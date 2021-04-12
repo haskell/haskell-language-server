@@ -1,40 +1,44 @@
-cabal-version: 2.2
-name:          hls-retrie-plugin
-version:       1.0.0.1
-synopsis:      Retrie integration plugin for Haskell Language Server
-license:       Apache-2.0
-license-file:  LICENSE
-author:        Pepe Iborra
-maintainer:    pepeiborra@gmail.com
-category:      Development
-build-type:    Simple
+cabal-version:      2.2
+name:               hls-retrie-plugin
+version:            1.0.0.2
+synopsis:           Retrie integration plugin for Haskell Language Server
+license:            Apache-2.0
+license-file:       LICENSE
+author:             Pepe Iborra
+maintainer:         pepeiborra@gmail.com
+category:           Development
+build-type:         Simple
 extra-source-files:
-  LICENSE
   include/ghc-api-version.h
+  LICENSE
 
 library
-  exposed-modules:  Ide.Plugin.Retrie
-  hs-source-dirs:   src
-  build-depends:    aeson
-               ,    base                 >=4.12 && <5
-               ,    containers
-               ,    deepseq
-               ,    directory
-               ,    extra
-               ,    lsp
-               ,    lsp-types
-               ,    hls-plugin-api       >= 1.0 && < 1.2
-               ,    ghc
-               ,    ghcide               ^>= 1.1
-               ,    hashable
-               ,    retrie               >=0.1.1.0
-               ,    safe-exceptions
-               ,    shake
-               ,    text
-               ,    transformers
-               ,    unordered-containers
+  exposed-modules:    Ide.Plugin.Retrie
+  hs-source-dirs:     src
+  build-depends:
+    , aeson
+    , base                  >=4.12    && <5
+    , containers
+    , deepseq
+    , directory
+    , extra
+    , ghc
+    , ghcide                ^>=1.2
+    , hashable
+    , hls-plugin-api        ^>=1.1
+    , lsp
+    , lsp-types
+    , retrie                >=0.1.1.0
+    , safe-exceptions
+    , shake
+    , text
+    , transformers
+    , unordered-containers
 
-  default-language: Haskell2010
-  include-dirs:     include
-  default-extensions: DataKinds, TypeOperators
-  ghc-options: -Wno-unticked-promoted-constructors
+  default-language:   Haskell2010
+  include-dirs:       include
+  default-extensions:
+    DataKinds
+    TypeOperators
+
+  ghc-options:        -Wno-unticked-promoted-constructors

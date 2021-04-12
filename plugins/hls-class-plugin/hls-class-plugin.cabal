@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-class-plugin
-version:            1.0.0.0
+version:            1.0.0.1
 synopsis:
   Class/instance management plugin for Haskell Language Server
 
@@ -29,8 +29,8 @@ library
     , containers
     , ghc
     , ghc-exactprint
-    , ghcide                ^>=1.1.0.0
-    , hls-plugin-api        >=1.0     && <1.2
+    , ghcide                ^>=1.2.0.0
+    , hls-plugin-api        ^>=1.1
     , lens
     , lsp
     , shake
@@ -56,7 +56,7 @@ test-suite tests
     , bytestring
     , filepath
     , hls-class-plugin
-    , hls-test-utils
+    , hls-test-utils  ^>= 1.0.0.0
     , lens
     , lsp-test
     , lsp-types
