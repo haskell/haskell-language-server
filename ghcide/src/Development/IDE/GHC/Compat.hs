@@ -117,6 +117,8 @@ module Development.IDE.GHC.Compat(
     LogActionCompat,
     logActionCompat,
 
+    pprSigmaType,
+
     module GHC,
     module DynFlags,
     initializePlugins,
@@ -139,12 +141,14 @@ import qualified Outputable           as Out
 import           StringBuffer
 #if MIN_GHC_API_VERSION(9,0,1)
 import qualified Data.Set             as S
+import           GHC.Core.TyCo.Ppr    (pprSigmaType)
 import           GHC.Core.TyCo.Rep    (Scaled, scaledThing)
 import           GHC.Iface.Load
 import           GHC.Types.Unique.Set (emptyUniqSet)
 import qualified SrcLoc
 #else
 import           Module               (InstalledUnitId, toInstalledUnitId)
+import           TcType               (pprSigmaType)
 #endif
 import           Compat.HieAst        (enrichHie, mkHieFile)
 import           Compat.HieBin
