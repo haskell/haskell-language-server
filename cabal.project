@@ -89,15 +89,9 @@ source-repository-package
   tag: 0.9.2.0
 -- https://github.com/mpickering/apply-refact/issues/107
 
-source-repository-package
-  type: git
-  location: https://github.com/facebookincubator/retrie
-  tag: d2869440df5889d4af6f5b58c79b002d93ba9346
--- https://github.com/facebookincubator/retrie/issues/25
-
 write-ghc-environment-files: never
 
-index-state: 2021-04-07T07:31:23Z
+index-state: 2021-04-12T10:01:30Z
 
 allow-newer:
     *:*,
