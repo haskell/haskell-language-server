@@ -1,6 +1,5 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
-{-# LANGUAGE CPP #-}
 
 module Development.IDE.Core.Preprocessor
   ( preprocessor
@@ -59,7 +58,7 @@ preprocessor env filename mbContents = do
         else do
             cppLogs <- liftIO $ newIORef []
             contents <- ExceptT
-                        $ (Right <$> (runCpp dflags {log_action = logAction cppLogs} filename
+                        $ (Right <$> (runCpp dflags {log_action = logActionCompat $ logAction cppLogs} filename
                                        $ if isOnDisk then Nothing else Just contents))
                             `catch`
                             ( \(e :: GhcException) -> do
@@ -79,12 +78,8 @@ preprocessor env filename mbContents = do
         (opts, dflags) <- ExceptT $ parsePragmasIntoDynFlags env filename contents
         return (contents, opts, dflags)
   where
-    logAction :: IORef [CPPLog] -> LogAction
-#if __GLASGOW_HASKELL__ >= 900
-    logAction cppLogs dflags _reason severity srcSpan msg = do
-#else
+    logAction :: IORef [CPPLog] -> LogActionCompat
     logAction cppLogs dflags _reason severity srcSpan _style msg = do
-#endif
       let log = CPPLog severity srcSpan $ T.pack $ showSDoc dflags msg
       modifyIORef cppLogs (log :)
 

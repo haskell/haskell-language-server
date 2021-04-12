@@ -114,6 +114,9 @@ module Development.IDE.GHC.Compat(
     stringToUnit,
     rtsUnit,
 
+    LogActionCompat,
+    logActionCompat,
+
     module GHC,
     module DynFlags,
     initializePlugins,
@@ -404,7 +407,19 @@ oldFormatErrDoc dflags = Err.formatErrDoc dummySDocContext
 -- oldFormatErrDoc = Err.formatErrDoc . undefined
 writeIfaceFile = writeIface
 
+type LogActionCompat = DynFlags -> WarnReason -> Severity -> SrcSpan -> PrintUnqualified -> Out.SDoc -> IO ()
+
+-- alwaysQualify seems to still do the right thing here, according to the "unqualified warnings" test.
+logActionCompat :: LogActionCompat -> LogAction
+logActionCompat logAction dynFlags wr severity loc = logAction dynFlags wr severity loc alwaysQualify
+
 #else
+
+type LogActionCompat = DynFlags -> WarnReason -> Severity -> SrcSpan -> PrintUnqualified -> Out.SDoc -> IO ()
+
+logActionCompat :: LogActionCompat -> LogAction
+logActionCompat logAction dynFlags wr severity loc style = logAction dynFlags wr severity loc (Out.queryQual style)
+
 type Unit = Module.UnitId
 -- type PackageConfig = Packages.PackageConfig
 definiteUnitId :: Module.DefUnitId -> UnitId
