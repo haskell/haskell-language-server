@@ -318,7 +318,7 @@ buildTopLevelHypothesis name ps = do
 -- | Construct a hypothesis for a single pattern, including building
 -- sub-hypotheses for constructor pattern matches.
 buildPatHy :: Provenance -> PatCompat GhcTc -> State Int (Hypothesis CType)
-buildPatHy prov (fromPatCompatTc -> p0) =
+buildPatHy prov (fromPatCompat -> p0) =
   case p0 of
     VarPat  _ x   -> pure $ mkIdHypothesis (unLoc x) prov
     LazyPat _ p   -> buildPatHy prov p
@@ -333,7 +333,7 @@ buildPatHy prov (fromPatCompatTc -> p0) =
     ListPat x@(ListPatTc ty _) (p : ps) ->
       mkDerivedConHypothesis prov (RealDataCon consDataCon) [ty]
         [ (0, p)
-        , (1, toPatCompatTc $ ListPat x ps)
+        , (1, toPatCompat $ ListPat x ps)
         ]
     -- Desugar tuples into an explicit constructor
     TuplePat tys pats boxity ->

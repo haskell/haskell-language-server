@@ -188,7 +188,7 @@ allOccNames = everything (<>) $ mkQ mempty $ \case
 pattern AMatch :: HsMatchContext (NameOrRdrName (IdP GhcPs)) -> [Pat GhcPs] -> HsExpr GhcPs -> Match GhcPs (LHsExpr GhcPs)
 pattern AMatch ctx pats body <-
   Match { m_ctxt = ctx
-        , m_pats = fmap fromPatCompatPs -> pats
+        , m_pats = fmap fromPatCompat -> pats
         , m_grhss = UnguardedRHSs (unLoc -> body)
         }
 
@@ -255,9 +255,6 @@ class PatCompattable p where
   fromPatCompat :: PatCompat p -> Pat p
   toPatCompat :: Pat p -> PatCompat p
 
-fromPatCompatTc :: PatCompat GhcTc -> Pat GhcTc
-toPatCompatTc :: Pat GhcTc -> PatCompat GhcTc
-fromPatCompatPs :: PatCompat GhcPs -> Pat GhcPs
 #if __GLASGOW_HASKELL__ == 808
 instance PatCompattable GhcTc where
   fromPatCompat = id
@@ -268,9 +265,6 @@ instance PatCompattable GhcPs where
   toPatCompat = id
 
 type PatCompat pass = Pat pass
-fromPatCompatTc = id
-fromPatCompatPs = id
-toPatCompatTc = id
 #else
 instance PatCompattable GhcTc where
   fromPatCompat = unLoc
@@ -281,9 +275,6 @@ instance PatCompattable GhcPs where
   toPatCompat = noLoc
 
 type PatCompat pass = LPat pass
-fromPatCompatTc = unLoc
-fromPatCompatPs = unLoc
-toPatCompatTc = noLoc
 #endif
 
 ------------------------------------------------------------------------------
