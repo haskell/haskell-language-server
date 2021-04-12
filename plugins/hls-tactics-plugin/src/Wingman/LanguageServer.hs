@@ -185,6 +185,11 @@ judgementForHole state nfp range features = do
            $ runStaleIde state nfp TypeCheck
       hscenv <- runStaleIde state nfp GhcSessionDeps
 
+      rss2 <- liftMaybe $ getSpanAtCursor range' hf
+      (new_span, scrutinee) <- liftMaybe $ getFirst $
+        emptyCaseQ (RealSrcSpan $ unTrack rss2) $ tcg_binds $ untrackedStaleValue tcg
+      x <- MaybeT $ typeCheck (hscEnv $ untrackedStaleValue hscenv) (untrackedStaleValue tcg) scrutinee
+
       (rss, g) <- liftMaybe $ getSpanAndTypeAtHole range' hf
       new_rss <- liftMaybe $ mapAgeTo amapping rss
 
@@ -266,6 +271,17 @@ getAlreadyDestructed (unTrack -> span) (unTrack -> binds) =
       (_ :: HsExpr GhcTc) -> mempty
     ) binds
 
+
+getSpanAtCursor
+    :: Tracked age Range
+    -> Tracked age (HieASTs b)
+    -> Maybe (Tracked age RealSrcSpan)
+getSpanAtCursor r@(unTrack -> range) (unTrack -> hf) = do
+  join $ listToMaybe $ M.elems $ flip M.mapWithKey (getAsts hf) $ \fs ast ->
+    case selectSmallestContaining (rangeToRealSrcSpan (FastString.unpackFS fs) range) ast of
+      Nothing -> Nothing
+      Just ast' -> do
+        pure $ unsafeCopyAge r $ nodeSpan ast'
 
 getSpanAndTypeAtHole
     :: Tracked age Range
