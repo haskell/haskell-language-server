@@ -1,11 +1,15 @@
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE RankNTypes          #-}
 
 -- | Custom SYB traversals
 module Wingman.Judgements.SYB where
 
-import Data.Generics
 import Data.Foldable (foldl')
+import Data.Generics hiding (typeRep)
 import Development.IDE.GHC.Compat
+import GHC.Exts (Any)
+import Type.Reflection
+import Unsafe.Coerce (unsafeCoerce)
 
 
 ------------------------------------------------------------------------------
@@ -35,6 +39,40 @@ everythingWithin dst f = go
 genericIsSubspan
     :: SrcSpan
     -> GenericQ (Maybe Bool)
-genericIsSubspan dst = mkQ Nothing $ \case
-  (L span _ :: LHsExpr GhcTc) -> Just $ dst `isSubspanOf` span
+genericIsSubspan dst = mkQ1 (L noSrcSpan ()) Nothing $ \case
+  L span _ -> Just $ dst `isSubspanOf` span
+
+
+------------------------------------------------------------------------------
+-- | Like 'mkQ', but allows for polymorphic instantiation of its specific case.
+-- This instantation matches whenever the dynamic value has the same
+-- constructor as the proxy @f ()@ value.
+mkQ1 :: forall a r f
+      . (Data a, Data (f ()))
+     => f ()                  -- ^ Polymorphic constructor to match on
+     -> r                     -- ^ Default value
+     -> (forall b. f b -> r)  -- ^ Polymorphic match
+     -> a
+     -> r
+mkQ1 proxy r br a =
+    case l_con == a_con && sameTypeModuloLastApp @a @(f ()) of
+      True  -> br $ unsafeCoerce @_ @(f Any) a
+      False -> r
+  where
+    l_con = toConstr proxy
+    a_con = toConstr a
+
+
+------------------------------------------------------------------------------
+-- | Given @a ~ f1 a1@ and @b ~ f2 b2@, returns true if @f1 ~ f2@.
+sameTypeModuloLastApp :: forall a b. (Typeable a, Typeable b) => Bool
+sameTypeModuloLastApp =
+  let tyrep1 = typeRep @a
+      tyrep2 = typeRep @b
+   in case (tyrep1 , tyrep2) of
+        (App a _, App b _) ->
+          case eqTypeRep a b of
+            Just HRefl -> True
+            Nothing    -> False
+        _ -> False
 
