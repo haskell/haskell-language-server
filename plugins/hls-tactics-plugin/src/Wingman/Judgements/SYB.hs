@@ -27,5 +27,5 @@ genericIsSubspan
     :: SrcSpan
     -> GenericQ (Maybe Bool)
 genericIsSubspan dst =
-  empty `ext1Q` \case L span _ -> Just $ dst `isSubspanOf` span
+  const empty `ext1Q` \case L span _ -> Just $ dst `isSubspanOf` span
 
