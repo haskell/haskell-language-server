@@ -490,3 +490,9 @@ instance Show UserFacingMessage where
   show NothingToDo             = "Nothing to do"
   show (InfrastructureError t) = "Internal error: " <> T.unpack t
 
+
+data Hook a
+  = Tactic a Judgement
+  | EmptyCase (HsExpr GhcPs) Type
+  deriving Functor
+

@@ -57,6 +57,7 @@ import           Wingman.Judgements.SYB (everythingContaining, smallestQ, generi
 import           Wingman.Judgements.Theta
 import           Wingman.Range
 import           Wingman.Types
+import Control.Applicative (empty)
 
 
 tacticDesc :: T.Text -> T.Text
@@ -165,6 +166,11 @@ getIdeDynflags state nfp = do
   pure $ ms_hspp_opts $ msrModSummary msr
 
 
+data GoalOrScrutinee
+  = Goal Type
+  | Scrutinee (HsExpr GhcPs) Type
+
+
 ------------------------------------------------------------------------------
 -- | Find the last typechecked module, and find the most specific span, as well
 -- as the judgement at the given range.
@@ -173,7 +179,7 @@ judgementForHole
     -> NormalizedFilePath
     -> Tracked 'Current Range
     -> FeatureSet
-    -> MaybeT IO (Tracked 'Current Range, Judgement, Context, DynFlags)
+    -> MaybeT IO (Tracked 'Current Range, Hook (), Context, DynFlags)
 judgementForHole state nfp range features = do
   TrackedStale asts amapping  <- runStaleIde state nfp GetHieAst
   case unTrack asts of
@@ -185,24 +191,30 @@ judgementForHole state nfp range features = do
            $ runStaleIde state nfp TypeCheck
       hscenv <- runStaleIde state nfp GhcSessionDeps
 
-      rss2 <- liftMaybe $ getSpanAtCursor range' hf
-      (new_span, scrutinee) <- liftMaybe $ getFirst $
-        emptyCaseQ (RealSrcSpan $ unTrack rss2) $ tcg_binds $ untrackedStaleValue tcg
-      x <- MaybeT $ typeCheck (hscEnv $ untrackedStaleValue hscenv) (untrackedStaleValue tcg) scrutinee
-
-      (rss, g) <- liftMaybe $ getSpanAndTypeAtHole range' hf
-      new_rss <- liftMaybe $ mapAgeTo amapping rss
-
       -- KnownThings is just the instances in scope. There are no ranges
       -- involved, so it's not crucial to track ages.
-      let henv = untrackedStaleValue $ hscenv
+      let henv = untrackedStaleValue hscenv
+          untracked_tcg = untrackedStaleValue tcg
       eps <- liftIO $ readIORef $ hsc_EPS $ hscEnv henv
-      kt <- knownThings (untrackedStaleValue tcg) henv
+      kt <- knownThings untracked_tcg henv
 
-      (jdg, ctx) <- liftMaybe $ mkJudgementAndContext features g binds new_rss tcg eps kt
+      (rss, g_or_s) <-
+        case getSpanAndTypeAtHole range' hf of
+          Just (rss, g) -> pure (rss, Goal g)
+          Nothing -> do
+            rss2 <- liftMaybe $ getSpanAtCursor range' hf
+            (new_span, scrutinee) <- liftMaybe $ getFirst $
+              emptyCaseQ (RealSrcSpan $ unTrack rss2) $ tcg_binds untracked_tcg
+            ty <- MaybeT $ typeCheck (hscEnv henv) untracked_tcg scrutinee
+            case new_span of
+              RealSrcSpan rss -> pure (pure rss, Scrutinee scrutinee ty)
+              UnhelpfulSpan _ -> empty
+
+      new_rss <- liftMaybe $ mapAgeTo amapping rss
+      (hook, ctx) <- liftMaybe $ mkJudgementAndContext features g_or_s binds new_rss tcg eps kt
 
       dflags <- getIdeDynflags state nfp
-      pure (fmap realSrcSpanToRange new_rss, jdg, ctx, dflags)
+      pure (fmap realSrcSpanToRange new_rss, hook, ctx, dflags)
 
 
 
@@ -219,14 +231,14 @@ emptyCaseQ span =
 
 mkJudgementAndContext
     :: FeatureSet
-    -> Type
+    -> GoalOrScrutinee
     -> TrackedStale Bindings
     -> Tracked 'Current RealSrcSpan
     -> TrackedStale TcGblEnv
     -> ExternalPackageState
     -> KnownThings
-    -> Maybe (Judgement, Context)
-mkJudgementAndContext features g (TrackedStale binds bmap) rss (TrackedStale tcg tcgmap) eps kt = do
+    -> Maybe (Hook (), Context)
+mkJudgementAndContext features g_or_s (TrackedStale binds bmap) rss (TrackedStale tcg tcgmap) eps kt = do
   binds_rss <- mapAgeFrom bmap rss
   tcg_rss <- mapAgeFrom tcgmap rss
 
@@ -246,14 +258,19 @@ mkJudgementAndContext features g (TrackedStale binds bmap) rss (TrackedStale tcg
       evidence = getEvidenceAtHole (fmap RealSrcSpan tcg_rss) tcs
       cls_hy = foldMap evidenceToHypothesis evidence
       subst = ts_unifier $ appEndo (foldMap (Endo . evidenceToSubst) evidence) defaultTacticState
+
   pure $
-    ( disallowing AlreadyDestructed already_destructed
-    $ fmap (CType . substTyAddInScope subst . unCType) $ mkFirstJudgement
-          (local_hy <> cls_hy)
-          (isRhsHole tcg_rss tcs)
-          g
-    , ctx
-    )
+    case g_or_s of
+      Goal g ->
+        ( Tactic ()
+        $ disallowing AlreadyDestructed already_destructed
+        $ fmap (CType . substTyAddInScope subst . unCType) $ mkFirstJudgement
+              (local_hy <> cls_hy)
+              (isRhsHole tcg_rss tcs)
+              g
+        , ctx
+        )
+      Scrutinee scrutinee ty -> (EmptyCase scrutinee ty, ctx)
 
 
 ------------------------------------------------------------------------------

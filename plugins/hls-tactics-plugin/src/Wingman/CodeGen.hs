@@ -167,6 +167,15 @@ destruct' f hi jdg = do
     & #syn_val       %~ noLoc . case' (var' term)
 
 
+destructExpr :: (ConLike -> Judgement -> Rule) -> HsExpr GhcPs -> Type -> Judgement -> Rule
+destructExpr f term ty jdg = do
+  ext
+      <- destructMatches f Nothing (CType ty) jdg
+  pure $ ext
+    & #syn_trace     %~ rose ("destruct " <> show term) . pure
+    & #syn_val       %~ noLoc . case' term
+
+
 ------------------------------------------------------------------------------
 -- | Combinator for performign case splitting, and running sub-rules on the
 -- resulting matches.
