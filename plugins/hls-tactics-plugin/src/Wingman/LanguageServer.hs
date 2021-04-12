@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes        #-}
 {-# LANGUAGE TypeFamilies      #-}
 
 module Wingman.LanguageServer where
@@ -11,7 +12,7 @@ import           Control.Monad.State (State, get, put, evalState)
 import           Control.Monad.Trans.Maybe
 import           Data.Coerce
 import           Data.Functor ((<&>))
-import           Data.Generics.Aliases (mkQ)
+import           Data.Generics.Aliases (mkQ, GenericQ, extQ)
 import           Data.Generics.Schemes (everything)
 import qualified Data.HashMap.Strict as Map
 import           Data.IORef (readIORef)
@@ -52,7 +53,7 @@ import           Wingman.Context
 import           Wingman.FeatureSet
 import           Wingman.GHC
 import           Wingman.Judgements
-import           Wingman.Judgements.SYB (everythingContaining)
+import           Wingman.Judgements.SYB (everythingContaining, smallestQ, genericDefinitelyNotIsSubspan)
 import           Wingman.Judgements.Theta
 import           Wingman.Range
 import           Wingman.Types
@@ -197,6 +198,18 @@ judgementForHole state nfp range features = do
 
       dflags <- getIdeDynflags state nfp
       pure (fmap realSrcSpanToRange new_rss, jdg, ctx, dflags)
+
+
+
+emptyCaseQ :: SrcSpan -> GenericQ (First (SrcSpan, HsExpr GhcTc))
+emptyCaseQ span =
+  smallestQ
+    (genericDefinitelyNotIsSubspan span `extQ` \case
+      (L _ (Case _ _)) -> Just True
+      (_ :: LHsExpr GhcTc) -> Nothing
+    ) $ mkQ mempty $ \case
+          L new_span (Case scrutinee []) -> pure (new_span, scrutinee)
+          (_ :: LHsExpr GhcTc) -> mempty
 
 
 mkJudgementAndContext
