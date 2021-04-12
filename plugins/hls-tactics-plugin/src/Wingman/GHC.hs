@@ -250,7 +250,6 @@ lambdaCaseable (splitFunTy_maybe -> Just (arg, res))
   = Just $ isJust $ algebraicTyCon res
 lambdaCaseable _ = Nothing
 
--- It's hard to generalize over these since weird type families are involved.
 class PatCompattable p where
   fromPatCompat :: PatCompat p -> Pat p
   toPatCompat :: Pat p -> PatCompat p

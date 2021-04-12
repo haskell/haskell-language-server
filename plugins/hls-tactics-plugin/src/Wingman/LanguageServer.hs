@@ -238,6 +238,9 @@ mkJudgementAndContext features g (TrackedStale binds bmap) rss (TrackedStale tcg
     )
 
 
+------------------------------------------------------------------------------
+-- | Determine which bindings have already been destructed by the location of
+-- the hole.
 getAlreadyDestructed
     :: Tracked age SrcSpan
     -> Tracked age (LHsBinds GhcTc)

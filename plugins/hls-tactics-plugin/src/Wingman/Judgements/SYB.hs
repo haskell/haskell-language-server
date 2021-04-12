@@ -8,6 +8,8 @@ import Data.Foldable (foldl')
 import Development.IDE.GHC.Compat
 
 
+------------------------------------------------------------------------------
+-- | Like 'everything', but only looks inside of the given 'SrcSpan'.
 everythingWithin
     :: forall r
      . Monoid r
@@ -23,6 +25,13 @@ everythingWithin dst f = go
         _ -> foldl' (<>) (f x) (gmapQ go x)
 
 
+------------------------------------------------------------------------------
+-- | Helper function for implementing 'everythingWithin'
+--
+-- NOTE(sandy): Subtly broken. In an ideal world, this function shuld return
+-- @Just False@ for nodes of /any type/ which do not contain the span. But if
+-- this functionality exists anywhere within the SYB machinery, I have yet to
+-- find it.
 genericIsSubspan
     :: SrcSpan
     -> GenericQ (Maybe Bool)
