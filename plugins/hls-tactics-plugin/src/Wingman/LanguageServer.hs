@@ -52,7 +52,7 @@ import           Wingman.Context
 import           Wingman.FeatureSet
 import           Wingman.GHC
 import           Wingman.Judgements
-import           Wingman.Judgements.SYB (everythingWithin)
+import           Wingman.Judgements.SYB (everythingContaining)
 import           Wingman.Judgements.Theta
 import           Wingman.Range
 import           Wingman.Types
@@ -246,7 +246,7 @@ getAlreadyDestructed
     -> Tracked age (LHsBinds GhcTc)
     -> Set OccName
 getAlreadyDestructed (unTrack -> span) (unTrack -> binds) =
-  everythingWithin span
+  everythingContaining span
     (mkQ mempty $ \case
       Case (HsVar _ (L _ (occName -> var))) _ ->
         S.singleton var

@@ -13,14 +13,15 @@ import Unsafe.Coerce (unsafeCoerce)
 
 
 ------------------------------------------------------------------------------
--- | Like 'everything', but only looks inside of the given 'SrcSpan'.
-everythingWithin
+-- | Like 'everything', but only looks inside 'Located' terms that contain the
+-- given 'SrcSpan'.
+everythingContaining
     :: forall r
      . Monoid r
     => SrcSpan
     -> GenericQ r
     -> GenericQ r
-everythingWithin dst f = go
+everythingContaining dst f = go
   where
     go :: GenericQ r
     go x =
