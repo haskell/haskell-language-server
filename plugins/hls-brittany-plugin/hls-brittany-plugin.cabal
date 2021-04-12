@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-brittany-plugin
-version:            1.0.0.1
+version:            1.1.0.0
 synopsis:           Integration with the Brittany code formatter
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>

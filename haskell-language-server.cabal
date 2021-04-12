@@ -187,12 +187,12 @@ common example-plugins
 
 common class
   if flag(class) || flag(all-plugins)
-    build-depends: hls-class-plugin ^>= 1.0.0.1
+    build-depends: hls-class-plugin ^>= 1.1.0.0
     cpp-options: -Dclass
 
 common haddockComments
   if flag(haddockComments) || flag(all-plugins)
-    build-depends: hls-haddock-comments-plugin ^>= 1.0.0.1
+    build-depends: hls-haddock-comments-plugin ^>= 1.1.0.0
     cpp-options: -DhaddockComments
 
 common eval
@@ -202,12 +202,12 @@ common eval
 
 common importLens
   if flag(importLens) || flag(all-plugins)
-    build-depends: hls-explicit-imports-plugin ^>= 1.0.0.1
+    build-depends: hls-explicit-imports-plugin ^>= 1.1.0.0
     cpp-options: -DimportLens
 
 common retrie
   if flag(retrie) || flag(all-plugins)
-    build-depends: hls-retrie-plugin ^>= 1.0.0.1
+    build-depends: hls-retrie-plugin ^>= 1.1.0.0
     cpp-options: -Dretrie
 
 common tactic
@@ -217,7 +217,7 @@ common tactic
 
 common hlint
   if flag(hlint) || flag(all-plugins)
-    build-depends: hls-hlint-plugin ^>= 1.0.0.2
+    build-depends: hls-hlint-plugin ^>= 1.1.0.0
     cpp-options: -Dhlint
 
 common moduleName
@@ -235,7 +235,7 @@ common pragmas
 
 common splice
   if flag(splice) || flag(all-plugins)
-    build-depends: hls-splice-plugin ^>= 1.0.0.1
+    build-depends: hls-splice-plugin ^>= 1.1.0.0
     cpp-options: -Dsplice
 
 -- formatters
@@ -263,12 +263,12 @@ common ormolu
 
 common stylishHaskell
   if flag(stylishHaskell) || flag(all-formatters)
-    build-depends: hls-stylish-haskell-plugin ^>= 1.0.0.0
+    build-depends: hls-stylish-haskell-plugin ^>= 1.1.0.0
     cpp-options: -DstylishHaskell
 
 common brittany
   if (flag(brittany) || flag(all-formatters))
-    build-depends: hls-brittany-plugin ^>= 1.0.0.1
+    build-depends: hls-brittany-plugin ^>= 1.1.0.0
     cpp-options: -Dbrittany
 
 executable haskell-language-server
