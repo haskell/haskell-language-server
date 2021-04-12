@@ -1,6 +1,7 @@
 module Wingman.Auto where
 
 import           Control.Monad.State (gets)
+import qualified Data.Set as S
 import           Refinery.Tactic
 import           Wingman.Context
 import           Wingman.Judgements
@@ -24,5 +25,6 @@ auto = do
     . tracing "auto"
     . localTactic (auto' 4)
     . disallowing RecursiveCall
+    . S.fromList
     $ fmap fst current
 
