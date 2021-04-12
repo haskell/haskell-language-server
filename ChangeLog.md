@@ -5,7 +5,14 @@
 Haskell Language Server 1.1.0 has finally come! Many thanks to all contributors -- since the last release, we have merged over 100 PRs!
 As always, there are many internal bug fixes and performance improvements in ghcide. Apart from that,
 
-* Wingman gets a comprehensive evolution, thanks to @isovector for this epic work!
+* Wingman gets many enhancements, thanks to @isovector for this epic work!
+  * Wingman actions can now be bound to editor hotkeys
+  * Experimental support for "jump to next unsolved hole"
+  * Improved layout algorithm --- don't reflow instances, or break do-blocks
+  * Wingman can now deal with GADTs, rank-n types and pattern synonyms
+  * Wingman now respects user-written bindings on the left side of the equals sign
+  * Significantly more-natural synthesized code when dealing with newtypes, infix operators, records and strings
+  * Improved user experience --- less waiting, and friendly errors for when things go wrong
 * hlint plugin not working in some cases gets fixed
 * annoying log message "haskell-lsp:incoming message parse error" gets fixed in `lsp-1.2`
 * eval plugin now supports `it` variable, like GHCi
@@ -31,6 +38,8 @@ This version uses `lsp-1.2.0`, `hls-plugin-api-1.1.0`, and `ghcide-1.2.0`.
 
 ### Pull requests merged for 1.1.0
 
+- Add keybindings and jump to hole to the Wingman README
+([#1712](https://github.com/haskell/haskell-language-server/pull/1712)) by @isovector
 - Prepare ghcide 1.2.0
 ([#1707](https://github.com/haskell/haskell-language-server/pull/1707)) by @berberman
 - Adjust bounds
