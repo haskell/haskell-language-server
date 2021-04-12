@@ -251,12 +251,13 @@ mkNameCompItem doc thingParent origName origMod thingType isInfix docs !imp = CI
         argText = mconcat $ List.intersperse " " $ zipWithFrom snippet 1 argTypes
         snippet :: Int -> Type -> T.Text
         snippet i t = case t of
-            (TyVarTy _) -> noParensSnippet
-            (LitTy _)   -> noParensSnippet
-            _           -> snippetText i (T.pack "(" <> showGhc t <> T.pack ")")
+            (TyVarTy _)     -> noParensSnippet
+            (LitTy _)       -> noParensSnippet
+            (TyConApp _ []) -> noParensSnippet
+            _               -> snippetText i (T.pack "(" <> showGhc t <> T.pack ")")
             where
-                snippetText i t = "${" <> T.pack (show i) <> ":" <> t <> "}"
                 noParensSnippet = snippetText i (showGhc t)
+                snippetText i t = "${" <> T.pack (show i) <> ":" <> t <> "}"
         getArgs :: Type -> [Type]
         getArgs t
           | isPredTy t = []

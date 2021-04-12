@@ -3900,7 +3900,7 @@ nonLocalCompletionTests =
       "variable"
       ["module A where", "f = hea"]
       (Position 1 7)
-      [("head", CiFunction, "head ${1:[a]}", True, True, Nothing)],
+      [("head", CiFunction, "head ${1:([a])}", True, True, Nothing)],
     completionTest
       "constructor"
       ["module A where", "f = Tru"]
@@ -3912,20 +3912,20 @@ nonLocalCompletionTests =
       "type"
       ["{-# OPTIONS_GHC -Wall #-}", "module A () where", "f :: Bo", "f = True"]
       (Position 2 7)
-      [ ("Bounded", CiInterface, "Bounded ${1:*}", True, True, Nothing),
+      [ ("Bounded", CiInterface, "Bounded ${1:(*)}", True, True, Nothing),
         ("Bool", CiStruct, "Bool ", True, True, Nothing)
       ],
     completionTest
       "qualified"
       ["{-# OPTIONS_GHC -Wunused-binds #-}", "module A () where", "f = Prelude.hea"]
       (Position 2 15)
-      [ ("head", CiFunction, "head ${1:[a]}", True, True, Nothing)
+      [ ("head", CiFunction, "head ${1:([a])}", True, True, Nothing)
       ],
     completionTest
       "duplicate import"
       ["module A where", "import Data.List", "import Data.List", "f = perm"]
       (Position 3 8)
-      [ ("permutations", CiFunction, "permutations ${1:[a]}", False, False, Nothing)
+      [ ("permutations", CiFunction, "permutations ${1:([a])}", False, False, Nothing)
       ],
     completionTest
        "dont show hidden items"
