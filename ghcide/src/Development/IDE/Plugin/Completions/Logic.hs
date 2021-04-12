@@ -43,7 +43,7 @@ import           Data.Functor
 import qualified Data.Set                                 as Set
 import           Development.IDE.Core.Compile
 import           Development.IDE.Core.PositionMapping
-import           Development.IDE.GHC.Compat               as GHC hiding (FunTy)
+import           Development.IDE.GHC.Compat               as GHC
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Util
 import           Development.IDE.Plugin.Completions.Types
