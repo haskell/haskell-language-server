@@ -7,6 +7,7 @@ import           ConLike
 import           Control.Applicative (empty)
 import           Control.Monad.State
 import           Control.Monad.Trans.Maybe (MaybeT(..))
+import           CoreUtils (exprType)
 import           Data.Function (on)
 import           Data.Functor ((<&>))
 import           Data.List (isPrefixOf)
@@ -18,7 +19,9 @@ import           Data.Traversable
 import           DataCon
 import           Development.IDE (HscEnvEq (hscEnv))
 import           Development.IDE.Core.Compile (lookupName)
-import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat hiding (exprType)
+import           DsExpr (dsExpr)
+import           DsMonad (initDs)
 import           GHC.SourceGen (lambda)
 import           Generics.SYB (Data, everything, everywhere, listify, mkQ, mkT)
 import           GhcPlugins (extractModule, GlobalRdrElt (gre_name))
@@ -343,4 +346,8 @@ knownThing f tcg hscenv occ = do
 
 liftMaybe :: Monad m => Maybe a -> MaybeT m a
 liftMaybe a = MaybeT $ pure a
+
+
+typeCheck :: HscEnv -> TcGblEnv -> HsExpr GhcTc -> IO (Maybe Type)
+typeCheck hscenv tcg = fmap snd . initDs hscenv tcg . fmap exprType . dsExpr
 
