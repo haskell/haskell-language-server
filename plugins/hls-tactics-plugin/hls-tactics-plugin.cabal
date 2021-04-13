@@ -37,6 +37,7 @@ library
     Wingman.FeatureSet
     Wingman.GHC
     Wingman.Judgements
+    Wingman.Judgements.SYB
     Wingman.Judgements.Theta
     Wingman.KnownStrategies
     Wingman.KnownStrategies.QuickCheck
@@ -71,8 +72,8 @@ library
     , ghc-boot-th
     , ghc-exactprint
     , ghc-source-gen
-    , ghcide                ^>=1.2.0.0
-    , hls-plugin-api        ^>=1.1
+    , ghcide                ^>=1.2.0.2
+    , hls-plugin-api        ^>=1.1.0.0
     , lens
     , lsp
     , mtl

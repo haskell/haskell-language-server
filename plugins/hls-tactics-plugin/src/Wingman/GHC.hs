@@ -19,7 +19,7 @@ import           DataCon
 import           Development.IDE (HscEnvEq (hscEnv))
 import           Development.IDE.Core.Compile (lookupName)
 import           Development.IDE.GHC.Compat
-import           GHC.SourceGen (case', lambda, match)
+import           GHC.SourceGen (lambda)
 import           Generics.SYB (Data, everything, everywhere, listify, mkQ, mkT)
 import           GhcPlugins (extractModule, GlobalRdrElt (gre_name))
 import           OccName
@@ -188,8 +188,8 @@ allOccNames = everything (<>) $ mkQ mempty $ \case
 pattern AMatch :: HsMatchContext (NameOrRdrName (IdP GhcPs)) -> [Pat GhcPs] -> HsExpr GhcPs -> Match GhcPs (LHsExpr GhcPs)
 pattern AMatch ctx pats body <-
   Match { m_ctxt = ctx
-        , m_pats = fmap fromPatCompatPs -> pats
-        , m_grhss = UnguardedRHSs body
+        , m_pats = fmap fromPatCompat -> pats
+        , m_grhss = UnguardedRHSs (unLoc -> body)
         }
 
 
@@ -207,23 +207,23 @@ pattern Lambda pats body <-
 
 ------------------------------------------------------------------------------
 -- | A GRHS that caontains no guards.
-pattern UnguardedRHSs :: HsExpr GhcPs -> GRHSs GhcPs (LHsExpr GhcPs)
+pattern UnguardedRHSs :: LHsExpr p -> GRHSs p (LHsExpr p)
 pattern UnguardedRHSs body <-
-  GRHSs {grhssGRHSs = [L _ (GRHS _ [] (L _ body))]}
+  GRHSs {grhssGRHSs = [L _ (GRHS _ [] body)]}
 
 
 ------------------------------------------------------------------------------
 -- | A match with a single pattern. Case matches are always 'SinglePatMatch'es.
-pattern SinglePatMatch :: Pat GhcPs -> HsExpr GhcPs -> Match GhcPs (LHsExpr GhcPs)
+pattern SinglePatMatch :: PatCompattable p => Pat p -> LHsExpr p -> Match p (LHsExpr p)
 pattern SinglePatMatch pat body <-
-  Match { m_pats = [fromPatCompatPs -> pat]
+  Match { m_pats = [fromPatCompat -> pat]
         , m_grhss = UnguardedRHSs body
         }
 
 
 ------------------------------------------------------------------------------
 -- | Helper function for defining the 'Case' pattern.
-unpackMatches :: [Match GhcPs (LHsExpr GhcPs)] -> Maybe [(Pat GhcPs, HsExpr GhcPs)]
+unpackMatches :: PatCompattable p => [Match p (LHsExpr p)] -> Maybe [(Pat p, LHsExpr p)]
 unpackMatches [] = Just []
 unpackMatches (SinglePatMatch pat body : matches) =
   (:) <$> pure (pat, body) <*> unpackMatches matches
@@ -232,13 +232,10 @@ unpackMatches _ = Nothing
 
 ------------------------------------------------------------------------------
 -- | A pattern over the otherwise (extremely) messy AST for lambdas.
-pattern Case :: HsExpr GhcPs -> [(Pat GhcPs, HsExpr GhcPs)] -> HsExpr GhcPs
+pattern Case :: PatCompattable p => HsExpr p -> [(Pat p, LHsExpr p)] -> HsExpr p
 pattern Case scrutinee matches <-
   HsCase _ (L _ scrutinee)
     (MG {mg_alts = L _ (fmap unLoc -> unpackMatches -> Just matches)})
-  where
-    Case scrutinee matches =
-      case' scrutinee $ fmap (\(pat, body) -> match [pat] body) matches
 
 
 ------------------------------------------------------------------------------
@@ -253,20 +250,30 @@ lambdaCaseable (splitFunTy_maybe -> Just (arg, res))
   = Just $ isJust $ algebraicTyCon res
 lambdaCaseable _ = Nothing
 
--- It's hard to generalize over these since weird type families are involved.
-fromPatCompatTc :: PatCompat GhcTc -> Pat GhcTc
-toPatCompatTc :: Pat GhcTc -> PatCompat GhcTc
-fromPatCompatPs :: PatCompat GhcPs -> Pat GhcPs
+class PatCompattable p where
+  fromPatCompat :: PatCompat p -> Pat p
+  toPatCompat :: Pat p -> PatCompat p
+
 #if __GLASGOW_HASKELL__ == 808
+instance PatCompattable GhcTc where
+  fromPatCompat = id
+  toPatCompat = id
+
+instance PatCompattable GhcPs where
+  fromPatCompat = id
+  toPatCompat = id
+
 type PatCompat pass = Pat pass
-fromPatCompatTc = id
-fromPatCompatPs = id
-toPatCompatTc = id
 #else
+instance PatCompattable GhcTc where
+  fromPatCompat = unLoc
+  toPatCompat = noLoc
+
+instance PatCompattable GhcPs where
+  fromPatCompat = unLoc
+  toPatCompat = noLoc
+
 type PatCompat pass = LPat pass
-fromPatCompatTc = unLoc
-fromPatCompatPs = unLoc
-toPatCompatTc = noLoc
 #endif
 
 ------------------------------------------------------------------------------

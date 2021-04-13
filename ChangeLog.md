@@ -34,12 +34,18 @@ As always, there are many internal bug fixes and performance improvements in ghc
 * test suite of plugins are reorganized, which no longer need to be run with `test-server` executable
 * two new packages `hls-test-utils` and `hls-stylish-haskell-plugin` are extracted
 
-This version uses `lsp-1.2.0`, `hls-plugin-api-1.1.0`, and `ghcide-1.2.0`.
+This version uses `lsp-1.2.0`, `hls-plugin-api-1.1.0`, and `ghcide-1.2.0.2`.
 
 ### Pull requests merged for 1.1.0
 
+- Restore compat. with haddock-library 1.8
+([#1717](https://github.com/haskell/haskell-language-server/pull/1717)) by @pepeiborra
+- Don't suggest destruct actions for already-destructed terms
+([#1715](https://github.com/haskell/haskell-language-server/pull/1715)) by @isovector
 - Add keybindings and jump to hole to the Wingman README
 ([#1712](https://github.com/haskell/haskell-language-server/pull/1712)) by @isovector
+- Bracketing for snippet completions
+([#1709](https://github.com/haskell/haskell-language-server/pull/1709)) by @OliverMadine
 - Prepare ghcide 1.2.0
 ([#1707](https://github.com/haskell/haskell-language-server/pull/1707)) by @berberman
 - Adjust bounds

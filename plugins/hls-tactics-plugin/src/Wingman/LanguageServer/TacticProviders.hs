@@ -211,7 +211,7 @@ filterBindingType
     -> TacticProvider
 filterBindingType p tp tpd =
   let jdg = tpd_jdg tpd
-      hy  = jHypothesis jdg
+      hy  = jLocalHypothesis jdg
       g   = jGoal jdg
    in fmap join $ for (unHypothesis hy) $ \hi ->
         let ty = unCType $ hi_type hi

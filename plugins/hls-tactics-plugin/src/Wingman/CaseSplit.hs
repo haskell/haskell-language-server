@@ -33,7 +33,7 @@ agdaSplit :: AgdaMatch -> [AgdaMatch]
 agdaSplit (AgdaMatch pats (Case (HsVar _ (L _ var)) matches)) = do
   (pat, body) <- matches
   -- TODO(sandy): use an at pattern if necessary
-  pure $ AgdaMatch (rewriteVarPat var pat pats) body
+  pure $ AgdaMatch (rewriteVarPat var pat pats) $ unLoc body
 agdaSplit x = [x]
 
 
