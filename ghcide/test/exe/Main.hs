@@ -3551,7 +3551,13 @@ findDefinitionAndHoverTests = let
   in
   mkFindTests
   --      def    hover  look       expect
-  [ test  yes    yes    fffL4      fff           "field in record definition"
+  [
+#if MIN_GHC_API_VERSION(9,0,0)
+  -- It suggests either going to the constructor or to the field
+    test  broken yes    fffL4      fff           "field in record definition"
+#else
+    test  yes    yes    fffL4      fff           "field in record definition"
+#endif
   , test  yes    yes    fffL8      fff           "field in record construction    #1102"
   , test  yes    yes    fffL14     fff           "field name used as accessor"           -- https://github.com/haskell/ghcide/pull/120 in Calculate.hs
   , test  yes    yes    aaaL14     aaa           "top-level name"                        -- https://github.com/haskell/ghcide/pull/120
@@ -4318,7 +4324,11 @@ highlightTests = testGroup "highlight"
             , DocumentHighlight (R 6 10 6 13) (Just HkRead)
             , DocumentHighlight (R 7 12 7 15) (Just HkRead)
             ]
-  , testSessionWait "record" $ do
+  ,
+#if MIN_GHC_API_VERSION(9,0,0)
+    expectFailBecause "Ghc9 highlights the constructor and not just this field" $
+#endif
+    testSessionWait "record" $ do
     doc <- createDoc "A.hs" "haskell" recsource
     _ <- waitForDiagnostics
     highlights <- getHighlights doc (Position 4 15)
