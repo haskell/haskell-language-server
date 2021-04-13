@@ -123,6 +123,11 @@ flag importLens
   default:     True
   manual:      True
 
+flag renameSymbol
+  description: Enable renameSymbol plugin
+  default:     True
+  manual:      True
+
 flag retrie
   description: Enable retrie plugin
   default:     True
@@ -184,6 +189,10 @@ common example-plugins
   hs-source-dirs: plugins/default/src
   other-modules: Ide.Plugin.Example,
                  Ide.Plugin.Example2
+
+common renameSymbol
+  hs-source-dirs: plugins/default/src
+  other-modules: Ide.Plugin.RenameSymbol
 
 common class
   if flag(class) || flag(all-plugins)
@@ -279,6 +288,7 @@ executable haskell-language-server
                     , haddockComments
                     , eval
                     , importLens
+                    , renameSymbol
                     , retrie
                     , tactic
                     , hlint

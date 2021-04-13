@@ -10,6 +10,7 @@ import           Development.IDE                   (IdeState)
 import           Development.IDE.Plugin.HLS.GhcIde as GhcIde
 import           Ide.Plugin.Example                as Example
 import           Ide.Plugin.Example2               as Example2
+import           Ide.Plugin.RenameSymbol           as RenameSymbol
 
 -- haskell-language-server optional plugins
 
@@ -125,6 +126,7 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
 #if importLens
       ExplicitImports.descriptor "importLens" :
 #endif
+      RenameSymbol.descriptor "renameSymbol" :
 #if moduleName
       ModuleName.descriptor "moduleName" :
 #endif
