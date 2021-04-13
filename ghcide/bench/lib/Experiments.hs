@@ -204,7 +204,7 @@ configP =
     <*> option auto (long "timeout" <> value 60 <> help "timeout for waiting for a ghcide response")
     <*> ( GetPackage <$> strOption (long "example-package-name" <> value "Cabal")
                <*> (some moduleOption <|> pure ["Distribution/Simple.hs"])
-               <*> option versionP (long "example-package-version" <> value (makeVersion [3,2,0,0]))
+               <*> option versionP (long "example-package-version" <> value (makeVersion [3,4,0,0]))
          <|>
           UsePackage <$> strOption (long "example-path")
                      <*> some moduleOption
