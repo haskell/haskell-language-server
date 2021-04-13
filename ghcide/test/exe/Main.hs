@@ -4729,7 +4729,12 @@ dependentFileTest = testGroup "addDependentFile"
         _ <-createDoc "Foo.hs" "haskell" fooContent
         doc <- createDoc "Baz.hs" "haskell" bazContent
         expectDiagnostics
+#if MIN_GHC_API_VERSION(9,0,0)
+          -- String vs [Char] causes this change in error message
+          [("Foo.hs", [(DsError, (4, 6), "Couldn't match type")])]
+#else
           [("Foo.hs", [(DsError, (4, 6), "Couldn't match expected type")])]
+#endif
         -- Now modify the dependent file
         liftIO $ writeFile (dir </> "dep-file.txt") "B"
         let change = TextDocumentContentChangeEvent
@@ -4993,7 +4998,12 @@ sessionDepsArePickedUp = testSession'
     -- Open without OverloadedStrings and expect an error.
     doc <- createDoc "Foo.hs" "haskell" fooContent
     expectDiagnostics
+#if MIN_GHC_API_VERSION(9,0,0)
+      -- String vs [Char] causes this change in error message
+      [("Foo.hs", [(DsError, (3, 6), "Couldn't match type")])]
+#else
       [("Foo.hs", [(DsError, (3, 6), "Couldn't match expected type")])]
+#endif
     -- Update hie.yaml to enable OverloadedStrings.
     liftIO $
       writeFileUTF8
