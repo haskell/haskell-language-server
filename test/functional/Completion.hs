@@ -253,7 +253,7 @@ snippetTests = testGroup "snippets" [
             item ^. label @?= "foldl"
             item ^. kind @?= Just CiFunction
             item ^. insertTextFormat @?= Just Snippet
-            item ^. insertText @?= Just "foldl ${1:b -> a -> b} ${2:b} ${3:t a}"
+            item ^. insertText @?= Just "foldl ${1:(b -> a -> b)} ${2:b} ${3:(t a)}"
 
     , testCase "work for complex types" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
         doc <- openDoc "Completion.hs" "haskell"
@@ -267,7 +267,7 @@ snippetTests = testGroup "snippets" [
             item ^. label @?= "mapM"
             item ^. kind @?= Just CiFunction
             item ^. insertTextFormat @?= Just Snippet
-            item ^. insertText @?= Just "mapM ${1:a -> m b} ${2:t a}"
+            item ^. insertText @?= Just "mapM ${1:(a -> m b)} ${2:(t a)}"
 
     , testCase "work for infix functions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
         doc <- openDoc "Completion.hs" "haskell"
