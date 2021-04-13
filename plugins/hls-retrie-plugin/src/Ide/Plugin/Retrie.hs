@@ -5,6 +5,7 @@
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE PatternSynonyms     #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving  #-}
@@ -65,8 +66,11 @@ import           Development.IDE.GHC.Compat           (GenLocated (L), GhcRn,
                                                        TyClGroup (..), fun_id,
                                                        mi_fixities,
                                                        moduleNameString,
-                                                       parseModule, rds_rules,
-                                                       srcSpanFile)
+                                                       parseModule,
+                                                       pattern IsBoot,
+                                                       pattern NotBoot,
+                                                       pattern OldRealSrcSpan,
+                                                       rds_rules, srcSpanFile)
 import           GHC.Generics                         (Generic)
 import           GhcPlugins                           (Outputable,
                                                        SourceText (NoSourceText),
@@ -466,8 +470,8 @@ asTextEdits :: Change -> [(Uri, TextEdit)]
 asTextEdits NoChange = []
 asTextEdits (Change reps _imports) =
   [ (filePathToUri spanLoc, edit)
-    | Replacement {..} <- nubOrdOn replLocation reps,
-      (RealSrcSpan rspan) <- [replLocation],
+    | Replacement {..} <- nubOrdOn (realSpan . replLocation) reps,
+      (OldRealSrcSpan rspan) <- [replLocation],
       let spanLoc = unpackFS $ srcSpanFile rspan,
       let edit = TextEdit (realSrcSpanToRange rspan) (T.pack replReplacement)
   ]
@@ -536,8 +540,9 @@ data ImportSpec = AddImport
   deriving (Eq, Show, Generic, FromJSON, ToJSON)
 
 toImportDecl :: ImportSpec -> GHC.ImportDecl GHC.GhcPs
-toImportDecl AddImport {..} = GHC.ImportDecl {..}
+toImportDecl AddImport {..} = GHC.ImportDecl {ideclSource = ideclSource', ..}
   where
+    ideclSource' = if ideclSource then IsBoot else NotBoot
     toMod = GHC.noLoc . GHC.mkModuleName
     ideclName = toMod ideclNameString
     ideclPkgQual = Nothing
