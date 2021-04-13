@@ -327,6 +327,7 @@ executable haskell-language-server
     , cryptohash-sha1
     , deepseq
     , ghc
+    , ghc-api-compat
     , ghc-boot-th
     , ghcide
     , hashable

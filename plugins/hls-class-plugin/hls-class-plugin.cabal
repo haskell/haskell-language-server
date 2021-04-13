@@ -28,6 +28,7 @@ library
     , base                  >=4.12    && <5
     , containers
     , ghc
+    , ghc-api-compat
     , ghc-exactprint
     , ghcide                ^>=1.2.0.2
     , hls-plugin-api        ^>=1.1.0.0
