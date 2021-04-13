@@ -2386,6 +2386,48 @@ fillTypedHoleTests = let
       executeCodeAction chosen
       modifiedCode <- documentContents doc
       liftIO $ mkDoc "E.toException" @=? modifiedCode
+  , testSession "filling infix type hole uses prefix notation" $ do
+      let mkDoc x = T.unlines
+              [ "module Testing where"
+              , "data A = A"
+              , "foo :: A -> A -> A"
+              , "foo A A = A"
+              , "test :: A -> A -> A"
+              , "test a1 a2 = a1 " <> x <> " a2"
+              ]
+      doc <- createDoc "Test.hs" "haskell" $ mkDoc "`_`"
+      _ <- waitForDiagnostics
+      actions <- getCodeActions doc (Range (Position 5 16) (Position 5 19))
+      chosen <- liftIO $ pickActionWithTitle "replace _ with foo" actions
+      executeCodeAction chosen
+      modifiedCode <- documentContents doc
+      liftIO $ mkDoc "`foo`" @=? modifiedCode
+  , testSession "postfix hole uses postfix notation of infix operator" $ do
+      let mkDoc x = T.unlines
+              [ "module Testing where"
+              , "test :: Int -> Int -> Int"
+              , "test a1 a2 = " <> x <> " a1 a2"
+              ]
+      doc <- createDoc "Test.hs" "haskell" $ mkDoc "_"
+      _ <- waitForDiagnostics
+      actions <- getCodeActions doc (Range (Position 2 13) (Position 2 14))
+      chosen <- liftIO $ pickActionWithTitle "replace _ with (+)" actions
+      executeCodeAction chosen
+      modifiedCode <- documentContents doc
+      liftIO $ mkDoc "(+)" @=? modifiedCode
+  , testSession "filling infix type hole uses infix operator" $ do
+      let mkDoc x = T.unlines
+              [ "module Testing where"
+              , "test :: Int -> Int -> Int"
+              , "test a1 a2 = a1 " <> x <> " a2"
+              ]
+      doc <- createDoc "Test.hs" "haskell" $ mkDoc "`_`"
+      _ <- waitForDiagnostics
+      actions <- getCodeActions doc (Range (Position 2 16) (Position 2 19))
+      chosen <- liftIO $ pickActionWithTitle "replace _ with (+)" actions
+      executeCodeAction chosen
+      modifiedCode <- documentContents doc
+      liftIO $ mkDoc "+" @=? modifiedCode
   ]
 
 addInstanceConstraintTests :: TestTree

@@ -677,16 +677,24 @@ suggestModuleTypo Diagnostic{_range=_range,..}
 suggestFillHole :: Diagnostic -> [(T.Text, TextEdit)]
 suggestFillHole Diagnostic{_range=_range,..}
     | Just holeName <- extractHoleName _message
-    , (holeFits, refFits) <- processHoleSuggestions (T.lines _message)
-    = map (proposeHoleFit holeName False) holeFits
-    ++ map (proposeHoleFit holeName True) refFits
+    , (holeFits, refFits) <- processHoleSuggestions (T.lines _message) =
+      let isInfixHole = _message =~ addBackticks holeName :: Bool in
+        map (proposeHoleFit holeName False isInfixHole) holeFits
+        ++ map (proposeHoleFit holeName True isInfixHole) refFits
     | otherwise = []
     where
       extractHoleName = fmap head . flip matchRegexUnifySpaces "Found hole: ([^ ]*)"
-      proposeHoleFit holeName parenthise name =
+      addBackticks text = "`" <> text <> "`"
+      addParens text = "(" <> text <> ")"
+      proposeHoleFit holeName parenthise isInfixHole name =
+        let isInfixOperator = T.head name == '('
+            name' = getOperatorNotation isInfixHole isInfixOperator name in
           ( "replace " <> holeName <> " with " <> name
-          , TextEdit _range $ if parenthise then parens name else name)
-      parens x = "(" <> x <> ")"
+          , TextEdit _range (if parenthise then addParens name' else name')
+          )
+      getOperatorNotation True False name                    = addBackticks name
+      getOperatorNotation True True name                     = T.drop 1 (T.dropEnd 1 name)
+      getOperatorNotation _isInfixHole _isInfixOperator name = name
 
 processHoleSuggestions :: [T.Text] -> ([T.Text], [T.Text])
 processHoleSuggestions mm = (holeSuggestions, refSuggestions)
@@ -858,7 +866,7 @@ suggestImportDisambiguation df (Just txt) ps@(L _ HsModule {hsmodImports}) diag@
           | otherwise         = case mapM toModuleTarget mods of
                                   Just targets -> suggestionsImpl symbol (oneAndOthers targets)
                                   Nothing      -> []
-        suggestionsImpl symbol targetsWithRestImports = 
+        suggestionsImpl symbol targetsWithRestImports =
             sortOn fst
             [ ( renderUniquify mode modNameText symbol
               , disambiguateSymbol ps diag symbol mode
