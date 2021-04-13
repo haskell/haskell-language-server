@@ -37,6 +37,7 @@ library
     Wingman.FeatureSet
     Wingman.GHC
     Wingman.Judgements
+    Wingman.Judgements.SYB
     Wingman.Judgements.Theta
     Wingman.KnownStrategies
     Wingman.KnownStrategies.QuickCheck

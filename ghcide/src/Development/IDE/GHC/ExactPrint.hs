@@ -196,7 +196,7 @@ needsParensSpace SectionL{}      = (All False, All False)
 needsParensSpace SectionR{}      = (All False, All False)
 needsParensSpace ExplicitTuple{} = (All False, All False)
 needsParensSpace ExplicitSum{}   = (All False, All False)
-needsParensSpace HsCase{}        = (All False, All False)
+needsParensSpace HsCase{}        = (All False, All True)
 needsParensSpace HsIf{}          = (All False, All False)
 needsParensSpace HsMultiIf{}     = (All False, All False)
 needsParensSpace HsLet{}         = (All False, All True)
@@ -337,7 +337,7 @@ genericGraftWithLargestM proxy dst trans = Graft $ \dflags ->
 -- 'everywhereM' or friends.
 --
 -- The 'Int' argument is the index in the list being bound.
-mkBindListT :: forall b m. (Typeable b, Data b, Monad m) => (Int -> b -> m [b]) -> GenericM m
+mkBindListT :: forall b m. (Data b, Monad m) => (Int -> b -> m [b]) -> GenericM m
 mkBindListT f = mkM $ fmap join . traverse (uncurry f) . zip [0..]
 
 

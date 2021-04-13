@@ -160,7 +160,7 @@ destruct' f hi jdg = do
            f
            (Just term)
            (hi_type hi)
-           $ disallowing AlreadyDestructed [term] jdg
+           $ disallowing AlreadyDestructed (S.singleton term) jdg
   pure $ ext
     & #syn_trace     %~ rose ("destruct " <> show term) . pure
     & #syn_used_vals %~ S.insert term

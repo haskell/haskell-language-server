@@ -18,12 +18,12 @@ import           Data.IORef (readIORef)
 import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Monoid
-import qualified Data.Set  as S
+import           Data.Set (Set)
+import qualified Data.Set as S
 import qualified Data.Text as T
 import           Data.Traversable
 import           Development.IDE (getFilesOfInterest, ShowDiagnostic (ShowDiag), srcSpanToRange)
 import           Development.IDE (hscEnv)
-import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Rules (usePropertyAction)
 import           Development.IDE.Core.Service (runAction)
@@ -52,6 +52,7 @@ import           Wingman.Context
 import           Wingman.FeatureSet
 import           Wingman.GHC
 import           Wingman.Judgements
+import           Wingman.Judgements.SYB (everythingContaining)
 import           Wingman.Judgements.Theta
 import           Wingman.Range
 import           Wingman.Types
@@ -221,18 +222,36 @@ mkJudgementAndContext features g (TrackedStale binds bmap) rss (TrackedStale tcg
               kt
               evidence
       top_provs = getRhsPosVals tcg_rss tcs
+      already_destructed = getAlreadyDestructed (fmap RealSrcSpan tcg_rss) tcs
       local_hy = spliceProvenance top_provs
                $ hypothesisFromBindings binds_rss binds
       evidence = getEvidenceAtHole (fmap RealSrcSpan tcg_rss) tcs
       cls_hy = foldMap evidenceToHypothesis evidence
       subst = ts_unifier $ appEndo (foldMap (Endo . evidenceToSubst) evidence) defaultTacticState
-  pure
-    ( fmap (CType . substTyAddInScope subst . unCType) $ mkFirstJudgement
+  pure $
+    ( disallowing AlreadyDestructed already_destructed
+    $ fmap (CType . substTyAddInScope subst . unCType) $ mkFirstJudgement
           (local_hy <> cls_hy)
           (isRhsHole tcg_rss tcs)
           g
     , ctx
     )
+
+
+------------------------------------------------------------------------------
+-- | Determine which bindings have already been destructed by the location of
+-- the hole.
+getAlreadyDestructed
+    :: Tracked age SrcSpan
+    -> Tracked age (LHsBinds GhcTc)
+    -> Set OccName
+getAlreadyDestructed (unTrack -> span) (unTrack -> binds) =
+  everythingContaining span
+    (mkQ mempty $ \case
+      Case (HsVar _ (L _ (occName -> var))) _ ->
+        S.singleton var
+      (_ :: HsExpr GhcTc) -> mempty
+    ) binds
 
 
 getSpanAndTypeAtHole
@@ -302,7 +321,7 @@ buildTopLevelHypothesis name ps = do
 -- | Construct a hypothesis for a single pattern, including building
 -- sub-hypotheses for constructor pattern matches.
 buildPatHy :: Provenance -> PatCompat GhcTc -> State Int (Hypothesis CType)
-buildPatHy prov (fromPatCompatTc -> p0) =
+buildPatHy prov (fromPatCompat -> p0) =
   case p0 of
     VarPat  _ x   -> pure $ mkIdHypothesis (unLoc x) prov
     LazyPat _ p   -> buildPatHy prov p
@@ -317,7 +336,7 @@ buildPatHy prov (fromPatCompatTc -> p0) =
     ListPat x@(ListPatTc ty _) (p : ps) ->
       mkDerivedConHypothesis prov (RealDataCon consDataCon) [ty]
         [ (0, p)
-        , (1, toPatCompatTc $ ListPat x ps)
+        , (1, toPatCompat $ ListPat x ps)
         ]
     -- Desugar tuples into an explicit constructor
     TuplePat tys pats boxity ->
