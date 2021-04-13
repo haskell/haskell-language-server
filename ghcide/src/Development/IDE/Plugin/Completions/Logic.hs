@@ -254,7 +254,7 @@ mkNameCompItem doc thingParent origName origMod thingType isInfix docs !imp = CI
             (TyVarTy _)     -> noParensSnippet
             (LitTy _)       -> noParensSnippet
             (TyConApp _ []) -> noParensSnippet
-            _               -> snippetText i (T.pack "(" <> showGhc t <> T.pack ")")
+            _               -> snippetText i ("(" <> showGhc t <> ")")
             where
                 noParensSnippet = snippetText i (showGhc t)
                 snippetText i t = "${" <> T.pack (show i) <> ":" <> t <> "}"
