@@ -59,6 +59,7 @@ library
     , extra
     , filepath
     , ghc
+    , ghc-api-compat
     , ghc-boot-th
     , ghc-paths
     , ghcide                ^>=1.2.0.2

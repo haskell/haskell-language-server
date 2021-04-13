@@ -63,6 +63,8 @@ module Development.IDE.GHC.Compat(
     -- Reexports from DynFlags
     thisPackage,
     writeIfaceFile,
+
+    gcatch,
 #else
     RefMap,
     Unit,
@@ -80,6 +82,7 @@ module Development.IDE.GHC.Compat(
     getPackageIncludePath,
     installedModule,
 
+    pattern DefiniteUnitId,
     packageName,
     packageNameString,
     packageVersion,
@@ -132,29 +135,32 @@ module Development.IDE.GHC.Compat(
 import           LinkerTypes
 #endif
 
-import           DynFlags             hiding (ExposePackage)
+import           DynFlags               hiding (ExposePackage)
 import qualified DynFlags
-import qualified ErrUtils             as Err
-import           Fingerprint          (Fingerprint)
+import qualified ErrUtils               as Err
+import           Fingerprint            (Fingerprint)
 import qualified Module
-import qualified Outputable           as Out
+import qualified Outputable             as Out
 import           StringBuffer
 #if MIN_GHC_API_VERSION(9,0,1)
-import qualified Data.Set             as S
-import           GHC.Core.TyCo.Ppr    (pprSigmaType)
-import           GHC.Core.TyCo.Rep    (Scaled, scaledThing)
+import           Control.Exception.Safe as Safe (Exception, MonadCatch, catch)
+import qualified Data.Set               as S
+import           GHC.Core.TyCo.Ppr      (pprSigmaType)
+import           GHC.Core.TyCo.Rep      (Scaled, scaledThing)
 import           GHC.Iface.Load
-import           GHC.Types.Unique.Set (emptyUniqSet)
+import           GHC.Types.Unique.Set   (emptyUniqSet)
 import qualified SrcLoc
 #else
-import           Module               (InstalledUnitId, toInstalledUnitId)
-import           TcType               (pprSigmaType)
+import           Module                 (InstalledUnitId,
+                                         UnitId (DefiniteUnitId),
+                                         toInstalledUnitId)
+import           TcType                 (pprSigmaType)
 #endif
-import           Compat.HieAst        (enrichHie, mkHieFile)
+import           Compat.HieAst          (enrichHie, mkHieFile)
 import           Compat.HieBin
 import           Compat.HieTypes
 import           Compat.HieUtils
-import qualified Data.ByteString      as BS
+import qualified Data.ByteString        as BS
 import           Data.IORef
 import           HscTypes
 import           MkIface
@@ -169,23 +175,24 @@ import           HsExtension
 #endif
 
 import           Avail
-import           GHC                  hiding (HasSrcSpan, ModLocation, getLoc,
-                                       lookupName)
+import           GHC                    hiding (HasSrcSpan, ModLocation, getLoc,
+                                         lookupName)
 import qualified GHC
 import qualified TyCoRep
 #if MIN_GHC_API_VERSION(8,8,0)
-import           Data.List            (foldl')
+import           Data.List              (foldl')
 #else
-import           Data.List            (foldl', isSuffixOf)
+import           Data.List              (foldl', isSuffixOf)
 #endif
 
-import qualified Data.Map             as M
+import qualified Data.Map               as M
 import           DynamicLoading
-import           Plugins              (Plugin (parsedResultAction), withPlugins)
+import           Plugins                (Plugin (parsedResultAction),
+                                         withPlugins)
 
 #if !MIN_GHC_API_VERSION(8,8,0)
-import           SrcLoc               (RealLocated)
-import           System.FilePath      ((-<.>))
+import           SrcLoc                 (RealLocated)
+import           System.FilePath        ((-<.>))
 #endif
 
 #if !MIN_GHC_API_VERSION(8,8,0)
@@ -355,6 +362,7 @@ getModuleHash = mi_mod_hash
 type UnitId            = Module.Unit
 type InstalledUnitId   = Module.UnitId
 type PackageConfig     = Packages.UnitInfo
+pattern DefiniteUnitId x = Module.RealUnit x
 definiteUnitId         = Module.RealUnit
 defUnitId              = Module.Definite
 installedModule        = Module.Module
@@ -416,6 +424,10 @@ type LogActionCompat = DynFlags -> WarnReason -> Severity -> SrcSpan -> PrintUnq
 -- alwaysQualify seems to still do the right thing here, according to the "unqualified warnings" test.
 logActionCompat :: LogActionCompat -> LogAction
 logActionCompat logAction dynFlags wr severity loc = logAction dynFlags wr severity loc alwaysQualify
+
+-- We are using Safe here, which is not equivalent, but probably what we want.
+gcatch :: (Exception e, MonadCatch m) => m a -> (e -> m a) -> m a
+gcatch = Safe.catch
 
 #else
 
