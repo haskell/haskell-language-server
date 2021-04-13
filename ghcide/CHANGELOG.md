@@ -1,3 +1,10 @@
+### 1.2.0.2 (2021-04-13)
+* Bracketing for snippet completions (#1709) - Oliver Madine
+* Don't suggest destruct actions for already-destructed terms (#1715) - Sandy Maguire
+
+### 1.2.0.1 (2021-04-12)
+* restore compat. with haddock-library 1.8 (#1717) - Pepe Iborra
+
 ### 1.2.0 (2021-04-11)
 * Emit holes as diagnostics (#1653) - Sandy Maguire
 * Fix ghcide and HLS enter lsp mode by default (#1692) - Potato Hatsue
