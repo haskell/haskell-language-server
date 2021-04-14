@@ -15,8 +15,11 @@ import           Data.Aeson
 import           Data.Bifunctor (first)
 import           Data.Data
 import           Data.Foldable (for_)
+import           Data.Functor ((<&>))
+import qualified Data.HashMap.Strict as HM
 import           Data.Maybe
 import qualified Data.Text as T
+import           Development.IDE (realSrcSpanToRange)
 import           Development.IDE.Core.Shake (IdeState (..))
 import           Development.IDE.Core.UseStale (Tracked, TrackedStale(..), unTrack, mapAgeFrom, unsafeMkCurrent)
 import           Development.IDE.GHC.Compat
@@ -36,9 +39,8 @@ import           Wingman.Machinery (scoreSolution)
 import           Wingman.Range
 import           Wingman.Tactics
 import           Wingman.Types
-import Data.Functor ((<&>))
-import Development.IDE (srcSpanToRange, realSrcSpanToRange)
-import qualified Data.HashMap.Strict as HM
+import Wingman.CodeGen (destructionFor)
+import GHC.SourceGen (case', var)
 
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -76,15 +78,16 @@ completionProvider state plId (CodeLensParams _ _ (TextDocumentIdentifier uri))
         holes <- completionForHole  state nfp $ cfg_feature_set cfg
         traceMX "found holes" holes
         pure $ Right $ List $ holes <&> \(ss, ty) ->
-          let range = realSrcSpanToRange $ unTrack ss
+          let range@(Range _ ep) = realSrcSpanToRange $ unTrack ss
+              rep_range = Range ep ep
            in CodeLens
                 range
                 (Just $ mkLspCommand plId
                   (CommandId "emptycase.complete")
-                  "Complete case constructors" $
+                  ("Complete case constructors (" <> T.pack (unsafeRender ty) <> ")") $
                     Just $ pure $ toJSON $
                       WorkspaceEdit
-                        (Just $ HM.singleton uri $ List $ pure $ TextEdit range $ T.pack $ unsafeRender ty)
+                        (Just $ HM.singleton uri $ List $ pure $ TextEdit rep_range $ T.pack $ mappend "\n" $ unlines $ drop 1 $ lines $ unsafeRender $ case' (var "_")  $ fromJust $ destructionFor mempty ty)
                         Nothing
                         Nothing
                 )

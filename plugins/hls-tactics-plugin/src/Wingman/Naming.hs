@@ -77,12 +77,12 @@ mkGoodName in_scope t =
 ------------------------------------------------------------------------------
 -- | Like 'mkGoodName' but creates several apart names.
 mkManyGoodNames
-  :: (Traversable t, Monad m)
+  :: (Traversable t)
   => Set OccName
   -> t Type
-  -> m (t OccName)
+  -> t OccName
 mkManyGoodNames in_scope args =
-  flip evalStateT in_scope $ for args $ \at -> do
+  flip evalState in_scope $ for args $ \at -> do
     in_scope <- get
     let n = mkGoodName in_scope at
     modify $ S.insert n

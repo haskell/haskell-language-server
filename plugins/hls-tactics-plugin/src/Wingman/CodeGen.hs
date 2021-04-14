@@ -1,7 +1,8 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE OverloadedLabels #-}
-{-# LANGUAGE TupleSections    #-}
-{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE OverloadedLabels  #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TupleSections     #-}
+{-# LANGUAGE TypeApplications  #-}
 
 module Wingman.CodeGen
   ( module Wingman.CodeGen
@@ -65,7 +66,7 @@ destructMatches f scrut t jdg = do
               args = conLikeInstOrigArgTys' con apps
           modify $ appEndo $ foldMap (Endo . evidenceToSubst) ev
           subst <- gets ts_unifier
-          names <- mkManyGoodNames (hyNamesInScope hy) args
+          let names = mkManyGoodNames (hyNamesInScope hy) args
           let hy' = patternHypothesis scrut con jdg
                   $ zip names
                   $ coerce args
@@ -79,6 +80,20 @@ destructMatches f scrut t jdg = do
                           . pure
             & #syn_scoped <>~ hy'
             & #syn_val     %~ match [mkDestructPat con names] . unLoc
+
+
+destructionFor :: Hypothesis a -> Type -> Maybe [RawMatch]
+destructionFor hy t = do
+  case tacticsGetDataCons t of
+    Nothing -> Nothing
+    Just ([], _) -> Nothing
+    Just (dcs, apps) -> do
+      for dcs $ \dc -> do
+        let con = RealDataCon dc
+            args = conLikeInstOrigArgTys' con apps
+            names = mkManyGoodNames (hyNamesInScope hy) args
+        pure $ match [mkDestructPat con names] $ var "_"
+
 
 
 ------------------------------------------------------------------------------
