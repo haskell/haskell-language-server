@@ -24,6 +24,7 @@ import qualified Data.Set as S
 import qualified Data.Text as T
 import           Data.Traversable
 import           Development.IDE (getFilesOfInterest, ShowDiagnostic (ShowDiag), srcSpanToRange)
+import qualified Development.IDE as GHCIDE
 import           Development.IDE (hscEnv)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Rules (usePropertyAction)
@@ -57,6 +58,7 @@ import           Wingman.Judgements.SYB (everythingContaining, smallestQ, generi
 import           Wingman.Judgements.Theta
 import           Wingman.Range
 import           Wingman.Types
+import Control.Applicative (empty)
 
 
 tacticDesc :: T.Text -> T.Text
@@ -185,11 +187,6 @@ judgementForHole state nfp range features = do
            $ runStaleIde state nfp TypeCheck
       hscenv <- runStaleIde state nfp GhcSessionDeps
 
-      rss2 <- liftMaybe $ getSpanAtCursor range' hf
-      (new_span, scrutinee) <- liftMaybe $ getFirst $
-        emptyCaseQ (RealSrcSpan $ unTrack rss2) $ tcg_binds $ untrackedStaleValue tcg
-      x <- MaybeT $ typeCheck (hscEnv $ untrackedStaleValue hscenv) (untrackedStaleValue tcg) scrutinee
-
       (rss, g) <- liftMaybe $ getSpanAndTypeAtHole range' hf
       new_rss <- liftMaybe $ mapAgeTo amapping rss
 
@@ -205,16 +202,35 @@ judgementForHole state nfp range features = do
       pure (fmap realSrcSpanToRange new_rss, jdg, ctx, dflags)
 
 
+------------------------------------------------------------------------------
+-- | Find the last typechecked module, and find the most specific span, as well
+-- as the judgement at the given range.
+completionForHole
+    :: IdeState
+    -> NormalizedFilePath
+    -> FeatureSet
+    -> MaybeT IO [(Tracked 'Current RealSrcSpan, Type)]
+completionForHole state nfp features = do
+    TrackedStale tcg tcg_map <- fmap (fmap tmrTypechecked) $ runStaleIde state nfp TypeCheck
+    let tcg' = unTrack tcg
+    hscenv <- runStaleIde state nfp GhcSessionDeps
 
-emptyCaseQ :: SrcSpan -> GenericQ (First (SrcSpan, HsExpr GhcTc))
-emptyCaseQ span =
-  smallestQ
-    (genericDefinitelyNotIsSubspan span `extQ` \case
-      (L _ (Case _ _)) -> Just True
-      (_ :: LHsExpr GhcTc) -> Nothing
-    ) $ mkQ mempty $ \case
-          L new_span (Case scrutinee []) -> pure (new_span, scrutinee)
-          (_ :: LHsExpr GhcTc) -> mempty
+    let zz = traverse (emptyCaseQ . tcg_binds) tcg
+
+    for zz $ \aged@(unTrack -> (ss, scrutinee)) -> do
+      ty <- MaybeT $ typeCheck (hscEnv $ untrackedStaleValue hscenv) tcg' scrutinee
+      case ss of
+        RealSrcSpan r   -> do
+          rss' <- liftMaybe $ mapAgeTo tcg_map $ unsafeCopyAge aged r
+          pure (rss', ty)
+        UnhelpfulSpan _ -> empty
+
+
+
+emptyCaseQ :: GenericQ [(SrcSpan, HsExpr GhcTc)]
+emptyCaseQ = everything (<>) $ mkQ mempty $ \case
+  L new_span (Case scrutinee []) -> pure (new_span, scrutinee)
+  (_ :: LHsExpr GhcTc) -> mempty
 
 
 mkJudgementAndContext

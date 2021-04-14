@@ -36,23 +36,63 @@ import           Wingman.Machinery (scoreSolution)
 import           Wingman.Range
 import           Wingman.Tactics
 import           Wingman.Types
+import Data.Functor ((<&>))
+import Development.IDE (srcSpanToRange, realSrcSpanToRange)
+import qualified Data.HashMap.Strict as HM
 
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
   { pluginCommands
-      = fmap (\tc ->
-          PluginCommand
-            (tcCommandId tc)
-            (tacticDesc $ tcCommandName tc)
-            (tacticCmd (commandTactic tc) plId))
-            [minBound .. maxBound]
-  , pluginHandlers =
-      mkPluginHandler STextDocumentCodeAction codeActionProvider
+      = mconcat
+          [ fmap (\tc ->
+              PluginCommand
+                (tcCommandId tc)
+                (tacticDesc $ tcCommandName tc)
+                (tacticCmd (commandTactic tc) plId))
+                [minBound .. maxBound]
+          , pure $ PluginCommand (CommandId "emptycase.complete") "Complete the empty case" commandHandler
+          ]
+  , pluginHandlers = mconcat
+      [ mkPluginHandler STextDocumentCodeAction codeActionProvider
+      , mkPluginHandler STextDocumentCodeLens completionProvider
+      ]
   , pluginRules = wingmanRules plId
   , pluginCustomConfig =
       mkCustomConfig properties
   }
+
+commandHandler :: CommandFunction IdeState WorkspaceEdit
+commandHandler _ideState wedit = do
+  _ <- sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
+  return $ Right Null
+
+completionProvider :: PluginMethodHandler IdeState TextDocumentCodeLens
+completionProvider state plId (CodeLensParams _ _ (TextDocumentIdentifier uri))
+  | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
+      cfg <- getTacticConfig plId
+      traceM "got a cfg"
+      liftIO $ fromMaybeT (Right $ List []) $ do
+        holes <- completionForHole  state nfp $ cfg_feature_set cfg
+        traceMX "found holes" holes
+        pure $ Right $ List $ holes <&> \(ss, ty) ->
+          let range = realSrcSpanToRange $ unTrack ss
+           in CodeLens
+                range
+                (Just $ mkLspCommand plId
+                  (CommandId "emptycase.complete")
+                  "Complete case constructors" $
+                    Just $ pure $ toJSON $
+                      WorkspaceEdit
+                        (Just $ HM.singleton uri $ List $ pure $ TextEdit range $ T.pack $ unsafeRender ty)
+                        Nothing
+                        Nothing
+                )
+                Nothing
+                -- (Just $ Command "Complete case constructors" "emptycase.complete" $
+                --   Just $ List
+                -- Nothing
+completionProvider _ _ _ = pure $ Right $ List []
 
 
 codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
