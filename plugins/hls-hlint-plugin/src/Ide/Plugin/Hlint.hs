@@ -4,6 +4,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE OverloadedLabels      #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE PackageImports        #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
@@ -33,7 +34,8 @@ import           Data.Maybe
 import qualified Data.Text                                          as T
 import qualified Data.Text.IO                                       as T
 import           Data.Typeable
-import           Development.IDE
+import           Development.IDE                                    hiding
+                                                                    (Error)
 import           Development.IDE.Core.Rules                         (defineNoFile,
                                                                      getParsedModuleWithComments)
 import           Development.IDE.Core.Shake                         (getDiagnostics)
@@ -70,10 +72,13 @@ import           Language.Haskell.GHC.ExactPrint.Types              (Rigidity (.
 #endif
 
 import           Ide.Logger
-import           Ide.Plugin.Config
+import           Ide.Plugin.Config                                  hiding
+                                                                    (Config)
+import           Ide.Plugin.Properties
 import           Ide.PluginUtils
 import           Ide.Types
-import           Language.Haskell.HLint                             as Hlint
+import           Language.Haskell.HLint                             as Hlint hiding
+                                                                             (Error)
 import           Language.LSP.Server                                (ProgressCancellable (Cancellable),
                                                                      sendRequest,
                                                                      withIndefiniteProgress)
@@ -125,7 +130,9 @@ rules plugin = do
     ideas <- if hlintOn' then getIdeas file else return (Right [])
     return (diagnostics file ideas, Just ())
 
-  getHlintSettingsRule (HlintEnabled [])
+  defineNoFile $ \GetHlintSettings -> do
+      (Config flags) <- getHlintConfig plugin
+      getHlintSettingsRule (HlintEnabled flags)
 
   action $ do
     files <- getFilesOfInterest
@@ -258,15 +265,40 @@ instance Binary GetHlintSettings
 
 type instance RuleResult GetHlintSettings = (ParseFlags, [Classify], Hint)
 
-getHlintSettingsRule :: HlintUsage -> Rules ()
+getHlintSettingsRule :: HlintUsage -> Action (ParseFlags, [Classify], Hint)
 getHlintSettingsRule usage =
-    defineNoFile $ \GetHlintSettings ->
       liftIO $ case usage of
           HlintEnabled cmdArgs -> argsSettings cmdArgs
           HlintDisabled        -> fail "hlint configuration unspecified"
 
 -- ---------------------------------------------------------------------
 
+newtype Config = Config [String]
+
+properties :: Properties '[ 'PropertyKey "flags" ('TArray String)]
+properties = emptyProperties
+  & defineArrayProperty #flags
+    "Flags used by hlint" []
+
+-- | Returns the value of a property for use with shake Rules
+usePropertyAction ::
+  (HasProperty s k t r) =>
+  KeyNameProxy s ->
+  PluginId ->
+  Properties r ->
+  Action (ToHsType t)
+usePropertyAction kn pId p = do
+  config <- getClientConfigAction def
+  let pluginConfig = configForPlugin config pId
+  return $ useProperty kn p $ Just (plcConfig pluginConfig)
+
+-- | Get the plugin config
+getHlintConfig :: PluginId -> Action Config
+getHlintConfig pId =
+  Config
+    <$> usePropertyAction #flags pId properties
+
+-- ---------------------------------------------------------------------
 codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
 codeActionProvider ideState plId (CodeActionParams _ _ docId _ context) = Right . LSP.List . map InR <$> liftIO getCodeActions
   where
