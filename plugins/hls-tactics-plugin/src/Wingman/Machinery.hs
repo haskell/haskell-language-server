@@ -33,7 +33,6 @@ import           Unify
 import           Wingman.Judgements
 import           Wingman.Simplify (simplify)
 import           Wingman.Types
-import GhcPlugins (unitTy)
 
 
 substCTy :: TCvSubst -> CType -> CType
@@ -51,7 +50,6 @@ newSubgoal j = do
     subgoal
       $ substJdg unifier
       $ unsetIsTopHole j
-
 
 
 ------------------------------------------------------------------------------

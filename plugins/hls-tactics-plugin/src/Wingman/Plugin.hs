@@ -36,8 +36,6 @@ import           Wingman.Machinery (scoreSolution)
 import           Wingman.Range
 import           Wingman.Tactics
 import           Wingman.Types
-import GhcPlugins (unitTy)
-import Wingman.Judgements (mkFirstJudgement)
 
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -62,7 +60,7 @@ codeActionProvider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
       cfg <- getTacticConfig plId
       liftIO $ fromMaybeT (Right $ List []) $ do
-        (_, hook, _, dflags) <- judgementForHole state nfp range $ cfg_feature_set cfg
+        (_, jdg, _, dflags) <- judgementForHole state nfp range $ cfg_feature_set cfg
         actions <- lift $
           -- This foldMap is over the function monoid.
           foldMap commandProvider [minBound .. maxBound] $ TacticProviderData
@@ -71,7 +69,7 @@ codeActionProvider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri)
             , tpd_plid   = plId
             , tpd_uri    = uri
             , tpd_range  = range
-            , tpd_hook   = hook
+            , tpd_jdg    = jdg
             }
         pure $ Right $ List actions
 codeActionProvider _ _ _ = pure $ Right $ List []
@@ -215,12 +213,4 @@ graftDecl _ _ _ _ x = pure $ pure x
 
 fromMaybeT :: Functor m => a -> MaybeT m a -> m a
 fromMaybeT def = fmap (fromMaybe def) . runMaybeT
-
-
-runHook
-    :: Context
-    -> Hook (TacticsM ())
-    -> Either [TacticError] RunTacticResults
-runHook ctx (Tactic t jdg) = runTactic ctx jdg t
-runHook ctx (EmptyCase ty) = runTactic ctx (mkFirstJudgement mempty False unitTy) _
 

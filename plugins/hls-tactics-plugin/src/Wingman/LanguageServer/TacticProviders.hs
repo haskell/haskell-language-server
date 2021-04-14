@@ -152,7 +152,7 @@ data TacticProviderData = TacticProviderData
   , tpd_plid   :: PluginId
   , tpd_uri    :: Uri
   , tpd_range  :: Tracked 'Current Range
-  , tpd_hook   :: Hook ()
+  , tpd_jdg    :: Judgement
   }
 
 
@@ -189,21 +189,17 @@ requireExtension ext tp tpd =
 -- | Restrict a 'TacticProvider', making sure it appears only when the given
 -- predicate holds for the goal.
 filterGoalType :: (Type -> Bool) -> TacticProvider -> TacticProvider
-filterGoalType p tp =
-  withJudgement $ \jdg ->
-    case p $ unCType $ jGoal jdg of
-      True  -> tp
-      False -> mempty
+filterGoalType p tp tpd =
+  case p $ unCType $ jGoal $ tpd_jdg tpd of
+    True  -> tp tpd
+    False -> pure []
 
 
 ------------------------------------------------------------------------------
 -- | Restrict a 'TacticProvider', making sure it appears only when the given
 -- predicate holds for the goal.
 withJudgement :: (Judgement -> TacticProvider) -> TacticProvider
-withJudgement tp tpd =
-  case tpd_hook tpd of
-    Tactic _ jdg -> tp jdg tpd
-    _ -> pure []
+withJudgement tp tpd = tp (tpd_jdg tpd) tpd
 
 
 ------------------------------------------------------------------------------
@@ -214,16 +210,14 @@ filterBindingType
     -> (OccName -> Type -> TacticProvider)
     -> TacticProvider
 filterBindingType p tp tpd =
-  case tpd_hook tpd of
-    Tactic _ jdg ->
-      let hy  = jLocalHypothesis jdg
-          g   = jGoal jdg
-      in fmap join $ for (unHypothesis hy) $ \hi ->
-            let ty = unCType $ hi_type hi
-            in case p (unCType g) ty of
-                  True  -> tp (hi_name hi) ty tpd
-                  False -> pure []
-    _ -> mempty
+  let jdg = tpd_jdg tpd
+      hy  = jLocalHypothesis jdg
+      g   = jGoal jdg
+   in fmap join $ for (unHypothesis hy) $ \hi ->
+        let ty = unCType $ hi_type hi
+         in case p (unCType g) ty of
+              True  -> tp (hi_name hi) ty tpd
+              False -> pure []
 
 
 ------------------------------------------------------------------------------
@@ -234,11 +228,9 @@ filterTypeProjection
     -> (a -> TacticProvider)
     -> TacticProvider
 filterTypeProjection p tp tpd =
-  case tpd_hook tpd of
-    Tactic _ jdg ->
-      fmap join $ for (p $ unCType $ jGoal jdg) $ \a ->
-          tp a tpd
-    _ -> mempty
+  fmap join $ for (p $ unCType $ jGoal $ tpd_jdg tpd) $ \a ->
+      tp a tpd
+
 
 ------------------------------------------------------------------------------
 -- | Get access to the 'Config' when building a 'TacticProvider'.
