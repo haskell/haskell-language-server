@@ -127,7 +127,7 @@ diffText' supports (f,fText) f2Text withDeletions  =
     diff = diffTextEdit fText f2Text withDeletions
     h = H.singleton f diff
     docChanges = J.List [InL docEdit]
-    docEdit = J.TextDocumentEdit (J.VersionedTextDocumentIdentifier f (Just 0)) $ fmap InL diff
+    docEdit = J.TextDocumentEdit (J.VersionedTextDocumentIdentifier f Nothing) $ fmap InL diff
 
 -- ---------------------------------------------------------------------
 
