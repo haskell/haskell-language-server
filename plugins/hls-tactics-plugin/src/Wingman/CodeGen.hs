@@ -14,6 +14,7 @@ import           Control.Lens ((%~), (<>~), (&))
 import           Control.Monad.Except
 import           Control.Monad.State
 import           Data.Bool (bool)
+import           Data.Functor ((<&>))
 import           Data.Generics.Labels ()
 import           Data.List
 import           Data.Monoid (Endo(..))
@@ -26,7 +27,8 @@ import           GHC.SourceGen.Binds
 import           GHC.SourceGen.Expr
 import           GHC.SourceGen.Overloaded
 import           GHC.SourceGen.Pat
-import           GhcPlugins (isSymOcc)
+import           GhcPlugins (isSymOcc, mkVarOccFS)
+import           OccName (occName)
 import           PatSyn
 import           Type hiding (Var)
 import           Wingman.CodeGen.Utils
@@ -39,7 +41,8 @@ import           Wingman.Types
 
 
 destructMatches
-    :: (ConLike -> Judgement -> Rule)
+    :: Bool
+    -> (ConLike -> Judgement -> Rule)
        -- ^ How to construct each match
     -> Maybe OccName
        -- ^ Scrutinee
@@ -47,7 +50,7 @@ destructMatches
        -- ^ Type being destructed
     -> Judgement
     -> RuleM (Synthesized [RawMatch])
-destructMatches f scrut t jdg = do
+destructMatches use_field_puns f scrut t jdg = do
   let hy = jEntireHypothesis jdg
       g  = jGoal jdg
   case splitTyConApp_maybe $ unCType t of
@@ -78,16 +81,30 @@ destructMatches f scrut t jdg = do
             & #syn_trace %~ rose ("match " <> show dc <> " {" <> intercalate ", " (fmap show names) <> "}")
                           . pure
             & #syn_scoped <>~ hy'
-            & #syn_val     %~ match [mkDestructPat con names] . unLoc
+            & #syn_val     %~ match [mkDestructPat use_field_puns con names] . unLoc
 
 
 ------------------------------------------------------------------------------
 -- | Produces a pattern for a data con and the names of its fields.
-mkDestructPat :: ConLike -> [OccName] -> Pat GhcPs
-mkDestructPat con names
+mkDestructPat :: Bool -> ConLike -> [OccName] -> Pat GhcPs
+mkDestructPat use_field_puns con names
   | RealDataCon dcon <- con
   , isTupleDataCon dcon =
       tuple pat_args
+  | fields@(_:_) <- zip (conLikeFieldLabels con) names
+  , use_field_puns =
+      ConPatIn (noLoc $ Unqual $ occName $ conLikeName con)
+        $ RecCon
+        $ HsRecFields
+            (fields <&> \(label, name) ->
+              let label_occ = mkVarOccFS $ flLabel label
+               in noLoc
+                $ HsRecField
+                    (noLoc $ mkFieldOcc $ noLoc $ Unqual label_occ)
+                    (noLoc $ bvar' label_occ)
+                    True
+            )
+        $ Nothing
   | otherwise =
       infixifyPatIfNecessary con $
         conP
@@ -151,12 +168,13 @@ patSynExTys ps = patSynExTyVars ps
 -- | Combinator for performing case splitting, and running sub-rules on the
 -- resulting matches.
 
-destruct' :: (ConLike -> Judgement -> Rule) -> HyInfo CType -> Judgement -> Rule
-destruct' f hi jdg = do
+destruct' :: Bool -> (ConLike -> Judgement -> Rule) -> HyInfo CType -> Judgement -> Rule
+destruct' use_field_puns f hi jdg = do
   when (isDestructBlacklisted jdg) $ throwError NoApplicableTactic
   let term = hi_name hi
   ext
       <- destructMatches
+           use_field_puns
            f
            (Just term)
            (hi_type hi)
@@ -170,14 +188,14 @@ destruct' f hi jdg = do
 ------------------------------------------------------------------------------
 -- | Combinator for performign case splitting, and running sub-rules on the
 -- resulting matches.
-destructLambdaCase' :: (ConLike -> Judgement -> Rule) -> Judgement -> Rule
-destructLambdaCase' f jdg = do
+destructLambdaCase' :: Bool -> (ConLike -> Judgement -> Rule) -> Judgement -> Rule
+destructLambdaCase' use_field_puns f jdg = do
   when (isDestructBlacklisted jdg) $ throwError NoApplicableTactic
   let g  = jGoal jdg
   case splitFunTy_maybe (unCType g) of
     Just (arg, _) | isAlgType arg ->
       fmap (fmap noLoc lambdaCase) <$>
-        destructMatches f Nothing (CType arg) jdg
+        destructMatches use_field_puns f Nothing (CType arg) jdg
     _ -> throwError $ GoalMismatch "destructLambdaCase'" g
 
 
