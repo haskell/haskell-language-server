@@ -68,9 +68,13 @@ destructMatches use_field_puns f scrut t jdg = do
               args = conLikeInstOrigArgTys' con apps
           modify $ appEndo $ foldMap (Endo . evidenceToSubst) ev
           subst <- gets ts_unifier
-          names <- mkManyGoodNames (hyNamesInScope hy) args
+
+          let names_in_scope = hyNamesInScope hy
+          names <- mkManyGoodNames names_in_scope args
+          let (names', destructed) =
+                mkDestructPat (bool Nothing (Just names_in_scope) use_field_puns) con names
           let hy' = patternHypothesis scrut con jdg
-                  $ zip names
+                  $ zip names'
                   $ coerce args
               j = fmap (CType . substTyAddInScope subst . unCType)
                 $ introduce hy'
@@ -78,35 +82,47 @@ destructMatches use_field_puns f scrut t jdg = do
                 $ withNewGoal g jdg
           ext <- f con j
           pure $ ext
-            & #syn_trace %~ rose ("match " <> show dc <> " {" <> intercalate ", " (fmap show names) <> "}")
+            & #syn_trace %~ rose ("match " <> show dc <> " {" <> intercalate ", " (fmap show names') <> "}")
                           . pure
             & #syn_scoped <>~ hy'
-            & #syn_val     %~ match [mkDestructPat use_field_puns con names] . unLoc
+            & #syn_val %~ match [destructed] . unLoc
 
 
 ------------------------------------------------------------------------------
 -- | Produces a pattern for a data con and the names of its fields.
-mkDestructPat :: Bool -> ConLike -> [OccName] -> Pat GhcPs
-mkDestructPat use_field_puns con names
+mkDestructPat :: Maybe (S.Set OccName) -> ConLike -> [OccName] -> ([OccName], Pat GhcPs)
+mkDestructPat already_in_scope con names
   | RealDataCon dcon <- con
   , isTupleDataCon dcon =
-      tuple pat_args
+      (names, tuple pat_args)
   | fields@(_:_) <- zip (conLikeFieldLabels con) names
-  , use_field_puns =
-      ConPatIn (noLoc $ Unqual $ occName $ conLikeName con)
-        $ RecCon
-        $ HsRecFields
-            (fields <&> \(label, name) ->
+  , Just in_scope <- already_in_scope =
+      let (names', rec_fields) =
+            unzip $ fields <&> \(label, name) -> do
               let label_occ = mkVarOccFS $ flLabel label
-               in noLoc
-                $ HsRecField
-                    (noLoc $ mkFieldOcc $ noLoc $ Unqual label_occ)
-                    (noLoc $ bvar' label_occ)
-                    True
-            )
-        $ Nothing
+              case S.member label_occ in_scope of
+                -- We have a shadow, so use the generated name instead
+                True ->
+                  (name,) $ noLoc $
+                    HsRecField
+                      (noLoc $ mkFieldOcc $ noLoc $ Unqual label_occ)
+                      (noLoc $ bvar' name)
+                      False
+                -- No shadow, safe to use a pun
+                False ->
+                  (label_occ,) $ noLoc $
+                    HsRecField
+                      (noLoc $ mkFieldOcc $ noLoc $ Unqual label_occ)
+                      (noLoc $ bvar' label_occ)
+                      True
+
+        in (names', )
+         $ ConPatIn (noLoc $ Unqual $ occName $ conLikeName con)
+         $ RecCon
+         $ HsRecFields rec_fields
+         $ Nothing
   | otherwise =
-      infixifyPatIfNecessary con $
+      (names, ) $ infixifyPatIfNecessary con $
         conP
           (coerceName $ conLikeName con)
           pat_args
