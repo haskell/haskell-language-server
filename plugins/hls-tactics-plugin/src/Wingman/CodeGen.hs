@@ -53,39 +53,36 @@ destructMatches
 destructMatches use_field_puns f scrut t jdg = do
   let hy = jEntireHypothesis jdg
       g  = jGoal jdg
-  case splitTyConApp_maybe $ unCType t of
+  case tacticsGetDataCons $ unCType t of
     Nothing -> throwError $ GoalMismatch "destruct" g
-    Just (tc, apps) -> do
-      let dcs = tyConDataCons tc
-      case dcs of
-        [] -> throwError $ GoalMismatch "destruct" g
-        _ -> fmap unzipTrace $ for dcs $ \dc -> do
-          let con = RealDataCon dc
-              ev = concatMap mkEvidence $ dataConInstArgTys dc apps
-              -- We explicitly do not need to add the method hypothesis to
-              -- #syn_scoped
-              method_hy = foldMap evidenceToHypothesis ev
-              args = conLikeInstOrigArgTys' con apps
-          modify $ appEndo $ foldMap (Endo . evidenceToSubst) ev
-          subst <- gets ts_unifier
+    Just (dcs, apps) ->
+      fmap unzipTrace $ for dcs $ \dc -> do
+        let con = RealDataCon dc
+            ev = concatMap mkEvidence $ dataConInstArgTys dc apps
+            -- We explicitly do not need to add the method hypothesis to
+            -- #syn_scoped
+            method_hy = foldMap evidenceToHypothesis ev
+            args = conLikeInstOrigArgTys' con apps
+        modify $ appEndo $ foldMap (Endo . evidenceToSubst) ev
+        subst <- gets ts_unifier
 
-          let names_in_scope = hyNamesInScope hy
-          names <- mkManyGoodNames names_in_scope args
-          let (names', destructed) =
-                mkDestructPat (bool Nothing (Just names_in_scope) use_field_puns) con names
-          let hy' = patternHypothesis scrut con jdg
-                  $ zip names'
-                  $ coerce args
-              j = fmap (CType . substTyAddInScope subst . unCType)
-                $ introduce hy'
-                $ introduce method_hy
-                $ withNewGoal g jdg
-          ext <- f con j
-          pure $ ext
-            & #syn_trace %~ rose ("match " <> show dc <> " {" <> intercalate ", " (fmap show names') <> "}")
-                          . pure
-            & #syn_scoped <>~ hy'
-            & #syn_val %~ match [destructed] . unLoc
+        let names_in_scope = hyNamesInScope hy
+        names <- mkManyGoodNames names_in_scope args
+        let (names', destructed) =
+              mkDestructPat (bool Nothing (Just names_in_scope) use_field_puns) con names
+        let hy' = patternHypothesis scrut con jdg
+                $ zip names'
+                $ coerce args
+            j = fmap (CType . substTyAddInScope subst . unCType)
+              $ introduce hy'
+              $ introduce method_hy
+              $ withNewGoal g jdg
+        ext <- f con j
+        pure $ ext
+          & #syn_trace %~ rose ("match " <> show dc <> " {" <> intercalate ", " (fmap show names') <> "}")
+                        . pure
+          & #syn_scoped <>~ hy'
+          & #syn_val %~ match [destructed] . unLoc
 
 
 ------------------------------------------------------------------------------
