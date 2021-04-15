@@ -97,7 +97,7 @@ codeLensProvider _ _ _ = pure $ Right $ List []
 -- | The description for the empty case lens.
 mkEmptyCaseLensDesc :: Type -> T.Text
 mkEmptyCaseLensDesc ty =
-  "Complete case constructors (" <> T.pack (unsafeRender ty) <> ")"
+  "Wingman: Complete case constructors (" <> T.pack (unsafeRender ty) <> ")"
 
 
 ------------------------------------------------------------------------------
