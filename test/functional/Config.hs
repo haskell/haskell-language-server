@@ -2,12 +2,13 @@
 
 module Config (tests) where
 
-import           Control.Lens            hiding (List)
+import           Control.Lens            hiding (List, (.=))
 import           Control.Monad
 import           Data.Aeson
 import qualified Data.Map                as Map
 import qualified Data.Text               as T
 import           Ide.Plugin.Config
+import qualified Ide.Plugin.Config       as Plugin
 import           Language.LSP.Test       as Test
 import qualified Language.LSP.Types.Lens as L
 import           System.FilePath         ((</>))
@@ -55,6 +56,30 @@ hlintTests = testGroup "hlint plugin enables" [
 
         liftIO $ noHlintDiagnostics diags'
 
+    , testCase "adding hlint flags to plugin configuration changes hlint diagnostics" $ runHlintSession "" $ do
+        let config = def { hlintOn = True }
+        sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
+
+        doc <- openDoc "ApplyRefact2.hs" "haskell"
+        testHlintDiagnostics doc
+
+        let unObject (Object obj) = obj
+            unObject _            = undefined
+
+            flags :: [T.Text]
+            flags = ["--ignore=Redundant id", "--hint=test-hlint-config.yaml"]
+
+            config' =
+              def
+                { hlintOn = True
+                , Plugin.plugins = Map.fromList [("hlint",
+                    def { Plugin.plcConfig = unObject $ object ["flags" .= flags] }
+                )] }
+        sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config'))
+
+        diags' <- waitForDiagnosticsFrom doc
+
+        liftIO $ noHlintDiagnostics diags'
     ]
     where
         runHlintSession :: FilePath -> Session a -> IO a
