@@ -3,6 +3,8 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE RankNTypes     #-}
 
+{-# OPTIONS_GHC -fno-warn-unused-top-binds #-}
+
 module Development.IDE.Core.UseStale
   ( Age(..)
   , Tracked
