@@ -28,6 +28,7 @@ background](https://neilmitchell.blogspot.com/2020/01/one-haskell-ide-to-rule-th
     - [Visual Studio Code](#visual-studio-code)
     - [Pre-built binaries](#pre-built-binaries)
     - [Arch Linux](#arch-linux)
+    - [FreeBSD](#freebsd)
     - [Installation from source](#installation-from-source)
       - [Common pre-requirements](#common-pre-requirements)
       - [Linux-specific pre-requirements](#linux-specific-pre-requirements)
@@ -154,6 +155,17 @@ sudo pacman -S haskell-language-server
 
 In this case, `haskell-language-server` is compiled against the GHC distributed to Arch Linux, so you will need maintain a system wide Haskell development environment, and install GHC from `pacman` as well.
 See [ArchWiki](https://wiki.archlinux.org/index.php/Haskell) for the details of Haskell infrastructure on Arch Linux.
+
+### FreeBSD
+
+HLS is available for installation from official binary packages. Use
+
+```
+pkg install hs-haskell-language-server
+```
+
+to install it. At the moment, HLS installed this way only supports the same GHC
+version as the ports one.
 
 ### Installation from source
 
