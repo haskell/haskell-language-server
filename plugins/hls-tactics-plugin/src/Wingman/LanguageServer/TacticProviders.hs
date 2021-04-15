@@ -101,8 +101,9 @@ commandProvider Destruct =
   filterBindingType destructFilter $ \occ _ ->
     provide Destruct $ T.pack $ occNameString occ
 commandProvider DestructPun =
-  filterBindingType destructPunFilter $ \occ _ ->
-    provide DestructPun $ T.pack $ occNameString occ
+  requireFeature FeatureDestructPun $
+    filterBindingType destructPunFilter $ \occ _ ->
+      provide DestructPun $ T.pack $ occNameString occ
 commandProvider Homomorphism =
   filterBindingType homoFilter $ \occ _ ->
     provide Homomorphism $ T.pack $ occNameString occ
