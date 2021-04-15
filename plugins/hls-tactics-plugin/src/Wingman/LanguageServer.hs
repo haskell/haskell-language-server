@@ -289,17 +289,6 @@ getAlreadyDestructed (unTrack -> span) (unTrack -> binds) =
     ) binds
 
 
-getSpanAtCursor
-    :: Tracked age Range
-    -> Tracked age (HieASTs b)
-    -> Maybe (Tracked age RealSrcSpan)
-getSpanAtCursor r@(unTrack -> range) (unTrack -> hf) = do
-  join $ listToMaybe $ M.elems $ flip M.mapWithKey (getAsts hf) $ \fs ast ->
-    case selectSmallestContaining (rangeToRealSrcSpan (FastString.unpackFS fs) range) ast of
-      Nothing -> Nothing
-      Just ast' -> do
-        pure $ unsafeCopyAge r $ nodeSpan ast'
-
 getSpanAndTypeAtHole
     :: Tracked age Range
     -> Tracked age (HieASTs b)
