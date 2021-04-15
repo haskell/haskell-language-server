@@ -6,7 +6,6 @@
 module Wingman.LanguageServer where
 
 import           ConLike
-import           Control.Applicative (empty)
 import           Control.Arrow ((***))
 import           Control.Monad
 import           Control.Monad.State (State, get, put, evalState)
@@ -14,7 +13,7 @@ import           Control.Monad.Trans.Maybe
 import           Data.Bifunctor (first)
 import           Data.Coerce
 import           Data.Functor ((<&>))
-import           Data.Generics.Aliases (mkQ, GenericQ)
+import           Data.Generics.Aliases (mkQ)
 import           Data.Generics.Schemes (everything)
 import qualified Data.HashMap.Strict as Map
 import           Data.IORef (readIORef)
@@ -203,34 +202,6 @@ judgementForHole state nfp range features = do
       dflags <- getIdeDynflags state nfp
       pure (fmap realSrcSpanToRange new_rss, jdg, ctx, dflags)
 
-
-------------------------------------------------------------------------------
--- | Find the last typechecked module, and find the most specific span, as well
--- as the judgement at the given range.
-completionForHole
-    :: IdeState
-    -> NormalizedFilePath
-    -> MaybeT IO [(Tracked 'Current RealSrcSpan, Type)]
-completionForHole state nfp = do
-    TrackedStale tcg tcg_map <- fmap (fmap tmrTypechecked) $ runStaleIde state nfp TypeCheck
-    let tcg' = unTrack tcg
-    hscenv <- runStaleIde state nfp GhcSessionDeps
-    let zz = traverse (emptyCaseQ . tcg_binds) tcg
-
-    for zz $ \aged@(unTrack -> (ss, scrutinee)) -> do
-      ty <- MaybeT $ typeCheck (hscEnv $ untrackedStaleValue hscenv) tcg' scrutinee
-      case ss of
-        RealSrcSpan r   -> do
-          rss' <- liftMaybe $ mapAgeTo tcg_map $ unsafeCopyAge aged r
-          pure (rss', ty)
-        UnhelpfulSpan _ -> empty
-
-
-
-emptyCaseQ :: GenericQ [(SrcSpan, HsExpr GhcTc)]
-emptyCaseQ = everything (<>) $ mkQ mempty $ \case
-  L new_span (Case scrutinee []) -> pure (new_span, scrutinee)
-  (_ :: LHsExpr GhcTc) -> mempty
 
 
 mkJudgementAndContext

@@ -3,16 +3,22 @@
 -- | A plugin that uses tactics to synthesize code
 module Wingman.EmptyCase where
 
+import           Control.Applicative (empty)
 import           Control.Monad
 import           Control.Monad.Trans
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
+import           Data.Generics.Aliases (mkQ, GenericQ)
+import           Data.Generics.Schemes (everything)
 import           Data.Maybe
+import           Data.Monoid
 import qualified Data.Text as T
-import           Data.Traversable (for)
-import           Development.IDE (realSrcSpanToRange, GetBindings(..))
+import           Data.Traversable
+import           Development.IDE (hscEnv)
+import           Development.IDE (realSrcSpanToRange)
+import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake (IdeState (..))
-import           Development.IDE.Core.UseStale (TrackedStale(..), unTrack, mapAgeFrom)
+import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.Spans.LocalBindings (getLocalScope)
@@ -21,10 +27,12 @@ import           Language.LSP.Server
 import           Language.LSP.Types
 import           OccName
 import           Prelude hiding (span)
+import           Prelude hiding (span)
+import           TcRnTypes (tcg_binds)
 import           Wingman.CodeGen (destructionFor)
 import           Wingman.FeatureSet
 import           Wingman.GHC
-import           Wingman.Judgements (hySingleton)
+import           Wingman.Judgements
 import           Wingman.LanguageServer
 import           Wingman.Types
 
@@ -56,7 +64,7 @@ codeLensProvider state plId (CodeLensParams _ _ (TextDocumentIdentifier uri))
         dflags <- getIdeDynflags state nfp
         TrackedStale pm _ <- runStaleIde state nfp GetAnnotatedParsedSource
         TrackedStale binds bind_map <- runStaleIde state nfp GetBindings
-        holes <- completionForHole state nfp
+        holes <- emptyCaseScrutinees state nfp
 
         fmap (Right . List) $ for holes $ \(ss, ty) -> do
           binds_ss <- liftMaybe $ mapAgeFrom bind_map ss
@@ -118,4 +126,34 @@ graftMatchGroup ss l = graftExprWithM ss $ \case
 
 fromMaybeT :: Functor m => a -> MaybeT m a -> m a
 fromMaybeT def = fmap (fromMaybe def) . runMaybeT
+
+
+------------------------------------------------------------------------------
+-- | Find the last typechecked module, and find the most specific span, as well
+-- as the judgement at the given range.
+emptyCaseScrutinees
+    :: IdeState
+    -> NormalizedFilePath
+    -> MaybeT IO [(Tracked 'Current RealSrcSpan, Type)]
+emptyCaseScrutinees state nfp = do
+    TrackedStale tcg tcg_map <- fmap (fmap tmrTypechecked) $ runStaleIde state nfp TypeCheck
+    let tcg' = unTrack tcg
+    hscenv <- runStaleIde state nfp GhcSessionDeps
+    let zz = traverse (emptyCaseQ . tcg_binds) tcg
+
+    for zz $ \aged@(unTrack -> (ss, scrutinee)) -> do
+      ty <- MaybeT $ typeCheck (hscEnv $ untrackedStaleValue hscenv) tcg' scrutinee
+      case ss of
+        RealSrcSpan r   -> do
+          rss' <- liftMaybe $ mapAgeTo tcg_map $ unsafeCopyAge aged r
+          pure (rss', ty)
+        UnhelpfulSpan _ -> empty
+
+
+------------------------------------------------------------------------------
+-- | Get the 'SrcSpan' and scrutinee of every empty case.
+emptyCaseQ :: GenericQ [(SrcSpan, HsExpr GhcTc)]
+emptyCaseQ = everything (<>) $ mkQ mempty $ \case
+  L new_span (Case scrutinee []) -> pure (new_span, scrutinee)
+  (_ :: LHsExpr GhcTc) -> mempty
 
