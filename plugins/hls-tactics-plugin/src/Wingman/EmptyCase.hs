@@ -1,10 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 
--- | A plugin that uses tactics to synthesize code
 module Wingman.EmptyCase where
 
 import           Control.Applicative (empty)
 import           Control.Monad
+import           Control.Monad.Except (runExcept)
 import           Control.Monad.Trans
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
@@ -107,9 +107,6 @@ hush (Left _) = Nothing
 hush (Right a) = Just a
 
 
-instance MonadFail (Either String) where
-  fail = Left
-
 ------------------------------------------------------------------------------
 -- | Graft a 'RunTacticResults' into the correct place in an AST. Correctly
 -- deals with top-level holes, in which we might need to fiddle with the
@@ -118,10 +115,11 @@ graftMatchGroup
     :: SrcSpan
     -> Located [LMatch GhcPs (LHsExpr GhcPs)]
     -> Graft (Either String) ParsedSource
-graftMatchGroup ss l = graftExprWithM ss $ \case
-  L span (HsCase ext scrut mg@_) -> do
-    pure $ Just $ L span $ HsCase ext scrut $ mg { mg_alts = l }
-  (_ :: LHsExpr GhcPs) -> pure Nothing
+graftMatchGroup ss l =
+  hoistGraft (runExcept . runExceptString) $ graftExprWithM ss $ \case
+    L span (HsCase ext scrut mg@_) -> do
+      pure $ Just $ L span $ HsCase ext scrut $ mg { mg_alts = l }
+    (_ :: LHsExpr GhcPs) -> pure Nothing
 
 
 fromMaybeT :: Functor m => a -> MaybeT m a -> m a
@@ -139,9 +137,9 @@ emptyCaseScrutinees state nfp = do
     TrackedStale tcg tcg_map <- fmap (fmap tmrTypechecked) $ runStaleIde state nfp TypeCheck
     let tcg' = unTrack tcg
     hscenv <- runStaleIde state nfp GhcSessionDeps
-    let zz = traverse (emptyCaseQ . tcg_binds) tcg
 
-    for zz $ \aged@(unTrack -> (ss, scrutinee)) -> do
+    let scrutinees = traverse (emptyCaseQ . tcg_binds) tcg
+    for scrutinees $ \aged@(unTrack -> (ss, scrutinee)) -> do
       ty <- MaybeT $ typeCheck (hscEnv $ untrackedStaleValue hscenv) tcg' scrutinee
       case ss of
         RealSrcSpan r   -> do
