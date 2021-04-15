@@ -229,7 +229,9 @@ common moduleName
 common pragmas
   if flag(pragmas) || flag(all-plugins)
     hs-source-dirs: plugins/default/src
-    build-depends: fuzzy
+    build-depends:
+      , fuzzy
+      , data-default
     other-modules: Ide.Plugin.Pragmas
     cpp-options: -Dpragmas
 

@@ -1,3 +1,4 @@
+
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedStrings     #-}
@@ -10,6 +11,8 @@ import           Control.Applicative        ((<|>))
 import           Control.Lens               hiding (List)
 import           Control.Monad              (join)
 import           Control.Monad.IO.Class
+import           Ide.Plugin.Config
+import           Data.Default
 import qualified Data.HashMap.Strict        as H
 import           Data.List.Extra            (nubOrdOn)
 import           Data.Maybe                 (catMaybes, listToMaybe)
@@ -42,13 +45,17 @@ data Pragma = LangExt T.Text | OptGHC T.Text
 
 codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
 codeActionProvider state _plId (CodeActionParams _ _ docId _ (J.CodeActionContext (J.List diags) _monly)) = do
-  let mFile = docId ^. J.uri & uriToFilePath <&> toNormalizedFilePath'
-      uri = docId ^. J.uri
-  pm <- liftIO $ fmap join $ runAction "Pragmas.GetParsedModule" state $ getParsedModule `traverse` mFile
-  let dflags = ms_hspp_opts . pm_mod_summary <$> pm
-      insertRange = maybe (Range (Position 0 0) (Position 0 0)) endOfModuleHeader pm
-      pedits = nubOrdOn snd . concat $ suggest dflags <$> diags
-  return $ Right $ List $ pragmaEditToAction uri insertRange <$> pedits
+    let mFile = docId ^. J.uri & uriToFilePath <&> toNormalizedFilePath'
+        uri = docId ^. J.uri
+    pm <- liftIO $ fmap join $ runAction "Pragmas.GetParsedModule" state $ getParsedModule `traverse` mFile
+    config <- liftIO $ runAction "getConfig" state (getClientConfigAction def)
+    let dflags = ms_hspp_opts . pm_mod_summary <$> pm
+        pedits = nubOrdOn snd . concat $ suggest dflags <$> diags
+        insertAfterComments = pragmaInsertAfterComments config
+    return $ Right $ List $ pragmaEditToAction uri (getInsertRange insertAfterComments pm) <$> pedits
+    where
+        getInsertRange True (Just pm) = endOfModuleHeader pm
+        getInsertRange _ _ = Range (Position 0 0) (Position 0 0)
 
 -- | Add a Pragma to the given URI at the top of the file.
 -- It is assumed that the pragma name is a valid pragma,

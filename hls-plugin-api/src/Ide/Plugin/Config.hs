@@ -55,6 +55,7 @@ data Config =
     , diagnosticsDebounceDuration :: !Int
     , liquidOn                    :: !Bool
     , formatOnImportOn            :: !Bool
+    , pragmaInsertAfterComments   :: !Bool
     , formattingProvider          :: !T.Text
     , maxCompletions              :: !Int
     , plugins                     :: !(Map.Map T.Text PluginConfig)
@@ -69,6 +70,7 @@ instance Default Config where
     , diagnosticsDebounceDuration = 350000
     , liquidOn                    = False
     , formatOnImportOn            = True
+    , pragmaInsertAfterComments   = True
     -- , formattingProvider          = "brittany"
     , formattingProvider          = "ormolu"
     -- , formattingProvider          = "floskell"
@@ -93,6 +95,7 @@ parseConfig defValue = A.withObject "Config" $ \v -> do
         <*> o .:? "diagnosticsDebounceDuration"             .!= diagnosticsDebounceDuration defValue
         <*> o .:? "liquidOn"                                .!= liquidOn defValue
         <*> o .:? "formatOnImportOn"                        .!= formatOnImportOn defValue
+        <*> o .:? "pragmaInsertAfterComments"               .!= pragmaInsertAfterComments defValue
         <*> o .:? "formattingProvider"                      .!= formattingProvider defValue
         <*> o .:? "maxCompletions"                          .!= maxCompletions defValue
         <*> o .:? "plugin"                                  .!= plugins defValue
@@ -108,6 +111,7 @@ instance A.ToJSON Config where
                  , "diagnosticsDebounceDuration" .= diagnosticsDebounceDuration
                  , "liquidOn"                    .= liquidOn
                  , "formatOnImportOn"            .= formatOnImportOn
+                 , "pragmaInsertAfterComments"   .= pragmaInsertAfterComments
                  , "formattingProvider"          .= formattingProvider
                  , "maxCompletions"              .= maxCompletions
                  , "plugin"                      .= plugins
