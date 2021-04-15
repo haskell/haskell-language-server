@@ -19,11 +19,13 @@ import           Data.Functor ((<&>))
 import qualified Data.HashMap.Strict as HM
 import           Data.Maybe
 import qualified Data.Text as T
+import           Data.Traversable (for)
 import           Development.IDE (realSrcSpanToRange)
 import           Development.IDE.Core.Shake (IdeState (..))
 import           Development.IDE.Core.UseStale (Tracked, TrackedStale(..), unTrack, mapAgeFrom, unsafeMkCurrent)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.ExactPrint
+import           GHC.SourceGen (case', var)
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
@@ -32,6 +34,7 @@ import           OccName
 import           Prelude hiding (span)
 import           System.Timeout
 import           Wingman.CaseSplit
+import           Wingman.CodeGen (destructionFor)
 import           Wingman.GHC
 import           Wingman.LanguageServer
 import           Wingman.LanguageServer.TacticProviders
@@ -39,8 +42,6 @@ import           Wingman.Machinery (scoreSolution)
 import           Wingman.Range
 import           Wingman.Tactics
 import           Wingman.Types
-import Wingman.CodeGen (destructionFor)
-import GHC.SourceGen (case', var)
 
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -77,17 +78,28 @@ completionProvider state plId (CodeLensParams _ _ (TextDocumentIdentifier uri))
       liftIO $ fromMaybeT (Right $ List []) $ do
         holes <- completionForHole  state nfp $ cfg_feature_set cfg
         traceMX "found holes" holes
-        pure $ Right $ List $ holes <&> \(ss, ty) ->
+        fmap (Right . List) $ for holes $ \(ss, ty) -> do
           let range@(Range _ ep) = realSrcSpanToRange $ unTrack ss
               rep_range = Range ep ep
-           in CodeLens
+          matches <- liftMaybe $ destructionFor mempty ty
+          pure $ CodeLens
                 range
                 (Just $ mkLspCommand plId
                   (CommandId "emptycase.complete")
                   ("Complete case constructors (" <> T.pack (unsafeRender ty) <> ")") $
                     Just $ pure $ toJSON $
                       WorkspaceEdit
-                        (Just $ HM.singleton uri $ List $ pure $ TextEdit rep_range $ T.pack $ mappend "\n" $ unlines $ drop 1 $ lines $ unsafeRender $ case' (var "_")  $ fromJust $ destructionFor mempty ty)
+                        (Just $ HM.singleton uri
+                              $ List
+                              $ pure
+                              $ TextEdit rep_range
+                              $ T.pack
+                              $ mappend "\n"
+                              $ unlines
+                              $ drop 1
+                              $ lines
+                              $ unsafeRender
+                              $ case' (var "_")  matches)
                         Nothing
                         Nothing
                 )
