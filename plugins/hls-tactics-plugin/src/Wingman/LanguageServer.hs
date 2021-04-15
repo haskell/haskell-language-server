@@ -230,7 +230,7 @@ completionForHole state nfp features = do
 
 emptyCaseQ :: GenericQ [(SrcSpan, HsExpr GhcTc)]
 emptyCaseQ = everything (<>) $ mkQ mempty $ \case
-  L case_span (Case scrutinee _ []) -> pure (case_span, scrutinee)
+  L new_span (Case scrutinee []) -> pure (new_span, scrutinee)
   (_ :: LHsExpr GhcTc) -> mempty
 
 
@@ -283,7 +283,7 @@ getAlreadyDestructed
 getAlreadyDestructed (unTrack -> span) (unTrack -> binds) =
   everythingContaining span
     (mkQ mempty $ \case
-      Case (HsVar _ (L _ (occName -> var))) _ _ ->
+      Case (HsVar _ (L _ (occName -> var))) _ ->
         S.singleton var
       (_ :: HsExpr GhcTc) -> mempty
     ) binds
