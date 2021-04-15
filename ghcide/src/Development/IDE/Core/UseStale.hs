@@ -3,8 +3,6 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE RankNTypes     #-}
 
-{-# OPTIONS_GHC -fno-warn-unused-top-binds #-}
-
 module Development.IDE.Core.UseStale
   ( Age(..)
   , Tracked
@@ -60,7 +58,7 @@ newtype Tracked (age :: Age) a  = UnsafeTracked
 -- change. Use the 'Category' instance to compose 'PositionMapping's in order
 -- to transform between values of different stale ages.
 newtype PositionMap (from :: Age) (to :: Age) = PositionMap
-  { getPositionMapping :: P.PositionMapping
+  { _getPositionMapping :: P.PositionMapping
   }
 
 instance Category PositionMap where
