@@ -100,10 +100,10 @@ destructionFor hy t = do
             names = mkManyGoodNames (hyNamesInScope hy) args
         pure
           . noLoc
-          . Match noExt CaseAlt [mkDestructPat con names]
-          . GRHSs noExt (pure $ noLoc $ GRHS noExt [] $ noLoc $ var "_")
+          . Match noExtField CaseAlt [mkDestructPat con names]
+          . GRHSs noExtField (pure $ noLoc $ GRHS noExtField [] $ noLoc $ var "_")
           . noLoc
-          $ EmptyLocalBinds noExt
+          $ EmptyLocalBinds noExtField
 
 
 
