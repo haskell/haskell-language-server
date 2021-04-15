@@ -45,3 +45,8 @@ flag run-from-stack
   description: Inform the application that it is run from stack
   default:     False
   manual:      True
+
+executable hls-install
+  main-is: ../install.hs
+  build-depends: base
+    , hls-install
