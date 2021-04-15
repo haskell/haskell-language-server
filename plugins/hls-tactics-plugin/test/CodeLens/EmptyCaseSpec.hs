@@ -22,4 +22,5 @@ spec = do
     test "EmptyCaseParens.hs"
     test "EmptyCaseNested.hs"
     test "EmptyCaseApply.hs"
+    test "EmptyCaseGADT.hs"
 
