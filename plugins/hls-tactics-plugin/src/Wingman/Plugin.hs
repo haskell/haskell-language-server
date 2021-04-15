@@ -15,16 +15,16 @@ import           Data.Aeson
 import           Data.Bifunctor (first)
 import           Data.Data
 import           Data.Foldable (for_)
-import           Data.Functor ((<&>))
 import qualified Data.HashMap.Strict as HM
 import           Data.Maybe
 import qualified Data.Text as T
 import           Data.Traversable (for)
-import           Development.IDE (realSrcSpanToRange)
+import           Development.IDE (realSrcSpanToRange, GetBindings(..))
 import           Development.IDE.Core.Shake (IdeState (..))
 import           Development.IDE.Core.UseStale (Tracked, TrackedStale(..), unTrack, mapAgeFrom, unsafeMkCurrent)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.ExactPrint
+import           Development.IDE.Spans.LocalBindings (getLocalScope)
 import           GHC.SourceGen (case', var)
 import           Ide.Types
 import           Language.LSP.Server
@@ -70,18 +70,30 @@ commandHandler _ideState wedit = do
   _ <- sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
   return $ Right Null
 
+
+hySingleton :: OccName -> Hypothesis ()
+hySingleton n = Hypothesis . pure $ HyInfo n UserPrv ()
+
+
 completionProvider :: PluginMethodHandler IdeState TextDocumentCodeLens
 completionProvider state plId (CodeLensParams _ _ (TextDocumentIdentifier uri))
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
       cfg <- getTacticConfig plId
       traceM "got a cfg"
       liftIO $ fromMaybeT (Right $ List []) $ do
+        TrackedStale binds bind_map <- runStaleIde state nfp GetBindings
         holes <- completionForHole  state nfp $ cfg_feature_set cfg
         traceMX "found holes" holes
         fmap (Right . List) $ for holes $ \(ss, ty) -> do
+          binds_ss <- liftMaybe $ mapAgeFrom bind_map ss
+          let bindings = getLocalScope (unTrack binds) $ unTrack binds_ss
           let range@(Range _ ep) = realSrcSpanToRange $ unTrack ss
               rep_range = Range ep ep
-          matches <- liftMaybe $ destructionFor mempty ty
+          matches <-
+            liftMaybe $
+              destructionFor
+                (foldMap (hySingleton . occName . fst) bindings)
+                ty
           pure $ CodeLens
                 range
                 (Just $ mkLspCommand plId
