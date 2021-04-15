@@ -28,16 +28,22 @@ import           Wingman.LanguageServer
 import           Wingman.Types
 
 
+------------------------------------------------------------------------------
+-- | The 'CommandId' for the empty case completion.
 emptyCaseLensCommandId :: CommandId
 emptyCaseLensCommandId = CommandId "wingman.emptyCase"
 
 
+------------------------------------------------------------------------------
+-- | A command function that just applies a 'WorkspaceEdit'.
 workspaceEditHandler :: CommandFunction IdeState WorkspaceEdit
 workspaceEditHandler _ideState wedit = do
   _ <- sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
   return $ Right Null
 
 
+------------------------------------------------------------------------------
+-- | Provide the "empty case completion" code lens
 codeLensProvider :: PluginMethodHandler IdeState TextDocumentCodeLens
 codeLensProvider state plId (CodeLensParams _ _ (TextDocumentIdentifier uri))
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
@@ -77,6 +83,8 @@ codeLensProvider state plId (CodeLensParams _ _ (TextDocumentIdentifier uri))
 codeLensProvider _ _ _ = pure $ Right $ List []
 
 
+------------------------------------------------------------------------------
+-- | The description for the empty case lens.
 mkEmptyCaseLensDesc :: Type -> T.Text
 mkEmptyCaseLensDesc ty =
   "Complete case constructors (" <> T.pack (unsafeRender ty) <> ")"

@@ -84,6 +84,8 @@ destructMatches f scrut t jdg = do
             & #syn_val     %~ match [mkDestructPat con names] . unLoc
 
 
+------------------------------------------------------------------------------
+-- | Generate just the 'Match'es for a case split on a specific type.
 destructionFor :: Hypothesis a -> Type -> Maybe [LMatch GhcPs (LHsExpr GhcPs)]
 -- TODO(sandy): In an ideal world, this would be the same codepath as
 -- 'destructMatches'. Make sure to change that if you ever change this.

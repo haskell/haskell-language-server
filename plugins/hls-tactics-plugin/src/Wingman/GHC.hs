@@ -344,10 +344,14 @@ knownThing f tcg hscenv occ = do
         Just tt -> liftMaybe $ f tt
         _ -> empty
 
+
 liftMaybe :: Monad m => Maybe a -> MaybeT m a
 liftMaybe a = MaybeT $ pure a
 
 
+------------------------------------------------------------------------------
+-- | Get the type of an @HsExpr GhcTc@. This is slow and you should prefer to
+-- not use it, but sometimes it can't be helped.
 typeCheck :: HscEnv -> TcGblEnv -> HsExpr GhcTc -> IO (Maybe Type)
 typeCheck hscenv tcg = fmap snd . initDs hscenv tcg . fmap exprType . dsExpr
 
