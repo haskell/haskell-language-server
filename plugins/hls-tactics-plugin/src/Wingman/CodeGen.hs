@@ -48,6 +48,8 @@ destructMatches
        -- ^ Type being destructed
     -> Judgement
     -> RuleM (Synthesized [RawMatch])
+-- TODO(sandy): In an ideal world, this would be the same codepath as
+-- 'destructionFor'. Make sure to change that if you ever change this.
 destructMatches f scrut t jdg = do
   let hy = jEntireHypothesis jdg
       g  = jGoal jdg
@@ -82,17 +84,24 @@ destructMatches f scrut t jdg = do
             & #syn_val     %~ match [mkDestructPat con names] . unLoc
 
 
-destructionFor :: Hypothesis a -> Type -> Maybe [RawMatch]
+destructionFor :: Hypothesis a -> Type -> Maybe [LMatch GhcPs (LHsExpr GhcPs)]
+-- TODO(sandy): In an ideal world, this would be the same codepath as
+-- 'destructMatches'. Make sure to change that if you ever change this.
 destructionFor hy t = do
   case tacticsGetDataCons t of
     Nothing -> Nothing
     Just ([], _) -> Nothing
     Just (dcs, apps) -> do
       for dcs $ \dc -> do
-        let con = RealDataCon dc
-            args = conLikeInstOrigArgTys' con apps
+        let con   = RealDataCon dc
+            args  = conLikeInstOrigArgTys' con apps
             names = mkManyGoodNames (hyNamesInScope hy) args
-        pure $ match [mkDestructPat con names] $ var "_"
+        pure
+          . noLoc
+          . Match noExt CaseAlt [mkDestructPat con names]
+          . GRHSs noExt (pure $ noLoc $ GRHS noExt [] $ noLoc $ var "_")
+          . noLoc
+          $ EmptyLocalBinds noExt
 
 
 

@@ -15,7 +15,6 @@ import           Data.Aeson
 import           Data.Bifunctor (first)
 import           Data.Data
 import           Data.Foldable (for_)
-import qualified Data.HashMap.Strict as HM
 import           Data.Maybe
 import qualified Data.Text as T
 import           Data.Traversable (for)
@@ -25,7 +24,6 @@ import           Development.IDE.Core.UseStale (Tracked, TrackedStale(..), unTra
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.Spans.LocalBindings (getLocalScope)
-import           GHC.SourceGen (case', var)
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
@@ -79,48 +77,39 @@ completionProvider :: PluginMethodHandler IdeState TextDocumentCodeLens
 completionProvider state plId (CodeLensParams _ _ (TextDocumentIdentifier uri))
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
       cfg <- getTacticConfig plId
-      traceM "got a cfg"
+      ccs <- getClientCapabilities
       liftIO $ fromMaybeT (Right $ List []) $ do
+        dflags <- getIdeDynflags state nfp
+        TrackedStale pm _ <- runStaleIde state nfp GetAnnotatedParsedSource
         TrackedStale binds bind_map <- runStaleIde state nfp GetBindings
         holes <- completionForHole  state nfp $ cfg_feature_set cfg
-        traceMX "found holes" holes
         fmap (Right . List) $ for holes $ \(ss, ty) -> do
           binds_ss <- liftMaybe $ mapAgeFrom bind_map ss
           let bindings = getLocalScope (unTrack binds) $ unTrack binds_ss
-          let range@(Range _ ep) = realSrcSpanToRange $ unTrack ss
-              rep_range = Range ep ep
+          let range = realSrcSpanToRange $ unTrack ss
           matches <-
             liftMaybe $
               destructionFor
                 (foldMap (hySingleton . occName . fst) bindings)
                 ty
+          edits <- liftMaybe $ hush $
+                mkWorkspaceEdits dflags ccs uri (unTrack pm) $
+                  graftMatchGroup (RealSrcSpan $ unTrack ss) $
+                    noLoc matches
+
           pure $ CodeLens
                 range
                 (Just $ mkLspCommand plId
                   (CommandId "emptycase.complete")
                   ("Complete case constructors (" <> T.pack (unsafeRender ty) <> ")") $
-                    Just $ pure $ toJSON $
-                      WorkspaceEdit
-                        (Just $ HM.singleton uri
-                              $ List
-                              $ pure
-                              $ TextEdit rep_range
-                              $ T.pack
-                              $ mappend "\n"
-                              $ unlines
-                              $ drop 1
-                              $ lines
-                              $ unsafeRender
-                              $ case' (var "_")  matches)
-                        Nothing
-                        Nothing
+                    Just $ pure $ toJSON $ edits
                 )
                 Nothing
-                -- (Just $ Command "Complete case constructors" "emptycase.complete" $
-                --   Just $ List
-                -- Nothing
 completionProvider _ _ _ = pure $ Right $ List []
 
+hush :: Either e a -> Maybe a
+hush (Left _) = Nothing
+hush (Right a) = Just a
 
 codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
 codeActionProvider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) (unsafeMkCurrent -> range) _ctx)
@@ -170,7 +159,7 @@ tacticCmd tac pId state (TacticParams uri range var_name)
               case rtr_extract rtr of
                 L _ (HsVar _ (L _ rdr)) | isHole (occName rdr) ->
                   Left NothingToDo
-                _ -> pure $ mkWorkspaceEdits pm_span dflags ccs uri pm rtr
+                _ -> pure $ mkTacticResultEdits pm_span dflags ccs uri pm rtr
 
       case res of
         Nothing -> do
@@ -207,7 +196,7 @@ mkErr code err = ResponseError code err Nothing
 ------------------------------------------------------------------------------
 -- | Turn a 'RunTacticResults' into concrete edits to make in the source
 -- document.
-mkWorkspaceEdits
+mkTacticResultEdits
     :: Tracked age RealSrcSpan
     -> DynFlags
     -> ClientCapabilities
@@ -215,14 +204,43 @@ mkWorkspaceEdits
     -> Tracked age (Annotated ParsedSource)
     -> RunTacticResults
     -> Either UserFacingMessage WorkspaceEdit
-mkWorkspaceEdits (unTrack -> span) dflags ccs uri (unTrack -> pm) rtr = do
+mkTacticResultEdits (unTrack -> span) dflags ccs uri (unTrack -> pm) rtr = do
   for_ (rtr_other_solns rtr) $ \soln -> do
     traceMX "other solution" $ syn_val soln
     traceMX "with score" $ scoreSolution soln (rtr_jdg rtr) []
   traceMX "solution" $ rtr_extract rtr
-  let g = graftHole (RealSrcSpan span) rtr
-      response = transform dflags ccs uri g pm
+  mkWorkspaceEdits dflags ccs uri pm $ graftHole (RealSrcSpan span) rtr
+
+
+------------------------------------------------------------------------------
+-- | Transform a 'Graft' over the AST into a 'WorkspaceEdit'.
+mkWorkspaceEdits
+    :: DynFlags
+    -> ClientCapabilities
+    -> Uri
+    -> Annotated ParsedSource
+    -> Graft (Either String) ParsedSource
+    -> Either UserFacingMessage WorkspaceEdit
+mkWorkspaceEdits dflags ccs uri pm g = do
+  let response = transform dflags ccs uri g pm
    in first (InfrastructureError . T.pack) response
+
+
+instance MonadFail (Either String) where
+  fail = Left
+
+------------------------------------------------------------------------------
+-- | Graft a 'RunTacticResults' into the correct place in an AST. Correctly
+-- deals with top-level holes, in which we might need to fiddle with the
+-- 'Match's that bind variables.
+graftMatchGroup
+    :: SrcSpan
+    -> Located [LMatch GhcPs (LHsExpr GhcPs)]
+    -> Graft (Either String) ParsedSource
+graftMatchGroup ss l = graftExprWithM ss $ \case
+  L span (HsCase ext scrut mg@_) -> do
+    pure $ Just $ L span $ HsCase ext scrut $ mg { mg_alts = l }
+  (_ :: LHsExpr GhcPs) -> pure Nothing
 
 
 ------------------------------------------------------------------------------

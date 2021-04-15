@@ -6,13 +6,14 @@
 module Wingman.LanguageServer where
 
 import           ConLike
+import           Control.Applicative (empty)
 import           Control.Arrow
 import           Control.Monad
 import           Control.Monad.State (State, get, put, evalState)
 import           Control.Monad.Trans.Maybe
 import           Data.Coerce
 import           Data.Functor ((<&>))
-import           Data.Generics.Aliases (mkQ, GenericQ, extQ)
+import           Data.Generics.Aliases (mkQ, GenericQ)
 import           Data.Generics.Schemes (everything)
 import qualified Data.HashMap.Strict as Map
 import           Data.IORef (readIORef)
@@ -24,7 +25,6 @@ import qualified Data.Set as S
 import qualified Data.Text as T
 import           Data.Traversable
 import           Development.IDE (getFilesOfInterest, ShowDiagnostic (ShowDiag), srcSpanToRange)
-import qualified Development.IDE as GHCIDE
 import           Development.IDE (hscEnv)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Rules (usePropertyAction)
@@ -54,11 +54,10 @@ import           Wingman.Context
 import           Wingman.FeatureSet
 import           Wingman.GHC
 import           Wingman.Judgements
-import           Wingman.Judgements.SYB (everythingContaining, smallestQ, genericDefinitelyNotIsSubspan)
+import           Wingman.Judgements.SYB (everythingContaining)
 import           Wingman.Judgements.Theta
 import           Wingman.Range
 import           Wingman.Types
-import Control.Applicative (empty)
 
 
 tacticDesc :: T.Text -> T.Text
@@ -214,7 +213,6 @@ completionForHole state nfp features = do
     TrackedStale tcg tcg_map <- fmap (fmap tmrTypechecked) $ runStaleIde state nfp TypeCheck
     let tcg' = unTrack tcg
     hscenv <- runStaleIde state nfp GhcSessionDeps
-
     let zz = traverse (emptyCaseQ . tcg_binds) tcg
 
     for zz $ \aged@(unTrack -> (ss, scrutinee)) -> do
@@ -229,7 +227,7 @@ completionForHole state nfp features = do
 
 emptyCaseQ :: GenericQ [(SrcSpan, HsExpr GhcTc)]
 emptyCaseQ = everything (<>) $ mkQ mempty $ \case
-  L new_span (Case scrutinee _ []) -> pure (new_span, scrutinee)
+  L case_span (Case scrutinee _ []) -> pure (case_span, scrutinee)
   (_ :: LHsExpr GhcTc) -> mempty
 
 
