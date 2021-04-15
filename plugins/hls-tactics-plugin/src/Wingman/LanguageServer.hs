@@ -210,9 +210,8 @@ judgementForHole state nfp range features = do
 completionForHole
     :: IdeState
     -> NormalizedFilePath
-    -> FeatureSet
     -> MaybeT IO [(Tracked 'Current RealSrcSpan, Type)]
-completionForHole state nfp features = do
+completionForHole state nfp = do
     TrackedStale tcg tcg_map <- fmap (fmap tmrTypechecked) $ runStaleIde state nfp TypeCheck
     let tcg' = unTrack tcg
     hscenv <- runStaleIde state nfp GhcSessionDeps

@@ -22,6 +22,7 @@ import           Language.LSP.Types
 import           OccName
 import           Prelude hiding (span)
 import           Wingman.CodeGen (destructionFor)
+import           Wingman.FeatureSet
 import           Wingman.GHC
 import           Wingman.Judgements (hySingleton)
 import           Wingman.LanguageServer
@@ -50,11 +51,12 @@ codeLensProvider state plId (CodeLensParams _ _ (TextDocumentIdentifier uri))
       cfg <- getTacticConfig plId
       ccs <- getClientCapabilities
       liftIO $ fromMaybeT (Right $ List []) $ do
-        dflags <- getIdeDynflags state nfp
+        guard $ hasFeature FeatureEmptyCase $ cfg_feature_set cfg
 
+        dflags <- getIdeDynflags state nfp
         TrackedStale pm _ <- runStaleIde state nfp GetAnnotatedParsedSource
         TrackedStale binds bind_map <- runStaleIde state nfp GetBindings
-        holes <- completionForHole  state nfp $ cfg_feature_set cfg
+        holes <- completionForHole state nfp
 
         fmap (Right . List) $ for holes $ \(ss, ty) -> do
           binds_ss <- liftMaybe $ mapAgeFrom bind_map ss
