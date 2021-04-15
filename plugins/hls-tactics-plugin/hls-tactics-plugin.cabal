@@ -34,6 +34,7 @@ library
     Wingman.CodeGen.Utils
     Wingman.Context
     Wingman.Debug
+    Wingman.EmptyCase
     Wingman.FeatureSet
     Wingman.GHC
     Wingman.Judgements
