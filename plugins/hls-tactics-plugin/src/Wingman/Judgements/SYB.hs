@@ -4,14 +4,12 @@
 -- | Custom SYB traversals
 module Wingman.Judgements.SYB where
 
-import           Data.Bool (bool)
-import           Data.Foldable (foldl')
-import           Data.Generics hiding (typeRep)
-import qualified Data.Monoid as M
-import           Development.IDE.GHC.Compat
-import           GHC.Exts (Any)
-import           Type.Reflection
-import           Unsafe.Coerce (unsafeCoerce)
+import Data.Foldable (foldl')
+import Data.Generics hiding (typeRep)
+import Development.IDE.GHC.Compat
+import GHC.Exts (Any)
+import Type.Reflection
+import Unsafe.Coerce (unsafeCoerce)
 
 
 ------------------------------------------------------------------------------
@@ -44,28 +42,6 @@ genericIsSubspan
     -> GenericQ (Maybe Bool)
 genericIsSubspan dst = mkQ1 (L noSrcSpan ()) Nothing $ \case
   L span _ -> Just $ dst `isSubspanOf` span
-
-
-genericDefinitelyNotIsSubspan
-    :: SrcSpan
-    -> GenericQ (Maybe Bool)
-genericDefinitelyNotIsSubspan dst = mkQ1 (L noSrcSpan ()) Nothing $ \case
-  L span _ -> bool (Just False) Nothing $ dst `isSubspanOf` span
-
-
-smallestQ :: forall r. Monoid r => GenericQ (Maybe Bool) -> GenericQ r -> GenericQ r
-smallestQ q f = snd . go
-  where
-    go :: GenericQ (M.Any, r)
-    go x = do
-      case q x of
-        Nothing -> mconcat $ gmapQ go x
-        Just True ->
-          let it@(r, x') = mconcat $ gmapQ go x
-           in case r of
-                M.Any True -> it
-                M.Any False -> (M.Any True, x' <> f x)
-        Just False -> mempty
 
 
 ------------------------------------------------------------------------------
