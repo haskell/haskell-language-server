@@ -42,6 +42,10 @@ import           Wingman.Tactics
 import           Wingman.Types
 
 
+emptyCaseLensCommandId :: CommandId
+emptyCaseLensCommandId = CommandId "wingman.emptyCase"
+
+
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
   { pluginCommands
@@ -52,19 +56,23 @@ descriptor plId = (defaultPluginDescriptor plId)
                 (tacticDesc $ tcCommandName tc)
                 (tacticCmd (commandTactic tc) plId))
                 [minBound .. maxBound]
-          , pure $ PluginCommand (CommandId "emptycase.complete") "Complete the empty case" commandHandler
+          , pure $
+              PluginCommand
+              emptyCaseLensCommandId
+              "Complete the empty case"
+              workspaceEditHandler
           ]
   , pluginHandlers = mconcat
       [ mkPluginHandler STextDocumentCodeAction codeActionProvider
-      , mkPluginHandler STextDocumentCodeLens completionProvider
+      , mkPluginHandler STextDocumentCodeLens codeLensProvider
       ]
   , pluginRules = wingmanRules plId
   , pluginCustomConfig =
       mkCustomConfig properties
   }
 
-commandHandler :: CommandFunction IdeState WorkspaceEdit
-commandHandler _ideState wedit = do
+workspaceEditHandler :: CommandFunction IdeState WorkspaceEdit
+workspaceEditHandler _ideState wedit = do
   _ <- sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
   return $ Right Null
 
@@ -73,8 +81,8 @@ hySingleton :: OccName -> Hypothesis ()
 hySingleton n = Hypothesis . pure $ HyInfo n UserPrv ()
 
 
-completionProvider :: PluginMethodHandler IdeState TextDocumentCodeLens
-completionProvider state plId (CodeLensParams _ _ (TextDocumentIdentifier uri))
+codeLensProvider :: PluginMethodHandler IdeState TextDocumentCodeLens
+codeLensProvider state plId (CodeLensParams _ _ (TextDocumentIdentifier uri))
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
       cfg <- getTacticConfig plId
       ccs <- getClientCapabilities
@@ -86,7 +94,7 @@ completionProvider state plId (CodeLensParams _ _ (TextDocumentIdentifier uri))
         fmap (Right . List) $ for holes $ \(ss, ty) -> do
           binds_ss <- liftMaybe $ mapAgeFrom bind_map ss
           let bindings = getLocalScope (unTrack binds) $ unTrack binds_ss
-          let range = realSrcSpanToRange $ unTrack ss
+              range = realSrcSpanToRange $ unTrack ss
           matches <-
             liftMaybe $
               destructionFor
@@ -97,19 +105,24 @@ completionProvider state plId (CodeLensParams _ _ (TextDocumentIdentifier uri))
                   graftMatchGroup (RealSrcSpan $ unTrack ss) $
                     noLoc matches
 
-          pure $ CodeLens
-                range
-                (Just $ mkLspCommand plId
-                  (CommandId "emptycase.complete")
-                  ("Complete case constructors (" <> T.pack (unsafeRender ty) <> ")") $
-                    Just $ pure $ toJSON $ edits
-                )
-                Nothing
-completionProvider _ _ _ = pure $ Right $ List []
+          pure $
+            CodeLens
+              range
+              (Just
+                $ mkLspCommand
+                    plId
+                    emptyCaseLensCommandId
+                    ("Complete case constructors (" <> T.pack (unsafeRender ty) <> ")")
+                $ Just $ pure $ toJSON $ edits
+              )
+              Nothing
+codeLensProvider _ _ _ = pure $ Right $ List []
+
 
 hush :: Either e a -> Maybe a
 hush (Left _) = Nothing
 hush (Right a) = Just a
+
 
 codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
 codeActionProvider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) (unsafeMkCurrent -> range) _ctx)
