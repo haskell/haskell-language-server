@@ -100,7 +100,7 @@ destructionFor hy t = do
             names = mkManyGoodNames (hyNamesInScope hy) args
         pure
           . noLoc
-          . Match noExtField CaseAlt [mkDestructPat con names]
+          . Match noExtField CaseAlt [toPatCompat $ mkDestructPat con names]
           . GRHSs noExtField (pure $ noLoc $ GRHS noExtField [] $ noLoc $ var "_")
           . noLoc
           $ EmptyLocalBinds noExtField
