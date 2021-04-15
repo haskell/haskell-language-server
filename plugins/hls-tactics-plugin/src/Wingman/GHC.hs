@@ -235,10 +235,10 @@ unpackMatches _ = Nothing
 
 ------------------------------------------------------------------------------
 -- | A pattern over the otherwise (extremely) messy AST for lambdas.
-pattern Case :: PatCompattable p => HsExpr p -> [(Pat p, LHsExpr p)] -> HsExpr p
-pattern Case scrutinee matches <-
+pattern Case :: PatCompattable p => HsExpr p -> SrcSpan -> [(Pat p, LHsExpr p)] -> HsExpr p
+pattern Case scrutinee span matches <-
   HsCase _ (L _ scrutinee)
-    (MG {mg_alts = L _ (fmap unLoc -> unpackMatches -> Just matches)})
+    (MG {mg_alts = L span (fmap unLoc -> unpackMatches -> Just matches)})
 
 
 ------------------------------------------------------------------------------

@@ -30,7 +30,7 @@ mkFirstAgda pats body                = AgdaMatch pats body
 -- | Transform an 'AgdaMatch' whose body is a case over a bound pattern, by
 -- splitting it into multiple matches: one for each alternative of the case.
 agdaSplit :: AgdaMatch -> [AgdaMatch]
-agdaSplit (AgdaMatch pats (Case (HsVar _ (L _ var)) matches)) = do
+agdaSplit (AgdaMatch pats (Case (HsVar _ (L _ var)) _ matches)) = do
   (pat, body) <- matches
   -- TODO(sandy): use an at pattern if necessary
   pure $ AgdaMatch (rewriteVarPat var pat pats) $ unLoc body
