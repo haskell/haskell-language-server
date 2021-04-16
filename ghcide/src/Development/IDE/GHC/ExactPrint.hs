@@ -12,6 +12,7 @@ module Development.IDE.GHC.ExactPrint
       annotateDecl,
       hoistGraft,
       graftWithM,
+      graftExprWithM,
       genericGraftWithSmallestM,
       genericGraftWithLargestM,
       graftSmallestDeclsWithM,
@@ -66,11 +67,9 @@ import Parser (parseIdentifier)
 import Data.Traversable (for)
 import Data.Foldable (Foldable(fold))
 import Data.Bool (bool)
-import Data.Monoid (All(All), Any(Any))
+import Data.Monoid (All(All), Any(Any), getAll)
 import Data.Functor.Compose (Compose(Compose))
-#if __GLASGOW_HASKELL__ == 808
 import Control.Arrow
-#endif
 
 
 ------------------------------------------------------------------------------
@@ -246,24 +245,63 @@ graftExpr ::
     LHsExpr GhcPs ->
     Graft (Either String) a
 graftExpr dst val = Graft $ \dflags a -> do
-    -- Traverse the tree, looking for our replacement node. But keep track of
-    -- the context (parent HsExpr constructor) we're in while we do it. This
-    -- lets us determine wehther or not we need parentheses.
-    let (All needs_parens, All needs_space) =
-          everythingWithContext (All True, All True) (<>)
-            ( mkQ (mempty, ) $ \x s -> case x of
-                (L src _ :: LHsExpr GhcPs) | src == dst ->
-                  (s, s)
-                L _ x' -> (mempty, needsParensSpace x')
-            ) a
+    let (needs_space, mk_parens) = getNeedsSpaceAndParenthesize dst a
 
     runGraft
-      (graft' needs_space dst $ bool id maybeParensAST needs_parens val)
+      (graft' needs_space dst $ mk_parens val)
       dflags
       a
 
 
+getNeedsSpaceAndParenthesize ::
+    (ASTElement ast, Data a) =>
+    SrcSpan ->
+    a ->
+    (Bool, Located ast -> Located ast)
+getNeedsSpaceAndParenthesize dst a =
+  -- Traverse the tree, looking for our replacement node. But keep track of
+  -- the context (parent HsExpr constructor) we're in while we do it. This
+  -- lets us determine wehther or not we need parentheses.
+  let (needs_parens, needs_space) =
+          everythingWithContext (Nothing, Nothing) (<>)
+            ( mkQ (mempty, ) $ \x s -> case x of
+                (L src _ :: LHsExpr GhcPs) | src == dst ->
+                  (s, s)
+                L _ x' -> (mempty, Just *** Just $ needsParensSpace x')
+            ) a
+   in ( maybe True getAll needs_space
+      , bool id maybeParensAST $ maybe False getAll needs_parens
+      )
+
+
 ------------------------------------------------------------------------------
+
+graftExprWithM ::
+    forall m a.
+    (Fail.MonadFail m, Data a) =>
+    SrcSpan ->
+    (LHsExpr GhcPs -> TransformT m (Maybe (LHsExpr GhcPs))) ->
+    Graft m a
+graftExprWithM dst trans = Graft $ \dflags a -> do
+    let (needs_space, mk_parens) = getNeedsSpaceAndParenthesize dst a
+
+    everywhereM'
+        ( mkM $
+            \case
+                val@(L src _ :: LHsExpr GhcPs)
+                    | src == dst -> do
+                        mval <- trans val
+                        case mval of
+                            Just val' -> do
+                                (anns, val'') <-
+                                    hoistTransform (either Fail.fail pure) $
+                                        annotate dflags needs_space $ mk_parens val'
+                                modifyAnnsT $ mappend anns
+                                pure val''
+                            Nothing -> pure val
+                l -> pure l
+        )
+        a
 
 graftWithM ::
     forall ast m a.

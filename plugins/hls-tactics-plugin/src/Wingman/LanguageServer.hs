@@ -1,14 +1,16 @@
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes        #-}
 {-# LANGUAGE TypeFamilies      #-}
 
 module Wingman.LanguageServer where
 
 import           ConLike
-import           Control.Arrow
+import           Control.Arrow ((***))
 import           Control.Monad
 import           Control.Monad.State (State, get, put, evalState)
 import           Control.Monad.Trans.Maybe
+import           Data.Bifunctor (first)
 import           Data.Coerce
 import           Data.Functor ((<&>))
 import           Data.Generics.Aliases (mkQ)
@@ -32,6 +34,7 @@ import qualified Development.IDE.Core.Shake as IDE
 import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error (realSrcSpanToRange)
+import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindings)
 import           Development.Shake (Action, RuleResult, Rules, action)
 import           Development.Shake.Classes (Typeable, Binary, Hashable, NFData)
@@ -44,6 +47,7 @@ import           Ide.PluginUtils (usePropertyLsp)
 import           Ide.Types (PluginId)
 import           Language.LSP.Server (MonadLsp, sendNotification)
 import           Language.LSP.Types
+import           Language.LSP.Types.Capabilities
 import           OccName
 import           Prelude hiding (span)
 import           SrcLoc (containsSpan)
@@ -197,6 +201,7 @@ judgementForHole state nfp range features = do
 
       dflags <- getIdeDynflags state nfp
       pure (fmap realSrcSpanToRange new_rss, jdg, ctx, dflags)
+
 
 
 mkJudgementAndContext
@@ -513,4 +518,18 @@ mkDiagnostic severity r =
     "Hole"
     (Just $ List [DtUnnecessary])
     Nothing
+
+
+------------------------------------------------------------------------------
+-- | Transform a 'Graft' over the AST into a 'WorkspaceEdit'.
+mkWorkspaceEdits
+    :: DynFlags
+    -> ClientCapabilities
+    -> Uri
+    -> Annotated ParsedSource
+    -> Graft (Either String) ParsedSource
+    -> Either UserFacingMessage WorkspaceEdit
+mkWorkspaceEdits dflags ccs uri pm g = do
+  let response = transform dflags ccs uri g pm
+   in first (InfrastructureError . T.pack) response
 

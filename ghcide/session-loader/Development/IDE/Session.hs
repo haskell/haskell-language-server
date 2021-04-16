@@ -90,6 +90,7 @@ import           HieDb.Create
 import           HieDb.Types
 import           HieDb.Utils
 import           Maybes                               (MaybeT (runMaybeT))
+import           GHC.LanguageExtensions               (Extension(EmptyCase))
 
 -- | Bump this version number when making changes to the format of the data stored in hiedb
 hiedbDataVersion :: String
@@ -771,6 +772,7 @@ setOptions (ComponentOptions theOpts compRoot _) dflags = do
           setIgnoreInterfacePragmas $
           setLinkerOptions $
           disableOptimisation $
+          allowEmptyCaseButWithWarning $
           setUpTypedHoles $
           makeDynFlagsAbsolute compRoot dflags'
     -- initPackages parses the -package flags and
@@ -778,6 +780,14 @@ setOptions (ComponentOptions theOpts compRoot _) dflags = do
     -- Throws if a -package flag cannot be satisfied.
     (final_df, _) <- liftIO $ wrapPackageSetupException $ initPackages dflags''
     return (final_df, targets)
+
+
+-- | Wingman wants to support destructing of empty cases, but these are a parse
+-- error by default. So we want to enable 'EmptyCase', but then that leads to
+-- silent errors without 'Opt_WarnIncompletePatterns'.
+allowEmptyCaseButWithWarning :: DynFlags -> DynFlags
+allowEmptyCaseButWithWarning =
+  flip xopt_set EmptyCase . flip wopt_set Opt_WarnIncompletePatterns
 
 
 -- we don't want to generate object code so we compile to bytecode
