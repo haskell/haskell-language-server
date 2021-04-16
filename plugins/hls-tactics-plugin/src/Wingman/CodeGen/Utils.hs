@@ -5,7 +5,7 @@ import Data.List
 import DataCon
 import Development.IDE.GHC.Compat
 import GHC.Exts
-import GHC.SourceGen (RdrNameStr, recordConE, string)
+import GHC.SourceGen (RdrNameStr (UnqualStr), recordConE, string)
 import GHC.SourceGen.Overloaded
 import GhcPlugins (nilDataCon, charTy, eqType)
 import Name
@@ -43,7 +43,7 @@ mkCon con apps (fmap unLoc -> args)
 
 
 coerceName :: HasOccName a => a -> RdrNameStr
-coerceName = fromString . occNameString . occName
+coerceName = UnqualStr . fromString . occNameString . occName
 
 
 ------------------------------------------------------------------------------
