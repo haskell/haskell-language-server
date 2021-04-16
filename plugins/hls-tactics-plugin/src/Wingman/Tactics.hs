@@ -99,7 +99,7 @@ intros = rule $ \jdg -> do
   case tcSplitFunTys $ unCType g of
     ([], _) -> throwError $ GoalMismatch "intros" g
     (as, b) -> do
-      vs <- mkManyGoodNames (hyNamesInScope $ jEntireHypothesis jdg) as
+      let vs = mkManyGoodNames (hyNamesInScope $ jEntireHypothesis jdg) as
       let top_hole = isTopHole ctx jdg
           hy' = lambdaHypothesis top_hole $ zip vs $ coerce as
           jdg' = introduce hy'

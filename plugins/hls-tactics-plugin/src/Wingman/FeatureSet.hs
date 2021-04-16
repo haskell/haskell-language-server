@@ -25,6 +25,7 @@ data Feature
   | FeatureUseDataCon
   | FeatureRefineHole
   | FeatureKnownMonoid
+  | FeatureEmptyCase
   deriving (Eq, Ord, Show, Read, Enum, Bounded)
 
 

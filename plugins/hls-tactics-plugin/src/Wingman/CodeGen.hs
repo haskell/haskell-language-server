@@ -1,7 +1,8 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE OverloadedLabels #-}
-{-# LANGUAGE TupleSections    #-}
-{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE OverloadedLabels  #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TupleSections     #-}
+{-# LANGUAGE TypeApplications  #-}
 
 module Wingman.CodeGen
   ( module Wingman.CodeGen
@@ -47,6 +48,8 @@ destructMatches
        -- ^ Type being destructed
     -> Judgement
     -> RuleM (Synthesized [RawMatch])
+-- TODO(sandy): In an ideal world, this would be the same codepath as
+-- 'destructionFor'. Make sure to change that if you ever change this.
 destructMatches f scrut t jdg = do
   let hy = jEntireHypothesis jdg
       g  = jGoal jdg
@@ -65,7 +68,7 @@ destructMatches f scrut t jdg = do
               args = conLikeInstOrigArgTys' con apps
           modify $ appEndo $ foldMap (Endo . evidenceToSubst) ev
           subst <- gets ts_unifier
-          names <- mkManyGoodNames (hyNamesInScope hy) args
+          let names = mkManyGoodNames (hyNamesInScope hy) args
           let hy' = patternHypothesis scrut con jdg
                   $ zip names
                   $ coerce args
@@ -79,6 +82,29 @@ destructMatches f scrut t jdg = do
                           . pure
             & #syn_scoped <>~ hy'
             & #syn_val     %~ match [mkDestructPat con names] . unLoc
+
+
+------------------------------------------------------------------------------
+-- | Generate just the 'Match'es for a case split on a specific type.
+destructionFor :: Hypothesis a -> Type -> Maybe [LMatch GhcPs (LHsExpr GhcPs)]
+-- TODO(sandy): In an ideal world, this would be the same codepath as
+-- 'destructMatches'. Make sure to change that if you ever change this.
+destructionFor hy t = do
+  case tacticsGetDataCons t of
+    Nothing -> Nothing
+    Just ([], _) -> Nothing
+    Just (dcs, apps) -> do
+      for dcs $ \dc -> do
+        let con   = RealDataCon dc
+            args  = conLikeInstOrigArgTys' con apps
+            names = mkManyGoodNames (hyNamesInScope hy) args
+        pure
+          . noLoc
+          . Match noExtField CaseAlt [toPatCompat $ mkDestructPat con names]
+          . GRHSs noExtField (pure $ noLoc $ GRHS noExtField [] $ noLoc $ var "_")
+          . noLoc
+          $ EmptyLocalBinds noExtField
+
 
 
 ------------------------------------------------------------------------------

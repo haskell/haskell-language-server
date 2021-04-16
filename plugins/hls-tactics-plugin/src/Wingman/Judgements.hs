@@ -40,6 +40,13 @@ buildHypothesis
       | otherwise = Nothing
 
 
+------------------------------------------------------------------------------
+-- | Build a trivial hypothesis containing only a single name. The corresponding
+-- HyInfo has no provenance or type.
+hySingleton :: OccName -> Hypothesis ()
+hySingleton n = Hypothesis . pure $ HyInfo n UserPrv ()
+
+
 blacklistingDestruct :: Judgement -> Judgement
 blacklistingDestruct =
   field @"_jBlacklistDestruct" .~ True
