@@ -1,5 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
+{-# LANGUAGE NoMonoLocalBinds  #-}
+
 module Wingman.EmptyCase where
 
 import           Control.Applicative (empty)
@@ -56,14 +58,16 @@ workspaceEditHandler _ideState wedit = do
 codeLensProvider :: PluginMethodHandler IdeState TextDocumentCodeLens
 codeLensProvider state plId (CodeLensParams _ _ (TextDocumentIdentifier uri))
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
+      let stale a = runStaleIde "codeLensProvider" state nfp a
+
       cfg <- getTacticConfig plId
       ccs <- getClientCapabilities
       liftIO $ fromMaybeT (Right $ List []) $ do
         guard $ hasFeature FeatureEmptyCase $ cfg_feature_set cfg
 
         dflags <- getIdeDynflags state nfp
-        TrackedStale pm _ <- runStaleIde state nfp GetAnnotatedParsedSource
-        TrackedStale binds bind_map <- runStaleIde state nfp GetBindings
+        TrackedStale pm _ <- stale GetAnnotatedParsedSource
+        TrackedStale binds bind_map <- stale GetBindings
         holes <- emptyCaseScrutinees state nfp
 
         fmap (Right . List) $ for holes $ \(ss, ty) -> do
@@ -134,9 +138,11 @@ emptyCaseScrutinees
     -> NormalizedFilePath
     -> MaybeT IO [(Tracked 'Current RealSrcSpan, Type)]
 emptyCaseScrutinees state nfp = do
-    TrackedStale tcg tcg_map <- fmap (fmap tmrTypechecked) $ runStaleIde state nfp TypeCheck
+    let stale a = runStaleIde "emptyCaseScrutinees" state nfp a
+
+    TrackedStale tcg tcg_map <- fmap (fmap tmrTypechecked) $ stale TypeCheck
     let tcg' = unTrack tcg
-    hscenv <- runStaleIde state nfp GhcSessionDeps
+    hscenv <- stale GhcSessionDeps
 
     let scrutinees = traverse (emptyCaseQ . tcg_binds) tcg
     for scrutinees $ \aged@(unTrack -> (ss, scrutinee)) -> do

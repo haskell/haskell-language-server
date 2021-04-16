@@ -96,13 +96,15 @@ showUserFacingMessage ufm = do
 tacticCmd :: (OccName -> TacticsM ()) -> PluginId -> CommandFunction IdeState TacticParams
 tacticCmd tac pId state (TacticParams uri range var_name)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
+      let stale a = runStaleIde "tacticCmd" state nfp a
+
       features <- getFeatureSet pId
       ccs <- getClientCapabilities
       cfg <- getTacticConfig pId
       res <- liftIO $ runMaybeT $ do
         (range', jdg, ctx, dflags) <- judgementForHole state nfp range features
         let span = fmap (rangeToRealSrcSpan (fromNormalizedFilePath nfp)) range'
-        TrackedStale pm pmmap <- runStaleIde state nfp GetAnnotatedParsedSource
+        TrackedStale pm pmmap <- stale GetAnnotatedParsedSource
         pm_span <- liftMaybe $ mapAgeFrom pmmap span
 
         timingOut (cfg_timeout_seconds cfg * seconds) $ join $
