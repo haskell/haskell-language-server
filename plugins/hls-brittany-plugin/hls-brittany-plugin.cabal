@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-brittany-plugin
-version:            1.0.0.0
+version:            1.0.0.1
 synopsis:           Integration with the Brittany code formatter
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -25,8 +25,8 @@ library
     , filepath
     , ghc
     , ghc-boot-th
-    , ghcide          ^>=1.1.0.0
-    , hls-plugin-api  >=1.0      && <1.2
+    , ghcide          ^>=1.2.0.2
+    , hls-plugin-api  ^>=1.1.0.0
     , lens
     , lsp-types
     , text
@@ -44,5 +44,5 @@ test-suite tests
     , base
     , bytestring
     , hls-brittany-plugin
-    , hls-test-utils
+    , hls-test-utils       ^>=1.0.0.0
     , text

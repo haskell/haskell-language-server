@@ -127,10 +127,23 @@ excludeForbiddenMethods = filter (not . flip S.member forbiddenMethods . hi_name
       [ -- monadfail
         "fail"
         -- show
-      , "showsPrec"
-      , "showList"
+      , "showsPrec", "showList"
+        -- functor
+      , "<$"
+        -- applicative
+      , "liftA2", "<*", "*>"
         -- monad
-      , "return"
+      , "return", ">>"
+        -- alternative
+      , "some", "many"
+        -- foldable
+      , "foldr1", "foldl1", "elem", "maximum", "minimum", "sum", "product"
+        -- traversable
+      , "sequenceA", "mapM", "sequence"
+        -- semigroup
+      , "sconcat", "stimes"
+        -- monoid
+      , "mconcat"
       ]
 
 

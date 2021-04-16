@@ -12,7 +12,6 @@ import           Control.Monad
 import           Control.Monad.Trans
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
-import           Data.Bifunctor (first)
 import           Data.Data
 import           Data.Foldable (for_)
 import           Data.Maybe
@@ -29,6 +28,7 @@ import           OccName
 import           Prelude hiding (span)
 import           System.Timeout
 import           Wingman.CaseSplit
+import           Wingman.EmptyCase
 import           Wingman.GHC
 import           Wingman.LanguageServer
 import           Wingman.LanguageServer.TacticProviders
@@ -41,14 +41,24 @@ import           Wingman.Types
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
   { pluginCommands
-      = fmap (\tc ->
-          PluginCommand
-            (tcCommandId tc)
-            (tacticDesc $ tcCommandName tc)
-            (tacticCmd (commandTactic tc) plId))
-            [minBound .. maxBound]
-  , pluginHandlers =
-      mkPluginHandler STextDocumentCodeAction codeActionProvider
+      = mconcat
+          [ fmap (\tc ->
+              PluginCommand
+                (tcCommandId tc)
+                (tacticDesc $ tcCommandName tc)
+                (tacticCmd (commandTactic tc) plId))
+                [minBound .. maxBound]
+          , pure $
+              PluginCommand
+              emptyCaseLensCommandId
+              "Complete the empty case"
+              workspaceEditHandler
+          ]
+  , pluginHandlers = mconcat
+      [ mkPluginHandler STextDocumentCodeAction codeActionProvider
+      , mkPluginHandler STextDocumentCodeLens codeLensProvider
+      ]
+  , pluginRules = wingmanRules plId
   , pluginCustomConfig =
       mkCustomConfig properties
   }
@@ -88,20 +98,21 @@ tacticCmd tac pId state (TacticParams uri range var_name)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
       features <- getFeatureSet pId
       ccs <- getClientCapabilities
+      cfg <- getTacticConfig pId
       res <- liftIO $ runMaybeT $ do
         (range', jdg, ctx, dflags) <- judgementForHole state nfp range features
         let span = fmap (rangeToRealSrcSpan (fromNormalizedFilePath nfp)) range'
         TrackedStale pm pmmap <- runStaleIde state nfp GetAnnotatedParsedSource
         pm_span <- liftMaybe $ mapAgeFrom pmmap span
 
-        timingOut 2e8 $ join $
+        timingOut (cfg_timeout_seconds cfg * seconds) $ join $
           case runTactic ctx jdg $ tac $ mkVarOcc $ T.unpack var_name of
             Left _ -> Left TacticErrors
             Right rtr ->
               case rtr_extract rtr of
                 L _ (HsVar _ (L _ rdr)) | isHole (occName rdr) ->
                   Left NothingToDo
-                _ -> pure $ mkWorkspaceEdits pm_span dflags ccs uri pm rtr
+                _ -> pure $ mkTacticResultEdits pm_span dflags ccs uri pm rtr
 
       case res of
         Nothing -> do
@@ -118,6 +129,12 @@ tacticCmd _ _ _ _ =
   pure $ Left $ mkErr InvalidRequest "Bad URI"
 
 
+------------------------------------------------------------------------------
+-- | The number of microseconds in a second
+seconds :: Num a => a
+seconds = 1e6
+
+
 timingOut
     :: Int  -- ^ Time in microseconds
     -> a    -- ^ Computation to run
@@ -132,7 +149,7 @@ mkErr code err = ResponseError code err Nothing
 ------------------------------------------------------------------------------
 -- | Turn a 'RunTacticResults' into concrete edits to make in the source
 -- document.
-mkWorkspaceEdits
+mkTacticResultEdits
     :: Tracked age RealSrcSpan
     -> DynFlags
     -> ClientCapabilities
@@ -140,14 +157,12 @@ mkWorkspaceEdits
     -> Tracked age (Annotated ParsedSource)
     -> RunTacticResults
     -> Either UserFacingMessage WorkspaceEdit
-mkWorkspaceEdits (unTrack -> span) dflags ccs uri (unTrack -> pm) rtr = do
+mkTacticResultEdits (unTrack -> span) dflags ccs uri (unTrack -> pm) rtr = do
   for_ (rtr_other_solns rtr) $ \soln -> do
     traceMX "other solution" $ syn_val soln
     traceMX "with score" $ scoreSolution soln (rtr_jdg rtr) []
   traceMX "solution" $ rtr_extract rtr
-  let g = graftHole (RealSrcSpan span) rtr
-      response = transform dflags ccs uri g pm
-   in first (InfrastructureError . T.pack) response
+  mkWorkspaceEdits dflags ccs uri pm $ graftHole (RealSrcSpan span) rtr
 
 
 ------------------------------------------------------------------------------
@@ -201,8 +216,4 @@ graftDecl dflags dst ix make_decl (L src (AMatch (FunRhs (L _ name) _ _) pats _)
           pure alts
         _ -> lift $ Left "annotateDecl didn't produce a funbind"
 graftDecl _ _ _ _ x = pure $ pure x
-
-
-fromMaybeT :: Functor m => a -> MaybeT m a -> m a
-fromMaybeT def = fmap (fromMaybe def) . runMaybeT
 
