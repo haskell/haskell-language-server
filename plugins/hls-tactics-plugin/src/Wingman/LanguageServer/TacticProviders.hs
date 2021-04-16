@@ -44,6 +44,7 @@ commandTactic :: TacticCommand -> OccName -> TacticsM ()
 commandTactic Auto                   = const auto
 commandTactic Intros                 = const intros
 commandTactic Destruct               = useNameFromHypothesis destruct
+commandTactic DestructPun            = useNameFromHypothesis destructPun
 commandTactic Homomorphism           = useNameFromHypothesis homo
 commandTactic DestructLambdaCase     = const destructLambdaCase
 commandTactic HomomorphismLambdaCase = const homoLambdaCase
@@ -58,6 +59,7 @@ tacticKind :: TacticCommand -> T.Text
 tacticKind Auto                   = "fillHole"
 tacticKind Intros                 = "introduceLambda"
 tacticKind Destruct               = "caseSplit"
+tacticKind DestructPun            = "caseSplitPun"
 tacticKind Homomorphism           = "homomorphicCaseSplit"
 tacticKind DestructLambdaCase     = "lambdaCase"
 tacticKind HomomorphismLambdaCase = "homomorphicLambdaCase"
@@ -73,6 +75,7 @@ tacticPreferred :: TacticCommand -> Bool
 tacticPreferred Auto                   = True
 tacticPreferred Intros                 = True
 tacticPreferred Destruct               = True
+tacticPreferred DestructPun            = False
 tacticPreferred Homomorphism           = False
 tacticPreferred DestructLambdaCase     = False
 tacticPreferred HomomorphismLambdaCase = False
@@ -97,6 +100,10 @@ commandProvider Intros =
 commandProvider Destruct =
   filterBindingType destructFilter $ \occ _ ->
     provide Destruct $ T.pack $ occNameString occ
+commandProvider DestructPun =
+  requireFeature FeatureDestructPun $
+    filterBindingType destructPunFilter $ \occ _ ->
+      provide DestructPun $ T.pack $ occNameString occ
 commandProvider Homomorphism =
   filterBindingType homoFilter $ \occ _ ->
     provide Homomorphism $ T.pack $ occNameString occ
@@ -293,4 +300,13 @@ homoFilter _ _                                                     = False
 destructFilter :: Type -> Type -> Bool
 destructFilter _ (algebraicTyCon -> Just _) = True
 destructFilter _ _                          = False
+
+
+------------------------------------------------------------------------------
+-- | We should show destruct punning for bindings only when those bindings have
+-- usual algebraic types, and when any of their data constructors are records.
+destructPunFilter :: Type -> Type -> Bool
+destructPunFilter _ (algebraicTyCon -> Just tc) =
+  any (not . null . dataConFieldLabels) $ tyConDataCons tc
+destructPunFilter _ _                          = False
 
