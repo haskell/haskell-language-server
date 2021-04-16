@@ -38,6 +38,7 @@ background](https://neilmitchell.blogspot.com/2020/01/one-haskell-ide-to-rule-th
         - [Install via cabal](#install-via-cabal)
         - [Install specific GHC Version](#install-specific-ghc-version)
     - [Installation from Hackage](#installation-from-hackage)
+    - [Installation via Homebrew](#installation-via-homebrew)
   - [Configuring `haskell-language-server`](#configuring-haskell-language-server)
     - [Generic server options](#generic-server-options)
     - [Generic editor options](#generic-editor-options)
@@ -316,6 +317,18 @@ Said command builds the `haskell-language-server` binary and installs it in the 
 but the binary will only work with projects that use the same GHC version that built it.
 
 The package can be found here on Hackage: <https://hackage.haskell.org/package/haskell-language-server>
+
+### Installation via Homebrew
+
+Homebrew users can install `haskell-language-server` using the following command:
+
+```bash
+brew install haskell-language-server
+```
+
+This formula contains HLS binaries compiled with GHC versions available via Homebrew; at the moment those are: 8.6.5, 8.8.4, 8.10.4.
+
+You need to provide your own GHC/Cabal/Stack as required by your project, possibly via Homebrew.
 
 ## Configuring `haskell-language-server`
 
