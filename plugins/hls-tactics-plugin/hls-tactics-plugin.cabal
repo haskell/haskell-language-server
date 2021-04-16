@@ -118,6 +118,7 @@ test-suite tests
     AutoTupleSpec
     CodeAction.AutoSpec
     CodeAction.DestructAllSpec
+    CodeAction.DestructPunSpec
     CodeAction.DestructSpec
     CodeAction.IntrosSpec
     CodeAction.RefineSpec

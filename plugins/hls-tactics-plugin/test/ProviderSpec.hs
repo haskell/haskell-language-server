@@ -24,6 +24,7 @@ spec = do
     "T2.hs" 2 21
     [ (id, Destruct, "eab")
     , (id, Homomorphism, "eab")
+    , (not, DestructPun, "eab")
     ]
   mkTest
     "Won't suggest homomorphism on the wrong type"

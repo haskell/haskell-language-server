@@ -142,9 +142,9 @@ destructOrHomoAuto hi = tracing "destructOrHomoAuto" $ do
       ty = unCType $ hi_type hi
 
   attemptWhen
-      (rule $ destruct' (\dc jdg ->
+      (rule $ destruct' False (\dc jdg ->
         buildDataCon False jdg dc $ snd $ splitAppTys g) hi)
-      (rule $ destruct' (const subgoal) hi)
+      (rule $ destruct' False (const subgoal) hi)
     $ case (splitTyConApp_maybe g, splitTyConApp_maybe ty) of
         (Just (gtc, _), Just (tytc, _)) -> gtc == tytc
         _ -> False
@@ -154,20 +154,28 @@ destructOrHomoAuto hi = tracing "destructOrHomoAuto" $ do
 -- | Case split, and leave holes in the matches.
 destruct :: HyInfo CType -> TacticsM ()
 destruct hi = requireConcreteHole $ tracing "destruct(user)" $
-  rule $ destruct' (const subgoal) hi
+  rule $ destruct' False (const subgoal) hi
+
+
+------------------------------------------------------------------------------
+-- | Case split, and leave holes in the matches. Performs record punning.
+destructPun :: HyInfo CType -> TacticsM ()
+destructPun hi = requireConcreteHole $ tracing "destructPun(user)" $
+  rule $ destruct' True (const subgoal) hi
 
 
 ------------------------------------------------------------------------------
 -- | Case split, using the same data constructor in the matches.
 homo :: HyInfo CType -> TacticsM ()
-homo = requireConcreteHole . tracing "homo" . rule . destruct' (\dc jdg ->
+homo = requireConcreteHole . tracing "homo" . rule . destruct' False (\dc jdg ->
   buildDataCon False jdg dc $ snd $ splitAppTys $ unCType $ jGoal jdg)
 
 
 ------------------------------------------------------------------------------
 -- | LambdaCase split, and leave holes in the matches.
 destructLambdaCase :: TacticsM ()
-destructLambdaCase = tracing "destructLambdaCase" $ rule $ destructLambdaCase' (const subgoal)
+destructLambdaCase =
+  tracing "destructLambdaCase" $ rule $ destructLambdaCase' False (const subgoal)
 
 
 ------------------------------------------------------------------------------
@@ -175,7 +183,7 @@ destructLambdaCase = tracing "destructLambdaCase" $ rule $ destructLambdaCase' (
 homoLambdaCase :: TacticsM ()
 homoLambdaCase =
   tracing "homoLambdaCase" $
-    rule $ destructLambdaCase' $ \dc jdg ->
+    rule $ destructLambdaCase' False $ \dc jdg ->
       buildDataCon False jdg dc
         . snd
         . splitAppTys
