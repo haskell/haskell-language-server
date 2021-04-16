@@ -64,8 +64,8 @@ rewriteVarPat name rep = everywhere $
   `extT` \case
     HsRecField lbl _ True
       | eqRdrName name $ unLoc $ rdrNameFieldOcc $ unLoc lbl
-          -> HsRecField lbl rep False
-    (x :: HsRecField' (FieldOcc GhcPs) (LPat GhcPs)) -> x
+          -> HsRecField lbl (toPatCompat rep) False
+    (x :: HsRecField' (FieldOcc GhcPs) (PatCompat GhcPs)) -> x
 
 
 
