@@ -49,7 +49,9 @@ parseFeatureSet
 -- | Features that are globally enabled for all users.
 defaultFeatures :: FeatureSet
 defaultFeatures = S.fromList
-  [
+  [ FeatureDestructAll
+  , FeatureUseDataCon
+  , FeatureRefineHole
   ]
 
 
