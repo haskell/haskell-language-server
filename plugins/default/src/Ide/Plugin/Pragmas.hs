@@ -16,6 +16,7 @@ import           Data.Maybe                 (catMaybes, listToMaybe)
 import qualified Data.Text                  as T
 import           Development.IDE            as D
 import           Development.IDE.GHC.Compat
+import           Development.IDE.Core.Rules (getParsedModuleWithComments)
 import           Ide.Types
 import qualified Language.LSP.Server        as LSP
 import           Language.LSP.Types
@@ -44,7 +45,7 @@ codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
 codeActionProvider state _plId (CodeActionParams _ _ docId _ (J.CodeActionContext (J.List diags) _monly)) = do
   let mFile = docId ^. J.uri & uriToFilePath <&> toNormalizedFilePath'
       uri = docId ^. J.uri
-  pm <- liftIO $ fmap join $ runAction "Pragmas.GetParsedModule" state $ getParsedModule `traverse` mFile
+  pm <- liftIO $ fmap join $ runAction "Pragmas.GetParsedModuleWithComments" state $ getParsedModuleWithComments `traverse` mFile
   let dflags = ms_hspp_opts . pm_mod_summary <$> pm
       insertRange = maybe (Range (Position 0 0) (Position 0 0)) endOfModuleHeader pm
       pedits = nubOrdOn snd . concat $ suggest dflags <$> diags
@@ -178,14 +179,26 @@ completion _ide _ complParams = do
 
 -- ---------------------------------------------------------------------
 
--- | Find the first non-blank line before the first of (module name / imports / declarations).
+-- | Find the first non-blank line before the first of (comment / module name / imports / declarations).
 -- Useful for inserting pragmas.
 endOfModuleHeader :: ParsedModule -> Range
 endOfModuleHeader pm =
   let mod = unLoc $ pm_parsed_source pm
+      firstCommentLoc = getLoc <$> lastListToMaybe (getAnnotationComments (pm_annotations pm) (UnhelpfulSpan "<no location info>"))
       modNameLoc = getLoc <$> hsmodName mod
       firstImportLoc = getLoc <$> listToMaybe (hsmodImports mod)
       firstDeclLoc = getLoc <$> listToMaybe (hsmodDecls mod)
-      line = maybe 0 (_line . _start) (modNameLoc <|> firstImportLoc <|> firstDeclLoc >>= srcSpanToRange)
+      startLine loc = (_line . _start) <$> (loc >>= srcSpanToRange)
+      line = mbMin (startLine (modNameLoc <|> firstImportLoc <|> firstDeclLoc)) (startLine firstCommentLoc)
       loc = Position line 0
    in Range loc loc
+
+mbMin :: Maybe Int -> Maybe Int -> Int
+mbMin Nothing Nothing = 0
+mbMin (Just n) Nothing = n
+mbMin Nothing (Just m) = m
+mbMin (Just n) (Just m) = min n m
+
+lastListToMaybe :: [a] -> Maybe a
+lastListToMaybe [] = Nothing
+lastListToMaybe xs = Just (last xs)

@@ -513,8 +513,8 @@ missingPragmaTests = testGroup "missing pragma warning code actions" [
             let expected =
 -- TODO: Why CPP???
 #if __GLASGOW_HASKELL__ < 810
-                    [ "{-# LANGUAGE ScopedTypeVariables #-}"
-                    , "{-# LANGUAGE TypeApplications #-}"
+                    [ "{-# LANGUAGE TypeApplications #-}"
+                    , "{-# LANGUAGE ScopedTypeVariables #-}"
 #else
                     [ "{-# LANGUAGE TypeApplications #-}"
                     , "{-# LANGUAGE ScopedTypeVariables #-}"
@@ -585,6 +585,38 @@ missingPragmaTests = testGroup "missing pragma warning code actions" [
                     ]
 
             liftIO $ T.lines contents @?= expected
+    , testCase "Before Doc Comments" $ do
+        runSession hlsCommand fullCaps "test/testdata/addPragmas" $ do
+            doc <- openDoc "BeforeDocComment.hs" "haskell"
+
+            _ <- waitForDiagnosticsFrom doc
+            cas <- map fromAction <$> getAllCodeActions doc
+
+            liftIO $ "Add \"NamedFieldPuns\"" `elem` map (^. L.title) cas @? "Contains NamedFieldPuns code action"
+
+            executeCodeAction $ head cas
+
+            contents <- documentContents doc
+
+            let expected =
+                    [ "#! /usr/bin/env nix-shell"
+                    , "#! nix-shell --pure -i runghc -p \"haskellPackages.ghcWithPackages (hp: with hp; [ turtle ])\""
+                    , "{-# LANGUAGE NamedFieldPuns #-}"
+                    , "-- | Doc Comment"
+                    , "{- Block -}"
+                    , ""
+                    , "module BeforeDocComment where"
+                    , ""
+                    , "data Record = Record"
+                    , "  { a :: Int,"
+                    , "    b :: Double,"
+                    , "    c :: String"
+                    , "  }"
+                    , ""
+                    , "f Record{a, b} = a"
+                    ]
+
+            liftIO $ T.lines contents @?= expected
     ]
 
 disableWarningTests :: TestTree
@@ -597,8 +629,8 @@ disableWarningTests =
           , "main = putStrLn \"hello\""
           ]
       , T.unlines
-          [ "{-# OPTIONS_GHC -Wall #-}"
-          , "{-# OPTIONS_GHC -Wno-missing-signatures #-}"
+          [ "{-# OPTIONS_GHC -Wno-missing-signatures #-}"
+          , "{-# OPTIONS_GHC -Wall #-}"
           , "main = putStrLn \"hello\""
           ]
       )
@@ -613,10 +645,10 @@ disableWarningTests =
           , "import Data.Functor"
           ]
       , T.unlines
-          [ "{-# OPTIONS_GHC -Wall #-}"
+          [ "{-# OPTIONS_GHC -Wno-unused-imports #-}"
+          , "{-# OPTIONS_GHC -Wall #-}"
           , ""
           , ""
-          , "{-# OPTIONS_GHC -Wno-unused-imports #-}"
           , "module M where"
           , ""
           , "import Data.Functor"
