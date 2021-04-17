@@ -73,7 +73,6 @@ library
     , pretty-simple
     , QuickCheck
     , safe-exceptions
-    , shake
     , temporary
     , text
     , time
