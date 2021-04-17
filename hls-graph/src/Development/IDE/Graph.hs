@@ -5,18 +5,21 @@ module Development.IDE.Graph(
     Rules,
     Action, action,
     actionFinally, actionBracket, actionCatch,
-    ShakeException(..),
+    Shake.ShakeException(..),
     -- * Configuration
     ShakeOptions(shakeThreads, shakeFiles, shakeExtra),
     getShakeExtra, getShakeExtraRules, addShakeExtra,
     -- * Explicit parallelism
     parallel,
     -- * Oracle rules
-    ShakeValue, RuleResult,
+    Shake.ShakeValue, Shake.RuleResult,
     -- * Special rules
     alwaysRerun,
     -- * Batching
     reschedule,
     ) where
 
-import Development.Shake
+import qualified Development.Shake as Shake
+import Development.IDE.Graph.Internal.Action
+import Development.IDE.Graph.Internal.Options
+import Development.IDE.Graph.Internal.Rules

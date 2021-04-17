@@ -31,10 +31,17 @@ library
     Development.IDE.Graph.Database
     Development.IDE.Graph.Rule
 
+  other-modules:
+    Development.IDE.Graph.Internal.Action
+    Development.IDE.Graph.Internal.Options
+    Development.IDE.Graph.Internal.Rules
+
   hs-source-dirs:     src
   build-depends:
     , base >=4.12 && <5
+    , bytestring
     , shake >= 0.18.4
+    , unordered-containers
 
   ghc-options:
     -Wall -Wredundant-constraints -Wno-name-shadowing
