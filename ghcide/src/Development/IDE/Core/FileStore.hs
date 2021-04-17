@@ -27,6 +27,7 @@ import           Control.Concurrent.STM.TQueue                (writeTQueue)
 import           Control.Concurrent.Strict
 import           Control.Exception
 import           Control.Monad.Extra
+import           Control.Monad.IO.Class
 import qualified Data.ByteString                              as BS
 import           Data.Either.Extra
 import qualified Data.HashMap.Strict                          as HM
