@@ -12,11 +12,11 @@ import           Control.Monad              (join)
 import           Control.Monad.IO.Class
 import qualified Data.HashMap.Strict        as H
 import           Data.List.Extra            (nubOrdOn)
-import           Data.Maybe                 (catMaybes, listToMaybe)
+import           Data.Maybe                 (catMaybes, listToMaybe, fromMaybe)
 import qualified Data.Text                  as T
 import           Development.IDE            as D
-import           Development.IDE.GHC.Compat
 import           Development.IDE.Core.Rules (getParsedModuleWithComments)
+import           Development.IDE.GHC.Compat
 import           Ide.Types
 import qualified Language.LSP.Server        as LSP
 import           Language.LSP.Types
@@ -179,21 +179,41 @@ completion _ide _ complParams = do
 
 -- ---------------------------------------------------------------------
 
--- | Find the first non-blank line before the first of (comment / module name / imports / declarations).
+-- | Find end of last pragma or first (haddock comment / module name / imports / declarations).
 -- Useful for inserting pragmas.
 endOfModuleHeader :: ParsedModule -> Range
 endOfModuleHeader pm = Range loc loc
     where
-        loc = Position line 0
-        line = mbMin (startLine (modNameLoc <|> firstImportLoc <|> firstDeclLoc)) (startLine firstCommentLoc)
-        startLine loc = (_line . _start) <$> (loc >>= srcSpanToRange)
-        modNameLoc = getLoc <$> hsmodName mod
-        firstCommentLoc = getLoc <$> listToMaybe (reverse $ getAnnotationComments (pm_annotations pm) (UnhelpfulSpan "<no location info>"))
-        firstImportLoc = getLoc <$> listToMaybe (hsmodImports mod)
-        firstDeclLoc = getLoc <$> listToMaybe (hsmodDecls mod)
         mod = unLoc $ pm_parsed_source pm
+        loc = Position line 0
+        line = fromMaybe (mbMin firstCodeLine firstDocLine) lastPragmaLine
+        firstCodeLine = let
+            modNameLoc = (getLoc <$> hsmodName mod)
+            firstImportLoc = (getLoc <$> listToMaybe (hsmodImports mod))
+            firstDeclLoc = (getLoc <$> listToMaybe (hsmodDecls mod))
+            in startLine $ modNameLoc <|> firstImportLoc <|> firstDeclLoc
+        lastPragmaLine = succ <$> annotationsStart (filter (isPragma . unLoc) comments)
+        firstDocLine = annotationsStart $ reverse $ filter (isHaddock . unLoc) comments
+        comments = getAnnotationComments (pm_annotations pm) (UnhelpfulSpan "<no location info>")
+        annotationsStart = startLine . (getLoc <$>) . listToMaybe
+        startLine loc = (_line . _start) <$> (loc >>= srcSpanToRange)
         mbMin :: (Num a, Ord a) => Maybe a -> Maybe a -> a
         mbMin Nothing Nothing   = 0
         mbMin (Just n) Nothing  = n
         mbMin Nothing (Just m)  = m
         mbMin (Just n) (Just m) = min n m
+
+isHaddock :: AnnotationComment -> Bool
+isHaddock c = case c of
+    AnnLineComment s     -> take 4 s `elem` ["-- |", "-- ^", "-- $", "-- *"]
+    AnnBlockComment s    -> take 3 s == "{-|"
+    AnnDocCommentNext _  -> True
+    AnnDocCommentPrev _  -> True
+    AnnDocCommentNamed _ -> True
+    AnnDocSection _ _    -> True
+    _                    -> False
+
+isPragma :: AnnotationComment -> Bool
+isPragma (AnnBlockComment ('{':'-':'#':_)) = True
+isPragma (AnnDocOptions _)                 = True
+isPragma _                                 = False
