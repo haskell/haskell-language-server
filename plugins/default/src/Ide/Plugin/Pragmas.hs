@@ -184,8 +184,8 @@ completion _ide _ complParams = do
 endOfModuleHeader :: ParsedModule -> Range
 endOfModuleHeader pm =
   let mod = unLoc $ pm_parsed_source pm
-      firstCommentLoc = getLoc <$> lastListToMaybe (getAnnotationComments (pm_annotations pm) (UnhelpfulSpan "<no location info>"))
       modNameLoc = getLoc <$> hsmodName mod
+      firstCommentLoc = getLoc <$> listToMaybe (reverse $ getAnnotationComments (pm_annotations pm) (UnhelpfulSpan "<no location info>"))
       firstImportLoc = getLoc <$> listToMaybe (hsmodImports mod)
       firstDeclLoc = getLoc <$> listToMaybe (hsmodDecls mod)
       startLine loc = (_line . _start) <$> (loc >>= srcSpanToRange)
@@ -193,12 +193,8 @@ endOfModuleHeader pm =
       loc = Position line 0
    in Range loc loc
 
-mbMin :: Maybe Int -> Maybe Int -> Int
-mbMin Nothing Nothing = 0
-mbMin (Just n) Nothing = n
-mbMin Nothing (Just m) = m
+mbMin :: (Num a, Ord a) => Maybe a -> Maybe a -> a
+mbMin Nothing Nothing   = 0
+mbMin (Just n) Nothing  = n
+mbMin Nothing (Just m)  = m
 mbMin (Just n) (Just m) = min n m
-
-lastListToMaybe :: [a] -> Maybe a
-lastListToMaybe [] = Nothing
-lastListToMaybe xs = Just (last xs)
