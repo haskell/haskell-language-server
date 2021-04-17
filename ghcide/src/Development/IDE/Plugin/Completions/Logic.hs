@@ -415,7 +415,7 @@ localCompletionsForParsedModule uri pm@ParsedModule{pm_parsed_source = L _ HsMod
             TyClD _ ClassDecl{tcdLName, tcdSigs} ->
                 mkComp tcdLName CiInterface Nothing :
                 [ mkComp id CiFunction (Just $ ppr typ)
-                | L _ (TypeSig _ ids typ) <- tcdSigs
+                | L _ (ClassOpSig _ _ ids typ) <- tcdSigs
                 , id <- ids]
             TyClD _ x ->
                 let generalCompls = [mkComp id cl Nothing
