@@ -290,7 +290,7 @@ usePropertyAction ::
 usePropertyAction kn pId p = do
   config <- getClientConfigAction def
   let pluginConfig = configForPlugin config pId
-  return $ useProperty kn p $ Just (plcConfig pluginConfig)
+  return $ useProperty kn p (plcConfig pluginConfig)
 
 -- | Get the plugin config
 getHlintConfig :: PluginId -> Action Config
