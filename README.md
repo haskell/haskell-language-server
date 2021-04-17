@@ -28,6 +28,7 @@ background](https://neilmitchell.blogspot.com/2020/01/one-haskell-ide-to-rule-th
     - [Visual Studio Code](#visual-studio-code)
     - [Pre-built binaries](#pre-built-binaries)
     - [Arch Linux](#arch-linux)
+    - [FreeBSD](#freebsd)
     - [Installation from source](#installation-from-source)
       - [Common pre-requirements](#common-pre-requirements)
       - [Linux-specific pre-requirements](#linux-specific-pre-requirements)
@@ -37,6 +38,7 @@ background](https://neilmitchell.blogspot.com/2020/01/one-haskell-ide-to-rule-th
         - [Install via cabal](#install-via-cabal)
         - [Install specific GHC Version](#install-specific-ghc-version)
     - [Installation from Hackage](#installation-from-hackage)
+    - [Installation via Homebrew](#installation-via-homebrew)
   - [Configuring `haskell-language-server`](#configuring-haskell-language-server)
     - [Generic server options](#generic-server-options)
     - [Generic editor options](#generic-editor-options)
@@ -140,7 +142,12 @@ To install, download the `haskell-language-server-wrapper` executable for your p
 
 ### Arch Linux
 
-If you are using Arch Linux with **dynamically linked** Haskell packages from `pacman`,
+The preferred method of installation for development purposes is to use the [haskell-language-server-bin](https://aur.archlinux.org/packages/haskell-language-server-bin) package from AUR.
+This package contains statically linked binaries for each supported GHC version and `haskell-language-server-wrapper` for automatic GHC version selection.
+It is updated regularly, requires no additional dependencies, and is independent of other haskell packages you may have on your system, including GHC.
+Its size is relatively large (approx. 900 MB), but if this is a problem for you, during installation you can disable the GHC versions you will not be using by editing the PKGBUILD file.
+
+Alternatively, if you want to use **dynamically linked** Haskell packages from `pacman`,
 you can install the latest pre-compiled version of `haskell-language-server` from [[community]](https://archlinux.org/packages/community/x86_64/haskell-language-server/):
 
 ```
@@ -149,6 +156,17 @@ sudo pacman -S haskell-language-server
 
 In this case, `haskell-language-server` is compiled against the GHC distributed to Arch Linux, so you will need maintain a system wide Haskell development environment, and install GHC from `pacman` as well.
 See [ArchWiki](https://wiki.archlinux.org/index.php/Haskell) for the details of Haskell infrastructure on Arch Linux.
+
+### FreeBSD
+
+HLS is available for installation from official binary packages. Use
+
+```
+pkg install hs-haskell-language-server
+```
+
+to install it. At the moment, HLS installed this way only supports the same GHC
+version as the ports one.
 
 ### Installation from source
 
@@ -299,6 +317,18 @@ Said command builds the `haskell-language-server` binary and installs it in the 
 but the binary will only work with projects that use the same GHC version that built it.
 
 The package can be found here on Hackage: <https://hackage.haskell.org/package/haskell-language-server>
+
+### Installation via Homebrew
+
+Homebrew users can install `haskell-language-server` using the following command:
+
+```bash
+brew install haskell-language-server
+```
+
+This formula contains HLS binaries compiled with GHC versions available via Homebrew; at the moment those are: 8.6.5, 8.8.4, 8.10.4.
+
+You need to provide your own GHC/Cabal/Stack as required by your project, possibly via Homebrew.
 
 ## Configuring `haskell-language-server`
 

@@ -60,6 +60,7 @@ import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities
 import qualified Language.LSP.VFS                         as VFS
 import           Outputable                               (Outputable)
+import           TyCoRep
 
 -- From haskell-ide-engine/hie-plugin-api/Haskell/Ide/Engine/Context.hs
 
@@ -186,6 +187,7 @@ mkCompl
                   _filterText = Nothing,
                   _insertText = Just insertText,
                   _insertTextFormat = Just Snippet,
+                  _insertTextMode = Nothing,
                   _textEdit = Nothing,
                   _additionalTextEdits = Nothing,
                   _commitCharacters = Nothing,
@@ -246,9 +248,16 @@ mkNameCompItem doc thingParent origName origMod thingType isInfix docs !imp = CI
       where
         argTypes = getArgs typ
         argText :: T.Text
-        argText =  mconcat $ List.intersperse " " $ zipWithFrom snippet 1 argTypes
+        argText = mconcat $ List.intersperse " " $ zipWithFrom snippet 1 argTypes
         snippet :: Int -> Type -> T.Text
-        snippet i t = "${" <> T.pack (show i) <> ":" <> showGhc t <> "}"
+        snippet i t = case t of
+            (TyVarTy _)     -> noParensSnippet
+            (LitTy _)       -> noParensSnippet
+            (TyConApp _ []) -> noParensSnippet
+            _               -> snippetText i ("(" <> showGhc t <> ")")
+            where
+                noParensSnippet = snippetText i (showGhc t)
+                snippetText i t = "${" <> T.pack (show i) <> ":" <> t <> "}"
         getArgs :: Type -> [Type]
         getArgs t
           | isPredTy t = []
@@ -272,13 +281,13 @@ mkModCompl :: T.Text -> CompletionItem
 mkModCompl label =
   CompletionItem label (Just CiModule) Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing Nothing Nothing
-    Nothing Nothing Nothing Nothing Nothing
+    Nothing Nothing Nothing Nothing Nothing Nothing
 
 mkImportCompl :: T.Text -> T.Text -> CompletionItem
 mkImportCompl enteredQual label =
   CompletionItem m (Just CiModule) Nothing (Just label)
     Nothing Nothing Nothing Nothing Nothing Nothing Nothing
-    Nothing Nothing Nothing Nothing Nothing
+    Nothing Nothing Nothing Nothing Nothing Nothing
   where
     m = fromMaybe "" (T.stripPrefix enteredQual label)
 
@@ -286,13 +295,13 @@ mkExtCompl :: T.Text -> CompletionItem
 mkExtCompl label =
   CompletionItem label (Just CiKeyword) Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing Nothing Nothing
-    Nothing Nothing Nothing Nothing Nothing
+    Nothing Nothing Nothing Nothing Nothing Nothing
 
 mkPragmaCompl :: T.Text -> T.Text -> CompletionItem
 mkPragmaCompl label insertText =
   CompletionItem label (Just CiKeyword) Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing (Just insertText) (Just Snippet)
-    Nothing Nothing Nothing Nothing Nothing
+    Nothing Nothing Nothing Nothing Nothing Nothing
 
 
 cacheDataProducer :: Uri -> HscEnvEq -> Module -> GlobalRdrEnv-> GlobalRdrEnv -> [LImportDecl GhcPs] -> IO CachedCompletions

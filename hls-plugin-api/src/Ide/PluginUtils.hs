@@ -37,7 +37,7 @@ import           Language.LSP.Types
 import qualified Language.LSP.Types              as J
 import           Language.LSP.Types.Capabilities
 
-import qualified Data.Map.Strict                 as Map
+import           Data.Containers.ListUtils       (nubOrdOn)
 import           Ide.Plugin.Config
 import           Ide.Plugin.Properties
 import           Language.LSP.Server
@@ -121,13 +121,13 @@ diffTextEdit fText f2Text withDeletions = J.List r
 diffText' :: Bool -> (Uri,T.Text) -> T.Text -> WithDeletions -> WorkspaceEdit
 diffText' supports (f,fText) f2Text withDeletions  =
   if supports
-    then WorkspaceEdit Nothing (Just docChanges)
-    else WorkspaceEdit (Just h) Nothing
+    then WorkspaceEdit Nothing (Just docChanges) Nothing
+    else WorkspaceEdit (Just h) Nothing Nothing
   where
     diff = diffTextEdit fText f2Text withDeletions
     h = H.singleton f diff
     docChanges = J.List [InL docEdit]
-    docEdit = J.TextDocumentEdit (J.VersionedTextDocumentIdentifier f (Just 0)) diff
+    docEdit = J.TextDocumentEdit (J.VersionedTextDocumentIdentifier f (Just 0)) $ fmap InL diff
 
 -- ---------------------------------------------------------------------
 
@@ -136,7 +136,7 @@ clientSupportsDocumentChanges caps =
   let ClientCapabilities mwCaps _ _ _ = caps
       supports = do
         wCaps <- mwCaps
-        WorkspaceEditClientCapabilities mDc _ _ <- _workspaceEdit wCaps
+        WorkspaceEditClientCapabilities mDc _ _ _ _ <- _workspaceEdit wCaps
         mDc
   in
     Just True == supports
@@ -144,7 +144,8 @@ clientSupportsDocumentChanges caps =
 -- ---------------------------------------------------------------------
 
 pluginDescToIdePlugins :: [PluginDescriptor ideState] -> IdePlugins ideState
-pluginDescToIdePlugins plugins = IdePlugins $ Map.fromList $ map (\p -> (pluginId p, p)) plugins
+pluginDescToIdePlugins plugins =
+    IdePlugins $ map (\p -> (pluginId p, p)) $ nubOrdOn pluginId plugins
 
 
 -- ---------------------------------------------------------------------
@@ -152,7 +153,7 @@ pluginDescToIdePlugins plugins = IdePlugins $ Map.fromList $ map (\p -> (pluginI
 -- cache the returned value of this function, as clients can at runitime change
 -- their configuration.
 --
-getClientConfig :: MonadLsp Config m => m (Maybe Config)
+getClientConfig :: MonadLsp Config m => m Config
 getClientConfig = getConfig
 
 -- ---------------------------------------------------------------------
@@ -160,10 +161,10 @@ getClientConfig = getConfig
 -- | Returns the current plugin configuration. It is not wise to permanently
 -- cache the returned value of this function, as clients can change their
 -- configuration at runtime.
-getPluginConfig :: MonadLsp Config m => PluginId -> m (Maybe PluginConfig)
+getPluginConfig :: MonadLsp Config m => PluginId -> m PluginConfig
 getPluginConfig plugin = do
     config <- getClientConfig
-    return $ flip configForPlugin plugin <$> config
+    return $ flip configForPlugin plugin config
 
 -- ---------------------------------------------------------------------
 
@@ -176,7 +177,7 @@ usePropertyLsp ::
   m (ToHsType t)
 usePropertyLsp kn pId p = do
   config <- getPluginConfig pId
-  return $ useProperty kn p $ plcConfig <$> config
+  return $ useProperty kn p $ plcConfig config
 
 -- ---------------------------------------------------------------------
 
@@ -214,12 +215,11 @@ positionInRange (Position pl po) (Range (Position sl so) (Position el eo)) =
 -- ---------------------------------------------------------------------
 
 allLspCmdIds' :: T.Text -> IdePlugins ideState -> [T.Text]
-allLspCmdIds' pid mp = mkPlugin (allLspCmdIds pid) (Just . pluginCommands)
+allLspCmdIds' pid (IdePlugins ls) = mkPlugin (allLspCmdIds pid) (Just . pluginCommands)
     where
         justs (p, Just x)  = [(p, x)]
         justs (_, Nothing) = []
 
-        ls = Map.toList (ipMap mp)
 
         mkPlugin maker selector
             = maker $ concatMap (\(pid, p) -> justs (pid, selector p)) ls

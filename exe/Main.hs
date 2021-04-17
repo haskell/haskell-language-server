@@ -4,7 +4,8 @@
 {-# LANGUAGE RecordWildCards   #-}
 module Main(main) where
 
-import           Ide.Arguments (Arguments (..), LspArguments (..), getArguments)
+import           Ide.Arguments (Arguments (..), GhcideArguments (..),
+                                getArguments)
 import           Ide.Main      (defaultMain)
 import           Plugins
 
@@ -14,7 +15,7 @@ main = do
 
     let withExamples =
             case args of
-                LspMode LspArguments{..} -> argsExamplePlugin
-                _                        -> False
+                Ghcide GhcideArguments{..} -> argsExamplePlugin
+                _                          -> False
 
     defaultMain args (idePlugins withExamples)

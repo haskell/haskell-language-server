@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-eval-plugin
-version:            1.0.0.0
+version:            1.1.0.0
 synopsis:           Eval plugin for Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -19,11 +19,11 @@ build-type:         Simple
 extra-source-files:
   LICENSE
   README.md
-  test/testdata/*.yaml
-  test/testdata/*.hs
-  test/testdata/*.expected
-  test/testdata/*.lhs
   test/testdata/*.cabal
+  test/testdata/*.expected
+  test/testdata/*.hs
+  test/testdata/*.lhs
+  test/testdata/*.yaml
 
 flag pedantic
   description: Enable -Werror
@@ -53,7 +53,7 @@ library
     , base                  >=4.12    && <5
     , containers
     , deepseq
-    , Diff
+    , Diff                  ^>=0.4.0
     , directory
     , dlist
     , extra
@@ -61,9 +61,9 @@ library
     , ghc
     , ghc-boot-th
     , ghc-paths
-    , ghcide                ^>=1.1.0.0
+    , ghcide                ^>=1.2.0.2
     , hashable
-    , hls-plugin-api        >=1.0     && <1.2
+    , hls-plugin-api        ^>=1.1.0.0
     , lens
     , lsp
     , lsp-types
@@ -92,26 +92,12 @@ library
     DataKinds
     TypeOperators
 
-executable test-server
-  default-language: Haskell2010
-  build-depends:
-    , base
-    , data-default
-    , ghcide
-    , hls-eval-plugin
-    , hls-plugin-api
-
-  main-is:          Server.hs
-  hs-source-dirs:   test
-  ghc-options:      -threaded
-
 test-suite tests
-  type:               exitcode-stdio-1.0
-  default-language:   Haskell2010
-  build-tool-depends: hls-eval-plugin:test-server -any
-  hs-source-dirs:     test
-  main-is:            Main.hs
-
+  type:             exitcode-stdio-1.0
+  default-language: Haskell2010
+  hs-source-dirs:   test
+  main-is:          Main.hs
+  ghc-options:      -threaded -rtsopts -with-rtsopts=-N
   build-depends:
     , aeson
     , base
@@ -119,7 +105,7 @@ test-suite tests
     , extra
     , filepath
     , hls-eval-plugin
-    , hls-test-utils
+    , hls-test-utils   ^>=1.0.0.0
     , lens
     , lsp-test
     , lsp-types

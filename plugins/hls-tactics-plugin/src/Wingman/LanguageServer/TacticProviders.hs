@@ -20,21 +20,22 @@ import           Data.Monoid
 import qualified Data.Text as T
 import           Data.Traversable
 import           DataCon (dataConName)
+import           Development.IDE.Core.UseStale (Tracked, Age(..))
 import           Development.IDE.GHC.Compat
 import           GHC.Generics
 import           GHC.LanguageExtensions.Type (Extension (LambdaCase))
-import           Wingman.Auto
-import           Wingman.FeatureSet
-import           Wingman.GHC
-import           Wingman.Judgements
-import           Wingman.Tactics
-import           Wingman.Types
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Types
 import           OccName
 import           Prelude hiding (span)
 import           Refinery.Tactic (goal)
+import           Wingman.Auto
+import           Wingman.FeatureSet
+import           Wingman.GHC
+import           Wingman.Judgements
+import           Wingman.Tactics
+import           Wingman.Types
 
 
 ------------------------------------------------------------------------------
@@ -43,6 +44,7 @@ commandTactic :: TacticCommand -> OccName -> TacticsM ()
 commandTactic Auto                   = const auto
 commandTactic Intros                 = const intros
 commandTactic Destruct               = useNameFromHypothesis destruct
+commandTactic DestructPun            = useNameFromHypothesis destructPun
 commandTactic Homomorphism           = useNameFromHypothesis homo
 commandTactic DestructLambdaCase     = const destructLambdaCase
 commandTactic HomomorphismLambdaCase = const homoLambdaCase
@@ -57,6 +59,7 @@ tacticKind :: TacticCommand -> T.Text
 tacticKind Auto                   = "fillHole"
 tacticKind Intros                 = "introduceLambda"
 tacticKind Destruct               = "caseSplit"
+tacticKind DestructPun            = "caseSplitPun"
 tacticKind Homomorphism           = "homomorphicCaseSplit"
 tacticKind DestructLambdaCase     = "lambdaCase"
 tacticKind HomomorphismLambdaCase = "homomorphicLambdaCase"
@@ -72,6 +75,7 @@ tacticPreferred :: TacticCommand -> Bool
 tacticPreferred Auto                   = True
 tacticPreferred Intros                 = True
 tacticPreferred Destruct               = True
+tacticPreferred DestructPun            = False
 tacticPreferred Homomorphism           = False
 tacticPreferred DestructLambdaCase     = False
 tacticPreferred HomomorphismLambdaCase = False
@@ -96,6 +100,10 @@ commandProvider Intros =
 commandProvider Destruct =
   filterBindingType destructFilter $ \occ _ ->
     provide Destruct $ T.pack $ occNameString occ
+commandProvider DestructPun =
+  requireFeature FeatureDestructPun $
+    filterBindingType destructPunFilter $ \occ _ ->
+      provide DestructPun $ T.pack $ occNameString occ
 commandProvider Homomorphism =
   filterBindingType homoFilter $ \occ _ ->
     provide Homomorphism $ T.pack $ occNameString occ
@@ -150,14 +158,14 @@ data TacticProviderData = TacticProviderData
   , tpd_config :: Config
   , tpd_plid   :: PluginId
   , tpd_uri    :: Uri
-  , tpd_range  :: Range
+  , tpd_range  :: Tracked 'Current Range
   , tpd_jdg    :: Judgement
   }
 
 
 data TacticParams = TacticParams
     { tp_file     :: Uri    -- ^ Uri of the file to fill the hole in
-    , tp_range    :: Range  -- ^ The range of the hole
+    , tp_range    :: Tracked 'Current Range  -- ^ The range of the hole
     , tp_var_name :: T.Text
     }
   deriving stock (Show, Eq, Generic)
@@ -210,7 +218,7 @@ filterBindingType
     -> TacticProvider
 filterBindingType p tp tpd =
   let jdg = tpd_jdg tpd
-      hy  = jHypothesis jdg
+      hy  = jLocalHypothesis jdg
       g   = jGoal jdg
    in fmap join $ for (unHypothesis hy) $ \hi ->
         let ty = unCType $ hi_type hi
@@ -261,13 +269,15 @@ provide tc name TacticProviderData{..} = do
     $ pure
     $ InR
     $ CodeAction
-        title
-        (Just $ mkTacticKind tc)
-        Nothing
-        (Just $ tacticPreferred tc)
-        Nothing
-        Nothing
-    $ Just cmd
+        { _title       = title
+        , _kind        = Just $ mkTacticKind tc
+        , _diagnostics = Nothing
+        , _isPreferred = Just $ tacticPreferred tc
+        , _disabled    = Nothing
+        , _edit        = Nothing
+        , _command     = Just cmd
+        , _xdata       = Nothing
+        }
 
 
 ------------------------------------------------------------------------------
@@ -290,4 +300,13 @@ homoFilter _ _                                                     = False
 destructFilter :: Type -> Type -> Bool
 destructFilter _ (algebraicTyCon -> Just _) = True
 destructFilter _ _                          = False
+
+
+------------------------------------------------------------------------------
+-- | We should show destruct punning for bindings only when those bindings have
+-- usual algebraic types, and when any of their data constructors are records.
+destructPunFilter :: Type -> Type -> Bool
+destructPunFilter _ (algebraicTyCon -> Just tc) =
+  any (not . null . dataConFieldLabels) $ tyConDataCons tc
+destructPunFilter _ _                          = False
 

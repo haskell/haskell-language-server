@@ -2,7 +2,7 @@ cabal-version:      2.4
 build-type:         Simple
 category:           Development
 name:               ghcide
-version:            1.1.0.0
+version:            1.2.0.2
 license:            Apache-2.0
 license-file:       LICENSE
 author:             Digital Asset and Ghcide contributors
@@ -52,17 +52,19 @@ library
         filepath,
         fingertree,
         ghc-exactprint,
+        ghc-trace-events,
         Glob,
-        haddock-library ^>= 1.10.0,
+        haddock-library >= 1.8 && < 1.11,
         hashable,
         hie-compat ^>= 0.1.0.0,
         hls-plugin-api ^>= 1.1.0.0,
         lens,
         hiedb == 0.3.0.1,
-        lsp-types == 1.1.*,
-        lsp == 1.1.1.0,
+        lsp-types == 1.2.*,
+        lsp == 1.2.*,
         mtl,
         network-uri,
+        optparse-applicative,
         parallel,
         prettyprinter-ansi-terminal,
         prettyprinter-ansi-terminal,
@@ -84,7 +86,7 @@ library
         utf8-string,
         vector,
         hslogger,
-        Diff,
+        Diff ^>=0.4.0,
         vector,
         bytestring-encoding,
         opentelemetry >=0.6.1,
@@ -110,9 +112,12 @@ library
         cbits/getmodtime.c
 
     default-extensions:
+        ApplicativeDo
         BangPatterns
         DeriveFunctor
         DeriveGeneric
+        DeriveFoldable
+        DeriveTraversable
         FlexibleContexts
         GeneralizedNewtypeDeriving
         LambdaCase
@@ -137,6 +142,7 @@ library
         Control.Concurrent.Strict
         Development.IDE
         Development.IDE.Main
+        Development.IDE.Core.Actions
         Development.IDE.Core.Debouncer
         Development.IDE.Core.FileStore
         Development.IDE.Core.IdeConfiguration
@@ -148,6 +154,7 @@ library
         Development.IDE.Core.Service
         Development.IDE.Core.Shake
         Development.IDE.Core.Tracing
+        Development.IDE.Core.UseStale
         Development.IDE.GHC.Compat
         Development.IDE.Core.Compile
         Development.IDE.GHC.Error
@@ -315,6 +322,7 @@ test-suite ghcide-tests
         implicit-hie:gen-hie
     build-depends:
         aeson,
+        async,
         base,
         binary,
         bytestring,
@@ -339,12 +347,13 @@ test-suite ghcide-tests
         hls-plugin-api,
         network-uri,
         lens,
-        lsp-test == 0.13.0.0,
+        lsp-test == 0.14.0.0,
         optparse-applicative,
         process,
         QuickCheck,
         quickcheck-instances,
         rope-utf16-splay,
+        regex-tdfa ^>= 1.3.1,
         safe,
         safe-exceptions,
         shake,
@@ -396,7 +405,7 @@ executable ghcide-bench
         extra,
         filepath,
         ghcide,
-        lsp-test == 0.13.0.0,
+        lsp-test == 0.14.0.0,
         optparse-applicative,
         process,
         safe-exceptions,

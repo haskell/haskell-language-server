@@ -13,6 +13,7 @@ module Development.IDE.LSP.HoverDefinition
     ) where
 
 import           Control.Monad.IO.Class
+import           Development.IDE.Core.Actions
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Shake
 import           Development.IDE.LSP.Server

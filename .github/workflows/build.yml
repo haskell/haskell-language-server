@@ -17,7 +17,7 @@ jobs:
       fail-fast: false
       matrix:
         ghc: ['8.10.4', '8.10.3', '8.10.2', '8.8.4', '8.8.3', '8.8.2', '8.6.5', '8.6.4']
-        os: [ubuntu-latest, macOS-latest, windows-latest]
+        os: [ubuntu-18.04, macOS-latest, windows-latest]
         exclude:
           - os: windows-latest
             ghc: '8.10.2' # broken due to https://gitlab.haskell.org/ghc/ghc/-/issues/18550
@@ -58,7 +58,7 @@ jobs:
         echo "GHC_VERSION=$GHC_VER" >> $GITHUB_ENV
 
     - name: Set some linux specific things
-      if: matrix.os == 'ubuntu-latest'
+      if: matrix.os == 'ubuntu-18.04'
       env:
         GHC_VER: ${{ matrix.ghc }}
       run: |
@@ -156,7 +156,7 @@ jobs:
   # macOS and Linux, used by ghcup
   tar:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
     strategy:
       matrix:
         os: [Linux, macOS]

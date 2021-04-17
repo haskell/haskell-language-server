@@ -6,7 +6,7 @@ description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
 
 homepage:
-  https://github.com/haskell/haskell-language-server/hls-test-utils
+  https://github.com/haskell/haskell-language-server#readme
 
 bug-reports:   https://github.com/haskell/haskell-language-server/issues
 license:       Apache-2.0
@@ -34,6 +34,7 @@ library
   hs-source-dirs:   src
   build-depends:
     , aeson
+    , async
     , base
     , blaze-markup
     , bytestring
@@ -42,13 +43,16 @@ library
     , directory
     , extra
     , filepath
+    , ghcide                  ^>=1.2.0.2
+    , hls-plugin-api          ^>=1.1.0.0
     , hspec
     , hspec-core
     , lens
-    , lsp-test                ==0.13.0.0
-    , lsp-types               ^>=1.1
+    , lsp                     ^>=1.2
+    , lsp-test                ==0.14.0.0
+    , lsp-types               ^>=1.2
+    , shake
     , tasty
-    , tasty-ant-xml           >=1.1.6
     , tasty-expected-failure
     , tasty-golden
     , tasty-hunit

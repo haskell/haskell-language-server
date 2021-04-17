@@ -16,6 +16,7 @@ import Wingman.FeatureSet (allFeatures)
 spec :: Spec
 spec = do
   let autoTest = goldenTest Auto ""
+      autoTestNoWhitespace = goldenTestNoWhitespace Auto ""
 
   describe "golden" $ do
     autoTest 11  8 "AutoSplitGADT.hs"
@@ -39,7 +40,6 @@ spec = do
     autoTest  2  8 "GoldenShowMapChar.hs"
     autoTest  7  8 "GoldenSuperclass.hs"
     autoTest  2 12 "GoldenSafeHead.hs"
-    autoTest 25 13 "GoldenArbitrary.hs"
     autoTest  2 12 "FmapBoth.hs"
     autoTest  7  8 "RecordCon.hs"
     autoTest  6  8 "NewtypeRecord.hs"
@@ -50,6 +50,9 @@ spec = do
     autoTest  2 16 "AutoEmptyString.hs"
     autoTest  7 35 "AutoPatSynUse.hs"
     autoTest  2 28 "AutoZip.hs"
+    autoTest  2 17 "AutoInfixApply.hs"
+    autoTest  2 19 "AutoInfixApplyMany.hs"
+    autoTest  2 25 "AutoInfixInfix.hs"
 
     failing "flaky in CI" $
       autoTest 2 11 "GoldenApplicativeThen.hs"
@@ -67,6 +70,19 @@ spec = do
     autoTest  6  8 "AutoThetaEqGADTDestruct.hs"
     autoTest  6 10 "AutoThetaRefl.hs"
     autoTest  6  8 "AutoThetaReflDestruct.hs"
+
+  describe "known" $ do
+    autoTest 25 13 "GoldenArbitrary.hs"
+    autoTestNoWhitespace
+              6 10 "KnownBigSemigroup.hs"
+    autoTest  4 10 "KnownThetaSemigroup.hs"
+    autoTest  6 10 "KnownCounterfactualSemigroup.hs"
+    autoTest 10 10 "KnownModuleInstanceSemigroup.hs"
+    autoTest  4 22 "KnownDestructedSemigroup.hs"
+    autoTest  4 10 "KnownMissingSemigroup.hs"
+    autoTest  7 12 "KnownMonoid.hs"
+    autoTest  7 12 "KnownPolyMonoid.hs"
+    autoTest  7 12 "KnownMissingMonoid.hs"
 
 
   describe "messages" $ do
