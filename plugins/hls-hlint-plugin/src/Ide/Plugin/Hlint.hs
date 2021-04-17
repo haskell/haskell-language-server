@@ -37,7 +37,8 @@ import           Data.Typeable
 import           Development.IDE                                    hiding
                                                                     (Error)
 import           Development.IDE.Core.Rules                         (defineNoFile,
-                                                                     getParsedModuleWithComments)
+                                                                     getParsedModuleWithComments,
+                                                                     usePropertyAction)
 import           Development.IDE.Core.Shake                         (getDiagnostics)
 import           Refact.Apply
 
@@ -100,7 +101,8 @@ descriptor plId = (defaultPluginDescriptor plId)
       [ PluginCommand "applyOne" "Apply a single hint" applyOneCmd
       , PluginCommand "applyAll" "Apply all hints to the file" applyAllCmd
       ]
-    , pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionProvider
+  , pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionProvider
+  , pluginCustomConfig = mkCustomConfig properties
   }
 
 -- This rule only exists for generating file diagnostics
@@ -132,7 +134,7 @@ rules plugin = do
 
   defineNoFile $ \GetHlintSettings -> do
       (Config flags) <- getHlintConfig plugin
-      getHlintSettingsRule (HlintEnabled flags)
+      liftIO $ argsSettings flags
 
   action $ do
     files <- getFilesOfInterest
@@ -247,11 +249,6 @@ getExtensions pflags nfp = do
 
 -- ---------------------------------------------------------------------
 
-data HlintUsage
-  = HlintEnabled { cmdArgs :: [String] }
-  | HlintDisabled
-  deriving Show
-
 data GetHlintSettings = GetHlintSettings
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetHlintSettings
@@ -265,12 +262,6 @@ instance Binary GetHlintSettings
 
 type instance RuleResult GetHlintSettings = (ParseFlags, [Classify], Hint)
 
-getHlintSettingsRule :: HlintUsage -> Action (ParseFlags, [Classify], Hint)
-getHlintSettingsRule usage =
-      liftIO $ case usage of
-          HlintEnabled cmdArgs -> argsSettings cmdArgs
-          HlintDisabled        -> fail "hlint configuration unspecified"
-
 -- ---------------------------------------------------------------------
 
 newtype Config = Config [String]
@@ -279,18 +270,6 @@ properties :: Properties '[ 'PropertyKey "flags" ('TArray String)]
 properties = emptyProperties
   & defineArrayProperty #flags
     "Flags used by hlint" []
-
--- | Returns the value of a property for use with shake Rules
-usePropertyAction ::
-  (HasProperty s k t r) =>
-  KeyNameProxy s ->
-  PluginId ->
-  Properties r ->
-  Action (ToHsType t)
-usePropertyAction kn pId p = do
-  config <- getClientConfigAction def
-  let pluginConfig = configForPlugin config pId
-  return $ useProperty kn p (plcConfig pluginConfig)
 
 -- | Get the plugin config
 getHlintConfig :: PluginId -> Action Config
