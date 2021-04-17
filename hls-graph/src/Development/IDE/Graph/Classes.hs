@@ -1,4 +1,6 @@
 
-module Development.IDE.Graph.Classes(module X) where
+module Development.IDE.Graph.Classes(
+    Show(..), Typeable, Eq(..), Hashable(..), Binary(..), NFData(..)
+    ) where
 
-import Development.Shake.Classes as X
+import Development.Shake.Classes

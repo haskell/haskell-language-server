@@ -1,4 +1,14 @@
 
-module Development.IDE.Graph.Database(module X) where
+module Development.IDE.Graph.Database(
+    ShakeDatabase,
+    shakeOpenDatabase,
+    shakeWithDatabase,
+    shakeOneShotDatabase,
+    shakeRunDatabase,
+    shakeLiveFilesDatabase,
+    shakeProfileDatabase,
+    shakeErrorsDatabase,
+    shakeRunAfter
+    ) where
 
-import Development.Shake.Database as X
+import Development.Shake.Database
