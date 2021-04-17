@@ -1,8 +1,11 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Development.IDE.Graph.Internal.Action where
 
 import qualified Development.Shake as Shake
+import qualified Development.Shake.Rule as Shake
+import Development.Shake.Classes
 import Control.Exception
 import Control.Monad.IO.Class
 import Control.Monad.Fail
@@ -27,3 +30,9 @@ actionBracket a b c = Action $ Shake.actionBracket a b (fromAction . c)
 
 actionFinally :: Action a -> IO b -> Action a
 actionFinally a b = Action $ Shake.actionFinally (fromAction a) b
+
+apply1 :: (Shake.RuleResult key ~ value, Shake.ShakeValue key, Typeable value) => key -> Action value
+apply1 = Action . Shake.apply1
+
+apply :: (Shake.RuleResult key ~ value, Shake.ShakeValue key, Typeable value) => [key] -> Action [value]
+apply = Action . Shake.apply
