@@ -59,8 +59,8 @@ descriptor plId = (defaultPluginDescriptor plId)
       , mkPluginHandler STextDocumentCodeLens codeLensProvider
       ]
   , pluginRules = wingmanRules plId
-  , pluginCustomConfig =
-      mkCustomConfig properties
+  , pluginConfigDescriptor =
+      defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
   }
 
 

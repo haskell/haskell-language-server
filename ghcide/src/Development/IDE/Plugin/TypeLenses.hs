@@ -17,8 +17,8 @@ import           Control.DeepSeq                     (rwhnf)
 import           Control.Monad                       (mzero)
 import           Control.Monad.Extra                 (whenMaybe)
 import           Control.Monad.IO.Class              (MonadIO (liftIO))
-import qualified Data.Aeson.Types                    as A
 import           Data.Aeson.Types                    (Value (..), toJSON)
+import qualified Data.Aeson.Types                    as A
 import qualified Data.HashMap.Strict                 as Map
 import           Data.List                           (find)
 import           Data.Maybe                          (catMaybes, fromJust)
@@ -60,6 +60,8 @@ import           Ide.Types                           (CommandFunction,
                                                       PluginCommand (PluginCommand),
                                                       PluginDescriptor (..),
                                                       PluginId,
+                                                      configCustomConfig,
+                                                      defaultConfigDescriptor,
                                                       defaultPluginDescriptor,
                                                       mkCustomConfig,
                                                       mkPluginHandler)
@@ -90,7 +92,7 @@ descriptor plId =
     { pluginHandlers = mkPluginHandler STextDocumentCodeLens codeLensProvider
     , pluginCommands = [PluginCommand (CommandId typeLensCommandId) "adds a signature" commandHandler]
     , pluginRules = rules
-    , pluginCustomConfig = mkCustomConfig properties
+    , pluginConfigDescriptor = defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
     }
 
 properties :: Properties '[ 'PropertyKey "mode" ('TEnum Mode)]
@@ -212,8 +214,8 @@ data Mode
   deriving (Eq, Ord, Show, Read, Enum)
 
 instance A.ToJSON Mode where
-  toJSON Always = "always"
-  toJSON Exported = "exported"
+  toJSON Always      = "always"
+  toJSON Exported    = "exported"
   toJSON Diagnostics = "diagnostics"
 
 instance A.FromJSON Mode where

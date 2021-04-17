@@ -47,7 +47,7 @@ descriptor plId = (defaultPluginDescriptor plId)
   { pluginRules = produceCompletions
   , pluginHandlers = mkPluginHandler STextDocumentCompletion getCompletionsLSP
   , pluginCommands = [extendImportCommand]
-  , pluginCustomConfig = mkCustomConfig properties
+  , pluginConfigDescriptor = defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
   }
 
 produceCompletions :: Rules ()
