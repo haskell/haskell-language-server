@@ -182,19 +182,18 @@ completion _ide _ complParams = do
 -- | Find the first non-blank line before the first of (comment / module name / imports / declarations).
 -- Useful for inserting pragmas.
 endOfModuleHeader :: ParsedModule -> Range
-endOfModuleHeader pm =
-  let mod = unLoc $ pm_parsed_source pm
-      modNameLoc = getLoc <$> hsmodName mod
-      firstCommentLoc = getLoc <$> listToMaybe (reverse $ getAnnotationComments (pm_annotations pm) (UnhelpfulSpan "<no location info>"))
-      firstImportLoc = getLoc <$> listToMaybe (hsmodImports mod)
-      firstDeclLoc = getLoc <$> listToMaybe (hsmodDecls mod)
-      startLine loc = (_line . _start) <$> (loc >>= srcSpanToRange)
-      line = mbMin (startLine (modNameLoc <|> firstImportLoc <|> firstDeclLoc)) (startLine firstCommentLoc)
-      loc = Position line 0
-   in Range loc loc
-
-mbMin :: (Num a, Ord a) => Maybe a -> Maybe a -> a
-mbMin Nothing Nothing   = 0
-mbMin (Just n) Nothing  = n
-mbMin Nothing (Just m)  = m
-mbMin (Just n) (Just m) = min n m
+endOfModuleHeader pm = Range loc loc
+    where
+        loc = Position line 0
+        line = mbMin (startLine (modNameLoc <|> firstImportLoc <|> firstDeclLoc)) (startLine firstCommentLoc)
+        startLine loc = (_line . _start) <$> (loc >>= srcSpanToRange)
+        modNameLoc = getLoc <$> hsmodName mod
+        firstCommentLoc = getLoc <$> listToMaybe (reverse $ getAnnotationComments (pm_annotations pm) (UnhelpfulSpan "<no location info>"))
+        firstImportLoc = getLoc <$> listToMaybe (hsmodImports mod)
+        firstDeclLoc = getLoc <$> listToMaybe (hsmodDecls mod)
+        mod = unLoc $ pm_parsed_source pm
+        mbMin :: (Num a, Ord a) => Maybe a -> Maybe a -> a
+        mbMin Nothing Nothing   = 0
+        mbMin (Just n) Nothing  = n
+        mbMin Nothing (Just m)  = m
+        mbMin (Just n) (Just m) = min n m
