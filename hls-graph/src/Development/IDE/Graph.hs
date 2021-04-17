@@ -8,7 +8,7 @@ module Development.IDE.Graph(
     Shake.ShakeException(..),
     -- * Configuration
     ShakeOptions(shakeThreads, shakeFiles, shakeExtra),
-    getShakeExtra, getShakeExtraRules, addShakeExtra,
+    getShakeExtra, getShakeExtraRules, newShakeExtra,
     -- * Explicit parallelism
     parallel,
     -- * Oracle rules

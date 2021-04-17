@@ -508,7 +508,7 @@ shakeOpen lspEnv defaultConfig logger debouncer
         pure (ShakeExtras{..}, cancel progressAsync)
     (shakeDbM, shakeClose) <-
         shakeOpenDatabase
-            opts { shakeExtra = addShakeExtra shakeExtras $ shakeExtra opts }
+            opts { shakeExtra = newShakeExtra shakeExtras }
             rules
     shakeDb <- shakeDbM
     initSession <- newSession shakeExtras shakeDb []

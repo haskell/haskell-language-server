@@ -7,20 +7,23 @@ import qualified Data.HashMap.Strict as Map
 import Development.IDE.Graph.Internal.Action
 import Development.IDE.Graph.Internal.Rules
 import Data.Dynamic
-import Data.Typeable
 
 data ShakeOptions = ShakeOptions {
     shakeThreads :: Int,
     shakeFiles :: FilePath,
-    shakeExtra :: Map.HashMap TypeRep Dynamic
+    shakeExtra :: Maybe Dynamic
     }
 
 shakeOptions :: ShakeOptions
-shakeOptions = ShakeOptions 0 ".shake" Map.empty
+shakeOptions = ShakeOptions 0 ".shake" Nothing
 
 fromShakeOptions :: ShakeOptions -> Shake.ShakeOptions
-fromShakeOptions ShakeOptions{..} =
-    Shake.shakeOptions{Shake.shakeThreads = shakeThreads, Shake.shakeFiles = shakeFiles, Shake.shakeExtra = shakeExtra}
+fromShakeOptions ShakeOptions{..} = Shake.shakeOptions{
+    Shake.shakeThreads = shakeThreads,
+    Shake.shakeFiles = shakeFiles,
+    Shake.shakeExtra = maybe Map.empty f shakeExtra
+    }
+    where f x = Map.singleton (dynTypeRep x) x
 
 
 getShakeExtra :: Typeable a => Action (Maybe a)
@@ -29,5 +32,5 @@ getShakeExtra = Action Shake.getShakeExtra
 getShakeExtraRules :: Typeable a => Rules (Maybe a)
 getShakeExtraRules = Rules Shake.getShakeExtraRules
 
-addShakeExtra :: Typeable a => a -> Map.HashMap TypeRep Dynamic -> Map.HashMap TypeRep Dynamic
-addShakeExtra = Shake.addShakeExtra
+newShakeExtra :: Typeable a => a -> Maybe Dynamic
+newShakeExtra = Just . toDyn
