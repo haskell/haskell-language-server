@@ -3,6 +3,8 @@
 {-# LANGUAGE RankNTypes        #-}
 {-# LANGUAGE TypeFamilies      #-}
 
+{-# LANGUAGE NoMonoLocalBinds  #-}
+
 module Wingman.LanguageServer where
 
 import           ConLike
@@ -72,8 +74,8 @@ tcCommandName :: TacticCommand -> T.Text
 tcCommandName = T.pack . show
 
 
-runIde :: IdeState -> Action a -> IO a
-runIde state = runAction "tactic" state
+runIde :: String -> String -> IdeState -> Action a -> IO a
+runIde herald action state = runAction ("Wingman." <> herald <> "." <> action) state
 
 
 runCurrentIde
@@ -82,11 +84,13 @@ runCurrentIde
        , Eq a , Hashable a , Binary a , Show a , Typeable a , NFData a
        , Show r, Typeable r, NFData r
        )
-    => IdeState
+    => String
+    -> IdeState
     -> NormalizedFilePath
     -> a
     -> MaybeT IO (Tracked 'Current r)
-runCurrentIde state nfp a = MaybeT $ fmap (fmap unsafeMkCurrent) $ runIde state $ use a nfp
+runCurrentIde herald state nfp a =
+  MaybeT $ fmap (fmap unsafeMkCurrent) $ runIde herald (show a) state $ use a nfp
 
 
 runStaleIde
@@ -95,11 +99,13 @@ runStaleIde
        , Eq a , Hashable a , Binary a , Show a , Typeable a , NFData a
        , Show r, Typeable r, NFData r
        )
-    => IdeState
+    => String
+    -> IdeState
     -> NormalizedFilePath
     -> a
     -> MaybeT IO (TrackedStale r)
-runStaleIde state nfp a = MaybeT $ runIde state $ useWithStale a nfp
+runStaleIde herald state nfp a =
+  MaybeT $ runIde herald (show a) state $ useWithStale a nfp
 
 
 unsafeRunStaleIde
@@ -108,12 +114,13 @@ unsafeRunStaleIde
        , Eq a , Hashable a , Binary a , Show a , Typeable a , NFData a
        , Show r, Typeable r, NFData r
        )
-    => IdeState
+    => String
+    -> IdeState
     -> NormalizedFilePath
     -> a
     -> MaybeT IO r
-unsafeRunStaleIde state nfp a = do
-  (r, _) <- MaybeT $ runIde state $ IDE.useWithStale a nfp
+unsafeRunStaleIde herald state nfp a = do
+  (r, _) <- MaybeT $ runIde herald (show a) state $ IDE.useWithStale a nfp
   pure r
 
 
@@ -164,7 +171,7 @@ getIdeDynflags
 getIdeDynflags state nfp = do
   -- Ok to use the stale 'ModIface', since all we need is its 'DynFlags'
   -- which don't change very often.
-  msr <- unsafeRunStaleIde state nfp GetModSummaryWithoutTimestamps
+  msr <- unsafeRunStaleIde "getIdeDynflags" state nfp GetModSummaryWithoutTimestamps
   pure $ ms_hspp_opts $ msrModSummary msr
 
 
@@ -178,15 +185,17 @@ judgementForHole
     -> FeatureSet
     -> MaybeT IO (Tracked 'Current Range, Judgement, Context, DynFlags)
 judgementForHole state nfp range features = do
-  TrackedStale asts amapping  <- runStaleIde state nfp GetHieAst
+  let stale a = runStaleIde "judgementForHole" state nfp a
+
+  TrackedStale asts amapping  <- stale GetHieAst
   case unTrack asts of
     HAR _ _  _ _ (HieFromDisk _) -> fail "Need a fresh hie file"
     HAR _ (unsafeCopyAge asts -> hf) _ _ HieFresh -> do
       range' <- liftMaybe $ mapAgeFrom amapping range
-      binds <- runStaleIde state nfp GetBindings
+      binds <- stale GetBindings
       tcg <- fmap (fmap tmrTypechecked)
-           $ runStaleIde state nfp TypeCheck
-      hscenv <- runStaleIde state nfp GhcSessionDeps
+           $ stale TypeCheck
+      hscenv <- stale GhcSessionDeps
 
       (rss, g) <- liftMaybe $ getSpanAndTypeAtHole range' hf
       new_rss <- liftMaybe $ mapAgeTo amapping rss
