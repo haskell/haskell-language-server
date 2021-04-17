@@ -45,7 +45,6 @@ library
     , lens
     , lsp
     , retrie
-    , shake
     , syb
     , text
     , transformers
