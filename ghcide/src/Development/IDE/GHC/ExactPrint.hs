@@ -292,8 +292,8 @@ graftExprWithM dst trans = Graft $ \dflags a -> do
                         case mval of
                             Just val' -> do
                                 (anns, val'') <-
-                                    hoistTransform (either Fail.fail pure) $
-                                        annotate dflags needs_space $ mk_parens val'
+                                    hoistTransform (either Fail.fail pure)
+                                        (annotate @(HsExpr GhcPs) dflags needs_space (mk_parens val'))
                                 modifyAnnsT $ mappend anns
                                 pure val''
                             Nothing -> pure val
