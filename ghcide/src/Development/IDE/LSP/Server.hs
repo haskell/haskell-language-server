@@ -26,7 +26,8 @@ import           UnliftIO.Chan
 
 data ReactorMessage
   = ReactorNotification (IO ())
-  | ReactorRequest SomeLspId (IO ()) (ResponseError -> IO ())
+  | ReactorRequestSync SomeLspId (IO ()) (ResponseError -> IO ())
+  | ReactorRequestAsync SomeLspId (IO ()) (ResponseError -> IO ())
 
 type ReactorChan = Chan ReactorMessage
 type ServerM c = ReaderT (ReactorChan, IdeState) (LspM c)
@@ -43,7 +44,12 @@ requestHandler m k = LSP.requestHandler m $ \RequestMessage{_method,_id,_params}
       trace x = otTracedHandler "Request" (show _method) $ \sp -> do
         traceWithSpan sp _params
         x
-  writeChan chan $ ReactorRequest (SomeLspId _id) (trace $ LSP.runLspT env $ resp' =<< k ide _params) (LSP.runLspT env . resp' . Left)
+      item = case _method of
+          SInitialize ->
+            ReactorRequestSync  (SomeLspId _id) (trace $ LSP.runLspT env $ resp' =<< k ide _params) (LSP.runLspT env . resp' . Left)
+          _other ->
+            ReactorRequestAsync (SomeLspId _id) (trace $ LSP.runLspT env $ resp' =<< k ide _params) (LSP.runLspT env . resp' . Left)
+  writeChan chan item
 
 notificationHandler
   :: forall (m :: Method FromClient Notification) c. (HasTracing (MessageParams m)) =>

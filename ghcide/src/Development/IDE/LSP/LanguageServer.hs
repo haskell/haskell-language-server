@@ -154,7 +154,9 @@ runLanguageServer options inH outH getHieDbLoc defaultConfig onConfigurationChan
                         logError (ideLogger ide) $ T.pack $
                           "Unexpected exception on notification, please report!\n" ++
                           "Exception: " ++ show e
-                    ReactorRequest _id act k -> void $ async $
+                    ReactorRequestSync _id act k ->
+                      checkCancelled ide clearReqId waitForCancel _id act k
+                    ReactorRequestAsync _id act k -> void $ async $
                       checkCancelled ide clearReqId waitForCancel _id act k
             pure $ Right (env,ide)
 
