@@ -14,7 +14,6 @@ data Arguments = Arguments
     ,argsShakeProfiling        :: Maybe FilePath
     ,argsOTMemoryProfiling     :: Bool
     ,argsTesting               :: Bool
-    ,argsDisableKick           :: Bool
     ,argsThreads               :: Int
     ,argsVerbose               :: Bool
     ,argsCommand               :: Command
@@ -36,7 +35,6 @@ arguments = Arguments
       <*> optional (strOption $ long "shake-profiling" <> metavar "DIR" <> help "Dump profiling reports to this directory")
       <*> switch (long "ot-memory-profiling" <> help "Record OpenTelemetry info to the eventlog. Needs the -l RTS flag to have an effect")
       <*> switch (long "test" <> help "Enable additional lsp messages used by the testsuite")
-      <*> switch (long "test-no-kick" <> help "Disable kick. Useful for testing cancellation")
       <*> option auto (short 'j' <> help "Number of threads (0: automatic)" <> metavar "NUM" <> value 0 <> showDefault)
       <*> switch (long "verbose" <> help "Include internal events in logging output")
       <*> (commandP <|> lspCommand <|> checkCommand)
