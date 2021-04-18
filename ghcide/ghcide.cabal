@@ -359,6 +359,7 @@ test-suite ghcide-tests
         safe-exceptions,
         shake,
         hls-graph,
+        sqlite-simple,
         tasty,
         tasty-expected-failure,
         tasty-hunit,

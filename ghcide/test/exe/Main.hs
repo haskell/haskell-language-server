@@ -101,6 +101,7 @@ import           Ide.Types
 import           Data.String                              (IsString(fromString))
 import qualified Language.LSP.Types                       as LSP
 import           Data.IORef.Extra                         (atomicModifyIORef_)
+import           Database.SQLite.Simple (SQLError(SQLError))
 import           Development.IDE.Core.Rules (mainRule)
 import qualified Development.IDE.Plugin.HLS.GhcIde        as Ghcide
 import qualified Development.IDE.Plugin.Test as Test
@@ -5397,7 +5398,11 @@ testIde rootDir arguments session = do
                 { optShakeOptions = (optShakeOptions ideOptions) {shakeThreads = 2}}
         }
 
-    res <- runSessionWithHandles hInWrite hOutRead config lspTestCaps rootDir session
+    let runIt = runSessionWithHandles hInWrite hOutRead config lspTestCaps rootDir session
+    -- catch SQL errors and retry once to handle the hiedb getting locked by a previous test
+    res <- runIt `catch` \SQLError{} -> do
+        sleep 1
+        runIt
 
     hClose hInWrite
     timeout 3 (wait server) >>= \case
