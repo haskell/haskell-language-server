@@ -11,17 +11,21 @@ import Data.Dynamic
 data ShakeOptions = ShakeOptions {
     shakeThreads :: Int,
     shakeFiles :: FilePath,
-    shakeExtra :: Maybe Dynamic
+    shakeExtra :: Maybe Dynamic,
+    shakeAllowRedefineRules :: Bool,
+    shakeTimings :: Bool
     }
 
 shakeOptions :: ShakeOptions
-shakeOptions = ShakeOptions 0 ".shake" Nothing
+shakeOptions = ShakeOptions 0 ".shake" Nothing False False
 
 fromShakeOptions :: ShakeOptions -> Shake.ShakeOptions
 fromShakeOptions ShakeOptions{..} = Shake.shakeOptions{
     Shake.shakeThreads = shakeThreads,
     Shake.shakeFiles = shakeFiles,
-    Shake.shakeExtra = maybe Map.empty f shakeExtra
+    Shake.shakeExtra = maybe Map.empty f shakeExtra,
+    Shake.shakeAllowRedefineRules = shakeAllowRedefineRules,
+    Shake.shakeTimings = shakeTimings
     }
     where f x = Map.singleton (dynTypeRep x) x
 

@@ -40,7 +40,7 @@ library
   build-depends:
     , base >=4.12 && <5
     , bytestring
-    , shake >= 0.18.4
+    , shake >= 0.19.4
     , unordered-containers
 
   ghc-options:

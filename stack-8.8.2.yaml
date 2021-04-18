@@ -58,6 +58,7 @@ extra-deps:
   - ormolu-0.1.4.1
   - refinery-0.3.0.0
   - retrie-0.1.1.1
+  - shake-0.19.4
   - semigroups-0.18.5
   - stylish-haskell-0.12.2.0
   - temporary-1.2.1.1
