@@ -20,6 +20,7 @@ import           Development.IDE.Core.Shake (IdeState (..))
 import           Development.IDE.Core.UseStale (Tracked, TrackedStale(..), unTrack, mapAgeFrom, unsafeMkCurrent)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.ExactPrint
+import           Generics.SYB.GHC
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
