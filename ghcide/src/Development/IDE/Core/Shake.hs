@@ -3,6 +3,7 @@
 
 {-# LANGUAGE ConstraintKinds           #-}
 {-# LANGUAGE DerivingStrategies        #-}
+{-# LANGUAGE DuplicateRecordFields     #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE PolyKinds                 #-}
 {-# LANGUAGE RankNTypes                #-}
@@ -183,8 +184,8 @@ data ShakeExtras = ShakeExtras
     -- positions in a version of that document to positions in the latest version
     -- First mapping is delta from previous version and second one is an
     -- accumlation of all previous mappings.
-    ,inProgress :: Var (HMap.HashMap NormalizedFilePath Int)
-    -- ^ How many rules are running for each file
+    ,inProgress :: forall a . NormalizedFilePath -> Action a -> Action a
+    -- ^ Report progress for a rule
     ,progressUpdate :: ProgressEvent -> IO ()
     ,ideTesting :: IdeTesting
     -- ^ Whether to enable additional lsp messages used by the test suite for checking invariants
@@ -473,9 +474,8 @@ shakeOpen :: Maybe (LSP.LanguageContextEnv Config)
           -> Rules ()
           -> IO IdeState
 shakeOpen lspEnv defaultConfig logger debouncer
-  shakeProfileDir (IdeReportProgress reportProgress) ideTesting@(IdeTesting testing) hiedb indexQueue vfs opts rules = mdo
+  shakeProfileDir (IdeReportProgress inProgress) ideTesting@(IdeTesting testing) hiedb indexQueue vfs opts rules = mdo
 
-    inProgress <- newVar HMap.empty
     us <- mkSplitUniqSupply 'r'
     ideNc <- newIORef (initNameCache us knownKeyNames)
     (shakeExtras, stopProgressReporting) <- do
@@ -487,23 +487,23 @@ shakeOpen lspEnv defaultConfig logger debouncer
         positionMapping <- newVar HMap.empty
         knownTargetsVar <- newVar $ hashed HMap.empty
         let restartShakeSession = shakeRestart ideState
-        mostRecentProgressEvent <- newTVarIO KickCompleted
         persistentKeys <- newVar HMap.empty
-        let progressUpdate = atomically . writeTVar mostRecentProgressEvent
         indexPending <- newTVarIO HMap.empty
         indexCompleted <- newTVarIO 0
         indexProgressToken <- newVar Nothing
         let hiedbWriter = HieDbWriter{..}
-        progressAsync <- async $
-            when reportProgress $
-                progressThread optProgressStyle mostRecentProgressEvent inProgress
         exportsMap <- newVar mempty
 
+        ProgressReporting{..} <-
+            if inProgress
+                then delayedProgressReporting lspEnv optProgressStyle
+                else noProgressReporting
         actionQueue <- newQueue
 
         let clientCapabilities = maybe def LSP.resClientCapabilities lspEnv
+            extras = ShakeExtras{..}
 
-        pure (ShakeExtras{..}, cancel progressAsync)
+        pure (extras, progressStop)
     (shakeDbM, shakeClose) <-
         shakeOpenDatabase
             opts { shakeExtra = newShakeExtra shakeExtras }
@@ -520,6 +520,34 @@ shakeOpen lspEnv defaultConfig logger debouncer
     startTelemetry otProfilingEnabled logger $ state shakeExtras
 
     return ideState
+
+data ProgressReporting  = ProgressReporting
+  { progressUpdate :: ProgressEvent -> IO ()
+  , inProgress     :: forall a. NormalizedFilePath -> Action a -> Action a
+  , progressStop   :: IO ()
+  }
+
+noProgressReporting :: IO ProgressReporting
+noProgressReporting = return $ ProgressReporting
+  { progressUpdate = const $ pure ()
+  , inProgress = const id
+  , progressStop   = pure ()
+  }
+
+delayedProgressReporting
+  :: Maybe (LSP.LanguageContextEnv c)
+  -> ProgressReportingStyle
+  -> IO ProgressReporting
+delayedProgressReporting lspEnv optProgressStyle = do
+    inProgressVar <- newVar HMap.empty
+    mostRecentProgressEvent <- newTVarIO KickCompleted
+    progressAsync <- async $
+            progressThread optProgressStyle mostRecentProgressEvent inProgressVar
+    let progressUpdate = atomically . writeTVar mostRecentProgressEvent
+        progressStop   = cancel progressAsync
+        inProgress :: NormalizedFilePath -> Action a -> Action a
+        inProgress = withProgressVar inProgressVar
+    return ProgressReporting{..}
     where
         -- The progress thread is a state machine with two states:
         --   1. Idle
@@ -550,7 +578,7 @@ shakeOpen lspEnv defaultConfig logger debouncer
             lspShakeProgress = do
                 -- first sleep a bit, so we only show progress messages if it's going to take
                 -- a "noticable amount of time" (we often expect a thread kill to arrive before the sleep finishes)
-                liftIO $ unless testing $ sleep 0.1
+                liftIO $ sleep 0.1
                 u <- ProgressTextToken . T.pack . show . hashUnique <$> liftIO newUnique
 
                 void $ LSP.sendRequest LSP.SWindowWorkDoneProgressCreate
@@ -607,6 +635,12 @@ shakeOpen lspEnv defaultConfig logger debouncer
                                     }
                               }
                         loop id next
+
+        withProgressVar var file = actionBracket (f succ) (const $ f pred) . const
+            -- This functions are deliberately eta-expanded to avoid space leaks.
+            -- Do not remove the eta-expansion without profiling a session with at
+            -- least 1000 modifications.
+            where f shift = void $ modifyVar' var $ HMap.insertWith (\_ x -> shift x) file (shift 0)
 
 -- | Must be called in the 'Initialized' handler and only once
 shakeSessionInit :: IdeState -> IO ()
@@ -952,7 +986,7 @@ defineEarlyCutoff'
 defineEarlyCutoff' doDiagnostics key file old mode action = do
     extras@ShakeExtras{state, inProgress, logger} <- getShakeExtras
     options <- getIdeOptions
-    (if optSkipProgress options key then id else withProgressVar inProgress file) $ do
+    (if optSkipProgress options key then id else inProgress file) $ do
         val <- case old of
             Just old | mode == RunDependenciesSame -> do
                 v <- liftIO $ getValues state key file
@@ -1000,13 +1034,6 @@ defineEarlyCutoff' doDiagnostics key file old mode action = do
                     (encodeShakeValue bs) $
                     A res
     where
-
-        withProgressVar :: (Eq a, Hashable a) => Var (HMap.HashMap a Int) -> a -> Action b -> Action b
-        withProgressVar var file = actionBracket (f succ) (const $ f pred) . const
-            -- This functions are deliberately eta-expanded to avoid space leaks.
-            -- Do not remove the eta-expansion without profiling a session with at
-            -- least 1000 modifications.
-            where f shift = void $ modifyVar' var $ HMap.insertWith (\_ x -> shift x) file (shift 0)
 
 isSuccess :: RunResult (A v) -> Bool
 isSuccess (RunResult _ _ (A Failed{})) = False
