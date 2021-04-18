@@ -193,7 +193,7 @@ initializeResponseTests = withResource acquire release tests where
     , chk "NO doc link"               _documentLinkProvider Nothing
     , chk "NO color"                         _colorProvider (Just $ InL False)
     , chk "NO folding range"          _foldingRangeProvider (Just $ InL False)
-    , che "   execute command"      _executeCommandProvider [extendImportCommandId, typeLensCommandId, blockCommandId]
+    , che "   execute command"      _executeCommandProvider [blockCommandId, extendImportCommandId, typeLensCommandId]
     , chk "   workspace"                         _workspace (Just $ WorkspaceServerCapabilities (Just WorkspaceFoldersServerCapabilities{_supported = Just True, _changeNotifications = Just ( InR True )}))
     , chk "NO experimental"                   _experimental Nothing
     ] where
