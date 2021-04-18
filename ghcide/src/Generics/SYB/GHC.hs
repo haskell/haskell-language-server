@@ -14,7 +14,7 @@ import Control.Monad
 import Data.Functor.Compose (Compose(Compose))
 import Data.Monoid (Any(Any))
 import Development.IDE.GHC.Compat
-import Development.Shake.Classes
+import Development.IDE.Graph.Classes
 import Generics.SYB
 
 
@@ -122,4 +122,3 @@ gmapMQ f = runMonadicQuery . gfoldl k pure
   where
     k :: Data d => MonadicQuery r f (d -> b) -> d -> MonadicQuery r f b
     k c x = c <*> MonadicQuery (f x)
-

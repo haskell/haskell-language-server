@@ -74,7 +74,7 @@ library
         rope-utf16-splay,
         safe,
         safe-exceptions,
-        shake >= 0.18.4,
+        hls-graph,
         sorted-list,
         sqlite-simple,
         stm,
@@ -288,7 +288,7 @@ executable ghcide
         ghcide,
         lens,
         optparse-applicative,
-        shake,
+        hls-graph,
         text,
         unordered-containers,
         aeson-pretty
@@ -358,6 +358,7 @@ test-suite ghcide-tests
         safe,
         safe-exceptions,
         shake,
+        hls-graph,
         tasty,
         tasty-expected-failure,
         tasty-hunit,
@@ -410,6 +411,7 @@ executable ghcide-bench
         optparse-applicative,
         process,
         safe-exceptions,
+        hls-graph,
         shake,
         text
     hs-source-dirs: bench/lib bench/exe

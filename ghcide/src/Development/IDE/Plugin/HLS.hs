@@ -27,7 +27,7 @@ import           Development.IDE.Core.Tracing
 import           Development.IDE.LSP.Server
 import           Development.IDE.Plugin
 import           Development.IDE.Types.Logger
-import           Development.Shake            (Rules)
+import           Development.IDE.Graph            (Rules)
 import           Ide.Plugin.Config
 import           Ide.PluginUtils              (getClientConfig)
 import           Ide.Types                    as HLS

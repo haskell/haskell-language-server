@@ -56,7 +56,7 @@ import           Development.IDE.Types.HscEnvEq       (HscEnvEq, newHscEnvEq,
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger
 import           Development.IDE.Types.Options
-import           Development.Shake                    (Action)
+import           Development.IDE.Graph                    (Action)
 import           GHC.Check
 import qualified HIE.Bios                             as HieBios
 import           HIE.Bios.Environment                 hiding (getCacheDir)

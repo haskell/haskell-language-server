@@ -3,6 +3,7 @@ resolver: lts-16.11 # Last 8.8.3
 packages:
   - .
   - ./hie-compat
+  - ./hls-graph
   - ./ghcide/
   - ./shake-bench
   - ./hls-plugin-api

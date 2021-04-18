@@ -4,6 +4,7 @@ compiler: ghc-8.6.4
 packages:
   - .
   - ./hie-compat
+  - ./hls-graph
   - ./ghcide/
 # - ./shake-bench
   - ./hls-plugin-api

@@ -50,8 +50,8 @@ import Development.IDE.Core.Service (runAction)
 import Development.IDE.Core.Shake
 import Development.IDE.GHC.Compat hiding (parseExpr)
 import Development.IDE.Types.Location
-import Development.Shake (RuleResult, Rules)
-import Development.Shake.Classes
+import Development.IDE.Graph (RuleResult, Rules)
+import Development.IDE.Graph.Classes
 import qualified GHC.Generics as GHC
 import Generics.SYB
 import Generics.SYB.GHC

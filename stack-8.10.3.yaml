@@ -3,6 +3,7 @@ resolver: lts-17.2 # Last ghc-8.10.3 lts
 packages:
   - .
   - ./hie-compat
+  - ./hls-graph
   - ./ghcide/
   - ./hls-plugin-api
   - ./hls-test-utils
