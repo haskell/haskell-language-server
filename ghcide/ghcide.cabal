@@ -188,6 +188,7 @@ library
         Development.IDE.Plugin.CodeAction.ExactPrint
         Development.IDE.Plugin.HLS
         Development.IDE.Plugin.HLS.GhcIde
+        Development.IDE.Plugin.LspLogger
         Development.IDE.Plugin.Test
         Development.IDE.Plugin.TypeLenses
 

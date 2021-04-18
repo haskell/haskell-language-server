@@ -39,6 +39,7 @@ import           Development.IDE.Core.Shake               (Q (..))
 import qualified Development.IDE.Main                     as IDE
 import           Development.IDE.GHC.Util
 import           Development.IDE.Plugin.Completions.Types (extendImportCommandId)
+import           Development.IDE.Plugin.LspLogger
 import           Development.IDE.Plugin.TypeLenses        (typeLensCommandId)
 import           Development.IDE.Spans.Common
 import           Development.IDE.Test                     (Cursor,
@@ -51,7 +52,7 @@ import           Development.IDE.Test                     (Cursor,
                                                            expectNoMoreDiagnostics,
                                                            flushMessages,
                                                            standardizeQuotes,
-                                                           waitForAction, lspLogger)
+                                                           waitForAction)
 import           Development.IDE.Test.Runfiles
 import qualified Development.IDE.Types.Diagnostics        as Diagnostics
 import           Development.IDE.Types.Location
