@@ -5381,13 +5381,23 @@ testIde arguments session = do
     config <- getConfigFromEnv
     (hInRead, hInWrite) <- createPipe
     (hOutRead, hOutWrite) <- createPipe
-    let server = IDE.defaultMain arguments
+    server <- async $ IDE.defaultMain arguments
             { IDE.argsHandleIn = pure hInRead
             , IDE.argsHandleOut = pure hOutWrite
+            , IDE.argsIdeOptions = \config sessionLoader ->
+              let ideOptions = (argsIdeOptions def config sessionLoader) {optTesting = IdeTesting True}
+               in ideOptions {optShakeOptions = (optShakeOptions ideOptions) {shakeThreads = 2}}
             }
 
-    withAsync server $ \_ ->
-        runSessionWithHandles hInWrite hOutRead config lspTestCaps "." session
+    runSessionWithHandles hInWrite hOutRead config lspTestCaps "." session
+
+    hClose inw
+    timeout 3 (wait server) >>= \case
+        Just () -> pure ()
+        Nothing -> do
+            putStrLn "Server does not exit in 3s, canceling the async task..."
+            (t, _) <- duration $ cancel server
+            putStrLn $ "Finishing canceling (took " <> showDuration t <> "s)"
 
 positionMappingTests :: TestTree
 positionMappingTests =
