@@ -10,8 +10,8 @@ module Development.IDE.Plugin.Completions
     ) where
 
 import           Control.Concurrent.Async                     (concurrently)
-import           Control.Monad
 import           Control.Monad.Extra
+import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
 import           Data.List                                    (find)

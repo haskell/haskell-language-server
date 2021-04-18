@@ -17,6 +17,7 @@ import           Control.Concurrent.Strict
 import           Control.DeepSeq
 import           Control.Exception
 import           Control.Monad
+import           Control.Monad.IO.Class
 import           Data.Binary
 import           Data.HashMap.Strict                          (HashMap)
 import qualified Data.HashMap.Strict                          as HashMap
