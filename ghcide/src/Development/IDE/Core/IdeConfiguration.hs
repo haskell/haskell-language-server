@@ -21,7 +21,7 @@ import           Data.Hashable                  (Hashed, hashed, unhashed)
 import           Data.Text                      (Text, isPrefixOf)
 import           Development.IDE.Core.Shake
 import           Development.IDE.Types.Location
-import           Development.Shake
+import           Development.IDE.Graph
 import           Language.LSP.Types
 import           System.FilePath                (isRelative)
 

@@ -123,9 +123,9 @@ import           Development.IDE.Types.HscEnvEq
 import           Development.IDE.Types.Location
 import qualified Development.IDE.Types.Logger                 as L
 import           Development.IDE.Types.Options
-import           Development.Shake                            hiding
+import           Development.IDE.Graph                            hiding
                                                               (Diagnostic)
-import           Development.Shake.Classes                    hiding (get, put)
+import           Development.IDE.Graph.Classes                    hiding (get, put)
 import           Fingerprint
 import           GHC.Generics                                 (Generic)
 import           GHC.IO.Encoding

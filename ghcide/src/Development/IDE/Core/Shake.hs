@@ -119,12 +119,12 @@ import           Development.IDE.Types.Logger         hiding (Priority)
 import qualified Development.IDE.Types.Logger         as Logger
 import           Development.IDE.Types.Options
 import           Development.IDE.Types.Shake
-import           Development.Shake                    hiding (Info, ShakeValue,
+import           Development.IDE.Graph                    hiding (Info, ShakeValue,
                                                        doesFileExist)
-import qualified Development.Shake                    as Shake
-import           Development.Shake.Classes
-import           Development.Shake.Database
-import           Development.Shake.Rule
+import qualified Development.IDE.Graph                    as Shake
+import           Development.IDE.Graph.Classes
+import           Development.IDE.Graph.Database
+import           Development.IDE.Graph.Rule
 import           GHC.Generics
 import           Language.LSP.Diagnostics
 import qualified Language.LSP.Server                  as LSP

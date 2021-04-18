@@ -26,7 +26,7 @@ import qualified Data.Text                            as T
 import           Development.IDE
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.GHC.Compat
-import           Development.Shake.Classes
+import           Development.IDE.Graph.Classes
 import           GHC.Generics                         (Generic)
 import           Ide.PluginUtils                      (mkLspCommand)
 import           Ide.Types

@@ -3,6 +3,7 @@ resolver: nightly-2020-12-09
 packages:
   - .
   - ./hie-compat
+  - ./hls-graph
   - ./ghcide/
   - ./hls-plugin-api
   - ./hls-test-utils

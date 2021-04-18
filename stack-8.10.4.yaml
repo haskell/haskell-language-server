@@ -3,6 +3,7 @@ resolver: lts-17.4
 packages:
   - .
   - ./hie-compat
+  - ./hls-graph
   - ./ghcide/
   - ./hls-plugin-api
   - ./hls-test-utils

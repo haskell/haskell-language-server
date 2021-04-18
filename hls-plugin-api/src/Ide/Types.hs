@@ -38,7 +38,7 @@ import           Data.Semigroup
 import           Data.String
 import qualified Data.Text                       as T
 import           Data.Text.Encoding              (encodeUtf8)
-import           Development.Shake               hiding (command)
+import           Development.IDE.Graph           hiding (command)
 import           GHC.Generics
 import           Ide.Plugin.Config
 import           Ide.Plugin.Properties

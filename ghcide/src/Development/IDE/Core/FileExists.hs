@@ -24,7 +24,7 @@ import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
-import           Development.Shake
+import           Development.IDE.Graph
 import           Language.LSP.Server                   hiding (getVirtualFile)
 import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities

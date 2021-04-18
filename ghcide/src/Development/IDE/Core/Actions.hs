@@ -30,7 +30,7 @@ import           Development.IDE.GHC.Compat           hiding (TargetFile,
                                                        writeHieFile)
 import qualified Development.IDE.Spans.AtPoint        as AtPoint
 import           Development.IDE.Types.Location
-import           Development.Shake                    hiding (Diagnostic)
+import           Development.IDE.Graph                    hiding (Diagnostic)
 import qualified HieDb
 import           Language.LSP.Types                   (DocumentHighlight (..),
                                                        SymbolInformation (..))
