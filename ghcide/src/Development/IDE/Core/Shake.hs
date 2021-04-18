@@ -119,8 +119,7 @@ import           Development.IDE.Types.Logger         hiding (Priority)
 import qualified Development.IDE.Types.Logger         as Logger
 import           Development.IDE.Types.Options
 import           Development.IDE.Types.Shake
-import           Development.IDE.Graph                    hiding (Info, ShakeValue,
-                                                       doesFileExist)
+import           Development.IDE.Graph                    hiding (ShakeValue)
 import qualified Development.IDE.Graph                    as Shake
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Graph.Database

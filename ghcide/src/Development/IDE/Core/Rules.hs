@@ -123,8 +123,7 @@ import           Development.IDE.Types.HscEnvEq
 import           Development.IDE.Types.Location
 import qualified Development.IDE.Types.Logger                 as L
 import           Development.IDE.Types.Options
-import           Development.IDE.Graph                            hiding
-                                                              (Diagnostic)
+import           Development.IDE.Graph
 import           Development.IDE.Graph.Classes                    hiding (get, put)
 import           Fingerprint
 import           GHC.Generics                                 (Generic)
