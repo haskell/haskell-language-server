@@ -8,7 +8,7 @@ module Main(main) where
 import           Arguments                         (Arguments (..),
                                                     getArguments)
 import           Control.Concurrent.Extra          (newLock, withLock)
-import           Control.Monad.Extra               (when, whenJust)
+import           Control.Monad.Extra               (when)
 import qualified Data.Aeson.Encode.Pretty          as A
 import           Data.Default                      (Default (def))
 import           Data.List.Extra                   (upper)
@@ -20,16 +20,15 @@ import           Data.Version                      (showVersion)
 import           Development.GitRev                (gitHash)
 import           Development.IDE                   (Logger (Logger),
                                                     Priority (Info))
+import           Development.IDE.Graph             (ShakeOptions (shakeThreads))
 import qualified Development.IDE.Main              as Main
 import qualified Development.IDE.Plugin.HLS.GhcIde as GhcIde
 import           Development.IDE.Types.Options
-import           Development.IDE.Graph                 (ShakeOptions (shakeThreads))
 import           Ide.Plugin.Config                 (Config (checkParents, checkProject))
 import           Ide.Plugin.ConfigUtils            (pluginsToDefaultConfig,
                                                     pluginsToVSCodeExtensionSchema)
 import           Ide.PluginUtils                   (pluginDescToIdePlugins)
 import           Paths_ghcide                      (version)
-import qualified System.Directory.Extra            as IO
 import           System.Environment                (getExecutablePath)
 import           System.Exit                       (exitSuccess)
 import           System.IO                         (hPutStrLn, stderr)
@@ -65,8 +64,6 @@ main = do
       LT.putStrLn $ decodeUtf8 $ A.encodePretty $ pluginsToDefaultConfig hlsPlugins
       exitSuccess
 
-    whenJust argsCwd IO.setCurrentDirectory
-
     -- lock to avoid overlapping output on stdout
     lock <- newLock
     let logger = Logger $ \pri msg -> when (pri >= logLevel) $ withLock lock $
@@ -81,7 +78,6 @@ main = do
             in defOptions
                 { optShakeProfiling = argsShakeProfiling
                 , optOTMemoryProfiling = IdeOTMemoryProfiling argsOTMemoryProfiling
-                , optTesting = IdeTesting argsTesting
                 , optShakeOptions = (optShakeOptions defOptions){shakeThreads = argsThreads}
                 , optCheckParents = pure $ checkParents config
                 , optCheckProject = pure $ checkProject config
