@@ -710,7 +710,7 @@ cancellationTemplate (edit, undoEdit) mbKey = testCase (maybe "-" fst mbKey) $ r
       expectNoMoreDiagnostics 0.5
     where
         -- similar to run except it disables kick
-        runTestNoKick s = withTempDir $ \dir -> runInDir' argsNoKick dir "." "." s
+        runTestNoKick s = withTempDir $ \dir -> runInDir' argsNoKick dir "." s
         argsNoKick = def { IDE.argsRules = mainRule }
 
         typeCheck doc = do
@@ -4955,7 +4955,7 @@ benchmarkTests =
 
 -- | checks if we use InitializeParams.rootUri for loading session
 rootUriTests :: TestTree
-rootUriTests = testCase "use rootUri" . runTest "dirA" "dirB" $ \dir -> do
+rootUriTests = testCase "use rootUri" . runTest "dirB" $ \dir -> do
   let bPath = dir </> "dirB/Foo.hs"
   liftIO $ copyTestDataFiles dir "rootUri"
   bSource <- liftIO $ readFileUtf8 bPath
@@ -4963,8 +4963,8 @@ rootUriTests = testCase "use rootUri" . runTest "dirA" "dirB" $ \dir -> do
   expectNoMoreDiagnostics 0.5
   where
     -- similar to run' except we can configure where to start ghcide and session
-    runTest :: FilePath -> FilePath -> (FilePath -> Session ()) -> IO ()
-    runTest dir1 dir2 s = withTempDir $ \dir -> runInDir' def dir dir1 dir2 (s dir)
+    runTest :: FilePath -> (FilePath -> Session ()) -> IO ()
+    runTest dir2 s = withTempDir $ \dir -> runInDir' def dir dir2 (s dir)
 
 -- | Test if ghcide asynchronously handles Commands and user Requests
 asyncTests :: TestTree
@@ -5248,27 +5248,22 @@ run' :: (FilePath -> Session a) -> IO a
 run' s = withTempDir $ \dir -> runInDir dir (s dir)
 
 runInDir :: FilePath -> Session a -> IO a
-runInDir dir = runInDir' def dir "." "."
+runInDir dir = runInDir' def dir "."
 
 withLongTimeout :: IO a -> IO a
 withLongTimeout = bracket_ (setEnv "LSP_TIMEOUT" "120" True) (unsetEnv "LSP_TIMEOUT")
 
 -- | Takes a directory as well as relative paths to where we should launch the executable as well as the session root.
-runInDir' :: IDE.Arguments -> FilePath -> FilePath -> FilePath -> Session a -> IO a
-runInDir' args dir startExeIn startSessionIn s = do
-  let startDir = dir </> startExeIn
+runInDir' :: IDE.Arguments -> FilePath -> FilePath -> Session a -> IO a
+runInDir' args dir startSessionIn s = do
   let projDir = dir </> startSessionIn
 
-  createDirectoryIfMissing True startDir
   createDirectoryIfMissing True projDir
-  -- Temporarily hack around https://github.com/mpickering/hie-bios/pull/56
-  -- since the package import test creates "Data/List.hs", which otherwise has no physical home
-  createDirectoryIfMissing True $ projDir ++ "/Data"
   -- HIE calls getXgdDirectory which assumes that HOME is set.
   -- Only sets HOME if it wasn't already set.
   setEnv "HOME" "/homeless-shelter" False
 
-  testIde dir args s
+  testIde projDir args s
 
 getConfigFromEnv ::IO SessionConfig
 getConfigFromEnv = do
@@ -5405,7 +5400,7 @@ testIde rootDir arguments session = do
         sleep 1
         runIt
 
-    hClose hInWrite
+    -- hClose hInWrite
     timeout 3 (wait server) >>= \case
         Just () -> pure ()
         Nothing -> do
