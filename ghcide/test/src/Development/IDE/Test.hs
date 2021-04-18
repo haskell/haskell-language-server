@@ -20,19 +20,25 @@ module Development.IDE.Test
   , standardizeQuotes
   , flushMessages
   , waitForAction
+  , lspLogger
   ) where
 
 import           Control.Applicative.Combinators
 import           Control.Lens                    hiding (List)
 import           Control.Monad
+import           Control.Monad.Extra             (whenJust)
 import           Control.Monad.IO.Class
 import qualified Data.Aeson                      as A
 import           Data.Bifunctor                  (second)
+import           Data.IORef
 import qualified Data.Map.Strict                 as Map
 import           Data.Maybe                      (fromJust)
 import qualified Data.Text                       as T
 import           Development.IDE.Plugin.Test     (TestRequest (..),
                                                   WaitForIdeRuleResult)
+import           Development.IDE.Types.Logger
+import           Ide.Types
+import qualified Language.LSP.Server             as LSP
 import           Language.LSP.Test               hiding (message)
 import qualified Language.LSP.Test               as LspTest
 import           Language.LSP.Types
@@ -200,3 +206,18 @@ waitForAction key TextDocumentIdentifier{_uri} = do
       case A.fromJSON e of
         A.Error e   -> Left $ ResponseError InternalError (T.pack e) Nothing
         A.Success a -> pure a
+
+-- lspLogger :: lspEnv a -> T.Text -> IO ()
+lspLogger :: IO (Logger, PluginDescriptor a)
+lspLogger = do
+    lspEnvRef <- newIORef Nothing
+    let plugin = (defaultPluginDescriptor "lspLogging"){
+            pluginNotificationHandlers =
+                mkPluginNotificationHandler SInitialized $ \_ _ _ ->
+                    liftIO $ readIORef lspEnvRef >>= writeIORef lspEnvRef
+        }
+        logger = Logger $ \_p msg -> do
+            env <- readIORef lspEnvRef
+            whenJust env $ \env ->
+                LSP.runLspT env (LSP.sendNotification (SCustomMethod "ghcide/log") (A.String msg))
+    return (logger, plugin)

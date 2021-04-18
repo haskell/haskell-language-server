@@ -348,6 +348,7 @@ test-suite ghcide-tests
         hls-plugin-api,
         network-uri,
         lens,
+        lsp,
         lsp-test == 0.14.0.0,
         optparse-applicative,
         process,

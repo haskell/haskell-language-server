@@ -51,7 +51,7 @@ import           Development.IDE.Test                     (Cursor,
                                                            expectNoMoreDiagnostics,
                                                            flushMessages,
                                                            standardizeQuotes,
-                                                           waitForAction)
+                                                           waitForAction, lspLogger)
 import           Development.IDE.Test.Runfiles
 import qualified Development.IDE.Types.Diagnostics        as Diagnostics
 import           Development.IDE.Types.Location
@@ -5380,14 +5380,14 @@ testIde rootDir arguments session = do
     shakeProfiling <- getEnv "SHAKE_PROFILING"
     (hInRead, hInWrite) <- createPipe
     (hOutRead, hOutWrite) <- createPipe
+    (logger, loggerPlugin) <- lspLogger
     server <- async $ IDE.defaultMain arguments
-        -- TODO install a logger that logs to the LSP stream, otherwise it's hard to debug test failures
         { IDE.argsHandleIn = pure hInRead
         , IDE.argsHandleOut = pure hOutWrite
         , IDE.argsHlsPlugins =
-            pluginDescToIdePlugins $
-            Ghcide.descriptors
-            ++ [Test.blockCommandDescriptor "block-command" ]
+            pluginDescToIdePlugins
+                [ loggerPlugin, Test.blockCommandDescriptor "block-command" ]
+            <> IDE.argsHlsPlugins arguments
         , IDE.argsGhcidePlugin = Test.plugin
         , IDE.argsIdeOptions = \config sessionLoader ->
             let ideOptions = (IDE.argsIdeOptions def config sessionLoader)
@@ -5396,6 +5396,7 @@ testIde rootDir arguments session = do
                     }
             in ideOptions
                 { optShakeOptions = (optShakeOptions ideOptions) {shakeThreads = 2}}
+        , IDE.argsLogger = pure logger
         }
 
     let runIt = runSessionWithHandles hInWrite hOutRead config lspTestCaps rootDir session
