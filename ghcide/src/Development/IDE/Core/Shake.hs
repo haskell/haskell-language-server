@@ -23,7 +23,7 @@
 --   always stored as real Haskell values, whereas Shake serialises all 'A' values
 --   between runs. To deserialise a Shake value, we just consult Values.
 module Development.IDE.Core.Shake(
-    IdeState, shakeExtras,
+    IdeState, shakeSessionInit, shakeExtras,
     ShakeExtras(..), getShakeExtras, getShakeExtrasRules,
     KnownTargets, Target(..), toKnownFiles,
     IdeRule, IdeResult,
@@ -32,6 +32,7 @@ module Development.IDE.Core.Shake(
     shakeRestart,
     shakeEnqueue,
     shakeProfile,
+    newSession,
     use, useNoFile, uses, useWithStaleFast, useWithStaleFast', delayedAction,
     FastResult(..),
     use_, useNoFile_, uses_,
@@ -508,8 +509,7 @@ shakeOpen lspEnv defaultConfig logger debouncer
             opts { shakeExtra = newShakeExtra shakeExtras }
             rules
     shakeDb <- shakeDbM
-    initSession <- newSession shakeExtras shakeDb []
-    shakeSession <- newMVar initSession
+    shakeSession <- newEmptyMVar
     shakeDatabaseProfile <- shakeDatabaseProfileIO shakeProfileDir
     let ideState = IdeState{..}
 
@@ -607,6 +607,12 @@ shakeOpen lspEnv defaultConfig logger debouncer
                                     }
                               }
                         loop id next
+
+-- | Must be called in the 'Initialized' handler and only once
+shakeSessionInit :: IdeState -> IO ()
+shakeSessionInit IdeState{..} = do
+    initSession <- newSession shakeExtras shakeDb []
+    putMVar shakeSession initSession
 
 shakeProfile :: IdeState -> FilePath -> IO ()
 shakeProfile IdeState{..} = shakeProfileDatabase shakeDb
