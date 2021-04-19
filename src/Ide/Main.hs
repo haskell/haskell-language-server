@@ -19,7 +19,7 @@ import           Development.IDE.Main          (isLSP)
 import qualified Development.IDE.Main          as Main
 import           Development.IDE.Types.Logger  as G
 import qualified Development.IDE.Types.Options as Ghcide
-import           Development.Shake             (ShakeOptions (shakeThreads))
+import           Development.IDE.Graph             (ShakeOptions (shakeThreads))
 import           Ide.Arguments
 import           Ide.Logger
 import           Ide.Plugin.ConfigUtils        (pluginsToDefaultConfig,

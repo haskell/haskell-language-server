@@ -17,13 +17,14 @@ import           Control.Concurrent.Strict
 import           Control.DeepSeq
 import           Control.Exception
 import           Control.Monad
+import           Control.Monad.IO.Class
 import           Data.Binary
 import           Data.HashMap.Strict                          (HashMap)
 import qualified Data.HashMap.Strict                          as HashMap
 import           Data.Hashable
 import qualified Data.Text                                    as T
 import           Data.Typeable
-import           Development.Shake
+import           Development.IDE.Graph
 import           GHC.Generics
 
 import           Control.Monad.Trans.Class
@@ -116,4 +117,3 @@ kick = do
     void $ liftIO $ modifyVar' exportsMap $ (exportsMap'' <>) . (exportsMap' <>)
 
     liftIO $ progressUpdate KickCompleted
-

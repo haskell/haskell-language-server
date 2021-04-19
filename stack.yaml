@@ -3,7 +3,8 @@ resolver: lts-14.27 # Last 8.6.5
 packages:
   - .
   - ./hie-compat
-  - ./ghcide/
+  - ./hls-graph
+  - ./ghcide
   - ./hls-plugin-api
   - ./hls-test-utils
   # - ./shake-bench
@@ -72,6 +73,7 @@ extra-deps:
   - regex-tdfa-1.3.1.0
   - retrie-0.1.1.1
   - semialign-1.1
+  - shake-0.19.4
   - stylish-haskell-0.12.2.0
   - tasty-rerun-1.1.17
   - temporary-1.2.1.1

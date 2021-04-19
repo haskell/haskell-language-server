@@ -73,7 +73,7 @@ library
     , optparse-applicative
     , optparse-simple
     , process
-    , shake
+    , hls-graph
     , safe-exceptions
     , sqlite-simple
     , unordered-containers
@@ -332,7 +332,7 @@ executable haskell-language-server
     , mtl
     , regex-tdfa
     , safe-exceptions
-    , shake
+    , hls-graph
     , sqlite-simple
     , temporary
     , transformers

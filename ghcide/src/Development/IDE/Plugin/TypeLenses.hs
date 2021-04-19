@@ -41,7 +41,7 @@ import           Development.IDE.Types.Location      (Position (Position, _chara
                                                       Range (Range, _end, _start),
                                                       toNormalizedFilePath',
                                                       uriToFilePath')
-import           Development.Shake.Classes
+import           Development.IDE.Graph.Classes
 import           GHC.Generics                        (Generic)
 import           GhcPlugins                          (GlobalRdrEnv,
                                                       HscEnv (hsc_dflags), SDoc,

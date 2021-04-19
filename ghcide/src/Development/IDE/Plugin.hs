@@ -1,7 +1,7 @@
 module Development.IDE.Plugin ( Plugin(..) ) where
 
 import           Data.Default
-import           Development.Shake
+import           Development.IDE.Graph
 
 import           Development.IDE.LSP.Server
 import qualified Language.LSP.Server        as LSP

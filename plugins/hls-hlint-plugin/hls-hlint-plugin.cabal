@@ -49,7 +49,6 @@ library
     , lens
     , lsp
     , regex-tdfa
-    , shake
     , temporary
     , text
     , transformers

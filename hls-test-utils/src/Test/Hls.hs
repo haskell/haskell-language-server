@@ -33,7 +33,7 @@ import           Development.IDE.Main
 import qualified Development.IDE.Main              as Ghcide
 import qualified Development.IDE.Plugin.HLS.GhcIde as Ghcide
 import           Development.IDE.Types.Options
-import           Development.Shake                 (ShakeOptions (shakeThreads))
+import           Development.IDE.Graph                 (ShakeOptions (shakeThreads))
 import           GHC.IO.Handle
 import           Ide.Plugin.Config                 (Config, formattingProvider)
 import           Ide.PluginUtils                   (pluginDescToIdePlugins)

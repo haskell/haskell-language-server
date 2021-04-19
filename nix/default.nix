@@ -25,6 +25,7 @@ let
         ourSources = {
             haskell-language-server = gitignoreSource ../.;
             ghcide = gitignoreSource ../ghcide;
+            hls-graph = gitignoreSource ../hls-graph;
             shake-bench = gitignoreSource ../shake-bench;
             hie-compat = gitignoreSource ../hie-compat;
             hls-plugin-api = gitignoreSource ../hls-plugin-api;
