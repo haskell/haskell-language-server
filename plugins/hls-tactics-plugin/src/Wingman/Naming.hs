@@ -22,6 +22,7 @@ import           Text.Hyphenation (hyphenate, english_US)
 import           TyCon
 import           Type
 import           TysWiredIn (listTyCon, pairTyCon, unitTyCon)
+import Wingman.GHC (tcTyVar_maybe)
 
 
 fieldNames :: ConLike -> [OccName]
@@ -37,67 +38,146 @@ fieldNames cl =
                in fmap (mkVarOcc . drop common_prefix) fields
             False -> []
 
-------------------------------------------------------------------------------
--- | Use type information to create a reasonable name.
+data Purpose
+  = Function [Type] Type
+  | Predicate
+  | Continuation
+  | Integral
+  | Number
+  | String
+  | List Type
+  | Maybe Type
+  | TyConned TyCon [Type]
+  | TyVarred TyVar [Type]
+
+pattern IsPredicate :: Type
+pattern IsPredicate <- (tcSplitFunTys -> ([isFunTy -> False], isBoolTy -> True))
+
+pattern IsFunction :: [Type] -> Type -> Type
+pattern IsFunction args res <- (tcSplitFunTys -> (args@(_:_), res))
+
+pattern IsString :: Type
+pattern IsString <- (splitTyConApp_maybe -> Just ((== listTyCon) -> True, [eqType charTy -> True]))
+
+pattern IsMaybe :: Type -> Type
+pattern IsMaybe a <- (splitTyConApp_maybe -> Just ((== maybeTyCon) -> True, [a]))
+
+pattern IsList :: Type -> Type
+pattern IsList a <- (splitTyConApp_maybe -> Just ((== listTyCon) -> True, [a]))
+
+pattern IsTyConned :: TyCon -> [Type] -> Type
+pattern IsTyConned tc args <- (splitTyConApp_maybe -> Just (tc, args))
+
+pattern IsTyVarred :: TyVar -> [Type] -> Type
+pattern IsTyVarred v args <- (tcSplitAppTys -> (tcTyVar_maybe -> Just v, args))
+
+
+getPurposes :: Type -> [Purpose]
+getPurposes ty = mconcat
+  [ [ Predicate         | IsPredicate         <- [ty] ]
+  , [ Function args res | IsFunction args res <- [ty] ]
+  , with (isIntegerTy ty) [ Integral, Number          ]
+  , with (isIntTy ty)     [ Integral, Number          ]
+  , [ Number            | isFloatingTy ty             ]
+  , [ String            | isStringTy ty               ]
+  , [ Maybe a           | IsMaybe a           <- [ty] ]
+  , [ List a            | IsList a            <- [ty] ]
+  , [ TyVarred v args   | IsTyVarred v args   <- [ty] ]
+  , [ TyConned tc args  | IsTyConned tc args  <- [ty] ]
+  ]
+
+
+with :: Monoid a => Bool -> a -> a
+with False _ = mempty
+with True a = a
+
+
+functionNames :: [String]
+functionNames = ["f", "g", "h"]
+
+
+mkName :: Purpose -> [String]
+mkName (Function args res)
+  | Just tv_args <- traverse tcTyVar_maybe $ args <> pure res
+  = fmap (<> foldMap (occNameString . occName) tv_args) functionNames
+mkName (Function _ _) = functionNames
+mkName Predicate = pure "p"
+mkName Continuation = pure "k"
+mkName Integral = ["n", "i", "j"]
+mkName Number = ["x", "y", "z", "w"]
+mkName String = ["s", "str"]
+mkName (List t) = fmap (<> "s") $ mkName =<< getPurposes t
+mkName (Maybe t) = fmap ("m_" <>) $ mkName =<< getPurposes t
+mkName (TyVarred tv args)
+  | Just tv_args <- traverse tcTyVar_maybe args
+  = pure $ foldMap (occNameString . occName) $ tv : tv_args
+mkName (TyVarred tv _) = pure $ occNameString $ occName tv
+mkName (TyConned tc args)
+  | Just tv_args <- traverse tcTyVar_maybe args
+  = pure $ mappend (mkTyConName tc) $ foldMap (occNameString . occName) tv_args
+mkName (TyConned tc _)
+  = pure
+  $ mkTyConName tc
+
+
 mkTyName :: Type -> [String]
--- eg. mkTyName (a -> b) = "fab"
-mkTyName (tcSplitFunTys -> ([a@(isFunTy -> False)], b))
-  | isTyVarTy a && isTyVarTy b
-  = (\x y z -> x <> y <> z) <$> ["f", "g", "h"] <*> mkTyName a <*> mkTyName b
--- eg. mkTyName (a -> Bool) = "p"
-mkTyName (tcSplitFunTys -> ([isFunTy -> False], isBoolTy -> True))
-  = pure $ "p"
--- eg. mkTyName (A -> B) = "f"
-mkTyName (tcSplitFunTys -> ([isFunTy -> False], _))
-  = ["f", "g", "h"]
--- eg. mkTyName (a -> b -> C) = "f_C"
-mkTyName (tcSplitFunTys -> (_:_, b))
-  = fmap ("f_" <>) $ mkTyName b
--- eg. mkTyName [Char] = "str"
-mkTyName (splitTyConApp_maybe -> Just (c, [arg]))
-  | c == listTyCon, eqType arg charTy
-  = pure $ "str"
-mkTyName (splitTyConApp_maybe -> Just (c, [arg]))
-  | c == listTyCon, eqType arg charTy
-  = pure $ "str"
--- eg. mkTyName Int = "n"
-mkTyName (isIntTy -> True) = ["n", "i", "j"]
--- eg. mkTyName Integer = "n"
-mkTyName (isIntegerTy -> True) = ["n", "i", "j"]
--- eg. mkTyName (T A B) = "tab"
-mkTyName (splitTyConApp_maybe -> Just (c, args))
-  = fmap (mkTyConName c $) $ foldMap mkTyName args
--- eg. mkTyName (f a) = "fa"
-mkTyName (tcSplitAppTys -> (t, args@(_:_)))
-  = liftA2 (<>) (mkTyName t) $ foldMap mkTyName args
--- eg. mkTyName a = "a"
-mkTyName (getTyVar_maybe -> Just tv)
-  = pure $ occNameString $ occName tv
--- eg. mkTyName (forall x. y) = "y"
-mkTyName (tcSplitSigmaTy -> (_:_, _, t))
-  = mkTyName t
-mkTyName _ = pure $ "x"
+mkTyName = mkName <=< getPurposes
+
+
+
+--------------------------------------------------------------------------------
+---- | Use type information to create a reasonable name.
+--mkTyName :: Type -> [String]
+---- eg. mkTyName (a -> b) = "fab"
+--mkTyName (tcSplitFunTys -> ([a@(isFunTy -> False)], b))
+--  | isTyVarTy a && isTyVarTy b
+--  = (\x y z -> x <> y <> z) <$> ["f", "g", "h"] <*> mkTyName a <*> mkTyName b
+---- eg. mkTyName (a -> Bool) = "p"
+---- mkTyName (tcSplitFunTys -> ([isFunTy -> False], isBoolTy -> True))
+----   = pure $ "p"
+---- eg. mkTyName (A -> B) = "f"
+---- mkTyName (tcSplitFunTys -> ([isFunTy -> False], _))
+----   = ["f", "g", "h"]
+---- eg. mkTyName (a -> b -> C) = "f_C"
+--mkTyName (tcSplitFunTys -> (_:_, b))
+--  = fmap ("f_" <>) $ mkTyName b
+---- eg. mkTyName [Char] = "str"
+---- mkTyName (splitTyConApp_maybe -> Just (c, [arg]))
+----   | c == listTyCon, eqType arg charTy
+----   = pure $ "str"
+---- eg. mkTyName Int = "n"
+---- mkTyName (isIntTy -> True) = ["n", "i", "j"]
+---- eg. mkTyName Integer = "n"
+---- mkTyName (isIntegerTy -> True) = ["n", "i", "j"]
+---- eg. mkTyName (T A B) = "tab"
+--mkTyName (splitTyConApp_maybe -> Just (c, args))
+--  = fmap (mkTyConName c $) $ foldMap mkTyName args
+---- eg. mkTyName (f a) = "fa"
+--mkTyName (tcSplitAppTys -> (t, args@(_:_)))
+--  = liftA2 (<>) (mkTyName t) $ foldMap mkTyName args
+---- eg. mkTyName a = "a"
+--mkTyName (getTyVar_maybe -> Just tv)
+--  = pure $ occNameString $ occName tv
+---- eg. mkTyName (forall x. y) = "y"
+--mkTyName (tcSplitSigmaTy -> (_:_, _, t))
+--  = mkTyName t
+--mkTyName _ = pure $ "x"
 
 
 ------------------------------------------------------------------------------
 -- | Get a good name for a type constructor.
-mkTyConName :: TyCon -> String -> String
+mkTyConName :: TyCon -> String
 mkTyConName tc
-  | tc == listTyCon = flip mappend "s"
-  | tc == pairTyCon = mappend "p_"
-  | tc == unitTyCon = mappend "unit"
-  | tc == maybeTyCon = mappend "m_"
+  | tc == unitTyCon = "unit"
   | isSymOcc (getOccName tc)
-      = mappend
-      . take 1
+      = take 1
       . fmap toLower
       . filterReplace isSymbol      's'
       . filterReplace isPunctuation 'p'
       . occNameString
       $ getOccName tc
   | otherwise
-      = const
-      $ stem
+      = stem
       $ fmap toLower
       $ occNameString
       $ getOccName tc
