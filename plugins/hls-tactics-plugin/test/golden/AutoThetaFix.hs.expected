@@ -9,5 +9,5 @@ instance ( Functor f
            -- dictionary, we can get Wingman to generate the right definition.
          , Functor (Fix f)
          ) => Functor (Fix f) where
-  fmap fab (Fix fffa) = Fix (fmap (fmap fab) fffa)
+  fmap fab (Fix f) = Fix (fmap (fmap fab) f)
 

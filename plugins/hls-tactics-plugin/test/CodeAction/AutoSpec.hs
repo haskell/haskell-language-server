@@ -16,7 +16,6 @@ import Wingman.FeatureSet (allFeatures)
 spec :: Spec
 spec = do
   let autoTest = goldenTest Auto ""
-      autoTestNoWhitespace = goldenTestNoWhitespace Auto ""
 
   describe "golden" $ do
     autoTest 11  8 "AutoSplitGADT.hs"
@@ -73,8 +72,7 @@ spec = do
 
   describe "known" $ do
     autoTest 25 13 "GoldenArbitrary.hs"
-    autoTestNoWhitespace
-              6 10 "KnownBigSemigroup.hs"
+    autoTest  6 10 "KnownBigSemigroup.hs"
     autoTest  4 10 "KnownThetaSemigroup.hs"
     autoTest  6 10 "KnownCounterfactualSemigroup.hs"
     autoTest 10 10 "KnownModuleInstanceSemigroup.hs"
