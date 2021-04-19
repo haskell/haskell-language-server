@@ -133,8 +133,8 @@ rules plugin = do
     return (diagnostics file ideas, Just ())
 
   defineNoFile $ \GetHlintSettings -> do
-      (Config flags) <- getHlintConfig plugin
-      liftIO $ argsSettings flags
+    (Config flags) <- getHlintConfig plugin
+    liftIO $ argsSettings flags
 
   action $ do
     files <- getFilesOfInterest

@@ -56,30 +56,38 @@ hlintTests = testGroup "hlint plugin enables" [
 
         liftIO $ noHlintDiagnostics diags'
 
-    , testCase "adding hlint flags to plugin configuration changes hlint diagnostics" $ runHlintSession "" $ do
+    , testCase "adding hlint flags to plugin configuration removes hlint diagnostics" $ runHlintSession "" $ do
         let config = def { hlintOn = True }
         sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
 
         doc <- openDoc "ApplyRefact2.hs" "haskell"
         testHlintDiagnostics doc
 
-        let unObject (Object obj) = obj
-            unObject _            = undefined
-
-            flags :: [T.Text]
-            flags = ["--ignore=Redundant id", "--hint=test-hlint-config.yaml"]
-
-            config' =
-              def
-                { hlintOn = True
-                , Plugin.plugins = Map.fromList [("hlint",
-                    def { Plugin.plcConfig = unObject $ object ["flags" .= flags] }
-                )] }
+        let config' = hlintConfigWithFlags ["--ignore=Redundant id", "--hint=test-hlint-config.yaml"]
         sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config'))
 
         diags' <- waitForDiagnosticsFrom doc
 
         liftIO $ noHlintDiagnostics diags'
+
+    , testCase "adding hlint flags to plugin configuration adds hlint diagnostics" $ runHlintSession "" $ do
+        let config = def { hlintOn = True }
+        sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
+
+        doc <- openDoc "ApplyRefact7.hs" "haskell"
+
+        expectNoMoreDiagnostics 3 doc "hlint"
+
+        let config' = hlintConfigWithFlags ["--with-group=generalise"]
+        sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config'))
+
+        diags' <- waitForDiagnosticsFromSource doc "hlint"
+        d <- liftIO $ inspectDiagnostic diags' ["Use <>"]
+
+        liftIO $ do
+            length diags' @?= 1
+            d ^. L.range @?= Range (Position 1 10) (Position 1 21)
+            d ^. L.severity @?= Just DsInfo
     ]
     where
         runHlintSession :: FilePath -> Session a -> IO a
@@ -119,3 +127,14 @@ pluginGlobalOn config pid state = config'
   where
       pluginConfig = def { plcGlobalOn = state }
       config' = def { plugins = Map.insert pid pluginConfig (plugins config) }
+
+hlintConfigWithFlags :: [T.Text] -> Config
+hlintConfigWithFlags flags =
+  def
+    { hlintOn = True
+    , Plugin.plugins = Map.fromList [("hlint",
+        def { Plugin.plcConfig = unObject $ object ["flags" .= flags] }
+    )] }
+  where
+    unObject (Object obj) = obj
+    unObject _            = undefined
