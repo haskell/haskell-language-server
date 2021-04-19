@@ -2,6 +2,7 @@ module Wingman.Naming where
 
 import           Control.Arrow
 import           Control.Monad.State.Strict
+import           Data.Aeson (camelTo2)
 import           Data.Bool (bool)
 import           Data.Char
 import           Data.List (isPrefixOf)
@@ -23,6 +24,9 @@ import           TysWiredIn (listTyCon, unitTyCon)
 import           Wingman.GHC (tcTyVar_maybe)
 
 
+------------------------------------------------------------------------------
+-- | A classification of a variable, for which we have specific naming rules.
+-- A variable can have multiple purposes simultaneously.
 data Purpose
   = Function [Type] Type
   | Predicate
@@ -33,30 +37,45 @@ data Purpose
   | List Type
   | Maybe Type
   | TyConned TyCon [Type]
+    -- ^ Something of the form @TC a b c@
   | TyVarred TyVar [Type]
+    -- ^ Something of the form @m a b c@
 
 pattern IsPredicate :: Type
-pattern IsPredicate <- (tcSplitFunTys -> ([isFunTy -> False], isBoolTy -> True))
+pattern IsPredicate <-
+  (tcSplitFunTys -> ([isFunTy -> False], isBoolTy -> True))
 
 pattern IsFunction :: [Type] -> Type -> Type
-pattern IsFunction args res <- (tcSplitFunTys -> (args@(_:_), res))
+pattern IsFunction args res <-
+  (tcSplitFunTys -> (args@(_:_), res))
 
 pattern IsString :: Type
-pattern IsString <- (splitTyConApp_maybe -> Just ((== listTyCon) -> True, [eqType charTy -> True]))
+pattern IsString <-
+  (splitTyConApp_maybe -> Just ((== listTyCon) -> True, [eqType charTy -> True]))
 
 pattern IsMaybe :: Type -> Type
-pattern IsMaybe a <- (splitTyConApp_maybe -> Just ((== maybeTyCon) -> True, [a]))
+pattern IsMaybe a <-
+  (splitTyConApp_maybe -> Just ((== maybeTyCon) -> True, [a]))
 
 pattern IsList :: Type -> Type
-pattern IsList a <- (splitTyConApp_maybe -> Just ((== listTyCon) -> True, [a]))
+pattern IsList a <-
+  (splitTyConApp_maybe -> Just ((== listTyCon) -> True, [a]))
 
 pattern IsTyConned :: TyCon -> [Type] -> Type
-pattern IsTyConned tc args <- (splitTyConApp_maybe -> Just (id &&& isSymOcc . getOccName -> (tc, False), args))
+pattern IsTyConned tc args <-
+  (splitTyConApp_maybe -> Just (id &&& isSymOcc . getOccName -> (tc, False), args))
 
 pattern IsTyVarred :: TyVar -> [Type] -> Type
-pattern IsTyVarred v args <- (tcSplitAppTys -> (tcTyVar_maybe -> Just v, args))
+pattern IsTyVarred v args <-
+  (tcSplitAppTys -> (tcTyVar_maybe -> Just v, args))
 
 
+------------------------------------------------------------------------------
+-- | Get the 'Purpose's of a type. A type can have multiple purposes
+-- simultaneously, so the order of purposes in this function corresponds to the
+-- precedence of that naming rule. Which means, eg, that if a type is both
+-- a 'Predicate' and a 'Function', we should prefer to use the predicate naming
+-- rules, since they come first.
 getPurposes :: Type -> [Purpose]
 getPurposes ty = mconcat
   [ [ Predicate         | IsPredicate         <- [ty] ]
@@ -74,45 +93,57 @@ getPurposes ty = mconcat
   ]
 
 
+------------------------------------------------------------------------------
+-- | Return 'mempty' if the give bool is false.
 with :: Monoid a => Bool -> a -> a
 with False _ = mempty
 with True a = a
 
 
+------------------------------------------------------------------------------
+-- | Names we can give functions
 functionNames :: [String]
 functionNames = ["f", "g", "h"]
 
 
-mkName :: Purpose -> [String]
-mkName (Function args res)
+------------------------------------------------------------------------------
+-- | Get a ranked ordering of names for a given purpose.
+purposeToName :: Purpose -> [String]
+purposeToName (Function args res)
   | Just tv_args <- traverse tcTyVar_maybe $ args <> pure res
   = fmap (<> foldMap (occNameString . occName) tv_args) functionNames
-mkName (Function _ _) = functionNames
-mkName Predicate = pure "p"
-mkName Continuation = pure "k"
-mkName Integral = ["n", "i", "j"]
-mkName Number = ["x", "y", "z", "w"]
-mkName String = ["s", "str"]
-mkName (List t) = fmap (<> "s") $ mkName =<< getPurposes t
-mkName (Maybe t) = fmap ("m_" <>) $ mkName =<< getPurposes t
-mkName (TyVarred tv args)
+purposeToName (Function _ _) = functionNames
+purposeToName Predicate = pure "p"
+purposeToName Continuation = pure "k"
+purposeToName Integral = ["n", "i", "j"]
+purposeToName Number = ["x", "y", "z", "w"]
+purposeToName String = ["s", "str"]
+purposeToName (List t) = fmap (<> "s") $ purposeToName =<< getPurposes t
+purposeToName (Maybe t) = fmap ("m_" <>) $ purposeToName =<< getPurposes t
+purposeToName (TyVarred tv args)
   | Just tv_args <- traverse tcTyVar_maybe args
   = pure $ foldMap (occNameString . occName) $ tv : tv_args
-mkName (TyVarred tv _) = pure $ occNameString $ occName tv
-mkName (TyConned tc args@(_:_))
+purposeToName (TyVarred tv _) = pure $ occNameString $ occName tv
+purposeToName (TyConned tc args@(_:_))
   | Just tv_args <- traverse tcTyVar_maybe args
-  = pure $ mconcat
+  = [ mkTyConName tc
+      -- We insert primes to everything later, but it gets the lowest
+      -- precedence. Here we'd like to prefer it over the more specific type
+      -- name.
+    , mkTyConName tc <> "'"
+    , mconcat
       [ mkTyConName tc
       , bool mempty "_" $ length (mkTyConName tc) > 1
       , foldMap (occNameString . occName) tv_args
       ]
-mkName (TyConned tc _)
+    ]
+purposeToName (TyConned tc _)
   = pure
   $ mkTyConName tc
 
 
 mkTyName :: Type -> [String]
-mkTyName = mkName <=< getPurposes
+mkTyName = purposeToName <=< getPurposes
 
 
 ------------------------------------------------------------------------------
@@ -137,17 +168,20 @@ mkTyConName tc
     name = occNameString occ
 
 
+------------------------------------------------------------------------------
+-- | Split a string into its camel case components.
 camelTerms :: String -> [String]
-camelTerms = split (== '@') . go2 . go1
-  where
-    go1 "" = ""
-    go1 (x:u:l:xs) | isUpper u && isLower l = x : '@' : u : l : go1 xs
-    go1 (x:xs) = x : go1 xs
-    go2 "" = ""
-    go2 (l:u:xs) | isLower l && isUpper u = l : '@' : u : go2 xs
-    go2 (x:xs) = x : go2 xs
+camelTerms = split (== '@') . camelTo2 '@'
 
 
+------------------------------------------------------------------------------
+-- | A stem of a string is either a special-case shortened form, or a shortened
+-- first syllable. If the string is one syllable, we take the full word if it's
+-- short, or just the first two characters if it's long. Otherwise, just take
+-- the first syllable.
+--
+-- NOTE: There's no rhyme or reason here, I just experimented until I got
+-- results that were reasonably consistent with the names I would give things.
 getStem :: String -> String
 getStem str =
   let s = stem str
@@ -156,34 +190,16 @@ getStem str =
         (True, (<= 3) -> True) -> str
         _                      -> take 2 str
 
+------------------------------------------------------------------------------
+-- | Get a special-case stem, or, failing that, give back the first syllable.
 stem :: String -> String
 stem "char" = "c"
 stem "function" = "func"
 stem "bool" = "b"
 stem "either" = "e"
 stem "text" = "txt"
-stem s =
-  let syllables = hyphenate english_US s
-      (as, bs) = break (not . isLowerVowel . last) syllables
-   in join as <>
-     case bs of
-       [] -> ""
-       [b] -> b
-       (b : next : _) -> b <>
-         takeWhile (not . isLowerVowel) next
+stem s = join $ take 1 $ hyphenate english_US s
 
-
-isLowerVowel :: Char -> Bool
-isLowerVowel 'a' = True
-isLowerVowel 'e' = True
-isLowerVowel 'i' = True
-isLowerVowel 'o' = True
-isLowerVowel 'u' = True
-isLowerVowel _ = False
-
-
-takeUntil :: (a -> Bool) -> [a] -> [a]
-takeUntil p = foldr (\x ys -> x : if p x then [] else ys) []
 
 ------------------------------------------------------------------------------
 -- | Maybe replace an element in the list if the predicate matches
@@ -207,6 +223,10 @@ mkGoodName in_scope (mkTyName -> tn)
     check n = S.member (mkVarOcc n) in_scope
 
 
+------------------------------------------------------------------------------
+-- | Given a desired name, compute a new name for it based on how many names in
+-- scope conflict with it. Eg, if we want to name something @x@, but already
+-- have @x@, @x'@ and @x2@ in scope, we will give back @x3@.
 mkNumericSuffix :: Set OccName -> String -> String
 mkNumericSuffix s nm =
   mappend nm . show . length . filter (isPrefixOf nm . occNameString) $ S.toList s
