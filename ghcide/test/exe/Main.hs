@@ -2386,6 +2386,48 @@ fillTypedHoleTests = let
       executeCodeAction chosen
       modifiedCode <- documentContents doc
       liftIO $ mkDoc "E.toException" @=? modifiedCode
+  , testSession "filling infix type hole uses prefix notation" $ do
+      let mkDoc x = T.unlines
+              [ "module Testing where"
+              , "data A = A"
+              , "foo :: A -> A -> A"
+              , "foo A A = A"
+              , "test :: A -> A -> A"
+              , "test a1 a2 = a1 " <> x <> " a2"
+              ]
+      doc <- createDoc "Test.hs" "haskell" $ mkDoc "`_`"
+      _ <- waitForDiagnostics
+      actions <- getCodeActions doc (Range (Position 5 16) (Position 5 19))
+      chosen <- liftIO $ pickActionWithTitle "replace _ with foo" actions
+      executeCodeAction chosen
+      modifiedCode <- documentContents doc
+      liftIO $ mkDoc "`foo`" @=? modifiedCode
+  , testSession "postfix hole uses postfix notation of infix operator" $ do
+      let mkDoc x = T.unlines
+              [ "module Testing where"
+              , "test :: Int -> Int -> Int"
+              , "test a1 a2 = " <> x <> " a1 a2"
+              ]
+      doc <- createDoc "Test.hs" "haskell" $ mkDoc "_"
+      _ <- waitForDiagnostics
+      actions <- getCodeActions doc (Range (Position 2 13) (Position 2 14))
+      chosen <- liftIO $ pickActionWithTitle "replace _ with (+)" actions
+      executeCodeAction chosen
+      modifiedCode <- documentContents doc
+      liftIO $ mkDoc "(+)" @=? modifiedCode
+  , testSession "filling infix type hole uses infix operator" $ do
+      let mkDoc x = T.unlines
+              [ "module Testing where"
+              , "test :: Int -> Int -> Int"
+              , "test a1 a2 = a1 " <> x <> " a2"
+              ]
+      doc <- createDoc "Test.hs" "haskell" $ mkDoc "`_`"
+      _ <- waitForDiagnostics
+      actions <- getCodeActions doc (Range (Position 2 16) (Position 2 19))
+      chosen <- liftIO $ pickActionWithTitle "replace _ with (+)" actions
+      executeCodeAction chosen
+      modifiedCode <- documentContents doc
+      liftIO $ mkDoc "+" @=? modifiedCode
   ]
 
 addInstanceConstraintTests :: TestTree
@@ -3891,6 +3933,19 @@ localCompletionTests = [
         ,("abcdefg", CiFunction, "abcdefg", True, False, Nothing)
         ,("abcdefgh", CiFunction, "abcdefgh", True, False, Nothing)
         ,("abcdefghi", CiFunction, "abcdefghi", True, False, Nothing)
+        ],
+    completionTest
+        "class method"
+        [
+          "class Test a where"
+        , "    abcd :: a -> ()"
+        , "    abcde :: a -> Int"
+        , "instance Test Int where"
+        , "    abcd = abc"
+        ]
+        (Position 4 14)
+        [("abcd", CiFunction, "abcd", True, False, Nothing)
+        ,("abcde", CiFunction, "abcde", True, False, Nothing)
         ]
     ]
 
@@ -3900,7 +3955,7 @@ nonLocalCompletionTests =
       "variable"
       ["module A where", "f = hea"]
       (Position 1 7)
-      [("head", CiFunction, "head ${1:[a]}", True, True, Nothing)],
+      [("head", CiFunction, "head ${1:([a])}", True, True, Nothing)],
     completionTest
       "constructor"
       ["module A where", "f = Tru"]
@@ -3912,20 +3967,20 @@ nonLocalCompletionTests =
       "type"
       ["{-# OPTIONS_GHC -Wall #-}", "module A () where", "f :: Bo", "f = True"]
       (Position 2 7)
-      [ ("Bounded", CiInterface, "Bounded ${1:*}", True, True, Nothing),
+      [ ("Bounded", CiInterface, "Bounded ${1:(*)}", True, True, Nothing),
         ("Bool", CiStruct, "Bool ", True, True, Nothing)
       ],
     completionTest
       "qualified"
       ["{-# OPTIONS_GHC -Wunused-binds #-}", "module A () where", "f = Prelude.hea"]
       (Position 2 15)
-      [ ("head", CiFunction, "head ${1:[a]}", True, True, Nothing)
+      [ ("head", CiFunction, "head ${1:([a])}", True, True, Nothing)
       ],
     completionTest
       "duplicate import"
       ["module A where", "import Data.List", "import Data.List", "f = perm"]
       (Position 3 8)
-      [ ("permutations", CiFunction, "permutations ${1:[a]}", False, False, Nothing)
+      [ ("permutations", CiFunction, "permutations ${1:([a])}", False, False, Nothing)
       ],
     completionTest
        "dont show hidden items"

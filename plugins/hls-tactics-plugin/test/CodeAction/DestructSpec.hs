@@ -20,6 +20,7 @@ spec = do
     destructTest "gadt" 7 17 "GoldenGADTDestruct.hs"
     destructTest "gadt" 8 17 "GoldenGADTDestructCoercion.hs"
     destructTest "a"    7 25 "SplitPattern.hs"
+    destructTest "a"    6 18 "DestructPun.hs"
 
   describe "layout" $ do
     destructTest "b"  4  3 "LayoutBind.hs"

@@ -49,6 +49,7 @@ data TacticCommand
   = Auto
   | Intros
   | Destruct
+  | DestructPun
   | Homomorphism
   | DestructLambdaCase
   | HomomorphismLambdaCase
@@ -64,6 +65,7 @@ tacticTitle = (mappend "Wingman: " .) . go
     go Auto _                   = "Attempt to fill hole"
     go Intros _                 = "Introduce lambda"
     go Destruct var             = "Case split on " <> var
+    go DestructPun var          = "Split on " <> var <> " with NamedFieldPuns"
     go Homomorphism var         = "Homomorphic case split on " <> var
     go DestructLambdaCase _     = "Lambda case split"
     go HomomorphismLambdaCase _ = "Homomorphic lambda case split"
@@ -115,6 +117,9 @@ instance Show Class where
   show  = unsafeRender
 
 instance Show (HsExpr GhcPs) where
+  show  = unsafeRender
+
+instance Show (HsExpr GhcTc) where
   show  = unsafeRender
 
 instance Show (HsDecl GhcPs) where

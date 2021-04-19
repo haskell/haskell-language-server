@@ -10,8 +10,8 @@ module Development.IDE.Plugin.Completions
     ) where
 
 import           Control.Concurrent.Async                     (concurrently)
-import           Control.Monad
 import           Control.Monad.Extra
+import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
 import           Data.List                                    (find)
@@ -31,8 +31,8 @@ import           Development.IDE.Plugin.Completions.Logic
 import           Development.IDE.Plugin.Completions.Types
 import           Development.IDE.Types.HscEnvEq               (hscEnv)
 import           Development.IDE.Types.Location
-import           Development.Shake
-import           Development.Shake.Classes
+import           Development.IDE.Graph
+import           Development.IDE.Graph.Classes
 import           GHC.Exts                                     (toList)
 import           GHC.Generics
 import           Ide.Plugin.Config                            (Config)

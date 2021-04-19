@@ -1,14 +1,18 @@
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes        #-}
 {-# LANGUAGE TypeFamilies      #-}
+
+{-# LANGUAGE NoMonoLocalBinds  #-}
 
 module Wingman.LanguageServer where
 
 import           ConLike
-import           Control.Arrow
+import           Control.Arrow ((***))
 import           Control.Monad
 import           Control.Monad.State (State, get, put, evalState)
 import           Control.Monad.Trans.Maybe
+import           Data.Bifunctor (first)
 import           Data.Coerce
 import           Data.Functor ((<&>))
 import           Data.Generics.Aliases (mkQ)
@@ -18,12 +22,12 @@ import           Data.IORef (readIORef)
 import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Monoid
-import qualified Data.Set  as S
+import           Data.Set (Set)
+import qualified Data.Set as S
 import qualified Data.Text as T
 import           Data.Traversable
 import           Development.IDE (getFilesOfInterest, ShowDiagnostic (ShowDiag), srcSpanToRange)
 import           Development.IDE (hscEnv)
-import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Rules (usePropertyAction)
 import           Development.IDE.Core.Service (runAction)
@@ -32,9 +36,10 @@ import qualified Development.IDE.Core.Shake as IDE
 import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error (realSrcSpanToRange)
+import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindings)
-import           Development.Shake (Action, RuleResult, Rules, action)
-import           Development.Shake.Classes (Typeable, Binary, Hashable, NFData)
+import           Development.IDE.Graph (Action, RuleResult, Rules, action)
+import           Development.IDE.Graph.Classes (Typeable, Binary, Hashable, NFData)
 import qualified FastString
 import           GHC.Generics (Generic)
 import           GhcPlugins (tupleDataCon, consDataCon, substTyAddInScope, ExternalPackageState, HscEnv (hsc_EPS), liftIO)
@@ -44,6 +49,7 @@ import           Ide.PluginUtils (usePropertyLsp)
 import           Ide.Types (PluginId)
 import           Language.LSP.Server (MonadLsp, sendNotification)
 import           Language.LSP.Types
+import           Language.LSP.Types.Capabilities
 import           OccName
 import           Prelude hiding (span)
 import           SrcLoc (containsSpan)
@@ -52,6 +58,7 @@ import           Wingman.Context
 import           Wingman.FeatureSet
 import           Wingman.GHC
 import           Wingman.Judgements
+import           Wingman.Judgements.SYB (everythingContaining)
 import           Wingman.Judgements.Theta
 import           Wingman.Range
 import           Wingman.Types
@@ -67,8 +74,8 @@ tcCommandName :: TacticCommand -> T.Text
 tcCommandName = T.pack . show
 
 
-runIde :: IdeState -> Action a -> IO a
-runIde state = runAction "tactic" state
+runIde :: String -> String -> IdeState -> Action a -> IO a
+runIde herald action state = runAction ("Wingman." <> herald <> "." <> action) state
 
 
 runCurrentIde
@@ -77,11 +84,13 @@ runCurrentIde
        , Eq a , Hashable a , Binary a , Show a , Typeable a , NFData a
        , Show r, Typeable r, NFData r
        )
-    => IdeState
+    => String
+    -> IdeState
     -> NormalizedFilePath
     -> a
     -> MaybeT IO (Tracked 'Current r)
-runCurrentIde state nfp a = MaybeT $ fmap (fmap unsafeMkCurrent) $ runIde state $ use a nfp
+runCurrentIde herald state nfp a =
+  MaybeT $ fmap (fmap unsafeMkCurrent) $ runIde herald (show a) state $ use a nfp
 
 
 runStaleIde
@@ -90,11 +99,13 @@ runStaleIde
        , Eq a , Hashable a , Binary a , Show a , Typeable a , NFData a
        , Show r, Typeable r, NFData r
        )
-    => IdeState
+    => String
+    -> IdeState
     -> NormalizedFilePath
     -> a
     -> MaybeT IO (TrackedStale r)
-runStaleIde state nfp a = MaybeT $ runIde state $ useWithStale a nfp
+runStaleIde herald state nfp a =
+  MaybeT $ runIde herald (show a) state $ useWithStale a nfp
 
 
 unsafeRunStaleIde
@@ -103,12 +114,13 @@ unsafeRunStaleIde
        , Eq a , Hashable a , Binary a , Show a , Typeable a , NFData a
        , Show r, Typeable r, NFData r
        )
-    => IdeState
+    => String
+    -> IdeState
     -> NormalizedFilePath
     -> a
     -> MaybeT IO r
-unsafeRunStaleIde state nfp a = do
-  (r, _) <- MaybeT $ runIde state $ IDE.useWithStale a nfp
+unsafeRunStaleIde herald state nfp a = do
+  (r, _) <- MaybeT $ runIde herald (show a) state $ IDE.useWithStale a nfp
   pure r
 
 
@@ -159,7 +171,7 @@ getIdeDynflags
 getIdeDynflags state nfp = do
   -- Ok to use the stale 'ModIface', since all we need is its 'DynFlags'
   -- which don't change very often.
-  msr <- unsafeRunStaleIde state nfp GetModSummaryWithoutTimestamps
+  msr <- unsafeRunStaleIde "getIdeDynflags" state nfp GetModSummaryWithoutTimestamps
   pure $ ms_hspp_opts $ msrModSummary msr
 
 
@@ -173,15 +185,17 @@ judgementForHole
     -> FeatureSet
     -> MaybeT IO (Tracked 'Current Range, Judgement, Context, DynFlags)
 judgementForHole state nfp range features = do
-  TrackedStale asts amapping  <- runStaleIde state nfp GetHieAst
+  let stale a = runStaleIde "judgementForHole" state nfp a
+
+  TrackedStale asts amapping  <- stale GetHieAst
   case unTrack asts of
     HAR _ _  _ _ (HieFromDisk _) -> fail "Need a fresh hie file"
     HAR _ (unsafeCopyAge asts -> hf) _ _ HieFresh -> do
       range' <- liftMaybe $ mapAgeFrom amapping range
-      binds <- runStaleIde state nfp GetBindings
+      binds <- stale GetBindings
       tcg <- fmap (fmap tmrTypechecked)
-           $ runStaleIde state nfp TypeCheck
-      hscenv <- runStaleIde state nfp GhcSessionDeps
+           $ stale TypeCheck
+      hscenv <- stale GhcSessionDeps
 
       (rss, g) <- liftMaybe $ getSpanAndTypeAtHole range' hf
       new_rss <- liftMaybe $ mapAgeTo amapping rss
@@ -196,6 +210,7 @@ judgementForHole state nfp range features = do
 
       dflags <- getIdeDynflags state nfp
       pure (fmap realSrcSpanToRange new_rss, jdg, ctx, dflags)
+
 
 
 mkJudgementAndContext
@@ -221,18 +236,36 @@ mkJudgementAndContext features g (TrackedStale binds bmap) rss (TrackedStale tcg
               kt
               evidence
       top_provs = getRhsPosVals tcg_rss tcs
+      already_destructed = getAlreadyDestructed (fmap RealSrcSpan tcg_rss) tcs
       local_hy = spliceProvenance top_provs
                $ hypothesisFromBindings binds_rss binds
       evidence = getEvidenceAtHole (fmap RealSrcSpan tcg_rss) tcs
       cls_hy = foldMap evidenceToHypothesis evidence
       subst = ts_unifier $ appEndo (foldMap (Endo . evidenceToSubst) evidence) defaultTacticState
-  pure
-    ( fmap (CType . substTyAddInScope subst . unCType) $ mkFirstJudgement
+  pure $
+    ( disallowing AlreadyDestructed already_destructed
+    $ fmap (CType . substTyAddInScope subst . unCType) $ mkFirstJudgement
           (local_hy <> cls_hy)
           (isRhsHole tcg_rss tcs)
           g
     , ctx
     )
+
+
+------------------------------------------------------------------------------
+-- | Determine which bindings have already been destructed by the location of
+-- the hole.
+getAlreadyDestructed
+    :: Tracked age SrcSpan
+    -> Tracked age (LHsBinds GhcTc)
+    -> Set OccName
+getAlreadyDestructed (unTrack -> span) (unTrack -> binds) =
+  everythingContaining span
+    (mkQ mempty $ \case
+      Case (HsVar _ (L _ (occName -> var))) _ ->
+        S.singleton var
+      (_ :: HsExpr GhcTc) -> mempty
+    ) binds
 
 
 getSpanAndTypeAtHole
@@ -302,7 +335,7 @@ buildTopLevelHypothesis name ps = do
 -- | Construct a hypothesis for a single pattern, including building
 -- sub-hypotheses for constructor pattern matches.
 buildPatHy :: Provenance -> PatCompat GhcTc -> State Int (Hypothesis CType)
-buildPatHy prov (fromPatCompatTc -> p0) =
+buildPatHy prov (fromPatCompat -> p0) =
   case p0 of
     VarPat  _ x   -> pure $ mkIdHypothesis (unLoc x) prov
     LazyPat _ p   -> buildPatHy prov p
@@ -317,7 +350,7 @@ buildPatHy prov (fromPatCompatTc -> p0) =
     ListPat x@(ListPatTc ty _) (p : ps) ->
       mkDerivedConHypothesis prov (RealDataCon consDataCon) [ty]
         [ (0, p)
-        , (1, toPatCompatTc $ ListPat x ps)
+        , (1, toPatCompat $ ListPat x ps)
         ]
     -- Desugar tuples into an explicit constructor
     TuplePat tys pats boxity ->
@@ -495,3 +528,16 @@ mkDiagnostic severity r =
     (Just $ List [DtUnnecessary])
     Nothing
 
+
+------------------------------------------------------------------------------
+-- | Transform a 'Graft' over the AST into a 'WorkspaceEdit'.
+mkWorkspaceEdits
+    :: DynFlags
+    -> ClientCapabilities
+    -> Uri
+    -> Annotated ParsedSource
+    -> Graft (Either String) ParsedSource
+    -> Either UserFacingMessage WorkspaceEdit
+mkWorkspaceEdits dflags ccs uri pm g = do
+  let response = transform dflags ccs uri g pm
+   in first (InfrastructureError . T.pack) response

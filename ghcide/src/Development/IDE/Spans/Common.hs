@@ -121,6 +121,7 @@ haddockToMarkdown (H.DocIdentifier i)
   = "`" ++ i ++ "`"
 haddockToMarkdown (H.DocIdentifierUnchecked i)
   = "`" ++ i ++ "`"
+#if MIN_VERSION_haddock_library(1,10,0)
 haddockToMarkdown (H.DocModule (H.ModLink i Nothing))
   = "`" ++ escapeBackticks i ++ "`"
 -- See https://github.com/haskell/haddock/pull/1315
@@ -130,6 +131,10 @@ haddockToMarkdown (H.DocModule (H.ModLink i Nothing))
 -- some label ( `Some.Module` )
 haddockToMarkdown (H.DocModule (H.ModLink i (Just label)))
   = haddockToMarkdown label ++ " ( `" ++ escapeBackticks i ++ "` )"
+#else
+haddockToMarkdown (H.DocModule i)
+  = "`" ++ escapeBackticks i ++ "`"
+#endif
 haddockToMarkdown (H.DocWarning w)
   = haddockToMarkdown w
 haddockToMarkdown (H.DocEmphasis d)

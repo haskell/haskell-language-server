@@ -22,8 +22,8 @@ library
     , filepath
     , ghc
     , ghc-boot-th
-    , ghcide           ^>=1.1.0.0
-    , hls-plugin-api   ^>=1.1
+    , ghcide           ^>=1.2.0.2
+    , hls-plugin-api   ^>=1.1.0.0
     , lsp-types
     , mtl
     , stylish-haskell  ^>=0.12
