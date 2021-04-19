@@ -1,7 +1,6 @@
 module Wingman.Naming where
 
-import           ConLike
-import           Control.Applicative
+import           Control.Arrow
 import           Control.Monad.State.Strict
 import           Data.Bool (bool)
 import           Data.Char
@@ -14,29 +13,15 @@ import           Data.Monoid
 import           Data.Set (Set)
 import qualified Data.Set as S
 import           Data.Traversable
-import           FieldLabel
-import           GhcPlugins (unpackFS, charTy, maybeTyCon)
+import           GhcPlugins (charTy, maybeTyCon)
 import           Name
 import           TcType
 import           Text.Hyphenation (hyphenate, english_US)
 import           TyCon
 import           Type
-import           TysWiredIn (listTyCon, pairTyCon, unitTyCon)
-import Wingman.GHC (tcTyVar_maybe)
+import           TysWiredIn (listTyCon, unitTyCon)
+import           Wingman.GHC (tcTyVar_maybe)
 
-
-fieldNames :: ConLike -> [OccName]
-fieldNames cl =
-  case fmap (unpackFS . flLabel) $ conLikeFieldLabels cl of
-    [] -> []
-    [_] -> []
-    fields ->
-      let field_first_segs = fmap (listToMaybe . split (== '_')) fields
-      in case and $ zipWith (==) field_first_segs $ tail field_first_segs of
-            True ->
-              let common_prefix = maybe 0 ((+ 1) . length) $ head field_first_segs
-               in fmap (mkVarOcc . drop common_prefix) fields
-            False -> []
 
 data Purpose
   = Function [Type] Type
@@ -66,7 +51,7 @@ pattern IsList :: Type -> Type
 pattern IsList a <- (splitTyConApp_maybe -> Just ((== listTyCon) -> True, [a]))
 
 pattern IsTyConned :: TyCon -> [Type] -> Type
-pattern IsTyConned tc args <- (splitTyConApp_maybe -> Just (tc, args))
+pattern IsTyConned tc args <- (splitTyConApp_maybe -> Just (id &&& isSymOcc . getOccName -> (tc, False), args))
 
 pattern IsTyVarred :: TyVar -> [Type] -> Type
 pattern IsTyVarred v args <- (tcSplitAppTys -> (tcTyVar_maybe -> Just v, args))
@@ -83,7 +68,9 @@ getPurposes ty = mconcat
   , [ Maybe a           | IsMaybe a           <- [ty] ]
   , [ List a            | IsList a            <- [ty] ]
   , [ TyVarred v args   | IsTyVarred v args   <- [ty] ]
-  , [ TyConned tc args  | IsTyConned tc args  <- [ty] ]
+  , [ TyConned tc args  | IsTyConned tc args  <- [ty]
+                        , not (isTupleTyCon tc)
+                        , tc /= listTyCon             ]
   ]
 
 
@@ -112,9 +99,13 @@ mkName (TyVarred tv args)
   | Just tv_args <- traverse tcTyVar_maybe args
   = pure $ foldMap (occNameString . occName) $ tv : tv_args
 mkName (TyVarred tv _) = pure $ occNameString $ occName tv
-mkName (TyConned tc args)
+mkName (TyConned tc args@(_:_))
   | Just tv_args <- traverse tcTyVar_maybe args
-  = pure $ mappend (mkTyConName tc) $ foldMap (occNameString . occName) tv_args
+  = pure $ mconcat
+      [ mkTyConName tc
+      , bool mempty "_" $ length (mkTyConName tc) > 1
+      , foldMap (occNameString . occName) tv_args
+      ]
 mkName (TyConned tc _)
   = pure
   $ mkTyConName tc
@@ -124,72 +115,53 @@ mkTyName :: Type -> [String]
 mkTyName = mkName <=< getPurposes
 
 
-
---------------------------------------------------------------------------------
----- | Use type information to create a reasonable name.
---mkTyName :: Type -> [String]
----- eg. mkTyName (a -> b) = "fab"
---mkTyName (tcSplitFunTys -> ([a@(isFunTy -> False)], b))
---  | isTyVarTy a && isTyVarTy b
---  = (\x y z -> x <> y <> z) <$> ["f", "g", "h"] <*> mkTyName a <*> mkTyName b
----- eg. mkTyName (a -> Bool) = "p"
----- mkTyName (tcSplitFunTys -> ([isFunTy -> False], isBoolTy -> True))
-----   = pure $ "p"
----- eg. mkTyName (A -> B) = "f"
----- mkTyName (tcSplitFunTys -> ([isFunTy -> False], _))
-----   = ["f", "g", "h"]
----- eg. mkTyName (a -> b -> C) = "f_C"
---mkTyName (tcSplitFunTys -> (_:_, b))
---  = fmap ("f_" <>) $ mkTyName b
----- eg. mkTyName [Char] = "str"
----- mkTyName (splitTyConApp_maybe -> Just (c, [arg]))
-----   | c == listTyCon, eqType arg charTy
-----   = pure $ "str"
----- eg. mkTyName Int = "n"
----- mkTyName (isIntTy -> True) = ["n", "i", "j"]
----- eg. mkTyName Integer = "n"
----- mkTyName (isIntegerTy -> True) = ["n", "i", "j"]
----- eg. mkTyName (T A B) = "tab"
---mkTyName (splitTyConApp_maybe -> Just (c, args))
---  = fmap (mkTyConName c $) $ foldMap mkTyName args
----- eg. mkTyName (f a) = "fa"
---mkTyName (tcSplitAppTys -> (t, args@(_:_)))
---  = liftA2 (<>) (mkTyName t) $ foldMap mkTyName args
----- eg. mkTyName a = "a"
---mkTyName (getTyVar_maybe -> Just tv)
---  = pure $ occNameString $ occName tv
----- eg. mkTyName (forall x. y) = "y"
---mkTyName (tcSplitSigmaTy -> (_:_, _, t))
---  = mkTyName t
---mkTyName _ = pure $ "x"
-
-
 ------------------------------------------------------------------------------
 -- | Get a good name for a type constructor.
 mkTyConName :: TyCon -> String
 mkTyConName tc
-  | tc == unitTyCon = "unit"
-  | isSymOcc (getOccName tc)
+  | tc == unitTyCon = "u"
+  | isSymOcc occ
       = take 1
       . fmap toLower
       . filterReplace isSymbol      's'
       . filterReplace isPunctuation 'p'
-      . occNameString
-      $ getOccName tc
+      $ name
+  | camels@(_:_:_) <- camelTerms name
+      = foldMap (fmap toLower . take 1) camels
   | otherwise
-      = stem
+      = getStem
       $ fmap toLower
-      $ occNameString
-      $ getOccName tc
+      $ name
+  where
+    occ = getOccName tc
+    name = occNameString occ
 
+
+camelTerms :: String -> [String]
+camelTerms = split (== '@') . go2 . go1
+  where
+    go1 "" = ""
+    go1 (x:u:l:xs) | isUpper u && isLower l = x : '@' : u : l : go1 xs
+    go1 (x:xs) = x : go1 xs
+    go2 "" = ""
+    go2 (l:u:xs) | isLower l && isUpper u = l : '@' : u : go2 xs
+    go2 (x:xs) = x : go2 xs
+
+
+getStem :: String -> String
+getStem str =
+  let s = stem str
+   in case (s == str, length str) of
+        (False, _)             -> s
+        (True, (<= 3) -> True) -> str
+        _                      -> take 2 str
 
 stem :: String -> String
 stem "char" = "c"
 stem "function" = "func"
 stem "bool" = "b"
 stem "either" = "e"
-stem "error" = "err"
-stem "text" = "t"
+stem "text" = "txt"
 stem s =
   let syllables = hyphenate english_US s
       (as, bs) = break (not . isLowerVowel . last) syllables
@@ -227,7 +199,7 @@ mkGoodName
     -> OccName
 mkGoodName in_scope (mkTyName -> tn)
   = mkVarOcc
-  . fromMaybe (mkNumericSuffix in_scope $ head tn)
+  . fromMaybe (mkNumericSuffix in_scope $ fromMaybe "x" $ listToMaybe tn)
   . getFirst
   . foldMap (\n -> bool (pure n) mempty $ check n)
   $ tn <> fmap (<> "'") tn
