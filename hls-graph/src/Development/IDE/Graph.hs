@@ -12,14 +12,16 @@ module Development.IDE.Graph(
     -- * Explicit parallelism
     parallel,
     -- * Oracle rules
-    Shake.ShakeValue, Shake.RuleResult,
+    ShakeValue, Shake.RuleResult,
     -- * Special rules
     alwaysRerun,
     -- * Batching
     reschedule,
     ) where
 
+import           Development.IDE.Graph.Database
 import           Development.IDE.Graph.Internal.Action
 import           Development.IDE.Graph.Internal.Options
 import           Development.IDE.Graph.Internal.Rules
+import           Development.IDE.Graph.Internal.Types
 import qualified Development.Shake                      as Shake
