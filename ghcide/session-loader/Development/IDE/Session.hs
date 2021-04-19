@@ -48,6 +48,7 @@ import           Development.IDE.GHC.Compat           hiding (Target,
                                                        TargetFile, TargetModule)
 import qualified Development.IDE.GHC.Compat           as GHC
 import           Development.IDE.GHC.Util
+import           Development.IDE.Graph                (Action)
 import           Development.IDE.Session.VersionCheck
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Exports
@@ -56,7 +57,6 @@ import           Development.IDE.Types.HscEnvEq       (HscEnvEq, newHscEnvEq,
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger
 import           Development.IDE.Types.Options
-import           Development.IDE.Graph                    (Action)
 import           GHC.Check
 import qualified HIE.Bios                             as HieBios
 import           HIE.Bios.Environment                 hiding (getCacheDir)
@@ -152,8 +152,8 @@ setInitialDynFlags logger SessionLoadingOptions{..} = do
 -- writing. Actions are picked off one by one from the `HieWriterChan` and executed in serial
 -- by a worker thread using a dedicated database connection.
 -- This is done in order to serialize writes to the database, or else SQLite becomes unhappy
-runWithDb :: FilePath -> (HieDb -> IndexQueue -> IO ()) -> IO ()
-runWithDb fp k = do
+runWithDb :: Logger -> FilePath -> (HieDb -> IndexQueue -> IO ()) -> IO ()
+runWithDb logger fp k = do
   -- Delete the database if it has an incompatible schema version
   withHieDb fp (const $ pure ())
     `catch` \IncompatibleSchemaVersion{} -> removeFile fp
@@ -171,9 +171,9 @@ runWithDb fp k = do
         k <- atomically $ readTQueue chan
         k db
           `catch` \e@SQLError{} -> do
-            hPutStrLn stderr $ "SQLite error in worker, ignoring: " ++ show e
+            logWarning logger $ "SQLite error in worker, ignoring: " <> T.pack(show e)
           `catchAny` \e -> do
-            hPutStrLn stderr $ "Uncaught error in database worker, ignoring: " ++ show e
+            logWarning logger $ "Uncaught error in database worker, ignoring: " <> T.pack(show e)
 
 
 getHieDbLoc :: FilePath -> IO FilePath
@@ -346,8 +346,8 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
             res <- loadDLL hscEnv "libm.so.6"
             case res of
               Nothing -> pure ()
-              Just err -> hPutStrLn stderr $
-                "Error dynamically loading libm.so.6:\n" <> err
+              Just err -> logError logger $
+                "Error dynamically loading libm.so.6:\n" <> T.pack err
 
           -- Make a map from unit-id to DynFlags, this is used when trying to
           -- resolve imports. (especially PackageImports)

@@ -233,7 +233,7 @@ defaultMain Arguments{..} = do
         Check argFiles -> do
           dir <- IO.getCurrentDirectory
           dbLoc <- getHieDbLoc dir
-          runWithDb dbLoc $ \hiedb hieChan -> do
+          runWithDb logger dbLoc $ \hiedb hieChan -> do
             -- GHC produces messages with UTF8 in them, so make sure the terminal doesn't error
             hSetEncoding stdout utf8
             hSetEncoding stderr utf8
@@ -301,7 +301,7 @@ defaultMain Arguments{..} = do
                 Just libdir -> HieDb.runCommand libdir opts{HieDb.database = dbLoc} cmd
         Custom projectRoot (IdeCommand c) -> do
           dbLoc <- getHieDbLoc projectRoot
-          runWithDb dbLoc $ \hiedb hieChan -> do
+          runWithDb logger dbLoc $ \hiedb hieChan -> do
             vfs <- makeVFSHandle
             sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions "."
             let options =
