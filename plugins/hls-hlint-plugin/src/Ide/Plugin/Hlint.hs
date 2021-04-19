@@ -96,6 +96,7 @@ descriptor plId = (defaultPluginDescriptor plId)
       , PluginCommand "applyAll" "Apply all hints to the file" applyAllCmd
       ]
     , pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionProvider
+    , pluginConfigDescriptor = defaultConfigDescriptor {configHasDiagnostics = True}
   }
 
 -- This rule only exists for generating file diagnostics
