@@ -3933,6 +3933,19 @@ localCompletionTests = [
         ,("abcdefg", CiFunction, "abcdefg", True, False, Nothing)
         ,("abcdefgh", CiFunction, "abcdefgh", True, False, Nothing)
         ,("abcdefghi", CiFunction, "abcdefghi", True, False, Nothing)
+        ],
+    completionTest
+        "class method"
+        [
+          "class Test a where"
+        , "    abcd :: a -> ()"
+        , "    abcde :: a -> Int"
+        , "instance Test Int where"
+        , "    abcd = abc"
+        ]
+        (Position 4 14)
+        [("abcd", CiFunction, "abcd", True, False, Nothing)
+        ,("abcde", CiFunction, "abcde", True, False, Nothing)
         ]
     ]
 

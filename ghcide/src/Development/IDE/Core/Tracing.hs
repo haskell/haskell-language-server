@@ -38,7 +38,7 @@ import           Development.IDE.Types.Logger   (Logger, logDebug, logInfo)
 import           Development.IDE.Types.Shake    (Key (..), Value,
                                                  ValueWithDiagnostics (..),
                                                  Values)
-import           Development.Shake              (Action, actionBracket)
+import           Development.IDE.Graph              (Action, actionBracket)
 import           Foreign.Storable               (Storable (sizeOf))
 import           HeapSize                       (recursiveSize, runHeapsize)
 import           Ide.PluginUtils                (installSigUsr1Handler)
@@ -230,4 +230,3 @@ repeatUntilJust nattempts action = do
     case res of
         Nothing -> repeatUntilJust (nattempts-1) action
         Just{}  -> return res
-

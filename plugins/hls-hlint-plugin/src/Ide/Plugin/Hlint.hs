@@ -103,6 +103,7 @@ descriptor plId = (defaultPluginDescriptor plId)
       ]
   , pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionProvider
   , pluginCustomConfig = mkCustomConfig properties
+  , pluginConfigDescriptor = defaultConfigDescriptor {configHasDiagnostics = True}
   }
 
 -- This rule only exists for generating file diagnostics

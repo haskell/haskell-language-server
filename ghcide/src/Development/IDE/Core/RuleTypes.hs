@@ -28,7 +28,7 @@ import           Development.IDE.GHC.Util
 import           Development.IDE.Import.DependencyInformation
 import           Development.IDE.Types.HscEnvEq               (HscEnvEq)
 import           Development.IDE.Types.KnownTargets
-import           Development.Shake
+import           Development.IDE.Graph
 import           GHC.Generics                                 (Generic)
 
 import           HscTypes                                     (HomeModInfo,

@@ -20,6 +20,7 @@ import           Development.IDE.Core.Shake (IdeState (..))
 import           Development.IDE.Core.UseStale (Tracked, TrackedStale(..), unTrack, mapAgeFrom, unsafeMkCurrent)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.ExactPrint
+import           Generics.SYB.GHC
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
@@ -59,8 +60,8 @@ descriptor plId = (defaultPluginDescriptor plId)
       , mkPluginHandler STextDocumentCodeLens codeLensProvider
       ]
   , pluginRules = wingmanRules plId
-  , pluginCustomConfig =
-      mkCustomConfig properties
+  , pluginConfigDescriptor =
+      defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
   }
 
 
@@ -96,13 +97,15 @@ showUserFacingMessage ufm = do
 tacticCmd :: (OccName -> TacticsM ()) -> PluginId -> CommandFunction IdeState TacticParams
 tacticCmd tac pId state (TacticParams uri range var_name)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
+      let stale a = runStaleIde "tacticCmd" state nfp a
+
       features <- getFeatureSet pId
       ccs <- getClientCapabilities
       cfg <- getTacticConfig pId
       res <- liftIO $ runMaybeT $ do
         (range', jdg, ctx, dflags) <- judgementForHole state nfp range features
         let span = fmap (rangeToRealSrcSpan (fromNormalizedFilePath nfp)) range'
-        TrackedStale pm pmmap <- runStaleIde state nfp GetAnnotatedParsedSource
+        TrackedStale pm pmmap <- stale GetAnnotatedParsedSource
         pm_span <- liftMaybe $ mapAgeFrom pmmap span
 
         timingOut (cfg_timeout_seconds cfg * seconds) $ join $

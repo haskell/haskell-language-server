@@ -27,6 +27,7 @@ import           Control.Concurrent.STM.TQueue                (writeTQueue)
 import           Control.Concurrent.Strict
 import           Control.Exception
 import           Control.Monad.Extra
+import           Control.Monad.IO.Class
 import qualified Data.ByteString                              as BS
 import           Data.Either.Extra
 import qualified Data.HashMap.Strict                          as HM
@@ -45,7 +46,7 @@ import           Development.IDE.Import.DependencyInformation
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
-import           Development.Shake
+import           Development.IDE.Graph
 import           HieDb.Create                                 (deleteMissingRealFiles)
 import           Ide.Plugin.Config                            (CheckParents (..))
 import           System.IO.Error
@@ -67,7 +68,6 @@ import qualified Development.IDE.Types.Logger                 as L
 
 import qualified Data.Binary                                  as B
 import qualified Data.ByteString.Lazy                         as LBS
-import           Development.IDE.Core.IdeConfiguration        (isWorkspaceFile)
 import           Language.LSP.Server                          hiding
                                                               (getVirtualFile)
 import qualified Language.LSP.Server                          as LSP
