@@ -298,7 +298,7 @@ destructAll :: TacticsM ()
 destructAll = do
   jdg <- goal
   let args = fmap fst
-           $ sortOn (Down . snd)
+           $ sort
            $ mapMaybe (\(hi, prov) ->
               case prov of
                 TopLevelArgPrv _ idx _ -> pure (hi, idx)
