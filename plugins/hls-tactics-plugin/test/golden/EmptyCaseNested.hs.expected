@@ -1,5 +1,5 @@
 test =
   case (case (Just "") of
   Nothing -> _
-  Just l_c -> _) of
+  Just s -> _) of
     True -> _

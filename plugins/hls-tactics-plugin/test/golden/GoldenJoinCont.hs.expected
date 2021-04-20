@@ -1,4 +1,4 @@
 type Cont r a = ((a -> r) -> r)
 
 joinCont :: Cont r (Cont r a) -> Cont r a
-joinCont f_r far = f_r (\ f_r2 -> f_r2 far)
+joinCont f far = f (\ g -> g far)

@@ -4,7 +4,7 @@ data Foo = A Int | B Bool | C
 -- split
 foo :: Int -> Bool -> Foo -> ()
 foo i b x = case x of
-  A i3 -> _
-  B b3 -> _
+  A n -> _
+  B b' -> _
   C -> _
 

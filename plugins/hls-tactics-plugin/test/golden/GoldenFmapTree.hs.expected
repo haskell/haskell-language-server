@@ -2,4 +2,4 @@ data Tree a = Leaf a | Branch (Tree a) (Tree a)
 
 instance Functor Tree where
    fmap fab (Leaf a) = Leaf (fab a)
-   fmap fab (Branch ta2 ta3) = Branch (fmap fab ta2) (fmap fab ta3)
+   fmap fab (Branch tr' tr_a) = Branch (fmap fab tr') (fmap fab tr_a)
