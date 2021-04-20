@@ -25,7 +25,7 @@ library
     , hls-plugin-api        ^>=1.1.0.0
     , lsp
     , lsp-types
-    , shake
+    , hls-graph
     , text
     , unordered-containers
 

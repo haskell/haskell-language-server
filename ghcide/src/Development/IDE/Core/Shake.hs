@@ -119,12 +119,11 @@ import           Development.IDE.Types.Logger         hiding (Priority)
 import qualified Development.IDE.Types.Logger         as Logger
 import           Development.IDE.Types.Options
 import           Development.IDE.Types.Shake
-import           Development.Shake                    hiding (Info, ShakeValue,
-                                                       doesFileExist)
-import qualified Development.Shake                    as Shake
-import           Development.Shake.Classes
-import           Development.Shake.Database
-import           Development.Shake.Rule
+import           Development.IDE.Graph                    hiding (ShakeValue)
+import qualified Development.IDE.Graph                    as Shake
+import           Development.IDE.Graph.Classes
+import           Development.IDE.Graph.Database
+import           Development.IDE.Graph.Rule
 import           GHC.Generics
 import           Language.LSP.Diagnostics
 import qualified Language.LSP.Server                  as LSP
@@ -509,7 +508,7 @@ shakeOpen lspEnv defaultConfig logger debouncer
         pure (ShakeExtras{..}, cancel progressAsync)
     (shakeDbM, shakeClose) <-
         shakeOpenDatabase
-            opts { shakeExtra = addShakeExtra shakeExtras $ shakeExtra opts }
+            opts { shakeExtra = newShakeExtra shakeExtras }
             rules
     shakeDb <- shakeDbM
     initSession <- newSession shakeExtras shakeDb []
@@ -933,9 +932,9 @@ defineEarlyCutoff
     :: IdeRule k v
     => RuleBody k v
     -> Rules ()
-defineEarlyCutoff (Rule op) = addBuiltinRule noLint noIdentity $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file isSuccess $ do
+defineEarlyCutoff (Rule op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file isSuccess $ do
     defineEarlyCutoff' True key file old mode $ op key file
-defineEarlyCutoff (RuleNoDiagnostics op) = addBuiltinRule noLint noIdentity $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file isSuccess $ do
+defineEarlyCutoff (RuleNoDiagnostics op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file isSuccess $ do
     defineEarlyCutoff' False key file old mode $ second (mempty,) <$> op key file
 
 defineEarlyCutoff'
@@ -1046,7 +1045,7 @@ defineOnDisk
   :: (Shake.ShakeValue k, RuleResult k ~ ())
   => (k -> NormalizedFilePath -> OnDiskRule)
   -> Rules ()
-defineOnDisk act = addBuiltinRule noLint noIdentity $
+defineOnDisk act = addRule $
   \(QDisk key file) (mbOld :: Maybe BS.ByteString) mode -> do
       extras <- getShakeExtras
       let OnDiskRule{..} = act key file

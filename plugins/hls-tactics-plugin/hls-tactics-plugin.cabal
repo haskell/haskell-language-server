@@ -80,7 +80,7 @@ library
     , mtl
     , refinery              ^>=0.3
     , retrie                >=0.1.1.0
-    , shake
+    , hls-graph
     , syb
     , text
     , transformers

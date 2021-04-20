@@ -51,5 +51,5 @@ import           Development.IDE.Types.HscEnvEq        as X (HscEnvEq (..),
                                                              hscEnvWithImportPaths)
 import           Development.IDE.Types.Location        as X
 import           Development.IDE.Types.Logger          as X
-import           Development.Shake                     as X (Action, RuleResult,
+import           Development.IDE.Graph                     as X (Action, RuleResult,
                                                              Rules, action)

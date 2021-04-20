@@ -38,8 +38,8 @@ import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error (realSrcSpanToRange)
 import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindings)
-import           Development.Shake (Action, RuleResult, Rules, action)
-import           Development.Shake.Classes (Typeable, Binary, Hashable, NFData)
+import           Development.IDE.Graph (Action, RuleResult, Rules, action)
+import           Development.IDE.Graph.Classes (Typeable, Binary, Hashable, NFData)
 import qualified FastString
 import           GHC.Generics (Generic)
 import           GhcPlugins (tupleDataCon, consDataCon, substTyAddInScope, ExternalPackageState, HscEnv (hsc_EPS), liftIO)
@@ -541,4 +541,3 @@ mkWorkspaceEdits
 mkWorkspaceEdits dflags ccs uri pm g = do
   let response = transform dflags ccs uri g pm
    in first (InfrastructureError . T.pack) response
-

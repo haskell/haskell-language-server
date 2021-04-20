@@ -31,8 +31,8 @@ import           Development.IDE.Plugin.Completions.Logic
 import           Development.IDE.Plugin.Completions.Types
 import           Development.IDE.Types.HscEnvEq               (hscEnv)
 import           Development.IDE.Types.Location
-import           Development.Shake
-import           Development.Shake.Classes
+import           Development.IDE.Graph
+import           Development.IDE.Graph.Classes
 import           GHC.Exts                                     (toList)
 import           GHC.Generics
 import           Ide.Plugin.Config                            (Config)
@@ -47,7 +47,7 @@ descriptor plId = (defaultPluginDescriptor plId)
   { pluginRules = produceCompletions
   , pluginHandlers = mkPluginHandler STextDocumentCompletion getCompletionsLSP
   , pluginCommands = [extendImportCommand]
-  , pluginCustomConfig = mkCustomConfig properties
+  , pluginConfigDescriptor = defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
   }
 
 produceCompletions :: Rules ()

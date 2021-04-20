@@ -61,7 +61,7 @@ import           Development.IDE.Types.Options         (IdeGhcSession,
                                                         clientSupportsProgress,
                                                         defaultIdeOptions)
 import           Development.IDE.Types.Shake           (Key (Key))
-import           Development.Shake                     (action)
+import           Development.IDE.Graph                     (action)
 import           GHC.IO.Encoding                       (setLocaleEncoding)
 import           GHC.IO.Handle                         (hDuplicate)
 import           HIE.Bios.Cradle                       (findCradle)
