@@ -511,14 +511,8 @@ missingPragmaTests = testGroup "missing pragma warning code actions" [
             contents <- documentContents doc
 
             let expected =
--- TODO: Why CPP???
-#if __GLASGOW_HASKELL__ < 810
                     [ "{-# LANGUAGE ScopedTypeVariables #-}"
                     , "{-# LANGUAGE TypeApplications #-}"
-#else
-                    [ "{-# LANGUAGE TypeApplications #-}"
-                    , "{-# LANGUAGE ScopedTypeVariables #-}"
-#endif
                     , "module TypeApplications where"
                     , ""
                     , "foo :: forall a. a -> a"
@@ -571,8 +565,8 @@ missingPragmaTests = testGroup "missing pragma warning code actions" [
             let expected =
                     [ "#! /usr/bin/env nix-shell"
                     , "#! nix-shell --pure -i runghc -p \"haskellPackages.ghcWithPackages (hp: with hp; [ turtle ])\""
-                    , ""
                     , "{-# LANGUAGE NamedFieldPuns #-}"
+                    , ""
                     , "module AfterShebang where"
                     , ""
                     , "data Record = Record"
