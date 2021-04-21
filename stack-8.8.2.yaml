@@ -3,6 +3,7 @@ resolver: lts-15.3 # Last 8.8.2
 packages:
   - .
   - ./hie-compat
+  - ./hls-graph
   - ./ghcide/
   - ./hls-plugin-api
   - ./hls-test-utils
