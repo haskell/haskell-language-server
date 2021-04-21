@@ -46,7 +46,7 @@ codeActionProvider state _plId (CodeActionParams _ _ docId _ (J.CodeActionContex
   let mFile = docId ^. J.uri & uriToFilePath <&> toNormalizedFilePath'
       uri = docId ^. J.uri
   pm <- liftIO $ fmap join $ runAction "Pragmas.GetParsedModule" state $ getParsedModule `traverse` mFile
-  mbContents <- liftIO $ fmap join $ fmap (fmap snd) $ runAction "Pragmas.GetFileContents" state $ getFileContents `traverse` mFile
+  mbContents <- liftIO $ fmap (join . fmap snd) $ runAction "Pragmas.GetFileContents" state $ getFileContents `traverse` mFile
   let dflags = ms_hspp_opts . pm_mod_summary <$> pm
       insertRange = maybe (Range (Position 0 0) (Position 0 0)) endOfModuleHeader mbContents
       pedits = nubOrdOn snd . concat $ suggest dflags <$> diags
