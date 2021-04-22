@@ -511,14 +511,8 @@ missingPragmaTests = testGroup "missing pragma warning code actions" [
             contents <- documentContents doc
 
             let expected =
--- TODO: Why CPP???
-#if __GLASGOW_HASKELL__ < 810
                     [ "{-# LANGUAGE ScopedTypeVariables #-}"
                     , "{-# LANGUAGE TypeApplications #-}"
-#else
-                    [ "{-# LANGUAGE TypeApplications #-}"
-                    , "{-# LANGUAGE ScopedTypeVariables #-}"
-#endif
                     , "module TypeApplications where"
                     , ""
                     , "foo :: forall a. a -> a"
@@ -555,7 +549,7 @@ missingPragmaTests = testGroup "missing pragma warning code actions" [
                     , "f Record{a, b} = a"
                     ]
             liftIO $ T.lines contents @?= expected
-    , testCase "After Shebang" $ do
+    , testCase "After shebang" $ do
         runSession hlsCommand fullCaps "test/testdata/addPragmas" $ do
             doc <- openDoc "AfterShebang.hs" "haskell"
 
@@ -571,9 +565,70 @@ missingPragmaTests = testGroup "missing pragma warning code actions" [
             let expected =
                     [ "#! /usr/bin/env nix-shell"
                     , "#! nix-shell --pure -i runghc -p \"haskellPackages.ghcWithPackages (hp: with hp; [ turtle ])\""
-                    , ""
                     , "{-# LANGUAGE NamedFieldPuns #-}"
+                    , ""
                     , "module AfterShebang where"
+                    , ""
+                    , "data Record = Record"
+                    , "  { a :: Int,"
+                    , "    b :: Double,"
+                    , "    c :: String"
+                    , "  }"
+                    , ""
+                    , "f Record{a, b} = a"
+                    ]
+
+            liftIO $ T.lines contents @?= expected
+    , testCase "Append to existing pragmas" $ do
+        runSession hlsCommand fullCaps "test/testdata/addPragmas" $ do
+            doc <- openDoc "AppendToExisting.hs" "haskell"
+
+            _ <- waitForDiagnosticsFrom doc
+            cas <- map fromAction <$> getAllCodeActions doc
+
+            liftIO $ "Add \"NamedFieldPuns\"" `elem` map (^. L.title) cas @? "Contains NamedFieldPuns code action"
+
+            executeCodeAction $ head cas
+
+            contents <- documentContents doc
+
+            let expected =
+                    [ "-- | Doc before pragma"
+                    , "{-# OPTIONS_GHC -Wno-dodgy-imports #-}"
+                    , "{-# LANGUAGE NamedFieldPuns #-}"
+                    , "module AppendToExisting where"
+                    , ""
+                    , "data Record = Record"
+                    , "  { a :: Int,"
+                    , "    b :: Double,"
+                    , "    c :: String"
+                    , "  }"
+                    , ""
+                    , "f Record{a, b} = a"
+                    ]
+
+            liftIO $ T.lines contents @?= expected
+    , testCase "Before Doc Comments" $ do
+        runSession hlsCommand fullCaps "test/testdata/addPragmas" $ do
+            doc <- openDoc "BeforeDocComment.hs" "haskell"
+
+            _ <- waitForDiagnosticsFrom doc
+            cas <- map fromAction <$> getAllCodeActions doc
+
+            liftIO $ "Add \"NamedFieldPuns\"" `elem` map (^. L.title) cas @? "Contains NamedFieldPuns code action"
+
+            executeCodeAction $ head cas
+
+            contents <- documentContents doc
+
+            let expected =
+                    [ "#! /usr/bin/env nix-shell"
+                    , "#! nix-shell --pure -i runghc -p \"haskellPackages.ghcWithPackages (hp: with hp; [ turtle ])\""
+                    , "{-# LANGUAGE NamedFieldPuns #-}"
+                    , "-- | Doc Comment"
+                    , "{- Block -}"
+                    , ""
+                    , "module BeforeDocComment where"
                     , ""
                     , "data Record = Record"
                     , "  { a :: Int,"
@@ -614,9 +669,9 @@ disableWarningTests =
           ]
       , T.unlines
           [ "{-# OPTIONS_GHC -Wall #-}"
-          , ""
-          , ""
           , "{-# OPTIONS_GHC -Wno-unused-imports #-}"
+          , ""
+          , ""
           , "module M where"
           , ""
           , "import Data.Functor"
