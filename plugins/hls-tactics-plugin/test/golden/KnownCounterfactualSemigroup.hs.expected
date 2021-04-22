@@ -3,6 +3,5 @@
 data Semi = Semi [String] Int
 
 instance Semigroup Int => Semigroup Semi where
-  (<>) (Semi l_l_c5 i6) (Semi l_l_c i)
-    = Semi (l_l_c5 <> l_l_c) (i6 <> i)
+  (<>) (Semi ss n) (Semi strs i) = Semi (ss <> strs) (n <> i)
 

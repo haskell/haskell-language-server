@@ -54,6 +54,7 @@ extra-deps:
   - refinery-0.3.0.0
   - retrie-0.1.1.1
   - semigroups-0.18.5
+  - shake-0.19.4
   - stylish-haskell-0.12.2.0
   - temporary-1.2.1.1
   - uniplate-1.6.13

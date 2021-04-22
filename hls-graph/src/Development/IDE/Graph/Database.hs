@@ -1,9 +1,18 @@
 
 module Development.IDE.Graph.Database(
-    ShakeDatabase,
+    Shake.ShakeDatabase,
     shakeOpenDatabase,
     shakeRunDatabase,
-    shakeProfileDatabase,
+    Shake.shakeProfileDatabase,
     ) where
 
-import Development.Shake.Database
+import qualified Development.Shake.Database as Shake
+import Development.IDE.Graph.Internal.Action
+import Development.IDE.Graph.Internal.Options
+import Development.IDE.Graph.Internal.Rules
+
+shakeOpenDatabase :: ShakeOptions -> Rules () -> IO (IO Shake.ShakeDatabase, IO ())
+shakeOpenDatabase a b = Shake.shakeOpenDatabase (fromShakeOptions a) (fromRules b)
+
+shakeRunDatabase :: Shake.ShakeDatabase -> [Action a] -> IO ([a], [IO ()])
+shakeRunDatabase a b = Shake.shakeRunDatabase a (map fromAction b)
