@@ -47,11 +47,17 @@ noProgressReporting = return $ ProgressReporting
   , progressStop   = pure ()
   }
 
+-- | A 'ProgressReporting' that enqueues Begin and End notifications in a new
+--   thread, with a grace period (nothing will be sent if 'KickCompleted' arrives
+--   before the end of the grace period).
+--   Avoid using in tests where progress notifications are used to assert invariants.
 delayedProgressReporting
-  :: Maybe (LSP.LanguageContextEnv c)
+  :: Seconds  -- ^ Grace period before starting
+  -> Seconds  -- ^ sampling delay
+  -> Maybe (LSP.LanguageContextEnv c)
   -> ProgressReportingStyle
   -> IO ProgressReporting
-delayedProgressReporting lspEnv optProgressStyle = do
+delayedProgressReporting before after lspEnv optProgressStyle = do
     inProgressVar <- newVar (HMap.empty @NormalizedFilePath @Int)
     mostRecentProgressEvent <- newTVarIO KickCompleted
     progressAsync <- async $
@@ -91,7 +97,7 @@ delayedProgressReporting lspEnv optProgressStyle = do
             lspShakeProgress = do
                 -- first sleep a bit, so we only show progress messages if it's going to take
                 -- a "noticable amount of time" (we often expect a thread kill to arrive before the sleep finishes)
-                liftIO $ sleep 0.1
+                liftIO $ sleep before
                 u <- ProgressTextToken . T.pack . show . hashUnique <$> liftIO newUnique
 
                 void $ LSP.sendRequest LSP.SWindowWorkDoneProgressCreate
@@ -119,9 +125,8 @@ delayedProgressReporting lspEnv optProgressStyle = do
                               { _message = Nothing
                               }
                             }
-                    sample = 0.1
                     loop id prev = do
-                        liftIO $ sleep sample
+                        liftIO $ sleep after
                         current <- liftIO $ readVar inProgress
                         let done = length $ filter (== 0) $ HMap.elems current
                         let todo = HMap.size current

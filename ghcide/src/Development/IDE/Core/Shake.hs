@@ -183,9 +183,7 @@ data ShakeExtras = ShakeExtras
     -- positions in a version of that document to positions in the latest version
     -- First mapping is delta from previous version and second one is an
     -- accumlation of all previous mappings.
-    ,inProgress :: forall a . NormalizedFilePath -> Action a -> Action a
-    -- ^ Report progress for a rule
-    ,progressUpdate :: ProgressEvent -> IO ()
+    ,progress :: ProgressReporting
     ,ideTesting :: IdeTesting
     -- ^ Whether to enable additional lsp messages used by the test suite for checking invariants
     ,restartShakeSession :: [DelayedAction ()] -> IO ()
@@ -378,12 +376,11 @@ newtype ShakeSession = ShakeSession
 -- | A Shake database plus persistent store. Can be thought of as storing
 --   mappings from @(FilePath, k)@ to @RuleResult k@.
 data IdeState = IdeState
-    {shakeDb               :: ShakeDatabase
-    ,shakeSession          :: MVar ShakeSession
-    ,shakeClose            :: IO ()
-    ,shakeExtras           :: ShakeExtras
-    ,shakeDatabaseProfile  :: ShakeDatabase -> IO (Maybe FilePath)
-    ,stopProgressReporting :: IO ()
+    {shakeDb              :: ShakeDatabase
+    ,shakeSession         :: MVar ShakeSession
+    ,shakeClose           :: IO ()
+    ,shakeExtras          :: ShakeExtras
+    ,shakeDatabaseProfile :: ShakeDatabase -> IO (Maybe FilePath)
     }
 
 
@@ -469,11 +466,11 @@ shakeOpen :: Maybe (LSP.LanguageContextEnv Config)
           -> Rules ()
           -> IO IdeState
 shakeOpen lspEnv defaultConfig logger debouncer
-  shakeProfileDir (IdeReportProgress inProgress) ideTesting@(IdeTesting testing) hiedb indexQueue vfs opts rules = mdo
+  shakeProfileDir (IdeReportProgress reportProgress) ideTesting@(IdeTesting testing) hiedb indexQueue vfs opts rules = mdo
 
     us <- mkSplitUniqSupply 'r'
     ideNc <- newIORef (initNameCache us knownKeyNames)
-    (shakeExtras, stopProgressReporting) <- do
+    shakeExtras <- do
         globals <- newVar HMap.empty
         state <- newVar HMap.empty
         diagnostics <- newVar mempty
@@ -489,16 +486,16 @@ shakeOpen lspEnv defaultConfig logger debouncer
         let hiedbWriter = HieDbWriter{..}
         exportsMap <- newVar mempty
 
-        ProgressReporting{..} <-
-            if inProgress
-                then delayedProgressReporting lspEnv optProgressStyle
+        progress <- do
+            let (before, after) = if testing then (0,0.1) else (0.1,0.1)
+            if reportProgress
+                then delayedProgressReporting before after lspEnv optProgressStyle
                 else noProgressReporting
         actionQueue <- newQueue
 
         let clientCapabilities = maybe def LSP.resClientCapabilities lspEnv
-            extras = ShakeExtras{..}
 
-        pure (extras, progressStop)
+        pure ShakeExtras{..}
     (shakeDbM, shakeClose) <-
         shakeOpenDatabase
             opts { shakeExtra = newShakeExtra shakeExtras }
@@ -531,7 +528,7 @@ shakeShut IdeState{..} = withMVar shakeSession $ \runner -> do
     -- request so we first abort that.
     void $ cancelShakeSession runner
     shakeClose
-    stopProgressReporting
+    progressStop $ progress shakeExtras
 
 
 -- | This is a variant of withMVar where the first argument is run unmasked and if it throws
@@ -846,9 +843,9 @@ defineEarlyCutoff'
     -> Action (Maybe BS.ByteString, IdeResult v)
     -> Action (RunResult (A (RuleResult k)))
 defineEarlyCutoff' doDiagnostics key file old mode action = do
-    extras@ShakeExtras{state, inProgress, logger} <- getShakeExtras
+    extras@ShakeExtras{state, progress, logger} <- getShakeExtras
     options <- getIdeOptions
-    (if optSkipProgress options key then id else inProgress file) $ do
+    (if optSkipProgress options key then id else inProgress progress file) $ do
         val <- case old of
             Just old | mode == RunDependenciesSame -> do
                 v <- liftIO $ getValues state key file
