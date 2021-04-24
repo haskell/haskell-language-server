@@ -70,7 +70,7 @@ codeActionProvider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
       cfg <- getTacticConfig plId
       liftIO $ fromMaybeT (Right $ List []) $ do
-        (_, jdg, _, dflags) <- judgementForHole state nfp range $ cfg_feature_set cfg
+        (_, jdg, _, dflags) <- judgementForHole state nfp range cfg
         actions <- lift $
           -- This foldMap is over the function monoid.
           foldMap commandProvider [minBound .. maxBound] $ TacticProviderData
@@ -99,11 +99,10 @@ tacticCmd tac pId state (TacticParams uri range var_name)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
       let stale a = runStaleIde "tacticCmd" state nfp a
 
-      features <- getFeatureSet pId
       ccs <- getClientCapabilities
       cfg <- getTacticConfig pId
       res <- liftIO $ runMaybeT $ do
-        (range', jdg, ctx, dflags) <- judgementForHole state nfp range features
+        (range', jdg, ctx, dflags) <- judgementForHole state nfp range cfg
         let span = fmap (rangeToRealSrcSpan (fromNormalizedFilePath nfp)) range'
         TrackedStale pm pmmap <- stale GetAnnotatedParsedSource
         pm_span <- liftMaybe $ mapAgeFrom pmmap span

@@ -13,27 +13,26 @@ import           OccName
 import           TcRnTypes
 import           TcType (tcSplitTyConApp, tcSplitPhiTy)
 import           TysPrim (alphaTys)
-import           Wingman.FeatureSet (FeatureSet)
 import           Wingman.Judgements.Theta
 import           Wingman.Types
 
 
 mkContext
-    :: FeatureSet
+    :: Config
     -> [(OccName, CType)]
     -> TcGblEnv
     -> ExternalPackageState
     -> KnownThings
     -> [Evidence]
     -> Context
-mkContext features locals tcg eps kt ev = Context
+mkContext cfg locals tcg eps kt ev = Context
   { ctxDefiningFuncs = locals
   , ctxModuleFuncs = fmap splitId
                    . (getFunBindId =<<)
                    . fmap unLoc
                    . bagToList
                    $ tcg_binds tcg
-  , ctxFeatureSet = features
+  , ctxConfig = cfg
   , ctxInstEnvs =
       InstEnvs
         (eps_inst_env eps)
