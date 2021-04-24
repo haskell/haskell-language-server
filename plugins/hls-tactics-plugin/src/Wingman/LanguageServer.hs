@@ -131,8 +131,11 @@ properties :: Properties
    , 'PropertyKey "max_use_ctor_actions" 'TInteger
    , 'PropertyKey "features" 'TString
    , 'PropertyKey "timeout_duration" 'TInteger
+   , 'PropertyKey "auto_gas" 'TInteger
    ]
 properties = emptyProperties
+  & defineIntegerProperty #auto_gas
+    "The depth of the search tree when performing \"Attempt to fill hole\". Bigger values will be able to derive more solutions, but will take exponentially more time." 4
   & defineIntegerProperty #timeout_duration
     "The timeout for Wingman actions, in seconds" 2
   & defineStringProperty #features
@@ -157,6 +160,7 @@ getTacticConfig pId =
     <$> (parseFeatureSet <$> usePropertyLsp #features pId properties)
     <*> usePropertyLsp #max_use_ctor_actions pId properties
     <*> usePropertyLsp #timeout_duration pId properties
+    <*> usePropertyLsp #auto_gas pId properties
 
 ------------------------------------------------------------------------------
 -- | Get the current feature set from the plugin config.
@@ -182,9 +186,9 @@ judgementForHole
     :: IdeState
     -> NormalizedFilePath
     -> Tracked 'Current Range
-    -> FeatureSet
+    -> Config
     -> MaybeT IO (Tracked 'Current Range, Judgement, Context, DynFlags)
-judgementForHole state nfp range features = do
+judgementForHole state nfp range cfg = do
   let stale a = runStaleIde "judgementForHole" state nfp a
 
   TrackedStale asts amapping  <- stale GetHieAst
@@ -206,7 +210,7 @@ judgementForHole state nfp range features = do
       eps <- liftIO $ readIORef $ hsc_EPS $ hscEnv henv
       kt <- knownThings (untrackedStaleValue tcg) henv
 
-      (jdg, ctx) <- liftMaybe $ mkJudgementAndContext features g binds new_rss tcg eps kt
+      (jdg, ctx) <- liftMaybe $ mkJudgementAndContext cfg g binds new_rss tcg eps kt
 
       dflags <- getIdeDynflags state nfp
       pure (fmap realSrcSpanToRange new_rss, jdg, ctx, dflags)
@@ -214,7 +218,7 @@ judgementForHole state nfp range features = do
 
 
 mkJudgementAndContext
-    :: FeatureSet
+    :: Config
     -> Type
     -> TrackedStale Bindings
     -> Tracked 'Current RealSrcSpan
@@ -222,12 +226,12 @@ mkJudgementAndContext
     -> ExternalPackageState
     -> KnownThings
     -> Maybe (Judgement, Context)
-mkJudgementAndContext features g (TrackedStale binds bmap) rss (TrackedStale tcg tcgmap) eps kt = do
+mkJudgementAndContext cfg g (TrackedStale binds bmap) rss (TrackedStale tcg tcgmap) eps kt = do
   binds_rss <- mapAgeFrom bmap rss
   tcg_rss <- mapAgeFrom tcgmap rss
 
   let tcs = fmap tcg_binds tcg
-      ctx = mkContext features
+      ctx = mkContext cfg
               (mapMaybe (sequenceA . (occName *** coerce))
                 $ unTrack
                 $ getDefiningBindings <$> binds <*> binds_rss)
