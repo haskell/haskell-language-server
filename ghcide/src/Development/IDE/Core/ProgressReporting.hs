@@ -21,14 +21,13 @@ import           Data.Foldable                  (for_)
 import           Data.HashMap.Strict            (HashMap)
 import qualified Data.HashMap.Strict            as HMap
 import           Data.IORef
+import           Data.IORef.Extra               (atomicModifyIORef'_)
 import qualified Data.Text                      as T
 import           Data.Unique
 import           Development.IDE.GHC.Orphans    ()
 import           Development.IDE.Graph          hiding (ShakeValue)
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
-import           GHC.IORef                      (atomicModifyIORef'_,
-                                                 atomicSwapIORef)
 import qualified Language.LSP.Server            as LSP
 import           Language.LSP.Types
 import qualified Language.LSP.Types             as LSP
@@ -68,7 +67,7 @@ directProgressReporting sample env style = do
           writeIORef st (Just u)
           mRunLspT env $ start u
         progressUpdate KickCompleted = do
-            mbToken <- atomicSwapIORef st Nothing
+            mbToken <- atomicModifyIORef st (Nothing,)
             for_ mbToken $ \u ->
                 mRunLspT env $ stop u
 
