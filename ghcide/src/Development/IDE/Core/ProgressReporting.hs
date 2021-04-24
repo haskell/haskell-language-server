@@ -17,7 +17,7 @@ import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import qualified Control.Monad.STM              as STM
 import           Control.Monad.Trans.Class      (lift)
-import           Data.Foldable                  (for_)
+import           Data.Foldable                  (for_, traverse_)
 import           Data.HashMap.Strict            (HashMap)
 import qualified Data.HashMap.Strict            as HMap
 import           Data.IORef
@@ -65,6 +65,7 @@ directProgressReporting sample env style = do
     inProgressVar <- newIORef (HMap.empty @NormalizedFilePath @Int)
 
     let progressUpdate KickStarted = do
+          readIORef st >>= traverse_ (mRunLspT env . stop)
           u <- newProgressToken
           mRunLspT env $ do
               ready <- create u
