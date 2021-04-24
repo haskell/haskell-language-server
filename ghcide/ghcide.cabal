@@ -150,6 +150,7 @@ library
         Development.IDE.Core.OfInterest
         Development.IDE.Core.PositionMapping
         Development.IDE.Core.Preprocessor
+        Development.IDE.Core.ProgressReporting
         Development.IDE.Core.Rules
         Development.IDE.Core.RuleTypes
         Development.IDE.Core.Service
