@@ -469,7 +469,7 @@ shakeOpen :: Maybe (LSP.LanguageContextEnv Config)
           -> Rules ()
           -> IO IdeState
 shakeOpen lspEnv defaultConfig logger debouncer
-  shakeProfileDir (IdeReportProgress inProgress) ideTesting@(IdeTesting testing) hiedb indexQueue vfs opts rules = mdo
+  shakeProfileDir (IdeReportProgress reportProgress) ideTesting@(IdeTesting testing) hiedb indexQueue vfs opts rules = mdo
 
     us <- mkSplitUniqSupply 'r'
     ideNc <- newIORef (initNameCache us knownKeyNames)
@@ -490,8 +490,11 @@ shakeOpen lspEnv defaultConfig logger debouncer
         exportsMap <- newVar mempty
 
         ProgressReporting{..} <-
-            if inProgress
-                then delayedProgressReporting lspEnv optProgressStyle
+            if reportProgress
+                then (if testing
+                        then directProgressReporting
+                        else delayedProgressReporting
+                     ) 0.1 lspEnv optProgressStyle
                 else noProgressReporting
         actionQueue <- newQueue
 
