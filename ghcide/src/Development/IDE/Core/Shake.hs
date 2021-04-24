@@ -23,7 +23,7 @@
 --   always stored as real Haskell values, whereas Shake serialises all 'A' values
 --   between runs. To deserialise a Shake value, we just consult Values.
 module Development.IDE.Core.Shake(
-    IdeState, shakeExtras,
+    IdeState, shakeSessionInit, shakeExtras,
     ShakeExtras(..), getShakeExtras, getShakeExtrasRules,
     KnownTargets, Target(..), toKnownFiles,
     IdeRule, IdeResult,
@@ -32,6 +32,7 @@ module Development.IDE.Core.Shake(
     shakeRestart,
     shakeEnqueue,
     shakeProfile,
+    newSession,
     use, useNoFile, uses, useWithStaleFast, useWithStaleFast', delayedAction,
     FastResult(..),
     use_, useNoFile_, uses_,
@@ -110,6 +111,11 @@ import           Development.IDE.Core.Tracing
 import           Development.IDE.GHC.Compat           (NameCacheUpdater (..),
                                                        upNameCache)
 import           Development.IDE.GHC.Orphans          ()
+import           Development.IDE.Graph                hiding (ShakeValue)
+import qualified Development.IDE.Graph                as Shake
+import           Development.IDE.Graph.Classes
+import           Development.IDE.Graph.Database
+import           Development.IDE.Graph.Rule
 import           Development.IDE.Types.Action
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Exports
@@ -119,11 +125,6 @@ import           Development.IDE.Types.Logger         hiding (Priority)
 import qualified Development.IDE.Types.Logger         as Logger
 import           Development.IDE.Types.Options
 import           Development.IDE.Types.Shake
-import           Development.IDE.Graph                    hiding (ShakeValue)
-import qualified Development.IDE.Graph                    as Shake
-import           Development.IDE.Graph.Classes
-import           Development.IDE.Graph.Database
-import           Development.IDE.Graph.Rule
 import           GHC.Generics
 import           Language.LSP.Diagnostics
 import qualified Language.LSP.Server                  as LSP
@@ -187,8 +188,6 @@ data ShakeExtras = ShakeExtras
     ,progressUpdate :: ProgressEvent -> IO ()
     ,ideTesting :: IdeTesting
     -- ^ Whether to enable additional lsp messages used by the test suite for checking invariants
-    ,session :: MVar ShakeSession
-    -- ^ Used in the GhcSession rule to forcefully restart the session after adding a new component
     ,restartShakeSession :: [DelayedAction ()] -> IO ()
     ,ideNc :: IORef NameCache
     -- | A mapping of module name to known target (or candidate targets, if missing)
@@ -488,7 +487,6 @@ shakeOpen lspEnv defaultConfig logger debouncer
         positionMapping <- newVar HMap.empty
         knownTargetsVar <- newVar $ hashed HMap.empty
         let restartShakeSession = shakeRestart ideState
-        let session = shakeSession
         mostRecentProgressEvent <- newTVarIO KickCompleted
         persistentKeys <- newVar HMap.empty
         let progressUpdate = atomically . writeTVar mostRecentProgressEvent
@@ -511,8 +509,7 @@ shakeOpen lspEnv defaultConfig logger debouncer
             opts { shakeExtra = newShakeExtra shakeExtras }
             rules
     shakeDb <- shakeDbM
-    initSession <- newSession shakeExtras shakeDb []
-    shakeSession <- newMVar initSession
+    shakeSession <- newEmptyMVar
     shakeDatabaseProfile <- shakeDatabaseProfileIO shakeProfileDir
     let ideState = IdeState{..}
 
@@ -610,6 +607,12 @@ shakeOpen lspEnv defaultConfig logger debouncer
                                     }
                               }
                         loop id next
+
+-- | Must be called in the 'Initialized' handler and only once
+shakeSessionInit :: IdeState -> IO ()
+shakeSessionInit IdeState{..} = do
+    initSession <- newSession shakeExtras shakeDb []
+    putMVar shakeSession initSession
 
 shakeProfile :: IdeState -> FilePath -> IO ()
 shakeProfile IdeState{..} = shakeProfileDatabase shakeDb
