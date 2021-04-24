@@ -53,8 +53,10 @@ noProgressReporting = return $ ProgressReporting
 
 -- | A 'ProgressReporting' that sends the WorkDone Begin and End notifications
 --   synchronously. Progress notifications are sent from a sampling thread.
+--
+--  This 'ProgressReporting' is currently used only in tests.
 directProgressReporting
-    :: Double -- ^ sampling rate
+    :: Seconds -- ^ sampling rate
     -> Maybe (LSP.LanguageContextEnv config)
     -> ProgressReportingStyle
     -> IO ProgressReporting
@@ -64,8 +66,11 @@ directProgressReporting sample env style = do
 
     let progressUpdate KickStarted = do
           u <- newProgressToken
-          writeIORef st (Just u)
-          mRunLspT env $ start u
+          mRunLspT env $ do
+              ready <- create u
+              for_ ready $ \_ -> do
+                  start u
+                  liftIO $ writeIORef st (Just u)
         progressUpdate KickCompleted = do
             mbToken <- atomicModifyIORef st (Nothing,)
             for_ mbToken $ \u ->
@@ -78,17 +83,17 @@ directProgressReporting sample env style = do
         f file shift = atomicModifyIORef'_ inProgressVar $
                 HMap.insertWith (\_ x -> shift x) file (shift 0)
 
-        progressLoop :: Double -> LSP.LspM a ()
+        progressLoop :: Seconds -> LSP.LspM a ()
         progressLoop prev = do
             mbToken <- liftIO $ readIORef st
-            case mbToken of
+            next <- case mbToken of
                 Nothing ->
-                    liftIO (sleep sample) >> progressLoop 0
+                    pure 0
                 Just t -> do
                     current <- liftIO $ readIORef inProgressVar
-                    prev <- progress style prev current t
-                    liftIO $ sleep sample
-                    progressLoop prev
+                    progress style prev current t
+            liftIO $ sleep sample
+            progressLoop next
 
     progressThread <- async $ mRunLspT env $ progressLoop 0
     let progressStop = cancel progressThread
@@ -100,7 +105,7 @@ directProgressReporting sample env style = do
 --   before the end of the grace period).
 --   Avoid using in tests where progress notifications are used to assert invariants.
 delayedProgressReporting
-  :: Double  -- ^ sampling rate, also used as grace period before Begin
+  :: Seconds  -- ^ sampling rate, also used as grace period before Begin
   -> Maybe (LSP.LanguageContextEnv c)
   -> ProgressReportingStyle
   -> IO ProgressReporting
@@ -121,6 +126,9 @@ delayedProgressReporting sample lspEnv style = do
     -- And two transitions, modelled by 'ProgressEvent':
     --   1. KickCompleted - transitions from Reporting into Idle
     --   2. KickStarted - transitions from Idle into Reporting
+    -- When transitioning from Idle to Reporting a new async is spawned that
+    -- sends progress updates in a loop. The async is cancelled when transitioning
+    -- from Reporting to Idle.
     progressThread mostRecentProgressEvent inProgress = progressLoopIdle
       where
         progressLoopIdle = do
@@ -147,10 +155,10 @@ delayedProgressReporting sample lspEnv style = do
     lspShakeProgress style inProgress = do
         u <- liftIO newProgressToken
 
-        void $ LSP.sendRequest LSP.SWindowWorkDoneProgressCreate
-            LSP.WorkDoneProgressCreateParams { _token = u } $ const (pure ())
+        ready <- create u
 
-        bracket_ (start u) (stop u) (loop u 0)
+        for_ ready $ \_ ->
+          bracket_ (start u) (stop u) (loop u 0)
         where
             loop id prev = do
                 liftIO $ sleep sample
@@ -167,6 +175,16 @@ delayedProgressReporting sample lspEnv style = do
 newProgressToken :: IO ProgressToken
 newProgressToken = ProgressTextToken . T.pack . show . hashUnique <$> liftIO newUnique
 
+create
+    :: LSP.MonadLsp config f
+    => ProgressToken
+    -> f (Either ResponseError Empty)
+create u = do
+    b <- liftIO newBarrier
+    _ <- LSP.sendRequest LSP.SWindowWorkDoneProgressCreate
+            LSP.WorkDoneProgressCreateParams { _token = u }
+            (liftIO . signalBarrier b)
+    liftIO $ waitBarrier b
 
 start :: LSP.MonadLsp config f => ProgressToken -> f ()
 start id = LSP.sendNotification LSP.SProgress $
@@ -189,7 +207,7 @@ stop id = LSP.sendNotification LSP.SProgress
         }
 
 progress :: (LSP.MonadLsp config f) =>
-  ProgressReportingStyle -> Double -> HashMap NormalizedFilePath Int -> ProgressToken -> f Double
+  ProgressReportingStyle -> Seconds -> HashMap NormalizedFilePath Int -> ProgressToken -> f Seconds
 progress style prev current id = do
     let done = length $ filter (== 0) $ HMap.elems current
     let todo = HMap.size current
