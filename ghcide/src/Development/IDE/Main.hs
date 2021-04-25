@@ -42,8 +42,9 @@ import           Development.IDE.Core.Rules            (GhcSessionIO (GhcSession
 import           Development.IDE.Core.Service          (initialise, runAction)
 import           Development.IDE.Core.Shake            (IdeState (shakeExtras),
                                                         ShakeExtras (state),
-                                                        uses)
+                                                        shakeSessionInit, uses)
 import           Development.IDE.Core.Tracing          (measureMemory)
+import           Development.IDE.Graph                 (action)
 import           Development.IDE.LSP.LanguageServer    (runLanguageServer)
 import           Development.IDE.Plugin                (Plugin (pluginHandlers, pluginRules))
 import           Development.IDE.Plugin.HLS            (asGhcIdePlugin)
@@ -61,7 +62,6 @@ import           Development.IDE.Types.Options         (IdeGhcSession,
                                                         clientSupportsProgress,
                                                         defaultIdeOptions)
 import           Development.IDE.Types.Shake           (Key (Key))
-import           Development.IDE.Graph                     (action)
 import           GHC.IO.Encoding                       (setLocaleEncoding)
 import           GHC.IO.Handle                         (hDuplicate)
 import           HIE.Bios.Cradle                       (findCradle)
@@ -261,6 +261,7 @@ defaultMain Arguments{..} = do
                         , optCheckProject = pure False
                         }
             ide <- initialise argsDefaultHlsConfig rules Nothing logger debouncer options vfs hiedb hieChan
+            shakeSessionInit ide
             registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
 
             putStrLn "\nStep 4/4: Type checking the files"
@@ -309,6 +310,7 @@ defaultMain Arguments{..} = do
                       optCheckProject = pure False
                     }
             ide <- initialise argsDefaultHlsConfig rules Nothing logger debouncer options vfs hiedb hieChan
+            shakeSessionInit ide
             registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
             c ide
 
