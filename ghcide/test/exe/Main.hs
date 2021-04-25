@@ -5087,18 +5087,16 @@ clientSettingsTest :: TestTree
 clientSettingsTest = testGroup "client settings handling"
     [ testSession "ghcide restarts shake session on config changes" $ do
             void $ skipManyTill anyMessage $ message SClientRegisterCapability
+            waitForProgressDone
             sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON ("" :: String)))
-            nots <- skipManyTill anyMessage $ count 3 loggingNotification
-            isMessagePresent "Restarting build session" (map getLogMessage nots)
+            skipManyTill anyMessage restartingBuildSession
 
     ]
-  where getLogMessage :: FromServerMessage -> T.Text
-        getLogMessage (FromServerMess SWindowLogMessage (NotificationMessage _ _ (LogMessageParams _ msg))) = msg
-        getLogMessage _ = ""
-
-        isMessagePresent expectedMsg actualMsgs = liftIO $
-            assertBool ("\"" ++ expectedMsg ++ "\" is not present in: " ++ show actualMsgs)
-                       (any ((expectedMsg `isSubsequenceOf`) . show) actualMsgs)
+  where
+    restartingBuildSession :: Session ()
+    restartingBuildSession = do
+        FromServerMess SWindowLogMessage NotificationMessage{_params = LogMessageParams{..}} <- loggingNotification
+        guard $ "Restarting build session" `T.isInfixOf` _message
 
 referenceTests :: TestTree
 referenceTests = testGroup "references"
