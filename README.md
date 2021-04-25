@@ -7,6 +7,7 @@
 [![CircleCI][badge-circleci]][circleci]
 ![Github Testing Workflow](https://github.com/haskell/haskell-language-server/workflows/Testing/badge.svg)
 ![Github Nix Workflow](https://github.com/haskell/haskell-language-server/workflows/Nix/badge.svg)
+[![codetriage][badge-codetriage]][codetriage]
 
 [logo]: ./docs/logos/logo-256.png
 [badge-license]: https://img.shields.io/badge/license-Apache2-green.svg?dummy
@@ -15,6 +16,8 @@
 [circleci]: https://circleci.com/gh/haskell/haskell-language-server/
 [badge-hackage]: https://img.shields.io/hackage/v/haskell-language-server.svg?logo=haskell
 [hackage]: https://hackage.haskell.org/package/haskell-language-server
+[badge-codetriage]: https://www.codetriage.com/haskell/haskell-language-server/badges/users.svg
+[codetriage]:https://www.codetriage.com/haskell/haskell-language-server
 
 Integration point for [ghcide](https://github.com/haskell/ghcide) and [haskell-ide-engine](https://github.com/haskell/haskell-ide-engine). One IDE to rule
 them all. Read the [project's
