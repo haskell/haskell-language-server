@@ -783,7 +783,8 @@ suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_
           | otherwise = []
         lookupExportMap binding mod
           | Just match <- Map.lookup binding (getExportsMap exportsMap)
-          -- Only for the situation that data constructor name is same as type constructor name
+          -- Only for the situation that data constructor name is same as type constructor name,
+          -- let ident with parent be in front of the one without.
           , sortedMatch <- sortBy (\ident1 ident2 -> parent ident2 `compare` parent ident1) (Set.toList match)
           , idents <- filter (\ident -> moduleNameText ident == mod) sortedMatch
           , (not . null) idents -- Ensure fallback while `idents` is empty
