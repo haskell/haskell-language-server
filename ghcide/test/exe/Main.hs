@@ -1408,6 +1408,25 @@ extendImportTests = testGroup "extend import actions"
                     , "import A (pattern Some)"
                     , "k (Some x) = x"
                     ])
+        , testSession "type constructor name same as data constructor name" $ template
+            [("ModuleA.hs", T.unlines
+                    [ "module ModuleA where"
+                    , "newtype Foo = Foo Int"
+                    ])]
+            ("ModuleB.hs", T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA(Foo)"
+                    , "f :: Foo"
+                    , "f = Foo 1"
+                    ])
+            (Range (Position 3 4) (Position 3 6))
+            ["Add Foo(Foo) to the import list of ModuleA"]
+            (T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA(Foo (Foo))"
+                    , "f :: Foo"
+                    , "f = Foo 1"
+                    ])
         ]
       where
         codeActionTitle CodeAction{_title=x} = x

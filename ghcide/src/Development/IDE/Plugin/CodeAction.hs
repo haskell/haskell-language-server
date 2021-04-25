@@ -768,7 +768,7 @@ suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_
     | otherwise = []
     where
         suggestions decls binding mod srcspan
-          |  range <- case [ x | (x,"") <- readSrcSpan (T.unpack srcspan)] of
+          | range <- case [ x | (x,"") <- readSrcSpan (T.unpack srcspan)] of
                 [s] -> let x = realSrcSpanToRange s
                    in x{_end = (_end x){_character = succ (_character (_end x))}}
                 _ -> error "bug in srcspan parser",
@@ -783,8 +783,12 @@ suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_
           | otherwise = []
         lookupExportMap binding mod
           | Just match <- Map.lookup binding (getExportsMap exportsMap)
-          , [ident] <- filter (\ident -> moduleNameText ident == mod) (Set.toList match)
-           = Just ident
+          -- Only for the situation that data constructor name is same as type constructor name
+          , sortedMatch <- sortBy (\ident1 ident2 -> parent ident2 `compare` parent ident1) (Set.toList match)
+          , idents <- filter (\ident -> moduleNameText ident == mod) sortedMatch
+          , (not . null) idents -- Ensure fallback while `idents` is empty
+          , ident <- head idents
+          = Just ident
 
             -- fallback to using GHC suggestion even though it is not always correct
           | otherwise
