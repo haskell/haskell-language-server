@@ -1,3 +1,4 @@
+{-# LANGUAGE GADTs      #-}
 {-# LANGUAGE LambdaCase #-}
 module Test.Hls
   ( module Test.Tasty.HUnit,
@@ -14,6 +15,7 @@ module Test.Hls
     runSessionWithServer,
     runSessionWithServerFormatter,
     runSessionWithServer',
+    waitForProgressDone,
     PluginDescriptor,
     IdeState,
   )
@@ -23,17 +25,18 @@ import           Control.Applicative.Combinators
 import           Control.Concurrent.Async          (async, cancel, wait)
 import           Control.Concurrent.Extra
 import           Control.Exception.Base
+import           Control.Monad                     (unless)
 import           Control.Monad.IO.Class
 import           Data.ByteString.Lazy              (ByteString)
 import           Data.Default                      (def)
 import qualified Data.Text                         as T
 import           Development.IDE                   (IdeState, hDuplicateTo',
                                                     noLogging)
+import           Development.IDE.Graph             (ShakeOptions (shakeThreads))
 import           Development.IDE.Main
 import qualified Development.IDE.Main              as Ghcide
 import qualified Development.IDE.Plugin.HLS.GhcIde as Ghcide
 import           Development.IDE.Types.Options
-import           Development.IDE.Graph                 (ShakeOptions (shakeThreads))
 import           GHC.IO.Handle
 import           Ide.Plugin.Config                 (Config, formattingProvider)
 import           Ide.PluginUtils                   (pluginDescToIdePlugins)
@@ -134,3 +137,15 @@ runSessionWithServer' plugin conf sconf caps root s = withLock lock $ keepCurren
       (t, _) <- duration $ cancel server
       putStrLn $ "Finishing canceling (took " <> showDuration t <> "s)"
   pure x
+
+-- | Wait for all progress to be done
+-- Needs at least one progress done notification to return
+waitForProgressDone :: Session ()
+waitForProgressDone = loop
+  where
+    loop = do
+      ~() <- skipManyTill anyMessage $ satisfyMaybe $ \case
+        FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (End _))) -> Just ()
+        _ -> Nothing
+      done <- null <$> getIncompleteProgressSessions
+      unless done loop
