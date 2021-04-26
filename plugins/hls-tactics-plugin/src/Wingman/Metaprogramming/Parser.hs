@@ -38,6 +38,7 @@ tactic = flip P.makeExprParser operators $  P.choice
     , variadic_occ   "intros" $ \case
         []    -> intros
         names -> intros' $ Just names
+    , unary_occ  "intro" $ intros' . Just . pure
     , nullary   "destruct_all" destructAll
     , unary_occ "destruct" $ useNameFromHypothesis destruct
     , unary_occ "homo" $ useNameFromHypothesis homo
