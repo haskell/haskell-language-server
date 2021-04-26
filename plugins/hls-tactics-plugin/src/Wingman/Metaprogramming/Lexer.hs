@@ -29,6 +29,9 @@ blockComment = L.skipBlockComment "{-" "-}"
 sc :: Parser ()
 sc = L.space P.space1 lineComment blockComment
 
+ichar :: Parser Char
+ichar = P.alphaNumChar <|> P.char '_' <|> P.char '\''
+
 lexeme :: Parser a -> Parser a
 lexeme = L.lexeme sc
 
@@ -45,20 +48,20 @@ braces :: Parser a -> Parser a
 braces = P.between (symbol "{") (symbol "}")
 
 identifier :: Text -> Parser ()
-identifier i = lexeme (P.string i *> P.notFollowedBy P.alphaNumChar)
+identifier i = lexeme (P.string i *> P.notFollowedBy ichar)
 
 -- FIXME [Reed M. 2020-10-18] Check to see if the variables are in the reserved list
 variable :: Parser OccName
 variable = lexeme $ do
     c <- P.alphaNumChar
-    cs <- P.many (P.alphaNumChar <|> P.char '_' <|> P.char '\'')
+    cs <- P.many ichar
     pure $ mkVarOcc (c:cs)
 
 -- FIXME [Reed M. 2020-10-18] Check to see if the variables are in the reserved list
 name :: Parser Text
 name = lexeme $ do
     c <- P.alphaNumChar
-    cs <- P.many (P.alphaNumChar <|> P.char '_' <|> P.char '\'' <|> P.char '-')
+    cs <- P.many (ichar <|> P.char '-')
     pure $ T.pack (c:cs)
 
 named :: Text -> TacticsM () -> Parser (TacticsM ())
