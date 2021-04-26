@@ -45,6 +45,8 @@ library
     Wingman.LanguageServer
     Wingman.LanguageServer.TacticProviders
     Wingman.Machinery
+    Wingman.Metaprogramming.Lexer
+    Wingman.Metaprogramming.Parser
     Wingman.Naming
     Wingman.Plugin
     Wingman.Range
@@ -86,6 +88,8 @@ library
     , transformers
     , unordered-containers
     , hyphenation
+    , megaparsec ^>=9
+    , parser-combinators
 
   default-language:   Haskell2010
   default-extensions:

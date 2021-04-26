@@ -7,6 +7,7 @@ module Wingman.LanguageServer.TacticProviders
   , tcCommandId
   , TacticParams (..)
   , TacticProviderData (..)
+  , useNameFromHypothesis
   ) where
 
 import           Control.Monad
