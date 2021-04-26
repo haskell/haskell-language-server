@@ -130,13 +130,14 @@ import Generics.SYB hiding (orElse)
 parseModule
     :: IdeOptions
     -> HscEnv
+    -> (DynFlags -> DynFlags)
     -> FilePath
     -> ModSummary
     -> IO (IdeResult ParsedModule)
-parseModule IdeOptions{..} env filename ms =
+parseModule IdeOptions{..} env modifyDynFlags filename ms =
     fmap (either (, Nothing) id) $
     runExceptT $ do
-        (diag, modu) <- parseFileContents env optPreprocessor filename ms
+        (diag, modu) <- parseFileContents env modifyDynFlags optPreprocessor filename ms
         return (diag, Just modu)
 
 
@@ -844,18 +845,14 @@ parseHeader dflags filename contents = do
 -- ModSummary must contain the (preprocessed) contents of the buffer
 parseFileContents
        :: HscEnv
+       -> (DynFlags -> DynFlags)
        -> (GHC.ParsedSource -> IdePreprocessedSource)
        -> FilePath  -- ^ the filename (for source locations)
        -> ModSummary
        -> ExceptT [FileDiagnostic] IO ([FileDiagnostic], ParsedModule)
-parseFileContents env customPreprocessor filename ms = do
+parseFileContents env modifyDynFlags customPreprocessor filename ms = do
    let loc  = mkRealSrcLoc (mkFastString filename) 1 1
-       dflags' = ms_hspp_opts ms
-       dflags =
-         dflags'
-            { staticPlugins =
-                staticPlugins dflags' <> [wingmanMetaprogrammingPlugin]
-            }
+       dflags = modifyDynFlags $ ms_hspp_opts ms
 
        contents = fromJust $ ms_hspp_buf ms
    case unP Parser.parseModule (mkPState dflags contents loc) of

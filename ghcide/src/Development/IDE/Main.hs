@@ -46,7 +46,7 @@ import           Development.IDE.Core.Shake            (IdeState (shakeExtras),
 import           Development.IDE.Core.Tracing          (measureMemory)
 import           Development.IDE.Graph                 (action)
 import           Development.IDE.LSP.LanguageServer    (runLanguageServer)
-import           Development.IDE.Plugin                (Plugin (pluginHandlers, pluginRules))
+import           Development.IDE.Plugin                (Plugin (pluginHandlers, pluginRules, pluginModifyDynflags))
 import           Development.IDE.Plugin.HLS            (asGhcIdePlugin)
 import qualified Development.IDE.Plugin.HLS.GhcIde     as Ghcide
 import           Development.IDE.Session               (SessionLoadingOptions,
@@ -89,6 +89,7 @@ import           System.IO                             (BufferMode (LineBufferin
 import           System.Time.Extra                     (offsetTime,
                                                         showDuration)
 import           Text.Printf                           (printf)
+import Data.Monoid (Endo(appEndo))
 
 data Command
     = Check [FilePath]  -- ^ Typecheck some paths and print diagnostics. Exit code is the number of failures
@@ -223,6 +224,7 @@ defaultMain Arguments{..} = do
                 initialise
                     argsDefaultHlsConfig
                     rules
+                    (appEndo $ pluginModifyDynflags plugins)
                     (Just env)
                     logger
                     debouncer
@@ -260,7 +262,7 @@ defaultMain Arguments{..} = do
                         { optCheckParents = pure NeverCheck
                         , optCheckProject = pure False
                         }
-            ide <- initialise argsDefaultHlsConfig rules Nothing logger debouncer options vfs hiedb hieChan
+            ide <- initialise argsDefaultHlsConfig rules (appEndo $ pluginModifyDynflags plugins) Nothing logger debouncer options vfs hiedb hieChan
             shakeSessionInit ide
             registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
 
@@ -309,7 +311,7 @@ defaultMain Arguments{..} = do
                     { optCheckParents = pure NeverCheck,
                       optCheckProject = pure False
                     }
-            ide <- initialise argsDefaultHlsConfig rules Nothing logger debouncer options vfs hiedb hieChan
+            ide <- initialise argsDefaultHlsConfig rules (appEndo $ pluginModifyDynflags plugins) Nothing logger debouncer options vfs hiedb hieChan
             shakeSessionInit ide
             registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
             c ide

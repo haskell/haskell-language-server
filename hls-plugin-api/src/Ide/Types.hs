@@ -50,6 +50,8 @@ import           Language.LSP.VFS
 import           OpenTelemetry.Eventlog
 import           System.IO.Unsafe
 import           Text.Regex.TDFA.Text            ()
+import GhcPlugins (StaticPlugin)
+import DynFlags (DynFlags)
 
 -- ---------------------------------------------------------------------
 
@@ -65,6 +67,7 @@ data PluginDescriptor ideState =
                    , pluginHandlers     :: PluginHandlers ideState
                    , pluginConfigDescriptor :: ConfigDescriptor
                    , pluginNotificationHandlers :: PluginNotificationHandlers ideState
+                   , pluginModifyDynflags :: DynFlags -> DynFlags
                    }
 
 -- | An existential wrapper of 'Properties'
@@ -297,6 +300,7 @@ defaultPluginDescriptor plId =
     mempty
     defaultConfigDescriptor
     mempty
+    id
 
 newtype CommandId = CommandId T.Text
   deriving (Show, Read, Eq, Ord)

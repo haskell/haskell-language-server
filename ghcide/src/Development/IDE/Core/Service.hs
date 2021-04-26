@@ -30,6 +30,7 @@ import qualified Language.LSP.Types              as LSP
 
 import           Control.Monad
 import           Development.IDE.Core.Shake
+import Development.IDE.GHC.Compat (DynFlags)
 
 
 ------------------------------------------------------------
@@ -38,6 +39,7 @@ import           Development.IDE.Core.Shake
 -- | Initialise the Compiler Service.
 initialise :: Config
            -> Rules ()
+           -> (DynFlags -> DynFlags)
            -> Maybe (LSP.LanguageContextEnv Config)
            -> Logger
            -> Debouncer LSP.NormalizedUri
@@ -46,10 +48,11 @@ initialise :: Config
            -> HieDb
            -> IndexQueue
            -> IO IdeState
-initialise defaultConfig mainRule lspEnv logger debouncer options vfs hiedb hiedbChan =
+initialise defaultConfig mainRule modifyDynFlags lspEnv logger debouncer options vfs hiedb hiedbChan =
     shakeOpen
         lspEnv
         defaultConfig
+        modifyDynFlags
         logger
         debouncer
         (optShakeProfiling options)

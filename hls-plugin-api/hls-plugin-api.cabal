@@ -43,6 +43,7 @@ library
     , dependent-sum
     , Diff                  ^>=0.4.0
     , dlist
+    , ghc
     , hashable
     , hslogger
     , lens

@@ -112,7 +112,7 @@ import           Development.IDE.GHC.Compat                   hiding
                                                                writeHieFile)
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint
-import           Development.IDE.GHC.Util
+import           Development.IDE.GHC.Util hiding (modifyDynFlags)
 import           Development.IDE.Import.DependencyInformation
 import           Development.IDE.Import.FindImports
 import qualified Development.IDE.Spans.AtPoint                as AtPoint
@@ -216,16 +216,18 @@ getParsedModuleRule =
     sess <- use_ GhcSession file
     let hsc = hscEnv sess
     opt <- getIdeOptions
+    modify_dflags <- getModifyDynFlags
 
+    -- TODO(sandy): should we apply modify_dflags here?
     let dflags    = ms_hspp_opts ms
-        mainParse = getParsedModuleDefinition hsc opt file ms
+        mainParse = getParsedModuleDefinition hsc modify_dflags opt file ms
 
     -- Parse again (if necessary) to capture Haddock parse errors
     res@(_,pmod) <- if gopt Opt_Haddock dflags
         then
             liftIO mainParse
         else do
-            let haddockParse = getParsedModuleDefinition hsc opt file (withOptHaddock ms)
+            let haddockParse = getParsedModuleDefinition hsc modify_dflags opt file (withOptHaddock ms)
 
             -- parse twice, with and without Haddocks, concurrently
             -- we cannot ignore Haddock parse errors because files of
@@ -283,19 +285,25 @@ getParsedModuleWithCommentsRule =
     ModSummaryResult{msrModSummary = ms} <- use_ GetModSummary file
     sess <- use_ GhcSession file
     opt <- getIdeOptions
+    modify_dflags <- getModifyDynFlags
 
     let ms' = withoutOption Opt_Haddock $ withOption Opt_KeepRawTokenStream ms
 
-    liftIO $ snd <$> getParsedModuleDefinition (hscEnv sess) opt file ms'
+    liftIO $ snd <$> getParsedModuleDefinition (hscEnv sess) modify_dflags opt file ms'
+
+getModifyDynFlags :: Action (DynFlags -> DynFlags)
+getModifyDynFlags = maybe id modifyDynFlags <$> getShakeExtra
+
 
 getParsedModuleDefinition
     :: HscEnv
+   -> (DynFlags -> DynFlags)
     -> IdeOptions
     -> NormalizedFilePath
     -> ModSummary -> IO ([FileDiagnostic], Maybe ParsedModule)
-getParsedModuleDefinition packageState opt file ms = do
+getParsedModuleDefinition packageState modifyDynFlags opt file ms = do
     let fp = fromNormalizedFilePath file
-    (diag, res) <- parseModule opt packageState fp ms
+    (diag, res) <- parseModule opt packageState modifyDynFlags fp ms
     case res of
         Nothing   -> pure (diag, Nothing)
         Just modu -> pure (diag, Just modu)
@@ -863,14 +871,15 @@ regenerateHiFile :: HscEnvEq -> NormalizedFilePath -> ModSummary -> Maybe Linkab
 regenerateHiFile sess f ms compNeeded = do
     let hsc = hscEnv sess
     opt <- getIdeOptions
+    modify_dflags <- getModifyDynFlags
 
     -- Embed haddocks in the interface file
-    (diags, mb_pm) <- liftIO $ getParsedModuleDefinition hsc opt f (withOptHaddock ms)
+    (diags, mb_pm) <- liftIO $ getParsedModuleDefinition hsc modify_dflags opt f (withOptHaddock ms)
     (diags, mb_pm) <- case mb_pm of
         Just _ -> return (diags, mb_pm)
         Nothing -> do
             -- if parsing fails, try parsing again with Haddock turned off
-            (diagsNoHaddock, mb_pm) <- liftIO $ getParsedModuleDefinition hsc opt f ms
+            (diagsNoHaddock, mb_pm) <- liftIO $ getParsedModuleDefinition hsc modify_dflags opt f ms
             return (mergeParseErrorsHaddock diagsNoHaddock diags, mb_pm)
     case mb_pm of
         Nothing -> return (diags, Nothing)
