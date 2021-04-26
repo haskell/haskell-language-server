@@ -20,20 +20,31 @@ import           Wingman.Types
 import qualified Data.Text as T
 
 
+nullary :: T.Text -> TacticsM () -> Parser (TacticsM ())
+nullary name tac = identifier name $> tac
+
+unary_occ :: T.Text -> (OccName -> TacticsM ()) -> Parser (TacticsM ())
+unary_occ name tac = tac <$> (identifier name *> variable)
+
+variadic_occ :: T.Text -> ([OccName] -> TacticsM ()) -> Parser (TacticsM ())
+variadic_occ name tac = tac <$> (identifier name *> P.many variable)
+
+
 tactic :: Parser (TacticsM ())
 tactic = flip P.makeExprParser operators $  P.choice
     [ braces tactic
-    , named  "assumption" assumption
-    , named' "assume" assume
-    , named  "intros" intros
-    -- , named' "intro" intro
-    , named "destruct_all" destructAll
-    , named' "destruct" $ useNameFromHypothesis destruct
-    , named' "homo" $ useNameFromHypothesis homo
-    , named' "apply" $ useNameFromHypothesis apply
-    , named' "split" userSplit
-    , named  "obvious" obvious
-    , named  "auto" auto
+    , nullary   "assumption" assumption
+    , unary_occ "assume" assume
+    , variadic_occ   "intros" $ \case
+        []    -> intros
+        names -> intros' $ Just names
+    , nullary   "destruct_all" destructAll
+    , unary_occ "destruct" $ useNameFromHypothesis destruct
+    , unary_occ "homo" $ useNameFromHypothesis homo
+    , unary_occ "apply" $ useNameFromHypothesis apply
+    , unary_occ "split" userSplit
+    , nullary   "obvious" obvious
+    , nullary   "auto" auto
     , R.try <$> (keyword "try" *> tactic)
     ]
 

@@ -94,17 +94,26 @@ restrictPositionForApplication f app = do
 ------------------------------------------------------------------------------
 -- | Introduce a lambda binding every variable.
 intros :: TacticsM ()
-intros = rule $ \jdg -> do
+intros = intros' Nothing
+
+------------------------------------------------------------------------------
+-- | Introduce a lambda binding every variable.
+intros'
+    :: Maybe [OccName]  -- ^ When 'Nothing', generate a new name for every
+                        -- variable. Otherwise, only bind the variables named.
+    -> TacticsM ()
+intros' names = rule $ \jdg -> do
   let g  = jGoal jdg
   ctx <- ask
   case tcSplitFunTys $ unCType g of
     ([], _) -> throwError $ GoalMismatch "intros" g
     (as, b) -> do
-      let vs = mkManyGoodNames (hyNamesInScope $ jEntireHypothesis jdg) as
-      let top_hole = isTopHole ctx jdg
+      let vs = fromMaybe (mkManyGoodNames (hyNamesInScope $ jEntireHypothesis jdg) as) names
+          num_args = length vs
+          top_hole = isTopHole ctx jdg
           hy' = lambdaHypothesis top_hole $ zip vs $ coerce as
           jdg' = introduce hy'
-               $ withNewGoal (CType b) jdg
+               $ withNewGoal (CType $ mkFunTys (drop num_args as) b) jdg
       ext <- newSubgoal jdg'
       pure $
         ext

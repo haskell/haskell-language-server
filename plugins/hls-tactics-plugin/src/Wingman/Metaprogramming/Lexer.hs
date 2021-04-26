@@ -7,7 +7,6 @@ module Wingman.Metaprogramming.Lexer where
 
 import           Control.Applicative
 import           Control.Monad
-import           Data.Functor
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Void
@@ -15,7 +14,6 @@ import           Name
 import qualified Text.Megaparsec as P
 import qualified Text.Megaparsec.Char as P
 import qualified Text.Megaparsec.Char.Lexer as L
-import           Wingman.Types
 
 
 type Parser = P.Parsec Void Text
@@ -63,12 +61,6 @@ name = lexeme $ do
     c <- P.alphaNumChar
     cs <- P.many (ichar <|> P.char '-')
     pure $ T.pack (c:cs)
-
-named :: Text -> TacticsM () -> Parser (TacticsM ())
-named name tac = identifier name $> tac
-
-named' :: Text -> (OccName -> TacticsM ()) -> Parser (TacticsM ())
-named' name tac = tac <$> (identifier name *> variable)
 
 keyword :: Text -> Parser ()
 keyword = identifier
