@@ -163,6 +163,22 @@ hlintTests = testGroup "hlint suggestions" [
 
     , testCase "apply-refact preserve regular comments" $ runHlintSession "" $ do
         testRefactor "ApplyRefact6.hs" "Redundant bracket" expectedComments
+
+    , testCase "applyAll is shown only when there is at least one diagnostic in range" $  runHlintSession "" $ do
+        doc <- openDoc "ApplyRefact8.hs" "haskell"
+        _ <- waitForDiagnosticsFromSource doc "hlint"
+
+        firstLine <- map fromAction <$> getCodeActions doc (mkRange 0 0 0 0)
+        secondLine <- map fromAction <$> getCodeActions doc (mkRange 1 0 1 0)
+        thirdLine <- map fromAction <$> getCodeActions doc (mkRange 2 0 2 0)
+        multiLine <- map fromAction <$> getCodeActions doc (mkRange 0 0 2 0)
+
+        let hasApplyAll = isJust . find (\ca -> "Apply all hints" `T.isSuffixOf` (ca ^. L.title))
+
+        liftIO $ hasApplyAll firstLine @? "Missing apply all code action"
+        liftIO $ hasApplyAll secondLine @? "Missing apply all code action"
+        liftIO $ not (hasApplyAll thirdLine) @? "Unexpected apply all code action"
+        liftIO $ hasApplyAll multiLine @? "Missing apply all code action"
     ]
     where
         runHlintSession :: FilePath -> Session a -> IO a
