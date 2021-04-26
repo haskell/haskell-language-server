@@ -11,6 +11,7 @@ module Development.IDE.Core.PositionMapping
   , PositionDelta(..)
   , addDelta
   , idDelta
+  , composeDelta
   , mkDelta
   , toCurrentRange
   , fromCurrentRange

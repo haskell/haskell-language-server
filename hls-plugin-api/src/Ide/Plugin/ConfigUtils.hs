@@ -5,15 +5,16 @@
 
 module Ide.Plugin.ConfigUtils where
 
-import qualified Data.Aeson            as A
-import qualified Data.Aeson.Types      as A
-import           Data.Default          (def)
-import qualified Data.Dependent.Map    as DMap
-import qualified Data.Dependent.Sum    as DSum
-import qualified Data.HashMap.Lazy     as HMap
-import qualified Data.Map              as Map
+import qualified Data.Aeson                as A
+import qualified Data.Aeson.Types          as A
+import           Data.Containers.ListUtils (nubOrd)
+import           Data.Default              (def)
+import qualified Data.Dependent.Map        as DMap
+import qualified Data.Dependent.Sum        as DSum
+import qualified Data.HashMap.Lazy         as HMap
 import           Ide.Plugin.Config
-import           Ide.Plugin.Properties (toDefaultJSON, toVSCodeExtensionSchema)
+import           Ide.Plugin.Properties     (toDefaultJSON,
+                                            toVSCodeExtensionSchema)
 import           Ide.Types
 import           Language.LSP.Types
 
@@ -36,7 +37,7 @@ pluginsToDefaultConfig IdePlugins {..} =
     defaultConfig@Config {} = def
     unsafeValueToObject (A.Object o) = o
     unsafeValueToObject _            = error "impossible"
-    elems = A.object $ mconcat $ singlePlugin <$> Map.elems ipMap
+    elems = A.object $ mconcat $ singlePlugin <$> map snd ipMap
     -- Splice genericDefaultConfig and dedicatedDefaultConfig
     -- Example:
     --
@@ -50,7 +51,7 @@ pluginsToDefaultConfig IdePlugins {..} =
     --     }
     --   }
     -- }
-    singlePlugin PluginDescriptor {..} =
+    singlePlugin PluginDescriptor {pluginConfigDescriptor = ConfigDescriptor {..}, ..} =
       let x = genericDefaultConfig <> dedicatedDefaultConfig
        in [pId A..= A.object x | not $ null x]
       where
@@ -59,20 +60,17 @@ pluginsToDefaultConfig IdePlugins {..} =
         -- Example:
         --
         -- {
-        --   "globalOn": true,
         --   "codeActionsOn": true,
         --   "codeLensOn": true
         -- }
         --
-        -- we don't generate the config section if the plugin doesn't register any of the following six methods,
-        -- which avoids producing trivial configuration for formatters:
-        --
-        -- "stylish-haskell": {
-        --    "globalOn": true
-        -- }
         genericDefaultConfig =
-          let x = mconcat (handlersToGenericDefaultConfig <$> handlers)
-           in ["globalOn" A..= True | not $ null x] <> x
+          let x = ["diagnosticsOn" A..= True | configHasDiagnostics] <> nubOrd (mconcat (handlersToGenericDefaultConfig <$> handlers))
+           in case x of
+                -- if the plugin has only one capability, we produce globalOn instead of the specific one;
+                -- otherwise we don't produce globalOn at all
+                [_] -> ["globalOn" A..= True]
+                _   -> x
         -- Example:
         --
         -- {
@@ -81,7 +79,7 @@ pluginsToDefaultConfig IdePlugins {..} =
         --   }
         --}
         dedicatedDefaultConfig =
-          let x = customConfigToDedicatedDefaultConfig pluginCustomConfig
+          let x = customConfigToDedicatedDefaultConfig configCustomConfig
            in ["config" A..= A.object x | not $ null x]
 
         (PluginId pId) = pluginId
@@ -100,15 +98,23 @@ pluginsToDefaultConfig IdePlugins {..} =
 -- | Generates json schema used in haskell vscode extension
 -- Similar to 'pluginsToDefaultConfig' but simpler, since schema has a flatten structure
 pluginsToVSCodeExtensionSchema :: IdePlugins a -> A.Value
-pluginsToVSCodeExtensionSchema IdePlugins {..} = A.object $ mconcat $ singlePlugin <$> Map.elems ipMap
+pluginsToVSCodeExtensionSchema IdePlugins {..} = A.object $ mconcat $ singlePlugin <$> map snd ipMap
   where
-    singlePlugin PluginDescriptor {..} = genericSchema <> dedicatedSchema
+    singlePlugin PluginDescriptor {pluginConfigDescriptor = ConfigDescriptor {..}, ..} = genericSchema <> dedicatedSchema
       where
         (PluginHandlers (DMap.toList -> handlers)) = pluginHandlers
         customConfigToDedicatedSchema (CustomConfig p) = toVSCodeExtensionSchema (withIdPrefix "config.") p
         (PluginId pId) = pluginId
-        genericSchema = withIdPrefix "globalOn" A..= schemaEntry "plugin" : mconcat (handlersToGenericSchema <$> handlers)
-        dedicatedSchema = customConfigToDedicatedSchema pluginCustomConfig
+        genericSchema =
+          let x =
+                [withIdPrefix "diagnosticsOn" A..= schemaEntry "diagnostics" | configHasDiagnostics]
+                  <> nubOrd (mconcat (handlersToGenericSchema <$> handlers))
+           in case x of
+                -- If the plugin has only one capability, we produce globalOn instead of the specific one;
+                -- otherwise we don't produce globalOn at all
+                [_] -> [withIdPrefix "globalOn" A..= schemaEntry "plugin"]
+                _   -> x
+        dedicatedSchema = customConfigToDedicatedSchema configCustomConfig
         handlersToGenericSchema (IdeMethod m DSum.:=> _) = case m of
           STextDocumentCodeAction -> [withIdPrefix "codeActionsOn" A..= schemaEntry "code actions"]
           STextDocumentCodeLens -> [withIdPrefix "codeLensOn" A..= schemaEntry "code lenses"]

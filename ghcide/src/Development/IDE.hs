@@ -6,6 +6,11 @@ module Development.IDE
 
 ) where
 
+import           Development.IDE.Core.Actions          as X (getAtPoint,
+                                                             getDefinition,
+                                                             getTypeDefinition,
+                                                             useE, useNoFileE,
+                                                             usesE)
 import           Development.IDE.Core.FileExists       as X (getFileExists)
 import           Development.IDE.Core.FileStore        as X (getFileContents)
 import           Development.IDE.Core.IdeConfiguration as X (IdeConfiguration (..),
@@ -13,11 +18,8 @@ import           Development.IDE.Core.IdeConfiguration as X (IdeConfiguration (.
 import           Development.IDE.Core.OfInterest       as X (getFilesOfInterest)
 import           Development.IDE.Core.RuleTypes        as X
 import           Development.IDE.Core.Rules            as X (IsHiFileStable (..),
-                                                             getAtPoint,
                                                              getClientConfigAction,
-                                                             getDefinition,
-                                                             getParsedModule,
-                                                             getTypeDefinition)
+                                                             getParsedModule)
 import           Development.IDE.Core.Service          as X (runAction)
 import           Development.IDE.Core.Shake            as X (FastResult (..),
                                                              IdeAction (..),
@@ -49,5 +51,5 @@ import           Development.IDE.Types.HscEnvEq        as X (HscEnvEq (..),
                                                              hscEnvWithImportPaths)
 import           Development.IDE.Types.Location        as X
 import           Development.IDE.Types.Logger          as X
-import           Development.Shake                     as X (Action, RuleResult,
+import           Development.IDE.Graph                     as X (Action, RuleResult,
                                                              Rules, action)

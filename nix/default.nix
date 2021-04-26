@@ -25,9 +25,11 @@ let
         ourSources = {
             haskell-language-server = gitignoreSource ../.;
             ghcide = gitignoreSource ../ghcide;
+            hls-graph = gitignoreSource ../hls-graph;
             shake-bench = gitignoreSource ../shake-bench;
             hie-compat = gitignoreSource ../hie-compat;
             hls-plugin-api = gitignoreSource ../hls-plugin-api;
+            hls-test-utils = gitignoreSource ../hls-test-utils;
             hls-brittany-plugin = gitignoreSource ../plugins/hls-brittany-plugin;
             hls-stylish-haskell-plugin = gitignoreSource ../plugins/hls-stylish-haskell-plugin;
             hls-class-plugin = gitignoreSource ../plugins/hls-class-plugin;
@@ -47,16 +49,20 @@ let
         inherit gitignoreSource;
         inherit ourSources;
 
-        # tracy-0.7.6 is broken on macOS
-        tracy = pkgs.tracy.overrideAttrs (_old: rec {
-          version = "0.7.5";
-          src = pkgs.fetchFromGitHub {
-            owner = "wolfpld";
-            repo = "tracy";
-            rev = "v${version}";
-            sha256 = "0qfb30k6a8vi8vn65vv927wd9nynwwvc9crbmi7a55kp20hzg06r";
-          };
-        });
+        gen-hls-changelogs = with pkgs;
+          let myGHC = haskellPackages.ghcWithPackages (p: with p; [ github ]);
+          in runCommand "gen-hls-changelogs" {
+              passAsFile = [ "text" ];
+              preferLocalBuild = true;
+              allowSubstitutes = false;
+              buildInputs = [ git myGHC ];
+            } ''
+              dest=$out/bin/gen-hls-changelogs
+              mkdir -p $out/bin
+              echo "#!${runtimeShell}" >> $dest
+              echo "${myGHC}/bin/runghc ${../GenChangelogs.hs}" >> $dest
+              chmod +x $dest
+            '';
 
         ourHaskell = pkgs.haskell // {
             packages = pkgs.haskell.packages // {
@@ -79,7 +85,7 @@ in (import sources.nixpkgs
       # default_stages = ["manual" "push"];
       hooks = {
         stylish-haskell.enable = true;
-        stylish-haskell.excludes = [ "^Setup.hs$" "test/testdata/.*$" "test/data/.*$" "^hie-compat/.*$" ];
+        stylish-haskell.excludes = [ "^Setup.hs$" "test/testdata/.*$" "test/data/.*$" "^hie-compat/.*$" "^plugins/hls-tactics-plugin/.*$" ];
       };
     };
   }

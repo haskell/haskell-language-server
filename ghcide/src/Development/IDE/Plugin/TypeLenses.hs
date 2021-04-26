@@ -14,9 +14,11 @@ module Development.IDE.Plugin.TypeLenses (
 
 import           Avail                               (availsToNameSet)
 import           Control.DeepSeq                     (rwhnf)
+import           Control.Monad                       (mzero)
 import           Control.Monad.Extra                 (whenMaybe)
 import           Control.Monad.IO.Class              (MonadIO (liftIO))
 import           Data.Aeson.Types                    (Value (..), toJSON)
+import qualified Data.Aeson.Types                    as A
 import qualified Data.HashMap.Strict                 as Map
 import           Data.List                           (find)
 import           Data.Maybe                          (catMaybes, fromJust)
@@ -39,7 +41,7 @@ import           Development.IDE.Types.Location      (Position (Position, _chara
                                                       Range (Range, _end, _start),
                                                       toNormalizedFilePath',
                                                       uriToFilePath')
-import           Development.Shake.Classes
+import           Development.IDE.Graph.Classes
 import           GHC.Generics                        (Generic)
 import           GhcPlugins                          (GlobalRdrEnv,
                                                       HscEnv (hsc_dflags), SDoc,
@@ -58,6 +60,8 @@ import           Ide.Types                           (CommandFunction,
                                                       PluginCommand (PluginCommand),
                                                       PluginDescriptor (..),
                                                       PluginId,
+                                                      configCustomConfig,
+                                                      defaultConfigDescriptor,
                                                       defaultPluginDescriptor,
                                                       mkCustomConfig,
                                                       mkPluginHandler)
@@ -88,16 +92,16 @@ descriptor plId =
     { pluginHandlers = mkPluginHandler STextDocumentCodeLens codeLensProvider
     , pluginCommands = [PluginCommand (CommandId typeLensCommandId) "adds a signature" commandHandler]
     , pluginRules = rules
-    , pluginCustomConfig = mkCustomConfig properties
+    , pluginConfigDescriptor = defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
     }
 
-properties :: Properties '[ 'PropertyKey "mode" 'TEnum]
+properties :: Properties '[ 'PropertyKey "mode" ('TEnum Mode)]
 properties = emptyProperties
   & defineEnumProperty #mode "Control how type lenses are shown"
-    [ ("always", "Always displays type lenses of global bindings")
-    , ("exported", "Only display type lenses of exported global bindings")
-    , ("diagnostics", "Follows error messages produced by GHC about missing signatures")
-    ] "always"
+    [ (Always, "Always displays type lenses of global bindings")
+    , (Exported, "Only display type lenses of exported global bindings")
+    , (Diagnostics, "Follows error messages produced by GHC about missing signatures")
+    ] Always
 
 codeLensProvider ::
   IdeState ->
@@ -105,7 +109,7 @@ codeLensProvider ::
   CodeLensParams ->
   LSP.LspM Config (Either ResponseError (List CodeLens))
 codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentifier uri} = do
-  mode <- readMode <$> usePropertyLsp #mode pId properties
+  mode <- usePropertyLsp #mode pId properties
   fmap (Right . List) $ case uriToFilePath' uri of
     Just (toNormalizedFilePath' -> filePath) -> liftIO $ do
       tmr <- runAction "codeLens.TypeCheck" ideState (use TypeCheck filePath)
@@ -115,7 +119,7 @@ codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentif
       diag <- getDiagnostics ideState
       hDiag <- getHiddenDiagnostics ideState
 
-      let toWorkSpaceEdit tedit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
+      let toWorkSpaceEdit tedit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing Nothing
           generateLensForGlobal sig@GlobalBindingTypeSig{..} = do
             range <- srcSpanToRange $ gbSrcSpan sig
             tedit <- gblBindingTypeSigToEdit sig
@@ -209,6 +213,18 @@ data Mode
     Diagnostics
   deriving (Eq, Ord, Show, Read, Enum)
 
+instance A.ToJSON Mode where
+  toJSON Always      = "always"
+  toJSON Exported    = "exported"
+  toJSON Diagnostics = "diagnostics"
+
+instance A.FromJSON Mode where
+  parseJSON = A.withText "Mode" $ \case
+    "always"      -> pure Always
+    "exported"    -> pure Exported
+    "diagnostics" -> pure Diagnostics
+    _             -> mzero
+
 --------------------------------------------------------------------------------
 
 showDocRdrEnv :: DynFlags -> GlobalRdrEnv -> SDoc -> String
@@ -244,14 +260,6 @@ rules = do
     hsc <- use GhcSession nfp
     result <- liftIO $ gblBindingType (hscEnv <$> hsc) (tmrTypechecked <$> tmr)
     pure ([], result)
-
-readMode :: T.Text -> Mode
-readMode = \case
-  "always"      -> Always
-  "exported"    -> Exported
-  "diagnostics" -> Diagnostics
-  -- actually it never happens because of 'usePropertyLsp'
-  _             -> error "failed to parse type lenses mode"
 
 gblBindingType :: Maybe HscEnv -> Maybe TcGblEnv -> IO (Maybe GlobalBindingTypeSigsResult)
 gblBindingType (Just hsc) (Just gblEnv) = do

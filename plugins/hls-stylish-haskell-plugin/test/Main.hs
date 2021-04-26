@@ -1,39 +1,26 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main(main) where
 
-import           Control.Monad.IO.Class
-import           Data.Aeson
-import qualified Data.ByteString.Lazy         as BS
-import qualified Data.Text.Encoding           as T
-import qualified Data.Text.IO                 as T
-import           Language.LSP.Test
-import           Language.LSP.Types
-import           Test.Tasty
-import           Test.Tasty.Golden
-import           Test.Tasty.HUnit
-import           Test.Tasty.Ingredients.Rerun
-import           Test.Tasty.Runners           (consoleTestReporter,
-                                               listingTests)
-import           Test.Tasty.Runners.AntXML
+import qualified Data.ByteString.Lazy      as BS
+import qualified Data.Text.Encoding        as T
+import qualified Data.Text.IO              as T
+import qualified Ide.Plugin.StylishHaskell as StylishHaskell
+import           Test.Hls
 
 main :: IO ()
-main = defaultMainWithIngredients
-        [antXMLRunner, rerunningTests [listingTests, consoleTestReporter]]
-        tests
+main = defaultTestRunner tests
 
-testCommand = "test-server"
+plugin :: PluginDescriptor IdeState
+plugin = StylishHaskell.descriptor "stylishHaskell"
 
 tests :: TestTree
 tests = testGroup "stylish-haskell" [
-  goldenVsStringDiff "formats a document" goldenGitDiff "test/testdata/StylishHaskell.formatted_document.hs" $ runSession testCommand fullCaps "test/testdata" $ do
+  goldenGitDiff "formats a document" "test/testdata/StylishHaskell.formatted_document.hs" $ runSessionWithServerFormatter plugin "stylishHaskell" "test/testdata" $ do
       doc <- openDoc "StylishHaskell.hs" "haskell"
       formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
       BS.fromStrict . T.encodeUtf8 <$> documentContents doc
-  , goldenVsStringDiff "formats a range" goldenGitDiff "test/testdata/StylishHaskell.formatted_range.hs" $ runSession testCommand fullCaps "test/testdata" $ do
+  , goldenGitDiff "formats a range" "test/testdata/StylishHaskell.formatted_range.hs" $ runSessionWithServerFormatter plugin "stylishHaskell" "test/testdata" $ do
       doc <- openDoc "StylishHaskell.hs" "haskell"
       formatRange doc (FormattingOptions 2 True Nothing Nothing Nothing) (Range (Position 0 0) (Position 2 21))
       BS.fromStrict . T.encodeUtf8 <$> documentContents doc
   ]
-
-goldenGitDiff :: FilePath -> FilePath -> [String]
-goldenGitDiff fRef fNew = ["git", "diff", "--no-index", "--text", "--exit-code", fRef, fNew]

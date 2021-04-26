@@ -332,7 +332,7 @@ runEvalCmd st EvalParams{..} =
                                 tests
 
             let workspaceEditsMap = HashMap.fromList [(_uri, List $ addFinalReturn mdlText edits)]
-            let workspaceEdits = WorkspaceEdit (Just workspaceEditsMap) Nothing
+            let workspaceEdits = WorkspaceEdit (Just workspaceEditsMap) Nothing Nothing
 
             return workspaceEdits
      in perf "evalCmd" $

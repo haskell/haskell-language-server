@@ -36,6 +36,7 @@ import           Development.IDE.Core.PositionMapping     (PositionResult (..),
                                                            positionResultToMaybe,
                                                            toCurrent)
 import           Development.IDE.Core.Shake               (Q (..))
+import qualified Development.IDE.Main                     as IDE
 import           Development.IDE.GHC.Util
 import           Development.IDE.Plugin.Completions.Types (extendImportCommandId)
 import           Development.IDE.Plugin.TypeLenses        (typeLensCommandId)
@@ -75,7 +76,7 @@ import qualified System.IO.Extra
 import           System.Info.Extra                        (isWindows)
 import           System.Process.Extra                     (CreateProcess (cwd),
                                                            proc,
-                                                           readCreateProcessWithExitCode)
+                                                           readCreateProcessWithExitCode, createPipe)
 import           Test.QuickCheck
 -- import Test.QuickCheck.Instances ()
 import           Control.Lens                             ((^.))
@@ -92,6 +93,15 @@ import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.HUnit
 import           Test.Tasty.Ingredients.Rerun
 import           Test.Tasty.QuickCheck
+import           Data.IORef
+import           Ide.PluginUtils (pluginDescToIdePlugins)
+import           Control.Concurrent.Async
+import           Ide.Types
+import           Data.String                              (IsString(fromString))
+import qualified Language.LSP.Types                       as LSP
+import           Data.IORef.Extra                         (atomicModifyIORef_)
+import qualified Development.IDE.Plugin.HLS.GhcIde        as Ghcide
+import           Text.Regex.TDFA                          ((=~))
 
 waitForProgressBegin :: Session ()
 waitForProgressBegin = skipManyTill anyMessage $ satisfyMaybe $ \case
@@ -179,7 +189,7 @@ initializeResponseTests = withResource acquire release tests where
     , chk "NO doc link"               _documentLinkProvider Nothing
     , chk "NO color"                         _colorProvider (Just $ InL False)
     , chk "NO folding range"          _foldingRangeProvider (Just $ InL False)
-    , che "   execute command"      _executeCommandProvider [blockCommandId, extendImportCommandId, typeLensCommandId]
+    , che "   execute command"      _executeCommandProvider [extendImportCommandId, typeLensCommandId, blockCommandId]
     , chk "   workspace"                         _workspace (Just $ WorkspaceServerCapabilities (Just WorkspaceFoldersServerCapabilities{_supported = Just True, _changeNotifications = Just ( InR True )}))
     , chk "NO experimental"                   _experimental Nothing
     ] where
@@ -846,7 +856,7 @@ typeWildCardActionTests = testGroup "type wildcard actions"
             ]
       doc <- createDoc "Testing.hs" "haskell" content
       _ <- waitForDiagnostics
-      actionsOrCommands <- getCodeActions doc (Range (Position 2 1) (Position 2 10))
+      actionsOrCommands <- getAllCodeActions doc
       let [addSignature] = [action | InR action@CodeAction { _title = actionTitle } <- actionsOrCommands
                                    , "Use type signature" `T.isInfixOf` actionTitle
                            ]
@@ -866,7 +876,7 @@ typeWildCardActionTests = testGroup "type wildcard actions"
             ]
       doc <- createDoc "Testing.hs" "haskell" content
       _ <- waitForDiagnostics
-      actionsOrCommands <- getCodeActions doc (Range (Position 2 1) (Position 2 10))
+      actionsOrCommands <- getAllCodeActions doc
       let [addSignature] = [action | InR action@CodeAction { _title = actionTitle } <- actionsOrCommands
                                     , "Use type signature" `T.isInfixOf` actionTitle
                               ]
@@ -889,7 +899,7 @@ typeWildCardActionTests = testGroup "type wildcard actions"
             ]
       doc <- createDoc "Testing.hs" "haskell" content
       _ <- waitForDiagnostics
-      actionsOrCommands <- getCodeActions doc (Range (Position 4 1) (Position 4 10))
+      actionsOrCommands <- getAllCodeActions doc
       let [addSignature] = [action | InR action@CodeAction { _title = actionTitle } <- actionsOrCommands
                                     , "Use type signature" `T.isInfixOf` actionTitle
                               ]
@@ -906,6 +916,7 @@ typeWildCardActionTests = testGroup "type wildcard actions"
       liftIO $ expectedContentAfterAction @=? contentAfterAction
   ]
 
+{-# HLINT ignore "Use nubOrd" #-}
 removeImportTests :: TestTree
 removeImportTests = testGroup "remove import actions"
   [ testSession "redundant" $ do
@@ -1111,7 +1122,7 @@ removeImportTests = testGroup "remove import actions"
       doc <- createDoc "ModuleC.hs" "haskell" content
       _ <- waitForDiagnostics
       [_, _, _, _, InR action@CodeAction { _title = actionTitle }]
-          <- getCodeActions doc (Range (Position 2 0) (Position 2 5))
+          <- nub <$> getAllCodeActions doc
       liftIO $ "Remove all redundant imports" @=? actionTitle
       executeCodeAction action
       contentAfterAction <- documentContents doc
@@ -1149,7 +1160,7 @@ extendImportTests = testGroup "extend import actions"
                     , "import ModuleA as A (stuffB)"
                     , "main = print (stuffA, stuffB)"
                     ])
-            (Range (Position 3 17) (Position 3 18))
+            (Range (Position 2 17) (Position 2 18))
             ["Add stuffA to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
@@ -1169,7 +1180,7 @@ extendImportTests = testGroup "extend import actions"
                     , "import ModuleA as A (stuffB)"
                     , "main = print (stuffB .* stuffB)"
                     ])
-            (Range (Position 3 17) (Position 3 18))
+            (Range (Position 2 17) (Position 2 18))
             ["Add (.*) to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
@@ -1206,7 +1217,7 @@ extendImportTests = testGroup "extend import actions"
                     , "b :: A"
                     , "b = Constructor"
                     ])
-            (Range (Position 2 5) (Position 2 5))
+            (Range (Position 3 5) (Position 3 5))
             ["Add A(Constructor) to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
@@ -1225,7 +1236,7 @@ extendImportTests = testGroup "extend import actions"
                     , "b :: A"
                     , "b = Constructor"
                     ])
-            (Range (Position 2 5) (Position 2 5))
+            (Range (Position 3 5) (Position 3 5))
             ["Add A(Constructor) to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
@@ -1245,7 +1256,7 @@ extendImportTests = testGroup "extend import actions"
                     , "b :: A"
                     , "b = ConstructorFoo"
                     ])
-            (Range (Position 2 5) (Position 2 5))
+            (Range (Position 3 5) (Position 3 5))
             ["Add A(ConstructorFoo) to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
@@ -1266,7 +1277,7 @@ extendImportTests = testGroup "extend import actions"
                     , "import qualified ModuleA as A (stuffB)"
                     , "main = print (A.stuffA, A.stuffB)"
                     ])
-            (Range (Position 3 17) (Position 3 18))
+            (Range (Position 2 17) (Position 2 18))
             ["Add stuffA to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
@@ -1370,12 +1381,51 @@ extendImportTests = testGroup "extend import actions"
                     , "x = Refl"
                     ])
             (Range (Position 3 17) (Position 3 18))
-            ["Add (:~:)(Refl) to the import list of Data.Type.Equality"]
+            ["Add type (:~:)(Refl) to the import list of Data.Type.Equality"]
             (T.unlines
                     [ "module ModuleA where"
                     , "import Data.Type.Equality ((:~:) (Refl))"
                     , "x :: (:~:) [] []"
                     , "x = Refl"
+                    ])
+        , expectFailBecause "importing pattern synonyms is unsupported"
+          $ testSession "extend import list with pattern synonym" $ template
+            [("ModuleA.hs", T.unlines
+                    [ "{-# LANGUAGE PatternSynonyms #-}"
+                      , "module ModuleA where"
+                      , "pattern Some x = Just x"
+                    ])
+            ]
+            ("ModuleB.hs", T.unlines
+                    [ "module ModuleB where"
+                    , "import A ()"
+                    , "k (Some x) = x"
+                    ])
+            (Range (Position 2 3) (Position 2 7))
+            ["Add pattern Some to the import list of A"]
+            (T.unlines
+                    [ "module ModuleB where"
+                    , "import A (pattern Some)"
+                    , "k (Some x) = x"
+                    ])
+        , testSession "type constructor name same as data constructor name" $ template
+            [("ModuleA.hs", T.unlines
+                    [ "module ModuleA where"
+                    , "newtype Foo = Foo Int"
+                    ])]
+            ("ModuleB.hs", T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA(Foo)"
+                    , "f :: Foo"
+                    , "f = Foo 1"
+                    ])
+            (Range (Position 3 4) (Position 3 6))
+            ["Add Foo(Foo) to the import list of ModuleA"]
+            (T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA(Foo (Foo))"
+                    , "f :: Foo"
+                    , "f = Foo 1"
                     ])
         ]
       where
@@ -1539,6 +1589,7 @@ suggestImportTests = testGroup "suggest import actions"
     , test True []          "f = (&) [] id"               []                "import Data.Function ((&))"
     , test True []          "f = (.|.)"                   []                "import Data.Bits (Bits((.|.)))"
     , test True []          "f = (.|.)"                   []                "import Data.Bits ((.|.))"
+    , test True []          "f :: a ~~ b"                 []                "import Data.Type.Equality (type (~~))"
     , test True
       ["qualified Data.Text as T"
       ]                     "f = T.putStrLn"              []                "import qualified Data.Text.IO as T"
@@ -1553,6 +1604,7 @@ suggestImportTests = testGroup "suggest import actions"
       , "qualified Data.Data as T"
       ]                     "f = T.putStrLn"              []                "import qualified Data.Text.IO as T"
     ]
+    , expectFailBecause "importing pattern synonyms is unsupported" $ test True [] "k (Some x) = x" [] "import B (pattern Some)"
   ]
   where
     test = test' False
@@ -1560,8 +1612,9 @@ suggestImportTests = testGroup "suggest import actions"
     test' waitForCheckProject wanted imps def other newImp = testSessionWithExtraFiles "hover" (T.unpack def) $ \dir -> do
       let before = T.unlines $ "module A where" : ["import " <> x | x <- imps] ++ def : other
           after  = T.unlines $ "module A where" : ["import " <> x | x <- imps] ++ [newImp] ++ def : other
-          cradle = "cradle: {direct: {arguments: [-hide-all-packages, -package, base, -package, text, -package-env, -, A, Bar, Foo]}}"
+          cradle = "cradle: {direct: {arguments: [-hide-all-packages, -package, base, -package, text, -package-env, -, A, Bar, Foo, B]}}"
       liftIO $ writeFileUTF8 (dir </> "hie.yaml") cradle
+      liftIO $ writeFileUTF8 (dir </> "B.hs") $ unlines ["{-# LANGUAGE PatternSynonyms #-}", "module B where", "pattern Some x = Just x"]
       doc <- createDoc "Test.hs" "haskell" before
       waitForProgressDone
       _diags <- waitForDiagnostics
@@ -1640,6 +1693,23 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
             compareHideFunctionTo [(8,9),(10,8)]
                 "Replace with qualified: E.fromList"
                 "HideFunction.expected.qualified.fromList.E.hs"
+        , testCase "Hide DuplicateRecordFields" $
+            compareTwo
+                "HideQualifyDuplicateRecordFields.hs" [(9, 9)]
+                "Replace with qualified: AVec.fromList"
+                "HideQualifyDuplicateRecordFields.expected.hs"
+        , testCase "Duplicate record fields should not be imported" $ do
+          withTarget ("HideQualifyDuplicateRecordFields" <.> ".hs") [(9, 9)] $
+            \_ actions -> do
+              liftIO $
+                assertBool "Hidings should not be presented while DuplicateRecordFields exists" $
+                  all not [ actionTitle =~ T.pack "Use ([A-Za-z][A-Za-z0-9]*) for fromList, hiding other imports"
+                      | InR CodeAction { _title = actionTitle } <- actions]
+          withTarget ("HideQualifyDuplicateRecordFieldsSelf" <.> ".hs") [(4, 4)] $
+            \_ actions -> do
+              liftIO $
+                assertBool "ambiguity from DuplicateRecordFields should not be imported" $
+                  null actions
         ]
     , testGroup "(++)"
         [ testCase "Prelude, parensed" $
@@ -1675,16 +1745,14 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
             contentAfterAction <- documentContents doc
             liftIO $ T.replace "\r\n" "\n" expected @=? contentAfterAction
     compareHideFunctionTo = compareTwo "HideFunction.hs"
-    auxFiles = ["AVec.hs", "BVec.hs", "CVec.hs", "DVec.hs", "EVec.hs"]
+    auxFiles = ["AVec.hs", "BVec.hs", "CVec.hs", "DVec.hs", "EVec.hs", "FVec.hs"]
     withTarget file locs k = withTempDir $ \dir -> runInDir dir $ do
         liftIO $ mapM_ (\fp -> copyFile (hidingDir </> fp) $ dir </> fp)
             $ file : auxFiles
         doc <- openDoc file "haskell"
         waitForProgressDone
         void $ expectDiagnostics [(file, [(DsError, loc, "Ambiguous occurrence") | loc <- locs])]
-        contents <- documentContents doc
-        let range = Range (Position 0 0) (Position (length $ T.lines contents) 0)
-        actions <- getCodeActions doc range
+        actions <- getAllCodeActions doc
         k doc actions
     withHideFunction = withTarget ("HideFunction" <.> "hs")
 
@@ -1891,7 +1959,7 @@ insertNewDefinitionTests = testGroup "insert new definition actions"
       _ <- waitForDiagnostics
       InR action@CodeAction { _title = actionTitle } : _
                   <- sortOn (\(InR CodeAction{_title=x}) -> x) <$>
-                     getCodeActions docB (R 1 0 1 50)
+                     getCodeActions docB (R 0 0 0 50)
       liftIO $ actionTitle @?= "Define select :: [Bool] -> Bool"
       executeCodeAction action
       contentAfterAction <- documentContents docB
@@ -1915,7 +1983,7 @@ insertNewDefinitionTests = testGroup "insert new definition actions"
       _ <- waitForDiagnostics
       InR action@CodeAction { _title = actionTitle } : _
                   <- sortOn (\(InR CodeAction{_title=x}) -> x) <$>
-                     getCodeActions docB (R 1 0 1 50)
+                     getCodeActions docB (R 0 0 0 50)
       liftIO $ actionTitle @?= "Define select :: [Bool] -> Bool"
       executeCodeAction action
       contentAfterAction <- documentContents docB
@@ -2063,15 +2131,15 @@ deleteUnusedDefinitionTests = testGroup "delete unused definition action"
       docId <- createDoc "A.hs" "haskell" source
       expectDiagnostics [ ("A.hs", [(DsWarning, pos, "not used")]) ]
 
-      (action, title) <- extractCodeAction docId "Delete"
+      (action, title) <- extractCodeAction docId "Delete" pos
 
       liftIO $ title @?= expectedTitle
       executeCodeAction action
       contentAfterAction <- documentContents docId
       liftIO $ contentAfterAction @?= expectedResult
 
-    extractCodeAction docId actionPrefix = do
-      [action@CodeAction { _title = actionTitle }]  <- findCodeActionsByPrefix docId (R 0 0 0 0) [actionPrefix]
+    extractCodeAction docId actionPrefix (l, c) = do
+      [action@CodeAction { _title = actionTitle }]  <- findCodeActionsByPrefix docId (R l c l c) [actionPrefix]
       return (action, actionTitle)
 
 addTypeAnnotationsToLiteralsTest :: TestTree
@@ -2196,15 +2264,16 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
       docId <- createDoc "A.hs" "haskell" source
       expectDiagnostics [ ("A.hs", diag) ]
 
-      (action, title) <- extractCodeAction docId "Add type annotation"
+      let cursors = map snd3 diag
+      (action, title) <- extractCodeAction docId "Add type annotation" (minimum cursors) (maximum cursors)
 
       liftIO $ title @?= expectedTitle
       executeCodeAction action
       contentAfterAction <- documentContents docId
       liftIO $ contentAfterAction @?= expectedResult
 
-    extractCodeAction docId actionPrefix = do
-      [action@CodeAction { _title = actionTitle }]  <- findCodeActionsByPrefix docId (R 0 0 0 0) [actionPrefix]
+    extractCodeAction docId actionPrefix (l,c) (l', c')= do
+      [action@CodeAction { _title = actionTitle }]  <- findCodeActionsByPrefix docId (R l c l' c') [actionPrefix]
       return (action, actionTitle)
 
 
@@ -2250,7 +2319,7 @@ importRenameActionTests = testGroup "import rename actions"
             ]
       doc <- createDoc "Testing.hs" "haskell" content
       _ <- waitForDiagnostics
-      actionsOrCommands <- getCodeActions doc (Range (Position 2 8) (Position 2 16))
+      actionsOrCommands <- getCodeActions doc (Range (Position 1 8) (Position 1 16))
       let [changeToMap] = [action | InR action@CodeAction{ _title = actionTitle } <- actionsOrCommands, ("Data." <> modname) `T.isInfixOf` actionTitle ]
       executeCodeAction changeToMap
       contentAfterAction <- documentContents doc
@@ -2336,6 +2405,48 @@ fillTypedHoleTests = let
       executeCodeAction chosen
       modifiedCode <- documentContents doc
       liftIO $ mkDoc "E.toException" @=? modifiedCode
+  , testSession "filling infix type hole uses prefix notation" $ do
+      let mkDoc x = T.unlines
+              [ "module Testing where"
+              , "data A = A"
+              , "foo :: A -> A -> A"
+              , "foo A A = A"
+              , "test :: A -> A -> A"
+              , "test a1 a2 = a1 " <> x <> " a2"
+              ]
+      doc <- createDoc "Test.hs" "haskell" $ mkDoc "`_`"
+      _ <- waitForDiagnostics
+      actions <- getCodeActions doc (Range (Position 5 16) (Position 5 19))
+      chosen <- liftIO $ pickActionWithTitle "replace _ with foo" actions
+      executeCodeAction chosen
+      modifiedCode <- documentContents doc
+      liftIO $ mkDoc "`foo`" @=? modifiedCode
+  , testSession "postfix hole uses postfix notation of infix operator" $ do
+      let mkDoc x = T.unlines
+              [ "module Testing where"
+              , "test :: Int -> Int -> Int"
+              , "test a1 a2 = " <> x <> " a1 a2"
+              ]
+      doc <- createDoc "Test.hs" "haskell" $ mkDoc "_"
+      _ <- waitForDiagnostics
+      actions <- getCodeActions doc (Range (Position 2 13) (Position 2 14))
+      chosen <- liftIO $ pickActionWithTitle "replace _ with (+)" actions
+      executeCodeAction chosen
+      modifiedCode <- documentContents doc
+      liftIO $ mkDoc "(+)" @=? modifiedCode
+  , testSession "filling infix type hole uses infix operator" $ do
+      let mkDoc x = T.unlines
+              [ "module Testing where"
+              , "test :: Int -> Int -> Int"
+              , "test a1 a2 = a1 " <> x <> " a2"
+              ]
+      doc <- createDoc "Test.hs" "haskell" $ mkDoc "`_`"
+      _ <- waitForDiagnostics
+      actions <- getCodeActions doc (Range (Position 2 16) (Position 2 19))
+      chosen <- liftIO $ pickActionWithTitle "replace _ with (+)" actions
+      executeCodeAction chosen
+      modifiedCode <- documentContents doc
+      liftIO $ mkDoc "+" @=? modifiedCode
   ]
 
 addInstanceConstraintTests :: TestTree
@@ -2380,7 +2491,7 @@ addInstanceConstraintTests = let
   check actionTitle originalCode expectedCode = testSession (T.unpack actionTitle) $ do
     doc <- createDoc "Testing.hs" "haskell" originalCode
     _ <- waitForDiagnostics
-    actionsOrCommands <- getCodeActions doc (Range (Position 6 0) (Position 6 68))
+    actionsOrCommands <- getAllCodeActions doc
     chosenAction <- liftIO $ pickActionWithTitle actionTitle actionsOrCommands
     executeCodeAction chosenAction
     modifiedCode <- documentContents doc
@@ -2532,7 +2643,7 @@ checkCodeAction :: String -> T.Text -> T.Text -> T.Text -> TestTree
 checkCodeAction testName actionTitle originalCode expectedCode = testSession testName $ do
   doc <- createDoc "Testing.hs" "haskell" originalCode
   _ <- waitForDiagnostics
-  actionsOrCommands <- getCodeActions doc (Range (Position 6 0) (Position 6 maxBound))
+  actionsOrCommands <- getAllCodeActions doc
   chosenAction <- liftIO $ pickActionWithTitle actionTitle actionsOrCommands
   executeCodeAction chosenAction
   modifiedCode <- documentContents doc
@@ -2615,7 +2726,7 @@ removeRedundantConstraintsTests = let
   check actionTitle originalCode expectedCode = testSession (T.unpack actionTitle) $ do
     doc <- createDoc "Testing.hs" "haskell" originalCode
     _ <- waitForDiagnostics
-    actionsOrCommands <- getCodeActions doc (Range (Position 4 0) (Position 4 maxBound))
+    actionsOrCommands <- getAllCodeActions doc
     chosenAction <- liftIO $ pickActionWithTitle actionTitle actionsOrCommands
     executeCodeAction chosenAction
     modifiedCode <- documentContents doc
@@ -2625,7 +2736,7 @@ removeRedundantConstraintsTests = let
   checkPeculiarFormatting title code = testSession title $ do
     doc <- createDoc "Testing.hs" "haskell" code
     _ <- waitForDiagnostics
-    actionsOrCommands <- getCodeActions doc (Range (Position 4 0) (Position 4 maxBound))
+    actionsOrCommands <- getAllCodeActions doc
     liftIO $ assertBool "Found some actions" (null actionsOrCommands)
 
   in testGroup "remove redundant function constraints"
@@ -2769,7 +2880,7 @@ exportUnusedTests = testGroup "export unused actions"
               , "  ) where"
               , "foo = id"
               , "bar = foo"])
-        (R 4 0 4 3)
+        (R 5 0 5 3)
         "Export ‘bar’"
         (Just $ T.unlines
               [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
@@ -3841,6 +3952,19 @@ localCompletionTests = [
         ,("abcdefg", CiFunction, "abcdefg", True, False, Nothing)
         ,("abcdefgh", CiFunction, "abcdefgh", True, False, Nothing)
         ,("abcdefghi", CiFunction, "abcdefghi", True, False, Nothing)
+        ],
+    completionTest
+        "class method"
+        [
+          "class Test a where"
+        , "    abcd :: a -> ()"
+        , "    abcde :: a -> Int"
+        , "instance Test Int where"
+        , "    abcd = abc"
+        ]
+        (Position 4 14)
+        [("abcd", CiFunction, "abcd", True, False, Nothing)
+        ,("abcde", CiFunction, "abcde", True, False, Nothing)
         ]
     ]
 
@@ -3850,7 +3974,7 @@ nonLocalCompletionTests =
       "variable"
       ["module A where", "f = hea"]
       (Position 1 7)
-      [("head", CiFunction, "head ${1:[a]}", True, True, Nothing)],
+      [("head", CiFunction, "head ${1:([a])}", True, True, Nothing)],
     completionTest
       "constructor"
       ["module A where", "f = Tru"]
@@ -3862,20 +3986,20 @@ nonLocalCompletionTests =
       "type"
       ["{-# OPTIONS_GHC -Wall #-}", "module A () where", "f :: Bo", "f = True"]
       (Position 2 7)
-      [ ("Bounded", CiInterface, "Bounded ${1:*}", True, True, Nothing),
+      [ ("Bounded", CiInterface, "Bounded ${1:(*)}", True, True, Nothing),
         ("Bool", CiStruct, "Bool ", True, True, Nothing)
       ],
     completionTest
       "qualified"
       ["{-# OPTIONS_GHC -Wunused-binds #-}", "module A () where", "f = Prelude.hea"]
       (Position 2 15)
-      [ ("head", CiFunction, "head ${1:[a]}", True, True, Nothing)
+      [ ("head", CiFunction, "head ${1:([a])}", True, True, Nothing)
       ],
     completionTest
       "duplicate import"
       ["module A where", "import Data.List", "import Data.List", "f = perm"]
       (Position 3 8)
-      [ ("permutations", CiFunction, "permutations ${1:[a]}", False, False, Nothing)
+      [ ("permutations", CiFunction, "permutations ${1:([a])}", False, False, Nothing)
       ],
     completionTest
        "dont show hidden items"
@@ -3978,7 +4102,7 @@ nonLocalCompletionTests =
             ["module A where", "import Data.Type.Equality ()", "f = Ref"]
             (Position 2 8)
             "Refl"
-            ["module A where", "import Data.Type.Equality ((:~:) (Refl))", "f = Ref"]
+            ["module A where", "import Data.Type.Equality (type (:~:) (Refl))", "f = Ref"]
         ]
       , testGroup "Record completion"
         [ completionCommandTest
@@ -4286,18 +4410,19 @@ outlineTests = testGroup
   ]
  where
   docSymbol name kind loc =
-    DocumentSymbol name Nothing kind Nothing loc loc Nothing
+    DocumentSymbol name Nothing kind Nothing Nothing loc loc Nothing
   docSymbol' name kind loc selectionLoc =
-    DocumentSymbol name Nothing kind Nothing loc selectionLoc Nothing
+    DocumentSymbol name Nothing kind Nothing Nothing loc selectionLoc Nothing
   docSymbolD name detail kind loc =
-    DocumentSymbol name (Just detail) kind Nothing loc loc Nothing
+    DocumentSymbol name (Just detail) kind Nothing Nothing loc loc Nothing
   docSymbolWithChildren name kind loc cc =
-    DocumentSymbol name Nothing kind Nothing loc loc (Just $ List cc)
+    DocumentSymbol name Nothing kind Nothing Nothing loc loc (Just $ List cc)
   docSymbolWithChildren' name kind loc selectionLoc cc =
-    DocumentSymbol name Nothing kind Nothing loc selectionLoc (Just $ List cc)
+    DocumentSymbol name Nothing kind Nothing Nothing loc selectionLoc (Just $ List cc)
   moduleSymbol name loc cc = DocumentSymbol name
                                             Nothing
                                             SkFile
+                                            Nothing
                                             Nothing
                                             (R 0 0 maxBound 0)
                                             loc
@@ -4305,6 +4430,7 @@ outlineTests = testGroup
   classSymbol name loc cc = DocumentSymbol name
                                            (Just "class")
                                            SkInterface
+                                           Nothing
                                            Nothing
                                            loc
                                            loc
@@ -4861,7 +4987,7 @@ asyncTests = testGroup "async"
               , "foo = id"
               ]
             void waitForDiagnostics
-            actions <- getCodeActions doc (Range (Position 0 0) (Position 0 0))
+            actions <- getCodeActions doc (Range (Position 1 0) (Position 1 0))
             liftIO $ [ _title | InR CodeAction{_title} <- actions] @=?
               [ "add signature: foo :: a -> a" ]
     ]
@@ -5143,20 +5269,25 @@ runInDir' dir startExeIn startSessionIn extraOptions s = do
   -- HIE calls getXgdDirectory which assumes that HOME is set.
   -- Only sets HOME if it wasn't already set.
   setEnv "HOME" "/homeless-shelter" False
-  let lspTestCaps = fullCaps { _window = Just $ WindowClientCapabilities $ Just True }
+  conf <- getConfigFromEnv
+  runSessionWithConfig conf cmd lspTestCaps projDir s
+
+getConfigFromEnv :: IO SessionConfig
+getConfigFromEnv = do
   logColor <- fromMaybe True <$> checkEnv "LSP_TEST_LOG_COLOR"
   timeoutOverride <- fmap read <$> getEnv "LSP_TIMEOUT"
-  let conf = defaultConfig{messageTimeout = fromMaybe (messageTimeout defaultConfig) timeoutOverride}
-            -- uncomment this or set LSP_TEST_LOG_STDERR=1 to see all logging
-            --   { logStdErr = True }
-            --   uncomment this or set LSP_TEST_LOG_MESSAGES=1 to see all messages
-            --   { logMessages = True }
-  runSessionWithConfig conf{logColor} cmd lspTestCaps projDir s
+  return defaultConfig
+    { messageTimeout = fromMaybe (messageTimeout defaultConfig) timeoutOverride
+    , logColor
+    }
   where
     checkEnv :: String -> IO (Maybe Bool)
     checkEnv s = fmap convertVal <$> getEnv s
     convertVal "0" = False
     convertVal _   = True
+
+lspTestCaps :: ClientCapabilities
+lspTestCaps = fullCaps { _window = Just $ WindowClientCapabilities $ Just True }
 
 openTestDataDoc :: FilePath -> Session TextDocumentIdentifier
 openTestDataDoc path = do
@@ -5225,7 +5356,38 @@ unitTests = do
          let expected = "1:2-3:4"
          assertBool (unwords ["expected to find range", expected, "in diagnostic", shown]) $
              expected `isInfixOf` shown
+     , testCase "notification handlers run sequentially" $ do
+        orderRef <- newIORef []
+        let plugins = pluginDescToIdePlugins $
+                [ (defaultPluginDescriptor $ fromString $ show i)
+                    { pluginNotificationHandlers = mconcat
+                        [ mkPluginNotificationHandler LSP.STextDocumentDidOpen $ \_ _ _ ->
+                            liftIO $ atomicModifyIORef_ orderRef (i:)
+                        ]
+                    }
+                    | i <- [(1::Int)..20]
+                ] ++ Ghcide.descriptors
+
+        testIde def{IDE.argsHlsPlugins = plugins} $ do
+            _ <- createDoc "haskell" "A.hs" "module A where"
+            waitForProgressDone
+            actualOrder <- liftIO $ readIORef orderRef
+
+            liftIO $ actualOrder @?= reverse [(1::Int)..20]
      ]
+
+testIde :: IDE.Arguments -> Session () -> IO ()
+testIde arguments session = do
+    config <- getConfigFromEnv
+    (hInRead, hInWrite) <- createPipe
+    (hOutRead, hOutWrite) <- createPipe
+    let server = IDE.defaultMain arguments
+            { IDE.argsHandleIn = pure hInRead
+            , IDE.argsHandleOut = pure hOutWrite
+            }
+
+    withAsync server $ \_ ->
+        runSessionWithHandles hInWrite hOutRead config lspTestCaps "." session
 
 positionMappingTests :: TestTree
 positionMappingTests =

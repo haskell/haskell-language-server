@@ -19,7 +19,6 @@ import qualified Language.LSP.Types.Capabilities       as LSP
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.Service
 import           Development.IDE.Core.Shake
-import           Development.IDE.LSP.Server
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger
 import           Development.IDE.Types.Options
@@ -105,6 +104,10 @@ descriptor plId = (defaultPluginDescriptor plId) { pluginNotificationHandlers = 
         setSomethingModified ide
 
   , mkPluginNotificationHandler LSP.SInitialized $ \ide _ _ -> do
+      --------- Initialize Shake session --------------------------------------------------------------------
+      liftIO $ shakeSessionInit ide
+
+      --------- Set up file watchers ------------------------------------------------------------------------
       clientCapabilities <- LSP.getClientCapabilities
       let watchSupported = case () of
             _ | LSP.ClientCapabilities{_workspace} <- clientCapabilities

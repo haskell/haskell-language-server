@@ -27,6 +27,7 @@ import           Control.Concurrent.STM.TQueue                (writeTQueue)
 import           Control.Concurrent.Strict
 import           Control.Exception
 import           Control.Monad.Extra
+import           Control.Monad.IO.Class
 import qualified Data.ByteString                              as BS
 import           Data.Either.Extra
 import qualified Data.HashMap.Strict                          as HM
@@ -45,7 +46,7 @@ import           Development.IDE.Import.DependencyInformation
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
-import           Development.Shake
+import           Development.IDE.Graph
 import           HieDb.Create                                 (deleteMissingRealFiles)
 import           Ide.Plugin.Config                            (CheckParents (..))
 import           System.IO.Error
@@ -127,16 +128,23 @@ getModificationTimeImpl vfs isWatched missingFileDiags file = do
         let file' = fromNormalizedFilePath file
         let wrap time@(l,s) = (Just $ LBS.toStrict $ B.encode time, ([], Just $ ModificationTime l s))
         mbVirtual <- liftIO $ getVirtualFile vfs $ filePathToUri' file
-        -- we use 'getVirtualFile' to discriminate FOIs so make that
-        -- dependency explicit by using the IsFileOfInterest rule
-        _ <- use_ IsFileOfInterest file
         case mbVirtual of
             Just (virtualFileVersion -> ver) -> do
                 alwaysRerun
                 pure (Just $ LBS.toStrict $ B.encode ver, ([], Just $ VFSVersion ver))
             Nothing -> do
                 isWF <- isWatched file
-                unless (isWF || isInterface file) alwaysRerun
+                if isWF
+                    then -- the file is watched so we can rely on FileWatched notifications,
+                         -- but also need a dependency on IsFileOfInterest to reinstall
+                         -- alwaysRerun when the file becomes VFS
+                        void (use_ IsFileOfInterest file)
+                    else if isInterface file
+                        then -- interface files are tracked specially using the closed world assumption
+                            pure ()
+                        else -- in all other cases we will need to freshly check the file system
+                            alwaysRerun
+
                 liftIO $ fmap wrap (getModTime file')
                     `catch` \(e :: IOException) -> do
                         let err | isDoesNotExistError e = "File does not exist: " ++ file'

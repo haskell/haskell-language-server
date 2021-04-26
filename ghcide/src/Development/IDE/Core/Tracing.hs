@@ -1,3 +1,4 @@
+{-# LANGUAGE NoApplicativeDo #-}
 {-# LANGUAGE CPP #-}
 #include "ghc-api-version.h"
 module Development.IDE.Core.Tracing
@@ -6,7 +7,9 @@ module Development.IDE.Core.Tracing
     , startTelemetry
     , measureMemory
     , getInstrumentCached
-    ,otTracedProvider,otSetUri)
+    , otTracedProvider
+    , otSetUri
+    )
 where
 
 import           Control.Concurrent.Async       (Async, async)
@@ -26,6 +29,7 @@ import           Data.IORef                     (modifyIORef', newIORef,
                                                  readIORef, writeIORef)
 import           Data.String                    (IsString (fromString))
 import           Data.Text.Encoding             (encodeUtf8)
+import           Debug.Trace.Flags              (userTracingEnabled)
 import           Development.IDE.Core.RuleTypes (GhcSession (GhcSession),
                                                  GhcSessionDeps (GhcSessionDeps),
                                                  GhcSessionIO (GhcSessionIO))
@@ -34,21 +38,19 @@ import           Development.IDE.Types.Logger   (Logger, logDebug, logInfo)
 import           Development.IDE.Types.Shake    (Key (..), Value,
                                                  ValueWithDiagnostics (..),
                                                  Values)
-import           Development.Shake              (Action, actionBracket)
+import           Development.IDE.Graph              (Action, actionBracket)
 import           Foreign.Storable               (Storable (sizeOf))
-import           GHC.RTS.Flags
 import           HeapSize                       (recursiveSize, runHeapsize)
 import           Ide.PluginUtils                (installSigUsr1Handler)
 import           Ide.Types                      (PluginId (..))
 import           Language.LSP.Types             (NormalizedFilePath,
                                                  fromNormalizedFilePath)
 import           Numeric.Natural                (Natural)
-import           OpenTelemetry.Eventlog         (Instrument, SpanInFlight,
+import           OpenTelemetry.Eventlog         (Instrument, SpanInFlight (..),
                                                  Synchronicity (Asynchronous),
                                                  addEvent, beginSpan, endSpan,
                                                  mkValueObserver, observe,
                                                  setTag, withSpan, withSpan_)
-import           System.IO.Unsafe               (unsafePerformIO)
 
 -- | Trace a handler using OpenTelemetry. Adds various useful info into tags in the OpenTelemetry span.
 otTracedHandler
@@ -57,26 +59,19 @@ otTracedHandler
     -> String -- ^ Message label
     -> (SpanInFlight -> m a)
     -> m a
-otTracedHandler requestType label act =
-  let !name =
-        if null label
-          then requestType
-          else requestType <> ":" <> show label
-   -- Add an event so all requests can be quickly seen in the viewer without searching
-   in do
-     runInIO <- askRunInIO
-     liftIO $ withSpan (fromString name) (\sp -> addEvent sp "" (fromString $ name <> " received") >> runInIO (act sp))
+otTracedHandler requestType label act
+  | userTracingEnabled = do
+    let !name =
+            if null label
+            then requestType
+            else requestType <> ":" <> show label
+    -- Add an event so all requests can be quickly seen in the viewer without searching
+    runInIO <- askRunInIO
+    liftIO $ withSpan (fromString name) (\sp -> addEvent sp "" (fromString $ name <> " received") >> runInIO (act sp))
+  | otherwise = act (SpanInFlight 0)
 
 otSetUri :: SpanInFlight -> Uri -> IO ()
 otSetUri sp (Uri t) = setTag sp "uri" (encodeUtf8 t)
-
-{-# NOINLINE isTracingEnabled #-}
-isTracingEnabled :: Bool
-isTracingEnabled = unsafePerformIO $ do
-    flags <- getTraceFlags
-    case tracing flags of
-        TraceNone -> return False
-        _         -> return True
 
 -- | Trace a Shake action using opentelemetry.
 otTracedAction
@@ -87,7 +82,7 @@ otTracedAction
     -> Action a -- ^ The action
     -> Action a
 otTracedAction key file success act
-  | isTracingEnabled =
+  | userTracingEnabled =
     actionBracket
         (do
             sp <- beginSpan (fromString (show key))
@@ -106,11 +101,13 @@ otTracedProvider :: MonadUnliftIO m => PluginId -> ByteString -> m a -> m a
 #else
 otTracedProvider :: MonadUnliftIO m => PluginId -> String -> m a -> m a
 #endif
-otTracedProvider (PluginId pluginName) provider act = do
-  runInIO <- askRunInIO
-  liftIO $ withSpan (provider <> " provider") $ \sp -> do
-    setTag sp "plugin" (encodeUtf8 pluginName)
-    runInIO act
+otTracedProvider (PluginId pluginName) provider act
+  | userTracingEnabled = do
+    runInIO <- askRunInIO
+    liftIO $ withSpan (provider <> " provider") $ \sp -> do
+        setTag sp "plugin" (encodeUtf8 pluginName)
+        runInIO act
+  | otherwise = act
 
 startTelemetry :: Bool -> Logger -> Var Values -> IO ()
 startTelemetry allTheTime logger stateRef = do
@@ -233,4 +230,3 @@ repeatUntilJust nattempts action = do
     case res of
         Nothing -> repeatUntilJust (nattempts-1) action
         Just{}  -> return res
-

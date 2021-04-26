@@ -11,7 +11,6 @@ module Wingman.Types
   , Type
   , TyVar
   , Span
-  , Range
   ) where
 
 import           ConLike (ConLike)
@@ -29,9 +28,9 @@ import qualified Data.Text as T
 import           Data.Tree
 import           Development.IDE.GHC.Compat hiding (Node)
 import           Development.IDE.GHC.Orphans ()
-import           Development.IDE.Types.Location
 import           GHC.Generics
 import           GHC.SourceGen (var)
+import           InstEnv (InstEnvs(..))
 import           OccName
 import           Refinery.Tactic
 import           System.IO.Unsafe (unsafePerformIO)
@@ -50,6 +49,7 @@ data TacticCommand
   = Auto
   | Intros
   | Destruct
+  | DestructPun
   | Homomorphism
   | DestructLambdaCase
   | HomomorphismLambdaCase
@@ -65,6 +65,7 @@ tacticTitle = (mappend "Wingman: " .) . go
     go Auto _                   = "Attempt to fill hole"
     go Intros _                 = "Introduce lambda"
     go Destruct var             = "Case split on " <> var
+    go DestructPun var          = "Split on " <> var <> " with NamedFieldPuns"
     go Homomorphism var         = "Homomorphic case split on " <> var
     go DestructLambdaCase _     = "Lambda case split"
     go HomomorphismLambdaCase _ = "Homomorphic lambda case split"
@@ -78,6 +79,17 @@ tacticTitle = (mappend "Wingman: " .) . go
 data Config = Config
   { cfg_feature_set          :: FeatureSet
   , cfg_max_use_ctor_actions :: Int
+  , cfg_timeout_seconds      :: Int
+  , cfg_auto_gas             :: Int
+  }
+  deriving (Eq, Ord, Show)
+
+emptyConfig :: Config
+emptyConfig = Config
+  { cfg_feature_set = mempty
+  , cfg_max_use_ctor_actions = 5
+  , cfg_timeout_seconds = 2
+  , cfg_auto_gas = 4
   }
 
 ------------------------------------------------------------------------------
@@ -115,6 +127,9 @@ instance Show Class where
   show  = unsafeRender
 
 instance Show (HsExpr GhcPs) where
+  show  = unsafeRender
+
+instance Show (HsExpr GhcTc) where
   show  = unsafeRender
 
 instance Show (HsDecl GhcPs) where
@@ -393,15 +408,42 @@ data Context = Context
     -- ^ The functions currently being defined
   , ctxModuleFuncs   :: [(OccName, CType)]
     -- ^ Everything defined in the current module
-  , ctxFeatureSet    :: FeatureSet
+  , ctxConfig        :: Config
+  , ctxKnownThings   :: KnownThings
+  , ctxInstEnvs      :: InstEnvs
+  , ctxTheta         :: Set CType
   }
-  deriving stock (Eq, Ord, Show)
+
+instance Show Context where
+  show (Context {..}) = mconcat
+    [ "Context "
+    , showsPrec 10 ctxDefiningFuncs ""
+    , showsPrec 10 ctxModuleFuncs ""
+    , showsPrec 10 ctxConfig ""
+    , showsPrec 10 ctxTheta ""
+    ]
+
+
+------------------------------------------------------------------------------
+-- | Things we'd like to look up, that don't exist in TysWiredIn.
+data KnownThings = KnownThings
+  { kt_semigroup :: Class
+  , kt_monoid    :: Class
+  }
 
 
 ------------------------------------------------------------------------------
 -- | An empty context
 emptyContext :: Context
-emptyContext  = Context mempty mempty mempty
+emptyContext
+  = Context
+      { ctxDefiningFuncs = mempty
+      , ctxModuleFuncs = mempty
+      , ctxConfig = emptyConfig
+      , ctxKnownThings = error "empty known things from emptyContext"
+      , ctxInstEnvs = InstEnvs mempty mempty mempty
+      , ctxTheta = mempty
+      }
 
 
 newtype Rose a = Rose (Tree a)

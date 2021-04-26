@@ -9,6 +9,8 @@ Output of `haskell-language-server --probe-tools` or `haskell-language-server-wr
 ```sh
 
 ```
+Which OS do you use:
+<!-- Windows, MacOS, Ubuntu, ArchLinux, etc... -->
 Which lsp-client do you use:
 <!-- Neovim, emacs, VS Codium, etc... -->
 Describe your project (alternative: link to the project):

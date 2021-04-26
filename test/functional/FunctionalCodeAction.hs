@@ -6,30 +6,23 @@
 
 module FunctionalCodeAction (tests) where
 
-import           Control.Applicative.Combinators
 import           Control.Lens                    hiding (List)
 import           Control.Monad
-import           Control.Monad.IO.Class
 import           Data.Aeson
-import           Data.Default
 import qualified Data.HashMap.Strict             as HM
 import           Data.List
 import           Data.Maybe
 import qualified Data.Text                       as T
 import           Ide.Plugin.Config
 import           Language.LSP.Test               as Test
-import           Language.LSP.Types
 import qualified Language.LSP.Types.Capabilities as C
 import qualified Language.LSP.Types.Lens         as L
-import           Test.Hls.Util
+import           Test.Hls
 import           Test.Hspec.Expectations
 
 import           System.FilePath                 ((</>))
 import           System.IO.Extra                 (withTempDir)
-import           Test.Tasty
-import           Test.Tasty.ExpectedFailure      (expectFailBecause,
-                                                  ignoreTestBecause)
-import           Test.Tasty.HUnit
+import           Test.Hls.Command
 
 {-# ANN module ("HLint: ignore Reduce duplication"::String) #-}
 
@@ -170,6 +163,22 @@ hlintTests = testGroup "hlint suggestions" [
 
     , testCase "apply-refact preserve regular comments" $ runHlintSession "" $ do
         testRefactor "ApplyRefact6.hs" "Redundant bracket" expectedComments
+
+    , testCase "applyAll is shown only when there is at least one diagnostic in range" $  runHlintSession "" $ do
+        doc <- openDoc "ApplyRefact8.hs" "haskell"
+        _ <- waitForDiagnosticsFromSource doc "hlint"
+
+        firstLine <- map fromAction <$> getCodeActions doc (mkRange 0 0 0 0)
+        secondLine <- map fromAction <$> getCodeActions doc (mkRange 1 0 1 0)
+        thirdLine <- map fromAction <$> getCodeActions doc (mkRange 2 0 2 0)
+        multiLine <- map fromAction <$> getCodeActions doc (mkRange 0 0 2 0)
+
+        let hasApplyAll = isJust . find (\ca -> "Apply all hints" `T.isSuffixOf` (ca ^. L.title))
+
+        liftIO $ hasApplyAll firstLine @? "Missing apply all code action"
+        liftIO $ hasApplyAll secondLine @? "Missing apply all code action"
+        liftIO $ not (hasApplyAll thirdLine) @? "Unexpected apply all code action"
+        liftIO $ hasApplyAll multiLine @? "Missing apply all code action"
     ]
     where
         runHlintSession :: FilePath -> Session a -> IO a
@@ -379,7 +388,8 @@ redundantImportTests = testGroup "redundant import code actions" [
     , testCase "doesn't touch other imports" $ runSession hlsCommand noLiteralCaps "test/testdata/redundantImportTest/" $ do
         doc <- openDoc "src/MultipleImports.hs" "haskell"
         _   <- waitForDiagnosticsFromSource doc "typecheck"
-        InL cmd : _ <- getAllCodeActions doc
+        cas <- getAllCodeActions doc
+        cmd <- liftIO $ inspectCommand cas ["redundant import"]
         executeCommand cmd
         _ <- anyRequest
         contents <- documentContents doc
@@ -446,11 +456,12 @@ signatureTests = testGroup "missing top level signature code actions" [
         doc <- openDoc "TopLevelSignature.hs" "haskell"
 
         _ <- waitForDiagnosticsFromSource doc "typecheck"
-        cas <- map fromAction <$> getAllCodeActions doc
+        cas <- getAllCodeActions doc
 
-        liftIO $ "add signature: main :: IO ()" `elem` map (^. L.title) cas @? "Contains code action"
+        liftIO $ expectCodeAction cas ["add signature: main :: IO ()"]
 
-        executeCodeAction $ head cas
+        replaceWithStuff <- liftIO $ inspectCodeAction cas ["add signature"]
+        executeCodeAction replaceWithStuff
 
         contents <- documentContents doc
 
@@ -516,14 +527,8 @@ missingPragmaTests = testGroup "missing pragma warning code actions" [
             contents <- documentContents doc
 
             let expected =
--- TODO: Why CPP???
-#if __GLASGOW_HASKELL__ < 810
                     [ "{-# LANGUAGE ScopedTypeVariables #-}"
                     , "{-# LANGUAGE TypeApplications #-}"
-#else
-                    [ "{-# LANGUAGE TypeApplications #-}"
-                    , "{-# LANGUAGE ScopedTypeVariables #-}"
-#endif
                     , "module TypeApplications where"
                     , ""
                     , "foo :: forall a. a -> a"
@@ -560,7 +565,7 @@ missingPragmaTests = testGroup "missing pragma warning code actions" [
                     , "f Record{a, b} = a"
                     ]
             liftIO $ T.lines contents @?= expected
-    , testCase "After Shebang" $ do
+    , testCase "After shebang" $ do
         runSession hlsCommand fullCaps "test/testdata/addPragmas" $ do
             doc <- openDoc "AfterShebang.hs" "haskell"
 
@@ -576,9 +581,70 @@ missingPragmaTests = testGroup "missing pragma warning code actions" [
             let expected =
                     [ "#! /usr/bin/env nix-shell"
                     , "#! nix-shell --pure -i runghc -p \"haskellPackages.ghcWithPackages (hp: with hp; [ turtle ])\""
-                    , ""
                     , "{-# LANGUAGE NamedFieldPuns #-}"
+                    , ""
                     , "module AfterShebang where"
+                    , ""
+                    , "data Record = Record"
+                    , "  { a :: Int,"
+                    , "    b :: Double,"
+                    , "    c :: String"
+                    , "  }"
+                    , ""
+                    , "f Record{a, b} = a"
+                    ]
+
+            liftIO $ T.lines contents @?= expected
+    , testCase "Append to existing pragmas" $ do
+        runSession hlsCommand fullCaps "test/testdata/addPragmas" $ do
+            doc <- openDoc "AppendToExisting.hs" "haskell"
+
+            _ <- waitForDiagnosticsFrom doc
+            cas <- map fromAction <$> getAllCodeActions doc
+
+            liftIO $ "Add \"NamedFieldPuns\"" `elem` map (^. L.title) cas @? "Contains NamedFieldPuns code action"
+
+            executeCodeAction $ head cas
+
+            contents <- documentContents doc
+
+            let expected =
+                    [ "-- | Doc before pragma"
+                    , "{-# OPTIONS_GHC -Wno-dodgy-imports #-}"
+                    , "{-# LANGUAGE NamedFieldPuns #-}"
+                    , "module AppendToExisting where"
+                    , ""
+                    , "data Record = Record"
+                    , "  { a :: Int,"
+                    , "    b :: Double,"
+                    , "    c :: String"
+                    , "  }"
+                    , ""
+                    , "f Record{a, b} = a"
+                    ]
+
+            liftIO $ T.lines contents @?= expected
+    , testCase "Before Doc Comments" $ do
+        runSession hlsCommand fullCaps "test/testdata/addPragmas" $ do
+            doc <- openDoc "BeforeDocComment.hs" "haskell"
+
+            _ <- waitForDiagnosticsFrom doc
+            cas <- map fromAction <$> getAllCodeActions doc
+
+            liftIO $ "Add \"NamedFieldPuns\"" `elem` map (^. L.title) cas @? "Contains NamedFieldPuns code action"
+
+            executeCodeAction $ head cas
+
+            contents <- documentContents doc
+
+            let expected =
+                    [ "#! /usr/bin/env nix-shell"
+                    , "#! nix-shell --pure -i runghc -p \"haskellPackages.ghcWithPackages (hp: with hp; [ turtle ])\""
+                    , "{-# LANGUAGE NamedFieldPuns #-}"
+                    , "-- | Doc Comment"
+                    , "{- Block -}"
+                    , ""
+                    , "module BeforeDocComment where"
                     , ""
                     , "data Record = Record"
                     , "  { a :: Int,"
@@ -619,9 +685,9 @@ disableWarningTests =
           ]
       , T.unlines
           [ "{-# OPTIONS_GHC -Wall #-}"
-          , ""
-          , ""
           , "{-# OPTIONS_GHC -Wno-unused-imports #-}"
+          , ""
+          , ""
           , "module M where"
           , ""
           , "import Data.Functor"
@@ -631,7 +697,7 @@ disableWarningTests =
       <&> \(warning, initialContent, expectedContent) -> testSession (T.unpack warning) $ do
         doc <- createDoc "Module.hs" "haskell" initialContent
         _ <- waitForDiagnostics
-        codeActs <- mapMaybe caResultToCodeAct <$> getCodeActions doc (Range (Position 0 0) (Position 0 0))
+        codeActs <- mapMaybe caResultToCodeAct <$> getAllCodeActions doc
         case find (\CodeAction{_title} -> _title == "Disable \"" <> warning <> "\" warnings") codeActs of
           Nothing -> liftIO $ assertFailure "No code action with expected title"
           Just action -> do
@@ -698,7 +764,7 @@ noLiteralCaps :: C.ClientCapabilities
 noLiteralCaps = def { C._textDocument = Just textDocumentCaps }
   where
     textDocumentCaps = def { C._codeAction = Just codeActionCaps }
-    codeActionCaps = CodeActionClientCapabilities (Just True) Nothing Nothing
+    codeActionCaps = CodeActionClientCapabilities (Just True) Nothing Nothing Nothing Nothing Nothing Nothing
 
 testSession :: String -> Session () -> TestTree
 testSession name s = testCase name $ withTempDir $ \dir ->

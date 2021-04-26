@@ -49,8 +49,8 @@ main = do
 launchHaskellLanguageServer :: Arguments -> IO ()
 launchHaskellLanguageServer parsedArgs = do
   case parsedArgs of
-    LspMode LspArguments{..} -> whenJust argsCwd setCurrentDirectory
-    _                        -> pure ()
+    Ghcide GhcideArguments{..} -> whenJust argsCwd setCurrentDirectory
+    _                          -> pure ()
 
   d <- getCurrentDirectory
 
@@ -59,7 +59,7 @@ launchHaskellLanguageServer parsedArgs = do
   setCurrentDirectory $ cradleRootDir cradle
 
   case parsedArgs of
-    LspMode LspArguments{..} ->
+    Ghcide GhcideArguments{..} ->
       when argsProjectGhcVersion $ getRuntimeGhcVersion' cradle >>= putStrLn >> exitSuccess
     _ -> pure ()
 

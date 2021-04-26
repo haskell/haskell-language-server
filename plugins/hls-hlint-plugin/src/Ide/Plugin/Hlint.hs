@@ -4,6 +4,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE OverloadedLabels      #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE PackageImports        #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
@@ -33,9 +34,11 @@ import           Data.Maybe
 import qualified Data.Text                                          as T
 import qualified Data.Text.IO                                       as T
 import           Data.Typeable
-import           Development.IDE
+import           Development.IDE                                    hiding
+                                                                    (Error)
 import           Development.IDE.Core.Rules                         (defineNoFile,
-                                                                     getParsedModuleWithComments)
+                                                                     getParsedModuleWithComments,
+                                                                     usePropertyAction)
 import           Development.IDE.Core.Shake                         (getDiagnostics)
 import           Refact.Apply
 
@@ -70,10 +73,13 @@ import           Language.Haskell.GHC.ExactPrint.Types              (Rigidity (.
 #endif
 
 import           Ide.Logger
-import           Ide.Plugin.Config
+import           Ide.Plugin.Config                                  hiding
+                                                                    (Config)
+import           Ide.Plugin.Properties
 import           Ide.PluginUtils
 import           Ide.Types
-import           Language.Haskell.HLint                             as Hlint
+import           Language.Haskell.HLint                             as Hlint hiding
+                                                                             (Error)
 import           Language.LSP.Server                                (ProgressCancellable (Cancellable),
                                                                      sendRequest,
                                                                      withIndefiniteProgress)
@@ -95,7 +101,11 @@ descriptor plId = (defaultPluginDescriptor plId)
       [ PluginCommand "applyOne" "Apply a single hint" applyOneCmd
       , PluginCommand "applyAll" "Apply all hints to the file" applyAllCmd
       ]
-    , pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionProvider
+  , pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionProvider
+  , pluginConfigDescriptor = defaultConfigDescriptor
+      { configHasDiagnostics = True
+      , configCustomConfig = mkCustomConfig properties
+      }
   }
 
 -- This rule only exists for generating file diagnostics
@@ -125,7 +135,9 @@ rules plugin = do
     ideas <- if hlintOn' then getIdeas file else return (Right [])
     return (diagnostics file ideas, Just ())
 
-  getHlintSettingsRule (HlintEnabled [])
+  defineNoFile $ \GetHlintSettings -> do
+    (Config flags) <- getHlintConfig plugin
+    liftIO $ argsSettings flags
 
   action $ do
     files <- getFilesOfInterest
@@ -190,7 +202,7 @@ rules plugin = do
 
 getIdeas :: NormalizedFilePath -> Action (Either ParseError [Idea])
 getIdeas nfp = do
-  logm $ "hlint:getIdeas:file:" ++ show nfp
+  debugm $ "hlint:getIdeas:file:" ++ show nfp
   (flags, classify, hint) <- useNoFile_ GetHlintSettings
 
   let applyHints' (Just (Right modEx)) = Right $ applyHints classify hint [modEx]
@@ -222,7 +234,7 @@ getIdeas nfp = do
 
         setExtensions flags = do
           hlintExts <- getExtensions flags nfp
-          logm $ "hlint:getIdeas:setExtensions:" ++ show hlintExts
+          debugm $ "hlint:getIdeas:setExtensions:" ++ show hlintExts
           return $ flags { enabledExtensions = hlintExts }
 
 getExtensions :: ParseFlags -> NormalizedFilePath -> Action [Extension]
@@ -240,11 +252,6 @@ getExtensions pflags nfp = do
 
 -- ---------------------------------------------------------------------
 
-data HlintUsage
-  = HlintEnabled { cmdArgs :: [String] }
-  | HlintDisabled
-  deriving Show
-
 data GetHlintSettings = GetHlintSettings
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetHlintSettings
@@ -258,30 +265,42 @@ instance Binary GetHlintSettings
 
 type instance RuleResult GetHlintSettings = (ParseFlags, [Classify], Hint)
 
-getHlintSettingsRule :: HlintUsage -> Rules ()
-getHlintSettingsRule usage =
-    defineNoFile $ \GetHlintSettings ->
-      liftIO $ case usage of
-          HlintEnabled cmdArgs -> argsSettings cmdArgs
-          HlintDisabled        -> fail "hlint configuration unspecified"
-
 -- ---------------------------------------------------------------------
 
+newtype Config = Config [String]
+
+properties :: Properties '[ 'PropertyKey "flags" ('TArray String)]
+properties = emptyProperties
+  & defineArrayProperty #flags
+    "Flags used by hlint" []
+
+-- | Get the plugin config
+getHlintConfig :: PluginId -> Action Config
+getHlintConfig pId =
+  Config
+    <$> usePropertyAction #flags pId properties
+
+-- ---------------------------------------------------------------------
 codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
 codeActionProvider ideState plId (CodeActionParams _ _ docId _ context) = Right . LSP.List . map InR <$> liftIO getCodeActions
   where
 
     getCodeActions = do
-        diags <- getDiagnostics ideState
+        allDiags <- getDiagnostics ideState
         let docNfp = toNormalizedFilePath' <$> uriToFilePath' (docId ^. LSP.uri)
             numHintsInDoc = length
-              [d | (nfp, _, d) <- diags
+              [d | (nfp, _, d) <- allDiags
                  , validCommand d
                  , Just nfp == docNfp
               ]
+            numHintsInContext = length
+              [d | d <- diags
+                 , validCommand d
+              ]
         -- We only want to show the applyAll code action if there is more than 1
-        -- hint in the current document
-        if numHintsInDoc > 1 then do
+        -- hint in the current document and if code action range contains at
+        -- least one hint
+        if numHintsInDoc > 1 && numHintsInContext > 0 then do
           pure $ applyAllAction:applyOneActions
         else
           pure applyOneActions
@@ -289,7 +308,7 @@ codeActionProvider ideState plId (CodeActionParams _ _ docId _ context) = Right 
     applyAllAction =
       let args = Just [toJSON (docId ^. LSP.uri)]
           cmd = mkLspCommand plId "applyAll" "Apply all hints" args
-        in LSP.CodeAction "Apply all hints" (Just LSP.CodeActionQuickFix) Nothing Nothing Nothing Nothing (Just cmd)
+        in LSP.CodeAction "Apply all hints" (Just LSP.CodeActionQuickFix) Nothing Nothing Nothing Nothing (Just cmd) Nothing
 
     applyOneActions :: [LSP.CodeAction]
     applyOneActions = mapMaybe mkHlintAction (filter validCommand diags)
@@ -306,7 +325,7 @@ codeActionProvider ideState plId (CodeActionParams _ _ docId _ context) = Right 
     mkHlintAction diag@(LSP.Diagnostic (LSP.Range start _) _s (Just (InR code)) (Just "hlint") _ _ _) =
       Just . codeAction $ mkLspCommand plId "applyOne" title (Just args)
      where
-       codeAction cmd = LSP.CodeAction title (Just LSP.CodeActionQuickFix) (Just (LSP.List [diag])) Nothing Nothing Nothing (Just cmd)
+       codeAction cmd = LSP.CodeAction title (Just LSP.CodeActionQuickFix) (Just (LSP.List [diag])) Nothing Nothing Nothing (Just cmd) Nothing
        -- we have to recover the original ideaHint removing the prefix
        ideaHint = T.replace "refact:" "" code
        title = "Apply hint: " <> ideaHint
