@@ -90,7 +90,7 @@ import           HieDb.Create
 import           HieDb.Types
 import           HieDb.Utils
 import           Maybes                               (MaybeT (runMaybeT))
-import           GHC.LanguageExtensions               (Extension(EmptyCase))
+import           GHC.LanguageExtensions               (Extension(EmptyCase, QuasiQuotes))
 
 -- | Bump this version number when making changes to the format of the data stored in hiedb
 hiedbDataVersion :: String
@@ -774,6 +774,7 @@ setOptions (ComponentOptions theOpts compRoot _) dflags = do
           disableOptimisation $
           allowEmptyCaseButWithWarning $
           setUpTypedHoles $
+          enableQuasiQuotes $
           makeDynFlagsAbsolute compRoot dflags'
     -- initPackages parses the -package flags and
     -- sets up the visibility for each component.
@@ -781,6 +782,8 @@ setOptions (ComponentOptions theOpts compRoot _) dflags = do
     (final_df, _) <- liftIO $ wrapPackageSetupException $ initPackages dflags''
     return (final_df, targets)
 
+enableQuasiQuotes :: DynFlags -> DynFlags
+enableQuasiQuotes = flip xopt_set QuasiQuotes
 
 -- | Wingman wants to support destructing of empty cases, but these are a parse
 -- error by default. So we want to enable 'EmptyCase', but then that leads to
