@@ -10,6 +10,7 @@ import           Control.Monad (unless)
 import           Control.Monad.Except (throwError)
 import           Control.Monad.Reader.Class (MonadReader (ask))
 import           Control.Monad.State.Strict (StateT(..), runStateT)
+import           Data.Bool (bool)
 import           Data.Foldable
 import           Data.Functor ((<&>))
 import           Data.Generics.Labels ()
@@ -255,6 +256,12 @@ splitSingle = tracing "splitSingle" $ do
       splitDataCon dc
     _ -> throwError $ GoalMismatch "splitSingle" g
 
+------------------------------------------------------------------------------
+-- | Like 'split', but prunes any data constructors which have holes.
+obvious :: TacticsM ()
+obvious = tracing "obvious" $ do
+  pruning split $ bool (Just NoProgress) Nothing . null
+
 
 ------------------------------------------------------------------------------
 -- | Allow the given tactic to proceed if and only if it introduces holes that
@@ -401,5 +408,4 @@ applyByName name = do
     case hi_name hi == name of
       True  -> apply hi
       False -> empty
-
 

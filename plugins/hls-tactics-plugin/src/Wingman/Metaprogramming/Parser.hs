@@ -31,7 +31,8 @@ tactic = flip P.makeExprParser operators $  P.choice
     , named' "destruct" $ useNameFromHypothesis destruct
     , named' "homo" $ useNameFromHypothesis homo
     , named' "apply" $ useNameFromHypothesis apply
-    , named'  "split" userSplit
+    , named' "split" userSplit
+    , named  "obvious" obvious
     , named  "auto" auto
     , R.try <$> (keyword "try" *> tactic)
     ]
