@@ -10,16 +10,18 @@ import qualified Control.Monad.Combinators.Expr as P
 import           Data.Function
 import           Data.Functor
 import           Data.List (foldl')
-import           Development.IDE.GHC.Compat (alphaTyVars)
+import           Development.IDE.GHC.Compat (alphaTyVars, LHsExpr, GhcPs)
 import           GhcPlugins (mkTyVarTy, mkFunTys, mkListTy, mkVarOcc)
 import qualified Refinery.Tactic as R
 import qualified Text.Megaparsec as P
+import qualified Text.Megaparsec.Char as C
 import           Wingman.Auto
 import           Wingman.Judgements (mkFirstJudgement)
 import           Wingman.LanguageServer.TacticProviders (useNameFromHypothesis)
 import           Wingman.Metaprogramming.Lexer
 import           Wingman.Tactics
 import           Wingman.Types
+import qualified Data.Text as T
 
 
 tactic :: Parser (TacticsM ())
@@ -29,6 +31,7 @@ tactic = flip P.makeExprParser operators $  P.choice
     , named  "intros" intros
     -- , named' "intro" intro
     , named' "destruct" $ useNameFromHypothesis destruct
+    , named "destruct_all" destructAll
     , named' "homo" $ useNameFromHypothesis homo
     , named' "apply" $ useNameFromHypothesis apply
     -- , named  "split" $ useNameFromHypothesis split
@@ -62,23 +65,16 @@ a_skolem, b_skolem, c_skolem :: Type
 (a_skolem : b_skolem : c_skolem : _) = skolems
 
 
-main :: IO ()
-main = do
-  case P.runParser (tactics <* P.eof)
-          "<splice>"
-          "intros, destruct as, [ assumption; auto ]" of
-    Left peb -> putStrLn $ P.errorBundlePretty peb
+attempt_it :: Context -> Judgement -> String -> Either String (LHsExpr GhcPs)
+attempt_it ctx jdg program =
+  case P.runParser (sc *> tactics <* P.eof) "<splice>" (T.pack program) of
+    Left peb -> Left $ P.errorBundlePretty peb
     Right tt -> do
-      let ty = mkFunTys
-                [ mkFunTys [a_skolem, b_skolem] b_skolem
-                , b_skolem
-                , mkListTy a_skolem
-                ] b_skolem
       case runTactic
-             emptyContext { ctxDefiningFuncs = [(mkVarOcc "hello", CType ty)] }
-             (mkFirstJudgement mempty True ty)
+             ctx
+             jdg
              tt
         of
-          Left tes -> putStrLn $ "failed: " <> show tes
-          Right rtr -> print $ rtr_extract rtr
+          Left tes -> Left $ show tes
+          Right rtr -> Right $ rtr_extract rtr
 

@@ -42,7 +42,7 @@ import           Development.IDE.Graph (Action, RuleResult, Rules, action)
 import           Development.IDE.Graph.Classes (Typeable, Binary, Hashable, NFData)
 import qualified FastString
 import           GHC.Generics (Generic)
-import           GhcPlugins (tupleDataCon, consDataCon, substTyAddInScope, ExternalPackageState, HscEnv (hsc_EPS), liftIO)
+import           GhcPlugins (tupleDataCon, consDataCon, substTyAddInScope, ExternalPackageState, HscEnv (hsc_EPS), liftIO, unpackFS)
 import qualified Ide.Plugin.Config as Plugin
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils (usePropertyLsp)
@@ -62,6 +62,10 @@ import           Wingman.Judgements.SYB (everythingContaining)
 import           Wingman.Judgements.Theta
 import           Wingman.Range
 import           Wingman.Types
+import Generics.SYB hiding (Generic)
+import Development.IDE.Core.Compile (pattern WingmanMetaprogram)
+import Data.Foldable (for_)
+import Wingman.Metaprogramming.Parser (attempt_it)
 
 
 tacticDesc :: T.Text -> T.Text
@@ -178,6 +182,10 @@ getIdeDynflags state nfp = do
   msr <- unsafeRunStaleIde "getIdeDynflags" state nfp GetModSummaryWithoutTimestamps
   pure $ ms_hspp_opts $ msrModSummary msr
 
+getAllMetaprograms :: Data a => a -> [String]
+getAllMetaprograms = everything (<>) $ mkQ mempty $ \case
+  WingmanMetaprogram fs -> [ unpackFS fs ]
+  (_ :: HsExpr GhcTc)  -> mempty
 
 ------------------------------------------------------------------------------
 -- | Find the last typechecked module, and find the most specific span, as well
@@ -199,6 +207,7 @@ judgementForHole state nfp range cfg = do
       binds <- stale GetBindings
       tcg <- fmap (fmap tmrTypechecked)
            $ stale TypeCheck
+
       hscenv <- stale GhcSessionDeps
 
       (rss, g) <- liftMaybe $ getSpanAndTypeAtHole range' hf
@@ -211,6 +220,10 @@ judgementForHole state nfp range cfg = do
       kt <- knownThings (untrackedStaleValue tcg) henv
 
       (jdg, ctx) <- liftMaybe $ mkJudgementAndContext cfg g binds new_rss tcg eps kt
+
+      let mps = getAllMetaprograms $ tcg_binds $ untrackedStaleValue tcg
+      for_ mps $ \prog ->
+        liftIO $ putStrLn $ either id show $ attempt_it ctx jdg prog
 
       dflags <- getIdeDynflags state nfp
       pure (fmap realSrcSpanToRange new_rss, jdg, ctx, dflags)
