@@ -51,14 +51,14 @@ identifier i = lexeme (P.string i *> P.notFollowedBy P.alphaNumChar)
 variable :: Parser OccName
 variable = lexeme $ do
     c <- P.alphaNumChar
-    cs <- P.many (P.alphaNumChar <|> P.char '\'')
+    cs <- P.many (P.alphaNumChar <|> P.char '_' <|> P.char '\'')
     pure $ mkVarOcc (c:cs)
 
 -- FIXME [Reed M. 2020-10-18] Check to see if the variables are in the reserved list
 name :: Parser Text
 name = lexeme $ do
     c <- P.alphaNumChar
-    cs <- P.many (P.alphaNumChar <|> P.char '\'' <|> P.char '-')
+    cs <- P.many (P.alphaNumChar <|> P.char '_' <|> P.char '\'' <|> P.char '-')
     pure $ T.pack (c:cs)
 
 named :: Text -> TacticsM () -> Parser (TacticsM ())
