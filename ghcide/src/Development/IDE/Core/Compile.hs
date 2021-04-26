@@ -224,7 +224,7 @@ pattern WingmanMetaprogram mp
   <- HsSCC _ (SourceText "wingman-meta-program") (StringLiteral NoSourceText mp)
       (L _ ( HsVar _ _))
 
-mkWingmanMetaprogram :: (XVar p ~ NoExt, XSCC p ~ NoExt, IdP p ~ RdrName) => SrcSpan -> FastString -> HsExpr p
+mkWingmanMetaprogram :: SrcSpan -> FastString -> HsExpr GhcPs
 mkWingmanMetaprogram ss mp =
   HsSCC noExt (SourceText "wingman-meta-program") (StringLiteral NoSourceText mp)
     $ L ss
