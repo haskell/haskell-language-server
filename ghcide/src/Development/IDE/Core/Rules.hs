@@ -620,10 +620,11 @@ typeCheckRuleDefinition
 typeCheckRuleDefinition hsc pm = do
   setPriority priorityTypeCheck
   IdeOptions { optDefer = defer } <- getIdeOptions
+  modify_dflags <- getModifyDynFlags
 
   linkables_to_keep <- currentLinkables
   addUsageDependencies $ liftIO $
-    typecheckModule defer hsc linkables_to_keep pm
+    typecheckModule defer hsc modify_dflags linkables_to_keep pm
   where
     addUsageDependencies :: Action (a, Maybe TcModuleResult) -> Action (a, Maybe TcModuleResult)
     addUsageDependencies a = do

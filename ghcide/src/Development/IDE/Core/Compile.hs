@@ -155,10 +155,11 @@ computePackageDeps env pkg = do
 
 typecheckModule :: IdeDefer
                 -> HscEnv
+                -> (DynFlags -> DynFlags)
                 -> [Linkable] -- ^ linkables not to unload
                 -> ParsedModule
                 -> IO (IdeResult TcModuleResult)
-typecheckModule (IdeDefer defer) hsc keep_lbls pm = do
+typecheckModule (IdeDefer defer) hsc modify_dflags keep_lbls pm = do
     fmap (either (,Nothing) id) $
       catchSrcErrors (hsc_dflags hsc) "typecheck" $ do
 
@@ -167,7 +168,7 @@ typecheckModule (IdeDefer defer) hsc keep_lbls pm = do
 
         modSummary' <- initPlugins hsc modSummary
         (warnings, tcm) <- withWarnings "typecheck" $ \tweak ->
-            tcRnModule hsc keep_lbls $ demoteIfDefer pm{pm_mod_summary = tweak modSummary'}
+            tcRnModule hsc modify_dflags keep_lbls $ demoteIfDefer pm{pm_mod_summary = tweak modSummary'}
         let errorPipeline = unDefer . hideDiag dflags . tagDiag
             diags = map errorPipeline warnings
             deferedError = any fst diags
@@ -242,10 +243,10 @@ addWingmanMetaprogrammingSyntax =
       L ss $ mkWingmanMetaprogram ss mp
     (x :: LHsExpr GhcPs) -> x
 
-tcRnModule :: HscEnv -> [Linkable] -> ParsedModule -> IO TcModuleResult
-tcRnModule hsc_env keep_lbls pmod = do
+tcRnModule :: HscEnv -> (DynFlags -> DynFlags) -> [Linkable] -> ParsedModule -> IO TcModuleResult
+tcRnModule hsc_env modify_dflags keep_lbls pmod = do
   let ms = pm_mod_summary pmod
-      hsc_env_tmp = hsc_env { hsc_dflags = ms_hspp_opts ms }
+      hsc_env_tmp = hsc_env { hsc_dflags = modify_dflags $ ms_hspp_opts ms }
 
   unload hsc_env_tmp keep_lbls
 
