@@ -7,16 +7,12 @@
 module Wingman.Metaprogramming.Parser where
 
 import qualified Control.Monad.Combinators.Expr as P
-import           Data.Function
 import           Data.Functor
-import           Data.List (foldl')
 import           Development.IDE.GHC.Compat (alphaTyVars, LHsExpr, GhcPs)
-import           GhcPlugins (mkTyVarTy, mkFunTys, mkListTy, mkVarOcc)
+import           GhcPlugins (mkTyVarTy)
 import qualified Refinery.Tactic as R
 import qualified Text.Megaparsec as P
-import qualified Text.Megaparsec.Char as C
 import           Wingman.Auto
-import           Wingman.Judgements (mkFirstJudgement)
 import           Wingman.LanguageServer.TacticProviders (useNameFromHypothesis)
 import           Wingman.Metaprogramming.Lexer
 import           Wingman.Tactics
