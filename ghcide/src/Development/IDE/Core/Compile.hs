@@ -4,6 +4,7 @@
 {-# LANGUAGE CPP        #-}
 {-# LANGUAGE GADTs      #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE PatternSynonyms #-}
 #include "ghc-api-version.h"
 
 -- | Based on https://ghc.haskell.org/trac/ghc/wiki/Commentary/Compiler/API.
@@ -31,6 +32,7 @@ module Development.IDE.Core.Compile
   , setupFinderCache
   , getDocsBatch
   , lookupName
+  , pattern WingmanMetaprogram
   ) where
 
 import           Development.IDE.Core.Preprocessor
@@ -122,6 +124,7 @@ import           Data.Unique
 import           GHC.Fingerprint
 import qualified Language.LSP.Server               as LSP
 import qualified Language.LSP.Types                as LSP
+import Generics.SYB hiding (orElse)
 
 -- | Given a string buffer, return the string (after preprocessing) and the 'ParsedModule'.
 parseModule
@@ -207,6 +210,36 @@ captureSplices dflags k = do
             liftIO $ modifyIORef' var $ awSplicesL %~ ((e, aw') :)
             pure $ f aw'
 
+
+wingmanMetaprogrammingPlugin :: StaticPlugin
+wingmanMetaprogrammingPlugin =
+    StaticPlugin $ PluginWithArgs (defaultPlugin { parsedResultAction = worker })  []
+  where
+    worker :: [CommandLineOption] -> ModSummary -> HsParsedModule -> Hsc HsParsedModule
+    worker _ _ pm = pure $ pm { hpm_module = addWingmanMetaprogrammingSyntax $ hpm_module pm }
+
+
+pattern WingmanMetaprogram :: FastString -> HsExpr p
+pattern WingmanMetaprogram mp
+  <- HsSCC _ (SourceText "wingman-meta-program") (StringLiteral NoSourceText mp)
+      (L _ ( HsVar _ _))
+
+mkWingmanMetaprogram :: (XVar p ~ NoExt, XSCC p ~ NoExt, IdP p ~ RdrName) => SrcSpan -> FastString -> HsExpr p
+mkWingmanMetaprogram ss mp =
+  HsSCC noExt (SourceText "wingman-meta-program") (StringLiteral NoSourceText mp)
+    $ L ss
+    $ HsVar noExt
+    $ L ss
+    $ mkRdrUnqual
+    $ mkVarOcc "_"
+
+
+addWingmanMetaprogrammingSyntax :: Data a => a -> a
+addWingmanMetaprogrammingSyntax =
+  everywhere $ mkT $ \case
+    L ss (HsSpliceE _ (HsQuasiQuote _ _ (occNameString . rdrNameOcc -> "wingman") _ mp)) ->
+      L ss $ mkWingmanMetaprogram ss mp
+    (x :: LHsExpr GhcPs) -> x
 
 tcRnModule :: HscEnv -> [Linkable] -> ParsedModule -> IO TcModuleResult
 tcRnModule hsc_env keep_lbls pmod = do
@@ -817,7 +850,13 @@ parseFileContents
        -> ExceptT [FileDiagnostic] IO ([FileDiagnostic], ParsedModule)
 parseFileContents env customPreprocessor filename ms = do
    let loc  = mkRealSrcLoc (mkFastString filename) 1 1
-       dflags = ms_hspp_opts ms
+       dflags' = ms_hspp_opts ms
+       dflags =
+         dflags'
+            { staticPlugins =
+                staticPlugins dflags' <> [wingmanMetaprogrammingPlugin]
+            }
+
        contents = fromJust $ ms_hspp_buf ms
    case unP Parser.parseModule (mkPState dflags contents loc) of
 #if MIN_GHC_API_VERSION(8,10,0)
