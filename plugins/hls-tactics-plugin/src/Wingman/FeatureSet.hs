@@ -25,6 +25,8 @@ data Feature
   | FeatureUseDataCon
   | FeatureRefineHole
   | FeatureKnownMonoid
+  | FeatureEmptyCase
+  | FeatureDestructPun
   deriving (Eq, Ord, Show, Read, Enum, Bounded)
 
 
@@ -47,7 +49,9 @@ parseFeatureSet
 -- | Features that are globally enabled for all users.
 defaultFeatures :: FeatureSet
 defaultFeatures = S.fromList
-  [
+  [ FeatureDestructAll
+  , FeatureUseDataCon
+  , FeatureRefineHole
   ]
 
 

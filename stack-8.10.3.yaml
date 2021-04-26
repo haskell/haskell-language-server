@@ -3,6 +3,7 @@ resolver: lts-17.2 # Last ghc-8.10.3 lts
 packages:
   - .
   - ./hie-compat
+  - ./hls-graph
   - ./ghcide/
   - ./hls-plugin-api
   - ./hls-test-utils
@@ -31,7 +32,6 @@ extra-deps:
   - fourmolu-0.3.0.0
   - ghc-lib-8.10.4.20210206
   - ghc-lib-parser-8.10.4.20210206
-  - haddock-library-1.10.0
   - heapsize-0.3.0
   - hie-bios-0.7.4
   - implicit-hie-cradle-0.3.0.2
@@ -39,6 +39,7 @@ extra-deps:
   - monad-dijkstra-0.1.1.2
   - refinery-0.3.0.0
   - retrie-0.1.1.1
+  - shake-0.19.4
   - stylish-haskell-0.12.2.0
   - semigroups-0.18.5
   - temporary-1.2.1.1

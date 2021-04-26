@@ -33,7 +33,8 @@ descriptors =
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
   { pluginHandlers = mkPluginHandler STextDocumentHover hover'
-                  <> mkPluginHandler STextDocumentDocumentSymbol symbolsProvider
+                  <> mkPluginHandler STextDocumentDocumentSymbol symbolsProvider,
+    pluginConfigDescriptor = defaultConfigDescriptor {configEnableGenericConfig = False}
   }
 
 -- ---------------------------------------------------------------------

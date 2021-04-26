@@ -2,7 +2,7 @@ cabal-version:      2.4
 build-type:         Simple
 category:           Development
 name:               ghcide
-version:            1.1.0.0
+version:            1.2.0.2
 license:            Apache-2.0
 license-file:       LICENSE
 author:             Digital Asset and Ghcide contributors
@@ -54,7 +54,7 @@ library
         ghc-exactprint,
         ghc-trace-events,
         Glob,
-        haddock-library ^>= 1.10.0,
+        haddock-library >= 1.8 && < 1.11,
         hashable,
         hie-compat ^>= 0.1.0.0,
         hls-plugin-api ^>= 1.1.0.0,
@@ -74,7 +74,7 @@ library
         rope-utf16-splay,
         safe,
         safe-exceptions,
-        shake >= 0.18.4,
+        hls-graph,
         sorted-list,
         sqlite-simple,
         stm,
@@ -140,6 +140,7 @@ library
         include
     exposed-modules:
         Control.Concurrent.Strict
+        Generics.SYB.GHC
         Development.IDE
         Development.IDE.Main
         Development.IDE.Core.Actions
@@ -287,7 +288,7 @@ executable ghcide
         ghcide,
         lens,
         optparse-applicative,
-        shake,
+        hls-graph,
         text,
         unordered-containers,
         aeson-pretty
@@ -357,6 +358,7 @@ test-suite ghcide-tests
         safe,
         safe-exceptions,
         shake,
+        hls-graph,
         tasty,
         tasty-expected-failure,
         tasty-hunit,
@@ -409,6 +411,7 @@ executable ghcide-bench
         optparse-applicative,
         process,
         safe-exceptions,
+        hls-graph,
         shake,
         text
     hs-source-dirs: bench/lib bench/exe

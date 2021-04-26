@@ -60,6 +60,7 @@ import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities
 import qualified Language.LSP.VFS                         as VFS
 import           Outputable                               (Outputable)
+import           TyCoRep
 
 -- From haskell-ide-engine/hie-plugin-api/Haskell/Ide/Engine/Context.hs
 
@@ -247,9 +248,16 @@ mkNameCompItem doc thingParent origName origMod thingType isInfix docs !imp = CI
       where
         argTypes = getArgs typ
         argText :: T.Text
-        argText =  mconcat $ List.intersperse " " $ zipWithFrom snippet 1 argTypes
+        argText = mconcat $ List.intersperse " " $ zipWithFrom snippet 1 argTypes
         snippet :: Int -> Type -> T.Text
-        snippet i t = "${" <> T.pack (show i) <> ":" <> showGhc t <> "}"
+        snippet i t = case t of
+            (TyVarTy _)     -> noParensSnippet
+            (LitTy _)       -> noParensSnippet
+            (TyConApp _ []) -> noParensSnippet
+            _               -> snippetText i ("(" <> showGhc t <> ")")
+            where
+                noParensSnippet = snippetText i (showGhc t)
+                snippetText i t = "${" <> T.pack (show i) <> ":" <> t <> "}"
         getArgs :: Type -> [Type]
         getArgs t
           | isPredTy t = []
@@ -407,7 +415,7 @@ localCompletionsForParsedModule uri pm@ParsedModule{pm_parsed_source = L _ HsMod
             TyClD _ ClassDecl{tcdLName, tcdSigs} ->
                 mkComp tcdLName CiInterface Nothing :
                 [ mkComp id CiFunction (Just $ ppr typ)
-                | L _ (TypeSig _ ids typ) <- tcdSigs
+                | L _ (ClassOpSig _ _ ids typ) <- tcdSigs
                 , id <- ids]
             TyClD _ x ->
                 let generalCompls = [mkComp id cl Nothing

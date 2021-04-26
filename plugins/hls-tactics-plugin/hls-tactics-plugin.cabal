@@ -1,7 +1,7 @@
 cabal-version:      2.4
 category:           Development
 name:               hls-tactics-plugin
-version:            1.0.0.0
+version:            1.1.0.0
 synopsis:           Wingman plugin for Haskell Language Server
 description:        Please see README.md
 author:             Sandy Maguire, Reed Mullanix
@@ -15,10 +15,9 @@ build-type:         Simple
 extra-source-files:
   README.md
   test/golden/*.cabal
-  test/golden/*.yaml
-  test/golden/*.hs
   test/golden/*.expected
-
+  test/golden/*.hs
+  test/golden/*.yaml
 
 flag pedantic
   description: Enable -Werror
@@ -26,7 +25,7 @@ flag pedantic
   manual:      True
 
 library
-  hs-source-dirs:   src
+  hs-source-dirs:     src
   exposed-modules:
     Ide.Plugin.Tactic
     Wingman.Auto
@@ -35,9 +34,11 @@ library
     Wingman.CodeGen.Utils
     Wingman.Context
     Wingman.Debug
+    Wingman.EmptyCase
     Wingman.FeatureSet
     Wingman.GHC
     Wingman.Judgements
+    Wingman.Judgements.SYB
     Wingman.Judgements.Theta
     Wingman.KnownStrategies
     Wingman.KnownStrategies.QuickCheck
@@ -52,14 +53,17 @@ library
     Wingman.Types
 
   ghc-options:
-    -Wall -Wno-name-shadowing -Wredundant-constraints -Wno-unticked-promoted-constructors
+    -Wall -Wno-name-shadowing -Wredundant-constraints
+    -Wno-unticked-promoted-constructors
+
   if flag(pedantic)
     ghc-options: -Werror
 
   build-depends:
     , aeson
-    , base           >=4.12 && <5
+    , base                  >=4.12    && <5
     , containers
+    , deepseq
     , directory
     , extra
     , filepath
@@ -69,84 +73,88 @@ library
     , ghc-boot-th
     , ghc-exactprint
     , ghc-source-gen
-    , ghcide         ^>= 1.1.0.0
-    , lsp
-    , hls-plugin-api >= 1.0 && < 1.2
+    , ghcide                ^>=1.2.0.2
+    , hls-plugin-api        ^>=1.1.0.0
     , lens
+    , lsp
     , mtl
-    , refinery       ^>=0.3
-    , retrie         >=0.1.1.0
-    , shake          >=0.17.5
+    , refinery              ^>=0.3
+    , retrie                >=0.1.1.0
+    , hls-graph
     , syb
     , text
     , transformers
-    , deepseq
+    , unordered-containers
+    , hyphenation
 
-  default-language: Haskell2010
+  default-language:   Haskell2010
   default-extensions:
-    DataKinds,
-    DeriveAnyClass,
-    DeriveFunctor,
-    DeriveGeneric,
-    DeriveDataTypeable,
-    DeriveFoldable,
-    DeriveTraversable,
-    DerivingStrategies,
-    DerivingVia,
-    FlexibleContexts,
-    FlexibleInstances,
-    GADTs,
-    GeneralizedNewtypeDeriving,
-    LambdaCase,
-    MultiParamTypeClasses,
-    NumDecimals,
-    OverloadedLabels,
-    PatternSynonyms,
-    ScopedTypeVariables,
-    TypeApplications,
-    TypeOperators,
+    DataKinds
+    DeriveAnyClass
+    DeriveDataTypeable
+    DeriveFoldable
+    DeriveFunctor
+    DeriveGeneric
+    DeriveTraversable
+    DerivingStrategies
+    DerivingVia
+    FlexibleContexts
+    FlexibleInstances
+    GADTs
+    GeneralizedNewtypeDeriving
+    LambdaCase
+    MultiParamTypeClasses
+    NumDecimals
+    OverloadedLabels
+    PatternSynonyms
+    ScopedTypeVariables
+    TypeApplications
+    TypeOperators
     ViewPatterns
 
 test-suite tests
-  type: exitcode-stdio-1.0
-  main-is: Main.hs
+  type:               exitcode-stdio-1.0
+  main-is:            Main.hs
   other-modules:
     AutoTupleSpec
     CodeAction.AutoSpec
     CodeAction.DestructAllSpec
-    CodeAction.RefineSpec
+    CodeAction.DestructPunSpec
     CodeAction.DestructSpec
     CodeAction.IntrosSpec
+    CodeAction.RefineSpec
     CodeAction.UseDataConSpec
+    CodeLens.EmptyCaseSpec
     ProviderSpec
     Spec
     UnificationSpec
     Utils
-  hs-source-dirs:
-      test
-  ghc-options: -Wall -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+
+  hs-source-dirs:     test
+  ghc-options:
+    -Wall -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+
   build-depends:
-      QuickCheck
     , aeson
     , base
     , containers
+    , deepseq
     , directory
     , filepath
     , ghc
-    , ghcide                >= 0.7.5.0
+    , ghcide
     , hls-plugin-api
     , hls-tactics-plugin
-    , hls-test-utils
-    , lsp-types
+    , hls-test-utils  ^>= 1.0.0.0
     , hspec
     , hspec-expectations
     , lens
+    , lsp-types
     , mtl
-    , text
-    , deepseq
-    , tasty-hunit
+    , QuickCheck
     , tasty-hspec
-  build-tool-depends:
-      hspec-discover:hspec-discover
-  default-language: Haskell2010
+    , tasty-hunit
+    , text
 
+  build-tool-depends: hspec-discover:hspec-discover -any
+  default-language:   Haskell2010

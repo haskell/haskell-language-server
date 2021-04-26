@@ -9,7 +9,7 @@ module Utils where
 
 import           Control.DeepSeq (deepseq)
 import qualified Control.Exception as E
-import           Control.Lens hiding (failing, (<.>), (.=))
+import           Control.Lens hiding (List, failing, (<.>), (.=))
 import           Control.Monad (unless)
 import           Control.Monad.IO.Class
 import           Data.Aeson
@@ -29,10 +29,10 @@ import           System.FilePath
 import           Test.Hls
 import           Test.Hspec
 import           Test.Hspec.Formatters (FailureReason(ExpectedButGot))
-import           Test.Tasty.HUnit (Assertion, HUnitFailure(..))
 import           Wingman.FeatureSet (FeatureSet, allFeatures, prettyFeatureSet)
 import           Wingman.LanguageServer (mkShowMessageParams)
 import           Wingman.Types
+
 
 plugin :: PluginDescriptor IdeState
 plugin = Tactic.descriptor "tactics"
@@ -125,6 +125,37 @@ mkGoldenTest eq features tc occ line col input =
         T.writeFile expected_name edited
       expected <- liftIO $ T.readFile expected_name
       liftIO $ edited `eq` expected
+
+
+mkCodeLensTest
+    :: FeatureSet
+    -> FilePath
+    -> SpecWith ()
+mkCodeLensTest features input =
+  it (input <> " (golden)") $ do
+    runSessionWithServer plugin tacticPath $ do
+      setFeatureSet features
+      doc <- openDoc input "haskell"
+      _ <- waitForDiagnostics
+      lenses <- fmap (reverse . filter isWingmanLens) $ getCodeLenses doc
+      for_ lenses $ \(CodeLens _ (Just cmd) _) ->
+        executeCommand cmd
+      _resp <- skipManyTill anyMessage (message SWorkspaceApplyEdit)
+      edited <- documentContents doc
+      let expected_name = input <.> "expected"
+      -- Write golden tests if they don't already exist
+      liftIO $ (doesFileExist expected_name >>=) $ flip unless $ do
+        T.writeFile expected_name edited
+      expected <- liftIO $ T.readFile expected_name
+      liftIO $ edited `shouldBe` expected
+
+
+
+isWingmanLens :: CodeLens -> Bool
+isWingmanLens (CodeLens _ (Just (Command _ cmd _)) _)
+    = T.isInfixOf ":tactics:" cmd
+isWingmanLens _ = False
+
 
 mkShowMessageTest
     :: FeatureSet

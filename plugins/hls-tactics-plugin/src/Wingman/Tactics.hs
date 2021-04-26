@@ -22,7 +22,6 @@ import           DataCon
 import           Development.IDE.GHC.Compat
 import           GHC.Exts
 import           GHC.SourceGen.Expr
-import           GHC.SourceGen.Overloaded
 import           Name (occNameString, occName)
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
@@ -100,7 +99,7 @@ intros = rule $ \jdg -> do
   case tcSplitFunTys $ unCType g of
     ([], _) -> throwError $ GoalMismatch "intros" g
     (as, b) -> do
-      vs <- mkManyGoodNames (hyNamesInScope $ jEntireHypothesis jdg) as
+      let vs = mkManyGoodNames (hyNamesInScope $ jEntireHypothesis jdg) as
       let top_hole = isTopHole ctx jdg
           hy' = lambdaHypothesis top_hole $ zip vs $ coerce as
           jdg' = introduce hy'
@@ -143,9 +142,9 @@ destructOrHomoAuto hi = tracing "destructOrHomoAuto" $ do
       ty = unCType $ hi_type hi
 
   attemptWhen
-      (rule $ destruct' (\dc jdg ->
+      (rule $ destruct' False (\dc jdg ->
         buildDataCon False jdg dc $ snd $ splitAppTys g) hi)
-      (rule $ destruct' (const subgoal) hi)
+      (rule $ destruct' False (const subgoal) hi)
     $ case (splitTyConApp_maybe g, splitTyConApp_maybe ty) of
         (Just (gtc, _), Just (tytc, _)) -> gtc == tytc
         _ -> False
@@ -155,20 +154,28 @@ destructOrHomoAuto hi = tracing "destructOrHomoAuto" $ do
 -- | Case split, and leave holes in the matches.
 destruct :: HyInfo CType -> TacticsM ()
 destruct hi = requireConcreteHole $ tracing "destruct(user)" $
-  rule $ destruct' (const subgoal) hi
+  rule $ destruct' False (const subgoal) hi
+
+
+------------------------------------------------------------------------------
+-- | Case split, and leave holes in the matches. Performs record punning.
+destructPun :: HyInfo CType -> TacticsM ()
+destructPun hi = requireConcreteHole $ tracing "destructPun(user)" $
+  rule $ destruct' True (const subgoal) hi
 
 
 ------------------------------------------------------------------------------
 -- | Case split, using the same data constructor in the matches.
 homo :: HyInfo CType -> TacticsM ()
-homo = requireConcreteHole . tracing "homo" . rule . destruct' (\dc jdg ->
+homo = requireConcreteHole . tracing "homo" . rule . destruct' False (\dc jdg ->
   buildDataCon False jdg dc $ snd $ splitAppTys $ unCType $ jGoal jdg)
 
 
 ------------------------------------------------------------------------------
 -- | LambdaCase split, and leave holes in the matches.
 destructLambdaCase :: TacticsM ()
-destructLambdaCase = tracing "destructLambdaCase" $ rule $ destructLambdaCase' (const subgoal)
+destructLambdaCase =
+  tracing "destructLambdaCase" $ rule $ destructLambdaCase' False (const subgoal)
 
 
 ------------------------------------------------------------------------------
@@ -176,7 +183,7 @@ destructLambdaCase = tracing "destructLambdaCase" $ rule $ destructLambdaCase' (
 homoLambdaCase :: TacticsM ()
 homoLambdaCase =
   tracing "homoLambdaCase" $
-    rule $ destructLambdaCase' $ \dc jdg ->
+    rule $ destructLambdaCase' False $ \dc jdg ->
       buildDataCon False jdg dc
         . snd
         . splitAppTys
@@ -204,7 +211,7 @@ apply hi = requireConcreteHole $ tracing ("apply' " <> show (hi_name hi)) $ do
     pure $
       ext
         & #syn_used_vals %~ S.insert func
-        & #syn_val       %~ noLoc . foldl' (@@) (var' func) . fmap unLoc
+        & #syn_val       %~ mkApply func . fmap unLoc
 
 
 ------------------------------------------------------------------------------
@@ -291,13 +298,14 @@ destructAll :: TacticsM ()
 destructAll = do
   jdg <- goal
   let args = fmap fst
-           $ sortOn (Down . snd)
+           $ sort
            $ mapMaybe (\(hi, prov) ->
               case prov of
                 TopLevelArgPrv _ idx _ -> pure (hi, idx)
                 _ -> Nothing
                 )
            $ fmap (\hi -> (hi, hi_provenance hi))
+           $ filter (isAlgType . unCType . hi_type)
            $ unHypothesis
            $ jHypothesis jdg
   for_ args destruct

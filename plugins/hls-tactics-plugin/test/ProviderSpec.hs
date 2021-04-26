@@ -24,6 +24,7 @@ spec = do
     "T2.hs" 2 21
     [ (id, Destruct, "eab")
     , (id, Homomorphism, "eab")
+    , (not, DestructPun, "eab")
     ]
   mkTest
     "Won't suggest homomorphism on the wrong type"
@@ -50,5 +51,23 @@ spec = do
     "Doesn't suggest lambdacase without -XLambdaCase"
     "T2.hs" 11 25
     [ (not, DestructLambdaCase, "")
+    ]
+
+  mkTest
+    "Doesn't suggest destruct if already destructed"
+    "ProvideAlreadyDestructed.hs" 6 18
+    [ (not, Destruct, "x")
+    ]
+
+  mkTest
+    "...but does suggest destruct if destructed in a different branch"
+    "ProvideAlreadyDestructed.hs" 9 7
+    [ (id, Destruct, "x")
+    ]
+
+  mkTest
+    "Doesn't suggest destruct on class methods"
+    "ProvideLocalHyOnly.hs" 2 12
+    [ (not, Destruct, "mempty")
     ]
 

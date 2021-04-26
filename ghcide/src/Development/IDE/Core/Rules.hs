@@ -27,6 +27,7 @@ module Development.IDE.Core.Rules(
     getParsedModule,
     getParsedModuleWithComments,
     getClientConfigAction,
+    usePropertyAction,
     -- * Rules
     CompiledLinkables(..),
     IsHiFileStable(..),
@@ -122,9 +123,8 @@ import           Development.IDE.Types.HscEnvEq
 import           Development.IDE.Types.Location
 import qualified Development.IDE.Types.Logger                 as L
 import           Development.IDE.Types.Options
-import           Development.Shake                            hiding
-                                                              (Diagnostic)
-import           Development.Shake.Classes                    hiding (get, put)
+import           Development.IDE.Graph
+import           Development.IDE.Graph.Classes                    hiding (get, put)
 import           Fingerprint
 import           GHC.Generics                                 (Generic)
 import           GHC.IO.Encoding
@@ -139,7 +139,12 @@ import           Language.LSP.Types                           (SMethod (SCustomM
 import           Language.LSP.VFS
 import           Module
 import           TcRnMonad                                    (tcg_dependent_files)
-import Control.Applicative
+
+import           Ide.Plugin.Properties (HasProperty, KeyNameProxy, Properties, ToHsType, useProperty)
+import           Ide.Types (PluginId)
+import           Data.Default (def)
+import           Ide.PluginUtils (configForPlugin)
+import           Control.Applicative
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
@@ -939,6 +944,19 @@ getClientConfigAction defValue = do
   case A.parse (parseConfig defValue) <$> mbVal of
     Just (Success c) -> return c
     _                -> return defValue
+
+usePropertyAction ::
+  (HasProperty s k t r) =>
+  KeyNameProxy s ->
+  PluginId ->
+  Properties r ->
+  Action (ToHsType t)
+usePropertyAction kn plId p = do
+  config <- getClientConfigAction def
+  let pluginConfig = configForPlugin config plId
+  pure $ useProperty kn p $ plcConfig pluginConfig
+
+-- ---------------------------------------------------------------------
 
 -- | For now we always use bytecode unless something uses unboxed sums and tuples along with TH
 getLinkableType :: NormalizedFilePath -> Action (Maybe LinkableType)

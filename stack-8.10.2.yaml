@@ -3,6 +3,7 @@ resolver: nightly-2020-12-09
 packages:
   - .
   - ./hie-compat
+  - ./hls-graph
   - ./ghcide/
   - ./hls-plugin-api
   - ./hls-test-utils
@@ -36,7 +37,6 @@ extra-deps:
   - lsp-1.2.0.0
   - lsp-types-1.2.0.0
   - lsp-test-0.14.0.0
-  - haddock-library-1.10.0
   - heapsize-0.3.0
   - hie-bios-0.7.4
   - implicit-hie-cradle-0.3.0.2
@@ -44,6 +44,7 @@ extra-deps:
   - monad-dijkstra-0.1.1.2
   - refinery-0.3.0.0
   - retrie-0.1.1.1
+  - shake-0.19.4
   - stylish-haskell-0.12.2.0
   - semigroups-0.18.5
   - temporary-1.2.1.1

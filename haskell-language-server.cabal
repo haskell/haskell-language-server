@@ -1,7 +1,7 @@
 cabal-version:      2.4
 category:           Development
 name:               haskell-language-server
-version:            1.0.0.0
+version:            1.1.0.0
 synopsis:           LSP server for GHC
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -63,17 +63,17 @@ library
     , cryptohash-sha1
     , data-default
     , ghc
-    , ghcide                ^>= 1.1.0.0
+    , ghcide                ^>= 1.2.0.2
     , gitrev
     , lsp
     , hie-bios
     , hiedb
-    , hls-plugin-api        >= 1.0 && < 1.2
+    , hls-plugin-api        ^>= 1.1
     , hslogger
     , optparse-applicative
     , optparse-simple
     , process
-    , shake
+    , hls-graph
     , safe-exceptions
     , sqlite-simple
     , unordered-containers
@@ -192,22 +192,22 @@ common example-plugins
 
 common class
   if flag(class) || flag(all-plugins)
-    build-depends: hls-class-plugin ^>= 1.0.0.0
+    build-depends: hls-class-plugin ^>= 1.0.0.1
     cpp-options: -Dclass
 
 common haddockComments
   if flag(haddockComments) || flag(all-plugins)
-    build-depends: hls-haddock-comments-plugin ^>= 1.0.0.0
+    build-depends: hls-haddock-comments-plugin ^>= 1.0.0.1
     cpp-options: -DhaddockComments
 
 common eval
   if flag(eval) || flag(all-plugins)
-    build-depends: hls-eval-plugin ^>= 1.0.0.0
+    build-depends: hls-eval-plugin ^>= 1.1.0.0
     cpp-options: -Deval
 
 common importLens
   if flag(importLens) || flag(all-plugins)
-    build-depends: hls-explicit-imports-plugin ^>= 1.0.0.0
+    build-depends: hls-explicit-imports-plugin ^>= 1.0.0.1
     cpp-options: -DimportLens
 
 common refineImports
@@ -217,17 +217,17 @@ common refineImports
 
 common retrie
   if flag(retrie) || flag(all-plugins)
-    build-depends: hls-retrie-plugin ^>= 1.0.0.0
+    build-depends: hls-retrie-plugin ^>= 1.0.0.1
     cpp-options: -Dretrie
 
 common tactic
   if flag(tactic) || flag(all-plugins)
-    build-depends: hls-tactics-plugin ^>= 1.0.0.0
+    build-depends: hls-tactics-plugin ^>= 1.1.0.0
     cpp-options: -Dtactic
 
 common hlint
   if flag(hlint) || flag(all-plugins)
-    build-depends: hls-hlint-plugin ^>= 1.0.0.0
+    build-depends: hls-hlint-plugin ^>= 1.0.0.2
     cpp-options: -Dhlint
 
 common moduleName
@@ -245,7 +245,7 @@ common pragmas
 
 common splice
   if flag(splice) || flag(all-plugins)
-    build-depends: hls-splice-plugin ^>= 1.0.0.0
+    build-depends: hls-splice-plugin ^>= 1.0.0.1
     cpp-options: -Dsplice
 
 -- formatters
@@ -278,7 +278,7 @@ common stylishHaskell
 
 common brittany
   if (flag(brittany) || flag(all-formatters))
-    build-depends: hls-brittany-plugin ^>= 1.0.0.0
+    build-depends: hls-brittany-plugin ^>= 1.0.0.1
     cpp-options: -Dbrittany
 
 executable haskell-language-server
@@ -343,7 +343,7 @@ executable haskell-language-server
     , mtl
     , regex-tdfa
     , safe-exceptions
-    , shake                    >=0.17.5
+    , hls-graph
     , sqlite-simple
     , temporary
     , transformers
@@ -398,11 +398,11 @@ test-suite func-test
     , hspec-expectations
     , lens
     , ghcide
-    , hls-test-utils
+    , hls-test-utils ^>= 1.0.0.0
     , lsp-types
     , aeson
-    , hls-plugin-api        >= 1.0 && < 1.2
-    , lsp-test              == 0.14.0.0
+    , hls-plugin-api
+    , lsp-test
     , containers
     , unordered-containers
 

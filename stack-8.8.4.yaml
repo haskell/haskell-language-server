@@ -3,6 +3,7 @@ resolver: lts-16.31 # last 8.8.4 lts
 packages:
   - .
   - ./hie-compat
+  - ./hls-graph
   - ./ghcide/
   - ./shake-bench
   - ./hls-plugin-api
@@ -37,7 +38,6 @@ extra-deps:
   - ghc-lib-parser-8.10.4.20210206
   - ghc-trace-events-0.1.2.1
   - haskell-src-exts-1.21.1
-  - haddock-library-1.10.0
   - heapsize-0.3.0
   - hie-bios-0.7.4
   - hlint-3.2.3
@@ -54,6 +54,7 @@ extra-deps:
   - refinery-0.3.0.0
   - retrie-0.1.1.1
   - semigroups-0.18.5
+  - shake-0.19.4
   - stylish-haskell-0.12.2.0
   - temporary-1.2.1.1
   - bytestring-encoding-0.1.0.0@sha256:460b49779fbf0112e8e2f1753c1ed9131eb18827600c298f4d6bb51c4e8c1c0d,1727

@@ -2,6 +2,7 @@ packages:
          ./
          ./hie-compat
          ./shake-bench
+         ./hls-graph
          ./ghcide
          ./hls-plugin-api
          ./hls-test-utils

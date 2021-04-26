@@ -1,6 +1,6 @@
 cabal-version: 2.2
 name:          hls-hlint-plugin
-version:       1.0.0.1
+version:       1.0.0.2
 synopsis:      Hlint integration plugin with Haskell Language Server
 description:
   Please see Haskell Language Server Readme (https://github.com/haskell/haskell-language-server#readme)
@@ -41,15 +41,14 @@ library
     , extra
     , filepath
     , ghc-exactprint        >=0.6.3.4
-    , ghcide                ^>=1.1.0.0
+    , ghcide                ^>=1.2.0.2
     , hashable
     , hlint                 >=3.2
-    , hls-plugin-api        >=1.0     && <1.2
+    , hls-plugin-api        ^>=1.1.0.0
     , hslogger
     , lens
     , lsp
     , regex-tdfa
-    , shake
     , temporary
     , text
     , transformers
