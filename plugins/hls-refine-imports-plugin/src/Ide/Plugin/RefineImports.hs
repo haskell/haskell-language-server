@@ -26,8 +26,18 @@ import qualified Data.Text                            as T
 import           Data.Traversable                     (forM)
 import           Development.IDE
 import           Development.IDE.Core.PositionMapping
-import           Development.IDE.GHC.Compat
-import           Development.Shake.Classes
+import           Development.IDE.GHC.Compat           (AvailInfo,
+                                                       GenLocated (L), GhcRn,
+                                                       HsModule (hsmodImports),
+                                                       ImportDecl (ImportDecl, ideclHiding, ideclName),
+                                                       LIE, LImportDecl,
+                                                       Module (moduleName),
+                                                       ModuleName,
+                                                       ParsedModule (ParsedModule, pm_parsed_source),
+                                                       SrcSpan (RealSrcSpan),
+                                                       getLoc, ieName, noLoc,
+                                                       tcg_exports, unLoc)
+import           Development.IDE.Graph.Classes
 import           GHC.Generics                         (Generic)
 import           Ide.Plugin.ExplicitImports           (extractMinimalImports,
                                                        within)
@@ -91,7 +101,7 @@ lensProvider
           runIde state $ useWithStale RefineImports nfp
         case mbRefinedImports of
           -- Implement the provider logic:
-          -- for every import, if it's lacking a explicit list, generate a code lens
+          -- for every refined import, generate a code lens
           Just (RefineImportsResult result, posMapping) -> do
             commands <-
               sequence
@@ -104,8 +114,7 @@ lensProvider
     | otherwise =
       return $ Right (List [])
 
--- | If there are any implicit imports, provide one code action to turn them all
---   into explicit imports.
+-- | Provide one code action to refine all imports
 codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
 codeActionProvider ideState _pId (CodeActionParams _ _ docId range _context)
   | TextDocumentIdentifier {_uri} <- docId,
@@ -130,7 +139,7 @@ codeActionProvider ideState _pId (CodeActionParams _ _ docId range _context)
                 ]
               caExplicitImports = InR CodeAction {..}
               _title = "Refine all imports"
-              _kind = Just CodeActionQuickFix
+              _kind = Just $ CodeActionUnknown "quickfix.import.refine"
               _command = Nothing
               _edit = Just WorkspaceEdit
                 {_changes, _documentChanges, _changeAnnotations}
@@ -190,9 +199,9 @@ refineImportsRule = define $ \RefineImports nfp -> do
         -> Map.Map ModuleName [AvailInfo]
         -> Map.Map ModuleName [AvailInfo]
       filterByImport (L _ ImportDecl{ideclHiding = Just (_, L _ names)}) avails =
-        let importedNames = map (prettyPrint . ieName . unLoc) names
+        let importedNames = map (ieName . unLoc) names
         in flip Map.filter avails $ \a ->
-              any ((`elem` importedNames) . prettyPrint)
+              any (`elem` importedNames)
                 $ concatMap availNamesWithSelectors a
       filterByImport _ _ = mempty
   let constructImport
@@ -251,7 +260,7 @@ mkExplicitEdit posMapping (L src imp) explicit
 generateLens :: PluginId -> Uri -> TextEdit -> IO (Maybe CodeLens)
 generateLens pId uri edits@TextEdit {_range, _newText} = do
   -- The title of the command is just the minimal explicit import decl
-  let title = T.intercalate ", " (T.lines _newText)
+  let title = "Refine imports to " <> T.intercalate ", " (T.lines _newText)
       -- the code lens has no extra data
       _xdata = Nothing
       -- an edit that replaces the whole declaration with the explicit one

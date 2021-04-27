@@ -1,0 +1,10 @@
+cradle:
+  direct:
+    arguments:
+    - UsualCase.hs
+    - WithOverride.hs
+    - A.hs
+    - B.hs
+    - C.hs
+    - D.hs
+    - E.hs
