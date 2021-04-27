@@ -9,14 +9,23 @@ import Data.Bool (bool)
 import Wingman.Judgements (jLocalHypothesis, isDisallowed)
 import Data.Functor ((<&>))
 import Data.Text.Prettyprint.Doc.Render.String (renderString)
+import qualified Data.Text as T
+import Language.LSP.Types (sectionSeparator)
+
+forceMarkdownNewlines :: String -> String
+forceMarkdownNewlines = unlines . fmap (<> "  ") . lines
 
 layout :: Doc ann -> String
-layout = renderString . layoutPretty (LayoutOptions $ AvailablePerLine 80 0.6)
+layout
+  = flip mappend (T.unpack sectionSeparator)
+  . forceMarkdownNewlines
+  . renderString
+  . layoutPretty (LayoutOptions $ AvailablePerLine 80 0.6)
 
 proofState :: RunTacticResults -> Doc ann
-proofState RunTacticResults{rtr_subgoals} =
+proofState RunTacticResults{rtr_extract, rtr_subgoals} =
   vsep
-    $ (countFinished "goals accomplished" "goal" $ length rtr_subgoals)
+    $ (countFinished (viaShow rtr_extract) "goal" $ length rtr_subgoals)
     : fmap prettySubgoal rtr_subgoals
 
 

@@ -219,10 +219,6 @@ judgementForHole state nfp range cfg = do
 
       (jdg, ctx) <- liftMaybe $ mkJudgementAndContext cfg g binds new_rss tcg eps kt
 
-      let mps = getAllMetaprograms $ tcg_binds $ untrackedStaleValue tcg
-      for_ mps $ \prog ->
-        liftIO $ putStrLn $ either id id $ attempt_it ctx jdg prog
-
       dflags <- getIdeDynflags state nfp
       pure (fmap realSrcSpanToRange new_rss, jdg, ctx, dflags)
 

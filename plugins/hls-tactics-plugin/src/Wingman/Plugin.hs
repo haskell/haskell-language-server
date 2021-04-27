@@ -38,6 +38,7 @@ import           Wingman.Range
 import           Wingman.StaticPlugin
 import           Wingman.Tactics
 import           Wingman.Types
+import Wingman.LanguageServer.Metaprogram (hoverProvider)
 
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -59,6 +60,7 @@ descriptor plId = (defaultPluginDescriptor plId)
   , pluginHandlers = mconcat
       [ mkPluginHandler STextDocumentCodeAction codeActionProvider
       , mkPluginHandler STextDocumentCodeLens codeLensProvider
+      , mkPluginHandler STextDocumentHover hoverProvider
       ]
   , pluginRules = wingmanRules plId
   , pluginConfigDescriptor =

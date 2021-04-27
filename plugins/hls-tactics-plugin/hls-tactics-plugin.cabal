@@ -44,6 +44,7 @@ library
     Wingman.KnownStrategies.QuickCheck
     Wingman.LanguageServer
     Wingman.LanguageServer.TacticProviders
+    Wingman.LanguageServer.Metaprogram
     Wingman.Machinery
     Wingman.Metaprogramming.Lexer
     Wingman.Metaprogramming.Parser
