@@ -17,6 +17,7 @@ import           Wingman.LanguageServer.TacticProviders (useNameFromHypothesis)
 import           Wingman.Metaprogramming.Lexer
 import           Wingman.Tactics
 import           Wingman.Types
+import Wingman.Metaprogramming.ProofState (proofState, layout)
 
 
 nullary :: T.Text -> TacticsM () -> Parser (TacticsM ())
@@ -70,7 +71,7 @@ operators =
     ]
 
 
-attempt_it :: Context -> Judgement -> String -> Either String (LHsExpr GhcPs)
+attempt_it :: Context -> Judgement -> String -> Either String String
 attempt_it ctx jdg program =
   case P.runParser (sc *> tactic <* P.eof) "<splice>" $ T.pack program of
     Left peb -> Left $ P.errorBundlePretty peb
@@ -81,5 +82,5 @@ attempt_it ctx jdg program =
              tt
         of
           Left tes -> Left $ show tes
-          Right rtr -> Right $ rtr_extract rtr
+          Right rtr -> Right $ layout $ proofState rtr
 

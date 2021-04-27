@@ -221,7 +221,7 @@ judgementForHole state nfp range cfg = do
 
       let mps = getAllMetaprograms $ tcg_binds $ untrackedStaleValue tcg
       for_ mps $ \prog ->
-        liftIO $ putStrLn $ either id show $ attempt_it ctx jdg prog
+        liftIO $ putStrLn $ either id id $ attempt_it ctx jdg prog
 
       dflags <- getIdeDynflags state nfp
       pure (fmap realSrcSpanToRange new_rss, jdg, ctx, dflags)
