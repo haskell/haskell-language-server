@@ -476,6 +476,7 @@ rose a rs = Rose $ Node a $ coerce rs
 data RunTacticResults = RunTacticResults
   { rtr_trace       :: Trace
   , rtr_extract     :: LHsExpr GhcPs
+  , rtr_subgoals    :: [Judgement]
   , rtr_other_solns :: [Synthesized (LHsExpr GhcPs)]
   , rtr_jdg         :: Judgement
   , rtr_ctx         :: Context

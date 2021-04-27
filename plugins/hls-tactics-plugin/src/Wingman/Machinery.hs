@@ -82,11 +82,12 @@ runTactic ctx jdg t =
               flip sortBy solns $ comparing $ \(ext, (_, holes)) ->
                 Down $ scoreSolution ext jdg holes
         case sorted of
-          ((syn, _) : _) ->
+          ((syn, (_, subgoals)) : _) ->
             Right $
               RunTacticResults
-                { rtr_trace = syn_trace syn
-                , rtr_extract = simplify $ syn_val syn
+                { rtr_trace    = syn_trace syn
+                , rtr_extract  = simplify $ syn_val syn
+                , rtr_subgoals = subgoals
                 , rtr_other_solns = reverse . fmap fst $ sorted
                 , rtr_jdg = jdg
                 , rtr_ctx = ctx
