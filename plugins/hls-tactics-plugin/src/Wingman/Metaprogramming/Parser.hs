@@ -9,7 +9,6 @@ module Wingman.Metaprogramming.Parser where
 import qualified Control.Monad.Combinators.Expr as P
 import           Data.Functor
 import qualified Data.Text as T
-import           Development.IDE.GHC.Compat (LHsExpr, GhcPs)
 import qualified Refinery.Tactic as R
 import qualified Text.Megaparsec as P
 import           Wingman.Auto
@@ -51,6 +50,7 @@ oneTactic =
     , unary_occ "ctor" userSplit
     , nullary   "obvious" obvious
     , nullary   "auto" auto
+    , nullary   "sorry" sorry
     ]
 
 

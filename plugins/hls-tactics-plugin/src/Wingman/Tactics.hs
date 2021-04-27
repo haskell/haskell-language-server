@@ -35,6 +35,7 @@ import           Wingman.Judgements
 import           Wingman.Machinery
 import           Wingman.Naming
 import           Wingman.Types
+import OccName (mkVarOcc)
 
 
 ------------------------------------------------------------------------------
@@ -273,6 +274,12 @@ splitSingle = tracing "splitSingle" $ do
 obvious :: TacticsM ()
 obvious = tracing "obvious" $ do
   pruning split $ bool (Just NoProgress) Nothing . null
+
+
+------------------------------------------------------------------------------
+-- | Sorry leaves a hole in its extract
+sorry :: TacticsM ()
+sorry = rule $ const $ pure $ (pure $ noLoc $ var' $ mkVarOcc "_")
 
 
 ------------------------------------------------------------------------------
