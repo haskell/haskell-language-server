@@ -45,6 +45,9 @@ brackets = P.between (symbol "[") (symbol "]")
 braces :: Parser a -> Parser a
 braces = P.between (symbol "{") (symbol "}")
 
+parens :: Parser a -> Parser a
+parens = P.between (symbol "(") (symbol ")")
+
 identifier :: Text -> Parser ()
 identifier i = lexeme (P.string i *> P.notFollowedBy ichar)
 

@@ -29,10 +29,13 @@ unary_occ name tac = tac <$> (identifier name *> variable)
 variadic_occ :: T.Text -> ([OccName] -> TacticsM ()) -> Parser (TacticsM ())
 variadic_occ name tac = tac <$> (identifier name *> P.many variable)
 
-
-tactic :: Parser (TacticsM ())
-tactic = flip P.makeExprParser operators $  P.choice
+oneTactic :: Parser (TacticsM ())
+oneTactic =
+  P.choice
     [ braces tactic
+      -- TODO(sandy): lean uses braces for control flow, but i always forget
+      -- and want to use parens. is there a semantic difference?
+    , parens tactic
     , nullary   "assumption" assumption
     , unary_occ "assume" assume
     , variadic_occ   "intros" $ \case
@@ -42,12 +45,17 @@ tactic = flip P.makeExprParser operators $  P.choice
     , nullary   "destruct_all" destructAll
     , unary_occ "destruct" $ useNameFromHypothesis destruct
     , unary_occ "homo" $ useNameFromHypothesis homo
+    , nullary   "application" application
     , unary_occ "apply" $ useNameFromHypothesis apply
-    , unary_occ "split" userSplit
+    , nullary   "split" split
+    , unary_occ "ctor" userSplit
     , nullary   "obvious" obvious
     , nullary   "auto" auto
-    , R.try <$> (keyword "try" *> tactic)
     ]
+
+
+tactic :: Parser (TacticsM ())
+tactic = flip P.makeExprParser operators oneTactic
 
 bindOne :: TacticsM a -> TacticsM a -> TacticsM a
 bindOne t t1 = t R.<@> [t1]
@@ -55,6 +63,7 @@ bindOne t t1 = t R.<@> [t1]
 operators :: [[P.Operator Parser (TacticsM ())]]
 operators =
     [ [ P.Prefix (symbol "*" $> R.many_) ]
+    , [ P.Prefix (symbol "try" $> R.try) ]
     , [ P.InfixR (symbol "|" $> (R.<%>) )]
     , [ P.InfixL (symbol ";" $> (>>))
       , P.InfixL (symbol "," $> bindOne)

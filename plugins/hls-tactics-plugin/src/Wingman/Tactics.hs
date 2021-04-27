@@ -223,6 +223,9 @@ apply hi = requireConcreteHole $ tracing ("apply' " <> show (hi_name hi)) $ do
         & #syn_used_vals %~ S.insert func
         & #syn_val       %~ mkApply func . fmap unLoc
 
+application :: TacticsM ()
+application = overFunctions apply
+
 
 ------------------------------------------------------------------------------
 -- | Choose between each of the goal's data constructors.
