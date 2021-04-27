@@ -773,16 +773,12 @@ setOptions (ComponentOptions theOpts compRoot _) dflags = do
           setLinkerOptions $
           disableOptimisation $
           setUpTypedHoles $
-          enableQuasiQuotes $
           makeDynFlagsAbsolute compRoot dflags'
     -- initPackages parses the -package flags and
     -- sets up the visibility for each component.
     -- Throws if a -package flag cannot be satisfied.
     (final_df, _) <- liftIO $ wrapPackageSetupException $ initPackages dflags''
     return (final_df, targets)
-
-enableQuasiQuotes :: DynFlags -> DynFlags
-enableQuasiQuotes = flip xopt_set QuasiQuotes
 
 -- we don't want to generate object code so we compile to bytecode
 -- (HscInterpreted) which implies LinkInMemory

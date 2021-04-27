@@ -32,7 +32,6 @@ module Development.IDE.Core.Compile
   , setupFinderCache
   , getDocsBatch
   , lookupName
-  , pattern WingmanMetaprogram
   ) where
 
 import           Development.IDE.Core.Preprocessor
@@ -124,7 +123,6 @@ import           Data.Unique
 import           GHC.Fingerprint
 import qualified Language.LSP.Server               as LSP
 import qualified Language.LSP.Types                as LSP
-import Generics.SYB hiding (orElse)
 
 -- | Given a string buffer, return the string (after preprocessing) and the 'ParsedModule'.
 parseModule
@@ -211,37 +209,6 @@ captureSplices dflags k = do
             aw' <- metaRequestAW hook e
             liftIO $ modifyIORef' var $ awSplicesL %~ ((e, aw') :)
             pure $ f aw'
-
-
-wingmanMetaprogrammingPlugin :: StaticPlugin
-wingmanMetaprogrammingPlugin =
-    StaticPlugin $ PluginWithArgs (defaultPlugin { parsedResultAction = worker })  []
-  where
-    worker :: [CommandLineOption] -> ModSummary -> HsParsedModule -> Hsc HsParsedModule
-    worker _ _ pm = pure $ pm { hpm_module = addWingmanMetaprogrammingSyntax $ hpm_module pm }
-
-
-pattern WingmanMetaprogram :: FastString -> HsExpr p
-pattern WingmanMetaprogram mp
-  <- HsSCC _ (SourceText "wingman-meta-program") (StringLiteral NoSourceText mp)
-      (L _ ( HsVar _ _))
-
-mkWingmanMetaprogram :: SrcSpan -> FastString -> HsExpr GhcPs
-mkWingmanMetaprogram ss mp =
-  HsSCC noExt (SourceText "wingman-meta-program") (StringLiteral NoSourceText mp)
-    $ L ss
-    $ HsVar noExt
-    $ L ss
-    $ mkRdrUnqual
-    $ mkVarOcc "_"
-
-
-addWingmanMetaprogrammingSyntax :: Data a => a -> a
-addWingmanMetaprogrammingSyntax =
-  everywhere $ mkT $ \case
-    L ss (HsSpliceE _ (HsQuasiQuote _ _ (occNameString . rdrNameOcc -> "wingman") _ mp)) ->
-      L ss $ mkWingmanMetaprogram ss mp
-    (x :: LHsExpr GhcPs) -> x
 
 tcRnModule :: HscEnv -> (DynFlags -> DynFlags) -> [Linkable] -> ParsedModule -> IO TcModuleResult
 tcRnModule hsc_env modify_dflags keep_lbls pmod = do

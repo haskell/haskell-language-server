@@ -14,9 +14,8 @@ import           Control.Monad.State (State, get, put, evalState)
 import           Control.Monad.Trans.Maybe
 import           Data.Bifunctor (first)
 import           Data.Coerce
+import           Data.Foldable (for_)
 import           Data.Functor ((<&>))
-import           Data.Generics.Aliases (mkQ)
-import           Data.Generics.Schemes (everything)
 import qualified Data.HashMap.Strict as Map
 import           Data.IORef (readIORef)
 import qualified Data.Map as M
@@ -37,11 +36,12 @@ import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error (realSrcSpanToRange)
 import           Development.IDE.GHC.ExactPrint
-import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindings)
 import           Development.IDE.Graph (Action, RuleResult, Rules, action)
-import           Development.IDE.Graph.Classes (Typeable, Binary, Hashable, NFData)
+import           Development.IDE.Graph.Classes (Binary, Hashable, NFData)
+import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindings)
 import qualified FastString
 import           GHC.Generics (Generic)
+import           Generics.SYB hiding (Generic)
 import           GhcPlugins (tupleDataCon, consDataCon, substTyAddInScope, ExternalPackageState, HscEnv (hsc_EPS), liftIO, unpackFS)
 import qualified Ide.Plugin.Config as Plugin
 import           Ide.Plugin.Properties
@@ -60,12 +60,10 @@ import           Wingman.GHC
 import           Wingman.Judgements
 import           Wingman.Judgements.SYB (everythingContaining)
 import           Wingman.Judgements.Theta
+import           Wingman.Metaprogramming.Parser (attempt_it)
 import           Wingman.Range
+import           Wingman.StaticPlugin (pattern WingmanMetaprogram)
 import           Wingman.Types
-import Generics.SYB hiding (Generic)
-import Development.IDE.Core.Compile (pattern WingmanMetaprogram)
-import Data.Foldable (for_)
-import Wingman.Metaprogramming.Parser (attempt_it)
 
 
 tacticDesc :: T.Text -> T.Text

@@ -49,6 +49,7 @@ library
     Wingman.Metaprogramming.Parser
     Wingman.Naming
     Wingman.Plugin
+    Wingman.StaticPlugin
     Wingman.Range
     Wingman.Simplify
     Wingman.Tactics
