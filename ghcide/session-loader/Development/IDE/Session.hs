@@ -772,7 +772,6 @@ setOptions (ComponentOptions theOpts compRoot _) dflags = do
           setIgnoreInterfacePragmas $
           setLinkerOptions $
           disableOptimisation $
-          allowEmptyCaseButWithWarning $
           setUpTypedHoles $
           enableQuasiQuotes $
           makeDynFlagsAbsolute compRoot dflags'
@@ -784,14 +783,6 @@ setOptions (ComponentOptions theOpts compRoot _) dflags = do
 
 enableQuasiQuotes :: DynFlags -> DynFlags
 enableQuasiQuotes = flip xopt_set QuasiQuotes
-
--- | Wingman wants to support destructing of empty cases, but these are a parse
--- error by default. So we want to enable 'EmptyCase', but then that leads to
--- silent errors without 'Opt_WarnIncompletePatterns'.
-allowEmptyCaseButWithWarning :: DynFlags -> DynFlags
-allowEmptyCaseButWithWarning =
-  flip xopt_set EmptyCase . flip wopt_set Opt_WarnIncompletePatterns
-
 
 -- we don't want to generate object code so we compile to bytecode
 -- (HscInterpreted) which implies LinkInMemory
