@@ -14,7 +14,6 @@ import           Control.Monad.State (State, get, put, evalState)
 import           Control.Monad.Trans.Maybe
 import           Data.Bifunctor (first)
 import           Data.Coerce
-import           Data.Foldable (for_)
 import           Data.Functor ((<&>))
 import qualified Data.HashMap.Strict as Map
 import           Data.IORef (readIORef)
@@ -60,7 +59,6 @@ import           Wingman.GHC
 import           Wingman.Judgements
 import           Wingman.Judgements.SYB (everythingContaining)
 import           Wingman.Judgements.Theta
-import           Wingman.Metaprogramming.Parser (attempt_it)
 import           Wingman.Range
 import           Wingman.StaticPlugin (pattern WingmanMetaprogram)
 import           Wingman.Types

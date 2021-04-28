@@ -53,7 +53,11 @@ hoverProvider state plId (HoverParams (TextDocumentIdentifier uri) pos _)
               let tr_range = fmap realSrcSpanToRange trss
               (_, jdg, ctx, _) <- judgementForHole state nfp tr_range cfg
               pure $ Hover
-                { _contents = HoverContents $ MarkupContent MkPlainText $ either T.pack T.pack $ attempt_it ctx jdg $ T.unpack program
+                { _contents = HoverContents
+                            $ MarkupContent MkMarkdown
+                            $ either T.pack T.pack
+                            $ attempt_it ctx jdg
+                            $ T.unpack program
                 , _range = Just $ unTrack tr_range
                 }
             Nothing -> empty
