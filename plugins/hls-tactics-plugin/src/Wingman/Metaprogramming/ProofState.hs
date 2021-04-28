@@ -3,59 +3,107 @@
 
 module Wingman.Metaprogramming.ProofState where
 
-import Data.Text.Prettyprint.Doc
-import Wingman.Types
-import Data.Bool (bool)
-import Wingman.Judgements (jLocalHypothesis, isDisallowed)
-import Data.Functor ((<&>))
-import Data.Text.Prettyprint.Doc.Render.String (renderString)
+import           Data.Bool (bool)
+import           Data.Functor ((<&>))
 import qualified Data.Text as T
-import Language.LSP.Types (sectionSeparator)
+import           Data.Text.Prettyprint.Doc
+import           Data.Text.Prettyprint.Doc.Internal (textSpaces)
+import           Data.Text.Prettyprint.Doc.Render.Util.Panic
+import           Language.LSP.Types (sectionSeparator)
+import           Wingman.Judgements (jHypothesis)
+import           Wingman.Types
+
+renderSimplyDecorated
+    :: Monoid out
+    => (T.Text -> out) -- ^ Render plain 'Text'
+    -> (ann -> out)  -- ^ How to render an annotation
+    -> (ann -> out)  -- ^ How to render the removed annotation
+    -> SimpleDocStream ann
+    -> out
+renderSimplyDecorated text push pop = go []
+  where
+    go _           SFail               = panicUncaughtFail
+    go []          SEmpty              = mempty
+    go (_:_)       SEmpty              = panicInputNotFullyConsumed
+    go stack       (SChar c rest)      = text (T.singleton c) <> go stack rest
+    go stack       (SText _l t rest)   = text t <> go stack rest
+    go stack       (SLine i rest)      = text (T.singleton '\n') <> text (textSpaces i) <> go stack rest
+    go stack       (SAnnPush ann rest) = push ann <> go (ann : stack) rest
+    go (ann:stack) (SAnnPop rest)      = pop ann <> go stack rest
+    go []          SAnnPop{}           = panicUnpairedPop
+{-# INLINE renderSimplyDecorated #-}
+
+
+data Ann
+  = Goal
+  | Hypoth
+  | Status
+  deriving (Eq, Ord, Show, Enum, Bounded)
 
 forceMarkdownNewlines :: String -> String
 forceMarkdownNewlines = unlines . fmap (<> "  ") . lines
 
-layout :: Doc ann -> String
+layout :: Doc Ann -> String
 layout
-  = flip mappend (T.unpack sectionSeparator)
-  . forceMarkdownNewlines
-  . renderString
+  = forceMarkdownNewlines
+  . T.unpack
+  . renderSimplyDecorated id
+    renderAnn
+    renderUnann
   . layoutPretty (LayoutOptions $ AvailablePerLine 80 0.6)
 
-proofState :: RunTacticResults -> Doc ann
-proofState RunTacticResults{rtr_extract, rtr_subgoals} =
+renderAnn :: Ann -> T.Text
+renderAnn Goal = "<span style='color:#ef4026;'>"
+renderAnn Hypoth = "```haskell\n"
+renderAnn Status = "<span style='color:#6495ED;'>"
+
+renderUnann :: Ann -> T.Text
+renderUnann Goal = "</span>"
+renderUnann Hypoth = "\n```\n"
+renderUnann Status = "</span>"
+
+proofState :: RunTacticResults -> Doc Ann
+proofState RunTacticResults{rtr_subgoals} =
   vsep
-    $ (countFinished (viaShow rtr_extract) "goal" $ length rtr_subgoals)
+    $ ( annotate Status
+      . countFinished "goals accomplished 🎉" "goal"
+      $ length rtr_subgoals
+      )
+    : pretty sectionSeparator
     : fmap prettySubgoal rtr_subgoals
 
 
-prettySubgoal :: Judgement -> Doc ann
+prettySubgoal :: Judgement -> Doc Ann
 prettySubgoal jdg =
-  vsep
-    [ mempty
-    , prettyHypothesis $ jLocalHypothesis jdg
-    , "⊢" <+> prettyType (_jGoal jdg)
+  vsep $
+    [ mempty | has_hy] <>
+    [ annotate Hypoth $ prettyHypothesis hy | has_hy] <>
+    [ "⊢" <+> annotate Goal (prettyType (_jGoal jdg))
+    , pretty sectionSeparator
     ]
+  where
+    hy = jHypothesis jdg
+    has_hy = not $ null $ unHypothesis hy
 
 
-prettyHypothesis :: Hypothesis CType -> Doc ann
+prettyHypothesis :: Hypothesis CType -> Doc Ann
 prettyHypothesis hy =
-  vsep $ filter (not . isDisallowed . hi_provenance) (unHypothesis hy) <&> \hi ->
+  vsep $ unHypothesis hy <&> \hi ->
     prettyHyInfo hi
 
-prettyHyInfo :: HyInfo CType -> Doc ann
+prettyHyInfo :: HyInfo CType -> Doc Ann
 prettyHyInfo hi = viaShow (hi_name hi) <+> "::" <+> prettyType (hi_type hi)
 
 
-prettyType :: CType -> Doc ann
+prettyType :: CType -> Doc Ann
 prettyType (CType ty) = viaShow ty
 
 
-countFinished :: Doc ann -> Doc ann -> Int -> Doc ann
+countFinished :: Doc Ann -> Doc Ann -> Int -> Doc Ann
 countFinished finished _ 0 = finished
 countFinished _ thing n    = count thing n
 
-count :: Doc ann -> Int -> Doc ann
+count :: Doc Ann -> Int -> Doc Ann
 count thing n =
   pretty n <+> thing <> bool "" "s" (n /= 1)
 
