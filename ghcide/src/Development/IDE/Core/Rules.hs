@@ -216,18 +216,17 @@ getParsedModuleRule =
     sess <- use_ GhcSession file
     let hsc = hscEnv sess
     opt <- getIdeOptions
-    modify_dflags <- getModifyDynFlags
 
     -- TODO(sandy): should we apply modify_dflags here?
     let dflags    = ms_hspp_opts ms
-        mainParse = getParsedModuleDefinition hsc modify_dflags opt file ms
+        mainParse = getParsedModuleDefinition hsc opt file ms
 
     -- Parse again (if necessary) to capture Haddock parse errors
     res@(_,pmod) <- if gopt Opt_Haddock dflags
         then
             liftIO mainParse
         else do
-            let haddockParse = getParsedModuleDefinition hsc modify_dflags opt file (withOptHaddock ms)
+            let haddockParse = getParsedModuleDefinition hsc opt file (withOptHaddock ms)
 
             -- parse twice, with and without Haddocks, concurrently
             -- we cannot ignore Haddock parse errors because files of
@@ -285,11 +284,10 @@ getParsedModuleWithCommentsRule =
     ModSummaryResult{msrModSummary = ms} <- use_ GetModSummary file
     sess <- use_ GhcSession file
     opt <- getIdeOptions
-    modify_dflags <- getModifyDynFlags
 
     let ms' = withoutOption Opt_Haddock $ withOption Opt_KeepRawTokenStream ms
 
-    liftIO $ snd <$> getParsedModuleDefinition (hscEnv sess) modify_dflags opt file ms'
+    liftIO $ snd <$> getParsedModuleDefinition (hscEnv sess) opt file ms'
 
 getModifyDynFlags :: Action (DynFlags -> DynFlags)
 getModifyDynFlags = maybe id modifyDynFlags <$> getShakeExtra
@@ -297,13 +295,12 @@ getModifyDynFlags = maybe id modifyDynFlags <$> getShakeExtra
 
 getParsedModuleDefinition
     :: HscEnv
-   -> (DynFlags -> DynFlags)
     -> IdeOptions
     -> NormalizedFilePath
     -> ModSummary -> IO ([FileDiagnostic], Maybe ParsedModule)
-getParsedModuleDefinition packageState modifyDynFlags opt file ms = do
+getParsedModuleDefinition packageState opt file ms = do
     let fp = fromNormalizedFilePath file
-    (diag, res) <- parseModule opt packageState modifyDynFlags fp ms
+    (diag, res) <- parseModule opt packageState fp ms
     case res of
         Nothing   -> pure (diag, Nothing)
         Just modu -> pure (diag, Just modu)
@@ -620,11 +617,10 @@ typeCheckRuleDefinition
 typeCheckRuleDefinition hsc pm = do
   setPriority priorityTypeCheck
   IdeOptions { optDefer = defer } <- getIdeOptions
-  modify_dflags <- getModifyDynFlags
 
   linkables_to_keep <- currentLinkables
   addUsageDependencies $ liftIO $
-    typecheckModule defer hsc modify_dflags linkables_to_keep pm
+    typecheckModule defer hsc linkables_to_keep pm
   where
     addUsageDependencies :: Action (a, Maybe TcModuleResult) -> Action (a, Maybe TcModuleResult)
     addUsageDependencies a = do
@@ -792,7 +788,9 @@ isHiFileStableRule = defineEarlyCutoff $ RuleNoDiagnostics $ \IsHiFileStable f -
 getModSummaryRule :: Rules ()
 getModSummaryRule = do
     defineEarlyCutoff $ Rule $ \GetModSummary f -> do
-        session <- hscEnv <$> use_ GhcSession f
+        session' <- hscEnv <$> use_ GhcSession f
+        modify_dflags <- getModifyDynFlags
+        let session = session' { hsc_dflags = modify_dflags $ hsc_dflags session' }
         (modTime, mFileContent) <- getFileContents f
         let fp = fromNormalizedFilePath f
         modS <- liftIO $ runExceptT $
@@ -872,15 +870,14 @@ regenerateHiFile :: HscEnvEq -> NormalizedFilePath -> ModSummary -> Maybe Linkab
 regenerateHiFile sess f ms compNeeded = do
     let hsc = hscEnv sess
     opt <- getIdeOptions
-    modify_dflags <- getModifyDynFlags
 
     -- Embed haddocks in the interface file
-    (diags, mb_pm) <- liftIO $ getParsedModuleDefinition hsc modify_dflags opt f (withOptHaddock ms)
+    (diags, mb_pm) <- liftIO $ getParsedModuleDefinition hsc opt f (withOptHaddock ms)
     (diags, mb_pm) <- case mb_pm of
         Just _ -> return (diags, mb_pm)
         Nothing -> do
             -- if parsing fails, try parsing again with Haddock turned off
-            (diagsNoHaddock, mb_pm) <- liftIO $ getParsedModuleDefinition hsc modify_dflags opt f ms
+            (diagsNoHaddock, mb_pm) <- liftIO $ getParsedModuleDefinition hsc opt f ms
             return (mergeParseErrorsHaddock diagsNoHaddock diags, mb_pm)
     case mb_pm of
         Nothing -> return (diags, Nothing)

@@ -128,14 +128,13 @@ import qualified Language.LSP.Types                as LSP
 parseModule
     :: IdeOptions
     -> HscEnv
-    -> (DynFlags -> DynFlags)
     -> FilePath
     -> ModSummary
     -> IO (IdeResult ParsedModule)
-parseModule IdeOptions{..} env modifyDynFlags filename ms =
+parseModule IdeOptions{..} env filename ms =
     fmap (either (, Nothing) id) $
     runExceptT $ do
-        (diag, modu) <- parseFileContents env modifyDynFlags optPreprocessor filename ms
+        (diag, modu) <- parseFileContents env optPreprocessor filename ms
         return (diag, Just modu)
 
 
@@ -153,11 +152,10 @@ computePackageDeps env pkg = do
 
 typecheckModule :: IdeDefer
                 -> HscEnv
-                -> (DynFlags -> DynFlags)
                 -> [Linkable] -- ^ linkables not to unload
                 -> ParsedModule
                 -> IO (IdeResult TcModuleResult)
-typecheckModule (IdeDefer defer) hsc modify_dflags keep_lbls pm = do
+typecheckModule (IdeDefer defer) hsc keep_lbls pm = do
     fmap (either (,Nothing) id) $
       catchSrcErrors (hsc_dflags hsc) "typecheck" $ do
 
@@ -166,7 +164,7 @@ typecheckModule (IdeDefer defer) hsc modify_dflags keep_lbls pm = do
 
         modSummary' <- initPlugins hsc modSummary
         (warnings, tcm) <- withWarnings "typecheck" $ \tweak ->
-            tcRnModule hsc modify_dflags keep_lbls $ demoteIfDefer pm{pm_mod_summary = tweak modSummary'}
+            tcRnModule hsc keep_lbls $ demoteIfDefer pm{pm_mod_summary = tweak modSummary'}
         let errorPipeline = unDefer . hideDiag dflags . tagDiag
             diags = map errorPipeline warnings
             deferedError = any fst diags
@@ -210,10 +208,10 @@ captureSplices dflags k = do
             liftIO $ modifyIORef' var $ awSplicesL %~ ((e, aw') :)
             pure $ f aw'
 
-tcRnModule :: HscEnv -> (DynFlags -> DynFlags) -> [Linkable] -> ParsedModule -> IO TcModuleResult
-tcRnModule hsc_env modify_dflags keep_lbls pmod = do
+tcRnModule :: HscEnv -> [Linkable] -> ParsedModule -> IO TcModuleResult
+tcRnModule hsc_env keep_lbls pmod = do
   let ms = pm_mod_summary pmod
-      hsc_env_tmp = hsc_env { hsc_dflags = modify_dflags $ ms_hspp_opts ms }
+      hsc_env_tmp = hsc_env { hsc_dflags = ms_hspp_opts ms }
 
   unload hsc_env_tmp keep_lbls
 
@@ -813,14 +811,13 @@ parseHeader dflags filename contents = do
 -- ModSummary must contain the (preprocessed) contents of the buffer
 parseFileContents
        :: HscEnv
-       -> (DynFlags -> DynFlags)
        -> (GHC.ParsedSource -> IdePreprocessedSource)
        -> FilePath  -- ^ the filename (for source locations)
        -> ModSummary
        -> ExceptT [FileDiagnostic] IO ([FileDiagnostic], ParsedModule)
-parseFileContents env modifyDynFlags customPreprocessor filename ms = do
+parseFileContents env customPreprocessor filename ms = do
    let loc  = mkRealSrcLoc (mkFastString filename) 1 1
-       dflags = modifyDynFlags $ ms_hspp_opts ms
+       dflags = ms_hspp_opts ms
 
        contents = fromJust $ ms_hspp_buf ms
    case unP Parser.parseModule (mkPState dflags contents loc) of
