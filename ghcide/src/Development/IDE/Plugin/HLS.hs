@@ -26,6 +26,7 @@ import           Development.IDE.Core.Shake
 import           Development.IDE.Core.Tracing
 import           Development.IDE.LSP.Server
 import           Development.IDE.Plugin
+import qualified Development.IDE.Plugin       as P
 import           Development.IDE.Types.Logger
 import           Development.IDE.Graph            (Rules)
 import           Ide.Plugin.Config
@@ -66,19 +67,19 @@ asGhcIdePlugin (IdePlugins ls) =
 -- ---------------------------------------------------------------------
 
 rulesPlugins :: [(PluginId, Rules ())] -> Plugin Config
-rulesPlugins rs = Plugin rules mempty mempty
+rulesPlugins rs = mempty { P.pluginRules = rules }
     where
         rules = foldMap snd rs
 
 dynFlagsPlugins :: [(PluginId, DynFlags -> DynFlags)] -> Plugin Config
-dynFlagsPlugins rs = Plugin mempty mempty endo
+dynFlagsPlugins rs = mempty { P.pluginModifyDynflags = endo }
     where
         endo = foldMap (Endo . snd) rs
 
 -- ---------------------------------------------------------------------
 
 executeCommandPlugins :: [(PluginId, [PluginCommand IdeState])] -> Plugin Config
-executeCommandPlugins ecs = Plugin mempty (executeCommandHandlers ecs) mempty
+executeCommandPlugins ecs = mempty { P.pluginHandlers = executeCommandHandlers ecs }
 
 executeCommandHandlers :: [(PluginId, [PluginCommand IdeState])] -> LSP.Handlers (ServerM Config)
 executeCommandHandlers ecs = requestHandler SWorkspaceExecuteCommand execCmd
@@ -140,7 +141,7 @@ executeCommandHandlers ecs = requestHandler SWorkspaceExecuteCommand execCmd
 -- ---------------------------------------------------------------------
 
 extensiblePlugins :: [(PluginId, PluginHandlers IdeState)] -> Plugin Config
-extensiblePlugins xs = Plugin mempty handlers mempty
+extensiblePlugins xs = mempty { P.pluginHandlers = handlers }
   where
     IdeHandlers handlers' = foldMap bakePluginId xs
     bakePluginId :: (PluginId, PluginHandlers IdeState) -> IdeHandlers
@@ -168,7 +169,7 @@ extensiblePlugins xs = Plugin mempty handlers mempty
 -- ---------------------------------------------------------------------
 
 extensibleNotificationPlugins :: [(PluginId, PluginNotificationHandlers IdeState)] -> Plugin Config
-extensibleNotificationPlugins xs = Plugin mempty handlers mempty
+extensibleNotificationPlugins xs = mempty { P.pluginHandlers = handlers }
   where
     IdeNotificationHandlers handlers' = foldMap bakePluginId xs
     bakePluginId :: (PluginId, PluginNotificationHandlers IdeState) -> IdeNotificationHandlers
