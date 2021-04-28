@@ -56,6 +56,7 @@ data TacticCommand
   | DestructAll
   | UseDataCon
   | Refine
+  | BeginMetaprogram
   deriving (Eq, Ord, Show, Enum, Bounded)
 
 -- | Generate a title for the command.
@@ -72,6 +73,7 @@ tacticTitle = (mappend "Wingman: " .) . go
     go DestructAll _            = "Split all function arguments"
     go UseDataCon dcon          = "Use constructor " <> dcon
     go Refine _                 = "Refine hole"
+    go BeginMetaprogram _       = "Use custom tactic block"
 
 
 ------------------------------------------------------------------------------

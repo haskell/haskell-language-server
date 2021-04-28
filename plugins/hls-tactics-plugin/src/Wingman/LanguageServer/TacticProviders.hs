@@ -52,6 +52,7 @@ commandTactic HomomorphismLambdaCase = const homoLambdaCase
 commandTactic DestructAll            = const destructAll
 commandTactic UseDataCon             = userSplit
 commandTactic Refine                 = const refine
+commandTactic BeginMetaprogram       = const metaprogram
 
 
 ------------------------------------------------------------------------------
@@ -67,6 +68,7 @@ tacticKind HomomorphismLambdaCase = "homomorphicLambdaCase"
 tacticKind DestructAll            = "splitFuncArgs"
 tacticKind UseDataCon             = "useConstructor"
 tacticKind Refine                 = "refine"
+tacticKind BeginMetaprogram       = "metaprogram"
 
 
 ------------------------------------------------------------------------------
@@ -83,6 +85,7 @@ tacticPreferred HomomorphismLambdaCase = False
 tacticPreferred DestructAll            = True
 tacticPreferred UseDataCon             = True
 tacticPreferred Refine                 = True
+tacticPreferred BeginMetaprogram       = False
 
 
 mkTacticKind :: TacticCommand -> CodeActionKind
@@ -139,6 +142,9 @@ commandProvider UseDataCon =
 commandProvider Refine =
   requireFeature FeatureRefineHole $
     provide Refine ""
+commandProvider BeginMetaprogram =
+  -- requireFeature FeatureMetaprogram $
+    provide BeginMetaprogram ""
 
 
 ------------------------------------------------------------------------------
