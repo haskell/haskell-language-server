@@ -10,7 +10,7 @@ module Wingman.LanguageServer where
 import           ConLike
 import           Control.Arrow ((***))
 import           Control.Monad
-import           Control.Monad.State (State, get, put, evalState)
+import           Control.Monad.State (State, evalState)
 import           Control.Monad.Trans.Maybe
 import           Data.Bifunctor (first)
 import           Data.Coerce
@@ -32,7 +32,7 @@ import           Development.IDE.Core.Service (runAction)
 import           Development.IDE.Core.Shake (IdeState (..), uses, define, use)
 import qualified Development.IDE.Core.Shake as IDE
 import           Development.IDE.Core.UseStale
-import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat hiding (parseExpr)
 import           Development.IDE.GHC.Error (realSrcSpanToRange)
 import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.Graph (Action, RuleResult, Rules, action)
@@ -41,7 +41,7 @@ import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindi
 import qualified FastString
 import           GHC.Generics (Generic)
 import           Generics.SYB hiding (Generic)
-import           GhcPlugins (tupleDataCon, consDataCon, substTyAddInScope, ExternalPackageState, HscEnv (hsc_EPS), liftIO, unpackFS)
+import           GhcPlugins (tupleDataCon, consDataCon, substTyAddInScope, ExternalPackageState, HscEnv (hsc_EPS), unpackFS)
 import qualified Ide.Plugin.Config as Plugin
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils (usePropertyLsp)
@@ -62,6 +62,13 @@ import           Wingman.Judgements.Theta
 import           Wingman.Range
 import           Wingman.StaticPlugin (pattern WingmanMetaprogram)
 import           Wingman.Types
+import Control.Monad.IO.Class
+import Control.Monad.RWS
+import Language.Haskell.GHC.ExactPrint (modifyAnnsT, addAnnotationsForPretty)
+import Retrie (transformA)
+import GhcPlugins (mkRdrUnqual)
+import Language.Haskell.GHC.ExactPrint (Transform)
+import Data.Functor.Identity (runIdentity)
 
 
 tacticDesc :: T.Text -> T.Text
@@ -548,5 +555,23 @@ mkWorkspaceEdits
     -> Graft (Either String) ParsedSource
     -> Either UserFacingMessage WorkspaceEdit
 mkWorkspaceEdits dflags ccs uri pm g = do
-  let response = transform dflags ccs uri g pm
+  let pm' = runIdentity $ transformA pm annotateMetaprograms
+  let response = transform dflags ccs uri g pm'
    in first (InfrastructureError . T.pack) response
+
+
+annotateMetaprograms :: Data a => a -> Transform a
+annotateMetaprograms = everywhereM $ mkM $ \case
+  L ss (WingmanMetaprogram mp) -> do
+    let x = L ss
+          $ HsSpliceE noExt
+          $ HsQuasiQuote noExt
+              (mkRdrUnqual $ mkVarOcc "splice")
+              (mkRdrUnqual $ mkVarOcc "wingman")
+              noSrcSpan
+              mp
+    let anns = addAnnotationsForPretty [] x mempty
+    modifyAnnsT $ mappend anns
+    pure x
+  (x :: LHsExpr GhcPs) -> pure x
+
