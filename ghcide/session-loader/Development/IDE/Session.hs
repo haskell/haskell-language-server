@@ -90,7 +90,6 @@ import           HieDb.Create
 import           HieDb.Types
 import           HieDb.Utils
 import           Maybes                               (MaybeT (runMaybeT))
-import           GHC.LanguageExtensions               (Extension(EmptyCase, QuasiQuotes))
 
 -- | Bump this version number when making changes to the format of the data stored in hiedb
 hiedbDataVersion :: String
