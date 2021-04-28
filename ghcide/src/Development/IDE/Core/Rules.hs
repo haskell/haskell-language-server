@@ -217,7 +217,6 @@ getParsedModuleRule =
     let hsc = hscEnv sess
     opt <- getIdeOptions
 
-    -- TODO(sandy): should we apply modify_dflags here?
     let dflags    = ms_hspp_opts ms
         mainParse = getParsedModuleDefinition hsc opt file ms
 

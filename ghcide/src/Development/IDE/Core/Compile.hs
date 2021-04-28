@@ -4,7 +4,6 @@
 {-# LANGUAGE CPP        #-}
 {-# LANGUAGE GADTs      #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE PatternSynonyms #-}
 #include "ghc-api-version.h"
 
 -- | Based on https://ghc.haskell.org/trac/ghc/wiki/Commentary/Compiler/API.
@@ -207,6 +206,7 @@ captureSplices dflags k = do
             aw' <- metaRequestAW hook e
             liftIO $ modifyIORef' var $ awSplicesL %~ ((e, aw') :)
             pure $ f aw'
+
 
 tcRnModule :: HscEnv -> [Linkable] -> ParsedModule -> IO TcModuleResult
 tcRnModule hsc_env keep_lbls pmod = do
@@ -818,7 +818,6 @@ parseFileContents
 parseFileContents env customPreprocessor filename ms = do
    let loc  = mkRealSrcLoc (mkFastString filename) 1 1
        dflags = ms_hspp_opts ms
-
        contents = fromJust $ ms_hspp_buf ms
    case unP Parser.parseModule (mkPState dflags contents loc) of
 #if MIN_GHC_API_VERSION(8,10,0)
