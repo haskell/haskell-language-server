@@ -71,16 +71,28 @@ operators =
     ]
 
 
+tacticProgram :: Parser (TacticsM ())
+tacticProgram = do
+  sc
+  r <- tactic P.<|> pure (pure ())
+  P.eof
+  pure r
+
+
+wrapError :: String -> String
+wrapError err = "```\n" <> err <> "\n```\n"
+
+
 attempt_it :: Context -> Judgement -> String -> Either String String
 attempt_it ctx jdg program =
-  case P.runParser (sc *> tactic <* P.eof) "<splice>" $ T.pack program of
-    Left peb -> Left $ P.errorBundlePretty peb
+  case P.runParser tacticProgram "<splice>" $ T.pack program of
+    Left peb -> Left $ wrapError $ P.errorBundlePretty peb
     Right tt -> do
       case runTactic
              ctx
              jdg
              tt
         of
-          Left tes -> Left $ show tes
+          Left tes -> Left $ wrapError $ show tes
           Right rtr -> Right $ layout $ proofState rtr
 
