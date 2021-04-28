@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Wingman.Tactics
   ( module Wingman.Tactics
   , runTactic
@@ -36,6 +38,7 @@ import           Wingman.Machinery
 import           Wingman.Naming
 import           Wingman.Types
 import OccName (mkVarOcc)
+import Wingman.StaticPlugin (pattern MetaprogramSyntax)
 
 
 ------------------------------------------------------------------------------
@@ -279,7 +282,13 @@ obvious = tracing "obvious" $ do
 ------------------------------------------------------------------------------
 -- | Sorry leaves a hole in its extract
 sorry :: TacticsM ()
-sorry = rule $ const $ pure $ (pure $ noLoc $ var' $ mkVarOcc "_")
+sorry = exact $ var' $ mkVarOcc "_"
+
+
+------------------------------------------------------------------------------
+-- | Sorry leaves a hole in its extract
+metaprogram :: TacticsM ()
+metaprogram = exact $ MetaprogramSyntax ""
 
 
 ------------------------------------------------------------------------------

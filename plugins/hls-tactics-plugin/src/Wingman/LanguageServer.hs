@@ -60,13 +60,12 @@ import           Wingman.Judgements
 import           Wingman.Judgements.SYB (everythingContaining)
 import           Wingman.Judgements.Theta
 import           Wingman.Range
-import           Wingman.StaticPlugin (pattern WingmanMetaprogram)
+import           Wingman.StaticPlugin (pattern WingmanMetaprogram, pattern MetaprogramSyntax)
 import           Wingman.Types
 import Control.Monad.IO.Class
 import Control.Monad.RWS
 import Language.Haskell.GHC.ExactPrint (modifyAnnsT, addAnnotationsForPretty)
 import Retrie (transformA)
-import GhcPlugins (mkRdrUnqual)
 import Language.Haskell.GHC.ExactPrint (Transform)
 import Data.Functor.Identity (runIdentity)
 
@@ -563,13 +562,7 @@ mkWorkspaceEdits dflags ccs uri pm g = do
 annotateMetaprograms :: Data a => a -> Transform a
 annotateMetaprograms = everywhereM $ mkM $ \case
   L ss (WingmanMetaprogram mp) -> do
-    let x = L ss
-          $ HsSpliceE noExt
-          $ HsQuasiQuote noExt
-              (mkRdrUnqual $ mkVarOcc "splice")
-              (mkRdrUnqual $ mkVarOcc "wingman")
-              noSrcSpan
-              mp
+    let x = L ss $ MetaprogramSyntax mp
     let anns = addAnnotationsForPretty [] x mempty
     modifyAnnsT $ mappend anns
     pure x

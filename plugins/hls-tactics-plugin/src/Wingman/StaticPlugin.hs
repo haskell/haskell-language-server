@@ -1,6 +1,7 @@
 module Wingman.StaticPlugin
   ( staticPlugin
   , pattern WingmanMetaprogram
+  , pattern MetaprogramSyntax
   ) where
 
 import           Data.Data
@@ -62,7 +63,21 @@ mkMetaprogram ss mp =
 addMetaprogrammingSyntax :: Data a => a -> a
 addMetaprogrammingSyntax =
   everywhere $ mkT $ \case
-    L ss (HsSpliceE _ (HsQuasiQuote _ _ (occNameString . rdrNameOcc -> "wingman") _ mp)) ->
+    L ss (MetaprogramSyntax mp) ->
       L ss $ mkMetaprogram ss mp
     (x :: LHsExpr GhcPs) -> x
+
+
+pattern MetaprogramSyntax :: FastString -> HsExpr GhcPs
+pattern MetaprogramSyntax mp <-
+    HsSpliceE _ (HsQuasiQuote _ _ (occNameString . rdrNameOcc -> "wingman") _ mp)
+  where
+    MetaprogramSyntax mp =
+      HsSpliceE noExt $
+        HsQuasiQuote
+          noExt
+          (mkRdrUnqual $ mkVarOcc "splice")
+          (mkRdrUnqual $ mkVarOcc "wingman")
+          noSrcSpan
+          mp
 
