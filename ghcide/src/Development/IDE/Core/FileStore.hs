@@ -37,16 +37,17 @@ import           Data.Maybe
 import qualified Data.Rope.UTF16                              as Rope
 import qualified Data.Text                                    as T
 import           Data.Time
+import           Data.Time.Clock.POSIX
 import           Development.IDE.Core.OfInterest              (OfInterestVar (..),
                                                                getFilesOfInterest)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Orphans                  ()
+import           Development.IDE.Graph
 import           Development.IDE.Import.DependencyInformation
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
-import           Development.IDE.Graph
 import           HieDb.Create                                 (deleteMissingRealFiles)
 import           Ide.Plugin.Config                            (CheckParents (..))
 import           System.IO.Error
@@ -62,6 +63,7 @@ import           Foreign.Marshal                              (alloca)
 import           Foreign.Ptr
 import           Foreign.Storable
 import qualified System.Posix.Error                           as Posix
+import           System.Posix.Files                           (getFileStatus, modificationTimeHiRes)
 #endif
 
 import qualified Development.IDE.Types.Logger                 as L
@@ -126,7 +128,7 @@ getModificationTimeImpl :: VFSHandle
         (Maybe BS.ByteString, ([FileDiagnostic], Maybe FileVersion))
 getModificationTimeImpl vfs isWatched missingFileDiags file = do
         let file' = fromNormalizedFilePath file
-        let wrap time@(l,s) = (Just $ LBS.toStrict $ B.encode time, ([], Just $ ModificationTime l s))
+        let wrap time = (Just $ LBS.toStrict $ B.encode $ toRational time, ([], Just $ ModificationTime time))
         mbVirtual <- liftIO $ getVirtualFile vfs $ filePathToUri' file
         case mbVirtual of
             Just (virtualFileVersion -> ver) -> do
@@ -192,38 +194,17 @@ resetFileStore ideState changes = mask $ \_ ->
 -- We might also want to try speeding this up on Windows at some point.
 -- TODO leverage DidChangeWatchedFile lsp notifications on clients that
 -- support them, as done for GetFileExists
-getModTime :: FilePath -> IO (Int64, Int64)
+getModTime :: FilePath -> IO POSIXTime
 getModTime f =
 #ifdef mingw32_HOST_OS
-    do time <- Dir.getModificationTime f
-       let !day = fromInteger $ toModifiedJulianDay $ utctDay time
-           !dayTime = fromInteger $ diffTimeToPicoseconds $ utctDayTime time
-       pure (day, dayTime)
+    Dir.getModificationTime f
 #else
-    withCString f $ \f' ->
-    alloca $ \secPtr ->
-    alloca $ \nsecPtr -> do
-        Posix.throwErrnoPathIfMinus1Retry_ "getmodtime" f $ c_getModTime f' secPtr nsecPtr
-        CTime sec <- peek secPtr
-        CLong nsec <- peek nsecPtr
-        pure (sec, nsec)
-
--- Sadly even unix’s getFileStatus + modificationTimeHiRes is still about twice as slow
--- as doing the FFI call ourselves :(.
-foreign import ccall "getmodtime" c_getModTime :: CString -> Ptr CTime -> Ptr CLong -> IO Int
+    modificationTimeHiRes <$> getFileStatus f
 #endif
 
 modificationTime :: FileVersion -> Maybe UTCTime
-modificationTime VFSVersion{} = Nothing
-modificationTime (ModificationTime large small) = Just $ internalTimeToUTCTime large small
-
-internalTimeToUTCTime :: Int64 -> Int64 -> UTCTime
-internalTimeToUTCTime large small =
-#ifdef mingw32_HOST_OS
-    UTCTime (ModifiedJulianDay $ fromIntegral large) (picosecondsToDiffTime $ fromIntegral small)
-#else
-    systemToUTCTime $ MkSystemTime large (fromIntegral small)
-#endif
+modificationTime VFSVersion{}             = Nothing
+modificationTime (ModificationTime posix) = Just $ posixSecondsToUTCTime posix
 
 getFileContentsRule :: VFSHandle -> Rules ()
 getFileContentsRule vfs = define $ \GetFileContents file -> getFileContentsImpl vfs file
@@ -260,8 +241,8 @@ getFileContents f = do
         liftIO $ case foi of
           IsFOI Modified{} -> getCurrentTime
           _ -> do
-            (large,small) <- getModTime $ fromNormalizedFilePath f
-            pure $ internalTimeToUTCTime large small
+            posix <- getModTime $ fromNormalizedFilePath f
+            pure $ posixSecondsToUTCTime posix
     return (modTime, txt)
 
 fileStoreRules :: VFSHandle -> (NormalizedFilePath -> Action Bool) -> Rules ()
