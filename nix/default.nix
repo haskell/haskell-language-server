@@ -1,6 +1,5 @@
 { sources ? import ./sources.nix }:
 let
-  nix-pre-commit-hooks = (import (builtins.fetchTarball "https://github.com/cachix/pre-commit-hooks.nix/tarball/master/" + "/nix/") { sources = sources; }).packages;
   overlay = _self: pkgs:
     let
         sharedOverrides = {
@@ -78,14 +77,4 @@ in (import sources.nixpkgs
   {
     overlays = [ overlay ];
     config = {allowBroken = true;};
-  }) // {
-    pre-commit-check = nix-pre-commit-hooks.run {
-      src = ./.;
-      # If your hooks are intrusive, avoid running on each commit with a default_states like this:
-      # default_stages = ["manual" "push"];
-      hooks = {
-        stylish-haskell.enable = true;
-        stylish-haskell.excludes = [ "^Setup.hs$" "test/testdata/.*$" "test/data/.*$" "^hie-compat/.*$" "^plugins/hls-tactics-plugin/.*$" ];
-      };
-    };
-  }
+  })
