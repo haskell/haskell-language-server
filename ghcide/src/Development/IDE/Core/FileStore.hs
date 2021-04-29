@@ -55,15 +55,7 @@ import           System.IO.Error
 #ifdef mingw32_HOST_OS
 import qualified System.Directory                             as Dir
 #else
-import           Data.Time.Clock.System                       (SystemTime (MkSystemTime),
-                                                               systemToUTCTime)
-import           Foreign.C.String
-import           Foreign.C.Types
-import           Foreign.Marshal                              (alloca)
-import           Foreign.Ptr
-import           Foreign.Storable
-import qualified System.Posix.Error                           as Posix
-import           System.Posix.Files                           (getFileStatus, modificationTimeHiRes)
+import           System.Posix.Files                           ( getFileStatus, modificationTimeHiRes)
 #endif
 
 import qualified Development.IDE.Types.Logger                 as L
