@@ -197,7 +197,7 @@ resetFileStore ideState changes = mask $ \_ ->
 getModTime :: FilePath -> IO POSIXTime
 getModTime f =
 #ifdef mingw32_HOST_OS
-    Dir.getModificationTime f
+    utcTimeToPOSIXSeconds <$> Dir.getModificationTime f
 #else
     modificationTimeHiRes <$> getFileStatus f
 #endif
