@@ -11,7 +11,11 @@
 
 #include "ghc-api-version.h"
 
-module Ide.Plugin.ExplicitImports (descriptor) where
+module Ide.Plugin.ExplicitImports
+  ( descriptor
+  , extractMinimalImports
+  , within
+  ) where
 
 import           Control.DeepSeq
 import           Control.Monad.IO.Class
@@ -210,7 +214,8 @@ extractMinimalImports (Just hsc) (Just TcModuleResult {..}) = do
   -- call findImportUsage does exactly what we need
   -- GHC is full of treats like this
   let usage = findImportUsage imports gblElts
-  (_, minimalImports) <- initTcWithGbl (hscEnv hsc) tcEnv span $ getMinimalImports usage
+  (_, minimalImports) <-
+    initTcWithGbl (hscEnv hsc) tcEnv span $ getMinimalImports usage
 
   -- return both the original imports and the computed minimal ones
   return (imports, minimalImports)
@@ -249,11 +254,11 @@ generateLens pId uri importEdit@TextEdit {_range, _newText} = do
   -- create and return the code lens
   return $ Just CodeLens {..}
 
+--------------------------------------------------------------------------------
+
 -- | A helper to run ide actions
 runIde :: IdeState -> Action a -> IO a
-runIde state = runAction "importLens" state
-
---------------------------------------------------------------------------------
+runIde = runAction "importLens"
 
 within :: Range -> SrcSpan -> Bool
 within (Range start end) span =

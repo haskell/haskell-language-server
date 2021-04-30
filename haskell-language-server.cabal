@@ -123,6 +123,11 @@ flag importLens
   default:     True
   manual:      True
 
+flag refineImports
+  description: Enable refineImports plugin
+  default:     True
+  manual:      True
+
 flag retrie
   description: Enable retrie plugin
   default:     True
@@ -205,6 +210,11 @@ common importLens
     build-depends: hls-explicit-imports-plugin ^>= 1.0.0.1
     cpp-options: -DimportLens
 
+common refineImports
+  if flag(refineImports) || flag(all-plugins)
+    build-depends: hls-refine-imports-plugin
+    cpp-options: -DrefineImports
+
 common retrie
   if flag(retrie) || flag(all-plugins)
     build-depends: hls-retrie-plugin ^>= 1.0.0.1
@@ -279,6 +289,7 @@ executable haskell-language-server
                     , haddockComments
                     , eval
                     , importLens
+                    , refineImports
                     , retrie
                     , tactic
                     , hlint

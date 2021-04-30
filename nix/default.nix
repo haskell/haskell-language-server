@@ -36,6 +36,7 @@ let
             hls-haddock-comments-plugin = gitignoreSource ../plugins/hls-haddock-comments-plugin;
             hls-eval-plugin = gitignoreSource ../plugins/hls-eval-plugin;
             hls-explicit-imports-plugin = gitignoreSource ../plugins/hls-explicit-imports-plugin;
+            hls-refine-imports-plugin = gitignoreSource ../plugins/hls-refine-imports-plugin;
             hls-hlint-plugin = gitignoreSource ../plugins/hls-hlint-plugin;
             hls-retrie-plugin = gitignoreSource ../plugins/hls-retrie-plugin;
             hls-splice-plugin = gitignoreSource ../plugins/hls-splice-plugin;
