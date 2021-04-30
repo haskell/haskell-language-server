@@ -486,12 +486,11 @@ shakeOpen lspEnv defaultConfig logger debouncer
         let hiedbWriter = HieDbWriter{..}
         exportsMap <- newVar mempty
 
-        progress <-
+        progress <- do
+            let delay = if testing then 0 else 0.1
+                sampling = 0.1
             if reportProgress
-                then (if testing
-                        then directProgressReporting
-                        else delayedProgressReporting
-                     ) 0.1 lspEnv optProgressStyle
+                then makeProgressReporting delay sampling lspEnv optProgressStyle
                 else noProgressReporting
         actionQueue <- newQueue
 

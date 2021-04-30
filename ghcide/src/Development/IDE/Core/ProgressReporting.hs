@@ -3,19 +3,16 @@ module Development.IDE.Core.ProgressReporting
   ( ProgressEvent(..)
   , ProgressReporting(..)
   , noProgressReporting
-  , delayedProgressReporting
-  , directProgressReporting
+  , makeProgressReporting
   -- utilities, reexported for use in Core.Shake
   , mRunLspT
   , mRunLspTCallback
   ) where
 
 import           Control.Concurrent.Async
-import           Control.Concurrent.STM
 import           Control.Concurrent.Strict
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
-import qualified Control.Monad.STM              as STM
 import           Control.Monad.Trans.Class      (lift)
 import           Data.Foldable                  (for_, traverse_)
 import           Data.HashMap.Strict            (HashMap)
@@ -32,7 +29,6 @@ import qualified Language.LSP.Server            as LSP
 import           Language.LSP.Types
 import qualified Language.LSP.Types             as LSP
 import           System.Time.Extra
-import           UnliftIO.Exception             (bracket_)
 
 data ProgressEvent
     = KickStarted
@@ -55,14 +51,16 @@ noProgressReporting = return $ ProgressReporting
 --   synchronously. Progress notifications are sent from a sampling thread.
 --
 --  This 'ProgressReporting' is currently used only in tests.
-directProgressReporting
+makeProgressReporting
     :: Seconds -- ^ sampling rate
+    -> Seconds -- ^ initial delay
     -> Maybe (LSP.LanguageContextEnv config)
     -> ProgressReportingStyle
     -> IO ProgressReporting
-directProgressReporting sample env style = do
+makeProgressReporting sample delay env style = do
     st <- newIORef Nothing
     inProgressVar <- newIORef (HMap.empty @NormalizedFilePath @Int)
+    delayVar <- newIORef delay
 
     let progressUpdate KickStarted = do
           readIORef st >>= traverse_ (mRunLspT env . stop)
@@ -86,6 +84,8 @@ directProgressReporting sample env style = do
 
         progressLoop :: Seconds -> LSP.LspM a ()
         progressLoop prev = do
+            delayActual <- liftIO $ atomicModifyIORef delayVar (0,)
+            liftIO $ sleep delayActual
             mbToken <- liftIO $ readIORef st
             next <- case mbToken of
                 Nothing ->
@@ -100,78 +100,6 @@ directProgressReporting sample env style = do
     let progressStop = cancel progressThread
 
     pure ProgressReporting {..}
-
--- | A 'ProgressReporting' that enqueues Begin and End notifications in a new
---   thread, with a grace period (nothing will be sent if 'KickCompleted' arrives
---   before the end of the grace period).
---   Avoid using in tests where progress notifications are used to assert invariants.
-delayedProgressReporting
-  :: Seconds  -- ^ sampling rate, also used as grace period before Begin
-  -> Maybe (LSP.LanguageContextEnv c)
-  -> ProgressReportingStyle
-  -> IO ProgressReporting
-delayedProgressReporting sample lspEnv style = do
-    inProgressVar <- newVar (HMap.empty @NormalizedFilePath @Int)
-    mostRecentProgressEvent <- newTVarIO KickCompleted
-    progressAsync <- async $
-        progressThread mostRecentProgressEvent inProgressVar
-    let progressUpdate = atomically . writeTVar mostRecentProgressEvent
-        progressStop   = cancel progressAsync
-        inProgress :: NormalizedFilePath -> Action a -> Action a
-        inProgress = withProgressVar inProgressVar
-    return ProgressReporting{..}
-  where
-    -- The progress thread is a state machine with two states:
-    --   1. Idle
-    --   2. Reporting a kick event
-    -- And two transitions, modelled by 'ProgressEvent':
-    --   1. KickCompleted - transitions from Reporting into Idle
-    --   2. KickStarted - transitions from Idle into Reporting
-    -- When transitioning from Idle to Reporting a new async is spawned that
-    -- sends progress updates in a loop. The async is cancelled when transitioning
-    -- from Reporting to Idle.
-    progressThread mostRecentProgressEvent inProgress = progressLoopIdle
-      where
-        progressLoopIdle = do
-            atomically $ do
-                v <- readTVar mostRecentProgressEvent
-                case v of
-                    KickCompleted -> STM.retry
-                    KickStarted   -> return ()
-            asyncReporter <- async $ mRunLspT lspEnv $ do
-                -- first sleep a bit, so we only show progress messages if it's going to take
-                -- a "noticable amount of time" (we often expect a thread kill to arrive before the sleep finishes)
-                liftIO $ sleep sample
-                lspShakeProgress style inProgress
-            progressLoopReporting asyncReporter
-        progressLoopReporting asyncReporter = do
-            atomically $ do
-                v <- readTVar mostRecentProgressEvent
-                case v of
-                    KickStarted   -> STM.retry
-                    KickCompleted -> return ()
-            cancel asyncReporter
-            progressLoopIdle
-
-    lspShakeProgress style inProgress = do
-        u <- liftIO newProgressToken
-
-        ready <- create u
-
-        for_ ready $ \_ ->
-          bracket_ (start u) (stop u) (loop u 0)
-        where
-            loop id prev = do
-                liftIO $ sleep sample
-                current <- liftIO $ readVar inProgress
-                next <- progress style prev current id
-                loop id next
-
-    withProgressVar var file = actionBracket (f succ) (const $ f pred) . const
-        -- This functions are deliberately eta-expanded to avoid space leaks.
-        -- Do not remove the eta-expansion without profiling a session with at
-        -- least 1000 modifications.
-        where f shift = void $ modifyVar' var $ HMap.insertWith (\_ x -> shift x) file (shift 0)
 
 newProgressToken :: IO ProgressToken
 newProgressToken = ProgressTextToken . T.pack . show . hashUnique <$> liftIO newUnique
