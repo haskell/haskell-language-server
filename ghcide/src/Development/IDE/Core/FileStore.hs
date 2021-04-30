@@ -19,7 +19,8 @@ module Development.IDE.Core.FileStore(
     resetInterfaceStore,
     getModificationTimeImpl,
     addIdeGlobal,
-    getFileContentsImpl
+    getFileContentsImpl,
+    getModTime
     ) where
 
 import           Control.Concurrent.STM                       (atomically)
@@ -31,7 +32,6 @@ import           Control.Monad.IO.Class
 import qualified Data.ByteString                              as BS
 import           Data.Either.Extra
 import qualified Data.HashMap.Strict                          as HM
-import           Data.Int                                     (Int64)
 import qualified Data.Map.Strict                              as Map
 import           Data.Maybe
 import qualified Data.Rope.UTF16                              as Rope
