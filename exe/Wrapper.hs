@@ -7,6 +7,7 @@ import           Control.Monad.Extra
 import           Data.Default
 import           Data.Foldable
 import           Data.List
+import           Data.Void
 import qualified Development.IDE.Session as Session
 import qualified HIE.Bios.Environment    as HieBios
 import           HIE.Bios.Types
@@ -42,6 +43,9 @@ main = do
       VersionMode PrintNumericVersion ->
           putStrLn haskellLanguageServerNumericVersion
 
+      BiosMode PrintCradleType ->
+          print =<< findProjectCradle
+
       _ -> launchHaskellLanguageServer args
 
 launchHaskellLanguageServer :: Arguments -> IO ()
@@ -51,18 +55,11 @@ launchHaskellLanguageServer parsedArgs = do
     _                          -> pure ()
 
   d <- getCurrentDirectory
+  
+  -- search for the project cradle type
+  cradle <- findProjectCradle
 
-  let initialFp = (d </> "a")
-  -- Get the cabal directory from the cradle
-  hieYaml <- Session.findCradle def initialFp
-
-  -- Some log messages
-  case hieYaml of
-    Just yaml -> hPutStrLn stderr $ "Found \"" ++ yaml ++ "\" for \"" ++ initialFp ++ "\""
-    Nothing -> hPutStrLn stderr "No 'hie.yaml' found. Try to discover the project type!"
-
-  cradle <- Session.loadCradle def hieYaml d
-
+  -- Get the root directory from the cradle
   setCurrentDirectory $ cradleRootDir cradle
 
   case parsedArgs of
@@ -135,3 +132,17 @@ getRuntimeGhcVersion' cradle = do
         Nothing ->
           die $ "Cradle requires " ++ exe ++ " but couldn't find it" ++ "\n"
            ++ show cradle
+
+findProjectCradle :: IO (Cradle Void)
+findProjectCradle = do
+  d <- getCurrentDirectory
+
+  let initialFp = (d </> "a")
+  hieYaml <- Session.findCradle def initialFp
+
+  -- Some log messages
+  case hieYaml of
+    Just yaml -> hPutStrLn stderr $ "Found \"" ++ yaml ++ "\" for \"" ++ initialFp ++ "\""
+    Nothing -> hPutStrLn stderr "No 'hie.yaml' found. Try to discover the project type!"
+
+  Session.loadCradle def hieYaml d
