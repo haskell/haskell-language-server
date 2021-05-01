@@ -135,6 +135,7 @@ stop id = LSP.sendNotification LSP.SProgress
 
 progress :: (LSP.MonadLsp config f) =>
   ProgressReportingStyle -> Seconds -> HashMap NormalizedFilePath Int -> ProgressToken -> f Seconds
+progress NoProgress _ _ _ = return 0
 progress style prev current id = do
     let done = length $ filter (== 0) $ HMap.elems current
     let todo = HMap.size current
