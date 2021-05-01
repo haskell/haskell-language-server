@@ -131,7 +131,7 @@ delayedProgressReporting before after lspEnv optProgressStyle = do
                         let done = length $ filter (== 0) $ HMap.elems current
                         let todo = HMap.size current
                         let next = 100 * fromIntegral done / fromIntegral todo
-                        when (next /= prev) $
+                        when (style /= NoProgress && next /= prev) $
                           LSP.sendNotification LSP.SProgress $
                           LSP.ProgressParams
                               { _token = id
@@ -146,11 +146,7 @@ delayedProgressReporting before after lspEnv optProgressStyle = do
                                     , _message = Nothing
                                     , _percentage = Just next
                                     }
-                                  NoProgress -> LSP.WorkDoneProgressReportParams
-                                    { _cancellable = Nothing
-                                    , _message = Nothing
-                                    , _percentage = Nothing
-                                    }
+                                  NoProgress -> error "unreachable"
                               }
                         loop id next
 
