@@ -52,15 +52,14 @@ noProgressReporting = return $ ProgressReporting
 --
 --  This 'ProgressReporting' is currently used only in tests.
 makeProgressReporting
-    :: Seconds -- ^ sampling rate
-    -> Seconds -- ^ initial delay
+    :: Seconds -- ^ sleep before reporting
+    -> Seconds -- ^ sleep after reporting
     -> Maybe (LSP.LanguageContextEnv config)
     -> ProgressReportingStyle
     -> IO ProgressReporting
-makeProgressReporting sample delay env style = do
+makeProgressReporting before after env style = do
     st <- newIORef Nothing
     inProgressVar <- newIORef (HMap.empty @NormalizedFilePath @Int)
-    delayVar <- newIORef delay
 
     let progressUpdate KickStarted = do
           readIORef st >>= traverse_ (mRunLspT env . stop)
@@ -84,8 +83,7 @@ makeProgressReporting sample delay env style = do
 
         progressLoop :: Seconds -> LSP.LspM a ()
         progressLoop prev = do
-            delayActual <- liftIO $ atomicModifyIORef delayVar (0,)
-            liftIO $ sleep delayActual
+            liftIO $ sleep before
             mbToken <- liftIO $ readIORef st
             next <- case mbToken of
                 Nothing ->
@@ -93,7 +91,7 @@ makeProgressReporting sample delay env style = do
                 Just t -> do
                     current <- liftIO $ readIORef inProgressVar
                     progress style prev current t
-            liftIO $ sleep sample
+            liftIO $ sleep after
             progressLoop next
 
     progressThread <- async $ mRunLspT env $ progressLoop 0

@@ -487,10 +487,10 @@ shakeOpen lspEnv defaultConfig logger debouncer
         exportsMap <- newVar mempty
 
         progress <- do
-            let delay = if testing then 0 else 0.1
-                sampling = 0.1
+            let before = if testing then 0 else 0.1
+                after = if testing then 0.1 else 0
             if reportProgress
-                then makeProgressReporting delay sampling lspEnv optProgressStyle
+                then makeProgressReporting before after lspEnv optProgressStyle
                 else noProgressReporting
         actionQueue <- newQueue
 
