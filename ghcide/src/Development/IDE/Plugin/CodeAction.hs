@@ -162,60 +162,56 @@ findSigOfDecl pred decls =
         any (pred . unLoc) idsSig
     ]
 
-findSigOfDeclRanged :: Range -> [LHsDecl p] -> Either String (Sig p)
+findSigOfDeclRanged :: Range -> [LHsDecl p] -> Maybe (Sig p)
 findSigOfDeclRanged range decls = do
-  dec <- findDeclContainingLocE (_start range) decls
+  dec <- findDeclContainingLoc (_start range) decls
   case dec of
-     L _ (SigD _ sig@TypeSig {}) -> Right sig
+     L _ (SigD _ sig@TypeSig {}) -> Just sig
      L _ (ValD _ (bind :: HsBind p)) -> findSigOfBind range bind
-     _ -> Left "findSigOfDeclRanged"
+     _ -> Nothing
 
-findSigOfBind :: Range -> HsBind p -> Either String (Sig p)
+findSigOfBind :: Range -> HsBind p -> Maybe (Sig p)
 findSigOfBind range bind =
     case bind of
       FunBind {} -> findSigOfLMatch (unLoc $ mg_alts (fun_matches bind))
-      _ -> Left "findSigOfBind"
+      _ -> Nothing
   where
-    findSigOfLMatch :: [LMatch p (LHsExpr p)] -> Either String (Sig p)
+    findSigOfLMatch :: [LMatch p (LHsExpr p)] -> Maybe (Sig p)
     findSigOfLMatch ls = do
-      match <- findDeclContainingLocE (_start range) ls
+      match <- findDeclContainingLoc (_start range) ls
       findSigOfGRHSs (m_grhss (unLoc match))
 
-    findSigOfGRHSs :: GRHSs p (LHsExpr p) -> Either String (Sig p)
+    findSigOfGRHSs :: GRHSs p (LHsExpr p) -> Maybe (Sig p)
     findSigOfGRHSs grhs = do
         if _start range `isInsideSrcSpan` (getLoc $ grhssLocalBinds grhs)
         then findSigOfBinds range (unLoc (grhssLocalBinds grhs)) -- where clause
         else do
-          grhs <- findDeclContainingLocE (_start range) (grhssGRHSs grhs)
+          grhs <- findDeclContainingLoc (_start range) (grhssGRHSs grhs)
           case unLoc grhs of
             GRHS _ _ bd -> findSigOfExpr (unLoc bd)
-            _ -> Left "findSigOfGRHSs"
+            _ -> Nothing
 
-    findSigOfExpr :: HsExpr p -> Either String (Sig p)
+    findSigOfExpr :: HsExpr p -> Maybe (Sig p)
     findSigOfExpr = go
       where
         go (HsLet _ binds _) = findSigOfBinds range (unLoc binds)
         go (HsDo _ _ stmts) = do
-          stmtlr <- unLoc <$> findDeclContainingLocE (_start range) (unLoc stmts)
+          stmtlr <- unLoc <$> findDeclContainingLoc (_start range) (unLoc stmts)
           case stmtlr of
             LetStmt _ lhsLocalBindsLR -> findSigOfBinds range $ unLoc lhsLocalBindsLR
-            _ -> Left "HsDo"
-        go _ = Left "findSigOfExpr"
+            _ -> Nothing
+        go _ = Nothing
 
-findSigOfBinds :: Range -> HsLocalBinds p -> Either String (Sig p)
+findSigOfBinds :: Range -> HsLocalBinds p -> Maybe (Sig p)
 findSigOfBinds range = go
   where
     go (HsValBinds _ (ValBinds _ binds lsigs)) =
-        case unLoc <$> findDeclContainingLocE (_start range) lsigs of
-          Right sig' -> Right sig'
-          Left _ -> do
-            lHsBindLR <- findDeclContainingLocE (_start range) (bagToList binds)
+        case unLoc <$> findDeclContainingLoc (_start range) lsigs of
+          Just sig' -> Just sig'
+          Nothing -> do
+            lHsBindLR <- findDeclContainingLoc (_start range) (bagToList binds)
             findSigOfBind range (unLoc lHsBindLR)
-    go _ = Left "findSigOfBinds"
-
-findDeclContainingLocE :: Position -> [Located a] -> Either String (Located a)
-findDeclContainingLocE loc ls =
-  maybe (Left "findDeclContainingLoc") Right $ findDeclContainingLoc loc ls
+    go _ = Nothing
 
 findInstanceHead :: (Outputable (HsType p)) => DynFlags -> String -> [LHsDecl p] -> Maybe (LHsType p)
 findInstanceHead df instanceHead decls =
@@ -1125,7 +1121,7 @@ removeRedundantConstraints df (L _ HsModule {hsmodDecls}) Diagnostic{..}
   -- Account for both "Redundant constraint" and "Redundant constraints".
   | "Redundant constraint" `T.isInfixOf` _message
   , Just typeSignatureName <- findTypeSignatureName _message
-  , Right (TypeSig _ _ HsWC{hswc_body = HsIB {hsib_body = sig}})
+  , Just (TypeSig _ _ HsWC{hswc_body = HsIB {hsib_body = sig}})
     <- findSigOfDeclRanged _range hsmodDecls
   , Just redundantConstraintList <- findRedundantConstraints _message
   , rewrite <- removeConstraint (toRemove df redundantConstraintList) sig
