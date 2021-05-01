@@ -5401,7 +5401,6 @@ testIde rootDir arguments session = do
         sleep 1
         runIt
 
-    -- hClose hInWrite
     timeout 3 (wait server) >>= \case
         Just () -> pure ()
         Nothing -> do
@@ -5409,6 +5408,8 @@ testIde rootDir arguments session = do
             (t, _) <- duration $ cancel server
             putStrLn $ "Finishing canceling (took " <> showDuration t <> "s)"
 
+    hClose hInWrite
+    hClose hOutRead
     return res
 
 positionMappingTests :: TestTree
