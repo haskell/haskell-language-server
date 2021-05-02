@@ -110,7 +110,7 @@ jobs:
         run: cabal update
 
       - if: ${{ needs.pre_job.outputs.should_skip != 'true' && matrix.ghc == '9.0.1' }}
-        run: cabal configure --constraint "haskell-language-server -class -eval -tactic -moduleName -splice -fourmolu -ormolu -stylishHaskell -brittany"
+        run: cabal configure --constraint "haskell-language-server -class -eval -refineImports -tactic -moduleName -splice -fourmolu -ormolu -stylishHaskell -brittany"
 
       # Need this to work around filepath length limits in Windows
       - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
