@@ -18,6 +18,7 @@ import           Control.Monad.Trans.Class      (lift)
 import           Data.Foldable                  (for_)
 import           Data.Functor                   (($>))
 import qualified Data.HashMap.Strict            as HMap
+import           Data.Maybe                     (isJust)
 import qualified Data.Text                      as T
 import           Data.Unique
 import           Development.IDE.GHC.Orphans    ()
@@ -46,7 +47,6 @@ noProgressReporting = return $ ProgressReporting
   , inProgress = const id
   , progressStop   = pure ()
   }
-
 data State
     = NotStarted
     | Completed
@@ -65,6 +65,8 @@ updateState _     (Event KickCompleted) st          = pure st
 updateState _     StopProgress          (Running a) = cancel a $> Stopped
 updateState _     StopProgress          st          = pure st
 
+data InProgress = InProgress {todo, done :: !Int, current :: !(HMap.HashMap NormalizedFilePath Int)}
+
 -- | A 'ProgressReporting' that enqueues Begin and End notifications in a new
 --   thread, with a grace period (nothing will be sent if 'KickCompleted' arrives
 --   before the end of the grace period).
@@ -76,7 +78,7 @@ delayedProgressReporting
   -> ProgressReportingStyle
   -> IO ProgressReporting
 delayedProgressReporting before after lspEnv optProgressStyle = do
-    inProgressVar <- newVar (HMap.empty @NormalizedFilePath @Int)
+    inProgressVar <- newVar $ InProgress 0 0 mempty
     progressState <- newVar NotStarted
     let progressUpdate event = modifyVar_ progressState $ updateState (mRunLspT lspEnv $ lspShakeProgress inProgressVar) (Event event)
         progressStop   = modifyVar_ progressState $ updateState (mRunLspT lspEnv $ lspShakeProgress inProgressVar) StopProgress
@@ -115,9 +117,7 @@ delayedProgressReporting before after lspEnv optProgressStyle = do
                           }
                         }
                 loop id prev = do
-                    current <- liftIO $ readVar inProgress
-                    let done = length $ filter (== 0) $ HMap.elems current
-                    let todo = HMap.size current
+                    InProgress{..} <- liftIO $ readVar inProgress
                     if todo == 0 then loop id 0 else do
                         let next = 100 * fromIntegral done / fromIntegral todo
                         liftIO $ sleep after
@@ -144,7 +144,15 @@ delayedProgressReporting before after lspEnv optProgressStyle = do
             -- This functions are deliberately eta-expanded to avoid space leaks.
             -- Do not remove the eta-expansion without profiling a session with at
             -- least 1000 modifications.
-            where f shift = void $ modifyVar' var $ HMap.insertWith (\_ x -> shift x) file (shift 0)
+            where
+              f shift = void $ modifyVar' var $ \InProgress{..} ->
+                case HMap.alterF alter file current of
+                    ((prev, new), m') ->
+                        let todo' = if isJust prev then todo else todo + 1
+                            done' = if new == 0 then done+1 else done
+                        in InProgress todo' done' m'
+                where
+                    alter x = let x' = maybe (shift 0) shift x in ((x,x'), Just x')
 
 mRunLspT :: Applicative m => Maybe (LSP.LanguageContextEnv c ) -> LSP.LspT c m () -> m ()
 mRunLspT (Just lspEnv) f = LSP.runLspT lspEnv f
