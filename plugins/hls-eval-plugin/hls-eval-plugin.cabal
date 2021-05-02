@@ -61,9 +61,9 @@ library
     , ghc
     , ghc-boot-th
     , ghc-paths
-    , ghcide                ^>=1.2.0.2
+    , ghcide                ^>=1.2
     , hashable
-    , hls-plugin-api        ^>=1.1.0.0
+    , hls-plugin-api        ^>=1.1
     , lens
     , lsp
     , lsp-types
@@ -104,7 +104,7 @@ test-suite tests
     , extra
     , filepath
     , hls-eval-plugin
-    , hls-test-utils   ^>=1.0.0.0
+    , hls-test-utils   ^>=1.0
     , lens
     , lsp-test
     , lsp-types
