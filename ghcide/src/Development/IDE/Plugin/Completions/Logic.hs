@@ -2,7 +2,6 @@
 {-# LANGUAGE GADTs      #-}
 {-# LANGUAGE MultiWayIf #-}
 
-#include "ghc-api-version.h"
 
 -- Mostly taken from "haskell-ide-engine"
 module Development.IDE.Plugin.Completions.Logic (
@@ -29,7 +28,7 @@ import           HscTypes
 import           Name
 import           RdrName
 import           Type
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
 import           Coercion
 import           Pair
 import           Predicate                                (isDictTy)
@@ -269,7 +268,7 @@ mkNameCompItem doc thingParent origName origMod thingType isInfix docs !imp = CI
                   then getArgs ret
                   else Prelude.filter (not . isDictTy) args
           | isPiTy t = getArgs $ snd (splitPiTys t)
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
           | Just (Pair _ t) <- coercionKind <$> isCoercionTy_maybe t
           = getArgs t
 #else

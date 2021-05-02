@@ -11,7 +11,6 @@
 {-# LANGUAGE PolyKinds             #-}
 {-# LANGUAGE TypeOperators         #-}
 {-# OPTIONS_GHC -Wno-deprecations -Wno-unticked-promoted-constructors #-}
-#include "ghc-api-version.h"
 
 module Main (main) where
 
@@ -2685,6 +2684,7 @@ addImplicitParamsConstraintTests =
           "fCaller :: " <> mkContext contextCaller <> "()",
           "fCaller = fBase"
         ]
+
 removeRedundantConstraintsTests :: TestTree
 removeRedundantConstraintsTests = let
   header =
@@ -2692,6 +2692,13 @@ removeRedundantConstraintsTests = let
     , "module Testing where"
     , ""
     ]
+
+  headerExt :: [T.Text] -> [T.Text]
+  headerExt exts =
+    redunt : extTxt ++ ["module Testing where"]
+    where
+      redunt = "{-# OPTIONS_GHC -Wredundant-constraints #-}"
+      extTxt = map (\ext -> "{-# LANGUAGE " <> ext <> " #-}") exts
 
   redundantConstraintsCode :: Maybe T.Text -> T.Text
   redundantConstraintsCode mConstraint =
@@ -2709,11 +2716,73 @@ removeRedundantConstraintsTests = let
         , "foo x = x == 1"
         ]
 
-  typeSignatureSpaces :: T.Text
-  typeSignatureSpaces = T.unlines $ header <>
-    [ "foo ::  (Num a, Eq a, Monoid a)  => a -> Bool"
-    , "foo x = x == 1"
-    ]
+  typeSignatureSpaces :: Maybe T.Text -> T.Text
+  typeSignatureSpaces mConstraint =
+    let constraint = maybe "(Num a, Eq a)" (\c -> "(Num a, Eq a, " <> c <> ")") mConstraint
+      in T.unlines $ header <>
+        [ "foo ::  " <> constraint <> " => a -> Bool"
+        , "foo x = x == 1"
+        ]
+
+  redundantConstraintsForall :: Maybe T.Text -> T.Text
+  redundantConstraintsForall mConstraint =
+    let constraint = maybe "" (\c -> "" <> c <> " => ") mConstraint
+      in T.unlines $ headerExt ["RankNTypes"] <>
+        [ "foo :: forall a. " <> constraint <> "a -> a"
+        , "foo = id"
+        ]
+
+  typeSignatureDo :: Maybe T.Text -> T.Text
+  typeSignatureDo mConstraint =
+    let constraint = maybe "" (\c -> "" <> c <> " => ") mConstraint
+      in T.unlines $ header <>
+        [ "f :: Int -> IO ()"
+        , "f n = do"
+        , "  let foo :: " <> constraint <> "a -> IO ()"
+        , "      foo _ = return ()"
+        , "  r n"
+        ]
+
+  typeSignatureNested :: Maybe T.Text -> T.Text
+  typeSignatureNested mConstraint =
+    let constraint = maybe "" (\c -> "" <> c <> " => ") mConstraint
+      in T.unlines $ header <>
+        [ "f :: Int -> ()"
+        , "f = g"
+        , "  where"
+        , "    g :: " <> constraint <> "a -> ()"
+        , "    g _ = ()"
+        ]
+
+  typeSignatureNested' :: Maybe T.Text -> T.Text
+  typeSignatureNested' mConstraint =
+    let constraint = maybe "" (\c -> "" <> c <> " => ") mConstraint
+      in T.unlines $ header <>
+        [ "f :: Int -> ()"
+        , "f ="
+        , "  let"
+        , "    g :: Int -> ()"
+        , "    g = h"
+        , "      where"
+        , "        h :: " <> constraint <> "a -> ()"
+        , "        h _ = ()"
+        , "  in g"
+        ]
+
+  typeSignatureNested'' :: Maybe T.Text -> T.Text
+  typeSignatureNested'' mConstraint =
+    let constraint = maybe "" (\c -> "" <> c <> " => ") mConstraint
+      in T.unlines $ header <>
+        [ "f :: Int -> ()"
+        , "f = g"
+        , "  where"
+        , "    g :: Int -> ()"
+        , "    g = "
+        , "      let"
+        , "        h :: " <> constraint <> "a -> ()"
+        , "        h _ = ()"
+        , "      in h"
+        ]
 
   typeSignatureMultipleLines :: T.Text
   typeSignatureMultipleLines = T.unlines $ header <>
@@ -2752,9 +2821,30 @@ removeRedundantConstraintsTests = let
     "Remove redundant constraints `(Monoid a, Show a)` from the context of the type signature for `foo`"
     (redundantMixedConstraintsCode $ Just "Monoid a, Show a")
     (redundantMixedConstraintsCode Nothing)
-  , checkPeculiarFormatting
-    "should do nothing when constraints contain an arbitrary number of spaces"
-    typeSignatureSpaces
+  , check
+    "Remove redundant constraint `Eq a` from the context of the type signature for `g`"
+    (typeSignatureNested $ Just "Eq a")
+    (typeSignatureNested Nothing)
+  , check
+    "Remove redundant constraint `Eq a` from the context of the type signature for `h`"
+    (typeSignatureNested' $ Just "Eq a")
+    (typeSignatureNested' Nothing)
+  , check
+    "Remove redundant constraint `Eq a` from the context of the type signature for `h`"
+    (typeSignatureNested'' $ Just "Eq a")
+    (typeSignatureNested'' Nothing)
+  , check
+    "Remove redundant constraint `Eq a` from the context of the type signature for `foo`"
+    (redundantConstraintsForall $ Just "Eq a")
+    (redundantConstraintsForall Nothing)
+  , check
+    "Remove redundant constraint `Eq a` from the context of the type signature for `foo`"
+    (typeSignatureDo $ Just "Eq a")
+    (typeSignatureDo Nothing)
+  , check
+    "Remove redundant constraints `(Monoid a, Show a)` from the context of the type signature for `foo`"
+    (typeSignatureSpaces $ Just "Monoid a, Show a")
+    (typeSignatureSpaces Nothing)
   , checkPeculiarFormatting
     "should do nothing when constraints contain line feeds"
     typeSignatureMultipleLines
@@ -3478,7 +3568,7 @@ findDefinitionAndHoverTests = let
   , test  yes    yes    lclL33     lcb           "listcomp lookup"
   , test  yes    yes    mclL36     mcl           "top-level fn 1st clause"
   , test  yes    yes    mclL37     mcl           "top-level fn 2nd clause         #1030"
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
   , test  yes    yes    spaceL37   space         "top-level fn on space           #1002"
 #else
   , test  yes    broken spaceL37   space         "top-level fn on space           #1002"
@@ -4222,7 +4312,7 @@ highlightTests = testGroup "highlight"
     highlights <- getHighlights doc (Position 4 15)
     liftIO $ highlights @?= List
       -- Span is just the .. on 8.10, but Rec{..} before
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
             [ DocumentHighlight (R 4 8 4 10) (Just HkWrite)
 #else
             [ DocumentHighlight (R 4 4 4 11) (Just HkWrite)
@@ -4233,7 +4323,7 @@ highlightTests = testGroup "highlight"
     liftIO $ highlights @?= List
             [ DocumentHighlight (R 3 17 3 23) (Just HkWrite)
       -- Span is just the .. on 8.10, but Rec{..} before
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
             , DocumentHighlight (R 4 8 4 10) (Just HkRead)
 #else
             , DocumentHighlight (R 4 4 4 11) (Just HkRead)
@@ -4446,7 +4536,7 @@ ignoreInWindowsBecause :: String -> TestTree -> TestTree
 ignoreInWindowsBecause = if isWindows then ignoreTestBecause else (\_ x -> x)
 
 ignoreInWindowsForGHC88And810 :: TestTree -> TestTree
-#if MIN_GHC_API_VERSION(8,8,1) && !MIN_GHC_API_VERSION(9,0,0)
+#if MIN_VERSION_ghc(8,8,1) && !MIN_VERSION_ghc(9,0,0)
 ignoreInWindowsForGHC88And810 =
     ignoreInWindowsBecause "tests are unreliable in windows for ghc 8.8 and 8.10"
 #else
@@ -4454,7 +4544,7 @@ ignoreInWindowsForGHC88And810 = id
 #endif
 
 ignoreInWindowsForGHC88 :: TestTree -> TestTree
-#if MIN_GHC_API_VERSION(8,8,1) && !MIN_GHC_API_VERSION(8,10,1)
+#if MIN_VERSION_ghc(8,8,1) && !MIN_VERSION_ghc(8,10,1)
 ignoreInWindowsForGHC88 =
     ignoreInWindowsBecause "tests are unreliable in windows for ghc 8.8"
 #else
