@@ -47,12 +47,15 @@ noProgressReporting = return $ ProgressReporting
   , inProgress = const id
   , progressStop   = pure ()
   }
+
+-- | State used in 'delayedProgressReporting'
 data State
     = NotStarted
     | Completed
     | Stopped
     | Running (Async ())
 
+-- | State transitions used in 'delayedProgressReporting'
 data Transition = Event ProgressEvent | StopProgress
 
 updateState :: IO () -> Transition -> State -> IO State
@@ -65,7 +68,12 @@ updateState _     (Event KickCompleted) st          = pure st
 updateState _     StopProgress          (Running a) = cancel a $> Stopped
 updateState _     StopProgress          st          = pure st
 
-data InProgress = InProgress {todo, done :: !Int, current :: !(HMap.HashMap NormalizedFilePath Int)}
+-- | Data structure to track progress across the project
+data InProgress = InProgress
+    { todo    :: !Int  -- ^ Number of files to do
+    , done    :: !Int  -- ^ Number of files done
+    , current :: !(HMap.HashMap NormalizedFilePath Int)
+    }
 
 recordProgress :: NormalizedFilePath -> (Int -> Int) -> InProgress -> InProgress
 recordProgress file shift InProgress{..} = case HMap.alterF alter file current of
@@ -79,7 +87,6 @@ recordProgress file shift InProgress{..} = case HMap.alterF alter file current o
 -- | A 'ProgressReporting' that enqueues Begin and End notifications in a new
 --   thread, with a grace period (nothing will be sent if 'KickCompleted' arrives
 --   before the end of the grace period).
---   Avoid using in tests where progress notifications are used to assert invariants.
 delayedProgressReporting
   :: Seconds  -- ^ Grace period before starting
   -> Seconds  -- ^ sampling delay
