@@ -439,7 +439,8 @@ test-suite func-test
 test-suite wrapper-test
   type:               exitcode-stdio-1.0
   build-tool-depends:
-    haskell-language-server:haskell-language-server-wrapper -any
+    haskell-language-server:haskell-language-server-wrapper -any,
+    haskell-language-server:haskell-language-server -any
 
   default-language:   Haskell2010
   build-depends:

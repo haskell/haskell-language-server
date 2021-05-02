@@ -1,4 +1,4 @@
-import           Data.List.Extra    (trimEnd)
+import           Data.List.Extra    (trimEnd, isInfixOf)
 import           Data.Maybe
 import           System.Environment
 import           System.Process
@@ -18,6 +18,11 @@ projectGhcVersionTests = testGroup "--project-ghc-version"
   , testCase "cabal with global ghc" $ do
       ghcVer <- trimEnd <$> readProcess "ghc" ["--numeric-version"] ""
       testDir "test/wrapper/testdata/cabal-cur-ver" ghcVer
+  , testCase "stack with existing cabal build artifact" $ do
+      -- Should report cabal as existing build artifacts are more important than
+      -- the existence of 'stack.yaml'
+      testProjectType "test/wrapper/testdata/stack-with-dist-newstyle"
+        ("cradleOptsProg = CradleAction: Cabal" `isInfixOf`)
   ]
 
 testDir :: FilePath -> String -> Assertion
@@ -27,3 +32,15 @@ testDir dir expectedVer =
       <$> lookupEnv "HLS_WRAPPER_TEST_EXE"
     actualVer <- trimEnd <$> readProcess testExe ["--project-ghc-version"] ""
     actualVer @?= expectedVer
+
+testProjectType :: FilePath -> (String -> Bool) -> Assertion
+testProjectType dir matcher =
+  withCurrentDirectoryInTmp' [".stack-work", "dist"] dir $ do
+    wrapperTestExe <- fromMaybe "haskell-language-server-wrapper"
+      <$> lookupEnv "HLS_WRAPPER_TEST_EXE"
+    hlsTestExe <- fromMaybe "haskell-language-server"
+      <$> lookupEnv "HLS_TEST_EXE"
+    actualWrapperCradle <- trimEnd <$> readProcess wrapperTestExe ["--print-cradle"] ""
+    actualHlsCradle <- trimEnd <$> readProcess hlsTestExe ["--print-cradle"] ""
+    matcher actualWrapperCradle @? "Wrapper reported wrong project type: " ++ actualWrapperCradle
+    matcher actualHlsCradle @? "HLS reported wrong project type: " ++ actualHlsCradle
