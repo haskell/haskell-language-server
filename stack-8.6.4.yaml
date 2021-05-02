@@ -103,6 +103,9 @@ flags:
     pedantic: true
   retrie:
     BuildExecutable: false
+  # Stack doesn't support automatic flags.
+  hls-hlint-plugin:
+    hlint33: false
 
 configure-options:
   ghcide:

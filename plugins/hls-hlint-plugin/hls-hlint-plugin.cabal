@@ -12,8 +12,6 @@ maintainer:    alan.zimm@gmail.com
 copyright:     The Haskell IDE Team
 category:      Development
 build-type:    Simple
-extra-source-files:
-  include/ghc-api-version.h
 
 flag pedantic
   description: Enable -Werror
