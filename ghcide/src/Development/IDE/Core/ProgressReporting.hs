@@ -126,29 +126,30 @@ delayedProgressReporting before after lspEnv optProgressStyle = do
                               }
                             }
                     loop id prev = do
-                        liftIO $ sleep after
                         current <- liftIO $ readVar inProgress
                         let done = length $ filter (== 0) $ HMap.elems current
                         let todo = HMap.size current
-                        let next = 100 * fromIntegral done / fromIntegral todo
-                        when (style /= NoProgress && next /= prev) $
-                          LSP.sendNotification LSP.SProgress $
-                          LSP.ProgressParams
-                              { _token = id
-                              , _value = LSP.Report $ case style of
-                                  Explicit -> LSP.WorkDoneProgressReportParams
-                                    { _cancellable = Nothing
-                                    , _message = Just $ T.pack $ show done <> "/" <> show todo
-                                    , _percentage = Nothing
-                                    }
-                                  Percentage -> LSP.WorkDoneProgressReportParams
-                                    { _cancellable = Nothing
-                                    , _message = Nothing
-                                    , _percentage = Just next
-                                    }
-                                  NoProgress -> error "unreachable"
-                              }
-                        loop id next
+                        if todo == 0 then loop id 0 else do
+                            let next = 100 * fromIntegral done / fromIntegral todo
+                            liftIO $ sleep after
+                            when (style /= NoProgress && next /= prev) $
+                              LSP.sendNotification LSP.SProgress $
+                              LSP.ProgressParams
+                                  { _token = id
+                                  , _value = LSP.Report $ case style of
+                                      Explicit -> LSP.WorkDoneProgressReportParams
+                                        { _cancellable = Nothing
+                                        , _message = Just $ T.pack $ show done <> "/" <> show todo
+                                        , _percentage = Nothing
+                                        }
+                                      Percentage -> LSP.WorkDoneProgressReportParams
+                                        { _cancellable = Nothing
+                                        , _message = Nothing
+                                        , _percentage = Just next
+                                        }
+                                      NoProgress -> error "unreachable"
+                                  }
+                            loop id next
 
         withProgressVar var file = actionBracket (f succ) (const $ f pred) . const
             -- This functions are deliberately eta-expanded to avoid space leaks.
