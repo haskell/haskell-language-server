@@ -21,7 +21,7 @@ import           GHC.LanguageExtensions.Type
 import           GhcPlugins                  (HscEnv (hsc_dflags))
 import           Ide.PluginUtils
 import           Ide.Types
-import           Language.LSP.Server
+import           Language.LSP.Server hiding (defaultConfig)
 import           Language.LSP.Types
 import           "ormolu" Ormolu
 import           System.FilePath             (takeFileName)

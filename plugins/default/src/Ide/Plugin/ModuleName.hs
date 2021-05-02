@@ -88,7 +88,7 @@ data Action = Replace {aUri :: Uri, aRange :: Range, aTitle :: Text, aCode :: Te
 -- | Convert an Action to the corresponding edit operation
 asEdit :: Action -> WorkspaceEdit
 asEdit act@Replace{..} =
-    WorkspaceEdit (Just $ Map.singleton aUri $ List (asTextEdits act)) Nothing
+    WorkspaceEdit (Just $ Map.singleton aUri $ List (asTextEdits act)) Nothing Nothing
 
 asTextEdits :: Action -> [TextEdit]
 asTextEdits Replace{..} = [TextEdit aRange aCode]

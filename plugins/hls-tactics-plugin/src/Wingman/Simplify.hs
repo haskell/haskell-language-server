@@ -11,7 +11,7 @@ import Development.IDE.GHC.Compat
 import GHC.SourceGen (var)
 import GHC.SourceGen.Expr (lambda)
 import Wingman.CodeGen.Utils
-import Wingman.GHC (containsHsVar, fromPatCompatPs)
+import Wingman.GHC (containsHsVar, fromPatCompat)
 
 
 ------------------------------------------------------------------------------
@@ -20,7 +20,7 @@ pattern Lambda :: [Pat GhcPs] -> HsExpr GhcPs -> HsExpr GhcPs
 pattern Lambda pats body <-
   HsLam _
     (MG {mg_alts = L _ [L _
-      (Match { m_pats = fmap fromPatCompatPs -> pats
+      (Match { m_pats = fmap fromPatCompat -> pats
              , m_grhss = GRHSs {grhssGRHSs = [L _ (
                  GRHS _ [] (L _ body))]}
              })]})

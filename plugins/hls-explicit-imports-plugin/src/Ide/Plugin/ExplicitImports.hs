@@ -11,7 +11,11 @@
 
 #include "ghc-api-version.h"
 
-module Ide.Plugin.ExplicitImports (descriptor) where
+module Ide.Plugin.ExplicitImports
+  ( descriptor
+  , extractMinimalImports
+  , within
+  ) where
 
 import           Control.DeepSeq
 import           Control.Monad.IO.Class
@@ -26,7 +30,7 @@ import qualified Data.Text                            as T
 import           Development.IDE
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.GHC.Compat
-import           Development.Shake.Classes
+import           Development.IDE.Graph.Classes
 import           GHC.Generics                         (Generic)
 import           Ide.PluginUtils                      (mkLspCommand)
 import           Ide.Types
@@ -139,12 +143,14 @@ codeActionProvider ideState _pId (CodeActionParams _ _ docId range _context)
               _title = "Make all imports explicit"
               _kind = Just CodeActionQuickFix
               _command = Nothing
-              _edit = Just WorkspaceEdit {_changes, _documentChanges}
+              _edit = Just WorkspaceEdit {_changes, _documentChanges, _changeAnnotations}
               _changes = Just $ HashMap.singleton _uri $ List edits
               _documentChanges = Nothing
               _diagnostics = Nothing
               _isPreferred = Nothing
               _disabled = Nothing
+              _xdata = Nothing
+              _changeAnnotations = Nothing
           return $ Right $ List [caExplicitImports | not (null edits)]
   | otherwise =
     return $ Right $ List []
@@ -208,7 +214,8 @@ extractMinimalImports (Just hsc) (Just TcModuleResult {..}) = do
   -- call findImportUsage does exactly what we need
   -- GHC is full of treats like this
   let usage = findImportUsage imports gblElts
-  (_, minimalImports) <- initTcWithGbl (hscEnv hsc) tcEnv span $ getMinimalImports usage
+  (_, minimalImports) <-
+    initTcWithGbl (hscEnv hsc) tcEnv span $ getMinimalImports usage
 
   -- return both the original imports and the computed minimal ones
   return (imports, minimalImports)
@@ -232,13 +239,13 @@ mkExplicitEdit posMapping (L src imp) explicit
 -- | Given an import declaration, generate a code lens unless it has an
 -- explicit import list or it's qualified
 generateLens :: PluginId -> Uri -> TextEdit -> IO (Maybe CodeLens)
-generateLens pId uri importEdit@TextEdit {_range} = do
+generateLens pId uri importEdit@TextEdit {_range, _newText} = do
   -- The title of the command is just the minimal explicit import decl
-  let title = _newText importEdit
+  let title = _newText
       -- the code lens has no extra data
       _xdata = Nothing
       -- an edit that replaces the whole declaration with the explicit one
-      edit = WorkspaceEdit (Just editsMap) Nothing
+      edit = WorkspaceEdit (Just editsMap) Nothing Nothing
       editsMap = HashMap.fromList [(uri, List [importEdit])]
       -- the command argument is simply the edit
       _arguments = Just [toJSON $ ImportCommandParams edit]
@@ -247,11 +254,11 @@ generateLens pId uri importEdit@TextEdit {_range} = do
   -- create and return the code lens
   return $ Just CodeLens {..}
 
+--------------------------------------------------------------------------------
+
 -- | A helper to run ide actions
 runIde :: IdeState -> Action a -> IO a
-runIde state = runAction "importLens" state
-
---------------------------------------------------------------------------------
+runIde = runAction "importLens"
 
 within :: Range -> SrcSpan -> Bool
 within (Range start end) span =

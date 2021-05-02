@@ -29,6 +29,10 @@ import           Ide.Plugin.Eval                   as Eval
 import           Ide.Plugin.ExplicitImports        as ExplicitImports
 #endif
 
+#if refineImports
+import           Ide.Plugin.RefineImports          as RefineImports
+#endif
+
 #if retrie
 import           Ide.Plugin.Retrie                 as Retrie
 #endif
@@ -89,7 +93,6 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
                    then basePlugins ++ examplePlugins
                    else basePlugins
     basePlugins =
-      GhcIde.descriptors ++
 #if pragmas
       Pragmas.descriptor  "pragmas" :
 #endif
@@ -100,7 +103,7 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
       Fourmolu.descriptor "fourmolu" :
 #endif
 #if tactic
-      Tactic.descriptor "tactic" :
+      Tactic.descriptor "tactics" :
 #endif
 #if ormolu
       Ormolu.descriptor   "ormolu" :
@@ -111,7 +114,7 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
 #if retrie
       Retrie.descriptor "retrie" :
 #endif
-#if AGPL && brittany
+#if brittany
       Brittany.descriptor "brittany" :
 #endif
 #if class
@@ -126,6 +129,9 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
 #if importLens
       ExplicitImports.descriptor "importLens" :
 #endif
+#if refineImports
+      RefineImports.descriptor "refineImports" :
+#endif
 #if moduleName
       ModuleName.descriptor "moduleName" :
 #endif
@@ -135,7 +141,9 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
 #if splice
       Splice.descriptor "splice" :
 #endif
-      []
+    -- The ghcide descriptors should come last so that the notification handlers
+    -- (which restart the Shake build) run after everything else
+      GhcIde.descriptors
     examplePlugins =
       [Example.descriptor  "eg"
       ,Example2.descriptor "eg2"

@@ -1,8 +1,10 @@
 cabal-version: 2.2
 name:          hls-hlint-plugin
-version:       1.0.0.1
+version:       1.0.0.2
 synopsis:      Hlint integration plugin with Haskell Language Server
-description:   Please see Haskell Language Server Readme (https://github.com/haskell/haskell-language-server#readme)
+description:
+  Please see Haskell Language Server Readme (https://github.com/haskell/haskell-language-server#readme)
+
 license:       Apache-2.0
 license-file:  LICENSE
 author:        The Haskell IDE Team
@@ -23,51 +25,54 @@ flag ghc-lib
     Force dependency on ghc-lib-parser even if GHC API in the ghc package is supported
 
 library
-  exposed-modules:  Ide.Plugin.Hlint
-  hs-source-dirs:   src
+  exposed-modules:    Ide.Plugin.Hlint
+  hs-source-dirs:     src
   build-depends:
     , aeson
-    , apply-refact             >=0.9
-    , base                     >=4.12 && <5
+    , apply-refact          >=0.9
+    , base                  >=4.12    && <5
     , binary
     , bytestring
     , containers
     , data-default
     , deepseq
-    , Diff
+    , Diff                  ^>=0.4.0
     , directory
     , extra
     , filepath
-    , ghc-exactprint           >=0.6.3.4
-    , ghcide                   ^>= 1.1.0.0
+    , ghc-exactprint        >=0.6.3.4
+    , ghcide                ^>=1.2.0.2
     , hashable
-    , lsp
-    , hlint                    >=3.2
-    , hls-plugin-api           ^>= 1.0.0.0
+    , hlint                 >=3.2
+    , hls-plugin-api        ^>=1.1.0.0
     , hslogger
     , lens
+    , lsp
     , regex-tdfa
-    , shake
     , temporary
     , text
     , transformers
     , unordered-containers
 
-  if (!flag(ghc-lib) && impl(ghc >=8.10.1) && impl(ghc <9.0.0))
-    build-depends: ghc ^>= 8.10
+  if ((!flag(ghc-lib) && impl(ghc >=8.10.1)) && impl(ghc <9.0.0))
+    build-depends: ghc ^>=8.10
 
   else
     build-depends:
       , ghc
-      , ghc-lib            ^>= 8.10.4.20210206
-      , ghc-lib-parser-ex  ^>= 8.10
+      , ghc-lib            ^>=8.10.4.20210206
+      , ghc-lib-parser-ex  ^>=8.10
 
     cpp-options:   -DHLINT_ON_GHC_LIB
 
-  ghc-options:      -Wall -Wredundant-constraints -Wno-name-shadowing -Wno-unticked-promoted-constructors
+  ghc-options:
+    -Wall -Wredundant-constraints -Wno-name-shadowing
+    -Wno-unticked-promoted-constructors
 
   if flag(pedantic)
     ghc-options: -Werror
 
-  default-language: Haskell2010
-  default-extensions: DataKinds, TypeOperators
+  default-language:   Haskell2010
+  default-extensions:
+    DataKinds
+    TypeOperators

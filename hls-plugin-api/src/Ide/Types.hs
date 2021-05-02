@@ -38,9 +38,10 @@ import           Data.Semigroup
 import           Data.String
 import qualified Data.Text                       as T
 import           Data.Text.Encoding              (encodeUtf8)
-import           Development.Shake               hiding (command)
+import           Development.IDE.Graph
 import           GHC.Generics
 import           Ide.Plugin.Config
+import           Ide.Plugin.Properties
 import           Language.LSP.Server             (LspM, getVirtualFile)
 import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities
@@ -53,16 +54,55 @@ import           Text.Regex.TDFA.Text            ()
 -- ---------------------------------------------------------------------
 
 newtype IdePlugins ideState = IdePlugins
-  { ipMap :: Map.Map PluginId (PluginDescriptor ideState)}
+  { ipMap :: [(PluginId, PluginDescriptor ideState)]}
 
 -- ---------------------------------------------------------------------
 
 data PluginDescriptor ideState =
-  PluginDescriptor { pluginId       :: !PluginId
-                   , pluginRules    :: !(Rules ())
-                   , pluginCommands :: ![PluginCommand ideState]
-                   , pluginHandlers :: PluginHandlers ideState
+  PluginDescriptor { pluginId           :: !PluginId
+                   , pluginRules        :: !(Rules ())
+                   , pluginCommands     :: ![PluginCommand ideState]
+                   , pluginHandlers     :: PluginHandlers ideState
+                   , pluginConfigDescriptor :: ConfigDescriptor
+                   , pluginNotificationHandlers :: PluginNotificationHandlers ideState
                    }
+
+-- | An existential wrapper of 'Properties'
+data CustomConfig = forall r. CustomConfig (Properties r)
+
+-- | Describes the configuration a plugin.
+-- A plugin may be configurable in such form:
+-- @
+-- {
+--  "plugin-id": {
+--    "globalOn": true,
+--    "codeActionsOn": true,
+--    "codeLensOn": true,
+--    "config": {
+--      "property1": "foo"
+--     }
+--   }
+-- }
+-- @
+-- @globalOn@, @codeActionsOn@, and @codeLensOn@ etc. are called generic configs,
+-- which can be inferred from handlers registered by the plugin.
+-- @config@ is called custom config, which is defined using 'Properties'.
+data ConfigDescriptor = ConfigDescriptor {
+  -- | Whether or not to generate generic configs.
+  configEnableGenericConfig :: Bool,
+  -- | Whether or not to generate @diagnosticsOn@ config.
+  -- Diagnostics emit in arbitrary shake rules,
+  -- so we can't know statically if the plugin produces diagnostics
+  configHasDiagnostics      :: Bool,
+  -- | Custom config.
+  configCustomConfig        :: CustomConfig
+}
+
+mkCustomConfig :: Properties r -> CustomConfig
+mkCustomConfig = CustomConfig
+
+defaultConfigDescriptor :: ConfigDescriptor
+defaultConfigDescriptor = ConfigDescriptor True False (mkCustomConfig emptyProperties)
 
 -- | Methods that can be handled by plugins.
 -- 'ExtraParams' captures any extra data the IDE passes to the handlers for this method
@@ -131,8 +171,8 @@ instance PluginMethod TextDocumentDocumentSymbol where
       res
         | supportsHierarchy = InL $ sconcat $ fmap (either id (fmap siToDs)) dsOrSi
         | otherwise = InR $ sconcat $ fmap (either (List . concatMap dsToSi) id) dsOrSi
-      siToDs (SymbolInformation name kind dep (Location _uri range) cont)
-        = DocumentSymbol name cont kind dep range range Nothing
+      siToDs (SymbolInformation name kind _tags dep (Location _uri range) cont)
+        = DocumentSymbol name cont kind Nothing dep range range Nothing
       dsToSi = go Nothing
       go :: Maybe T.Text -> DocumentSymbol -> [SymbolInformation]
       go parent ds =
@@ -140,7 +180,7 @@ instance PluginMethod TextDocumentDocumentSymbol where
             children' = concatMap (go (Just name')) (fromMaybe mempty (ds ^. children))
             loc = Location uri' (ds ^. range)
             name' = ds ^. name
-            si = SymbolInformation name' (ds ^. kind) (ds ^. deprecated) loc parent
+            si = SymbolInformation name' (ds ^. kind) Nothing (ds ^. deprecated) loc parent
         in [si] <> children'
 
 instance PluginMethod TextDocumentCompletion where
@@ -180,6 +220,8 @@ instance PluginMethod TextDocumentRangeFormatting where
   pluginEnabled _ pid conf = (PluginId $ formattingProvider conf) == pid
   combineResponses _ _ _ _ (x :| _) = x
 
+-- ---------------------------------------------------------------------
+
 -- | Methods which have a PluginMethod instance
 data IdeMethod (m :: Method FromClient Request) = PluginMethod m => IdeMethod (SMethod m)
 instance GEq IdeMethod where
@@ -187,12 +229,22 @@ instance GEq IdeMethod where
 instance GCompare IdeMethod where
   gcompare (IdeMethod a) (IdeMethod b) = gcompare a b
 
+-- | Methods which have a PluginMethod instance
+data IdeNotification (m :: Method FromClient Notification) = HasTracing (MessageParams m) => IdeNotification (SMethod m)
+instance GEq IdeNotification where
+  geq (IdeNotification a) (IdeNotification b) = geq a b
+instance GCompare IdeNotification where
+  gcompare (IdeNotification a) (IdeNotification b) = gcompare a b
+
 -- | Combine handlers for the
 newtype PluginHandler a (m :: Method FromClient Request)
   = PluginHandler (PluginId -> a -> MessageParams m -> LspM Config (NonEmpty (Either ResponseError (ResponseResult m))))
 
-newtype PluginHandlers a = PluginHandlers (DMap IdeMethod (PluginHandler a))
+newtype PluginNotificationHandler a (m :: Method FromClient Notification)
+  = PluginNotificationHandler (PluginId -> a -> MessageParams m -> LspM Config ())
 
+newtype PluginHandlers a             = PluginHandlers             (DMap IdeMethod       (PluginHandler a))
+newtype PluginNotificationHandlers a = PluginNotificationHandlers (DMap IdeNotification (PluginNotificationHandler a))
 instance Semigroup (PluginHandlers a) where
   (PluginHandlers a) <> (PluginHandlers b) = PluginHandlers $ DMap.unionWithKey go a b
     where
@@ -202,7 +254,18 @@ instance Semigroup (PluginHandlers a) where
 instance Monoid (PluginHandlers a) where
   mempty = PluginHandlers mempty
 
+instance Semigroup (PluginNotificationHandlers a) where
+  (PluginNotificationHandlers a) <> (PluginNotificationHandlers b) = PluginNotificationHandlers $ DMap.unionWithKey go a b
+    where
+      go _ (PluginNotificationHandler f) (PluginNotificationHandler g) = PluginNotificationHandler $ \pid ide params ->
+        f pid ide params >> g pid ide params
+
+instance Monoid (PluginNotificationHandlers a) where
+  mempty = PluginNotificationHandlers mempty
+
 type PluginMethodHandler a m = a -> PluginId -> MessageParams m -> LspM Config (Either ResponseError (ResponseResult m))
+
+type PluginNotificationMethodHandler a m = a -> PluginId -> MessageParams m -> LspM Config ()
 
 -- | Make a handler for plugins with no extra data
 mkPluginHandler
@@ -214,12 +277,25 @@ mkPluginHandler m f = PluginHandlers $ DMap.singleton (IdeMethod m) (PluginHandl
   where
     f' pid ide params = pure <$> f ide pid params
 
+-- | Make a handler for plugins with no extra data
+mkPluginNotificationHandler
+  :: HasTracing (MessageParams m)
+  => SClientMethod (m :: Method FromClient Notification)
+  -> PluginNotificationMethodHandler ideState m
+  -> PluginNotificationHandlers ideState
+mkPluginNotificationHandler m f
+    = PluginNotificationHandlers $ DMap.singleton (IdeNotification m) (PluginNotificationHandler f')
+  where
+    f' pid ide = f ide pid
+
 defaultPluginDescriptor :: PluginId -> PluginDescriptor ideState
 defaultPluginDescriptor plId =
   PluginDescriptor
     plId
     mempty
     mempty
+    mempty
+    defaultConfigDescriptor
     mempty
 
 newtype CommandId = CommandId T.Text
@@ -239,8 +315,6 @@ type CommandFunction ideState a
   = ideState
   -> a
   -> LspM Config (Either ResponseError Value)
-
-newtype WithSnippets = WithSnippets Bool
 
 -- ---------------------------------------------------------------------
 

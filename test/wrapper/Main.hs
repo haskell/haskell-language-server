@@ -1,20 +1,13 @@
-import           Data.List.Extra              (trimEnd)
+import           Data.List.Extra    (trimEnd)
 import           Data.Maybe
 import           System.Environment
 import           System.Process
-import           Test.Hls.Util
-import           Test.Tasty
-import           Test.Tasty.HUnit
-import           Test.Tasty.Ingredients.Rerun
-import           Test.Tasty.Runners           (consoleTestReporter,
-                                               listingTests)
+import           Test.Hls
 
 main :: IO ()
 main = do
   flushStackEnvironment
-  defaultMainWithIngredients
-      [rerunningTests [listingTests, consoleTestReporter]] $
-        testGroup "haskell-language-server-wrapper" [projectGhcVersionTests]
+  defaultTestRunner $ testGroup "haskell-language-server-wrapper" [projectGhcVersionTests]
 
 projectGhcVersionTests :: TestTree
 projectGhcVersionTests = testGroup "--project-ghc-version"

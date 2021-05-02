@@ -4,15 +4,21 @@ on:
   pull_request:
     branches:
       - '**'
-    paths-ignore:
-      - '**/docs/**'
-      - '**.md'
-      - '**/LICENSE'
-      - '.circleci/**'
-      - 'install/**'
 
 jobs:
+  pre_job:
+    runs-on: ubuntu-latest
+    outputs:
+      should_skip: ${{ steps.skip_check.outputs.should_skip }}
+    steps:
+      - id: skip_check
+        uses: fkirc/skip-duplicate-actions@master
+        with:
+          cancel_others: true
+          paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", ".circleci/**", "install/**"]'
+
   nix:
+    needs: pre_job
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -22,14 +28,18 @@ jobs:
         os: [ubuntu-latest, macOS-latest]
 
     steps:
-    - uses: actions/checkout@v2
+    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+      uses: actions/checkout@v2
       with:
         submodules: true
-    - uses: cachix/install-nix-action@v12
+    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+      uses: cachix/install-nix-action@v12
       with:
-        nix_path: nixpkgs=channel:nixos-20.03
-    - uses: cachix/cachix-action@v8
+        nix_path: nixpkgs=channel:nixos-unstable
+    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+      uses: cachix/cachix-action@v8
       with:
         name: haskell-language-server
         authToken: ${{ secrets.HLS_CACHIX_AUTH_TOKEN }}
-    - run: nix-shell --argstr compiler ${{ matrix.ghc }} --run "cabal update && cabal build"
+    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+      run: nix-shell --argstr compiler ${{ matrix.ghc }} --run "cabal update && cabal build"

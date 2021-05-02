@@ -11,6 +11,7 @@ import           Control.Lens               hiding (List)
 import           Control.Monad              (join)
 import           Control.Monad.IO.Class
 import qualified Data.HashMap.Strict        as H
+import           Data.List
 import           Data.List.Extra            (nubOrdOn)
 import           Data.Maybe                 (catMaybes, listToMaybe)
 import qualified Data.Text                  as T
@@ -45,8 +46,9 @@ codeActionProvider state _plId (CodeActionParams _ _ docId _ (J.CodeActionContex
   let mFile = docId ^. J.uri & uriToFilePath <&> toNormalizedFilePath'
       uri = docId ^. J.uri
   pm <- liftIO $ fmap join $ runAction "Pragmas.GetParsedModule" state $ getParsedModule `traverse` mFile
+  mbContents <- liftIO $ fmap (join . fmap snd) $ runAction "Pragmas.GetFileContents" state $ getFileContents `traverse` mFile
   let dflags = ms_hspp_opts . pm_mod_summary <$> pm
-      insertRange = maybe (Range (Position 0 0) (Position 0 0)) endOfModuleHeader pm
+      insertRange = maybe (Range (Position 0 0) (Position 0 0)) endOfModuleHeader mbContents
       pedits = nubOrdOn snd . concat $ suggest dflags <$> diags
   return $ Right $ List $ pragmaEditToAction uri insertRange <$> pedits
 
@@ -55,7 +57,7 @@ codeActionProvider state _plId (CodeActionParams _ _ docId _ (J.CodeActionContex
 -- thus, not validated.
 pragmaEditToAction :: Uri -> Range -> PragmaEdit -> (Command |? CodeAction)
 pragmaEditToAction uri range (title, p) =
-  InR $ J.CodeAction title (Just J.CodeActionQuickFix) (Just (J.List [])) Nothing Nothing (Just edit) Nothing
+  InR $ J.CodeAction title (Just J.CodeActionQuickFix) (Just (J.List [])) Nothing Nothing (Just edit) Nothing Nothing
   where
     render (OptGHC x)  = "{-# OPTIONS_GHC -Wno-" <> x <> " #-}\n"
     render (LangExt x) = "{-# LANGUAGE " <> x <> " #-}\n"
@@ -63,6 +65,7 @@ pragmaEditToAction uri range (title, p) =
     edit =
       J.WorkspaceEdit
         (Just $ H.singleton uri textEdits)
+        Nothing
         Nothing
 
 suggest :: Maybe DynFlags -> Diagnostic -> [PragmaEdit]
@@ -166,6 +169,7 @@ completion _ide _ complParams = do
                         _filterText = Nothing,
                         _insertText = Nothing,
                         _insertTextFormat = Nothing,
+                        _insertTextMode = Nothing,
                         _textEdit = Nothing,
                         _additionalTextEdits = Nothing,
                         _commitCharacters = Nothing,
@@ -176,14 +180,11 @@ completion _ide _ complParams = do
 
 -- ---------------------------------------------------------------------
 
--- | Find the first non-blank line before the first of (module name / imports / declarations).
+-- | Find first line after (last pragma / last shebang / beginning of file).
 -- Useful for inserting pragmas.
-endOfModuleHeader :: ParsedModule -> Range
-endOfModuleHeader pm =
-  let mod = unLoc $ pm_parsed_source pm
-      modNameLoc = getLoc <$> hsmodName mod
-      firstImportLoc = getLoc <$> listToMaybe (hsmodImports mod)
-      firstDeclLoc = getLoc <$> listToMaybe (hsmodDecls mod)
-      line = maybe 0 (_line . _start) (modNameLoc <|> firstImportLoc <|> firstDeclLoc >>= srcSpanToRange)
-      loc = Position line 0
-   in Range loc loc
+endOfModuleHeader :: T.Text -> Range
+endOfModuleHeader contents = Range loc loc
+    where
+        loc = Position line 0
+        line = maybe 0 succ (lastLineWithPrefix "{-#" <|> lastLineWithPrefix "#!")
+        lastLineWithPrefix pre = listToMaybe $ reverse $ findIndices (T.isPrefixOf pre) $ T.lines contents

@@ -1,49 +1,64 @@
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes        #-}
+{-# LANGUAGE TypeFamilies      #-}
+
+{-# LANGUAGE NoMonoLocalBinds  #-}
 
 module Wingman.LanguageServer where
 
 import           ConLike
-import           Control.Arrow
+import           Control.Arrow ((***))
 import           Control.Monad
 import           Control.Monad.State (State, get, put, evalState)
 import           Control.Monad.Trans.Maybe
-import           Data.Aeson (Value (Object), fromJSON)
-import           Data.Aeson.Types (Result (Error, Success))
+import           Data.Bifunctor (first)
 import           Data.Coerce
 import           Data.Functor ((<&>))
 import           Data.Generics.Aliases (mkQ)
 import           Data.Generics.Schemes (everything)
+import qualified Data.HashMap.Strict as Map
+import           Data.IORef (readIORef)
 import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Monoid
-import qualified Data.Set  as S
+import           Data.Set (Set)
+import qualified Data.Set as S
 import qualified Data.Text as T
 import           Data.Traversable
-import           Development.IDE (ShakeExtras, getPluginConfig)
-import           Development.IDE.Core.PositionMapping
+import           Development.IDE (getFilesOfInterest, ShowDiagnostic (ShowDiag), srcSpanToRange)
+import           Development.IDE (hscEnv)
 import           Development.IDE.Core.RuleTypes
+import           Development.IDE.Core.Rules (usePropertyAction)
 import           Development.IDE.Core.Service (runAction)
-import           Development.IDE.Core.Shake (IdeState (..), useWithStale)
+import           Development.IDE.Core.Shake (IdeState (..), uses, define, use)
+import qualified Development.IDE.Core.Shake as IDE
+import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error (realSrcSpanToRange)
+import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindings)
-import           Development.Shake (Action, RuleResult)
-import           Development.Shake.Classes (Typeable, Binary, Hashable, NFData)
+import           Development.IDE.Graph (Action, RuleResult, Rules, action)
+import           Development.IDE.Graph.Classes (Typeable, Binary, Hashable, NFData)
 import qualified FastString
-import           GhcPlugins (tupleDataCon, consDataCon, substTyAddInScope)
-import           Ide.Plugin.Config (PluginConfig (plcConfig))
+import           GHC.Generics (Generic)
+import           GhcPlugins (tupleDataCon, consDataCon, substTyAddInScope, ExternalPackageState, HscEnv (hsc_EPS), liftIO)
 import qualified Ide.Plugin.Config as Plugin
+import           Ide.Plugin.Properties
+import           Ide.PluginUtils (usePropertyLsp)
+import           Ide.Types (PluginId)
 import           Language.LSP.Server (MonadLsp, sendNotification)
 import           Language.LSP.Types
+import           Language.LSP.Types.Capabilities
 import           OccName
 import           Prelude hiding (span)
 import           SrcLoc (containsSpan)
-import           TcRnTypes (tcg_binds)
+import           TcRnTypes (tcg_binds, TcGblEnv)
 import           Wingman.Context
 import           Wingman.FeatureSet
 import           Wingman.GHC
 import           Wingman.Judgements
+import           Wingman.Judgements.SYB (everythingContaining)
 import           Wingman.Judgements.Theta
 import           Wingman.Range
 import           Wingman.Types
@@ -59,8 +74,23 @@ tcCommandName :: TacticCommand -> T.Text
 tcCommandName = T.pack . show
 
 
-runIde :: IdeState -> Action a -> IO a
-runIde state = runAction "tactic" state
+runIde :: String -> String -> IdeState -> Action a -> IO a
+runIde herald action state = runAction ("Wingman." <> herald <> "." <> action) state
+
+
+runCurrentIde
+    :: forall a r
+     . ( r ~ RuleResult a
+       , Eq a , Hashable a , Binary a , Show a , Typeable a , NFData a
+       , Show r, Typeable r, NFData r
+       )
+    => String
+    -> IdeState
+    -> NormalizedFilePath
+    -> a
+    -> MaybeT IO (Tracked 'Current r)
+runCurrentIde herald state nfp a =
+  MaybeT $ fmap (fmap unsafeMkCurrent) $ runIde herald (show a) state $ use a nfp
 
 
 runStaleIde
@@ -69,26 +99,72 @@ runStaleIde
        , Eq a , Hashable a , Binary a , Show a , Typeable a , NFData a
        , Show r, Typeable r, NFData r
        )
-    => IdeState
+    => String
+    -> IdeState
     -> NormalizedFilePath
     -> a
-    -> MaybeT IO (r, PositionMapping)
-runStaleIde state nfp a = MaybeT $ runIde state $ useWithStale a nfp
+    -> MaybeT IO (TrackedStale r)
+runStaleIde herald state nfp a =
+  MaybeT $ runIde herald (show a) state $ useWithStale a nfp
+
+
+unsafeRunStaleIde
+    :: forall a r
+     . ( r ~ RuleResult a
+       , Eq a , Hashable a , Binary a , Show a , Typeable a , NFData a
+       , Show r, Typeable r, NFData r
+       )
+    => String
+    -> IdeState
+    -> NormalizedFilePath
+    -> a
+    -> MaybeT IO r
+unsafeRunStaleIde herald state nfp a = do
+  (r, _) <- MaybeT $ runIde herald (show a) state $ IDE.useWithStale a nfp
+  pure r
 
 
 ------------------------------------------------------------------------------
--- | Get the the plugin config
-getTacticConfig :: MonadLsp Plugin.Config m => ShakeExtras -> m Config
-getTacticConfig extras = do
-  pcfg <- getPluginConfig extras "tactics"
-  pure $ case fromJSON $ Object $ plcConfig pcfg of
-    Success cfg -> cfg
-    Error _     -> emptyConfig
 
+properties :: Properties
+  '[ 'PropertyKey "hole_severity" ('TEnum (Maybe DiagnosticSeverity))
+   , 'PropertyKey "max_use_ctor_actions" 'TInteger
+   , 'PropertyKey "features" 'TString
+   , 'PropertyKey "timeout_duration" 'TInteger
+   , 'PropertyKey "auto_gas" 'TInteger
+   ]
+properties = emptyProperties
+  & defineIntegerProperty #auto_gas
+    "The depth of the search tree when performing \"Attempt to fill hole\". Bigger values will be able to derive more solutions, but will take exponentially more time." 4
+  & defineIntegerProperty #timeout_duration
+    "The timeout for Wingman actions, in seconds" 2
+  & defineStringProperty #features
+    "Feature set used by Wingman" ""
+  & defineIntegerProperty #max_use_ctor_actions
+    "Maximum number of `Use constructor <x>` code actions that can appear" 5
+  & defineEnumProperty #hole_severity
+    "The severity to use when showing hole diagnostics. These are noisy, but some editors don't allow jumping to all severities."
+    [ (Just DsError,   "error")
+    , (Just DsWarning, "warning")
+    , (Just DsInfo,    "info")
+    , (Just DsHint,    "hint")
+    , (Nothing,        "none")
+    ]
+    Nothing
+
+
+-- | Get the the plugin config
+getTacticConfig :: MonadLsp Plugin.Config m => PluginId -> m Config
+getTacticConfig pId =
+  Config
+    <$> (parseFeatureSet <$> usePropertyLsp #features pId properties)
+    <*> usePropertyLsp #max_use_ctor_actions pId properties
+    <*> usePropertyLsp #timeout_duration pId properties
+    <*> usePropertyLsp #auto_gas pId properties
 
 ------------------------------------------------------------------------------
 -- | Get the current feature set from the plugin config.
-getFeatureSet :: MonadLsp Plugin.Config m => ShakeExtras -> m FeatureSet
+getFeatureSet :: MonadLsp Plugin.Config m => PluginId -> m FeatureSet
 getFeatureSet  = fmap cfg_feature_set . getTacticConfig
 
 
@@ -99,7 +175,7 @@ getIdeDynflags
 getIdeDynflags state nfp = do
   -- Ok to use the stale 'ModIface', since all we need is its 'DynFlags'
   -- which don't change very often.
-  (msr, _) <- runStaleIde state nfp GetModSummaryWithoutTimestamps
+  msr <- unsafeRunStaleIde "getIdeDynflags" state nfp GetModSummaryWithoutTimestamps
   pure $ ms_hspp_opts $ msrModSummary msr
 
 
@@ -109,60 +185,100 @@ getIdeDynflags state nfp = do
 judgementForHole
     :: IdeState
     -> NormalizedFilePath
-    -> Range
-    -> FeatureSet
-    -> MaybeT IO (Range, Judgement, Context, DynFlags)
-judgementForHole state nfp range features = do
-  (asts, amapping) <- runStaleIde state nfp GetHieAst
-  case asts of
+    -> Tracked 'Current Range
+    -> Config
+    -> MaybeT IO (Tracked 'Current Range, Judgement, Context, DynFlags)
+judgementForHole state nfp range cfg = do
+  let stale a = runStaleIde "judgementForHole" state nfp a
+
+  TrackedStale asts amapping  <- stale GetHieAst
+  case unTrack asts of
     HAR _ _  _ _ (HieFromDisk _) -> fail "Need a fresh hie file"
-    HAR _ hf _ _ HieFresh -> do
-      (binds, _) <- runStaleIde state nfp GetBindings
-      (tcmod, _) <- runStaleIde state nfp TypeCheck
-      (rss, g)   <- liftMaybe $ getSpanAndTypeAtHole amapping range hf
-      resulting_range <- liftMaybe $ toCurrentRange amapping $ realSrcSpanToRange rss
-      let (jdg, ctx) = mkJudgementAndContext features g binds rss tcmod
+    HAR _ (unsafeCopyAge asts -> hf) _ _ HieFresh -> do
+      range' <- liftMaybe $ mapAgeFrom amapping range
+      binds <- stale GetBindings
+      tcg <- fmap (fmap tmrTypechecked)
+           $ stale TypeCheck
+      hscenv <- stale GhcSessionDeps
+
+      (rss, g) <- liftMaybe $ getSpanAndTypeAtHole range' hf
+      new_rss <- liftMaybe $ mapAgeTo amapping rss
+
+      -- KnownThings is just the instances in scope. There are no ranges
+      -- involved, so it's not crucial to track ages.
+      let henv = untrackedStaleValue $ hscenv
+      eps <- liftIO $ readIORef $ hsc_EPS $ hscEnv henv
+      kt <- knownThings (untrackedStaleValue tcg) henv
+
+      (jdg, ctx) <- liftMaybe $ mkJudgementAndContext cfg g binds new_rss tcg eps kt
+
       dflags <- getIdeDynflags state nfp
-      pure (resulting_range, jdg, ctx, dflags)
+      pure (fmap realSrcSpanToRange new_rss, jdg, ctx, dflags)
+
 
 
 mkJudgementAndContext
-    :: FeatureSet
+    :: Config
     -> Type
-    -> Bindings
-    -> RealSrcSpan
-    -> TcModuleResult
-    -> (Judgement, Context)
-mkJudgementAndContext features g binds rss tcmod = do
-      let tcg = tmrTypechecked tcmod
-          tcs = tcg_binds tcg
-          ctx = mkContext features
-                  (mapMaybe (sequenceA . (occName *** coerce))
-                    $ getDefiningBindings binds rss)
-                  tcg
-          top_provs = getRhsPosVals rss tcs
-          local_hy = spliceProvenance top_provs
-                   $ hypothesisFromBindings rss binds
-          evidence = getEvidenceAtHole (RealSrcSpan rss) tcs
-          cls_hy = foldMap evidenceToHypothesis evidence
-          subst = ts_unifier $ appEndo (foldMap (Endo . evidenceToSubst) evidence) defaultTacticState
-       in ( fmap (CType . substTyAddInScope subst . unCType) $ mkFirstJudgement
-              (local_hy <> cls_hy)
-              (isRhsHole rss tcs)
-              g
-          , ctx
-          )
+    -> TrackedStale Bindings
+    -> Tracked 'Current RealSrcSpan
+    -> TrackedStale TcGblEnv
+    -> ExternalPackageState
+    -> KnownThings
+    -> Maybe (Judgement, Context)
+mkJudgementAndContext cfg g (TrackedStale binds bmap) rss (TrackedStale tcg tcgmap) eps kt = do
+  binds_rss <- mapAgeFrom bmap rss
+  tcg_rss <- mapAgeFrom tcgmap rss
+
+  let tcs = fmap tcg_binds tcg
+      ctx = mkContext cfg
+              (mapMaybe (sequenceA . (occName *** coerce))
+                $ unTrack
+                $ getDefiningBindings <$> binds <*> binds_rss)
+              (unTrack tcg)
+              eps
+              kt
+              evidence
+      top_provs = getRhsPosVals tcg_rss tcs
+      already_destructed = getAlreadyDestructed (fmap RealSrcSpan tcg_rss) tcs
+      local_hy = spliceProvenance top_provs
+               $ hypothesisFromBindings binds_rss binds
+      evidence = getEvidenceAtHole (fmap RealSrcSpan tcg_rss) tcs
+      cls_hy = foldMap evidenceToHypothesis evidence
+      subst = ts_unifier $ appEndo (foldMap (Endo . evidenceToSubst) evidence) defaultTacticState
+  pure $
+    ( disallowing AlreadyDestructed already_destructed
+    $ fmap (CType . substTyAddInScope subst . unCType) $ mkFirstJudgement
+          (local_hy <> cls_hy)
+          (isRhsHole tcg_rss tcs)
+          g
+    , ctx
+    )
+
+
+------------------------------------------------------------------------------
+-- | Determine which bindings have already been destructed by the location of
+-- the hole.
+getAlreadyDestructed
+    :: Tracked age SrcSpan
+    -> Tracked age (LHsBinds GhcTc)
+    -> Set OccName
+getAlreadyDestructed (unTrack -> span) (unTrack -> binds) =
+  everythingContaining span
+    (mkQ mempty $ \case
+      Case (HsVar _ (L _ (occName -> var))) _ ->
+        S.singleton var
+      (_ :: HsExpr GhcTc) -> mempty
+    ) binds
 
 
 getSpanAndTypeAtHole
-    :: PositionMapping
-    -> Range
-    -> HieASTs b
-    -> Maybe (Span, b)
-getSpanAndTypeAtHole amapping range hf = do
-  range' <- fromCurrentRange amapping range
+    :: Tracked age Range
+    -> Tracked age (HieASTs b)
+    -> Maybe (Tracked age RealSrcSpan, b)
+getSpanAndTypeAtHole r@(unTrack -> range) (unTrack -> hf) = do
   join $ listToMaybe $ M.elems $ flip M.mapWithKey (getAsts hf) $ \fs ast ->
-    case selectSmallestContaining (rangeToRealSrcSpan (FastString.unpackFS fs) range') ast of
+    case selectSmallestContaining (rangeToRealSrcSpan (FastString.unpackFS fs) range) ast of
       Nothing -> Nothing
       Just ast' -> do
         let info = nodeInfo ast'
@@ -171,11 +287,8 @@ getSpanAndTypeAtHole amapping range hf = do
         -- Ensure we're actually looking at a hole here
         guard $ all (either (const False) $ isHole . occName)
           $ M.keysSet $ nodeIdentifiers info
-        pure (nodeSpan ast', ty)
+        pure (unsafeCopyAge r $ nodeSpan ast', ty)
 
-
-liftMaybe :: Monad m => Maybe a -> MaybeT m a
-liftMaybe a = MaybeT $ pure a
 
 
 ------------------------------------------------------------------------------
@@ -192,8 +305,11 @@ spliceProvenance top x =
 
 ------------------------------------------------------------------------------
 -- | Compute top-level position vals of a function
-getRhsPosVals :: RealSrcSpan -> TypecheckedSource -> Hypothesis CType
-getRhsPosVals rss tcs
+getRhsPosVals
+    :: Tracked age RealSrcSpan
+    -> Tracked age TypecheckedSource
+    -> Hypothesis CType
+getRhsPosVals (unTrack -> rss) (unTrack -> tcs)
   = everything (<>) (mkQ mempty $ \case
       TopLevelRHS name ps
           (L (RealSrcSpan span)  -- body with no guards and a single defn
@@ -223,7 +339,7 @@ buildTopLevelHypothesis name ps = do
 -- | Construct a hypothesis for a single pattern, including building
 -- sub-hypotheses for constructor pattern matches.
 buildPatHy :: Provenance -> PatCompat GhcTc -> State Int (Hypothesis CType)
-buildPatHy prov (fromPatCompatTc -> p0) =
+buildPatHy prov (fromPatCompat -> p0) =
   case p0 of
     VarPat  _ x   -> pure $ mkIdHypothesis (unLoc x) prov
     LazyPat _ p   -> buildPatHy prov p
@@ -238,7 +354,7 @@ buildPatHy prov (fromPatCompatTc -> p0) =
     ListPat x@(ListPatTc ty _) (p : ps) ->
       mkDerivedConHypothesis prov (RealDataCon consDataCon) [ty]
         [ (0, p)
-        , (1, toPatCompatTc $ ListPat x ps)
+        , (1, toPatCompat $ ListPat x ps)
         ]
     -- Desugar tuples into an explicit constructor
     TuplePat tys pats boxity ->
@@ -336,11 +452,12 @@ mkIdHypothesis (splitId -> (name, ty)) prov =
 
 ------------------------------------------------------------------------------
 -- | Is this hole immediately to the right of an equals sign?
-isRhsHole :: RealSrcSpan -> TypecheckedSource -> Bool
-isRhsHole rss tcs = everything (||) (mkQ False $ \case
-  TopLevelRHS _ _ (L (RealSrcSpan span) _) -> containsSpan rss span
-  _                                        -> False
-  ) tcs
+isRhsHole :: Tracked age RealSrcSpan -> Tracked age TypecheckedSource -> Bool
+isRhsHole (unTrack -> rss) (unTrack -> tcs) =
+  everything (||) (mkQ False $ \case
+      TopLevelRHS _ _ (L (RealSrcSpan span) _) -> containsSpan rss span
+      _                                        -> False
+    ) tcs
 
 
 ufmSeverity :: UserFacingMessage -> MessageType
@@ -357,3 +474,74 @@ mkShowMessageParams ufm = ShowMessageParams (ufmSeverity ufm) $ T.pack $ show uf
 showLspMessage :: MonadLsp cfg m => ShowMessageParams -> m ()
 showLspMessage = sendNotification SWindowShowMessage
 
+
+-- This rule only exists for generating file diagnostics
+-- so the RuleResult is empty
+data WriteDiagnostics = WriteDiagnostics
+    deriving (Eq, Show, Typeable, Generic)
+
+instance Hashable WriteDiagnostics
+instance NFData   WriteDiagnostics
+instance Binary   WriteDiagnostics
+
+type instance RuleResult WriteDiagnostics = ()
+
+wingmanRules :: PluginId -> Rules ()
+wingmanRules plId = do
+  define $ \WriteDiagnostics nfp ->
+    usePropertyAction #hole_severity plId properties >>= \case
+      Nothing -> pure (mempty, Just ())
+      Just severity ->
+        use GetParsedModule nfp >>= \case
+          Nothing ->
+            pure ([], Nothing)
+          Just pm -> do
+            let holes :: [Range]
+                holes =
+                  everything (<>)
+                    (mkQ mempty $ \case
+                      L span (HsVar _ (L _ name))
+                        | isHole (occName name) ->
+                            maybeToList $ srcSpanToRange span
+                      L span (HsUnboundVar _ (TrueExprHole occ))
+                        | isHole occ ->
+                            maybeToList $ srcSpanToRange span
+#if __GLASGOW_HASKELL__ <= 808
+                      L span (EWildPat _) ->
+                        maybeToList $ srcSpanToRange span
+#endif
+                      (_ :: LHsExpr GhcPs) -> mempty
+                    ) $ pm_parsed_source pm
+            pure
+              ( fmap (\r -> (nfp, ShowDiag, mkDiagnostic severity r)) holes
+              , Just ()
+              )
+
+  action $ do
+    files <- getFilesOfInterest
+    void $ uses WriteDiagnostics $ Map.keys files
+
+
+mkDiagnostic :: DiagnosticSeverity -> Range -> Diagnostic
+mkDiagnostic severity r =
+  Diagnostic r
+    (Just severity)
+    (Just $ InR "hole")
+    (Just "wingman")
+    "Hole"
+    (Just $ List [DtUnnecessary])
+    Nothing
+
+
+------------------------------------------------------------------------------
+-- | Transform a 'Graft' over the AST into a 'WorkspaceEdit'.
+mkWorkspaceEdits
+    :: DynFlags
+    -> ClientCapabilities
+    -> Uri
+    -> Annotated ParsedSource
+    -> Graft (Either String) ParsedSource
+    -> Either UserFacingMessage WorkspaceEdit
+mkWorkspaceEdits dflags ccs uri pm g = do
+  let response = transform dflags ccs uri g pm
+   in first (InfrastructureError . T.pack) response

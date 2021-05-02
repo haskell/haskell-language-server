@@ -38,7 +38,7 @@ defaults: &defaults
 
     - run:
         name: Build Testsuite without running it
-        command: stack --stack-yaml=${STACK_FILE}  build --test --no-run-tests
+        command: stack -j 1 --stack-yaml=${STACK_FILE} build --test --no-run-tests
         no_output_timeout: 30m
 
     - store_artifacts:
@@ -51,14 +51,6 @@ defaults: &defaults
           - ~/.stack
           - ~/build/.stack-work
           - ~/build/ghcide/.stack-work
-
-    - run:
-        name: Setup stack eval hie.html
-        command: cp plugins/hls-eval-plugin/test/testdata/hie-stack.yaml plugins/hls-eval-plugin/test/testdata/hie.yaml
-
-    - run:
-        name: Setup stack eval stack.html
-        command: grep '^resolver:\|^compiler:' stack-build.txt > plugins/hls-eval-plugin/test/testdata/stack.yaml
 
     - run:
         name: Build including tests

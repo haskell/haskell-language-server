@@ -23,7 +23,7 @@ import           Development.IDE.Core.FileExists (fileExistsRules)
 import           Development.IDE.Core.OfInterest
 import           Development.IDE.Types.Logger    as Logger
 import           Development.IDE.Types.Options   (IdeOptions (..))
-import           Development.Shake
+import           Development.IDE.Graph
 import           Ide.Plugin.Config
 import qualified Language.LSP.Server             as LSP
 import qualified Language.LSP.Types              as LSP

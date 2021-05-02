@@ -17,13 +17,14 @@ import           Control.Concurrent.Strict
 import           Control.DeepSeq
 import           Control.Exception
 import           Control.Monad
+import           Control.Monad.IO.Class
 import           Data.Binary
 import           Data.HashMap.Strict                          (HashMap)
 import qualified Data.HashMap.Strict                          as HashMap
 import           Data.Hashable
 import qualified Data.Text                                    as T
 import           Data.Typeable
-import           Development.Shake
+import           Development.IDE.Graph
 import           GHC.Generics
 
 import           Control.Monad.Trans.Class
@@ -98,7 +99,7 @@ kick = do
     liftIO $ progressUpdate KickStarted
 
     -- Update the exports map for FOIs
-    (results, ()) <- par (uses GenerateCore files) (void $ uses GetHieAst files)
+    results <- uses GenerateCore files <* uses GetHieAst files
 
     -- Update the exports map for non FOIs
     -- We can skip this if checkProject is True, assuming they never change under our feet.
@@ -116,4 +117,3 @@ kick = do
     void $ liftIO $ modifyVar' exportsMap $ (exportsMap'' <>) . (exportsMap' <>)
 
     liftIO $ progressUpdate KickCompleted
-

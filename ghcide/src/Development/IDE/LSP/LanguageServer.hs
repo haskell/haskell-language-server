@@ -12,9 +12,6 @@ module Development.IDE.LSP.LanguageServer
     ( runLanguageServer
     ) where
 
-import           Control.Concurrent.Extra              (newBarrier,
-                                                        signalBarrier,
-                                                        waitBarrier)
 import           Control.Concurrent.STM
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
@@ -23,10 +20,8 @@ import           Data.Aeson                            (Value)
 import           Data.Maybe
 import qualified Data.Set                              as Set
 import qualified Data.Text                             as T
-import qualified Development.IDE.GHC.Util              as Ghcide
 import           Development.IDE.LSP.Server
 import           Development.IDE.Session               (runWithDb)
-import           GHC.IO.Handle                         (hDuplicate)
 import           Ide.Types                             (traceWithSpan)
 import qualified Language.LSP.Server                   as LSP
 import           Language.LSP.Types
@@ -41,7 +36,6 @@ import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.Shake
 import           Development.IDE.Core.Tracing
 import           Development.IDE.LSP.HoverDefinition
-import           Development.IDE.LSP.Notifications
 import           Development.IDE.Types.Logger
 
 import           System.IO.Unsafe                      (unsafeInterleaveIO)
@@ -49,32 +43,21 @@ import           System.IO.Unsafe                      (unsafeInterleaveIO)
 runLanguageServer
     :: forall config. (Show config)
     => LSP.Options
+    -> Handle -- input
+    -> Handle -- output
     -> (FilePath -> IO FilePath) -- ^ Map root paths to the location of the hiedb for the project
-    -> (IdeState -> Value -> IO (Either T.Text config))
+    -> config
+    -> (config -> Value -> Either T.Text config)
     -> LSP.Handlers (ServerM config)
     -> (LSP.LanguageContextEnv config -> VFSHandle -> Maybe FilePath -> HieDb -> IndexQueue -> IO IdeState)
     -> IO ()
-runLanguageServer options getHieDbLoc onConfigurationChange userHandlers getIdeState = do
-    -- Move stdout to another file descriptor and duplicate stderr
-    -- to stdout. This guards against stray prints from corrupting the JSON-RPC
-    -- message stream.
-    newStdout <- hDuplicate stdout
-    stderr `Ghcide.hDuplicateTo'` stdout
-    hSetBuffering stderr NoBuffering
-    hSetBuffering stdout NoBuffering
+runLanguageServer options inH outH getHieDbLoc defaultConfig onConfigurationChange userHandlers getIdeState = do
 
-    -- Print out a single space to assert that the above redirection works.
-    -- This is interleaved with the logger, hence we just print a space here in
-    -- order not to mess up the output too much. Verified that this breaks
-    -- the language server tests without the redirection.
-    putStr " " >> hFlush stdout
-
-    -- These barriers are signaled when the threads reading from these chans exit.
-    -- This should not happen but if it does, we will make sure that the whole server
-    -- dies and can be restarted instead of losing threads silently.
-    clientMsgBarrier <- newBarrier
+    -- This MVar becomes full when the server thread exits or we receive exit message from client.
+    -- LSP loop will be canceled when it's full.
+    clientMsgVar <- newEmptyMVar
     -- Forcefully exit
-    let exit = signalBarrier clientMsgBarrier ()
+    let exit = void $ tryPutMVar clientMsgVar ()
 
     -- The set of requests ids that we have received but not finished processing
     pendingRequests <- newTVarIO Set.empty
@@ -100,7 +83,6 @@ runLanguageServer options getHieDbLoc onConfigurationChange userHandlers getIdeS
     let ideHandlers = mconcat
           [ setIdeHandlers
           , userHandlers
-          , setHandlersNotifications -- absolutely critical, join them with user notifications
           ]
 
     -- Send everything over a channel, since you need to wait until after initialise before
@@ -117,9 +99,8 @@ runLanguageServer options getHieDbLoc onConfigurationChange userHandlers getIdeS
 
 
     let serverDefinition = LSP.ServerDefinition
-            { LSP.onConfigurationChange = \v -> do
-                (_chan, ide) <- ask
-                liftIO $ onConfigurationChange ide v
+            { LSP.onConfigurationChange = onConfigurationChange
+            , LSP.defaultConfig = defaultConfig
             , LSP.doInitialize = handleInit exit clearReqId waitForCancel clientMsgChan
             , LSP.staticHandlers = asyncHandlers
             , LSP.interpretHandler = \(env, st) -> LSP.Iso (LSP.runLspT env . flip runReaderT (clientMsgChan,st)) liftIO
@@ -128,10 +109,10 @@ runLanguageServer options getHieDbLoc onConfigurationChange userHandlers getIdeS
 
     void $ waitAnyCancel =<< traverse async
         [ void $ LSP.runServerWithHandles
-            stdin
-            newStdout
+            inH
+            outH
             serverDefinition
-        , void $ waitBarrier clientMsgBarrier
+        , void $ readMVar clientMsgVar
         ]
 
     where
@@ -156,7 +137,12 @@ runLanguageServer options getHieDbLoc onConfigurationChange userHandlers getIdeS
             logInfo (ideLogger ide) $ T.pack $ "Registering ide configuration: " <> show initConfig
             registerIdeConfiguration (shakeExtras ide) initConfig
 
-            _ <- flip forkFinally (const exitClientMsg) $ runWithDb dbLoc $ \hiedb hieChan -> do
+            let handleServerException (Left e) = do
+                    logError (ideLogger ide) $
+                        T.pack $ "Fatal error in server thread: " <> show e
+                    exitClientMsg
+                handleServerException _ = pure ()
+            _ <- flip forkFinally handleServerException $ runWithDb dbLoc $ \hiedb hieChan -> do
               putMVar dbMVar (hiedb,hieChan)
               forever $ do
                 msg <- readChan clientMsgChan
@@ -202,8 +188,9 @@ cancelHandler cancelRequest = LSP.notificationHandler SCancelRequest $ \Notifica
 exitHandler :: IO () -> LSP.Handlers (ServerM c)
 exitHandler exit = LSP.notificationHandler SExit $ const $ do
     (_, ide) <- ask
+    liftIO $ logDebug (ideLogger ide) "Received exit message"
     -- flush out the Shake session to record a Shake profile if applicable
-    liftIO $ restartShakeSession (shakeExtras ide) []
+    liftIO $ shakeShut ide
     liftIO exit
 
 modifyOptions :: LSP.Options -> LSP.Options

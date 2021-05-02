@@ -8,7 +8,7 @@
 
 module Ide.Arguments
   ( Arguments(..)
-  , LspArguments(..)
+  , GhcideArguments(..)
   , PrintVersion(..)
   , getArguments
   , haskellLanguageServerVersion
@@ -17,7 +17,7 @@ module Ide.Arguments
 
 import           Data.Version
 import           Development.GitRev
-import           HieDb.Run
+import           Development.IDE.Main          (Command (..), commandP)
 import           Options.Applicative
 import           Paths_haskell_language_server
 import           System.Environment
@@ -27,13 +27,13 @@ import           System.Environment
 data Arguments
   = VersionMode PrintVersion
   | ProbeToolsMode
-  | DbCmd Options Command
-  | LspMode LspArguments
+  | Ghcide GhcideArguments
+  | VSCodeExtensionSchemaMode
+  | DefaultConfigurationMode
 
-data LspArguments = LspArguments
-    {argLSP                 :: Bool
+data GhcideArguments = GhcideArguments
+    {argsCommand            :: Command
     ,argsCwd                :: Maybe FilePath
-    ,argFiles               :: [FilePath]
     ,argsShakeProfiling     :: Maybe FilePath
     ,argsTesting            :: Bool
     ,argsExamplePlugin      :: Bool
@@ -53,12 +53,12 @@ data PrintVersion
 getArguments :: String -> IO Arguments
 getArguments exeName = execParser opts
   where
-    hieInfo = fullDesc <> progDesc "Query .hie files"
     opts = info ((
       VersionMode <$> printVersionParser exeName
       <|> probeToolsParser exeName
-      <|> hsubparser (command "hiedb" (info (DbCmd <$> optParser "" True <*> cmdParser <**> helper) hieInfo))
-      <|> LspMode <$> arguments)
+      <|> Ghcide <$> arguments
+      <|> vsCodeExtensionSchemaModeParser
+      <|> defaultConfigurationModeParser)
       <**> helper)
       ( fullDesc
      <> progDesc "Used as a test bed to check your IDE Client will work"
@@ -77,12 +77,21 @@ probeToolsParser exeName =
   flag' ProbeToolsMode
     (long "probe-tools" <> help ("Show " ++ exeName  ++ " version and other tools of interest"))
 
-arguments :: Parser LspArguments
-arguments = LspArguments
-      <$> switch (long "lsp" <> help "Start talking to an LSP server")
+vsCodeExtensionSchemaModeParser :: Parser Arguments
+vsCodeExtensionSchemaModeParser =
+  flag' VSCodeExtensionSchemaMode
+    (long "vscode-extension-schema" <> help "Print generic config schema for plugins (used in the package.json of haskell vscode extension)")
+
+defaultConfigurationModeParser :: Parser Arguments
+defaultConfigurationModeParser =
+  flag' DefaultConfigurationMode
+    (long "generate-default-config" <> help "Print config supported by the server with default values")
+
+arguments :: Parser GhcideArguments
+arguments = GhcideArguments
+      <$> (commandP <|> lspCommand <|> checkCommand)
       <*> optional (strOption $ long "cwd" <> metavar "DIR"
                   <> help "Change to this directory")
-      <*> many (argument str (metavar "FILES/DIRS..."))
       <*> optional (strOption $ long "shake-profiling" <> metavar "DIR"
                   <> help "Dump profiling reports to this directory")
       <*> switch (long "test"
@@ -110,6 +119,9 @@ arguments = LspArguments
            )
       <*> switch (long "project-ghc-version"
                   <> help "Work out the project GHC version and print it")
+    where
+        lspCommand = LSP <$ flag' True (long "lsp" <> help "Start talking to an LSP server")
+        checkCommand = Check <$> many (argument str (metavar "FILES/DIRS..."))
 
 -- ---------------------------------------------------------------------
 
