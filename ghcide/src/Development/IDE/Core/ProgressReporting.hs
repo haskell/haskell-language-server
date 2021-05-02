@@ -17,6 +17,7 @@ import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import qualified Control.Monad.STM              as STM
 import           Control.Monad.Trans.Class      (lift)
+import           Data.Foldable                  (for_)
 import qualified Data.HashMap.Strict            as HMap
 import qualified Data.Text                      as T
 import           Data.Unique
@@ -100,13 +101,12 @@ delayedProgressReporting before after lspEnv optProgressStyle = do
                 liftIO $ sleep before
                 u <- ProgressTextToken . T.pack . show . hashUnique <$> liftIO newUnique
 
+                b <- liftIO newBarrier
                 void $ LSP.sendRequest LSP.SWindowWorkDoneProgressCreate
-                    LSP.WorkDoneProgressCreateParams { _token = u } $ const (pure ())
+                    LSP.WorkDoneProgressCreateParams { _token = u } $ liftIO . signalBarrier b
+                ready <- liftIO $ waitBarrier b
 
-                bracket_
-                  (start u)
-                  (stop u)
-                  (loop u 0)
+                for_ ready $ const $ bracket_ (start u) (stop u) (loop u 0)
                 where
                     start id = LSP.sendNotification LSP.SProgress $
                         LSP.ProgressParams
