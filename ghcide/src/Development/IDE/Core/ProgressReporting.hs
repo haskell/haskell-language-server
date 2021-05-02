@@ -16,6 +16,7 @@ import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class      (lift)
 import           Data.Foldable                  (for_)
+import           Data.Functor                   (($>))
 import qualified Data.HashMap.Strict            as HMap
 import qualified Data.Text                      as T
 import           Data.Unique
@@ -46,6 +47,24 @@ noProgressReporting = return $ ProgressReporting
   , progressStop   = pure ()
   }
 
+data State
+    = NotStarted
+    | Completed
+    | Stopped
+    | Running (Async ())
+
+data Transition = Event ProgressEvent | StopProgress
+
+updateState :: IO () -> Transition -> State -> IO State
+updateState _      _                    Stopped     = pure Stopped
+updateState start (Event KickStarted)   NotStarted  = Running <$> async start
+updateState start (Event KickStarted)   Completed   = Running <$> async start
+updateState start (Event KickStarted)   (Running a) = cancel a >> Running <$> async start
+updateState _     (Event KickCompleted) (Running a) = cancel a $> Completed
+updateState _     (Event KickCompleted) st          = pure st
+updateState _     StopProgress          (Running a) = cancel a $> Stopped
+updateState _     StopProgress          st          = pure st
+
 -- | A 'ProgressReporting' that enqueues Begin and End notifications in a new
 --   thread, with a grace period (nothing will be sent if 'KickCompleted' arrives
 --   before the end of the grace period).
@@ -58,10 +77,9 @@ delayedProgressReporting
   -> IO ProgressReporting
 delayedProgressReporting before after lspEnv optProgressStyle = do
     inProgressVar <- newVar (HMap.empty @NormalizedFilePath @Int)
-    progressThread <- newVar =<< async (pure ())
-    let progressUpdate KickStarted = writeVar progressThread =<< async (mRunLspT lspEnv $ lspShakeProgress inProgressVar)
-        progressUpdate KickCompleted = readVar progressThread >>= cancel
-        progressStop   = progressUpdate KickCompleted
+    progressState <- newVar NotStarted
+    let progressUpdate event = modifyVar_ progressState $ updateState (mRunLspT lspEnv $ lspShakeProgress inProgressVar) (Event event)
+        progressStop   = modifyVar_ progressState $ updateState (mRunLspT lspEnv $ lspShakeProgress inProgressVar) StopProgress
         inProgress :: NormalizedFilePath -> Action a -> Action a
         inProgress = withProgressVar inProgressVar
     return ProgressReporting{..}
