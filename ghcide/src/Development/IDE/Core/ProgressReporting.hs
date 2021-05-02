@@ -67,6 +67,15 @@ updateState _     StopProgress          st          = pure st
 
 data InProgress = InProgress {todo, done :: !Int, current :: !(HMap.HashMap NormalizedFilePath Int)}
 
+recordProgress :: NormalizedFilePath -> (Int -> Int) -> InProgress -> InProgress
+recordProgress file shift InProgress{..} = case HMap.alterF alter file current of
+    ((prev, new), m') ->
+        let todo' = if isJust prev then todo else todo + 1
+            done' = if new == 0 then done+1 else done
+        in InProgress todo' done' m'
+  where
+    alter x = let x' = maybe (shift 0) shift x in ((x,x'), Just x')
+
 -- | A 'ProgressReporting' that enqueues Begin and End notifications in a new
 --   thread, with a grace period (nothing will be sent if 'KickCompleted' arrives
 --   before the end of the grace period).
@@ -145,14 +154,7 @@ delayedProgressReporting before after lspEnv optProgressStyle = do
             -- Do not remove the eta-expansion without profiling a session with at
             -- least 1000 modifications.
             where
-              f shift = void $ modifyVar' var $ \InProgress{..} ->
-                case HMap.alterF alter file current of
-                    ((prev, new), m') ->
-                        let todo' = if isJust prev then todo else todo + 1
-                            done' = if new == 0 then done+1 else done
-                        in InProgress todo' done' m'
-                where
-                    alter x = let x' = maybe (shift 0) shift x in ((x,x'), Just x')
+              f shift = modifyVar' var $ recordProgress file shift
 
 mRunLspT :: Applicative m => Maybe (LSP.LanguageContextEnv c ) -> LSP.LspT c m () -> m ()
 mRunLspT (Just lspEnv) f = LSP.runLspT lspEnv f
