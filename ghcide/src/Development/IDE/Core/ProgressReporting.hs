@@ -11,11 +11,9 @@ module Development.IDE.Core.ProgressReporting
    where
 
 import           Control.Concurrent.Async
-import           Control.Concurrent.STM
 import           Control.Concurrent.Strict
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
-import qualified Control.Monad.STM              as STM
 import           Control.Monad.Trans.Class      (lift)
 import           Data.Foldable                  (for_)
 import qualified Data.HashMap.Strict            as HMap
@@ -60,96 +58,69 @@ delayedProgressReporting
   -> IO ProgressReporting
 delayedProgressReporting before after lspEnv optProgressStyle = do
     inProgressVar <- newVar (HMap.empty @NormalizedFilePath @Int)
-    mostRecentProgressEvent <- newTVarIO KickCompleted
-    progressAsync <- async $
-            progressThread optProgressStyle mostRecentProgressEvent inProgressVar
-    let progressUpdate = atomically . writeTVar mostRecentProgressEvent
-        progressStop   = cancel progressAsync
+    progressThread <- newVar =<< async (pure ())
+    let progressUpdate KickStarted = writeVar progressThread =<< async (mRunLspT lspEnv $ lspShakeProgress inProgressVar)
+        progressUpdate KickCompleted = readVar progressThread >>= cancel
+        progressStop   = progressUpdate KickCompleted
         inProgress :: NormalizedFilePath -> Action a -> Action a
         inProgress = withProgressVar inProgressVar
     return ProgressReporting{..}
     where
-        -- The progress thread is a state machine with two states:
-        --   1. Idle
-        --   2. Reporting a kick event
-        -- And two transitions, modelled by 'ProgressEvent':
-        --   1. KickCompleted - transitions from Reporting into Idle
-        --   2. KickStarted - transitions from Idle into Reporting
-        progressThread style mostRecentProgressEvent inProgress = progressLoopIdle
-          where
-            progressLoopIdle = do
-                atomically $ do
-                    v <- readTVar mostRecentProgressEvent
-                    case v of
-                        KickCompleted -> STM.retry
-                        KickStarted   -> return ()
-                asyncReporter <- async $ mRunLspT lspEnv lspShakeProgress
-                progressLoopReporting asyncReporter
-            progressLoopReporting asyncReporter = do
-                atomically $ do
-                    v <- readTVar mostRecentProgressEvent
-                    case v of
-                        KickStarted   -> STM.retry
-                        KickCompleted -> return ()
-                cancel asyncReporter
-                progressLoopIdle
+        lspShakeProgress inProgress = do
+            -- first sleep a bit, so we only show progress messages if it's going to take
+            -- a "noticable amount of time" (we often expect a thread kill to arrive before the sleep finishes)
+            liftIO $ sleep before
+            u <- ProgressTextToken . T.pack . show . hashUnique <$> liftIO newUnique
 
-            lspShakeProgress :: LSP.LspM config ()
-            lspShakeProgress = do
-                -- first sleep a bit, so we only show progress messages if it's going to take
-                -- a "noticable amount of time" (we often expect a thread kill to arrive before the sleep finishes)
-                liftIO $ sleep before
-                u <- ProgressTextToken . T.pack . show . hashUnique <$> liftIO newUnique
+            b <- liftIO newBarrier
+            void $ LSP.sendRequest LSP.SWindowWorkDoneProgressCreate
+                LSP.WorkDoneProgressCreateParams { _token = u } $ liftIO . signalBarrier b
+            ready <- liftIO $ waitBarrier b
 
-                b <- liftIO newBarrier
-                void $ LSP.sendRequest LSP.SWindowWorkDoneProgressCreate
-                    LSP.WorkDoneProgressCreateParams { _token = u } $ liftIO . signalBarrier b
-                ready <- liftIO $ waitBarrier b
-
-                for_ ready $ const $ bracket_ (start u) (stop u) (loop u 0)
-                where
-                    start id = LSP.sendNotification LSP.SProgress $
-                        LSP.ProgressParams
-                            { _token = id
-                            , _value = LSP.Begin $ WorkDoneProgressBeginParams
-                              { _title = "Processing"
-                              , _cancellable = Nothing
-                              , _message = Nothing
-                              , _percentage = Nothing
+            for_ ready $ const $ bracket_ (start u) (stop u) (loop u 0)
+            where
+                start id = LSP.sendNotification LSP.SProgress $
+                    LSP.ProgressParams
+                        { _token = id
+                        , _value = LSP.Begin $ WorkDoneProgressBeginParams
+                          { _title = "Processing"
+                          , _cancellable = Nothing
+                          , _message = Nothing
+                          , _percentage = Nothing
+                          }
+                        }
+                stop id = LSP.sendNotification LSP.SProgress
+                    LSP.ProgressParams
+                        { _token = id
+                        , _value = LSP.End WorkDoneProgressEndParams
+                          { _message = Nothing
+                          }
+                        }
+                loop id prev = do
+                    current <- liftIO $ readVar inProgress
+                    let done = length $ filter (== 0) $ HMap.elems current
+                    let todo = HMap.size current
+                    if todo == 0 then loop id 0 else do
+                        let next = 100 * fromIntegral done / fromIntegral todo
+                        liftIO $ sleep after
+                        when (optProgressStyle /= NoProgress && next /= prev) $
+                          LSP.sendNotification LSP.SProgress $
+                          LSP.ProgressParams
+                              { _token = id
+                              , _value = LSP.Report $ case optProgressStyle of
+                                  Explicit -> LSP.WorkDoneProgressReportParams
+                                    { _cancellable = Nothing
+                                    , _message = Just $ T.pack $ show done <> "/" <> show todo
+                                    , _percentage = Nothing
+                                    }
+                                  Percentage -> LSP.WorkDoneProgressReportParams
+                                    { _cancellable = Nothing
+                                    , _message = Nothing
+                                    , _percentage = Just next
+                                    }
+                                  NoProgress -> error "unreachable"
                               }
-                            }
-                    stop id = LSP.sendNotification LSP.SProgress
-                        LSP.ProgressParams
-                            { _token = id
-                            , _value = LSP.End WorkDoneProgressEndParams
-                              { _message = Nothing
-                              }
-                            }
-                    loop id prev = do
-                        current <- liftIO $ readVar inProgress
-                        let done = length $ filter (== 0) $ HMap.elems current
-                        let todo = HMap.size current
-                        if todo == 0 then loop id 0 else do
-                            let next = 100 * fromIntegral done / fromIntegral todo
-                            liftIO $ sleep after
-                            when (style /= NoProgress && next /= prev) $
-                              LSP.sendNotification LSP.SProgress $
-                              LSP.ProgressParams
-                                  { _token = id
-                                  , _value = LSP.Report $ case style of
-                                      Explicit -> LSP.WorkDoneProgressReportParams
-                                        { _cancellable = Nothing
-                                        , _message = Just $ T.pack $ show done <> "/" <> show todo
-                                        , _percentage = Nothing
-                                        }
-                                      Percentage -> LSP.WorkDoneProgressReportParams
-                                        { _cancellable = Nothing
-                                        , _message = Nothing
-                                        , _percentage = Just next
-                                        }
-                                      NoProgress -> error "unreachable"
-                                  }
-                            loop id next
+                        loop id next
 
         withProgressVar var file = actionBracket (f succ) (const $ f pred) . const
             -- This functions are deliberately eta-expanded to avoid space leaks.
