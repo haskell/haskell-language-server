@@ -1,6 +1,5 @@
 {-# LANGUAGE CPP          #-}
 {-# LANGUAGE TypeFamilies #-}
-#include "ghc-api-version.h"
 
 {-|
 The logic for setting up a ghcide session by tapping into hie-bios.
