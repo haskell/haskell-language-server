@@ -14,7 +14,8 @@ module Development.IDE.Plugin.CodeAction
     , matchRegExMultipleImports
     ) where
 
-import           Bag                                               (isEmptyBag)
+import           Bag                                               (bagToList,
+                                                                    isEmptyBag)
 import           Control.Applicative                               ((<|>))
 import           Control.Arrow                                     (second,
                                                                     (>>>))
@@ -72,7 +73,6 @@ import           Outputable                                        (Outputable,
                                                                     showSDocUnsafe)
 import           RdrName                                           (GlobalRdrElt (..),
                                                                     lookupGlobalRdrEnv)
-import           Safe                                              (atMay)
 import           SrcLoc                                            (realSrcSpanEnd,
                                                                     realSrcSpanStart)
 import           TcRnTypes                                         (ImportAvails (..),
@@ -162,6 +162,57 @@ findSigOfDecl pred decls =
         any (pred . unLoc) idsSig
     ]
 
+findSigOfDeclRanged :: Range -> [LHsDecl p] -> Maybe (Sig p)
+findSigOfDeclRanged range decls = do
+  dec <- findDeclContainingLoc (_start range) decls
+  case dec of
+     L _ (SigD _ sig@TypeSig {}) -> Just sig
+     L _ (ValD _ (bind :: HsBind p)) -> findSigOfBind range bind
+     _ -> Nothing
+
+findSigOfBind :: Range -> HsBind p -> Maybe (Sig p)
+findSigOfBind range bind =
+    case bind of
+      FunBind {} -> findSigOfLMatch (unLoc $ mg_alts (fun_matches bind))
+      _ -> Nothing
+  where
+    findSigOfLMatch :: [LMatch p (LHsExpr p)] -> Maybe (Sig p)
+    findSigOfLMatch ls = do
+      match <- findDeclContainingLoc (_start range) ls
+      findSigOfGRHSs (m_grhss (unLoc match))
+
+    findSigOfGRHSs :: GRHSs p (LHsExpr p) -> Maybe (Sig p)
+    findSigOfGRHSs grhs = do
+        if _start range `isInsideSrcSpan` (getLoc $ grhssLocalBinds grhs)
+        then findSigOfBinds range (unLoc (grhssLocalBinds grhs)) -- where clause
+        else do
+          grhs <- findDeclContainingLoc (_start range) (grhssGRHSs grhs)
+          case unLoc grhs of
+            GRHS _ _ bd -> findSigOfExpr (unLoc bd)
+            _ -> Nothing
+
+    findSigOfExpr :: HsExpr p -> Maybe (Sig p)
+    findSigOfExpr = go
+      where
+        go (HsLet _ binds _) = findSigOfBinds range (unLoc binds)
+        go (HsDo _ _ stmts) = do
+          stmtlr <- unLoc <$> findDeclContainingLoc (_start range) (unLoc stmts)
+          case stmtlr of
+            LetStmt _ lhsLocalBindsLR -> findSigOfBinds range $ unLoc lhsLocalBindsLR
+            _ -> Nothing
+        go _ = Nothing
+
+findSigOfBinds :: Range -> HsLocalBinds p -> Maybe (Sig p)
+findSigOfBinds range = go
+  where
+    go (HsValBinds _ (ValBinds _ binds lsigs)) =
+        case unLoc <$> findDeclContainingLoc (_start range) lsigs of
+          Just sig' -> Just sig'
+          Nothing -> do
+            lHsBindLR <- findDeclContainingLoc (_start range) (bagToList binds)
+            findSigOfBind range (unLoc lHsBindLR)
+    go _ = Nothing
+
 findInstanceHead :: (Outputable (HsType p)) => DynFlags -> String -> [LHsDecl p] -> Maybe (LHsType p)
 findInstanceHead df instanceHead decls =
   listToMaybe
@@ -172,6 +223,7 @@ findInstanceHead df instanceHead decls =
 
 findDeclContainingLoc :: Position -> [Located a] -> Maybe (Located a)
 findDeclContainingLoc loc = find (\(L l _) -> loc `isInsideSrcSpan` l)
+
 
 -- Single:
 -- This binding for ‘mod’ shadows the existing binding
@@ -1048,10 +1100,6 @@ suggestImplicitParameter (L _ HsModule {hsmodDecls}) Diagnostic {_message, _rang
 findTypeSignatureName :: T.Text -> Maybe T.Text
 findTypeSignatureName t = matchRegexUnifySpaces t "([^ ]+) :: " <&> head
 
-findTypeSignatureLine :: T.Text -> T.Text -> Int
-findTypeSignatureLine contents typeSignatureName =
-  T.splitOn (typeSignatureName <> " :: ") contents & head & T.lines & length
-
 -- | Suggests a constraint for a type signature with any number of existing constraints.
 suggestFunctionConstraint :: DynFlags -> ParsedSource -> Diagnostic -> T.Text -> [(T.Text, Rewrite)]
 
@@ -1090,31 +1138,26 @@ suggestFunctionConstraint df (L _ HsModule {hsmodDecls}) Diagnostic {..} missing
         <> "` to the context of the type signature for `" <> typeSignatureName <> "`"
 
 -- | Suggests the removal of a redundant constraint for a type signature.
-removeRedundantConstraints :: Maybe T.Text -> Diagnostic -> [(T.Text, TextEdit)]
-removeRedundantConstraints mContents Diagnostic{..}
+removeRedundantConstraints :: DynFlags -> ParsedSource -> Diagnostic -> [(T.Text, Rewrite)]
+removeRedundantConstraints df (L _ HsModule {hsmodDecls}) Diagnostic{..}
 -- • Redundant constraint: Eq a
 -- • In the type signature for:
 --      foo :: forall a. Eq a => a -> a
 -- • Redundant constraints: (Monoid a, Show a)
 -- • In the type signature for:
 --      foo :: forall a. (Num a, Monoid a, Eq a, Show a) => a -> Bool
-  | Just contents <- mContents
   -- Account for both "Redundant constraint" and "Redundant constraints".
-  , True <- "Redundant constraint" `T.isInfixOf` _message
+  | "Redundant constraint" `T.isInfixOf` _message
   , Just typeSignatureName <- findTypeSignatureName _message
+  , Just (TypeSig _ _ HsWC{hswc_body = HsIB {hsib_body = sig}})
+    <- findSigOfDeclRanged _range hsmodDecls
   , Just redundantConstraintList <- findRedundantConstraints _message
-  , Just constraints <- findConstraints contents typeSignatureName
-  = let constraintList = parseConstraints constraints
-        newConstraints = buildNewConstraints constraintList redundantConstraintList
-        typeSignatureLine = findTypeSignatureLine contents typeSignatureName
-        typeSignatureFirstChar = T.length $ typeSignatureName <> " :: "
-        startOfConstraint = Position typeSignatureLine typeSignatureFirstChar
-        endOfConstraint = Position typeSignatureLine $
-          typeSignatureFirstChar + T.length (constraints <> " => ")
-        range = Range startOfConstraint endOfConstraint
-     in [(actionTitle redundantConstraintList typeSignatureName, TextEdit range newConstraints)]
+  , rewrite <- removeConstraint (toRemove df redundantConstraintList) sig
+      = [(actionTitle redundantConstraintList typeSignatureName, rewrite)]
   | otherwise = []
     where
+      toRemove df list a = showSDoc df (ppr a) `elem` (T.unpack <$> list)
+
       parseConstraints :: T.Text -> [T.Text]
       parseConstraints t = t
         & (T.strip >>> stripConstraintsParens >>> T.splitOn ",")
@@ -1134,31 +1177,12 @@ removeRedundantConstraints mContents Diagnostic{..}
         & (`matchRegexUnifySpaces` "Redundant constraints?: (.+)")
         <&> (head >>> parseConstraints)
 
-      -- If the type signature is not formatted as expected (arbitrary number of spaces,
-      -- line feeds...), just fail.
-      findConstraints :: T.Text -> T.Text -> Maybe T.Text
-      findConstraints contents typeSignatureName = do
-        constraints <- contents
-          & T.splitOn (typeSignatureName <> " :: ")
-          & (`atMay` 1)
-          >>= (T.splitOn " => " >>> (`atMay` 0))
-        guard $ not $ "\n" `T.isInfixOf` constraints || T.strip constraints /= constraints
-        return constraints
-
       formatConstraints :: [T.Text] -> T.Text
       formatConstraints [] = ""
       formatConstraints [constraint] = constraint
       formatConstraints constraintList = constraintList
         & T.intercalate ", "
         & \cs -> "(" <> cs <> ")"
-
-      formatConstraintsWithArrow :: [T.Text] -> T.Text
-      formatConstraintsWithArrow [] = ""
-      formatConstraintsWithArrow cs = cs & formatConstraints & (<> " => ")
-
-      buildNewConstraints :: [T.Text] -> [T.Text] -> T.Text
-      buildNewConstraints constraintList redundantConstraintList =
-        formatConstraintsWithArrow $ constraintList \\ redundantConstraintList
 
       actionTitle :: [T.Text] -> T.Text -> T.Text
       actionTitle constraintList typeSignatureName =

@@ -2685,6 +2685,7 @@ addImplicitParamsConstraintTests =
           "fCaller :: " <> mkContext contextCaller <> "()",
           "fCaller = fBase"
         ]
+
 removeRedundantConstraintsTests :: TestTree
 removeRedundantConstraintsTests = let
   header =
@@ -2692,6 +2693,13 @@ removeRedundantConstraintsTests = let
     , "module Testing where"
     , ""
     ]
+
+  headerExt :: [T.Text] -> [T.Text]
+  headerExt exts =
+    redunt : extTxt ++ ["module Testing where"]
+    where
+      redunt = "{-# OPTIONS_GHC -Wredundant-constraints #-}"
+      extTxt = map (\ext -> "{-# LANGUAGE " <> ext <> " #-}") exts
 
   redundantConstraintsCode :: Maybe T.Text -> T.Text
   redundantConstraintsCode mConstraint =
@@ -2709,11 +2717,73 @@ removeRedundantConstraintsTests = let
         , "foo x = x == 1"
         ]
 
-  typeSignatureSpaces :: T.Text
-  typeSignatureSpaces = T.unlines $ header <>
-    [ "foo ::  (Num a, Eq a, Monoid a)  => a -> Bool"
-    , "foo x = x == 1"
-    ]
+  typeSignatureSpaces :: Maybe T.Text -> T.Text
+  typeSignatureSpaces mConstraint =
+    let constraint = maybe "(Num a, Eq a)" (\c -> "(Num a, Eq a, " <> c <> ")") mConstraint
+      in T.unlines $ header <>
+        [ "foo ::  " <> constraint <> " => a -> Bool"
+        , "foo x = x == 1"
+        ]
+
+  redundantConstraintsForall :: Maybe T.Text -> T.Text
+  redundantConstraintsForall mConstraint =
+    let constraint = maybe "" (\c -> "" <> c <> " => ") mConstraint
+      in T.unlines $ headerExt ["RankNTypes"] <>
+        [ "foo :: forall a. " <> constraint <> "a -> a"
+        , "foo = id"
+        ]
+
+  typeSignatureDo :: Maybe T.Text -> T.Text
+  typeSignatureDo mConstraint =
+    let constraint = maybe "" (\c -> "" <> c <> " => ") mConstraint
+      in T.unlines $ header <>
+        [ "f :: Int -> IO ()"
+        , "f n = do"
+        , "  let foo :: " <> constraint <> "a -> IO ()"
+        , "      foo _ = return ()"
+        , "  r n"
+        ]
+
+  typeSignatureNested :: Maybe T.Text -> T.Text
+  typeSignatureNested mConstraint =
+    let constraint = maybe "" (\c -> "" <> c <> " => ") mConstraint
+      in T.unlines $ header <>
+        [ "f :: Int -> ()"
+        , "f = g"
+        , "  where"
+        , "    g :: " <> constraint <> "a -> ()"
+        , "    g _ = ()"
+        ]
+
+  typeSignatureNested' :: Maybe T.Text -> T.Text
+  typeSignatureNested' mConstraint =
+    let constraint = maybe "" (\c -> "" <> c <> " => ") mConstraint
+      in T.unlines $ header <>
+        [ "f :: Int -> ()"
+        , "f ="
+        , "  let"
+        , "    g :: Int -> ()"
+        , "    g = h"
+        , "      where"
+        , "        h :: " <> constraint <> "a -> ()"
+        , "        h _ = ()"
+        , "  in g"
+        ]
+
+  typeSignatureNested'' :: Maybe T.Text -> T.Text
+  typeSignatureNested'' mConstraint =
+    let constraint = maybe "" (\c -> "" <> c <> " => ") mConstraint
+      in T.unlines $ header <>
+        [ "f :: Int -> ()"
+        , "f = g"
+        , "  where"
+        , "    g :: Int -> ()"
+        , "    g = "
+        , "      let"
+        , "        h :: " <> constraint <> "a -> ()"
+        , "        h _ = ()"
+        , "      in h"
+        ]
 
   typeSignatureMultipleLines :: T.Text
   typeSignatureMultipleLines = T.unlines $ header <>
@@ -2752,9 +2822,30 @@ removeRedundantConstraintsTests = let
     "Remove redundant constraints `(Monoid a, Show a)` from the context of the type signature for `foo`"
     (redundantMixedConstraintsCode $ Just "Monoid a, Show a")
     (redundantMixedConstraintsCode Nothing)
-  , checkPeculiarFormatting
-    "should do nothing when constraints contain an arbitrary number of spaces"
-    typeSignatureSpaces
+  , check
+    "Remove redundant constraint `Eq a` from the context of the type signature for `g`"
+    (typeSignatureNested $ Just "Eq a")
+    (typeSignatureNested Nothing)
+  , check
+    "Remove redundant constraint `Eq a` from the context of the type signature for `h`"
+    (typeSignatureNested' $ Just "Eq a")
+    (typeSignatureNested' Nothing)
+  , check
+    "Remove redundant constraint `Eq a` from the context of the type signature for `h`"
+    (typeSignatureNested'' $ Just "Eq a")
+    (typeSignatureNested'' Nothing)
+  , check
+    "Remove redundant constraint `Eq a` from the context of the type signature for `foo`"
+    (redundantConstraintsForall $ Just "Eq a")
+    (redundantConstraintsForall Nothing)
+  , check
+    "Remove redundant constraint `Eq a` from the context of the type signature for `foo`"
+    (typeSignatureDo $ Just "Eq a")
+    (typeSignatureDo Nothing)
+  , check
+    "Remove redundant constraints `(Monoid a, Show a)` from the context of the type signature for `foo`"
+    (typeSignatureSpaces $ Just "Monoid a, Show a")
+    (typeSignatureSpaces Nothing)
   , checkPeculiarFormatting
     "should do nothing when constraints contain line feeds"
     typeSignatureMultipleLines
