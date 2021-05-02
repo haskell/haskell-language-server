@@ -1,7 +1,6 @@
 {-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DerivingStrategies #-}
-#include "ghc-api-version.h"
 
 module Development.IDE.Spans.Common (
   showGhc

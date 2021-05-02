@@ -4,7 +4,6 @@
 {-# LANGUAGE CPP        #-}
 {-# LANGUAGE GADTs      #-}
 {-# LANGUAGE RankNTypes #-}
-#include "ghc-api-version.h"
 
 -- | Based on https://ghc.haskell.org/trac/ghc/wiki/Commentary/Compiler/API.
 --   Given a list of paths to find libraries, and a file to compile, produce a list of 'CoreModule' values.
@@ -57,7 +56,7 @@ import           LoadIface                         (loadModuleInterface)
 
 import           Lexer
 import qualified Parser
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
 import           Control.DeepSeq                   (force, rnf)
 #else
 import           Control.DeepSeq                   (rnf)
@@ -234,7 +233,7 @@ mkHiFileResultNoCompile session tcm = do
       tcGblEnv = tmrTypechecked tcm
   details <- makeSimpleDetails hsc_env_tmp tcGblEnv
   sf <- finalSafeMode (ms_hspp_opts ms) tcGblEnv
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
   iface <- mkIfaceTc hsc_env_tmp sf details tcGblEnv
 #else
   (iface, _) <- mkIfaceTc hsc_env_tmp Nothing sf details tcGblEnv
@@ -268,7 +267,7 @@ mkHiFileResultCompile session' tcm simplified_guts ltype = catchErrs $ do
         (guts, details) <- tidyProgram session simplified_guts
         (diags, linkable) <- genLinkable session ms guts
         pure (linkable, details, diags)
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
   let !partial_iface = force (mkPartialIface session details simplified_guts)
   final_iface <- mkFullIface session partial_iface
 #else
@@ -330,14 +329,14 @@ generateObjectCode session summary guts = do
               (warnings, dot_o_fp) <-
                 withWarnings "object" $ \_tweak -> do
                       let summary' = _tweak summary
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
                           target = defaultObjectTarget $ hsc_dflags session
 #else
                           target = defaultObjectTarget $ targetPlatform $ hsc_dflags session
 #endif
                           session' = session { hsc_dflags = updOptLevel 0 $ (ms_hspp_opts summary') { outputFile = Just dot_o , hscTarget = target}}
                       (outputFilename, _mStub, _foreign_files) <- hscGenHardCode session' guts
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
                                 (ms_location summary')
 #else
                                 summary'
@@ -360,7 +359,7 @@ generateByteCode hscEnv summary guts = do
                       let summary' = _tweak summary
                           session = hscEnv { hsc_dflags = ms_hspp_opts summary' }
                       hscInteractive session guts
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
                                 (ms_location summary')
 #else
                                 summary'
@@ -419,7 +418,7 @@ unnecessaryDeprecationWarningFlags
     , Opt_WarnUnusedMatches
     , Opt_WarnUnusedTypePatterns
     , Opt_WarnUnusedForalls
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
     , Opt_WarnUnusedRecordWildcards
 #endif
     , Opt_WarnInaccessibleCode
@@ -738,7 +737,7 @@ getModSummaryFromImports env fp modTime contents = do
         msrModSummary =
             ModSummary
                 { ms_mod          = modl
-#if MIN_GHC_API_VERSION(8,8,0)
+#if MIN_VERSION_ghc(8,8,0)
                 , ms_hie_date     = Nothing
 #endif
                 , ms_hs_date      = modTime
@@ -782,7 +781,7 @@ parseHeader
 parseHeader dflags filename contents = do
    let loc  = mkRealSrcLoc (mkFastString filename) 1 1
    case unP Parser.parseHeader (mkPState dflags contents loc) of
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
      PFailed pst ->
         throwE $ diagFromErrMsgs "parser" dflags $ getErrorMessages pst dflags
 #else
@@ -820,7 +819,7 @@ parseFileContents env customPreprocessor filename ms = do
        dflags = ms_hspp_opts ms
        contents = fromJust $ ms_hspp_buf ms
    case unP Parser.parseModule (mkPState dflags contents loc) of
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
      PFailed pst -> throwE $ diagFromErrMsgs "parser" dflags $ getErrorMessages pst dflags
 #else
      PFailed _ locErr msgErr ->

@@ -3,7 +3,6 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE RankNTypes            #-}
-#include "ghc-api-version.h"
 
 module Development.IDE.LSP.Outline
   ( moduleOutline
@@ -194,7 +193,7 @@ documentSymbolForImport (L (RealSrcSpan l) ImportDecl { ideclName, ideclQualifie
   (defDocumentSymbol l :: DocumentSymbol)
     { _name   = "import " <> pprText ideclName
     , _kind   = SkModule
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
     , _detail = case ideclQualified of { NotQualified -> Nothing; _ -> Just "qualified" }
 #else
     , _detail = if ideclQualified then Just "qualified" else Nothing
