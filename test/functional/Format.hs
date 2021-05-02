@@ -13,14 +13,17 @@ import           Language.LSP.Types
 import qualified Language.LSP.Types.Lens as LSP
 import           Test.Hls
 import           Test.Hls.Command
+import           Test.Hls.Flags          (requiresFloskellPlugin,
+                                          requiresFourmoluPlugin,
+                                          requiresOrmoluPlugin)
 
 tests :: TestTree
 tests = testGroup "format document" [
-    goldenGitDiff "works" "test/testdata/format/Format.formatted_document.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
+    requiresOrmoluPlugin $ goldenGitDiff "works" "test/testdata/format/Format.formatted_document.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
         doc <- openDoc "Format.hs" "haskell"
         formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
         BS.fromStrict . T.encodeUtf8 <$> documentContents doc
-    , goldenGitDiff "works with custom tab size" "test/testdata/format/Format.formatted_document_with_tabsize.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
+    , requiresOrmoluPlugin $ goldenGitDiff "works with custom tab size" "test/testdata/format/Format.formatted_document_with_tabsize.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
         doc <- openDoc "Format.hs" "haskell"
         formatDoc doc (FormattingOptions 5 True Nothing Nothing Nothing)
         BS.fromStrict . T.encodeUtf8 <$> documentContents doc
@@ -31,7 +34,7 @@ tests = testGroup "format document" [
     ]
 
 rangeTests :: TestTree
-rangeTests = testGroup "format range" [
+rangeTests = requiresOrmoluPlugin $ testGroup "format range" [
     goldenGitDiff "works" "test/testdata/format/Format.formatted_range.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
         doc <- openDoc "Format.hs" "haskell"
         formatRange doc (FormattingOptions 2 True Nothing Nothing Nothing) (Range (Position 5 0) (Position 7 10))
@@ -55,7 +58,7 @@ providerTests = testGroup "formatting provider" [
         formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
         documentContents doc >>= liftIO . (@?= formattedFloskell)
 
-    , testCase "can change on the fly" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
+    , requiresOrmoluPlugin . requiresFloskellPlugin $ testCase "can change on the fly" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
         formattedOrmolu <- liftIO $ T.readFile "test/testdata/format/Format.ormolu.formatted.hs"
         formattedFloskell <- liftIO $ T.readFile "test/testdata/format/Format.floskell.formatted.hs"
         formattedOrmoluPostFloskell <- liftIO $ T.readFile "test/testdata/format/Format.ormolu_post_floskell.formatted.hs"
@@ -73,7 +76,7 @@ providerTests = testGroup "formatting provider" [
         sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "ormolu"))
         formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
         documentContents doc >>= liftIO . (@?= formattedOrmoluPostFloskell)
-    , testCase "supports both new and old configuration sections" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
+    , requiresOrmoluPlugin . requiresFloskellPlugin $ testCase "supports both new and old configuration sections" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
        formattedOrmolu <- liftIO $ T.readFile "test/testdata/format/Format.ormolu.formatted.hs"
        formattedFloskell <- liftIO $ T.readFile "test/testdata/format/Format.floskell.formatted.hs"
 
@@ -90,7 +93,7 @@ providerTests = testGroup "formatting provider" [
 
 
 ormoluTests :: TestTree
-ormoluTests = testGroup "ormolu"
+ormoluTests = requiresOrmoluPlugin $ testGroup "ormolu"
   [ goldenGitDiff "formats correctly" "test/testdata/format/Format.ormolu.formatted.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
       sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "ormolu"))
       doc <- openDoc "Format.hs" "haskell"
@@ -104,7 +107,7 @@ ormoluTests = testGroup "ormolu"
   ]
 
 fourmoluTests :: TestTree
-fourmoluTests = testGroup "fourmolu"
+fourmoluTests = requiresFourmoluPlugin $ testGroup "fourmolu"
   [ goldenGitDiff "formats correctly" "test/testdata/format/Format.fourmolu.formatted.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
       sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "fourmolu"))
       doc <- openDoc "Format.hs" "haskell"

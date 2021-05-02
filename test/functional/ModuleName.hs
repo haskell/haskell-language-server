@@ -11,9 +11,10 @@ import qualified Data.Text.IO     as T
 import           System.FilePath  ((<.>), (</>))
 import           Test.Hls
 import           Test.Hls.Command
+import           Test.Hls.Flags   (requiresModuleNamePlugin)
 
 tests :: TestTree
-tests = testGroup
+tests = requiresModuleNamePlugin $ testGroup
   "moduleName"
   [ testCase "Add module header to empty module" $ goldenTest "TEmptyModule.hs"
   , testCase "Fix wrong module name" $ goldenTest "TWrongModuleName.hs"
