@@ -1,5 +1,6 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE OverloadedStrings         #-}
+{-# LANGUAGE PatternSynonyms           #-}
 {-# LANGUAGE RecordWildCards           #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
 {-# OPTIONS_GHC -Wall -Wwarn -fno-warn-type-defaults -fno-warn-unused-binds -fno-warn-unused-imports -Wno-unticked-promoted-constructors #-}
@@ -15,38 +16,40 @@ module Ide.Plugin.ModuleName (
 ) where
 
 import           Control.Monad
-import           Control.Monad.IO.Class (MonadIO (liftIO))
-import           Data.Aeson             (ToJSON (toJSON), Value (Null))
-import           Data.Char              (isLower)
-import qualified Data.HashMap.Strict    as Map
-import           Data.List              (find, intercalate, isPrefixOf)
-import           Data.Maybe             (maybeToList)
-import           Data.String            (IsString)
-import           Data.Text              (Text, pack)
-import qualified Data.Text              as T
+import           Control.Monad.IO.Class     (MonadIO (liftIO))
+import           Data.Aeson                 (ToJSON (toJSON), Value (Null))
+import           Data.Char                  (isLower)
+import qualified Data.HashMap.Strict        as Map
+import           Data.List                  (find, intercalate, isPrefixOf)
+import           Data.Maybe                 (maybeToList)
+import           Data.String                (IsString)
+import           Data.Text                  (Text, pack)
+import qualified Data.Text                  as T
 -- import Debug.Trace (trace)
-import           Development.IDE        (GetParsedModule (GetParsedModule),
-                                         GhcSession (GhcSession), HscEnvEq,
-                                         IdeState, List (..),
-                                         NormalizedFilePath,
-                                         Position (Position), Range (Range),
-                                         evalGhcEnv, hscEnvWithImportPaths,
-                                         realSrcSpanToRange, runAction,
-                                         toNormalizedUri, uriToFilePath', use,
-                                         use_)
-import           GHC                    (DynFlags (importPaths), GenLocated (L),
-                                         HsModule (hsmodName),
-                                         ParsedModule (pm_parsed_source),
-                                         SrcSpan (RealSrcSpan),
-                                         getSessionDynFlags, unLoc)
-import           Ide.PluginUtils        (getProcessID, mkLspCmdId)
+import           Development.IDE            (GetParsedModule (GetParsedModule),
+                                             GhcSession (GhcSession), HscEnvEq,
+                                             IdeState, List (..),
+                                             NormalizedFilePath,
+                                             Position (Position), Range (Range),
+                                             evalGhcEnv, hscEnvWithImportPaths,
+                                             realSrcSpanToRange, runAction,
+                                             toNormalizedUri, uriToFilePath',
+                                             use, use_)
+import           Development.IDE.GHC.Compat (pattern OldRealSrcSpan)
+import           GHC                        (DynFlags (importPaths),
+                                             GenLocated (L),
+                                             HsModule (hsmodName),
+                                             ParsedModule (pm_parsed_source),
+                                             SrcSpan (RealSrcSpan),
+                                             getSessionDynFlags, unLoc)
+import           Ide.PluginUtils            (getProcessID, mkLspCmdId)
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
-import           Language.LSP.VFS       (virtualFileText)
-import           System.Directory       (canonicalizePath)
-import           System.FilePath        (dropExtension, splitDirectories,
-                                         takeFileName)
+import           Language.LSP.VFS           (virtualFileText)
+import           System.Directory           (canonicalizePath)
+import           System.FilePath            (dropExtension, splitDirectories,
+                                             takeFileName)
 
 -- |Plugin descriptor
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -146,7 +149,7 @@ pathModuleName state normFilePath filePath
 -- | The module name, as stated in the module
 codeModuleName :: IdeState -> NormalizedFilePath -> IO (Maybe (Range, Text))
 codeModuleName state nfp =
-    ((\(L (RealSrcSpan l) m) -> (realSrcSpanToRange l, T.pack . show $ m)) <$>)
+    ((\(L (OldRealSrcSpan l) m) -> (realSrcSpanToRange l, T.pack . show $ m)) <$>)
         . ((hsmodName . unLoc . pm_parsed_source) =<<)
         <$> runAction "ModuleName.GetParsedModule" state (use GetParsedModule nfp)
 
