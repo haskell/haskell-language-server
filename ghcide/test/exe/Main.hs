@@ -11,7 +11,6 @@
 {-# LANGUAGE PolyKinds             #-}
 {-# LANGUAGE TypeOperators         #-}
 {-# OPTIONS_GHC -Wno-deprecations -Wno-unticked-promoted-constructors #-}
-#include "ghc-api-version.h"
 
 module Main (main) where
 
@@ -3569,7 +3568,7 @@ findDefinitionAndHoverTests = let
   , test  yes    yes    lclL33     lcb           "listcomp lookup"
   , test  yes    yes    mclL36     mcl           "top-level fn 1st clause"
   , test  yes    yes    mclL37     mcl           "top-level fn 2nd clause         #1030"
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
   , test  yes    yes    spaceL37   space         "top-level fn on space           #1002"
 #else
   , test  yes    broken spaceL37   space         "top-level fn on space           #1002"
@@ -4313,7 +4312,7 @@ highlightTests = testGroup "highlight"
     highlights <- getHighlights doc (Position 4 15)
     liftIO $ highlights @?= List
       -- Span is just the .. on 8.10, but Rec{..} before
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
             [ DocumentHighlight (R 4 8 4 10) (Just HkWrite)
 #else
             [ DocumentHighlight (R 4 4 4 11) (Just HkWrite)
@@ -4324,7 +4323,7 @@ highlightTests = testGroup "highlight"
     liftIO $ highlights @?= List
             [ DocumentHighlight (R 3 17 3 23) (Just HkWrite)
       -- Span is just the .. on 8.10, but Rec{..} before
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
             , DocumentHighlight (R 4 8 4 10) (Just HkRead)
 #else
             , DocumentHighlight (R 4 4 4 11) (Just HkRead)
@@ -4537,7 +4536,7 @@ ignoreInWindowsBecause :: String -> TestTree -> TestTree
 ignoreInWindowsBecause = if isWindows then ignoreTestBecause else (\_ x -> x)
 
 ignoreInWindowsForGHC88And810 :: TestTree -> TestTree
-#if MIN_GHC_API_VERSION(8,8,1) && !MIN_GHC_API_VERSION(9,0,0)
+#if MIN_VERSION_ghc(8,8,1) && !MIN_VERSION_ghc(9,0,0)
 ignoreInWindowsForGHC88And810 =
     ignoreInWindowsBecause "tests are unreliable in windows for ghc 8.8 and 8.10"
 #else
@@ -4545,7 +4544,7 @@ ignoreInWindowsForGHC88And810 = id
 #endif
 
 ignoreInWindowsForGHC88 :: TestTree -> TestTree
-#if MIN_GHC_API_VERSION(8,8,1) && !MIN_GHC_API_VERSION(8,10,1)
+#if MIN_VERSION_ghc(8,8,1) && !MIN_VERSION_ghc(8,10,1)
 ignoreInWindowsForGHC88 =
     ignoreInWindowsBecause "tests are unreliable in windows for ghc 8.8"
 #else

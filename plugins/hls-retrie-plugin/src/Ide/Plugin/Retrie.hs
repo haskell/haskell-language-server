@@ -12,7 +12,6 @@
 {-# LANGUAGE TypeFamilies        #-}
 
 {-# OPTIONS -Wno-orphans #-}
-#include "ghc-api-version.h"
 
 module Ide.Plugin.Retrie (descriptor) where
 
@@ -293,7 +292,7 @@ suggestRuleRewrites originatingFile pos ms_mod (L _ HsRules {rds_rules}) =
           ]
         | L l r  <- rds_rules,
           pos `isInsideSrcSpan` l,
-#if MIN_GHC_API_VERSION(8,8,0)
+#if MIN_VERSION_ghc(8,8,0)
           let HsRule {rd_name = L _ (_, rn)} = r,
 #else
           let HsRule _ (L _ (_,rn)) _ _ _ _ = r,
@@ -547,7 +546,7 @@ toImportDecl AddImport {..} = GHC.ImportDecl {..}
     ideclSourceSrc = NoSourceText
     ideclExt = GHC.noExtField
     ideclAs = toMod <$> ideclAsString
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
     ideclQualified = if ideclQualifiedBool then GHC.QualifiedPre else GHC.NotQualified
 #else
     ideclQualified = ideclQualifiedBool

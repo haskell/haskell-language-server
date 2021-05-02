@@ -1,6 +1,5 @@
 {-# LANGUAGE NoApplicativeDo #-}
 {-# LANGUAGE CPP #-}
-#include "ghc-api-version.h"
 module Development.IDE.Core.Tracing
     ( otTracedHandler
     , otTracedAction
@@ -96,7 +95,7 @@ otTracedAction key file success act
             return res)
   | otherwise = act
 
-#if MIN_GHC_API_VERSION(8,8,0)
+#if MIN_VERSION_ghc(8,8,0)
 otTracedProvider :: MonadUnliftIO m => PluginId -> ByteString -> m a -> m a
 #else
 otTracedProvider :: MonadUnliftIO m => PluginId -> String -> m a -> m a

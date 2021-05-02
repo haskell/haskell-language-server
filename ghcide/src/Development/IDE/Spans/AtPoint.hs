@@ -3,7 +3,6 @@
 
 {-# LANGUAGE CPP   #-}
 {-# LANGUAGE GADTs #-}
-#include "ghc-api-version.h"
 
 -- | Gives information about symbols at a given point in DAML files.
 -- These are all pure functions that should execute quickly.
@@ -255,7 +254,7 @@ typeLocationsAtPoint hiedb lookupModule _ideOptions pos (HAR _ ast _ _ hieKind) 
             where ni = nodeInfo x
           getTypes ts = flip concatMap (unfold ts) $ \case
             HTyVarTy n -> [n]
-#if MIN_GHC_API_VERSION(8,8,0)
+#if MIN_VERSION_ghc(8,8,0)
             HAppTy a (HieArgs xs) -> getTypes (a : map snd xs)
 #else
             HAppTy a b -> getTypes [a,b]
