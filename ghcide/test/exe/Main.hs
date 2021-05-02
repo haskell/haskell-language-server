@@ -5087,6 +5087,7 @@ clientSettingsTest :: TestTree
 clientSettingsTest = testGroup "client settings handling"
     [ testSession "ghcide restarts shake session on config changes" $ do
             void $ skipManyTill anyMessage $ message SClientRegisterCapability
+            void $ createDoc "A.hs" "haskell" "module A where"
             waitForProgressDone
             sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON ("" :: String)))
             skipManyTill anyMessage restartingBuildSession
