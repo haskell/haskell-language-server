@@ -32,6 +32,7 @@ import           Control.Monad.Trans.Maybe
 import qualified Data.ByteString.Lazy                         as LBS
 import           Data.List.Extra                              (nubOrd)
 import           Data.Maybe                                   (catMaybes)
+import           Development.IDE.Core.ProgressReporting
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
 import           Development.IDE.Import.DependencyInformation
@@ -95,8 +96,8 @@ modifyFilesOfInterest state f = do
 kick :: Action ()
 kick = do
     files <- HashMap.keys <$> getFilesOfInterest
-    ShakeExtras{progressUpdate} <- getShakeExtras
-    liftIO $ progressUpdate KickStarted
+    ShakeExtras{progress} <- getShakeExtras
+    liftIO $ progressUpdate progress KickStarted
 
     -- Update the exports map for FOIs
     results <- uses GenerateCore files <* uses GetHieAst files
@@ -116,4 +117,4 @@ kick = do
         !exportsMap'' = maybe mempty createExportsMap ifaces
     void $ liftIO $ modifyVar' exportsMap $ (exportsMap'' <>) . (exportsMap' <>)
 
-    liftIO $ progressUpdate KickCompleted
+    liftIO $ progressUpdate progress KickCompleted
