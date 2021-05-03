@@ -40,8 +40,8 @@ library
     , foldl
     , ghc
     , ghc-exactprint
-    , ghcide                ^>=1.2.0.2
-    , hls-plugin-api        ^>=1.1.0.0
+    , ghcide                ^>=1.2
+    , hls-plugin-api        ^>=1.1
     , lens
     , lsp
     , retrie
@@ -69,5 +69,5 @@ test-suite tests
     , extra
     , filepath
     , hls-splice-plugin
-    , hls-test-utils  ^>= 1.0.0.0
+    , hls-test-utils  ^>= 1.0
     , text
