@@ -365,7 +365,8 @@ test-suite ghcide-tests
         tasty-hunit,
         tasty-quickcheck,
         tasty-rerun,
-        text
+        text,
+        unordered-containers,
     if (impl(ghc >= 8.6))
       build-depends:
           record-dot-preprocessor,
@@ -379,6 +380,7 @@ test-suite ghcide-tests
         Development.IDE.Test.Runfiles
         Experiments
         Experiments.Types
+        Progress
     default-extensions:
         BangPatterns
         DeriveFunctor

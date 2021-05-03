@@ -7,6 +7,9 @@ module Development.IDE.Core.ProgressReporting
   -- utilities, reexported for use in Core.Shake
   , mRunLspT
   , mRunLspTCallback
+  -- for tests
+  , recordProgress
+  , InProgress(..)
   )
    where
 
