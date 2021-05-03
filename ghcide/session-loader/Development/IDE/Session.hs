@@ -504,7 +504,7 @@ cradleToOptsAndLibDir cradle file = do
 emptyHscEnv :: IORef NameCache -> FilePath -> IO HscEnv
 emptyHscEnv nc libDir = do
     env <- runGhc (Just libDir) getSession
-#if !MIN_GHC_API_VERSION(9,0,0)
+#if !MIN_VERSION_ghc(9,0,0)
     -- This causes ghc9 to crash
     initDynLinker env
 #endif

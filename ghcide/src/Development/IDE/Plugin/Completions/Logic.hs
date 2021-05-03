@@ -29,7 +29,7 @@ import           HscTypes
 import           Name
 import           RdrName
 import           Type
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
 import           Coercion
 import           Pair
 import           Predicate                                (isDictTy)
@@ -270,7 +270,7 @@ mkNameCompItem doc thingParent origName origMod thingType isInfix docs !imp = CI
                   -- TODO: Do we want to use multiplicity here?
                   else Prelude.filter (not . isDictTy) $ map scaledThing args
           | isPiTy t = getArgs $ snd (splitPiTys t)
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
           | Just (Pair _ t) <- coercionKind <$> isCoercionTy_maybe t
           = getArgs t
 #else

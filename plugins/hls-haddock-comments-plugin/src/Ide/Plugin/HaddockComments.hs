@@ -92,7 +92,7 @@ genForSig = GenComments {..}
     isFresh Ann {annsDP} = null [() | (AnnComment _, _) <- annsDP]
     collectKeys = keyFromTyVar 0
 
-#if MIN_GHC_API_VERSION(9,0,0)
+#if MIN_VERSION_ghc(9,0,0)
     comment = mkComment "-- ^ " badRealSrcSpan
 #else
     comment = mkComment "-- ^ " noSrcSpan
@@ -115,7 +115,7 @@ genForRecord = GenComments {..}
 
     collectKeys = keyFromCon
 
-#if MIN_GHC_API_VERSION(9,0,0)
+#if MIN_VERSION_ghc(9,0,0)
     comment = mkComment "-- | " badRealSrcSpan
 #else
     comment = mkComment "-- | " noSrcSpan
@@ -156,7 +156,7 @@ cleanPriorComments x = x {annPriorComments = []}
 -----------------------------------------------------------------------------
 
 keyFromTyVar :: Int -> LHsType GhcPs -> [AnnKey]
-#if MIN_GHC_API_VERSION(9,0,0)
+#if MIN_VERSION_ghc(9,0,0)
 -- GHC9 HsFunTy has 4 arguments, we could extract this
 keyFromTyVar dep c@(L _ (HsFunTy _ _ x y))
 #else

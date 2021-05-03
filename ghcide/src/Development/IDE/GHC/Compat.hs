@@ -23,7 +23,7 @@ module Development.IDE.GHC.Compat(
     supportsHieFiles,
     setHieDir,
     dontWriteHieFiles,
-#if !MIN_GHC_API_VERSION(8,8,0)
+#if !MIN_VERSION_ghc(8,8,0)
     ml_hie_file,
     addBootSuffixLocnOut,
     getRealSrcSpan,
@@ -45,7 +45,7 @@ module Development.IDE.GHC.Compat(
     tcg_exports,
     pattern FunTy,
 
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
     module GHC.Hs.Extension,
     module LinkerTypes,
 #else
@@ -54,7 +54,7 @@ module Development.IDE.GHC.Compat(
     linkableTime,
 #endif
 
-#if MIN_GHC_API_VERSION(9,0,1)
+#if MIN_VERSION_ghc(9,0,1)
     -- Reexports from GHC
     UnitId,
     moduleUnitId,
@@ -131,7 +131,7 @@ module Development.IDE.GHC.Compat(
     dropForAll
     ,isQualifiedImport) where
 
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
 import           LinkerTypes
 #endif
 
@@ -142,7 +142,7 @@ import           Fingerprint            (Fingerprint)
 import qualified Module
 import qualified Outputable             as Out
 import           StringBuffer
-#if MIN_GHC_API_VERSION(9,0,1)
+#if MIN_VERSION_ghc(9,0,1)
 import           Control.Exception.Safe as Safe (Exception, MonadCatch, catch)
 import qualified Data.Set               as S
 import           GHC.Core.TyCo.Ppr      (pprSigmaType)
@@ -168,7 +168,7 @@ import           NameCache
 import           Packages
 import           TcRnTypes
 
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
 import           GHC.Hs.Extension
 #else
 import           HsExtension
@@ -179,7 +179,7 @@ import           GHC                    hiding (HasSrcSpan, ModLocation, getLoc,
                                          lookupName)
 import qualified GHC
 import qualified TyCoRep
-#if MIN_GHC_API_VERSION(8,8,0)
+#if MIN_VERSION_ghc(8,8,0)
 import           Data.List              (foldl')
 #else
 import           Data.List              (foldl', isSuffixOf)
@@ -190,12 +190,12 @@ import           DynamicLoading
 import           Plugins                (Plugin (parsedResultAction),
                                          withPlugins)
 
-#if !MIN_GHC_API_VERSION(8,8,0)
+#if !MIN_VERSION_ghc(8,8,0)
 import           SrcLoc                 (RealLocated)
 import           System.FilePath        ((-<.>))
 #endif
 
-#if !MIN_GHC_API_VERSION(8,8,0)
+#if !MIN_VERSION_ghc(8,8,0)
 import qualified EnumSet
 
 import           Foreign.ForeignPtr
@@ -209,7 +209,7 @@ hPutStringBuffer hdl (StringBuffer buf len cur)
 
 #endif
 
-#if !MIN_GHC_API_VERSION(8,10,0)
+#if !MIN_VERSION_ghc(8,10,0)
 noExtField :: NoExt
 noExtField = noExt
 #endif
@@ -220,7 +220,7 @@ supportsHieFiles = True
 hieExportNames :: HieFile -> [(SrcSpan, Name)]
 hieExportNames = nameListFromAvails . hie_exports
 
-#if !MIN_GHC_API_VERSION(8,8,0)
+#if !MIN_VERSION_ghc(8,8,0)
 ml_hie_file :: GHC.ModLocation -> FilePath
 ml_hie_file ml
   | "boot" `isSuffixOf ` ml_hi_file ml = ml_hi_file ml -<.> ".hie-boot"
@@ -228,7 +228,7 @@ ml_hie_file ml
 #endif
 
 upNameCache :: IORef NameCache -> (NameCache -> (NameCache, c)) -> IO c
-#if !MIN_GHC_API_VERSION(8,8,0)
+#if !MIN_VERSION_ghc(8,8,0)
 upNameCache ref upd_fn
   = atomicModifyIORef' ref upd_fn
 #else
@@ -236,7 +236,7 @@ upNameCache = updNameCache
 #endif
 
 
-#if !MIN_GHC_API_VERSION(9,0,1)
+#if !MIN_VERSION_ghc(9,0,1)
 type RefMap a = M.Map Identifier [(Span, IdentifierDetails a)]
 #endif
 
@@ -263,7 +263,7 @@ addIncludePathsQuote path x = x{includePaths = f $ includePaths x}
     where f i = i{includePathsQuote = path : includePathsQuote i}
 
 pattern ModLocation :: Maybe FilePath -> FilePath -> FilePath -> GHC.ModLocation
-#if MIN_GHC_API_VERSION(8,8,0)
+#if MIN_VERSION_ghc(8,8,0)
 pattern ModLocation a b c <-
     GHC.ModLocation a b c _ where ModLocation a b c = GHC.ModLocation a b c ""
 #else
@@ -273,7 +273,7 @@ pattern ModLocation a b c <-
 
 setHieDir :: FilePath -> DynFlags -> DynFlags
 setHieDir _f d =
-#if MIN_GHC_API_VERSION(8,8,0)
+#if MIN_VERSION_ghc(8,8,0)
     d { hieDir     = Just _f}
 #else
     d
@@ -281,7 +281,7 @@ setHieDir _f d =
 
 dontWriteHieFiles :: DynFlags -> DynFlags
 dontWriteHieFiles d =
-#if MIN_GHC_API_VERSION(8,8,0)
+#if MIN_VERSION_ghc(8,8,0)
     gopt_unset d Opt_WriteHie
 #else
     d
@@ -290,7 +290,7 @@ dontWriteHieFiles d =
 setUpTypedHoles ::DynFlags -> DynFlags
 setUpTypedHoles df
   = flip gopt_unset Opt_AbstractRefHoleFits    -- too spammy
-#if MIN_GHC_API_VERSION(8,8,0)
+#if MIN_VERSION_ghc(8,8,0)
   $ flip gopt_unset Opt_ShowDocsOfHoleFits     -- not used
 #endif
   $ flip gopt_unset Opt_ShowMatchesOfHoleFits  -- nice but broken (forgets module qualifiers)
@@ -312,7 +312,7 @@ nameListFromAvails :: [AvailInfo] -> [(SrcSpan, Name)]
 nameListFromAvails as =
   map (\n -> (nameSrcSpan n, n)) (concatMap availNames as)
 
-#if MIN_GHC_API_VERSION(9,0,0)
+#if MIN_VERSION_ghc(9,0,0)
 -- type HasSrcSpan x a = (GenLocated SrcSpan a ~ x)
 -- type HasSrcSpan x = () :: Constraint
 
@@ -325,7 +325,7 @@ instance HasSrcSpan (GenLocated SrcSpan a) where
 -- getLoc :: GenLocated l a -> l
 -- getLoc = GHC.getLoc
 
-#elif MIN_GHC_API_VERSION(8,8,0)
+#elif MIN_VERSION_ghc(8,8,0)
 type HasSrcSpan = GHC.HasSrcSpan
 getLoc :: HasSrcSpan a => a -> SrcSpan
 getLoc = GHC.getLoc
@@ -349,14 +349,14 @@ addBootSuffixLocnOut locn
 #endif
 
 getModuleHash :: ModIface -> Fingerprint
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
 getModuleHash = mi_mod_hash . mi_final_exts
 #else
 getModuleHash = mi_mod_hash
 #endif
 
 -- type PackageName = Packages.PackageName
-#if MIN_GHC_API_VERSION(9,0,0)
+#if MIN_VERSION_ghc(9,0,0)
 -- NOTE: Since both the new and old version uses UnitId with different meaning,
 -- we try to avoid it and instead use InstalledUnitId and Unit, since it is unambiguous.
 type UnitId            = Module.Unit
@@ -491,7 +491,7 @@ disableWarningsAsErrors :: DynFlags -> DynFlags
 disableWarningsAsErrors df =
     flip gopt_unset Opt_WarnIsError $ foldl' wopt_unset_fatal df [toEnum 0 ..]
 
-#if !MIN_GHC_API_VERSION(8,8,0)
+#if !MIN_VERSION_ghc(8,8,0)
 wopt_unset_fatal :: DynFlags -> WarningFlag -> DynFlags
 wopt_unset_fatal dfs f
     = dfs { fatalWarningFlags = EnumSet.delete f (fatalWarningFlags dfs) }
@@ -518,21 +518,21 @@ pattern ExposePackage s a mr = DynFlags.ExposePackage s a mr
 
 -- | Take AST representation of type signature and drop `forall` part from it (if any), returning just type's body
 dropForAll :: LHsType pass -> LHsType pass
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
 dropForAll = snd . GHC.splitLHsForAllTyInvis
 #else
 dropForAll = snd . GHC.splitLHsForAllTy
 #endif
 
 pattern FunTy :: Type -> Type -> Type
-#if MIN_GHC_API_VERSION(8, 10, 0)
+#if MIN_VERSION_ghc(8, 10, 0)
 pattern FunTy arg res <- TyCoRep.FunTy {ft_arg = arg, ft_res = res}
 #else
 pattern FunTy arg res <- TyCoRep.FunTy arg res
 #endif
 
 isQualifiedImport :: ImportDecl a -> Bool
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
 isQualifiedImport ImportDecl{ideclQualified = NotQualified} = False
 isQualifiedImport ImportDecl{}                              = True
 #else
@@ -587,6 +587,6 @@ stringToUnit = Module.stringToUnitId
 rtsUnit = Module.rtsUnitId
 #endif
 
-#if MIN_GHC_API_VERSION(9,0,0)
+#if MIN_VERSION_ghc(9,0,0)
 #else
 #endif

@@ -141,7 +141,7 @@ import           UnliftIO.Temporary                   (withSystemTempFile)
 import           Util                                 (OverridingBool (Never))
 
 
-#if MIN_GHC_API_VERSION(9,0,0)
+#if MIN_VERSION_ghc(9,0,0)
 import           GHC.Parser.Annotation                (ApiAnns (apiAnnComments))
 #else
 import           GhcPlugins                           (interpWays, updateWays,
@@ -149,7 +149,7 @@ import           GhcPlugins                           (interpWays, updateWays,
                                                        wayUnsetGeneralFlags)
 #endif
 
-#if MIN_GHC_API_VERSION(9,0,0)
+#if MIN_VERSION_ghc(9,0,0)
 pattern RealSrcSpanAlready :: SrcLoc.RealSrcSpan -> SrcLoc.RealSrcSpan
 pattern RealSrcSpanAlready x = x
 #else
@@ -305,7 +305,7 @@ runEvalCmd st EvalParams{..} =
                 df <- getSessionDynFlags
                 setInteractiveDynFlags $
                     (foldl xopt_set idflags evalExtensions)
-#if MIN_GHC_API_VERSION(9,0,0)
+#if MIN_VERSION_ghc(9,0,0)
                         { unitState =
                             unitState
                                 df
@@ -334,7 +334,7 @@ runEvalCmd st EvalParams{..} =
 #endif
 
                 -- set up a custom log action
-#if MIN_GHC_API_VERSION(9,0,0)
+#if MIN_VERSION_ghc(9,0,0)
                 setLogAction $ \_df _wr _sev _span _doc ->
                     defaultLogActionHPutStrDoc _df logHandle _doc
 #else

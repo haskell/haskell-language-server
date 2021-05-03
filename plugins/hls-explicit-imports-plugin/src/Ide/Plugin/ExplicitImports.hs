@@ -36,7 +36,7 @@ import           Ide.PluginUtils                      (mkLspCommand)
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
-#if MIN_GHC_API_VERSION(9,0,0)
+#if MIN_VERSION_ghc(9,0,0)
 import           GHC.Builtin.Names                    (pRELUDE)
 #else
 import           PrelNames                            (pRELUDE)

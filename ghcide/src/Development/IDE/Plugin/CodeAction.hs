@@ -934,7 +934,7 @@ suggestImportDisambiguation df (Just txt) ps@(L _ HsModule {hsmodImports}) diag@
             , mode <-
                 [ ToQualified parensed qual
                 | ExistingImp imps <- [modTarget]
-#if MIN_GHC_API_VERSION(9,0,0)
+#if MIN_VERSION_ghc(9,0,0)
                 {- HLINT ignore suggestImportDisambiguation "Use nubOrd" -}
                 -- TODO: The use of nub here is slow and maybe wrong for UnhelpfulLocation
                 -- nubOrd can't be used since SrcSpan is intentionally no Ord

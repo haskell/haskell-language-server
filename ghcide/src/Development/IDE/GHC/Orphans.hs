@@ -38,7 +38,7 @@ instance Show PackageFlag where show = prettyPrint
 instance Show InteractiveImport where show = prettyPrint
 instance Show PackageName  where show = prettyPrint
 
-#if !MIN_GHC_API_VERSION(9,0,1)
+#if !MIN_VERSION_ghc(9,0,1)
 instance Show ComponentId  where show = prettyPrint
 instance Show SourcePackageId  where show = prettyPrint
 
@@ -72,7 +72,7 @@ instance Show ParsedModule where
 instance NFData ModSummary where
     rnf = rwhnf
 
-#if !MIN_GHC_API_VERSION(8,10,0)
+#if !MIN_VERSION_ghc(8,10,0)
 instance NFData FastString where
     rnf = rwhnf
 #endif
@@ -157,7 +157,7 @@ instance Show (Annotated ParsedSource) where
 instance NFData (Annotated ParsedSource) where
   rnf = rwhnf
 
-#if MIN_GHC_API_VERSION(9,0,1)
+#if MIN_VERSION_ghc(9,0,1)
 instance (NFData HsModule) where
 #else
 instance (NFData (HsModule a)) where

@@ -13,9 +13,9 @@
 {-# OPTIONS_GHC -Wno-orphans   #-}
 
 #ifdef HLINT_ON_GHC_LIB
-#define MIN_GHC_API_VERSION(x,y,z) MIN_VERSION_ghc_lib(x,y,z)
+#define MIN_VERSION_ghc(x,y,z) MIN_VERSION_ghc_lib(x,y,z)
 #else
-#define MIN_GHC_API_VERSION(x,y,z) MIN_VERSION_ghc(x,y,z)
+#define MIN_VERSION_ghc(x,y,z) MIN_VERSION_ghc(x,y,z)
 #endif
 
 module Ide.Plugin.Hlint
@@ -103,7 +103,7 @@ import           System.Environment                                 (setEnv,
 -- ---------------------------------------------------------------------
 
 pattern OldRealSrcSpan :: RealSrcSpan -> SrcSpan
-#if MIN_GHC_API_VERSION(9,0,0)
+#if MIN_VERSION_ghc(9,0,0)
 pattern OldRealSrcSpan span <- RealSrcSpan span _
 #else
 pattern OldRealSrcSpan span <- RealSrcSpan span

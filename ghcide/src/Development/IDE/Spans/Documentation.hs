@@ -156,7 +156,7 @@ getDocumentation sources targetName = fromMaybe [] $ do
     sortedNameSpans :: [Located RdrName] -> [RealSrcSpan]
     sortedNameSpans ls = nubSort (mapMaybe (realSpan . getLoc) ls)
     isBetween target before after = before <= target && target <= after
-#if MIN_GHC_API_VERSION(9,0,0)
+#if MIN_VERSION_ghc(9,0,0)
     ann = apiAnnComments . pm_annotations
 #else
     ann = fmap filterReal . snd . pm_annotations

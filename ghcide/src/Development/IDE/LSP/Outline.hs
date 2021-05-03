@@ -194,7 +194,7 @@ documentSymbolForImport (L (OldRealSrcSpan l) ImportDecl { ideclName, ideclQuali
   (defDocumentSymbol l :: DocumentSymbol)
     { _name   = "import " <> pprText ideclName
     , _kind   = SkModule
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
     , _detail = case ideclQualified of { NotQualified -> Nothing; _ -> Just "qualified" }
 #else
     , _detail = if ideclQualified then Just "qualified" else Nothing
@@ -223,8 +223,8 @@ pprText = pack . showSDocUnsafe . ppr
 getConNames' :: ConDecl GhcPs -> [Located (IdP GhcPs)]
 getConNames' ConDeclH98  {con_name  = name}  = [name]
 getConNames' ConDeclGADT {con_names = names} = names
-#if !MIN_GHC_API_VERSION(8,10,0)
+#if !MIN_VERSION_ghc(8,10,0)
 getConNames' (XConDecl NoExt)                = []
-#elif !MIN_GHC_API_VERSION(9,0,0)
+#elif !MIN_VERSION_ghc(9,0,0)
 getConNames' (XConDecl x)                    = noExtCon x
 #endif
