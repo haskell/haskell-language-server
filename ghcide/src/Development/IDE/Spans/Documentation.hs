@@ -3,7 +3,6 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 {-# LANGUAGE CPP        #-}
-#include "ghc-api-version.h"
 
 module Development.IDE.Spans.Documentation (
     getDocumentation

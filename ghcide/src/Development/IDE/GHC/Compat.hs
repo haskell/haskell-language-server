@@ -7,7 +7,6 @@
 {-# LANGUAGE PatternSynonyms   #-}
 {-# OPTIONS -Wno-dodgy-imports -Wno-incomplete-uni-patterns #-}
 {-# OPTIONS -Wno-missing-signatures #-} -- TODO: Remove!
-#include "ghc-api-version.h"
 
 -- | Attempt at hiding the GHC version differences we can.
 module Development.IDE.GHC.Compat(

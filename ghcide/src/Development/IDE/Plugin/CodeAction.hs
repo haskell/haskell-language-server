@@ -3,7 +3,6 @@
 
 {-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-#include "ghc-api-version.h"
 
 -- | Go to the definition of a variable.
 

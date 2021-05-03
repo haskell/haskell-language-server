@@ -4,7 +4,6 @@
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
-#include "ghc-api-version.h"
 
 -- | Orphan instances for GHC.
 --   Note that the 'NFData' instances may not be law abiding.

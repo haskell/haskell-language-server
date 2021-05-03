@@ -29,6 +29,7 @@ module Test.Hls.Util
     , waitForDiagnosticsFromSource
     , waitForDiagnosticsFromSourceWithTimeout
     , withCurrentDirectoryInTmp
+    , withCurrentDirectoryInTmp'
   )
 where
 
@@ -269,20 +270,45 @@ flushStackEnvironment = do
 
 -- | Like 'withCurrentDirectory', but will copy the directory over to the system
 -- temporary directory first to avoid haskell-language-server's source tree from
--- interfering with the cradle
+-- interfering with the cradle.
+--
+-- Ignores directories containing build artefacts to avoid interference and
+-- provide reproducible test-behaviour.
 withCurrentDirectoryInTmp :: FilePath -> IO a -> IO a
 withCurrentDirectoryInTmp dir f =
-  withTempCopy dir $ \newDir ->
+  withTempCopy ignored dir $ \newDir ->
+    withCurrentDirectory newDir f
+  where
+    ignored = ["dist", "dist-newstyle", ".stack-work"]
+
+
+-- | Like 'withCurrentDirectory', but will copy the directory over to the system
+-- temporary directory first to avoid haskell-language-server's source tree from
+-- interfering with the cradle.
+--
+-- You may specify directories to ignore, but should be careful to maintain reproducibility.
+withCurrentDirectoryInTmp' :: [FilePath] -> FilePath -> IO a -> IO a
+withCurrentDirectoryInTmp' ignored dir f =
+  withTempCopy ignored dir $ \newDir ->
     withCurrentDirectory newDir f
 
-withTempCopy :: FilePath -> (FilePath -> IO a) -> IO a
-withTempCopy srcDir f = do
+-- | Example call: @withTempCopy ignored src f@
+--
+-- Copy directory 'src' to into a temporary directory ignoring any directories
+-- (and files) that are listed in 'ignored'. Pass the temporary directory
+-- containing the copied sources to the continuation.
+withTempCopy :: [FilePath] -> FilePath -> (FilePath -> IO a) -> IO a
+withTempCopy ignored srcDir f = do
   withSystemTempDirectory "hls-test" $ \newDir -> do
-    copyDir srcDir newDir
+    copyDir ignored srcDir newDir
     f newDir
 
-copyDir :: FilePath -> FilePath -> IO ()
-copyDir src dst = do
+-- | Example call: @copyDir ignored src dst@
+--
+-- Copy directory 'src' to 'dst' ignoring any directories (and files)
+-- that are listed in 'ignored'.
+copyDir :: [FilePath] -> FilePath -> FilePath -> IO ()
+copyDir ignored src dst = do
   cnts <- listDirectory src
   forM_ cnts $ \file -> do
     unless (file `elem` ignored) $ do
@@ -290,9 +316,8 @@ copyDir src dst = do
           dstFp = dst </> file
       isDir <- doesDirectoryExist srcFp
       if isDir
-        then createDirectory dstFp >> copyDir srcFp dstFp
+        then createDirectory dstFp >> copyDir ignored srcFp dstFp
         else copyFile srcFp dstFp
-  where ignored = ["dist", "dist-newstyle", ".stack-work"]
 
 fromAction :: (Command |? CodeAction) -> CodeAction
 fromAction (InR action) = action

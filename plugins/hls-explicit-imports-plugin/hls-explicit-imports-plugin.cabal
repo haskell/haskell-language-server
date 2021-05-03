@@ -9,7 +9,6 @@ maintainer:         pepeiborra@gmail.com
 category:           Development
 build-type:         Simple
 extra-source-files:
-  include/ghc-api-version.h
   LICENSE
 
 library

@@ -2,7 +2,6 @@
 {-# LANGUAGE GADTs      #-}
 {-# LANGUAGE MultiWayIf #-}
 
-#include "ghc-api-version.h"
 
 -- Mostly taken from "haskell-ide-engine"
 module Development.IDE.Plugin.Completions.Logic (

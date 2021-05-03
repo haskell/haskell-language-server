@@ -1,6 +1,5 @@
 {-# LANGUAGE CPP          #-}
 {-# LANGUAGE TypeFamilies #-}
-#include "ghc-api-version.h"
 
 {-|
 The logic for setting up a ghcide session by tapping into hie-bios.
@@ -48,6 +47,7 @@ import           Development.IDE.GHC.Compat           hiding (Target,
                                                        TargetFile, TargetModule)
 import qualified Development.IDE.GHC.Compat           as GHC
 import           Development.IDE.GHC.Util
+import           Development.IDE.Graph                (Action)
 import           Development.IDE.Session.VersionCheck
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Exports
@@ -56,7 +56,6 @@ import           Development.IDE.Types.HscEnvEq       (HscEnvEq, newHscEnvEq,
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger
 import           Development.IDE.Types.Options
-import           Development.IDE.Graph                    (Action)
 import           GHC.Check
 import qualified HIE.Bios                             as HieBios
 import           HIE.Bios.Environment                 hiding (getCacheDir)
@@ -84,12 +83,10 @@ import           Control.Concurrent.STM               (atomically)
 import           Control.Concurrent.STM.TQueue
 import qualified Data.HashSet                         as Set
 import           Database.SQLite.Simple
-import           HIE.Bios.Cradle                      (yamlConfig)
+import           GHC.LanguageExtensions               (Extension (EmptyCase))
 import           HieDb.Create
 import           HieDb.Types
 import           HieDb.Utils
-import           Maybes                               (MaybeT (runMaybeT))
-import           GHC.LanguageExtensions               (Extension(EmptyCase))
 
 -- | Bump this version number when making changes to the format of the data stored in hiedb
 hiedbDataVersion :: String
@@ -99,15 +96,18 @@ data CacheDirs = CacheDirs
   { hiCacheDir, hieCacheDir, oCacheDir :: Maybe FilePath}
 
 data SessionLoadingOptions = SessionLoadingOptions
-  { findCradle          :: FilePath -> IO (Maybe FilePath)
-  , loadCradle          :: FilePath -> IO (HieBios.Cradle Void)
+  { findCradle             :: FilePath -> IO (Maybe FilePath)
+  -- | Load the cradle with an optional 'hie.yaml' location.
+  -- If a 'hie.yaml' is given, use it to load the cradle.
+  -- Otherwise, use the provided project root directory to determine the cradle type.
+  , loadCradle             :: Maybe FilePath -> FilePath -> IO (HieBios.Cradle Void)
   -- | Given the project name and a set of command line flags,
   --   return the path for storing generated GHC artifacts,
   --   or 'Nothing' to respect the cradle setting
-  , getCacheDirs        :: String -> [String] -> IO CacheDirs
+  , getCacheDirs           :: String -> [String] -> IO CacheDirs
   -- | Return the GHC lib dir to use for the 'unsafeGlobalDynFlags'
-  , getInitialGhcLibDir :: IO (Maybe LibDir)
-  , fakeUid             :: GHC.InstalledUnitId
+  , getInitialGhcLibDir    :: IO (Maybe LibDir)
+  , fakeUid                :: GHC.InstalledUnitId
     -- ^ unit id used to tag the internal component built by ghcide
     --   To reuse external interface files the unit ids must match,
     --   thus make sure to build them with `--this-unit-id` set to the
@@ -117,17 +117,39 @@ data SessionLoadingOptions = SessionLoadingOptions
 instance Default SessionLoadingOptions where
     def = SessionLoadingOptions
         {findCradle = HieBios.findCradle
-        ,loadCradle = HieBios.loadCradle
+        ,loadCradle = loadWithImplicitCradle
         ,getCacheDirs = getCacheDirsDefault
         ,getInitialGhcLibDir = getInitialGhcLibDirDefault
         ,fakeUid = GHC.toInstalledUnitId (GHC.stringToUnit "main")
         }
 
+-- | Find the cradle for a given 'hie.yaml' configuration.
+--
+-- If a 'hie.yaml' is given, the cradle is read from the config.
+--  If this config does not comply to the "hie.yaml"
+-- specification, an error is raised.
+--
+-- If no location for "hie.yaml" is provided, the implicit config is used
+-- using the provided root directory for discovering the project.
+-- The implicit config uses different heuristics to determine the type
+-- of the project that may or may not be accurate.
+loadWithImplicitCradle :: Maybe FilePath
+                          -- ^ Optional 'hie.yaml' location. Will be used if given.
+                          -> FilePath
+                          -- ^ Root directory of the project. Required as a fallback
+                          -- if no 'hie.yaml' location is given.
+                          -> IO (HieBios.Cradle Void)
+loadWithImplicitCradle mHieYaml rootDir = do
+  crdl       <- case mHieYaml of
+    Just yaml -> HieBios.loadCradle yaml
+    Nothing   -> loadImplicitHieCradle $ addTrailingPathSeparator rootDir
+  return crdl
+
 getInitialGhcLibDirDefault :: IO (Maybe LibDir)
 getInitialGhcLibDirDefault = do
   dir <- IO.getCurrentDirectory
-  hieYaml <- runMaybeT $ yamlConfig dir
-  cradle <- maybe (loadImplicitHieCradle $ addTrailingPathSeparator dir) HieBios.loadCradle hieYaml
+  hieYaml <- findCradle def dir
+  cradle <- loadCradle def hieYaml dir
   hPutStrLn stderr $ "setInitialDynFlags cradle: " ++ show cradle
   libDirRes <- getRuntimeGhcLibDir cradle
   case libDirRes of
@@ -399,7 +421,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
            when (isNothing hieYaml) $
              logWarning logger $ implicitCradleWarning lfp
 
-           cradle <- maybe (loadImplicitHieCradle $ addTrailingPathSeparator dir) loadCradle hieYaml
+           cradle <- loadCradle hieYaml dir
 
            when optTesting $ mRunLspT lspEnv $
             sendNotification (SCustomMethod "ghcide/cradle/loaded") (toJSON cfp)

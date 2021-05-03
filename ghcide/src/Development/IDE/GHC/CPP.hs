@@ -12,7 +12,6 @@
 {-# LANGUAGE NamedFieldPuns           #-}
 {-# LANGUAGE NondecreasingIndentation #-}
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
-#include "ghc-api-version.h"
 
 -----------------------------------------------------------------------------
 --

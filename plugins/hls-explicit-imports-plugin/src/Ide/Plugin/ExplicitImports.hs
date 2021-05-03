@@ -9,7 +9,6 @@
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeFamilies          #-}
 
-#include "ghc-api-version.h"
 
 module Ide.Plugin.ExplicitImports
   ( descriptor

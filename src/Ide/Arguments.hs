@@ -10,6 +10,7 @@ module Ide.Arguments
   ( Arguments(..)
   , GhcideArguments(..)
   , PrintVersion(..)
+  , BiosAction(..)
   , getArguments
   , haskellLanguageServerVersion
   , haskellLanguageServerNumericVersion
@@ -27,6 +28,7 @@ import           System.Environment
 data Arguments
   = VersionMode PrintVersion
   | ProbeToolsMode
+  | BiosMode BiosAction
   | Ghcide GhcideArguments
   | VSCodeExtensionSchemaMode
   | DefaultConfigurationMode
@@ -50,12 +52,17 @@ data PrintVersion
   | PrintNumericVersion
   deriving (Show, Eq, Ord)
 
+data BiosAction
+  = PrintCradleType
+  deriving (Show, Eq, Ord)
+
 getArguments :: String -> IO Arguments
 getArguments exeName = execParser opts
   where
     opts = info ((
       VersionMode <$> printVersionParser exeName
       <|> probeToolsParser exeName
+      <|> BiosMode <$> biosParser
       <|> Ghcide <$> arguments
       <|> vsCodeExtensionSchemaModeParser
       <|> defaultConfigurationModeParser)
@@ -71,6 +78,11 @@ printVersionParser exeName =
   <|>
   flag' PrintNumericVersion
     (long "numeric-version" <> help ("Show numeric version of " ++ exeName))
+
+biosParser :: Parser BiosAction
+biosParser =
+  flag' PrintCradleType
+    (long "print-cradle" <> help "Print the project cradle type")
 
 probeToolsParser :: String -> Parser Arguments
 probeToolsParser exeName =

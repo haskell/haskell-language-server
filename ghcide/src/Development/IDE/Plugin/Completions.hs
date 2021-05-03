@@ -1,7 +1,6 @@
 {-# LANGUAGE CPP          #-}
 {-# LANGUAGE RankNTypes   #-}
 {-# LANGUAGE TypeFamilies #-}
-#include "ghc-api-version.h"
 
 module Development.IDE.Plugin.Completions
     ( descriptor

@@ -11,7 +11,6 @@
 {-# LANGUAGE PolyKinds             #-}
 {-# LANGUAGE TypeOperators         #-}
 {-# OPTIONS_GHC -Wno-deprecations -Wno-unticked-promoted-constructors #-}
-#include "ghc-api-version.h"
 
 module Main (main) where
 

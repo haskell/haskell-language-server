@@ -3,7 +3,6 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE RankNTypes            #-}
-#include "ghc-api-version.h"
 
 module Development.IDE.LSP.Outline
   ( moduleOutline

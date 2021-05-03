@@ -13,7 +13,6 @@
 {-# LANGUAGE TypeFamilies        #-}
 
 {-# OPTIONS -Wno-orphans #-}
-#include "ghc-api-version.h"
 
 module Ide.Plugin.Retrie (descriptor) where
 

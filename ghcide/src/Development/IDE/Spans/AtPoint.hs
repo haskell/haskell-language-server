@@ -3,7 +3,6 @@
 
 {-# LANGUAGE CPP   #-}
 {-# LANGUAGE GADTs #-}
-#include "ghc-api-version.h"
 
 -- | Gives information about symbols at a given point in DAML files.
 -- These are all pure functions that should execute quickly.
