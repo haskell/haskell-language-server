@@ -144,7 +144,7 @@ waitForProgressDone :: Session ()
 waitForProgressDone = loop
   where
     loop = do
-      ~() <- skipManyTill anyMessage $ satisfyMaybe $ \case
+      () <- skipManyTill anyMessage $ satisfyMaybe $ \case
         FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (End _))) -> Just ()
         _ -> Nothing
       done <- null <$> getIncompleteProgressSessions
