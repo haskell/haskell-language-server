@@ -43,8 +43,8 @@ library
     , directory
     , extra
     , filepath
-    , ghcide                  ^>=1.2.0.2
-    , hls-plugin-api          ^>=1.1.0.0
+    , ghcide                  ^>=1.2
+    , hls-plugin-api          ^>=1.1
     , hspec
     , hspec-core
     , lens
