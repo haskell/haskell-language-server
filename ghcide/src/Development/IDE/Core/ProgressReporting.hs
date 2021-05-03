@@ -51,7 +51,6 @@ noProgressReporting = return $ ProgressReporting
 -- | State used in 'delayedProgressReporting'
 data State
     = NotStarted
-    | Completed
     | Stopped
     | Running (Async ())
 
@@ -61,9 +60,8 @@ data Transition = Event ProgressEvent | StopProgress
 updateState :: IO () -> Transition -> State -> IO State
 updateState _      _                    Stopped     = pure Stopped
 updateState start (Event KickStarted)   NotStarted  = Running <$> async start
-updateState start (Event KickStarted)   Completed   = Running <$> async start
 updateState start (Event KickStarted)   (Running a) = cancel a >> Running <$> async start
-updateState _     (Event KickCompleted) (Running a) = cancel a $> Completed
+updateState _     (Event KickCompleted) (Running a) = cancel a $> NotStarted
 updateState _     (Event KickCompleted) st          = pure st
 updateState _     StopProgress          (Running a) = cancel a $> Stopped
 updateState _     StopProgress          st          = pure st
@@ -96,8 +94,10 @@ delayedProgressReporting
 delayedProgressReporting before after lspEnv optProgressStyle = do
     inProgressVar <- newVar $ InProgress 0 0 mempty
     progressState <- newVar NotStarted
-    let progressUpdate event = modifyVar_ progressState $ updateState (mRunLspT lspEnv $ lspShakeProgress inProgressVar) (Event event)
-        progressStop   = modifyVar_ progressState $ updateState (mRunLspT lspEnv $ lspShakeProgress inProgressVar) StopProgress
+    let progressUpdate event = updateStateVar $ Event event
+        progressStop   =  updateStateVar StopProgress
+        updateStateVar = modifyVar_ progressState . updateState (mRunLspT lspEnv $ lspShakeProgress inProgressVar)
+
         inProgress :: NormalizedFilePath -> Action a -> Action a
         inProgress = withProgressVar inProgressVar
     return ProgressReporting{..}
@@ -132,12 +132,14 @@ delayedProgressReporting before after lspEnv optProgressStyle = do
                           { _message = Nothing
                           }
                         }
+                loop _ _ | optProgressStyle == NoProgress =
+                    forever $ liftIO $ threadDelay maxBound
                 loop id prev = do
                     InProgress{..} <- liftIO $ readVar inProgress
+                    liftIO $ sleep after
                     if todo == 0 then loop id 0 else do
                         let next = 100 * fromIntegral done / fromIntegral todo
-                        liftIO $ sleep after
-                        when (optProgressStyle /= NoProgress && next /= prev) $
+                        when (next /= prev) $
                           LSP.sendNotification LSP.SProgress $
                           LSP.ProgressParams
                               { _token = id
