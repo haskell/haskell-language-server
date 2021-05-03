@@ -62,7 +62,7 @@ library
     , cryptohash-sha1
     , data-default
     , ghc
-    , ghcide                ^>= 1.2.0.2
+    , ghcide                ^>=1.2
     , gitrev
     , lsp
     , hie-bios
