@@ -16,7 +16,6 @@ bug-reports:        https://github.com/haskell/haskell-language-server/issues
 extra-source-files:
   LICENSE
   test/testdata/*.hs
-  include/ghc-api-version.h
 
 library
   exposed-modules:    Ide.Plugin.HaddockComments
@@ -37,7 +36,6 @@ library
     , unordered-containers
 
   default-language:   Haskell2010
-  include-dirs:       include
   default-extensions:
     DataKinds
     TypeOperators

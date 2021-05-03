@@ -14,7 +14,6 @@
 {-# LANGUAGE TypeApplications          #-}
 {-# LANGUAGE ViewPatterns              #-}
 {-# OPTIONS_GHC -fno-warn-type-defaults #-}
-#include "ghc-api-version.h"
 
 {- |
 A plugin inspired by the REPLoid feature of <https://github.com/jyp/dante Dante>, <https://www.haskell.org/haddock/doc/html/ch03s08.html#idm140354810775744 Haddock>'s Examples and Properties and <https://hackage.haskell.org/package/doctest Doctest>.

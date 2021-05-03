@@ -1,5 +1,4 @@
 {-# LANGUAGE CPP #-}
-#include "ghc-api-version.h"
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
@@ -262,7 +261,7 @@ dupHandleTo filepath h other_side
 
 -- | This is copied unmodified from GHC since it is not exposed.
 -- Note the beautiful inline comment!
-#if MIN_GHC_API_VERSION(9,0,0)
+#if MIN_VERSION_ghc(9,0,0)
 dupHandle_ :: (RawIO dev, IODevice dev, BufferedIO dev, Typeable dev) => dev
 #else
 dupHandle_ :: (IODevice dev, BufferedIO dev, Typeable dev) => dev

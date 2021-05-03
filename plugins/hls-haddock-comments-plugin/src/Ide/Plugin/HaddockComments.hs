@@ -5,7 +5,6 @@
 {-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE RecordWildCards           #-}
 {-# LANGUAGE ViewPatterns              #-}
-#include "ghc-api-version.h"
 
 module Ide.Plugin.HaddockComments (descriptor) where
 
