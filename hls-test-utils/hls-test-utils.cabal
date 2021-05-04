@@ -5,9 +5,7 @@ synopsis:      Utilities used in the tests of Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
 
-homepage:
-  https://github.com/haskell/haskell-language-server#readme
-
+homepage:      https://github.com/haskell/haskell-language-server#readme
 bug-reports:   https://github.com/haskell/haskell-language-server/issues
 license:       Apache-2.0
 license-file:  LICENSE
@@ -35,7 +33,7 @@ library
   build-depends:
     , aeson
     , async
-    , base
+    , base                    >=4.12     && <5
     , blaze-markup
     , bytestring
     , containers
@@ -44,6 +42,7 @@ library
     , extra
     , filepath
     , ghcide                  ^>=1.2
+    , hls-graph
     , hls-plugin-api          ^>=1.1
     , hspec
     , hspec-core
@@ -51,7 +50,10 @@ library
     , lsp                     ^>=1.2
     , lsp-test                ==0.14.0.0
     , lsp-types               ^>=1.2
+<<<<<<< HEAD
     , shake
+=======
+>>>>>>> 98fa0fc1... Add bounds for base in hls-test-utils (#1791)
     , tasty
     , tasty-expected-failure
     , tasty-golden
