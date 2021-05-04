@@ -52,9 +52,9 @@ metaprogrammingPlugin =
 
 mkMetaprogram :: SrcSpan -> FastString -> HsExpr GhcPs
 mkMetaprogram ss mp =
-  HsSCC noExt MetaprogramSourceText (StringLiteral NoSourceText mp)
+  HsSCC noExtField MetaprogramSourceText (StringLiteral NoSourceText mp)
     $ L ss
-    $ HsVar noExt
+    $ HsVar noExtField
     $ L ss
     $ mkRdrUnqual
     $ mkVarOcc "_"
@@ -73,9 +73,9 @@ pattern MetaprogramSyntax mp <-
     HsSpliceE _ (HsQuasiQuote _ _ (occNameString . rdrNameOcc -> "wingman") _ mp)
   where
     MetaprogramSyntax mp =
-      HsSpliceE noExt $
+      HsSpliceE noExtField $
         HsQuasiQuote
-          noExt
+          noExtField
           (mkRdrUnqual $ mkVarOcc "splice")
           (mkRdrUnqual $ mkVarOcc "wingman")
           noSrcSpan
