@@ -14,7 +14,7 @@ description:
 homepage:           https://github.com/haskell/haskell-language-server/tree/master/ghcide#readme
 bug-reports:        https://github.com/haskell/haskell-language-server/issues
 tested-with:        GHC == 8.6.4 || == 8.6.5 || == 8.8.2 || == 8.8.3 || == 8.8.4 || == 8.10.2 || == 8.10.3 || == 8.10.4
-extra-source-files: include/ghc-api-version.h README.md CHANGELOG.md
+extra-source-files: README.md CHANGELOG.md
                     test/data/**/*.project
                     test/data/**/*.cabal
                     test/data/**/*.yaml
@@ -150,6 +150,7 @@ library
         Development.IDE.Core.OfInterest
         Development.IDE.Core.PositionMapping
         Development.IDE.Core.Preprocessor
+        Development.IDE.Core.ProgressReporting
         Development.IDE.Core.Rules
         Development.IDE.Core.RuleTypes
         Development.IDE.Core.Service
@@ -333,9 +334,9 @@ test-suite ghcide-tests
         extra,
         filepath,
         --------------------------------------------------------------
-        -- The MIN_GHC_API_VERSION macro relies on MIN_VERSION pragmas
+        -- The MIN_VERSION_ghc macro relies on MIN_VERSION pragmas
         -- which require depending on ghc. So the tests need to depend
-        -- on ghc if they need to use MIN_GHC_API_VERSION. Maybe a
+        -- on ghc if they need to use MIN_VERSION_ghc. Maybe a
         -- better solution can be found, but this is a quick solution
         -- which works for now.
         ghc,

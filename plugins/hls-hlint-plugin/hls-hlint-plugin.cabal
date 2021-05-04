@@ -41,10 +41,10 @@ library
     , extra
     , filepath
     , ghc-exactprint        >=0.6.3.4
-    , ghcide                ^>=1.2.0.2
+    , ghcide                ^>=1.2
     , hashable
     , hlint                 >=3.2
-    , hls-plugin-api        ^>=1.1.0.0
+    , hls-plugin-api        ^>=1.1
     , hslogger
     , lens
     , lsp

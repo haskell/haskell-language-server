@@ -110,6 +110,7 @@ data ProgressReportingStyle
     = Percentage -- ^ Report using the LSP @_percentage@ field
     | Explicit   -- ^ Report using explicit 123/456 text
     | NoProgress -- ^ Do not report any percentage
+    deriving Eq
 
 
 clientSupportsProgress :: LSP.ClientCapabilities -> IdeReportProgress

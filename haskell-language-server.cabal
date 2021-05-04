@@ -18,7 +18,6 @@ tested-with:        GHC == 8.6.4 || == 8.6.5 || == 8.8.2 || == 8.8.3 || == 8.8.4
 extra-source-files:
   README.md
   ChangeLog.md
-  include/ghc-api-version.h
   test/testdata/**/*.project
   test/testdata/**/*.cabal
   test/testdata/**/*.yaml
@@ -63,7 +62,7 @@ library
     , cryptohash-sha1
     , data-default
     , ghc
-    , ghcide                ^>= 1.2.0.2
+    , ghcide                ^>=1.2
     , gitrev
     , lsp
     , hie-bios
@@ -120,6 +119,11 @@ flag eval
 
 flag importLens
   description: Enable importLens plugin
+  default:     True
+  manual:      True
+
+flag refineImports
+  description: Enable refineImports plugin
   default:     True
   manual:      True
 
@@ -205,6 +209,11 @@ common importLens
     build-depends: hls-explicit-imports-plugin ^>= 1.0.0.1
     cpp-options: -DimportLens
 
+common refineImports
+  if flag(refineImports) || flag(all-plugins)
+    build-depends: hls-refine-imports-plugin
+    cpp-options: -DrefineImports
+
 common retrie
   if flag(retrie) || flag(all-plugins)
     build-depends: hls-retrie-plugin ^>= 1.0.0.1
@@ -279,6 +288,7 @@ executable haskell-language-server
                     , haddockComments
                     , eval
                     , importLens
+                    , refineImports
                     , retrie
                     , tactic
                     , hlint
@@ -429,7 +439,8 @@ test-suite func-test
 test-suite wrapper-test
   type:               exitcode-stdio-1.0
   build-tool-depends:
-    haskell-language-server:haskell-language-server-wrapper -any
+    haskell-language-server:haskell-language-server-wrapper -any,
+    haskell-language-server:haskell-language-server -any
 
   default-language:   Haskell2010
   build-depends:

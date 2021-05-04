@@ -99,7 +99,8 @@ goldenTestWithEdit input tc line col =
                         { _start = Position 0 0
                         , _end = Position (length lns + 1) 1
                         }
-            liftIO $ sleep 3
+            waitForProgressDone -- cradle
+            waitForProgressDone
             alt <- liftIO $ T.readFile (input <.> "error")
             void $ applyEdit doc $ TextEdit theRange alt
             changeDoc doc [TextDocumentContentChangeEvent (Just theRange) Nothing alt]
@@ -131,5 +132,5 @@ pointRange
 
 -- | Get the title of a code action.
 codeActionTitle :: (Command |? CodeAction) -> Maybe Text
-codeActionTitle InL{}                               = Nothing
+codeActionTitle InL{}                                 = Nothing
 codeActionTitle (InR(CodeAction title _ _ _ _ _ _ _)) = Just title

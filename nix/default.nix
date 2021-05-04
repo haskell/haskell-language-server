@@ -1,6 +1,6 @@
 { sources ? import ./sources.nix }:
 let
-  nix-pre-commit-hooks = (import (builtins.fetchTarball "https://github.com/cachix/pre-commit-hooks.nix/tarball/master/" + "/nix/") { sources = sources; }).packages;
+  nix-pre-commit-hooks = (import (builtins.fetchTarball "https://github.com/cachix/pre-commit-hooks.nix/tarball/87fb108527c7865ebee2ffe9af6154cb761ec9e0/" + "/nix/") { sources = sources; }).packages;
   overlay = _self: pkgs:
     let
         sharedOverrides = {
@@ -36,6 +36,7 @@ let
             hls-haddock-comments-plugin = gitignoreSource ../plugins/hls-haddock-comments-plugin;
             hls-eval-plugin = gitignoreSource ../plugins/hls-eval-plugin;
             hls-explicit-imports-plugin = gitignoreSource ../plugins/hls-explicit-imports-plugin;
+            hls-refine-imports-plugin = gitignoreSource ../plugins/hls-refine-imports-plugin;
             hls-hlint-plugin = gitignoreSource ../plugins/hls-hlint-plugin;
             hls-retrie-plugin = gitignoreSource ../plugins/hls-retrie-plugin;
             hls-splice-plugin = gitignoreSource ../plugins/hls-splice-plugin;

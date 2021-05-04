@@ -9,7 +9,6 @@ maintainer:         pepeiborra@gmail.com
 category:           Development
 build-type:         Simple
 extra-source-files:
-  include/ghc-api-version.h
   LICENSE
 
 library
@@ -21,8 +20,8 @@ library
     , containers
     , deepseq
     , ghc
-    , ghcide                ^>=1.2.0.2
-    , hls-plugin-api        ^>=1.1.0.0
+    , ghcide                ^>=1.2
+    , hls-plugin-api        ^>=1.1
     , lsp
     , lsp-types
     , hls-graph
