@@ -117,7 +117,7 @@ intros' names = rule $ \jdg -> do
           top_hole = isTopHole ctx jdg
           hy' = lambdaHypothesis top_hole $ zip vs $ coerce as
           jdg' = introduce hy'
-               $ withNewGoal (CType $ mkFunTys (drop num_args as) b) jdg
+               $ withNewGoal (CType $ mkFunTys' (drop num_args as) b) jdg
       ext <- newSubgoal jdg'
       pure $
         ext
