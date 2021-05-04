@@ -9,21 +9,24 @@ module Development.IDE.Core.IdeConfiguration
   , modifyWorkspaceFolders
   , modifyClientSettings
   , getClientSettings
-  )
+  , makeRelativeToWorkspace)
 where
 
 import           Control.Concurrent.Strict
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.Aeson.Types               (Value)
+import           Data.Foldable                  (toList)
 import           Data.HashSet                   (HashSet, singleton)
 import           Data.Hashable                  (Hashed, hashed, unhashed)
+import           Data.Maybe                     (catMaybes)
+import           Data.Monoid                    (First (..))
 import           Data.Text                      (Text, isPrefixOf)
 import           Development.IDE.Core.Shake
-import           Development.IDE.Types.Location
 import           Development.IDE.Graph
+import           Development.IDE.Types.Location
 import           Language.LSP.Types
-import           System.FilePath                (isRelative)
+import           System.FilePath                (isRelative, makeRelative)
 
 -- | Lsp client relevant configuration details
 data IdeConfiguration = IdeConfiguration
@@ -90,3 +93,13 @@ isWorkspaceFile file =
 
 getClientSettings :: Action (Maybe Value)
 getClientSettings = unhashed . clientSettings <$> getIdeConfiguration
+
+makeRelativeToWorkspace :: NormalizedFilePath -> Action (Maybe FilePath)
+makeRelativeToWorkspace nfp = do
+    roots <- map (uriToFilePath . fromNormalizedUri) . toList . workspaceFolders <$> getIdeConfiguration
+    return $ getFirst . foldMap (First . tryMakeRelative) $ catMaybes roots
+  where
+      p = fromNormalizedFilePath nfp
+      tryMakeRelative root =
+          let p' = makeRelative root p
+          in guard (isRelative p') >> return p'

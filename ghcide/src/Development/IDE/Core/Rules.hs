@@ -144,6 +144,7 @@ import           Ide.Types (PluginId)
 import           Data.Default (def)
 import           Ide.PluginUtils (configForPlugin)
 import           Control.Applicative
+import System.FilePath
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
@@ -562,14 +563,23 @@ getDocMapRule =
 persistentDocMapRule :: Rules ()
 persistentDocMapRule = addPersistentRule GetDocMap $ \_ -> pure $ Just (DKMap mempty mempty, idDelta, Nothing)
 
+-- | Finds and reads the hie file corresponding to a source module
 readHieFileForSrcFromDisk :: NormalizedFilePath -> MaybeT IdeAction HieFile
 readHieFileForSrcFromDisk file = do
   db <- asks hiedb
+  extras <- ask
+  let runActionForMePlease :: Action a -> MaybeT IdeAction a
+      runActionForMePlease = liftIO . join . shakeEnqueue extras . mkDelayedAction "" L.Debug
+  -- For hs files we only store workspace relative paths in the hiedb
+  relativeFile <- runActionForMePlease $ makeRelativeToWorkspace file
+  -- For hie files we only store cacheDir relative paths in the hiedb
+  hieCacheDir <- runActionForMePlease $
+        fromMaybe "ERROR" . hieDir . hsc_dflags . hscEnv <$> use_ GhcSession file
   log <- asks $ L.logDebug . logger
-  row <- MaybeT $ liftIO $ HieDb.lookupHieFileFromSource db $ fromNormalizedFilePath file
+  row <- MaybeT $ liftIO $ HieDb.lookupHieFileFromSource db $ fromMaybe (fromNormalizedFilePath file) relativeFile
   let hie_loc = HieDb.hieModuleHieFile row
   liftIO $ log $ "LOADING HIE FILE :" <> T.pack (show file)
-  exceptToMaybeT $ readHieFileFromDisk hie_loc
+  exceptToMaybeT $ readHieFileFromDisk $ hieCacheDir </> hie_loc
 
 readHieFileFromDisk :: FilePath -> ExceptT SomeException IdeAction HieFile
 readHieFileFromDisk hie_loc = do
