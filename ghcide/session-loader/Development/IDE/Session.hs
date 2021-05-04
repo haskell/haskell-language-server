@@ -84,7 +84,6 @@ import           Control.Concurrent.STM               (atomically)
 import           Control.Concurrent.STM.TQueue
 import qualified Data.HashSet                         as Set
 import           Database.SQLite.Simple
-import           GHC.LanguageExtensions               (Extension (EmptyCase))
 import           HieDb.Create
 import           HieDb.Types
 import           HieDb.Utils
