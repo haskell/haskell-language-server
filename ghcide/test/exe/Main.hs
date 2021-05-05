@@ -2785,12 +2785,38 @@ removeRedundantConstraintsTests = let
         , "      in h"
         ]
 
-  typeSignatureMultipleLines :: T.Text
-  typeSignatureMultipleLines = T.unlines $ header <>
-    [ "foo :: (Num a, Eq a, Monoid a)"
-    , "=> a -> Bool"
-    , "foo x = x == 1"
+  typeSignatureLined1 = T.unlines $ header <>
+    [ "foo :: Eq a =>"
+    , "  a -> Bool"
+    , "foo _ = True"
     ]
+
+  typeSignatureLined2 = T.unlines $ header <>
+    [ "foo :: (Eq a, Show a)"
+    , "  => a -> Bool"
+    , "foo _ = True"
+    ]
+
+  typeSignatureOneLine = T.unlines $ header <>
+    [ "foo :: a -> Bool"
+    , "foo _ = True"
+    ]
+
+  typeSignatureLined3 = T.unlines $ header <>
+    [ "foo :: ( Eq a"
+    , "       , Show a"
+    , "       )"
+    , "    => a -> Bool"
+    , "foo x = x == x"
+    ]
+
+  typeSignatureLined3' = T.unlines $ header <>
+    [ "foo :: ( Eq a"
+    , "       )"
+    , "    => a -> Bool"
+    , "foo x = x == x"
+    ]
+
 
   check :: T.Text -> T.Text -> T.Text -> TestTree
   check actionTitle originalCode expectedCode = testSession (T.unpack actionTitle) $ do
@@ -2801,13 +2827,6 @@ removeRedundantConstraintsTests = let
     executeCodeAction chosenAction
     modifiedCode <- documentContents doc
     liftIO $ expectedCode @=? modifiedCode
-
-  checkPeculiarFormatting :: String -> T.Text -> TestTree
-  checkPeculiarFormatting title code = testSession title $ do
-    doc <- createDoc "Testing.hs" "haskell" code
-    _ <- waitForDiagnostics
-    actionsOrCommands <- getAllCodeActions doc
-    liftIO $ assertBool "Found some actions" (null actionsOrCommands)
 
   in testGroup "remove redundant function constraints"
   [ check
@@ -2846,9 +2865,18 @@ removeRedundantConstraintsTests = let
     "Remove redundant constraints `(Monoid a, Show a)` from the context of the type signature for `foo`"
     (typeSignatureSpaces $ Just "Monoid a, Show a")
     (typeSignatureSpaces Nothing)
-  , checkPeculiarFormatting
-    "should do nothing when constraints contain line feeds"
-    typeSignatureMultipleLines
+    , check
+    "Remove redundant constraint `Eq a` from the context of the type signature for `foo`"
+    typeSignatureLined1
+    typeSignatureOneLine
+    , check
+    "Remove redundant constraints `(Eq a, Show a)` from the context of the type signature for `foo`"
+    typeSignatureLined2
+    typeSignatureOneLine
+    , check
+    "Remove redundant constraint `Show a` from the context of the type signature for `foo`"
+    typeSignatureLined3
+    typeSignatureLined3'
   ]
 
 addSigActionTests :: TestTree
