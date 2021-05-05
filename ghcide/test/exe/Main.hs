@@ -101,6 +101,7 @@ import qualified Language.LSP.Types                       as LSP
 import           Data.IORef.Extra                         (atomicModifyIORef_)
 import qualified Development.IDE.Plugin.HLS.GhcIde        as Ghcide
 import           Text.Regex.TDFA                          ((=~))
+import qualified Progress
 
 waitForProgressBegin :: Session ()
 waitForProgressBegin = skipManyTill anyMessage $ satisfyMaybe $ \case
@@ -5491,6 +5492,7 @@ unitTests = do
             actualOrder <- liftIO $ readIORef orderRef
 
             liftIO $ actualOrder @?= reverse [(1::Int)..20]
+     , Progress.tests
      ]
 
 testIde :: IDE.Arguments -> Session () -> IO ()
