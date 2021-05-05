@@ -137,6 +137,7 @@ import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.Types                           (SMethod (SCustomMethod))
 import           Language.LSP.VFS
 import           Module
+import           System.Directory                             (canonicalizePath)
 import           TcRnMonad                                    (tcg_dependent_files)
 
 import           Ide.Plugin.Properties (HasProperty, KeyNameProxy, Properties, ToHsType, useProperty)
@@ -732,10 +733,12 @@ getModIfaceFromDiskAndIndexRule =
       hie_loc = ml_hie_file $ ms_location ms
   hash <- liftIO $ getFileHash hie_loc
   mrow <- liftIO $ HieDb.lookupHieFileFromSource hiedb (fromNormalizedFilePath f)
+  hie_loc' <- liftIO $ traverse (canonicalizePath . HieDb.hieModuleHieFile) mrow
   case mrow of
     Just row
       | hash == HieDb.modInfoHash (HieDb.hieModInfo row)
-      , hie_loc == HieDb.hieModuleHieFile row  -> do
+      && Just hie_loc == hie_loc'
+      -> do
       -- All good, the db has indexed the file
       when (coerce $ ideTesting se) $ liftIO $ mRunLspT (lspEnv se) $
         LSP.sendNotification (SCustomMethod "ghcide/reference/ready") $
