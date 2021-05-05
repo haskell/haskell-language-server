@@ -22,6 +22,7 @@ import           Data.IORef                           (readIORef)
 import           Data.List                            (intercalate)
 import qualified Data.Map.Strict                      as Map
 import           Data.Maybe                           (catMaybes, fromMaybe)
+import qualified Data.Set                             as S
 import qualified Data.Text                            as T
 import           Data.Traversable                     (forM)
 import           Development.IDE
@@ -197,13 +198,23 @@ refineImportsRule = define $ \RefineImports nfp -> do
   let filterByImport
         :: LImportDecl GhcRn
         -> Map.Map ModuleName [AvailInfo]
-        -> Map.Map ModuleName [AvailInfo]
+        -> Maybe (Map.Map ModuleName [AvailInfo])
       filterByImport (L _ ImportDecl{ideclHiding = Just (_, L _ names)}) avails =
-        let importedNames = map (ieName . unLoc) names
-        in flip Map.filter avails $ \a ->
-              any (`elem` importedNames)
-                $ concatMap availNamesWithSelectors a
-      filterByImport _ _ = mempty
+        let importedNames = S.fromList $ map (ieName . unLoc) names
+            res = flip Map.filter avails $ \a ->
+                    any (`S.member` importedNames)
+                      $ concatMap availNamesWithSelectors a
+            allFilteredAvailsNames = S.fromList
+              $ concatMap availNamesWithSelectors
+              $ mconcat
+              $ Map.elems res
+            -- if there is a function defined in the current module and is used
+            -- i.e. if a function is not reexported but defined in current
+            -- module then this import cannot be refined
+        in if importedNames `S.isSubsetOf` allFilteredAvailsNames
+              then Just res
+              else Nothing
+      filterByImport _ _ = Nothing
   let constructImport
         :: LImportDecl GhcRn
         -> (ModuleName, [AvailInfo])
@@ -229,7 +240,7 @@ refineImportsRule = define $ \RefineImports nfp -> do
         -- we check for the inner imports
         , Just innerImports <- [Map.lookup mn import2Map]
         -- and only get those symbols used
-        , filteredInnerImports <- [filterByImport i innerImports]
+        , Just filteredInnerImports <- [filterByImport i innerImports]
         -- if no symbols from this modules then don't need to generate new import
         , not $ null filteredInnerImports
         ]
