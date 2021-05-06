@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+
 module Wingman.StaticPlugin
   ( staticPlugin
   , pattern WingmanMetaprogram
@@ -16,7 +18,9 @@ staticPlugin df
   = allowEmptyCaseButWithWarning
   $ enableQuasiQuotes
   $ df
+#if __GLASGOW_HASKELL__ >= 808
     { staticPlugins = staticPlugins df <> [metaprogrammingPlugin] }
+#endif
 
 
 pattern MetaprogramSourceText :: SourceText
@@ -42,12 +46,14 @@ allowEmptyCaseButWithWarning =
   flip xopt_set EmptyCase . flip wopt_set Opt_WarnIncompletePatterns
 
 
+#if __GLASGOW_HASKELL__ >= 808
 metaprogrammingPlugin :: StaticPlugin
 metaprogrammingPlugin =
     StaticPlugin $ PluginWithArgs (defaultPlugin { parsedResultAction = worker })  []
   where
     worker :: [CommandLineOption] -> ModSummary -> HsParsedModule -> Hsc HsParsedModule
     worker _ _ pm = pure $ pm { hpm_module = addMetaprogrammingSyntax $ hpm_module pm }
+#endif
 
 
 mkMetaprogram :: SrcSpan -> FastString -> HsExpr GhcPs
