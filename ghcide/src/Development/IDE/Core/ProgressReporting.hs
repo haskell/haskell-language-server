@@ -7,6 +7,9 @@ module Development.IDE.Core.ProgressReporting
   -- utilities, reexported for use in Core.Shake
   , mRunLspT
   , mRunLspTCallback
+  -- for tests
+  , recordProgress
+  , InProgress(..)
   )
    where
 
@@ -18,7 +21,6 @@ import           Control.Monad.Trans.Class      (lift)
 import           Data.Foldable                  (for_)
 import           Data.Functor                   (($>))
 import qualified Data.HashMap.Strict            as HMap
-import           Data.Maybe                     (isJust)
 import qualified Data.Text                      as T
 import           Data.Unique
 import           Development.IDE.GHC.Orphans    ()
@@ -76,8 +78,14 @@ data InProgress = InProgress
 recordProgress :: NormalizedFilePath -> (Int -> Int) -> InProgress -> InProgress
 recordProgress file shift InProgress{..} = case HMap.alterF alter file current of
     ((prev, new), m') ->
-        let todo' = if isJust prev then todo else todo + 1
-            done' = if new == 0 then done+1 else done
+        let (done',todo') =
+                case (prev,new) of
+                    (Nothing,0) -> (done+1, todo+1)
+                    (Nothing,_) -> (done,   todo+1)
+                    (Just 0, 0) -> (done  , todo)
+                    (Just 0, _) -> (done-1, todo)
+                    (Just _, 0) -> (done+1, todo)
+                    (Just _, _) -> (done  , todo)
         in InProgress todo' done' m'
   where
     alter x = let x' = maybe (shift 0) shift x in ((x,x'), Just x')
