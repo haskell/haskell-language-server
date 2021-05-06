@@ -57,7 +57,7 @@ metaprogrammingPlugin =
 #endif
 
 metaprogramHoleName :: OccName
-metaprogramHoleName = mkVarOcc "_$WINGMAN_HOLE"
+metaprogramHoleName = mkVarOcc "_$metaprogram"
 
 
 mkMetaprogram :: SrcSpan -> FastString -> HsExpr GhcPs
