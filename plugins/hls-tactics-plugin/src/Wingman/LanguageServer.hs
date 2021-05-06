@@ -220,7 +220,7 @@ judgementForHole state nfp range cfg = do
 
       hscenv <- stale GhcSessionDeps
 
-      (rss, g) <- liftMaybe $ getSpanAndTypeAtHole range' hf
+      (rss, occ, g) <- liftMaybe $ getSpanAndTypeAtHole range' hf
       new_rss <- liftMaybe $ mapAgeTo amapping rss
 
       -- KnownThings is just the instances in scope. There are no ranges
@@ -299,7 +299,7 @@ getAlreadyDestructed (unTrack -> span) (unTrack -> binds) =
 getSpanAndTypeAtHole
     :: Tracked age Range
     -> Tracked age (HieASTs b)
-    -> Maybe (Tracked age RealSrcSpan, b)
+    -> Maybe (Tracked age RealSrcSpan, OccName, b)
 getSpanAndTypeAtHole r@(unTrack -> range) (unTrack -> hf) = do
   join $ listToMaybe $ M.elems $ flip M.mapWithKey (getAsts hf) $ \fs ast ->
     case selectSmallestContaining (rangeToRealSrcSpan (FastString.unpackFS fs) range) ast of
@@ -309,9 +309,13 @@ getSpanAndTypeAtHole r@(unTrack -> range) (unTrack -> hf) = do
         ty <- listToMaybe $ nodeType info
         guard $ ("HsUnboundVar","HsExpr") `S.member` nodeAnnotations info
         -- Ensure we're actually looking at a hole here
-        guard $ all (either (const False) $ isHole . occName)
-          $ M.keysSet $ nodeIdentifiers info
-        pure (unsafeCopyAge r $ nodeSpan ast', ty)
+        occ <- (either (const Nothing) (Just . occName) =<<)
+             . listToMaybe
+             . S.toList
+             . M.keysSet
+             $ nodeIdentifiers info
+        guard $ isHole occ
+        pure (unsafeCopyAge r $ nodeSpan ast', occ, ty)
 
 
 
