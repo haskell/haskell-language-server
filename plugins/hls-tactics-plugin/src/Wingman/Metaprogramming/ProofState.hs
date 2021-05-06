@@ -21,15 +21,16 @@ renderSimplyDecorated
     -> out
 renderSimplyDecorated text push pop = go []
   where
-    go _           SFail               = panicUncaughtFail
-    go []          SEmpty              = mempty
-    go (_:_)       SEmpty              = panicInputNotFullyConsumed
-    go stack       (SChar c rest)      = text (T.singleton c) <> go stack rest
-    go stack       (SText _l t rest)   = text t <> go stack rest
-    go stack       (SLine i rest)      = text (T.singleton '\n') <> text (textSpaces i) <> go stack rest
-    go stack       (SAnnPush ann rest) = push ann <> go (ann : stack) rest
-    go (ann:stack) (SAnnPop rest)      = pop ann <> go stack rest
-    go []          SAnnPop{}           = panicUnpairedPop
+    go _        SFail               = panicUncaughtFail
+    go []       SEmpty              = mempty
+    go (_:_)    SEmpty              = panicInputNotFullyConsumed
+    go st       (SChar c rest)      = text (T.singleton c) <> go st rest
+    go st       (SText _l t rest)   = text t <> go st rest
+    go st       (SLine i rest)      =
+      text (T.singleton '\n') <> text (textSpaces i) <> go st rest
+    go st       (SAnnPush ann rest) = push ann <> go (ann : st) rest
+    go (ann:st) (SAnnPop rest)      = pop ann <> go st rest
+    go []       SAnnPop{}           = panicUnpairedPop
 {-# INLINE renderSimplyDecorated #-}
 
 
