@@ -189,6 +189,14 @@ getAllMetaprograms = everything (<>) $ mkQ mempty $ \case
   WingmanMetaprogram fs -> [ unpackFS fs ]
   (_ :: HsExpr GhcTc)  -> mempty
 
+
+data HoleJudgment = HoleJudgment
+  { hj_range :: Tracked 'Current Range
+  , hj_jdg :: Judgement
+  , hj_ctx :: Context
+  , hj_dflags :: DynFlags
+  }
+
 ------------------------------------------------------------------------------
 -- | Find the last typechecked module, and find the most specific span, as well
 -- as the judgement at the given range.
@@ -197,7 +205,7 @@ judgementForHole
     -> NormalizedFilePath
     -> Tracked 'Current Range
     -> Config
-    -> MaybeT IO (Tracked 'Current Range, Judgement, Context, DynFlags)
+    -> MaybeT IO HoleJudgment
 judgementForHole state nfp range cfg = do
   let stale a = runStaleIde "judgementForHole" state nfp a
 
@@ -224,7 +232,12 @@ judgementForHole state nfp range cfg = do
       (jdg, ctx) <- liftMaybe $ mkJudgementAndContext cfg g binds new_rss tcg eps kt
 
       dflags <- getIdeDynflags state nfp
-      pure (fmap realSrcSpanToRange new_rss, jdg, ctx, dflags)
+      pure $ HoleJudgment
+        { hj_range = fmap realSrcSpanToRange new_rss
+        , hj_jdg = jdg
+        , hj_ctx = ctx
+        , hj_dflags = dflags
+        }
 
 
 

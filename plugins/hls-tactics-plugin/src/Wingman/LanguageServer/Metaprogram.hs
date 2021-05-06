@@ -51,7 +51,7 @@ hoverProvider state plId (HoverParams (TextDocumentIdentifier uri) pos _)
           case (find (flip containsSpan (realSrcLocSpan loc) . unTrack . fst) holes) of
             Just (trss, program) -> do
               let tr_range = fmap realSrcSpanToRange trss
-              (_, jdg, ctx, _) <- judgementForHole state nfp tr_range cfg
+              HoleJudgment{hj_jdg=jdg, hj_ctx=ctx} <- judgementForHole state nfp tr_range cfg
               pure $ Hover
                 { _contents = HoverContents
                             $ MarkupContent MkMarkdown

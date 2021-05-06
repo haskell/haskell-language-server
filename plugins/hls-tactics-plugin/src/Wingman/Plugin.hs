@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 -- | A plugin that uses tactics to synthesize code
 module Wingman.Plugin
@@ -74,7 +75,7 @@ codeActionProvider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
       cfg <- getTacticConfig plId
       liftIO $ fromMaybeT (Right $ List []) $ do
-        (_, jdg, _, dflags) <- judgementForHole state nfp range cfg
+        HoleJudgment{hj_jdg = jdg, hj_dflags = dflags} <- judgementForHole state nfp range cfg
         actions <- lift $
           -- This foldMap is over the function monoid.
           foldMap commandProvider [minBound .. maxBound] $ TacticProviderData
@@ -106,19 +107,19 @@ tacticCmd tac pId state (TacticParams uri range var_name)
       ccs <- getClientCapabilities
       cfg <- getTacticConfig pId
       res <- liftIO $ runMaybeT $ do
-        (range', jdg, ctx, dflags) <- judgementForHole state nfp range cfg
-        let span = fmap (rangeToRealSrcSpan (fromNormalizedFilePath nfp)) range'
+        HoleJudgment{..} <- judgementForHole state nfp range cfg
+        let span = fmap (rangeToRealSrcSpan (fromNormalizedFilePath nfp)) hj_range
         TrackedStale pm pmmap <- stale GetAnnotatedParsedSource
         pm_span <- liftMaybe $ mapAgeFrom pmmap span
 
         timingOut (cfg_timeout_seconds cfg * seconds) $ join $
-          case runTactic ctx jdg $ tac $ mkVarOcc $ T.unpack var_name of
+          case runTactic hj_ctx hj_jdg $ tac $ mkVarOcc $ T.unpack var_name of
             Left _ -> Left TacticErrors
             Right rtr ->
               case rtr_extract rtr of
                 L _ (HsVar _ (L _ rdr)) | isHole (occName rdr) ->
                   Left NothingToDo
-                _ -> pure $ mkTacticResultEdits pm_span dflags ccs uri pm rtr
+                _ -> pure $ mkTacticResultEdits pm_span hj_dflags ccs uri pm rtr
 
       case res of
         Nothing -> do
