@@ -7,7 +7,6 @@ import           Data.Bool (bool)
 import           Data.Functor ((<&>))
 import qualified Data.Text as T
 import           Data.Text.Prettyprint.Doc
-import           Data.Text.Prettyprint.Doc.Internal (textSpaces)
 import           Data.Text.Prettyprint.Doc.Render.Util.Panic
 import           Language.LSP.Types (sectionSeparator)
 import           Wingman.Judgements (jHypothesis)
@@ -106,4 +105,8 @@ countFinished _ thing n    = count thing n
 count :: Doc Ann -> Int -> Doc Ann
 count thing n =
   pretty n <+> thing <> bool "" "s" (n /= 1)
+
+textSpaces :: Int -> T.Text
+textSpaces n = T.replicate n $ T.singleton ' '
+
 
