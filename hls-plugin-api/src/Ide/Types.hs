@@ -50,7 +50,6 @@ import           Language.LSP.VFS
 import           OpenTelemetry.Eventlog
 import           System.IO.Unsafe
 import           Text.Regex.TDFA.Text            ()
-import GhcPlugins (StaticPlugin)
 import DynFlags (DynFlags)
 
 -- ---------------------------------------------------------------------
