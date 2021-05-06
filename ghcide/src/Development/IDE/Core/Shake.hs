@@ -148,9 +148,8 @@ import           Data.Default
 import           HieDb.Types
 import           Ide.Plugin.Config
 import qualified Ide.PluginUtils                      as HLS
-import           Ide.Types                            (PluginId)
+import           Ide.Types                            (PluginId, DynFlagsModifications)
 import DynFlags (DynFlags)
-import Ide.Types (DynFlagsModifications)
 
 -- | We need to serialize writes to the database, so we send any function that
 -- needs to write to the database over the channel, where it will be picked up by
