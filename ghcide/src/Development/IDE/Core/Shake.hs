@@ -150,6 +150,7 @@ import           Ide.Plugin.Config
 import qualified Ide.PluginUtils                      as HLS
 import           Ide.Types                            (PluginId)
 import DynFlags (DynFlags)
+import Ide.Types (DynFlagsModifications)
 
 -- | We need to serialize writes to the database, so we send any function that
 -- needs to write to the database over the channel, where it will be picked up by
@@ -172,7 +173,7 @@ data ShakeExtras = ShakeExtras
      lspEnv :: Maybe (LSP.LanguageContextEnv Config)
     ,debouncer :: Debouncer NormalizedUri
     ,logger :: Logger
-    ,modifyDynFlags :: DynFlags -> DynFlags
+    ,dynFlagsMods :: DynFlagsModifications
     ,globals :: Var (HMap.HashMap TypeRep Dynamic)
     ,state :: Var Values
     ,diagnostics :: Var DiagnosticStore
@@ -456,7 +457,7 @@ seqValue v b = case v of
 -- | Open a 'IdeState', should be shut using 'shakeShut'.
 shakeOpen :: Maybe (LSP.LanguageContextEnv Config)
           -> Config
-          -> (DynFlags -> DynFlags)
+          -> DynFlagsModifications
           -> Logger
           -> Debouncer NormalizedUri
           -> Maybe FilePath
@@ -468,7 +469,7 @@ shakeOpen :: Maybe (LSP.LanguageContextEnv Config)
           -> ShakeOptions
           -> Rules ()
           -> IO IdeState
-shakeOpen lspEnv defaultConfig modifyDynFlags logger debouncer
+shakeOpen lspEnv defaultConfig dynFlagsMods logger debouncer
   shakeProfileDir (IdeReportProgress reportProgress) ideTesting@(IdeTesting testing) hiedb indexQueue vfs opts rules = mdo
 
     us <- mkSplitUniqSupply 'r'

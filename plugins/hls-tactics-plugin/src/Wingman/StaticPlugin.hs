@@ -7,21 +7,24 @@ module Wingman.StaticPlugin
   , pattern MetaprogramSyntax
   ) where
 
-import           Data.Data
-import           Development.IDE.GHC.Compat
-import           GHC.LanguageExtensions.Type (Extension(EmptyCase, QuasiQuotes))
-import           Generics.SYB
-import           GhcPlugins hiding ((<>))
+import Data.Data
+import Development.IDE.GHC.Compat
+import GHC.LanguageExtensions.Type (Extension(EmptyCase, QuasiQuotes))
+import Generics.SYB
+import GhcPlugins hiding ((<>))
+import Ide.Types
 
 
-staticPlugin :: DynFlags -> DynFlags
-staticPlugin df
-  = allowEmptyCaseButWithWarning
-  $ enableQuasiQuotes
-  $ df
+staticPlugin :: DynFlagsModifications
+staticPlugin = DynFlagsModifications
+  { dynFlagsModifyGlobal =
+      \df -> allowEmptyCaseButWithWarning
+           $ df
 #if __GLASGOW_HASKELL__ >= 808
-    { staticPlugins = staticPlugins df <> [metaprogrammingPlugin] }
+             { staticPlugins = staticPlugins df <> [metaprogrammingPlugin] }
 #endif
+  , dynFlagsModifyParser = enableQuasiQuotes
+  }
 
 
 pattern MetaprogramSourceText :: SourceText

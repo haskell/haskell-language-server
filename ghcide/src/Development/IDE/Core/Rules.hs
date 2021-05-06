@@ -140,7 +140,7 @@ import           Module
 import           TcRnMonad                                    (tcg_dependent_files)
 
 import           Ide.Plugin.Properties (HasProperty, KeyNameProxy, Properties, ToHsType, useProperty)
-import           Ide.Types (PluginId)
+import           Ide.Types (PluginId, DynFlagsModifications(dynFlagsModifyGlobal, dynFlagsModifyParser))
 import           Data.Default (def)
 import           Ide.PluginUtils (configForPlugin)
 import           Control.Applicative
@@ -211,10 +211,12 @@ getParsedModuleRule :: Rules ()
 getParsedModuleRule =
   -- this rule does not have early cutoff since all its dependencies already have it
   define $ \GetParsedModule file -> do
-    ModSummaryResult{msrModSummary = ms} <- use_ GetModSummary file
+    ModSummaryResult{msrModSummary = ms'} <- use_ GetModSummary file
     sess <- use_ GhcSession file
     let hsc = hscEnv sess
     opt <- getIdeOptions
+    modify_dflags <- getModifyDynFlags id dynFlagsModifyParser
+    let ms = ms' { ms_hspp_opts = modify_dflags $ ms_hspp_opts ms' }
 
     let dflags    = ms_hspp_opts ms
         mainParse = getParsedModuleDefinition hsc opt file ms
@@ -287,8 +289,8 @@ getParsedModuleWithCommentsRule =
 
     liftIO $ snd <$> getParsedModuleDefinition (hscEnv sess) opt file ms'
 
-getModifyDynFlags :: Action (DynFlags -> DynFlags)
-getModifyDynFlags = maybe id modifyDynFlags <$> getShakeExtra
+getModifyDynFlags :: a -> (DynFlagsModifications -> a) -> Action a
+getModifyDynFlags a f = maybe a (f . dynFlagsMods) <$> getShakeExtra
 
 
 getParsedModuleDefinition
@@ -787,7 +789,7 @@ getModSummaryRule :: Rules ()
 getModSummaryRule = do
     defineEarlyCutoff $ Rule $ \GetModSummary f -> do
         session' <- hscEnv <$> use_ GhcSession f
-        modify_dflags <- getModifyDynFlags
+        modify_dflags <- getModifyDynFlags id dynFlagsModifyGlobal
         let session = session' { hsc_dflags = modify_dflags $ hsc_dflags session' }
         (modTime, mFileContent) <- getFileContents f
         let fp = fromNormalizedFilePath f

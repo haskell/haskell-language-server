@@ -7,11 +7,12 @@ import           Development.IDE.LSP.Server
 import qualified Language.LSP.Server        as LSP
 import Development.IDE.GHC.Compat (DynFlags)
 import Data.Monoid (Endo)
+import Ide.Types (DynFlagsModifications)
 
 data Plugin c = Plugin
     {pluginRules    :: Rules ()
     ,pluginHandlers :: LSP.Handlers (ServerM c)
-    ,pluginModifyDynflags :: Endo DynFlags
+    ,pluginModifyDynflags :: DynFlagsModifications
     }
 
 instance Default (Plugin c) where

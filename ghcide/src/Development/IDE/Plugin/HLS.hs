@@ -40,7 +40,6 @@ import           UnliftIO                     (MonadUnliftIO)
 import           UnliftIO.Async               (forConcurrently)
 import           UnliftIO.Exception           (catchAny)
 import Development.IDE.GHC.Compat (DynFlags)
-import Data.Monoid (Endo(Endo))
 
 -- ---------------------------------------------------------------------
 --
@@ -71,10 +70,8 @@ rulesPlugins rs = mempty { P.pluginRules = rules }
     where
         rules = foldMap snd rs
 
-dynFlagsPlugins :: [(PluginId, DynFlags -> DynFlags)] -> Plugin Config
-dynFlagsPlugins rs = mempty { P.pluginModifyDynflags = endo }
-    where
-        endo = foldMap (Endo . snd) rs
+dynFlagsPlugins :: [(PluginId, DynFlagsModifications)] -> Plugin Config
+dynFlagsPlugins rs = mempty { P.pluginModifyDynflags = foldMap snd rs }
 
 -- ---------------------------------------------------------------------
 
