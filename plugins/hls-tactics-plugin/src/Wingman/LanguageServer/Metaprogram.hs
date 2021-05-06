@@ -2,6 +2,7 @@
 {-# LANGUAGE OverloadedStrings     #-}
 
 {-# LANGUAGE NoMonoLocalBinds  #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Wingman.LanguageServer.Metaprogram (hoverProvider) where
 
@@ -32,6 +33,7 @@ import           Wingman.GHC
 import           Wingman.LanguageServer
 import           Wingman.Metaprogramming.Parser (attempt_it)
 import           Wingman.StaticPlugin (pattern WingmanMetaprogram)
+import Wingman.Judgements.SYB (everythingContaining)
 
 
 ------------------------------------------------------------------------------
@@ -45,7 +47,7 @@ hoverProvider state plId (HoverParams (TextDocumentIdentifier uri) pos _)
       liftIO $ fromMaybeT (Right Nothing) $ do
         -- guard $ hasFeature FeatureEmptyCase $ cfg_feature_set cfg
 
-        holes <- emptyCaseScrutinees state nfp
+        holes <- emptyCaseScrutinees state nfp $ RealSrcSpan $ realSrcLocSpan loc
 
         fmap (Right . Just) $
           case (find (flip containsSpan (realSrcLocSpan loc) . unTrack . fst) holes) of
@@ -68,19 +70,17 @@ fromMaybeT :: Functor m => a -> MaybeT m a -> m a
 fromMaybeT def = fmap (fromMaybe def) . runMaybeT
 
 
-------------------------------------------------------------------------------
--- | Find the last typechecked module, and find the most specific span, as well
--- as the judgement at the given range.
 emptyCaseScrutinees
     :: IdeState
     -> NormalizedFilePath
+    -> SrcSpan
     -> MaybeT IO [(Tracked 'Current RealSrcSpan, T.Text)]
-emptyCaseScrutinees state nfp = do
+emptyCaseScrutinees state nfp ss = do
     let stale a = runStaleIde "emptyCaseScrutinees" state nfp a
 
     TrackedStale tcg tcg_map <- fmap (fmap tmrTypechecked) $ stale TypeCheck
 
-    let scrutinees = traverse (emptyCaseQ . tcg_binds) tcg
+    let scrutinees = traverse (metaprogramQ ss . tcg_binds) tcg
     for scrutinees $ \aged@(unTrack -> (ss, program)) -> do
       case ss of
         RealSrcSpan r   -> do
@@ -89,10 +89,8 @@ emptyCaseScrutinees state nfp = do
         UnhelpfulSpan _ -> empty
 
 
-------------------------------------------------------------------------------
--- | Get the 'SrcSpan' and scrutinee of every empty case.
-emptyCaseQ :: GenericQ [(SrcSpan, T.Text)]
-emptyCaseQ = everything (<>) $ mkQ mempty $ \case
+metaprogramQ :: SrcSpan -> GenericQ [(SrcSpan, T.Text)]
+metaprogramQ ss = everythingContaining ss $ mkQ mempty $ \case
   L new_span (WingmanMetaprogram program) -> pure (new_span, T.pack $ unpackFS $ program)
   (_ :: LHsExpr GhcTc) -> mempty
 

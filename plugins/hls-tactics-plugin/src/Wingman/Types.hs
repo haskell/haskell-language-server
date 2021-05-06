@@ -57,6 +57,7 @@ data TacticCommand
   | UseDataCon
   | Refine
   | BeginMetaprogram
+  | RunMetaprogram
   deriving (Eq, Ord, Show, Enum, Bounded)
 
 -- | Generate a title for the command.
@@ -74,6 +75,7 @@ tacticTitle = (mappend "Wingman: " .) . go
     go UseDataCon dcon          = "Use constructor " <> dcon
     go Refine _                 = "Refine hole"
     go BeginMetaprogram _       = "Use custom tactic block"
+    go RunMetaprogram _         = "Run custom tactic"
 
 
 ------------------------------------------------------------------------------
@@ -504,4 +506,8 @@ instance Show UserFacingMessage where
   show TimedOut                = "Wingman timed out while trying to find a solution"
   show NothingToDo             = "Nothing to do"
   show (InfrastructureError t) = "Internal error: " <> T.unpack t
+
+
+data HoleSort = Hole | Metaprogram
+  deriving (Eq, Ord, Show, Enum, Bounded)
 

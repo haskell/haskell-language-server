@@ -2,6 +2,7 @@
 
 module Wingman.StaticPlugin
   ( staticPlugin
+  , metaprogramHoleName
   , pattern WingmanMetaprogram
   , pattern MetaprogramSyntax
   ) where
@@ -55,6 +56,9 @@ metaprogrammingPlugin =
     worker _ _ pm = pure $ pm { hpm_module = addMetaprogrammingSyntax $ hpm_module pm }
 #endif
 
+metaprogramHoleName :: OccName
+metaprogramHoleName = mkVarOcc "_$WINGMAN_HOLE"
+
 
 mkMetaprogram :: SrcSpan -> FastString -> HsExpr GhcPs
 mkMetaprogram ss mp =
@@ -63,7 +67,7 @@ mkMetaprogram ss mp =
     $ HsVar noExtField
     $ L ss
     $ mkRdrUnqual
-    $ mkVarOcc "_"
+    $ metaprogramHoleName
 
 
 addMetaprogrammingSyntax :: Data a => a -> a

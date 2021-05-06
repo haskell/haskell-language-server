@@ -60,7 +60,7 @@ import           Wingman.Judgements
 import           Wingman.Judgements.SYB (everythingContaining)
 import           Wingman.Judgements.Theta
 import           Wingman.Range
-import           Wingman.StaticPlugin (pattern WingmanMetaprogram, pattern MetaprogramSyntax)
+import           Wingman.StaticPlugin (pattern WingmanMetaprogram, pattern MetaprogramSyntax, metaprogramHoleName)
 import           Wingman.Types
 import Control.Monad.IO.Class
 import Control.Monad.RWS
@@ -191,10 +191,11 @@ getAllMetaprograms = everything (<>) $ mkQ mempty $ \case
 
 
 data HoleJudgment = HoleJudgment
-  { hj_range :: Tracked 'Current Range
-  , hj_jdg :: Judgement
-  , hj_ctx :: Context
-  , hj_dflags :: DynFlags
+  { hj_range     :: Tracked 'Current Range
+  , hj_jdg       :: Judgement
+  , hj_ctx       :: Context
+  , hj_dflags    :: DynFlags
+  , hj_hole_sort :: HoleSort
   }
 
 ------------------------------------------------------------------------------
@@ -237,8 +238,13 @@ judgementForHole state nfp range cfg = do
         , hj_jdg = jdg
         , hj_ctx = ctx
         , hj_dflags = dflags
+        , hj_hole_sort = classifyHoleName occ
         }
 
+
+classifyHoleName :: OccName -> HoleSort
+classifyHoleName occ | occ == metaprogramHoleName = Metaprogram
+classifyHoleName _ = Hole
 
 
 mkJudgementAndContext

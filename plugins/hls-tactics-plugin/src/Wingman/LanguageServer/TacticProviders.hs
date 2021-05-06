@@ -53,6 +53,7 @@ commandTactic DestructAll            = const destructAll
 commandTactic UseDataCon             = userSplit
 commandTactic Refine                 = const refine
 commandTactic BeginMetaprogram       = const metaprogram
+commandTactic RunMetaprogram         = const $ pure ()
 
 
 ------------------------------------------------------------------------------
@@ -68,7 +69,8 @@ tacticKind HomomorphismLambdaCase = "homomorphicLambdaCase"
 tacticKind DestructAll            = "splitFuncArgs"
 tacticKind UseDataCon             = "useConstructor"
 tacticKind Refine                 = "refine"
-tacticKind BeginMetaprogram       = "metaprogram"
+tacticKind BeginMetaprogram       = "beginMetaprogram"
+tacticKind RunMetaprogram         = "runMetaprogram"
 
 
 ------------------------------------------------------------------------------
@@ -86,6 +88,7 @@ tacticPreferred DestructAll            = True
 tacticPreferred UseDataCon             = True
 tacticPreferred Refine                 = True
 tacticPreferred BeginMetaprogram       = False
+tacticPreferred RunMetaprogram         = True
 
 
 mkTacticKind :: TacticCommand -> CodeActionKind
@@ -97,35 +100,45 @@ mkTacticKind =
 -- | Mapping from tactic commands to their contextual providers. See 'provide',
 -- 'filterGoalType' and 'filterBindingType' for the nitty gritty.
 commandProvider :: TacticCommand -> TacticProvider
-commandProvider Auto  = provide Auto ""
+commandProvider Auto  =
+  requireHoleSort Hole $
+  provide Auto ""
 commandProvider Intros =
+  requireHoleSort Hole $
   filterGoalType isFunction $
     provide Intros ""
 commandProvider Destruct =
+  requireHoleSort Hole $
   filterBindingType destructFilter $ \occ _ ->
     provide Destruct $ T.pack $ occNameString occ
 commandProvider DestructPun =
+  requireHoleSort Hole $
   requireFeature FeatureDestructPun $
     filterBindingType destructPunFilter $ \occ _ ->
       provide DestructPun $ T.pack $ occNameString occ
 commandProvider Homomorphism =
+  requireHoleSort Hole $
   filterBindingType homoFilter $ \occ _ ->
     provide Homomorphism $ T.pack $ occNameString occ
 commandProvider DestructLambdaCase =
+  requireHoleSort Hole $
   requireExtension LambdaCase $
     filterGoalType (isJust . lambdaCaseable) $
       provide DestructLambdaCase ""
 commandProvider HomomorphismLambdaCase =
+  requireHoleSort Hole $
   requireExtension LambdaCase $
     filterGoalType ((== Just True) . lambdaCaseable) $
       provide HomomorphismLambdaCase ""
 commandProvider DestructAll =
+  requireHoleSort Hole $
   requireFeature FeatureDestructAll $
     withJudgement $ \jdg ->
       case _jIsTopHole jdg && jHasBoundArgs jdg of
         True  -> provide DestructAll ""
         False -> mempty
 commandProvider UseDataCon =
+  requireHoleSort Hole $
   withConfig $ \cfg ->
     requireFeature FeatureUseDataCon $
       filterTypeProjection
@@ -140,11 +153,17 @@ commandProvider UseDataCon =
           . occName
           $ dataConName dcon
 commandProvider Refine =
+  requireHoleSort Hole $
   requireFeature FeatureRefineHole $
     provide Refine ""
 commandProvider BeginMetaprogram =
+  requireHoleSort Hole $
   -- requireFeature FeatureMetaprogram $
     provide BeginMetaprogram ""
+commandProvider RunMetaprogram =
+  requireHoleSort Metaprogram $
+  -- requireFeature FeatureMetaprogram $
+    provide RunMetaprogram ""
 
 
 ------------------------------------------------------------------------------
@@ -160,6 +179,7 @@ type TacticProvider
      = TacticProviderData
     -> IO [Command |? CodeAction]
 
+
 data TacticProviderData = TacticProviderData
   { tpd_dflags :: DynFlags
   , tpd_config :: Config
@@ -167,6 +187,7 @@ data TacticProviderData = TacticProviderData
   , tpd_uri    :: Uri
   , tpd_range  :: Tracked 'Current Range
   , tpd_jdg    :: Judgement
+  , tpd_hole_sort :: HoleSort
   }
 
 
@@ -185,6 +206,13 @@ data TacticParams = TacticParams
 requireFeature :: Feature -> TacticProvider -> TacticProvider
 requireFeature f tp tpd =
   case hasFeature f $ cfg_feature_set $ tpd_config tpd of
+    True  -> tp tpd
+    False -> pure []
+
+
+requireHoleSort :: HoleSort -> TacticProvider -> TacticProvider
+requireHoleSort hs tp tpd =
+  case (== hs) $ tpd_hole_sort tpd of
     True  -> tp tpd
     False -> pure []
 
