@@ -133,7 +133,7 @@ findProjectCradle :: IO (Cradle Void)
 findProjectCradle = do
   d <- getCurrentDirectory
 
-  let initialFp = (d </> "a")
+  let initialFp = d </> "a"
   hieYaml <- Session.findCradle def initialFp
 
   -- Some log messages

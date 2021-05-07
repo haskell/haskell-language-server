@@ -105,7 +105,7 @@ checkCabal args = do
   return cabalVersion
 
 getCabalVersion :: [String] -> Action String
-getCabalVersion args = trimmedStdout <$> (execCabal $ ["--numeric-version"] ++ args)
+getCabalVersion args = trimmedStdout <$> execCabal ("--numeric-version" : args)
 
 -- | Error message when the `cabal` binary is an older version
 cabalInstallIsOldFailMsg :: String -> String

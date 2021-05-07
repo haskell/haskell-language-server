@@ -49,7 +49,7 @@ getGhcVersionOfCfgFile stackFile args = do
 -- | check `stack` has the required version
 checkStack :: [String] -> Action ()
 checkStack args = do
-  stackVersion <- trimmedStdout <$> (execStackShake $ ["--numeric-version"] ++ args)
+  stackVersion <- trimmedStdout <$> execStackShake ("--numeric-version" : args)
   unless (checkVersion requiredStackVersion stackVersion) $ do
     printInStars $ stackExeIsOldFailMsg stackVersion
     error $ stackExeIsOldFailMsg stackVersion
