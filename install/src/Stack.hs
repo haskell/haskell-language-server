@@ -39,8 +39,6 @@ stackInstallHls mbVersionNumber args = do
                         else command [] "ln" ["-f", old, new]
   copyCmd (localBinDir </> hls)
            (localBinDir </> "haskell-language-server-" ++ versionNumber <.> exe)
-  copyCmd (localBinDir </> hls)
-           (localBinDir </> "haskell-language-server-" ++ dropExtension versionNumber <.> exe)
 
 getGhcVersionOfCfgFile :: String -> [String] -> Action VersionNumber
 getGhcVersionOfCfgFile stackFile args = do

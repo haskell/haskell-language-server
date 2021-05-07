@@ -55,7 +55,7 @@ launchHaskellLanguageServer parsedArgs = do
     _                          -> pure ()
 
   d <- getCurrentDirectory
-  
+
   -- search for the project cradle type
   cradle <- findProjectCradle
 
@@ -88,11 +88,7 @@ launchHaskellLanguageServer parsedArgs = do
 
   let
     hlsBin = "haskell-language-server-" ++ ghcVersion
-    backupHlsBin =
-      case dropWhileEnd (/='.') ghcVersion of
-        [] -> "haskell-language-server"
-        xs -> "haskell-language-server-" ++ init xs
-    candidates' = [hlsBin, backupHlsBin, "haskell-language-server"]
+    candidates' = [hlsBin, "haskell-language-server"]
     candidates = map (++ exeExtension) candidates'
 
   hPutStrLn stderr $ "haskell-language-server exe candidates: " ++ show candidates
