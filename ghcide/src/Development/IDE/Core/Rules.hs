@@ -286,8 +286,10 @@ getParsedModuleWithCommentsRule =
     opt <- getIdeOptions
 
     let ms' = withoutOption Opt_Haddock $ withOption Opt_KeepRawTokenStream ms
+    modify_dflags <- getModifyDynFlags id dynFlagsModifyParser
+    let ms = ms' { ms_hspp_opts = modify_dflags $ ms_hspp_opts ms' }
 
-    liftIO $ snd <$> getParsedModuleDefinition (hscEnv sess) opt file ms'
+    liftIO $ snd <$> getParsedModuleDefinition (hscEnv sess) opt file ms
 
 getModifyDynFlags :: a -> (DynFlagsModifications -> a) -> Action a
 getModifyDynFlags a f = maybe a (f . dynFlagsMods) <$> getShakeExtra
