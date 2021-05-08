@@ -102,6 +102,9 @@ import           Data.IORef.Extra                         (atomicModifyIORef_)
 import qualified Development.IDE.Plugin.HLS.GhcIde        as Ghcide
 import           Text.Regex.TDFA                          ((=~))
 import qualified Progress
+import Development.IDE.Core.FileStore (getModTime)
+import Control.Concurrent (threadDelay)
+import Text.Printf (printf)
 
 waitForProgressBegin :: Session ()
 waitForProgressBegin = skipManyTill anyMessage $ satisfyMaybe $ \case
@@ -5492,8 +5495,23 @@ unitTests = do
             actualOrder <- liftIO $ readIORef orderRef
 
             liftIO $ actualOrder @?= reverse [(1::Int)..20]
+     , testCase "timestamps have millisecond resolution" $ do
+         resolution_us <- findResolution_us 1
+         let msg = printf "Timestamps do not have millisecond resolution: %dus" resolution_us
+         assertBool msg (resolution_us <= 1000)
      , Progress.tests
      ]
+
+findResolution_us :: Int -> IO Int
+findResolution_us delay_us | delay_us >= 1000000 = error "Unable to compute timestamp resolution"
+findResolution_us delay_us = withTempFile $ \f -> withTempFile $ \f' -> do
+    writeFile f ""
+    threadDelay delay_us
+    writeFile f' ""
+    t <- getModTime f
+    t' <- getModTime f'
+    if t /= t' then return delay_us else findResolution_us (delay_us * 10)
+
 
 testIde :: IDE.Arguments -> Session () -> IO ()
 testIde arguments session = do

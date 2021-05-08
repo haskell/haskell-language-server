@@ -108,8 +108,6 @@ library
     else
       build-depends:
         unix
-      c-sources:
-        cbits/getmodtime.c
 
     default-extensions:
         ApplicativeDo
