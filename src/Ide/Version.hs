@@ -43,9 +43,9 @@ data ProgramsOfInterest = ProgramsOfInterest
 showProgramVersionOfInterest :: ProgramsOfInterest -> String
 showProgramVersionOfInterest ProgramsOfInterest {..} =
   unlines
-    [ concat ["cabal:\t\t", showVersionWithDefault cabalVersion]
-    , concat ["stack:\t\t", showVersionWithDefault stackVersion]
-    , concat ["ghc:\t\t", showVersionWithDefault ghcVersion]
+    [ "cabal:\t\t" ++ showVersionWithDefault cabalVersion
+    , "stack:\t\t" ++ showVersionWithDefault stackVersion
+    , "ghc:\t\t" ++ showVersionWithDefault ghcVersion
     ]
   where
     showVersionWithDefault :: Maybe Version -> String
