@@ -30,7 +30,6 @@ module Development.IDE.Core.Shake(
     IdeRule, IdeResult,
     GetModificationTime(GetModificationTime, GetModificationTime_, missingFileDiagnostics),
     shakeOpen, shakeShut,
-    shakeRestart,
     shakeEnqueue,
     shakeProfile,
     newSession,
@@ -63,7 +62,7 @@ module Development.IDE.Core.Shake(
     FileVersion(..),
     Priority(..),
     updatePositionMapping,
-    deleteValue,
+    deleteValue, recordDirtyKeys,
     OnDiskRule(..),
     WithProgressFunc, WithIndefiniteProgressFunc,
     ProgressEvent(..),
@@ -91,7 +90,8 @@ import qualified Data.ByteString.Char8                  as BS
 import           Data.Dynamic
 import qualified Data.HashMap.Strict                    as HMap
 import           Data.Hashable
-import           Data.List.Extra                        (partition, takeEnd)
+import           Data.List.Extra                        (foldl', partition,
+                                                         takeEnd)
 import           Data.Map.Strict                        (Map)
 import qualified Data.Map.Strict                        as Map
 import           Data.Maybe
@@ -146,6 +146,9 @@ import           UniqSupply
 
 import           Control.Exception.Extra                hiding (bracket_)
 import           Data.Default
+import           Data.HashSet                           (HashSet)
+import qualified Data.HashSet                           as HSet
+import           Data.IORef.Extra                       (atomicModifyIORef_)
 import           HieDb.Types
 import           Ide.Plugin.Config
 import qualified Ide.PluginUtils                        as HLS
@@ -187,7 +190,10 @@ data ShakeExtras = ShakeExtras
     ,progress :: ProgressReporting
     ,ideTesting :: IdeTesting
     -- ^ Whether to enable additional lsp messages used by the test suite for checking invariants
-    ,restartShakeSession :: [DelayedAction ()] -> IO ()
+    ,restartShakeSession
+        :: Maybe [SomeShakeValue]         -- keys changed (or Nothing for ALL)
+        -> [DelayedAction ()]
+        -> IO ()
     ,ideNc :: IORef NameCache
     -- | A mapping of module name to known target (or candidate targets, if missing)
     ,knownTargetsVar :: Var (Hashed KnownTargets)
@@ -204,6 +210,8 @@ data ShakeExtras = ShakeExtras
     , vfs :: VFSHandle
     , defaultConfig :: Config
       -- ^ Default HLS config, only relevant if the client does not provide any Config
+    , dirtyKeys :: IORef (HashSet SomeShakeValue)
+      -- ^ Set of dirty rule keys since the last Shake run
     }
 
 type WithProgressFunc = forall a.
@@ -411,12 +419,23 @@ setValues state key file val diags =
 
 -- | Delete the value stored for a given ide build key
 deleteValue
-  :: (Typeable k, Hashable k, Eq k, Show k)
+  :: Shake.ShakeValue k
   => ShakeExtras
   -> k
   -> NormalizedFilePath
   -> IO ()
-deleteValue ShakeExtras{state} key file = void $ modifyVar' state $ HMap.delete (file, Key key)
+deleteValue ShakeExtras{dirtyKeys, state} key file = do
+    void $ modifyVar' state $ HMap.delete (file, Key key)
+    atomicModifyIORef_ dirtyKeys $ HSet.insert (toKey key file)
+
+recordDirtyKeys
+  :: Shake.ShakeValue k
+  => ShakeExtras
+  -> k
+  -> [NormalizedFilePath]
+  -> IO ()
+recordDirtyKeys ShakeExtras{dirtyKeys} key file =
+    atomicModifyIORef_ dirtyKeys $ \x -> foldl' (flip HSet.insert) x (toKey key <$> file)
 
 -- | We return Nothing if the rule has not run and Just Failed if it has failed to produce a value.
 getValues ::
@@ -496,6 +515,7 @@ shakeOpen lspEnv defaultConfig logger debouncer
 
         let clientCapabilities = maybe def LSP.resClientCapabilities lspEnv
 
+        dirtyKeys <- newIORef mempty
         pure ShakeExtras{..}
     (shakeDbM, shakeClose) <-
         shakeOpenDatabase
@@ -517,7 +537,7 @@ shakeOpen lspEnv defaultConfig logger debouncer
 -- | Must be called in the 'Initialized' handler and only once
 shakeSessionInit :: IdeState -> IO ()
 shakeSessionInit IdeState{..} = do
-    initSession <- newSession shakeExtras shakeDb []
+    initSession <- newSession shakeExtras shakeDb Nothing []
     putMVar shakeSession initSession
 
 shakeProfile :: IdeState -> FilePath -> IO ()
@@ -557,18 +577,20 @@ delayedAction a = do
 -- | Restart the current 'ShakeSession' with the given system actions.
 --   Any actions running in the current session will be aborted,
 --   but actions added via 'shakeEnqueue' will be requeued.
-shakeRestart :: IdeState -> [DelayedAction ()] -> IO ()
-shakeRestart IdeState{..} acts =
+shakeRestart :: IdeState -> Maybe [SomeShakeValue] -> [DelayedAction ()] -> IO ()
+shakeRestart IdeState{..} keysChanged acts =
     withMVar'
         shakeSession
         (\runner -> do
               (stopTime,()) <- duration (cancelShakeSession runner)
               res <- shakeDatabaseProfile shakeDb
+              backlog <- readIORef $ dirtyKeys shakeExtras
               let profile = case res of
                       Just fp -> ", profile saved at " <> fp
                       _       -> ""
-              let msg = T.pack $ "Restarting build session (aborting the previous one took "
-                              ++ showDuration stopTime ++ profile ++ ")"
+              let msg = T.pack $ "Restarting build session " ++ keysMsg ++ abortMsg
+                  keysMsg = "for keys " ++ show (HSet.toList backlog <> fromMaybe [] keysChanged) ++ " "
+                  abortMsg = "(aborting the previous one took " ++ showDuration stopTime ++ profile ++ ")"
               logDebug (logger shakeExtras) msg
               notifyTestingLogMessage shakeExtras msg
         )
@@ -576,7 +598,7 @@ shakeRestart IdeState{..} acts =
         -- between spawning the new thread and updating shakeSession.
         -- See https://github.com/haskell/ghcide/issues/79
         (\() -> do
-          (,()) <$> newSession shakeExtras shakeDb acts)
+          (,()) <$> newSession shakeExtras shakeDb keysChanged acts)
 
 notifyTestingLogMessage :: ShakeExtras -> T.Text -> IO ()
 notifyTestingLogMessage extras msg = do
@@ -609,9 +631,21 @@ shakeEnqueue ShakeExtras{actionQueue, logger} act = do
 
 -- | Set up a new 'ShakeSession' with a set of initial actions
 --   Will crash if there is an existing 'ShakeSession' running.
-newSession :: ShakeExtras -> ShakeDatabase -> [DelayedActionInternal] -> IO ShakeSession
-newSession extras@ShakeExtras{..} shakeDb acts = do
+newSession
+    :: ShakeExtras
+    -> ShakeDatabase
+    -> Maybe [SomeShakeValue]
+        -- ^ When a set of keys is given, we add them to the dirty backlog and hand it over to Shake.
+        --   Otherwise if nothing is given we clear the backlog but don't share the information with Shake, who will have to check all the keys.
+    -> [DelayedActionInternal]
+    -> IO ShakeSession
+newSession extras@ShakeExtras{..} shakeDb newDirtyKeys acts = do
+    IdeOptions{optRunSubset} <- getIdeOptionsIO extras
     reenqueued <- atomically $ peekInProgress actionQueue
+    allPendingKeys <- case newDirtyKeys of
+        Just kk | optRunSubset
+          -> Just . (\x -> foldl' (flip HSet.insert) x kk) <$> atomicModifyIORef' dirtyKeys (mempty,)
+        _ -> modifyIORef dirtyKeys mempty >> return Nothing
     let
         -- A daemon-like action used to inject additional work
         -- Runs actions from the work queue sequentially
@@ -632,8 +666,10 @@ newSession extras@ShakeExtras{..} shakeDb acts = do
                 notifyTestingLogMessage extras msg
 
         workRun restore = withSpan "Shake session" $ \otSpan -> do
-          let acts' = pumpActionThread otSpan : map (run otSpan) (reenqueued ++ acts)
-          res <- try @SomeException (restore $ shakeRunDatabase shakeDb acts')
+          let acts' = [pumpActionThread otSpan, keysActs]
+              keysActs = void $ parallel $ map (run otSpan) (reenqueued ++ acts)
+          res <- try @SomeException $
+            restore $ shakeRunDatabaseForKeys (HSet.toList <$> allPendingKeys) shakeDb acts'
           let res' = case res of
                       Left e  -> "exception: " <> displayException e
                       Right _ -> "completed"

@@ -36,6 +36,8 @@ import           Development.IDE.Core.FileStore        (resetFileStore,
                                                         setSomethingModified,
                                                         typecheckParents)
 import           Development.IDE.Core.OfInterest
+import           Development.IDE.Core.RuleTypes        (GetClientSettings (..))
+import           Development.IDE.Types.Shake           (toKey)
 import           Ide.Plugin.Config                     (CheckParents (CheckOnClose))
 import           Ide.Types
 
@@ -86,7 +88,7 @@ descriptor plId = (defaultPluginDescriptor plId) { pluginNotificationHandlers = 
         logDebug (ideLogger ide) $ "Watched file events: " <> msg
         modifyFileExists ide fileEvents
         resetFileStore ide fileEvents
-        setSomethingModified ide
+        setSomethingModified ide []
 
   , mkPluginNotificationHandler LSP.SWorkspaceDidChangeWorkspaceFolders $
       \ide _ (DidChangeWorkspaceFoldersParams events) -> liftIO $ do
@@ -101,7 +103,7 @@ descriptor plId = (defaultPluginDescriptor plId) { pluginNotificationHandlers = 
         let msg = Text.pack $ show cfg
         logDebug (ideLogger ide) $ "Configuration changed: " <> msg
         modifyClientSettings ide (const $ Just cfg)
-        setSomethingModified ide
+        setSomethingModified ide [toKey GetClientSettings emptyFilePath ]
 
   , mkPluginNotificationHandler LSP.SInitialized $ \ide _ _ -> do
       --------- Initialize Shake session --------------------------------------------------------------------

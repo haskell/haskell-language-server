@@ -22,8 +22,8 @@ module Development.IDE.Types.Options
 import qualified Data.Text                         as T
 import           Data.Typeable
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Graph
+import           Development.IDE.Types.Diagnostics
 import           GHC                               hiding (parseModule,
                                                     typecheckModule)
 import           GhcPlugins                        as GHC hiding (fst3, (<>))
@@ -80,6 +80,8 @@ data IdeOptions = IdeOptions
   , optSkipProgress       :: forall a. Typeable a => a -> Bool
       -- ^ Predicate to select which rule keys to exclude from progress reporting.
   , optProgressStyle      :: ProgressReportingStyle
+  , optRunSubset          :: Bool
+      -- ^ Experimental feature to re-run only the subset of the Shake graph that has changed
   }
 
 optShakeFiles :: IdeOptions -> Maybe FilePath
@@ -141,6 +143,7 @@ defaultIdeOptions session = IdeOptions
     ,optCustomDynFlags = id
     ,optSkipProgress = defaultSkipProgress
     ,optProgressStyle = Explicit
+    ,optRunSubset = False
     }
 
 defaultSkipProgress :: Typeable a => a -> Bool

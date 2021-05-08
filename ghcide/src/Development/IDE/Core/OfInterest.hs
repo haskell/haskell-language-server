@@ -74,7 +74,9 @@ modifyFilesOfInterest
   -> IO ()
 modifyFilesOfInterest state f = do
     OfInterestVar var <- getIdeGlobalState state
+    files0 <- readVar var
     files <- modifyVar' var f
+    when (files /= files0) $ recordDirtyKeys (shakeExtras state) GetFilesOfInterest [emptyFilePath]
     logDebug (ideLogger state) $ "Set files of interest to: " <> T.pack (show $ HashMap.toList files)
 
 -- | Typecheck all the files of interest.

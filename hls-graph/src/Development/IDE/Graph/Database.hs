@@ -1,8 +1,9 @@
 
 module Development.IDE.Graph.Database(
     Shake.ShakeDatabase,
+    Shake.SomeShakeValue(..),
     shakeOpenDatabase,
-    shakeRunDatabase,
+    shakeRunDatabaseForKeys,
     Shake.shakeProfileDatabase,
     ) where
 
@@ -14,5 +15,9 @@ import Development.IDE.Graph.Internal.Rules
 shakeOpenDatabase :: ShakeOptions -> Rules () -> IO (IO Shake.ShakeDatabase, IO ())
 shakeOpenDatabase a b = Shake.shakeOpenDatabase (fromShakeOptions a) (fromRules b)
 
-shakeRunDatabase :: Shake.ShakeDatabase -> [Action a] -> IO ([a], [IO ()])
-shakeRunDatabase a b = Shake.shakeRunDatabase a (map fromAction b)
+shakeRunDatabaseForKeys
+    :: Maybe [Shake.SomeShakeValue]       -- ^ Set of keys changed since last run
+    -> Shake.ShakeDatabase
+    -> [Action a]
+    -> IO ([a], [IO ()])
+shakeRunDatabaseForKeys keys a b = Shake.shakeRunDatabaseForKeys keys a (map fromAction b)

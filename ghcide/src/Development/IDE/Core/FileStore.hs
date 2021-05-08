@@ -38,6 +38,7 @@ import qualified Data.Rope.UTF16                              as Rope
 import qualified Data.Text                                    as T
 import           Data.Time
 import           Data.Time.Clock.POSIX
+import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.OfInterest              (OfInterestVar (..),
                                                                getFilesOfInterest)
 import           Development.IDE.Core.RuleTypes
@@ -48,6 +49,8 @@ import           Development.IDE.Import.DependencyInformation
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
+import           Development.IDE.Types.Shake                  (SomeShakeValue,
+                                                               toKey)
 import           HieDb.Create                                 (deleteMissingRealFiles)
 import           Ide.Plugin.Config                            (CheckParents (..))
 import           System.IO.Error
@@ -162,20 +165,22 @@ resetInterfaceStore state f = do
 
 -- | Reset the GetModificationTime state of watched files
 resetFileStore :: IdeState -> [FileEvent] -> IO ()
-resetFileStore ideState changes = mask $ \_ ->
-    forM_ changes $ \(FileEvent uri c) ->
+resetFileStore ideState changes = mask $ \_ -> do
+    -- we record FOIs document versions in all the stored values
+    -- so NEVER reset FOIs to avoid losing their versions
+    OfInterestVar foisVar <- getIdeGlobalExtras (shakeExtras ideState)
+    fois <- readVar foisVar
+    forM_ changes $ \(FileEvent uri c) -> do
         case c of
             FcChanged
               | Just f <- uriToFilePath uri
+              , nfp <- toNormalizedFilePath f
+              , not $ HM.member nfp fois
               -> do
-                  -- we record FOIs document versions in all the stored values
-                  -- so NEVER reset FOIs to avoid losing their versions
-                  OfInterestVar foisVar <- getIdeGlobalExtras (shakeExtras ideState)
-                  fois <- readVar foisVar
-                  unless (HM.member (toNormalizedFilePath f) fois) $ do
-                    deleteValue (shakeExtras ideState) (GetModificationTime_ True) (toNormalizedFilePath' f)
-                    deleteValue (shakeExtras ideState) (GetModificationTime_ False) (toNormalizedFilePath' f)
+                    deleteValue (shakeExtras ideState) (GetModificationTime_ True) nfp
+                    deleteValue (shakeExtras ideState) (GetModificationTime_ False) nfp
             _ -> pure ()
+
 
 -- Dir.getModificationTime is surprisingly slow since it performs
 -- a ton of conversions. Since we do not actually care about
@@ -260,7 +265,8 @@ setFileModified state saved nfp = do
     VFSHandle{..} <- getIdeGlobalState state
     when (isJust setVirtualFileContents) $
         fail "setFileModified can't be called on this type of VFSHandle"
-    shakeRestart state []
+    let keysChanged = [toKey GetModificationTime nfp]
+    restartShakeSession (shakeExtras state) (Just keysChanged) []
     when checkParents $
       typecheckParents state nfp
 
@@ -283,11 +289,12 @@ typecheckParentsAction nfp = do
 -- | Note that some buffer somewhere has been modified, but don't say what.
 --   Only valid if the virtual file system was initialised by LSP, as that
 --   independently tracks which files are modified.
-setSomethingModified :: IdeState -> IO ()
-setSomethingModified state = do
+setSomethingModified :: IdeState -> [SomeShakeValue] -> IO ()
+setSomethingModified state keys = do
     VFSHandle{..} <- getIdeGlobalState state
     when (isJust setVirtualFileContents) $
         fail "setSomethingModified can't be called on this type of VFSHandle"
     -- Update database to remove any files that might have been renamed/deleted
     atomically $ writeTQueue (indexQueue $ hiedbWriter $ shakeExtras state) deleteMissingRealFiles
-    void $ shakeRestart state []
+
+    void $ restartShakeSession (shakeExtras state) (Just keys) []

@@ -397,7 +397,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
 
           -- Invalidate all the existing GhcSession build nodes by restarting the Shake session
           invalidateShakeCache
-          restartShakeSession []
+          restartShakeSession Nothing []
 
           -- Typecheck all files in the project on startup
           checkProject <- getCheckProject
