@@ -14,13 +14,13 @@ extra-source-files:
 library
   exposed-modules:  Ide.Plugin.RefineImports
   hs-source-dirs:   src
-  build-depends:    
+  build-depends:
     , aeson
     , base        >=4.12 && <5
     , containers
     , deepseq
     , ghc
-    , ghcide                ^>=1.2
+    , ghcide                ^>=1.3
     , hls-plugin-api        ^>=1.1
     , lsp
     , lsp-types
