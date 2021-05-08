@@ -39,6 +39,8 @@ import           UniqSupply (takeUniqFromSupply, mkSplitUniqSupply, UniqSupply)
 import           Unique (nonDetCmpUnique, Uniquable, getUnique, Unique)
 import           Wingman.Debug
 import           Wingman.FeatureSet
+import Development.IDE.Core.UseStale
+import Development.IDE (Range)
 
 
 ------------------------------------------------------------------------------
@@ -508,6 +510,14 @@ instance Show UserFacingMessage where
   show (InfrastructureError t) = "Internal error: " <> T.unpack t
 
 
-data HoleSort = Hole | Metaprogram
-  deriving (Eq, Ord, Show, Enum, Bounded)
+data HoleSort = Hole | Metaprogram T.Text
+  deriving (Eq, Ord, Show)
+
+data HoleJudgment = HoleJudgment
+  { hj_range     :: Tracked 'Current Range
+  , hj_jdg       :: Judgement
+  , hj_ctx       :: Context
+  , hj_dflags    :: DynFlags
+  , hj_hole_sort :: HoleSort
+  }
 

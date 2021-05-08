@@ -4,17 +4,16 @@
 {-# LANGUAGE NoMonoLocalBinds  #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Wingman.LanguageServer.Metaprogram (hoverProvider) where
+module Wingman.LanguageServer.Metaprogram
+  ( hoverProvider
+  ) where
 
 import           Control.Applicative (empty)
 import           Control.Monad
 import           Control.Monad.Trans
 import           Control.Monad.Trans.Maybe
-import           Data.Generics.Aliases (mkQ, GenericQ)
-import           Data.Generics.Schemes (everything)
 import           Data.List (find)
 import           Data.Maybe
-import           Data.Monoid
 import qualified Data.Text as T
 import           Data.Traversable
 import           Development.IDE (positionToRealSrcLoc)
@@ -23,34 +22,34 @@ import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake (IdeState (..))
 import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.Compat
-import           GhcPlugins (unpackFS, containsSpan, realSrcLocSpan)
+import           GhcPlugins (containsSpan, realSrcLocSpan)
 import           Ide.Types
 import           Language.LSP.Types
 import           Prelude hiding (span)
 import           Prelude hiding (span)
 import           TcRnTypes (tcg_binds)
 import           Wingman.GHC
-import           Wingman.LanguageServer
+import           Wingman.Judgements.SYB (metaprogramQ)
 import           Wingman.Metaprogramming.Parser (attempt_it)
-import           Wingman.StaticPlugin (pattern WingmanMetaprogram)
-import Wingman.Judgements.SYB (everythingContaining)
+import           Wingman.LanguageServer
+import           Wingman.Types
 
 
 ------------------------------------------------------------------------------
 -- | Provide the "empty case completion" code lens
 hoverProvider :: PluginMethodHandler IdeState TextDocumentHover
-hoverProvider state plId (HoverParams (TextDocumentIdentifier uri) pos _)
+hoverProvider state plId (HoverParams (TextDocumentIdentifier uri) (unsafeMkCurrent -> pos) _)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
-      let loc = positionToRealSrcLoc nfp pos
+      let loc = fmap (realSrcLocSpan . positionToRealSrcLoc nfp) pos
 
       cfg <- getTacticConfig plId
       liftIO $ fromMaybeT (Right Nothing) $ do
         -- guard $ hasFeature FeatureEmptyCase $ cfg_feature_set cfg
 
-        holes <- emptyCaseScrutinees state nfp $ RealSrcSpan $ realSrcLocSpan loc
+        holes <- getMetaprogramsAtSpan state nfp $ RealSrcSpan $ unTrack loc
 
         fmap (Right . Just) $
-          case (find (flip containsSpan (realSrcLocSpan loc) . unTrack . fst) holes) of
+          case (find (flip containsSpan (unTrack loc) . unTrack . fst) holes) of
             Just (trss, program) -> do
               let tr_range = fmap realSrcSpanToRange trss
               HoleJudgment{hj_jdg=jdg, hj_ctx=ctx} <- judgementForHole state nfp tr_range cfg
@@ -70,13 +69,13 @@ fromMaybeT :: Functor m => a -> MaybeT m a -> m a
 fromMaybeT def = fmap (fromMaybe def) . runMaybeT
 
 
-emptyCaseScrutinees
+getMetaprogramsAtSpan
     :: IdeState
     -> NormalizedFilePath
     -> SrcSpan
     -> MaybeT IO [(Tracked 'Current RealSrcSpan, T.Text)]
-emptyCaseScrutinees state nfp ss = do
-    let stale a = runStaleIde "emptyCaseScrutinees" state nfp a
+getMetaprogramsAtSpan state nfp ss = do
+    let stale a = runStaleIde "getMetaprogramsAtSpan" state nfp a
 
     TrackedStale tcg tcg_map <- fmap (fmap tmrTypechecked) $ stale TypeCheck
 
@@ -88,9 +87,4 @@ emptyCaseScrutinees state nfp ss = do
           pure (rss', program)
         UnhelpfulSpan _ -> empty
 
-
-metaprogramQ :: SrcSpan -> GenericQ [(SrcSpan, T.Text)]
-metaprogramQ ss = everythingContaining ss $ mkQ mempty $ \case
-  L new_span (WingmanMetaprogram program) -> pure (new_span, T.pack $ unpackFS $ program)
-  (_ :: LHsExpr GhcTc) -> mempty
 

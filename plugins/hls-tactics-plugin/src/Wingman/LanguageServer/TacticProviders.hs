@@ -35,6 +35,8 @@ import           Wingman.Auto
 import           Wingman.FeatureSet
 import           Wingman.GHC
 import           Wingman.Judgements
+import           Wingman.Machinery (useNameFromHypothesis)
+import           Wingman.Metaprogramming.Parser (parseMetaprogram)
 import           Wingman.Tactics
 import           Wingman.Types
 
@@ -53,7 +55,7 @@ commandTactic DestructAll            = const destructAll
 commandTactic UseDataCon             = userSplit
 commandTactic Refine                 = const refine
 commandTactic BeginMetaprogram       = const metaprogram
-commandTactic RunMetaprogram         = const $ pure ()
+commandTactic RunMetaprogram         = parseMetaprogram .T.pack . occNameString
 
 
 ------------------------------------------------------------------------------
@@ -101,44 +103,44 @@ mkTacticKind =
 -- 'filterGoalType' and 'filterBindingType' for the nitty gritty.
 commandProvider :: TacticCommand -> TacticProvider
 commandProvider Auto  =
-  requireHoleSort Hole $
+  requireHoleSort (== Hole) $
   provide Auto ""
 commandProvider Intros =
-  requireHoleSort Hole $
+  requireHoleSort (== Hole) $
   filterGoalType isFunction $
     provide Intros ""
 commandProvider Destruct =
-  requireHoleSort Hole $
+  requireHoleSort (== Hole) $
   filterBindingType destructFilter $ \occ _ ->
     provide Destruct $ T.pack $ occNameString occ
 commandProvider DestructPun =
-  requireHoleSort Hole $
+  requireHoleSort (== Hole) $
   requireFeature FeatureDestructPun $
     filterBindingType destructPunFilter $ \occ _ ->
       provide DestructPun $ T.pack $ occNameString occ
 commandProvider Homomorphism =
-  requireHoleSort Hole $
+  requireHoleSort (== Hole) $
   filterBindingType homoFilter $ \occ _ ->
     provide Homomorphism $ T.pack $ occNameString occ
 commandProvider DestructLambdaCase =
-  requireHoleSort Hole $
+  requireHoleSort (== Hole) $
   requireExtension LambdaCase $
     filterGoalType (isJust . lambdaCaseable) $
       provide DestructLambdaCase ""
 commandProvider HomomorphismLambdaCase =
-  requireHoleSort Hole $
+  requireHoleSort (== Hole) $
   requireExtension LambdaCase $
     filterGoalType ((== Just True) . lambdaCaseable) $
       provide HomomorphismLambdaCase ""
 commandProvider DestructAll =
-  requireHoleSort Hole $
+  requireHoleSort (== Hole) $
   requireFeature FeatureDestructAll $
     withJudgement $ \jdg ->
       case _jIsTopHole jdg && jHasBoundArgs jdg of
         True  -> provide DestructAll ""
         False -> mempty
 commandProvider UseDataCon =
-  requireHoleSort Hole $
+  requireHoleSort (== Hole) $
   withConfig $ \cfg ->
     requireFeature FeatureUseDataCon $
       filterTypeProjection
@@ -153,17 +155,17 @@ commandProvider UseDataCon =
           . occName
           $ dataConName dcon
 commandProvider Refine =
-  requireHoleSort Hole $
+  requireHoleSort (== Hole) $
   requireFeature FeatureRefineHole $
     provide Refine ""
 commandProvider BeginMetaprogram =
-  requireHoleSort Hole $
+  requireHoleSort (== Hole) $
   -- requireFeature FeatureMetaprogram $
     provide BeginMetaprogram ""
 commandProvider RunMetaprogram =
-  requireHoleSort Metaprogram $
+  withMetaprogram $ \mp ->
   -- requireFeature FeatureMetaprogram $
-    provide RunMetaprogram ""
+    provide RunMetaprogram mp
 
 
 ------------------------------------------------------------------------------
@@ -210,11 +212,17 @@ requireFeature f tp tpd =
     False -> pure []
 
 
-requireHoleSort :: HoleSort -> TacticProvider -> TacticProvider
-requireHoleSort hs tp tpd =
-  case (== hs) $ tpd_hole_sort tpd of
+requireHoleSort :: (HoleSort -> Bool) -> TacticProvider -> TacticProvider
+requireHoleSort p tp tpd =
+  case p $ tpd_hole_sort tpd of
     True  -> tp tpd
     False -> pure []
+
+withMetaprogram :: (T.Text -> TacticProvider) -> TacticProvider
+withMetaprogram tp tpd =
+  case tpd_hole_sort tpd of
+    Metaprogram mp -> tp mp tpd
+    _ -> pure []
 
 
 ------------------------------------------------------------------------------
@@ -278,18 +286,6 @@ filterTypeProjection p tp tpd =
 -- | Get access to the 'Config' when building a 'TacticProvider'.
 withConfig :: (Config -> TacticProvider) -> TacticProvider
 withConfig tp tpd = tp (tpd_config tpd) tpd
-
-
-
-------------------------------------------------------------------------------
--- | Lift a function over 'HyInfo's to one that takes an 'OccName' and tries to
--- look it up in the hypothesis.
-useNameFromHypothesis :: (HyInfo CType -> TacticsM a) -> OccName -> TacticsM a
-useNameFromHypothesis f name = do
-  hy <- jHypothesis <$> goal
-  case M.lookup name $ hyByName hy of
-    Just hi -> f hi
-    Nothing -> throwError $ NotInScope name
 
 
 ------------------------------------------------------------------------------

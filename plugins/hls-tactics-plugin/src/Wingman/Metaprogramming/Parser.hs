@@ -12,11 +12,11 @@ import qualified Data.Text as T
 import qualified Refinery.Tactic as R
 import qualified Text.Megaparsec as P
 import           Wingman.Auto
-import           Wingman.LanguageServer.TacticProviders (useNameFromHypothesis)
+import           Wingman.Machinery (useNameFromHypothesis)
 import           Wingman.Metaprogramming.Lexer
+import           Wingman.Metaprogramming.ProofState (proofState, layout)
 import           Wingman.Tactics
 import           Wingman.Types
-import Wingman.Metaprogramming.ProofState (proofState, layout)
 
 
 nullary :: T.Text -> TacticsM () -> Parser (TacticsM ())
@@ -95,4 +95,7 @@ attempt_it ctx jdg program =
         of
           Left tes -> Left $ wrapError $ show tes
           Right rtr -> Right $ layout $ proofState rtr
+
+parseMetaprogram :: T.Text -> TacticsM ()
+parseMetaprogram = either (const $ pure ()) id . P.runParser tacticProgram "<splice>"
 

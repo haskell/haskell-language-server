@@ -10,16 +10,18 @@ module Wingman.LanguageServer where
 import           ConLike
 import           Control.Arrow ((***))
 import           Control.Monad
+import           Control.Monad.IO.Class
+import           Control.Monad.RWS
 import           Control.Monad.State (State, evalState)
 import           Control.Monad.Trans.Maybe
 import           Data.Bifunctor (first)
 import           Data.Coerce
 import           Data.Functor ((<&>))
+import           Data.Functor.Identity (runIdentity)
 import qualified Data.HashMap.Strict as Map
 import           Data.IORef (readIORef)
 import qualified Data.Map as M
 import           Data.Maybe
-import           Data.Monoid
 import           Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
@@ -46,28 +48,25 @@ import qualified Ide.Plugin.Config as Plugin
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils (usePropertyLsp)
 import           Ide.Types (PluginId)
+import           Language.Haskell.GHC.ExactPrint (Transform)
+import           Language.Haskell.GHC.ExactPrint (modifyAnnsT, addAnnotationsForPretty)
 import           Language.LSP.Server (MonadLsp, sendNotification)
 import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities
 import           OccName
 import           Prelude hiding (span)
+import           Retrie (transformA)
 import           SrcLoc (containsSpan)
 import           TcRnTypes (tcg_binds, TcGblEnv)
 import           Wingman.Context
 import           Wingman.FeatureSet
 import           Wingman.GHC
 import           Wingman.Judgements
-import           Wingman.Judgements.SYB (everythingContaining)
+import           Wingman.Judgements.SYB (everythingContaining, metaprogramQ)
 import           Wingman.Judgements.Theta
 import           Wingman.Range
-import           Wingman.StaticPlugin (pattern WingmanMetaprogram, pattern MetaprogramSyntax, metaprogramHoleName)
+import           Wingman.StaticPlugin (pattern WingmanMetaprogram, pattern MetaprogramSyntax)
 import           Wingman.Types
-import Control.Monad.IO.Class
-import Control.Monad.RWS
-import Language.Haskell.GHC.ExactPrint (modifyAnnsT, addAnnotationsForPretty)
-import Retrie (transformA)
-import Language.Haskell.GHC.ExactPrint (Transform)
-import Data.Functor.Identity (runIdentity)
 
 
 tacticDesc :: T.Text -> T.Text
@@ -190,14 +189,6 @@ getAllMetaprograms = everything (<>) $ mkQ mempty $ \case
   (_ :: HsExpr GhcTc)  -> mempty
 
 
-data HoleJudgment = HoleJudgment
-  { hj_range     :: Tracked 'Current Range
-  , hj_jdg       :: Judgement
-  , hj_ctx       :: Context
-  , hj_dflags    :: DynFlags
-  , hj_hole_sort :: HoleSort
-  }
-
 ------------------------------------------------------------------------------
 -- | Find the last typechecked module, and find the most specific span, as well
 -- as the judgement at the given range.
@@ -216,13 +207,16 @@ judgementForHole state nfp range cfg = do
     HAR _ (unsafeCopyAge asts -> hf) _ _ HieFresh -> do
       range' <- liftMaybe $ mapAgeFrom amapping range
       binds <- stale GetBindings
-      tcg <- fmap (fmap tmrTypechecked)
+      tcg@(TrackedStale tcg_t tcg_map)
+          <- fmap (fmap tmrTypechecked)
            $ stale TypeCheck
 
       hscenv <- stale GhcSessionDeps
 
-      (rss, occ, g) <- liftMaybe $ getSpanAndTypeAtHole range' hf
+      (rss, g) <- liftMaybe $ getSpanAndTypeAtHole range' hf
+
       new_rss <- liftMaybe $ mapAgeTo amapping rss
+      tcg_rss <- liftMaybe $ mapAgeFrom tcg_map new_rss
 
       -- KnownThings is just the instances in scope. There are no ranges
       -- involved, so it's not crucial to track ages.
@@ -231,6 +225,7 @@ judgementForHole state nfp range cfg = do
       kt <- knownThings (untrackedStaleValue tcg) henv
 
       (jdg, ctx) <- liftMaybe $ mkJudgementAndContext cfg g binds new_rss tcg eps kt
+      let mp = getMetaprogramAtSpan (fmap RealSrcSpan tcg_rss) tcg_t
 
       dflags <- getIdeDynflags state nfp
       pure $ HoleJudgment
@@ -238,13 +233,12 @@ judgementForHole state nfp range cfg = do
         , hj_jdg = jdg
         , hj_ctx = ctx
         , hj_dflags = dflags
-        , hj_hole_sort = classifyHoleName occ
+        , hj_hole_sort = holeSortFor mp
         }
 
 
-classifyHoleName :: OccName -> HoleSort
-classifyHoleName occ | occ == metaprogramHoleName = Metaprogram
-classifyHoleName _ = Hole
+holeSortFor :: Maybe T.Text -> HoleSort
+holeSortFor = maybe Hole Metaprogram
 
 
 mkJudgementAndContext
@@ -305,7 +299,7 @@ getAlreadyDestructed (unTrack -> span) (unTrack -> binds) =
 getSpanAndTypeAtHole
     :: Tracked age Range
     -> Tracked age (HieASTs b)
-    -> Maybe (Tracked age RealSrcSpan, OccName, b)
+    -> Maybe (Tracked age RealSrcSpan, b)
 getSpanAndTypeAtHole r@(unTrack -> range) (unTrack -> hf) = do
   join $ listToMaybe $ M.elems $ flip M.mapWithKey (getAsts hf) $ \fs ast ->
     case selectSmallestContaining (rangeToRealSrcSpan (FastString.unpackFS fs) range) ast of
@@ -321,7 +315,7 @@ getSpanAndTypeAtHole r@(unTrack -> range) (unTrack -> hf) = do
              . M.keysSet
              $ nodeIdentifiers info
         guard $ isHole occ
-        pure (unsafeCopyAge r $ nodeSpan ast', occ, ty)
+        pure (unsafeCopyAge r $ nodeSpan ast', ty)
 
 
 
@@ -590,4 +584,15 @@ annotateMetaprograms = everywhereM $ mkM $ \case
     modifyAnnsT $ mappend anns
     pure x
   (x :: LHsExpr GhcPs) -> pure x
+
+getMetaprogramAtSpan
+    :: Tracked age SrcSpan
+    -> Tracked age TcGblEnv
+    -> Maybe T.Text
+getMetaprogramAtSpan (unTrack -> ss)
+  = fmap snd
+  . listToMaybe
+  . metaprogramQ ss
+  . tcg_binds
+  . unTrack
 
