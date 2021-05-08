@@ -14,7 +14,6 @@ module Development.IDE.Core.FileStore(
     VFSHandle,
     makeVFSHandle,
     makeLSPVFSHandle,
-    isFileOfInterestRule,
     resetFileStore,
     resetInterfaceStore,
     getModificationTimeImpl,
@@ -40,8 +39,7 @@ import qualified Data.Rope.UTF16                              as Rope
 import qualified Data.Text                                    as T
 import           Data.Time
 import           Data.Time.Clock.POSIX
-import           Development.IDE.Core.OfInterest              (OfInterestVar (..),
-                                                               getFilesOfInterest)
+import           Development.IDE.Core.OfInterest              (OfInterestVar (..))
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Orphans                  ()
@@ -50,6 +48,7 @@ import           Development.IDE.Import.DependencyInformation
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
+import           Development.IDE.Types.Shake                  (SomeShakeValue)
 import           HieDb.Create                                 (deleteMissingRealFiles)
 import           Ide.Plugin.Config                            (CheckParents (..),
                                                                Config)
@@ -66,6 +65,9 @@ import qualified Development.IDE.Types.Logger                 as L
 
 import qualified Data.Binary                                  as B
 import qualified Data.ByteString.Lazy                         as LBS
+import qualified Data.HashSet                                 as HSet
+import           Data.IORef.Extra                             (atomicModifyIORef_)
+import           Data.List                                    (foldl')
 import qualified Data.Text                                    as Text
 import           Development.IDE.Core.IdeConfiguration        (isWorkspaceFile)
 import           Language.LSP.Server                          hiding
@@ -116,19 +118,6 @@ addWatchedFileRule isWatched = defineNoDiagnostics $ \AddWatchedFile f -> do
             Just env -> fmap Just $ liftIO $ LSP.runLspT env $
                 registerFileWatches [fromNormalizedFilePath f]
             Nothing -> pure $ Just False
-
-isFileOfInterestRule :: Rules ()
-isFileOfInterestRule = defineEarlyCutoff $ RuleNoDiagnostics $ \IsFileOfInterest f -> do
-    filesOfInterest <- getFilesOfInterest
-    let foi = maybe NotFOI IsFOI $ f `HM.lookup` filesOfInterest
-        fp  = summarize foi
-        res = (Just fp, Just foi)
-    return res
-    where
-    summarize NotFOI                   = BS.singleton 0
-    summarize (IsFOI OnDisk)           = BS.singleton 1
-    summarize (IsFOI (Modified False)) = BS.singleton 2
-    summarize (IsFOI (Modified True))  = BS.singleton 3
 
 
 getModificationTimeRule :: VFSHandle -> Rules ()
@@ -183,19 +172,20 @@ resetInterfaceStore state f = do
 
 -- | Reset the GetModificationTime state of watched files
 resetFileStore :: IdeState -> [FileEvent] -> IO ()
-resetFileStore ideState changes = mask $ \_ ->
-    forM_ changes $ \(FileEvent uri c) ->
+resetFileStore ideState changes = mask $ \_ -> do
+    -- we record FOIs document versions in all the stored values
+    -- so NEVER reset FOIs to avoid losing their versions
+    OfInterestVar foisVar <- getIdeGlobalExtras (shakeExtras ideState)
+    fois <- readVar foisVar
+    forM_ changes $ \(FileEvent uri c) -> do
         case c of
             FcChanged
               | Just f <- uriToFilePath uri
-              -> do
-                  -- we record FOIs document versions in all the stored values
-                  -- so NEVER reset FOIs to avoid losing their versions
-                  OfInterestVar foisVar <- getIdeGlobalExtras (shakeExtras ideState)
-                  fois <- readVar foisVar
-                  unless (HM.member (toNormalizedFilePath f) fois) $ do
-                    deleteValue (shakeExtras ideState) GetModificationTime (toNormalizedFilePath' f)
+              , nfp <- toNormalizedFilePath f
+              , not $ HM.member nfp fois
+              -> deleteValue (shakeExtras ideState) GetModificationTime nfp
             _ -> pure ()
+
 
 -- Dir.getModificationTime is surprisingly slow since it performs
 -- a ton of conversions. Since we do not actually care about
@@ -262,7 +252,6 @@ fileStoreRules vfs isWatched = do
     addIdeGlobal vfs
     getModificationTimeRule vfs
     getFileContentsRule vfs
-    isFileOfInterestRule
     addWatchedFileRule isWatched
 
 -- | Note that some buffer for a specific file has been modified but not
@@ -281,7 +270,8 @@ setFileModified state saved nfp = do
     VFSHandle{..} <- getIdeGlobalState state
     when (isJust setVirtualFileContents) $
         fail "setFileModified can't be called on this type of VFSHandle"
-    shakeRestart state []
+    recordDirtyKeys (shakeExtras state) GetModificationTime [nfp]
+    restartShakeSession (shakeExtras state) []
     when checkParents $
       typecheckParents state nfp
 
@@ -301,17 +291,19 @@ typecheckParentsAction nfp = do
           `catch` \(e :: SomeException) -> log (show e)
         () <$ uses GetModIface rs
 
--- | Note that some buffer somewhere has been modified, but don't say what.
+-- | Note that some keys have been modified and restart the session
 --   Only valid if the virtual file system was initialised by LSP, as that
 --   independently tracks which files are modified.
-setSomethingModified :: IdeState -> IO ()
-setSomethingModified state = do
+setSomethingModified :: IdeState -> [SomeShakeValue] -> IO ()
+setSomethingModified state keys = do
     VFSHandle{..} <- getIdeGlobalState state
     when (isJust setVirtualFileContents) $
         fail "setSomethingModified can't be called on this type of VFSHandle"
     -- Update database to remove any files that might have been renamed/deleted
     atomically $ writeTQueue (indexQueue $ hiedbWriter $ shakeExtras state) deleteMissingRealFiles
-    void $ shakeRestart state []
+    atomicModifyIORef_ (dirtyKeys $ shakeExtras state) $ \x ->
+        foldl' (flip HSet.insert) x keys
+    void $ restartShakeSession (shakeExtras state) []
 
 registerFileWatches :: [String] -> LSP.LspT Config IO Bool
 registerFileWatches globs = do
@@ -338,7 +330,7 @@ registerFileWatches globs = do
           -- support that: https://github.com/bubba/lsp-test/issues/77
           watchers = [ watcher (Text.pack glob) | glob <- globs ]
 
-        void $ LSP.sendRequest LSP.SClientRegisterCapability regParams (const $ pure ())
+        void $ LSP.sendRequest LSP.SClientRegisterCapability regParams (const $ pure ()) -- TODO handle response
         return True
       else return False
 
