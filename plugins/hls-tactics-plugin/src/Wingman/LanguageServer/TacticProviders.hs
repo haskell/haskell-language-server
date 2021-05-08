@@ -11,11 +11,9 @@ module Wingman.LanguageServer.TacticProviders
   ) where
 
 import           Control.Monad
-import           Control.Monad.Error.Class (MonadError (throwError))
 import           Data.Aeson
 import           Data.Bool (bool)
 import           Data.Coerce
-import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Monoid
 import qualified Data.Text as T
@@ -30,7 +28,6 @@ import           Ide.Types
 import           Language.LSP.Types
 import           OccName
 import           Prelude hiding (span)
-import           Refinery.Tactic (goal)
 import           Wingman.Auto
 import           Wingman.FeatureSet
 import           Wingman.GHC
@@ -43,19 +40,19 @@ import           Wingman.Types
 
 ------------------------------------------------------------------------------
 -- | A mapping from tactic commands to actual tactics for refinery.
-commandTactic :: TacticCommand -> OccName -> TacticsM ()
+commandTactic :: TacticCommand -> T.Text -> TacticsM ()
 commandTactic Auto                   = const auto
 commandTactic Intros                 = const intros
-commandTactic Destruct               = useNameFromHypothesis destruct
-commandTactic DestructPun            = useNameFromHypothesis destructPun
-commandTactic Homomorphism           = useNameFromHypothesis homo
+commandTactic Destruct               = useNameFromHypothesis destruct . mkVarOcc . T.unpack
+commandTactic DestructPun            = useNameFromHypothesis destructPun . mkVarOcc . T.unpack
+commandTactic Homomorphism           = useNameFromHypothesis homo . mkVarOcc . T.unpack
 commandTactic DestructLambdaCase     = const destructLambdaCase
 commandTactic HomomorphismLambdaCase = const homoLambdaCase
 commandTactic DestructAll            = const destructAll
-commandTactic UseDataCon             = userSplit
+commandTactic UseDataCon             = userSplit . mkVarOcc . T.unpack
 commandTactic Refine                 = const refine
 commandTactic BeginMetaprogram       = const metaprogram
-commandTactic RunMetaprogram         = parseMetaprogram .T.pack . occNameString
+commandTactic RunMetaprogram         = parseMetaprogram
 
 
 ------------------------------------------------------------------------------

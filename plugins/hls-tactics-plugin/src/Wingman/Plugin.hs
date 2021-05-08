@@ -33,13 +33,13 @@ import           Wingman.CaseSplit
 import           Wingman.EmptyCase
 import           Wingman.GHC
 import           Wingman.LanguageServer
+import           Wingman.LanguageServer.Metaprogram (hoverProvider)
 import           Wingman.LanguageServer.TacticProviders
 import           Wingman.Machinery (scoreSolution)
 import           Wingman.Range
 import           Wingman.StaticPlugin
 import           Wingman.Tactics
 import           Wingman.Types
-import Wingman.LanguageServer.Metaprogram (hoverProvider)
 
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -100,7 +100,10 @@ showUserFacingMessage ufm = do
   pure $ Left $ mkErr InternalError $ T.pack $ show ufm
 
 
-tacticCmd :: (OccName -> TacticsM ()) -> PluginId -> CommandFunction IdeState TacticParams
+tacticCmd
+    :: (T.Text -> TacticsM ())
+    -> PluginId
+    -> CommandFunction IdeState TacticParams
 tacticCmd tac pId state (TacticParams uri range var_name)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
       let stale a = runStaleIde "tacticCmd" state nfp a
@@ -114,7 +117,7 @@ tacticCmd tac pId state (TacticParams uri range var_name)
         pm_span <- liftMaybe $ mapAgeFrom pmmap span
 
         timingOut (cfg_timeout_seconds cfg * seconds) $ join $
-          case runTactic hj_ctx hj_jdg $ tac $ mkVarOcc $ T.unpack var_name of
+          case runTactic hj_ctx hj_jdg $ tac var_name of
             Left _ -> Left TacticErrors
             Right rtr ->
               case rtr_extract rtr of
