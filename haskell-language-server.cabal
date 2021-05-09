@@ -348,7 +348,6 @@ executable haskell-language-server
     , transformers
     , unordered-containers
 
-  include-dirs:     include
   default-language: Haskell2010
   default-extensions: DataKinds, TypeOperators
 
