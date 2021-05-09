@@ -40,6 +40,7 @@ import           HscTypes                                     (HomeModInfo,
 import qualified Data.Binary                                  as B
 import           Data.ByteString                              (ByteString)
 import qualified Data.ByteString.Lazy                         as LBS
+import           Data.HashMap.Strict                          (HashMap)
 import           Data.Text                                    (Text)
 import           Data.Time
 import           Development.IDE.Import.FindImports           (ArtifactsLocation)
@@ -353,6 +354,8 @@ type instance RuleResult GetModSummary = ModSummaryResult
 -- | Generate a ModSummary with the timestamps and preprocessed content elided, for more successful early cutoff
 type instance RuleResult GetModSummaryWithoutTimestamps = ModSummaryResult
 
+type instance RuleResult GetFilesOfInterest = HashMap NormalizedFilePath FileOfInterestStatus
+
 data GetParsedModule = GetParsedModule
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetParsedModule
@@ -509,6 +512,12 @@ data GhcSessionIO = GhcSessionIO deriving (Eq, Show, Typeable, Generic)
 instance Hashable GhcSessionIO
 instance NFData   GhcSessionIO
 instance Binary   GhcSessionIO
+
+data GetFilesOfInterest = GetFilesOfInterest
+    deriving (Eq, Show, Typeable, Generic)
+instance Hashable GetFilesOfInterest
+instance NFData   GetFilesOfInterest
+instance Binary   GetFilesOfInterest
 
 makeLensesWith
     (lensRules & lensField .~ mappingNamer (pure . (++ "L")))
