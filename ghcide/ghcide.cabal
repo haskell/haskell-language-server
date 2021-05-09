@@ -133,8 +133,6 @@ library
     hs-source-dirs:
         src
         session-loader
-    include-dirs:
-        include
     exposed-modules:
         Control.Concurrent.Strict
         Generics.SYB.GHC
@@ -252,8 +250,6 @@ benchmark benchHist
 
 executable ghcide
     default-language:   Haskell2010
-    include-dirs:
-        include
     hs-source-dirs:     exe
     ghc-options:
                 -threaded
@@ -369,7 +365,6 @@ test-suite ghcide-tests
           record-dot-preprocessor,
           record-hasfield
     hs-source-dirs: test/cabal test/exe test/src bench/lib
-    include-dirs: include
     ghc-options: -threaded -Wall -Wno-name-shadowing -O0 -Wno-unticked-promoted-constructors
     main-is: Main.hs
     other-modules:
@@ -415,7 +410,6 @@ executable ghcide-bench
         shake,
         text
     hs-source-dirs: bench/lib bench/exe
-    include-dirs: include
     ghc-options: -threaded -Wall -Wno-name-shadowing -rtsopts
     main-is: Main.hs
     other-modules:
