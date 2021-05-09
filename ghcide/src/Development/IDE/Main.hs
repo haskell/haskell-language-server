@@ -46,7 +46,7 @@ import           Development.IDE.Core.Shake            (IdeState (shakeExtras),
 import           Development.IDE.Core.Tracing          (measureMemory)
 import           Development.IDE.Graph                 (action)
 import           Development.IDE.LSP.LanguageServer    (runLanguageServer)
-import           Development.IDE.Plugin                (Plugin (pluginHandlers, pluginRules))
+import           Development.IDE.Plugin                (Plugin (pluginHandlers, pluginRules, pluginModifyDynflags))
 import           Development.IDE.Plugin.HLS            (asGhcIdePlugin)
 import qualified Development.IDE.Plugin.HLS.GhcIde     as Ghcide
 import           Development.IDE.Session               (SessionLoadingOptions,
@@ -223,6 +223,7 @@ defaultMain Arguments{..} = do
                 initialise
                     argsDefaultHlsConfig
                     rules
+                    (pluginModifyDynflags plugins)
                     (Just env)
                     logger
                     debouncer
@@ -260,7 +261,7 @@ defaultMain Arguments{..} = do
                         { optCheckParents = pure NeverCheck
                         , optCheckProject = pure False
                         }
-            ide <- initialise argsDefaultHlsConfig rules Nothing logger debouncer options vfs hiedb hieChan
+            ide <- initialise argsDefaultHlsConfig rules (pluginModifyDynflags plugins) Nothing logger debouncer options vfs hiedb hieChan
             shakeSessionInit ide
             registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
 
@@ -309,7 +310,7 @@ defaultMain Arguments{..} = do
                     { optCheckParents = pure NeverCheck,
                       optCheckProject = pure False
                     }
-            ide <- initialise argsDefaultHlsConfig rules Nothing logger debouncer options vfs hiedb hieChan
+            ide <- initialise argsDefaultHlsConfig rules (pluginModifyDynflags plugins) Nothing logger debouncer options vfs hiedb hieChan
             shakeSessionInit ide
             registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
             c ide
