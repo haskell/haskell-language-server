@@ -39,7 +39,6 @@ import           Text.Regex.TDFA.Text         ()
 import           UnliftIO                     (MonadUnliftIO)
 import           UnliftIO.Async               (forConcurrently)
 import           UnliftIO.Exception           (catchAny)
-import Development.IDE.GHC.Compat (DynFlags)
 
 -- ---------------------------------------------------------------------
 --

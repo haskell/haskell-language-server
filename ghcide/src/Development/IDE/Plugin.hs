@@ -4,10 +4,8 @@ import           Data.Default
 import           Development.IDE.Graph
 
 import           Development.IDE.LSP.Server
+import           Ide.Types (DynFlagsModifications)
 import qualified Language.LSP.Server        as LSP
-import Development.IDE.GHC.Compat (DynFlags)
-import Data.Monoid (Endo)
-import Ide.Types (DynFlagsModifications)
 
 data Plugin c = Plugin
     {pluginRules    :: Rules ()

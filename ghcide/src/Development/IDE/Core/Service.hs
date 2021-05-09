@@ -21,17 +21,16 @@ module Development.IDE.Core.Service(
 import           Development.IDE.Core.Debouncer
 import           Development.IDE.Core.FileExists (fileExistsRules)
 import           Development.IDE.Core.OfInterest
+import           Development.IDE.Graph
 import           Development.IDE.Types.Logger    as Logger
 import           Development.IDE.Types.Options   (IdeOptions (..))
-import           Development.IDE.Graph
 import           Ide.Plugin.Config
+import           Ide.Types (DynFlagsModifications)
 import qualified Language.LSP.Server             as LSP
 import qualified Language.LSP.Types              as LSP
 
 import           Control.Monad
 import           Development.IDE.Core.Shake
-import Development.IDE.GHC.Compat (DynFlags)
-import Ide.Types (DynFlagsModifications)
 
 
 ------------------------------------------------------------

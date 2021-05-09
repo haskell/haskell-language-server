@@ -20,6 +20,7 @@ import           Development.IDE.Core.Shake (IdeState (..))
 import           Development.IDE.Core.UseStale (Tracked, TrackedStale(..), unTrack, mapAgeFrom, unsafeMkCurrent)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.ExactPrint
+import           GHC.LanguageExtensions.Type (Extension(EmptyCase))
 import           Generics.SYB.GHC
 import           Ide.Types
 import           Language.LSP.Server
@@ -37,7 +38,6 @@ import           Wingman.Machinery (scoreSolution)
 import           Wingman.Range
 import           Wingman.Tactics
 import           Wingman.Types
-import GHC.LanguageExtensions.Type (Extension(EmptyCase))
 
 
 descriptor :: PluginId -> PluginDescriptor IdeState
