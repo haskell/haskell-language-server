@@ -160,8 +160,7 @@ isInterface f = takeExtension (fromNormalizedFilePath f) `elem` [".hi", ".hi-boo
 -- | Reset the GetModificationTime state of interface files
 resetInterfaceStore :: ShakeExtras -> NormalizedFilePath -> IO ()
 resetInterfaceStore state f = do
-    deleteValue state (GetModificationTime_ True) f
-    deleteValue state (GetModificationTime_ False) f
+    deleteValue state GetModificationTime f
 
 -- | Reset the GetModificationTime state of watched files
 resetFileStore :: IdeState -> [FileEvent] -> IO ()
@@ -177,8 +176,7 @@ resetFileStore ideState changes = mask $ \_ -> do
               , nfp <- toNormalizedFilePath f
               , not $ HM.member nfp fois
               -> do
-                    deleteValue (shakeExtras ideState) (GetModificationTime_ True) nfp
-                    deleteValue (shakeExtras ideState) (GetModificationTime_ False) nfp
+                    deleteValue (shakeExtras ideState) GetModificationTime nfp
             _ -> pure ()
 
 
