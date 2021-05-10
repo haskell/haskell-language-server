@@ -57,10 +57,21 @@ import           Text.Regex.TDFA.Text            ()
 newtype IdePlugins ideState = IdePlugins
   { ipMap :: [(PluginId, PluginDescriptor ideState)]}
 
+-- | Hooks for modifying the 'DynFlags' at different times of the compilation
+-- process. Plugins can install a 'DynFlagsModifications' via
+-- 'pluginModifyDynflags' in their 'PluginDescriptor'.
 data DynFlagsModifications =
-  DynFlagsModifications { dynFlagsModifyGlobal :: DynFlags -> DynFlags
-                        , dynFlagsModifyParser :: DynFlags -> DynFlags
-                        }
+  DynFlagsModifications
+    { -- | Invoked immediately at the package level. Changes to the 'DynFlags'
+      -- made in 'dynFlagsModifyGlobal' are guaranteed to be seen everywhere in
+      -- the compilation pipeline.
+      dynFlagsModifyGlobal :: DynFlags -> DynFlags
+      -- | Invoked just before the parsing step, and reset immediately
+      -- afterwards. 'dynFlagsModifyParser' allows plugins to enable language
+      -- extensions only during parsing. for example, to let them enable
+      -- certain pieces of syntax.
+    , dynFlagsModifyParser :: DynFlags -> DynFlags
+    }
 
 instance Semigroup DynFlagsModifications where
   DynFlagsModifications g1 p1 <> DynFlagsModifications g2 p2 =
