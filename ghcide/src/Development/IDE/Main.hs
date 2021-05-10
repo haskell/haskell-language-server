@@ -60,7 +60,7 @@ import           Development.IDE.Types.Logger          (Logger (Logger))
 import           Development.IDE.Types.Options         (IdeGhcSession,
                                                         IdeOptions (optCheckParents, optCheckProject, optReportProgress),
                                                         clientSupportsProgress,
-                                                        defaultIdeOptions)
+                                                        defaultIdeOptions, optModifyDynFlags)
 import           Development.IDE.Types.Shake           (Key (Key))
 import           GHC.IO.Encoding                       (setLocaleEncoding)
 import           GHC.IO.Handle                         (hDuplicate)
@@ -218,12 +218,12 @@ defaultMain Arguments{..} = do
                 config <- LSP.runLspT env LSP.getConfig
                 let options = (argsIdeOptions config sessionLoader)
                             { optReportProgress = clientSupportsProgress caps
+                            , optModifyDynFlags = pluginModifyDynflags plugins
                             }
                     caps = LSP.resClientCapabilities env
                 initialise
                     argsDefaultHlsConfig
                     rules
-                    (pluginModifyDynflags plugins)
                     (Just env)
                     logger
                     debouncer
@@ -260,8 +260,9 @@ defaultMain Arguments{..} = do
             let options = (argsIdeOptions argsDefaultHlsConfig sessionLoader)
                         { optCheckParents = pure NeverCheck
                         , optCheckProject = pure False
+                        , optModifyDynFlags = pluginModifyDynflags plugins
                         }
-            ide <- initialise argsDefaultHlsConfig rules (pluginModifyDynflags plugins) Nothing logger debouncer options vfs hiedb hieChan
+            ide <- initialise argsDefaultHlsConfig rules Nothing logger debouncer options vfs hiedb hieChan
             shakeSessionInit ide
             registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
 
@@ -307,10 +308,11 @@ defaultMain Arguments{..} = do
             sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions "."
             let options =
                   (argsIdeOptions argsDefaultHlsConfig sessionLoader)
-                    { optCheckParents = pure NeverCheck,
-                      optCheckProject = pure False
+                    { optCheckParents = pure NeverCheck
+                    , optCheckProject = pure False
+                    , optModifyDynFlags = pluginModifyDynflags plugins
                     }
-            ide <- initialise argsDefaultHlsConfig rules (pluginModifyDynflags plugins) Nothing logger debouncer options vfs hiedb hieChan
+            ide <- initialise argsDefaultHlsConfig rules Nothing logger debouncer options vfs hiedb hieChan
             shakeSessionInit ide
             registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
             c ide

@@ -25,7 +25,6 @@ import           Development.IDE.Graph
 import           Development.IDE.Types.Logger    as Logger
 import           Development.IDE.Types.Options   (IdeOptions (..))
 import           Ide.Plugin.Config
-import           Ide.Types (DynFlagsModifications)
 import qualified Language.LSP.Server             as LSP
 import qualified Language.LSP.Types              as LSP
 
@@ -39,7 +38,6 @@ import           Development.IDE.Core.Shake
 -- | Initialise the Compiler Service.
 initialise :: Config
            -> Rules ()
-           -> DynFlagsModifications
            -> Maybe (LSP.LanguageContextEnv Config)
            -> Logger
            -> Debouncer LSP.NormalizedUri
@@ -48,11 +46,10 @@ initialise :: Config
            -> HieDb
            -> IndexQueue
            -> IO IdeState
-initialise defaultConfig mainRule dynFlagsMods lspEnv logger debouncer options vfs hiedb hiedbChan =
+initialise defaultConfig mainRule lspEnv logger debouncer options vfs hiedb hiedbChan =
     shakeOpen
         lspEnv
         defaultConfig
-        dynFlagsMods
         logger
         debouncer
         (optShakeProfiling options)

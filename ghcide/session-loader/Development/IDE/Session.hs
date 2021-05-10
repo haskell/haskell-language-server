@@ -87,6 +87,7 @@ import           Database.SQLite.Simple
 import           HieDb.Create
 import           HieDb.Types
 import           HieDb.Utils
+import           Ide.Types                            (dynFlagsModifyGlobal)
 
 -- | Bump this version number when making changes to the format of the data stored in hiedb
 hiedbDataVersion :: String
@@ -255,7 +256,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
 
     IdeOptions{ optTesting = IdeTesting optTesting
               , optCheckProject = getCheckProject
-              , optCustomDynFlags
+              , optModifyDynFlags
               , optExtensions
               } <- getIdeOptions
 
@@ -286,7 +287,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
           -- Parse DynFlags for the newly discovered component
           hscEnv <- emptyHscEnv ideNc libDir
           (df, targets) <- evalGhcEnv hscEnv $
-              first optCustomDynFlags <$> setOptions opts (hsc_dflags hscEnv)
+              first (dynFlagsModifyGlobal optModifyDynFlags) <$> setOptions opts (hsc_dflags hscEnv)
           let deps = componentDependencies opts ++ maybeToList hieYaml
           dep_info <- getDependencyInfo deps
           -- Now lookup to see whether we are combining with an existing HscEnv

@@ -215,7 +215,7 @@ getParsedModuleRule =
     sess <- use_ GhcSession file
     let hsc = hscEnv sess
     opt <- getIdeOptions
-    modify_dflags <- getModifyDynFlags id dynFlagsModifyParser
+    modify_dflags <- getModifyDynFlags dynFlagsModifyParser
     let ms = ms' { ms_hspp_opts = modify_dflags $ ms_hspp_opts ms' }
 
     let dflags    = ms_hspp_opts ms
@@ -287,14 +287,14 @@ getParsedModuleWithCommentsRule =
     opt <- getIdeOptions
 
     let ms' = withoutOption Opt_Haddock $ withOption Opt_KeepRawTokenStream ms
-    modify_dflags <- getModifyDynFlags id dynFlagsModifyParser
+    modify_dflags <- getModifyDynFlags dynFlagsModifyParser
     let ms = ms' { ms_hspp_opts = modify_dflags $ ms_hspp_opts ms' }
         reset_ms pm = pm { pm_mod_summary = ms' }
 
     liftIO $ fmap (fmap reset_ms) $ snd <$> getParsedModuleDefinition (hscEnv sess) opt file ms
 
-getModifyDynFlags :: a -> (DynFlagsModifications -> a) -> Action a
-getModifyDynFlags a f = maybe a (f . dynFlagsMods) <$> getShakeExtra
+getModifyDynFlags :: (DynFlagsModifications -> a) -> Action a
+getModifyDynFlags f = f . optModifyDynFlags <$> getIdeOptions
 
 
 getParsedModuleDefinition
@@ -793,7 +793,7 @@ getModSummaryRule :: Rules ()
 getModSummaryRule = do
     defineEarlyCutoff $ Rule $ \GetModSummary f -> do
         session' <- hscEnv <$> use_ GhcSession f
-        modify_dflags <- getModifyDynFlags id dynFlagsModifyGlobal
+        modify_dflags <- getModifyDynFlags dynFlagsModifyGlobal
         let session = session' { hsc_dflags = modify_dflags $ hsc_dflags session' }
         (modTime, mFileContent) <- getFileContents f
         let fp = fromNormalizedFilePath f
