@@ -216,9 +216,10 @@ defaultMain Arguments{..} = do
 
                 sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions $ fromMaybe dir rootPath
                 config <- LSP.runLspT env LSP.getConfig
-                let options = (argsIdeOptions config sessionLoader)
+                let def_options = argsIdeOptions config sessionLoader
+                    options = def_options
                             { optReportProgress = clientSupportsProgress caps
-                            , optModifyDynFlags = pluginModifyDynflags plugins
+                            , optModifyDynFlags = optModifyDynFlags def_options <> pluginModifyDynflags plugins
                             }
                     caps = LSP.resClientCapabilities env
                 initialise
@@ -257,10 +258,11 @@ defaultMain Arguments{..} = do
             putStrLn "\nStep 3/4: Initializing the IDE"
             vfs <- makeVFSHandle
             sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions dir
-            let options = (argsIdeOptions argsDefaultHlsConfig sessionLoader)
+            let def_options = argsIdeOptions argsDefaultHlsConfig sessionLoader
+                options = def_options
                         { optCheckParents = pure NeverCheck
                         , optCheckProject = pure False
-                        , optModifyDynFlags = pluginModifyDynflags plugins
+                        , optModifyDynFlags = optModifyDynFlags def_options <> pluginModifyDynflags plugins
                         }
             ide <- initialise argsDefaultHlsConfig rules Nothing logger debouncer options vfs hiedb hieChan
             shakeSessionInit ide
@@ -306,11 +308,11 @@ defaultMain Arguments{..} = do
           runWithDb dbLoc $ \hiedb hieChan -> do
             vfs <- makeVFSHandle
             sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions "."
-            let options =
-                  (argsIdeOptions argsDefaultHlsConfig sessionLoader)
+            let def_options = argsIdeOptions argsDefaultHlsConfig sessionLoader
+                options = def_options
                     { optCheckParents = pure NeverCheck
                     , optCheckProject = pure False
-                    , optModifyDynFlags = pluginModifyDynflags plugins
+                    , optModifyDynFlags = optModifyDynFlags def_options <> pluginModifyDynflags plugins
                     }
             ide <- initialise argsDefaultHlsConfig rules Nothing logger debouncer options vfs hiedb hieChan
             shakeSessionInit ide
