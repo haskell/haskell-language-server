@@ -220,11 +220,12 @@ getParsedModuleRule =
 
     let dflags    = ms_hspp_opts ms
         mainParse = getParsedModuleDefinition hsc opt file ms
+        reset_ms pm = pm { pm_mod_summary = ms' }
 
     -- Parse again (if necessary) to capture Haddock parse errors
     res@(_,pmod) <- if gopt Opt_Haddock dflags
         then
-            liftIO mainParse
+            liftIO $ fmap (fmap (fmap reset_ms)) mainParse
         else do
             let haddockParse = getParsedModuleDefinition hsc opt file (withOptHaddock ms)
 
@@ -234,7 +235,7 @@ getParsedModuleRule =
             -- If we can parse Haddocks, might as well use them
             --
             -- HLINT INTEGRATION: might need to save the other parsed module too
-            ((diags,res),(diagsh,resh)) <- liftIO $ concurrently mainParse haddockParse
+            ((diags,res),(diagsh,resh)) <- liftIO $ fmap (fmap (fmap (fmap reset_ms))) $ concurrently mainParse haddockParse
 
             -- Merge haddock and regular diagnostics so we can always report haddock
             -- parse errors
@@ -288,8 +289,9 @@ getParsedModuleWithCommentsRule =
     let ms' = withoutOption Opt_Haddock $ withOption Opt_KeepRawTokenStream ms
     modify_dflags <- getModifyDynFlags id dynFlagsModifyParser
     let ms = ms' { ms_hspp_opts = modify_dflags $ ms_hspp_opts ms' }
+        reset_ms pm = pm { pm_mod_summary = ms' }
 
-    liftIO $ snd <$> getParsedModuleDefinition (hscEnv sess) opt file ms
+    liftIO $ fmap (fmap reset_ms) $ snd <$> getParsedModuleDefinition (hscEnv sess) opt file ms
 
 getModifyDynFlags :: a -> (DynFlagsModifications -> a) -> Action a
 getModifyDynFlags a f = maybe a (f . dynFlagsMods) <$> getShakeExtra
