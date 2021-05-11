@@ -22,7 +22,7 @@ library
     , directory
     , extra
     , ghc
-    , ghcide                ^>=1.2
+    , ghcide                 >=1.2 && <1.4
     , hashable
     , hls-plugin-api        ^>=1.1
     , lsp
@@ -34,7 +34,6 @@ library
     , unordered-containers
 
   default-language:   Haskell2010
-  include-dirs:       include
   default-extensions:
     DataKinds
     TypeOperators

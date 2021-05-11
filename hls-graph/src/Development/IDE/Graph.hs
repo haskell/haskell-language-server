@@ -7,7 +7,7 @@ module Development.IDE.Graph(
     actionFinally, actionBracket, actionCatch,
     Shake.ShakeException(..),
     -- * Configuration
-    ShakeOptions(shakeThreads, shakeFiles, shakeExtra),
+    ShakeOptions(shakeAllowRedefineRules, shakeThreads, shakeFiles, shakeExtra),
     getShakeExtra, getShakeExtraRules, newShakeExtra,
     -- * Explicit parallelism
     parallel,
