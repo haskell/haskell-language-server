@@ -235,7 +235,7 @@ getParsedModuleRule =
             -- If we can parse Haddocks, might as well use them
             --
             -- HLINT INTEGRATION: might need to save the other parsed module too
-            ((diags,res),(diagsh,resh)) <- liftIO $ fmap (fmap (fmap (fmap reset_ms))) $ concurrently mainParse haddockParse
+            ((diags,res),(diagsh,resh)) <- liftIO $ (fmap.fmap.fmap.fmap) reset_ms $ concurrently mainParse haddockParse
 
             -- Merge haddock and regular diagnostics so we can always report haddock
             -- parse errors
