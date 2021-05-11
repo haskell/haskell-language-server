@@ -145,10 +145,12 @@ import           PrelInfo
 import           UniqSupply
 
 import           Control.Exception.Extra                hiding (bracket_)
+import qualified Data.ByteString.Char8                  as BS8
 import           Data.Default
 import           Data.HashSet                           (HashSet)
 import qualified Data.HashSet                           as HSet
-import           Data.IORef.Extra                       (atomicModifyIORef_)
+import           Data.IORef.Extra                       (atomicModifyIORef_, atomicModifyIORef'_)
+import           Data.Foldable                          (toList)
 import           HieDb.Types
 import           Ide.Plugin.Config
 import qualified Ide.PluginUtils                        as HLS
@@ -666,6 +668,7 @@ newSession extras@ShakeExtras{..} shakeDb newDirtyKeys acts = do
                 notifyTestingLogMessage extras msg
 
         workRun restore = withSpan "Shake session" $ \otSpan -> do
+          whenJust allPendingKeys $ \kk -> setTag otSpan "keys" (BS8.pack $ unlines $ map show $ toList kk)
           let acts' = [pumpActionThread otSpan, keysActs]
               keysActs = void $ parallel $ map (run otSpan) (reenqueued ++ acts)
           res <- try @SomeException $
@@ -890,7 +893,7 @@ defineEarlyCutoff'
     -> Action (Maybe BS.ByteString, IdeResult v)
     -> Action (RunResult (A (RuleResult k)))
 defineEarlyCutoff' doDiagnostics key file old mode action = do
-    extras@ShakeExtras{state, progress, logger} <- getShakeExtras
+    extras@ShakeExtras{state, progress, logger, dirtyKeys} <- getShakeExtras
     options <- getIdeOptions
     (if optSkipProgress options key then id else inProgress progress file) $ do
         val <- case old of
@@ -906,7 +909,9 @@ defineEarlyCutoff' doDiagnostics key file old mode action = do
                     _ -> return Nothing
             _ -> return Nothing
         case val of
-            Just res -> return res
+            Just res -> do
+                liftIO $ atomicModifyIORef'_ dirtyKeys (HSet.delete $ SomeShakeValue key)
+                return res
             Nothing -> do
                 (bs, (diags, res)) <- actionCatch
                     (do v <- action; liftIO $ evaluate $ force v) $
@@ -926,6 +931,7 @@ defineEarlyCutoff' doDiagnostics key file old mode action = do
                                     (toShakeValue ShakeResult bs, Failed b)
                     Just v -> pure (maybe ShakeNoCutoff ShakeResult bs, Succeeded (vfsVersion =<< modTime) v)
                 liftIO $ setValues state key file res (Vector.fromList diags)
+                liftIO $ atomicModifyIORef'_ dirtyKeys (HSet.delete $ SomeShakeValue key)
                 if doDiagnostics
                     then updateFileDiagnostics file (Key key) extras $ map (\(_,y,z) -> (y,z)) diags
                     else forM_ diags $ \d -> liftIO $ logWarning logger $ showDiagnosticsColored [d]
