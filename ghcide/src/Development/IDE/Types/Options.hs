@@ -28,6 +28,7 @@ import           GHC                               hiding (parseModule,
                                                     typecheckModule)
 import           GhcPlugins                        as GHC hiding (fst3, (<>))
 import           Ide.Plugin.Config
+import           Ide.Types                         (DynFlagsModifications)
 import qualified Language.LSP.Types.Capabilities   as LSP
 
 data IdeOptions = IdeOptions
@@ -73,7 +74,7 @@ data IdeOptions = IdeOptions
     --   Otherwise, return the result of parsing without Opt_Haddock, so
     --   that the parsed module contains the result of Opt_KeepRawTokenStream,
     --   which might be necessary for hlint.
-  , optCustomDynFlags     :: DynFlags -> DynFlags
+  , optModifyDynFlags     :: DynFlagsModifications
     -- ^ Will be called right after setting up a new cradle,
     --   allowing to customize the Ghc options used
   , optShakeOptions       :: ShakeOptions
@@ -138,7 +139,7 @@ defaultIdeOptions session = IdeOptions
     ,optCheckProject = pure True
     ,optCheckParents = pure CheckOnSaveAndClose
     ,optHaddockParse = HaddockParse
-    ,optCustomDynFlags = id
+    ,optModifyDynFlags = mempty
     ,optSkipProgress = defaultSkipProgress
     ,optProgressStyle = Explicit
     }

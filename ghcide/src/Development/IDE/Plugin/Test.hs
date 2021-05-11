@@ -37,6 +37,8 @@ import           Ide.Types
 import qualified Language.LSP.Server            as LSP
 import           Language.LSP.Types
 import           System.Time.Extra
+import qualified Development.IDE.Plugin as P
+import Data.Default (def)
 
 data TestRequest
     = BlockSeconds Seconds           -- ^ :: Null
@@ -51,9 +53,9 @@ newtype WaitForIdeRuleResult = WaitForIdeRuleResult { ideResultSuccess::Bool}
     deriving newtype (FromJSON, ToJSON)
 
 plugin :: Plugin c
-plugin = Plugin {
-    pluginRules = return (),
-    pluginHandlers = requestHandler (SCustomMethod "test") testRequestHandler'
+plugin = def {
+    P.pluginRules = return (),
+    P.pluginHandlers = requestHandler (SCustomMethod "test") testRequestHandler'
 }
   where
       testRequestHandler' ide req

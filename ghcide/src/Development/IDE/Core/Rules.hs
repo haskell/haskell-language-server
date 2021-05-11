@@ -111,7 +111,7 @@ import           Development.IDE.GHC.Compat                   hiding
                                                                writeHieFile)
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint
-import           Development.IDE.GHC.Util
+import           Development.IDE.GHC.Util hiding (modifyDynFlags)
 import           Development.IDE.Import.DependencyInformation
 import           Development.IDE.Import.FindImports
 import qualified Development.IDE.Spans.AtPoint                as AtPoint
@@ -141,7 +141,7 @@ import           System.Directory                             (canonicalizePath)
 import           TcRnMonad                                    (tcg_dependent_files)
 
 import           Ide.Plugin.Properties (HasProperty, KeyNameProxy, Properties, ToHsType, useProperty)
-import           Ide.Types (PluginId)
+import           Ide.Types (PluginId, DynFlagsModifications(dynFlagsModifyGlobal, dynFlagsModifyParser))
 import           Data.Default (def)
 import           Ide.PluginUtils (configForPlugin)
 import           Control.Applicative
@@ -202,18 +202,21 @@ getParsedModuleRule :: Rules ()
 getParsedModuleRule =
   -- this rule does not have early cutoff since all its dependencies already have it
   define $ \GetParsedModule file -> do
-    ModSummaryResult{msrModSummary = ms} <- use_ GetModSummary file
+    ModSummaryResult{msrModSummary = ms'} <- use_ GetModSummary file
     sess <- use_ GhcSession file
     let hsc = hscEnv sess
     opt <- getIdeOptions
+    modify_dflags <- getModifyDynFlags dynFlagsModifyParser
+    let ms = ms' { ms_hspp_opts = modify_dflags $ ms_hspp_opts ms' }
 
     let dflags    = ms_hspp_opts ms
         mainParse = getParsedModuleDefinition hsc opt file ms
+        reset_ms pm = pm { pm_mod_summary = ms' }
 
     -- Parse again (if necessary) to capture Haddock parse errors
     res@(_,pmod) <- if gopt Opt_Haddock dflags
         then
-            liftIO mainParse
+            liftIO $ (fmap.fmap.fmap) reset_ms mainParse
         else do
             let haddockParse = getParsedModuleDefinition hsc opt file (withOptHaddock ms)
 
@@ -223,7 +226,7 @@ getParsedModuleRule =
             -- If we can parse Haddocks, might as well use them
             --
             -- HLINT INTEGRATION: might need to save the other parsed module too
-            ((diags,res),(diagsh,resh)) <- liftIO $ concurrently mainParse haddockParse
+            ((diags,res),(diagsh,resh)) <- liftIO $ (fmap.fmap.fmap.fmap) reset_ms $ concurrently mainParse haddockParse
 
             -- Merge haddock and regular diagnostics so we can always report haddock
             -- parse errors
@@ -275,8 +278,15 @@ getParsedModuleWithCommentsRule =
     opt <- getIdeOptions
 
     let ms' = withoutOption Opt_Haddock $ withOption Opt_KeepRawTokenStream ms
+    modify_dflags <- getModifyDynFlags dynFlagsModifyParser
+    let ms = ms' { ms_hspp_opts = modify_dflags $ ms_hspp_opts ms' }
+        reset_ms pm = pm { pm_mod_summary = ms' }
 
-    liftIO $ snd <$> getParsedModuleDefinition (hscEnv sess) opt file ms'
+    liftIO $ fmap (fmap reset_ms) $ snd <$> getParsedModuleDefinition (hscEnv sess) opt file ms
+
+getModifyDynFlags :: (DynFlagsModifications -> a) -> Action a
+getModifyDynFlags f = f . optModifyDynFlags <$> getIdeOptions
+
 
 getParsedModuleDefinition
     :: HscEnv
@@ -775,7 +785,9 @@ isHiFileStableRule = defineEarlyCutoff $ RuleNoDiagnostics $ \IsHiFileStable f -
 getModSummaryRule :: Rules ()
 getModSummaryRule = do
     defineEarlyCutoff $ Rule $ \GetModSummary f -> do
-        session <- hscEnv <$> use_ GhcSession f
+        session' <- hscEnv <$> use_ GhcSession f
+        modify_dflags <- getModifyDynFlags dynFlagsModifyGlobal
+        let session = session' { hsc_dflags = modify_dflags $ hsc_dflags session' }
         (modTime, mFileContent) <- getFileContents f
         let fp = fromNormalizedFilePath f
         modS <- liftIO $ runExceptT $
