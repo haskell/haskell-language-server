@@ -225,7 +225,7 @@ getParsedModuleRule =
     -- Parse again (if necessary) to capture Haddock parse errors
     res@(_,pmod) <- if gopt Opt_Haddock dflags
         then
-            liftIO $ fmap (fmap (fmap reset_ms)) mainParse
+            liftIO $ (fmap.fmap.fmap) reset_ms mainParse
         else do
             let haddockParse = getParsedModuleDefinition hsc opt file (withOptHaddock ms)
 
