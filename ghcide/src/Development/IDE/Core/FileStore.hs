@@ -14,7 +14,6 @@ module Development.IDE.Core.FileStore(
     VFSHandle,
     makeVFSHandle,
     makeLSPVFSHandle,
-    isFileOfInterestRule,
     resetFileStore,
     resetInterfaceStore,
     getModificationTimeImpl,
@@ -38,9 +37,7 @@ import qualified Data.Rope.UTF16                              as Rope
 import qualified Data.Text                                    as T
 import           Data.Time
 import           Data.Time.Clock.POSIX
-import           Development.IDE.Core.IdeConfiguration
-import           Development.IDE.Core.OfInterest              (OfInterestVar (..),
-                                                               getFilesOfInterest)
+import           Development.IDE.Core.OfInterest              (OfInterestVar (..))
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Orphans                  ()
@@ -58,7 +55,8 @@ import           System.IO.Error
 #ifdef mingw32_HOST_OS
 import qualified System.Directory                             as Dir
 #else
-import           System.Posix.Files                           ( getFileStatus, modificationTimeHiRes)
+import           System.Posix.Files                           (getFileStatus,
+                                                               modificationTimeHiRes)
 #endif
 
 import qualified Development.IDE.Types.Logger                 as L
@@ -95,20 +93,6 @@ makeLSPVFSHandle lspEnv = VFSHandle
     { getVirtualFile = runLspT lspEnv . LSP.getVirtualFile
     , setVirtualFileContents = Nothing
    }
-
-
-isFileOfInterestRule :: Rules ()
-isFileOfInterestRule = defineEarlyCutoff $ RuleNoDiagnostics $ \IsFileOfInterest f -> do
-    filesOfInterest <- getFilesOfInterest
-    let foi = maybe NotFOI IsFOI $ f `HM.lookup` filesOfInterest
-        fp  = summarize foi
-        res = (Just fp, Just foi)
-    return res
-    where
-    summarize NotFOI                   = BS.singleton 0
-    summarize (IsFOI OnDisk)           = BS.singleton 1
-    summarize (IsFOI (Modified False)) = BS.singleton 2
-    summarize (IsFOI (Modified True))  = BS.singleton 3
 
 
 getModificationTimeRule :: VFSHandle -> (NormalizedFilePath -> Action Bool) -> Rules ()
@@ -245,7 +229,6 @@ fileStoreRules vfs isWatched = do
     addIdeGlobal vfs
     getModificationTimeRule vfs isWatched
     getFileContentsRule vfs
-    isFileOfInterestRule
 
 -- | Note that some buffer for a specific file has been modified but not
 -- with what changes.

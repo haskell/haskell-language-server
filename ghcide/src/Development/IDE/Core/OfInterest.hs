@@ -5,10 +5,13 @@
 {-# LANGUAGE TypeFamilies      #-}
 
 -- | Utilities and state for the files of interest - those which are currently
---   open in the editor. The useful function is 'getFilesOfInterest'.
+--   open in the editor. The rule is 'IsFileOfInterest'
 module Development.IDE.Core.OfInterest(
     ofInterestRules,
-    getFilesOfInterest, setFilesOfInterest, modifyFilesOfInterest,
+    getFilesOfInterestUntracked,
+    addFileOfInterest,
+    deleteFileOfInterest,
+    setFilesOfInterest,
     kick, FileOfInterestStatus(..),
     OfInterestVar(..)
     ) where
@@ -16,7 +19,6 @@ module Development.IDE.Core.OfInterest(
 import           Control.Concurrent.Strict
 import           Control.Monad
 import           Control.Monad.IO.Class
-import           Data.Binary
 import           Data.HashMap.Strict                          (HashMap)
 import qualified Data.HashMap.Strict                          as HashMap
 import qualified Data.Text                                    as T
@@ -24,7 +26,8 @@ import           Development.IDE.Graph
 
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Maybe
-import qualified Data.ByteString.Lazy                         as LBS
+import qualified Data.ByteString                              as BS
+import           Data.Foldable                                (toList)
 import           Data.List.Extra                              (nubOrd)
 import           Data.Maybe                                   (catMaybes)
 import           Development.IDE.Core.ProgressReporting
@@ -43,15 +46,19 @@ instance IsIdeGlobal OfInterestVar
 ofInterestRules :: Rules ()
 ofInterestRules = do
     addIdeGlobal . OfInterestVar =<< liftIO (newVar HashMap.empty)
-    defineEarlyCutOffNoFile $ \GetFilesOfInterest -> do
+    defineEarlyCutoff $ RuleNoDiagnostics $ \IsFileOfInterest f -> do
         alwaysRerun
         filesOfInterest <- getFilesOfInterestUntracked
-        let !cutoff = LBS.toStrict $ encode $ HashMap.toList filesOfInterest
-        pure (cutoff, filesOfInterest)
+        let foi = maybe NotFOI IsFOI $ f `HashMap.lookup` filesOfInterest
+            fp  = summarize foi
+            res = (Just fp, Just foi)
+        return res
+    where
+    summarize NotFOI                   = BS.singleton 0
+    summarize (IsFOI OnDisk)           = BS.singleton 1
+    summarize (IsFOI (Modified False)) = BS.singleton 2
+    summarize (IsFOI (Modified True))  = BS.singleton 3
 
--- | Get the files that are open in the IDE.
-getFilesOfInterest :: Action (HashMap NormalizedFilePath FileOfInterestStatus)
-getFilesOfInterest = useNoFile_ GetFilesOfInterest
 
 ------------------------------------------------------------
 -- Exposed API
@@ -59,31 +66,35 @@ getFilesOfInterest = useNoFile_ GetFilesOfInterest
 -- | Set the files-of-interest - not usually necessary or advisable.
 --   The LSP client will keep this information up to date.
 setFilesOfInterest :: IdeState -> HashMap NormalizedFilePath FileOfInterestStatus -> IO ()
-setFilesOfInterest state files = modifyFilesOfInterest state (const files)
+setFilesOfInterest state files = do
+    OfInterestVar var <- getIdeGlobalState state
+    writeVar var files
 
 getFilesOfInterestUntracked :: Action (HashMap NormalizedFilePath FileOfInterestStatus)
 getFilesOfInterestUntracked = do
     OfInterestVar var <- getIdeGlobalAction
     liftIO $ readVar var
 
--- | Modify the files-of-interest - not usually necessary or advisable.
---   The LSP client will keep this information up to date.
-modifyFilesOfInterest
-  :: IdeState
-  -> (HashMap NormalizedFilePath FileOfInterestStatus -> HashMap NormalizedFilePath FileOfInterestStatus)
-  -> IO ()
-modifyFilesOfInterest state f = do
+addFileOfInterest :: IdeState -> NormalizedFilePath -> FileOfInterestStatus -> IO ()
+addFileOfInterest state f v = do
     OfInterestVar var <- getIdeGlobalState state
-    files0 <- readVar var
-    files <- modifyVar' var f
-    when (files /= files0) $ recordDirtyKeys (shakeExtras state) GetFilesOfInterest [emptyFilePath]
-    logDebug (ideLogger state) $ "Set files of interest to: " <> T.pack (show $ HashMap.toList files)
+    files <- modifyVar' var $ HashMap.insert f v
+    recordDirtyKeys (shakeExtras state) IsFileOfInterest [f]
+    logDebug (ideLogger state) $ "Set files of interest to: " <> T.pack (show $ toList files)
+
+deleteFileOfInterest :: IdeState -> NormalizedFilePath -> IO ()
+deleteFileOfInterest state f = do
+    OfInterestVar var <- getIdeGlobalState state
+    files <- modifyVar' var $ HashMap.delete f
+    recordDirtyKeys (shakeExtras state) IsFileOfInterest [f]
+    logDebug (ideLogger state) $ "Set files of interest to: " <> T.pack (show $ toList files)
+
 
 -- | Typecheck all the files of interest.
 --   Could be improved
 kick :: Action ()
 kick = do
-    files <- HashMap.keys <$> getFilesOfInterest
+    files <- HashMap.keys <$> getFilesOfInterestUntracked
     ShakeExtras{progress} <- getShakeExtras
     liftIO $ progressUpdate progress KickStarted
 
