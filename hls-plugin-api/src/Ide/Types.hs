@@ -39,6 +39,7 @@ import           Data.String
 import qualified Data.Text                       as T
 import           Data.Text.Encoding              (encodeUtf8)
 import           Development.IDE.Graph
+import           DynFlags                        (DynFlags)
 import           GHC.Generics
 import           Ide.Plugin.Config
 import           Ide.Plugin.Properties
@@ -56,6 +57,30 @@ import           Text.Regex.TDFA.Text            ()
 newtype IdePlugins ideState = IdePlugins
   { ipMap :: [(PluginId, PluginDescriptor ideState)]}
 
+-- | Hooks for modifying the 'DynFlags' at different times of the compilation
+-- process. Plugins can install a 'DynFlagsModifications' via
+-- 'pluginModifyDynflags' in their 'PluginDescriptor'.
+data DynFlagsModifications =
+  DynFlagsModifications
+    { -- | Invoked immediately at the package level. Changes to the 'DynFlags'
+      -- made in 'dynFlagsModifyGlobal' are guaranteed to be seen everywhere in
+      -- the compilation pipeline.
+      dynFlagsModifyGlobal :: DynFlags -> DynFlags
+      -- | Invoked just before the parsing step, and reset immediately
+      -- afterwards. 'dynFlagsModifyParser' allows plugins to enable language
+      -- extensions only during parsing. for example, to let them enable
+      -- certain pieces of syntax.
+    , dynFlagsModifyParser :: DynFlags -> DynFlags
+    }
+
+instance Semigroup DynFlagsModifications where
+  DynFlagsModifications g1 p1 <> DynFlagsModifications g2 p2 =
+    DynFlagsModifications (g2 . g1) (p2 . p1)
+
+instance Monoid DynFlagsModifications where
+  mempty = DynFlagsModifications id id
+
+
 -- ---------------------------------------------------------------------
 
 data PluginDescriptor ideState =
@@ -65,6 +90,7 @@ data PluginDescriptor ideState =
                    , pluginHandlers     :: PluginHandlers ideState
                    , pluginConfigDescriptor :: ConfigDescriptor
                    , pluginNotificationHandlers :: PluginNotificationHandlers ideState
+                   , pluginModifyDynflags :: DynFlagsModifications
                    }
 
 -- | An existential wrapper of 'Properties'
@@ -296,6 +322,7 @@ defaultPluginDescriptor plId =
     mempty
     mempty
     defaultConfigDescriptor
+    mempty
     mempty
 
 newtype CommandId = CommandId T.Text

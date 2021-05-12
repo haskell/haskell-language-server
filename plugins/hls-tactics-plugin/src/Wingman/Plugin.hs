@@ -21,6 +21,7 @@ import           Development.IDE.Core.Shake (IdeState (..))
 import           Development.IDE.Core.UseStale (Tracked, TrackedStale(..), unTrack, mapAgeFrom, unsafeMkCurrent)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.ExactPrint
+import           GHC.LanguageExtensions.Type (Extension(EmptyCase))
 import           Generics.SYB.GHC
 import           Ide.Types
 import           Language.LSP.Server
@@ -68,6 +69,15 @@ descriptor plId = (defaultPluginDescriptor plId)
       defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
   , pluginModifyDynflags = staticPlugin
   }
+
+
+-- | Wingman wants to support destructing of empty cases, but these are a parse
+-- error by default. So we want to enable 'EmptyCase', but then that leads to
+-- silent errors without 'Opt_WarnIncompletePatterns'.
+allowEmptyCaseButWithWarning :: DynFlags -> DynFlags
+allowEmptyCaseButWithWarning =
+  flip xopt_set EmptyCase . flip wopt_set Opt_WarnIncompletePatterns
+
 
 
 codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction

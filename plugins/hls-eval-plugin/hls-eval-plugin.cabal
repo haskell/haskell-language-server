@@ -61,7 +61,7 @@ library
     , ghc
     , ghc-boot-th
     , ghc-paths
-    , ghcide                ^>=1.2
+    , ghcide                 >=1.2 && <1.4
     , hashable
     , hls-plugin-api        ^>=1.1
     , lens

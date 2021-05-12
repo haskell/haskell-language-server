@@ -21,14 +21,15 @@ import           Data.Aeson.Types                             (Value)
 import           Data.Binary
 import           Data.Hashable
 import qualified Data.Map                                     as M
+import           Data.Time.Clock.POSIX
 import           Data.Typeable
 import           Development.IDE.GHC.Compat                   hiding
                                                               (HieFileResult)
 import           Development.IDE.GHC.Util
+import           Development.IDE.Graph
 import           Development.IDE.Import.DependencyInformation
 import           Development.IDE.Types.HscEnvEq               (HscEnvEq)
 import           Development.IDE.Types.KnownTargets
-import           Development.IDE.Graph
 import           GHC.Generics                                 (Generic)
 
 import           HscTypes                                     (HomeModInfo,
@@ -39,7 +40,7 @@ import           HscTypes                                     (HomeModInfo,
 import qualified Data.Binary                                  as B
 import           Data.ByteString                              (ByteString)
 import qualified Data.ByteString.Lazy                         as LBS
-import           Data.Int                                     (Int64)
+import           Data.HashMap.Strict                          (HashMap)
 import           Data.Text                                    (Text)
 import           Data.Time
 import           Development.IDE.Import.FindImports           (ArtifactsLocation)
@@ -295,9 +296,7 @@ type instance RuleResult GetModificationTime = FileVersion
 
 data FileVersion
     = VFSVersion !Int
-    | ModificationTime
-      !Int64   -- ^ Large unit (platform dependent, do not make assumptions)
-      !Int64   -- ^ Small unit (platform dependent, do not make assumptions)
+    | ModificationTime !POSIXTime
     deriving (Show, Generic)
 
 instance NFData FileVersion
@@ -354,6 +353,8 @@ type instance RuleResult GetModSummary = ModSummaryResult
 
 -- | Generate a ModSummary with the timestamps and preprocessed content elided, for more successful early cutoff
 type instance RuleResult GetModSummaryWithoutTimestamps = ModSummaryResult
+
+type instance RuleResult GetFilesOfInterest = HashMap NormalizedFilePath FileOfInterestStatus
 
 data GetParsedModule = GetParsedModule
     deriving (Eq, Show, Typeable, Generic)
@@ -511,6 +512,12 @@ data GhcSessionIO = GhcSessionIO deriving (Eq, Show, Typeable, Generic)
 instance Hashable GhcSessionIO
 instance NFData   GhcSessionIO
 instance Binary   GhcSessionIO
+
+data GetFilesOfInterest = GetFilesOfInterest
+    deriving (Eq, Show, Typeable, Generic)
+instance Hashable GetFilesOfInterest
+instance NFData   GetFilesOfInterest
+instance Binary   GetFilesOfInterest
 
 makeLensesWith
     (lensRules & lensField .~ mappingNamer (pure . (++ "L")))

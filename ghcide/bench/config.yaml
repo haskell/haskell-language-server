@@ -80,6 +80,7 @@ versions:
 # - 1.0.0
 # - ghcide-v1.1.0
 # - ghcide-v1.2.0
+# - ghcide-v1.3.0
 - upstream: origin/master
 - HEAD
 

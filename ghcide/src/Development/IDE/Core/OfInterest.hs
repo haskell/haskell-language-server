@@ -14,18 +14,13 @@ module Development.IDE.Core.OfInterest(
     ) where
 
 import           Control.Concurrent.Strict
-import           Control.DeepSeq
-import           Control.Exception
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.Binary
 import           Data.HashMap.Strict                          (HashMap)
 import qualified Data.HashMap.Strict                          as HashMap
-import           Data.Hashable
 import qualified Data.Text                                    as T
-import           Data.Typeable
 import           Development.IDE.Graph
-import           GHC.Generics
 
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Maybe
@@ -44,24 +39,15 @@ import           Development.IDE.Types.Options
 newtype OfInterestVar = OfInterestVar (Var (HashMap NormalizedFilePath FileOfInterestStatus))
 instance IsIdeGlobal OfInterestVar
 
-type instance RuleResult GetFilesOfInterest = HashMap NormalizedFilePath FileOfInterestStatus
-
-data GetFilesOfInterest = GetFilesOfInterest
-    deriving (Eq, Show, Typeable, Generic)
-instance Hashable GetFilesOfInterest
-instance NFData   GetFilesOfInterest
-instance Binary   GetFilesOfInterest
-
-
 -- | The rule that initialises the files of interest state.
 ofInterestRules :: Rules ()
 ofInterestRules = do
     addIdeGlobal . OfInterestVar =<< liftIO (newVar HashMap.empty)
-    defineEarlyCutoff $ RuleNoDiagnostics $ \GetFilesOfInterest _file -> assert (null $ fromNormalizedFilePath _file) $ do
+    defineEarlyCutOffNoFile $ \GetFilesOfInterest -> do
         alwaysRerun
         filesOfInterest <- getFilesOfInterestUntracked
         let !cutoff = LBS.toStrict $ encode $ HashMap.toList filesOfInterest
-        pure (Just cutoff, Just filesOfInterest)
+        pure (cutoff, filesOfInterest)
 
 -- | Get the files that are open in the IDE.
 getFilesOfInterest :: Action (HashMap NormalizedFilePath FileOfInterestStatus)

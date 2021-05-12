@@ -1,6 +1,6 @@
 cabal-version:      2.2
 name:               hls-explicit-imports-plugin
-version:            1.0.0.1
+version:            1.0.0.2
 synopsis:           Explicit imports plugin for Haskell Language Server
 license:            Apache-2.0
 license-file:       LICENSE
@@ -20,7 +20,7 @@ library
     , containers
     , deepseq
     , ghc
-    , ghcide                ^>=1.2
+    , ghcide                ^>=1.3
     , hls-plugin-api        ^>=1.1
     , lsp
     , lsp-types
@@ -29,7 +29,6 @@ library
     , unordered-containers
 
   default-language:   Haskell2010
-  include-dirs:       include
   default-extensions:
     DataKinds
     TypeOperators

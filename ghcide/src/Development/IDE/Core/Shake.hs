@@ -44,6 +44,7 @@ module Development.IDE.Core.Shake(
     define, defineNoDiagnostics,
     defineEarlyCutoff,
     defineOnDisk, needOnDisk, needOnDisks,
+    defineNoFile, defineEarlyCutOffNoFile,
     getDiagnostics,
     mRunLspT, mRunLspTCallback,
     getHiddenDiagnostics,
@@ -147,8 +148,8 @@ import           Control.Exception.Extra                hiding (bracket_)
 import           Data.Default
 import           HieDb.Types
 import           Ide.Plugin.Config
-import qualified Ide.PluginUtils                        as HLS
-import           Ide.Types                              (PluginId)
+import qualified Ide.PluginUtils                      as HLS
+import           Ide.Types                            (PluginId)
 
 -- | We need to serialize writes to the database, so we send any function that
 -- needs to write to the database over the channel, where it will be picked up by
@@ -832,6 +833,16 @@ defineEarlyCutoff (Rule op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteSt
     defineEarlyCutoff' True key file old mode $ op key file
 defineEarlyCutoff (RuleNoDiagnostics op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file isSuccess $ do
     defineEarlyCutoff' False key file old mode $ second (mempty,) <$> op key file
+
+defineNoFile :: IdeRule k v => (k -> Action v) -> Rules ()
+defineNoFile f = defineNoDiagnostics $ \k file -> do
+    if file == emptyFilePath then do res <- f k; return (Just res) else
+        fail $ "Rule " ++ show k ++ " should always be called with the empty string for a file"
+
+defineEarlyCutOffNoFile :: IdeRule k v => (k -> Action (BS.ByteString, v)) -> Rules ()
+defineEarlyCutOffNoFile f = defineEarlyCutoff $ RuleNoDiagnostics $ \k file -> do
+    if file == emptyFilePath then do (hash, res) <- f k; return (Just hash, Just res) else
+        fail $ "Rule " ++ show k ++ " should always be called with the empty string for a file"
 
 defineEarlyCutoff'
     :: IdeRule k v
