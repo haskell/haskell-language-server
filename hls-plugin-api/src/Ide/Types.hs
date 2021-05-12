@@ -50,25 +50,11 @@ import           Language.LSP.VFS
 import           OpenTelemetry.Eventlog
 import           System.IO.Unsafe
 import           Text.Regex.TDFA.Text            ()
-import DynFlags (DynFlags)
 
 -- ---------------------------------------------------------------------
 
 newtype IdePlugins ideState = IdePlugins
   { ipMap :: [(PluginId, PluginDescriptor ideState)]}
-
-data DynFlagsModifications =
-  DynFlagsModifications { dynFlagsModifyGlobal :: DynFlags -> DynFlags
-                        , dynFlagsModifyParser :: DynFlags -> DynFlags
-                        }
-
-instance Semigroup DynFlagsModifications where
-  DynFlagsModifications g1 p1 <> DynFlagsModifications g2 p2 =
-    DynFlagsModifications (g2 . g1) (p2 . p1)
-
-instance Monoid DynFlagsModifications where
-  mempty = DynFlagsModifications id id
-
 
 -- ---------------------------------------------------------------------
 
@@ -79,7 +65,6 @@ data PluginDescriptor ideState =
                    , pluginHandlers     :: PluginHandlers ideState
                    , pluginConfigDescriptor :: ConfigDescriptor
                    , pluginNotificationHandlers :: PluginNotificationHandlers ideState
-                   , pluginModifyDynflags :: DynFlagsModifications
                    }
 
 -- | An existential wrapper of 'Properties'
@@ -311,7 +296,6 @@ defaultPluginDescriptor plId =
     mempty
     mempty
     defaultConfigDescriptor
-    mempty
     mempty
 
 newtype CommandId = CommandId T.Text
