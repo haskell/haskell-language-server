@@ -165,15 +165,15 @@ findSigOfDeclRanged :: Range -> [LHsDecl p] -> Maybe (Sig p)
 findSigOfDeclRanged range decls = do
   dec <- findDeclContainingLoc (_start range) decls
   case dec of
-     L _ (SigD _ sig@TypeSig {}) -> Just sig
+     L _ (SigD _ sig@TypeSig {})     -> Just sig
      L _ (ValD _ (bind :: HsBind p)) -> findSigOfBind range bind
-     _ -> Nothing
+     _                               -> Nothing
 
 findSigOfBind :: Range -> HsBind p -> Maybe (Sig p)
 findSigOfBind range bind =
     case bind of
       FunBind {} -> findSigOfLMatch (unLoc $ mg_alts (fun_matches bind))
-      _ -> Nothing
+      _          -> Nothing
   where
     findSigOfLMatch :: [LMatch p (LHsExpr p)] -> Maybe (Sig p)
     findSigOfLMatch ls = do
@@ -188,7 +188,7 @@ findSigOfBind range bind =
           grhs <- findDeclContainingLoc (_start range) (grhssGRHSs grhs)
           case unLoc grhs of
             GRHS _ _ bd -> findSigOfExpr (unLoc bd)
-            _ -> Nothing
+            _           -> Nothing
 
     findSigOfExpr :: HsExpr p -> Maybe (Sig p)
     findSigOfExpr = go

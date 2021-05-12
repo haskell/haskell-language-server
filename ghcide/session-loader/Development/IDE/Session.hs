@@ -143,7 +143,7 @@ loadWithImplicitCradle :: Maybe FilePath
 loadWithImplicitCradle mHieYaml rootDir = do
   crdl       <- case mHieYaml of
     Just yaml -> HieBios.loadCradle yaml
-    Nothing -> loadImplicitHieCradle $ addTrailingPathSeparator rootDir
+    Nothing   -> loadImplicitHieCradle $ addTrailingPathSeparator rootDir
   return crdl
 
 getInitialGhcLibDirDefault :: IO (Maybe LibDir)

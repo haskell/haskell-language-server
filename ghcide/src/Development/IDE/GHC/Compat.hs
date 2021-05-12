@@ -1,10 +1,10 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE CPP               #-}
+{-# LANGUAGE ConstraintKinds   #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE PatternSynonyms   #-}
 {-# OPTIONS -Wno-dodgy-imports -Wno-incomplete-uni-patterns #-}
 
 -- | Attempt at hiding the GHC version differences we can.
@@ -62,60 +62,56 @@ module Development.IDE.GHC.Compat(
     ,isQualifiedImport) where
 
 #if MIN_VERSION_ghc(8,10,0)
-import LinkerTypes
+import           LinkerTypes
 #endif
 
-import StringBuffer
+import           Compat.HieAst      (enrichHie, mkHieFile)
+import           Compat.HieBin
+import           Compat.HieTypes
+import           Compat.HieUtils
+import qualified Data.ByteString    as BS
+import           Data.IORef
+import           DynFlags           hiding (ExposePackage)
 import qualified DynFlags
-import DynFlags hiding (ExposePackage)
-import Fingerprint (Fingerprint)
+import           Fingerprint        (Fingerprint)
+import           HscTypes
+import           MkIface
 import qualified Module
-import Packages
-import Data.IORef
-import HscTypes
-import NameCache
-import qualified Data.ByteString as BS
-import MkIface
-import TcRnTypes
-import Compat.HieAst (mkHieFile,enrichHie)
-import Compat.HieBin
-import Compat.HieTypes
-import Compat.HieUtils
+import           NameCache
+import           Packages
+import           StringBuffer
+import           TcRnTypes
 
 #if MIN_VERSION_ghc(8,10,0)
-import GHC.Hs.Extension
+import           GHC.Hs.Extension
 #else
-import HsExtension
+import           HsExtension
 #endif
 
+import           Avail
+import           GHC                hiding (HasSrcSpan, ModLocation, getLoc,
+                                     lookupName)
 import qualified GHC
 import qualified TyCoRep
-import GHC hiding (
-      ModLocation,
-      HasSrcSpan,
-      lookupName,
-      getLoc
-    )
-import Avail
 #if MIN_VERSION_ghc(8,8,0)
-import Data.List (foldl')
+import           Data.List          (foldl')
 #else
-import Data.List (foldl', isSuffixOf)
+import           Data.List          (foldl', isSuffixOf)
 #endif
 
-import DynamicLoading
-import Plugins (Plugin(parsedResultAction), withPlugins)
-import Data.Map.Strict (Map)
+import           Data.Map.Strict    (Map)
+import           DynamicLoading
+import           Plugins            (Plugin (parsedResultAction), withPlugins)
 
 #if !MIN_VERSION_ghc(8,8,0)
-import System.FilePath ((-<.>))
+import           System.FilePath    ((-<.>))
 #endif
 
 #if !MIN_VERSION_ghc(8,8,0)
 import qualified EnumSet
 
-import System.IO
-import Foreign.ForeignPtr
+import           Foreign.ForeignPtr
+import           System.IO
 
 
 hPutStringBuffer :: Handle -> StringBuffer -> IO ()
@@ -303,8 +299,8 @@ pattern FunTy arg res <- TyCoRep.FunTy arg res
 isQualifiedImport :: ImportDecl a -> Bool
 #if MIN_VERSION_ghc(8,10,0)
 isQualifiedImport ImportDecl{ideclQualified = NotQualified} = False
-isQualifiedImport ImportDecl{} = True
+isQualifiedImport ImportDecl{}                              = True
 #else
-isQualifiedImport ImportDecl{ideclQualified} = ideclQualified
+isQualifiedImport ImportDecl{ideclQualified}                = ideclQualified
 #endif
-isQualifiedImport _ = False
+isQualifiedImport _                                         = False

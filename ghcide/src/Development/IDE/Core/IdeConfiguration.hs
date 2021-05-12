@@ -20,8 +20,8 @@ import           Data.HashSet                   (HashSet, singleton)
 import           Data.Hashable                  (Hashed, hashed, unhashed)
 import           Data.Text                      (Text, isPrefixOf)
 import           Development.IDE.Core.Shake
-import           Development.IDE.Types.Location
 import           Development.IDE.Graph
+import           Development.IDE.Types.Location
 import           Language.LSP.Types
 import           System.FilePath                (isRelative)
 

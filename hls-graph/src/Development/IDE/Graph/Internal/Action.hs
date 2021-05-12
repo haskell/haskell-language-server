@@ -1,14 +1,14 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeFamilies               #-}
 
 module Development.IDE.Graph.Internal.Action where
 
-import qualified Development.Shake as Shake
-import qualified Development.Shake.Rule as Shake
-import Development.Shake.Classes
-import Control.Exception
-import Control.Monad.IO.Class
-import Control.Monad.Fail
+import           Control.Exception
+import           Control.Monad.Fail
+import           Control.Monad.IO.Class
+import qualified Development.Shake         as Shake
+import           Development.Shake.Classes
+import qualified Development.Shake.Rule    as Shake
 
 newtype Action a = Action {fromAction :: Shake.Action a}
     deriving (Monad, Applicative, Functor, MonadIO, MonadFail)

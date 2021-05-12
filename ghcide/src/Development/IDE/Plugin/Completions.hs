@@ -25,13 +25,13 @@ import           Development.IDE.GHC.Error                    (rangeToSrcSpan)
 import           Development.IDE.GHC.ExactPrint               (Annotated (annsA),
                                                                GetAnnotatedParsedSource (GetAnnotatedParsedSource))
 import           Development.IDE.GHC.Util                     (prettyPrint)
+import           Development.IDE.Graph
+import           Development.IDE.Graph.Classes
 import           Development.IDE.Plugin.CodeAction.ExactPrint
 import           Development.IDE.Plugin.Completions.Logic
 import           Development.IDE.Plugin.Completions.Types
 import           Development.IDE.Types.HscEnvEq               (hscEnv)
 import           Development.IDE.Types.Location
-import           Development.IDE.Graph
-import           Development.IDE.Graph.Classes
 import           GHC.Exts                                     (toList)
 import           GHC.Generics
 import           Ide.Plugin.Config                            (Config)
