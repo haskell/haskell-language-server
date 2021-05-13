@@ -31,21 +31,6 @@
         "type": "github"
       }
     },
-    "flake-utils_2": {
-      "locked": {
-        "lastModified": 1619345332,
-        "narHash": "sha256-qHnQkEp1uklKTpx3MvKtY6xzgcqXDsz5nLilbbuL+3A=",
-        "owner": "numtide",
-        "repo": "flake-utils",
-        "rev": "2ebf2558e5bf978c7fb8ea927dfaed8fefab2e28",
-        "type": "github"
-      },
-      "original": {
-        "owner": "numtide",
-        "repo": "flake-utils",
-        "type": "github"
-      }
-    },
     "gitignore": {
       "flake": false,
       "locked": {
@@ -80,7 +65,9 @@
     },
     "pre-commit-hooks": {
       "inputs": {
-        "flake-utils": "flake-utils_2",
+        "flake-utils": [
+          "flake-utils"
+        ],
         "nixpkgs": [
           "nixpkgs"
         ]
