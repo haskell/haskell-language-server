@@ -131,6 +131,7 @@ test-suite tests
     CodeAction.DestructSpec
     CodeAction.IntrosSpec
     CodeAction.RefineSpec
+    CodeAction.RunMetaprogramSpec
     CodeAction.UseDataConSpec
     CodeLens.EmptyCaseSpec
     ProviderSpec
