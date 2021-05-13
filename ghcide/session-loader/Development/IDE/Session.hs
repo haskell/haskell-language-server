@@ -143,7 +143,7 @@ loadWithImplicitCradle :: Maybe FilePath
 loadWithImplicitCradle mHieYaml rootDir = do
   crdl       <- case mHieYaml of
     Just yaml -> HieBios.loadCradle yaml
-    Nothing -> loadImplicitHieCradle $ addTrailingPathSeparator rootDir
+    Nothing   -> loadImplicitHieCradle $ addTrailingPathSeparator rootDir
   return crdl
 
 getInitialGhcLibDirDefault :: IO (Maybe LibDir)
@@ -236,8 +236,6 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
   -- Version of the mappings above
   version <- newVar 0
   let returnWithVersion fun = IdeGhcSession fun <$> liftIO (readVar version)
-  let invalidateShakeCache = do
-        void $ modifyVar' version succ
   -- This caches the mapping from Mod.hs -> hie.yaml
   cradleLoc <- liftIO $ memoIO $ \v -> do
       res <- findCradle v
@@ -253,6 +251,9 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
   return $ do
     extras@ShakeExtras{logger, restartShakeSession, ideNc, knownTargetsVar, lspEnv
                       } <- getShakeExtras
+    let invalidateShakeCache = do
+            void $ modifyVar' version succ
+            recordDirtyKeys extras GhcSessionIO [emptyFilePath]
 
     IdeOptions{ optTesting = IdeTesting optTesting
               , optCheckProject = getCheckProject
@@ -397,7 +398,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
 
           -- Invalidate all the existing GhcSession build nodes by restarting the Shake session
           invalidateShakeCache
-          restartShakeSession Nothing []
+          restartShakeSession []
 
           -- Typecheck all files in the project on startup
           checkProject <- getCheckProject

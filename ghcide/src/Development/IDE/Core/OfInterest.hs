@@ -27,7 +27,6 @@ import           Development.IDE.Graph
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Maybe
 import qualified Data.ByteString                              as BS
-import           Data.Foldable                                (toList)
 import           Data.List.Extra                              (nubOrd)
 import           Data.Maybe                                   (catMaybes)
 import           Development.IDE.Core.ProgressReporting
@@ -80,14 +79,14 @@ addFileOfInterest state f v = do
     OfInterestVar var <- getIdeGlobalState state
     files <- modifyVar' var $ HashMap.insert f v
     recordDirtyKeys (shakeExtras state) IsFileOfInterest [f]
-    logDebug (ideLogger state) $ "Set files of interest to: " <> T.pack (show $ toList files)
+    logDebug (ideLogger state) $ "Set files of interest to: " <> T.pack (show files)
 
 deleteFileOfInterest :: IdeState -> NormalizedFilePath -> IO ()
 deleteFileOfInterest state f = do
     OfInterestVar var <- getIdeGlobalState state
     files <- modifyVar' var $ HashMap.delete f
     recordDirtyKeys (shakeExtras state) IsFileOfInterest [f]
-    logDebug (ideLogger state) $ "Set files of interest to: " <> T.pack (show $ toList files)
+    logDebug (ideLogger state) $ "Set files of interest to: " <> T.pack (show files)
 
 
 -- | Typecheck all the files of interest.

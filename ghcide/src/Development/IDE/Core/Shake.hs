@@ -147,10 +147,11 @@ import           UniqSupply
 import           Control.Exception.Extra                hiding (bracket_)
 import qualified Data.ByteString.Char8                  as BS8
 import           Data.Default
+import           Data.Foldable                          (toList)
 import           Data.HashSet                           (HashSet)
 import qualified Data.HashSet                           as HSet
-import           Data.IORef.Extra                       (atomicModifyIORef_, atomicModifyIORef'_)
-import           Data.Foldable                          (toList)
+import           Data.IORef.Extra                       (atomicModifyIORef'_,
+                                                         atomicModifyIORef_)
 import           HieDb.Types
 import           Ide.Plugin.Config
 import qualified Ide.PluginUtils                        as HLS
@@ -193,8 +194,7 @@ data ShakeExtras = ShakeExtras
     ,ideTesting :: IdeTesting
     -- ^ Whether to enable additional lsp messages used by the test suite for checking invariants
     ,restartShakeSession
-        :: Maybe [SomeShakeValue]         -- keys changed (or Nothing for ALL)
-        -> [DelayedAction ()]
+        :: [DelayedAction ()]
         -> IO ()
     ,ideNc :: IORef NameCache
     -- | A mapping of module name to known target (or candidate targets, if missing)
@@ -539,7 +539,7 @@ shakeOpen lspEnv defaultConfig logger debouncer
 -- | Must be called in the 'Initialized' handler and only once
 shakeSessionInit :: IdeState -> IO ()
 shakeSessionInit IdeState{..} = do
-    initSession <- newSession shakeExtras shakeDb Nothing []
+    initSession <- newSession shakeExtras shakeDb []
     putMVar shakeSession initSession
 
 shakeProfile :: IdeState -> FilePath -> IO ()
@@ -579,8 +579,8 @@ delayedAction a = do
 -- | Restart the current 'ShakeSession' with the given system actions.
 --   Any actions running in the current session will be aborted,
 --   but actions added via 'shakeEnqueue' will be requeued.
-shakeRestart :: IdeState -> Maybe [SomeShakeValue] -> [DelayedAction ()] -> IO ()
-shakeRestart IdeState{..} keysChanged acts =
+shakeRestart :: IdeState -> [DelayedAction ()] -> IO ()
+shakeRestart IdeState{..} acts =
     withMVar'
         shakeSession
         (\runner -> do
@@ -591,7 +591,7 @@ shakeRestart IdeState{..} keysChanged acts =
                       Just fp -> ", profile saved at " <> fp
                       _       -> ""
               let msg = T.pack $ "Restarting build session " ++ keysMsg ++ abortMsg
-                  keysMsg = "for keys " ++ show (HSet.toList backlog <> fromMaybe [] keysChanged) ++ " "
+                  keysMsg = "for keys " ++ show (HSet.toList backlog) ++ " "
                   abortMsg = "(aborting the previous one took " ++ showDuration stopTime ++ profile ++ ")"
               logDebug (logger shakeExtras) msg
               notifyTestingLogMessage shakeExtras msg
@@ -600,7 +600,7 @@ shakeRestart IdeState{..} keysChanged acts =
         -- between spawning the new thread and updating shakeSession.
         -- See https://github.com/haskell/ghcide/issues/79
         (\() -> do
-          (,()) <$> newSession shakeExtras shakeDb keysChanged acts)
+          (,()) <$> newSession shakeExtras shakeDb acts)
 
 notifyTestingLogMessage :: ShakeExtras -> T.Text -> IO ()
 notifyTestingLogMessage extras msg = do
@@ -636,18 +636,15 @@ shakeEnqueue ShakeExtras{actionQueue, logger} act = do
 newSession
     :: ShakeExtras
     -> ShakeDatabase
-    -> Maybe [SomeShakeValue]
-        -- ^ When a set of keys is given, we add them to the dirty backlog and hand it over to Shake.
-        --   Otherwise if nothing is given we clear the backlog but don't share the information with Shake, who will have to check all the keys.
     -> [DelayedActionInternal]
     -> IO ShakeSession
-newSession extras@ShakeExtras{..} shakeDb newDirtyKeys acts = do
+newSession extras@ShakeExtras{..} shakeDb acts = do
     IdeOptions{optRunSubset} <- getIdeOptionsIO extras
     reenqueued <- atomically $ peekInProgress actionQueue
-    allPendingKeys <- case newDirtyKeys of
-        Just kk | optRunSubset
-          -> Just . (\x -> foldl' (flip HSet.insert) x kk) <$> atomicModifyIORef' dirtyKeys (mempty,)
-        _ -> modifyIORef dirtyKeys mempty >> return Nothing
+    allPendingKeys <-
+        if optRunSubset
+          then Just <$> readIORef dirtyKeys
+          else return Nothing
     let
         -- A daemon-like action used to inject additional work
         -- Runs actions from the work queue sequentially
@@ -669,10 +666,9 @@ newSession extras@ShakeExtras{..} shakeDb newDirtyKeys acts = do
 
         workRun restore = withSpan "Shake session" $ \otSpan -> do
           whenJust allPendingKeys $ \kk -> setTag otSpan "keys" (BS8.pack $ unlines $ map show $ toList kk)
-          let acts' = [pumpActionThread otSpan, keysActs]
-              keysActs = void $ parallel $ map (run otSpan) (reenqueued ++ acts)
+          let keysActs = pumpActionThread otSpan : map (run otSpan) (reenqueued ++ acts)
           res <- try @SomeException $
-            restore $ shakeRunDatabaseForKeys (HSet.toList <$> allPendingKeys) shakeDb acts'
+            restore $ shakeRunDatabaseForKeys (HSet.toList <$> allPendingKeys) shakeDb keysActs
           let res' = case res of
                       Left e  -> "exception: " <> displayException e
                       Right _ -> "completed"
@@ -908,10 +904,8 @@ defineEarlyCutoff' doDiagnostics key file old mode action = do
                         return $ Just $ RunResult ChangedNothing old $ A v
                     _ -> return Nothing
             _ -> return Nothing
-        case val of
-            Just res -> do
-                liftIO $ atomicModifyIORef'_ dirtyKeys (HSet.delete $ SomeShakeValue key)
-                return res
+        res <- case val of
+            Just res -> return res
             Nothing -> do
                 (bs, (diags, res)) <- actionCatch
                     (do v <- action; liftIO $ evaluate $ force v) $
@@ -931,7 +925,6 @@ defineEarlyCutoff' doDiagnostics key file old mode action = do
                                     (toShakeValue ShakeResult bs, Failed b)
                     Just v -> pure (maybe ShakeNoCutoff ShakeResult bs, Succeeded (vfsVersion =<< modTime) v)
                 liftIO $ setValues state key file res (Vector.fromList diags)
-                liftIO $ atomicModifyIORef'_ dirtyKeys (HSet.delete $ SomeShakeValue key)
                 if doDiagnostics
                     then updateFileDiagnostics file (Key key) extras $ map (\(_,y,z) -> (y,z)) diags
                     else forM_ diags $ \d -> liftIO $ logWarning logger $ showDiagnosticsColored [d]
@@ -945,6 +938,8 @@ defineEarlyCutoff' doDiagnostics key file old mode action = do
                     (if eq then ChangedRecomputeSame else ChangedRecomputeDiff)
                     (encodeShakeValue bs) $
                     A res
+        liftIO $ atomicModifyIORef'_ dirtyKeys (HSet.delete $ toKey key file)
+        return res
 
 isSuccess :: RunResult (A v) -> Bool
 isSuccess (RunResult _ _ (A Failed{})) = False

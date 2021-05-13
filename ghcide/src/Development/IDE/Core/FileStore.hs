@@ -46,8 +46,7 @@ import           Development.IDE.Import.DependencyInformation
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
-import           Development.IDE.Types.Shake                  (SomeShakeValue,
-                                                               toKey)
+import           Development.IDE.Types.Shake                  (SomeShakeValue)
 import           HieDb.Create                                 (deleteMissingRealFiles)
 import           Ide.Plugin.Config                            (CheckParents (..))
 import           System.IO.Error
@@ -63,6 +62,9 @@ import qualified Development.IDE.Types.Logger                 as L
 
 import qualified Data.Binary                                  as B
 import qualified Data.ByteString.Lazy                         as LBS
+import qualified Data.HashSet                                 as HSet
+import           Data.IORef.Extra                             (atomicModifyIORef_)
+import           Data.List                                    (foldl')
 import           Language.LSP.Server                          hiding
                                                               (getVirtualFile)
 import qualified Language.LSP.Server                          as LSP
@@ -246,8 +248,8 @@ setFileModified state saved nfp = do
     VFSHandle{..} <- getIdeGlobalState state
     when (isJust setVirtualFileContents) $
         fail "setFileModified can't be called on this type of VFSHandle"
-    let keysChanged = [toKey GetModificationTime nfp]
-    restartShakeSession (shakeExtras state) (Just keysChanged) []
+    recordDirtyKeys (shakeExtras state) GetModificationTime [nfp]
+    restartShakeSession (shakeExtras state) []
     when checkParents $
       typecheckParents state nfp
 
@@ -278,4 +280,6 @@ setSomethingModified state keys = do
     -- Update database to remove any files that might have been renamed/deleted
     atomically $ writeTQueue (indexQueue $ hiedbWriter $ shakeExtras state) deleteMissingRealFiles
 
-    void $ restartShakeSession (shakeExtras state) (Just keys) []
+    atomicModifyIORef_ (dirtyKeys $ shakeExtras state) $ \x ->
+        foldl' (flip HSet.insert) x keys
+    void $ restartShakeSession (shakeExtras state) []
