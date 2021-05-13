@@ -22,11 +22,11 @@ import           Development.IDE                   (Logger (Logger),
                                                     Priority (Info), action)
 import           Development.IDE.Core.OfInterest   (kick)
 import           Development.IDE.Core.Rules        (mainRule)
+import           Development.IDE.Graph             (ShakeOptions (shakeThreads))
 import qualified Development.IDE.Main              as Main
 import qualified Development.IDE.Plugin.HLS.GhcIde as GhcIde
 import qualified Development.IDE.Plugin.Test       as Test
 import           Development.IDE.Types.Options
-import           Development.IDE.Graph                 (ShakeOptions (shakeThreads))
 import           Ide.Plugin.Config                 (Config (checkParents, checkProject))
 import           Ide.Plugin.ConfigUtils            (pluginsToDefaultConfig,
                                                     pluginsToVSCodeExtensionSchema)

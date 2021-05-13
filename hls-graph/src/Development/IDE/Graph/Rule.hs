@@ -10,6 +10,6 @@ module Development.IDE.Graph.Rule(
     apply, apply1,
     ) where
 
-import qualified Development.Shake.Rule as Shake
-import Development.IDE.Graph.Internal.Action
-import Development.IDE.Graph.Internal.Rules
+import           Development.IDE.Graph.Internal.Action
+import           Development.IDE.Graph.Internal.Rules
+import qualified Development.Shake.Rule                as Shake

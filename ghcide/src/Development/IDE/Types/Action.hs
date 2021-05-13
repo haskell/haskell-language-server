@@ -15,8 +15,8 @@ import           Data.HashSet                 (HashSet)
 import qualified Data.HashSet                 as Set
 import           Data.Hashable                (Hashable (..))
 import           Data.Unique                  (Unique)
+import           Development.IDE.Graph        (Action)
 import           Development.IDE.Types.Logger
-import           Development.IDE.Graph            (Action)
 import           Numeric.Natural
 
 data DelayedAction a = DelayedAction

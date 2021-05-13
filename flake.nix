@@ -118,11 +118,21 @@
           hooks = {
             stylish-haskell.enable = true;
             stylish-haskell.excludes = [
+              # Ignored files
               "^Setup.hs$"
               "test/testdata/.*$"
               "test/data/.*$"
+              "test/manual/lhs/.*$"
               "^hie-compat/.*$"
               "^plugins/hls-tactics-plugin/.*$"
+
+              # Temporarily ignored files
+              # Stylish-haskell (and other formatters) does not work well with some CPP usages in these files
+              "^ghcide/src/Development/IDE/GHC/Compat.hs$"
+              "^plugins/hls-splice-plugin/src/Ide/Plugin/Splice.hs$"
+              "^ghcide/test/exe/Main.hs$"
+              "ghcide/src/Development/IDE/Core/Rules.hs"
+              "^hls-test-utils/src/Test/Hls/Util.hs$"
             ];
           };
         };

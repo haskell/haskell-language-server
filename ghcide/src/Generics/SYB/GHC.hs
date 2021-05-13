@@ -10,12 +10,12 @@ module Generics.SYB.GHC
       largestM
     ) where
 
-import Control.Monad
-import Data.Functor.Compose (Compose(Compose))
-import Data.Monoid (Any(Any))
-import Development.IDE.GHC.Compat
-import Development.IDE.Graph.Classes
-import Generics.SYB
+import           Control.Monad
+import           Data.Functor.Compose          (Compose (Compose))
+import           Data.Monoid                   (Any (Any))
+import           Development.IDE.GHC.Compat
+import           Development.IDE.Graph.Classes
+import           Generics.SYB
 
 
 -- | A generic query intended to be used for calling 'smallestM' and
@@ -80,7 +80,7 @@ smallestM q f = fmap snd . go
         Just True -> do
           it@(r, x') <- gmapMQ go x
           case r of
-            Any True -> pure it
+            Any True  -> pure it
             Any False -> fmap (Any True,) $ f x'
         Just False -> pure (mempty, x)
 
@@ -100,9 +100,9 @@ largestM q f = go
     go :: GenericM m
     go x = do
       case q x of
-        Just True -> f x
+        Just True  -> f x
         Just False -> pure x
-        Nothing -> gmapM go x
+        Nothing    -> gmapM go x
 
 newtype MonadicQuery r m a = MonadicQuery
   { runMonadicQuery :: m (r, a)

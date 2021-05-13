@@ -15,12 +15,12 @@ import qualified Data.ByteString.Lazy.Char8    as LBS
 import           Data.Default
 import qualified Data.Text                     as T
 import           Development.IDE.Core.Rules
+import           Development.IDE.Graph         (ShakeOptions (shakeThreads))
 import           Development.IDE.Main          (isLSP)
 import qualified Development.IDE.Main          as Main
 import qualified Development.IDE.Session       as Session
 import           Development.IDE.Types.Logger  as G
 import qualified Development.IDE.Types.Options as Ghcide
-import           Development.IDE.Graph             (ShakeOptions (shakeThreads))
 import           Ide.Arguments
 import           Ide.Logger
 import           Ide.Plugin.ConfigUtils        (pluginsToDefaultConfig,

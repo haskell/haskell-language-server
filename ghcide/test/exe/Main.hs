@@ -35,8 +35,8 @@ import           Development.IDE.Core.PositionMapping     (PositionResult (..),
                                                            positionResultToMaybe,
                                                            toCurrent)
 import           Development.IDE.Core.Shake               (Q (..))
-import qualified Development.IDE.Main                     as IDE
 import           Development.IDE.GHC.Util
+import qualified Development.IDE.Main                     as IDE
 import           Development.IDE.Plugin.Completions.Types (extendImportCommandId)
 import           Development.IDE.Plugin.TypeLenses        (typeLensCommandId)
 import           Development.IDE.Spans.Common
@@ -74,37 +74,37 @@ import           System.IO.Extra                          hiding (withTempDir)
 import qualified System.IO.Extra
 import           System.Info.Extra                        (isWindows)
 import           System.Process.Extra                     (CreateProcess (cwd),
-                                                           proc,
-                                                           readCreateProcessWithExitCode, createPipe)
+                                                           createPipe, proc,
+                                                           readCreateProcessWithExitCode)
 import           Test.QuickCheck
 -- import Test.QuickCheck.Instances ()
+import           Control.Concurrent                       (threadDelay)
+import           Control.Concurrent.Async
 import           Control.Lens                             ((^.))
 import           Control.Monad.Extra                      (whenJust)
+import           Data.IORef
+import           Data.IORef.Extra                         (atomicModifyIORef_)
+import           Data.String                              (IsString (fromString))
 import           Data.Tuple.Extra
+import           Development.IDE.Core.FileStore           (getModTime)
 import           Development.IDE.Plugin.CodeAction        (matchRegExMultipleImports)
+import qualified Development.IDE.Plugin.HLS.GhcIde        as Ghcide
 import           Development.IDE.Plugin.Test              (TestRequest (BlockSeconds, GetInterfaceFilesDir),
                                                            WaitForIdeRuleResult (..),
                                                            blockCommandId)
+import           Ide.PluginUtils                          (pluginDescToIdePlugins)
+import           Ide.Types
+import qualified Language.LSP.Types                       as LSP
 import qualified Language.LSP.Types.Lens                  as L
+import qualified Progress
 import           System.Time.Extra
 import           Test.Tasty
 import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.HUnit
 import           Test.Tasty.Ingredients.Rerun
 import           Test.Tasty.QuickCheck
-import           Data.IORef
-import           Ide.PluginUtils (pluginDescToIdePlugins)
-import           Control.Concurrent.Async
-import           Ide.Types
-import           Data.String                              (IsString(fromString))
-import qualified Language.LSP.Types                       as LSP
-import           Data.IORef.Extra                         (atomicModifyIORef_)
-import qualified Development.IDE.Plugin.HLS.GhcIde        as Ghcide
+import           Text.Printf                              (printf)
 import           Text.Regex.TDFA                          ((=~))
-import qualified Progress
-import Development.IDE.Core.FileStore (getModTime)
-import Control.Concurrent (threadDelay)
-import Text.Printf (printf)
 
 waitForProgressBegin :: Session ()
 waitForProgressBegin = skipManyTill anyMessage $ satisfyMaybe $ \case

@@ -111,7 +111,10 @@ import           Development.IDE.GHC.Compat                   hiding
                                                                writeHieFile)
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint
-import           Development.IDE.GHC.Util hiding (modifyDynFlags)
+import           Development.IDE.GHC.Util                     hiding
+                                                              (modifyDynFlags)
+import           Development.IDE.Graph
+import           Development.IDE.Graph.Classes                hiding (get, put)
 import           Development.IDE.Import.DependencyInformation
 import           Development.IDE.Import.FindImports
 import qualified Development.IDE.Spans.AtPoint                as AtPoint
@@ -122,8 +125,6 @@ import           Development.IDE.Types.HscEnvEq
 import           Development.IDE.Types.Location
 import qualified Development.IDE.Types.Logger                 as L
 import           Development.IDE.Types.Options
-import           Development.IDE.Graph
-import           Development.IDE.Graph.Classes                    hiding (get, put)
 import           Fingerprint
 import           GHC.Generics                                 (Generic)
 import           GHC.IO.Encoding
@@ -140,11 +141,16 @@ import           Module
 import           System.Directory                             (canonicalizePath)
 import           TcRnMonad                                    (tcg_dependent_files)
 
-import           Ide.Plugin.Properties (HasProperty, KeyNameProxy, Properties, ToHsType, useProperty)
-import           Ide.Types (PluginId, DynFlagsModifications(dynFlagsModifyGlobal, dynFlagsModifyParser))
-import           Data.Default (def)
-import           Ide.PluginUtils (configForPlugin)
 import           Control.Applicative
+import           Data.Default                                 (def)
+import           Ide.Plugin.Properties                        (HasProperty,
+                                                               KeyNameProxy,
+                                                               Properties,
+                                                               ToHsType,
+                                                               useProperty)
+import           Ide.PluginUtils                              (configForPlugin)
+import           Ide.Types                                    (DynFlagsModifications (dynFlagsModifyGlobal, dynFlagsModifyParser),
+                                                               PluginId)
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
