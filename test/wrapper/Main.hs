@@ -1,4 +1,4 @@
-import           Data.List.Extra    (trimEnd, isInfixOf)
+import           Data.List.Extra    (isInfixOf, trimEnd)
 import           Data.Maybe
 import           System.Environment
 import           System.Process

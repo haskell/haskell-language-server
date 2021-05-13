@@ -18,6 +18,7 @@ import           Data.Aeson
 import           Data.Aeson.Types
 import           Data.Bifunctor
 import           Data.CaseInsensitive           (CI, original)
+import           Data.Default                   (def)
 import           Data.Maybe                     (isJust)
 import           Data.String
 import           Data.Text                      (Text, pack)
@@ -25,20 +26,19 @@ import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
+import           Development.IDE.Graph          (Action)
 import           Development.IDE.LSP.Server
 import           Development.IDE.Plugin
+import qualified Development.IDE.Plugin         as P
 import           Development.IDE.Types.Action
 import           Development.IDE.Types.HscEnvEq (HscEnvEq (hscEnv))
 import           Development.IDE.Types.Location (fromUri)
-import           Development.IDE.Graph              (Action)
 import           GHC.Generics                   (Generic)
 import           GhcPlugins                     (HscEnv (hsc_dflags))
 import           Ide.Types
 import qualified Language.LSP.Server            as LSP
 import           Language.LSP.Types
 import           System.Time.Extra
-import qualified Development.IDE.Plugin as P
-import Data.Default (def)
 
 data TestRequest
     = BlockSeconds Seconds           -- ^ :: Null

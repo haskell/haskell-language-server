@@ -32,42 +32,46 @@ module Development.IDE.GHC.ExactPrint
     )
 where
 
-import BasicTypes (appPrec)
-import Control.Applicative (Alternative)
-import Control.Monad
-import qualified Control.Monad.Fail as Fail
-import Control.Monad.IO.Class (MonadIO)
-import Control.Monad.Trans.Class
-import Control.Monad.Trans.Except
-import Control.Monad.Zip
-import qualified Data.DList as DL
-import Data.Either.Extra (mapLeft)
-import Data.Functor.Classes
-import Data.Functor.Contravariant
-import qualified Data.Text as T
-import Development.IDE.Core.RuleTypes
-import Development.IDE.Core.Service (runAction)
-import Development.IDE.Core.Shake
-import Development.IDE.GHC.Compat hiding (parseExpr)
-import Development.IDE.Types.Location
-import Development.IDE.Graph (RuleResult, Rules)
-import Development.IDE.Graph.Classes
-import qualified GHC.Generics as GHC
-import Generics.SYB
-import Generics.SYB.GHC
-import Ide.PluginUtils
-import Language.Haskell.GHC.ExactPrint
-import Language.Haskell.GHC.ExactPrint.Parsers
-import Language.LSP.Types
-import Language.LSP.Types.Capabilities (ClientCapabilities)
-import Outputable (Outputable, ppr, showSDoc)
-import Retrie.ExactPrint hiding (parseDecl, parseExpr, parsePattern, parseType)
-import Parser (parseIdentifier)
-import Data.Traversable (for)
-import Data.Foldable (Foldable(fold))
-import Data.Bool (bool)
-import Data.Monoid (All(All), getAll)
-import Control.Arrow
+import           BasicTypes                              (appPrec)
+import           Control.Applicative                     (Alternative)
+import           Control.Arrow
+import           Control.Monad
+import qualified Control.Monad.Fail                      as Fail
+import           Control.Monad.IO.Class                  (MonadIO)
+import           Control.Monad.Trans.Class
+import           Control.Monad.Trans.Except
+import           Control.Monad.Zip
+import           Data.Bool                               (bool)
+import qualified Data.DList                              as DL
+import           Data.Either.Extra                       (mapLeft)
+import           Data.Foldable                           (Foldable (fold))
+import           Data.Functor.Classes
+import           Data.Functor.Contravariant
+import           Data.Monoid                             (All (All), getAll)
+import qualified Data.Text                               as T
+import           Data.Traversable                        (for)
+import           Development.IDE.Core.RuleTypes
+import           Development.IDE.Core.Service            (runAction)
+import           Development.IDE.Core.Shake
+import           Development.IDE.GHC.Compat              hiding (parseExpr)
+import           Development.IDE.Graph                   (RuleResult, Rules)
+import           Development.IDE.Graph.Classes
+import           Development.IDE.Types.Location
+import qualified GHC.Generics                            as GHC
+import           Generics.SYB
+import           Generics.SYB.GHC
+import           Ide.PluginUtils
+import           Language.Haskell.GHC.ExactPrint
+import           Language.Haskell.GHC.ExactPrint.Parsers
+import           Language.LSP.Types
+import           Language.LSP.Types.Capabilities         (ClientCapabilities)
+import           Outputable                              (Outputable, ppr,
+                                                          showSDoc)
+import           Parser                                  (parseIdentifier)
+import           Retrie.ExactPrint                       hiding (parseDecl,
+                                                          parseExpr,
+                                                          parsePattern,
+                                                          parseType)
 
 
 ------------------------------------------------------------------------------
@@ -230,7 +234,7 @@ graft' needs_space dst val = Graft $ \dflags a -> do
             ( mkT $
                 \case
                     (L src _ :: Located ast) | src == dst -> val'
-                    l -> l
+                    l                                     -> l
             )
             a
 

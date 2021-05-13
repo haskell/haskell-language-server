@@ -55,7 +55,8 @@ import           System.IO.Error
 #ifdef mingw32_HOST_OS
 import qualified System.Directory                             as Dir
 #else
-import           System.Posix.Files                           ( getFileStatus, modificationTimeHiRes)
+import           System.Posix.Files                           (getFileStatus,
+                                                               modificationTimeHiRes)
 #endif
 
 import qualified Development.IDE.Types.Logger                 as L

@@ -46,7 +46,7 @@ import           Development.IDE.Core.Shake            (IdeState (shakeExtras),
 import           Development.IDE.Core.Tracing          (measureMemory)
 import           Development.IDE.Graph                 (action)
 import           Development.IDE.LSP.LanguageServer    (runLanguageServer)
-import           Development.IDE.Plugin                (Plugin (pluginHandlers, pluginRules, pluginModifyDynflags))
+import           Development.IDE.Plugin                (Plugin (pluginHandlers, pluginModifyDynflags, pluginRules))
 import           Development.IDE.Plugin.HLS            (asGhcIdePlugin)
 import qualified Development.IDE.Plugin.HLS.GhcIde     as Ghcide
 import           Development.IDE.Session               (SessionLoadingOptions,
@@ -60,7 +60,8 @@ import           Development.IDE.Types.Logger          (Logger (Logger))
 import           Development.IDE.Types.Options         (IdeGhcSession,
                                                         IdeOptions (optCheckParents, optCheckProject, optReportProgress),
                                                         clientSupportsProgress,
-                                                        defaultIdeOptions, optModifyDynFlags)
+                                                        defaultIdeOptions,
+                                                        optModifyDynFlags)
 import           Development.IDE.Types.Shake           (Key (Key))
 import           GHC.IO.Encoding                       (setLocaleEncoding)
 import           GHC.IO.Handle                         (hDuplicate)
