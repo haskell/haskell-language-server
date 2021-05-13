@@ -38,7 +38,7 @@ jobs:
         install_options: '--tarball-url-prefix https://nixos-nix-install-tests.cachix.org/serve'
         extra_nix_config: |
           experimental-features = nix-command flakes
-          nix_path: nixpkgs=channel:nixos-unstable
+        nix_path: nixpkgs=channel:nixos-unstable
     - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
       uses: cachix/cachix-action@v8
       with:
