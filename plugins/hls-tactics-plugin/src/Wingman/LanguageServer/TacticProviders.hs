@@ -156,12 +156,12 @@ commandProvider Refine =
   requireFeature FeatureRefineHole $
     provide Refine ""
 commandProvider BeginMetaprogram =
+  requireFeature FeatureMetaprogram $
   requireHoleSort (== Hole) $
-  -- requireFeature FeatureMetaprogram $
     provide BeginMetaprogram ""
 commandProvider RunMetaprogram =
+  requireFeature FeatureMetaprogram $
   withMetaprogram $ \mp ->
-  -- requireFeature FeatureMetaprogram $
     provide RunMetaprogram mp
 
 
