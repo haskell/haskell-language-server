@@ -1,4 +1,7 @@
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleInstances   #-}
+{-# LANGUAGE GADTs               #-}
+{-# LANGUAGE OverloadedLabels    #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Development.IDE.Plugin.CodeAction.Args
   ( module Development.IDE.Plugin.CodeAction.Args,
@@ -6,6 +9,8 @@ module Development.IDE.Plugin.CodeAction.Args
 where
 
 import           Control.Lens                                 (alaf)
+import qualified Data.Aeson.Types                             as A
+import           Data.Maybe                                   (fromMaybe)
 import           Data.Monoid                                  (Ap (..))
 import qualified Data.Text                                    as T
 import           Development.IDE                              (Diagnostic,
@@ -20,10 +25,14 @@ import           Development.IDE.Plugin.TypeLenses            (GlobalBindingType
 import           Development.IDE.Spans.LocalBindings          (Bindings)
 import           Development.IDE.Types.Exports                (ExportsMap)
 import           Development.IDE.Types.Options                (IdeOptions)
+import           GHC.TypeLits                                 (KnownSymbol,
+                                                               symbolVal)
+import           Ide.Plugin.Properties
 import           Language.LSP.Types                           (CodeActionKind (CodeActionQuickFix),
                                                                TextEdit)
 import           Retrie                                       (Annotated (astA))
 import           Retrie.ExactPrint                            (annsA)
+-------------------------------------------------------------------------------------------------
 
 type CodeActionTitle = T.Text
 
@@ -31,6 +40,32 @@ type CodeActionPreferred = Bool
 
 -- | A compact representation of 'Language.LSP.Types.CodeAction's
 type GhcideCodeActions = [(CodeActionTitle, Maybe CodeActionKind, Maybe CodeActionPreferred, [TextEdit])]
+
+-------------------------------------------------------------------------------------------------
+data GhcideCodeActionFunction = forall a. ToCodeAction a => GhcideCodeActionFunction String a
+
+data GhcideCodeActionDef (r :: [PropertyKey]) = GhcideCodeActionDef (Properties r) [GhcideCodeActionFunction]
+
+emptyGhcideCodeActionDef :: GhcideCodeActionDef '[]
+emptyGhcideCodeActionDef = GhcideCodeActionDef emptyProperties []
+
+defCodeAction :: forall a s r. (ToCodeAction a, KnownSymbol s, NotElem s r) => KeyNameProxy s -> T.Text -> a -> GhcideCodeActionDef r -> GhcideCodeActionDef ('PropertyKey s 'TBoolean : r)
+defCodeAction k desc f (GhcideCodeActionDef p fx) = GhcideCodeActionDef (defineBooleanProperty k ("Code action: " <> desc) True p) (fx ++ [GhcideCodeActionFunction (symbolVal k) f])
+
+runCodeActionDef :: GhcideCodeActionDef r -> A.Object -> CodeActionArgs -> GhcideCodeActions
+runCodeActionDef (GhcideCodeActionDef _ xs) config caa = concat [toCodeAction caa f | GhcideCodeActionFunction name f <- xs, fromMaybe True $ A.parseMaybe (A..: T.pack name) config]
+
+properties :: GhcideCodeActionDef r -> Properties r
+properties (GhcideCodeActionDef p _) = p
+
+usePropertyCodeActionDef ::
+  (HasProperty s k t r) =>
+  KeyNameProxy s ->
+  GhcideCodeActionDef r ->
+  A.Object ->
+  ToHsType t
+usePropertyCodeActionDef k d = useProperty k (properties d)
+-------------------------------------------------------------------------------------------------
 
 class ToTextEdit a where
   toTextEdit :: CodeActionArgs -> a -> [TextEdit]

@@ -3,6 +3,7 @@
 
 {-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE OverloadedLabels      #-}
 
 -- | Go to the definition of a variable.
 
@@ -59,6 +60,9 @@ import           Development.IDE.Types.Options
 import qualified GHC.LanguageExtensions                            as Lang
 import           HscTypes                                          (ImportedModsVal (..),
                                                                     importedByUser)
+import           Ide.Plugin.Config                                 (Config,
+                                                                    plcConfig)
+import           Ide.Plugin.Properties
 import           Ide.PluginUtils                                   (subRange)
 import           Ide.Types
 import qualified Language.LSP.Server                               as LSP
@@ -83,7 +87,8 @@ descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
   (defaultPluginDescriptor plId)
     { pluginRules = mempty,
-      pluginHandlers = mkPluginHandler STextDocumentCodeAction codeAction
+      pluginHandlers = mkPluginHandler STextDocumentCodeAction codeAction,
+      pluginConfigDescriptor = defaultConfigDescriptor {configCustomConfig = mkCustomConfig $ properties ghcideCodeActions}
     }
 
 -- | Generate code actions.
@@ -91,9 +96,10 @@ codeAction
     :: IdeState
     -> PluginId
     -> CodeActionParams
-    -> LSP.LspM c (Either ResponseError (List (Command |? CodeAction)))
-codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List xs}) = do
+    -> LSP.LspM Config (Either ResponseError (List (Command |? CodeAction)))
+codeAction state pId (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List xs}) = do
   contents <- LSP.getVirtualFile $ toNormalizedUri uri
+  config <- plcConfig <$> getPluginConfig pId
   liftIO $ do
     let text = Rope.toText . (_text :: VirtualFile -> Rope.Rope) <$> contents
         mbFile = toNormalizedFilePath' <$> uriToFilePath uri
@@ -115,43 +121,64 @@ codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range Cod
       df = ms_hspp_opts . pm_mod_summary <$> parsedModule
       actions =
         [ mkCA title kind isPreferred [x] edit
-        | x <- xs, (title, kind, isPreferred, tedit) <- suggestAction $ CodeActionArgs exportsMap ideOptions parsedModule text df annotatedPS tcM har bindings gblSigs x
+        | x <- xs, (title, kind, isPreferred, tedit) <- runCodeActionDef ghcideCodeActions config $ CodeActionArgs exportsMap ideOptions parsedModule text df annotatedPS tcM har bindings gblSigs x
         , let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing Nothing
         ]
-      actions' = caRemoveRedundantImports parsedModule text diag xs uri
+      actions' = concat [caRemoveRedundantImports parsedModule text diag xs uri | usePropertyCodeActionDef #removeRedundantImport ghcideCodeActions config]
                <> actions
-               <> caRemoveInvalidExports parsedModule text diag xs uri
+               <> concat [caRemoveInvalidExports parsedModule text diag xs uri | usePropertyCodeActionDef #removeInvalidExport ghcideCodeActions config]
     pure $ Right $ List actions'
 
 mkCA :: T.Text -> Maybe CodeActionKind -> Maybe Bool -> [Diagnostic] -> WorkspaceEdit -> (Command |? CodeAction)
 mkCA title kind isPreferred diags edit =
   InR $ CodeAction title kind (Just $ List diags) isPreferred Nothing (Just edit) Nothing Nothing
 
-suggestAction :: CodeActionArgs -> GhcideCodeActions
-suggestAction caa =
-  concat   -- Order these suggestions by priority
-    [ wrap $ suggestSignature True
-    , wrap suggestExtendImport
-    , wrap suggestImportDisambiguation
-    , wrap suggestNewOrExtendImportForClassMethod
-    , wrap suggestFillTypeWildcard
-    , wrap suggestFixConstructorImport
-    , wrap suggestModuleTypo
-    , wrap suggestReplaceIdentifier
-    , wrap removeRedundantConstraints
-    , wrap suggestAddTypeAnnotationToSatisfyContraints
-    , wrap suggestConstraint
-    , wrap suggestImplicitParameter
-    , wrap suggestHideShadow
-    , wrap suggestNewDefinition
-    , wrap suggestNewImport
-    , wrap suggestDeleteUnusedBinding
-    , wrap suggestExportUnusedTopBinding
-    , wrap suggestFillHole -- Lowest priority
-    ]
-    where
-      wrap :: ToCodeAction a => a -> GhcideCodeActions
-      wrap = toCodeAction caa
+
+ghcideCodeActions :: GhcideCodeActionDef
+  '[ 'PropertyKey "suggestFillHole" 'TBoolean,
+     'PropertyKey "suggestExportUnusedTopBinding" 'TBoolean,
+     'PropertyKey "suggestDeleteUnusedBinding" 'TBoolean,
+     'PropertyKey "suggestNewImport" 'TBoolean,
+     'PropertyKey "suggestNewDefinition" 'TBoolean,
+     'PropertyKey "suggestHideShadow" 'TBoolean,
+     'PropertyKey "suggestImplicitParameter" 'TBoolean,
+     'PropertyKey "suggestConstraint" 'TBoolean,
+     'PropertyKey "suggestAddTypeAnnotationToSatisfyContraints" 'TBoolean,
+     'PropertyKey "removeRedundantConstraints" 'TBoolean,
+     'PropertyKey "suggestReplaceIdentifier" 'TBoolean,
+     'PropertyKey "suggestModuleTypo" 'TBoolean,
+     'PropertyKey "suggestFixConstructorImport" 'TBoolean,
+     'PropertyKey "suggestFillTypeWildcard" 'TBoolean,
+     'PropertyKey "importClassMethod" 'TBoolean,
+     'PropertyKey "suggestImportDisambiguation" 'TBoolean,
+     'PropertyKey "suggestExtendImport" 'TBoolean,
+     'PropertyKey "suggestSignature" 'TBoolean,
+     'PropertyKey "removeInvalidExport" 'TBoolean,
+     'PropertyKey "removeRedundantImport" 'TBoolean]
+ghcideCodeActions = emptyGhcideCodeActionDef  -- Order these suggestions by priority
+   -- the implementation 'caRemoveRedundantImports' and 'caRemoveInvalidExports' are not able to be packaged here
+   -- so they return empty results for config definition
+  & defCodeAction #removeRedundantImport                       "Remove redundant imports"                                 ([] :: [(T.Text, TextEdit)])
+  & defCodeAction #removeInvalidExport                         "Remove invalid exports"                                   ([] :: [(T.Text, TextEdit)])
+  & defCodeAction #suggestSignature                            "Add type signature for bindings"                          (suggestSignature True)
+  & defCodeAction #suggestExtendImport                         "Extend import lists"                                      suggestExtendImport
+  & defCodeAction #suggestImportDisambiguation                 "Disambiguate imports"                                     suggestImportDisambiguation
+  & defCodeAction #importClassMethod                           "Add new imports or extend import lists for class methods" suggestNewOrExtendImportForClassMethod
+  & defCodeAction #suggestFillTypeWildcard                     "Fill wildcards in types"                                  suggestFillTypeWildcard
+  & defCodeAction #suggestFixConstructorImport                 "Fix data constructor imports"                             suggestFixConstructorImport
+  & defCodeAction #suggestModuleTypo                           "Fix import module names"                                  suggestModuleTypo
+  & defCodeAction #suggestReplaceIdentifier                    "Replace identifiers"                                      suggestReplaceIdentifier
+  & defCodeAction #removeRedundantConstraints                  "Remove redundant constraints from type signatures"        removeRedundantConstraints
+  & defCodeAction #suggestAddTypeAnnotationToSatisfyContraints "Add type annotations"                                     suggestAddTypeAnnotationToSatisfyContraints
+  & defCodeAction #suggestConstraint                           "Add type constraints"                                     suggestConstraint
+  & defCodeAction #suggestImplicitParameter                    "Add implicit parameters"                                  suggestImplicitParameter
+  & defCodeAction #suggestHideShadow                           "Hide shadowed identifiers from imports"                   suggestHideShadow
+  & defCodeAction #suggestNewDefinition                        "Add new definitions to be implemented"                    suggestNewDefinition
+  & defCodeAction #suggestNewImport                            "Add new imports"                                          suggestNewImport
+  & defCodeAction #suggestDeleteUnusedBinding                  "Remove unused bindings"                                   suggestDeleteUnusedBinding
+  & defCodeAction #suggestExportUnusedTopBinding               "Export unused bindings"                                   suggestExportUnusedTopBinding
+  & defCodeAction #suggestFillHole                             "Fill holes with suggestions from GHC"                     suggestFillHole -- Lowest priority
+
 
 findSigOfDecl :: (IdP p -> Bool) -> [LHsDecl p] -> Maybe (Sig p)
 findSigOfDecl pred decls =
@@ -182,7 +209,7 @@ findSigOfBind range bind =
 
     findSigOfGRHSs :: GRHSs p (LHsExpr p) -> Maybe (Sig p)
     findSigOfGRHSs grhs = do
-        if _start range `isInsideSrcSpan` (getLoc $ grhssLocalBinds grhs)
+        if _start range `isInsideSrcSpan` getLoc (grhssLocalBinds grhs)
         then findSigOfBinds range (unLoc (grhssLocalBinds grhs)) -- where clause
         else do
           grhs <- findDeclContainingLoc (_start range) (grhssGRHSs grhs)

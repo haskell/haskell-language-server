@@ -26,6 +26,7 @@ module Ide.Plugin.Properties
     KeyNameProxy (..),
     Properties,
     HasProperty,
+    NotElem,
     emptyProperties,
     defineNumberProperty,
     defineIntegerProperty,
