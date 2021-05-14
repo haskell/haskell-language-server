@@ -185,6 +185,20 @@
               ${pre-commit-check.shellHook}
             '';
           };
+        # Create a hls executable
+        # Copied from https://github.com/NixOS/nixpkgs/blob/210784b7c8f3d926b7db73bdad085f4dc5d79418/pkgs/development/tools/haskell/haskell-language-server/withWrapper.nix#L16
+        mkExe = hpkgs:
+          with pkgs.haskell.lib;
+          justStaticExecutables (overrideCabal hpkgs.haskell-language-server
+            (_: {
+              postInstall = ''
+                remove-references-to -t ${hpkgs.ghc} $out/bin/haskell-language-server
+                remove-references-to -t ${hpkgs.shake.data} $out/bin/haskell-language-server
+                remove-references-to -t ${hpkgs.js-jquery.data} $out/bin/haskell-language-server
+                remove-references-to -t ${hpkgs.js-dgtable.data} $out/bin/haskell-language-server
+                remove-references-to -t ${hpkgs.js-flot.data} $out/bin/haskell-language-server
+              '';
+            }));
       in with pkgs; rec {
 
         packages = {
@@ -196,11 +210,11 @@
           haskell-language-server-901-dev = mkDevShell ghc901;
 
           # hls package
-          haskell-language-server = ghcDefault.haskell-language-server;
-          haskell-language-server-865 = ghc865.haskell-language-server;
-          haskell-language-server-884 = ghc884.haskell-language-server;
-          haskell-language-server-8104 = ghc8104.haskell-language-server;
-          haskell-language-server-901 = ghc901.haskell-language-server;
+          haskell-language-server = mkExe ghcDefault;
+          haskell-language-server-865 = mkExe ghc865;
+          haskell-language-server-884 = mkExe ghc884;
+          haskell-language-server-8104 = mkExe ghc8104;
+          haskell-language-server-901 = mkExe ghc901;
         };
 
         defaultPackage = packages.haskell-language-server;
