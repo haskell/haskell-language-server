@@ -1,6 +1,8 @@
+{-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE ViewPatterns          #-}
 
 -- | Provides code actions to add missing pragmas (whenever GHC suggests to)
@@ -9,7 +11,7 @@ module Ide.Plugin.Pragmas (descriptor) where
 import           Control.Applicative        ((<|>))
 import           Control.Lens               hiding (List)
 import           Control.Monad              (join)
-import           Control.Monad.IO.Class
+import           Control.Monad.IO.Class     (MonadIO (liftIO))
 import qualified Data.HashMap.Strict        as H
 import           Data.List
 import           Data.List.Extra            (nubOrdOn)
@@ -19,7 +21,6 @@ import           Development.IDE            as D
 import           Development.IDE.GHC.Compat
 import           Ide.Types
 import qualified Language.LSP.Server        as LSP
-import           Language.LSP.Types
 import qualified Language.LSP.Types         as J
 import qualified Language.LSP.Types.Lens    as J
 import qualified Language.LSP.VFS           as VFS
@@ -29,8 +30,8 @@ import qualified Text.Fuzzy                 as Fuzzy
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
-  { pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionProvider
-                  <> mkPluginHandler STextDocumentCompletion completion
+  { pluginHandlers = mkPluginHandler J.STextDocumentCodeAction codeActionProvider
+                  <> mkPluginHandler J.STextDocumentCompletion completion
   }
 
 -- ---------------------------------------------------------------------
@@ -41,12 +42,12 @@ type PragmaEdit = (T.Text, Pragma)
 data Pragma = LangExt T.Text | OptGHC T.Text
   deriving (Show, Eq, Ord)
 
-codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
-codeActionProvider state _plId (CodeActionParams _ _ docId _ (J.CodeActionContext (J.List diags) _monly)) = do
-  let mFile = docId ^. J.uri & uriToFilePath <&> toNormalizedFilePath'
+codeActionProvider :: PluginMethodHandler IdeState 'J.TextDocumentCodeAction
+codeActionProvider state _plId (J.CodeActionParams _ _ docId _ (J.CodeActionContext (J.List diags) _monly)) = do
+  let mFile = docId ^. J.uri & J.uriToFilePath <&> toNormalizedFilePath'
       uri = docId ^. J.uri
   pm <- liftIO $ fmap join $ runAction "Pragmas.GetParsedModule" state $ getParsedModule `traverse` mFile
-  mbContents <- liftIO $ fmap (join . fmap snd) $ runAction "Pragmas.GetFileContents" state $ getFileContents `traverse` mFile
+  mbContents <- liftIO $ fmap (snd =<<) $ runAction "Pragmas.GetFileContents" state $ getFileContents `traverse` mFile
   let dflags = ms_hspp_opts . pm_mod_summary <$> pm
       insertRange = maybe (Range (Position 0 0) (Position 0 0)) endOfModuleHeader mbContents
       pedits = nubOrdOn snd . concat $ suggest dflags <$> diags
@@ -55,9 +56,9 @@ codeActionProvider state _plId (CodeActionParams _ _ docId _ (J.CodeActionContex
 -- | Add a Pragma to the given URI at the top of the file.
 -- It is assumed that the pragma name is a valid pragma,
 -- thus, not validated.
-pragmaEditToAction :: Uri -> Range -> PragmaEdit -> (Command |? CodeAction)
+pragmaEditToAction :: Uri -> Range -> PragmaEdit -> (J.Command J.|? J.CodeAction)
 pragmaEditToAction uri range (title, p) =
-  InR $ J.CodeAction title (Just J.CodeActionQuickFix) (Just (J.List [])) Nothing Nothing (Just edit) Nothing Nothing
+  J.InR $ J.CodeAction title (Just J.CodeActionQuickFix) (Just (J.List [])) Nothing Nothing (Just edit) Nothing Nothing
   where
     render (OptGHC x)  = "{-# OPTIONS_GHC -Wno-" <> x <> " #-}\n"
     render (LangExt x) = "{-# LANGUAGE " <> x <> " #-}\n"
@@ -77,7 +78,7 @@ suggest dflags diag =
 
 suggestDisableWarning :: Diagnostic -> [PragmaEdit]
 suggestDisableWarning Diagnostic {_code}
-  | Just (InR (T.stripPrefix "-W" -> Just w)) <- _code =
+  | Just (J.InR (T.stripPrefix "-W" -> Just w)) <- _code =
     pure ("Disable \"" <> w <> "\" warnings", OptGHC w)
   | otherwise = []
 
@@ -140,26 +141,26 @@ allPragmas =
 
 -- ---------------------------------------------------------------------
 
-completion :: PluginMethodHandler IdeState TextDocumentCompletion
+completion :: PluginMethodHandler IdeState 'J.TextDocumentCompletion
 completion _ide _ complParams = do
-    let (TextDocumentIdentifier uri) = complParams ^. J.textDocument
+    let (J.TextDocumentIdentifier uri) = complParams ^. J.textDocument
         position = complParams ^. J.position
     contents <- LSP.getVirtualFile $ toNormalizedUri uri
-    fmap (Right . InL) $ case (contents, uriToFilePath' uri) of
+    fmap (Right . J.InL) $ case (contents, uriToFilePath' uri) of
         (Just cnts, Just _path) ->
             result <$> VFS.getCompletionPrefix position cnts
             where
                 result (Just pfix)
                     | "{-# LANGUAGE" `T.isPrefixOf` VFS.fullLine pfix
-                    = List $ map buildCompletion
+                    = J.List $ map buildCompletion
                         (Fuzzy.simpleFilter (VFS.prefixText pfix) allPragmas)
                     | otherwise
-                    = List []
-                result Nothing = List []
+                    = J.List []
+                result Nothing = J.List []
                 buildCompletion p =
-                    CompletionItem
+                    J.CompletionItem
                       { _label = p,
-                        _kind = Just CiKeyword,
+                        _kind = Just J.CiKeyword,
                         _tags = Nothing,
                         _detail = Nothing,
                         _documentation = Nothing,
@@ -176,7 +177,7 @@ completion _ide _ complParams = do
                         _command = Nothing,
                         _xdata = Nothing
                       }
-        _ -> return $ List []
+        _ -> return $ J.List []
 
 -- ---------------------------------------------------------------------
 
