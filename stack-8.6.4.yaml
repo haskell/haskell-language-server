@@ -21,6 +21,7 @@ packages:
   - ./plugins/hls-brittany-plugin
   - ./plugins/hls-stylish-haskell-plugin
   - ./plugins/hls-floskell-plugin
+  - ./plugins/hls-fourmolu-plugin
 
 ghc-options:
   "$everything": -haddock
