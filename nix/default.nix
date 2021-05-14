@@ -41,6 +41,7 @@ let
             hls-retrie-plugin = gitignoreSource ../plugins/hls-retrie-plugin;
             hls-splice-plugin = gitignoreSource ../plugins/hls-splice-plugin;
             hls-tactics-plugin = gitignoreSource ../plugins/hls-tactics-plugin;
+            hls-floskell-plugin = gitignoreSource ../plugins/hls-floskell-plugin;
         };
         gitignoreSource = (import sources.gitignore { inherit (pkgs) lib; }).gitignoreSource;
         extended = haskellPackages:
