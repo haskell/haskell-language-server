@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE OverloadedStrings     #-}
@@ -7,17 +8,24 @@
 
 module CodeAction.RunMetaprogramSpec where
 
-import Wingman.Types
-import Test.Hspec
-import Utils
+import  Utils
+import  Test.Hspec
+import  Wingman.Types
 
 
 spec :: Spec
 spec = do
-  let metaTest = goldenTest RunMetaprogram ""
+  let metaTest l c f =
+#if __GLASGOW_HASKELL__ >= 808
+        goldenTest RunMetaprogram "" l c f
+#else
+        pure ()
+#endif
 
+#if __GLASGOW_HASKELL__ >= 808
   describe "beginMetaprogram" $ do
     goldenTest BeginMetaprogram ""  1  7 "MetaBegin.hs"
+#endif
 
   describe "golden" $ do
     metaTest  6 11 "MetaMaybeAp.hs"

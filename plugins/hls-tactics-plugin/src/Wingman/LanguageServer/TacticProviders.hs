@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
@@ -156,13 +157,24 @@ commandProvider Refine =
   requireFeature FeatureRefineHole $
     provide Refine ""
 commandProvider BeginMetaprogram =
+  requireGHC88OrHigher $
   requireFeature FeatureMetaprogram $
   requireHoleSort (== Hole) $
     provide BeginMetaprogram ""
 commandProvider RunMetaprogram =
+  requireGHC88OrHigher $
   requireFeature FeatureMetaprogram $
   withMetaprogram $ \mp ->
     provide RunMetaprogram mp
+
+
+requireGHC88OrHigher :: TacticProvider -> TacticProvider
+requireGHC88OrHigher tp tpd =
+#if __GLASGOW_HASKELL__ >= 808
+  tp tpd
+#else
+  mempty
+#endif
 
 
 ------------------------------------------------------------------------------

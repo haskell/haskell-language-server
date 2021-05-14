@@ -16,14 +16,14 @@ import Ide.Types
 
 
 staticPlugin :: DynFlagsModifications
-staticPlugin = DynFlagsModifications
+staticPlugin = mempty
   { dynFlagsModifyGlobal =
       \df -> allowEmptyCaseButWithWarning
            $ df
 #if __GLASGOW_HASKELL__ >= 808
              { staticPlugins = staticPlugins df <> [metaprogrammingPlugin] }
-#endif
   , dynFlagsModifyParser = enableQuasiQuotes
+#endif
   }
 
 
