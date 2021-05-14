@@ -71,6 +71,7 @@
             hls-retrie-plugin = ./plugins/hls-retrie-plugin;
             hls-splice-plugin = ./plugins/hls-splice-plugin;
             hls-tactics-plugin = ./plugins/hls-tactics-plugin;
+            hls-floskell-plugin = ./plugins/hls-floskell-plugin;
           };
 
           # Tweak our packages

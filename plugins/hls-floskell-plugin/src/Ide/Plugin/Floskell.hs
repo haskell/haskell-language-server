@@ -9,15 +9,14 @@ module Ide.Plugin.Floskell
 where
 
 import           Control.Monad.IO.Class
-import qualified Data.ByteString.Lazy   as BS
-import qualified Data.Text              as T
-import qualified Data.Text.Encoding     as T
-import           Development.IDE        as D hiding (pluginHandlers)
+import qualified Data.Text               as T
+import qualified Data.Text.Lazy          as TL
+import qualified Data.Text.Lazy.Encoding as TL
+import           Development.IDE         as D hiding (pluginHandlers)
 import           Floskell
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Types
-import           Text.Regex.TDFA.Text   ()
 
 -- ---------------------------------------------------------------------
 
@@ -38,10 +37,10 @@ provider _ideState typ contents fp _ = liftIO $ do
     let (range, selectedContents) = case typ of
           FormatText    -> (fullRange contents, contents)
           FormatRange r -> (r, extractRange r contents)
-        result = reformat config (Just file) (BS.fromStrict (T.encodeUtf8 selectedContents))
+        result = reformat config (Just file) (TL.encodeUtf8 (TL.fromStrict selectedContents))
     case result of
       Left  err -> return $ Left $ responseError (T.pack $  "floskellCmd: " ++ err)
-      Right new -> return $ Right $ List [TextEdit range (T.decodeUtf8 (BS.toStrict new))]
+      Right new -> return $ Right $ List [TextEdit range . TL.toStrict $ TL.decodeUtf8 new]
 
 -- | Find Floskell Config, user and system wide or provides a default style.
 -- Every directory of the filepath will be searched to find a user configuration.

@@ -1,4 +1,4 @@
-module Format where
+module Floskell where
 
 import           Data.List
 import           Prelude
