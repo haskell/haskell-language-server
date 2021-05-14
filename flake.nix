@@ -154,7 +154,6 @@
         ghcDefault = pkgs.hlsHpkgs ("ghc"
           + pkgs.lib.replaceStrings [ "." ] [ "" ]
           pkgs.haskellPackages.ghc.version);
-        ghc865 = pkgs.hlsHpkgs "ghc865";
         ghc884 = pkgs.hlsHpkgs "ghc884";
         ghc8104 = pkgs.hlsHpkgs "ghc8104";
         ghc901 = pkgs.hlsHpkgs "ghc901";
@@ -204,14 +203,12 @@
         packages = {
           # dev shell
           haskell-language-server-dev = mkDevShell ghcDefault;
-          haskell-language-server-865-dev = mkDevShell ghc865;
           haskell-language-server-884-dev = mkDevShell ghc884;
           haskell-language-server-8104-dev = mkDevShell ghc8104;
           haskell-language-server-901-dev = mkDevShell ghc901;
 
           # hls package
           haskell-language-server = mkExe ghcDefault;
-          haskell-language-server-865 = mkExe ghc865;
           haskell-language-server-884 = mkExe ghc884;
           haskell-language-server-8104 = mkExe ghc8104;
           haskell-language-server-901 = mkExe ghc901;
