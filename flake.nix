@@ -51,6 +51,7 @@
           };
           gitignoreSource = (import gitignore { inherit lib; }).gitignoreSource;
 
+          # Source directories of our packages, should be consistent with cabal.project
           sourceDirs = {
             haskell-language-server = ./.;
             ghcide = ./ghcide;
@@ -72,20 +73,32 @@
             hls-tactics-plugin = ./plugins/hls-tactics-plugin;
           };
 
+          # Tweak our packages
+          tweaks = hself: hsuper:
+            with haskell.lib; {
+              hls-hlint-plugin =
+                hsuper.hls-hlint-plugin.override { hlint = hself.hlint_3_2_7; };
+              hls-tactics-plugin = hsuper.hls-tactics-plugin.override {
+                refinery = hself.refinery_0_3_0_0;
+              };
+            };
+
           hlsSources =
             builtins.mapAttrs (_: dir: gitignoreSource dir) sourceDirs;
+
+          extended = hpkgs:
+            (hpkgs.override haskellOverrides).extend (hself: hsuper:
+              # disable all checks for our packages
+              builtins.mapAttrs (_: drv: haskell.lib.dontCheck drv)
+              (lib.composeExtensions
+                (haskell.lib.packageSourceOverrides hlsSources) tweaks hself
+                hsuper));
+
         in {
           inherit hlsSources;
 
-          # haskellPackages extended with hls packages
-          hlsHaskellPackages = with haskell.lib;
-            (haskellPackages.override haskellOverrides).extend (self: super:
-              # disable check for ghcide and hls
-              builtins.mapAttrs (name: drv:
-                if name == "ghcide" || name == "haskell-language-server" then
-                  dontCheck drv
-                else
-                  drv) (packageSourceOverrides hlsSources self super));
+          # Haskell packages extended with our packages
+          hlsHpkgs = compiler: extended haskell.packages.${compiler};
 
           # Support of GenChangelogs.hs
           gen-hls-changelogs =
@@ -111,9 +124,8 @@
           overlays = [ self.overlay ];
           config = { allowBroken = true; };
         };
-        hlsPackages = p:
-          with builtins;
-          map (name: p.${name}) (attrNames pkgs.hlsSources);
+
+        # Pre-commit hooks to run stylish-haskell
         pre-commit-check = pre-commit-hooks.lib.${system}.run {
           src = ./.;
           hooks = {
@@ -137,47 +149,62 @@
             ];
           };
         };
+
+        # GHC versions
+        ghcDefault = pkgs.hlsHpkgs ("ghc"
+          + pkgs.lib.replaceStrings [ "." ] [ "" ]
+          pkgs.haskellPackages.ghc.version);
+        ghc865 = pkgs.hlsHpkgs "ghc865";
+        ghc884 = pkgs.hlsHpkgs "ghc884";
+        ghc8104 = pkgs.hlsHpkgs "ghc8104";
+        ghc901 = pkgs.hlsHpkgs "ghc901";
+
+        # Create a development shell of hls project
+        # See https://github.com/NixOS/nixpkgs/blob/5d4a430472cafada97888cc80672fab255231f57/pkgs/development/haskell-modules/make-package-set.nix#L319
+        mkDevShell = hpkgs:
+          with pkgs;
+          hpkgs.shellFor {
+            doBenchmark = true;
+            packages = p:
+              with builtins;
+              map (name: p.${name}) (attrNames pkgs.hlsSources);
+            buildInputs = [ gmp zlib ncurses capstone tracy gen-hls-changelogs ]
+              ++ (with haskellPackages; [
+                cabal-install
+                hlint
+                ormolu
+                stylish-haskell
+                opentelemetry-extra
+              ]);
+
+            src = null;
+            shellHook = ''
+              export LD_LIBRARY_PATH=${gmp}/lib:${zlib}/lib:${ncurses}/lib:${capstone}/lib
+              export DYLD_LIBRARY_PATH=${gmp}/lib:${zlib}/lib:${ncurses}/lib:${capstone}/lib
+              export PATH=$PATH:$HOME/.local/bin
+              ${pre-commit-check.shellHook}
+            '';
+          };
       in with pkgs; rec {
 
-        packages = with pkgs.haskell.lib; {
-          haskell-language-server =
-            justStaticExecutables hlsHaskellPackages.haskell-language-server;
-          ghcide = justStaticExecutables hlsHaskellPackages.ghcide;
-        };
+        packages = {
+          # dev shell
+          haskell-language-server-dev = mkDevShell ghcDefault;
+          haskell-language-server-865-dev = mkDevShell ghc865;
+          haskell-language-server-884-dev = mkDevShell ghc884;
+          haskell-language-server-8104-dev = mkDevShell ghc8104;
+          haskell-language-server-901-dev = mkDevShell ghc901;
 
-        apps = {
-          haskell-language-server = flake-utils.lib.mkApp {
-            drv = packages.haskell-language-server;
-            exePath = "/bin/haskell-language-server";
-          };
-          ghcide = flake-utils.lib.mkApp {
-            drv = packages.ghcide;
-            exePath = "/bin/ghcide";
-          };
+          # hls package
+          haskell-language-server = ghcDefault.haskell-language-server;
+          haskell-language-server-865 = ghc865.haskell-language-server;
+          haskell-language-server-884 = ghc884.haskell-language-server;
+          haskell-language-server-8104 = ghc8104.haskell-language-server;
+          haskell-language-server-901 = ghc901.haskell-language-server;
         };
 
         defaultPackage = packages.haskell-language-server;
-        defaultApp = apps.haskell-language-server;
 
-        devShell = hlsHaskellPackages.shellFor {
-          doBenchmark = true;
-          packages = hlsPackages;
-          buildInputs = [ gmp zlib ncurses capstone tracy gen-hls-changelogs ]
-            ++ (with haskellPackages; [
-              cabal-install
-              hlint
-              ormolu
-              stylish-haskell
-              opentelemetry-extra
-            ]);
-
-          src = null;
-          shellHook = ''
-            export LD_LIBRARY_PATH=${gmp}/lib:${zlib}/lib:${ncurses}/lib:${capstone}/lib
-            export DYLD_LIBRARY_PATH=${gmp}/lib:${zlib}/lib:${ncurses}/lib:${capstone}/lib
-            export PATH=$PATH:$HOME/.local/bin
-            ${pre-commit-check.shellHook}
-          '';
-        };
+        devShell = packages.haskell-language-server-dev;
       });
 }
