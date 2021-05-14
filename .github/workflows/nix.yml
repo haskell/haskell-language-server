@@ -46,3 +46,7 @@ jobs:
         authToken: ${{ secrets.HLS_CACHIX_AUTH_TOKEN }}
     - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
       run: nix build
+    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+      run: nix develop --profile dev && cachix push haskell-language-server dev
+    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+      run: nix path-info --json | jq -r '.[].path' | cachix push haskell-language-server
