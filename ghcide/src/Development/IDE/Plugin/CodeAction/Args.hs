@@ -1,6 +1,5 @@
-{-# LANGUAGE FlexibleInstances   #-}
-{-# LANGUAGE GADTs               #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs             #-}
 
 module Development.IDE.Plugin.CodeAction.Args
   ( module Development.IDE.Plugin.CodeAction.Args,
