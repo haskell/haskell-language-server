@@ -17,6 +17,7 @@ packages:
          ./plugins/hls-retrie-plugin
          ./plugins/hls-haddock-comments-plugin
          ./plugins/hls-splice-plugin
+         ./plugins/hls-floskell-plugin
 tests: true
 
 package *

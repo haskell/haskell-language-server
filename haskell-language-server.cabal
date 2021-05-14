@@ -251,9 +251,7 @@ common splice
 
 common floskell
   if flag(floskell) || flag(all-formatters)
-    hs-source-dirs: plugins/default/src
-    other-modules: Ide.Plugin.Floskell
-    build-depends: floskell                 ^>=0.10
+    build-depends: hls-floskell-plugin      ^>=1.0.0.0
     cpp-options: -Dfloskell
 
 common fourmolu
