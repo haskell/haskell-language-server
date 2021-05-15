@@ -1,9 +1,9 @@
 module Progress (tests) where
 
-import Development.IDE.Core.ProgressReporting
+import qualified Data.HashMap.Strict                    as Map
+import           Development.IDE.Core.ProgressReporting
 import           Test.Tasty
 import           Test.Tasty.HUnit
-import qualified Data.HashMap.Strict as Map
 
 tests :: TestTree
 tests = testGroup "Progress"

@@ -20,19 +20,23 @@ module Development.IDE.Core.UseStale
   ) where
 
 import           Control.Arrow
-import           Control.Category (Category)
-import qualified Control.Category as C
-import           Control.DeepSeq (NFData)
+import           Control.Category                     (Category)
+import qualified Control.Category                     as C
+import           Control.DeepSeq                      (NFData)
 import           Data.Aeson
-import           Data.Coerce (coerce)
-import           Data.Functor ((<&>))
-import           Data.Functor.Identity (Identity(Identity))
-import           Data.Kind (Type)
-import           Data.String (fromString)
-import           Development.IDE (NormalizedFilePath, IdeRule, Action, Range, rangeToRealSrcSpan, realSrcSpanToRange)
+import           Data.Coerce                          (coerce)
+import           Data.Functor                         ((<&>))
+import           Data.Functor.Identity                (Identity (Identity))
+import           Data.Kind                            (Type)
+import           Data.String                          (fromString)
+import           Development.IDE                      (Action, IdeRule,
+                                                       NormalizedFilePath,
+                                                       Range,
+                                                       rangeToRealSrcSpan,
+                                                       realSrcSpanToRange)
 import qualified Development.IDE.Core.PositionMapping as P
-import qualified Development.IDE.Core.Shake as IDE
-import qualified FastString as FS
+import qualified Development.IDE.Core.Shake           as IDE
+import qualified FastString                           as FS
 import           SrcLoc
 
 

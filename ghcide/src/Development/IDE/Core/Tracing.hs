@@ -1,5 +1,5 @@
+{-# LANGUAGE CPP             #-}
 {-# LANGUAGE NoApplicativeDo #-}
-{-# LANGUAGE CPP #-}
 module Development.IDE.Core.Tracing
     ( otTracedHandler
     , otTracedAction
@@ -32,12 +32,12 @@ import           Debug.Trace.Flags              (userTracingEnabled)
 import           Development.IDE.Core.RuleTypes (GhcSession (GhcSession),
                                                  GhcSessionDeps (GhcSessionDeps),
                                                  GhcSessionIO (GhcSessionIO))
+import           Development.IDE.Graph          (Action, actionBracket)
 import           Development.IDE.Types.Location (Uri (..))
 import           Development.IDE.Types.Logger   (Logger, logDebug, logInfo)
 import           Development.IDE.Types.Shake    (Key (..), Value,
                                                  ValueWithDiagnostics (..),
                                                  Values)
-import           Development.IDE.Graph              (Action, actionBracket)
 import           Foreign.Storable               (Storable (sizeOf))
 import           HeapSize                       (recursiveSize, runHeapsize)
 import           Ide.PluginUtils                (installSigUsr1Handler)

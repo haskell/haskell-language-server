@@ -22,8 +22,8 @@ module Development.IDE.Types.Options
 import qualified Data.Text                         as T
 import           Data.Typeable
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Graph
+import           Development.IDE.Types.Diagnostics
 import           GHC                               hiding (parseModule,
                                                     typecheckModule)
 import           GhcPlugins                        as GHC hiding (fst3, (<>))

@@ -32,6 +32,7 @@ let
             hls-test-utils = gitignoreSource ../hls-test-utils;
             hls-brittany-plugin = gitignoreSource ../plugins/hls-brittany-plugin;
             hls-stylish-haskell-plugin = gitignoreSource ../plugins/hls-stylish-haskell-plugin;
+            hls-fourmolu-plugin = gitignoreSource ../plugins/hls-fourmolu-plugin;
             hls-class-plugin = gitignoreSource ../plugins/hls-class-plugin;
             hls-haddock-comments-plugin = gitignoreSource ../plugins/hls-haddock-comments-plugin;
             hls-eval-plugin = gitignoreSource ../plugins/hls-eval-plugin;
@@ -41,6 +42,8 @@ let
             hls-retrie-plugin = gitignoreSource ../plugins/hls-retrie-plugin;
             hls-splice-plugin = gitignoreSource ../plugins/hls-splice-plugin;
             hls-tactics-plugin = gitignoreSource ../plugins/hls-tactics-plugin;
+            hls-floskell-plugin = gitignoreSource ../plugins/hls-floskell-plugin;
+            hls-pragmas-plugin = gitignoreSource ../plugins/hls-pragmas-plugin;
         };
         gitignoreSource = (import sources.gitignore { inherit (pkgs) lib; }).gitignoreSource;
         extended = haskellPackages:
@@ -86,7 +89,14 @@ in (import sources.nixpkgs
       # default_stages = ["manual" "push"];
       hooks = {
         stylish-haskell.enable = true;
-        stylish-haskell.excludes = [ "^Setup.hs$" "test/testdata/.*$" "test/data/.*$" "^hie-compat/.*$" "^plugins/hls-tactics-plugin/.*$" ];
+        stylish-haskell.excludes = [
+          # Ignored files
+          "^Setup.hs$" "test/testdata/.*$" "test/data/.*$" "test/manual/lhs/.*$" "^hie-compat/.*$" "^plugins/hls-tactics-plugin/.*$"
+
+          # Temporarily ignored files
+          # Stylish-haskell (and other formatters) does not work well with some CPP usages in these files
+          "^ghcide/src/Development/IDE/GHC/Compat.hs$" "^plugins/hls-splice-plugin/src/Ide/Plugin/Splice.hs$" "^ghcide/test/exe/Main.hs$" "ghcide/src/Development/IDE/Core/Rules.hs" "^hls-test-utils/src/Test/Hls/Util.hs$"
+        ];
       };
     };
   }

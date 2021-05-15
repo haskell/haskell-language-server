@@ -6,6 +6,7 @@
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MagicHash             #-}
+{-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE RecordWildCards       #-}
@@ -14,7 +15,6 @@
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE ViewPatterns          #-}
-{-# LANGUAGE NamedFieldPuns        #-}
 
 module Ide.Plugin.Splice
     ( descriptor,
@@ -24,7 +24,8 @@ where
 import           Control.Applicative             (Alternative ((<|>)))
 import           Control.Arrow
 import qualified Control.Foldl                   as L
-import           Control.Lens                    (ix, view, (%~), (<&>), (^.), Identity(..))
+import           Control.Lens                    (Identity (..), ix, view, (%~),
+                                                  (<&>), (^.))
 import           Control.Monad
 import           Control.Monad.Extra             (eitherM)
 import qualified Control.Monad.Fail              as Fail

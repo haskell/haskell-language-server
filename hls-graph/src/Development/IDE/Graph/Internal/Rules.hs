@@ -1,15 +1,15 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeFamilies               #-}
 
 module Development.IDE.Graph.Internal.Rules where
 
-import qualified Development.Shake as Shake
-import qualified Development.Shake.Rule as Shake
-import Development.Shake.Classes
-import Development.IDE.Graph.Internal.Action
-import Control.Monad.IO.Class
-import Control.Monad.Fail
-import qualified Data.ByteString as BS
+import           Control.Monad.Fail
+import           Control.Monad.IO.Class
+import qualified Data.ByteString                       as BS
+import           Development.IDE.Graph.Internal.Action
+import qualified Development.Shake                     as Shake
+import           Development.Shake.Classes
+import qualified Development.Shake.Rule                as Shake
 
 newtype Rules a = Rules {fromRules :: Shake.Rules a}
     deriving (Monoid, Semigroup, Monad, Applicative, Functor, MonadIO, MonadFail)

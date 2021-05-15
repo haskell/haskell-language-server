@@ -24,11 +24,11 @@ import           Data.String
 import qualified Data.Text                    as T
 import           Development.IDE.Core.Shake
 import           Development.IDE.Core.Tracing
+import           Development.IDE.Graph        (Rules)
 import           Development.IDE.LSP.Server
 import           Development.IDE.Plugin
 import qualified Development.IDE.Plugin       as P
 import           Development.IDE.Types.Logger
-import           Development.IDE.Graph            (Rules)
 import           Ide.Plugin.Config
 import           Ide.PluginUtils              (getClientConfig)
 import           Ide.Types                    as HLS

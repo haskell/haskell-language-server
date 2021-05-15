@@ -2,18 +2,18 @@
 
 module Development.IDE.Graph.Internal.Options where
 
-import qualified Development.Shake as Shake
-import qualified Data.HashMap.Strict as Map
-import Development.IDE.Graph.Internal.Action
-import Development.IDE.Graph.Internal.Rules
-import Data.Dynamic
+import           Data.Dynamic
+import qualified Data.HashMap.Strict                   as Map
+import           Development.IDE.Graph.Internal.Action
+import           Development.IDE.Graph.Internal.Rules
+import qualified Development.Shake                     as Shake
 
 data ShakeOptions = ShakeOptions {
-    shakeThreads :: Int,
-    shakeFiles :: FilePath,
-    shakeExtra :: Maybe Dynamic,
+    shakeThreads            :: Int,
+    shakeFiles              :: FilePath,
+    shakeExtra              :: Maybe Dynamic,
     shakeAllowRedefineRules :: Bool,
-    shakeTimings :: Bool
+    shakeTimings            :: Bool
     }
 
 shakeOptions :: ShakeOptions
