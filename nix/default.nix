@@ -44,6 +44,7 @@ let
             hls-tactics-plugin = gitignoreSource ../plugins/hls-tactics-plugin;
             hls-floskell-plugin = gitignoreSource ../plugins/hls-floskell-plugin;
             hls-pragmas-plugin = gitignoreSource ../plugins/hls-pragmas-plugin;
+            hls-module-name-plugin = gitignoreSource ../plugins/hls-module-name-plugin;
         };
         gitignoreSource = (import sources.gitignore { inherit (pkgs) lib; }).gitignoreSource;
         extended = haskellPackages:

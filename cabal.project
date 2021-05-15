@@ -20,6 +20,7 @@ packages:
          ./plugins/hls-splice-plugin
          ./plugins/hls-floskell-plugin
          ./plugins/hls-pragmas-plugin
+         ./plugins/hls-module-name-plugin
 tests: true
 
 package *
