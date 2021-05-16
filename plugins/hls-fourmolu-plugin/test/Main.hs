@@ -24,7 +24,7 @@ tests = testGroup "fourmolu"
   ]
 
 goldenWithFourmolu :: TestName -> FilePath -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
-goldenWithFourmolu title path desc = goldenWithHaskellDoc fourmoluPlugin title testDataDir path desc "hs"
+goldenWithFourmolu title path desc = goldenWithHaskellDocFormatter fourmoluPlugin "fourmolu" title testDataDir path desc "hs"
 
 testDataDir :: FilePath
 testDataDir = "test" </> "testdata"

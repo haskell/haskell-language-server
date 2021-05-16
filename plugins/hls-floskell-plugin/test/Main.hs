@@ -24,7 +24,7 @@ tests = testGroup "floskell"
   ]
 
 goldenWithFloskell :: TestName -> FilePath -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
-goldenWithFloskell title path desc = goldenWithHaskellDoc floskellPlugin title testDataDir path desc "hs"
+goldenWithFloskell title path desc = goldenWithHaskellDocFormatter floskellPlugin "floskell" title testDataDir path desc "hs"
 
 testDataDir :: FilePath
 testDataDir = "test" </> "testdata"
