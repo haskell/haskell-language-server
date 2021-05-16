@@ -72,6 +72,7 @@
             hls-splice-plugin = ./plugins/hls-splice-plugin;
             hls-tactics-plugin = ./plugins/hls-tactics-plugin;
             hls-floskell-plugin = ./plugins/hls-floskell-plugin;
+            hls-pragmas-plugin = ./plugins/hls-pragmas-plugin;
           };
 
           # Tweak our packages

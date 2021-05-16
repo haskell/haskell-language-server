@@ -237,9 +237,7 @@ common moduleName
 
 common pragmas
   if flag(pragmas) || flag(all-plugins)
-    hs-source-dirs: plugins/default/src
-    build-depends: fuzzy
-    other-modules: Ide.Plugin.Pragmas
+    build-depends: hls-pragmas-plugin ^>= 1.0.0.0
     cpp-options: -Dpragmas
 
 common splice
@@ -256,9 +254,7 @@ common floskell
 
 common fourmolu
   if flag(fourmolu) || flag(all-formatters)
-    hs-source-dirs: plugins/default/src
-    other-modules: Ide.Plugin.Fourmolu
-    build-depends: fourmolu                 ^>=0.3
+    build-depends: hls-fourmolu-plugin ^>= 1.0.0.0
     cpp-options: -Dfourmolu
 
 common ormolu

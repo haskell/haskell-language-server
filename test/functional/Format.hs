@@ -27,7 +27,6 @@ tests = testGroup "format document" [
     , rangeTests
     , providerTests
     , ormoluTests
-    , fourmoluTests
     ]
 
 rangeTests :: TestTree
@@ -97,19 +96,6 @@ ormoluTests = testGroup "ormolu"
       BS.fromStrict . T.encodeUtf8 <$> documentContents doc
   ]
 
-fourmoluTests :: TestTree
-fourmoluTests = testGroup "fourmolu"
-  [ goldenGitDiff "formats correctly" "test/testdata/format/Format.fourmolu.formatted.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
-      sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "fourmolu"))
-      doc <- openDoc "Format.hs" "haskell"
-      formatDoc doc (FormattingOptions 4 True Nothing Nothing Nothing)
-      BS.fromStrict . T.encodeUtf8 <$> documentContents doc
-  , goldenGitDiff "formats imports correctly" "test/testdata/format/Format2.fourmolu.formatted.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
-      sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "fourmolu"))
-      doc <- openDoc "Format2.hs" "haskell"
-      formatDoc doc (FormattingOptions 4 True Nothing Nothing Nothing)
-      BS.fromStrict . T.encodeUtf8 <$> documentContents doc
-  ]
 
 formatLspConfig :: Value -> Value
 formatLspConfig provider = object [ "haskell" .= object ["formattingProvider" .= (provider :: Value)] ]
