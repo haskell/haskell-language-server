@@ -33,6 +33,7 @@ let
             hls-brittany-plugin = gitignoreSource ../plugins/hls-brittany-plugin;
             hls-stylish-haskell-plugin = gitignoreSource ../plugins/hls-stylish-haskell-plugin;
             hls-fourmolu-plugin = gitignoreSource ../plugins/hls-fourmolu-plugin;
+            hls-ormolu-plugin = gitignoreSource ../plugins/hls-ormolu-plugin;
             hls-class-plugin = gitignoreSource ../plugins/hls-class-plugin;
             hls-haddock-comments-plugin = gitignoreSource ../plugins/hls-haddock-comments-plugin;
             hls-eval-plugin = gitignoreSource ../plugins/hls-eval-plugin;
