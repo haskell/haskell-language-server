@@ -1,13 +1,11 @@
-{-# LANGUAGE CPP                   #-}
-{-# LANGUAGE DeriveAnyClass        #-}
-{-# LANGUAGE DeriveGeneric         #-}
-{-# LANGUAGE DerivingStrategies    #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE NamedFieldPuns        #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE RecordWildCards       #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE CPP                #-}
+{-# LANGUAGE DeriveAnyClass     #-}
+{-# LANGUAGE DeriveGeneric      #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE NamedFieldPuns     #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE TypeFamilies       #-}
 
 
 module Ide.Plugin.ExplicitImports
@@ -26,7 +24,8 @@ import           Data.IORef                           (readIORef)
 import qualified Data.Map.Strict                      as Map
 import           Data.Maybe                           (catMaybes, fromMaybe)
 import qualified Data.Text                            as T
-import           Development.IDE
+import           Development.IDE                      hiding (pluginHandlers,
+                                                       pluginRules)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Graph.Classes
