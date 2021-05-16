@@ -27,6 +27,7 @@ data Feature
   | FeatureKnownMonoid
   | FeatureEmptyCase
   | FeatureDestructPun
+  | FeatureMetaprogram
   deriving (Eq, Ord, Show, Read, Enum, Bounded)
 
 

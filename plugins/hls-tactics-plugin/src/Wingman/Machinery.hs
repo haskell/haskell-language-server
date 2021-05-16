@@ -82,11 +82,12 @@ runTactic ctx jdg t =
               flip sortBy solns $ comparing $ \(ext, (_, holes)) ->
                 Down $ scoreSolution ext jdg holes
         case sorted of
-          ((syn, _) : _) ->
+          ((syn, (_, subgoals)) : _) ->
             Right $
               RunTacticResults
-                { rtr_trace = syn_trace syn
-                , rtr_extract = simplify $ syn_val syn
+                { rtr_trace    = syn_trace syn
+                , rtr_extract  = simplify $ syn_val syn
+                , rtr_subgoals = subgoals
                 , rtr_other_solns = reverse . fmap fst $ sorted
                 , rtr_jdg = jdg
                 , rtr_ctx = ctx
@@ -297,4 +298,20 @@ try'
     => TacticT jdg ext err s m ()
     -> TacticT jdg ext err s m ()
 try' t = commit t $ pure ()
+
+
+------------------------------------------------------------------------------
+-- | Sorry leaves a hole in its extract
+exact :: HsExpr GhcPs -> TacticsM ()
+exact = rule . const . pure . pure . noLoc
+
+------------------------------------------------------------------------------
+-- | Lift a function over 'HyInfo's to one that takes an 'OccName' and tries to
+-- look it up in the hypothesis.
+useNameFromHypothesis :: (HyInfo CType -> TacticsM a) -> OccName -> TacticsM a
+useNameFromHypothesis f name = do
+  hy <- jHypothesis <$> goal
+  case M.lookup name $ hyByName hy of
+    Just hi -> f hi
+    Nothing -> throwError $ NotInScope name
 
