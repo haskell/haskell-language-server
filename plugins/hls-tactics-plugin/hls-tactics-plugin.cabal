@@ -44,9 +44,14 @@ library
     Wingman.KnownStrategies.QuickCheck
     Wingman.LanguageServer
     Wingman.LanguageServer.TacticProviders
+    Wingman.LanguageServer.Metaprogram
     Wingman.Machinery
+    Wingman.Metaprogramming.Lexer
+    Wingman.Metaprogramming.Parser
+    Wingman.Metaprogramming.ProofState
     Wingman.Naming
     Wingman.Plugin
+    Wingman.StaticPlugin
     Wingman.Range
     Wingman.Simplify
     Wingman.Tactics
@@ -86,6 +91,9 @@ library
     , transformers
     , unordered-containers
     , hyphenation
+    , megaparsec ^>=9
+    , parser-combinators
+    , prettyprinter
 
   default-language:   Haskell2010
   default-extensions:
@@ -123,6 +131,7 @@ test-suite tests
     CodeAction.DestructSpec
     CodeAction.IntrosSpec
     CodeAction.RefineSpec
+    CodeAction.RunMetaprogramSpec
     CodeAction.UseDataConSpec
     CodeLens.EmptyCaseSpec
     ProviderSpec
