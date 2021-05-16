@@ -1,27 +1,30 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Main(main) where
+module Main
+  ( main
+  ) where
 
-import qualified Data.Text.Lazy          as TL
-import qualified Data.Text.Lazy.Encoding as TL
-import qualified Ide.Plugin.Floskell     as Floskell
+import qualified Ide.Plugin.Floskell as Floskell
+import           System.FilePath
 import           Test.Hls
 
 main :: IO ()
 main = defaultTestRunner tests
 
-plugin :: PluginDescriptor IdeState
-plugin = Floskell.descriptor "floskell"
+floskellPlugin :: PluginDescriptor IdeState
+floskellPlugin = Floskell.descriptor "floskell"
 
 tests :: TestTree
 tests = testGroup "floskell"
-  [ goldenGitDiff "formats a document" "test/testdata/Floskell.formatted_document.hs" $ runSessionWithServerFormatter plugin "floskell" "test/testdata" $ do
-        doc <- openDoc "Floskell.hs" "haskell"
-        formatDoc doc (FormattingOptions 4 True Nothing Nothing Nothing)
-        TL.encodeUtf8 . TL.fromStrict <$> documentContents doc
+  [ goldenWithFloskell "formats a document" "Floskell" "formatted_document" $ \doc -> do
+      formatDoc doc (FormattingOptions 4 True Nothing Nothing Nothing)
 
-  , goldenGitDiff "formats a range" "test/testdata/Floskell.formatted_range.hs" $ runSessionWithServerFormatter plugin "floskell" "test/testdata" $ do
-      doc <- openDoc "Floskell.hs" "haskell"
+  , goldenWithFloskell "formats a range" "Floskell" "formatted_range" $ \doc -> do
       let range = Range (Position 1 0) (Position 4 22)
       formatRange doc (FormattingOptions 4 True Nothing Nothing Nothing) range
-      TL.encodeUtf8 . TL.fromStrict <$> documentContents doc
   ]
+
+goldenWithFloskell :: TestName -> FilePath -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
+goldenWithFloskell title path desc = goldenWithHaskellDoc floskellPlugin title testDataDir path desc "hs"
+
+testDataDir :: FilePath
+testDataDir = "test" </> "testdata"
