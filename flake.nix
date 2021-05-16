@@ -8,7 +8,7 @@
   description = "haskell language server flake";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-compat = {
       url = "github:edolstra/flake-compat";
       flake = false;
@@ -62,6 +62,7 @@
             hls-test-utils = ./hls-test-utils;
             hls-brittany-plugin = ./plugins/hls-brittany-plugin;
             hls-stylish-haskell-plugin = ./plugins/hls-stylish-haskell-plugin;
+            hls-fourmolu-plugin = ./plugins/hls-fourmolu-plugin;
             hls-class-plugin = ./plugins/hls-class-plugin;
             hls-haddock-comments-plugin = ./plugins/hls-haddock-comments-plugin;
             hls-eval-plugin = ./plugins/hls-eval-plugin;

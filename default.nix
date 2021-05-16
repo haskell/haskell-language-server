@@ -1,3 +1,5 @@
+# This file is the compt layer of flakes: https://github.com/edolstra/flake-compat
+# See flake.nix for details
 (import (
   let
     lock = builtins.fromJSON (builtins.readFile ./flake.lock);
