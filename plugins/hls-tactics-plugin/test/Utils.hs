@@ -61,7 +61,7 @@ codeActionTitle (InR(CodeAction title _ _ _ _ _ _ _)) = Just title
 mkTest
     :: Foldable t
     => String  -- ^ The test name
-    -> FilePath  -- ^ The file to load
+    -> FilePath  -- ^ The file name stem (without extension) to load
     -> Int  -- ^ Cursor line
     -> Int  -- ^ Cursor columnn
     -> t ( Bool -> Bool   -- Use 'not' for actions that shouldnt be present
@@ -72,7 +72,7 @@ mkTest
 mkTest name fp line col ts = it name $ do
   runSessionWithServer plugin tacticPath $ do
     setFeatureSet allFeatures
-    doc <- openDoc fp "haskell"
+    doc <- openDoc (fp <.> "hs") "haskell"
     _ <- waitForDiagnostics
     actions <- getCodeActions doc $ pointRange line col
     let titles = mapMaybe codeActionTitle actions
@@ -111,7 +111,7 @@ mkGoldenTest eq features tc occ line col input =
   it (input <> " (golden)") $ do
     runSessionWithServer plugin tacticPath $ do
       setFeatureSet features
-      doc <- openDoc input "haskell"
+      doc <- openDoc (input <.> "hs") "haskell"
       _ <- waitForDiagnostics
       actions <- getCodeActions doc $ pointRange line col
       Just (InR CodeAction {_command = Just c})
@@ -119,7 +119,7 @@ mkGoldenTest eq features tc occ line col input =
       executeCommand c
       _resp <- skipManyTill anyMessage (message SWorkspaceApplyEdit)
       edited <- documentContents doc
-      let expected_name = input <.> "expected"
+      let expected_name = input <.> "expected" <.> "hs"
       -- Write golden tests if they don't already exist
       liftIO $ (doesFileExist expected_name >>=) $ flip unless $ do
         T.writeFile expected_name edited
@@ -135,14 +135,14 @@ mkCodeLensTest features input =
   it (input <> " (golden)") $ do
     runSessionWithServer plugin tacticPath $ do
       setFeatureSet features
-      doc <- openDoc input "haskell"
+      doc <- openDoc (input <.> "hs") "haskell"
       _ <- waitForDiagnostics
       lenses <- fmap (reverse . filter isWingmanLens) $ getCodeLenses doc
       for_ lenses $ \(CodeLens _ (Just cmd) _) ->
         executeCommand cmd
       _resp <- skipManyTill anyMessage (message SWorkspaceApplyEdit)
       edited <- documentContents doc
-      let expected_name = input <.> "expected"
+      let expected_name = input <.> "expected" <.> "hs"
       -- Write golden tests if they don't already exist
       liftIO $ (doesFileExist expected_name >>=) $ flip unless $ do
         T.writeFile expected_name edited
@@ -170,7 +170,7 @@ mkShowMessageTest features tc occ line col input ufm =
   it (input <> " (golden)") $ do
     runSessionWithServer plugin tacticPath $ do
       setFeatureSet features
-      doc <- openDoc input "haskell"
+      doc <- openDoc (input <.> "hs") "haskell"
       _ <- waitForDiagnostics
       actions <- getCodeActions doc $ pointRange line col
       Just (InR CodeAction {_command = Just c})
