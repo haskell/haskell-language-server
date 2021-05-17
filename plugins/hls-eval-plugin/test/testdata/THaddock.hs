@@ -16,6 +16,7 @@ module THaddock () where
 >>> "b"++"c"
 -}
 
+double :: Num a => a -> a
 double a = a + a
 -- ^ Single line backward comments
 -- >>> double 11
@@ -32,4 +33,5 @@ twice a = a ++ a
 
      >>> IGNORED as it does not start on the first column
 -}
+five :: Integer
 five = 5
