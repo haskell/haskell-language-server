@@ -22,6 +22,8 @@ packages:
   - ./plugins/hls-floskell-plugin
   - ./plugins/hls-fourmolu-plugin
   - ./plugins/hls-pragmas-plugin
+  - ./plugins/hls-module-name-plugin
+  - ./plugins/hls-ormolu-plugin
 
 ghc-options:
   "$everything": -haddock

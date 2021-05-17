@@ -6,7 +6,9 @@
 {-# LANGUAGE ViewPatterns          #-}
 
 -- | Provides code actions to add missing pragmas (whenever GHC suggests to)
-module Ide.Plugin.Pragmas (descriptor) where
+module Ide.Plugin.Pragmas
+  ( descriptor
+  ) where
 
 import           Control.Applicative        ((<|>))
 import           Control.Lens               hiding (List)

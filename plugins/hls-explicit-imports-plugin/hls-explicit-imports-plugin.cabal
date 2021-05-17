@@ -8,23 +8,21 @@ author:             Pepe Iborra
 maintainer:         pepeiborra@gmail.com
 category:           Development
 build-type:         Simple
-extra-source-files:
-  LICENSE
+extra-source-files: LICENSE
 
 library
   exposed-modules:    Ide.Plugin.ExplicitImports
   hs-source-dirs:     src
   build-depends:
     , aeson
-    , base                  >=4.12    && <5
+    , base                  >=4.12 && <5
     , containers
     , deepseq
     , ghc
     , ghcide                ^>=1.3
+    , hls-graph
     , hls-plugin-api        ^>=1.1
     , lsp
-    , lsp-types
-    , hls-graph
     , text
     , unordered-containers
 

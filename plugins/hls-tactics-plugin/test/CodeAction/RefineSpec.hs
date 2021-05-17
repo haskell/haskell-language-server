@@ -1,9 +1,4 @@
-{-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE TypeOperators         #-}
-{-# LANGUAGE ViewPatterns          #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module CodeAction.RefineSpec where
 
@@ -18,11 +13,11 @@ spec = do
   let refineTest = goldenTest Refine ""
 
   describe "golden" $ do
-    refineTest 2 8 "RefineIntro.hs"
-    refineTest 2 8 "RefineCon.hs"
-    refineTest 4 8 "RefineReader.hs"
-    refineTest 8 8 "RefineGADT.hs"
+    refineTest 2 8 "RefineIntro"
+    refineTest 2 8 "RefineCon"
+    refineTest 4 8 "RefineReader"
+    refineTest 8 8 "RefineGADT"
 
   describe "messages" $ do
-    mkShowMessageTest allFeatures Refine "" 2 8 "MessageForallA.hs" NothingToDo
+    mkShowMessageTest allFeatures Refine "" 2 8 "MessageForallA" NothingToDo
 
