@@ -1,4 +1,4 @@
-module Format where
+module Fourmolu where
 
 import Data.List
 

@@ -18,20 +18,21 @@ extra-source-files:
   test/testdata/*.yaml
 
 library
-  exposed-modules:    Ide.Plugin.Pragmas
-  hs-source-dirs:     src
+  exposed-modules:  Ide.Plugin.Pragmas
+  hs-source-dirs:   src
   build-depends:
-      base                  >=4.12    && <5
+    , base                  >=4.12 && <5
     , extra
     , fuzzy
-    , ghcide                 >=1.2 && <1.4
+    , ghcide                >=1.2  && <1.4
     , hls-plugin-api        ^>=1.1
     , lens
     , lsp
     , text
     , transformers
     , unordered-containers
-  default-language:   Haskell2010
+
+  default-language: Haskell2010
 
 test-suite tests
   type:             exitcode-stdio-1.0
@@ -43,8 +44,6 @@ test-suite tests
     , base
     , filepath
     , hls-pragmas-plugin
-    , hls-test-utils   ^>=1.0
+    , hls-test-utils      ^>=1.0
     , lens
-    , lsp-test
     , lsp-types
-    , text

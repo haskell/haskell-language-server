@@ -63,6 +63,7 @@
             hls-brittany-plugin = ./plugins/hls-brittany-plugin;
             hls-stylish-haskell-plugin = ./plugins/hls-stylish-haskell-plugin;
             hls-fourmolu-plugin = ./plugins/hls-fourmolu-plugin;
+            hls-ormolu-plugin = ./plugins/hls-ormolu-plugin;
             hls-class-plugin = ./plugins/hls-class-plugin;
             hls-haddock-comments-plugin = ./plugins/hls-haddock-comments-plugin;
             hls-eval-plugin = ./plugins/hls-eval-plugin;
@@ -74,6 +75,7 @@
             hls-tactics-plugin = ./plugins/hls-tactics-plugin;
             hls-floskell-plugin = ./plugins/hls-floskell-plugin;
             hls-pragmas-plugin = ./plugins/hls-pragmas-plugin;
+            hls-module-name-plugin = ./plugins/hls-module-name-plugin;
           };
 
           # Tweak our packages

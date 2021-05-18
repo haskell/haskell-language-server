@@ -1,10 +1,5 @@
-{-# LANGUAGE CPP                   #-}
-{-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE TypeOperators         #-}
-{-# LANGUAGE ViewPatterns          #-}
+{-# LANGUAGE CPP               #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module CodeAction.RunMetaprogramSpec where
 
@@ -24,13 +19,13 @@ spec = do
 
 #if __GLASGOW_HASKELL__ >= 808
   describe "beginMetaprogram" $ do
-    goldenTest BeginMetaprogram ""  1  7 "MetaBegin.hs"
+    goldenTest BeginMetaprogram ""  1  7 "MetaBegin"
 #endif
 
   describe "golden" $ do
-    metaTest  6 11 "MetaMaybeAp.hs"
-    metaTest  2 32 "MetaBindOne.hs"
-    metaTest  2 32 "MetaBindAll.hs"
-    metaTest  2 13 "MetaTry.hs"
-    metaTest  2 74 "MetaChoice.hs"
+    metaTest  6 11 "MetaMaybeAp"
+    metaTest  2 32 "MetaBindOne"
+    metaTest  2 32 "MetaBindAll"
+    metaTest  2 13 "MetaTry"
+    metaTest  2 74 "MetaChoice"
 

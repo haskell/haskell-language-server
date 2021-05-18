@@ -1,18 +1,15 @@
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Ide.Plugin.Floskell
-  (
-    descriptor
+  ( descriptor
   , provider
-  )
-where
+  ) where
 
 import           Control.Monad.IO.Class
 import qualified Data.Text               as T
 import qualified Data.Text.Lazy          as TL
 import qualified Data.Text.Lazy.Encoding as TL
-import           Development.IDE         as D hiding (pluginHandlers)
+import           Development.IDE         hiding (pluginHandlers)
 import           Floskell
 import           Ide.PluginUtils
 import           Ide.Types
@@ -37,10 +34,10 @@ provider _ideState typ contents fp _ = liftIO $ do
     let (range, selectedContents) = case typ of
           FormatText    -> (fullRange contents, contents)
           FormatRange r -> (r, extractRange r contents)
-        result = reformat config (Just file) (TL.encodeUtf8 (TL.fromStrict selectedContents))
+        result = reformat config (Just file) . TL.encodeUtf8 $ TL.fromStrict selectedContents
     case result of
-      Left  err -> return $ Left $ responseError (T.pack $  "floskellCmd: " ++ err)
-      Right new -> return $ Right $ List [TextEdit range . TL.toStrict $ TL.decodeUtf8 new]
+      Left  err -> pure $ Left $ responseError $ T.pack $ "floskellCmd: " ++ err
+      Right new -> pure $ Right $ List [TextEdit range . TL.toStrict $ TL.decodeUtf8 new]
 
 -- | Find Floskell Config, user and system wide or provides a default style.
 -- Every directory of the filepath will be searched to find a user configuration.
@@ -53,6 +50,6 @@ findConfigOrDefault file = do
     Just confFile -> readAppConfig confFile
     Nothing ->
       let gibiansky = head (filter (\s -> styleName s == "gibiansky") styles)
-      in return $ defaultAppConfig { appStyle = gibiansky }
+      in pure $ defaultAppConfig { appStyle = gibiansky }
 
 -- ---------------------------------------------------------------------
