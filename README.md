@@ -813,19 +813,21 @@ $ cabal build
 If you are using nix 2.4 style command (enabled by `experimental-features = nix-command`),
 you can use `nix develop` instead of `nix-shell` to enter the development shell. To enter the shell with specific GHC versions:
 
-* `nix develop` or `nix develop #haskell-language-server-dev` - default GHC version
-* `nix develop #haskell-language-server-8104-dev` - GHC 8.10.4
-* `nix develop #haskell-language-server-884-dev` - GHC 8.8.4
-* `nix develop #haskell-language-server-901-dev` - GHC 9.0.1
+* `nix develop` or `nix develop .#haskell-language-server-dev` - default GHC version
+* `nix develop .#haskell-language-server-8104-dev` - GHC 8.10.4
+* `nix develop .#haskell-language-server-884-dev` - GHC 8.8.4
+* `nix develop .#haskell-language-server-901-dev` - GHC 9.0.1
 
 If you are looking for a Nix expression to create haskell-language-server binaries, see https://github.com/haskell/haskell-language-server/issues/122
 
 To create binaries:
 
-* `nix build` or `nix build #haskell-language-server` - default GHC version
-* `nix build #haskell-language-server-8104` - GHC 8.10.4
-* `nix build #haskell-language-server-884` - GHC 8.8.4
-* `nix build #haskell-language-server-901` - GHC 9.0.1
+* `nix build` or `nix build .#haskell-language-server` - default GHC version
+* `nix build .#haskell-language-server-8104` - GHC 8.10.4
+* `nix build .#haskell-language-server-884` - GHC 8.8.4
+* `nix build .#haskell-language-server-901` - GHC 9.0.1
+
+GHC 8.6.5 is not supported here because `nixpkgs-unstable` no longer maintains the corresponding packages set.
 
 #### Introduction tutorial
 
