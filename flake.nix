@@ -51,6 +51,12 @@
           };
           gitignoreSource = (import gitignore { inherit lib; }).gitignoreSource;
 
+          # List all subdirectories under `./plugins`, except `./plugins/default`
+          pluginsDir = ./plugins;
+          pluginSourceDirs = builtins.removeAttrs (lib.mapAttrs'
+            (name: _: lib.nameValuePair name (pluginsDir + ("/" + name)))
+            (builtins.readDir pluginsDir)) [ "default" ];
+
           # Source directories of our packages, should be consistent with cabal.project
           sourceDirs = {
             haskell-language-server = ./.;
@@ -60,23 +66,7 @@
             hie-compat = ./hie-compat;
             hls-plugin-api = ./hls-plugin-api;
             hls-test-utils = ./hls-test-utils;
-            hls-brittany-plugin = ./plugins/hls-brittany-plugin;
-            hls-stylish-haskell-plugin = ./plugins/hls-stylish-haskell-plugin;
-            hls-fourmolu-plugin = ./plugins/hls-fourmolu-plugin;
-            hls-ormolu-plugin = ./plugins/hls-ormolu-plugin;
-            hls-class-plugin = ./plugins/hls-class-plugin;
-            hls-haddock-comments-plugin = ./plugins/hls-haddock-comments-plugin;
-            hls-eval-plugin = ./plugins/hls-eval-plugin;
-            hls-explicit-imports-plugin = ./plugins/hls-explicit-imports-plugin;
-            hls-refine-imports-plugin = ./plugins/hls-refine-imports-plugin;
-            hls-hlint-plugin = ./plugins/hls-hlint-plugin;
-            hls-retrie-plugin = ./plugins/hls-retrie-plugin;
-            hls-splice-plugin = ./plugins/hls-splice-plugin;
-            hls-tactics-plugin = ./plugins/hls-tactics-plugin;
-            hls-floskell-plugin = ./plugins/hls-floskell-plugin;
-            hls-pragmas-plugin = ./plugins/hls-pragmas-plugin;
-            hls-module-name-plugin = ./plugins/hls-module-name-plugin;
-          };
+          } // pluginSourceDirs;
 
           # Tweak our packages
           tweaks = hself: hsuper:
