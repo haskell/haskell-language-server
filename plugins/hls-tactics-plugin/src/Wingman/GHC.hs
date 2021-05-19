@@ -355,3 +355,12 @@ liftMaybe a = MaybeT $ pure a
 typeCheck :: HscEnv -> TcGblEnv -> HsExpr GhcTc -> IO (Maybe Type)
 typeCheck hscenv tcg = fmap snd . initDs hscenv tcg . fmap exprType . dsExpr
 
+
+mkFunTys' :: [Type] -> Type -> Type
+mkFunTys' =
+#if __GLASGOW_HASKELL__ <= 808
+  mkFunTys
+#else
+  mkVisFunTys
+#endif
+

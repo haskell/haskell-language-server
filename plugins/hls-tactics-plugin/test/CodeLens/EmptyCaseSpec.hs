@@ -1,9 +1,4 @@
-{-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE TypeOperators         #-}
-{-# LANGUAGE ViewPatterns          #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module CodeLens.EmptyCaseSpec where
 
@@ -17,10 +12,10 @@ spec = do
   let test = mkCodeLensTest allFeatures
 
   describe "golden" $ do
-    test "EmptyCaseADT.hs"
-    test "EmptyCaseShadow.hs"
-    test "EmptyCaseParens.hs"
-    test "EmptyCaseNested.hs"
-    test "EmptyCaseApply.hs"
-    test "EmptyCaseGADT.hs"
+    test "EmptyCaseADT"
+    test "EmptyCaseShadow"
+    test "EmptyCaseParens"
+    test "EmptyCaseNested"
+    test "EmptyCaseApply"
+    test "EmptyCaseGADT"
 

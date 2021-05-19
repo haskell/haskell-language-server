@@ -25,7 +25,6 @@ extra-source-files:
   test/testdata/hlint/ignore/.hlint.yaml
   test/testdata/**/*.h
   test/testdata/**/*.hs
-  test/testdata/**/*.expected
 
 flag pedantic
   description: Enable -Werror
@@ -231,15 +230,12 @@ common hlint
 
 common moduleName
   if flag(moduleName) || flag(all-plugins)
-    hs-source-dirs: plugins/default/src
-    other-modules: Ide.Plugin.ModuleName
+    build-depends: hls-module-name-plugin ^>= 1.0.0.0
     cpp-options: -DmoduleName
 
 common pragmas
   if flag(pragmas) || flag(all-plugins)
-    hs-source-dirs: plugins/default/src
-    build-depends: fuzzy
-    other-modules: Ide.Plugin.Pragmas
+    build-depends: hls-pragmas-plugin ^>= 1.0.0.0
     cpp-options: -Dpragmas
 
 common splice
@@ -261,9 +257,7 @@ common fourmolu
 
 common ormolu
   if flag(ormolu) || flag(all-formatters)
-    hs-source-dirs: plugins/default/src
-    other-modules: Ide.Plugin.Ormolu
-    build-depends: ormolu                   ^>=0.1.2
+    build-depends: hls-ormolu-plugin ^>= 1.0.0.0
     cpp-options: -Dormolu
 
 common stylishHaskell
@@ -416,7 +410,6 @@ test-suite func-test
     FunctionalLiquid
     HieBios
     Highlight
-    ModuleName
     Progress
     Reference
     Rename

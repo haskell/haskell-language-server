@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Wingman.Tactics
   ( module Wingman.Tactics
   , runTactic
@@ -10,6 +12,7 @@ import           Control.Monad (unless)
 import           Control.Monad.Except (throwError)
 import           Control.Monad.Reader.Class (MonadReader (ask))
 import           Control.Monad.State.Strict (StateT(..), runStateT)
+import           Data.Bool (bool)
 import           Data.Foldable
 import           Data.Functor ((<&>))
 import           Data.Generics.Labels ()
@@ -34,6 +37,8 @@ import           Wingman.Judgements
 import           Wingman.Machinery
 import           Wingman.Naming
 import           Wingman.Types
+import OccName (mkVarOcc)
+import Wingman.StaticPlugin (pattern MetaprogramSyntax)
 
 
 ------------------------------------------------------------------------------
@@ -93,17 +98,26 @@ restrictPositionForApplication f app = do
 ------------------------------------------------------------------------------
 -- | Introduce a lambda binding every variable.
 intros :: TacticsM ()
-intros = rule $ \jdg -> do
+intros = intros' Nothing
+
+------------------------------------------------------------------------------
+-- | Introduce a lambda binding every variable.
+intros'
+    :: Maybe [OccName]  -- ^ When 'Nothing', generate a new name for every
+                        -- variable. Otherwise, only bind the variables named.
+    -> TacticsM ()
+intros' names = rule $ \jdg -> do
   let g  = jGoal jdg
   ctx <- ask
   case tcSplitFunTys $ unCType g of
     ([], _) -> throwError $ GoalMismatch "intros" g
     (as, b) -> do
-      let vs = mkManyGoodNames (hyNamesInScope $ jEntireHypothesis jdg) as
-      let top_hole = isTopHole ctx jdg
+      let vs = fromMaybe (mkManyGoodNames (hyNamesInScope $ jEntireHypothesis jdg) as) names
+          num_args = length vs
+          top_hole = isTopHole ctx jdg
           hy' = lambdaHypothesis top_hole $ zip vs $ coerce as
           jdg' = introduce hy'
-               $ withNewGoal (CType b) jdg
+               $ withNewGoal (CType $ mkFunTys' (drop num_args as) b) jdg
       ext <- newSubgoal jdg'
       pure $
         ext
@@ -213,6 +227,9 @@ apply hi = requireConcreteHole $ tracing ("apply' " <> show (hi_name hi)) $ do
         & #syn_used_vals %~ S.insert func
         & #syn_val       %~ mkApply func . fmap unLoc
 
+application :: TacticsM ()
+application = overFunctions apply
+
 
 ------------------------------------------------------------------------------
 -- | Choose between each of the goal's data constructors.
@@ -254,6 +271,24 @@ splitSingle = tracing "splitSingle" $ do
     Just ([dc], _) -> do
       splitDataCon dc
     _ -> throwError $ GoalMismatch "splitSingle" g
+
+------------------------------------------------------------------------------
+-- | Like 'split', but prunes any data constructors which have holes.
+obvious :: TacticsM ()
+obvious = tracing "obvious" $ do
+  pruning split $ bool (Just NoProgress) Nothing . null
+
+
+------------------------------------------------------------------------------
+-- | Sorry leaves a hole in its extract
+sorry :: TacticsM ()
+sorry = exact $ var' $ mkVarOcc "_"
+
+
+------------------------------------------------------------------------------
+-- | Sorry leaves a hole in its extract
+metaprogram :: TacticsM ()
+metaprogram = exact $ MetaprogramSyntax ""
 
 
 ------------------------------------------------------------------------------
@@ -346,10 +381,7 @@ localTactic t f = do
 
 
 refine :: TacticsM ()
-refine = do
-  try' intros
-  try' splitSingle
-  try' intros
+refine = intros <%> splitSingle
 
 
 auto' :: Int -> TacticsM ()
@@ -401,5 +433,4 @@ applyByName name = do
     case hi_name hi == name of
       True  -> apply hi
       False -> empty
-
 

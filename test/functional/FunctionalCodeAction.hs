@@ -1,7 +1,5 @@
 {-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE LambdaCase            #-}
-{-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedStrings     #-}
 
 module FunctionalCodeAction (tests) where
@@ -21,7 +19,6 @@ import           Test.Hls
 import           Test.Hspec.Expectations
 
 import           System.FilePath                 ((</>))
-import           System.IO.Extra                 (withTempDir)
 import           Test.Hls.Command
 
 {-# ANN module ("HLint: ignore Reduce duplication"::String) #-}
@@ -30,8 +27,6 @@ tests :: TestTree
 tests = testGroup "code actions" [
       hlintTests
     , importTests
-    , missingPragmaTests
-    , disableWarningTests
     , packageTests
     , redundantImportTests
     , renameTests
@@ -476,239 +471,6 @@ signatureTests = testGroup "missing top level signature code actions" [
         liftIO $ T.lines contents @?= expected
     ]
 
-missingPragmaTests :: TestTree
-missingPragmaTests = testGroup "missing pragma warning code actions" [
-    testCase "Adds TypeSynonymInstances pragma" $ do
-        runSession hlsCommand fullCaps "test/testdata/addPragmas" $ do
-            doc <- openDoc "NeedsPragmas.hs" "haskell"
-
-            _ <- waitForDiagnosticsFromSource doc "typecheck"
-            cas <- map fromAction <$> getAllCodeActions doc
-
-            liftIO $ "Add \"TypeSynonymInstances\"" `elem` map (^. L.title) cas @? "Contains TypeSynonymInstances code action"
-            liftIO $ "Add \"FlexibleInstances\"" `elem` map (^. L.title) cas @? "Contains FlexibleInstances code action"
-
-            executeCodeAction $ head cas
-
-            contents <- documentContents doc
-
-            let expected = [ "{-# LANGUAGE TypeSynonymInstances #-}"
-                        , "module NeedsPragmas where"
-                        , ""
-                        , "import GHC.Generics"
-                        , ""
-                        , "main = putStrLn \"hello\""
-                        , ""
-                        , "type Foo = Int"
-                        , ""
-                        , "instance Show Foo where"
-                        , "  show x = undefined"
-                        , ""
-                        , "instance Show (Int,String) where"
-                        , "  show  = undefined"
-                        , ""
-                        , "data FFF a = FFF Int String a"
-                        , "           deriving (Generic,Functor,Traversable)"
-                        ]
-
-            liftIO $ T.lines contents @?= expected
-
-    , testCase "Adds TypeApplications pragma" $ do
-        runSession hlsCommand fullCaps "test/testdata/addPragmas" $ do
-            doc <- openDoc "TypeApplications.hs" "haskell"
-
-            _ <- waitForDiagnosticsFrom doc
-            cas <- map fromAction <$> getAllCodeActions doc
-
-            liftIO $ "Add \"TypeApplications\"" `elem` map (^. L.title) cas @? "Contains TypeApplications code action"
-
-            executeCodeAction $ head cas
-
-            contents <- documentContents doc
-
-            let expected =
-                    [ "{-# LANGUAGE ScopedTypeVariables #-}"
-                    , "{-# LANGUAGE TypeApplications #-}"
-                    , "module TypeApplications where"
-                    , ""
-                    , "foo :: forall a. a -> a"
-                    , "foo = id @a"
-                    ]
-
-            liftIO $ T.lines contents @?= expected
-    , testCase "No duplication" $ do
-        runSession hlsCommand fullCaps "test/testdata/addPragmas" $ do
-            doc <- openDoc "NamedFieldPuns.hs" "haskell"
-
-            _ <- waitForDiagnosticsFrom doc
-            cas <- map fromAction <$> getCodeActions doc (Range (Position 8 9) (Position 8 9))
-
-            liftIO $ length cas == 1 @? "Expected one code action, but got: " <> show cas
-            let ca = head cas
-
-            liftIO $ (ca ^. L.title == "Add \"NamedFieldPuns\"") @? "NamedFieldPuns code action"
-
-            executeCodeAction ca
-
-            contents <- documentContents doc
-
-            let expected =
-                    [ "{-# LANGUAGE NamedFieldPuns #-}"
-                    , "module NamedFieldPuns where"
-                    , ""
-                    , "data Record = Record"
-                    , "  { a :: Int,"
-                    , "    b :: Double,"
-                    , "    c :: String"
-                    , "  }"
-                    , ""
-                    , "f Record{a, b} = a"
-                    ]
-            liftIO $ T.lines contents @?= expected
-    , testCase "After shebang" $ do
-        runSession hlsCommand fullCaps "test/testdata/addPragmas" $ do
-            doc <- openDoc "AfterShebang.hs" "haskell"
-
-            _ <- waitForDiagnosticsFrom doc
-            cas <- map fromAction <$> getAllCodeActions doc
-
-            liftIO $ "Add \"NamedFieldPuns\"" `elem` map (^. L.title) cas @? "Contains NamedFieldPuns code action"
-
-            executeCodeAction $ head cas
-
-            contents <- documentContents doc
-
-            let expected =
-                    [ "#! /usr/bin/env nix-shell"
-                    , "#! nix-shell --pure -i runghc -p \"haskellPackages.ghcWithPackages (hp: with hp; [ turtle ])\""
-                    , "{-# LANGUAGE NamedFieldPuns #-}"
-                    , ""
-                    , "module AfterShebang where"
-                    , ""
-                    , "data Record = Record"
-                    , "  { a :: Int,"
-                    , "    b :: Double,"
-                    , "    c :: String"
-                    , "  }"
-                    , ""
-                    , "f Record{a, b} = a"
-                    ]
-
-            liftIO $ T.lines contents @?= expected
-    , testCase "Append to existing pragmas" $ do
-        runSession hlsCommand fullCaps "test/testdata/addPragmas" $ do
-            doc <- openDoc "AppendToExisting.hs" "haskell"
-
-            _ <- waitForDiagnosticsFrom doc
-            cas <- map fromAction <$> getAllCodeActions doc
-
-            liftIO $ "Add \"NamedFieldPuns\"" `elem` map (^. L.title) cas @? "Contains NamedFieldPuns code action"
-
-            executeCodeAction $ head cas
-
-            contents <- documentContents doc
-
-            let expected =
-                    [ "-- | Doc before pragma"
-                    , "{-# OPTIONS_GHC -Wno-dodgy-imports #-}"
-                    , "{-# LANGUAGE NamedFieldPuns #-}"
-                    , "module AppendToExisting where"
-                    , ""
-                    , "data Record = Record"
-                    , "  { a :: Int,"
-                    , "    b :: Double,"
-                    , "    c :: String"
-                    , "  }"
-                    , ""
-                    , "f Record{a, b} = a"
-                    ]
-
-            liftIO $ T.lines contents @?= expected
-    , testCase "Before Doc Comments" $ do
-        runSession hlsCommand fullCaps "test/testdata/addPragmas" $ do
-            doc <- openDoc "BeforeDocComment.hs" "haskell"
-
-            _ <- waitForDiagnosticsFrom doc
-            cas <- map fromAction <$> getAllCodeActions doc
-
-            liftIO $ "Add \"NamedFieldPuns\"" `elem` map (^. L.title) cas @? "Contains NamedFieldPuns code action"
-
-            executeCodeAction $ head cas
-
-            contents <- documentContents doc
-
-            let expected =
-                    [ "#! /usr/bin/env nix-shell"
-                    , "#! nix-shell --pure -i runghc -p \"haskellPackages.ghcWithPackages (hp: with hp; [ turtle ])\""
-                    , "{-# LANGUAGE NamedFieldPuns #-}"
-                    , "-- | Doc Comment"
-                    , "{- Block -}"
-                    , ""
-                    , "module BeforeDocComment where"
-                    , ""
-                    , "data Record = Record"
-                    , "  { a :: Int,"
-                    , "    b :: Double,"
-                    , "    c :: String"
-                    , "  }"
-                    , ""
-                    , "f Record{a, b} = a"
-                    ]
-
-            liftIO $ T.lines contents @?= expected
-    ]
-
-disableWarningTests :: TestTree
-disableWarningTests =
-  testGroup "disable warnings" $
-    [
-      ( "missing-signatures"
-      , T.unlines
-          [ "{-# OPTIONS_GHC -Wall #-}"
-          , "main = putStrLn \"hello\""
-          ]
-      , T.unlines
-          [ "{-# OPTIONS_GHC -Wall #-}"
-          , "{-# OPTIONS_GHC -Wno-missing-signatures #-}"
-          , "main = putStrLn \"hello\""
-          ]
-      )
-    ,
-      ( "unused-imports"
-      , T.unlines
-          [ "{-# OPTIONS_GHC -Wall #-}"
-          , ""
-          , ""
-          , "module M where"
-          , ""
-          , "import Data.Functor"
-          ]
-      , T.unlines
-          [ "{-# OPTIONS_GHC -Wall #-}"
-          , "{-# OPTIONS_GHC -Wno-unused-imports #-}"
-          , ""
-          , ""
-          , "module M where"
-          , ""
-          , "import Data.Functor"
-          ]
-      )
-    ]
-      <&> \(warning, initialContent, expectedContent) -> testSession (T.unpack warning) $ do
-        doc <- createDoc "Module.hs" "haskell" initialContent
-        _ <- waitForDiagnostics
-        codeActs <- mapMaybe caResultToCodeAct <$> getAllCodeActions doc
-        case find (\CodeAction{_title} -> _title == "Disable \"" <> warning <> "\" warnings") codeActs of
-          Nothing -> liftIO $ assertFailure "No code action with expected title"
-          Just action -> do
-            executeCodeAction action
-            contentAfterAction <- documentContents doc
-            liftIO $ expectedContent @=? contentAfterAction
- where
-  caResultToCodeAct = \case
-    InL _ -> Nothing
-    InR c -> Just c
-
 unusedTermTests :: TestTree
 unusedTermTests = testGroup "unused term code actions" [
     ignoreTestBecause "no support for prefixing unused names with _" $ testCase "Prefixes with '_'" $
@@ -765,7 +527,3 @@ noLiteralCaps = def { C._textDocument = Just textDocumentCaps }
   where
     textDocumentCaps = def { C._codeAction = Just codeActionCaps }
     codeActionCaps = CodeActionClientCapabilities (Just True) Nothing Nothing Nothing Nothing Nothing Nothing
-
-testSession :: String -> Session () -> TestTree
-testSession name s = testCase name $ withTempDir $ \dir ->
-    runSession hlsCommand fullCaps dir s

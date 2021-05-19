@@ -8,8 +8,7 @@ author:             Pepe Iborra
 maintainer:         pepeiborra@gmail.com
 category:           Development
 build-type:         Simple
-extra-source-files:
-  LICENSE
+extra-source-files: LICENSE
 
 library
   exposed-modules:    Ide.Plugin.Retrie
@@ -22,7 +21,7 @@ library
     , directory
     , extra
     , ghc
-    , ghcide                 >=1.2 && <1.4
+    , ghcide                >=1.2     && <1.4
     , hashable
     , hls-plugin-api        ^>=1.1
     , lsp
