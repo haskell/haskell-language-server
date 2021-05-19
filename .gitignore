@@ -41,3 +41,7 @@ test/testdata/**/hie.yaml
 # ghcide-bench
 *.identifierPosition
 /bench/example
+
+# nix
+result
+result-doc
