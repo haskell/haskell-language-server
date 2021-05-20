@@ -39,6 +39,8 @@ import           UniqSupply (takeUniqFromSupply, mkSplitUniqSupply, UniqSupply)
 import           Unique (nonDetCmpUnique, Uniquable, getUnique, Unique)
 import           Wingman.Debug
 import           Wingman.FeatureSet
+import Development.IDE.Core.UseStale
+import Development.IDE (Range)
 
 
 ------------------------------------------------------------------------------
@@ -56,6 +58,8 @@ data TacticCommand
   | DestructAll
   | UseDataCon
   | Refine
+  | BeginMetaprogram
+  | RunMetaprogram
   deriving (Eq, Ord, Show, Enum, Bounded)
 
 -- | Generate a title for the command.
@@ -72,6 +76,8 @@ tacticTitle = (mappend "Wingman: " .) . go
     go DestructAll _            = "Split all function arguments"
     go UseDataCon dcon          = "Use constructor " <> dcon
     go Refine _                 = "Refine hole"
+    go BeginMetaprogram _       = "Use custom tactic block"
+    go RunMetaprogram _         = "Run custom tactic"
 
 
 ------------------------------------------------------------------------------
@@ -476,6 +482,7 @@ rose a rs = Rose $ Node a $ coerce rs
 data RunTacticResults = RunTacticResults
   { rtr_trace       :: Trace
   , rtr_extract     :: LHsExpr GhcPs
+  , rtr_subgoals    :: [Judgement]
   , rtr_other_solns :: [Synthesized (LHsExpr GhcPs)]
   , rtr_jdg         :: Judgement
   , rtr_ctx         :: Context
@@ -501,4 +508,16 @@ instance Show UserFacingMessage where
   show TimedOut                = "Wingman timed out while trying to find a solution"
   show NothingToDo             = "Nothing to do"
   show (InfrastructureError t) = "Internal error: " <> T.unpack t
+
+
+data HoleSort = Hole | Metaprogram T.Text
+  deriving (Eq, Ord, Show)
+
+data HoleJudgment = HoleJudgment
+  { hj_range     :: Tracked 'Current Range
+  , hj_jdg       :: Judgement
+  , hj_ctx       :: Context
+  , hj_dflags    :: DynFlags
+  , hj_hole_sort :: HoleSort
+  }
 

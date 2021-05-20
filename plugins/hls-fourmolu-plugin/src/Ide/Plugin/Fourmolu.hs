@@ -9,26 +9,24 @@ module Ide.Plugin.Fourmolu (
     provider,
 ) where
 
-import           Control.Exception
-import           Data.Either.Extra
-import           System.FilePath
-
+import           Control.Exception           (try)
 import           Control.Lens                ((^.))
+import           Control.Monad.IO.Class
+import           Data.Bifunctor              (first)
 import qualified Data.Text                   as T
-import           Development.IDE             as D hiding (pluginHandlers)
+import           Development.IDE             hiding (pluginHandlers)
+import           Development.IDE.GHC.Compat  (moduleNameString)
 import qualified DynFlags                    as D
 import qualified EnumSet                     as S
-import           GHC                         (DynFlags, moduleNameString)
 import           GHC.LanguageExtensions.Type (Extension (Cpp))
 import           GhcPlugins                  (HscEnv (hsc_dflags))
 import           Ide.PluginUtils             (makeDiffTextEdit)
-
-import           Control.Monad.IO.Class
 import           Ide.Types
 import           Language.LSP.Server         hiding (defaultConfig)
 import           Language.LSP.Types
 import           Language.LSP.Types.Lens
 import           "fourmolu" Ormolu
+import           System.FilePath
 
 -- ---------------------------------------------------------------------
 
@@ -48,7 +46,7 @@ provider ideState typ contents fp fo = withIndefiniteProgress title Cancellable 
         Just df -> liftIO $ convertDynFlags df
 
     let format printerOpts =
-            mapLeft (responseError . ("Fourmolu: " <>) . T.pack . show)
+            first (responseError . ("Fourmolu: " <>) . T.pack . show)
                 <$> try @OrmoluException (makeDiffTextEdit contents <$> ormolu config fp' (T.unpack contents))
           where
             config =
@@ -91,7 +89,7 @@ provider ideState typ contents fp fo = withIndefiniteProgress title Cancellable 
         FormatRange (Range (Position sl _) (Position el _)) ->
             RegionIndices (Just $ sl + 1) (Just $ el + 1)
 
-convertDynFlags :: DynFlags -> IO [DynOption]
+convertDynFlags :: D.DynFlags -> IO [DynOption]
 convertDynFlags df =
     let pp = ["-pgmF=" <> p | not (null p)]
         p = D.sPgm_F $ D.settings df
