@@ -1,7 +1,6 @@
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE LambdaCase               #-}
 {-# LANGUAGE OverloadedStrings        #-}
-{-# LANGUAGE PackageImports           #-}
 {-# LANGUAGE TypeApplications         #-}
 
 module Ide.Plugin.Fourmolu (
@@ -25,7 +24,7 @@ import           Ide.Types
 import           Language.LSP.Server         hiding (defaultConfig)
 import           Language.LSP.Types
 import           Language.LSP.Types.Lens
-import           "fourmolu" Ormolu
+import           Ormolu
 import           System.FilePath
 
 -- ---------------------------------------------------------------------
