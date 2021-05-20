@@ -4,6 +4,7 @@ cradle:
     - UsualCase.hs
     - WithOverride.hs
     - DontUseInternal.hs
+    - UnusedImport.hs
     - A.hs
     - B.hs
     - C.hs
