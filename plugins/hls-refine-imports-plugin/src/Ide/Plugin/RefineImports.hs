@@ -21,13 +21,10 @@ import           Avail                                             (AvailInfo (A
                                                                     availName,
                                                                     availNames,
                                                                     availNamesWithSelectors)
-import           Control.Arrow                                     (Arrow (second))
 import           Control.DeepSeq                                   (rwhnf)
-import           Control.Monad                                     (join)
 import           Control.Monad.IO.Class                            (liftIO)
 import           Data.Aeson.Types
 import qualified Data.HashMap.Strict                               as HashMap
-import           Data.IORef                                        (readIORef)
 import           Data.List                                         (intercalate,
                                                                     isSuffixOf)
 import           Data.List.Extra                                   (notNull)
@@ -62,16 +59,10 @@ import           Development.IDE.Plugin.CodeAction.PositionIndexed (extendToIncl
 import           GHC.Generics                                      (Generic)
 import           Ide.Plugin.ExplicitImports                        (within)
 import qualified Ide.Plugin.ExplicitImports                        as EI
-import           Ide.PluginUtils                                   (mkLspCommand)
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
 import           PrelNames                                         (pRELUDE)
-import           RnNames                                           (findImportUsage,
-                                                                    getMinimalImports)
-import           TcRnMonad                                         (initTcWithGbl,
-                                                                    tcg_rn_exports,
-                                                                    tcg_used_gres)
 
 -- | plugin declaration
 descriptor :: PluginId -> PluginDescriptor IdeState
