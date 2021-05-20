@@ -7,7 +7,15 @@
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE TypeFamilies          #-}
 
-module Ide.Plugin.RefineImports (descriptor) where
+module Ide.Plugin.RefineImports
+  ( descriptor
+  , RefineImports(..)
+  , RefineImportsResult(..)
+  , RemoveUnusedImports(..)
+  , RemoveUnusedImportsResult(..)
+  , mkExplicitEdit
+  , mkExplicitEdit'
+  ) where
 
 import           Avail                                             (AvailInfo (Avail),
                                                                     availName,
