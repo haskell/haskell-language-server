@@ -1,9 +1,9 @@
 module Main where
 
 import A
+import C
 import D
 import F
-import H
 import G ()
 import Data.List (intercalate)
 

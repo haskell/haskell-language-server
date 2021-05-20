@@ -22,7 +22,6 @@ main = defaultTestRunner $
     [ codeActionGoldenTest refineAction "WithOverride" 3 1
     , codeActionGoldenTest removeUnusedAction "UnusedImport" 3 1
     , codeLensGoldenTest "UsualCase" 1
-    , codeLensGoldenTest "DontUseInternal" 1
     , codeLensGoldenTest "UnusedImportLens" 1
     ]
 

@@ -237,20 +237,13 @@ refineImportsRule = define $ \RefineImports nfp -> do
 
   (minImports, _) <- extractMinimalImports nfp
 
-  -- Internal module is the convention that no module should import
-  -- directly
-  let notContainInternalModule :: [AvailInfo] -> Bool
-      notContainInternalModule = not . any (\a ->
-        "Internal" `isSuffixOf` prettyPrint (availName a))
-
   let filterByImport
         :: LImportDecl GhcRn
         -> Map.Map ModuleName [AvailInfo]
         -> Maybe (Map.Map ModuleName [AvailInfo])
       filterByImport (L _ ImportDecl{ideclHiding = Just (_, L _ names)}) avails =
         let importedNames = S.fromList $ map (ieName . unLoc) names
-            availsExcludingInternal = Map.filter notContainInternalModule avails
-            res = flip Map.filter availsExcludingInternal $ \a ->
+            res = flip Map.filter avails $ \a ->
                     any (`S.member` importedNames)
                       $ concatMap availNamesWithSelectors a
             allFilteredAvailsNames = S.fromList

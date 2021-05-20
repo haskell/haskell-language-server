@@ -1,6 +1,6 @@
 module Main where
 
-import H
+import C
 
 main :: IO ()
 main = putStrLn "hello" 
