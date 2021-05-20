@@ -25,8 +25,6 @@ import           Control.DeepSeq                                   (rwhnf)
 import           Control.Monad.IO.Class                            (liftIO)
 import           Data.Aeson.Types
 import qualified Data.HashMap.Strict                               as HashMap
-import           Data.List                                         (intercalate,
-                                                                    isSuffixOf)
 import           Data.List.Extra                                   (notNull)
 import qualified Data.Map.Strict                                   as Map
 import           Data.Maybe                                        (catMaybes,
