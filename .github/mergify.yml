@@ -10,8 +10,8 @@ pull_request_rules:
   # disabled (too slow, ~4h) until hie-bios >0.7.2 is released
   # - status-success=bench-example (8.10.4, ubuntu-latest, bench_example_HLS)
 
-  - status-success=nix (default, ubuntu-latest)
-  - status-success=nix (default, macOS-latest)
+  - status-success=nix (ubuntu-latest)
+  - status-success=nix (macOS-latest)
 
   - status-success=test (8.10.4, ubuntu-latest)
   - status-success=test (8.10.4, macOS-latest)
