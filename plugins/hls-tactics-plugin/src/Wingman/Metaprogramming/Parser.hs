@@ -62,6 +62,8 @@ oneTactic =
     , nullary   "sorry" sorry
     , nullary   "unary" $ nary 1
     , nullary   "binary" $ nary 2
+    , unary_occ "cata" $ useNameFromHypothesis cata
+    , nullary   "collapse" collapse
     , nullary   "recursion" $
         fmap listToMaybe getCurrentDefinitions >>= \case
           Just (self, _) -> useNameFromContext apply self

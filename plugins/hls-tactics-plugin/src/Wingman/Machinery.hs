@@ -3,11 +3,12 @@
 module Wingman.Machinery where
 
 import           Class (Class (classTyVars))
+import           Control.Applicative (empty)
 import           Control.Lens ((<>~))
 import           Control.Monad.Error.Class
 import           Control.Monad.Reader
 import           Control.Monad.State.Class (gets, modify)
-import           Control.Monad.State.Strict (StateT (..))
+import           Control.Monad.State.Strict (StateT (..), execStateT)
 import           Data.Bool (bool)
 import           Data.Coerce
 import           Data.Either
@@ -22,7 +23,9 @@ import           Data.Monoid (getSum)
 import           Data.Ord (Down (..), comparing)
 import           Data.Set (Set)
 import qualified Data.Set as S
+import           Development.IDE.Core.Compile (lookupName)
 import           Development.IDE.GHC.Compat
+import           GhcPlugins (GlobalRdrElt (gre_name), lookupOccEnv)
 import           OccName (HasOccName (occName), OccEnv)
 import           Refinery.ProofState
 import           Refinery.Tactic
@@ -33,9 +36,6 @@ import           Unify
 import           Wingman.Judgements
 import           Wingman.Simplify (simplify)
 import           Wingman.Types
-import GhcPlugins (GlobalRdrElt (gre_name), lookupOccEnv)
-import Development.IDE.Core.Compile (lookupName)
-import Control.Applicative (empty)
 
 
 substCTy :: TCvSubst -> CType -> CType
@@ -53,6 +53,10 @@ newSubgoal j = do
     subgoal
       $ substJdg unifier
       $ unsetIsTopHole j
+
+
+tacticToRule :: Judgement -> TacticsM () -> Rule
+tacticToRule jdg (TacticT tt) = RuleT $ flip execStateT jdg tt >>= flip Subgoal Axiom
 
 
 ------------------------------------------------------------------------------

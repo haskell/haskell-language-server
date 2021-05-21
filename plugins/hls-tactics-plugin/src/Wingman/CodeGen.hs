@@ -39,6 +39,7 @@ import           Wingman.Judgements.Theta
 import           Wingman.Machinery
 import           Wingman.Naming
 import           Wingman.Types
+import GHC.SourceGen (occNameToStr)
 
 
 destructMatches
@@ -273,4 +274,26 @@ mkApply occ (lhs : rhs : more)
   | isSymOcc occ
   = noLoc $ foldl' (@@) (op lhs (coerceName occ) rhs) more
 mkApply occ args = noLoc $ foldl' (@@) (var' occ) args
+
+
+  -- TODO(sandy): it's likely that i've mangled the synthesized from terms
+letForEach
+    :: (OccName -> OccName)
+    -> (HyInfo CType -> TacticsM ())
+    -> Hypothesis CType
+    -> Judgement
+    -> RuleM (Synthesized (LHsExpr GhcPs))
+letForEach rename solve hy jdg = do
+  let g = jGoal jdg
+  terms <- fmap sequenceA $ for (unHypothesis hy) $ \hi -> do
+    let name = rename $ hi_name hi
+    res <- tacticToRule jdg $ solve hi
+    pure $ fmap (name,) res
+  let hy' = fmap (g <$) $ syn_val terms
+  g <- newSubgoal $ introduce (userHypothesis hy') jdg
+  pure $ g
+    & #syn_val %~ noLoc
+                . let' (fmap (\(occ, expr) -> valBind (occNameToStr occ) $ unLoc expr)
+                          $ syn_val terms)
+                . unLoc
 
