@@ -39,6 +39,8 @@ import           Wingman.Naming
 import           Wingman.Types
 import OccName (mkVarOcc)
 import Wingman.StaticPlugin (pattern MetaprogramSyntax)
+import GHC.SourceGen ((@@))
+import TysPrim (betaTy, alphaTy, betaTyVar, alphaTyVar)
 
 
 ------------------------------------------------------------------------------
@@ -206,7 +208,7 @@ homoLambdaCase =
 
 
 apply :: HyInfo CType -> TacticsM ()
-apply hi = requireConcreteHole $ tracing ("apply' " <> show (hi_name hi)) $ do
+apply hi = tracing ("apply' " <> show (hi_name hi)) $ do
   jdg <- goal
   let g  = jGoal jdg
       ty = unCType $ hi_type hi
@@ -394,7 +396,7 @@ auto' n = do
   try intros
   choice
     [ overFunctions $ \fname -> do
-        apply fname
+        requireConcreteHole $ apply fname
         loop
     , overAlgebraicTerms $ \aname -> do
         destructAuto aname
@@ -436,4 +438,32 @@ applyByName name = do
     case hi_name hi == name of
       True  -> apply hi
       False -> empty
+
+
+applyByType :: Type -> TacticsM ()
+applyByType ty = tracing ("applyByType " <> show ty) $ do
+  jdg <- goal
+  let g  = jGoal jdg
+  ty' <- freshTyvars ty
+  let (_, _, args, ret) = tacticsSplitFunTy ty'
+  rule $ \jdg -> do
+    unify g (CType ret)
+    app <- newSubgoal . blacklistingDestruct $ withNewGoal (CType ty) jdg
+    ext
+        <- fmap unzipTrace
+        $ traverse ( newSubgoal
+                    . blacklistingDestruct
+                    . flip withNewGoal jdg
+                    . CType
+                    ) args
+    pure $
+      fmap noLoc $
+        foldl' (@@)
+          <$> fmap unLoc app
+          <*> fmap (fmap unLoc) ext
+
+
+nary :: Int -> TacticsM ()
+nary n = do
+  applyByType $ mkInvForAllTys [alphaTyVar, betaTyVar] $ mkFunTys (replicate n alphaTy) betaTy
 

@@ -4,6 +4,7 @@
 {-# LANGUAGE TypeFamilies      #-}
 
 {-# LANGUAGE NoMonoLocalBinds  #-}
+{-# LANGUAGE TupleSections #-}
 
 module Wingman.LanguageServer where
 
@@ -16,6 +17,7 @@ import           Control.Monad.State (State, evalState)
 import           Control.Monad.Trans.Maybe
 import           Data.Bifunctor (first)
 import           Data.Coerce
+import           Data.Foldable (toList)
 import           Data.Functor ((<&>))
 import           Data.Functor.Identity (runIdentity)
 import qualified Data.HashMap.Strict as Map
@@ -43,6 +45,7 @@ import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindi
 import qualified FastString
 import           GHC.Generics (Generic)
 import           Generics.SYB hiding (Generic)
+import           GhcPlugins (extractModule)
 import           GhcPlugins (tupleDataCon, consDataCon, substTyAddInScope, ExternalPackageState, HscEnv (hsc_EPS), unpackFS)
 import qualified Ide.Plugin.Config as Plugin
 import           Ide.Plugin.Properties
@@ -57,13 +60,15 @@ import           OccName
 import           Prelude hiding (span)
 import           Retrie (transformA)
 import           SrcLoc (containsSpan)
-import           TcRnTypes (tcg_binds, TcGblEnv)
+import           TcRnTypes (tcg_binds, TcGblEnv (tcg_rdr_env))
 import           Wingman.Context
 import           Wingman.FeatureSet
 import           Wingman.GHC
 import           Wingman.Judgements
 import           Wingman.Judgements.SYB (everythingContaining, metaprogramQ)
 import           Wingman.Judgements.Theta
+import           Wingman.Machinery (getOccNameType)
+import           Wingman.Metaprogramming.Lexer (ParserContext(..))
 import           Wingman.Range
 import           Wingman.StaticPlugin (pattern WingmanMetaprogram, pattern MetaprogramSyntax)
 import           Wingman.Types
@@ -585,6 +590,7 @@ annotateMetaprograms = everywhereM $ mkM $ \case
     pure x
   (x :: LHsExpr GhcPs) -> pure x
 
+
 getMetaprogramAtSpan
     :: Tracked age SrcSpan
     -> Tracked age TcGblEnv
@@ -595,4 +601,43 @@ getMetaprogramAtSpan (unTrack -> ss)
   . metaprogramQ ss
   . tcg_binds
   . unTrack
+
+
+getOccNameTypes
+    :: Foldable t
+    => IdeState
+    -> NormalizedFilePath
+    -> t OccName
+    -> MaybeT IO (M.Map OccName Type)
+getOccNameTypes state nfp occs = do
+  let stale a = runStaleIde "getOccNameTypes" state nfp a
+
+  TrackedStale (unTrack -> tcmod) _ <- stale TypeCheck
+  TrackedStale (unTrack -> hscenv) _ <- stale GhcSessionDeps
+
+  let tcgblenv = tmrTypechecked tcmod
+      modul = extractModule tcgblenv
+      rdrenv = tcg_rdr_env tcgblenv
+  lift $ fmap M.fromList $
+    fmap join $ for (toList occs) $ \occ ->
+      fmap (maybeToList . fmap (occ, )) $
+        getOccNameType (hscEnv hscenv) rdrenv modul occ
+
+
+getParserState
+    :: IdeState
+    -> NormalizedFilePath
+   -> Context
+    -> MaybeT IO ParserContext
+getParserState state nfp ctx = do
+  let stale a = runStaleIde "getOccNameTypes" state nfp a
+
+  TrackedStale (unTrack -> tcmod) _ <- stale TypeCheck
+  TrackedStale (unTrack -> hscenv) _ <- stale GhcSessionDeps
+
+  let tcgblenv = tmrTypechecked tcmod
+      modul = extractModule tcgblenv
+      rdrenv = tcg_rdr_env tcgblenv
+
+  pure $ ParserContext (hscEnv hscenv) rdrenv modul ctx
 

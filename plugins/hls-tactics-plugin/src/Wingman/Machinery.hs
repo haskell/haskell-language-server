@@ -23,7 +23,7 @@ import           Data.Ord (Down (..), comparing)
 import           Data.Set (Set)
 import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
-import           OccName (HasOccName (occName))
+import           OccName (HasOccName (occName), OccEnv)
 import           Refinery.ProofState
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
@@ -33,6 +33,9 @@ import           Unify
 import           Wingman.Judgements
 import           Wingman.Simplify (simplify)
 import           Wingman.Types
+import GhcPlugins (GlobalRdrElt (gre_name), lookupOccEnv)
+import Development.IDE.Core.Compile (lookupName)
+import Control.Applicative (empty)
 
 
 substCTy :: TCvSubst -> CType -> CType
@@ -314,4 +317,45 @@ useNameFromHypothesis f name = do
   case M.lookup name $ hyByName hy of
     Just hi -> f hi
     Nothing -> throwError $ NotInScope name
+
+------------------------------------------------------------------------------
+-- | Lift a function over 'HyInfo's to one that takes an 'OccName' and tries to
+-- look it up in the hypothesis.
+useNameFromContext :: (HyInfo CType -> TacticsM a) -> OccName -> TacticsM a
+useNameFromContext f name = do
+  lookupNameInContext name >>= \case
+    Just ty -> f $ createImportedHyInfo name ty
+    Nothing -> throwError $ NotInScope name
+
+
+lookupNameInContext :: MonadReader Context m => OccName -> m (Maybe CType)
+lookupNameInContext name = do
+  ctx <- asks ctxModuleFuncs
+  pure $ case find ((== name) . fst) ctx of
+    Just (_, ty) -> pure ty
+    Nothing      -> empty
+
+
+createImportedHyInfo :: OccName -> CType -> HyInfo CType
+createImportedHyInfo on ty = HyInfo
+  { hi_name = on
+  , hi_provenance = ImportPrv
+  , hi_type = ty
+  }
+
+
+getOccNameType
+    :: HscEnv
+    -> OccEnv [GlobalRdrElt]
+    -> Module
+    -> OccName
+    -> IO (Maybe Type)
+getOccNameType hscenv rdrenv modul occ =
+  case lookupOccEnv rdrenv occ of
+    Just (elt : _) -> do
+      mvar <- lookupName hscenv modul $ gre_name elt
+      pure $ case mvar of
+        Just (AnId v) -> pure $ varType v
+        _ -> Nothing
+    _ -> pure Nothing
 
