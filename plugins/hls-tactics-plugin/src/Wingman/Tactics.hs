@@ -111,9 +111,9 @@ intros'
 intros' names = rule $ \jdg -> do
   let g  = jGoal jdg
   ctx <- ask
-  case tcSplitFunTys $ unCType g of
-    ([], _) -> throwError $ GoalMismatch "intros" g
-    (as, b) -> do
+  case tacticsSplitFunTy $ unCType g of
+    (_, _, [], _) -> throwError $ GoalMismatch "intros" g
+    (_, _, as, b) -> do
       let vs = fromMaybe (mkManyGoodNames (hyNamesInScope $ jEntireHypothesis jdg) as) names
           num_args = length vs
           top_hole = isTopHole ctx jdg
