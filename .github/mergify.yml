@@ -1,49 +1,9 @@
 pull_request_rules:
-- actions:
-    merge:
-      strict: smart+fasttrack
-      method: squash
-  name: Automatically merge pull requests
-  conditions:
-  - status-success=bench-example (8.10.4, ubuntu-latest, Cabal-3.0.0.0)
-  - status-success=bench-example (8.10.4, ubuntu-latest, lsp-types-1.0.0.1)
-  # disabled (too slow, ~4h) until hie-bios >0.7.2 is released
-  # - status-success=bench-example (8.10.4, ubuntu-latest, bench_example_HLS)
-
-  - status-success=nix (ubuntu-latest)
-  - status-success=nix (macOS-latest)
-
-  - status-success=test (8.10.4, ubuntu-latest)
-  - status-success=test (8.10.4, macOS-latest)
-  - status-success=test (8.10.3, ubuntu-latest)
-  - status-success=test (8.10.3, macOS-latest)
-  - status-success=test (8.10.2, ubuntu-latest)
-  - status-success=test (8.10.2, macOS-latest)
-  - status-success=test (8.8.4, ubuntu-latest)
-  - status-success=test (8.8.4, macOS-latest)
-  - status-success=test (8.8.3, ubuntu-latest)
-  - status-success=test (8.8.3, macOS-latest)
-  - status-success=test (8.8.2, ubuntu-latest)
-  - status-success=test (8.8.2, macOS-latest)
-  - status-success=test (8.6.5, ubuntu-latest)
-  - status-success=test (8.6.5, macOS-latest)
-  - status-success=test (8.6.4, ubuntu-latest)
-  - status-success=test (8.6.4, macOS-latest)
-  - status-success=test (windows-latest, 8.10.4, true)
-  - status-success=test (windows-latest, 8.10.3)
-  - status-success=test (windows-latest, 8.6.5, true)
-  - status-success=test (windows-latest, 8.10.2.2)
-  # - status-success=test (windows-latest, 8.6.4)
-
-  - 'status-success=ci/circleci: ghc-8.10.4'
-  - 'status-success=ci/circleci: ghc-8.10.3'
-  - 'status-success=ci/circleci: ghc-8.10.2'
-  - 'status-success=ci/circleci: ghc-8.8.4'
-  - 'status-success=ci/circleci: ghc-8.8.3'
-  - 'status-success=ci/circleci: ghc-8.8.2'
-  - 'status-success=ci/circleci: ghc-8.6.5'
-  - 'status-success=ci/circleci: ghc-8.6.4'
-  - 'status-success=ci/circleci: ghc-default'
-
-  - label=merge me
-  - '#approved-reviews-by>=1'
+  - actions:
+      merge:
+        strict: smart+fasttrack
+        method: squash
+    name: Automatically merge pull requests
+    conditions:
+      - label=merge me
+      - '#approved-reviews-by>=1'
