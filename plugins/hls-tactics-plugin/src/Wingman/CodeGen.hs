@@ -283,17 +283,20 @@ letForEach
     -> Hypothesis CType
     -> Judgement
     -> RuleM (Synthesized (LHsExpr GhcPs))
-letForEach rename solve hy jdg = do
-  let g = jGoal jdg
-  terms <- fmap sequenceA $ for (unHypothesis hy) $ \hi -> do
-    let name = rename $ hi_name hi
-    res <- tacticToRule jdg $ solve hi
-    pure $ fmap (name,) res
-  let hy' = fmap (g <$) $ syn_val terms
-  g <- newSubgoal $ introduce (userHypothesis hy') jdg
-  pure $ g
-    & #syn_val %~ noLoc
-                . let' (fmap (\(occ, expr) -> valBind (occNameToStr occ) $ unLoc expr)
-                          $ syn_val terms)
-                . unLoc
+letForEach rename solve (unHypothesis -> hy) jdg = do
+  case hy of
+    [] -> newSubgoal jdg
+    _ -> do
+      let g = jGoal jdg
+      terms <- fmap sequenceA $ for hy $ \hi -> do
+        let name = rename $ hi_name hi
+        res <- tacticToRule jdg $ solve hi
+        pure $ fmap (name,) res
+      let hy' = fmap (g <$) $ syn_val terms
+      g <- newSubgoal $ introduce (userHypothesis hy') jdg
+      pure $ g
+        & #syn_val %~ noLoc
+                    . let' (fmap (\(occ, expr) -> valBind (occNameToStr occ) $ unLoc expr)
+                              $ syn_val terms)
+                    . unLoc
 
