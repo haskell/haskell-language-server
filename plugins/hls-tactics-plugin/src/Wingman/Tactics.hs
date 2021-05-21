@@ -481,7 +481,7 @@ cata hi = do
   rule $
     letForEach
       (mkVarOcc . flip mappend "_c" . occNameString)
-      (\hi -> self >> apply hi)
+      (\hi -> self >> commit (apply hi) assumption)
       diff
 
 collapse :: TacticsM ()
