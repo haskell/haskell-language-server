@@ -153,12 +153,6 @@ instance Show TyCon where
 instance Show ConLike where
   show  = unsafeRender
 
-instance Show (HsBindLR GhcTc GhcTc) where
-  show  = unsafeRender
-
-instance Show (ABExport GhcTc) where
-  show  = unsafeRender
-
 
 ------------------------------------------------------------------------------
 -- | The state that should be shared between subgoals. Extracts move towards

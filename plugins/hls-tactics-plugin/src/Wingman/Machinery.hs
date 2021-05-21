@@ -3,6 +3,7 @@
 module Wingman.Machinery where
 
 import           Class (Class (classTyVars))
+import           Control.Applicative (empty)
 import           Control.Lens ((<>~))
 import           Control.Monad.Error.Class
 import           Control.Monad.Reader
@@ -22,7 +23,9 @@ import           Data.Monoid (getSum)
 import           Data.Ord (Down (..), comparing)
 import           Data.Set (Set)
 import qualified Data.Set as S
+import           Development.IDE.Core.Compile (lookupName)
 import           Development.IDE.GHC.Compat
+import           GhcPlugins (GlobalRdrElt (gre_name), lookupOccEnv)
 import           OccName (HasOccName (occName), OccEnv)
 import           Refinery.ProofState
 import           Refinery.Tactic
@@ -33,9 +36,6 @@ import           Unify
 import           Wingman.Judgements
 import           Wingman.Simplify (simplify)
 import           Wingman.Types
-import GhcPlugins (GlobalRdrElt (gre_name), lookupOccEnv)
-import Development.IDE.Core.Compile (lookupName)
-import Control.Applicative (empty)
 
 
 substCTy :: TCvSubst -> CType -> CType
@@ -328,6 +328,8 @@ useNameFromContext f name = do
     Nothing -> throwError $ NotInScope name
 
 
+------------------------------------------------------------------------------
+-- | Find the type of an 'OccName' that is defined in the current module.
 lookupNameInContext :: MonadReader Context m => OccName -> m (Maybe CType)
 lookupNameInContext name = do
   ctx <- asks ctxModuleFuncs
@@ -336,6 +338,8 @@ lookupNameInContext name = do
     Nothing      -> empty
 
 
+------------------------------------------------------------------------------
+-- | Build a 'HyInfo' for an imported term.
 createImportedHyInfo :: OccName -> CType -> HyInfo CType
 createImportedHyInfo on ty = HyInfo
   { hi_name = on
@@ -344,6 +348,10 @@ createImportedHyInfo on ty = HyInfo
   }
 
 
+------------------------------------------------------------------------------
+-- | Lookup the type of any 'OccName' that was imported. Necessarily done in
+-- IO, so we only expose this functionality to the parser. Internal Haskell
+-- code that wants to lookup terms should do it via 'KnownThings'.
 getOccNameType
     :: HscEnv
     -> OccEnv [GlobalRdrElt]

@@ -1,10 +1,10 @@
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes        #-}
+{-# LANGUAGE TupleSections     #-}
 {-# LANGUAGE TypeFamilies      #-}
 
 {-# LANGUAGE NoMonoLocalBinds  #-}
-{-# LANGUAGE TupleSections #-}
 
 module Wingman.LanguageServer where
 
@@ -17,7 +17,6 @@ import           Control.Monad.State (State, evalState)
 import           Control.Monad.Trans.Maybe
 import           Data.Bifunctor (first)
 import           Data.Coerce
-import           Data.Foldable (toList)
 import           Data.Functor ((<&>))
 import           Data.Functor.Identity (runIdentity)
 import qualified Data.HashMap.Strict as Map
@@ -67,7 +66,6 @@ import           Wingman.GHC
 import           Wingman.Judgements
 import           Wingman.Judgements.SYB (everythingContaining, metaprogramQ)
 import           Wingman.Judgements.Theta
-import           Wingman.Machinery (getOccNameType)
 import           Wingman.Metaprogramming.Lexer (ParserContext(..))
 import           Wingman.Range
 import           Wingman.StaticPlugin (pattern WingmanMetaprogram, pattern MetaprogramSyntax)
@@ -581,6 +579,10 @@ mkWorkspaceEdits dflags ccs uri pm g = do
    in first (InfrastructureError . T.pack) response
 
 
+------------------------------------------------------------------------------
+-- | Add ExactPrint annotations to every metaprogram in the source tree.
+-- Usually the ExactPrint module can do this for us, but we've enabled
+-- QuasiQuotes, so the round-trip print/parse journey will crash.
 annotateMetaprograms :: Data a => a -> Transform a
 annotateMetaprograms = everywhereM $ mkM $ \case
   L ss (WingmanMetaprogram mp) -> do
@@ -591,6 +593,8 @@ annotateMetaprograms = everywhereM $ mkM $ \case
   (x :: LHsExpr GhcPs) -> pure x
 
 
+------------------------------------------------------------------------------
+-- | Find the source of a tactic metaprogram at the given span.
 getMetaprogramAtSpan
     :: Tracked age SrcSpan
     -> Tracked age TcGblEnv
@@ -603,36 +607,19 @@ getMetaprogramAtSpan (unTrack -> ss)
   . unTrack
 
 
-getOccNameTypes
-    :: Foldable t
-    => IdeState
-    -> NormalizedFilePath
-    -> t OccName
-    -> MaybeT IO (M.Map OccName Type)
-getOccNameTypes state nfp occs = do
-  let stale a = runStaleIde "getOccNameTypes" state nfp a
-
-  TrackedStale (unTrack -> tcmod) _ <- stale TypeCheck
-  TrackedStale (unTrack -> hscenv) _ <- stale GhcSessionDeps
-
-  let tcgblenv = tmrTypechecked tcmod
-      modul = extractModule tcgblenv
-      rdrenv = tcg_rdr_env tcgblenv
-  lift $ fmap M.fromList $
-    fmap join $ for (toList occs) $ \occ ->
-      fmap (maybeToList . fmap (occ, )) $
-        getOccNameType (hscEnv hscenv) rdrenv modul occ
-
-
+------------------------------------------------------------------------------
+-- | The metaprogram parser needs the ability to lookup terms from the module
+-- and imports. The 'ParserContext' contains everything we need to find that
+-- stuff.
 getParserState
     :: IdeState
     -> NormalizedFilePath
-   -> Context
+    -> Context
     -> MaybeT IO ParserContext
 getParserState state nfp ctx = do
-  let stale a = runStaleIde "getOccNameTypes" state nfp a
+  let stale a = runStaleIde "getParserState" state nfp a
 
-  TrackedStale (unTrack -> tcmod) _ <- stale TypeCheck
+  TrackedStale (unTrack -> tcmod) _  <- stale TypeCheck
   TrackedStale (unTrack -> hscenv) _ <- stale GhcSessionDeps
 
   let tcgblenv = tmrTypechecked tcmod

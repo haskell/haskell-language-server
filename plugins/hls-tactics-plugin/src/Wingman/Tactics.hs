@@ -24,23 +24,23 @@ import qualified Data.Set as S
 import           DataCon
 import           Development.IDE.GHC.Compat
 import           GHC.Exts
+import           GHC.SourceGen ((@@))
 import           GHC.SourceGen.Expr
 import           Name (occNameString, occName)
+import           OccName (mkVarOcc)
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           TcType
 import           Type hiding (Var)
+import           TysPrim (betaTy, alphaTy, betaTyVar, alphaTyVar)
 import           Wingman.CodeGen
 import           Wingman.Context
 import           Wingman.GHC
 import           Wingman.Judgements
 import           Wingman.Machinery
 import           Wingman.Naming
+import           Wingman.StaticPlugin (pattern MetaprogramSyntax)
 import           Wingman.Types
-import OccName (mkVarOcc)
-import Wingman.StaticPlugin (pattern MetaprogramSyntax)
-import GHC.SourceGen ((@@))
-import TysPrim (betaTy, alphaTy, betaTyVar, alphaTyVar)
 
 
 ------------------------------------------------------------------------------
@@ -440,6 +440,9 @@ applyByName name = do
       False -> empty
 
 
+------------------------------------------------------------------------------
+-- | Make a function application where the function being applied itself is
+-- a hole.
 applyByType :: Type -> TacticsM ()
 applyByType ty = tracing ("applyByType " <> show ty) $ do
   jdg <- goal
@@ -463,7 +466,12 @@ applyByType ty = tracing ("applyByType " <> show ty) $ do
           <*> fmap (fmap unLoc) ext
 
 
+------------------------------------------------------------------------------
+-- | Make an n-ary function call of the form
+-- @(_ :: forall a b. a -> a -> b) _ _@.
 nary :: Int -> TacticsM ()
-nary n = do
-  applyByType $ mkInvForAllTys [alphaTyVar, betaTyVar] $ mkFunTys (replicate n alphaTy) betaTy
+nary n =
+  applyByType $
+    mkInvForAllTys [alphaTyVar, betaTyVar] $
+      mkFunTys (replicate n alphaTy) betaTy
 

@@ -27,14 +27,20 @@ import           Wingman.Types
 nullary :: T.Text -> TacticsM () -> Parser (TacticsM ())
 nullary name tac = identifier name $> tac
 
+
 unary_occ :: T.Text -> (OccName -> TacticsM ()) -> Parser (TacticsM ())
 unary_occ name tac = tac <$> (identifier name *> variable)
 
+
+------------------------------------------------------------------------------
+-- | Like 'unary_occ', but runs directly in the 'Parser' monad.
 unary_occM :: T.Text -> (OccName -> Parser (TacticsM ())) -> Parser (TacticsM ())
 unary_occM name tac = tac =<< (identifier name *> variable)
 
+
 variadic_occ :: T.Text -> ([OccName] -> TacticsM ()) -> Parser (TacticsM ())
 variadic_occ name tac = tac <$> (identifier name *> P.many variable)
+
 
 oneTactic :: Parser (TacticsM ())
 oneTactic =
@@ -104,6 +110,9 @@ wrapError :: String -> String
 wrapError err = "```\n" <> err <> "\n```\n"
 
 
+------------------------------------------------------------------------------
+-- | Attempt to run a metaprogram tactic, returning the proof state, or the
+-- errors.
 attempt_it
     :: Context
     -> Judgement
@@ -128,6 +137,8 @@ parseMetaprogram
     . P.runParserT tacticProgram "<splice>"
 
 
+------------------------------------------------------------------------------
+-- | Like 'getOccNameType', but runs in the 'Parser' monad.
 getOccTy :: OccName -> Parser Type
 getOccTy occ = do
   ParserContext hscenv rdrenv modul _ <- ask
