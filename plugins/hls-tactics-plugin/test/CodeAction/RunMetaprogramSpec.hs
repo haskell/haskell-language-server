@@ -28,4 +28,6 @@ spec = do
     metaTest  2 32 "MetaBindAll"
     metaTest  2 13 "MetaTry"
     metaTest  2 74 "MetaChoice"
+    metaTest  9 38 "MetaCataCollapse"
+    metaTest  7 16 "MetaCataCollapseUnary"
 
