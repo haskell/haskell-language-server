@@ -20,6 +20,8 @@ import qualified Text.Megaparsec.Char.Lexer as L
 import Wingman.Types (Context)
 
 
+------------------------------------------------------------------------------
+-- | Everything we need in order to call 'Wingman.Machinery.getOccNameType'.
 data ParserContext = ParserContext
   { ps_hscEnv :: HscEnv
   , ps_occEnv :: OccEnv [GlobalRdrElt]
