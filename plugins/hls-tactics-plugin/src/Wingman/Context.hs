@@ -8,7 +8,6 @@ import           Data.Maybe (fromMaybe, isJust, mapMaybe)
 import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
 import           GhcPlugins (ExternalPackageState (eps_inst_env), piResultTys)
-import           HsDumpAst
 import           InstEnv (lookupInstEnv, InstEnvs(..), is_dfun)
 import           OccName
 import           TcRnTypes
