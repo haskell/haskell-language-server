@@ -473,5 +473,5 @@ nary :: Int -> TacticsM ()
 nary n =
   applyByType $
     mkInvForAllTys [alphaTyVar, betaTyVar] $
-      mkFunTys (replicate n alphaTy) betaTy
+      mkFunTys' (replicate n alphaTy) betaTy
 
