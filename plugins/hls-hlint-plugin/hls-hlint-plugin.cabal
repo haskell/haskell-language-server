@@ -29,7 +29,7 @@ library
   hs-source-dirs:     src
   build-depends:
     , aeson
-    , apply-refact          >=0.9
+    , apply-refact          >=0.9.3.0
     , base                  >=4.12    && <5
     , binary
     , bytestring
