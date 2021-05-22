@@ -383,10 +383,7 @@ localTactic t f = do
 
 
 refine :: TacticsM ()
-refine = do
-  try' intros
-  try' splitSingle
-  try' intros
+refine = intros <%> splitSingle
 
 
 auto' :: Int -> TacticsM ()
