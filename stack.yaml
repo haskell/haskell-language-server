@@ -30,12 +30,13 @@ ghc-options:
 
 extra-deps:
   - apply-refact-0.9.3.0
-  - brittany-0.13.1.0
+  - brittany-0.13.1.2
   - Cabal-3.0.2.0
   - clock-0.7.2
   - data-tree-print-0.1.0.2@rev:2
   - floskell-0.10.4
   - fourmolu-0.3.0.0
+  - ghc-exactprint-0.6.4
   - heapsize-0.3.0
   - implicit-hie-cradle-0.3.0.2
   - implicit-hie-0.1.2.5

@@ -31,7 +31,7 @@ ghc-options:
 extra-deps:
   - aeson-1.5.2.0
   - apply-refact-0.9.3.0
-  - brittany-0.13.1.0
+  - brittany-0.13.1.2
   - bytestring-trie-0.2.5.0
   - cabal-plan-0.6.2.0
   - clock-0.7.2

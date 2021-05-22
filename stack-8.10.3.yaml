@@ -29,7 +29,7 @@ ghc-options:
   "$everything": -haddock
 
 extra-deps:
-  - brittany-0.13.1.0
+  - brittany-0.13.1.2
   - Cabal-3.0.2.0
   - clock-0.7.2
   - data-tree-print-0.1.0.2@rev:2
