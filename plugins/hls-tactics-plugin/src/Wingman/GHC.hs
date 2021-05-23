@@ -73,7 +73,7 @@ isFunction _                                    = True
 -- context.
 tacticsSplitFunTy :: Type -> ([TyVar], ThetaType, [Type], Type)
 tacticsSplitFunTy t
-  = let (vars, theta, t') = tcSplitSigmaTy t
+  = let (vars, theta, t') = tcSplitNestedSigmaTys t
         (args, res) = tcSplitFunTys t'
      in (vars, theta, args, res)
 

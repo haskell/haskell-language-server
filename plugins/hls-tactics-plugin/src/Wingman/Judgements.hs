@@ -229,6 +229,7 @@ provAncestryOf (PatternMatchPrv (PatVal mo so _ _)) =
 provAncestryOf (ClassMethodPrv _) = mempty
 provAncestryOf UserPrv = mempty
 provAncestryOf RecursivePrv = mempty
+provAncestryOf ImportPrv = mempty
 provAncestryOf (DisallowedPrv _ p2) = provAncestryOf p2
 
 

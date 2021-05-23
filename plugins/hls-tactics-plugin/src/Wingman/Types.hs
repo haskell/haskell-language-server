@@ -212,6 +212,8 @@ data Provenance
       (Uniquely Class)     -- ^ Class
     -- | A binding explicitly written by the user.
   | UserPrv
+    -- | A binding explicitly imported by the user.
+  | ImportPrv
     -- | The recursive hypothesis. Present only in the context of the recursion
     -- tactic.
   | RecursivePrv
@@ -326,6 +328,7 @@ data TacticError
   | UnhelpfulSplit OccName
   | TooPolymorphic
   | NotInScope OccName
+  | TacticPanic String
   deriving stock (Eq)
 
 instance Show TacticError where
@@ -364,6 +367,8 @@ instance Show TacticError where
       "The tactic isn't applicable because the goal is too polymorphic"
     show (NotInScope name) =
       "Tried to do something with the out of scope name " <> show name
+    show (TacticPanic err) =
+      "PANIC: " <> err
 
 
 ------------------------------------------------------------------------------
