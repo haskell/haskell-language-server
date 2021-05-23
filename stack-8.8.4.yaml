@@ -90,8 +90,6 @@ flags:
   retrie:
     BuildExecutable: false
 
-# allow-newer: true
-
 nix:
   packages: [icu libcxx zlib]
 

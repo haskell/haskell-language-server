@@ -115,8 +115,6 @@ configure-options:
   heapsize:
       - --disable-library-for-ghci
 
-# allow-newer: true
-
 nix:
   packages: [icu libcxx zlib]
 
