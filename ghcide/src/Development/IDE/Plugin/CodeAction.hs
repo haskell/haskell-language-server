@@ -111,7 +111,6 @@ iePluginDescriptor plId =
           , wrap suggestFixConstructorImport
           , wrap suggestHideShadow
           , wrap suggestExportUnusedTopBinding
-
           ]
           plId
    in old {pluginHandlers = pluginHandlers old <> mkPluginHandler STextDocumentCodeAction codeAction}
@@ -124,7 +123,6 @@ typeSigsPluginDescriptor =
     , wrap removeRedundantConstraints
     , wrap suggestAddTypeAnnotationToSatisfyContraints
     , wrap suggestConstraint
-    , wrap suggestModuleTypo
     ]
 
 bindingsPluginDescriptor :: PluginId -> PluginDescriptor IdeState

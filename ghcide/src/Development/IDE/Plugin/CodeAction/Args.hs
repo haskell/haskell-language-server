@@ -57,7 +57,7 @@ runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) _ra
     runRule key = runAction ("GhcideCodeActions." <> show key) state $ runMaybeT $ MaybeT (pure mbFile) >>= MaybeT . use key
   caaExportsMap <- onceIO $ runRule GhcSession >>= \case
       Just env -> do
-        pkgExports<-envPackageExports env
+        pkgExports <- envPackageExports env
         localExports <- readVar (exportsMap $ shakeExtras state)
         pure $ localExports <> pkgExports
       _ -> pure mempty
