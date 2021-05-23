@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes        #-}
+{-# LANGUAGE TupleSections     #-}
 {-# LANGUAGE TypeFamilies      #-}
 
 {-# LANGUAGE NoMonoLocalBinds  #-}
@@ -43,6 +44,7 @@ import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindi
 import qualified FastString
 import           GHC.Generics (Generic)
 import           Generics.SYB hiding (Generic)
+import           GhcPlugins (extractModule)
 import           GhcPlugins (tupleDataCon, consDataCon, substTyAddInScope, ExternalPackageState, HscEnv (hsc_EPS), unpackFS)
 import qualified Ide.Plugin.Config as Plugin
 import           Ide.Plugin.Properties
@@ -57,13 +59,14 @@ import           OccName
 import           Prelude hiding (span)
 import           Retrie (transformA)
 import           SrcLoc (containsSpan)
-import           TcRnTypes (tcg_binds, TcGblEnv)
+import           TcRnTypes (tcg_binds, TcGblEnv (tcg_rdr_env))
 import           Wingman.Context
 import           Wingman.FeatureSet
 import           Wingman.GHC
 import           Wingman.Judgements
 import           Wingman.Judgements.SYB (everythingContaining, metaprogramQ)
 import           Wingman.Judgements.Theta
+import           Wingman.Metaprogramming.Lexer (ParserContext(..))
 import           Wingman.Range
 import           Wingman.StaticPlugin (pattern WingmanMetaprogram, pattern MetaprogramSyntax)
 import           Wingman.Types
@@ -576,6 +579,10 @@ mkWorkspaceEdits dflags ccs uri pm g = do
    in first (InfrastructureError . T.pack) response
 
 
+------------------------------------------------------------------------------
+-- | Add ExactPrint annotations to every metaprogram in the source tree.
+-- Usually the ExactPrint module can do this for us, but we've enabled
+-- QuasiQuotes, so the round-trip print/parse journey will crash.
 annotateMetaprograms :: Data a => a -> Transform a
 annotateMetaprograms = everywhereM $ mkM $ \case
   L ss (WingmanMetaprogram mp) -> do
@@ -585,6 +592,9 @@ annotateMetaprograms = everywhereM $ mkM $ \case
     pure x
   (x :: LHsExpr GhcPs) -> pure x
 
+
+------------------------------------------------------------------------------
+-- | Find the source of a tactic metaprogram at the given span.
 getMetaprogramAtSpan
     :: Tracked age SrcSpan
     -> Tracked age TcGblEnv
@@ -595,4 +605,26 @@ getMetaprogramAtSpan (unTrack -> ss)
   . metaprogramQ ss
   . tcg_binds
   . unTrack
+
+
+------------------------------------------------------------------------------
+-- | The metaprogram parser needs the ability to lookup terms from the module
+-- and imports. The 'ParserContext' contains everything we need to find that
+-- stuff.
+getParserState
+    :: IdeState
+    -> NormalizedFilePath
+    -> Context
+    -> MaybeT IO ParserContext
+getParserState state nfp ctx = do
+  let stale a = runStaleIde "getParserState" state nfp a
+
+  TrackedStale (unTrack -> tcmod) _  <- stale TypeCheck
+  TrackedStale (unTrack -> hscenv) _ <- stale GhcSessionDeps
+
+  let tcgblenv = tmrTypechecked tcmod
+      modul = extractModule tcgblenv
+      rdrenv = tcg_rdr_env tcgblenv
+
+  pure $ ParserContext (hscEnv hscenv) rdrenv modul ctx
 
