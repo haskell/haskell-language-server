@@ -28,4 +28,7 @@ spec = do
     metaTest  2 32 "MetaBindAll"
     metaTest  2 13 "MetaTry"
     metaTest  2 74 "MetaChoice"
+    metaTest  5 40 "MetaUseImport"
+    metaTest  6 31 "MetaUseLocal"
+    metaTest 11 11 "MetaUseMethod"
 
