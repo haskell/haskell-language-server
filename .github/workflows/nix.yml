@@ -80,6 +80,6 @@ jobs:
         name: haskell-language-server
         authToken: ${{ secrets.HLS_CACHIX_AUTH_TOKEN }}
     - run: |
+        nix develop --profile dev && cachix push haskell-language-server dev
         nix build
         nix path-info --json | jq -r '.[].path' | cachix push haskell-language-server
-        nix develop --profile dev && cachix push haskell-language-server dev
