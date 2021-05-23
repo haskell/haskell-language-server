@@ -4,7 +4,7 @@ import           Bag
 import           Control.Arrow
 import           Control.Monad.Reader
 import           Data.Foldable.Extra (allM)
-import           Data.Maybe (fromMaybe, isJust)
+import           Data.Maybe (fromMaybe, isJust, mapMaybe)
 import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
 import           GhcPlugins (ExternalPackageState (eps_inst_env), piResultTys)
@@ -27,11 +27,13 @@ mkContext
     -> Context
 mkContext cfg locals tcg eps kt ev = Context
   { ctxDefiningFuncs = locals
-  , ctxModuleFuncs = fmap splitId
-                   . (getFunBindId =<<)
-                   . fmap unLoc
-                   . bagToList
-                   $ tcg_binds tcg
+  , ctxModuleFuncs
+      = fmap splitId
+      . mappend (locallyDefinedMethods tcg)
+      . (getFunBindId =<<)
+      . fmap unLoc
+      . bagToList
+      $ tcg_binds tcg
   , ctxConfig = cfg
   , ctxInstEnvs =
       InstEnvs
@@ -41,6 +43,14 @@ mkContext cfg locals tcg eps kt ev = Context
   , ctxKnownThings = kt
   , ctxTheta = evidenceToThetaType ev
   }
+
+
+locallyDefinedMethods :: TcGblEnv -> [Id]
+locallyDefinedMethods
+  = foldMap classMethods
+  . mapMaybe tyConClass_maybe
+  . tcg_tcs
+
 
 
 splitId :: Id -> (OccName, CType)

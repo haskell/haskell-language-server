@@ -24,21 +24,23 @@ import qualified Data.Set as S
 import           DataCon
 import           Development.IDE.GHC.Compat
 import           GHC.Exts
+import           GHC.SourceGen ((@@))
 import           GHC.SourceGen.Expr
 import           Name (occNameString, occName)
+import           OccName (mkVarOcc)
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           TcType
 import           Type hiding (Var)
+import           TysPrim (betaTy, alphaTy, betaTyVar, alphaTyVar)
 import           Wingman.CodeGen
 import           Wingman.Context
 import           Wingman.GHC
 import           Wingman.Judgements
 import           Wingman.Machinery
 import           Wingman.Naming
+import           Wingman.StaticPlugin (pattern MetaprogramSyntax)
 import           Wingman.Types
-import OccName (mkVarOcc)
-import Wingman.StaticPlugin (pattern MetaprogramSyntax)
 
 
 ------------------------------------------------------------------------------
@@ -206,7 +208,7 @@ homoLambdaCase =
 
 
 apply :: HyInfo CType -> TacticsM ()
-apply hi = requireConcreteHole $ tracing ("apply' " <> show (hi_name hi)) $ do
+apply hi = tracing ("apply' " <> show (hi_name hi)) $ do
   jdg <- goal
   let g  = jGoal jdg
       ty = unCType $ hi_type hi
@@ -391,7 +393,7 @@ auto' n = do
   try intros
   choice
     [ overFunctions $ \fname -> do
-        apply fname
+        requireConcreteHole $ apply fname
         loop
     , overAlgebraicTerms $ \aname -> do
         destructAuto aname
@@ -433,4 +435,40 @@ applyByName name = do
     case hi_name hi == name of
       True  -> apply hi
       False -> empty
+
+
+------------------------------------------------------------------------------
+-- | Make a function application where the function being applied itself is
+-- a hole.
+applyByType :: Type -> TacticsM ()
+applyByType ty = tracing ("applyByType " <> show ty) $ do
+  jdg <- goal
+  let g  = jGoal jdg
+  ty' <- freshTyvars ty
+  let (_, _, args, ret) = tacticsSplitFunTy ty'
+  rule $ \jdg -> do
+    unify g (CType ret)
+    app <- newSubgoal . blacklistingDestruct $ withNewGoal (CType ty) jdg
+    ext
+        <- fmap unzipTrace
+        $ traverse ( newSubgoal
+                    . blacklistingDestruct
+                    . flip withNewGoal jdg
+                    . CType
+                    ) args
+    pure $
+      fmap noLoc $
+        foldl' (@@)
+          <$> fmap unLoc app
+          <*> fmap (fmap unLoc) ext
+
+
+------------------------------------------------------------------------------
+-- | Make an n-ary function call of the form
+-- @(_ :: forall a b. a -> a -> b) _ _@.
+nary :: Int -> TacticsM ()
+nary n =
+  applyByType $
+    mkInvForAllTys [alphaTyVar, betaTyVar] $
+      mkFunTys' (replicate n alphaTy) betaTy
 

@@ -10,6 +10,7 @@ module Wingman.LanguageServer.Metaprogram
 
 import           Control.Applicative (empty)
 import           Control.Monad
+import           Control.Monad.Reader (runReaderT)
 import           Control.Monad.Trans
 import           Control.Monad.Trans.Maybe
 import           Data.List (find)
@@ -30,8 +31,8 @@ import           Prelude hiding (span)
 import           TcRnTypes (tcg_binds)
 import           Wingman.GHC
 import           Wingman.Judgements.SYB (metaprogramQ)
-import           Wingman.Metaprogramming.Parser (attempt_it)
 import           Wingman.LanguageServer
+import           Wingman.Metaprogramming.Parser (attempt_it)
 import           Wingman.Types
 
 
@@ -53,12 +54,12 @@ hoverProvider state plId (HoverParams (TextDocumentIdentifier uri) (unsafeMkCurr
             Just (trss, program) -> do
               let tr_range = fmap realSrcSpanToRange trss
               HoleJudgment{hj_jdg=jdg, hj_ctx=ctx} <- judgementForHole state nfp tr_range cfg
+              ps <- getParserState state nfp ctx
+              z <- liftIO $ flip runReaderT ps $ attempt_it ctx jdg $ T.unpack program
               pure $ Hover
                 { _contents = HoverContents
                             $ MarkupContent MkMarkdown
-                            $ either T.pack T.pack
-                            $ attempt_it ctx jdg
-                            $ T.unpack program
+                            $ either T.pack T.pack z
                 , _range = Just $ unTrack tr_range
                 }
             Nothing -> empty

@@ -40,6 +40,7 @@ import           Wingman.Range
 import           Wingman.StaticPlugin
 import           Wingman.Tactics
 import           Wingman.Types
+import Wingman.Metaprogramming.Lexer (ParserContext)
 
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -50,7 +51,7 @@ descriptor plId = (defaultPluginDescriptor plId)
               PluginCommand
                 (tcCommandId tc)
                 (tacticDesc $ tcCommandName tc)
-                (tacticCmd (commandTactic tc) plId))
+                (tacticCmd (flip commandTactic tc) plId))
                 [minBound .. maxBound]
           , pure $
               PluginCommand
@@ -101,7 +102,7 @@ showUserFacingMessage ufm = do
 
 
 tacticCmd
-    :: (T.Text -> TacticsM ())
+    :: (ParserContext -> T.Text -> IO (TacticsM ()))
     -> PluginId
     -> CommandFunction IdeState TacticParams
 tacticCmd tac pId state (TacticParams uri range var_name)
@@ -115,9 +116,11 @@ tacticCmd tac pId state (TacticParams uri range var_name)
         let span = fmap (rangeToRealSrcSpan (fromNormalizedFilePath nfp)) hj_range
         TrackedStale pm pmmap <- stale GetAnnotatedParsedSource
         pm_span <- liftMaybe $ mapAgeFrom pmmap span
+        pc <- getParserState state nfp hj_ctx
+        t <- liftIO $ tac pc var_name
 
         timingOut (cfg_timeout_seconds cfg * seconds) $ join $
-          case runTactic hj_ctx hj_jdg $ tac var_name of
+          case runTactic hj_ctx hj_jdg t of
             Left _ -> Left TacticErrors
             Right rtr ->
               case rtr_extract rtr of
