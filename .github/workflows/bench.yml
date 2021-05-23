@@ -58,7 +58,7 @@ jobs:
     # max-backjumps is increased as a temporary solution
     # for dependency resolution failure
     - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      run: cabal configure --enable-benchmarks --max-backjumps 10000
+      run: cabal configure --enable-benchmarks
 
     - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
       name: Build
