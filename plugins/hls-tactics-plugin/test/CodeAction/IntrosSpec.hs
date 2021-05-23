@@ -14,3 +14,6 @@ spec = do
   describe "golden" $ do
     introsTest 2 8 "GoldenIntros"
 
+  describe "layout" $ do
+    introsTest 4 24 "LayoutRec"
+

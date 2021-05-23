@@ -20,6 +20,8 @@ jobs:
   nix:
     needs: pre_job
     runs-on: ${{ matrix.os }}
+    env:
+      HAS_TOKEN: ${{ secrets.HLS_CACHIX_AUTH_TOKEN != '' }}
 
     strategy:
       fail-fast: false
@@ -39,14 +41,14 @@ jobs:
         extra_nix_config: |
           experimental-features = nix-command flakes
         nix_path: nixpkgs=channel:nixos-unstable
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+    - if: ${{ needs.pre_job.outputs.should_skip != 'true' && env.HAS_TOKEN == 'true' }}
       uses: cachix/cachix-action@v8
       with:
         name: haskell-language-server
         authToken: ${{ secrets.HLS_CACHIX_AUTH_TOKEN }}
     - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
       run: nix build
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+    - if: ${{ needs.pre_job.outputs.should_skip != 'true' && env.HAS_TOKEN == 'true' }}
       run: nix develop --profile dev && cachix push haskell-language-server dev
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+    - if: ${{ needs.pre_job.outputs.should_skip != 'true' && env.HAS_TOKEN == 'true' }}
       run: nix path-info --json | jq -r '.[].path' | cachix push haskell-language-server
