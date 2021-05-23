@@ -65,21 +65,21 @@ jobs:
         os: [ubuntu-latest, macOS-latest]
 
     steps:
-      uses: actions/checkout@v2
+    - uses: actions/checkout@v2
       with:
         submodules: true
-      uses: cachix/install-nix-action@v13
+    - uses: cachix/install-nix-action@v13
       with:
         install_url: https://nixos-nix-install-tests.cachix.org/serve/lb41az54kzk6j12p81br4bczary7m145/install
         install_options: '--tarball-url-prefix https://nixos-nix-install-tests.cachix.org/serve'
         extra_nix_config: |
           experimental-features = nix-command flakes
         nix_path: nixpkgs=channel:nixos-unstable
-      uses: cachix/cachix-action@v10
+    - uses: cachix/cachix-action@v10
       with:
         name: haskell-language-server
         authToken: ${{ secrets.HLS_CACHIX_AUTH_TOKEN }}
-      run: |
+    - run: |
         nix build
         nix path-info --json | jq -r '.[].path' | cachix push haskell-language-server
         nix develop --profile dev && cachix push haskell-language-server dev
