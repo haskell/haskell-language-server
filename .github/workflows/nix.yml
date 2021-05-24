@@ -58,7 +58,7 @@ jobs:
   # This job runs when PRs are merged to master, and should be excluded from branch protections
   build:
     runs-on: ${{ matrix.os }}
-    if: ${{ github.repository_owner == 'haskell' && github.ref == 'ref/heads/master' }}
+    if: ${{ github.repository_owner == 'haskell' && github.ref == 'refs/heads/master' }}
     strategy:
       fail-fast: false
       matrix:
@@ -79,7 +79,9 @@ jobs:
       with:
         name: haskell-language-server
         authToken: ${{ secrets.HLS_CACHIX_AUTH_TOKEN }}
-    - run: |
-        nix develop --profile dev && cachix push haskell-language-server dev
+    - name: Push development shell
+      run: nix develop --profile dev && cachix push haskell-language-server dev
+    - name: Build and push binaries
+      run: |
         nix build
         nix path-info --json | jq -r '.[].path' | cachix push haskell-language-server
