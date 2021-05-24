@@ -96,9 +96,7 @@ otTracedAction key file mode success act
             res <- act
             unless (success $ runValue res) $ setTag sp "error" "1"
             setTag sp "changed" $ case res of
-              RunResult ChangedRecomputeSame _ _ -> "0"
-              RunResult ChangedNothing _ _       -> "0"
-              RunResult ChangedRecomputeDiff _ _ -> "0"
+              RunResult x _ _ -> fromString $ show x
             return res)
   | otherwise = act
 
