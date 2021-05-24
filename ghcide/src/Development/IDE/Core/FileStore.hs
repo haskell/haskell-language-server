@@ -158,8 +158,7 @@ isInterface f = takeExtension (fromNormalizedFilePath f) `elem` [".hi", ".hi-boo
 -- | Reset the GetModificationTime state of interface files
 resetInterfaceStore :: ShakeExtras -> NormalizedFilePath -> IO ()
 resetInterfaceStore state f = do
-    deleteValue state (GetModificationTime_ True) f
-    deleteValue state (GetModificationTime_ False) f
+    deleteValue state GetModificationTime f
 
 -- | Reset the GetModificationTime state of watched files
 resetFileStore :: IdeState -> [FileEvent] -> IO ()
@@ -174,8 +173,7 @@ resetFileStore ideState changes = mask $ \_ ->
                   OfInterestVar foisVar <- getIdeGlobalExtras (shakeExtras ideState)
                   fois <- readVar foisVar
                   unless (HM.member (toNormalizedFilePath f) fois) $ do
-                    deleteValue (shakeExtras ideState) (GetModificationTime_ True) (toNormalizedFilePath' f)
-                    deleteValue (shakeExtras ideState) (GetModificationTime_ False) (toNormalizedFilePath' f)
+                    deleteValue (shakeExtras ideState) GetModificationTime (toNormalizedFilePath' f)
             _ -> pure ()
 
 -- Dir.getModificationTime is surprisingly slow since it performs
