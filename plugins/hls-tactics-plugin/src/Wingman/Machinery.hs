@@ -25,13 +25,13 @@ import           Data.Set (Set)
 import qualified Data.Set as S
 import           Development.IDE.Core.Compile (lookupName)
 import           Development.IDE.GHC.Compat
-import           GhcPlugins (GlobalRdrElt (gre_name), lookupOccEnv)
+import           GhcPlugins (GlobalRdrElt (gre_name), lookupOccEnv, varType)
 import           OccName (HasOccName (occName), OccEnv)
 import           Refinery.ProofState
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           TcType
-import           Type
+import           Type (tyCoVarsOfTypeWellScoped, splitTyConApp_maybe)
 import           Unify
 import           Wingman.Judgements
 import           Wingman.Simplify (simplify)

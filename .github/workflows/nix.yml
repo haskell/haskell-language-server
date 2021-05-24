@@ -4,6 +4,9 @@ on:
   pull_request:
     branches:
       - '**'
+  push:
+    branches:
+      - master
 
 jobs:
   pre_job:
@@ -17,14 +20,14 @@ jobs:
           cancel_others: true
           paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", ".circleci/**", "install/**"]'
 
-  nix:
+  # Enter the development shell and run `cabal build`
+  develop:
     needs: pre_job
     runs-on: ${{ matrix.os }}
 
     strategy:
       fail-fast: false
       matrix:
-        ghc: ['default']
         os: [ubuntu-latest, macOS-latest]
 
     steps:
@@ -33,13 +36,52 @@ jobs:
       with:
         submodules: true
     - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      uses: cachix/install-nix-action@v12
+      uses: cachix/install-nix-action@v13
       with:
+        install_url: https://nixos-nix-install-tests.cachix.org/serve/lb41az54kzk6j12p81br4bczary7m145/install
+        install_options: '--tarball-url-prefix https://nixos-nix-install-tests.cachix.org/serve'
+        extra_nix_config: |
+          experimental-features = nix-command flakes
         nix_path: nixpkgs=channel:nixos-unstable
     - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      uses: cachix/cachix-action@v8
+      uses: cachix/cachix-action@v10
+      with:
+        name: haskell-language-server
+        # Disable pushing, we will do that in job `build`
+        skipPush: true
+    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+      run: |
+        nix develop --command cabal update
+        nix develop --command cabal build
+
+  # Build and then push HLS binaries with developmet shell to cachix
+  # This job runs when PRs are merged to master, and should be excluded from branch protections
+  build:
+    runs-on: ${{ matrix.os }}
+    if: ${{ github.repository_owner == 'haskell' && github.ref == 'refs/heads/master' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macOS-latest]
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
+    - uses: cachix/install-nix-action@v13
+      with:
+        install_url: https://nixos-nix-install-tests.cachix.org/serve/lb41az54kzk6j12p81br4bczary7m145/install
+        install_options: '--tarball-url-prefix https://nixos-nix-install-tests.cachix.org/serve'
+        extra_nix_config: |
+          experimental-features = nix-command flakes
+        nix_path: nixpkgs=channel:nixos-unstable
+    - uses: cachix/cachix-action@v10
       with:
         name: haskell-language-server
         authToken: ${{ secrets.HLS_CACHIX_AUTH_TOKEN }}
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      run: nix-shell --argstr compiler ${{ matrix.ghc }} --run "cabal update && cabal build"
+    - name: Push development shell
+      run: nix develop --profile dev && cachix push haskell-language-server dev
+    - name: Build and push binaries
+      run: |
+        nix build
+        nix path-info --json | jq -r '.[].path' | cachix push haskell-language-server

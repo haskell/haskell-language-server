@@ -383,10 +383,7 @@ localTactic t f = do
 
 
 refine :: TacticsM ()
-refine = do
-  try' intros
-  try' splitSingle
-  try' intros
+refine = intros <%> splitSingle
 
 
 auto' :: Int -> TacticsM ()
@@ -475,7 +472,6 @@ nary n =
     mkInvForAllTys [alphaTyVar, betaTyVar] $
       mkFunTys' (replicate n alphaTy) betaTy
 
-
 self :: TacticsM ()
 self =
   fmap listToMaybe getCurrentDefinitions >>= \case
@@ -511,6 +507,4 @@ hyDiff m = do
   m
   g' <- unHypothesis . jEntireHypothesis <$> goal
   pure $ Hypothesis $ take (length g' - g_len) g'
-
-
 
