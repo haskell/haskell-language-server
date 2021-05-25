@@ -390,6 +390,8 @@ getOccTy occ = do
   maybe (fail $ occNameString occ <> " is not in scope") pure mty
 
 
+------------------------------------------------------------------------------
+-- | Automatically generate the metaprogram command reference.
 writeDocumentation :: IO ()
 writeDocumentation =
   writeFile "plugins/hls-tactics-plugin/COMMANDS.md" $

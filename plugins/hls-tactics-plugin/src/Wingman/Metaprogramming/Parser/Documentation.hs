@@ -14,6 +14,8 @@ import           Wingman.Metaprogramming.Lexer (Parser, identifier, variable)
 import           Wingman.Types (TacticsM)
 
 
+------------------------------------------------------------------------------
+-- | Is a tactic deterministic or not?
 data Determinism
   = Deterministic
   | Nondeterministic
@@ -22,6 +24,9 @@ prettyDeterminism :: Determinism -> Doc b
 prettyDeterminism Deterministic = "deterministic"
 prettyDeterminism Nondeterministic = "non-deterministic"
 
+
+------------------------------------------------------------------------------
+-- | How many arguments does the tactic take?
 data Count a where
   One  :: Count OccName
   Many :: Count [OccName]
@@ -31,6 +36,12 @@ prettyCount One  = "single"
 prettyCount Many = "varadic"
 
 
+------------------------------------------------------------------------------
+-- | What sorts of arguments does the tactic take? Currently there is no
+-- distincion between 'Ref' and 'Bind', other than documentation.
+--
+-- The type index here is used for the shape of the function the parser should
+-- take.
 data Syntax a where
   Nullary :: Syntax (Parser (TacticsM ()))
   Ref     :: Count a -> Syntax (a -> Parser (TacticsM ()))
@@ -42,44 +53,60 @@ prettySyntax (Ref co)  = prettyCount co <+> "reference"
 prettySyntax (Bind co) = prettyCount co <+> "binding"
 
 
+------------------------------------------------------------------------------
+-- | An example for the documentation.
 data Example = Example
-  { ex_ctx    :: Maybe Text
-  , ex_args   :: [Var]
-  , ex_hyp    :: [ExampleHyInfo]
-  , ex_goal   :: Maybe ExampleType
-  , ex_result :: Text
+  { ex_ctx    :: Maybe Text         -- ^ Specific context information about when the tactic is applicable
+  , ex_args   :: [Var]              -- ^ Arguments the tactic was called with
+  , ex_hyp    :: [ExampleHyInfo]    -- ^ The hypothesis
+  , ex_goal   :: Maybe ExampleType  -- ^ Current goal. Nothing indicates it's uninteresting.
+  , ex_result :: Text               -- ^ Resulting extract.
   }
 
 
+------------------------------------------------------------------------------
+-- | An example 'HyInfo'.
 data ExampleHyInfo = EHI
-  { ehi_name :: Var
-  , ehi_type :: ExampleType
+  { ehi_name :: Var          -- ^ Name of the variable
+  , ehi_type :: ExampleType  -- ^ Type of the variable
   }
 
+
+------------------------------------------------------------------------------
+-- | A variable
 newtype Var = Var
   { getVar :: Text
   }
   deriving newtype (IsString, Pretty)
 
+
+------------------------------------------------------------------------------
+-- | A type
 newtype ExampleType = ExampleType
   { getExampleType :: Text
   }
   deriving newtype (IsString, Pretty)
 
 
+------------------------------------------------------------------------------
+-- | A command to expose to the parser
 data MetaprogramCommand a = MC
-  { mpc_name        :: Text
-  , mpc_syntax      :: Syntax a
-  , mpc_det         :: Determinism
-  , mpc_description :: Text
-  , mpc_tactic      :: a
-  , mpc_examples    :: [Example]
+  { mpc_name        :: Text         -- ^ Name of the command. This is the token necessary to run the command.
+  , mpc_syntax      :: Syntax a     -- ^ The command's arguments
+  , mpc_det         :: Determinism  -- ^ Determinism of the command
+  , mpc_description :: Text         -- ^ User-facing description
+  , mpc_tactic      :: a            -- ^ Tactic to run
+  , mpc_examples    :: [Example]    -- ^ Collection of documentation examples
   }
 
+------------------------------------------------------------------------------
+-- | Existentialize the pain away
 data SomeMetaprogramCommand where
   SMC :: MetaprogramCommand a -> SomeMetaprogramCommand
 
 
+------------------------------------------------------------------------------
+-- | Run the 'Parser' of a 'MetaprogramCommand'
 makeMPParser :: MetaprogramCommand a -> Parser (TacticsM ())
 makeMPParser (MC name Nullary _ _ tactic _) = do
   identifier name
@@ -98,10 +125,14 @@ makeMPParser (MC name (Bind Many) _ _ tactic _) = do
   P.many variable >>= tactic
 
 
+------------------------------------------------------------------------------
+-- | Compile a collection of metaprogram commands into a parser.
 makeParser :: [SomeMetaprogramCommand] -> Parser (TacticsM ())
 makeParser ps = P.choice $ ps <&> \(SMC mp) -> makeMPParser mp
 
 
+------------------------------------------------------------------------------
+-- | Pretty print a command.
 prettyCommand :: MetaprogramCommand a -> Doc b
 prettyCommand (MC name syn det desc _ exs) = vsep
   [ "##" <+> pretty name
@@ -115,14 +146,21 @@ prettyCommand (MC name syn det desc _ exs) = vsep
   ]
 
 
+------------------------------------------------------------------------------
+-- | Pretty print a hypothesis.
 prettyHyInfo :: ExampleHyInfo -> Doc a
 prettyHyInfo hi = pretty (ehi_name hi) <+> "::" <+> pretty (ehi_type hi)
 
+
+------------------------------------------------------------------------------
+-- | Append the given term only if the first argument has elements.
 mappendIfNotNull :: [a] -> a -> [a]
 mappendIfNotNull [] _ = []
 mappendIfNotNull as a = as <> [a]
 
 
+------------------------------------------------------------------------------
+-- | Pretty print an example.
 prettyExample :: Text -> Example -> Doc a
 prettyExample name (Example m_txt args hys goal res) =
   align $ vsep
@@ -146,6 +184,8 @@ prettyExample name (Example m_txt args hys goal res) =
     ]
 
 
+------------------------------------------------------------------------------
+-- | Make a haskell code fence.
 codeFence :: Doc a -> Doc a
 codeFence d = align $ vsep
   [ "```haskell"
@@ -154,6 +194,8 @@ codeFence d = align $ vsep
   ]
 
 
+------------------------------------------------------------------------------
+-- | Render all of the commands.
 prettyReadme :: [SomeMetaprogramCommand] -> String
 prettyReadme
   = renderString
@@ -163,14 +205,17 @@ prettyReadme
   . sortOn (\case SMC c -> mpc_name c)
 
 
-dump :: SomeMetaprogramCommand -> String
-dump (SMC mc)
-  = renderString
-  . layoutPretty defaultLayoutOptions
-  $ prettyCommand mc
 
-
-command :: Text -> Determinism -> Syntax a -> Text -> a -> [Example] -> SomeMetaprogramCommand
+------------------------------------------------------------------------------
+-- | Helper function to build a 'SomeMetaprogramCommand'.
+command
+    :: Text
+    -> Determinism
+    -> Syntax a
+    -> Text
+    -> a
+    -> [Example]
+    -> SomeMetaprogramCommand
 command txt det syn txt' a exs = SMC $
   MC
     { mpc_name        = txt
