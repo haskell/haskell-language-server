@@ -22,7 +22,10 @@ import           Text.Regex.TDFA.Text                ()
 descriptors :: [PluginDescriptor IdeState]
 descriptors =
   [ descriptor "ghcide-hover-and-symbols",
-    CodeAction.descriptor "ghcide-code-actions",
+    CodeAction.iePluginDescriptor "ghcide-code-actions-imports-exports",
+    CodeAction.typeSigsPluginDescriptor "ghcide-code-actions-type-signatures",
+    CodeAction.bindingsPluginDescriptor "ghcide-code-actions-bindings",
+    CodeAction.fillHolePluginDescriptor "ghcide-code-actions-fill-holes",
     Completions.descriptor "ghcide-completions",
     TypeLenses.descriptor "ghcide-type-lenses",
     Notifications.descriptor "ghcide-core"
