@@ -13,6 +13,10 @@ import           Data.Text.Prettyprint.Doc
 import Data.Text.Prettyprint.Doc.Render.String (renderString)
 
 
+data Determinism
+  = Deterministic
+  | Nondeterministic
+
 data Count a where
   One :: Count OccName
   Many :: Count [OccName]
@@ -50,6 +54,7 @@ newtype ExampleType = ExampleType
 data MetaprogramCommand a = MC
   { mpc_name        :: Text
   , mpc_syntax      :: Syntax a
+  , mpc_det         :: Determinism
   , mpc_description :: Text
   , mpc_tactic      :: a
   , mpc_examples    :: [Example]
@@ -60,19 +65,19 @@ data SomeMetaprogramCommand where
 
 
 makeMPParser :: MetaprogramCommand a -> Parser (TacticsM ())
-makeMPParser (MC name Nullary _ tactic _) = do
+makeMPParser (MC name Nullary _ _ tactic _) = do
   identifier name
   tactic
-makeMPParser (MC name (Ref One) _ tactic _) = do
+makeMPParser (MC name (Ref One) _ _ tactic _) = do
   identifier name
   variable >>= tactic
-makeMPParser (MC name (Ref Many) _ tactic _) = do
+makeMPParser (MC name (Ref Many) _ _ tactic _) = do
   identifier name
   P.many variable >>= tactic
-makeMPParser (MC name (Bind One) _ tactic _) = do
+makeMPParser (MC name (Bind One) _ _ tactic _) = do
   identifier name
   variable >>= tactic
-makeMPParser (MC name (Bind Many) _ tactic _) = do
+makeMPParser (MC name (Bind Many) _ _ tactic _) = do
   identifier name
   P.many variable >>= tactic
 
@@ -81,15 +86,15 @@ makeParser :: [SomeMetaprogramCommand] -> Parser (TacticsM ())
 makeParser ps = P.choice $ ps <&> \(SMC mp) -> makeMPParser mp
 
 prettyCommand :: MetaprogramCommand a -> Doc b
-prettyCommand (MC name syn desc _ exs) = vsep
-  [ "##" <+> pretty name
+prettyCommand (MC name det syn desc _ exs) = vsep
+  [ "###" <+> pretty name
   , mempty
   , pretty desc
   , mempty
   , mempty
-  , "### Examples"
+  , "#### Examples"
   , mempty
-  , concatWith (\a b -> vsep [a, "---", b]) $ fmap (prettyExample name) exs
+  , concatWith (\a b -> vsep [a, mempty, "---", b]) $ fmap (prettyExample name) exs
   ]
 
 
@@ -106,7 +111,7 @@ prettyExample name (Example m_txt args hys goal res) =
               , "_" <+> maybe mempty (("::" <+>). pretty) goal
               ]
     , mempty
-    , ">" <+> enclose "`" "`" (pretty name <+> hsep (fmap pretty args))
+    , ">" <+> enclose "`" "`" (pretty name <> hsep (mempty : fmap pretty args))
     , mempty
     , codeFence $ align $ pretty res
     ]
@@ -130,10 +135,11 @@ dump (SMC mc)
 -- m
 
 
-command :: Text -> Syntax a -> Text -> a -> [Example] -> SomeMetaprogramCommand
-command txt syn txt' a exs = SMC $
+command :: Text -> Determinism -> Syntax a -> Text -> a -> [Example] -> SomeMetaprogramCommand
+command txt det syn txt' a exs = SMC $
   MC
     { mpc_name        = txt
+    , mpc_det         = det
     , mpc_syntax      = syn
     , mpc_description = txt'
     , mpc_tactic      = a

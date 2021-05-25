@@ -45,9 +45,7 @@ variadic_occ name tac = tac <$> (identifier name *> P.many variable)
 
 commands :: [SomeMetaprogramCommand]
 commands =
-  [ command
-      "assumption"
-      Nullary
+  [ command "assumption" Nondeterministic Nullary
       "Use any term in the hypothesis that can unify with the current goal."
       (pure assumption)
       [ Example
@@ -58,9 +56,7 @@ commands =
           "some_a_val"
       ]
 
-  , command
-      "assume"
-      (Ref One)
+  , command "assume" Deterministic (Ref One)
       "Use the given term from the hypothesis, unifying it with the current goal"
       (pure . assume)
       [ Example
@@ -71,9 +67,7 @@ commands =
           "some_a_val"
       ]
 
-  , command
-      "intros"
-      (Bind Many)
+  , command "intros" Deterministic (Bind Many)
       ( mconcat
           [ "Construct a lambda expression, using the specific names if given, "
           , "generating unique names otherwise. When no arguments are given, "
@@ -105,9 +99,7 @@ commands =
           "\\x y z -> (_ :: d)"
       ]
 
-  , command
-      "intro"
-      (Bind One)
+  , command "intro" Deterministic (Bind One)
       "Construct a lambda expression, binding an argument with the given name."
       (pure . intros' . Just . pure)
       [ Example
@@ -118,9 +110,7 @@ commands =
           "\\aye -> (_ :: b -> c -> d)"
       ]
 
-  , command
-      "destruct_all"
-      Nullary
+  , command "destruct_all" Deterministic Nullary
       "Pattern match on every function paramater, in original binding order."
       (pure destructAll)
       [ Example
@@ -139,9 +129,7 @@ commands =
             ]
       ]
 
-  , command
-      "destruct"
-      (Ref One)
+  , command "destruct" Deterministic (Ref One)
       "Pattern match on the argument."
       (pure . useNameFromHypothesis destruct)
       [ Example
@@ -156,6 +144,175 @@ commands =
             ]
       ]
 
+  , command "homo" Deterministic (Ref One)
+      ( mconcat
+        [ "Pattern match on the argument, and fill the resulting hole in with"
+        , "the same data constructor."
+        ])
+      (pure . useNameFromHypothesis homo)
+      [ Example
+          (Just $ mconcat
+            [ "Only applicable when the type constructor of the argument is "
+            , "the same as that of the hole."
+            ])
+          ["e"]
+          [EHI "e" "Either a b"]
+          (Just "Either x y") $
+          T.pack $ unlines
+            [ "case e of"
+            , "  Left a -> Left (_ :: x)"
+            , "  Right b -> Right (_ :: y)"
+            ]
+      ]
+
+  , command "application" Nondeterministic Nullary
+      "Apply any function in the hypothesis that returns the correct type."
+      (pure application)
+      [ Example
+          Nothing
+          []
+          [EHI "f" "a -> b"]
+          (Just "b")
+          "f (_ :: a)"
+      ]
+
+  , command "apply" Deterministic (Ref One)
+      "Apply the given function from *local* scope."
+      (pure . useNameFromHypothesis apply)
+      [ Example
+          Nothing
+          ["f"]
+          [EHI "f" "a -> b"]
+          (Just "b")
+          "f (_ :: a)"
+      ]
+
+  , command "split" Nondeterministic Nullary
+      "Produce a data constructor for the current goal."
+      (pure split)
+      [ Example
+          Nothing
+          []
+          []
+          (Just "Either a b")
+          "Right (_ :: b)"
+      ]
+
+  , command "ctor" Deterministic (Ref One)
+      "Use the given data cosntructor."
+      (pure . userSplit)
+      [ Example
+          Nothing
+          ["Just"]
+          []
+          (Just "Maybe a")
+          "Just (_ :: a)"
+      ]
+
+  , command "obvious" Nondeterministic Nullary
+      "Produce a nullary data constructor for the current goal."
+      (pure obvious)
+      [ Example
+          Nothing
+          []
+          []
+          (Just "[a]")
+          "[]"
+      ]
+
+  , command "auto" Nondeterministic Nullary
+      ( mconcat
+          [ "Repeatedly attempt to split, destruct, apply functions, and"
+          , "recurse in an attempt to fill the hole."
+          ])
+      (pure auto)
+      [ Example
+          Nothing
+          []
+          [EHI "f" "a -> b", EHI "g" "b -> c"]
+          (Just "a -> c")
+          "g . f"
+      ]
+
+  , command "sorry" Deterministic Nullary
+      "\"Solve\" the goal by leaving a hole."
+      (pure sorry)
+      [ Example
+          Nothing
+          []
+          []
+          (Just "b")
+          "_ :: b"
+      ]
+
+  , command "unary" Deterministic Nullary
+      ( mconcat
+        [ "Produce a hole for a single-parameter function, as well as a hole for"
+        , "its argument. The argument holes are completely unconstrained, and"
+        , "will be solved before the function."
+        ])
+      (pure $ nary 1)
+      [ Example
+          (Just $ mconcat
+            [ "In the example below, the variable `a` is free, and will unify"
+            , "to the resulting extract from any subsequent tactic."
+            ])
+          []
+          []
+          (Just "Int")
+          "(_2 :: a -> Int) (_1 :: a)"
+      ]
+
+  , command "binary" Deterministic Nullary
+      ( mconcat
+        [ "Produce a hole for a two-parameter function, as well as holes for"
+        , "its arguments. The argument holes have the same type but are "
+        , "otherwise unconstrained, and will be solved before the function."
+        ])
+      (pure $ nary 2)
+      [ Example
+          (Just $ mconcat
+            [ "In the example below, the variable `a` is free, and will unify"
+            , "to the resulting extract from any subsequent tactic."
+            ])
+          []
+          []
+          (Just "Int")
+          "(_3 :: a -> a -> Int) (_1 :: a) (_2 :: a)"
+      ]
+
+  , command "recursion" Deterministic Nullary
+      "Fill the current hole with a call to the defining function."
+      ( pure $
+          fmap listToMaybe getCurrentDefinitions >>= \case
+            Just (self, _) -> useNameFromContext apply self
+            Nothing -> E.throwError $ TacticPanic "no defining function"
+      )
+      [ Example
+          (Just "In the context of `foo (a :: Int) (b :: b) = _`:")
+          []
+          []
+          Nothing
+          "foo (_ :: Int) (_ :: b)"
+      ]
+
+  , command "use" Deterministic (Ref One)
+      "Apply the given function from *module* scope."
+      ( \occ -> do
+          ctx <- asks ps_context
+          ty <- case lookupNameInContext occ ctx of
+            Just ty -> pure ty
+            Nothing -> CType <$> getOccTy occ
+          pure $ apply $ createImportedHyInfo occ ty
+      )
+      [ Example
+          (Just "`import Data.Char (isSpace)`")
+          ["isSpace"]
+          []
+          (Just "Bool")
+          "isSpace (_ :: Char)"
+      ]
+
   ]
 
 
@@ -163,39 +320,8 @@ commands =
 oneTactic :: Parser (TacticsM ())
 oneTactic =
   P.choice
-    [ braces tactic
-      -- TODO(sandy): lean uses braces for control flow, but i always forget
-      -- and want to use parens. is there a semantic difference?
-    , parens tactic
-    -- , nullary   "assumption" assumption
-    -- , unary_occ "assume" assume
-    -- , variadic_occ   "intros" $ \case
-    --     []    -> intros
-    --     names -> intros' $ Just names
-    -- , unary_occ  "intro" $ intros' . Just . pure
-    -- , nullary   "destruct_all" destructAll
-    , unary_occ "destruct" $ useNameFromHypothesis destruct
-    , unary_occ "homo" $ useNameFromHypothesis homo
-    , nullary   "application" application
-    , unary_occ "apply_module" $ useNameFromContext apply
-    , unary_occ "apply" $ useNameFromHypothesis apply
-    , nullary   "split" split
-    , unary_occ "ctor" userSplit
-    , nullary   "obvious" obvious
-    , nullary   "auto" auto
-    , nullary   "sorry" sorry
-    , nullary   "unary" $ nary 1
-    , nullary   "binary" $ nary 2
-    , nullary   "recursion" $
-        fmap listToMaybe getCurrentDefinitions >>= \case
-          Just (self, _) -> useNameFromContext apply self
-          Nothing -> E.throwError $ TacticPanic "no defining function"
-    , unary_occM "use" $ \occ -> do
-        ctx <- asks ps_context
-        ty <- case lookupNameInContext occ ctx of
-          Just ty -> pure ty
-          Nothing -> CType <$> getOccTy occ
-        pure $ apply $ createImportedHyInfo occ ty
+    [ parens tactic
+    , makeParser commands
     ]
 
 

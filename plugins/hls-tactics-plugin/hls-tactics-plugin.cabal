@@ -47,6 +47,7 @@ library
     Wingman.Machinery
     Wingman.Metaprogramming.Lexer
     Wingman.Metaprogramming.Parser
+    Wingman.Metaprogramming.Parser.Documentation
     Wingman.Metaprogramming.ProofState
     Wingman.Naming
     Wingman.Plugin
