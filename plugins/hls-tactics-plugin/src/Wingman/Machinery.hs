@@ -8,7 +8,7 @@ import           Control.Lens ((<>~))
 import           Control.Monad.Error.Class
 import           Control.Monad.Reader
 import           Control.Monad.State.Class (gets, modify)
-import           Control.Monad.State.Strict (StateT (..))
+import           Control.Monad.State.Strict (StateT (..), execStateT)
 import           Data.Bool (bool)
 import           Data.Coerce
 import           Data.Either
@@ -53,6 +53,10 @@ newSubgoal j = do
     subgoal
       $ substJdg unifier
       $ unsetIsTopHole j
+
+
+tacticToRule :: Judgement -> TacticsM () -> Rule
+tacticToRule jdg (TacticT tt) = RuleT $ flip execStateT jdg tt >>= flip Subgoal Axiom
 
 
 ------------------------------------------------------------------------------

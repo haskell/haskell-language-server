@@ -108,6 +108,12 @@ recursiveHypothesis = introduceHypothesis $ const $ const RecursivePrv
 
 
 ------------------------------------------------------------------------------
+-- | Introduce a binding in a recursive context.
+userHypothesis :: [(OccName, a)] -> Hypothesis a
+userHypothesis = introduceHypothesis $ const $ const UserPrv
+
+
+------------------------------------------------------------------------------
 -- | Check whether any of the given occnames are an ancestor of the term.
 hasPositionalAncestry
     :: Foldable t
@@ -300,6 +306,12 @@ jLocalHypothesis
   . filter (isLocalHypothesis . hi_provenance)
   . unHypothesis
   . jHypothesis
+
+
+------------------------------------------------------------------------------
+-- | Filter elements from the hypothesis
+hyFilter :: (HyInfo a -> Bool) -> Hypothesis a -> Hypothesis a
+hyFilter f  = Hypothesis . filter f . unHypothesis
 
 
 ------------------------------------------------------------------------------
