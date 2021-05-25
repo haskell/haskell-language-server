@@ -2,29 +2,45 @@
 
 module Wingman.Metaprogramming.Parser.Documentation where
 
-import Data.String (IsString)
-import Data.Text (Text)
-import GhcPlugins (OccName)
-import Wingman.Metaprogramming.Lexer (Parser, identifier, variable)
-import Wingman.Types (TacticsM)
-import qualified Text.Megaparsec as P
-import Data.Functor ((<&>))
+import           Data.Functor ((<&>))
+import           Data.List (sortOn)
+import           Data.String (IsString)
+import           Data.Text (Text)
 import           Data.Text.Prettyprint.Doc
-import Data.Text.Prettyprint.Doc.Render.String (renderString)
+import           Data.Text.Prettyprint.Doc.Render.String (renderString)
+import           GhcPlugins (OccName)
+import qualified Text.Megaparsec as P
+import           Wingman.Metaprogramming.Lexer (Parser, identifier, variable)
+import           Wingman.Types (TacticsM)
 
 
 data Determinism
   = Deterministic
   | Nondeterministic
 
+prettyDeterminism :: Determinism -> Doc b
+prettyDeterminism Deterministic = "deterministic"
+prettyDeterminism Nondeterministic = "non-deterministic"
+
 data Count a where
-  One :: Count OccName
+  One  :: Count OccName
   Many :: Count [OccName]
+
+prettyCount :: Count a -> Doc b
+prettyCount One  = "single"
+prettyCount Many = "varadic"
+
 
 data Syntax a where
   Nullary :: Syntax (Parser (TacticsM ()))
-  Ref :: Count a -> Syntax (a -> Parser (TacticsM ()))
-  Bind :: Count a -> Syntax (a -> Parser (TacticsM ()))
+  Ref     :: Count a -> Syntax (a -> Parser (TacticsM ()))
+  Bind    :: Count a -> Syntax (a -> Parser (TacticsM ()))
+
+prettySyntax :: Syntax a -> Doc b
+prettySyntax Nullary   = "none"
+prettySyntax (Ref co)  = prettyCount co <+> "reference"
+prettySyntax (Bind co) = prettyCount co <+> "binding"
+
 
 data Example = Example
   { ex_ctx    :: Maybe Text
@@ -85,36 +101,50 @@ makeMPParser (MC name (Bind Many) _ _ tactic _) = do
 makeParser :: [SomeMetaprogramCommand] -> Parser (TacticsM ())
 makeParser ps = P.choice $ ps <&> \(SMC mp) -> makeMPParser mp
 
+
 prettyCommand :: MetaprogramCommand a -> Doc b
-prettyCommand (MC name det syn desc _ exs) = vsep
-  [ "###" <+> pretty name
+prettyCommand (MC name syn det desc _ exs) = vsep
+  [ "##" <+> pretty name
   , mempty
-  , pretty desc
+  , "arguments:" <+> prettySyntax syn <> "."
+  , prettyDeterminism det <> "."
   , mempty
+  , ">" <+> align (pretty desc)
   , mempty
-  , "#### Examples"
-  , mempty
-  , concatWith (\a b -> vsep [a, mempty, "---", b]) $ fmap (prettyExample name) exs
+  , vsep $ fmap (prettyExample name) exs
   ]
 
 
 prettyHyInfo :: ExampleHyInfo -> Doc a
 prettyHyInfo hi = pretty (ehi_name hi) <+> "::" <+> pretty (ehi_type hi)
 
+mappendIfNotNull :: [a] -> a -> [a]
+mappendIfNotNull [] _ = []
+mappendIfNotNull as a = as <> [a]
+
+
 prettyExample :: Text -> Example -> Doc a
 prettyExample name (Example m_txt args hys goal res) =
   align $ vsep
-    [ maybe mempty ((<> line) . pretty) m_txt
+    [ mempty
+    , "### Example"
+    , maybe mempty ((line <>) . (<> line) . (">" <+>) . align . pretty) m_txt
+    , "Given:"
+    , mempty
     , codeFence $ vsep
-        $ fmap prettyHyInfo hys
-           <> [ mempty
-              , "_" <+> maybe mempty (("::" <+>). pretty) goal
+        $ mappendIfNotNull (fmap prettyHyInfo hys) mempty
+           <> [ "_" <+> maybe mempty (("::" <+>). pretty) goal
               ]
     , mempty
-    , ">" <+> enclose "`" "`" (pretty name <> hsep (mempty : fmap pretty args))
+    , hsep
+        [ "running "
+        , enclose "`" "`" $ pretty name <> hsep (mempty : fmap pretty args)
+        , "will produce:"
+        ]
     , mempty
     , codeFence $ align $ pretty res
     ]
+
 
 codeFence :: Doc a -> Doc a
 codeFence d = align $ vsep
@@ -123,16 +153,21 @@ codeFence d = align $ vsep
   , "```"
   ]
 
+
+prettyReadme :: [SomeMetaprogramCommand] -> String
+prettyReadme
+  = renderString
+  . layoutPretty defaultLayoutOptions
+  . vsep
+  . fmap (\case SMC c -> prettyCommand c)
+  . sortOn (\case SMC c -> mpc_name c)
+
+
 dump :: SomeMetaprogramCommand -> String
 dump (SMC mc)
   = renderString
   . layoutPretty defaultLayoutOptions
   $ prettyCommand mc
-
-
-
--- makeReadme :: MetaprogramCommand a -> T.Text
--- m
 
 
 command :: Text -> Determinism -> Syntax a -> Text -> a -> [Example] -> SomeMetaprogramCommand

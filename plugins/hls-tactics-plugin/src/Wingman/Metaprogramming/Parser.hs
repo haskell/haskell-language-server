@@ -19,10 +19,10 @@ import           Wingman.Auto
 import           Wingman.Context (getCurrentDefinitions)
 import           Wingman.Machinery (useNameFromHypothesis, getOccNameType, createImportedHyInfo, useNameFromContext, lookupNameInContext)
 import           Wingman.Metaprogramming.Lexer
+import           Wingman.Metaprogramming.Parser.Documentation
 import           Wingman.Metaprogramming.ProofState (proofState, layout)
 import           Wingman.Tactics
 import           Wingman.Types
-import Wingman.Metaprogramming.Parser.Documentation
 
 
 nullary :: T.Text -> TacticsM () -> Parser (TacticsM ())
@@ -114,11 +114,11 @@ commands =
       "Pattern match on every function paramater, in original binding order."
       (pure destructAll)
       [ Example
-          (Just "If `a` and `b` were bound via `f a b = _`, then:")
+          (Just "Assume `a` and `b` were bound via `f a b = _`.")
           []
           [EHI "a" "Bool", EHI "b" "Maybe Int"]
           Nothing $
-          T.pack $ unlines
+          T.pack $ init $ unlines
             [ "case a of"
             , "  False -> case b of"
             , "    Nothing -> _"
@@ -137,7 +137,7 @@ commands =
           ["a"]
           [EHI "a" "Bool"]
           Nothing $
-          T.pack $ unlines
+          T.pack $ init $ unlines
             [ "case a of"
             , "  False -> _"
             , "  True -> _"
@@ -146,7 +146,7 @@ commands =
 
   , command "homo" Deterministic (Ref One)
       ( mconcat
-        [ "Pattern match on the argument, and fill the resulting hole in with"
+        [ "Pattern match on the argument, and fill the resulting hole in with "
         , "the same data constructor."
         ])
       (pure . useNameFromHypothesis homo)
@@ -158,7 +158,7 @@ commands =
           ["e"]
           [EHI "e" "Either a b"]
           (Just "Either x y") $
-          T.pack $ unlines
+          T.pack $ init $ unlines
             [ "case e of"
             , "  Left a -> Left (_ :: x)"
             , "  Right b -> Right (_ :: y)"
@@ -222,7 +222,7 @@ commands =
 
   , command "auto" Nondeterministic Nullary
       ( mconcat
-          [ "Repeatedly attempt to split, destruct, apply functions, and"
+          [ "Repeatedly attempt to split, destruct, apply functions, and "
           , "recurse in an attempt to fill the hole."
           ])
       (pure auto)
@@ -247,14 +247,14 @@ commands =
 
   , command "unary" Deterministic Nullary
       ( mconcat
-        [ "Produce a hole for a single-parameter function, as well as a hole for"
-        , "its argument. The argument holes are completely unconstrained, and"
+        [ "Produce a hole for a single-parameter function, as well as a hole for "
+        , "its argument. The argument holes are completely unconstrained, and "
         , "will be solved before the function."
         ])
       (pure $ nary 1)
       [ Example
           (Just $ mconcat
-            [ "In the example below, the variable `a` is free, and will unify"
+            [ "In the example below, the variable `a` is free, and will unify "
             , "to the resulting extract from any subsequent tactic."
             ])
           []
@@ -265,14 +265,14 @@ commands =
 
   , command "binary" Deterministic Nullary
       ( mconcat
-        [ "Produce a hole for a two-parameter function, as well as holes for"
+        [ "Produce a hole for a two-parameter function, as well as holes for "
         , "its arguments. The argument holes have the same type but are "
         , "otherwise unconstrained, and will be solved before the function."
         ])
       (pure $ nary 2)
       [ Example
           (Just $ mconcat
-            [ "In the example below, the variable `a` is free, and will unify"
+            [ "In the example below, the variable `a` is free, and will unify "
             , "to the resulting extract from any subsequent tactic."
             ])
           []
@@ -388,4 +388,14 @@ getOccTy occ = do
   ParserContext hscenv rdrenv modul _ <- ask
   mty <- liftIO $ getOccNameType hscenv rdrenv modul occ
   maybe (fail $ occNameString occ <> " is not in scope") pure mty
+
+
+writeDocumentation :: IO ()
+writeDocumentation =
+  writeFile "plugins/hls-tactics-plugin/COMMANDS.md" $
+    unlines
+      [ "# Wingman Metaprogram Command Reference"
+      , ""
+      , prettyReadme commands
+      ]
 
