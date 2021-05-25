@@ -276,12 +276,14 @@ mkApply occ (lhs : rhs : more)
 mkApply occ args = noLoc $ foldl' (@@) (var' occ) args
 
 
-  -- TODO(sandy): it's likely that i've mangled the synthesized from terms
+------------------------------------------------------------------------------
+-- | Run a tactic over each term in the given 'Hypothesis', binding the results
+-- of each in a let expression.
 letForEach
-    :: (OccName -> OccName)
-    -> (HyInfo CType -> TacticsM ())
-    -> Hypothesis CType
-    -> Judgement
+    :: (OccName -> OccName)           -- ^ How to name bound variables
+    -> (HyInfo CType -> TacticsM ())  -- ^ The tactic to run
+    -> Hypothesis CType               -- ^ Terms to generate bindings for
+    -> Judgement                      -- ^ The goal of original hole
     -> RuleM (Synthesized (LHsExpr GhcPs))
 letForEach rename solve (unHypothesis -> hy) jdg = do
   case hy of
@@ -291,12 +293,9 @@ letForEach rename solve (unHypothesis -> hy) jdg = do
       terms <- fmap sequenceA $ for hy $ \hi -> do
         let name = rename $ hi_name hi
         res <- tacticToRule jdg $ solve hi
-        pure $ fmap (name,) res
+        pure $ fmap ((name,) . unLoc) res
       let hy' = fmap (g <$) $ syn_val terms
-      g <- newSubgoal $ introduce (userHypothesis hy') jdg
-      pure $ g
-        & #syn_val %~ noLoc
-                    . let' (fmap (\(occ, expr) -> valBind (occNameToStr occ) $ unLoc expr)
-                              $ syn_val terms)
-                    . unLoc
+          matches = fmap (fmap (\(occ, expr) -> valBind (occNameToStr occ) expr)) terms
+      g <- fmap (fmap unLoc) $ newSubgoal $ introduce (userHypothesis hy') jdg
+      pure $ fmap noLoc $ let' <$> matches <*> g
 
