@@ -137,7 +137,7 @@ prettyCommand :: MetaprogramCommand a -> Doc b
 prettyCommand (MC name syn det desc _ exs) = vsep
   [ "##" <+> pretty name
   , mempty
-  , "arguments:" <+> prettySyntax syn <> "."
+  , "arguments:" <+> prettySyntax syn <> ".  "
   , prettyDeterminism det <> "."
   , mempty
   , ">" <+> align (pretty desc)

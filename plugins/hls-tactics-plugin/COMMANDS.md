@@ -2,7 +2,7 @@
 
 ## application
 
-arguments: none.
+arguments: none.  
 non-deterministic.
 
 > Apply any function in the hypothesis that returns the correct type.
@@ -25,7 +25,7 @@ f (_ :: a)
 ```
 ## apply
 
-arguments: single reference.
+arguments: single reference.  
 deterministic.
 
 > Apply the given function from *local* scope.
@@ -48,7 +48,7 @@ f (_ :: a)
 ```
 ## assume
 
-arguments: single reference.
+arguments: single reference.  
 deterministic.
 
 > Use the given term from the hypothesis, unifying it with the current goal
@@ -71,7 +71,7 @@ some_a_val
 ```
 ## assumption
 
-arguments: none.
+arguments: none.  
 non-deterministic.
 
 > Use any term in the hypothesis that can unify with the current goal.
@@ -94,10 +94,10 @@ some_a_val
 ```
 ## auto
 
-arguments: none.
+arguments: none.  
 non-deterministic.
 
-> Repeatedly attempt to split, destruct, apply functions, andrecurse in an attempt to fill the hole.
+> Repeatedly attempt to split, destruct, apply functions, and recurse in an attempt to fill the hole.
 
 
 ### Example
@@ -118,15 +118,15 @@ g . f
 ```
 ## binary
 
-arguments: none.
+arguments: none.  
 deterministic.
 
-> Produce a hole for a two-parameter function, as well as holes forits arguments. The argument holes have the same type but are otherwise unconstrained, and will be solved before the function.
+> Produce a hole for a two-parameter function, as well as holes for its arguments. The argument holes have the same type but are otherwise unconstrained, and will be solved before the function.
 
 
 ### Example
 
-> In the example below, the variable `a` is free, and will unifyto the resulting extract from any subsequent tactic.
+> In the example below, the variable `a` is free, and will unify to the resulting extract from any subsequent tactic.
 
 Given:
 
@@ -141,7 +141,7 @@ running  `binary` will produce:
 ```
 ## ctor
 
-arguments: single reference.
+arguments: single reference.  
 deterministic.
 
 > Use the given data cosntructor.
@@ -162,7 +162,7 @@ Just (_ :: a)
 ```
 ## destruct
 
-arguments: single reference.
+arguments: single reference.  
 deterministic.
 
 > Pattern match on the argument.
@@ -187,7 +187,7 @@ case a of
 ```
 ## destruct_all
 
-arguments: none.
+arguments: none.  
 deterministic.
 
 > Pattern match on every function paramater, in original binding order.
@@ -219,10 +219,10 @@ case a of
 ```
 ## homo
 
-arguments: single reference.
+arguments: single reference.  
 deterministic.
 
-> Pattern match on the argument, and fill the resulting hole in withthe same data constructor.
+> Pattern match on the argument, and fill the resulting hole in with the same data constructor.
 
 
 ### Example
@@ -246,7 +246,7 @@ case e of
 ```
 ## intro
 
-arguments: single binding.
+arguments: single binding.  
 deterministic.
 
 > Construct a lambda expression, binding an argument with the given name.
@@ -267,7 +267,7 @@ running  `intro aye` will produce:
 ```
 ## intros
 
-arguments: varadic binding.
+arguments: varadic binding.  
 deterministic.
 
 > Construct a lambda expression, using the specific names if given, generating unique names otherwise. When no arguments are given, all of the function arguments will be bound; otherwise, this tactic will bind only enough to saturate the given names. Extra names are ignored.
@@ -316,7 +316,7 @@ running  `intros x y z w` will produce:
 ```
 ## obvious
 
-arguments: none.
+arguments: none.  
 non-deterministic.
 
 > Produce a nullary data constructor for the current goal.
@@ -337,7 +337,7 @@ running  `obvious` will produce:
 ```
 ## recursion
 
-arguments: none.
+arguments: none.  
 deterministic.
 
 > Fill the current hole with a call to the defining function.
@@ -360,7 +360,7 @@ foo (_ :: Int) (_ :: b)
 ```
 ## sorry
 
-arguments: none.
+arguments: none.  
 deterministic.
 
 > "Solve" the goal by leaving a hole.
@@ -381,7 +381,7 @@ _ :: b
 ```
 ## split
 
-arguments: none.
+arguments: none.  
 non-deterministic.
 
 > Produce a data constructor for the current goal.
@@ -402,15 +402,15 @@ Right (_ :: b)
 ```
 ## unary
 
-arguments: none.
+arguments: none.  
 deterministic.
 
-> Produce a hole for a single-parameter function, as well as a hole forits argument. The argument holes are completely unconstrained, andwill be solved before the function.
+> Produce a hole for a single-parameter function, as well as a hole for its argument. The argument holes are completely unconstrained, and will be solved before the function.
 
 
 ### Example
 
-> In the example below, the variable `a` is free, and will unifyto the resulting extract from any subsequent tactic.
+> In the example below, the variable `a` is free, and will unify to the resulting extract from any subsequent tactic.
 
 Given:
 
@@ -425,7 +425,7 @@ running  `unary` will produce:
 ```
 ## use
 
-arguments: single reference.
+arguments: single reference.  
 deterministic.
 
 > Apply the given function from *module* scope.
