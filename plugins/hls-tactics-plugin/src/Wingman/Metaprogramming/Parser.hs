@@ -22,6 +22,7 @@ import           Wingman.Metaprogramming.Lexer
 import           Wingman.Metaprogramming.ProofState (proofState, layout)
 import           Wingman.Tactics
 import           Wingman.Types
+import Wingman.Metaprogramming.Parser.Documentation
 
 
 nullary :: T.Text -> TacticsM () -> Parser (TacticsM ())
@@ -42,6 +43,123 @@ variadic_occ :: T.Text -> ([OccName] -> TacticsM ()) -> Parser (TacticsM ())
 variadic_occ name tac = tac <$> (identifier name *> P.many variable)
 
 
+commands :: [SomeMetaprogramCommand]
+commands =
+  [ command
+      "assumption"
+      Nullary
+      "Use any term in the hypothesis that can unify with the current goal."
+      (pure assumption)
+      [ Example
+          Nothing
+          []
+          [EHI "some_a_val" "a"]
+          (Just "a")
+          "some_a_val"
+      ]
+
+  , command
+      "assume"
+      (Ref One)
+      "Use the given term from the hypothesis, unifying it with the current goal"
+      (pure . assume)
+      [ Example
+          Nothing
+          ["some_a_val"]
+          [EHI "some_a_val" "a"]
+          (Just "a")
+          "some_a_val"
+      ]
+
+  , command
+      "intros"
+      (Bind Many)
+      ( mconcat
+          [ "Construct a lambda expression, using the specific names if given, "
+          , "generating unique names otherwise. When no arguments are given, "
+          , "all of the function arguments will be bound; otherwise, this "
+          , "tactic will bind only enough to saturate the given names. Extra "
+          , "names are ignored."
+          ])
+      (pure . \case
+        []    -> intros
+        names -> intros' $ Just names
+      )
+      [ Example
+          Nothing
+          []
+          []
+          (Just "a -> b -> c -> d")
+          "\\a b c -> (_ :: d)"
+      , Example
+          Nothing
+          ["aye"]
+          []
+          (Just "a -> b -> c -> d")
+          "\\aye -> (_ :: b -> c -> d)"
+      , Example
+          Nothing
+          ["x", "y", "z", "w"]
+          []
+          (Just "a -> b -> c -> d")
+          "\\x y z -> (_ :: d)"
+      ]
+
+  , command
+      "intro"
+      (Bind One)
+      "Construct a lambda expression, binding an argument with the given name."
+      (pure . intros' . Just . pure)
+      [ Example
+          Nothing
+          ["aye"]
+          []
+          (Just "a -> b -> c -> d")
+          "\\aye -> (_ :: b -> c -> d)"
+      ]
+
+  , command
+      "destruct_all"
+      Nullary
+      "Pattern match on every function paramater, in original binding order."
+      (pure destructAll)
+      [ Example
+          (Just "If `a` and `b` were bound via `f a b = _`, then:")
+          []
+          [EHI "a" "Bool", EHI "b" "Maybe Int"]
+          Nothing $
+          T.pack $ unlines
+            [ "case a of"
+            , "  False -> case b of"
+            , "    Nothing -> _"
+            , "    Just i -> _"
+            , "  True -> case b of"
+            , "    Nothing -> _"
+            , "    Just i -> _"
+            ]
+      ]
+
+  , command
+      "destruct"
+      (Ref One)
+      "Pattern match on the argument."
+      (pure . useNameFromHypothesis destruct)
+      [ Example
+          Nothing
+          ["a"]
+          [EHI "a" "Bool"]
+          Nothing $
+          T.pack $ unlines
+            [ "case a of"
+            , "  False -> _"
+            , "  True -> _"
+            ]
+      ]
+
+  ]
+
+
+
 oneTactic :: Parser (TacticsM ())
 oneTactic =
   P.choice
@@ -49,13 +167,13 @@ oneTactic =
       -- TODO(sandy): lean uses braces for control flow, but i always forget
       -- and want to use parens. is there a semantic difference?
     , parens tactic
-    , nullary   "assumption" assumption
-    , unary_occ "assume" assume
-    , variadic_occ   "intros" $ \case
-        []    -> intros
-        names -> intros' $ Just names
-    , unary_occ  "intro" $ intros' . Just . pure
-    , nullary   "destruct_all" destructAll
+    -- , nullary   "assumption" assumption
+    -- , unary_occ "assume" assume
+    -- , variadic_occ   "intros" $ \case
+    --     []    -> intros
+    --     names -> intros' $ Just names
+    -- , unary_occ  "intro" $ intros' . Just . pure
+    -- , nullary   "destruct_all" destructAll
     , unary_occ "destruct" $ useNameFromHypothesis destruct
     , unary_occ "homo" $ useNameFromHypothesis homo
     , nullary   "application" application
