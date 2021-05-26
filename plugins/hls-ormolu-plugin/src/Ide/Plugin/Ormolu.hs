@@ -1,5 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE PackageImports    #-}
 {-# LANGUAGE TypeApplications  #-}
 
 module Ide.Plugin.Ormolu
@@ -21,7 +20,7 @@ import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Server         hiding (defaultConfig)
 import           Language.LSP.Types
-import           "ormolu" Ormolu
+import           Ormolu
 import           System.FilePath             (takeFileName)
 
 -- ---------------------------------------------------------------------
