@@ -24,21 +24,23 @@ import qualified Data.Set as S
 import           DataCon
 import           Development.IDE.GHC.Compat
 import           GHC.Exts
+import           GHC.SourceGen ((@@))
 import           GHC.SourceGen.Expr
 import           Name (occNameString, occName)
+import           OccName (mkVarOcc)
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           TcType
 import           Type hiding (Var)
+import           TysPrim (betaTy, alphaTy, betaTyVar, alphaTyVar)
 import           Wingman.CodeGen
 import           Wingman.Context
 import           Wingman.GHC
 import           Wingman.Judgements
 import           Wingman.Machinery
 import           Wingman.Naming
+import           Wingman.StaticPlugin (pattern MetaprogramSyntax)
 import           Wingman.Types
-import OccName (mkVarOcc)
-import Wingman.StaticPlugin (pattern MetaprogramSyntax)
 
 
 ------------------------------------------------------------------------------
@@ -109,9 +111,9 @@ intros'
 intros' names = rule $ \jdg -> do
   let g  = jGoal jdg
   ctx <- ask
-  case tcSplitFunTys $ unCType g of
-    ([], _) -> throwError $ GoalMismatch "intros" g
-    (as, b) -> do
+  case tacticsSplitFunTy $ unCType g of
+    (_, _, [], _) -> throwError $ GoalMismatch "intros" g
+    (_, _, as, b) -> do
       let vs = fromMaybe (mkManyGoodNames (hyNamesInScope $ jEntireHypothesis jdg) as) names
           num_args = length vs
           top_hole = isTopHole ctx jdg
@@ -206,7 +208,7 @@ homoLambdaCase =
 
 
 apply :: HyInfo CType -> TacticsM ()
-apply hi = requireConcreteHole $ tracing ("apply' " <> show (hi_name hi)) $ do
+apply hi = tracing ("apply' " <> show (hi_name hi)) $ do
   jdg <- goal
   let g  = jGoal jdg
       ty = unCType $ hi_type hi
@@ -391,7 +393,7 @@ auto' n = do
   try intros
   choice
     [ overFunctions $ \fname -> do
-        apply fname
+        requireConcreteHole $ apply fname
         loop
     , overAlgebraicTerms $ \aname -> do
         destructAuto aname
@@ -433,4 +435,76 @@ applyByName name = do
     case hi_name hi == name of
       True  -> apply hi
       False -> empty
+
+
+------------------------------------------------------------------------------
+-- | Make a function application where the function being applied itself is
+-- a hole.
+applyByType :: Type -> TacticsM ()
+applyByType ty = tracing ("applyByType " <> show ty) $ do
+  jdg <- goal
+  let g  = jGoal jdg
+  ty' <- freshTyvars ty
+  let (_, _, args, ret) = tacticsSplitFunTy ty'
+  rule $ \jdg -> do
+    unify g (CType ret)
+    ext
+        <- fmap unzipTrace
+        $ traverse ( newSubgoal
+                    . blacklistingDestruct
+                    . flip withNewGoal jdg
+                    . CType
+                    ) args
+    app <- newSubgoal . blacklistingDestruct $ withNewGoal (CType ty) jdg
+    pure $
+      fmap noLoc $
+        foldl' (@@)
+          <$> fmap unLoc app
+          <*> fmap (fmap unLoc) ext
+
+
+------------------------------------------------------------------------------
+-- | Make an n-ary function call of the form
+-- @(_ :: forall a b. a -> a -> b) _ _@.
+nary :: Int -> TacticsM ()
+nary n =
+  applyByType $
+    mkInvForAllTys [alphaTyVar, betaTyVar] $
+      mkFunTys' (replicate n alphaTy) betaTy
+
+self :: TacticsM ()
+self =
+  fmap listToMaybe getCurrentDefinitions >>= \case
+    Just (self, _) -> useNameFromContext apply self
+    Nothing -> throwError $ TacticPanic "no defining function"
+
+
+cata :: HyInfo CType -> TacticsM ()
+cata hi = do
+  diff <- hyDiff $ destruct hi
+  rule $
+    letForEach
+      (mkVarOcc . flip mappend "_c" . occNameString)
+      (\hi -> self >> commit (apply hi) assumption)
+      diff
+
+collapse :: TacticsM ()
+collapse = do
+  g <- goal
+  let terms = unHypothesis $ hyFilter ((jGoal g ==) . hi_type) $ jLocalHypothesis g
+  case terms of
+    [hi] -> assume $ hi_name hi
+    _    -> nary (length terms) <@> fmap (assume . hi_name) terms
+
+
+------------------------------------------------------------------------------
+-- | Determine the difference in hypothesis due to running a tactic. Also, it
+-- runs the tactic.
+hyDiff :: TacticsM () -> TacticsM (Hypothesis CType)
+hyDiff m = do
+  g <- unHypothesis . jEntireHypothesis <$> goal
+  let g_len = length g
+  m
+  g' <- unHypothesis . jEntireHypothesis <$> goal
+  pure $ Hypothesis $ take (length g' - g_len) g'
 

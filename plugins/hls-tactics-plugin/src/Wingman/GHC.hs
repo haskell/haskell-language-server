@@ -3,6 +3,7 @@
 
 module Wingman.GHC where
 
+import           Bag (bagToList)
 import           ConLike
 import           Control.Applicative (empty)
 import           Control.Monad.State
@@ -73,7 +74,7 @@ isFunction _                                    = True
 -- context.
 tacticsSplitFunTy :: Type -> ([TyVar], ThetaType, [Type], Type)
 tacticsSplitFunTy t
-  = let (vars, theta, t') = tcSplitSigmaTy t
+  = let (vars, theta, t') = tcSplitNestedSigmaTys t
         (args, res) = tcSplitFunTys t'
      in (vars, theta, args, res)
 
@@ -194,6 +195,15 @@ pattern AMatch ctx pats body <-
         , m_pats = fmap fromPatCompat -> pats
         , m_grhss = UnguardedRHSs (unLoc -> body)
         }
+
+
+pattern SingleLet :: IdP GhcPs -> [Pat GhcPs] -> HsExpr GhcPs -> HsExpr GhcPs -> HsExpr GhcPs
+pattern SingleLet bind pats val expr <-
+  HsLet _
+    (L _ (HsValBinds _
+      (ValBinds _ (bagToList ->
+        [(L _ (FunBind _ (L _ bind) (MG _ (L _ [L _ (AMatch _ pats val)]) _) _ _))]) _)))
+    (L _ expr)
 
 
 ------------------------------------------------------------------------------
