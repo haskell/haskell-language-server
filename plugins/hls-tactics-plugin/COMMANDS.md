@@ -139,6 +139,60 @@ running  `binary` will produce:
 ```haskell
 (_3 :: a -> a -> Int) (_1 :: a) (_2 :: a)
 ```
+## cata
+
+arguments: single reference.  
+deterministic.
+
+> Destruct the given term, recursing on every resulting binding.
+
+
+### Example
+
+> Assume we're called in the context of a function `f.`
+
+Given:
+
+```haskell
+x :: (a, a)
+
+_ 
+```
+
+running  `cata x` will produce:
+
+```haskell
+case x of
+  (a1, a2) ->
+    let a1_c = f a1
+        a2_c = f a2
+     in _
+```
+## collapse
+
+arguments: none.  
+deterministic.
+
+> Collapse every term in scope with the same type as the goal.
+
+
+### Example
+
+Given:
+
+```haskell
+a1 :: a
+a2 :: a
+a3 :: a
+
+_ :: a
+```
+
+running  `collapse` will produce:
+
+```haskell
+(_ :: a -> a -> a -> a) a1 a2 a3
+```
 ## ctor
 
 arguments: single reference.  

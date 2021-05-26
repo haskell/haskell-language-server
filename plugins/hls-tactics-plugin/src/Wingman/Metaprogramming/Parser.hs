@@ -313,6 +313,37 @@ commands =
           "isSpace (_ :: Char)"
       ]
 
+  , command "cata" Deterministic (Ref One)
+      "Destruct the given term, recursing on every resulting binding."
+      (pure . useNameFromHypothesis cata)
+      [ Example
+          (Just "Assume we're called in the context of a function `f.`")
+          ["x"]
+          [EHI "x" "(a, a)"]
+          Nothing $
+          T.pack $ init $ unlines
+            [ "case x of"
+            , "  (a1, a2) ->"
+            , "    let a1_c = f a1"
+            , "        a2_c = f a2"
+            , "     in _"
+            ]
+      ]
+
+  , command "collapse" Deterministic Nullary
+      "Collapse every term in scope with the same type as the goal."
+      (pure collapse)
+      [ Example
+          Nothing
+          []
+          [ EHI "a1" "a"
+          , EHI "a2" "a"
+          , EHI "a3" "a"
+          ]
+          (Just "a")
+          "(_ :: a -> a -> a -> a) a1 a2 a3"
+      ]
+
   ]
 
 
