@@ -39,6 +39,7 @@ import           Wingman.Judgements.Theta
 import           Wingman.Machinery
 import           Wingman.Naming
 import           Wingman.Types
+import GHC.SourceGen (occNameToStr)
 
 
 destructMatches
@@ -273,4 +274,28 @@ mkApply occ (lhs : rhs : more)
   | isSymOcc occ
   = noLoc $ foldl' (@@) (op lhs (coerceName occ) rhs) more
 mkApply occ args = noLoc $ foldl' (@@) (var' occ) args
+
+
+------------------------------------------------------------------------------
+-- | Run a tactic over each term in the given 'Hypothesis', binding the results
+-- of each in a let expression.
+letForEach
+    :: (OccName -> OccName)           -- ^ How to name bound variables
+    -> (HyInfo CType -> TacticsM ())  -- ^ The tactic to run
+    -> Hypothesis CType               -- ^ Terms to generate bindings for
+    -> Judgement                      -- ^ The goal of original hole
+    -> RuleM (Synthesized (LHsExpr GhcPs))
+letForEach rename solve (unHypothesis -> hy) jdg = do
+  case hy of
+    [] -> newSubgoal jdg
+    _ -> do
+      let g = jGoal jdg
+      terms <- fmap sequenceA $ for hy $ \hi -> do
+        let name = rename $ hi_name hi
+        res <- tacticToRule jdg $ solve hi
+        pure $ fmap ((name,) . unLoc) res
+      let hy' = fmap (g <$) $ syn_val terms
+          matches = fmap (fmap (\(occ, expr) -> valBind (occNameToStr occ) expr)) terms
+      g <- fmap (fmap unLoc) $ newSubgoal $ introduce (userHypothesis hy') jdg
+      pure $ fmap noLoc $ let' <$> matches <*> g
 
