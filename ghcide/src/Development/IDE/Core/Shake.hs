@@ -829,9 +829,9 @@ defineEarlyCutoff
     :: IdeRule k v
     => RuleBody k v
     -> Rules ()
-defineEarlyCutoff (Rule op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file isSuccess $ do
+defineEarlyCutoff (Rule op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode isSuccess $ do
     defineEarlyCutoff' True key file old mode $ op key file
-defineEarlyCutoff (RuleNoDiagnostics op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file isSuccess $ do
+defineEarlyCutoff (RuleNoDiagnostics op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode isSuccess $ do
     defineEarlyCutoff' False key file old mode $ second (mempty,) <$> op key file
 
 defineNoFile :: IdeRule k v => (k -> Action v) -> Rules ()
@@ -904,9 +904,9 @@ defineEarlyCutoff' doDiagnostics key file old mode action = do
                     (encodeShakeValue bs) $
                     A res
 
-isSuccess :: RunResult (A v) -> Bool
-isSuccess (RunResult _ _ (A Failed{})) = False
-isSuccess _                            = True
+isSuccess :: A v -> Bool
+isSuccess (A Failed{}) = False
+isSuccess _            = True
 
 -- | Rule type, input file
 data QDisk k = QDisk k NormalizedFilePath
