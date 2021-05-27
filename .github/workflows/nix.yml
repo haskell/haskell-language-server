@@ -12,13 +12,19 @@ jobs:
   pre_job:
     runs-on: ubuntu-latest
     outputs:
-      should_skip: ${{ steps.skip_check.outputs.should_skip }}
+      should_skip_develop: ${{ steps.skip_check.outputs.should_skip }}
+      should_skip_build: ${{ steps.skip_check_no_nix.outputs.should_skip }}
     steps:
       - id: skip_check
         uses: fkirc/skip-duplicate-actions@master
         with:
           cancel_others: true
           paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", ".circleci/**", "install/**"]'
+      - id: skip_check_no_nix
+        uses: fkirc/skip-duplicate-actions@master
+        with:
+          cancel_others: false
+          paths: '["**.nix"]'
 
   # Enter the development shell and run `cabal build`
   develop:
@@ -31,11 +37,11 @@ jobs:
         os: [ubuntu-latest, macOS-latest]
 
     steps:
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+    - if: ${{ needs.pre_job.outputs.should_skip_develop != 'true' }}
       uses: actions/checkout@v2
       with:
         submodules: true
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+    - if: ${{ needs.pre_job.outputs.should_skip_develop != 'true' }}
       uses: cachix/install-nix-action@v13
       with:
         install_url: https://nixos-nix-install-tests.cachix.org/serve/lb41az54kzk6j12p81br4bczary7m145/install
@@ -43,22 +49,27 @@ jobs:
         extra_nix_config: |
           experimental-features = nix-command flakes
         nix_path: nixpkgs=channel:nixos-unstable
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+    - if: ${{ needs.pre_job.outputs.should_skip_develop != 'true' }}
       uses: cachix/cachix-action@v10
       with:
         name: haskell-language-server
         # Disable pushing, we will do that in job `build`
         skipPush: true
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+    - if: ${{ needs.pre_job.outputs.should_skip_develop != 'true' }}
       run: |
         nix develop --command cabal update
         nix develop --command cabal build
 
   # Build and then push HLS binaries with developmet shell to cachix
-  # This job runs when PRs are merged to master, and should be excluded from branch protections
+  # This job runs when
+  #   1. PRs are merged to master (runs on master)
+  #   2. Nix files are changed (runs on PR)
   build:
+    needs: pre_job
     runs-on: ${{ matrix.os }}
-    if: ${{ github.repository_owner == 'haskell' && github.ref == 'refs/heads/master' }}
+    env:
+      HAS_TOKEN: ${{ secrets.HLS_CACHIX_AUTH_TOKEN != '' }}
+    if: ${{ needs.pre_job.outputs.should_skip_build != 'true' || (github.repository_owner == 'haskell' && github.ref == 'refs/heads/master') }}
     strategy:
       fail-fast: false
       matrix:
@@ -79,9 +90,13 @@ jobs:
       with:
         name: haskell-language-server
         authToken: ${{ secrets.HLS_CACHIX_AUTH_TOKEN }}
+    - name: Build development shell
+      run: nix develop --profile dev
     - name: Push development shell
-      run: nix develop --profile dev && cachix push haskell-language-server dev
-    - name: Build and push binaries
-      run: |
-        nix build
-        nix path-info --json | jq -r '.[].path' | cachix push haskell-language-server
+      if: ${{ env.HAS_TOKEN == 'true' }}
+      run: cachix push haskell-language-server dev
+    - name: Build binaries
+      run: nix build
+    - name: Push binaries
+      if: ${{ env.HAS_TOKEN == 'true' }}
+      run: nix path-info --json | jq -r '.[].path' | cachix push haskell-language-server

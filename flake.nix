@@ -69,13 +69,29 @@
           } // pluginSourceDirs;
 
           # Tweak our packages
+          # Don't use `callHackage`, it requires us to override `all-cabal-hashes`
           tweaks = hself: hsuper:
             with haskell.lib; {
-              hls-hlint-plugin =
-                hsuper.hls-hlint-plugin.override { hlint = hself.hlint_3_2_7; };
+
+              # https://github.com/haskell/haskell-language-server/pull/1858
+              # Remove this override when nixpkgs has this package
+              apply-refact_0_9_3_0 = hself.callCabal2nix "apply-refact"
+                (builtins.fetchTarball {
+                  url =
+                    "https://hackage.haskell.org/package/apply-refact-0.9.3.0/apply-refact-0.9.3.0.tar.gz";
+                  sha256 =
+                    "1jfq1aw91finlpq5nn7a96za4c8j13jk6jmx2867fildxwrik2qj";
+                }) { };
+
+              hls-hlint-plugin = hsuper.hls-hlint-plugin.override {
+                hlint = hself.hlint_3_2_7;
+                apply-refact = hself.apply-refact_0_9_3_0;
+              };
+
               hls-tactics-plugin = hsuper.hls-tactics-plugin.override {
                 refinery = hself.refinery_0_3_0_0;
               };
+
             };
 
           hlsSources =
