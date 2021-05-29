@@ -90,12 +90,6 @@ source-repository-package
 
 source-repository-package
   type: git
-  location: https://github.com/mpickering/apply-refact
-  tag: 0.9.2.0
--- https://github.com/mpickering/apply-refact/issues/107
-
-source-repository-package
-  type: git
   location: https://github.com/diagrams/active
   tag: ca23431a8dfa013992f9164ccc882a3277361f17
 -- https://github.com/diagrams/active/pull/36

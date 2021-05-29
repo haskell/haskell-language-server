@@ -25,7 +25,7 @@ ghc-options:
   "$everything": -haddock
 
 extra-deps:
-- apply-refact-0.9.2.0
+- apply-refact-0.9.3.0
 - base16-bytestring-0.1.1.7@sha256:0021256a9628971c08da95cb8f4d0d72192f3bb8a7b30b55c080562d17c43dd3,2231
 - bytestring-encoding-0.1.0.0@sha256:460b49779fbf0112e8e2f1753c1ed9131eb18827600c298f4d6bb51c4e8c1c0d,1727
 # Not newest (constraints-extras doesn't support 0.13 yet)
