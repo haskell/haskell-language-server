@@ -103,17 +103,17 @@ constraints:
     optparse-applicative < 0.16
 
 allow-newer:
-    -- Broken on ghc9, but let's pretend it's not so we can build the other things
-    brittany:base,
-    brittany:ghc,
-    brittany:ghc-boot-th,
-    butcher:base,
-    fourmolu:ghc-lib-parser,
-    ormolu:ghc-lib-parser,
-    stylish-haskell:ghc-lib-parser,
-    stylish-haskell:Cabal,
-    multistate:base,
-    ghc-source-gen:ghc,
+    -- -- Broken on ghc9, but let's pretend it's not so we can build the other things
+    -- brittany:base,
+    -- brittany:ghc,
+    -- brittany:ghc-boot-th,
+    -- butcher:base,
+    -- fourmolu:ghc-lib-parser,
+    -- ormolu:ghc-lib-parser,
+    -- stylish-haskell:ghc-lib-parser,
+    -- stylish-haskell:Cabal,
+    -- multistate:base,
+    -- ghc-source-gen:ghc,
 
     active:base,
     assoc:base,
