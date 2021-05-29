@@ -14,7 +14,6 @@ import qualified Language.LSP.Types.Lens as LSP
 import           Test.Hls
 import           Test.Hls.Command
 import           Test.Hls.Flags          (requiresFloskellPlugin,
-                                          requiresFourmoluPlugin,
                                           requiresOrmoluPlugin)
 
 tests :: TestTree
