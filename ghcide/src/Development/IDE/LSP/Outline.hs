@@ -18,7 +18,8 @@ import qualified Data.Text                      as T
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Error      (realSrcSpanToRange, rangeToRealSrcSpan)
+import           Development.IDE.GHC.Error      (rangeToRealSrcSpan,
+                                                 realSrcSpanToRange)
 import           Development.IDE.Types.Location
 import           Language.LSP.Server            (LspM)
 import           Language.LSP.Types

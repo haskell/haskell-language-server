@@ -1,9 +1,4 @@
-{-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE TypeOperators         #-}
-{-# LANGUAGE ViewPatterns          #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module ProviderSpec where
 
@@ -16,58 +11,58 @@ spec :: Spec
 spec = do
   mkTest
     "Produces intros code action"
-    "T1.hs" 2 14
+    "T1" 2 14
     [ (id, Intros, "")
     ]
   mkTest
     "Produces destruct and homomorphism code actions"
-    "T2.hs" 2 21
+    "T2" 2 21
     [ (id, Destruct, "eab")
     , (id, Homomorphism, "eab")
     , (not, DestructPun, "eab")
     ]
   mkTest
     "Won't suggest homomorphism on the wrong type"
-    "T2.hs" 8 8
+    "T2" 8 8
     [ (not, Homomorphism, "global")
     ]
   mkTest
     "Won't suggest intros on the wrong type"
-    "T2.hs" 8 8
+    "T2" 8 8
     [ (not, Intros, "")
     ]
   mkTest
     "Produces (homomorphic) lambdacase code actions"
-    "T3.hs" 4 24
+    "T3" 4 24
     [ (id, HomomorphismLambdaCase, "")
     , (id, DestructLambdaCase, "")
     ]
   mkTest
     "Produces lambdacase code actions"
-    "T3.hs" 7 13
+    "T3" 7 13
     [ (id, DestructLambdaCase, "")
     ]
   mkTest
     "Doesn't suggest lambdacase without -XLambdaCase"
-    "T2.hs" 11 25
+    "T2" 11 25
     [ (not, DestructLambdaCase, "")
     ]
 
   mkTest
     "Doesn't suggest destruct if already destructed"
-    "ProvideAlreadyDestructed.hs" 6 18
+    "ProvideAlreadyDestructed" 6 18
     [ (not, Destruct, "x")
     ]
 
   mkTest
     "...but does suggest destruct if destructed in a different branch"
-    "ProvideAlreadyDestructed.hs" 9 7
+    "ProvideAlreadyDestructed" 9 7
     [ (id, Destruct, "x")
     ]
 
   mkTest
     "Doesn't suggest destruct on class methods"
-    "ProvideLocalHyOnly.hs" 2 12
+    "ProvideLocalHyOnly" 2 12
     [ (not, Destruct, "mempty")
     ]
 

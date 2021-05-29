@@ -1,3 +1,15 @@
+### 1.3.0.0 (2021-05-09)
+* Replace unsafe getmodtime with unix package (#1778) - Pepe Iborra
+* Progress reporting improvements (#1784) - Pepe Iborra
+* Unify session loading using implicit-hie (#1783) - fendor
+* Fix remove constraint (#1578) - Kostas Dermentzis
+* Fix wrong extend import while type constuctor and data constructor have the same name (#1775) - Lei Zhu
+* Imporve vscode extension schema generation (#1742) - Potato Hatsue
+* Add hls-graph abstracting over shake (#1748) - Neil Mitchell
+* Tease apart the custom SYB from ExactPrint (#1746) - Sandy Maguire
+* fix class method completion (#1741) - Lei Zhu
+* Fix: #1690 - Infix typed holes are now filled using infix notation (#1708) - Oliver Madine
+
 ### 1.2.0.2 (2021-04-13)
 * Bracketing for snippet completions (#1709) - Oliver Madine
 * Don't suggest destruct actions for already-destructed terms (#1715) - Sandy Maguire

@@ -22,9 +22,9 @@ import           Development.IDE.Core.FileStore
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
+import           Development.IDE.Graph
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
-import           Development.IDE.Graph
 import           Language.LSP.Server                   hiding (getVirtualFile)
 import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities

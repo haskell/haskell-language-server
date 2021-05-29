@@ -17,15 +17,14 @@ library
   exposed-modules:  Ide.Plugin.StylishHaskell
   hs-source-dirs:   src
   build-depends:
-    , base
+    , base             >=4.12 && <5
     , directory
     , filepath
     , ghc
     , ghc-boot-th
-    , ghcide           ^>=1.2.0.2
-    , hls-plugin-api   ^>=1.1.0.0
+    , ghcide           >=1.2  && <1.4
+    , hls-plugin-api   ^>=1.1
     , lsp-types
-    , mtl
     , stylish-haskell  ^>=0.12
     , text
 
@@ -39,7 +38,6 @@ test-suite tests
   ghc-options:      -threaded -rtsopts -with-rtsopts=-N
   build-depends:
     , base
-    , bytestring
+    , filepath
     , hls-stylish-haskell-plugin
-    , hls-test-utils  ^>= 1.0.0.0
-    , text
+    , hls-test-utils              ^>=1.0

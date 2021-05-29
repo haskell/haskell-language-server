@@ -23,12 +23,13 @@ import qualified Data.Text                         as T
 import           Data.Typeable
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.GHC.Compat        as GHC
-import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Graph
+import           Development.IDE.Types.Diagnostics
 -- import           GHC                               hiding (parseModule,
 --                                                     typecheckModule)
 -- import           GhcPlugins                        as GHC hiding (fst3, (<>))
 import           Ide.Plugin.Config
+import           Ide.Types                         (DynFlagsModifications)
 import qualified Language.LSP.Types.Capabilities   as LSP
 
 data IdeOptions = IdeOptions
@@ -74,7 +75,7 @@ data IdeOptions = IdeOptions
     --   Otherwise, return the result of parsing without Opt_Haddock, so
     --   that the parsed module contains the result of Opt_KeepRawTokenStream,
     --   which might be necessary for hlint.
-  , optCustomDynFlags     :: DynFlags -> DynFlags
+  , optModifyDynFlags     :: DynFlagsModifications
     -- ^ Will be called right after setting up a new cradle,
     --   allowing to customize the Ghc options used
   , optShakeOptions       :: ShakeOptions
@@ -111,6 +112,7 @@ data ProgressReportingStyle
     = Percentage -- ^ Report using the LSP @_percentage@ field
     | Explicit   -- ^ Report using explicit 123/456 text
     | NoProgress -- ^ Do not report any percentage
+    deriving Eq
 
 
 clientSupportsProgress :: LSP.ClientCapabilities -> IdeReportProgress
@@ -138,7 +140,7 @@ defaultIdeOptions session = IdeOptions
     ,optCheckProject = pure True
     ,optCheckParents = pure CheckOnSaveAndClose
     ,optHaddockParse = HaddockParse
-    ,optCustomDynFlags = id
+    ,optModifyDynFlags = mempty
     ,optSkipProgress = defaultSkipProgress
     ,optProgressStyle = Explicit
     }

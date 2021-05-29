@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-splice-plugin
-version:            1.0.0.1
+version:            1.0.0.2
 synopsis:
   HLS Plugin to expand TemplateHaskell Splices and QuasiQuotes
 
@@ -19,8 +19,6 @@ category:           Development
 build-type:         Simple
 extra-source-files:
   LICENSE
-  test/testdata/*.error
-  test/testdata/*.expected
   test/testdata/*.hs
   test/testdata/*.yaml
 
@@ -33,15 +31,15 @@ library
   hs-source-dirs:     src
   build-depends:
     , aeson
-    , base                  >=4.12    && <5
+    , base                  >=4.12 && <5
     , containers
     , dlist
     , extra
     , foldl
     , ghc
     , ghc-exactprint
-    , ghcide                ^>=1.2.0.2
-    , hls-plugin-api        ^>=1.1.0.0
+    , ghcide                >=1.2  && <1.4
+    , hls-plugin-api        ^>=1.1
     , lens
     , lsp
     , retrie
@@ -64,9 +62,7 @@ test-suite tests
   ghc-options:      -threaded -rtsopts -with-rtsopts=-N
   build-depends:
     , base
-    , directory
-    , extra
     , filepath
     , hls-splice-plugin
-    , hls-test-utils  ^>= 1.0.0.0
+    , hls-test-utils     ^>=1.0
     , text

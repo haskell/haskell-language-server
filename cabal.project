@@ -9,6 +9,7 @@ packages:
          ./plugins/hls-tactics-plugin
          ./plugins/hls-brittany-plugin
          ./plugins/hls-stylish-haskell-plugin
+         ./plugins/hls-fourmolu-plugin
          ./plugins/hls-class-plugin
          ./plugins/hls-eval-plugin
          ./plugins/hls-explicit-imports-plugin
@@ -17,6 +18,10 @@ packages:
          ./plugins/hls-retrie-plugin
          ./plugins/hls-haddock-comments-plugin
          ./plugins/hls-splice-plugin
+         ./plugins/hls-floskell-plugin
+         ./plugins/hls-pragmas-plugin
+         ./plugins/hls-module-name-plugin
+         ./plugins/hls-ormolu-plugin
 tests: true
 
 package *
@@ -97,7 +102,7 @@ source-repository-package
 
 write-ghc-environment-files: never
 
-index-state: 2021-04-12T10:01:30Z
+index-state: 2021-05-21T05:01:41Z
 
 constraints:
     -- Diagrams doesn't support optparse-applicative >= 0.16 yet

@@ -19,14 +19,19 @@ packages:
   - ./plugins/hls-tactics-plugin
   - ./plugins/hls-brittany-plugin
   - ./plugins/hls-stylish-haskell-plugin
+  - ./plugins/hls-floskell-plugin
+  - ./plugins/hls-fourmolu-plugin
+  - ./plugins/hls-pragmas-plugin
+  - ./plugins/hls-module-name-plugin
+  - ./plugins/hls-ormolu-plugin
 
 ghc-options:
   "$everything": -haddock
 
 extra-deps:
   - aeson-1.5.2.0
-  - apply-refact-0.9.2.0
-  - brittany-0.13.1.1
+  - apply-refact-0.9.3.0
+  - brittany-0.13.1.2
   - bytestring-trie-0.2.5.0
   - cabal-plan-0.6.2.0
   - clock-0.7.2
@@ -41,7 +46,7 @@ extra-deps:
   - ghc-trace-events-0.1.2.1
   - haskell-src-exts-1.21.1
   - heapsize-0.3.0
-  - hie-bios-0.7.4
+  - hie-bios-0.7.5
   - hlint-3.2.3
   - HsYAML-aeson-0.2.0.0@rev:2
   - hoogle-5.0.17.11
@@ -94,8 +99,6 @@ flags:
   # Until the formatters support ghc-lib-9, we need this flag disabled
   hls-hlint-plugin:
     hlint33: false
-
-# allow-newer: true
 
 nix:
   packages: [icu libcxx zlib]

@@ -7,7 +7,7 @@ module Development.IDE.Graph(
     actionFinally, actionBracket, actionCatch,
     Shake.ShakeException(..),
     -- * Configuration
-    ShakeOptions(shakeThreads, shakeFiles, shakeExtra),
+    ShakeOptions(shakeAllowRedefineRules, shakeThreads, shakeFiles, shakeExtra),
     getShakeExtra, getShakeExtraRules, newShakeExtra,
     -- * Explicit parallelism
     parallel,
@@ -19,7 +19,7 @@ module Development.IDE.Graph(
     reschedule,
     ) where
 
-import qualified Development.Shake as Shake
-import Development.IDE.Graph.Internal.Action
-import Development.IDE.Graph.Internal.Options
-import Development.IDE.Graph.Internal.Rules
+import           Development.IDE.Graph.Internal.Action
+import           Development.IDE.Graph.Internal.Options
+import           Development.IDE.Graph.Internal.Rules
+import qualified Development.Shake                      as Shake

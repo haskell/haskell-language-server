@@ -78,6 +78,7 @@ import           System.Process.Extra                     (CreateProcess (cwd),
                                                            readCreateProcessWithExitCode)
 import           Test.QuickCheck
 -- import Test.QuickCheck.Instances ()
+import           Control.Concurrent                       (threadDelay)
 import           Control.Concurrent.Async
 import           Control.Lens                             ((^.))
 import           Control.Monad.Extra                      (whenJust)
@@ -85,6 +86,7 @@ import           Data.IORef
 import           Data.IORef.Extra                         (atomicModifyIORef_)
 import           Data.String                              (IsString (fromString))
 import           Data.Tuple.Extra
+import           Development.IDE.Core.FileStore           (getModTime)
 import           Development.IDE.Plugin.CodeAction        (matchRegExMultipleImports)
 import qualified Development.IDE.Plugin.HLS.GhcIde        as Ghcide
 import           Development.IDE.Plugin.Test              (TestRequest (BlockSeconds, GetInterfaceFilesDir),
@@ -94,12 +96,14 @@ import           Ide.PluginUtils                          (pluginDescToIdePlugin
 import           Ide.Types
 import qualified Language.LSP.Types                       as LSP
 import qualified Language.LSP.Types.Lens                  as L
+import qualified Progress
 import           System.Time.Extra
 import           Test.Tasty
 import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.HUnit
 import           Test.Tasty.Ingredients.Rerun
 import           Test.Tasty.QuickCheck
+import           Text.Printf                              (printf)
 import           Text.Regex.TDFA                          ((=~))
 
 waitForProgressBegin :: Session ()
@@ -2789,12 +2793,38 @@ removeRedundantConstraintsTests = let
         , "      in h"
         ]
 
-  typeSignatureMultipleLines :: T.Text
-  typeSignatureMultipleLines = T.unlines $ header <>
-    [ "foo :: (Num a, Eq a, Monoid a)"
-    , "=> a -> Bool"
-    , "foo x = x == 1"
+  typeSignatureLined1 = T.unlines $ header <>
+    [ "foo :: Eq a =>"
+    , "  a -> Bool"
+    , "foo _ = True"
     ]
+
+  typeSignatureLined2 = T.unlines $ header <>
+    [ "foo :: (Eq a, Show a)"
+    , "  => a -> Bool"
+    , "foo _ = True"
+    ]
+
+  typeSignatureOneLine = T.unlines $ header <>
+    [ "foo :: a -> Bool"
+    , "foo _ = True"
+    ]
+
+  typeSignatureLined3 = T.unlines $ header <>
+    [ "foo :: ( Eq a"
+    , "       , Show a"
+    , "       )"
+    , "    => a -> Bool"
+    , "foo x = x == x"
+    ]
+
+  typeSignatureLined3' = T.unlines $ header <>
+    [ "foo :: ( Eq a"
+    , "       )"
+    , "    => a -> Bool"
+    , "foo x = x == x"
+    ]
+
 
   check :: T.Text -> T.Text -> T.Text -> TestTree
   check actionTitle originalCode expectedCode = testSession (T.unpack actionTitle) $ do
@@ -2805,13 +2835,6 @@ removeRedundantConstraintsTests = let
     executeCodeAction chosenAction
     modifiedCode <- documentContents doc
     liftIO $ expectedCode @=? modifiedCode
-
-  checkPeculiarFormatting :: String -> T.Text -> TestTree
-  checkPeculiarFormatting title code = testSession title $ do
-    doc <- createDoc "Testing.hs" "haskell" code
-    _ <- waitForDiagnostics
-    actionsOrCommands <- getAllCodeActions doc
-    liftIO $ assertBool "Found some actions" (null actionsOrCommands)
 
   in testGroup "remove redundant function constraints"
   [ check
@@ -2850,9 +2873,18 @@ removeRedundantConstraintsTests = let
     "Remove redundant constraints `(Monoid a, Show a)` from the context of the type signature for `foo`"
     (typeSignatureSpaces $ Just "Monoid a, Show a")
     (typeSignatureSpaces Nothing)
-  , checkPeculiarFormatting
-    "should do nothing when constraints contain line feeds"
-    typeSignatureMultipleLines
+    , check
+    "Remove redundant constraint `Eq a` from the context of the type signature for `foo`"
+    typeSignatureLined1
+    typeSignatureOneLine
+    , check
+    "Remove redundant constraints `(Eq a, Show a)` from the context of the type signature for `foo`"
+    typeSignatureLined2
+    typeSignatureOneLine
+    , check
+    "Remove redundant constraint `Show a` from the context of the type signature for `foo`"
+    typeSignatureLined3
+    typeSignatureLined3'
   ]
 
 addSigActionTests :: TestTree
@@ -5119,18 +5151,17 @@ clientSettingsTest :: TestTree
 clientSettingsTest = testGroup "client settings handling"
     [ testSession "ghcide restarts shake session on config changes" $ do
             void $ skipManyTill anyMessage $ message SClientRegisterCapability
+            void $ createDoc "A.hs" "haskell" "module A where"
+            waitForProgressDone
             sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON ("" :: String)))
-            nots <- skipManyTill anyMessage $ count 3 loggingNotification
-            isMessagePresent "Restarting build session" (map getLogMessage nots)
+            skipManyTill anyMessage restartingBuildSession
 
     ]
-  where getLogMessage :: FromServerMessage -> T.Text
-        getLogMessage (FromServerMess SWindowLogMessage (NotificationMessage _ _ (LogMessageParams _ msg))) = msg
-        getLogMessage _ = ""
-
-        isMessagePresent expectedMsg actualMsgs = liftIO $
-            assertBool ("\"" ++ expectedMsg ++ "\" is not present in: " ++ show actualMsgs)
-                       (any ((expectedMsg `isSubsequenceOf`) . show) actualMsgs)
+  where
+    restartingBuildSession :: Session ()
+    restartingBuildSession = do
+        FromServerMess SWindowLogMessage NotificationMessage{_params = LogMessageParams{..}} <- loggingNotification
+        guard $ "Restarting build session" `T.isInfixOf` _message
 
 referenceTests :: TestTree
 referenceTests = testGroup "references"
@@ -5496,7 +5527,23 @@ unitTests = do
             actualOrder <- liftIO $ readIORef orderRef
 
             liftIO $ actualOrder @?= reverse [(1::Int)..20]
+     , testCase "timestamps have millisecond resolution" $ do
+         resolution_us <- findResolution_us 1
+         let msg = printf "Timestamps do not have millisecond resolution: %dus" resolution_us
+         assertBool msg (resolution_us <= 1000)
+     , Progress.tests
      ]
+
+findResolution_us :: Int -> IO Int
+findResolution_us delay_us | delay_us >= 1000000 = error "Unable to compute timestamp resolution"
+findResolution_us delay_us = withTempFile $ \f -> withTempFile $ \f' -> do
+    writeFile f ""
+    threadDelay delay_us
+    writeFile f' ""
+    t <- getModTime f
+    t' <- getModTime f'
+    if t /= t' then return delay_us else findResolution_us (delay_us * 10)
+
 
 testIde :: IDE.Arguments -> Session () -> IO ()
 testIde arguments session = do

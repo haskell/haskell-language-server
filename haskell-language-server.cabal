@@ -1,7 +1,7 @@
 cabal-version:      2.4
 category:           Development
 name:               haskell-language-server
-version:            1.1.0.0
+version:            1.1.0.1
 synopsis:           LSP server for GHC
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -25,7 +25,6 @@ extra-source-files:
   test/testdata/hlint/ignore/.hlint.yaml
   test/testdata/**/*.h
   test/testdata/**/*.hs
-  test/testdata/**/*.expected
 
 flag pedantic
   description: Enable -Werror
@@ -62,7 +61,7 @@ library
     , cryptohash-sha1
     , data-default
     , ghc
-    , ghcide                ^>= 1.2.0.2
+    , ghcide                ^>=1.3
     , gitrev
     , lsp
     , hie-bios
@@ -231,15 +230,12 @@ common hlint
 
 common moduleName
   if flag(moduleName) || flag(all-plugins)
-    hs-source-dirs: plugins/default/src
-    other-modules: Ide.Plugin.ModuleName
+    build-depends: hls-module-name-plugin ^>= 1.0.0.0
     cpp-options: -DmoduleName
 
 common pragmas
   if flag(pragmas) || flag(all-plugins)
-    hs-source-dirs: plugins/default/src
-    build-depends: fuzzy
-    other-modules: Ide.Plugin.Pragmas
+    build-depends: hls-pragmas-plugin ^>= 1.0.0.0
     cpp-options: -Dpragmas
 
 common splice
@@ -251,23 +247,17 @@ common splice
 
 common floskell
   if flag(floskell) || flag(all-formatters)
-    hs-source-dirs: plugins/default/src
-    other-modules: Ide.Plugin.Floskell
-    build-depends: floskell                 ^>=0.10
+    build-depends: hls-floskell-plugin      ^>=1.0.0.0
     cpp-options: -Dfloskell
 
 common fourmolu
   if flag(fourmolu) || flag(all-formatters)
-    hs-source-dirs: plugins/default/src
-    other-modules: Ide.Plugin.Fourmolu
-    build-depends: fourmolu                 ^>=0.3
+    build-depends: hls-fourmolu-plugin ^>= 1.0.0.0
     cpp-options: -Dfourmolu
 
 common ormolu
   if flag(ormolu) || flag(all-formatters)
-    hs-source-dirs: plugins/default/src
-    other-modules: Ide.Plugin.Ormolu
-    build-depends: ormolu                   ^>=0.1.2
+    build-depends: hls-ormolu-plugin ^>= 1.0.0.0
     cpp-options: -Dormolu
 
 common stylishHaskell
@@ -421,7 +411,6 @@ test-suite func-test
     FunctionalLiquid
     HieBios
     Highlight
-    ModuleName
     Progress
     Reference
     Rename

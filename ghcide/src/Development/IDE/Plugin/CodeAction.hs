@@ -7,8 +7,11 @@
 -- | Go to the definition of a variable.
 
 module Development.IDE.Plugin.CodeAction
-    ( descriptor
-
+    (
+    iePluginDescriptor,
+    typeSigsPluginDescriptor,
+    bindingsPluginDescriptor,
+    fillHolePluginDescriptor
     -- * For testing
     , matchRegExMultipleImports
     ) where
@@ -18,7 +21,6 @@ import           Bag                                               (bagToList,
 import           Control.Applicative                               ((<|>))
 import           Control.Arrow                                     (second,
                                                                     (>>>))
-import           Control.Concurrent.Extra                          (readVar)
 import           Control.Monad                                     (guard, join)
 import           Control.Monad.IO.Class
 import           Data.Char
@@ -39,21 +41,17 @@ import           Data.Tuple.Extra                                  (fst3)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Service
-import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error
-import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.GHC.Util                          (prettyPrint,
                                                                     printRdrName,
                                                                     unsafePrintSDoc)
 import           Development.IDE.Plugin.CodeAction.Args
 import           Development.IDE.Plugin.CodeAction.ExactPrint
 import           Development.IDE.Plugin.CodeAction.PositionIndexed
-import           Development.IDE.Plugin.TypeLenses                 (GetGlobalBindingTypeSigs (GetGlobalBindingTypeSigs),
-                                                                    suggestSignature)
+import           Development.IDE.Plugin.TypeLenses                 (suggestSignature)
 import           Development.IDE.Spans.Common
 import           Development.IDE.Types.Exports
-import           Development.IDE.Types.HscEnvEq
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 import qualified GHC.LanguageExtensions                            as Lang
@@ -79,12 +77,7 @@ import           TcRnTypes                                         (ImportAvails
 import           Text.Regex.TDFA                                   (mrAfter,
                                                                     (=~), (=~~))
 
-descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId =
-  (defaultPluginDescriptor plId)
-    { pluginRules = mempty,
-      pluginHandlers = mkPluginHandler STextDocumentCodeAction codeAction
-    }
+-------------------------------------------------------------------------------------------------
 
 -- | Generate code actions.
 codeAction
@@ -98,60 +91,53 @@ codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range Cod
     let text = Rope.toText . (_text :: VirtualFile -> Rope.Rope) <$> contents
         mbFile = toNormalizedFilePath' <$> uriToFilePath uri
     diag <- fmap (\(_, _, d) -> d) . filter (\(p, _, _) -> mbFile == Just p) <$> getDiagnostics state
-    (ideOptions, join -> parsedModule, join -> env, join -> annotatedPS, join -> tcM, join -> har, join -> bindings, join -> gblSigs) <- runAction "CodeAction" state $
-      (,,,,,,,) <$> getIdeOptions
-            <*> getParsedModule `traverse` mbFile
-            <*> use GhcSession `traverse` mbFile
-            <*> use GetAnnotatedParsedSource `traverse` mbFile
-            <*> use TypeCheck `traverse` mbFile
-            <*> use GetHieAst `traverse` mbFile
-            <*> use GetBindings `traverse` mbFile
-            <*> use GetGlobalBindingTypeSigs `traverse` mbFile
-    -- This is quite expensive 0.6-0.7s on GHC
-    pkgExports   <- maybe mempty envPackageExports env
-    localExports <- readVar (exportsMap $ shakeExtras state)
+    (join -> parsedModule) <- runAction "GhcideCodeActions.getParsedModule" state $ getParsedModule `traverse` mbFile
     let
-      exportsMap = localExports <> pkgExports
-      df = ms_hspp_opts . pm_mod_summary <$> parsedModule
-      actions =
-        [ mkCA title kind isPreferred [x] edit
-        | x <- xs, (title, kind, isPreferred, tedit) <- suggestAction $ CodeActionArgs exportsMap ideOptions parsedModule text df annotatedPS tcM har bindings gblSigs x
-        , let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing Nothing
-        ]
-      actions' = caRemoveRedundantImports parsedModule text diag xs uri
-               <> actions
+      actions = caRemoveRedundantImports parsedModule text diag xs uri
                <> caRemoveInvalidExports parsedModule text diag xs uri
-    pure $ Right $ List actions'
+    pure $ Right $ List actions
 
-mkCA :: T.Text -> Maybe CodeActionKind -> Maybe Bool -> [Diagnostic] -> WorkspaceEdit -> (Command |? CodeAction)
-mkCA title kind isPreferred diags edit =
-  InR $ CodeAction title kind (Just $ List diags) isPreferred Nothing (Just edit) Nothing Nothing
+-------------------------------------------------------------------------------------------------
 
-suggestAction :: CodeActionArgs -> GhcideCodeActions
-suggestAction caa =
-  concat   -- Order these suggestions by priority
-    [ wrap $ suggestSignature True
-    , wrap suggestExtendImport
-    , wrap suggestImportDisambiguation
-    , wrap suggestNewOrExtendImportForClassMethod
+iePluginDescriptor :: PluginId -> PluginDescriptor IdeState
+iePluginDescriptor plId =
+  let old =
+        mkGhcideCAsPlugin [
+           wrap suggestExtendImport
+          , wrap suggestImportDisambiguation
+          , wrap suggestNewOrExtendImportForClassMethod
+          , wrap suggestNewImport
+          , wrap suggestModuleTypo
+          , wrap suggestFixConstructorImport
+          , wrap suggestHideShadow
+          , wrap suggestExportUnusedTopBinding
+          ]
+          plId
+   in old {pluginHandlers = pluginHandlers old <> mkPluginHandler STextDocumentCodeAction codeAction}
+
+typeSigsPluginDescriptor :: PluginId -> PluginDescriptor IdeState
+typeSigsPluginDescriptor =
+  mkGhcideCAsPlugin [
+      wrap $ suggestSignature True
     , wrap suggestFillTypeWildcard
-    , wrap suggestFixConstructorImport
-    , wrap suggestModuleTypo
-    , wrap suggestReplaceIdentifier
     , wrap removeRedundantConstraints
     , wrap suggestAddTypeAnnotationToSatisfyContraints
     , wrap suggestConstraint
-    , wrap suggestImplicitParameter
-    , wrap suggestHideShadow
-    , wrap suggestNewDefinition
-    , wrap suggestNewImport
-    , wrap suggestDeleteUnusedBinding
-    , wrap suggestExportUnusedTopBinding
-    , wrap suggestFillHole -- Lowest priority
     ]
-    where
-      wrap :: ToCodeAction a => a -> GhcideCodeActions
-      wrap = toCodeAction caa
+
+bindingsPluginDescriptor :: PluginId -> PluginDescriptor IdeState
+bindingsPluginDescriptor =
+  mkGhcideCAsPlugin [
+      wrap suggestReplaceIdentifier
+    , wrap suggestImplicitParameter
+    , wrap suggestNewDefinition
+    , wrap suggestDeleteUnusedBinding
+    ]
+
+fillHolePluginDescriptor :: PluginId -> PluginDescriptor IdeState
+fillHolePluginDescriptor = mkGhcideCAPlugin $ wrap suggestFillHole
+
+-------------------------------------------------------------------------------------------------
 
 findSigOfDecl :: (IdP p -> Bool) -> [LHsDecl p] -> Maybe (Sig p)
 findSigOfDecl pred decls =
@@ -165,15 +151,15 @@ findSigOfDeclRanged :: Range -> [LHsDecl p] -> Maybe (Sig p)
 findSigOfDeclRanged range decls = do
   dec <- findDeclContainingLoc (_start range) decls
   case dec of
-     L _ (SigD _ sig@TypeSig {}) -> Just sig
+     L _ (SigD _ sig@TypeSig {})     -> Just sig
      L _ (ValD _ (bind :: HsBind p)) -> findSigOfBind range bind
-     _ -> Nothing
+     _                               -> Nothing
 
 findSigOfBind :: Range -> HsBind p -> Maybe (Sig p)
 findSigOfBind range bind =
     case bind of
       FunBind {} -> findSigOfLMatch (unLoc $ mg_alts (fun_matches bind))
-      _ -> Nothing
+      _          -> Nothing
   where
     findSigOfLMatch :: [LMatch p (LHsExpr p)] -> Maybe (Sig p)
     findSigOfLMatch ls = do
@@ -188,7 +174,7 @@ findSigOfBind range bind =
           grhs <- findDeclContainingLoc (_start range) (grhssGRHSs grhs)
           case unLoc grhs of
             GRHS _ _ bd -> findSigOfExpr (unLoc bd)
-            _ -> Nothing
+            _           -> Nothing
 
     findSigOfExpr :: HsExpr p -> Maybe (Sig p)
     findSigOfExpr = go

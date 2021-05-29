@@ -25,12 +25,12 @@ library
     -Wno-unticked-promoted-constructors
 
   build-depends:
-    , base                  >=4.12    && <5
+    , base                  >=4.12 && <5
     , containers
     , ghc
     , ghc-exactprint
-    , ghcide                ^>=1.2.0.2
-    , hls-plugin-api        ^>=1.1.0.0
+    , ghcide                >=1.2  && <1.4
+    , hls-plugin-api        ^>=1.1
     , lsp-types
     , text
     , unordered-containers
@@ -48,8 +48,7 @@ test-suite tests
   ghc-options:      -threaded -rtsopts -with-rtsopts=-N
   build-depends:
     , base
-    , bytestring
     , filepath
     , hls-haddock-comments-plugin
-    , hls-test-utils  ^>= 1.0.0.0
+    , hls-test-utils               ^>=1.0
     , text

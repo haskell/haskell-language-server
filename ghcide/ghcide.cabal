@@ -2,7 +2,7 @@ cabal-version:      2.4
 build-type:         Simple
 category:           Development
 name:               ghcide
-version:            1.2.0.2
+version:            1.3.0.0
 license:            Apache-2.0
 license-file:       LICENSE
 author:             Digital Asset and Ghcide contributors
@@ -67,14 +67,13 @@ library
         optparse-applicative,
         parallel,
         prettyprinter-ansi-terminal,
-        prettyprinter-ansi-terminal,
         prettyprinter,
         regex-tdfa >= 1.3.1.0,
         retrie,
         rope-utf16-splay,
         safe,
         safe-exceptions,
-        hls-graph,
+        hls-graph ^>= 1.3,
         sorted-list,
         sqlite-simple,
         stm,
@@ -109,8 +108,6 @@ library
     else
       build-depends:
         unix
-      c-sources:
-        cbits/getmodtime.c
 
     default-extensions:
         ApplicativeDo
@@ -137,8 +134,6 @@ library
     hs-source-dirs:
         src
         session-loader
-    include-dirs:
-        include
     exposed-modules:
         Control.Concurrent.Strict
         Generics.SYB.GHC
@@ -151,6 +146,7 @@ library
         Development.IDE.Core.OfInterest
         Development.IDE.Core.PositionMapping
         Development.IDE.Core.Preprocessor
+        Development.IDE.Core.ProgressReporting
         Development.IDE.Core.Rules
         Development.IDE.Core.RuleTypes
         Development.IDE.Core.Service
@@ -255,8 +251,6 @@ benchmark benchHist
 
 executable ghcide
     default-language:   Haskell2010
-    include-dirs:
-        include
     hs-source-dirs:     exe
     ghc-options:
                 -threaded
@@ -365,13 +359,13 @@ test-suite ghcide-tests
         tasty-hunit,
         tasty-quickcheck,
         tasty-rerun,
-        text
+        text,
+        unordered-containers,
     if (impl(ghc >= 8.6))
       build-depends:
           record-dot-preprocessor,
           record-hasfield
     hs-source-dirs: test/cabal test/exe test/src bench/lib
-    include-dirs: include
     ghc-options: -threaded -Wall -Wno-name-shadowing -O0 -Wno-unticked-promoted-constructors
     main-is: Main.hs
     other-modules:
@@ -379,6 +373,7 @@ test-suite ghcide-tests
         Development.IDE.Test.Runfiles
         Experiments
         Experiments.Types
+        Progress
     default-extensions:
         BangPatterns
         DeriveFunctor
@@ -416,7 +411,6 @@ executable ghcide-bench
         shake,
         text
     hs-source-dirs: bench/lib bench/exe
-    include-dirs: include
     ghc-options: -threaded -Wall -Wno-name-shadowing -rtsopts
     main-is: Main.hs
     other-modules:

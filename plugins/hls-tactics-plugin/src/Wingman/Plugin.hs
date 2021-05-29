@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 -- | A plugin that uses tactics to synthesize code
 module Wingman.Plugin
@@ -32,11 +33,14 @@ import           Wingman.CaseSplit
 import           Wingman.EmptyCase
 import           Wingman.GHC
 import           Wingman.LanguageServer
+import           Wingman.LanguageServer.Metaprogram (hoverProvider)
 import           Wingman.LanguageServer.TacticProviders
 import           Wingman.Machinery (scoreSolution)
 import           Wingman.Range
+import           Wingman.StaticPlugin
 import           Wingman.Tactics
 import           Wingman.Types
+import Wingman.Metaprogramming.Lexer (ParserContext)
 
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -47,7 +51,7 @@ descriptor plId = (defaultPluginDescriptor plId)
               PluginCommand
                 (tcCommandId tc)
                 (tacticDesc $ tcCommandName tc)
-                (tacticCmd (commandTactic tc) plId))
+                (tacticCmd (flip commandTactic tc) plId))
                 [minBound .. maxBound]
           , pure $
               PluginCommand
@@ -58,10 +62,12 @@ descriptor plId = (defaultPluginDescriptor plId)
   , pluginHandlers = mconcat
       [ mkPluginHandler STextDocumentCodeAction codeActionProvider
       , mkPluginHandler STextDocumentCodeLens codeLensProvider
+      , mkPluginHandler STextDocumentHover hoverProvider
       ]
   , pluginRules = wingmanRules plId
   , pluginConfigDescriptor =
       defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
+  , pluginModifyDynflags = staticPlugin
   }
 
 
@@ -70,16 +76,17 @@ codeActionProvider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
       cfg <- getTacticConfig plId
       liftIO $ fromMaybeT (Right $ List []) $ do
-        (_, jdg, _, dflags) <- judgementForHole state nfp range cfg
+        HoleJudgment{..} <- judgementForHole state nfp range cfg
         actions <- lift $
           -- This foldMap is over the function monoid.
           foldMap commandProvider [minBound .. maxBound] $ TacticProviderData
-            { tpd_dflags = dflags
+            { tpd_dflags = hj_dflags
             , tpd_config = cfg
             , tpd_plid   = plId
             , tpd_uri    = uri
             , tpd_range  = range
-            , tpd_jdg    = jdg
+            , tpd_jdg    = hj_jdg
+            , tpd_hole_sort = hj_hole_sort
             }
         pure $ Right $ List actions
 codeActionProvider _ _ _ = pure $ Right $ List []
@@ -94,7 +101,10 @@ showUserFacingMessage ufm = do
   pure $ Left $ mkErr InternalError $ T.pack $ show ufm
 
 
-tacticCmd :: (OccName -> TacticsM ()) -> PluginId -> CommandFunction IdeState TacticParams
+tacticCmd
+    :: (ParserContext -> T.Text -> IO (TacticsM ()))
+    -> PluginId
+    -> CommandFunction IdeState TacticParams
 tacticCmd tac pId state (TacticParams uri range var_name)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
       let stale a = runStaleIde "tacticCmd" state nfp a
@@ -102,19 +112,21 @@ tacticCmd tac pId state (TacticParams uri range var_name)
       ccs <- getClientCapabilities
       cfg <- getTacticConfig pId
       res <- liftIO $ runMaybeT $ do
-        (range', jdg, ctx, dflags) <- judgementForHole state nfp range cfg
-        let span = fmap (rangeToRealSrcSpan (fromNormalizedFilePath nfp)) range'
+        HoleJudgment{..} <- judgementForHole state nfp range cfg
+        let span = fmap (rangeToRealSrcSpan (fromNormalizedFilePath nfp)) hj_range
         TrackedStale pm pmmap <- stale GetAnnotatedParsedSource
         pm_span <- liftMaybe $ mapAgeFrom pmmap span
+        pc <- getParserState state nfp hj_ctx
+        t <- liftIO $ tac pc var_name
 
         timingOut (cfg_timeout_seconds cfg * seconds) $ join $
-          case runTactic ctx jdg $ tac $ mkVarOcc $ T.unpack var_name of
+          case runTactic hj_ctx hj_jdg t of
             Left _ -> Left TacticErrors
             Right rtr ->
               case rtr_extract rtr of
                 L _ (HsVar _ (L _ rdr)) | isHole (occName rdr) ->
                   Left NothingToDo
-                _ -> pure $ mkTacticResultEdits pm_span dflags ccs uri pm rtr
+                _ -> pure $ mkTacticResultEdits pm_span hj_dflags ccs uri pm rtr
 
       case res of
         Nothing -> do

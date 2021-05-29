@@ -1,5 +1,11 @@
-{-# LANGUAGE CPP, OverloadedStrings, NamedFieldPuns, MultiParamTypeClasses, DuplicateRecordFields, TypeOperators, GADTs #-}
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE CPP                   #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NamedFieldPuns        #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE TypeOperators         #-}
 module Test.Hls.Util
   (
       codeActionSupportCaps
@@ -33,35 +39,37 @@ module Test.Hls.Util
   )
 where
 
-import qualified Data.Aeson as A
-import           Control.Exception (throwIO, catch)
+import           Control.Applicative.Combinators (skipManyTill, (<|>))
+import           Control.Exception               (catch, throwIO)
+import           Control.Lens                    ((^.))
 import           Control.Monad
 import           Control.Monad.IO.Class
-import           Control.Applicative.Combinators (skipManyTill, (<|>))
-import           Control.Lens ((^.))
+import qualified Data.Aeson                      as A
 import           Data.Default
-import           Data.List (intercalate)
-import           Data.List.Extra (find)
+import           Data.List                       (intercalate)
+import           Data.List.Extra                 (find)
 import           Data.Maybe
-import qualified Data.Set as Set
-import qualified Data.Text as T
-import           Language.LSP.Types hiding (Reason(..))
-import qualified Language.LSP.Test as Test
-import qualified Language.LSP.Types.Lens as L
+import qualified Data.Set                        as Set
+import qualified Data.Text                       as T
+import qualified Language.LSP.Test               as Test
+import           Language.LSP.Types              hiding (Reason (..))
 import qualified Language.LSP.Types.Capabilities as C
+import qualified Language.LSP.Types.Lens         as L
 import           System.Directory
 import           System.Environment
-import           System.Time.Extra (Seconds, sleep)
 import           System.FilePath
 import           System.IO.Temp
+import           System.Info.Extra               (isMac, isWindows)
+import           System.Time.Extra               (Seconds, sleep)
+import           Test.Hspec.Core.Formatters      hiding (Seconds)
 import           Test.Hspec.Runner
-import           Test.Hspec.Core.Formatters hiding (Seconds)
-import           Test.Tasty (TestTree)
-import           Test.Tasty.ExpectedFailure (ignoreTestBecause, expectFailBecause)
-import           Test.Tasty.HUnit (Assertion, assertFailure, (@?=))
-import           Text.Blaze.Renderer.String (renderMarkup)
-import           Text.Blaze.Internal hiding (null)
-import System.Info.Extra (isWindows, isMac)
+import           Test.Tasty                      (TestTree)
+import           Test.Tasty.ExpectedFailure      (expectFailBecause,
+                                                  ignoreTestBecause)
+import           Test.Tasty.HUnit                (Assertion, assertFailure,
+                                                  (@?=))
+import           Text.Blaze.Internal             hiding (null)
+import           Text.Blaze.Renderer.String      (renderMarkup)
 
 codeActionSupportCaps :: C.ClientCapabilities
 codeActionSupportCaps = def { C._textDocument = Just textDocumentCaps }
@@ -121,7 +129,7 @@ data EnvSpec = HostOS OS | GhcVer GhcVersion
     deriving (Show, Eq)
 
 matchesCurrentEnv :: EnvSpec -> Bool
-matchesCurrentEnv (HostOS os) = hostOS == os
+matchesCurrentEnv (HostOS os)  = hostOS == os
 matchesCurrentEnv (GhcVer ver) = ghcVersion == ver
 
 data OS = Windows | MacOS | Linux
@@ -230,7 +238,7 @@ xmlFormatter = silent {
       writeLine $ renderMarkup $ testcase path $
         case reason of
           Just desc -> skipped ! message desc  $ ""
-          Nothing -> skipped ""
+          Nothing   -> skipped ""
 
     failure, skipped :: Markup -> Markup
     failure = customParent "failure"
@@ -321,11 +329,11 @@ copyDir ignored src dst = do
 
 fromAction :: (Command |? CodeAction) -> CodeAction
 fromAction (InR action) = action
-fromAction _ = error "Not a code action"
+fromAction _            = error "Not a code action"
 
 fromCommand :: (Command |? CodeAction) -> Command
 fromCommand (InL command) = command
-fromCommand _ = error "Not a command"
+fromCommand _             = error "Not a command"
 
 onMatch :: [a] -> (a -> Bool) -> String -> IO a
 onMatch as predicate err = maybe (fail err) return (find predicate as)
@@ -340,7 +348,7 @@ expectDiagnostic diags s = void $ inspectDiagnostic diags s
 inspectCodeAction :: [Command |? CodeAction] -> [T.Text] -> IO CodeAction
 inspectCodeAction cars s = fromAction <$> onMatch cars predicate err
     where predicate (InR ca) = all (`T.isInfixOf` (ca ^. L.title)) s
-          predicate _ = False
+          predicate _        = False
           err = "expected code action matching '" ++ show s ++ "' but did not find one"
 
 expectCodeAction :: [Command |? CodeAction] -> [T.Text] -> IO ()
@@ -349,7 +357,7 @@ expectCodeAction cars s = void $ inspectCodeAction cars s
 inspectCommand :: [Command |? CodeAction] -> [T.Text] -> IO Command
 inspectCommand cars s = fromCommand <$> onMatch cars predicate err
     where predicate (InL command) = all  (`T.isInfixOf` (command ^. L.title)) s
-          predicate _ = False
+          predicate _             = False
           err = "expected code action matching '" ++ show s ++ "' but did not find one"
 
 waitForDiagnosticsFrom :: TextDocumentIdentifier -> Test.Session [Diagnostic]
@@ -423,7 +431,7 @@ failIfSessionTimeout :: IO a -> IO a
 failIfSessionTimeout action = action `catch` errorHandler
     where errorHandler :: Test.SessionException -> IO a
           errorHandler e@(Test.Timeout _) = assertFailure $ show e
-          errorHandler e = throwIO e
+          errorHandler e                  = throwIO e
 
 -- | To locate a symbol, we provide a path to the file from the HLS root
 -- directory, the line number, and the column number. (0 indexed.)

@@ -19,13 +19,18 @@ packages:
   - ./plugins/hls-tactics-plugin
   - ./plugins/hls-brittany-plugin
   - ./plugins/hls-stylish-haskell-plugin
+  - ./plugins/hls-floskell-plugin
+  - ./plugins/hls-fourmolu-plugin
+  - ./plugins/hls-pragmas-plugin
+  - ./plugins/hls-module-name-plugin
+  - ./plugins/hls-ormolu-plugin
 
 ghc-options:
   "$everything": -haddock
 
 extra-deps:
-  - apply-refact-0.9.2.0
-  - brittany-0.13.1.1
+  - apply-refact-0.9.3.0
+  - brittany-0.13.1.2
   - Cabal-3.0.2.0
   - clock-0.7.2
   - data-tree-print-0.1.0.2@rev:2
@@ -40,7 +45,7 @@ extra-deps:
   - lsp-types-1.2.0.0
   - lsp-test-0.14.0.0
   - heapsize-0.3.0
-  - hie-bios-0.7.4
+  - hie-bios-0.7.5
   - implicit-hie-cradle-0.3.0.2
   - implicit-hie-0.1.2.5
   - monad-dijkstra-0.1.1.2

@@ -24,8 +24,8 @@ import           Data.Unique
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error     (catchSrcErrors)
 import           Development.IDE.GHC.Util      (lookupPackageConfig)
-import           Development.IDE.Types.Exports (ExportsMap, createExportsMap)
 import           Development.IDE.Graph.Classes
+import           Development.IDE.Types.Exports (ExportsMap, createExportsMap)
 import           GhcPlugins                    (HscEnv (hsc_dflags))
 import           LoadIface                     (loadInterface)
 import qualified Maybes
