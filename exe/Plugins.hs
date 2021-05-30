@@ -10,7 +10,6 @@ import           Development.IDE                   (IdeState)
 import           Development.IDE.Plugin.HLS.GhcIde as GhcIde
 import           Ide.Plugin.Example                as Example
 import           Ide.Plugin.Example2               as Example2
-import           Ide.Plugin.RenameSymbol           as RenameSymbol
 
 -- haskell-language-server optional plugins
 
@@ -32,6 +31,10 @@ import           Ide.Plugin.ExplicitImports        as ExplicitImports
 
 #if retrie
 import           Ide.Plugin.Retrie                 as Retrie
+#endif
+
+#if rename
+import           Ide.Plugin.Rename                 as Rename
 #endif
 
 #if tactic
@@ -111,6 +114,9 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
 #if retrie
       Retrie.descriptor "retrie" :
 #endif
+#if rename
+      Rename.descriptor "rename" :
+#endif
 #if brittany
       Brittany.descriptor "brittany" :
 #endif
@@ -126,7 +132,6 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
 #if importLens
       ExplicitImports.descriptor "importLens" :
 #endif
-      RenameSymbol.descriptor "renameSymbol" :
 #if moduleName
       ModuleName.descriptor "moduleName" :
 #endif
