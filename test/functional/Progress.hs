@@ -38,7 +38,7 @@ tests =
                 let cmd = evalLens ^?! L.command . _Just
                 _ <- sendRequest SWorkspaceExecuteCommand $ ExecuteCommandParams Nothing (cmd ^. L.command) (decode $ encode $ fromJust $ cmd ^. L.arguments)
                 expectProgressReports ["Evaluating"]
-        , requiresOrmoluPlugin $ testCase "ormolu plugin sends progress notifications" $ do
+        , requiresOrmoluPlugin $ testCase "ormolu plugin sends progress notifications" $ do
             runSession hlsCommand progressCaps "test/testdata/format" $ do
                 sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "ormolu"))
                 doc <- openDoc "Format.hs" "haskell"
