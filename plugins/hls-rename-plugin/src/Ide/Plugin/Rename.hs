@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+
 module Ide.Plugin.Rename (descriptor) where
 
 import           Data.Function
