@@ -115,7 +115,7 @@ jobs:
         run: |
           sed -i.bak -e 's/haskell-language-server/hls/g' \
                      -e 's/haskell_language_server/hls/g' \
-                     haskell-language-server.cabal
+                     haskell-language-server.cabal cabal.project
           sed -i.bak -e 's/Paths_haskell_language_server/Paths_hls/g' \
                      src/**/*.hs exe/*.hs
 
