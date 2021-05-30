@@ -91,6 +91,11 @@ jobs:
           echo "CABAL_STORE_DIR=~/.cabal/store" >> $GITHUB_ENV
           echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
 
+      # Needs to be before Cache Cabal so the cache can detect changes to the modified cabal.project file
+      - if: ${{ needs.pre_job.outputs.should_skip != 'true' && matrix.ghc == '9.0.1' }}
+        name: Use modified cabal.project for ghc9
+        run: cp cabal-ghc901.project cabal.project
+
       - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
         name: Cache Cabal
         uses: actions/cache@v2
@@ -108,9 +113,6 @@ jobs:
 
       - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
         run: cabal update
-
-      - if: ${{ needs.pre_job.outputs.should_skip != 'true' && matrix.ghc == '9.0.1' }}
-        run: cp cabal-ghc901.project cabal.project
 
       # Need this to work around filepath length limits in Windows
       - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
