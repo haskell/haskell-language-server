@@ -5,7 +5,6 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE TypeFamilies          #-}
-#include "ghc-api-version.h"
 
 -- | A Shake implementation of the compiler service, built
 --   using the "Shaker" abstraction layer for in-memory use.
@@ -112,7 +111,10 @@ import           Development.IDE.GHC.Compat                   hiding
                                                                writeHieFile)
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint
-import           Development.IDE.GHC.Util
+import           Development.IDE.GHC.Util                     hiding
+                                                              (modifyDynFlags)
+import           Development.IDE.Graph
+import           Development.IDE.Graph.Classes                hiding (get, put)
 import           Development.IDE.Import.DependencyInformation
 import           Development.IDE.Import.FindImports
 import qualified Development.IDE.Spans.AtPoint                as AtPoint
@@ -123,9 +125,6 @@ import           Development.IDE.Types.HscEnvEq
 import           Development.IDE.Types.Location
 import qualified Development.IDE.Types.Logger                 as L
 import           Development.IDE.Types.Options
-import           Development.Shake                            hiding
-                                                              (Diagnostic)
-import           Development.Shake.Classes                    hiding (get, put)
 import           Fingerprint
 import           GHC.Generics                                 (Generic)
 import           GHC.IO.Encoding
@@ -139,29 +138,25 @@ import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.Types                           (SMethod (SCustomMethod))
 import           Language.LSP.VFS
 import           Module
+import           System.Directory                             (canonicalizePath)
 import           TcRnMonad                                    (tcg_dependent_files)
 
-import           Ide.Plugin.Properties (HasProperty, KeyNameProxy, Properties, ToHsType, useProperty)
-import           Ide.Types (PluginId)
-import           Data.Default (def)
-import           Ide.PluginUtils (configForPlugin)
 import           Control.Applicative
+import           Data.Default                                 (def)
+import           Ide.Plugin.Properties                        (HasProperty,
+                                                               KeyNameProxy,
+                                                               Properties,
+                                                               ToHsType,
+                                                               useProperty)
+import           Ide.PluginUtils                              (configForPlugin)
+import           Ide.Types                                    (DynFlagsModifications (dynFlagsModifyGlobal, dynFlagsModifyParser),
+                                                               PluginId)
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
 -- warnings while also producing a result.
 toIdeResult :: Either [FileDiagnostic] v -> IdeResult v
 toIdeResult = either (, Nothing) (([],) . Just)
-
-defineNoFile :: IdeRule k v => (k -> Action v) -> Rules ()
-defineNoFile f = defineNoDiagnostics $ \k file -> do
-    if file == emptyFilePath then do res <- f k; return (Just res) else
-        fail $ "Rule " ++ show k ++ " should always be called with the empty string for a file"
-
-defineEarlyCutOffNoFile :: IdeRule k v => (k -> Action (BS.ByteString, v)) -> Rules ()
-defineEarlyCutOffNoFile f = defineEarlyCutoff $ RuleNoDiagnostics $ \k file -> do
-    if file == emptyFilePath then do (hash, res) <- f k; return (Just hash, Just res) else
-        fail $ "Rule " ++ show k ++ " should always be called with the empty string for a file"
 
 ------------------------------------------------------------
 -- Exposed API
@@ -213,18 +208,21 @@ getParsedModuleRule :: Rules ()
 getParsedModuleRule =
   -- this rule does not have early cutoff since all its dependencies already have it
   define $ \GetParsedModule file -> do
-    ModSummaryResult{msrModSummary = ms} <- use_ GetModSummary file
+    ModSummaryResult{msrModSummary = ms'} <- use_ GetModSummary file
     sess <- use_ GhcSession file
     let hsc = hscEnv sess
     opt <- getIdeOptions
+    modify_dflags <- getModifyDynFlags dynFlagsModifyParser
+    let ms = ms' { ms_hspp_opts = modify_dflags $ ms_hspp_opts ms' }
 
     let dflags    = ms_hspp_opts ms
         mainParse = getParsedModuleDefinition hsc opt file ms
+        reset_ms pm = pm { pm_mod_summary = ms' }
 
     -- Parse again (if necessary) to capture Haddock parse errors
     res@(_,pmod) <- if gopt Opt_Haddock dflags
         then
-            liftIO mainParse
+            liftIO $ (fmap.fmap.fmap) reset_ms mainParse
         else do
             let haddockParse = getParsedModuleDefinition hsc opt file (withOptHaddock ms)
 
@@ -234,7 +232,7 @@ getParsedModuleRule =
             -- If we can parse Haddocks, might as well use them
             --
             -- HLINT INTEGRATION: might need to save the other parsed module too
-            ((diags,res),(diagsh,resh)) <- liftIO $ concurrently mainParse haddockParse
+            ((diags,res),(diagsh,resh)) <- liftIO $ (fmap.fmap.fmap.fmap) reset_ms $ concurrently mainParse haddockParse
 
             -- Merge haddock and regular diagnostics so we can always report haddock
             -- parse errors
@@ -286,8 +284,15 @@ getParsedModuleWithCommentsRule =
     opt <- getIdeOptions
 
     let ms' = withoutOption Opt_Haddock $ withOption Opt_KeepRawTokenStream ms
+    modify_dflags <- getModifyDynFlags dynFlagsModifyParser
+    let ms = ms' { ms_hspp_opts = modify_dflags $ ms_hspp_opts ms' }
+        reset_ms pm = pm { pm_mod_summary = ms' }
 
-    liftIO $ snd <$> getParsedModuleDefinition (hscEnv sess) opt file ms'
+    liftIO $ fmap (fmap reset_ms) $ snd <$> getParsedModuleDefinition (hscEnv sess) opt file ms
+
+getModifyDynFlags :: (DynFlagsModifications -> a) -> Action a
+getModifyDynFlags f = f . optModifyDynFlags <$> getIdeOptions
+
 
 getParsedModuleDefinition
     :: HscEnv
@@ -734,10 +739,12 @@ getModIfaceFromDiskAndIndexRule =
       hie_loc = ml_hie_file $ ms_location ms
   hash <- liftIO $ getFileHash hie_loc
   mrow <- liftIO $ HieDb.lookupHieFileFromSource hiedb (fromNormalizedFilePath f)
+  hie_loc' <- liftIO $ traverse (canonicalizePath . HieDb.hieModuleHieFile) mrow
   case mrow of
     Just row
       | hash == HieDb.modInfoHash (HieDb.hieModInfo row)
-      , hie_loc == HieDb.hieModuleHieFile row  -> do
+      && Just hie_loc == hie_loc'
+      -> do
       -- All good, the db has indexed the file
       when (coerce $ ideTesting se) $ liftIO $ mRunLspT (lspEnv se) $
         LSP.sendNotification (SCustomMethod "ghcide/reference/ready") $
@@ -784,7 +791,9 @@ isHiFileStableRule = defineEarlyCutoff $ RuleNoDiagnostics $ \IsHiFileStable f -
 getModSummaryRule :: Rules ()
 getModSummaryRule = do
     defineEarlyCutoff $ Rule $ \GetModSummary f -> do
-        session <- hscEnv <$> use_ GhcSession f
+        session' <- hscEnv <$> use_ GhcSession f
+        modify_dflags <- getModifyDynFlags dynFlagsModifyGlobal
+        let session = session' { hsc_dflags = modify_dflags $ hsc_dflags session' }
         (modTime, mFileContent) <- getFileContents f
         let fp = fromNormalizedFilePath f
         modS <- liftIO $ runExceptT $

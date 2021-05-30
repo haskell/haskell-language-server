@@ -1,6 +1,6 @@
 cabal-version:      2.2
 name:               hls-retrie-plugin
-version:            1.0.0.1
+version:            1.0.0.2
 synopsis:           Retrie integration plugin for Haskell Language Server
 license:            Apache-2.0
 license-file:       LICENSE
@@ -8,9 +8,7 @@ author:             Pepe Iborra
 maintainer:         pepeiborra@gmail.com
 category:           Development
 build-type:         Simple
-extra-source-files:
-  include/ghc-api-version.h
-  LICENSE
+extra-source-files: LICENSE
 
 library
   exposed-modules:    Ide.Plugin.Retrie
@@ -23,20 +21,18 @@ library
     , directory
     , extra
     , ghc
-    , ghcide                ^>=1.1
+    , ghcide                >=1.2     && <1.4
     , hashable
     , hls-plugin-api        ^>=1.1
     , lsp
     , lsp-types
     , retrie                >=0.1.1.0
     , safe-exceptions
-    , shake
     , text
     , transformers
     , unordered-containers
 
   default-language:   Haskell2010
-  include-dirs:       include
   default-extensions:
     DataKinds
     TypeOperators

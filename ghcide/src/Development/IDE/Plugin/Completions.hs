@@ -1,7 +1,6 @@
 {-# LANGUAGE CPP          #-}
 {-# LANGUAGE RankNTypes   #-}
 {-# LANGUAGE TypeFamilies #-}
-#include "ghc-api-version.h"
 
 module Development.IDE.Plugin.Completions
     ( descriptor
@@ -10,8 +9,8 @@ module Development.IDE.Plugin.Completions
     ) where
 
 import           Control.Concurrent.Async                     (concurrently)
-import           Control.Monad
 import           Control.Monad.Extra
+import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
 import           Data.List                                    (find)
@@ -26,13 +25,13 @@ import           Development.IDE.GHC.Error                    (rangeToSrcSpan)
 import           Development.IDE.GHC.ExactPrint               (Annotated (annsA),
                                                                GetAnnotatedParsedSource (GetAnnotatedParsedSource))
 import           Development.IDE.GHC.Util                     (prettyPrint)
+import           Development.IDE.Graph
+import           Development.IDE.Graph.Classes
 import           Development.IDE.Plugin.CodeAction.ExactPrint
 import           Development.IDE.Plugin.Completions.Logic
 import           Development.IDE.Plugin.Completions.Types
 import           Development.IDE.Types.HscEnvEq               (hscEnv)
 import           Development.IDE.Types.Location
-import           Development.Shake
-import           Development.Shake.Classes
 import           GHC.Exts                                     (toList)
 import           GHC.Generics
 import           Ide.Plugin.Config                            (Config)
@@ -47,7 +46,7 @@ descriptor plId = (defaultPluginDescriptor plId)
   { pluginRules = produceCompletions
   , pluginHandlers = mkPluginHandler STextDocumentCompletion getCompletionsLSP
   , pluginCommands = [extendImportCommand]
-  , pluginCustomConfig = mkCustomConfig properties
+  , pluginConfigDescriptor = defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
   }
 
 produceCompletions :: Rules ()

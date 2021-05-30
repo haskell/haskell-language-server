@@ -24,11 +24,11 @@ import           Data.Hashable
 import           Data.Typeable
 import           Data.Vector                          (Vector)
 import           Development.IDE.Core.PositionMapping
+import           Development.IDE.Graph                (RuleResult,
+                                                       ShakeException (shakeExceptionInner))
+import           Development.IDE.Graph.Classes
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
-import           Development.Shake                    (RuleResult,
-                                                       ShakeException (shakeExceptionInner))
-import           Development.Shake.Classes
 import           GHC.Generics
 import           Language.LSP.Types
 

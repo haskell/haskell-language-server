@@ -1,7 +1,7 @@
 cabal-version:      2.4
 category:           Development
 name:               hls-tactics-plugin
-version:            1.0.0.0
+version:            1.1.0.1
 synopsis:           Wingman plugin for Haskell Language Server
 description:        Please see README.md
 author:             Sandy Maguire, Reed Mullanix
@@ -15,7 +15,6 @@ build-type:         Simple
 extra-source-files:
   README.md
   test/golden/*.cabal
-  test/golden/*.expected
   test/golden/*.hs
   test/golden/*.yaml
 
@@ -34,19 +33,27 @@ library
     Wingman.CodeGen.Utils
     Wingman.Context
     Wingman.Debug
+    Wingman.EmptyCase
     Wingman.FeatureSet
     Wingman.GHC
     Wingman.Judgements
+    Wingman.Judgements.SYB
     Wingman.Judgements.Theta
     Wingman.KnownStrategies
     Wingman.KnownStrategies.QuickCheck
     Wingman.LanguageServer
+    Wingman.LanguageServer.Metaprogram
     Wingman.LanguageServer.TacticProviders
     Wingman.Machinery
+    Wingman.Metaprogramming.Lexer
+    Wingman.Metaprogramming.Parser
+    Wingman.Metaprogramming.Parser.Documentation
+    Wingman.Metaprogramming.ProofState
     Wingman.Naming
     Wingman.Plugin
     Wingman.Range
     Wingman.Simplify
+    Wingman.StaticPlugin
     Wingman.Tactics
     Wingman.Types
 
@@ -71,14 +78,18 @@ library
     , ghc-boot-th
     , ghc-exactprint
     , ghc-source-gen
-    , ghcide                ^>=1.1.0.0
+    , ghcide                ^>=1.3
+    , hls-graph
     , hls-plugin-api        ^>=1.1
+    , hyphenation
     , lens
     , lsp
+    , megaparsec            ^>=9
     , mtl
+    , parser-combinators
+    , prettyprinter
     , refinery              ^>=0.3
     , retrie                >=0.1.1.0
-    , shake
     , syb
     , text
     , transformers
@@ -116,10 +127,13 @@ test-suite tests
     AutoTupleSpec
     CodeAction.AutoSpec
     CodeAction.DestructAllSpec
+    CodeAction.DestructPunSpec
     CodeAction.DestructSpec
     CodeAction.IntrosSpec
     CodeAction.RefineSpec
+    CodeAction.RunMetaprogramSpec
     CodeAction.UseDataConSpec
+    CodeLens.EmptyCaseSpec
     ProviderSpec
     Spec
     UnificationSpec
@@ -140,7 +154,7 @@ test-suite tests
     , ghcide
     , hls-plugin-api
     , hls-tactics-plugin
-    , hls-test-utils  ^>= 1.0.0.0
+    , hls-test-utils      ^>=1.0
     , hspec
     , hspec-expectations
     , lens

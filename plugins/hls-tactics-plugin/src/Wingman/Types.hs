@@ -39,6 +39,8 @@ import           UniqSupply (takeUniqFromSupply, mkSplitUniqSupply, UniqSupply)
 import           Unique (nonDetCmpUnique, Uniquable, getUnique, Unique)
 import           Wingman.Debug
 import           Wingman.FeatureSet
+import Development.IDE.Core.UseStale
+import Development.IDE (Range)
 
 
 ------------------------------------------------------------------------------
@@ -49,12 +51,15 @@ data TacticCommand
   = Auto
   | Intros
   | Destruct
+  | DestructPun
   | Homomorphism
   | DestructLambdaCase
   | HomomorphismLambdaCase
   | DestructAll
   | UseDataCon
   | Refine
+  | BeginMetaprogram
+  | RunMetaprogram
   deriving (Eq, Ord, Show, Enum, Bounded)
 
 -- | Generate a title for the command.
@@ -64,12 +69,15 @@ tacticTitle = (mappend "Wingman: " .) . go
     go Auto _                   = "Attempt to fill hole"
     go Intros _                 = "Introduce lambda"
     go Destruct var             = "Case split on " <> var
+    go DestructPun var          = "Split on " <> var <> " with NamedFieldPuns"
     go Homomorphism var         = "Homomorphic case split on " <> var
     go DestructLambdaCase _     = "Lambda case split"
     go HomomorphismLambdaCase _ = "Homomorphic lambda case split"
     go DestructAll _            = "Split all function arguments"
     go UseDataCon dcon          = "Use constructor " <> dcon
     go Refine _                 = "Refine hole"
+    go BeginMetaprogram _       = "Use custom tactic block"
+    go RunMetaprogram _         = "Run custom tactic"
 
 
 ------------------------------------------------------------------------------
@@ -78,6 +86,16 @@ data Config = Config
   { cfg_feature_set          :: FeatureSet
   , cfg_max_use_ctor_actions :: Int
   , cfg_timeout_seconds      :: Int
+  , cfg_auto_gas             :: Int
+  }
+  deriving (Eq, Ord, Show)
+
+emptyConfig :: Config
+emptyConfig = Config
+  { cfg_feature_set = mempty
+  , cfg_max_use_ctor_actions = 5
+  , cfg_timeout_seconds = 2
+  , cfg_auto_gas = 4
   }
 
 ------------------------------------------------------------------------------
@@ -115,6 +133,9 @@ instance Show Class where
   show  = unsafeRender
 
 instance Show (HsExpr GhcPs) where
+  show  = unsafeRender
+
+instance Show (HsExpr GhcTc) where
   show  = unsafeRender
 
 instance Show (HsDecl GhcPs) where
@@ -191,6 +212,8 @@ data Provenance
       (Uniquely Class)     -- ^ Class
     -- | A binding explicitly written by the user.
   | UserPrv
+    -- | A binding explicitly imported by the user.
+  | ImportPrv
     -- | The recursive hypothesis. Present only in the context of the recursion
     -- tactic.
   | RecursivePrv
@@ -305,6 +328,7 @@ data TacticError
   | UnhelpfulSplit OccName
   | TooPolymorphic
   | NotInScope OccName
+  | TacticPanic String
   deriving stock (Eq)
 
 instance Show TacticError where
@@ -343,6 +367,8 @@ instance Show TacticError where
       "The tactic isn't applicable because the goal is too polymorphic"
     show (NotInScope name) =
       "Tried to do something with the out of scope name " <> show name
+    show (TacticPanic err) =
+      "PANIC: " <> err
 
 
 ------------------------------------------------------------------------------
@@ -393,7 +419,7 @@ data Context = Context
     -- ^ The functions currently being defined
   , ctxModuleFuncs   :: [(OccName, CType)]
     -- ^ Everything defined in the current module
-  , ctxFeatureSet    :: FeatureSet
+  , ctxConfig        :: Config
   , ctxKnownThings   :: KnownThings
   , ctxInstEnvs      :: InstEnvs
   , ctxTheta         :: Set CType
@@ -404,7 +430,7 @@ instance Show Context where
     [ "Context "
     , showsPrec 10 ctxDefiningFuncs ""
     , showsPrec 10 ctxModuleFuncs ""
-    , showsPrec 10 ctxFeatureSet ""
+    , showsPrec 10 ctxConfig ""
     , showsPrec 10 ctxTheta ""
     ]
 
@@ -424,7 +450,7 @@ emptyContext
   = Context
       { ctxDefiningFuncs = mempty
       , ctxModuleFuncs = mempty
-      , ctxFeatureSet = mempty
+      , ctxConfig = emptyConfig
       , ctxKnownThings = error "empty known things from emptyContext"
       , ctxInstEnvs = InstEnvs mempty mempty mempty
       , ctxTheta = mempty
@@ -461,6 +487,7 @@ rose a rs = Rose $ Node a $ coerce rs
 data RunTacticResults = RunTacticResults
   { rtr_trace       :: Trace
   , rtr_extract     :: LHsExpr GhcPs
+  , rtr_subgoals    :: [Judgement]
   , rtr_other_solns :: [Synthesized (LHsExpr GhcPs)]
   , rtr_jdg         :: Judgement
   , rtr_ctx         :: Context
@@ -486,4 +513,16 @@ instance Show UserFacingMessage where
   show TimedOut                = "Wingman timed out while trying to find a solution"
   show NothingToDo             = "Nothing to do"
   show (InfrastructureError t) = "Internal error: " <> T.unpack t
+
+
+data HoleSort = Hole | Metaprogram T.Text
+  deriving (Eq, Ord, Show)
+
+data HoleJudgment = HoleJudgment
+  { hj_range     :: Tracked 'Current Range
+  , hj_jdg       :: Judgement
+  , hj_ctx       :: Context
+  , hj_dflags    :: DynFlags
+  , hj_hole_sort :: HoleSort
+  }
 

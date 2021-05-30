@@ -1,2 +1,0 @@
-test :: Show a => a -> (String -> b) -> b
-test a fl_cb = fl_cb (show a)

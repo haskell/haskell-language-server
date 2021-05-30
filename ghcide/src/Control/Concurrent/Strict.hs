@@ -4,11 +4,11 @@ module Control.Concurrent.Strict
     ,module Control.Concurrent.Extra
     ) where
 
-import Control.Concurrent.Extra hiding (modifyVar, modifyVar_)
+import           Control.Concurrent.Extra hiding (modifyVar, modifyVar_)
 import qualified Control.Concurrent.Extra as Extra
-import Control.Exception (evaluate)
-import Data.Tuple.Extra (dupe)
-import Control.Monad (void)
+import           Control.Exception        (evaluate)
+import           Control.Monad            (void)
+import           Data.Tuple.Extra         (dupe)
 
 -- | Strict modification that returns the new value
 modifyVar' :: Var a -> (a -> a) -> IO a

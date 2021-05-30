@@ -11,7 +11,6 @@
 {-# LANGUAGE PolyKinds             #-}
 {-# LANGUAGE TypeOperators         #-}
 {-# OPTIONS_GHC -Wno-deprecations -Wno-unticked-promoted-constructors #-}
-#include "ghc-api-version.h"
 
 module Main (main) where
 
@@ -36,8 +35,8 @@ import           Development.IDE.Core.PositionMapping     (PositionResult (..),
                                                            positionResultToMaybe,
                                                            toCurrent)
 import           Development.IDE.Core.Shake               (Q (..))
-import qualified Development.IDE.Main                     as IDE
 import           Development.IDE.GHC.Util
+import qualified Development.IDE.Main                     as IDE
 import           Development.IDE.Plugin.Completions.Types (extendImportCommandId)
 import           Development.IDE.Plugin.TypeLenses        (typeLensCommandId)
 import           Development.IDE.Spans.Common
@@ -75,32 +74,36 @@ import           System.IO.Extra                          hiding (withTempDir)
 import qualified System.IO.Extra
 import           System.Info.Extra                        (isWindows)
 import           System.Process.Extra                     (CreateProcess (cwd),
-                                                           proc,
-                                                           readCreateProcessWithExitCode, createPipe)
+                                                           createPipe, proc,
+                                                           readCreateProcessWithExitCode)
 import           Test.QuickCheck
 -- import Test.QuickCheck.Instances ()
+import           Control.Concurrent                       (threadDelay)
+import           Control.Concurrent.Async
 import           Control.Lens                             ((^.))
 import           Control.Monad.Extra                      (whenJust)
+import           Data.IORef
+import           Data.IORef.Extra                         (atomicModifyIORef_)
+import           Data.String                              (IsString (fromString))
 import           Data.Tuple.Extra
+import           Development.IDE.Core.FileStore           (getModTime)
 import           Development.IDE.Plugin.CodeAction        (matchRegExMultipleImports)
+import qualified Development.IDE.Plugin.HLS.GhcIde        as Ghcide
 import           Development.IDE.Plugin.Test              (TestRequest (BlockSeconds, GetInterfaceFilesDir),
                                                            WaitForIdeRuleResult (..),
                                                            blockCommandId)
+import           Ide.PluginUtils                          (pluginDescToIdePlugins)
+import           Ide.Types
+import qualified Language.LSP.Types                       as LSP
 import qualified Language.LSP.Types.Lens                  as L
+import qualified Progress
 import           System.Time.Extra
 import           Test.Tasty
 import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.HUnit
 import           Test.Tasty.Ingredients.Rerun
 import           Test.Tasty.QuickCheck
-import           Data.IORef
-import           Ide.PluginUtils (pluginDescToIdePlugins)
-import           Control.Concurrent.Async
-import           Ide.Types
-import           Data.String                              (IsString(fromString))
-import qualified Language.LSP.Types                       as LSP
-import           Data.IORef.Extra                         (atomicModifyIORef_)
-import qualified Development.IDE.Plugin.HLS.GhcIde        as Ghcide
+import           Text.Printf                              (printf)
 import           Text.Regex.TDFA                          ((=~))
 
 waitForProgressBegin :: Session ()
@@ -1408,6 +1411,25 @@ extendImportTests = testGroup "extend import actions"
                     , "import A (pattern Some)"
                     , "k (Some x) = x"
                     ])
+        , testSession "type constructor name same as data constructor name" $ template
+            [("ModuleA.hs", T.unlines
+                    [ "module ModuleA where"
+                    , "newtype Foo = Foo Int"
+                    ])]
+            ("ModuleB.hs", T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA(Foo)"
+                    , "f :: Foo"
+                    , "f = Foo 1"
+                    ])
+            (Range (Position 3 4) (Position 3 6))
+            ["Add Foo(Foo) to the import list of ModuleA"]
+            (T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA(Foo (Foo))"
+                    , "f :: Foo"
+                    , "f = Foo 1"
+                    ])
         ]
       where
         codeActionTitle CodeAction{_title=x} = x
@@ -2386,6 +2408,48 @@ fillTypedHoleTests = let
       executeCodeAction chosen
       modifiedCode <- documentContents doc
       liftIO $ mkDoc "E.toException" @=? modifiedCode
+  , testSession "filling infix type hole uses prefix notation" $ do
+      let mkDoc x = T.unlines
+              [ "module Testing where"
+              , "data A = A"
+              , "foo :: A -> A -> A"
+              , "foo A A = A"
+              , "test :: A -> A -> A"
+              , "test a1 a2 = a1 " <> x <> " a2"
+              ]
+      doc <- createDoc "Test.hs" "haskell" $ mkDoc "`_`"
+      _ <- waitForDiagnostics
+      actions <- getCodeActions doc (Range (Position 5 16) (Position 5 19))
+      chosen <- liftIO $ pickActionWithTitle "replace _ with foo" actions
+      executeCodeAction chosen
+      modifiedCode <- documentContents doc
+      liftIO $ mkDoc "`foo`" @=? modifiedCode
+  , testSession "postfix hole uses postfix notation of infix operator" $ do
+      let mkDoc x = T.unlines
+              [ "module Testing where"
+              , "test :: Int -> Int -> Int"
+              , "test a1 a2 = " <> x <> " a1 a2"
+              ]
+      doc <- createDoc "Test.hs" "haskell" $ mkDoc "_"
+      _ <- waitForDiagnostics
+      actions <- getCodeActions doc (Range (Position 2 13) (Position 2 14))
+      chosen <- liftIO $ pickActionWithTitle "replace _ with (+)" actions
+      executeCodeAction chosen
+      modifiedCode <- documentContents doc
+      liftIO $ mkDoc "(+)" @=? modifiedCode
+  , testSession "filling infix type hole uses infix operator" $ do
+      let mkDoc x = T.unlines
+              [ "module Testing where"
+              , "test :: Int -> Int -> Int"
+              , "test a1 a2 = a1 " <> x <> " a2"
+              ]
+      doc <- createDoc "Test.hs" "haskell" $ mkDoc "`_`"
+      _ <- waitForDiagnostics
+      actions <- getCodeActions doc (Range (Position 2 16) (Position 2 19))
+      chosen <- liftIO $ pickActionWithTitle "replace _ with (+)" actions
+      executeCodeAction chosen
+      modifiedCode <- documentContents doc
+      liftIO $ mkDoc "+" @=? modifiedCode
   ]
 
 addInstanceConstraintTests :: TestTree
@@ -2624,6 +2688,7 @@ addImplicitParamsConstraintTests =
           "fCaller :: " <> mkContext contextCaller <> "()",
           "fCaller = fBase"
         ]
+
 removeRedundantConstraintsTests :: TestTree
 removeRedundantConstraintsTests = let
   header =
@@ -2631,6 +2696,13 @@ removeRedundantConstraintsTests = let
     , "module Testing where"
     , ""
     ]
+
+  headerExt :: [T.Text] -> [T.Text]
+  headerExt exts =
+    redunt : extTxt ++ ["module Testing where"]
+    where
+      redunt = "{-# OPTIONS_GHC -Wredundant-constraints #-}"
+      extTxt = map (\ext -> "{-# LANGUAGE " <> ext <> " #-}") exts
 
   redundantConstraintsCode :: Maybe T.Text -> T.Text
   redundantConstraintsCode mConstraint =
@@ -2648,18 +2720,106 @@ removeRedundantConstraintsTests = let
         , "foo x = x == 1"
         ]
 
-  typeSignatureSpaces :: T.Text
-  typeSignatureSpaces = T.unlines $ header <>
-    [ "foo ::  (Num a, Eq a, Monoid a)  => a -> Bool"
-    , "foo x = x == 1"
+  typeSignatureSpaces :: Maybe T.Text -> T.Text
+  typeSignatureSpaces mConstraint =
+    let constraint = maybe "(Num a, Eq a)" (\c -> "(Num a, Eq a, " <> c <> ")") mConstraint
+      in T.unlines $ header <>
+        [ "foo ::  " <> constraint <> " => a -> Bool"
+        , "foo x = x == 1"
+        ]
+
+  redundantConstraintsForall :: Maybe T.Text -> T.Text
+  redundantConstraintsForall mConstraint =
+    let constraint = maybe "" (\c -> "" <> c <> " => ") mConstraint
+      in T.unlines $ headerExt ["RankNTypes"] <>
+        [ "foo :: forall a. " <> constraint <> "a -> a"
+        , "foo = id"
+        ]
+
+  typeSignatureDo :: Maybe T.Text -> T.Text
+  typeSignatureDo mConstraint =
+    let constraint = maybe "" (\c -> "" <> c <> " => ") mConstraint
+      in T.unlines $ header <>
+        [ "f :: Int -> IO ()"
+        , "f n = do"
+        , "  let foo :: " <> constraint <> "a -> IO ()"
+        , "      foo _ = return ()"
+        , "  r n"
+        ]
+
+  typeSignatureNested :: Maybe T.Text -> T.Text
+  typeSignatureNested mConstraint =
+    let constraint = maybe "" (\c -> "" <> c <> " => ") mConstraint
+      in T.unlines $ header <>
+        [ "f :: Int -> ()"
+        , "f = g"
+        , "  where"
+        , "    g :: " <> constraint <> "a -> ()"
+        , "    g _ = ()"
+        ]
+
+  typeSignatureNested' :: Maybe T.Text -> T.Text
+  typeSignatureNested' mConstraint =
+    let constraint = maybe "" (\c -> "" <> c <> " => ") mConstraint
+      in T.unlines $ header <>
+        [ "f :: Int -> ()"
+        , "f ="
+        , "  let"
+        , "    g :: Int -> ()"
+        , "    g = h"
+        , "      where"
+        , "        h :: " <> constraint <> "a -> ()"
+        , "        h _ = ()"
+        , "  in g"
+        ]
+
+  typeSignatureNested'' :: Maybe T.Text -> T.Text
+  typeSignatureNested'' mConstraint =
+    let constraint = maybe "" (\c -> "" <> c <> " => ") mConstraint
+      in T.unlines $ header <>
+        [ "f :: Int -> ()"
+        , "f = g"
+        , "  where"
+        , "    g :: Int -> ()"
+        , "    g = "
+        , "      let"
+        , "        h :: " <> constraint <> "a -> ()"
+        , "        h _ = ()"
+        , "      in h"
+        ]
+
+  typeSignatureLined1 = T.unlines $ header <>
+    [ "foo :: Eq a =>"
+    , "  a -> Bool"
+    , "foo _ = True"
     ]
 
-  typeSignatureMultipleLines :: T.Text
-  typeSignatureMultipleLines = T.unlines $ header <>
-    [ "foo :: (Num a, Eq a, Monoid a)"
-    , "=> a -> Bool"
-    , "foo x = x == 1"
+  typeSignatureLined2 = T.unlines $ header <>
+    [ "foo :: (Eq a, Show a)"
+    , "  => a -> Bool"
+    , "foo _ = True"
     ]
+
+  typeSignatureOneLine = T.unlines $ header <>
+    [ "foo :: a -> Bool"
+    , "foo _ = True"
+    ]
+
+  typeSignatureLined3 = T.unlines $ header <>
+    [ "foo :: ( Eq a"
+    , "       , Show a"
+    , "       )"
+    , "    => a -> Bool"
+    , "foo x = x == x"
+    ]
+
+  typeSignatureLined3' = T.unlines $ header <>
+    [ "foo :: ( Eq a"
+    , "       )"
+    , "    => a -> Bool"
+    , "foo x = x == x"
+    ]
+
 
   check :: T.Text -> T.Text -> T.Text -> TestTree
   check actionTitle originalCode expectedCode = testSession (T.unpack actionTitle) $ do
@@ -2670,13 +2830,6 @@ removeRedundantConstraintsTests = let
     executeCodeAction chosenAction
     modifiedCode <- documentContents doc
     liftIO $ expectedCode @=? modifiedCode
-
-  checkPeculiarFormatting :: String -> T.Text -> TestTree
-  checkPeculiarFormatting title code = testSession title $ do
-    doc <- createDoc "Testing.hs" "haskell" code
-    _ <- waitForDiagnostics
-    actionsOrCommands <- getAllCodeActions doc
-    liftIO $ assertBool "Found some actions" (null actionsOrCommands)
 
   in testGroup "remove redundant function constraints"
   [ check
@@ -2691,12 +2844,42 @@ removeRedundantConstraintsTests = let
     "Remove redundant constraints `(Monoid a, Show a)` from the context of the type signature for `foo`"
     (redundantMixedConstraintsCode $ Just "Monoid a, Show a")
     (redundantMixedConstraintsCode Nothing)
-  , checkPeculiarFormatting
-    "should do nothing when constraints contain an arbitrary number of spaces"
-    typeSignatureSpaces
-  , checkPeculiarFormatting
-    "should do nothing when constraints contain line feeds"
-    typeSignatureMultipleLines
+  , check
+    "Remove redundant constraint `Eq a` from the context of the type signature for `g`"
+    (typeSignatureNested $ Just "Eq a")
+    (typeSignatureNested Nothing)
+  , check
+    "Remove redundant constraint `Eq a` from the context of the type signature for `h`"
+    (typeSignatureNested' $ Just "Eq a")
+    (typeSignatureNested' Nothing)
+  , check
+    "Remove redundant constraint `Eq a` from the context of the type signature for `h`"
+    (typeSignatureNested'' $ Just "Eq a")
+    (typeSignatureNested'' Nothing)
+  , check
+    "Remove redundant constraint `Eq a` from the context of the type signature for `foo`"
+    (redundantConstraintsForall $ Just "Eq a")
+    (redundantConstraintsForall Nothing)
+  , check
+    "Remove redundant constraint `Eq a` from the context of the type signature for `foo`"
+    (typeSignatureDo $ Just "Eq a")
+    (typeSignatureDo Nothing)
+  , check
+    "Remove redundant constraints `(Monoid a, Show a)` from the context of the type signature for `foo`"
+    (typeSignatureSpaces $ Just "Monoid a, Show a")
+    (typeSignatureSpaces Nothing)
+    , check
+    "Remove redundant constraint `Eq a` from the context of the type signature for `foo`"
+    typeSignatureLined1
+    typeSignatureOneLine
+    , check
+    "Remove redundant constraints `(Eq a, Show a)` from the context of the type signature for `foo`"
+    typeSignatureLined2
+    typeSignatureOneLine
+    , check
+    "Remove redundant constraint `Show a` from the context of the type signature for `foo`"
+    typeSignatureLined3
+    typeSignatureLined3'
   ]
 
 addSigActionTests :: TestTree
@@ -3417,7 +3600,7 @@ findDefinitionAndHoverTests = let
   , test  yes    yes    lclL33     lcb           "listcomp lookup"
   , test  yes    yes    mclL36     mcl           "top-level fn 1st clause"
   , test  yes    yes    mclL37     mcl           "top-level fn 2nd clause         #1030"
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
   , test  yes    yes    spaceL37   space         "top-level fn on space           #1002"
 #else
   , test  yes    broken spaceL37   space         "top-level fn on space           #1002"
@@ -3891,6 +4074,19 @@ localCompletionTests = [
         ,("abcdefg", CiFunction, "abcdefg", True, False, Nothing)
         ,("abcdefgh", CiFunction, "abcdefgh", True, False, Nothing)
         ,("abcdefghi", CiFunction, "abcdefghi", True, False, Nothing)
+        ],
+    completionTest
+        "class method"
+        [
+          "class Test a where"
+        , "    abcd :: a -> ()"
+        , "    abcde :: a -> Int"
+        , "instance Test Int where"
+        , "    abcd = abc"
+        ]
+        (Position 4 14)
+        [("abcd", CiFunction, "abcd", True, False, Nothing)
+        ,("abcde", CiFunction, "abcde", True, False, Nothing)
         ]
     ]
 
@@ -3900,7 +4096,7 @@ nonLocalCompletionTests =
       "variable"
       ["module A where", "f = hea"]
       (Position 1 7)
-      [("head", CiFunction, "head ${1:[a]}", True, True, Nothing)],
+      [("head", CiFunction, "head ${1:([a])}", True, True, Nothing)],
     completionTest
       "constructor"
       ["module A where", "f = Tru"]
@@ -3912,20 +4108,20 @@ nonLocalCompletionTests =
       "type"
       ["{-# OPTIONS_GHC -Wall #-}", "module A () where", "f :: Bo", "f = True"]
       (Position 2 7)
-      [ ("Bounded", CiInterface, "Bounded ${1:*}", True, True, Nothing),
+      [ ("Bounded", CiInterface, "Bounded ${1:(*)}", True, True, Nothing),
         ("Bool", CiStruct, "Bool ", True, True, Nothing)
       ],
     completionTest
       "qualified"
       ["{-# OPTIONS_GHC -Wunused-binds #-}", "module A () where", "f = Prelude.hea"]
       (Position 2 15)
-      [ ("head", CiFunction, "head ${1:[a]}", True, True, Nothing)
+      [ ("head", CiFunction, "head ${1:([a])}", True, True, Nothing)
       ],
     completionTest
       "duplicate import"
       ["module A where", "import Data.List", "import Data.List", "f = perm"]
       (Position 3 8)
-      [ ("permutations", CiFunction, "permutations ${1:[a]}", False, False, Nothing)
+      [ ("permutations", CiFunction, "permutations ${1:([a])}", False, False, Nothing)
       ],
     completionTest
        "dont show hidden items"
@@ -4148,7 +4344,7 @@ highlightTests = testGroup "highlight"
     highlights <- getHighlights doc (Position 4 15)
     liftIO $ highlights @?= List
       -- Span is just the .. on 8.10, but Rec{..} before
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
             [ DocumentHighlight (R 4 8 4 10) (Just HkWrite)
 #else
             [ DocumentHighlight (R 4 4 4 11) (Just HkWrite)
@@ -4159,7 +4355,7 @@ highlightTests = testGroup "highlight"
     liftIO $ highlights @?= List
             [ DocumentHighlight (R 3 17 3 23) (Just HkWrite)
       -- Span is just the .. on 8.10, but Rec{..} before
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
             , DocumentHighlight (R 4 8 4 10) (Just HkRead)
 #else
             , DocumentHighlight (R 4 4 4 11) (Just HkRead)
@@ -4372,7 +4568,7 @@ ignoreInWindowsBecause :: String -> TestTree -> TestTree
 ignoreInWindowsBecause = if isWindows then ignoreTestBecause else (\_ x -> x)
 
 ignoreInWindowsForGHC88And810 :: TestTree -> TestTree
-#if MIN_GHC_API_VERSION(8,8,1) && !MIN_GHC_API_VERSION(9,0,0)
+#if MIN_VERSION_ghc(8,8,1) && !MIN_VERSION_ghc(9,0,0)
 ignoreInWindowsForGHC88And810 =
     ignoreInWindowsBecause "tests are unreliable in windows for ghc 8.8 and 8.10"
 #else
@@ -4380,7 +4576,7 @@ ignoreInWindowsForGHC88And810 = id
 #endif
 
 ignoreInWindowsForGHC88 :: TestTree -> TestTree
-#if MIN_GHC_API_VERSION(8,8,1) && !MIN_GHC_API_VERSION(8,10,1)
+#if MIN_VERSION_ghc(8,8,1) && !MIN_VERSION_ghc(8,10,1)
 ignoreInWindowsForGHC88 =
     ignoreInWindowsBecause "tests are unreliable in windows for ghc 8.8"
 #else
@@ -4923,18 +5119,17 @@ clientSettingsTest :: TestTree
 clientSettingsTest = testGroup "client settings handling"
     [ testSession "ghcide restarts shake session on config changes" $ do
             void $ skipManyTill anyMessage $ message SClientRegisterCapability
+            void $ createDoc "A.hs" "haskell" "module A where"
+            waitForProgressDone
             sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON ("" :: String)))
-            nots <- skipManyTill anyMessage $ count 3 loggingNotification
-            isMessagePresent "Restarting build session" (map getLogMessage nots)
+            skipManyTill anyMessage restartingBuildSession
 
     ]
-  where getLogMessage :: FromServerMessage -> T.Text
-        getLogMessage (FromServerMess SWindowLogMessage (NotificationMessage _ _ (LogMessageParams _ msg))) = msg
-        getLogMessage _ = ""
-
-        isMessagePresent expectedMsg actualMsgs = liftIO $
-            assertBool ("\"" ++ expectedMsg ++ "\" is not present in: " ++ show actualMsgs)
-                       (any ((expectedMsg `isSubsequenceOf`) . show) actualMsgs)
+  where
+    restartingBuildSession :: Session ()
+    restartingBuildSession = do
+        FromServerMess SWindowLogMessage NotificationMessage{_params = LogMessageParams{..}} <- loggingNotification
+        guard $ "Restarting build session" `T.isInfixOf` _message
 
 referenceTests :: TestTree
 referenceTests = testGroup "references"
@@ -5300,7 +5495,23 @@ unitTests = do
             actualOrder <- liftIO $ readIORef orderRef
 
             liftIO $ actualOrder @?= reverse [(1::Int)..20]
+     , testCase "timestamps have millisecond resolution" $ do
+         resolution_us <- findResolution_us 1
+         let msg = printf "Timestamps do not have millisecond resolution: %dus" resolution_us
+         assertBool msg (resolution_us <= 1000)
+     , Progress.tests
      ]
+
+findResolution_us :: Int -> IO Int
+findResolution_us delay_us | delay_us >= 1000000 = error "Unable to compute timestamp resolution"
+findResolution_us delay_us = withTempFile $ \f -> withTempFile $ \f' -> do
+    writeFile f ""
+    threadDelay delay_us
+    writeFile f' ""
+    t <- getModTime f
+    t' <- getModTime f'
+    if t /= t' then return delay_us else findResolution_us (delay_us * 10)
+
 
 testIde :: IDE.Arguments -> Session () -> IO ()
 testIde arguments session = do

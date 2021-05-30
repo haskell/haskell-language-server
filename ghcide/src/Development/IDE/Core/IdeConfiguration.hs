@@ -14,13 +14,14 @@ where
 
 import           Control.Concurrent.Strict
 import           Control.Monad
+import           Control.Monad.IO.Class
 import           Data.Aeson.Types               (Value)
 import           Data.HashSet                   (HashSet, singleton)
 import           Data.Hashable                  (Hashed, hashed, unhashed)
 import           Data.Text                      (Text, isPrefixOf)
 import           Development.IDE.Core.Shake
+import           Development.IDE.Graph
 import           Development.IDE.Types.Location
-import           Development.Shake
 import           Language.LSP.Types
 import           System.FilePath                (isRelative)
 

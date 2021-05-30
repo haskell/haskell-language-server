@@ -26,8 +26,6 @@ tests = testGroup "format document" [
         BS.fromStrict . T.encodeUtf8 <$> documentContents doc
     , rangeTests
     , providerTests
-    , ormoluTests
-    , fourmoluTests
     ]
 
 rangeTests :: TestTree
@@ -48,12 +46,6 @@ providerTests = testGroup "formatting provider" [
         doc <- openDoc "Format.hs" "haskell"
         resp <- request STextDocumentFormatting $ DocumentFormattingParams Nothing doc (FormattingOptions 2 True Nothing Nothing Nothing)
         liftIO $ resp ^. LSP.result @?= Left (ResponseError InvalidRequest "No plugin enabled for STextDocumentFormatting, available: []" Nothing)
-
-    ,  testCase "respects initial" $ runSessionWithConfig (formatConfig "floskell") hlsCommand fullCaps "test/testdata/format" $ do
-        doc <- openDoc "Format.hs" "haskell"
-        formattedFloskell <- liftIO $ T.readFile "test/testdata/format/Format.floskell.initial.hs"
-        formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
-        documentContents doc >>= liftIO . (@?= formattedFloskell)
 
     , testCase "can change on the fly" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
         formattedOrmolu <- liftIO $ T.readFile "test/testdata/format/Format.ormolu.formatted.hs"
@@ -87,35 +79,6 @@ providerTests = testGroup "formatting provider" [
        formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
        documentContents doc >>= liftIO . (@?= formattedFloskell)
     ]
-
-
-ormoluTests :: TestTree
-ormoluTests = testGroup "ormolu"
-  [ goldenGitDiff "formats correctly" "test/testdata/format/Format.ormolu.formatted.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
-      sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "ormolu"))
-      doc <- openDoc "Format.hs" "haskell"
-      formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
-      BS.fromStrict . T.encodeUtf8 <$> documentContents doc
-  , goldenGitDiff "formats imports correctly" "test/testdata/format/Format2.ormolu.formatted.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
-      sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "ormolu"))
-      doc <- openDoc "Format2.hs" "haskell"
-      formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
-      BS.fromStrict . T.encodeUtf8 <$> documentContents doc
-  ]
-
-fourmoluTests :: TestTree
-fourmoluTests = testGroup "fourmolu"
-  [ goldenGitDiff "formats correctly" "test/testdata/format/Format.fourmolu.formatted.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
-      sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "fourmolu"))
-      doc <- openDoc "Format.hs" "haskell"
-      formatDoc doc (FormattingOptions 4 True Nothing Nothing Nothing)
-      BS.fromStrict . T.encodeUtf8 <$> documentContents doc
-  , goldenGitDiff "formats imports correctly" "test/testdata/format/Format2.fourmolu.formatted.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
-      sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "fourmolu"))
-      doc <- openDoc "Format2.hs" "haskell"
-      formatDoc doc (FormattingOptions 4 True Nothing Nothing Nothing)
-      BS.fromStrict . T.encodeUtf8 <$> documentContents doc
-  ]
 
 formatLspConfig :: Value -> Value
 formatLspConfig provider = object [ "haskell" .= object ["formattingProvider" .= (provider :: Value)] ]

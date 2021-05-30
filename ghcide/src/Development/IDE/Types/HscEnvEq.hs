@@ -24,8 +24,8 @@ import           Data.Unique
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error     (catchSrcErrors)
 import           Development.IDE.GHC.Util      (lookupPackageConfig)
+import           Development.IDE.Graph.Classes
 import           Development.IDE.Types.Exports (ExportsMap, createExportsMap)
-import           Development.Shake.Classes
 import           GhcPlugins                    (HscEnv (hsc_dflags),
                                                 InstalledPackageInfo (exposedModules),
                                                 Module (..),
@@ -164,4 +164,3 @@ onceAsync act = do
             pure (OnceRunning x, unmask $ run x)
 
 data Once a = OncePending | OnceRunning (Async a)
-

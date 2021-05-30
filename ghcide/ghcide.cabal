@@ -2,7 +2,7 @@ cabal-version:      2.4
 build-type:         Simple
 category:           Development
 name:               ghcide
-version:            1.1.0.0
+version:            1.3.0.0
 license:            Apache-2.0
 license-file:       LICENSE
 author:             Digital Asset and Ghcide contributors
@@ -14,7 +14,7 @@ description:
 homepage:           https://github.com/haskell/haskell-language-server/tree/master/ghcide#readme
 bug-reports:        https://github.com/haskell/haskell-language-server/issues
 tested-with:        GHC == 8.6.4 || == 8.6.5 || == 8.8.2 || == 8.8.3 || == 8.8.4 || == 8.10.2 || == 8.10.3 || == 8.10.4
-extra-source-files: include/ghc-api-version.h README.md CHANGELOG.md
+extra-source-files: README.md CHANGELOG.md
                     test/data/**/*.project
                     test/data/**/*.cabal
                     test/data/**/*.yaml
@@ -54,7 +54,7 @@ library
         ghc-exactprint,
         ghc-trace-events,
         Glob,
-        haddock-library ^>= 1.10.0,
+        haddock-library >= 1.8 && < 1.11,
         hashable,
         hie-compat ^>= 0.1.0.0,
         hls-plugin-api ^>= 1.1.0.0,
@@ -67,14 +67,13 @@ library
         optparse-applicative,
         parallel,
         prettyprinter-ansi-terminal,
-        prettyprinter-ansi-terminal,
         prettyprinter,
         regex-tdfa >= 1.3.1.0,
         retrie,
         rope-utf16-splay,
         safe,
         safe-exceptions,
-        shake >= 0.18.4,
+        hls-graph ^>= 1.3,
         sorted-list,
         sqlite-simple,
         stm,
@@ -108,8 +107,6 @@ library
     else
       build-depends:
         unix
-      c-sources:
-        cbits/getmodtime.c
 
     default-extensions:
         ApplicativeDo
@@ -136,10 +133,9 @@ library
     hs-source-dirs:
         src
         session-loader
-    include-dirs:
-        include
     exposed-modules:
         Control.Concurrent.Strict
+        Generics.SYB.GHC
         Development.IDE
         Development.IDE.Main
         Development.IDE.Core.Actions
@@ -149,6 +145,7 @@ library
         Development.IDE.Core.OfInterest
         Development.IDE.Core.PositionMapping
         Development.IDE.Core.Preprocessor
+        Development.IDE.Core.ProgressReporting
         Development.IDE.Core.Rules
         Development.IDE.Core.RuleTypes
         Development.IDE.Core.Service
@@ -253,8 +250,6 @@ benchmark benchHist
 
 executable ghcide
     default-language:   Haskell2010
-    include-dirs:
-        include
     hs-source-dirs:     exe
     ghc-options:
                 -threaded
@@ -287,7 +282,7 @@ executable ghcide
         ghcide,
         lens,
         optparse-applicative,
-        shake,
+        hls-graph,
         text,
         unordered-containers,
         aeson-pretty
@@ -332,9 +327,9 @@ test-suite ghcide-tests
         extra,
         filepath,
         --------------------------------------------------------------
-        -- The MIN_GHC_API_VERSION macro relies on MIN_VERSION pragmas
+        -- The MIN_VERSION_ghc macro relies on MIN_VERSION pragmas
         -- which require depending on ghc. So the tests need to depend
-        -- on ghc if they need to use MIN_GHC_API_VERSION. Maybe a
+        -- on ghc if they need to use MIN_VERSION_ghc. Maybe a
         -- better solution can be found, but this is a quick solution
         -- which works for now.
         ghc,
@@ -357,18 +352,19 @@ test-suite ghcide-tests
         safe,
         safe-exceptions,
         shake,
+        hls-graph,
         tasty,
         tasty-expected-failure,
         tasty-hunit,
         tasty-quickcheck,
         tasty-rerun,
-        text
+        text,
+        unordered-containers,
     if (impl(ghc >= 8.6))
       build-depends:
           record-dot-preprocessor,
           record-hasfield
     hs-source-dirs: test/cabal test/exe test/src bench/lib
-    include-dirs: include
     ghc-options: -threaded -Wall -Wno-name-shadowing -O0 -Wno-unticked-promoted-constructors
     main-is: Main.hs
     other-modules:
@@ -376,6 +372,7 @@ test-suite ghcide-tests
         Development.IDE.Test.Runfiles
         Experiments
         Experiments.Types
+        Progress
     default-extensions:
         BangPatterns
         DeriveFunctor
@@ -409,10 +406,10 @@ executable ghcide-bench
         optparse-applicative,
         process,
         safe-exceptions,
+        hls-graph,
         shake,
         text
     hs-source-dirs: bench/lib bench/exe
-    include-dirs: include
     ghc-options: -threaded -Wall -Wno-name-shadowing -rtsopts
     main-is: Main.hs
     other-modules:

@@ -2,7 +2,6 @@
 {-# LANGUAGE GADTs      #-}
 {-# LANGUAGE MultiWayIf #-}
 
-#include "ghc-api-version.h"
 
 -- Mostly taken from "haskell-ide-engine"
 module Development.IDE.Plugin.Completions.Logic (
@@ -29,7 +28,7 @@ import           HscTypes
 import           Name
 import           RdrName
 import           Type
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
 import           Coercion
 import           Pair
 import           Predicate                                (isDictTy)
@@ -60,6 +59,7 @@ import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities
 import qualified Language.LSP.VFS                         as VFS
 import           Outputable                               (Outputable)
+import           TyCoRep
 
 -- From haskell-ide-engine/hie-plugin-api/Haskell/Ide/Engine/Context.hs
 
@@ -247,9 +247,16 @@ mkNameCompItem doc thingParent origName origMod thingType isInfix docs !imp = CI
       where
         argTypes = getArgs typ
         argText :: T.Text
-        argText =  mconcat $ List.intersperse " " $ zipWithFrom snippet 1 argTypes
+        argText = mconcat $ List.intersperse " " $ zipWithFrom snippet 1 argTypes
         snippet :: Int -> Type -> T.Text
-        snippet i t = "${" <> T.pack (show i) <> ":" <> showGhc t <> "}"
+        snippet i t = case t of
+            (TyVarTy _)     -> noParensSnippet
+            (LitTy _)       -> noParensSnippet
+            (TyConApp _ []) -> noParensSnippet
+            _               -> snippetText i ("(" <> showGhc t <> ")")
+            where
+                noParensSnippet = snippetText i (showGhc t)
+                snippetText i t = "${" <> T.pack (show i) <> ":" <> t <> "}"
         getArgs :: Type -> [Type]
         getArgs t
           | isPredTy t = []
@@ -261,7 +268,7 @@ mkNameCompItem doc thingParent origName origMod thingType isInfix docs !imp = CI
                   then getArgs ret
                   else Prelude.filter (not . isDictTy) args
           | isPiTy t = getArgs $ snd (splitPiTys t)
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
           | Just (Pair _ t) <- coercionKind <$> isCoercionTy_maybe t
           = getArgs t
 #else
@@ -407,7 +414,7 @@ localCompletionsForParsedModule uri pm@ParsedModule{pm_parsed_source = L _ HsMod
             TyClD _ ClassDecl{tcdLName, tcdSigs} ->
                 mkComp tcdLName CiInterface Nothing :
                 [ mkComp id CiFunction (Just $ ppr typ)
-                | L _ (TypeSig _ ids typ) <- tcdSigs
+                | L _ (ClassOpSig _ _ ids typ) <- tcdSigs
                 , id <- ids]
             TyClD _ x ->
                 let generalCompls = [mkComp id cl Nothing

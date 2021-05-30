@@ -29,7 +29,7 @@ knownStrategies = choice
 -- | Guard a tactic behind a feature.
 featureGuard :: Feature -> TacticsM a -> TacticsM a
 featureGuard feat t = do
-  fs <- asks ctxFeatureSet
+  fs <- asks $ cfg_feature_set . ctxConfig
   case hasFeature feat fs of
     True -> t
     False -> empty

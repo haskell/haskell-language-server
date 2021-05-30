@@ -42,10 +42,11 @@ import           Development.IDE.Core.Rules            (GhcSessionIO (GhcSession
 import           Development.IDE.Core.Service          (initialise, runAction)
 import           Development.IDE.Core.Shake            (IdeState (shakeExtras),
                                                         ShakeExtras (state),
-                                                        uses)
+                                                        shakeSessionInit, uses)
 import           Development.IDE.Core.Tracing          (measureMemory)
+import           Development.IDE.Graph                 (action)
 import           Development.IDE.LSP.LanguageServer    (runLanguageServer)
-import           Development.IDE.Plugin                (Plugin (pluginHandlers, pluginRules))
+import           Development.IDE.Plugin                (Plugin (pluginHandlers, pluginModifyDynflags, pluginRules))
 import           Development.IDE.Plugin.HLS            (asGhcIdePlugin)
 import qualified Development.IDE.Plugin.HLS.GhcIde     as Ghcide
 import           Development.IDE.Session               (SessionLoadingOptions,
@@ -59,9 +60,9 @@ import           Development.IDE.Types.Logger          (Logger (Logger))
 import           Development.IDE.Types.Options         (IdeGhcSession,
                                                         IdeOptions (optCheckParents, optCheckProject, optReportProgress),
                                                         clientSupportsProgress,
-                                                        defaultIdeOptions)
+                                                        defaultIdeOptions,
+                                                        optModifyDynFlags)
 import           Development.IDE.Types.Shake           (Key (Key))
-import           Development.Shake                     (action)
 import           GHC.IO.Encoding                       (setLocaleEncoding)
 import           GHC.IO.Handle                         (hDuplicate)
 import           HIE.Bios.Cradle                       (findCradle)
@@ -216,8 +217,10 @@ defaultMain Arguments{..} = do
 
                 sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions $ fromMaybe dir rootPath
                 config <- LSP.runLspT env LSP.getConfig
-                let options = (argsIdeOptions config sessionLoader)
+                let def_options = argsIdeOptions config sessionLoader
+                    options = def_options
                             { optReportProgress = clientSupportsProgress caps
+                            , optModifyDynFlags = optModifyDynFlags def_options <> pluginModifyDynflags plugins
                             }
                     caps = LSP.resClientCapabilities env
                 initialise
@@ -256,11 +259,14 @@ defaultMain Arguments{..} = do
             putStrLn "\nStep 3/4: Initializing the IDE"
             vfs <- makeVFSHandle
             sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions dir
-            let options = (argsIdeOptions argsDefaultHlsConfig sessionLoader)
+            let def_options = argsIdeOptions argsDefaultHlsConfig sessionLoader
+                options = def_options
                         { optCheckParents = pure NeverCheck
                         , optCheckProject = pure False
+                        , optModifyDynFlags = optModifyDynFlags def_options <> pluginModifyDynflags plugins
                         }
             ide <- initialise argsDefaultHlsConfig rules Nothing logger debouncer options vfs hiedb hieChan
+            shakeSessionInit ide
             registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
 
             putStrLn "\nStep 4/4: Type checking the files"
@@ -303,12 +309,14 @@ defaultMain Arguments{..} = do
           runWithDb dbLoc $ \hiedb hieChan -> do
             vfs <- makeVFSHandle
             sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions "."
-            let options =
-                  (argsIdeOptions argsDefaultHlsConfig sessionLoader)
-                    { optCheckParents = pure NeverCheck,
-                      optCheckProject = pure False
+            let def_options = argsIdeOptions argsDefaultHlsConfig sessionLoader
+                options = def_options
+                    { optCheckParents = pure NeverCheck
+                    , optCheckProject = pure False
+                    , optModifyDynFlags = optModifyDynFlags def_options <> pluginModifyDynflags plugins
                     }
             ide <- initialise argsDefaultHlsConfig rules Nothing logger debouncer options vfs hiedb hieChan
+            shakeSessionInit ide
             registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
             c ide
 

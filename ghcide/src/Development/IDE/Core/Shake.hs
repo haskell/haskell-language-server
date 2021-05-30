@@ -3,6 +3,7 @@
 
 {-# LANGUAGE ConstraintKinds           #-}
 {-# LANGUAGE DerivingStrategies        #-}
+{-# LANGUAGE DuplicateRecordFields     #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE PolyKinds                 #-}
 {-# LANGUAGE RankNTypes                #-}
@@ -23,7 +24,7 @@
 --   always stored as real Haskell values, whereas Shake serialises all 'A' values
 --   between runs. To deserialise a Shake value, we just consult Values.
 module Development.IDE.Core.Shake(
-    IdeState, shakeExtras,
+    IdeState, shakeSessionInit, shakeExtras,
     ShakeExtras(..), getShakeExtras, getShakeExtrasRules,
     KnownTargets, Target(..), toKnownFiles,
     IdeRule, IdeResult,
@@ -32,6 +33,7 @@ module Development.IDE.Core.Shake(
     shakeRestart,
     shakeEnqueue,
     shakeProfile,
+    newSession,
     use, useNoFile, uses, useWithStaleFast, useWithStaleFast', delayedAction,
     FastResult(..),
     use_, useNoFile_, uses_,
@@ -42,6 +44,7 @@ module Development.IDE.Core.Shake(
     define, defineNoDiagnostics,
     defineEarlyCutoff,
     defineOnDisk, needOnDisk, needOnDisks,
+    defineNoFile, defineEarlyCutOffNoFile,
     getDiagnostics,
     mRunLspT, mRunLspTCallback,
     getHiddenDiagnostics,
@@ -83,55 +86,54 @@ import           Control.DeepSeq
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader
-import qualified Control.Monad.STM                    as STM
 import           Control.Monad.Trans.Maybe
-import qualified Data.ByteString.Char8                as BS
+import qualified Data.ByteString.Char8                  as BS
 import           Data.Dynamic
-import qualified Data.HashMap.Strict                  as HMap
+import qualified Data.HashMap.Strict                    as HMap
 import           Data.Hashable
-import           Data.List.Extra                      (partition, takeEnd)
-import           Data.Map.Strict                      (Map)
-import qualified Data.Map.Strict                      as Map
+import           Data.List.Extra                        (partition, takeEnd)
+import           Data.Map.Strict                        (Map)
+import qualified Data.Map.Strict                        as Map
 import           Data.Maybe
-import qualified Data.Set                             as Set
-import qualified Data.SortedList                      as SL
-import qualified Data.Text                            as T
+import qualified Data.Set                               as Set
+import qualified Data.SortedList                        as SL
+import qualified Data.Text                              as T
 import           Data.Time
 import           Data.Traversable
 import           Data.Tuple.Extra
 import           Data.Typeable
 import           Data.Unique
-import           Data.Vector                          (Vector)
-import qualified Data.Vector                          as Vector
+import           Data.Vector                            (Vector)
+import qualified Data.Vector                            as Vector
 import           Development.IDE.Core.Debouncer
 import           Development.IDE.Core.PositionMapping
+import           Development.IDE.Core.ProgressReporting
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Tracing
-import           Development.IDE.GHC.Compat           (NameCacheUpdater (..),
-                                                       upNameCache)
-import           Development.IDE.GHC.Orphans          ()
+import           Development.IDE.GHC.Compat             (NameCacheUpdater (..),
+                                                         upNameCache)
+import           Development.IDE.GHC.Orphans            ()
+import           Development.IDE.Graph                  hiding (ShakeValue)
+import qualified Development.IDE.Graph                  as Shake
+import           Development.IDE.Graph.Classes
+import           Development.IDE.Graph.Database
+import           Development.IDE.Graph.Rule
 import           Development.IDE.Types.Action
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.KnownTargets
 import           Development.IDE.Types.Location
-import           Development.IDE.Types.Logger         hiding (Priority)
-import qualified Development.IDE.Types.Logger         as Logger
+import           Development.IDE.Types.Logger           hiding (Priority)
+import qualified Development.IDE.Types.Logger           as Logger
 import           Development.IDE.Types.Options
 import           Development.IDE.Types.Shake
-import           Development.Shake                    hiding (Info, ShakeValue,
-                                                       doesFileExist)
-import qualified Development.Shake                    as Shake
-import           Development.Shake.Classes
-import           Development.Shake.Database
-import           Development.Shake.Rule
 import           GHC.Generics
 import           Language.LSP.Diagnostics
-import qualified Language.LSP.Server                  as LSP
+import qualified Language.LSP.Server                    as LSP
 import           Language.LSP.Types
-import qualified Language.LSP.Types                   as LSP
+import qualified Language.LSP.Types                     as LSP
 import           Language.LSP.VFS
-import           System.FilePath                      hiding (makeRelative)
+import           System.FilePath                        hiding (makeRelative)
 import           System.Time.Extra
 
 import           Data.IORef
@@ -142,13 +144,12 @@ import           OpenTelemetry.Eventlog
 import           PrelInfo
 import           UniqSupply
 
-import           Control.Exception.Extra              hiding (bracket_)
+import           Control.Exception.Extra                hiding (bracket_)
 import           Data.Default
 import           HieDb.Types
 import           Ide.Plugin.Config
-import qualified Ide.PluginUtils                      as HLS
-import           Ide.Types                            (PluginId)
-import           UnliftIO.Exception                   (bracket_)
+import qualified Ide.PluginUtils                        as HLS
+import           Ide.Types                              (PluginId)
 
 -- | We need to serialize writes to the database, so we send any function that
 -- needs to write to the database over the channel, where it will be picked up by
@@ -183,13 +184,9 @@ data ShakeExtras = ShakeExtras
     -- positions in a version of that document to positions in the latest version
     -- First mapping is delta from previous version and second one is an
     -- accumlation of all previous mappings.
-    ,inProgress :: Var (HMap.HashMap NormalizedFilePath Int)
-    -- ^ How many rules are running for each file
-    ,progressUpdate :: ProgressEvent -> IO ()
+    ,progress :: ProgressReporting
     ,ideTesting :: IdeTesting
     -- ^ Whether to enable additional lsp messages used by the test suite for checking invariants
-    ,session :: MVar ShakeSession
-    -- ^ Used in the GhcSession rule to forcefully restart the session after adding a new component
     ,restartShakeSession :: [DelayedAction ()] -> IO ()
     ,ideNc :: IORef NameCache
     -- | A mapping of module name to known target (or candidate targets, if missing)
@@ -213,10 +210,6 @@ type WithProgressFunc = forall a.
     T.Text -> LSP.ProgressCancellable -> ((LSP.ProgressAmount -> IO ()) -> IO a) -> IO a
 type WithIndefiniteProgressFunc = forall a.
     T.Text -> LSP.ProgressCancellable -> IO a -> IO a
-
-data ProgressEvent
-    = KickStarted
-    | KickCompleted
 
 type GetStalePersistent = NormalizedFilePath -> IdeAction (Maybe (Dynamic,PositionDelta,TextDocumentVersion))
 
@@ -384,12 +377,11 @@ newtype ShakeSession = ShakeSession
 -- | A Shake database plus persistent store. Can be thought of as storing
 --   mappings from @(FilePath, k)@ to @RuleResult k@.
 data IdeState = IdeState
-    {shakeDb               :: ShakeDatabase
-    ,shakeSession          :: MVar ShakeSession
-    ,shakeClose            :: IO ()
-    ,shakeExtras           :: ShakeExtras
-    ,shakeDatabaseProfile  :: ShakeDatabase -> IO (Maybe FilePath)
-    ,stopProgressReporting :: IO ()
+    {shakeDb              :: ShakeDatabase
+    ,shakeSession         :: MVar ShakeSession
+    ,shakeClose           :: IO ()
+    ,shakeExtras          :: ShakeExtras
+    ,shakeDatabaseProfile :: ShakeDatabase -> IO (Maybe FilePath)
     }
 
 
@@ -477,10 +469,9 @@ shakeOpen :: Maybe (LSP.LanguageContextEnv Config)
 shakeOpen lspEnv defaultConfig logger debouncer
   shakeProfileDir (IdeReportProgress reportProgress) ideTesting@(IdeTesting testing) hiedb indexQueue vfs opts rules = mdo
 
-    inProgress <- newVar HMap.empty
     us <- mkSplitUniqSupply 'r'
     ideNc <- newIORef (initNameCache us knownKeyNames)
-    (shakeExtras, stopProgressReporting) <- do
+    shakeExtras <- do
         globals <- newVar HMap.empty
         state <- newVar HMap.empty
         diagnostics <- newVar mempty
@@ -489,31 +480,29 @@ shakeOpen lspEnv defaultConfig logger debouncer
         positionMapping <- newVar HMap.empty
         knownTargetsVar <- newVar $ hashed HMap.empty
         let restartShakeSession = shakeRestart ideState
-        let session = shakeSession
-        mostRecentProgressEvent <- newTVarIO KickCompleted
         persistentKeys <- newVar HMap.empty
-        let progressUpdate = atomically . writeTVar mostRecentProgressEvent
         indexPending <- newTVarIO HMap.empty
         indexCompleted <- newTVarIO 0
         indexProgressToken <- newVar Nothing
         let hiedbWriter = HieDbWriter{..}
-        progressAsync <- async $
-            when reportProgress $
-                progressThread optProgressStyle mostRecentProgressEvent inProgress
         exportsMap <- newVar mempty
 
+        progress <- do
+            let (before, after) = if testing then (0,0.1) else (0.1,0.1)
+            if reportProgress
+                then delayedProgressReporting before after lspEnv optProgressStyle
+                else noProgressReporting
         actionQueue <- newQueue
 
         let clientCapabilities = maybe def LSP.resClientCapabilities lspEnv
 
-        pure (ShakeExtras{..}, cancel progressAsync)
+        pure ShakeExtras{..}
     (shakeDbM, shakeClose) <-
         shakeOpenDatabase
-            opts { shakeExtra = addShakeExtra shakeExtras $ shakeExtra opts }
+            opts { shakeExtra = newShakeExtra shakeExtras }
             rules
     shakeDb <- shakeDbM
-    initSession <- newSession shakeExtras shakeDb []
-    shakeSession <- newMVar initSession
+    shakeSession <- newEmptyMVar
     shakeDatabaseProfile <- shakeDatabaseProfileIO shakeProfileDir
     let ideState = IdeState{..}
 
@@ -524,93 +513,12 @@ shakeOpen lspEnv defaultConfig logger debouncer
     startTelemetry otProfilingEnabled logger $ state shakeExtras
 
     return ideState
-    where
-        -- The progress thread is a state machine with two states:
-        --   1. Idle
-        --   2. Reporting a kick event
-        -- And two transitions, modelled by 'ProgressEvent':
-        --   1. KickCompleted - transitions from Reporting into Idle
-        --   2. KickStarted - transitions from Idle into Reporting
-        progressThread style mostRecentProgressEvent inProgress = progressLoopIdle
-          where
-            progressLoopIdle = do
-                atomically $ do
-                    v <- readTVar mostRecentProgressEvent
-                    case v of
-                        KickCompleted -> STM.retry
-                        KickStarted   -> return ()
-                asyncReporter <- async $ mRunLspT lspEnv lspShakeProgress
-                progressLoopReporting asyncReporter
-            progressLoopReporting asyncReporter = do
-                atomically $ do
-                    v <- readTVar mostRecentProgressEvent
-                    case v of
-                        KickStarted   -> STM.retry
-                        KickCompleted -> return ()
-                cancel asyncReporter
-                progressLoopIdle
 
-            lspShakeProgress :: LSP.LspM config ()
-            lspShakeProgress = do
-                -- first sleep a bit, so we only show progress messages if it's going to take
-                -- a "noticable amount of time" (we often expect a thread kill to arrive before the sleep finishes)
-                liftIO $ unless testing $ sleep 0.1
-                u <- ProgressTextToken . T.pack . show . hashUnique <$> liftIO newUnique
-
-                void $ LSP.sendRequest LSP.SWindowWorkDoneProgressCreate
-                    LSP.WorkDoneProgressCreateParams { _token = u } $ const (pure ())
-
-                bracket_
-                  (start u)
-                  (stop u)
-                  (loop u 0)
-                where
-                    start id = LSP.sendNotification LSP.SProgress $
-                        LSP.ProgressParams
-                            { _token = id
-                            , _value = LSP.Begin $ WorkDoneProgressBeginParams
-                              { _title = "Processing"
-                              , _cancellable = Nothing
-                              , _message = Nothing
-                              , _percentage = Nothing
-                              }
-                            }
-                    stop id = LSP.sendNotification LSP.SProgress
-                        LSP.ProgressParams
-                            { _token = id
-                            , _value = LSP.End WorkDoneProgressEndParams
-                              { _message = Nothing
-                              }
-                            }
-                    sample = 0.1
-                    loop id prev = do
-                        liftIO $ sleep sample
-                        current <- liftIO $ readVar inProgress
-                        let done = length $ filter (== 0) $ HMap.elems current
-                        let todo = HMap.size current
-                        let next = 100 * fromIntegral done / fromIntegral todo
-                        when (next /= prev) $
-                          LSP.sendNotification LSP.SProgress $
-                          LSP.ProgressParams
-                              { _token = id
-                              , _value = LSP.Report $ case style of
-                                  Explicit -> LSP.WorkDoneProgressReportParams
-                                    { _cancellable = Nothing
-                                    , _message = Just $ T.pack $ show done <> "/" <> show todo
-                                    , _percentage = Nothing
-                                    }
-                                  Percentage -> LSP.WorkDoneProgressReportParams
-                                    { _cancellable = Nothing
-                                    , _message = Nothing
-                                    , _percentage = Just next
-                                    }
-                                  NoProgress -> LSP.WorkDoneProgressReportParams
-                                    { _cancellable = Nothing
-                                    , _message = Nothing
-                                    , _percentage = Nothing
-                                    }
-                              }
-                        loop id next
+-- | Must be called in the 'Initialized' handler and only once
+shakeSessionInit :: IdeState -> IO ()
+shakeSessionInit IdeState{..} = do
+    initSession <- newSession shakeExtras shakeDb []
+    putMVar shakeSession initSession
 
 shakeProfile :: IdeState -> FilePath -> IO ()
 shakeProfile IdeState{..} = shakeProfileDatabase shakeDb
@@ -621,7 +529,7 @@ shakeShut IdeState{..} = withMVar shakeSession $ \runner -> do
     -- request so we first abort that.
     void $ cancelShakeSession runner
     shakeClose
-    stopProgressReporting
+    progressStop $ progress shakeExtras
 
 
 -- | This is a variant of withMVar where the first argument is run unmasked and if it throws
@@ -765,18 +673,6 @@ instantiateDelayedAction (DelayedAction _ s p a) = do
           liftIO $ void $ try @SomeException $ signalBarrier b x
       d' = DelayedAction (Just u) s p a'
   return (b, d')
-
-mRunLspT :: Applicative m => Maybe (LSP.LanguageContextEnv c ) -> LSP.LspT c m () -> m ()
-mRunLspT (Just lspEnv) f = LSP.runLspT lspEnv f
-mRunLspT Nothing _       = pure ()
-
-mRunLspTCallback :: Monad m
-                 => Maybe (LSP.LanguageContextEnv c)
-                 -> (LSP.LspT c m a -> LSP.LspT c m a)
-                 -> m a
-                 -> m a
-mRunLspTCallback (Just lspEnv) f g = LSP.runLspT lspEnv $ f (lift g)
-mRunLspTCallback Nothing _ g       = g
 
 getDiagnostics :: IdeState -> IO [FileDiagnostic]
 getDiagnostics IdeState{shakeExtras = ShakeExtras{diagnostics}} = do
@@ -933,10 +829,20 @@ defineEarlyCutoff
     :: IdeRule k v
     => RuleBody k v
     -> Rules ()
-defineEarlyCutoff (Rule op) = addBuiltinRule noLint noIdentity $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file isSuccess $ do
+defineEarlyCutoff (Rule op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode isSuccess $ do
     defineEarlyCutoff' True key file old mode $ op key file
-defineEarlyCutoff (RuleNoDiagnostics op) = addBuiltinRule noLint noIdentity $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file isSuccess $ do
+defineEarlyCutoff (RuleNoDiagnostics op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode isSuccess $ do
     defineEarlyCutoff' False key file old mode $ second (mempty,) <$> op key file
+
+defineNoFile :: IdeRule k v => (k -> Action v) -> Rules ()
+defineNoFile f = defineNoDiagnostics $ \k file -> do
+    if file == emptyFilePath then do res <- f k; return (Just res) else
+        fail $ "Rule " ++ show k ++ " should always be called with the empty string for a file"
+
+defineEarlyCutOffNoFile :: IdeRule k v => (k -> Action (BS.ByteString, v)) -> Rules ()
+defineEarlyCutOffNoFile f = defineEarlyCutoff $ RuleNoDiagnostics $ \k file -> do
+    if file == emptyFilePath then do (hash, res) <- f k; return (Just hash, Just res) else
+        fail $ "Rule " ++ show k ++ " should always be called with the empty string for a file"
 
 defineEarlyCutoff'
     :: IdeRule k v
@@ -948,9 +854,9 @@ defineEarlyCutoff'
     -> Action (Maybe BS.ByteString, IdeResult v)
     -> Action (RunResult (A (RuleResult k)))
 defineEarlyCutoff' doDiagnostics key file old mode action = do
-    extras@ShakeExtras{state, inProgress, logger} <- getShakeExtras
+    extras@ShakeExtras{state, progress, logger} <- getShakeExtras
     options <- getIdeOptions
-    (if optSkipProgress options key then id else withProgressVar inProgress file) $ do
+    (if optSkipProgress options key then id else inProgress progress file) $ do
         val <- case old of
             Just old | mode == RunDependenciesSame -> do
                 v <- liftIO $ getValues state key file
@@ -997,18 +903,10 @@ defineEarlyCutoff' doDiagnostics key file old mode action = do
                     (if eq then ChangedRecomputeSame else ChangedRecomputeDiff)
                     (encodeShakeValue bs) $
                     A res
-    where
 
-        withProgressVar :: (Eq a, Hashable a) => Var (HMap.HashMap a Int) -> a -> Action b -> Action b
-        withProgressVar var file = actionBracket (f succ) (const $ f pred) . const
-            -- This functions are deliberately eta-expanded to avoid space leaks.
-            -- Do not remove the eta-expansion without profiling a session with at
-            -- least 1000 modifications.
-            where f shift = void $ modifyVar' var $ HMap.insertWith (\_ x -> shift x) file (shift 0)
-
-isSuccess :: RunResult (A v) -> Bool
-isSuccess (RunResult _ _ (A Failed{})) = False
-isSuccess _                            = True
+isSuccess :: A v -> Bool
+isSuccess (A Failed{}) = False
+isSuccess _            = True
 
 -- | Rule type, input file
 data QDisk k = QDisk k NormalizedFilePath
@@ -1046,7 +944,7 @@ defineOnDisk
   :: (Shake.ShakeValue k, RuleResult k ~ ())
   => (k -> NormalizedFilePath -> OnDiskRule)
   -> Rules ()
-defineOnDisk act = addBuiltinRule noLint noIdentity $
+defineOnDisk act = addRule $
   \(QDisk key file) (mbOld :: Maybe BS.ByteString) mode -> do
       extras <- getShakeExtras
       let OnDiskRule{..} = act key file

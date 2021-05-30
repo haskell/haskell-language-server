@@ -3,11 +3,12 @@
 module Wingman.Machinery where
 
 import           Class (Class (classTyVars))
+import           Control.Applicative (empty)
 import           Control.Lens ((<>~))
 import           Control.Monad.Error.Class
 import           Control.Monad.Reader
 import           Control.Monad.State.Class (gets, modify)
-import           Control.Monad.State.Strict (StateT (..))
+import           Control.Monad.State.Strict (StateT (..), execStateT)
 import           Data.Bool (bool)
 import           Data.Coerce
 import           Data.Either
@@ -22,13 +23,15 @@ import           Data.Monoid (getSum)
 import           Data.Ord (Down (..), comparing)
 import           Data.Set (Set)
 import qualified Data.Set as S
+import           Development.IDE.Core.Compile (lookupName)
 import           Development.IDE.GHC.Compat
-import           OccName (HasOccName (occName))
+import           GhcPlugins (GlobalRdrElt (gre_name), lookupOccEnv, varType)
+import           OccName (HasOccName (occName), OccEnv)
 import           Refinery.ProofState
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           TcType
-import           Type
+import           Type (tyCoVarsOfTypeWellScoped, splitTyConApp_maybe)
 import           Unify
 import           Wingman.Judgements
 import           Wingman.Simplify (simplify)
@@ -50,6 +53,10 @@ newSubgoal j = do
     subgoal
       $ substJdg unifier
       $ unsetIsTopHole j
+
+
+tacticToRule :: Judgement -> TacticsM () -> Rule
+tacticToRule jdg (TacticT tt) = RuleT $ flip execStateT jdg tt >>= flip Subgoal Axiom
 
 
 ------------------------------------------------------------------------------
@@ -82,11 +89,12 @@ runTactic ctx jdg t =
               flip sortBy solns $ comparing $ \(ext, (_, holes)) ->
                 Down $ scoreSolution ext jdg holes
         case sorted of
-          ((syn, _) : _) ->
+          ((syn, (_, subgoals)) : _) ->
             Right $
               RunTacticResults
-                { rtr_trace = syn_trace syn
-                , rtr_extract = simplify $ syn_val syn
+                { rtr_trace    = syn_trace syn
+                , rtr_extract  = simplify $ syn_val syn
+                , rtr_subgoals = subgoals
                 , rtr_other_solns = reverse . fmap fst $ sorted
                 , rtr_jdg = jdg
                 , rtr_ctx = ctx
@@ -297,4 +305,69 @@ try'
     => TacticT jdg ext err s m ()
     -> TacticT jdg ext err s m ()
 try' t = commit t $ pure ()
+
+
+------------------------------------------------------------------------------
+-- | Sorry leaves a hole in its extract
+exact :: HsExpr GhcPs -> TacticsM ()
+exact = rule . const . pure . pure . noLoc
+
+------------------------------------------------------------------------------
+-- | Lift a function over 'HyInfo's to one that takes an 'OccName' and tries to
+-- look it up in the hypothesis.
+useNameFromHypothesis :: (HyInfo CType -> TacticsM a) -> OccName -> TacticsM a
+useNameFromHypothesis f name = do
+  hy <- jHypothesis <$> goal
+  case M.lookup name $ hyByName hy of
+    Just hi -> f hi
+    Nothing -> throwError $ NotInScope name
+
+------------------------------------------------------------------------------
+-- | Lift a function over 'HyInfo's to one that takes an 'OccName' and tries to
+-- look it up in the hypothesis.
+useNameFromContext :: (HyInfo CType -> TacticsM a) -> OccName -> TacticsM a
+useNameFromContext f name = do
+  lookupNameInContext name >>= \case
+    Just ty -> f $ createImportedHyInfo name ty
+    Nothing -> throwError $ NotInScope name
+
+
+------------------------------------------------------------------------------
+-- | Find the type of an 'OccName' that is defined in the current module.
+lookupNameInContext :: MonadReader Context m => OccName -> m (Maybe CType)
+lookupNameInContext name = do
+  ctx <- asks ctxModuleFuncs
+  pure $ case find ((== name) . fst) ctx of
+    Just (_, ty) -> pure ty
+    Nothing      -> empty
+
+
+------------------------------------------------------------------------------
+-- | Build a 'HyInfo' for an imported term.
+createImportedHyInfo :: OccName -> CType -> HyInfo CType
+createImportedHyInfo on ty = HyInfo
+  { hi_name = on
+  , hi_provenance = ImportPrv
+  , hi_type = ty
+  }
+
+
+------------------------------------------------------------------------------
+-- | Lookup the type of any 'OccName' that was imported. Necessarily done in
+-- IO, so we only expose this functionality to the parser. Internal Haskell
+-- code that wants to lookup terms should do it via 'KnownThings'.
+getOccNameType
+    :: HscEnv
+    -> OccEnv [GlobalRdrElt]
+    -> Module
+    -> OccName
+    -> IO (Maybe Type)
+getOccNameType hscenv rdrenv modul occ =
+  case lookupOccEnv rdrenv occ of
+    Just (elt : _) -> do
+      mvar <- lookupName hscenv modul $ gre_name elt
+      pure $ case mvar of
+        Just (AnId v) -> pure $ varType v
+        _ -> Nothing
+    _ -> pure Nothing
 

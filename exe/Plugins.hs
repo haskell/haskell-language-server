@@ -29,12 +29,16 @@ import           Ide.Plugin.Eval                   as Eval
 import           Ide.Plugin.ExplicitImports        as ExplicitImports
 #endif
 
-#if retrie
-import           Ide.Plugin.Retrie                 as Retrie
+#if refineImports
+import           Ide.Plugin.RefineImports          as RefineImports
 #endif
 
 #if rename
 import           Ide.Plugin.Rename                 as Rename
+#endif
+
+#if retrie
+import           Ide.Plugin.Retrie                 as Retrie
 #endif
 
 #if tactic
@@ -111,11 +115,11 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
 #if stylishHaskell
       StylishHaskell.descriptor "stylish-haskell" :
 #endif
-#if retrie
-      Retrie.descriptor "retrie" :
-#endif
 #if rename
       Rename.descriptor "rename" :
+#endif
+#if retrie
+      Retrie.descriptor "retrie" :
 #endif
 #if brittany
       Brittany.descriptor "brittany" :
@@ -131,6 +135,9 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
 #endif
 #if importLens
       ExplicitImports.descriptor "importLens" :
+#endif
+#if refineImports
+      RefineImports.descriptor "refineImports" :
 #endif
 #if moduleName
       ModuleName.descriptor "moduleName" :
