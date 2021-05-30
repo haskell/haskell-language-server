@@ -38,6 +38,9 @@ jobs:
         include:
           # only test supported ghc major versions
           - os: ubuntu-latest
+            ghc: '9.0.1'
+            test: true
+          - os: ubuntu-latest
             ghc: '8.10.4'
             test: true
           - os: windows-latest
