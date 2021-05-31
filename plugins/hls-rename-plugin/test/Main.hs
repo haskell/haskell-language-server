@@ -31,6 +31,8 @@ tests = testGroup "rename"
         rename doc (Position 0 13) "b" -- bar :: Maybe a -> Maybe a
     , goldenWithRename "imported function" "ImportedFunction" $ \doc -> do
         rename doc (Position 0 35) "baz" -- import           FunctionArgument (foo)
+    , goldenWithRename "GADT" "Gadt" $ \doc -> do
+        rename doc (Position 6 35) "Expr" -- Even    :: Expression Int -> Expression Bool
     ]
 
 goldenWithRename :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
