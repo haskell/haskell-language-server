@@ -478,11 +478,11 @@ generateHieAsts hscEnv tcm =
     let fake_splice_binds = listToBag (map (mkVarBind unitDataConId) (spliceExpresions $ tmrTopLevelSplices tcm))
         real_binds = tcg_binds $ tmrTypechecked tcm
 #if MIN_VERSION_ghc(9,0,1)
-        -- TODO: Use some proper values here!
-        evBinds = emptyBag @EvBind :: Bag EvBind
-        clsInsts = [] :: [ClsInst]
-        tyCons = []   :: [TyCon]
-    Just <$> GHC.enrichHie (fake_splice_binds `unionBags` real_binds) (tmrRenamed tcm) evBinds clsInsts tyCons
+        ts = tmrTypechecked tcm :: TcGblEnv
+        top_ev_binds = tcg_ev_binds ts :: Bag EvBind
+        insts = tcg_insts ts :: [ClsInst]
+        tcs = tcg_tcs ts :: [TyCon]
+    Just <$> GHC.enrichHie (fake_splice_binds `unionBags` real_binds) (tmrRenamed tcm) top_ev_binds insts tcs
 #else
     Just <$> GHC.enrichHie (fake_splice_binds `unionBags` real_binds) (tmrRenamed tcm)
 #endif
