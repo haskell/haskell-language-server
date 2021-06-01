@@ -11,10 +11,8 @@ module Development.IDE.LSP.Notifications
     , descriptor
     ) where
 
-import qualified Language.LSP.Server                   as LSP
 import           Language.LSP.Types
 import qualified Language.LSP.Types                    as LSP
-import qualified Language.LSP.Types.Capabilities       as LSP
 
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.Service
@@ -31,7 +29,8 @@ import qualified Data.Text                             as Text
 import           Control.Monad.IO.Class
 import           Development.IDE.Core.FileExists       (modifyFileExists,
                                                         watchedGlobs)
-import           Development.IDE.Core.FileStore        (resetFileStore,
+import           Development.IDE.Core.FileStore        (registerFileWatches,
+                                                        resetFileStore,
                                                         setFileModified,
                                                         setSomethingModified,
                                                         typecheckParents)
@@ -108,38 +107,15 @@ descriptor plId = (defaultPluginDescriptor plId) { pluginNotificationHandlers = 
       liftIO $ shakeSessionInit ide
 
       --------- Set up file watchers ------------------------------------------------------------------------
-      clientCapabilities <- LSP.getClientCapabilities
-      let watchSupported = case () of
-            _ | LSP.ClientCapabilities{_workspace} <- clientCapabilities
-              , Just LSP.WorkspaceClientCapabilities{_didChangeWatchedFiles} <- _workspace
-              , Just LSP.DidChangeWatchedFilesClientCapabilities{_dynamicRegistration} <- _didChangeWatchedFiles
-              , Just True <- _dynamicRegistration
-                -> True
-              | otherwise -> False
-      if watchSupported
-      then do
-        opts <- liftIO $ getIdeOptionsIO $ shakeExtras ide
-        let
-          regParams    = RegistrationParams (List [SomeRegistration registration])
-          -- The registration ID is arbitrary and is only used in case we want to deregister (which we won't).
-          -- We could also use something like a random UUID, as some other servers do, but this works for
-          -- our purposes.
-          registration = Registration "globalFileWatches"
-                                      SWorkspaceDidChangeWatchedFiles
-                                      regOptions
-          regOptions =
-            DidChangeWatchedFilesRegistrationOptions { _watchers = List watchers }
-          -- See Note [File existence cache and LSP file watchers] for why this exists, and the choice of watch kind
-          watchKind = WatchKind { _watchCreate = True, _watchChange = True, _watchDelete = True}
-          -- See Note [Which files should we watch?] for an explanation of why the pattern is the way that it is
-          -- The patterns will be something like "**/.hs", i.e. "any number of directory segments,
-          -- followed by a file with an extension 'hs'.
-          watcher glob = FileSystemWatcher { _globPattern = glob, _kind = Just watchKind }
-          -- We use multiple watchers instead of one using '{}' because lsp-test doesn't
-          -- support that: https://github.com/bubba/lsp-test/issues/77
-          watchers = [ watcher (Text.pack glob) | glob <- watchedGlobs opts ]
-
-        void $ LSP.sendRequest SClientRegisterCapability regParams (const $ pure ()) -- TODO handle response
-      else liftIO $ logDebug (ideLogger ide) "Warning: Client does not support watched files. Falling back to OS polling"
+      opts <- liftIO $ getIdeOptionsIO $ shakeExtras ide
+        -- See Note [Which files should we watch?] for an explanation of why the pattern is the way that it is
+        -- The patterns will be something like "**/.hs", i.e. "any number of directory segments,
+        -- followed by a file with an extension 'hs'.
+        -- We use multiple watchers instead of one using '{}' because lsp-test doesn't
+        -- support that: https://github.com/bubba/lsp-test/issues/77
+      let globs = watchedGlobs opts
+      success <- registerFileWatches globs
+      unless success $
+        liftIO $ logDebug (ideLogger ide) "Warning: Client does not support watched files. Falling back to OS polling"
   ]
     }

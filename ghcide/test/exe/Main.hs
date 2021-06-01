@@ -763,17 +763,18 @@ watchedFilesTests = testGroup "watched files"
       _doc <- createDoc "A.hs" "haskell" "{-#LANGUAGE NoImplicitPrelude #-}\nmodule A where\nimport WatchedFilesMissingModule"
       watchedFileRegs <- getWatchedFilesSubscriptionsUntil STextDocumentPublishDiagnostics
 
-      -- Expect 1 subscription: we only ever send one
-      liftIO $ length watchedFileRegs @?= 1
+      -- Expect 2 subscriptions: one for all .hs files and one for the hie.yaml cradle
+      liftIO $ length watchedFileRegs @?= 2
 
   , testSession' "non workspace file" $ \sessionDir -> do
       tmpDir <- liftIO getTemporaryDirectory
-      liftIO $ writeFile (sessionDir </> "hie.yaml") ("cradle: {direct: {arguments: [\"-i" <> tmpDir <> "\", \"A\", \"WatchedFilesMissingModule\"]}}")
+      let yaml = "cradle: {direct: {arguments: [\"-i" <> tail(init(show tmpDir)) <> "\", \"A\", \"WatchedFilesMissingModule\"]}}"
+      liftIO $ writeFile (sessionDir </> "hie.yaml") yaml
       _doc <- createDoc "A.hs" "haskell" "{-# LANGUAGE NoImplicitPrelude#-}\nmodule A where\nimport WatchedFilesMissingModule"
       watchedFileRegs <- getWatchedFilesSubscriptionsUntil STextDocumentPublishDiagnostics
 
-      -- Expect 1 subscription: we only ever send one
-      liftIO $ length watchedFileRegs @?= 1
+      -- Expect 2 subscriptions: one for all .hs files and one for the hie.yaml cradle
+      liftIO $ length watchedFileRegs @?= 2
 
   -- TODO add a test for didChangeWorkspaceFolder
   ]
@@ -4733,7 +4734,8 @@ dependentFileTest = testGroup "addDependentFile"
       test dir = do
         -- If the file contains B then no type error
         -- otherwise type error
-        liftIO $ writeFile (dir </> "dep-file.txt") "A"
+        let depFilePath = dir </> "dep-file.txt"
+        liftIO $ writeFile depFilePath "A"
         let fooContent = T.unlines
               [ "{-# LANGUAGE TemplateHaskell #-}"
               , "module Foo where"
@@ -4745,18 +4747,21 @@ dependentFileTest = testGroup "addDependentFile"
               , "               if f == \"B\" then [| 1 |] else lift f)"
               ]
         let bazContent = T.unlines ["module Baz where", "import Foo ()"]
-        _ <-createDoc "Foo.hs" "haskell" fooContent
+        _ <- createDoc "Foo.hs" "haskell" fooContent
         doc <- createDoc "Baz.hs" "haskell" bazContent
         expectDiagnostics
           [("Foo.hs", [(DsError, (4, 6), "Couldn't match expected type")])]
         -- Now modify the dependent file
-        liftIO $ writeFile (dir </> "dep-file.txt") "B"
+        liftIO $ writeFile depFilePath "B"
+        sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
+          List [FileEvent (filePathToUri "dep-file.txt") FcChanged ]
+
+        -- Modifying Baz will now trigger Foo to be rebuilt as well
         let change = TextDocumentContentChangeEvent
               { _range = Just (Range (Position 2 0) (Position 2 6))
               , _rangeLength = Nothing
               , _text = "f = ()"
               }
-        -- Modifying Baz will now trigger Foo to be rebuilt as well
         changeDoc doc [change]
         expectDiagnostics [("Foo.hs", [])]
 
@@ -5018,6 +5023,8 @@ sessionDepsArePickedUp = testSession'
       writeFileUTF8
         (dir </> "hie.yaml")
         "cradle: {direct: {arguments: [-XOverloadedStrings]}}"
+    sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
+          List [FileEvent (filePathToUri $ dir </> "hie.yaml") FcChanged ]
     -- Send change event.
     let change =
           TextDocumentContentChangeEvent
@@ -5049,7 +5056,7 @@ nonLspCommandLine = testGroup "ghcide command line"
 
         (ec, _, _) <- readCreateProcessWithExitCode cmd ""
 
-        ec @=? ExitSuccess
+        ec @?= ExitSuccess
   ]
 
 benchmarkTests :: TestTree

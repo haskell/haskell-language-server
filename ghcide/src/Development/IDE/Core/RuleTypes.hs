@@ -267,6 +267,8 @@ type instance RuleResult GetFileContents = (FileVersion, Maybe Text)
 
 type instance RuleResult GetFileExists = Bool
 
+type instance RuleResult AddWatchedFile = Bool
+
 
 -- The Shake key type for getModificationTime queries
 newtype GetModificationTime = GetModificationTime_
@@ -492,6 +494,12 @@ instance NFData   GetClientSettings
 instance Binary   GetClientSettings
 
 type instance RuleResult GetClientSettings = Hashed (Maybe Value)
+
+data AddWatchedFile = AddWatchedFile deriving (Eq, Show, Typeable, Generic)
+instance Hashable AddWatchedFile
+instance NFData   AddWatchedFile
+instance Binary   AddWatchedFile
+
 
 -- A local rule type to get caching. We want to use newCache, but it has
 -- thread killed exception issues, so we lift it to a full rule.
