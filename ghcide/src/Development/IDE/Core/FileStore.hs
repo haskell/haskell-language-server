@@ -112,7 +112,7 @@ addWatchedFileRule isWatched = defineNoDiagnostics $ \AddWatchedFile f -> do
     case lspEnv of
         Just env -> fmap Just $ liftIO $ LSP.runLspT env $
             registerFileWatches [fromNormalizedFilePath f]
-        Nothing -> pure Nothing
+        Nothing -> pure $ Just False
 
 isFileOfInterestRule :: Rules ()
 isFileOfInterestRule = defineEarlyCutoff $ RuleNoDiagnostics $ \IsFileOfInterest f -> do
