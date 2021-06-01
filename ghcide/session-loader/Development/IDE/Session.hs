@@ -525,15 +525,12 @@ cradleToOptsAndLibDir cradle file = do
 
 emptyHscEnv :: IORef NameCache -> FilePath -> IO HscEnv
 emptyHscEnv nc libDir = do
-#if MIN_VERSION_ghc(9,0,0)
-    -- Without the seemingly redundant `getSessionDynFlags >>= setSessionDynFlags`
-    -- the line `initDynLinker env` would crash with the errror:
-    -- `Couldn't find a target code interpreter. Try with -fexternal-interpreter`
-    env <- runGhc (Just libDir) $ getSessionDynFlags >>= setSessionDynFlags >> getSession
-#else
     env <- runGhc (Just libDir) getSession
-#endif
+#if !MIN_VERSION_ghc(9,0,0)
+    -- This causes ghc9 to crash with the error:
+    -- Couldn't find a target code interpreter. Try with -fexternal-interpreter
     initDynLinker env
+#endif
     pure $ setNameCache nc env{ hsc_dflags = (hsc_dflags env){useUnicode = True } }
 
 data TargetDetails = TargetDetails
