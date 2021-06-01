@@ -67,6 +67,7 @@ import qualified Development.IDE.Types.Logger                 as L
 import qualified Data.Binary                                  as B
 import qualified Data.ByteString.Lazy                         as LBS
 import qualified Data.Text                                    as Text
+import           Development.IDE.Core.IdeConfiguration        (isWorkspaceFile)
 import           Language.LSP.Server                          hiding
                                                               (getVirtualFile)
 import qualified Language.LSP.Server                          as LSP
@@ -107,12 +108,14 @@ makeLSPVFSHandle lspEnv = VFSHandle
 addWatchedFileRule :: (NormalizedFilePath -> Action Bool) -> Rules ()
 addWatchedFileRule isWatched = defineNoDiagnostics $ \AddWatchedFile f -> do
   isAlreadyWatched <- isWatched f
-  if isAlreadyWatched then pure (Just True) else do
-    ShakeExtras{lspEnv} <- getShakeExtras
-    case lspEnv of
-        Just env -> fmap Just $ liftIO $ LSP.runLspT env $
-            registerFileWatches [fromNormalizedFilePath f]
-        Nothing -> pure $ Just False
+  isWp <- isWorkspaceFile f
+  if isAlreadyWatched then pure (Just True) else
+    if not isWp then pure (Just False) else do
+        ShakeExtras{lspEnv} <- getShakeExtras
+        case lspEnv of
+            Just env -> fmap Just $ liftIO $ LSP.runLspT env $
+                registerFileWatches [fromNormalizedFilePath f]
+            Nothing -> pure $ Just False
 
 isFileOfInterestRule :: Rules ()
 isFileOfInterestRule = defineEarlyCutoff $ RuleNoDiagnostics $ \IsFileOfInterest f -> do
@@ -335,7 +338,7 @@ registerFileWatches globs = do
           -- support that: https://github.com/bubba/lsp-test/issues/77
           watchers = [ watcher (Text.pack glob) | glob <- globs ]
 
-        void $ LSP.sendRequest LSP.SClientRegisterCapability regParams (const $ pure ()) -- TODO handle response
+        void $ LSP.sendRequest LSP.SClientRegisterCapability regParams (const $ pure ())
         return True
       else return False
 
