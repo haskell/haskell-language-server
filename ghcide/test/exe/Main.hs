@@ -11,7 +11,6 @@
 {-# LANGUAGE PolyKinds             #-}
 {-# LANGUAGE TypeOperators         #-}
 {-# OPTIONS_GHC -Wno-deprecations -Wno-unticked-promoted-constructors #-}
-#include "ghc-api-version.h"
 
 module Main (main) where
 
@@ -36,8 +35,8 @@ import           Development.IDE.Core.PositionMapping     (PositionResult (..),
                                                            positionResultToMaybe,
                                                            toCurrent)
 import           Development.IDE.Core.Shake               (Q (..))
-import qualified Development.IDE.Main                     as IDE
 import           Development.IDE.GHC.Util
+import qualified Development.IDE.Main                     as IDE
 import           Development.IDE.Plugin.Completions.Types (extendImportCommandId)
 import           Development.IDE.Plugin.TypeLenses        (typeLensCommandId)
 import           Development.IDE.Spans.Common
@@ -75,32 +74,36 @@ import           System.IO.Extra                          hiding (withTempDir)
 import qualified System.IO.Extra
 import           System.Info.Extra                        (isWindows)
 import           System.Process.Extra                     (CreateProcess (cwd),
-                                                           proc,
-                                                           readCreateProcessWithExitCode, createPipe)
+                                                           createPipe, proc,
+                                                           readCreateProcessWithExitCode)
 import           Test.QuickCheck
 -- import Test.QuickCheck.Instances ()
+import           Control.Concurrent                       (threadDelay)
+import           Control.Concurrent.Async
 import           Control.Lens                             ((^.))
 import           Control.Monad.Extra                      (whenJust)
+import           Data.IORef
+import           Data.IORef.Extra                         (atomicModifyIORef_)
+import           Data.String                              (IsString (fromString))
 import           Data.Tuple.Extra
+import           Development.IDE.Core.FileStore           (getModTime)
 import           Development.IDE.Plugin.CodeAction        (matchRegExMultipleImports)
+import qualified Development.IDE.Plugin.HLS.GhcIde        as Ghcide
 import           Development.IDE.Plugin.Test              (TestRequest (BlockSeconds, GetInterfaceFilesDir),
                                                            WaitForIdeRuleResult (..),
                                                            blockCommandId)
+import           Ide.PluginUtils                          (pluginDescToIdePlugins)
+import           Ide.Types
+import qualified Language.LSP.Types                       as LSP
 import qualified Language.LSP.Types.Lens                  as L
+import qualified Progress
 import           System.Time.Extra
 import           Test.Tasty
 import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.HUnit
 import           Test.Tasty.Ingredients.Rerun
 import           Test.Tasty.QuickCheck
-import           Data.IORef
-import           Ide.PluginUtils (pluginDescToIdePlugins)
-import           Control.Concurrent.Async
-import           Ide.Types
-import           Data.String                              (IsString(fromString))
-import qualified Language.LSP.Types                       as LSP
-import           Data.IORef.Extra                         (atomicModifyIORef_)
-import qualified Development.IDE.Plugin.HLS.GhcIde        as Ghcide
+import           Text.Printf                              (printf)
 import           Text.Regex.TDFA                          ((=~))
 
 waitForProgressBegin :: Session ()
@@ -760,17 +763,18 @@ watchedFilesTests = testGroup "watched files"
       _doc <- createDoc "A.hs" "haskell" "{-#LANGUAGE NoImplicitPrelude #-}\nmodule A where\nimport WatchedFilesMissingModule"
       watchedFileRegs <- getWatchedFilesSubscriptionsUntil STextDocumentPublishDiagnostics
 
-      -- Expect 1 subscription: we only ever send one
-      liftIO $ length watchedFileRegs @?= 1
+      -- Expect 2 subscriptions: one for all .hs files and one for the hie.yaml cradle
+      liftIO $ length watchedFileRegs @?= 2
 
   , testSession' "non workspace file" $ \sessionDir -> do
       tmpDir <- liftIO getTemporaryDirectory
-      liftIO $ writeFile (sessionDir </> "hie.yaml") ("cradle: {direct: {arguments: [\"-i" <> tmpDir <> "\", \"A\", \"WatchedFilesMissingModule\"]}}")
+      let yaml = "cradle: {direct: {arguments: [\"-i" <> tail(init(show tmpDir)) <> "\", \"A\", \"WatchedFilesMissingModule\"]}}"
+      liftIO $ writeFile (sessionDir </> "hie.yaml") yaml
       _doc <- createDoc "A.hs" "haskell" "{-# LANGUAGE NoImplicitPrelude#-}\nmodule A where\nimport WatchedFilesMissingModule"
       watchedFileRegs <- getWatchedFilesSubscriptionsUntil STextDocumentPublishDiagnostics
 
-      -- Expect 1 subscription: we only ever send one
-      liftIO $ length watchedFileRegs @?= 1
+      -- Expect 2 subscriptions: one for all .hs files and one for the hie.yaml cradle
+      liftIO $ length watchedFileRegs @?= 2
 
   -- TODO add a test for didChangeWorkspaceFolder
   ]
@@ -2685,6 +2689,7 @@ addImplicitParamsConstraintTests =
           "fCaller :: " <> mkContext contextCaller <> "()",
           "fCaller = fBase"
         ]
+
 removeRedundantConstraintsTests :: TestTree
 removeRedundantConstraintsTests = let
   header =
@@ -2692,6 +2697,13 @@ removeRedundantConstraintsTests = let
     , "module Testing where"
     , ""
     ]
+
+  headerExt :: [T.Text] -> [T.Text]
+  headerExt exts =
+    redunt : extTxt ++ ["module Testing where"]
+    where
+      redunt = "{-# OPTIONS_GHC -Wredundant-constraints #-}"
+      extTxt = map (\ext -> "{-# LANGUAGE " <> ext <> " #-}") exts
 
   redundantConstraintsCode :: Maybe T.Text -> T.Text
   redundantConstraintsCode mConstraint =
@@ -2709,18 +2721,106 @@ removeRedundantConstraintsTests = let
         , "foo x = x == 1"
         ]
 
-  typeSignatureSpaces :: T.Text
-  typeSignatureSpaces = T.unlines $ header <>
-    [ "foo ::  (Num a, Eq a, Monoid a)  => a -> Bool"
-    , "foo x = x == 1"
+  typeSignatureSpaces :: Maybe T.Text -> T.Text
+  typeSignatureSpaces mConstraint =
+    let constraint = maybe "(Num a, Eq a)" (\c -> "(Num a, Eq a, " <> c <> ")") mConstraint
+      in T.unlines $ header <>
+        [ "foo ::  " <> constraint <> " => a -> Bool"
+        , "foo x = x == 1"
+        ]
+
+  redundantConstraintsForall :: Maybe T.Text -> T.Text
+  redundantConstraintsForall mConstraint =
+    let constraint = maybe "" (\c -> "" <> c <> " => ") mConstraint
+      in T.unlines $ headerExt ["RankNTypes"] <>
+        [ "foo :: forall a. " <> constraint <> "a -> a"
+        , "foo = id"
+        ]
+
+  typeSignatureDo :: Maybe T.Text -> T.Text
+  typeSignatureDo mConstraint =
+    let constraint = maybe "" (\c -> "" <> c <> " => ") mConstraint
+      in T.unlines $ header <>
+        [ "f :: Int -> IO ()"
+        , "f n = do"
+        , "  let foo :: " <> constraint <> "a -> IO ()"
+        , "      foo _ = return ()"
+        , "  r n"
+        ]
+
+  typeSignatureNested :: Maybe T.Text -> T.Text
+  typeSignatureNested mConstraint =
+    let constraint = maybe "" (\c -> "" <> c <> " => ") mConstraint
+      in T.unlines $ header <>
+        [ "f :: Int -> ()"
+        , "f = g"
+        , "  where"
+        , "    g :: " <> constraint <> "a -> ()"
+        , "    g _ = ()"
+        ]
+
+  typeSignatureNested' :: Maybe T.Text -> T.Text
+  typeSignatureNested' mConstraint =
+    let constraint = maybe "" (\c -> "" <> c <> " => ") mConstraint
+      in T.unlines $ header <>
+        [ "f :: Int -> ()"
+        , "f ="
+        , "  let"
+        , "    g :: Int -> ()"
+        , "    g = h"
+        , "      where"
+        , "        h :: " <> constraint <> "a -> ()"
+        , "        h _ = ()"
+        , "  in g"
+        ]
+
+  typeSignatureNested'' :: Maybe T.Text -> T.Text
+  typeSignatureNested'' mConstraint =
+    let constraint = maybe "" (\c -> "" <> c <> " => ") mConstraint
+      in T.unlines $ header <>
+        [ "f :: Int -> ()"
+        , "f = g"
+        , "  where"
+        , "    g :: Int -> ()"
+        , "    g = "
+        , "      let"
+        , "        h :: " <> constraint <> "a -> ()"
+        , "        h _ = ()"
+        , "      in h"
+        ]
+
+  typeSignatureLined1 = T.unlines $ header <>
+    [ "foo :: Eq a =>"
+    , "  a -> Bool"
+    , "foo _ = True"
     ]
 
-  typeSignatureMultipleLines :: T.Text
-  typeSignatureMultipleLines = T.unlines $ header <>
-    [ "foo :: (Num a, Eq a, Monoid a)"
-    , "=> a -> Bool"
-    , "foo x = x == 1"
+  typeSignatureLined2 = T.unlines $ header <>
+    [ "foo :: (Eq a, Show a)"
+    , "  => a -> Bool"
+    , "foo _ = True"
     ]
+
+  typeSignatureOneLine = T.unlines $ header <>
+    [ "foo :: a -> Bool"
+    , "foo _ = True"
+    ]
+
+  typeSignatureLined3 = T.unlines $ header <>
+    [ "foo :: ( Eq a"
+    , "       , Show a"
+    , "       )"
+    , "    => a -> Bool"
+    , "foo x = x == x"
+    ]
+
+  typeSignatureLined3' = T.unlines $ header <>
+    [ "foo :: ( Eq a"
+    , "       )"
+    , "    => a -> Bool"
+    , "foo x = x == x"
+    ]
+
 
   check :: T.Text -> T.Text -> T.Text -> TestTree
   check actionTitle originalCode expectedCode = testSession (T.unpack actionTitle) $ do
@@ -2731,13 +2831,6 @@ removeRedundantConstraintsTests = let
     executeCodeAction chosenAction
     modifiedCode <- documentContents doc
     liftIO $ expectedCode @=? modifiedCode
-
-  checkPeculiarFormatting :: String -> T.Text -> TestTree
-  checkPeculiarFormatting title code = testSession title $ do
-    doc <- createDoc "Testing.hs" "haskell" code
-    _ <- waitForDiagnostics
-    actionsOrCommands <- getAllCodeActions doc
-    liftIO $ assertBool "Found some actions" (null actionsOrCommands)
 
   in testGroup "remove redundant function constraints"
   [ check
@@ -2752,12 +2845,42 @@ removeRedundantConstraintsTests = let
     "Remove redundant constraints `(Monoid a, Show a)` from the context of the type signature for `foo`"
     (redundantMixedConstraintsCode $ Just "Monoid a, Show a")
     (redundantMixedConstraintsCode Nothing)
-  , checkPeculiarFormatting
-    "should do nothing when constraints contain an arbitrary number of spaces"
-    typeSignatureSpaces
-  , checkPeculiarFormatting
-    "should do nothing when constraints contain line feeds"
-    typeSignatureMultipleLines
+  , check
+    "Remove redundant constraint `Eq a` from the context of the type signature for `g`"
+    (typeSignatureNested $ Just "Eq a")
+    (typeSignatureNested Nothing)
+  , check
+    "Remove redundant constraint `Eq a` from the context of the type signature for `h`"
+    (typeSignatureNested' $ Just "Eq a")
+    (typeSignatureNested' Nothing)
+  , check
+    "Remove redundant constraint `Eq a` from the context of the type signature for `h`"
+    (typeSignatureNested'' $ Just "Eq a")
+    (typeSignatureNested'' Nothing)
+  , check
+    "Remove redundant constraint `Eq a` from the context of the type signature for `foo`"
+    (redundantConstraintsForall $ Just "Eq a")
+    (redundantConstraintsForall Nothing)
+  , check
+    "Remove redundant constraint `Eq a` from the context of the type signature for `foo`"
+    (typeSignatureDo $ Just "Eq a")
+    (typeSignatureDo Nothing)
+  , check
+    "Remove redundant constraints `(Monoid a, Show a)` from the context of the type signature for `foo`"
+    (typeSignatureSpaces $ Just "Monoid a, Show a")
+    (typeSignatureSpaces Nothing)
+    , check
+    "Remove redundant constraint `Eq a` from the context of the type signature for `foo`"
+    typeSignatureLined1
+    typeSignatureOneLine
+    , check
+    "Remove redundant constraints `(Eq a, Show a)` from the context of the type signature for `foo`"
+    typeSignatureLined2
+    typeSignatureOneLine
+    , check
+    "Remove redundant constraint `Show a` from the context of the type signature for `foo`"
+    typeSignatureLined3
+    typeSignatureLined3'
   ]
 
 addSigActionTests :: TestTree
@@ -3478,7 +3601,7 @@ findDefinitionAndHoverTests = let
   , test  yes    yes    lclL33     lcb           "listcomp lookup"
   , test  yes    yes    mclL36     mcl           "top-level fn 1st clause"
   , test  yes    yes    mclL37     mcl           "top-level fn 2nd clause         #1030"
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
   , test  yes    yes    spaceL37   space         "top-level fn on space           #1002"
 #else
   , test  yes    broken spaceL37   space         "top-level fn on space           #1002"
@@ -4222,7 +4345,7 @@ highlightTests = testGroup "highlight"
     highlights <- getHighlights doc (Position 4 15)
     liftIO $ highlights @?= List
       -- Span is just the .. on 8.10, but Rec{..} before
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
             [ DocumentHighlight (R 4 8 4 10) (Just HkWrite)
 #else
             [ DocumentHighlight (R 4 4 4 11) (Just HkWrite)
@@ -4233,7 +4356,7 @@ highlightTests = testGroup "highlight"
     liftIO $ highlights @?= List
             [ DocumentHighlight (R 3 17 3 23) (Just HkWrite)
       -- Span is just the .. on 8.10, but Rec{..} before
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
             , DocumentHighlight (R 4 8 4 10) (Just HkRead)
 #else
             , DocumentHighlight (R 4 4 4 11) (Just HkRead)
@@ -4446,7 +4569,7 @@ ignoreInWindowsBecause :: String -> TestTree -> TestTree
 ignoreInWindowsBecause = if isWindows then ignoreTestBecause else (\_ x -> x)
 
 ignoreInWindowsForGHC88And810 :: TestTree -> TestTree
-#if MIN_GHC_API_VERSION(8,8,1) && !MIN_GHC_API_VERSION(9,0,0)
+#if MIN_VERSION_ghc(8,8,1) && !MIN_VERSION_ghc(9,0,0)
 ignoreInWindowsForGHC88And810 =
     ignoreInWindowsBecause "tests are unreliable in windows for ghc 8.8 and 8.10"
 #else
@@ -4454,7 +4577,7 @@ ignoreInWindowsForGHC88And810 = id
 #endif
 
 ignoreInWindowsForGHC88 :: TestTree -> TestTree
-#if MIN_GHC_API_VERSION(8,8,1) && !MIN_GHC_API_VERSION(8,10,1)
+#if MIN_VERSION_ghc(8,8,1) && !MIN_VERSION_ghc(8,10,1)
 ignoreInWindowsForGHC88 =
     ignoreInWindowsBecause "tests are unreliable in windows for ghc 8.8"
 #else
@@ -4571,7 +4694,6 @@ retryFailedCradle = testSession' "retry failed" $ \dir -> do
   let hieContents = "cradle: {bios: {shell: \"false\"}}"
       hiePath = dir </> "hie.yaml"
   liftIO $ writeFile hiePath hieContents
-  hieDoc <- createDoc hiePath "yaml" $ T.pack hieContents
   let aPath = dir </> "A.hs"
   doc <- createDoc aPath "haskell" "main = return ()"
   Right WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" doc
@@ -4580,15 +4702,8 @@ retryFailedCradle = testSession' "retry failed" $ \dir -> do
   -- Fix the cradle and typecheck again
   let validCradle = "cradle: {bios: {shell: \"echo A.hs\"}}"
   liftIO $ writeFileUTF8 hiePath $ T.unpack validCradle
-  changeDoc
-    hieDoc
-    [ TextDocumentContentChangeEvent
-        { _range = Nothing,
-          _rangeLength = Nothing,
-          _text = validCradle
-        }
-    ]
-
+  sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
+          List [FileEvent (filePathToUri $ dir </> "hie.yaml") FcChanged ]
   -- Force a session restart by making an edit, just to dirty the typecheck node
   changeDoc
     doc
@@ -4611,7 +4726,8 @@ dependentFileTest = testGroup "addDependentFile"
       test dir = do
         -- If the file contains B then no type error
         -- otherwise type error
-        liftIO $ writeFile (dir </> "dep-file.txt") "A"
+        let depFilePath = dir </> "dep-file.txt"
+        liftIO $ writeFile depFilePath "A"
         let fooContent = T.unlines
               [ "{-# LANGUAGE TemplateHaskell #-}"
               , "module Foo where"
@@ -4623,18 +4739,21 @@ dependentFileTest = testGroup "addDependentFile"
               , "               if f == \"B\" then [| 1 |] else lift f)"
               ]
         let bazContent = T.unlines ["module Baz where", "import Foo ()"]
-        _ <-createDoc "Foo.hs" "haskell" fooContent
+        _ <- createDoc "Foo.hs" "haskell" fooContent
         doc <- createDoc "Baz.hs" "haskell" bazContent
         expectDiagnostics
           [("Foo.hs", [(DsError, (4, 6), "Couldn't match expected type")])]
         -- Now modify the dependent file
-        liftIO $ writeFile (dir </> "dep-file.txt") "B"
+        liftIO $ writeFile depFilePath "B"
+        sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
+          List [FileEvent (filePathToUri "dep-file.txt") FcChanged ]
+
+        -- Modifying Baz will now trigger Foo to be rebuilt as well
         let change = TextDocumentContentChangeEvent
               { _range = Just (Range (Position 2 0) (Position 2 6))
               , _rangeLength = Nothing
               , _text = "f = ()"
               }
-        -- Modifying Baz will now trigger Foo to be rebuilt as well
         changeDoc doc [change]
         expectDiagnostics [("Foo.hs", [])]
 
@@ -4896,6 +5015,8 @@ sessionDepsArePickedUp = testSession'
       writeFileUTF8
         (dir </> "hie.yaml")
         "cradle: {direct: {arguments: [-XOverloadedStrings]}}"
+    sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
+          List [FileEvent (filePathToUri $ dir </> "hie.yaml") FcChanged ]
     -- Send change event.
     let change =
           TextDocumentContentChangeEvent
@@ -4927,7 +5048,7 @@ nonLspCommandLine = testGroup "ghcide command line"
 
         (ec, _, _) <- readCreateProcessWithExitCode cmd ""
 
-        ec @=? ExitSuccess
+        ec @?= ExitSuccess
   ]
 
 benchmarkTests :: TestTree
@@ -4997,18 +5118,17 @@ clientSettingsTest :: TestTree
 clientSettingsTest = testGroup "client settings handling"
     [ testSession "ghcide restarts shake session on config changes" $ do
             void $ skipManyTill anyMessage $ message SClientRegisterCapability
+            void $ createDoc "A.hs" "haskell" "module A where"
+            waitForProgressDone
             sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON ("" :: String)))
-            nots <- skipManyTill anyMessage $ count 3 loggingNotification
-            isMessagePresent "Restarting build session" (map getLogMessage nots)
+            skipManyTill anyMessage restartingBuildSession
 
     ]
-  where getLogMessage :: FromServerMessage -> T.Text
-        getLogMessage (FromServerMess SWindowLogMessage (NotificationMessage _ _ (LogMessageParams _ msg))) = msg
-        getLogMessage _ = ""
-
-        isMessagePresent expectedMsg actualMsgs = liftIO $
-            assertBool ("\"" ++ expectedMsg ++ "\" is not present in: " ++ show actualMsgs)
-                       (any ((expectedMsg `isSubsequenceOf`) . show) actualMsgs)
+  where
+    restartingBuildSession :: Session ()
+    restartingBuildSession = do
+        FromServerMess SWindowLogMessage NotificationMessage{_params = LogMessageParams{..}} <- loggingNotification
+        guard $ "Restarting build session" `T.isInfixOf` _message
 
 referenceTests :: TestTree
 referenceTests = testGroup "references"
@@ -5374,7 +5494,23 @@ unitTests = do
             actualOrder <- liftIO $ readIORef orderRef
 
             liftIO $ actualOrder @?= reverse [(1::Int)..20]
+     , testCase "timestamps have millisecond resolution" $ do
+         resolution_us <- findResolution_us 1
+         let msg = printf "Timestamps do not have millisecond resolution: %dus" resolution_us
+         assertBool msg (resolution_us <= 1000)
+     , Progress.tests
      ]
+
+findResolution_us :: Int -> IO Int
+findResolution_us delay_us | delay_us >= 1000000 = error "Unable to compute timestamp resolution"
+findResolution_us delay_us = withTempFile $ \f -> withTempFile $ \f' -> do
+    writeFile f ""
+    threadDelay delay_us
+    writeFile f' ""
+    t <- getModTime f
+    t' <- getModTime f'
+    if t /= t' then return delay_us else findResolution_us (delay_us * 10)
+
 
 testIde :: IDE.Arguments -> Session () -> IO ()
 testIde arguments session = do

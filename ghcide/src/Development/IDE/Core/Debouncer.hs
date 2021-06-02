@@ -11,10 +11,10 @@ module Development.IDE.Core.Debouncer
 import           Control.Concurrent.Async
 import           Control.Concurrent.Strict
 import           Control.Exception
-import           Control.Monad            (join)
-import           Data.Foldable            (traverse_)
-import           Data.HashMap.Strict      (HashMap)
-import qualified Data.HashMap.Strict      as Map
+import           Control.Monad             (join)
+import           Data.Foldable             (traverse_)
+import           Data.HashMap.Strict       (HashMap)
+import qualified Data.HashMap.Strict       as Map
 import           Data.Hashable
 import           System.Time.Extra
 

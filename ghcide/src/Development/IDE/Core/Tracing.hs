@@ -1,6 +1,5 @@
+{-# LANGUAGE CPP             #-}
 {-# LANGUAGE NoApplicativeDo #-}
-{-# LANGUAGE CPP #-}
-#include "ghc-api-version.h"
 module Development.IDE.Core.Tracing
     ( otTracedHandler
     , otTracedAction
@@ -33,12 +32,13 @@ import           Debug.Trace.Flags              (userTracingEnabled)
 import           Development.IDE.Core.RuleTypes (GhcSession (GhcSession),
                                                  GhcSessionDeps (GhcSessionDeps),
                                                  GhcSessionIO (GhcSessionIO))
+import           Development.IDE.Graph          (Action, actionBracket)
+import           Development.IDE.Graph.Rule
 import           Development.IDE.Types.Location (Uri (..))
 import           Development.IDE.Types.Logger   (Logger, logDebug, logInfo)
 import           Development.IDE.Types.Shake    (Key (..), Value,
                                                  ValueWithDiagnostics (..),
                                                  Values)
-import           Development.IDE.Graph              (Action, actionBracket)
 import           Foreign.Storable               (Storable (sizeOf))
 import           HeapSize                       (recursiveSize, runHeapsize)
 import           Ide.PluginUtils                (installSigUsr1Handler)
@@ -78,25 +78,29 @@ otTracedAction
     :: Show k
     => k -- ^ The Action's Key
     -> NormalizedFilePath -- ^ Path to the file the action was run for
-    -> (a -> Bool) -- ^ Did this action succeed?
-    -> Action a -- ^ The action
-    -> Action a
-otTracedAction key file success act
+    -> RunMode
+    -> (a -> Bool)
+    -> Action (RunResult a) -- ^ The action
+    -> Action (RunResult a)
+otTracedAction key file mode success act
   | userTracingEnabled =
     actionBracket
         (do
             sp <- beginSpan (fromString (show key))
             setTag sp "File" (fromString $ fromNormalizedFilePath file)
+            setTag sp "Mode" (fromString $ show mode)
             return sp
         )
         endSpan
         (\sp -> do
             res <- act
-            unless (success res) $ setTag sp "error" "1"
+            unless (success $ runValue res) $ setTag sp "error" "1"
+            setTag sp "changed" $ case res of
+              RunResult x _ _ -> fromString $ show x
             return res)
   | otherwise = act
 
-#if MIN_GHC_API_VERSION(8,8,0)
+#if MIN_VERSION_ghc(8,8,0)
 otTracedProvider :: MonadUnliftIO m => PluginId -> ByteString -> m a -> m a
 #else
 otTracedProvider :: MonadUnliftIO m => PluginId -> String -> m a -> m a

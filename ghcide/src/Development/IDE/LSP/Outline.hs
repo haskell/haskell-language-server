@@ -3,7 +3,6 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE RankNTypes            #-}
-#include "ghc-api-version.h"
 
 module Development.IDE.LSP.Outline
   ( moduleOutline
@@ -19,7 +18,8 @@ import qualified Data.Text                      as T
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Error      (realSrcSpanToRange, rangeToRealSrcSpan)
+import           Development.IDE.GHC.Error      (rangeToRealSrcSpan,
+                                                 realSrcSpanToRange)
 import           Development.IDE.Types.Location
 import           Language.LSP.Server            (LspM)
 import           Language.LSP.Types
@@ -194,7 +194,7 @@ documentSymbolForImport (L (RealSrcSpan l) ImportDecl { ideclName, ideclQualifie
   (defDocumentSymbol l :: DocumentSymbol)
     { _name   = "import " <> pprText ideclName
     , _kind   = SkModule
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
     , _detail = case ideclQualified of { NotQualified -> Nothing; _ -> Just "qualified" }
 #else
     , _detail = if ideclQualified then Just "qualified" else Nothing

@@ -20,10 +20,10 @@ extra-source-files:
   LICENSE
   README.md
   test/testdata/*.cabal
-  test/testdata/*.expected
   test/testdata/*.hs
   test/testdata/*.lhs
   test/testdata/*.yaml
+  test/testdata/cabal.project
 
 flag pedantic
   description: Enable -Werror
@@ -50,7 +50,7 @@ library
 
   build-depends:
     , aeson
-    , base                  >=4.12    && <5
+    , base                  >=4.12  && <5
     , containers
     , deepseq
     , Diff                  ^>=0.4.0
@@ -61,9 +61,9 @@ library
     , ghc
     , ghc-boot-th
     , ghc-paths
-    , ghcide                ^>=1.2.0.2
+    , ghcide                >=1.2   && <1.4
     , hashable
-    , hls-plugin-api        ^>=1.1.0.0
+    , hls-plugin-api        ^>=1.1
     , lens
     , lsp
     , lsp-types
@@ -104,8 +104,6 @@ test-suite tests
     , extra
     , filepath
     , hls-eval-plugin
-    , hls-test-utils   ^>=1.0.0.0
+    , hls-test-utils   ^>=1.0
     , lens
-    , lsp-test
     , lsp-types
-    , text

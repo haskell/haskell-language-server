@@ -12,12 +12,15 @@ module Development.IDE.Spans.LocalBindings
 import           Control.DeepSeq
 import           Control.Monad
 import           Data.Bifunctor
-import           Data.IntervalMap.FingerTree (IntervalMap, Interval (..))
-import qualified Data.IntervalMap.FingerTree as IM
-import qualified Data.List as L
-import qualified Data.Map as M
-import qualified Data.Set as S
-import           Development.IDE.GHC.Compat (RefMap, identType, identInfo, getScopeFromContext, getBindSiteFromContext, Scope(..), Name, Type)
+import           Data.IntervalMap.FingerTree    (Interval (..), IntervalMap)
+import qualified Data.IntervalMap.FingerTree    as IM
+import qualified Data.List                      as L
+import qualified Data.Map                       as M
+import qualified Data.Set                       as S
+import           Development.IDE.GHC.Compat     (Name, RefMap, Scope (..), Type,
+                                                 getBindSiteFromContext,
+                                                 getScopeFromContext, identInfo,
+                                                 identType)
 import           Development.IDE.GHC.Error
 import           Development.IDE.Types.Location
 import           NameEnv
@@ -53,7 +56,7 @@ localBindings refmap = bimap mk mk $ unzip $ do
         Just scopes <- pure $ getScopeFromContext info
         scope <- scopes >>= \case
           LocalScope scope -> pure $ realSrcSpanToInterval scope
-          _ -> []
+          _                -> []
         pure ( scope
             , unitNameEnv name (name,ty)
             )

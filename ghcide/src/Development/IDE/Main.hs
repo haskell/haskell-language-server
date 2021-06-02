@@ -26,7 +26,8 @@ import           Development.IDE                       (Action, Rules,
                                                         hDuplicateTo')
 import           Development.IDE.Core.Debouncer        (Debouncer,
                                                         newAsyncDebouncer)
-import           Development.IDE.Core.FileStore        (makeVFSHandle)
+import           Development.IDE.Core.FileStore        (isWatchSupported,
+                                                        makeVFSHandle)
 import           Development.IDE.Core.IdeConfiguration (IdeConfiguration (..),
                                                         registerIdeConfiguration)
 import           Development.IDE.Core.OfInterest       (FileOfInterestStatus (OnDisk),
@@ -46,7 +47,7 @@ import           Development.IDE.Core.Shake            (IdeState (shakeExtras),
 import           Development.IDE.Core.Tracing          (measureMemory)
 import           Development.IDE.Graph                 (action)
 import           Development.IDE.LSP.LanguageServer    (runLanguageServer)
-import           Development.IDE.Plugin                (Plugin (pluginHandlers, pluginRules))
+import           Development.IDE.Plugin                (Plugin (pluginHandlers, pluginModifyDynflags, pluginRules))
 import           Development.IDE.Plugin.HLS            (asGhcIdePlugin)
 import qualified Development.IDE.Plugin.HLS.GhcIde     as Ghcide
 import           Development.IDE.Session               (SessionLoadingOptions,
@@ -58,9 +59,10 @@ import           Development.IDE.Types.Location        (NormalizedUri,
                                                         toNormalizedFilePath')
 import           Development.IDE.Types.Logger          (Logger (Logger))
 import           Development.IDE.Types.Options         (IdeGhcSession,
-                                                        IdeOptions (optCheckParents, optCheckProject, optReportProgress),
+                                                        IdeOptions (optCheckParents, optCheckProject, optReportProgress, optRunSubset),
                                                         clientSupportsProgress,
-                                                        defaultIdeOptions)
+                                                        defaultIdeOptions,
+                                                        optModifyDynFlags)
 import           Development.IDE.Types.Shake           (Key (Key))
 import           GHC.IO.Encoding                       (setLocaleEncoding)
 import           GHC.IO.Handle                         (hDuplicate)
@@ -214,10 +216,18 @@ defaultMain Arguments{..} = do
                     setInitialDynFlags argsSessionLoadingOptions
                         `catchAny` (\e -> (hPutStrLn stderr $ "setInitialDynFlags: " ++ displayException e) >> pure Nothing)
 
+
                 sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions $ fromMaybe dir rootPath
                 config <- LSP.runLspT env LSP.getConfig
-                let options = (argsIdeOptions config sessionLoader)
+                let def_options = argsIdeOptions config sessionLoader
+
+                -- disable runSubset if the client doesn't support watched files
+                runSubset <- (optRunSubset def_options &&) <$> LSP.runLspT env isWatchSupported
+
+                let options = def_options
                             { optReportProgress = clientSupportsProgress caps
+                            , optModifyDynFlags = optModifyDynFlags def_options <> pluginModifyDynflags plugins
+                            , optRunSubset = runSubset
                             }
                     caps = LSP.resClientCapabilities env
                 initialise
@@ -256,9 +266,11 @@ defaultMain Arguments{..} = do
             putStrLn "\nStep 3/4: Initializing the IDE"
             vfs <- makeVFSHandle
             sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions dir
-            let options = (argsIdeOptions argsDefaultHlsConfig sessionLoader)
+            let def_options = argsIdeOptions argsDefaultHlsConfig sessionLoader
+                options = def_options
                         { optCheckParents = pure NeverCheck
                         , optCheckProject = pure False
+                        , optModifyDynFlags = optModifyDynFlags def_options <> pluginModifyDynflags plugins
                         }
             ide <- initialise argsDefaultHlsConfig rules Nothing logger debouncer options vfs hiedb hieChan
             shakeSessionInit ide
@@ -304,10 +316,11 @@ defaultMain Arguments{..} = do
           runWithDb dbLoc $ \hiedb hieChan -> do
             vfs <- makeVFSHandle
             sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions "."
-            let options =
-                  (argsIdeOptions argsDefaultHlsConfig sessionLoader)
-                    { optCheckParents = pure NeverCheck,
-                      optCheckProject = pure False
+            let def_options = argsIdeOptions argsDefaultHlsConfig sessionLoader
+                options = def_options
+                    { optCheckParents = pure NeverCheck
+                    , optCheckProject = pure False
+                    , optModifyDynFlags = optModifyDynFlags def_options <> pluginModifyDynflags plugins
                     }
             ide <- initialise argsDefaultHlsConfig rules Nothing logger debouncer options vfs hiedb hieChan
             shakeSessionInit ide

@@ -5,16 +5,15 @@
 
 module Ide.Plugin.ConfigUtils where
 
-import qualified Data.Aeson                as A
-import qualified Data.Aeson.Types          as A
-import           Data.Containers.ListUtils (nubOrd)
-import           Data.Default              (def)
-import qualified Data.Dependent.Map        as DMap
-import qualified Data.Dependent.Sum        as DSum
-import qualified Data.HashMap.Lazy         as HMap
+import qualified Data.Aeson            as A
+import qualified Data.Aeson.Types      as A
+import           Data.Default          (def)
+import qualified Data.Dependent.Map    as DMap
+import qualified Data.Dependent.Sum    as DSum
+import qualified Data.HashMap.Lazy     as HMap
+import           Data.List             (nub)
 import           Ide.Plugin.Config
-import           Ide.Plugin.Properties     (toDefaultJSON,
-                                            toVSCodeExtensionSchema)
+import           Ide.Plugin.Properties (toDefaultJSON, toVSCodeExtensionSchema)
 import           Ide.Types
 import           Language.LSP.Types
 
@@ -65,7 +64,7 @@ pluginsToDefaultConfig IdePlugins {..} =
         -- }
         --
         genericDefaultConfig =
-          let x = ["diagnosticsOn" A..= True | configHasDiagnostics] <> nubOrd (mconcat (handlersToGenericDefaultConfig <$> handlers))
+          let x = ["diagnosticsOn" A..= True | configHasDiagnostics] <> nub (mconcat (handlersToGenericDefaultConfig <$> handlers))
            in case x of
                 -- if the plugin has only one capability, we produce globalOn instead of the specific one;
                 -- otherwise we don't produce globalOn at all
@@ -108,7 +107,7 @@ pluginsToVSCodeExtensionSchema IdePlugins {..} = A.object $ mconcat $ singlePlug
         genericSchema =
           let x =
                 [withIdPrefix "diagnosticsOn" A..= schemaEntry "diagnostics" | configHasDiagnostics]
-                  <> nubOrd (mconcat (handlersToGenericSchema <$> handlers))
+                  <> nub (mconcat (handlersToGenericSchema <$> handlers))
            in case x of
                 -- If the plugin has only one capability, we produce globalOn instead of the specific one;
                 -- otherwise we don't produce globalOn at all

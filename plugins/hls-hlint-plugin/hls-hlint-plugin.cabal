@@ -29,7 +29,7 @@ library
   hs-source-dirs:     src
   build-depends:
     , aeson
-    , apply-refact          >=0.9
+    , apply-refact          >=0.9.3.0
     , base                  >=4.12    && <5
     , binary
     , bytestring
@@ -41,10 +41,10 @@ library
     , extra
     , filepath
     , ghc-exactprint        >=0.6.3.4
-    , ghcide                ^>=1.2.0.2
+    , ghcide                >=1.2     && <1.4
     , hashable
-    , hlint                 >=3.2
-    , hls-plugin-api        ^>=1.1.0.0
+    , hlint                 ^>=3.2
+    , hls-plugin-api        ^>=1.1
     , hslogger
     , lens
     , lsp

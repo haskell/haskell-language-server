@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes        #-}
+{-# LANGUAGE TupleSections     #-}
 {-# LANGUAGE TypeFamilies      #-}
 
 {-# LANGUAGE NoMonoLocalBinds  #-}
@@ -10,23 +11,23 @@ module Wingman.LanguageServer where
 import           ConLike
 import           Control.Arrow ((***))
 import           Control.Monad
-import           Control.Monad.State (State, get, put, evalState)
+import           Control.Monad.IO.Class
+import           Control.Monad.RWS
+import           Control.Monad.State (State, evalState)
 import           Control.Monad.Trans.Maybe
 import           Data.Bifunctor (first)
 import           Data.Coerce
 import           Data.Functor ((<&>))
-import           Data.Generics.Aliases (mkQ)
-import           Data.Generics.Schemes (everything)
+import           Data.Functor.Identity (runIdentity)
 import qualified Data.HashMap.Strict as Map
 import           Data.IORef (readIORef)
 import qualified Data.Map as M
 import           Data.Maybe
-import           Data.Monoid
 import           Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
 import           Data.Traversable
-import           Development.IDE (getFilesOfInterest, ShowDiagnostic (ShowDiag), srcSpanToRange)
+import           Development.IDE (getFilesOfInterestUntracked, ShowDiagnostic (ShowDiag), srcSpanToRange)
 import           Development.IDE (hscEnv)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Rules (usePropertyAction)
@@ -34,33 +35,40 @@ import           Development.IDE.Core.Service (runAction)
 import           Development.IDE.Core.Shake (IdeState (..), uses, define, use)
 import qualified Development.IDE.Core.Shake as IDE
 import           Development.IDE.Core.UseStale
-import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat hiding (parseExpr)
 import           Development.IDE.GHC.Error (realSrcSpanToRange)
 import           Development.IDE.GHC.ExactPrint
-import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindings)
 import           Development.IDE.Graph (Action, RuleResult, Rules, action)
-import           Development.IDE.Graph.Classes (Typeable, Binary, Hashable, NFData)
+import           Development.IDE.Graph.Classes (Binary, Hashable, NFData)
+import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindings)
 import qualified FastString
 import           GHC.Generics (Generic)
-import           GhcPlugins (tupleDataCon, consDataCon, substTyAddInScope, ExternalPackageState, HscEnv (hsc_EPS), liftIO)
+import           Generics.SYB hiding (Generic)
+import           GhcPlugins (extractModule)
+import           GhcPlugins (tupleDataCon, consDataCon, substTyAddInScope, ExternalPackageState, HscEnv (hsc_EPS), unpackFS)
 import qualified Ide.Plugin.Config as Plugin
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils (usePropertyLsp)
 import           Ide.Types (PluginId)
+import           Language.Haskell.GHC.ExactPrint (Transform)
+import           Language.Haskell.GHC.ExactPrint (modifyAnnsT, addAnnotationsForPretty)
 import           Language.LSP.Server (MonadLsp, sendNotification)
 import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities
 import           OccName
 import           Prelude hiding (span)
+import           Retrie (transformA)
 import           SrcLoc (containsSpan)
-import           TcRnTypes (tcg_binds, TcGblEnv)
+import           TcRnTypes (tcg_binds, TcGblEnv (tcg_rdr_env))
 import           Wingman.Context
 import           Wingman.FeatureSet
 import           Wingman.GHC
 import           Wingman.Judgements
-import           Wingman.Judgements.SYB (everythingContaining)
+import           Wingman.Judgements.SYB (everythingContaining, metaprogramQ)
 import           Wingman.Judgements.Theta
+import           Wingman.Metaprogramming.Lexer (ParserContext(..))
 import           Wingman.Range
+import           Wingman.StaticPlugin (pattern WingmanMetaprogram, pattern MetaprogramSyntax)
 import           Wingman.Types
 
 
@@ -178,6 +186,11 @@ getIdeDynflags state nfp = do
   msr <- unsafeRunStaleIde "getIdeDynflags" state nfp GetModSummaryWithoutTimestamps
   pure $ ms_hspp_opts $ msrModSummary msr
 
+getAllMetaprograms :: Data a => a -> [String]
+getAllMetaprograms = everything (<>) $ mkQ mempty $ \case
+  WingmanMetaprogram fs -> [ unpackFS fs ]
+  (_ :: HsExpr GhcTc)  -> mempty
+
 
 ------------------------------------------------------------------------------
 -- | Find the last typechecked module, and find the most specific span, as well
@@ -187,7 +200,7 @@ judgementForHole
     -> NormalizedFilePath
     -> Tracked 'Current Range
     -> Config
-    -> MaybeT IO (Tracked 'Current Range, Judgement, Context, DynFlags)
+    -> MaybeT IO HoleJudgment
 judgementForHole state nfp range cfg = do
   let stale a = runStaleIde "judgementForHole" state nfp a
 
@@ -197,12 +210,16 @@ judgementForHole state nfp range cfg = do
     HAR _ (unsafeCopyAge asts -> hf) _ _ HieFresh -> do
       range' <- liftMaybe $ mapAgeFrom amapping range
       binds <- stale GetBindings
-      tcg <- fmap (fmap tmrTypechecked)
+      tcg@(TrackedStale tcg_t tcg_map)
+          <- fmap (fmap tmrTypechecked)
            $ stale TypeCheck
+
       hscenv <- stale GhcSessionDeps
 
       (rss, g) <- liftMaybe $ getSpanAndTypeAtHole range' hf
+
       new_rss <- liftMaybe $ mapAgeTo amapping rss
+      tcg_rss <- liftMaybe $ mapAgeFrom tcg_map new_rss
 
       -- KnownThings is just the instances in scope. There are no ranges
       -- involved, so it's not crucial to track ages.
@@ -211,10 +228,20 @@ judgementForHole state nfp range cfg = do
       kt <- knownThings (untrackedStaleValue tcg) henv
 
       (jdg, ctx) <- liftMaybe $ mkJudgementAndContext cfg g binds new_rss tcg eps kt
+      let mp = getMetaprogramAtSpan (fmap RealSrcSpan tcg_rss) tcg_t
 
       dflags <- getIdeDynflags state nfp
-      pure (fmap realSrcSpanToRange new_rss, jdg, ctx, dflags)
+      pure $ HoleJudgment
+        { hj_range = fmap realSrcSpanToRange new_rss
+        , hj_jdg = jdg
+        , hj_ctx = ctx
+        , hj_dflags = dflags
+        , hj_hole_sort = holeSortFor mp
+        }
 
+
+holeSortFor :: Maybe T.Text -> HoleSort
+holeSortFor = maybe Hole Metaprogram
 
 
 mkJudgementAndContext
@@ -285,8 +312,12 @@ getSpanAndTypeAtHole r@(unTrack -> range) (unTrack -> hf) = do
         ty <- listToMaybe $ nodeType info
         guard $ ("HsUnboundVar","HsExpr") `S.member` nodeAnnotations info
         -- Ensure we're actually looking at a hole here
-        guard $ all (either (const False) $ isHole . occName)
-          $ M.keysSet $ nodeIdentifiers info
+        occ <- (either (const Nothing) (Just . occName) =<<)
+             . listToMaybe
+             . S.toList
+             . M.keysSet
+             $ nodeIdentifiers info
+        guard $ isHole occ
         pure (unsafeCopyAge r $ nodeSpan ast', ty)
 
 
@@ -518,7 +549,7 @@ wingmanRules plId = do
               )
 
   action $ do
-    files <- getFilesOfInterest
+    files <- getFilesOfInterestUntracked
     void $ uses WriteDiagnostics $ Map.keys files
 
 
@@ -543,5 +574,57 @@ mkWorkspaceEdits
     -> Graft (Either String) ParsedSource
     -> Either UserFacingMessage WorkspaceEdit
 mkWorkspaceEdits dflags ccs uri pm g = do
-  let response = transform dflags ccs uri g pm
+  let pm' = runIdentity $ transformA pm annotateMetaprograms
+  let response = transform dflags ccs uri g pm'
    in first (InfrastructureError . T.pack) response
+
+
+------------------------------------------------------------------------------
+-- | Add ExactPrint annotations to every metaprogram in the source tree.
+-- Usually the ExactPrint module can do this for us, but we've enabled
+-- QuasiQuotes, so the round-trip print/parse journey will crash.
+annotateMetaprograms :: Data a => a -> Transform a
+annotateMetaprograms = everywhereM $ mkM $ \case
+  L ss (WingmanMetaprogram mp) -> do
+    let x = L ss $ MetaprogramSyntax mp
+    let anns = addAnnotationsForPretty [] x mempty
+    modifyAnnsT $ mappend anns
+    pure x
+  (x :: LHsExpr GhcPs) -> pure x
+
+
+------------------------------------------------------------------------------
+-- | Find the source of a tactic metaprogram at the given span.
+getMetaprogramAtSpan
+    :: Tracked age SrcSpan
+    -> Tracked age TcGblEnv
+    -> Maybe T.Text
+getMetaprogramAtSpan (unTrack -> ss)
+  = fmap snd
+  . listToMaybe
+  . metaprogramQ ss
+  . tcg_binds
+  . unTrack
+
+
+------------------------------------------------------------------------------
+-- | The metaprogram parser needs the ability to lookup terms from the module
+-- and imports. The 'ParserContext' contains everything we need to find that
+-- stuff.
+getParserState
+    :: IdeState
+    -> NormalizedFilePath
+    -> Context
+    -> MaybeT IO ParserContext
+getParserState state nfp ctx = do
+  let stale a = runStaleIde "getParserState" state nfp a
+
+  TrackedStale (unTrack -> tcmod) _  <- stale TypeCheck
+  TrackedStale (unTrack -> hscenv) _ <- stale GhcSessionDeps
+
+  let tcgblenv = tmrTypechecked tcmod
+      modul = extractModule tcgblenv
+      rdrenv = tcg_rdr_env tcgblenv
+
+  pure $ ParserContext (hscEnv hscenv) rdrenv modul ctx
+

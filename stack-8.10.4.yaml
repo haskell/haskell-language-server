@@ -1,4 +1,4 @@
-resolver: lts-17.4
+resolver: lts-17.12
 
 packages:
   - .
@@ -12,31 +12,36 @@ packages:
   - ./plugins/hls-haddock-comments-plugin
   - ./plugins/hls-eval-plugin
   - ./plugins/hls-explicit-imports-plugin
+  - ./plugins/hls-refine-imports-plugin
   - ./plugins/hls-hlint-plugin
   - ./plugins/hls-retrie-plugin
   - ./plugins/hls-splice-plugin
   - ./plugins/hls-tactics-plugin
   - ./plugins/hls-brittany-plugin
   - ./plugins/hls-stylish-haskell-plugin
+  - ./plugins/hls-floskell-plugin
+  - ./plugins/hls-fourmolu-plugin
+  - ./plugins/hls-pragmas-plugin
+  - ./plugins/hls-module-name-plugin
+  - ./plugins/hls-ormolu-plugin
 
 ghc-options:
   "$everything": -haddock
 
 extra-deps:
-  - brittany-0.13.1.0
+  - apply-refact-0.9.3.0
+  - brittany-0.13.1.2
   - Cabal-3.0.2.0
   - clock-0.7.2
   - data-tree-print-0.1.0.2@rev:2
   - floskell-0.10.4
   - fourmolu-0.3.0.0
   - heapsize-0.3.0
-  - hie-bios-0.7.4
   - implicit-hie-cradle-0.3.0.2
   - implicit-hie-0.1.2.5
   - monad-dijkstra-0.1.1.2
   - refinery-0.3.0.0
   - retrie-0.1.1.1
-  - shake-0.19.4
   - stylish-haskell-0.12.2.0
   - semigroups-0.18.5
   - temporary-1.2.1.1

@@ -78,6 +78,7 @@ background](https://neilmitchell.blogspot.com/2020/01/one-haskell-ide-to-rule-th
       - [Using Cabal](#using-cabal)
       - [Using Stack](#using-stack)
       - [Using Nix](#using-nix)
+        - [Flakes support](#flakes-support)
       - [Introduction tutorial](#introduction-tutorial)
       - [Test your hacked HLS in your editor](#test-your-hacked-hls-in-your-editor)
     - [Adding support for a new editor](#adding-support-for-a-new-editor)
@@ -759,8 +760,7 @@ it to look for the right executable.
 
 :heart: The Haskell tooling dream is near, we need your help! :heart:
 
-- Join [our IRC channel](https://webchat.freenode.net/?channels=haskell-language-server) at `#haskell-language-server` on `freenode`.
-- Fork this repo and [ghcide](https://github.com/haskell/ghcide) and hack as much as you can.
+- Join [our IRC channel](https://web.libera.chat/?channels=#haskell-language-server) at `#haskell-language-server` on [`libera`](https://libera.chat/).
 
 ### Style guidelines
 
@@ -807,7 +807,26 @@ $ cabal update
 $ cabal build
 ```
 
+##### Flakes support
+
+If you are using nix 2.4 style command (enabled by `experimental-features = nix-command`),
+you can use `nix develop` instead of `nix-shell` to enter the development shell. To enter the shell with specific GHC versions:
+
+* `nix develop` or `nix develop .#haskell-language-server-dev` - default GHC version
+* `nix develop .#haskell-language-server-8104-dev` - GHC 8.10.4
+* `nix develop .#haskell-language-server-884-dev` - GHC 8.8.4
+* `nix develop .#haskell-language-server-901-dev` - GHC 9.0.1
+
 If you are looking for a Nix expression to create haskell-language-server binaries, see https://github.com/haskell/haskell-language-server/issues/122
+
+To create binaries:
+
+* `nix build` or `nix build .#haskell-language-server` - default GHC version
+* `nix build .#haskell-language-server-8104` - GHC 8.10.4
+* `nix build .#haskell-language-server-884` - GHC 8.8.4
+* `nix build .#haskell-language-server-901` - GHC 9.0.1
+
+GHC 8.6.5 is not supported here because `nixpkgs-unstable` no longer maintains the corresponding packages set.
 
 #### Introduction tutorial
 

@@ -1,6 +1,5 @@
 {-# LANGUAGE CPP          #-}
 {-# LANGUAGE TypeFamilies #-}
-#include "ghc-api-version.h"
 
 {-|
 The logic for setting up a ghcide session by tapping into hie-bios.
@@ -48,6 +47,7 @@ import           Development.IDE.GHC.Compat           hiding (Target,
                                                        TargetFile, TargetModule)
 import qualified Development.IDE.GHC.Compat           as GHC
 import           Development.IDE.GHC.Util
+import           Development.IDE.Graph                (Action)
 import           Development.IDE.Session.VersionCheck
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Exports
@@ -56,7 +56,6 @@ import           Development.IDE.Types.HscEnvEq       (HscEnvEq, newHscEnvEq,
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger
 import           Development.IDE.Types.Options
-import           Development.IDE.Graph                    (Action)
 import           GHC.Check
 import qualified HIE.Bios                             as HieBios
 import           HIE.Bios.Environment                 hiding (getCacheDir)
@@ -85,12 +84,10 @@ import           Control.Concurrent.STM               (atomically)
 import           Control.Concurrent.STM.TQueue
 import qualified Data.HashSet                         as Set
 import           Database.SQLite.Simple
-import           HIE.Bios.Cradle                      (yamlConfig)
 import           HieDb.Create
 import           HieDb.Types
 import           HieDb.Utils
-import           Maybes                               (MaybeT (runMaybeT))
-import           GHC.LanguageExtensions               (Extension(EmptyCase))
+import           Ide.Types                            (dynFlagsModifyGlobal)
 
 -- | Bump this version number when making changes to the format of the data stored in hiedb
 hiedbDataVersion :: String
@@ -100,15 +97,18 @@ data CacheDirs = CacheDirs
   { hiCacheDir, hieCacheDir, oCacheDir :: Maybe FilePath}
 
 data SessionLoadingOptions = SessionLoadingOptions
-  { findCradle          :: FilePath -> IO (Maybe FilePath)
-  , loadCradle          :: FilePath -> IO (HieBios.Cradle Void)
+  { findCradle             :: FilePath -> IO (Maybe FilePath)
+  -- | Load the cradle with an optional 'hie.yaml' location.
+  -- If a 'hie.yaml' is given, use it to load the cradle.
+  -- Otherwise, use the provided project root directory to determine the cradle type.
+  , loadCradle             :: Maybe FilePath -> FilePath -> IO (HieBios.Cradle Void)
   -- | Given the project name and a set of command line flags,
   --   return the path for storing generated GHC artifacts,
   --   or 'Nothing' to respect the cradle setting
-  , getCacheDirs        :: String -> [String] -> IO CacheDirs
+  , getCacheDirs           :: String -> [String] -> IO CacheDirs
   -- | Return the GHC lib dir to use for the 'unsafeGlobalDynFlags'
-  , getInitialGhcLibDir :: IO (Maybe LibDir)
-  , fakeUid             :: InstalledUnitId
+  , getInitialGhcLibDir    :: IO (Maybe LibDir)
+  , fakeUid                :: InstalledUnitId
     -- ^ unit id used to tag the internal component built by ghcide
     --   To reuse external interface files the unit ids must match,
     --   thus make sure to build them with `--this-unit-id` set to the
@@ -118,17 +118,39 @@ data SessionLoadingOptions = SessionLoadingOptions
 instance Default SessionLoadingOptions where
     def = SessionLoadingOptions
         {findCradle = HieBios.findCradle
-        ,loadCradle = HieBios.loadCradle
+        ,loadCradle = loadWithImplicitCradle
         ,getCacheDirs = getCacheDirsDefault
         ,getInitialGhcLibDir = getInitialGhcLibDirDefault
         ,fakeUid = toInstalledUnitId (stringToUnitId "main")
         }
 
+-- | Find the cradle for a given 'hie.yaml' configuration.
+--
+-- If a 'hie.yaml' is given, the cradle is read from the config.
+--  If this config does not comply to the "hie.yaml"
+-- specification, an error is raised.
+--
+-- If no location for "hie.yaml" is provided, the implicit config is used
+-- using the provided root directory for discovering the project.
+-- The implicit config uses different heuristics to determine the type
+-- of the project that may or may not be accurate.
+loadWithImplicitCradle :: Maybe FilePath
+                          -- ^ Optional 'hie.yaml' location. Will be used if given.
+                          -> FilePath
+                          -- ^ Root directory of the project. Required as a fallback
+                          -- if no 'hie.yaml' location is given.
+                          -> IO (HieBios.Cradle Void)
+loadWithImplicitCradle mHieYaml rootDir = do
+  crdl       <- case mHieYaml of
+    Just yaml -> HieBios.loadCradle yaml
+    Nothing   -> loadImplicitHieCradle $ addTrailingPathSeparator rootDir
+  return crdl
+
 getInitialGhcLibDirDefault :: IO (Maybe LibDir)
 getInitialGhcLibDirDefault = do
   dir <- IO.getCurrentDirectory
-  hieYaml <- runMaybeT $ yamlConfig dir
-  cradle <- maybe (loadImplicitHieCradle $ addTrailingPathSeparator dir) HieBios.loadCradle hieYaml
+  hieYaml <- findCradle def dir
+  cradle <- loadCradle def hieYaml dir
   hPutStrLn stderr $ "setInitialDynFlags cradle: " ++ show cradle
   libDirRes <- getRuntimeGhcLibDir cradle
   case libDirRes of
@@ -214,8 +236,6 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
   -- Version of the mappings above
   version <- newVar 0
   let returnWithVersion fun = IdeGhcSession fun <$> liftIO (readVar version)
-  let invalidateShakeCache = do
-        void $ modifyVar' version succ
   -- This caches the mapping from Mod.hs -> hie.yaml
   cradleLoc <- liftIO $ memoIO $ \v -> do
       res <- findCradle v
@@ -231,10 +251,13 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
   return $ do
     extras@ShakeExtras{logger, restartShakeSession, ideNc, knownTargetsVar, lspEnv
                       } <- getShakeExtras
+    let invalidateShakeCache = do
+            void $ modifyVar' version succ
+            recordDirtyKeys extras GhcSessionIO [emptyFilePath]
 
     IdeOptions{ optTesting = IdeTesting optTesting
               , optCheckProject = getCheckProject
-              , optCustomDynFlags
+              , optModifyDynFlags
               , optExtensions
               } <- getIdeOptions
 
@@ -265,7 +288,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
           -- Parse DynFlags for the newly discovered component
           hscEnv <- emptyHscEnv ideNc libDir
           (df, targets) <- evalGhcEnv hscEnv $
-              first optCustomDynFlags <$> setOptions opts (hsc_dflags hscEnv)
+              first (dynFlagsModifyGlobal optModifyDynFlags) <$> setOptions opts (hsc_dflags hscEnv)
           let deps = componentDependencies opts ++ maybeToList hieYaml
           dep_info <- getDependencyInfo deps
           -- Now lookup to see whether we are combining with an existing HscEnv
@@ -400,7 +423,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
            when (isNothing hieYaml) $
              logWarning logger $ implicitCradleWarning lfp
 
-           cradle <- maybe (loadImplicitHieCradle $ addTrailingPathSeparator dir) loadCradle hieYaml
+           cradle <- loadCradle hieYaml dir
 
            when optTesting $ mRunLspT lspEnv $
             sendNotification (SCustomMethod "ghcide/cradle/loaded") (toJSON cfp)
@@ -772,7 +795,6 @@ setOptions (ComponentOptions theOpts compRoot _) dflags = do
           setIgnoreInterfacePragmas $
           setLinkerOptions $
           disableOptimisation $
-          allowEmptyCaseButWithWarning $
           setUpTypedHoles $
           makeDynFlagsAbsolute compRoot dflags'
     -- initPackages parses the -package flags and
@@ -780,15 +802,6 @@ setOptions (ComponentOptions theOpts compRoot _) dflags = do
     -- Throws if a -package flag cannot be satisfied.
     (final_df, _) <- liftIO $ wrapPackageSetupException $ initPackages dflags''
     return (final_df, targets)
-
-
--- | Wingman wants to support destructing of empty cases, but these are a parse
--- error by default. So we want to enable 'EmptyCase', but then that leads to
--- silent errors without 'Opt_WarnIncompletePatterns'.
-allowEmptyCaseButWithWarning :: DynFlags -> DynFlags
-allowEmptyCaseButWithWarning =
-  flip xopt_set EmptyCase . flip wopt_set Opt_WarnIncompletePatterns
-
 
 -- we don't want to generate object code so we compile to bytecode
 -- (HscInterpreted) which implies LinkInMemory

@@ -24,10 +24,11 @@ import           Data.String
 import qualified Data.Text                    as T
 import           Development.IDE.Core.Shake
 import           Development.IDE.Core.Tracing
+import           Development.IDE.Graph        (Rules)
 import           Development.IDE.LSP.Server
 import           Development.IDE.Plugin
+import qualified Development.IDE.Plugin       as P
 import           Development.IDE.Types.Logger
-import           Development.IDE.Graph            (Rules)
 import           Ide.Plugin.Config
 import           Ide.PluginUtils              (getClientConfig)
 import           Ide.Types                    as HLS
@@ -48,7 +49,8 @@ asGhcIdePlugin (IdePlugins ls) =
     mkPlugin rulesPlugins HLS.pluginRules <>
     mkPlugin executeCommandPlugins HLS.pluginCommands <>
     mkPlugin extensiblePlugins HLS.pluginHandlers <>
-    mkPlugin extensibleNotificationPlugins HLS.pluginNotificationHandlers
+    mkPlugin extensibleNotificationPlugins HLS.pluginNotificationHandlers <>
+    mkPlugin dynFlagsPlugins HLS.pluginModifyDynflags
     where
 
         mkPlugin :: ([(PluginId, b)] -> Plugin Config) -> (PluginDescriptor IdeState -> b) -> Plugin Config
@@ -63,14 +65,17 @@ asGhcIdePlugin (IdePlugins ls) =
 -- ---------------------------------------------------------------------
 
 rulesPlugins :: [(PluginId, Rules ())] -> Plugin Config
-rulesPlugins rs = Plugin rules mempty
+rulesPlugins rs = mempty { P.pluginRules = rules }
     where
         rules = foldMap snd rs
+
+dynFlagsPlugins :: [(PluginId, DynFlagsModifications)] -> Plugin Config
+dynFlagsPlugins rs = mempty { P.pluginModifyDynflags = foldMap snd rs }
 
 -- ---------------------------------------------------------------------
 
 executeCommandPlugins :: [(PluginId, [PluginCommand IdeState])] -> Plugin Config
-executeCommandPlugins ecs = Plugin mempty (executeCommandHandlers ecs)
+executeCommandPlugins ecs = mempty { P.pluginHandlers = executeCommandHandlers ecs }
 
 executeCommandHandlers :: [(PluginId, [PluginCommand IdeState])] -> LSP.Handlers (ServerM Config)
 executeCommandHandlers ecs = requestHandler SWorkspaceExecuteCommand execCmd
@@ -132,7 +137,7 @@ executeCommandHandlers ecs = requestHandler SWorkspaceExecuteCommand execCmd
 -- ---------------------------------------------------------------------
 
 extensiblePlugins :: [(PluginId, PluginHandlers IdeState)] -> Plugin Config
-extensiblePlugins xs = Plugin mempty handlers
+extensiblePlugins xs = mempty { P.pluginHandlers = handlers }
   where
     IdeHandlers handlers' = foldMap bakePluginId xs
     bakePluginId :: (PluginId, PluginHandlers IdeState) -> IdeHandlers
@@ -160,7 +165,7 @@ extensiblePlugins xs = Plugin mempty handlers
 -- ---------------------------------------------------------------------
 
 extensibleNotificationPlugins :: [(PluginId, PluginNotificationHandlers IdeState)] -> Plugin Config
-extensibleNotificationPlugins xs = Plugin mempty handlers
+extensibleNotificationPlugins xs = mempty { P.pluginHandlers = handlers }
   where
     IdeNotificationHandlers handlers' = foldMap bakePluginId xs
     bakePluginId :: (PluginId, PluginNotificationHandlers IdeState) -> IdeNotificationHandlers
