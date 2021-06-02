@@ -26,7 +26,8 @@ import           Development.IDE                       (Action, Rules,
                                                         hDuplicateTo')
 import           Development.IDE.Core.Debouncer        (Debouncer,
                                                         newAsyncDebouncer)
-import           Development.IDE.Core.FileStore        (makeVFSHandle)
+import           Development.IDE.Core.FileStore        (isWatchSupported,
+                                                        makeVFSHandle)
 import           Development.IDE.Core.IdeConfiguration (IdeConfiguration (..),
                                                         registerIdeConfiguration)
 import           Development.IDE.Core.OfInterest       (FileOfInterestStatus (OnDisk),
@@ -58,7 +59,7 @@ import           Development.IDE.Types.Location        (NormalizedUri,
                                                         toNormalizedFilePath')
 import           Development.IDE.Types.Logger          (Logger (Logger))
 import           Development.IDE.Types.Options         (IdeGhcSession,
-                                                        IdeOptions (optCheckParents, optCheckProject, optReportProgress),
+                                                        IdeOptions (optCheckParents, optCheckProject, optReportProgress, optRunSubset),
                                                         clientSupportsProgress,
                                                         defaultIdeOptions,
                                                         optModifyDynFlags)
@@ -215,12 +216,18 @@ defaultMain Arguments{..} = do
                     setInitialDynFlags argsSessionLoadingOptions
                         `catchAny` (\e -> (hPutStrLn stderr $ "setInitialDynFlags: " ++ displayException e) >> pure Nothing)
 
+
                 sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions $ fromMaybe dir rootPath
                 config <- LSP.runLspT env LSP.getConfig
                 let def_options = argsIdeOptions config sessionLoader
-                    options = def_options
+
+                -- disable runSubset if the client doesn't support watched files
+                runSubset <- (optRunSubset def_options &&) <$> LSP.runLspT env isWatchSupported
+
+                let options = def_options
                             { optReportProgress = clientSupportsProgress caps
                             , optModifyDynFlags = optModifyDynFlags def_options <> pluginModifyDynflags plugins
+                            , optRunSubset = runSubset
                             }
                     caps = LSP.resClientCapabilities env
                 initialise
