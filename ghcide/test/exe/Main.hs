@@ -4694,7 +4694,6 @@ retryFailedCradle = testSession' "retry failed" $ \dir -> do
   let hieContents = "cradle: {bios: {shell: \"false\"}}"
       hiePath = dir </> "hie.yaml"
   liftIO $ writeFile hiePath hieContents
-  hieDoc <- createDoc hiePath "yaml" $ T.pack hieContents
   let aPath = dir </> "A.hs"
   doc <- createDoc aPath "haskell" "main = return ()"
   Right WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" doc
@@ -4703,15 +4702,8 @@ retryFailedCradle = testSession' "retry failed" $ \dir -> do
   -- Fix the cradle and typecheck again
   let validCradle = "cradle: {bios: {shell: \"echo A.hs\"}}"
   liftIO $ writeFileUTF8 hiePath $ T.unpack validCradle
-  changeDoc
-    hieDoc
-    [ TextDocumentContentChangeEvent
-        { _range = Nothing,
-          _rangeLength = Nothing,
-          _text = validCradle
-        }
-    ]
-
+  sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
+          List [FileEvent (filePathToUri $ dir </> "hie.yaml") FcChanged ]
   -- Force a session restart by making an edit, just to dirty the typecheck node
   changeDoc
     doc

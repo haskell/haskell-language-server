@@ -102,9 +102,11 @@ modifyFileExists state changes = do
     void $ modifyVar' var $ HashMap.union (HashMap.mapMaybe fromChange changesMap)
     -- See Note [Invalidating file existence results]
     -- flush previous values
-    let (_fileModifChanges, fileExistChanges) =
+    let (fileModifChanges, fileExistChanges) =
             partition ((== FcChanged) . snd) (HashMap.toList changesMap)
     mapM_ (deleteValue (shakeExtras state) GetFileExists . fst) fileExistChanges
+    recordDirtyKeys (shakeExtras state) GetFileExists $ map fst fileExistChanges
+    recordDirtyKeys (shakeExtras state) GetModificationTime $ map fst fileModifChanges
 
 fromChange :: FileChangeType -> Maybe Bool
 fromChange FcCreated = Just True

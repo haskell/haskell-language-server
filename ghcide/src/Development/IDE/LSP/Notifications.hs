@@ -22,7 +22,6 @@ import           Development.IDE.Types.Logger
 import           Development.IDE.Types.Options
 
 import           Control.Monad.Extra
-import qualified Data.HashMap.Strict                   as M
 import qualified Data.HashSet                          as S
 import qualified Data.Text                             as Text
 
@@ -35,6 +34,8 @@ import           Development.IDE.Core.FileStore        (registerFileWatches,
                                                         setSomethingModified,
                                                         typecheckParents)
 import           Development.IDE.Core.OfInterest
+import           Development.IDE.Core.RuleTypes        (GetClientSettings (..))
+import           Development.IDE.Types.Shake           (toKey)
 import           Ide.Plugin.Config                     (CheckParents (CheckOnClose))
 import           Ide.Types
 
@@ -49,7 +50,7 @@ descriptor plId = (defaultPluginDescriptor plId) { pluginNotificationHandlers = 
       whenUriFile _uri $ \file -> do
           -- We don't know if the file actually exists, or if the contents match those on disk
           -- For example, vscode restores previously unsaved contents on open
-          modifyFilesOfInterest ide (M.insert file Modified{firstOpen=True})
+          addFileOfInterest ide file Modified{firstOpen=True}
           setFileModified ide False file
           logDebug (ideLogger ide) $ "Opened text document: " <> getUri _uri
 
@@ -57,21 +58,21 @@ descriptor plId = (defaultPluginDescriptor plId) { pluginNotificationHandlers = 
       \ide _ (DidChangeTextDocumentParams identifier@VersionedTextDocumentIdentifier{_uri} changes) -> liftIO $ do
         updatePositionMapping ide identifier changes
         whenUriFile _uri $ \file -> do
-          modifyFilesOfInterest ide (M.insert file Modified{firstOpen=False})
+          addFileOfInterest ide file Modified{firstOpen=False}
           setFileModified ide False file
         logDebug (ideLogger ide) $ "Modified text document: " <> getUri _uri
 
   , mkPluginNotificationHandler LSP.STextDocumentDidSave $
       \ide _ (DidSaveTextDocumentParams TextDocumentIdentifier{_uri} _) -> liftIO $ do
         whenUriFile _uri $ \file -> do
-            modifyFilesOfInterest ide (M.insert file OnDisk)
+            addFileOfInterest ide file OnDisk
             setFileModified ide True file
         logDebug (ideLogger ide) $ "Saved text document: " <> getUri _uri
 
   , mkPluginNotificationHandler LSP.STextDocumentDidClose $
         \ide _ (DidCloseTextDocumentParams TextDocumentIdentifier{_uri}) -> liftIO $ do
           whenUriFile _uri $ \file -> do
-              modifyFilesOfInterest ide (M.delete file)
+              deleteFileOfInterest ide file
               -- Refresh all the files that depended on this
               checkParents <- optCheckParents =<< getIdeOptionsIO (shakeExtras ide)
               when (checkParents >= CheckOnClose) $ typecheckParents ide file
@@ -85,7 +86,7 @@ descriptor plId = (defaultPluginDescriptor plId) { pluginNotificationHandlers = 
         logDebug (ideLogger ide) $ "Watched file events: " <> msg
         modifyFileExists ide fileEvents
         resetFileStore ide fileEvents
-        setSomethingModified ide
+        setSomethingModified ide []
 
   , mkPluginNotificationHandler LSP.SWorkspaceDidChangeWorkspaceFolders $
       \ide _ (DidChangeWorkspaceFoldersParams events) -> liftIO $ do
@@ -100,7 +101,7 @@ descriptor plId = (defaultPluginDescriptor plId) { pluginNotificationHandlers = 
         let msg = Text.pack $ show cfg
         logDebug (ideLogger ide) $ "Configuration changed: " <> msg
         modifyClientSettings ide (const $ Just cfg)
-        setSomethingModified ide
+        setSomethingModified ide [toKey GetClientSettings emptyFilePath ]
 
   , mkPluginNotificationHandler LSP.SInitialized $ \ide _ _ -> do
       --------- Initialize Shake session --------------------------------------------------------------------

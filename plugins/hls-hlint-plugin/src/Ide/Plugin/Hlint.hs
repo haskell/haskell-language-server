@@ -120,8 +120,7 @@ type instance RuleResult GetHlintDiagnostics = ()
 
 -- | Hlint rules to generate file diagnostics based on hlint hints
 -- | This rule is recomputed when:
--- | - The files of interest have changed via `getFilesOfInterest`
--- | - One of those files has been edited via
+-- | - A file has been edited via
 -- |    - `getIdeas` -> `getParsedModule` in any case
 -- |    - `getIdeas` -> `getFileContents` if the hls ghc does not match the hlint default ghc
 -- | - The client settings have changed, to honour the `hlintOn` setting, via `getClientConfigAction`
@@ -140,7 +139,7 @@ rules plugin = do
     liftIO $ argsSettings flags
 
   action $ do
-    files <- getFilesOfInterest
+    files <- getFilesOfInterestUntracked
     void $ uses GetHlintDiagnostics $ Map.keys files
 
   where
