@@ -26,8 +26,11 @@ import           Data.Set (Set)
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Tree
+import           Development.IDE (Range)
+import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.Compat hiding (Node)
 import           Development.IDE.GHC.Orphans ()
+import           FamInstEnv (FamInstEnvs)
 import           GHC.Generics
 import           GHC.SourceGen (var)
 import           InstEnv (InstEnvs(..))
@@ -39,8 +42,6 @@ import           UniqSupply (takeUniqFromSupply, mkSplitUniqSupply, UniqSupply)
 import           Unique (nonDetCmpUnique, Uniquable, getUnique, Unique)
 import           Wingman.Debug
 import           Wingman.FeatureSet
-import Development.IDE.Core.UseStale
-import Development.IDE (Range)
 
 
 ------------------------------------------------------------------------------
@@ -422,6 +423,7 @@ data Context = Context
   , ctxConfig        :: Config
   , ctxKnownThings   :: KnownThings
   , ctxInstEnvs      :: InstEnvs
+  , ctxFamInstEnvs   :: FamInstEnvs
   , ctxTheta         :: Set CType
   }
 
@@ -452,6 +454,7 @@ emptyContext
       , ctxModuleFuncs = mempty
       , ctxConfig = emptyConfig
       , ctxKnownThings = error "empty known things from emptyContext"
+      , ctxFamInstEnvs = mempty
       , ctxInstEnvs = InstEnvs mempty mempty mempty
       , ctxTheta = mempty
       }

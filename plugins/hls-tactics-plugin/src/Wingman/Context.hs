@@ -3,16 +3,18 @@ module Wingman.Context where
 import           Bag
 import           Control.Arrow
 import           Control.Monad.Reader
+import           Data.Coerce (coerce)
 import           Data.Foldable.Extra (allM)
 import           Data.Maybe (fromMaybe, isJust, mapMaybe)
 import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
-import           GhcPlugins (ExternalPackageState (eps_inst_env), piResultTys)
+import           GhcPlugins (ExternalPackageState (eps_inst_env), piResultTys, eps_fam_inst_env)
 import           InstEnv (lookupInstEnv, InstEnvs(..), is_dfun)
 import           OccName
 import           TcRnTypes
 import           TcType (tcSplitTyConApp, tcSplitPhiTy)
 import           TysPrim (alphaTys)
+import           Wingman.GHC (normalizeType)
 import           Wingman.Judgements.Theta
 import           Wingman.Types
 
@@ -25,24 +27,28 @@ mkContext
     -> KnownThings
     -> [Evidence]
     -> Context
-mkContext cfg locals tcg eps kt ev = Context
-  { ctxDefiningFuncs = locals
-  , ctxModuleFuncs
-      = fmap splitId
-      . mappend (locallyDefinedMethods tcg)
-      . (getFunBindId =<<)
-      . fmap unLoc
-      . bagToList
-      $ tcg_binds tcg
-  , ctxConfig = cfg
-  , ctxInstEnvs =
-      InstEnvs
-        (eps_inst_env eps)
-        (tcg_inst_env tcg)
-        (tcVisibleOrphanMods tcg)
-  , ctxKnownThings = kt
-  , ctxTheta = evidenceToThetaType ev
-  }
+mkContext cfg locals tcg eps kt ev = fix $ \ctx ->
+  Context
+    { ctxDefiningFuncs
+        = fmap (second $ coerce $ normalizeType ctx) locals
+    , ctxModuleFuncs
+        = fmap (second (coerce $ normalizeType ctx) . splitId)
+        . mappend (locallyDefinedMethods tcg)
+        . (getFunBindId =<<)
+        . fmap unLoc
+        . bagToList
+        $ tcg_binds tcg
+    , ctxConfig = cfg
+    , ctxFamInstEnvs =
+        (eps_fam_inst_env eps, tcg_fam_inst_env tcg)
+    , ctxInstEnvs =
+        InstEnvs
+          (eps_inst_env eps)
+          (tcg_inst_env tcg)
+          (tcVisibleOrphanMods tcg)
+    , ctxKnownThings = kt
+    , ctxTheta = evidenceToThetaType ev
+    }
 
 
 locallyDefinedMethods :: TcGblEnv -> [Id]
