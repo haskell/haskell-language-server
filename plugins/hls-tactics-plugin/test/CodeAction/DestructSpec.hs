@@ -17,6 +17,7 @@ spec = do
     destructTest "a"     7 25 "SplitPattern"
     destructTest "a"     6 18 "DestructPun"
     destructTest "fp"   31 14 "DestructCthulhu"
+    destructTest "b"     7 10 "DestructTyFam"
 
   describe "layout" $ do
     destructTest "b"  4  3 "LayoutBind"

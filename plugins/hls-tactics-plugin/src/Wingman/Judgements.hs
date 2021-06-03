@@ -17,7 +17,7 @@ import           Development.IDE.Spans.LocalBindings
 import           OccName
 import           SrcLoc
 import           Type
-import           Wingman.GHC (algebraicTyCon)
+import           Wingman.GHC (algebraicTyCon, normalizeType)
 import           Wingman.Types
 
 
@@ -69,11 +69,19 @@ withNewGoal :: a -> Judgement' a -> Judgement' a
 withNewGoal t = field @"_jGoal" .~ t
 
 
-introduce :: Hypothesis a -> Judgement' a -> Judgement' a
+normalizeHypothesis :: Functor f => Context -> f CType -> f CType
+normalizeHypothesis = fmap . coerce . normalizeType
+
+normalizeJudgement :: Functor f => Context -> f CType -> f CType
+normalizeJudgement = normalizeHypothesis
+
+
+introduce :: Context -> Hypothesis CType -> Judgement' CType -> Judgement' CType
 -- NOTE(sandy): It's important that we put the new hypothesis terms first,
 -- since 'jAcceptableDestructTargets' will never destruct a pattern that occurs
 -- after a previously-destructed term.
-introduce hy = field @"_jHypothesis" %~ mappend hy
+introduce ctx hy =
+  field @"_jHypothesis" %~ mappend (normalizeHypothesis ctx hy)
 
 
 ------------------------------------------------------------------------------
@@ -393,17 +401,19 @@ substJdg subst = fmap $ coerce . substTy subst . coerce
 
 
 mkFirstJudgement
-    :: Hypothesis CType
+    :: Context
+    -> Hypothesis CType
     -> Bool  -- ^ are we in the top level rhs hole?
     -> Type
     -> Judgement' CType
-mkFirstJudgement hy top goal = Judgement
-  { _jHypothesis        = hy
-  , _jBlacklistDestruct = False
-  , _jWhitelistSplit    = True
-  , _jIsTopHole         = top
-  , _jGoal              = CType goal
-  }
+mkFirstJudgement ctx hy top goal =
+  Judgement
+    { _jHypothesis        = fmap (coerce $ normalizeType ctx) hy
+    , _jBlacklistDestruct = False
+    , _jWhitelistSplit    = True
+    , _jIsTopHole         = top
+    , _jGoal              = CType $ normalizeType ctx goal
+    }
 
 
 ------------------------------------------------------------------------------

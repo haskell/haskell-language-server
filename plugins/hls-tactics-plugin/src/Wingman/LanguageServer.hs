@@ -275,7 +275,9 @@ mkJudgementAndContext cfg g (TrackedStale binds bmap) rss (TrackedStale tcg tcgm
       subst = ts_unifier $ appEndo (foldMap (Endo . evidenceToSubst) evidence) defaultTacticState
   pure $
     ( disallowing AlreadyDestructed already_destructed
-    $ fmap (CType . substTyAddInScope subst . unCType) $ mkFirstJudgement
+    $ fmap (CType . substTyAddInScope subst . unCType) $
+        mkFirstJudgement
+          ctx
           (local_hy <> cls_hy)
           (isRhsHole tcg_rss tcs)
           g

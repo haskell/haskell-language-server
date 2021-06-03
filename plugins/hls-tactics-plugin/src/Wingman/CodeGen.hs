@@ -40,6 +40,7 @@ import           Wingman.Machinery
 import           Wingman.Naming
 import           Wingman.Types
 import GHC.SourceGen (occNameToStr)
+import Control.Monad.Reader (ask)
 
 
 destructMatches
@@ -69,6 +70,7 @@ destructMatches use_field_puns f scrut t jdg = do
             args = conLikeInstOrigArgTys' con apps
         modify $ appEndo $ foldMap (Endo . evidenceToSubst) ev
         subst <- gets ts_unifier
+        ctx <- ask
 
         let names_in_scope = hyNamesInScope hy
             names = mkManyGoodNames (hyNamesInScope hy) args
@@ -79,8 +81,8 @@ destructMatches use_field_puns f scrut t jdg = do
                 $ zip names'
                 $ coerce args
             j = fmap (CType . substTyAddInScope subst . unCType)
-              $ introduce hy'
-              $ introduce method_hy
+              $ introduce ctx hy'
+              $ introduce ctx method_hy
               $ withNewGoal g jdg
         ext <- f con j
         pure $ ext
@@ -289,6 +291,7 @@ letForEach rename solve (unHypothesis -> hy) jdg = do
   case hy of
     [] -> newSubgoal jdg
     _ -> do
+      ctx <- ask
       let g = jGoal jdg
       terms <- fmap sequenceA $ for hy $ \hi -> do
         let name = rename $ hi_name hi
@@ -296,6 +299,6 @@ letForEach rename solve (unHypothesis -> hy) jdg = do
         pure $ fmap ((name,) . unLoc) res
       let hy' = fmap (g <$) $ syn_val terms
           matches = fmap (fmap (\(occ, expr) -> valBind (occNameToStr occ) expr)) terms
-      g <- fmap (fmap unLoc) $ newSubgoal $ introduce (userHypothesis hy') jdg
+      g <- fmap (fmap unLoc) $ newSubgoal $ introduce ctx (userHypothesis hy') jdg
       pure $ fmap noLoc $ let' <$> matches <*> g
 
