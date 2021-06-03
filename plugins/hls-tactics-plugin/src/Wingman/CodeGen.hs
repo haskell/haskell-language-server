@@ -13,6 +13,7 @@ module Wingman.CodeGen
 import           ConLike
 import           Control.Lens ((%~), (<>~), (&))
 import           Control.Monad.Except
+import           Control.Monad.Reader (ask)
 import           Control.Monad.State
 import           Data.Bool (bool)
 import           Data.Functor ((<&>))
@@ -24,6 +25,7 @@ import           Data.Traversable
 import           DataCon
 import           Development.IDE.GHC.Compat
 import           GHC.Exts
+import           GHC.SourceGen (occNameToStr)
 import           GHC.SourceGen.Binds
 import           GHC.SourceGen.Expr
 import           GHC.SourceGen.Overloaded
@@ -39,8 +41,6 @@ import           Wingman.Judgements.Theta
 import           Wingman.Machinery
 import           Wingman.Naming
 import           Wingman.Types
-import GHC.SourceGen (occNameToStr)
-import Control.Monad.Reader (ask)
 
 
 destructMatches
