@@ -407,13 +407,14 @@ mkFirstJudgement
     -> Type
     -> Judgement' CType
 mkFirstJudgement ctx hy top goal =
-  Judgement
-    { _jHypothesis        = fmap (coerce $ normalizeType ctx) hy
-    , _jBlacklistDestruct = False
-    , _jWhitelistSplit    = True
-    , _jIsTopHole         = top
-    , _jGoal              = CType $ normalizeType ctx goal
-    }
+  normalizeJudgement ctx $
+    Judgement
+      { _jHypothesis        = hy
+      , _jBlacklistDestruct = False
+      , _jWhitelistSplit    = True
+      , _jIsTopHole         = top
+      , _jGoal              = CType goal
+      }
 
 
 ------------------------------------------------------------------------------
