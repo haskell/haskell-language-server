@@ -18,7 +18,7 @@ import qualified Data.Set as S
 import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.Compat
 import           Generics.SYB hiding (tyConName, empty)
-import           GhcPlugins (mkVarOcc, splitTyConApp_maybe, getTyVar_maybe, zipTvSubst)
+import           GhcPlugins (mkVarOcc, splitTyConApp_maybe, getTyVar_maybe, zipTvSubst, unionTCvSubst, emptyTCvSubst, TCvSubst)
 #if __GLASGOW_HASKELL__ > 806
 import           GhcPlugins (eqTyCon)
 #else
@@ -77,8 +77,8 @@ getEvidenceAtHole (unTrack -> dst)
 
 ------------------------------------------------------------------------------
 -- | Update our knowledge of which types are equal.
-evidenceToSubst :: Evidence -> TacticState -> TacticState
-evidenceToSubst (EqualityOfTypes a b) ts =
+hi :: Evidence -> TacticState -> TacticState
+hi (EqualityOfTypes a b) ts =
   let tyvars = S.fromList $ mapMaybe getTyVar_maybe [a, b]
       -- If we can unify our skolems, at least one is no longer a skolem.
       -- Removing them from this set ensures we can get a subtitution between
@@ -89,7 +89,22 @@ evidenceToSubst (EqualityOfTypes a b) ts =
   case tryUnifyUnivarsButNotSkolems skolems (CType a) (CType b) of
     Just subst -> updateSubst subst ts
     Nothing -> ts
-evidenceToSubst HasInstance{} ts = ts
+hi HasInstance{} ts = ts
+
+substEvidence :: TCvSubst -> Evidence -> Evidence
+substEvidence subst (EqualityOfTypes ty ty') =
+  EqualityOfTypes (substTy subst ty) (substTy subst ty')
+substEvidence _ x = x
+
+allEvidenceToSubst :: [Evidence] -> TCvSubst
+allEvidenceToSubst [] = emptyTCvSubst
+allEvidenceToSubst (HasInstance{} : evs) = allEvidenceToSubst evs
+allEvidenceToSubst (eq@EqualityOfTypes{} : evs) =
+  let subst = ts_unifier $ hi eq defaultTacticState
+   in unionTCvSubst subst $ allEvidenceToSubst $ fmap (substEvidence subst) evs
+
+evidenceToSubst :: [Evidence] -> TacticState -> TacticState
+evidenceToSubst = updateSubst . allEvidenceToSubst
 
 
 ------------------------------------------------------------------------------

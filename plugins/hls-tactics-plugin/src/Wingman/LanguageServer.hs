@@ -270,9 +270,9 @@ mkJudgementAndContext cfg g (TrackedStale binds bmap) rss (TrackedStale tcg tcgm
       already_destructed = getAlreadyDestructed (fmap RealSrcSpan tcg_rss) tcs
       local_hy = spliceProvenance top_provs
                $ hypothesisFromBindings binds_rss binds
-      evidence = getEvidenceAtHole (fmap RealSrcSpan tcg_rss) tcs
+      evidence = traceIdX "evidence" $ getEvidenceAtHole (fmap RealSrcSpan tcg_rss) tcs
       cls_hy = foldMap evidenceToHypothesis evidence
-      subst = ts_unifier $ appEndo (foldMap (Endo . evidenceToSubst) evidence) defaultTacticState
+      subst = ts_unifier $ evidenceToSubst evidence defaultTacticState
   pure $
     ( disallowing AlreadyDestructed already_destructed
     $ fmap (CType . substTyAddInScope subst . unCType) $ mkFirstJudgement
