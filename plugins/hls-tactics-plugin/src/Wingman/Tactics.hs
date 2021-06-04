@@ -11,7 +11,7 @@ import           Control.Lens ((&), (%~), (<>~))
 import           Control.Monad (unless)
 import           Control.Monad.Except (throwError)
 import           Control.Monad.Reader.Class (MonadReader (ask))
-import           Control.Monad.State.Strict (StateT(..), runStateT)
+import           Control.Monad.State.Strict (StateT(..), runStateT, gets)
 import           Data.Bool (bool)
 import           Data.Foldable
 import           Data.Functor ((<&>))
@@ -160,7 +160,7 @@ destructOrHomoAuto hi = tracing "destructOrHomoAuto" $ do
   attemptWhen
       (rule $ destruct' False (\dc jdg ->
         buildDataCon False jdg dc $ snd $ splitAppTys g) hi)
-      (rule $ destruct' False (const subgoal) hi)
+      (rule $ destruct' False (const newSubgoal) hi)
     $ case (splitTyConApp_maybe g, splitTyConApp_maybe ty) of
         (Just (gtc, _), Just (tytc, _)) -> gtc == tytc
         _ -> False
@@ -170,14 +170,14 @@ destructOrHomoAuto hi = tracing "destructOrHomoAuto" $ do
 -- | Case split, and leave holes in the matches.
 destruct :: HyInfo CType -> TacticsM ()
 destruct hi = requireConcreteHole $ tracing "destruct(user)" $
-  rule $ destruct' False (const subgoal) hi
+  rule $ destruct' False (const newSubgoal) hi
 
 
 ------------------------------------------------------------------------------
 -- | Case split, and leave holes in the matches. Performs record punning.
 destructPun :: HyInfo CType -> TacticsM ()
 destructPun hi = requireConcreteHole $ tracing "destructPun(user)" $
-  rule $ destruct' True (const subgoal) hi
+  rule $ destruct' True (const newSubgoal) hi
 
 
 ------------------------------------------------------------------------------
@@ -191,7 +191,7 @@ homo = requireConcreteHole . tracing "homo" . rule . destruct' False (\dc jdg ->
 -- | LambdaCase split, and leave holes in the matches.
 destructLambdaCase :: TacticsM ()
 destructLambdaCase =
-  tracing "destructLambdaCase" $ rule $ destructLambdaCase' False (const subgoal)
+  tracing "destructLambdaCase" $ rule $ destructLambdaCase' False (const newSubgoal)
 
 
 ------------------------------------------------------------------------------
@@ -335,7 +335,7 @@ destructAll :: TacticsM ()
 destructAll = do
   jdg <- goal
   let args = fmap fst
-           $ sort
+           $ sortOn snd
            $ mapMaybe (\(hi, prov) ->
               case prov of
                 TopLevelArgPrv _ idx _ -> pure (hi, idx)
@@ -345,7 +345,9 @@ destructAll = do
            $ filter (isAlgType . unCType . hi_type)
            $ unHypothesis
            $ jHypothesis jdg
-  for_ args destruct
+  for_ args $ \arg -> do
+    subst <- gets ts_unifier
+    destruct $ fmap (coerce substTy subst) arg
 
 --------------------------------------------------------------------------------
 -- | User-facing tactic to implement "Use constructor <x>"
