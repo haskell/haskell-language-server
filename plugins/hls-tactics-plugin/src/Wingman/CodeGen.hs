@@ -19,7 +19,6 @@ import           Data.Bool (bool)
 import           Data.Functor ((<&>))
 import           Data.Generics.Labels ()
 import           Data.List
-import           Data.Monoid (Endo(..))
 import qualified Data.Set as S
 import           Data.Traversable
 import           DataCon
@@ -68,7 +67,7 @@ destructMatches use_field_puns f scrut t jdg = do
             -- #syn_scoped
             method_hy = foldMap evidenceToHypothesis ev
             args = conLikeInstOrigArgTys' con apps
-        modify $ appEndo $ foldMap (Endo . evidenceToSubst) ev
+        modify $ evidenceToSubst ev
         subst <- gets ts_unifier
         ctx <- ask
 

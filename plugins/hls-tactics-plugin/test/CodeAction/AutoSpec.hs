@@ -65,6 +65,7 @@ spec = do
     autoTest  6  8 "AutoThetaEqGADTDestruct"
     autoTest  6 10 "AutoThetaRefl"
     autoTest  6  8 "AutoThetaReflDestruct"
+    autoTest 19 30 "AutoThetaMultipleUnification"
 
   describe "known" $ do
     autoTest 25 13 "GoldenArbitrary"
