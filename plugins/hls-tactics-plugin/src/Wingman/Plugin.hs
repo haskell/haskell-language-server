@@ -121,7 +121,9 @@ tacticCmd tac pId state (TacticParams uri range var_name)
 
         timingOut (cfg_timeout_seconds cfg * seconds) $ join $
           case runTactic hj_ctx hj_jdg t of
-            Left _ -> Left TacticErrors
+            Left errs ->  do
+              traceMX "errs" errs
+              Left TacticErrors
             Right rtr ->
               case rtr_extract rtr of
                 L _ (HsVar _ (L _ rdr)) | isHole (occName rdr) ->
