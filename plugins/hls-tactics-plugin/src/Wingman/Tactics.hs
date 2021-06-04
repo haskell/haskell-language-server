@@ -83,7 +83,8 @@ recursion = requireConcreteHole $ tracing "recursion" $ do
       unless (any (flip M.member pat_vals) $ syn_used_vals ext) empty
 
     let hy' = recursiveHypothesis defs
-    localTactic (apply $ HyInfo name RecursivePrv ty) (introduce hy')
+    ctx <- ask
+    localTactic (apply $ HyInfo name RecursivePrv ty) (introduce ctx hy')
       <@> fmap (localTactic assumption . filterPosition name) [0..]
 
 
@@ -110,15 +111,15 @@ intros'
     -> TacticsM ()
 intros' names = rule $ \jdg -> do
   let g  = jGoal jdg
-  ctx <- ask
   case tacticsSplitFunTy $ unCType g of
     (_, _, [], _) -> throwError $ GoalMismatch "intros" g
     (_, _, as, b) -> do
+      ctx <- ask
       let vs = fromMaybe (mkManyGoodNames (hyNamesInScope $ jEntireHypothesis jdg) as) names
           num_args = length vs
           top_hole = isTopHole ctx jdg
           hy' = lambdaHypothesis top_hole $ zip vs $ coerce as
-          jdg' = introduce hy'
+          jdg' = introduce ctx hy'
                $ withNewGoal (CType $ mkFunTys' (drop num_args as) b) jdg
       ext <- newSubgoal jdg'
       pure $
