@@ -12,12 +12,15 @@ module Wingman.Judgements.Theta
 
 import           Class (classTyVars)
 import           Control.Applicative (empty)
+import           Control.Lens (preview)
 import           Data.Maybe (fromMaybe, mapMaybe, maybeToList)
+import           Data.Generics.Sum (_Ctor)
 import           Data.Set (Set)
 import qualified Data.Set as S
 import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.Compat
-import           Generics.SYB hiding (tyConName, empty)
+import           Generics.SYB hiding (tyConName, empty, Generic)
+import           GHC.Generics
 import           GhcPlugins (mkVarOcc, splitTyConApp_maybe, getTyVar_maybe, zipTvSubst, unionTCvSubst, emptyTCvSubst, TCvSubst)
 #if __GLASGOW_HASKELL__ > 806
 import           GhcPlugins (eqTyCon)
@@ -40,7 +43,7 @@ data Evidence
   = EqualityOfTypes Type Type
     -- | We have an instance in scope
   | HasInstance PredType
-  deriving (Show)
+  deriving (Show, Generic)
 
 
 ------------------------------------------------------------------------------
@@ -75,36 +78,46 @@ getEvidenceAtHole (unTrack -> dst)
   . unTrack
 
 
-------------------------------------------------------------------------------
--- | Update our knowledge of which types are equal.
-hi :: Evidence -> TacticState -> TacticState
-hi (EqualityOfTypes a b) ts =
+mkSubst :: Set TyVar -> Type -> Type -> TCvSubst
+mkSubst skolems a b =
   let tyvars = S.fromList $ mapMaybe getTyVar_maybe [a, b]
       -- If we can unify our skolems, at least one is no longer a skolem.
       -- Removing them from this set ensures we can get a subtitution between
       -- the two. But it's okay to leave them in 'ts_skolems' in general, since
       -- they won't exist after running this substitution.
-      skolems = ts_skolems ts S.\\ tyvars
+      skolems' = skolems S.\\ tyvars
    in
-  case tryUnifyUnivarsButNotSkolems skolems (CType a) (CType b) of
-    Just subst -> updateSubst subst ts
-    Nothing -> ts
-hi HasInstance{} ts = ts
+  case tryUnifyUnivarsButNotSkolems skolems' (CType a) (CType b) of
+    Just subst -> subst
+    Nothing -> emptyTCvSubst
 
-substEvidence :: TCvSubst -> Evidence -> Evidence
-substEvidence subst (EqualityOfTypes ty ty') =
-  EqualityOfTypes (substTy subst ty) (substTy subst ty')
-substEvidence _ x = x
 
-allEvidenceToSubst :: [Evidence] -> TCvSubst
-allEvidenceToSubst [] = emptyTCvSubst
-allEvidenceToSubst (HasInstance{} : evs) = allEvidenceToSubst evs
-allEvidenceToSubst (eq@EqualityOfTypes{} : evs) =
-  let subst = ts_unifier $ hi eq defaultTacticState
-   in unionTCvSubst subst $ allEvidenceToSubst $ fmap (substEvidence subst) evs
+substPair :: TCvSubst -> (Type, Type) -> (Type, Type)
+substPair subst (ty, ty') = (substTy subst ty, substTy subst ty')
 
+
+------------------------------------------------------------------------------
+-- | Construct a substitution given a list of types that are equal to one
+-- another. This is more subtle than it seems, since there might be several
+-- equalities for the same type. We must be careful to push the accumulating
+-- substitution through each pair of types before adding their equalities.
+allEvidenceToSubst :: Set TyVar -> [(Type, Type)] -> TCvSubst
+allEvidenceToSubst _ [] = emptyTCvSubst
+allEvidenceToSubst skolems ((a, b) : evs) =
+  let subst = mkSubst skolems a b
+   in unionTCvSubst subst
+    $ allEvidenceToSubst skolems
+    $ fmap (substPair subst) evs
+
+------------------------------------------------------------------------------
+-- | Update our knowledge of which types are equal.
 evidenceToSubst :: [Evidence] -> TacticState -> TacticState
-evidenceToSubst = updateSubst . allEvidenceToSubst
+evidenceToSubst evs ts =
+  updateSubst
+    (allEvidenceToSubst (ts_skolems ts)
+      $ mapMaybe (preview $ _Ctor @"EqualityOfTypes")
+      $ evs)
+    ts
 
 
 ------------------------------------------------------------------------------
