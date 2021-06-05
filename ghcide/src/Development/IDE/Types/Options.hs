@@ -82,6 +82,8 @@ data IdeOptions = IdeOptions
   , optSkipProgress       :: forall a. Typeable a => a -> Bool
       -- ^ Predicate to select which rule keys to exclude from progress reporting.
   , optProgressStyle      :: ProgressReportingStyle
+  , optRunSubset          :: Bool
+      -- ^ Experimental feature to re-run only the subset of the Shake graph that has changed
   }
 
 optShakeFiles :: IdeOptions -> Maybe FilePath
@@ -143,6 +145,7 @@ defaultIdeOptions session = IdeOptions
     ,optModifyDynFlags = mempty
     ,optSkipProgress = defaultSkipProgress
     ,optProgressStyle = Explicit
+    ,optRunSubset = False
     }
 
 defaultSkipProgress :: Typeable a => a -> Bool

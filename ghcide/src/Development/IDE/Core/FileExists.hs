@@ -17,6 +17,7 @@ import           Control.Monad.IO.Class
 import qualified Data.ByteString                       as BS
 import           Data.HashMap.Strict                   (HashMap)
 import qualified Data.HashMap.Strict                   as HashMap
+import           Data.List                             (partition)
 import           Data.Maybe
 import           Development.IDE.Core.FileStore
 import           Development.IDE.Core.IdeConfiguration
@@ -25,9 +26,9 @@ import           Development.IDE.Core.Shake
 import           Development.IDE.Graph
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
+import           Ide.Plugin.Config                     (Config)
 import           Language.LSP.Server                   hiding (getVirtualFile)
 import           Language.LSP.Types
-import           Language.LSP.Types.Capabilities
 import qualified System.Directory                      as Dir
 import qualified System.FilePath.Glob                  as Glob
 
@@ -91,22 +92,25 @@ modifyFileExists :: IdeState -> [FileEvent] -> IO ()
 modifyFileExists state changes = do
   FileExistsMapVar var <- getIdeGlobalState state
   changesMap           <- evaluate $ HashMap.fromList $
-    [ (toNormalizedFilePath' f, newState)
+    [ (toNormalizedFilePath' f, change)
     | FileEvent uri change <- changes
     , Just f <- [uriToFilePath uri]
-    , Just newState <- [fromChange change]
     ]
   -- Masked to ensure that the previous values are flushed together with the map update
   mask $ \_ -> do
     -- update the map
-    void $ modifyVar' var $ HashMap.union changesMap
+    void $ modifyVar' var $ HashMap.union (HashMap.mapMaybe fromChange changesMap)
     -- See Note [Invalidating file existence results]
     -- flush previous values
-    mapM_ (deleteValue (shakeExtras state) GetFileExists) (HashMap.keys changesMap)
+    let (fileModifChanges, fileExistChanges) =
+            partition ((== FcChanged) . snd) (HashMap.toList changesMap)
+    mapM_ (deleteValue (shakeExtras state) GetFileExists . fst) fileExistChanges
+    recordDirtyKeys (shakeExtras state) GetFileExists $ map fst fileExistChanges
+    recordDirtyKeys (shakeExtras state) GetModificationTime $ map fst fileModifChanges
 
 fromChange :: FileChangeType -> Maybe Bool
 fromChange FcCreated = Just True
-fromChange FcDeleted = Just True
+fromChange FcDeleted = Just False
 fromChange FcChanged = Nothing
 
 -------------------------------------------------------------------------------------
@@ -153,18 +157,11 @@ allExtensions opts = [extIncBoot | ext <- optExtensions opts, extIncBoot <- [ext
 -- | Installs the 'getFileExists' rules.
 --   Provides a fast implementation if client supports dynamic watched files.
 --   Creates a global state as a side effect in that case.
-fileExistsRules :: Maybe (LanguageContextEnv c) -> VFSHandle -> Rules ()
+fileExistsRules :: Maybe (LanguageContextEnv Config) -> VFSHandle -> Rules ()
 fileExistsRules lspEnv vfs = do
   supportsWatchedFiles <- case lspEnv of
-    Just lspEnv' -> liftIO $ runLspT lspEnv' $ do
-      ClientCapabilities {_workspace} <- getClientCapabilities
-      case () of
-        _ | Just WorkspaceClientCapabilities{_didChangeWatchedFiles} <- _workspace
-          , Just DidChangeWatchedFilesClientCapabilities{_dynamicRegistration} <- _didChangeWatchedFiles
-          , Just True <- _dynamicRegistration
-          -> pure True
-        _ -> pure False
-    Nothing -> pure False
+    Nothing      -> pure False
+    Just lspEnv' -> liftIO $  runLspT lspEnv' isWatchSupported
   -- Create the global always, although it should only be used if we have fast rules.
   -- But there's a chance someone will send unexpected notifications anyway,
   -- e.g. https://github.com/haskell/ghcide/issues/599
