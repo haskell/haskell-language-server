@@ -102,6 +102,7 @@ import           System.Environment                                 (setEnv,
                                                                      unsetEnv)
 -- ---------------------------------------------------------------------
 
+-- Reimplementing this, since the one in Development.IDE.GHC.Compat isn't for ghc-lib
 pattern OldRealSrcSpan :: RealSrcSpan -> SrcSpan
 #if MIN_GHC_API_VERSION(9,0,0)
 pattern OldRealSrcSpan span <- RealSrcSpan span _
