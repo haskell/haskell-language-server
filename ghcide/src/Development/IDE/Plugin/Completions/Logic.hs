@@ -266,7 +266,6 @@ mkNameCompItem doc thingParent origName origMod thingType isInfix docs !imp = CI
             let (args, ret) = splitFunTys t
               in if isForAllTy ret
                   then getArgs ret
-                  -- TODO: Do we want to use multiplicity here?
                   else Prelude.filter (not . isDictTy) $ map scaledThing args
           | isPiTy t = getArgs $ snd (splitPiTys t)
 #if MIN_VERSION_ghc(8,10,0)
