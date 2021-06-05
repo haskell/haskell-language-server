@@ -36,7 +36,6 @@ import           HscTypes                       (HscEnv (hsc_dflags))
 import           Language.LSP.Types             (filePathToUri, getUri)
 import           Name
 import           NameEnv
--- import           Packages
 import           SrcLoc                         (RealLocated)
 import           TcRnTypes
 

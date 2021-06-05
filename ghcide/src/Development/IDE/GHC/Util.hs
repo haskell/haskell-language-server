@@ -69,9 +69,6 @@ import           OccName                        (parenSymOcc)
 import           Outputable                     (Depth (..), Outputable, SDoc,
                                                  neverQualify, ppr,
                                                  showSDocUnsafe)
--- import           PackageConfig                  (PackageConfig)
--- import           Packages                       ( -- getPackageConfigMap,
---                                                  lookupPackage')
 import           RdrName                        (nameRdrName, rdrNameOcc)
 import           SrcLoc                         (mkRealSrcLoc)
 import           StringBuffer
