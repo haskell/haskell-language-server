@@ -86,7 +86,7 @@ extra-deps:
 # https://github.com/wz1000/HieDb/pull/31
 
 - github: anka-213/lsp
-  commit: 3bf244fe0cf7ca9b895ae71fb526adba466ceaee
+  commit: e96383ab19534128f12acc70a69fbc15d4f298cc
   subdirs:
   - lsp-types
   - lsp
