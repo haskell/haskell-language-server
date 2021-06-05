@@ -23,9 +23,11 @@ import           Development.IDE.Core.Compile (lookupName)
 import           Development.IDE.GHC.Compat hiding (exprType)
 import           DsExpr (dsExpr)
 import           DsMonad (initDs)
+import           FamInst (tcLookupDataFamInst_maybe)
+import           FamInstEnv (normaliseType)
 import           GHC.SourceGen (lambda)
 import           Generics.SYB (Data, everything, everywhere, listify, mkQ, mkT)
-import           GhcPlugins (extractModule, GlobalRdrElt (gre_name))
+import           GhcPlugins (extractModule, GlobalRdrElt (gre_name), Role (Nominal))
 import           OccName
 import           TcRnMonad
 import           TcType
@@ -373,4 +375,24 @@ mkFunTys' =
 #else
   mkVisFunTys
 #endif
+
+
+------------------------------------------------------------------------------
+-- | Expand type and data families
+normalizeType :: Context -> Type -> Type
+normalizeType ctx ty =
+  let ty' = expandTyFam ctx ty
+   in case tcSplitTyConApp_maybe ty' of
+        Just (tc, tys) ->
+          -- try to expand any data families
+          case tcLookupDataFamInst_maybe (ctxFamInstEnvs ctx) tc tys of
+            Just (dtc, dtys, _) -> mkAppTys (mkTyConTy dtc) dtys
+            Nothing -> ty'
+        Nothing -> ty'
+
+------------------------------------------------------------------------------
+-- | Expand type families
+expandTyFam :: Context -> Type -> Type
+expandTyFam ctx = snd . normaliseType  (ctxFamInstEnvs ctx) Nominal
+
 
