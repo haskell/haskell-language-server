@@ -82,7 +82,7 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/anka-213/lsp
-  tag: 3bf244fe0cf7ca9b895ae71fb526adba466ceaee
+  tag: e96383ab19534128f12acc70a69fbc15d4f298cc
   subdir: lsp-types
   subdir: lsp
   subdir: lsp-test
