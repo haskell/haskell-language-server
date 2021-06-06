@@ -18,8 +18,7 @@ import qualified Data.HashMap.Strict                   as HashMap
 import           Data.Hashable                         (hashed)
 import           Data.List.Extra                       (intercalate, isPrefixOf,
                                                         nub, nubOrd, partition)
-import           Data.Maybe                            (catMaybes, fromMaybe,
-                                                        isJust)
+import           Data.Maybe                            (catMaybes, isJust)
 import qualified Data.Text                             as T
 import qualified Data.Text.IO                          as T
 import           Development.IDE                       (Action, Rules,
@@ -210,14 +209,12 @@ defaultMain Arguments{..} = do
 
                 -- We want to set the global DynFlags right now, so that we can use
                 -- `unsafeGlobalDynFlags` even before the project is configured
-                -- We do it here since haskell-lsp changes our working directory to the correct place ('rootPath')
-                -- before calling this function
                 _mlibdir <-
                     setInitialDynFlags dir argsSessionLoadingOptions
                         `catchAny` (\e -> (hPutStrLn stderr $ "setInitialDynFlags: " ++ displayException e) >> pure Nothing)
 
 
-                sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions $ fromMaybe dir rootPath
+                sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions dir
                 config <- LSP.runLspT env LSP.getConfig
                 let def_options = argsIdeOptions config sessionLoader
 
