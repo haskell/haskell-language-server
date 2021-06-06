@@ -80,24 +80,28 @@ data CollectedProgressNotification
  the titles we see are those we expect.
 -}
 expectProgressReports :: [Text] -> Session ()
-expectProgressReports xs = expectProgressReports' [] xs
+expectProgressReports xs = expectProgressReports' [] [] xs
   where
-    expectProgressReports' [] [] = return ()
-    expectProgressReports' tokens expectedTitles =
+    expectProgressReports' toks our titles | traceShow ("Progress reports", toks, our, titles) False = undefined
+    expectProgressReports' _ [] [] = return ()
+    expectProgressReports' allTokens ourTokens expectedTitles =
         do
             skipManyTill anyMessage (create <|> begin <|> progress <|> end)
             >>= \case
                 CreateM msg ->
-                    expectProgressReports' (token msg : tokens) expectedTitles
+                    expectProgressReports' (token msg : allTokens) ourTokens expectedTitles
                 BeginM msg -> do
-                    liftIO $ token msg `expectElem` tokens
-                    expectProgressReports' tokens (delete (title msg) expectedTitles)
+                    liftIO $ token msg `expectElem` allTokens
+                    let ourTokens' = if title msg `elem` expectedTitles
+                                        then token msg : ourTokens
+                                        else ourTokens
+                    expectProgressReports' allTokens ourTokens' (delete (title msg) expectedTitles)
                 ProgressM msg -> do
-                    liftIO $ token msg `expectElem` tokens
-                    expectProgressReports' tokens expectedTitles
+                    liftIO $ token msg `expectElem` allTokens
+                    expectProgressReports' allTokens ourTokens expectedTitles
                 EndM msg -> do
-                    liftIO $ token msg `expectElem` tokens
-                    expectProgressReports' (delete (token msg) tokens) expectedTitles
+                    liftIO $ token msg `expectElem` allTokens
+                    expectProgressReports' allTokens (delete (token msg) ourTokens) expectedTitles
     title msg = msg ^. L.value . L.title
     token msg = msg ^. L.token
     create = CreateM . view L.params <$> message SWindowWorkDoneProgressCreate
