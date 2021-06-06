@@ -24,6 +24,14 @@ packages:
          ./plugins/hls-ormolu-plugin
 tests: true
 
+source-repository-package
+   type: git
+   location: https://github.com/anka-213/lsp
+   tag: 3e688d99218889cc17aaf43337ad9902aed321f
+   subdir: lsp-types
+   subdir: lsp
+   subdir: lsp-test
+
 package *
   ghc-options: -haddock
   test-show-details: direct
