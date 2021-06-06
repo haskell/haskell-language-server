@@ -34,18 +34,21 @@ tests =
                 doc <- openDoc "T1.hs" "haskell"
                 [evalLens] <- getCodeLenses doc
                 let cmd = evalLens ^?! L.command . _Just
+                waitForProgressDone
                 _ <- sendRequest SWorkspaceExecuteCommand $ ExecuteCommandParams Nothing (cmd ^. L.command) (decode $ encode $ fromJust $ cmd ^. L.arguments)
                 expectProgressReports ["Evaluating"]
         , testCase "ormolu plugin sends progress notifications" $ do
             runSession hlsCommand progressCaps "test/testdata/format" $ do
                 sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "ormolu"))
                 doc <- openDoc "Format.hs" "haskell"
+                waitForProgressDone
                 _ <- sendRequest STextDocumentFormatting $ DocumentFormattingParams Nothing doc (FormattingOptions 2 True Nothing Nothing Nothing)
                 expectProgressReports ["Formatting Format.hs"]
         , testCase "fourmolu plugin sends progress notifications" $ do
             runSession hlsCommand progressCaps "test/testdata/format" $ do
                 sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "fourmolu"))
                 doc <- openDoc "Format.hs" "haskell"
+                waitForProgressDone
                 _ <- sendRequest STextDocumentFormatting $ DocumentFormattingParams Nothing doc (FormattingOptions 2 True Nothing Nothing Nothing)
                 expectProgressReports ["Formatting Format.hs"]
         , ignoreTestBecause "no liquid Haskell support" $
