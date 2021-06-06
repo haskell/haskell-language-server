@@ -141,15 +141,8 @@ loadWithImplicitCradle :: Maybe FilePath
                           -> IO (HieBios.Cradle Void)
 loadWithImplicitCradle mHieYaml rootDir = do
   case mHieYaml of
-    Just yaml -> do
-        -- change the cwd to the cradle location in order to support relative
-        -- paths in the cradle definition
-        setCurrentDirectory (takeDirectory yaml)
-        HieBios.loadCradle yaml
-    Nothing   -> do
-        -- change the cwd to the workspace root for consistency with the Just case
-        setCurrentDirectory rootDir
-        loadImplicitHieCradle $ addTrailingPathSeparator rootDir
+    Just yaml -> HieBios.loadCradle yaml
+    Nothing   -> loadImplicitHieCradle $ addTrailingPathSeparator rootDir
 
 getInitialGhcLibDirDefault :: FilePath -> IO (Maybe LibDir)
 getInitialGhcLibDirDefault rootDir = do
@@ -428,6 +421,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
              logWarning logger $ implicitCradleWarning lfp
 
            cradle <- loadCradle hieYaml dir
+           lfp <- flip makeRelative cfp <$> getCurrentDirectory
 
            when optTesting $ mRunLspT lspEnv $
             sendNotification (SCustomMethod "ghcide/cradle/loaded") (toJSON cfp)

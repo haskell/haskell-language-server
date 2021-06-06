@@ -14,6 +14,7 @@ import           Control.Exception.Safe                (Exception (displayExcept
 import           Control.Monad.Extra                   (concatMapM, unless,
                                                         when)
 import           Data.Default                          (Default (def))
+import           Data.Foldable                         (traverse_)
 import qualified Data.HashMap.Strict                   as HashMap
 import           Data.Hashable                         (hashed)
 import           Data.List.Extra                       (intercalate, isPrefixOf,
@@ -202,6 +203,7 @@ defaultMain Arguments{..} = do
             hPutStrLn stderr "Starting LSP server..."
             hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run WITHOUT the --lsp option!"
             runLanguageServer options inH outH argsGetHieDbLoc argsDefaultHlsConfig argsOnConfigChange (pluginHandlers plugins) $ \env vfs rootPath hiedb hieChan -> do
+                traverse_ IO.setCurrentDirectory rootPath
                 t <- t
                 hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
 
