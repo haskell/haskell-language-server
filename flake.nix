@@ -167,6 +167,7 @@
           pkgs.haskellPackages.ghc.version);
         ghc884 = pkgs.hlsHpkgs "ghc884";
         ghc8104 = pkgs.hlsHpkgs "ghc8104";
+        ghc8105 = pkgs.hlsHpkgs "ghc8105";
         ghc901 = pkgs.hlsHpkgs "ghc901";
 
         # Create a development shell of hls project
@@ -216,12 +217,14 @@
           haskell-language-server-dev = mkDevShell ghcDefault;
           haskell-language-server-884-dev = mkDevShell ghc884;
           haskell-language-server-8104-dev = mkDevShell ghc8104;
+          haskell-language-server-8105-dev = mkDevShell ghc8105;
           haskell-language-server-901-dev = mkDevShell ghc901;
 
           # hls package
           haskell-language-server = mkExe ghcDefault;
           haskell-language-server-884 = mkExe ghc884;
           haskell-language-server-8104 = mkExe ghc8104;
+          haskell-language-server-8105 = mkExe ghc8105;
           haskell-language-server-901 = mkExe ghc901;
         };
 
