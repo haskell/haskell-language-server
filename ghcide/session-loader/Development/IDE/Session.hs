@@ -78,7 +78,6 @@ import           HscTypes                             (hsc_IC, hsc_NC,
 import           Linker
 import           Module
 import           NameCache
-import           Packages
 
 import           Control.Concurrent.STM               (atomically)
 import           Control.Concurrent.STM.TQueue
@@ -108,7 +107,7 @@ data SessionLoadingOptions = SessionLoadingOptions
   , getCacheDirs           :: String -> [String] -> IO CacheDirs
   -- | Return the GHC lib dir to use for the 'unsafeGlobalDynFlags'
   , getInitialGhcLibDir    :: IO (Maybe LibDir)
-  , fakeUid                :: InstalledUnitId
+  , fakeUid                :: GHC.InstalledUnitId
     -- ^ unit id used to tag the internal component built by ghcide
     --   To reuse external interface files the unit ids must match,
     --   thus make sure to build them with `--this-unit-id` set to the
@@ -121,7 +120,7 @@ instance Default SessionLoadingOptions where
         ,loadCradle = loadWithImplicitCradle
         ,getCacheDirs = getCacheDirsDefault
         ,getInitialGhcLibDir = getInitialGhcLibDirDefault
-        ,fakeUid = toInstalledUnitId (stringToUnitId "main")
+        ,fakeUid = GHC.toInstalledUnitId (GHC.stringToUnit "main")
         }
 
 -- | Find the cradle for a given 'hie.yaml' configuration.
@@ -528,7 +527,11 @@ cradleToOptsAndLibDir cradle file = do
 emptyHscEnv :: IORef NameCache -> FilePath -> IO HscEnv
 emptyHscEnv nc libDir = do
     env <- runGhc (Just libDir) getSession
+#if !MIN_VERSION_ghc(9,0,0)
+    -- This causes ghc9 to crash with the error:
+    -- Couldn't find a target code interpreter. Try with -fexternal-interpreter
     initDynLinker env
+#endif
     pure $ setNameCache nc env{ hsc_dflags = (hsc_dflags env){useUnicode = True } }
 
 data TargetDetails = TargetDetails
@@ -754,12 +757,12 @@ removeInplacePackages
     -> [InstalledUnitId]
     -> DynFlags
     -> (DynFlags, [InstalledUnitId])
-removeInplacePackages fake_uid us df = (df { packageFlags = ps
-                                  , thisInstalledUnitId = fake_uid }, uids)
+removeInplacePackages fake_uid us df = (setThisInstalledUnitId fake_uid $
+                                       df { packageFlags = ps }, uids)
   where
     (uids, ps) = partitionEithers (map go (packageFlags df))
-    go p@(ExposePackage _ (UnitIdArg u) _) = if toInstalledUnitId u `elem` us
-                                                  then Left (toInstalledUnitId u)
+    go p@(ExposePackage _ (UnitIdArg u) _) = if GHC.toInstalledUnitId u `elem` us
+                                                  then Left (GHC.toInstalledUnitId u)
                                                   else Right p
     go p = Right p
 
@@ -800,7 +803,7 @@ setOptions (ComponentOptions theOpts compRoot _) dflags = do
     -- initPackages parses the -package flags and
     -- sets up the visibility for each component.
     -- Throws if a -package flag cannot be satisfied.
-    (final_df, _) <- liftIO $ wrapPackageSetupException $ initPackages dflags''
+    final_df <- liftIO $ wrapPackageSetupException $ initUnits dflags''
     return (final_df, targets)
 
 -- we don't want to generate object code so we compile to bytecode

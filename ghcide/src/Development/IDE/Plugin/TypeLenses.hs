@@ -80,7 +80,6 @@ import           PatSyn                              (patSynName)
 import           TcEnv                               (tcInitTidyEnv)
 import           TcRnMonad                           (initTcWithGbl)
 import           TcRnTypes                           (TcGblEnv (..))
-import           TcType                              (pprSigmaType)
 import           Text.Regex.TDFA                     ((=~), (=~~))
 
 typeLensCommandId :: T.Text

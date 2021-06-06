@@ -35,9 +35,14 @@ import           Ide.PluginUtils                      (mkLspCommand)
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
+#if MIN_VERSION_ghc(9,0,0)
+import           GHC.Builtin.Names                    (pRELUDE)
+#else
 import           PrelNames                            (pRELUDE)
+#endif
 import           RnNames                              (findImportUsage,
                                                        getMinimalImports)
+import qualified SrcLoc
 import           TcRnMonad                            (initTcWithGbl)
 import           TcRnTypes                            (TcGblEnv (tcg_used_gres))
 
@@ -192,12 +197,13 @@ minimalImportsRule = define $ \MinimalImports nfp -> do
   (imports, mbMinImports) <- liftIO $ extractMinimalImports hsc tmr
   let importsMap =
         Map.fromList
-          [ (srcSpanStart l, T.pack (prettyPrint i))
-            | L l i <- fromMaybe [] mbMinImports
+          [ (SrcLoc.realSrcSpanStart l, T.pack (prettyPrint i))
+            | L (OldRealSrcSpan l) i <- fromMaybe [] mbMinImports
           ]
       res =
-        [ (i, Map.lookup (srcSpanStart (getLoc i)) importsMap)
+        [ (i, Map.lookup (SrcLoc.realSrcSpanStart l) importsMap)
           | i <- imports
+          , OldRealSrcSpan l <- [getLoc i]
         ]
   return ([], MinimalImportsResult res <$ mbMinImports)
 
@@ -234,7 +240,7 @@ mkExplicitEdit pred posMapping (L src imp) explicit
   | ImportDecl {ideclHiding = Just (False, _)} <- imp =
     Nothing
   | not (isQualifiedImport imp),
-    RealSrcSpan l <- src,
+    OldRealSrcSpan l <- src,
     L _ mn <- ideclName imp,
     -- (almost) no one wants to see an explicit import list for Prelude
     pred mn,

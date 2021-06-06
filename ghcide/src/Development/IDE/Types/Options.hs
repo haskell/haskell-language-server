@@ -22,11 +22,9 @@ module Development.IDE.Types.Options
 import qualified Data.Text                         as T
 import           Data.Typeable
 import           Development.IDE.Core.RuleTypes
+import           Development.IDE.GHC.Compat        as GHC
 import           Development.IDE.Graph
 import           Development.IDE.Types.Diagnostics
-import           GHC                               hiding (parseModule,
-                                                    typecheckModule)
-import           GhcPlugins                        as GHC hiding (fst3, (<>))
 import           Ide.Plugin.Config
 import           Ide.Types                         (DynFlagsModifications)
 import qualified Language.LSP.Types.Capabilities   as LSP
