@@ -36,7 +36,9 @@ extra-deps:
   - data-tree-print-0.1.0.2@rev:2
   - floskell-0.10.4
   - fourmolu-0.3.0.0
-  - ghc-api-compat-8.6
+  - # ghc-api-compat-8.6
+    github: pepeiborra/ghc-api-compat
+    commit: 6546157c7a7e1d323d4bf961768804119450c1aa
   - ghc-check-0.5.0.4
   - ghc-exactprint-0.6.4
   - ghc-lib-8.10.4.20210206
