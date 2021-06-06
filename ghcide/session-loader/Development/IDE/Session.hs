@@ -141,10 +141,16 @@ loadWithImplicitCradle :: Maybe FilePath
                           -- if no 'hie.yaml' location is given.
                           -> IO (HieBios.Cradle Void)
 loadWithImplicitCradle mHieYaml rootDir = do
-  crdl       <- case mHieYaml of
-    Just yaml -> HieBios.loadCradle yaml
-    Nothing   -> loadImplicitHieCradle $ addTrailingPathSeparator rootDir
-  return crdl
+  case mHieYaml of
+    Just yaml -> do
+        -- change the cwd to the cradle location in order to support relative
+        -- paths in the cradle definition
+        setCurrentDirectory (takeDirectory yaml)
+        HieBios.loadCradle yaml
+    Nothing   -> do
+        -- change the cwd to the workspace root for consistency with the Just case
+        setCurrentDirectory rootDir
+        loadImplicitHieCradle $ addTrailingPathSeparator rootDir
 
 getInitialGhcLibDirDefault :: IO (Maybe LibDir)
 getInitialGhcLibDirDefault = do
