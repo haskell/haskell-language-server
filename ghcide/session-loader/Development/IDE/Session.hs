@@ -107,7 +107,7 @@ data SessionLoadingOptions = SessionLoadingOptions
   --   or 'Nothing' to respect the cradle setting
   , getCacheDirs           :: String -> [String] -> IO CacheDirs
   -- | Return the GHC lib dir to use for the 'unsafeGlobalDynFlags'
-  , getInitialGhcLibDir    :: IO (Maybe LibDir)
+  , getInitialGhcLibDir    :: FilePath -> IO (Maybe LibDir)
   , fakeUid                :: InstalledUnitId
     -- ^ unit id used to tag the internal component built by ghcide
     --   To reuse external interface files the unit ids must match,
@@ -152,26 +152,25 @@ loadWithImplicitCradle mHieYaml rootDir = do
         setCurrentDirectory rootDir
         loadImplicitHieCradle $ addTrailingPathSeparator rootDir
 
-getInitialGhcLibDirDefault :: IO (Maybe LibDir)
-getInitialGhcLibDirDefault = do
-  dir <- IO.getCurrentDirectory
-  hieYaml <- findCradle def dir
-  cradle <- loadCradle def hieYaml dir
+getInitialGhcLibDirDefault :: FilePath -> IO (Maybe LibDir)
+getInitialGhcLibDirDefault rootDir = do
+  hieYaml <- findCradle def rootDir
+  cradle <- loadCradle def hieYaml rootDir
   hPutStrLn stderr $ "setInitialDynFlags cradle: " ++ show cradle
   libDirRes <- getRuntimeGhcLibDir cradle
   case libDirRes of
       CradleSuccess libdir -> pure $ Just $ LibDir libdir
       CradleFail err -> do
-        hPutStrLn stderr $ "Couldn't load cradle for libdir: " ++ show (err,dir,hieYaml,cradle)
+        hPutStrLn stderr $ "Couldn't load cradle for libdir: " ++ show (err,rootDir,hieYaml,cradle)
         pure Nothing
       CradleNone -> do
         hPutStrLn stderr "Couldn't load cradle (CradleNone)"
         pure Nothing
 
 -- | Sets `unsafeGlobalDynFlags` on using the hie-bios cradle and returns the GHC libdir
-setInitialDynFlags :: SessionLoadingOptions -> IO (Maybe LibDir)
-setInitialDynFlags SessionLoadingOptions{..} = do
-  libdir <- getInitialGhcLibDir
+setInitialDynFlags :: FilePath -> SessionLoadingOptions -> IO (Maybe LibDir)
+setInitialDynFlags rootDir SessionLoadingOptions{..} = do
+  libdir <- getInitialGhcLibDir rootDir
   dynFlags <- mapM dynFlagsForPrinting libdir
   mapM_ setUnsafeGlobalDynFlags dynFlags
   pure libdir
