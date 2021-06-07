@@ -31,8 +31,8 @@ package *
 -- ghc-api-compat-8.6
 source-repository-package
   type: git
-  location: https://github.com/pepeiborra/ghc-api-compat
-  tag: 6546157c7a7e1d323d4bf961768804119450c1aa
+  location: https://github.com/hsyl20/ghc-api-compat
+  tag: 8fee87eac97a538dbe81ff1ab18cff10f2f9fa15
 
 write-ghc-environment-files: never
 

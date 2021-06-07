@@ -51,7 +51,7 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/hsyl20/ghc-api-compat
-  tag: 6178d75772c7d923918dfffa0b1f503dfb36d0a6
+  tag: 8fee87eac97a538dbe81ff1ab18cff10f2f9fa15
 
 source-repository-package
   type: git
