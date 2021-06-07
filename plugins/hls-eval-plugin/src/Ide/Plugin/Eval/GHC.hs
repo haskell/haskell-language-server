@@ -20,13 +20,10 @@ import           Development.IDE.GHC.Compat
 import qualified EnumSet
 import           GHC.LanguageExtensions.Type (Extension (..))
 import           GhcMonad                    (modifySession)
-import           GhcPlugins                  (DefUnitId (..),
-                                              InstalledUnitId (..), fsLit,
-                                              hsc_IC, pprHsString)
+import           GhcPlugins                  (fsLit, hsc_IC, pprHsString)
 import           HscTypes                    (InteractiveContext (ic_dflags))
 import           Ide.Plugin.Eval.Util        (asS, gStrictTry)
 import qualified Lexer
-import           Module                      (UnitId (DefiniteUnitId))
 import           Outputable                  (Outputable (ppr), SDoc,
                                               showSDocUnsafe, text, vcat, (<+>))
 import qualified Parser
