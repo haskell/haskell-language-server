@@ -3653,6 +3653,9 @@ checkFileCompiles fp diag =
 pluginSimpleTests :: TestTree
 pluginSimpleTests =
   ignoreInWindowsForGHC88And810 $
+#if __GLASGOW_HASKELL__ == 810 && __GLASGOW_HASKELL_PATCHLEVEL1__ == 5
+  expectFailBecause "known broken (see GHC #19763)" $
+#endif
   testSessionWithExtraFiles "plugin-knownnat" "simple plugin" $ \dir -> do
     _ <- openDoc (dir </> "KnownNat.hs") "haskell"
     liftIO $ writeFile (dir</>"hie.yaml")
