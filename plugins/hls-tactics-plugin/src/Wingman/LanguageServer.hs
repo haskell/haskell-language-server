@@ -27,7 +27,7 @@ import           Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
 import           Data.Traversable
-import           Development.IDE (getFilesOfInterest, ShowDiagnostic (ShowDiag), srcSpanToRange)
+import           Development.IDE (getFilesOfInterestUntracked, ShowDiagnostic (ShowDiag), srcSpanToRange)
 import           Development.IDE (hscEnv)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Rules (usePropertyAction)
@@ -262,10 +262,12 @@ mkJudgementAndContext cfg g (TrackedStale binds bmap) rss (TrackedStale tcg tcgm
                $ hypothesisFromBindings binds_rss binds
       evidence = getEvidenceAtHole (fmap RealSrcSpan tcg_rss) tcs
       cls_hy = foldMap evidenceToHypothesis evidence
-      subst = ts_unifier $ appEndo (foldMap (Endo . evidenceToSubst) evidence) defaultTacticState
+      subst = ts_unifier $ evidenceToSubst evidence defaultTacticState
   pure $
     ( disallowing AlreadyDestructed already_destructed
-    $ fmap (CType . substTyAddInScope subst . unCType) $ mkFirstJudgement
+    $ fmap (CType . substTyAddInScope subst . unCType) $
+        mkFirstJudgement
+          ctx
           (local_hy <> cls_hy)
           (isRhsHole tcg_rss tcs)
           g
@@ -539,7 +541,7 @@ wingmanRules plId = do
               )
 
   action $ do
-    files <- getFilesOfInterest
+    files <- getFilesOfInterestUntracked
     void $ uses WriteDiagnostics $ Map.keys files
 
 

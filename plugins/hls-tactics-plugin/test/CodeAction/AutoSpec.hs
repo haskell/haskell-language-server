@@ -64,6 +64,8 @@ spec = do
     autoTest  6  8 "AutoThetaEqGADTDestruct"
     autoTest  6 10 "AutoThetaRefl"
     autoTest  6  8 "AutoThetaReflDestruct"
+    autoTest 19 30 "AutoThetaMultipleUnification"
+    autoTest 16  9 "AutoThetaSplitUnification"
 
   describe "known" $ do
     autoTest 25 13 "GoldenArbitrary"
@@ -81,4 +83,5 @@ spec = do
 
   describe "messages" $ do
     mkShowMessageTest Auto "" 2 8 "MessageForallA" TacticErrors
+    mkShowMessageTest Auto "" 7 8 "MessageCantUnify" TacticErrors
 

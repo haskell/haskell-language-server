@@ -49,10 +49,13 @@ newSubgoal
     :: Judgement
     -> Rule
 newSubgoal j = do
-    unifier <- gets ts_unifier
-    subgoal
-      $ substJdg unifier
-      $ unsetIsTopHole j
+  ctx <- ask
+  unifier <- gets ts_unifier
+  subgoal
+    $ normalizeJudgement ctx
+    $ substJdg unifier
+    $ unsetIsTopHole
+    $ normalizeJudgement ctx j
 
 
 tacticToRule :: Judgement -> TacticsM () -> Rule

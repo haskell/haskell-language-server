@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                       #-}
 {-# LANGUAGE DuplicateRecordFields     #-}
 {-# LANGUAGE ExtendedDefaultRules      #-}
 {-# LANGUAGE FlexibleContexts          #-}
@@ -6,6 +7,7 @@
 {-# LANGUAGE NamedFieldPuns            #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE OverloadedStrings         #-}
+{-# LANGUAGE PatternSynonyms           #-}
 {-# LANGUAGE RankNTypes                #-}
 {-# LANGUAGE RecordWildCards           #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
@@ -74,7 +76,8 @@ import           Development.IDE.GHC.Compat           (AnnotationComment (AnnBlo
                                                        GenLocated (L),
                                                        GhcException, HscEnv,
                                                        ParsedModule (..),
-                                                       SrcSpan (RealSrcSpan, UnhelpfulSpan),
+                                                       SrcSpan (UnhelpfulSpan),
+                                                       moduleName,
                                                        setInteractiveDynFlags,
                                                        srcSpanFile)
 import qualified Development.IDE.GHC.Compat           as SrcLoc
@@ -89,7 +92,6 @@ import           GHC                                  (ExecOptions (execLineNumb
                                                        HscTarget (HscInterpreted),
                                                        LoadHowMuch (LoadAllTargets),
                                                        ModSummary (ms_hspp_opts),
-                                                       Module (moduleName),
                                                        SuccessFlag (Failed, Succeeded),
                                                        TcRnExprMode (..),
                                                        execOptions, exprType,
@@ -103,13 +105,9 @@ import           GHC                                  (ExecOptions (execLineNumb
 import           GhcPlugins                           (DynFlags (..),
                                                        defaultLogActionHPutStrDoc,
                                                        gopt_set, gopt_unset,
-                                                       hsc_dflags, interpWays,
+                                                       hsc_dflags,
                                                        parseDynamicFlagsCmdLine,
-                                                       targetPlatform,
-                                                       updateWays,
-                                                       wayGeneralFlags,
-                                                       wayUnsetGeneralFlags,
-                                                       xopt_set)
+                                                       targetPlatform, xopt_set)
 import           HscTypes                             (InteractiveImport (IIModule),
                                                        ModSummary (ms_mod),
                                                        Target (Target),
@@ -141,6 +139,27 @@ import           System.IO                            (hClose)
 import           UnliftIO.Temporary                   (withSystemTempFile)
 import           Util                                 (OverridingBool (Never))
 
+
+#if MIN_VERSION_ghc(9,0,0)
+import           GHC.Parser.Annotation                (ApiAnns (apiAnnComments))
+#else
+import           GhcPlugins                           (interpWays, updateWays,
+                                                       wayGeneralFlags,
+                                                       wayUnsetGeneralFlags)
+#endif
+
+#if MIN_VERSION_ghc(9,0,0)
+pattern RealSrcSpanAlready :: SrcLoc.RealSrcSpan -> SrcLoc.RealSrcSpan
+pattern RealSrcSpanAlready x = x
+#else
+apiAnnComments :: SrcLoc.ApiAnns -> Map.Map SrcSpan [SrcLoc.Located AnnotationComment]
+apiAnnComments = snd
+
+pattern RealSrcSpanAlready :: SrcLoc.RealSrcSpan -> SrcSpan
+pattern RealSrcSpanAlready x = SrcLoc.RealSrcSpan x
+#endif
+
+
 {- | Code Lens provider
  NOTE: Invoked every time the document is modified, not just when the document is saved.
 -}
@@ -159,7 +178,7 @@ codeLens st plId CodeLensParams{_textDocument} =
                     runAction "parsed" st $ useWithStale_ GetParsedModuleWithComments nfp
                 let comments = foldMap
                         ( foldMap $ \case
-                            L (RealSrcSpan real) bdy
+                            L (RealSrcSpanAlready real) bdy
                                 | unpackFS (srcSpanFile real) ==
                                     fromNormalizedFilePath nfp
                                 , let ran0 = realSrcSpanToRange real
@@ -176,7 +195,7 @@ codeLens st plId CodeLensParams{_textDocument} =
                                         _ -> mempty
                             _ -> mempty
                         )
-                        $ snd pm_annotations
+                        $ apiAnnComments pm_annotations
                 dbg "excluded comments" $ show $  DL.toList $
                     foldMap
                     (foldMap $ \(L a b) ->
@@ -185,7 +204,7 @@ codeLens st plId CodeLensParams{_textDocument} =
                             AnnBlockComment{} -> mempty
                             _                 -> DL.singleton (a, b)
                     )
-                    $ snd pm_annotations
+                    $ apiAnnComments pm_annotations
                 dbg "comments" $ show comments
 
                 -- Extract tests from source code
@@ -285,6 +304,20 @@ runEvalCmd st EvalParams{..} =
                 df <- getSessionDynFlags
                 setInteractiveDynFlags $
                     (foldl xopt_set idflags evalExtensions)
+#if MIN_VERSION_ghc(9,0,0)
+                        { unitState =
+                            unitState
+                                df
+                        , unitDatabases =
+                            unitDatabases
+                                df
+                        , packageFlags =
+                            packageFlags
+                                df
+                        , useColor = Never
+                        , canUseColor = False
+                        }
+#else
                         { pkgState =
                             pkgState
                                 df
@@ -297,10 +330,16 @@ runEvalCmd st EvalParams{..} =
                         , useColor = Never
                         , canUseColor = False
                         }
+#endif
 
                 -- set up a custom log action
+#if MIN_VERSION_ghc(9,0,0)
+                setLogAction $ \_df _wr _sev _span _doc ->
+                    defaultLogActionHPutStrDoc _df logHandle _doc
+#else
                 setLogAction $ \_df _wr _sev _span _style _doc ->
                     defaultLogActionHPutStrDoc _df logHandle _doc _style
+#endif
 
                 -- Load the module with its current content (as the saved module might not be up to date)
                 -- BUG: this fails for files that requires preprocessors (e.g. CPP) for ghc < 8.8

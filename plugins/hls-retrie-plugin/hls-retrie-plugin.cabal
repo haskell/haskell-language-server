@@ -21,6 +21,7 @@ library
     , directory
     , extra
     , ghc
+    , ghc-api-compat
     , ghcide                >=1.2     && <1.4
     , hashable
     , hls-plugin-api        ^>=1.1
