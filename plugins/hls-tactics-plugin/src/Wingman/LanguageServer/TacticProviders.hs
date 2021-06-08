@@ -12,6 +12,7 @@ module Wingman.LanguageServer.TacticProviders
   ) where
 
 import           Control.Monad
+import           Control.Monad.Reader (runReaderT)
 import           Data.Aeson
 import           Data.Bool (bool)
 import           Data.Coerce
@@ -30,7 +31,6 @@ import           Language.LSP.Types
 import           OccName
 import           Prelude hiding (span)
 import           Wingman.Auto
-import           Wingman.FeatureSet
 import           Wingman.GHC
 import           Wingman.Judgements
 import           Wingman.Machinery (useNameFromHypothesis)
@@ -38,7 +38,6 @@ import           Wingman.Metaprogramming.Lexer (ParserContext)
 import           Wingman.Metaprogramming.Parser (parseMetaprogram)
 import           Wingman.Tactics
 import           Wingman.Types
-import Control.Monad.Reader (runReaderT)
 
 
 ------------------------------------------------------------------------------
@@ -115,7 +114,6 @@ commandProvider Destruct =
     provide Destruct $ T.pack $ occNameString occ
 commandProvider DestructPun =
   requireHoleSort (== Hole) $
-  requireFeature FeatureDestructPun $
     filterBindingType destructPunFilter $ \occ _ ->
       provide DestructPun $ T.pack $ occNameString occ
 commandProvider Homomorphism =
@@ -134,7 +132,6 @@ commandProvider HomomorphismLambdaCase =
       provide HomomorphismLambdaCase ""
 commandProvider DestructAll =
   requireHoleSort (== Hole) $
-  requireFeature FeatureDestructAll $
     withJudgement $ \jdg ->
       case _jIsTopHole jdg && jHasBoundArgs jdg of
         True  -> provide DestructAll ""
@@ -142,30 +139,26 @@ commandProvider DestructAll =
 commandProvider UseDataCon =
   requireHoleSort (== Hole) $
   withConfig $ \cfg ->
-    requireFeature FeatureUseDataCon $
-      filterTypeProjection
-          ( guardLength (<= cfg_max_use_ctor_actions cfg)
-          . fromMaybe []
-          . fmap fst
-          . tacticsGetDataCons
-          ) $ \dcon ->
-        provide UseDataCon
-          . T.pack
-          . occNameString
-          . occName
-          $ dataConName dcon
+    filterTypeProjection
+        ( guardLength (<= cfg_max_use_ctor_actions cfg)
+        . fromMaybe []
+        . fmap fst
+        . tacticsGetDataCons
+        ) $ \dcon ->
+      provide UseDataCon
+        . T.pack
+        . occNameString
+        . occName
+        $ dataConName dcon
 commandProvider Refine =
   requireHoleSort (== Hole) $
-  requireFeature FeatureRefineHole $
     provide Refine ""
 commandProvider BeginMetaprogram =
   requireGHC88OrHigher $
-  requireFeature FeatureMetaprogram $
   requireHoleSort (== Hole) $
     provide BeginMetaprogram ""
 commandProvider RunMetaprogram =
   requireGHC88OrHigher $
-  requireFeature FeatureMetaprogram $
   withMetaprogram $ \mp ->
     provide RunMetaprogram mp
 
@@ -211,16 +204,6 @@ data TacticParams = TacticParams
     }
   deriving stock (Show, Eq, Generic)
   deriving anyclass (ToJSON, FromJSON)
-
-
-------------------------------------------------------------------------------
--- | Restrict a 'TacticProvider', making sure it appears only when the given
--- 'Feature' is in the feature set.
-requireFeature :: Feature -> TacticProvider -> TacticProvider
-requireFeature f tp tpd =
-  case hasFeature f $ cfg_feature_set $ tpd_config tpd of
-    True  -> tp tpd
-    False -> pure []
 
 
 requireHoleSort :: (HoleSort -> Bool) -> TacticProvider -> TacticProvider

@@ -45,8 +45,6 @@ hoverProvider state plId (HoverParams (TextDocumentIdentifier uri) (unsafeMkCurr
 
       cfg <- getTacticConfig plId
       liftIO $ fromMaybeT (Right Nothing) $ do
-        -- guard $ hasFeature FeatureEmptyCase $ cfg_feature_set cfg
-
         holes <- getMetaprogramsAtSpan state nfp $ RealSrcSpan $ unTrack loc
 
         fmap (Right . Just) $

@@ -1,18 +1,17 @@
 module Wingman.KnownStrategies where
 
+import Control.Applicative (empty)
 import Control.Monad.Error.Class
+import Control.Monad.Reader.Class (asks)
+import Data.Foldable (for_)
 import OccName (mkVarOcc)
 import Refinery.Tactic
 import Wingman.Context (getCurrentDefinitions, getKnownInstance)
+import Wingman.Judgements (jGoal)
 import Wingman.KnownStrategies.QuickCheck (deriveArbitrary)
 import Wingman.Machinery (tracing)
 import Wingman.Tactics
 import Wingman.Types
-import Wingman.Judgements (jGoal)
-import Data.Foldable (for_)
-import Wingman.FeatureSet
-import Control.Applicative (empty)
-import Control.Monad.Reader.Class (asks)
 
 
 knownStrategies :: TacticsM ()
@@ -20,19 +19,9 @@ knownStrategies = choice
   [ known "fmap" deriveFmap
   , known "mempty" deriveMempty
   , known "arbitrary" deriveArbitrary
-  , featureGuard FeatureKnownMonoid $ known "<>" deriveMappend
-  , featureGuard FeatureKnownMonoid $ known "mappend" deriveMappend
+  , known "<>" deriveMappend
+  , known "mappend" deriveMappend
   ]
-
-
-------------------------------------------------------------------------------
--- | Guard a tactic behind a feature.
-featureGuard :: Feature -> TacticsM a -> TacticsM a
-featureGuard feat t = do
-  fs <- asks $ cfg_feature_set . ctxConfig
-  case hasFeature feat fs of
-    True -> t
-    False -> empty
 
 
 known :: String -> TacticsM () -> TacticsM ()

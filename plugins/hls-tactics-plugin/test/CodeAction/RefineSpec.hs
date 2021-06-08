@@ -5,7 +5,6 @@ module CodeAction.RefineSpec where
 import Wingman.Types
 import Test.Hspec
 import Utils
-import Wingman.FeatureSet (allFeatures)
 
 
 spec :: Spec
@@ -19,5 +18,5 @@ spec = do
     refineTest  8 10 "RefineGADT"
 
   describe "messages" $ do
-    mkShowMessageTest allFeatures Refine "" 2 8 "MessageForallA" TacticErrors
+    mkShowMessageTest Refine "" 2 8 "MessageForallA" TacticErrors
 

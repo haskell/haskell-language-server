@@ -26,6 +26,8 @@ import           Data.Set (Set)
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Tree
+import           Development.IDE (Range)
+import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.Compat hiding (Node)
 import           Development.IDE.GHC.Orphans ()
 import           GHC.Generics
@@ -38,9 +40,6 @@ import           Type (TCvSubst, Var, eqType, nonDetCmpType, emptyTCvSubst)
 import           UniqSupply (takeUniqFromSupply, mkSplitUniqSupply, UniqSupply)
 import           Unique (nonDetCmpUnique, Uniquable, getUnique, Unique)
 import           Wingman.Debug
-import           Wingman.FeatureSet
-import Development.IDE.Core.UseStale
-import Development.IDE (Range)
 
 
 ------------------------------------------------------------------------------
@@ -83,8 +82,7 @@ tacticTitle = (mappend "Wingman: " .) . go
 ------------------------------------------------------------------------------
 -- | Plugin configuration for tactics
 data Config = Config
-  { cfg_feature_set          :: FeatureSet
-  , cfg_max_use_ctor_actions :: Int
+  { cfg_max_use_ctor_actions :: Int
   , cfg_timeout_seconds      :: Int
   , cfg_auto_gas             :: Int
   }
@@ -92,8 +90,7 @@ data Config = Config
 
 emptyConfig :: Config
 emptyConfig = Config
-  { cfg_feature_set = mempty
-  , cfg_max_use_ctor_actions = 5
+  { cfg_max_use_ctor_actions = 5
   , cfg_timeout_seconds = 2
   , cfg_auto_gas = 4
   }

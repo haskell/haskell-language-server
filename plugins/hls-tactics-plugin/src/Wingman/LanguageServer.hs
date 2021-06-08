@@ -61,7 +61,6 @@ import           Retrie (transformA)
 import           SrcLoc (containsSpan)
 import           TcRnTypes (tcg_binds, TcGblEnv (tcg_rdr_env))
 import           Wingman.Context
-import           Wingman.FeatureSet
 import           Wingman.GHC
 import           Wingman.Judgements
 import           Wingman.Judgements.SYB (everythingContaining, metaprogramQ)
@@ -137,7 +136,6 @@ unsafeRunStaleIde herald state nfp a = do
 properties :: Properties
   '[ 'PropertyKey "hole_severity" ('TEnum (Maybe DiagnosticSeverity))
    , 'PropertyKey "max_use_ctor_actions" 'TInteger
-   , 'PropertyKey "features" 'TString
    , 'PropertyKey "timeout_duration" 'TInteger
    , 'PropertyKey "auto_gas" 'TInteger
    ]
@@ -146,8 +144,6 @@ properties = emptyProperties
     "The depth of the search tree when performing \"Attempt to fill hole\". Bigger values will be able to derive more solutions, but will take exponentially more time." 4
   & defineIntegerProperty #timeout_duration
     "The timeout for Wingman actions, in seconds" 2
-  & defineStringProperty #features
-    "Feature set used by Wingman" ""
   & defineIntegerProperty #max_use_ctor_actions
     "Maximum number of `Use constructor <x>` code actions that can appear" 5
   & defineEnumProperty #hole_severity
@@ -165,15 +161,9 @@ properties = emptyProperties
 getTacticConfig :: MonadLsp Plugin.Config m => PluginId -> m Config
 getTacticConfig pId =
   Config
-    <$> (parseFeatureSet <$> usePropertyLsp #features pId properties)
-    <*> usePropertyLsp #max_use_ctor_actions pId properties
+    <$> usePropertyLsp #max_use_ctor_actions pId properties
     <*> usePropertyLsp #timeout_duration pId properties
     <*> usePropertyLsp #auto_gas pId properties
-
-------------------------------------------------------------------------------
--- | Get the current feature set from the plugin config.
-getFeatureSet :: MonadLsp Plugin.Config m => PluginId -> m FeatureSet
-getFeatureSet  = fmap cfg_feature_set . getTacticConfig
 
 
 getIdeDynflags
