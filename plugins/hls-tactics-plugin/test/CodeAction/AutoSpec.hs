@@ -5,7 +5,6 @@ module CodeAction.AutoSpec where
 import Wingman.Types
 import Test.Hspec
 import Utils
-import Wingman.FeatureSet (allFeatures)
 
 
 spec :: Spec
@@ -83,6 +82,6 @@ spec = do
 
 
   describe "messages" $ do
-    mkShowMessageTest allFeatures Auto "" 2 8 "MessageForallA" TacticErrors
-    mkShowMessageTest allFeatures Auto "" 7 8 "MessageCantUnify" TacticErrors
+    mkShowMessageTest Auto "" 2 8 "MessageForallA" TacticErrors
+    mkShowMessageTest Auto "" 7 8 "MessageCantUnify" TacticErrors
 

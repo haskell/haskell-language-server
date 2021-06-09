@@ -32,7 +32,6 @@ import           Prelude hiding (span)
 import           Prelude hiding (span)
 import           TcRnTypes (tcg_binds)
 import           Wingman.CodeGen (destructionFor)
-import           Wingman.FeatureSet
 import           Wingman.GHC
 import           Wingman.Judgements
 import           Wingman.LanguageServer
@@ -63,8 +62,6 @@ codeLensProvider state plId (CodeLensParams _ _ (TextDocumentIdentifier uri))
       cfg <- getTacticConfig plId
       ccs <- getClientCapabilities
       liftIO $ fromMaybeT (Right $ List []) $ do
-        guard $ hasFeature FeatureEmptyCase $ cfg_feature_set cfg
-
         dflags <- getIdeDynflags state nfp
         TrackedStale pm _ <- stale GetAnnotatedParsedSource
         TrackedStale binds bind_map <- stale GetBindings

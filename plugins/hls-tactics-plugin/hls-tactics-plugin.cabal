@@ -34,7 +34,6 @@ library
     Wingman.Context
     Wingman.Debug
     Wingman.EmptyCase
-    Wingman.FeatureSet
     Wingman.GHC
     Wingman.Judgements
     Wingman.Judgements.SYB
