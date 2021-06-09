@@ -33,12 +33,12 @@ defaults: &defaults
     - run:
         name: Build (we need the exe for tests)
         # need j1, else ghc-lib-parser triggers OOM
-        command: stack -j 1 --stack-yaml=${STACK_FILE} install
+        command: stack -j 1 --stack-yaml=${STACK_FILE} install --no-terminal
         no_output_timeout: 30m
 
     - run:
         name: Build Testsuite without running it
-        command: stack -j 1 --stack-yaml=${STACK_FILE} build --test --no-run-tests
+        command: stack -j 1 --stack-yaml=${STACK_FILE} build --test --no-run-tests --no-terminal
         no_output_timeout: 30m
 
     - store_artifacts:
@@ -54,7 +54,7 @@ defaults: &defaults
 
     - run:
         name: Build including tests
-        command: stack --stack-yaml=${STACK_FILE} test --no-run-tests
+        command: stack --stack-yaml=${STACK_FILE} test --no-run-tests --no-terminal
         no_output_timeout: 120m
 
     - save_cache:
