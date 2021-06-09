@@ -88,6 +88,11 @@ jobs:
       - STACK_FILE: "stack-8.8.4.yaml"
     <<: *defaults
 
+  ghc-8.10.2:
+    environment:
+      - STACK_FILE: "stack-8.10.2.yaml"
+    <<: *defaults
+
   ghc-8.10.3:
     environment:
       - STACK_FILE: "stack-8.10.3.yaml"
@@ -123,6 +128,7 @@ workflows:
       - ghc-8.8.2
       - ghc-8.8.3
       - ghc-8.8.4
+      - ghc-8.10.2
       - ghc-8.10.3
       - ghc-8.10.4
       - ghc-8.10.5

@@ -33,7 +33,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        ghc: ["9.0.1", "8.10.5", "8.10.4", "8.10.3", "8.8.4", "8.8.3", "8.8.2", "8.6.5", "8.6.4"]
+        ghc: ["9.0.1", "8.10.5", "8.10.4", "8.10.3", "8.10.2", "8.8.4", "8.8.3", "8.8.2", "8.6.5", "8.6.4"]
         os: [ubuntu-latest, macOS-latest]
         include:
           # only test supported ghc major versions
@@ -58,6 +58,8 @@ jobs:
             ghc: '8.10.4'
           - os: windows-latest
             ghc: '8.10.3'
+          - os: windows-latest
+            ghc: '8.10.2.2'
           - os: windows-latest
             ghc: '8.6.5'
             test: true
