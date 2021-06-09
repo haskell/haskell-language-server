@@ -25,6 +25,8 @@ jobs:
             ghc: '8.8.3' # fails due to segfault
           - os: windows-latest
             ghc: '8.8.2' # fails due to error with Cabal
+          - os: macOS-latest
+            ghc: '8.10.5' # https://gitlab.haskell.org/ghc/ghc/-/issues/19968
 
     steps:
     - uses: actions/checkout@v2
