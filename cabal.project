@@ -28,6 +28,12 @@ package *
   ghc-options: -haddock
   test-show-details: direct
 
+-- ghc-api-compat-8.6
+source-repository-package
+  type: git
+  location: https://github.com/hsyl20/ghc-api-compat
+  tag: 8fee87eac97a538dbe81ff1ab18cff10f2f9fa15
+
 write-ghc-environment-files: never
 
 index-state: 2021-05-21T05:01:41Z

@@ -68,7 +68,7 @@ extra-deps:
 # https://github.com/mpickering/hie-bios/pull/285
 
 - github: hsyl20/ghc-api-compat
-  commit: 6178d75772c7d923918dfffa0b1f503dfb36d0a6
+  commit: 8fee87eac97a538dbe81ff1ab18cff10f2f9fa15
 
 - github: anka-213/th-extras
   commit: 57a97b4df128eb7b360e8ab9c5759392de8d1659
