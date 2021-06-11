@@ -18,7 +18,7 @@ Here are the summary of changes:
     ![https://github.com/haskell/haskell-language-server/blob/master/plugins/hls-tactics-plugin/COMMANDS.md#wingman-metaprogram-command-reference](https://user-images.githubusercontent.com/307223/118190278-bdf24f80-b3f7-11eb-8838-b08a2582d7f1.gif)
   - "Refine hole" and "Split all function arguments" code actions are publicly opened.
   - "Empty case split" code lens is added.
-  - The name generator is fixed [to avoid dangerous summon rituals](https://github.com/haskell/haskell-language-server/pull/1771).
+  - The name generator is fixed [to avoid dangerous summon rituals](https://github.com/haskell/haskell-language-server/pull/1760).
   - Many bugs related to type families and GADTs are fixed.
 - We support [nix flake](https://nixos.wiki/wiki/Flakes), an upcoming way to manage dependencies in nix.
 - Every plugin (other than example plugins) now lives in its own package.
