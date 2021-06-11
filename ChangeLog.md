@@ -2,7 +2,7 @@
 
 ## 1.2.0
 
-We finally release a new version of Haskell Language Server!
+We have finally released a new version of Haskell Language Server!
 Thanks for all contributors, many bugs has been fixed, and many features has landed.
 Here are the summary of changes:
 
@@ -12,9 +12,14 @@ Here are the summary of changes:
   Note that macOS version is unfortunately not included in this release because of [a GHC issue with `network` package](https://gitlab.haskell.org/ghc/ghc/-/issues/19968).
 - HLS wrapper and GHCIDE session loader uses the same logic with implicit-hie.  
   This fixes [a build issue](https://github.com/haskell/haskell-language-server/issues/1782) of a stack project with implicit `hie.yaml` .
-- Wingman plugin now supports tactic metaprogramming!  
-  For list of commands, see [this document](https://github.com/haskell/haskell-language-server/blob/master/plugins/hls-tactics-plugin/COMMANDS.md#wingman-metaprogram-command-reference).  
-  ![https://github.com/haskell/haskell-language-server/blob/master/plugins/hls-tactics-plugin/COMMANDS.md#wingman-metaprogram-command-reference](https://user-images.githubusercontent.com/307223/118190278-bdf24f80-b3f7-11eb-8838-b08a2582d7f1.gif)
+- Wingman plugin has added numerous features and fixed many bugs:
+  - It now supports tactic metaprogramming!  
+    For list of commands, see [this document](https://github.com/haskell/haskell-language-server/blob/master/plugins/hls-tactics-plugin/COMMANDS.md#wingman-metaprogram-command-reference).  
+    ![https://github.com/haskell/haskell-language-server/blob/master/plugins/hls-tactics-plugin/COMMANDS.md#wingman-metaprogram-command-reference](https://user-images.githubusercontent.com/307223/118190278-bdf24f80-b3f7-11eb-8838-b08a2582d7f1.gif)
+  - "Refine hole" and "Split all function arguments" code actions are publicly opened.
+  - "Empty case split" code lens is added.
+  - The name generator is fixed [to avoid dangerous summon rituals](https://github.com/haskell/haskell-language-server/pull/1771).
+  - Many bugs related to type families and GADTs are fixed.
 - We support [nix flake](https://nixos.wiki/wiki/Flakes), an upcoming way to manage dependencies in nix.
 - Every plugin (other than example plugins) now lives in its own package.
 
