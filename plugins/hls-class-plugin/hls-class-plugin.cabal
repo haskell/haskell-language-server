@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-class-plugin
-version:            1.0.0.1
+version:            1.0.0.2
 synopsis:
   Class/instance management plugin for Haskell Language Server
 

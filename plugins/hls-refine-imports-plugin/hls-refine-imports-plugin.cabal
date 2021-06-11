@@ -1,6 +1,6 @@
 cabal-version:      2.2
 name:               hls-refine-imports-plugin
-version:            1.0.0.0
+version:            1.0.0.1
 synopsis:           Refine imports plugin for Haskell Language Server
 license:            Apache-2.0
 license-file:       LICENSE

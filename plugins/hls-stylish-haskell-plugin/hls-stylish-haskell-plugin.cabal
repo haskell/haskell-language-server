@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-stylish-haskell-plugin
-version:            1.0.0.0
+version:            1.0.0.1
 synopsis:           Integration with the Stylish Haskell code formatter
 license:            Apache-2.0
 license-file:       LICENSE
