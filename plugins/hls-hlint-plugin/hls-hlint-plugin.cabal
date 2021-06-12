@@ -48,7 +48,7 @@ library
     , extra
     , filepath
     , ghc-exactprint        >=0.6.3.4
-    , ghcide                >=1.2     && <1.4
+    , ghcide                ^>=1.4
     , hashable
     , hlint
     , hls-plugin-api        ^>=1.1

@@ -22,7 +22,7 @@ library
     , extra
     , ghc
     , ghc-api-compat
-    , ghcide                >=1.2     && <1.4
+    , ghcide                >=1.2     && <1.5
     , hashable
     , hls-plugin-api        ^>=1.1
     , lsp
