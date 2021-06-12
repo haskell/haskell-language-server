@@ -42,3 +42,4 @@ test-suite tests
     , lsp-test
     , lsp
     , lens
+    , text
