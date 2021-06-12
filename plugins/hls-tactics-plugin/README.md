@@ -41,10 +41,8 @@ actions. These code actions are provided by GHC and make typechecking extremely
 slow in the presence of typed holes. Because Wingman relies so heavily on typed
 holes, these features are in great tension.
 
-The solution: we just remove the hole-fit actions. They are mostly subsumed by
-Wingman, and usually make extremely unhelpful suggestions, such as `replace _
-with id _`. If you'd prefer to use these actions, you can get them back by
-disabling Wingman.
+The solution: we just remove the hole-fit actions. If you'd prefer to use these
+actions, you can get them back by compiling HLS without the Wingman plugin.
 
 
 ## Editor Configuration
