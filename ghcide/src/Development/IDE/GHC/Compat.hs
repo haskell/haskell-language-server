@@ -302,8 +302,8 @@ setUpTypedHoles df
   $ flip gopt_unset Opt_SortValidHoleFits
   $ flip gopt_unset Opt_UnclutterValidHoleFits
   $ df
-  { refLevelHoleFits = Just 1   -- becomes slow at higher levels
-  , maxRefHoleFits   = Just 10  -- quantity does not impact speed
+  { refLevelHoleFits = refLevelHoleFits df <|> Just 1   -- becomes slow at higher levels
+  , maxRefHoleFits   = maxRefHoleFits df <|> Just 10  -- quantity does not impact speed
   , maxValidHoleFits = maxValidHoleFits df <|> Just 10  -- quantity does not impact speed
   }
 
