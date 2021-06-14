@@ -1,8 +1,6 @@
 module Wingman.KnownStrategies where
 
-import Control.Applicative (empty)
 import Control.Monad.Error.Class
-import Control.Monad.Reader.Class (asks)
 import Data.Foldable (for_)
 import OccName (mkVarOcc)
 import Refinery.Tactic
