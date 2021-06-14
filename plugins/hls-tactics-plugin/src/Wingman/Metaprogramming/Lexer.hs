@@ -67,6 +67,8 @@ symchar = asum
   , P.char '/'
   , P.char '?'
   , P.char '~'
+  , P.char '|'
+  , P.char '\\'
   ]
 
 lexeme :: Parser a -> Parser a
