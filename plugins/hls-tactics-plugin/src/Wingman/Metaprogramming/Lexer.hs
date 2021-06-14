@@ -8,6 +8,7 @@ module Wingman.Metaprogramming.Lexer where
 import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.Reader (ReaderT)
+import           Data.Foldable (asum)
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Void
@@ -17,8 +18,7 @@ import           Name
 import qualified Text.Megaparsec as P
 import qualified Text.Megaparsec.Char as P
 import qualified Text.Megaparsec.Char.Lexer as L
-import Wingman.Types (Context)
-import Data.Foldable (asum)
+import           Wingman.Types (Context)
 
 
 ------------------------------------------------------------------------------
