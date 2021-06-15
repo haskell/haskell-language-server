@@ -59,7 +59,6 @@ codeLensProvider state plId (CodeLensParams _ _ (TextDocumentIdentifier uri))
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
       let stale a = runStaleIde "codeLensProvider" state nfp a
 
-      cfg <- getTacticConfig plId
       ccs <- getClientCapabilities
       liftIO $ fromMaybeT (Right $ List []) $ do
         dflags <- getIdeDynflags state nfp

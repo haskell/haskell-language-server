@@ -50,7 +50,6 @@ jobs:
             ghc: '8.6.5'
             test: true
           # only build rest of supported ghc versions for windows
-          # Disable window test temporarily because choco does not have GHC 8.10.5 yet
           - os: windows-latest
             ghc: '8.10.5'
             test: true
