@@ -4,6 +4,7 @@
 module Wingman.GHC where
 
 import           Bag (bagToList)
+import           Class (classTyVars)
 import           ConLike
 import           Control.Monad.State
 import           Control.Monad.Trans.Maybe (MaybeT(..))
@@ -36,7 +37,6 @@ import           Unify
 import           Unique
 import           Var
 import           Wingman.Types
-import Class (classTyVars)
 
 
 tcTyVar_maybe :: Type -> Maybe Var
