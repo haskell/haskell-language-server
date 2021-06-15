@@ -25,10 +25,9 @@ mkContext
     -> TcGblEnv
     -> HscEnv
     -> ExternalPackageState
-    -> KnownThings
     -> [Evidence]
     -> Context
-mkContext cfg locals tcg hscenv eps kt ev = fix $ \ctx ->
+mkContext cfg locals tcg hscenv eps ev = fix $ \ctx ->
   Context
     { ctxDefiningFuncs
         = fmap (second $ coerce $ normalizeType ctx) locals
@@ -47,7 +46,6 @@ mkContext cfg locals tcg hscenv eps kt ev = fix $ \ctx ->
           (eps_inst_env eps)
           (tcg_inst_env tcg)
           (tcVisibleOrphanMods tcg)
-    , ctxKnownThings = kt
     , ctxTheta = evidenceToThetaType ev
     , ctx_hscEnv = hscenv
     , ctx_occEnv = tcg_rdr_env tcg
@@ -78,19 +76,6 @@ getFunBindId _ = []
 getCurrentDefinitions :: MonadReader Context m => m [(OccName, CType)]
 getCurrentDefinitions = asks ctxDefiningFuncs
 
-
-------------------------------------------------------------------------------
--- | Extract something from 'KnownThings'.
-getKnownThing :: MonadReader Context m => (KnownThings -> a) -> m a
-getKnownThing f = asks $ f . ctxKnownThings
-
-
-------------------------------------------------------------------------------
--- | Like 'getInstance', but uses a class from the 'KnownThings'.
-getKnownInstance :: MonadReader Context m => (KnownThings -> Class) -> [Type] -> m (Maybe (Class, PredType))
-getKnownInstance f tys = do
-  cls <- getKnownThing f
-  getInstance cls tys
 
 
 ------------------------------------------------------------------------------

@@ -213,9 +213,8 @@ judgementForHole state nfp range cfg = do
       -- involved, so it's not crucial to track ages.
       let henv = untrackedStaleValue $ hscenv
       eps <- liftIO $ readIORef $ hsc_EPS $ hscEnv henv
-      kt <- knownThings (untrackedStaleValue tcg) henv
 
-      (jdg, ctx) <- liftMaybe $ mkJudgementAndContext cfg g binds new_rss tcg (hscEnv henv) eps kt
+      (jdg, ctx) <- liftMaybe $ mkJudgementAndContext cfg g binds new_rss tcg (hscEnv henv) eps
       let mp = getMetaprogramAtSpan (fmap RealSrcSpan tcg_rss) tcg_t
 
       dflags <- getIdeDynflags state nfp
@@ -240,9 +239,8 @@ mkJudgementAndContext
     -> TrackedStale TcGblEnv
     -> HscEnv
     -> ExternalPackageState
-    -> KnownThings
     -> Maybe (Judgement, Context)
-mkJudgementAndContext cfg g (TrackedStale binds bmap) rss (TrackedStale tcg tcgmap) hscenv eps kt = do
+mkJudgementAndContext cfg g (TrackedStale binds bmap) rss (TrackedStale tcg tcgmap) hscenv eps = do
   binds_rss <- mapAgeFrom bmap rss
   tcg_rss <- mapAgeFrom tcgmap rss
 
@@ -254,7 +252,6 @@ mkJudgementAndContext cfg g (TrackedStale binds bmap) rss (TrackedStale tcg tcgm
               (unTrack tcg)
               hscenv
               eps
-              kt
               evidence
       top_provs = getRhsPosVals tcg_rss tcs
       already_destructed = getAlreadyDestructed (fmap RealSrcSpan tcg_rss) tcs

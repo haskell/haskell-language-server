@@ -2,14 +2,13 @@
 
 module Wingman.Machinery where
 
-import           Class (Class (classTyVars))
 import           Control.Applicative (empty)
 import           Control.Lens ((<>~))
 import           Control.Monad.Error.Class
 import           Control.Monad.Reader
 import           Control.Monad.State.Class (gets, modify)
 import           Control.Monad.State.Strict (StateT (..), execStateT)
-import           Data.Bool (bool)
+import           Control.Monad.Trans.Maybe
 import           Data.Coerce
 import           Data.Either
 import           Data.Foldable
@@ -21,18 +20,17 @@ import qualified Data.Map as M
 import           Data.Maybe (mapMaybe)
 import           Data.Monoid (getSum)
 import           Data.Ord (Down (..), comparing)
-import           Data.Set (Set)
 import qualified Data.Set as S
 import           Development.IDE.Core.Compile (lookupName)
 import           Development.IDE.GHC.Compat
 import           GhcPlugins (GlobalRdrElt (gre_name), lookupOccEnv, varType)
-import           OccName (HasOccName (occName))
 import           Refinery.ProofState
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           TcType
-import           Type (tyCoVarsOfTypeWellScoped, splitTyConApp_maybe)
-import           Unify
+import           Type (tyCoVarsOfTypeWellScoped)
+import           Wingman.Context (getInstance)
+import           Wingman.GHC (tryUnifyUnivarsButNotSkolems, updateSubst)
 import           Wingman.Judgements
 import           Wingman.Simplify (simplify)
 import           Wingman.Types
@@ -204,21 +202,6 @@ newtype Reward a = Reward a
   deriving (Eq, Ord, Show) via a
 
 
-------------------------------------------------------------------------------
--- | Like 'tcUnifyTy', but takes a list of skolems to prevent unification of.
-tryUnifyUnivarsButNotSkolems :: Set TyVar -> CType -> CType -> Maybe TCvSubst
-tryUnifyUnivarsButNotSkolems skolems goal inst =
-  case tcUnifyTysFG
-         (bool BindMe Skolem . flip S.member skolems)
-         [unCType inst]
-         [unCType goal] of
-    Unifiable subst -> pure subst
-    _               -> Nothing
-
-
-updateSubst :: TCvSubst -> TacticState -> TacticState
-updateSubst subst s = s { ts_unifier = unionTCvSubst subst (ts_unifier s) }
-
 
 
 ------------------------------------------------------------------------------
@@ -242,22 +225,6 @@ unify goal inst = do
 attemptWhen :: TacticsM a -> TacticsM a -> Bool -> TacticsM a
 attemptWhen _  t2 False = t2
 attemptWhen t1 t2 True  = commit t1 t2
-
-
-------------------------------------------------------------------------------
--- | Get the class methods of a 'PredType', correctly dealing with
--- instantiation of quantified class types.
-methodHypothesis :: PredType -> Maybe [HyInfo CType]
-methodHypothesis ty = do
-  (tc, apps) <- splitTyConApp_maybe ty
-  cls <- tyConClass_maybe tc
-  let methods = classMethods cls
-      tvs     = classTyVars cls
-      subst   = zipTvSubst tvs apps
-  pure $ methods <&> \method ->
-    let (_, _, ty) = tcSplitSigmaTy $ idType method
-    in ( HyInfo (occName method) (ClassMethodPrv $ Uniquely cls) $ CType $ substTy subst ty
-       )
 
 
 ------------------------------------------------------------------------------
@@ -355,6 +322,39 @@ createImportedHyInfo on ty = HyInfo
   }
 
 
+getTyThing
+    :: OccName
+    -> TacticsM (Maybe TyThing)
+getTyThing occ = do
+  ctx <- ask
+  case lookupOccEnv (ctx_occEnv ctx) occ of
+    Just (elt : _) -> do
+      mvar <- lift
+            $ ExtractM
+            $ lift
+            $ lookupName (ctx_hscEnv ctx) (ctx_module ctx)
+            $ gre_name elt
+      pure mvar
+    _ -> pure Nothing
+
+
+------------------------------------------------------------------------------
+-- | Like 'getTyThing' but specialized to classes.
+knownClass :: OccName -> TacticsM (Maybe Class)
+knownClass occ =
+  getTyThing occ <&> \case
+    Just (ATyCon tc) -> tyConClass_maybe tc
+    _                -> Nothing
+
+
+------------------------------------------------------------------------------
+-- | Like 'getInstance', but uses a class that it just looked up.
+getKnownInstance :: OccName -> [Type] -> TacticsM (Maybe (Class, PredType))
+getKnownInstance f tys = runMaybeT $ do
+  cls <- MaybeT $ knownClass f
+  MaybeT $ getInstance cls tys
+
+
 ------------------------------------------------------------------------------
 -- | Lookup the type of any 'OccName' that was imported. Necessarily done in
 -- IO, so we only expose this functionality to the parser. Internal Haskell
@@ -363,12 +363,7 @@ getOccNameType
     :: OccName
     -> TacticsM Type
 getOccNameType occ = do
-  ctx <- ask
-  case lookupOccEnv (ctx_occEnv ctx) occ of
-    Just (elt : _) -> do
-      mvar <- lift $ ExtractM $ lift $ lookupName (ctx_hscEnv ctx) (ctx_module ctx) $ gre_name elt
-      case mvar of
-        Just (AnId v) -> pure $ varType v
-        _ -> throwError $ NotInScope occ
+  getTyThing occ >>= \case
+    Just (AnId v) -> pure $ varType v
     _ -> throwError $ NotInScope occ
 

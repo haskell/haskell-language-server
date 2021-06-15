@@ -16,7 +16,7 @@ import           Test.QuickCheck
 import           Type (mkTyVarTy)
 import           TysPrim (alphaTyVars)
 import           TysWiredIn (mkBoxedTupleTy)
-import           Wingman.Machinery
+import           Wingman.GHC
 import           Wingman.Types
 
 

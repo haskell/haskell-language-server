@@ -419,7 +419,6 @@ data Context = Context
   , ctxModuleFuncs   :: [(OccName, CType)]
     -- ^ Everything defined in the current module
   , ctxConfig        :: Config
-  , ctxKnownThings   :: KnownThings
   , ctxInstEnvs      :: InstEnvs
   , ctxFamInstEnvs   :: FamInstEnvs
   , ctxTheta         :: Set CType
@@ -439,14 +438,6 @@ instance Show Context where
 
 
 ------------------------------------------------------------------------------
--- | Things we'd like to look up, that don't exist in TysWiredIn.
-data KnownThings = KnownThings
-  { kt_semigroup :: Class
-  , kt_monoid    :: Class
-  }
-
-
-------------------------------------------------------------------------------
 -- | An empty context
 emptyContext :: Context
 emptyContext
@@ -454,7 +445,6 @@ emptyContext
       { ctxDefiningFuncs = mempty
       , ctxModuleFuncs = mempty
       , ctxConfig = emptyConfig
-      , ctxKnownThings = error "empty known things from emptyContext"
       , ctxFamInstEnvs = mempty
       , ctxInstEnvs = InstEnvs mempty mempty mempty
       , ctxTheta = mempty
