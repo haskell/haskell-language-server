@@ -7,30 +7,16 @@ module Wingman.Metaprogramming.Lexer where
 
 import           Control.Applicative
 import           Control.Monad
-import           Control.Monad.Reader (ReaderT)
 import           Data.Foldable (asum)
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Void
-import           Development.IDE.GHC.Compat (HscEnv, Module)
-import           GhcPlugins (GlobalRdrElt)
 import           Name
 import qualified Text.Megaparsec as P
 import qualified Text.Megaparsec.Char as P
 import qualified Text.Megaparsec.Char.Lexer as L
-import           Wingman.Types (Context)
 
-
-------------------------------------------------------------------------------
--- | Everything we need in order to call 'Wingman.Machinery.getOccNameType'.
-data ParserContext = ParserContext
-  { ps_hscEnv :: HscEnv
-  , ps_occEnv :: OccEnv [GlobalRdrElt]
-  , ps_module :: Module
-  , ps_context :: Context
-  }
-
-type Parser = P.ParsecT Void Text (ReaderT ParserContext IO)
+type Parser = P.Parsec Void Text
 
 
 

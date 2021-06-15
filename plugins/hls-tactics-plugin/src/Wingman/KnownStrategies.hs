@@ -2,12 +2,12 @@ module Wingman.KnownStrategies where
 
 import Control.Monad.Error.Class
 import Data.Foldable (for_)
-import OccName (mkVarOcc)
+import OccName (mkVarOcc, mkClsOcc)
 import Refinery.Tactic
-import Wingman.Context (getCurrentDefinitions, getKnownInstance)
+import Wingman.Context (getCurrentDefinitions)
 import Wingman.Judgements (jGoal)
 import Wingman.KnownStrategies.QuickCheck (deriveArbitrary)
-import Wingman.Machinery (tracing)
+import Wingman.Machinery (tracing, getKnownInstance)
 import Wingman.Tactics
 import Wingman.Types
 
@@ -55,7 +55,7 @@ deriveMappend = do
   destructAll
   split
   g <- goal
-  minst <- getKnownInstance kt_semigroup
+  minst <- getKnownInstance (mkClsOcc "Semigroup")
          . pure
          . unCType
          $ jGoal g
@@ -77,7 +77,7 @@ deriveMempty :: TacticsM ()
 deriveMempty = do
   split
   g <- goal
-  minst <- getKnownInstance kt_monoid [unCType $ jGoal g]
+  minst <- getKnownInstance (mkClsOcc "Monoid") [unCType $ jGoal g]
   for_ minst $ \(cls, df) -> do
     applyMethod cls df $ mkVarOcc "mempty"
   try assumption
