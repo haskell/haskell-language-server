@@ -175,6 +175,17 @@ commands =
           "f (_ :: a)"
       ]
 
+  , command "pointwise" Deterministic Tactic
+      "Restrict the hypothesis in the holes of the given tactic to align up with the top-level bindings. This will ensure, eg, that the first hole can see only terms that came from the first position in any terms destructed from the top-level bindings."
+      (pure . flip restrictPositionForApplication (pure ()))
+      [ Example
+          (Just "In the context of `f (a1, b1) (a2, b2) = _`. The resulting first hole can see only 'a1' and 'a2', and the second, only 'b1' and 'b2'.")
+          ["(use mappend)"]
+          []
+          Nothing
+          "mappend _ _"
+      ]
+
   , command "apply" Deterministic (Ref One)
       "Apply the given function from *local* scope."
       (pure . useNameFromHypothesis apply)

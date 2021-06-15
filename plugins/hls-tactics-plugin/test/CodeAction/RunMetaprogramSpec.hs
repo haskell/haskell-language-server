@@ -33,5 +33,5 @@ spec = do
     metaTest 11 11 "MetaUseMethod"
     metaTest  9 38 "MetaCataCollapse"
     metaTest  7 16 "MetaCataCollapseUnary"
+    metaTest  6 46 "MetaPointwise"
     metaTest  4 28 "MetaUseSymbol"
-
