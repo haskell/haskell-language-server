@@ -44,7 +44,6 @@ import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindi
 import qualified FastString
 import           GHC.Generics (Generic)
 import           Generics.SYB hiding (Generic)
-import           GhcPlugins (extractModule)
 import           GhcPlugins (tupleDataCon, consDataCon, substTyAddInScope, ExternalPackageState, HscEnv (hsc_EPS), unpackFS)
 import qualified Ide.Plugin.Config as Plugin
 import           Ide.Plugin.Properties
@@ -59,13 +58,12 @@ import           OccName
 import           Prelude hiding (span)
 import           Retrie (transformA)
 import           SrcLoc (containsSpan)
-import           TcRnTypes (tcg_binds, TcGblEnv (tcg_rdr_env))
+import           TcRnTypes (tcg_binds, TcGblEnv)
 import           Wingman.Context
 import           Wingman.GHC
 import           Wingman.Judgements
 import           Wingman.Judgements.SYB (everythingContaining, metaprogramQ)
 import           Wingman.Judgements.Theta
-import           Wingman.Metaprogramming.Lexer (ParserContext(..))
 import           Wingman.Range
 import           Wingman.StaticPlugin (pattern WingmanMetaprogram, pattern MetaprogramSyntax)
 import           Wingman.Types
@@ -217,7 +215,7 @@ judgementForHole state nfp range cfg = do
       eps <- liftIO $ readIORef $ hsc_EPS $ hscEnv henv
       kt <- knownThings (untrackedStaleValue tcg) henv
 
-      (jdg, ctx) <- liftMaybe $ mkJudgementAndContext cfg g binds new_rss tcg eps kt
+      (jdg, ctx) <- liftMaybe $ mkJudgementAndContext cfg g binds new_rss tcg (hscEnv henv) eps kt
       let mp = getMetaprogramAtSpan (fmap RealSrcSpan tcg_rss) tcg_t
 
       dflags <- getIdeDynflags state nfp
@@ -240,10 +238,11 @@ mkJudgementAndContext
     -> TrackedStale Bindings
     -> Tracked 'Current RealSrcSpan
     -> TrackedStale TcGblEnv
+    -> HscEnv
     -> ExternalPackageState
     -> KnownThings
     -> Maybe (Judgement, Context)
-mkJudgementAndContext cfg g (TrackedStale binds bmap) rss (TrackedStale tcg tcgmap) eps kt = do
+mkJudgementAndContext cfg g (TrackedStale binds bmap) rss (TrackedStale tcg tcgmap) hscenv eps kt = do
   binds_rss <- mapAgeFrom bmap rss
   tcg_rss <- mapAgeFrom tcgmap rss
 
@@ -253,6 +252,7 @@ mkJudgementAndContext cfg g (TrackedStale binds bmap) rss (TrackedStale tcg tcgm
                 $ unTrack
                 $ getDefiningBindings <$> binds <*> binds_rss)
               (unTrack tcg)
+              hscenv
               eps
               kt
               evidence
@@ -597,26 +597,4 @@ getMetaprogramAtSpan (unTrack -> ss)
   . metaprogramQ ss
   . tcg_binds
   . unTrack
-
-
-------------------------------------------------------------------------------
--- | The metaprogram parser needs the ability to lookup terms from the module
--- and imports. The 'ParserContext' contains everything we need to find that
--- stuff.
-getParserState
-    :: IdeState
-    -> NormalizedFilePath
-    -> Context
-    -> MaybeT IO ParserContext
-getParserState state nfp ctx = do
-  let stale a = runStaleIde "getParserState" state nfp a
-
-  TrackedStale (unTrack -> tcmod) _  <- stale TypeCheck
-  TrackedStale (unTrack -> hscenv) _ <- stale GhcSessionDeps
-
-  let tcgblenv = tmrTypechecked tcmod
-      modul = extractModule tcgblenv
-      rdrenv = tcg_rdr_env tcgblenv
-
-  pure $ ParserContext (hscEnv hscenv) rdrenv modul ctx
 

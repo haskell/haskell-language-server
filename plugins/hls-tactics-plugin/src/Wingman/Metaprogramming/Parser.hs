@@ -8,11 +8,10 @@ module Wingman.Metaprogramming.Parser where
 
 import qualified Control.Monad.Combinators.Expr as P
 import qualified Control.Monad.Error.Class as E
-import           Control.Monad.Reader (ReaderT, ask, MonadIO (liftIO), asks)
+import           Control.Monad.Reader (ask)
 import           Data.Functor
 import           Data.Maybe (listToMaybe)
 import qualified Data.Text as T
-import           GhcPlugins (occNameString)
 import qualified Refinery.Tactic as R
 import qualified Text.Megaparsec as P
 import           Wingman.Auto
@@ -298,12 +297,12 @@ commands =
 
   , command "use" Deterministic (Ref One)
       "Apply the given function from *module* scope."
-      ( \occ -> do
-          ctx <- asks ps_context
+      ( \occ -> pure $ do
+          ctx <- ask
           ty <- case lookupNameInContext occ ctx of
             Just ty -> pure ty
-            Nothing -> CType <$> getOccTy occ
-          pure $ apply $ createImportedHyInfo occ ty
+            Nothing -> CType <$> getOccNameType occ
+          apply $ createImportedHyInfo occ ty
       )
       [ Example
           (Just "`import Data.Char (isSpace)`")
@@ -392,33 +391,24 @@ attempt_it
     :: Context
     -> Judgement
     -> String
-    -> ReaderT ParserContext IO (Either String String)
+    -> IO (Either String String)
 attempt_it ctx jdg program =
-  P.runParserT tacticProgram "<splice>" (T.pack program) <&> \case
-      Left peb -> Left $ wrapError $ P.errorBundlePretty peb
-      Right tt -> do
-        case runTactic
-              ctx
-              jdg
-              tt
-          of
-            Left tes -> Left $ wrapError $ show tes
-            Right rtr -> Right $ layout $ proofState rtr
+  case P.runParser tacticProgram "<splice>" (T.pack program) of
+    Left peb -> pure $ Left $ wrapError $ P.errorBundlePretty peb
+    Right tt -> do
+      res <- runTactic
+            ctx
+            jdg
+            tt
+      pure $ case res of
+          Left tes -> Left $ wrapError $ show tes
+          Right rtr -> Right $ layout $ proofState rtr
 
 
-parseMetaprogram :: T.Text -> ReaderT ParserContext IO (TacticsM ())
+parseMetaprogram :: T.Text -> TacticsM ()
 parseMetaprogram
-    = fmap (either (const $ pure ()) id)
-    . P.runParserT tacticProgram "<splice>"
-
-
-------------------------------------------------------------------------------
--- | Like 'getOccNameType', but runs in the 'Parser' monad.
-getOccTy :: OccName -> Parser Type
-getOccTy occ = do
-  ParserContext hscenv rdrenv modul _ <- ask
-  mty <- liftIO $ getOccNameType hscenv rdrenv modul occ
-  maybe (fail $ occNameString occ <> " is not in scope") pure mty
+    = either (const $ pure ()) id
+    . P.runParser tacticProgram "<splice>"
 
 
 ------------------------------------------------------------------------------

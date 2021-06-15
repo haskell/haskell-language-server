@@ -8,7 +8,7 @@ import           Data.Foldable.Extra (allM)
 import           Data.Maybe (fromMaybe, isJust, mapMaybe)
 import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
-import           GhcPlugins (ExternalPackageState (eps_inst_env), piResultTys, eps_fam_inst_env)
+import           GhcPlugins (ExternalPackageState (eps_inst_env), piResultTys, eps_fam_inst_env, extractModule)
 import           InstEnv (lookupInstEnv, InstEnvs(..), is_dfun)
 import           OccName
 import           TcRnTypes
@@ -23,11 +23,12 @@ mkContext
     :: Config
     -> [(OccName, CType)]
     -> TcGblEnv
+    -> HscEnv
     -> ExternalPackageState
     -> KnownThings
     -> [Evidence]
     -> Context
-mkContext cfg locals tcg eps kt ev = fix $ \ctx ->
+mkContext cfg locals tcg hscenv eps kt ev = fix $ \ctx ->
   Context
     { ctxDefiningFuncs
         = fmap (second $ coerce $ normalizeType ctx) locals
@@ -48,6 +49,9 @@ mkContext cfg locals tcg eps kt ev = fix $ \ctx ->
           (tcVisibleOrphanMods tcg)
     , ctxKnownThings = kt
     , ctxTheta = evidenceToThetaType ev
+    , ctx_hscEnv = hscenv
+    , ctx_occEnv = tcg_rdr_env tcg
+    , ctx_module = extractModule tcg
     }
 
 

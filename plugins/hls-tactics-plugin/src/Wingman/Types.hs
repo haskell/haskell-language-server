@@ -33,6 +33,7 @@ import           Development.IDE.GHC.Orphans ()
 import           FamInstEnv (FamInstEnvs)
 import           GHC.Generics
 import           GHC.SourceGen (var)
+import           GhcPlugins (GlobalRdrElt)
 import           InstEnv (InstEnvs(..))
 import           OccName
 import           Refinery.Tactic
@@ -302,7 +303,7 @@ data Judgement' a = Judgement
 type Judgement = Judgement' CType
 
 
-newtype ExtractM a = ExtractM { unExtractM :: Reader Context a }
+newtype ExtractM a = ExtractM { unExtractM :: ReaderT Context IO a }
     deriving newtype (Functor, Applicative, Monad, MonadReader Context)
 
 ------------------------------------------------------------------------------
@@ -422,6 +423,9 @@ data Context = Context
   , ctxInstEnvs      :: InstEnvs
   , ctxFamInstEnvs   :: FamInstEnvs
   , ctxTheta         :: Set CType
+  , ctx_hscEnv       :: HscEnv
+  , ctx_occEnv       :: OccEnv [GlobalRdrElt]
+  , ctx_module       :: Module
   }
 
 instance Show Context where
@@ -454,6 +458,9 @@ emptyContext
       , ctxFamInstEnvs = mempty
       , ctxInstEnvs = InstEnvs mempty mempty mempty
       , ctxTheta = mempty
+      , ctx_hscEnv = error "empty hsc env from emptyContext"
+      , ctx_occEnv = emptyOccEnv
+      , ctx_module = error "empty module from emptyContext"
       }
 
 

@@ -26,7 +26,7 @@ import qualified Data.Set as S
 import           Development.IDE.Core.Compile (lookupName)
 import           Development.IDE.GHC.Compat
 import           GhcPlugins (GlobalRdrElt (gre_name), lookupOccEnv, varType)
-import           OccName (HasOccName (occName), OccEnv)
+import           OccName (HasOccName (occName))
 import           Refinery.ProofState
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
@@ -69,8 +69,8 @@ runTactic
     :: Context
     -> Judgement
     -> TacticsM ()       -- ^ Tactic to use
-    -> Either [TacticError] RunTacticResults
-runTactic ctx jdg t =
+    -> IO (Either [TacticError] RunTacticResults)
+runTactic ctx jdg t = do
     let skolems = S.fromList
                 $ foldMap (tyCoVarsOfTypeWellScoped . unCType)
                 $ (:) (jGoal jdg)
@@ -82,10 +82,10 @@ runTactic ctx jdg t =
           defaultTacticState
             { ts_skolems = skolems
             }
-    in case partitionEithers
-          . flip runReader ctx
-          . unExtractM
-          $ runTacticT t jdg tacticState of
+    res <- flip runReaderT ctx
+         . unExtractM
+         $ runTacticT t jdg tacticState
+    pure $ case partitionEithers res of
       (errs, []) -> Left $ take 50 errs
       (_, fmap assoc23 -> solns) -> do
         let sorted =
@@ -360,17 +360,15 @@ createImportedHyInfo on ty = HyInfo
 -- IO, so we only expose this functionality to the parser. Internal Haskell
 -- code that wants to lookup terms should do it via 'KnownThings'.
 getOccNameType
-    :: HscEnv
-    -> OccEnv [GlobalRdrElt]
-    -> Module
-    -> OccName
-    -> IO (Maybe Type)
-getOccNameType hscenv rdrenv modul occ =
-  case lookupOccEnv rdrenv occ of
+    :: OccName
+    -> TacticsM Type
+getOccNameType occ = do
+  ctx <- ask
+  case lookupOccEnv (ctx_occEnv ctx) occ of
     Just (elt : _) -> do
-      mvar <- lookupName hscenv modul $ gre_name elt
-      pure $ case mvar of
+      mvar <- lift $ ExtractM $ lift $ lookupName (ctx_hscEnv ctx) (ctx_module ctx) $ gre_name elt
+      case mvar of
         Just (AnId v) -> pure $ varType v
-        _ -> Nothing
-    _ -> pure Nothing
+        _ -> throwError $ NotInScope occ
+    _ -> throwError $ NotInScope occ
 
