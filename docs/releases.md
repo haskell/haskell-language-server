@@ -85,8 +85,15 @@ we make sure to upload them as their full name variant.
 
 If the workflow fail and all of some binaries has not been uploaded,
 the prerelease and the tag itself has to be recreated to start it again.
-If only some of the artefacts are missinf an alternative could be make
+If only some of the artefacts are missing, an alternative could be make
 the release in a fork and upload manually them.
+
+To manually upload the missing binary we should:
+
+- Add the new tar/zip following the name conventions of existing ones
+  - `haskell-language-server-${os}-${ghcVersion}.gz` for `Linux` and `macOS` and `haskell-language-server-Windows-${ghcVersion}.exe.zip` for `Windows`
+  - the binary inside the gz file is named `haskell-language-server-${ghcVersion}` (with the `.exe` extension for `Windows`). Note that the binary name does not contain the `${os}`part.
+- Add the executable to the existing tar `haskell-language-server-${os}-${ghcVersion}.tar.gz` following the same schema for the binary as the previous one.
 
 ### ghcup
 Ghcup can install hls binaries, provided that there is a tarfile
