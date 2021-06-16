@@ -88,6 +88,8 @@ the prerelease and the tag itself has to be recreated to start it again.
 If only some of the artefacts are missing, an alternative could be make
 the release in a fork and upload manually them.
 
+If they are missing due to ci specific problems we can build the executable locally.
+
 To manually upload the missing binary we should:
 
 - Add the new tar/zip following the name conventions of existing ones
