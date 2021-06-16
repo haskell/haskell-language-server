@@ -74,8 +74,6 @@ jobs:
 
     - name: Tentative Workaround for GHC 8.10.5 on macOS
       if: matrix.os == 'macOS-latest' && matrix.ghc == '8.10.5'
-      env:
-        GHC_VER: ${{ matrix.ghc }}
       run: |
         echo "# uninstalling CommandLineTools (see https://github.com/haskell/haskell-language-server/issues/1913#issuecomment-861667786)"
         sudo rm -rf /Library/Developer/CommandLineTools
