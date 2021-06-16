@@ -65,11 +65,6 @@ jobs:
           # This build get stuck frequently
           # - os: windows-latest
           #   ghc: '8.6.4'
-        exclude:
-          # Not able to build 'network' package
-          # See https://gitlab.haskell.org/ghc/ghc/-/issues/19968
-          - os: macOS-latest
-            ghc: '8.10.5'
 
     steps:
       - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
@@ -97,6 +92,12 @@ jobs:
         run: |
           echo "CABAL_STORE_DIR=~/.cabal/store" >> $GITHUB_ENV
           echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
+
+      - name: Tentative Workaround for GHC 8.10.5 on macOS
+        if: matrix.os == 'macOS-latest' && matrix.ghc == '8.10.5'
+        run: |
+          echo "# uninstalling CommandLineTools (see https://github.com/haskell/haskell-language-server/issues/1913#issuecomment-861667786)"
+          sudo rm -rf /Library/Developer/CommandLineTools
 
       # Needs to be before Cache Cabal so the cache can detect changes to the modified cabal.project file
       - if: ${{ needs.pre_job.outputs.should_skip != 'true' && matrix.ghc == '9.0.1' }}
