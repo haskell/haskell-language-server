@@ -6,7 +6,7 @@ import           Control.Applicative (empty)
 import           Control.Lens ((<>~))
 import           Control.Monad.Error.Class
 import           Control.Monad.Reader
-import           Control.Monad.State.Class (gets, modify)
+import           Control.Monad.State.Class (gets, modify, MonadState)
 import           Control.Monad.State.Strict (StateT (..), execStateT)
 import           Control.Monad.Trans.Maybe
 import           Data.Coerce
@@ -218,6 +218,20 @@ unify goal inst = do
 
 
 ------------------------------------------------------------------------------
+-- | Attempt to unify two types.
+canUnify
+    :: MonadState TacticState m
+    => CType -- ^ The goal type
+    -> CType -- ^ The type we are trying unify the goal type with
+    -> m Bool
+canUnify goal inst = do
+  skolems <- gets ts_skolems
+  case tryUnifyUnivarsButNotSkolems skolems goal inst of
+    Just _ -> pure True
+    Nothing -> pure False
+
+
+------------------------------------------------------------------------------
 -- | Prefer the first tactic to the second, if the bool is true. Otherwise, just run the second tactic.
 --
 -- This is useful when you have a clever pruning solution that isn't always
@@ -310,6 +324,17 @@ lookupNameInContext name = do
   pure $ case find ((== name) . fst) ctx of
     Just (_, ty) -> pure ty
     Nothing      -> empty
+
+
+getDefiningType
+    :: (MonadError TacticError m, MonadReader Context m)
+    => m CType
+getDefiningType = do
+  calling_fun_name <- fst . head <$> asks ctxDefiningFuncs
+  maybe
+    (throwError $ NotInScope calling_fun_name)
+    pure
+      =<< lookupNameInContext calling_fun_name
 
 
 ------------------------------------------------------------------------------

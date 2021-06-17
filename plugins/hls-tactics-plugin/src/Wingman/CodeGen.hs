@@ -33,6 +33,7 @@ import           GhcPlugins (isSymOcc, mkVarOccFS)
 import           OccName (occName)
 import           PatSyn
 import           Type hiding (Var)
+import           TysPrim (alphaTy)
 import           Wingman.CodeGen.Utils
 import           Wingman.GHC
 import           Wingman.Judgements
@@ -309,7 +310,8 @@ letForEach rename solve (unHypothesis -> hy) jdg = do
       let g = jGoal jdg
       terms <- fmap sequenceA $ for hy $ \hi -> do
         let name = rename $ hi_name hi
-        res <- tacticToRule jdg $ solve hi
+        let generalized_let_ty = CType alphaTy
+        res <- tacticToRule (withNewGoal generalized_let_ty jdg) $ solve hi
         pure $ fmap ((name,) . unLoc) res
       let hy' = fmap (g <$) $ syn_val terms
           matches = fmap (fmap (\(occ, expr) -> valBind (occNameToStr occ) expr)) terms
