@@ -70,8 +70,6 @@ defaultMain = do
       phony "hls"  (need ["data", "latest"])
 
     -- stack specific targets
-    -- Default `stack.yaml` uses ghc-8.8.2 and we can't build hls in windows
-    -- TODO: Enable for windows when it uses ghc-8.8.3
     when isRunFromStack $
       phony "dev" $ do
         need ["show-options"]
