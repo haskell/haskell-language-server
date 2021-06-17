@@ -69,6 +69,10 @@ withNewGoal :: a -> Judgement' a -> Judgement' a
 withNewGoal t = field @"_jGoal" .~ t
 
 
+withNewCoercions :: [(a, a)] -> Judgement' a -> Judgement' a
+withNewCoercions ev = field @"j_coercion" <>~ ev
+
+
 normalizeHypothesis :: Functor f => Context -> f CType -> f CType
 normalizeHypothesis = fmap . coerce . normalizeType
 
@@ -414,6 +418,7 @@ mkFirstJudgement ctx hy top goal =
       , _jWhitelistSplit    = True
       , _jIsTopHole         = top
       , _jGoal              = CType goal
+      , j_coercion          = mempty
       }
 
 

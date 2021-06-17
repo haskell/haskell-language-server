@@ -7,19 +7,8 @@ data AST a where
     Equal :: AST a -> AST a -> AST Bool
 
 eval :: AST a -> a
--- NOTE(sandy): There is an unrelated bug that is shown off in this test
--- namely, that
---
--- @eval (IntLit n) = _@
---
--- but should be
---
--- @eval (IntLit n) = n@
---
--- https://github.com/haskell/haskell-language-server/issues/1937
-
 eval (BoolLit b) = b
-eval (IntLit n) = _
+eval (IntLit n) = n
 eval (If ast ast' ast_a)
   = let
       ast_c = eval ast

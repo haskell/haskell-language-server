@@ -297,6 +297,7 @@ data Judgement' a = Judgement
   , _jWhitelistSplit    :: !Bool
   , _jIsTopHole         :: !Bool
   , _jGoal              :: !a
+  , j_coercion          :: [(a, a)]
   }
   deriving stock (Eq, Generic, Functor, Show)
 

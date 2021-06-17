@@ -32,6 +32,7 @@ import           Type (tyCoVarsOfTypeWellScoped)
 import           Wingman.Context (getInstance)
 import           Wingman.GHC (tryUnifyUnivarsButNotSkolems, updateSubst)
 import           Wingman.Judgements
+import           Wingman.Judgements.Theta (allEvidenceToSubst)
 import           Wingman.Simplify (simplify)
 import           Wingman.Types
 
@@ -48,10 +49,12 @@ newSubgoal
     -> Rule
 newSubgoal j = do
   ctx <- ask
+  skolems <- gets ts_skolems
+  let coercions = allEvidenceToSubst skolems $ coerce $ j_coercion j
   unifier <- gets ts_unifier
   subgoal
     $ normalizeJudgement ctx
-    $ substJdg unifier
+    $ substJdg (unionTCvSubst unifier coercions)
     $ unsetIsTopHole
     $ normalizeJudgement ctx j
 
