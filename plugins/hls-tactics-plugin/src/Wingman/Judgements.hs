@@ -69,6 +69,8 @@ withNewGoal :: a -> Judgement' a -> Judgement' a
 withNewGoal t = field @"_jGoal" .~ t
 
 
+------------------------------------------------------------------------------
+-- | Add some new type equalities to the local judgement.
 withNewCoercions :: [(a, a)] -> Judgement' a -> Judgement' a
 withNewCoercions ev = field @"j_coercion" <>~ ev
 

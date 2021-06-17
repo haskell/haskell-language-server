@@ -113,7 +113,7 @@ allEvidenceToSubst skolems ((a, b) : evs) =
     $ fmap (substPair subst) evs
 
 ------------------------------------------------------------------------------
--- | Update our knowledge of which types are equal.
+-- | Given some 'Evidence', get a list of which types are now equal.
 evidenceToCoercions :: [Evidence] -> [(CType, CType)]
 evidenceToCoercions = coerce . mapMaybe (preview $ _Ctor @"EqualityOfTypes")
 
@@ -122,9 +122,7 @@ evidenceToCoercions = coerce . mapMaybe (preview $ _Ctor @"EqualityOfTypes")
 evidenceToSubst :: [Evidence] -> TacticState -> TacticState
 evidenceToSubst evs ts =
   updateSubst
-    (allEvidenceToSubst (ts_skolems ts)
-      $ mapMaybe (preview $ _Ctor @"EqualityOfTypes")
-      $ evs)
+    (allEvidenceToSubst (ts_skolems ts) . coerce $ evidenceToCoercions evs)
     ts
 
 
