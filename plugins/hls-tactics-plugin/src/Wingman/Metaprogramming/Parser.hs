@@ -188,7 +188,7 @@ commands =
 
   , command "apply" Deterministic (Ref One)
       "Apply the given function from *local* scope."
-      (pure . useNameFromHypothesis apply)
+      (pure . useNameFromHypothesis (apply Saturated))
       [ Example
           Nothing
           ["f"]
@@ -295,7 +295,7 @@ commands =
       "Fill the current hole with a call to the defining function."
       ( pure $
           fmap listToMaybe getCurrentDefinitions >>= \case
-            Just (self, _) -> useNameFromContext apply self
+            Just (self, _) -> useNameFromContext (apply Saturated) self
             Nothing -> E.throwError $ TacticPanic "no defining function"
       )
       [ Example
@@ -308,13 +308,7 @@ commands =
 
   , command "use" Deterministic (Ref One)
       "Apply the given function from *module* scope."
-      ( \occ -> pure $ do
-          ctx <- ask
-          ty <- case lookupNameInContext occ ctx of
-            Just ty -> pure ty
-            Nothing -> CType <$> getOccNameType occ
-          apply $ createImportedHyInfo occ ty
-      )
+      (pure . use Saturated)
       [ Example
           (Just "`import Data.Char (isSpace)`")
           ["isSpace"]
@@ -371,6 +365,11 @@ commands =
             ]
       ]
 
+  , command "deepening" Nondeterministic Nullary
+      ""
+      (pure $ deep2 2)
+      [ ]
+
   ]
 
 
@@ -385,9 +384,6 @@ oneTactic =
 
 tactic :: Parser (TacticsM ())
 tactic = flip P.makeExprParser operators oneTactic
-
-bindOne :: TacticsM a -> TacticsM a -> TacticsM a
-bindOne t t1 = t R.<@> [t1]
 
 operators :: [[P.Operator Parser (TacticsM ())]]
 operators =

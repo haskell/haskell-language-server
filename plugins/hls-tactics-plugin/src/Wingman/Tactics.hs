@@ -19,6 +19,7 @@ import           Data.Foldable
 import           Data.Functor ((<&>))
 import           Data.Generics.Labels ()
 import           Data.List
+import           Data.List.Extra (dropEnd, takeEnd)
 import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Set (Set)
@@ -69,6 +70,15 @@ assume name = rule $ \jdg -> do
     Nothing -> throwError $ UndefinedHypothesis name
 
 
+use :: Saturation -> OccName -> TacticsM ()
+use sat occ = do
+  ctx <- ask
+  ty <- case lookupNameInContext occ ctx of
+    Just ty -> pure ty
+    Nothing -> CType <$> getOccNameType occ
+  apply sat $ createImportedHyInfo occ ty
+
+
 recursion :: TacticsM ()
 -- TODO(sandy): This tactic doesn't fire for the @AutoThetaFix@ golden test,
 -- presumably due to running afoul of 'requireConcreteHole'. Look into this!
@@ -86,7 +96,7 @@ recursion = requireConcreteHole $ tracing "recursion" $ do
 
     let hy' = recursiveHypothesis defs
     ctx <- ask
-    localTactic (apply $ HyInfo name RecursivePrv ty) (introduce ctx hy')
+    localTactic (apply Saturated $ HyInfo name RecursivePrv ty) (introduce ctx hy')
       <@> fmap (localTactic assumption . filterPosition name) [0..]
 
 
@@ -210,30 +220,39 @@ homoLambdaCase =
         $ jGoal jdg
 
 
-apply :: HyInfo CType -> TacticsM ()
-apply hi = tracing ("apply' " <> show (hi_name hi)) $ do
+data Saturation = Unsaturated Int
+  deriving (Eq, Ord, Show)
+
+pattern Saturated :: Saturation
+pattern Saturated = Unsaturated 0
+
+
+apply :: Saturation -> HyInfo CType -> TacticsM ()
+apply (Unsaturated n) hi = tracing ("apply' " <> show (hi_name hi)) $ do
   jdg <- goal
   let g  = jGoal jdg
       ty = unCType $ hi_type hi
       func = hi_name hi
   ty' <- freshTyvars ty
-  let (_, _, args, ret) = tacticsSplitFunTy ty'
+  let (_, _, all_args, ret) = tacticsSplitFunTy ty'
+      saturated_args = dropEnd n all_args
+      unsaturated_args = takeEnd n all_args
   rule $ \jdg -> do
-    unify g (CType ret)
+    unify g (CType $ mkFunTys' unsaturated_args ret)
     ext
         <- fmap unzipTrace
         $ traverse ( newSubgoal
                     . blacklistingDestruct
                     . flip withNewGoal jdg
                     . CType
-                    ) args
+                    ) saturated_args
     pure $
       ext
         & #syn_used_vals %~ S.insert func
         & #syn_val       %~ mkApply func . fmap unLoc
 
 application :: TacticsM ()
-application = overFunctions apply
+application = overFunctions $ apply Saturated
 
 
 ------------------------------------------------------------------------------
@@ -398,7 +417,7 @@ auto' n = do
   try intros
   choice
     [ overFunctions $ \fname -> do
-        requireConcreteHole $ apply fname
+        requireConcreteHole $ apply Saturated fname
         loop
     , overAlgebraicTerms $ \aname -> do
         destructAuto aname
@@ -429,7 +448,7 @@ applyMethod cls df method_name = do
     Just method -> do
       let (_, apps) = splitAppTys df
       let ty = piResultTys (idType method) apps
-      apply $ HyInfo method_name (ClassMethodPrv $ Uniquely cls) $ CType ty
+      apply Saturated $ HyInfo method_name (ClassMethodPrv $ Uniquely cls) $ CType ty
     Nothing -> throwError $ NotInScope method_name
 
 
@@ -438,7 +457,7 @@ applyByName name = do
   g <- goal
   choice $ (unHypothesis (jHypothesis g)) <&> \hi ->
     case hi_name hi == name of
-      True  -> apply hi
+      True  -> apply Saturated hi
       False -> empty
 
 
@@ -481,7 +500,7 @@ nary n =
 self :: TacticsM ()
 self =
   fmap listToMaybe getCurrentDefinitions >>= \case
-    Just (self, _) -> useNameFromContext apply self
+    Just (self, _) -> useNameFromContext (apply Saturated) self
     Nothing -> throwError $ TacticPanic "no defining function"
 
 
@@ -508,6 +527,23 @@ cata hi = do
       (mkVarOcc . flip mappend "_c" . occNameString)
       (\hi -> self >> commit (assume $ hi_name hi) assumption)
       $ Hypothesis unifiable_diff
+
+
+deep2 :: Int -> TacticsM ()
+deep2 0 = pure ()
+deep2 n = foldr1 bindOne $ replicate n $ use (Unsaturated 1) $ mkVarOcc "."
+
+deep :: Int -> TacticsM () -> TacticsM ()
+deep 0 _ = pure ()
+deep n t = foldr1 bindOne $ replicate n t
+
+deepening :: Int -> TacticsM () -> TacticsM ()
+deepening n t =
+  asum $ fmap (flip deep t) [1 .. n]
+
+
+bindOne :: TacticsM a -> TacticsM a -> TacticsM a
+bindOne t t1 = t <@> [t1]
 
 
 collapse :: TacticsM ()
