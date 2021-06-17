@@ -36,7 +36,7 @@ jobs:
     - uses: haskell/actions/setup@v1
       with:
         ghc-version: ${{ matrix.ghc }}
-        cabal-version: '3.2'
+        cabal-version: '3.4'
 
     - if: ${{ matrix.ghc == '9.0.1' }}
       name: Use modified cabal.project for ghc9
