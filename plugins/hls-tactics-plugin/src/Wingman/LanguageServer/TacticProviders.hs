@@ -12,7 +12,6 @@ module Wingman.LanguageServer.TacticProviders
   ) where
 
 import           Control.Monad
-import           Control.Monad.Reader (runReaderT)
 import           Data.Aeson
 import           Data.Bool (bool)
 import           Data.Coerce
@@ -34,7 +33,6 @@ import           Wingman.Auto
 import           Wingman.GHC
 import           Wingman.Judgements
 import           Wingman.Machinery (useNameFromHypothesis)
-import           Wingman.Metaprogramming.Lexer (ParserContext)
 import           Wingman.Metaprogramming.Parser (parseMetaprogram)
 import           Wingman.Tactics
 import           Wingman.Types
@@ -42,19 +40,19 @@ import           Wingman.Types
 
 ------------------------------------------------------------------------------
 -- | A mapping from tactic commands to actual tactics for refinery.
-commandTactic :: ParserContext -> TacticCommand -> T.Text -> IO (TacticsM ())
-commandTactic _ Auto                   = pure . const auto
-commandTactic _ Intros                 = pure . const intros
-commandTactic _ Destruct               = pure . useNameFromHypothesis destruct . mkVarOcc . T.unpack
-commandTactic _ DestructPun            = pure . useNameFromHypothesis destructPun . mkVarOcc . T.unpack
-commandTactic _ Homomorphism           = pure . useNameFromHypothesis homo . mkVarOcc . T.unpack
-commandTactic _ DestructLambdaCase     = pure . const destructLambdaCase
-commandTactic _ HomomorphismLambdaCase = pure . const homoLambdaCase
-commandTactic _ DestructAll            = pure . const destructAll
-commandTactic _ UseDataCon             = pure . userSplit . mkVarOcc . T.unpack
-commandTactic _ Refine                 = pure . const refine
-commandTactic _ BeginMetaprogram       = pure . const metaprogram
-commandTactic c RunMetaprogram         = flip runReaderT c . parseMetaprogram
+commandTactic :: TacticCommand -> T.Text -> TacticsM ()
+commandTactic Auto                   = const auto
+commandTactic Intros                 = const intros
+commandTactic Destruct               = useNameFromHypothesis destruct . mkVarOcc . T.unpack
+commandTactic DestructPun            = useNameFromHypothesis destructPun . mkVarOcc . T.unpack
+commandTactic Homomorphism           = useNameFromHypothesis homo . mkVarOcc . T.unpack
+commandTactic DestructLambdaCase     = const destructLambdaCase
+commandTactic HomomorphismLambdaCase = const homoLambdaCase
+commandTactic DestructAll            = const destructAll
+commandTactic UseDataCon             = userSplit . mkVarOcc . T.unpack
+commandTactic Refine                 = const refine
+commandTactic BeginMetaprogram       = const metaprogram
+commandTactic RunMetaprogram         = parseMetaprogram
 
 
 ------------------------------------------------------------------------------

@@ -32,7 +32,7 @@ import           TcEvidence
 import           TcType (substTy)
 import           TcType (tcTyConAppTyCon_maybe)
 import           TysPrim (eqPrimTyCon)
-import           Wingman.Machinery
+import           Wingman.GHC
 import           Wingman.Types
 
 
