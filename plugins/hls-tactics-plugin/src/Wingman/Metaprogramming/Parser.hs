@@ -354,6 +354,23 @@ commands =
           "(_ :: a -> a -> a -> a) a1 a2 a3"
       ]
 
+  , command "try" Nondeterministic Tactic
+      "Simultaneously run and do not run a tactic. Subsequent tactics will bind on both states."
+      (pure . R.try)
+      [ Example
+          Nothing
+          ["apply f"]
+          [ EHI "f" "a -> b"
+          ]
+          (Just "b")
+          $ T.pack $ unlines
+            [ "BOTH of:\n"
+            , "f (_ :: a)"
+            , "\nand\n"
+            , "_ :: b"
+            ]
+      ]
+
   ]
 
 
@@ -374,9 +391,7 @@ bindOne t t1 = t R.<@> [t1]
 
 operators :: [[P.Operator Parser (TacticsM ())]]
 operators =
-    [ [ P.Prefix (symbol "*"   $> R.many_) ]
-    , [ P.Prefix (symbol "try" $> R.try) ]
-    , [ P.InfixR (symbol "|"   $> (R.<%>) )]
+    [ [ P.InfixR (symbol "|"   $> (R.<%>) )]
     , [ P.InfixL (symbol ";"   $> (>>))
       , P.InfixL (symbol ","   $> bindOne)
       ]
