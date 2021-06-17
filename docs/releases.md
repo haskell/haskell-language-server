@@ -15,6 +15,7 @@ when added to the path.
 * [ ] add that list to the actual [Changelog](https://github.com/haskell/haskell-language-server/blob/master/ChangeLog.md) with a description of the release.
 * [ ] bump up versions of changed packages. All are optional but [haskell-language-server itself](https://github.com/haskell/haskell-language-server/blob/master/haskell-language-server.cabal).
 * [ ] create the tag and make an initial prerelease to trigger the ci workflow (see details below)
+* [ ] contact ghcup team (#haskell-ghcup irc channel or via its [repo](https://gitlab.haskell.org/haskell/ghcup-hs/-/issues)) to try to sync our release and its inclusion in ghcup
 * [ ] check uploaded binaries (see windows note below) and the release description (usually the changelog entry) and uncheck the prerelease box
 * [ ] make public the release in the usual social channels: irc, twitter, reddit, discord, discourse, mailing lists, etc (not required but useful to spread the word :slightly_smiling_face:)
 
@@ -34,11 +35,17 @@ workflow](https://github.com/haskell/haskell-language-server/actions) will be
 kicked off and will start creating binaries. They will be gzipped and
 uploaded to the release.
 
-It creates a `haskell-language-server-OS-GHC` binary for each platform
+It creates a `haskell-language-server-${os}-${ghcVersion}` binary for each platform
 (Linux, macOS, Windows) and each GHC version that we currently support, as well
-as a `haskell-language-server-wrapper-OS` binary for each platform. Note that
+as a `haskell-language-server-wrapper-${os}` binary for each platform. Note that
 only one wrapper binary is created per platform, and it should be built with the
 most recent GHC version.
+
+### ghcup
+It also creates a `haskell-language-server-${os}-${hlsVersion}.tar.gz` tarball with
+the binaries for *all* supported ghc versions, to help downstream publishers in 
+the distribution of the release. The most prominent publisher using them is `ghcup`.
+The `tar` job in the workflow file automates the creation of this.
 
 Once all these binaries are present
 
@@ -88,19 +95,22 @@ the prerelease and the tag itself has to be recreated to start it again.
 If only some of the artefacts are missing, an alternative could be make
 the release in a fork and upload manually them.
 
-If they are missing due to ci specific problems we can build the executable locally.
+If they are missing due to ci specific problems we can build the executable locally
+and add it to the existing release.
 
-To manually upload the missing binary we should:
+### Updating release artifacts
+
+*IMPORTANT: release artifacts must not be modified, cause it would break 
+its secure distribution using their hashes. We should only add new ones.*
+
+To manually upload a new binary we should:
 
 - Add the new tar/zip following the name conventions of existing ones
   - `haskell-language-server-${os}-${ghcVersion}.gz` for `Linux` and `macOS` and `haskell-language-server-Windows-${ghcVersion}.exe.zip` for `Windows`
   - the binary inside the gz file is named `haskell-language-server-${ghcVersion}` (with the `.exe` extension for `Windows`). Note that the binary name does not contain the `${os}` part.
-- Add the executable to the existing tar `haskell-language-server-${os}-${ghcVersion}.tar.gz` following the same schema for the binary as the previous one.
-
-### ghcup
-Ghcup can install hls binaries, provided that there is a tarfile
-called `haskell-language-server-{macOS,Linux}-$HLS_VERSION.tar.gz`
-included in the GitHub release. The `tar` job in the workflow file automates the creation of this.
+- Add the executable to the existing tar `haskell-language-server-${os}-${ghcVersion}.tar.gz` *locally* and upload it under a new name `haskell-language-server-${os}-${ghcVersion}-rev${n}.tar.gz` following the same schema for the binary as the previous one. 
+  - `-rev${n}` is the next revision number of the tarball, strating at 1.
+  - we should contact users of the tarball (particularly ghcup) to notify the change
 
 ### Windows
 Currently building HLS with GHC 8.8.x on Windows is very flakey and so
