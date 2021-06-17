@@ -96,7 +96,7 @@ constraints:
     -- Diagrams doesn't support optparse-applicative >= 0.16 yet
     optparse-applicative < 0.16
     -- These plugins doesn't work on GHC9 yet
-    , haskell-language-server -brittany -class -eval -fourmolu -modulename -ormolu -splice -stylishhaskell -tactic -refineImports
+    , haskell-language-server -brittany -class -eval -fourmolu -ormolu -splice -stylishhaskell -tactic -refineImports
 
 
 allow-newer:
