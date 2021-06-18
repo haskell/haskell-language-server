@@ -15,8 +15,7 @@ import qualified Data.Text as T
 import qualified Refinery.Tactic as R
 import qualified Text.Megaparsec as P
 import           Wingman.Auto
-import           Wingman.Context (getCurrentDefinitions)
-import           Wingman.Machinery (useNameFromHypothesis, getOccNameType, createImportedHyInfo, useNameFromContext, lookupNameInContext)
+import           Wingman.Machinery (useNameFromHypothesis, getOccNameType, createImportedHyInfo, useNameFromContext, lookupNameInContext, getCurrentDefinitions)
 import           Wingman.Metaprogramming.Lexer
 import           Wingman.Metaprogramming.Parser.Documentation
 import           Wingman.Metaprogramming.ProofState (proofState, layout)

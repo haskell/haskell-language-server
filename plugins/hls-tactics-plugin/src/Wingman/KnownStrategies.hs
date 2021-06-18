@@ -4,10 +4,9 @@ import Control.Monad.Error.Class
 import Data.Foldable (for_)
 import OccName (mkVarOcc, mkClsOcc)
 import Refinery.Tactic
-import Wingman.Context (getCurrentDefinitions)
 import Wingman.Judgements (jGoal)
 import Wingman.KnownStrategies.QuickCheck (deriveArbitrary)
-import Wingman.Machinery (tracing, getKnownInstance)
+import Wingman.Machinery (tracing, getKnownInstance, getCurrentDefinitions)
 import Wingman.Tactics
 import Wingman.Types
 

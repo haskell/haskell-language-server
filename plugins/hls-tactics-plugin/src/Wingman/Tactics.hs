@@ -36,7 +36,6 @@ import           TcType
 import           Type hiding (Var)
 import           TysPrim (betaTy, alphaTy, betaTyVar, alphaTyVar)
 import           Wingman.CodeGen
-import           Wingman.Context
 import           Wingman.GHC
 import           Wingman.Judgements
 import           Wingman.Machinery
@@ -72,10 +71,6 @@ assume name = rule $ \jdg -> do
 recursion :: TacticsM ()
 -- TODO(sandy): This tactic doesn't fire for the @AutoThetaFix@ golden test,
 -- presumably due to running afoul of 'requireConcreteHole'. Look into this!
-
--- TODO(sandy): There's a bug here! This should use the polymorphic defining
--- types, not the ones available via 'getCurrentDefinitions'. As it is, this
--- tactic doesn't support polymorphic recursion.
 recursion = requireConcreteHole $ tracing "recursion" $ do
   defs <- getCurrentDefinitions
   attemptOn (const defs) $ \(name, ty) -> markRecursion $ do
