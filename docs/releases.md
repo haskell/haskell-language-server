@@ -109,7 +109,7 @@ To manually upload a new binary we should:
   - `haskell-language-server-${os}-${ghcVersion}.gz` for `Linux` and `macOS` and `haskell-language-server-Windows-${ghcVersion}.exe.zip` for `Windows`
   - the binary inside the gz file is named `haskell-language-server-${ghcVersion}` (with the `.exe` extension for `Windows`). Note that the binary name does not contain the `${os}` part.
 - Add the executable to the existing tar `haskell-language-server-${os}-${ghcVersion}.tar.gz` *locally* and upload it under a new name `haskell-language-server-${os}-${ghcVersion}-rev${n}.tar.gz` following the same schema for the binary as the previous one. 
-  - `-rev${n}` is the next revision number of the tarball, strating at 1.
+  - `-rev${n}` is the next revision number of the tarball, starting at 1.
   - we should contact users of the tarball (particularly ghcup) to notify the change
 
 ### Windows
