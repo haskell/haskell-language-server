@@ -536,7 +536,7 @@ f :: a -> b
 _ :: b
 ```
 
-running  `try apply f` will produce:
+running  `try (apply f)` will produce:
 
 ```haskell
 -- BOTH of:

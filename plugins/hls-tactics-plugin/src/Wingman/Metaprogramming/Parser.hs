@@ -353,7 +353,7 @@ commands =
       (pure . R.try)
       [ Example
           Nothing
-          ["apply f"]
+          ["(apply f)"]
           [ EHI "f" "a -> b"
           ]
           (Just "b")
