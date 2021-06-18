@@ -70,6 +70,9 @@ assume name = rule $ \jdg -> do
     Nothing -> throwError $ UndefinedHypothesis name
 
 
+------------------------------------------------------------------------------
+-- | Like 'apply', but uses an 'OccName' available in the context
+-- or the module
 use :: Saturation -> OccName -> TacticsM ()
 use sat occ = do
   ctx <- ask
@@ -533,13 +536,21 @@ cata hi = do
       $ Hypothesis unifiable_diff
 
 
+------------------------------------------------------------------------------
+-- | Deeply nest an unsaturated function onto itself
 deep_of :: OccName -> TacticsM ()
 deep_of = deepening . use (Unsaturated 1)
 
+
+------------------------------------------------------------------------------
+-- | Repeatedly bind a tactic on its first hole
 deep :: Int -> TacticsM () -> TacticsM ()
 deep 0 _ = pure ()
 deep n t = foldr1 bindOne $ replicate n t
 
+
+------------------------------------------------------------------------------
+-- | Try 'deep' for arbitrary depths.
 deepening :: TacticsM () -> TacticsM ()
 deepening t =
   asum $ fmap (flip deep t) [0 .. 100]
