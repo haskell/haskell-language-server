@@ -13,7 +13,7 @@ import           Control.Monad (unless)
 import           Control.Monad.Except (throwError)
 import           Control.Monad.Extra (anyM)
 import           Control.Monad.Reader.Class (MonadReader (ask))
-import           Control.Monad.State.Strict (StateT(..), runStateT, gets)
+import           Control.Monad.State.Strict (StateT(..), runStateT)
 import           Data.Bool (bool)
 import           Data.Foldable
 import           Data.Functor ((<&>))
@@ -72,6 +72,10 @@ assume name = rule $ \jdg -> do
 recursion :: TacticsM ()
 -- TODO(sandy): This tactic doesn't fire for the @AutoThetaFix@ golden test,
 -- presumably due to running afoul of 'requireConcreteHole'. Look into this!
+
+-- TODO(sandy): There's a bug here! This should use the polymorphic defining
+-- types, not the ones available via 'getCurrentDefinitions'. As it is, this
+-- tactic doesn't support polymorphic recursion.
 recursion = requireConcreteHole $ tracing "recursion" $ do
   defs <- getCurrentDefinitions
   attemptOn (const defs) $ \(name, ty) -> markRecursion $ do
@@ -349,7 +353,7 @@ destructAll = do
            $ unHypothesis
            $ jHypothesis jdg
   for_ args $ \arg -> do
-    subst <- gets ts_unifier
+    subst <- getSubstForJudgement =<< goal
     destruct $ fmap (coerce substTy subst) arg
 
 --------------------------------------------------------------------------------

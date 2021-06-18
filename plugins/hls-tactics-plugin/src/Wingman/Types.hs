@@ -297,9 +297,9 @@ data Judgement' a = Judgement
   , _jWhitelistSplit    :: !Bool
   , _jIsTopHole         :: !Bool
   , _jGoal              :: !a
-  , j_coercion          :: [(a, a)]
+  , j_coercion          :: TCvSubst
   }
-  deriving stock (Eq, Generic, Functor, Show)
+  deriving stock (Generic, Functor, Show)
 
 type Judgement = Judgement' CType
 
@@ -329,7 +329,6 @@ data TacticError
   | TooPolymorphic
   | NotInScope OccName
   | TacticPanic String
-  deriving stock (Eq)
 
 instance Show TacticError where
     show (UndefinedHypothesis name) =
