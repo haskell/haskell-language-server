@@ -40,6 +40,17 @@ substCTy :: TCvSubst -> CType -> CType
 substCTy subst = coerce . substTy subst . coerce
 
 
+getSubstForJudgement
+    :: MonadState TacticState m
+    => Judgement
+    -> m TCvSubst
+getSubstForJudgement j = do
+  -- NOTE(sandy): It's OK to use mempty here, because coercions _can_ give us
+  -- substitutions for skolems.
+  let coercions = j_coercion j
+  unifier <- gets ts_unifier
+  pure $ unionTCvSubst unifier coercions
+
 ------------------------------------------------------------------------------
 -- | Produce a subgoal that must be solved before we can solve the original
 -- goal.
@@ -48,7 +59,7 @@ newSubgoal
     -> Rule
 newSubgoal j = do
   ctx <- ask
-  unifier <- gets ts_unifier
+  unifier <- getSubstForJudgement j
   subgoal
     $ normalizeJudgement ctx
     $ substJdg unifier

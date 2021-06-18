@@ -18,6 +18,7 @@ import           OccName
 import           SrcLoc
 import           Type
 import           Wingman.GHC (algebraicTyCon, normalizeType)
+import           Wingman.Judgements.Theta
 import           Wingman.Types
 
 
@@ -67,6 +68,15 @@ isSplitWhitelisted = _jWhitelistSplit
 
 withNewGoal :: a -> Judgement' a -> Judgement' a
 withNewGoal t = field @"_jGoal" .~ t
+
+
+------------------------------------------------------------------------------
+-- | Add some new type equalities to the local judgement.
+withNewCoercions :: [(CType, CType)] -> Judgement -> Judgement
+withNewCoercions ev j =
+  let subst = allEvidenceToSubst mempty $ coerce ev
+   in fmap (CType . substTyAddInScope subst . unCType) j
+      & field @"j_coercion" %~ unionTCvSubst subst
 
 
 normalizeHypothesis :: Functor f => Context -> f CType -> f CType
@@ -414,6 +424,7 @@ mkFirstJudgement ctx hy top goal =
       , _jWhitelistSplit    = True
       , _jIsTopHole         = top
       , _jGoal              = CType goal
+      , j_coercion          = emptyTCvSubst
       }
 
 
