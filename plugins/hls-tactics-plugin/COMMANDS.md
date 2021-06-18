@@ -23,6 +23,7 @@ running  `application` will produce:
 ```haskell
 f (_ :: a)
 ```
+
 ## apply
 
 arguments: single reference.  
@@ -46,6 +47,7 @@ running  `apply f` will produce:
 ```haskell
 f (_ :: a)
 ```
+
 ## assume
 
 arguments: single reference.  
@@ -69,6 +71,7 @@ running  `assume some_a_val` will produce:
 ```haskell
 some_a_val
 ```
+
 ## assumption
 
 arguments: none.  
@@ -92,6 +95,7 @@ running  `assumption` will produce:
 ```haskell
 some_a_val
 ```
+
 ## auto
 
 arguments: none.  
@@ -116,6 +120,7 @@ running  `auto` will produce:
 ```haskell
 g . f
 ```
+
 ## binary
 
 arguments: none.  
@@ -139,6 +144,7 @@ running  `binary` will produce:
 ```haskell
 (_3 :: a -> a -> Int) (_1 :: a) (_2 :: a)
 ```
+
 ## cata
 
 arguments: single reference.  
@@ -168,6 +174,7 @@ case x of
         a2_c = f a2
      in _
 ```
+
 ## collapse
 
 arguments: none.  
@@ -193,6 +200,7 @@ running  `collapse` will produce:
 ```haskell
 (_ :: a -> a -> a -> a) a1 a2 a3
 ```
+
 ## ctor
 
 arguments: single reference.  
@@ -214,6 +222,29 @@ running  `ctor Just` will produce:
 ```haskell
 Just (_ :: a)
 ```
+
+## deep_of
+
+arguments: single reference.  
+non-deterministic.
+
+> Nest the given function (in module scope) with itself arbitrarily many times. NOTE: The resulting function is necessarily unsaturated, so you will likely need `with_arg` to use this tactic in a saturated context.
+
+
+### Example
+
+Given:
+
+```haskell
+_ :: [(Int, Either Bool a)] -> [(Int, Either Bool b)]
+```
+
+running  `deep_of fmap` will produce:
+
+```haskell
+fmap (fmap (fmap _))
+```
+
 ## destruct
 
 arguments: single reference.  
@@ -239,6 +270,7 @@ case a of
   False -> _
   True -> _
 ```
+
 ## destruct_all
 
 arguments: none.  
@@ -271,6 +303,7 @@ case a of
     Nothing -> _
     Just i -> _
 ```
+
 ## homo
 
 arguments: single reference.  
@@ -298,6 +331,7 @@ case e of
   Left a -> Left (_ :: x)
   Right b -> Right (_ :: y)
 ```
+
 ## intro
 
 arguments: single binding.  
@@ -319,6 +353,7 @@ running  `intro aye` will produce:
 ```haskell
 \aye -> (_ :: b -> c -> d)
 ```
+
 ## intros
 
 arguments: varadic binding.  
@@ -368,6 +403,7 @@ running  `intros x y z w` will produce:
 ```haskell
 \x y z -> (_ :: d)
 ```
+
 ## obvious
 
 arguments: none.  
@@ -389,6 +425,7 @@ running  `obvious` will produce:
 ```haskell
 []
 ```
+
 ## pointwise
 
 arguments: tactic.  
@@ -412,6 +449,7 @@ running  `pointwise (use mappend)` will produce:
 ```haskell
 mappend _ _
 ```
+
 ## recursion
 
 arguments: none.  
@@ -435,6 +473,7 @@ running  `recursion` will produce:
 ```haskell
 foo (_ :: Int) (_ :: b)
 ```
+
 ## sorry
 
 arguments: none.  
@@ -456,6 +495,7 @@ running  `sorry` will produce:
 ```haskell
 _ :: b
 ```
+
 ## split
 
 arguments: none.  
@@ -477,6 +517,38 @@ running  `split` will produce:
 ```haskell
 Right (_ :: b)
 ```
+
+## try
+
+arguments: tactic.  
+non-deterministic.
+
+> Simultaneously run and do not run a tactic. Subsequent tactics will bind on both states.
+
+
+### Example
+
+Given:
+
+```haskell
+f :: a -> b
+
+_ :: b
+```
+
+running  `try apply f` will produce:
+
+```haskell
+-- BOTH of:
+
+f (_ :: a)
+
+-- and
+
+_ :: b
+
+```
+
 ## unary
 
 arguments: none.  
@@ -500,6 +572,7 @@ running  `unary` will produce:
 ```haskell
 (_2 :: a -> Int) (_1 :: a)
 ```
+
 ## use
 
 arguments: single reference.  
@@ -523,3 +596,28 @@ running  `use isSpace` will produce:
 ```haskell
 isSpace (_ :: Char)
 ```
+
+## with_arg
+
+arguments: none.  
+deterministic.
+
+> Fill the current goal with a function application. This can be useful when you'd like to fill in the argument before the function, or when you'd like to use a non-saturated function in a saturated context.
+
+
+### Example
+
+> Where `a` is a new unifiable type variable.
+
+Given:
+
+```haskell
+_ :: r
+```
+
+running  `with_arg` will produce:
+
+```haskell
+(_2 :: a -> r) (_1 :: a)
+```
+

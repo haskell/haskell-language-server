@@ -358,18 +358,34 @@ commands =
           ]
           (Just "b")
           $ T.pack $ unlines
-            [ "BOTH of:\n"
+            [ "-- BOTH of:\n"
             , "f (_ :: a)"
-            , "\nand\n"
+            , "\n-- and\n"
             , "_ :: b"
             ]
       ]
 
-  , command "deepening" Nondeterministic Nullary
-      ""
-      (pure $ deep2 2)
-      [ ]
+  , command "deep_of" Nondeterministic (Ref One)
+      "Nest the given function (in module scope) with itself arbitrarily many times. NOTE: The resulting function is necessarily unsaturated, so you will likely need `with_arg` to use this tactic in a saturated context."
+      (pure . deep_of)
+      [ Example
+          Nothing
+          ["fmap"]
+          []
+          (Just "[(Int, Either Bool a)] -> [(Int, Either Bool b)]")
+          "fmap (fmap (fmap _))"
+      ]
 
+  , command "with_arg" Deterministic Nullary
+      "Fill the current goal with a function application. This can be useful when you'd like to fill in the argument before the function, or when you'd like to use a non-saturated function in a saturated context."
+      (pure with_arg)
+      [ Example
+          (Just "Where `a` is a new unifiable type variable.")
+          []
+          []
+          (Just "r")
+          "(_2 :: a -> r) (_1 :: a)"
+      ]
   ]
 
 
@@ -437,7 +453,7 @@ parseMetaprogram
 -- | Automatically generate the metaprogram command reference.
 writeDocumentation :: IO ()
 writeDocumentation =
-  writeFile "plugins/hls-tactics-plugin/COMMANDS.md" $
+  writeFile "COMMANDS.md" $
     unlines
       [ "# Wingman Metaprogram Command Reference"
       , ""

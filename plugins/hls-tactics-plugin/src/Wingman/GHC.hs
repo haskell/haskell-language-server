@@ -113,7 +113,7 @@ freshTyvars t = do
         case M.lookup tv reps of
           Just tv' -> tv'
           Nothing  -> tv
-      ) t
+      ) $ snd $ tcSplitForAllTys t
 
 
 ------------------------------------------------------------------------------

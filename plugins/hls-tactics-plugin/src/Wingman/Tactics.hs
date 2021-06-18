@@ -529,17 +529,16 @@ cata hi = do
       $ Hypothesis unifiable_diff
 
 
-deep2 :: Int -> TacticsM ()
-deep2 0 = pure ()
-deep2 n = foldr1 bindOne $ replicate n $ use (Unsaturated 1) $ mkVarOcc "."
+deep_of :: OccName -> TacticsM ()
+deep_of = deepening . use (Unsaturated 1)
 
 deep :: Int -> TacticsM () -> TacticsM ()
 deep 0 _ = pure ()
 deep n t = foldr1 bindOne $ replicate n t
 
-deepening :: Int -> TacticsM () -> TacticsM ()
-deepening n t =
-  asum $ fmap (flip deep t) [1 .. n]
+deepening :: TacticsM () -> TacticsM ()
+deepening t =
+  asum $ fmap (flip deep t) [0 .. 100]
 
 
 bindOne :: TacticsM a -> TacticsM a -> TacticsM a
@@ -553,6 +552,15 @@ collapse = do
   case terms of
     [hi] -> assume $ hi_name hi
     _    -> nary (length terms) <@> fmap (assume . hi_name) terms
+
+
+with_arg :: TacticsM ()
+with_arg = rule $ \jdg -> do
+  let g = jGoal jdg
+  fresh_ty <- freshTyvars $ mkInvForAllTys [alphaTyVar] alphaTy
+  a <- newSubgoal $ withNewGoal (CType fresh_ty) jdg
+  f <- newSubgoal $ withNewGoal (coerce mkFunTys' [fresh_ty] g) jdg
+  pure $ fmap noLoc $ (@@) <$> fmap unLoc f <*> fmap unLoc a
 
 
 ------------------------------------------------------------------------------
