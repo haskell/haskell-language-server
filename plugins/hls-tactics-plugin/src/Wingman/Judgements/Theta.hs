@@ -5,14 +5,17 @@ module Wingman.Judgements.Theta
   ( Evidence
   , getEvidenceAtHole
   , mkEvidence
+  , evidenceToCoercions
   , evidenceToSubst
   , evidenceToHypothesis
   , evidenceToThetaType
+  , allEvidenceToSubst
   ) where
 
 import           Class (classTyVars)
 import           Control.Applicative (empty)
 import           Control.Lens (preview)
+import           Data.Coerce (coerce)
 import           Data.Maybe (fromMaybe, mapMaybe, maybeToList)
 import           Data.Generics.Sum (_Ctor)
 import           Data.Set (Set)
@@ -110,13 +113,16 @@ allEvidenceToSubst skolems ((a, b) : evs) =
     $ fmap (substPair subst) evs
 
 ------------------------------------------------------------------------------
+-- | Given some 'Evidence', get a list of which types are now equal.
+evidenceToCoercions :: [Evidence] -> [(CType, CType)]
+evidenceToCoercions = coerce . mapMaybe (preview $ _Ctor @"EqualityOfTypes")
+
+------------------------------------------------------------------------------
 -- | Update our knowledge of which types are equal.
 evidenceToSubst :: [Evidence] -> TacticState -> TacticState
 evidenceToSubst evs ts =
   updateSubst
-    (allEvidenceToSubst (ts_skolems ts)
-      $ mapMaybe (preview $ _Ctor @"EqualityOfTypes")
-      $ evs)
+    (allEvidenceToSubst (ts_skolems ts) . coerce $ evidenceToCoercions evs)
     ts
 
 

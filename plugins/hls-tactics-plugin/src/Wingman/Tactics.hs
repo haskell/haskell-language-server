@@ -8,10 +8,12 @@ module Wingman.Tactics
 import           ConLike (ConLike(RealDataCon))
 import           Control.Applicative (Alternative(empty))
 import           Control.Lens ((&), (%~), (<>~))
+import           Control.Monad (filterM)
 import           Control.Monad (unless)
 import           Control.Monad.Except (throwError)
+import           Control.Monad.Extra (anyM)
 import           Control.Monad.Reader.Class (MonadReader (ask))
-import           Control.Monad.State.Strict (StateT(..), runStateT, gets)
+import           Control.Monad.State.Strict (StateT(..), runStateT)
 import           Data.Bool (bool)
 import           Data.Foldable
 import           Data.Functor ((<&>))
@@ -70,6 +72,10 @@ assume name = rule $ \jdg -> do
 recursion :: TacticsM ()
 -- TODO(sandy): This tactic doesn't fire for the @AutoThetaFix@ golden test,
 -- presumably due to running afoul of 'requireConcreteHole'. Look into this!
+
+-- TODO(sandy): There's a bug here! This should use the polymorphic defining
+-- types, not the ones available via 'getCurrentDefinitions'. As it is, this
+-- tactic doesn't support polymorphic recursion.
 recursion = requireConcreteHole $ tracing "recursion" $ do
   defs <- getCurrentDefinitions
   attemptOn (const defs) $ \(name, ty) -> markRecursion $ do
@@ -347,7 +353,7 @@ destructAll = do
            $ unHypothesis
            $ jHypothesis jdg
   for_ args $ \arg -> do
-    subst <- gets ts_unifier
+    subst <- getSubstForJudgement =<< goal
     destruct $ fmap (coerce substTy subst) arg
 
 --------------------------------------------------------------------------------
@@ -475,6 +481,7 @@ nary n =
     mkInvForAllTys [alphaTyVar, betaTyVar] $
       mkFunTys' (replicate n alphaTy) betaTy
 
+
 self :: TacticsM ()
 self =
   fmap listToMaybe getCurrentDefinitions >>= \case
@@ -482,14 +489,30 @@ self =
     Nothing -> throwError $ TacticPanic "no defining function"
 
 
+------------------------------------------------------------------------------
+-- | Perform a catamorphism when destructing the given 'HyInfo'. This will
+-- result in let binding, making values that call the defining function on each
+-- destructed value.
 cata :: HyInfo CType -> TacticsM ()
 cata hi = do
+  (_, _, calling_args, _)
+      <- tacticsSplitFunTy . unCType <$> getDefiningType
+  freshened_args <- traverse freshTyvars calling_args
   diff <- hyDiff $ destruct hi
+
+  -- For for every destructed term, check to see if it can unify with any of
+  -- the arguments to the calling function. If it doesn't, we don't try to
+  -- perform a cata on it.
+  unifiable_diff <- flip filterM (unHypothesis diff) $ \hi ->
+    flip anyM freshened_args $ \ty ->
+      canUnify (hi_type hi) $ CType ty
+
   rule $
     letForEach
       (mkVarOcc . flip mappend "_c" . occNameString)
-      (\hi -> self >> commit (apply hi) assumption)
-      diff
+      (\hi -> self >> commit (assume $ hi_name hi) assumption)
+      $ Hypothesis unifiable_diff
+
 
 collapse :: TacticsM ()
 collapse = do
