@@ -150,6 +150,7 @@ prettyCommand (MC name syn det desc _ exs) = vsep
   , ">" <+> align (pretty desc)
   , mempty
   , vsep $ fmap (prettyExample name) exs
+  , mempty
   ]
 
 

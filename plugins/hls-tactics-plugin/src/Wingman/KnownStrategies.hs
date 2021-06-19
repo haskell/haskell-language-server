@@ -34,7 +34,7 @@ deriveFmap = do
   try intros
   overAlgebraicTerms homo
   choice
-    [ overFunctions apply >> auto' 2
+    [ overFunctions (apply Saturated) >> auto' 2
     , assumption
     , recursion
     ]
