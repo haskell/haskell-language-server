@@ -538,8 +538,8 @@ cata hi = do
 
 ------------------------------------------------------------------------------
 -- | Deeply nest an unsaturated function onto itself
-deep_of :: OccName -> TacticsM ()
-deep_of = deepening . use (Unsaturated 1)
+nested :: OccName -> TacticsM ()
+nested = deepening . use (Unsaturated 1)
 
 
 ------------------------------------------------------------------------------

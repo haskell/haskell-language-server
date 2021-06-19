@@ -365,9 +365,9 @@ commands =
             ]
       ]
 
-  , command "deep_of" Nondeterministic (Ref One)
+  , command "nested" Nondeterministic (Ref One)
       "Nest the given function (in module scope) with itself arbitrarily many times. NOTE: The resulting function is necessarily unsaturated, so you will likely need `with_arg` to use this tactic in a saturated context."
-      (pure . deep_of)
+      (pure . nested)
       [ Example
           Nothing
           ["fmap"]

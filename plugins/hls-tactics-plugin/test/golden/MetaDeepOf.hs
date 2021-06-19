@@ -4,5 +4,5 @@ whats_it_deep_of
     -> [(Int, Either Bool (Maybe [a]))]
 -- The assumption here is necessary to tie-break in favor of the longest
 -- nesting of fmaps.
-whats_it_deep_of f = [wingman| deep_of fmap, assumption |]
+whats_it_deep_of f = [wingman| nested fmap, assumption |]
 

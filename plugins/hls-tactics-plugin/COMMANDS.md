@@ -223,28 +223,6 @@ running  `ctor Just` will produce:
 Just (_ :: a)
 ```
 
-## deep_of
-
-arguments: single reference.  
-non-deterministic.
-
-> Nest the given function (in module scope) with itself arbitrarily many times. NOTE: The resulting function is necessarily unsaturated, so you will likely need `with_arg` to use this tactic in a saturated context.
-
-
-### Example
-
-Given:
-
-```haskell
-_ :: [(Int, Either Bool a)] -> [(Int, Either Bool b)]
-```
-
-running  `deep_of fmap` will produce:
-
-```haskell
-fmap (fmap (fmap _))
-```
-
 ## destruct
 
 arguments: single reference.  
@@ -402,6 +380,28 @@ running  `intros x y z w` will produce:
 
 ```haskell
 \x y z -> (_ :: d)
+```
+
+## nested
+
+arguments: single reference.  
+non-deterministic.
+
+> Nest the given function (in module scope) with itself arbitrarily many times. NOTE: The resulting function is necessarily unsaturated, so you will likely need `with_arg` to use this tactic in a saturated context.
+
+
+### Example
+
+Given:
+
+```haskell
+_ :: [(Int, Either Bool a)] -> [(Int, Either Bool b)]
+```
+
+running  `nested fmap` will produce:
+
+```haskell
+fmap (fmap (fmap _))
 ```
 
 ## obvious
