@@ -101,7 +101,7 @@ expandTHSplice _eStyle ideState params@ExpandSpliceParams {..} = do
             reportEditor
                 MtWarning
                 [ "Expansion in type-chcking phase failed;"
-                , "trying to expand manually, but note taht it is less rigorous."
+                , "trying to expand manually, but note that it is less rigorous."
                 ]
             pm <-
                 liftIO $

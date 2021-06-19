@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-fourmolu-plugin
-version:            1.0.0.0
+version:            1.0.0.1
 synopsis:           Integration with the Fourmolu code formatter
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -25,7 +25,7 @@ library
     , fourmolu        ^>=0.3
     , ghc
     , ghc-boot-th
-    , ghcide          >=1.2  && <1.4
+    , ghcide          >=1.2  && <1.5
     , hls-plugin-api  ^>=1.1
     , lens
     , lsp

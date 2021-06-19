@@ -1,7 +1,7 @@
 cabal-version:      2.4
 category:           Development
 name:               haskell-language-server
-version:            1.1.0.1
+version:            1.2.0.0
 synopsis:           LSP server for GHC
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -14,7 +14,7 @@ copyright:          The Haskell IDE Team
 license:            Apache-2.0
 license-file:       LICENSE
 build-type:         Simple
-tested-with:        GHC == 8.6.4 || == 8.6.5 || == 8.8.2 || == 8.8.3 || == 8.8.4 || == 8.10.2 || == 8.10.3 || == 8.10.4
+tested-with:        GHC == 8.6.4 || == 8.6.5 || == 8.8.3 || == 8.8.4 || == 8.10.2 || == 8.10.3 || == 8.10.4 || == 8.10.5
 extra-source-files:
   README.md
   ChangeLog.md
@@ -61,7 +61,7 @@ library
     , cryptohash-sha1
     , data-default
     , ghc
-    , ghcide                ^>=1.3
+    , ghcide                ^>=1.4
     , gitrev
     , lsp
     , hie-bios
@@ -220,7 +220,7 @@ common retrie
 
 common tactic
   if flag(tactic) || flag(all-plugins)
-    build-depends: hls-tactics-plugin ^>= 1.1.0.0
+    build-depends: hls-tactics-plugin ^>= 1.2.0.0
     cpp-options: -Dtactic
 
 common hlint
@@ -316,6 +316,7 @@ executable haskell-language-server
     , cryptohash-sha1
     , deepseq
     , ghc
+    , ghc-api-compat
     , ghc-boot-th
     , ghcide
     , hashable
@@ -416,6 +417,7 @@ test-suite func-test
     Symbol
     TypeDefinition
     Test.Hls.Command
+    Test.Hls.Flags
 
   default-extensions: OverloadedStrings
   ghc-options:
@@ -423,6 +425,39 @@ test-suite func-test
 
   if flag(pedantic)
     ghc-options: -Werror -Wredundant-constraints
+
+  if flag(class) || flag(all-plugins)
+    cpp-options: -Dclass
+  if flag(haddockComments) || flag(all-plugins)
+    cpp-options: -DhaddockComments
+  if flag(eval) || flag(all-plugins)
+    cpp-options: -Deval
+  if flag(importLens) || flag(all-plugins)
+    cpp-options: -DimportLens
+  if flag(retrie) || flag(all-plugins)
+    cpp-options: -Dretrie
+  if flag(tactic) || flag(all-plugins)
+    cpp-options: -Dtactic
+  if flag(hlint) || flag(all-plugins)
+    cpp-options: -Dhlint
+  if flag(moduleName) || flag(all-plugins)
+    cpp-options: -DmoduleName
+  if flag(pragmas) || flag(all-plugins)
+    cpp-options: -Dpragmas
+  if flag(splice) || flag(all-plugins)
+    cpp-options: -Dsplice
+
+-- formatters
+  if flag(floskell) || flag(all-formatters)
+    cpp-options: -Dfloskell
+  if flag(fourmolu) || flag(all-formatters)
+    cpp-options: -Dfourmolu
+  if flag(ormolu) || flag(all-formatters)
+    cpp-options: -Dormolu
+  if flag(stylishHaskell) || flag(all-formatters)
+    cpp-options: -DstylishHaskell
+  if (flag(brittany) || flag(all-formatters))
+    cpp-options: -Dbrittany
 
 test-suite wrapper-test
   type:               exitcode-stdio-1.0

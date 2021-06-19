@@ -7,9 +7,16 @@
 {-# LANGUAGE OverloadedLabels      #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE PackageImports        #-}
+{-# LANGUAGE PatternSynonyms       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# OPTIONS_GHC -Wno-orphans   #-}
+
+#ifdef HLINT_ON_GHC_LIB
+#define MIN_GHC_API_VERSION(x,y,z) MIN_VERSION_ghc_lib(x,y,z)
+#else
+#define MIN_GHC_API_VERSION(x,y,z) MIN_VERSION_ghc(x,y,z)
+#endif
 
 module Ide.Plugin.Hlint
   (
@@ -66,7 +73,8 @@ import           System.IO                                          (IOMode (Wri
 import           System.IO.Temp
 #else
 import           Development.IDE.GHC.Compat                         hiding
-                                                                    (DynFlags (..))
+                                                                    (DynFlags (..),
+                                                                     OldRealSrcSpan)
 import           Language.Haskell.GHC.ExactPrint.Delta              (deltaOptions)
 import           Language.Haskell.GHC.ExactPrint.Parsers            (postParseTransform)
 import           Language.Haskell.GHC.ExactPrint.Types              (Rigidity (..))
@@ -93,6 +101,15 @@ import           Text.Regex.TDFA.Text                               ()
 import           System.Environment                                 (setEnv,
                                                                      unsetEnv)
 -- ---------------------------------------------------------------------
+
+-- Reimplementing this, since the one in Development.IDE.GHC.Compat isn't for ghc-lib
+pattern OldRealSrcSpan :: RealSrcSpan -> SrcSpan
+#if MIN_GHC_API_VERSION(9,0,0)
+pattern OldRealSrcSpan span <- RealSrcSpan span _
+#else
+pattern OldRealSrcSpan span <- RealSrcSpan span
+#endif
+{-# COMPLETE OldRealSrcSpan, UnhelpfulSpan #-}
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
@@ -189,7 +206,7 @@ rules plugin = do
       -- This one is defined in Development.IDE.GHC.Error but here
       -- the types could come from ghc-lib or ghc
       srcSpanToRange :: SrcSpan -> LSP.Range
-      srcSpanToRange (RealSrcSpan span) = Range {
+      srcSpanToRange (OldRealSrcSpan span) = Range {
           _start = LSP.Position {
                 _line = srcSpanStartLine span - 1
               , _character  = srcSpanStartCol span - 1}
@@ -229,7 +246,7 @@ getIdeas nfp = do
                      (_, contents) <- getFileContents nfp
                      let fp = fromNormalizedFilePath nfp
                      let contents' = T.unpack <$> contents
-                     Just <$> (liftIO $ parseModuleEx flags' fp contents')
+                     Just <$> liftIO (parseModuleEx flags' fp contents')
 
         setExtensions flags = do
           hlintExts <- getExtensions flags nfp
@@ -462,7 +479,7 @@ applyHint ide nfp mhint =
                 ideaPos = (srcSpanStartLine &&& srcSpanStartCol) . toRealSrcSpan . ideaSpan
             in filter (\i -> ideaHint i == title' && ideaPos i == (l+1, c+1)) ideas
 
-          toRealSrcSpan (RealSrcSpan real) = real
+          toRealSrcSpan (OldRealSrcSpan real) = real
           toRealSrcSpan (UnhelpfulSpan x) = error $ "No real source span: " ++ show x
 
           showParseError :: Hlint.ParseError -> String

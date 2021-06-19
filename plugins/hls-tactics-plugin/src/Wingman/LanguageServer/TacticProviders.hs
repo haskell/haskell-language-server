@@ -30,32 +30,29 @@ import           Language.LSP.Types
 import           OccName
 import           Prelude hiding (span)
 import           Wingman.Auto
-import           Wingman.FeatureSet
 import           Wingman.GHC
 import           Wingman.Judgements
 import           Wingman.Machinery (useNameFromHypothesis)
-import           Wingman.Metaprogramming.Lexer (ParserContext)
 import           Wingman.Metaprogramming.Parser (parseMetaprogram)
 import           Wingman.Tactics
 import           Wingman.Types
-import Control.Monad.Reader (runReaderT)
 
 
 ------------------------------------------------------------------------------
 -- | A mapping from tactic commands to actual tactics for refinery.
-commandTactic :: ParserContext -> TacticCommand -> T.Text -> IO (TacticsM ())
-commandTactic _ Auto                   = pure . const auto
-commandTactic _ Intros                 = pure . const intros
-commandTactic _ Destruct               = pure . useNameFromHypothesis destruct . mkVarOcc . T.unpack
-commandTactic _ DestructPun            = pure . useNameFromHypothesis destructPun . mkVarOcc . T.unpack
-commandTactic _ Homomorphism           = pure . useNameFromHypothesis homo . mkVarOcc . T.unpack
-commandTactic _ DestructLambdaCase     = pure . const destructLambdaCase
-commandTactic _ HomomorphismLambdaCase = pure . const homoLambdaCase
-commandTactic _ DestructAll            = pure . const destructAll
-commandTactic _ UseDataCon             = pure . userSplit . mkVarOcc . T.unpack
-commandTactic _ Refine                 = pure . const refine
-commandTactic _ BeginMetaprogram       = pure . const metaprogram
-commandTactic c RunMetaprogram         = flip runReaderT c . parseMetaprogram
+commandTactic :: TacticCommand -> T.Text -> TacticsM ()
+commandTactic Auto                   = const auto
+commandTactic Intros                 = const intros
+commandTactic Destruct               = useNameFromHypothesis destruct . mkVarOcc . T.unpack
+commandTactic DestructPun            = useNameFromHypothesis destructPun . mkVarOcc . T.unpack
+commandTactic Homomorphism           = useNameFromHypothesis homo . mkVarOcc . T.unpack
+commandTactic DestructLambdaCase     = const destructLambdaCase
+commandTactic HomomorphismLambdaCase = const homoLambdaCase
+commandTactic DestructAll            = const destructAll
+commandTactic UseDataCon             = userSplit . mkVarOcc . T.unpack
+commandTactic Refine                 = const refine
+commandTactic BeginMetaprogram       = const metaprogram
+commandTactic RunMetaprogram         = parseMetaprogram
 
 
 ------------------------------------------------------------------------------
@@ -115,7 +112,6 @@ commandProvider Destruct =
     provide Destruct $ T.pack $ occNameString occ
 commandProvider DestructPun =
   requireHoleSort (== Hole) $
-  requireFeature FeatureDestructPun $
     filterBindingType destructPunFilter $ \occ _ ->
       provide DestructPun $ T.pack $ occNameString occ
 commandProvider Homomorphism =
@@ -134,7 +130,6 @@ commandProvider HomomorphismLambdaCase =
       provide HomomorphismLambdaCase ""
 commandProvider DestructAll =
   requireHoleSort (== Hole) $
-  requireFeature FeatureDestructAll $
     withJudgement $ \jdg ->
       case _jIsTopHole jdg && jHasBoundArgs jdg of
         True  -> provide DestructAll ""
@@ -142,30 +137,26 @@ commandProvider DestructAll =
 commandProvider UseDataCon =
   requireHoleSort (== Hole) $
   withConfig $ \cfg ->
-    requireFeature FeatureUseDataCon $
-      filterTypeProjection
-          ( guardLength (<= cfg_max_use_ctor_actions cfg)
-          . fromMaybe []
-          . fmap fst
-          . tacticsGetDataCons
-          ) $ \dcon ->
-        provide UseDataCon
-          . T.pack
-          . occNameString
-          . occName
-          $ dataConName dcon
+    filterTypeProjection
+        ( guardLength (<= cfg_max_use_ctor_actions cfg)
+        . fromMaybe []
+        . fmap fst
+        . tacticsGetDataCons
+        ) $ \dcon ->
+      provide UseDataCon
+        . T.pack
+        . occNameString
+        . occName
+        $ dataConName dcon
 commandProvider Refine =
   requireHoleSort (== Hole) $
-  requireFeature FeatureRefineHole $
     provide Refine ""
 commandProvider BeginMetaprogram =
   requireGHC88OrHigher $
-  requireFeature FeatureMetaprogram $
   requireHoleSort (== Hole) $
     provide BeginMetaprogram ""
 commandProvider RunMetaprogram =
   requireGHC88OrHigher $
-  requireFeature FeatureMetaprogram $
   withMetaprogram $ \mp ->
     provide RunMetaprogram mp
 
@@ -211,16 +202,6 @@ data TacticParams = TacticParams
     }
   deriving stock (Show, Eq, Generic)
   deriving anyclass (ToJSON, FromJSON)
-
-
-------------------------------------------------------------------------------
--- | Restrict a 'TacticProvider', making sure it appears only when the given
--- 'Feature' is in the feature set.
-requireFeature :: Feature -> TacticProvider -> TacticProvider
-requireFeature f tp tpd =
-  case hasFeature f $ cfg_feature_set $ tpd_config tpd of
-    True  -> tp tpd
-    False -> pure []
 
 
 requireHoleSort :: (HoleSort -> Bool) -> TacticProvider -> TacticProvider

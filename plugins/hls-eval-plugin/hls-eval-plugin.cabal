@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-eval-plugin
-version:            1.1.0.0
+version:            1.1.1.0
 synopsis:           Eval plugin for Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -59,9 +59,10 @@ library
     , extra
     , filepath
     , ghc
+    , ghc-api-compat
     , ghc-boot-th
     , ghc-paths
-    , ghcide                >=1.2   && <1.4
+    , ghcide                >=1.2   && <1.5
     , hashable
     , hls-plugin-api        ^>=1.1
     , lens

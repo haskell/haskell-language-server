@@ -4,12 +4,11 @@ module CodeLens.EmptyCaseSpec where
 
 import Test.Hspec
 import Utils
-import Wingman.FeatureSet (allFeatures)
 
 
 spec :: Spec
 spec = do
-  let test = mkCodeLensTest allFeatures
+  let test = mkCodeLensTest
 
   describe "golden" $ do
     test "EmptyCaseADT"

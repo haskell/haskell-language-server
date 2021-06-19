@@ -22,7 +22,7 @@ library
   build-depends:
     , base            >=4.12 && <5
     , floskell        ^>=0.10
-    , ghcide          >=1.2  && <1.4
+    , ghcide          >=1.2  && <1.5
     , hls-plugin-api  ^>=1.1
     , lsp-types
     , text

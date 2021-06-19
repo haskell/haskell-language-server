@@ -664,6 +664,8 @@ newSession extras@ShakeExtras{..} shakeDb acts = do
                 logPriority logger (actionPriority d) msg
                 notifyTestingLogMessage extras msg
 
+        -- The inferred type signature doesn't work in ghc >= 9.0.1
+        workRun :: (forall b. IO b -> IO b) -> IO (IO ())
         workRun restore = withSpan "Shake session" $ \otSpan -> do
           whenJust allPendingKeys $ \kk -> setTag otSpan "keys" (BS8.pack $ unlines $ map show $ toList kk)
           let keysActs = pumpActionThread otSpan : map (run otSpan) (reenqueued ++ acts)

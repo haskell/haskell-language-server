@@ -389,6 +389,29 @@ running  `obvious` will produce:
 ```haskell
 []
 ```
+## pointwise
+
+arguments: tactic.  
+deterministic.
+
+> Restrict the hypothesis in the holes of the given tactic to align up with the top-level bindings. This will ensure, eg, that the first hole can see only terms that came from the first position in any terms destructed from the top-level bindings.
+
+
+### Example
+
+> In the context of `f (a1, b1) (a2, b2) = _`. The resulting first hole can see only 'a1' and 'a2', and the second, only 'b1' and 'b2'.
+
+Given:
+
+```haskell
+_ 
+```
+
+running  `pointwise (use mappend)` will produce:
+
+```haskell
+mappend _ _
+```
 ## recursion
 
 arguments: none.  
