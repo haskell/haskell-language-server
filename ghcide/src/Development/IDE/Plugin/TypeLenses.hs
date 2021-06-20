@@ -21,7 +21,7 @@ import           Data.Aeson.Types                    (Value (..), toJSON)
 import qualified Data.Aeson.Types                    as A
 import qualified Data.HashMap.Strict                 as Map
 import           Data.List                           (find)
-import           Data.Maybe                          (catMaybes, fromJust)
+import           Data.Maybe                          (catMaybes)
 import qualified Data.Text                           as T
 import           Development.IDE                     (GhcSession (..),
                                                       HscEnvEq (hscEnv),
@@ -36,7 +36,6 @@ import           Development.IDE.Core.Shake          (getHiddenDiagnostics, use)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Util            (printName)
 import           Development.IDE.Graph.Classes
-import           Development.IDE.Spans.Common        (safeTyThingType)
 import           Development.IDE.Spans.LocalBindings (Bindings, getFuzzyScope)
 import           Development.IDE.Types.Location      (Position (Position, _character, _line),
                                                       Range (Range, _end, _start),
@@ -46,8 +45,7 @@ import           GHC.Generics                        (Generic)
 import           GhcPlugins                          (GlobalRdrEnv,
                                                       HscEnv (hsc_dflags), SDoc,
                                                       elemNameSet, getSrcSpan,
-                                                      idName, lookupTypeEnv,
-                                                      mkRealSrcLoc,
+                                                      idName, mkRealSrcLoc,
                                                       realSrcLocSpan,
                                                       tidyOpenType)
 import           HscTypes                            (mkPrintUnqualified)
@@ -76,7 +74,12 @@ import           Language.LSP.Types                  (ApplyWorkspaceEditParams (
                                                       TextEdit (TextEdit),
                                                       WorkspaceEdit (WorkspaceEdit))
 import           Outputable                          (showSDocForUser)
-import           PatSyn                              (patSynName)
+import           PatSyn                              (PatSyn, mkPatSyn,
+                                                      patSynBuilder,
+                                                      patSynFieldLabels,
+                                                      patSynIsInfix,
+                                                      patSynMatcher, patSynName,
+                                                      patSynSig, pprPatSynType)
 import           TcEnv                               (tcInitTidyEnv)
 import           TcRnMonad                           (initTcWithGbl)
 import           TcRnTypes                           (TcGblEnv (..))
@@ -279,10 +282,19 @@ gblBindingType (Just hsc) (Just gblEnv) = do
           pure $ GlobalBindingTypeSig name (printName name <> " :: " <> showDoc (pprSigmaType ty)) (name `elemNameSet` exports)
       patToSig p = do
         let name = patSynName p
-            -- we don't use pprPatSynType, since it always prints forall
-            ty = fromJust $ lookupTypeEnv (tcg_type_env gblEnv) name >>= safeTyThingType
-        hasSig name $ pure $ GlobalBindingTypeSig name ("pattern " <> printName name <> " :: " <> showDoc (pprSigmaType ty)) (name `elemNameSet` exports)
+        hasSig name $ pure $ GlobalBindingTypeSig name ("pattern " <> printName name <> " :: " <> showDoc (pprPatSynTypeWithoutForalls p)) (name `elemNameSet` exports)
   (_, maybe [] catMaybes -> bindings) <- initTcWithGbl hsc gblEnv (realSrcLocSpan $ mkRealSrcLoc "<dummy>" 1 1) $ mapM bindToSig binds
   patterns <- catMaybes <$> mapM patToSig patSyns
   pure . Just . GlobalBindingTypeSigsResult $ bindings <> patterns
 gblBindingType _ _ = pure Nothing
+
+pprPatSynTypeWithoutForalls :: PatSyn -> SDoc
+pprPatSynTypeWithoutForalls p = pprPatSynType pWithoutTypeVariables
+  where
+    pWithoutTypeVariables = mkPatSyn name declared_infix ([], req_theta) ([], prov_theta) orig_args orig_res_ty matcher builder field_labels
+    (_univ_tvs, req_theta, _ex_tvs, prov_theta, orig_args, orig_res_ty) = patSynSig p
+    name = patSynName p
+    declared_infix = patSynIsInfix p
+    matcher = patSynMatcher p
+    builder = patSynBuilder p
+    field_labels = patSynFieldLabels p
