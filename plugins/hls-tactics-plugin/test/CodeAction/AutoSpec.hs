@@ -47,6 +47,7 @@ spec = do
     autoTest  2 17 "AutoInfixApply"
     autoTest  2 19 "AutoInfixApplyMany"
     autoTest  2 25 "AutoInfixInfix"
+    autoTest 19 12 "AutoTypeLevel"
 
     failing "flaky in CI" $
       autoTest 2 11 "GoldenApplicativeThen"
