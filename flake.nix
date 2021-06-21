@@ -69,13 +69,29 @@
           } // pluginSourceDirs;
 
           # Tweak our packages
+          # Don't use `callHackage`, it requires us to override `all-cabal-hashes`
           tweaks = hself: hsuper:
             with haskell.lib; {
-              hls-hlint-plugin =
-                hsuper.hls-hlint-plugin.override { hlint = hself.hlint_3_2_7; };
+
+              # https://github.com/haskell/haskell-language-server/pull/1858
+              # Remove this override when nixpkgs has this package
+              apply-refact_0_9_3_0 = hself.callCabal2nix "apply-refact"
+                (builtins.fetchTarball {
+                  url =
+                    "https://hackage.haskell.org/package/apply-refact-0.9.3.0/apply-refact-0.9.3.0.tar.gz";
+                  sha256 =
+                    "1jfq1aw91finlpq5nn7a96za4c8j13jk6jmx2867fildxwrik2qj";
+                }) { };
+
+              hls-hlint-plugin = hsuper.hls-hlint-plugin.override {
+                hlint = hself.hlint_3_2_7;
+                apply-refact = hself.apply-refact_0_9_3_0;
+              };
+
               hls-tactics-plugin = hsuper.hls-tactics-plugin.override {
                 refinery = hself.refinery_0_3_0_0;
               };
+
             };
 
           hlsSources =
@@ -151,6 +167,7 @@
           pkgs.haskellPackages.ghc.version);
         ghc884 = pkgs.hlsHpkgs "ghc884";
         ghc8104 = pkgs.hlsHpkgs "ghc8104";
+        ghc8105 = pkgs.hlsHpkgs "ghc8105";
         ghc901 = pkgs.hlsHpkgs "ghc901";
 
         # Create a development shell of hls project
@@ -200,12 +217,14 @@
           haskell-language-server-dev = mkDevShell ghcDefault;
           haskell-language-server-884-dev = mkDevShell ghc884;
           haskell-language-server-8104-dev = mkDevShell ghc8104;
+          haskell-language-server-8105-dev = mkDevShell ghc8105;
           haskell-language-server-901-dev = mkDevShell ghc901;
 
           # hls package
           haskell-language-server = mkExe ghcDefault;
           haskell-language-server-884 = mkExe ghc884;
           haskell-language-server-8104 = mkExe ghc8104;
+          haskell-language-server-8105 = mkExe ghc8105;
           haskell-language-server-901 = mkExe ghc901;
         };
 

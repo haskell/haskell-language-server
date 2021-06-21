@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms   #-}
 {-# LANGUAGE RecordWildCards   #-}
 {-# OPTIONS_GHC -Wall -Wwarn -fno-warn-type-defaults #-}
 
@@ -26,17 +27,13 @@ import           Data.String                (IsString)
 import qualified Data.Text                  as T
 import           Development.IDE            (GetParsedModule (GetParsedModule),
                                              GhcSession (GhcSession), IdeState,
-                                             List (..), NormalizedFilePath,
-                                             Position (Position), Range (Range),
                                              evalGhcEnv, hscEnvWithImportPaths,
                                              realSrcSpanToRange, runAction,
-                                             toNormalizedUri, uriToFilePath',
-                                             use, use_)
-import           Development.IDE.GHC.Compat (GenLocated (L),
-                                             SrcSpan (RealSrcSpan),
-                                             getSessionDynFlags, hsmodName,
-                                             importPaths, pm_parsed_source,
-                                             unLoc)
+                                             uriToFilePath', use, use_)
+import           Development.IDE.GHC.Compat (GenLocated (L), getSessionDynFlags,
+                                             hsmodName, importPaths,
+                                             pattern OldRealSrcSpan,
+                                             pm_parsed_source, unLoc)
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
@@ -132,7 +129,7 @@ pathModuleName state normFilePath filePath
 codeModuleName :: IdeState -> NormalizedFilePath -> IO (Maybe (Range, T.Text))
 codeModuleName state nfp = runMaybeT $ do
   pm <- MaybeT . runAction "ModuleName.GetParsedModule" state $ use GetParsedModule nfp
-  L (RealSrcSpan l) m <- MaybeT . pure . hsmodName . unLoc $ pm_parsed_source pm
+  L (OldRealSrcSpan l) m <- MaybeT . pure . hsmodName . unLoc $ pm_parsed_source pm
   pure (realSrcSpanToRange l, T.pack $ show m)
 
 -- traceAs :: Show a => String -> a -> a

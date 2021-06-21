@@ -58,7 +58,7 @@ preprocessor env filename mbContents = do
         else do
             cppLogs <- liftIO $ newIORef []
             contents <- ExceptT
-                        $ (Right <$> (runCpp dflags {log_action = logAction cppLogs} filename
+                        $ (Right <$> (runCpp dflags {log_action = logActionCompat $ logAction cppLogs} filename
                                        $ if isOnDisk then Nothing else Just contents))
                             `catch`
                             ( \(e :: GhcException) -> do
@@ -78,7 +78,7 @@ preprocessor env filename mbContents = do
         (opts, dflags) <- ExceptT $ parsePragmasIntoDynFlags env filename contents
         return (contents, opts, dflags)
   where
-    logAction :: IORef [CPPLog] -> LogAction
+    logAction :: IORef [CPPLog] -> LogActionCompat
     logAction cppLogs dflags _reason severity srcSpan _style msg = do
       let log = CPPLog severity srcSpan $ T.pack $ showSDoc dflags msg
       modifyIORef cppLogs (log :)
@@ -107,7 +107,7 @@ diagsFromCPPLogs filename logs =
     -- informational log messages and attaches them to the initial log message.
     go :: [CPPDiag] -> [CPPLog] -> [CPPDiag]
     go acc [] = reverse $ map (\d -> d {cdMessage = reverse $ cdMessage d}) acc
-    go acc (CPPLog sev (RealSrcSpan span) msg : logs) =
+    go acc (CPPLog sev (OldRealSrcSpan span) msg : logs) =
       let diag = CPPDiag (realSrcSpanToRange span) (toDSeverity sev) [msg]
        in go (diag : acc) logs
     go (diag : diags) (CPPLog _sev (UnhelpfulSpan _) msg : logs) =

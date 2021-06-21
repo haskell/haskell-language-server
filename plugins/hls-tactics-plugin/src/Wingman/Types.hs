@@ -26,10 +26,14 @@ import           Data.Set (Set)
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Tree
+import           Development.IDE (Range)
+import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.Compat hiding (Node)
 import           Development.IDE.GHC.Orphans ()
+import           FamInstEnv (FamInstEnvs)
 import           GHC.Generics
 import           GHC.SourceGen (var)
+import           GhcPlugins (GlobalRdrElt)
 import           InstEnv (InstEnvs(..))
 import           OccName
 import           Refinery.Tactic
@@ -38,9 +42,6 @@ import           Type (TCvSubst, Var, eqType, nonDetCmpType, emptyTCvSubst)
 import           UniqSupply (takeUniqFromSupply, mkSplitUniqSupply, UniqSupply)
 import           Unique (nonDetCmpUnique, Uniquable, getUnique, Unique)
 import           Wingman.Debug
-import           Wingman.FeatureSet
-import Development.IDE.Core.UseStale
-import Development.IDE (Range)
 
 
 ------------------------------------------------------------------------------
@@ -83,8 +84,7 @@ tacticTitle = (mappend "Wingman: " .) . go
 ------------------------------------------------------------------------------
 -- | Plugin configuration for tactics
 data Config = Config
-  { cfg_feature_set          :: FeatureSet
-  , cfg_max_use_ctor_actions :: Int
+  { cfg_max_use_ctor_actions :: Int
   , cfg_timeout_seconds      :: Int
   , cfg_auto_gas             :: Int
   }
@@ -92,8 +92,7 @@ data Config = Config
 
 emptyConfig :: Config
 emptyConfig = Config
-  { cfg_feature_set = mempty
-  , cfg_max_use_ctor_actions = 5
+  { cfg_max_use_ctor_actions = 5
   , cfg_timeout_seconds = 2
   , cfg_auto_gas = 4
   }
@@ -298,13 +297,14 @@ data Judgement' a = Judgement
   , _jWhitelistSplit    :: !Bool
   , _jIsTopHole         :: !Bool
   , _jGoal              :: !a
+  , j_coercion          :: TCvSubst
   }
-  deriving stock (Eq, Generic, Functor, Show)
+  deriving stock (Generic, Functor, Show)
 
 type Judgement = Judgement' CType
 
 
-newtype ExtractM a = ExtractM { unExtractM :: Reader Context a }
+newtype ExtractM a = ExtractM { unExtractM :: ReaderT Context IO a }
     deriving newtype (Functor, Applicative, Monad, MonadReader Context)
 
 ------------------------------------------------------------------------------
@@ -329,7 +329,6 @@ data TacticError
   | TooPolymorphic
   | NotInScope OccName
   | TacticPanic String
-  deriving stock (Eq)
 
 instance Show TacticError where
     show (UndefinedHypothesis name) =
@@ -420,9 +419,12 @@ data Context = Context
   , ctxModuleFuncs   :: [(OccName, CType)]
     -- ^ Everything defined in the current module
   , ctxConfig        :: Config
-  , ctxKnownThings   :: KnownThings
   , ctxInstEnvs      :: InstEnvs
+  , ctxFamInstEnvs   :: FamInstEnvs
   , ctxTheta         :: Set CType
+  , ctx_hscEnv       :: HscEnv
+  , ctx_occEnv       :: OccEnv [GlobalRdrElt]
+  , ctx_module       :: Module
   }
 
 instance Show Context where
@@ -436,14 +438,6 @@ instance Show Context where
 
 
 ------------------------------------------------------------------------------
--- | Things we'd like to look up, that don't exist in TysWiredIn.
-data KnownThings = KnownThings
-  { kt_semigroup :: Class
-  , kt_monoid    :: Class
-  }
-
-
-------------------------------------------------------------------------------
 -- | An empty context
 emptyContext :: Context
 emptyContext
@@ -451,9 +445,12 @@ emptyContext
       { ctxDefiningFuncs = mempty
       , ctxModuleFuncs = mempty
       , ctxConfig = emptyConfig
-      , ctxKnownThings = error "empty known things from emptyContext"
+      , ctxFamInstEnvs = mempty
       , ctxInstEnvs = InstEnvs mempty mempty mempty
       , ctxTheta = mempty
+      , ctx_hscEnv = error "empty hsc env from emptyContext"
+      , ctx_occEnv = emptyOccEnv
+      , ctx_module = error "empty module from emptyContext"
       }
 
 

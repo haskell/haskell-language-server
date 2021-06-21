@@ -1,15 +1,15 @@
-{-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections   #-}
 
 module Wingman.Machinery where
 
-import           Class (Class (classTyVars))
 import           Control.Applicative (empty)
 import           Control.Lens ((<>~))
 import           Control.Monad.Error.Class
 import           Control.Monad.Reader
-import           Control.Monad.State.Class (gets, modify)
+import           Control.Monad.State.Class (gets, modify, MonadState)
 import           Control.Monad.State.Strict (StateT (..), execStateT)
-import           Data.Bool (bool)
+import           Control.Monad.Trans.Maybe
 import           Data.Coerce
 import           Data.Either
 import           Data.Foldable
@@ -21,18 +21,18 @@ import qualified Data.Map as M
 import           Data.Maybe (mapMaybe)
 import           Data.Monoid (getSum)
 import           Data.Ord (Down (..), comparing)
-import           Data.Set (Set)
 import qualified Data.Set as S
+import           Data.Traversable (for)
 import           Development.IDE.Core.Compile (lookupName)
 import           Development.IDE.GHC.Compat
 import           GhcPlugins (GlobalRdrElt (gre_name), lookupOccEnv, varType)
-import           OccName (HasOccName (occName), OccEnv)
 import           Refinery.ProofState
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           TcType
-import           Type (tyCoVarsOfTypeWellScoped, splitTyConApp_maybe)
-import           Unify
+import           Type (tyCoVarsOfTypeWellScoped)
+import           Wingman.Context (getInstance)
+import           Wingman.GHC (tryUnifyUnivarsButNotSkolems, updateSubst)
 import           Wingman.Judgements
 import           Wingman.Simplify (simplify)
 import           Wingman.Types
@@ -42,6 +42,17 @@ substCTy :: TCvSubst -> CType -> CType
 substCTy subst = coerce . substTy subst . coerce
 
 
+getSubstForJudgement
+    :: MonadState TacticState m
+    => Judgement
+    -> m TCvSubst
+getSubstForJudgement j = do
+  -- NOTE(sandy): It's OK to use mempty here, because coercions _can_ give us
+  -- substitutions for skolems.
+  let coercions = j_coercion j
+  unifier <- gets ts_unifier
+  pure $ unionTCvSubst unifier coercions
+
 ------------------------------------------------------------------------------
 -- | Produce a subgoal that must be solved before we can solve the original
 -- goal.
@@ -49,10 +60,13 @@ newSubgoal
     :: Judgement
     -> Rule
 newSubgoal j = do
-    unifier <- gets ts_unifier
-    subgoal
-      $ substJdg unifier
-      $ unsetIsTopHole j
+  ctx <- ask
+  unifier <- getSubstForJudgement j
+  subgoal
+    $ normalizeJudgement ctx
+    $ substJdg unifier
+    $ unsetIsTopHole
+    $ normalizeJudgement ctx j
 
 
 tacticToRule :: Judgement -> TacticsM () -> Rule
@@ -66,8 +80,8 @@ runTactic
     :: Context
     -> Judgement
     -> TacticsM ()       -- ^ Tactic to use
-    -> Either [TacticError] RunTacticResults
-runTactic ctx jdg t =
+    -> IO (Either [TacticError] RunTacticResults)
+runTactic ctx jdg t = do
     let skolems = S.fromList
                 $ foldMap (tyCoVarsOfTypeWellScoped . unCType)
                 $ (:) (jGoal jdg)
@@ -79,10 +93,10 @@ runTactic ctx jdg t =
           defaultTacticState
             { ts_skolems = skolems
             }
-    in case partitionEithers
-          . flip runReader ctx
-          . unExtractM
-          $ runTacticT t jdg tacticState of
+    res <- flip runReaderT ctx
+         . unExtractM
+         $ runTacticT t jdg tacticState
+    pure $ case partitionEithers res of
       (errs, []) -> Left $ take 50 errs
       (_, fmap assoc23 -> solns) -> do
         let sorted =
@@ -201,21 +215,6 @@ newtype Reward a = Reward a
   deriving (Eq, Ord, Show) via a
 
 
-------------------------------------------------------------------------------
--- | Like 'tcUnifyTy', but takes a list of skolems to prevent unification of.
-tryUnifyUnivarsButNotSkolems :: Set TyVar -> CType -> CType -> Maybe TCvSubst
-tryUnifyUnivarsButNotSkolems skolems goal inst =
-  case tcUnifyTysFG
-         (bool BindMe Skolem . flip S.member skolems)
-         [unCType inst]
-         [unCType goal] of
-    Unifiable subst -> pure subst
-    _               -> Nothing
-
-
-updateSubst :: TCvSubst -> TacticState -> TacticState
-updateSubst subst s = s { ts_unifier = unionTCvSubst subst (ts_unifier s) }
-
 
 
 ------------------------------------------------------------------------------
@@ -232,6 +231,20 @@ unify goal inst = do
 
 
 ------------------------------------------------------------------------------
+-- | Attempt to unify two types.
+canUnify
+    :: MonadState TacticState m
+    => CType -- ^ The goal type
+    -> CType -- ^ The type we are trying unify the goal type with
+    -> m Bool
+canUnify goal inst = do
+  skolems <- gets ts_skolems
+  case tryUnifyUnivarsButNotSkolems skolems goal inst of
+    Just _ -> pure True
+    Nothing -> pure False
+
+
+------------------------------------------------------------------------------
 -- | Prefer the first tactic to the second, if the bool is true. Otherwise, just run the second tactic.
 --
 -- This is useful when you have a clever pruning solution that isn't always
@@ -239,22 +252,6 @@ unify goal inst = do
 attemptWhen :: TacticsM a -> TacticsM a -> Bool -> TacticsM a
 attemptWhen _  t2 False = t2
 attemptWhen t1 t2 True  = commit t1 t2
-
-
-------------------------------------------------------------------------------
--- | Get the class methods of a 'PredType', correctly dealing with
--- instantiation of quantified class types.
-methodHypothesis :: PredType -> Maybe [HyInfo CType]
-methodHypothesis ty = do
-  (tc, apps) <- splitTyConApp_maybe ty
-  cls <- tyConClass_maybe tc
-  let methods = classMethods cls
-      tvs     = classTyVars cls
-      subst   = zipTvSubst tvs apps
-  pure $ methods <&> \method ->
-    let (_, _, ty) = tcSplitSigmaTy $ idType method
-    in ( HyInfo (occName method) (ClassMethodPrv $ Uniquely cls) $ CType $ substTy subst ty
-       )
 
 
 ------------------------------------------------------------------------------
@@ -342,6 +339,17 @@ lookupNameInContext name = do
     Nothing      -> empty
 
 
+getDefiningType
+    :: (MonadError TacticError m, MonadReader Context m)
+    => m CType
+getDefiningType = do
+  calling_fun_name <- fst . head <$> asks ctxDefiningFuncs
+  maybe
+    (throwError $ NotInScope calling_fun_name)
+    pure
+      =<< lookupNameInContext calling_fun_name
+
+
 ------------------------------------------------------------------------------
 -- | Build a 'HyInfo' for an imported term.
 createImportedHyInfo :: OccName -> CType -> HyInfo CType
@@ -352,22 +360,55 @@ createImportedHyInfo on ty = HyInfo
   }
 
 
+getTyThing
+    :: OccName
+    -> TacticsM (Maybe TyThing)
+getTyThing occ = do
+  ctx <- ask
+  case lookupOccEnv (ctx_occEnv ctx) occ of
+    Just (elt : _) -> do
+      mvar <- lift
+            $ ExtractM
+            $ lift
+            $ lookupName (ctx_hscEnv ctx) (ctx_module ctx)
+            $ gre_name elt
+      pure mvar
+    _ -> pure Nothing
+
+
+------------------------------------------------------------------------------
+-- | Like 'getTyThing' but specialized to classes.
+knownClass :: OccName -> TacticsM (Maybe Class)
+knownClass occ =
+  getTyThing occ <&> \case
+    Just (ATyCon tc) -> tyConClass_maybe tc
+    _                -> Nothing
+
+
+------------------------------------------------------------------------------
+-- | Like 'getInstance', but uses a class that it just looked up.
+getKnownInstance :: OccName -> [Type] -> TacticsM (Maybe (Class, PredType))
+getKnownInstance f tys = runMaybeT $ do
+  cls <- MaybeT $ knownClass f
+  MaybeT $ getInstance cls tys
+
+
 ------------------------------------------------------------------------------
 -- | Lookup the type of any 'OccName' that was imported. Necessarily done in
 -- IO, so we only expose this functionality to the parser. Internal Haskell
 -- code that wants to lookup terms should do it via 'KnownThings'.
 getOccNameType
-    :: HscEnv
-    -> OccEnv [GlobalRdrElt]
-    -> Module
-    -> OccName
-    -> IO (Maybe Type)
-getOccNameType hscenv rdrenv modul occ =
-  case lookupOccEnv rdrenv occ of
-    Just (elt : _) -> do
-      mvar <- lookupName hscenv modul $ gre_name elt
-      pure $ case mvar of
-        Just (AnId v) -> pure $ varType v
-        _ -> Nothing
-    _ -> pure Nothing
+    :: OccName
+    -> TacticsM Type
+getOccNameType occ = do
+  getTyThing occ >>= \case
+    Just (AnId v) -> pure $ varType v
+    _ -> throwError $ NotInScope occ
+
+
+getCurrentDefinitions :: TacticsM [(OccName, CType)]
+getCurrentDefinitions = do
+  ctx_funcs <- asks ctxDefiningFuncs
+  for ctx_funcs $ \res@(occ, _) ->
+    pure . maybe res (occ,) =<< lookupNameInContext occ
 

@@ -1,0 +1,153 @@
+packages:
+         ./
+         ./hie-compat
+         ./shake-bench
+         ./hls-graph
+         ./ghcide
+         ./hls-plugin-api
+         ./hls-test-utils
+        --  ./plugins/hls-tactics-plugin
+        --  ./plugins/hls-brittany-plugin
+        --  ./plugins/hls-stylish-haskell-plugin
+        --  ./plugins/hls-fourmolu-plugin
+         ./plugins/hls-class-plugin
+         ./plugins/hls-eval-plugin
+         ./plugins/hls-explicit-imports-plugin
+         ./plugins/hls-refine-imports-plugin
+         ./plugins/hls-hlint-plugin
+         ./plugins/hls-retrie-plugin
+         ./plugins/hls-haddock-comments-plugin
+        --  ./plugins/hls-splice-plugin
+         ./plugins/hls-floskell-plugin
+         ./plugins/hls-pragmas-plugin
+         ./plugins/hls-module-name-plugin
+        --  ./plugins/hls-ormolu-plugin
+tests: true
+
+package *
+  ghc-options: -haddock
+  test-show-details: direct
+
+source-repository-package
+  type: git
+  location: https://github.com/jwaldmann/blaze-textual.git
+  tag: d8ee6cf80e27f9619d621c936bb4bda4b99a183f
+  -- https://github.com/jwaldmann/blaze-textual/commit/d8ee6cf80e27f9619d621c936bb4bda4b99a183f
+  -- https://github.com/bos/blaze-textual/issues/13
+
+source-repository-package
+  type: git
+  location: https://github.com/mithrandi/czipwith.git
+  tag: b6245884ae83e00dd2b5261762549b37390179f8
+  -- https://github.com/lspitzner/czipwith/pull/2
+
+
+source-repository-package
+  type: git
+  location: https://github.com/jneira/hie-bios/
+  tag: 9b1445ab5efcabfad54043fc9b8e50e9d8c5bbf3
+  -- https://github.com/mpickering/hie-bios/pull/285
+
+source-repository-package
+  type: git
+  location: https://github.com/hsyl20/ghc-api-compat
+  tag: 8fee87eac97a538dbe81ff1ab18cff10f2f9fa15
+
+source-repository-package
+  type: git
+  location: https://github.com/anka-213/th-extras
+  tag: 57a97b4df128eb7b360e8ab9c5759392de8d1659
+-- https://github.com/mokus0/th-extras/pull/8
+-- https://github.com/mokus0/th-extras/issues/7
+
+source-repository-package
+  type: git
+  location: https://github.com/anka-213/dependent-sum
+  tag: 8cf4c7fbc3bfa2be475a17bb7c94a1e1e9a830b5
+  subdir: dependent-sum-template
+-- https://github.com/obsidiansystems/dependent-sum/pull/57
+
+source-repository-package
+  type: git
+  location: https://github.com/anka-213/HieDb
+  tag: a3f7521f6c5af1b977040cce09c8f7354f8984eb
+-- https://github.com/wz1000/HieDb/pull/31
+
+source-repository-package
+  type: git
+  location: https://github.com/anka-213/lsp
+  tag: tag-ghc-9.0.1-without-pr-326
+  subdir: lsp-types
+  subdir: lsp
+  subdir: lsp-test
+-- https://github.com/haskell/lsp/pull/312
+
+source-repository-package
+  type: git
+  location: https://github.com/diagrams/active
+  tag: ca23431a8dfa013992f9164ccc882a3277361f17
+-- https://github.com/diagrams/active/pull/36
+
+write-ghc-environment-files: never
+
+index-state: 2021-05-21T05:01:41Z
+
+constraints:
+    -- Diagrams doesn't support optparse-applicative >= 0.16 yet
+    optparse-applicative < 0.16
+    -- These plugins doesn't work on GHC9 yet
+    , haskell-language-server -brittany -class -eval -fourmolu -modulename -ormolu -splice -stylishhaskell -tactic -refineImports
+
+
+allow-newer:
+    -- -- Broken on ghc9, but let's pretend it's not so we can build the other things
+    -- brittany:base,
+    -- brittany:ghc,
+    -- brittany:ghc-boot-th,
+    -- butcher:base,
+    -- fourmolu:ghc-lib-parser,
+    -- ormolu:ghc-lib-parser,
+    -- stylish-haskell:ghc-lib-parser,
+    -- stylish-haskell:Cabal,
+    -- multistate:base,
+    -- ghc-source-gen:ghc,
+
+    active:base,
+    assoc:base,
+    cryptohash-md5:base,
+    cryptohash-sha1:base,
+    constraints-extras:template-haskell,
+    data-tree-print:base,
+    deepseq:base,
+    dependent-sum:some,
+    dependent-sum:constraints,
+    diagrams-contrib:base,
+    diagrams-contrib:lens,
+    diagrams-contrib:random,
+    diagrams-core:base,
+    diagrams-core:lens,
+    diagrams-lib:base,
+    diagrams-lib:lens,
+    diagrams-postscript:base,
+    diagrams-postscript:lens,
+    diagrams-svg:base,
+    diagrams-svg:lens,
+    dual-tree:base,
+    -- Does this make any sense?
+    entropy:Cabal,
+    force-layout:base,
+    force-layout:lens,
+    floskell:ghc-prim,
+    floskell:base,
+    hashable:base,
+    hslogger:base,
+    monoid-extras:base,
+    newtype-generics:base,
+    parallel:base,
+    regex-base:base,
+    regex-tdfa:base,
+    statestack:base,
+    svg-builder:base,
+    these:base,
+    time-compat:base
+

@@ -14,19 +14,20 @@ import           Control.Exception.Safe                (Exception (displayExcept
 import           Control.Monad.Extra                   (concatMapM, unless,
                                                         when)
 import           Data.Default                          (Default (def))
+import           Data.Foldable                         (traverse_)
 import qualified Data.HashMap.Strict                   as HashMap
 import           Data.Hashable                         (hashed)
 import           Data.List.Extra                       (intercalate, isPrefixOf,
                                                         nub, nubOrd, partition)
-import           Data.Maybe                            (catMaybes, fromMaybe,
-                                                        isJust)
+import           Data.Maybe                            (catMaybes, isJust)
 import qualified Data.Text                             as T
 import qualified Data.Text.IO                          as T
 import           Development.IDE                       (Action, Rules,
                                                         hDuplicateTo')
 import           Development.IDE.Core.Debouncer        (Debouncer,
                                                         newAsyncDebouncer)
-import           Development.IDE.Core.FileStore        (makeVFSHandle)
+import           Development.IDE.Core.FileStore        (isWatchSupported,
+                                                        makeVFSHandle)
 import           Development.IDE.Core.IdeConfiguration (IdeConfiguration (..),
                                                         registerIdeConfiguration)
 import           Development.IDE.Core.OfInterest       (FileOfInterestStatus (OnDisk),
@@ -58,7 +59,7 @@ import           Development.IDE.Types.Location        (NormalizedUri,
                                                         toNormalizedFilePath')
 import           Development.IDE.Types.Logger          (Logger (Logger))
 import           Development.IDE.Types.Options         (IdeGhcSession,
-                                                        IdeOptions (optCheckParents, optCheckProject, optReportProgress),
+                                                        IdeOptions (optCheckParents, optCheckProject, optReportProgress, optRunSubset),
                                                         clientSupportsProgress,
                                                         defaultIdeOptions,
                                                         optModifyDynFlags)
@@ -202,25 +203,30 @@ defaultMain Arguments{..} = do
             hPutStrLn stderr "Starting LSP server..."
             hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run WITHOUT the --lsp option!"
             runLanguageServer options inH outH argsGetHieDbLoc argsDefaultHlsConfig argsOnConfigChange (pluginHandlers plugins) $ \env vfs rootPath hiedb hieChan -> do
+                traverse_ IO.setCurrentDirectory rootPath
                 t <- t
                 hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
 
-                dir <- IO.getCurrentDirectory
+                dir <- maybe IO.getCurrentDirectory return rootPath
 
                 -- We want to set the global DynFlags right now, so that we can use
                 -- `unsafeGlobalDynFlags` even before the project is configured
-                -- We do it here since haskell-lsp changes our working directory to the correct place ('rootPath')
-                -- before calling this function
                 _mlibdir <-
-                    setInitialDynFlags argsSessionLoadingOptions
+                    setInitialDynFlags dir argsSessionLoadingOptions
                         `catchAny` (\e -> (hPutStrLn stderr $ "setInitialDynFlags: " ++ displayException e) >> pure Nothing)
 
-                sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions $ fromMaybe dir rootPath
+
+                sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions dir
                 config <- LSP.runLspT env LSP.getConfig
                 let def_options = argsIdeOptions config sessionLoader
-                    options = def_options
+
+                -- disable runSubset if the client doesn't support watched files
+                runSubset <- (optRunSubset def_options &&) <$> LSP.runLspT env isWatchSupported
+
+                let options = def_options
                             { optReportProgress = clientSupportsProgress caps
                             , optModifyDynFlags = optModifyDynFlags def_options <> pluginModifyDynflags plugins
+                            , optRunSubset = runSubset
                             }
                     caps = LSP.resClientCapabilities env
                 initialise
@@ -300,7 +306,7 @@ defaultMain Arguments{..} = do
         Db dir opts cmd -> do
             dbLoc <- getHieDbLoc dir
             hPutStrLn stderr $ "Using hiedb at: " ++ dbLoc
-            mlibdir <- setInitialDynFlags def
+            mlibdir <- setInitialDynFlags dir def
             case mlibdir of
                 Nothing     -> exitWith $ ExitFailure 1
                 Just libdir -> HieDb.runCommand libdir opts{HieDb.database = dbLoc} cmd

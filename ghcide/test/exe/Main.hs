@@ -538,12 +538,17 @@ diagnosticTests = testGroup "diagnostics"
             , "foo = 1 {-|-}"
             ]
       _ <- createDoc "Foo.hs" "haskell" fooContent
+#if MIN_VERSION_ghc(9,0,1)
+      -- Haddock parse errors are ignored on ghc-9.0.1
+      pure ()
+#else
       expectDiagnostics
         [ ( "Foo.hs"
           , [(DsWarning, (2, 8), "Haddock parse error on input")
             ]
           )
         ]
+#endif
   , testSessionWait "strip file path" $ do
       let
           name = "Testing"
@@ -763,17 +768,18 @@ watchedFilesTests = testGroup "watched files"
       _doc <- createDoc "A.hs" "haskell" "{-#LANGUAGE NoImplicitPrelude #-}\nmodule A where\nimport WatchedFilesMissingModule"
       watchedFileRegs <- getWatchedFilesSubscriptionsUntil STextDocumentPublishDiagnostics
 
-      -- Expect 1 subscription: we only ever send one
-      liftIO $ length watchedFileRegs @?= 1
+      -- Expect 2 subscriptions: one for all .hs files and one for the hie.yaml cradle
+      liftIO $ length watchedFileRegs @?= 2
 
   , testSession' "non workspace file" $ \sessionDir -> do
       tmpDir <- liftIO getTemporaryDirectory
-      liftIO $ writeFile (sessionDir </> "hie.yaml") ("cradle: {direct: {arguments: [\"-i" <> tmpDir <> "\", \"A\", \"WatchedFilesMissingModule\"]}}")
+      let yaml = "cradle: {direct: {arguments: [\"-i" <> tail(init(show tmpDir)) <> "\", \"A\", \"WatchedFilesMissingModule\"]}}"
+      liftIO $ writeFile (sessionDir </> "hie.yaml") yaml
       _doc <- createDoc "A.hs" "haskell" "{-# LANGUAGE NoImplicitPrelude#-}\nmodule A where\nimport WatchedFilesMissingModule"
       watchedFileRegs <- getWatchedFilesSubscriptionsUntil STextDocumentPublishDiagnostics
 
-      -- Expect 1 subscription: we only ever send one
-      liftIO $ length watchedFileRegs @?= 1
+      -- Expect 2 subscriptions: one for all .hs files and one for the hie.yaml cradle
+      liftIO $ length watchedFileRegs @?= 2
 
   -- TODO add a test for didChangeWorkspaceFolder
   ]
@@ -2212,14 +2218,14 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
     [ (DsWarning, (6, 8), "Defaulting the following constraint")
     , (DsWarning, (6, 16), "Defaulting the following constraint")
     ]
-    "Add type annotation ‘[Char]’ to ‘\"debug\"’"
+    ("Add type annotation ‘" <> listOfChar <> "’ to ‘\"debug\"’")
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "{-# LANGUAGE OverloadedStrings #-}"
                , "module A (f) where"
                , ""
                , "import Debug.Trace"
                , ""
-               , "f = seq (\"debug\" :: [Char]) traceShow \"debug\""
+               , "f = seq (\"debug\" :: " <> listOfChar <> ") traceShow \"debug\""
                ])
   , testSession "add default type to satisfy two contraints" $
     testFor
@@ -2232,14 +2238,14 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , "f a = traceShow \"debug\" a"
                ])
     [ (DsWarning, (6, 6), "Defaulting the following constraint") ]
-    "Add type annotation ‘[Char]’ to ‘\"debug\"’"
+    ("Add type annotation ‘" <> listOfChar <> "’ to ‘\"debug\"’")
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "{-# LANGUAGE OverloadedStrings #-}"
                , "module A (f) where"
                , ""
                , "import Debug.Trace"
                , ""
-               , "f a = traceShow (\"debug\" :: [Char]) a"
+               , "f a = traceShow (\"debug\" :: " <> listOfChar <> ") a"
                ])
   , testSession "add default type to satisfy two contraints with duplicate literals" $
     testFor
@@ -2252,14 +2258,14 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , "f = seq (\"debug\" :: [Char]) (seq (\"debug\" :: [Char]) (traceShow \"debug\"))"
                ])
     [ (DsWarning, (6, 54), "Defaulting the following constraint") ]
-    "Add type annotation ‘[Char]’ to ‘\"debug\"’"
+    ("Add type annotation ‘" <> listOfChar <> "’ to ‘\"debug\"’")
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "{-# LANGUAGE OverloadedStrings #-}"
                , "module A (f) where"
                , ""
                , "import Debug.Trace"
                , ""
-               , "f = seq (\"debug\" :: [Char]) (seq (\"debug\" :: [Char]) (traceShow (\"debug\" :: [Char])))"
+               , "f = seq (\"debug\" :: [Char]) (seq (\"debug\" :: [Char]) (traceShow (\"debug\" :: " <> listOfChar <> ")))"
                ])
   ]
   where
@@ -3405,7 +3411,7 @@ addSigLensesTests =
         , ("pattern Some a = Just a", "pattern Some :: a -> Maybe a")
         , ("qualifiedSigTest= C.realPart", "qualifiedSigTest :: C.Complex a -> a")
         , ("head = 233", "head :: Integer")
-        , ("rank2Test (k :: forall a . a -> a) = (k 233 :: Int, k \"QAQ\")", "rank2Test :: (forall a. a -> a) -> (Int, [Char])")
+        , ("rank2Test (k :: forall a . a -> a) = (k 233 :: Int, k \"QAQ\")", "rank2Test :: (forall a. a -> a) -> (Int, " <> listOfChar <> ")")
         , ("symbolKindTest = Proxy @\"qwq\"", "symbolKindTest :: Proxy \"qwq\"")
         , ("promotedKindTest = Proxy @Nothing", "promotedKindTest :: Proxy 'Nothing")
         , ("typeOperatorTest = Refl", "typeOperatorTest :: a :~: a")
@@ -3577,7 +3583,13 @@ findDefinitionAndHoverTests = let
   in
   mkFindTests
   --      def    hover  look       expect
-  [ test  yes    yes    fffL4      fff           "field in record definition"
+  [
+#if MIN_VERSION_ghc(9,0,0)
+  -- It suggests either going to the constructor or to the field
+    test  broken yes    fffL4      fff           "field in record definition"
+#else
+    test  yes    yes    fffL4      fff           "field in record definition"
+#endif
   , test  yes    yes    fffL8      fff           "field in record construction    #1102"
   , test  yes    yes    fffL14     fff           "field name used as accessor"           -- https://github.com/haskell/ghcide/pull/120 in Calculate.hs
   , test  yes    yes    aaaL14     aaa           "top-level name"                        -- https://github.com/haskell/ghcide/pull/120
@@ -3613,7 +3625,11 @@ findDefinitionAndHoverTests = let
   , test  no     broken chrL36     litC          "literal Char in hover info      #1016"
   , test  no     broken txtL8      litT          "literal Text in hover info      #1016"
   , test  no     broken lstL43     litL          "literal List in hover info      #1016"
+#if MIN_VERSION_ghc(9,0,0)
+  , test  no     yes    docL41     constr        "type constraint in hover info   #1012"
+#else
   , test  no     broken docL41     constr        "type constraint in hover info   #1012"
+#endif
   , test  broken broken outL45     outSig        "top-level signature              #767"
   , test  broken broken innL48     innSig        "inner     signature              #767"
   , test  no     yes    holeL60    hleInfo       "hole without internal name       #831"
@@ -3637,6 +3653,9 @@ checkFileCompiles fp diag =
 pluginSimpleTests :: TestTree
 pluginSimpleTests =
   ignoreInWindowsForGHC88And810 $
+#if __GLASGOW_HASKELL__ == 810 && __GLASGOW_HASKELL_PATCHLEVEL1__ == 5
+  expectFailBecause "known broken (see GHC #19763)" $
+#endif
   testSessionWithExtraFiles "plugin-knownnat" "simple plugin" $ \dir -> do
     _ <- openDoc (dir </> "KnownNat.hs") "haskell"
     liftIO $ writeFile (dir</>"hie.yaml")
@@ -3801,6 +3820,8 @@ thTests =
               T.unlines
                 [ "{-# LANGUAGE TemplateHaskell #-}"
                 , "module A (a) where"
+                , "import Language.Haskell.TH (ExpQ)"
+                , "a :: ExpQ" -- TH 2.17 requires an explicit type signature since splices are polymorphic
                 , "a = [| glorifiedID |]"
                 , "glorifiedID :: a -> a"
                 , "glorifiedID = id" ]
@@ -3843,7 +3864,7 @@ thReloadingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
     bdoc <- createDoc bPath "haskell" bSource
     cdoc <- createDoc cPath "haskell" cSource
 
-    expectDiagnostics [("THB.hs", [(DsWarning, (4,0), "Top-level binding")])]
+    expectDiagnostics [("THB.hs", [(DsWarning, (4,thDollarIdx), "Top-level binding")])]
 
     -- Change th from () to Bool
     let aSource' = T.unlines $ init (T.lines aSource) ++ ["th_a = [d| a = False|]"]
@@ -3855,7 +3876,7 @@ thReloadingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
     expectDiagnostics
         [("THC.hs", [(DsError, (4, 4), "Couldn't match expected type '()' with actual type 'Bool'")])
         ,("THC.hs", [(DsWarning, (6,0), "Top-level binding")])
-        ,("THB.hs", [(DsWarning, (4,0), "Top-level binding")])
+        ,("THB.hs", [(DsWarning, (4,thDollarIdx), "Top-level bindin")])
         ]
 
     closeDoc adoc
@@ -3878,7 +3899,7 @@ thLinkingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
     adoc <- createDoc aPath "haskell" aSource
     bdoc <- createDoc bPath "haskell" bSource
 
-    expectDiagnostics [("THB.hs", [(DsWarning, (4,0), "Top-level binding")])]
+    expectDiagnostics [("THB.hs", [(DsWarning, (4,thDollarIdx), "Top-level binding")])]
 
     let aSource' = T.unlines $ init (init (T.lines aSource)) ++ ["th :: DecsQ", "th = [d| a = False|]"]
     changeDoc adoc [TextDocumentContentChangeEvent Nothing Nothing aSource']
@@ -3887,7 +3908,7 @@ thLinkingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
     let bSource' = T.unlines $ init (T.lines bSource) ++ ["$th"]
     changeDoc bdoc [TextDocumentContentChangeEvent Nothing Nothing bSource']
 
-    expectDiagnostics [("THB.hs", [(DsWarning, (4,0), "Top-level binding")])]
+    expectDiagnostics [("THB.hs", [(DsWarning, (4,thDollarIdx), "Top-level binding")])]
 
     closeDoc adoc
     closeDoc bdoc
@@ -4338,16 +4359,21 @@ highlightTests = testGroup "highlight"
             , DocumentHighlight (R 6 10 6 13) (Just HkRead)
             , DocumentHighlight (R 7 12 7 15) (Just HkRead)
             ]
-  , testSessionWait "record" $ do
+  ,
+#if MIN_VERSION_ghc(9,0,0)
+    expectFailBecause "Ghc9 highlights the constructor and not just this field" $
+#endif
+    testSessionWait "record" $ do
     doc <- createDoc "A.hs" "haskell" recsource
     _ <- waitForDiagnostics
     highlights <- getHighlights doc (Position 4 15)
     liftIO $ highlights @?= List
       -- Span is just the .. on 8.10, but Rec{..} before
+            [
 #if MIN_VERSION_ghc(8,10,0)
-            [ DocumentHighlight (R 4 8 4 10) (Just HkWrite)
+              DocumentHighlight (R 4 8 4 10) (Just HkWrite)
 #else
-            [ DocumentHighlight (R 4 4 4 11) (Just HkWrite)
+              DocumentHighlight (R 4 4 4 11) (Just HkWrite)
 #endif
             , DocumentHighlight (R 4 14 4 20) (Just HkRead)
             ]
@@ -4693,7 +4719,6 @@ retryFailedCradle = testSession' "retry failed" $ \dir -> do
   let hieContents = "cradle: {bios: {shell: \"false\"}}"
       hiePath = dir </> "hie.yaml"
   liftIO $ writeFile hiePath hieContents
-  hieDoc <- createDoc hiePath "yaml" $ T.pack hieContents
   let aPath = dir </> "A.hs"
   doc <- createDoc aPath "haskell" "main = return ()"
   Right WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" doc
@@ -4702,15 +4727,8 @@ retryFailedCradle = testSession' "retry failed" $ \dir -> do
   -- Fix the cradle and typecheck again
   let validCradle = "cradle: {bios: {shell: \"echo A.hs\"}}"
   liftIO $ writeFileUTF8 hiePath $ T.unpack validCradle
-  changeDoc
-    hieDoc
-    [ TextDocumentContentChangeEvent
-        { _range = Nothing,
-          _rangeLength = Nothing,
-          _text = validCradle
-        }
-    ]
-
+  sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
+          List [FileEvent (filePathToUri $ dir </> "hie.yaml") FcChanged ]
   -- Force a session restart by making an edit, just to dirty the typecheck node
   changeDoc
     doc
@@ -4733,7 +4751,8 @@ dependentFileTest = testGroup "addDependentFile"
       test dir = do
         -- If the file contains B then no type error
         -- otherwise type error
-        liftIO $ writeFile (dir </> "dep-file.txt") "A"
+        let depFilePath = dir </> "dep-file.txt"
+        liftIO $ writeFile depFilePath "A"
         let fooContent = T.unlines
               [ "{-# LANGUAGE TemplateHaskell #-}"
               , "module Foo where"
@@ -4745,18 +4764,26 @@ dependentFileTest = testGroup "addDependentFile"
               , "               if f == \"B\" then [| 1 |] else lift f)"
               ]
         let bazContent = T.unlines ["module Baz where", "import Foo ()"]
-        _ <-createDoc "Foo.hs" "haskell" fooContent
+        _ <- createDoc "Foo.hs" "haskell" fooContent
         doc <- createDoc "Baz.hs" "haskell" bazContent
         expectDiagnostics
+#if MIN_VERSION_ghc(9,0,0)
+          -- String vs [Char] causes this change in error message
+          [("Foo.hs", [(DsError, (4, 6), "Couldn't match type")])]
+#else
           [("Foo.hs", [(DsError, (4, 6), "Couldn't match expected type")])]
+#endif
         -- Now modify the dependent file
-        liftIO $ writeFile (dir </> "dep-file.txt") "B"
+        liftIO $ writeFile depFilePath "B"
+        sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
+          List [FileEvent (filePathToUri "dep-file.txt") FcChanged ]
+
+        -- Modifying Baz will now trigger Foo to be rebuilt as well
         let change = TextDocumentContentChangeEvent
               { _range = Just (Range (Position 2 0) (Position 2 6))
               , _rangeLength = Nothing
               , _text = "f = ()"
               }
-        -- Modifying Baz will now trigger Foo to be rebuilt as well
         changeDoc doc [change]
         expectDiagnostics [("Foo.hs", [])]
 
@@ -4893,7 +4920,7 @@ ifaceTHTest = testCase "iface-th-test" $ runWithExtraFiles "TH" $ \dir -> do
     changeDoc cdoc [TextDocumentContentChangeEvent Nothing Nothing cSource]
     expectDiagnostics
       [("THC.hs", [(DsError, (4, 4), "Couldn't match expected type '()' with actual type 'Bool'")])
-      ,("THB.hs", [(DsWarning, (4,0), "Top-level binding")])]
+      ,("THB.hs", [(DsWarning, (4,thDollarIdx), "Top-level binding")])]
     closeDoc cdoc
 
 ifaceErrorTest :: TestTree
@@ -5012,12 +5039,19 @@ sessionDepsArePickedUp = testSession'
     -- Open without OverloadedStrings and expect an error.
     doc <- createDoc "Foo.hs" "haskell" fooContent
     expectDiagnostics
+#if MIN_VERSION_ghc(9,0,0)
+      -- String vs [Char] causes this change in error message
+      [("Foo.hs", [(DsError, (3, 6), "Couldn't match type")])]
+#else
       [("Foo.hs", [(DsError, (3, 6), "Couldn't match expected type")])]
+#endif
     -- Update hie.yaml to enable OverloadedStrings.
     liftIO $
       writeFileUTF8
         (dir </> "hie.yaml")
         "cradle: {direct: {arguments: [-XOverloadedStrings]}}"
+    sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
+          List [FileEvent (filePathToUri $ dir </> "hie.yaml") FcChanged ]
     -- Send change event.
     let change =
           TextDocumentContentChangeEvent
@@ -5049,7 +5083,7 @@ nonLspCommandLine = testGroup "ghcide command line"
 
         (ec, _, _) <- readCreateProcessWithExitCode cmd ""
 
-        ec @=? ExitSuccess
+        ec @?= ExitSuccess
   ]
 
 benchmarkTests :: TestTree
@@ -5316,7 +5350,7 @@ testSessionWithExtraFiles prefix name = testCase name . runWithExtraFiles prefix
 testSession' :: String -> (FilePath -> Session ()) -> TestTree
 testSession' name = testCase name . run'
 
-testSessionWait :: String -> Session () -> TestTree
+testSessionWait :: HasCallStack => String -> Session () -> TestTree
 testSessionWait name = testSession name .
       -- Check that any diagnostics produced were already consumed by the test case.
       --
@@ -5717,3 +5751,19 @@ assertJust :: MonadIO m => String -> Maybe a -> m a
 assertJust s = \case
   Nothing -> liftIO $ assertFailure s
   Just x  -> pure x
+
+-- | Before ghc9, lists of Char is displayed as [Char], but with ghc9 and up, it's displayed as String
+listOfChar :: T.Text
+#if MIN_VERSION_ghc(9,0,1)
+listOfChar = "String"
+#else
+listOfChar = "[Char]"
+#endif
+
+-- | Ghc 9 doesn't include the $-sign in TH warnings like earlier versions did
+thDollarIdx :: Int
+#if MIN_VERSION_ghc(9,0,1)
+thDollarIdx = 1
+#else
+thDollarIdx = 0
+#endif
