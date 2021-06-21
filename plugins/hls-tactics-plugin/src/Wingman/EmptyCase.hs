@@ -93,6 +93,13 @@ codeLensProvider state plId (CodeLensParams _ _ (TextDocumentIdentifier uri))
 codeLensProvider _ _ _ = pure $ Right $ List []
 
 
+scrutinzedType :: EmptyCaseSort Type -> Maybe Type
+scrutinzedType (EmptyCase ty) = pure  ty
+scrutinzedType (EmptyLamCase ty) =
+  case tacticsSplitFunTy ty of
+    (_, _, tys, _) -> listToMaybe  tys
+
+
 ------------------------------------------------------------------------------
 -- | The description for the empty case lens.
 mkEmptyCaseLensDesc :: Type -> T.Text
@@ -119,6 +126,8 @@ graftMatchGroup ss l =
   hoistGraft (runExcept . runExceptString) $ graftExprWithM ss $ \case
     L span (HsCase ext scrut mg@_) -> do
       pure $ Just $ L span $ HsCase ext scrut $ mg { mg_alts = l }
+    L span (HsLamCase ext mg@_) -> do
+      pure $ Just $ L span $ HsLamCase ext $ mg { mg_alts = l }
     (_ :: LHsExpr GhcPs) -> pure Nothing
 
 
@@ -142,18 +151,26 @@ emptyCaseScrutinees state nfp = do
 
     let scrutinees = traverse (emptyCaseQ . tcg_binds) tcg
     for scrutinees $ \aged@(unTrack -> (ss, scrutinee)) -> do
-      ty <- MaybeT $ typeCheck (hscEnv $ untrackedStaleValue hscenv) tcg' scrutinee
+      ty <- MaybeT
+          . fmap (scrutinzedType <=< sequence)
+          . traverse (typeCheck (hscEnv $ untrackedStaleValue hscenv) tcg')
+          $ scrutinee
       case ss of
         RealSrcSpan r   -> do
           rss' <- liftMaybe $ mapAgeTo tcg_map $ unsafeCopyAge aged r
           pure (rss', ty)
         UnhelpfulSpan _ -> empty
 
+data EmptyCaseSort a
+  = EmptyCase a
+  | EmptyLamCase a
+  deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 ------------------------------------------------------------------------------
 -- | Get the 'SrcSpan' and scrutinee of every empty case.
-emptyCaseQ :: GenericQ [(SrcSpan, HsExpr GhcTc)]
+emptyCaseQ :: GenericQ [(SrcSpan, EmptyCaseSort (HsExpr GhcTc))]
 emptyCaseQ = everything (<>) $ mkQ mempty $ \case
-  L new_span (Case scrutinee []) -> pure (new_span, scrutinee)
+  L new_span (Case scrutinee []) -> pure (new_span, EmptyCase scrutinee)
+  L new_span (expr@(LamCase [])) -> pure (new_span, EmptyLamCase expr)
   (_ :: LHsExpr GhcTc) -> mempty
 
