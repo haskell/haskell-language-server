@@ -291,10 +291,11 @@ gblBindingType _ _ = pure Nothing
 pprPatSynTypeWithoutForalls :: PatSyn -> SDoc
 pprPatSynTypeWithoutForalls p = pprPatSynType pWithoutTypeVariables
   where
-    pWithoutTypeVariables = mkPatSyn name declared_infix ([], req_theta) ([], prov_theta) orig_args orig_res_ty matcher builder field_labels
+    pWithoutTypeVariables = mkPatSyn name declared_infix ([], req_theta) ([], prov_theta) orig_args' orig_res_ty matcher builder field_labels
     (_univ_tvs, req_theta, _ex_tvs, prov_theta, orig_args, orig_res_ty) = patSynSig p
     name = patSynName p
     declared_infix = patSynIsInfix p
     matcher = patSynMatcher p
     builder = patSynBuilder p
     field_labels = patSynFieldLabels p
+    orig_args' = map scaledThing orig_args
