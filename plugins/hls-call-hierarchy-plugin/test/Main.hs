@@ -24,7 +24,7 @@ prepareCallHierarchyTests =
       let contents = T.unlines ["a=3"]
           range = mkRange 0 0 0 3
           selRange = mkRange 0 0 0 1
-          expected = mkCallHierarchyItem "a" SkVariable range selRange
+          expected = mkCallHierarchyItem "a" SkFunction range selRange
       oneCaseWithCreate contents 0 0 expected
   , testCase "function" $ do
       let contents = T.unlines ["a=(+)"]
@@ -34,7 +34,7 @@ prepareCallHierarchyTests =
       oneCaseWithCreate contents 0 0 expected
   , testCase "datatype" $ do
       let contents = T.unlines ["data A=A"]
-          range = mkRange 0 5 0 6
+          range = mkRange 0 0 0 8
           selRange = mkRange 0 5 0 6
           expected = mkCallHierarchyItem "A" SkStruct range selRange
       oneCaseWithCreate contents 0 5 expected
@@ -46,19 +46,19 @@ prepareCallHierarchyTests =
       oneCaseWithCreate contents 0 7 expected
   , testCase "record" $ do
       let contents = T.unlines ["data A=A{a::Int}"]
-          range = mkRange 0 9 0 14
+          range = mkRange 0 9 0 10
           selRange = mkRange 0 9 0 10
           expected = mkCallHierarchyItem "a" SkField range selRange
       oneCaseWithCreate contents 0 9 expected
   , testCase "type operator" $ do
-      let contents = T.unlines ["{-# LANGUAGE TypeOperator -#}", "type (><)=Maybe"]
-          range = mkRange 1 6 1 8
-          selRange = mkRange 1 6 1 8
-          expected = mkCallHierarchyItem "(><)" SkStruct range selRange
-      oneCaseWithCreate contents 1 6 expected
+      let contents = T.unlines ["{-# LANGUAGE TypeOperators #-}", "type (><)=Maybe"]
+          range = mkRange 1 0 1 15
+          selRange = mkRange 1 5 1 9
+          expected = mkCallHierarchyItem "><" SkTypeParameter range selRange
+      oneCaseWithCreate contents 1 5 expected
   , testCase "type class" $ do
       let contents = T.unlines ["class A a where a :: a -> Int"]
-          range = mkRange 0 6 0 7
+          range = mkRange 0 0 0 29
           selRange = mkRange 0 6 0 7
           expected = mkCallHierarchyItem "A" SkInterface range selRange
       oneCaseWithCreate contents 0 6 expected
@@ -77,15 +77,15 @@ prepareCallHierarchyTests =
   , testGroup "type family"
       [ testCase "1" $ do
           let contents = T.unlines ["{-# LANGUAGE TypeFamilies #-}", "type family A"]
-              range = mkRange 1 12 1 13
-              selRange = range
+              range = mkRange 1 0 1 13
+              selRange = mkRange 1 12 1 13
               expected = mkCallHierarchyItem "A" SkFunction range selRange
           oneCaseWithCreate contents 1 12 expected
       , testCase "2" $ do
           let contents = T.unlines ["{-# LANGUAGE TypeFamilies #-}", "type family A a"]
-              range = mkRange 1 12 1 15
-              selRange = range
-              expected = mkCallHierarchyItem "A a" SkFunction range selRange
+              range = mkRange 1 0 1 15
+              selRange = mkRange 1 12 1 13
+              expected = mkCallHierarchyItem "A" SkFunction range selRange
           oneCaseWithCreate contents 1 12 expected
       ]
   , testCase "type family instance" $ do
@@ -94,50 +94,50 @@ prepareCallHierarchyTests =
             , "type family A a"
             , "type instance A () = ()"
             ]
-          range = mkRange 2 14 2 17
-          selRange = range
-          expected = mkCallHierarchyItem "A ()" SkInterface range selRange
+          range = mkRange 2 14 2 23
+          selRange = mkRange 2 14 2 15
+          expected = mkCallHierarchyItem "A" SkInterface range selRange
       oneCaseWithCreate contents 2 14 expected
-  , testGroup "data family"
-      [ testCase "1" $ do
-          let contents = T.unlines ["{-# LANGUAGE TypeFamilies #-}", "data family A"]
-              range = mkRange 1 12 1 13
-              selRange = range
-              expected = mkCallHierarchyItem "A" SkFunction range selRange
-          oneCaseWithCreate contents 1 12 expected
-      , testCase "2" $ do
-          let contents = T.unlines [ "{-# LANGUAGE TypeFamilies #-}" , "data family A a"]
-              range = mkRange 1 12 1 15
-              selRange = range
-              expected = mkCallHierarchyItem "A a" SkFunction range selRange
-          oneCaseWithCreate contents 1 12 expected
-      ]
-  , testCase "data family instance" $ do
-      let contents = T.unlines
-            [ "{-# LANGUAGE TypeFamilies #-}"
-            , "data family A a"
-            , "data instance A () = A()"
-            ]
-          range = mkRange 2 14 2 17
-          selRange = range
-          expected = mkCallHierarchyItem "A ()" SkInterface range selRange
-      oneCaseWithCreate contents 2 14 expected
+  -- , testGroup "data family"
+  --     [ testCase "1" $ do
+  --         let contents = T.unlines ["{-# LANGUAGE TypeFamilies #-}", "data family A"]
+  --             range = mkRange 1 0 1 13
+  --             selRange = mkRange 1 12 1 13
+  --             expected = mkCallHierarchyItem "A" SkFunction range selRange
+  --         oneCaseWithCreate contents 1 12 expected
+  --     , testCase "2" $ do
+  --         let contents = T.unlines [ "{-# LANGUAGE TypeFamilies #-}" , "data family A a"]
+  --             range = mkRange 1 0 1 15
+  --             selRange = mkRange 1 12 1 13
+  --             expected = mkCallHierarchyItem "A" SkFunction range selRange
+  --         oneCaseWithCreate contents 1 12 expected
+  --     ]
+  -- , testCase "data family instance" $ do
+  --     let contents = T.unlines
+  --           [ "{-# LANGUAGE TypeFamilies #-}"
+  --           , "data family A a"
+  --           , "data instance A () = A()"
+  --           ]
+  --         range = mkRange 2 0 2 24
+  --         selRange = mkRange 2 14 2 15
+  --         expected = mkCallHierarchyItem "A" SkInterface range selRange
+  --     oneCaseWithCreate contents 2 14 expected
   , testCase "pattern" $ do
       let contents = T.unlines ["Just x = Just 3"]
-          range = mkRange 0 5 0 6
-          selRange = range
-          expected = mkCallHierarchyItem "x" SkVariable range selRange
+          range = mkRange 0 0 0 15
+          selRange = mkRange 0 5 0 6
+          expected = mkCallHierarchyItem "x" SkFunction range selRange
       oneCaseWithCreate contents 0 5 expected
   , testCase "pattern with type signature" $ do
       let contents = T.unlines ["{-# LANGUAGE ScopedTypeVariables #-}", "a :: () = ()"]
-          range = mkRange 1 0 1 7
+          range = mkRange 1 0 1 12
           selRange = mkRange 1 0 1 1
           expected = mkCallHierarchyItem "a" SkFunction range selRange
       oneCaseWithCreate contents 1 0 expected
   , testCase "type synonym" $ do
       let contents = T.unlines ["type A=Bool"]
-          range = mkRange 0 5 0 6
-          selRange = range
+          range = mkRange 0 0 0 11
+          selRange = mkRange 0 5 0 6
           expected = mkCallHierarchyItem "A" SkTypeParameter range selRange
       oneCaseWithCreate contents 0 5 expected
   , testCase "GADT" $ do
@@ -167,7 +167,7 @@ oneCaseWithCreate contents queryX queryY expected =
     Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc queryX queryY) >>=
       \case
         [item] -> liftIO $ item @?= expected (doc ^. L.uri)
-        _      -> liftIO $ assertFailure "Not one element"
+        res    -> liftIO $ assertFailure "Not one element"
 
 mkCallHierarchyItem :: T.Text -> SymbolKind -> Range -> Range -> Uri -> CallHierarchyItem
 mkCallHierarchyItem name kind range selRange uri =

@@ -7,9 +7,9 @@ module Ide.Plugin.CallHierarchy where
 
 import           Control.Lens                  ((^.))
 import           Control.Monad.IO.Class
-import           Data.List
 import qualified Data.Map                      as M
 import           Data.Maybe
+import qualified Data.Set                      as S
 import qualified Data.Text                     as T
 import           Development.IDE
 import           Development.IDE.Core.Shake
@@ -30,15 +30,13 @@ prepareCallHierarchy :: PluginMethodHandler IdeState TextDocumentPrepareCallHier
 prepareCallHierarchy state pluginId param
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri =
     liftIO $ prepareCallHierarchyItem state nfp pos >>=
-    \case
-      Just item -> pure $ Right $ Just $ List item
-      Nothing   -> pure $ Left $ responseError "Call Hierarchy: No result"
+      \case
+        Just items -> pure $ Right $ Just $ List items
+        Nothing    -> pure $ Left $ responseError "Call Hierarchy: No result"
   | otherwise = pure $ Left $ responseError $ T.pack $ "Call Hierarchy: uriToNormalizedFilePath failed for: " <> show uri
   where
     uri = param ^. (L.textDocument . L.uri)
     pos = param ^. L.position
-
-
 
 incomingCalls :: PluginMethodHandler IdeState CallHierarchyIncomingCalls
 incomingCalls = undefined
@@ -48,31 +46,83 @@ outgoingCalls = undefined
 
 prepareCallHierarchyItem :: IdeState -> NormalizedFilePath -> Position -> IO (Maybe [CallHierarchyItem])
 prepareCallHierarchyItem state filepath pos = do
-  let ShakeExtras{hiedb} = shakeExtras state
-  runAction "CallHierarchy.mkCallHierarchyItem" state (use GetHieAst filepath) >>=
+  runAction "CallHierarchy.prepareCallHierarchyItem" state (use GetHieAst filepath) >>=
     \case
       Nothing -> pure Nothing
       Just (HAR _ hf _ _ _) -> do
-        case listToMaybe $
-          pointCommand hf pos
-            (\ast -> ((M.keys . nodeIdentifiers . nodeInfo) ast, nodeSpan ast)) of
-              Just res -> pure $ Just $ nub $ map (\x -> construct x (snd res)) (fst res)
-              _ -> pure Nothing
+        case listToMaybe $ pointCommand hf pos extract of
+          Just res -> pure $ Just $ mapMaybe construct res
+          _        -> pure Nothing
   where
-    getSymbolKind occName
-      | isVarOcc occName = SkVariable
-      | isDataOcc occName = SkConstructor
-      | isTvOcc occName = SkStruct
-      | otherwise = SkUnknown 27 -- avoid duplication
 
-    construct :: Identifier -> Span -> CallHierarchyItem
-    construct identifer span = case identifer of
-      Left modName -> mkCallHierarchyItem (moduleNameString modName) SkModule span
-      Right name -> let occName = nameOccName name
-                    in mkCallHierarchyItem (occNameString occName) (getSymbolKind occName) span
+    extract :: HieAST a -> [(Identifier, S.Set ContextInfo, Span)]
+    extract ast = let span = nodeSpan ast
+                      infos = M.toList $ M.map identInfo (nodeIdentifiers $ nodeInfo ast)
+                  in  [ (ident, contexts, span) | (ident, contexts) <- infos ]
 
-    mkCallHierarchyItem :: String -> SymbolKind -> Span -> CallHierarchyItem
-    mkCallHierarchyItem name kind span =
+    identifierName :: Identifier -> String
+    identifierName = \case
+      Left modName -> moduleNameString modName
+      Right name   -> occNameString $ nameOccName name
+
+    recFieldInfo :: S.Set ContextInfo -> Maybe ContextInfo
+    recFieldInfo ctxs = listToMaybe [ctx | ctx@RecField{} <- S.toList ctxs]
+
+    declInfo :: S.Set ContextInfo -> Maybe ContextInfo
+    declInfo ctxs = listToMaybe [ctx | ctx@Decl{} <- S.toList ctxs]
+
+    valBindInfo :: S.Set ContextInfo -> Maybe ContextInfo
+    valBindInfo ctxs = listToMaybe [ctx | ctx@ValBind{} <- S.toList ctxs]
+
+    classTyDeclInfo :: S.Set ContextInfo -> Maybe ContextInfo
+    classTyDeclInfo ctxs = listToMaybe [ctx | ctx@ClassTyDecl{} <- S.toList ctxs]
+
+    useInfo :: S.Set ContextInfo -> Maybe ContextInfo
+    useInfo ctxs = listToMaybe [Use | Use <- S.toList ctxs]
+
+    patternBindInfo :: S.Set ContextInfo -> Maybe ContextInfo
+    patternBindInfo ctxs = listToMaybe [ctx | ctx@PatternBind{} <- S.toList ctxs]
+
+    construct :: (Identifier, S.Set ContextInfo, Span) -> Maybe CallHierarchyItem
+    construct (ident, contexts, ssp)
+      | Just (RecField RecFieldDecl _) <- recFieldInfo contexts
+        -- ignored type span
+        = Just $ mkCallHierarchyItem name SkField ssp ssp
+
+      | Just ctx <- valBindInfo contexts
+        = Just $ case ctx of
+            ValBind _ _ span -> mkCallHierarchyItem name SkFunction (renderSpan span) ssp
+            _ -> mkCallHierarchyItem name skUnknown ssp ssp
+
+      | Just ctx <- declInfo contexts
+        = Just $ case ctx of
+            -- TODO: sort in alphabetical order
+            Decl DataDec span -> mkCallHierarchyItem name SkStruct (renderSpan span) ssp
+            Decl ConDec span -> mkCallHierarchyItem name SkConstructor (renderSpan span) ssp
+            Decl SynDec span -> mkCallHierarchyItem name SkTypeParameter (renderSpan span) ssp
+            Decl ClassDec span -> mkCallHierarchyItem name SkInterface (renderSpan span) ssp
+            Decl FamDec span -> mkCallHierarchyItem name SkFunction (renderSpan span) ssp
+            Decl InstDec span -> mkCallHierarchyItem name SkInterface (renderSpan span) ssp
+            _ -> mkCallHierarchyItem name skUnknown ssp ssp
+
+      | Just (ClassTyDecl span) <- classTyDeclInfo contexts
+        = Just $ mkCallHierarchyItem name SkMethod (renderSpan span) ssp
+
+      | Just (PatternBind _ _ span) <- patternBindInfo contexts
+        = Just $ mkCallHierarchyItem name SkFunction (renderSpan span) ssp
+
+      | Just Use <- useInfo contexts
+        = Just $ mkCallHierarchyItem name SkInterface ssp ssp
+
+      | otherwise = Nothing
+      where
+        name = identifierName ident
+        renderSpan = \case Just span -> span
+                           _         -> ssp
+        skUnknown = SkUnknown 27
+
+    mkCallHierarchyItem :: String -> SymbolKind -> Span -> Span -> CallHierarchyItem
+    mkCallHierarchyItem name kind span selSpan =
       CallHierarchyItem
         (T.pack name)
         kind
@@ -80,7 +130,5 @@ prepareCallHierarchyItem state filepath pos = do
         Nothing
         (fromNormalizedUri $ normalizedFilePathToUri filepath)
         (realSrcSpanToRange span)
-        (realSrcSpanToRange span)
+        (realSrcSpanToRange selSpan)
         Nothing
-
-
