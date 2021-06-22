@@ -1,21 +1,22 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE TypeApplications  #-}
 {-# LANGUAGE ViewPatterns      #-}
 
 module Main
   ( main
   ) where
 
-import           Control.Lens            (_Just, preview, view)
-import           Control.Monad           (when)
+import           Control.Lens            (_Just, preview, toListOf, view)
 import           Data.Aeson              (fromJSON)
 import           Data.Aeson.Types        (Result (Success))
+import           Data.List               (isInfixOf)
 import           Data.List.Extra         (nubOrdOn)
 import qualified Ide.Plugin.Eval         as Eval
-import           Ide.Plugin.Eval.Types   (EvalParams (..))
-import           Language.LSP.Types.Lens (command, range, title)
-import           System.Directory        (doesFileExist)
-import           System.FilePath         ((<.>), (</>))
+import           Ide.Plugin.Eval.Types   (EvalParams (..), Section (..),
+                                          testOutput)
+import           Language.LSP.Types.Lens (arguments, command, range, title)
+import           System.FilePath         ((</>))
 import           Test.Hls
 
 main :: IO ()
@@ -108,11 +109,56 @@ tests =
     ]
   , goldenWithEval "Works with NoImplicitPrelude" "TNoImplicitPrelude" "hs"
   , goldenWithEval "Variable 'it' works" "TIt" "hs"
+
+  , testGroup ":info command"
+    [ testCase ":info reports type, constructors and instances" $ do
+        [output] <- map (unlines . codeLensTestOutput) <$> evalLenses "TInfo.hs"
+        "data Foo = Foo1 | Foo2" `isInfixOf` output @? "Output does not include Foo data declaration"
+        "Eq Foo" `isInfixOf` output                 @? "Output does not include instance Eq Foo"
+        "Ord Foo" `isInfixOf` output                @? "Output does not include instance Ord Foo"
+        not ("Baz Foo" `isInfixOf` output)          @? "Output includes instance Baz Foo"
+    , testCase ":info reports type, constructors and instances for multiple types" $ do
+        [output] <- map (unlines . codeLensTestOutput) <$> evalLenses "TInfoMany.hs"
+        "data Foo = Foo1 | Foo2" `isInfixOf` output        @? "Output does not include Foo data declaration"
+        "Eq Foo" `isInfixOf` output                        @? "Output does not include instance Eq Foo"
+        "Ord Foo" `isInfixOf` output                       @? "Output does not include instance Ord Foo"
+        not ("Baz Foo" `isInfixOf` output)                 @? "Output includes instance Baz Foo"
+        "data Bar = Bar1 | Bar2 | Bar3" `isInfixOf` output @? "Output does not include Bar data declaration"
+        "Eq Bar" `isInfixOf` output                        @? "Output does not include instance Eq Bar"
+        "Ord Bar" `isInfixOf` output                       @? "Output does not include instance Ord Bar"
+        not ("Baz Bar" `isInfixOf` output)                 @? "Output includes instance Baz Bar"
+    , testCase ":info! reports type, constructors and unfiltered instances" $ do
+        [output] <- map (unlines . codeLensTestOutput) <$> evalLenses "TInfoBang.hs"
+        "data Foo = Foo1 | Foo2" `isInfixOf` output @? "Output does not include Foo data declaration"
+        "Eq Foo" `isInfixOf` output                 @? "Output does not include instance Eq Foo"
+        "Ord Foo" `isInfixOf` output                @? "Output does not include instance Ord Foo"
+        "Baz Foo" `isInfixOf` output                @? "Output does not include instance Baz Foo"
+    , testCase ":info! reports type, constructors and unfiltered instances for multiple types" $ do
+        [output] <- map (unlines . codeLensTestOutput) <$> evalLenses "TInfoBangMany.hs"
+        "data Foo = Foo1 | Foo2" `isInfixOf` output        @? "Output does not include Foo data declaration"
+        "Eq Foo" `isInfixOf` output                        @? "Output does not include instance Eq Foo"
+        "Ord Foo" `isInfixOf` output                       @? "Output does not include instance Ord Foo"
+        "Baz Foo" `isInfixOf` output                       @? "Output does not include instance Baz Foo"
+        "data Bar = Bar1 | Bar2 | Bar3" `isInfixOf` output @? "Output does not include Bar data declaration"
+        "Eq Bar" `isInfixOf` output                        @? "Output does not include instance Eq Bar"
+        "Ord Bar" `isInfixOf` output                       @? "Output does not include instance Ord Bar"
+        "Baz Bar" `isInfixOf` output                       @? "Output does not include instance Baz Bar"
+    , testCase ":i behaves exactly the same as :info" $ do
+        [output] <- map (unlines . codeLensTestOutput) <$> evalLenses "TI_Info.hs"
+        "data Foo = Foo1 | Foo2" `isInfixOf` output @? "Output does not include Foo data declaration"
+        "Eq Foo" `isInfixOf` output                 @? "Output does not include instance Eq Foo"
+        "Ord Foo" `isInfixOf` output                @? "Output does not include instance Ord Foo"
+        not ("Baz Foo" `isInfixOf` output)          @? "Output includes instance Baz Foo"
+    ]
   ]
 
 goldenWithEval :: TestName -> FilePath -> FilePath -> TestTree
-goldenWithEval title path ext = goldenWithHaskellDoc evalPlugin title testDataDir path "expected" ext $ \doc -> do
-  -- Execute lenses backwards, to avoid affecting their position in the source file
+goldenWithEval title path ext =
+  goldenWithHaskellDoc evalPlugin title testDataDir path "expected" ext executeLensesBackwards
+
+-- | Execute lenses backwards, to avoid affecting their position in the source file
+executeLensesBackwards :: TextDocumentIdentifier -> Session ()
+executeLensesBackwards doc = do
   codeLenses <- reverse <$> getCodeLenses doc
   -- liftIO $ print codeLenses
 
@@ -133,6 +179,20 @@ executeCmd cmd = do
   _ <- skipManyTill anyMessage (message SWorkspaceApplyEdit)
   -- liftIO $ print _resp
   pure ()
+
+evalLenses :: FilePath -> IO [CodeLens]
+evalLenses path = runSessionWithServer evalPlugin testDataDir $ do
+  doc <- openDoc path "haskell"
+  executeLensesBackwards doc
+  getCodeLenses doc
+
+codeLensTestOutput :: CodeLens -> [String]
+codeLensTestOutput codeLens = do
+  CodeLens { _command = Just command } <- [codeLens]
+  Command { _arguments = Just (List args) } <- [command]
+  Success EvalParams { sections = sections } <- fromJSON @EvalParams <$> args
+  Section { sectionTests = sectionTests } <- sections
+  testOutput =<< sectionTests
 
 testDataDir :: FilePath
 testDataDir = "test" </> "testdata"

@@ -40,7 +40,7 @@ import           Data.Char                            (isSpace)
 import qualified Data.DList                           as DL
 import qualified Data.HashMap.Strict                  as HashMap
 import           Data.List                            (dropWhileEnd, find,
-                                                       intercalate)
+                                                       intercalate, intersperse)
 import qualified Data.Map.Strict                      as Map
 import           Data.Maybe                           (catMaybes, fromMaybe)
 import           Data.String                          (IsString)
@@ -84,7 +84,9 @@ import qualified Development.IDE.GHC.Compat           as SrcLoc
 import           Development.IDE.Types.Options
 import           DynamicLoading                       (initializePlugins)
 import           FastString                           (unpackFS)
-import           GHC                                  (ExecOptions (execLineNumber, execSourceFile),
+import           GHC                                  (ClsInst,
+                                                       ExecOptions (execLineNumber, execSourceFile),
+                                                       FamInst, Fixity,
                                                        GeneralFlag (..), Ghc,
                                                        GhcLink (LinkInMemory),
                                                        GhcMode (CompManager),
@@ -92,23 +94,33 @@ import           GHC                                  (ExecOptions (execLineNumb
                                                        HscTarget (HscInterpreted),
                                                        LoadHowMuch (LoadAllTargets),
                                                        ModSummary (ms_hspp_opts),
+                                                       NamedThing (getName, getOccName),
                                                        SuccessFlag (Failed, Succeeded),
                                                        TcRnExprMode (..),
+                                                       TyThing, defaultFixity,
                                                        execOptions, exprType,
+                                                       getInfo,
                                                        getInteractiveDynFlags,
                                                        getSessionDynFlags,
                                                        isImport, isStmt, load,
-                                                       runDecls, setContext,
-                                                       setLogAction,
+                                                       parseName, pprFamInst,
+                                                       pprInstance, runDecls,
+                                                       setContext, setLogAction,
                                                        setSessionDynFlags,
                                                        setTargets, typeKind)
 import qualified GHC.LanguageExtensions.Type          as LangExt (Extension (..))
 import           GhcPlugins                           (DynFlags (..),
                                                        defaultLogActionHPutStrDoc,
-                                                       gopt_set, gopt_unset,
-                                                       hsc_dflags,
-                                                       parseDynamicFlagsCmdLine,
-                                                       targetPlatform, xopt_set, xopt_unset, xopt_set_unlessExplSpec)
+                                                       elemNameSet, gopt_set,
+                                                       gopt_unset, hsc_dflags,
+                                                       isSymOcc, mkNameSet,
+                                                       parseDynamicFlagsCmdLine,                                                       pprDefinedAt,
+                                                       pprInfixName,
+                                                       targetPlatform,
+                                                       tyThingParent_maybe,
+                                                       xopt_set, xopt_unset, 
+                                                       xopt_set_unlessExplSpec)
+
 import           HscTypes                             (InteractiveImport (IIModule),
                                                        ModSummary (ms_mod),
                                                        Target (Target),
@@ -132,8 +144,9 @@ import           Language.LSP.Server
 import           Language.LSP.Types
 import           Language.LSP.Types.Lens              (end, line)
 import           Language.LSP.VFS                     (virtualFileText)
-import           Outputable                           (nest, ppr, showSDoc,
-                                                       text, ($$), (<+>))
+import           Outputable                           (SDoc, empty, hang, nest,
+                                                       ppr, showSDoc, text,
+                                                       vcat, ($$), (<+>))
 import           System.FilePath                      (takeFileName)
 import           System.IO                            (hClose)
 import           UnliftIO.Temporary                   (withSystemTempFile)
@@ -146,6 +159,8 @@ import           GHC.Parser.Annotation                (ApiAnns (apiAnnComments))
 import           GhcPlugins                           (interpWays, updateWays,
                                                        wayGeneralFlags,
                                                        wayUnsetGeneralFlags)
+import           IfaceSyn                             (showToHeader)
+import           PprTyThing                           (pprTyThingInContext)
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
@@ -658,7 +673,12 @@ type GHCiLikeCmd = DynFlags -> Text -> Ghc (Maybe Text)
 -- Should we use some sort of trie here?
 ghciLikeCommands :: [(Text, GHCiLikeCmd)]
 ghciLikeCommands =
-    [("kind", doKindCmd False), ("kind!", doKindCmd True), ("type", doTypeCmd)]
+    [ ("info", doInfoCmd False)
+    , ("info!", doInfoCmd True)
+    , ("kind", doKindCmd False)
+    , ("kind!", doKindCmd True)
+    , ("type", doTypeCmd)
+    ]
 
 evalGhciLikeCmd :: Text -> Text -> Ghc (Maybe [Text])
 evalGhciLikeCmd cmd arg = do
@@ -671,6 +691,51 @@ evalGhciLikeCmd cmd arg = do
                 T.lines
                 <$> hndler df arg
         _ -> E.throw $ GhciLikeCmdNotImplemented cmd arg
+
+doInfoCmd :: Bool -> DynFlags -> Text -> Ghc (Maybe Text)
+doInfoCmd allInfo dflags s = do
+    sdocs <- mapM infoThing (T.words s)
+    pure $ Just $ T.pack $ showSDoc dflags (vcat sdocs)
+    where
+        infoThing :: GHC.GhcMonad m => Text -> m SDoc
+        infoThing (T.unpack -> str) = do
+            names     <- GHC.parseName str
+            mb_stuffs <- mapM (GHC.getInfo allInfo) names
+            let filtered = filterOutChildren (\(t,_f,_ci,_fi,_sd) -> t)
+                                            (catMaybes mb_stuffs)
+            return $ vcat (intersperse (text "") $ map pprInfo filtered)
+
+        filterOutChildren :: (a -> TyThing) -> [a] -> [a]
+        filterOutChildren get_thing xs
+            = filter (not . has_parent) xs
+            where
+                all_names = mkNameSet (map (getName . get_thing) xs)
+                has_parent x = case tyThingParent_maybe (get_thing x) of
+                                Just p  -> getName p `elemNameSet` all_names
+                                Nothing -> False
+
+        pprInfo :: (TyThing, Fixity, [GHC.ClsInst], [GHC.FamInst], SDoc) -> SDoc
+        pprInfo (thing, fixity, cls_insts, fam_insts, docs)
+            =  docs
+            $$ pprTyThingInContextLoc thing
+            $$ showFixity thing fixity
+            $$ vcat (map GHC.pprInstance cls_insts)
+            $$ vcat (map GHC.pprFamInst  fam_insts)
+
+        pprTyThingInContextLoc :: TyThing -> SDoc
+        pprTyThingInContextLoc tyThing
+            = showWithLoc (pprDefinedAt (getName tyThing))
+                          (pprTyThingInContext showToHeader tyThing)
+
+        showWithLoc :: SDoc -> SDoc -> SDoc
+        showWithLoc loc doc
+            = hang doc 2 (text "\t--" <+> loc)
+
+        showFixity :: TyThing -> Fixity -> SDoc
+        showFixity thing fixity
+            | fixity /= GHC.defaultFixity || isSymOcc (getOccName thing)
+                = ppr fixity <+> pprInfixName (GHC.getName thing)
+            | otherwise = empty
 
 doKindCmd :: Bool -> DynFlags -> Text -> Ghc (Maybe Text)
 doKindCmd False df arg = do
