@@ -1,0 +1,131 @@
+resolver: nightly-2021-05-02
+compiler: ghc-9.0.1
+
+packages:
+  - .
+  - ./hie-compat
+  - ./hls-graph
+  - ./ghcide/
+  - ./hls-plugin-api
+  - ./hls-test-utils
+  # - ./shake-bench
+  # - ./plugins/hls-class-plugin
+  - ./plugins/hls-haddock-comments-plugin
+  # - ./plugins/hls-eval-plugin
+  - ./plugins/hls-explicit-imports-plugin
+  # - ./plugins/hls-refine-imports-plugin
+  - ./plugins/hls-hlint-plugin
+  - ./plugins/hls-retrie-plugin
+  # - ./plugins/hls-splice-plugin
+  # - ./plugins/hls-tactics-plugin
+  # - ./plugins/hls-brittany-plugin
+  # - ./plugins/hls-stylish-haskell-plugin
+  # - ./plugins/hls-floskell-plugin
+  # - ./plugins/hls-fourmolu-plugin
+  - ./plugins/hls-pragmas-plugin
+  - ./plugins/hls-module-name-plugin
+  # - ./plugins/hls-ormolu-plugin
+
+ghc-options:
+  "$everything": -haddock
+
+extra-deps:
+- apply-refact-0.9.3.0
+- base16-bytestring-0.1.1.7@sha256:0021256a9628971c08da95cb8f4d0d72192f3bb8a7b30b55c080562d17c43dd3,2231
+- bytestring-encoding-0.1.0.0@sha256:460b49779fbf0112e8e2f1753c1ed9131eb18827600c298f4d6bb51c4e8c1c0d,1727
+# Not newest (constraints-extras doesn't support 0.13 yet)
+- constraints-0.12@sha256:71c7999d7fa01d8941f08d37d4c107c6b1bcbd0306e234157557b9b096b7f1be,2217
+- constraints-extras-0.3.1.0@sha256:12016ebb91ad5ed2c82bf7e48c6bd6947d164d33c9dca5ac3965de1bb6c780c0,1777
+- dependent-map-0.4.0.0@sha256:ca2b131046f4340a1c35d138c5a003fe4a5be96b14efc26291ed35fd08c62221,1657
+- dependent-sum-0.7.1.0@sha256:0e419237f5b86da3659772afff9cab355c0f8d5b3fdb15a5b30e673d8dc83941,2147
+- ghc-lib-9.0.1.20210324@sha256:c8b9a2541ea3424c8d0e4f80584477d0f35be03f4a47d931152042d5f446c5fc,19279
+- ghc-lib-parser-9.0.1.20210324@sha256:fb680f78d4ab08b5d089a05bda3b84ad857e5edcc2e4ca7c188c0207d369af80
+- ghc-lib-parser-ex-9.0.0.4@sha256:8282b11c3797fc8ba225b245e736cc9a0745d9c48d0f9fea7f9bffb5c9997709,3642
+- haddock-library-1.10.0@sha256:2a6c239da9225951a5d837e1ce373faeeae60d1345c78dd0a0b0f29df30c4fe9,4098
+- heapsize-0.3.0.1@sha256:0b69aa97a46d819b700ac7b145f3b5493c3565cf2c5b8298682238d405d0326e,1417
+- hlint-3.3@sha256:4218ad6e03050f5d68aeba0e025f5f05e366c8fd49657f2a19df04ee31b2bb23,4154
+- implicit-hie-0.1.2.5@sha256:517a98ef72f92f0a1617495222774fed3a751a64b0c06fbfc7b858d7aa5de279,2998
+- implicit-hie-cradle-0.3.0.2@sha256:7ad0d10c475ad2b45a068aa0c1b150078ec579746df3b1754d91820354c90696,2594
+- lens-5.0.1
+- profunctors-5.6.2
+- refinery-0.3.0.0@sha256:5ec9588de8f9752b2a947a87ca6a5a0156150ed7b0197975730c007c4549e7fb,1675
+- retrie-1.0.0.0
+- some-1.0.2@sha256:3d460998df32ad7b93bf55657aeae988d97070155e71718b4bc75d0997ce9d62,2244
+
+# Upstream patches for ghc-9.0.1 compatability
+# Same as in cabal.project
+- github: jwaldmann/blaze-textual
+  commit: d8ee6cf80e27f9619d621c936bb4bda4b99a183f
+# https://github.com/jwaldmann/blaze-textual/commit/d8ee6cf80e27f9619d621c936bb4bda4b99a183f
+# https://github.com/bos/blaze-textual/issues/13
+
+- github: mithrandi/czipwith
+  commit: b6245884ae83e00dd2b5261762549b37390179f8
+# https://github.com/lspitzner/czipwith/pull/2
+
+- github: jneira/hie-bios
+  commit: 9b1445ab5efcabfad54043fc9b8e50e9d8c5bbf3
+# https://github.com/mpickering/hie-bios/pull/285
+
+- github: hsyl20/ghc-api-compat
+  commit: 8fee87eac97a538dbe81ff1ab18cff10f2f9fa15
+
+- github: anka-213/th-extras
+  commit: 57a97b4df128eb7b360e8ab9c5759392de8d1659
+# https://github.com/mokus0/th-extras/pull/8
+# https://github.com/mokus0/th-extras/issues/7
+
+- github: anka-213/dependent-sum
+  commit: 8cf4c7fbc3bfa2be475a17bb7c94a1e1e9a830b5
+  subdirs:
+  - dependent-sum-template
+# https://github.com/obsidiansystems/dependent-sum/pull/57
+
+- github: anka-213/HieDb
+  commit: a3f7521f6c5af1b977040cce09c8f7354f8984eb
+# https://github.com/wz1000/HieDb/pull/31
+
+- github: anka-213/lsp
+  commit: e96383ab19534128f12acc70a69fbc15d4f298cc
+  subdirs:
+  - lsp-types
+  - lsp
+  - lsp-test
+# https://github.com/haskell/lsp/pull/312
+
+- github: diagrams/active
+  commit: ca23431a8dfa013992f9164ccc882a3277361f17
+# https://github.com/diagrams/active/pull/36
+
+configure-options:
+  ghcide:
+      - --disable-library-for-ghci
+  haskell-language-server:
+      - --disable-library-for-ghci
+  heapsize:
+      - --disable-library-for-ghci
+
+flags:
+  haskell-language-server:
+    pedantic: true
+    eval: false
+    class: false
+    splice: false
+    refineImports: false
+    tactic: false # Dependencies fail
+
+    floskell: false
+    ormolu: false
+    fourmolu: false
+    stylishHaskell: false
+    brittany: false
+  retrie:
+    BuildExecutable: false
+  # Stack doesn't support automatic flags.
+  hls-hlint-plugin:
+    hlint33: true
+
+nix:
+  packages: [ icu libcxx zlib ]
+
+concurrent-tests: false

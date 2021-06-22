@@ -40,7 +40,6 @@ import           HscTypes                                     (HomeModInfo,
 import qualified Data.Binary                                  as B
 import           Data.ByteString                              (ByteString)
 import qualified Data.ByteString.Lazy                         as LBS
-import           Data.HashMap.Strict                          (HashMap)
 import           Data.Text                                    (Text)
 import           Data.Time
 import           Development.IDE.Import.FindImports           (ArtifactsLocation)
@@ -267,6 +266,8 @@ type instance RuleResult GetFileContents = (FileVersion, Maybe Text)
 
 type instance RuleResult GetFileExists = Bool
 
+type instance RuleResult AddWatchedFile = Bool
+
 
 -- The Shake key type for getModificationTime queries
 newtype GetModificationTime = GetModificationTime_
@@ -353,8 +354,6 @@ type instance RuleResult GetModSummary = ModSummaryResult
 
 -- | Generate a ModSummary with the timestamps and preprocessed content elided, for more successful early cutoff
 type instance RuleResult GetModSummaryWithoutTimestamps = ModSummaryResult
-
-type instance RuleResult GetFilesOfInterest = HashMap NormalizedFilePath FileOfInterestStatus
 
 data GetParsedModule = GetParsedModule
     deriving (Eq, Show, Typeable, Generic)
@@ -493,6 +492,12 @@ instance Binary   GetClientSettings
 
 type instance RuleResult GetClientSettings = Hashed (Maybe Value)
 
+data AddWatchedFile = AddWatchedFile deriving (Eq, Show, Typeable, Generic)
+instance Hashable AddWatchedFile
+instance NFData   AddWatchedFile
+instance Binary   AddWatchedFile
+
+
 -- A local rule type to get caching. We want to use newCache, but it has
 -- thread killed exception issues, so we lift it to a full rule.
 -- https://github.com/digital-asset/daml/pull/2808#issuecomment-529639547
@@ -512,12 +517,6 @@ data GhcSessionIO = GhcSessionIO deriving (Eq, Show, Typeable, Generic)
 instance Hashable GhcSessionIO
 instance NFData   GhcSessionIO
 instance Binary   GhcSessionIO
-
-data GetFilesOfInterest = GetFilesOfInterest
-    deriving (Eq, Show, Typeable, Generic)
-instance Hashable GetFilesOfInterest
-instance NFData   GetFilesOfInterest
-instance Binary   GetFilesOfInterest
 
 makeLensesWith
     (lensRules & lensField .~ mappingNamer (pure . (++ "L")))

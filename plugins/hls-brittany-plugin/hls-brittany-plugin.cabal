@@ -25,7 +25,7 @@ library
     , filepath
     , ghc
     , ghc-boot-th
-    , ghcide           >=1.2 && <1.4
+    , ghcide           >=1.2 && <1.5
     , hls-plugin-api  ^>=1.1
     , lens
     , lsp-types
@@ -42,7 +42,6 @@ test-suite tests
   ghc-options:      -threaded -rtsopts -with-rtsopts=-N
   build-depends:
     , base
-    , bytestring
+    , filepath
     , hls-brittany-plugin
     , hls-test-utils       ^>=1.0
-    , text

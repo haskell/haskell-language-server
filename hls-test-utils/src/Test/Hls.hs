@@ -1,5 +1,6 @@
-{-# LANGUAGE GADTs      #-}
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE GADTs             #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Test.Hls
   ( module Test.Tasty.HUnit,
     module Test.Tasty,
@@ -11,6 +12,8 @@ module Test.Hls
     module Control.Applicative.Combinators,
     defaultTestRunner,
     goldenGitDiff,
+    goldenWithHaskellDoc,
+    goldenWithHaskellDocFormatter,
     def,
     runSessionWithServer,
     runSessionWithServerFormatter,
@@ -30,6 +33,8 @@ import           Control.Monad.IO.Class
 import           Data.ByteString.Lazy              (ByteString)
 import           Data.Default                      (def)
 import qualified Data.Text                         as T
+import qualified Data.Text.Lazy                    as TL
+import qualified Data.Text.Lazy.Encoding           as TL
 import           Development.IDE                   (IdeState, hDuplicateTo',
                                                     noLogging)
 import           Development.IDE.Graph             (ShakeOptions (shakeThreads))
@@ -46,6 +51,7 @@ import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities   (ClientCapabilities)
 import           System.Directory                  (getCurrentDirectory,
                                                     setCurrentDirectory)
+import           System.FilePath
 import           System.IO.Extra
 import           System.IO.Unsafe                  (unsafePerformIO)
 import           System.Process.Extra              (createPipe)
@@ -66,6 +72,43 @@ gitDiff fRef fNew = ["git", "-c", "core.fileMode=false", "diff", "--no-index", "
 
 goldenGitDiff :: TestName -> FilePath -> IO ByteString -> TestTree
 goldenGitDiff name = goldenVsStringDiff name gitDiff
+
+goldenWithHaskellDoc
+  :: PluginDescriptor IdeState
+  -> TestName
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> (TextDocumentIdentifier -> Session ())
+  -> TestTree
+goldenWithHaskellDoc plugin title testDataDir path desc ext act =
+  goldenGitDiff title (testDataDir </> path <.> desc <.> ext)
+  $ runSessionWithServer plugin testDataDir
+  $ TL.encodeUtf8 . TL.fromStrict
+  <$> do
+    doc <- openDoc (path <.> ext) "haskell"
+    act doc
+    documentContents doc
+
+goldenWithHaskellDocFormatter
+  :: PluginDescriptor IdeState
+  -> String
+  -> TestName
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> (TextDocumentIdentifier -> Session ())
+  -> TestTree
+goldenWithHaskellDocFormatter plugin formatter title testDataDir path desc ext act =
+  goldenGitDiff title (testDataDir </> path <.> desc <.> ext)
+  $ runSessionWithServerFormatter plugin formatter testDataDir
+  $ TL.encodeUtf8 . TL.fromStrict
+  <$> do
+    doc <- openDoc (path <.> ext) "haskell"
+    act doc
+    documentContents doc
 
 runSessionWithServer :: PluginDescriptor IdeState -> FilePath -> Session a -> IO a
 runSessionWithServer plugin = runSessionWithServer' [plugin] def def fullCaps

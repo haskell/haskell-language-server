@@ -15,7 +15,7 @@ import           Development.IDE.Core.FileExists       as X (getFileExists)
 import           Development.IDE.Core.FileStore        as X (getFileContents)
 import           Development.IDE.Core.IdeConfiguration as X (IdeConfiguration (..),
                                                              isWorkspaceFile)
-import           Development.IDE.Core.OfInterest       as X (getFilesOfInterest)
+import           Development.IDE.Core.OfInterest       as X (getFilesOfInterestUntracked)
 import           Development.IDE.Core.RuleTypes        as X
 import           Development.IDE.Core.Rules            as X (IsHiFileStable (..),
                                                              getClientConfigAction,

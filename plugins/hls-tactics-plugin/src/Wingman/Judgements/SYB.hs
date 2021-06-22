@@ -4,12 +4,15 @@
 -- | Custom SYB traversals
 module Wingman.Judgements.SYB where
 
-import Data.Foldable (foldl')
-import Data.Generics hiding (typeRep)
-import Development.IDE.GHC.Compat
-import GHC.Exts (Any)
-import Type.Reflection
-import Unsafe.Coerce (unsafeCoerce)
+import           Data.Foldable (foldl')
+import           Data.Generics hiding (typeRep)
+import qualified Data.Text as T
+import           Development.IDE.GHC.Compat
+import           GHC.Exts (Any)
+import           GhcPlugins (unpackFS)
+import           Type.Reflection
+import           Unsafe.Coerce (unsafeCoerce)
+import           Wingman.StaticPlugin (pattern WingmanMetaprogram)
 
 
 ------------------------------------------------------------------------------
@@ -80,4 +83,10 @@ sameTypeModuloLastApp =
             Just HRefl -> True
             Nothing    -> False
         _ -> False
+
+
+metaprogramQ :: SrcSpan -> GenericQ [(SrcSpan, T.Text)]
+metaprogramQ ss = everythingContaining ss $ mkQ mempty $ \case
+  L new_span (WingmanMetaprogram program) -> pure (new_span, T.pack $ unpackFS $ program)
+  (_ :: LHsExpr GhcTc) -> mempty
 

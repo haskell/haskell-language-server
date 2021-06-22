@@ -75,7 +75,7 @@ exampleRules = do
     return ([diag], Just ())
 
   action $ do
-    files <- getFilesOfInterest
+    files <- getFilesOfInterestUntracked
     void $ uses Example2 $ Map.keys files
 
 mkDiag :: NormalizedFilePath

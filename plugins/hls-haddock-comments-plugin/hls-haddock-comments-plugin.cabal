@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-haddock-comments-plugin
-version:            1.0.0.1
+version:            1.0.0.2
 synopsis:           Haddock comments plugin for Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server>
@@ -25,11 +25,11 @@ library
     -Wno-unticked-promoted-constructors
 
   build-depends:
-    , base                  >=4.12    && <5
+    , base                  >=4.12 && <5
     , containers
     , ghc
     , ghc-exactprint
-    , ghcide                 >=1.2 && <1.4
+    , ghcide                >=1.2  && <1.5
     , hls-plugin-api        ^>=1.1
     , lsp-types
     , text
@@ -48,8 +48,7 @@ test-suite tests
   ghc-options:      -threaded -rtsopts -with-rtsopts=-N
   build-depends:
     , base
-    , bytestring
     , filepath
     , hls-haddock-comments-plugin
-    , hls-test-utils  ^>= 1.0
+    , hls-test-utils               ^>=1.0
     , text

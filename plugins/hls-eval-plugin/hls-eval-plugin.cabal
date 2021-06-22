@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-eval-plugin
-version:            1.1.0.0
+version:            1.1.1.0
 synopsis:           Eval plugin for Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -20,10 +20,12 @@ extra-source-files:
   LICENSE
   README.md
   test/testdata/*.cabal
-  test/testdata/*.expected
   test/testdata/*.hs
   test/testdata/*.lhs
   test/testdata/*.yaml
+  test/info-util/*.cabal
+  test/info-util/*.hs
+  test/cabal.project
 
 flag pedantic
   description: Enable -Werror
@@ -50,7 +52,7 @@ library
 
   build-depends:
     , aeson
-    , base                  >=4.12    && <5
+    , base                  >=4.12  && <5
     , containers
     , deepseq
     , Diff                  ^>=0.4.0
@@ -59,9 +61,10 @@ library
     , extra
     , filepath
     , ghc
+    , ghc-api-compat
     , ghc-boot-th
     , ghc-paths
-    , ghcide                 >=1.2 && <1.4
+    , ghcide                >=1.2   && <1.5
     , hashable
     , hls-plugin-api        ^>=1.1
     , lens
@@ -106,6 +109,4 @@ test-suite tests
     , hls-eval-plugin
     , hls-test-utils   ^>=1.0
     , lens
-    , lsp-test
     , lsp-types
-    , text

@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ['8.10.4', '8.10.3', '8.10.2', '8.8.4', '8.8.3', '8.8.2', '8.6.5', '8.6.4']
+        ghc: ['8.10.5', '8.10.4', '8.10.3', '8.10.2', '8.8.4', '8.8.3', '8.6.5', '8.6.4']
         os: [ubuntu-18.04, macOS-latest, windows-latest]
         exclude:
           - os: windows-latest
@@ -25,8 +25,6 @@ jobs:
             ghc: '8.8.4' # also fails due to segfault :(
           - os: windows-latest
             ghc: '8.8.3' # fails due to segfault
-          - os: windows-latest
-            ghc: '8.8.2' # fails due to error with Cabal
         include:
           - os: windows-latest
             ghc: '8.10.2.2' # only available for windows and choco
@@ -71,6 +69,12 @@ jobs:
         GHC_VER: ${{ matrix.ghc }}
       run: |
         echo "GHC_VERSION=$GHC_VER" >> $GITHUB_ENV
+
+    - name: Tentative Workaround for GHC 8.10.5 on macOS
+      if: matrix.os == 'macOS-latest' && matrix.ghc == '8.10.5'
+      run: |
+        echo "# uninstalling CommandLineTools (see https://github.com/haskell/haskell-language-server/issues/1913#issuecomment-861667786)"
+        sudo rm -rf /Library/Developer/CommandLineTools
 
     - name: Build Server
       # Try building it twice in case of flakey builds on Windows

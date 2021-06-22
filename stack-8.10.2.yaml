@@ -21,26 +21,33 @@ packages:
   - ./plugins/hls-stylish-haskell-plugin
   - ./plugins/hls-floskell-plugin
   - ./plugins/hls-fourmolu-plugin
+  - ./plugins/hls-pragmas-plugin
+  - ./plugins/hls-module-name-plugin
+  - ./plugins/hls-ormolu-plugin
 
 ghc-options:
   "$everything": -haddock
 
 extra-deps:
-  - apply-refact-0.9.0.0
-  - brittany-0.13.1.0
+  - apply-refact-0.9.3.0
+  - brittany-0.13.1.2
   - Cabal-3.0.2.0
   - clock-0.7.2
   - data-tree-print-0.1.0.2@rev:2
   - floskell-0.10.4
   - fourmolu-0.3.0.0
-  - ghc-exactprint-0.6.3.4
+  - # ghc-api-compat-8.6
+    github: hsyl20/ghc-api-compat
+    commit: 8fee87eac97a538dbe81ff1ab18cff10f2f9fa15
+  - ghc-check-0.5.0.4
+  - ghc-exactprint-0.6.4
   - ghc-lib-8.10.4.20210206
   - ghc-lib-parser-8.10.4.20210206
   - lsp-1.2.0.0
   - lsp-types-1.2.0.0
   - lsp-test-0.14.0.0
   - heapsize-0.3.0
-  - hie-bios-0.7.4
+  - hie-bios-0.7.5
   - implicit-hie-cradle-0.3.0.2
   - implicit-hie-0.1.2.5
   - monad-dijkstra-0.1.1.2
@@ -50,6 +57,7 @@ extra-deps:
   - stylish-haskell-0.12.2.0
   - semigroups-0.18.5
   - temporary-1.2.1.1
+  - th-compat-0.1.2@sha256:3d55de1adc542c1a870c9ada90da2fbbe5f4e8bcd3eed545a55c3df9311b32a8,2854
   - bytestring-encoding-0.1.0.0@sha256:460b49779fbf0112e8e2f1753c1ed9131eb18827600c298f4d6bb51c4e8c1c0d,1727
   - hiedb-0.3.0.1
   - dependent-map-0.4.0.0@sha256:ca2b131046f4340a1c35d138c5a003fe4a5be96b14efc26291ed35fd08c62221,1657
@@ -72,6 +80,10 @@ flags:
     pedantic: true
   retrie:
     BuildExecutable: false
+  # Stack doesn't support automatic flags.
+  # Until the formatters support ghc-lib-9, we need this flag disabled
+  hls-hlint-plugin:
+    hlint33: false
 
 nix:
   packages: [icu libcxx zlib]

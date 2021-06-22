@@ -188,7 +188,7 @@ needsParensSpace ::
     -- | (Needs parens, needs space)
     (All, All)
 needsParensSpace HsLam{}         = (All False, All False)
-needsParensSpace HsLamCase{}     = (All False, All False)
+needsParensSpace HsLamCase{}     = (All False, All True)
 needsParensSpace HsApp{}         = mempty
 needsParensSpace HsAppType{}     = mempty
 needsParensSpace OpApp{}         = mempty
@@ -203,7 +203,7 @@ needsParensSpace HsMultiIf{}     = (All False, All False)
 needsParensSpace HsLet{}         = (All False, All True)
 needsParensSpace HsDo{}          = (All False, All False)
 needsParensSpace ExplicitList{}  = (All False, All False)
-needsParensSpace RecordCon{}     = (All False, All False)
+needsParensSpace RecordCon{}     = (All False, All True)
 needsParensSpace RecordUpd{}     = mempty
 needsParensSpace _               = mempty
 
