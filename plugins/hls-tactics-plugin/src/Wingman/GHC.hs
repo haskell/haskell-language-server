@@ -36,6 +36,7 @@ import           TysWiredIn (charTyCon, doubleTyCon, floatTyCon, intTyCon)
 import           Unify
 import           Unique
 import           Var
+import           Wingman.StaticPlugin (pattern MetaprogramSyntax)
 import           Wingman.Types
 
 
@@ -171,6 +172,7 @@ containsHole :: Data a => a -> Bool
 containsHole x = not $ null $ listify (
   \case
     ((HsVar _ (L _ name)) :: HsExpr GhcPs) -> isHole $ occName name
+    MetaprogramSyntax _                    -> True
     _                                      -> False
   ) x
 
