@@ -114,12 +114,12 @@ import           GhcPlugins                           (DynFlags (..),
                                                        elemNameSet, gopt_set,
                                                        gopt_unset, hsc_dflags,
                                                        isSymOcc, mkNameSet,
-                                                       parseDynamicFlagsCmdLine,                                                       pprDefinedAt,
+                                                       parseDynamicFlagsCmdLine,
+                                                       pprDefinedAt,
                                                        pprInfixName,
                                                        targetPlatform,
                                                        tyThingParent_maybe,
-                                                       xopt_set, xopt_unset, 
-                                                       xopt_set_unlessExplSpec)
+                                                       xopt_set, xopt_unset)
 
 import           HscTypes                             (InteractiveImport (IIModule),
                                                        ModSummary (ms_mod),
@@ -320,10 +320,8 @@ runEvalCmd st EvalParams{..} =
                 -- set the identical DynFlags as GHCi
                 -- Source: https://github.com/ghc/ghc/blob/5abf59976c7335df760e5d8609d9488489478173/ghc/GHCi/UI.hs#L473-L483
                 -- This needs to be done manually since the default flags are not visible externally.
-                let df' = (xopt_set_unlessExplSpec
-                            LangExt.ExtendedDefaultRules xopt_set)
-                        . (xopt_set_unlessExplSpec
-                            LangExt.MonomorphismRestriction xopt_unset)
+                let df' = flip xopt_set    LangExt.ExtendedDefaultRules
+                        . flip xopt_unset  LangExt.MonomorphismRestriction
                         $ idflags
                 setInteractiveDynFlags $ df'
 #if MIN_VERSION_ghc(9,0,0)
