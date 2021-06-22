@@ -17,8 +17,8 @@ import           Control.DeepSeq                     (rwhnf)
 import           Control.Monad                       (mzero)
 import           Control.Monad.Extra                 (whenMaybe)
 import           Control.Monad.IO.Class              (MonadIO (liftIO))
-import qualified Data.Aeson.Types                    as A
 import           Data.Aeson.Types                    (Value (..), toJSON)
+import qualified Data.Aeson.Types                    as A
 import qualified Data.HashMap.Strict                 as Map
 import           Data.List                           (find)
 import           Data.Maybe                          (catMaybes, fromJust)
@@ -35,13 +35,13 @@ import           Development.IDE.Core.Service        (getDiagnostics)
 import           Development.IDE.Core.Shake          (getHiddenDiagnostics, use)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Util            (printName)
+import           Development.IDE.Graph.Classes
 import           Development.IDE.Spans.Common        (safeTyThingType)
 import           Development.IDE.Spans.LocalBindings (Bindings, getFuzzyScope)
 import           Development.IDE.Types.Location      (Position (Position, _character, _line),
                                                       Range (Range, _end, _start),
                                                       toNormalizedFilePath',
                                                       uriToFilePath')
-import           Development.Shake.Classes
 import           GHC.Generics                        (Generic)
 import           GhcPlugins                          (GlobalRdrEnv,
                                                       HscEnv (hsc_dflags), SDoc,
@@ -60,6 +60,8 @@ import           Ide.Types                           (CommandFunction,
                                                       PluginCommand (PluginCommand),
                                                       PluginDescriptor (..),
                                                       PluginId,
+                                                      configCustomConfig,
+                                                      defaultConfigDescriptor,
                                                       defaultPluginDescriptor,
                                                       mkCustomConfig,
                                                       mkPluginHandler)
@@ -78,7 +80,6 @@ import           PatSyn                              (patSynName)
 import           TcEnv                               (tcInitTidyEnv)
 import           TcRnMonad                           (initTcWithGbl)
 import           TcRnTypes                           (TcGblEnv (..))
-import           TcType                              (pprSigmaType)
 import           Text.Regex.TDFA                     ((=~), (=~~))
 
 typeLensCommandId :: T.Text
@@ -90,7 +91,7 @@ descriptor plId =
     { pluginHandlers = mkPluginHandler STextDocumentCodeLens codeLensProvider
     , pluginCommands = [PluginCommand (CommandId typeLensCommandId) "adds a signature" commandHandler]
     , pluginRules = rules
-    , pluginCustomConfig = mkCustomConfig properties
+    , pluginConfigDescriptor = defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
     }
 
 properties :: Properties '[ 'PropertyKey "mode" ('TEnum Mode)]
@@ -212,8 +213,8 @@ data Mode
   deriving (Eq, Ord, Show, Read, Enum)
 
 instance A.ToJSON Mode where
-  toJSON Always = "always"
-  toJSON Exported = "exported"
+  toJSON Always      = "always"
+  toJSON Exported    = "exported"
   toJSON Diagnostics = "diagnostics"
 
 instance A.FromJSON Mode where

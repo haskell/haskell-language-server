@@ -1,0 +1,57 @@
+cabal-version: 2.4
+name:          hls-graph
+version:       1.4.0.0
+synopsis:      Haskell Language Server internal graph API
+description:
+  Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
+
+homepage:      https://github.com/haskell/haskell-language-server#readme
+bug-reports:   https://github.com/haskell/haskell-language-server/issues
+license:       Apache-2.0
+license-file:  LICENSE
+author:        The Haskell IDE Team
+maintainer:    alan.zimm@gmail.com
+copyright:     The Haskell IDE Team
+category:      Development
+build-type:    Simple
+
+flag pedantic
+  description: Enable -Werror
+  default:     False
+  manual:      True
+
+source-repository head
+  type:     git
+  location: https://github.com/haskell/haskell-language-server
+
+library
+  exposed-modules:
+    Development.IDE.Graph
+    Development.IDE.Graph.Classes
+    Development.IDE.Graph.Database
+    Development.IDE.Graph.Rule
+
+  other-modules:
+    Development.IDE.Graph.Internal.Action
+    Development.IDE.Graph.Internal.Options
+    Development.IDE.Graph.Internal.Rules
+
+  hs-source-dirs:     src
+  build-depends:
+    , base >=4.12 && <5
+    , bytestring
+    , shake >= 0.19.4
+    , unordered-containers
+
+  ghc-options:
+    -Wall -Wredundant-constraints -Wno-name-shadowing
+    -Wno-unticked-promoted-constructors
+
+  if flag(pedantic)
+    ghc-options: -Werror
+
+  default-language:   Haskell2010
+  default-extensions:
+    DataKinds
+    KindSignatures
+    TypeOperators

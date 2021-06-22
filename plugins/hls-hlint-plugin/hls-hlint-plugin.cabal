@@ -1,6 +1,6 @@
 cabal-version: 2.2
 name:          hls-hlint-plugin
-version:       1.0.0.2
+version:       1.0.1.0
 synopsis:      Hlint integration plugin with Haskell Language Server
 description:
   Please see Haskell Language Server Readme (https://github.com/haskell/haskell-language-server#readme)
@@ -24,12 +24,19 @@ flag ghc-lib
   description:
     Force dependency on ghc-lib-parser even if GHC API in the ghc package is supported
 
+flag hlint33
+  default:     True
+  manual:      False
+  description:
+    Hlint-3.3 doesn't support versions ghc-lib < 9.0.1 nor ghc <= 8.6, so we can use hlint-3.2 for backwards compat
+    This flag can be removed when all dependencies support ghc-lib-9.0.1 and we drop support for ghc-8.6
+
 library
   exposed-modules:    Ide.Plugin.Hlint
   hs-source-dirs:     src
   build-depends:
     , aeson
-    , apply-refact          >=0.9
+    , apply-refact          >=0.9.3.0
     , base                  >=4.12    && <5
     , binary
     , bytestring
@@ -41,30 +48,47 @@ library
     , extra
     , filepath
     , ghc-exactprint        >=0.6.3.4
-    , ghcide                ^>=1.2.0.2
+    , ghcide                ^>=1.4
     , hashable
-    , hlint                 >=3.2
-    , hls-plugin-api        ^>=1.1.0.0
+    , hlint
+    , hls-plugin-api        ^>=1.1
     , hslogger
     , lens
     , lsp
     , regex-tdfa
-    , shake
     , temporary
     , text
     , transformers
     , unordered-containers
 
-  if ((!flag(ghc-lib) && impl(ghc >=8.10.1)) && impl(ghc <9.0.0))
-    build-depends: ghc ^>=8.10
+  if (flag(hlint33))
+    -- This mirrors the logic in hlint.cabal for hlint-3.3
+    -- https://github.com/ndmitchell/hlint/blob/d3576de4529d8df6cca5a345f5b7e04474ff7bff/hlint.cabal#L79-L88
+    -- so we can make sure that we do the same thing as hlint
+    build-depends: hlint ^>=3.3
+    if (!flag(ghc-lib) && impl(ghc >=9.0.1) && impl(ghc <9.1.0))
+      build-depends: ghc ==9.0.*
+    else
+      build-depends:
+        , ghc
+        , ghc-lib            == 9.0.*
+        , ghc-lib-parser-ex  == 9.0.*
+
+      cpp-options:   -DHLINT_ON_GHC_LIB
 
   else
-    build-depends:
-      , ghc
-      , ghc-lib            ^>=8.10.4.20210206
-      , ghc-lib-parser-ex  ^>=8.10
+    -- This mirrors the logic in hlint.cabal for hlint-3.2
+    -- https://github.com/ndmitchell/hlint/blob/c7354e473c7d09213c8adc3dc94bf50a6eb4a42d/hlint.cabal#L79-L88
+    build-depends: hlint ^>=3.2
+    if (!flag(ghc-lib) && impl(ghc >=8.10.1) && impl(ghc < 8.11.0))
+        build-depends: ghc >=8.10 && < 9.0
+    else
+      build-depends:
+        , ghc
+        , ghc-lib            ^>= 8.10.4.20210206
+        , ghc-lib-parser-ex  ^>= 8.10
 
-    cpp-options:   -DHLINT_ON_GHC_LIB
+      cpp-options:   -DHLINT_ON_GHC_LIB
 
   ghc-options:
     -Wall -Wredundant-constraints -Wno-name-shadowing

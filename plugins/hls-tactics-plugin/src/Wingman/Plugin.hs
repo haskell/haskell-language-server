@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 -- | A plugin that uses tactics to synthesize code
 module Wingman.Plugin
@@ -7,7 +8,6 @@ module Wingman.Plugin
   , TacticCommand (..)
   ) where
 
-import           Control.Exception (evaluate)
 import           Control.Monad
 import           Control.Monad.Trans
 import           Control.Monad.Trans.Maybe
@@ -20,6 +20,7 @@ import           Development.IDE.Core.Shake (IdeState (..))
 import           Development.IDE.Core.UseStale (Tracked, TrackedStale(..), unTrack, mapAgeFrom, unsafeMkCurrent)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.ExactPrint
+import           Generics.SYB.GHC
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
@@ -31,9 +32,11 @@ import           Wingman.CaseSplit
 import           Wingman.EmptyCase
 import           Wingman.GHC
 import           Wingman.LanguageServer
+import           Wingman.LanguageServer.Metaprogram (hoverProvider)
 import           Wingman.LanguageServer.TacticProviders
 import           Wingman.Machinery (scoreSolution)
 import           Wingman.Range
+import           Wingman.StaticPlugin
 import           Wingman.Tactics
 import           Wingman.Types
 
@@ -57,10 +60,12 @@ descriptor plId = (defaultPluginDescriptor plId)
   , pluginHandlers = mconcat
       [ mkPluginHandler STextDocumentCodeAction codeActionProvider
       , mkPluginHandler STextDocumentCodeLens codeLensProvider
+      , mkPluginHandler STextDocumentHover hoverProvider
       ]
   , pluginRules = wingmanRules plId
-  , pluginCustomConfig =
-      mkCustomConfig properties
+  , pluginConfigDescriptor =
+      defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
+  , pluginModifyDynflags = staticPlugin
   }
 
 
@@ -69,16 +74,17 @@ codeActionProvider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
       cfg <- getTacticConfig plId
       liftIO $ fromMaybeT (Right $ List []) $ do
-        (_, jdg, _, dflags) <- judgementForHole state nfp range $ cfg_feature_set cfg
+        HoleJudgment{..} <- judgementForHole state nfp range cfg
         actions <- lift $
           -- This foldMap is over the function monoid.
           foldMap commandProvider [minBound .. maxBound] $ TacticProviderData
-            { tpd_dflags = dflags
+            { tpd_dflags = hj_dflags
             , tpd_config = cfg
             , tpd_plid   = plId
             , tpd_uri    = uri
             , tpd_range  = range
-            , tpd_jdg    = jdg
+            , tpd_jdg    = hj_jdg
+            , tpd_hole_sort = hj_hole_sort
             }
         pure $ Right $ List actions
 codeActionProvider _ _ _ = pure $ Right $ List []
@@ -93,26 +99,34 @@ showUserFacingMessage ufm = do
   pure $ Left $ mkErr InternalError $ T.pack $ show ufm
 
 
-tacticCmd :: (OccName -> TacticsM ()) -> PluginId -> CommandFunction IdeState TacticParams
+tacticCmd
+    :: (T.Text -> TacticsM ())
+    -> PluginId
+    -> CommandFunction IdeState TacticParams
 tacticCmd tac pId state (TacticParams uri range var_name)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
-      features <- getFeatureSet pId
+      let stale a = runStaleIde "tacticCmd" state nfp a
+
       ccs <- getClientCapabilities
       cfg <- getTacticConfig pId
       res <- liftIO $ runMaybeT $ do
-        (range', jdg, ctx, dflags) <- judgementForHole state nfp range features
-        let span = fmap (rangeToRealSrcSpan (fromNormalizedFilePath nfp)) range'
-        TrackedStale pm pmmap <- runStaleIde state nfp GetAnnotatedParsedSource
+        HoleJudgment{..} <- judgementForHole state nfp range cfg
+        let span = fmap (rangeToRealSrcSpan (fromNormalizedFilePath nfp)) hj_range
+        TrackedStale pm pmmap <- stale GetAnnotatedParsedSource
         pm_span <- liftMaybe $ mapAgeFrom pmmap span
+        let t = tac var_name
 
-        timingOut (cfg_timeout_seconds cfg * seconds) $ join $
-          case runTactic ctx jdg $ tac $ mkVarOcc $ T.unpack var_name of
-            Left _ -> Left TacticErrors
+        timingOut (cfg_timeout_seconds cfg * seconds) $ do
+          res <- liftIO $ runTactic hj_ctx hj_jdg t
+          pure $ join $ case res of
+            Left errs ->  do
+              traceMX "errs" errs
+              Left TacticErrors
             Right rtr ->
               case rtr_extract rtr of
                 L _ (HsVar _ (L _ rdr)) | isHole (occName rdr) ->
                   Left NothingToDo
-                _ -> pure $ mkTacticResultEdits pm_span dflags ccs uri pm rtr
+                _ -> pure $ mkTacticResultEdits pm_span hj_dflags ccs uri pm rtr
 
       case res of
         Nothing -> do
@@ -137,9 +151,9 @@ seconds = 1e6
 
 timingOut
     :: Int  -- ^ Time in microseconds
-    -> a    -- ^ Computation to run
+    -> IO a    -- ^ Computation to run
     -> MaybeT IO a
-timingOut t m = MaybeT $ timeout t $ evaluate m
+timingOut t m = MaybeT $ timeout t m
 
 
 mkErr :: ErrorCode -> T.Text -> ResponseError

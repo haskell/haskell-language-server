@@ -1,5 +1,0 @@
-test =
-  case (case (Just "") of
-  Nothing -> _
-  Just l_c -> _) of
-    True -> _

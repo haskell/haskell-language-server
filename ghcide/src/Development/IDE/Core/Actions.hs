@@ -28,9 +28,9 @@ import           Development.IDE.GHC.Compat           hiding (TargetFile,
                                                        parseModule,
                                                        typecheckModule,
                                                        writeHieFile)
+import           Development.IDE.Graph
 import qualified Development.IDE.Spans.AtPoint        as AtPoint
 import           Development.IDE.Types.Location
-import           Development.Shake                    hiding (Diagnostic)
 import qualified HieDb
 import           Language.LSP.Types                   (DocumentHighlight (..),
                                                        SymbolInformation (..))
@@ -116,7 +116,7 @@ highlightAtPoint file pos = runMaybeT $ do
 refsAtPoint :: NormalizedFilePath -> Position -> Action [Location]
 refsAtPoint file pos = do
     ShakeExtras{hiedb} <- getShakeExtras
-    fs <- HM.keys <$> getFilesOfInterest
+    fs <- HM.keys <$> getFilesOfInterestUntracked
     asts <- HM.fromList . mapMaybe sequence . zip fs <$> usesWithStale GetHieAst fs
     AtPoint.referencesAtPoint hiedb file pos (AtPoint.FOIReferences asts)
 

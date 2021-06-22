@@ -3,6 +3,7 @@ resolver: lts-16.11 # Last 8.8.3
 packages:
   - .
   - ./hie-compat
+  - ./hls-graph
   - ./ghcide/
   - ./shake-bench
   - ./hls-plugin-api
@@ -11,33 +12,43 @@ packages:
   - ./plugins/hls-haddock-comments-plugin
   - ./plugins/hls-eval-plugin
   - ./plugins/hls-explicit-imports-plugin
+  - ./plugins/hls-refine-imports-plugin
   - ./plugins/hls-hlint-plugin
   - ./plugins/hls-retrie-plugin
   - ./plugins/hls-splice-plugin
   - ./plugins/hls-tactics-plugin
   - ./plugins/hls-brittany-plugin
   - ./plugins/hls-stylish-haskell-plugin
+  - ./plugins/hls-floskell-plugin
+  - ./plugins/hls-fourmolu-plugin
+  - ./plugins/hls-pragmas-plugin
+  - ./plugins/hls-module-name-plugin
+  - ./plugins/hls-ormolu-plugin
 
 ghc-options:
   "$everything": -haddock
 
 extra-deps:
   - aeson-1.5.2.0
-  - apply-refact-0.9.0.0
-  - brittany-0.13.1.0
+  - apply-refact-0.9.3.0
+  - brittany-0.13.1.2
   - bytestring-trie-0.2.5.0
   - cabal-plan-0.6.2.0
   - clock-0.7.2
   - constrained-dynamic-0.1.0.0
   - floskell-0.10.4
   - fourmolu-0.3.0.0
-  - ghc-exactprint-0.6.3.4
+  - # ghc-api-compat-8.6
+    github: hsyl20/ghc-api-compat
+    commit: 8fee87eac97a538dbe81ff1ab18cff10f2f9fa15
+  - ghc-check-0.5.0.4
+  - ghc-exactprint-0.6.4
   - ghc-lib-8.10.4.20210206
   - ghc-lib-parser-8.10.4.20210206
   - ghc-trace-events-0.1.2.1
   - haskell-src-exts-1.21.1
   - heapsize-0.3.0
-  - hie-bios-0.7.4
+  - hie-bios-0.7.5
   - hlint-3.2.3
   - HsYAML-aeson-0.2.0.0@rev:2
   - hoogle-5.0.17.11
@@ -53,9 +64,11 @@ extra-deps:
   - refinery-0.3.0.0
   - retrie-0.1.1.1
   - semigroups-0.18.5
+  - shake-0.19.4
   - stylish-haskell-0.12.2.0
   - temporary-1.2.1.1
   - uniplate-1.6.13
+  - th-compat-0.1.2@sha256:3d55de1adc542c1a870c9ada90da2fbbe5f4e8bcd3eed545a55c3df9311b32a8,2854
   - bytestring-encoding-0.1.0.0@sha256:460b49779fbf0112e8e2f1753c1ed9131eb18827600c298f4d6bb51c4e8c1c0d,1727
   - hiedb-0.3.0.1
   - sqlite-simple-0.4.18.0@sha256:3ceea56375c0a3590c814e411a4eb86943f8d31b93b110ca159c90689b6b39e5,3002
@@ -84,8 +97,10 @@ flags:
     pedantic: true
   retrie:
     BuildExecutable: false
-
-# allow-newer: true
+  # Stack doesn't support automatic flags.
+  # Until the formatters support ghc-lib-9, we need this flag disabled
+  hls-hlint-plugin:
+    hlint33: false
 
 nix:
   packages: [icu libcxx zlib]

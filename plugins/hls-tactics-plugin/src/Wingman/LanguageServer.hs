@@ -1,30 +1,33 @@
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes        #-}
+{-# LANGUAGE TupleSections     #-}
 {-# LANGUAGE TypeFamilies      #-}
+
+{-# LANGUAGE NoMonoLocalBinds  #-}
 
 module Wingman.LanguageServer where
 
 import           ConLike
 import           Control.Arrow ((***))
 import           Control.Monad
-import           Control.Monad.State (State, get, put, evalState)
+import           Control.Monad.IO.Class
+import           Control.Monad.RWS
+import           Control.Monad.State (State, evalState)
 import           Control.Monad.Trans.Maybe
 import           Data.Bifunctor (first)
 import           Data.Coerce
 import           Data.Functor ((<&>))
-import           Data.Generics.Aliases (mkQ)
-import           Data.Generics.Schemes (everything)
+import           Data.Functor.Identity (runIdentity)
 import qualified Data.HashMap.Strict as Map
 import           Data.IORef (readIORef)
 import qualified Data.Map as M
 import           Data.Maybe
-import           Data.Monoid
 import           Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
 import           Data.Traversable
-import           Development.IDE (getFilesOfInterest, ShowDiagnostic (ShowDiag), srcSpanToRange)
+import           Development.IDE (getFilesOfInterestUntracked, ShowDiagnostic (ShowDiag), srcSpanToRange)
 import           Development.IDE (hscEnv)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Rules (usePropertyAction)
@@ -32,33 +35,37 @@ import           Development.IDE.Core.Service (runAction)
 import           Development.IDE.Core.Shake (IdeState (..), uses, define, use)
 import qualified Development.IDE.Core.Shake as IDE
 import           Development.IDE.Core.UseStale
-import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat hiding (parseExpr)
 import           Development.IDE.GHC.Error (realSrcSpanToRange)
 import           Development.IDE.GHC.ExactPrint
+import           Development.IDE.Graph (Action, RuleResult, Rules, action)
+import           Development.IDE.Graph.Classes (Binary, Hashable, NFData)
 import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindings)
-import           Development.Shake (Action, RuleResult, Rules, action)
-import           Development.Shake.Classes (Typeable, Binary, Hashable, NFData)
 import qualified FastString
 import           GHC.Generics (Generic)
-import           GhcPlugins (tupleDataCon, consDataCon, substTyAddInScope, ExternalPackageState, HscEnv (hsc_EPS), liftIO)
+import           Generics.SYB hiding (Generic)
+import           GhcPlugins (tupleDataCon, consDataCon, substTyAddInScope, ExternalPackageState, HscEnv (hsc_EPS), unpackFS)
 import qualified Ide.Plugin.Config as Plugin
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils (usePropertyLsp)
 import           Ide.Types (PluginId)
+import           Language.Haskell.GHC.ExactPrint (Transform)
+import           Language.Haskell.GHC.ExactPrint (modifyAnnsT, addAnnotationsForPretty)
 import           Language.LSP.Server (MonadLsp, sendNotification)
 import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities
 import           OccName
 import           Prelude hiding (span)
+import           Retrie (transformA)
 import           SrcLoc (containsSpan)
 import           TcRnTypes (tcg_binds, TcGblEnv)
 import           Wingman.Context
-import           Wingman.FeatureSet
 import           Wingman.GHC
 import           Wingman.Judgements
-import           Wingman.Judgements.SYB (everythingContaining)
+import           Wingman.Judgements.SYB (everythingContaining, metaprogramQ)
 import           Wingman.Judgements.Theta
 import           Wingman.Range
+import           Wingman.StaticPlugin (pattern WingmanMetaprogram, pattern MetaprogramSyntax)
 import           Wingman.Types
 
 
@@ -72,8 +79,8 @@ tcCommandName :: TacticCommand -> T.Text
 tcCommandName = T.pack . show
 
 
-runIde :: IdeState -> Action a -> IO a
-runIde state = runAction "tactic" state
+runIde :: String -> String -> IdeState -> Action a -> IO a
+runIde herald action state = runAction ("Wingman." <> herald <> "." <> action) state
 
 
 runCurrentIde
@@ -82,11 +89,13 @@ runCurrentIde
        , Eq a , Hashable a , Binary a , Show a , Typeable a , NFData a
        , Show r, Typeable r, NFData r
        )
-    => IdeState
+    => String
+    -> IdeState
     -> NormalizedFilePath
     -> a
     -> MaybeT IO (Tracked 'Current r)
-runCurrentIde state nfp a = MaybeT $ fmap (fmap unsafeMkCurrent) $ runIde state $ use a nfp
+runCurrentIde herald state nfp a =
+  MaybeT $ fmap (fmap unsafeMkCurrent) $ runIde herald (show a) state $ use a nfp
 
 
 runStaleIde
@@ -95,11 +104,13 @@ runStaleIde
        , Eq a , Hashable a , Binary a , Show a , Typeable a , NFData a
        , Show r, Typeable r, NFData r
        )
-    => IdeState
+    => String
+    -> IdeState
     -> NormalizedFilePath
     -> a
     -> MaybeT IO (TrackedStale r)
-runStaleIde state nfp a = MaybeT $ runIde state $ useWithStale a nfp
+runStaleIde herald state nfp a =
+  MaybeT $ runIde herald (show a) state $ useWithStale a nfp
 
 
 unsafeRunStaleIde
@@ -108,12 +119,13 @@ unsafeRunStaleIde
        , Eq a , Hashable a , Binary a , Show a , Typeable a , NFData a
        , Show r, Typeable r, NFData r
        )
-    => IdeState
+    => String
+    -> IdeState
     -> NormalizedFilePath
     -> a
     -> MaybeT IO r
-unsafeRunStaleIde state nfp a = do
-  (r, _) <- MaybeT $ runIde state $ IDE.useWithStale a nfp
+unsafeRunStaleIde herald state nfp a = do
+  (r, _) <- MaybeT $ runIde herald (show a) state $ IDE.useWithStale a nfp
   pure r
 
 
@@ -122,14 +134,14 @@ unsafeRunStaleIde state nfp a = do
 properties :: Properties
   '[ 'PropertyKey "hole_severity" ('TEnum (Maybe DiagnosticSeverity))
    , 'PropertyKey "max_use_ctor_actions" 'TInteger
-   , 'PropertyKey "features" 'TString
    , 'PropertyKey "timeout_duration" 'TInteger
+   , 'PropertyKey "auto_gas" 'TInteger
    ]
 properties = emptyProperties
+  & defineIntegerProperty #auto_gas
+    "The depth of the search tree when performing \"Attempt to fill hole\". Bigger values will be able to derive more solutions, but will take exponentially more time." 4
   & defineIntegerProperty #timeout_duration
     "The timeout for Wingman actions, in seconds" 2
-  & defineStringProperty #features
-    "Feature set used by Wingman" ""
   & defineIntegerProperty #max_use_ctor_actions
     "Maximum number of `Use constructor <x>` code actions that can appear" 5
   & defineEnumProperty #hole_severity
@@ -147,14 +159,9 @@ properties = emptyProperties
 getTacticConfig :: MonadLsp Plugin.Config m => PluginId -> m Config
 getTacticConfig pId =
   Config
-    <$> (parseFeatureSet <$> usePropertyLsp #features pId properties)
-    <*> usePropertyLsp #max_use_ctor_actions pId properties
+    <$> usePropertyLsp #max_use_ctor_actions pId properties
     <*> usePropertyLsp #timeout_duration pId properties
-
-------------------------------------------------------------------------------
--- | Get the current feature set from the plugin config.
-getFeatureSet :: MonadLsp Plugin.Config m => PluginId -> m FeatureSet
-getFeatureSet  = fmap cfg_feature_set . getTacticConfig
+    <*> usePropertyLsp #auto_gas pId properties
 
 
 getIdeDynflags
@@ -164,8 +171,13 @@ getIdeDynflags
 getIdeDynflags state nfp = do
   -- Ok to use the stale 'ModIface', since all we need is its 'DynFlags'
   -- which don't change very often.
-  msr <- unsafeRunStaleIde state nfp GetModSummaryWithoutTimestamps
+  msr <- unsafeRunStaleIde "getIdeDynflags" state nfp GetModSummaryWithoutTimestamps
   pure $ ms_hspp_opts $ msrModSummary msr
+
+getAllMetaprograms :: Data a => a -> [String]
+getAllMetaprograms = everything (<>) $ mkQ mempty $ \case
+  WingmanMetaprogram fs -> [ unpackFS fs ]
+  (_ :: HsExpr GhcTc)  -> mempty
 
 
 ------------------------------------------------------------------------------
@@ -175,56 +187,71 @@ judgementForHole
     :: IdeState
     -> NormalizedFilePath
     -> Tracked 'Current Range
-    -> FeatureSet
-    -> MaybeT IO (Tracked 'Current Range, Judgement, Context, DynFlags)
-judgementForHole state nfp range features = do
-  TrackedStale asts amapping  <- runStaleIde state nfp GetHieAst
+    -> Config
+    -> MaybeT IO HoleJudgment
+judgementForHole state nfp range cfg = do
+  let stale a = runStaleIde "judgementForHole" state nfp a
+
+  TrackedStale asts amapping  <- stale GetHieAst
   case unTrack asts of
     HAR _ _  _ _ (HieFromDisk _) -> fail "Need a fresh hie file"
     HAR _ (unsafeCopyAge asts -> hf) _ _ HieFresh -> do
       range' <- liftMaybe $ mapAgeFrom amapping range
-      binds <- runStaleIde state nfp GetBindings
-      tcg <- fmap (fmap tmrTypechecked)
-           $ runStaleIde state nfp TypeCheck
-      hscenv <- runStaleIde state nfp GhcSessionDeps
+      binds <- stale GetBindings
+      tcg@(TrackedStale tcg_t tcg_map)
+          <- fmap (fmap tmrTypechecked)
+           $ stale TypeCheck
+
+      hscenv <- stale GhcSessionDeps
 
       (rss, g) <- liftMaybe $ getSpanAndTypeAtHole range' hf
+
       new_rss <- liftMaybe $ mapAgeTo amapping rss
+      tcg_rss <- liftMaybe $ mapAgeFrom tcg_map new_rss
 
       -- KnownThings is just the instances in scope. There are no ranges
       -- involved, so it's not crucial to track ages.
       let henv = untrackedStaleValue $ hscenv
       eps <- liftIO $ readIORef $ hsc_EPS $ hscEnv henv
-      kt <- knownThings (untrackedStaleValue tcg) henv
 
-      (jdg, ctx) <- liftMaybe $ mkJudgementAndContext features g binds new_rss tcg eps kt
+      (jdg, ctx) <- liftMaybe $ mkJudgementAndContext cfg g binds new_rss tcg (hscEnv henv) eps
+      let mp = getMetaprogramAtSpan (fmap RealSrcSpan tcg_rss) tcg_t
 
       dflags <- getIdeDynflags state nfp
-      pure (fmap realSrcSpanToRange new_rss, jdg, ctx, dflags)
+      pure $ HoleJudgment
+        { hj_range = fmap realSrcSpanToRange new_rss
+        , hj_jdg = jdg
+        , hj_ctx = ctx
+        , hj_dflags = dflags
+        , hj_hole_sort = holeSortFor mp
+        }
 
+
+holeSortFor :: Maybe T.Text -> HoleSort
+holeSortFor = maybe Hole Metaprogram
 
 
 mkJudgementAndContext
-    :: FeatureSet
+    :: Config
     -> Type
     -> TrackedStale Bindings
     -> Tracked 'Current RealSrcSpan
     -> TrackedStale TcGblEnv
+    -> HscEnv
     -> ExternalPackageState
-    -> KnownThings
     -> Maybe (Judgement, Context)
-mkJudgementAndContext features g (TrackedStale binds bmap) rss (TrackedStale tcg tcgmap) eps kt = do
+mkJudgementAndContext cfg g (TrackedStale binds bmap) rss (TrackedStale tcg tcgmap) hscenv eps = do
   binds_rss <- mapAgeFrom bmap rss
   tcg_rss <- mapAgeFrom tcgmap rss
 
   let tcs = fmap tcg_binds tcg
-      ctx = mkContext features
+      ctx = mkContext cfg
               (mapMaybe (sequenceA . (occName *** coerce))
                 $ unTrack
                 $ getDefiningBindings <$> binds <*> binds_rss)
               (unTrack tcg)
+              hscenv
               eps
-              kt
               evidence
       top_provs = getRhsPosVals tcg_rss tcs
       already_destructed = getAlreadyDestructed (fmap RealSrcSpan tcg_rss) tcs
@@ -232,10 +259,12 @@ mkJudgementAndContext features g (TrackedStale binds bmap) rss (TrackedStale tcg
                $ hypothesisFromBindings binds_rss binds
       evidence = getEvidenceAtHole (fmap RealSrcSpan tcg_rss) tcs
       cls_hy = foldMap evidenceToHypothesis evidence
-      subst = ts_unifier $ appEndo (foldMap (Endo . evidenceToSubst) evidence) defaultTacticState
+      subst = ts_unifier $ evidenceToSubst evidence defaultTacticState
   pure $
     ( disallowing AlreadyDestructed already_destructed
-    $ fmap (CType . substTyAddInScope subst . unCType) $ mkFirstJudgement
+    $ fmap (CType . substTyAddInScope subst . unCType) $
+        mkFirstJudgement
+          ctx
           (local_hy <> cls_hy)
           (isRhsHole tcg_rss tcs)
           g
@@ -272,8 +301,12 @@ getSpanAndTypeAtHole r@(unTrack -> range) (unTrack -> hf) = do
         ty <- listToMaybe $ nodeType info
         guard $ ("HsUnboundVar","HsExpr") `S.member` nodeAnnotations info
         -- Ensure we're actually looking at a hole here
-        guard $ all (either (const False) $ isHole . occName)
-          $ M.keysSet $ nodeIdentifiers info
+        occ <- (either (const Nothing) (Just . occName) =<<)
+             . listToMaybe
+             . S.toList
+             . M.keysSet
+             $ nodeIdentifiers info
+        guard $ isHole occ
         pure (unsafeCopyAge r $ nodeSpan ast', ty)
 
 
@@ -505,7 +538,7 @@ wingmanRules plId = do
               )
 
   action $ do
-    files <- getFilesOfInterest
+    files <- getFilesOfInterestUntracked
     void $ uses WriteDiagnostics $ Map.keys files
 
 
@@ -530,6 +563,35 @@ mkWorkspaceEdits
     -> Graft (Either String) ParsedSource
     -> Either UserFacingMessage WorkspaceEdit
 mkWorkspaceEdits dflags ccs uri pm g = do
-  let response = transform dflags ccs uri g pm
+  let pm' = runIdentity $ transformA pm annotateMetaprograms
+  let response = transform dflags ccs uri g pm'
    in first (InfrastructureError . T.pack) response
+
+
+------------------------------------------------------------------------------
+-- | Add ExactPrint annotations to every metaprogram in the source tree.
+-- Usually the ExactPrint module can do this for us, but we've enabled
+-- QuasiQuotes, so the round-trip print/parse journey will crash.
+annotateMetaprograms :: Data a => a -> Transform a
+annotateMetaprograms = everywhereM $ mkM $ \case
+  L ss (WingmanMetaprogram mp) -> do
+    let x = L ss $ MetaprogramSyntax mp
+    let anns = addAnnotationsForPretty [] x mempty
+    modifyAnnsT $ mappend anns
+    pure x
+  (x :: LHsExpr GhcPs) -> pure x
+
+
+------------------------------------------------------------------------------
+-- | Find the source of a tactic metaprogram at the given span.
+getMetaprogramAtSpan
+    :: Tracked age SrcSpan
+    -> Tracked age TcGblEnv
+    -> Maybe T.Text
+getMetaprogramAtSpan (unTrack -> ss)
+  = fmap snd
+  . listToMaybe
+  . metaprogramQ ss
+  . tcg_binds
+  . unTrack
 

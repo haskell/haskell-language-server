@@ -12,7 +12,6 @@ import           FunctionalCodeAction
 import           FunctionalLiquid
 import           HieBios
 import           Highlight
-import           ModuleName
 import           Progress
 import           Reference
 import           Rename
@@ -36,7 +35,6 @@ main = defaultTestRunner
             , FunctionalLiquid.tests
             , HieBios.tests
             , Highlight.tests
-            , ModuleName.tests
             , Progress.tests
             , Reference.tests
             , Rename.tests

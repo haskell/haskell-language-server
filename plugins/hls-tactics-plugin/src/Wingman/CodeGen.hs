@@ -13,17 +13,18 @@ module Wingman.CodeGen
 import           ConLike
 import           Control.Lens ((%~), (<>~), (&))
 import           Control.Monad.Except
+import           Control.Monad.Reader (ask)
 import           Control.Monad.State
 import           Data.Bool (bool)
 import           Data.Functor ((<&>))
 import           Data.Generics.Labels ()
 import           Data.List
-import           Data.Monoid (Endo(..))
 import qualified Data.Set as S
 import           Data.Traversable
 import           DataCon
 import           Development.IDE.GHC.Compat
 import           GHC.Exts
+import           GHC.SourceGen (occNameToStr)
 import           GHC.SourceGen.Binds
 import           GHC.SourceGen.Expr
 import           GHC.SourceGen.Overloaded
@@ -32,6 +33,7 @@ import           GhcPlugins (isSymOcc, mkVarOccFS)
 import           OccName (occName)
 import           PatSyn
 import           Type hiding (Var)
+import           TysPrim (alphaTy)
 import           Wingman.CodeGen.Utils
 import           Wingman.GHC
 import           Wingman.Judgements
@@ -66,8 +68,7 @@ destructMatches use_field_puns f scrut t jdg = do
             -- #syn_scoped
             method_hy = foldMap evidenceToHypothesis ev
             args = conLikeInstOrigArgTys' con apps
-        modify $ appEndo $ foldMap (Endo . evidenceToSubst) ev
-        subst <- gets ts_unifier
+        ctx <- ask
 
         let names_in_scope = hyNamesInScope hy
             names = mkManyGoodNames (hyNamesInScope hy) args
@@ -77,9 +78,9 @@ destructMatches use_field_puns f scrut t jdg = do
         let hy' = patternHypothesis scrut con jdg
                 $ zip names'
                 $ coerce args
-            j = fmap (CType . substTyAddInScope subst . unCType)
-              $ introduce hy'
-              $ introduce method_hy
+            j = withNewCoercions (evidenceToCoercions ev)
+              $ introduce ctx hy'
+              $ introduce ctx method_hy
               $ withNewGoal g jdg
         ext <- f con j
         pure $ ext
@@ -251,7 +252,22 @@ buildDataCon
     -> [Type]             -- ^ Type arguments for the data con
     -> RuleM (Synthesized (LHsExpr GhcPs))
 buildDataCon should_blacklist jdg dc tyapps = do
-  let args = conLikeInstOrigArgTys' dc tyapps
+  args <- case dc of
+    RealDataCon dc' -> do
+      let (skolems', theta, args) = dataConInstSig dc' tyapps
+      modify $ \ts ->
+        evidenceToSubst (foldMap mkEvidence theta) ts
+          & #ts_skolems <>~ S.fromList skolems'
+      pure args
+    _ ->
+      -- If we have a 'PatSyn', we can't continue, since there is no
+      -- 'dataConInstSig' equivalent for 'PatSyn's. I don't think this is
+      -- a fundamental problem, but I don't know enough about the GHC internals
+      -- to implement it myself.
+      --
+      -- Fortunately, this isn't an issue in practice, since 'PatSyn's are
+      -- never in the hypothesis.
+      throwError $ TacticPanic "Can't build Pattern constructors yet"
   ext
       <- fmap unzipTrace
        $ traverse ( \(arg, n) ->
@@ -273,4 +289,30 @@ mkApply occ (lhs : rhs : more)
   | isSymOcc occ
   = noLoc $ foldl' (@@) (op lhs (coerceName occ) rhs) more
 mkApply occ args = noLoc $ foldl' (@@) (var' occ) args
+
+
+------------------------------------------------------------------------------
+-- | Run a tactic over each term in the given 'Hypothesis', binding the results
+-- of each in a let expression.
+letForEach
+    :: (OccName -> OccName)           -- ^ How to name bound variables
+    -> (HyInfo CType -> TacticsM ())  -- ^ The tactic to run
+    -> Hypothesis CType               -- ^ Terms to generate bindings for
+    -> Judgement                      -- ^ The goal of original hole
+    -> RuleM (Synthesized (LHsExpr GhcPs))
+letForEach rename solve (unHypothesis -> hy) jdg = do
+  case hy of
+    [] -> newSubgoal jdg
+    _ -> do
+      ctx <- ask
+      let g = jGoal jdg
+      terms <- fmap sequenceA $ for hy $ \hi -> do
+        let name = rename $ hi_name hi
+        let generalized_let_ty = CType alphaTy
+        res <- tacticToRule (withNewGoal generalized_let_ty jdg) $ solve hi
+        pure $ fmap ((name,) . unLoc) res
+      let hy' = fmap (g <$) $ syn_val terms
+          matches = fmap (fmap (\(occ, expr) -> valBind (occNameToStr occ) expr)) terms
+      g <- fmap (fmap unLoc) $ newSubgoal $ introduce ctx (userHypothesis hy') jdg
+      pure $ fmap noLoc $ let' <$> matches <*> g
 

@@ -1,4 +1,6 @@
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE GADTs             #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Test.Hls
   ( module Test.Tasty.HUnit,
     module Test.Tasty,
@@ -10,10 +12,13 @@ module Test.Hls
     module Control.Applicative.Combinators,
     defaultTestRunner,
     goldenGitDiff,
+    goldenWithHaskellDoc,
+    goldenWithHaskellDocFormatter,
     def,
     runSessionWithServer,
     runSessionWithServerFormatter,
     runSessionWithServer',
+    waitForProgressDone,
     PluginDescriptor,
     IdeState,
   )
@@ -23,17 +28,20 @@ import           Control.Applicative.Combinators
 import           Control.Concurrent.Async          (async, cancel, wait)
 import           Control.Concurrent.Extra
 import           Control.Exception.Base
+import           Control.Monad                     (unless)
 import           Control.Monad.IO.Class
 import           Data.ByteString.Lazy              (ByteString)
 import           Data.Default                      (def)
 import qualified Data.Text                         as T
+import qualified Data.Text.Lazy                    as TL
+import qualified Data.Text.Lazy.Encoding           as TL
 import           Development.IDE                   (IdeState, hDuplicateTo',
                                                     noLogging)
+import           Development.IDE.Graph             (ShakeOptions (shakeThreads))
 import           Development.IDE.Main
 import qualified Development.IDE.Main              as Ghcide
 import qualified Development.IDE.Plugin.HLS.GhcIde as Ghcide
 import           Development.IDE.Types.Options
-import           Development.Shake                 (ShakeOptions (shakeThreads))
 import           GHC.IO.Handle
 import           Ide.Plugin.Config                 (Config, formattingProvider)
 import           Ide.PluginUtils                   (pluginDescToIdePlugins)
@@ -43,6 +51,7 @@ import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities   (ClientCapabilities)
 import           System.Directory                  (getCurrentDirectory,
                                                     setCurrentDirectory)
+import           System.FilePath
 import           System.IO.Extra
 import           System.IO.Unsafe                  (unsafePerformIO)
 import           System.Process.Extra              (createPipe)
@@ -59,10 +68,47 @@ defaultTestRunner :: TestTree -> IO ()
 defaultTestRunner = defaultMainWithRerun . adjustOption (const $ mkTimeout 600000000)
 
 gitDiff :: FilePath -> FilePath -> [String]
-gitDiff fRef fNew = ["git", "diff", "--no-index", "--text", "--exit-code", fRef, fNew]
+gitDiff fRef fNew = ["git", "-c", "core.fileMode=false", "diff", "--no-index", "--text", "--exit-code", fRef, fNew]
 
 goldenGitDiff :: TestName -> FilePath -> IO ByteString -> TestTree
 goldenGitDiff name = goldenVsStringDiff name gitDiff
+
+goldenWithHaskellDoc
+  :: PluginDescriptor IdeState
+  -> TestName
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> (TextDocumentIdentifier -> Session ())
+  -> TestTree
+goldenWithHaskellDoc plugin title testDataDir path desc ext act =
+  goldenGitDiff title (testDataDir </> path <.> desc <.> ext)
+  $ runSessionWithServer plugin testDataDir
+  $ TL.encodeUtf8 . TL.fromStrict
+  <$> do
+    doc <- openDoc (path <.> ext) "haskell"
+    act doc
+    documentContents doc
+
+goldenWithHaskellDocFormatter
+  :: PluginDescriptor IdeState
+  -> String
+  -> TestName
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> (TextDocumentIdentifier -> Session ())
+  -> TestTree
+goldenWithHaskellDocFormatter plugin formatter title testDataDir path desc ext act =
+  goldenGitDiff title (testDataDir </> path <.> desc <.> ext)
+  $ runSessionWithServerFormatter plugin formatter testDataDir
+  $ TL.encodeUtf8 . TL.fromStrict
+  <$> do
+    doc <- openDoc (path <.> ext) "haskell"
+    act doc
+    documentContents doc
 
 runSessionWithServer :: PluginDescriptor IdeState -> FilePath -> Session a -> IO a
 runSessionWithServer plugin = runSessionWithServer' [plugin] def def fullCaps
@@ -134,3 +180,15 @@ runSessionWithServer' plugin conf sconf caps root s = withLock lock $ keepCurren
       (t, _) <- duration $ cancel server
       putStrLn $ "Finishing canceling (took " <> showDuration t <> "s)"
   pure x
+
+-- | Wait for all progress to be done
+-- Needs at least one progress done notification to return
+waitForProgressDone :: Session ()
+waitForProgressDone = loop
+  where
+    loop = do
+      () <- skipManyTill anyMessage $ satisfyMaybe $ \case
+        FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (End _))) -> Just ()
+        _ -> Nothing
+      done <- null <$> getIncompleteProgressSessions
+      unless done loop

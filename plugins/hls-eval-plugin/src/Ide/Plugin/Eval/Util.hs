@@ -25,8 +25,9 @@ import           Data.String                (IsString (fromString))
 import qualified Data.Text                  as T
 import           Development.IDE            (IdeState, Priority (..), ideLogger,
                                              logPriority)
+import           Development.IDE.GHC.Compat (gcatch)
 import           Exception                  (ExceptionMonad, SomeException (..),
-                                             evaluate, gcatch)
+                                             evaluate)
 import           GHC.Exts                   (toList)
 import           GHC.Stack                  (HasCallStack, callStack,
                                              srcLocFile, srcLocStartCol,

@@ -3,11 +3,13 @@
 
 module Wingman.GHC where
 
+import           Bag (bagToList)
+import           Class (classTyVars)
 import           ConLike
-import           Control.Applicative (empty)
 import           Control.Monad.State
 import           Control.Monad.Trans.Maybe (MaybeT(..))
 import           CoreUtils (exprType)
+import           Data.Bool (bool)
 import           Data.Function (on)
 import           Data.Functor ((<&>))
 import           Data.List (isPrefixOf)
@@ -17,20 +19,21 @@ import           Data.Set (Set)
 import qualified Data.Set as S
 import           Data.Traversable
 import           DataCon
-import           Development.IDE (HscEnvEq (hscEnv))
-import           Development.IDE.Core.Compile (lookupName)
 import           Development.IDE.GHC.Compat hiding (exprType)
 import           DsExpr (dsExpr)
 import           DsMonad (initDs)
+import           FamInst (tcLookupDataFamInst_maybe)
+import           FamInstEnv (normaliseType)
 import           GHC.SourceGen (lambda)
 import           Generics.SYB (Data, everything, everywhere, listify, mkQ, mkT)
-import           GhcPlugins (extractModule, GlobalRdrElt (gre_name))
+import           GhcPlugins (Role (Nominal))
 import           OccName
 import           TcRnMonad
 import           TcType
 import           TyCoRep
 import           Type
 import           TysWiredIn (charTyCon, doubleTyCon, floatTyCon, intTyCon)
+import           Unify
 import           Unique
 import           Var
 import           Wingman.Types
@@ -73,7 +76,7 @@ isFunction _                                    = True
 -- context.
 tacticsSplitFunTy :: Type -> ([TyVar], ThetaType, [Type], Type)
 tacticsSplitFunTy t
-  = let (vars, theta, t') = tcSplitSigmaTy t
+  = let (vars, theta, t') = tcSplitNestedSigmaTys t
         (args, res) = tcSplitFunTys t'
      in (vars, theta, args, res)
 
@@ -110,7 +113,7 @@ freshTyvars t = do
         case M.lookup tv reps of
           Just tv' -> tv'
           Nothing  -> tv
-      ) t
+      ) $ snd $ tcSplitForAllTys t
 
 
 ------------------------------------------------------------------------------
@@ -196,6 +199,15 @@ pattern AMatch ctx pats body <-
         }
 
 
+pattern SingleLet :: IdP GhcPs -> [Pat GhcPs] -> HsExpr GhcPs -> HsExpr GhcPs -> HsExpr GhcPs
+pattern SingleLet bind pats val expr <-
+  HsLet _
+    (L _ (HsValBinds _
+      (ValBinds _ (bagToList ->
+        [(L _ (FunBind _ (L _ bind) (MG _ (L _ [L _ (AMatch _ pats val)]) _) _ _))]) _)))
+    (L _ expr)
+
+
 ------------------------------------------------------------------------------
 -- | A pattern over the otherwise (extremely) messy AST for lambdas.
 pattern Lambda :: [Pat GhcPs] -> HsExpr GhcPs -> HsExpr GhcPs
@@ -238,6 +250,13 @@ unpackMatches _ = Nothing
 pattern Case :: PatCompattable p => HsExpr p -> [(Pat p, LHsExpr p)] -> HsExpr p
 pattern Case scrutinee matches <-
   HsCase _ (L _ scrutinee)
+    (MG {mg_alts = L _ (fmap unLoc -> unpackMatches -> Just matches)})
+
+------------------------------------------------------------------------------
+-- | Like 'Case', but for lambda cases.
+pattern LamCase :: PatCompattable p => [(Pat p, LHsExpr p)] -> HsExpr p
+pattern LamCase matches <-
+  HsLamCase _
     (MG {mg_alts = L _ (fmap unLoc -> unpackMatches -> Just matches)})
 
 
@@ -311,40 +330,6 @@ unXPat (XPat (L _ pat)) = unXPat pat
 unXPat pat              = pat
 
 
-------------------------------------------------------------------------------
--- | Build a 'KnownThings'.
-knownThings :: TcGblEnv -> HscEnvEq -> MaybeT IO KnownThings
-knownThings tcg hscenv= do
-  let cls = knownClass tcg hscenv
-  KnownThings
-    <$> cls (mkClsOcc "Semigroup")
-    <*> cls (mkClsOcc "Monoid")
-
-
-------------------------------------------------------------------------------
--- | Like 'knownThing' but specialized to classes.
-knownClass :: TcGblEnv -> HscEnvEq -> OccName -> MaybeT IO Class
-knownClass = knownThing $ \case
-  ATyCon tc -> tyConClass_maybe tc
-  _         -> Nothing
-
-
-------------------------------------------------------------------------------
--- | Helper function for defining 'knownThings'.
-knownThing :: (TyThing -> Maybe a) -> TcGblEnv -> HscEnvEq -> OccName -> MaybeT IO a
-knownThing f tcg hscenv occ = do
-  let modul = extractModule tcg
-      rdrenv = tcg_rdr_env tcg
-
-  case lookupOccEnv rdrenv occ of
-    Nothing -> empty
-    Just elts -> do
-      mvar <- lift $ lookupName (hscEnv hscenv) modul $ gre_name $ head elts
-      case mvar of
-        Just tt -> liftMaybe $ f tt
-        _ -> empty
-
-
 liftMaybe :: Monad m => Maybe a -> MaybeT m a
 liftMaybe a = MaybeT $ pure a
 
@@ -354,4 +339,64 @@ liftMaybe a = MaybeT $ pure a
 -- not use it, but sometimes it can't be helped.
 typeCheck :: HscEnv -> TcGblEnv -> HsExpr GhcTc -> IO (Maybe Type)
 typeCheck hscenv tcg = fmap snd . initDs hscenv tcg . fmap exprType . dsExpr
+
+
+mkFunTys' :: [Type] -> Type -> Type
+mkFunTys' =
+#if __GLASGOW_HASKELL__ <= 808
+  mkFunTys
+#else
+  mkVisFunTys
+#endif
+
+
+------------------------------------------------------------------------------
+-- | Expand type and data families
+normalizeType :: Context -> Type -> Type
+normalizeType ctx ty =
+  let ty' = expandTyFam ctx ty
+   in case tcSplitTyConApp_maybe ty' of
+        Just (tc, tys) ->
+          -- try to expand any data families
+          case tcLookupDataFamInst_maybe (ctxFamInstEnvs ctx) tc tys of
+            Just (dtc, dtys, _) -> mkAppTys (mkTyConTy dtc) dtys
+            Nothing -> ty'
+        Nothing -> ty'
+
+------------------------------------------------------------------------------
+-- | Expand type families
+expandTyFam :: Context -> Type -> Type
+expandTyFam ctx = snd . normaliseType  (ctxFamInstEnvs ctx) Nominal
+
+
+------------------------------------------------------------------------------
+-- | Like 'tcUnifyTy', but takes a list of skolems to prevent unification of.
+tryUnifyUnivarsButNotSkolems :: Set TyVar -> CType -> CType -> Maybe TCvSubst
+tryUnifyUnivarsButNotSkolems skolems goal inst =
+  case tcUnifyTysFG
+         (bool BindMe Skolem . flip S.member skolems)
+         [unCType inst]
+         [unCType goal] of
+    Unifiable subst -> pure subst
+    _               -> Nothing
+
+
+updateSubst :: TCvSubst -> TacticState -> TacticState
+updateSubst subst s = s { ts_unifier = unionTCvSubst subst (ts_unifier s) }
+
+
+------------------------------------------------------------------------------
+-- | Get the class methods of a 'PredType', correctly dealing with
+-- instantiation of quantified class types.
+methodHypothesis :: PredType -> Maybe [HyInfo CType]
+methodHypothesis ty = do
+  (tc, apps) <- splitTyConApp_maybe ty
+  cls <- tyConClass_maybe tc
+  let methods = classMethods cls
+      tvs     = classTyVars cls
+      subst   = zipTvSubst tvs apps
+  pure $ methods <&> \method ->
+    let (_, _, ty) = tcSplitSigmaTy $ idType method
+    in ( HyInfo (occName method) (ClassMethodPrv $ Uniquely cls) $ CType $ substTy subst ty
+       )
 

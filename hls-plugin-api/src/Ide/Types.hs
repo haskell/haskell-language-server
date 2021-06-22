@@ -38,7 +38,8 @@ import           Data.Semigroup
 import           Data.String
 import qualified Data.Text                       as T
 import           Data.Text.Encoding              (encodeUtf8)
-import           Development.Shake               hiding (command)
+import           Development.IDE.Graph
+import           DynFlags                        (DynFlags)
 import           GHC.Generics
 import           Ide.Plugin.Config
 import           Ide.Plugin.Properties
@@ -56,6 +57,30 @@ import           Text.Regex.TDFA.Text            ()
 newtype IdePlugins ideState = IdePlugins
   { ipMap :: [(PluginId, PluginDescriptor ideState)]}
 
+-- | Hooks for modifying the 'DynFlags' at different times of the compilation
+-- process. Plugins can install a 'DynFlagsModifications' via
+-- 'pluginModifyDynflags' in their 'PluginDescriptor'.
+data DynFlagsModifications =
+  DynFlagsModifications
+    { -- | Invoked immediately at the package level. Changes to the 'DynFlags'
+      -- made in 'dynFlagsModifyGlobal' are guaranteed to be seen everywhere in
+      -- the compilation pipeline.
+      dynFlagsModifyGlobal :: DynFlags -> DynFlags
+      -- | Invoked just before the parsing step, and reset immediately
+      -- afterwards. 'dynFlagsModifyParser' allows plugins to enable language
+      -- extensions only during parsing. for example, to let them enable
+      -- certain pieces of syntax.
+    , dynFlagsModifyParser :: DynFlags -> DynFlags
+    }
+
+instance Semigroup DynFlagsModifications where
+  DynFlagsModifications g1 p1 <> DynFlagsModifications g2 p2 =
+    DynFlagsModifications (g2 . g1) (p2 . p1)
+
+instance Monoid DynFlagsModifications where
+  mempty = DynFlagsModifications id id
+
+
 -- ---------------------------------------------------------------------
 
 data PluginDescriptor ideState =
@@ -63,18 +88,47 @@ data PluginDescriptor ideState =
                    , pluginRules        :: !(Rules ())
                    , pluginCommands     :: ![PluginCommand ideState]
                    , pluginHandlers     :: PluginHandlers ideState
-                   , pluginCustomConfig :: CustomConfig
+                   , pluginConfigDescriptor :: ConfigDescriptor
                    , pluginNotificationHandlers :: PluginNotificationHandlers ideState
+                   , pluginModifyDynflags :: DynFlagsModifications
                    }
 
--- | An existential wrapper of 'Properties', used only for documenting and generating config templates
+-- | An existential wrapper of 'Properties'
 data CustomConfig = forall r. CustomConfig (Properties r)
 
-emptyCustomConfig :: CustomConfig
-emptyCustomConfig = CustomConfig emptyProperties
+-- | Describes the configuration a plugin.
+-- A plugin may be configurable in such form:
+-- @
+-- {
+--  "plugin-id": {
+--    "globalOn": true,
+--    "codeActionsOn": true,
+--    "codeLensOn": true,
+--    "config": {
+--      "property1": "foo"
+--     }
+--   }
+-- }
+-- @
+-- @globalOn@, @codeActionsOn@, and @codeLensOn@ etc. are called generic configs,
+-- which can be inferred from handlers registered by the plugin.
+-- @config@ is called custom config, which is defined using 'Properties'.
+data ConfigDescriptor = ConfigDescriptor {
+  -- | Whether or not to generate generic configs.
+  configEnableGenericConfig :: Bool,
+  -- | Whether or not to generate @diagnosticsOn@ config.
+  -- Diagnostics emit in arbitrary shake rules,
+  -- so we can't know statically if the plugin produces diagnostics
+  configHasDiagnostics      :: Bool,
+  -- | Custom config.
+  configCustomConfig        :: CustomConfig
+}
 
 mkCustomConfig :: Properties r -> CustomConfig
 mkCustomConfig = CustomConfig
+
+defaultConfigDescriptor :: ConfigDescriptor
+defaultConfigDescriptor = ConfigDescriptor True False (mkCustomConfig emptyProperties)
 
 -- | Methods that can be handled by plugins.
 -- 'ExtraParams' captures any extra data the IDE passes to the handlers for this method
@@ -267,7 +321,8 @@ defaultPluginDescriptor plId =
     mempty
     mempty
     mempty
-    emptyCustomConfig
+    defaultConfigDescriptor
+    mempty
     mempty
 
 newtype CommandId = CommandId T.Text

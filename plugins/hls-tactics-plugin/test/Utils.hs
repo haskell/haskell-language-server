@@ -29,7 +29,6 @@ import           System.FilePath
 import           Test.Hls
 import           Test.Hspec
 import           Test.Hspec.Formatters (FailureReason(ExpectedButGot))
-import           Wingman.FeatureSet (FeatureSet, allFeatures, prettyFeatureSet)
 import           Wingman.LanguageServer (mkShowMessageParams)
 import           Wingman.Types
 
@@ -61,7 +60,7 @@ codeActionTitle (InR(CodeAction title _ _ _ _ _ _ _)) = Just title
 mkTest
     :: Foldable t
     => String  -- ^ The test name
-    -> FilePath  -- ^ The file to load
+    -> FilePath  -- ^ The file name stem (without extension) to load
     -> Int  -- ^ Cursor line
     -> Int  -- ^ Cursor columnn
     -> t ( Bool -> Bool   -- Use 'not' for actions that shouldnt be present
@@ -71,8 +70,7 @@ mkTest
     -> SpecWith (Arg Bool)
 mkTest name fp line col ts = it name $ do
   runSessionWithServer plugin tacticPath $ do
-    setFeatureSet allFeatures
-    doc <- openDoc fp "haskell"
+    doc <- openDoc (fp <.> "hs") "haskell"
     _ <- waitForDiagnostics
     actions <- getCodeActions doc $ pointRange line col
     let titles = mapMaybe codeActionTitle actions
@@ -82,36 +80,19 @@ mkTest name fp line col ts = it name $ do
         (title `elem` titles) `shouldSatisfy` f
 
 
-setFeatureSet :: FeatureSet -> Session ()
-setFeatureSet features = do
-  let unObject (Object obj) = obj
-      unObject _            = undefined
-      def_config = def :: Plugin.Config
-      config =
-        def_config
-          { Plugin.plugins = M.fromList [("tactics",
-              def { Plugin.plcConfig = unObject $ object ["features" .= prettyFeatureSet features] }
-          )] <> Plugin.plugins def_config }
-
-  sendNotification SWorkspaceDidChangeConfiguration $
-    DidChangeConfigurationParams $
-      toJSON config
-
 
 mkGoldenTest
     :: (Text -> Text -> Assertion)
-    -> FeatureSet
     -> TacticCommand
     -> Text
     -> Int
     -> Int
     -> FilePath
     -> SpecWith ()
-mkGoldenTest eq features tc occ line col input =
+mkGoldenTest eq tc occ line col input =
   it (input <> " (golden)") $ do
     runSessionWithServer plugin tacticPath $ do
-      setFeatureSet features
-      doc <- openDoc input "haskell"
+      doc <- openDoc (input <.> "hs") "haskell"
       _ <- waitForDiagnostics
       actions <- getCodeActions doc $ pointRange line col
       Just (InR CodeAction {_command = Just c})
@@ -119,7 +100,7 @@ mkGoldenTest eq features tc occ line col input =
       executeCommand c
       _resp <- skipManyTill anyMessage (message SWorkspaceApplyEdit)
       edited <- documentContents doc
-      let expected_name = input <.> "expected"
+      let expected_name = input <.> "expected" <.> "hs"
       -- Write golden tests if they don't already exist
       liftIO $ (doesFileExist expected_name >>=) $ flip unless $ do
         T.writeFile expected_name edited
@@ -128,21 +109,19 @@ mkGoldenTest eq features tc occ line col input =
 
 
 mkCodeLensTest
-    :: FeatureSet
-    -> FilePath
+    :: FilePath
     -> SpecWith ()
-mkCodeLensTest features input =
+mkCodeLensTest input =
   it (input <> " (golden)") $ do
     runSessionWithServer plugin tacticPath $ do
-      setFeatureSet features
-      doc <- openDoc input "haskell"
+      doc <- openDoc (input <.> "hs") "haskell"
       _ <- waitForDiagnostics
       lenses <- fmap (reverse . filter isWingmanLens) $ getCodeLenses doc
       for_ lenses $ \(CodeLens _ (Just cmd) _) ->
         executeCommand cmd
       _resp <- skipManyTill anyMessage (message SWorkspaceApplyEdit)
       edited <- documentContents doc
-      let expected_name = input <.> "expected"
+      let expected_name = input <.> "expected" <.> "hs"
       -- Write golden tests if they don't already exist
       liftIO $ (doesFileExist expected_name >>=) $ flip unless $ do
         T.writeFile expected_name edited
@@ -158,19 +137,17 @@ isWingmanLens _ = False
 
 
 mkShowMessageTest
-    :: FeatureSet
-    -> TacticCommand
+    :: TacticCommand
     -> Text
     -> Int
     -> Int
     -> FilePath
     -> UserFacingMessage
     -> SpecWith ()
-mkShowMessageTest features tc occ line col input ufm =
+mkShowMessageTest tc occ line col input ufm =
   it (input <> " (golden)") $ do
     runSessionWithServer plugin tacticPath $ do
-      setFeatureSet features
-      doc <- openDoc input "haskell"
+      doc <- openDoc (input <.> "hs") "haskell"
       _ <- waitForDiagnostics
       actions <- getCodeActions doc $ pointRange line col
       Just (InR CodeAction {_command = Just c})
@@ -181,10 +158,10 @@ mkShowMessageTest features tc occ line col input ufm =
 
 
 goldenTest :: TacticCommand -> Text -> Int -> Int -> FilePath -> SpecWith ()
-goldenTest = mkGoldenTest shouldBe allFeatures
+goldenTest = mkGoldenTest shouldBe
 
 goldenTestNoWhitespace :: TacticCommand -> Text -> Int -> Int -> FilePath -> SpecWith ()
-goldenTestNoWhitespace = mkGoldenTest shouldBeIgnoringSpaces allFeatures
+goldenTestNoWhitespace = mkGoldenTest shouldBeIgnoringSpaces
 
 
 shouldBeIgnoringSpaces :: Text -> Text -> Assertion

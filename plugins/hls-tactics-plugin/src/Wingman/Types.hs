@@ -26,10 +26,14 @@ import           Data.Set (Set)
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Tree
+import           Development.IDE (Range)
+import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.Compat hiding (Node)
 import           Development.IDE.GHC.Orphans ()
+import           FamInstEnv (FamInstEnvs)
 import           GHC.Generics
 import           GHC.SourceGen (var)
+import           GhcPlugins (GlobalRdrElt)
 import           InstEnv (InstEnvs(..))
 import           OccName
 import           Refinery.Tactic
@@ -38,7 +42,6 @@ import           Type (TCvSubst, Var, eqType, nonDetCmpType, emptyTCvSubst)
 import           UniqSupply (takeUniqFromSupply, mkSplitUniqSupply, UniqSupply)
 import           Unique (nonDetCmpUnique, Uniquable, getUnique, Unique)
 import           Wingman.Debug
-import           Wingman.FeatureSet
 
 
 ------------------------------------------------------------------------------
@@ -56,6 +59,8 @@ data TacticCommand
   | DestructAll
   | UseDataCon
   | Refine
+  | BeginMetaprogram
+  | RunMetaprogram
   deriving (Eq, Ord, Show, Enum, Bounded)
 
 -- | Generate a title for the command.
@@ -72,14 +77,24 @@ tacticTitle = (mappend "Wingman: " .) . go
     go DestructAll _            = "Split all function arguments"
     go UseDataCon dcon          = "Use constructor " <> dcon
     go Refine _                 = "Refine hole"
+    go BeginMetaprogram _       = "Use custom tactic block"
+    go RunMetaprogram _         = "Run custom tactic"
 
 
 ------------------------------------------------------------------------------
 -- | Plugin configuration for tactics
 data Config = Config
-  { cfg_feature_set          :: FeatureSet
-  , cfg_max_use_ctor_actions :: Int
+  { cfg_max_use_ctor_actions :: Int
   , cfg_timeout_seconds      :: Int
+  , cfg_auto_gas             :: Int
+  }
+  deriving (Eq, Ord, Show)
+
+emptyConfig :: Config
+emptyConfig = Config
+  { cfg_max_use_ctor_actions = 5
+  , cfg_timeout_seconds = 2
+  , cfg_auto_gas = 4
   }
 
 ------------------------------------------------------------------------------
@@ -196,6 +211,8 @@ data Provenance
       (Uniquely Class)     -- ^ Class
     -- | A binding explicitly written by the user.
   | UserPrv
+    -- | A binding explicitly imported by the user.
+  | ImportPrv
     -- | The recursive hypothesis. Present only in the context of the recursion
     -- tactic.
   | RecursivePrv
@@ -280,13 +297,14 @@ data Judgement' a = Judgement
   , _jWhitelistSplit    :: !Bool
   , _jIsTopHole         :: !Bool
   , _jGoal              :: !a
+  , j_coercion          :: TCvSubst
   }
-  deriving stock (Eq, Generic, Functor, Show)
+  deriving stock (Generic, Functor, Show)
 
 type Judgement = Judgement' CType
 
 
-newtype ExtractM a = ExtractM { unExtractM :: Reader Context a }
+newtype ExtractM a = ExtractM { unExtractM :: ReaderT Context IO a }
     deriving newtype (Functor, Applicative, Monad, MonadReader Context)
 
 ------------------------------------------------------------------------------
@@ -310,7 +328,7 @@ data TacticError
   | UnhelpfulSplit OccName
   | TooPolymorphic
   | NotInScope OccName
-  deriving stock (Eq)
+  | TacticPanic String
 
 instance Show TacticError where
     show (UndefinedHypothesis name) =
@@ -348,6 +366,8 @@ instance Show TacticError where
       "The tactic isn't applicable because the goal is too polymorphic"
     show (NotInScope name) =
       "Tried to do something with the out of scope name " <> show name
+    show (TacticPanic err) =
+      "PANIC: " <> err
 
 
 ------------------------------------------------------------------------------
@@ -398,10 +418,13 @@ data Context = Context
     -- ^ The functions currently being defined
   , ctxModuleFuncs   :: [(OccName, CType)]
     -- ^ Everything defined in the current module
-  , ctxFeatureSet    :: FeatureSet
-  , ctxKnownThings   :: KnownThings
+  , ctxConfig        :: Config
   , ctxInstEnvs      :: InstEnvs
+  , ctxFamInstEnvs   :: FamInstEnvs
   , ctxTheta         :: Set CType
+  , ctx_hscEnv       :: HscEnv
+  , ctx_occEnv       :: OccEnv [GlobalRdrElt]
+  , ctx_module       :: Module
   }
 
 instance Show Context where
@@ -409,17 +432,9 @@ instance Show Context where
     [ "Context "
     , showsPrec 10 ctxDefiningFuncs ""
     , showsPrec 10 ctxModuleFuncs ""
-    , showsPrec 10 ctxFeatureSet ""
+    , showsPrec 10 ctxConfig ""
     , showsPrec 10 ctxTheta ""
     ]
-
-
-------------------------------------------------------------------------------
--- | Things we'd like to look up, that don't exist in TysWiredIn.
-data KnownThings = KnownThings
-  { kt_semigroup :: Class
-  , kt_monoid    :: Class
-  }
 
 
 ------------------------------------------------------------------------------
@@ -429,10 +444,13 @@ emptyContext
   = Context
       { ctxDefiningFuncs = mempty
       , ctxModuleFuncs = mempty
-      , ctxFeatureSet = mempty
-      , ctxKnownThings = error "empty known things from emptyContext"
+      , ctxConfig = emptyConfig
+      , ctxFamInstEnvs = mempty
       , ctxInstEnvs = InstEnvs mempty mempty mempty
       , ctxTheta = mempty
+      , ctx_hscEnv = error "empty hsc env from emptyContext"
+      , ctx_occEnv = emptyOccEnv
+      , ctx_module = error "empty module from emptyContext"
       }
 
 
@@ -466,6 +484,7 @@ rose a rs = Rose $ Node a $ coerce rs
 data RunTacticResults = RunTacticResults
   { rtr_trace       :: Trace
   , rtr_extract     :: LHsExpr GhcPs
+  , rtr_subgoals    :: [Judgement]
   , rtr_other_solns :: [Synthesized (LHsExpr GhcPs)]
   , rtr_jdg         :: Judgement
   , rtr_ctx         :: Context
@@ -491,4 +510,16 @@ instance Show UserFacingMessage where
   show TimedOut                = "Wingman timed out while trying to find a solution"
   show NothingToDo             = "Nothing to do"
   show (InfrastructureError t) = "Internal error: " <> T.unpack t
+
+
+data HoleSort = Hole | Metaprogram T.Text
+  deriving (Eq, Ord, Show)
+
+data HoleJudgment = HoleJudgment
+  { hj_range     :: Tracked 'Current Range
+  , hj_jdg       :: Judgement
+  , hj_ctx       :: Context
+  , hj_dflags    :: DynFlags
+  , hj_hole_sort :: HoleSort
+  }
 

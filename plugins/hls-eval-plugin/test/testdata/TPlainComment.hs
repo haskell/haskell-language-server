@@ -4,7 +4,7 @@ Tests are ignored if:
     * do not start on the first column
     * are in multi line comments that open and close on the same line
 -}
-module TPlain where
+module TPlainComment where
 
 {- ORMOLU_DISABLE -}
 
@@ -22,4 +22,5 @@ module TPlain where
 
      >>> IGNORED as it does not start on the first column
 -}
+five :: Integer
 five = 5

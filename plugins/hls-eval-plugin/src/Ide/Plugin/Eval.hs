@@ -1,5 +1,5 @@
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
 {-# OPTIONS_GHC -Wwarn #-}
 
 {- |
@@ -9,15 +9,12 @@ module Ide.Plugin.Eval (
     descriptor,
 ) where
 
-import Development.IDE (IdeState)
+import           Development.IDE          (IdeState)
 import qualified Ide.Plugin.Eval.CodeLens as CL
-import Ide.Types (
-    PluginDescriptor (..),
-    PluginId,
-    defaultPluginDescriptor,
-    mkPluginHandler
- )
-import Language.LSP.Types
+import           Ide.Types                (PluginDescriptor (..), PluginId,
+                                           defaultPluginDescriptor,
+                                           mkPluginHandler)
+import           Language.LSP.Types
 
 -- |Plugin descriptor
 descriptor :: PluginId -> PluginDescriptor IdeState

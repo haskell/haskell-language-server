@@ -122,8 +122,7 @@ runLanguageServer options inH outH getHieDbLoc defaultConfig onConfigurationChan
         handleInit exitClientMsg clearReqId waitForCancel clientMsgChan env (RequestMessage _ _ m params) = otTracedHandler "Initialize" (show m) $ \sp -> do
             traceWithSpan sp params
             let root = LSP.resRootPath env
-
-            dir <- getCurrentDirectory
+            dir <- maybe getCurrentDirectory return root
             dbLoc <- getHieDbLoc dir
 
             -- The database needs to be open for the duration of the reactor thread, but we need to pass in a reference

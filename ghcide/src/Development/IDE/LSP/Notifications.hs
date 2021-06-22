@@ -11,10 +11,8 @@ module Development.IDE.LSP.Notifications
     , descriptor
     ) where
 
-import qualified Language.LSP.Server                   as LSP
 import           Language.LSP.Types
 import qualified Language.LSP.Types                    as LSP
-import qualified Language.LSP.Types.Capabilities       as LSP
 
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.Service
@@ -24,18 +22,20 @@ import           Development.IDE.Types.Logger
 import           Development.IDE.Types.Options
 
 import           Control.Monad.Extra
-import qualified Data.HashMap.Strict                   as M
 import qualified Data.HashSet                          as S
 import qualified Data.Text                             as Text
 
 import           Control.Monad.IO.Class
 import           Development.IDE.Core.FileExists       (modifyFileExists,
                                                         watchedGlobs)
-import           Development.IDE.Core.FileStore        (resetFileStore,
+import           Development.IDE.Core.FileStore        (registerFileWatches,
+                                                        resetFileStore,
                                                         setFileModified,
                                                         setSomethingModified,
                                                         typecheckParents)
 import           Development.IDE.Core.OfInterest
+import           Development.IDE.Core.RuleTypes        (GetClientSettings (..))
+import           Development.IDE.Types.Shake           (toKey)
 import           Ide.Plugin.Config                     (CheckParents (CheckOnClose))
 import           Ide.Types
 
@@ -50,7 +50,7 @@ descriptor plId = (defaultPluginDescriptor plId) { pluginNotificationHandlers = 
       whenUriFile _uri $ \file -> do
           -- We don't know if the file actually exists, or if the contents match those on disk
           -- For example, vscode restores previously unsaved contents on open
-          modifyFilesOfInterest ide (M.insert file Modified{firstOpen=True})
+          addFileOfInterest ide file Modified{firstOpen=True}
           setFileModified ide False file
           logDebug (ideLogger ide) $ "Opened text document: " <> getUri _uri
 
@@ -58,21 +58,21 @@ descriptor plId = (defaultPluginDescriptor plId) { pluginNotificationHandlers = 
       \ide _ (DidChangeTextDocumentParams identifier@VersionedTextDocumentIdentifier{_uri} changes) -> liftIO $ do
         updatePositionMapping ide identifier changes
         whenUriFile _uri $ \file -> do
-          modifyFilesOfInterest ide (M.insert file Modified{firstOpen=False})
+          addFileOfInterest ide file Modified{firstOpen=False}
           setFileModified ide False file
         logDebug (ideLogger ide) $ "Modified text document: " <> getUri _uri
 
   , mkPluginNotificationHandler LSP.STextDocumentDidSave $
       \ide _ (DidSaveTextDocumentParams TextDocumentIdentifier{_uri} _) -> liftIO $ do
         whenUriFile _uri $ \file -> do
-            modifyFilesOfInterest ide (M.insert file OnDisk)
+            addFileOfInterest ide file OnDisk
             setFileModified ide True file
         logDebug (ideLogger ide) $ "Saved text document: " <> getUri _uri
 
   , mkPluginNotificationHandler LSP.STextDocumentDidClose $
         \ide _ (DidCloseTextDocumentParams TextDocumentIdentifier{_uri}) -> liftIO $ do
           whenUriFile _uri $ \file -> do
-              modifyFilesOfInterest ide (M.delete file)
+              deleteFileOfInterest ide file
               -- Refresh all the files that depended on this
               checkParents <- optCheckParents =<< getIdeOptionsIO (shakeExtras ide)
               when (checkParents >= CheckOnClose) $ typecheckParents ide file
@@ -86,7 +86,7 @@ descriptor plId = (defaultPluginDescriptor plId) { pluginNotificationHandlers = 
         logDebug (ideLogger ide) $ "Watched file events: " <> msg
         modifyFileExists ide fileEvents
         resetFileStore ide fileEvents
-        setSomethingModified ide
+        setSomethingModified ide []
 
   , mkPluginNotificationHandler LSP.SWorkspaceDidChangeWorkspaceFolders $
       \ide _ (DidChangeWorkspaceFoldersParams events) -> liftIO $ do
@@ -101,41 +101,22 @@ descriptor plId = (defaultPluginDescriptor plId) { pluginNotificationHandlers = 
         let msg = Text.pack $ show cfg
         logDebug (ideLogger ide) $ "Configuration changed: " <> msg
         modifyClientSettings ide (const $ Just cfg)
-        setSomethingModified ide
+        setSomethingModified ide [toKey GetClientSettings emptyFilePath ]
 
   , mkPluginNotificationHandler LSP.SInitialized $ \ide _ _ -> do
-      clientCapabilities <- LSP.getClientCapabilities
-      let watchSupported = case () of
-            _ | LSP.ClientCapabilities{_workspace} <- clientCapabilities
-              , Just LSP.WorkspaceClientCapabilities{_didChangeWatchedFiles} <- _workspace
-              , Just LSP.DidChangeWatchedFilesClientCapabilities{_dynamicRegistration} <- _didChangeWatchedFiles
-              , Just True <- _dynamicRegistration
-                -> True
-              | otherwise -> False
-      if watchSupported
-      then do
-        opts <- liftIO $ getIdeOptionsIO $ shakeExtras ide
-        let
-          regParams    = RegistrationParams (List [SomeRegistration registration])
-          -- The registration ID is arbitrary and is only used in case we want to deregister (which we won't).
-          -- We could also use something like a random UUID, as some other servers do, but this works for
-          -- our purposes.
-          registration = Registration "globalFileWatches"
-                                      SWorkspaceDidChangeWatchedFiles
-                                      regOptions
-          regOptions =
-            DidChangeWatchedFilesRegistrationOptions { _watchers = List watchers }
-          -- See Note [File existence cache and LSP file watchers] for why this exists, and the choice of watch kind
-          watchKind = WatchKind { _watchCreate = True, _watchChange = True, _watchDelete = True}
-          -- See Note [Which files should we watch?] for an explanation of why the pattern is the way that it is
-          -- The patterns will be something like "**/.hs", i.e. "any number of directory segments,
-          -- followed by a file with an extension 'hs'.
-          watcher glob = FileSystemWatcher { _globPattern = glob, _kind = Just watchKind }
-          -- We use multiple watchers instead of one using '{}' because lsp-test doesn't
-          -- support that: https://github.com/bubba/lsp-test/issues/77
-          watchers = [ watcher (Text.pack glob) | glob <- watchedGlobs opts ]
+      --------- Initialize Shake session --------------------------------------------------------------------
+      liftIO $ shakeSessionInit ide
 
-        void $ LSP.sendRequest SClientRegisterCapability regParams (const $ pure ()) -- TODO handle response
-      else liftIO $ logDebug (ideLogger ide) "Warning: Client does not support watched files. Falling back to OS polling"
+      --------- Set up file watchers ------------------------------------------------------------------------
+      opts <- liftIO $ getIdeOptionsIO $ shakeExtras ide
+        -- See Note [Which files should we watch?] for an explanation of why the pattern is the way that it is
+        -- The patterns will be something like "**/.hs", i.e. "any number of directory segments,
+        -- followed by a file with an extension 'hs'.
+        -- We use multiple watchers instead of one using '{}' because lsp-test doesn't
+        -- support that: https://github.com/bubba/lsp-test/issues/77
+      let globs = watchedGlobs opts
+      success <- registerFileWatches globs
+      unless success $
+        liftIO $ logDebug (ideLogger ide) "Warning: Client does not support watched files. Falling back to OS polling"
   ]
     }

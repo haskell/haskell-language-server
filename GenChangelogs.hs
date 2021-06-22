@@ -17,7 +17,7 @@ import           System.Process
 
 main = do
   callCommand "git fetch --tags"
-  tags <- filter (isPrefixOf "0.") . lines <$>
+  tags <- filter (isPrefixOf "1.") . lines <$>
     readProcess "git" ["tag", "--list", "--sort=v:refname"] ""
 
   lastDateStr <- last . lines <$> readProcess "git" ["show", "-s", "--format=%cI", "-1", last tags] ""
