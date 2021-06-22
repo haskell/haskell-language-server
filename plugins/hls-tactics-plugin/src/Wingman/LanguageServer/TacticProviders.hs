@@ -126,9 +126,8 @@ commandProvider DestructLambdaCase =
       provide DestructLambdaCase ""
 commandProvider HomomorphismLambdaCase =
   requireHoleSort (== Hole) $
-  -- TODO(sandy): Needs the new test
   requireExtension LambdaCase $
-    filterGoalType ((== Just True) . lambdaCaseable) $
+    filterGoalType (liftLambdaCase False homoFilter) $
       provide HomomorphismLambdaCase ""
 commandProvider DestructAll =
   requireHoleSort (== Hole) $
@@ -319,6 +318,16 @@ homoFilter codomain domain =
   case uncoveredDataCons domain codomain of
     Just s -> S.null s
     _ -> False
+
+
+------------------------------------------------------------------------------
+-- | Lift a function of (codomain, domain) over a lambda case.
+liftLambdaCase :: r -> (Type -> Type -> r) -> Type -> r
+liftLambdaCase nil f t =
+  case tacticsSplitFunTy t of
+    (_, _, arg : _, res) -> f res arg
+    _ -> nil
+
 
 
 ------------------------------------------------------------------------------

@@ -1,4 +1,5 @@
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE GADTs      #-}
+{-# LANGUAGE LambdaCase #-}
 
 data GADT a where
   B1 :: GADT Bool
@@ -12,4 +13,10 @@ hasHomo g = _
 
 cantHomo :: GADT a -> GADT Int
 cantHomo g = _
+
+hasHomoLam :: GADT Bool -> GADT a
+hasHomoLam = _
+
+cantHomoLam :: GADT a -> GADT Int
+cantHomoLam = _
 

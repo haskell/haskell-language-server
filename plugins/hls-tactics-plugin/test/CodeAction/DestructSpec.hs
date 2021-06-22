@@ -89,15 +89,27 @@ spec = do
 
     mkTest
       "Suggests homomorphism if the domain is bigger than the codomain"
-      "ProviderHomomorphism" 11 13
+      "ProviderHomomorphism" 12 13
       [ (id, Homomorphism, "g")
       ]
 
     mkTest
       "Doesn't suggest homomorphism if the domain is smaller than the codomain"
-      "ProviderHomomorphism" 14 14
+      "ProviderHomomorphism" 15 14
       [ (not, Homomorphism, "g")
       , (id, Destruct, "g")
       ]
 
+    mkTest
+      "Suggests lambda homomorphism if the domain is bigger than the codomain"
+      "ProviderHomomorphism" 18 14
+      [ (id, HomomorphismLambdaCase, "")
+      ]
+
+    mkTest
+      "Doesn't suggest lambda homomorphism if the domain is smaller than the codomain"
+      "ProviderHomomorphism" 21 15
+      [ (not, HomomorphismLambdaCase, "")
+      , (id, DestructLambdaCase, "")
+      ]
 
