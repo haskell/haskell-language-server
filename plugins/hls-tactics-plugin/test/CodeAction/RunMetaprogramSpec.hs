@@ -36,3 +36,6 @@ spec = do
     metaTest 10 32 "MetaCataAST"
     metaTest  6 46 "MetaPointwise"
     metaTest  4 28 "MetaUseSymbol"
+    metaTest  7 53 "MetaDeepOf"
+    metaTest  2 34 "MetaWithArg"
+

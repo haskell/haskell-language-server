@@ -73,11 +73,6 @@ getFunBindId (AbsBinds _ _ _ abes _ _ _)
 getFunBindId _ = []
 
 
-getCurrentDefinitions :: MonadReader Context m => m [(OccName, CType)]
-getCurrentDefinitions = asks ctxDefiningFuncs
-
-
-
 ------------------------------------------------------------------------------
 -- | Determine if there is an instance that exists for the given 'Class' at the
 -- specified types. Deeply checks contexts to ensure the instance is actually
