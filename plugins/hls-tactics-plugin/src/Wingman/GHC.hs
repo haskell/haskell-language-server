@@ -113,7 +113,7 @@ freshTyvars t = do
         case M.lookup tv reps of
           Just tv' -> tv'
           Nothing  -> tv
-      ) t
+      ) $ snd $ tcSplitForAllTys t
 
 
 ------------------------------------------------------------------------------
@@ -250,6 +250,13 @@ unpackMatches _ = Nothing
 pattern Case :: PatCompattable p => HsExpr p -> [(Pat p, LHsExpr p)] -> HsExpr p
 pattern Case scrutinee matches <-
   HsCase _ (L _ scrutinee)
+    (MG {mg_alts = L _ (fmap unLoc -> unpackMatches -> Just matches)})
+
+------------------------------------------------------------------------------
+-- | Like 'Case', but for lambda cases.
+pattern LamCase :: PatCompattable p => [(Pat p, LHsExpr p)] -> HsExpr p
+pattern LamCase matches <-
+  HsLamCase _
     (MG {mg_alts = L _ (fmap unLoc -> unpackMatches -> Just matches)})
 
 

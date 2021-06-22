@@ -68,8 +68,6 @@ destructMatches use_field_puns f scrut t jdg = do
             -- #syn_scoped
             method_hy = foldMap evidenceToHypothesis ev
             args = conLikeInstOrigArgTys' con apps
-        modify $ evidenceToSubst ev
-        subst <- gets ts_unifier
         ctx <- ask
 
         let names_in_scope = hyNamesInScope hy
@@ -80,7 +78,7 @@ destructMatches use_field_puns f scrut t jdg = do
         let hy' = patternHypothesis scrut con jdg
                 $ zip names'
                 $ coerce args
-            j = fmap (CType . substTyAddInScope subst . unCType)
+            j = withNewCoercions (evidenceToCoercions ev)
               $ introduce ctx hy'
               $ introduce ctx method_hy
               $ withNewGoal g jdg

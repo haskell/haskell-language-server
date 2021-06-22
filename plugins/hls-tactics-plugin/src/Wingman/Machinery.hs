@@ -1,4 +1,5 @@
-{-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections   #-}
 
 module Wingman.Machinery where
 
@@ -21,6 +22,7 @@ import           Data.Maybe (mapMaybe)
 import           Data.Monoid (getSum)
 import           Data.Ord (Down (..), comparing)
 import qualified Data.Set as S
+import           Data.Traversable (for)
 import           Development.IDE.Core.Compile (lookupName)
 import           Development.IDE.GHC.Compat
 import           GhcPlugins (GlobalRdrElt (gre_name), lookupOccEnv, varType)
@@ -40,6 +42,17 @@ substCTy :: TCvSubst -> CType -> CType
 substCTy subst = coerce . substTy subst . coerce
 
 
+getSubstForJudgement
+    :: MonadState TacticState m
+    => Judgement
+    -> m TCvSubst
+getSubstForJudgement j = do
+  -- NOTE(sandy): It's OK to use mempty here, because coercions _can_ give us
+  -- substitutions for skolems.
+  let coercions = j_coercion j
+  unifier <- gets ts_unifier
+  pure $ unionTCvSubst unifier coercions
+
 ------------------------------------------------------------------------------
 -- | Produce a subgoal that must be solved before we can solve the original
 -- goal.
@@ -48,7 +61,7 @@ newSubgoal
     -> Rule
 newSubgoal j = do
   ctx <- ask
-  unifier <- gets ts_unifier
+  unifier <- getSubstForJudgement j
   subgoal
     $ normalizeJudgement ctx
     $ substJdg unifier
@@ -391,4 +404,11 @@ getOccNameType occ = do
   getTyThing occ >>= \case
     Just (AnId v) -> pure $ varType v
     _ -> throwError $ NotInScope occ
+
+
+getCurrentDefinitions :: TacticsM [(OccName, CType)]
+getCurrentDefinitions = do
+  ctx_funcs <- asks ctxDefiningFuncs
+  for ctx_funcs $ \res@(occ, _) ->
+    pure . maybe res (occ,) =<< lookupNameInContext occ
 
