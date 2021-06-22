@@ -8,14 +8,13 @@ module Wingman.Metaprogramming.Parser where
 
 import qualified Control.Monad.Combinators.Expr as P
 import qualified Control.Monad.Error.Class as E
-import           Control.Monad.Reader (ask)
 import           Data.Functor
 import           Data.Maybe (listToMaybe)
 import qualified Data.Text as T
 import qualified Refinery.Tactic as R
 import qualified Text.Megaparsec as P
 import           Wingman.Auto
-import           Wingman.Machinery (useNameFromHypothesis, getOccNameType, createImportedHyInfo, useNameFromContext, lookupNameInContext, getCurrentDefinitions)
+import           Wingman.Machinery (useNameFromHypothesis, useNameFromContext, getCurrentDefinitions)
 import           Wingman.Metaprogramming.Lexer
 import           Wingman.Metaprogramming.Parser.Documentation
 import           Wingman.Metaprogramming.ProofState (proofState, layout)
@@ -439,7 +438,9 @@ attempt_it ctx jdg program =
             tt
       pure $ case res of
           Left tes -> Left $ wrapError $ show tes
-          Right rtr -> Right $ layout $ proofState rtr
+          Right rtr -> Right
+                     $ layout (cfg_proofstate_styling $ ctxConfig ctx)
+                     $ proofState rtr
 
 
 parseMetaprogram :: T.Text -> TacticsM ()
