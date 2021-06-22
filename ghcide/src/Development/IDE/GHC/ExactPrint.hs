@@ -188,7 +188,7 @@ needsParensSpace ::
     -- | (Needs parens, needs space)
     (All, All)
 needsParensSpace HsLam{}         = (All False, All False)
-needsParensSpace HsLamCase{}     = (All False, All False)
+needsParensSpace HsLamCase{}     = (All False, All True)
 needsParensSpace HsApp{}         = mempty
 needsParensSpace HsAppType{}     = mempty
 needsParensSpace OpApp{}         = mempty

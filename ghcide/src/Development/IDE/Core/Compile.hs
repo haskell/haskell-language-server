@@ -528,13 +528,15 @@ spliceExpresions Splices{..} =
 -- can just increment the 'indexCompleted' TVar and exit.
 --
 indexHieFile :: ShakeExtras -> ModSummary -> NormalizedFilePath -> Fingerprint -> Compat.HieFile -> IO ()
-indexHieFile se mod_summary srcPath hash hf = do
+indexHieFile se mod_summary srcPath !hash hf = do
  IdeOptions{optProgressStyle} <- getIdeOptionsIO se
  atomically $ do
   pending <- readTVar indexPending
   case HashMap.lookup srcPath pending of
     Just pendingHash | pendingHash == hash -> pure () -- An index is already scheduled
     _ -> do
+      -- hiedb doesn't use the Haskell src, so we clear it to avoid unnecessarily keeping it around
+      let !hf' = hf{hie_hs_src = mempty}
       modifyTVar' indexPending $ HashMap.insert srcPath hash
       writeTQueue indexQueue $ \db -> do
         -- We are now in the worker thread
@@ -547,7 +549,7 @@ indexHieFile se mod_summary srcPath hash hf = do
             Just pendingHash -> pendingHash /= hash
         unless newerScheduled $ do
           pre optProgressStyle
-          addRefsFromLoaded db targetPath (RealFile $ fromNormalizedFilePath srcPath) hash hf
+          addRefsFromLoaded db targetPath (RealFile $ fromNormalizedFilePath srcPath) hash hf'
           post
   where
     mod_location    = ms_location mod_summary

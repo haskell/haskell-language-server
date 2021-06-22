@@ -5,10 +5,9 @@ import           Control.Monad.Reader.Class (asks)
 import           Control.Monad.State (gets)
 import qualified Data.Set as S
 import           Refinery.Tactic
-import           Wingman.Context
 import           Wingman.Judgements
 import           Wingman.KnownStrategies
-import           Wingman.Machinery (tracing)
+import           Wingman.Machinery (tracing, getCurrentDefinitions)
 import           Wingman.Tactics
 import           Wingman.Types
 

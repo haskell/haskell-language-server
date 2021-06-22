@@ -17,4 +17,5 @@ spec = do
     test "EmptyCaseNested"
     test "EmptyCaseApply"
     test "EmptyCaseGADT"
+    test "EmptyCaseLamCase"
 

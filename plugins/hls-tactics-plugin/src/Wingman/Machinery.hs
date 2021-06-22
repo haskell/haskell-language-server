@@ -1,4 +1,5 @@
-{-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections   #-}
 
 module Wingman.Machinery where
 
@@ -21,6 +22,7 @@ import           Data.Maybe (mapMaybe)
 import           Data.Monoid (getSum)
 import           Data.Ord (Down (..), comparing)
 import qualified Data.Set as S
+import           Data.Traversable (for)
 import           Development.IDE.Core.Compile (lookupName)
 import           Development.IDE.GHC.Compat
 import           GhcPlugins (GlobalRdrElt (gre_name), lookupOccEnv, varType)
@@ -402,4 +404,11 @@ getOccNameType occ = do
   getTyThing occ >>= \case
     Just (AnId v) -> pure $ varType v
     _ -> throwError $ NotInScope occ
+
+
+getCurrentDefinitions :: TacticsM [(OccName, CType)]
+getCurrentDefinitions = do
+  ctx_funcs <- asks ctxDefiningFuncs
+  for ctx_funcs $ \res@(occ, _) ->
+    pure . maybe res (occ,) =<< lookupNameInContext occ
 
