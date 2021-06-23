@@ -5,16 +5,26 @@ module Wingman.Judgements.Theta
   ( Evidence
   , getEvidenceAtHole
   , mkEvidence
+  , evidenceToCoercions
   , evidenceToSubst
   , evidenceToHypothesis
+  , evidenceToThetaType
+  , allEvidenceToSubst
   ) where
 
-import           Data.Maybe (fromMaybe, mapMaybe)
+import           Class (classTyVars)
+import           Control.Applicative (empty)
+import           Control.Lens (preview)
+import           Data.Coerce (coerce)
+import           Data.Maybe (fromMaybe, mapMaybe, maybeToList)
+import           Data.Generics.Sum (_Ctor)
 import           Data.Set (Set)
 import qualified Data.Set as S
+import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.Compat
-import           Generics.SYB hiding (tyConName)
-import           GhcPlugins (mkVarOcc, splitTyConApp_maybe, getTyVar_maybe)
+import           Generics.SYB hiding (tyConName, empty, Generic)
+import           GHC.Generics
+import           GhcPlugins (mkVarOcc, splitTyConApp_maybe, getTyVar_maybe, zipTvSubst, unionTCvSubst, emptyTCvSubst, TCvSubst)
 #if __GLASGOW_HASKELL__ > 806
 import           GhcPlugins (eqTyCon)
 #else
@@ -22,9 +32,10 @@ import           GhcPlugins (nameRdrName, tyConName)
 import           PrelNames (eqTyCon_RDR)
 #endif
 import           TcEvidence
+import           TcType (substTy)
 import           TcType (tcTyConAppTyCon_maybe)
 import           TysPrim (eqPrimTyCon)
-import           Wingman.Machinery
+import           Wingman.GHC
 import           Wingman.Types
 
 
@@ -35,43 +46,84 @@ data Evidence
   = EqualityOfTypes Type Type
     -- | We have an instance in scope
   | HasInstance PredType
-  deriving (Show)
+  deriving (Show, Generic)
 
 
 ------------------------------------------------------------------------------
 -- | Given a 'PredType', pull an 'Evidence' out of it.
-mkEvidence :: PredType -> Maybe Evidence
+mkEvidence :: PredType -> [Evidence]
 mkEvidence (getEqualityTheta -> Just (a, b))
-  = Just $ EqualityOfTypes a b
-mkEvidence inst@(tcTyConAppTyCon_maybe -> Just (isClassTyCon -> True))
-  = Just $ HasInstance inst
-mkEvidence _ = Nothing
+  = pure $ EqualityOfTypes a b
+mkEvidence inst@(tcTyConAppTyCon_maybe -> Just (tyConClass_maybe -> Just cls)) = do
+  (_, apps) <- maybeToList $ splitTyConApp_maybe inst
+  let tvs     = classTyVars cls
+      subst   = zipTvSubst tvs apps
+  sc_ev <- traverse (mkEvidence . substTy subst) $ classSCTheta cls
+  HasInstance inst : sc_ev
+mkEvidence _ = empty
+
+
+------------------------------------------------------------------------------
+-- | Build a set of 'PredType's from the evidence.
+evidenceToThetaType :: [Evidence] -> Set CType
+evidenceToThetaType evs = S.fromList $ do
+  HasInstance t <- evs
+  pure $ CType t
 
 
 ------------------------------------------------------------------------------
 -- | Compute all the 'Evidence' implicitly bound at the given 'SrcSpan'.
-getEvidenceAtHole :: SrcSpan -> LHsBinds GhcTc -> [Evidence]
-getEvidenceAtHole dst
-  = mapMaybe mkEvidence
+getEvidenceAtHole :: Tracked age SrcSpan -> Tracked age (LHsBinds GhcTc) -> [Evidence]
+getEvidenceAtHole (unTrack -> dst)
+  = concatMap mkEvidence
   . (everything (<>) $
         mkQ mempty (absBinds dst) `extQ` wrapperBinds dst `extQ` matchBinds dst)
+  . unTrack
 
 
-------------------------------------------------------------------------------
--- | Update our knowledge of which types are equal.
-evidenceToSubst :: Evidence -> TacticState -> TacticState
-evidenceToSubst (EqualityOfTypes a b) ts =
+mkSubst :: Set TyVar -> Type -> Type -> TCvSubst
+mkSubst skolems a b =
   let tyvars = S.fromList $ mapMaybe getTyVar_maybe [a, b]
       -- If we can unify our skolems, at least one is no longer a skolem.
       -- Removing them from this set ensures we can get a subtitution between
       -- the two. But it's okay to leave them in 'ts_skolems' in general, since
       -- they won't exist after running this substitution.
-      skolems = ts_skolems ts S.\\ tyvars
+      skolems' = skolems S.\\ tyvars
    in
-  case tryUnifyUnivarsButNotSkolems skolems (CType a) (CType b) of
-    Just subst -> updateSubst subst ts
-    Nothing -> ts
-evidenceToSubst HasInstance{} ts = ts
+  case tryUnifyUnivarsButNotSkolems skolems' (CType a) (CType b) of
+    Just subst -> subst
+    Nothing -> emptyTCvSubst
+
+
+substPair :: TCvSubst -> (Type, Type) -> (Type, Type)
+substPair subst (ty, ty') = (substTy subst ty, substTy subst ty')
+
+
+------------------------------------------------------------------------------
+-- | Construct a substitution given a list of types that are equal to one
+-- another. This is more subtle than it seems, since there might be several
+-- equalities for the same type. We must be careful to push the accumulating
+-- substitution through each pair of types before adding their equalities.
+allEvidenceToSubst :: Set TyVar -> [(Type, Type)] -> TCvSubst
+allEvidenceToSubst _ [] = emptyTCvSubst
+allEvidenceToSubst skolems ((a, b) : evs) =
+  let subst = mkSubst skolems a b
+   in unionTCvSubst subst
+    $ allEvidenceToSubst skolems
+    $ fmap (substPair subst) evs
+
+------------------------------------------------------------------------------
+-- | Given some 'Evidence', get a list of which types are now equal.
+evidenceToCoercions :: [Evidence] -> [(CType, CType)]
+evidenceToCoercions = coerce . mapMaybe (preview $ _Ctor @"EqualityOfTypes")
+
+------------------------------------------------------------------------------
+-- | Update our knowledge of which types are equal.
+evidenceToSubst :: [Evidence] -> TacticState -> TacticState
+evidenceToSubst evs ts =
+  updateSubst
+    (allEvidenceToSubst (ts_skolems ts) . coerce $ evidenceToCoercions evs)
+    ts
 
 
 ------------------------------------------------------------------------------
@@ -109,8 +161,23 @@ excludeForbiddenMethods = filter (not . flip S.member forbiddenMethods . hi_name
       [ -- monadfail
         "fail"
         -- show
-      , "showsPrec"
-      , "showList"
+      , "showsPrec", "showList"
+        -- functor
+      , "<$"
+        -- applicative
+      , "liftA2", "<*", "*>"
+        -- monad
+      , "return", ">>"
+        -- alternative
+      , "some", "many"
+        -- foldable
+      , "foldr1", "foldl1", "elem", "maximum", "minimum", "sum", "product"
+        -- traversable
+      , "sequenceA", "mapM", "sequence"
+        -- semigroup
+      , "sconcat", "stimes"
+        -- monoid
+      , "mconcat"
       ]
 
 

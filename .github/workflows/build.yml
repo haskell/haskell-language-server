@@ -16,8 +16,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ['8.10.4', '8.10.3', '8.10.2', '8.8.4', '8.8.3', '8.8.2', '8.6.5', '8.6.4']
-        os: [ubuntu-latest, macOS-latest, windows-latest]
+        ghc: ['9.0.1', '8.10.5', '8.10.4', '8.10.3', '8.10.2', '8.8.4', '8.8.3', '8.6.5', '8.6.4']
+        os: [ubuntu-18.04, macOS-latest, windows-latest]
         exclude:
           - os: windows-latest
             ghc: '8.10.2' # broken due to https://gitlab.haskell.org/ghc/ghc/-/issues/18550
@@ -25,8 +25,6 @@ jobs:
             ghc: '8.8.4' # also fails due to segfault :(
           - os: windows-latest
             ghc: '8.8.3' # fails due to segfault
-          - os: windows-latest
-            ghc: '8.8.2' # fails due to error with Cabal
         include:
           - os: windows-latest
             ghc: '8.10.2.2' # only available for windows and choco
@@ -38,13 +36,17 @@ jobs:
     - uses: haskell/actions/setup@v1
       with:
         ghc-version: ${{ matrix.ghc }}
-        cabal-version: '3.2'
+        cabal-version: '3.4'
+
+    - if: ${{ matrix.ghc == '9.0.1' }}
+      name: Use modified cabal.project for ghc9
+      run: cp cabal-ghc901.project cabal.project
 
     - name: Shorten binary names
       run: |
         sed -i.bak -e 's/haskell-language-server/hls/g' \
                    -e 's/haskell_language_server/hls/g' \
-                   haskell-language-server.cabal
+                   haskell-language-server.cabal cabal.project
         sed -i.bak -e 's/Paths_haskell_language_server/Paths_hls/g' \
                    src/**/*.hs exe/*.hs
 
@@ -58,7 +60,7 @@ jobs:
         echo "GHC_VERSION=$GHC_VER" >> $GITHUB_ENV
 
     - name: Set some linux specific things
-      if: matrix.os == 'ubuntu-latest'
+      if: matrix.os == 'ubuntu-18.04'
       env:
         GHC_VER: ${{ matrix.ghc }}
       run: |
@@ -71,6 +73,12 @@ jobs:
         GHC_VER: ${{ matrix.ghc }}
       run: |
         echo "GHC_VERSION=$GHC_VER" >> $GITHUB_ENV
+
+    - name: Tentative Workaround for GHC 8.10.5 on macOS
+      if: matrix.os == 'macOS-latest' && matrix.ghc == '8.10.5'
+      run: |
+        echo "# uninstalling CommandLineTools (see https://github.com/haskell/haskell-language-server/issues/1913#issuecomment-861667786)"
+        sudo rm -rf /Library/Developer/CommandLineTools
 
     - name: Build Server
       # Try building it twice in case of flakey builds on Windows
@@ -156,7 +164,7 @@ jobs:
   # macOS and Linux, used by ghcup
   tar:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
     strategy:
       matrix:
         os: [Linux, macOS]

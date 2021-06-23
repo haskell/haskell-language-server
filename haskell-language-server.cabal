@@ -1,7 +1,7 @@
 cabal-version:      2.4
 category:           Development
 name:               haskell-language-server
-version:            1.0.0.0
+version:            1.2.0.0
 synopsis:           LSP server for GHC
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -14,11 +14,10 @@ copyright:          The Haskell IDE Team
 license:            Apache-2.0
 license-file:       LICENSE
 build-type:         Simple
-tested-with:        GHC == 8.6.4 || == 8.6.5 || == 8.8.2 || == 8.8.3 || == 8.8.4 || == 8.10.2 || == 8.10.3 || == 8.10.4
+tested-with:        GHC == 8.6.4 || == 8.6.5 || == 8.8.3 || == 8.8.4 || == 8.10.2 || == 8.10.3 || == 8.10.4 || == 8.10.5
 extra-source-files:
   README.md
   ChangeLog.md
-  include/ghc-api-version.h
   test/testdata/**/*.project
   test/testdata/**/*.cabal
   test/testdata/**/*.yaml
@@ -26,7 +25,6 @@ extra-source-files:
   test/testdata/hlint/ignore/.hlint.yaml
   test/testdata/**/*.h
   test/testdata/**/*.hs
-  test/testdata/**/*.expected
 
 flag pedantic
   description: Enable -Werror
@@ -63,17 +61,17 @@ library
     , cryptohash-sha1
     , data-default
     , ghc
-    , ghcide                ^>= 1.1.0.0
+    , ghcide                ^>=1.4
     , gitrev
     , lsp
     , hie-bios
     , hiedb
-    , hls-plugin-api        >= 1.0 && < 1.2
+    , hls-plugin-api        ^>= 1.1
     , hslogger
     , optparse-applicative
     , optparse-simple
     , process
-    , shake
+    , hls-graph
     , safe-exceptions
     , sqlite-simple
     , unordered-containers
@@ -120,6 +118,11 @@ flag eval
 
 flag importLens
   description: Enable importLens plugin
+  default:     True
+  manual:      True
+
+flag refineImports
+  description: Enable refineImports plugin
   default:     True
   manual:      True
 
@@ -187,78 +190,74 @@ common example-plugins
 
 common class
   if flag(class) || flag(all-plugins)
-    build-depends: hls-class-plugin ^>= 1.0.0.0
+    build-depends: hls-class-plugin ^>= 1.0.0.1
     cpp-options: -Dclass
 
 common haddockComments
   if flag(haddockComments) || flag(all-plugins)
-    build-depends: hls-haddock-comments-plugin ^>= 1.0.0.0
+    build-depends: hls-haddock-comments-plugin ^>= 1.0.0.1
     cpp-options: -DhaddockComments
 
 common eval
   if flag(eval) || flag(all-plugins)
-    build-depends: hls-eval-plugin ^>= 1.0.0.0
+    build-depends: hls-eval-plugin ^>= 1.1.0.0
     cpp-options: -Deval
 
 common importLens
   if flag(importLens) || flag(all-plugins)
-    build-depends: hls-explicit-imports-plugin ^>= 1.0.0.0
+    build-depends: hls-explicit-imports-plugin ^>= 1.0.0.1
     cpp-options: -DimportLens
+
+common refineImports
+  if flag(refineImports) || flag(all-plugins)
+    build-depends: hls-refine-imports-plugin
+    cpp-options: -DrefineImports
 
 common retrie
   if flag(retrie) || flag(all-plugins)
-    build-depends: hls-retrie-plugin ^>= 1.0.0.0
+    build-depends: hls-retrie-plugin ^>= 1.0.0.1
     cpp-options: -Dretrie
 
 common tactic
   if flag(tactic) || flag(all-plugins)
-    build-depends: hls-tactics-plugin ^>= 1.0.0.0
+    build-depends: hls-tactics-plugin ^>= 1.2.0.0
     cpp-options: -Dtactic
 
 common hlint
   if flag(hlint) || flag(all-plugins)
-    build-depends: hls-hlint-plugin ^>= 1.0.0.0
+    build-depends: hls-hlint-plugin ^>= 1.0.0.2
     cpp-options: -Dhlint
 
 common moduleName
   if flag(moduleName) || flag(all-plugins)
-    hs-source-dirs: plugins/default/src
-    other-modules: Ide.Plugin.ModuleName
+    build-depends: hls-module-name-plugin ^>= 1.0.0.0
     cpp-options: -DmoduleName
 
 common pragmas
   if flag(pragmas) || flag(all-plugins)
-    hs-source-dirs: plugins/default/src
-    build-depends: fuzzy
-    other-modules: Ide.Plugin.Pragmas
+    build-depends: hls-pragmas-plugin ^>= 1.0.0.0
     cpp-options: -Dpragmas
 
 common splice
   if flag(splice) || flag(all-plugins)
-    build-depends: hls-splice-plugin ^>= 1.0.0.0
+    build-depends: hls-splice-plugin ^>= 1.0.0.1
     cpp-options: -Dsplice
 
 -- formatters
 
 common floskell
   if flag(floskell) || flag(all-formatters)
-    hs-source-dirs: plugins/default/src
-    other-modules: Ide.Plugin.Floskell
-    build-depends: floskell                 ^>=0.10
+    build-depends: hls-floskell-plugin      ^>=1.0.0.0
     cpp-options: -Dfloskell
 
 common fourmolu
   if flag(fourmolu) || flag(all-formatters)
-    hs-source-dirs: plugins/default/src
-    other-modules: Ide.Plugin.Fourmolu
-    build-depends: fourmolu                 ^>=0.3
+    build-depends: hls-fourmolu-plugin ^>= 1.0.0.0
     cpp-options: -Dfourmolu
 
 common ormolu
   if flag(ormolu) || flag(all-formatters)
-    hs-source-dirs: plugins/default/src
-    other-modules: Ide.Plugin.Ormolu
-    build-depends: ormolu                   ^>=0.1.2
+    build-depends: hls-ormolu-plugin ^>= 1.0.0.0
     cpp-options: -Dormolu
 
 common stylishHaskell
@@ -268,7 +267,7 @@ common stylishHaskell
 
 common brittany
   if (flag(brittany) || flag(all-formatters))
-    build-depends: hls-brittany-plugin ^>= 1.0.0.0
+    build-depends: hls-brittany-plugin ^>= 1.0.0.1
     cpp-options: -Dbrittany
 
 executable haskell-language-server
@@ -279,6 +278,7 @@ executable haskell-language-server
                     , haddockComments
                     , eval
                     , importLens
+                    , refineImports
                     , retrie
                     , tactic
                     , hlint
@@ -316,6 +316,7 @@ executable haskell-language-server
     , cryptohash-sha1
     , deepseq
     , ghc
+    , ghc-api-compat
     , ghc-boot-th
     , ghcide
     , hashable
@@ -332,13 +333,12 @@ executable haskell-language-server
     , mtl
     , regex-tdfa
     , safe-exceptions
-    , shake                    >=0.17.5
+    , hls-graph
     , sqlite-simple
     , temporary
     , transformers
     , unordered-containers
 
-  include-dirs:     include
   default-language: Haskell2010
   default-extensions: DataKinds, TypeOperators
 
@@ -387,11 +387,11 @@ test-suite func-test
     , hspec-expectations
     , lens
     , ghcide
-    , hls-test-utils
+    , hls-test-utils ^>= 1.0.0.0
     , lsp-types
     , aeson
-    , hls-plugin-api        >= 1.0 && < 1.2
-    , lsp-test              == 0.13.0.0
+    , hls-plugin-api
+    , lsp-test
     , containers
     , unordered-containers
 
@@ -411,13 +411,13 @@ test-suite func-test
     FunctionalLiquid
     HieBios
     Highlight
-    ModuleName
     Progress
     Reference
     Rename
     Symbol
     TypeDefinition
     Test.Hls.Command
+    Test.Hls.Flags
 
   default-extensions: OverloadedStrings
   ghc-options:
@@ -426,10 +426,44 @@ test-suite func-test
   if flag(pedantic)
     ghc-options: -Werror -Wredundant-constraints
 
+  if flag(class) || flag(all-plugins)
+    cpp-options: -Dclass
+  if flag(haddockComments) || flag(all-plugins)
+    cpp-options: -DhaddockComments
+  if flag(eval) || flag(all-plugins)
+    cpp-options: -Deval
+  if flag(importLens) || flag(all-plugins)
+    cpp-options: -DimportLens
+  if flag(retrie) || flag(all-plugins)
+    cpp-options: -Dretrie
+  if flag(tactic) || flag(all-plugins)
+    cpp-options: -Dtactic
+  if flag(hlint) || flag(all-plugins)
+    cpp-options: -Dhlint
+  if flag(moduleName) || flag(all-plugins)
+    cpp-options: -DmoduleName
+  if flag(pragmas) || flag(all-plugins)
+    cpp-options: -Dpragmas
+  if flag(splice) || flag(all-plugins)
+    cpp-options: -Dsplice
+
+-- formatters
+  if flag(floskell) || flag(all-formatters)
+    cpp-options: -Dfloskell
+  if flag(fourmolu) || flag(all-formatters)
+    cpp-options: -Dfourmolu
+  if flag(ormolu) || flag(all-formatters)
+    cpp-options: -Dormolu
+  if flag(stylishHaskell) || flag(all-formatters)
+    cpp-options: -DstylishHaskell
+  if (flag(brittany) || flag(all-formatters))
+    cpp-options: -Dbrittany
+
 test-suite wrapper-test
   type:               exitcode-stdio-1.0
   build-tool-depends:
-    haskell-language-server:haskell-language-server-wrapper -any
+    haskell-language-server:haskell-language-server-wrapper -any,
+    haskell-language-server:haskell-language-server -any
 
   default-language:   Haskell2010
   build-depends:

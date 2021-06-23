@@ -5,7 +5,6 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE TypeFamilies          #-}
-#include "ghc-api-version.h"
 
 -- | A Shake implementation of the compiler service, built
 --   using the "Shaker" abstraction layer for in-memory use.
@@ -18,21 +17,16 @@ module Development.IDE.Core.Rules(
     priorityTypeCheck,
     priorityGenerateCore,
     priorityFilesOfInterest,
-    runAction, useE, useNoFileE, usesE,
+    runAction,
     toIdeResult,
     defineNoFile,
     defineEarlyCutOffNoFile,
     mainRule,
-    getAtPoint,
-    getDefinition,
-    getTypeDefinition,
-    highlightAtPoint,
-    refsAtPoint,
-    workspaceSymbols,
     getDependencies,
     getParsedModule,
     getParsedModuleWithComments,
     getClientConfigAction,
+    usePropertyAction,
     -- * Rules
     CompiledLinkables(..),
     IsHiFileStable(..),
@@ -64,32 +58,51 @@ module Development.IDE.Core.Rules(
     typeCheckRuleDefinition,
     ) where
 
-import           Fingerprint
-
+import           Control.Concurrent.Async                     (concurrently)
+import           Control.Concurrent.Strict
+import           Control.Exception.Safe
 import           Control.Monad.Extra
-import           Control.Monad.Trans.Class
+import           Control.Monad.Reader
+import           Control.Monad.State
+import           Control.Monad.Trans.Except                   (ExceptT, except,
+                                                               runExceptT)
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson                                   (Result (Success),
                                                                toJSON)
+import qualified Data.Aeson.Types                             as A
 import           Data.Binary                                  hiding (get, put)
+import qualified Data.Binary                                  as B
 import qualified Data.ByteString                              as BS
+import           Data.ByteString.Encoding                     as T
+import qualified Data.ByteString.Lazy                         as LBS
+import           Data.Coerce
 import           Data.Foldable
+import qualified Data.HashMap.Strict                          as HM
+import qualified Data.HashSet                                 as HashSet
+import           Data.Hashable
+import           Data.IORef
 import           Data.IntMap.Strict                           (IntMap)
 import qualified Data.IntMap.Strict                           as IntMap
 import           Data.List
 import qualified Data.Map                                     as M
 import           Data.Maybe
+import qualified Data.Rope.UTF16                              as Rope
 import qualified Data.Set                                     as Set
 import qualified Data.Text                                    as T
 import qualified Data.Text.Encoding                           as T
+import           Data.Time                                    (UTCTime (..))
 import           Data.Tuple.Extra
 import           Development.IDE.Core.Compile
 import           Development.IDE.Core.FileExists
 import           Development.IDE.Core.FileStore               (getFileContents,
-                                                               modificationTime, resetInterfaceStore)
+                                                               modificationTime,
+                                                               resetInterfaceStore)
+import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.OfInterest
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
+import           Development.IDE.Core.Service
+import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat                   hiding
                                                               (TargetFile,
                                                                TargetModule,
@@ -98,60 +111,46 @@ import           Development.IDE.GHC.Compat                   hiding
                                                                writeHieFile)
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint
-import           Development.IDE.GHC.Util
+import           Development.IDE.GHC.Util                     hiding
+                                                              (modifyDynFlags)
+import           Development.IDE.Graph
+import           Development.IDE.Graph.Classes                hiding (get, put)
 import           Development.IDE.Import.DependencyInformation
 import           Development.IDE.Import.FindImports
+import qualified Development.IDE.Spans.AtPoint                as AtPoint
 import           Development.IDE.Spans.Documentation
 import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Diagnostics            as Diag
+import           Development.IDE.Types.HscEnvEq
 import           Development.IDE.Types.Location
 import qualified Development.IDE.Types.Logger                 as L
 import           Development.IDE.Types.Options
-import           Development.Shake                            hiding
-                                                              (Diagnostic)
-import qualified Language.LSP.Server                          as LSP
-import           Language.LSP.Types                           (DocumentHighlight (..),
-                                                               SMethod (SCustomMethod),
-                                                               SymbolInformation (..))
-import           Language.LSP.VFS
-
+import           Fingerprint
 import           GHC.Generics                                 (Generic)
+import           GHC.IO.Encoding
 import qualified GHC.LanguageExtensions                       as LangExt
+import qualified HieDb
 import           HscTypes                                     hiding
                                                               (TargetFile,
                                                                TargetModule)
-
-import           Control.Concurrent.Async                     (concurrently)
-import           Control.Exception.Safe
-import           Control.Monad.Reader
-import           Control.Monad.Trans.Except                   (ExceptT, except,
-                                                               runExceptT)
-import           Development.IDE.Core.IdeConfiguration
-import           Development.IDE.Core.Service
-import           Development.IDE.Core.Shake
-import qualified Development.IDE.Spans.AtPoint                as AtPoint
-import           Development.IDE.Types.HscEnvEq
-import           Development.Shake.Classes                    hiding (get, put)
-
-import           Control.Concurrent.Strict
-import           Control.Monad.State
-import           Data.ByteString.Encoding                     as T
-import           Data.Coerce
-import qualified Data.HashMap.Strict                          as HM
-import qualified Data.HashSet                                 as HashSet
-import           Data.Hashable
-import           Data.IORef
-import qualified Data.Rope.UTF16                              as Rope
-import           Data.Time                                    (UTCTime (..))
-import           GHC.IO.Encoding
+import           Ide.Plugin.Config
+import qualified Language.LSP.Server                          as LSP
+import           Language.LSP.Types                           (SMethod (SCustomMethod))
+import           Language.LSP.VFS
 import           Module
+import           System.Directory                             (canonicalizePath)
 import           TcRnMonad                                    (tcg_dependent_files)
 
-import qualified Data.Aeson.Types                             as A
-import qualified HieDb
-import           Ide.Plugin.Config
-import qualified Data.ByteString.Lazy as LBS
-import qualified Data.Binary as B
+import           Control.Applicative
+import           Data.Default                                 (def)
+import           Ide.Plugin.Properties                        (HasProperty,
+                                                               KeyNameProxy,
+                                                               Properties,
+                                                               ToHsType,
+                                                               useProperty)
+import           Ide.PluginUtils                              (configForPlugin)
+import           Ide.Types                                    (DynFlagsModifications (dynFlagsModifyGlobal, dynFlagsModifyParser),
+                                                               PluginId)
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
@@ -159,114 +158,9 @@ import qualified Data.Binary as B
 toIdeResult :: Either [FileDiagnostic] v -> IdeResult v
 toIdeResult = either (, Nothing) (([],) . Just)
 
--- | useE is useful to implement functions that aren’t rules but need shortcircuiting
--- e.g. getDefinition.
-useE :: IdeRule k v => k -> NormalizedFilePath -> MaybeT IdeAction (v, PositionMapping)
-useE k = MaybeT . useWithStaleFast k
-
-useNoFileE :: IdeRule k v => IdeState -> k -> MaybeT IdeAction v
-useNoFileE _ide k = fst <$> useE k emptyFilePath
-
-usesE :: IdeRule k v => k -> [NormalizedFilePath] -> MaybeT IdeAction [(v,PositionMapping)]
-usesE k = MaybeT . fmap sequence . mapM (useWithStaleFast k)
-
-defineNoFile :: IdeRule k v => (k -> Action v) -> Rules ()
-defineNoFile f = defineNoDiagnostics $ \k file -> do
-    if file == emptyFilePath then do res <- f k; return (Just res) else
-        fail $ "Rule " ++ show k ++ " should always be called with the empty string for a file"
-
-defineEarlyCutOffNoFile :: IdeRule k v => (k -> Action (BS.ByteString, v)) -> Rules ()
-defineEarlyCutOffNoFile f = defineEarlyCutoff $ RuleNoDiagnostics $ \k file -> do
-    if file == emptyFilePath then do (hash, res) <- f k; return (Just hash, Just res) else
-        fail $ "Rule " ++ show k ++ " should always be called with the empty string for a file"
-
-------------------------------------------------------------
--- Core IDE features
-------------------------------------------------------------
-
--- IMPORTANT NOTE : make sure all rules `useE`d by these have a "Persistent Stale" rule defined,
--- so we can quickly answer as soon as the IDE is opened
--- Even if we don't have persistent information on disk for these rules, the persistent rule
--- should just return an empty result
--- It is imperative that the result of the persistent rule succeed in such a case, or we will
--- block waiting for the rule to be properly computed.
-
--- | Try to get hover text for the name under point.
-getAtPoint :: NormalizedFilePath -> Position -> IdeAction (Maybe (Maybe Range, [T.Text]))
-getAtPoint file pos = runMaybeT $ do
-  ide <- ask
-  opts <- liftIO $ getIdeOptionsIO ide
-
-  (hf, mapping) <- useE GetHieAst file
-  df <- hsc_dflags . hscEnv . fst <$> useE GhcSession file
-  dkMap <- lift $ maybe (DKMap mempty mempty) fst <$> (runMaybeT $ useE GetDocMap file)
-
-  !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
-  MaybeT $ pure $ fmap (first (toCurrentRange mapping =<<)) $ AtPoint.atPoint opts hf dkMap df pos'
-
-toCurrentLocations :: PositionMapping -> [Location] -> [Location]
-toCurrentLocations mapping = mapMaybe go
-  where
-    go (Location uri range) = Location uri <$> toCurrentRange mapping range
-
--- | Goto Definition.
-getDefinition :: NormalizedFilePath -> Position -> IdeAction (Maybe [Location])
-getDefinition file pos = runMaybeT $ do
-    ide <- ask
-    opts <- liftIO $ getIdeOptionsIO ide
-    (HAR _ hf _ _ _, mapping) <- useE GetHieAst file
-    (ImportMap imports, _) <- useE GetImportMap file
-    !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
-    hiedb <- lift $ asks hiedb
-    dbWriter <- lift $ asks hiedbWriter
-    toCurrentLocations mapping <$> AtPoint.gotoDefinition hiedb (lookupMod dbWriter) opts imports hf pos'
-
-getTypeDefinition :: NormalizedFilePath -> Position -> IdeAction (Maybe [Location])
-getTypeDefinition file pos = runMaybeT $ do
-    ide <- ask
-    opts <- liftIO $ getIdeOptionsIO ide
-    (hf, mapping) <- useE GetHieAst file
-    !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
-    hiedb <- lift $ asks hiedb
-    dbWriter <- lift $ asks hiedbWriter
-    toCurrentLocations mapping <$> AtPoint.gotoTypeDefinition hiedb (lookupMod dbWriter) opts hf pos'
-
-highlightAtPoint :: NormalizedFilePath -> Position -> IdeAction (Maybe [DocumentHighlight])
-highlightAtPoint file pos = runMaybeT $ do
-    (HAR _ hf rf _ _,mapping) <- useE GetHieAst file
-    !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
-    let toCurrentHighlight (DocumentHighlight range t) = flip DocumentHighlight t <$> toCurrentRange mapping range
-    mapMaybe toCurrentHighlight <$>AtPoint.documentHighlight hf rf pos'
-
--- Refs are not an IDE action, so it is OK to be slow and (more) accurate
-refsAtPoint :: NormalizedFilePath -> Position -> Action [Location]
-refsAtPoint file pos = do
-    ShakeExtras{hiedb} <- getShakeExtras
-    fs <- HM.keys <$> getFilesOfInterest
-    asts <- HM.fromList . mapMaybe sequence . zip fs <$> usesWithStale GetHieAst fs
-    AtPoint.referencesAtPoint hiedb file pos (AtPoint.FOIReferences asts)
-
-workspaceSymbols :: T.Text -> IdeAction (Maybe [SymbolInformation])
-workspaceSymbols query = runMaybeT $ do
-  hiedb <- lift $ asks hiedb
-  res <- liftIO $ HieDb.searchDef hiedb $ T.unpack query
-  pure $ mapMaybe AtPoint.defRowToSymbolInfo res
-
 ------------------------------------------------------------
 -- Exposed API
 ------------------------------------------------------------
-
--- | Eventually this will lookup/generate URIs for files in dependencies, but not in the
--- project. Right now, this is just a stub.
-lookupMod
-  :: HieDbWriter -- ^ access the database
-  -> FilePath -- ^ The `.hie` file we got from the database
-  -> ModuleName
-  -> UnitId
-  -> Bool -- ^ Is this file a boot file?
-  -> MaybeT IdeAction Uri
-lookupMod _dbchan _hie_f _mod _uid _boot = MaybeT $ pure Nothing
-
 -- | Get all transitive file dependencies of a given module.
 -- Does not include the file itself.
 getDependencies :: NormalizedFilePath -> Action (Maybe [NormalizedFilePath])
@@ -314,18 +208,21 @@ getParsedModuleRule :: Rules ()
 getParsedModuleRule =
   -- this rule does not have early cutoff since all its dependencies already have it
   define $ \GetParsedModule file -> do
-    ModSummaryResult{msrModSummary = ms} <- use_ GetModSummary file
+    ModSummaryResult{msrModSummary = ms'} <- use_ GetModSummary file
     sess <- use_ GhcSession file
     let hsc = hscEnv sess
     opt <- getIdeOptions
+    modify_dflags <- getModifyDynFlags dynFlagsModifyParser
+    let ms = ms' { ms_hspp_opts = modify_dflags $ ms_hspp_opts ms' }
 
     let dflags    = ms_hspp_opts ms
         mainParse = getParsedModuleDefinition hsc opt file ms
+        reset_ms pm = pm { pm_mod_summary = ms' }
 
     -- Parse again (if necessary) to capture Haddock parse errors
     res@(_,pmod) <- if gopt Opt_Haddock dflags
         then
-            liftIO mainParse
+            liftIO $ (fmap.fmap.fmap) reset_ms mainParse
         else do
             let haddockParse = getParsedModuleDefinition hsc opt file (withOptHaddock ms)
 
@@ -335,7 +232,7 @@ getParsedModuleRule =
             -- If we can parse Haddocks, might as well use them
             --
             -- HLINT INTEGRATION: might need to save the other parsed module too
-            ((diags,res),(diagsh,resh)) <- liftIO $ concurrently mainParse haddockParse
+            ((diags,res),(diagsh,resh)) <- liftIO $ (fmap.fmap.fmap.fmap) reset_ms $ concurrently mainParse haddockParse
 
             -- Merge haddock and regular diagnostics so we can always report haddock
             -- parse errors
@@ -387,8 +284,15 @@ getParsedModuleWithCommentsRule =
     opt <- getIdeOptions
 
     let ms' = withoutOption Opt_Haddock $ withOption Opt_KeepRawTokenStream ms
+    modify_dflags <- getModifyDynFlags dynFlagsModifyParser
+    let ms = ms' { ms_hspp_opts = modify_dflags $ ms_hspp_opts ms' }
+        reset_ms pm = pm { pm_mod_summary = ms' }
 
-    liftIO $ snd <$> getParsedModuleDefinition (hscEnv sess) opt file ms'
+    liftIO $ fmap (fmap reset_ms) $ snd <$> getParsedModuleDefinition (hscEnv sess) opt file ms
+
+getModifyDynFlags :: (DynFlagsModifications -> a) -> Action a
+getModifyDynFlags f = f . optModifyDynFlags <$> getIdeOptions
+
 
 getParsedModuleDefinition
     :: HscEnv
@@ -399,7 +303,7 @@ getParsedModuleDefinition packageState opt file ms = do
     let fp = fromNormalizedFilePath file
     (diag, res) <- parseModule opt packageState fp ms
     case res of
-        Nothing -> pure (diag, Nothing)
+        Nothing   -> pure (diag, Nothing)
         Just modu -> pure (diag, Just modu)
 
 getLocatedImportsRule :: Rules ()
@@ -835,10 +739,12 @@ getModIfaceFromDiskAndIndexRule =
       hie_loc = ml_hie_file $ ms_location ms
   hash <- liftIO $ getFileHash hie_loc
   mrow <- liftIO $ HieDb.lookupHieFileFromSource hiedb (fromNormalizedFilePath f)
+  hie_loc' <- liftIO $ traverse (canonicalizePath . HieDb.hieModuleHieFile) mrow
   case mrow of
     Just row
       | hash == HieDb.modInfoHash (HieDb.hieModInfo row)
-      , hie_loc == HieDb.hieModuleHieFile row  -> do
+      && Just hie_loc == hie_loc'
+      -> do
       -- All good, the db has indexed the file
       when (coerce $ ideTesting se) $ liftIO $ mRunLspT (lspEnv se) $
         LSP.sendNotification (SCustomMethod "ghcide/reference/ready") $
@@ -878,14 +784,16 @@ isHiFileStableRule = defineEarlyCutoff $ RuleNoDiagnostics $ \IsHiFileStable f -
                            else SourceUnmodified
     return (Just (summarize sourceModified), Just sourceModified)
   where
-      summarize SourceModified = BS.singleton 1
-      summarize SourceUnmodified = BS.singleton 2
+      summarize SourceModified            = BS.singleton 1
+      summarize SourceUnmodified          = BS.singleton 2
       summarize SourceUnmodifiedAndStable = BS.singleton 3
 
 getModSummaryRule :: Rules ()
 getModSummaryRule = do
     defineEarlyCutoff $ Rule $ \GetModSummary f -> do
-        session <- hscEnv <$> use_ GhcSession f
+        session' <- hscEnv <$> use_ GhcSession f
+        modify_dflags <- getModifyDynFlags dynFlagsModifyGlobal
+        let session = session' { hsc_dflags = modify_dflags $ hsc_dflags session' }
         (modTime, mFileContent) <- getFileContents f
         let fp = fromNormalizedFilePath f
         modS <- liftIO $ runExceptT $
@@ -1047,6 +955,19 @@ getClientConfigAction defValue = do
     Just (Success c) -> return c
     _                -> return defValue
 
+usePropertyAction ::
+  (HasProperty s k t r) =>
+  KeyNameProxy s ->
+  PluginId ->
+  Properties r ->
+  Action (ToHsType t)
+usePropertyAction kn plId p = do
+  config <- getClientConfigAction def
+  let pluginConfig = configForPlugin config plId
+  pure $ useProperty kn p $ plcConfig pluginConfig
+
+-- ---------------------------------------------------------------------
+
 -- | For now we always use bytecode unless something uses unboxed sums and tuples along with TH
 getLinkableType :: NormalizedFilePath -> Action (Maybe LinkableType)
 getLinkableType f = use_ NeedsCompilation f
@@ -1071,8 +992,8 @@ needsCompilationRule = defineEarlyCutoff $ RuleNoDiagnostics $ \NeedsCompilation
         -- again, this time keeping the object code.
         -- A file needs to be compiled if any file that depends on it uses TemplateHaskell or needs to be compiled
         ms <- msrModSummary . fst <$> useWithStale_ GetModSummaryWithoutTimestamps file
-        (modsums,needsComps) <-
-            par (map (fmap (msrModSummary . fst)) <$> usesWithStale GetModSummaryWithoutTimestamps revdeps)
+        (modsums,needsComps) <- liftA2
+            (,) (map (fmap (msrModSummary . fst)) <$> usesWithStale GetModSummaryWithoutTimestamps revdeps)
                 (uses NeedsCompilation revdeps)
         pure $ computeLinkableType ms modsums (map join needsComps)
 

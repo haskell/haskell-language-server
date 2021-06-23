@@ -1,7 +1,6 @@
 {-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DerivingStrategies #-}
-#include "ghc-api-version.h"
 
 module Development.IDE.Spans.Common (
   showGhc
@@ -31,6 +30,8 @@ import           NameEnv
 import           Outputable                   hiding ((<>))
 import           Var
 
+import           Development.IDE.GHC.Compat   (oldMkUserStyle,
+                                               oldRenderWithStyle)
 import           Development.IDE.GHC.Orphans  ()
 import           Development.IDE.GHC.Util
 import qualified Documentation.Haddock.Parser as H
@@ -50,8 +51,8 @@ showNameWithoutUniques :: Outputable a => a -> T.Text
 showNameWithoutUniques = T.pack . prettyprint
   where
     dyn = unsafeGlobalDynFlags `gopt_set` Opt_SuppressUniques
-    prettyprint x = renderWithStyle dyn (ppr x) style
-    style = mkUserStyle dyn neverQualify AllTheWay
+    prettyprint x = oldRenderWithStyle dyn (ppr x) style
+    style = oldMkUserStyle dyn neverQualify AllTheWay
 
 -- | Shows IEWrappedName, without any modifier, qualifier or unique identifier.
 unqualIEWrapName :: IEWrappedName RdrName -> T.Text
@@ -121,6 +122,7 @@ haddockToMarkdown (H.DocIdentifier i)
   = "`" ++ i ++ "`"
 haddockToMarkdown (H.DocIdentifierUnchecked i)
   = "`" ++ i ++ "`"
+#if MIN_VERSION_haddock_library(1,10,0)
 haddockToMarkdown (H.DocModule (H.ModLink i Nothing))
   = "`" ++ escapeBackticks i ++ "`"
 -- See https://github.com/haskell/haddock/pull/1315
@@ -130,6 +132,10 @@ haddockToMarkdown (H.DocModule (H.ModLink i Nothing))
 -- some label ( `Some.Module` )
 haddockToMarkdown (H.DocModule (H.ModLink i (Just label)))
   = haddockToMarkdown label ++ " ( `" ++ escapeBackticks i ++ "` )"
+#else
+haddockToMarkdown (H.DocModule i)
+  = "`" ++ escapeBackticks i ++ "`"
+#endif
 haddockToMarkdown (H.DocWarning w)
   = haddockToMarkdown w
 haddockToMarkdown (H.DocEmphasis d)

@@ -21,14 +21,15 @@ import           Data.Aeson.Types                             (Value)
 import           Data.Binary
 import           Data.Hashable
 import qualified Data.Map                                     as M
+import           Data.Time.Clock.POSIX
 import           Data.Typeable
 import           Development.IDE.GHC.Compat                   hiding
                                                               (HieFileResult)
 import           Development.IDE.GHC.Util
+import           Development.IDE.Graph
 import           Development.IDE.Import.DependencyInformation
 import           Development.IDE.Types.HscEnvEq               (HscEnvEq)
 import           Development.IDE.Types.KnownTargets
-import           Development.Shake
 import           GHC.Generics                                 (Generic)
 
 import           HscTypes                                     (HomeModInfo,
@@ -39,7 +40,6 @@ import           HscTypes                                     (HomeModInfo,
 import qualified Data.Binary                                  as B
 import           Data.ByteString                              (ByteString)
 import qualified Data.ByteString.Lazy                         as LBS
-import           Data.Int                                     (Int64)
 import           Data.Text                                    (Text)
 import           Data.Time
 import           Development.IDE.Import.FindImports           (ArtifactsLocation)
@@ -266,6 +266,8 @@ type instance RuleResult GetFileContents = (FileVersion, Maybe Text)
 
 type instance RuleResult GetFileExists = Bool
 
+type instance RuleResult AddWatchedFile = Bool
+
 
 -- The Shake key type for getModificationTime queries
 newtype GetModificationTime = GetModificationTime_
@@ -295,9 +297,7 @@ type instance RuleResult GetModificationTime = FileVersion
 
 data FileVersion
     = VFSVersion !Int
-    | ModificationTime
-      !Int64   -- ^ Large unit (platform dependent, do not make assumptions)
-      !Int64   -- ^ Small unit (platform dependent, do not make assumptions)
+    | ModificationTime !POSIXTime
     deriving (Show, Generic)
 
 instance NFData FileVersion
@@ -491,6 +491,12 @@ instance NFData   GetClientSettings
 instance Binary   GetClientSettings
 
 type instance RuleResult GetClientSettings = Hashed (Maybe Value)
+
+data AddWatchedFile = AddWatchedFile deriving (Eq, Show, Typeable, Generic)
+instance Hashable AddWatchedFile
+instance NFData   AddWatchedFile
+instance Binary   AddWatchedFile
+
 
 -- A local rule type to get caching. We want to use newCache, but it has
 -- thread killed exception issues, so we lift it to a full rule.

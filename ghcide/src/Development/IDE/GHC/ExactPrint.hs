@@ -12,6 +12,7 @@ module Development.IDE.GHC.ExactPrint
       annotateDecl,
       hoistGraft,
       graftWithM,
+      graftExprWithM,
       genericGraftWithSmallestM,
       genericGraftWithLargestM,
       graftSmallestDeclsWithM,
@@ -27,50 +28,50 @@ module Development.IDE.GHC.ExactPrint
       TransformT,
       Anns,
       Annotate,
-      mkBindListT,
       setPrecedingLinesT,
-      everywhereM',
     )
 where
 
-import BasicTypes (appPrec)
-import Control.Applicative (Alternative)
-import Control.Monad
-import qualified Control.Monad.Fail as Fail
-import Control.Monad.IO.Class (MonadIO)
-import Control.Monad.Trans.Class
-import Control.Monad.Trans.Except
-import Control.Monad.Zip
-import qualified Data.DList as DL
-import Data.Either.Extra (mapLeft)
-import Data.Functor.Classes
-import Data.Functor.Contravariant
-import qualified Data.Text as T
-import Development.IDE.Core.RuleTypes
-import Development.IDE.Core.Service (runAction)
-import Development.IDE.Core.Shake
-import Development.IDE.GHC.Compat hiding (parseExpr)
-import Development.IDE.Types.Location
-import Development.Shake (RuleResult, Rules)
-import Development.Shake.Classes
-import qualified GHC.Generics as GHC
-import Generics.SYB
-import Ide.PluginUtils
-import Language.Haskell.GHC.ExactPrint
-import Language.Haskell.GHC.ExactPrint.Parsers
-import Language.LSP.Types
-import Language.LSP.Types.Capabilities (ClientCapabilities)
-import Outputable (Outputable, ppr, showSDoc)
-import Retrie.ExactPrint hiding (parseDecl, parseExpr, parsePattern, parseType)
-import Parser (parseIdentifier)
-import Data.Traversable (for)
-import Data.Foldable (Foldable(fold))
-import Data.Bool (bool)
-import Data.Monoid (All(All), Any(Any))
-import Data.Functor.Compose (Compose(Compose))
-#if __GLASGOW_HASKELL__ == 808
-import Control.Arrow
-#endif
+import           BasicTypes                              (appPrec)
+import           Control.Applicative                     (Alternative)
+import           Control.Arrow
+import           Control.Monad
+import qualified Control.Monad.Fail                      as Fail
+import           Control.Monad.IO.Class                  (MonadIO)
+import           Control.Monad.Trans.Class
+import           Control.Monad.Trans.Except
+import           Control.Monad.Zip
+import           Data.Bool                               (bool)
+import qualified Data.DList                              as DL
+import           Data.Either.Extra                       (mapLeft)
+import           Data.Foldable                           (Foldable (fold))
+import           Data.Functor.Classes
+import           Data.Functor.Contravariant
+import           Data.Monoid                             (All (All), getAll)
+import qualified Data.Text                               as T
+import           Data.Traversable                        (for)
+import           Development.IDE.Core.RuleTypes
+import           Development.IDE.Core.Service            (runAction)
+import           Development.IDE.Core.Shake
+import           Development.IDE.GHC.Compat              hiding (parseExpr)
+import           Development.IDE.Graph                   (RuleResult, Rules)
+import           Development.IDE.Graph.Classes
+import           Development.IDE.Types.Location
+import qualified GHC.Generics                            as GHC
+import           Generics.SYB
+import           Generics.SYB.GHC
+import           Ide.PluginUtils
+import           Language.Haskell.GHC.ExactPrint
+import           Language.Haskell.GHC.ExactPrint.Parsers
+import           Language.LSP.Types
+import           Language.LSP.Types.Capabilities         (ClientCapabilities)
+import           Outputable                              (Outputable, ppr,
+                                                          showSDoc)
+import           Parser                                  (parseIdentifier)
+import           Retrie.ExactPrint                       hiding (parseDecl,
+                                                          parseExpr,
+                                                          parsePattern,
+                                                          parseType)
 
 
 ------------------------------------------------------------------------------
@@ -187,7 +188,7 @@ needsParensSpace ::
     -- | (Needs parens, needs space)
     (All, All)
 needsParensSpace HsLam{}         = (All False, All False)
-needsParensSpace HsLamCase{}     = (All False, All False)
+needsParensSpace HsLamCase{}     = (All False, All True)
 needsParensSpace HsApp{}         = mempty
 needsParensSpace HsAppType{}     = mempty
 needsParensSpace OpApp{}         = mempty
@@ -196,13 +197,13 @@ needsParensSpace SectionL{}      = (All False, All False)
 needsParensSpace SectionR{}      = (All False, All False)
 needsParensSpace ExplicitTuple{} = (All False, All False)
 needsParensSpace ExplicitSum{}   = (All False, All False)
-needsParensSpace HsCase{}        = (All False, All False)
+needsParensSpace HsCase{}        = (All False, All True)
 needsParensSpace HsIf{}          = (All False, All False)
 needsParensSpace HsMultiIf{}     = (All False, All False)
 needsParensSpace HsLet{}         = (All False, All True)
 needsParensSpace HsDo{}          = (All False, All False)
 needsParensSpace ExplicitList{}  = (All False, All False)
-needsParensSpace RecordCon{}     = (All False, All False)
+needsParensSpace RecordCon{}     = (All False, All True)
 needsParensSpace RecordUpd{}     = mempty
 needsParensSpace _               = mempty
 
@@ -233,7 +234,7 @@ graft' needs_space dst val = Graft $ \dflags a -> do
             ( mkT $
                 \case
                     (L src _ :: Located ast) | src == dst -> val'
-                    l -> l
+                    l                                     -> l
             )
             a
 
@@ -246,24 +247,63 @@ graftExpr ::
     LHsExpr GhcPs ->
     Graft (Either String) a
 graftExpr dst val = Graft $ \dflags a -> do
-    -- Traverse the tree, looking for our replacement node. But keep track of
-    -- the context (parent HsExpr constructor) we're in while we do it. This
-    -- lets us determine wehther or not we need parentheses.
-    let (All needs_parens, All needs_space) =
-          everythingWithContext (All True, All True) (<>)
-            ( mkQ (mempty, ) $ \x s -> case x of
-                (L src _ :: LHsExpr GhcPs) | src == dst ->
-                  (s, s)
-                L _ x' -> (mempty, needsParensSpace x')
-            ) a
+    let (needs_space, mk_parens) = getNeedsSpaceAndParenthesize dst a
 
     runGraft
-      (graft' needs_space dst $ bool id maybeParensAST needs_parens val)
+      (graft' needs_space dst $ mk_parens val)
       dflags
       a
 
 
+getNeedsSpaceAndParenthesize ::
+    (ASTElement ast, Data a) =>
+    SrcSpan ->
+    a ->
+    (Bool, Located ast -> Located ast)
+getNeedsSpaceAndParenthesize dst a =
+  -- Traverse the tree, looking for our replacement node. But keep track of
+  -- the context (parent HsExpr constructor) we're in while we do it. This
+  -- lets us determine wehther or not we need parentheses.
+  let (needs_parens, needs_space) =
+          everythingWithContext (Nothing, Nothing) (<>)
+            ( mkQ (mempty, ) $ \x s -> case x of
+                (L src _ :: LHsExpr GhcPs) | src == dst ->
+                  (s, s)
+                L _ x' -> (mempty, Just *** Just $ needsParensSpace x')
+            ) a
+   in ( maybe True getAll needs_space
+      , bool id maybeParensAST $ maybe False getAll needs_parens
+      )
+
+
 ------------------------------------------------------------------------------
+
+graftExprWithM ::
+    forall m a.
+    (Fail.MonadFail m, Data a) =>
+    SrcSpan ->
+    (LHsExpr GhcPs -> TransformT m (Maybe (LHsExpr GhcPs))) ->
+    Graft m a
+graftExprWithM dst trans = Graft $ \dflags a -> do
+    let (needs_space, mk_parens) = getNeedsSpaceAndParenthesize dst a
+
+    everywhereM'
+        ( mkM $
+            \case
+                val@(L src _ :: LHsExpr GhcPs)
+                    | src == dst -> do
+                        mval <- trans val
+                        case mval of
+                            Just val' -> do
+                                (anns, val'') <-
+                                    hoistTransform (either Fail.fail pure)
+                                        (annotate @(HsExpr GhcPs) dflags needs_space (mk_parens val'))
+                                modifyAnnsT $ mappend anns
+                                pure val''
+                            Nothing -> pure val
+                l -> pure l
+        )
+        a
 
 graftWithM ::
     forall ast m a.
@@ -290,21 +330,6 @@ graftWithM dst trans = Graft $ \dflags a -> do
         )
         a
 
--- | A generic query intended to be used for calling 'smallestM' and
--- 'largestM'. If the current node is a 'Located', returns whether or not the
--- given 'SrcSpan' is a subspan. For all other nodes, returns 'Nothing', which
--- indicates uncertainty. The search strategy in 'smallestM' et al. will
--- continue searching uncertain nodes.
-genericIsSubspan ::
-    forall ast.
-    Typeable ast =>
-    -- | The type of nodes we'd like to consider.
-    Proxy (Located ast) ->
-    SrcSpan ->
-    GenericQ (Maybe Bool)
-genericIsSubspan _ dst = mkQ Nothing $ \case
-  (L span _ :: Located ast) -> Just $ dst `isSubspanOf` span
-
 -- | Run the given transformation only on the smallest node in the tree that
 -- contains the 'SrcSpan'.
 genericGraftWithSmallestM ::
@@ -330,15 +355,6 @@ genericGraftWithLargestM ::
     Graft m a
 genericGraftWithLargestM proxy dst trans = Graft $ \dflags ->
     largestM (genericIsSubspan proxy dst) (trans dflags)
-
-
--- | Lift a function that replaces a value with several values into a generic
--- function. The result doesn't perform any searching, so should be driven via
--- 'everywhereM' or friends.
---
--- The 'Int' argument is the index in the list being bound.
-mkBindListT :: forall b m. (Typeable b, Data b, Monad m) => (Int -> b -> m [b]) -> GenericM m
-mkBindListT f = mkM $ fmap join . traverse (uncurry f) . zip [0..]
 
 
 graftDecls ::
@@ -393,12 +409,6 @@ graftDeclsWithM dst toDecls = Graft $ \dflags a -> do
             | otherwise = (DL.singleton e <>) <$> go rest
     modifyDeclsT (fmap DL.toList . go) a
 
-
-everywhereM' :: forall m. Monad m => GenericM m -> GenericM m
-everywhereM' f = go
-    where
-        go :: GenericM m
-        go = gmapM go <=< f
 
 class (Data ast, Outputable ast) => ASTElement ast where
     parseAST :: Parser (Located ast)
@@ -508,77 +518,4 @@ render dflags = showSDoc dflags . ppr
 -- | Put parentheses around an expression if required.
 parenthesize :: LHsExpr GhcPs -> LHsExpr GhcPs
 parenthesize = parenthesizeHsExpr appPrec
-
-
-------------------------------------------------------------------------------
--- Custom SYB machinery
-------------------------------------------------------------------------------
-
--- | Generic monadic transformations that return side-channel data.
-type GenericMQ r m = forall a. Data a => a -> m (r, a)
-
-------------------------------------------------------------------------------
--- | Apply the given 'GenericM' at all every node whose children fail the
--- 'GenericQ', but which passes the query itself.
---
--- The query must be a monotonic function when it returns 'Just'. That is, if
--- @s@ is a subtree of @t@, @q t@ should return @Just True@ if @q s@ does. It
--- is the True-to-false edge of the query that triggers the transformation.
---
--- Why is the query a @Maybe Bool@? The GHC AST intersperses 'Located' nodes
--- with data nodes, so for any given node we can only definitely return an
--- answer if it's a 'Located'. See 'genericIsSubspan' for how this parameter is
--- used.
-smallestM :: forall m. Monad m => GenericQ (Maybe Bool) -> GenericM m -> GenericM m
-smallestM q f = fmap snd . go
-  where
-    go :: GenericMQ Any m
-    go x = do
-      case q x of
-        Nothing -> gmapMQ go x
-        Just True -> do
-          it@(r, x') <- gmapMQ go x
-          case r of
-            Any True -> pure it
-            Any False -> fmap (Any True,) $ f x'
-        Just False -> pure (mempty, x)
-
-------------------------------------------------------------------------------
--- | Apply the given 'GenericM' at every node that passes the 'GenericQ', but
--- don't descend into children if the query matches. Because this traversal is
--- root-first, this policy will find the largest subtrees for which the query
--- holds true.
---
--- Why is the query a @Maybe Bool@? The GHC AST intersperses 'Located' nodes
--- with data nodes, so for any given node we can only definitely return an
--- answer if it's a 'Located'. See 'genericIsSubspan' for how this parameter is
--- used.
-largestM :: forall m. Monad m => GenericQ (Maybe Bool) -> GenericM m -> GenericM m
-largestM q f = go
-  where
-    go :: GenericM m
-    go x = do
-      case q x of
-        Just True -> f x
-        Just False -> pure x
-        Nothing -> gmapM go x
-
-newtype MonadicQuery r m a = MonadicQuery
-  { runMonadicQuery :: m (r, a)
-  }
-  deriving stock (Functor)
-  deriving Applicative via Compose m ((,) r)
-
-
-------------------------------------------------------------------------------
--- | Like 'gmapM', but also returns side-channel data.
-gmapMQ ::
-    forall f r a. (Monoid r, Data a, Applicative f) =>
-    (forall d. Data d => d -> f (r, d)) ->
-    a ->
-    f (r, a)
-gmapMQ f = runMonadicQuery . gfoldl k pure
-  where
-    k :: Data d => MonadicQuery r f (d -> b) -> d -> MonadicQuery r f b
-    k c x = c <*> MonadicQuery (f x)
 

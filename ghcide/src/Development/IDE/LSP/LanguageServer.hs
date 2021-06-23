@@ -12,9 +12,6 @@ module Development.IDE.LSP.LanguageServer
     ( runLanguageServer
     ) where
 
-import           Control.Concurrent.Extra              (newBarrier,
-                                                        signalBarrier,
-                                                        waitBarrier)
 import           Control.Concurrent.STM
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
@@ -23,7 +20,6 @@ import           Data.Aeson                            (Value)
 import           Data.Maybe
 import qualified Data.Set                              as Set
 import qualified Data.Text                             as T
-import qualified Development.IDE.GHC.Util              as Ghcide
 import           Development.IDE.LSP.Server
 import           Development.IDE.Session               (runWithDb)
 import           Ide.Types                             (traceWithSpan)
@@ -50,18 +46,18 @@ runLanguageServer
     -> Handle -- input
     -> Handle -- output
     -> (FilePath -> IO FilePath) -- ^ Map root paths to the location of the hiedb for the project
-    -> (IdeState -> Value -> IO (Either T.Text config))
+    -> config
+    -> (config -> Value -> Either T.Text config)
     -> LSP.Handlers (ServerM config)
     -> (LSP.LanguageContextEnv config -> VFSHandle -> Maybe FilePath -> HieDb -> IndexQueue -> IO IdeState)
     -> IO ()
-runLanguageServer options inH outH getHieDbLoc onConfigurationChange userHandlers getIdeState = do
+runLanguageServer options inH outH getHieDbLoc defaultConfig onConfigurationChange userHandlers getIdeState = do
 
-    -- These barriers are signaled when the threads reading from these chans exit.
-    -- This should not happen but if it does, we will make sure that the whole server
-    -- dies and can be restarted instead of losing threads silently.
-    clientMsgBarrier <- newBarrier
+    -- This MVar becomes full when the server thread exits or we receive exit message from client.
+    -- LSP loop will be canceled when it's full.
+    clientMsgVar <- newEmptyMVar
     -- Forcefully exit
-    let exit = signalBarrier clientMsgBarrier ()
+    let exit = void $ tryPutMVar clientMsgVar ()
 
     -- The set of requests ids that we have received but not finished processing
     pendingRequests <- newTVarIO Set.empty
@@ -103,9 +99,8 @@ runLanguageServer options inH outH getHieDbLoc onConfigurationChange userHandler
 
 
     let serverDefinition = LSP.ServerDefinition
-            { LSP.onConfigurationChange = \v -> do
-                (_chan, ide) <- ask
-                liftIO $ onConfigurationChange ide v
+            { LSP.onConfigurationChange = onConfigurationChange
+            , LSP.defaultConfig = defaultConfig
             , LSP.doInitialize = handleInit exit clearReqId waitForCancel clientMsgChan
             , LSP.staticHandlers = asyncHandlers
             , LSP.interpretHandler = \(env, st) -> LSP.Iso (LSP.runLspT env . flip runReaderT (clientMsgChan,st)) liftIO
@@ -117,7 +112,7 @@ runLanguageServer options inH outH getHieDbLoc onConfigurationChange userHandler
             inH
             outH
             serverDefinition
-        , void $ waitBarrier clientMsgBarrier
+        , void $ readMVar clientMsgVar
         ]
 
     where
@@ -127,8 +122,7 @@ runLanguageServer options inH outH getHieDbLoc onConfigurationChange userHandler
         handleInit exitClientMsg clearReqId waitForCancel clientMsgChan env (RequestMessage _ _ m params) = otTracedHandler "Initialize" (show m) $ \sp -> do
             traceWithSpan sp params
             let root = LSP.resRootPath env
-
-            dir <- getCurrentDirectory
+            dir <- maybe getCurrentDirectory return root
             dbLoc <- getHieDbLoc dir
 
             -- The database needs to be open for the duration of the reactor thread, but we need to pass in a reference
@@ -142,7 +136,12 @@ runLanguageServer options inH outH getHieDbLoc onConfigurationChange userHandler
             logInfo (ideLogger ide) $ T.pack $ "Registering ide configuration: " <> show initConfig
             registerIdeConfiguration (shakeExtras ide) initConfig
 
-            _ <- flip forkFinally (const exitClientMsg) $ runWithDb dbLoc $ \hiedb hieChan -> do
+            let handleServerException (Left e) = do
+                    logError (ideLogger ide) $
+                        T.pack $ "Fatal error in server thread: " <> show e
+                    exitClientMsg
+                handleServerException _ = pure ()
+            _ <- flip forkFinally handleServerException $ runWithDb dbLoc $ \hiedb hieChan -> do
               putMVar dbMVar (hiedb,hieChan)
               forever $ do
                 msg <- readChan clientMsgChan
@@ -188,8 +187,9 @@ cancelHandler cancelRequest = LSP.notificationHandler SCancelRequest $ \Notifica
 exitHandler :: IO () -> LSP.Handlers (ServerM c)
 exitHandler exit = LSP.notificationHandler SExit $ const $ do
     (_, ide) <- ask
+    liftIO $ logDebug (ideLogger ide) "Received exit message"
     -- flush out the Shake session to record a Shake profile if applicable
-    liftIO $ restartShakeSession (shakeExtras ide) []
+    liftIO $ shakeShut ide
     liftIO exit
 
 modifyOptions :: LSP.Options -> LSP.Options

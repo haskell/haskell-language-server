@@ -19,6 +19,7 @@ import qualified Language.LSP.Types.Lens         as L
 import           System.FilePath                 ((</>))
 import           Test.Hls
 import           Test.Hls.Command
+import           Test.Hls.Flags
 
 tests :: TestTree
 tests =
@@ -28,27 +29,27 @@ tests =
             runSession hlsCommand progressCaps "test/testdata" $ do
                 let path = "hlint" </> "ApplyRefact2.hs"
                 _ <- openDoc path "haskell"
-                expectProgressReports [pack ("Setting up hlint (for " ++ path ++ ")"), "Processing"]
-        , testCase "eval plugin sends progress reports" $
+                expectProgressReports [pack ("Setting up hlint (for " ++ path ++ ")"), "Processing", "Indexing"]
+        , requiresEvalPlugin $ testCase "eval plugin sends progress reports" $
             runSession hlsCommand progressCaps "plugins/hls-eval-plugin/test/testdata" $ do
                 doc <- openDoc "T1.hs" "haskell"
-                expectProgressReports ["Setting up testdata (for T1.hs)", "Processing"]
+                expectProgressReports ["Setting up testdata (for T1.hs)", "Processing", "Indexing"]
                 [evalLens] <- getCodeLenses doc
                 let cmd = evalLens ^?! L.command . _Just
                 _ <- sendRequest SWorkspaceExecuteCommand $ ExecuteCommandParams Nothing (cmd ^. L.command) (decode $ encode $ fromJust $ cmd ^. L.arguments)
                 expectProgressReports ["Evaluating"]
-        , testCase "ormolu plugin sends progress notifications" $ do
+        , requiresOrmoluPlugin $ testCase "ormolu plugin sends progress notifications" $ do
             runSession hlsCommand progressCaps "test/testdata/format" $ do
                 sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "ormolu"))
                 doc <- openDoc "Format.hs" "haskell"
-                expectProgressReports ["Setting up testdata (for Format.hs)", "Processing"]
+                expectProgressReports ["Setting up testdata (for Format.hs)", "Processing", "Indexing"]
                 _ <- sendRequest STextDocumentFormatting $ DocumentFormattingParams Nothing doc (FormattingOptions 2 True Nothing Nothing Nothing)
                 expectProgressReports ["Formatting Format.hs"]
-        , testCase "fourmolu plugin sends progress notifications" $ do
+        , requiresFourmoluPlugin $ testCase "fourmolu plugin sends progress notifications" $ do
             runSession hlsCommand progressCaps "test/testdata/format" $ do
                 sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "fourmolu"))
                 doc <- openDoc "Format.hs" "haskell"
-                expectProgressReports ["Setting up testdata (for Format.hs)", "Processing"]
+                expectProgressReports ["Setting up testdata (for Format.hs)", "Processing", "Indexing"]
                 _ <- sendRequest STextDocumentFormatting $ DocumentFormattingParams Nothing doc (FormattingOptions 2 True Nothing Nothing Nothing)
                 expectProgressReports ["Formatting Format.hs"]
         , ignoreTestBecause "no liquid Haskell support" $
@@ -90,7 +91,6 @@ expectProgressReports xs = expectProgressReports' [] xs
                 CreateM msg ->
                     expectProgressReports' (token msg : tokens) expectedTitles
                 BeginM msg -> do
-                    liftIO $ title msg `expectElem` ("Indexing references from:":xs)
                     liftIO $ token msg `expectElem` tokens
                     expectProgressReports' tokens (delete (title msg) expectedTitles)
                 ProgressM msg -> do

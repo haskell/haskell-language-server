@@ -25,7 +25,7 @@ import qualified Data.Text                               as T
 import           Development.IDE                         hiding (pluginHandlers)
 import           Development.IDE.Core.PositionMapping    (fromCurrentRange,
                                                           toCurrentRange)
-import           Development.IDE.GHC.Compat              hiding (getLoc)
+import           Development.IDE.GHC.Compat
 import           Development.IDE.Spans.AtPoint
 import qualified GHC.Generics                            as Generics
 import           GhcPlugins                              hiding (Var, getLoc,
@@ -38,7 +38,6 @@ import           Language.Haskell.GHC.ExactPrint.Types   hiding (GhcPs, Parens)
 import           Language.LSP.Server
 import           Language.LSP.Types
 import qualified Language.LSP.Types.Lens                 as J
-import           SrcLoc
 import           TcEnv
 import           TcRnMonad
 
@@ -163,10 +162,9 @@ codeAction state plId (CodeActionParams _ _ docId _ context) = liftIO $ fmap (fr
 
         mkCmdParams methodGroup = [toJSON (AddMinimalMethodsParams uri range (List methodGroup))]
 
-        mkCodeAction title
+        mkCodeAction title cmd
           = InR
-          . CodeAction title (Just CodeActionQuickFix) (Just (List [])) Nothing Nothing Nothing
-          . Just
+          $ CodeAction title (Just CodeActionQuickFix) (Just (List [])) Nothing Nothing Nothing (Just cmd) Nothing
 
     findClassIdentifier docPath range = do
       (hieAstResult, pmap) <- MaybeT . runAction "classplugin" state $ useWithStale GetHieAst docPath

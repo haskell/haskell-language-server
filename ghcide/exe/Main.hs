@@ -5,14 +5,13 @@
 
 module Main(main) where
 
-import           Arguments                         (Arguments' (..),
-                                                    IdeCmd (..), getArguments)
+import           Arguments                         (Arguments (..),
+                                                    getArguments)
 import           Control.Concurrent.Extra          (newLock, withLock)
 import           Control.Monad.Extra               (unless, when, whenJust)
 import qualified Data.Aeson.Encode.Pretty          as A
 import           Data.Default                      (Default (def))
 import           Data.List.Extra                   (upper)
-import           Data.Maybe                        (fromMaybe)
 import qualified Data.Text                         as T
 import qualified Data.Text.IO                      as T
 import           Data.Text.Lazy.Encoding           (decodeUtf8)
@@ -23,14 +22,11 @@ import           Development.IDE                   (Logger (Logger),
                                                     Priority (Info), action)
 import           Development.IDE.Core.OfInterest   (kick)
 import           Development.IDE.Core.Rules        (mainRule)
+import           Development.IDE.Graph             (ShakeOptions (shakeThreads))
 import qualified Development.IDE.Main              as Main
 import qualified Development.IDE.Plugin.HLS.GhcIde as GhcIde
 import qualified Development.IDE.Plugin.Test       as Test
-import           Development.IDE.Session           (getHieDbLoc,
-                                                    setInitialDynFlags)
 import           Development.IDE.Types.Options
-import           Development.Shake                 (ShakeOptions (shakeThreads))
-import           HieDb.Run                         (Options (..), runCommand)
 import           Ide.Plugin.Config                 (Config (checkParents, checkProject))
 import           Ide.Plugin.ConfigUtils            (pluginsToDefaultConfig,
                                                     pluginsToVSCodeExtensionSchema)
@@ -38,8 +34,7 @@ import           Ide.PluginUtils                   (pluginDescToIdePlugins)
 import           Paths_ghcide                      (version)
 import qualified System.Directory.Extra            as IO
 import           System.Environment                (getExecutablePath)
-import           System.Exit                       (ExitCode (ExitFailure),
-                                                    exitSuccess, exitWith)
+import           System.Exit                       (exitSuccess)
 import           System.IO                         (hPutStrLn, stderr)
 import           System.Info                       (compilerVersion)
 
@@ -81,56 +76,36 @@ main = do
             T.putStrLn $ T.pack ("[" ++ upper (show pri) ++ "] ") <> msg
         logLevel = if argsVerbose then minBound else Info
 
-    case argFilesOrCmd of
-      DbCmd opts cmd -> do
-        dir <- IO.getCurrentDirectory
-        dbLoc <- getHieDbLoc dir
-        mlibdir <- setInitialDynFlags def
-        case mlibdir of
-          Nothing     -> exitWith $ ExitFailure 1
-          Just libdir -> runCommand libdir opts{database = dbLoc} cmd
+    Main.defaultMain def
+        {Main.argCommand = argsCommand
 
-      _ -> do
+        ,Main.argsLogger = pure logger
 
-          case argFilesOrCmd of
-              LSP -> do
-                hPutStrLn stderr "Starting LSP server..."
-                hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
-              _ -> return ()
+        ,Main.argsRules = do
+            -- install the main and ghcide-plugin rules
+            mainRule
+            -- install the kick action, which triggers a typecheck on every
+            -- Shake database restart, i.e. on every user edit.
+            unless argsDisableKick $
+                action kick
 
-          Main.defaultMain def
-            {Main.argFiles = case argFilesOrCmd of
-                Typecheck x | not argLSP -> Just x
-                _                        -> Nothing
+        ,Main.argsHlsPlugins =
+            pluginDescToIdePlugins $
+            GhcIde.descriptors
+            ++ [Test.blockCommandDescriptor "block-command" | argsTesting]
 
-            ,Main.argsLogger = pure logger
+        ,Main.argsGhcidePlugin = if argsTesting
+            then Test.plugin
+            else mempty
 
-            ,Main.argsRules = do
-                -- install the main and ghcide-plugin rules
-                mainRule
-                -- install the kick action, which triggers a typecheck on every
-                -- Shake database restart, i.e. on every user edit.
-                unless argsDisableKick $
-                    action kick
-
-            ,Main.argsHlsPlugins =
-                pluginDescToIdePlugins $
-                GhcIde.descriptors
-                ++ [Test.blockCommandDescriptor "block-command" | argsTesting]
-
-            ,Main.argsGhcidePlugin = if argsTesting
-                then Test.plugin
-                else mempty
-
-            ,Main.argsIdeOptions = \(fromMaybe def -> config) sessionLoader ->
-                let defOptions = defaultIdeOptions sessionLoader
-                in defOptions
-                  { optShakeProfiling = argsShakeProfiling
-                  , optOTMemoryProfiling = IdeOTMemoryProfiling argsOTMemoryProfiling
-                  , optTesting = IdeTesting argsTesting
-                  , optShakeOptions = (optShakeOptions defOptions){shakeThreads = argsThreads}
-                  , optCheckParents = pure $ checkParents config
-                  , optCheckProject = pure $ checkProject config
-                  }
-            }
-
+        ,Main.argsIdeOptions = \config  sessionLoader ->
+            let defOptions = defaultIdeOptions sessionLoader
+            in defOptions
+                { optShakeProfiling = argsShakeProfiling
+                , optOTMemoryProfiling = IdeOTMemoryProfiling argsOTMemoryProfiling
+                , optTesting = IdeTesting argsTesting
+                , optShakeOptions = (optShakeOptions defOptions){shakeThreads = argsThreads}
+                , optCheckParents = pure $ checkParents config
+                , optCheckProject = pure $ checkProject config
+                }
+        }

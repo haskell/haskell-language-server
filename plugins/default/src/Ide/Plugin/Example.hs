@@ -25,7 +25,6 @@ import           Data.Hashable
 import qualified Data.Text                  as T
 import           Data.Typeable
 import           Development.IDE            as D
-import           Development.IDE.Core.Rules (useE)
 import           Development.IDE.Core.Shake (getDiagnostics,
                                              getHiddenDiagnostics)
 import           Development.IDE.GHC.Compat (ParsedModule (ParsedModule))
@@ -78,7 +77,7 @@ exampleRules = do
     return ([diag], Just ())
 
   action $ do
-    files <- getFilesOfInterest
+    files <- getFilesOfInterestUntracked
     void $ uses Example $ Map.keys files
 
 mkDiag :: NormalizedFilePath
@@ -111,9 +110,9 @@ codeAction state _pid (CodeActionParams _ _ (TextDocumentIdentifier uri) _range 
       title = "Add TODO Item 1"
       tedit = [TextEdit (Range (Position 2 0) (Position 2 0))
                "-- TODO1 added by Example Plugin directly\n"]
-      edit  = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
+      edit  = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing Nothing
     pure $ Right $ List
-        [ InR $ CodeAction title (Just CodeActionQuickFix) (Just $ List []) Nothing Nothing (Just edit) Nothing]
+        [ InR $ CodeAction title (Just CodeActionQuickFix) (Just $ List []) Nothing Nothing (Just edit) Nothing Nothing]
 
 -- ---------------------------------------------------------------------
 
@@ -154,6 +153,7 @@ addTodoCmd _ide (AddTodoParams uri todoText) = do
       ]
     res = WorkspaceEdit
       (Just $ Map.singleton uri textEdits)
+      Nothing
       Nothing
   _ <- sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing res) (\_ -> pure ())
   return $ Right Null
@@ -196,7 +196,7 @@ symbols :: PluginMethodHandler IdeState TextDocumentDocumentSymbol
 symbols _ide _pid (DocumentSymbolParams _ _ _doc)
     = pure $ Right $ InL $ List [r]
     where
-        r = DocumentSymbol name detail kind deprecation range selR chList
+        r = DocumentSymbol name detail kind Nothing deprecation range selR chList
         name = "Example_symbol_name"
         detail = Nothing
         kind = SkVariable
@@ -212,7 +212,7 @@ completion _ide _pid (CompletionParams _doc _pos _ _ _mctxt)
     = pure $ Right $ InL $ List [r]
     where
         r = CompletionItem label kind tags detail documentation deprecated preselect
-                           sortText filterText insertText insertTextFormat
+                           sortText filterText insertText insertTextFormat insertTextMode
                            textEdit additionalTextEdits commitCharacters
                            command xd
         label = "Example completion"
@@ -225,6 +225,7 @@ completion _ide _pid (CompletionParams _doc _pos _ _ _mctxt)
         sortText = Nothing
         filterText = Nothing
         insertText = Nothing
+        insertTextMode = Nothing
         insertTextFormat = Nothing
         textEdit = Nothing
         additionalTextEdits = Nothing

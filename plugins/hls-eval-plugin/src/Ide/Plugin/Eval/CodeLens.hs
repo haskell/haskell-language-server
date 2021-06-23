@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                       #-}
 {-# LANGUAGE DuplicateRecordFields     #-}
 {-# LANGUAGE ExtendedDefaultRules      #-}
 {-# LANGUAGE FlexibleContexts          #-}
@@ -6,6 +7,7 @@
 {-# LANGUAGE NamedFieldPuns            #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE OverloadedStrings         #-}
+{-# LANGUAGE PatternSynonyms           #-}
 {-# LANGUAGE RankNTypes                #-}
 {-# LANGUAGE RecordWildCards           #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
@@ -38,7 +40,7 @@ import           Data.Char                            (isSpace)
 import qualified Data.DList                           as DL
 import qualified Data.HashMap.Strict                  as HashMap
 import           Data.List                            (dropWhileEnd, find,
-                                                       intercalate)
+                                                       intercalate, intersperse)
 import qualified Data.Map.Strict                      as Map
 import           Data.Maybe                           (catMaybes, fromMaybe)
 import           Data.String                          (IsString)
@@ -74,14 +76,17 @@ import           Development.IDE.GHC.Compat           (AnnotationComment (AnnBlo
                                                        GenLocated (L),
                                                        GhcException, HscEnv,
                                                        ParsedModule (..),
-                                                       SrcSpan (RealSrcSpan, UnhelpfulSpan),
+                                                       SrcSpan (UnhelpfulSpan),
+                                                       moduleName,
                                                        setInteractiveDynFlags,
                                                        srcSpanFile)
 import qualified Development.IDE.GHC.Compat           as SrcLoc
 import           Development.IDE.Types.Options
 import           DynamicLoading                       (initializePlugins)
 import           FastString                           (unpackFS)
-import           GHC                                  (ExecOptions (execLineNumber, execSourceFile),
+import           GHC                                  (ClsInst,
+                                                       ExecOptions (execLineNumber, execSourceFile),
+                                                       FamInst, Fixity,
                                                        GeneralFlag (..), Ghc,
                                                        GhcLink (LinkInMemory),
                                                        GhcMode (CompManager),
@@ -89,26 +94,30 @@ import           GHC                                  (ExecOptions (execLineNumb
                                                        HscTarget (HscInterpreted),
                                                        LoadHowMuch (LoadAllTargets),
                                                        ModSummary (ms_hspp_opts),
-                                                       Module (moduleName),
+                                                       NamedThing (getName, getOccName),
                                                        SuccessFlag (Failed, Succeeded),
                                                        TcRnExprMode (..),
+                                                       TyThing, defaultFixity,
                                                        execOptions, exprType,
+                                                       getInfo,
                                                        getInteractiveDynFlags,
                                                        getSessionDynFlags,
                                                        isImport, isStmt, load,
-                                                       runDecls, setContext,
-                                                       setLogAction,
+                                                       parseName, pprFamInst,
+                                                       pprInstance, runDecls,
+                                                       setContext, setLogAction,
                                                        setSessionDynFlags,
                                                        setTargets, typeKind)
 import           GhcPlugins                           (DynFlags (..),
                                                        defaultLogActionHPutStrDoc,
-                                                       gopt_set, gopt_unset,
-                                                       hsc_dflags, interpWays,
+                                                       elemNameSet, gopt_set,
+                                                       gopt_unset, hsc_dflags,
+                                                       isSymOcc, mkNameSet,
                                                        parseDynamicFlagsCmdLine,
+                                                       pprDefinedAt,
+                                                       pprInfixName,
                                                        targetPlatform,
-                                                       updateWays,
-                                                       wayGeneralFlags,
-                                                       wayUnsetGeneralFlags,
+                                                       tyThingParent_maybe,
                                                        xopt_set)
 import           HscTypes                             (InteractiveImport (IIModule),
                                                        ModSummary (ms_mod),
@@ -134,12 +143,36 @@ import           Language.LSP.Server
 import           Language.LSP.Types
 import           Language.LSP.Types.Lens              (end, line)
 import           Language.LSP.VFS                     (virtualFileText)
-import           Outputable                           (nest, ppr, showSDoc,
-                                                       text, ($$), (<+>))
+import           Outputable                           (SDoc, empty, hang, nest,
+                                                       ppr, showSDoc, text,
+                                                       vcat, ($$), (<+>))
 import           System.FilePath                      (takeFileName)
 import           System.IO                            (hClose)
 import           UnliftIO.Temporary                   (withSystemTempFile)
 import           Util                                 (OverridingBool (Never))
+
+
+#if MIN_VERSION_ghc(9,0,0)
+import           GHC.Parser.Annotation                (ApiAnns (apiAnnComments))
+#else
+import           GhcPlugins                           (interpWays, updateWays,
+                                                       wayGeneralFlags,
+                                                       wayUnsetGeneralFlags)
+import           IfaceSyn                             (showToHeader)
+import           PprTyThing                           (pprTyThingInContext)
+#endif
+
+#if MIN_VERSION_ghc(9,0,0)
+pattern RealSrcSpanAlready :: SrcLoc.RealSrcSpan -> SrcLoc.RealSrcSpan
+pattern RealSrcSpanAlready x = x
+#else
+apiAnnComments :: SrcLoc.ApiAnns -> Map.Map SrcSpan [SrcLoc.Located AnnotationComment]
+apiAnnComments = snd
+
+pattern RealSrcSpanAlready :: SrcLoc.RealSrcSpan -> SrcSpan
+pattern RealSrcSpanAlready x = SrcLoc.RealSrcSpan x
+#endif
+
 
 {- | Code Lens provider
  NOTE: Invoked every time the document is modified, not just when the document is saved.
@@ -159,7 +192,7 @@ codeLens st plId CodeLensParams{_textDocument} =
                     runAction "parsed" st $ useWithStale_ GetParsedModuleWithComments nfp
                 let comments = foldMap
                         ( foldMap $ \case
-                            L (RealSrcSpan real) bdy
+                            L (RealSrcSpanAlready real) bdy
                                 | unpackFS (srcSpanFile real) ==
                                     fromNormalizedFilePath nfp
                                 , let ran0 = realSrcSpanToRange real
@@ -176,7 +209,7 @@ codeLens st plId CodeLensParams{_textDocument} =
                                         _ -> mempty
                             _ -> mempty
                         )
-                        $ snd pm_annotations
+                        $ apiAnnComments pm_annotations
                 dbg "excluded comments" $ show $  DL.toList $
                     foldMap
                     (foldMap $ \(L a b) ->
@@ -185,7 +218,7 @@ codeLens st plId CodeLensParams{_textDocument} =
                             AnnBlockComment{} -> mempty
                             _                 -> DL.singleton (a, b)
                     )
-                    $ snd pm_annotations
+                    $ apiAnnComments pm_annotations
                 dbg "comments" $ show comments
 
                 -- Extract tests from source code
@@ -285,6 +318,20 @@ runEvalCmd st EvalParams{..} =
                 df <- getSessionDynFlags
                 setInteractiveDynFlags $
                     (foldl xopt_set idflags evalExtensions)
+#if MIN_VERSION_ghc(9,0,0)
+                        { unitState =
+                            unitState
+                                df
+                        , unitDatabases =
+                            unitDatabases
+                                df
+                        , packageFlags =
+                            packageFlags
+                                df
+                        , useColor = Never
+                        , canUseColor = False
+                        }
+#else
                         { pkgState =
                             pkgState
                                 df
@@ -297,10 +344,16 @@ runEvalCmd st EvalParams{..} =
                         , useColor = Never
                         , canUseColor = False
                         }
+#endif
 
                 -- set up a custom log action
+#if MIN_VERSION_ghc(9,0,0)
+                setLogAction $ \_df _wr _sev _span _doc ->
+                    defaultLogActionHPutStrDoc _df logHandle _doc
+#else
                 setLogAction $ \_df _wr _sev _span _style _doc ->
                     defaultLogActionHPutStrDoc _df logHandle _doc _style
+#endif
 
                 -- Load the module with its current content (as the saved module might not be up to date)
                 -- BUG: this fails for files that requires preprocessors (e.g. CPP) for ghc < 8.8
@@ -332,7 +385,7 @@ runEvalCmd st EvalParams{..} =
                                 tests
 
             let workspaceEditsMap = HashMap.fromList [(_uri, List $ addFinalReturn mdlText edits)]
-            let workspaceEdits = WorkspaceEdit (Just workspaceEditsMap) Nothing
+            let workspaceEdits = WorkspaceEdit (Just workspaceEditsMap) Nothing Nothing
 
             return workspaceEdits
      in perf "evalCmd" $
@@ -612,7 +665,12 @@ type GHCiLikeCmd = DynFlags -> Text -> Ghc (Maybe Text)
 -- Should we use some sort of trie here?
 ghciLikeCommands :: [(Text, GHCiLikeCmd)]
 ghciLikeCommands =
-    [("kind", doKindCmd False), ("kind!", doKindCmd True), ("type", doTypeCmd)]
+    [ ("info", doInfoCmd False)
+    , ("info!", doInfoCmd True)
+    , ("kind", doKindCmd False)
+    , ("kind!", doKindCmd True)
+    , ("type", doTypeCmd)
+    ]
 
 evalGhciLikeCmd :: Text -> Text -> Ghc (Maybe [Text])
 evalGhciLikeCmd cmd arg = do
@@ -625,6 +683,51 @@ evalGhciLikeCmd cmd arg = do
                 T.lines
                 <$> hndler df arg
         _ -> E.throw $ GhciLikeCmdNotImplemented cmd arg
+
+doInfoCmd :: Bool -> DynFlags -> Text -> Ghc (Maybe Text)
+doInfoCmd allInfo dflags s = do
+    sdocs <- mapM infoThing (T.words s)
+    pure $ Just $ T.pack $ showSDoc dflags (vcat sdocs)
+    where
+        infoThing :: GHC.GhcMonad m => Text -> m SDoc
+        infoThing (T.unpack -> str) = do
+            names     <- GHC.parseName str
+            mb_stuffs <- mapM (GHC.getInfo allInfo) names
+            let filtered = filterOutChildren (\(t,_f,_ci,_fi,_sd) -> t)
+                                            (catMaybes mb_stuffs)
+            return $ vcat (intersperse (text "") $ map pprInfo filtered)
+
+        filterOutChildren :: (a -> TyThing) -> [a] -> [a]
+        filterOutChildren get_thing xs
+            = filter (not . has_parent) xs
+            where
+                all_names = mkNameSet (map (getName . get_thing) xs)
+                has_parent x = case tyThingParent_maybe (get_thing x) of
+                                Just p  -> getName p `elemNameSet` all_names
+                                Nothing -> False
+
+        pprInfo :: (TyThing, Fixity, [GHC.ClsInst], [GHC.FamInst], SDoc) -> SDoc
+        pprInfo (thing, fixity, cls_insts, fam_insts, docs)
+            =  docs
+            $$ pprTyThingInContextLoc thing
+            $$ showFixity thing fixity
+            $$ vcat (map GHC.pprInstance cls_insts)
+            $$ vcat (map GHC.pprFamInst  fam_insts)
+
+        pprTyThingInContextLoc :: TyThing -> SDoc
+        pprTyThingInContextLoc tyThing
+            = showWithLoc (pprDefinedAt (getName tyThing))
+                          (pprTyThingInContext showToHeader tyThing)
+
+        showWithLoc :: SDoc -> SDoc -> SDoc
+        showWithLoc loc doc
+            = hang doc 2 (text "\t--" <+> loc)
+
+        showFixity :: TyThing -> Fixity -> SDoc
+        showFixity thing fixity
+            | fixity /= GHC.defaultFixity || isSymOcc (getOccName thing)
+                = ppr fixity <+> pprInfixName (GHC.getName thing)
+            | otherwise = empty
 
 doKindCmd :: Bool -> DynFlags -> Text -> Ghc (Maybe Text)
 doKindCmd False df arg = do
