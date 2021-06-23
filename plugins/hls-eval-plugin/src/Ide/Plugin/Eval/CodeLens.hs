@@ -108,6 +108,7 @@ import           GHC                                  (ClsInst,
                                                        setContext, setLogAction,
                                                        setSessionDynFlags,
                                                        setTargets, typeKind)
+import qualified GHC.LanguageExtensions.Type          as LangExt (Extension (..))
 import           GhcPlugins                           (DynFlags (..),
                                                        defaultLogActionHPutStrDoc,
                                                        elemNameSet, gopt_set,
@@ -118,13 +119,13 @@ import           GhcPlugins                           (DynFlags (..),
                                                        pprInfixName,
                                                        targetPlatform,
                                                        tyThingParent_maybe,
-                                                       xopt_set)
+                                                       xopt_set, xopt_unset)
+
 import           HscTypes                             (InteractiveImport (IIModule),
                                                        ModSummary (ms_mod),
                                                        Target (Target),
                                                        TargetId (TargetFile))
 import           Ide.Plugin.Eval.Code                 (Statement, asStatements,
-                                                       evalExtensions,
                                                        evalSetup, myExecStmt,
                                                        propSetup, resultRange,
                                                        testCheck, testRanges)
@@ -316,8 +317,13 @@ runEvalCmd st EvalParams{..} =
                 -- copy the package state to the interactive DynFlags
                 idflags <- getInteractiveDynFlags
                 df <- getSessionDynFlags
-                setInteractiveDynFlags $
-                    (foldl xopt_set idflags evalExtensions)
+                -- set the identical DynFlags as GHCi
+                -- Source: https://github.com/ghc/ghc/blob/5abf59976c7335df760e5d8609d9488489478173/ghc/GHCi/UI.hs#L473-L483
+                -- This needs to be done manually since the default flags are not visible externally.
+                let df' = flip xopt_set    LangExt.ExtendedDefaultRules
+                        . flip xopt_unset  LangExt.MonomorphismRestriction
+                        $ idflags
+                setInteractiveDynFlags $ df'
 #if MIN_VERSION_ghc(9,0,0)
                         { unitState =
                             unitState
