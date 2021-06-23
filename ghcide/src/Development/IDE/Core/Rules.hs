@@ -802,7 +802,7 @@ getModSummaryRule = do
                 foi <- use_ IsFileOfInterest f
                 bufFingerPrint <- liftIO $
                     fingerprintFromStringBuffer $ fromJust $ ms_hspp_buf $ msrModSummary res
-                let fingerPrint = fingerprintFingerprints
+                let !fingerPrint = fingerprintToBS $ fingerprintFingerprints
                         [ msrFingerprint res, bufFingerPrint ]
                     !res' = case foi of
                         NotFOI -> res
@@ -810,7 +810,7 @@ getModSummaryRule = do
                                 {ms_hspp_buf = Just $ error "ms_hspp_buf is cleared for non FOIs"}
                             }
                         _ -> res
-                return ( Just (fingerprintToBS fingerPrint) , ([], Just res'))
+                return ( Just fingerPrint, ([], Just res'))
             Left diags -> return (Nothing, (diags, Nothing))
 
     defineEarlyCutoff $ RuleNoDiagnostics $ \GetModSummaryWithoutTimestamps f -> do
