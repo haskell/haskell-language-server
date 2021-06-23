@@ -141,7 +141,6 @@ import           Module
 import           System.Directory                             (canonicalizePath)
 import           TcRnMonad                                    (tcg_dependent_files)
 
-import           Control.Applicative
 import           Data.Default                                 (def)
 import           Ide.Plugin.Properties                        (HasProperty,
                                                                KeyNameProxy,
@@ -800,11 +799,18 @@ getModSummaryRule = do
                 getModSummaryFromImports session fp modTime (textToStringBuffer <$> mFileContent)
         case modS of
             Right res -> do
+                foi <- use_ IsFileOfInterest f
                 bufFingerPrint <- liftIO $
                     fingerprintFromStringBuffer $ fromJust $ ms_hspp_buf $ msrModSummary res
                 let fingerPrint = fingerprintFingerprints
                         [ msrFingerprint res, bufFingerPrint ]
-                return ( Just (fingerprintToBS fingerPrint) , ([], Just res))
+                    !res' = case foi of
+                        NotFOI -> res
+                            {msrModSummary = (msrModSummary res)
+                                {ms_hspp_buf = Just $ error "ms_hspp_buf is cleared for non FOIs"}
+                            }
+                        _ -> res
+                return ( Just (fingerprintToBS fingerPrint) , ([], Just res'))
             Left diags -> return (Nothing, (diags, Nothing))
 
     defineEarlyCutoff $ RuleNoDiagnostics $ \GetModSummaryWithoutTimestamps f -> do
