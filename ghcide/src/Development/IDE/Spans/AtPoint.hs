@@ -58,10 +58,7 @@ import           Data.List.Extra                      (dropEnd1, nubOrd)
 
 import           Data.Version                         (showVersion)
 import           HieDb                                hiding (pointCommand)
-import           Packages                             (InstalledPackageInfo (packageVersion),
-                                                       PackageName (..),
-                                                       lookupPackage,
-                                                       packageNameString,
+import           Packages                             (PackageName (..),
                                                        sourceLibName)
 import           System.Directory                     (doesFileExist)
 
