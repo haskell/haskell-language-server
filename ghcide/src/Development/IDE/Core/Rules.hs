@@ -810,7 +810,7 @@ getModSummaryRule = do
                                 {ms_hspp_buf = Just $ error "ms_hspp_buf is cleared for non FOIs"}
                             }
                         _ -> res
-                return ( Just fingerPrint, ([], Just res'))
+                return (Just fingerPrint, ([], Just res'))
             Left diags -> return (Nothing, (diags, Nothing))
 
     defineEarlyCutoff $ RuleNoDiagnostics $ \GetModSummaryWithoutTimestamps f -> do
