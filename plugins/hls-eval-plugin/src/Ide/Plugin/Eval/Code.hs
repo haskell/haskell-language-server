@@ -80,17 +80,6 @@ asStmts (Example e _ _) = NE.toList e
 asStmts (Property t _ _) =
     ["prop11 = " ++ t, "(propEvaluation prop11 :: IO String)"]
 
--- -- |GHC extensions required for expression evaluation
--- evalExtensions :: [Extension]
--- evalExtensions =
---     [ NondecreasingIndentation
---     -- , OverlappingInstances
---     -- , UndecidableInstances
---     -- , FlexibleInstances
---     -- , IncoherentInstances
---     -- , TupleSections
---     , ExtendedDefaultRules
---     ]
 
 -- |GHC declarations required for expression evaluation
 evalSetup :: Ghc ()
