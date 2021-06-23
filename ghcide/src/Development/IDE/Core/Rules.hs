@@ -58,6 +58,7 @@ module Development.IDE.Core.Rules(
     typeCheckRuleDefinition,
     ) where
 
+import           Control.Applicative
 import           Control.Concurrent.Async                     (concurrently)
 import           Control.Concurrent.Strict
 import           Control.Exception.Safe
