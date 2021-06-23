@@ -58,8 +58,6 @@ import           Data.List.Extra                      (dropEnd1, nubOrd)
 
 import           Data.Version                         (showVersion)
 import           HieDb                                hiding (pointCommand)
-import           Packages                             (PackageName (..),
-                                                       sourceLibName)
 import           System.Directory                     (doesFileExist)
 
 -- | Gives a Uri for the module, given the .hie file location and the the module info
