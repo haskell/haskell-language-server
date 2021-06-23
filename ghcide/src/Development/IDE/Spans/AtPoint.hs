@@ -235,10 +235,7 @@ atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) df pos = listToMaybe $ po
           conf <- lookupPackage df pid
           let pkgName = T.pack $ packageNameString conf
               version = T.pack $ showVersion (packageVersion conf)
-              libName = case sourceLibName conf of
-                Just (PackageName x) -> ":" <> T.pack (unpackFS x)
-                _                    -> ""
-          pure $ " *(" <> pkgName <> "-" <> version <> libName <> ")*"
+          pure $ " *(" <> pkgName <> "-" <> version <> ")*"
 
         prettyTypes = map (("_ :: "<>) . prettyType) types
         prettyType t = case kind of
