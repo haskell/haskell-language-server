@@ -167,7 +167,7 @@ jobs:
     runs-on: ubuntu-18.04
     strategy:
       matrix:
-        os: [Linux, macOS]
+        os: [Linux, macOS, Windows]
     steps:
       - uses: actions/download-artifact@v2
 
