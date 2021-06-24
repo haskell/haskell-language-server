@@ -50,6 +50,7 @@ library
       TLanguageOptionsTupleSections
       TIO
       TProperty
+      TSameDefaultLanguageExtensionsAsGhci
       TPrelude
       TCPP
       TLHS
