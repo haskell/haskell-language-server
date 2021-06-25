@@ -993,7 +993,7 @@ getDocsBatch
   :: HscEnv
   -> Module  -- ^ a moudle where the names are in scope
   -> [Name]
-  -> IO [Either String (Maybe HsDocString, Map.Map Int HsDocString)]
+  -> IO [Either String (Maybe HsDocString)]
 getDocsBatch hsc_env _mod _names = do
     ((_warns,errs), res) <- initTc hsc_env HsSrcFile False _mod fakeSpan $ forM _names $ \name ->
         case nameModule_maybe name of
@@ -1001,12 +1001,10 @@ getDocsBatch hsc_env _mod _names = do
             Just mod -> do
              ModIface { mi_doc_hdr = mb_doc_hdr
                       , mi_decl_docs = DeclDocMap dmap
-                      , mi_arg_docs = ArgDocMap amap
                       } <- loadModuleInterface "getModuleInterface" mod
-             if isNothing mb_doc_hdr && Map.null dmap && Map.null amap
+             if isNothing mb_doc_hdr && Map.null dmap
                then pure (Left (NoDocsInIface mod $ compiled name))
-               else pure (Right ( Map.lookup name dmap
-                                , Map.findWithDefault Map.empty name amap))
+               else pure (Right ( Map.lookup name dmap))
     case res of
         Just x  -> return $ map (first $ T.unpack . showGhc) x
         Nothing -> throwErrors errs

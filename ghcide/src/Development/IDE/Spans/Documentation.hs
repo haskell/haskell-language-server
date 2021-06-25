@@ -78,8 +78,8 @@ getDocumentationsTryGhc env mod names = do
       Left _    -> return []
       Right res -> zipWithM unwrap res names
   where
-    unwrap (Right (Just docs, _)) n = SpanDocString docs <$> getUris n
-    unwrap _ n                      = mkSpanDocText n
+    unwrap (Right (Just docs)) n = SpanDocString docs <$> getUris n
+    unwrap _ n                   = mkSpanDocText n
 
     mkSpanDocText name =
       SpanDocText [] <$> getUris name
