@@ -15,12 +15,10 @@ import           Control.Monad.IO.Class
 import           Data.Aeson
 import           Data.Foldable
 import           Data.Function (on)
-import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
-import qualified Ide.Plugin.Config as Plugin
 import           Ide.Plugin.Tactic as Tactic
 import           Language.LSP.Types
 import           Language.LSP.Types.Lens hiding (actions, applyEdit, capabilities, executeCommand, id, line, message, name, rename, title)
@@ -127,6 +125,20 @@ mkCodeLensTest input =
         T.writeFile expected_name edited
       expected <- liftIO $ T.readFile expected_name
       liftIO $ edited `shouldBe` expected
+
+
+------------------------------------------------------------------------------
+-- | A test that no code lenses can be run in the file
+mkNoCodeLensTest
+    :: FilePath
+    -> SpecWith ()
+mkNoCodeLensTest input =
+  it (input <> " (no code lenses)") $ do
+    runSessionWithServer plugin tacticPath $ do
+      doc <- openDoc (input <.> "hs") "haskell"
+      _ <- waitForDiagnostics
+      lenses <- fmap (reverse . filter isWingmanLens) $ getCodeLenses doc
+      liftIO $ lenses `shouldBe` []
 
 
 
