@@ -87,6 +87,7 @@ data Config = Config
   { cfg_max_use_ctor_actions :: Int
   , cfg_timeout_seconds      :: Int
   , cfg_auto_gas             :: Int
+  , cfg_proofstate_styling   :: Bool
   }
   deriving (Eq, Ord, Show)
 
@@ -95,6 +96,7 @@ emptyConfig = Config
   { cfg_max_use_ctor_actions = 5
   , cfg_timeout_seconds = 2
   , cfg_auto_gas = 4
+  , cfg_proofstate_styling = True
   }
 
 ------------------------------------------------------------------------------
@@ -297,8 +299,9 @@ data Judgement' a = Judgement
   , _jWhitelistSplit    :: !Bool
   , _jIsTopHole         :: !Bool
   , _jGoal              :: !a
+  , j_coercion          :: TCvSubst
   }
-  deriving stock (Eq, Generic, Functor, Show)
+  deriving stock (Generic, Functor, Show)
 
 type Judgement = Judgement' CType
 
@@ -328,7 +331,6 @@ data TacticError
   | TooPolymorphic
   | NotInScope OccName
   | TacticPanic String
-  deriving stock (Eq)
 
 instance Show TacticError where
     show (UndefinedHypothesis name) =

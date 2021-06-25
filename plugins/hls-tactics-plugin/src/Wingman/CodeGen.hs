@@ -33,6 +33,7 @@ import           GhcPlugins (isSymOcc, mkVarOccFS)
 import           OccName (occName)
 import           PatSyn
 import           Type hiding (Var)
+import           TysPrim (alphaTy)
 import           Wingman.CodeGen.Utils
 import           Wingman.GHC
 import           Wingman.Judgements
@@ -67,8 +68,6 @@ destructMatches use_field_puns f scrut t jdg = do
             -- #syn_scoped
             method_hy = foldMap evidenceToHypothesis ev
             args = conLikeInstOrigArgTys' con apps
-        modify $ evidenceToSubst ev
-        subst <- gets ts_unifier
         ctx <- ask
 
         let names_in_scope = hyNamesInScope hy
@@ -79,7 +78,7 @@ destructMatches use_field_puns f scrut t jdg = do
         let hy' = patternHypothesis scrut con jdg
                 $ zip names'
                 $ coerce args
-            j = fmap (CType . substTyAddInScope subst . unCType)
+            j = withNewCoercions (evidenceToCoercions ev)
               $ introduce ctx hy'
               $ introduce ctx method_hy
               $ withNewGoal g jdg
@@ -309,7 +308,8 @@ letForEach rename solve (unHypothesis -> hy) jdg = do
       let g = jGoal jdg
       terms <- fmap sequenceA $ for hy $ \hi -> do
         let name = rename $ hi_name hi
-        res <- tacticToRule jdg $ solve hi
+        let generalized_let_ty = CType alphaTy
+        res <- tacticToRule (withNewGoal generalized_let_ty jdg) $ solve hi
         pure $ fmap ((name,) . unLoc) res
       let hy' = fmap (g <$) $ syn_val terms
           matches = fmap (fmap (\(occ, expr) -> valBind (occNameToStr occ) expr)) terms

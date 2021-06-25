@@ -1,4 +1,5 @@
-{-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections   #-}
 
 module Wingman.Machinery where
 
@@ -6,7 +7,7 @@ import           Control.Applicative (empty)
 import           Control.Lens ((<>~))
 import           Control.Monad.Error.Class
 import           Control.Monad.Reader
-import           Control.Monad.State.Class (gets, modify)
+import           Control.Monad.State.Class (gets, modify, MonadState)
 import           Control.Monad.State.Strict (StateT (..), execStateT)
 import           Control.Monad.Trans.Maybe
 import           Data.Coerce
@@ -21,6 +22,7 @@ import           Data.Maybe (mapMaybe)
 import           Data.Monoid (getSum)
 import           Data.Ord (Down (..), comparing)
 import qualified Data.Set as S
+import           Data.Traversable (for)
 import           Development.IDE.Core.Compile (lookupName)
 import           Development.IDE.GHC.Compat
 import           GhcPlugins (GlobalRdrElt (gre_name), lookupOccEnv, varType)
@@ -30,7 +32,7 @@ import           Refinery.Tactic.Internal
 import           TcType
 import           Type (tyCoVarsOfTypeWellScoped)
 import           Wingman.Context (getInstance)
-import           Wingman.GHC (tryUnifyUnivarsButNotSkolems, updateSubst)
+import           Wingman.GHC (tryUnifyUnivarsButNotSkolems, updateSubst, tacticsGetDataCons)
 import           Wingman.Judgements
 import           Wingman.Simplify (simplify)
 import           Wingman.Types
@@ -40,6 +42,17 @@ substCTy :: TCvSubst -> CType -> CType
 substCTy subst = coerce . substTy subst . coerce
 
 
+getSubstForJudgement
+    :: MonadState TacticState m
+    => Judgement
+    -> m TCvSubst
+getSubstForJudgement j = do
+  -- NOTE(sandy): It's OK to use mempty here, because coercions _can_ give us
+  -- substitutions for skolems.
+  let coercions = j_coercion j
+  unifier <- gets ts_unifier
+  pure $ unionTCvSubst unifier coercions
+
 ------------------------------------------------------------------------------
 -- | Produce a subgoal that must be solved before we can solve the original
 -- goal.
@@ -48,7 +61,7 @@ newSubgoal
     -> Rule
 newSubgoal j = do
   ctx <- ask
-  unifier <- gets ts_unifier
+  unifier <- getSubstForJudgement j
   subgoal
     $ normalizeJudgement ctx
     $ substJdg unifier
@@ -218,6 +231,20 @@ unify goal inst = do
 
 
 ------------------------------------------------------------------------------
+-- | Attempt to unify two types.
+canUnify
+    :: MonadState TacticState m
+    => CType -- ^ The goal type
+    -> CType -- ^ The type we are trying unify the goal type with
+    -> m Bool
+canUnify goal inst = do
+  skolems <- gets ts_skolems
+  case tryUnifyUnivarsButNotSkolems skolems goal inst of
+    Just _ -> pure True
+    Nothing -> pure False
+
+
+------------------------------------------------------------------------------
 -- | Prefer the first tactic to the second, if the bool is true. Otherwise, just run the second tactic.
 --
 -- This is useful when you have a clever pruning solution that isn't always
@@ -312,6 +339,17 @@ lookupNameInContext name = do
     Nothing      -> empty
 
 
+getDefiningType
+    :: (MonadError TacticError m, MonadReader Context m)
+    => m CType
+getDefiningType = do
+  calling_fun_name <- fst . head <$> asks ctxDefiningFuncs
+  maybe
+    (throwError $ NotInScope calling_fun_name)
+    pure
+      =<< lookupNameInContext calling_fun_name
+
+
 ------------------------------------------------------------------------------
 -- | Build a 'HyInfo' for an imported term.
 createImportedHyInfo :: OccName -> CType -> HyInfo CType
@@ -366,4 +404,23 @@ getOccNameType occ = do
   getTyThing occ >>= \case
     Just (AnId v) -> pure $ varType v
     _ -> throwError $ NotInScope occ
+
+
+getCurrentDefinitions :: TacticsM [(OccName, CType)]
+getCurrentDefinitions = do
+  ctx_funcs <- asks ctxDefiningFuncs
+  for ctx_funcs $ \res@(occ, _) ->
+    pure . maybe res (occ,) =<< lookupNameInContext occ
+
+
+------------------------------------------------------------------------------
+-- | Given two types, see if we can construct a homomorphism by mapping every
+-- data constructor in the domain to the same in the codomain. This function
+-- returns 'Just' when all the lookups succeeded, and a non-empty value if the
+-- homomorphism *is not* possible.
+uncoveredDataCons :: Type -> Type -> Maybe (S.Set (Uniquely DataCon))
+uncoveredDataCons domain codomain = do
+  (g_dcs, _) <- tacticsGetDataCons codomain
+  (hi_dcs, _) <- tacticsGetDataCons domain
+  pure $ S.fromList (coerce hi_dcs) S.\\ S.fromList (coerce g_dcs)
 

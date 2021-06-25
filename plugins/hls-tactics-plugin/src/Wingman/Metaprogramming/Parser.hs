@@ -8,20 +8,20 @@ module Wingman.Metaprogramming.Parser where
 
 import qualified Control.Monad.Combinators.Expr as P
 import qualified Control.Monad.Error.Class as E
-import           Control.Monad.Reader (ask)
 import           Data.Functor
 import           Data.Maybe (listToMaybe)
 import qualified Data.Text as T
 import qualified Refinery.Tactic as R
 import qualified Text.Megaparsec as P
 import           Wingman.Auto
-import           Wingman.Context (getCurrentDefinitions)
-import           Wingman.Machinery (useNameFromHypothesis, getOccNameType, createImportedHyInfo, useNameFromContext, lookupNameInContext)
+import           Wingman.Machinery (useNameFromHypothesis, useNameFromContext, getCurrentDefinitions)
 import           Wingman.Metaprogramming.Lexer
 import           Wingman.Metaprogramming.Parser.Documentation
 import           Wingman.Metaprogramming.ProofState (proofState, layout)
 import           Wingman.Tactics
 import           Wingman.Types
+import Development.IDE.GHC.Compat (RealSrcLoc, srcLocLine, srcLocCol, srcLocFile)
+import FastString (unpackFS)
 
 
 nullary :: T.Text -> TacticsM () -> Parser (TacticsM ())
@@ -188,7 +188,7 @@ commands =
 
   , command "apply" Deterministic (Ref One)
       "Apply the given function from *local* scope."
-      (pure . useNameFromHypothesis apply)
+      (pure . useNameFromHypothesis (apply Saturated))
       [ Example
           Nothing
           ["f"]
@@ -295,7 +295,7 @@ commands =
       "Fill the current hole with a call to the defining function."
       ( pure $
           fmap listToMaybe getCurrentDefinitions >>= \case
-            Just (self, _) -> useNameFromContext apply self
+            Just (self, _) -> useNameFromContext (apply Saturated) self
             Nothing -> E.throwError $ TacticPanic "no defining function"
       )
       [ Example
@@ -308,13 +308,7 @@ commands =
 
   , command "use" Deterministic (Ref One)
       "Apply the given function from *module* scope."
-      ( \occ -> pure $ do
-          ctx <- ask
-          ty <- case lookupNameInContext occ ctx of
-            Just ty -> pure ty
-            Nothing -> CType <$> getOccNameType occ
-          apply $ createImportedHyInfo occ ty
-      )
+      (pure . use Saturated)
       [ Example
           (Just "`import Data.Char (isSpace)`")
           ["isSpace"]
@@ -354,6 +348,44 @@ commands =
           "(_ :: a -> a -> a -> a) a1 a2 a3"
       ]
 
+  , command "try" Nondeterministic Tactic
+      "Simultaneously run and do not run a tactic. Subsequent tactics will bind on both states."
+      (pure . R.try)
+      [ Example
+          Nothing
+          ["(apply f)"]
+          [ EHI "f" "a -> b"
+          ]
+          (Just "b")
+          $ T.pack $ unlines
+            [ "-- BOTH of:\n"
+            , "f (_ :: a)"
+            , "\n-- and\n"
+            , "_ :: b"
+            ]
+      ]
+
+  , command "nested" Nondeterministic (Ref One)
+      "Nest the given function (in module scope) with itself arbitrarily many times. NOTE: The resulting function is necessarily unsaturated, so you will likely need `with_arg` to use this tactic in a saturated context."
+      (pure . nested)
+      [ Example
+          Nothing
+          ["fmap"]
+          []
+          (Just "[(Int, Either Bool a)] -> [(Int, Either Bool b)]")
+          "fmap (fmap (fmap _))"
+      ]
+
+  , command "with_arg" Deterministic Nullary
+      "Fill the current goal with a function application. This can be useful when you'd like to fill in the argument before the function, or when you'd like to use a non-saturated function in a saturated context."
+      (pure with_arg)
+      [ Example
+          (Just "Where `a` is a new unifiable type variable.")
+          []
+          []
+          (Just "r")
+          "(_2 :: a -> r) (_1 :: a)"
+      ]
   ]
 
 
@@ -369,14 +401,9 @@ oneTactic =
 tactic :: Parser (TacticsM ())
 tactic = flip P.makeExprParser operators oneTactic
 
-bindOne :: TacticsM a -> TacticsM a -> TacticsM a
-bindOne t t1 = t R.<@> [t1]
-
 operators :: [[P.Operator Parser (TacticsM ())]]
 operators =
-    [ [ P.Prefix (symbol "*"   $> R.many_) ]
-    , [ P.Prefix (symbol "try" $> R.try) ]
-    , [ P.InfixR (symbol "|"   $> (R.<%>) )]
+    [ [ P.InfixR (symbol "|"   $> (R.<%>) )]
     , [ P.InfixL (symbol ";"   $> (>>))
       , P.InfixL (symbol ","   $> bindOne)
       ]
@@ -395,17 +422,30 @@ wrapError :: String -> String
 wrapError err = "```\n" <> err <> "\n```\n"
 
 
+fixErrorOffset :: RealSrcLoc -> P.ParseErrorBundle a b -> P.ParseErrorBundle a b
+fixErrorOffset rsl (P.ParseErrorBundle ne (P.PosState a n (P.SourcePos _ line col) pos s))
+  = P.ParseErrorBundle ne
+  $ P.PosState a n
+      (P.SourcePos
+        (unpackFS $ srcLocFile rsl)
+        ((<>) line $ P.mkPos $ srcLocLine rsl - 1)
+        ((<>) col  $ P.mkPos $ srcLocCol  rsl - 1 + length @[] "[wingman|")
+      )
+      pos
+      s
+
 ------------------------------------------------------------------------------
 -- | Attempt to run a metaprogram tactic, returning the proof state, or the
 -- errors.
 attempt_it
-    :: Context
+    :: RealSrcLoc
+    -> Context
     -> Judgement
     -> String
     -> IO (Either String String)
-attempt_it ctx jdg program =
+attempt_it rsl ctx jdg program =
   case P.runParser tacticProgram "<splice>" (T.pack program) of
-    Left peb -> pure $ Left $ wrapError $ P.errorBundlePretty peb
+    Left peb -> pure $ Left $ wrapError $ P.errorBundlePretty $ fixErrorOffset rsl peb
     Right tt -> do
       res <- runTactic
             ctx
@@ -413,7 +453,9 @@ attempt_it ctx jdg program =
             tt
       pure $ case res of
           Left tes -> Left $ wrapError $ show tes
-          Right rtr -> Right $ layout $ proofState rtr
+          Right rtr -> Right
+                     $ layout (cfg_proofstate_styling $ ctxConfig ctx)
+                     $ proofState rtr
 
 
 parseMetaprogram :: T.Text -> TacticsM ()
@@ -426,7 +468,7 @@ parseMetaprogram
 -- | Automatically generate the metaprogram command reference.
 writeDocumentation :: IO ()
 writeDocumentation =
-  writeFile "plugins/hls-tactics-plugin/COMMANDS.md" $
+  writeFile "COMMANDS.md" $
     unlines
       [ "# Wingman Metaprogram Command Reference"
       , ""
