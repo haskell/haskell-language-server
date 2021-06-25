@@ -39,6 +39,7 @@ import           Text.Regex.TDFA.Text         ()
 import           UnliftIO                     (MonadUnliftIO)
 import           UnliftIO.Async               (forConcurrently)
 import           UnliftIO.Exception           (catchAny)
+import Debug.Trace (trace)
 
 -- ---------------------------------------------------------------------
 --
@@ -70,7 +71,14 @@ rulesPlugins rs = mempty { P.pluginRules = rules }
         rules = foldMap snd rs
 
 dynFlagsPlugins :: [(PluginId, DynFlagsModifications)] -> Plugin Config
-dynFlagsPlugins rs = mempty { P.pluginModifyDynflags = foldMap snd rs }
+dynFlagsPlugins rs = mempty
+  { P.pluginModifyDynflags =
+      flip foldMap rs $ \(plId, dflag_mods) cfg ->
+        let plg_cfg = configForPlugin cfg plId
+         in case trace ("enabling dynflag mods for " <> show plId <> "? " <> show (plcGlobalOn plg_cfg)) $ plcGlobalOn plg_cfg of
+              True  -> dflag_mods
+              False -> mempty
+  }
 
 -- ---------------------------------------------------------------------
 

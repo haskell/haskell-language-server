@@ -91,6 +91,7 @@ import           System.IO                             (BufferMode (LineBufferin
 import           System.Time.Extra                     (offsetTime,
                                                         showDuration)
 import           Text.Printf                           (printf)
+import Debug.Trace (traceM, trace)
 
 data Command
     = Check [FilePath]  -- ^ Typecheck some paths and print diagnostics. Exit code is the number of failures
@@ -218,6 +219,7 @@ defaultMain Arguments{..} = do
 
                 sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions dir
                 config <- LSP.runLspT env LSP.getConfig
+                traceM $ "config::: " <> show config
                 let def_options = argsIdeOptions config sessionLoader
 
                 -- disable runSubset if the client doesn't support watched files
@@ -225,7 +227,7 @@ defaultMain Arguments{..} = do
 
                 let options = def_options
                             { optReportProgress = clientSupportsProgress caps
-                            , optModifyDynFlags = optModifyDynFlags def_options <> pluginModifyDynflags plugins
+                            , optModifyDynFlags = optModifyDynFlags def_options <> trace "from LSP for real" (pluginModifyDynflags plugins config)
                             , optRunSubset = runSubset
                             }
                     caps = LSP.resClientCapabilities env
@@ -269,7 +271,7 @@ defaultMain Arguments{..} = do
                 options = def_options
                         { optCheckParents = pure NeverCheck
                         , optCheckProject = pure False
-                        , optModifyDynFlags = optModifyDynFlags def_options <> pluginModifyDynflags plugins
+                        , optModifyDynFlags = optModifyDynFlags def_options <> trace "not for real 2" (pluginModifyDynflags plugins def)
                         }
             ide <- initialise argsDefaultHlsConfig rules Nothing logger debouncer options vfs hiedb hieChan
             shakeSessionInit ide
@@ -319,7 +321,7 @@ defaultMain Arguments{..} = do
                 options = def_options
                     { optCheckParents = pure NeverCheck
                     , optCheckProject = pure False
-                    , optModifyDynFlags = optModifyDynFlags def_options <> pluginModifyDynflags plugins
+                    , optModifyDynFlags = optModifyDynFlags def_options <> trace "not for real" (pluginModifyDynflags plugins def)
                     }
             ide <- initialise argsDefaultHlsConfig rules Nothing logger debouncer options vfs hiedb hieChan
             shakeSessionInit ide
