@@ -22,7 +22,7 @@ import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake (IdeState (..))
 import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.Compat
-import           GhcPlugins (containsSpan, realSrcLocSpan)
+import           GhcPlugins (containsSpan, realSrcLocSpan, realSrcSpanStart)
 import           Ide.Types
 import           Language.LSP.Types
 import           Prelude hiding (span)
@@ -50,8 +50,9 @@ hoverProvider state plId (HoverParams (TextDocumentIdentifier uri) (unsafeMkCurr
           case (find (flip containsSpan (unTrack loc) . unTrack . fst) holes) of
             Just (trss, program) -> do
               let tr_range = fmap realSrcSpanToRange trss
+                  rsl = realSrcSpanStart $ unTrack trss
               HoleJudgment{hj_jdg=jdg, hj_ctx=ctx} <- judgementForHole state nfp tr_range cfg
-              z <- liftIO $ attempt_it ctx jdg $ T.unpack program
+              z <- liftIO $ attempt_it rsl ctx jdg $ T.unpack program
               pure $ Hover
                 { _contents = HoverContents
                             $ MarkupContent MkMarkdown

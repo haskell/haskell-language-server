@@ -21,6 +21,8 @@ import           Wingman.Metaprogramming.Parser.Documentation
 import           Wingman.Metaprogramming.ProofState (proofState, layout)
 import           Wingman.Tactics
 import           Wingman.Types
+import Development.IDE.GHC.Compat (RealSrcLoc, srcLocLine, srcLocCol, srcLocFile)
+import FastString (unpackFS)
 
 
 nullary :: T.Text -> TacticsM () -> Parser (TacticsM ())
@@ -421,17 +423,30 @@ wrapError :: String -> String
 wrapError err = "```\n" <> err <> "\n```\n"
 
 
+fixErrorOffset :: RealSrcLoc -> P.ParseErrorBundle a b -> P.ParseErrorBundle a b
+fixErrorOffset rsl (P.ParseErrorBundle ne (P.PosState a n (P.SourcePos _ line col) pos s))
+  = P.ParseErrorBundle ne
+  $ P.PosState a n
+      (P.SourcePos
+        (unpackFS $ srcLocFile rsl)
+        ((<>) line $ P.mkPos $ srcLocLine rsl - 1)
+        ((<>) col  $ P.mkPos $ srcLocCol  rsl - 1 + length @[] "[wingman|")
+      )
+      pos
+      s
+
 ------------------------------------------------------------------------------
 -- | Attempt to run a metaprogram tactic, returning the proof state, or the
 -- errors.
 attempt_it
-    :: Context
+    :: RealSrcLoc
+    -> Context
     -> Judgement
     -> String
     -> IO (Either String String)
-attempt_it ctx jdg program =
+attempt_it rsl ctx jdg program =
   case P.runParser tacticProgram "<splice>" (T.pack program) of
-    Left peb -> pure $ Left $ wrapError $ P.errorBundlePretty peb
+    Left peb -> pure $ Left $ wrapError $ P.errorBundlePretty $ fixErrorOffset rsl peb
     Right tt -> do
       res <- runTactic
             ctx

@@ -17,6 +17,7 @@ import           Data.Bool (bool)
 import           Data.Coerce
 import           Data.Maybe
 import           Data.Monoid
+import qualified Data.Set as S
 import qualified Data.Text as T
 import           Data.Traversable
 import           DataCon (dataConName)
@@ -32,7 +33,7 @@ import           Prelude hiding (span)
 import           Wingman.Auto
 import           Wingman.GHC
 import           Wingman.Judgements
-import           Wingman.Machinery (useNameFromHypothesis)
+import           Wingman.Machinery (useNameFromHypothesis, uncoveredDataCons)
 import           Wingman.Metaprogramming.Parser (parseMetaprogram)
 import           Wingman.Tactics
 import           Wingman.Types
@@ -126,7 +127,7 @@ commandProvider DestructLambdaCase =
 commandProvider HomomorphismLambdaCase =
   requireHoleSort (== Hole) $
   requireExtension LambdaCase $
-    filterGoalType ((== Just True) . lambdaCaseable) $
+    filterGoalType (liftLambdaCase False homoFilter) $
       provide HomomorphismLambdaCase ""
 commandProvider DestructAll =
   requireHoleSort (== Hole) $
@@ -313,8 +314,20 @@ tcCommandId c = coerce $ T.pack $ "tactics" <> show c <> "Command"
 -- | We should show homos only when the goal type is the same as the binding
 -- type, and that both are usual algebraic types.
 homoFilter :: Type -> Type -> Bool
-homoFilter (algebraicTyCon -> Just t1) (algebraicTyCon -> Just t2) = t1 == t2
-homoFilter _ _                                                     = False
+homoFilter codomain domain =
+  case uncoveredDataCons domain codomain of
+    Just s -> S.null s
+    _ -> False
+
+
+------------------------------------------------------------------------------
+-- | Lift a function of (codomain, domain) over a lambda case.
+liftLambdaCase :: r -> (Type -> Type -> r) -> Type -> r
+liftLambdaCase nil f t =
+  case tacticsSplitFunTy t of
+    (_, _, arg : _, res) -> f res arg
+    _ -> nil
+
 
 
 ------------------------------------------------------------------------------
