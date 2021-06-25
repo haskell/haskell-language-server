@@ -200,8 +200,23 @@ destructPun hi = requireConcreteHole $ tracing "destructPun(user)" $
 ------------------------------------------------------------------------------
 -- | Case split, using the same data constructor in the matches.
 homo :: HyInfo CType -> TacticsM ()
-homo = requireConcreteHole . tracing "homo" . rule . destruct' False (\dc jdg ->
-  buildDataCon False jdg dc $ snd $ splitAppTys $ unCType $ jGoal jdg)
+homo hi = requireConcreteHole . tracing "homo" $ do
+  jdg <- goal
+  let g = jGoal jdg
+
+  -- Ensure that every data constructor in the domain type is covered in the
+  -- codomain; otherwise 'homo' will produce an ill-typed program.
+  case (uncoveredDataCons (coerce $ hi_type hi) (coerce g)) of
+    Just uncovered_dcs ->
+      unless (S.null uncovered_dcs) $
+        throwError  $ TacticPanic "Can't cover every datacon in domain"
+    _ -> throwError $ TacticPanic "Unable to fetch datacons"
+
+  rule
+    $ destruct'
+        False
+        (\dc jdg -> buildDataCon False jdg dc $ snd $ splitAppTys $ unCType $ jGoal jdg)
+    $ hi
 
 
 ------------------------------------------------------------------------------
