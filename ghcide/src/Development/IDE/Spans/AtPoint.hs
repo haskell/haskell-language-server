@@ -52,11 +52,14 @@ import qualified Data.Text                            as T
 
 import qualified Data.Array                           as A
 import           Data.Either
-import           Data.List                            (isSuffixOf)
 import           Data.List.Extra                      (dropEnd1, nubOrd)
 
+import           Data.List                            (isSuffixOf, sortOn)
+import           Data.Tree
+import qualified Data.Tree                            as T
 import           Data.Version                         (showVersion)
 import           Development.IDE.Types.Shake          (WithHieDb)
+import qualified GHC.Utils.Outputable                 as O
 import           HieDb                                hiding (pointCommand,
                                                        withHieDb)
 import           System.Directory                     (doesFileExist)
@@ -198,7 +201,7 @@ gotoDefinition
   -> LookupModule m
   -> IdeOptions
   -> M.Map ModuleName NormalizedFilePath
-  -> HieASTs a
+  -> HieAstResult
   -> Position
   -> MaybeT m [(Location, Identifier)]
 gotoDefinition withHieDb getHieFile ideOpts imports srcSpans pos
@@ -212,7 +215,7 @@ atPoint
   -> HscEnv
   -> Position
   -> IO (Maybe (Maybe Range, [T.Text]))
-atPoint IdeOptions{} (HAR _ hf _ _ (kind :: HieKind hietype)) (DKMap dm km) env pos =
+atPoint IdeOptions{} (HAR _ (hf :: HieASTs a) rf _ (kind :: HieKind hietype)) (DKMap dm km) env pos =
     listToMaybe <$> sequence (pointCommand hf pos hoverInfo)
   where
     -- Hover info for values/data
@@ -236,7 +239,7 @@ atPoint IdeOptions{} (HAR _ hf _ _ (kind :: HieKind hietype)) (DKMap dm km) env 
         info = nodeInfoH kind ast
 
         names :: [(Identifier, IdentifierDetails hietype)]
-        names = M.assocs $ nodeIdentifiers info
+        names = sortOn (any isEvidenceUse . identInfo . snd) $ M.assocs $ nodeIdentifiers info
 
         -- Check for evidence bindings
         isInternal :: (Identifier, IdentifierDetails a) -> Bool
@@ -248,11 +251,14 @@ atPoint IdeOptions{} (HAR _ hf _ _ (kind :: HieKind hietype)) (DKMap dm km) env 
         filteredNames = filter (not . isInternal) names
 
         prettyName :: (Either ModuleName Name, IdentifierDetails hietype) -> IO T.Text
-        prettyName (Right n, dets) = pure $ T.unlines $
-          wrapHaskell (printOutputable n <> maybe "" (" :: " <>) ((prettyType <$> identType dets) <|> maybeKind))
-          : maybeToList (pretty (definedAt n) (prettyPackageName n))
-          ++ catMaybes [ T.unlines . spanDocToMarkdown <$> lookupNameEnv dm n
-                       ]
+        prettyName (Right n, dets)
+          | any isEvidenceUse (identInfo dets) =
+            pure $ maybe "" (printOutputable . renderEvidenceTree) (getEvidenceTree rf n) <> "\n"
+          | otherwise = pure $ T.unlines $
+            wrapHaskell (printOutputable n <> maybe "" (" :: " <>) ((prettyType <$> identType dets) <|> maybeKind))
+            : maybeToList (pretty (definedAt n) (prettyPackageName n))
+            ++ catMaybes [ T.unlines . spanDocToMarkdown <$> lookupNameEnv dm n
+                        ]
           where maybeKind = fmap printOutputable $ safeTyThingType =<< lookupNameEnv km n
                 pretty Nothing Nothing = Nothing
                 pretty (Just define) Nothing = Just $ define <> "\n"
@@ -298,6 +304,12 @@ atPoint IdeOptions{} (HAR _ hf _ _ (kind :: HieKind hietype)) (DKMap dm km) env 
         prettyType t = case kind of
           HieFresh -> printOutputable t
           HieFromDisk full_file -> printOutputable $ hieTypeToIface $ recoverFullType t (hie_types full_file)
+        -- prettyType = printOutputable . expandType
+
+        expandType :: a -> SDoc
+        expandType t = case kind of
+          HieFresh -> ppr t
+          HieFromDisk full_file -> ppr $ hieTypeToIface $ recoverFullType t (hie_types full_file)
 
         definedAt :: Name -> Maybe T.Text
         definedAt name =
@@ -306,6 +318,40 @@ atPoint IdeOptions{} (HAR _ hf _ _ (kind :: HieKind hietype)) (DKMap dm km) env 
           case nameSrcLoc name of
             UnhelpfulLoc {} | isInternalName name || isSystemName name -> Nothing
             _ -> Just $ "*Defined " <> printOutputable (pprNameDefnLoc name) <> "*"
+
+        -- We want to render the root constraint even if it is a let,
+        -- but we don't want to render any subsequent lets
+        renderEvidenceTree :: Tree (EvidenceInfo a) -> SDoc
+        -- However, if the root constraint is simply an indirection (via let) to a single other constraint,
+        -- we can still skip rendering it
+        renderEvidenceTree (T.Node (EvidenceInfo{evidenceDetails=Just (EvLetBind _,_,_)}) [x])
+          = renderEvidenceTree x
+        renderEvidenceTree (T.Node (EvidenceInfo{evidenceDetails=Just (EvLetBind _,_,_), ..}) xs)
+          = hang (text "- Evidence of constraint `" O.<> expandType evidenceType O.<> "`") 2 $
+                 vcat $ text "depending on:" : map renderEvidenceTree' xs
+        renderEvidenceTree x = renderEvidenceTree' x
+
+        -- renderEvidenceTree' skips let bound evidence variables and prints the children directly
+        renderEvidenceTree' (T.Node (EvidenceInfo{evidenceDetails=Just (EvLetBind _,_,_)}) xs)
+          = vcat (map renderEvidenceTree' xs)
+        renderEvidenceTree' (T.Node (EvidenceInfo{..}) xs)
+          = hang (text "- Evidence of constraint `" O.<> expandType evidenceType O.<> "`") 2 $
+                 vcat $ map (text . T.unpack) (maybeToList $ definedAt evidenceVar)
+                     ++ [printDets evidenceSpan evidenceDetails (null xs)]
+                     ++ map renderEvidenceTree' xs
+
+        printDets :: RealSrcSpan -> Maybe (EvVarSource, Scope, Maybe Span) -> Bool -> SDoc
+        printDets _    Nothing True = text ""
+        printDets _    Nothing False = text "constructed using:"
+        printDets ospn (Just (src,_,mspn)) _ = pprSrc
+                                      $$ text "at" <+> ppr spn
+          where
+            -- Use the bind span if we have one, else use the occurence span
+            spn = fromMaybe ospn mspn
+            pprSrc = case src of
+              -- Users don't know what HsWrappers are
+              EvWrapperBind -> "bound by type signature or pattern"
+              _             -> ppr src
 
 -- | Find 'Location's of type definition at a specific point and return them along with their 'Identifier's.
 typeLocationsAtPoint
@@ -323,7 +369,7 @@ typeLocationsAtPoint withHieDb lookupModule _ideOptions pos (HAR _ ast _ _ hieKi
       let arr = hie_types hf
           ts = concat $ pointCommand ast pos getts
           unfold = map (arr A.!)
-          getts x = nodeType ni  ++ (mapMaybe identType $ M.elems $ nodeIdentifiers ni)
+          getts x = nodeType ni  ++ mapMaybe identType (M.elems $ nodeIdentifiers ni)
             where ni = nodeInfo' x
           getTypes' ts' = flip concatMap (unfold ts') $ \case
             HTyVarTy n -> [n]
@@ -337,7 +383,7 @@ typeLocationsAtPoint withHieDb lookupModule _ideOptions pos (HAR _ ast _ _ hieKi
         in fmap nubOrd $ concatMapM (\n -> fmap (maybe [] (fmap (,Right n))) (nameToLocation withHieDb lookupModule n)) (getTypes' ts)
     HieFresh ->
       let ts = concat $ pointCommand ast pos getts
-          getts x = nodeType ni  ++ (mapMaybe identType $ M.elems $ nodeIdentifiers ni)
+          getts x = nodeType ni  ++ mapMaybe identType (M.elems $ nodeIdentifiers ni)
             where ni = nodeInfo x
         in fmap nubOrd $ concatMapM (\n -> fmap (maybe [] (fmap (,Right n))) (nameToLocation withHieDb lookupModule n)) (getTypes ts)
 
@@ -352,28 +398,48 @@ namesInType (LitTy _)        = []
 namesInType _                = []
 
 getTypes :: [Type] -> [Name]
-getTypes ts = concatMap namesInType ts
+getTypes = concatMap namesInType
 
 -- | Find 'Location's of definition at a specific point and return them along with their 'Identifier's.
 locationsAtPoint
-  :: forall m a
+  :: forall m
    . MonadIO m
   => WithHieDb
   -> LookupModule m
   -> IdeOptions
   -> M.Map ModuleName NormalizedFilePath
   -> Position
+<<<<<<< HEAD
   -> HieASTs a
   -> m [(Location, Identifier)]
 locationsAtPoint withHieDb lookupModule _ideOptions imports pos ast =
+||||||| parent of 86ebcf859 (Jump to instance definition and explain typeclass evidence)
+  -> HieASTs a
+  -> m [Location]
+locationsAtPoint withHieDb lookupModule _ideOptions imports pos ast =
+=======
+  -> HieAstResult
+  -> m [Location]
+locationsAtPoint withHieDb lookupModule _ideOptions imports pos (HAR _ ast _rm _ _) =
+>>>>>>> 86ebcf859 (Jump to instance definition and explain typeclass evidence)
   let ns = concat $ pointCommand ast pos (M.keys . getNodeIds)
+      evTrees = mapMaybe (either (const Nothing) $ getEvidenceTree _rm) ns
+      evNs = concatMap (map (Right . evidenceVar) . T.flatten) evTrees
       zeroPos = Position 0 0
       zeroRange = Range zeroPos zeroPos
+<<<<<<< HEAD
       modToLocation m = fmap (\fs -> pure (Location (fromNormalizedUri $ filePathToUri' fs) zeroRange)) $ M.lookup m imports
    in fmap (nubOrd . concat) $ mapMaybeM
         (either (\m -> pure ((fmap $ fmap (,Left m)) (modToLocation m)))
                 (\n -> fmap (fmap $ fmap (,Right n)) (nameToLocation withHieDb lookupModule n)))
         ns
+||||||| parent of 86ebcf859 (Jump to instance definition and explain typeclass evidence)
+      modToLocation m = fmap (\fs -> pure $ Location (fromNormalizedUri $ filePathToUri' fs) zeroRange) $ M.lookup m imports
+    in fmap (nubOrd . concat) $ mapMaybeM (either (pure . modToLocation) $ nameToLocation withHieDb lookupModule) ns
+=======
+      modToLocation m = (\fs -> pure $ Location (fromNormalizedUri $ filePathToUri' fs) zeroRange) <$> M.lookup m imports
+    in nubOrd . concat <$> mapMaybeM (either (pure . modToLocation) $ nameToLocation withHieDb lookupModule) (ns ++ evNs)
+>>>>>>> 86ebcf859 (Jump to instance definition and explain typeclass evidence)
 
 -- | Given a 'Name' attempt to find the location where it is defined.
 nameToLocation :: MonadIO m => WithHieDb -> LookupModule m -> Name -> m (Maybe [Location])
