@@ -98,7 +98,7 @@ getDefinition :: NormalizedFilePath -> Position -> IdeAction (Maybe [(Location, 
 getDefinition file pos = runMaybeT $ do
     ide@ShakeExtras{ withHieDb, hiedbWriter } <- ask
     opts <- liftIO $ getIdeOptionsIO ide
-    (HAR _ hf _ _ _, mapping) <- useWithStaleFastMT GetHieAst file
+    (hf, mapping) <- useWithStaleFastMT GetHieAst file
     (ImportMap imports, _) <- useWithStaleFastMT GetImportMap file
     !pos' <- MaybeT (pure $ fromCurrentPosition mapping pos)
     locationsWithIdentifier <- AtPoint.gotoDefinition withHieDb (lookupMod hiedbWriter) opts imports hf pos'
