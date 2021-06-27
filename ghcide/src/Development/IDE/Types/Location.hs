@@ -1,5 +1,6 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
+{-# LANGUAGE CPP #-}
 
 
 -- | Types and functions for working with source code locations.
@@ -43,7 +44,11 @@ toNormalizedFilePath' "" = emptyFilePath
 toNormalizedFilePath' fp = LSP.toNormalizedFilePath fp
 
 emptyFilePath :: LSP.NormalizedFilePath
+#if MIN_VERSION_lsp_types(1,3,0)
+emptyFilePath = LSP.normalizedFilePath emptyPathUri ""
+#else
 emptyFilePath = LSP.NormalizedFilePath emptyPathUri ""
+#endif
 
 -- | We use an empty string as a filepath when we don’t have a file.
 -- However, haskell-lsp doesn’t support that in uriToFilePath and given
