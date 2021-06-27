@@ -195,6 +195,11 @@ jobs:
           asset_name: haskell-language-server-${{ matrix.os }}-${{ github.event.release.tag_name }}.tar.gz
           asset_content_type: application/gzip
 
+      - uses: actions/upload-artifact@v2
+        with:
+          name: haskell-language-server-${{ matrix.os }}-${{ github.event.release.tag_name }}.tar.gz
+          path: bin/haskell-language-server.tar.gz
+
   sha256sum:
     needs: tar
     runs-on: ubuntu-18.04
@@ -213,3 +218,8 @@ jobs:
           asset_path: SHA256SUMS
           asset_name: SHA256SUMS
           asset_content_type: plain/text
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: SHA256SUMS
+          path: SHA256SUMS
