@@ -60,7 +60,7 @@ library
         hls-plugin-api ^>= 1.1.0.0,
         lens,
         hiedb == 0.3.0.*,
-        lsp-types >= 1.2 < 1.4,
+        lsp-types >= 1.2 && < 1.4,
         lsp == 1.2.*,
         mtl,
         network-uri,
