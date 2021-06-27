@@ -150,16 +150,19 @@ emptyCaseScrutinees state nfp = do
     hscenv <- stale GhcSessionDeps
 
     let scrutinees = traverse (emptyCaseQ . tcg_binds) tcg
-    for scrutinees $ \aged@(unTrack -> (ss, scrutinee)) -> do
+    fmap catMaybes $ for scrutinees $ \aged@(unTrack -> (ss, scrutinee)) -> do
       ty <- MaybeT
           . fmap (scrutinzedType <=< sequence)
           . traverse (typeCheck (hscEnv $ untrackedStaleValue hscenv) tcg')
           $ scrutinee
-      case ss of
-        RealSrcSpan r   -> do
-          rss' <- liftMaybe $ mapAgeTo tcg_map $ unsafeCopyAge aged r
-          pure (rss', ty)
-        UnhelpfulSpan _ -> empty
+      case null $ tacticsGetDataCons ty of
+        True -> pure empty
+        False ->
+          case ss of
+            RealSrcSpan r   -> do
+              rss' <- liftMaybe $ mapAgeTo tcg_map $ unsafeCopyAge aged r
+              pure $ Just (rss', ty)
+            UnhelpfulSpan _ -> empty
 
 data EmptyCaseSort a
   = EmptyCase a

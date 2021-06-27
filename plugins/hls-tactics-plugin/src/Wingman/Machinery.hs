@@ -32,7 +32,7 @@ import           Refinery.Tactic.Internal
 import           TcType
 import           Type (tyCoVarsOfTypeWellScoped)
 import           Wingman.Context (getInstance)
-import           Wingman.GHC (tryUnifyUnivarsButNotSkolems, updateSubst)
+import           Wingman.GHC (tryUnifyUnivarsButNotSkolems, updateSubst, tacticsGetDataCons)
 import           Wingman.Judgements
 import           Wingman.Simplify (simplify)
 import           Wingman.Types
@@ -411,4 +411,16 @@ getCurrentDefinitions = do
   ctx_funcs <- asks ctxDefiningFuncs
   for ctx_funcs $ \res@(occ, _) ->
     pure . maybe res (occ,) =<< lookupNameInContext occ
+
+
+------------------------------------------------------------------------------
+-- | Given two types, see if we can construct a homomorphism by mapping every
+-- data constructor in the domain to the same in the codomain. This function
+-- returns 'Just' when all the lookups succeeded, and a non-empty value if the
+-- homomorphism *is not* possible.
+uncoveredDataCons :: Type -> Type -> Maybe (S.Set (Uniquely DataCon))
+uncoveredDataCons domain codomain = do
+  (g_dcs, _) <- tacticsGetDataCons codomain
+  (hi_dcs, _) <- tacticsGetDataCons domain
+  pure $ S.fromList (coerce hi_dcs) S.\\ S.fromList (coerce g_dcs)
 
