@@ -178,7 +178,7 @@ jobs:
           mv haskell-language-server-wrapper-${{ matrix.os }}.*/* bin
           # decompress them
           cd bin
-          if [[ "$OSTYPE" == "msys" ]]; then
+          if [[ "${{ matrix.os }}" == "Windows" ]]; then
             7z x "*.zip"
             rm *.zip
           else
@@ -194,3 +194,22 @@ jobs:
           asset_path: bin/haskell-language-server.tar.gz
           asset_name: haskell-language-server-${{ matrix.os }}-${{ github.event.release.tag_name }}.tar.gz
           asset_content_type: application/gzip
+
+  sha256sum:
+    needs: tar
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/download-artifact@v2
+
+      - run: |
+          # generate sha256 sums for all current artifacts
+          sha256sum --tag haskell-language-server*/* >> SHA256SUMS
+
+      - uses: actions/upload-release-asset@v1.0.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: SHA256SUMS
+          asset_name: SHA256SUMS
+          asset_content_type: plain/text
