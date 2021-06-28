@@ -1,0 +1,41 @@
+name: Hackage
+
+defaults:
+  run:
+    shell: bash
+
+on:
+  push:
+    branches:
+      - '*-hackage'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        package: ["hls-plugin-api", "ghcide", "hls-test-utils",
+                  "hls-brittany-plugin", "hls-floskell-plugin", "hls-fourmolu-plugin",
+                  "hls-ourmolu-plugin", "hls-stylish-haskell-plugin",
+                  "hls-class-plugin", "hls-eval-plugin", "hls-explicit-imports-plugin",
+                  "hls-haddock-comments-plugin", "hls-hlint-plugin",
+                  "hls-module-name-plugin", "hls-pragmas-plugin",
+                  "hls-refine-imports-plugin", "hls-retrie-plugin",
+                  "hls-splice-plugin", "hls-tactics-plugin"]
+
+    steps:
+      - name: "Run cabal check"
+        run: |
+          if [[ name == *plugin ]]; then
+            cd plugins
+          fi
+          cd ${{ package }}
+          cabal check
+
+      - name: "Generate haddock for hackage"
+        run: cabal haddock --haddock-for-hackage ${{ package }}
+
+      - name: "Build with hackage head"
+        run: cabal build --index-state=HEAD ${{ package }}
+
+
