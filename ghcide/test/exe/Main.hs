@@ -730,7 +730,7 @@ codeActionTests = testGroup "code actions"
   , typeWildCardActionTests
   , removeImportTests
   , extendImportTests
-  , suggesImportClassMethodTests
+  , suggestImportClassMethodTests
   , suggestImportTests
   , suggestHideShadowTests
   , suggestImportDisambiguationTests
@@ -1436,6 +1436,25 @@ extendImportTests = testGroup "extend import actions"
                     , "f :: Foo"
                     , "f = Foo 1"
                     ])
+        , testSession "type constructor name same as data constructor name, data constructor extraneous" $ template
+            [("ModuleA.hs", T.unlines
+                    [ "module ModuleA where"
+                    , "data Foo = Foo"
+                    ])]
+            ("ModuleB.hs", T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA()"
+                    , "f :: Foo"
+                    , "f = undefined"
+                    ])
+            (Range (Position 2 4) (Position 2 6))
+            ["Add Foo to the import list of ModuleA"]
+            (T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA(Foo)"
+                    , "f :: Foo"
+                    , "f = undefined"
+                    ])
         ]
       where
         codeActionTitle CodeAction{_title=x} = x
@@ -1486,8 +1505,8 @@ extendImportTestsRegEx = testGroup "regex parsing"
         template message expected = do
             liftIO $ matchRegExMultipleImports message @=? expected
 
-suggesImportClassMethodTests :: TestTree
-suggesImportClassMethodTests =
+suggestImportClassMethodTests :: TestTree
+suggestImportClassMethodTests =
   testGroup
     "suggest import class methods"
     [ testGroup
@@ -1566,6 +1585,8 @@ suggestImportTests = testGroup "suggest import actions"
     , test False []         "f = quickCheck"              []                "import Test.QuickCheck (quickCheck)"
       -- don't omit the parent data type of a constructor
     , test False []         "f ExitSuccess = ()"          []                "import System.Exit (ExitSuccess)"
+      -- don't suggest data constructor when we only need the type
+    , test False []         "f :: Bar"                    []                "import Bar (Bar(Bar))"
     ]
   , testGroup "want suggestion"
     [ wantWait  []          "f = foo"                     []                "import Foo (foo)"
