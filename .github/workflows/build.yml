@@ -209,6 +209,8 @@ jobs:
       - run: |
           # generate sha256 sums for all current artifacts
           sha256sum --tag haskell-language-server*/* >> SHA256SUMS
+          # we clean up tags to match the release file names
+          sed -i 's/\/.*)/)/g' SHA256SUMS
 
       - uses: actions/upload-release-asset@v1.0.2
         env:
