@@ -83,7 +83,7 @@ library
     , hyphenation
     , lens
     , lsp
-    , megaparsec            ^>=9
+    , megaparsec            >=8 && < 10
     , mtl
     , parser-combinators
     , prettyprinter
