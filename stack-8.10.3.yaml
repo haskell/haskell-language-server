@@ -84,6 +84,9 @@ flags:
   # Until the formatters support ghc-lib-9, we need this flag disabled
   hls-hlint-plugin:
     hlint33: false
+  hyphenation:
+    embed: true
+
 
 nix:
   packages: [ icu libcxx zlib ]

@@ -40,7 +40,9 @@ index-state: 2021-06-21T19:57:32Z
 
 constraints:
     -- Diagrams doesn't support optparse-applicative >= 0.16 yet
-    optparse-applicative < 0.16
+    optparse-applicative < 0.16,
+    hyphenation +embed
+
 
 allow-newer:
     active:base,
