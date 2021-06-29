@@ -152,6 +152,8 @@ import           Data.HashSet                           (HashSet)
 import qualified Data.HashSet                           as HSet
 import           Data.IORef.Extra                       (atomicModifyIORef'_,
                                                          atomicModifyIORef_)
+import           Data.Text                              (pack)
+import qualified Development.IDE.Types.Exports          as ExportsMap
 import           HieDb.Types
 import           Ide.Plugin.Config
 import qualified Ide.PluginUtils                        as HLS
@@ -507,6 +509,12 @@ shakeOpen lspEnv defaultConfig logger debouncer
         indexProgressToken <- newVar Nothing
         let hiedbWriter = HieDbWriter{..}
         exportsMap <- newVar mempty
+        -- lazily initialize the exports map with the contents of the hiedb
+        _ <- async $ do
+            logDebug logger "Initializing exports map from hiedb"
+            em <- createExportsMapHieDb hiedb
+            modifyVar' exportsMap (<> em)
+            logDebug logger $ "Done initializing exports map from hiedb (" <> pack(show (ExportsMap.size em)) <> ")"
 
         progress <- do
             let (before, after) = if testing then (0,0.1) else (0.1,0.1)
