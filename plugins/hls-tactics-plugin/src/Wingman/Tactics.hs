@@ -127,21 +127,23 @@ intros' names = rule $ \jdg -> do
   let g  = jGoal jdg
   case tacticsSplitFunTy $ unCType g of
     (_, _, [], _) -> throwError $ GoalMismatch "intros" g
-    (_, _, as, b) -> do
+    (_, _, args, res) -> do
       ctx <- ask
-      let vs = fromMaybe (mkManyGoodNames (hyNamesInScope $ jEntireHypothesis jdg) as) names
-          num_args = length vs
+      let occs = fromMaybe (mkManyGoodNames (hyNamesInScope $ jEntireHypothesis jdg) args) names
+          num_occs = length occs
           top_hole = isTopHole ctx jdg
-          hy' = lambdaHypothesis top_hole $ zip vs $ coerce as
+          bindings = zip occs $ coerce args
+          bound_occs = fmap fst bindings
+          hy' = lambdaHypothesis top_hole bindings
           jdg' = introduce ctx hy'
-               $ withNewGoal (CType $ mkFunTys' (drop num_args as) b) jdg
+               $ withNewGoal (CType $ mkFunTys' (drop num_occs args) res) jdg
       ext <- newSubgoal jdg'
       pure $
         ext
-          & #syn_trace %~ rose ("intros {" <> intercalate ", " (fmap show vs) <> "}")
+          & #syn_trace %~ rose ("intros {" <> intercalate ", " (fmap show bound_occs) <> "}")
                         . pure
           & #syn_scoped <>~ hy'
-          & #syn_val   %~ noLoc . lambda (fmap bvar' vs) . unLoc
+          & #syn_val   %~ noLoc . lambda (fmap bvar' bound_occs) . unLoc
 
 
 ------------------------------------------------------------------------------
@@ -198,8 +200,23 @@ destructPun hi = requireConcreteHole $ tracing "destructPun(user)" $
 ------------------------------------------------------------------------------
 -- | Case split, using the same data constructor in the matches.
 homo :: HyInfo CType -> TacticsM ()
-homo = requireConcreteHole . tracing "homo" . rule . destruct' False (\dc jdg ->
-  buildDataCon False jdg dc $ snd $ splitAppTys $ unCType $ jGoal jdg)
+homo hi = requireConcreteHole . tracing "homo" $ do
+  jdg <- goal
+  let g = jGoal jdg
+
+  -- Ensure that every data constructor in the domain type is covered in the
+  -- codomain; otherwise 'homo' will produce an ill-typed program.
+  case (uncoveredDataCons (coerce $ hi_type hi) (coerce g)) of
+    Just uncovered_dcs ->
+      unless (S.null uncovered_dcs) $
+        throwError  $ TacticPanic "Can't cover every datacon in domain"
+    _ -> throwError $ TacticPanic "Unable to fetch datacons"
+
+  rule
+    $ destruct'
+        False
+        (\dc jdg -> buildDataCon False jdg dc $ snd $ splitAppTys $ unCType $ jGoal jdg)
+    $ hi
 
 
 ------------------------------------------------------------------------------

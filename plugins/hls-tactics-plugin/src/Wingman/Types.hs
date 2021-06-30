@@ -87,6 +87,7 @@ data Config = Config
   { cfg_max_use_ctor_actions :: Int
   , cfg_timeout_seconds      :: Int
   , cfg_auto_gas             :: Int
+  , cfg_proofstate_styling   :: Bool
   }
   deriving (Eq, Ord, Show)
 
@@ -95,6 +96,7 @@ emptyConfig = Config
   { cfg_max_use_ctor_actions = 5
   , cfg_timeout_seconds = 2
   , cfg_auto_gas = 4
+  , cfg_proofstate_styling = True
   }
 
 ------------------------------------------------------------------------------

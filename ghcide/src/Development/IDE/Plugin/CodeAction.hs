@@ -804,6 +804,10 @@ suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_
     = mod_srcspan >>= uncurry (suggestions hsmodImports binding)
     | otherwise = []
     where
+        canUseDatacon = case extractNotInScopeName _message of
+                            Just NotInScopeTypeConstructorOrClass{} -> False
+                            _                                       -> True
+
         suggestions decls binding mod srcspan
           | range <- case [ x | (x,"") <- readSrcSpan (T.unpack srcspan)] of
                 [s] -> let x = realSrcSpanToRange s
@@ -823,7 +827,7 @@ suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_
           -- Only for the situation that data constructor name is same as type constructor name,
           -- let ident with parent be in front of the one without.
           , sortedMatch <- sortBy (\ident1 ident2 -> parent ident2 `compare` parent ident1) (Set.toList match)
-          , idents <- filter (\ident -> moduleNameText ident == mod) sortedMatch
+          , idents <- filter (\ident -> moduleNameText ident == mod && (canUseDatacon || not (isDatacon ident))) sortedMatch
           , (not . null) idents -- Ensure fallback while `idents` is empty
           , ident <- head idents
           = Just ident
@@ -1318,8 +1322,9 @@ hideImplicitPreludeSymbol :: T.Text -> NewImport
 hideImplicitPreludeSymbol symbol = newUnqualImport "Prelude" symbol True
 
 canUseIdent :: NotInScope -> IdentInfo -> Bool
-canUseIdent NotInScopeDataConstructor{} = isDatacon
-canUseIdent _                           = const True
+canUseIdent NotInScopeDataConstructor{}        = isDatacon
+canUseIdent NotInScopeTypeConstructorOrClass{} = not . isDatacon
+canUseIdent _                                  = const True
 
 data NotInScope
     = NotInScopeDataConstructor T.Text

@@ -730,7 +730,7 @@ codeActionTests = testGroup "code actions"
   , typeWildCardActionTests
   , removeImportTests
   , extendImportTests
-  , suggesImportClassMethodTests
+  , suggestImportClassMethodTests
   , suggestImportTests
   , suggestHideShadowTests
   , suggestImportDisambiguationTests
@@ -1436,6 +1436,25 @@ extendImportTests = testGroup "extend import actions"
                     , "f :: Foo"
                     , "f = Foo 1"
                     ])
+        , testSession "type constructor name same as data constructor name, data constructor extraneous" $ template
+            [("ModuleA.hs", T.unlines
+                    [ "module ModuleA where"
+                    , "data Foo = Foo"
+                    ])]
+            ("ModuleB.hs", T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA()"
+                    , "f :: Foo"
+                    , "f = undefined"
+                    ])
+            (Range (Position 2 4) (Position 2 6))
+            ["Add Foo to the import list of ModuleA"]
+            (T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA(Foo)"
+                    , "f :: Foo"
+                    , "f = undefined"
+                    ])
         ]
       where
         codeActionTitle CodeAction{_title=x} = x
@@ -1486,8 +1505,8 @@ extendImportTestsRegEx = testGroup "regex parsing"
         template message expected = do
             liftIO $ matchRegExMultipleImports message @=? expected
 
-suggesImportClassMethodTests :: TestTree
-suggesImportClassMethodTests =
+suggestImportClassMethodTests :: TestTree
+suggestImportClassMethodTests =
   testGroup
     "suggest import class methods"
     [ testGroup
@@ -1566,6 +1585,8 @@ suggestImportTests = testGroup "suggest import actions"
     , test False []         "f = quickCheck"              []                "import Test.QuickCheck (quickCheck)"
       -- don't omit the parent data type of a constructor
     , test False []         "f ExitSuccess = ()"          []                "import System.Exit (ExitSuccess)"
+      -- don't suggest data constructor when we only need the type
+    , test False []         "f :: Bar"                    []                "import Bar (Bar(Bar))"
     ]
   , testGroup "want suggestion"
     [ wantWait  []          "f = foo"                     []                "import Foo (foo)"
@@ -2890,17 +2911,21 @@ removeRedundantConstraintsTests = let
 
 addSigActionTests :: TestTree
 addSigActionTests = let
-  header = "{-# OPTIONS_GHC -Wmissing-signatures -Wmissing-pattern-synonym-signatures #-}"
-  moduleH = "{-# LANGUAGE PatternSynonyms #-}\nmodule Sigs where"
-  before def     = T.unlines [header, moduleH,      def]
-  after' def sig = T.unlines [header, moduleH, sig, def]
+  header = [ "{-# OPTIONS_GHC -Wmissing-signatures -Wmissing-pattern-synonym-signatures #-}"
+           , "{-# LANGUAGE PatternSynonyms,BangPatterns,GADTs #-}"
+           , "module Sigs where"
+           , "data T1 a where"
+           , "  MkT1 :: (Show b) => a -> b -> T1 a"
+           ]
+  before def     = T.unlines $ header ++ [def]
+  after' def sig = T.unlines $ header ++ [sig, def]
 
-  def >:: sig = testSession (T.unpack def) $ do
+  def >:: sig = testSession (T.unpack $ T.replace "\n" "\\n" def) $ do
     let originalCode = before def
     let expectedCode = after' def sig
     doc <- createDoc "Sigs.hs" "haskell" originalCode
     _ <- waitForDiagnostics
-    actionsOrCommands <- getCodeActions doc (Range (Position 3 1) (Position 3 maxBound))
+    actionsOrCommands <- getCodeActions doc (Range (Position 5 1) (Position 5 maxBound))
     chosenAction <- liftIO $ pickActionWithTitle ("add signature: " <> sig) actionsOrCommands
     executeCodeAction chosenAction
     modifiedCode <- documentContents doc
@@ -2914,6 +2939,15 @@ addSigActionTests = let
     , "a >>>> b = a + b"        >:: "(>>>>) :: Num a => a -> a -> a"
     , "a `haha` b = a b"        >:: "haha :: (t1 -> t2) -> t1 -> t2"
     , "pattern Some a = Just a" >:: "pattern Some :: a -> Maybe a"
+    , "pattern Some a <- Just a" >:: "pattern Some :: a -> Maybe a"
+    , "pattern Some a <- Just a\n  where Some a = Just a" >:: "pattern Some :: a -> Maybe a"
+    , "pattern Some a <- Just !a\n  where Some !a = Just a" >:: "pattern Some :: a -> Maybe a"
+    , "pattern Point{x, y} = (x, y)" >:: "pattern Point :: a -> b -> (a, b)"
+    , "pattern Point{x, y} <- (x, y)" >:: "pattern Point :: a -> b -> (a, b)"
+    , "pattern Point{x, y} <- (x, y)\n  where Point x y = (x, y)" >:: "pattern Point :: a -> b -> (a, b)"
+    , "pattern MkT1' b = MkT1 42 b" >:: "pattern MkT1' :: (Eq a, Num a) => Show b => b -> T1 a"
+    , "pattern MkT1' b <- MkT1 42 b" >:: "pattern MkT1' :: (Eq a, Num a) => Show b => b -> T1 a"
+    , "pattern MkT1' b <- MkT1 42 b\n  where MkT1' b = T1 42 b" >:: "pattern MkT1' :: (Eq a, Num a) => Show b => b -> T1 a"
     ]
 
 exportUnusedTests :: TestTree
@@ -3377,10 +3411,12 @@ addSigLensesTests =
   let pragmas = "{-# OPTIONS_GHC -Wmissing-signatures -Wmissing-pattern-synonym-signatures #-}"
       moduleH exported =
         T.unlines
-          [ "{-# LANGUAGE PatternSynonyms,TypeApplications,DataKinds,RankNTypes,ScopedTypeVariables,TypeOperators #-}"
+          [ "{-# LANGUAGE PatternSynonyms,TypeApplications,DataKinds,RankNTypes,ScopedTypeVariables,TypeOperators,GADTs,BangPatterns #-}"
           , "module Sigs(" <> exported <> ") where"
           , "import qualified Data.Complex as C"
           , "import Data.Data (Proxy (..), type (:~:) (..), mkCharType)"
+          , "data T1 a where"
+          , "  MkT1 :: (Show b) => a -> b -> T1 a"
           ]
       before enableGHCWarnings exported (def, _) others =
         T.unlines $ [pragmas | enableGHCWarnings] <> [moduleH exported, def] <> others
@@ -3409,6 +3445,15 @@ addSigLensesTests =
         , ("a >>>> b = a + b", "(>>>>) :: Num a => a -> a -> a")
         , ("a `haha` b = a b", "haha :: (t1 -> t2) -> t1 -> t2")
         , ("pattern Some a = Just a", "pattern Some :: a -> Maybe a")
+        , ("pattern Some a <- Just a", "pattern Some :: a -> Maybe a")
+        , ("pattern Some a <- Just a\n  where Some a = Just a", "pattern Some :: a -> Maybe a")
+        , ("pattern Some a <- Just !a\n  where Some !a = Just a", "pattern Some :: a -> Maybe a")
+        , ("pattern Point{x, y} = (x, y)", "pattern Point :: a -> b -> (a, b)")
+        , ("pattern Point{x, y} <- (x, y)", "pattern Point :: a -> b -> (a, b)")
+        , ("pattern Point{x, y} <- (x, y)\n  where Point x y = (x, y)", "pattern Point :: a -> b -> (a, b)")
+        , ("pattern MkT1' b = MkT1 42 b", "pattern MkT1' :: (Eq a, Num a) => Show b => b -> T1 a")
+        , ("pattern MkT1' b <- MkT1 42 b", "pattern MkT1' :: (Eq a, Num a) => Show b => b -> T1 a")
+        , ("pattern MkT1' b <- MkT1 42 b\n  where MkT1' b = T1 42 b", "pattern MkT1' :: (Eq a, Num a) => Show b => b -> T1 a")
         , ("qualifiedSigTest= C.realPart", "qualifiedSigTest :: C.Complex a -> a")
         , ("head = 233", "head :: Integer")
         , ("rank2Test (k :: forall a . a -> a) = (k 233 :: Int, k \"QAQ\")", "rank2Test :: (forall a. a -> a) -> (Int, " <> listOfChar <> ")")
@@ -3419,7 +3464,7 @@ addSigLensesTests =
         ]
    in testGroup
         "add signature"
-        [ testGroup "signatures are correct" [sigSession (T.unpack def) False "always" "" (def, Just sig) [] | (def, sig) <- cases]
+        [ testGroup "signatures are correct" [sigSession (T.unpack $ T.replace "\n" "\\n" def) False "always" "" (def, Just sig) [] | (def, sig) <- cases]
         , sigSession "exported mode works" False "exported" "xyz" ("xyz = True", Just "xyz :: Bool") (fst <$> take 3 cases)
         , testGroup
             "diagnostics mode works"

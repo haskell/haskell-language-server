@@ -9,6 +9,7 @@ import Utils
 spec :: Spec
 spec = do
   let test = mkCodeLensTest
+      noTest = mkNoCodeLensTest
 
   describe "golden" $ do
     test "EmptyCaseADT"
@@ -18,4 +19,7 @@ spec = do
     test "EmptyCaseApply"
     test "EmptyCaseGADT"
     test "EmptyCaseLamCase"
+
+  describe "no code lenses" $ do
+    noTest "EmptyCaseSpuriousGADT"
 
