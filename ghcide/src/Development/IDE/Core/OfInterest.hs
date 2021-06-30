@@ -19,24 +19,19 @@ module Development.IDE.Core.OfInterest(
 import           Control.Concurrent.Strict
 import           Control.Monad
 import           Control.Monad.IO.Class
-import           Data.HashMap.Strict                          (HashMap)
-import qualified Data.HashMap.Strict                          as HashMap
-import qualified Data.Text                                    as T
+import           Data.HashMap.Strict                    (HashMap)
+import qualified Data.HashMap.Strict                    as HashMap
+import qualified Data.Text                              as T
 import           Development.IDE.Graph
 
-import           Control.Monad.Trans.Class
-import           Control.Monad.Trans.Maybe
-import qualified Data.ByteString                              as BS
-import           Data.List.Extra                              (nubOrd)
-import           Data.Maybe                                   (catMaybes)
+import qualified Data.ByteString                        as BS
+import           Data.Maybe                             (catMaybes)
 import           Development.IDE.Core.ProgressReporting
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
-import           Development.IDE.Import.DependencyInformation
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger
-import           Development.IDE.Types.Options
 
 newtype OfInterestVar = OfInterestVar (Var (HashMap NormalizedFilePath FileOfInterestStatus))
 instance IsIdeGlobal OfInterestVar
@@ -98,25 +93,13 @@ deleteFileOfInterest state f = do
 kick :: Action ()
 kick = do
     files <- HashMap.keys <$> getFilesOfInterestUntracked
-    ShakeExtras{progress} <- getShakeExtras
+    ShakeExtras{exportsMap, progress} <- getShakeExtras
     liftIO $ progressUpdate progress KickStarted
 
-    -- Update the exports map for FOIs
+    -- Update the exports map
     results <- uses GenerateCore files <* uses GetHieAst files
-
-    -- Update the exports map for non FOIs
-    -- We can skip this if checkProject is True, assuming they never change under our feet.
-    IdeOptions{ optCheckProject = doCheckProject } <- getIdeOptions
-    checkProject <- liftIO doCheckProject
-    ifaces <- if checkProject then return Nothing else runMaybeT $ do
-        deps <- MaybeT $ sequence <$> uses GetDependencies files
-        hiResults <- lift $ uses GetModIface (nubOrd $ foldMap transitiveModuleDeps deps)
-        return $ map hirModIface $ catMaybes hiResults
-
-    ShakeExtras{exportsMap} <- getShakeExtras
     let mguts = catMaybes results
         !exportsMap' = createExportsMapMg mguts
-        !exportsMap'' = maybe mempty createExportsMap ifaces
-    void $ liftIO $ modifyVar' exportsMap $ (exportsMap'' <>) . (exportsMap' <>)
+    void $ liftIO $ modifyVar' exportsMap (exportsMap' <>)
 
     liftIO $ progressUpdate progress KickCompleted
