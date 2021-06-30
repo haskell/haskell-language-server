@@ -66,12 +66,6 @@ source-repository-package
   subdir: dependent-sum-template
 -- https://github.com/obsidiansystems/dependent-sum/pull/57
 
--- https://github.com/wz1000/HieDb/pull/35
-source-repository-package
-  type: git
-  location: https://github.com/pepeiborra/HieDb
-  tag: 67ccc0c248fbe2947525756a95e23116c71c3f28
-
 source-repository-package
   type: git
   location: https://github.com/anka-213/lsp
