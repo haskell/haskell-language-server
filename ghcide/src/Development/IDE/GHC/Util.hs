@@ -6,6 +6,7 @@
 module Development.IDE.GHC.Util(
     modifyDynFlags,
     evalGhcEnv,
+    isOverGhc9,
     -- * GHC wrappers
     prettyPrint,
     unsafePrintSDoc,
@@ -280,3 +281,10 @@ ioe_dupHandlesNotCompatible :: Handle -> IO a
 ioe_dupHandlesNotCompatible h =
    ioException (IOError (Just h) IllegalOperation "hDuplicateTo"
                 "handles are incompatible" Nothing Nothing)
+
+isOverGhc9 :: Bool
+#if MIN_VERSION_ghc(9,0,1)
+isOverGhc9 = True
+#else
+isOverGhc9 = False
+#endif

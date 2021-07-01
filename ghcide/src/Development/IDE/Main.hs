@@ -1,5 +1,4 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
-{-# LANGUAGE CPP #-}
 module Development.IDE.Main
 (Arguments(..)
 ,Command(..)
@@ -27,7 +26,8 @@ import qualified Data.Text.IO                          as T
 import           Data.Text.Lazy.Encoding               (decodeUtf8)
 import qualified Data.Text.Lazy.IO                     as LT
 import           Development.IDE                       (Action, Rules,
-                                                        hDuplicateTo')
+                                                        hDuplicateTo',
+                                                        isOverGhc9)
 import           Development.IDE.Core.Debouncer        (Debouncer,
                                                         newAsyncDebouncer)
 import           Development.IDE.Core.FileStore        (isWatchSupported,
@@ -86,9 +86,7 @@ import           Ide.Types                             (IdeCommand (IdeCommand),
                                                         PluginId (PluginId),
                                                         ipMap)
 import qualified Language.LSP.Server                   as LSP
-#if (defined(MIN_VERSION_GLASGOW_HASKELL) && (MIN_VERSION_GLASGOW_HASKELL(9,0,1,0)))
 import qualified Language.LSP.Types                    as LSP
-#endif
 import           Options.Applicative                   hiding (action)
 import qualified System.Directory.Extra                as IO
 import           System.Exit                           (ExitCode (ExitFailure),
@@ -260,14 +258,13 @@ defaultMain Arguments{..} = do
                             , optRunSubset = runSubset
                             }
                     caps = LSP.resClientCapabilities env
--- FIXME: Remove this after GHC 9 gets fully supported
-#if (defined(MIN_VERSION_GLASGOW_HASKELL) && (MIN_VERSION_GLASGOW_HASKELL(9,0,1,0)))
-                LSP.runLspT env $
+                -- FIXME: Remove this after GHC 9 gets fully supported
+                when isOverGhc9 $
+                    LSP.runLspT env $
                     LSP.sendNotification LSP.SWindowShowMessage $
                     LSP.ShowMessageParams LSP.MtWarning $
                     "Currently, HLS supports GHC 9 only partially. "
                     <> "See [issue #297](https://github.com/haskell/haskell-language-server/issues/297) for more detail."
-#endif
                 initialise
                     argsDefaultHlsConfig
                     rules
