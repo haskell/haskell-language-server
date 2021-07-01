@@ -77,6 +77,14 @@
                 refinery = hself.refinery_0_3_0_0;
               };
 
+              hiedb = hself.callCabal2nix "hiedb"
+                (builtins.fetchTarball {
+                  url =
+                    "https://hackage.haskell.org/package/hiedb-0.4.0.0/hiedb-0.4.0.0.tar.gz";
+                  sha256 =
+                    "13jz8c46zfpf54ya2wsv4akhn0wcfc6qjazqsjfir5gpvsi7v8xr";
+                }) { };
+
             };
 
           hlsSources =
