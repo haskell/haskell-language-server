@@ -73,24 +73,17 @@
           tweaks = hself: hsuper:
             with haskell.lib; {
 
-              # https://github.com/haskell/haskell-language-server/pull/1858
-              # Remove this override when nixpkgs has this package
-              apply-refact_0_9_3_0 = hself.callCabal2nix "apply-refact"
-                (builtins.fetchTarball {
-                  url =
-                    "https://hackage.haskell.org/package/apply-refact-0.9.3.0/apply-refact-0.9.3.0.tar.gz";
-                  sha256 =
-                    "1jfq1aw91finlpq5nn7a96za4c8j13jk6jmx2867fildxwrik2qj";
-                }) { };
-
-              hls-hlint-plugin = hsuper.hls-hlint-plugin.override {
-                hlint = hself.hlint_3_2_7;
-                apply-refact = hself.apply-refact_0_9_3_0;
-              };
-
               hls-tactics-plugin = hsuper.hls-tactics-plugin.override {
                 refinery = hself.refinery_0_3_0_0;
               };
+
+              hiedb = hself.callCabal2nix "hiedb"
+                (builtins.fetchTarball {
+                  url =
+                    "https://hackage.haskell.org/package/hiedb-0.4.0.0/hiedb-0.4.0.0.tar.gz";
+                  sha256 =
+                    "13jz8c46zfpf54ya2wsv4akhn0wcfc6qjazqsjfir5gpvsi7v8xr";
+                }) { };
 
             };
 
@@ -112,8 +105,8 @@
           hlsHpkgs = compiler: extended haskell.packages.${compiler};
 
           # Support of GenChangelogs.hs
-          gen-hls-changelogs =
-            let myGHC = haskellPackages.ghcWithPackages (p: with p; [ github ]);
+          gen-hls-changelogs = hpkgs:
+            let myGHC = hpkgs.ghcWithPackages (p: with p; [ github ]);
             in runCommand "gen-hls-changelogs" {
               passAsFile = [ "text" ];
               preferLocalBuild = true;
@@ -137,10 +130,12 @@
         };
 
         # Pre-commit hooks to run stylish-haskell
-        pre-commit-check = pre-commit-hooks.lib.${system}.run {
+        pre-commit-check = hpkgs: pre-commit-hooks.lib.${system}.run {
           src = ./.;
           hooks = {
             stylish-haskell.enable = true;
+            # use stylish-haskell with our target ghc
+            stylish-haskell.entry = "${hpkgs.stylish-haskell}/bin/stylish-haskell --inplace";
             stylish-haskell.excludes = [
               # Ignored files
               "^Setup.hs$"
@@ -178,9 +173,9 @@
             doBenchmark = true;
             packages = p:
               with builtins;
-              map (name: p.${name}) (attrNames pkgs.hlsSources);
-            buildInputs = [ gmp zlib ncurses capstone tracy gen-hls-changelogs ]
-              ++ (with haskellPackages; [
+              map (name: p.${name}) (attrNames hlsSources);
+            buildInputs = [ gmp zlib ncurses capstone tracy (gen-hls-changelogs hpkgs) ]
+              ++ (with hpkgs; [
                 cabal-install
                 hlint
                 ormolu
@@ -193,7 +188,7 @@
               export LD_LIBRARY_PATH=${gmp}/lib:${zlib}/lib:${ncurses}/lib:${capstone}/lib
               export DYLD_LIBRARY_PATH=${gmp}/lib:${zlib}/lib:${ncurses}/lib:${capstone}/lib
               export PATH=$PATH:$HOME/.local/bin
-              ${pre-commit-check.shellHook}
+              ${(pre-commit-check hpkgs).shellHook}
             '';
           };
         # Create a hls executable
@@ -218,14 +213,14 @@
           haskell-language-server-884-dev = mkDevShell ghc884;
           haskell-language-server-8104-dev = mkDevShell ghc8104;
           haskell-language-server-8105-dev = mkDevShell ghc8105;
-          haskell-language-server-901-dev = mkDevShell ghc901;
+          haskell-language-server-901-dev = builtins.throw "Nix expression for developing HLS in GHC 9.0.1 is not yet available"; # mkDevShell ghc901;
 
           # hls package
           haskell-language-server = mkExe ghcDefault;
           haskell-language-server-884 = mkExe ghc884;
           haskell-language-server-8104 = mkExe ghc8104;
           haskell-language-server-8105 = mkExe ghc8105;
-          haskell-language-server-901 = mkExe ghc901;
+          haskell-language-server-901 = builtins.throw "Nix expression for building HLS in GHC 9.0.1 is not yet available"; # mkExe ghc901;
         };
 
         defaultPackage = packages.haskell-language-server;
