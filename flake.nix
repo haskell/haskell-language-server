@@ -175,13 +175,12 @@
           hpkgs.shellFor {
             doBenchmark = true;
             packages = p:
-              with lib;
-              # we can remove sources attrs from hpkgs to exclude HLS plugins,
-              # so hpkgs may not be the superset of hlsSources
-              pipe (attrNames hlsSources) [
-                (xs: map (name: if hpkgs ? name then p.${name} else null) xs)
-                (xs: remove null xs)
-              ];
+              with builtins;
+              map (name: p.${name}) (attrNames
+                (if hpkgs.ghc.version == "9.0.1" then
+                  removeAttrs hlsSources ghc901Config.disabledPlugins
+                else
+                  hlsSources));
             buildInputs = [ gmp zlib ncurses capstone tracy (gen-hls-changelogs hpkgs) ]
               ++ (with hpkgs; [
                 cabal-install

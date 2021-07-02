@@ -2,16 +2,16 @@
 { pkgs }:
 
 let
-  removePluginPackages = hpkgs:
-    removeAttrs hpkgs [
-      "hls-tactics-plugin"
-      "hls-brittany-plugin"
-      "hls-stylish-haskell-plugin"
-      "hls-fourmolu-plugin"
-      "hls-splice-plugin"
-      "hls-ormolu-plugin"
-      "hls-eval-plugin"
-    ];
+  disabledPlugins = [
+    "hls-tactics-plugin"
+    "hls-brittany-plugin"
+    "hls-stylish-haskell-plugin"
+    "hls-fourmolu-plugin"
+    "hls-splice-plugin"
+    "hls-ormolu-plugin"
+    "hls-eval-plugin"
+  ];
+
   hpkgsOverride = hself: hsuper:
     with pkgs.haskell.lib;
     let
@@ -98,4 +98,7 @@ let
           "-f-tactic"
         ]) { };
     };
-in { tweakHpkgs = hpkgs: removePluginPackages (hpkgs.extend hpkgsOverride); }
+in {
+  inherit disabledPlugins;
+  tweakHpkgs = hpkgs: hpkgs.extend hpkgsOverride;
+}
