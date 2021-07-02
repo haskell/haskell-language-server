@@ -97,6 +97,9 @@ let
           "-f-stylishhaskell"
           "-f-tactic"
         ]) { };
+
+      # YOLO
+      mkDerivation = args: hsuper.mkDerivation (args // { jailbreak = true; });
     };
 in {
   inherit disabledPlugins;
