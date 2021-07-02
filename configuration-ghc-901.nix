@@ -78,14 +78,11 @@ let
         hself.callCabal2nix "dependent-sum" "${dependent-sum-src}/dependent-sum"
         { };
 
-      # Copied from https://github.com/NixOS/nixpkgs/blob/2e672ed71afb9d0cea962b694ddb4e63a9ee00eb/pkgs/development/haskell-modules/configuration-ghc-9.0.x.nix#L109
-      hlint = (hself.callCabal2nix "hlint" hlint_3_3_1-src { }).overrideScope
-        (self: super: {
-          ghc-lib-parser = overrideCabal self.ghc-lib-parser_9_0_1_20210324 {
-            doHaddock = false;
-          };
-          ghc-lib-parser-ex = self.ghc-lib-parser-ex_9_0_0_4;
-        });
+      hlint = hself.callCabal2nix "hlint" hlint_3_3_1-src { };
+
+      ghc-lib-parser = hself.ghc-lib-parser_9_0_1_20210324;
+
+      ghc-lib-parser-ex = hself.ghc-lib-parser-ex_9_0_0_4;
 
       # Disable plugins
       haskell-language-server =
