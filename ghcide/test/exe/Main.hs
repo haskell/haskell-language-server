@@ -35,6 +35,7 @@ import           Development.IDE.Core.PositionMapping     (PositionResult (..),
                                                            positionResultToMaybe,
                                                            toCurrent)
 import           Development.IDE.Core.Shake               (Q (..))
+import           Development.IDE.GHC.Compat               (ghcVersion)
 import           Development.IDE.GHC.Util
 import qualified Development.IDE.Main                     as IDE
 import           Development.IDE.Plugin.Completions.Types (extendImportCommandId)
