@@ -30,24 +30,22 @@
       overlay = final: prev:
         with prev;
         let
-          haskellOverrides = {
-            overrides = hself: hsuper: {
-              # we override mkDerivation here to apply the following
-              # tweak to each haskell package:
-              #   if the package is broken, then we disable its check and relax the cabal bounds;
-              #   otherwise, we leave it unchanged.
-              # hopefully, this could fix packages marked as broken by nix due to check failures
-              # or the build failure because of tight cabal bounds
-              mkDerivation = args:
-                let
-                  broken = args.broken or false;
-                  check = args.doCheck or true;
-                  jailbreak = args.jailbreak or false;
-                in hsuper.mkDerivation (args // {
-                  jailbreak = if broken then true else jailbreak;
-                  doCheck = if broken then false else check;
-                });
-            };
+          haskellOverrides = hself: hsuper: {
+            # we override mkDerivation here to apply the following
+            # tweak to each haskell package:
+            #   if the package is broken, then we disable its check and relax the cabal bounds;
+            #   otherwise, we leave it unchanged.
+            # hopefully, this could fix packages marked as broken by nix due to check failures
+            # or the build failure because of tight cabal bounds
+            mkDerivation = args:
+              let
+                broken = args.broken or false;
+                check = args.doCheck or true;
+                jailbreak = args.jailbreak or false;
+              in hsuper.mkDerivation (args // {
+                jailbreak = if broken then true else jailbreak;
+                doCheck = if broken then false else check;
+              });
           };
           gitignoreSource = (import gitignore { inherit lib; }).gitignoreSource;
 
@@ -91,7 +89,10 @@
             builtins.mapAttrs (_: dir: gitignoreSource dir) sourceDirs;
 
           extended = hpkgs:
-            (hpkgs.override haskellOverrides).extend (hself: hsuper:
+            (hpkgs.override (old: {
+              overrides = lib.composeExtensions (old.overrides or (_: _: { }))
+                haskellOverrides;
+            })).extend (hself: hsuper:
               # disable all checks for our packages
               builtins.mapAttrs (_: drv: haskell.lib.dontCheck drv)
               (lib.composeExtensions
@@ -135,7 +136,7 @@
           hooks = {
             stylish-haskell.enable = true;
             # use stylish-haskell with our target ghc
-            stylish-haskell.entry = "${hpkgs.stylish-haskell}/bin/stylish-haskell --inplace";
+            stylish-haskell.entry = pkgs.lib.mkForce "${hpkgs.stylish-haskell}/bin/stylish-haskell --inplace";
             stylish-haskell.excludes = [
               # Ignored files
               "^Setup.hs$"
@@ -156,6 +157,8 @@
           };
         };
 
+        ghc901Config = (import ./configuration-ghc-901.nix) { inherit pkgs; };
+
         # GHC versions
         ghcDefault = pkgs.hlsHpkgs ("ghc"
           + pkgs.lib.replaceStrings [ "." ] [ "" ]
@@ -163,7 +166,7 @@
         ghc884 = pkgs.hlsHpkgs "ghc884";
         ghc8104 = pkgs.hlsHpkgs "ghc8104";
         ghc8105 = pkgs.hlsHpkgs "ghc8105";
-        ghc901 = pkgs.hlsHpkgs "ghc901";
+        ghc901 = ghc901Config.tweakHpkgs (pkgs.hlsHpkgs "ghc901");
 
         # Create a development shell of hls project
         # See https://github.com/NixOS/nixpkgs/blob/5d4a430472cafada97888cc80672fab255231f57/pkgs/development/haskell-modules/make-package-set.nix#L319
@@ -172,8 +175,13 @@
           hpkgs.shellFor {
             doBenchmark = true;
             packages = p:
-              with builtins;
-              map (name: p.${name}) (attrNames hlsSources);
+              with lib;
+              # we can remove sources attrs from hpkgs to exclude HLS plugins,
+              # so hpkgs may not be the superset of hlsSources
+              pipe (attrNames hlsSources) [
+                (xs: map (name: p.${name} or null) xs)
+                (xs: remove null xs)
+              ];
             buildInputs = [ gmp zlib ncurses capstone tracy (gen-hls-changelogs hpkgs) ]
               ++ (with hpkgs; [
                 cabal-install
@@ -213,14 +221,14 @@
           haskell-language-server-884-dev = mkDevShell ghc884;
           haskell-language-server-8104-dev = mkDevShell ghc8104;
           haskell-language-server-8105-dev = mkDevShell ghc8105;
-          haskell-language-server-901-dev = builtins.throw "Nix expression for developing HLS in GHC 9.0.1 is not yet available"; # mkDevShell ghc901;
+          haskell-language-server-901-dev = mkDevShell ghc901;
 
           # hls package
           haskell-language-server = mkExe ghcDefault;
           haskell-language-server-884 = mkExe ghc884;
           haskell-language-server-8104 = mkExe ghc8104;
           haskell-language-server-8105 = mkExe ghc8105;
-          haskell-language-server-901 = builtins.throw "Nix expression for building HLS in GHC 9.0.1 is not yet available"; # mkExe ghc901;
+          haskell-language-server-901 = mkExe ghc901;
         };
 
         defaultPackage = packages.haskell-language-server;
