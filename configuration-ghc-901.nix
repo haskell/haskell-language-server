@@ -79,11 +79,19 @@ let
         hself.callCabal2nix "dependent-sum" "${dependent-sum-src}/dependent-sum"
         { };
 
-      hlint = hself.callCabal2nix "hlint" hlint_3_3_1-src { };
+      hlint = hself.hlint_3_3_1;
 
       ghc-lib-parser = hself.ghc-lib-parser_9_0_1_20210324;
 
       ghc-lib-parser-ex = hself.ghc-lib-parser-ex_9_0_0_4;
+
+      operational = hself.callCabal2nix "operational"
+        (pkgs.fetchFromGitHub {
+          owner = "berberman";
+          repo = "operational";
+          rev = "0e062895678f49fd673ae493371262cfb8c5ab56";
+          sha256 = "P+aocEcqCN8klnW3IMrmIqq6ztBZJxk4sBp1ewN6YaA=";
+        }) { };
 
       # Re-generate HLS drv excluding some plugins
       haskell-language-server =
