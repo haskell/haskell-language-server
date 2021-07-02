@@ -127,8 +127,11 @@ module Development.IDE.GHC.Compat(
     applyPluginsParsedResultAction,
     module Compat.HieTypes,
     module Compat.HieUtils,
-    dropForAll
-    ,isQualifiedImport) where
+    dropForAll,
+    isQualifiedImport,
+    GHCVersion(..),
+    ghcVersion
+    ) where
 
 #if MIN_VERSION_ghc(8,10,0)
 import           LinkerTypes
@@ -524,7 +527,7 @@ dropForAll = snd . GHC.splitLHsForAllTy
 #endif
 
 pattern FunTy :: Type -> Type -> Type
-#if MIN_VERSION_ghc(8, 10, 0)
+#if MIN_VERSION_ghc(8,10,0)
 pattern FunTy arg res <- TyCoRep.FunTy {ft_arg = arg, ft_res = res}
 #else
 pattern FunTy arg res <- TyCoRep.FunTy arg res
@@ -541,7 +544,7 @@ isQualifiedImport _                                         = False
 
 
 
-#if __GLASGOW_HASKELL__ >= 900
+#if MIN_VERSION_ghc(9,0,0)
 getNodeIds :: HieAST a -> M.Map Identifier (IdentifierDetails a)
 getNodeIds = M.foldl' combineNodeIds M.empty . getSourcedNodeInfo . sourcedNodeInfo
 
@@ -586,6 +589,23 @@ stringToUnit = Module.stringToUnitId
 rtsUnit = Module.rtsUnitId
 #endif
 
+data GhcVersion
+  = GHC90
+  | GHC810
+  | GHC88
+  | GHC86
+  | GHC84
+  deriving (Eq,Show)
+
+ghcVersion :: GhcVersion
 #if MIN_VERSION_ghc(9,0,0)
-#else
+ghcVersion = GHC90
+#elif MIN_VERSION_ghc(8,10,0)
+ghcVersion = GHC810
+#elif MIN_VERSION_ghc(8,8,0)
+ghcVersion = GHC88
+#elif MIN_VERSION_ghc(8,6,0)
+ghcVersion = GHC86
+#elif MIN_VERSION_ghc(8,4,0)
+ghcVersion = GHC84
 #endif
