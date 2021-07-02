@@ -10,6 +10,7 @@ let
       "hls-fourmolu-plugin"
       "hls-splice-plugin"
       "hls-ormolu-plugin"
+      "hls-eval-plugin"
     ];
   hpkgsOverride = hself: hsuper:
     with pkgs.haskell.lib;
@@ -84,17 +85,17 @@ let
 
       ghc-lib-parser-ex = hself.ghc-lib-parser-ex_9_0_0_4;
 
-      # Disable plugins
+      # Re-generate HLS drv excluding some plugins
       haskell-language-server =
-        appendConfigureFlags hsuper.haskell-language-server [
-          "-brittany"
-          "-eval"
-          "-fourmolu"
-          "-ormolu"
-          "-splice"
-          "-stylishhaskell"
-          "-tactic"
-          "-refineImports"
-        ];
+        hself.callCabal2nixWithOptions "haskell-language-server" ./.
+        (pkgs.lib.concatStringsSep " " [
+          "-f-brittany"
+          "-f-eval"
+          "-f-fourmolu"
+          "-f-ormolu"
+          "-f-splice"
+          "-f-stylishhaskell"
+          "-f-tactic"
+        ]) { };
     };
-in { tweakHpkgs = hpkgs: (removePluginPackages hpkgs).extend hpkgsOverride; }
+in { tweakHpkgs = hpkgs: removePluginPackages (hpkgs.extend hpkgsOverride); }

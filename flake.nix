@@ -179,7 +179,7 @@
               # we can remove sources attrs from hpkgs to exclude HLS plugins,
               # so hpkgs may not be the superset of hlsSources
               pipe (attrNames hlsSources) [
-                (xs: map (name: p.${name} or null) xs)
+                (xs: map (name: if hpkgs ? name then p.${name} else null) xs)
                 (xs: remove null xs)
               ];
             buildInputs = [ gmp zlib ncurses capstone tracy (gen-hls-changelogs hpkgs) ]
