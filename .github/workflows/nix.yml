@@ -91,16 +91,16 @@ jobs:
         name: haskell-language-server
         authToken: ${{ secrets.HLS_CACHIX_AUTH_TOKEN }}
     - name: Build development shell
-      run: |
-        nix develop --profile dev
-        nix develop .#haskell-language-server-901-dev --profile dev
+      run: nix develop --profile dev
+    - name: Build development shell (GHC 9.0.1)
+      run: nix develop .#haskell-language-server-901-dev --profile dev
     - name: Push development shell
       if: ${{ env.HAS_TOKEN == 'true' }}
       run: cachix push haskell-language-server dev
     - name: Build binaries
-      run: |
-        nix build
-        nix build .#haskell-language-server-901
+      run: nix build
+    - name: Build binaries (GHC 9.0.1)
+      run: nix build .#haskell-language-server-901
     - name: Push binaries
       if: ${{ env.HAS_TOKEN == 'true' }}
       run: nix path-info --json | jq -r '.[].path' | cachix push haskell-language-server
