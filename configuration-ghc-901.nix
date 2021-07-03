@@ -96,6 +96,8 @@ let
 
       dual-tree = hself.dual-tree_0_2_3_0;
 
+      monoid-extras = hself.monoid-extras_0_6;
+
       # Re-generate HLS drv excluding some plugins
       haskell-language-server =
         hself.callCabal2nixWithOptions "haskell-language-server" ./.
