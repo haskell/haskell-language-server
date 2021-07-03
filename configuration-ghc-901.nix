@@ -90,9 +90,6 @@ let
         sha256 = "P+aocEcqCN8klnW3IMrmIqq6ztBZJxk4sBp1ewN6YaA=";
       }) { };
 
-      # needs https://github.com/JonasDuregard/sized-functors/pull/9
-      dual-tree = dontCheck hsuper.dual-tree;
-
       # Re-generate HLS drv excluding some plugins
       haskell-language-server =
         hself.callCabal2nixWithOptions "haskell-language-server" ./.

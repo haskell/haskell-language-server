@@ -185,8 +185,8 @@
               ++ (with hpkgs; [
                 cabal-install
                 hlint
-                ormolu
-                stylish-haskell
+                # ormolu
+                # stylish-haskell
                 opentelemetry-extra
               ]);
 
