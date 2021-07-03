@@ -74,6 +74,9 @@ let
         hself.callCabal2nix "dependent-sum" "${dependent-sum-src}/dependent-sum"
         { };
 
+      dependent-sum-template = hself.callCabal2nix "dependent-sum-template"
+        "${dependent-sum-src}/dependent-sum-template" { };
+
       hlint = hself.hlint_3_3_1;
 
       ghc-lib-parser = hself.ghc-lib-parser_9_0_1_20210324;
