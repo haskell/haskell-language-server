@@ -107,7 +107,11 @@ let
         ]) { };
 
       # YOLO
-      mkDerivation = args: hsuper.mkDerivation (args // { jailbreak = true; });
+      mkDerivation = args:
+        hsuper.mkDerivation (args // {
+          jailbreak = true;
+          doCheck = false;
+        });
     };
 in {
   inherit disabledPlugins;
