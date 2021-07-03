@@ -28,11 +28,6 @@ let
         rev = "8cf4c7fbc3bfa2be475a17bb7c94a1e1e9a830b5";
         sha256 = "WtxTB6ufTZC6SxOtGSfhlO4mY0y9eWejMSa0yUJ7dHQ=";
       };
-      hlint_3_3_1-src = builtins.fetchTarball {
-        url =
-          "https://hackage.haskell.org/package/hlint-3.3.1/hlint-3.3.1.tar.gz";
-        sha256 = "03vb4s4w8k5vp5cjzg7m2bsinbjz1j2aqx4q06syq4r5vb3ai5yq";
-      };
     in {
       blaze-textual = hself.callCabal2nix "blaze-textual"
         (pkgs.fetchFromGitHub {
@@ -85,13 +80,15 @@ let
 
       ghc-lib-parser-ex = hself.ghc-lib-parser-ex_9_0_0_4;
 
-      operational = hself.callCabal2nix "operational"
-        (pkgs.fetchFromGitHub {
-          owner = "berberman";
-          repo = "operational";
-          rev = "0e062895678f49fd673ae493371262cfb8c5ab56";
-          sha256 = "P+aocEcqCN8klnW3IMrmIqq6ztBZJxk4sBp1ewN6YaA=";
-        }) { };
+      operational = hself.callCabal2nix "operational" (pkgs.fetchFromGitHub {
+        owner = "berberman";
+        repo = "operational";
+        rev = "0e062895678f49fd673ae493371262cfb8c5ab56";
+        sha256 = "P+aocEcqCN8klnW3IMrmIqq6ztBZJxk4sBp1ewN6YaA=";
+      }) { };
+
+      # needs https://github.com/JonasDuregard/sized-functors/pull/9
+      dual-tree = dontCheck hsuper.dual-tree;
 
       # Re-generate HLS drv excluding some plugins
       haskell-language-server =
