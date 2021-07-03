@@ -10,6 +10,8 @@ let
     "hls-splice-plugin"
     "hls-ormolu-plugin"
     "hls-eval-plugin"
+    "hls-class-plugin"
+    "hls-refine-imports-plugin"
   ];
 
   hpkgsOverride = hself: hsuper:
@@ -103,12 +105,14 @@ let
         hself.callCabal2nixWithOptions "haskell-language-server" ./.
         (pkgs.lib.concatStringsSep " " [
           "-f-brittany"
+          "-f-class"
           "-f-eval"
           "-f-fourmolu"
           "-f-ormolu"
           "-f-splice"
           "-f-stylishhaskell"
           "-f-tactic"
+          "-f-refineImports"
         ]) { };
 
       # YOLO
