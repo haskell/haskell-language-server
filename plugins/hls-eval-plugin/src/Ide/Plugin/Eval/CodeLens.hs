@@ -152,23 +152,29 @@ import           System.IO                            (hClose)
 import           UnliftIO.Temporary                   (withSystemTempFile)
 import           Util                                 (OverridingBool (Never))
 
-
+import           IfaceSyn                             (showToHeader)
+import           PprTyThing                           (pprTyThingInContext, pprTypeForUser)
 #if MIN_VERSION_ghc(9,0,0)
-import           GHC.Parser.Annotation                (ApiAnns (apiAnnComments))
+import           GHC.Parser.Annotation                (ApiAnns (apiAnnRogueComments))
+import           GHC.Parser.Lexer                     (mkParserFlags)
+import           GHC.Driver.Ways                      (hostFullWays,
+                                                       wayGeneralFlags,
+                                                       wayUnsetGeneralFlags)
+import           GHC.Types.SrcLoc                     (UnhelpfulSpanReason(UnhelpfulInteractive))
 #else
 import           GhcPlugins                           (interpWays, updateWays,
                                                        wayGeneralFlags,
                                                        wayUnsetGeneralFlags)
-import           IfaceSyn                             (showToHeader)
-import           PprTyThing                           (pprTyThingInContext)
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
 pattern RealSrcSpanAlready :: SrcLoc.RealSrcSpan -> SrcLoc.RealSrcSpan
 pattern RealSrcSpanAlready x = x
+apiAnnComments' :: SrcLoc.ApiAnns -> [SrcLoc.RealLocated AnnotationComment]
+apiAnnComments' = apiAnnRogueComments
 #else
-apiAnnComments :: SrcLoc.ApiAnns -> Map.Map SrcSpan [SrcLoc.Located AnnotationComment]
-apiAnnComments = snd
+apiAnnComments' :: SrcLoc.ApiAnns -> [SrcLoc.Located AnnotationComment]
+apiAnnComments' = concat . Map.elems . snd
 
 pattern RealSrcSpanAlready :: SrcLoc.RealSrcSpan -> SrcSpan
 pattern RealSrcSpanAlready x = SrcLoc.RealSrcSpan x
@@ -190,9 +196,9 @@ codeLens st plId CodeLensParams{_textDocument} =
                     isLHS = isLiterate fp
                 dbg "fp" fp
                 (ParsedModule{..}, posMap) <- liftIO $
-                    runAction "parsed" st $ useWithStale_ GetParsedModuleWithComments nfp
-                let comments = foldMap
-                        ( foldMap $ \case
+                    runAction "eval.GetParsedModuleWithComments" st $ useWithStale_ GetParsedModuleWithComments nfp
+                let comments =
+                         foldMap (\case
                             L (RealSrcSpanAlready real) bdy
                                 | unpackFS (srcSpanFile real) ==
                                     fromNormalizedFilePath nfp
@@ -210,16 +216,15 @@ codeLens st plId CodeLensParams{_textDocument} =
                                         _ -> mempty
                             _ -> mempty
                         )
-                        $ apiAnnComments pm_annotations
+                        $ apiAnnComments' pm_annotations
                 dbg "excluded comments" $ show $  DL.toList $
-                    foldMap
-                    (foldMap $ \(L a b) ->
+                    foldMap (\(L a b) ->
                         case b of
                             AnnLineComment{}  -> mempty
                             AnnBlockComment{} -> mempty
                             _                 -> DL.singleton (a, b)
                     )
-                    $ apiAnnComments pm_annotations
+                    $ apiAnnComments' pm_annotations
                 dbg "comments" $ show comments
 
                 -- Extract tests from source code
@@ -546,7 +551,7 @@ evals (st, fp) df stmts = do
             eans <-
                 liftIO $ try @GhcException $
                 parseDynamicFlagsCmdLine ndf
-                (map (L $ UnhelpfulSpan "<interactive>") flags)
+                (map (L $ UnhelpfulSpan unhelpfulReason) flags)
             dbg "parsed flags" $ eans
               <&> (_1 %~ showDynFlags >>> _3 %~ map warnMsg)
             case eans of
@@ -572,7 +577,7 @@ evals (st, fp) df stmts = do
           Just (cmd, arg) <- parseGhciLikeCmd $ T.pack stmt =
             evalGhciLikeCmd cmd arg
         | -- A statement
-          isStmt df stmt =
+          isStmt pf stmt =
             do
                 dbg "{STMT " stmt
                 res <- exec stmt l
@@ -582,7 +587,7 @@ evals (st, fp) df stmts = do
                 dbg "STMT} -> " r
                 return r
         | -- An import
-          isImport df stmt =
+          isImport pf stmt =
             do
                 dbg "{IMPORT " stmt
                 _ <- addImport stmt
@@ -593,6 +598,13 @@ evals (st, fp) df stmts = do
                 dbg "{DECL " stmt
                 void $ runDecls stmt
                 return Nothing
+#if !MIN_VERSION_ghc(9,0,0)
+    pf = df
+    unhelpfulReason = "<interactive>"
+#else
+    pf = mkParserFlags df
+    unhelpfulReason = UnhelpfulInteractive
+#endif
     exec stmt l =
         let opts = execOptions{execSourceFile = fp, execLineNumber = l}
          in myExecStmt stmt opts
@@ -752,7 +764,7 @@ doTypeCmd :: DynFlags -> Text -> Ghc (Maybe Text)
 doTypeCmd dflags arg = do
     let (emod, expr) = parseExprMode arg
     ty <- exprType emod $ T.unpack expr
-    let rawType = T.strip $ T.pack $ showSDoc dflags $ ppr ty
+    let rawType = T.strip $ T.pack $ showSDoc dflags $ pprTypeForUser ty
         broken = T.any (\c -> c == '\r' || c == '\n') rawType
     pure $
         Just $
@@ -761,7 +773,7 @@ doTypeCmd dflags arg = do
                     T.pack $
                         showSDoc dflags $
                             text (T.unpack expr)
-                                $$ nest 2 ("::" <+> ppr ty)
+                                $$ nest 2 ("::" <+> pprTypeForUser ty)
                 else expr <> " :: " <> rawType <> "\n"
 
 parseExprMode :: Text -> (TcRnExprMode, T.Text)
@@ -804,13 +816,18 @@ setupDynFlagsForGHCiLike env dflags = do
                 , ghcLink = LinkInMemory
                 }
         platform = targetPlatform dflags3
-        dflags3a = updateWays $ dflags3{ways = interpWays}
+#if MIN_VERSION_ghc(9,0,0)
+        evalWays = hostFullWays
+#else
+        evalWays = interpWays
+#endif
+        dflags3a = dflags3{ways = evalWays}
         dflags3b =
             foldl gopt_set dflags3a $
-                concatMap (wayGeneralFlags platform) interpWays
+                concatMap (wayGeneralFlags platform) evalWays
         dflags3c =
             foldl gopt_unset dflags3b $
-                concatMap (wayUnsetGeneralFlags platform) interpWays
+                concatMap (wayUnsetGeneralFlags platform) evalWays
         dflags4 =
             dflags3c
                 `gopt_set` Opt_ImplicitImportQualified

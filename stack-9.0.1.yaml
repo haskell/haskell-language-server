@@ -105,7 +105,6 @@ configure-options:
 flags:
   haskell-language-server:
     pedantic: true
-    eval: false
     class: false
     splice: false
     refineImports: false
