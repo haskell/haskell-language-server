@@ -90,6 +90,12 @@ let
         sha256 = "P+aocEcqCN8klnW3IMrmIqq6ztBZJxk4sBp1ewN6YaA=";
       }) { };
 
+      diagrams-core = hself.diagrams-core_1_5_0;
+
+      diagrams-lib = hself.diagrams-lib_1_4_4;
+
+      dual-tree = hself.dual-tree_0_2_3_0;
+
       # Re-generate HLS drv excluding some plugins
       haskell-language-server =
         hself.callCabal2nixWithOptions "haskell-language-server" ./.
