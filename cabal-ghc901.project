@@ -75,6 +75,13 @@ source-repository-package
   subdir: lsp-test
 -- https://github.com/haskell/lsp/pull/312
 
+-- benchmark dependency
+source-repository-package
+  type: git
+  location: https://github.com/berberman/operational
+  tag: 0e062895678f49fd673ae493371262cfb8c5ab56
+-- https://github.com/HeinrichApfelmus/operational/pull/26
+
 write-ghc-environment-files: never
 
 index-state: 2021-06-30T16:00:00Z
