@@ -69,15 +69,15 @@ modSummaryToArtifactsLocation nfp ms = ArtifactsLocation nfp (ms_location <$> ms
 locateModuleFile :: MonadIO m
              => [[FilePath]]
              -> [String]
-             -> (ModuleName -> NormalizedFilePath -> m Bool)
+             -> (ModuleName -> NormalizedFilePath -> m (Maybe NormalizedFilePath))
              -> Bool
              -> ModuleName
              -> m (Maybe NormalizedFilePath)
-locateModuleFile import_dirss exts doesExist isSource modName = do
+locateModuleFile import_dirss exts targetFor isSource modName = do
   let candidates import_dirs =
         [ toNormalizedFilePath' (prefix </> M.moduleNameSlashes modName <.> maybeBoot ext)
            | prefix <- import_dirs , ext <- exts]
-  findM (doesExist modName) (concatMap candidates import_dirss)
+  firstJustM (targetFor modName) (concatMap candidates import_dirss)
   where
     maybeBoot ext
       | isSource = ext ++ "-boot"
@@ -97,12 +97,12 @@ locateModule
     => DynFlags
     -> [(Compat.InstalledUnitId, DynFlags)] -- ^ Import directories
     -> [String]                        -- ^ File extensions
-    -> (ModuleName -> NormalizedFilePath -> m Bool)  -- ^ does file exist predicate
+    -> (ModuleName -> NormalizedFilePath -> m (Maybe NormalizedFilePath))  -- ^ does file exist predicate
     -> Located ModuleName              -- ^ Module name
     -> Maybe FastString                -- ^ Package name
     -> Bool                            -- ^ Is boot module
     -> m (Either [FileDiagnostic] Import)
-locateModule dflags comp_info exts doesExist modName mbPkgName isSource = do
+locateModule dflags comp_info exts targetFor modName mbPkgName isSource = do
   case mbPkgName of
     -- "this" means that we should only look in the current package
     Just "this" -> do
@@ -118,7 +118,7 @@ locateModule dflags comp_info exts doesExist modName mbPkgName isSource = do
       -- Here the importPaths for the current modules are added to the front of the import paths from the other components.
       -- This is particularly important for Paths_* modules which get generated for every component but unless you use it in
       -- each component will end up being found in the wrong place and cause a multi-cradle match failure.
-      mbFile <- locateModuleFile (importPaths dflags : map snd import_paths) exts doesExist isSource $ unLoc modName
+      mbFile <- locateModuleFile (importPaths dflags : map snd import_paths) exts targetFor isSource $ unLoc modName
       case mbFile of
         Nothing   -> lookupInPackageDB dflags
         Just file -> toModLocation file
@@ -129,7 +129,7 @@ locateModule dflags comp_info exts doesExist modName mbPkgName isSource = do
         return $ Right $ FileImport $ ArtifactsLocation file (Just loc) (not isSource)
 
     lookupLocal dirs = do
-      mbFile <- locateModuleFile dirs exts doesExist isSource $ unLoc modName
+      mbFile <- locateModuleFile dirs exts targetFor isSource $ unLoc modName
       case mbFile of
         Nothing -> return $ Left $ notFoundErr dflags modName $ LookupNotFound []
         Just file -> toModLocation file

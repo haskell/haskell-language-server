@@ -56,6 +56,7 @@ import           Data.Either
 import           Data.List                            (isSuffixOf)
 import           Data.List.Extra                      (dropEnd1, nubOrd)
 
+import           Data.Version                         (showVersion)
 import           HieDb                                hiding (pointCommand)
 import           System.Directory                     (doesFileExist)
 
@@ -196,9 +197,10 @@ atPoint
   :: IdeOptions
   -> HieAstResult
   -> DocAndKindMap
+  -> DynFlags
   -> Position
   -> Maybe (Maybe Range, [T.Text])
-atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) pos = listToMaybe $ pointCommand hf pos hoverInfo
+atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) df pos = listToMaybe $ pointCommand hf pos hoverInfo
   where
     -- Hover info for values/data
     hoverInfo ast = (Just range, prettyNames ++ pTypes)
@@ -219,10 +221,19 @@ atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) pos = listToMaybe $ point
         prettyName (Right n, dets) = T.unlines $
           wrapHaskell (showNameWithoutUniques n <> maybe "" (" :: " <>) ((prettyType <$> identType dets) <|> maybeKind))
           : definedAt n
+          ++ maybeToList (prettyPackageName n)
           ++ catMaybes [ T.unlines . spanDocToMarkdown <$> lookupNameEnv dm n
                        ]
           where maybeKind = fmap showGhc $ safeTyThingType =<< lookupNameEnv km n
         prettyName (Left m,_) = showGhc m
+
+        prettyPackageName n = do
+          m <- nameModule_maybe n
+          let pid = moduleUnitId m
+          conf <- lookupPackage df pid
+          let pkgName = T.pack $ packageNameString conf
+              version = T.pack $ showVersion (packageVersion conf)
+          pure $ " *(" <> pkgName <> "-" <> version <> ")*"
 
         prettyTypes = map (("_ :: "<>) . prettyType) types
         prettyType t = case kind of
