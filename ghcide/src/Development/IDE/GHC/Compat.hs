@@ -590,22 +590,19 @@ rtsUnit = Module.rtsUnitId
 #endif
 
 data GhcVersion
-  = GHC84
-  | GHC86
+  = GHC86
   | GHC88
   | GHC810
   | GHC90
   deriving (Eq, Ord, Show)
 
 ghcVersion :: GhcVersion
-#if MIN_VERSION_ghc(9,0,0)
+#if MIN_VERSION_GLASGOW_HASKELL(9,0,0,0)
 ghcVersion = GHC90
-#elif MIN_VERSION_ghc(8,10,0)
+#elif MIN_VERSION_GLASGOW_HASKELL(8,10,0,0)
 ghcVersion = GHC810
-#elif MIN_VERSION_ghc(8,8,0)
+#elif MIN_VERSION_GLASGOW_HASKELL(8,8,0,0)
 ghcVersion = GHC88
-#elif MIN_VERSION_ghc(8,6,0)
+#elif MIN_VERSION_GLASGOW_HASKELL(8,6,0,0)
 ghcVersion = GHC86
-#elif MIN_VERSION_ghc(8,4,0)
-ghcVersion = GHC84
 #endif
