@@ -11,7 +11,7 @@ packages:
   # - ./shake-bench
   # - ./plugins/hls-class-plugin
   - ./plugins/hls-haddock-comments-plugin
-  # - ./plugins/hls-eval-plugin
+  - ./plugins/hls-eval-plugin
   - ./plugins/hls-explicit-imports-plugin
   # - ./plugins/hls-refine-imports-plugin
   - ./plugins/hls-hlint-plugin
