@@ -62,16 +62,8 @@ main = do
 
     whenJust argsCwd IO.setCurrentDirectory
 
-    -- lock to avoid overlapping output on stdout
-    lock <- newLock
-    let logger = Logger $ \pri msg -> when (pri >= logLevel) $ withLock lock $
-            T.putStrLn $ T.pack ("[" ++ upper (show pri) ++ "] ") <> msg
-        logLevel = if argsVerbose then minBound else Info
-
     Main.defaultMain def
         {Main.argCommand = argsCommand
-
-        ,Main.argsLogger = pure logger
 
         ,Main.argsRules = do
             -- install the main and ghcide-plugin rules
