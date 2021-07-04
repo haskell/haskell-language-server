@@ -751,13 +751,13 @@ doKindCmd :: Bool -> DynFlags -> Text -> Ghc (Maybe Text)
 doKindCmd False df arg = do
     let input = T.strip arg
     (_, kind) <- typeKind False $ T.unpack input
-    let kindText = text (T.unpack input) <+> "::" <+> ppr kind
+    let kindText = text (T.unpack input) <+> "::" <+> pprTypeForUser kind
     pure $ Just $ T.pack (showSDoc df kindText)
 doKindCmd True df arg = do
     let input = T.strip arg
     (ty, kind) <- typeKind True $ T.unpack input
-    let kindDoc = text (T.unpack input) <+> "::" <+> ppr kind
-        tyDoc = "=" <+> ppr ty
+    let kindDoc = text (T.unpack input) <+> "::" <+> pprTypeForUser kind
+        tyDoc = "=" <+> pprTypeForUser ty
     pure $ Just $ T.pack (showSDoc df $ kindDoc $$ tyDoc)
 
 doTypeCmd :: DynFlags -> Text -> Ghc (Maybe Text)
