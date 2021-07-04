@@ -22,8 +22,9 @@ import           Data.List.Extra                       (intercalate, isPrefixOf,
                                                         nub, nubOrd, partition)
 import           Data.Maybe                            (catMaybes, isJust)
 import qualified Data.Text                             as T
-import qualified Data.Text.IO                          as LT
 import qualified Data.Text.IO                          as T
+import           Data.Text.Lazy.Encoding               (decodeUtf8)
+import qualified Data.Text.Lazy.IO                     as LT
 import           Development.IDE                       (Action, Rules,
                                                         hDuplicateTo')
 import           Development.IDE.Core.Debouncer        (Debouncer,
@@ -73,6 +74,8 @@ import qualified HieDb.Run                             as HieDb
 import           Ide.Plugin.Config                     (CheckParents (NeverCheck),
                                                         Config,
                                                         getConfigFromNotification)
+import           Ide.Plugin.ConfigUtils                (pluginsToDefaultConfig,
+                                                        pluginsToVSCodeExtensionSchema)
 import           Ide.PluginUtils                       (allLspCmdIds',
                                                         getProcessID,
                                                         pluginDescToIdePlugins)
@@ -211,9 +214,9 @@ defaultMain Arguments{..} = do
 
     case argCommand of
         PrintExtensionSchema ->
-            LT.putStrLn $ decodeUtf8 $ A.encodePretty $ pluginsToVSCodeExtensionSchema hlsPlugins
+            LT.putStrLn $ decodeUtf8 $ A.encodePretty $ pluginsToVSCodeExtensionSchema argsHlsPlugins
         PrintDefaultConfig ->
-            LT.putStrLn $ decodeUtf8 $ A.encodePretty $ pluginsToDefaultConfig hlsPlugins
+            LT.putStrLn $ decodeUtf8 $ A.encodePretty $ pluginsToDefaultConfig argsHlsPlugins
         LSP -> do
             t <- offsetTime
             hPutStrLn stderr "Starting LSP server..."

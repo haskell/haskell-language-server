@@ -7,19 +7,11 @@ module Main(main) where
 
 import           Arguments                         (Arguments (..),
                                                     getArguments)
-import           Control.Concurrent.Extra          (newLock, withLock)
-import           Control.Monad.Extra               (unless, when, whenJust)
-import qualified Data.Aeson.Encode.Pretty          as A
+import           Control.Monad.Extra               (unless, whenJust)
 import           Data.Default                      (Default (def))
-import           Data.List.Extra                   (upper)
-import qualified Data.Text                         as T
-import qualified Data.Text.IO                      as T
-import           Data.Text.Lazy.Encoding           (decodeUtf8)
-import qualified Data.Text.Lazy.IO                 as LT
 import           Data.Version                      (showVersion)
 import           Development.GitRev                (gitHash)
-import           Development.IDE                   (Logger (Logger),
-                                                    Priority (Info), action)
+import           Development.IDE                   (action)
 import           Development.IDE.Core.OfInterest   (kick)
 import           Development.IDE.Core.Rules        (mainRule)
 import           Development.IDE.Graph             (ShakeOptions (shakeThreads))
@@ -28,8 +20,6 @@ import qualified Development.IDE.Plugin.HLS.GhcIde as GhcIde
 import qualified Development.IDE.Plugin.Test       as Test
 import           Development.IDE.Types.Options
 import           Ide.Plugin.Config                 (Config (checkParents, checkProject))
-import           Ide.Plugin.ConfigUtils            (pluginsToDefaultConfig,
-                                                    pluginsToVSCodeExtensionSchema)
 import           Ide.PluginUtils                   (pluginDescToIdePlugins)
 import           Paths_ghcide                      (version)
 import qualified System.Directory.Extra            as IO
@@ -57,8 +47,6 @@ main = do
 
     if argsVersion then ghcideVersion >>= putStrLn >> exitSuccess
     else hPutStrLn stderr {- see WARNING above -} =<< ghcideVersion
-
-    let hlsPlugins = pluginDescToIdePlugins GhcIde.descriptors
 
     whenJust argsCwd IO.setCurrentDirectory
 
