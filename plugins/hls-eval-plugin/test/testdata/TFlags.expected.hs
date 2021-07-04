@@ -49,17 +49,6 @@ It still works
 
 -}
 
-{- -fprint-* families
-
->>> :t id
-id :: a -> a
-
-
->>> :set -fprint-explicit-foralls
->>> :t id
-id :: forall {a}. a -> a
-
--}
 
 {- Invalid option/flags are reported, but valid ones will be reflected
 

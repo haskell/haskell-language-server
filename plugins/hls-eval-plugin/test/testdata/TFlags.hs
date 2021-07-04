@@ -45,15 +45,6 @@ It still works
 
 -}
 
-{- -fprint-* families
-
->>> :t id
-
-
->>> :set -fprint-explicit-foralls
->>> :t id
-
--}
 
 {- Invalid option/flags are reported, but valid ones will be reflected
 
