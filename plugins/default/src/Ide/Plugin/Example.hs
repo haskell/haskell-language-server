@@ -52,7 +52,7 @@ descriptor plId = (defaultPluginDescriptor plId)
 
 exampleCli :: ParserInfo (IdeCommand IdeState)
 exampleCli = info p mempty
-  where p = pure $ IdeCommand $ \_ideState -> print "hello HLS"
+  where p = pure $ IdeCommand $ \_ideState -> putStrLn "hello HLS"
 
 -- ---------------------------------------------------------------------
 
