@@ -64,8 +64,7 @@ getArguments exeName = execParser opts
       <|> probeToolsParser exeName
       <|> BiosMode <$> biosParser
       <|> Ghcide <$> arguments
-      <|> vsCodeExtensionSchemaModeParser
-      <|> defaultConfigurationModeParser)
+      )
       <**> helper)
       ( fullDesc
      <> progDesc "Used as a test bed to check your IDE Client will work"
@@ -88,16 +87,6 @@ probeToolsParser :: String -> Parser Arguments
 probeToolsParser exeName =
   flag' ProbeToolsMode
     (long "probe-tools" <> help ("Show " ++ exeName  ++ " version and other tools of interest"))
-
-vsCodeExtensionSchemaModeParser :: Parser Arguments
-vsCodeExtensionSchemaModeParser =
-  flag' VSCodeExtensionSchemaMode
-    (long "vscode-extension-schema" <> help "Print generic config schema for plugins (used in the package.json of haskell vscode extension)")
-
-defaultConfigurationModeParser :: Parser Arguments
-defaultConfigurationModeParser =
-  flag' DefaultConfigurationMode
-    (long "generate-default-config" <> help "Print config supported by the server with default values")
 
 arguments :: Parser GhcideArguments
 arguments = GhcideArguments

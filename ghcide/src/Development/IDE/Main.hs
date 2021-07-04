@@ -13,6 +13,7 @@ import           Control.Exception.Safe                (Exception (displayExcept
                                                         catchAny)
 import           Control.Monad.Extra                   (concatMapM, unless,
                                                         when)
+import qualified Data.Aeson.Encode.Pretty              as A
 import           Data.Default                          (Default (def))
 import           Data.Foldable                         (traverse_)
 import qualified Data.HashMap.Strict                   as HashMap
@@ -21,6 +22,7 @@ import           Data.List.Extra                       (intercalate, isPrefixOf,
                                                         nub, nubOrd, partition)
 import           Data.Maybe                            (catMaybes, isJust)
 import qualified Data.Text                             as T
+import qualified Data.Text.IO                          as LT
 import qualified Data.Text.IO                          as T
 import           Development.IDE                       (Action, Rules,
                                                         hDuplicateTo')
@@ -97,6 +99,8 @@ data Command
     | Db {projectRoot :: FilePath, hieOptions ::  HieDb.Options, hieCommand :: HieDb.Command}
      -- ^ Run a command in the hiedb
     | LSP   -- ^ Run the LSP server
+    | PrintExtensionSchema
+    | PrintDefaultConfig
     | Custom {projectRoot :: FilePath, ideCommand :: IdeCommand} -- ^ User defined
     deriving Show
 
@@ -116,12 +120,20 @@ commandP :: Parser Command
 commandP = hsubparser (command "typecheck" (info (Check <$> fileCmd) fileInfo)
                     <> command "hiedb" (info (Db "." <$> HieDb.optParser "" True <*> HieDb.cmdParser <**> helper) hieInfo)
                     <> command "lsp" (info (pure LSP <**> helper) lspInfo)
+                    <> command "vscode-extension-schema" extensionSchemaCommand
+                    <> command "generate-default-config" generateDefaultConfigCommand
                     )
   where
     fileCmd = many (argument str (metavar "FILES/DIRS..."))
     lspInfo = fullDesc <> progDesc "Start talking to an LSP client"
     fileInfo = fullDesc <> progDesc "Used as a test bed to check your IDE will work"
     hieInfo = fullDesc <> progDesc "Query .hie files"
+    extensionSchemaCommand =
+        info (pure PrintExtensionSchema)
+             (fullDesc <> progDesc "Print generic config schema for plugins (used in the package.json of haskell vscode extension)")
+    generateDefaultConfigCommand =
+        info (pure PrintDefaultConfig)
+             (fullDesc <> progDesc "Print config supported by the server with default values")
 
 
 data Arguments = Arguments
@@ -198,6 +210,10 @@ defaultMain Arguments{..} = do
     outH <- argsHandleOut
 
     case argCommand of
+        PrintExtensionSchema ->
+            LT.putStrLn $ decodeUtf8 $ A.encodePretty $ pluginsToVSCodeExtensionSchema hlsPlugins
+        PrintDefaultConfig ->
+            LT.putStrLn $ decodeUtf8 $ A.encodePretty $ pluginsToDefaultConfig hlsPlugins
         LSP -> do
             t <- offsetTime
             hPutStrLn stderr "Starting LSP server..."
@@ -310,6 +326,7 @@ defaultMain Arguments{..} = do
             case mlibdir of
                 Nothing     -> exitWith $ ExitFailure 1
                 Just libdir -> HieDb.runCommand libdir opts{HieDb.database = dbLoc} cmd
+
         Custom projectRoot (IdeCommand c) -> do
           dbLoc <- getHieDbLoc projectRoot
           runWithDb dbLoc $ \hiedb hieChan -> do

@@ -60,14 +60,6 @@ main = do
 
     let hlsPlugins = pluginDescToIdePlugins GhcIde.descriptors
 
-    when argsVSCodeExtensionSchema $ do
-      LT.putStrLn $ decodeUtf8 $ A.encodePretty $ pluginsToVSCodeExtensionSchema hlsPlugins
-      exitSuccess
-
-    when argsDefaultConfig $ do
-      LT.putStrLn $ decodeUtf8 $ A.encodePretty $ pluginsToDefaultConfig hlsPlugins
-      exitSuccess
-
     whenJust argsCwd IO.setCurrentDirectory
 
     -- lock to avoid overlapping output on stdout
