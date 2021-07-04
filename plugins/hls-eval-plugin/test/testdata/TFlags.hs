@@ -47,22 +47,16 @@ It still works
 
 {- -fprint-* families
 
->>> import Data.Proxy
->>> :set -XPolyKinds
->>> :t Proxy
-Proxy :: forall k (t :: k). Proxy t
+>>> :t id
+
 
 >>> :set -fprint-explicit-foralls
->>> :t Proxy
-Proxy :: forall {k} {t :: k}. Proxy t
+>>> :t id
+
 -}
 
 {- Invalid option/flags are reported, but valid ones will be reflected
 
 >>> :set -XRank2Types -XAbsent -XDatatypeContexts -XWrong -fprint-nothing-at-all
 
-Still, Rank2Types is enabled, as in GHCi:
-
->>> f = const 42 :: (forall x. x) -> Int
->>> f undefined
 -}
