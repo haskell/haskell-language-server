@@ -79,7 +79,11 @@ import           Ide.Plugin.ConfigUtils                (pluginsToDefaultConfig,
 import           Ide.PluginUtils                       (allLspCmdIds',
                                                         getProcessID,
                                                         pluginDescToIdePlugins)
-import           Ide.Types                             (IdePlugins)
+import           Ide.Types                             (IdeCommand (IdeCommand),
+                                                        IdePlugins,
+                                                        PluginDescriptor (PluginDescriptor, pluginCli),
+                                                        PluginId (PluginId),
+                                                        ipMap)
 import qualified Language.LSP.Server                   as LSP
 import           Options.Applicative                   hiding (action)
 import qualified System.Directory.Extra                as IO
@@ -104,12 +108,9 @@ data Command
     | LSP   -- ^ Run the LSP server
     | PrintExtensionSchema
     | PrintDefaultConfig
-    | Custom {projectRoot :: FilePath, ideCommand :: IdeCommand} -- ^ User defined
+    | Custom {projectRoot :: FilePath, ideCommand :: IdeCommand IdeState} -- ^ User defined
     deriving Show
 
-newtype IdeCommand = IdeCommand (IdeState -> IO ())
-
-instance Show IdeCommand where show _ = "<ide command>"
 
 -- TODO move these to hiedb
 deriving instance Show HieDb.Command
@@ -119,13 +120,15 @@ isLSP :: Command -> Bool
 isLSP LSP = True
 isLSP _   = False
 
-commandP :: Parser Command
-commandP = hsubparser (command "typecheck" (info (Check <$> fileCmd) fileInfo)
-                    <> command "hiedb" (info (Db "." <$> HieDb.optParser "" True <*> HieDb.cmdParser <**> helper) hieInfo)
-                    <> command "lsp" (info (pure LSP <**> helper) lspInfo)
-                    <> command "vscode-extension-schema" extensionSchemaCommand
-                    <> command "generate-default-config" generateDefaultConfigCommand
-                    )
+commandP :: IdePlugins IdeState -> Parser Command
+commandP plugins =
+    hsubparser(command "typecheck" (info (Check <$> fileCmd) fileInfo)
+            <> command "hiedb" (info (Db "." <$> HieDb.optParser "" True <*> HieDb.cmdParser <**> helper) hieInfo)
+            <> command "lsp" (info (pure LSP <**> helper) lspInfo)
+            <> command "vscode-extension-schema" extensionSchemaCommand
+            <> command "generate-default-config" generateDefaultConfigCommand
+            <> pluginCommands
+            )
   where
     fileCmd = many (argument str (metavar "FILES/DIRS..."))
     lspInfo = fullDesc <> progDesc "Start talking to an LSP client"
@@ -137,6 +140,11 @@ commandP = hsubparser (command "typecheck" (info (Check <$> fileCmd) fileInfo)
     generateDefaultConfigCommand =
         info (pure PrintDefaultConfig)
              (fullDesc <> progDesc "Print config supported by the server with default values")
+
+    pluginCommands = mconcat
+        [ command (T.unpack pId) (Custom "." <$> p)
+        | (PluginId pId, PluginDescriptor{pluginCli = Just p}) <- ipMap plugins
+        ]
 
 
 data Arguments = Arguments

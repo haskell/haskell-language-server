@@ -41,9 +41,10 @@ ghcideVersion = do
 
 main :: IO ()
 main = do
+    let hlsPlugins = pluginDescToIdePlugins GhcIde.descriptors
     -- WARNING: If you write to stdout before runLanguageServer
     --          then the language server will not work
-    Arguments{..} <- getArguments
+    Arguments{..} <- getArguments hlsPlugins
 
     if argsVersion then ghcideVersion >>= putStrLn >> exitSuccess
     else hPutStrLn stderr {- see WARNING above -} =<< ghcideVersion

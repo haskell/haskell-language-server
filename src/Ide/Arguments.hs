@@ -18,7 +18,9 @@ module Ide.Arguments
 
 import           Data.Version
 import           Development.GitRev
+import           Development.IDE               (IdeState)
 import           Development.IDE.Main          (Command (..), commandP)
+import           Ide.Types                     (IdePlugins)
 import           Options.Applicative
 import           Paths_haskell_language_server
 import           System.Environment
@@ -56,14 +58,14 @@ data BiosAction
   = PrintCradleType
   deriving (Show, Eq, Ord)
 
-getArguments :: String -> IO Arguments
-getArguments exeName = execParser opts
+getArguments :: String -> IdePlugins IdeState -> IO Arguments
+getArguments exeName plugins = execParser opts
   where
     opts = info ((
       VersionMode <$> printVersionParser exeName
       <|> probeToolsParser exeName
       <|> BiosMode <$> biosParser
-      <|> Ghcide <$> arguments
+      <|> Ghcide <$> arguments plugins
       )
       <**> helper)
       ( fullDesc
@@ -88,9 +90,9 @@ probeToolsParser exeName =
   flag' ProbeToolsMode
     (long "probe-tools" <> help ("Show " ++ exeName  ++ " version and other tools of interest"))
 
-arguments :: Parser GhcideArguments
-arguments = GhcideArguments
-      <$> (commandP <|> lspCommand <|> checkCommand)
+arguments :: IdePlugins IdeState -> Parser GhcideArguments
+arguments plugins = GhcideArguments
+      <$> (commandP plugins <|> lspCommand <|> checkCommand)
       <*> optional (strOption $ long "cwd" <> metavar "DIR"
                   <> help "Change to this directory")
       <*> optional (strOption $ long "shake-profiling" <> metavar "DIR"
