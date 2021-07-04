@@ -20,11 +20,13 @@ import           System.FilePath         ((</>))
 import           Test.Hls
 
 main :: IO ()
-main = defaultTestRunner $ if ghcVersion == GHC901 then tests else dummyTestCase
+main = defaultTestRunner $ ignore tests
 
--- | Now we only maintain test cases for GHC 9.0.1
-dummyTestCase :: TestTree
-dummyTestCase = testCase "Tests are skipped before GHC 9.0.1" $ pure ()
+ignore :: TestTree -> TestTree
+ignore =
+    if ghcVersion == GHC901
+       then id
+       else ignoreTestBecause "Eval plugin tests are enabled for GHC 9.0.1"
 
 evalPlugin :: PluginDescriptor IdeState
 evalPlugin = Eval.descriptor "eval"

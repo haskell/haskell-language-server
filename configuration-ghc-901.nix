@@ -9,7 +9,6 @@ let
     "hls-fourmolu-plugin"
     "hls-splice-plugin"
     "hls-ormolu-plugin"
-    "hls-eval-plugin"
     "hls-class-plugin"
     "hls-refine-imports-plugin"
   ];
@@ -106,7 +105,6 @@ let
         (pkgs.lib.concatStringsSep " " [
           "-f-brittany"
           "-f-class"
-          "-f-eval"
           "-f-fourmolu"
           "-f-ormolu"
           "-f-splice"
