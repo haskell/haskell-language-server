@@ -129,7 +129,7 @@ module Development.IDE.GHC.Compat(
     module Compat.HieUtils,
     dropForAll,
     isQualifiedImport,
-    GHCVersion(..),
+    GhcVersion(..),
     ghcVersion
     ) where
 
