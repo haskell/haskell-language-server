@@ -130,7 +130,8 @@ module Development.IDE.GHC.Compat(
     dropForAll,
     isQualifiedImport,
     GhcVersion(..),
-    ghcVersion
+    ghcVersion,
+    ghcVersionStr
     ) where
 
 #if MIN_VERSION_ghc(8,10,0)
@@ -595,6 +596,9 @@ data GhcVersion
   | GHC810
   | GHC90
   deriving (Eq, Ord, Show)
+
+ghcVersionStr :: String
+ghcVersionStr = VERSION_ghc
 
 ghcVersion :: GhcVersion
 #if MIN_VERSION_GLASGOW_HASKELL(9,0,0,0)
