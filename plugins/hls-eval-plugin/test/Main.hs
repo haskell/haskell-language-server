@@ -86,7 +86,7 @@ tests =
   , testCase ":type handles a multilined result properly" $
       evalInFile "T21.hs" "-- >>> :type fun" $ T.unlines [
         "-- fun",
-        if ghcVersion == GHC901 
+        if ghcVersion == GHC901
           then "--   :: forall {k1} {k2 :: Nat} {n :: Nat} {a :: k1}."
           else "--   :: forall k1 (k2 :: Nat) (n :: Nat) (a :: k1).",
         "--      (KnownNat k2, KnownNat n, Typeable a) =>",
@@ -95,7 +95,7 @@ tests =
   , goldenWithEval ":t behaves exactly the same as :type" "T22" "hs"
   , testCase ":type does \"dovetails\" for short identifiers" $
       evalInFile "T23.hs" "-- >>> :type f" $ T.unlines [
-        if ghcVersion == GHC901 
+        if ghcVersion == GHC901
           then "-- f :: forall {k1} {k2 :: Nat} {n :: Nat} {a :: k1}."
           else "-- f :: forall k1 (k2 :: Nat) (n :: Nat) (a :: k1).",
         "--      (KnownNat k2, KnownNat n, Typeable a) =>",
@@ -116,10 +116,8 @@ tests =
   , goldenWithEval ":set accepts ghci flags" "TFlags" "hs"
   , testCase ":set -fprint-explicit-foralls works" $ do
       evalInFile "T8.hs" "-- >>> :t id" "-- id :: a -> a"
-      evalInFile "T8.hs" "-- >>> :set -fprint-explicit-foralls\n-- >>> :t id" $
-        if ghcVersion == GHC901
-          then "-- id :: forall {a}. a -> a"
-          else "-- id :: forall a. a -> a"
+      evalInFile "T8.hs" "-- >>> :set -fprint-explicit-foralls\n-- >>> :t id"
+        "-- id :: forall {a}. a -> a"
   , goldenWithEval "The default language extensions for the eval plugin are the same as those for ghci" "TSameDefaultLanguageExtensionsAsGhci" "hs"
   , goldenWithEval "IO expressions are supported, stdout/stderr output is ignored" "TIO" "hs"
   , goldenWithEval "Property checking" "TProperty" "hs"
