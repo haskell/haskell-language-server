@@ -88,7 +88,7 @@ index-state: 2021-06-30T16:00:00Z
 
 constraints:
     -- These plugins doesn't work on GHC9 yet
-    haskell-language-server -brittany -class -eval -fourmolu -ormolu -splice -stylishhaskell -tactic -refineImports
+    haskell-language-server -brittany -class -fourmolu -ormolu -splice -stylishhaskell -tactic -refineImports
 
 
 allow-newer:
