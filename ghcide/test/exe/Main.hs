@@ -3678,7 +3678,10 @@ findDefinitionAndHoverTests = let
   , test  no     skip   cccL17     docLink       "Haddock html links"
   , testM yes    yes    imported   importedSig   "Imported symbol"
   , testM yes    yes    reexported reexportedSig "Imported symbol (reexported)"
-  , test  no     yes    thLocL57   thLoc         "TH Splice Hover"
+  , if ghcVersion == GHC90 && isWindows then
+        test  no     broken    thLocL57   thLoc         "TH Splice Hover"
+    else
+        test  no     yes       thLocL57   thLoc         "TH Splice Hover"
   ]
   where yes, broken :: (TestTree -> Maybe TestTree)
         yes    = Just -- test should run and pass
