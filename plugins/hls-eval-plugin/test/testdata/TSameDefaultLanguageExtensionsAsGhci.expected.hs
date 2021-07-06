@@ -24,4 +24,4 @@ It therefore suffices to test for ExtendedDefaultRules and NoMonomorphismRestric
 
 -- >>> plus = (+)
 -- >>> :t plus
--- plus :: forall a. Num a => a -> a -> a
+-- plus :: Num a => a -> a -> a
