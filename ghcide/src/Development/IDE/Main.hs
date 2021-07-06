@@ -25,10 +25,9 @@ import qualified Data.Text                             as T
 import qualified Data.Text.IO                          as T
 import           Data.Text.Lazy.Encoding               (decodeUtf8)
 import qualified Data.Text.Lazy.IO                     as LT
-import           Development.IDE                       (Action, Rules,
-                                                        hDuplicateTo',
-                                                        GhcVersion(..),
-                                                        ghcVersion)
+import           Development.IDE                       (Action, GhcVersion (..),
+                                                        Rules, ghcVersion,
+                                                        hDuplicateTo')
 import           Development.IDE.Core.Debouncer        (Debouncer,
                                                         newAsyncDebouncer)
 import           Development.IDE.Core.FileStore        (isWatchSupported,
@@ -87,7 +86,6 @@ import           Ide.Types                             (IdeCommand (IdeCommand),
                                                         PluginId (PluginId),
                                                         ipMap)
 import qualified Language.LSP.Server                   as LSP
-import qualified Language.LSP.Types                    as LSP
 import           Options.Applicative                   hiding (action)
 import qualified System.Directory.Extra                as IO
 import           System.Exit                           (ExitCode (ExitFailure),
@@ -261,11 +259,9 @@ defaultMain Arguments{..} = do
                     caps = LSP.resClientCapabilities env
                 -- FIXME: Remove this after GHC 9 gets fully supported
                 when (ghcVersion == GHC90) $
-                    LSP.runLspT env $
-                    LSP.sendNotification LSP.SWindowShowMessage $
-                    LSP.ShowMessageParams LSP.MtWarning $
-                    "Currently, HLS supports GHC 9 only partially. "
-                    <> "See [issue #297](https://github.com/haskell/haskell-language-server/issues/297) for more detail."
+                    hPutStrLn stderr $
+                        "Currently, HLS supports GHC 9 only partially. "
+                        <> "See [issue #297](https://github.com/haskell/haskell-language-server/issues/297) for more detail."
                 initialise
                     argsDefaultHlsConfig
                     rules
