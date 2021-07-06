@@ -126,10 +126,10 @@ tests =
   , goldenWithEval "Can handle eval inside nested comment properly" "TNested" "hs"
   , goldenWithEval "Test on last line insert results correctly" "TLastLine" "hs"
   , testGroup "with preprocessors"
-    [ knownBrokenInEnv [HostOS Windows, GhcVer GHC84, GhcVer GHC86]
+    [ knownBrokenInEnv [HostOS Windows, GhcVer GHC86]
         "CPP eval on Windows and/or GHC <= 8.6 fails for some reasons" $
           goldenWithEval "CPP support" "TCPP" "hs"
-    , knownBrokenForGhcVersions [GHC84, GHC86]
+    , knownBrokenForGhcVersions [GHC86]
         "Preprocessor known to fail on GHC <= 8.6" $
           goldenWithEval "Literate Haskell Bird Style" "TLHS" "lhs"
     -- , goldenWithEval "Literate Haskell LaTeX Style" "TLHSLateX" "lhs"
