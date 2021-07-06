@@ -12,6 +12,10 @@ extra-source-files: test/testdata/*.hs
 
 library
   exposed-modules:    Ide.Plugin.CallHierarchy
+  other-modules:
+                      Ide.Plugin.CallHierarchy.Query
+                      Ide.Plugin.CallHierarchy.Types
+                      Ide.Plugin.CallHierarchy.Internal
   hs-source-dirs:     src
   build-depends:
     , base                         >=4.12    && <5
@@ -23,6 +27,12 @@ library
     , ghc
     , lens
     , text
+    , aeson
+    , mtl
+    , transformers
+    , unordered-containers
+    , sqlite-simple
+    , bytestring
 
   default-language:   Haskell2010
   default-extensions:
