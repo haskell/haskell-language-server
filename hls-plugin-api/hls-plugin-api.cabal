@@ -55,6 +55,7 @@ library
     , hls-graph             ^>=1.4
     , text
     , unordered-containers
+    , optparse-applicative
 
   if os(windows)
     build-depends: Win32
