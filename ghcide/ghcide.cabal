@@ -2,7 +2,7 @@ cabal-version:      2.4
 build-type:         Simple
 category:           Development
 name:               ghcide
-version:            1.4.0.2
+version:            1.4.0.3
 license:            Apache-2.0
 license-file:       LICENSE
 author:             Digital Asset and Ghcide contributors
@@ -34,6 +34,7 @@ library
     default-language:   Haskell2010
     build-depends:
         aeson,
+        aeson-pretty,
         array,
         async,
         base == 4.*,
@@ -59,8 +60,8 @@ library
         hie-compat ^>= 0.2.0.0,
         hls-plugin-api ^>= 1.1.0.0,
         lens,
-        hiedb == 0.3.0.*,
-        lsp-types == 1.2.*,
+        hiedb == 0.4.0.*,
+        lsp-types >= 1.2 && < 1.4,
         lsp == 1.2.*,
         mtl,
         network-uri,
@@ -286,7 +287,6 @@ executable ghcide
         hls-graph,
         text,
         unordered-containers,
-        aeson-pretty
     other-modules:
         Arguments
         Paths_ghcide
@@ -343,7 +343,7 @@ test-suite ghcide-tests
         hls-plugin-api,
         network-uri,
         lens,
-        lsp-test == 0.14.0.0,
+        lsp-test ^>= 0.14,
         optparse-applicative,
         process,
         QuickCheck,
@@ -403,7 +403,7 @@ executable ghcide-bench
         extra,
         filepath,
         ghcide,
-        lsp-test == 0.14.0.0,
+        lsp-test,
         optparse-applicative,
         process,
         safe-exceptions,

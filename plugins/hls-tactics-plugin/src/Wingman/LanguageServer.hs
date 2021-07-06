@@ -136,8 +136,11 @@ properties :: Properties
    , 'PropertyKey "max_use_ctor_actions" 'TInteger
    , 'PropertyKey "timeout_duration" 'TInteger
    , 'PropertyKey "auto_gas" 'TInteger
+   , 'PropertyKey "proofstate_styling" 'TBoolean
    ]
 properties = emptyProperties
+  & defineBooleanProperty #proofstate_styling
+    "Should Wingman emit styling markup when showing metaprogram proof states?" True
   & defineIntegerProperty #auto_gas
     "The depth of the search tree when performing \"Attempt to fill hole\". Bigger values will be able to derive more solutions, but will take exponentially more time." 4
   & defineIntegerProperty #timeout_duration
@@ -162,6 +165,7 @@ getTacticConfig pId =
     <$> usePropertyLsp #max_use_ctor_actions pId properties
     <*> usePropertyLsp #timeout_duration pId properties
     <*> usePropertyLsp #auto_gas pId properties
+    <*> usePropertyLsp #proofstate_styling pId properties
 
 
 getIdeDynflags

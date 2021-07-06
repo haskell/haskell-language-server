@@ -49,17 +49,6 @@ It still works
 
 -}
 
-{- -fprint-* families
-
->>> import Data.Proxy
->>> :set -XPolyKinds
->>> :t Proxy
-Proxy :: forall k (t :: k). Proxy t
-
->>> :set -fprint-explicit-foralls
->>> :t Proxy
-Proxy :: forall {k} {t :: k}. Proxy t
--}
 
 {- Invalid option/flags are reported, but valid ones will be reflected
 
@@ -68,9 +57,4 @@ Proxy :: forall {k} {t :: k}. Proxy t
     -XDatatypeContexts is deprecated: It was widely considered a misfeature, and has been removed from the Haskell language.
 Some flags have not been recognized: -XAbsent, -XWrong, -fprint-nothing-at-all
 
-Still, Rank2Types is enabled, as in GHCi:
-
->>> f = const 42 :: (forall x. x) -> Int
->>> f undefined
-42
 -}

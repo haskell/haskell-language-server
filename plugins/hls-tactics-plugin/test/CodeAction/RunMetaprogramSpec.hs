@@ -20,6 +20,7 @@ spec = do
 #if __GLASGOW_HASKELL__ >= 808
   describe "beginMetaprogram" $ do
     goldenTest BeginMetaprogram ""  1  7 "MetaBegin"
+    goldenTest BeginMetaprogram ""  1  9 "MetaBeginNoWildify"
 #endif
 
   describe "golden" $ do
@@ -38,4 +39,5 @@ spec = do
     metaTest  4 28 "MetaUseSymbol"
     metaTest  7 53 "MetaDeepOf"
     metaTest  2 34 "MetaWithArg"
+    metaTest  2 12 "IntrosTooMany"
 

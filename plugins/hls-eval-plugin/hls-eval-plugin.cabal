@@ -19,11 +19,13 @@ build-type:         Simple
 extra-source-files:
   LICENSE
   README.md
+  test/cabal.project
+  test/info-util/*.cabal
+  test/info-util/*.hs
   test/testdata/*.cabal
   test/testdata/*.hs
   test/testdata/*.lhs
   test/testdata/*.yaml
-  test/testdata/cabal.project
 
 flag pedantic
   description: Enable -Werror
@@ -108,3 +110,4 @@ test-suite tests
     , hls-test-utils   ^>=1.0
     , lens
     , lsp-types
+    , text

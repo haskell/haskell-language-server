@@ -36,6 +36,7 @@ import           TysWiredIn (charTyCon, doubleTyCon, floatTyCon, intTyCon)
 import           Unify
 import           Unique
 import           Var
+import           Wingman.StaticPlugin (pattern MetaprogramSyntax)
 import           Wingman.Types
 
 
@@ -171,6 +172,7 @@ containsHole :: Data a => a -> Bool
 containsHole x = not $ null $ listify (
   \case
     ((HsVar _ (L _ name)) :: HsExpr GhcPs) -> isHole $ occName name
+    MetaprogramSyntax _                    -> True
     _                                      -> False
   ) x
 
@@ -250,6 +252,13 @@ unpackMatches _ = Nothing
 pattern Case :: PatCompattable p => HsExpr p -> [(Pat p, LHsExpr p)] -> HsExpr p
 pattern Case scrutinee matches <-
   HsCase _ (L _ scrutinee)
+    (MG {mg_alts = L _ (fmap unLoc -> unpackMatches -> Just matches)})
+
+------------------------------------------------------------------------------
+-- | Like 'Case', but for lambda cases.
+pattern LamCase :: PatCompattable p => [(Pat p, LHsExpr p)] -> HsExpr p
+pattern LamCase matches <-
+  HsLamCase _
     (MG {mg_alts = L _ (fmap unLoc -> unpackMatches -> Just matches)})
 
 

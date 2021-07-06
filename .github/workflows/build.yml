@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ['8.10.5', '8.10.4', '8.10.3', '8.10.2', '8.8.4', '8.8.3', '8.6.5', '8.6.4']
+        ghc: ['9.0.1', '8.10.5', '8.10.4', '8.10.3', '8.10.2', '8.8.4', '8.8.3', '8.6.5', '8.6.4']
         os: [ubuntu-18.04, macOS-latest, windows-latest]
         exclude:
           - os: windows-latest
@@ -36,13 +36,17 @@ jobs:
     - uses: haskell/actions/setup@v1
       with:
         ghc-version: ${{ matrix.ghc }}
-        cabal-version: '3.2'
+        cabal-version: '3.4'
+
+    - if: ${{ matrix.ghc == '9.0.1' }}
+      name: Use modified cabal.project for ghc9
+      run: cp cabal-ghc901.project cabal.project
 
     - name: Shorten binary names
       run: |
         sed -i.bak -e 's/haskell-language-server/hls/g' \
                    -e 's/haskell_language_server/hls/g' \
-                   haskell-language-server.cabal
+                   haskell-language-server.cabal cabal.project
         sed -i.bak -e 's/Paths_haskell_language_server/Paths_hls/g' \
                    src/**/*.hs exe/*.hs
 
@@ -52,6 +56,7 @@ jobs:
         GHC_VER: ${{ matrix.ghc }}
       run: |
         echo "EXE_EXT=.exe" >> $GITHUB_ENV
+        # We normalize windows+choco ghc version 8.10.2.2
         GHC_VER=$(echo $GHC_VER | sed 's/8.10.2.2/8.10.2/g')
         echo "GHC_VERSION=$GHC_VER" >> $GITHUB_ENV
 
@@ -70,7 +75,7 @@ jobs:
       run: |
         echo "GHC_VERSION=$GHC_VER" >> $GITHUB_ENV
 
-    - name: Tentative Workaround for GHC 8.10.5 on macOS
+    - name: Workaround for GHC 8.10.5 on macOS
       if: matrix.os == 'macOS-latest' && matrix.ghc == '8.10.5'
       run: |
         echo "# uninstalling CommandLineTools (see https://github.com/haskell/haskell-language-server/issues/1913#issuecomment-861667786)"
@@ -85,7 +90,6 @@ jobs:
     - name: Compress Server Binary
       id: compress_server_binary
       run: |
-        # We normalize windows+choco ghc version 8.10.2.2
         HLS_BUILD=$(find dist-newstyle \( -name 'hls' -o -name 'hls.exe' \) -type f)
         HLS=haskell-language-server-${{env.GHC_VERSION}}
         mv $HLS_BUILD $HLS${{env.EXE_EXT}}
@@ -163,18 +167,23 @@ jobs:
     runs-on: ubuntu-18.04
     strategy:
       matrix:
-        os: [Linux, macOS]
+        os: [Linux, macOS, Windows]
     steps:
       - uses: actions/download-artifact@v2
 
       - run: |
           # move the binaries for the specific platform into bin/
           mkdir bin
-          mv haskell-language-server-${{ matrix.os }}-*.gz/haskell-language-server-*.gz bin
-          mv haskell-language-server-wrapper-${{ matrix.os }}.gz/haskell-language-server-wrapper.gz bin
+          mv haskell-language-server-${{ matrix.os }}-*/* bin
+          mv haskell-language-server-wrapper-${{ matrix.os }}.*/* bin
           # decompress them
-          gzip -d bin/*.gz
           cd bin
+          if [[ "${{ matrix.os }}" == "Windows" ]]; then
+            7z x "*.zip"
+            rm *.zip
+          else
+            gzip -d *.gz
+          fi
           tar -czpf haskell-language-server.tar.gz *
 
       - uses: actions/upload-release-asset@v1.0.2
@@ -185,3 +194,34 @@ jobs:
           asset_path: bin/haskell-language-server.tar.gz
           asset_name: haskell-language-server-${{ matrix.os }}-${{ github.event.release.tag_name }}.tar.gz
           asset_content_type: application/gzip
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: haskell-language-server-${{ matrix.os }}-${{ github.event.release.tag_name }}.tar.gz
+          path: bin/haskell-language-server.tar.gz
+
+  sha256sum:
+    needs: tar
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/download-artifact@v2
+
+      - run: |
+          # generate sha256 sums for all current artifacts
+          sha256sum --tag haskell-language-server*/* >> SHA256SUMS
+          # we clean up tags to match the release file names
+          sed -i 's/\/.*)/)/g' SHA256SUMS
+
+      - uses: actions/upload-release-asset@v1.0.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: SHA256SUMS
+          asset_name: SHA256SUMS
+          asset_content_type: plain/text
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: SHA256SUMS
+          path: SHA256SUMS

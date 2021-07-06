@@ -44,7 +44,7 @@ jobs:
     - if: ${{ needs.pre_job.outputs.should_skip_develop != 'true' }}
       uses: cachix/install-nix-action@v13
       with:
-        install_url: https://nixos-nix-install-tests.cachix.org/serve/lb41az54kzk6j12p81br4bczary7m145/install
+        install_url: https://nixos-nix-install-tests.cachix.org/serve/i6laym9jw3wg9mw6ncyrk6gjx4l34vvx/install
         install_options: '--tarball-url-prefix https://nixos-nix-install-tests.cachix.org/serve'
         extra_nix_config: |
           experimental-features = nix-command flakes
@@ -81,7 +81,7 @@ jobs:
         submodules: true
     - uses: cachix/install-nix-action@v13
       with:
-        install_url: https://nixos-nix-install-tests.cachix.org/serve/lb41az54kzk6j12p81br4bczary7m145/install
+        install_url: https://nixos-nix-install-tests.cachix.org/serve/i6laym9jw3wg9mw6ncyrk6gjx4l34vvx/install
         install_options: '--tarball-url-prefix https://nixos-nix-install-tests.cachix.org/serve'
         extra_nix_config: |
           experimental-features = nix-command flakes
@@ -92,11 +92,15 @@ jobs:
         authToken: ${{ secrets.HLS_CACHIX_AUTH_TOKEN }}
     - name: Build development shell
       run: nix develop --profile dev
+    - name: Build development shell (GHC 9.0.1)
+      run: nix develop .#haskell-language-server-901-dev --profile dev
     - name: Push development shell
       if: ${{ env.HAS_TOKEN == 'true' }}
       run: cachix push haskell-language-server dev
     - name: Build binaries
       run: nix build
+    - name: Build binaries (GHC 9.0.1)
+      run: nix build .#haskell-language-server-901
     - name: Push binaries
       if: ${{ env.HAS_TOKEN == 'true' }}
       run: nix path-info --json | jq -r '.[].path' | cachix push haskell-language-server

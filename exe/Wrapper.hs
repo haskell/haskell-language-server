@@ -27,7 +27,7 @@ main :: IO ()
 main = do
   -- WARNING: If you write to stdout before runLanguageServer
   --          then the language server will not work
-  args <- getArguments "haskell-language-server-wrapper"
+  args <- getArguments "haskell-language-server-wrapper" mempty
 
   hlsVer <- haskellLanguageServerVersion
   case args of
