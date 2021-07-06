@@ -27,7 +27,8 @@ import           Data.Text.Lazy.Encoding               (decodeUtf8)
 import qualified Data.Text.Lazy.IO                     as LT
 import           Development.IDE                       (Action, Rules,
                                                         hDuplicateTo',
-                                                        isOverGhc9)
+                                                        GhcVersion(..),
+                                                        ghcVersion)
 import           Development.IDE.Core.Debouncer        (Debouncer,
                                                         newAsyncDebouncer)
 import           Development.IDE.Core.FileStore        (isWatchSupported,
@@ -259,7 +260,7 @@ defaultMain Arguments{..} = do
                             }
                     caps = LSP.resClientCapabilities env
                 -- FIXME: Remove this after GHC 9 gets fully supported
-                when isOverGhc9 $
+                when (ghcVersion == GHC90) $
                     LSP.runLspT env $
                     LSP.sendNotification LSP.SWindowShowMessage $
                     LSP.ShowMessageParams LSP.MtWarning $
