@@ -49,9 +49,6 @@ jobs:
           - os: ubuntu-latest
             ghc: '8.6.5'
             test: true
-          - os: macOS-latest
-            ghc: '9.0.1'
-            test: true
           - os: windows-latest
             ghc: '9.0.1'
             test: true
