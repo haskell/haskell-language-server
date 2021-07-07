@@ -133,12 +133,14 @@ hlintTests = testGroup "hlint suggestions" [
         testRefactor "ApplyRefact1.hs" "Redundant bracket"
             ("{-# LANGUAGE LambdaCase #-}" : expectedLambdaCase)
 
-    , expectFailBecause "apply-refact doesn't work with cpp" $
+    , ignoreInEnv [HostOS Windows, GhcVer GHC90] "Test make execution does not terminate for windows and ghc-9.0" $
+      expectFailBecause "apply-refact doesn't work with cpp" $
       testCase "apply hints works with CPP via -XCPP argument" $ runHlintSession "cpp" $ do
         testRefactor "ApplyRefact3.hs" "Redundant bracket"
             expectedCPP
 
-    , expectFailBecause "apply-refact doesn't work with cpp" $
+    , ignoreInEnv [HostOS Windows, GhcVer GHC90] "Test make execution does not terminate for windows and ghc-9.0" $
+      expectFailBecause "apply-refact doesn't work with cpp" $
       testCase "apply hints works with CPP via language pragma" $ runHlintSession "" $ do
         testRefactor "ApplyRefact3.hs" "Redundant bracket"
             ("{-# LANGUAGE CPP #-}" : expectedCPP)
@@ -151,7 +153,7 @@ hlintTests = testGroup "hlint suggestions" [
         doc <- openDoc "ApplyRefact4.hs" "haskell"
         expectNoMoreDiagnostics 3 doc "hlint"
 
-    , knownBrokenForGhcVersions [GHC810, GHC901] "hlint plugin doesn't honour HLINT annotations (#838)" $
+    , knownBrokenForGhcVersions [GHC810, GHC90] "hlint plugin doesn't honour HLINT annotations (#838)" $
       testCase "hlint diagnostics ignore hints honouring HLINT annotations" $ runHlintSession "" $ do
         doc <- openDoc "ApplyRefact5.hs" "haskell"
         expectNoMoreDiagnostics 3 doc "hlint"

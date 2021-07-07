@@ -51,6 +51,7 @@ import           Data.List.Extra                 (find)
 import           Data.Maybe
 import qualified Data.Set                        as Set
 import qualified Data.Text                       as T
+import           Development.IDE                 (GhcVersion(..), ghcVersion)
 import qualified Language.LSP.Test               as Test
 import           Language.LSP.Types              hiding (Reason (..))
 import qualified Language.LSP.Types.Capabilities as C
@@ -107,27 +108,6 @@ files =
    -- , "./test/testdata/wErrorTest/"
   ]
 
-data GhcVersion
-  = GHC810
-  | GHC88
-  | GHC86
-  | GHC84
-  | GHC901
-  deriving (Eq,Show)
-
-ghcVersion :: GhcVersion
-#if (defined(MIN_VERSION_GLASGOW_HASKELL) && (MIN_VERSION_GLASGOW_HASKELL(9,0,1,0)))
-ghcVersion = GHC901
-#elif (defined(MIN_VERSION_GLASGOW_HASKELL) && (MIN_VERSION_GLASGOW_HASKELL(8,10,0,0)))
-ghcVersion = GHC810
-#elif (defined(MIN_VERSION_GLASGOW_HASKELL) && (MIN_VERSION_GLASGOW_HASKELL(8,8,0,0)))
-ghcVersion = GHC88
-#elif (defined(MIN_VERSION_GLASGOW_HASKELL) && (MIN_VERSION_GLASGOW_HASKELL(8,6,0,0)))
-ghcVersion = GHC86
-#elif (defined(MIN_VERSION_GLASGOW_HASKELL) && (MIN_VERSION_GLASGOW_HASKELL(8,4,0,0)))
-ghcVersion = GHC84
-#endif
-
 data EnvSpec = HostOS OS | GhcVer GhcVersion
     deriving (Show, Eq)
 
@@ -151,25 +131,19 @@ knownBrokenInEnv envSpecs reason
     | otherwise = id
 
 knownBrokenOnWindows :: String -> TestTree -> TestTree
-knownBrokenOnWindows reason
-    | isWindows = expectFailBecause reason
-    | otherwise = id
+knownBrokenOnWindows = knownBrokenInEnv [HostOS Windows]
 
 knownBrokenForGhcVersions :: [GhcVersion] -> String -> TestTree -> TestTree
-knownBrokenForGhcVersions vers reason
-    | ghcVersion `elem` vers =  expectFailBecause reason
-    | otherwise = id
+knownBrokenForGhcVersions vers = knownBrokenInEnv (map GhcVer vers)
 
--- | IgnroeTest if /any/ of environmental spec mathces the current environment.
+-- | IgnoreTest if /any/ of environmental spec mathces the current environment.
 ignoreInEnv :: [EnvSpec] -> String -> TestTree -> TestTree
 ignoreInEnv envSpecs reason
     | any matchesCurrentEnv envSpecs = ignoreTestBecause reason
     | otherwise = id
 
 ignoreForGhcVersions :: [GhcVersion] -> String -> TestTree -> TestTree
-ignoreForGhcVersions vers reason
-    | ghcVersion `elem` vers =  ignoreTestBecause reason
-    | otherwise = id
+ignoreForGhcVersions vers = ignoreInEnv (map GhcVer vers)
 
 -- ---------------------------------------------------------------------
 
