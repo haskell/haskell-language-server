@@ -16,8 +16,8 @@ import           Name
 getReachableFrom :: HieDb -> Vertex -> IO [Vertex]
 getReachableFrom (getConn -> conn) v = undefined
 
-incomingCalls :: HieDb -> Symbol -> IO [Vertex]
-incomingCalls (getConn -> conn) Symbol{..} = do
+outgoingCalls :: HieDb -> Symbol -> IO [Vertex]
+outgoingCalls (getConn -> conn) Symbol{..} = do
   let n = toNsChar (occNameSpace symName) : occNameString symName
       m = moduleNameString $ moduleName symModule
       u = unitIdString $ moduleUnitId symModule
@@ -36,5 +36,5 @@ incomingCalls (getConn -> conn) Symbol{..} = do
             \and \
             \((refs.el < decls.el) OR (refs.el = decls.el AND refs.ec <= decls.ec))" (n, n, m, u)
 
-outgoingCalls :: HieDb -> Symbol -> IO [Vertex]
-outgoingCalls = incomingCalls
+incomingCalls :: HieDb -> Symbol -> IO [Vertex]
+incomingCalls = undefined
