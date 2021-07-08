@@ -10,6 +10,7 @@ module Development.IDE.LSP.HoverDefinition
     , hover
     , gotoDefinition
     , gotoTypeDefinition
+    , references
     ) where
 
 import           Control.Monad.IO.Class

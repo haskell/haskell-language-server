@@ -1,4 +1,4 @@
-data Expr = Apply Int Int
+data Expr = Op Int Int
 
 plus :: Expr -> Expr
-plus (Apply n m) = Apply (n + m) 0
+plus (Op n m) = Op (n + m) 0

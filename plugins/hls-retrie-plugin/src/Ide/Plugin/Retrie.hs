@@ -13,7 +13,7 @@
 
 {-# OPTIONS -Wno-orphans #-}
 
-module Ide.Plugin.Retrie (descriptor) where
+module Ide.Plugin.Retrie (descriptor, callRetrie, RunRetrieParams(..), response) where
 
 import           Control.Concurrent.Extra             (readVar)
 import           Control.Exception.Safe               (Exception (..),
@@ -41,6 +41,7 @@ import           Data.Hashable                        (unhashed)
 import           Data.IORef.Extra                     (atomicModifyIORef'_,
                                                        newIORef, readIORef)
 import           Data.List.Extra                      (find, nubOrdOn)
+import           Data.Maybe                           (fromMaybe)
 import           Data.String                          (IsString (fromString))
 import qualified Data.Text                            as T
 import qualified Data.Text.IO                         as T
@@ -98,6 +99,7 @@ import           Retrie.Replace                       (Change (..),
                                                        Replacement (..))
 import           Retrie.Rewrites
 import           Retrie.SYB                           (listify)
+import           Retrie.Types                         (setRewriteTransformer, MatchResultTransformer, defaultTransformer)
 import           Retrie.Util                          (Verbosity (Loud))
 import           StringBuffer                         (stringToStringBuffer)
 import           System.Directory                     (makeAbsolute)
@@ -145,6 +147,7 @@ runRetrieCmd state RunRetrieParams{originatingFile = uri, ..} =
                 (map Right rewrites <> map Left importRewrites)
                 nfp
                 restrictToOriginatingFile
+                Nothing
         unless (null errors) $
             lift $ sendNotification SWindowShowMessage $
                     ShowMessageParams MtWarning $
@@ -347,8 +350,9 @@ callRetrie ::
   [Either ImportSpec RewriteSpec] ->
   NormalizedFilePath ->
   Bool ->
+  Maybe MatchResultTransformer ->
   IO ([CallRetrieError], WorkspaceEdit)
-callRetrie state session rewrites origin restrictToOriginatingFile = do
+callRetrie state session rewrites origin restrictToOriginatingFile mbTransformer = do
   knownFiles <- toKnownFiles . unhashed <$> readVar (knownTargetsVar $ shakeExtras state)
   let reuseParsedModule f = do
         pm <-
@@ -410,8 +414,9 @@ callRetrie state session rewrites origin restrictToOriginatingFile = do
         unsafeMkA (map (GHC.noLoc . toImportDecl) theImports) mempty 0
 
   (originFixities, originParsedModule) <- reuseParsedModule origin
+  let transformer = fromMaybe defaultTransformer mbTransformer
   retrie <-
-    (\specs -> apply specs >> addImports annotatedImports)
+    (\specs -> apply (map (setRewriteTransformer transformer) specs) >> addImports annotatedImports)
       <$> parseRewriteSpecs
         (\_f -> return $ NoCPP originParsedModule)
         originFixities

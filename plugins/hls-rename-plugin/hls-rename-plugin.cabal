@@ -20,16 +20,18 @@ library
   exposed-modules:  Ide.Plugin.Rename
   hs-source-dirs:   src
   build-depends:
+    , aeson
     , base            >=4.12 && <5
     , lsp-types
     , lsp
     , hls-plugin-api  ^>=1.1
     , ghcide          >=1.3.0.1
+    , retrie          >=0.1.1.0
+    , transformers
+    , hls-retrie-plugin
     , text
     , unordered-containers
-    , extra
     , containers
-    , hiedb
     , ghc
 
   default-language: Haskell2010
