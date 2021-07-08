@@ -69,7 +69,7 @@ library
     , containers
     , deepseq
     , directory
-    , extra
+    , extra                 >=1.7.9
     , filepath
     , fingertree
     , generic-lens
