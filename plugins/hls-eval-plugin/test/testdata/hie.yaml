@@ -1,4 +1,4 @@
 cradle:
   cabal:
-    - path: "././"
+    - path: "./"
       component: "lib:test"

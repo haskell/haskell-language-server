@@ -7,6 +7,7 @@
 [![CircleCI][badge-circleci]][circleci]
 ![Github Testing Workflow](https://github.com/haskell/haskell-language-server/workflows/Testing/badge.svg)
 ![Github Nix Workflow](https://github.com/haskell/haskell-language-server/workflows/Nix/badge.svg)
+[![codetriage][badge-codetriage]][codetriage]
 
 [logo]: ./docs/logos/logo-256.png
 [badge-license]: https://img.shields.io/badge/license-Apache2-green.svg?dummy
@@ -15,6 +16,8 @@
 [circleci]: https://circleci.com/gh/haskell/haskell-language-server/
 [badge-hackage]: https://img.shields.io/hackage/v/haskell-language-server.svg?logo=haskell
 [hackage]: https://hackage.haskell.org/package/haskell-language-server
+[badge-codetriage]: https://www.codetriage.com/haskell/haskell-language-server/badges/users.svg
+[codetriage]:https://www.codetriage.com/haskell/haskell-language-server
 
 Integration point for [ghcide](https://github.com/haskell/ghcide) and [haskell-ide-engine](https://github.com/haskell/haskell-ide-engine). One IDE to rule
 them all. Read the [project's
@@ -28,6 +31,7 @@ background](https://neilmitchell.blogspot.com/2020/01/one-haskell-ide-to-rule-th
     - [Visual Studio Code](#visual-studio-code)
     - [Pre-built binaries](#pre-built-binaries)
     - [Arch Linux](#arch-linux)
+    - [FreeBSD](#freebsd)
     - [Installation from source](#installation-from-source)
       - [Common pre-requirements](#common-pre-requirements)
       - [Linux-specific pre-requirements](#linux-specific-pre-requirements)
@@ -37,6 +41,7 @@ background](https://neilmitchell.blogspot.com/2020/01/one-haskell-ide-to-rule-th
         - [Install via cabal](#install-via-cabal)
         - [Install specific GHC Version](#install-specific-ghc-version)
     - [Installation from Hackage](#installation-from-hackage)
+    - [Installation via Homebrew](#installation-via-homebrew)
   - [Configuring `haskell-language-server`](#configuring-haskell-language-server)
     - [Generic server options](#generic-server-options)
     - [Generic editor options](#generic-editor-options)
@@ -73,6 +78,7 @@ background](https://neilmitchell.blogspot.com/2020/01/one-haskell-ide-to-rule-th
       - [Using Cabal](#using-cabal)
       - [Using Stack](#using-stack)
       - [Using Nix](#using-nix)
+        - [Flakes support](#flakes-support)
       - [Introduction tutorial](#introduction-tutorial)
       - [Test your hacked HLS in your editor](#test-your-hacked-hls-in-your-editor)
     - [Adding support for a new editor](#adding-support-for-a-new-editor)
@@ -118,16 +124,23 @@ background](https://neilmitchell.blogspot.com/2020/01/one-haskell-ide-to-rule-th
 
 ### Prerequisites
 
-- For standalone `.hs`/`.lhs` files, [ghc](https://www.haskell.org/ghc/) must be installed and on the PATH. The easiest way to install it is with [ghcup](https://www.haskell.org/ghcup/) or [Chocolatey](https://www.haskell.org/platform/windows.html) on Windows.
-- For Cabal based projects, both ghc and [cabal-install](https://www.haskell.org/cabal/) must be installed and on the PATH. It can also be installed with [ghcup](https://www.haskell.org/ghcup/) or [Chocolatey](https://www.haskell.org/platform/windows.html) on Windows.
+- For standalone `.hs`/`.lhs` files, [ghc](https://www.haskell.org/ghc/) must be installed and on the PATH. The easiest way to install it is with [ghcup](https://www.haskell.org/ghcup/) or [chocolatey](https://community.chocolatey.org/packages/ghc) on Windows.
+- For Cabal based projects, both ghc and [cabal-install](https://www.haskell.org/cabal/) must be installed and on the PATH. It can also be installed with [ghcup](https://www.haskell.org/ghcup/) or [chocolatey](https://community.chocolatey.org/packages/cabal) on Windows.
 - For Stack based projects, [stack](http://haskellstack.org) must be installed and on the PATH.
 
 ### ghcup
 
-If you are using [`ghcup`](https://www.haskell.org/ghcup/) to manage your installations, you can install the latest version of `haskell-language-server` with
+If you are using [`ghcup`](https://www.haskell.org/ghcup/) to manage your installations, you can install `haskell-language-server` with
 ```
 ghcup install hls
 ```
+
+### chocolatey
+
+If you are using [`chocolatey`](https://chocolatey.org/) to manage your installations in windows, [you can install `haskell-language-server`](https://community.chocolatey.org/packages/haskell-language-server) with
+```
+choco install haskell-language-server
+````
 
 ### Visual Studio Code
 
@@ -154,6 +167,17 @@ sudo pacman -S haskell-language-server
 
 In this case, `haskell-language-server` is compiled against the GHC distributed to Arch Linux, so you will need maintain a system wide Haskell development environment, and install GHC from `pacman` as well.
 See [ArchWiki](https://wiki.archlinux.org/index.php/Haskell) for the details of Haskell infrastructure on Arch Linux.
+
+### FreeBSD
+
+HLS is available for installation from official binary packages. Use
+
+```
+pkg install hs-haskell-language-server
+```
+
+to install it. At the moment, HLS installed this way only supports the same GHC
+version as the ports one.
 
 ### Installation from source
 
@@ -304,6 +328,18 @@ Said command builds the `haskell-language-server` binary and installs it in the 
 but the binary will only work with projects that use the same GHC version that built it.
 
 The package can be found here on Hackage: <https://hackage.haskell.org/package/haskell-language-server>
+
+### Installation via Homebrew
+
+Homebrew users can install `haskell-language-server` using the following command:
+
+```bash
+brew install haskell-language-server
+```
+
+This formula contains HLS binaries compiled with GHC versions available via Homebrew; at the moment those are: 8.6.5, 8.8.4, 8.10.4.
+
+You need to provide your own GHC/Cabal/Stack as required by your project, possibly via Homebrew.
 
 ## Configuring `haskell-language-server`
 
@@ -667,6 +703,11 @@ args = ["--lsp"]
 
 ## Known limitations
 
+### Limited GHC 9 Support
+Currently, GHC 9 support in HLS is in beta stage; some features are unavailable with GHC >= 9.0.1 for the time being.
+This situation is expected to be resolved in the near future after all the dependent packages support GHC 9.
+See issue [#297](https://github.com/haskell/haskell-language-server/issues/297) for the supported features in GHC 9 and the status of migration progress.
+
 ### Preprocessor
 HLS is not yet able to find project preprocessors, which may result in `could not execute: <preprocessor>` errors. This problem is
 tracked in https://github.com/haskell/haskell-language-server/issues/176 and originally comes from https://github.com/mpickering/hie-bios/issues/125
@@ -731,8 +772,7 @@ it to look for the right executable.
 
 :heart: The Haskell tooling dream is near, we need your help! :heart:
 
-- Join [our IRC channel](https://webchat.freenode.net/?channels=haskell-language-server) at `#haskell-language-server` on `freenode`.
-- Fork this repo and [ghcide](https://github.com/haskell/ghcide) and hack as much as you can.
+- Join [our IRC channel](https://web.libera.chat/?channels=#haskell-language-server) at `#haskell-language-server` on [`libera`](https://libera.chat/).
 
 ### Style guidelines
 
@@ -779,7 +819,26 @@ $ cabal update
 $ cabal build
 ```
 
+##### Flakes support
+
+If you are using nix 2.4 style command (enabled by `experimental-features = nix-command`),
+you can use `nix develop` instead of `nix-shell` to enter the development shell. To enter the shell with specific GHC versions:
+
+* `nix develop` or `nix develop .#haskell-language-server-dev` - default GHC version
+* `nix develop .#haskell-language-server-8104-dev` - GHC 8.10.4
+* `nix develop .#haskell-language-server-884-dev` - GHC 8.8.4
+* `nix develop .#haskell-language-server-901-dev` - GHC 9.0.1
+
 If you are looking for a Nix expression to create haskell-language-server binaries, see https://github.com/haskell/haskell-language-server/issues/122
+
+To create binaries:
+
+* `nix build` or `nix build .#haskell-language-server` - default GHC version
+* `nix build .#haskell-language-server-8104` - GHC 8.10.4
+* `nix build .#haskell-language-server-884` - GHC 8.8.4
+* `nix build .#haskell-language-server-901` - GHC 9.0.1
+
+GHC 8.6.5 is not supported here because `nixpkgs-unstable` no longer maintains the corresponding packages set.
 
 #### Introduction tutorial
 

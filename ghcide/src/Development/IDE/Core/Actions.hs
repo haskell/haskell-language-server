@@ -28,10 +28,12 @@ import           Development.IDE.GHC.Compat           hiding (TargetFile,
                                                        parseModule,
                                                        typecheckModule,
                                                        writeHieFile)
+import           Development.IDE.Graph
 import qualified Development.IDE.Spans.AtPoint        as AtPoint
+import           Development.IDE.Types.HscEnvEq       (hscEnv)
 import           Development.IDE.Types.Location
-import           Development.Shake                    hiding (Diagnostic)
 import qualified HieDb
+import           HscTypes                             (hsc_dflags)
 import           Language.LSP.Types                   (DocumentHighlight (..),
                                                        SymbolInformation (..))
 
@@ -62,10 +64,11 @@ getAtPoint file pos = runMaybeT $ do
   opts <- liftIO $ getIdeOptionsIO ide
 
   (hf, mapping) <- useE GetHieAst file
-  dkMap <- lift $ maybe (DKMap mempty mempty) fst <$> (runMaybeT $ useE GetDocMap file)
+  df <- hsc_dflags . hscEnv . fst <$> useE GhcSession file
+  dkMap <- lift $ maybe (DKMap mempty mempty) fst <$> runMaybeT (useE GetDocMap file)
 
   !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
-  MaybeT $ pure $ fmap (first (toCurrentRange mapping =<<)) $ AtPoint.atPoint opts hf dkMap pos'
+  MaybeT $ pure $ first (toCurrentRange mapping =<<) <$> AtPoint.atPoint opts hf dkMap df pos'
 
 toCurrentLocations :: PositionMapping -> [Location] -> [Location]
 toCurrentLocations mapping = mapMaybe go
@@ -116,7 +119,7 @@ highlightAtPoint file pos = runMaybeT $ do
 refsAtPoint :: NormalizedFilePath -> Position -> Action [Location]
 refsAtPoint file pos = do
     ShakeExtras{hiedb} <- getShakeExtras
-    fs <- HM.keys <$> getFilesOfInterest
+    fs <- HM.keys <$> getFilesOfInterestUntracked
     asts <- HM.fromList . mapMaybe sequence . zip fs <$> usesWithStale GetHieAst fs
     AtPoint.referencesAtPoint hiedb file pos (AtPoint.FOIReferences asts)
 

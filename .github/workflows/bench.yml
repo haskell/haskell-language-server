@@ -15,7 +15,7 @@ jobs:
         uses: fkirc/skip-duplicate-actions@v3.4.0
         with:
           cancel_others: true
-          paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", ".circleci/**", "install/**", "nix/**", "**/test/**"]'
+          paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", ".circleci/**", "install/**", "**.nix", "**/test/**", "flake.lock"]'
 
   bench-init:
     needs: pre_job
@@ -55,8 +55,10 @@ jobs:
     - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
       run: cabal update
 
+    # max-backjumps is increased as a temporary solution
+    # for dependency resolution failure
     - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      run: cabal configure --enable-benchmarks
+      run: cabal configure --enable-benchmarks --max-backjumps 12000
 
     - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
       name: Build
@@ -133,6 +135,7 @@ jobs:
     - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
       name: untar
       run: |
+        mkdir -p ~/.cabal
         tar xzf workspace.tar.gz
         tar xzf cabal.tar.gz --directory ~/.cabal
 

@@ -15,7 +15,7 @@ import           Development.IDE.Core.FileExists       as X (getFileExists)
 import           Development.IDE.Core.FileStore        as X (getFileContents)
 import           Development.IDE.Core.IdeConfiguration as X (IdeConfiguration (..),
                                                              isWorkspaceFile)
-import           Development.IDE.Core.OfInterest       as X (getFilesOfInterest)
+import           Development.IDE.Core.OfInterest       as X (getFilesOfInterestUntracked)
 import           Development.IDE.Core.RuleTypes        as X
 import           Development.IDE.Core.Rules            as X (IsHiFileStable (..),
                                                              getClientConfigAction,
@@ -42,8 +42,12 @@ import           Development.IDE.Core.Shake            as X (FastResult (..),
                                                              useWithStaleFast',
                                                              useWithStale_,
                                                              use_, uses, uses_)
+import           Development.IDE.GHC.Compat            as X (GhcVersion (..),
+                                                             ghcVersion)
 import           Development.IDE.GHC.Error             as X
 import           Development.IDE.GHC.Util              as X
+import           Development.IDE.Graph                 as X (Action, RuleResult,
+                                                             Rules, action)
 import           Development.IDE.Plugin                as X
 import           Development.IDE.Types.Diagnostics     as X
 import           Development.IDE.Types.HscEnvEq        as X (HscEnvEq (..),
@@ -51,5 +55,3 @@ import           Development.IDE.Types.HscEnvEq        as X (HscEnvEq (..),
                                                              hscEnvWithImportPaths)
 import           Development.IDE.Types.Location        as X
 import           Development.IDE.Types.Logger          as X
-import           Development.Shake                     as X (Action, RuleResult,
-                                                             Rules, action)

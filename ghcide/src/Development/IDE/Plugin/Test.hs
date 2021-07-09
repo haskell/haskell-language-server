@@ -18,6 +18,7 @@ import           Data.Aeson
 import           Data.Aeson.Types
 import           Data.Bifunctor
 import           Data.CaseInsensitive           (CI, original)
+import           Data.Default                   (def)
 import           Data.Maybe                     (isJust)
 import           Data.String
 import           Data.Text                      (Text, pack)
@@ -25,12 +26,13 @@ import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
+import           Development.IDE.Graph          (Action)
 import           Development.IDE.LSP.Server
 import           Development.IDE.Plugin
+import qualified Development.IDE.Plugin         as P
 import           Development.IDE.Types.Action
 import           Development.IDE.Types.HscEnvEq (HscEnvEq (hscEnv))
 import           Development.IDE.Types.Location (fromUri)
-import           Development.Shake              (Action)
 import           GHC.Generics                   (Generic)
 import           GhcPlugins                     (HscEnv (hsc_dflags))
 import           Ide.Types
@@ -51,9 +53,9 @@ newtype WaitForIdeRuleResult = WaitForIdeRuleResult { ideResultSuccess::Bool}
     deriving newtype (FromJSON, ToJSON)
 
 plugin :: Plugin c
-plugin = Plugin {
-    pluginRules = return (),
-    pluginHandlers = requestHandler (SCustomMethod "test") testRequestHandler'
+plugin = def {
+    P.pluginRules = return (),
+    P.pluginHandlers = requestHandler (SCustomMethod "test") testRequestHandler'
 }
   where
       testRequestHandler' ide req

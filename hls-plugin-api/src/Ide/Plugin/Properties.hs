@@ -48,7 +48,7 @@ import           Data.Either          (fromRight)
 import           Data.Function        ((&))
 import           Data.Kind            (Constraint, Type)
 import qualified Data.Map.Strict      as Map
-import           Data.Proxy (Proxy (..))
+import           Data.Proxy           (Proxy (..))
 import qualified Data.Text            as T
 import           GHC.OverloadedLabels (IsLabel (..))
 import           GHC.TypeLits

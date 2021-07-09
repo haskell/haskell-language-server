@@ -33,7 +33,7 @@ agdaSplit :: AgdaMatch -> [AgdaMatch]
 agdaSplit (AgdaMatch pats (Case (HsVar _ (L _ var)) matches)) = do
   (pat, body) <- matches
   -- TODO(sandy): use an at pattern if necessary
-  pure $ AgdaMatch (rewriteVarPat var pat pats) body
+  pure $ AgdaMatch (rewriteVarPat var pat pats) $ unLoc body
 agdaSplit x = [x]
 
 
@@ -56,9 +56,17 @@ wildifyT (S.map occNameString -> used) = everywhere $ mkT $ \case
 ------------------------------------------------------------------------------
 -- | Replace a 'VarPat' with the given @'Pat' GhcPs@.
 rewriteVarPat :: Data a => RdrName -> Pat GhcPs -> a -> a
-rewriteVarPat name rep = everywhere $ mkT $ \case
-  VarPat _ (L _ var) | eqRdrName name var -> rep
-  (x :: Pat GhcPs)                        -> x
+rewriteVarPat name rep = everywhere $
+  mkT (\case
+    VarPat _ (L _ var) | eqRdrName name var -> rep
+    (x :: Pat GhcPs)                        -> x
+      )
+  `extT` \case
+    HsRecField lbl _ True
+      | eqRdrName name $ unLoc $ rdrNameFieldOcc $ unLoc lbl
+          -> HsRecField lbl (toPatCompat rep) False
+    (x :: HsRecField' (FieldOcc GhcPs) (PatCompat GhcPs)) -> x
+
 
 
 ------------------------------------------------------------------------------

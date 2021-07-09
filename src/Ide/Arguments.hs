@@ -10,6 +10,7 @@ module Ide.Arguments
   ( Arguments(..)
   , GhcideArguments(..)
   , PrintVersion(..)
+  , BiosAction(..)
   , getArguments
   , haskellLanguageServerVersion
   , haskellLanguageServerNumericVersion
@@ -17,7 +18,9 @@ module Ide.Arguments
 
 import           Data.Version
 import           Development.GitRev
+import           Development.IDE               (IdeState)
 import           Development.IDE.Main          (Command (..), commandP)
+import           Ide.Types                     (IdePlugins)
 import           Options.Applicative
 import           Paths_haskell_language_server
 import           System.Environment
@@ -27,6 +30,7 @@ import           System.Environment
 data Arguments
   = VersionMode PrintVersion
   | ProbeToolsMode
+  | BiosMode BiosAction
   | Ghcide GhcideArguments
   | VSCodeExtensionSchemaMode
   | DefaultConfigurationMode
@@ -50,15 +54,19 @@ data PrintVersion
   | PrintNumericVersion
   deriving (Show, Eq, Ord)
 
-getArguments :: String -> IO Arguments
-getArguments exeName = execParser opts
+data BiosAction
+  = PrintCradleType
+  deriving (Show, Eq, Ord)
+
+getArguments :: String -> IdePlugins IdeState -> IO Arguments
+getArguments exeName plugins = execParser opts
   where
     opts = info ((
       VersionMode <$> printVersionParser exeName
       <|> probeToolsParser exeName
-      <|> Ghcide <$> arguments
-      <|> vsCodeExtensionSchemaModeParser
-      <|> defaultConfigurationModeParser)
+      <|> BiosMode <$> biosParser
+      <|> Ghcide <$> arguments plugins
+      )
       <**> helper)
       ( fullDesc
      <> progDesc "Used as a test bed to check your IDE Client will work"
@@ -72,24 +80,19 @@ printVersionParser exeName =
   flag' PrintNumericVersion
     (long "numeric-version" <> help ("Show numeric version of " ++ exeName))
 
+biosParser :: Parser BiosAction
+biosParser =
+  flag' PrintCradleType
+    (long "print-cradle" <> help "Print the project cradle type")
+
 probeToolsParser :: String -> Parser Arguments
 probeToolsParser exeName =
   flag' ProbeToolsMode
     (long "probe-tools" <> help ("Show " ++ exeName  ++ " version and other tools of interest"))
 
-vsCodeExtensionSchemaModeParser :: Parser Arguments
-vsCodeExtensionSchemaModeParser =
-  flag' VSCodeExtensionSchemaMode
-    (long "vscode-extension-schema" <> help "Print generic config schema for plugins (used in the package.json of haskell vscode extension)")
-
-defaultConfigurationModeParser :: Parser Arguments
-defaultConfigurationModeParser =
-  flag' DefaultConfigurationMode
-    (long "generate-default-config" <> help "Print config supported by the server with default values")
-
-arguments :: Parser GhcideArguments
-arguments = GhcideArguments
-      <$> (commandP <|> lspCommand <|> checkCommand)
+arguments :: IdePlugins IdeState -> Parser GhcideArguments
+arguments plugins = GhcideArguments
+      <$> (commandP plugins <|> lspCommand <|> checkCommand)
       <*> optional (strOption $ long "cwd" <> metavar "DIR"
                   <> help "Change to this directory")
       <*> optional (strOption $ long "shake-profiling" <> metavar "DIR"

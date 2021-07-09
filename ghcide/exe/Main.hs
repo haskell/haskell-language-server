@@ -7,29 +7,19 @@ module Main(main) where
 
 import           Arguments                         (Arguments (..),
                                                     getArguments)
-import           Control.Concurrent.Extra          (newLock, withLock)
-import           Control.Monad.Extra               (unless, when, whenJust)
-import qualified Data.Aeson.Encode.Pretty          as A
+import           Control.Monad.Extra               (unless, whenJust)
 import           Data.Default                      (Default (def))
-import           Data.List.Extra                   (upper)
-import qualified Data.Text                         as T
-import qualified Data.Text.IO                      as T
-import           Data.Text.Lazy.Encoding           (decodeUtf8)
-import qualified Data.Text.Lazy.IO                 as LT
 import           Data.Version                      (showVersion)
 import           Development.GitRev                (gitHash)
-import           Development.IDE                   (Logger (Logger),
-                                                    Priority (Info), action)
+import           Development.IDE                   (action)
 import           Development.IDE.Core.OfInterest   (kick)
 import           Development.IDE.Core.Rules        (mainRule)
+import           Development.IDE.Graph             (ShakeOptions (shakeThreads))
 import qualified Development.IDE.Main              as Main
 import qualified Development.IDE.Plugin.HLS.GhcIde as GhcIde
 import qualified Development.IDE.Plugin.Test       as Test
 import           Development.IDE.Types.Options
-import           Development.Shake                 (ShakeOptions (shakeThreads))
 import           Ide.Plugin.Config                 (Config (checkParents, checkProject))
-import           Ide.Plugin.ConfigUtils            (pluginsToDefaultConfig,
-                                                    pluginsToVSCodeExtensionSchema)
 import           Ide.PluginUtils                   (pluginDescToIdePlugins)
 import           Paths_ghcide                      (version)
 import qualified System.Directory.Extra            as IO
@@ -51,35 +41,18 @@ ghcideVersion = do
 
 main :: IO ()
 main = do
+    let hlsPlugins = pluginDescToIdePlugins GhcIde.descriptors
     -- WARNING: If you write to stdout before runLanguageServer
     --          then the language server will not work
-    Arguments{..} <- getArguments
+    Arguments{..} <- getArguments hlsPlugins
 
     if argsVersion then ghcideVersion >>= putStrLn >> exitSuccess
     else hPutStrLn stderr {- see WARNING above -} =<< ghcideVersion
 
-    let hlsPlugins = pluginDescToIdePlugins GhcIde.descriptors
-
-    when argsVSCodeExtensionSchema $ do
-      LT.putStrLn $ decodeUtf8 $ A.encodePretty $ pluginsToVSCodeExtensionSchema hlsPlugins
-      exitSuccess
-
-    when argsDefaultConfig $ do
-      LT.putStrLn $ decodeUtf8 $ A.encodePretty $ pluginsToDefaultConfig hlsPlugins
-      exitSuccess
-
     whenJust argsCwd IO.setCurrentDirectory
-
-    -- lock to avoid overlapping output on stdout
-    lock <- newLock
-    let logger = Logger $ \pri msg -> when (pri >= logLevel) $ withLock lock $
-            T.putStrLn $ T.pack ("[" ++ upper (show pri) ++ "] ") <> msg
-        logLevel = if argsVerbose then minBound else Info
 
     Main.defaultMain def
         {Main.argCommand = argsCommand
-
-        ,Main.argsLogger = pure logger
 
         ,Main.argsRules = do
             -- install the main and ghcide-plugin rules
@@ -109,4 +82,3 @@ main = do
                 , optCheckProject = pure $ checkProject config
                 }
         }
-

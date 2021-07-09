@@ -1,7 +1,5 @@
 {-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE LambdaCase            #-}
-{-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedStrings     #-}
 
 module FunctionalCodeAction (tests) where
@@ -21,7 +19,6 @@ import           Test.Hls
 import           Test.Hspec.Expectations
 
 import           System.FilePath                 ((</>))
-import           System.IO.Extra                 (withTempDir)
 import           Test.Hls.Command
 
 {-# ANN module ("HLint: ignore Reduce duplication"::String) #-}
@@ -30,8 +27,6 @@ tests :: TestTree
 tests = testGroup "code actions" [
       hlintTests
     , importTests
-    , missingPragmaTests
-    , disableWarningTests
     , packageTests
     , redundantImportTests
     , renameTests
@@ -138,12 +133,14 @@ hlintTests = testGroup "hlint suggestions" [
         testRefactor "ApplyRefact1.hs" "Redundant bracket"
             ("{-# LANGUAGE LambdaCase #-}" : expectedLambdaCase)
 
-    , expectFailBecause "apply-refact doesn't work with cpp" $
+    , ignoreInEnv [HostOS Windows, GhcVer GHC90] "Test make execution does not terminate for windows and ghc-9.0" $
+      expectFailBecause "apply-refact doesn't work with cpp" $
       testCase "apply hints works with CPP via -XCPP argument" $ runHlintSession "cpp" $ do
         testRefactor "ApplyRefact3.hs" "Redundant bracket"
             expectedCPP
 
-    , expectFailBecause "apply-refact doesn't work with cpp" $
+    , ignoreInEnv [HostOS Windows, GhcVer GHC90] "Test make execution does not terminate for windows and ghc-9.0" $
+      expectFailBecause "apply-refact doesn't work with cpp" $
       testCase "apply hints works with CPP via language pragma" $ runHlintSession "" $ do
         testRefactor "ApplyRefact3.hs" "Redundant bracket"
             ("{-# LANGUAGE CPP #-}" : expectedCPP)
@@ -156,13 +153,29 @@ hlintTests = testGroup "hlint suggestions" [
         doc <- openDoc "ApplyRefact4.hs" "haskell"
         expectNoMoreDiagnostics 3 doc "hlint"
 
-    , knownBrokenForGhcVersions [GHC810] "hlint plugin doesn't honour HLINT annotations (#838)" $
+    , knownBrokenForGhcVersions [GHC810, GHC90] "hlint plugin doesn't honour HLINT annotations (#838)" $
       testCase "hlint diagnostics ignore hints honouring HLINT annotations" $ runHlintSession "" $ do
         doc <- openDoc "ApplyRefact5.hs" "haskell"
         expectNoMoreDiagnostics 3 doc "hlint"
 
     , testCase "apply-refact preserve regular comments" $ runHlintSession "" $ do
         testRefactor "ApplyRefact6.hs" "Redundant bracket" expectedComments
+
+    , testCase "applyAll is shown only when there is at least one diagnostic in range" $  runHlintSession "" $ do
+        doc <- openDoc "ApplyRefact8.hs" "haskell"
+        _ <- waitForDiagnosticsFromSource doc "hlint"
+
+        firstLine <- map fromAction <$> getCodeActions doc (mkRange 0 0 0 0)
+        secondLine <- map fromAction <$> getCodeActions doc (mkRange 1 0 1 0)
+        thirdLine <- map fromAction <$> getCodeActions doc (mkRange 2 0 2 0)
+        multiLine <- map fromAction <$> getCodeActions doc (mkRange 0 0 2 0)
+
+        let hasApplyAll = isJust . find (\ca -> "Apply all hints" `T.isSuffixOf` (ca ^. L.title))
+
+        liftIO $ hasApplyAll firstLine @? "Missing apply all code action"
+        liftIO $ hasApplyAll secondLine @? "Missing apply all code action"
+        liftIO $ not (hasApplyAll thirdLine) @? "Unexpected apply all code action"
+        liftIO $ hasApplyAll multiLine @? "Missing apply all code action"
     ]
     where
         runHlintSession :: FilePath -> Session a -> IO a
@@ -460,184 +473,6 @@ signatureTests = testGroup "missing top level signature code actions" [
         liftIO $ T.lines contents @?= expected
     ]
 
-missingPragmaTests :: TestTree
-missingPragmaTests = testGroup "missing pragma warning code actions" [
-    testCase "Adds TypeSynonymInstances pragma" $ do
-        runSession hlsCommand fullCaps "test/testdata/addPragmas" $ do
-            doc <- openDoc "NeedsPragmas.hs" "haskell"
-
-            _ <- waitForDiagnosticsFromSource doc "typecheck"
-            cas <- map fromAction <$> getAllCodeActions doc
-
-            liftIO $ "Add \"TypeSynonymInstances\"" `elem` map (^. L.title) cas @? "Contains TypeSynonymInstances code action"
-            liftIO $ "Add \"FlexibleInstances\"" `elem` map (^. L.title) cas @? "Contains FlexibleInstances code action"
-
-            executeCodeAction $ head cas
-
-            contents <- documentContents doc
-
-            let expected = [ "{-# LANGUAGE TypeSynonymInstances #-}"
-                        , "module NeedsPragmas where"
-                        , ""
-                        , "import GHC.Generics"
-                        , ""
-                        , "main = putStrLn \"hello\""
-                        , ""
-                        , "type Foo = Int"
-                        , ""
-                        , "instance Show Foo where"
-                        , "  show x = undefined"
-                        , ""
-                        , "instance Show (Int,String) where"
-                        , "  show  = undefined"
-                        , ""
-                        , "data FFF a = FFF Int String a"
-                        , "           deriving (Generic,Functor,Traversable)"
-                        ]
-
-            liftIO $ T.lines contents @?= expected
-
-    , testCase "Adds TypeApplications pragma" $ do
-        runSession hlsCommand fullCaps "test/testdata/addPragmas" $ do
-            doc <- openDoc "TypeApplications.hs" "haskell"
-
-            _ <- waitForDiagnosticsFrom doc
-            cas <- map fromAction <$> getAllCodeActions doc
-
-            liftIO $ "Add \"TypeApplications\"" `elem` map (^. L.title) cas @? "Contains TypeApplications code action"
-
-            executeCodeAction $ head cas
-
-            contents <- documentContents doc
-
-            let expected =
--- TODO: Why CPP???
-#if __GLASGOW_HASKELL__ < 810
-                    [ "{-# LANGUAGE ScopedTypeVariables #-}"
-                    , "{-# LANGUAGE TypeApplications #-}"
-#else
-                    [ "{-# LANGUAGE TypeApplications #-}"
-                    , "{-# LANGUAGE ScopedTypeVariables #-}"
-#endif
-                    , "module TypeApplications where"
-                    , ""
-                    , "foo :: forall a. a -> a"
-                    , "foo = id @a"
-                    ]
-
-            liftIO $ T.lines contents @?= expected
-    , testCase "No duplication" $ do
-        runSession hlsCommand fullCaps "test/testdata/addPragmas" $ do
-            doc <- openDoc "NamedFieldPuns.hs" "haskell"
-
-            _ <- waitForDiagnosticsFrom doc
-            cas <- map fromAction <$> getCodeActions doc (Range (Position 8 9) (Position 8 9))
-
-            liftIO $ length cas == 1 @? "Expected one code action, but got: " <> show cas
-            let ca = head cas
-
-            liftIO $ (ca ^. L.title == "Add \"NamedFieldPuns\"") @? "NamedFieldPuns code action"
-
-            executeCodeAction ca
-
-            contents <- documentContents doc
-
-            let expected =
-                    [ "{-# LANGUAGE NamedFieldPuns #-}"
-                    , "module NamedFieldPuns where"
-                    , ""
-                    , "data Record = Record"
-                    , "  { a :: Int,"
-                    , "    b :: Double,"
-                    , "    c :: String"
-                    , "  }"
-                    , ""
-                    , "f Record{a, b} = a"
-                    ]
-            liftIO $ T.lines contents @?= expected
-    , testCase "After Shebang" $ do
-        runSession hlsCommand fullCaps "test/testdata/addPragmas" $ do
-            doc <- openDoc "AfterShebang.hs" "haskell"
-
-            _ <- waitForDiagnosticsFrom doc
-            cas <- map fromAction <$> getAllCodeActions doc
-
-            liftIO $ "Add \"NamedFieldPuns\"" `elem` map (^. L.title) cas @? "Contains NamedFieldPuns code action"
-
-            executeCodeAction $ head cas
-
-            contents <- documentContents doc
-
-            let expected =
-                    [ "#! /usr/bin/env nix-shell"
-                    , "#! nix-shell --pure -i runghc -p \"haskellPackages.ghcWithPackages (hp: with hp; [ turtle ])\""
-                    , ""
-                    , "{-# LANGUAGE NamedFieldPuns #-}"
-                    , "module AfterShebang where"
-                    , ""
-                    , "data Record = Record"
-                    , "  { a :: Int,"
-                    , "    b :: Double,"
-                    , "    c :: String"
-                    , "  }"
-                    , ""
-                    , "f Record{a, b} = a"
-                    ]
-
-            liftIO $ T.lines contents @?= expected
-    ]
-
-disableWarningTests :: TestTree
-disableWarningTests =
-  testGroup "disable warnings" $
-    [
-      ( "missing-signatures"
-      , T.unlines
-          [ "{-# OPTIONS_GHC -Wall #-}"
-          , "main = putStrLn \"hello\""
-          ]
-      , T.unlines
-          [ "{-# OPTIONS_GHC -Wall #-}"
-          , "{-# OPTIONS_GHC -Wno-missing-signatures #-}"
-          , "main = putStrLn \"hello\""
-          ]
-      )
-    ,
-      ( "unused-imports"
-      , T.unlines
-          [ "{-# OPTIONS_GHC -Wall #-}"
-          , ""
-          , ""
-          , "module M where"
-          , ""
-          , "import Data.Functor"
-          ]
-      , T.unlines
-          [ "{-# OPTIONS_GHC -Wall #-}"
-          , ""
-          , ""
-          , "{-# OPTIONS_GHC -Wno-unused-imports #-}"
-          , "module M where"
-          , ""
-          , "import Data.Functor"
-          ]
-      )
-    ]
-      <&> \(warning, initialContent, expectedContent) -> testSession (T.unpack warning) $ do
-        doc <- createDoc "Module.hs" "haskell" initialContent
-        _ <- waitForDiagnostics
-        codeActs <- mapMaybe caResultToCodeAct <$> getAllCodeActions doc
-        case find (\CodeAction{_title} -> _title == "Disable \"" <> warning <> "\" warnings") codeActs of
-          Nothing -> liftIO $ assertFailure "No code action with expected title"
-          Just action -> do
-            executeCodeAction action
-            contentAfterAction <- documentContents doc
-            liftIO $ expectedContent @=? contentAfterAction
- where
-  caResultToCodeAct = \case
-    InL _ -> Nothing
-    InR c -> Just c
-
 unusedTermTests :: TestTree
 unusedTermTests = testGroup "unused term code actions" [
     ignoreTestBecause "no support for prefixing unused names with _" $ testCase "Prefixes with '_'" $
@@ -694,7 +529,3 @@ noLiteralCaps = def { C._textDocument = Just textDocumentCaps }
   where
     textDocumentCaps = def { C._codeAction = Just codeActionCaps }
     codeActionCaps = CodeActionClientCapabilities (Just True) Nothing Nothing Nothing Nothing Nothing Nothing
-
-testSession :: String -> Session () -> TestTree
-testSession name s = testCase name $ withTempDir $ \dir ->
-    runSession hlsCommand fullCaps dir s
