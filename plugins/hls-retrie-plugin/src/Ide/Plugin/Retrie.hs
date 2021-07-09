@@ -12,8 +12,9 @@
 {-# LANGUAGE TypeFamilies        #-}
 
 {-# OPTIONS -Wno-orphans #-}
+{-# LANGUAGE RankNTypes          #-}
 
-module Ide.Plugin.Retrie (descriptor, callRetrie, RunRetrieParams(..), response) where
+module Ide.Plugin.Retrie (descriptor, callRetrieWithTransformerAndUpdates, RunRetrieParams(..), response) where
 
 import           Control.Concurrent.Extra             (readVar)
 import           Control.Exception.Safe               (Exception (..),
@@ -46,12 +47,12 @@ import           Data.String                          (IsString (fromString))
 import qualified Data.Text                            as T
 import qualified Data.Text.IO                         as T
 import           Data.Typeable                        (Typeable)
+import           Debug.Trace                          (trace)
 import           Development.IDE                      hiding (pluginHandlers)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.Shake           (ShakeExtras (knownTargetsVar),
                                                        toKnownFiles)
 import           Development.IDE.GHC.Compat           (GenLocated (L), GhcRn,
-                                                       HsBindLR (FunBind),
                                                        HsGroup (..),
                                                        HsValBindsLR (..),
                                                        HscEnv, IdP, LRuleDecls,
@@ -76,6 +77,7 @@ import           GhcPlugins                           (Outputable,
                                                        nameRdrName, occNameFS,
                                                        occNameString,
                                                        rdrNameOcc, unpackFS)
+import           HsBinds
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Server                  (LspM,
@@ -85,11 +87,13 @@ import           Language.LSP.Server                  (LspM,
                                                        withIndefiniteProgress)
 import           Language.LSP.Types                   as J
 import           Retrie.CPP                           (CPP (NoCPP), parseCPP)
+import           Retrie.Context                       (ContextUpdater, updateContext)
 import           Retrie.ExactPrint                    (fix, relativiseApiAnns,
                                                        transformA, unsafeMkA)
 import           Retrie.Fixity                        (mkFixityEnv)
 import qualified Retrie.GHC                           as GHC
-import           Retrie.Monad                         (addImports, apply,
+import           Retrie.Monad                         (addImports,
+                                                       applyWithUpdate,
                                                        getGroundTerms,
                                                        runRetrie)
 import           Retrie.Options                       (defaultOptions,
@@ -99,7 +103,9 @@ import           Retrie.Replace                       (Change (..),
                                                        Replacement (..))
 import           Retrie.Rewrites
 import           Retrie.SYB                           (listify)
-import           Retrie.Types                         (setRewriteTransformer, MatchResultTransformer, defaultTransformer)
+import           Retrie.Types                         (MatchResultTransformer,
+                                                       defaultTransformer,
+                                                       setRewriteTransformer)
 import           Retrie.Util                          (Verbosity (Loud))
 import           StringBuffer                         (stringToStringBuffer)
 import           System.Directory                     (makeAbsolute)
@@ -147,7 +153,6 @@ runRetrieCmd state RunRetrieParams{originatingFile = uri, ..} =
                 (map Right rewrites <> map Left importRewrites)
                 nfp
                 restrictToOriginatingFile
-                Nothing
         unless (null errors) $
             lift $ sendNotification SWindowShowMessage $
                     ShowMessageParams MtWarning $
@@ -350,9 +355,22 @@ callRetrie ::
   [Either ImportSpec RewriteSpec] ->
   NormalizedFilePath ->
   Bool ->
-  Maybe MatchResultTransformer ->
   IO ([CallRetrieError], WorkspaceEdit)
-callRetrie state session rewrites origin restrictToOriginatingFile mbTransformer = do
+callRetrie =
+  callRetrieWithTransformerAndUpdates defaultTransformer updateContext
+
+-- allows custom 'ContextUpdater' to be given to 'applyWithUpdates'
+-- applies transformations to the spec
+callRetrieWithTransformerAndUpdates ::
+  MatchResultTransformer ->
+  ContextUpdater ->
+  IdeState ->
+  HscEnv ->
+  [Either ImportSpec RewriteSpec] ->
+  NormalizedFilePath ->
+  Bool ->
+  IO ([CallRetrieError], WorkspaceEdit)
+callRetrieWithTransformerAndUpdates transformer contextUpdater state session rewrites origin restrictToOriginatingFile = do
   knownFiles <- toKnownFiles . unhashed <$> readVar (knownTargetsVar $ shakeExtras state)
   let reuseParsedModule f = do
         pm <-
@@ -414,9 +432,8 @@ callRetrie state session rewrites origin restrictToOriginatingFile mbTransformer
         unsafeMkA (map (GHC.noLoc . toImportDecl) theImports) mempty 0
 
   (originFixities, originParsedModule) <- reuseParsedModule origin
-  let transformer = fromMaybe defaultTransformer mbTransformer
-  retrie <-
-    (\specs -> apply (map (setRewriteTransformer transformer) specs) >> addImports annotatedImports)
+  retrie <- do (\specs -> applyWithUpdate updateContext (map (setRewriteTransformer transformer) specs)
+                    >> addImports annotatedImports)
       <$> parseRewriteSpecs
         (\_f -> return $ NoCPP originParsedModule)
         originFixities
