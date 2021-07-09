@@ -43,6 +43,7 @@ extra-deps:
   - ghc-exactprint-0.6.4
   - ghc-lib-8.10.4.20210206
   - ghc-lib-parser-8.10.4.20210206
+  - ghc-source-gen-0.4.1.0
   - heapsize-0.3.0
   - hie-bios-0.7.5
   - implicit-hie-cradle-0.3.0.2
