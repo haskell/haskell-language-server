@@ -114,6 +114,6 @@ spec = do
       ]
 
     -- test layouts that maintain user-written fixities
-    destructTest "b"  3 13 "LayoutInfixKeep.hs"
-    destructTest "b"  2 12 "LayoutPrefixKeep.hs"
+    destructTest "b"  3 13 "LayoutInfixKeep"
+    destructTest "b"  2 12 "LayoutPrefixKeep"
 
