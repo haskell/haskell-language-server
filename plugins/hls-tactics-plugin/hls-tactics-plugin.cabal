@@ -69,7 +69,7 @@ library
     , containers
     , deepseq
     , directory
-    , extra
+    , extra                 >=1.7.8
     , filepath
     , fingertree
     , generic-lens
@@ -83,7 +83,7 @@ library
     , hyphenation
     , lens
     , lsp
-    , megaparsec            ^>=9
+    , megaparsec            >=8 && < 10
     , mtl
     , parser-combinators
     , prettyprinter

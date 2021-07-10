@@ -18,6 +18,7 @@ import           Ide.Plugin.Eval.Types   (EvalParams (..), Section (..),
 import           Language.LSP.Types.Lens (arguments, command, range, title)
 import           System.FilePath         ((</>))
 import           Test.Hls
+import qualified Data.Text as T
 
 main :: IO ()
 main = defaultTestRunner tests
@@ -61,7 +62,14 @@ tests =
   , goldenWithEval "Refresh an evaluation" "T5" "hs"
   , goldenWithEval "Refresh an evaluation w/ lets" "T6" "hs"
   , goldenWithEval "Refresh a multiline evaluation" "T7" "hs"
-  , goldenWithEval "Semantic and Lexical errors are reported" "T8" "hs"
+  , testCase "Semantic and Lexical errors are reported" $ do
+      evalInFile "T8.hs" "-- >>> noFunctionWithThisName" "-- Variable not in scope: noFunctionWithThisName"
+      evalInFile "T8.hs" "-- >>> \"a\" + \"bc\"" $
+        if ghcVersion == GHC90
+          then "-- No instance for (Num String) arising from a use of ‘+’"
+          else "-- No instance for (Num [Char]) arising from a use of ‘+’"
+      evalInFile "T8.hs" "-- >>> \"" "-- lexical error in string/character literal at end of input"
+      evalInFile "T8.hs" "-- >>> 3 `div` 0" "-- divide by zero"
   , goldenWithEval "Applies file LANGUAGE extensions" "T9" "hs"
   , goldenWithEval "Evaluate a type with :kind!" "T10" "hs"
   , goldenWithEval "Reports an error for an incorrect type with :kind!" "T11" "hs"
@@ -75,9 +83,24 @@ tests =
   , goldenWithEval "Returns defaulted type for :type +d reflecting the default declaration specified in the >>> prompt" "T19" "hs"
   , expectFailBecause "known issue - see a note in P.R. #361" $
       goldenWithEval ":type +d reflects the `default' declaration of the module" "T20" "hs"
-  , goldenWithEval ":type handles a multilined result properly" "T21" "hs"
+  , testCase ":type handles a multilined result properly" $
+      evalInFile "T21.hs" "-- >>> :type fun" $ T.unlines [
+        "-- fun",
+        if ghcVersion == GHC90
+          then "--   :: forall {k1} {k2 :: Nat} {n :: Nat} {a :: k1}."
+          else "--   :: forall k1 (k2 :: Nat) (n :: Nat) (a :: k1).",
+        "--      (KnownNat k2, KnownNat n, Typeable a) =>",
+        "--      Proxy k2 -> Proxy n -> Proxy a -> ()"
+      ]
   , goldenWithEval ":t behaves exactly the same as :type" "T22" "hs"
-  , goldenWithEval ":type does \"dovetails\" for short identifiers" "T23" "hs"
+  , testCase ":type does \"dovetails\" for short identifiers" $
+      evalInFile "T23.hs" "-- >>> :type f" $ T.unlines [
+        if ghcVersion == GHC90
+          then "-- f :: forall {k1} {k2 :: Nat} {n :: Nat} {a :: k1}."
+          else "-- f :: forall k1 (k2 :: Nat) (n :: Nat) (a :: k1).",
+        "--      (KnownNat k2, KnownNat n, Typeable a) =>",
+        "--      Proxy k2 -> Proxy n -> Proxy a -> ()"
+      ]
   , goldenWithEval ":kind! treats a multilined result properly" "T24" "hs"
   , goldenWithEval ":kind treats a multilined result properly" "T25" "hs"
   , goldenWithEval "local imports" "T26" "hs"
@@ -91,6 +114,10 @@ tests =
   -- , goldenWithEval "Local Modules can be imported in a test" "TLocalImportInTest" "hs"
   , goldenWithEval "Setting language option TupleSections" "TLanguageOptionsTupleSections" "hs"
   , goldenWithEval ":set accepts ghci flags" "TFlags" "hs"
+  , testCase ":set -fprint-explicit-foralls works" $ do
+      evalInFile "T8.hs" "-- >>> :t id" "-- id :: a -> a"
+      evalInFile "T8.hs" "-- >>> :set -fprint-explicit-foralls\n-- >>> :t id"
+        "-- id :: forall {a}. a -> a"
   , goldenWithEval "The default language extensions for the eval plugin are the same as those for ghci" "TSameDefaultLanguageExtensionsAsGhci" "hs"
   , goldenWithEval "IO expressions are supported, stdout/stderr output is ignored" "TIO" "hs"
   , goldenWithEval "Property checking" "TProperty" "hs"
@@ -99,10 +126,10 @@ tests =
   , goldenWithEval "Can handle eval inside nested comment properly" "TNested" "hs"
   , goldenWithEval "Test on last line insert results correctly" "TLastLine" "hs"
   , testGroup "with preprocessors"
-    [ knownBrokenInEnv [HostOS Windows, GhcVer GHC84, GhcVer GHC86]
+    [ knownBrokenInEnv [HostOS Windows, GhcVer GHC86]
         "CPP eval on Windows and/or GHC <= 8.6 fails for some reasons" $
           goldenWithEval "CPP support" "TCPP" "hs"
-    , knownBrokenForGhcVersions [GHC84, GHC86]
+    , knownBrokenForGhcVersions [GHC86]
         "Preprocessor known to fail on GHC <= 8.6" $
           goldenWithEval "Literate Haskell Bird Style" "TLHS" "lhs"
     -- , goldenWithEval "Literate Haskell LaTeX Style" "TLHSLateX" "lhs"
@@ -196,3 +223,13 @@ codeLensTestOutput codeLens = do
 
 testDataDir :: FilePath
 testDataDir = "test" </> "testdata"
+
+evalInFile :: FilePath -> T.Text -> T.Text -> IO ()
+evalInFile fp e expected = runSessionWithServer evalPlugin testDataDir $ do
+  doc <- openDoc fp "haskell"
+  origin <- documentContents doc
+  let withEval = origin <> e
+  changeDoc doc [TextDocumentContentChangeEvent Nothing Nothing withEval]
+  executeLensesBackwards doc
+  result <- fmap T.strip . T.stripPrefix withEval <$> documentContents doc
+  liftIO $ result @?= Just (T.strip expected)

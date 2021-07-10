@@ -1,6 +1,6 @@
 name:          completions
 version:       0.1.0.0
-cabal-version: >= 2.0
+cabal-version: 2.0
 build-type:    Simple
 
 executable compl-exe

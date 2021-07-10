@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP          #-}
 {-# LANGUAGE TypeFamilies #-}
 
 {-|
@@ -197,7 +196,7 @@ runWithDb fp k = do
 
 getHieDbLoc :: FilePath -> IO FilePath
 getHieDbLoc dir = do
-  let db = intercalate "-" [dirHash, takeBaseName dir, VERSION_ghc, hiedbDataVersion] <.> "hiedb"
+  let db = intercalate "-" [dirHash, takeBaseName dir, ghcVersionStr, hiedbDataVersion] <.> "hiedb"
       dirHash = B.unpack $ B16.encode $ H.hash $ B.pack dir
   cDir <- IO.getXdgDirectory IO.XdgCache cacheDir
   createDirectoryIfMissing True cDir
@@ -526,11 +525,10 @@ cradleToOptsAndLibDir cradle file = do
 emptyHscEnv :: IORef NameCache -> FilePath -> IO HscEnv
 emptyHscEnv nc libDir = do
     env <- runGhc (Just libDir) getSession
-#if !MIN_VERSION_ghc(9,0,0)
-    -- This causes ghc9 to crash with the error:
-    -- Couldn't find a target code interpreter. Try with -fexternal-interpreter
-    initDynLinker env
-#endif
+    when (ghcVersion < GHC90) $
+        -- This causes ghc9 to crash with the error:
+        -- Couldn't find a target code interpreter. Try with -fexternal-interpreter
+        initDynLinker env
     pure $ setNameCache nc env{ hsc_dflags = (hsc_dflags env){useUnicode = True } }
 
 data TargetDetails = TargetDetails
