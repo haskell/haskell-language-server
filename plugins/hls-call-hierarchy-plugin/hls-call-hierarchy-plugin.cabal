@@ -33,6 +33,7 @@ library
     , unordered-containers
     , sqlite-simple
     , bytestring
+    , extra
 
   default-language:   Haskell2010
   default-extensions:

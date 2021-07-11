@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
@@ -6,6 +7,7 @@
 module Ide.Plugin.CallHierarchy.Internal where
 
 import           Control.Lens                   (Field1 (_1), Field3 (_3), (^.))
+import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Data.Aeson                     as A
 import qualified Data.HashMap.Strict            as HM
@@ -29,7 +31,7 @@ import           Text.Read                      (readMaybe)
 prepareCallHierarchy :: PluginMethodHandler IdeState TextDocumentPrepareCallHierarchy
 prepareCallHierarchy state pluginId param
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri =
-    liftIO (runAction "" state (prepareCallHierarchyItem nfp pos)) >>=
+    liftIO (runAction "CallHierarchy.prepareHierarchy" state (prepareCallHierarchyItem nfp pos)) >>=
       \case
         Just items -> pure $ Right $ Just $ List items
         Nothing    -> pure $ Left $ responseError "Call Hierarchy: No result"
@@ -123,37 +125,73 @@ mkCallHierarchyItem nfp ident kind span selSpan =
     (T.pack $ identifierName ident)
     kind
     Nothing
-    (T.pack . show <$> mkSymbol ident)
+    (Just $ T.pack $ identifierToDetail ident)
     (fromNormalizedUri $ normalizedFilePathToUri nfp)
     (realSrcSpanToRange span)
     (realSrcSpanToRange selSpan)
     (toJSON . show <$> mkSymbol ident)
+  where
+    identifierToDetail :: Identifier -> String
+    identifierToDetail = \case
+      Left modName -> moduleNameString modName
+      Right name   -> (moduleNameString . moduleName . nameModule) name
 
 mkSymbol :: Identifier -> Maybe Symbol
 mkSymbol = \case
   Left _     -> Nothing
   Right name -> Just $ Symbol (occName name) (nameModule name)
 
-incomingCalls = undefined
+-- todo: remove duplication
+incomingCalls :: PluginMethodHandler IdeState CallHierarchyIncomingCalls
+incomingCalls state pluginId param = do
+  liftIO $ runAction "CallHierarchy.incomingCalls" state $
+      queryCalls (param ^. L.item) Q.incomingCalls mkCallHierarchyIncomingCall foiIncomingCalls >>=
+    \case
+      Just x  -> pure $ Right $ Just $ List x
+      Nothing -> pure $ Left $ responseError "CallHierarchy.incomingCalls error"
+  where
+    mkCallHierarchyIncomingCall :: Vertex -> Action (Maybe CallHierarchyIncomingCall)
+    mkCallHierarchyIncomingCall = mkCallHierarchyCall CallHierarchyIncomingCall
 
 outgoingCalls :: PluginMethodHandler IdeState CallHierarchyOutgoingCalls
 outgoingCalls state pluginId param = do
-  liftIO $ runAction "CallHierarchy.outgoingCalls" state $ queryCalls state (param ^. L.item) >>=
+  liftIO $ runAction "CallHierarchy.outgoingCalls" state $
+      queryCalls (param ^. L.item) Q.outgoingCalls mkCallHierarchyOutgoingCall foiOutgoingCalls >>=
     \case
       Just x  -> pure $ Right $ Just $ List x
       Nothing -> pure $ Left $ responseError "CallHierarchy.outgoingCalls error"
+  where
+    mkCallHierarchyOutgoingCall :: Vertex -> Action (Maybe CallHierarchyOutgoingCall)
+    mkCallHierarchyOutgoingCall = mkCallHierarchyCall CallHierarchyOutgoingCall
 
-queryCalls :: IdeState -> CallHierarchyItem -> Action (Maybe [CallHierarchyOutgoingCall])
-queryCalls state item
+-- todo: mutil range support
+mkCallHierarchyCall builder Vertex{..} = do
+  let pos = Position (sl - 1) (sc - 1)
+      nfp = toNormalizedFilePath' hieSrc
+      range = mkRange (casl - 1) (casc - 1) (cael - 1) (caec - 1)
+  items <- prepareCallHierarchyItem nfp pos
+  case items of
+    Just [item] -> pure $ Just $ builder item (List [range])
+    _           -> pure Nothing
+
+-- queryCalls :: IdeState -> CallHierarchyItem -> Action (Maybe [CallHierarchyOutgoingCall])
+queryCalls :: (L.HasSelectionRange s a1, L.HasStart a1 Position,
+ L.HasXdata s (Maybe Value), L.HasXdata s a2, L.HasUri s Uri) =>
+  s
+  -> (HieDb -> Symbol -> IO [a3])
+  -> (a3 -> Action (Maybe a4))
+  -> (NormalizedFilePath -> Position -> Action (Maybe [a4]))
+  -> Action (Maybe [a4])
+queryCalls item queryFunc makeFunc foiCalls
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
     ShakeExtras{hiedb} <- getShakeExtras
     maySymbol <- getSymbol nfp
     case maySymbol of
       Nothing -> error "CallHierarchy.Impossible"
       Just symbol -> do
-        vs <- liftIO $ Q.outgoingCalls hiedb symbol
-        nonFOIItems <- mapM mkCallHierarchyOutgoingCall vs
-        foiRes <- foiOutgoingCalls nfp pos
+        vs <- liftIO $ queryFunc hiedb symbol
+        nonFOIItems <- mapM makeFunc vs
+        foiRes <- foiCalls nfp pos
         let nonFOIRes = Just $ catMaybes nonFOIItems
         pure (nonFOIRes <> foiRes)
   | otherwise = pure Nothing
@@ -165,24 +203,36 @@ queryCalls state item
     getSymbol nfp =
       case item ^. L.xdata of
         Just xdata -> case fromJSON xdata of
-          Success (symbolStr :: String) ->
+          A.Success (symbolStr :: String) ->
             case readMaybe symbolStr of
               Just symbol -> pure $ Just symbol
               Nothing     -> getSymbolFromAst nfp pos
           A.Error _ -> getSymbolFromAst nfp pos
         Nothing -> getSymbolFromAst nfp pos
 
-    mkCallHierarchyOutgoingCall :: Vertex -> Action (Maybe CallHierarchyOutgoingCall)
-    mkCallHierarchyOutgoingCall Vertex{..} = do
-      let pos = Position (sl - 1) (sc - 1)
-          nfp = toNormalizedFilePath' hieSrc
-          range = mkRange (casl - 1) (casc - 1) (cael - 1) (caec - 1)
-      items <- prepareCallHierarchyItem nfp pos
-      case items of
-        Just [item] -> pure $ Just $ CallHierarchyOutgoingCall item (List [range])
-        _           -> pure Nothing
+foiIncomingCalls :: NormalizedFilePath -> Position -> Action (Maybe [CallHierarchyIncomingCall])
+foiIncomingCalls nfp pos =
+  use GetHieAst nfp >>=
+    \case
+      Nothing -> pure Nothing
+      Just (HAR _ hf _ _ _) -> do
+        case listToMaybe $ pointCommand hf pos id of
+          Nothing -> pure Nothing
+          Just ast -> do
+            fs <- HM.keys <$> getFilesOfInterestUntracked
+            Just . concatMap (`callers` ast) <$> mapMaybeM (use GetHieAst) fs
+  where
+    callers :: HieAstResult -> HieAST a -> [CallHierarchyIncomingCall]
+    callers (HAR _ hf _ _ _) ast = mkIncomingCalls $ filter (sameAst ast) $ M.elems (getAsts hf)
 
--- Incoming calls for FOIs, caller range is broken apparently.
+    sameAst :: HieAST a -> HieAST b -> Bool
+    sameAst ast1 ast2 = (M.keys .nodeIdentifiers . nodeInfo) ast1 == (M.keys .nodeIdentifiers . nodeInfo) ast2
+
+    mkIncomingCalls asts = let infos = concatMap extract asts
+                               items = mapMaybe (construct nfp) infos
+                           in  map (\item -> CallHierarchyIncomingCall item (List [item ^. L.selectionRange])) items
+
+-- Outgoing calls for FOIs, caller range is broken apparently.
 foiOutgoingCalls :: NormalizedFilePath -> Position -> Action (Maybe [CallHierarchyOutgoingCall])
 foiOutgoingCalls nfp pos =
   use GetHieAst nfp >>=

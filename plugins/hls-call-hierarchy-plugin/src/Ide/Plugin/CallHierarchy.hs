@@ -8,5 +8,6 @@ import           Language.LSP.Types
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
   { Ide.Types.pluginHandlers = mkPluginHandler STextDocumentPrepareCallHierarchy X.prepareCallHierarchy
+                            <> mkPluginHandler SCallHierarchyIncomingCalls X.incomingCalls
                             <> mkPluginHandler SCallHierarchyOutgoingCalls X.outgoingCalls
   }
