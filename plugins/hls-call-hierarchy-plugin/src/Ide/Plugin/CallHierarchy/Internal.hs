@@ -83,6 +83,8 @@ patternBindInfo ctxs = listToMaybe [ctx | ctx@PatternBind{} <- S.toList ctxs]
 
 construct :: NormalizedFilePath -> (Identifier, S.Set ContextInfo, Span) -> Maybe CallHierarchyItem
 construct nfp (ident, contexts, ssp)
+  | isInternalIdentifier ident = Nothing
+
   | Just (RecField RecFieldDecl _) <- recFieldInfo contexts
     -- ignored type span
     = Just $ mkCallHierarchyItem' ident SkField ssp ssp
@@ -109,7 +111,7 @@ construct nfp (ident, contexts, ssp)
   | Just (PatternBind _ _ span) <- patternBindInfo contexts
     = Just $ mkCallHierarchyItem' ident SkFunction (renderSpan span) ssp
 
-  | Just Use <- useInfo contexts
+  | Just Use <- useInfo contexts -- todo: Use may be a type signature..
     = Just $ mkCallHierarchyItem' ident SkInterface ssp ssp
 
   | otherwise = Nothing
@@ -118,6 +120,10 @@ construct nfp (ident, contexts, ssp)
                        _         -> ssp
     skUnknown = SkUnknown 27
     mkCallHierarchyItem' = mkCallHierarchyItem nfp
+
+    isInternalIdentifier = \case
+      Left _     -> False
+      Right name -> isInternalName name
 
 mkCallHierarchyItem :: NormalizedFilePath -> Identifier -> SymbolKind -> Span -> Span -> CallHierarchyItem
 mkCallHierarchyItem nfp ident kind span selSpan =
