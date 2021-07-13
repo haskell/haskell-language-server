@@ -36,7 +36,7 @@ source-repository-package
 
 write-ghc-environment-files: never
 
-index-state: 2021-07-09T16:00:00Z
+index-state: 2021-07-12T16:00:00Z
 
 constraints:
     -- Diagrams doesn't support optparse-applicative >= 0.16 yet

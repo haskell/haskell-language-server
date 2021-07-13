@@ -95,11 +95,6 @@ extra-deps:
   commit: ca23431a8dfa013992f9164ccc882a3277361f17
 # https://github.com/diagrams/active/pull/36
 
-# benchmark dependency
-- github: berberman/operational
-  commit: 0e062895678f49fd673ae493371262cfb8c5ab56
-# https://github.com/HeinrichApfelmus/operational/pull/26
-
 configure-options:
   ghcide:
       - --disable-library-for-ghci
