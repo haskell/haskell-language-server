@@ -78,9 +78,8 @@ source-repository-package
 -- benchmark dependency
 source-repository-package
   type: git
-  location: https://github.com/berberman/operational
-  tag: 0e062895678f49fd673ae493371262cfb8c5ab56
--- https://github.com/HeinrichApfelmus/operational/pull/26
+  location: https://github.com/HeinrichApfelmus/operational
+  tag: 16e19aaf34e286f3d27b3988c61040823ec66537
 
 write-ghc-environment-files: never
 

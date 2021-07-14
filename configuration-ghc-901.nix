@@ -85,9 +85,9 @@ let
       ghc-lib-parser-ex = hself.ghc-lib-parser-ex_9_0_0_4;
 
       operational = hself.callCabal2nix "operational" (pkgs.fetchFromGitHub {
-        owner = "berberman";
+        owner = "HeinrichApfelmus";
         repo = "operational";
-        rev = "0e062895678f49fd673ae493371262cfb8c5ab56";
+        rev = "16e19aaf34e286f3d27b3988c61040823ec66537";
         sha256 = "P+aocEcqCN8klnW3IMrmIqq6ztBZJxk4sBp1ewN6YaA=";
       }) { };
 
