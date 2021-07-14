@@ -63,7 +63,7 @@ extra-deps:
   - HsYAML-0.2.1.0@rev:1
   - HsYAML-aeson-0.2.0.0@rev:2
   - implicit-hie-cradle-0.3.0.5
-  - implicit-hie-0.1.2.5
+  - implicit-hie-0.1.2.6
   - indexed-profunctors-0.1
   - lens-4.18
   - megaparsec-9.0.1

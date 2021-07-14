@@ -44,7 +44,7 @@ extra-deps:
   - ghc-source-gen-0.4.1.0
   - heapsize-0.3.0
   - implicit-hie-cradle-0.3.0.5
-  - implicit-hie-0.1.2.5
+  - implicit-hie-0.1.2.6
   - monad-dijkstra-0.1.1.2
   - refinery-0.3.0.0
   - retrie-0.1.1.1

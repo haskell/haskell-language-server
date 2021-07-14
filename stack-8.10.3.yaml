@@ -47,7 +47,7 @@ extra-deps:
   - heapsize-0.3.0
   - hie-bios-0.7.5
   - implicit-hie-cradle-0.3.0.5
-  - implicit-hie-0.1.2.5
+  - implicit-hie-0.1.2.6
   - monad-dijkstra-0.1.1.2
   - refinery-0.3.0.0
   - retrie-0.1.1.1
