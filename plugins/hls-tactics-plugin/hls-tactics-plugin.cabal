@@ -76,7 +76,7 @@ library
     , ghc
     , ghc-boot-th
     , ghc-exactprint
-    , ghc-source-gen
+    , ghc-source-gen        ^>=0.4.1
     , ghcide                ^>=1.4
     , hls-graph
     , hls-plugin-api        ^>=1.1

@@ -45,6 +45,7 @@ extra-deps:
   - ghc-exactprint-0.6.4
   - ghc-lib-8.10.4.20210206
   - ghc-lib-parser-8.10.4.20210206
+  - ghc-source-gen-0.4.1.0
   - ghc-trace-events-0.1.2.1
   - haskell-src-exts-1.21.1
   - heapsize-0.3.0

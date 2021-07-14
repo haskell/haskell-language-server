@@ -154,6 +154,9 @@ instance Show TyCon where
 instance Show ConLike where
   show  = unsafeRender
 
+instance Show LexicalFixity where
+  show  = unsafeRender
+
 
 ------------------------------------------------------------------------------
 -- | The state that should be shared between subgoals. Extracts move towards
