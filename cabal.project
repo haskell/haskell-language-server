@@ -28,6 +28,12 @@ package *
   ghc-options: -haddock
   test-show-details: direct
 
+-- ghc-api-compat-8.6
+source-repository-package
+  type: git
+  location: https://github.com/hsyl20/ghc-api-compat
+  tag: 8fee87eac97a538dbe81ff1ab18cff10f2f9fa15
+
 write-ghc-environment-files: never
 
 source-repository-package
@@ -40,11 +46,13 @@ source-repository-package
 -- To check if issues are caused by:
 -- https://github.com/haskell/lsp/pull/326
 
-index-state: 2021-05-21T05:01:41Z
+index-state: 2021-06-30T16:00:00Z
 
 constraints:
     -- Diagrams doesn't support optparse-applicative >= 0.16 yet
-    optparse-applicative < 0.16
+    optparse-applicative < 0.16,
+    hyphenation +embed
+
 
 allow-newer:
     active:base,
@@ -85,4 +93,3 @@ allow-newer:
     svg-builder:base,
     these:base,
     time-compat:base
-

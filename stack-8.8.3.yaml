@@ -38,7 +38,9 @@ extra-deps:
   - constrained-dynamic-0.1.0.0
   - floskell-0.10.4
   - fourmolu-0.3.0.0
-  - ghc-api-compat-8.6
+  - # ghc-api-compat-8.6
+    github: hsyl20/ghc-api-compat
+    commit: 8fee87eac97a538dbe81ff1ab18cff10f2f9fa15
   - ghc-check-0.5.0.4
   - ghc-exactprint-0.6.4
   - ghc-lib-8.10.4.20210206
@@ -68,7 +70,7 @@ extra-deps:
   - uniplate-1.6.13
   - th-compat-0.1.2@sha256:3d55de1adc542c1a870c9ada90da2fbbe5f4e8bcd3eed545a55c3df9311b32a8,2854
   - bytestring-encoding-0.1.0.0@sha256:460b49779fbf0112e8e2f1753c1ed9131eb18827600c298f4d6bb51c4e8c1c0d,1727
-  - hiedb-0.3.0.1
+  - hiedb-0.4.0.0
   - sqlite-simple-0.4.18.0@sha256:3ceea56375c0a3590c814e411a4eb86943f8d31b93b110ca159c90689b6b39e5,3002
   - direct-sqlite-2.3.26@sha256:04e835402f1508abca383182023e4e2b9b86297b8533afbd4e57d1a5652e0c23,3718
   - extra-1.7.9@sha256:f1dec740f0f2025790c540732bfd52c556ec55bde4f5dfd7cf18e22bd44ff3d0,2683
@@ -99,6 +101,9 @@ flags:
   # Until the formatters support ghc-lib-9, we need this flag disabled
   hls-hlint-plugin:
     hlint33: false
+  hyphenation:
+    embed: true
+
 
 nix:
   packages: [icu libcxx zlib]

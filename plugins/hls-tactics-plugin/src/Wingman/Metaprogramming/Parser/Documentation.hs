@@ -6,12 +6,14 @@ import           Data.Functor ((<&>))
 import           Data.List (sortOn)
 import           Data.String (IsString)
 import           Data.Text (Text)
-import           Data.Text.Prettyprint.Doc
+import           Data.Text.Prettyprint.Doc hiding (parens)
 import           Data.Text.Prettyprint.Doc.Render.String (renderString)
 import           GhcPlugins (OccName)
 import qualified Text.Megaparsec as P
-import           Wingman.Metaprogramming.Lexer (Parser, identifier, variable)
+import           Wingman.Metaprogramming.Lexer (Parser, identifier, variable, parens)
 import           Wingman.Types (TacticsM)
+
+import {-# SOURCE #-} Wingman.Metaprogramming.Parser (tactic)
 
 
 ------------------------------------------------------------------------------
@@ -46,11 +48,13 @@ data Syntax a where
   Nullary :: Syntax (Parser (TacticsM ()))
   Ref     :: Count a -> Syntax (a -> Parser (TacticsM ()))
   Bind    :: Count a -> Syntax (a -> Parser (TacticsM ()))
+  Tactic  :: Syntax (TacticsM () -> Parser (TacticsM ()))
 
 prettySyntax :: Syntax a -> Doc b
 prettySyntax Nullary   = "none"
 prettySyntax (Ref co)  = prettyCount co <+> "reference"
 prettySyntax (Bind co) = prettyCount co <+> "binding"
+prettySyntax Tactic    = "tactic"
 
 
 ------------------------------------------------------------------------------
@@ -108,21 +112,24 @@ data SomeMetaprogramCommand where
 ------------------------------------------------------------------------------
 -- | Run the 'Parser' of a 'MetaprogramCommand'
 makeMPParser :: MetaprogramCommand a -> Parser (TacticsM ())
-makeMPParser (MC name Nullary _ _ tactic _) = do
+makeMPParser (MC name Nullary _ _ t _) = do
   identifier name
-  tactic
-makeMPParser (MC name (Ref One) _ _ tactic _) = do
+  t
+makeMPParser (MC name (Ref One) _ _ t _) = do
   identifier name
-  variable >>= tactic
-makeMPParser (MC name (Ref Many) _ _ tactic _) = do
+  variable >>= t
+makeMPParser (MC name (Ref Many) _ _ t _) = do
   identifier name
-  P.many variable >>= tactic
-makeMPParser (MC name (Bind One) _ _ tactic _) = do
+  P.many variable >>= t
+makeMPParser (MC name (Bind One) _ _ t _) = do
   identifier name
-  variable >>= tactic
-makeMPParser (MC name (Bind Many) _ _ tactic _) = do
+  variable >>= t
+makeMPParser (MC name (Bind Many) _ _ t _) = do
   identifier name
-  P.many variable >>= tactic
+  P.many variable >>= t
+makeMPParser (MC name Tactic _ _ t _) = do
+  identifier name
+  parens tactic >>= t
 
 
 ------------------------------------------------------------------------------
@@ -143,6 +150,7 @@ prettyCommand (MC name syn det desc _ exs) = vsep
   , ">" <+> align (pretty desc)
   , mempty
   , vsep $ fmap (prettyExample name) exs
+  , mempty
   ]
 
 

@@ -33,12 +33,12 @@ defaults: &defaults
     - run:
         name: Build (we need the exe for tests)
         # need j1, else ghc-lib-parser triggers OOM
-        command: stack -j 1 --stack-yaml=${STACK_FILE} install
+        command: stack -j 1 --stack-yaml=${STACK_FILE} install --no-terminal
         no_output_timeout: 30m
 
     - run:
         name: Build Testsuite without running it
-        command: stack -j 1 --stack-yaml=${STACK_FILE} build --test --no-run-tests
+        command: stack -j 1 --stack-yaml=${STACK_FILE} build --test --no-run-tests --no-terminal
         no_output_timeout: 30m
 
     - store_artifacts:
@@ -54,7 +54,7 @@ defaults: &defaults
 
     - run:
         name: Build including tests
-        command: stack --stack-yaml=${STACK_FILE} test --no-run-tests
+        command: stack --stack-yaml=${STACK_FILE} test --no-run-tests --no-terminal
         no_output_timeout: 120m
 
     - save_cache:
@@ -71,11 +71,6 @@ jobs:
   ghc-8.6.5:
     environment:
       - STACK_FILE: "stack-8.6.5.yaml"
-    <<: *defaults
-
-  ghc-8.8.2:
-    environment:
-      - STACK_FILE: "stack-8.8.2.yaml"
     <<: *defaults
 
   ghc-8.8.3:
@@ -103,6 +98,11 @@ jobs:
       - STACK_FILE: "stack-8.10.4.yaml"
     <<: *defaults
 
+  ghc-8.10.5:
+    environment:
+      - STACK_FILE: "stack-8.10.5.yaml"
+    <<: *defaults
+
   ghc-9.0.1:
     environment:
       - STACK_FILE: "stack-9.0.1.yaml"
@@ -120,11 +120,11 @@ workflows:
     jobs:
       - ghc-8.6.4
       - ghc-8.6.5
-      - ghc-8.8.2
       - ghc-8.8.3
       - ghc-8.8.4
       - ghc-8.10.2
       - ghc-8.10.3
       - ghc-8.10.4
+      - ghc-8.10.5
       - ghc-9.0.1
       - ghc-default

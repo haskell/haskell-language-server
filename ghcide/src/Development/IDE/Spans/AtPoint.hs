@@ -56,7 +56,9 @@ import           Data.Either
 import           Data.List                            (isSuffixOf)
 import           Data.List.Extra                      (dropEnd1, nubOrd)
 
+import           Data.Version                         (showVersion)
 import           HieDb                                hiding (pointCommand)
+import           System.Directory                     (doesFileExist)
 
 -- | Gives a Uri for the module, given the .hie file location and the the module info
 -- The Bool denotes if it is a boot module
@@ -195,9 +197,10 @@ atPoint
   :: IdeOptions
   -> HieAstResult
   -> DocAndKindMap
+  -> DynFlags
   -> Position
   -> Maybe (Maybe Range, [T.Text])
-atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) pos = listToMaybe $ pointCommand hf pos hoverInfo
+atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) df pos = listToMaybe $ pointCommand hf pos hoverInfo
   where
     -- Hover info for values/data
     hoverInfo ast = (Just range, prettyNames ++ pTypes)
@@ -218,10 +221,19 @@ atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) pos = listToMaybe $ point
         prettyName (Right n, dets) = T.unlines $
           wrapHaskell (showNameWithoutUniques n <> maybe "" (" :: " <>) ((prettyType <$> identType dets) <|> maybeKind))
           : definedAt n
+          ++ maybeToList (prettyPackageName n)
           ++ catMaybes [ T.unlines . spanDocToMarkdown <$> lookupNameEnv dm n
                        ]
           where maybeKind = fmap showGhc $ safeTyThingType =<< lookupNameEnv km n
         prettyName (Left m,_) = showGhc m
+
+        prettyPackageName n = do
+          m <- nameModule_maybe n
+          let pid = moduleUnitId m
+          conf <- lookupPackage df pid
+          let pkgName = T.pack $ packageNameString conf
+              version = T.pack $ showVersion (packageVersion conf)
+          pure $ " *(" <> pkgName <> "-" <> version <> ")*"
 
         prettyTypes = map (("_ :: "<>) . prettyType) types
         prettyType t = case kind of
@@ -312,8 +324,19 @@ nameToLocation hiedb lookupModule name = runMaybeT $
   case nameSrcSpan name of
     sp@(OldRealSrcSpan rsp)
       -- Lookup in the db if we got a location in a boot file
-      | not $ "boot" `isSuffixOf` unpackFS (srcSpanFile rsp) -> MaybeT $ pure $ fmap pure $ srcSpanToLocation sp
-    sp -> do
+      | fs <- unpackFS (srcSpanFile rsp)
+      , not $ "boot" `isSuffixOf` fs
+      -> do
+          itExists <- liftIO $ doesFileExist fs
+          if itExists
+              then MaybeT $ pure $ fmap pure $ srcSpanToLocation sp
+              -- When reusing .hie files from a cloud cache,
+              -- the paths may not match the local file system.
+              -- Let's fall back to the hiedb in case it contains local paths
+              else fallbackToDb sp
+    sp -> fallbackToDb sp
+  where
+    fallbackToDb sp = do
       guard (sp /= wiredInSrcSpan)
       -- This case usually arises when the definition is in an external package.
       -- In this case the interface files contain garbage source spans

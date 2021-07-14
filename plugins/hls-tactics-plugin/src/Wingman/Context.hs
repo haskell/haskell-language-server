@@ -8,7 +8,7 @@ import           Data.Foldable.Extra (allM)
 import           Data.Maybe (fromMaybe, isJust, mapMaybe)
 import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
-import           GhcPlugins (ExternalPackageState (eps_inst_env), piResultTys, eps_fam_inst_env)
+import           GhcPlugins (ExternalPackageState (eps_inst_env), piResultTys, eps_fam_inst_env, extractModule)
 import           InstEnv (lookupInstEnv, InstEnvs(..), is_dfun)
 import           OccName
 import           TcRnTypes
@@ -23,11 +23,11 @@ mkContext
     :: Config
     -> [(OccName, CType)]
     -> TcGblEnv
+    -> HscEnv
     -> ExternalPackageState
-    -> KnownThings
     -> [Evidence]
     -> Context
-mkContext cfg locals tcg eps kt ev = fix $ \ctx ->
+mkContext cfg locals tcg hscenv eps ev = fix $ \ctx ->
   Context
     { ctxDefiningFuncs
         = fmap (second $ coerce $ normalizeType ctx) locals
@@ -46,8 +46,10 @@ mkContext cfg locals tcg eps kt ev = fix $ \ctx ->
           (eps_inst_env eps)
           (tcg_inst_env tcg)
           (tcVisibleOrphanMods tcg)
-    , ctxKnownThings = kt
     , ctxTheta = evidenceToThetaType ev
+    , ctx_hscEnv = hscenv
+    , ctx_occEnv = tcg_rdr_env tcg
+    , ctx_module = extractModule tcg
     }
 
 
@@ -69,24 +71,6 @@ getFunBindId (AbsBinds _ _ _ abes _ _ _)
       ABE _ poly _ _ _ -> pure poly
       _                -> []
 getFunBindId _ = []
-
-
-getCurrentDefinitions :: MonadReader Context m => m [(OccName, CType)]
-getCurrentDefinitions = asks ctxDefiningFuncs
-
-
-------------------------------------------------------------------------------
--- | Extract something from 'KnownThings'.
-getKnownThing :: MonadReader Context m => (KnownThings -> a) -> m a
-getKnownThing f = asks $ f . ctxKnownThings
-
-
-------------------------------------------------------------------------------
--- | Like 'getInstance', but uses a class from the 'KnownThings'.
-getKnownInstance :: MonadReader Context m => (KnownThings -> Class) -> [Type] -> m (Maybe (Class, PredType))
-getKnownInstance f tys = do
-  cls <- getKnownThing f
-  getInstance cls tys
 
 
 ------------------------------------------------------------------------------
