@@ -10,7 +10,6 @@ module Wingman.LanguageServer.Metaprogram
 
 import           Control.Applicative (empty)
 import           Control.Monad
-import           Control.Monad.Reader (runReaderT)
 import           Control.Monad.Trans
 import           Control.Monad.Trans.Maybe
 import           Data.List (find)
@@ -23,7 +22,7 @@ import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake (IdeState (..))
 import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.Compat
-import           GhcPlugins (containsSpan, realSrcLocSpan)
+import           GhcPlugins (containsSpan, realSrcLocSpan, realSrcSpanStart)
 import           Ide.Types
 import           Language.LSP.Types
 import           Prelude hiding (span)
@@ -45,17 +44,15 @@ hoverProvider state plId (HoverParams (TextDocumentIdentifier uri) (unsafeMkCurr
 
       cfg <- getTacticConfig plId
       liftIO $ fromMaybeT (Right Nothing) $ do
-        -- guard $ hasFeature FeatureEmptyCase $ cfg_feature_set cfg
-
         holes <- getMetaprogramsAtSpan state nfp $ RealSrcSpan $ unTrack loc
 
         fmap (Right . Just) $
           case (find (flip containsSpan (unTrack loc) . unTrack . fst) holes) of
             Just (trss, program) -> do
               let tr_range = fmap realSrcSpanToRange trss
+                  rsl = realSrcSpanStart $ unTrack trss
               HoleJudgment{hj_jdg=jdg, hj_ctx=ctx} <- judgementForHole state nfp tr_range cfg
-              ps <- getParserState state nfp ctx
-              z <- liftIO $ flip runReaderT ps $ attempt_it ctx jdg $ T.unpack program
+              z <- liftIO $ attempt_it rsl ctx jdg $ T.unpack program
               pure $ Hover
                 { _contents = HoverContents
                             $ MarkupContent MkMarkdown

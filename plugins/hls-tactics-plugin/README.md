@@ -110,6 +110,33 @@ function! s:WingmanUseCtor(type)
 endfunction
 ```
 
+### Emacs
+
+When using Emacs, wingman actions should be available out-of-the-box and
+show up e.g. when using `M-x helm-lsp-code-actions RET` provided by 
+[helm-lsp](https://github.com/emacs-lsp/helm-lsp) or as popups via
+[lsp-ui-sideline](https://emacs-lsp.github.io/lsp-ui/#lsp-ui-sideline).
+
+Additionally, if you want to bind wingman actions directly to specific
+keybindings or use them from Emacs Lisp, you can do so like this:
+
+``` emacs-lisp
+;; will define elisp functions for the given lsp code actions, prefixing the
+;; given function names with "lsp"
+(lsp-make-interactive-code-action wingman-fill-hole "refactor.wingman.fillHole")
+(lsp-make-interactive-code-action wingman-case-split "refactor.wingman.caseSplit")
+(lsp-make-interactive-code-action wingman-refine "refactor.wingman.refine")
+(lsp-make-interactive-code-action wingman-split-func-args "refactor.wingman.spltFuncArgs")
+(lsp-make-interactive-code-action wingman-use-constructor "refactor.wingman.useConstructor")
+
+;; example key bindings
+(define-key haskell-mode-map (kbd "C-c d") #'lsp-wingman-case-split)
+(define-key haskell-mode-map (kbd "C-c n") #'lsp-wingman-fill-hole)
+(define-key haskell-mode-map (kbd "C-c r") #'lsp-wingman-refine)
+(define-key haskell-mode-map (kbd "C-c c") #'lsp-wingman-use-constructor)
+(define-key haskell-mode-map (kbd "C-c a") #'lsp-wingman-split-func-args)
+```
+
 ### Other Editors
 
 Please open a PR if you have a working configuration!

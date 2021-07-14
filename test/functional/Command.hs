@@ -8,6 +8,7 @@ import           Language.LSP.Types      as LSP
 import           Language.LSP.Types.Lens as LSP
 import           Test.Hls
 import           Test.Hls.Command
+import           Test.Hls.Flags          (requiresEvalPlugin)
 
 tests :: TestTree
 tests = testGroup "commands" [
@@ -19,7 +20,7 @@ tests = testGroup "commands" [
             liftIO $ do
                 all f cmds @? "All prefixed"
                 not (null cmds) @? "Commands aren't empty"
-    , testCase "get de-prefixed" $
+    , requiresEvalPlugin $ testCase "get de-prefixed" $
         runSession hlsCommand fullCaps "test/testdata/" $ do
             ResponseMessage _ _ (Left err) <- request
                 SWorkspaceExecuteCommand

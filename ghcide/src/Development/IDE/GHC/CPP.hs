@@ -24,9 +24,8 @@
 module Development.IDE.GHC.CPP(doCpp, addOptP)
 where
 
-import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat as Compat
 import           FileCleanup
-import           Module
 import           Packages
 import           Panic
 import           SysTools
@@ -187,7 +186,7 @@ addOptP opt = onSettings (onOptP (opt:))
 -- ---------------------------------------------------------------------------
 -- Macros (cribbed from Cabal)
 
-generatePackageVersionMacros :: [PackageConfig] -> String
+generatePackageVersionMacros :: [Compat.PackageConfig] -> String
 generatePackageVersionMacros pkgs = concat
   -- Do not add any C-style comments. See #3389.
   [ generateMacros "" pkgname version
@@ -220,7 +219,7 @@ getGhcVersionPathName dflags = do
   candidates <- case ghcVersionFile dflags of
     Just path -> return [path]
     Nothing -> (map (</> "ghcversion.h")) <$>
-               (getPackageIncludePath dflags [toInstalledUnitId rtsUnitId])
+               (getPackageIncludePath dflags [Compat.toInstalledUnitId Compat.rtsUnit])
 
   found <- filterM doesFileExist candidates
   case found of
