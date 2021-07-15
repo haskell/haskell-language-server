@@ -350,7 +350,6 @@ getTyThing occ = do
       mvar <- lift
             $ ExtractM
             $ lift
-            $ lift
             $ lookupName (ctx_hscEnv ctx) (ctx_module ctx)
             $ gre_name elt
       pure mvar

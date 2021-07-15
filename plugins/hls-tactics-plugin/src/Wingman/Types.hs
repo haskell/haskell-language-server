@@ -47,8 +47,9 @@ import           Refinery.Tactic.Internal (TacticT(TacticT), RuleT (RuleT))
 import           System.IO.Unsafe (unsafePerformIO)
 import           Type (TCvSubst, Var, eqType, nonDetCmpType, emptyTCvSubst)
 import           UniqSupply (takeUniqFromSupply, mkSplitUniqSupply, UniqSupply)
-import           Unique (nonDetCmpUnique, Uniquable, getUnique, Unique)
+import           Unique (nonDetCmpUnique, Uniquable, getUnique, Unique, mkUnique)
 import           Wingman.Debug
+import Data.IORef
 
 
 ------------------------------------------------------------------------------
@@ -317,29 +318,20 @@ data Judgement' a = Judgement
 
 type Judgement = Judgement' CType
 
-newtype UnderlyingState = UnderlyingState
-  { us_unique_name :: Int
-  }
-  deriving stock (Generic)
 
-instance Semigroup UnderlyingState where
-  UnderlyingState a1 <> UnderlyingState a2
-    = UnderlyingState (a1 + a2)
+newtype ExtractM a = ExtractM { unExtractM :: ReaderT Context IO a }
+    deriving newtype (Functor, Applicative, Monad, MonadReader Context)
 
-instance Monoid UnderlyingState where
-  mempty = UnderlyingState 0
-
-
-
-newtype ExtractM a = ExtractM { unExtractM' :: Strict.StateT UnderlyingState (ReaderT Context IO) a }
-    deriving newtype (Functor, Applicative, Monad, MonadReader Context, MonadState UnderlyingState)
-
-unExtractM :: ExtractM a -> ReaderT Context IO a
-unExtractM = flip Strict.evalStateT mempty . unExtractM'
+------------------------------------------------------------------------------
+-- | Used to ensure hole names are unique across invocations of runTactic
+globalHoleRef :: IORef Int
+globalHoleRef = unsafePerformIO $ newIORef 10
+{-# NOINLINE globalHoleRef #-}
 
 instance MonadExtract Int (Synthesized (LHsExpr GhcPs)) TacticError TacticState ExtractM where
   hole = do
-    u <- lift $! gets us_unique_name <* modify' (#us_unique_name +~ 1)
+    u <- lift $ ExtractM $ lift $
+          readIORef globalHoleRef <* modifyIORef' globalHoleRef (+ 1)
     pure
       ( u
       , pure . noLoc $ var $ fromString $ occNameString $ occName $ mkMetaHoleName u
@@ -358,7 +350,7 @@ instance MonadReader r m => MonadReader r (RuleT jdg ext err s m) where
   local f (RuleT m) = RuleT $ Effect $ local f $ pure m
 
 mkMetaHoleName :: Int -> RdrName
-mkMetaHoleName u = mkRdrUnqual $ mkVarOcc $ "_" <> show u
+mkMetaHoleName u = mkRdrUnqual $ mkVarOcc $ "_" <> show (mkUnique 'w' u)
 
 instance MetaSubst Int (Synthesized (LHsExpr GhcPs)) where
   -- TODO(sandy): This join is to combine the synthesizeds
