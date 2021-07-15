@@ -68,7 +68,7 @@ extra-deps:
     subdirs:
     - lsp-types
     - lsp
-    - lsp-tests
+    - lsp-test
   # https://github.com/haskell/lsp/pull/332
 
   # Enable these when supported by all formatters

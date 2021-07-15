@@ -70,7 +70,7 @@ extra-deps:
     subdirs:
     - lsp-types
     - lsp
-    - lsp-tests
+    - lsp-test
   # https://github.com/haskell/lsp/pull/332
 
 configure-options:
