@@ -8,7 +8,9 @@ author:             Lei Zhu
 maintainer:         julytreee@gmail.com
 category:           Development
 build-type:         Simple
-extra-source-files: test/testdata/*.hs
+extra-source-files:
+  LICENSE
+  test/testdata/*.hs
 
 library
   exposed-modules:    Ide.Plugin.CallHierarchy
