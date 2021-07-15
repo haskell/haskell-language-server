@@ -354,10 +354,11 @@ mkMetaHoleName u = mkRdrUnqual $ mkVarOcc $ "_" <> show (mkUnique 'w' u)
 
 instance MetaSubst Int (Synthesized (LHsExpr GhcPs)) where
   -- TODO(sandy): This join is to combine the synthesizeds
-  substMeta u val a = join $ everywhereM (mkM $ \case
-    (L _ (HsVar _ (L _ name)))
-      | name == mkMetaHoleName u -> val
-    (t :: LHsExpr GhcPs) -> pure t) a
+  substMeta u val a =  join $ a <&>
+    everywhereM (mkM $ \case
+      (L _ (HsVar _ (L _ name)))
+        | name == mkMetaHoleName u -> val
+      (t :: LHsExpr GhcPs) -> pure t)
 
 
 ------------------------------------------------------------------------------
