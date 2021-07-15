@@ -87,7 +87,7 @@ library
     , mtl
     , parser-combinators
     , prettyprinter
-    , refinery              ^>=0.3
+    , refinery              ^>=0.4
     , retrie                >=0.1.1.0
     , syb
     , text
