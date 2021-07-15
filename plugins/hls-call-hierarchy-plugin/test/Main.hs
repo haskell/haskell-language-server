@@ -1,15 +1,21 @@
-{-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase         #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TupleSections      #-}
 module Main where
 
-import           Control.Lens
+import           Control.Lens             (set, (^.))
+import           Control.Monad.Extra
 import           Data.Aeson
+import           Data.List                (sort)
 import qualified Data.Text                as T
 import           Ide.Plugin.CallHierarchy
 import qualified Language.LSP.Test        as Test
 import qualified Language.LSP.Types.Lens  as L
 import           System.FilePath
 import           Test.Hls
+
+import           Data.Functor             ((<&>))
 
 plugin :: PluginDescriptor IdeState
 plugin = descriptor "callHierarchy"
@@ -152,14 +158,63 @@ prepareCallHierarchyTests =
       oneCaseWithCreate contents 1 13 expected
   ]
 
-oneCaseWithOpen :: FilePath -> Int -> Int -> CallHierarchyItem -> Assertion
-oneCaseWithOpen filename queryX queryY expected =
+incomingCallsTests :: TestTree
+incomingCallsTests =
+  testGroup "Incoming Calls"
+  [ testGroup "single file"
+    [
+      testCase "xdata unavaliable" $
+        runSessionWithServer plugin testDataDir $ do
+          doc <- createDoc "A.hs" "haskell" $ T.unlines ["a=3", "b=a"]
+          [item] <- Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc 1 0)
+          let expected = [CallHierarchyIncomingCall item (List [mkRange 1 2 1 3])]
+          Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc 0 0) >>=
+            \case
+              [item] -> do
+                let itemNoData = set L.xdata Nothing item
+                Test.incomingCalls (mkIncomingCallsParam itemNoData) >>=
+                  \res -> liftIO $ sort expected @=? sort res
+              _      -> liftIO $ assertFailure "Not exactly one element"
+          closeDoc doc
+    , testCase "xdata avaliable" $ do
+        let contents = T.unlines ["a=3", "b=a"]
+            positions = [(1, 0)]
+            ranges = [mkRange 1 2 1 3]
+        foiTestCase contents 0 0 positions ranges
+    , testGroup "data"
+      [ testCase "data type" $ do
+        let contents = T.unlines ["data A=A"]
+            positions = []
+            ranges = []
+        foiTestCase contents 0 5 positions ranges
+      , testCase "data constructor" $ do
+        let contents = T.unlines ["data A=A{a::Int}"]
+            positions = [(0, 7)]
+            ranges = [mkRange 0 5 0 6]
+        foiTestCase contents 0 5 positions ranges
+      ]
+    ]
+  ]
+
+deriving instance Ord CallHierarchyIncomingCall
+deriving instance Ord CallHierarchyOutgoingCall
+
+foiTestCase :: T.Text -> Int -> Int -> [(Int, Int)] -> [Range] -> Assertion
+foiTestCase contents queryX queryY positions ranges =
   runSessionWithServer plugin testDataDir $ do
-    doc <- openDoc filename "haskell"
+    doc <- createDoc "A.hs" "haskell" contents
+    items <- concatMapM (\((x, y), range) ->
+        Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc x y)
+            <&> map (,range)
+        )
+        (zip positions ranges)
+    let expected = map mkCallHierarchyIncomingCall items
     Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc queryX queryY) >>=
       \case
-        [item] -> liftIO $ item @?= expected
+        [item] -> Test.incomingCalls (mkIncomingCallsParam item) >>=
+                    \res -> liftIO $ sort expected @=? sort res
         _      -> liftIO $ assertFailure "Not one element"
+    closeDoc doc
 
 oneCaseWithCreate :: T.Text -> Int -> Int -> (Uri -> CallHierarchyItem) -> Assertion
 oneCaseWithCreate contents queryX queryY expected =
@@ -185,6 +240,9 @@ mkCallHierarchyItemC, mkCallHierarchyItemT, mkCallHierarchyItemV ::
 mkCallHierarchyItemC = mkCallHierarchyItem' "c"
 mkCallHierarchyItemT = mkCallHierarchyItem' "t"
 mkCallHierarchyItemV = mkCallHierarchyItem' "v"
+
+mkCallHierarchyIncomingCall :: (CallHierarchyItem, Range) -> CallHierarchyIncomingCall
+mkCallHierarchyIncomingCall (item, range) = CallHierarchyIncomingCall item (List [range])
 
 testDataDir :: FilePath
 testDataDir = "test" </> "testdata"

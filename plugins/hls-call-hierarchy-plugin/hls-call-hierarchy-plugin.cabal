@@ -3,7 +3,7 @@ name:               hls-call-hierarchy-plugin
 version:            1.0.0.0
 synopsis:           Call hierarchy plugin for Haskell Language Server
 license:            Apache-2.0
--- license-file:       LICENSE
+license-file:       LICENSE
 author:             Lei Zhu
 maintainer:         julytreee@gmail.com
 category:           Development
@@ -13,27 +13,24 @@ extra-source-files: test/testdata/*.hs
 library
   exposed-modules:    Ide.Plugin.CallHierarchy
   other-modules:
+                      Ide.Plugin.CallHierarchy.Internal
                       Ide.Plugin.CallHierarchy.Query
                       Ide.Plugin.CallHierarchy.Types
-                      Ide.Plugin.CallHierarchy.Internal
   hs-source-dirs:     src
   build-depends:
-    , base                         >=4.12    && <5
-    , ghcide                       >=1.2     && <1.5
-    , hls-plugin-api               ^>=1.1
-    , lsp
-    , containers
-    , hiedb
-    , ghc
-    , lens
-    , text
     , aeson
-    , mtl
-    , transformers
-    , unordered-containers
-    , sqlite-simple
-    , bytestring
+    , base                         >=4.12 && <5
+    , containers
     , extra
+    , ghc
+    , ghcide                       >=1.2  && <1.5
+    , hiedb
+    , hls-plugin-api               ^>=1.1
+    , lens
+    , lsp
+    , sqlite-simple
+    , text
+    , unordered-containers
 
   default-language:   Haskell2010
   default-extensions:
@@ -48,10 +45,11 @@ test-suite tests
   build-depends:
     , aeson
     , base
-    , hls-call-hierarchy-plugin
-    , hls-test-utils
+    , extra
     , filepath
-    , lsp-test
-    , lsp
+    , hls-call-hierarchy-plugin
+    , hls-test-utils               ^>=1.0
     , lens
+    , lsp
+    , lsp-test
     , text
