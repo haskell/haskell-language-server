@@ -14,5 +14,5 @@ data family Yo
 data instance Yo = Heya Int
 
 test :: T1 Bool -> Int
-test (Heya n) = _
+test (Heya n) = _w0
 

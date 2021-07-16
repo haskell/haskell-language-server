@@ -5,13 +5,11 @@ module Wingman.Machinery where
 
 import           Control.Applicative (empty)
 import           Control.Lens ((<>~))
-import           Control.Monad.Error.Class
 import           Control.Monad.Reader
 import           Control.Monad.State.Class (gets, modify, MonadState)
 import           Control.Monad.State.Strict (StateT (..), execStateT)
 import           Control.Monad.Trans.Maybe
 import           Data.Coerce
-import           Data.Either
 import           Data.Foldable
 import           Data.Functor ((<&>))
 import           Data.Generics (everything, gcount, mkQ)
@@ -96,20 +94,20 @@ runTactic ctx jdg t = do
     res <- flip runReaderT ctx
          . unExtractM
          $ runTacticT t jdg tacticState
-    pure $ case partitionEithers res of
-      (errs, []) -> Left $ take 50 errs
-      (_, fmap assoc23 -> solns) -> do
+    pure $ case res of
+      (Left errs) -> Left $ take 50 errs
+      (Right solns) -> do
         let sorted =
-              flip sortBy solns $ comparing $ \(ext, (_, holes)) ->
-                Down $ scoreSolution ext jdg holes
+              flip sortBy solns $ comparing $ \(Proof ext _ holes) ->
+                Down $ scoreSolution ext jdg $ fmap snd holes
         case sorted of
-          ((syn, (_, subgoals)) : _) ->
+          ((Proof syn _ subgoals) : _) ->
             Right $
               RunTacticResults
                 { rtr_trace    = syn_trace syn
                 , rtr_extract  = simplify $ syn_val syn
-                , rtr_subgoals = subgoals
-                , rtr_other_solns = reverse . fmap fst $ sorted
+                , rtr_subgoals = fmap snd subgoals
+                , rtr_other_solns = reverse . fmap pf_extract $ sorted
                 , rtr_jdg = jdg
                 , rtr_ctx = ctx
                 }
@@ -154,7 +152,7 @@ mappingExtract
     -> TacticT jdg ext err s m a
 mappingExtract f (TacticT m)
   = TacticT $ StateT $ \jdg ->
-      mapExtract' f $ runStateT m jdg
+      mapExtract id f $ runStateT m jdg
 
 
 ------------------------------------------------------------------------------
@@ -227,7 +225,10 @@ unify goal inst = do
   case tryUnifyUnivarsButNotSkolems skolems goal inst of
     Just subst ->
       modify $ updateSubst subst
-    Nothing -> throwError (UnificationError inst goal)
+    Nothing -> cut -- failure (UnificationError inst goal)
+
+cut :: RuleT jdg ext err s m a
+cut = RuleT Empty
 
 
 ------------------------------------------------------------------------------
@@ -255,26 +256,6 @@ attemptWhen t1 t2 True  = commit t1 t2
 
 
 ------------------------------------------------------------------------------
--- | Mystical time-traveling combinator for inspecting the extracts produced by
--- a tactic. We can use it to guard that extracts match certain predicates, for
--- example.
---
--- Note, that this thing is WEIRD. To illustrate:
---
--- @@
--- peek f
--- blah
--- @@
---
--- Here, @f@ can inspect the extract _produced by @blah@,_  which means the
--- causality appears to go backwards.
---
--- 'peek' should be exposed directly by @refinery@ in the next release.
-peek :: (ext -> TacticT jdg ext err s m ()) -> TacticT jdg ext err s m ()
-peek k = tactic $ \j -> Subgoal ((), j) $ \e -> proofState (k e) j
-
-
-------------------------------------------------------------------------------
 -- | Run the given tactic iff the current hole contains no univars. Skolems and
 -- already decided univars are OK though.
 requireConcreteHole :: TacticsM a -> TacticsM a
@@ -284,7 +265,7 @@ requireConcreteHole m = do
   let vars = S.fromList $ tyCoVarsOfTypeWellScoped $ unCType $ jGoal jdg
   case S.size $ vars S.\\ skolems of
     0 -> m
-    _ -> throwError TooPolymorphic
+    _ -> failure TooPolymorphic
 
 
 ------------------------------------------------------------------------------
@@ -317,7 +298,7 @@ useNameFromHypothesis f name = do
   hy <- jHypothesis <$> goal
   case M.lookup name $ hyByName hy of
     Just hi -> f hi
-    Nothing -> throwError $ NotInScope name
+    Nothing -> failure $ NotInScope name
 
 ------------------------------------------------------------------------------
 -- | Lift a function over 'HyInfo's to one that takes an 'OccName' and tries to
@@ -326,7 +307,7 @@ useNameFromContext :: (HyInfo CType -> TacticsM a) -> OccName -> TacticsM a
 useNameFromContext f name = do
   lookupNameInContext name >>= \case
     Just ty -> f $ createImportedHyInfo name ty
-    Nothing -> throwError $ NotInScope name
+    Nothing -> failure $ NotInScope name
 
 
 ------------------------------------------------------------------------------
@@ -340,12 +321,11 @@ lookupNameInContext name = do
 
 
 getDefiningType
-    :: (MonadError TacticError m, MonadReader Context m)
-    => m CType
+    :: TacticsM CType
 getDefiningType = do
   calling_fun_name <- fst . head <$> asks ctxDefiningFuncs
   maybe
-    (throwError $ NotInScope calling_fun_name)
+    (failure $ NotInScope calling_fun_name)
     pure
       =<< lookupNameInContext calling_fun_name
 
@@ -403,7 +383,7 @@ getOccNameType
 getOccNameType occ = do
   getTyThing occ >>= \case
     Just (AnId v) -> pure $ varType v
-    _ -> throwError $ NotInScope occ
+    _ -> failure $ NotInScope occ
 
 
 getCurrentDefinitions :: TacticsM [(OccName, CType)]

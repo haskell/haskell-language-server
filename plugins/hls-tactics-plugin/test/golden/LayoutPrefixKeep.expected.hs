@@ -1,4 +1,4 @@
 (-/) :: Bool -> a -> a
-(-/) False a = _
-(-/) True a = _
+(-/) False a = _w0
+(-/) True a = _w1
 

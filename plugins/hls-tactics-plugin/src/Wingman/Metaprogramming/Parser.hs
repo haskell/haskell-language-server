@@ -7,10 +7,12 @@
 module Wingman.Metaprogramming.Parser where
 
 import qualified Control.Monad.Combinators.Expr as P
-import qualified Control.Monad.Error.Class as E
 import           Data.Functor
 import           Data.Maybe (listToMaybe)
 import qualified Data.Text as T
+import           Development.IDE.GHC.Compat (RealSrcLoc, srcLocLine, srcLocCol, srcLocFile)
+import           FastString (unpackFS)
+import           Refinery.Tactic (failure)
 import qualified Refinery.Tactic as R
 import qualified Text.Megaparsec as P
 import           Wingman.Auto
@@ -20,8 +22,6 @@ import           Wingman.Metaprogramming.Parser.Documentation
 import           Wingman.Metaprogramming.ProofState (proofState, layout)
 import           Wingman.Tactics
 import           Wingman.Types
-import Development.IDE.GHC.Compat (RealSrcLoc, srcLocLine, srcLocCol, srcLocFile)
-import FastString (unpackFS)
 
 
 nullary :: T.Text -> TacticsM () -> Parser (TacticsM ())
@@ -296,7 +296,7 @@ commands =
       ( pure $
           fmap listToMaybe getCurrentDefinitions >>= \case
             Just (self, _) -> useNameFromContext (apply Saturated) self
-            Nothing -> E.throwError $ TacticPanic "no defining function"
+            Nothing -> failure $ TacticPanic "no defining function"
       )
       [ Example
           (Just "In the context of `foo (a :: Int) (b :: b) = _`:")

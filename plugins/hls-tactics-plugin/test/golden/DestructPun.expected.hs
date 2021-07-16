@@ -3,6 +3,6 @@
 
 data Foo = Foo { a :: Bool, b :: Bool }
 
-foo Foo {a = False, b} = _
-foo Foo {a = True, b} = _
+foo Foo {a = False, b} = _w0
+foo Foo {a = True, b} = _w1
 
