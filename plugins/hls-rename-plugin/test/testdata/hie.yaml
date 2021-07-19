@@ -10,3 +10,4 @@ cradle:
       - "TypeVariable"
       - "TypeConstructor"
       - "DataConstructor"
+      - "Gadt"

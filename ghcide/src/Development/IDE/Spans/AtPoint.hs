@@ -17,6 +17,8 @@ module Development.IDE.Spans.AtPoint (
   , FOIReferences(..)
   , defRowToSymbolInfo
   , getNamesAtPoint
+  , toCurrentLocation
+  , rowToLoc
   ) where
 
 import           Development.IDE.GHC.Error

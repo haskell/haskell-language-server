@@ -33,6 +33,7 @@ library
     , unordered-containers
     , containers
     , ghc
+    , hiedb
 
   default-language: Haskell2010
 
