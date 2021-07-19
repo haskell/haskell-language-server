@@ -100,7 +100,7 @@ expandTHSplice _eStyle ideState params@ExpandSpliceParams {..} = do
                 pure mresl
             reportEditor
                 MtWarning
-                [ "Expansion in type-chcking phase failed;"
+                [ "Expansion in type-checking phase failed;"
                 , "trying to expand manually, but note that it is less rigorous."
                 ]
             pm <-
