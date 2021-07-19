@@ -25,10 +25,10 @@ library
     , lsp-types
     , lsp
     , hls-plugin-api  ^>=1.1
-    , ghcide          >=1.3.0.1
-    , retrie          >=0.1.1.0
+    , ghcide          >=1.4.0.4
+    , retrie          >=0.1.1.1
     , transformers
-    , hls-retrie-plugin
+    , hls-retrie-plugin >= 1.0.1.1
     , text
     , unordered-containers
     , containers
