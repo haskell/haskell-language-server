@@ -266,7 +266,7 @@ mkNameCompItem doc thingParent origName origMod thingType isInfix docs !imp = CI
             let (args, ret) = splitFunTys t
               in if isForAllTy ret
                   then getArgs ret
-                  else Prelude.filter (not . isDictTy) args
+                  else Prelude.filter (not . isDictTy) $ map scaledThing args
           | isPiTy t = getArgs $ snd (splitPiTys t)
 #if MIN_VERSION_ghc(8,10,0)
           | Just (Pair _ t) <- coercionKind <$> isCoercionTy_maybe t
@@ -309,7 +309,7 @@ cacheDataProducer uri env curMod globalEnv inScopeEnv limports = do
       packageState = hscEnv env
       curModName = moduleName curMod
 
-      importMap = Map.fromList [ (getLoc imp, imp) | imp <- limports ]
+      importMap = Map.fromList [ (l, imp) | imp@(L (OldRealSrcSpan l) _) <- limports ]
 
       iDeclToModName :: ImportDecl name -> ModuleName
       iDeclToModName = unLoc . ideclName
@@ -337,8 +337,12 @@ cacheDataProducer uri env curMod globalEnv inScopeEnv limports = do
           (, mempty) <$> toCompItem par curMod curModName n Nothing
       getComplsForOne (GRE n par False prov) =
         flip foldMapM (map is_decl prov) $ \spec -> do
-          -- we don't want to extend import if it's already in scope
-          let originalImportDecl = if null $ lookupGRE_Name inScopeEnv n then Map.lookup (is_dloc spec) importMap else Nothing
+          let originalImportDecl = do
+                -- we don't want to extend import if it's already in scope
+                guard . null $ lookupGRE_Name inScopeEnv n
+                -- or if it doesn't have a real location
+                loc <- realSpan $ is_dloc spec
+                Map.lookup loc importMap
           compItem <- toCompItem par curMod (is_mod spec) n originalImportDecl
           let unqual
                 | is_qual spec = []

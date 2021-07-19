@@ -11,7 +11,7 @@ import           Data.Set (Set)
 import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
 import           GHC.Exts (IsString (fromString))
-import           GHC.SourceGen (funBinds, match, wildP)
+import           GHC.SourceGen (funBindsWithFixity, match, wildP)
 import           OccName
 import           Wingman.GHC
 import           Wingman.Types
@@ -72,12 +72,16 @@ rewriteVarPat name rep = everywhere $
 ------------------------------------------------------------------------------
 -- | Construct an 'HsDecl' from a set of 'AgdaMatch'es.
 splitToDecl
-    :: OccName  -- ^ The name of the function
+    :: Maybe LexicalFixity
+    -> OccName  -- ^ The name of the function
     -> [AgdaMatch]
     -> LHsDecl GhcPs
-splitToDecl name ams = noLoc $ funBinds (fromString . occNameString . occName $ name) $ do
-  AgdaMatch pats body <- ams
-  pure $ match pats body
+splitToDecl fixity name ams = do
+  traceX "fixity" fixity $
+    noLoc $
+      funBindsWithFixity fixity (fromString . occNameString . occName $ name) $ do
+        AgdaMatch pats body <- ams
+        pure $ match pats body
 
 
 ------------------------------------------------------------------------------

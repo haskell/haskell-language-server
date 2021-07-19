@@ -8,7 +8,6 @@ module Wingman.Plugin
   , TacticCommand (..)
   ) where
 
-import           Control.Exception (evaluate)
 import           Control.Monad
 import           Control.Monad.Trans
 import           Control.Monad.Trans.Maybe
@@ -32,6 +31,7 @@ import           System.Timeout
 import           Wingman.CaseSplit
 import           Wingman.EmptyCase
 import           Wingman.GHC
+import           Wingman.Judgements (jNeedsToBindArgs)
 import           Wingman.LanguageServer
 import           Wingman.LanguageServer.Metaprogram (hoverProvider)
 import           Wingman.LanguageServer.TacticProviders
@@ -40,7 +40,6 @@ import           Wingman.Range
 import           Wingman.StaticPlugin
 import           Wingman.Tactics
 import           Wingman.Types
-import Wingman.Metaprogramming.Lexer (ParserContext)
 
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -51,7 +50,7 @@ descriptor plId = (defaultPluginDescriptor plId)
               PluginCommand
                 (tcCommandId tc)
                 (tacticDesc $ tcCommandName tc)
-                (tacticCmd (flip commandTactic tc) plId))
+                (tacticCmd (commandTactic tc) plId))
                 [minBound .. maxBound]
           , pure $
               PluginCommand
@@ -102,7 +101,7 @@ showUserFacingMessage ufm = do
 
 
 tacticCmd
-    :: (ParserContext -> T.Text -> IO (TacticsM ()))
+    :: (T.Text -> TacticsM ())
     -> PluginId
     -> CommandFunction IdeState TacticParams
 tacticCmd tac pId state (TacticParams uri range var_name)
@@ -116,12 +115,14 @@ tacticCmd tac pId state (TacticParams uri range var_name)
         let span = fmap (rangeToRealSrcSpan (fromNormalizedFilePath nfp)) hj_range
         TrackedStale pm pmmap <- stale GetAnnotatedParsedSource
         pm_span <- liftMaybe $ mapAgeFrom pmmap span
-        pc <- getParserState state nfp hj_ctx
-        t <- liftIO $ tac pc var_name
+        let t = tac var_name
 
-        timingOut (cfg_timeout_seconds cfg * seconds) $ join $
-          case runTactic hj_ctx hj_jdg t of
-            Left _ -> Left TacticErrors
+        timingOut (cfg_timeout_seconds cfg * seconds) $ do
+          res <- liftIO $ runTactic hj_ctx hj_jdg t
+          pure $ join $ case res of
+            Left errs ->  do
+              traceMX "errs" errs
+              Left TacticErrors
             Right rtr ->
               case rtr_extract rtr of
                 L _ (HsVar _ (L _ rdr)) | isHole (occName rdr) ->
@@ -151,9 +152,9 @@ seconds = 1e6
 
 timingOut
     :: Int  -- ^ Time in microseconds
-    -> a    -- ^ Computation to run
+    -> IO a    -- ^ Computation to run
     -> MaybeT IO a
-timingOut t m = MaybeT $ timeout t $ evaluate m
+timingOut t m = MaybeT $ timeout t m
 
 
 mkErr :: ErrorCode -> T.Text -> ResponseError
@@ -189,18 +190,34 @@ graftHole
     -> Graft (Either String) ParsedSource
 graftHole span rtr
   | _jIsTopHole (rtr_jdg rtr)
-      = genericGraftWithSmallestM (Proxy @(Located [LMatch GhcPs (LHsExpr GhcPs)])) span $ \dflags ->
-        everywhereM'
-          $ mkBindListT $ \ix ->
-            graftDecl dflags span ix $ \name pats ->
-            splitToDecl (occName name)
-          $ iterateSplit
-          $ mkFirstAgda (fmap unXPat pats)
-          $ unLoc
-          $ rtr_extract rtr
+      = genericGraftWithSmallestM
+            (Proxy @(Located [LMatch GhcPs (LHsExpr GhcPs)])) span
+      $ \dflags matches ->
+          everywhereM'
+            $ mkBindListT $ \ix ->
+              graftDecl dflags span ix $ \name pats ->
+              splitToDecl
+                (case not $ jNeedsToBindArgs (rtr_jdg rtr) of
+                   -- If the user has explicitly bound arguments, use the
+                   -- fixity they wrote.
+                   True -> matchContextFixity . m_ctxt . unLoc
+                             =<< listToMaybe matches
+                   -- Otherwise, choose based on the name of the function.
+                   False -> Nothing
+                )
+                (occName name)
+            $ iterateSplit
+            $ mkFirstAgda (fmap unXPat pats)
+            $ unLoc
+            $ rtr_extract rtr
 graftHole span rtr
   = graft span
   $ rtr_extract rtr
+
+
+matchContextFixity :: HsMatchContext p -> Maybe LexicalFixity
+matchContextFixity (FunRhs _ l _) = Just l
+matchContextFixity _ = Nothing
 
 
 ------------------------------------------------------------------------------

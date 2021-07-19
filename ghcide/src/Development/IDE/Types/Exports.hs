@@ -7,12 +7,13 @@ module Development.IDE.Types.Exports
     createExportsMap,
     createExportsMapMg,
     createExportsMapTc
-) where
+,createExportsMapHieDb,size) where
 
 import           Avail                      (AvailInfo (..))
 import           Control.DeepSeq            (NFData (..))
+import           Control.Monad
 import           Data.Bifunctor             (Bifunctor (second))
-import           Data.HashMap.Strict        (HashMap)
+import           Data.HashMap.Strict        (HashMap, elems)
 import qualified Data.HashMap.Strict        as Map
 import           Data.HashSet               (HashSet)
 import qualified Data.HashSet               as Set
@@ -23,12 +24,16 @@ import           Development.IDE.GHC.Util
 import           FieldLabel                 (flSelector)
 import           GHC.Generics               (Generic)
 import           GhcPlugins                 (IfaceExport, ModGuts (..))
+import           HieDb
 import           Name
 import           TcRnTypes                  (TcGblEnv (..))
 
 newtype ExportsMap = ExportsMap
     {getExportsMap :: HashMap IdentifierText (HashSet IdentInfo)}
     deriving newtype (Monoid, NFData, Show)
+
+size :: ExportsMap -> Int
+size = sum . map length . elems . getExportsMap
 
 instance Semigroup ExportsMap where
     ExportsMap a <> ExportsMap b = ExportsMap $ Map.unionWith (<>) a b
@@ -103,6 +108,22 @@ createExportsMapTc = ExportsMap . Map.fromListWith (<>) . concatMap doOne
     doOne mi = concatMap (fmap (second Set.fromList) . unpackAvail mn) (tcg_exports mi)
       where
         mn = moduleName $ tcg_mod mi
+
+createExportsMapHieDb :: HieDb -> IO ExportsMap
+createExportsMapHieDb hiedb = do
+    mods <- getAllIndexedMods hiedb
+    idents <- forM mods $ \m -> do
+        let mn = modInfoName $ hieModInfo m
+            mText = pack $ moduleNameString mn
+        fmap (wrap . unwrap mText) <$> getExportsForModule hiedb mn
+    return $ ExportsMap $ Map.fromListWith (<>) (concat idents)
+  where
+    wrap identInfo = (name identInfo, Set.fromList [identInfo])
+    -- unwrap :: ExportRow -> IdentInfo
+    unwrap m ExportRow{..} = IdentInfo n n p exportIsDatacon m
+      where
+          n = pack (occNameString exportName)
+          p = pack . occNameString <$> exportParent
 
 unpackAvail :: ModuleName -> IfaceExport -> [(Text, [IdentInfo])]
 unpackAvail !(pack . moduleNameString -> mod) = map f . mkIdentInfos mod

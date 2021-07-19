@@ -35,14 +35,22 @@ instance Show Linkable where show = prettyPrint
 instance NFData Linkable where rnf = rwhnf
 instance Show PackageFlag where show = prettyPrint
 instance Show InteractiveImport where show = prettyPrint
-instance Show ComponentId  where show = prettyPrint
 instance Show PackageName  where show = prettyPrint
+
+#if !MIN_VERSION_ghc(9,0,1)
+instance Show ComponentId  where show = prettyPrint
 instance Show SourcePackageId  where show = prettyPrint
 
-instance Show InstalledUnitId where
+instance Show GhcPlugins.InstalledUnitId where
     show = installedUnitIdString
 
-instance NFData InstalledUnitId where rnf = rwhnf . installedUnitIdFS
+instance NFData GhcPlugins.InstalledUnitId where rnf = rwhnf . installedUnitIdFS
+
+instance Hashable GhcPlugins.InstalledUnitId where
+  hashWithSalt salt = hashWithSalt salt . installedUnitIdString
+#else
+instance Show InstalledUnitId where show = prettyPrint
+#endif
 
 instance NFData SB.StringBuffer where rnf = rwhnf
 
@@ -70,9 +78,6 @@ instance NFData FastString where
 
 instance NFData ParsedModule where
     rnf = rwhnf
-
-instance Hashable InstalledUnitId where
-  hashWithSalt salt = hashWithSalt salt . installedUnitIdString
 
 instance Show HieFile where
     show = show . hie_module
@@ -149,4 +154,11 @@ instance Show (Annotated ParsedSource) where
   show _ = "<Annotated ParsedSource>"
 
 instance NFData (Annotated ParsedSource) where
+  rnf = rwhnf
+
+#if MIN_VERSION_ghc(9,0,1)
+instance (NFData HsModule) where
+#else
+instance (NFData (HsModule a)) where
+#endif
   rnf = rwhnf

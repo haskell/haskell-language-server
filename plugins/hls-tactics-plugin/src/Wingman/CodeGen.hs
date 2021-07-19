@@ -13,17 +13,18 @@ module Wingman.CodeGen
 import           ConLike
 import           Control.Lens ((%~), (<>~), (&))
 import           Control.Monad.Except
+import           Control.Monad.Reader (ask)
 import           Control.Monad.State
 import           Data.Bool (bool)
 import           Data.Functor ((<&>))
 import           Data.Generics.Labels ()
 import           Data.List
-import           Data.Monoid (Endo(..))
 import qualified Data.Set as S
 import           Data.Traversable
 import           DataCon
 import           Development.IDE.GHC.Compat
 import           GHC.Exts
+import           GHC.SourceGen (occNameToStr)
 import           GHC.SourceGen.Binds
 import           GHC.SourceGen.Expr
 import           GHC.SourceGen.Overloaded
@@ -32,6 +33,7 @@ import           GhcPlugins (isSymOcc, mkVarOccFS)
 import           OccName (occName)
 import           PatSyn
 import           Type hiding (Var)
+import           TysPrim (alphaTy)
 import           Wingman.CodeGen.Utils
 import           Wingman.GHC
 import           Wingman.Judgements
@@ -39,7 +41,6 @@ import           Wingman.Judgements.Theta
 import           Wingman.Machinery
 import           Wingman.Naming
 import           Wingman.Types
-import GHC.SourceGen (occNameToStr)
 
 
 destructMatches
@@ -58,7 +59,7 @@ destructMatches use_field_puns f scrut t jdg = do
   let hy = jEntireHypothesis jdg
       g  = jGoal jdg
   case tacticsGetDataCons $ unCType t of
-    Nothing -> throwError $ GoalMismatch "destruct" g
+    Nothing -> cut -- throwError $ GoalMismatch "destruct" g
     Just (dcs, apps) ->
       fmap unzipTrace $ for dcs $ \dc -> do
         let con = RealDataCon dc
@@ -67,8 +68,7 @@ destructMatches use_field_puns f scrut t jdg = do
             -- #syn_scoped
             method_hy = foldMap evidenceToHypothesis ev
             args = conLikeInstOrigArgTys' con apps
-        modify $ appEndo $ foldMap (Endo . evidenceToSubst) ev
-        subst <- gets ts_unifier
+        ctx <- ask
 
         let names_in_scope = hyNamesInScope hy
             names = mkManyGoodNames (hyNamesInScope hy) args
@@ -78,9 +78,9 @@ destructMatches use_field_puns f scrut t jdg = do
         let hy' = patternHypothesis scrut con jdg
                 $ zip names'
                 $ coerce args
-            j = fmap (CType . substTyAddInScope subst . unCType)
-              $ introduce hy'
-              $ introduce method_hy
+            j = withNewCoercions (evidenceToCoercions ev)
+              $ introduce ctx hy'
+              $ introduce ctx method_hy
               $ withNewGoal g jdg
         ext <- f con j
         pure $ ext
@@ -214,7 +214,7 @@ patSynExTys ps = patSynExTyVars ps
 
 destruct' :: Bool -> (ConLike -> Judgement -> Rule) -> HyInfo CType -> Judgement -> Rule
 destruct' use_field_puns f hi jdg = do
-  when (isDestructBlacklisted jdg) $ throwError NoApplicableTactic
+  when (isDestructBlacklisted jdg) $ cut -- throwError NoApplicableTactic
   let term = hi_name hi
   ext
       <- destructMatches
@@ -234,13 +234,13 @@ destruct' use_field_puns f hi jdg = do
 -- resulting matches.
 destructLambdaCase' :: Bool -> (ConLike -> Judgement -> Rule) -> Judgement -> Rule
 destructLambdaCase' use_field_puns f jdg = do
-  when (isDestructBlacklisted jdg) $ throwError NoApplicableTactic
+  when (isDestructBlacklisted jdg) $ cut -- throwError NoApplicableTactic
   let g  = jGoal jdg
   case splitFunTy_maybe (unCType g) of
     Just (arg, _) | isAlgType arg ->
       fmap (fmap noLoc lambdaCase) <$>
         destructMatches use_field_puns f Nothing (CType arg) jdg
-    _ -> throwError $ GoalMismatch "destructLambdaCase'" g
+    _ -> cut -- throwError $ GoalMismatch "destructLambdaCase'" g
 
 
 ------------------------------------------------------------------------------
@@ -252,7 +252,22 @@ buildDataCon
     -> [Type]             -- ^ Type arguments for the data con
     -> RuleM (Synthesized (LHsExpr GhcPs))
 buildDataCon should_blacklist jdg dc tyapps = do
-  let args = conLikeInstOrigArgTys' dc tyapps
+  args <- case dc of
+    RealDataCon dc' -> do
+      let (skolems', theta, args) = dataConInstSig dc' tyapps
+      modify $ \ts ->
+        evidenceToSubst (foldMap mkEvidence theta) ts
+          & #ts_skolems <>~ S.fromList skolems'
+      pure args
+    _ ->
+      -- If we have a 'PatSyn', we can't continue, since there is no
+      -- 'dataConInstSig' equivalent for 'PatSyn's. I don't think this is
+      -- a fundamental problem, but I don't know enough about the GHC internals
+      -- to implement it myself.
+      --
+      -- Fortunately, this isn't an issue in practice, since 'PatSyn's are
+      -- never in the hypothesis.
+      cut -- throwError $ TacticPanic "Can't build Pattern constructors yet"
   ext
       <- fmap unzipTrace
        $ traverse ( \(arg, n) ->
@@ -289,13 +304,15 @@ letForEach rename solve (unHypothesis -> hy) jdg = do
   case hy of
     [] -> newSubgoal jdg
     _ -> do
+      ctx <- ask
       let g = jGoal jdg
       terms <- fmap sequenceA $ for hy $ \hi -> do
         let name = rename $ hi_name hi
-        res <- tacticToRule jdg $ solve hi
+        let generalized_let_ty = CType alphaTy
+        res <- tacticToRule (withNewGoal generalized_let_ty jdg) $ solve hi
         pure $ fmap ((name,) . unLoc) res
       let hy' = fmap (g <$) $ syn_val terms
           matches = fmap (fmap (\(occ, expr) -> valBind (occNameToStr occ) expr)) terms
-      g <- fmap (fmap unLoc) $ newSubgoal $ introduce (userHypothesis hy') jdg
+      g <- fmap (fmap unLoc) $ newSubgoal $ introduce ctx (userHypothesis hy') jdg
       pure $ fmap noLoc $ let' <$> matches <*> g
 

@@ -124,16 +124,23 @@ background](https://neilmitchell.blogspot.com/2020/01/one-haskell-ide-to-rule-th
 
 ### Prerequisites
 
-- For standalone `.hs`/`.lhs` files, [ghc](https://www.haskell.org/ghc/) must be installed and on the PATH. The easiest way to install it is with [ghcup](https://www.haskell.org/ghcup/) or [Chocolatey](https://www.haskell.org/platform/windows.html) on Windows.
-- For Cabal based projects, both ghc and [cabal-install](https://www.haskell.org/cabal/) must be installed and on the PATH. It can also be installed with [ghcup](https://www.haskell.org/ghcup/) or [Chocolatey](https://www.haskell.org/platform/windows.html) on Windows.
+- For standalone `.hs`/`.lhs` files, [ghc](https://www.haskell.org/ghc/) must be installed and on the PATH. The easiest way to install it is with [ghcup](https://www.haskell.org/ghcup/) or [chocolatey](https://community.chocolatey.org/packages/ghc) on Windows.
+- For Cabal based projects, both ghc and [cabal-install](https://www.haskell.org/cabal/) must be installed and on the PATH. It can also be installed with [ghcup](https://www.haskell.org/ghcup/) or [chocolatey](https://community.chocolatey.org/packages/cabal) on Windows.
 - For Stack based projects, [stack](http://haskellstack.org) must be installed and on the PATH.
 
 ### ghcup
 
-If you are using [`ghcup`](https://www.haskell.org/ghcup/) to manage your installations, you can install the latest version of `haskell-language-server` with
+If you are using [`ghcup`](https://www.haskell.org/ghcup/) to manage your installations, you can install `haskell-language-server` with
 ```
 ghcup install hls
 ```
+
+### chocolatey
+
+If you are using [`chocolatey`](https://chocolatey.org/) to manage your installations in windows, [you can install `haskell-language-server`](https://community.chocolatey.org/packages/haskell-language-server) with
+```
+choco install haskell-language-server
+````
 
 ### Visual Studio Code
 
@@ -695,6 +702,11 @@ args = ["--lsp"]
 ```
 
 ## Known limitations
+
+### Limited GHC 9 Support
+Currently, GHC 9 support in HLS is in beta stage; some features are unavailable with GHC >= 9.0.1 for the time being.
+This situation is expected to be resolved in the near future after all the dependent packages support GHC 9.
+See issue [#297](https://github.com/haskell/haskell-language-server/issues/297) for the supported features in GHC 9 and the status of migration progress.
 
 ### Preprocessor
 HLS is not yet able to find project preprocessors, which may result in `could not execute: <preprocessor>` errors. This problem is

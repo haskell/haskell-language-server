@@ -1,2 +1,2 @@
 foo :: a -> (b, a)
-foo a = (_, a)
+foo a = (_w0, a)

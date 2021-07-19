@@ -5,8 +5,6 @@
 module Ide.Plugin.Rename (descriptor) where
 
 import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Class
-import           Control.Monad.Trans.Maybe
 import qualified Data.Bifunctor
 import           Data.Char
 import           Data.Containers.ListUtils
@@ -15,7 +13,6 @@ import qualified Data.HashMap.Strict                  as HM
 import qualified Data.Map                             as M
 import           Data.Maybe
 import qualified Data.Text                            as T
-import           Debug.Trace
 import           Development.IDE                      hiding (pluginHandlers)
 import           Development.IDE.Core.Actions         (refsAtPoint)
 import           Development.IDE.Core.PositionMapping
@@ -28,8 +25,6 @@ import           Ide.Types
 import           Language.LSP.Types
 import           Name
 import           Retrie
-import           Retrie.ExactPrint
-import Retrie.Universe
 
 type HiePosMap = HM.HashMap NormalizedFilePath (HieAstResult, PositionMapping)
 
@@ -76,7 +71,7 @@ nameAtPos pos nfp = do
 refsAtName :: NormalizedFilePath -> Name -> Action [Location]
 refsAtName nfp name = do
     ShakeExtras{hiedb} <- getShakeExtras
-    fois <- HM.keys <$> getFilesOfInterest
+    fois <- HM.keys <$> getFilesOfInterestUntracked
     asts <- HM.fromList . mapMaybe sequence . zip fois <$> usesWithStale GetHieAst fois
     let foiRefs = concat $ mapMaybe (getNameAstLocations name) (HM.elems asts)
     refs <- nameDbRefs (HM.keys asts) name hiedb
@@ -94,16 +89,3 @@ nameDbRefs fois name hiedb =
 getNameAstLocations :: Name -> (HieAstResult, PositionMapping) -> Maybe [Location]
 getNameAstLocations name (HAR _ _ rm _ _, mapping) =
     mapMaybe (toCurrentLocation mapping . realSrcSpanToLocation . fst) <$> M.lookup (Right name) rm
-
--- Debugging
-showMatch :: MatchResult Universe -> [Char]
-showMatch NoMatch = "Nomatch"
-showMatch (MatchResult sub temp) =
-    "Sub: " ++ show sub ++
-    " \ntemp: " ++ showTemp (astA $ tTemplate temp) ++
-    " \nAnns: " ++ show (annsA (tTemplate temp))
-
-showTemp (ULHsExpr _) = "ULHsExpr"
-showTemp (ULStmt _) = "ULStmt"
-showTemp (ULType _) = "ULType"
-showTemp (ULPat _) = "ULPat"

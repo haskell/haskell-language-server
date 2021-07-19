@@ -10,6 +10,7 @@
 
 module Ide.Plugin.ExplicitImports
   ( descriptor
+  , descriptorForModules
   , extractMinimalImports
   , within
   ) where
@@ -34,9 +35,14 @@ import           Ide.PluginUtils                      (mkLspCommand)
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
+#if MIN_VERSION_ghc(9,0,0)
+import           GHC.Builtin.Names                    (pRELUDE)
+#else
 import           PrelNames                            (pRELUDE)
+#endif
 import           RnNames                              (findImportUsage,
                                                        getMinimalImports)
+import qualified SrcLoc
 import           TcRnMonad                            (initTcWithGbl)
 import           TcRnTypes                            (TcGblEnv (tcg_used_gres))
 
@@ -45,7 +51,14 @@ importCommandId = "ImportLensCommand"
 
 -- | The "main" function of a plugin
 descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId =
+descriptor = descriptorForModules (/= moduleName pRELUDE)
+
+descriptorForModules
+    :: (ModuleName -> Bool)
+      -- ^ Predicate to select modules that will be annotated
+    -> PluginId
+    -> PluginDescriptor IdeState
+descriptorForModules pred plId =
   (defaultPluginDescriptor plId)
     {
       -- This plugin provides a command handler
@@ -54,9 +67,9 @@ descriptor plId =
       pluginRules = minimalImportsRule,
       pluginHandlers = mconcat
         [ -- This plugin provides code lenses
-          mkPluginHandler STextDocumentCodeLens lensProvider
+          mkPluginHandler STextDocumentCodeLens $ lensProvider pred
           -- This plugin provides code actions
-        , mkPluginHandler STextDocumentCodeAction codeActionProvider
+        , mkPluginHandler STextDocumentCodeAction $ codeActionProvider pred
         ]
     }
 
@@ -87,8 +100,9 @@ runImportCommand _state (ImportCommandParams edit) = do
 -- the provider should produce one code lens associated to the import statement:
 --
 -- > import Data.List (intercalate, sortBy)
-lensProvider :: PluginMethodHandler IdeState TextDocumentCodeLens
+lensProvider :: (ModuleName -> Bool) -> PluginMethodHandler IdeState TextDocumentCodeLens
 lensProvider
+  pred
   state -- ghcide state, used to retrieve typechecking artifacts
   pId -- plugin Id
   CodeLensParams {_textDocument = TextDocumentIdentifier {_uri}}
@@ -105,7 +119,7 @@ lensProvider
               sequence
                 [ generateLens pId _uri edit
                   | (imp, Just minImport) <- minImports,
-                    Just edit <- [mkExplicitEdit posMapping imp minImport]
+                    Just edit <- [mkExplicitEdit pred posMapping imp minImport]
                 ]
             return $ Right (List $ catMaybes commands)
           _ ->
@@ -115,8 +129,8 @@ lensProvider
 
 -- | If there are any implicit imports, provide one code action to turn them all
 --   into explicit imports.
-codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
-codeActionProvider ideState _pId (CodeActionParams _ _ docId range _context)
+codeActionProvider :: (ModuleName -> Bool) -> PluginMethodHandler IdeState TextDocumentCodeAction
+codeActionProvider pred ideState _pId (CodeActionParams _ _ docId range _context)
   | TextDocumentIdentifier {_uri} <- docId,
     Just nfp <- uriToNormalizedFilePath $ toNormalizedUri _uri = liftIO $
     do
@@ -135,7 +149,7 @@ codeActionProvider ideState _pId (CodeActionParams _ _ docId range _context)
                 [ e
                   | (imp, Just explicit) <-
                       maybe [] getMinimalImportsResult minImports,
-                    Just e <- [mkExplicitEdit zeroMapping imp explicit]
+                    Just e <- [mkExplicitEdit pred zeroMapping imp explicit]
                 ]
               caExplicitImports = InR CodeAction {..}
               _title = "Make all imports explicit"
@@ -183,12 +197,13 @@ minimalImportsRule = define $ \MinimalImports nfp -> do
   (imports, mbMinImports) <- liftIO $ extractMinimalImports hsc tmr
   let importsMap =
         Map.fromList
-          [ (srcSpanStart l, T.pack (prettyPrint i))
-            | L l i <- fromMaybe [] mbMinImports
+          [ (SrcLoc.realSrcSpanStart l, T.pack (prettyPrint i))
+            | L (OldRealSrcSpan l) i <- fromMaybe [] mbMinImports
           ]
       res =
-        [ (i, Map.lookup (srcSpanStart (getLoc i)) importsMap)
+        [ (i, Map.lookup (SrcLoc.realSrcSpanStart l) importsMap)
           | i <- imports
+          , OldRealSrcSpan l <- [getLoc i]
         ]
   return ([], MinimalImportsResult res <$ mbMinImports)
 
@@ -219,16 +234,16 @@ extractMinimalImports (Just hsc) (Just TcModuleResult {..}) = do
   return (imports, minimalImports)
 extractMinimalImports _ _ = return ([], Nothing)
 
-mkExplicitEdit :: PositionMapping -> LImportDecl pass -> T.Text -> Maybe TextEdit
-mkExplicitEdit posMapping (L src imp) explicit
+mkExplicitEdit :: (ModuleName -> Bool) -> PositionMapping -> LImportDecl pass -> T.Text -> Maybe TextEdit
+mkExplicitEdit pred posMapping (L src imp) explicit
   -- Explicit import list case
   | ImportDecl {ideclHiding = Just (False, _)} <- imp =
     Nothing
   | not (isQualifiedImport imp),
-    RealSrcSpan l <- src,
+    OldRealSrcSpan l <- src,
     L _ mn <- ideclName imp,
     -- (almost) no one wants to see an explicit import list for Prelude
-    mn /= moduleName pRELUDE,
+    pred mn,
     Just rng <- toCurrentRange posMapping $ realSrcSpanToRange l =
     Just $ TextEdit rng explicit
   | otherwise =

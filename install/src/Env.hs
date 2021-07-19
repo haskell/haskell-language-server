@@ -108,8 +108,6 @@ getHlsVersions = do
           & mapMaybe
               (T.stripPrefix stackYamlPrefix >=> T.stripSuffix stackYamlSuffix)
           & map T.unpack
-        -- the following line excludes `8.6.3`, `8.8.1` and `8.8.2` on windows systems
-          & filter (\p -> not (isWindowsSystem && p `elem` ["8.6.3", "8.8.1", "8.8.2"]))
           & sort
   return hlsVersions
 
