@@ -74,9 +74,9 @@ dynFlagsPlugins rs = mempty
   { P.pluginModifyDynflags =
       flip foldMap rs $ \(plId, dflag_mods) cfg ->
         let plg_cfg = configForPlugin cfg plId
-         in case plcGlobalOn plg_cfg of
-              True  -> dflag_mods
-              False -> mempty
+         in if plcGlobalOn plg_cfg
+              then dflag_mods
+              else mempty
   }
 
 -- ---------------------------------------------------------------------
