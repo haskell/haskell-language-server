@@ -42,6 +42,8 @@ import           Development.IDE.Core.Shake            as X (FastResult (..),
                                                              useWithStaleFast',
                                                              useWithStale_,
                                                              use_, uses, uses_)
+import           Development.IDE.GHC.Compat            as X (GhcVersion (..),
+                                                             ghcVersion)
 import           Development.IDE.GHC.Error             as X
 import           Development.IDE.GHC.Util              as X
 import           Development.IDE.Graph                 as X (Action, RuleResult,

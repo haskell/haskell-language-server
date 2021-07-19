@@ -14,6 +14,6 @@ data GADT a where
 
 
 split :: GADT Bool -> a
-split GADT {blah, bar} = _
-split Bar {zoo, baxter, another} = _
+split GADT {blah, bar} = _w0
+split Bar {zoo, baxter, another} = _w1
 

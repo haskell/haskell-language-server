@@ -53,7 +53,7 @@ extra-deps:
   - ghc-lib-8.10.4.20210206
   - ghc-lib-parser-8.10.4.20210206
   - ghc-lib-parser-ex-8.10.0.17
-  - ghc-source-gen-0.4.0.0
+  - ghc-source-gen-0.4.1.0
   - ghc-trace-events-0.1.2.1
   - haddock-api-2.22.0@rev:1
   - haddock-library-1.10.0
@@ -63,8 +63,8 @@ extra-deps:
   - hlint-3.2.3
   - HsYAML-0.2.1.0@rev:1
   - HsYAML-aeson-0.2.0.0@rev:2
-  - implicit-hie-cradle-0.3.0.2
-  - implicit-hie-0.1.2.5
+  - implicit-hie-cradle-0.3.0.5
+  - implicit-hie-0.1.2.6
   - indexed-profunctors-0.1
   - lens-4.18
   - megaparsec-9.0.1
@@ -76,7 +76,7 @@ extra-deps:
   - ormolu-0.1.4.1
   - parser-combinators-1.2.1
   - primitive-0.7.1.0
-  - refinery-0.3.0.0
+  - refinery-0.4.0.0
   - regex-base-0.94.0.0
   - regex-pcre-builtin-0.95.1.1.8.43
   - regex-tdfa-1.3.1.0
@@ -93,7 +93,7 @@ extra-deps:
   - th-env-0.1.0.2@sha256:d8f1f37f42a8f1a22404d7d0579528af18f5dac7232cca6bdbd5117c115a0ad5,1370
   - th-compat-0.1.2@sha256:3d55de1adc542c1a870c9ada90da2fbbe5f4e8bcd3eed545a55c3df9311b32a8,2854
   - bytestring-encoding-0.1.0.0@sha256:460b49779fbf0112e8e2f1753c1ed9131eb18827600c298f4d6bb51c4e8c1c0d,1727
-  - hiedb-0.3.0.1
+  - hiedb-0.4.0.0
   - extra-1.7.9@sha256:f1dec740f0f2025790c540732bfd52c556ec55bde4f5dfd7cf18e22bd44ff3d0,2683
   - lsp-1.2.0.0
   - lsp-types-1.2.0.0
@@ -122,6 +122,8 @@ flags:
   # Stack doesn't support automatic flags.
   hls-hlint-plugin:
     hlint33: false
+  hyphenation:
+    embed: true
 
 nix:
   packages: [icu libcxx zlib]

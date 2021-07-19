@@ -59,7 +59,7 @@ destructMatches use_field_puns f scrut t jdg = do
   let hy = jEntireHypothesis jdg
       g  = jGoal jdg
   case tacticsGetDataCons $ unCType t of
-    Nothing -> throwError $ GoalMismatch "destruct" g
+    Nothing -> cut -- throwError $ GoalMismatch "destruct" g
     Just (dcs, apps) ->
       fmap unzipTrace $ for dcs $ \dc -> do
         let con = RealDataCon dc
@@ -214,7 +214,7 @@ patSynExTys ps = patSynExTyVars ps
 
 destruct' :: Bool -> (ConLike -> Judgement -> Rule) -> HyInfo CType -> Judgement -> Rule
 destruct' use_field_puns f hi jdg = do
-  when (isDestructBlacklisted jdg) $ throwError NoApplicableTactic
+  when (isDestructBlacklisted jdg) $ cut -- throwError NoApplicableTactic
   let term = hi_name hi
   ext
       <- destructMatches
@@ -234,13 +234,13 @@ destruct' use_field_puns f hi jdg = do
 -- resulting matches.
 destructLambdaCase' :: Bool -> (ConLike -> Judgement -> Rule) -> Judgement -> Rule
 destructLambdaCase' use_field_puns f jdg = do
-  when (isDestructBlacklisted jdg) $ throwError NoApplicableTactic
+  when (isDestructBlacklisted jdg) $ cut -- throwError NoApplicableTactic
   let g  = jGoal jdg
   case splitFunTy_maybe (unCType g) of
     Just (arg, _) | isAlgType arg ->
       fmap (fmap noLoc lambdaCase) <$>
         destructMatches use_field_puns f Nothing (CType arg) jdg
-    _ -> throwError $ GoalMismatch "destructLambdaCase'" g
+    _ -> cut -- throwError $ GoalMismatch "destructLambdaCase'" g
 
 
 ------------------------------------------------------------------------------
@@ -267,7 +267,7 @@ buildDataCon should_blacklist jdg dc tyapps = do
       --
       -- Fortunately, this isn't an issue in practice, since 'PatSyn's are
       -- never in the hypothesis.
-      throwError $ TacticPanic "Can't build Pattern constructors yet"
+      cut -- throwError $ TacticPanic "Can't build Pattern constructors yet"
   ext
       <- fmap unzipTrace
        $ traverse ( \(arg, n) ->

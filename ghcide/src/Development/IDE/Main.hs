@@ -13,6 +13,7 @@ import           Control.Exception.Safe                (Exception (displayExcept
                                                         catchAny)
 import           Control.Monad.Extra                   (concatMapM, unless,
                                                         when)
+import qualified Data.Aeson.Encode.Pretty              as A
 import           Data.Default                          (Default (def))
 import           Data.Foldable                         (traverse_)
 import qualified Data.HashMap.Strict                   as HashMap
@@ -22,7 +23,10 @@ import           Data.List.Extra                       (intercalate, isPrefixOf,
 import           Data.Maybe                            (catMaybes, isJust)
 import qualified Data.Text                             as T
 import qualified Data.Text.IO                          as T
-import           Development.IDE                       (Action, Rules,
+import           Data.Text.Lazy.Encoding               (decodeUtf8)
+import qualified Data.Text.Lazy.IO                     as LT
+import           Development.IDE                       (Action, GhcVersion (..),
+                                                        Rules, ghcVersion,
                                                         hDuplicateTo')
 import           Development.IDE.Core.Debouncer        (Debouncer,
                                                         newAsyncDebouncer)
@@ -71,10 +75,16 @@ import qualified HieDb.Run                             as HieDb
 import           Ide.Plugin.Config                     (CheckParents (NeverCheck),
                                                         Config,
                                                         getConfigFromNotification)
+import           Ide.Plugin.ConfigUtils                (pluginsToDefaultConfig,
+                                                        pluginsToVSCodeExtensionSchema)
 import           Ide.PluginUtils                       (allLspCmdIds',
                                                         getProcessID,
                                                         pluginDescToIdePlugins)
-import           Ide.Types                             (IdePlugins)
+import           Ide.Types                             (IdeCommand (IdeCommand),
+                                                        IdePlugins,
+                                                        PluginDescriptor (PluginDescriptor, pluginCli),
+                                                        PluginId (PluginId),
+                                                        ipMap)
 import qualified Language.LSP.Server                   as LSP
 import           Options.Applicative                   hiding (action)
 import qualified System.Directory.Extra                as IO
@@ -98,12 +108,11 @@ data Command
     | Db {projectRoot :: FilePath, hieOptions ::  HieDb.Options, hieCommand :: HieDb.Command}
      -- ^ Run a command in the hiedb
     | LSP   -- ^ Run the LSP server
-    | Custom {projectRoot :: FilePath, ideCommand :: IdeCommand} -- ^ User defined
+    | PrintExtensionSchema
+    | PrintDefaultConfig
+    | Custom {projectRoot :: FilePath, ideCommand :: IdeCommand IdeState} -- ^ User defined
     deriving Show
 
-newtype IdeCommand = IdeCommand (IdeState -> IO ())
-
-instance Show IdeCommand where show _ = "<ide command>"
 
 -- TODO move these to hiedb
 deriving instance Show HieDb.Command
@@ -113,16 +122,31 @@ isLSP :: Command -> Bool
 isLSP LSP = True
 isLSP _   = False
 
-commandP :: Parser Command
-commandP = hsubparser (command "typecheck" (info (Check <$> fileCmd) fileInfo)
-                    <> command "hiedb" (info (Db "." <$> HieDb.optParser "" True <*> HieDb.cmdParser <**> helper) hieInfo)
-                    <> command "lsp" (info (pure LSP <**> helper) lspInfo)
-                    )
+commandP :: IdePlugins IdeState -> Parser Command
+commandP plugins =
+    hsubparser(command "typecheck" (info (Check <$> fileCmd) fileInfo)
+            <> command "hiedb" (info (Db "." <$> HieDb.optParser "" True <*> HieDb.cmdParser <**> helper) hieInfo)
+            <> command "lsp" (info (pure LSP <**> helper) lspInfo)
+            <> command "vscode-extension-schema" extensionSchemaCommand
+            <> command "generate-default-config" generateDefaultConfigCommand
+            <> pluginCommands
+            )
   where
     fileCmd = many (argument str (metavar "FILES/DIRS..."))
     lspInfo = fullDesc <> progDesc "Start talking to an LSP client"
     fileInfo = fullDesc <> progDesc "Used as a test bed to check your IDE will work"
     hieInfo = fullDesc <> progDesc "Query .hie files"
+    extensionSchemaCommand =
+        info (pure PrintExtensionSchema)
+             (fullDesc <> progDesc "Print generic config schema for plugins (used in the package.json of haskell vscode extension)")
+    generateDefaultConfigCommand =
+        info (pure PrintDefaultConfig)
+             (fullDesc <> progDesc "Print config supported by the server with default values")
+
+    pluginCommands = mconcat
+        [ command (T.unpack pId) (Custom "." <$> p)
+        | (PluginId pId, PluginDescriptor{pluginCli = Just p}) <- ipMap plugins
+        ]
 
 
 data Arguments = Arguments
@@ -199,6 +223,10 @@ defaultMain Arguments{..} = do
     outH <- argsHandleOut
 
     case argCommand of
+        PrintExtensionSchema ->
+            LT.putStrLn $ decodeUtf8 $ A.encodePretty $ pluginsToVSCodeExtensionSchema argsHlsPlugins
+        PrintDefaultConfig ->
+            LT.putStrLn $ decodeUtf8 $ A.encodePretty $ pluginsToDefaultConfig argsHlsPlugins
         LSP -> do
             t <- offsetTime
             hPutStrLn stderr "Starting LSP server..."
@@ -231,6 +259,11 @@ defaultMain Arguments{..} = do
                             , optRunSubset = runSubset
                             }
                     caps = LSP.resClientCapabilities env
+                -- FIXME: Remove this after GHC 9 gets fully supported
+                when (ghcVersion == GHC90) $
+                    hPutStrLn stderr $
+                        "Currently, HLS supports GHC 9 only partially. "
+                        <> "See [issue #297](https://github.com/haskell/haskell-language-server/issues/297) for more detail."
                 initialise
                     argsDefaultHlsConfig
                     rules
@@ -312,6 +345,7 @@ defaultMain Arguments{..} = do
             case mlibdir of
                 Nothing     -> exitWith $ ExitFailure 1
                 Just libdir -> HieDb.runCommand libdir opts{HieDb.database = dbLoc} cmd
+
         Custom projectRoot (IdeCommand c) -> do
           dbLoc <- getHieDbLoc projectRoot
           runWithDb dbLoc $ \hiedb hieChan -> do

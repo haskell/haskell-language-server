@@ -1,2 +1,2 @@
 test :: (a, b)
-test = (_, _)
+test = (_w0, _w1)

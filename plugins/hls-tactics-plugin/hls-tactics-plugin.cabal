@@ -69,25 +69,25 @@ library
     , containers
     , deepseq
     , directory
-    , extra
+    , extra                 >=1.7.8
     , filepath
     , fingertree
     , generic-lens
     , ghc
     , ghc-boot-th
     , ghc-exactprint
-    , ghc-source-gen
+    , ghc-source-gen        ^>=0.4.1
     , ghcide                ^>=1.4
     , hls-graph
     , hls-plugin-api        ^>=1.1
     , hyphenation
     , lens
     , lsp
-    , megaparsec            ^>=9
+    , megaparsec            >=8 && < 10
     , mtl
     , parser-combinators
     , prettyprinter
-    , refinery              ^>=0.3
+    , refinery              ^>=0.4
     , retrie                >=0.1.1.0
     , syb
     , text

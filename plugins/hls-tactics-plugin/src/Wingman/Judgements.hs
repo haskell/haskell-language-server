@@ -375,6 +375,10 @@ jHasBoundArgs
   . jLocalHypothesis
 
 
+jNeedsToBindArgs :: Judgement' CType -> Bool
+jNeedsToBindArgs = isFunTy . unCType . jGoal
+
+
 ------------------------------------------------------------------------------
 -- | Fold a hypothesis into a single mapping from name to info. This
 -- unavoidably will cause duplicate names (things like methods) to shadow one

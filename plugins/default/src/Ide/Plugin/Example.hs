@@ -33,6 +33,7 @@ import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
+import           Options.Applicative        (ParserInfo, info)
 import           Text.Regex.TDFA.Text       ()
 
 -- ---------------------------------------------------------------------
@@ -46,7 +47,12 @@ descriptor plId = (defaultPluginDescriptor plId)
                   <> mkPluginHandler STextDocumentHover          hover
                   <> mkPluginHandler STextDocumentDocumentSymbol symbols
                   <> mkPluginHandler STextDocumentCompletion     completion
+  , pluginCli = Just exampleCli
   }
+
+exampleCli :: ParserInfo (IdeCommand IdeState)
+exampleCli = info p mempty
+  where p = pure $ IdeCommand $ \_ideState -> putStrLn "hello HLS"
 
 -- ---------------------------------------------------------------------
 
