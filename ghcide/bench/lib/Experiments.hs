@@ -169,9 +169,26 @@ experiments =
             sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
                 List [ FileEvent (filePathToUri "hie.yaml") FcChanged ]
             flip allWithIdentifierPos docs $ \DocumentPositions{..} -> isJust <$> getHover doc (fromJust identifierP)
+        ),
+      ---------------------------------------------------------------------------------------
+      benchWithSetup
+        "hole fit suggestions"
+        ( mapM_ $ \DocumentPositions{..} -> do
+            let edit :: TextDocumentContentChangeEvent =TextDocumentContentChangeEvent
+                  {_range = Just Range {_start = bottom, _end = bottom}, _rangeLength = Nothing, _text = t}
+                t = "\nf :: [Int] -> [Int]\nf = _"
+            changeDoc doc [edit]
+        )
+        (\docs -> do
+            forM_ docs $ \DocumentPositions{..} ->
+              changeDoc doc [charEdit bottom]
+            waitForProgressDone
+            return True
         )
     ]
 
+bottom :: Position
+bottom = Position maxBound 0
 ---------------------------------------------------------------------------------------------
 
 examplesPath :: FilePath
