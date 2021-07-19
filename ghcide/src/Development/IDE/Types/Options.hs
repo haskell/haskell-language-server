@@ -72,7 +72,7 @@ data IdeOptions = IdeOptions
     --   Otherwise, return the result of parsing without Opt_Haddock, so
     --   that the parsed module contains the result of Opt_KeepRawTokenStream,
     --   which might be necessary for hlint.
-  , optModifyDynFlags     :: DynFlagsModifications
+  , optModifyDynFlags     :: Config -> DynFlagsModifications
     -- ^ Will be called right after setting up a new cradle,
     --   allowing to customize the Ghc options used
   , optShakeOptions       :: ShakeOptions
