@@ -444,6 +444,8 @@ test-suite func-test
     cpp-options: -Deval
   if flag(importLens) || flag(all-plugins)
     cpp-options: -DimportLens
+  if flag(rename) || flag(all-plugins)
+    cpp-options: -Drename
   if flag(retrie) || flag(all-plugins)
     cpp-options: -Dretrie
   if flag(tactic) || flag(all-plugins)

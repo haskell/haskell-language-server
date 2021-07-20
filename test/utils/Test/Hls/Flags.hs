@@ -39,6 +39,14 @@ requiresImportLensPlugin      = id
 requiresImportLensPlugin      = ignoreTestBecause "ImportLens plugin disabled"
 #endif
 
+-- | Disable test unless the rename flag is set
+requiresRenamePlugin          :: TestTree -> TestTree
+#if rename
+requiresRenamePlugin          = id
+#else
+requiresRenamePlugin          = ignoreTestBecause "Rename plugin disabled"
+#endif
+
 -- | Disable test unless the retrie flag is set
 requiresRetriePlugin          :: TestTree -> TestTree
 #if retrie
