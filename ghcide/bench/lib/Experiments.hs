@@ -192,6 +192,7 @@ experiments =
         (\docs -> do
             forM_ docs $ \DocumentPositions{..} ->
               changeDoc doc [charEdit stringLiteralP]
+            void waitForDiagnostics
             waitForProgressDone
             flip allM docs $ \DocumentPositions{..} -> do
                 bottom <- pred . length . T.lines <$> documentContents doc
