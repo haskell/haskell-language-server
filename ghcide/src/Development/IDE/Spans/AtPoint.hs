@@ -93,7 +93,10 @@ foiReferencesAtPoint file pos (FOIReferences asts) =
   case HM.lookup file asts of
     Nothing -> ([],[],[])
     Just (HAR _ hf _ _ _,mapping) ->
-      let names = getNamesAtPoint hf pos mapping
+      let names = let
+       posFile = fromMaybe pos $ fromCurrentPosition mapping pos
+  in
+   concat $ pointCommand hf posFile (rights . M.keys . getNodeIds)
           adjustedLocs = HM.foldr go [] asts
           go (HAR _ _ rf tr _, mapping) xs = refs ++ typerefs ++ xs
             where
@@ -105,8 +108,9 @@ foiReferencesAtPoint file pos (FOIReferences asts) =
 
 getNamesAtPoint :: HieASTs a -> Position -> PositionMapping -> [Name]
 getNamesAtPoint hf pos mapping =
-  let posFile = fromMaybe pos $ fromCurrentPosition mapping pos
-  in concat $ pointCommand hf posFile (rights . M.keys . nodeIdentifiers . nodeInfo)
+  concat $ pointCommand hf posFile (rights . M.keys . getNodeIds)
+    where
+      posFile = fromMaybe pos $ fromCurrentPosition mapping pos
 
 toCurrentLocation :: PositionMapping -> Location -> Maybe Location
 toCurrentLocation mapping (Location uri range) =
