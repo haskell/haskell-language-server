@@ -22,7 +22,7 @@ import           Language.LSP.Types
 -- since diagnostics emit in arbitrary shake rules -- we don't know
 -- whether a plugin is capable of producing diagnostics.
 
--- | Generates a defalut 'Config', but remains only effective items
+-- | Generates a default 'Config', but remains only effective items
 pluginsToDefaultConfig :: IdePlugins a -> A.Value
 pluginsToDefaultConfig IdePlugins {..} =
   A.Object $

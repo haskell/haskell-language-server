@@ -241,7 +241,7 @@ suggestHideShadow ps@(L _ HsModule {hsmodImports}) mTcM mHar Diagnostic {_messag
       | Just tcM <- mTcM,
         Just har <- mHar,
         [s'] <- [x | (x, "") <- readSrcSpan $ T.unpack s],
-        isUnusedImportedId tcM har (T.unpack identifier) (T.unpack modName) (RealSrcSpan s'),
+        isUnusedImportedId tcM har (T.unpack identifier) (T.unpack modName) (OldRealSrcSpan s'),
         mDecl <- findImportDeclByModuleName hsmodImports $ T.unpack modName,
         title <- "Hide " <> identifier <> " from " <> modName =
         if modName == "Prelude" && null mDecl
@@ -289,7 +289,7 @@ suggestRemoveRedundantImport :: ParsedModule -> Maybe T.Text -> Diagnostic -> [(
 suggestRemoveRedundantImport ParsedModule{pm_parsed_source = L _  HsModule{hsmodImports}} contents Diagnostic{_range=_range,..}
 --     The qualified import of ‘many’ from module ‘Control.Applicative’ is redundant
     | Just [_, bindings] <- matchRegexUnifySpaces _message "The( qualified)? import of ‘([^’]*)’ from module [^ ]* is redundant"
-    , Just (L _ impDecl) <- find (\(L l _) -> srcSpanToRange l == Just _range ) hsmodImports
+    , Just (L _ impDecl) <- find (\(L l _) -> _start _range `isInsideSrcSpan` l && _end _range `isInsideSrcSpan` l ) hsmodImports
     , Just c <- contents
     , ranges <- map (rangesForBindingImport impDecl . T.unpack) (T.splitOn ", " bindings)
     , ranges' <- extendAllToIncludeCommaIfPossible False (indexedByPosition $ T.unpack c) (concat ranges)
@@ -425,10 +425,10 @@ suggestDeleteUnusedBinding
       findRelatedSpans
         indexedContent
         name
-        (L (RealSrcSpan l) (ValD _ (extractNameAndMatchesFromFunBind -> Just (lname, matches)))) =
+        (L (OldRealSrcSpan l) (ValD _ (extractNameAndMatchesFromFunBind -> Just (lname, matches)))) =
         case lname of
           (L nLoc _name) | isTheBinding nLoc ->
-            let findSig (L (RealSrcSpan l) (SigD _ sig)) = findRelatedSigSpan indexedContent name l sig
+            let findSig (L (OldRealSrcSpan l) (SigD _ sig)) = findRelatedSigSpan indexedContent name l sig
                 findSig _ = []
             in
               extendForSpaces indexedContent (toRange l) :
@@ -451,7 +451,7 @@ suggestDeleteUnusedBinding
         let maybeSpan = findRelatedSigSpan1 name sig
         in case maybeSpan of
           Just (_span, True) -> pure $ extendForSpaces indexedContent $ toRange l -- a :: Int
-          Just (RealSrcSpan span, False) -> pure $ toRange span -- a, b :: Int, a is unused
+          Just (OldRealSrcSpan span, False) -> pure $ toRange span -- a, b :: Int, a is unused
           _ -> []
 
       -- Second of the tuple means there is only one match
@@ -502,10 +502,10 @@ suggestDeleteUnusedBinding
         indexedContent
         name
         lsigs
-        (L (RealSrcSpan l) (extractNameAndMatchesFromFunBind -> Just (lname, matches))) =
+        (L (OldRealSrcSpan l) (extractNameAndMatchesFromFunBind -> Just (lname, matches))) =
         if isTheBinding (getLoc lname)
         then
-          let findSig (L (RealSrcSpan l) sig) = findRelatedSigSpan indexedContent name l sig
+          let findSig (L (OldRealSrcSpan l) sig) = findRelatedSigSpan indexedContent name l sig
               findSig _ = []
           in extendForSpaces indexedContent (toRange l) : concatMap findSig lsigs
         else concatMap (findRelatedSpanForMatch indexedContent name) matches
@@ -547,7 +547,7 @@ suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModul
     -- we get the last export and the closing bracket and check for comma in that range
     needsComma :: T.Text -> Located [LIE GhcPs] -> Bool
     needsComma _ (L _ []) = False
-    needsComma source (L (RealSrcSpan l) exports) =
+    needsComma source (L (OldRealSrcSpan l) exports) =
       let closeParan = _end $ realSrcSpanToRange l
           lastExport = fmap _end . getLocatedRange $ last exports
       in case lastExport of
@@ -675,7 +675,7 @@ newDefinitionAction :: IdeOptions -> ParsedModule -> Range -> T.Text -> T.Text -
 newDefinitionAction IdeOptions{..} parsedModule Range{_start} name typ
     | Range _ lastLineP : _ <-
       [ realSrcSpanToRange sp
-      | (L l@(RealSrcSpan sp) _) <- hsmodDecls
+      | (L l@(OldRealSrcSpan sp) _) <- hsmodDecls
       , _start `isInsideSrcSpan` l]
     , nextLineP <- Position{ _line = _line lastLineP + 1, _character = 0}
     = [ ("Define " <> sig
@@ -804,6 +804,10 @@ suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_
     = mod_srcspan >>= uncurry (suggestions hsmodImports binding)
     | otherwise = []
     where
+        canUseDatacon = case extractNotInScopeName _message of
+                            Just NotInScopeTypeConstructorOrClass{} -> False
+                            _                                       -> True
+
         suggestions decls binding mod srcspan
           | range <- case [ x | (x,"") <- readSrcSpan (T.unpack srcspan)] of
                 [s] -> let x = realSrcSpanToRange s
@@ -823,7 +827,7 @@ suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_
           -- Only for the situation that data constructor name is same as type constructor name,
           -- let ident with parent be in front of the one without.
           , sortedMatch <- sortBy (\ident1 ident2 -> parent ident2 `compare` parent ident1) (Set.toList match)
-          , idents <- filter (\ident -> moduleNameText ident == mod) sortedMatch
+          , idents <- filter (\ident -> moduleNameText ident == mod && (canUseDatacon || not (isDatacon ident))) sortedMatch
           , (not . null) idents -- Ensure fallback while `idents` is empty
           , ident <- head idents
           = Just ident
@@ -919,7 +923,14 @@ suggestImportDisambiguation df (Just txt) ps@(L _ HsModule {hsmodImports}) diag@
             , mode <-
                 [ ToQualified parensed qual
                 | ExistingImp imps <- [modTarget]
+#if MIN_VERSION_ghc(9,0,0)
+                {- HLINT ignore suggestImportDisambiguation "Use nubOrd" -}
+                -- TODO: The use of nub here is slow and maybe wrong for UnhelpfulLocation
+                -- nubOrd can't be used since SrcSpan is intentionally no Ord
+                , L _ qual <- nub $ mapMaybe (ideclAs . unLoc)
+#else
                 , L _ qual <- nubOrd $ mapMaybe (ideclAs . unLoc)
+#endif
                     $ NE.toList imps
                 ]
                 ++ [ToQualified parensed modName
@@ -987,10 +998,10 @@ disambiguateSymbol pm Diagnostic {..} (T.unpack -> symbol) = \case
                     liftParseAST @(HsExpr GhcPs) df $
                     prettyPrint $
                         HsVar @GhcPs noExtField $
-                            L (UnhelpfulSpan "") rdr
+                            L (oldUnhelpfulSpan  "") rdr
                 else Rewrite (rangeToSrcSpan "<dummy>" _range) $ \df ->
                     liftParseAST @RdrName df $
-                    prettyPrint $ L (UnhelpfulSpan "") rdr
+                    prettyPrint $ L (oldUnhelpfulSpan  "") rdr
             ]
 
 findImportDeclByRange :: [LImportDecl GhcPs] -> Range -> Maybe (LImportDecl GhcPs)
@@ -1266,11 +1277,11 @@ newImportInsertRange :: ParsedSource -> Maybe (Range, Int)
 newImportInsertRange (L _ HsModule {..})
   |  Just (uncurry Position -> insertPos, col) <- case hsmodImports of
       [] -> case getLoc (head hsmodDecls) of
-        RealSrcSpan s -> let col = srcLocCol (realSrcSpanStart s) - 1
+        OldRealSrcSpan s -> let col = srcLocCol (realSrcSpanStart s) - 1
               in Just ((srcLocLine (realSrcSpanStart s) - 1, col), col)
         _            -> Nothing
       _ -> case  getLoc (last hsmodImports) of
-        RealSrcSpan s -> let col = srcLocCol (realSrcSpanStart s) - 1
+        OldRealSrcSpan s -> let col = srcLocCol (realSrcSpanStart s) - 1
             in Just ((srcLocLine $ realSrcSpanEnd s,col), col)
         _            -> Nothing
     = Just (Range insertPos insertPos, col)
@@ -1311,8 +1322,9 @@ hideImplicitPreludeSymbol :: T.Text -> NewImport
 hideImplicitPreludeSymbol symbol = newUnqualImport "Prelude" symbol True
 
 canUseIdent :: NotInScope -> IdentInfo -> Bool
-canUseIdent NotInScopeDataConstructor{} = isDatacon
-canUseIdent _                           = const True
+canUseIdent NotInScopeDataConstructor{}        = isDatacon
+canUseIdent NotInScopeTypeConstructorOrClass{} = not . isDatacon
+canUseIdent _                                  = const True
 
 data NotInScope
     = NotInScopeDataConstructor T.Text

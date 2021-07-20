@@ -3,6 +3,6 @@ data Many
   | Goodbye { a :: Int, b :: Bool, c :: Many }
 
 test :: Many -> Many
-test Hello {world} = _
-test Goodbye {a, b, c} = _
+test Hello {world} = _w0
+test Goodbye {a, b, c} = _w1
 

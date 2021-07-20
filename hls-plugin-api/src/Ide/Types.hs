@@ -4,9 +4,11 @@
 {-# LANGUAGE DefaultSignatures    #-}
 {-# LANGUAGE DeriveAnyClass       #-}
 {-# LANGUAGE DeriveGeneric        #-}
+{-# LANGUAGE DerivingStrategies   #-}
 {-# LANGUAGE FlexibleContexts     #-}
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE GADTs                #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings    #-}
 {-# LANGUAGE PolyKinds            #-}
 {-# LANGUAGE ScopedTypeVariables  #-}
@@ -49,6 +51,7 @@ import           Language.LSP.Types.Capabilities
 import           Language.LSP.Types.Lens         as J hiding (id)
 import           Language.LSP.VFS
 import           OpenTelemetry.Eventlog
+import           Options.Applicative             (ParserInfo)
 import           System.IO.Unsafe
 import           Text.Regex.TDFA.Text            ()
 
@@ -56,6 +59,7 @@ import           Text.Regex.TDFA.Text            ()
 
 newtype IdePlugins ideState = IdePlugins
   { ipMap :: [(PluginId, PluginDescriptor ideState)]}
+  deriving newtype (Monoid, Semigroup)
 
 -- | Hooks for modifying the 'DynFlags' at different times of the compilation
 -- process. Plugins can install a 'DynFlagsModifications' via
@@ -80,6 +84,10 @@ instance Semigroup DynFlagsModifications where
 instance Monoid DynFlagsModifications where
   mempty = DynFlagsModifications id id
 
+-- ---------------------------------------------------------------------
+
+newtype IdeCommand state = IdeCommand (state -> IO ())
+instance Show (IdeCommand st) where show _ = "<ide command>"
 
 -- ---------------------------------------------------------------------
 
@@ -91,6 +99,7 @@ data PluginDescriptor ideState =
                    , pluginConfigDescriptor :: ConfigDescriptor
                    , pluginNotificationHandlers :: PluginNotificationHandlers ideState
                    , pluginModifyDynflags :: DynFlagsModifications
+                   , pluginCli            :: Maybe (ParserInfo (IdeCommand ideState))
                    }
 
 -- | An existential wrapper of 'Properties'
@@ -324,6 +333,7 @@ defaultPluginDescriptor plId =
     defaultConfigDescriptor
     mempty
     mempty
+    Nothing
 
 newtype CommandId = CommandId T.Text
   deriving (Show, Read, Eq, Ord)
@@ -446,6 +456,8 @@ instance HasTracing WorkspaceSymbolParams where
 -- ---------------------------------------------------------------------
 
 {-# NOINLINE pROCESS_ID #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 pROCESS_ID :: T.Text
 pROCESS_ID = unsafePerformIO getPid
 

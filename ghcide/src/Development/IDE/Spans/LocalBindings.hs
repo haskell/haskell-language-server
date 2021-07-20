@@ -23,6 +23,7 @@ import           Development.IDE.GHC.Compat     (Name, RefMap, Scope (..), Type,
                                                  identType)
 import           Development.IDE.GHC.Error
 import           Development.IDE.Types.Location
+import           Name                           (isSystemName)
 import           NameEnv
 import           SrcLoc
 
@@ -118,7 +119,8 @@ getDefiningBindings bs rss
 -- This is meant for use with the fuzzy `PositionRange` returned by `PositionMapping`
 getFuzzyScope :: Bindings -> Position -> Position -> [(Name, Maybe Type)]
 getFuzzyScope bs a b
-  = nameEnvElts
+  = filter (not . isSystemName . fst)
+  $ nameEnvElts
   $ foldMap snd
   $ IM.intersections (Interval a b)
   $ getLocalBindings bs

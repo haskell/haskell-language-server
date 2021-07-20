@@ -135,6 +135,7 @@ jobs:
     - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
       name: untar
       run: |
+        mkdir -p ~/.cabal
         tar xzf workspace.tar.gz
         tar xzf cabal.tar.gz --directory ~/.cabal
 

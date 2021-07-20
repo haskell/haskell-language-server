@@ -22,11 +22,9 @@ module Development.IDE.Types.Options
 import qualified Data.Text                         as T
 import           Data.Typeable
 import           Development.IDE.Core.RuleTypes
+import           Development.IDE.GHC.Compat        as GHC
 import           Development.IDE.Graph
 import           Development.IDE.Types.Diagnostics
-import           GHC                               hiding (parseModule,
-                                                    typecheckModule)
-import           GhcPlugins                        as GHC hiding (fst3, (<>))
 import           Ide.Plugin.Config
 import           Ide.Types                         (DynFlagsModifications)
 import qualified Language.LSP.Types.Capabilities   as LSP
@@ -74,13 +72,15 @@ data IdeOptions = IdeOptions
     --   Otherwise, return the result of parsing without Opt_Haddock, so
     --   that the parsed module contains the result of Opt_KeepRawTokenStream,
     --   which might be necessary for hlint.
-  , optModifyDynFlags     :: DynFlagsModifications
+  , optModifyDynFlags     :: Config -> DynFlagsModifications
     -- ^ Will be called right after setting up a new cradle,
     --   allowing to customize the Ghc options used
   , optShakeOptions       :: ShakeOptions
   , optSkipProgress       :: forall a. Typeable a => a -> Bool
       -- ^ Predicate to select which rule keys to exclude from progress reporting.
   , optProgressStyle      :: ProgressReportingStyle
+  , optRunSubset          :: Bool
+      -- ^ Experimental feature to re-run only the subset of the Shake graph that has changed
   }
 
 optShakeFiles :: IdeOptions -> Maybe FilePath
@@ -142,6 +142,7 @@ defaultIdeOptions session = IdeOptions
     ,optModifyDynFlags = mempty
     ,optSkipProgress = defaultSkipProgress
     ,optProgressStyle = Explicit
+    ,optRunSubset = False
     }
 
 defaultSkipProgress :: Typeable a => a -> Bool

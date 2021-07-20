@@ -11,7 +11,7 @@ import           Plugins
 
 main :: IO ()
 main = do
-    args <- getArguments "haskell-language-server"
+    args <- getArguments "haskell-language-server" (idePlugins False)
 
     let withExamples =
             case args of

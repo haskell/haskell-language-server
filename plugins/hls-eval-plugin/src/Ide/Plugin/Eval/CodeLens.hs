@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                       #-}
 {-# LANGUAGE DuplicateRecordFields     #-}
 {-# LANGUAGE ExtendedDefaultRules      #-}
 {-# LANGUAGE FlexibleContexts          #-}
@@ -6,6 +7,7 @@
 {-# LANGUAGE NamedFieldPuns            #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE OverloadedStrings         #-}
+{-# LANGUAGE PatternSynonyms           #-}
 {-# LANGUAGE RankNTypes                #-}
 {-# LANGUAGE RecordWildCards           #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
@@ -38,7 +40,7 @@ import           Data.Char                            (isSpace)
 import qualified Data.DList                           as DL
 import qualified Data.HashMap.Strict                  as HashMap
 import           Data.List                            (dropWhileEnd, find,
-                                                       intercalate)
+                                                       intercalate, intersperse)
 import qualified Data.Map.Strict                      as Map
 import           Data.Maybe                           (catMaybes, fromMaybe)
 import           Data.String                          (IsString)
@@ -74,14 +76,17 @@ import           Development.IDE.GHC.Compat           (AnnotationComment (AnnBlo
                                                        GenLocated (L),
                                                        GhcException, HscEnv,
                                                        ParsedModule (..),
-                                                       SrcSpan (RealSrcSpan, UnhelpfulSpan),
+                                                       SrcSpan (UnhelpfulSpan),
+                                                       moduleName,
                                                        setInteractiveDynFlags,
                                                        srcSpanFile)
 import qualified Development.IDE.GHC.Compat           as SrcLoc
 import           Development.IDE.Types.Options
 import           DynamicLoading                       (initializePlugins)
 import           FastString                           (unpackFS)
-import           GHC                                  (ExecOptions (execLineNumber, execSourceFile),
+import           GHC                                  (ClsInst,
+                                                       ExecOptions (execLineNumber, execSourceFile),
+                                                       FamInst, Fixity,
                                                        GeneralFlag (..), Ghc,
                                                        GhcLink (LinkInMemory),
                                                        GhcMode (CompManager),
@@ -89,33 +94,38 @@ import           GHC                                  (ExecOptions (execLineNumb
                                                        HscTarget (HscInterpreted),
                                                        LoadHowMuch (LoadAllTargets),
                                                        ModSummary (ms_hspp_opts),
-                                                       Module (moduleName),
+                                                       NamedThing (getName, getOccName),
                                                        SuccessFlag (Failed, Succeeded),
                                                        TcRnExprMode (..),
+                                                       TyThing, defaultFixity,
                                                        execOptions, exprType,
+                                                       getInfo,
                                                        getInteractiveDynFlags,
                                                        getSessionDynFlags,
                                                        isImport, isStmt, load,
-                                                       runDecls, setContext,
-                                                       setLogAction,
+                                                       parseName, pprFamInst,
+                                                       pprInstance, runDecls,
+                                                       setContext, setLogAction,
                                                        setSessionDynFlags,
                                                        setTargets, typeKind)
+import qualified GHC.LanguageExtensions.Type          as LangExt (Extension (..))
 import           GhcPlugins                           (DynFlags (..),
                                                        defaultLogActionHPutStrDoc,
-                                                       gopt_set, gopt_unset,
-                                                       hsc_dflags, interpWays,
+                                                       elemNameSet, gopt_set,
+                                                       gopt_unset, hsc_dflags,
+                                                       isSymOcc, mkNameSet,
                                                        parseDynamicFlagsCmdLine,
+                                                       pprDefinedAt,
+                                                       pprInfixName,
                                                        targetPlatform,
-                                                       updateWays,
-                                                       wayGeneralFlags,
-                                                       wayUnsetGeneralFlags,
-                                                       xopt_set)
+                                                       tyThingParent_maybe,
+                                                       xopt_set, xopt_unset)
+
 import           HscTypes                             (InteractiveImport (IIModule),
                                                        ModSummary (ms_mod),
                                                        Target (Target),
                                                        TargetId (TargetFile))
 import           Ide.Plugin.Eval.Code                 (Statement, asStatements,
-                                                       evalExtensions,
                                                        evalSetup, myExecStmt,
                                                        propSetup, resultRange,
                                                        testCheck, testRanges)
@@ -134,12 +144,42 @@ import           Language.LSP.Server
 import           Language.LSP.Types
 import           Language.LSP.Types.Lens              (end, line)
 import           Language.LSP.VFS                     (virtualFileText)
-import           Outputable                           (nest, ppr, showSDoc,
-                                                       text, ($$), (<+>))
+import           Outputable                           (SDoc, empty, hang, nest,
+                                                       ppr, showSDoc, text,
+                                                       vcat, ($$), (<+>))
 import           System.FilePath                      (takeFileName)
 import           System.IO                            (hClose)
 import           UnliftIO.Temporary                   (withSystemTempFile)
 import           Util                                 (OverridingBool (Never))
+
+import           IfaceSyn                             (showToHeader)
+import           PprTyThing                           (pprTyThingInContext, pprTypeForUser)
+#if MIN_VERSION_ghc(9,0,0)
+import           GHC.Parser.Annotation                (ApiAnns (apiAnnRogueComments))
+import           GHC.Parser.Lexer                     (mkParserFlags)
+import           GHC.Driver.Ways                      (hostFullWays,
+                                                       wayGeneralFlags,
+                                                       wayUnsetGeneralFlags)
+import           GHC.Types.SrcLoc                     (UnhelpfulSpanReason(UnhelpfulInteractive))
+#else
+import           GhcPlugins                           (interpWays, updateWays,
+                                                       wayGeneralFlags,
+                                                       wayUnsetGeneralFlags)
+#endif
+
+#if MIN_VERSION_ghc(9,0,0)
+pattern RealSrcSpanAlready :: SrcLoc.RealSrcSpan -> SrcLoc.RealSrcSpan
+pattern RealSrcSpanAlready x = x
+apiAnnComments' :: SrcLoc.ApiAnns -> [SrcLoc.RealLocated AnnotationComment]
+apiAnnComments' = apiAnnRogueComments
+#else
+apiAnnComments' :: SrcLoc.ApiAnns -> [SrcLoc.Located AnnotationComment]
+apiAnnComments' = concat . Map.elems . snd
+
+pattern RealSrcSpanAlready :: SrcLoc.RealSrcSpan -> SrcSpan
+pattern RealSrcSpanAlready x = SrcLoc.RealSrcSpan x
+#endif
+
 
 {- | Code Lens provider
  NOTE: Invoked every time the document is modified, not just when the document is saved.
@@ -156,10 +196,10 @@ codeLens st plId CodeLensParams{_textDocument} =
                     isLHS = isLiterate fp
                 dbg "fp" fp
                 (ParsedModule{..}, posMap) <- liftIO $
-                    runAction "parsed" st $ useWithStale_ GetParsedModuleWithComments nfp
-                let comments = foldMap
-                        ( foldMap $ \case
-                            L (RealSrcSpan real) bdy
+                    runAction "eval.GetParsedModuleWithComments" st $ useWithStale_ GetParsedModuleWithComments nfp
+                let comments =
+                         foldMap (\case
+                            L (RealSrcSpanAlready real) bdy
                                 | unpackFS (srcSpanFile real) ==
                                     fromNormalizedFilePath nfp
                                 , let ran0 = realSrcSpanToRange real
@@ -176,16 +216,15 @@ codeLens st plId CodeLensParams{_textDocument} =
                                         _ -> mempty
                             _ -> mempty
                         )
-                        $ snd pm_annotations
+                        $ apiAnnComments' pm_annotations
                 dbg "excluded comments" $ show $  DL.toList $
-                    foldMap
-                    (foldMap $ \(L a b) ->
+                    foldMap (\(L a b) ->
                         case b of
                             AnnLineComment{}  -> mempty
                             AnnBlockComment{} -> mempty
                             _                 -> DL.singleton (a, b)
                     )
-                    $ snd pm_annotations
+                    $ apiAnnComments' pm_annotations
                 dbg "comments" $ show comments
 
                 -- Extract tests from source code
@@ -283,8 +322,27 @@ runEvalCmd st EvalParams{..} =
                 -- copy the package state to the interactive DynFlags
                 idflags <- getInteractiveDynFlags
                 df <- getSessionDynFlags
-                setInteractiveDynFlags $
-                    (foldl xopt_set idflags evalExtensions)
+                -- set the identical DynFlags as GHCi
+                -- Source: https://github.com/ghc/ghc/blob/5abf59976c7335df760e5d8609d9488489478173/ghc/GHCi/UI.hs#L473-L483
+                -- This needs to be done manually since the default flags are not visible externally.
+                let df' = flip xopt_set    LangExt.ExtendedDefaultRules
+                        . flip xopt_unset  LangExt.MonomorphismRestriction
+                        $ idflags
+                setInteractiveDynFlags $ df'
+#if MIN_VERSION_ghc(9,0,0)
+                        { unitState =
+                            unitState
+                                df
+                        , unitDatabases =
+                            unitDatabases
+                                df
+                        , packageFlags =
+                            packageFlags
+                                df
+                        , useColor = Never
+                        , canUseColor = False
+                        }
+#else
                         { pkgState =
                             pkgState
                                 df
@@ -297,10 +355,16 @@ runEvalCmd st EvalParams{..} =
                         , useColor = Never
                         , canUseColor = False
                         }
+#endif
 
                 -- set up a custom log action
+#if MIN_VERSION_ghc(9,0,0)
+                setLogAction $ \_df _wr _sev _span _doc ->
+                    defaultLogActionHPutStrDoc _df logHandle _doc
+#else
                 setLogAction $ \_df _wr _sev _span _style _doc ->
                     defaultLogActionHPutStrDoc _df logHandle _doc _style
+#endif
 
                 -- Load the module with its current content (as the saved module might not be up to date)
                 -- BUG: this fails for files that requires preprocessors (e.g. CPP) for ghc < 8.8
@@ -487,7 +551,7 @@ evals (st, fp) df stmts = do
             eans <-
                 liftIO $ try @GhcException $
                 parseDynamicFlagsCmdLine ndf
-                (map (L $ UnhelpfulSpan "<interactive>") flags)
+                (map (L $ UnhelpfulSpan unhelpfulReason) flags)
             dbg "parsed flags" $ eans
               <&> (_1 %~ showDynFlags >>> _3 %~ map warnMsg)
             case eans of
@@ -513,7 +577,7 @@ evals (st, fp) df stmts = do
           Just (cmd, arg) <- parseGhciLikeCmd $ T.pack stmt =
             evalGhciLikeCmd cmd arg
         | -- A statement
-          isStmt df stmt =
+          isStmt pf stmt =
             do
                 dbg "{STMT " stmt
                 res <- exec stmt l
@@ -523,7 +587,7 @@ evals (st, fp) df stmts = do
                 dbg "STMT} -> " r
                 return r
         | -- An import
-          isImport df stmt =
+          isImport pf stmt =
             do
                 dbg "{IMPORT " stmt
                 _ <- addImport stmt
@@ -534,6 +598,13 @@ evals (st, fp) df stmts = do
                 dbg "{DECL " stmt
                 void $ runDecls stmt
                 return Nothing
+#if !MIN_VERSION_ghc(9,0,0)
+    pf = df
+    unhelpfulReason = "<interactive>"
+#else
+    pf = mkParserFlags df
+    unhelpfulReason = UnhelpfulInteractive
+#endif
     exec stmt l =
         let opts = execOptions{execSourceFile = fp, execLineNumber = l}
          in myExecStmt stmt opts
@@ -612,7 +683,12 @@ type GHCiLikeCmd = DynFlags -> Text -> Ghc (Maybe Text)
 -- Should we use some sort of trie here?
 ghciLikeCommands :: [(Text, GHCiLikeCmd)]
 ghciLikeCommands =
-    [("kind", doKindCmd False), ("kind!", doKindCmd True), ("type", doTypeCmd)]
+    [ ("info", doInfoCmd False)
+    , ("info!", doInfoCmd True)
+    , ("kind", doKindCmd False)
+    , ("kind!", doKindCmd True)
+    , ("type", doTypeCmd)
+    ]
 
 evalGhciLikeCmd :: Text -> Text -> Ghc (Maybe [Text])
 evalGhciLikeCmd cmd arg = do
@@ -626,24 +702,69 @@ evalGhciLikeCmd cmd arg = do
                 <$> hndler df arg
         _ -> E.throw $ GhciLikeCmdNotImplemented cmd arg
 
+doInfoCmd :: Bool -> DynFlags -> Text -> Ghc (Maybe Text)
+doInfoCmd allInfo dflags s = do
+    sdocs <- mapM infoThing (T.words s)
+    pure $ Just $ T.pack $ showSDoc dflags (vcat sdocs)
+    where
+        infoThing :: GHC.GhcMonad m => Text -> m SDoc
+        infoThing (T.unpack -> str) = do
+            names     <- GHC.parseName str
+            mb_stuffs <- mapM (GHC.getInfo allInfo) names
+            let filtered = filterOutChildren (\(t,_f,_ci,_fi,_sd) -> t)
+                                            (catMaybes mb_stuffs)
+            return $ vcat (intersperse (text "") $ map pprInfo filtered)
+
+        filterOutChildren :: (a -> TyThing) -> [a] -> [a]
+        filterOutChildren get_thing xs
+            = filter (not . has_parent) xs
+            where
+                all_names = mkNameSet (map (getName . get_thing) xs)
+                has_parent x = case tyThingParent_maybe (get_thing x) of
+                                Just p  -> getName p `elemNameSet` all_names
+                                Nothing -> False
+
+        pprInfo :: (TyThing, Fixity, [GHC.ClsInst], [GHC.FamInst], SDoc) -> SDoc
+        pprInfo (thing, fixity, cls_insts, fam_insts, docs)
+            =  docs
+            $$ pprTyThingInContextLoc thing
+            $$ showFixity thing fixity
+            $$ vcat (map GHC.pprInstance cls_insts)
+            $$ vcat (map GHC.pprFamInst  fam_insts)
+
+        pprTyThingInContextLoc :: TyThing -> SDoc
+        pprTyThingInContextLoc tyThing
+            = showWithLoc (pprDefinedAt (getName tyThing))
+                          (pprTyThingInContext showToHeader tyThing)
+
+        showWithLoc :: SDoc -> SDoc -> SDoc
+        showWithLoc loc doc
+            = hang doc 2 (text "\t--" <+> loc)
+
+        showFixity :: TyThing -> Fixity -> SDoc
+        showFixity thing fixity
+            | fixity /= GHC.defaultFixity || isSymOcc (getOccName thing)
+                = ppr fixity <+> pprInfixName (GHC.getName thing)
+            | otherwise = empty
+
 doKindCmd :: Bool -> DynFlags -> Text -> Ghc (Maybe Text)
 doKindCmd False df arg = do
     let input = T.strip arg
     (_, kind) <- typeKind False $ T.unpack input
-    let kindText = text (T.unpack input) <+> "::" <+> ppr kind
+    let kindText = text (T.unpack input) <+> "::" <+> pprTypeForUser kind
     pure $ Just $ T.pack (showSDoc df kindText)
 doKindCmd True df arg = do
     let input = T.strip arg
     (ty, kind) <- typeKind True $ T.unpack input
-    let kindDoc = text (T.unpack input) <+> "::" <+> ppr kind
-        tyDoc = "=" <+> ppr ty
+    let kindDoc = text (T.unpack input) <+> "::" <+> pprTypeForUser kind
+        tyDoc = "=" <+> pprTypeForUser ty
     pure $ Just $ T.pack (showSDoc df $ kindDoc $$ tyDoc)
 
 doTypeCmd :: DynFlags -> Text -> Ghc (Maybe Text)
 doTypeCmd dflags arg = do
     let (emod, expr) = parseExprMode arg
     ty <- exprType emod $ T.unpack expr
-    let rawType = T.strip $ T.pack $ showSDoc dflags $ ppr ty
+    let rawType = T.strip $ T.pack $ showSDoc dflags $ pprTypeForUser ty
         broken = T.any (\c -> c == '\r' || c == '\n') rawType
     pure $
         Just $
@@ -652,7 +773,7 @@ doTypeCmd dflags arg = do
                     T.pack $
                         showSDoc dflags $
                             text (T.unpack expr)
-                                $$ nest 2 ("::" <+> ppr ty)
+                                $$ nest 2 ("::" <+> pprTypeForUser ty)
                 else expr <> " :: " <> rawType <> "\n"
 
 parseExprMode :: Text -> (TcRnExprMode, T.Text)
@@ -695,13 +816,18 @@ setupDynFlagsForGHCiLike env dflags = do
                 , ghcLink = LinkInMemory
                 }
         platform = targetPlatform dflags3
-        dflags3a = updateWays $ dflags3{ways = interpWays}
+#if MIN_VERSION_ghc(9,0,0)
+        evalWays = hostFullWays
+#else
+        evalWays = interpWays
+#endif
+        dflags3a = dflags3{ways = evalWays}
         dflags3b =
             foldl gopt_set dflags3a $
-                concatMap (wayGeneralFlags platform) interpWays
+                concatMap (wayGeneralFlags platform) evalWays
         dflags3c =
             foldl gopt_unset dflags3b $
-                concatMap (wayUnsetGeneralFlags platform) interpWays
+                concatMap (wayUnsetGeneralFlags platform) evalWays
         dflags4 =
             dflags3c
                 `gopt_set` Opt_ImplicitImportQualified

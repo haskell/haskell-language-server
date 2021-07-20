@@ -36,22 +36,28 @@ extra-deps:
   - data-tree-print-0.1.0.2@rev:2
   - floskell-0.10.4
   - fourmolu-0.3.0.0
+  - # ghc-api-compat-8.6
+    github: hsyl20/ghc-api-compat
+    commit: 8fee87eac97a538dbe81ff1ab18cff10f2f9fa15
+  - ghc-check-0.5.0.4
   - ghc-exactprint-0.6.4
   - ghc-lib-8.10.4.20210206
   - ghc-lib-parser-8.10.4.20210206
+  - ghc-source-gen-0.4.1.0
   - heapsize-0.3.0
   - hie-bios-0.7.5
-  - implicit-hie-cradle-0.3.0.2
-  - implicit-hie-0.1.2.5
+  - implicit-hie-cradle-0.3.0.5
+  - implicit-hie-0.1.2.6
   - monad-dijkstra-0.1.1.2
-  - refinery-0.3.0.0
+  - refinery-0.4.0.0
   - retrie-0.1.1.1
   - shake-0.19.4
   - stylish-haskell-0.12.2.0
   - semigroups-0.18.5
   - temporary-1.2.1.1
+  - th-compat-0.1.2@sha256:3d55de1adc542c1a870c9ada90da2fbbe5f4e8bcd3eed545a55c3df9311b32a8,2854
   - bytestring-encoding-0.1.0.0@sha256:460b49779fbf0112e8e2f1753c1ed9131eb18827600c298f4d6bb51c4e8c1c0d,1727
-  - hiedb-0.3.0.1
+  - hiedb-0.4.0.0
   - lsp-1.2.0.0
   - lsp-types-1.2.0.0
   - lsp-test-0.14.0.0
@@ -75,6 +81,13 @@ flags:
     pedantic: true
   retrie:
     BuildExecutable: false
+  # Stack doesn't support automatic flags.
+  # Until the formatters support ghc-lib-9, we need this flag disabled
+  hls-hlint-plugin:
+    hlint33: false
+  hyphenation:
+    embed: true
+
 
 nix:
   packages: [ icu libcxx zlib ]

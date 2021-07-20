@@ -9,4 +9,3 @@ fun :: forall k n a. (KnownNat k, KnownNat n, Typeable a)
     => Proxy k -> Proxy n -> Proxy a -> ()
 fun _ _ _ = ()
 
--- >>> :type fun

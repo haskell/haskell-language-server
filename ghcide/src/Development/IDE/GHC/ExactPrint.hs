@@ -188,7 +188,7 @@ needsParensSpace ::
     -- | (Needs parens, needs space)
     (All, All)
 needsParensSpace HsLam{}         = (All False, All False)
-needsParensSpace HsLamCase{}     = (All False, All False)
+needsParensSpace HsLamCase{}     = (All False, All True)
 needsParensSpace HsApp{}         = mempty
 needsParensSpace HsAppType{}     = mempty
 needsParensSpace OpApp{}         = mempty
@@ -338,7 +338,7 @@ genericGraftWithSmallestM ::
     -- | The type of nodes we'd like to consider when finding the smallest.
     Proxy (Located ast) ->
     SrcSpan ->
-    (DynFlags -> GenericM (TransformT m)) ->
+    (DynFlags -> ast -> GenericM (TransformT m)) ->
     Graft m a
 genericGraftWithSmallestM proxy dst trans = Graft $ \dflags ->
     smallestM (genericIsSubspan proxy dst) (trans dflags)
@@ -351,7 +351,7 @@ genericGraftWithLargestM ::
     -- | The type of nodes we'd like to consider when finding the largest.
     Proxy (Located ast) ->
     SrcSpan ->
-    (DynFlags -> GenericM (TransformT m)) ->
+    (DynFlags -> ast -> GenericM (TransformT m)) ->
     Graft m a
 genericGraftWithLargestM proxy dst trans = Graft $ \dflags ->
     largestM (genericIsSubspan proxy dst) (trans dflags)

@@ -28,20 +28,59 @@ package *
   ghc-options: -haddock
   test-show-details: direct
 
+-- ghc-api-compat-8.6
+source-repository-package
+  type: git
+  location: https://github.com/hsyl20/ghc-api-compat
+  tag: 8fee87eac97a538dbe81ff1ab18cff10f2f9fa15
+
 write-ghc-environment-files: never
 
-index-state: 2021-05-21T05:01:41Z
+index-state: 2021-07-14T20:31:09Z
+
+constraints:
+    -- Diagrams doesn't support optparse-applicative >= 0.16 yet
+    optparse-applicative < 0.16,
+    hyphenation +embed
+
 
 allow-newer:
-	active:base,
-  data-tree-print:base,
-	diagrams-contrib:base,
-	diagrams-core:base,
-	diagrams-lib:base,
-	diagrams-postscript:base,
-  diagrams-svg:base,
-	dual-tree:base,
-	force-layout:base,
-	monoid-extras:base,
-	statestack:base,
-	svg-builder:base
+    active:base,
+    assoc:base,
+    cryptohash-md5:base,
+    cryptohash-sha1:base,
+    constraints-extras:template-haskell,
+    data-tree-print:base,
+    deepseq:base,
+    dependent-sum:some,
+    dependent-sum:constraints,
+    diagrams-contrib:base,
+    diagrams-contrib:lens,
+    diagrams-contrib:random,
+    diagrams-core:base,
+    diagrams-core:lens,
+    diagrams-lib:base,
+    diagrams-lib:lens,
+    diagrams-postscript:base,
+    diagrams-postscript:lens,
+    diagrams-svg:base,
+    diagrams-svg:lens,
+    dual-tree:base,
+    -- Does this make any sense?
+    entropy:Cabal,
+    force-layout:base,
+    force-layout:lens,
+    floskell:ghc-prim,
+    floskell:base,
+    hashable:base,
+    hslogger:base,
+    monoid-extras:base,
+    newtype-generics:base,
+    parallel:base,
+    regex-base:base,
+    regex-tdfa:base,
+    statestack:base,
+    svg-builder:base,
+    these:base,
+    time-compat:base
+
