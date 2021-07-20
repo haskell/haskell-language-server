@@ -9,6 +9,7 @@ import           Control.Monad
 import           Data.Aeson
 import qualified Data.HashMap.Strict             as HM
 import           Data.List
+import qualified Data.Map as M
 import           Data.Maybe
 import qualified Data.Text                       as T
 import           Ide.Plugin.Config
@@ -400,9 +401,9 @@ redundantImportTests = testGroup "redundant import code actions" [
 
 typedHoleTests :: TestTree
 typedHoleTests = testGroup "typed hole code actions" [
-    ignoreTestBecause "Wingman changes the result of this test when enabled" $
     testCase "works" $
         runSession hlsCommand fullCaps "test/testdata" $ do
+            disableWingman
             doc <- openDoc "TypedHoles.hs" "haskell"
             _ <- waitForDiagnosticsFromSource doc "typecheck"
             cas <- getAllCodeActions doc
@@ -421,9 +422,9 @@ typedHoleTests = testGroup "typed hole code actions" [
                     , "foo x = maxBound"
                     ]
 
-      , ignoreTestBecause "Wingman changes the result of this test when enabled" $
-        testCase "shows more suggestions" $
+      , testCase "shows more suggestions" $
             runSession hlsCommand fullCaps "test/testdata" $ do
+                disableWingman
                 doc <- openDoc "TypedHoles2.hs" "haskell"
                 _ <- waitForDiagnosticsFromSource doc "typecheck"
                 cas <- getAllCodeActions doc
@@ -524,6 +525,17 @@ unusedTermTests = testGroup "unused term code actions" [
             not (null kinds) @? "We found an action of kind RefactorInline"
             all (Just CodeActionRefactorInline ==) kinds @? "All CodeActionRefactorInline"
     ]
+
+disableWingman :: Session ()
+disableWingman =
+  sendConfigurationChanged $ def
+    { plugins = M.fromList [ ("tactics", def { plcGlobalOn = False }) ]
+    }
+
+
+sendConfigurationChanged :: Config -> Session ()
+sendConfigurationChanged config =
+  sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
 
 noLiteralCaps :: C.ClientCapabilities
 noLiteralCaps = def { C._textDocument = Just textDocumentCaps }
