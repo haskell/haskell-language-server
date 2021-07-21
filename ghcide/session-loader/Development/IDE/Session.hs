@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP          #-}
 {-# LANGUAGE TypeFamilies #-}
 
 {-|
@@ -86,7 +85,6 @@ import           Database.SQLite.Simple
 import           HieDb.Create
 import           HieDb.Types
 import           HieDb.Utils
-import           Ide.Types                            (dynFlagsModifyGlobal)
 
 -- | Bump this version number when making changes to the format of the data stored in hiedb
 hiedbDataVersion :: String
@@ -197,7 +195,7 @@ runWithDb fp k = do
 
 getHieDbLoc :: FilePath -> IO FilePath
 getHieDbLoc dir = do
-  let db = intercalate "-" [dirHash, takeBaseName dir, VERSION_ghc, hiedbDataVersion] <.> "hiedb"
+  let db = intercalate "-" [dirHash, takeBaseName dir, ghcVersionStr, hiedbDataVersion] <.> "hiedb"
       dirHash = B.unpack $ B16.encode $ H.hash $ B.pack dir
   cDir <- IO.getXdgDirectory IO.XdgCache cacheDir
   createDirectoryIfMissing True cDir
@@ -284,8 +282,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
         packageSetup (hieYaml, cfp, opts, libDir) = do
           -- Parse DynFlags for the newly discovered component
           hscEnv <- emptyHscEnv ideNc libDir
-          (df, targets) <- evalGhcEnv hscEnv $
-              first (dynFlagsModifyGlobal optModifyDynFlags) <$> setOptions opts (hsc_dflags hscEnv)
+          (df, targets) <- evalGhcEnv hscEnv $ setOptions opts (hsc_dflags hscEnv)
           let deps = componentDependencies opts ++ maybeToList hieYaml
           dep_info <- getDependencyInfo deps
           -- Now lookup to see whether we are combining with an existing HscEnv
@@ -526,11 +523,10 @@ cradleToOptsAndLibDir cradle file = do
 emptyHscEnv :: IORef NameCache -> FilePath -> IO HscEnv
 emptyHscEnv nc libDir = do
     env <- runGhc (Just libDir) getSession
-#if !MIN_VERSION_ghc(9,0,0)
-    -- This causes ghc9 to crash with the error:
-    -- Couldn't find a target code interpreter. Try with -fexternal-interpreter
-    initDynLinker env
-#endif
+    when (ghcVersion < GHC90) $
+        -- This causes ghc9 to crash with the error:
+        -- Couldn't find a target code interpreter. Try with -fexternal-interpreter
+        initDynLinker env
     pure $ setNameCache nc env{ hsc_dflags = (hsc_dflags env){useUnicode = True } }
 
 data TargetDetails = TargetDetails

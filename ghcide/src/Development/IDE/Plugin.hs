@@ -10,7 +10,7 @@ import qualified Language.LSP.Server        as LSP
 data Plugin c = Plugin
     {pluginRules          :: Rules ()
     ,pluginHandlers       :: LSP.Handlers (ServerM c)
-    ,pluginModifyDynflags :: DynFlagsModifications
+    ,pluginModifyDynflags :: c -> DynFlagsModifications
     }
 
 instance Default (Plugin c) where

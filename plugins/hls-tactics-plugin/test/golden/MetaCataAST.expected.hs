@@ -14,10 +14,10 @@ eval (If ast ast' ast_a)
       ast_c = eval ast
       ast'_c = eval ast'
       ast_a_c = eval ast_a
-    in _ ast_c ast'_c ast_a_c
+    in _w0 ast_c ast'_c ast_a_c
 eval (Equal ast ast')
   = let
       ast_c = eval ast
       ast'_c = eval ast'
-    in _ ast_c ast'_c
+    in _w1 ast_c ast'_c
 

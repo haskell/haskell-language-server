@@ -25,7 +25,8 @@ import qualified Data.Text                             as T
 import qualified Data.Text.IO                          as T
 import           Data.Text.Lazy.Encoding               (decodeUtf8)
 import qualified Data.Text.Lazy.IO                     as LT
-import           Development.IDE                       (Action, Rules,
+import           Development.IDE                       (Action, GhcVersion (..),
+                                                        Rules, ghcVersion,
                                                         hDuplicateTo')
 import           Development.IDE.Core.Debouncer        (Debouncer,
                                                         newAsyncDebouncer)
@@ -256,6 +257,11 @@ defaultMain Arguments{..} = do
                             , optRunSubset = runSubset
                             }
                     caps = LSP.resClientCapabilities env
+                -- FIXME: Remove this after GHC 9 gets fully supported
+                when (ghcVersion == GHC90) $
+                    hPutStrLn stderr $
+                        "Currently, HLS supports GHC 9 only partially. "
+                        <> "See [issue #297](https://github.com/haskell/haskell-language-server/issues/297) for more detail."
                 initialise
                     argsDefaultHlsConfig
                     rules

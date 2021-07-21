@@ -65,7 +65,7 @@ tests =
   , testCase "Semantic and Lexical errors are reported" $ do
       evalInFile "T8.hs" "-- >>> noFunctionWithThisName" "-- Variable not in scope: noFunctionWithThisName"
       evalInFile "T8.hs" "-- >>> \"a\" + \"bc\"" $
-        if ghcVersion == GHC901
+        if ghcVersion == GHC90
           then "-- No instance for (Num String) arising from a use of ‘+’"
           else "-- No instance for (Num [Char]) arising from a use of ‘+’"
       evalInFile "T8.hs" "-- >>> \"" "-- lexical error in string/character literal at end of input"
@@ -86,7 +86,7 @@ tests =
   , testCase ":type handles a multilined result properly" $
       evalInFile "T21.hs" "-- >>> :type fun" $ T.unlines [
         "-- fun",
-        if ghcVersion == GHC901
+        if ghcVersion == GHC90
           then "--   :: forall {k1} {k2 :: Nat} {n :: Nat} {a :: k1}."
           else "--   :: forall k1 (k2 :: Nat) (n :: Nat) (a :: k1).",
         "--      (KnownNat k2, KnownNat n, Typeable a) =>",
@@ -95,7 +95,7 @@ tests =
   , goldenWithEval ":t behaves exactly the same as :type" "T22" "hs"
   , testCase ":type does \"dovetails\" for short identifiers" $
       evalInFile "T23.hs" "-- >>> :type f" $ T.unlines [
-        if ghcVersion == GHC901
+        if ghcVersion == GHC90
           then "-- f :: forall {k1} {k2 :: Nat} {n :: Nat} {a :: k1}."
           else "-- f :: forall k1 (k2 :: Nat) (n :: Nat) (a :: k1).",
         "--      (KnownNat k2, KnownNat n, Typeable a) =>",
@@ -126,10 +126,10 @@ tests =
   , goldenWithEval "Can handle eval inside nested comment properly" "TNested" "hs"
   , goldenWithEval "Test on last line insert results correctly" "TLastLine" "hs"
   , testGroup "with preprocessors"
-    [ knownBrokenInEnv [HostOS Windows, GhcVer GHC84, GhcVer GHC86]
+    [ knownBrokenInEnv [HostOS Windows, GhcVer GHC86]
         "CPP eval on Windows and/or GHC <= 8.6 fails for some reasons" $
           goldenWithEval "CPP support" "TCPP" "hs"
-    , knownBrokenForGhcVersions [GHC84, GHC86]
+    , knownBrokenForGhcVersions [GHC86]
         "Preprocessor known to fail on GHC <= 8.6" $
           goldenWithEval "Literate Haskell Bird Style" "TLHS" "lhs"
     -- , goldenWithEval "Literate Haskell LaTeX Style" "TLHSLateX" "lhs"

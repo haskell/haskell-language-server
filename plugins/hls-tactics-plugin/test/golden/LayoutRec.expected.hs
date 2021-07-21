@@ -1,5 +1,5 @@
 data Pair a b = Pair {pa :: a, pb :: b}
 
 p :: Pair (a -> a) (a -> b -> c -> b)
-p = Pair {pa = _, pb = \ a b c -> _}
+p = Pair {pa = _, pb = \ a b c -> _w0}
 
