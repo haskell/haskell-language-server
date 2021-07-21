@@ -112,7 +112,6 @@ configure-options:
 flags:
   haskell-language-server:
     pedantic: true
-    callHierarchy: false
     class: false
     splice: false
     refineImports: false
