@@ -71,10 +71,6 @@
           tweaks = hself: hsuper:
             with haskell.lib; {
 
-              hls-tactics-plugin = hsuper.hls-tactics-plugin.override {
-                refinery = hself.refinery;
-              };
-
               hiedb = hself.callCabal2nix "hiedb"
                 (builtins.fetchTarball {
                   url =
@@ -105,14 +101,6 @@
                     "https://hackage.haskell.org/package/ghc-source-gen-0.4.1.0/ghc-source-gen-0.4.1.0.tar.gz";
                   sha256 =
                     "0kk599vk54ckikpxkzwrbx7z5x0xr20hr179rldmnlb34bf9mpnk";
-                }) { };
-
-              refinery = hself.callCabal2nix "refinery"
-                (builtins.fetchTarball {
-                  url =
-                    "https://hackage.haskell.org/package/refinery-0.4.0.0/refinery-0.4.0.0.tar.gz";
-                  sha256 =
-                    "1ic7qvfizh5av3b3hp8db08v6b0hmac20smyhbaqzwvfpdgnjq71";
                 }) { };
             };
 
