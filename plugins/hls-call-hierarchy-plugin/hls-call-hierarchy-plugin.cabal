@@ -47,6 +47,7 @@ test-suite tests
   build-depends:
     , aeson
     , base
+    , containers
     , extra
     , filepath
     , hls-call-hierarchy-plugin

@@ -1,14 +1,7 @@
-module B (a, b, F(g)) where
+module B where
+import qualified C
+data T = A | B
 
-class F a where
-    g :: a
-
-instance F Integer where
-    g = 3
-
-instance F Bool where
-    g = True
-
-a = 3
+a = 3 + C.a
 b = 4
 c = 5
