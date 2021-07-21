@@ -1,5 +1,6 @@
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveGeneric  #-}
+{-# LANGUAGE DeriveAnyClass        #-}
+{-# LANGUAGE DeriveGeneric         #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 
 module Ide.Plugin.CallHierarchy.Types where
 
@@ -34,3 +35,13 @@ instance FromRow Vertex where
                    <*> field <*> field <*> field
                    <*> field <*> field <*> field
                    <*> field <*> field
+data SymbolPosition = SymbolPosition {
+  psl :: Int
+, psc :: Int
+} deriving (Eq, Show, Generic, FromJSON, ToJSON)
+
+instance ToRow SymbolPosition where
+  toRow (SymbolPosition a b) = toRow (a, b)
+
+instance FromRow SymbolPosition where
+  fromRow = SymbolPosition <$> field <*> field

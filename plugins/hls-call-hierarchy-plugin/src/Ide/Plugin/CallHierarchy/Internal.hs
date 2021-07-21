@@ -21,17 +21,21 @@ import qualified Data.Map                       as M
 import           Data.Maybe
 import qualified Data.Set                       as S
 import qualified Data.Text                      as T
+import           Data.Tuple.Extra
 import           Development.IDE
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Spans.AtPoint
+import           Development.IDE.Spans.Common
 import           HieDb                          (Symbol (Symbol))
 import qualified Ide.Plugin.CallHierarchy.Query as Q
 import           Ide.Plugin.CallHierarchy.Types
 import           Ide.Types
 import           Language.LSP.Types
 import qualified Language.LSP.Types.Lens        as L
+import           Maybes
 import           Name
+import           SrcLoc
 import           Text.Read                      (readMaybe)
 
 prepareCallHierarchy :: PluginMethodHandler IdeState TextDocumentPrepareCallHierarchy
@@ -146,7 +150,9 @@ mkSymbol = \case
   Right name -> Just $ Symbol (occName name) (nameModule name)
 
 
--- Incoming calls and outgoing calls
+----------------------------------------------------------------------
+-------------- Incoming calls and outgoing calls ---------------------
+----------------------------------------------------------------------
 
 deriving instance Ord SymbolKind
 deriving instance Ord SymbolTag
@@ -193,16 +199,26 @@ outgoingCalls state pluginId param = do
                       in  CallHierarchyOutgoingCall (head calls ^. L.to) (List ranges)
 
 mkCallHierarchyCall :: (CallHierarchyItem -> List Range -> a) -> Vertex -> Action (Maybe a)
-mkCallHierarchyCall mk Vertex{..} = do
+mkCallHierarchyCall mk v@Vertex{..} = do
   let pos = Position (sl - 1) (sc - 1)
       nfp = toNormalizedFilePath' hieSrc
       range = mkRange (casl - 1) (casc - 1) (cael - 1) (caec - 1)
-  items <- prepareCallHierarchyItem nfp pos
-  case items of
-    Just [item] -> pure $ Just $ mk item (List [range])
-    _           -> pure Nothing
 
--- Unified queries include incoming calls and outgoing calls.
+  prepareCallHierarchyItem nfp pos >>=
+    \case
+      Just [item] -> pure $ Just $ mk item (List [range])
+      _           -> do
+        ShakeExtras{hiedb} <- getShakeExtras
+        liftIO (Q.getSymbolPosition hiedb v) >>=
+          \case
+            (x:_) ->
+              prepareCallHierarchyItem nfp (Position (psl x - 1) (psc x - 1)) >>=
+                \case
+                  Just [item] -> pure $ Just $ mk item (List [range])
+                  _           -> pure Nothing
+            _     -> pure Nothing
+
+-- | Unified queries include incoming calls and outgoing calls.
 queryCalls :: (Show a)
   => CallHierarchyItem
   -> (HieDb -> Symbol -> IO [Vertex])
@@ -220,7 +236,6 @@ queryCalls item queryFunc makeFunc foiCalls merge
         vs <- liftIO $ queryFunc hiedb symbol
         nonFOIItems <- mapM makeFunc vs
         foiRes <- foiCalls nfp pos
-        if isJust foiRes && (length <$> foiRes) /= Just 0 then liftIO $ putStrLn (show "fois:" <> show foiRes) else pure ()
         let nonFOIRes = Just $ catMaybes nonFOIItems
         pure $ merge <$> (nonFOIRes <> foiRes)
   | otherwise = pure Nothing
@@ -246,7 +261,7 @@ queryCalls item queryFunc makeFunc foiCalls merge
           Nothing -> pure Nothing
           Just (HAR _ hf _ _ _) -> do
             case listToMaybe $ pointCommand hf pos extract of
-              Just infos -> case (\(ident, _, _) -> mkSymbol ident) <$> listToMaybe infos of
+              Just infos -> case mkSymbol . fst3 <$> listToMaybe infos of
                 Nothing  -> pure Nothing
                 Just res -> pure res
               Nothing -> pure Nothing
@@ -267,8 +282,8 @@ foiIncomingCalls nfp pos =
     callers (HAR _ hf _ _ _) ast = mkIncomingCalls $ filter (sameAst ast) $ M.elems (getAsts hf)
 
     sameAst :: HieAST a -> HieAST b -> Bool
-    sameAst ast1 ast2 = (M.keys .nodeIdentifiers . nodeInfo) ast1
-                     == (M.keys .nodeIdentifiers . nodeInfo) ast2
+    sameAst ast1 ast2 = (M.keys . nodeIdentifiers . nodeInfo) ast1
+                     == (M.keys . nodeIdentifiers . nodeInfo) ast2
 
     mkIncomingCalls asts = let infos = concatMap extract asts
                                items = mapMaybe (construct nfp) infos

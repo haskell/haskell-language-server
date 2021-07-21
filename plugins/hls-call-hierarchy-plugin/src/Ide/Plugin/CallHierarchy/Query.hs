@@ -51,6 +51,16 @@ outgoingCalls (getConn -> conn) symbol = do
             \AND \
             \((refs.el = decls.el AND refs.ec <= decls.ec) OR (refs.el < decls.el))" (o, m, u, o, m, u)
 
+getSymbolPosition :: HieDb -> Vertex -> IO [SymbolPosition]
+getSymbolPosition (getConn -> conn) Vertex{..} = do
+  query conn "SELECT refs.sl, refs.sc from refs where \
+             \(occ = ?) \
+             \AND \
+             \((refs.sl = ? AND refs.sc > ?) OR (refs.sl > ?)) \
+             \AND \
+             \((refs.el = ? AND refs.ec <= ?) OR (refs.el < ?))"
+             (occ, sl, sc, sl, el, ec, el)
+
 parseSymbol :: Symbol -> (String, String, String)
 parseSymbol Symbol{..} =
   let o = toNsChar (occNameSpace symName) : occNameString symName
