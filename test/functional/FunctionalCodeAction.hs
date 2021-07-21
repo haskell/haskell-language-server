@@ -422,6 +422,15 @@ typedHoleTests = testGroup "typed hole code actions" [
                     , "foo x = maxBound"
                     ]
 
+      , testCase "doesn't work when wingman is active" $
+        runSession hlsCommand fullCaps "test/testdata" $ do
+            doc <- openDoc "TypedHoles.hs" "haskell"
+            _ <- waitForDiagnosticsFromSource doc "typecheck"
+            cas <- getAllCodeActions doc
+            liftIO $ do
+                dontExpectCodeAction cas ["replace _ with minBound"]
+                dontExpectCodeAction cas ["replace _ with foo _"]
+
       , testCase "shows more suggestions" $
             runSession hlsCommand fullCaps "test/testdata" $ do
                 disableWingman
@@ -446,6 +455,16 @@ typedHoleTests = testGroup "typed hole code actions" [
                         , "  where"
                         , "    stuff (A a) = A (a + 1)"
                         ]
+
+      , testCase "doesnt show more suggestions when wingman is active" $
+            runSession hlsCommand fullCaps "test/testdata" $ do
+                doc <- openDoc "TypedHoles2.hs" "haskell"
+                _ <- waitForDiagnosticsFromSource doc "typecheck"
+                cas <- getAllCodeActions doc
+
+                liftIO $ do
+                    dontExpectCodeAction cas ["replace _ with foo2 _"]
+                    dontExpectCodeAction cas ["replace _ with A _"]
     ]
 
 signatureTests :: TestTree
