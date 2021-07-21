@@ -342,7 +342,7 @@ dontExpectCodeAction cars s =
   noMatch cars predicate err
     where predicate (InR ca) = all (`T.isInfixOf` (ca ^. L.title)) s
           predicate _        = False
-          err = "expected code action matching '" ++ show s ++ "' but did not find one"
+          err = "didn't expected code action matching '" ++ show s ++ "' but found one anyway"
 
 
 inspectCommand :: [Command |? CodeAction] -> [T.Text] -> IO Command
