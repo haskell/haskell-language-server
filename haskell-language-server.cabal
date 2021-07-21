@@ -437,6 +437,8 @@ test-suite func-test
   if flag(pedantic)
     ghc-options: -Werror -Wredundant-constraints
 
+  if flag(callHierarchy) || flag(all-plugins)
+    cpp-options: -DcallHierarchy
   if flag(class) || flag(all-plugins)
     cpp-options: -Dclass
   if flag(haddockComments) || flag(all-plugins)
