@@ -370,6 +370,7 @@ test-suite ghcide-tests
     main-is: Main.hs
     other-modules:
         Development.IDE.Test
+        Development.IDE.Test.Diagnostic
         Development.IDE.Test.Runfiles
         Experiments
         Experiments.Types
@@ -403,17 +404,20 @@ executable ghcide-bench
         extra,
         filepath,
         ghcide,
+        lens,
         lsp-test,
+        lsp-types,
         optparse-applicative,
         process,
         safe-exceptions,
         hls-graph,
         shake,
         text
-    hs-source-dirs: bench/lib bench/exe
+    hs-source-dirs: bench/lib bench/exe test/src
     ghc-options: -threaded -Wall -Wno-name-shadowing -rtsopts
     main-is: Main.hs
     other-modules:
+        Development.IDE.Test.Diagnostic
         Experiments
         Experiments.Types
     default-extensions:
