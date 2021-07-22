@@ -107,6 +107,8 @@ extra-deps:
   - resourcet-1.2.3
 
 configure-options:
+  $targets:
+      - --enable-executable-dynamic
   ghcide:
     - --disable-library-for-ghci
   haskell-language-server:
