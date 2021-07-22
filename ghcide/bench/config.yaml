@@ -48,6 +48,7 @@ experiments:
     - "code actions after edit"
     - "code actions after cradle edit"
     - "documentSymbols after edit"
+    - "hole fit suggestions"
 
 # An ordered list of versions to analyze
 versions:
