@@ -31,6 +31,10 @@ library
     , lsp-types
     , text
     , transformers
+    -- TODO: remove these when GH issue #2005 is resolved
+    , extra
+    , ghc-exactprint
+    , czipwith
 
   default-language: Haskell2010
 
