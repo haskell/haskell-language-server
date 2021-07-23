@@ -9,6 +9,7 @@ import           Control.Monad
 import           Data.Aeson
 import qualified Data.HashMap.Strict             as HM
 import           Data.List
+import qualified Data.Map as M
 import           Data.Maybe
 import qualified Data.Text                       as T
 import           Ide.Plugin.Config
@@ -397,10 +398,12 @@ redundantImportTests = testGroup "redundant import code actions" [
                 ]
     ]
 
+
 typedHoleTests :: TestTree
 typedHoleTests = testGroup "typed hole code actions" [
     testCase "works" $
         runSession hlsCommand fullCaps "test/testdata" $ do
+            disableWingman
             doc <- openDoc "TypedHoles.hs" "haskell"
             _ <- waitForDiagnosticsFromSource doc "typecheck"
             cas <- getAllCodeActions doc
@@ -419,8 +422,19 @@ typedHoleTests = testGroup "typed hole code actions" [
                     , "foo x = maxBound"
                     ]
 
+      , expectFailIfGhc9 "The wingman plugin doesn't yet compile in GHC9" $
+        testCase "doesn't work when wingman is active" $
+        runSession hlsCommand fullCaps "test/testdata" $ do
+            doc <- openDoc "TypedHoles.hs" "haskell"
+            _ <- waitForDiagnosticsFromSource doc "typecheck"
+            cas <- getAllCodeActions doc
+            liftIO $ do
+                dontExpectCodeAction cas ["replace _ with minBound"]
+                dontExpectCodeAction cas ["replace _ with foo _"]
+
       , testCase "shows more suggestions" $
             runSession hlsCommand fullCaps "test/testdata" $ do
+                disableWingman
                 doc <- openDoc "TypedHoles2.hs" "haskell"
                 _ <- waitForDiagnosticsFromSource doc "typecheck"
                 cas <- getAllCodeActions doc
@@ -442,6 +456,17 @@ typedHoleTests = testGroup "typed hole code actions" [
                         , "  where"
                         , "    stuff (A a) = A (a + 1)"
                         ]
+
+      , expectFailIfGhc9 "The wingman plugin doesn't yet compile in GHC9" $
+        testCase "doesnt show more suggestions when wingman is active" $
+            runSession hlsCommand fullCaps "test/testdata" $ do
+                doc <- openDoc "TypedHoles2.hs" "haskell"
+                _ <- waitForDiagnosticsFromSource doc "typecheck"
+                cas <- getAllCodeActions doc
+
+                liftIO $ do
+                    dontExpectCodeAction cas ["replace _ with foo2 _"]
+                    dontExpectCodeAction cas ["replace _ with A _"]
     ]
 
 signatureTests :: TestTree
@@ -521,6 +546,23 @@ unusedTermTests = testGroup "unused term code actions" [
             not (null kinds) @? "We found an action of kind RefactorInline"
             all (Just CodeActionRefactorInline ==) kinds @? "All CodeActionRefactorInline"
     ]
+
+expectFailIfGhc9 :: String -> TestTree -> TestTree
+expectFailIfGhc9 reason =
+  case ghcVersion of
+    GHC90 -> expectFailBecause reason
+    _ -> id
+
+disableWingman :: Session ()
+disableWingman =
+  sendConfigurationChanged $ def
+    { plugins = M.fromList [ ("tactics", def { plcGlobalOn = False }) ]
+    }
+
+
+sendConfigurationChanged :: Config -> Session ()
+sendConfigurationChanged config =
+  sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
 
 noLiteralCaps :: C.ClientCapabilities
 noLiteralCaps = def { C._textDocument = Just textDocumentCaps }

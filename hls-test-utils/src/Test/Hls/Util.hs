@@ -10,6 +10,7 @@ module Test.Hls.Util
   (
       codeActionSupportCaps
     , expectCodeAction
+    , dontExpectCodeAction
     , expectDiagnostic
     , expectNoMoreDiagnostics
     , expectSameLocations
@@ -45,6 +46,7 @@ import           Control.Lens                    ((^.))
 import           Control.Monad
 import           Control.Monad.IO.Class
 import qualified Data.Aeson                      as A
+import           Data.Bool                       (bool)
 import           Data.Default
 import           Data.List                       (intercalate)
 import           Data.List.Extra                 (find)
@@ -315,6 +317,10 @@ fromCommand _             = error "Not a command"
 onMatch :: [a] -> (a -> Bool) -> String -> IO a
 onMatch as predicate err = maybe (fail err) return (find predicate as)
 
+noMatch :: [a] -> (a -> Bool) -> String -> IO ()
+noMatch [] _ _ = pure ()
+noMatch as predicate err = bool (pure ()) (fail err) (any predicate as)
+
 inspectDiagnostic :: [Diagnostic] -> [T.Text] -> IO Diagnostic
 inspectDiagnostic diags s = onMatch diags (\ca -> all (`T.isInfixOf` (ca ^. L.message)) s) err
     where err = "expected diagnostic matching '" ++ show s ++ "' but did not find one"
@@ -330,6 +336,14 @@ inspectCodeAction cars s = fromAction <$> onMatch cars predicate err
 
 expectCodeAction :: [Command |? CodeAction] -> [T.Text] -> IO ()
 expectCodeAction cars s = void $ inspectCodeAction cars s
+
+dontExpectCodeAction :: [Command |? CodeAction] -> [T.Text] -> IO ()
+dontExpectCodeAction cars s =
+  noMatch cars predicate err
+    where predicate (InR ca) = all (`T.isInfixOf` (ca ^. L.title)) s
+          predicate _        = False
+          err = "didn't expected code action matching '" ++ show s ++ "' but found one anyway"
+
 
 inspectCommand :: [Command |? CodeAction] -> [T.Text] -> IO Command
 inspectCommand cars s = fromCommand <$> onMatch cars predicate err
