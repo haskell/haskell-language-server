@@ -317,9 +317,9 @@ fromCommand _             = error "Not a command"
 onMatch :: [a] -> (a -> Bool) -> String -> IO a
 onMatch as predicate err = maybe (fail err) return (find predicate as)
 
-noMatch :: [a] -> (a -> Bool) -> String -> IO ()
+noMatch :: Show a => [a] -> (a -> Bool) -> String -> IO ()
 noMatch [] _ _ = pure ()
-noMatch as predicate err = bool (pure ()) (fail err) (any predicate as)
+noMatch as predicate err = bool (pure ()) (fail $ (show as) <> err) (any predicate as)
 
 inspectDiagnostic :: [Diagnostic] -> [T.Text] -> IO Diagnostic
 inspectDiagnostic diags s = onMatch diags (\ca -> all (`T.isInfixOf` (ca ^. L.message)) s) err
