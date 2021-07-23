@@ -20,11 +20,15 @@ staticPlugin = mempty
   { dynFlagsModifyGlobal =
       \df -> allowEmptyCaseButWithWarning
            $ flip gopt_unset Opt_SortBySubsumHoleFits
-           $ flip gopt_unset Opt_ShowValidHoleFits
            $ df
+             { refLevelHoleFits = Just 0
+             , maxRefHoleFits   = Just 0
+             , maxValidHoleFits = Just 0
 #if __GLASGOW_HASKELL__ >= 808
-             { staticPlugins = staticPlugins df <> [metaprogrammingPlugin]
+             , staticPlugins = staticPlugins df <> [metaprogrammingPlugin]
+#endif
              }
+#if __GLASGOW_HASKELL__ >= 808
   , dynFlagsModifyParser = enableQuasiQuotes
 #endif
   }
