@@ -5137,6 +5137,7 @@ benchmarkTests =
         assertBool "did not successfully complete 5 repetitions" $ Bench.success res
         | e <- Bench.experiments
         , Bench.name e /= "edit" -- the edit experiment does not ever fail
+        , Bench.name e /= "hole fit suggestions" -- is too slow!
         -- the cradle experiments are way too slow
         , not ("cradle" `isInfixOf` Bench.name e)
     ]

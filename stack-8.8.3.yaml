@@ -86,6 +86,8 @@ extra-deps:
   - unliftio-core-0.2.0.1@sha256:9b3e44ea9aacacbfc35b3b54015af450091916ac3618a41868ebf6546977659a,1082
 
 configure-options:
+  $targets:
+      - --enable-executable-dynamic
   ghcide:
     - --disable-library-for-ghci
   haskell-language-server:
