@@ -20,6 +20,7 @@ staticPlugin = mempty
   { dynFlagsModifyGlobal =
       \df -> allowEmptyCaseButWithWarning
            $ flip gopt_unset Opt_SortBySubsumHoleFits
+           $ flip gopt_unset Opt_ShowValidHoleFits
            $ df
              { refLevelHoleFits = Just 0
              , maxRefHoleFits   = Just 0
