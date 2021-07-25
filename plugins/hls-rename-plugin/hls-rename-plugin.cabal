@@ -34,6 +34,7 @@ library
     , containers
     , ghc
     , hiedb
+    , ghc-exactprint
 
   default-language: Haskell2010
 
