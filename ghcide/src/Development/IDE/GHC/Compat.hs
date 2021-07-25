@@ -295,7 +295,7 @@ setUpTypedHoles df
 #if MIN_VERSION_ghc(8,8,0)
   $ flip gopt_unset Opt_ShowDocsOfHoleFits     -- not used
 #endif
-  $ flip gopt_unset Opt_ShowMatchesOfHoleFits  -- nice but broken (forgets module qualifiers)
+  $ flip gopt_unset Opt_ShowMatchesOfHoleFits  -- nice but not used
   $ flip gopt_unset Opt_ShowProvOfHoleFits     -- not used
   $ flip gopt_unset Opt_ShowTypeAppOfHoleFits  -- not used
   $ flip gopt_unset Opt_ShowTypeAppVarsOfHoleFits -- not used
@@ -303,11 +303,7 @@ setUpTypedHoles df
   $ flip gopt_set   Opt_SortBySubsumHoleFits   -- very nice and fast enough in most cases
   $ flip gopt_unset Opt_SortValidHoleFits
   $ flip gopt_unset Opt_UnclutterValidHoleFits
-  $ df
-  { refLevelHoleFits = Just 1   -- becomes slow at higher levels
-  , maxRefHoleFits   = Just 10  -- quantity does not impact speed
-  , maxValidHoleFits = Nothing  -- quantity does not impact speed
-  }
+    df
 
 
 nameListFromAvails :: [AvailInfo] -> [(SrcSpan, Name)]
