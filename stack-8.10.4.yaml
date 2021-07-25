@@ -72,6 +72,8 @@ extra-deps:
   # - hlint-3.3@sha256:4218ad6e03050f5d68aeba0e025f5f05e366c8fd49657f2a19df04ee31b2bb23,4154
 
 configure-options:
+  $targets:
+      - --enable-executable-dynamic
   ghcide:
     - --disable-library-for-ghci
   haskell-language-server:

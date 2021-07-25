@@ -71,10 +71,6 @@
           tweaks = hself: hsuper:
             with haskell.lib; {
 
-              hls-tactics-plugin = hsuper.hls-tactics-plugin.override {
-                refinery = hself.refinery_0_3_0_0;
-              };
-
               hiedb = hself.callCabal2nix "hiedb"
                 (builtins.fetchTarball {
                   url =
@@ -83,6 +79,29 @@
                     "13jz8c46zfpf54ya2wsv4akhn0wcfc6qjazqsjfir5gpvsi7v8xr";
                 }) { };
 
+              implicit-hie = hself.callCabal2nix "implicit-hie"
+                (builtins.fetchTarball {
+                  url =
+                    "https://hackage.haskell.org/package/implicit-hie-0.1.2.6/implicit-hie-0.1.2.6.tar.gz";
+                  sha256 =
+                    "067bmw5b9qg55ggklbfyf93jgpkbzmprmgv906jscfzvv1h8266c";
+                }) { };
+
+              implicit-hie-cradle = hself.callCabal2nix "implicit-hie-cradle"
+                (builtins.fetchTarball {
+                  url =
+                    "https://hackage.haskell.org/package/implicit-hie-cradle-0.3.0.5/implicit-hie-cradle-0.3.0.5.tar.gz";
+                  sha256 =
+                    "15a7g9x6cjk2b92hb2wilxx4550msxp1pmk5a2shiva821qaxnfq";
+                }) { };
+
+              ghc-source-gen = hself.callCabal2nix "ghc-source-gen"
+                (builtins.fetchTarball {
+                  url =
+                    "https://hackage.haskell.org/package/ghc-source-gen-0.4.1.0/ghc-source-gen-0.4.1.0.tar.gz";
+                  sha256 =
+                    "0kk599vk54ckikpxkzwrbx7z5x0xr20hr179rldmnlb34bf9mpnk";
+                }) { };
             };
 
           hlsSources =

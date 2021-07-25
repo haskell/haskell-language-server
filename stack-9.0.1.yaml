@@ -102,6 +102,8 @@ extra-deps:
   commit: 16e19aaf34e286f3d27b3988c61040823ec66537
 
 configure-options:
+  $targets:
+      - --enable-executable-dynamic
   ghcide:
       - --disable-library-for-ghci
   haskell-language-server:

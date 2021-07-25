@@ -292,7 +292,10 @@ getParsedModuleWithCommentsRule =
     liftIO $ fmap (fmap reset_ms) $ snd <$> getParsedModuleDefinition (hscEnv sess) opt file ms
 
 getModifyDynFlags :: (DynFlagsModifications -> a) -> Action a
-getModifyDynFlags f = f . optModifyDynFlags <$> getIdeOptions
+getModifyDynFlags f = do
+  opts <- getIdeOptions
+  cfg <- getClientConfigAction def
+  pure $ f $ optModifyDynFlags opts cfg
 
 
 getParsedModuleDefinition

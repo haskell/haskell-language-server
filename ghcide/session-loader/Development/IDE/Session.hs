@@ -86,7 +86,6 @@ import           HieDb.Create
 import           HieDb.Types
 import           HieDb.Utils
 import           Ide.Types                            (dynFlagsModifyGlobal)
-import HIE.Bios (getCompilerOptions)
 
 -- | Bump this version number when making changes to the format of the data stored in hiedb
 hiedbDataVersion :: String
@@ -284,8 +283,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
         packageSetup (hieYaml, cfp, opts, libDir) = do
           -- Parse DynFlags for the newly discovered component
           hscEnv <- emptyHscEnv ideNc libDir
-          (df, targets) <- evalGhcEnv hscEnv $
-              first (dynFlagsModifyGlobal optModifyDynFlags) <$> setOptions opts (hsc_dflags hscEnv)
+          (df, targets) <- evalGhcEnv hscEnv $ setOptions opts (hsc_dflags hscEnv)
           let deps = componentDependencies opts ++ maybeToList hieYaml
           dep_info <- getDependencyInfo deps
           -- Now lookup to see whether we are combining with an existing HscEnv
@@ -505,7 +503,7 @@ cradleToOptsAndLibDir :: Show a => Cradle a -> FilePath
 cradleToOptsAndLibDir cradle file = do
     -- Start off by getting the session options
     hPutStrLn stderr $ "Output from setting up the cradle " <> show cradle
-    cradleRes <- getCompilerOptions file cradle
+    cradleRes <- HieBios.getCompilerOptions file cradle
     case cradleRes of
         CradleSuccess r -> do
             -- Now get the GHC lib dir
