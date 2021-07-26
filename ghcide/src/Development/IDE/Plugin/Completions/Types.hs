@@ -7,20 +7,23 @@ module Development.IDE.Plugin.Completions.Types (
 ) where
 
 import           Control.DeepSeq
-import qualified Data.Map                     as Map
-import qualified Data.Text                    as T
+import qualified Data.Map                      as Map
+import qualified Data.Text                     as T
 import           SrcLoc
 
-import           Data.Aeson                   (FromJSON, ToJSON)
-import           Data.Text                    (Text)
+import           Data.Aeson                    (FromJSON, ToJSON)
+import           Data.Char                     (isUpper)
+import           Data.Maybe                    (isJust)
+import           Data.Text                     (Text)
 import           Development.IDE.Spans.Common
-import           GHC.Generics                 (Generic)
-import           Ide.Plugin.Config            (Config)
+import           Development.IDE.Types.Exports
+import           GHC.Generics                  (Generic)
+import           Ide.Plugin.Config             (Config)
 import           Ide.Plugin.Properties
-import           Ide.PluginUtils              (usePropertyLsp)
-import           Ide.Types                    (PluginId)
-import           Language.LSP.Server          (MonadLsp)
-import           Language.LSP.Types           (CompletionItemKind, Uri)
+import           Ide.PluginUtils               (usePropertyLsp)
+import           Ide.Types                     (PluginId)
+import           Language.LSP.Server           (MonadLsp)
+import           Language.LSP.Types            (CompletionItemKind (..), Uri)
 
 -- From haskell-ide-engine/src/Haskell/Ide/Engine/LSP/Completions.hs
 
@@ -76,6 +79,23 @@ data CompItem = CI
   , additionalTextEdits :: Maybe ExtendImport
   }
   deriving (Eq, Show)
+
+fromIdentInfo :: IdentInfo -> CompItem
+fromIdentInfo IdentInfo{..} = CI
+  { compKind=
+      if isDatacon
+        then CiConstructor
+        else if isJust parent then CiProperty else CiFunction
+  , insertText=rendered
+  , importedFrom=Right moduleNameText
+  , typeText=Nothing
+  , label=rendered
+  , isInfix=Nothing
+  , docs=emptySpanDoc
+  , isTypeCompl= not isDatacon && isUpper (T.head rendered)
+  -- TODO Extend imports
+  , additionalTextEdits=Nothing
+  }
 
 -- Associates a module's qualifier with its members
 newtype QualCompls

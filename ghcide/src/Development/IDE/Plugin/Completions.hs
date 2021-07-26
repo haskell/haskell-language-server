@@ -30,7 +30,8 @@ import           Development.IDE.Graph.Classes
 import           Development.IDE.Plugin.CodeAction.ExactPrint
 import           Development.IDE.Plugin.Completions.Logic
 import           Development.IDE.Plugin.Completions.Types
-import           Development.IDE.Types.HscEnvEq               (hscEnv)
+import           Development.IDE.Types.HscEnvEq               (HscEnvEq (envPackageExports),
+                                                               hscEnv)
 import           Development.IDE.Types.Location
 import           GHC.Exts                                     (toList)
 import           GHC.Generics
@@ -42,6 +43,9 @@ import qualified Language.LSP.VFS                             as VFS
 #if MIN_VERSION_ghc(9,0,0)
 import           GHC.Tc.Module                                (tcRnImportDecls)
 #else
+import qualified Data.HashMap.Strict                          as Map
+import qualified Data.HashSet                                 as Set
+import           Development.IDE.Types.Exports
 import           TcRnDriver                                   (tcRnImportDecls)
 #endif
 
@@ -130,7 +134,12 @@ getCompletionsLSP ide plId
             nonLocalCompls <- useWithStaleFast NonLocalCompletions npath
             pm <- useWithStaleFast GetParsedModule npath
             binds <- fromMaybe (mempty, zeroMapping) <$> useWithStaleFast GetBindings npath
-            pure (opts, fmap (,pm,binds) ((fst <$> localCompls) <> (fst <$> nonLocalCompls)))
+            exportsMapIO <- fmap(envPackageExports . fst) <$> useWithStaleFast GhcSession npath
+            exportsMap <- mapM liftIO exportsMapIO
+            let exportsCompItems = foldMap (map fromIdentInfo . Set.toList) . Map.elems . getExportsMap <$> exportsMap
+                exportsCompls = mempty{unqualCompls = fromMaybe [] exportsCompItems}
+            let compls = (fst <$> localCompls) <> (fst <$> nonLocalCompls) <> (Just exportsCompls)
+            pure (opts, fmap (,pm,binds) compls)
         case compls of
           Just (cci', parsedMod, bindMap) -> do
             pfix <- VFS.getCompletionPrefix position cnts
