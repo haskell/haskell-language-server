@@ -14,7 +14,6 @@ module Development.IDE.GHC.Compat(
     HieFile(..),
     NameCacheUpdater(..),
     hieExportNames,
-    mkHieFile,
     mkHieFile',
     enrichHie,
     writeHieFile,
@@ -159,7 +158,7 @@ import           Module                 (InstalledUnitId,
                                          toInstalledUnitId)
 import           TcType                 (pprSigmaType)
 #endif
-import           Compat.HieAst          (enrichHie, mkHieFile)
+import           Compat.HieAst          (enrichHie)
 import           Compat.HieBin
 import           Compat.HieTypes
 import           Compat.HieUtils
