@@ -33,6 +33,7 @@ import           Data.Maybe                      (fromJust)
 import qualified Data.Text                       as T
 import           Development.IDE.Plugin.Test     (TestRequest (..),
                                                   WaitForIdeRuleResult)
+import           Development.IDE.Test.Diagnostic
 import           Language.LSP.Test               hiding (message)
 import qualified Language.LSP.Test               as LspTest
 import           Language.LSP.Types
@@ -41,31 +42,14 @@ import           System.Directory                (canonicalizePath)
 import           System.Time.Extra
 import           Test.Tasty.HUnit
 
--- | (0-based line number, 0-based column number)
-type Cursor = (Int, Int)
-
-cursorPosition :: Cursor -> Position
-cursorPosition (line,  col) = Position line col
-
-requireDiagnostic :: HasCallStack => List Diagnostic -> (DiagnosticSeverity, Cursor, T.Text, Maybe DiagnosticTag) -> Assertion
-requireDiagnostic actuals expected@(severity, cursor, expectedMsg, expectedTag) = do
-    unless (any match actuals) $
-        assertFailure $
-            "Could not find " <> show expected <>
-            " in " <> show actuals
-  where
-    match :: Diagnostic -> Bool
-    match d =
-        Just severity == _severity d
-        && cursorPosition cursor == d ^. range . start
-        && standardizeQuotes (T.toLower expectedMsg) `T.isInfixOf`
-           standardizeQuotes (T.toLower $ d ^. message)
-        && hasTag expectedTag (d ^. tags)
-
-    hasTag :: Maybe DiagnosticTag -> Maybe (List DiagnosticTag) -> Bool
-    hasTag Nothing  _                          = True
-    hasTag (Just _) Nothing                    = False
-    hasTag (Just actualTag) (Just (List tags)) = actualTag `elem` tags
+requireDiagnosticM
+    :: (Foldable f, Show (f Diagnostic), HasCallStack)
+    => f Diagnostic
+    -> (DiagnosticSeverity, Cursor, T.Text, Maybe DiagnosticTag)
+    -> Assertion
+requireDiagnosticM actuals expected = case requireDiagnostic actuals expected of
+    Nothing  -> pure ()
+    Just err -> assertFailure err
 
 -- |wait for @timeout@ seconds and report an assertion failure
 -- if any diagnostic messages arrive in that period
@@ -154,7 +138,7 @@ expectDiagnosticsWithTags' next expected = go expected
                   <> " got "
                   <> show actual
           Just expected -> do
-            liftIO $ mapM_ (requireDiagnostic actual) expected
+            liftIO $ mapM_ (requireDiagnosticM actual) expected
             liftIO $
               unless (length expected == length actual) $
                 assertFailure $
@@ -181,14 +165,6 @@ canonicalizeUri uri = filePathToUri <$> canonicalizePath (fromJust (uriToFilePat
 
 diagnostic :: Session (NotificationMessage TextDocumentPublishDiagnostics)
 diagnostic = LspTest.message STextDocumentPublishDiagnostics
-
-standardizeQuotes :: T.Text -> T.Text
-standardizeQuotes msg = let
-        repl '‘' = '\''
-        repl '’' = '\''
-        repl '`' = '\''
-        repl  c  = c
-    in  T.map repl msg
 
 waitForAction :: String -> TextDocumentIdentifier -> Session (Either ResponseError WaitForIdeRuleResult)
 waitForAction key TextDocumentIdentifier{_uri} = do
