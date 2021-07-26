@@ -302,8 +302,7 @@ setUpTypedHoles df
   $ flip gopt_unset Opt_ShowTypeOfHoleFits     -- massively simplifies parsing
   $ flip gopt_set   Opt_SortBySubsumHoleFits   -- very nice and fast enough in most cases
   $ flip gopt_unset Opt_SortValidHoleFits
-  $ flip gopt_unset Opt_UnclutterValidHoleFits
-    df
+  $ gopt_unset df Opt_UnclutterValidHoleFits
 
 
 nameListFromAvails :: [AvailInfo] -> [(SrcSpan, Name)]
