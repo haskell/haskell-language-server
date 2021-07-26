@@ -3979,8 +3979,9 @@ completionTest name src pos expected = testSessionWait name $ do
     let compls' = [ (_label, _kind, _insertText, _additionalTextEdits) | CompletionItem{..} <- compls]
     liftIO $ do
         let emptyToMaybe x = if T.null x then Nothing else Just x
-        sortOn (Lens.view Lens._1) compls' @?=
-            sortOn (Lens.view Lens._1) [ (l, Just k, emptyToMaybe t, at) | (l,k,t,_,_,at) <- expected]
+        sortOn (Lens.view Lens._1) (take (length expected) compls') @?=
+            sortOn (Lens.view Lens._1)
+              [ (l, Just k, emptyToMaybe t, at) | (l,k,t,_,_,at) <- expected]
         forM_ (zip compls expected) $ \(CompletionItem{..}, (_,_,_,expectedSig, expectedDocs, _)) -> do
             when expectedSig $
                 assertBool ("Missing type signature: " <> T.unpack _label) (isJust _detail)
@@ -4362,7 +4363,7 @@ otherCompletionTests = [
       _ <- waitForDiagnostics
       compls <- getCompletions docA $ Position 2 4
       let compls' = [txt | CompletionItem {_insertText = Just txt, ..} <- compls, _label == "member"]
-      liftIO $ compls' @?= ["member ${1:Foo}", "member ${1:Bar}"],
+      liftIO $ take 2 compls' @?= ["member ${1:Foo}", "member ${1:Bar}"],
 
     testSessionWait "maxCompletions" $ do
         doc <- createDoc "A.hs" "haskell" $ T.unlines
