@@ -432,7 +432,7 @@ refine = intros <%> splitSingle
 
 
 auto' :: Int -> TacticsM ()
-auto' 0 = failure NoProgress
+auto' 0 = failure OutOfGas
 auto' n = do
   let loop = auto' (n - 1)
   try intros

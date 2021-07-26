@@ -364,7 +364,7 @@ instance MetaSubst Int (Synthesized (LHsExpr GhcPs)) where
 ------------------------------------------------------------------------------
 -- | Reasons a tactic might fail.
 data TacticError
-  = UndefinedHypothesis OccName
+  = OutOfGas
   | GoalMismatch String CType
   | NoProgress
   | NoApplicableTactic
@@ -373,10 +373,10 @@ data TacticError
   | TooPolymorphic
   | NotInScope OccName
   | TacticPanic String
+  deriving (Eq)
 
 instance Show TacticError where
-    show (UndefinedHypothesis name) =
-      occNameString name <> " is not available in the hypothesis."
+    show OutOfGas = "Auto ran out of gas"
     show (GoalMismatch tac (CType typ)) =
       mconcat
         [ "The tactic "
