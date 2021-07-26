@@ -23,17 +23,20 @@ import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error                    (rangeToSrcSpan)
 import           Development.IDE.GHC.ExactPrint               (Annotated (annsA),
-                                                               GetAnnotatedParsedSource (GetAnnotatedParsedSource))
+                                                               GetAnnotatedParsedSource (GetAnnotatedParsedSource),
+                                                               astA)
 import           Development.IDE.GHC.Util                     (prettyPrint)
 import           Development.IDE.Graph
 import           Development.IDE.Graph.Classes
+import           Development.IDE.Plugin.CodeAction            (newImport,
+                                                               newImportToEdit)
 import           Development.IDE.Plugin.CodeAction.ExactPrint
 import           Development.IDE.Plugin.Completions.Logic
 import           Development.IDE.Plugin.Completions.Types
 import           Development.IDE.Types.HscEnvEq               (HscEnvEq (envPackageExports),
                                                                hscEnv)
 import           Development.IDE.Types.Location
-import           GHC.Exts                                     (toList)
+import           GHC.Exts                                     (fromList, toList)
 import           GHC.Generics
 import           Ide.Plugin.Config                            (Config)
 import           Ide.Types
@@ -136,7 +139,7 @@ getCompletionsLSP ide plId
             binds <- fromMaybe (mempty, zeroMapping) <$> useWithStaleFast GetBindings npath
             exportsMapIO <- fmap(envPackageExports . fst) <$> useWithStaleFast GhcSession npath
             exportsMap <- mapM liftIO exportsMapIO
-            let exportsCompItems = foldMap (map fromIdentInfo . Set.toList) . Map.elems . getExportsMap <$> exportsMap
+            let exportsCompItems = foldMap (map (fromIdentInfo uri) . Set.toList) . Map.elems . getExportsMap <$> exportsMap
                 exportsCompls = mempty{unqualCompls = fromMaybe [] exportsCompItems}
             let compls = (fst <$> localCompls) <> (fst <$> nonLocalCompls) <> (Just exportsCompls)
             pure (opts, fmap (,pm,binds) compls)
@@ -194,10 +197,19 @@ extendImportHandler' ideState ExtendImport {..}
       let df = ms_hspp_opts msrModSummary
           wantedModule = mkModuleName (T.unpack importName)
           wantedQual = mkModuleName . T.unpack <$> importQual
-      imp <- liftMaybe $ find (isWantedModule wantedModule wantedQual) msrImports
-      fmap (nfp,) $ liftEither $
-        rewriteToWEdit df doc (annsA ps) $
-          extendImport (T.unpack <$> thingParent) (T.unpack newThing) imp
+          existingImport = find (isWantedModule wantedModule wantedQual) msrImports
+      case existingImport of
+        Just imp -> do
+            fmap (nfp,) $ liftEither $
+              rewriteToWEdit df doc (annsA ps) $
+                extendImport (T.unpack <$> thingParent) (T.unpack newThing) imp
+        Nothing -> do
+            let n = newImport importName (Just it) importQual False
+                it = case thingParent of
+                  Nothing -> newThing
+                  Just p  -> p <> "(" <> newThing <> ")"
+            t <- liftMaybe $ snd <$> newImportToEdit n (astA ps)
+            return (nfp, WorkspaceEdit {_changes=Just (fromList [(doc,List [t])]), _documentChanges=Nothing, _changeAnnotations=Nothing})
   | otherwise =
     mzero
 

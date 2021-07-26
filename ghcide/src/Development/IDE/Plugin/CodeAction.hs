@@ -11,7 +11,9 @@ module Development.IDE.Plugin.CodeAction
     iePluginDescriptor,
     typeSigsPluginDescriptor,
     bindingsPluginDescriptor,
-    fillHolePluginDescriptor
+    fillHolePluginDescriptor,
+    newImport,
+    newImportToEdit
     -- * For testing
     , matchRegExMultipleImports
     ) where

@@ -606,7 +606,7 @@ getCompletions plId ideOpts CC {allModNamesAsNS, unqualCompls, qualCompls, impor
     | "{-# " `T.isPrefixOf` fullLine
     -> return $ filtPragmaCompls (pragmaSuffix fullLine)
     | otherwise -> do
-        let uniqueFiltCompls = nubOrdOn (\x -> (insertText x, importedFrom x) ) filtCompls
+        let uniqueFiltCompls = nubOrdOn (\x -> (label x, importedFrom x, compKind x) ) filtCompls
         compls <- mapM (mkCompl plId ideOpts) uniqueFiltCompls
         return $ filtModNameCompls
               ++ filtKeywordCompls

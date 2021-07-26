@@ -80,8 +80,8 @@ data CompItem = CI
   }
   deriving (Eq, Show)
 
-fromIdentInfo :: IdentInfo -> CompItem
-fromIdentInfo IdentInfo{..} = CI
+fromIdentInfo :: Uri -> IdentInfo -> CompItem
+fromIdentInfo doc IdentInfo{..} = CI
   { compKind=
       if isDatacon
         then CiConstructor
@@ -93,8 +93,14 @@ fromIdentInfo IdentInfo{..} = CI
   , isInfix=Nothing
   , docs=emptySpanDoc
   , isTypeCompl= not isDatacon && isUpper (T.head rendered)
-  -- TODO Extend imports
-  , additionalTextEdits=Nothing
+  , additionalTextEdits= Just $
+        ExtendImport
+          { doc,
+            thingParent = parent,
+            importName = moduleNameText,
+            importQual = Nothing,
+            newThing = rendered
+          }
   }
 
 -- Associates a module's qualifier with its members
