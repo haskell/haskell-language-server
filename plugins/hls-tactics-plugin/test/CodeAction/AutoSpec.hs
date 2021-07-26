@@ -83,6 +83,7 @@ spec = do
 
 
   describe "messages" $ do
-    mkShowMessageTest Auto "" 2 8 "MessageForallA" TacticErrors
-    mkShowMessageTest Auto "" 7 8 "MessageCantUnify" TacticErrors
+    mkShowMessageTest Auto ""  2 8 "MessageForallA"      TacticErrors
+    mkShowMessageTest Auto ""  7 8 "MessageCantUnify"    TacticErrors
+    mkShowMessageTest Auto "" 12 8 "MessageNotEnoughGas" NotEnoughGas
 
