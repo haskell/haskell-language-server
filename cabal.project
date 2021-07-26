@@ -88,17 +88,17 @@ allow-newer:
 source-repository-package
   type: git
   location: https://github.com/haskell/lsp.git
-  tag: e96383ab19534128f12acc70a69fbc15d4f298cc
+  tag: ef59c28b41ed4c5775f0ab0c1e985839359cec96
   subdir: lsp-types
 
 source-repository-package
   type: git
   location: https://github.com/haskell/lsp.git
-  tag: e96383ab19534128f12acc70a69fbc15d4f298cc
+  tag: ef59c28b41ed4c5775f0ab0c1e985839359cec96
   subdir: lsp-test
 
 source-repository-package
   type: git
   location: https://github.com/haskell/lsp.git
-  tag: e96383ab19534128f12acc70a69fbc15d4f298cc
+  tag: ef59c28b41ed4c5775f0ab0c1e985839359cec96
   subdir: lsp

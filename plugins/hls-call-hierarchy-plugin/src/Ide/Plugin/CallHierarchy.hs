@@ -1,4 +1,4 @@
-module Ide.Plugin.CallHierarchy where
+module Ide.Plugin.CallHierarchy (descriptor) where
 
 import           Development.IDE
 import qualified Ide.Plugin.CallHierarchy.Internal as X

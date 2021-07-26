@@ -2,13 +2,17 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE ViewPatterns      #-}
-module Ide.Plugin.CallHierarchy.Query where
+
+module Ide.Plugin.CallHierarchy.Query (
+  incomingCalls
+, outgoingCalls
+, getSymbolPosition
+) where
 
 import           Database.SQLite.Simple
 import           GHC
 import           HieDb                          (HieDb (getConn), Symbol (..),
                                                  toNsChar)
-import qualified HieDb
 import           Ide.Plugin.CallHierarchy.Types
 import           Module
 import           Name

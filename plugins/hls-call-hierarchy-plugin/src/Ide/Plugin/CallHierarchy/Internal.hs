@@ -5,39 +5,42 @@
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving  #-}
+
 module Ide.Plugin.CallHierarchy.Internal (
   prepareCallHierarchy
 , incomingCalls
 , outgoingCalls
 ) where
 
+import           Control.Concurrent
 import           Control.Lens                   ((^.))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Data.Aeson                     as A
+import qualified Data.ByteString                as BS
 import qualified Data.HashMap.Strict            as HM
 import           Data.List                      (groupBy, sortBy)
 import qualified Data.Map                       as M
 import           Data.Maybe
 import qualified Data.Set                       as S
 import qualified Data.Text                      as T
+import qualified Data.Text.Encoding             as T
 import           Data.Tuple.Extra
 import           Development.IDE
+import           Development.IDE.Core.Compile
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Spans.AtPoint
-import           Development.IDE.Spans.Common
 import           HieDb                          (Symbol (Symbol))
 import qualified Ide.Plugin.CallHierarchy.Query as Q
 import           Ide.Plugin.CallHierarchy.Types
 import           Ide.Types
 import           Language.LSP.Types
 import qualified Language.LSP.Types.Lens        as L
-import           Maybes
 import           Name
-import           SrcLoc
 import           Text.Read                      (readMaybe)
 
+-- | Render prepare call hierarchy request.
 prepareCallHierarchy :: PluginMethodHandler IdeState TextDocumentPrepareCallHierarchy
 prepareCallHierarchy state pluginId param
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri =
@@ -92,11 +95,11 @@ construct nfp (ident, contexts, ssp)
 
   | Just ctx <- declInfo contexts
     = Just $ case ctx of
-        Decl ClassDec span -> mkCallHierarchyItem' ident SkInterface (renderSpan span) ssp
-        Decl ConDec   span -> mkCallHierarchyItem' ident SkConstructor (renderSpan span) ssp
-        Decl DataDec  span -> mkCallHierarchyItem' ident SkStruct (renderSpan span) ssp
-        Decl FamDec   span -> mkCallHierarchyItem' ident SkFunction (renderSpan span) ssp
-        Decl InstDec  span -> mkCallHierarchyItem' ident SkInterface (renderSpan span) ssp
+        Decl ClassDec span -> mkCallHierarchyItem' ident SkInterface     (renderSpan span) ssp
+        Decl ConDec   span -> mkCallHierarchyItem' ident SkConstructor   (renderSpan span) ssp
+        Decl DataDec  span -> mkCallHierarchyItem' ident SkStruct        (renderSpan span) ssp
+        Decl FamDec   span -> mkCallHierarchyItem' ident SkFunction      (renderSpan span) ssp
+        Decl InstDec  span -> mkCallHierarchyItem' ident SkInterface     (renderSpan span) ssp
         Decl SynDec   span -> mkCallHierarchyItem' ident SkTypeParameter (renderSpan span) ssp
         _ -> mkCallHierarchyItem' ident skUnknown ssp ssp
 
@@ -125,7 +128,7 @@ construct nfp (ident, contexts, ssp)
 mkCallHierarchyItem :: NormalizedFilePath -> Identifier -> SymbolKind -> Span -> Span -> CallHierarchyItem
 mkCallHierarchyItem nfp ident kind span selSpan =
   CallHierarchyItem
-    (T.pack $ identifierName ident)
+    (T.pack $ optimize $ identifierName ident)
     kind
     Nothing
     (Just $ T.pack $ identifierToDetail ident)
@@ -144,11 +147,15 @@ mkCallHierarchyItem nfp ident kind span selSpan =
       Left modName -> moduleNameString modName
       Right name   -> occNameString $ nameOccName name
 
+    optimize :: String -> String
+    optimize name -- optimize display for DuplicateRecordFields
+        | "$sel:" == take 5 name = drop 5 name
+        | otherwise = name
+
 mkSymbol :: Identifier -> Maybe Symbol
 mkSymbol = \case
   Left _     -> Nothing
   Right name -> Just $ Symbol (occName name) (nameModule name)
-
 
 ----------------------------------------------------------------------
 -------------- Incoming calls and outgoing calls ---------------------
@@ -158,11 +165,12 @@ deriving instance Ord SymbolKind
 deriving instance Ord SymbolTag
 deriving instance Ord CallHierarchyItem
 
+-- | Render incoming calls request.
 incomingCalls :: PluginMethodHandler IdeState CallHierarchyIncomingCalls
 incomingCalls state pluginId param = do
   liftIO $ runAction "CallHierarchy.incomingCalls" state $
       queryCalls (param ^. L.item) Q.incomingCalls mkCallHierarchyIncomingCall
-        foiIncomingCalls mergeIncomingCalls >>=
+        mergeIncomingCalls >>=
     \case
       Just x  -> pure $ Right $ Just $ List x
       Nothing -> pure $ Left $ responseError "CallHierarchy: IncomingCalls internal error"
@@ -178,11 +186,12 @@ incomingCalls state pluginId param = do
         merge calls = let ranges = concatMap ((\(List x) -> x) . (^. L.fromRanges)) calls
                       in  CallHierarchyIncomingCall (head calls ^. L.from) (List ranges)
 
+-- Render outgoing calls request.
 outgoingCalls :: PluginMethodHandler IdeState CallHierarchyOutgoingCalls
 outgoingCalls state pluginId param = do
   liftIO $ runAction "CallHierarchy.outgoingCalls" state $
       queryCalls (param ^. L.item) Q.outgoingCalls mkCallHierarchyOutgoingCall
-                 foiOutgoingCalls mergeOutgoingCalls >>=
+        mergeOutgoingCalls >>=
     \case
       Just x  -> pure $ Right $ Just $ List x
       Nothing -> pure $ Left $ responseError "CallHierarchy: OutgoingCalls internal error"
@@ -223,21 +232,20 @@ queryCalls :: (Show a)
   => CallHierarchyItem
   -> (HieDb -> Symbol -> IO [Vertex])
   -> (Vertex -> Action (Maybe a))
-  -> (NormalizedFilePath -> Position -> Action (Maybe [a]))
   -> ([a] -> [a])
   -> Action (Maybe [a])
-queryCalls item queryFunc makeFunc foiCalls merge
+queryCalls item queryFunc makeFunc merge
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
+    refreshHieDb
+
     ShakeExtras{hiedb} <- getShakeExtras
     maySymbol <- getSymbol nfp
     case maySymbol of
       Nothing -> error "CallHierarchy.Impossible"
       Just symbol -> do
         vs <- liftIO $ queryFunc hiedb symbol
-        nonFOIItems <- mapM makeFunc vs
-        foiRes <- foiCalls nfp pos
-        let nonFOIRes = Just $ catMaybes nonFOIItems
-        pure $ merge <$> (nonFOIRes <> foiRes)
+        items <- Just . catMaybes <$> mapM makeFunc vs
+        pure $ merge <$> items
   | otherwise = pure Nothing
   where
     uri = item ^. L.uri
@@ -266,43 +274,30 @@ queryCalls item queryFunc makeFunc foiCalls merge
                 Just res -> pure res
               Nothing -> pure Nothing
 
-foiIncomingCalls :: NormalizedFilePath -> Position -> Action (Maybe [CallHierarchyIncomingCall])
-foiIncomingCalls nfp pos =
-  use GetHieAst nfp >>=
-    \case
-      Nothing -> pure Nothing
-      Just (HAR _ hf _ _ _) -> do
-        case listToMaybe $ pointCommand hf pos id of
-          Nothing -> pure Nothing
-          Just ast -> do
-            fs <- HM.keys <$> getFilesOfInterestUntracked
-            Just . concatMap (`callers` ast) <$> mapMaybeM (use GetHieAst) fs
-  where
-    callers :: HieAstResult -> HieAST a -> [CallHierarchyIncomingCall]
-    callers (HAR _ hf _ _ _) ast = mkIncomingCalls $ filter (sameAst ast) $ M.elems (getAsts hf)
+-- Write modified foi files before queries.
+refreshHieDb :: Action ()
+refreshHieDb = do
+    fs <- HM.keys . HM.filter (/= OnDisk) <$> getFilesOfInterestUntracked
+    forM_ fs (\f -> do
+        tmr <- use_ TypeCheck f
+        hsc <- hscEnv <$> use_ GhcSession f
+        (_, masts) <- liftIO $ generateHieAsts hsc tmr
+        se <- getShakeExtras
+        case masts of
+            Nothing -> pure ()
+            Just asts -> do
+                source <- getSourceFileSource f
+                let exports = tcg_exports $ tmrTypechecked tmr
+                    msum = tmrModSummary tmr
+                liftIO $ writeAndIndexHieFile hsc se msum f exports asts source
+                pure ()
+        )
+    liftIO $ threadDelay 100000 -- delay 0.1 sec to make more exact results.
 
-    sameAst :: HieAST a -> HieAST b -> Bool
-    sameAst ast1 ast2 = (M.keys . nodeIdentifiers . nodeInfo) ast1
-                     == (M.keys . nodeIdentifiers . nodeInfo) ast2
-
-    mkIncomingCalls asts = let infos = concatMap extract asts
-                               items = mapMaybe (construct nfp) infos
-                           in  map (\item ->
-                                      CallHierarchyIncomingCall item
-                                        (List [item ^. L.selectionRange])) items
-
-foiOutgoingCalls :: NormalizedFilePath -> Position -> Action (Maybe [CallHierarchyOutgoingCall])
-foiOutgoingCalls nfp pos =
-  use GetHieAst nfp >>=
-    \case
-      Nothing -> pure Nothing
-      Just (HAR _ hf _ _ _) -> do
-        case listToMaybe $ pointCommand hf pos nodeChildren of
-          Nothing       -> pure Nothing
-          Just children -> pure $ Just $ mkOutgoingCalls children
-  where
-    mkOutgoingCalls asts = let infos = concatMap extract asts
-                               items = mapMaybe (construct nfp) infos
-                           in  map (\item ->
-                                      CallHierarchyOutgoingCall item
-                                        (List [item ^. L.selectionRange]) ) items
+-- Copy unexport function form `ghcide/src/Development/IDE/Core/Rules.hs`
+getSourceFileSource :: NormalizedFilePath -> Action BS.ByteString
+getSourceFileSource nfp = do
+    (_, msource) <- getFileContents nfp
+    case msource of
+        Nothing     -> liftIO $ BS.readFile (fromNormalizedFilePath nfp)
+        Just source -> pure $ T.encodeUtf8 source

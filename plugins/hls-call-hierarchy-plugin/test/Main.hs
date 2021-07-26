@@ -2,24 +2,23 @@
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TupleSections      #-}
-module Main where
+
+module Main (main) where
 
 import           Control.Lens             (set, (^.))
 import           Control.Monad.Extra
 import           Data.Aeson
+import           Data.Functor             ((<&>))
 import           Data.List                (sort)
+import qualified Data.Map                 as M
 import qualified Data.Text                as T
 import           Ide.Plugin.CallHierarchy
 import qualified Language.LSP.Test        as Test
 import qualified Language.LSP.Types.Lens  as L
+import           System.Directory.Extra
 import           System.FilePath
 import qualified System.IO.Extra
 import           Test.Hls
-
-import           Control.Concurrent.Extra
-import           Data.Functor             ((<&>))
-import qualified Data.Map                 as M
-import           System.Directory.Extra
 
 plugin :: PluginDescriptor IdeState
 plugin = descriptor "callHierarchy"
@@ -177,7 +176,6 @@ incomingCallsTests =
           doc <- createDoc "A.hs" "haskell" $ T.unlines ["a=3", "b=a"]
           [item] <- Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc 1 0)
           let expected = [CallHierarchyIncomingCall item (List [mkRange 1 2 1 3])]
-          liftIO delay -- A hack, ensure HieDb be initilized.
           Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc 0 0) >>=
             \case
               [item] -> do
@@ -283,7 +281,6 @@ outgoingCallsTests =
           doc <- createDoc "A.hs" "haskell" $ T.unlines ["a=3", "b=a"]
           [item] <- Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc 0 1)
           let expected = [CallHierarchyOutgoingCall item (List [mkRange 1 2 1 3])]
-          liftIO delay
           Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc 1 0) >>=
             \case
               [item] -> do
@@ -391,7 +388,7 @@ incomingCallTestCase contents queryX queryY positions ranges = withTempDir $ \di
       )
       (zip positions ranges)
     let expected = map mkCallHierarchyIncomingCall items
-    liftIO delay
+    -- liftIO delay
     Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc queryX queryY) >>=
       \case
         [item] -> do
@@ -411,7 +408,7 @@ incomingCallMultiFileTestCase filepath queryX queryY mp =
                     <&> map (, range)
                 ) pr) mp
     let expected = map mkCallHierarchyIncomingCall items
-    liftIO delay
+    -- liftIO delay
     Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc queryX queryY) >>=
       \case
         [item] -> do
@@ -430,7 +427,6 @@ outgoingCallTestCase contents queryX queryY positions ranges = withTempDir $ \di
       )
       (zip positions ranges)
     let expected = map mkCallHierarchyOutgoingCall items
-    liftIO delay
     Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc queryX queryY) >>=
       \case
         [item] -> do
@@ -450,7 +446,6 @@ outgoingCallMultiFileTestCase filepath queryX queryY mp =
                     <&> map (, range)
                 ) pr) mp
     let expected = map mkCallHierarchyOutgoingCall items
-    liftIO delay
     Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc queryX queryY) >>=
       \case
         [item] -> do
@@ -503,6 +498,3 @@ withTempDir :: (FilePath -> IO a) -> IO a
 withTempDir f = System.IO.Extra.withTempDir $ \dir -> do
   dir' <- canonicalizePath dir
   f dir'
-
-delay :: IO ()
-delay = threadDelay 1000000
