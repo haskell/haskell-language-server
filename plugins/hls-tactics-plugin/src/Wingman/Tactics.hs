@@ -65,7 +65,7 @@ assume name = rule $ \jdg -> do
           { syn_trace = tracePrim $ "assume " <> occNameString name
           , syn_used_vals = S.singleton name
           }
-    Nothing -> cut -- failure $ UndefinedHypothesis name
+    Nothing -> cut
 
 
 ------------------------------------------------------------------------------
