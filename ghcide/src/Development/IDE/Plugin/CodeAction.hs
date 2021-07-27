@@ -837,7 +837,7 @@ suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_
             -- fallback to using GHC suggestion even though it is not always correct
           | otherwise
           = Just IdentInfo
-                { name = binding
+                { name = mkVarOcc $ T.unpack binding
                 , rendered = binding
                 , parent = Nothing
                 , isDatacon = False

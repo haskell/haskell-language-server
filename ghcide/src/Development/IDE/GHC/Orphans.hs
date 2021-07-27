@@ -21,6 +21,7 @@ import           GHC                        ()
 import           GhcPlugins
 import           Retrie.ExactPrint          (Annotated)
 import qualified StringBuffer               as SB
+import           Unique                     (getKey)
 
 
 -- Orphan instances for types from the GHC API.
@@ -162,3 +163,6 @@ instance (NFData HsModule) where
 instance (NFData (HsModule a)) where
 #endif
   rnf = rwhnf
+
+instance Show OccName where show = prettyPrint
+instance Hashable OccName where hashWithSalt s n = hashWithSalt s (getKey $ getUnique n)

@@ -9,25 +9,26 @@ module Development.IDE.Types.Exports
     createExportsMapTc
 ,createExportsMapHieDb,size) where
 
-import           Avail                      (AvailInfo (..))
-import           Control.DeepSeq            (NFData (..))
+import           Avail                       (AvailInfo (..))
+import           Control.DeepSeq             (NFData (..))
 import           Control.Monad
-import           Data.Bifunctor             (Bifunctor (second))
-import           Data.HashMap.Strict        (HashMap, elems)
-import qualified Data.HashMap.Strict        as Map
-import           Data.HashSet               (HashSet)
-import qualified Data.HashSet               as Set
-import           Data.Hashable              (Hashable)
-import           Data.Text                  (Text, pack)
+import           Data.Bifunctor              (Bifunctor (second))
+import           Data.HashMap.Strict         (HashMap, elems)
+import qualified Data.HashMap.Strict         as Map
+import           Data.HashSet                (HashSet)
+import qualified Data.HashSet                as Set
+import           Data.Hashable               (Hashable)
+import           Data.List                   (isSuffixOf)
+import           Data.Text                   (Text, pack)
 import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Orphans ()
 import           Development.IDE.GHC.Util
-import           FieldLabel                 (flSelector)
-import           GHC.Generics               (Generic)
-import           GhcPlugins                 (IfaceExport, ModGuts (..))
+import           FieldLabel                  (flSelector)
+import           GHC.Generics                (Generic)
+import           GhcPlugins                  (IfaceExport, ModGuts (..))
 import           HieDb
 import           Name
-import           TcRnTypes                  (TcGblEnv (..))
-import Data.List (isSuffixOf)
+import           TcRnTypes                   (TcGblEnv (..))
 
 newtype ExportsMap = ExportsMap
     {getExportsMap :: HashMap IdentifierText (HashSet IdentInfo)}
@@ -42,7 +43,7 @@ instance Semigroup ExportsMap where
 type IdentifierText = Text
 
 data IdentInfo = IdentInfo
-    { name           :: !Text
+    { name           :: !OccName
     , rendered       :: Text
     , parent         :: !(Maybe Text)
     , isDatacon      :: !Bool
@@ -73,19 +74,19 @@ renderIEWrapped n
 
 mkIdentInfos :: Text -> AvailInfo -> [IdentInfo]
 mkIdentInfos mod (Avail n) =
-    [IdentInfo (pack (prettyPrint n)) (renderIEWrapped n) Nothing (isDataConName n) mod]
+    [IdentInfo (nameOccName n) (renderIEWrapped n) Nothing (isDataConName n) mod]
 mkIdentInfos mod (AvailTC parent (n:nn) flds)
     -- Following the GHC convention that parent == n if parent is exported
     | n == parent
-    = [ IdentInfo (pack (prettyPrint n)) (renderIEWrapped n) (Just $! parentP) (isDataConName n) mod
+    = [ IdentInfo (nameOccName n) (renderIEWrapped n) (Just $! parentP) (isDataConName n) mod
         | n <- nn ++ map flSelector flds
       ] ++
-      [ IdentInfo (pack (prettyPrint n)) (renderIEWrapped n) Nothing (isDataConName n) mod]
+      [ IdentInfo (nameOccName n) (renderIEWrapped n) Nothing (isDataConName n) mod]
     where
         parentP = pack $ printName parent
 
 mkIdentInfos mod (AvailTC _ nn flds)
-    = [ IdentInfo (pack (prettyPrint n)) (renderIEWrapped n) Nothing (isDataConName n) mod
+    = [ IdentInfo (nameOccName n) (renderIEWrapped n) Nothing (isDataConName n) mod
         | n <- nn ++ map flSelector flds
       ]
 
@@ -122,9 +123,9 @@ createExportsMapHieDb hiedb = do
         fmap (wrap . unwrap mText) <$> getExportsForModule hiedb mn
     return $ ExportsMap $ Map.fromListWith (<>) (concat idents)
   where
-    wrap identInfo = (name identInfo, Set.fromList [identInfo])
+    wrap identInfo = (rendered identInfo, Set.fromList [identInfo])
     -- unwrap :: ExportRow -> IdentInfo
-    unwrap m ExportRow{..} = IdentInfo n n p exportIsDatacon m
+    unwrap m ExportRow{..} = IdentInfo exportName n p exportIsDatacon m
       where
           n = pack (occNameString exportName)
           p = pack . occNameString <$> exportParent
