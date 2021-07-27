@@ -29,7 +29,7 @@ import           Data.Tuple.Extra
 import           Development.IDE
 import           Development.IDE.Core.Compile
 import           Development.IDE.Core.Shake
-import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat     as Compat
 import           Development.IDE.Spans.AtPoint
 import           HieDb                          (Symbol (Symbol))
 import qualified Ide.Plugin.CallHierarchy.Query as Q
@@ -68,7 +68,7 @@ constructFromAst nfp pos =
 
 extract :: HieAST a -> [(Identifier, S.Set ContextInfo, Span)]
 extract ast = let span = nodeSpan ast
-                  infos = M.toList $ M.map identInfo (nodeIdentifiers $ nodeInfo ast)
+                  infos = M.toList $ M.map identInfo (Compat.getNodeIds ast)
               in  [ (ident, contexts, span) | (ident, contexts) <- infos ]
 
 recFieldInfo, declInfo, valBindInfo, classTyDeclInfo,

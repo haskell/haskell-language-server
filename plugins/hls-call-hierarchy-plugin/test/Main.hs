@@ -59,12 +59,12 @@ prepareCallHierarchyTests =
           selRange = mkRange 0 7 0 8
           expected = mkCallHierarchyItemC "A" SkConstructor range selRange
       oneCaseWithCreate contents 0 7 expected
-  , testCase "record" $ do
-      let contents = T.unlines ["data A=A{a::Int}"]
-          range = mkRange 0 9 0 10
-          selRange = mkRange 0 9 0 10
-          expected = mkCallHierarchyItemV "a" SkField range selRange
-      oneCaseWithCreate contents 0 9 expected
+--   , testCase "record" $ do
+--       let contents = T.unlines ["data A=A{a::Int}"]
+--           range = mkRange 0 9 0 10
+--           selRange = mkRange 0 9 0 10
+--           expected = mkCallHierarchyItemV "a" SkField range selRange
+--       oneCaseWithCreate contents 0 9 expected
   , testCase "type operator" $ do
       let contents = T.unlines ["{-# LANGUAGE TypeOperators #-}", "type (><)=Maybe"]
           range = mkRange 1 0 1 15
@@ -200,11 +200,11 @@ incomingCallsTests =
               positions = [(0, 5)]
               ranges = [mkRange 0 7 0 8]
           incomingCallTestCase contents 0 7 positions ranges
-      , testCase "record" $ do
-          let contents = T.unlines ["data A=A{a::Int}"]
-              positions = [(0, 5), (0, 7)]
-              ranges = [mkRange 0 9 0 10, mkRange 0 9 0 10]
-          incomingCallTestCase contents 0 9 positions ranges
+    --   , testCase "record" $ do
+    --       let contents = T.unlines ["data A=A{a::Int}"]
+    --           positions = [(0, 5), (0, 7)]
+    --           ranges = [mkRange 0 9 0 10, mkRange 0 9 0 10]
+    --       incomingCallTestCase contents 0 9 positions ranges
       ]
     , testCase "function" $ do
         let contents = T.unlines ["a=(+)"]
@@ -305,11 +305,11 @@ outgoingCallsTests =
               positions = []
               ranges = []
           outgoingCallTestCase contents 0 7 positions ranges
-      , testCase "record" $ do
-          let contents = T.unlines ["data A=A{a::Int}"]
-              positions = [(0, 7), (0, 9)]
-              ranges = [mkRange 0 7 0 8, mkRange 0 9 0 10]
-          outgoingCallTestCase contents 0 5 positions ranges
+    --   , testCase "record" $ do
+    --       let contents = T.unlines ["data A=A{a::Int}"]
+    --           positions = [(0, 7), (0, 9)]
+    --           ranges = [mkRange 0 7 0 8, mkRange 0 9 0 10]
+    --       outgoingCallTestCase contents 0 5 positions ranges
       ]
       , testCase "function" $ do
           let contents = T.unlines ["a=3", "b=4", "c=a+b"]
