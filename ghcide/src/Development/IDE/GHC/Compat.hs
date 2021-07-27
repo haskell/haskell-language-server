@@ -114,6 +114,7 @@ module Development.IDE.GHC.Compat(
     getNodeIds,
     stringToUnit,
     rtsUnit,
+    unitString,
 
     LogActionCompat,
     logActionCompat,
@@ -151,6 +152,7 @@ import           GHC.Core.TyCo.Ppr      (pprSigmaType)
 import           GHC.Core.TyCo.Rep      (Scaled, scaledThing)
 import           GHC.Iface.Load
 import           GHC.Types.Unique.Set   (emptyUniqSet)
+import           Module                 (unitString)
 import qualified SrcLoc
 #else
 import           Module                 (InstalledUnitId,
@@ -578,8 +580,8 @@ getNodeIds = nodeIdentifiers . nodeInfo
 nodeInfo' :: Ord a => HieAST a -> NodeInfo a
 nodeInfo' = nodeInfo
 -- type Unit = UnitId
--- unitString :: Unit -> String
--- unitString = unitIdString
+unitString :: Unit -> String
+unitString = Module.unitIdString
 stringToUnit :: String -> Unit
 stringToUnit = Module.stringToUnitId
 -- moduleUnit :: Module -> Unit

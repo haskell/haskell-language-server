@@ -22,6 +22,7 @@ packages:
          ./plugins/hls-pragmas-plugin
          ./plugins/hls-module-name-plugin
         --  ./plugins/hls-ormolu-plugin
+         ./plugins/hls-call-hierarchy-plugin
 tests: true
 
 package *
