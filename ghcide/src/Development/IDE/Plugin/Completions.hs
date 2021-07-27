@@ -141,7 +141,7 @@ getCompletionsLSP ide plId
             exportsMap <- mapM liftIO exportsMapIO
             let exportsCompItems = foldMap (map (fromIdentInfo uri) . Set.toList) . Map.elems . getExportsMap <$> exportsMap
                 exportsCompls = mempty{unqualCompls = fromMaybe [] exportsCompItems}
-            let compls = (fst <$> localCompls) <> (fst <$> nonLocalCompls) <> (Just exportsCompls)
+            let compls = (fst <$> localCompls) <> (fst <$> nonLocalCompls) <> Just exportsCompls
             pure (opts, fmap (,pm,binds) compls)
         case compls of
           Just (cci', parsedMod, bindMap) -> do
