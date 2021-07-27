@@ -3968,6 +3968,7 @@ completionTests
     [ testGroup "non local" nonLocalCompletionTests
     , testGroup "topLevel" topLevelCompletionTests
     , testGroup "local" localCompletionTests
+    , testGroup "global" globalCompletionTests
     , testGroup "other" otherCompletionTests
     ]
 
@@ -4374,6 +4375,90 @@ otherCompletionTests = [
         _ <- waitForDiagnostics
         compls <- getCompletions  doc (Position 3 13)
         liftIO $ length compls @?= maxCompletions def
+  ]
+
+globalCompletionTests :: [TestTree]
+globalCompletionTests =
+  [ testSessionWait "fromList" $ do
+        doc <- createDoc "A.hs" "haskell" $ T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-binds #-}",
+                "module A () where",
+                "a = fromList"
+            ]
+        _ <- waitForDiagnostics
+        compls <- getCompletions doc (Position 2 12)
+        let compls' =
+              [T.drop 1 $ T.dropEnd 10 d
+              | CompletionItem {_documentation = Just (CompletionDocMarkup (MarkupContent MkMarkdown d)), _label}
+                <- compls
+              , _label == "fromList"
+              ]
+        liftIO $ take 3 (sort compls') @?=
+          map ("Defined in "<>)
+              [ "'Data.IntMap"
+              , "'Data.IntMap.Lazy"
+              , "'Data.IntMap.Strict"
+              ]
+
+  , testSessionWait "Map" $ do
+        doc <- createDoc "A.hs" "haskell" $ T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-binds #-}",
+                "module A () where",
+                "a :: Map"
+            ]
+        _ <- waitForDiagnostics
+        compls <- getCompletions doc (Position 2 7)
+        let compls' =
+              [T.drop 1 $ T.dropEnd 10 d
+              | CompletionItem {_documentation = Just (CompletionDocMarkup (MarkupContent MkMarkdown d)), _label}
+                <- compls
+              , _label == "Map"
+              ]
+        liftIO $ take 3 (sort compls') @?=
+          map ("Defined in "<>)
+              [ "'Data.Map"
+              , "'Data.Map.Lazy"
+              , "'Data.Map.Strict"
+              ]
+  , testSessionWait "no duplicates" $ do
+        doc <- createDoc "A.hs" "haskell" $ T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-binds #-}",
+                "module A () where",
+                "import GHC.Exts(fromList)",
+                "a = fromList"
+            ]
+        _ <- waitForDiagnostics
+        compls <- getCompletions doc (Position 3 13)
+        let duplicate =
+              find
+                (\case
+                  CompletionItem
+                    { _insertText = Just "fromList"
+                    , _documentation =
+                      Just (CompletionDocMarkup (MarkupContent MkMarkdown d))
+                    } ->
+                    "GHC.Exts" `T.isInfixOf` d
+                  _ -> False
+                ) compls
+        liftIO $ duplicate @?= Nothing
+
+  , testSessionWait "non-local before global" $ do
+    -- non local completions are more specific
+        doc <- createDoc "A.hs" "haskell" $ T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-binds #-}",
+                "module A () where",
+                "import GHC.Exts(fromList)",
+                "a = fromList"
+            ]
+        _ <- waitForDiagnostics
+        compls <- getCompletions doc (Position 3 13)
+        let compls' =
+              [_insertText
+              | CompletionItem {_label, _insertText} <- compls
+              , _label == "fromList"
+              ]
+        liftIO $ take 3 compls' @?=
+          map Just ["fromList ${1:([Item l])}", "fromList", "fromList"]
   ]
 
 highlightTests :: TestTree
