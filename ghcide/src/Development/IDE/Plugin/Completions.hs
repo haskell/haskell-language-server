@@ -13,6 +13,8 @@ import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
+import qualified Data.HashMap.Strict                          as Map
+import qualified Data.HashSet                                 as Set
 import           Data.List                                    (find)
 import           Data.Maybe
 import qualified Data.Text                                    as T
@@ -33,6 +35,7 @@ import           Development.IDE.Plugin.CodeAction            (newImport,
 import           Development.IDE.Plugin.CodeAction.ExactPrint
 import           Development.IDE.Plugin.Completions.Logic
 import           Development.IDE.Plugin.Completions.Types
+import           Development.IDE.Types.Exports
 import           Development.IDE.Types.HscEnvEq               (HscEnvEq (envPackageExports),
                                                                hscEnv)
 import           Development.IDE.Types.Location
@@ -46,9 +49,6 @@ import qualified Language.LSP.VFS                             as VFS
 #if MIN_VERSION_ghc(9,0,0)
 import           GHC.Tc.Module                                (tcRnImportDecls)
 #else
-import qualified Data.HashMap.Strict                          as Map
-import qualified Data.HashSet                                 as Set
-import           Development.IDE.Types.Exports
 import           TcRnDriver                                   (tcRnImportDecls)
 #endif
 
