@@ -27,6 +27,7 @@ import           GhcPlugins                 (IfaceExport, ModGuts (..))
 import           HieDb
 import           Name
 import           TcRnTypes                  (TcGblEnv (..))
+import Data.List (isSuffixOf)
 
 newtype ExportsMap = ExportsMap
     {getExportsMap :: HashMap IdentifierText (HashSet IdentInfo)}
@@ -109,10 +110,13 @@ createExportsMapTc = ExportsMap . Map.fromListWith (<>) . concatMap doOne
       where
         mn = moduleName $ tcg_mod mi
 
+nonInternalModules :: ModuleName -> Bool
+nonInternalModules = not . (".Internal" `isSuffixOf`) . moduleNameString
+
 createExportsMapHieDb :: HieDb -> IO ExportsMap
 createExportsMapHieDb hiedb = do
     mods <- getAllIndexedMods hiedb
-    idents <- forM mods $ \m -> do
+    idents <- forM (filter (nonInternalModules . modInfoName . hieModInfo) mods) $ \m -> do
         let mn = modInfoName $ hieModInfo m
             mText = pack $ moduleNameString mn
         fmap (wrap . unwrap mText) <$> getExportsForModule hiedb mn
@@ -126,6 +130,9 @@ createExportsMapHieDb hiedb = do
           p = pack . occNameString <$> exportParent
 
 unpackAvail :: ModuleName -> IfaceExport -> [(Text, [IdentInfo])]
-unpackAvail !(pack . moduleNameString -> mod) = map f . mkIdentInfos mod
+unpackAvail mn
+  | nonInternalModules mn = map f . mkIdentInfos mod
+  | otherwise = const []
   where
-    f id@IdentInfo {..} = (name, [id])
+    !mod = pack $ moduleNameString mn
+    f id@IdentInfo {..} = (rendered, [id])
