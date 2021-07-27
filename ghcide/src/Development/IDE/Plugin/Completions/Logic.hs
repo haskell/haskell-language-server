@@ -305,8 +305,8 @@ mkPragmaCompl label insertText =
     Nothing Nothing Nothing Nothing Nothing (Just insertText) (Just Snippet)
     Nothing Nothing Nothing Nothing Nothing Nothing
 
-fromIdentInfo :: Uri -> IdentInfo -> CompItem
-fromIdentInfo doc IdentInfo{..} = CI
+fromIdentInfo :: Uri -> IdentInfo -> Maybe T.Text -> CompItem
+fromIdentInfo doc IdentInfo{..} q = CI
   { compKind= occNameToComKind Nothing name
   , insertText=rendered
   , importedFrom=Right moduleNameText
@@ -320,7 +320,7 @@ fromIdentInfo doc IdentInfo{..} = CI
           { doc,
             thingParent = parent,
             importName = moduleNameText,
-            importQual = Nothing,
+            importQual = q,
             newThing = rendered
           }
   }
@@ -407,6 +407,7 @@ cacheDataProducer uri env curMod globalEnv inScopeEnv limports = do
     { allModNamesAsNS = allModNamesAsNS
     , unqualCompls = unquals
     , qualCompls = quals
+    , anyQualCompls = []
     , importableModules = moduleNames
     }
 
@@ -416,6 +417,7 @@ localCompletionsForParsedModule uri pm@ParsedModule{pm_parsed_source = L _ HsMod
     CC { allModNamesAsNS = mempty
        , unqualCompls = compls
        , qualCompls = mempty
+       , anyQualCompls = []
        , importableModules = mempty
         }
   where
@@ -529,7 +531,7 @@ getCompletions
     -> ClientCapabilities
     -> CompletionsConfig
     -> IO [CompletionItem]
-getCompletions plId ideOpts CC {allModNamesAsNS, unqualCompls, qualCompls, importableModules}
+getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qualCompls, importableModules}
                maybe_parsed (localBindings, bmapping) prefixInfo caps config = do
   let VFS.PosPrefixInfo { fullLine, prefixModule, prefixText } = prefixInfo
       enteredQual = if T.null prefixModule then "" else prefixModule <> "."
@@ -588,8 +590,9 @@ getCompletions plId ideOpts CC {allModNamesAsNS, unqualCompls, qualCompls, impor
                 Just m  -> Right $ ppr m
 
           compls = if T.null prefixModule
-            then localCompls ++ unqualCompls
-            else Map.findWithDefault [] prefixModule $ getQualCompls qualCompls
+            then localCompls ++ unqualCompls ++ (($Nothing) <$> anyQualCompls)
+            else Map.findWithDefault [] prefixModule (getQualCompls qualCompls)
+                 ++ (($ Just prefixModule) <$> anyQualCompls)
 
       filtListWith f list =
         [ f label

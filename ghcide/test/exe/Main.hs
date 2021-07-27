@@ -4459,6 +4459,21 @@ globalCompletionTests =
               ]
         liftIO $ take 3 compls' @?=
           map Just ["fromList ${1:([Item l])}", "fromList", "fromList"]
+  , testGroup "auto import snippets"
+    [ completionCommandTest
+            "import Data.Sequence"
+            ["module A where", "foo :: Seq"]
+            (Position 1 9)
+            "Seq"
+            ["module A where", "import Data.Sequence (Seq)", "foo :: Seq"]
+
+    , completionCommandTest
+            "qualified import"
+            ["module A where", "foo :: Seq.Seq"]
+            (Position 1 13)
+            "Seq"
+            ["module A where", "import qualified Data.Sequence as Seq", "foo :: Seq.Seq"]
+    ]
   ]
 
 highlightTests :: TestTree

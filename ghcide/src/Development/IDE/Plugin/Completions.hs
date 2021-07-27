@@ -140,7 +140,7 @@ getCompletionsLSP ide plId
             exportsMapIO <- fmap(envPackageExports . fst) <$> useWithStaleFast GhcSession npath
             exportsMap <- mapM liftIO exportsMapIO
             let exportsCompItems = foldMap (map (fromIdentInfo uri) . Set.toList) . Map.elems . getExportsMap <$> exportsMap
-                exportsCompls = mempty{unqualCompls = fromMaybe [] exportsCompItems}
+                exportsCompls = mempty{anyQualCompls = fromMaybe [] exportsCompItems}
             let compls = (fst <$> localCompls) <> (fst <$> nonLocalCompls) <> Just exportsCompls
             pure (opts, fmap (,pm,binds) compls)
         case compls of
@@ -204,7 +204,8 @@ extendImportHandler' ideState ExtendImport {..}
               rewriteToWEdit df doc (annsA ps) $
                 extendImport (T.unpack <$> thingParent) (T.unpack newThing) imp
         Nothing -> do
-            let n = newImport importName (Just it) importQual False
+            let n = newImport importName sym importQual False
+                sym = if isNothing importQual then Just it else Nothing
                 it = case thingParent of
                   Nothing -> newThing
                   Just p  -> p <> "(" <> newThing <> ")"

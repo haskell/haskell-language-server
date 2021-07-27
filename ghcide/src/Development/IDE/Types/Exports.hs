@@ -136,4 +136,4 @@ unpackAvail mn
   | otherwise = const []
   where
     !mod = pack $ moduleNameString mn
-    f id@IdentInfo {..} = (rendered, [id])
+    f id@IdentInfo {..} = (pack (prettyPrint name), [id])
