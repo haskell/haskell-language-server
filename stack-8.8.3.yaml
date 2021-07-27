@@ -8,6 +8,7 @@ packages:
   - ./shake-bench
   - ./hls-plugin-api
   - ./hls-test-utils
+  - ./plugins/hls-call-hierarchy-plugin
   - ./plugins/hls-class-plugin
   - ./plugins/hls-haddock-comments-plugin
   - ./plugins/hls-eval-plugin
@@ -75,15 +76,20 @@ extra-deps:
   - sqlite-simple-0.4.18.0@sha256:3ceea56375c0a3590c814e411a4eb86943f8d31b93b110ca159c90689b6b39e5,3002
   - direct-sqlite-2.3.26@sha256:04e835402f1508abca383182023e4e2b9b86297b8533afbd4e57d1a5652e0c23,3718
   - extra-1.7.9@sha256:f1dec740f0f2025790c540732bfd52c556ec55bde4f5dfd7cf18e22bd44ff3d0,2683
-  - lsp-1.2.0.0
-  - lsp-types-1.2.0.0
-  - lsp-test-0.14.0.0
   - dependent-map-0.4.0.0@sha256:ca2b131046f4340a1c35d138c5a003fe4a5be96b14efc26291ed35fd08c62221,1657
   - dependent-sum-0.7.1.0@sha256:5599aa89637db434431b1dd3fa7c34bc3d565ee44f0519bfbc877be1927c2531,2068
   - dependent-sum-template-0.1.0.3@sha256:0bbbacdfbd3abf2a15aaf0cf2c27e5bdd159b519441fec39e1e6f2f54424adde,1682
   - constraints-extras-0.3.0.2@sha256:013b8d0392582c6ca068e226718a4fe8be8e22321cc0634f6115505bf377ad26,1853
   - some-1.0.1@sha256:26e5bab7276f48b25ea8660d3fd1166c0f20fd497dac879a40f408e23211f93e,2055
   - unliftio-core-0.2.0.1@sha256:9b3e44ea9aacacbfc35b3b54015af450091916ac3618a41868ebf6546977659a,1082
+
+  - github: haskell/lsp
+    commit: ef59c28b41ed4c5775f0ab0c1e985839359cec96
+    subdirs:
+    - lsp-types
+    - lsp
+    - lsp-test
+  # https://github.com/haskell/lsp/pull/332
 
 configure-options:
   $targets:
