@@ -582,7 +582,7 @@ nodeInfo' :: Ord a => HieAST a -> NodeInfo a
 nodeInfo' = nodeInfo
 -- type Unit = UnitId
 unitString :: Unit -> String
-unitString = unitIdString
+unitString = Module.unitIdString
 stringToUnit :: String -> Unit
 stringToUnit = Module.stringToUnitId
 -- moduleUnit :: Module -> Unit
