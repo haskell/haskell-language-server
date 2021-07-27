@@ -12,14 +12,8 @@ defaults: &defaults
         name: Figure out resolver for better caching
         command: grep '^resolver:' stack-build.txt > resolver.txt
 
-    - run:
-        name: Create a composite cabal file for changes detection
-        command: find . -name "*.cabal" | grep -v -e "stack-work" -e "dist-newstyle" -e "submodules" -e "testdata" | sort | xargs cat > all-cabal.txt
-
     - restore_cache:
         keys:
-          - v3-stack-cache-{{ .Environment.HIE_CACHE }}-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "stack-build.txt" }}-{{ checksum "all-cabal.txt" }}
-          - v3-stack-cache-{{ .Environment.HIE_CACHE }}-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "stack-build.txt" }}
           - v3-stack-cache-{{ .Environment.HIE_CACHE }}-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "resolver.txt" }}
 
     - run:
@@ -54,10 +48,6 @@ defaults: &defaults
         name: Build including tests
         command: stack --stack-yaml=${STACK_FILE} test --no-run-tests --no-terminal
         no_output_timeout: 120m
-
-    - save_cache:
-        key: v3-stack-cache-{{ .Environment.HIE_CACHE }}-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "stack-build.txt" }}-{{ checksum "all-cabal.txt" }}
-        paths: *cache_paths
 
 version: 2
 jobs:
