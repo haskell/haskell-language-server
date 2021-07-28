@@ -20,7 +20,7 @@ import           Ide.Plugin.Properties
 import           Ide.PluginUtils              (usePropertyLsp)
 import           Ide.Types                    (PluginId)
 import           Language.LSP.Server          (MonadLsp)
-import           Language.LSP.Types           (CompletionItemKind, Uri)
+import           Language.LSP.Types           (CompletionItemKind (..), Uri)
 
 -- From haskell-ide-engine/src/Haskell/Ide/Engine/LSP/Completions.hs
 
@@ -91,18 +91,21 @@ instance Monoid QualCompls where
 data CachedCompletions = CC
   { allModNamesAsNS   :: [T.Text] -- ^ All module names in scope.
                                 -- Prelude is a single module
-  , unqualCompls      :: [CompItem]  -- ^ All Possible completion items
+  , unqualCompls      :: [CompItem]  -- ^ Unqualified completion items
   , qualCompls        :: QualCompls    -- ^ Completion items associated to
                                 -- to a specific module name.
+  , anyQualCompls     :: [Maybe T.Text -> CompItem] -- ^ Items associated to any qualifier
   , importableModules :: [T.Text] -- ^ All modules that may be imported.
-  } deriving Show
+  }
+
+instance Show CachedCompletions where show _ = "<cached completions>"
 
 instance NFData CachedCompletions where
     rnf = rwhnf
 
 instance Monoid CachedCompletions where
-    mempty = CC mempty mempty mempty mempty
+    mempty = CC mempty mempty mempty mempty mempty
 
 instance Semigroup CachedCompletions where
-    CC a b c d <> CC a' b' c' d' =
-        CC (a<>a') (b<>b') (c<>c') (d<>d')
+    CC a b c d e <> CC a' b' c' d' e' =
+        CC (a<>a') (b<>b') (c<>c') (d<>d') (e<>e')

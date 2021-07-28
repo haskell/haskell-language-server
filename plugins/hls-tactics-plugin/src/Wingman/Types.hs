@@ -121,9 +121,6 @@ instance Ord CType where
 instance Show CType where
   show  = unsafeRender . unCType
 
-instance Show OccName where
-  show  = unsafeRender
-
 instance Show Name where
   show  = unsafeRender
 
