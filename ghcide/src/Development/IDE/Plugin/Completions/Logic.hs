@@ -9,6 +9,7 @@ module Development.IDE.Plugin.Completions.Logic (
 , cacheDataProducer
 , localCompletionsForParsedModule
 , getCompletions
+, fromIdentInfo
 ) where
 
 import           Control.Applicative
@@ -19,6 +20,7 @@ import           Data.List.Extra                          as List hiding
 import qualified Data.Map                                 as Map
 
 import           Data.Maybe                               (fromMaybe, isJust,
+                                                           isNothing,
                                                            listToMaybe,
                                                            mapMaybe)
 import qualified Data.Text                                as T
@@ -49,6 +51,7 @@ import           Development.IDE.Plugin.Completions.Types
 import           Development.IDE.Spans.Common
 import           Development.IDE.Spans.Documentation
 import           Development.IDE.Spans.LocalBindings
+import           Development.IDE.Types.Exports
 import           Development.IDE.Types.HscEnvEq
 import           Development.IDE.Types.Options
 import           GhcPlugins                               (flLabel, unpackFS)
@@ -302,6 +305,25 @@ mkPragmaCompl label insertText =
     Nothing Nothing Nothing Nothing Nothing (Just insertText) (Just Snippet)
     Nothing Nothing Nothing Nothing Nothing Nothing
 
+fromIdentInfo :: Uri -> IdentInfo -> Maybe T.Text -> CompItem
+fromIdentInfo doc IdentInfo{..} q = CI
+  { compKind= occNameToComKind Nothing name
+  , insertText=rendered
+  , importedFrom=Right moduleNameText
+  , typeText=Nothing
+  , label=rendered
+  , isInfix=Nothing
+  , docs=emptySpanDoc
+  , isTypeCompl= not isDatacon && isUpper (T.head rendered)
+  , additionalTextEdits= Just $
+        ExtendImport
+          { doc,
+            thingParent = parent,
+            importName = moduleNameText,
+            importQual = q,
+            newThing = rendered
+          }
+  }
 
 cacheDataProducer :: Uri -> HscEnvEq -> Module -> GlobalRdrEnv-> GlobalRdrEnv -> [LImportDecl GhcPs] -> IO CachedCompletions
 cacheDataProducer uri env curMod globalEnv inScopeEnv limports = do
@@ -385,6 +407,7 @@ cacheDataProducer uri env curMod globalEnv inScopeEnv limports = do
     { allModNamesAsNS = allModNamesAsNS
     , unqualCompls = unquals
     , qualCompls = quals
+    , anyQualCompls = []
     , importableModules = moduleNames
     }
 
@@ -394,6 +417,7 @@ localCompletionsForParsedModule uri pm@ParsedModule{pm_parsed_source = L _ HsMod
     CC { allModNamesAsNS = mempty
        , unqualCompls = compls
        , qualCompls = mempty
+       , anyQualCompls = []
        , importableModules = mempty
         }
   where
@@ -507,7 +531,7 @@ getCompletions
     -> ClientCapabilities
     -> CompletionsConfig
     -> IO [CompletionItem]
-getCompletions plId ideOpts CC {allModNamesAsNS, unqualCompls, qualCompls, importableModules}
+getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qualCompls, importableModules}
                maybe_parsed (localBindings, bmapping) prefixInfo caps config = do
   let VFS.PosPrefixInfo { fullLine, prefixModule, prefixText } = prefixInfo
       enteredQual = if T.null prefixModule then "" else prefixModule <> "."
@@ -566,8 +590,9 @@ getCompletions plId ideOpts CC {allModNamesAsNS, unqualCompls, qualCompls, impor
                 Just m  -> Right $ ppr m
 
           compls = if T.null prefixModule
-            then localCompls ++ unqualCompls
-            else Map.findWithDefault [] prefixModule $ getQualCompls qualCompls
+            then localCompls ++ unqualCompls ++ (($Nothing) <$> anyQualCompls)
+            else Map.findWithDefault [] prefixModule (getQualCompls qualCompls)
+                 ++ (($ Just prefixModule) <$> anyQualCompls)
 
       filtListWith f list =
         [ f label
@@ -606,13 +631,26 @@ getCompletions plId ideOpts CC {allModNamesAsNS, unqualCompls, qualCompls, impor
     | "{-# " `T.isPrefixOf` fullLine
     -> return $ filtPragmaCompls (pragmaSuffix fullLine)
     | otherwise -> do
-        let uniqueFiltCompls = nubOrdOn insertText filtCompls
+        -- assumes that nubOrdBy is stable
+        let uniqueFiltCompls = nubOrdBy uniqueCompl filtCompls
         compls <- mapM (mkCompl plId ideOpts) uniqueFiltCompls
         return $ filtModNameCompls
               ++ filtKeywordCompls
               ++ map (toggleSnippets caps config) compls
 
-
+uniqueCompl :: CompItem -> CompItem -> Ordering
+uniqueCompl x y =
+  case compare (label x, importedFrom x, compKind x)
+               (label y, importedFrom y, compKind y) of
+    EQ ->
+      -- preserve completions for duplicate record fields where the only difference is in the type
+      -- remove redundant completions with less type info
+      if typeText x == typeText y
+        || isNothing (typeText x)
+        || isNothing (typeText y)
+        then EQ
+        else compare (insertText x) (insertText y)
+    other -> other
 -- ---------------------------------------------------------------------
 -- helper functions for pragmas
 -- ---------------------------------------------------------------------
