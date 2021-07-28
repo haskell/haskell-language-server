@@ -58,7 +58,7 @@ wildifyT (S.map occNameString -> used) = everywhere $ mkT $ \case
 
 
 ------------------------------------------------------------------------------
--- | Replace a 'VarPat' with the given @'Pat' GhcPs@.
+-- | Determine whether the given 'RdrName' exists as a 'VarPat' inside of @a@.
 containsVar :: Data a => RdrName -> a -> Bool
 containsVar name = everything (||) $
   mkQ False (\case
