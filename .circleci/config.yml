@@ -22,17 +22,17 @@ defaults: &defaults
 
     - run:
         name: Stack setup
-        command: stack -j 2 --stack-yaml=${STACK_FILE} setup
+        command: stack -j2 --stack-yaml=${STACK_FILE} setup
 
     - run:
         name: Build (we need the exe for tests)
         # need j1, else ghc-lib-parser triggers OOM
-        command: stack -j 1 --stack-yaml=${STACK_FILE} install --no-terminal
+        command: stack -j1 --stack-yaml=${STACK_FILE} install --no-terminal
         no_output_timeout: 30m
 
     - run:
         name: Build Testsuite without running it
-        command: stack -j 1 --stack-yaml=${STACK_FILE} build --test --no-run-tests --no-terminal
+        command: stack -j1 --stack-yaml=${STACK_FILE} build --test --no-run-tests --no-terminal
         no_output_timeout: 30m
 
     - store_artifacts:
@@ -43,11 +43,6 @@ defaults: &defaults
         key: v4-stack-cache-{{ .Environment.HIE_CACHE }}-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "resolver.txt" }}
         paths: &cache_paths
           - ~/.stack
-
-    - run:
-        name: Build including tests
-        command: stack --stack-yaml=${STACK_FILE} test --no-run-tests --no-terminal
-        no_output_timeout: 120m
 
 version: 2
 jobs:
