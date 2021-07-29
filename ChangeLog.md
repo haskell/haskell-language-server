@@ -16,7 +16,6 @@ and some new interesting features. Here is the brief summary of changes:
   - The plugin uses the same default language as GHCi with @fmehta's patch.
 - Wingman, where most changes owing to @isovector
   - An option for disabling proof state styling is added.
-  - Tactic supports deep recursion.
   - Hole fit suggestions are now disabled for performance reasons when using Wingman. 
 - Hovering on a name displays the package where the name is defined, contributed by @berberman.
   ![hover](https://user-images.githubusercontent.com/12473268/127550516-acc1f1b4-bad7-44fd-99a0-a174ce9ac909.gif)
