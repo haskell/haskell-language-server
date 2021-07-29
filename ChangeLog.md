@@ -1,5 +1,153 @@
 # Changelog for haskell-language-server
 
+## 1.3.0
+
+2021 July release of HLS arrives! This release includes binaries for GHC 9.0.1
+and some new interesting features. Here is the brief summary of changes:
+
+- Binaries for GHC 9.0.1 are added by @anka-213.
+- Call hierarchy plugin is added, contributed by @July541.
+  ![hierarchy](https://user-images.githubusercontent.com/12473268/127550041-094151a6-be7b-484a-bb82-c61f326ca503.gif)
+- Now completions work with definitions from non-imported modules, thanks to @pepeiborra.
+  ![completion](https://user-images.githubusercontent.com/12473268/127543694-718ae043-38f2-4fb0-be71-317f5f93b443.gif)
+- Eval plugin
+  - The plugin supports GHC 9.0.1, thanks to @berberman.
+  - `:info` command is added by @akrmn.
+  - The plugin uses the same default language as GHCi with @fmehta's patch.
+- Wingman, where most changes owing to @isovector
+  - An option for disabling proof state styling is added.
+  - Tactic supports deep recursion.
+  - Hole fits suggestions are now disabled with Wingman for a performance reason.
+- Hovering on a name displays the package where the name is defined, contributed by @berberman.
+  ![hover](https://user-images.githubusercontent.com/12473268/127550516-acc1f1b4-bad7-44fd-99a0-a174ce9ac909.gif)
+
+### Pull requests merged for 1.3.0
+
+- Wingman: Properly destruct forall-quantified types
+([#2049](https://github.com/haskell/haskell-language-server/pull/2049)) by @isovector
+- Remove .stack-work from circleci cache
+([#2044](https://github.com/haskell/haskell-language-server/pull/2044)) by @jneira
+- Completions from non-imported modules
+([#2040](https://github.com/haskell/haskell-language-server/pull/2040)) by @pepeiborra
+- Wingman: Low gas warning
+([#2038](https://github.com/haskell/haskell-language-server/pull/2038)) by @isovector
+- Enable dynamic linking in stack builds
+([#2031](https://github.com/haskell/haskell-language-server/pull/2031)) by @pepeiborra
+- Fix nix flake
+([#2030](https://github.com/haskell/haskell-language-server/pull/2030)) by @Avi-D-coder
+- Tie plugins' pluginModifyDynflags to their enabled state
+([#2029](https://github.com/haskell/haskell-language-server/pull/2029)) by @isovector
+- Add benchmarks for hole fits
+([#2027](https://github.com/haskell/haskell-language-server/pull/2027)) by @pepeiborra
+- fix a typo
+([#2024](https://github.com/haskell/haskell-language-server/pull/2024)) by @cdsmith
+- Upgrade to refinery-0.4.0.0
+([#2021](https://github.com/haskell/haskell-language-server/pull/2021)) by @isovector
+- Use implicit-hie-cradle-0.3.0.5
+([#2020](https://github.com/haskell/haskell-language-server/pull/2020)) by @jneira
+- Disable hls tests for win and ghc-9.0.1
+([#2018](https://github.com/haskell/haskell-language-server/pull/2018)) by @jneira
+- Use operational master commit to fix build for ghc-9.0.1
+([#2017](https://github.com/haskell/haskell-language-server/pull/2017)) by @jneira
+- Fix Wingman dependency on extra
+([#2007](https://github.com/haskell/haskell-language-server/pull/2007)) by @pepeiborra
+- Add GHC 9.2 support for hie-compat
+([#2003](https://github.com/haskell/haskell-language-server/pull/2003)) by @fendor
+- Enable tests for ghc 9 and promote `ghcVersion` check
+([#2001](https://github.com/haskell/haskell-language-server/pull/2001)) by @jneira
+- Allow HLS plugins to declare cli commands
+([#1999](https://github.com/haskell/haskell-language-server/pull/1999)) by @pepeiborra
+- Remove >= from cabal-version
+([#1998](https://github.com/haskell/haskell-language-server/pull/1998)) by @felixonmars
+- Eval plugin: support ghc 9.0.1
+([#1997](https://github.com/haskell/haskell-language-server/pull/1997)) by @berberman
+- Maximize sharing of NormalizedFilePath values in getLocatedImports
+([#1996](https://github.com/haskell/haskell-language-server/pull/1996)) by @pepeiborra
+- nix: add support for ghc 9.0.1
+([#1995](https://github.com/haskell/haskell-language-server/pull/1995)) by @berberman
+- Warn GHC 9 Compatibility to LSP Client
+([#1992](https://github.com/haskell/haskell-language-server/pull/1992)) by @konn
+- Update nix to GHC 8.10.5
+([#1991](https://github.com/haskell/haskell-language-server/pull/1991)) by @berberman
+- Initialize ExportsMap using hiedb exports
+([#1989](https://github.com/haskell/haskell-language-server/pull/1989)) by @pepeiborra
+- Wingman: add emacs example config to Readme
+([#1988](https://github.com/haskell/haskell-language-server/pull/1988)) by @stuebinm
+- relax megaparsec constraint in hls-tactics-plugin
+([#1986](https://github.com/haskell/haskell-language-server/pull/1986)) by @pepeiborra
+- follow change in lsp-types
+([#1985](https://github.com/haskell/haskell-language-server/pull/1985)) by @pepeiborra
+- Don't suggest import an unnecessary data constructor.
+([#1984](https://github.com/haskell/haskell-language-server/pull/1984)) by @peterwicksstringfield
+- Enable hyphenation embedding
+([#1979](https://github.com/haskell/haskell-language-server/pull/1979)) by @isovector
+- Fix nix.yaml
+([#1974](https://github.com/haskell/haskell-language-server/pull/1974)) by @isovector
+- Add windows to ghcup artifacts and generate sha256 sums
+([#1970](https://github.com/haskell/haskell-language-server/pull/1970)) by @jneira
+- Wingman: Ensure homomorphic destruct covers all constructors in the domain
+([#1968](https://github.com/haskell/haskell-language-server/pull/1968)) by @isovector
+- Wingman: Add the correct file offset to metaprogram parse errors
+([#1967](https://github.com/haskell/haskell-language-server/pull/1967)) by @isovector
+- Wingman: Config option to suppress proofstate styling
+([#1966](https://github.com/haskell/haskell-language-server/pull/1966)) by @isovector
+- Wingman: Don't wildify vars when running beginMetaprogram
+([#1963](https://github.com/haskell/haskell-language-server/pull/1963)) by @isovector
+- Wingman: Don't suggest empty case lenses for case exprs with no data cons
+([#1962](https://github.com/haskell/haskell-language-server/pull/1962)) by @isovector
+- Wingman: Don't introduce too many variables
+([#1961](https://github.com/haskell/haskell-language-server/pull/1961)) by @isovector
+- Wingman: Code lens for empty lambda case
+([#1956](https://github.com/haskell/haskell-language-server/pull/1956)) by @isovector
+- Call hierarchy support
+([#1955](https://github.com/haskell/haskell-language-server/pull/1955)) by @July541
+- Bugfix type signature lenses / code actions for pattern synonyms.
+([#1952](https://github.com/haskell/haskell-language-server/pull/1952)) by @peterwicksstringfield
+- Add :info command in Eval plugin
+([#1948](https://github.com/haskell/haskell-language-server/pull/1948)) by @akrmn
+- avoid holding onto the hie bytestring when indexing
+([#1947](https://github.com/haskell/haskell-language-server/pull/1947)) by @pepeiborra
+- Wingman: Make getCurrentDefinitions return polymorphic types
+([#1945](https://github.com/haskell/haskell-language-server/pull/1945)) by @isovector
+- Wingman: Tactical support for deep recursion
+([#1944](https://github.com/haskell/haskell-language-server/pull/1944)) by @isovector
+- Properly scope GADT equality evidence in the judgment
+([#1942](https://github.com/haskell/haskell-language-server/pull/1942)) by @isovector
+- Add ghc-9.0.1 to the build release script
+([#1940](https://github.com/haskell/haskell-language-server/pull/1940)) by @anka-213
+- Cata tactic should generalize let and ensure unifiability
+([#1938](https://github.com/haskell/haskell-language-server/pull/1938)) by @isovector
+- Include chocolatey hls package
+([#1936](https://github.com/haskell/haskell-language-server/pull/1936)) by @jneira
+- Mention ghcup and warning about updating artifacts
+([#1935](https://github.com/haskell/haskell-language-server/pull/1935)) by @jneira
+- Remove ghc-8.8.2
+([#1934](https://github.com/haskell/haskell-language-server/pull/1934)) by @jneira
+- Workaround for GHC 8.10.5 on macOS
+([#1931](https://github.com/haskell/haskell-language-server/pull/1931)) by @konn
+- Add manual upload instructions
+([#1930](https://github.com/haskell/haskell-language-server/pull/1930)) by @jneira
+- Perform name lookup directly in TacticsM
+([#1924](https://github.com/haskell/haskell-language-server/pull/1924)) by @isovector
+- Include testdata in hls-refine-imports-plugin.cabal (backport #1922)
+([#1923](https://github.com/haskell/haskell-language-server/pull/1923)) by @mergify[bot]
+- Include testdata in hls-refine-imports-plugin.cabal
+([#1922](https://github.com/haskell/haskell-language-server/pull/1922)) by @felixonmars
+- Add pointwise command to the metaprogram parser
+([#1921](https://github.com/haskell/haskell-language-server/pull/1921)) by @isovector
+- Allow symbol identifiers in tactics
+([#1920](https://github.com/haskell/haskell-language-server/pull/1920)) by @isovector
+- Fall back to hiedb for invalid srcspan paths
+([#1918](https://github.com/haskell/haskell-language-server/pull/1918)) by @pepeiborra
+- Disable hole fit suggestions when running Wingman
+([#1873](https://github.com/haskell/haskell-language-server/pull/1873)) by @isovector
+- Wingman: maintain user-defined fixity for definitions
+([#1697](https://github.com/haskell/haskell-language-server/pull/1697)) by @isovector
+- Display package names of external libraries on hover
+([#1626](https://github.com/haskell/haskell-language-server/pull/1626)) by @berberman
+- Make the eval plugin use the same default language extensions as ghci.
+([#1596](https://github.com/haskell/haskell-language-server/pull/1596)) by @fmehta
+
 ## 1.2.0
 
 We have finally released a new version of Haskell Language Server!
