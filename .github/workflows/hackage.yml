@@ -21,7 +21,8 @@ jobs:
                   "hls-haddock-comments-plugin", "hls-hlint-plugin",
                   "hls-module-name-plugin", "hls-pragmas-plugin",
                   "hls-refine-imports-plugin", "hls-retrie-plugin",
-                  "hls-splice-plugin", "hls-tactics-plugin"]
+                  "hls-splice-plugin", "hls-tactics-plugin",
+                  "hls-call-hierarchy-plugin"]
 
     steps:
       - name: "Run cabal check"
