@@ -17,7 +17,7 @@ and some new interesting features. Here is the brief summary of changes:
 - Wingman, where most changes owing to @isovector
   - An option for disabling proof state styling is added.
   - Tactic supports deep recursion.
-  - Hole fits suggestions are now disabled with Wingman for a performance reason.
+  - Hole fit suggestions are now disabled with Wingman for a performance reason.
 - Hovering on a name displays the package where the name is defined, contributed by @berberman.
   ![hover](https://user-images.githubusercontent.com/12473268/127550516-acc1f1b4-bad7-44fd-99a0-a174ce9ac909.gif)
 
