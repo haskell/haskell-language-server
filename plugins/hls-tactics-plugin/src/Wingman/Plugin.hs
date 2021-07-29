@@ -100,6 +100,12 @@ showUserFacingMessage ufm = do
   pure $ Left $ mkErr InternalError $ T.pack $ show ufm
 
 
+mkUserFacingMessage :: [TacticError] -> UserFacingMessage
+mkUserFacingMessage errs
+  | elem OutOfGas errs = NotEnoughGas
+mkUserFacingMessage _ = TacticErrors
+
+
 tacticCmd
     :: (T.Text -> TacticsM ())
     -> PluginId
@@ -122,7 +128,7 @@ tacticCmd tac pId state (TacticParams uri range var_name)
           pure $ join $ case res of
             Left errs ->  do
               traceMX "errs" errs
-              Left TacticErrors
+              Left $ mkUserFacingMessage errs
             Right rtr ->
               case rtr_extract rtr of
                 L _ (HsVar _ (L _ rdr)) | isHole (occName rdr) ->
