@@ -225,7 +225,7 @@ unify goal inst = do
   case tryUnifyUnivarsButNotSkolems skolems goal inst of
     Just subst ->
       modify $ updateSubst subst
-    Nothing -> cut -- failure (UnificationError inst goal)
+    Nothing -> cut
 
 cut :: RuleT jdg ext err s m a
 cut = RuleT Empty
