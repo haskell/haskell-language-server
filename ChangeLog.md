@@ -17,12 +17,12 @@ and some new interesting features. Here is the brief summary of changes:
 - Wingman, where most changes owing to @isovector
   - Wingman no longer changes the fixity of function definitions.
   - Wingman now gives unique names to the holes it generates.
-  - Significant improvements in Wingman's ability to reason about polymorphic and GADT types.
+  - Wingman's ability to reason about polymorphic and GADT types is significantly improved.
   - Wingman no longer suggests homomorphic destructs when the codomain is larger than the domain.
-  - "Complete case constructors" support for empty lambda cases
-  - Wingman will now give a warning if it ran out of gas during "attempt to fill hole"
-  - Metaprogramming improvements, including symbolic-name support, and the `pointwise` combinator.
-  - Fixed a bug when attempting to introduce too many variables in an `intros` metaprogram.
+  - "Complete case constructors" action supports empty lambda cases.
+  - Wingman now gives a warning if it ran out of gas during "attempt to fill hole".
+  - Metaprogramming for Wingman has been improved with symbolic-name support and the `pointwise` combinator.
+  - An option to enable/disable Wingman's proof state styling is added.
   - Hole fit suggestions are now disabled for performance reasons when using Wingman. 
 - Hovering on a name displays the package where the name is defined, contributed by @berberman.
   ![hover](https://user-images.githubusercontent.com/12473268/127550516-acc1f1b4-bad7-44fd-99a0-a174ce9ac909.gif)
