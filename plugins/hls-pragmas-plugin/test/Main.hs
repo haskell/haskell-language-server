@@ -32,6 +32,54 @@ codeActionTests =
       liftIO $ "Add \"FlexibleInstances\"" `elem` map (^. L.title) cas @? "Contains FlexibleInstances code action"
       executeCodeAction $ head cas
 
+  , goldenWithPragmas "adds LANGUAGE pragma after shebang and last language pragma" "AfterShebangAndPragma" $ \doc -> do
+      _ <- waitForDiagnosticsFrom doc
+      cas <- map fromAction <$> getAllCodeActions doc
+      liftIO $ "Add \"NamedFieldPuns\"" `elem` map (^. L.title) cas @? "Contains NamedFieldPuns code action"
+      executeCodeAction $ head cas
+
+  , goldenWithPragmas "adds above module keyword on first line" "ModuleOnFirstLine" $ \doc -> do
+      _ <- waitForDiagnosticsFrom doc
+      cas <- map fromAction <$> getAllCodeActions doc
+      liftIO $ "Add \"TupleSections\"" `elem` map (^. L.title) cas @? "Contains TupleSections code action"
+      executeCodeAction $ head cas
+
+  , goldenWithPragmas "adds LANGUAGE pragma after GHC_OPTIONS" "AfterGhcOptions" $ \doc -> do
+      _ <- waitForDiagnosticsFrom doc
+      cas <- map fromAction <$> getAllCodeActions doc
+      liftIO $ "Add \"TupleSections\"" `elem` map (^. L.title) cas @? "Contains TupleSections code action"
+      executeCodeAction $ head cas
+
+  , goldenWithPragmas "adds LANGUAGE pragma after shebang and GHC_OPTIONS" "AfterShebangAndOpts" $ \doc -> do
+      _ <- waitForDiagnosticsFrom doc
+      cas <- map fromAction <$> getAllCodeActions doc
+      liftIO $ "Add \"TupleSections\"" `elem` map (^. L.title) cas @? "Contains TupleSections code action"
+      executeCodeAction $ head cas
+
+  , goldenWithPragmas "adds LANGUAGE pragma after shebang, GHC_OPTIONS and language pragma" "AfterShebangAndOptionsAndPragma" $ \doc -> do
+      _ <- waitForDiagnosticsFrom doc
+      cas <- map fromAction <$> getAllCodeActions doc
+      liftIO $ "Add \"TupleSections\"" `elem` map (^. L.title) cas @? "Contains TupleSections code action"
+      executeCodeAction $ head cas
+
+  , goldenWithPragmas "adds LANGUAGE pragma after all others ignoring later INLINE pragma" "AfterShebangAndOptionsAndPragmasIgnoreInline" $ \doc -> do
+      _ <- waitForDiagnosticsFrom doc
+      cas <- map fromAction <$> getAllCodeActions doc
+      liftIO $ "Add \"TupleSections\"" `elem` map (^. L.title) cas @? "Contains TupleSections code action"
+      executeCodeAction $ head cas
+
+  , goldenWithPragmas "adds LANGUAGE pragma after all others ignoring multiple later INLINE pragma" "AfterAllWithMultipleInlines" $ \doc -> do
+      _ <- waitForDiagnosticsFrom doc
+      cas <- map fromAction <$> getAllCodeActions doc
+      liftIO $ "Add \"TupleSections\"" `elem` map (^. L.title) cas @? "Contains TupleSections code action"
+      executeCodeAction $ head cas
+
+  , goldenWithPragmas "adds LANGUAGE pragma correctly ignoring later INLINE pragma" "AddLanguagePragma" $ \doc -> do
+      _ <- waitForDiagnosticsFrom doc
+      cas <- map fromAction <$> getAllCodeActions doc
+      liftIO $ "Add \"TupleSections\"" `elem` map (^. L.title) cas @? "Contains TupleSections code action"
+      executeCodeAction $ head cas
+
   , goldenWithPragmas "adds TypeApplications pragma" "TypeApplications" $ \doc -> do
       _ <- waitForDiagnosticsFrom doc
       cas <- map fromAction <$> getAllCodeActions doc

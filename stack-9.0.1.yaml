@@ -9,6 +9,7 @@ packages:
   - ./hls-plugin-api
   - ./hls-test-utils
   # - ./shake-bench
+  - ./plugins/hls-call-hierarchy-plugin
   # - ./plugins/hls-class-plugin
   - ./plugins/hls-haddock-comments-plugin
   - ./plugins/hls-eval-plugin
@@ -101,8 +102,6 @@ extra-deps:
   commit: 16e19aaf34e286f3d27b3988c61040823ec66537
 
 configure-options:
-  $targets:
-      - --enable-executable-dynamic
   ghcide:
       - --disable-library-for-ghci
   haskell-language-server:

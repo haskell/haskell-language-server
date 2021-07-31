@@ -3968,6 +3968,7 @@ completionTests
     [ testGroup "non local" nonLocalCompletionTests
     , testGroup "topLevel" topLevelCompletionTests
     , testGroup "local" localCompletionTests
+    , testGroup "global" globalCompletionTests
     , testGroup "other" otherCompletionTests
     ]
 
@@ -3979,8 +3980,9 @@ completionTest name src pos expected = testSessionWait name $ do
     let compls' = [ (_label, _kind, _insertText, _additionalTextEdits) | CompletionItem{..} <- compls]
     liftIO $ do
         let emptyToMaybe x = if T.null x then Nothing else Just x
-        sortOn (Lens.view Lens._1) compls' @?=
-            sortOn (Lens.view Lens._1) [ (l, Just k, emptyToMaybe t, at) | (l,k,t,_,_,at) <- expected]
+        sortOn (Lens.view Lens._1) (take (length expected) compls') @?=
+            sortOn (Lens.view Lens._1)
+              [ (l, Just k, emptyToMaybe t, at) | (l,k,t,_,_,at) <- expected]
         forM_ (zip compls expected) $ \(CompletionItem{..}, (_,_,_,expectedSig, expectedDocs, _)) -> do
             when expectedSig $
                 assertBool ("Missing type signature: " <> T.unpack _label) (isJust _detail)
@@ -4362,7 +4364,7 @@ otherCompletionTests = [
       _ <- waitForDiagnostics
       compls <- getCompletions docA $ Position 2 4
       let compls' = [txt | CompletionItem {_insertText = Just txt, ..} <- compls, _label == "member"]
-      liftIO $ compls' @?= ["member ${1:Foo}", "member ${1:Bar}"],
+      liftIO $ take 2 compls' @?= ["member ${1:Foo}", "member ${1:Bar}"],
 
     testSessionWait "maxCompletions" $ do
         doc <- createDoc "A.hs" "haskell" $ T.unlines
@@ -4373,6 +4375,105 @@ otherCompletionTests = [
         _ <- waitForDiagnostics
         compls <- getCompletions  doc (Position 3 13)
         liftIO $ length compls @?= maxCompletions def
+  ]
+
+globalCompletionTests :: [TestTree]
+globalCompletionTests =
+  [ testSessionWait "fromList" $ do
+        doc <- createDoc "A.hs" "haskell" $ T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-binds #-}",
+                "module A () where",
+                "a = fromList"
+            ]
+        _ <- waitForDiagnostics
+        compls <- getCompletions doc (Position 2 12)
+        let compls' =
+              [T.drop 1 $ T.dropEnd 10 d
+              | CompletionItem {_documentation = Just (CompletionDocMarkup (MarkupContent MkMarkdown d)), _label}
+                <- compls
+              , _label == "fromList"
+              ]
+        liftIO $ take 3 (sort compls') @?=
+          map ("Defined in "<>)
+              [ "'Data.IntMap"
+              , "'Data.IntMap.Lazy"
+              , "'Data.IntMap.Strict"
+              ]
+
+  , testSessionWait "Map" $ do
+        doc <- createDoc "A.hs" "haskell" $ T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-binds #-}",
+                "module A () where",
+                "a :: Map"
+            ]
+        _ <- waitForDiagnostics
+        compls <- getCompletions doc (Position 2 7)
+        let compls' =
+              [T.drop 1 $ T.dropEnd 10 d
+              | CompletionItem {_documentation = Just (CompletionDocMarkup (MarkupContent MkMarkdown d)), _label}
+                <- compls
+              , _label == "Map"
+              ]
+        liftIO $ take 3 (sort compls') @?=
+          map ("Defined in "<>)
+              [ "'Data.Map"
+              , "'Data.Map.Lazy"
+              , "'Data.Map.Strict"
+              ]
+  , testSessionWait "no duplicates" $ do
+        doc <- createDoc "A.hs" "haskell" $ T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-binds #-}",
+                "module A () where",
+                "import GHC.Exts(fromList)",
+                "a = fromList"
+            ]
+        _ <- waitForDiagnostics
+        compls <- getCompletions doc (Position 3 13)
+        let duplicate =
+              find
+                (\case
+                  CompletionItem
+                    { _insertText = Just "fromList"
+                    , _documentation =
+                      Just (CompletionDocMarkup (MarkupContent MkMarkdown d))
+                    } ->
+                    "GHC.Exts" `T.isInfixOf` d
+                  _ -> False
+                ) compls
+        liftIO $ duplicate @?= Nothing
+
+  , testSessionWait "non-local before global" $ do
+    -- non local completions are more specific
+        doc <- createDoc "A.hs" "haskell" $ T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-binds #-}",
+                "module A () where",
+                "import GHC.Exts(fromList)",
+                "a = fromList"
+            ]
+        _ <- waitForDiagnostics
+        compls <- getCompletions doc (Position 3 13)
+        let compls' =
+              [_insertText
+              | CompletionItem {_label, _insertText} <- compls
+              , _label == "fromList"
+              ]
+        liftIO $ take 3 compls' @?=
+          map Just ["fromList ${1:([Item l])}", "fromList", "fromList"]
+  , testGroup "auto import snippets"
+    [ completionCommandTest
+            "import Data.Sequence"
+            ["module A where", "foo :: Seq"]
+            (Position 1 9)
+            "Seq"
+            ["module A where", "import Data.Sequence (Seq)", "foo :: Seq"]
+
+    , completionCommandTest
+            "qualified import"
+            ["module A where", "foo :: Seq.Seq"]
+            (Position 1 13)
+            "Seq"
+            ["module A where", "import qualified Data.Sequence as Seq", "foo :: Seq.Seq"]
+    ]
   ]
 
 highlightTests :: TestTree
