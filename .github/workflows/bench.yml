@@ -24,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ['8.10.4']
+        ghc: ['8.10.4','9.0.1']
         os: [ubuntu-latest]
 
     steps:
@@ -38,6 +38,11 @@ jobs:
         ghc-version: ${{ matrix.ghc }}
         cabal-version: '3.2'
         enable-stack: false
+
+    # Needs to be before Cache Cabal so the cache can detect changes to the modified cabal.project file
+    - if: ${{ needs.pre_job.outputs.should_skip != 'true' && matrix.ghc == '9.0.1' }}
+      name: Use modified cabal.project for ghc9
+      run: cp cabal-ghc901.project cabal.project
 
     - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
       name: Cache Cabal
