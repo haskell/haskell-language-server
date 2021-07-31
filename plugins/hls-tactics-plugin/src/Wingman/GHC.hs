@@ -91,11 +91,15 @@ tacticsThetaTy (tcSplitSigmaTy -> (_, theta,  _)) = theta
 ------------------------------------------------------------------------------
 -- | Get the data cons of a type, if it has any.
 tacticsGetDataCons :: Type -> Maybe ([DataCon], [Type])
-tacticsGetDataCons ty | Just _ <- algebraicTyCon ty =
-  splitTyConApp_maybe ty <&> \(tc, apps) ->
-    ( filter (not . dataConCannotMatch apps) $ tyConDataCons tc
-    , apps
-    )
+tacticsGetDataCons ty
+  | Just (_, ty') <- tcSplitForAllTy_maybe ty
+  = tacticsGetDataCons ty'
+tacticsGetDataCons ty
+  | Just _ <- algebraicTyCon ty
+  = splitTyConApp_maybe ty <&> \(tc, apps) ->
+      ( filter (not . dataConCannotMatch apps) $ tyConDataCons tc
+      , apps
+      )
 tacticsGetDataCons _ = Nothing
 
 ------------------------------------------------------------------------------
@@ -132,6 +136,9 @@ getRecordFields dc =
 ------------------------------------------------------------------------------
 -- | Is this an algebraic type?
 algebraicTyCon :: Type -> Maybe TyCon
+algebraicTyCon ty
+  | Just (_, ty') <- tcSplitForAllTy_maybe ty
+  = algebraicTyCon ty'
 algebraicTyCon (splitTyConApp_maybe -> Just (tycon, _))
   | tycon == intTyCon    = Nothing
   | tycon == floatTyCon  = Nothing
