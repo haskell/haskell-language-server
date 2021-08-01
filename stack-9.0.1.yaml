@@ -54,6 +54,9 @@ extra-deps:
 - refinery-0.4.0.0
 - retrie-1.0.0.0
 - some-1.0.2@sha256:3d460998df32ad7b93bf55657aeae988d97070155e71718b4bc75d0997ce9d62,2244
+- lsp-1.2.0.1
+- lsp-types-1.3.0.0
+- lsp-test-0.14.0.1
 
 # Upstream patches for ghc-9.0.1 compatability
 # Same as in cabal.project
@@ -83,14 +86,6 @@ extra-deps:
   subdirs:
   - dependent-sum-template
 # https://github.com/obsidiansystems/dependent-sum/pull/57
-
-- github: anka-213/lsp
-  commit: e96383ab19534128f12acc70a69fbc15d4f298cc
-  subdirs:
-  - lsp-types
-  - lsp
-  - lsp-test
-# https://github.com/haskell/lsp/pull/312
 
 - github: diagrams/active
   commit: ca23431a8dfa013992f9164ccc882a3277361f17
