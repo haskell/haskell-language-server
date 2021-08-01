@@ -49,7 +49,7 @@ library
     , hls-graph             ^>=1.4
     , hslogger
     , lens
-    , lsp                   ^>=1.2
+    , lsp                   ^>=1.2.0.1
     , opentelemetry
     , optparse-applicative
     , process

@@ -141,7 +141,9 @@ import           Ide.Plugin.Eval.Util                 (asS, gStrictTry,
                                                        response', timed)
 import           Ide.Types
 import           Language.LSP.Server
-import           Language.LSP.Types
+import           Language.LSP.Types                   hiding
+                                                      (SemanticTokenAbsolute (length, line),
+                                                       SemanticTokenRelative (length))
 import           Language.LSP.Types.Lens              (end, line)
 import           Language.LSP.VFS                     (virtualFileText)
 import           Outputable                           (SDoc, empty, hang, nest,
@@ -153,14 +155,15 @@ import           UnliftIO.Temporary                   (withSystemTempFile)
 import           Util                                 (OverridingBool (Never))
 
 import           IfaceSyn                             (showToHeader)
-import           PprTyThing                           (pprTyThingInContext, pprTypeForUser)
+import           PprTyThing                           (pprTyThingInContext,
+                                                       pprTypeForUser)
 #if MIN_VERSION_ghc(9,0,0)
-import           GHC.Parser.Annotation                (ApiAnns (apiAnnRogueComments))
-import           GHC.Parser.Lexer                     (mkParserFlags)
 import           GHC.Driver.Ways                      (hostFullWays,
                                                        wayGeneralFlags,
                                                        wayUnsetGeneralFlags)
-import           GHC.Types.SrcLoc                     (UnhelpfulSpanReason(UnhelpfulInteractive))
+import           GHC.Parser.Annotation                (ApiAnns (apiAnnRogueComments))
+import           GHC.Parser.Lexer                     (mkParserFlags)
+import           GHC.Types.SrcLoc                     (UnhelpfulSpanReason (UnhelpfulInteractive))
 #else
 import           GhcPlugins                           (interpWays, updateWays,
                                                        wayGeneralFlags,

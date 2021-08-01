@@ -60,7 +60,10 @@ import           Development.Shake                        (getDirectoryFilesIO)
 import qualified Experiments                              as Bench
 import           Ide.Plugin.Config
 import           Language.LSP.Test
-import           Language.LSP.Types                       hiding (mkRange)
+import           Language.LSP.Types                                 hiding
+                                                                    (mkRange, SemanticTokenAbsolute (length, line),
+                                                                     SemanticTokenRelative (length),
+                                                                     SemanticTokensEdit (_start))
 import           Language.LSP.Types.Capabilities
 import qualified Language.LSP.Types.Lens                  as Lsp (diagnostics,
                                                                   message,
