@@ -52,7 +52,10 @@ import           Ide.Types (PluginId)
 import           Language.Haskell.GHC.ExactPrint (Transform)
 import           Language.Haskell.GHC.ExactPrint (modifyAnnsT, addAnnotationsForPretty)
 import           Language.LSP.Server (MonadLsp, sendNotification)
-import           Language.LSP.Types
+import           Language.LSP.Types              hiding
+                                                 (SemanticTokenAbsolute (length, line),
+                                                  SemanticTokenRelative (length),
+                                                  SemanticTokensEdit (_start))
 import           Language.LSP.Types.Capabilities
 import           OccName
 import           Prelude hiding (span)

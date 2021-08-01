@@ -62,7 +62,20 @@ import           HscTypes                                          (ImportedMods
 import           Ide.PluginUtils                                   (subRange)
 import           Ide.Types
 import qualified Language.LSP.Server                               as LSP
-import           Language.LSP.Types
+import           Language.LSP.Types                                (CodeAction (..),
+                                                                    CodeActionContext (CodeActionContext, _diagnostics),
+                                                                    CodeActionKind (CodeActionQuickFix, CodeActionUnknown),
+                                                                    CodeActionParams (CodeActionParams),
+                                                                    Command,
+                                                                    Diagnostic (..),
+                                                                    List (..),
+                                                                    ResponseError,
+                                                                    SMethod (STextDocumentCodeAction),
+                                                                    TextDocumentIdentifier (TextDocumentIdentifier),
+                                                                    TextEdit (TextEdit),
+                                                                    WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
+                                                                    type (|?) (InR),
+                                                                    uriToFilePath)
 import           Language.LSP.VFS
 import           Module                                            (moduleEnvElts)
 import           OccName

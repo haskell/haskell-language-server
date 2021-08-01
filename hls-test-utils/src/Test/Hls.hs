@@ -47,7 +47,10 @@ import           Ide.Plugin.Config                 (Config, formattingProvider)
 import           Ide.PluginUtils                   (pluginDescToIdePlugins)
 import           Ide.Types
 import           Language.LSP.Test
-import           Language.LSP.Types
+import           Language.LSP.Types                hiding
+                                                   (SemanticTokenAbsolute (length, line),
+                                                    SemanticTokenRelative (length),
+                                                    SemanticTokensEdit (_start))
 import           Language.LSP.Types.Capabilities   (ClientCapabilities)
 import           System.Directory                  (getCurrentDirectory,
                                                     setCurrentDirectory)
