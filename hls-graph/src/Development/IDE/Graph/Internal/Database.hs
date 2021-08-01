@@ -115,7 +115,7 @@ cleanupAsync ref = mapConcurrently_ uninterruptibleCancel =<< readIORef ref
 check :: Database -> Key -> Id -> Maybe Result -> IO Result
 check db key id result@(Just me@Result{resultDeps=Just deps}) = do
     res <- builder db $ map Left deps
-    let dirty = all (\(_,dep) -> resultBuilt me < resultChanged dep) res
+    let dirty = any (\(_,dep) -> resultBuilt me < resultChanged dep) res
     let mode = if dirty then Shake.RunDependenciesChanged else Shake.RunDependenciesSame
     spawn db key id mode result
 check db key id result = spawn db key id Shake.RunDependenciesChanged result
