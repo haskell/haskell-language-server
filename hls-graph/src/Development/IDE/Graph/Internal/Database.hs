@@ -1,34 +1,34 @@
 -- We deliberately want to ensure the function we add to the rule database
 -- has the constraints we need on it when we get it out.
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE NamedFieldPuns      #-}
+{-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE TupleSections       #-}
+{-# LANGUAGE TypeFamilies        #-}
 
 module Development.IDE.Graph.Internal.Database where
 
-import Development.IDE.Graph.Internal.Intern
-import Development.IDE.Graph.Internal.Types
-import Data.Dynamic
+import           Control.Concurrent.Async
+import           Control.Concurrent.Extra
+import           Control.Exception
+import           Control.Monad
+import           Control.Monad.Trans.Reader
+import           Data.Dynamic
+import           Data.Either
+import           Data.IORef.Extra
+import           Data.Maybe
+import           Data.Tuple.Extra
+import qualified Development.IDE.Graph.Internal.Ids    as Ids
+import           Development.IDE.Graph.Internal.Intern
 import qualified Development.IDE.Graph.Internal.Intern as Intern
-import qualified Development.IDE.Graph.Internal.Ids as Ids
-import Control.Concurrent.Extra
-import Data.IORef.Extra
-import Control.Monad
-import Development.Shake.Classes
-import qualified Development.Shake as Shake
-import Data.Maybe
-import Control.Concurrent.Async
-import System.IO.Unsafe
-import Development.IDE.Graph.Internal.Rules
-import qualified Development.Shake.Rule as Shake
-import Control.Exception
-import Control.Monad.Trans.Reader
-import Data.Tuple.Extra
-import Data.Either
+import           Development.IDE.Graph.Internal.Rules
+import           Development.IDE.Graph.Internal.Types
+import qualified Development.Shake                     as Shake
+import           Development.Shake.Classes
+import qualified Development.Shake.Rule                as Shake
+import           System.IO.Unsafe
 
 newDatabase :: Dynamic -> TheRules -> IO Database
 newDatabase databaseExtra databaseRules = do
@@ -38,15 +38,17 @@ newDatabase databaseExtra databaseRules = do
     databaseValues <- Ids.empty
     pure Database{..}
 
+-- | Increment the step and mark all ids dirty
 incDatabase :: Database -> IO ()
 incDatabase db = do
     modifyIORef' (databaseStep db) $ \(Step i) -> Step $ i + 1
     Ids.forMutate (databaseValues db) $ second $ \case
-        Clean x -> Dirty (Just x)
-        Dirty x -> Dirty x
+        Clean x     -> Dirty (Just x)
+        Dirty x     -> Dirty x
         Running _ x -> Dirty x
 
 
+-- | Unwrap and build a list of keys in parallel
 build
     :: forall key value . (Shake.RuleResult key ~ value, Typeable key, Show key, Hashable key, Eq key, Typeable value)
     => Database -> [key] -> IO ([Id], [value])
@@ -57,6 +59,7 @@ build db keys = do
         asV :: Value -> value
         asV (Value x) = unwrapDynamic x
 
+-- | Build a list of keys in parallel
 builder
     :: Database -> [Either Id Key] -> IO [(Id, Result)]
 builder db@Database{..} keys = do
@@ -69,6 +72,7 @@ builder db@Database{..} keys = do
 
         results <- withLock databaseLock $ do
             forM keys $ \idKey -> do
+                -- Resolve the id
                 id <- case idKey of
                     Left id -> pure id
                     Right key -> do
@@ -80,6 +84,7 @@ builder db@Database{..} keys = do
                                 writeIORef' databaseIds ids
                                 return id
 
+                -- Spawn the id if needed
                 status <- Ids.lookup databaseValues id
                 val <- case fromMaybe (fromRight undefined idKey, Dirty Nothing) status of
                     (_, Clean r) -> pure r
@@ -111,7 +116,7 @@ cleanupAsync :: IORef [Async a] -> IO ()
 cleanupAsync ref = mapConcurrently_ uninterruptibleCancel =<< readIORef ref
 
 
--- Check if we need to run the database.
+-- | Check if we need to run the database.
 check :: Database -> Key -> Id -> Maybe Result -> IO Result
 check db key id result@(Just me@Result{resultDeps=Just deps}) = do
     res <- builder db $ map Left deps
@@ -121,7 +126,7 @@ check db key id result@(Just me@Result{resultDeps=Just deps}) = do
 check db key id result = spawn db key id Shake.RunDependenciesChanged result
 
 
--- Spawn a new computation to run the action.
+-- | Spawn a new computation to run the action.
 spawn :: Database -> Key -> Id -> Shake.RunMode -> Maybe Result -> IO Result
 spawn db@Database{..} key id mode result = do
     let act = runRule databaseRules key (fmap resultData result) mode
@@ -137,6 +142,7 @@ spawn db@Database{..} key id mode result = do
 
 data Box a = Box {fromBox :: a}
 
+-- | Split an IO computation into an unsafe lazy value and a forcing computation
 splitIO :: IO a -> (IO (), a)
 splitIO act = do
     let act2 = Box <$> act
