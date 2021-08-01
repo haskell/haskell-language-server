@@ -21,13 +21,12 @@ import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.Spans.AtPoint
 import           HieDb.Query
 import           Ide.Plugin.Retrie                    hiding (descriptor)
+import           Ide.PluginUtils
 import           Ide.Types
-import           Language.Haskell.GHC.ExactPrint
 import           Language.LSP.Server
 import           Language.LSP.Types                   hiding (_changes)
 import           Name
-import           Retrie                               hiding (getLoc)
-import Ide.PluginUtils
+import           Retrie                               hiding (HsModule, getLoc)
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor pluginId = (defaultPluginDescriptor pluginId) {
@@ -36,25 +35,25 @@ descriptor pluginId = (defaultPluginDescriptor pluginId) {
 
 -- Todo: handle errors correctly (remove fromJust)
 renameProvider :: PluginMethodHandler IdeState TextDocumentRename
-renameProvider state pluginId (RenameParams tdi@(TextDocumentIdentifier uri) pos _progToken newName) = response $ do
-    let Just nfp = uriToNormalizedFilePath $ toNormalizedUri uri
+renameProvider state pluginId (RenameParams tdi@(TextDocumentIdentifier uri) pos _progToken newNameStr) = response $ do
+    let Just nfp = uriToNormalizedFilePath $ toNormalizedUri uri -- TODO: nfp should be nfp of ref file
+    (HAR _ asts _ _ _, mapping) <- liftIO $ fromJust <$> runAction "Rename.GetHieAst" state (useWithStale GetHieAst nfp)
+    session <- liftIO $ runAction "Rename.GhcSessionDeps" state (useWithStale GhcSessionDeps nfp)
+    let oldName = head $ getNamesAtPoint asts pos mapping
+    refs <- liftIO $ runAction "Rename.references" state (refsAtName nfp oldName)
 
     -- rename LHS declarations
-    (annPs, _) <- liftIO $ fromJust <$> runAction "Rename.GetAnnotatedParsedModule" state (useWithStale GetAnnotatedParsedSource nfp) -- stale?
+    annPs <- liftIO $ fst . fromJust <$> runAction "Rename.GetAnnotatedParsedModule" state (useWithStale GetAnnotatedParsedSource  nfp) -- stale?
     ccs <- lift getClientCapabilities
     let src = printA annPs
-        res = printA (fmap renameLhsDecls annPs)
+        res = printA (fmap (fmap (renameLhsDecls (mkRdrUnqual $ mkTcOcc $ T.unpack newNameStr) refs)) annPs)
         declEdits = makeDiffTextEdit (T.pack src) (T.pack res)
 
     -- use retrie to rename right-hand sides
-    (HAR _ asts _ _ _, mapping) <- liftIO $ fromJust <$> runAction "Rename.GetHieAst" state (useWithStale GetHieAst nfp)
-    let oldName = head $ getNamesAtPoint asts pos mapping
-    session <- liftIO $ runAction "Rename.GhcSessionDeps" state (useWithStale GhcSessionDeps nfp)
-    refs <- liftIO $ runAction "Rename.references" state (refsAtName nfp oldName)
     let emptyContextUpdater c i = const (return c)
         isType = isUpper $ head oldNameStr
         oldNameStr = getOccString oldName
-        rewrite = (if isType then AdhocType else Adhoc) (oldNameStr ++ " = " ++ T.unpack newName)
+        rewrite = (if isType then AdhocType else Adhoc) (oldNameStr ++ " = " ++ T.unpack newNameStr)
     (_errors, edits@WorkspaceEdit{_changes}) <- liftIO $
         callRetrieWithTransformerAndUpdates
             (referenceTransformer refs)
@@ -67,9 +66,26 @@ renameProvider state pluginId (RenameParams tdi@(TextDocumentIdentifier uri) pos
 
     return (edits {_changes = HM.update (Just . (<> declEdits)) uri <$> _changes})
 
--- TODO: rename LHS of top level decl in parsedSource (using grafts?)
-renameLhsDecls :: ParsedSource -> ParsedSource
-renameLhsDecls = error "not implemented"
+-- TODO: rename lhs for signature declarations
+-- TODO: rename lhs for type decls
+-- TODO: export/import lists
+renameLhsDecls :: RdrName -> [Location] -> HsModule GhcPs -> HsModule GhcPs
+renameLhsDecls newName refs ps@HsModule{hsmodDecls} =
+    ps {hsmodDecls = map (fmap replaceLhs) hsmodDecls}
+        where
+            replaceLhs :: HsDecl GhcPs -> HsDecl GhcPs
+            replaceLhs (ValD val funBind@FunBind{fun_id = L srcSpan _, fun_matches = fun_matches@MG{mg_alts}})
+                | fromJust (srcSpanToLocation srcSpan) `elem` refs =
+                    -- TODO: update srcSpan to newName length
+                    ValD val (funBind {
+                        fun_matches = fun_matches{
+                            mg_alts = fmap ((: []) . (fmap (renameLhsMatch newName) . head)) mg_alts}})
+            replaceLhs decl = decl
+
+renameLhsMatch :: RdrName -> Match GhcPs (LHsExpr GhcPs) -> Match GhcPs (LHsExpr GhcPs)
+renameLhsMatch newName match@Match{m_ctxt = funrhs@FunRhs{mc_fun}} =
+    match{m_ctxt = funrhs{mc_fun = fmap (const newName) mc_fun}}
+renameLhsMatch _ _ = error "Expected function match"
 
 referenceTransformer :: [Location] -> MatchResultTransformer
 referenceTransformer refs _ctxt match
