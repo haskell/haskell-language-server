@@ -30,17 +30,19 @@ where
 
 import           Data.Algorithm.Diff
 import           Data.Algorithm.DiffOutput
+import           Data.Containers.ListUtils       (nubOrdOn)
 import qualified Data.HashMap.Strict             as H
 import qualified Data.Text                       as T
-import           Ide.Types
-import           Language.LSP.Types
-import qualified Language.LSP.Types              as J
-import           Language.LSP.Types.Capabilities
-
-import           Data.Containers.ListUtils       (nubOrdOn)
 import           Ide.Plugin.Config
 import           Ide.Plugin.Properties
+import           Ide.Types
 import           Language.LSP.Server
+import           Language.LSP.Types              hiding
+                                                 (SemanticTokenAbsolute (length, line),
+                                                  SemanticTokenRelative (length),
+                                                  SemanticTokensEdit (_start))
+import qualified Language.LSP.Types              as J
+import           Language.LSP.Types.Capabilities
 
 -- ---------------------------------------------------------------------
 

@@ -91,7 +91,10 @@ import           Language.Haskell.HLint                             as Hlint hid
 import           Language.LSP.Server                                (ProgressCancellable (Cancellable),
                                                                      sendRequest,
                                                                      withIndefiniteProgress)
-import           Language.LSP.Types
+import           Language.LSP.Types                                 hiding
+                                                                    (SemanticTokenAbsolute (length, line),
+                                                                     SemanticTokenRelative (length),
+                                                                     SemanticTokensEdit (_start))
 import qualified Language.LSP.Types                                 as LSP
 import qualified Language.LSP.Types.Lens                            as LSP
 
