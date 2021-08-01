@@ -113,3 +113,7 @@ spec = do
       , (id, DestructLambdaCase, "")
       ]
 
+    -- test layouts that maintain user-written fixities
+    destructTest "b"  3 13 "LayoutInfixKeep"
+    destructTest "b"  2 12 "LayoutPrefixKeep"
+

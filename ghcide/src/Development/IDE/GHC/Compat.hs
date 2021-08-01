@@ -14,7 +14,6 @@ module Development.IDE.GHC.Compat(
     HieFile(..),
     NameCacheUpdater(..),
     hieExportNames,
-    mkHieFile,
     mkHieFile',
     enrichHie,
     writeHieFile,
@@ -115,6 +114,7 @@ module Development.IDE.GHC.Compat(
     getNodeIds,
     stringToUnit,
     rtsUnit,
+    unitString,
 
     LogActionCompat,
     logActionCompat,
@@ -152,6 +152,7 @@ import           GHC.Core.TyCo.Ppr      (pprSigmaType)
 import           GHC.Core.TyCo.Rep      (Scaled, scaledThing)
 import           GHC.Iface.Load
 import           GHC.Types.Unique.Set   (emptyUniqSet)
+import           Module                 (unitString)
 import qualified SrcLoc
 #else
 import           Module                 (InstalledUnitId,
@@ -159,7 +160,7 @@ import           Module                 (InstalledUnitId,
                                          toInstalledUnitId)
 import           TcType                 (pprSigmaType)
 #endif
-import           Compat.HieAst          (enrichHie, mkHieFile)
+import           Compat.HieAst          (enrichHie)
 import           Compat.HieBin
 import           Compat.HieTypes
 import           Compat.HieUtils
@@ -580,8 +581,8 @@ getNodeIds = nodeIdentifiers . nodeInfo
 nodeInfo' :: Ord a => HieAST a -> NodeInfo a
 nodeInfo' = nodeInfo
 -- type Unit = UnitId
--- unitString :: Unit -> String
--- unitString = unitIdString
+unitString :: Unit -> String
+unitString = Module.unitIdString
 stringToUnit :: String -> Unit
 stringToUnit = Module.stringToUnitId
 -- moduleUnit :: Module -> Unit

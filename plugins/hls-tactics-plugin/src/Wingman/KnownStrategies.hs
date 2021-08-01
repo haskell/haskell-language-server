@@ -1,6 +1,5 @@
 module Wingman.KnownStrategies where
 
-import Control.Monad.Error.Class
 import Data.Foldable (for_)
 import OccName (mkVarOcc, mkClsOcc)
 import Refinery.Tactic
@@ -26,7 +25,7 @@ known name t = do
   getCurrentDefinitions >>= \case
     [(def, _)] | def == mkVarOcc name ->
       tracing ("known " <> name) t
-    _ -> throwError NoApplicableTactic
+    _ -> failure NoApplicableTactic
 
 
 deriveFmap :: TacticsM ()

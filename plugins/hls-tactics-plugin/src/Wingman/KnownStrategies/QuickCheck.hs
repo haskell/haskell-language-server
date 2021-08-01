@@ -1,7 +1,6 @@
 module Wingman.KnownStrategies.QuickCheck where
 
 import ConLike (ConLike(RealDataCon))
-import Control.Monad.Except (MonadError (throwError))
 import Data.Bool (bool)
 import Data.Generics (everything, mkQ)
 import Data.List (partition)
@@ -15,7 +14,7 @@ import GHC.SourceGen.Expr (case', lambda, let')
 import GHC.SourceGen.Overloaded (App ((@@)), HasList (list))
 import GHC.SourceGen.Pat (conP)
 import OccName (HasOccName (occName), mkVarOcc, occNameString)
-import Refinery.Tactic (goal, rule)
+import Refinery.Tactic (goal, rule, failure)
 import TyCon (TyCon, tyConDataCons, tyConName)
 import Type (splitTyConApp_maybe)
 import Wingman.CodeGen
@@ -61,7 +60,7 @@ deriveArbitrary = do
                             (list $ fmap genExpr big)
                             terminal_expr
                     ]
-    _ -> throwError $ GoalMismatch "deriveArbitrary" ty
+    _ -> failure $ GoalMismatch "deriveArbitrary" ty
 
 
 ------------------------------------------------------------------------------

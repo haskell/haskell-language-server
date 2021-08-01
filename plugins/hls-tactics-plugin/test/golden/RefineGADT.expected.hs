@@ -5,5 +5,5 @@ data GADT a where
   Two :: GADT Bool
 
 test :: z -> GADT Int
-test z = One _
+test z = One _w0
 

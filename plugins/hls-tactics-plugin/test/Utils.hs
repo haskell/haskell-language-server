@@ -15,6 +15,7 @@ import           Control.Monad.IO.Class
 import           Data.Aeson
 import           Data.Foldable
 import           Data.Function (on)
+import           Data.IORef (writeIORef)
 import           Data.Maybe
 import           Data.Text (Text)
 import qualified Data.Text as T
@@ -53,6 +54,19 @@ codeActionTitle InL{}                               = Nothing
 codeActionTitle (InR(CodeAction title _ _ _ _ _ _ _)) = Just title
 
 
+resetGlobalHoleRef :: IO ()
+resetGlobalHoleRef = writeIORef globalHoleRef 0
+
+
+runSessionForTactics :: Session a -> IO a
+runSessionForTactics =
+  runSessionWithServer'
+    [plugin]
+    def
+    (def { messageTimeout = 5 } )
+    fullCaps
+    tacticPath
+
 ------------------------------------------------------------------------------
 -- | Make a tactic unit test.
 mkTest
@@ -67,7 +81,8 @@ mkTest
          ) -- ^ A collection of (un)expected code actions.
     -> SpecWith (Arg Bool)
 mkTest name fp line col ts = it name $ do
-  runSessionWithServer plugin tacticPath $ do
+  resetGlobalHoleRef
+  runSessionForTactics $ do
     doc <- openDoc (fp <.> "hs") "haskell"
     _ <- waitForDiagnostics
     actions <- getCodeActions doc $ pointRange line col
@@ -89,7 +104,8 @@ mkGoldenTest
     -> SpecWith ()
 mkGoldenTest eq tc occ line col input =
   it (input <> " (golden)") $ do
-    runSessionWithServer plugin tacticPath $ do
+    resetGlobalHoleRef
+    runSessionForTactics $ do
       doc <- openDoc (input <.> "hs") "haskell"
       _ <- waitForDiagnostics
       actions <- getCodeActions doc $ pointRange line col
@@ -111,7 +127,8 @@ mkCodeLensTest
     -> SpecWith ()
 mkCodeLensTest input =
   it (input <> " (golden)") $ do
-    runSessionWithServer plugin tacticPath $ do
+    resetGlobalHoleRef
+    runSessionForTactics $ do
       doc <- openDoc (input <.> "hs") "haskell"
       _ <- waitForDiagnostics
       lenses <- fmap (reverse . filter isWingmanLens) $ getCodeLenses doc
@@ -134,7 +151,8 @@ mkNoCodeLensTest
     -> SpecWith ()
 mkNoCodeLensTest input =
   it (input <> " (no code lenses)") $ do
-    runSessionWithServer plugin tacticPath $ do
+    resetGlobalHoleRef
+    runSessionForTactics $ do
       doc <- openDoc (input <.> "hs") "haskell"
       _ <- waitForDiagnostics
       lenses <- fmap (reverse . filter isWingmanLens) $ getCodeLenses doc
@@ -158,7 +176,8 @@ mkShowMessageTest
     -> SpecWith ()
 mkShowMessageTest tc occ line col input ufm =
   it (input <> " (golden)") $ do
-    runSessionWithServer plugin tacticPath $ do
+    resetGlobalHoleRef
+    runSessionForTactics $ do
       doc <- openDoc (input <.> "hs") "haskell"
       _ <- waitForDiagnostics
       actions <- getCodeActions doc $ pointRange line col

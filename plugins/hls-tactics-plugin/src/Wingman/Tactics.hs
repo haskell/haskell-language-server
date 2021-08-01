@@ -10,7 +10,6 @@ import           Control.Applicative (Alternative(empty))
 import           Control.Lens ((&), (%~), (<>~))
 import           Control.Monad (filterM)
 import           Control.Monad (unless)
-import           Control.Monad.Except (throwError)
 import           Control.Monad.Extra (anyM)
 import           Control.Monad.Reader.Class (MonadReader (ask))
 import           Control.Monad.State.Strict (StateT(..), runStateT)
@@ -66,7 +65,7 @@ assume name = rule $ \jdg -> do
           { syn_trace = tracePrim $ "assume " <> occNameString name
           , syn_used_vals = S.singleton name
           }
-    Nothing -> throwError $ UndefinedHypothesis name
+    Nothing -> cut
 
 
 ------------------------------------------------------------------------------
@@ -87,19 +86,22 @@ recursion :: TacticsM ()
 recursion = requireConcreteHole $ tracing "recursion" $ do
   defs <- getCurrentDefinitions
   attemptOn (const defs) $ \(name, ty) -> markRecursion $ do
+    jdg <- goal
     -- Peek allows us to look at the extract produced by this block.
-    peek $ \ext -> do
-      jdg <- goal
-      let pat_vals = jPatHypothesis jdg
-      -- Make sure that the recursive call contains at least one already-bound
-      -- pattern value. This ensures it is structurally smaller, and thus
-      -- suggests termination.
-      unless (any (flip M.member pat_vals) $ syn_used_vals ext) empty
-
-    let hy' = recursiveHypothesis defs
-    ctx <- ask
-    localTactic (apply Saturated $ HyInfo name RecursivePrv ty) (introduce ctx hy')
-      <@> fmap (localTactic assumption . filterPosition name) [0..]
+    peek
+      ( do
+          let hy' = recursiveHypothesis defs
+          ctx <- ask
+          localTactic (apply Saturated $ HyInfo name RecursivePrv ty) (introduce ctx hy')
+            <@> fmap (localTactic assumption . filterPosition name) [0..]
+      ) $ \ext -> do
+        let pat_vals = jPatHypothesis jdg
+        -- Make sure that the recursive call contains at least one already-bound
+        -- pattern value. This ensures it is structurally smaller, and thus
+        -- suggests termination.
+        case (any (flip M.member pat_vals) $ syn_used_vals ext) of
+          True -> Nothing
+          False -> Just UnhelpfulRecursion
 
 
 restrictPositionForApplication :: TacticsM () -> TacticsM () -> TacticsM ()
@@ -126,7 +128,7 @@ intros'
 intros' names = rule $ \jdg -> do
   let g  = jGoal jdg
   case tacticsSplitFunTy $ unCType g of
-    (_, _, [], _) -> throwError $ GoalMismatch "intros" g
+    (_, _, [], _) -> cut -- failure $ GoalMismatch "intros" g
     (_, _, args, res) -> do
       ctx <- ask
       let occs = fromMaybe (mkManyGoodNames (hyNamesInScope $ jEntireHypothesis jdg) args) names
@@ -209,8 +211,8 @@ homo hi = requireConcreteHole . tracing "homo" $ do
   case (uncoveredDataCons (coerce $ hi_type hi) (coerce g)) of
     Just uncovered_dcs ->
       unless (S.null uncovered_dcs) $
-        throwError  $ TacticPanic "Can't cover every datacon in domain"
-    _ -> throwError $ TacticPanic "Unable to fetch datacons"
+        failure  $ TacticPanic "Can't cover every datacon in domain"
+    _ -> failure $ TacticPanic "Unable to fetch datacons"
 
   rule
     $ destruct'
@@ -281,7 +283,7 @@ split = tracing "split(user)" $ do
   jdg <- goal
   let g = jGoal jdg
   case tacticsGetDataCons $ unCType g of
-    Nothing -> throwError $ GoalMismatch "split" g
+    Nothing -> failure $ GoalMismatch "split" g
     Just (dcs, _) -> choice $ fmap splitDataCon dcs
 
 
@@ -294,7 +296,7 @@ splitAuto = requireConcreteHole $ tracing "split(auto)" $ do
   jdg <- goal
   let g = jGoal jdg
   case tacticsGetDataCons $ unCType g of
-    Nothing -> throwError $ GoalMismatch "split" g
+    Nothing -> failure $ GoalMismatch "split" g
     Just (dcs, _) -> do
       case isSplitWhitelisted jdg of
         True -> choice $ fmap splitDataCon dcs
@@ -313,7 +315,7 @@ splitSingle = tracing "splitSingle" $ do
   case tacticsGetDataCons $ unCType g of
     Just ([dc], _) -> do
       splitDataCon dc
-    _ -> throwError $ GoalMismatch "splitSingle" g
+    _ -> failure $ GoalMismatch "splitSingle" g
 
 ------------------------------------------------------------------------------
 -- | Like 'split', but prunes any data constructors which have holes.
@@ -358,7 +360,7 @@ splitConLike dc =
     case splitTyConApp_maybe $ unCType g of
       Just (_, apps) -> do
         buildDataCon True (unwhitelistingSplit jdg) dc apps
-      Nothing -> throwError $ GoalMismatch "splitDataCon" g
+      Nothing -> cut -- failure $ GoalMismatch "splitDataCon" g
 
 ------------------------------------------------------------------------------
 -- | Attempt to instantiate the given data constructor to solve the goal.
@@ -404,8 +406,8 @@ userSplit occ = do
       case find (sloppyEqOccName occ . occName . dataConName)
              $ tyConDataCons tc of
         Just dc -> splitDataCon dc
-        Nothing -> throwError $ NotInScope occ
-    Nothing -> throwError $ NotInScope occ
+        Nothing -> failure $ NotInScope occ
+    Nothing -> failure $ NotInScope occ
 
 
 ------------------------------------------------------------------------------
@@ -430,7 +432,7 @@ refine = intros <%> splitSingle
 
 
 auto' :: Int -> TacticsM ()
-auto' 0 = throwError NoProgress
+auto' 0 = failure OutOfGas
 auto' n = do
   let loop = auto' (n - 1)
   try intros
@@ -468,7 +470,7 @@ applyMethod cls df method_name = do
       let (_, apps) = splitAppTys df
       let ty = piResultTys (idType method) apps
       apply Saturated $ HyInfo method_name (ClassMethodPrv $ Uniquely cls) $ CType ty
-    Nothing -> throwError $ NotInScope method_name
+    Nothing -> failure $ NotInScope method_name
 
 
 applyByName :: OccName -> TacticsM ()
@@ -520,7 +522,7 @@ self :: TacticsM ()
 self =
   fmap listToMaybe getCurrentDefinitions >>= \case
     Just (self, _) -> useNameFromContext (apply Saturated) self
-    Nothing -> throwError $ TacticPanic "no defining function"
+    Nothing -> failure $ TacticPanic "no defining function"
 
 
 ------------------------------------------------------------------------------

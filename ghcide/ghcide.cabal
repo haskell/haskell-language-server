@@ -2,7 +2,7 @@ cabal-version:      2.4
 build-type:         Simple
 category:           Development
 name:               ghcide
-version:            1.4.0.3
+version:            1.4.1.0
 license:            Apache-2.0
 license-file:       LICENSE
 author:             Digital Asset and Ghcide contributors
@@ -58,7 +58,7 @@ library
         haddock-library >= 1.8 && < 1.11,
         hashable,
         hie-compat ^>= 0.2.0.0,
-        hls-plugin-api ^>= 1.1.0.0,
+        hls-plugin-api ^>= 1.2.0.0,
         lens,
         hiedb == 0.4.0.*,
         lsp-types >= 1.2 && < 1.4,
@@ -101,7 +101,7 @@ library
         ghc-api-compat,
         cryptohash-sha1 >=0.11.100 && <0.12,
         hie-bios >= 0.7.1 && < 0.8.0,
-        implicit-hie-cradle >= 0.3.0.2 && < 0.4,
+        implicit-hie-cradle >= 0.3.0.5 && < 0.4,
         base16-bytestring >=0.1.1 && <1.1
     if os(windows)
       build-depends:
@@ -370,6 +370,7 @@ test-suite ghcide-tests
     main-is: Main.hs
     other-modules:
         Development.IDE.Test
+        Development.IDE.Test.Diagnostic
         Development.IDE.Test.Runfiles
         Experiments
         Experiments.Types
@@ -403,17 +404,20 @@ executable ghcide-bench
         extra,
         filepath,
         ghcide,
+        lens,
         lsp-test,
+        lsp-types,
         optparse-applicative,
         process,
         safe-exceptions,
         hls-graph,
         shake,
         text
-    hs-source-dirs: bench/lib bench/exe
+    hs-source-dirs: bench/lib bench/exe test/src
     ghc-options: -threaded -Wall -Wno-name-shadowing -rtsopts
     main-is: Main.hs
     other-modules:
+        Development.IDE.Test.Diagnostic
         Experiments
         Experiments.Types
     default-extensions:

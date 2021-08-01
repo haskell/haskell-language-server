@@ -8,6 +8,7 @@ packages:
   - ./hls-plugin-api
   - ./hls-test-utils
   # - ./shake-bench
+  - ./plugins/hls-call-hierarchy-plugin
   - ./plugins/hls-class-plugin
   - ./plugins/hls-haddock-comments-plugin
   - ./plugins/hls-eval-plugin
@@ -43,15 +44,13 @@ extra-deps:
   - ghc-exactprint-0.6.4
   - ghc-lib-8.10.4.20210206
   - ghc-lib-parser-8.10.4.20210206
-  - lsp-1.2.0.0
-  - lsp-types-1.2.0.0
-  - lsp-test-0.14.0.0
+  - ghc-source-gen-0.4.1.0
   - heapsize-0.3.0
   - hie-bios-0.7.5
-  - implicit-hie-cradle-0.3.0.2
-  - implicit-hie-0.1.2.5
+  - implicit-hie-cradle-0.3.0.5
+  - implicit-hie-0.1.2.6
   - monad-dijkstra-0.1.1.2
-  - refinery-0.3.0.0
+  - refinery-0.4.0.0
   - retrie-0.1.1.1
   - shake-0.19.4
   - stylish-haskell-0.12.2.0
@@ -66,6 +65,14 @@ extra-deps:
   - constraints-extras-0.3.0.2@sha256:013b8d0392582c6ca068e226718a4fe8be8e22321cc0634f6115505bf377ad26,1853
   - some-1.0.1@sha256:26e5bab7276f48b25ea8660d3fd1166c0f20fd497dac879a40f408e23211f93e,2055
   - unliftio-core-0.2.0.1@sha256:9b3e44ea9aacacbfc35b3b54015af450091916ac3618a41868ebf6546977659a,1082
+
+  - github: haskell/lsp
+    commit: ef59c28b41ed4c5775f0ab0c1e985839359cec96
+    subdirs:
+    - lsp-types
+    - lsp
+    - lsp-test
+  # https://github.com/haskell/lsp/pull/332
 
 configure-options:
   ghcide:

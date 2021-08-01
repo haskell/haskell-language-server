@@ -10,5 +10,5 @@ instance (Yo f, Yo g) => Yo (f :*: g) where
     = let
         fx_c = yo fx
         gx_c = yo gx
-      in _ fx_c gx_c
+      in _w0 fx_c gx_c
 

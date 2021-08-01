@@ -31,6 +31,7 @@ import           Data.Maybe
 import qualified Data.Text                       as T
 import           Data.Version
 import           Development.IDE.Plugin.Test
+import           Development.IDE.Test.Diagnostic
 import           Development.Shake               (CmdOption (Cwd, FileStdout),
                                                   cmd_)
 import           Experiments.Types
@@ -169,6 +170,36 @@ experiments =
             sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
                 List [ FileEvent (filePathToUri "hie.yaml") FcChanged ]
             flip allWithIdentifierPos docs $ \DocumentPositions{..} -> isJust <$> getHover doc (fromJust identifierP)
+        ),
+      ---------------------------------------------------------------------------------------
+      benchWithSetup
+        "hole fit suggestions"
+        ( mapM_ $ \DocumentPositions{..} -> do
+            let edit :: TextDocumentContentChangeEvent =TextDocumentContentChangeEvent
+                  { _range = Just Range {_start = bottom, _end = bottom}
+                  , _rangeLength = Nothing, _text = t}
+                bottom = Position maxBound 0
+                t = T.unlines
+                    [""
+                    ,"holef :: [Int] -> [Int]"
+                    ,"holef = _"
+                    ,""
+                    ,"holeg :: [()] -> [()]"
+                    ,"holeg = _"
+                    ]
+            changeDoc doc [edit]
+        )
+        (\docs -> do
+            forM_ docs $ \DocumentPositions{..} ->
+              changeDoc doc [charEdit stringLiteralP]
+            void waitForDiagnostics
+            waitForProgressDone
+            flip allM docs $ \DocumentPositions{..} -> do
+                bottom <- pred . length . T.lines <$> documentContents doc
+                diags <- getCurrentDiagnostics doc
+                case requireDiagnostic diags (DsError, (bottom, 8), "Found hole", Nothing) of
+                    Nothing   -> pure True
+                    Just _err -> pure False
         )
     ]
 

@@ -8,7 +8,7 @@ some a = do
       foo = putStrLn "Hi"
 
       bar :: A -> IO ()
-      bar A = _
-      bar B = _
-      bar C = _
+      bar A = _w0
+      bar B = _w1
+      bar C = _w2
 

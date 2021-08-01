@@ -485,6 +485,7 @@ isRhsHole (unTrack -> rss) (unTrack -> tcs) =
 
 
 ufmSeverity :: UserFacingMessage -> MessageType
+ufmSeverity NotEnoughGas            = MtInfo
 ufmSeverity TacticErrors            = MtError
 ufmSeverity TimedOut                = MtInfo
 ufmSeverity NothingToDo             = MtInfo

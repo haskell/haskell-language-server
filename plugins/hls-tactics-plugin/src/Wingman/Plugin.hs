@@ -31,6 +31,7 @@ import           System.Timeout
 import           Wingman.CaseSplit
 import           Wingman.EmptyCase
 import           Wingman.GHC
+import           Wingman.Judgements (jNeedsToBindArgs)
 import           Wingman.LanguageServer
 import           Wingman.LanguageServer.Metaprogram (hoverProvider)
 import           Wingman.LanguageServer.TacticProviders
@@ -99,6 +100,12 @@ showUserFacingMessage ufm = do
   pure $ Left $ mkErr InternalError $ T.pack $ show ufm
 
 
+mkUserFacingMessage :: [TacticError] -> UserFacingMessage
+mkUserFacingMessage errs
+  | elem OutOfGas errs = NotEnoughGas
+mkUserFacingMessage _ = TacticErrors
+
+
 tacticCmd
     :: (T.Text -> TacticsM ())
     -> PluginId
@@ -121,7 +128,7 @@ tacticCmd tac pId state (TacticParams uri range var_name)
           pure $ join $ case res of
             Left errs ->  do
               traceMX "errs" errs
-              Left TacticErrors
+              Left $ mkUserFacingMessage errs
             Right rtr ->
               case rtr_extract rtr of
                 L _ (HsVar _ (L _ rdr)) | isHole (occName rdr) ->
@@ -189,18 +196,34 @@ graftHole
     -> Graft (Either String) ParsedSource
 graftHole span rtr
   | _jIsTopHole (rtr_jdg rtr)
-      = genericGraftWithSmallestM (Proxy @(Located [LMatch GhcPs (LHsExpr GhcPs)])) span $ \dflags ->
-        everywhereM'
-          $ mkBindListT $ \ix ->
-            graftDecl dflags span ix $ \name pats ->
-            splitToDecl (occName name)
-          $ iterateSplit
-          $ mkFirstAgda (fmap unXPat pats)
-          $ unLoc
-          $ rtr_extract rtr
+      = genericGraftWithSmallestM
+            (Proxy @(Located [LMatch GhcPs (LHsExpr GhcPs)])) span
+      $ \dflags matches ->
+          everywhereM'
+            $ mkBindListT $ \ix ->
+              graftDecl dflags span ix $ \name pats ->
+              splitToDecl
+                (case not $ jNeedsToBindArgs (rtr_jdg rtr) of
+                   -- If the user has explicitly bound arguments, use the
+                   -- fixity they wrote.
+                   True -> matchContextFixity . m_ctxt . unLoc
+                             =<< listToMaybe matches
+                   -- Otherwise, choose based on the name of the function.
+                   False -> Nothing
+                )
+                (occName name)
+            $ iterateSplit
+            $ mkFirstAgda (fmap unXPat pats)
+            $ unLoc
+            $ rtr_extract rtr
 graftHole span rtr
   = graft span
   $ rtr_extract rtr
+
+
+matchContextFixity :: HsMatchContext p -> Maybe LexicalFixity
+matchContextFixity (FunRhs _ l _) = Just l
+matchContextFixity _ = Nothing
 
 
 ------------------------------------------------------------------------------

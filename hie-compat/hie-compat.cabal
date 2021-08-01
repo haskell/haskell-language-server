@@ -1,6 +1,6 @@
 cabal-version:       1.22
 name:                hie-compat
-version:             0.2.0.0
+version:             0.2.1.0
 synopsis:            HIE files for GHC 8.6 and other HIE file backports
 license:             Apache-2.0
 description:
@@ -30,6 +30,8 @@ library
     build-depends: ghc, ghc-boot
   if (impl(ghc >= 9.0) && impl(ghc < 9.1))
     ghc-options: -Wall -Wno-name-shadowing
+  else
+    ghc-options: -Wall -Wno-name-shadowing
 
   exposed-modules:
     Compat.HieAst
@@ -45,5 +47,8 @@ library
   if (impl(ghc > 8.9) && impl(ghc < 8.11))
     hs-source-dirs: src-ghc810 src-reexport
   if (impl(ghc >= 9.0) && impl(ghc < 9.1) || flag(ghc-lib))
-    hs-source-dirs: src-ghc901
+    hs-source-dirs: src-reexport-ghc9
+  if (impl(ghc >= 9.2) && impl(ghc < 9.3))
+    hs-source-dirs: src-reexport-ghc9
+
 
