@@ -1,22 +1,21 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TypeFamilies               #-}
 
 module Development.IDE.Graph.Internal.Action where
 
-import qualified Development.Shake as Shake
-import Development.Shake.Classes
-import Control.Exception
-import Control.Concurrent.Async
-import System.Exit
-import Control.Monad.IO.Class
-import Control.Monad.Trans.Reader
-import Data.IORef
-import Development.IDE.Graph.Internal.Database
-import Development.IDE.Graph.Internal.Types
-import Control.Monad.Extra
-import Control.Monad.Trans.Class
-import Control.Concurrent.Async
+import           Control.Concurrent.Async
+import           Control.Exception
+import           Control.Monad.Extra
+import           Control.Monad.IO.Class
+import           Control.Monad.Trans.Class
+import           Control.Monad.Trans.Reader
+import           Data.IORef
+import           Development.IDE.Graph.Internal.Database
+import           Development.IDE.Graph.Internal.Types
+import qualified Development.Shake                       as Shake
+import           Development.Shake.Classes
+import           System.Exit
 
 
 alwaysRerun :: Action ()
