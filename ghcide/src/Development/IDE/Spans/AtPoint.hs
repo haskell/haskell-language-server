@@ -206,7 +206,7 @@ atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) df pos = listToMaybe $ po
     hoverInfo ast = (Just range, prettyNames ++ pTypes)
       where
         pTypes
-          | length names == 1 = dropEnd1 $ map wrapHaskell prettyTypes
+          | Prelude.length names == 1 = dropEnd1 $ map wrapHaskell prettyTypes
           | otherwise = map wrapHaskell prettyTypes
 
         range = realSrcSpanToRange $ nodeSpan ast

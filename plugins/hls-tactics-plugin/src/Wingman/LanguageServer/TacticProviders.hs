@@ -27,7 +27,10 @@ import           GHC.Generics
 import           GHC.LanguageExtensions.Type (Extension (LambdaCase))
 import           Ide.PluginUtils
 import           Ide.Types
-import           Language.LSP.Types
+import           Language.LSP.Types              hiding
+                                                 (SemanticTokenAbsolute (length, line),
+                                                  SemanticTokenRelative (length),
+                                                  SemanticTokensEdit (_start))
 import           OccName
 import           Prelude hiding (span)
 import           Wingman.Auto
