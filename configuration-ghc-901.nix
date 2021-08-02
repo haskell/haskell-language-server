@@ -16,13 +16,6 @@ let
   hpkgsOverride = hself: hsuper:
     with pkgs.haskell.lib;
     let
-      lsp-src = pkgs.fetchFromGitHub {
-        owner = "anka-213";
-        repo = "lsp";
-        rev = "tag-ghc-9.0.1-without-pr-326";
-        sha256 = "lW/EdBnvKPLE2+CGE/grIekOu+U/Wh6zMCN4xhJDtPY=";
-      };
-
       dependent-sum-src = pkgs.fetchFromGitHub {
         owner = "anka-213";
         repo = "dependent-sum";
@@ -52,24 +45,12 @@ let
         sha256 = "8ct7t3xIxIAoC+f8VO5e5+QKrd5L5Zu1eButSaE+1Uk=";
       }) { };
 
-      ghc-api-compat = hself.callCabal2nix "ghc-api-compat"
-        (pkgs.fetchFromGitHub {
-          owner = "hsyl20";
-          repo = "ghc-api-compat";
-          rev = "8fee87eac97a538dbe81ff1ab18cff10f2f9fa15";
-          sha256 = "byehvdxQxhNk5ZQUXeFHjAZpAze4Ct9261ro4c5acZk=";
-        }) { };
-
       th-extras = hself.callCabal2nix "th-extras" (pkgs.fetchFromGitHub {
         owner = "anka-213";
         repo = "th-extras";
         rev = "57a97b4df128eb7b360e8ab9c5759392de8d1659";
         sha256 = "Qtha1ge/C0L+uFcV2dZ5xpG59DCxQT7LuK/OYfiM4Pk=";
       }) { };
-
-      lsp = hself.callCabal2nix "lsp" "${lsp-src}/lsp" { };
-      lsp-types = hself.callCabal2nix "lsp-types" "${lsp-src}/lsp-types" { };
-      lsp-test = hself.callCabal2nix "lsp-test" "${lsp-src}/lsp-test" { };
 
       dependent-sum =
         hself.callCabal2nix "dependent-sum" "${dependent-sum-src}/dependent-sum"
