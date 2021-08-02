@@ -23,6 +23,11 @@ let
         sha256 = "WtxTB6ufTZC6SxOtGSfhlO4mY0y9eWejMSa0yUJ7dHQ=";
       };
     in {
+
+      # we need add ghc-api-compat to build depends,
+      # since its condition tree is not evaluated under ghc 9
+      hiedb = addBuildDepend hsuper.hiedb hself.ghc-api-compat;
+
       blaze-textual = hself.callCabal2nix "blaze-textual"
         (pkgs.fetchFromGitHub {
           owner = "jwaldmann";
