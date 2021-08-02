@@ -774,7 +774,7 @@ it to look for the right executable.
 
 - Join [our IRC channel](https://web.libera.chat/?channels=#haskell-language-server) at `#haskell-language-server` on [`libera`](https://libera.chat/).
 - Follow the [Haskell IDE team twitter account](https://twitter.com/IdeHaskell) for updates and help.
-- Join the [#haskell-tooling channel](https://discord.com/channels/280033776820813825/505370075402862594/808027763868827659) in the Functional Programming discord server.
+- Join the [#haskell-tooling channel](https://discord.com/channels/280033776820813825/505370075402862594/808027763868827659) in the Functional Programming discord server. You can join the server via [this invitation](https://discord.gg/9spEdTNGrD).
 
 ### Style guidelines
 
