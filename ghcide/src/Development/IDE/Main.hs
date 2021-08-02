@@ -257,6 +257,7 @@ defaultMain Arguments{..} = do
 
                 -- disable runSubset if the client doesn't support watched files
                 runSubset <- (optRunSubset def_options &&) <$> LSP.runLspT env isWatchSupported
+                hPutStrLn stderr $ "runSubset: " <> show runSubset
 
                 let options = def_options
                             { optReportProgress = clientSupportsProgress caps

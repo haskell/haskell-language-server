@@ -82,5 +82,6 @@ main = do
                 , optShakeOptions = (optShakeOptions defOptions){shakeThreads = argsThreads}
                 , optCheckParents = pure $ checkParents config
                 , optCheckProject = pure $ checkProject config
+                , optRunSubset = not argsConservativeChangeTracking
                 }
         }
