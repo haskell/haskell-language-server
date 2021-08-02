@@ -135,7 +135,10 @@ spawn db@Database{..} key id mode result = do
     built <- readIORef databaseStep
     deps <- readIORef deps
     let changed = if runChanged == Shake.ChangedRecomputeDiff then built else maybe built resultChanged result
-    let res = Result runValue built changed deps runStore
+        -- only update the deps when the rule ran with changes
+    let actual_deps = if runChanged /= Shake.ChangedNothing then deps else previousDeps
+        previousDeps= resultDeps =<< result
+    let res = Result runValue built changed actual_deps runStore
     withLock databaseLock $
         Ids.insert databaseValues id (key, Clean res)
     pure res
