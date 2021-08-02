@@ -123,6 +123,13 @@ codeActionTests =
       cas <- map fromAction <$> getAllCodeActions doc
       liftIO $ "Disable \"unused-imports\" warnings" `elem` map (^. L.title) cas @? "Contains unused-imports code action"
       executeCodeAction $ head cas
+
+  , goldenWithPragmas "doesn't suggest disabling type errors" "DeferredTypeErrors" $ \doc -> do
+
+      _ <- waitForDiagnosticsFrom doc
+      cas <- map fromAction <$> getAllCodeActions doc
+      liftIO $ "Disable \"deferred-type-errors\" warnings" `notElem` map (^. L.title) cas @? "Doesn't contain deferred-type-errors code action"
+      liftIO $ length cas == 0 @? "Expected no code actions, but got: " <> show cas
   ]
 
 completionTests :: TestTree
