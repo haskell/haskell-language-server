@@ -81,9 +81,15 @@ suggest dflags diag =
 
 suggestDisableWarning :: Diagnostic -> [PragmaEdit]
 suggestDisableWarning Diagnostic {_code}
-  | Just (J.InR (T.stripPrefix "-W" -> Just w)) <- _code =
+  | Just (J.InR (T.stripPrefix "-W" -> Just w)) <- _code
+  , w `notElem` warningBlacklist =
     pure ("Disable \"" <> w <> "\" warnings", OptGHC w)
   | otherwise = []
+
+-- Don't suggest disabling type errors as a solution to all type errors
+warningBlacklist :: [T.Text]
+-- warningBlacklist = []
+warningBlacklist = ["deferred-type-errors"]
 
 -- ---------------------------------------------------------------------
 
