@@ -876,4 +876,4 @@ for them to configure how the server is started.
 
 ### Sponsorship
 
-If you want to contribute financially you could do via open-collective: https://opencollective.com/haskell-language-server
+If you want to contribute financially you can do so via [open-collective](https://opencollective.com/haskell-language-server). In the past the funding has been used to sponsor [summer student projects](https://mpickering.github.io/ide/posts/2021-07-22-summer-of-hls.html). 
