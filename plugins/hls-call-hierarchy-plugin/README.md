@@ -14,10 +14,10 @@ This plugin is useful when debugging and refactoring code because it allows you 
 None. You can experience the whole feature without any setting.
 
 ## Configuration
-None. Native support by lsp-based client, switch on and off is insignificant.
+Enable default. You can disable it in the setting file (JSON format) whenever you like.
 
 ## Acknowledgments
-Supoorted by
+Supported by
 
 * [Google Summer of Code](https://summerofcode.withgoogle.com/)
 * Warm and timely help from mentors [@jneira](https://github.com/jneira) and [@pepeiborra](https://github.com/pepeiborra)
