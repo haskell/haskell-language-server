@@ -4,6 +4,7 @@ module Development.IDE.Graph(
     shakeOptions,
     Rules,
     Action, action,
+    Key(..),
     actionFinally, actionBracket, actionCatch,
     Shake.ShakeException(..),
     -- * Configuration

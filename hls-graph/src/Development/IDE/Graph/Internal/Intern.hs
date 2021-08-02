@@ -1,34 +1,31 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Development.IDE.Graph.Internal.Intern(
-    Intern, Id(..),
+    Intern, Id,
     empty, insert, add, lookup, toList, fromList
     ) where
 
-import Development.Shake.Classes
-import Foreign.Storable
-import Data.Word
-import Prelude hiding (lookup)
-import qualified Data.HashMap.Strict as Map
-import Data.List(foldl')
+import qualified Data.HashMap.Strict       as Map
+import           Data.List                 (foldl')
+import           Development.Shake.Classes
+import           Prelude                   hiding (lookup)
 
 
 -- Invariant: The first field is the highest value in the Map
-data Intern a = Intern {-# UNPACK #-} !Word32 !(Map.HashMap a Id)
+data Intern a = Intern {-# UNPACK #-} !Int !(Map.HashMap a Id)
 
-newtype Id = Id Word32
-    deriving (Eq,Hashable,Ord,Binary,Show,NFData,Storable)
+type Id = Int
 
 empty :: Intern a
 empty = Intern 0 Map.empty
 
 
 insert :: (Eq a, Hashable a) => a -> Id -> Intern a -> Intern a
-insert k v@(Id i) (Intern n mp) = Intern (max n i) $ Map.insert k v mp
+insert k v (Intern n mp) = Intern (max n v) $ Map.insert k v mp
 
 
 add :: (Eq a, Hashable a) => a -> Intern a -> (Intern a, Id)
-add k (Intern v mp) = (Intern v2 $ Map.insert k (Id v2) mp, Id v2)
+add k (Intern v mp) = (Intern v2 $ Map.insert k v2 mp, v2)
     where v2 = v + 1
 
 
@@ -41,4 +38,4 @@ toList (Intern _ mp) = Map.toList mp
 
 
 fromList :: (Eq a, Hashable a) => [(a, Id)] -> Intern a
-fromList xs = Intern (foldl' max 0 [i | (_, Id i) <- xs]) (Map.fromList xs)
+fromList xs = Intern (foldl' max 0 [i | (_, i) <- xs]) (Map.fromList xs)

@@ -14,10 +14,15 @@ import           Control.Concurrent.Async
 import           Control.Concurrent.Extra
 import           Control.Exception
 import           Control.Monad
+import           Control.Monad.Trans.Class             (lift)
 import           Control.Monad.Trans.Reader
+import qualified Control.Monad.Trans.State.Strict      as State
 import           Data.Dynamic
 import           Data.Either
+import           Data.Foldable                         (traverse_)
 import           Data.IORef.Extra
+import           Data.IntSet                           (IntSet)
+import qualified Data.IntSet                           as Set
 import           Data.Maybe
 import           Data.Tuple.Extra
 import qualified Development.IDE.Graph.Internal.Ids    as Ids
@@ -36,17 +41,32 @@ newDatabase databaseExtra databaseRules = do
     databaseLock <- newLock
     databaseIds <- newIORef Intern.empty
     databaseValues <- Ids.empty
+    databaseReverseDeps <- Ids.empty
+    databaseReverseDepsLock <- newLock
     pure Database{..}
 
--- | Increment the step and mark all ids dirty
-incDatabase :: Database -> IO ()
-incDatabase db = do
+-- | Increment the step and mark dirty
+incDatabase :: Database -> Maybe [Key] -> IO ()
+-- all keys are dirty
+incDatabase db Nothing = do
     modifyIORef' (databaseStep db) $ \(Step i) -> Step $ i + 1
     withLock (databaseLock db) $
-        Ids.forMutate (databaseValues db) $ second $ \case
+        Ids.forMutate (databaseValues db) $ \_ -> second $ \case
             Clean x     -> Dirty (Just x)
             Dirty x     -> Dirty x
             Running _ x -> Dirty x
+-- only some keys are dirty
+incDatabase db (Just kk) = do
+    modifyIORef' (databaseStep db) $ \(Step i) -> Step $ i + 1
+    intern <- readIORef (databaseIds db)
+    let dirtyIds = mapMaybe (`Intern.lookup` intern) kk
+    transitiveDirtyIds <- transitiveDirtySet db dirtyIds
+    withLock (databaseLock db) $
+        Ids.forMutate (databaseValues db) $ \i -> \case
+            (k, Running _ x) -> (k, Dirty x)
+            (k, Clean x) | i `Set.member` transitiveDirtyIds ->
+                (k, Dirty (Just x))
+            other -> other
 
 
 -- | Unwrap and build a list of keys in parallel
@@ -139,10 +159,13 @@ spawn db@Database{..} key id mode result = do
     deps <- readIORef deps
     let changed = if runChanged == Shake.ChangedRecomputeDiff then built else maybe built resultChanged result
         -- only update the deps when the rule ran with changes
-    let actual_deps = if runChanged /= Shake.ChangedNothing then deps else previousDeps
+    let actualDeps = if runChanged /= Shake.ChangedNothing then deps else previousDeps
         previousDeps= resultDeps =<< result
-    let res = Result runValue built changed actual_deps runStore
-    withLock databaseLock $
+    let res = Result runValue built changed actualDeps runStore
+    withLock databaseLock $ do
+        -- recompute reverse deps only when the rule ran with changes
+        when (runChanged /= Shake.ChangedNothing) $
+          updateReverseDeps id db (fromMaybe [] previousDeps) (maybe mempty Set.fromList actualDeps)
         Ids.insert databaseValues id (key, Clean res)
     pure res
 
@@ -154,3 +177,37 @@ splitIO act = do
     let act2 = Box <$> act
     let res = unsafePerformIO act2
     (void $ evaluate res, fromBox res)
+
+--------------------------------------------------------------------------------
+-- Reverse dependencies
+
+-- | Update the reverse dependencies of an Id
+updateReverseDeps
+    :: Id         -- ^ Id
+    -> Database
+    -> [Id] -- ^ Previous direct dependencies of Id
+    -> IntSet     -- ^ Current direct dependencies of Id
+    -> IO ()
+updateReverseDeps myId db prev new = withLock (databaseReverseDepsLock db) $ do
+    forM_ prev $ \d ->
+        unless (d `Set.member` new) $
+            doOne (Set.delete myId) d
+    forM_ (Set.elems new) $
+        doOne (Set.insert myId)
+    where
+        doOne f id = do
+            rdeps <- getReverseDependencies db id
+            Ids.insert (databaseReverseDeps db) id (f $ fromMaybe mempty rdeps)
+
+getReverseDependencies :: Database -> Id -> IO (Maybe (IntSet))
+getReverseDependencies db = Ids.lookup (databaseReverseDeps db)
+
+transitiveDirtySet :: Foldable t => Database -> t Id -> IO IntSet
+transitiveDirtySet database = flip State.execStateT Set.empty . traverse_ loop
+  where
+    loop x = do
+        seen <- State.get
+        if x `Set.member` seen then pure () else do
+            State.put (Set.insert x seen)
+            next <- lift $ getReverseDependencies database x
+            traverse_ loop (maybe mempty Set.toList next)

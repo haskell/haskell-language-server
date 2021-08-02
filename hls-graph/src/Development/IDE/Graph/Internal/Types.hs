@@ -6,20 +6,21 @@
 
 module Development.IDE.Graph.Internal.Types where
 
-import Control.Monad.Trans.Reader
-import Data.IORef
-import qualified Data.HashMap.Strict as Map
-import Data.Typeable
-import Data.Dynamic
-import Control.Monad.Fail
-import Control.Monad.IO.Class
-import Development.IDE.Graph.Internal.Ids
-import Control.Concurrent.Extra
-import Development.IDE.Graph.Internal.Intern
-import Control.Applicative
-import Development.Shake.Classes
-import qualified Data.ByteString as BS
-import Data.Maybe
+import           Control.Applicative
+import           Control.Concurrent.Extra
+import           Control.Monad.Fail
+import           Control.Monad.IO.Class
+import           Control.Monad.Trans.Reader
+import qualified Data.ByteString                       as BS
+import           Data.Dynamic
+import qualified Data.HashMap.Strict                   as Map
+import           Data.IORef
+import           Data.IntSet                           (IntSet)
+import           Data.Maybe
+import           Data.Typeable
+import           Development.IDE.Graph.Internal.Ids
+import           Development.IDE.Graph.Internal.Intern
+import           Development.Shake.Classes
 
 
 unwrapDynamic :: forall a . Typeable a => Dynamic -> a
@@ -74,13 +75,15 @@ instance Show Key where
 newtype Value = Value Dynamic
 
 data Database = Database {
-    databaseExtra :: Dynamic,
-    databaseRules :: TheRules,
-    databaseStep :: !(IORef Step),
+    databaseExtra           :: Dynamic,
+    databaseRules           :: TheRules,
+    databaseStep            :: !(IORef Step),
     -- Hold the lock while mutating Ids/Values
-    databaseLock :: !Lock,
-    databaseIds :: !(IORef (Intern Key)),
-    databaseValues :: !(Ids (Key, Status))
+    databaseLock            :: !Lock,
+    databaseIds             :: !(IORef (Intern Key)),
+    databaseValues          :: !(Ids (Key, Status)),
+    databaseReverseDeps     :: !(Ids IntSet),
+    databaseReverseDepsLock :: !Lock
     }
 
 data Status

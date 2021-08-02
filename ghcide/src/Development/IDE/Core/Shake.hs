@@ -213,7 +213,7 @@ data ShakeExtras = ShakeExtras
     , vfs :: VFSHandle
     , defaultConfig :: Config
       -- ^ Default HLS config, only relevant if the client does not provide any Config
-    , dirtyKeys :: IORef (HashSet SomeShakeValue)
+    , dirtyKeys :: IORef (HashSet Key)
       -- ^ Set of dirty rule keys since the last Shake run
     }
 

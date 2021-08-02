@@ -8,7 +8,6 @@ module Development.IDE.Types.Shake
     ValueWithDiagnostics (..),
     Values,
     Key (..),
-    SomeShakeValue,
     BadDependency (..),
     ShakeValue(..),
     currentValue,
@@ -22,14 +21,12 @@ import qualified Data.ByteString.Char8                as BS
 import           Data.Dynamic
 import           Data.HashMap.Strict
 import           Data.Hashable
-import           Data.Typeable
 import           Data.Vector                          (Vector)
 import           Development.IDE.Core.PositionMapping
-import           Development.IDE.Graph                (RuleResult,
+import           Development.IDE.Graph                (Key (..), RuleResult,
                                                        ShakeException (shakeExceptionInner))
 import qualified Development.IDE.Graph                as Shake
 import           Development.IDE.Graph.Classes
-import           Development.IDE.Graph.Database       (SomeShakeValue (..))
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           GHC.Generics
@@ -56,26 +53,6 @@ data ValueWithDiagnostics
 -- | The state of the all values and diagnostics
 type Values = HashMap (NormalizedFilePath, Key) ValueWithDiagnostics
 
--- | Key type
-data Key = forall k . (Typeable k, Hashable k, Eq k, NFData k, Show k) => Key k
-
-instance Show Key where
-  show (Key k) = show k
-
-instance Eq Key where
-    Key k1 == Key k2 | Just k2' <- cast k2 = k1 == k2'
-                     | otherwise = False
-
-instance Hashable Key where
-    hashWithSalt salt (Key key) = hashWithSalt salt key
-
-instance Binary Key where
-    get = error "not really"
-    put _ = error "not really"
-
-instance NFData Key where
-    rnf (Key k) = rnf k
-
 -- | When we depend on something that reported an error, and we fail as a direct result, throw BadDependency
 --   which short-circuits the rest of the action
 newtype BadDependency = BadDependency String deriving Show
@@ -87,12 +64,11 @@ isBadDependency x
     | Just (_ :: BadDependency) <- fromException x = True
     | otherwise = False
 
+toKey :: Shake.ShakeValue k => k -> NormalizedFilePath -> Key
+toKey = (Key.) . curry Q
 
-toKey :: Shake.ShakeValue k => k -> NormalizedFilePath -> SomeShakeValue
-toKey = (SomeShakeValue .) . curry Q
-
-toNoFileKey :: (Show k, Typeable k, Eq k, Hashable k, Binary k, NFData k) => k -> SomeShakeValue
-toNoFileKey k = toKey k emptyFilePath
+toNoFileKey :: (Show k, Typeable k, Eq k, Hashable k, Binary k) => k -> Key
+toNoFileKey k = Key $ Q (k, emptyFilePath)
 
 newtype Q k = Q (k, NormalizedFilePath)
     deriving newtype (Eq, Hashable, NFData)

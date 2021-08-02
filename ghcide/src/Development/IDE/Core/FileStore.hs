@@ -48,7 +48,6 @@ import           Development.IDE.Import.DependencyInformation
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
-import           Development.IDE.Types.Shake                  (SomeShakeValue)
 import           HieDb.Create                                 (deleteMissingRealFiles)
 import           Ide.Plugin.Config                            (CheckParents (..),
                                                                Config)
@@ -294,7 +293,7 @@ typecheckParentsAction nfp = do
 -- | Note that some keys have been modified and restart the session
 --   Only valid if the virtual file system was initialised by LSP, as that
 --   independently tracks which files are modified.
-setSomethingModified :: IdeState -> [SomeShakeValue] -> IO ()
+setSomethingModified :: IdeState -> [Key] -> IO ()
 setSomethingModified state keys = do
     VFSHandle{..} <- getIdeGlobalState state
     when (isJust setVirtualFileContents) $

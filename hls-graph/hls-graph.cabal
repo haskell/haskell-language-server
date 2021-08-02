@@ -45,6 +45,7 @@ library
     , async
     , base >=4.12 && <5
     , bytestring
+    , containers
     , extra
     , primitive
     , shake >= 0.19.4

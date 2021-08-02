@@ -1,34 +1,37 @@
-{-# LANGUAGE RecordWildCards, BangPatterns, GADTs, UnboxedTuples #-}
+{-# LANGUAGE BangPatterns    #-}
+{-# LANGUAGE GADTs           #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE UnboxedTuples   #-}
 
 -- Note that argument order is more like IORef than Map, because its mutable
 module Development.IDE.Graph.Internal.Ids(
-    Ids, Id(..),
+    Ids, Id,
     empty, insert, lookup, fromList,
     null, size, sizeUpperBound,
     forWithKeyM_, forCopy, forMutate,
     toList, elems, toMap
     ) where
 
-import Data.IORef.Extra
-import Data.Primitive.Array hiding (fromList)
-import Control.Exception
-import Development.IDE.Graph.Internal.Intern(Id(..))
-import Control.Monad.Extra
-import Data.List.Extra(zipFrom)
-import Data.Maybe
-import Data.Functor
-import qualified Data.HashMap.Strict as Map
-import Prelude hiding (lookup, null)
-import GHC.IO(IO(..))
-import GHC.Exts(RealWorld)
+import           Control.Exception
+import           Control.Monad.Extra
+import           Data.Functor
+import qualified Data.HashMap.Strict                   as Map
+import           Data.IORef.Extra
+import           Data.List.Extra                       (zipFrom)
+import           Data.Maybe
+import           Data.Primitive.Array                  hiding (fromList)
+import           Development.IDE.Graph.Internal.Intern (Id)
+import           GHC.Exts                              (RealWorld)
+import           GHC.IO                                (IO (..))
+import           Prelude                               hiding (lookup, null)
 
 
 newtype Ids a = Ids (IORef (S a))
 
 data S a = S
     {capacity :: {-# UNPACK #-} !Int -- ^ Number of entries in values, initially 0
-    ,used :: {-# UNPACK #-} !Int -- ^ Capacity that has been used, assuming no gaps from index 0, initially 0
-    ,values :: {-# UNPACK #-} !(MutableArray RealWorld (Maybe a))
+    ,used     :: {-# UNPACK #-} !Int -- ^ Capacity that has been used, assuming no gaps from index 0, initially 0
+    ,values   :: {-# UNPACK #-} !(MutableArray RealWorld (Maybe a))
     }
 
 
@@ -76,7 +79,7 @@ forWithKeyM_ (Ids ref) f = do
     let go !i | i >= used = pure ()
               | otherwise = do
                 v <- readArray values i
-                whenJust v $ f $ Id $ fromIntegral i
+                whenJust v $ f $ fromIntegral i
                 go $ i+1
     go 0
 
@@ -93,13 +96,13 @@ forCopy (Ids ref) f = do
     Ids <$> newIORef (S capacity used values2)
 
 
-forMutate :: Ids a -> (a -> a) -> IO ()
+forMutate :: Ids a -> (Id -> a -> a) -> IO ()
 forMutate (Ids ref) f = do
     S{..} <- readIORef ref
     let go !i | i >= used = pure ()
               | otherwise = do
                 v <- readArray values i
-                whenJust v $ \v -> writeArray values i $! Just $! f v
+                whenJust v $ \v -> writeArray values i $! Just $! f i v
                 go $ i+1
     go 0
 
@@ -113,7 +116,7 @@ toListUnsafe (Ids ref) = do
     let index _ i | i >= used = []
         index r i | IO io <- readArray values i = case io r of
             (# r, Nothing #) -> index r (i+1)
-            (# r, Just v  #) -> (Id $ fromIntegral i, v) : index r (i+1)
+            (# r, Just v  #) -> (fromIntegral i, v) : index r (i+1)
 
     IO $ \r -> (# r, index r 0 #)
 
@@ -122,7 +125,7 @@ toList :: Ids a -> IO [(Id, a)]
 toList ids = do
     xs <- toListUnsafe ids
     let demand (_:xs) = demand xs
-        demand [] = ()
+        demand []     = ()
     evaluate $ demand xs
     pure xs
 
@@ -134,7 +137,7 @@ null ids = (== 0) <$> sizeUpperBound ids
 
 
 insert :: Ids a -> Id -> a -> IO ()
-insert (Ids ref) (Id i) v = do
+insert (Ids ref) (i) v = do
     S{..} <- readIORef ref
     let ii = fromIntegral i
     if ii < capacity then do
@@ -148,7 +151,7 @@ insert (Ids ref) (Id i) v = do
         writeIORef' ref $ S c2 (ii+1) v2
 
 lookup :: Ids a -> Id -> IO (Maybe a)
-lookup (Ids ref) (Id i) = do
+lookup (Ids ref) (i) = do
     S{..} <- readIORef ref
     let ii = fromIntegral i
     if ii < used then

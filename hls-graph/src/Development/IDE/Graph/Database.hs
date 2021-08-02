@@ -4,7 +4,6 @@
 module Development.IDE.Graph.Database(
     ShakeDatabase,
     ShakeValue,
-    SomeShakeValue(..),
     shakeOpenDatabase,
     shakeRunDatabase,
     shakeRunDatabaseForKeys,
@@ -13,7 +12,6 @@ module Development.IDE.Graph.Database(
 
 import           Data.Dynamic
 import           Data.Maybe
-import           Data.Typeable                           (cast)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Graph.Internal.Action
 import           Development.IDE.Graph.Internal.Database
@@ -37,10 +35,7 @@ shakeNewDatabase opts rules = do
     pure $ ShakeDatabase (length actions) actions db
 
 shakeRunDatabase :: ShakeDatabase -> [Action a] -> IO ([a], [IO ()])
-shakeRunDatabase (ShakeDatabase lenAs1 as1 db) as2 = do
-    incDatabase db
-    as <- fmap (drop lenAs1) $ runActions db $ map unvoid as1 ++ as2
-    return (as, [])
+shakeRunDatabase = shakeRunDatabaseForKeys Nothing
 
 -- Only valid if we never pull on the results, which we don't
 unvoid :: Functor m => m () -> m a
@@ -50,20 +45,15 @@ unvoid = fmap undefined
 shakeProfileDatabase :: ShakeDatabase -> FilePath -> IO ()
 shakeProfileDatabase _ file = writeFile file ""
 
-data SomeShakeValue = forall k . ShakeValue k => SomeShakeValue k
-instance Eq SomeShakeValue where SomeShakeValue a == SomeShakeValue b = cast a == Just b
-instance Hashable SomeShakeValue where hashWithSalt s (SomeShakeValue x) = hashWithSalt s x
-instance Show SomeShakeValue where show (SomeShakeValue x) = show x
-
 type ShakeValue a = (Show a, Typeable a, Eq a, Hashable a, NFData a, Binary a)
 
 shakeRunDatabaseForKeys
-    :: Maybe [SomeShakeValue]
+    :: Maybe [Key]
       -- ^ Set of keys changed since last run. 'Nothing' means everything has changed
     -> ShakeDatabase
     -> [Action a]
     -> IO ([a], [IO ()])
-shakeRunDatabaseForKeys _keys a b =
-    -- Shake upstream does not accept the set of keys changed yet
-    -- https://github.com/ndmitchell/shake/pull/802
-    shakeRunDatabase a b
+shakeRunDatabaseForKeys keysChanged (ShakeDatabase lenAs1 as1 db) as2 = do
+    incDatabase db keysChanged
+    as <- fmap (drop lenAs1) $ runActions db $ map unvoid as1 ++ as2
+    return (as, [])
