@@ -190,27 +190,31 @@ completion _ide _ complParams = do
 
 -----------------------------------------------------------------------
 
--- | Find first line after the last LANGUAGE pragma
--- Defaults to line 0 if the file contains no shebang(s), OPTIONS_GHC pragma(s), or other LANGUAGE pragma(s)
--- Otherwise it will be one after the count of line numbers, with order: Shebangs -> OPTIONS_GHC -> LANGUAGE
+-- | Find first line after the last file header pragma
+-- Defaults to line 0 if the file contains no shebang(s), OPTIONS_GHC pragma(s), or LANGUAGE pragma(s)
+-- Otherwise it will be one after the count of line numbers, checking in order: Shebangs -> OPTIONS_GHC -> LANGUAGE
+-- Taking the max of these to account for the possibility of interchanging order of these three Pragma types
 findNextPragmaPosition :: T.Text -> Range
 findNextPragmaPosition contents = Range loc loc
   where
     loc = Position line 0
-    line = afterLangPragma . afterOptsGhc $ afterShebang 0
-    afterLangPragma = afterPragma "LANGUAGE" contents
-    afterOptsGhc = afterPragma "OPTIONS_GHC" contents
-    afterShebang = afterPragma "" contents
+    line = afterLangPragma . afterOptsGhc $ afterShebang
+    afterLangPragma = afterPragma "LANGUAGE" contents'
+    afterOptsGhc = afterPragma "OPTIONS_GHC" contents'
+    afterShebang = lastLineWithPrefix (T.isPrefixOf "#!") contents' 0
+    contents' = T.lines contents
 
-afterPragma :: T.Text -> T.Text -> Int -> Int
-afterPragma name contents lineNum = maybe lineNum succ $ lastLineWithPrefix (checkPragma name) contents
+afterPragma :: T.Text -> [T.Text] -> Int -> Int
+afterPragma name contents lineNum = lastLineWithPrefix (checkPragma name) contents lineNum
+
+lastLineWithPrefix :: (T.Text -> Bool) -> [T.Text] -> Int -> Int
+lastLineWithPrefix p contents lineNum = max lineNum next
   where
-    lastLineWithPrefix p contents = listToMaybe . reverse $ findIndices p $ T.lines contents
+    next = maybe lineNum succ $ listToMaybe . reverse $ findIndices p contents
 
 checkPragma :: T.Text -> T.Text -> Bool
 checkPragma name = check
   where
-    check l = (isPragma l || isShebang l) && getName l == name
+    check l = isPragma l && getName l == name
     getName l = T.take (T.length name) $ T.dropWhile isSpace $ T.drop 3 l
     isPragma = T.isPrefixOf "{-#"
-    isShebang = T.isPrefixOf "#!"
