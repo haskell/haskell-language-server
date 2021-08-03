@@ -31,6 +31,13 @@ main = defaultTestRunner $
            , outgoingCallsTests
            ]
 
+main1 = defaultTestRunner  $ testCase "t1" $ do
+    let contents = T.unlines ["a :: Int", "f=3","a = 3"]
+        range = mkRange 2 0 2 5
+        selRange = mkRange 2 0 2 1
+        expected = mkCallHierarchyItemV "a" SkFunction range selRange
+    oneCaseWithCreate contents 0 0 expected
+
 prepareCallHierarchyTests :: TestTree
 prepareCallHierarchyTests =
   testGroup
@@ -164,6 +171,20 @@ prepareCallHierarchyTests =
           selRange = mkRange 1 13 1 14
           expected = mkCallHierarchyItemC "A" SkConstructor range selRange
       oneCaseWithCreate contents 1 13 expected
+  , testGroup "type singature"
+      [ testCase "next line" $ do
+          let contents = T.unlines ["a::Int", "a=3"]
+              range = mkRange 1 0 1 3
+              selRange = mkRange 1 0 1 1
+              expected = mkCallHierarchyItemV "a" SkFunction range selRange
+          oneCaseWithCreate contents 0 0 expected
+      , testCase "multi functions" $ do
+          let contents = T.unlines [ "a,b::Int", "a=3", "b=4"]
+              range = mkRange 2 0 2 3
+              selRange = mkRange 2 0 2 1
+              expected = mkCallHierarchyItemV "b" SkFunction range selRange
+          oneCaseWithCreate contents 0 2 expected
+      ]
   ]
 
 incomingCallsTests :: TestTree
