@@ -160,6 +160,24 @@ intros' params = rule $ \jdg -> do
 
 
 ------------------------------------------------------------------------------
+-- | Introduce a single lambda argument, and immediately destruct it.
+introAndDestruct :: TacticsM ()
+introAndDestruct = do
+  hy <- fmap unHypothesis $ hyDiff $ intros' $ IntroduceOnlyUnnamed 1
+  -- This case should never happen, but I'm validating instead of parsing.
+  -- Adding a log to be reminded if the invariant ever goes false.
+  --
+  -- But note that this isn't a game-ending bug. In the worst case, we'll
+  -- accidentally bind too many variables, and incorrectly unify between them.
+  -- Which means some GADT cases that should be eliminated won't be --- not the
+  -- end of the world.
+  unless (length hy == 1) $
+    traceMX "BUG: Introduced too many variables for introAndDestruct! Please report me if you see this! " hy
+
+  for_ hy destruct
+
+
+------------------------------------------------------------------------------
 -- | Case split, and leave holes in the matches.
 destructAuto :: HyInfo CType -> TacticsM ()
 destructAuto hi = requireConcreteHole $ tracing "destruct(auto)" $ do
