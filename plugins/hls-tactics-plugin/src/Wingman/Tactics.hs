@@ -117,21 +117,32 @@ restrictPositionForApplication f app = do
 ------------------------------------------------------------------------------
 -- | Introduce a lambda binding every variable.
 intros :: TacticsM ()
-intros = intros' Nothing
+intros = intros' IntroduceAllUnnamed
+
+
+data IntroParams
+  = IntroduceAllUnnamed
+  | IntroduceOnlyNamed [OccName]
+  | IntroduceOnlyUnnamed Int
+  deriving stock (Eq, Ord, Show)
+
 
 ------------------------------------------------------------------------------
 -- | Introduce a lambda binding every variable.
 intros'
-    :: Maybe [OccName]  -- ^ When 'Nothing', generate a new name for every
-                        -- variable. Otherwise, only bind the variables named.
+    :: IntroParams
     -> TacticsM ()
-intros' names = rule $ \jdg -> do
+intros' params = rule $ \jdg -> do
   let g  = jGoal jdg
   case tacticsSplitFunTy $ unCType g of
     (_, _, [], _) -> cut -- failure $ GoalMismatch "intros" g
     (_, _, args, res) -> do
       ctx <- ask
-      let occs = fromMaybe (mkManyGoodNames (hyNamesInScope $ jEntireHypothesis jdg) args) names
+      let gen_names = mkManyGoodNames (hyNamesInScope $ jEntireHypothesis jdg) args
+          occs = case params of
+            IntroduceAllUnnamed -> gen_names
+            IntroduceOnlyNamed names -> names
+            IntroduceOnlyUnnamed n -> take n gen_names
           num_occs = length occs
           top_hole = isTopHole ctx jdg
           bindings = zip occs $ coerce args
