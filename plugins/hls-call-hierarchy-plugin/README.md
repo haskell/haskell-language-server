@@ -14,7 +14,11 @@ This plugin is useful when debugging and refactoring code because it allows you 
 None. You can experience the whole feature without any setting.
 
 ## Configuration
-Enable default. You can disable it in the setting file (JSON format) whenever you like.
+Enable default. You can disable it in the setting whenever you like.
+
+## Change log
+### 1.0.1.0
+- Support call hierarchy on type signatures.
 
 ## Acknowledgments
 Supported by
