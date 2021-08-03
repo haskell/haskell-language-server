@@ -42,10 +42,11 @@ newDatabase databaseExtra databaseRules = do
 incDatabase :: Database -> IO ()
 incDatabase db = do
     modifyIORef' (databaseStep db) $ \(Step i) -> Step $ i + 1
-    Ids.forMutate (databaseValues db) $ second $ \case
-        Clean x     -> Dirty (Just x)
-        Dirty x     -> Dirty x
-        Running _ x -> Dirty x
+    withLock (databaseLock db) $
+        Ids.forMutate (databaseValues db) $ second $ \case
+            Clean x     -> Dirty (Just x)
+            Dirty x     -> Dirty x
+            Running _ x -> Dirty x
 
 
 -- | Unwrap and build a list of keys in parallel
