@@ -14,7 +14,12 @@ This plugin is useful when debugging and refactoring code because it allows you 
 None. You can experience the whole feature without any setting.
 
 ## Configuration
-Enable default. You can disable it in the setting whenever you like.
+Enabled by default. You can disable it in your editor settings whenever you like.
+
+```json
+{
+  "haskell.plugin.callHierarchy.globalOn": true
+}
 
 ## Change log
 ### 1.0.1.0
