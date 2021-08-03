@@ -164,7 +164,7 @@ prepareCallHierarchyTests =
           selRange = mkRange 1 13 1 14
           expected = mkCallHierarchyItemC "A" SkConstructor range selRange
       oneCaseWithCreate contents 1 13 expected
-  , testGroup "type singature"
+  , testGroup "type signature"
       [ testCase "next line" $ do
           let contents = T.unlines ["a::Int", "a=3"]
               range = mkRange 1 0 1 3
