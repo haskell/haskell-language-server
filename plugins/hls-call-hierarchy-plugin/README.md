@@ -22,7 +22,7 @@ Enabled by default. You can disable it in your editor settings whenever you like
 }
 
 ## Change log
-### 1.0.1.0
+### 1.0.0.1
 - Support call hierarchy on type signatures.
 
 ## Acknowledgments

@@ -47,7 +47,6 @@ background](https://neilmitchell.blogspot.com/2020/01/one-haskell-ide-to-rule-th
     - [Generic editor options](#generic-editor-options)
     - [Language-specific server options](#language-specific-server-options)
     - [Client options](#client-options)
-  - [Configuring plugins](#configuring-plugins)
   - [Configuring your project build](#configuring-your-project-build)
   - [Configuring your editor](#configuring-your-editor)
     - [VS Code](#vs-code)
@@ -397,29 +396,6 @@ Settings like this are typically provided by the language-specific LSP client su
 A particular client might also have some options of its own, for example to control how the server executable is started.
 
 Settings like this are typically be provided by the language-specific LSP client support for your editor, for example in Emacs by `lsp-haskell`.
-
-## Configuring plugins
-
-`haskell-language-server` bundled several plugins to supply various distinctive functions. In order to get better experience, some plugins have prerequisites, you are required to configure them manually.
-
-| Plugin                      | Prerequisite  | Details                                               |
-| --------------------------- | ------------- | ----------------------------------------------------- |
-| hls-brittany-plugin         | Still working | Still working                                         |
-| hls-call-hierarchy-plugin   | None          | [README](plugins/hls-call-hierarchy-plugin/README.md) |
-| hls-class-plugin            | Still working | Still working                                         |
-| hls-eval-plugin             | None          | [README](plugins/hls-eval-plugin/README.md)           |
-| hls-explicit-imports-plugin | Still working | Still working                                         |
-| hls-floskell-plugin         | Still working | Still working                                         |
-| hls-haddock-comments-plugin | Still working | Still working                                         |
-| hls-hlint-plugin            | Still working | Still working                                         |
-| hls-module-name-plugin      | Still working | Still working                                         |
-| hls-ormolu-plugin           | Still working | Still working                                         |
-| hls-pragmas-plugin          | Still working | Still working                                         |
-| hls-refine-imports-plugin   | Still working | Still working                                         |
-| hls-retrie-plugin           | Still working | Still working                                         |
-| hls-splice-plugin           | Still working | Still working                                         |
-| hls-stylish-plugin          | Still working | Still working                                         |
-| hls-tactics-plugin          | Still working | [README](plugins/hls-tactics-plugin/README.md), [COMMANDS](plugins/hls-tactics-plugin/COMMANDS.md)       |
 
 ## Configuring your project build
 
@@ -902,4 +878,4 @@ for them to configure how the server is started.
 
 ### Sponsorship
 
-If you want to contribute financially you can do so via [open-collective](https://opencollective.com/haskell-language-server). In the past the funding has been used to sponsor [summer student projects](https://mpickering.github.io/ide/posts/2021-07-22-summer-of-hls.html).
+If you want to contribute financially you can do so via [open-collective](https://opencollective.com/haskell-language-server). In the past the funding has been used to sponsor [summer student projects](https://mpickering.github.io/ide/posts/2021-07-22-summer-of-hls.html). 
