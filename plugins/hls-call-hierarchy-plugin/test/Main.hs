@@ -25,11 +25,11 @@ plugin = descriptor "callHierarchy"
 
 main :: IO ()
 main = defaultTestRunner $
-         testGroup "Call Hierarchy"
-           [ prepareCallHierarchyTests
-           , incomingCallsTests
-           , outgoingCallsTests
-           ]
+  testGroup "Call Hierarchy"
+    [ prepareCallHierarchyTests
+    , incomingCallsTests
+    , outgoingCallsTests
+    ]
 
 prepareCallHierarchyTests :: TestTree
 prepareCallHierarchyTests =
@@ -164,6 +164,20 @@ prepareCallHierarchyTests =
           selRange = mkRange 1 13 1 14
           expected = mkCallHierarchyItemC "A" SkConstructor range selRange
       oneCaseWithCreate contents 1 13 expected
+  , testGroup "type signature"
+      [ testCase "next line" $ do
+          let contents = T.unlines ["a::Int", "a=3"]
+              range = mkRange 1 0 1 3
+              selRange = mkRange 1 0 1 1
+              expected = mkCallHierarchyItemV "a" SkFunction range selRange
+          oneCaseWithCreate contents 0 0 expected
+      , testCase "multi functions" $ do
+          let contents = T.unlines [ "a,b::Int", "a=3", "b=4"]
+              range = mkRange 2 0 2 3
+              selRange = mkRange 2 0 2 1
+              expected = mkCallHierarchyItemV "b" SkFunction range selRange
+          oneCaseWithCreate contents 0 2 expected
+      ]
   ]
 
 incomingCallsTests :: TestTree
