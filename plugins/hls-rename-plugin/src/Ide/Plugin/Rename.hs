@@ -5,7 +5,6 @@
 module Ide.Plugin.Rename (descriptor) where
 
 import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Class
 import qualified Data.Bifunctor
 import           Data.Char
 import           Data.Containers.ListUtils
@@ -23,7 +22,6 @@ import           HieDb.Query
 import           Ide.Plugin.Retrie                    hiding (descriptor)
 import           Ide.PluginUtils
 import           Ide.Types
-import           Language.LSP.Server
 import           Language.LSP.Types                   hiding (_changes)
 import           Name
 import           Retrie                               hiding (HsModule, getLoc)
@@ -40,19 +38,19 @@ renameProvider state pluginId (RenameParams tdi@(TextDocumentIdentifier uri) pos
     (HAR _ asts _ _ _, mapping) <- liftIO $ fromJust <$> runAction "Rename.GetHieAst" state (useWithStale GetHieAst nfp)
     session <- liftIO $ runAction "Rename.GhcSessionDeps" state (useWithStale GhcSessionDeps nfp)
     let oldName = head $ getNamesAtPoint asts pos mapping
+        oldNameStr = getOccString oldName
     refs <- liftIO $ runAction "Rename.references" state (refsAtName nfp oldName)
 
     -- rename LHS declarations
-    annPs <- liftIO $ fst . fromJust <$> runAction "Rename.GetAnnotatedParsedModule" state (useWithStale GetAnnotatedParsedSource  nfp) -- stale?
-    ccs <- lift getClientCapabilities
+    annPs <- liftIO $ fromJust <$> runAction "Rename.GetAnnotatedParsedModule" state (use GetAnnotatedParsedSource  nfp)
     let src = printA annPs
-        res = printA (fmap (fmap (renameLhsDecls (mkRdrUnqual $ mkTcOcc $ T.unpack newNameStr) refs)) annPs)
+        applyDeclRenames = renameLhsModDecls (mkRdrUnqual $ mkTcOcc $ T.unpack newNameStr) oldNameStr
+        res = printA $ (fmap . fmap) applyDeclRenames annPs
         declEdits = makeDiffTextEdit (T.pack src) (T.pack res)
 
     -- use retrie to rename right-hand sides
     let emptyContextUpdater c i = const (return c)
         isType = isUpper $ head oldNameStr
-        oldNameStr = getOccString oldName
         rewrite = (if isType then AdhocType else Adhoc) (oldNameStr ++ " = " ++ T.unpack newNameStr)
     (_errors, edits@WorkspaceEdit{_changes}) <- liftIO $
         callRetrieWithTransformerAndUpdates
@@ -69,23 +67,49 @@ renameProvider state pluginId (RenameParams tdi@(TextDocumentIdentifier uri) pos
 -- TODO: rename lhs for signature declarations
 -- TODO: rename lhs for type decls
 -- TODO: export/import lists
-renameLhsDecls :: RdrName -> [Location] -> HsModule GhcPs -> HsModule GhcPs
-renameLhsDecls newName refs ps@HsModule{hsmodDecls} =
-    ps {hsmodDecls = map (fmap replaceLhs) hsmodDecls}
+-- TODO: update srcSpans to newName length
+-- TODO: pattern syn type sig
+-- TODO: restructure renameLhsModDecls
+renameLhsModDecls :: RdrName -> String -> HsModule GhcPs -> HsModule GhcPs
+renameLhsModDecls newName oldNameStr ps@HsModule{hsmodDecls} =
+    ps {hsmodDecls = map (fmap renameLhsDecl) hsmodDecls}
         where
-            replaceLhs :: HsDecl GhcPs -> HsDecl GhcPs
-            replaceLhs (ValD val funBind@FunBind{fun_id = L srcSpan _, fun_matches = fun_matches@MG{mg_alts}})
-                | fromJust (srcSpanToLocation srcSpan) `elem` refs =
-                    -- TODO: update srcSpan to newName length
-                    ValD val (funBind {
-                        fun_matches = fun_matches{
-                            mg_alts = fmap ((: []) . (fmap (renameLhsMatch newName) . head)) mg_alts}})
-            replaceLhs decl = decl
+            renameLhsDecl :: HsDecl GhcPs -> HsDecl GhcPs
+            renameLhsDecl (SigD xSig (TypeSig xTySig sigNames wc)) =
+                SigD xSig $ TypeSig
+                    xTySig
+                    (map (renameLhsSig newName oldNameStr <$>) sigNames)
+                    wc
+            renameLhsDecl (ValD xVal funBind@FunBind{fun_id = L srcSpan funName, fun_matches = fun_matches@MG{mg_alts}})
+                | getRdrString funName == oldNameStr =
+                    ValD xVal $ funBind {
+                        fun_id = L srcSpan newName
+                        , fun_matches = fun_matches {mg_alts = fmap ((: []) . (fmap (renameLhsMatch newName) . head)) mg_alts}
+                    }
+            renameLhsDecl (TyClD xTy dataDecl@DataDecl{tcdLName = L srcSpan typeName})
+                | getRdrString typeName == oldNameStr =
+                    TyClD xTy $ dataDecl {
+                        tcdLName = L srcSpan newName
+                    }
+            renameLhsDecl (TyClD xTy synDecl@SynDecl{tcdLName = L srcSpan typeName})
+                | getRdrString typeName == oldNameStr =
+                    TyClD xTy $ synDecl {
+                        tcdLName = L srcSpan newName
+                    }
+            renameLhsDecl decl = decl
+
+renameLhsSig :: RdrName -> String -> RdrName -> RdrName
+renameLhsSig newName oldNameStr sigName
+    | getRdrString sigName == oldNameStr = newName
+renameLhsSig _ _ sigName = sigName
 
 renameLhsMatch :: RdrName -> Match GhcPs (LHsExpr GhcPs) -> Match GhcPs (LHsExpr GhcPs)
-renameLhsMatch newName match@Match{m_ctxt = funrhs@FunRhs{mc_fun}} =
-    match{m_ctxt = funrhs{mc_fun = fmap (const newName) mc_fun}}
+renameLhsMatch newName match@Match{m_ctxt = funRhs@FunRhs{mc_fun}} =
+    match{m_ctxt = funRhs{mc_fun = fmap (const newName) mc_fun}}
 renameLhsMatch _ _ = error "Expected function match"
+
+getRdrString :: RdrName -> String
+getRdrString = occNameString . rdrNameOcc
 
 referenceTransformer :: [Location] -> MatchResultTransformer
 referenceTransformer refs _ctxt match
