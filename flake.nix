@@ -71,36 +71,30 @@
           tweaks = hself: hsuper:
             with haskell.lib; {
 
-              hiedb = hself.callCabal2nix "hiedb"
-                (builtins.fetchTarball {
-                  url =
-                    "https://hackage.haskell.org/package/hiedb-0.4.0.0/hiedb-0.4.0.0.tar.gz";
-                  sha256 =
-                    "13jz8c46zfpf54ya2wsv4akhn0wcfc6qjazqsjfir5gpvsi7v8xr";
+              ghc-api-compat = hself.callCabal2nix "ghc-api-compat"
+                (pkgs.fetchFromGitHub {
+                  owner = "hsyl20";
+                  repo = "ghc-api-compat";
+                  rev = "8fee87eac97a538dbe81ff1ab18cff10f2f9fa15";
+                  sha256 = "byehvdxQxhNk5ZQUXeFHjAZpAze4Ct9261ro4c5acZk=";
                 }) { };
 
-              implicit-hie = hself.callCabal2nix "implicit-hie"
+              lsp = hself.callCabal2nix "lsp"
                 (builtins.fetchTarball {
-                  url =
-                    "https://hackage.haskell.org/package/implicit-hie-0.1.2.6/implicit-hie-0.1.2.6.tar.gz";
-                  sha256 =
-                    "067bmw5b9qg55ggklbfyf93jgpkbzmprmgv906jscfzvv1h8266c";
+                  url = "https://hackage.haskell.org/package/lsp-1.2.0.1/lsp-1.2.0.1.tar.gz";
+                  sha256 = "1lhzsraiw11ldxvxn8ax11hswpyzsvw2da2qmp3p6fc9rfpz4pj5";
                 }) { };
 
-              implicit-hie-cradle = hself.callCabal2nix "implicit-hie-cradle"
+              lsp-types = hself.callCabal2nix "lsp-types"
                 (builtins.fetchTarball {
-                  url =
-                    "https://hackage.haskell.org/package/implicit-hie-cradle-0.3.0.5/implicit-hie-cradle-0.3.0.5.tar.gz";
-                  sha256 =
-                    "15a7g9x6cjk2b92hb2wilxx4550msxp1pmk5a2shiva821qaxnfq";
+                  url = "https://hackage.haskell.org/package/lsp-types-1.3.0.0/lsp-types-1.3.0.0.tar.gz";
+                  sha256 = "0qajyyj2d51daa4y0pqaa87n4nny0i920ivvzfnrk9gq9386iac7";
                 }) { };
 
-              ghc-source-gen = hself.callCabal2nix "ghc-source-gen"
+              lsp-test = hself.callCabal2nix "lsp-test"
                 (builtins.fetchTarball {
-                  url =
-                    "https://hackage.haskell.org/package/ghc-source-gen-0.4.1.0/ghc-source-gen-0.4.1.0.tar.gz";
-                  sha256 =
-                    "0kk599vk54ckikpxkzwrbx7z5x0xr20hr179rldmnlb34bf9mpnk";
+                  url = "https://hackage.haskell.org/package/lsp-test-0.14.0.1/lsp-test-0.14.0.1.tar.gz";
+                  sha256 = "10lnyg7nlbd3ymgvjjlrkfndyy7ay9cwnsk684p08k2gzlric4yq";
                 }) { };
             };
 
@@ -184,7 +178,6 @@
           pkgs.haskellPackages.ghc.version);
         ghc884 = pkgs.hlsHpkgs "ghc884";
         ghc8104 = pkgs.hlsHpkgs "ghc8104";
-        ghc8105 = pkgs.hlsHpkgs "ghc8105";
         ghc901 = ghc901Config.tweakHpkgs (pkgs.hlsHpkgs "ghc901");
 
         # Create a development shell of hls project
@@ -238,14 +231,14 @@
           haskell-language-server-dev = mkDevShell ghcDefault;
           haskell-language-server-884-dev = mkDevShell ghc884;
           haskell-language-server-8104-dev = mkDevShell ghc8104;
-          haskell-language-server-8105-dev = mkDevShell ghc8105;
+          haskell-language-server-8105-dev = builtins.throw "GHC 8.10.5 is not available in nixpkgs";
           haskell-language-server-901-dev = mkDevShell ghc901;
 
           # hls package
           haskell-language-server = mkExe ghcDefault;
           haskell-language-server-884 = mkExe ghc884;
           haskell-language-server-8104 = mkExe ghc8104;
-          haskell-language-server-8105 = mkExe ghc8105;
+          haskell-language-server-8105 = builtins.throw "GHC 8.10.5 is not available in nixpkgs";
           haskell-language-server-901 = mkExe ghc901;
         };
 
