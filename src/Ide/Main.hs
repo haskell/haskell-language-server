@@ -106,6 +106,7 @@ runLspMode ghcideArgs@GhcideArguments{..} idePlugins = do
       { Main.argCommand = argsCommand
       , Main.argsHlsPlugins = idePlugins
       , Main.argsLogger = pure hlsLogger
+      , Main.argsThreads = if argsThreads == 0 then Nothing else Just $ fromIntegral argsThreads
       , Main.argsIdeOptions = \_config sessionLoader ->
         let defOptions = Ghcide.defaultIdeOptions sessionLoader
         in defOptions

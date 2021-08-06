@@ -2,11 +2,12 @@
 
 module Development.IDE.Graph.Internal.Options where
 
-import Data.Dynamic
-import Control.Monad.Trans.Reader
-import Development.IDE.Graph.Internal.Types
+import           Control.Monad.Trans.Reader
+import           Data.Dynamic
+import           Development.IDE.Graph.Internal.Types
 
 data ShakeOptions = ShakeOptions {
+    -- | Has no effect, kept only for api compatibility with Shake
     shakeThreads            :: Int,
     shakeFiles              :: FilePath,
     shakeExtra              :: Maybe Dynamic,

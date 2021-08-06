@@ -11,7 +11,6 @@ module Development.IDE.Graph.Database(
     shakeProfileDatabase,
     ) where
 
-import           Control.Concurrent.Extra
 import           Data.Dynamic
 import           Data.Maybe
 import           Data.Typeable                           (cast)
@@ -21,9 +20,8 @@ import           Development.IDE.Graph.Internal.Database
 import           Development.IDE.Graph.Internal.Options
 import           Development.IDE.Graph.Internal.Rules
 import           Development.IDE.Graph.Internal.Types
-import           GHC.Conc
 
-data ShakeDatabase = ShakeDatabase !Int !Int [Action ()] Database
+data ShakeDatabase = ShakeDatabase !Int [Action ()] Database
 
 -- Placeholder to be the 'extra' if the user doesn't set it
 data NonExportedType = NonExportedType
@@ -36,12 +34,10 @@ shakeNewDatabase opts rules = do
     let extra = fromMaybe (toDyn NonExportedType) $ shakeExtra opts
     (theRules, actions) <- runRules extra rules
     db <- newDatabase extra theRules
-    let threads = shakeThreads opts
-    threads <- if threads /= 0 then pure threads else getNumProcessors
-    pure $ ShakeDatabase threads (length actions) actions db
+    pure $ ShakeDatabase (length actions) actions db
 
 shakeRunDatabase :: ShakeDatabase -> [Action a] -> IO ([a], [IO ()])
-shakeRunDatabase (ShakeDatabase threads lenAs1 as1 db) as2 = withNumCapabilities threads $ do
+shakeRunDatabase (ShakeDatabase lenAs1 as1 db) as2 = do
     incDatabase db
     as <- fmap (drop lenAs1) $ runActions db $ map unvoid as1 ++ as2
     return (as, [])

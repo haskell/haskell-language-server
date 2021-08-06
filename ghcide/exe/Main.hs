@@ -71,6 +71,8 @@ main = do
             then Test.plugin
             else mempty
 
+        ,Main.argsThreads = case argsThreads of 0 -> Nothing ; i -> Just (fromIntegral i)
+
         ,Main.argsIdeOptions = \config  sessionLoader ->
             let defOptions = defaultIdeOptions sessionLoader
             in defOptions
