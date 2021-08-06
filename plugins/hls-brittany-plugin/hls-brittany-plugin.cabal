@@ -5,7 +5,7 @@ synopsis:           Integration with the Brittany code formatter
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
 
-license:            Apache-2.0
+license:            AGPL-3.0-only
 license-file:       LICENSE
 author:             The Haskell IDE Team
 copyright:          The Haskell IDE Team
@@ -31,6 +31,10 @@ library
     , lsp-types
     , text
     , transformers
+    -- TODO: remove these when GH issue #2005 is resolved
+    , extra
+    , ghc-exactprint
+    , czipwith
 
   default-language: Haskell2010
 
