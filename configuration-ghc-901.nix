@@ -8,7 +8,6 @@ let
     "hls-stylish-haskell-plugin"
     "hls-fourmolu-plugin"
     "hls-splice-plugin"
-    "hls-ormolu-plugin"
     "hls-class-plugin"
     "hls-refine-imports-plugin"
   ];
@@ -92,7 +91,6 @@ let
           "-f-brittany"
           "-f-class"
           "-f-fourmolu"
-          "-f-ormolu"
           "-f-splice"
           "-f-stylishhaskell"
           "-f-tactic"
