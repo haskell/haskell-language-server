@@ -655,7 +655,7 @@ newSession extras@ShakeExtras{..} shakeDb acts = do
         -- Runs actions from the work queue sequentially
         pumpActionThread otSpan = do
             d <- liftIO $ atomically $ popQueue actionQueue
-            void $ parallel [run otSpan d, pumpActionThread otSpan]
+            actionFork (run otSpan d) $ \_ -> pumpActionThread otSpan
 
         -- TODO figure out how to thread the otSpan into defineEarlyCutoff
         run _otSpan d  = do

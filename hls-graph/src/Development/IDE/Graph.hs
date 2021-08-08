@@ -5,7 +5,7 @@ module Development.IDE.Graph(
     Rules,
     Action, action,
     Key(..),
-    actionFinally, actionBracket, actionCatch,
+    actionFinally, actionBracket, actionCatch, actionFork,
     Shake.ShakeException(..),
     -- * Configuration
     ShakeOptions(shakeAllowRedefineRules, shakeThreads, shakeFiles, shakeExtra),

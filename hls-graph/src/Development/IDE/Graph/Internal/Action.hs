@@ -2,7 +2,18 @@
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE TypeFamilies               #-}
 
-module Development.IDE.Graph.Internal.Action where
+module Development.IDE.Graph.Internal.Action
+( actionFork
+, actionBracket
+, actionCatch
+, actionFinally
+, alwaysRerun
+, apply1
+, apply
+, parallel
+, reschedule
+, runActions
+) where
 
 import           Control.Concurrent.Async
 import           Control.Exception
@@ -42,15 +53,29 @@ parallel xs = do
             liftIO $ writeIORef (actionDeps a) $ (deps ++) <$> concatMapM id newDeps
             pure res
     where
-        ignoreState a x = do
-            ref <- newIORef Nothing
-            runReaderT (fromAction x) a{actionDeps=ref}
-
         usingState a x = do
             ref <- newIORef $ Just []
             res <- runReaderT (fromAction x) a{actionDeps=ref}
             deps <- readIORef ref
             pure (deps, res)
+
+ignoreState :: SAction -> Action b -> IO b
+ignoreState a x = do
+    ref <- newIORef Nothing
+    runReaderT (fromAction x) a{actionDeps=ref}
+
+actionFork :: Action a -> (Async a -> Action b) -> Action b
+actionFork act k = do
+    a <- Action ask
+    deps <- liftIO $ readIORef $ actionDeps a
+    let db = actionDatabase a
+    case deps of
+        Nothing -> do
+            -- if we are already in the rerun mode, nothing we do is going to impact our state
+            [res] <- liftIO $ withAsync (ignoreState a act) $ \as -> runActions db [k as]
+            return res
+        _ ->
+            error "please help me"
 
 isAsyncException :: SomeException -> Bool
 isAsyncException e
