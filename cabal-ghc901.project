@@ -21,7 +21,7 @@ packages:
          ./plugins/hls-floskell-plugin
          ./plugins/hls-pragmas-plugin
          ./plugins/hls-module-name-plugin
-        --  ./plugins/hls-ormolu-plugin
+         ./plugins/hls-ormolu-plugin
          ./plugins/hls-call-hierarchy-plugin
 tests: true
 
@@ -75,11 +75,11 @@ source-repository-package
 
 write-ghc-environment-files: never
 
-index-state: 2021-08-01T00:00:00Z
+index-state: 2021-08-08T02:21:16Z
 
 constraints:
     -- These plugins doesn't work on GHC9 yet
-    haskell-language-server -brittany -class -fourmolu -ormolu -splice -stylishhaskell -tactic -refineImports
+    haskell-language-server -brittany -class -fourmolu -splice -stylishhaskell -tactic -refineImports
 
 
 allow-newer:
@@ -89,7 +89,6 @@ allow-newer:
     -- brittany:ghc-boot-th,
     -- butcher:base,
     -- fourmolu:ghc-lib-parser,
-    -- ormolu:ghc-lib-parser,
     -- stylish-haskell:ghc-lib-parser,
     -- stylish-haskell:Cabal,
     -- multistate:base,
