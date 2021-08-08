@@ -19,7 +19,7 @@ jobs:
         uses: fkirc/skip-duplicate-actions@master
         with:
           cancel_others: true
-          paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", ".circleci/**", "install/**"]'
+          paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", ".circleci/**", "install/**", "**/README.md", "FUNDING.yml"]'
       - id: skip_check_no_nix
         uses: fkirc/skip-duplicate-actions@master
         with:

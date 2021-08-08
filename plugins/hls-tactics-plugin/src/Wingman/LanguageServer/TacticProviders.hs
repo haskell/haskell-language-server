@@ -47,6 +47,7 @@ import           Wingman.Types
 commandTactic :: TacticCommand -> T.Text -> TacticsM ()
 commandTactic Auto                   = const auto
 commandTactic Intros                 = const intros
+commandTactic IntroAndDestruct       = const introAndDestruct
 commandTactic Destruct               = useNameFromHypothesis destruct . mkVarOcc . T.unpack
 commandTactic DestructPun            = useNameFromHypothesis destructPun . mkVarOcc . T.unpack
 commandTactic Homomorphism           = useNameFromHypothesis homo . mkVarOcc . T.unpack
@@ -64,6 +65,7 @@ commandTactic RunMetaprogram         = parseMetaprogram
 tacticKind :: TacticCommand -> T.Text
 tacticKind Auto                   = "fillHole"
 tacticKind Intros                 = "introduceLambda"
+tacticKind IntroAndDestruct       = "introduceAndDestruct"
 tacticKind Destruct               = "caseSplit"
 tacticKind DestructPun            = "caseSplitPun"
 tacticKind Homomorphism           = "homomorphicCaseSplit"
@@ -82,9 +84,10 @@ tacticKind RunMetaprogram         = "runMetaprogram"
 tacticPreferred :: TacticCommand -> Bool
 tacticPreferred Auto                   = True
 tacticPreferred Intros                 = True
+tacticPreferred IntroAndDestruct       = True
 tacticPreferred Destruct               = True
 tacticPreferred DestructPun            = False
-tacticPreferred Homomorphism           = False
+tacticPreferred Homomorphism           = True
 tacticPreferred DestructLambdaCase     = False
 tacticPreferred HomomorphismLambdaCase = False
 tacticPreferred DestructAll            = True
@@ -110,6 +113,10 @@ commandProvider Intros =
   requireHoleSort (== Hole) $
   filterGoalType isFunction $
     provide Intros ""
+commandProvider IntroAndDestruct =
+  requireHoleSort (== Hole) $
+  filterGoalType (liftLambdaCase False (\_ -> isJust . algebraicTyCon)) $
+    provide IntroAndDestruct ""
 commandProvider Destruct =
   requireHoleSort (== Hole) $
   filterBindingType destructFilter $ \occ _ ->

@@ -86,13 +86,14 @@ pluginsToDefaultConfig IdePlugins {..} =
         -- This function captures ide methods registered by the plugin, and then converts it to kv pairs
         handlersToGenericDefaultConfig :: DSum.DSum IdeMethod f -> [A.Pair]
         handlersToGenericDefaultConfig (IdeMethod m DSum.:=> _) = case m of
-          STextDocumentCodeAction     -> ["codeActionsOn" A..= True]
-          STextDocumentCodeLens       -> ["codeLensOn" A..= True]
-          STextDocumentRename         -> ["renameOn" A..= True]
-          STextDocumentHover          -> ["hoverOn" A..= True]
-          STextDocumentDocumentSymbol -> ["symbolsOn" A..= True]
-          STextDocumentCompletion     -> ["completionOn" A..= True]
-          _                           -> []
+          STextDocumentCodeAction           -> ["codeActionsOn" A..= True]
+          STextDocumentCodeLens             -> ["codeLensOn" A..= True]
+          STextDocumentRename               -> ["renameOn" A..= True]
+          STextDocumentHover                -> ["hoverOn" A..= True]
+          STextDocumentDocumentSymbol       -> ["symbolsOn" A..= True]
+          STextDocumentCompletion           -> ["completionOn" A..= True]
+          STextDocumentPrepareCallHierarchy -> ["callHierarchyOn" A..= True]
+          _                                 -> []
 
 -- | Generates json schema used in haskell vscode extension
 -- Similar to 'pluginsToDefaultConfig' but simpler, since schema has a flatten structure
@@ -121,6 +122,7 @@ pluginsToVSCodeExtensionSchema IdePlugins {..} = A.object $ mconcat $ singlePlug
           STextDocumentHover -> [withIdPrefix "hoverOn" A..= schemaEntry "hover"]
           STextDocumentDocumentSymbol -> [withIdPrefix "symbolsOn" A..= schemaEntry "symbols"]
           STextDocumentCompletion -> [withIdPrefix "completionOn" A..= schemaEntry "completions"]
+          STextDocumentPrepareCallHierarchy -> [withIdPrefix "callHierarchyOn" A..= schemaEntry "call hierarchy"]
           _ -> []
         schemaEntry desc =
           A.object

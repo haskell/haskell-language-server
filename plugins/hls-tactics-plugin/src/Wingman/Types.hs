@@ -59,6 +59,7 @@ import Data.IORef
 data TacticCommand
   = Auto
   | Intros
+  | IntroAndDestruct
   | Destruct
   | DestructPun
   | Homomorphism
@@ -77,6 +78,7 @@ tacticTitle = (mappend "Wingman: " .) . go
   where
     go Auto _                   = "Attempt to fill hole"
     go Intros _                 = "Introduce lambda"
+    go IntroAndDestruct _       = "Introduce and destruct term"
     go Destruct var             = "Case split on " <> var
     go DestructPun var          = "Split on " <> var <> " with NamedFieldPuns"
     go Homomorphism var         = "Homomorphic case split on " <> var
