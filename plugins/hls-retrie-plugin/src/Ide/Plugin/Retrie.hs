@@ -436,7 +436,7 @@ callRetrieWithTransformerAndUpdates transformer contextUpdater state session rew
         unsafeMkA (map (GHC.noLoc . toImportDecl) theImports) mempty 0
 
   (originFixities, originParsedModule) <- reuseParsedModule origin
-  retrie <- do (\specs -> applyWithUpdate updateContext (map (setRewriteTransformer transformer) specs)
+  retrie <- do (\specs -> applyWithUpdate contextUpdater (map (setRewriteTransformer transformer) specs)
                     >> addImports annotatedImports)
       <$> parseRewriteSpecs
         (\_f -> return $ NoCPP originParsedModule)
