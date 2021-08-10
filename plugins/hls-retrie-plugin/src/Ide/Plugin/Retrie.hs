@@ -15,7 +15,7 @@
 {-# OPTIONS -Wno-orphans #-}
 {-# LANGUAGE RankNTypes          #-}
 
-module Ide.Plugin.Retrie (descriptor, callRetrieWithTransformerAndUpdates, RunRetrieParams(..), response) where
+module Ide.Plugin.Retrie (descriptor, callRetrieWithTransformerAndUpdates, RunRetrieParams(..), response, handleMaybe, handleMaybeM) where
 
 import           Control.Concurrent.Extra             (readVar)
 import           Control.Exception.Safe               (Exception (..),
