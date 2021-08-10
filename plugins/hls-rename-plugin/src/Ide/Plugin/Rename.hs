@@ -54,21 +54,22 @@ renameProvider state pluginId (RenameParams tdi@(TextDocumentIdentifier uri) pos
         (uses GetAnnotatedParsedSource refFiles))
     let declEdits = filter
             (not . isListEmpty . snd)
-            (zip refUris $ map (lhsDeclEdits newRdrName refs) sources)
+            (zip refUris $ map (sourceEdits newRdrName refs) sources)
 
     -- use retrie to rename right-hand sides
     (session, _) <- handleMaybeM "session deps" . liftIO $ runAction "Rename.GhcSessionDeps" state (useWithStale GhcSessionDeps nfp)
     let emptyContextUpdater c i = const $ pure c
         isType = isUpper $ head oldNameStr
         rewrite = (if isType then AdhocType else Adhoc) (oldNameStr ++ " = " ++ T.unpack newRdrNameStr)
-    (_errors, retrieEdit@WorkspaceEdit{_changes}) <- liftIO $ callRetrieWithTransformerAndUpdates
-        (referenceTransformer refs)
-        emptyContextUpdater
-        state
-        (hscEnv session)
-        [Right rewrite]
-        nfp
-        False
+    (_errors, retrieEdit@WorkspaceEdit{_changes}) <-
+        liftIO $ callRetrieWithTransformerAndUpdates
+            (\_ match -> pure match) -- Temp empty
+            emptyContextUpdater
+            state
+            (hscEnv session)
+            [Right rewrite]
+            nfp
+            False
 
     pure $ case declEdits of
         [] -> WorkspaceEdit Nothing Nothing Nothing
@@ -79,8 +80,8 @@ renameProvider state pluginId (RenameParams tdi@(TextDocumentIdentifier uri) pos
 -------------------------------------------------------------------------------
 -- Source renaming
 
-lhsDeclEdits :: RdrName -> [Location] -> Annotated ParsedSource -> List TextEdit
-lhsDeclEdits newRdrName refs annPs = makeDiffTextEdit src res
+sourceEdits :: RdrName -> [Location] -> Annotated ParsedSource -> List TextEdit
+sourceEdits newRdrName refs annPs = makeDiffTextEdit src res
     where
         src = T.pack $ printA annPs
         updateMod =
@@ -130,7 +131,7 @@ updateLhsDecls newRdrName refs ps@HsModule{hsmodDecls} =
         renameLhsDecl (ValD xVal funBind@FunBind{fun_id, fun_matches = fun_matches@MG{mg_alts}})
             | isRef refs fun_id = ValD xVal $ funBind {
                     fun_id = fmap (const newRdrName) fun_id,
-                    fun_matches = fun_matches {mg_alts = fmap ((: []) . fmap (renameLhsMatch newRdrName) . head) mg_alts}
+                    fun_matches = fun_matches {mg_alts = fmap (map (fmap $ renameLhsMatch newRdrName)) mg_alts}
                 }
         renameLhsDecl (TyClD xTy dataDecl@DataDecl{tcdLName, tcdDataDefn = hsDataDefn@HsDataDefn{dd_cons}})
             | isRef refs tcdLName = TyClD xTy $ dataDecl {
@@ -181,7 +182,7 @@ referenceTransformer :: [Location] -> MatchResultTransformer
 referenceTransformer refs _ctxt match
   | MatchResult _sub template <- match
   , srcSpan <- getOrigin $ astA $ tTemplate template -- Bug: incorrect loc
---   , isRef refs srcSpan
+  , isRef' refs srcSpan
     = pure match
   | otherwise = pure NoMatch
 
@@ -191,7 +192,7 @@ referenceTransformer refs _ctxt match
 refsAtName :: NormalizedFilePath -> Name -> Action [Location]
 refsAtName nfp name = do
     fois <- HM.keys <$> getFilesOfInterestUntracked
-    Just asts <- sequence <$> usesWithStale GetHieAst fois
+    asts <- fromJust . sequence <$> usesWithStale GetHieAst fois
     let foiRefs = concat $ mapMaybe (getNameAstLocations name) asts
     refs <- nameDbRefs fois name
     pure $ nubOrd $ foiRefs ++ refs
@@ -230,4 +231,7 @@ isListEmpty :: List a -> Bool
 isListEmpty (List xs) = null xs
 
 isRef :: Retrie.HasSrcSpan a => [Location] -> a -> Bool
-isRef refs = (`elem` refs) . fromJust . srcSpanToLocation . getLoc
+isRef refs = isRef' refs . getLoc
+
+isRef' :: [Location] -> SrcSpan -> Bool
+isRef' refs = (`elem` refs) . fromJust . srcSpanToLocation

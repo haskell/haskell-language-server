@@ -13,8 +13,7 @@ renamePlugin = Rename.descriptor "rename"
 
 tests :: TestTree
 tests = testGroup "rename"
-    [ expectFailBecause "Declaration renames not implemented" $
-      goldenWithRename "function name" "FunctionName" $ \doc -> do
+    [ goldenWithRename "function name" "FunctionName" $ \doc -> do
         rename doc (Position 3 1) "baz" -- foo :: Int -> Int
     , expectFailBecause "Declaration renames not implemented" $
       goldenWithRename "function argument" "FunctionArgument" $ \doc -> do
@@ -37,11 +36,9 @@ tests = testGroup "rename"
     , expectFailBecause "Declaration renames not implemented" $
       goldenWithRename "type variable" "TypeVariable" $ \doc -> do
         rename doc (Position 0 13) "b" -- bar :: Maybe a -> Maybe a
-    , expectFailBecause "Declaration renames not implemented" $
-      goldenWithRename "imported function" "ImportedFunction" $ \doc -> do
+    , goldenWithRename "imported function" "ImportedFunction" $ \doc -> do
         rename doc (Position 0 35) "baz" -- import           FunctionArgument (foo)
-    , expectFailBecause "Declaration renames not implemented" $
-      goldenWithRename "GADT" "Gadt" $ \doc -> do
+    , goldenWithRename "GADT" "Gadt" $ \doc -> do
         rename doc (Position 6 35) "Expr" -- Even    :: Expression Int -> Expression Bool
     ]
 
