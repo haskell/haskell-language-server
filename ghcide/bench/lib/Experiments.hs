@@ -36,7 +36,10 @@ import           Development.Shake               (CmdOption (Cwd, FileStdout),
                                                   cmd_)
 import           Experiments.Types
 import           Language.LSP.Test
-import           Language.LSP.Types
+import           Language.LSP.Types              hiding
+                                                 (SemanticTokenAbsolute (length, line),
+                                                  SemanticTokenRelative (length),
+                                                  SemanticTokensEdit (_start))
 import           Language.LSP.Types.Capabilities
 import           Numeric.Natural
 import           Options.Applicative

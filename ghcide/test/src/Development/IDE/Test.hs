@@ -36,7 +36,10 @@ import           Development.IDE.Plugin.Test     (TestRequest (..),
 import           Development.IDE.Test.Diagnostic
 import           Language.LSP.Test               hiding (message)
 import qualified Language.LSP.Test               as LspTest
-import           Language.LSP.Types
+import           Language.LSP.Types              hiding
+                                                 (SemanticTokenAbsolute (length, line),
+                                                  SemanticTokenRelative (length),
+                                                  SemanticTokensEdit (_start))
 import           Language.LSP.Types.Lens         as Lsp
 import           System.Directory                (canonicalizePath)
 import           System.Time.Extra

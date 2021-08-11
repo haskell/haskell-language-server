@@ -22,7 +22,13 @@ import           Development.IDE.GHC.Error      (rangeToRealSrcSpan,
                                                  realSrcSpanToRange)
 import           Development.IDE.Types.Location
 import           Language.LSP.Server            (LspM)
-import           Language.LSP.Types
+import           Language.LSP.Types             (DocumentSymbol (..),
+                                                 DocumentSymbolParams (DocumentSymbolParams, _textDocument),
+                                                 List (..), ResponseError,
+                                                 SymbolInformation,
+                                                 SymbolKind (SkConstructor, SkField, SkFile, SkFunction, SkInterface, SkMethod, SkModule, SkObject, SkStruct, SkTypeParameter, SkUnknown),
+                                                 TextDocumentIdentifier (TextDocumentIdentifier),
+                                                 type (|?) (InL), uriToFilePath)
 import           Outputable                     (Outputable, ppr,
                                                  showSDocUnsafe)
 

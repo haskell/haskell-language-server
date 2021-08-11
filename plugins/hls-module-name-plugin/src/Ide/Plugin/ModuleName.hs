@@ -36,7 +36,10 @@ import           Development.IDE.GHC.Compat (GenLocated (L), getSessionDynFlags,
                                              pm_parsed_source, unLoc)
 import           Ide.Types
 import           Language.LSP.Server
-import           Language.LSP.Types
+import           Language.LSP.Types         hiding
+                                            (SemanticTokenAbsolute (length, line),
+                                             SemanticTokenRelative (length),
+                                             SemanticTokensEdit (_start))
 import           Language.LSP.VFS           (virtualFileText)
 import           System.Directory           (canonicalizePath)
 import           System.FilePath            (dropExtension, splitDirectories,

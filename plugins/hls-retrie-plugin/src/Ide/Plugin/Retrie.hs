@@ -86,7 +86,10 @@ import           Language.LSP.Server                  (LspM,
                                                        sendNotification,
                                                        sendRequest,
                                                        withIndefiniteProgress)
-import           Language.LSP.Types                   as J
+import           Language.LSP.Types                   as J hiding
+                                                           (SemanticTokenAbsolute (length, line),
+                                                            SemanticTokenRelative (length),
+                                                            SemanticTokensEdit (_start))
 import           Retrie.CPP                           (CPP (NoCPP), parseCPP)
 import           Retrie.ExactPrint                    (fix, relativiseApiAnns,
                                                        transformA, unsafeMkA)

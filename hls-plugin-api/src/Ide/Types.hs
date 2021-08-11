@@ -1,20 +1,20 @@
-{-# LANGUAGE BangPatterns         #-}
-{-# LANGUAGE CPP                  #-}
-{-# LANGUAGE ConstraintKinds      #-}
-{-# LANGUAGE DefaultSignatures    #-}
-{-# LANGUAGE DeriveAnyClass       #-}
-{-# LANGUAGE DeriveGeneric        #-}
-{-# LANGUAGE DerivingStrategies   #-}
-{-# LANGUAGE FlexibleContexts     #-}
-{-# LANGUAGE FlexibleInstances    #-}
-{-# LANGUAGE GADTs                #-}
+{-# LANGUAGE BangPatterns               #-}
+{-# LANGUAGE CPP                        #-}
+{-# LANGUAGE ConstraintKinds            #-}
+{-# LANGUAGE DefaultSignatures          #-}
+{-# LANGUAGE DeriveAnyClass             #-}
+{-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE DerivingStrategies         #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE OverloadedStrings    #-}
-{-# LANGUAGE PolyKinds            #-}
-{-# LANGUAGE ScopedTypeVariables  #-}
-{-# LANGUAGE TypeFamilies         #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE ViewPatterns         #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE PolyKinds                  #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE UndecidableInstances       #-}
+{-# LANGUAGE ViewPatterns               #-}
 
 module Ide.Types
     where
@@ -46,9 +46,21 @@ import           GHC.Generics
 import           Ide.Plugin.Config
 import           Ide.Plugin.Properties
 import           Language.LSP.Server             (LspM, getVirtualFile)
-import           Language.LSP.Types
-import           Language.LSP.Types.Capabilities
-import           Language.LSP.Types.Lens         as J hiding (id)
+import           Language.LSP.Types              hiding (SemanticTokenAbsolute(length, line), SemanticTokenRelative(length), SemanticTokensEdit(_start))
+import           Language.LSP.Types.Capabilities (ClientCapabilities (ClientCapabilities),
+                                                  TextDocumentClientCapabilities (_codeAction, _documentSymbol))
+import           Language.LSP.Types.Lens         as J (HasChildren (children),
+                                                       HasCommand (command),
+                                                       HasContents (contents),
+                                                       HasDeprecated (deprecated),
+                                                       HasEdit (edit),
+                                                       HasKind (kind),
+                                                       HasName (name),
+                                                       HasOptions (..),
+                                                       HasRange (range),
+                                                       HasTextDocument (..),
+                                                       HasTitle (title),
+                                                       HasUri (..))
 import           Language.LSP.VFS
 import           OpenTelemetry.Eventlog
 import           Options.Applicative             (ParserInfo)
@@ -467,7 +479,7 @@ instance HasTracing CallHierarchyOutgoingCallsParams
 -- ---------------------------------------------------------------------
 
 {-# NOINLINE pROCESS_ID #-}
-{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DerivingStrategies         #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 pROCESS_ID :: T.Text
 pROCESS_ID = unsafePerformIO getPid
