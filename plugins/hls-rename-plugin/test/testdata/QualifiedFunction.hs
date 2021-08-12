@@ -1,4 +1,4 @@
-import qualified FunctionArgument
+import qualified Foo
 
 bar :: Int -> Int
-bar = FunctionArgument.foo
+bar = Foo.foo

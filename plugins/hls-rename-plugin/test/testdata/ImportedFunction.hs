@@ -1,4 +1,4 @@
-import           FunctionArgument (foo)
+import           Foo (foo)
 
 bar :: Int -> Int
 bar = foo

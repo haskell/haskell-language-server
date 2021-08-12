@@ -1,4 +1,4 @@
-foo :: Int -> Int
-foo x = y + 10
+baz :: Int -> Int
+baz x = foo + 10
     where
-        y = 20
+        foo = 20

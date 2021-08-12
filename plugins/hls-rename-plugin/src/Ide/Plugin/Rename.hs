@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -14,22 +15,21 @@ import           Data.List
 import qualified Data.Map                             as M
 import           Data.Maybe
 import qualified Data.Text                            as T
+import           Debug.Trace
 import           Development.IDE                      hiding (pluginHandlers)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.Spans.AtPoint
+import           GhcPlugins                           hiding (getLoc, (<>))
 import           HieDb.Query
 import           Ide.Plugin.Retrie                    hiding (descriptor)
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Types                   hiding (_changes)
-import           Name
 import           Retrie                               hiding (HsModule, getLoc)
-
-instance Show RdrName where
-    show = occNameString . rdrNameOcc
+import           Retrie.SYB
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor pluginId = (defaultPluginDescriptor pluginId) {
@@ -58,13 +58,12 @@ renameProvider state pluginId (RenameParams tdi@(TextDocumentIdentifier uri) pos
 
     -- use retrie to rename right-hand sides
     (session, _) <- handleMaybeM "session deps" . liftIO $ runAction "Rename.GhcSessionDeps" state (useWithStale GhcSessionDeps nfp)
-    let emptyContextUpdater c i = const $ pure c
-        isType = isUpper $ head oldNameStr
+    let isType = isUpper $ head oldNameStr
         rewrite = (if isType then AdhocType else Adhoc) (oldNameStr ++ " = " ++ T.unpack newRdrNameStr)
     (_errors, retrieEdit@WorkspaceEdit{_changes}) <-
         liftIO $ callRetrieWithTransformerAndUpdates
-            (\_ match -> pure match) -- Temp empty
-            emptyContextUpdater
+            (referenceTransformer refs)
+            contextUpdater
             state
             (hscEnv session)
             [Right rewrite]
@@ -76,6 +75,7 @@ renameProvider state pluginId (RenameParams tdi@(TextDocumentIdentifier uri) pos
         declEdits' -> retrieEdit {
             _changes = foldl1 (.) (map (uncurry $ HM.insertWith (<>)) declEdits') <$> _changes
             }
+
 
 -------------------------------------------------------------------------------
 -- Source renaming
@@ -174,17 +174,67 @@ renameLhsMatch newRdrName match@Match{m_ctxt = funRhs@FunRhs{mc_fun}} =
     match{m_ctxt = funRhs{mc_fun = fmap (const newRdrName) mc_fun}}
 renameLhsMatch _ _ = error "Expected function match"
 
+
 -------------------------------------------------------------------------------
 -- retrie
 
 -- limits matches to reference locations
 referenceTransformer :: [Location] -> MatchResultTransformer
-referenceTransformer refs _ctxt match
-  | MatchResult _sub template <- match
-  , srcSpan <- getOrigin $ astA $ tTemplate template -- Bug: incorrect loc
-  , isRef' refs srcSpan
-    = pure match
-  | otherwise = pure NoMatch
+referenceTransformer refs Context{ctxtBinders} match
+    | MatchResult _sub template <- match
+    , trace ("\nRefs: " ++ show refs ++ "\nContext: " ++ show (map getRdrLoc ctxtBinders))
+        any (containsRef . getRdrLoc) ctxtBinders = pure match
+    | otherwise = pure NoMatch
+    where
+        containsRef srcSpan = any (flip isSubspanOf srcSpan . locToSpan) refs
+        getRdrLoc (Exact name) = nameSrcSpan name
+        getRdrLoc _            = error "Expected exact name"
+
+
+-- Hacky use of ctxtBinders to track match spans
+contextUpdater :: (Typeable b, Monad f) => Context -> Int -> b -> f Context
+contextUpdater c@Context{ctxtBinders} i = const (pure c)
+    `extQ` (return . updType)
+    `extQ` (return . updExpr)
+    `extQ` (return . updMatch)
+    `extQ` (return . updTyDecl)
+    where
+        makeName = Exact . mkInternalName initTyVarUnique (mkVarOcc "")
+
+        updType :: LHsType GhcPs -> Context
+        updType (L _ (HsAppTy _ (L matchSpan _) _)) =
+            c {ctxtBinders = makeName matchSpan : ctxtBinders}
+        updType (L matchSpan ty) =
+            c {ctxtBinders = makeName matchSpan : ctxtBinders}
+
+        updExpr :: LHsExpr GhcPs -> Context
+        updExpr (L _ (HsApp _ (L matchSpan a) _)) =
+            c {ctxtBinders = makeName matchSpan : ctxtBinders}
+        updExpr (L matchSpan _) =
+            c {ctxtBinders = makeName matchSpan : ctxtBinders}
+
+        -- updTyDecl :: LTyClDecl GhcPs -> Context
+        -- updTyDecl (L matchSpan SynDecl{tcdLName}) =
+        --     c {ctxtBinders = makeName (matchSpan `subtractSrcSpans` getLoc tcdLName) : ctxtBinders}
+        -- updTyDecl (L _ _) = c
+
+        updTyDecl :: TyClDecl GhcPs -> Context
+        updTyDecl SynDecl{tcdRhs} =
+            c {ctxtBinders = makeName (getLoc tcdRhs) : ctxtBinders}
+        updTyDecl _ = c
+
+        updMatch :: LMatch GhcPs (LHsExpr GhcPs) -> Context
+        updMatch (L matchSpan Match{m_ctxt = FunRhs{mc_fun = L funNameSpan _}}) =
+            c {ctxtBinders = makeName (matchSpan `subtractSrcSpans` funNameSpan) : ctxtBinders}
+        updMatch (L matchSpan _) = c {ctxtBinders = makeName matchSpan : ctxtBinders}
+
+subtractSrcSpans :: SrcSpan -> SrcSpan -> SrcSpan
+subtractSrcSpans span1 (RealSrcSpan span2)
+    = mkSrcSpan startLoc endLoc
+    where
+        startLoc = mkSrcLoc (srcSpanFile span2) (srcSpanStartLine span2) (srcSpanEndCol span2)
+        endLoc = srcSpanEnd span1
+subtractSrcSpans _ _ = error ""
 
 -------------------------------------------------------------------------------
 -- reference finding
@@ -192,7 +242,7 @@ referenceTransformer refs _ctxt match
 refsAtName :: NormalizedFilePath -> Name -> Action [Location]
 refsAtName nfp name = do
     fois <- HM.keys <$> getFilesOfInterestUntracked
-    asts <- fromJust . sequence <$> usesWithStale GetHieAst fois
+    Just asts <- sequence <$> usesWithStale GetHieAst fois
     let foiRefs = concat $ mapMaybe (getNameAstLocations name) asts
     refs <- nameDbRefs fois name
     pure $ nubOrd $ foiRefs ++ refs
@@ -217,6 +267,7 @@ getNameAstLocations :: Name -> (HieAstResult, PositionMapping) -> Maybe [Locatio
 getNameAstLocations name (HAR _ _ rm _ _, mapping) =
     mapMaybe (toCurrentLocation mapping . realSrcSpanToLocation . fst) <$> M.lookup (Right name) rm
 
+
 -------------------------------------------------------------------------------
 -- util
 
@@ -235,3 +286,9 @@ isRef refs = isRef' refs . getLoc
 
 isRef' :: [Location] -> SrcSpan -> Bool
 isRef' refs = (`elem` refs) . fromJust . srcSpanToLocation
+
+locToSpan :: Location -> SrcSpan
+locToSpan (Location uri (Range (Position l c) (Position l' c'))) =
+    mkSrcSpan (mkSrcLoc' uri (succ l) (succ c)) (mkSrcLoc' uri (succ l') (succ c'))
+    where
+        mkSrcLoc' = mkSrcLoc . mkFastString . fromJust . uriToFilePath
