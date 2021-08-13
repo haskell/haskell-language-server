@@ -10,7 +10,7 @@ import           Ide.Types
 import           Language.LSP.Types
 import           Prelude hiding (span)
 import           Wingman.AbstractLSP
-import           Wingman.AbstractLSP.TacticActions (makeTacticCodeAction)
+import           Wingman.AbstractLSP.TacticActions (makeTacticInteraction)
 import           Wingman.EmptyCase
 import           Wingman.LanguageServer
 import           Wingman.LanguageServer.Metaprogram (hoverProvider)
@@ -21,7 +21,7 @@ descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId
   = installInteractions
       ( emptyCaseInteraction
-      : fmap makeTacticCodeAction [minBound .. maxBound]
+      : fmap makeTacticInteraction [minBound .. maxBound]
       )
   $ (defaultPluginDescriptor plId)
       { pluginHandlers = mkPluginHandler STextDocumentHover hoverProvider

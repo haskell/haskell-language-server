@@ -31,10 +31,10 @@ import           Wingman.Types
 
 ------------------------------------------------------------------------------
 -- | An 'Interaction' for a 'TacticCommand'.
-makeTacticCodeAction
+makeTacticInteraction
     :: TacticCommand
     -> Interaction
-makeTacticCodeAction cmd =
+makeTacticInteraction cmd =
   Interaction $ Continuation @_ @HoleTarget cmd
     (SynthesizeCodeAction $ \env@LspEnv{..} hj -> do
       pure $ commandProvider cmd $
