@@ -79,17 +79,23 @@ codeActionProvider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri)
       cfg <- getTacticConfig plId
       liftIO $ fromMaybeT (Right $ List []) $ do
         HoleJudgment{..} <- judgementForHole state nfp range cfg
-        actions <- lift $
-          -- This foldMap is over the function monoid.
-          foldMap commandProvider [minBound .. maxBound] $ TacticProviderData
-            { tpd_dflags = hj_dflags
-            , tpd_config = cfg
-            , tpd_plid   = plId
-            , tpd_uri    = uri
-            , tpd_range  = range
-            , tpd_jdg    = hj_jdg
-            , tpd_hole_sort = hj_hole_sort
-            }
+        let actions =
+              -- This foldMap is over the function monoid.
+              foldMap commandProvider [minBound .. maxBound] $ TacticProviderData
+                { tpd_lspEnv = LspEnv
+                  { le_ideState = state
+                  , le_pluginId = plId
+                  , le_dflags = hj_dflags
+                  , le_config = cfg
+                  , le_fileContext = FileContext
+                      { fc_uri = uri
+                      , fc_nfp = nfp
+                      , fc_range = Just range
+                      }
+                  }
+                , tpd_jdg    = hj_jdg
+                , tpd_hole_sort = hj_hole_sort
+                }
         pure $ Right $ List actions
 codeActionProvider _ _ _ = pure $ Right $ List []
 

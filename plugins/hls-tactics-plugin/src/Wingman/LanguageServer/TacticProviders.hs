@@ -27,10 +27,7 @@ import           GHC.Generics
 import           GHC.LanguageExtensions.Type (Extension (LambdaCase))
 import           Ide.PluginUtils
 import           Ide.Types
-import           Language.LSP.Types              hiding
-                                                 (SemanticTokenAbsolute (length, line),
-                                                  SemanticTokenRelative (length),
-                                                  SemanticTokensEdit (_start))
+import           Language.LSP.Types hiding (SemanticTokenAbsolute (..), SemanticTokenRelative (..))
 import           OccName
 import           Prelude hiding (span)
 import           Wingman.Auto
@@ -40,6 +37,7 @@ import           Wingman.Machinery (useNameFromHypothesis, uncoveredDataCons)
 import           Wingman.Metaprogramming.Parser (parseMetaprogram)
 import           Wingman.Tactics
 import           Wingman.Types
+import Wingman.AbstractLSP.Types
 
 
 ------------------------------------------------------------------------------
@@ -192,15 +190,11 @@ guardLength f as = bool [] as $ f $ length as
 -- UI.
 type TacticProvider
      = TacticProviderData
-    -> IO [Command |? CodeAction]
+    -> [Command |? CodeAction]
 
 
 data TacticProviderData = TacticProviderData
-  { tpd_dflags :: DynFlags
-  , tpd_config :: Config
-  , tpd_plid   :: PluginId
-  , tpd_uri    :: Uri
-  , tpd_range  :: Tracked 'Current Range
+  { tpd_lspEnv :: LspEnv
   , tpd_jdg    :: Judgement
   , tpd_hole_sort :: HoleSort
   }
@@ -219,13 +213,13 @@ requireHoleSort :: (HoleSort -> Bool) -> TacticProvider -> TacticProvider
 requireHoleSort p tp tpd =
   case p $ tpd_hole_sort tpd of
     True  -> tp tpd
-    False -> pure []
+    False -> []
 
 withMetaprogram :: (T.Text -> TacticProvider) -> TacticProvider
 withMetaprogram tp tpd =
   case tpd_hole_sort tpd of
     Metaprogram mp -> tp mp tpd
-    _ -> pure []
+    _ -> []
 
 
 ------------------------------------------------------------------------------
@@ -233,9 +227,9 @@ withMetaprogram tp tpd =
 -- predicate holds for the goal.
 requireExtension :: Extension -> TacticProvider -> TacticProvider
 requireExtension ext tp tpd =
-  case xopt ext $ tpd_dflags tpd of
+  case xopt ext $ le_dflags $ tpd_lspEnv tpd of
     True  -> tp tpd
-    False -> pure []
+    False -> []
 
 
 ------------------------------------------------------------------------------
@@ -245,7 +239,7 @@ filterGoalType :: (Type -> Bool) -> TacticProvider -> TacticProvider
 filterGoalType p tp tpd =
   case p $ unCType $ jGoal $ tpd_jdg tpd of
     True  -> tp tpd
-    False -> pure []
+    False -> []
 
 
 ------------------------------------------------------------------------------
@@ -266,11 +260,11 @@ filterBindingType p tp tpd =
   let jdg = tpd_jdg tpd
       hy  = jLocalHypothesis jdg
       g   = jGoal jdg
-   in fmap join $ for (unHypothesis hy) $ \hi ->
+   in join $ for (unHypothesis hy) $ \hi ->
         let ty = unCType $ hi_type hi
          in case p (unCType g) ty of
               True  -> tp (hi_name hi) ty tpd
-              False -> pure []
+              False -> []
 
 
 ------------------------------------------------------------------------------
@@ -281,14 +275,14 @@ filterTypeProjection
     -> (a -> TacticProvider)
     -> TacticProvider
 filterTypeProjection p tp tpd =
-  fmap join $ for (p $ unCType $ jGoal $ tpd_jdg tpd) $ \a ->
+  join $ for (p $ unCType $ jGoal $ tpd_jdg tpd) $ \a ->
       tp a tpd
 
 
 ------------------------------------------------------------------------------
 -- | Get access to the 'Config' when building a 'TacticProvider'.
 withConfig :: (Config -> TacticProvider) -> TacticProvider
-withConfig tp tpd = tp (tpd_config tpd) tpd
+withConfig tp tpd = tp (le_config $ tpd_lspEnv tpd) tpd
 
 
 ------------------------------------------------------------------------------
@@ -296,11 +290,13 @@ withConfig tp tpd = tp (tpd_config tpd) tpd
 -- given by 'provide' are always available.
 provide :: TacticCommand -> T.Text -> TacticProvider
 provide tc name TacticProviderData{..} = do
-  let title = tacticTitle tc name
-      params = TacticParams { tp_file = tpd_uri , tp_range = tpd_range , tp_var_name = name }
-      cmd = mkLspCommand tpd_plid (tcCommandId tc) title (Just [toJSON params])
+  let LspEnv{..} = tpd_lspEnv
+      FileContext{..} = le_fileContext
+      title = tacticTitle tc name
+      -- TODO(sandy): fromJust
+      params = TacticParams { tp_file = fc_uri , tp_range = fromJust fc_range , tp_var_name = name }
+      cmd = mkLspCommand le_pluginId (tcCommandId tc) title (Just [toJSON params])
   pure
-    $ pure
     $ InR
     $ CodeAction
         { _title       = title
