@@ -20,21 +20,11 @@ import           Wingman.StaticPlugin
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId
   = installInteractions
-      ( fmap makeTacticCodeAction [minBound .. maxBound]
+      ( emptyCaseInteraction
+      : fmap makeTacticCodeAction [minBound .. maxBound]
       )
   $ (defaultPluginDescriptor plId)
-      { pluginCommands =
-          mconcat
-            [ pure $
-                PluginCommand
-                emptyCaseLensCommandId
-                "Complete the empty case"
-                workspaceEditHandler
-            ]
-      , pluginHandlers = mconcat
-          [ mkPluginHandler STextDocumentCodeLens codeLensProvider
-          , mkPluginHandler STextDocumentHover hoverProvider
-          ]
+      { pluginHandlers = mkPluginHandler STextDocumentHover hoverProvider
       , pluginRules = wingmanRules plId
       , pluginConfigDescriptor =
           defaultConfigDescriptor
