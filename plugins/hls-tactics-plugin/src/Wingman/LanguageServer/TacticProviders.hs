@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Wingman.LanguageServer.TacticProviders
   ( commandProvider
@@ -25,11 +26,11 @@ import           Development.IDE.Core.UseStale (Tracked, Age(..))
 import           Development.IDE.GHC.Compat
 import           GHC.Generics
 import           GHC.LanguageExtensions.Type (Extension (LambdaCase))
-import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Types hiding (SemanticTokenAbsolute (..), SemanticTokenRelative (..))
 import           OccName
 import           Prelude hiding (span)
+import           Wingman.AbstractLSP.Types
 import           Wingman.Auto
 import           Wingman.GHC
 import           Wingman.Judgements
@@ -37,7 +38,6 @@ import           Wingman.Machinery (useNameFromHypothesis, uncoveredDataCons)
 import           Wingman.Metaprogramming.Parser (parseMetaprogram)
 import           Wingman.Tactics
 import           Wingman.Types
-import Wingman.AbstractLSP.Types
 
 
 ------------------------------------------------------------------------------
@@ -190,7 +190,7 @@ guardLength f as = bool [] as $ f $ length as
 -- UI.
 type TacticProvider
      = TacticProviderData
-    -> [Command |? CodeAction]
+    -> [(Metadata, T.Text)]
 
 
 data TacticProviderData = TacticProviderData
@@ -289,25 +289,8 @@ withConfig tp tpd = tp (le_config $ tpd_lspEnv tpd) tpd
 -- | Terminal constructor for providing context-sensitive tactics. Tactics
 -- given by 'provide' are always available.
 provide :: TacticCommand -> T.Text -> TacticProvider
-provide tc name TacticProviderData{..} = do
-  let LspEnv{..} = tpd_lspEnv
-      FileContext{..} = le_fileContext
-      title = tacticTitle tc name
-      -- TODO(sandy): fromJust
-      params = TacticParams { tp_file = fc_uri , tp_range = fromJust fc_range , tp_var_name = name }
-      cmd = mkLspCommand le_pluginId (tcCommandId tc) title (Just [toJSON params])
-  pure
-    $ InR
-    $ CodeAction
-        { _title       = title
-        , _kind        = Just $ mkTacticKind tc
-        , _diagnostics = Nothing
-        , _isPreferred = Just $ tacticPreferred tc
-        , _disabled    = Nothing
-        , _edit        = Nothing
-        , _command     = Just cmd
-        , _xdata       = Nothing
-        }
+provide tc name _ =
+  pure $ (Metadata (tacticTitle tc name) (mkTacticKind tc) (tacticPreferred tc), name)
 
 
 ------------------------------------------------------------------------------
@@ -341,7 +324,7 @@ liftLambdaCase nil f t =
 -- algebraic types.
 destructFilter :: Type -> Type -> Bool
 destructFilter _ (algebraicTyCon -> Just _) = True
-destructFilter _ _                          = False
+destructFilter _ _ = False
 
 
 ------------------------------------------------------------------------------
@@ -350,5 +333,9 @@ destructFilter _ _                          = False
 destructPunFilter :: Type -> Type -> Bool
 destructPunFilter _ (algebraicTyCon -> Just tc) =
   any (not . null . dataConFieldLabels) $ tyConDataCons tc
-destructPunFilter _ _                          = False
+destructPunFilter _ _ = False
+
+
+instance IsContinuationSort TacticCommand where
+  toCommandId = tcCommandId
 
