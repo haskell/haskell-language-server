@@ -29,6 +29,8 @@ import           Wingman.Range
 import           Wingman.Types
 
 
+------------------------------------------------------------------------------
+-- | An 'Interaction' for a 'TacticCommand'.
 makeTacticCodeAction
     :: TacticCommand
     -> Interaction
@@ -75,6 +77,8 @@ seconds :: Num a => a
 seconds = 1e6
 
 
+------------------------------------------------------------------------------
+-- | Transform some tactic errors into a 'UserFacingMessage'.
 mkUserFacingMessage :: [TacticError] -> UserFacingMessage
 mkUserFacingMessage errs
   | elem OutOfGas errs = NotEnoughGas
@@ -116,6 +120,8 @@ graftHole span rtr
   $ rtr_extract rtr
 
 
+------------------------------------------------------------------------------
+-- | Keep a fixity if one was present in the 'HsMatchContext'.
 matchContextFixity :: HsMatchContext p -> Maybe LexicalFixity
 matchContextFixity (FunRhs _ l _) = Just l
 matchContextFixity _ = Nothing

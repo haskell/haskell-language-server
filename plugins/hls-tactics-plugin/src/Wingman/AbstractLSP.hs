@@ -30,7 +30,15 @@ import           Wingman.LanguageServer (getTacticConfig, getIdeDynflags, mkWork
 import           Wingman.Types
 
 
-installInteractions :: [Interaction] -> PluginDescriptor IdeState -> PluginDescriptor IdeState
+------------------------------------------------------------------------------
+-- | Attact the 'Interaction's to a 'PluginDescriptor'. Interactions are
+-- self-contained request/response pairs that abstract over the LSP, and
+-- provide a unified interface for doing interesting things, without needing to
+-- dive into the underlying API too directly.
+installInteractions
+    :: [Interaction]
+    -> PluginDescriptor IdeState
+    -> PluginDescriptor IdeState
 installInteractions is desc =
   let plId = pluginId desc
    in desc
@@ -39,6 +47,8 @@ installInteractions is desc =
         }
 
 
+------------------------------------------------------------------------------
+-- | Extract 'PluginHandlers' from 'Interaction's.
 buildHandlers
     :: [Interaction]
     -> PluginHandlers IdeState
@@ -51,6 +61,8 @@ buildHandlers cs =
         mkPluginHandler STextDocumentCodeLens   $ codeLensProvider   @target (c_sort c) k
 
 
+------------------------------------------------------------------------------
+-- | Extract a 'PluginCommand' from an 'Interaction'.
 buildCommand
   :: PluginId
   -> Interaction
@@ -59,17 +71,19 @@ buildCommand plId (Interaction (c :: Continuation sort target b)) =
   PluginCommand
     { commandId = toCommandId $ c_sort c
     , commandDesc = T.pack ""
-    , commandFunc = runCodeAction plId c
+    , commandFunc = runContinuation plId c
     }
 
 
-runCodeAction
+------------------------------------------------------------------------------
+-- | Boilerplate for running a 'Continuation' as part of an LSP command.
+runContinuation
     :: forall sort a b
      . IsTarget a
     => PluginId
     -> Continuation sort a b
     -> CommandFunction IdeState (FileContext, b)
-runCodeAction plId cont state (fc, b) = do
+runContinuation plId cont state (fc, b) = do
   fromMaybeT
     (Left $ ResponseError
               { _code = InternalError
@@ -77,7 +91,7 @@ runCodeAction plId cont state (fc, b) = do
               , _xdata =  Nothing
               } ) $ do
       env@LspEnv{..} <- buildEnv state plId fc
-      let stale a = runStaleIde "runCodeAction" state (fc_nfp le_fileContext) a
+      let stale a = runStaleIde "runContinuation" state (fc_nfp le_fileContext) a
       args <- fetchTargetArgs @a env
       c_runCommand cont env args fc b >>= \case
         ErrorMessages errs ->
@@ -93,6 +107,8 @@ runCodeAction plId cont state (fc, b) = do
       pure $ Right A.Null
 
 
+------------------------------------------------------------------------------
+-- | Push a 'WorkspaceEdit' to the client.
 sendEdits :: WorkspaceEdit -> MaybeT (LspM Plugin.Config) ()
 sendEdits edits =
   void $ lift $
@@ -102,6 +118,8 @@ sendEdits edits =
       (const $ pure ())
 
 
+------------------------------------------------------------------------------
+-- | Push a 'UserFacingMessage' to the client.
 showUserFacingMessage
     :: UserFacingMessage
     -> MaybeT (LspM Plugin.Config) ()
@@ -109,6 +127,9 @@ showUserFacingMessage ufm =
   void $ lift $ showLspMessage $ mkShowMessageParams ufm
 
 
+------------------------------------------------------------------------------
+-- | Build an 'LspEnv', which contains the majority of things we need to know
+-- in a 'Continuation'.
 buildEnv
     :: IdeState
     -> PluginId
@@ -126,6 +147,8 @@ buildEnv state plId fc = do
     }
 
 
+------------------------------------------------------------------------------
+-- | Lift a 'Continuation' into an LSP CodeAction.
 codeActionProvider
     :: forall target sort b
      . (IsContinuationSort sort, A.ToJSON b, IsTarget target)
@@ -154,6 +177,8 @@ codeActionProvider sort k state plId
 codeActionProvider _ _ _ _ _ = pure $ Right $ List []
 
 
+------------------------------------------------------------------------------
+-- | Lift a 'Continuation' into an LSP CodeLens.
 codeLensProvider
     :: forall target sort b
      . (IsContinuationSort sort, A.ToJSON b, IsTarget target)
@@ -175,6 +200,7 @@ codeLensProvider sort k state plId
         env <- buildEnv state plId fc
         args <- fetchTargetArgs @target env
         actions <- k env args
+        -- TODO(sandy): NEED TO STICK THE RANGE INTO HERE
         pure
           $ Right
           $ List
@@ -182,6 +208,8 @@ codeLensProvider sort k state plId
 codeLensProvider _ _ _ _ _ = pure $ Right $ List []
 
 
+------------------------------------------------------------------------------
+-- | Build a 'LSP.CodeAction'.
 makeCodeAction
     :: (A.ToJSON b, IsContinuationSort sort)
     => PluginId
@@ -204,6 +232,9 @@ makeCodeAction plId fc sort (Metadata title kind preferred) b =
         , _xdata       = Nothing
         }
 
+
+------------------------------------------------------------------------------
+-- | Build a 'LSP.CodeLens'.
 makeCodeLens
     :: (A.ToJSON b, IsContinuationSort sort)
     => PluginId
@@ -214,6 +245,7 @@ makeCodeLens
     -> LSP.CodeLens
 makeCodeLens plId sort range (Metadata title _ _) b =
   let cmd_id = toCommandId sort
+      -- TODO(sandy): BUG HERE. NEED TO PUSH THE FILE CONTEXT TOO
       cmd = mkLspCommand plId cmd_id title $ Just [A.toJSON b]
    in LSP.CodeLens
         { _range = range
