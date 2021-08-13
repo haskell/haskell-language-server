@@ -1,10 +1,11 @@
-{-# LANGUAGE QuantifiedConstraints #-}
-{-# LANGUAGE StandaloneDeriving    #-}
-{-# LANGUAGE UndecidableInstances  #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE AllowAmbiguousTypes    #-}
+{-# LANGUAGE KindSignatures         #-}
+{-# LANGUAGE QuantifiedConstraints  #-}
+{-# LANGUAGE RecordWildCards        #-}
+{-# LANGUAGE StandaloneDeriving     #-}
+{-# LANGUAGE TypeFamilies           #-}
+{-# LANGUAGE UndecidableInstances   #-}
+
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 -- | A plugin that uses tactics to synthesize code
@@ -28,8 +29,8 @@ import qualified Language.LSP.Types as LSP
 import           Language.LSP.Types hiding (CodeLens, CodeAction)
 import           Wingman.EmptyCase (fromMaybeT)
 import           Wingman.LanguageServer (judgementForHole, getTacticConfig, getIdeDynflags)
-import           Wingman.LanguageServer.TacticProviders
 import           Wingman.Types
+import qualified Data.Text as T
 
 -- STILL TO DO:
 --
@@ -44,19 +45,14 @@ import           Wingman.Types
 data Metadata
   = CodeActionMetadata
       { md_title     :: Text
-      , md_kind      :: Text
+      , md_kind      :: CodeActionKind
       , md_preferred :: Bool
       }
   | CodeLensMetadata
       { md_title     :: Text
       }
-  deriving stock (Eq, Ord, Show)
+  deriving stock (Eq, Show)
 
-
-newtype Interaction node = Interaction
-  { getInteractions ::
-      LHsBinds GhcTc -> [(Metadata, Continuation node (IO ()))]
-  }
 
 data InteractionSort
   = CodeAction
@@ -65,8 +61,9 @@ data InteractionSort
 
 -- TODO(sandy): a is the data we want to fetch on both sides
 -- b is the data we share when synthesizing commands to running them
-data Continuation (a :: Target) b = Continuation
-  { c_interactionSort :: InteractionSort
+data Continuation sort (a :: Target) b = Continuation
+  { c_sort :: sort
+  , c_interactionSort :: InteractionSort
   , c_makeCommand
         :: LspEnv
         -> TargetArgs a
@@ -74,7 +71,7 @@ data Continuation (a :: Target) b = Continuation
            -- a high-level function to actually build the command
            --
            -- should produce a 'b'
-        -> IO [Command |? LSP.CodeAction]
+        -> MaybeT (LspM Plugin.Config) [(Metadata, b)]
   , c_runCommand
         :: LspEnv
         -> TargetArgs a
@@ -114,18 +111,18 @@ class IsTarget (t :: Target) where
       :: LspEnv
       -> MaybeT (LspM Plugin.Config) (TargetArgs t)
 
-contToCommand :: Continuation a b -> PluginCommand IdeState
+contToCommand :: Continuation sort a b -> PluginCommand IdeState
 contToCommand = undefined
 
 buildHandlers
-    :: IsTarget a
-    => [Continuation a b]
+    :: (Show sort, IsTarget a, A.ToJSON b )
+    => [Continuation sort a b]
     -> PluginHandlers IdeState
 buildHandlers cs =
   flip foldMap cs $ \c ->
     case c_interactionSort c of
       CodeAction -> mkPluginHandler STextDocumentCodeAction $ codeActionProvider c
-      CodeLens -> mkPluginHandler STextDocumentCodeLens $ undefined
+      CodeLens   -> mkPluginHandler STextDocumentCodeLens $ undefined
 
 instance IsTarget 'HoleTarget where
   type TargetArgs 'HoleTarget = HoleJudgment
@@ -136,10 +133,10 @@ instance IsTarget 'HoleTarget where
 
 
 runCodeAction
-    :: forall a b
+    :: forall sort a b
      . IsTarget a
     => PluginId
-    -> Continuation a b
+    -> Continuation sort a b
     -> CommandFunction IdeState (FileContext, b)
 runCodeAction plId cont state (fc, b) =
   fromMaybeT (Left undefined) $ do
@@ -178,9 +175,9 @@ buildEnv state plId fc = do
     }
 
 codeActionProvider
-    :: forall target b
-     . IsTarget target
-    => Continuation target b
+    :: forall sort target b
+     . (Show sort, A.ToJSON b, IsTarget target)
+    => Continuation sort target b
     -> PluginMethodHandler IdeState TextDocumentCodeAction
 codeActionProvider
     c state plId
@@ -194,33 +191,63 @@ codeActionProvider
                    }
         env <- buildEnv state plId fc
         args <- fetchTargetArgs @target env
-        actions <- lift $ liftIO $ c_makeCommand c env args
-        pure $ Right $ List actions
+        actions <- c_makeCommand c env args
+        pure $ Right $ List $ fmap (uncurry $ makeCommands plId $ c_sort c) actions
 codeActionProvider _ _ _ _ = pure $ Right $ List []
 
 
-makeTacticCodeAction
-    :: TacticCommand
-    -> Continuation 'HoleTarget b
-makeTacticCodeAction cmd =
-  Continuation CodeAction
-    (\LspEnv{..} hj -> do
-      let FileContext{..} = le_fileContext
-      case fc_range of
-        Nothing -> do
-          traceM "Tried to run makeTacticCodeAction but no range was given"
-          pure []
-        Just range -> do
-          commandProvider cmd $
-            -- TODO(sandy): this is stupid. just use the same env
-            TacticProviderData
-              { tpd_dflags    = le_dflags
-              , tpd_config    = le_config
-              , tpd_plid      = le_pluginId
-              , tpd_uri       = fc_uri
-              , tpd_range     = range
-              , tpd_jdg       = hj_jdg hj
-              , tpd_hole_sort = hj_hole_sort hj
-              }
-    ) undefined
+makeCommands
+    :: (A.ToJSON b, Show sort)
+    => PluginId
+    -> sort
+    -> Metadata
+    -> b
+    -> Command |? LSP.CodeAction
+makeCommands plId sort (CodeActionMetadata title kind preferred) b =
+  let cmd_id = CommandId $ T.pack $ show sort
+      cmd = mkLspCommand plId cmd_id title $ Just [A.toJSON b]
+   in InR
+    $ LSP.CodeAction
+        { _title       = title
+        , _kind        = Just kind
+        , _diagnostics = Nothing
+        , _isPreferred = Just preferred
+        , _disabled    = Nothing
+        , _edit        = Nothing
+        , _command     = Just cmd
+        , _xdata       = Nothing
+        }
+makeCommands plId sort (CodeLensMetadata title) b =
+  let cmd_id = undefined
+      cmd = mkLspCommand plId cmd_id title $ Just [A.toJSON b]
+      range = undefined
+   -- TODO(sandy): omfg LSP is such an asshole
+   in undefined -- InR $ LSP.CodeLens range (Just cmd) Nothing
+
+
+-- makeTacticCodeAction
+--     :: TacticCommand
+--     -> Continuation 'HoleTarget b
+-- makeTacticCodeAction cmd =
+--   Continuation CodeAction
+--     (\LspEnv{..} hj -> do
+--       let FileContext{..} = le_fileContext
+--       case fc_range of
+--         Nothing -> do
+--           traceM "Tried to run makeTacticCodeAction but no range was given"
+--           pure []
+--         Just range -> do
+--           undefined
+--           lift $ liftIO $ commandProvider cmd $
+--             -- TODO(sandy): this is stupid. just use the same env
+--             TacticProviderData
+--               { tpd_dflags    = le_dflags
+--               , tpd_config    = le_config
+--               , tpd_plid      = le_pluginId
+--               , tpd_uri       = fc_uri
+--               , tpd_range     = range
+--               , tpd_jdg       = hj_jdg hj
+--               , tpd_hole_sort = hj_hole_sort hj
+--               }
+--     ) undefined
 
