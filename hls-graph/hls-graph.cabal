@@ -14,11 +14,19 @@ maintainer:    alan.zimm@gmail.com
 copyright:     The Haskell IDE Team
 category:      Development
 build-type:    Simple
+data-files:
+    html/profile.html
+    html/shake.js
 
 flag pedantic
   description: Enable -Werror
   default:     False
   manual:      True
+
+flag embed-files
+  default: False
+  manual: True
+  description: Embed data files into the shake library
 
 source-repository head
   type:     git
@@ -38,7 +46,12 @@ library
     Development.IDE.Graph.Internal.Database
     Development.IDE.Graph.Internal.Ids
     Development.IDE.Graph.Internal.Intern
+    Development.IDE.Graph.Internal.Paths
+    Development.IDE.Graph.Internal.Profile
     Development.IDE.Graph.Internal.Types
+    Paths_hls_graph
+
+  autogen-modules:  Paths_hls_graph
 
   hs-source-dirs:     src
   build-depends:
@@ -46,11 +59,23 @@ library
     , base >=4.12 && <5
     , bytestring
     , containers
+    , directory
     , extra
+    , filepath
+    , js-dgtable
+    , js-flot
+    , js-jquery
     , primitive
     , shake >= 0.19.4
+    , time
     , transformers
     , unordered-containers
+
+  if flag(embed-files)
+        cpp-options: -DFILE_EMBED
+        build-depends:
+            file-embed >= 0.0.11,
+            template-haskell
 
   ghc-options:
     -Wall -Wredundant-constraints -Wno-name-shadowing

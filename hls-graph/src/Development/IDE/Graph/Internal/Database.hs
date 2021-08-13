@@ -34,6 +34,7 @@ import qualified Development.Shake                     as Shake
 import           Development.Shake.Classes
 import qualified Development.Shake.Rule                as Shake
 import           System.IO.Unsafe
+import           System.Time.Extra                     (duration)
 
 newDatabase :: Dynamic -> TheRules -> IO Database
 newDatabase databaseExtra databaseRules = do
@@ -154,14 +155,16 @@ spawn :: Database -> Key -> Id -> Shake.RunMode -> Maybe Result -> IO Result
 spawn db@Database{..} key id mode result = do
     let act = runRule databaseRules key (fmap resultData result) mode
     deps <- newIORef $ Just []
-    Shake.RunResult{..} <- runReaderT (fromAction act) $ SAction db deps
+    (execution, Shake.RunResult{..}) <-
+        duration $ runReaderT (fromAction act) $ SAction db deps
     built <- readIORef databaseStep
     deps <- readIORef deps
     let changed = if runChanged == Shake.ChangedRecomputeDiff then built else maybe built resultChanged result
+        built' = if runChanged /= Shake.ChangedNothing then built else changed
         -- only update the deps when the rule ran with changes
-    let actualDeps = if runChanged /= Shake.ChangedNothing then deps else previousDeps
+        actualDeps = if runChanged /= Shake.ChangedNothing then deps else previousDeps
         previousDeps= resultDeps =<< result
-    let res = Result runValue built changed actualDeps runStore
+    let res = Result runValue built' changed actualDeps execution runStore
     case actualDeps of
         Just deps | not(null deps) &&
                     runChanged /= Shake.ChangedNothing

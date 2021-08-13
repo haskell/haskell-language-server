@@ -16,6 +16,7 @@ import           Development.IDE.Graph.Classes
 import           Development.IDE.Graph.Internal.Action
 import           Development.IDE.Graph.Internal.Database
 import           Development.IDE.Graph.Internal.Options
+import           Development.IDE.Graph.Internal.Profile  (writeProfile)
 import           Development.IDE.Graph.Internal.Rules
 import           Development.IDE.Graph.Internal.Types
 
@@ -41,10 +42,6 @@ shakeRunDatabase = shakeRunDatabaseForKeys Nothing
 unvoid :: Functor m => m () -> m a
 unvoid = fmap undefined
 
--- Noop
-shakeProfileDatabase :: ShakeDatabase -> FilePath -> IO ()
-shakeProfileDatabase _ file = writeFile file ""
-
 type ShakeValue a = (Show a, Typeable a, Eq a, Hashable a, NFData a, Binary a)
 
 shakeRunDatabaseForKeys
@@ -57,3 +54,7 @@ shakeRunDatabaseForKeys keysChanged (ShakeDatabase lenAs1 as1 db) as2 = do
     incDatabase db keysChanged
     as <- fmap (drop lenAs1) $ runActions db $ map unvoid as1 ++ as2
     return (as, [])
+
+-- | Given a 'ShakeDatabase', write an HTML profile to the given file about the latest run.
+shakeProfileDatabase :: ShakeDatabase -> FilePath -> IO ()
+shakeProfileDatabase (ShakeDatabase _ _ s) file = writeProfile file s

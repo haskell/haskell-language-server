@@ -21,6 +21,7 @@ import           Data.Typeable
 import           Development.IDE.Graph.Internal.Ids
 import           Development.IDE.Graph.Internal.Intern
 import           Development.Shake.Classes
+import           System.Time.Extra                     (Seconds)
 
 
 unwrapDynamic :: forall a . Typeable a => Dynamic -> a
@@ -59,7 +60,7 @@ data SAction = SAction {
 -- DATABASE
 
 newtype Step = Step Int
-    deriving (Eq,Ord)
+    deriving (Eq,Ord,Hashable)
 
 data Key = forall a . (Typeable a, Eq a, Hashable a, Show a) => Key a
 
@@ -91,12 +92,18 @@ data Status
     | Dirty (Maybe Result)
     | Running (IO Result) (Maybe Result)
 
+getResult :: Status -> Maybe Result
+getResult (Clean re)       = Just re
+getResult (Dirty m_re)     = m_re
+getResult (Running _ m_re) = m_re
+
 data Result = Result {
-    resultValue :: !Value,
-    resultBuilt :: !Step,
-    resultChanged :: !Step,
-    resultDeps :: !(Maybe [Id]), -- Nothing = alwaysRerun
-    resultData :: BS.ByteString
+    resultValue     :: !Value,
+    resultBuilt     :: !Step, -- ^ the step when it was actually run
+    resultChanged   :: !Step, -- ^ the step when it last changed
+    resultDeps      :: !(Maybe [Id]), -- ^ Nothing = alwaysRerun
+    resultExecution :: !Seconds, -- ^ How long it took, last time it ran
+    resultData      :: BS.ByteString
     }
 
 
