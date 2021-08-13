@@ -1,7 +1,9 @@
-{-# LANGUAGE AllowAmbiguousTypes    #-}
-{-# LANGUAGE RecordWildCards        #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE StandaloneDeriving  #-}
+
+{-# LANGUAGE NoMonoLocalBinds    #-}
+{-# OPTIONS_GHC -Wno-orphans     #-}
 
 module Wingman.AbstractLSP (buildHandlers, buildCommand, testInteraction) where
 
@@ -17,15 +19,17 @@ import           Development.IDE (IdeState)
 import           Development.IDE.Core.UseStale
 import qualified Ide.Plugin.Config as Plugin
 import           Ide.Types
-import           Language.LSP.Server (LspM, sendRequest)
+import           Language.LSP.Server (LspM, sendRequest, getClientCapabilities)
 import qualified Language.LSP.Types as LSP
 import           Language.LSP.Types hiding (CodeLens, CodeAction)
 import           Wingman.AbstractLSP.Types
 import           Wingman.EmptyCase (fromMaybeT)
-import           Wingman.LanguageServer (getTacticConfig, getIdeDynflags)
+import           Wingman.LanguageServer (getTacticConfig, getIdeDynflags, mkWorkspaceEdits, runStaleIde)
 import           Wingman.Types
 import Data.Functor ((<&>))
 import Data.Maybe (fromJust)
+import Development.IDE.GHC.ExactPrint (GetAnnotatedParsedSource(GetAnnotatedParsedSource))
+import Control.Applicative (empty)
 
 
 buildHandlers
@@ -46,7 +50,7 @@ buildCommand
   -> PluginCommand IdeState
 buildCommand plId (Interaction (c :: Continuation sort target b)) =
   PluginCommand
-    { commandId = CommandId $ T.pack $ show (c_sort c)
+    { commandId = toCommandId $ c_sort c
     , commandDesc = T.pack ""
     , commandFunc = runCodeAction plId c
     }
@@ -58,25 +62,37 @@ runCodeAction
     => PluginId
     -> Continuation sort a b
     -> CommandFunction IdeState (FileContext, b)
-runCodeAction plId cont state (fc, b) =
+runCodeAction plId cont state (fc, b) = do
   fromMaybeT
     (Left $ ResponseError
               { _code = InternalError
               , _message = T.pack "TODO(sandy)"
               , _xdata =  Nothing
               } ) $ do
-      env <- buildEnv state plId fc
+      env@LspEnv{..} <- buildEnv state plId fc
+      let stale a = runStaleIde "runCodeAction" state (fc_nfp le_fileContext) a
       args <- fetchTargetArgs @a env
       c_runCommand cont env args fc b >>= \case
-        Left errs ->
+        ErrorMessages errs ->
           traverse_ showUserFacingMessage errs
-        Right edits ->
-          void $ lift $
-            sendRequest
-              SWorkspaceApplyEdit
-              (ApplyWorkspaceEditParams Nothing edits)
-              (const $ pure ())
+        RawEdit edits -> sendEdits edits
+        GraftEdit gr -> do
+          ccs <- lift getClientCapabilities
+          TrackedStale pm _ <- mapMaybeT liftIO $ stale GetAnnotatedParsedSource
+          case mkWorkspaceEdits le_dflags ccs (fc_uri le_fileContext) (unTrack pm) gr of
+            -- TODO(sandy): fixme
+            Left _errs -> empty
+            Right edits -> sendEdits edits
       pure $ Right A.Null
+
+
+sendEdits :: WorkspaceEdit -> MaybeT (LspM Plugin.Config) ()
+sendEdits edits =
+  void $ lift $
+    sendRequest
+      SWorkspaceApplyEdit
+      (ApplyWorkspaceEditParams Nothing edits)
+      (const $ pure ())
 
 
 showUserFacingMessage :: UserFacingMessage -> MaybeT (LspM Plugin.Config) ()
@@ -102,16 +118,15 @@ buildEnv state plId fc = do
 
 codeActionProvider
     :: forall target sort b
-     . (Show sort, A.ToJSON b, IsTarget target)
+     . (IsContinuationSort sort, A.ToJSON b, IsTarget target)
     => sort
     -> ( LspEnv
      -> TargetArgs target
      -> MaybeT (LspM Plugin.Config) [(Metadata, b)]
        )
     -> PluginMethodHandler IdeState TextDocumentCodeAction
-codeActionProvider
-    sort k state plId
-    (CodeActionParams _ _ (TextDocumentIdentifier uri) range _)
+codeActionProvider sort k state plId
+                   (CodeActionParams _ _ (TextDocumentIdentifier uri) range _)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
       fromMaybeT (Right $ List []) $ do
         let fc = FileContext
@@ -131,16 +146,15 @@ codeActionProvider _ _ _ _ _ = pure $ Right $ List []
 
 codeLensProvider
     :: forall target sort b
-     . (Show sort, A.ToJSON b, IsTarget target)
+     . (IsContinuationSort sort, A.ToJSON b, IsTarget target)
     => sort
     -> ( LspEnv
      -> TargetArgs target
      -> MaybeT (LspM Plugin.Config) [(Range, Metadata, b)]
       )
     -> PluginMethodHandler IdeState TextDocumentCodeLens
-codeLensProvider
-    sort k state plId
-    (CodeLensParams _ _ (TextDocumentIdentifier uri))
+codeLensProvider sort k state plId
+                 (CodeLensParams _ _ (TextDocumentIdentifier uri))
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
       fromMaybeT (Right $ List []) $ do
         let fc = FileContext
@@ -159,7 +173,7 @@ codeLensProvider _ _ _ _ _ = pure $ Right $ List []
 
 
 makeCodeAction
-    :: (A.ToJSON b, Show sort)
+    :: (A.ToJSON b, IsContinuationSort sort)
     => PluginId
     -> FileContext
     -> sort
@@ -167,7 +181,7 @@ makeCodeAction
     -> b
     -> LSP.CodeAction
 makeCodeAction plId fc sort (Metadata title kind preferred) b =
-  let cmd_id = CommandId $ T.pack $ show sort
+  let cmd_id = toCommandId sort
       cmd = mkLspCommand plId cmd_id title $ Just [A.toJSON (fc, b)]
    in LSP.CodeAction
         { _title       = title
@@ -181,7 +195,7 @@ makeCodeAction plId fc sort (Metadata title kind preferred) b =
         }
 
 makeCodeLens
-    :: (A.ToJSON b, Show sort)
+    :: (A.ToJSON b, IsContinuationSort sort)
     => PluginId
     -> sort
     -> Range
@@ -189,7 +203,7 @@ makeCodeLens
     -> b
     -> LSP.CodeLens
 makeCodeLens plId sort range (Metadata title _ _) b =
-  let cmd_id = CommandId $ T.pack $ show sort
+  let cmd_id = toCommandId sort
       cmd = mkLspCommand plId cmd_id title $ Just [A.toJSON b]
    in LSP.CodeLens
         { _range = range
@@ -204,7 +218,7 @@ testInteraction =
     , c_makeCommand = SynthesizeCodeAction $ \_ hj -> do
         pure $ [0..2] <&> \ix -> (Metadata (T.pack $ "Hello from AbstractLSP: " <> show (_jGoal $ hj_jdg hj)) (CodeActionUnknown $ T.pack "some-kind") False, ix)
     , c_runCommand = \_ _ fc n -> do
-        pure $ Right $ WorkspaceEdit
+        pure $ RawEdit $ WorkspaceEdit
           { _changes = Nothing
           , _documentChanges = pure $ pure $ InL $ TextDocumentEdit
               { _textDocument = VersionedTextDocumentIdentifier {_uri = fc_uri fc, _version = Just 0}
@@ -218,6 +232,7 @@ testInteraction =
     }
 
 deriving newtype instance Applicative List
+
 
 -- makeTacticCodeAction
 --     :: TacticCommand

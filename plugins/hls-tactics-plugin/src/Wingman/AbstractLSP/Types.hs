@@ -12,6 +12,7 @@ import           Control.Monad.Trans.Maybe (MaybeT (MaybeT), mapMaybeT)
 import qualified Data.Aeson as A
 import           Data.Text (Text)
 import           Development.IDE (IdeState)
+import           Development.IDE.GHC.ExactPrint (Graft)
 import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.Compat hiding (Target)
 import           GHC.Generics (Generic)
@@ -25,7 +26,7 @@ import           Wingman.Types
 
 data Interaction where
   Interaction
-      :: (IsTarget target, Show sort, A.ToJSON b, A.FromJSON b)
+      :: (IsTarget target, IsContinuationSort sort, A.ToJSON b, A.FromJSON b)
       => Continuation sort target b
       -> Interaction
 
@@ -52,6 +53,15 @@ data SynthesizeCommand a b
       )
 
 
+class IsContinuationSort a where
+  toCommandId :: a -> CommandId
+
+data ContinuationResult
+  = ErrorMessages [UserFacingMessage]
+  | RawEdit WorkspaceEdit
+  | GraftEdit (Graft (Either String) ParsedSource)
+
+
 data Continuation sort a b = Continuation
   { c_sort :: sort
   , c_makeCommand :: SynthesizeCommand a b
@@ -60,8 +70,7 @@ data Continuation sort a b = Continuation
         -> TargetArgs a
         -> FileContext
         -> b
-        -> MaybeT (LspM Plugin.Config)
-                  (Either [UserFacingMessage] WorkspaceEdit)
+        -> MaybeT (LspM Plugin.Config) ContinuationResult
   }
 
 
