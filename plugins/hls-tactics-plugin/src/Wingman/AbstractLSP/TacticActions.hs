@@ -4,39 +4,36 @@
 
 module Wingman.AbstractLSP.TacticActions where
 
-import Data.Foldable
-import qualified Data.Text as T
+import           Control.Monad (when)
+import           Control.Monad.IO.Class (liftIO)
+import           Control.Monad.Trans (lift)
+import           Control.Monad.Trans.Maybe (mapMaybeT)
+import           Data.Foldable
+import           Data.Maybe (listToMaybe)
+import           Data.Proxy
 import           Development.IDE hiding (rangeToRealSrcSpan)
 import           Development.IDE.Core.UseStale
-import           Ide.Types (PluginId, CommandFunction)
+import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.ExactPrint
+import           Generics.SYB.GHC (mkBindListT, everywhereM')
+import           GhcPlugins (occName)
+import           System.Timeout (timeout)
 import           Wingman.AbstractLSP.Types
+import           Wingman.CaseSplit
+import           Wingman.GHC (liftMaybe, isHole, pattern AMatch, unXPat)
+import           Wingman.Judgements (jNeedsToBindArgs)
+import           Wingman.LanguageServer (runStaleIde)
 import           Wingman.LanguageServer.TacticProviders
+import           Wingman.Machinery (runTactic, scoreSolution)
+import           Wingman.Range
 import           Wingman.Types
-import Development.IDE.GHC.Compat
-import Wingman.LanguageServer (runStaleIde)
-import System.Timeout (timeout)
-import Control.Monad.Trans (lift)
-import Wingman.GHC (liftMaybe, isHole, pattern AMatch, unXPat)
-import Development.IDE.GHC.ExactPrint
-import Control.Monad.Trans.Maybe (mapMaybeT)
-import Control.Monad.IO.Class (liftIO)
-import Wingman.Range
-import Wingman.Machinery (runTactic, scoreSolution)
-import GhcPlugins (occName)
-import Language.Haskell.GHC.ExactPrint
-import Data.Proxy
-import Control.Monad (when)
-import Wingman.CaseSplit
-import Data.Maybe (listToMaybe)
-import Wingman.Judgements (jNeedsToBindArgs)
-import Generics.SYB.GHC (mkBindListT, everywhereM')
 
 
 makeTacticCodeAction
     :: TacticCommand
-    -> Continuation TacticCommand HoleTarget T.Text
+    -> Interaction
 makeTacticCodeAction cmd =
-  Continuation cmd
+  Interaction $ Continuation @_ @HoleTarget cmd
     (SynthesizeCodeAction $ \env@LspEnv{..} hj -> do
       pure $ commandProvider cmd $
             TacticProviderData
@@ -67,21 +64,22 @@ makeTacticCodeAction cmd =
                   traceMX "solution" $ rtr_extract rtr
                   pure $ GraftEdit $ graftHole (RealSrcSpan $ unTrack pm_span) rtr
 
-        case res of
-          Nothing -> do
-            -- showUserFacingMessage TimedOut
-            undefined
-          Just c -> pure c
+        pure $ case res of
+          Nothing -> ErrorMessages $ pure TimedOut
+          Just c  -> c
+
 
 ------------------------------------------------------------------------------
 -- | The number of microseconds in a second
 seconds :: Num a => a
 seconds = 1e6
 
+
 mkUserFacingMessage :: [TacticError] -> UserFacingMessage
 mkUserFacingMessage errs
   | elem OutOfGas errs = NotEnoughGas
 mkUserFacingMessage _ = TacticErrors
+
 
 ------------------------------------------------------------------------------
 -- | Graft a 'RunTacticResults' into the correct place in an AST. Correctly
@@ -151,16 +149,3 @@ graftDecl dflags dst ix make_decl (L src (AMatch (FunRhs (L _ name) _ _) pats _)
         _ -> lift $ Left "annotateDecl didn't produce a funbind"
 graftDecl _ _ _ _ x = pure $ pure x
 
-
--- tacticCmd
---     :: (T.Text -> TacticsM ())
---     -> PluginId
---     -> CommandFunction IdeState TacticParams
--- tacticCmd tac pId state (TacticParams uri range var_name)
---   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
---       let stale a = runStaleIde "tacticCmd" state nfp a
-
---       ccs <- getClientCapabilities
---       cfg <- getTacticConfig pId
---       res <- liftIO $ runMaybeT $ do
---         HoleJudgment{..} <- judgementForHole state nfp range cfg

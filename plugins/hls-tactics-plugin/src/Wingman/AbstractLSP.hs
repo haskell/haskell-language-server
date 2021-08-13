@@ -5,7 +5,7 @@
 {-# LANGUAGE NoMonoLocalBinds    #-}
 {-# OPTIONS_GHC -Wno-orphans     #-}
 
-module Wingman.AbstractLSP (installInteractions, testInteraction) where
+module Wingman.AbstractLSP (installInteractions) where
 
 import           Control.Applicative (empty)
 import           Control.Monad (void)
@@ -14,8 +14,6 @@ import           Control.Monad.Trans (lift)
 import           Control.Monad.Trans.Maybe (MaybeT, mapMaybeT)
 import qualified Data.Aeson as A
 import           Data.Foldable (traverse_)
-import           Data.Functor ((<&>))
-import           Data.Maybe (fromJust)
 import qualified Data.Text as T
 import           Data.Tuple.Extra (uncurry3)
 import           Development.IDE (IdeState)
@@ -28,7 +26,7 @@ import qualified Language.LSP.Types as LSP
 import           Language.LSP.Types hiding (CodeLens, CodeAction)
 import           Wingman.AbstractLSP.Types
 import           Wingman.EmptyCase (fromMaybeT)
-import           Wingman.LanguageServer (getTacticConfig, getIdeDynflags, mkWorkspaceEdits, runStaleIde)
+import           Wingman.LanguageServer (getTacticConfig, getIdeDynflags, mkWorkspaceEdits, runStaleIde, showLspMessage, mkShowMessageParams)
 import           Wingman.Types
 
 
@@ -104,8 +102,11 @@ sendEdits edits =
       (const $ pure ())
 
 
-showUserFacingMessage :: UserFacingMessage -> MaybeT (LspM Plugin.Config) ()
-showUserFacingMessage = error "not implemented"
+showUserFacingMessage
+    :: UserFacingMessage
+    -> MaybeT (LspM Plugin.Config) ()
+showUserFacingMessage ufm =
+  void $ lift $ showLspMessage $ mkShowMessageParams ufm
 
 
 buildEnv
@@ -219,27 +220,4 @@ makeCodeLens plId sort range (Metadata title _ _) b =
         , _command = Just cmd
         , _xdata = Nothing
         }
-
-testInteraction :: Continuation T.Text HoleTarget Int
-testInteraction =
-  Continuation
-    { c_sort = T.pack "tactics.test"
-    , c_makeCommand = SynthesizeCodeAction $ \_ hj -> do
-        pure $ [0..2] <&> \ix -> (Metadata (T.pack $ "Hello from AbstractLSP: " <> show (_jGoal $ hj_jdg hj)) (CodeActionUnknown $ T.pack "some-kind") False, ix)
-    , c_runCommand = \_ _ fc n -> do
-        pure $ RawEdit $ WorkspaceEdit
-          { _changes = Nothing
-          , _documentChanges = pure $ pure $ InL $ TextDocumentEdit
-              { _textDocument = VersionedTextDocumentIdentifier {_uri = fc_uri fc, _version = Just 0}
-              , _edits = pure $ InL TextEdit
-                  { _range = unTrack $ fromJust $ fc_range fc
-                  , _newText = T.pack $ "yo" <> show n
-                  }
-              }
-          , _changeAnnotations = Nothing
-          }
-    }
-
-deriving newtype instance Applicative List
-
 

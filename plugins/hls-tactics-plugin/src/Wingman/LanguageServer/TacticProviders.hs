@@ -6,25 +6,18 @@
 module Wingman.LanguageServer.TacticProviders
   ( commandProvider
   , commandTactic
-  , tcCommandId
-  , TacticParams (..)
   , TacticProviderData (..)
-  , useNameFromHypothesis
   ) where
 
 import           Control.Monad
-import           Data.Aeson
 import           Data.Bool (bool)
 import           Data.Coerce
 import           Data.Maybe
 import           Data.Monoid
 import qualified Data.Set as S
 import qualified Data.Text as T
-import           Data.Traversable
 import           DataCon (dataConName)
-import           Development.IDE.Core.UseStale (Tracked, Age(..))
 import           Development.IDE.GHC.Compat
-import           GHC.Generics
 import           GHC.LanguageExtensions.Type (Extension (LambdaCase))
 import           Ide.Types
 import           Language.LSP.Types hiding (SemanticTokenAbsolute (..), SemanticTokenRelative (..))
@@ -200,15 +193,6 @@ data TacticProviderData = TacticProviderData
   }
 
 
-data TacticParams = TacticParams
-    { tp_file     :: Uri    -- ^ Uri of the file to fill the hole in
-    , tp_range    :: Tracked 'Current Range  -- ^ The range of the hole
-    , tp_var_name :: T.Text
-    }
-  deriving stock (Show, Eq, Generic)
-  deriving anyclass (ToJSON, FromJSON)
-
-
 requireHoleSort :: (HoleSort -> Bool) -> TacticProvider -> TacticProvider
 requireHoleSort p tp tpd =
   case p $ tpd_hole_sort tpd of
@@ -260,7 +244,7 @@ filterBindingType p tp tpd =
   let jdg = tpd_jdg tpd
       hy  = jLocalHypothesis jdg
       g   = jGoal jdg
-   in join $ for (unHypothesis hy) $ \hi ->
+   in unHypothesis hy >>= \hi ->
         let ty = unCType $ hi_type hi
          in case p (unCType g) ty of
               True  -> tp (hi_name hi) ty tpd
@@ -275,7 +259,7 @@ filterTypeProjection
     -> (a -> TacticProvider)
     -> TacticProvider
 filterTypeProjection p tp tpd =
-  join $ for (p $ unCType $ jGoal $ tpd_jdg tpd) $ \a ->
+  (p $ unCType $ jGoal $ tpd_jdg tpd) >>= \a ->
       tp a tpd
 
 
