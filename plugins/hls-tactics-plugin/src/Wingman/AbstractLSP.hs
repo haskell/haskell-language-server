@@ -31,25 +31,25 @@ import           Wingman.EmptyCase (fromMaybeT)
 import           Wingman.LanguageServer (judgementForHole, getTacticConfig, getIdeDynflags)
 import           Wingman.Types
 import qualified Data.Text as T
+import Data.Tuple.Extra (uncurry3)
 
 -- STILL TO DO:
---
--- generalize c_makeCommand so that it produces a 'b' and a 'Metadata'
--- or maybe attach metadata directly to the continuation
---
--- implement code lenses
---
--- and then wire it all up!
+
+-- wire it all up!
+
+
+data Interaction where
+  Interaction
+      :: (IsTarget target, Show sort, A.ToJSON b, A.FromJSON b)
+      => Continuation sort target b
+      -> Interaction
 
 
 data Metadata
-  = CodeActionMetadata
+  = Metadata
       { md_title     :: Text
       , md_kind      :: CodeActionKind
       , md_preferred :: Bool
-      }
-  | CodeLensMetadata
-      { md_title     :: Text
       }
   deriving stock (Eq, Show)
 
@@ -59,19 +59,25 @@ data InteractionSort
   | CodeLens
   deriving stock (Eq, Ord, Show, Enum, Bounded)
 
+data SynthesizeCommand a b
+  = SynthesizeCodeAction
+      ( LspEnv
+     -> TargetArgs a
+     -> MaybeT (LspM Plugin.Config) [(Metadata, b)]
+      )
+  | SynthesizeCodeLens
+      ( LspEnv
+     -> TargetArgs a
+     -> MaybeT (LspM Plugin.Config) [(Range, Metadata, b)]
+      )
+
+
+
 -- TODO(sandy): a is the data we want to fetch on both sides
 -- b is the data we share when synthesizing commands to running them
 data Continuation sort (a :: Target) b = Continuation
   { c_sort :: sort
-  , c_interactionSort :: InteractionSort
-  , c_makeCommand
-        :: LspEnv
-        -> TargetArgs a
-           -- TODO(sandy): wrong type. should be more structured, and then call
-           -- a high-level function to actually build the command
-           --
-           -- should produce a 'b'
-        -> MaybeT (LspM Plugin.Config) [(Metadata, b)]
+  , c_makeCommand :: SynthesizeCommand a b
   , c_runCommand
         :: LspEnv
         -> TargetArgs a
@@ -115,14 +121,17 @@ contToCommand :: Continuation sort a b -> PluginCommand IdeState
 contToCommand = undefined
 
 buildHandlers
-    :: (Show sort, IsTarget a, A.ToJSON b )
-    => [Continuation sort a b]
+    :: forall target sort b
+     . (Show sort, IsTarget target, A.ToJSON b )
+    => [Continuation sort target b]
     -> PluginHandlers IdeState
 buildHandlers cs =
   flip foldMap cs $ \c ->
-    case c_interactionSort c of
-      CodeAction -> mkPluginHandler STextDocumentCodeAction $ codeActionProvider c
-      CodeLens   -> mkPluginHandler STextDocumentCodeLens $ undefined
+    case c_makeCommand c of
+      SynthesizeCodeAction k ->
+        mkPluginHandler STextDocumentCodeAction $ codeActionProvider @target (c_sort c) k
+      SynthesizeCodeLens k ->
+        mkPluginHandler STextDocumentCodeLens   $ codeLensProvider   @target (c_sort c) k
 
 instance IsTarget 'HoleTarget where
   type TargetArgs 'HoleTarget = HoleJudgment
@@ -175,12 +184,16 @@ buildEnv state plId fc = do
     }
 
 codeActionProvider
-    :: forall sort target b
+    :: forall target sort b
      . (Show sort, A.ToJSON b, IsTarget target)
-    => Continuation sort target b
+    => sort
+    -> ( LspEnv
+     -> TargetArgs target
+     -> MaybeT (LspM Plugin.Config) [(Metadata, b)]
+       )
     -> PluginMethodHandler IdeState TextDocumentCodeAction
 codeActionProvider
-    c state plId
+    sort k state plId
     (CodeActionParams _ _ (TextDocumentIdentifier uri) range _)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
       fromMaybeT (Right $ List []) $ do
@@ -191,23 +204,54 @@ codeActionProvider
                    }
         env <- buildEnv state plId fc
         args <- fetchTargetArgs @target env
-        actions <- c_makeCommand c env args
-        pure $ Right $ List $ fmap (uncurry $ makeCommands plId $ c_sort c) actions
-codeActionProvider _ _ _ _ = pure $ Right $ List []
+        actions <- k env args
+        pure
+          $ Right
+          $ List
+          $ fmap (InR . uncurry (makeCodeAction plId sort)) actions
+codeActionProvider _ _ _ _ _ = pure $ Right $ List []
 
 
-makeCommands
+codeLensProvider
+    :: forall target sort b
+     . (Show sort, A.ToJSON b, IsTarget target)
+    => sort
+    -> ( LspEnv
+     -> TargetArgs target
+     -> MaybeT (LspM Plugin.Config) [(Range, Metadata, b)]
+      )
+    -> PluginMethodHandler IdeState TextDocumentCodeLens
+codeLensProvider
+    sort k state plId
+    (CodeLensParams _ _ (TextDocumentIdentifier uri))
+  | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
+      fromMaybeT (Right $ List []) $ do
+        let fc = FileContext
+                   { fc_uri   = uri
+                   , fc_nfp   = nfp
+                   , fc_range = Nothing
+                   }
+        env <- buildEnv state plId fc
+        args <- fetchTargetArgs @target env
+        actions <- k env args
+        pure
+          $ Right
+          $ List
+          $ fmap (uncurry3 $ makeCodeLens plId sort) actions
+codeLensProvider _ _ _ _ _ = pure $ Right $ List []
+
+
+makeCodeAction
     :: (A.ToJSON b, Show sort)
     => PluginId
     -> sort
     -> Metadata
     -> b
-    -> Command |? LSP.CodeAction
-makeCommands plId sort (CodeActionMetadata title kind preferred) b =
+    -> LSP.CodeAction
+makeCodeAction plId sort (Metadata title kind preferred) b =
   let cmd_id = CommandId $ T.pack $ show sort
       cmd = mkLspCommand plId cmd_id title $ Just [A.toJSON b]
-   in InR
-    $ LSP.CodeAction
+   in LSP.CodeAction
         { _title       = title
         , _kind        = Just kind
         , _diagnostics = Nothing
@@ -217,12 +261,30 @@ makeCommands plId sort (CodeActionMetadata title kind preferred) b =
         , _command     = Just cmd
         , _xdata       = Nothing
         }
-makeCommands plId sort (CodeLensMetadata title) b =
-  let cmd_id = undefined
+
+makeCodeLens
+    :: (A.ToJSON b, Show sort)
+    => PluginId
+    -> sort
+    -> Range
+    -> Metadata
+    -> b
+    -> LSP.CodeLens
+makeCodeLens plId sort range (Metadata title _ _) b =
+  let cmd_id = CommandId $ T.pack $ show sort
       cmd = mkLspCommand plId cmd_id title $ Just [A.toJSON b]
-      range = undefined
-   -- TODO(sandy): omfg LSP is such an asshole
-   in undefined -- InR $ LSP.CodeLens range (Just cmd) Nothing
+   in LSP.CodeLens
+        { _range = range
+        , _command = Just cmd
+        , _xdata = Nothing
+        }
+
+-- makeCodeAction plId sort (CodeLensMetadata title) b =
+--   let cmd_id = undefined
+--       cmd = mkLspCommand plId cmd_id title $ Just [A.toJSON b]
+--       range = undefined
+--    -- TODO(sandy): omfg LSP is such an asshole
+--    in undefined -- InR $ LSP.CodeLens range (Just cmd) Nothing
 
 
 -- makeTacticCodeAction
