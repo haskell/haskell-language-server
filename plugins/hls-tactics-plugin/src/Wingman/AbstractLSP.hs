@@ -1,124 +1,28 @@
 {-# LANGUAGE AllowAmbiguousTypes    #-}
-{-# LANGUAGE KindSignatures         #-}
-{-# LANGUAGE QuantifiedConstraints  #-}
 {-# LANGUAGE RecordWildCards        #-}
-{-# LANGUAGE StandaloneDeriving     #-}
-{-# LANGUAGE TypeFamilies           #-}
-{-# LANGUAGE UndecidableInstances   #-}
 
-{-# OPTIONS_GHC -Wno-orphans #-}
-
--- | A plugin that uses tactics to synthesize code
 module Wingman.AbstractLSP where
 
 import           Control.Monad (void)
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans (lift)
-import           Control.Monad.Trans.Maybe (MaybeT (MaybeT), mapMaybeT)
+import           Control.Monad.Trans.Maybe (MaybeT, mapMaybeT)
 import qualified Data.Aeson as A
 import           Data.Foldable (traverse_)
-import           Data.Text (Text)
+import qualified Data.Text as T
+import           Data.Tuple.Extra (uncurry3)
 import           Development.IDE (IdeState)
 import           Development.IDE.Core.UseStale
-import           Development.IDE.GHC.Compat hiding (Target)
-import           GHC.Generics (Generic)
 import qualified Ide.Plugin.Config as Plugin
 import           Ide.Types
 import           Language.LSP.Server (LspM, sendRequest)
 import qualified Language.LSP.Types as LSP
 import           Language.LSP.Types hiding (CodeLens, CodeAction)
+import           Wingman.AbstractLSP.Types
 import           Wingman.EmptyCase (fromMaybeT)
-import           Wingman.LanguageServer (judgementForHole, getTacticConfig, getIdeDynflags)
+import           Wingman.LanguageServer (getTacticConfig, getIdeDynflags)
 import           Wingman.Types
-import qualified Data.Text as T
-import Data.Tuple.Extra (uncurry3)
 
--- STILL TO DO:
-
--- wire it all up!
-
-
-data Interaction where
-  Interaction
-      :: (IsTarget target, Show sort, A.ToJSON b, A.FromJSON b)
-      => Continuation sort target b
-      -> Interaction
-
-
-data Metadata
-  = Metadata
-      { md_title     :: Text
-      , md_kind      :: CodeActionKind
-      , md_preferred :: Bool
-      }
-  deriving stock (Eq, Show)
-
-
-data InteractionSort
-  = CodeAction
-  | CodeLens
-  deriving stock (Eq, Ord, Show, Enum, Bounded)
-
-data SynthesizeCommand a b
-  = SynthesizeCodeAction
-      ( LspEnv
-     -> TargetArgs a
-     -> MaybeT (LspM Plugin.Config) [(Metadata, b)]
-      )
-  | SynthesizeCodeLens
-      ( LspEnv
-     -> TargetArgs a
-     -> MaybeT (LspM Plugin.Config) [(Range, Metadata, b)]
-      )
-
-
-
--- TODO(sandy): a is the data we want to fetch on both sides
--- b is the data we share when synthesizing commands to running them
-data Continuation sort (a :: Target) b = Continuation
-  { c_sort :: sort
-  , c_makeCommand :: SynthesizeCommand a b
-  , c_runCommand
-        :: LspEnv
-        -> TargetArgs a
-        -> FileContext
-        -> b
-        -> MaybeT (LspM Plugin.Config)
-                  (Either [UserFacingMessage] WorkspaceEdit)
-  }
-
-data Target = HoleTarget | EmptyCaseTarget
-  deriving stock (Eq, Ord, Show, Enum, Bounded)
-
-data FileContext = FileContext
-  { fc_uri      :: Uri
-  , fc_nfp      :: NormalizedFilePath
-  , fc_range    :: Maybe (Tracked 'Current Range)
-  }
-  deriving stock (Eq, Ord, Show, Generic)
-  deriving anyclass (A.ToJSON, A.FromJSON)
-
-deriving anyclass instance A.ToJSON NormalizedFilePath
-deriving anyclass instance A.FromJSON NormalizedFilePath
-deriving anyclass instance A.ToJSON NormalizedUri
-deriving anyclass instance A.FromJSON NormalizedUri
-
-data LspEnv = LspEnv
-  { le_ideState    :: IdeState
-  , le_pluginId    :: PluginId
-  , le_dflags      :: DynFlags
-  , le_config      :: Config
-  , le_fileContext :: FileContext
-  }
-
-class IsTarget (t :: Target) where
-  type TargetArgs t
-  fetchTargetArgs
-      :: LspEnv
-      -> MaybeT (LspM Plugin.Config) (TargetArgs t)
-
-contToCommand :: Continuation sort a b -> PluginCommand IdeState
-contToCommand = undefined
 
 buildHandlers
     :: forall target sort b
@@ -132,13 +36,6 @@ buildHandlers cs =
         mkPluginHandler STextDocumentCodeAction $ codeActionProvider @target (c_sort c) k
       SynthesizeCodeLens k ->
         mkPluginHandler STextDocumentCodeLens   $ codeLensProvider   @target (c_sort c) k
-
-instance IsTarget 'HoleTarget where
-  type TargetArgs 'HoleTarget = HoleJudgment
-  fetchTargetArgs LspEnv{..} = do
-    let FileContext{..} = le_fileContext
-    range <- MaybeT $ pure fc_range
-    mapMaybeT liftIO $ judgementForHole le_ideState fc_nfp range le_config
 
 
 runCodeAction
@@ -182,6 +79,7 @@ buildEnv state plId fc = do
     , le_config   = cfg
     , le_fileContext = fc
     }
+
 
 codeActionProvider
     :: forall target sort b
@@ -278,14 +176,6 @@ makeCodeLens plId sort range (Metadata title _ _) b =
         , _command = Just cmd
         , _xdata = Nothing
         }
-
--- makeCodeAction plId sort (CodeLensMetadata title) b =
---   let cmd_id = undefined
---       cmd = mkLspCommand plId cmd_id title $ Just [A.toJSON b]
---       range = undefined
---    -- TODO(sandy): omfg LSP is such an asshole
---    in undefined -- InR $ LSP.CodeLens range (Just cmd) Nothing
-
 
 -- makeTacticCodeAction
 --     :: TacticCommand
