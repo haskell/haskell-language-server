@@ -33,6 +33,7 @@ import           Wingman.EmptyCase
 import           Wingman.GHC
 import           Wingman.Judgements (jNeedsToBindArgs)
 import           Wingman.LanguageServer
+import           Wingman.AbstractLSP
 import           Wingman.LanguageServer.Metaprogram (hoverProvider)
 import           Wingman.LanguageServer.TacticProviders
 import           Wingman.Machinery (scoreSolution)
@@ -40,6 +41,7 @@ import           Wingman.Range
 import           Wingman.StaticPlugin
 import           Wingman.Tactics
 import           Wingman.Types
+import Wingman.AbstractLSP.Types (Interaction(Interaction))
 
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -57,12 +59,13 @@ descriptor plId = (defaultPluginDescriptor plId)
               emptyCaseLensCommandId
               "Complete the empty case"
               workspaceEditHandler
+          , pure $ buildCommand plId $ Interaction testInteraction
           ]
   , pluginHandlers = mconcat
       [ mkPluginHandler STextDocumentCodeAction codeActionProvider
       , mkPluginHandler STextDocumentCodeLens codeLensProvider
       , mkPluginHandler STextDocumentHover hoverProvider
-      ]
+      ] <> buildHandlers [Interaction testInteraction]
   , pluginRules = wingmanRules plId
   , pluginConfigDescriptor =
       defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}

@@ -1,7 +1,9 @@
 {-# LANGUAGE AllowAmbiguousTypes    #-}
 {-# LANGUAGE RecordWildCards        #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
-module Wingman.AbstractLSP where
+module Wingman.AbstractLSP (buildHandlers, buildCommand, testInteraction) where
 
 import           Control.Monad (void)
 import           Control.Monad.IO.Class
@@ -22,6 +24,8 @@ import           Wingman.AbstractLSP.Types
 import           Wingman.EmptyCase (fromMaybeT)
 import           Wingman.LanguageServer (getTacticConfig, getIdeDynflags)
 import           Wingman.Types
+import Data.Functor ((<&>))
+import Data.Maybe (fromJust)
 
 
 buildHandlers
@@ -121,7 +125,7 @@ codeActionProvider
         pure
           $ Right
           $ List
-          $ fmap (InR . uncurry (makeCodeAction plId sort)) actions
+          $ fmap (InR . uncurry (makeCodeAction plId fc sort)) actions
 codeActionProvider _ _ _ _ _ = pure $ Right $ List []
 
 
@@ -157,13 +161,14 @@ codeLensProvider _ _ _ _ _ = pure $ Right $ List []
 makeCodeAction
     :: (A.ToJSON b, Show sort)
     => PluginId
+    -> FileContext
     -> sort
     -> Metadata
     -> b
     -> LSP.CodeAction
-makeCodeAction plId sort (Metadata title kind preferred) b =
+makeCodeAction plId fc sort (Metadata title kind preferred) b =
   let cmd_id = CommandId $ T.pack $ show sort
-      cmd = mkLspCommand plId cmd_id title $ Just [A.toJSON b]
+      cmd = mkLspCommand plId cmd_id title $ Just [A.toJSON (fc, b)]
    in LSP.CodeAction
         { _title       = title
         , _kind        = Just kind
@@ -191,6 +196,28 @@ makeCodeLens plId sort range (Metadata title _ _) b =
         , _command = Just cmd
         , _xdata = Nothing
         }
+
+testInteraction :: Continuation String HoleTarget Int
+testInteraction =
+  Continuation
+    { c_sort = "tactics.test"
+    , c_makeCommand = SynthesizeCodeAction $ \_ hj -> do
+        pure $ [0..2] <&> \ix -> (Metadata (T.pack $ "Hello from AbstractLSP: " <> show (_jGoal $ hj_jdg hj)) (CodeActionUnknown $ T.pack "some-kind") False, ix)
+    , c_runCommand = \_ _ fc n -> do
+        pure $ Right $ WorkspaceEdit
+          { _changes = Nothing
+          , _documentChanges = pure $ pure $ InL $ TextDocumentEdit
+              { _textDocument = VersionedTextDocumentIdentifier {_uri = fc_uri fc, _version = Just 0}
+              , _edits = pure $ InL TextEdit
+                  { _range = unTrack $ fromJust $ fc_range fc
+                  , _newText = T.pack $ "yo" <> show n
+                  }
+              }
+          , _changeAnnotations = Nothing
+          }
+    }
+
+deriving newtype instance Applicative List
 
 -- makeTacticCodeAction
 --     :: TacticCommand
