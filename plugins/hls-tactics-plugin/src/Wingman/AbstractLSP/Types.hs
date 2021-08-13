@@ -1,7 +1,7 @@
-{-# LANGUAGE AllowAmbiguousTypes    #-}
-{-# LANGUAGE RecordWildCards        #-}
-{-# LANGUAGE StandaloneDeriving     #-}
-{-# LANGUAGE TypeFamilies           #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE StandaloneDeriving  #-}
+{-# LANGUAGE TypeFamilies        #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -52,7 +52,7 @@ data SynthesizeCommand a b
       )
 
 
-data Continuation sort (a :: Target) b = Continuation
+data Continuation sort a b = Continuation
   { c_sort :: sort
   , c_makeCommand :: SynthesizeCommand a b
   , c_runCommand
@@ -65,7 +65,7 @@ data Continuation sort (a :: Target) b = Continuation
   }
 
 
-data Target = HoleTarget | EmptyCaseTarget
+data HoleTarget = HoleTarget
   deriving stock (Eq, Ord, Show, Enum, Bounded)
 
 
@@ -91,14 +91,14 @@ data LspEnv = LspEnv
   , le_fileContext :: FileContext
   }
 
-class IsTarget (t :: Target) where
+class IsTarget t where
   type TargetArgs t
   fetchTargetArgs
       :: LspEnv
       -> MaybeT (LspM Plugin.Config) (TargetArgs t)
 
-instance IsTarget 'HoleTarget where
-  type TargetArgs 'HoleTarget = HoleJudgment
+instance IsTarget HoleTarget where
+  type TargetArgs HoleTarget = HoleJudgment
   fetchTargetArgs LspEnv{..} = do
     let FileContext{..} = le_fileContext
     range <- MaybeT $ pure fc_range

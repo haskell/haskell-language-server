@@ -25,17 +25,27 @@ import           Wingman.Types
 
 
 buildHandlers
-    :: forall target sort b
-     . (Show sort, IsTarget target, A.ToJSON b )
-    => [Continuation sort target b]
+    :: [Interaction]
     -> PluginHandlers IdeState
 buildHandlers cs =
-  flip foldMap cs $ \c ->
+  flip foldMap cs $ \(Interaction (c :: Continuation sort target b)) ->
     case c_makeCommand c of
       SynthesizeCodeAction k ->
         mkPluginHandler STextDocumentCodeAction $ codeActionProvider @target (c_sort c) k
       SynthesizeCodeLens k ->
         mkPluginHandler STextDocumentCodeLens   $ codeLensProvider   @target (c_sort c) k
+
+
+buildCommand
+  :: PluginId
+  -> Interaction
+  -> PluginCommand IdeState
+buildCommand plId (Interaction (c :: Continuation sort target b)) =
+  PluginCommand
+    { commandId = CommandId $ T.pack $ show (c_sort c)
+    , commandDesc = T.pack ""
+    , commandFunc = runCodeAction plId c
+    }
 
 
 runCodeAction
@@ -45,19 +55,24 @@ runCodeAction
     -> Continuation sort a b
     -> CommandFunction IdeState (FileContext, b)
 runCodeAction plId cont state (fc, b) =
-  fromMaybeT (Left undefined) $ do
-    env <- buildEnv state plId fc
-    args <- fetchTargetArgs @a env
-    c_runCommand cont env args fc b >>= \case
-      Left errs ->
-        traverse_ showUserFacingMessage errs
-      Right edits ->
-        void $ lift $
-          sendRequest
-            SWorkspaceApplyEdit
-            (ApplyWorkspaceEditParams Nothing edits)
-            (const $ pure ())
-    pure $ Right A.Null
+  fromMaybeT
+    (Left $ ResponseError
+              { _code = InternalError
+              , _message = T.pack "TODO(sandy)"
+              , _xdata =  Nothing
+              } ) $ do
+      env <- buildEnv state plId fc
+      args <- fetchTargetArgs @a env
+      c_runCommand cont env args fc b >>= \case
+        Left errs ->
+          traverse_ showUserFacingMessage errs
+        Right edits ->
+          void $ lift $
+            sendRequest
+              SWorkspaceApplyEdit
+              (ApplyWorkspaceEditParams Nothing edits)
+              (const $ pure ())
+      pure $ Right A.Null
 
 
 showUserFacingMessage :: UserFacingMessage -> MaybeT (LspM Plugin.Config) ()
