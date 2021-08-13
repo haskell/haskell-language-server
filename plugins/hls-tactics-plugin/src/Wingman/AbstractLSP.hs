@@ -3,11 +3,11 @@
 {-# LANGUAGE StandaloneDeriving  #-}
 
 {-# LANGUAGE NoMonoLocalBinds    #-}
+
 {-# OPTIONS_GHC -Wno-orphans     #-}
 
 module Wingman.AbstractLSP (installInteractions) where
 
-import           Control.Applicative (empty)
 import           Control.Monad (void)
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans (lift)
@@ -94,17 +94,25 @@ runContinuation plId cont state (fc, b) = do
       let stale a = runStaleIde "runContinuation" state (fc_nfp le_fileContext) a
       args <- fetchTargetArgs @a env
       c_runCommand cont env args fc b >>= \case
-        ErrorMessages errs ->
+        ErrorMessages errs -> do
           traverse_ showUserFacingMessage errs
-        RawEdit edits -> sendEdits edits
+          pure $ Right A.Null
+        RawEdit edits -> do
+          sendEdits edits
+          pure $ Right A.Null
         GraftEdit gr -> do
           ccs <- lift getClientCapabilities
           TrackedStale pm _ <- mapMaybeT liftIO $ stale GetAnnotatedParsedSource
           case mkWorkspaceEdits le_dflags ccs (fc_uri le_fileContext) (unTrack pm) gr of
-            -- TODO(sandy): fixme
-            Left _errs -> empty
-            Right edits -> sendEdits edits
-      pure $ Right A.Null
+            Left errs ->
+              pure $ Left $ ResponseError
+                { _code    = InternalError
+                , _message = T.pack $ show errs
+                , _xdata   = Nothing
+                }
+            Right edits -> do
+              sendEdits edits
+              pure $ Right A.Null
 
 
 ------------------------------------------------------------------------------
@@ -200,11 +208,10 @@ codeLensProvider sort k state plId
         env <- buildEnv state plId fc
         args <- fetchTargetArgs @target env
         actions <- k env args
-        -- TODO(sandy): NEED TO STICK THE RANGE INTO HERE
         pure
           $ Right
           $ List
-          $ fmap (uncurry3 $ makeCodeLens plId sort) actions
+          $ fmap (uncurry3 $ makeCodeLens plId sort fc) actions
 codeLensProvider _ _ _ _ _ = pure $ Right $ List []
 
 
@@ -239,14 +246,15 @@ makeCodeLens
     :: (A.ToJSON b, IsContinuationSort sort)
     => PluginId
     -> sort
+    -> FileContext
     -> Range
     -> Metadata
     -> b
     -> LSP.CodeLens
-makeCodeLens plId sort range (Metadata title _ _) b =
-  let cmd_id = toCommandId sort
-      -- TODO(sandy): BUG HERE. NEED TO PUSH THE FILE CONTEXT TOO
-      cmd = mkLspCommand plId cmd_id title $ Just [A.toJSON b]
+makeCodeLens plId sort fc range (Metadata title _ _) b =
+  let fc' = fc { fc_range = Just $ unsafeMkCurrent range }
+      cmd_id = toCommandId sort
+      cmd = mkLspCommand plId cmd_id title $ Just [A.toJSON (fc', b)]
    in LSP.CodeLens
         { _range = range
         , _command = Just cmd
