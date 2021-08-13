@@ -28,12 +28,13 @@ import           Language.LSP.Types.Capabilities
 import           OccName
 import           Prelude hiding (span)
 import           System.Timeout
+import           Wingman.AbstractLSP
+import           Wingman.AbstractLSP.Types (Interaction(Interaction), LspEnv (..), FileContext (..))
 import           Wingman.CaseSplit
 import           Wingman.EmptyCase
 import           Wingman.GHC
 import           Wingman.Judgements (jNeedsToBindArgs)
 import           Wingman.LanguageServer
-import           Wingman.AbstractLSP
 import           Wingman.LanguageServer.Metaprogram (hoverProvider)
 import           Wingman.LanguageServer.TacticProviders
 import           Wingman.Machinery (scoreSolution)
@@ -41,36 +42,37 @@ import           Wingman.Range
 import           Wingman.StaticPlugin
 import           Wingman.Tactics
 import           Wingman.Types
-import Wingman.AbstractLSP.Types (Interaction(Interaction))
 
 
 descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId = (defaultPluginDescriptor plId)
-  { pluginCommands
-      = mconcat
-          [ fmap (\tc ->
-              PluginCommand
-                (tcCommandId tc)
-                (tacticDesc $ tcCommandName tc)
-                (tacticCmd (commandTactic tc) plId))
-                [minBound .. maxBound]
-          , pure $
-              PluginCommand
-              emptyCaseLensCommandId
-              "Complete the empty case"
-              workspaceEditHandler
-          , pure $ buildCommand plId $ Interaction testInteraction
+descriptor plId
+  = installInteractions
+      [Interaction testInteraction]
+  $ (defaultPluginDescriptor plId)
+      { pluginCommands
+          = mconcat
+              [ fmap (\tc ->
+                  PluginCommand
+                    (tcCommandId tc)
+                    (tacticDesc $ tcCommandName tc)
+                    (tacticCmd (commandTactic tc) plId))
+                    [minBound .. maxBound]
+              , pure $
+                  PluginCommand
+                  emptyCaseLensCommandId
+                  "Complete the empty case"
+                  workspaceEditHandler
+              ]
+      , pluginHandlers = mconcat
+          [ mkPluginHandler STextDocumentCodeAction codeActionProvider
+          , mkPluginHandler STextDocumentCodeLens codeLensProvider
+          , mkPluginHandler STextDocumentHover hoverProvider
           ]
-  , pluginHandlers = mconcat
-      [ mkPluginHandler STextDocumentCodeAction codeActionProvider
-      , mkPluginHandler STextDocumentCodeLens codeLensProvider
-      , mkPluginHandler STextDocumentHover hoverProvider
-      ] <> buildHandlers [Interaction testInteraction]
-  , pluginRules = wingmanRules plId
-  , pluginConfigDescriptor =
-      defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
-  , pluginModifyDynflags = staticPlugin
-  }
+      , pluginRules = wingmanRules plId
+      , pluginConfigDescriptor =
+          defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
+      , pluginModifyDynflags = staticPlugin
+      }
 
 
 codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction

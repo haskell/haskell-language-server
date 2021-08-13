@@ -5,18 +5,22 @@
 {-# LANGUAGE NoMonoLocalBinds    #-}
 {-# OPTIONS_GHC -Wno-orphans     #-}
 
-module Wingman.AbstractLSP (buildHandlers, buildCommand, testInteraction) where
+module Wingman.AbstractLSP (installInteractions, testInteraction) where
 
+import           Control.Applicative (empty)
 import           Control.Monad (void)
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans (lift)
 import           Control.Monad.Trans.Maybe (MaybeT, mapMaybeT)
 import qualified Data.Aeson as A
 import           Data.Foldable (traverse_)
+import           Data.Functor ((<&>))
+import           Data.Maybe (fromJust)
 import qualified Data.Text as T
 import           Data.Tuple.Extra (uncurry3)
 import           Development.IDE (IdeState)
 import           Development.IDE.Core.UseStale
+import           Development.IDE.GHC.ExactPrint (GetAnnotatedParsedSource(GetAnnotatedParsedSource))
 import qualified Ide.Plugin.Config as Plugin
 import           Ide.Types
 import           Language.LSP.Server (LspM, sendRequest, getClientCapabilities)
@@ -26,10 +30,15 @@ import           Wingman.AbstractLSP.Types
 import           Wingman.EmptyCase (fromMaybeT)
 import           Wingman.LanguageServer (getTacticConfig, getIdeDynflags, mkWorkspaceEdits, runStaleIde)
 import           Wingman.Types
-import Data.Functor ((<&>))
-import Data.Maybe (fromJust)
-import Development.IDE.GHC.ExactPrint (GetAnnotatedParsedSource(GetAnnotatedParsedSource))
-import Control.Applicative (empty)
+
+
+installInteractions :: [Interaction] -> PluginDescriptor IdeState -> PluginDescriptor IdeState
+installInteractions is desc =
+  let plId = pluginId desc
+   in desc
+        { pluginCommands = pluginCommands desc <> fmap (buildCommand plId) is
+        , pluginHandlers = pluginHandlers desc <> buildHandlers is
+        }
 
 
 buildHandlers
@@ -211,10 +220,10 @@ makeCodeLens plId sort range (Metadata title _ _) b =
         , _xdata = Nothing
         }
 
-testInteraction :: Continuation String HoleTarget Int
+testInteraction :: Continuation T.Text HoleTarget Int
 testInteraction =
   Continuation
-    { c_sort = "tactics.test"
+    { c_sort = T.pack "tactics.test"
     , c_makeCommand = SynthesizeCodeAction $ \_ hj -> do
         pure $ [0..2] <&> \ix -> (Metadata (T.pack $ "Hello from AbstractLSP: " <> show (_jGoal $ hj_jdg hj)) (CodeActionUnknown $ T.pack "some-kind") False, ix)
     , c_runCommand = \_ _ fc n -> do
@@ -232,31 +241,4 @@ testInteraction =
     }
 
 deriving newtype instance Applicative List
-
-
--- makeTacticCodeAction
---     :: TacticCommand
---     -> Continuation 'HoleTarget b
--- makeTacticCodeAction cmd =
---   Continuation CodeAction
---     (\LspEnv{..} hj -> do
---       let FileContext{..} = le_fileContext
---       case fc_range of
---         Nothing -> do
---           traceM "Tried to run makeTacticCodeAction but no range was given"
---           pure []
---         Just range -> do
---           undefined
---           lift $ liftIO $ commandProvider cmd $
---             -- TODO(sandy): this is stupid. just use the same env
---             TacticProviderData
---               { tpd_dflags    = le_dflags
---               , tpd_config    = le_config
---               , tpd_plid      = le_pluginId
---               , tpd_uri       = fc_uri
---               , tpd_range     = range
---               , tpd_jdg       = hj_jdg hj
---               , tpd_hole_sort = hj_hole_sort hj
---               }
---     ) undefined
 

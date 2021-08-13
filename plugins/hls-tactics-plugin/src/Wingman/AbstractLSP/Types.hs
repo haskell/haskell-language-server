@@ -56,6 +56,13 @@ data SynthesizeCommand a b
 class IsContinuationSort a where
   toCommandId :: a -> CommandId
 
+
+instance IsContinuationSort CommandId where
+  toCommandId = id
+
+instance IsContinuationSort Text where
+  toCommandId = CommandId
+
 data ContinuationResult
   = ErrorMessages [UserFacingMessage]
   | RawEdit WorkspaceEdit
