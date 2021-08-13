@@ -2,6 +2,8 @@
 
 ![haskell-language-server][logo]
 
+
+[![Release][badge-github-release]][github-release]
 [![Hackage][badge-hackage]][hackage]
 [![License Apache 2.0][badge-license]][license]
 [![CircleCI][badge-circleci]][circleci]
@@ -15,9 +17,11 @@
 [badge-circleci]: https://img.shields.io/circleci/project/github/haskell/haskell-language-server/master.svg
 [circleci]: https://circleci.com/gh/haskell/haskell-language-server/
 [badge-hackage]: https://img.shields.io/hackage/v/haskell-language-server.svg?logo=haskell
+[badge-github-release]:https://img.shields.io/github/v/release/haskell/haskell-language-server.svg
 [hackage]: https://hackage.haskell.org/package/haskell-language-server
 [badge-codetriage]: https://www.codetriage.com/haskell/haskell-language-server/badges/users.svg
 [codetriage]:https://www.codetriage.com/haskell/haskell-language-server
+[github-release]:https://github.com/haskell/haskell-language-server/releases/latest
 
 The official Haskell language server (LSP) implementation. Consult the [project documentation](https://haskell-language-server.readthedocs.io/en/latest/) for more details.
 
