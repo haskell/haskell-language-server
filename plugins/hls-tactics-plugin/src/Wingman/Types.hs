@@ -530,6 +530,7 @@ data RunTacticResults = RunTacticResults
   , rtr_other_solns :: [Synthesized (LHsExpr GhcPs)]
   , rtr_jdg         :: Judgement
   , rtr_ctx         :: Context
+  , rtr_timed_out   :: Bool
   } deriving Show
 
 

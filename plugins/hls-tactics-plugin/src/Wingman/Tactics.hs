@@ -6,7 +6,7 @@ module Wingman.Tactics
   ) where
 
 import           ConLike (ConLike(RealDataCon))
-import           Control.Applicative (Alternative(empty))
+import           Control.Applicative (Alternative(empty), (<|>))
 import           Control.Lens ((&), (%~), (<>~))
 import           Control.Monad (filterM)
 import           Control.Monad (unless)
@@ -465,17 +465,17 @@ auto' 0 = failure OutOfGas
 auto' n = do
   let loop = auto' (n - 1)
   try intros
-  choice
-    [ overFunctions $ \fname -> do
-        requireConcreteHole $ apply Saturated fname
-        loop
-    , overAlgebraicTerms $ \aname -> do
-        destructAuto aname
-        loop
-    , splitAuto >> loop
-    , assumption >> loop
-    , recursion
-    ]
+  assumption <|>
+    choice
+      [ overFunctions $ \fname -> do
+          requireConcreteHole $ apply Saturated fname
+          loop
+      , overAlgebraicTerms $ \aname -> do
+          destructAuto aname
+          loop
+      , splitAuto >> loop
+      , recursion
+      ]
 
 overFunctions :: (HyInfo CType -> TacticsM ()) -> TacticsM ()
 overFunctions =

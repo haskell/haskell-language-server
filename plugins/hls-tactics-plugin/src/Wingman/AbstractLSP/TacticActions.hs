@@ -17,7 +17,6 @@ import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.ExactPrint
 import           Generics.SYB.GHC (mkBindListT, everywhereM')
 import           GhcPlugins (occName)
-import           System.Timeout (timeout)
 import           Wingman.AbstractLSP.Types
 import           Wingman.CaseSplit
 import           Wingman.GHC (liftMaybe, isHole, pattern AMatch, unXPat)
@@ -52,8 +51,8 @@ makeTacticInteraction cmd =
         pm_span <- liftMaybe $ mapAgeFrom pmmap span
         let t = commandTactic cmd var_name
 
-        res <- liftIO $ timeout (cfg_timeout_seconds le_config * seconds) $ do
-          runTactic hj_ctx hj_jdg t >>= \case
+        res <-
+          liftIO $ runTactic (cfg_timeout_seconds le_config * seconds) hj_ctx hj_jdg t >>= \case
             Left err -> pure $ ErrorMessages $ pure $ mkUserFacingMessage err
             Right rtr ->
               case rtr_extract rtr of
@@ -66,9 +65,10 @@ makeTacticInteraction cmd =
                   traceMX "solution" $ rtr_extract rtr
                   pure $ GraftEdit $ graftHole (RealSrcSpan $ unTrack pm_span) rtr
 
-        pure $ case res of
-          Nothing -> ErrorMessages $ pure TimedOut
-          Just c  -> c
+        pure res
+--         pure $ case res of
+--           Nothing -> ErrorMessages $ pure TimedOut
+--           Just c  -> c
 
 
 ------------------------------------------------------------------------------
