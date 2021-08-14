@@ -183,7 +183,8 @@ renameLhsMatch _ _ = error "Expected function match"
 
 getRhsEdits :: IdeState -> [Location] -> [RewriteSpec] -> NormalizedFilePath -> ExceptT String (LspT Config IO) WorkspaceEditMap
 getRhsEdits state refs rewriteSpecs nfp = do
-    (session, _) <- handleMaybeM "error: session deps" $ liftIO $ runAction "Rename.GhcSessionDeps" state (useWithStale GhcSessionDeps nfp)
+    (session, _) <- handleMaybeM "error: session deps" $
+        liftIO $ runAction "Rename.GhcSessionDeps" state (useWithStale GhcSessionDeps nfp)
     (errors, WorkspaceEdit{_changes = edits}) <-
         liftIO $ callRetrieWithTransformerAndUpdates
             (referenceTransformer refs)
@@ -316,16 +317,17 @@ longerThan (Location _ (Range Position{_character = start} Position{_character =
 
 getNamesAtPos :: IdeState -> Position -> NormalizedFilePath -> ExceptT String (LspT Config IO) [Name]
 getNamesAtPos state pos nfp = do
-    (HAR{hieAst}, mapping) <- handleMaybeM "error: ast" . liftIO . runAction "Rename.GetHieAst" state $ useWithStale GetHieAst nfp
+    (HAR{hieAst}, mapping) <- handleMaybeM "error: ast" $
+        liftIO $ runAction "Rename.GetHieAst" state $ useWithStale GetHieAst nfp
     let oldName = getAstNamesAtPoint hieAst pos mapping
     pure oldName
 
 subtractSrcSpans :: SrcSpan -> SrcSpan -> SrcSpan
-subtractSrcSpans span1 (RealSrcSpan span2)
+subtractSrcSpans minuend (RealSrcSpan subtrahend)
     = mkSrcSpan startLoc endLoc
     where
-        startLoc = mkSrcLoc (srcSpanFile span2) (srcSpanStartLine span2) (srcSpanEndCol span2)
-        endLoc = srcSpanEnd span1
+        startLoc = mkSrcLoc (srcSpanFile subtrahend) (srcSpanStartLine subtrahend) (srcSpanEndCol subtrahend)
+        endLoc = srcSpanEnd minuend
 subtractSrcSpans _ _ = error ""
 
 refContainsDecl :: Location -> Bool
