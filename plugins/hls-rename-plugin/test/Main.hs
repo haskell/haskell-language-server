@@ -36,14 +36,14 @@ tests = testGroup "rename"
           goldenWithRename "shadowed name" "ShadowedName" $ \doc -> do
             rename doc (Position 1 1) "baz"
         , ignoreTestBecause "Inconsistent - need to wait for typecheck" $
+          goldenWithRename "qualified function" "QualifiedFunction" $ \doc -> do
+            rename doc (Position 3 12) "baz"
+        , ignoreTestBecause "Inconsistent - need to wait for typecheck" $
           goldenWithRename "type constructor" "TypeConstructor" $ \doc -> do
             rename doc (Position 2 15) "BinaryTree"
         , expectFailBecause "Not implemented yet" $
           goldenWithRename "data constructor" "DataConstructor" $ \doc -> do
             rename doc (Position 0 13) "Apply"
-        , expectFailBecause "qualified rename not implemented yet" $
-          goldenWithRename "qualified function" "QualifiedFunction" $ \doc -> do
-            rename doc (Position 3 12) "baz"
         ]
     , testGroup "non Top-level renames"
         [ expectFailBecause "Only top-level renames are implemented" $

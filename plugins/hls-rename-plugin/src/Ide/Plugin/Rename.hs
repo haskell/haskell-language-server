@@ -31,7 +31,6 @@ import           Language.LSP.Server
 import           Language.LSP.Types                   hiding (_changes, _range)
 import           Retrie                               hiding (HsModule, getLoc)
 import           Retrie.SYB
-import Control.Monad
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor pluginId = (defaultPluginDescriptor pluginId) {
@@ -40,7 +39,6 @@ descriptor pluginId = (defaultPluginDescriptor pluginId) {
 
 renameProvider :: PluginMethodHandler IdeState TextDocumentRename
 renameProvider state pluginId (RenameParams (TextDocumentIdentifier uri) pos _prog newNameText) = response $ do
-    -- get reference locations
     nfp <- forceGetNfp uri
     oldName <- head <$> getNamesAtPos state pos nfp
     refs <- liftIO $ runAction "Rename.references" state (refsAtName nfp oldName)
@@ -49,7 +47,8 @@ renameProvider state pluginId (RenameParams (TextDocumentIdentifier uri) pos _pr
     edits <- mapM (renameFile state refs (getOccString oldName) (T.unpack newNameText)) refFiles
     pure $ WorkspaceEdit (Just $ foldl1 (HM.unionWith (<>)) edits) Nothing Nothing
 
-renameFile :: IdeState
+renameFile ::
+    IdeState
     -> [Location]
     -> String
     -> String
@@ -57,37 +56,46 @@ renameFile :: IdeState
     -> ExceptT String (LspT Config IO) WorkspaceEditMap
 renameFile state refs oldNameStr newNameStr nfp = do
     -- Rename LHS declarations / imports / exports
-    src <- handleMaybeM "parsed source" $
-        liftIO $ runAction
-            "Rename.GetAnnotatedParsedModule"
-            state
-            (use GetAnnotatedParsedSource nfp)
+    src <- handleMaybeM "error: parsed source" $
+            liftIO $ runAction
+                "Rename.GetAnnotatedParsedModule"
+                state
+                (use GetAnnotatedParsedSource nfp)
     let sourceEdits = getSourceEdits refs (mkRdrUnqual $ mkTcOcc newNameStr) src
 
     -- Rename RHS with retrie
-    rhsEdits <- getRhsEdits state refs (getRewrite oldNameStr newNameStr) nfp
+    Location originUri _ <- handleMaybe "error: could not find name origin" $ find containsDecl refs
+    originNfp <- forceGetNfp originUri
+    ParsedModule{pm_parsed_source = L _ HsModule{hsmodName}} <-
+        handleMaybeM "error: parsed source" $
+            liftIO $ runAction
+                "Rename.GetAnnotatedParsedModule"
+                state
+                (use GetParsedModule originNfp)
+    L _ originModule <- handleMaybe "error: module name" hsmodName
+
+    rewriteSpecs <- getRewriteSpecs state oldNameStr newNameStr originModule nfp
+    rhsEdits <- getRhsEdits state refs rewriteSpecs nfp
 
     pure $ HM.insertWith (<>) (nfpToUri nfp) sourceEdits rhsEdits
-
-getRewrite :: String -> String -> RewriteSpec
-getRewrite oldNameStr newNameStr =
-    (if isType then AdhocType else Adhoc) (oldNameStr ++ " = " ++ newNameStr)
-    where
-        isType = isUpper $ head oldNameStr
 
 -------------------------------------------------------------------------------
 -- Source renaming
 
 getSourceEdits :: [Location] -> RdrName -> Annotated ParsedSource -> List TextEdit
-getSourceEdits refs newRdrName annPs = do
+getSourceEdits refs newRdrName annPs =
     makeDiffTextEdit src res
     where
         src = T.pack $ printA annPs
         updateMod =
-            updateImports refs newRdrName .
             updateExports refs newRdrName .
+            updateImports refs newRdrName .
             updateLhsDecls refs newRdrName
         res = T.pack $ printA $ (fmap . fmap) updateMod annPs
+
+updateExports :: [Location] -> RdrName -> HsModule GhcPs -> HsModule GhcPs
+updateExports refs newRdrName ps@HsModule{hsmodExports} =
+    ps {hsmodExports = (fmap . fmap) (map (fmap $ renameIE refs newRdrName)) hsmodExports}
 
 updateImports :: [Location] -> RdrName -> HsModule GhcPs -> HsModule GhcPs
 updateImports refs newRdrName ps@HsModule{hsmodImports} =
@@ -100,10 +108,6 @@ updateImports refs newRdrName ps@HsModule{hsmodImports} =
                     Just (isHiding, fmap (map (fmap $ renameIE refs newRdrName)) names)
                 }
         renameImport importDecl = importDecl
-
-updateExports :: [Location] -> RdrName -> HsModule GhcPs -> HsModule GhcPs
-updateExports refs newRdrName ps@HsModule{hsmodExports} =
-    ps {hsmodExports = (fmap . fmap) (map (fmap $ renameIE refs newRdrName)) hsmodExports}
 
 -- TODO: implement explicit type import/export renames
 renameIE :: [Location] -> RdrName -> IE GhcPs -> IE GhcPs
@@ -120,6 +124,7 @@ renameIE refs newRdrName IEThingWith{}
     = error "not implemented explicit type import/export renames yet"
 renameIE _ _ export = export
 
+-- TODO: data constructor renames
 updateLhsDecls :: [Location] -> RdrName -> HsModule GhcPs -> HsModule GhcPs
 updateLhsDecls refs newRdrName ps@HsModule{hsmodDecls} =
     ps {hsmodDecls = map (fmap renameLhsDecl) hsmodDecls}
@@ -176,20 +181,48 @@ renameLhsMatch _ _ = error "Expected function match"
 -------------------------------------------------------------------------------
 -- retrie
 
-getRhsEdits :: IdeState -> [Location] -> RewriteSpec -> NormalizedFilePath -> ExceptT String (LspT Config IO) WorkspaceEditMap
-getRhsEdits state refs rewriteSpec nfp = do
-    (session, _) <- handleMaybeM "session deps" $ liftIO $ runAction "Rename.GhcSessionDeps" state (useWithStale GhcSessionDeps nfp)
+getRhsEdits :: IdeState -> [Location] -> [RewriteSpec] -> NormalizedFilePath -> ExceptT String (LspT Config IO) WorkspaceEditMap
+getRhsEdits state refs rewriteSpecs nfp = do
+    (session, _) <- handleMaybeM "error: session deps" $ liftIO $ runAction "Rename.GhcSessionDeps" state (useWithStale GhcSessionDeps nfp)
     (errors, WorkspaceEdit{_changes = edits}) <-
         liftIO $ callRetrieWithTransformerAndUpdates
             (referenceTransformer refs)
             contextUpdater
             state
             (hscEnv session)
-            [Right rewriteSpec]
+            (map Right rewriteSpecs)
             nfp
             True
     lift $ sendRetrieErrors errors
-    handleMaybe "retrie" edits
+    handleMaybe "error: retrie" edits
+
+getRewriteSpecs ::
+    IdeState
+    -> String
+    -> String
+    -> ModuleName
+    -> NormalizedFilePath
+    -> ExceptT String (LspT Config IO) [RewriteSpec]
+getRewriteSpecs state oldNameStr newNameStr originModule nfp = do
+    ParsedModule{pm_parsed_source = L _ HsModule{hsmodImports}} <-
+        handleMaybeM "error: parsed source" $
+            liftIO $ runAction
+                "Rename.GetAnnotatedParsedModule"
+                state
+                (use GetParsedModule nfp)
+    let rewriteType = (if isUpper $ head oldNameStr then AdhocType else Adhoc)
+        mbImportDecl = find ((==originModule) . unLoc . ideclName) (map unLoc hsmodImports)
+        mkAdhoc qualStr = rewriteType $ qualStr ++ oldNameStr ++ " = " ++ qualStr ++ newNameStr
+        unQualRewrite = mkAdhoc ""
+    pure $ case mbImportDecl of
+       Just decl@ImportDecl{ideclQualified = True} -> [mkAdhoc $ getQualifierStr decl]
+       Just decl -> [unQualRewrite, mkAdhoc $ getQualifierStr decl]
+       Nothing -> [unQualRewrite]
+
+getQualifierStr :: ImportDecl pass -> String
+getQualifierStr ImportDecl{ideclAs, ideclName} =
+    moduleNameString (unLoc (fromMaybe ideclName ideclAs)) ++ "."
+getQualifierStr _ = ""
 
 -- limits matches to reference locations
 referenceTransformer :: [Location] -> MatchResultTransformer
@@ -210,6 +243,7 @@ contextUpdater c@Context{ctxtBinders} i = const (pure c)
     `extQ` (return . updTyDecl)
     `extQ` (return . updMatch)
     where
+        -- Todo: add statement matches
         updType :: LHsType GhcPs -> Context
         updType (L _ (HsAppTy _ (L matchSpan _) _)) =
             c {ctxtBinders = makeName matchSpan : ctxtBinders}
@@ -241,17 +275,17 @@ refsAtName :: NormalizedFilePath -> Name -> Action [Location]
 refsAtName nfp name = do
     ShakeExtras{hiedb} <- getShakeExtras
     fois <- HM.keys <$> getFilesOfInterestUntracked
-    Just asts <- sequence <$> usesWithStale GetHieAst fois
-    let foiRefs = concat $ mapMaybe (getNameAstLocations name) asts
+    Just ast <- useWithStale GetHieAst nfp
+    let Just fileRefs = getNameAstLocations name ast
         Just mod = nameModule_maybe name
-    refs <- liftIO $ mapMaybe rowToLoc <$> findReferences
+    dbRefs <- liftIO $ mapMaybe rowToLoc <$> findReferences
         hiedb
         True
         (nameOccName name)
         (Just $ moduleName mod)
         (Just $ moduleUnitId mod)
-        (map fromNormalizedFilePath fois)
-    pure $ nubOrd $ foiRefs ++ refs
+        [fromNormalizedFilePath nfp]
+    pure $ nubOrd $ fileRefs ++ dbRefs
 
 getNameAstLocations :: Name -> (HieAstResult, PositionMapping) -> Maybe [Location]
 getNameAstLocations name (HAR _ _ rm _ _, mapping) =
@@ -264,7 +298,7 @@ nfpToUri :: NormalizedFilePath -> Uri
 nfpToUri = filePathToUri . fromNormalizedFilePath
 
 forceGetNfp :: (Monad m) => Uri -> ExceptT String m NormalizedFilePath
-forceGetNfp uri = handleMaybe "uri" $ toNormalizedFilePath <$> uriToFilePath uri
+forceGetNfp uri = handleMaybe "error: uri" $ toNormalizedFilePath <$> uriToFilePath uri
 
 isRef :: Retrie.HasSrcSpan a => [Location] -> a -> Bool
 isRef refs = (`elem` refs) . fromJust . srcSpanToLocation . getLoc
@@ -281,7 +315,7 @@ longerThan (Location _ (Range Position{_character = start} Position{_character =
 
 getNamesAtPos :: IdeState -> Position -> NormalizedFilePath -> ExceptT String (LspT Config IO) [Name]
 getNamesAtPos state pos nfp = do
-    (HAR{hieAst}, mapping) <- handleMaybeM "ast" . liftIO . runAction "Rename.GetHieAst" state $ useWithStale GetHieAst nfp
+    (HAR{hieAst}, mapping) <- handleMaybeM "error: ast" . liftIO . runAction "Rename.GetHieAst" state $ useWithStale GetHieAst nfp
     let oldName = getAstNamesAtPoint hieAst pos mapping
     pure oldName
 
@@ -292,3 +326,6 @@ subtractSrcSpans span1 (RealSrcSpan span2)
         startLoc = mkSrcLoc (srcSpanFile span2) (srcSpanStartLine span2) (srcSpanEndCol span2)
         endLoc = srcSpanEnd span1
 subtractSrcSpans _ _ = error ""
+
+containsDecl :: Location -> Bool
+containsDecl (Location _ Range{_start = Position{_character}}) = _character == 0
