@@ -11,7 +11,9 @@ module Development.IDE.Plugin.CodeAction
     iePluginDescriptor,
     typeSigsPluginDescriptor,
     bindingsPluginDescriptor,
-    fillHolePluginDescriptor
+    fillHolePluginDescriptor,
+    newImport,
+    newImportToEdit
     -- * For testing
     , matchRegExMultipleImports
     ) where
@@ -60,7 +62,20 @@ import           HscTypes                                          (ImportedMods
 import           Ide.PluginUtils                                   (subRange)
 import           Ide.Types
 import qualified Language.LSP.Server                               as LSP
-import           Language.LSP.Types
+import           Language.LSP.Types                                (CodeAction (..),
+                                                                    CodeActionContext (CodeActionContext, _diagnostics),
+                                                                    CodeActionKind (CodeActionQuickFix, CodeActionUnknown),
+                                                                    CodeActionParams (CodeActionParams),
+                                                                    Command,
+                                                                    Diagnostic (..),
+                                                                    List (..),
+                                                                    ResponseError,
+                                                                    SMethod (STextDocumentCodeAction),
+                                                                    TextDocumentIdentifier (TextDocumentIdentifier),
+                                                                    TextEdit (TextEdit),
+                                                                    WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
+                                                                    type (|?) (InR),
+                                                                    uriToFilePath)
 import           Language.LSP.VFS
 import           Module                                            (moduleEnvElts)
 import           OccName
@@ -835,7 +850,7 @@ suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_
             -- fallback to using GHC suggestion even though it is not always correct
           | otherwise
           = Just IdentInfo
-                { name = binding
+                { name = mkVarOcc $ T.unpack binding
                 , rendered = binding
                 , parent = Nothing
                 , isDatacon = False

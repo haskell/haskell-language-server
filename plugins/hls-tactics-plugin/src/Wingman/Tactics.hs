@@ -65,7 +65,7 @@ assume name = rule $ \jdg -> do
           { syn_trace = tracePrim $ "assume " <> occNameString name
           , syn_used_vals = S.singleton name
           }
-    Nothing -> cut -- failure $ UndefinedHypothesis name
+    Nothing -> cut
 
 
 ------------------------------------------------------------------------------
@@ -117,21 +117,32 @@ restrictPositionForApplication f app = do
 ------------------------------------------------------------------------------
 -- | Introduce a lambda binding every variable.
 intros :: TacticsM ()
-intros = intros' Nothing
+intros = intros' IntroduceAllUnnamed
+
+
+data IntroParams
+  = IntroduceAllUnnamed
+  | IntroduceOnlyNamed [OccName]
+  | IntroduceOnlyUnnamed Int
+  deriving stock (Eq, Ord, Show)
+
 
 ------------------------------------------------------------------------------
 -- | Introduce a lambda binding every variable.
 intros'
-    :: Maybe [OccName]  -- ^ When 'Nothing', generate a new name for every
-                        -- variable. Otherwise, only bind the variables named.
+    :: IntroParams
     -> TacticsM ()
-intros' names = rule $ \jdg -> do
+intros' params = rule $ \jdg -> do
   let g  = jGoal jdg
   case tacticsSplitFunTy $ unCType g of
     (_, _, [], _) -> cut -- failure $ GoalMismatch "intros" g
     (_, _, args, res) -> do
       ctx <- ask
-      let occs = fromMaybe (mkManyGoodNames (hyNamesInScope $ jEntireHypothesis jdg) args) names
+      let gen_names = mkManyGoodNames (hyNamesInScope $ jEntireHypothesis jdg) args
+          occs = case params of
+            IntroduceAllUnnamed -> gen_names
+            IntroduceOnlyNamed names -> names
+            IntroduceOnlyUnnamed n -> take n gen_names
           num_occs = length occs
           top_hole = isTopHole ctx jdg
           bindings = zip occs $ coerce args
@@ -146,6 +157,24 @@ intros' names = rule $ \jdg -> do
                         . pure
           & #syn_scoped <>~ hy'
           & #syn_val   %~ noLoc . lambda (fmap bvar' bound_occs) . unLoc
+
+
+------------------------------------------------------------------------------
+-- | Introduce a single lambda argument, and immediately destruct it.
+introAndDestruct :: TacticsM ()
+introAndDestruct = do
+  hy <- fmap unHypothesis $ hyDiff $ intros' $ IntroduceOnlyUnnamed 1
+  -- This case should never happen, but I'm validating instead of parsing.
+  -- Adding a log to be reminded if the invariant ever goes false.
+  --
+  -- But note that this isn't a game-ending bug. In the worst case, we'll
+  -- accidentally bind too many variables, and incorrectly unify between them.
+  -- Which means some GADT cases that should be eliminated won't be --- not the
+  -- end of the world.
+  unless (length hy == 1) $
+    traceMX "BUG: Introduced too many variables for introAndDestruct! Please report me if you see this! " hy
+
+  for_ hy destruct
 
 
 ------------------------------------------------------------------------------
@@ -432,7 +461,7 @@ refine = intros <%> splitSingle
 
 
 auto' :: Int -> TacticsM ()
-auto' 0 = failure NoProgress
+auto' 0 = failure OutOfGas
 auto' n = do
   let loop = auto' (n - 1)
   try intros

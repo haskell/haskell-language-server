@@ -85,7 +85,6 @@ import           Database.SQLite.Simple
 import           HieDb.Create
 import           HieDb.Types
 import           HieDb.Utils
-import           Ide.Types                            (dynFlagsModifyGlobal)
 
 -- | Bump this version number when making changes to the format of the data stored in hiedb
 hiedbDataVersion :: String

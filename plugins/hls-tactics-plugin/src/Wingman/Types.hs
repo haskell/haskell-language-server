@@ -59,6 +59,7 @@ import Data.IORef
 data TacticCommand
   = Auto
   | Intros
+  | IntroAndDestruct
   | Destruct
   | DestructPun
   | Homomorphism
@@ -77,6 +78,7 @@ tacticTitle = (mappend "Wingman: " .) . go
   where
     go Auto _                   = "Attempt to fill hole"
     go Intros _                 = "Introduce lambda"
+    go IntroAndDestruct _       = "Introduce and destruct term"
     go Destruct var             = "Case split on " <> var
     go DestructPun var          = "Split on " <> var <> " with NamedFieldPuns"
     go Homomorphism var         = "Homomorphic case split on " <> var
@@ -120,9 +122,6 @@ instance Ord CType where
 
 instance Show CType where
   show  = unsafeRender . unCType
-
-instance Show OccName where
-  show  = unsafeRender
 
 instance Show Name where
   show  = unsafeRender
@@ -364,24 +363,19 @@ instance MetaSubst Int (Synthesized (LHsExpr GhcPs)) where
 ------------------------------------------------------------------------------
 -- | Reasons a tactic might fail.
 data TacticError
-  = UndefinedHypothesis OccName
+  = OutOfGas
   | GoalMismatch String CType
-  | UnsolvedSubgoals [Judgement]
-  | UnificationError CType CType
   | NoProgress
   | NoApplicableTactic
-  | IncorrectDataCon DataCon
-  | RecursionOnWrongParam OccName Int OccName
   | UnhelpfulRecursion
   | UnhelpfulDestruct OccName
-  | UnhelpfulSplit OccName
   | TooPolymorphic
   | NotInScope OccName
   | TacticPanic String
+  deriving (Eq)
 
 instance Show TacticError where
-    show (UndefinedHypothesis name) =
-      occNameString name <> " is not available in the hypothesis."
+    show OutOfGas = "Auto ran out of gas"
     show (GoalMismatch tac (CType typ)) =
       mconcat
         [ "The tactic "
@@ -389,36 +383,20 @@ instance Show TacticError where
         , " doesn't apply to goal type "
         , unsafeRender typ
         ]
-    show (UnsolvedSubgoals _) =
-      "There were unsolved subgoals"
-    show (UnificationError (CType t1) (CType t2)) =
-        mconcat
-          [ "Could not unify "
-          , unsafeRender t1
-          , " and "
-          , unsafeRender t2
-          ]
     show NoProgress =
       "Unable to make progress"
     show NoApplicableTactic =
       "No tactic could be applied"
-    show (IncorrectDataCon dcon) =
-      "Data con doesn't align with goal type (" <> unsafeRender dcon <> ")"
-    show (RecursionOnWrongParam call p arg) =
-      "Recursion on wrong param (" <> show call <> ") on arg"
-        <> show p <> ": " <> show arg
     show UnhelpfulRecursion =
       "Recursion wasn't productive"
     show (UnhelpfulDestruct n) =
       "Destructing patval " <> show n <> " leads to no new types"
-    show (UnhelpfulSplit n) =
-      "Splitting constructor " <> show n <> " leads to no new goals"
     show TooPolymorphic =
       "The tactic isn't applicable because the goal is too polymorphic"
     show (NotInScope name) =
       "Tried to do something with the out of scope name " <> show name
     show (TacticPanic err) =
-      "PANIC: " <> err
+      "Tactic panic: " <> err
 
 
 ------------------------------------------------------------------------------
@@ -563,16 +541,18 @@ data AgdaMatch = AgdaMatch
 
 
 data UserFacingMessage
-  = TacticErrors
+  = NotEnoughGas
+  | TacticErrors
   | TimedOut
   | NothingToDo
   | InfrastructureError Text
   deriving Eq
 
 instance Show UserFacingMessage where
-  show TacticErrors            = "Wingman couldn't find a solution"
-  show TimedOut                = "Wingman timed out while trying to find a solution"
-  show NothingToDo             = "Nothing to do"
+  show NotEnoughGas = "Wingman ran out of gas when trying to find a solution.  \nTry increasing the `auto_gas` setting."
+  show TacticErrors = "Wingman couldn't find a solution"
+  show TimedOut     = "Wingman timed out while trying to find a solution"
+  show NothingToDo  = "Nothing to do"
   show (InfrastructureError t) = "Internal error: " <> T.unpack t
 
 

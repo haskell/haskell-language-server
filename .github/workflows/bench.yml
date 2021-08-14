@@ -15,7 +15,7 @@ jobs:
         uses: fkirc/skip-duplicate-actions@v3.4.0
         with:
           cancel_others: true
-          paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", ".circleci/**", "install/**", "**.nix", "**/test/**", "flake.lock"]'
+          paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", ".circleci/**", "install/**", "**.nix", "**/test/**", "flake.lock", "**/README.md", "FUNDING.yml"]'
 
   bench-init:
     needs: pre_job

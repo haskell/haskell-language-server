@@ -76,7 +76,7 @@ commands =
           ])
       (pure . \case
         []    -> intros
-        names -> intros' $ Just names
+        names -> intros' $ IntroduceOnlyNamed names
       )
       [ Example
           Nothing
@@ -100,7 +100,7 @@ commands =
 
   , command "intro" Deterministic (Bind One)
       "Construct a lambda expression, binding an argument with the given name."
-      (pure . intros' . Just . pure)
+      (pure . intros' . IntroduceOnlyNamed . pure)
       [ Example
           Nothing
           ["aye"]

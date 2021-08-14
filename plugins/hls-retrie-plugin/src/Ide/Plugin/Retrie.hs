@@ -88,8 +88,12 @@ import           Language.LSP.Server                  (LspM,
                                                        ProgressCancellable (Cancellable),
                                                        sendNotification,
                                                        sendRequest,
-                                                       withIndefiniteProgress, LspT, MonadLsp)
-import           Language.LSP.Types                   as J
+                                                       withIndefiniteProgress,
+                                                       MonadLsp)
+import           Language.LSP.Types                   as J hiding
+                                                           (SemanticTokenAbsolute (length, line),
+                                                            SemanticTokenRelative (length),
+                                                            SemanticTokensEdit (_start))
 import           Retrie.CPP                           (CPP (NoCPP), parseCPP)
 import           Retrie.Context                       (ContextUpdater, updateContext)
 import           Retrie.ExactPrint                    (fix, relativiseApiAnns,

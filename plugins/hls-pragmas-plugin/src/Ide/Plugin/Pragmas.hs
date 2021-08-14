@@ -14,6 +14,7 @@ import           Control.Applicative        ((<|>))
 import           Control.Lens               hiding (List)
 import           Control.Monad              (join)
 import           Control.Monad.IO.Class     (MonadIO (liftIO))
+import           Data.Char                  (isSpace)
 import qualified Data.HashMap.Strict        as H
 import           Data.List
 import           Data.List.Extra            (nubOrdOn)
@@ -51,7 +52,7 @@ codeActionProvider state _plId (J.CodeActionParams _ _ docId _ (J.CodeActionCont
   pm <- liftIO $ fmap join $ runAction "Pragmas.GetParsedModule" state $ getParsedModule `traverse` mFile
   mbContents <- liftIO $ fmap (snd =<<) $ runAction "Pragmas.GetFileContents" state $ getFileContents `traverse` mFile
   let dflags = ms_hspp_opts . pm_mod_summary <$> pm
-      insertRange = maybe (Range (Position 0 0) (Position 0 0)) endOfModuleHeader mbContents
+      insertRange = maybe (Range (Position 0 0) (Position 0 0)) findNextPragmaPosition mbContents
       pedits = nubOrdOn snd . concat $ suggest dflags <$> diags
   return $ Right $ List $ pragmaEditToAction uri insertRange <$> pedits
 
@@ -80,9 +81,15 @@ suggest dflags diag =
 
 suggestDisableWarning :: Diagnostic -> [PragmaEdit]
 suggestDisableWarning Diagnostic {_code}
-  | Just (J.InR (T.stripPrefix "-W" -> Just w)) <- _code =
+  | Just (J.InR (T.stripPrefix "-W" -> Just w)) <- _code
+  , w `notElem` warningBlacklist =
     pure ("Disable \"" <> w <> "\" warnings", OptGHC w)
   | otherwise = []
+
+-- Don't suggest disabling type errors as a solution to all type errors
+warningBlacklist :: [T.Text]
+-- warningBlacklist = []
+warningBlacklist = ["deferred-type-errors"]
 
 -- ---------------------------------------------------------------------
 
@@ -181,13 +188,33 @@ completion _ide _ complParams = do
                       }
         _ -> return $ J.List []
 
--- ---------------------------------------------------------------------
+-----------------------------------------------------------------------
 
--- | Find first line after (last pragma / last shebang / beginning of file).
--- Useful for inserting pragmas.
-endOfModuleHeader :: T.Text -> Range
-endOfModuleHeader contents = Range loc loc
-    where
-        loc = Position line 0
-        line = maybe 0 succ (lastLineWithPrefix "{-#" <|> lastLineWithPrefix "#!")
-        lastLineWithPrefix pre = listToMaybe $ reverse $ findIndices (T.isPrefixOf pre) $ T.lines contents
+-- | Find first line after the last file header pragma
+-- Defaults to line 0 if the file contains no shebang(s), OPTIONS_GHC pragma(s), or LANGUAGE pragma(s)
+-- Otherwise it will be one after the count of line numbers, checking in order: Shebangs -> OPTIONS_GHC -> LANGUAGE
+-- Taking the max of these to account for the possibility of interchanging order of these three Pragma types
+findNextPragmaPosition :: T.Text -> Range
+findNextPragmaPosition contents = Range loc loc
+  where
+    loc = Position line 0
+    line = afterLangPragma . afterOptsGhc $ afterShebang
+    afterLangPragma = afterPragma "LANGUAGE" contents'
+    afterOptsGhc = afterPragma "OPTIONS_GHC" contents'
+    afterShebang = lastLineWithPrefix (T.isPrefixOf "#!") contents' 0
+    contents' = T.lines contents
+
+afterPragma :: T.Text -> [T.Text] -> Int -> Int
+afterPragma name contents lineNum = lastLineWithPrefix (checkPragma name) contents lineNum
+
+lastLineWithPrefix :: (T.Text -> Bool) -> [T.Text] -> Int -> Int
+lastLineWithPrefix p contents lineNum = max lineNum next
+  where
+    next = maybe lineNum succ $ listToMaybe . reverse $ findIndices p contents
+
+checkPragma :: T.Text -> T.Text -> Bool
+checkPragma name = check
+  where
+    check l = isPragma l && getName l == name
+    getName l = T.take (T.length name) $ T.dropWhile isSpace $ T.drop 3 l
+    isPragma = T.isPrefixOf "{-#"

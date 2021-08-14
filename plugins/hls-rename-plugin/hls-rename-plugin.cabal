@@ -24,8 +24,8 @@ library
     , base            >=4.12 && <5
     , lsp-types
     , lsp
-    , hls-plugin-api  ^>=1.1
-    , ghcide          >=1.4.0.4 && <1.5
+    , hls-plugin-api  ^>=1.2
+    , ghcide          >=1.4 && <1.5
     , retrie          >0.1.1.1
     , transformers
     , hls-retrie-plugin >= 1.0.1.1
@@ -48,4 +48,4 @@ test-suite tests
     , base
     , filepath
     , hls-rename-plugin
-    , hls-test-utils      ^>=1.0
+    , hls-test-utils             >=1.0 && <1.2

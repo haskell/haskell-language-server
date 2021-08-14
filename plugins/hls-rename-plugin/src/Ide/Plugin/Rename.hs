@@ -64,7 +64,7 @@ renameFile state refs oldNameStr newNameStr nfp = do
     let sourceEdits = getSourceEdits refs (mkRdrUnqual $ mkTcOcc newNameStr) src
 
     -- Rename RHS with retrie
-    Location originUri _ <- handleMaybe "error: could not find name origin" $ find containsDecl refs
+    Location originUri _ <- handleMaybe "error: could not find name origin" $ find refContainsDecl refs
     originNfp <- forceGetNfp originUri
     ParsedModule{pm_parsed_source = L _ HsModule{hsmodName}} <-
         handleMaybeM "error: parsed source" $
@@ -328,5 +328,5 @@ subtractSrcSpans span1 (RealSrcSpan span2)
         endLoc = srcSpanEnd span1
 subtractSrcSpans _ _ = error ""
 
-containsDecl :: Location -> Bool
-containsDecl (Location _ Range{_start = Position{_character}}) = _character == 0
+refContainsDecl :: Location -> Bool
+refContainsDecl (Location _ (Range Position{_character} _)) = _character == 0

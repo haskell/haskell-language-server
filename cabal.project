@@ -23,6 +23,7 @@ packages:
          ./plugins/hls-pragmas-plugin
          ./plugins/hls-module-name-plugin
          ./plugins/hls-ormolu-plugin
+         ./plugins/hls-call-hierarchy-plugin
 tests: true
 
 package *
@@ -37,7 +38,7 @@ source-repository-package
 
 write-ghc-environment-files: never
 
-index-state: 2021-07-14T20:31:09Z
+index-state: 2021-08-08T02:21:16Z
 
 constraints:
     -- Diagrams doesn't support optparse-applicative >= 0.16 yet

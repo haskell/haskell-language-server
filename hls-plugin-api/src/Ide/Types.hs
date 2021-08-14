@@ -1,20 +1,20 @@
-{-# LANGUAGE BangPatterns         #-}
-{-# LANGUAGE CPP                  #-}
-{-# LANGUAGE ConstraintKinds      #-}
-{-# LANGUAGE DefaultSignatures    #-}
-{-# LANGUAGE DeriveAnyClass       #-}
-{-# LANGUAGE DeriveGeneric        #-}
-{-# LANGUAGE DerivingStrategies   #-}
-{-# LANGUAGE FlexibleContexts     #-}
-{-# LANGUAGE FlexibleInstances    #-}
-{-# LANGUAGE GADTs                #-}
+{-# LANGUAGE BangPatterns               #-}
+{-# LANGUAGE CPP                        #-}
+{-# LANGUAGE ConstraintKinds            #-}
+{-# LANGUAGE DefaultSignatures          #-}
+{-# LANGUAGE DeriveAnyClass             #-}
+{-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE DerivingStrategies         #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE OverloadedStrings    #-}
-{-# LANGUAGE PolyKinds            #-}
-{-# LANGUAGE ScopedTypeVariables  #-}
-{-# LANGUAGE TypeFamilies         #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE ViewPatterns         #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE PolyKinds                  #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE UndecidableInstances       #-}
+{-# LANGUAGE ViewPatterns               #-}
 
 module Ide.Types
     where
@@ -46,9 +46,21 @@ import           GHC.Generics
 import           Ide.Plugin.Config
 import           Ide.Plugin.Properties
 import           Language.LSP.Server             (LspM, getVirtualFile)
-import           Language.LSP.Types
-import           Language.LSP.Types.Capabilities
-import           Language.LSP.Types.Lens         as J hiding (id)
+import           Language.LSP.Types              hiding (SemanticTokenAbsolute(length, line), SemanticTokenRelative(length), SemanticTokensEdit(_start))
+import           Language.LSP.Types.Capabilities (ClientCapabilities (ClientCapabilities),
+                                                  TextDocumentClientCapabilities (_codeAction, _documentSymbol))
+import           Language.LSP.Types.Lens         as J (HasChildren (children),
+                                                       HasCommand (command),
+                                                       HasContents (contents),
+                                                       HasDeprecated (deprecated),
+                                                       HasEdit (edit),
+                                                       HasKind (kind),
+                                                       HasName (name),
+                                                       HasOptions (..),
+                                                       HasRange (range),
+                                                       HasTextDocument (..),
+                                                       HasTitle (title),
+                                                       HasUri (..))
 import           Language.LSP.VFS
 import           OpenTelemetry.Eventlog
 import           Options.Applicative             (ParserInfo)
@@ -255,6 +267,15 @@ instance PluginMethod TextDocumentRangeFormatting where
   pluginEnabled _ pid conf = (PluginId $ formattingProvider conf) == pid
   combineResponses _ _ _ _ (x :| _) = x
 
+instance PluginMethod TextDocumentPrepareCallHierarchy where
+  pluginEnabled _ = pluginEnabledConfig plcCallHierarchyOn
+
+instance PluginMethod CallHierarchyIncomingCalls where
+  pluginEnabled _ = pluginEnabledConfig plcCallHierarchyOn
+
+instance PluginMethod CallHierarchyOutgoingCalls where
+  pluginEnabled _ = pluginEnabledConfig plcCallHierarchyOn
+
 -- ---------------------------------------------------------------------
 
 -- | Methods which have a PluginMethod instance
@@ -452,11 +473,13 @@ instance HasTracing InitializeParams
 instance HasTracing (Maybe InitializedParams)
 instance HasTracing WorkspaceSymbolParams where
   traceWithSpan sp (WorkspaceSymbolParams _ _ query) = setTag sp "query" (encodeUtf8 query)
+instance HasTracing CallHierarchyIncomingCallsParams
+instance HasTracing CallHierarchyOutgoingCallsParams
 
 -- ---------------------------------------------------------------------
 
 {-# NOINLINE pROCESS_ID #-}
-{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DerivingStrategies         #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 pROCESS_ID :: T.Text
 pROCESS_ID = unsafePerformIO getPid

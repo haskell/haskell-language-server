@@ -22,7 +22,8 @@ packages:
          ./plugins/hls-floskell-plugin
          ./plugins/hls-pragmas-plugin
          ./plugins/hls-module-name-plugin
-        --  ./plugins/hls-ormolu-plugin
+         ./plugins/hls-ormolu-plugin
+         ./plugins/hls-call-hierarchy-plugin
 tests: true
 
 package *
@@ -67,15 +68,6 @@ source-repository-package
   subdir: dependent-sum-template
 -- https://github.com/obsidiansystems/dependent-sum/pull/57
 
-source-repository-package
-  type: git
-  location: https://github.com/anka-213/lsp
-  tag: tag-ghc-9.0.1-without-pr-326
-  subdir: lsp-types
-  subdir: lsp
-  subdir: lsp-test
--- https://github.com/haskell/lsp/pull/312
-
 -- benchmark dependency
 source-repository-package
   type: git
@@ -84,11 +76,11 @@ source-repository-package
 
 write-ghc-environment-files: never
 
-index-state: 2021-07-14T20:31:09Z
+index-state: 2021-08-08T02:21:16Z
 
 constraints:
     -- These plugins doesn't work on GHC9 yet
-    haskell-language-server -brittany -class -fourmolu -ormolu -splice -stylishhaskell -tactic -refineImports
+    haskell-language-server -brittany -class -fourmolu -splice -stylishhaskell -tactic -refineImports
 
 
 allow-newer:
@@ -98,7 +90,6 @@ allow-newer:
     -- brittany:ghc-boot-th,
     -- butcher:base,
     -- fourmolu:ghc-lib-parser,
-    -- ormolu:ghc-lib-parser,
     -- stylish-haskell:ghc-lib-parser,
     -- stylish-haskell:Cabal,
     -- multistate:base,
