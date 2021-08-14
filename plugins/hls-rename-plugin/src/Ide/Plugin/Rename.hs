@@ -215,9 +215,10 @@ getRewriteSpecs state oldNameStr newNameStr originModule nfp = do
         mkAdhoc qualStr = rewriteType $ qualStr ++ oldNameStr ++ " = " ++ qualStr ++ newNameStr
         unQualRewrite = mkAdhoc ""
     pure $ case mbImportDecl of
-       Just decl@ImportDecl{ideclQualified = True} -> [mkAdhoc $ getQualifierStr decl]
-       Just decl -> [unQualRewrite, mkAdhoc $ getQualifierStr decl]
-       Nothing -> [unQualRewrite]
+        Just decl -> if isQualifiedImport decl
+                    then [mkAdhoc $ getQualifierStr decl]
+                    else [unQualRewrite, mkAdhoc $ getQualifierStr decl]
+        Nothing -> [unQualRewrite]
 
 getQualifierStr :: ImportDecl pass -> String
 getQualifierStr ImportDecl{ideclAs, ideclName} =
