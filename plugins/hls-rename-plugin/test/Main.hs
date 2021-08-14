@@ -59,7 +59,7 @@ tests = testGroup "rename"
     ]
 
 goldenWithRename :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
-goldenWithRename title path =
+goldenWithRename title path = requiresRenamePlugin $
     goldenWithHaskellDoc renamePlugin title testDataDir path "expected" "hs"
 
 testDataDir :: FilePath

@@ -26,7 +26,6 @@ library
     , lsp
     , hls-plugin-api  ^>=1.2
     , ghcide          >=1.4 && <1.5
-    , retrie          >0.1.1.1
     , transformers
     , hls-retrie-plugin >= 1.0.1.1
     , text
@@ -35,6 +34,9 @@ library
     , ghc
     , hiedb
     , ghc-exactprint
+
+  if impl(ghc >= 8.8)
+    build-depends: retrie >=1.0.0.0
 
   default-language: Haskell2010
 
