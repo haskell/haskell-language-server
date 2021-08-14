@@ -1,11 +1,11 @@
 {-# LANGUAGE DataKinds         #-}
-{-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Ide.Plugin.Rename (descriptor) where
 
 import           Control.Monad.IO.Class
+import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Except
 import qualified Data.Bifunctor
 import           Data.Char
@@ -15,7 +15,6 @@ import           Data.List
 import qualified Data.Map                             as M
 import           Data.Maybe
 import qualified Data.Text                            as T
-import           Debug.Trace
 import           Development.IDE                      hiding (pluginHandlers)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.Shake
@@ -24,12 +23,15 @@ import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.Spans.AtPoint
 import           GhcPlugins                           hiding (getLoc, (<>))
 import           HieDb.Query
+import           Ide.Plugin.Config
 import           Ide.Plugin.Retrie                    hiding (descriptor)
 import           Ide.PluginUtils
 import           Ide.Types
-import           Language.LSP.Types                   hiding (_changes)
+import           Language.LSP.Server
+import           Language.LSP.Types                   hiding (_changes, _range)
 import           Retrie                               hiding (HsModule, getLoc)
 import           Retrie.SYB
+import Control.Monad
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor pluginId = (defaultPluginDescriptor pluginId) {
@@ -37,61 +39,58 @@ descriptor pluginId = (defaultPluginDescriptor pluginId) {
 }
 
 renameProvider :: PluginMethodHandler IdeState TextDocumentRename
-renameProvider state pluginId (RenameParams tdi@(TextDocumentIdentifier uri) pos _progToken newRdrNameStr) = response $ do
+renameProvider state pluginId (RenameParams (TextDocumentIdentifier uri) pos _prog newNameText) = response $ do
+    -- get reference locations
     nfp <- forceGetNfp uri
-    (HAR _ asts _ _ _, mapping) <- handleMaybeM "ast" $ liftIO $ runAction "Rename.GetHieAst" state (useWithStale GetHieAst nfp)
-    let oldName = head $ getNamesAtPoint asts pos mapping
-        oldNameStr = getOccString oldName
+    oldName <- head <$> getNamesAtPos state pos nfp
     refs <- liftIO $ runAction "Rename.references" state (refsAtName nfp oldName)
+    refFiles <- mapM forceGetNfp (nub [uri | Location uri _ <- refs])
 
-    -- rename LHS declarations / imports / exports
-    let refUris = nub [refFile | Location refFile _ <- refs]
-        newRdrName = mkRdrUnqual $ mkTcOcc $ T.unpack newRdrNameStr
-    refFiles <- mapM forceGetNfp refUris
-    sources <- mapM (handleMaybe "parsed source") =<< liftIO (runAction
-        "Rename.GetAnnotatedParsedModule"
-        state
-        (uses GetAnnotatedParsedSource refFiles))
-    let declEdits = filter
-            (not . isListEmpty . snd)
-            (zip refUris $ map (sourceEdits newRdrName refs) sources)
+    edits <- mapM (renameFile state refs (getOccString oldName) (T.unpack newNameText)) refFiles
+    pure $ WorkspaceEdit (Just $ foldl1 (HM.unionWith (<>)) edits) Nothing Nothing
 
-    -- use retrie to rename right-hand sides
-    (session, _) <- handleMaybeM "session deps" . liftIO $ runAction "Rename.GhcSessionDeps" state (useWithStale GhcSessionDeps nfp)
-    let isType = isUpper $ head oldNameStr
-        rewrite = (if isType then AdhocType else Adhoc) (oldNameStr ++ " = " ++ T.unpack newRdrNameStr)
-    (_errors, retrieEdit@WorkspaceEdit{_changes}) <-
-        liftIO $ callRetrieWithTransformerAndUpdates
-            (referenceTransformer refs)
-            contextUpdater
+renameFile :: IdeState
+    -> [Location]
+    -> String
+    -> String
+    -> NormalizedFilePath
+    -> ExceptT String (LspT Config IO) WorkspaceEditMap
+renameFile state refs oldNameStr newNameStr nfp = do
+    -- Rename LHS declarations / imports / exports
+    src <- handleMaybeM "parsed source" $
+        liftIO $ runAction
+            "Rename.GetAnnotatedParsedModule"
             state
-            (hscEnv session)
-            [Right rewrite]
-            nfp
-            False
+            (use GetAnnotatedParsedSource nfp)
+    let sourceEdits = getSourceEdits refs (mkRdrUnqual $ mkTcOcc newNameStr) src
 
-    pure $ case declEdits of
-        [] -> WorkspaceEdit Nothing Nothing Nothing
-        declEdits' -> retrieEdit {
-            _changes = foldl1 (.) (map (uncurry $ HM.insertWith (<>)) declEdits') <$> _changes
-            }
+    -- Rename RHS with retrie
+    rhsEdits <- getRhsEdits state refs (getRewrite oldNameStr newNameStr) nfp
 
+    pure $ HM.insertWith (<>) (nfpToUri nfp) sourceEdits rhsEdits
+
+getRewrite :: String -> String -> RewriteSpec
+getRewrite oldNameStr newNameStr =
+    (if isType then AdhocType else Adhoc) (oldNameStr ++ " = " ++ newNameStr)
+    where
+        isType = isUpper $ head oldNameStr
 
 -------------------------------------------------------------------------------
 -- Source renaming
 
-sourceEdits :: RdrName -> [Location] -> Annotated ParsedSource -> List TextEdit
-sourceEdits newRdrName refs annPs = makeDiffTextEdit src res
+getSourceEdits :: [Location] -> RdrName -> Annotated ParsedSource -> List TextEdit
+getSourceEdits refs newRdrName annPs = do
+    makeDiffTextEdit src res
     where
         src = T.pack $ printA annPs
         updateMod =
-            updateImports newRdrName refs .
-            updateExports newRdrName refs .
-            updateLhsDecls newRdrName refs
+            updateImports refs newRdrName .
+            updateExports refs newRdrName .
+            updateLhsDecls refs newRdrName
         res = T.pack $ printA $ (fmap . fmap) updateMod annPs
 
-updateImports :: RdrName -> [Location] -> HsModule GhcPs -> HsModule GhcPs
-updateImports newRdrName refs ps@HsModule{hsmodImports} =
+updateImports :: [Location] -> RdrName -> HsModule GhcPs -> HsModule GhcPs
+updateImports refs newRdrName ps@HsModule{hsmodImports} =
     ps {hsmodImports = map (fmap renameImport) hsmodImports}
     where
         renameImport :: ImportDecl GhcPs -> ImportDecl GhcPs
@@ -102,8 +101,8 @@ updateImports newRdrName refs ps@HsModule{hsmodImports} =
                 }
         renameImport importDecl = importDecl
 
-updateExports :: RdrName -> [Location] -> HsModule GhcPs -> HsModule GhcPs
-updateExports newRdrName refs ps@HsModule{hsmodExports} =
+updateExports :: [Location] -> RdrName -> HsModule GhcPs -> HsModule GhcPs
+updateExports refs newRdrName ps@HsModule{hsmodExports} =
     ps {hsmodExports = (fmap . fmap) (map (fmap $ renameIE refs newRdrName)) hsmodExports}
 
 -- TODO: implement explicit type import/export renames
@@ -121,8 +120,8 @@ renameIE refs newRdrName IEThingWith{}
     = error "not implemented explicit type import/export renames yet"
 renameIE _ _ export = export
 
-updateLhsDecls :: RdrName -> [Location] -> HsModule GhcPs -> HsModule GhcPs
-updateLhsDecls newRdrName refs ps@HsModule{hsmodDecls} =
+updateLhsDecls :: [Location] -> RdrName -> HsModule GhcPs -> HsModule GhcPs
+updateLhsDecls refs newRdrName ps@HsModule{hsmodDecls} =
     ps {hsmodDecls = map (fmap renameLhsDecl) hsmodDecls}
     where
         renameLhsDecl :: HsDecl GhcPs -> HsDecl GhcPs
@@ -174,33 +173,43 @@ renameLhsMatch newRdrName match@Match{m_ctxt = funRhs@FunRhs{mc_fun}} =
     match{m_ctxt = funRhs{mc_fun = fmap (const newRdrName) mc_fun}}
 renameLhsMatch _ _ = error "Expected function match"
 
-
 -------------------------------------------------------------------------------
 -- retrie
+
+getRhsEdits :: IdeState -> [Location] -> RewriteSpec -> NormalizedFilePath -> ExceptT String (LspT Config IO) WorkspaceEditMap
+getRhsEdits state refs rewriteSpec nfp = do
+    (session, _) <- handleMaybeM "session deps" $ liftIO $ runAction "Rename.GhcSessionDeps" state (useWithStale GhcSessionDeps nfp)
+    (errors, WorkspaceEdit{_changes = edits}) <-
+        liftIO $ callRetrieWithTransformerAndUpdates
+            (referenceTransformer refs)
+            contextUpdater
+            state
+            (hscEnv session)
+            [Right rewriteSpec]
+            nfp
+            True
+    lift $ sendRetrieErrors errors
+    handleMaybe "retrie" edits
 
 -- limits matches to reference locations
 referenceTransformer :: [Location] -> MatchResultTransformer
 referenceTransformer refs Context{ctxtBinders} match
     | MatchResult _sub template <- match
-    , trace ("\nRefs: " ++ show refs ++ "\nContext: " ++ show (map getRdrLoc ctxtBinders))
-        any (containsRef . getRdrLoc) ctxtBinders = pure match
+    , any (containsRef . getRdrLoc) ctxtBinders = pure match
     | otherwise = pure NoMatch
     where
         containsRef srcSpan = any (flip isSubspanOf srcSpan . locToSpan) refs
         getRdrLoc (Exact name) = nameSrcSpan name
         getRdrLoc _            = error "Expected exact name"
 
-
 -- Hacky use of ctxtBinders to track match spans
 contextUpdater :: (Typeable b, Monad f) => Context -> Int -> b -> f Context
 contextUpdater c@Context{ctxtBinders} i = const (pure c)
     `extQ` (return . updType)
     `extQ` (return . updExpr)
-    `extQ` (return . updMatch)
     `extQ` (return . updTyDecl)
+    `extQ` (return . updMatch)
     where
-        makeName = Exact . mkInternalName initTyVarUnique (mkVarOcc "")
-
         updType :: LHsType GhcPs -> Context
         updType (L _ (HsAppTy _ (L matchSpan _) _)) =
             c {ctxtBinders = makeName matchSpan : ctxtBinders}
@@ -213,11 +222,6 @@ contextUpdater c@Context{ctxtBinders} i = const (pure c)
         updExpr (L matchSpan _) =
             c {ctxtBinders = makeName matchSpan : ctxtBinders}
 
-        -- updTyDecl :: LTyClDecl GhcPs -> Context
-        -- updTyDecl (L matchSpan SynDecl{tcdLName}) =
-        --     c {ctxtBinders = makeName (matchSpan `subtractSrcSpans` getLoc tcdLName) : ctxtBinders}
-        -- updTyDecl (L _ _) = c
-
         updTyDecl :: TyClDecl GhcPs -> Context
         updTyDecl SynDecl{tcdRhs} =
             c {ctxtBinders = makeName (getLoc tcdRhs) : ctxtBinders}
@@ -228,6 +232,59 @@ contextUpdater c@Context{ctxtBinders} i = const (pure c)
             c {ctxtBinders = makeName (matchSpan `subtractSrcSpans` funNameSpan) : ctxtBinders}
         updMatch (L matchSpan _) = c {ctxtBinders = makeName matchSpan : ctxtBinders}
 
+        makeName = Exact . mkInternalName initTyVarUnique (mkVarOcc "")
+
+-------------------------------------------------------------------------------
+-- reference finding
+
+refsAtName :: NormalizedFilePath -> Name -> Action [Location]
+refsAtName nfp name = do
+    ShakeExtras{hiedb} <- getShakeExtras
+    fois <- HM.keys <$> getFilesOfInterestUntracked
+    Just asts <- sequence <$> usesWithStale GetHieAst fois
+    let foiRefs = concat $ mapMaybe (getNameAstLocations name) asts
+        Just mod = nameModule_maybe name
+    refs <- liftIO $ mapMaybe rowToLoc <$> findReferences
+        hiedb
+        True
+        (nameOccName name)
+        (Just $ moduleName mod)
+        (Just $ moduleUnitId mod)
+        (map fromNormalizedFilePath fois)
+    pure $ nubOrd $ foiRefs ++ refs
+
+getNameAstLocations :: Name -> (HieAstResult, PositionMapping) -> Maybe [Location]
+getNameAstLocations name (HAR _ _ rm _ _, mapping) =
+    mapMaybe (toCurrentLocation mapping . realSrcSpanToLocation . fst) <$> M.lookup (Right name) rm
+
+-------------------------------------------------------------------------------
+-- util
+
+nfpToUri :: NormalizedFilePath -> Uri
+nfpToUri = filePathToUri . fromNormalizedFilePath
+
+forceGetNfp :: (Monad m) => Uri -> ExceptT String m NormalizedFilePath
+forceGetNfp uri = handleMaybe "uri" $ toNormalizedFilePath <$> uriToFilePath uri
+
+isRef :: Retrie.HasSrcSpan a => [Location] -> a -> Bool
+isRef refs = (`elem` refs) . fromJust . srcSpanToLocation . getLoc
+
+locToSpan :: Location -> SrcSpan
+locToSpan (Location uri (Range (Position l c) (Position l' c'))) =
+    mkSrcSpan (mkSrcLoc' uri (succ l) (succ c)) (mkSrcLoc' uri (succ l') (succ c'))
+    where
+        mkSrcLoc' = mkSrcLoc . mkFastString . fromJust . uriToFilePath
+
+longerThan :: Location -> Int -> Bool
+longerThan (Location _ (Range Position{_character = start} Position{_character = end})) n =
+     end - start > n
+
+getNamesAtPos :: IdeState -> Position -> NormalizedFilePath -> ExceptT String (LspT Config IO) [Name]
+getNamesAtPos state pos nfp = do
+    (HAR{hieAst}, mapping) <- handleMaybeM "ast" . liftIO . runAction "Rename.GetHieAst" state $ useWithStale GetHieAst nfp
+    let oldName = getAstNamesAtPoint hieAst pos mapping
+    pure oldName
+
 subtractSrcSpans :: SrcSpan -> SrcSpan -> SrcSpan
 subtractSrcSpans span1 (RealSrcSpan span2)
     = mkSrcSpan startLoc endLoc
@@ -235,60 +292,3 @@ subtractSrcSpans span1 (RealSrcSpan span2)
         startLoc = mkSrcLoc (srcSpanFile span2) (srcSpanStartLine span2) (srcSpanEndCol span2)
         endLoc = srcSpanEnd span1
 subtractSrcSpans _ _ = error ""
-
--------------------------------------------------------------------------------
--- reference finding
-
-refsAtName :: NormalizedFilePath -> Name -> Action [Location]
-refsAtName nfp name = do
-    fois <- HM.keys <$> getFilesOfInterestUntracked
-    Just asts <- sequence <$> usesWithStale GetHieAst fois
-    let foiRefs = concat $ mapMaybe (getNameAstLocations name) asts
-    refs <- nameDbRefs fois name
-    pure $ nubOrd $ foiRefs ++ refs
-
-nameDbRefs :: [NormalizedFilePath] -> Name -> Action [Location]
-nameDbRefs fois name = do
-    ShakeExtras{hiedb} <- getShakeExtras
-    case nameModule_maybe name of
-        Nothing -> pure []
-        Just mod -> do
-            let exclude = map fromNormalizedFilePath fois
-            rows <- liftIO $ findReferences
-                hiedb
-                True
-                (nameOccName name)
-                (Just $ moduleName mod)
-                (Just $ moduleUnitId mod)
-                exclude
-            pure $ mapMaybe rowToLoc rows
-
-getNameAstLocations :: Name -> (HieAstResult, PositionMapping) -> Maybe [Location]
-getNameAstLocations name (HAR _ _ rm _ _, mapping) =
-    mapMaybe (toCurrentLocation mapping . realSrcSpanToLocation . fst) <$> M.lookup (Right name) rm
-
-
--------------------------------------------------------------------------------
--- util
-
-forceGetNfp :: (Monad m) => Uri -> ExceptT String m NormalizedFilePath
-forceGetNfp nfp = handleMaybe "uri" $ toNormalizedFilePath <$> uriToFilePath nfp
-
-isTopLevelSpan :: SrcSpan -> Bool
-isTopLevelSpan (RealSrcSpan srcSpan) = srcSpanStartCol srcSpan == 1
-isTopLevelSpan _                     = False
-
-isListEmpty :: List a -> Bool
-isListEmpty (List xs) = null xs
-
-isRef :: Retrie.HasSrcSpan a => [Location] -> a -> Bool
-isRef refs = isRef' refs . getLoc
-
-isRef' :: [Location] -> SrcSpan -> Bool
-isRef' refs = (`elem` refs) . fromJust . srcSpanToLocation
-
-locToSpan :: Location -> SrcSpan
-locToSpan (Location uri (Range (Position l c) (Position l' c'))) =
-    mkSrcSpan (mkSrcLoc' uri (succ l) (succ c)) (mkSrcLoc' uri (succ l') (succ c'))
-    where
-        mkSrcLoc' = mkSrcLoc . mkFastString . fromJust . uriToFilePath

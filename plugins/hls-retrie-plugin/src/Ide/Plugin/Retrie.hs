@@ -15,7 +15,7 @@
 {-# OPTIONS -Wno-orphans #-}
 {-# LANGUAGE RankNTypes          #-}
 
-module Ide.Plugin.Retrie (descriptor, callRetrieWithTransformerAndUpdates, RunRetrieParams(..), response, handleMaybe, handleMaybeM) where
+module Ide.Plugin.Retrie (descriptor, callRetrieWithTransformerAndUpdates, RunRetrieParams(..), response, handleMaybe, handleMaybeM, sendRetrieErrors) where
 
 import           Control.Concurrent.Extra             (readVar)
 import           Control.Exception.Safe               (Exception (..),
@@ -88,7 +88,7 @@ import           Language.LSP.Server                  (LspM,
                                                        ProgressCancellable (Cancellable),
                                                        sendNotification,
                                                        sendRequest,
-                                                       withIndefiniteProgress)
+                                                       withIndefiniteProgress, LspT, MonadLsp)
 import           Language.LSP.Types                   as J
 import           Retrie.CPP                           (CPP (NoCPP), parseCPP)
 import           Retrie.Context                       (ContextUpdater, updateContext)
@@ -157,15 +157,21 @@ runRetrieCmd state RunRetrieParams{originatingFile = uri, ..} =
                 (map Right rewrites <> map Left importRewrites)
                 nfp
                 restrictToOriginatingFile
-        unless (null errors) $
-            lift $ sendNotification SWindowShowMessage $
-                    ShowMessageParams MtWarning $
-                    T.unlines $
-                        "## Found errors during rewrite:" :
-                        ["-" <> T.pack (show e) | e <- errors]
+        lift $ sendRetrieErrors errors
+
         lift $ sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edits) (\_ -> pure ())
         return ()
     return $ Right Null
+
+
+sendRetrieErrors :: (MonadLsp c f) => [CallRetrieError] -> f ()
+sendRetrieErrors errors = do
+    unless (null errors) $
+        sendNotification SWindowShowMessage $
+            ShowMessageParams MtWarning $
+            T.unlines $
+                "## Found errors during rewrite:" :
+                ["-" <> T.pack (show e) | e <- errors]
 
 extractImports :: ModSummary -> [HsBindLR GhcRn GhcRn] -> RewriteSpec -> [ImportSpec]
 extractImports ModSummary{ms_mod} topLevelBinds (Unfold thing)

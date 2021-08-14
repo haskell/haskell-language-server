@@ -25,7 +25,7 @@ library
     , lsp-types
     , lsp
     , hls-plugin-api  ^>=1.1
-    , ghcide          >=1.4.0.4
+    , ghcide          >=1.4.0.4 && <1.5
     , retrie          >0.1.1.1
     , transformers
     , hls-retrie-plugin >= 1.0.1.1
