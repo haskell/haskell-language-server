@@ -110,6 +110,7 @@ flags:
     pedantic: true
     class: false
     splice: false
+    rename: false
     refineImports: false
     tactic: false # Dependencies fail
 
