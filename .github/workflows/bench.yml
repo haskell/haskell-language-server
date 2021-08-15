@@ -58,17 +58,17 @@ jobs:
     # max-backjumps is increased as a temporary solution
     # for dependency resolution failure
     - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      run: cabal configure --enable-benchmarks --max-backjumps 12000
+      run: cabal configure --enable-benchmarks --max-backjumps 12000 --project-file cabal-benchmark.project
 
     - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
       name: Build
       shell: bash
-      run: cabal build ghcide:benchHist
+      run: cabal build ghcide:benchHist --project-file cabal-benchmark.project
 
     - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
       name: Bench init
       shell: bash
-      run: cabal bench ghcide:benchHist  -j --benchmark-options="all-binaries"
+      run: cabal bench ghcide:benchHist  -j --benchmark-options="all-binaries" --project-file cabal-benchmark.project
 
     # tar is required to preserve file permissions
     # compression speeds up upload/download nicely
@@ -142,7 +142,7 @@ jobs:
     - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
       name: Bench
       shell: bash
-      run: cabal bench ghcide:benchHist  -j --benchmark-options="${{ matrix.example }}"
+      run: cabal bench ghcide:benchHist  -j --benchmark-options="${{ matrix.example }}" --project-file cabal-benchmark.project
 
     - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
       name: Display results
