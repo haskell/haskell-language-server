@@ -29,7 +29,7 @@ package *
   ghc-options: -haddock
   test-show-details: direct
 
-https://gitlab.haskell.org/haskell/ghc-api-compat/-/issues/1#note_371055
+-- see https://gitlab.haskell.org/haskell/ghc-api-compat/-/issues/1#note_371055
 source-repository-package
   type: git
   location: https://github.com/hsyl20/ghc-api-compat
