@@ -15,7 +15,7 @@
 {-# OPTIONS -Wno-orphans #-}
 {-# LANGUAGE RankNTypes          #-}
 
-module Ide.Plugin.Retrie (descriptor, callRetrieWithTransformerAndUpdates, RunRetrieParams(..), response, handleMaybe, handleMaybeM, sendRetrieErrors) where
+module Ide.Plugin.Retrie (descriptor, callRetrieWithTransformerAndUpdates, response, handleMaybe, handleMaybeM, sendRetrieErrors) where
 
 import           Control.Concurrent.Extra             (readVar)
 import           Control.Exception.Safe               (Exception (..),
@@ -43,12 +43,10 @@ import           Data.Hashable                        (unhashed)
 import           Data.IORef.Extra                     (atomicModifyIORef'_,
                                                        newIORef, readIORef)
 import           Data.List.Extra                      (find, nubOrdOn)
-import           Data.Maybe                           (fromMaybe)
 import           Data.String                          (IsString (fromString))
 import qualified Data.Text                            as T
 import qualified Data.Text.IO                         as T
 import           Data.Typeable                        (Typeable)
-import           Debug.Trace                          (trace)
 import           Development.IDE                      hiding (pluginHandlers)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.Shake           (ShakeExtras (knownTargetsVar),
@@ -84,18 +82,18 @@ import           GhcPlugins                           (Outputable,
 import           HsBinds
 import           Ide.PluginUtils
 import           Ide.Types
-import           Language.LSP.Server                  (LspM,
+import           Language.LSP.Server                  (LspM, MonadLsp,
                                                        ProgressCancellable (Cancellable),
                                                        sendNotification,
                                                        sendRequest,
-                                                       withIndefiniteProgress,
-                                                       MonadLsp)
+                                                       withIndefiniteProgress)
 import           Language.LSP.Types                   as J hiding
                                                            (SemanticTokenAbsolute (length, line),
                                                             SemanticTokenRelative (length),
                                                             SemanticTokensEdit (_start))
 import           Retrie.CPP                           (CPP (NoCPP), parseCPP)
-import           Retrie.Context                       (ContextUpdater, updateContext)
+import           Retrie.Context                       (ContextUpdater,
+                                                       updateContext)
 import           Retrie.ExactPrint                    (fix, relativiseApiAnns,
                                                        transformA, unsafeMkA)
 import           Retrie.Fixity                        (mkFixityEnv)

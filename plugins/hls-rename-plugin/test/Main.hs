@@ -14,53 +14,52 @@ renamePlugin = Rename.descriptor "rename"
 tests :: TestTree
 tests = testGroup "rename"
     [ testGroup "Top-level renames"
-        [ ignoreTestBecause "Inconsistent - need to wait for typecheck" $
-          goldenWithRename "function name" "FunctionName" $ \doc -> do
+        [ goldenWithRename "function name" "FunctionName" $ \doc -> do
             rename doc (Position 3 1) "baz"
-        , ignoreTestBecause "Inconsistent - need to wait for typecheck" $
-          goldenWithRename "GADT" "Gadt" $ \doc -> do
+        , goldenWithRename "GADT" "Gadt" $ \doc -> do
             rename doc (Position 6 37) "Expr"
-        , ignoreTestBecause "Inconsistent - need to wait for typecheck" $
-          goldenWithRename "imported function" "ImportedFunction" $ \doc -> do
+        , goldenWithRename "imported function" "ImportedFunction" $ \doc -> do
             rename doc (Position 3 8) "baz"
-        , ignoreTestBecause "Inconsistent - need to wait for typecheck" $
-          goldenWithRename "exported function" "ExportedFunction" $ \doc -> do
+        , goldenWithRename "exported function" "ExportedFunction" $ \doc -> do
             rename doc (Position 2 1) "quux"
-        , ignoreTestBecause "Inconsistent - need to wait for typecheck" $
-          goldenWithRename "hidden function" "HiddenFunction" $ \doc -> do
+        , goldenWithRename "hidden function" "HiddenFunction" $ \doc -> do
             rename doc (Position 0 32) "quux"
-        , ignoreTestBecause "Inconsistent - need to wait for typecheck" $
-          goldenWithRename "allign indentation" "Indentation" $ \doc -> do
+        , goldenWithRename "allign indentation" "Indentation" $ \doc -> do
             rename doc (Position 0 2) "fooBarQuux"
-        ,  ignoreTestBecause "Inconsistent - need to wait for typecheck" $
-          goldenWithRename "shadowed name" "ShadowedName" $ \doc -> do
+        , goldenWithRename "shadowed name" "ShadowedName" $ \doc -> do
             rename doc (Position 1 1) "baz"
-        , ignoreTestBecause "Inconsistent - need to wait for typecheck" $
-          goldenWithRename "qualified function" "QualifiedFunction" $ \doc -> do
+        , goldenWithRename "qualified function" "QualifiedFunction" $ \doc -> do
             rename doc (Position 3 12) "baz"
-        , ignoreTestBecause "Inconsistent - need to wait for typecheck" $
-          goldenWithRename "type constructor" "TypeConstructor" $ \doc -> do
-            rename doc (Position 2 15) "BinaryTree"
+        , expectFailBecause "Bug: Test case giving different result to editor" $
+            goldenWithRename "type constructor" "TypeConstructor" $ \doc -> do
+            rename doc (Position 2 17) "BinaryTree"
         , expectFailBecause "Not implemented yet" $
           goldenWithRename "data constructor" "DataConstructor" $ \doc -> do
             rename doc (Position 0 13) "Apply"
+        , goldenWithRename "import hiding" "ImportHiding" $ \doc -> do
+            rename doc (Position 0 22) "hiddenFoo"
+        , goldenWithRename "qualified as" "QualifiedAs" $ \doc -> do
+            rename doc (Position 3 10) "baz"
+        , goldenWithRename "qualified shadowing" "QualifiedShadowing" $ \doc -> do
+            rename doc (Position 3 12) "foobar"
         ]
-    , testGroup "non Top-level renames"
-        [ expectFailBecause "Only top-level renames are implemented" $
-          goldenWithRename "function argument" "FunctionArgument" $ \doc -> do
+    , expectFailBecause "Only top-level renames are implemented" $
+      testGroup "non Top-level renames"
+        [ goldenWithRename "function argument" "FunctionArgument" $ \doc -> do
             rename doc (Position 3 4) "y"
-        , expectFailBecause "Only top-level renames are implemented" $
-          goldenWithRename "record field" "RecordField" $ \doc -> do
+        , goldenWithRename "record field" "RecordField" $ \doc -> do
             rename doc (Position 6 9) "number"
-        , expectFailBecause "Only top-level renames are implemented" $
-          goldenWithRename "type variable" "TypeVariable" $ \doc -> do
+        , goldenWithRename "type variable" "TypeVariable" $ \doc -> do
             rename doc (Position 0 13) "b"
         ]
     ]
 
 goldenWithRename :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
-goldenWithRename title path = requiresRenamePlugin $
-    goldenWithHaskellDoc renamePlugin title testDataDir path "expected" "hs"
+goldenWithRename title path act =
+    goldenWithHaskellDoc renamePlugin title testDataDir path "expected" "hs" $ \doc -> do
+        waitForProgressDone
+        waitForProgressDone
+        act doc
 
 testDataDir :: FilePath
 testDataDir = "test" </> "testdata"
