@@ -40,8 +40,9 @@ descriptor pluginId = (defaultPluginDescriptor pluginId) {
 renameProvider :: PluginMethodHandler IdeState TextDocumentRename
 renameProvider state pluginId (RenameParams (TextDocumentIdentifier uri) pos _prog newNameText) = response $ do
     nfp <- safeGetNfp uri
-    oldName <- head <$> getNamesAtPos state pos nfp
-    refs <- liftIO $ runAction "Rename.references" state (refsAtName nfp oldName)
+    oldName <- (handleMaybe "error: could not find name at pos" . listToMaybe) =<<
+        getNamesAtPos state pos nfp
+    refs <- refsAtName state nfp oldName
     refFiles <- mapM safeGetNfp (nub [uri | Location uri _ <- refs])
     let newNameStr = T.unpack newNameText
         newRdrName = mkRdrUnqual $ mkTcOcc newNameStr
@@ -262,13 +263,13 @@ contextUpdater c@Context{ctxtBinders} i = const (pure c)
 -------------------------------------------------------------------------------
 -- reference finding
 
-refsAtName :: NormalizedFilePath -> Name -> Action [Location]
-refsAtName nfp name = do
-    ShakeExtras{hiedb} <- getShakeExtras
-    fois <- HM.keys <$> getFilesOfInterestUntracked
-    Just ast <- useWithStale GetHieAst nfp
-    let Just fileRefs = getNameAstLocations name ast
-        Just mod = nameModule_maybe name
+
+refsAtName :: IdeState -> NormalizedFilePath -> Name -> ExceptT [Char] (LspT Config IO) [Location]
+refsAtName state nfp name = do
+    ShakeExtras{hiedb} <- liftIO $ runAction "Rename.HieDb" state getShakeExtras
+    ast <- handleMaybeM "error: ast" $ liftIO $ runAction "" state $ useWithStale GetHieAst nfp
+    fileRefs <- handleMaybe "error: name references" $ getNameAstLocations name ast
+    mod <- handleMaybe "error: module name" $ nameModule_maybe name
     dbRefs <- liftIO $ mapMaybe rowToLoc <$> findReferences
         hiedb
         True
@@ -302,10 +303,9 @@ locToSpan (Location uri (Range (Position l c) (Position l' c'))) =
 
 getNamesAtPos :: IdeState -> Position -> NormalizedFilePath -> ExceptT String (LspT Config IO) [Name]
 getNamesAtPos state pos nfp = do
-    (HAR{hieAst}, mapping) <- handleMaybeM "error: ast" $
-        liftIO $ runAction "Rename.GetHieAst" state $ useWithStale GetHieAst nfp
-    let oldName = getAstNamesAtPoint hieAst pos mapping
-    pure oldName
+    (HAR{hieAst}, mapping) <- handleMaybeM "error: ast" $ liftIO $
+        runAction "Rename.GetHieAst" state $ useWithStale GetHieAst nfp
+    pure $ getAstNamesAtPoint hieAst pos mapping
 
 subtractSrcSpans :: SrcSpan -> SrcSpan -> SrcSpan
 subtractSrcSpans minuend (RealSrcSpan subtrahend)
