@@ -123,7 +123,7 @@ runTactic duration ctx jdg t = do
                $ runStreamingTacticT t jdg tacticState
     (in_chan, out_chan) <- newChan
     timed_out <-
-      fmap isJust $ timeout duration $ consume stream $ \case
+      fmap (not. isJust) $ timeout duration $ consume stream $ \case
         Left _ -> pure ()
         Right proof -> writeChan in_chan $ Just proof
     writeChan in_chan Nothing
