@@ -4,11 +4,11 @@
 module Experiments.Types (module Experiments.Types ) where
 
 import           Data.Aeson
+import           Data.Maybe                (fromMaybe)
 import           Data.Version
 import           Development.Shake.Classes
 import           GHC.Generics
 import           Numeric.Natural
-import           System.FilePath           (isPathSeparator)
 
 data CabalStack = Cabal | Stack
   deriving (Eq, Show)
@@ -31,40 +31,44 @@ data Config = Config
   }
   deriving (Eq, Show)
 
-data Example
-    = GetPackage {exampleName :: !String, exampleModules :: [FilePath], exampleVersion :: Version}
-    | UsePackage {examplePath :: FilePath, exampleModules :: [FilePath]}
+data ExamplePackage = ExamplePackage {packageName :: !String, packageVersion :: !Version}
   deriving (Eq, Generic, Show)
   deriving anyclass (Binary, Hashable, NFData)
 
-getExampleName :: Example -> String
-getExampleName UsePackage{examplePath} = map replaceSeparator examplePath
-  where
-      replaceSeparator x
-        | isPathSeparator x = '_'
-        | otherwise = x
-getExampleName GetPackage{exampleName, exampleVersion} =
-    exampleName <> "-" <> showVersion exampleVersion
+data Example = Example
+    { exampleName      :: !String
+    , exampleDetails   :: Either FilePath ExamplePackage
+    , exampleModules   :: [FilePath]
+    , exampleExtraArgs :: [String]}
+  deriving (Eq, Generic, Show)
+  deriving anyclass (Binary, Hashable, NFData)
 
 instance FromJSON Example where
     parseJSON = withObject "example" $ \x -> do
+        exampleName <- x .: "name"
         exampleModules <- x .: "modules"
+        exampleExtraArgs <- fromMaybe [] <$> x .:? "extra-args"
 
         path <- x .:? "path"
         case path of
-            Just examplePath -> return UsePackage{..}
+            Just examplePath -> do
+                let exampleDetails = Left examplePath
+                return Example{..}
             Nothing -> do
-                exampleName <- x .: "name"
-                exampleVersion <- x .: "version"
-                return GetPackage {..}
+                packageName <- x .: "package"
+                packageVersion <- x .: "version"
+                let exampleDetails = Right ExamplePackage{..}
+                return Example{..}
 
-exampleToOptions :: Example -> [String]
-exampleToOptions GetPackage{..} =
-    ["--example-package-name", exampleName
-    ,"--example-package-version", showVersion exampleVersion
+exampleToOptions :: Example -> [String] -> [String]
+exampleToOptions Example{exampleDetails = Right ExamplePackage{..}, ..} extraArgs =
+    ["--example-package-name", packageName
+    ,"--example-package-version", showVersion packageVersion
+    ,"--ghcide-options", unwords $ exampleExtraArgs ++ extraArgs
     ] ++
     ["--example-module=" <> m | m <- exampleModules]
-exampleToOptions UsePackage{..} =
+exampleToOptions Example{exampleDetails = Left examplePath, ..} extraArgs =
     ["--example-path", examplePath
+    ,"--ghcide-options", unwords $ exampleExtraArgs ++ extraArgs
     ] ++
     ["--example-module=" <> m | m <- exampleModules]

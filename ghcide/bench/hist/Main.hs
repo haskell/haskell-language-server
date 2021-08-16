@@ -50,8 +50,8 @@ import           Data.Yaml                   (FromJSON (..), decodeFileThrow)
 import           Development.Benchmark.Rules
 import           Development.Shake
 import           Development.Shake.Classes
-import           Experiments.Types           (Example, exampleToOptions)
-import qualified Experiments.Types           as E
+import           Experiments.Types           (Example (exampleName),
+                                              exampleToOptions)
 import           GHC.Generics                (Generic)
 import           Numeric.Natural             (Natural)
 import           System.Console.GetOpt
@@ -68,7 +68,7 @@ configOpt = Option [] ["config"] (ReqArg Right configPath) "config file"
 readConfigIO :: FilePath -> IO (Config BuildSystem)
 readConfigIO = decodeFileThrow
 
-instance IsExample Example where getExampleName = E.getExampleName
+instance IsExample Example where getExampleName = exampleName
 type instance RuleResult GetExample = Maybe Example
 type instance RuleResult GetExamples = [Example]
 
@@ -170,11 +170,10 @@ benchGhcide samples buildSystem args BenchProject{..} = do
         "--samples=" <> show samples,
         "--csv="     <> outcsv,
         "--ghcide="  <> exePath,
-        "--ghcide-options=" <> unwords exeExtraArgs,
         "--select",
         unescaped (unescapeExperiment experiment)
     ] ++
-    exampleToOptions example ++
+    exampleToOptions example exeExtraArgs ++
     [ "--stack" | Stack == buildSystem
     ]
 
@@ -187,6 +186,6 @@ warmupGhcide buildSystem exePath args example = do
       "--ghcide=" <> exePath,
       "--select=hover"
     ] ++
-    exampleToOptions example ++
+    exampleToOptions example [] ++
     [ "--stack" | Stack == buildSystem
     ]

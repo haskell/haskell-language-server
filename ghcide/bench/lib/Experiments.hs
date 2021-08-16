@@ -236,15 +236,22 @@ configP =
     <*> optional (option auto (long "samples" <> metavar "NAT" <> help "override sampling count"))
     <*> strOption (long "ghcide" <> metavar "PATH" <> help "path to ghcide" <> value "ghcide")
     <*> option auto (long "timeout" <> value 60 <> help "timeout for waiting for a ghcide response")
-    <*> ( GetPackage <$> strOption (long "example-package-name" <> value "Cabal")
+    <*> ( Example "name"
+               <$> (Right <$> packageP)
                <*> (some moduleOption <|> pure ["Distribution/Simple.hs"])
-               <*> option versionP (long "example-package-version" <> value (makeVersion [3,4,0,0]))
+               <*> pure []
          <|>
-          UsePackage <$> strOption (long "example-path")
-                     <*> some moduleOption
-         )
+          Example "name"
+                <$> (Left <$> pathP)
+                <*> some moduleOption
+                <*> pure [])
   where
       moduleOption = strOption (long "example-module" <> metavar "PATH")
+
+      packageP = ExamplePackage
+            <$> strOption (long "example-package-name" <> value "Cabal")
+            <*> option versionP (long "example-package-version" <> value (makeVersion [3,4,0,0]))
+      pathP = strOption (long "example-path")
 
 versionP :: ReadM Version
 versionP = maybeReader $ extract . readP_to_S parseVersion
@@ -463,16 +470,16 @@ callCommandLogging cmd = do
 setup :: HasConfig => IO SetupResult
 setup = do
 --   when alreadyExists $ removeDirectoryRecursive examplesPath
-  benchDir <- case example ?config of
-      UsePackage{..} -> do
+  benchDir <- case exampleDetails(example ?config) of
+      Left examplePath -> do
           let hieYamlPath = examplePath </> "hie.yaml"
           alreadyExists <- doesFileExist hieYamlPath
           unless alreadyExists $
                 cmd_ (Cwd examplePath) (FileStdout hieYamlPath) ("gen-hie"::String)
           return examplePath
-      GetPackage{..} -> do
+      Right ExamplePackage{..} -> do
         let path = examplesPath </> package
-            package = exampleName <> "-" <> showVersion exampleVersion
+            package = packageName <> "-" <> showVersion packageVersion
             hieYamlPath = path </> "hie.yaml"
         alreadySetup <- doesDirectoryExist path
         unless alreadySetup $
@@ -515,9 +522,9 @@ setup = do
 
   whenJust (shakeProfiling ?config) $ createDirectoryIfMissing True
 
-  let cleanUp = case example ?config of
-        GetPackage{} -> removeDirectoryRecursive examplesPath
-        UsePackage{} -> return ()
+  let cleanUp = case exampleDetails(example ?config) of
+        Right _ -> removeDirectoryRecursive examplesPath
+        Left _  -> return ()
 
       runBenchmarks = runBenchmarksFun benchDir
 
