@@ -28,7 +28,7 @@ import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types                   hiding (_changes, _range)
-import           Retrie                               hiding (HsModule, getLoc)
+import           Retrie                               hiding (HasSrcSpan, HsModule, getLoc)
 import           Retrie.SYB
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -291,7 +291,7 @@ nfpToUri = filePathToUri . fromNormalizedFilePath
 safeGetNfp :: (Monad m) => Uri -> ExceptT String m NormalizedFilePath
 safeGetNfp uri = handleMaybe "error: uri" $ toNormalizedFilePath <$> uriToFilePath uri
 
-isRef :: Retrie.HasSrcSpan a => [Location] -> a -> Bool
+isRef :: HasSrcSpan a => [Location] -> a -> Bool
 isRef refs = (`elem` refs) . fromJust . srcSpanToLocation . getLoc
 
 locToSpan :: Location -> SrcSpan
