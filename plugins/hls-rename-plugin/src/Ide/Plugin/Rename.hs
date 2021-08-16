@@ -89,11 +89,29 @@ getSrcEdits state updateMod nfp = do
         res = T.pack $ printA $ (fmap . fmap) updateMod annPs
     pure $ makeDiffTextEdit src res
 
-updateExports :: [Location] -> RdrName -> HsModule GhcPs -> HsModule GhcPs
+updateExports ::
+    [Location]
+    -> RdrName
+#if MIN_VERSION_ghc(9,0,1)
+    -> HsModule
+    -> HsModule
+#else
+    -> HsModule GhcPs
+    -> HsModule GhcPs
+#endif
 updateExports refs newRdrName ps@HsModule{hsmodExports} =
     ps {hsmodExports = (fmap . fmap) (map (fmap $ renameIE refs newRdrName)) hsmodExports}
 
-updateImports :: [Location] -> RdrName -> HsModule GhcPs -> HsModule GhcPs
+updateImports ::
+    [Location]
+    -> RdrName
+#if MIN_VERSION_ghc(9,0,1)
+    -> HsModule
+    -> HsModule
+#else
+    -> HsModule GhcPs
+    -> HsModule GhcPs
+#endif
 updateImports refs newRdrName ps@HsModule{hsmodImports} =
     ps {hsmodImports = map (fmap renameImport) hsmodImports}
     where
@@ -121,7 +139,16 @@ renameIE refs newRdrName IEThingWith{}
 renameIE _ _ export = export
 
 -- TODO: data constructor renames
-updateLhsDecls :: [Location] -> RdrName -> HsModule GhcPs -> HsModule GhcPs
+updateLhsDecls ::
+    [Location]
+    -> RdrName
+#if MIN_VERSION_ghc(9,0,1)
+    -> HsModule
+    -> HsModule
+#else
+    -> HsModule GhcPs
+    -> HsModule GhcPs
+#endif
 updateLhsDecls refs newRdrName ps@HsModule{hsmodDecls} =
     ps {hsmodDecls = map (fmap renameLhsDecl) hsmodDecls}
     where
