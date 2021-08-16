@@ -49,6 +49,7 @@ spec = do
     autoTest  2 25 "AutoInfixInfix"
     autoTest 19 12 "AutoTypeLevel"
     autoTest 11  9 "AutoForallClassMethod"
+    autoTest  2  8 "AutoUnusedPatternMatch"
 
     failing "flaky in CI" $
       autoTest 2 11 "GoldenApplicativeThen"

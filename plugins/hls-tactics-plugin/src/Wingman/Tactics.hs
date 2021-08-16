@@ -65,7 +65,7 @@ assume name = rule $ \jdg -> do
         -- reasonable for a default value.
         (pure (noLoc $ var' name))
           { syn_trace = tracePrim $ "assume " <> occNameString name
-          , syn_used_vals = S.singleton name
+          , syn_used_vals = S.singleton name <> getAncestry jdg name
           }
     Nothing -> cut
 
@@ -300,7 +300,7 @@ apply (Unsaturated n) hi = tracing ("apply' " <> show (hi_name hi)) $ do
                     ) saturated_args
     pure $
       ext
-        & #syn_used_vals %~ S.insert func
+        & #syn_used_vals %~ (\x -> S.insert func x <> getAncestry jdg func)
         & #syn_val       %~ mkApply func . fmap unLoc
 
 application :: TacticsM ()
