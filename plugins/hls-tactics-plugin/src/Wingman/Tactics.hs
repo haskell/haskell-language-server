@@ -48,6 +48,8 @@ import           Wingman.Types
 -- | Use something in the hypothesis to fill the hole.
 assumption :: TacticsM ()
 assumption = attemptOn (S.toList . allNames) assume
+  where
+    attemptOn getNames tac = matching (asum . fmap (\s -> tac s) . getNames)
 
 
 ------------------------------------------------------------------------------
