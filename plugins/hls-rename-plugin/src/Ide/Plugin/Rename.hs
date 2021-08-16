@@ -1,6 +1,6 @@
-{-# LANGUAGE DataKinds         #-}
-{-# LANGUAGE NamedFieldPuns    #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE CPP            #-}
+{-# LANGUAGE DataKinds      #-}
+{-# LANGUAGE NamedFieldPuns #-}
 
 module Ide.Plugin.Rename (descriptor) where
 
@@ -30,12 +30,20 @@ import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types                   hiding (_changes, _range)
+
+#if MIN_VERSION_ghc(8,0,0)
 import           Retrie                               hiding (HsModule, getLoc)
 import           Retrie.SYB
+#endif
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor pluginId = (defaultPluginDescriptor pluginId) {
-    pluginHandlers = mkPluginHandler STextDocumentRename renameProvider
+    pluginHandlers = mkPluginHandler STextDocumentRename
+#if MIN_VERSION_ghc(8,0,0)
+        renameProvider
+#else
+        (\_ _ _ -> pure $ Left $ ResponseError InternalError (T.pack "Rename plugin unsupported for ghc < 8.8.0") Nothing)
+#endif
 }
 
 renameProvider :: PluginMethodHandler IdeState TextDocumentRename
@@ -314,7 +322,7 @@ subtractSrcSpans minuend (RealSrcSpan subtrahend)
     where
         startLoc = mkSrcLoc (srcSpanFile subtrahend) (srcSpanStartLine subtrahend) (srcSpanEndCol subtrahend)
         endLoc = srcSpanEnd minuend
-subtractSrcSpans _ _ = error ""
+subtractSrcSpans _ _ = error "Expected real SrcSpan"
 
 mapMToSnd :: Monad f => (a -> f b) -> [a] -> f [(a, b)]
 mapMToSnd = liftM2 (<$>) zip . mapM
