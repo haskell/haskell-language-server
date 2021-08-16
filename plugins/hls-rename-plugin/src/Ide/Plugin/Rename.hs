@@ -340,7 +340,7 @@ getNamesAtPos state pos nfp = do
     pure $ getAstNamesAtPoint hieAst pos mapping
 
 subtractSrcSpans :: SrcSpan -> SrcSpan -> SrcSpan
-subtractSrcSpans minuend (RealSrcSpan subtrahend)
+subtractSrcSpans minuend (OldRealSrcSpan subtrahend)
     = mkSrcSpan startLoc endLoc
     where
         startLoc = mkSrcLoc (srcSpanFile subtrahend) (srcSpanStartLine subtrahend) (srcSpanEndCol subtrahend)
