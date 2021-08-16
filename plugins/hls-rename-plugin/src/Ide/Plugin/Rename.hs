@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP            #-}
 {-# LANGUAGE DataKinds      #-}
 {-# LANGUAGE NamedFieldPuns #-}
 
@@ -28,7 +29,8 @@ import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types                   hiding (_changes, _range)
-import           Retrie                               hiding (HasSrcSpan, HsModule, getLoc)
+import           Retrie                               hiding (HasSrcSpan,
+                                                       HsModule, getLoc)
 import           Retrie.SYB
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -70,7 +72,11 @@ renameProvider state pluginId (RenameParams (TextDocumentIdentifier uri) pos _pr
 
 getSrcEdits ::
     IdeState
+#if MIN_VERSION_ghc(9,0,1)
+    -> (HsModule -> HsModule)
+#else
     -> (HsModule GhcPs -> HsModule GhcPs)
+#endif
     -> NormalizedFilePath
     -> ExceptT String (LspT Config IO) (List TextEdit)
 getSrcEdits state updateMod nfp = do
