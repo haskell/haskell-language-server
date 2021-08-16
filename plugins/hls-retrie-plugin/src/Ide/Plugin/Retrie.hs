@@ -371,7 +371,7 @@ callRetrie ::
 callRetrie =
   callRetrieWithTransformerAndUpdates defaultTransformer updateContext
 
--- allows custom 'ContextUpdater' to be given to 'applyWithUpdates'
+-- | allows custom 'ContextUpdater' to be given to 'applyWithUpdates'
 -- applies transformations to the spec
 callRetrieWithTransformerAndUpdates ::
   MatchResultTransformer ->
