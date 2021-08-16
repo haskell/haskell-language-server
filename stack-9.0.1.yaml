@@ -51,7 +51,7 @@ extra-deps:
 - implicit-hie-cradle-0.3.0.5
 - lens-5.0.1
 - profunctors-5.6.2
-- refinery-0.4.0.0
+- refinery-0.5.0.0
 - retrie-1.0.0.0
 - some-1.0.2@sha256:3d460998df32ad7b93bf55657aeae988d97070155e71718b4bc75d0997ce9d62,2244
 - lsp-1.2.0.1

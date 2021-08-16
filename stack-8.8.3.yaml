@@ -63,7 +63,7 @@ extra-deps:
   - opentelemetry-0.6.1
   - opentelemetry-extra-0.6.1
   - ormolu-0.1.4.1
-  - refinery-0.4.0.0
+  - refinery-0.5.0.0
   - retrie-0.1.1.1
   - semigroups-0.18.5
   - shake-0.19.4
