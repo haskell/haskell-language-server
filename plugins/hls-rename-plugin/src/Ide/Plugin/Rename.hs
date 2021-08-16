@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP            #-}
 {-# LANGUAGE DataKinds      #-}
 {-# LANGUAGE NamedFieldPuns #-}
 
@@ -30,20 +29,14 @@ import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types                   hiding (_changes, _range)
-
-#if MIN_VERSION_ghc(8,0,0)
 import           Retrie                               hiding (HsModule, getLoc)
 import           Retrie.SYB
-#endif
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor pluginId = (defaultPluginDescriptor pluginId) {
     pluginHandlers = mkPluginHandler STextDocumentRename
-#if MIN_VERSION_ghc(8,0,0)
         renameProvider
-#else
         (\_ _ _ -> pure $ Left $ ResponseError InternalError (T.pack "Rename plugin unsupported for ghc < 8.8.0") Nothing)
-#endif
 }
 
 renameProvider :: PluginMethodHandler IdeState TextDocumentRename
