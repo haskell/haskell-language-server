@@ -44,15 +44,10 @@ constraints:
     hyphenation +embed
 
 allow-newer:
-    diagrams-contrib:base,
-    diagrams-contrib:lens,
-    diagrams-contrib:random,
     diagrams-core:base,
     diagrams-core:lens,
     diagrams-lib:base,
     diagrams-lib:lens,
-    diagrams-postscript:base,
-    diagrams-postscript:lens,
     diagrams-svg:base,
     diagrams-svg:lens,
     dual-tree:base,
