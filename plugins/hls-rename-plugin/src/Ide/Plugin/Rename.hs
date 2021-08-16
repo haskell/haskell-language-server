@@ -34,9 +34,7 @@ import           Retrie.SYB
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor pluginId = (defaultPluginDescriptor pluginId) {
-    pluginHandlers = mkPluginHandler STextDocumentRename
-        renameProvider
-        (\_ _ _ -> pure $ Left $ ResponseError InternalError (T.pack "Rename plugin unsupported for ghc < 8.8.0") Nothing)
+    pluginHandlers = mkPluginHandler STextDocumentRename renameProvider
 }
 
 renameProvider :: PluginMethodHandler IdeState TextDocumentRename
@@ -101,7 +99,7 @@ updateImports refs newRdrName ps@HsModule{hsmodImports} =
                 }
         renameImport importDecl = importDecl
 
--- TODO: implement explicit type import/export renames
+-- TODO: implement explicit type import/export
 renameIE :: [Location] -> RdrName -> IE GhcPs -> IE GhcPs
 renameIE refs newRdrName (IEVar xVar ieName)
     | isRef refs ieName =
