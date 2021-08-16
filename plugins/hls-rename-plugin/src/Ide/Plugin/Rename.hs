@@ -21,7 +21,6 @@ import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.Spans.AtPoint
-import           GhcPlugins                           hiding (getLoc, (<>))
 import           HieDb.Query
 import           Ide.Plugin.Config
 import           Ide.Plugin.Retrie                    hiding (descriptor)
