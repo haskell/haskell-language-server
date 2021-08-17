@@ -56,17 +56,6 @@ allow-newer:
     deepseq:base,
     dependent-sum:some,
     dependent-sum:constraints,
-    diagrams-contrib:base,
-    diagrams-contrib:lens,
-    diagrams-contrib:random,
-    diagrams-core:base,
-    diagrams-core:lens,
-    diagrams-lib:base,
-    diagrams-lib:lens,
-    diagrams-postscript:base,
-    diagrams-postscript:lens,
-    diagrams-svg:base,
-    diagrams-svg:lens,
     dual-tree:base,
     -- Does this make any sense?
     entropy:Cabal,
@@ -82,7 +71,9 @@ allow-newer:
     regex-base:base,
     regex-tdfa:base,
     statestack:base,
-    svg-builder:base,
     these:base,
-    time-compat:base
+    time-compat:base,
 
+    -- for shake-bench
+    Chart-diagrams:diagrams-core,
+    SVGFonts:diagrams-core
