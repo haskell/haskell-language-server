@@ -131,6 +131,11 @@ flag refineImports
   default:     True
   manual:      True
 
+flag rename
+  description: Enable rename plugin
+  default:     True
+  manual:      True
+
 flag retrie
   description: Enable retrie plugin
   default:     True
@@ -223,6 +228,11 @@ common refineImports
     build-depends: hls-refine-imports-plugin ^>=1.0.0.0
     cpp-options: -DrefineImports
 
+common rename
+  if impl(ghc >= 8.8) && (flag(rename) || flag(all-plugins))
+    build-depends: hls-rename-plugin ^>= 1.0.0.0
+    cpp-options: -Drename
+
 common retrie
   if flag(retrie) || flag(all-plugins)
     build-depends: hls-retrie-plugin ^>=1.0.0.1
@@ -290,6 +300,7 @@ executable haskell-language-server
                     , eval
                     , importLens
                     , refineImports
+                    , rename
                     , retrie
                     , tactic
                     , hlint
@@ -424,7 +435,6 @@ test-suite func-test
     Highlight
     Progress
     Reference
-    Rename
     Symbol
     TypeDefinition
     Test.Hls.Command
@@ -447,6 +457,8 @@ test-suite func-test
     cpp-options: -Deval
   if flag(importLens) || flag(all-plugins)
     cpp-options: -DimportLens
+  if impl(ghc > 8.8) && (flag(rename) || flag(all-plugins))
+    cpp-options: -Drename
   if flag(retrie) || flag(all-plugins)
     cpp-options: -Dretrie
   if flag(tactic) || flag(all-plugins)

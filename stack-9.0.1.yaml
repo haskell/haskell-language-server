@@ -16,6 +16,7 @@ packages:
   - ./plugins/hls-explicit-imports-plugin
   # - ./plugins/hls-refine-imports-plugin
   - ./plugins/hls-hlint-plugin
+  - ./plugins/hls-rename-plugin
   - ./plugins/hls-retrie-plugin
   # - ./plugins/hls-splice-plugin
   # - ./plugins/hls-tactics-plugin
@@ -109,6 +110,7 @@ flags:
     pedantic: true
     class: false
     splice: false
+    rename: false
     refineImports: false
     tactic: false # Dependencies fail
 

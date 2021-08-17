@@ -15,6 +15,7 @@ packages:
   - ./plugins/hls-explicit-imports-plugin
   - ./plugins/hls-refine-imports-plugin
   - ./plugins/hls-hlint-plugin
+  - ./plugins/hls-rename-plugin
   - ./plugins/hls-retrie-plugin
   - ./plugins/hls-splice-plugin
   - ./plugins/hls-tactics-plugin
@@ -45,7 +46,7 @@ extra-deps:
   - implicit-hie-0.1.2.6
   - monad-dijkstra-0.1.1.2
   - refinery-0.4.0.0
-  - retrie-0.1.1.1
+  - retrie-1.0.0.0
   - stylish-haskell-0.12.2.0
   - semigroups-0.18.5
   - temporary-1.2.1.1

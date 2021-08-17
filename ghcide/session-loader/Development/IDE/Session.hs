@@ -501,9 +501,8 @@ cradleToOptsAndLibDir :: Show a => Cradle a -> FilePath
                       -> IO (Either [CradleError] (ComponentOptions, FilePath))
 cradleToOptsAndLibDir cradle file = do
     -- Start off by getting the session options
-    let showLine s = hPutStrLn stderr ("> " ++ s)
     hPutStrLn stderr $ "Output from setting up the cradle " <> show cradle
-    cradleRes <- runCradle (cradleOptsProg cradle) showLine file
+    cradleRes <- HieBios.getCompilerOptions file cradle
     case cradleRes of
         CradleSuccess r -> do
             -- Now get the GHC lib dir
