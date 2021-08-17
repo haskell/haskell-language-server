@@ -20,7 +20,6 @@ library
   exposed-modules:  Ide.Plugin.Rename
   hs-source-dirs:   src
   build-depends:
-    , aeson
     , base                  >=4.12    && <5
     , containers
     , ghc
