@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP            #-}
 {-# LANGUAGE DataKinds      #-}
+{-# LANGUAGE GADTs          #-}
 {-# LANGUAGE NamedFieldPuns #-}
 
 module Ide.Plugin.Rename (descriptor) where
@@ -28,8 +29,7 @@ import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
-import           Retrie                               hiding (HasSrcSpan,
-                                                       HsModule, getLoc)
+import           Retrie                               hiding (HasSrcSpan, HsModule, getLoc)
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor pluginId = (defaultPluginDescriptor pluginId) {
@@ -37,19 +37,19 @@ descriptor pluginId = (defaultPluginDescriptor pluginId) {
 }
 
 renameProvider :: PluginMethodHandler IdeState TextDocumentRename
-renameProvider state pluginId (RenameParams (TextDocumentIdentifier uri) pos _prog newNameText) = response $ do
-    nfp <- safeGetNfp uri
-    oldName <- (handleMaybe "error: could not find name at pos" . listToMaybe) =<<
-        getNamesAtPos state pos nfp
-    refs <- refsAtName state nfp oldName
-    refFiles <- mapM safeGetNfp (nub [uri | Location uri _ <- refs])
-    let newNameStr = T.unpack newNameText
-        newOccName = mkTcOcc newNameStr
+renameProvider state pluginId (RenameParams (TextDocumentIdentifier uri) pos _prog newNameText) =
+    response $ do
+        nfp <- safeGetNfp uri
+        oldName <- (handleMaybe "error: could not find name at pos" . listToMaybe) =<<
+            getNamesAtPos state pos nfp
+        refs <- refsAtName state nfp oldName
+        refFiles <- mapM safeGetNfp (nub [uri | Location uri _ <- refs])
 
-    nfpEdits <- mapMToSnd (getSrcEdits state (renameRefs refs (mkTcOcc newNameStr))) refFiles
-    let uriEdits = HM.fromList $ map (Data.Bifunctor.first nfpToUri) nfpEdits
+        let newOccName = mkTcOcc $ T.unpack newNameText
+        nfpEdits <- mapMToSnd (getSrcEdits state (renameRefs refs newOccName)) refFiles
+        let uriEdits = HM.fromList $ map (Data.Bifunctor.first nfpToUri) nfpEdits
 
-    pure $ WorkspaceEdit (Just uriEdits) Nothing Nothing
+        pure $ WorkspaceEdit (Just uriEdits) Nothing Nothing
 
 -------------------------------------------------------------------------------
 -- Source renaming
@@ -77,29 +77,26 @@ renameRefs ::
     [Location]
     -> OccName
 #if MIN_VERSION_ghc(9,0,1)
-    -> HsModule
-    -> HsModule
+    -> (HsModule -> HsModule)
 #else
-    -> HsModule GhcPs
-    -> HsModule GhcPs
+    -> (HsModule GhcPs -> HsModule GhcPs)
 #endif
 renameRefs refs newOccName = everywhere $ mkT replace
     where
         replace :: Located RdrName -> Located RdrName
-        replace lOldRdrName
-            | isRef refs lOldRdrName = fmap (const newRdrName) lOldRdrName
-            | otherwise = lOldRdrName
-            where
-                newRdrName =
-                    case unLoc lOldRdrName of
-                        Qual modName _ -> Qual modName newOccName
-                        _              -> Unqual newOccName
+        replace (L srcSpan oldRdrName)
+            | isRef srcSpan = L srcSpan $ newRdrName oldRdrName
+        replace lOldRdrName = lOldRdrName
 
-        isRef :: HasSrcSpan a => [Location] -> a -> Bool
-        isRef refs = (`elem` refs) . fromJust . srcSpanToLocation . getLoc
+        newRdrName srcSpan = case srcSpan of
+            Qual modName _ -> Qual modName newOccName
+            _              -> Unqual newOccName
 
-------------------------------------------------------------
--- reference finding
+        isRef :: SrcSpan -> Bool
+        isRef = (`elem` refs) . fromJust . srcSpanToLocation
+
+-------------------------------------------------------------------------------
+-- Reference finding
 
 refsAtName :: IdeState -> NormalizedFilePath -> Name -> ExceptT [Char] (LspT Config IO) [Location]
 refsAtName state nfp name = do
@@ -121,7 +118,7 @@ getNameAstLocations name (HAR _ _ rm _ _, mapping) =
     mapMaybe (toCurrentLocation mapping . realSrcSpanToLocation . fst) <$> M.lookup (Right name) rm
 
 -------------------------------------------------------------------------------
--- util
+-- Util
 
 safeGetNfp :: (Monad m) => Uri -> ExceptT String m NormalizedFilePath
 safeGetNfp uri = handleMaybe "error: uri" $ toNormalizedFilePath <$> uriToFilePath uri
