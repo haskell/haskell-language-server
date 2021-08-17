@@ -70,6 +70,12 @@ function run(i) {
 function changed() {
     return environmentThis.changed === environmentThis.built;
 }
+function visited(i) {
+    if (i === undefined)
+        return environmentThis.visited;
+    else
+        return environmentThis.visited === i;
+}
 function unchanged() {
     return !unchanged();
 }
@@ -122,9 +128,10 @@ function unraw(xs) {
         execution: x[1],
         built: x[2],
         changed: x[3],
-        depends: x.length > 4 ? x[4] : [],
+        visited: x[4],
+        depends: x.length > 5 ? x[5] : [],
         rdepends: [],
-        traces: x.length > 5 ? x[5].map(y => ({ command: y[0], start: y[1], stop: y[2] })) : []
+        traces: []
     }));
     for (const p of ans)
         for (const ds of p.depends)
@@ -135,8 +142,6 @@ function unraw(xs) {
 function profileRoot(profile) {
     const [s, search] = createSearch(profile);
     const t = createTabs([["Summary", () => reportSummary(profile)],
-        ["Command plot", () => reportCmdPlot(profile)],
-        ["Commands", () => reportCmdTable(profile, search)],
         ["Rules", () => reportRuleTable(profile, search)],
         ["Parallelizability", () => reportParallelism(profile)],
         ["Details", () => reportDetails(profile, search)]
@@ -185,6 +190,8 @@ function createTabs(xs) {
 // A mapping from names (rule names or those matched from rule parts)
 // to the indicies in profiles.
 class Search {
+    profile;
+    mapping;
     constructor(profile, mapping) {
         this.profile = profile;
         if (mapping !== undefined)
@@ -288,6 +295,7 @@ function createSearch(profile) {
 }
 function searchHelp(input) {
     const examples = [["Only the last run", "run(0)"],
+        ["Only the last visited", "visited(0)"],
         ["Named 'Main'", "named(\"Main\")"],
         ["Group by file extension", "named(/(\\.[_0-9a-z]+)$/)"],
         ["No dependencies (an input)", "leaf()"],
@@ -347,6 +355,8 @@ function untraced(p) {
 /////////////////////////////////////////////////////////////////////
 // BASIC UI TOOLKIT
 class Prop {
+    val;
+    callback;
     constructor(val) { this.val = val; this.callback = () => { return; }; }
     get() { return this.val; }
     set(val) {
@@ -801,12 +811,12 @@ function reportRuleTable(profile, search) {
     const columns = [{ field: "name", label: "Name", width: 400 },
         { field: "count", label: "Count", width: 65, alignRight: true, show: showInt },
         { field: "leaf", label: "Leaf", width: 60, alignRight: true },
+        { field: "visited", label: "Visit", width: 50, alignRight: true },
         { field: "run", label: "Run", width: 50, alignRight: true },
         { field: "changed", label: "Change", width: 60, alignRight: true },
         { field: "time", label: "Time", width: 75, alignRight: true, show: showTime },
         { field: "etime", label: "ETime", width: 75, alignRight: true, show: showTime },
-        { field: "wtime", label: "WTime", width: 75, alignRight: true, show: showTime },
-        { field: "untraced", label: "Untraced", width: 100, alignRight: true, show: showTime }
+        { field: "wtime", label: "WTime", width: 75, alignRight: true, show: showTime }
     ];
     return newTable(columns, search.map(s => ruleData(etimes, wtimes, s)), "time", true);
 }
@@ -846,15 +856,16 @@ function ruleData(etimes, wtimes, search) {
         count: ps.length,
         leaf: ps.every(p => p.depends.length === 0),
         run: ps.map(p => p.built).minimum(),
+        visited: ps.map(p => p.visited).minimum(),
         changed: ps.some(p => p.built === p.changed),
         time: ps.map(p => p.execution).sum(),
         etime: ps.map(p => etimes[p.index]).sum(),
         wtime: ps.map(p => wtimes[p.index]).sum(),
-        untraced: ps.map(untraced).sum()
     }));
 }
 function reportSummary(profile) {
     let countLast = 0; // number of rules run in the last run
+    let visitedLast = 0; // number of rules visited in the last run
     let highestRun = 0; // highest run you have seen (add 1 to get the count of runs)
     let sumExecution = 0; // build time in total
     let sumExecutionLast = 0; // build time in total
@@ -873,6 +884,9 @@ function reportSummary(profile) {
             if (p.traces.length > 0)
                 maxTraceStopLast = Math.max(maxTraceStopLast, p.traces.last().stop);
         }
+        if (p.visited === 0) {
+            visitedLast++;
+        }
     }
     return React.createElement("div", null,
         React.createElement("h2", null, "Totals"),
@@ -882,7 +896,7 @@ function reportSummary(profile) {
                 " ",
                 showInt(highestRun + 1),
                 " ",
-                React.createElement("span", { class: "note" }, "number of times Shake has been run.")),
+                React.createElement("span", { class: "note" }, "total number of runs so far.")),
             React.createElement("li", null,
                 React.createElement("b", null, "Rules:"),
                 " ",
@@ -890,7 +904,7 @@ function reportSummary(profile) {
                 " (",
                 showInt(countLast),
                 " in last run) ",
-                React.createElement("span", { class: "note" }, "number of defined rules, e.g. individual files.")),
+                React.createElement("span", { class: "note" }, "number of defined build rules.")),
             React.createElement("li", null,
                 React.createElement("b", null, "Traced:"),
                 " ",
@@ -935,7 +949,21 @@ function reportSummary(profile) {
                 " ",
                 showTime(preciseCriticalPath(profile)),
                 " ",
-                React.createElement("span", { class: "note" }, "critical path not speculatively executing."))));
+                React.createElement("span", { class: "note" }, "critical path not speculatively executing."))),
+        React.createElement("h2", null, "This run"),
+        React.createElement("ul", null,
+            React.createElement("li", null,
+                React.createElement("b", null, "Rules built:"),
+                " ",
+                showInt(countLast),
+                " ",
+                React.createElement("span", { class: "note" }, "Total number of rules built in this run")),
+            React.createElement("li", null,
+                React.createElement("b", null, "Rules visited:"),
+                " ",
+                showInt(visitedLast - countLast),
+                " ",
+                React.createElement("span", { class: "note" }, "Total number of rules looked up from the values store in this run"))));
 }
 function speculativeCriticalPath(profile) {
     const criticalPath = []; // the critical path to any element

@@ -164,7 +164,7 @@ spawn db@Database{..} key id mode result = do
         -- only update the deps when the rule ran with changes
         actualDeps = if runChanged /= Shake.ChangedNothing then deps else previousDeps
         previousDeps= resultDeps =<< result
-    let res = Result runValue built' changed actualDeps execution runStore
+    let res = Result runValue built' changed built actualDeps execution runStore
     case actualDeps of
         Just deps | not(null deps) &&
                     runChanged /= Shake.ChangedNothing

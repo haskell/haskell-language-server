@@ -1,8 +1,8 @@
 
 
+{-# LANGUAGE ExistentialQuantification  #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
 
 module Development.IDE.Graph.Internal.Types where
 
@@ -38,9 +38,9 @@ newtype Rules a = Rules (ReaderT SRules IO a)
     deriving (Monad, Applicative, Functor, MonadIO, MonadFail)
 
 data SRules = SRules {
-    rulesExtra :: !Dynamic,
+    rulesExtra   :: !Dynamic,
     rulesActions :: !(IORef [Action ()]),
-    rulesMap :: !(IORef TheRules)
+    rulesMap     :: !(IORef TheRules)
     }
 
 
@@ -52,7 +52,7 @@ newtype Action a = Action {fromAction :: ReaderT SAction IO a}
 
 data SAction = SAction {
     actionDatabase :: !Database,
-    actionDeps :: !(IORef (Maybe [Id])) -- Nothing means always rerun
+    actionDeps     :: !(IORef (Maybe [Id])) -- Nothing means always rerun
     }
 
 
@@ -99,8 +99,9 @@ getResult (Running _ m_re) = m_re
 
 data Result = Result {
     resultValue     :: !Value,
-    resultBuilt     :: !Step, -- ^ the step when it was actually run
+    resultBuilt     :: !Step, -- ^ the step when it was last recomputed
     resultChanged   :: !Step, -- ^ the step when it last changed
+    resultVisited   :: !Step, -- ^ the step when it was last looked up
     resultDeps      :: !(Maybe [Id]), -- ^ Nothing = alwaysRerun
     resultExecution :: !Seconds, -- ^ How long it took, last time it ran
     resultData      :: BS.ByteString

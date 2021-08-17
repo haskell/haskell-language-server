@@ -44,7 +44,7 @@ writeProfile :: FilePath -> Database -> IO ()
 writeProfile out = LBS.writeFile out <=< generateHTML <=< toReport
 
 data ProfileEntry = ProfileEntry
-    {prfName :: String, prfBuilt :: Int, prfChanged :: Int, prfDepends :: [[Int]], prfExecution :: Seconds}
+    {prfName :: !String, prfBuilt :: !Int, prfChanged :: !Int, prfVisited :: !Int, prfDepends :: [[Int]], prfExecution :: !Seconds}
 
 -- | Eliminate all errors from the database, pretending they don't exist
 -- resultsOnly :: Map.HashMap Id (Key, Status) -> Map.HashMap Id (Key, Result (Either BS.ByteString Value))
@@ -105,13 +105,14 @@ toReport db = do
                 $ Map.toList status
         ids = Map.fromList $ zip order [0..]
 
-        steps = let xs = nubOrd $ concat [[resultChanged, resultBuilt] | (_k, Result{..}) <- Map.elems status]
+        steps = let xs = nubOrd $ concat [[resultChanged, resultBuilt, resultVisited] | (_k, Result{..}) <- Map.elems status]
 
                 in Map.fromList $ zip (sortBy (flip compare) xs) [0..]
 
         f (k, Result{..}) = ProfileEntry
             {prfName = show k
             ,prfBuilt = fromStep resultBuilt
+            ,prfVisited = fromStep resultVisited
             ,prfChanged = fromStep resultChanged
             ,prfDepends = map pure $ mapMaybe (`Map.lookup` ids) $ fromMaybe [-1] $ resultDeps
             ,prfExecution = resultExecution
@@ -120,7 +121,7 @@ toReport db = do
     pure $ [maybe (error "toReport") f $ Map.lookup i status | i <- order]
 
 alwaysRerunResult :: Step -> Result
-alwaysRerunResult current = Result (Value $ toDyn "<alwaysRerun>") (Step 0) current (Just []) 0 mempty
+alwaysRerunResult current = Result (Value $ toDyn "<alwaysRerun>") (Step 0) (Step 0) current (Just []) 0 mempty
 
 readDataFileHTML :: FilePath -> IO LBS.ByteString
 readDataFileHTML file = LBS.readFile =<< getDataFile ("html" </> file)
@@ -139,7 +140,9 @@ generateJSON = jsonListLines . map showEntry
             [show prfName
             ,showTime prfExecution
             ,show prfBuilt
-            ,show prfChanged] ++
+            ,show prfChanged
+            ,show prfVisited
+            ] ++
             [show prfDepends | not (null prfDepends)]
         showTime x = if '.' `elem` y then dropWhileEnd (== '.') $ dropWhileEnd (== '0') y else y
             where y = showDP 4 x

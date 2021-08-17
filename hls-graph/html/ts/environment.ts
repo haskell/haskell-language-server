@@ -26,6 +26,15 @@ function changed(): boolean {
     return environmentThis.changed === environmentThis.built;
 }
 
+function visited(): number;
+function visited(i:timestamp): boolean;
+function visited(i?: timestamp): number | boolean {
+    if(i === undefined)
+        return environmentThis.visited;
+    else
+        return environmentThis.visited === i;
+}
+
 function unchanged(): boolean {
     return !unchanged();
 }
