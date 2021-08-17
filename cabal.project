@@ -71,8 +71,8 @@ allow-newer:
     regex-tdfa:base,
     statestack:base,
     these:base,
-    time-compat:base
+    time-compat:base,
 
     -- for shake-bench
     Chart-diagrams:diagrams-core,
-    SVGFonts:diagrams-core,
+    SVGFonts:diagrams-core
