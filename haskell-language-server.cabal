@@ -133,7 +133,7 @@ flag refineImports
 
 flag rename
   description: Enable rename plugin
-  default:     True
+  default:     False
   manual:      True
 
 flag retrie
