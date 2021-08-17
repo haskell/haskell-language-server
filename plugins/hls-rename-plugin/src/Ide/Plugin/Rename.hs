@@ -138,7 +138,6 @@ renameIE refs newRdrName IEThingWith{}
     = error "not implemented explicit type import/export renames yet"
 renameIE _ _ export = export
 
--- TODO: data constructor renames
 updateLhsDecls ::
     [Location]
     -> RdrName
@@ -295,19 +294,18 @@ contextUpdater c@Context{ctxtBinders} i = const (pure c)
 -------------------------------------------------------------------------------
 -- reference finding
 
-
 refsAtName :: IdeState -> NormalizedFilePath -> Name -> ExceptT [Char] (LspT Config IO) [Location]
 refsAtName state nfp name = do
     ShakeExtras{hiedb} <- liftIO $ runAction "Rename.HieDb" state getShakeExtras
     ast <- handleMaybeM "error: ast" $ liftIO $ runAction "" state $ useWithStale GetHieAst nfp
     fileRefs <- handleMaybe "error: name references" $ getNameAstLocations name ast
-    mod <- handleMaybe "error: module name" $ nameModule_maybe name
+    let mod = nameModule_maybe name
     dbRefs <- liftIO $ mapMaybe rowToLoc <$> findReferences
         hiedb
         True
         (nameOccName name)
-        (Just $ moduleName mod)
-        (Just $ moduleUnitId mod)
+        (moduleName <$> mod)
+        (moduleUnitId <$> mod)
         [fromNormalizedFilePath nfp]
     pure $ nubOrd $ fileRefs ++ dbRefs
 

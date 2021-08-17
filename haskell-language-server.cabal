@@ -457,7 +457,7 @@ test-suite func-test
     cpp-options: -Deval
   if flag(importLens) || flag(all-plugins)
     cpp-options: -DimportLens
-  if impl(ghc > 8.8) && (flag(rename) || flag(all-plugins))
+  if impl(ghc >= 8.8) && (flag(rename) || flag(all-plugins))
     cpp-options: -Drename
   if flag(retrie) || flag(all-plugins)
     cpp-options: -Dretrie

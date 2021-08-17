@@ -21,22 +21,20 @@ library
   hs-source-dirs:   src
   build-depends:
     , aeson
-    , base            >=4.12 && <5
-    , lsp-types
-    , lsp
-    , hls-plugin-api  ^>=1.2
-    , ghcide          >=1.4 && <1.5
-    , transformers
-    , hls-retrie-plugin >= 1.0.1.1
-    , text
-    , unordered-containers
+    , base                  >=4.12    && <5
     , containers
     , ghc
-    , hiedb
     , ghc-exactprint
-
-  if impl(ghc >= 8.8)
-    build-depends: retrie >=1.0.0.0
+    , ghcide                >=1.4     && <1.5
+    , hiedb
+    , hls-plugin-api        ^>=1.2
+    , hls-retrie-plugin     >= 1.0.1.1
+    , lsp
+    , lsp-types
+    , retrie                >=1.0.0.0
+    , text
+    , transformers
+    , unordered-containers
 
   default-language: Haskell2010
 

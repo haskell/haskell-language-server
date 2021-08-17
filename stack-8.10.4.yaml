@@ -74,11 +74,11 @@ extra-deps:
 
 configure-options:
   ghcide:
-    - --disable-library-for-ghci
+      - --disable-library-for-ghci
   haskell-language-server:
-    - --disable-library-for-ghci
+      - --disable-library-for-ghci
   heapsize:
-    - --disable-library-for-ghci
+      - --disable-library-for-ghci
 
 flags:
   haskell-language-server:
@@ -94,6 +94,6 @@ flags:
 
 
 nix:
-  packages: [icu libcxx zlib]
+  packages: [ icu libcxx zlib ]
 
 concurrent-tests: false
