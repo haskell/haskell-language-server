@@ -153,10 +153,10 @@ experiments =
                 forM_ identifierP $ \p -> changeDoc doc [charEdit p]
         )
         ( \docs -> do
-            Just hieYaml <- uriToFilePath <$> getDocUri "hie.yaml"
-            liftIO $ appendFile hieYaml "##\n"
+            hieYamlUri <- getDocUri "hie.yaml"
+            liftIO $ appendFile (fromJust $ uriToFilePath hieYamlUri) "##\n"
             sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
-                List [ FileEvent (filePathToUri "hie.yaml") FcChanged ]
+                List [ FileEvent hieYamlUri FcChanged ]
             forM_ docs $ \DocumentPositions{..} ->
               changeDoc doc [charEdit stringLiteralP]
             waitForProgressDone
@@ -168,10 +168,10 @@ experiments =
       bench
         "hover after cradle edit"
         (\docs -> do
-            Just hieYaml <- uriToFilePath <$> getDocUri "hie.yaml"
-            liftIO $ appendFile hieYaml "##\n"
+            hieYamlUri <- getDocUri "hie.yaml"
+            liftIO $ appendFile (fromJust $ uriToFilePath hieYamlUri) "##\n"
             sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
-                List [ FileEvent (filePathToUri "hie.yaml") FcChanged ]
+                List [ FileEvent hieYamlUri FcChanged ]
             flip allWithIdentifierPos docs $ \DocumentPositions{..} -> isJust <$> getHover doc (fromJust identifierP)
         ),
       ---------------------------------------------------------------------------------------
