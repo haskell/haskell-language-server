@@ -143,7 +143,7 @@ instance Default PluginConfig where
       , plcHoverOn         = True
       , plcSymbolsOn       = True
       , plcCompletionOn    = True
-      , plcRenameOn        = True
+      , plcRenameOn        = False
       , plcConfig          = mempty
       }
 
