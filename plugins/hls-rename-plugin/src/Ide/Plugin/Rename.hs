@@ -12,7 +12,7 @@ import qualified Data.Bifunctor
 import           Data.Containers.ListUtils
 import           Data.Generics
 import qualified Data.HashMap.Strict                  as HM
-import           Data.List
+import qualified Data.HashSet                         as HashSet
 import qualified Data.Map                             as M
 import           Data.Maybe
 import qualified Data.Text                            as T
@@ -43,7 +43,7 @@ renameProvider state pluginId (RenameParams (TextDocumentIdentifier uri) pos _pr
         oldName <- (handleMaybe "error: could not find name at pos" . listToMaybe) =<<
             getNamesAtPos state pos nfp
         refs <- refsAtName state nfp oldName
-        refFiles <- mapM safeGetNfp (nub [uri | Location uri _ <- refs])
+        refFiles <- mapM safeGetNfp (HashSet.toList $ HashSet.fromList [uri | Location uri _ <- refs])
 
         let newOccName = mkTcOcc $ T.unpack newNameText
         nfpEdits <- mapMToSnd (getSrcEdits state (renameRefs refs newOccName)) refFiles
