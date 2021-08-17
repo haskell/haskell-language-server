@@ -180,6 +180,28 @@
         ghc8104 = pkgs.hlsHpkgs "ghc8104";
         ghc901 = ghc901Config.tweakHpkgs (pkgs.hlsHpkgs "ghc901");
 
+        # For markdown support
+        myst-parser = pkgs.python3Packages.callPackage ./myst-parser.nix {};
+        sphinx_rtd_theme = pkgs.python3Packages.sphinx_rtd_theme.overrideAttrs (oldAttrs: {
+          # For https://github.com/readthedocs/sphinx_rtd_theme/pull/1185, otherwise lists are broken locally
+          src = pkgs.fetchFromGitHub {
+            owner = "readthedocs";
+            repo = "sphinx_rtd_theme";
+            rev = "34f81daaf52466366c80003db293d50075c1b896";
+            sha256 = "0rkrsvvqr6g2p3v5vq88jhfp5sd0r1jqjh3vc5y26jn30z8s4fkz";
+          };
+        });
+        pythonWithPackages = pkgs.python3.withPackages (ps: [ps.sphinx myst-parser sphinx_rtd_theme ps.pip]);
+
+        docs = pkgs.stdenv.mkDerivation {
+          name = "hls-docs";
+          src = pkgs.lib.sourceFilesBySuffices ./docs [ ".py" ".rst" ".md" ".png" ".gif" ".svg" ];
+          buildInputs = [ pythonWithPackages ];
+          # -n gives warnings on missing link targets, -W makes warnings into errors
+          buildPhase = ''sphinx-build -n -W . $out'';
+          dontInstall = true;
+        };
+
         # Create a development shell of hls project
         # See https://github.com/NixOS/nixpkgs/blob/5d4a430472cafada97888cc80672fab255231f57/pkgs/development/haskell-modules/make-package-set.nix#L319
         mkDevShell = hpkgs:
@@ -193,7 +215,7 @@
                   removeAttrs hlsSources ghc901Config.disabledPlugins
                 else
                   hlsSources));
-            buildInputs = [ gmp zlib ncurses capstone tracy (gen-hls-changelogs hpkgs) ]
+            buildInputs = [ gmp zlib ncurses capstone tracy (gen-hls-changelogs hpkgs) pythonWithPackages ]
               ++ (with hpkgs; [
                 cabal-install
                 hlint
@@ -240,6 +262,9 @@
           haskell-language-server-8104 = mkExe ghc8104;
           haskell-language-server-8105 = builtins.throw "GHC 8.10.5 is not available in nixpkgs";
           haskell-language-server-901 = mkExe ghc901;
+
+          # docs
+          docs = docs;
         };
 
         defaultPackage = packages.haskell-language-server;
