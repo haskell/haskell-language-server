@@ -3,6 +3,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 
 module Ide.Plugin.Rename (descriptor) where
+    
 import           Control.Monad
 import           Control.Monad.IO.Class               (MonadIO (liftIO))
 import           Control.Monad.Trans.Except
