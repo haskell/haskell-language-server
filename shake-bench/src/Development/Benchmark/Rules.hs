@@ -307,7 +307,7 @@ benchRules build MkBenchRules{..} = do
         let exePath    = build </> "binaries" </> ver </> executableName
             exeExtraArgs =
                 [ "+RTS"
-                , "-l-au"
+                , "-l"
                 , "-S" <> outGc]
              ++ concat
                 [[ "-h"
