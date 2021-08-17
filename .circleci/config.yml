@@ -114,5 +114,6 @@ workflows:
       - ghc-8.10.3
       - ghc-8.10.4
       - ghc-8.10.5
+      - ghc-8.10.6
       - ghc-9.0.1
       - ghc-default
