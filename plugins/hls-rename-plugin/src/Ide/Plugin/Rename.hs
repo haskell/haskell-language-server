@@ -54,7 +54,7 @@ renameProvider state pluginId (RenameParams (TextDocumentIdentifier uri) pos _pr
 
     -- Rename left-hand sides (declarations)
     filesDeclEdits <- mapMToSnd (getSrcEdits state (updateLhsDecls refs newRdrName)) refFiles
-    declEdits@(originNfp, _) <- handleMaybe "error: could not find name declaration" $
+    declEdits@(originNfp, _) <- handleMaybe "error: could not rename declaration" $
         find (\(_, List xs) -> not $ null xs) filesDeclEdits
 
     -- Rename right-hand sides (using retrie)

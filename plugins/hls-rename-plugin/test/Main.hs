@@ -15,9 +15,7 @@ renamePlugin = Rename.descriptor "rename"
 tests :: TestTree
 tests = testGroup "rename"
     [ testGroup "Top-level renames"
-        [ goldenWithRename "data constructor" "DataConstructor" $ \doc -> do
-            rename doc (Position 0 15) "Op"
-        , goldenWithRename "exported function" "ExportedFunction" $ \doc -> do
+        [ goldenWithRename "exported function" "ExportedFunction" $ \doc -> do
             rename doc (Position 2 1) "quux"
         , goldenWithRename "function name" "FunctionName" $ \doc -> do
             rename doc (Position 3 1) "baz"
@@ -45,7 +43,9 @@ tests = testGroup "rename"
         ]
     , expectFailBecause "Only top-level renames are implemented" $
       testGroup "non Top-level renames"
-        [ goldenWithRename "function argument" "FunctionArgument" $ \doc -> do
+        [ goldenWithRename "data constructor" "DataConstructor" $ \doc -> do
+            rename doc (Position 0 15) "Op"
+        , goldenWithRename "function argument" "FunctionArgument" $ \doc -> do
             rename doc (Position 3 4) "y"
         , goldenWithRename "record field" "RecordField" $ \doc -> do
             rename doc (Position 6 9) "number"
@@ -55,8 +55,10 @@ tests = testGroup "rename"
     ]
 
 goldenWithRename :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
-goldenWithRename title path =
-    goldenWithHaskellDoc renamePlugin title testDataDir path "expected" "hs"
+goldenWithRename title path act =
+    goldenWithHaskellDoc renamePlugin title testDataDir path "expected" "hs" $ \doc -> do
+        waitForProgressDone
+        act doc
 
 testDataDir :: FilePath
 testDataDir = "test" </> "testdata"
