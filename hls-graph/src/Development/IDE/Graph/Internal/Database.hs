@@ -162,10 +162,13 @@ spawn db@Database{..} key id mode result = do
     let actualDeps = if runChanged /= Shake.ChangedNothing then deps else previousDeps
         previousDeps= resultDeps =<< result
     let res = Result runValue built changed actualDeps runStore
-    withLock databaseLock $ do
-        -- recompute reverse deps only when the rule ran with changes
-        when (runChanged /= Shake.ChangedNothing) $
-          updateReverseDeps id db (fromMaybe [] previousDeps) (maybe mempty Set.fromList actualDeps)
+    case actualDeps of
+        Just deps | not(null deps) &&
+                    runChanged /= Shake.ChangedNothing
+                    -> do
+            updateReverseDeps id db (fromMaybe [] previousDeps) (Set.fromList deps)
+        _ -> pure ()
+    withLock databaseLock $
         Ids.insert databaseValues id (key, Clean res)
     pure res
 
