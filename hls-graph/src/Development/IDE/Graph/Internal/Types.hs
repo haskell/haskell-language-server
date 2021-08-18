@@ -91,12 +91,12 @@ data Database = Database {
 data Status
     = Clean Result
     | Dirty (Maybe Result)
-    | Running (IO Result) (Maybe Result)
+    | Running (IO ()) Result (Maybe Result)
 
 getResult :: Status -> Maybe Result
 getResult (Clean re)       = Just re
 getResult (Dirty m_re)     = m_re
-getResult (Running _ m_re) = m_re
+getResult (Running _ _ m_re) = m_re
 
 data Result = Result {
     resultValue     :: !Value,

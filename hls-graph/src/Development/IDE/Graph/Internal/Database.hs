@@ -1,19 +1,23 @@
 -- We deliberately want to ensure the function we add to the rule database
 -- has the constraints we need on it when we get it out.
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE NamedFieldPuns      #-}
-{-# LANGUAGE RecordWildCards     #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections       #-}
-{-# LANGUAGE TypeFamilies        #-}
+{-# LANGUAGE DeriveFunctor              #-}
+{-# LANGUAGE DerivingStrategies         #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase                 #-}
+{-# LANGUAGE NamedFieldPuns             #-}
+{-# LANGUAGE RecordWildCards            #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TupleSections              #-}
+{-# LANGUAGE TypeFamilies               #-}
 
-module Development.IDE.Graph.Internal.Database where
+module Development.IDE.Graph.Internal.Database (newDatabase, incDatabase, build) where
 
 import           Control.Concurrent.Async
 import           Control.Concurrent.Extra
 import           Control.Exception
 import           Control.Monad
+import           Control.Monad.IO.Class                (MonadIO (liftIO))
 import           Control.Monad.Trans.Class             (lift)
 import           Control.Monad.Trans.Reader
 import qualified Control.Monad.Trans.State.Strict      as State
@@ -57,7 +61,7 @@ incDatabase db Nothing = do
         Ids.forMutate (databaseValues db) $ \_ -> second $ \case
             Clean x     -> Dirty (Just x)
             Dirty x     -> Dirty x
-            Running _ x -> Dirty x
+            Running _ _ x -> Dirty x
 -- only some keys are dirty
 incDatabase db (Just kk) = do
     modifyIORef' (databaseStep db) $ \(Step i) -> Step $ i + 1
@@ -67,7 +71,7 @@ incDatabase db (Just kk) = do
     writeIORef (databaseDirtySet db) (Just $ Set.toList transitiveDirtyIds)
     withLock (databaseLock db) $
         Ids.forMutate (databaseValues db) $ \i -> \case
-            (k, Running _ x) -> (k, Dirty x)
+            (k, Running _ _ x) -> (k, Dirty x)
             (k, Clean x) | i `Set.member` transitiveDirtyIds ->
                 (k, Dirty (Just x))
             other -> other
@@ -78,29 +82,27 @@ build
     :: forall key value . (Shake.RuleResult key ~ value, Typeable key, Show key, Hashable key, Eq key, Typeable value)
     => Database -> [key] -> IO ([Id], [value])
 build db keys = do
-    (ids, vs) <- fmap unzip $ builder db $ map (Right . Key) keys
+    (ids, vs) <- runAIO $ fmap unzip $ either return liftIO =<< builder db (map (Right . Key) keys)
     pure (ids, map (asV . resultValue) vs)
     where
         asV :: Value -> value
         asV (Value x) = unwrapDynamic x
 
--- | Build a list of keys in parallel
+-- | Build a list of keys and return their results.
+--  If none of the keys are dirty, we can return the results immediately.
+--  Otherwise, a blocking computation is returned *which must be evaluated asynchronously* to avoid deadlock.
 builder
-    :: Database -> [Either Id Key] -> IO [(Id, Result)]
+    :: Database -> [Either Id Key] -> AIO (Either [(Id, Result)] (IO [(Id, Result)]))
 builder db@Database{..} keys = do
-    -- Async things that I own and am responsible for killing
-    ownedAsync <- newIORef []
-    flip onException (cleanupAsync ownedAsync) $ do
-
         -- Things that I need to force before my results are ready
-        toForce <- newIORef []
+        toForce <- liftIO $ newIORef []
 
-        results <- withLock databaseLock $ do
-            forM keys $ \idKey -> do
+        results <- withLockAIO databaseLock $ do
+            flip traverse keys $ \idKey -> do
                 -- Resolve the id
                 id <- case idKey of
                     Left id -> pure id
-                    Right key -> do
+                    Right key -> liftIO $ do
                         ids <- readIORef databaseIds
                         case Intern.lookup key ids of
                             Just v -> pure v
@@ -110,52 +112,67 @@ builder db@Database{..} keys = do
                                 return id
 
                 -- Spawn the id if needed
-                status <- Ids.lookup databaseValues id
+                status <- liftIO $ Ids.lookup databaseValues id
                 val <- case fromMaybe (fromRight undefined idKey, Dirty Nothing) status of
                     (_, Clean r) -> pure r
-                    (_, Running act _) -> do
-                        -- we promise to force everything in todo before reading the results
-                        -- so the following unsafePerformIO isn't actually unsafe
-                        let (force, val) = splitIO act
-                        modifyIORef toForce (force:)
+                    (_, Running force val _) -> do
+                        liftIO $ modifyIORef toForce (force:)
                         pure val
                     (key, Dirty s) -> do
-                        -- Important we don't lose any Async things we create
-                        act <- uninterruptibleMask $ \restore -> do
-                            -- the child actions should always be spawned unmasked
-                            -- or they can't be killed
-                            async <- async $ restore $ check db key id s
-                            modifyIORef ownedAsync (async:)
-                            pure $ wait async
-                        Ids.insert databaseValues id (key, Running act s)
-                        let (force, val) = splitIO act
-                        modifyIORef toForce (force:)
+                        act <- unliftAIO (refresh db key id s)
+                        let (force, val) = splitIO (join act)
+                        liftIO $ Ids.insert databaseValues id (key, Running force val s)
+                        liftIO $ modifyIORef toForce (force:)
                         pure val
 
                 pure (id, val)
 
-        sequence_ =<< readIORef toForce
-        pure results
+        toForceList <- liftIO $ readIORef toForce
+        case toForceList of
+            [] -> return $ Left results
+            _ -> return $ Right $ do
+                    parallelWait toForceList
+                    pure results
 
-cleanupAsync :: IORef [Async a] -> IO ()
-cleanupAsync ref = uninterruptibleMask_ $ do
-    asyncs <- readIORef ref
-    mapM_ (\a -> throwTo (asyncThreadId a) AsyncCancelled) asyncs
-    mapM_ waitCatch asyncs
+parallelWait :: [IO ()] -> IO ()
+parallelWait [] = pure ()
+parallelWait [one] = one
+parallelWait many = mapConcurrently_ sequence_ (increasingChunks many)
 
--- | Check if we need to run the database.
-check :: Database -> Key -> Id -> Maybe Result -> IO Result
-check db key id result@(Just me@Result{resultDeps=Just deps}) = do
+-- >>> increasingChunks [1..20]
+-- [[1,2],[3,4,5,6],[7,8,9,10,11,12,13,14],[15,16,17,18,19,20]]
+increasingChunks :: [a] -> [[a]]
+increasingChunks = go 2 where
+    go :: Int -> [a] -> [[a]]
+    go _ [] = []
+    go n xx = let (chunk, rest) = splitAt n xx in chunk : go (min 10 (n*2)) rest
+
+-- | Refresh a key:
+--     * If no dirty dependencies and we have evaluated the key previously, then we refresh it in the current thread.
+--       This assumes that the implementation will be a lookup
+--     * Otherwise, we spawn a new thread to refresh the dirty deps (if any) and the key itself
+refresh :: Database -> Key -> Id -> Maybe Result -> AIO (IO Result)
+refresh db key id result@(Just me@Result{resultDeps=Just deps}) = do
     res <- builder db $ map Left deps
-    let dirty = any (\(_,dep) -> resultBuilt me < resultChanged dep) res
-    let mode = if dirty then Shake.RunDependenciesChanged else Shake.RunDependenciesSame
-    spawn db key id mode result
-check db key id result = spawn db key id Shake.RunDependenciesChanged result
+    case res of
+      Left res ->
+        if isDirty res
+            then asyncWithCleanUp $ liftIO $ compute db key id Shake.RunDependenciesChanged result
+            else pure $ compute db key id Shake.RunDependenciesSame result
+      Right iores -> asyncWithCleanUp $ liftIO $ do
+        res <- iores
+        let mode = if isDirty res then Shake.RunDependenciesChanged else Shake.RunDependenciesSame
+        compute db key id mode result
+    where
+        isDirty = any (\(_,dep) -> resultBuilt me < resultChanged dep)
+
+refresh db key id result =
+    asyncWithCleanUp $ liftIO $ compute db key id Shake.RunDependenciesChanged result
 
 
--- | Spawn a new computation to run the action.
-spawn :: Database -> Key -> Id -> Shake.RunMode -> Maybe Result -> IO Result
-spawn db@Database{..} key id mode result = do
+-- | Compute a key.
+compute :: Database -> Key -> Id -> Shake.RunMode -> Maybe Result -> IO Result
+compute db@Database{..} key id mode result = do
     let act = runRule databaseRules key (fmap resultData result) mode
     deps <- newIORef $ Just []
     (execution, Shake.RunResult{..}) <-
@@ -178,6 +195,9 @@ spawn db@Database{..} key id mode result = do
     withLock databaseLock $
         Ids.insert databaseValues id (key, Clean res)
     pure res
+
+--------------------------------------------------------------------------------
+-- Lazy IO trick
 
 data Box a = Box {fromBox :: a}
 
@@ -221,3 +241,38 @@ transitiveDirtySet database = flip State.execStateT Set.empty . traverse_ loop
             State.put (Set.insert x seen)
             next <- lift $ getReverseDependencies database x
             traverse_ loop (maybe mempty Set.toList next)
+
+-- | IO extended to track created asyncs to clean them up when the thread is killed,
+--   generalizing 'withAsync'
+newtype AIO a = AIO { unAIO :: ReaderT (IORef [Async ()]) IO a }
+  deriving newtype (Applicative, Functor, Monad, MonadIO)
+
+runAIO :: AIO a -> IO a
+runAIO (AIO act) = do
+    asyncs <- newIORef []
+    runReaderT act asyncs `onException` cleanupAsync asyncs
+
+asyncWithCleanUp :: AIO a -> AIO (IO a)
+asyncWithCleanUp act = do
+    st <- AIO ask
+    io <- unliftAIO act
+    liftIO $ uninterruptibleMask $ \restore -> do
+        a <- async $ restore io
+        modifyIORef st (void a :)
+        return $ wait a
+
+withLockAIO :: Lock -> AIO a -> AIO a
+withLockAIO lock act = do
+    io <- unliftAIO act
+    liftIO $ withLock lock io
+
+unliftAIO :: AIO a -> AIO (IO a)
+unliftAIO act = do
+    st <- AIO ask
+    return $ runReaderT (unAIO act) st
+
+cleanupAsync :: IORef [Async a] -> IO ()
+cleanupAsync ref = uninterruptibleMask_ $ do
+    asyncs <- readIORef ref
+    mapM_ (\a -> throwTo (asyncThreadId a) AsyncCancelled) asyncs
+    mapM_ waitCatch asyncs
