@@ -38,59 +38,13 @@ source-repository-package
 
 write-ghc-environment-files: never
 
-<<<<<<< HEAD
-index-state: 2021-08-01T00:00:00Z
-=======
 index-state: 2021-08-12T12:00:38Z
->>>>>>> 57ffd744 (Clean cabal project (#2097))
 
 constraints:
     hyphenation +embed
 
 
 allow-newer:
-<<<<<<< HEAD
-    active:base,
-    assoc:base,
-    cryptohash-md5:base,
-    cryptohash-sha1:base,
-    constraints-extras:template-haskell,
-    data-tree-print:base,
-    deepseq:base,
-    dependent-sum:some,
-    dependent-sum:constraints,
-    diagrams-contrib:base,
-    diagrams-contrib:lens,
-    diagrams-contrib:random,
-    diagrams-core:base,
-    diagrams-core:lens,
-    diagrams-lib:base,
-    diagrams-lib:lens,
-    diagrams-postscript:base,
-    diagrams-postscript:lens,
-    diagrams-svg:base,
-    diagrams-svg:lens,
-    dual-tree:base,
-    -- Does this make any sense?
-    entropy:Cabal,
-    force-layout:base,
-    force-layout:lens,
-    floskell:ghc-prim,
-    floskell:base,
-    hashable:base,
-    hslogger:base,
-    monoid-extras:base,
-    newtype-generics:base,
-    parallel:base,
-    regex-base:base,
-    regex-tdfa:base,
-    statestack:base,
-    svg-builder:base,
-    these:base,
-    time-compat:base
-
-=======
     -- for shake-bench
     Chart-diagrams:diagrams-core,
     SVGFonts:diagrams-core
->>>>>>> 57ffd744 (Clean cabal project (#2097))
