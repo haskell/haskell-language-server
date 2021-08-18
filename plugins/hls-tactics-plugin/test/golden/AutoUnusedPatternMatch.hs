@@ -1,0 +1,2 @@
+test :: Bool -> ()
+test = _

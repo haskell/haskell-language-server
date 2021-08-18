@@ -138,7 +138,7 @@ import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.Types                           (SMethod (SCustomMethod))
 import           Language.LSP.VFS
 import           Module
-import           System.Directory                             (canonicalizePath)
+import           System.Directory                             (canonicalizePath, makeAbsolute)
 import           TcRnMonad                                    (tcg_dependent_files)
 
 import           Control.Applicative
@@ -674,9 +674,12 @@ loadGhcSession = do
 
         -- add the deps to the Shake graph
         let addDependency fp = do
-                let nfp = toNormalizedFilePath' fp
+                -- VSCode uses absolute paths in its filewatch notifications
+                afp <- liftIO $ makeAbsolute fp
+                let nfp = toNormalizedFilePath' afp
                 itExists <- getFileExists nfp
-                when itExists $ void $ use_ GetModificationTime nfp
+                when itExists $ void $ do
+                  use_ GetModificationTime nfp
         mapM_ addDependency deps
 
         opts <- getIdeOptions
