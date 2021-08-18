@@ -76,7 +76,10 @@ experiments =
       bench "edit" $ \docs -> do
         forM_ docs $ \DocumentPositions{..} ->
           changeDoc doc [charEdit stringLiteralP]
-        waitForProgressDone -- TODO check that this waits for all of them
+        -- wait for a fresh build start
+        waitForProgressStart
+        -- wait for the build to be finished
+        waitForProgressDone
         return True,
       ---------------------------------------------------------------------------------------
       bench "hover after edit" $ \docs -> do
@@ -389,6 +392,12 @@ data BenchRun = BenchRun
 
 badRun :: BenchRun
 badRun = BenchRun 0 0 0 0 0 False
+
+waitForProgressStart :: Session ()
+waitForProgressStart = void $ do
+    skipManyTill anyMessage $ satisfy $ \case
+      FromServerMess SWindowWorkDoneProgressCreate _ -> True
+      _                                              -> False
 
 -- | Wait for all progress to be done
 -- Needs at least one progress done notification to return
