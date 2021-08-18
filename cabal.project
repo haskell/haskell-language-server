@@ -45,8 +45,6 @@ constraints:
 
 
 allow-newer:
-<<<<<<< HEAD
-=======
     active:base,
     assoc:base,
     cryptohash-md5:base,
@@ -74,7 +72,6 @@ allow-newer:
     these:base,
     time-compat:base,
 
->>>>>>> f3620d1e (reduce allow-newer entries for shake-bench (#2101))
     -- for shake-bench
     Chart-diagrams:diagrams-core,
     SVGFonts:diagrams-core
