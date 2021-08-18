@@ -12,7 +12,7 @@ import qualified Data.Bifunctor
 import           Data.Containers.ListUtils
 import           Data.Generics
 import qualified Data.HashMap.Strict                  as HM
-import qualified Data.HashSet                         as HashSet
+import qualified Data.HashSet                         as HS
 import qualified Data.Map                             as M
 import           Data.Maybe
 import qualified Data.Text                            as T
@@ -43,7 +43,7 @@ renameProvider state pluginId (RenameParams (TextDocumentIdentifier uri) pos _pr
         oldName <- (handleMaybe "error: could not find name at pos" . listToMaybe) =<<
             getNamesAtPos state pos nfp
         refs <- refsAtName state nfp oldName
-        refFiles <- mapM safeGetNfp (HashSet.toList $ HashSet.fromList [uri | Location uri _ <- refs])
+        refFiles <- mapM safeGetNfp $ HS.toList $ HS.fromList [uri | Location uri _ <- refs]
 
         let newOccName = mkTcOcc $ T.unpack newNameText
         nfpEdits <- mapMToSnd (getSrcEdits state (renameRefs refs newOccName)) refFiles
@@ -88,7 +88,8 @@ renameRefs refs newOccName = everywhere $ mkT replace
             | isRef srcSpan = L srcSpan $ newRdrName oldRdrName
         replace lOldRdrName = lOldRdrName
 
-        newRdrName srcSpan = case srcSpan of
+        newRdrName :: RdrName -> RdrName
+        newRdrName oldRdrName = case oldRdrName of
             Qual modName _ -> Qual modName newOccName
             _              -> Unqual newOccName
 
@@ -123,7 +124,11 @@ getNameAstLocations name (HAR _ _ rm _ _, mapping) =
 safeGetNfp :: (Monad m) => Uri -> ExceptT String m NormalizedFilePath
 safeGetNfp uri = handleMaybe "error: uri" $ toNormalizedFilePath <$> uriToFilePath uri
 
-getNamesAtPos :: IdeState -> Position -> NormalizedFilePath -> ExceptT String (LspT Config IO) [Name]
+getNamesAtPos ::
+    IdeState
+    -> Position
+    -> NormalizedFilePath
+    -> ExceptT String (LspT Config IO) [Name]
 getNamesAtPos state pos nfp = do
     (HAR{hieAst}, mapping) <- handleMaybeM "error: ast" $ liftIO $
         runAction "Rename.GetHieAst" state $ useWithStale GetHieAst nfp

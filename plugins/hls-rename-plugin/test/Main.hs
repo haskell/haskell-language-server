@@ -29,7 +29,7 @@ tests = testGroup "rename"
             rename doc (Position 3 8) "baz"
         , goldenWithRename "import hiding" "ImportHiding" $ \doc -> do
             rename doc (Position 0 22) "hiddenFoo"
-        , goldenWithRename "allign indentation" "Indentation" $ \doc -> do
+        , goldenWithRename "realign indentation" "Indentation" $ \doc -> do
             rename doc (Position 0 2) "fooBarQuux"
         , goldenWithRename "qualified as" "QualifiedAs" $ \doc -> do
             rename doc (Position 3 10) "baz"
