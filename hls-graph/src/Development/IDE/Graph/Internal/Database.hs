@@ -166,7 +166,8 @@ spawn db@Database{..} key id mode result = do
         Just deps | not(null deps) &&
                     runChanged /= Shake.ChangedNothing
                     -> do
-            updateReverseDeps id db (fromMaybe [] previousDeps) (Set.fromList deps)
+            void $ forkIO $
+                updateReverseDeps id db (fromMaybe [] previousDeps) (Set.fromList deps)
         _ -> pure ()
     withLock databaseLock $
         Ids.insert databaseValues id (key, Clean res)
