@@ -23,13 +23,14 @@ packages:
          ./plugins/hls-module-name-plugin
          ./plugins/hls-ormolu-plugin
          ./plugins/hls-call-hierarchy-plugin
+
 tests: true
 
 package *
   ghc-options: -haddock
   test-show-details: direct
 
--- ghc-api-compat-8.6
+-- see https://gitlab.haskell.org/haskell/ghc-api-compat/-/issues/1#note_371055
 source-repository-package
   type: git
   location: https://github.com/hsyl20/ghc-api-compat
@@ -37,42 +38,13 @@ source-repository-package
 
 write-ghc-environment-files: never
 
-index-state: 2021-08-08T02:21:16Z
+index-state: 2021-08-12T12:00:38Z
 
 constraints:
-    -- Diagrams doesn't support optparse-applicative >= 0.16 yet
-    optparse-applicative < 0.16,
     hyphenation +embed
 
 
 allow-newer:
-    active:base,
-    assoc:base,
-    cryptohash-md5:base,
-    cryptohash-sha1:base,
-    constraints-extras:template-haskell,
-    data-tree-print:base,
-    deepseq:base,
-    dependent-sum:some,
-    dependent-sum:constraints,
-    dual-tree:base,
-    -- Does this make any sense?
-    entropy:Cabal,
-    force-layout:base,
-    force-layout:lens,
-    floskell:ghc-prim,
-    floskell:base,
-    hashable:base,
-    hslogger:base,
-    monoid-extras:base,
-    newtype-generics:base,
-    parallel:base,
-    regex-base:base,
-    regex-tdfa:base,
-    statestack:base,
-    these:base,
-    time-compat:base,
-
     -- for shake-bench
     Chart-diagrams:diagrams-core,
     SVGFonts:diagrams-core
