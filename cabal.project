@@ -23,13 +23,14 @@ packages:
          ./plugins/hls-module-name-plugin
          ./plugins/hls-ormolu-plugin
          ./plugins/hls-call-hierarchy-plugin
+
 tests: true
 
 package *
   ghc-options: -haddock
   test-show-details: direct
 
--- ghc-api-compat-8.6
+-- see https://gitlab.haskell.org/haskell/ghc-api-compat/-/issues/1#note_371055
 source-repository-package
   type: git
   location: https://github.com/hsyl20/ghc-api-compat
@@ -37,15 +38,18 @@ source-repository-package
 
 write-ghc-environment-files: never
 
+<<<<<<< HEAD
 index-state: 2021-08-01T00:00:00Z
+=======
+index-state: 2021-08-12T12:00:38Z
+>>>>>>> 57ffd744 (Clean cabal project (#2097))
 
 constraints:
-    -- Diagrams doesn't support optparse-applicative >= 0.16 yet
-    optparse-applicative < 0.16,
     hyphenation +embed
 
 
 allow-newer:
+<<<<<<< HEAD
     active:base,
     assoc:base,
     cryptohash-md5:base,
@@ -85,3 +89,8 @@ allow-newer:
     these:base,
     time-compat:base
 
+=======
+    -- for shake-bench
+    Chart-diagrams:diagrams-core,
+    SVGFonts:diagrams-core
+>>>>>>> 57ffd744 (Clean cabal project (#2097))
