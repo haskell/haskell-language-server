@@ -1,3 +1,5 @@
+{-# LANGUAGE NumDecimals #-}
+
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module AutoTupleSpec where
