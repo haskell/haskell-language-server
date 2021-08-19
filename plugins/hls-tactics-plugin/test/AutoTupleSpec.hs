@@ -36,6 +36,7 @@ spec = describe "auto for tuple" $ do
           -- We should always be able to find a solution
           unsafePerformIO
             (runTactic
+              2e6
               emptyContext
               (mkFirstJudgement
                 emptyContext
