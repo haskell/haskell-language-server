@@ -20,7 +20,11 @@ import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Spans.AtPoint
+#if MIN_VERSION_ghc(9,0,1)
+import           GHC.Types.Name
+#else
 import           Name
+#endif
 import           HieDb.Query
 import           Ide.Plugin.Config
 import           Ide.Plugin.Retrie                    hiding (descriptor)
