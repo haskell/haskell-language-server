@@ -22,6 +22,7 @@ library
   build-depends:
     , base                  >=4.12    && <5
     , containers
+    , extra
     , ghc
     , ghc-exactprint
     , ghcide                >=1.4     && <1.5
@@ -30,11 +31,9 @@ library
     , hls-retrie-plugin     >=1.0.1.1
     , lsp
     , lsp-types
-    , retrie                >=0.1.1.1
     , syb
     , text
     , transformers
-    , unordered-containers
 
   default-language: Haskell2010
 
