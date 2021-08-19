@@ -114,8 +114,10 @@ builder db@Database{..} keys = do
         pure results
 
 cleanupAsync :: IORef [Async a] -> IO ()
-cleanupAsync ref = mapConcurrently_ uninterruptibleCancel =<< readIORef ref
-
+cleanupAsync ref = uninterruptibleMask_ $ do
+    asyncs <- readIORef ref
+    mapM_ (\a -> throwTo (asyncThreadId a) AsyncCancelled) asyncs
+    mapM_ waitCatch asyncs
 
 -- | Check if we need to run the database.
 check :: Database -> Key -> Id -> Maybe Result -> IO Result
