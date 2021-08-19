@@ -54,7 +54,7 @@ renameProvider state pluginId (RenameParams (TextDocumentIdentifier uri) pos _pr
 -------------------------------------------------------------------------------
 -- Source renaming
 
--- | Compute a `WorkspaceEdit` by applying a given function to a `ParsedModule` at a given `Uri`.
+-- | Compute a `WorkspaceEdit` by applying a given function to the `ParsedModule` for a given `Uri`.
 getSrcEdits ::
     (MonadLsp config m) =>
     IdeState ->
