@@ -27,6 +27,7 @@ library
   hs-source-dirs:     src
   exposed-modules:
     Ide.Plugin.Tactic
+    Refinery.Future
     Wingman.AbstractLSP
     Wingman.AbstractLSP.TacticActions
     Wingman.AbstractLSP.Types

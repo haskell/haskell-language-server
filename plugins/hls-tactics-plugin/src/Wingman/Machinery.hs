@@ -5,6 +5,7 @@
 module Wingman.Machinery where
 
 import           Control.Applicative (empty)
+import           Control.Concurrent.Chan.Unagi.NoBlocking (newChan, writeChan, OutChan, tryRead, tryReadChan)
 import           Control.Lens ((<>~))
 import           Control.Monad.Reader
 import           Control.Monad.State.Class (gets, modify, MonadState)
@@ -25,9 +26,11 @@ import           Data.Traversable (for)
 import           Development.IDE.Core.Compile (lookupName)
 import           Development.IDE.GHC.Compat
 import           GhcPlugins (GlobalRdrElt (gre_name), lookupOccEnv, varType)
+import           Refinery.Future
 import           Refinery.ProofState
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
+import           System.Timeout (timeout)
 import           TcType
 import           Type (tyCoVarsOfTypeWellScoped)
 import           Wingman.Context (getInstance)
@@ -35,8 +38,6 @@ import           Wingman.GHC (tryUnifyUnivarsButNotSkolems, updateSubst, tactics
 import           Wingman.Judgements
 import           Wingman.Simplify (simplify)
 import           Wingman.Types
-import Control.Concurrent.Chan.Unagi.NoBlocking (newChan, writeChan, OutChan, tryRead, tryReadChan)
-import System.Timeout (timeout)
 
 
 substCTy :: TCvSubst -> CType -> CType
@@ -72,21 +73,6 @@ newSubgoal j = do
 
 tacticToRule :: Judgement -> TacticsM () -> Rule
 tacticToRule jdg (TacticT tt) = RuleT $ flip execStateT jdg tt >>= flip Subgoal Axiom
-
-
-hoistElem :: Functor m => (forall x. m x -> n x) -> Elem m a -> Elem n a
-hoistElem _ Done = Done
-hoistElem f (Next a lt) = Next a $ hoistListT f lt
-
-
-hoistListT :: Functor m => (forall x. m x -> n x) -> ListT m a -> ListT n a
-hoistListT f t = ListT $ f $ fmap (hoistElem f) $ unListT t
-
-
-consume :: Monad m => ListT m a -> (a -> m ()) -> m ()
-consume lt f = unListT lt >>= \case
-  Done -> pure ()
-  Next a lt' -> f a >> consume lt' f
 
 
 consumeChan :: OutChan (Maybe a) -> IO [a]
