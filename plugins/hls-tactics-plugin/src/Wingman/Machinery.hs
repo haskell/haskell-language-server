@@ -107,32 +107,31 @@ runTactic duration ctx jdg t = do
 
     let stream = hoistListT (flip runReaderT ctx . unExtractM)
                $ runStreamingTacticT t jdg tacticState
-    (in_chan, out_chan) <- newChan
+    (in_proofs, out_proofs) <- newChan
+    (in_errs, out_errs) <- newChan
     timed_out <-
       fmap (not. isJust) $ timeout duration $ consume stream $ \case
-        Left _ -> pure ()
-        Right proof -> writeChan in_chan $ Just proof
-    writeChan in_chan Nothing
+        Left err -> writeChan in_errs $ Just err
+        Right proof -> writeChan in_proofs $ Just proof
+    writeChan in_proofs Nothing
 
-    solns <- consumeChan out_chan
-    pure $ do
-      let sorted =
-            flip sortBy solns $ comparing $ \(Proof ext _ holes) ->
-              Down $ scoreSolution ext jdg $ fmap snd holes
-      case sorted of
-        ((Proof syn _ subgoals) : _) ->
-          Right $
-            RunTacticResults
-              { rtr_trace    = syn_trace syn
-              , rtr_extract  = simplify $ syn_val syn
-              , rtr_subgoals = fmap snd subgoals
-              , rtr_other_solns = reverse . fmap pf_extract $ sorted
-              , rtr_jdg = jdg
-              , rtr_ctx = ctx
-              , rtr_timed_out = timed_out
-              }
-        -- guaranteed to not be empty
-        _ -> Left []
+    solns <- consumeChan out_proofs
+    let sorted =
+          flip sortBy solns $ comparing $ \(Proof ext _ holes) ->
+            Down $ scoreSolution ext jdg $ fmap snd holes
+    case sorted of
+      ((Proof syn _ subgoals) : _) ->
+        pure $ Right $
+          RunTacticResults
+            { rtr_trace    = syn_trace syn
+            , rtr_extract  = simplify $ syn_val syn
+            , rtr_subgoals = fmap snd subgoals
+            , rtr_other_solns = reverse . fmap pf_extract $ sorted
+            , rtr_jdg = jdg
+            , rtr_ctx = ctx
+            , rtr_timed_out = timed_out
+            }
+      _ -> fmap Left $ consumeChan out_errs
 
 
 tracePrim :: String -> Trace

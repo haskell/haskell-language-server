@@ -53,7 +53,12 @@ makeTacticInteraction cmd =
         let t = commandTactic cmd var_name
 
         liftIO $ runTactic (cfg_timeout_seconds le_config * seconds) hj_ctx hj_jdg t >>= \case
-          Left err -> pure $ pure $ ErrorMessages $ pure $ mkUserFacingMessage err
+          Left err ->
+            pure
+              $ pure
+              $ ErrorMessages
+              $ pure
+              $ mkUserFacingMessage err
           Right rtr ->
             case rtr_extract rtr of
               L _ (HsVar _ (L _ rdr)) | isHole (occName rdr) ->
@@ -92,6 +97,7 @@ seconds = 1e6
 mkUserFacingMessage :: [TacticError] -> UserFacingMessage
 mkUserFacingMessage errs
   | elem OutOfGas errs = NotEnoughGas
+mkUserFacingMessage [] = NothingToDo
 mkUserFacingMessage _ = TacticErrors
 
 
