@@ -108,7 +108,7 @@ jobs:
       matrix:
         ghc: ['8.10.4']
         os: [ubuntu-latest]
-        example: ['Cabal-3.0.0.0', 'lsp-types-1.0.0.1']
+        example: ['cabal', 'lsp-types']
 
     steps:
     - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
