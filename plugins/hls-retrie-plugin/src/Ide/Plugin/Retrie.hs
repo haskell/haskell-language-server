@@ -14,7 +14,7 @@
 
 {-# OPTIONS -Wno-orphans #-}
 
-module Ide.Plugin.Retrie (descriptor) where
+module Ide.Plugin.Retrie (descriptor, response, handleMaybe, handleMaybeM) where
 
 import           Control.Concurrent.Extra             (readVar)
 import           Control.Exception.Safe               (Exception (..),
