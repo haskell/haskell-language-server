@@ -1167,7 +1167,7 @@ removeImportTests = testGroup "remove import actions"
       _ <- waitForDiagnostics
       [InR action@CodeAction { _title = actionTitle }, _]
           <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
-      liftIO $ "Remove (@.) from import" @=? actionTitle
+      liftIO $ "Remove @. from import" @=? actionTitle
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines
