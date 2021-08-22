@@ -31,7 +31,6 @@ module Development.IDE.Core.Shake(
     GetModificationTime(GetModificationTime, GetModificationTime_, missingFileDiagnostics),
     shakeOpen, shakeShut,
     shakeEnqueue,
-    shakeProfile,
     newSession,
     use, useNoFile, uses, useWithStaleFast, useWithStaleFast', delayedAction,
     FastResult(..),
@@ -550,14 +549,12 @@ shakeSessionInit IdeState{..} = do
     initSession <- newSession shakeExtras shakeDb []
     putMVar shakeSession initSession
 
-shakeProfile :: IdeState -> FilePath -> IO ()
-shakeProfile IdeState{..} = shakeProfileDatabase shakeDb
-
 shakeShut :: IdeState -> IO ()
 shakeShut IdeState{..} = withMVar shakeSession $ \runner -> do
     -- Shake gets unhappy if you try to close when there is a running
     -- request so we first abort that.
     void $ cancelShakeSession runner
+    void $ shakeDatabaseProfile shakeDb
     shakeClose
     progressStop $ progress shakeExtras
 

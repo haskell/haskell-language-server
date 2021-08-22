@@ -12,7 +12,6 @@ module Development.IDE.Core.Service(
     getIdeOptions, getIdeOptionsIO,
     IdeState, initialise, shutdown,
     runAction,
-    writeProfile,
     getDiagnostics,
     ideLogger,
     updatePositionMapping,
@@ -70,9 +69,6 @@ initialise defaultConfig mainRule lspEnv logger debouncer options vfs hiedb hied
             ofInterestRules
             fileExistsRules lspEnv vfs
             mainRule
-
-writeProfile :: IdeState -> FilePath -> IO ()
-writeProfile = shakeProfile
 
 -- | Shutdown the Compiler Service.
 shutdown :: IdeState -> IO ()
