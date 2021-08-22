@@ -3338,23 +3338,18 @@ removeExportTests = testGroup "remove export actions"
               , "import qualified Data.List as M"
               , "a :: ()"
               , "a = ()"])
-    , testSession "qualified re-export ending in '.'" $ do
-        _docB <- createDoc "B.hs" "haskell"
-          (T.unlines
-                [ "module B where"
-                , "(@.) = 0"])
-        template
-          (T.unlines
-                [ "module A ((B.@.),a) where"
-                , "import qualified B"
-                , "a :: ()"
-                , "a = ()"])
-          "remove ‘B.@.’ from export"
-          (Just $ T.unlines
-                [ "module A (a) where"
-                , "import qualified B"
-                , "a :: ()"
-                , "a = ()"])
+    , testSession "qualified re-export ending in '.'" $ template
+        (T.unlines
+              [ "module A ((M.@.),a) where"
+              , "import qualified Data.List as M"
+              , "a :: ()"
+              , "a = ()"])
+        "Remove ‘M.@.’ from export"
+        (Just $ T.unlines
+              [ "module A (a) where"
+              , "import qualified Data.List as M"
+              , "a :: ()"
+              , "a = ()"])
     , testSession "export module" $ template
         (T.unlines
               [ "module A (module B) where"

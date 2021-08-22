@@ -40,7 +40,6 @@ import qualified Data.Rope.UTF16                                   as Rope
 import qualified Data.Set                                          as S
 import qualified Data.Text                                         as T
 import           Data.Tuple.Extra                                  (fst3)
-import           Debug.Trace
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Service
@@ -1484,28 +1483,21 @@ rangesForBindingImport :: ImportDecl GhcPs -> String -> [Range]
 rangesForBindingImport ImportDecl{ideclHiding = Just (False, L _ lies)} b =
     concatMap (mapMaybe srcSpanToRange . rangesForBinding' b') lies
   where
-    b' = modifyBinding b
+    b' = wrapOperatorInParens b
 rangesForBindingImport _ _ = []
 
-modifyBinding :: String -> String
-modifyBinding = traceShowId . wrapOperatorInParens . unqualify . traceShowId
-  where
-    wrapOperatorInParens x =
-      let addParens x = "(" <> x <> ")"
-      in case uncons x of
-        Just (h, _t) -> if isAlpha h then x else addParens x
-        Nothing      -> mempty
-    unqualify x =
-      case unsnoc x of
-        Just (h, t@'.') -> snoc (snd $ breakOnEnd "." h) t
-        Just _          -> snd $ breakOnEnd "." x
-        Nothing         -> mempty
+wrapOperatorInParens :: String -> String
+wrapOperatorInParens x =
+  case uncons x of
+    Just (h, _t) -> if isAlpha h then x else "(" <> x <> ")"
+    Nothing      -> mempty
 
 smallerRangesForBindingExport :: [LIE GhcPs] -> String -> [Range]
 smallerRangesForBindingExport lies b =
     concatMap (mapMaybe srcSpanToRange . ranges') lies
   where
-    b' = modifyBinding b
+    unqualify = snd . breakOnEnd "."
+    b' = wrapOperatorInParens . unqualify $ b
     ranges' (L _ (IEThingWith _ thing _  inners labels))
       | showSDocUnsafe (ppr thing) == b' = []
       | otherwise =
