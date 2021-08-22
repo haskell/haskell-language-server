@@ -40,6 +40,7 @@ import qualified Data.Rope.UTF16                                   as Rope
 import qualified Data.Set                                          as S
 import qualified Data.Text                                         as T
 import           Data.Tuple.Extra                                  (fst3)
+import           Debug.Trace
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Service
@@ -1487,7 +1488,7 @@ rangesForBindingImport ImportDecl{ideclHiding = Just (False, L _ lies)} b =
 rangesForBindingImport _ _ = []
 
 modifyBinding :: String -> String
-modifyBinding = wrapOperatorInParens . unqualify
+modifyBinding = traceShowId . wrapOperatorInParens . unqualify . traceShowId
   where
     wrapOperatorInParens x =
       let addParens x = "(" <> x <> ")"
