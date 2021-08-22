@@ -1493,7 +1493,7 @@ modifyBinding = wrapOperatorInParens . unqualify
       let addParens x = "(" <> x <> ")"
       in case uncons x of
         Just (h, _t) -> if isAlpha h then x else addParens x
-        Nothing -> addParens x
+        Nothing -> mempty
     unqualify x = snd $ breakOnEnd "." x
 
 smallerRangesForBindingExport :: [LIE GhcPs] -> String -> [Range]
