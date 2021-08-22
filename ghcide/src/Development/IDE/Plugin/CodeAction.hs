@@ -1489,7 +1489,11 @@ rangesForBindingImport _ _ = []
 modifyBinding :: String -> String
 modifyBinding = wrapOperatorInParens . unqualify
   where
-    wrapOperatorInParens x = if isAlpha (head x) then x else "(" <> x <> ")"
+    wrapOperatorInParens x =
+      let addParens x = "(" <> x <> ")"
+      in case uncons x of
+        Just (h, _t) -> if isAlpha h then x else addParens x
+        Nothing -> addParens x
     unqualify x = snd $ breakOnEnd "." x
 
 smallerRangesForBindingExport :: [LIE GhcPs] -> String -> [Range]
