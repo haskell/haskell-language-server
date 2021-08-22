@@ -124,6 +124,17 @@ waitForProgressDone = skipManyTill anyMessage $ satisfyMaybe $ \case
   FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (End _))) -> Just ()
   _ -> Nothing
 
+-- | Wait for all progress to be done
+-- Needs at least one progress done notification to return
+waitForAllProgressDone :: Session ()
+waitForAllProgressDone = loop
+  where
+    loop = do
+      ~() <- skipManyTill anyMessage $ satisfyMaybe $ \case
+        FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (End _))) -> Just ()
+        _ -> Nothing
+      done <- null <$> getIncompleteProgressSessions
+      unless done loop
 main :: IO ()
 main = do
   -- We mess with env vars so run single-threaded.
@@ -4043,8 +4054,10 @@ thLinkingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
     -- modify b too
     let bSource' = T.unlines $ init (T.lines bSource) ++ ["$th"]
     changeDoc bdoc [TextDocumentContentChangeEvent Nothing Nothing bSource']
+    waitForProgressBegin
+    waitForAllProgressDone
 
-    expectDiagnostics [("THB.hs", [(DsWarning, (4,thDollarIdx), "Top-level binding")])]
+    expectCurrentDiagnostics bdoc [(DsWarning, (4,thDollarIdx), "Top-level binding")]
 
     closeDoc adoc
     closeDoc bdoc
