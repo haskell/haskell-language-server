@@ -33,6 +33,10 @@ function untraced(p: Profile): seconds {
     return Math.max(0, p.execution - p.traces.map(t => t.stop - t.start).sum());
 }
 
+interface Build {
+    dirtyKeys: pindex[];
+}
+
 type TraceRaw =
     [ string
     , seconds
@@ -47,6 +51,10 @@ type ProfileRaw =
     , timestamp
     , pindex[][] // Optional
     , TraceRaw[] // Optional
+    ];
+
+type BuildRaw =
+    [ pindex[] // Optional
     ];
 
 /////////////////////////////////////////////////////////////////////

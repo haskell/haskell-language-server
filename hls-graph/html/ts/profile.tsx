@@ -1,6 +1,6 @@
 
-function profileLoaded(profileRaw: ProfileRaw[]): void {
-    $(document.body).empty().append(profileRoot(unraw(profileRaw)));
+function profileLoaded(profileRaw: ProfileRaw[], buildRaw: BuildRaw): void {
+    $(document.body).empty().append(profileRoot(unraw(profileRaw), unrawBuild(buildRaw)));
 }
 
 function unraw(xs: ProfileRaw[]): Profile[] {
@@ -22,10 +22,14 @@ function unraw(xs: ProfileRaw[]): Profile[] {
     return ans;
 }
 
-function profileRoot(profile: Profile[]): HTMLElement {
+function unrawBuild(b: BuildRaw): Build {
+    return { dirtyKeys: b.length > 0 ? b[0] : null };
+}
+
+function profileRoot(profile: Profile[], build: Build): HTMLElement {
     const [s, search] = createSearch(profile);
     const t = createTabs(
-        [ ["Summary", () => reportSummary(profile)]
+        [ ["Summary", () => reportSummary(profile, build)]
         , ["Rules", () => reportRuleTable(profile, search)]
         , ["Parallelizability", () => reportParallelism(profile)]
         , ["Details", () => reportDetails(profile, search)]

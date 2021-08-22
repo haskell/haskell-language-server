@@ -1,5 +1,5 @@
 
-function reportSummary(profile: Profile[]): HTMLElement {
+function reportSummary(profile: Profile[], build: Build): HTMLElement {
     let countLast: int = 0; // number of rules run in the last run
     let visitedLast: int = 0; // number of rules visited in the last run
     let highestRun: timestamp = 0; // highest run you have seen (add 1 to get the count of runs)
@@ -43,8 +43,21 @@ function reportSummary(profile: Profile[]): HTMLElement {
         <ul>
             <li><b>Rules built:</b> {showInt(countLast)} <span class="note">Total number of rules built in this run</span></li>
             <li><b>Rules visited:</b> {showInt(visitedLast - countLast)} <span class="note">Total number of rules looked up from the values store in this run</span></li>
+            <li><b>Dirty set:</b>{renderDirtySet(build,profile)}</li>
         </ul>
     </div>;
+}
+
+function renderDirtySet(build: Build, profile: Profile[]) {
+    if(build.dirtyKeys === null) {
+        return "ALL";
+    }
+    else {
+        return <ul>
+                {build.dirtyKeys.map( d => {return <li>{profile[d].name}</li>})
+                }
+        </ul>;
+    }
 }
 
 function speculativeCriticalPath(profile: Profile[]): seconds {

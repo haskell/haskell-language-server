@@ -44,6 +44,7 @@ newDatabase databaseExtra databaseRules = do
     databaseValues <- Ids.empty
     databaseReverseDeps <- Ids.empty
     databaseReverseDepsLock <- newLock
+    databaseDirtySet <- newIORef Nothing
     pure Database{..}
 
 -- | Increment the step and mark dirty
@@ -51,6 +52,7 @@ incDatabase :: Database -> Maybe [Key] -> IO ()
 -- all keys are dirty
 incDatabase db Nothing = do
     modifyIORef' (databaseStep db) $ \(Step i) -> Step $ i + 1
+    writeIORef (databaseDirtySet db) Nothing
     withLock (databaseLock db) $
         Ids.forMutate (databaseValues db) $ \_ -> second $ \case
             Clean x     -> Dirty (Just x)
@@ -62,6 +64,7 @@ incDatabase db (Just kk) = do
     intern <- readIORef (databaseIds db)
     let dirtyIds = mapMaybe (`Intern.lookup` intern) kk
     transitiveDirtyIds <- transitiveDirtySet db dirtyIds
+    writeIORef (databaseDirtySet db) (Just $ Set.toList transitiveDirtyIds)
     withLock (databaseLock db) $
         Ids.forMutate (databaseValues db) $ \i -> \case
             (k, Running _ x) -> (k, Dirty x)
@@ -195,7 +198,7 @@ updateReverseDeps
     -> [Id] -- ^ Previous direct dependencies of Id
     -> IntSet     -- ^ Current direct dependencies of Id
     -> IO ()
-updateReverseDeps myId db prev new = withLock (databaseReverseDepsLock db) $ do
+updateReverseDeps myId db prev new = uninterruptibleMask_ $ withLock (databaseReverseDepsLock db) $ do
     forM_ prev $ \d ->
         unless (d `Set.member` new) $
             doOne (Set.delete myId) d

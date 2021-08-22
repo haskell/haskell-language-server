@@ -6,16 +6,17 @@
 
 module Development.IDE.Graph.Internal.Profile (writeProfile) where
 
-import           Control.Monad                        ((<=<))
 import           Data.Bifunctor
 import qualified Data.ByteString.Lazy.Char8           as LBS
 import           Data.Char
 import           Data.Dynamic                         (toDyn)
 import qualified Data.HashMap.Strict                  as Map
 import           Data.IORef
+import           Data.IntMap                          (IntMap)
+import qualified Data.IntMap                          as IntMap
 import           Data.List                            (dropWhileEnd, foldl',
                                                        intercalate, partition,
-                                                       sortBy)
+                                                       sort, sortBy)
 import           Data.List.Extra                      (nubOrd)
 import           Data.Maybe
 import           Data.Time                            (defaultTimeLocale,
@@ -41,7 +42,12 @@ import           Language.Haskell.TH.Syntax           (runIO)
 
 -- | Generates an report given some build system profiling data.
 writeProfile :: FilePath -> Database -> IO ()
-writeProfile out = LBS.writeFile out <=< generateHTML <=< toReport
+writeProfile out db = do
+    dirtyKeys <- readIORef (databaseDirtySet db)
+    (report, mapping) <- toReport db
+    let dirtyKeysMapped = mapMaybe (`IntMap.lookup` mapping) <$> dirtyKeys
+    rpt <- generateHTML (sort <$> dirtyKeysMapped) report
+    LBS.writeFile out rpt
 
 data ProfileEntry = ProfileEntry
     {prfName :: !String, prfBuilt :: !Int, prfChanged :: !Int, prfVisited :: !Int, prfDepends :: [[Int]], prfExecution :: !Seconds}
@@ -96,14 +102,15 @@ prepareForDependencyOrder db = do
     Map.insert (-1) (Key "alwaysRerun", alwaysRerunResult current) .  resultsOnly
         <$> Ids.toList (databaseValues db)
 
-toReport :: Database -> IO [ProfileEntry]
+-- | Returns a list of profile entries, and a mapping linking a non-error Id to its profile entry
+toReport :: Database -> IO ([ProfileEntry], IntMap Int)
 toReport db = do
     status <- prepareForDependencyOrder db
     let order = let shw i = maybe "<unknown>" (show . fst) $ Map.lookup i status
                 in dependencyOrder shw
                 $ map (second (fromMaybe [-1] . resultDeps . snd))
                 $ Map.toList status
-        ids = Map.fromList $ zip order [0..]
+        ids = IntMap.fromList $ zip order [0..]
 
         steps = let xs = nubOrd $ concat [[resultChanged, resultBuilt, resultVisited] | (_k, Result{..}) <- Map.elems status]
 
@@ -114,11 +121,11 @@ toReport db = do
             ,prfBuilt = fromStep resultBuilt
             ,prfVisited = fromStep resultVisited
             ,prfChanged = fromStep resultChanged
-            ,prfDepends = map pure $ mapMaybe (`Map.lookup` ids) $ fromMaybe [-1] $ resultDeps
+            ,prfDepends = map pure $ mapMaybe (`IntMap.lookup` ids) $ fromMaybe [-1] $ resultDeps
             ,prfExecution = resultExecution
             }
             where fromStep i = fromJust $ Map.lookup i steps
-    pure $ [maybe (error "toReport") f $ Map.lookup i status | i <- order]
+    pure ([maybe (error "toReport") f $ Map.lookup i status | i <- order], ids)
 
 alwaysRerunResult :: Step -> Result
 alwaysRerunResult current = Result (Value $ toDyn "<alwaysRerun>") (Step 0) (Step 0) current (Just []) 0 mempty
@@ -126,15 +133,20 @@ alwaysRerunResult current = Result (Value $ toDyn "<alwaysRerun>") (Step 0) (Ste
 readDataFileHTML :: FilePath -> IO LBS.ByteString
 readDataFileHTML file = LBS.readFile =<< getDataFile ("html" </> file)
 
-generateHTML :: [ProfileEntry] -> IO LBS.ByteString
-generateHTML xs = do
+generateHTML :: Maybe [Int] -> [ProfileEntry] -> IO LBS.ByteString
+generateHTML dirtyKeys xs = do
     report <- readDataFileHTML "profile.html"
-    let f "data/profile-data.js" = pure $ LBS.pack $ "var profile =\n" ++ generateJSON xs
+    let f "data/profile-data.js" = pure $ LBS.pack $ "var profile =\n" ++ generateJSONProfile xs
+        f "data/build-data.js" = pure $ LBS.pack $ "var build =\n" ++ generateJSONBuild dirtyKeys
         f other = error other
     runTemplate f report
 
-generateJSON :: [ProfileEntry] -> String
-generateJSON = jsonListLines . map showEntry
+generateJSONBuild :: Maybe [Ids.Id] -> String
+generateJSONBuild (Just dirtyKeys) = jsonList [jsonList (map show dirtyKeys)]
+generateJSONBuild Nothing          = jsonList []
+
+generateJSONProfile :: [ProfileEntry] -> String
+generateJSONProfile = jsonListLines . map showEntry
     where
         showEntry ProfileEntry{..} = jsonList $
             [show prfName

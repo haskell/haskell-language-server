@@ -118,8 +118,8 @@ function command(r, groupName) {
         return true;
     }
 }
-function profileLoaded(profileRaw) {
-    $(document.body).empty().append(profileRoot(unraw(profileRaw)));
+function profileLoaded(profileRaw, buildRaw) {
+    $(document.body).empty().append(profileRoot(unraw(profileRaw), unrawBuild(buildRaw)));
 }
 function unraw(xs) {
     const ans = xs.map((x, i) => ({
@@ -139,9 +139,12 @@ function unraw(xs) {
                 ans[d].rdepends.push(p.index);
     return ans;
 }
-function profileRoot(profile) {
+function unrawBuild(b) {
+    return { dirtyKeys: b.length > 0 ? b[0] : null };
+}
+function profileRoot(profile, build) {
     const [s, search] = createSearch(profile);
-    const t = createTabs([["Summary", () => reportSummary(profile)],
+    const t = createTabs([["Summary", () => reportSummary(profile, build)],
         ["Rules", () => reportRuleTable(profile, search)],
         ["Parallelizability", () => reportParallelism(profile)],
         ["Details", () => reportDetails(profile, search)]
@@ -863,7 +866,7 @@ function ruleData(etimes, wtimes, search) {
         wtime: ps.map(p => wtimes[p.index]).sum(),
     }));
 }
-function reportSummary(profile) {
+function reportSummary(profile, build) {
     let countLast = 0; // number of rules run in the last run
     let visitedLast = 0; // number of rules visited in the last run
     let highestRun = 0; // highest run you have seen (add 1 to get the count of runs)
@@ -904,20 +907,7 @@ function reportSummary(profile) {
                 " (",
                 showInt(countLast),
                 " in last run) ",
-                React.createElement("span", { class: "note" }, "number of defined build rules.")),
-            React.createElement("li", null,
-                React.createElement("b", null, "Traced:"),
-                " ",
-                showInt(countTrace),
-                " (",
-                showInt(countTraceLast),
-                " in last run)",
-                React.createElement("span", { class: "note" },
-                    "number of calls to ",
-                    varLink("cmd"),
-                    " or ",
-                    varLink("traced"),
-                    "."))),
+                React.createElement("span", { class: "note" }, "number of defined build rules."))),
         React.createElement("h2", null, "Performance"),
         React.createElement("ul", null,
             React.createElement("li", null,
@@ -963,7 +953,18 @@ function reportSummary(profile) {
                 " ",
                 showInt(visitedLast - countLast),
                 " ",
-                React.createElement("span", { class: "note" }, "Total number of rules looked up from the values store in this run"))));
+                React.createElement("span", { class: "note" }, "Total number of rules looked up from the values store in this run")),
+            React.createElement("li", null,
+                React.createElement("b", null, "Dirty set:"),
+                renderDirtySet(build, profile))));
+}
+function renderDirtySet(build, profile) {
+    if (build.dirtyKeys === null) {
+        return "ALL";
+    }
+    else {
+        return React.createElement("ul", null, build.dirtyKeys.map(d => { return React.createElement("li", null, profile[d - 1].name); }));
+    }
 }
 function speculativeCriticalPath(profile) {
     const criticalPath = []; // the critical path to any element
