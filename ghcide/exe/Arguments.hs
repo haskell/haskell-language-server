@@ -36,7 +36,7 @@ arguments plugins = Arguments
       <*> switch (long "test" <> help "Enable additional lsp messages used by the testsuite")
       <*> switch (long "test-no-kick" <> help "Disable kick. Useful for testing cancellation")
       <*> option auto (short 'j' <> help "Number of threads (0: automatic)" <> metavar "NUM" <> value 0 <> showDefault)
-      <*> switch (long "verbose" <> help "Include internal events in logging output")
+      <*> switch (short 'd' <> long "verbose" <> help "Include internal events in logging output")
       <*> (commandP plugins <|> lspCommand <|> checkCommand)
       where
           checkCommand = Check <$> many (argument str (metavar "FILES/DIRS..."))
