@@ -59,14 +59,15 @@ library
     , base >=4.12 && <5
     , bytestring
     , containers
+    , deepseq
     , directory
     , extra
     , filepath
+    , hashable
     , js-dgtable
     , js-flot
     , js-jquery
     , primitive
-    , shake >= 0.19.4
     , time
     , transformers
     , unordered-containers

@@ -1,9 +1,11 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE ConstraintKinds #-}
 
 module Development.IDE.Graph.Internal.Action
-( actionFork
+( ShakeValue
+, actionFork
 , actionBracket
 , actionCatch
 , actionFinally
@@ -22,12 +24,13 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Reader
 import           Data.IORef
+import           Development.IDE.Graph.Classes
 import           Development.IDE.Graph.Internal.Database
 import           Development.IDE.Graph.Internal.Types
-import qualified Development.Shake                       as Shake
-import           Development.Shake.Classes
 import           System.Exit
+import Development.IDE.Graph.Internal.Rules (RuleResult)
 
+type ShakeValue a = (Show a, Typeable a, Eq a, Hashable a, NFData a)
 
 alwaysRerun :: Action ()
 alwaysRerun = do
@@ -105,10 +108,10 @@ actionFinally a b = do
     v <- Action ask
     Action $ lift $ finally (runReaderT (fromAction a) v) b
 
-apply1 :: (Shake.RuleResult key ~ value, Shake.ShakeValue key, Typeable value) => key -> Action value
+apply1 :: (RuleResult key ~ value, ShakeValue key, Typeable value) => key -> Action value
 apply1 k = head <$> apply [k]
 
-apply :: (Shake.RuleResult key ~ value, Shake.ShakeValue key, Typeable value) => [key] -> Action [value]
+apply :: (RuleResult key ~ value, ShakeValue key, Typeable value) => [key] -> Action [value]
 apply ks = do
     db <- Action $ asks actionDatabase
     (is, vs) <- liftIO $ build db ks

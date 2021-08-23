@@ -117,7 +117,6 @@ import           Development.IDE.GHC.Compat             (NameCacheUpdater (..),
 import           Development.IDE.GHC.Orphans            ()
 import           Development.IDE.Graph                  hiding (ShakeValue)
 import qualified Development.IDE.Graph                  as Shake
-import           Development.IDE.Graph.Classes
 import           Development.IDE.Graph.Database
 import           Development.IDE.Graph.Rule
 import           Development.IDE.Types.Action
@@ -959,8 +958,6 @@ data QDisk k = QDisk k NormalizedFilePath
 instance Hashable k => Hashable (QDisk k)
 
 instance NFData k => NFData (QDisk k)
-
-instance Binary k => Binary (QDisk k)
 
 instance Show k => Show (QDisk k) where
     show (QDisk k file) =

@@ -73,7 +73,6 @@ import           Control.Monad.Trans.Maybe
 import           Data.Aeson                                   (Result (Success),
                                                                toJSON)
 import qualified Data.Aeson.Types                             as A
-import           Data.Binary                                  hiding (get, put)
 import qualified Data.Binary                                  as B
 import qualified Data.ByteString                              as BS
 import           Data.ByteString.Encoding                     as T
@@ -119,7 +118,7 @@ import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.GHC.Util                     hiding
                                                               (modifyDynFlags)
 import           Development.IDE.Graph
-import           Development.IDE.Graph.Classes                hiding (get, put)
+import           Development.IDE.Graph.Classes
 import           Development.IDE.Import.DependencyInformation
 import           Development.IDE.Import.FindImports
 import qualified Development.IDE.Spans.AtPoint                as AtPoint
@@ -1090,6 +1089,5 @@ data IsHiFileStable = IsHiFileStable
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable IsHiFileStable
 instance NFData   IsHiFileStable
-instance Binary   IsHiFileStable
 
 type instance RuleResult IsHiFileStable = SourceModified

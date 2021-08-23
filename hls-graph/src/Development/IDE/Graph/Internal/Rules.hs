@@ -9,9 +9,7 @@
 
 module Development.IDE.Graph.Internal.Rules where
 
-import qualified Development.Shake as Shake
-import qualified Development.Shake.Rule as Shake
-import Development.Shake.Classes
+import Development.IDE.Graph.Classes
 import Control.Exception.Extra
 import Control.Monad
 import Control.Monad.IO.Class
@@ -24,6 +22,10 @@ import Control.Monad.Trans.Reader
 import Development.IDE.Graph.Internal.Types
 import Data.Maybe
 
+-- | The type mapping between the @key@ or a rule and the resulting @value@.
+--   See 'addBuiltinRule' and 'Development.Shake.Rule.apply'.
+type family RuleResult key -- = value
+
 action :: Action a -> Rules ()
 action x = do
     ref <- Rules $ asks rulesActions
@@ -31,21 +33,21 @@ action x = do
 
 addRule
     :: forall key value .
-       (Shake.RuleResult key ~ value, Typeable key, Hashable key, Eq key, Typeable value)
-    => (key -> Maybe BS.ByteString -> Shake.RunMode -> Action (Shake.RunResult value))
+       (RuleResult key ~ value, Typeable key, Hashable key, Eq key, Typeable value)
+    => (key -> Maybe BS.ByteString -> RunMode -> Action (RunResult value))
     -> Rules ()
 addRule f = do
     ref <- Rules $ asks rulesMap
     liftIO $ modifyIORef' ref $ Map.insert (typeRep (Proxy :: Proxy key)) (toDyn f2)
     where
-        f2 :: Key -> Maybe BS.ByteString -> Shake.RunMode -> Action (Shake.RunResult Value)
+        f2 :: Key -> Maybe BS.ByteString -> RunMode -> Action (RunResult Value)
         f2 (Key a) b c = do
             v <- f (fromJust $ cast a :: key) b c
             v <- liftIO $ evaluate v
             pure $ (Value . toDyn) <$> v
 
 runRule
-    :: TheRules -> Key -> Maybe BS.ByteString -> Shake.RunMode -> Action (Shake.RunResult Value)
+    :: TheRules -> Key -> Maybe BS.ByteString -> RunMode -> Action (RunResult Value)
 runRule rules key@(Key t) bs mode = case Map.lookup (typeOf t) rules of
     Nothing -> liftIO $ errorIO "Could not find key"
     Just x -> unwrapDynamic x key bs mode

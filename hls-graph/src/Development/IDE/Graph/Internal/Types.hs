@@ -3,6 +3,7 @@
 {-# LANGUAGE ExistentialQuantification  #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE DeriveFunctor #-}
 
 module Development.IDE.Graph.Internal.Types where
 
@@ -18,9 +19,9 @@ import           Data.IORef
 import           Data.IntSet                           (IntSet)
 import           Data.Maybe
 import           Data.Typeable
+import           Development.IDE.Graph.Classes
 import           Development.IDE.Graph.Internal.Ids
 import           Development.IDE.Graph.Internal.Intern
-import           Development.Shake.Classes
 import           System.Time.Extra                     (Seconds)
 
 
@@ -108,6 +109,39 @@ data Result = Result {
     resultData      :: BS.ByteString
     }
 
+---------------------------------------------------------------------
+-- Running builds
+
+-- | What mode a rule is running in, passed as an argument to 'BuiltinRun'.
+data RunMode
+    = RunDependenciesSame -- ^ My dependencies have not changed.
+    | RunDependenciesChanged -- ^ At least one of my dependencies from last time have changed, or I have no recorded dependencies.
+      deriving (Eq,Show)
+
+instance NFData RunMode where rnf x = x `seq` ()
+
+-- | How the output of a rule has changed.
+data RunChanged
+    = ChangedNothing -- ^ Nothing has changed.
+    | ChangedStore -- ^ The stored value has changed, but in a way that should be considered identical (used rarely).
+    | ChangedRecomputeSame -- ^ I recomputed the value and it was the same.
+    | ChangedRecomputeDiff -- ^ I recomputed the value and it was different.
+      deriving (Eq,Show)
+
+instance NFData RunChanged where rnf x = x `seq` ()
+
+-- | The result of 'BuiltinRun'.
+data RunResult value = RunResult
+    {runChanged :: RunChanged
+        -- ^ How has the 'RunResult' changed from what happened last time.
+    ,runStore   :: BS.ByteString
+        -- ^ The value to store in the Shake database.
+    ,runValue   :: value
+        -- ^ The value to return from 'Development.Shake.Rule.apply'.
+    } deriving Functor
+
+instance NFData value => NFData (RunResult value) where
+    rnf (RunResult x1 x2 x3) = rnf x1 `seq` x2 `seq` rnf x3
 
 ---------------------------------------------------------------------
 -- INSTANCES

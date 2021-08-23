@@ -7,7 +7,7 @@ module Development.IDE.Graph.Internal.Intern(
 
 import qualified Data.HashMap.Strict       as Map
 import           Data.List                 (foldl')
-import           Development.Shake.Classes
+import           Development.IDE.Graph.Classes
 import           Prelude                   hiding (lookup)
 
 

@@ -23,10 +23,8 @@ import           Data.HashMap.Strict
 import           Data.Hashable
 import           Data.Vector                          (Vector)
 import           Development.IDE.Core.PositionMapping
-import           Development.IDE.Graph                (Key (..), RuleResult,
-                                                       ShakeException (shakeExceptionInner))
+import           Development.IDE.Graph                (Key (..), RuleResult)
 import qualified Development.IDE.Graph                as Shake
-import           Development.IDE.Graph.Classes
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           GHC.Generics
@@ -60,27 +58,17 @@ instance Exception BadDependency
 
 isBadDependency :: SomeException -> Bool
 isBadDependency x
-    | Just (x :: ShakeException) <- fromException x = isBadDependency $ shakeExceptionInner x
     | Just (_ :: BadDependency) <- fromException x = True
     | otherwise = False
 
 toKey :: Shake.ShakeValue k => k -> NormalizedFilePath -> Key
 toKey = (Key.) . curry Q
 
-toNoFileKey :: (Show k, Typeable k, Eq k, Hashable k, Binary k) => k -> Key
+toNoFileKey :: (Show k, Typeable k, Eq k, Hashable k) => k -> Key
 toNoFileKey k = Key $ Q (k, emptyFilePath)
 
 newtype Q k = Q (k, NormalizedFilePath)
     deriving newtype (Eq, Hashable, NFData)
-
-instance Binary k => Binary (Q k) where
-    put (Q (k, fp)) = put (k, fp)
-    get = do
-        (k, fp) <- get
-        -- The `get` implementation of NormalizedFilePath
-        -- does not handle empty file paths so we
-        -- need to handle this ourselves here.
-        pure (Q (k, toNormalizedFilePath' fp))
 
 instance Show k => Show (Q k) where
     show (Q (k, file)) = show k ++ "; " ++ fromNormalizedFilePath file

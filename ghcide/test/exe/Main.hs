@@ -21,7 +21,6 @@ import           Control.Monad
 import           Control.Monad.IO.Class                   (MonadIO, liftIO)
 import           Data.Aeson                               (fromJSON, toJSON)
 import qualified Data.Aeson                               as A
-import qualified Data.Binary                              as Binary
 import           Data.Default
 import           Data.Foldable
 import           Data.List.Extra
@@ -34,7 +33,6 @@ import           Development.IDE.Core.PositionMapping     (PositionResult (..),
                                                            fromCurrent,
                                                            positionResultToMaybe,
                                                            toCurrent)
-import           Development.IDE.Core.Shake               (Q (..))
 import           Development.IDE.GHC.Compat               (GhcVersion (..),
                                                            ghcVersion)
 import           Development.IDE.GHC.Util
@@ -5778,8 +5776,6 @@ unitTests = do
      , testCase "from empty path URI" $ do
          let uri = Uri "file://"
          uriToFilePath' uri @?= Just ""
-     , testCase "Key with empty file path roundtrips via Binary"  $
-         Binary.decode (Binary.encode (Q ((), emptyFilePath))) @?= Q ((), emptyFilePath)
      , testCase "showDiagnostics prints ranges 1-based (like vscode)" $ do
          let diag = ("", Diagnostics.ShowDiag, Diagnostic
                { _range = Range

@@ -12,7 +12,7 @@ module Development.IDE.Graph.Database(
 
 import           Data.Dynamic
 import           Data.Maybe
-import           Development.IDE.Graph.Classes
+import           Development.IDE.Graph.Classes ()
 import           Development.IDE.Graph.Internal.Action
 import           Development.IDE.Graph.Internal.Database
 import           Development.IDE.Graph.Internal.Options
@@ -41,8 +41,6 @@ shakeRunDatabase = shakeRunDatabaseForKeys Nothing
 -- Only valid if we never pull on the results, which we don't
 unvoid :: Functor m => m () -> m a
 unvoid = fmap undefined
-
-type ShakeValue a = (Show a, Typeable a, Eq a, Hashable a, NFData a, Binary a)
 
 shakeRunDatabaseForKeys
     :: Maybe [Key]

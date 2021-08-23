@@ -155,7 +155,6 @@ data RefineImports = RefineImports
 
 instance Hashable RefineImports
 instance NFData RefineImports
-instance Binary RefineImports
 type instance RuleResult RefineImports = RefineImportsResult
 
 newtype RefineImportsResult = RefineImportsResult

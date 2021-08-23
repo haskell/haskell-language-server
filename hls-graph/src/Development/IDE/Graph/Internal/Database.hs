@@ -34,9 +34,7 @@ import           Development.IDE.Graph.Internal.Intern
 import qualified Development.IDE.Graph.Internal.Intern as Intern
 import           Development.IDE.Graph.Internal.Rules
 import           Development.IDE.Graph.Internal.Types
-import qualified Development.Shake                     as Shake
-import           Development.Shake.Classes
-import qualified Development.Shake.Rule                as Shake
+import           Development.IDE.Graph.Classes
 import           System.IO.Unsafe
 import           System.Time.Extra                     (duration)
 
@@ -79,7 +77,7 @@ incDatabase db (Just kk) = do
 
 -- | Unwrap and build a list of keys in parallel
 build
-    :: forall key value . (Shake.RuleResult key ~ value, Typeable key, Show key, Hashable key, Eq key, Typeable value)
+    :: forall key value . (RuleResult key ~ value, Typeable key, Show key, Hashable key, Eq key, Typeable value)
     => Database -> [key] -> IO ([Id], [value])
 build db keys = do
     (ids, vs) <- runAIO $ fmap unzip $ either return liftIO =<< builder db (map (Right . Key) keys)
@@ -157,37 +155,37 @@ refresh db key id result@(Just me@Result{resultDeps=Just deps}) = do
     case res of
       Left res ->
         if isDirty res
-            then asyncWithCleanUp $ liftIO $ compute db key id Shake.RunDependenciesChanged result
-            else pure $ compute db key id Shake.RunDependenciesSame result
+            then asyncWithCleanUp $ liftIO $ compute db key id RunDependenciesChanged result
+            else pure $ compute db key id RunDependenciesSame result
       Right iores -> asyncWithCleanUp $ liftIO $ do
         res <- iores
-        let mode = if isDirty res then Shake.RunDependenciesChanged else Shake.RunDependenciesSame
+        let mode = if isDirty res then RunDependenciesChanged else RunDependenciesSame
         compute db key id mode result
     where
         isDirty = any (\(_,dep) -> resultBuilt me < resultChanged dep)
 
 refresh db key id result =
-    asyncWithCleanUp $ liftIO $ compute db key id Shake.RunDependenciesChanged result
+    asyncWithCleanUp $ liftIO $ compute db key id RunDependenciesChanged result
 
 
 -- | Compute a key.
-compute :: Database -> Key -> Id -> Shake.RunMode -> Maybe Result -> IO Result
+compute :: Database -> Key -> Id -> RunMode -> Maybe Result -> IO Result
 compute db@Database{..} key id mode result = do
     let act = runRule databaseRules key (fmap resultData result) mode
     deps <- newIORef $ Just []
-    (execution, Shake.RunResult{..}) <-
+    (execution, RunResult{..}) <-
         duration $ runReaderT (fromAction act) $ SAction db deps
     built <- readIORef databaseStep
     deps <- readIORef deps
-    let changed = if runChanged == Shake.ChangedRecomputeDiff then built else maybe built resultChanged result
-        built' = if runChanged /= Shake.ChangedNothing then built else changed
+    let changed = if runChanged == ChangedRecomputeDiff then built else maybe built resultChanged result
+        built' = if runChanged /= ChangedNothing then built else changed
         -- only update the deps when the rule ran with changes
-        actualDeps = if runChanged /= Shake.ChangedNothing then deps else previousDeps
+        actualDeps = if runChanged /= ChangedNothing then deps else previousDeps
         previousDeps= resultDeps =<< result
     let res = Result runValue built' changed built actualDeps execution runStore
     case actualDeps of
         Just deps | not(null deps) &&
-                    runChanged /= Shake.ChangedNothing
+                    runChanged /= ChangedNothing
                     -> do
             void $ forkIO $
                 updateReverseDeps id db (fromMaybe [] previousDeps) (Set.fromList deps)
