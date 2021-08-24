@@ -1150,6 +1150,33 @@ removeImportTests = testGroup "remove import actions"
             , "type T = K.Type"
             ]
       liftIO $ expectedContentAfterAction @=? contentAfterAction
+  , testSession "remove unused operators whose name ends with '.'" $ do
+      let contentA = T.unlines
+            [ "module ModuleA where"
+            , "(@.) = 0 -- Must have an operator whose name ends with '.'"
+            , "a = 1 -- .. but also something else"
+            ]
+      _docA <- createDoc "ModuleA.hs" "haskell" contentA
+      let contentB = T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-imports #-}"
+            , "module ModuleB where"
+            , "import ModuleA (a, (@.))"
+            , "x = a -- Must use something from module A, but not (@.)"
+            ]
+      docB <- createDoc "ModuleB.hs" "haskell" contentB
+      _ <- waitForDiagnostics
+      [InR action@CodeAction { _title = actionTitle }, _]
+          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
+      liftIO $ "Remove @. from import" @=? actionTitle
+      executeCodeAction action
+      contentAfterAction <- documentContents docB
+      let expectedContentAfterAction = T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-imports #-}"
+            , "module ModuleB where"
+            , "import ModuleA (a)"
+            , "x = a -- Must use something from module A, but not (@.)"
+            ]
+      liftIO $ expectedContentAfterAction @=? contentAfterAction
   ]
 
 extendImportTests :: TestTree
@@ -3306,6 +3333,18 @@ removeExportTests = testGroup "remove export actions"
               , "a :: ()"
               , "a = ()"])
         "Remove ‘M.x’ from export"
+        (Just $ T.unlines
+              [ "module A (a) where"
+              , "import qualified Data.List as M"
+              , "a :: ()"
+              , "a = ()"])
+    , testSession "qualified re-export ending in '.'" $ template
+        (T.unlines
+              [ "module A ((M.@.),a) where"
+              , "import qualified Data.List as M"
+              , "a :: ()"
+              , "a = ()"])
+        "Remove ‘M.@.’ from export"
         (Just $ T.unlines
               [ "module A (a) where"
               , "import qualified Data.List as M"
