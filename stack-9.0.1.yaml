@@ -16,6 +16,7 @@ packages:
   - ./plugins/hls-explicit-imports-plugin
   # - ./plugins/hls-refine-imports-plugin
   - ./plugins/hls-hlint-plugin
+  - ./plugins/hls-rename-plugin
   - ./plugins/hls-retrie-plugin
   # - ./plugins/hls-splice-plugin
   # - ./plugins/hls-tactics-plugin
@@ -55,7 +56,7 @@ extra-deps:
 - retrie-1.0.0.0
 - some-1.0.2@sha256:3d460998df32ad7b93bf55657aeae988d97070155e71718b4bc75d0997ce9d62,2244
 - lsp-1.2.0.1
-- lsp-types-1.3.0.0
+- lsp-types-1.3.0.1
 - lsp-test-0.14.0.1
 
 # Upstream patches for ghc-9.0.1 compatability

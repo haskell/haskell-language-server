@@ -16,6 +16,9 @@ module Development.IDE.Spans.AtPoint (
   , computeTypeReferences
   , FOIReferences(..)
   , defRowToSymbolInfo
+  , getAstNamesAtPoint
+  , toCurrentLocation
+  , rowToLoc
   ) where
 
 import           Development.IDE.GHC.Error
@@ -90,8 +93,7 @@ foiReferencesAtPoint file pos (FOIReferences asts) =
   case HM.lookup file asts of
     Nothing -> ([],[],[])
     Just (HAR _ hf _ _ _,mapping) ->
-      let posFile = fromMaybe pos $ fromCurrentPosition mapping pos
-          names = concat $ pointCommand hf posFile (rights . M.keys . getNodeIds)
+      let names = getAstNamesAtPoint hf pos mapping
           adjustedLocs = HM.foldr go [] asts
           go (HAR _ _ rf tr _, mapping) xs = refs ++ typerefs ++ xs
             where
@@ -99,8 +101,17 @@ foiReferencesAtPoint file pos (FOIReferences asts) =
                    $ concat $ mapMaybe (\n -> M.lookup (Right n) rf) names
               typerefs = mapMaybe (toCurrentLocation mapping . realSrcSpanToLocation)
                    $ concat $ mapMaybe (`M.lookup` tr) names
-          toCurrentLocation mapping (Location uri range) = Location uri <$> toCurrentRange mapping range
         in (names, adjustedLocs,map fromNormalizedFilePath $ HM.keys asts)
+
+getAstNamesAtPoint :: HieASTs a -> Position -> PositionMapping -> [Name]
+getAstNamesAtPoint hf pos mapping =
+  concat $ pointCommand hf posFile (rights . M.keys . getNodeIds)
+    where
+      posFile = fromMaybe pos $ fromCurrentPosition mapping pos
+
+toCurrentLocation :: PositionMapping -> Location -> Maybe Location
+toCurrentLocation mapping (Location uri range) =
+  Location uri <$> toCurrentRange mapping range
 
 referencesAtPoint
   :: MonadIO m
