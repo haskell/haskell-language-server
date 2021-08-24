@@ -13,8 +13,11 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Trans (lift)
 import           Control.Monad.Trans.Maybe (MaybeT, mapMaybeT)
 import qualified Data.Aeson as A
+import           Data.Coerce
 import           Data.Foldable (traverse_)
+import           Data.Monoid (Last (..))
 import qualified Data.Text as T
+import           Data.Traversable (for)
 import           Data.Tuple.Extra (uncurry3)
 import           Development.IDE (IdeState)
 import           Development.IDE.Core.UseStale
@@ -93,26 +96,30 @@ runContinuation plId cont state (fc, b) = do
       env@LspEnv{..} <- buildEnv state plId fc
       let stale a = runStaleIde "runContinuation" state (fc_nfp le_fileContext) a
       args <- fetchTargetArgs @a env
-      c_runCommand cont env args fc b >>= \case
-        ErrorMessages errs -> do
-          traverse_ showUserFacingMessage errs
-          pure $ Right A.Null
-        RawEdit edits -> do
-          sendEdits edits
-          pure $ Right A.Null
-        GraftEdit gr -> do
-          ccs <- lift getClientCapabilities
-          TrackedStale pm _ <- mapMaybeT liftIO $ stale GetAnnotatedParsedSource
-          case mkWorkspaceEdits le_dflags ccs (fc_uri le_fileContext) (unTrack pm) gr of
-            Left errs ->
-              pure $ Left $ ResponseError
-                { _code    = InternalError
-                , _message = T.pack $ show errs
-                , _xdata   = Nothing
-                }
-            Right edits -> do
-              sendEdits edits
-              pure $ Right A.Null
+      res <- c_runCommand cont env args fc b
+
+      -- This block returns a maybe error.
+      fmap (maybe (Right $ A.Null) Left . coerce . foldMap Last) $
+        for res $ \case
+          ErrorMessages errs -> do
+            traverse_ showUserFacingMessage errs
+            pure Nothing
+          RawEdit edits -> do
+            sendEdits edits
+            pure Nothing
+          GraftEdit gr -> do
+            ccs <- lift getClientCapabilities
+            TrackedStale pm _ <- mapMaybeT liftIO $ stale GetAnnotatedParsedSource
+            case mkWorkspaceEdits le_dflags ccs (fc_uri le_fileContext) (unTrack pm) gr of
+              Left errs ->
+                pure $ Just $ ResponseError
+                  { _code    = InternalError
+                  , _message = T.pack $ show errs
+                  , _xdata   = Nothing
+                  }
+              Right edits -> do
+                sendEdits edits
+                pure $ Nothing
 
 
 ------------------------------------------------------------------------------

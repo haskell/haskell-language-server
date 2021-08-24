@@ -84,7 +84,7 @@ emptyCaseInteraction = Interaction $
           , edits
           )
     )
-  $ (\ _ _ _ we -> pure $ RawEdit we)
+  $ (\ _ _ _ we -> pure $ pure $ RawEdit we)
 
 
 scrutinzedType :: EmptyCaseSort Type -> Maybe Type

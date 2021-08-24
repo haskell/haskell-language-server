@@ -447,10 +447,7 @@ attempt_it rsl ctx jdg program =
   case P.runParser tacticProgram "<splice>" (T.pack program) of
     Left peb -> pure $ Left $ wrapError $ P.errorBundlePretty $ fixErrorOffset rsl peb
     Right tt -> do
-      res <- runTactic
-            ctx
-            jdg
-            tt
+      res <- runTactic 2e6 ctx jdg tt
       pure $ case res of
           Left tes -> Left $ wrapError $ show tes
           Right rtr -> Right
