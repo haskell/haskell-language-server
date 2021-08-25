@@ -19,6 +19,11 @@ examples:
         - Distribution/Simple.hs
         - Distribution/Types/Module.hs
     extra-args: [] # extra ghcide command line args
+  - name: cabal-1module
+    package: Cabal
+    version: 3.0.0.0
+    modules:
+        - Distribution/Simple.hs
   - name: cabal-conservative
     package: Cabal
     version: 3.0.0.0
