@@ -194,7 +194,8 @@ data ShakeExtras = ShakeExtras
     ,ideTesting :: IdeTesting
     -- ^ Whether to enable additional lsp messages used by the test suite for checking invariants
     ,restartShakeSession
-        :: [DelayedAction ()]
+        :: String
+        -> [DelayedAction ()]
         -> IO ()
     ,ideNc :: IORef NameCache
     -- | A mapping of module name to known target (or candidate targets, if missing)
@@ -583,8 +584,8 @@ delayedAction a = do
 -- | Restart the current 'ShakeSession' with the given system actions.
 --   Any actions running in the current session will be aborted,
 --   but actions added via 'shakeEnqueue' will be requeued.
-shakeRestart :: IdeState -> [DelayedAction ()] -> IO ()
-shakeRestart IdeState{..} acts =
+shakeRestart :: IdeState -> String -> [DelayedAction ()] -> IO ()
+shakeRestart IdeState{..} reason acts =
     withMVar'
         shakeSession
         (\runner -> do
@@ -594,8 +595,9 @@ shakeRestart IdeState{..} acts =
               let profile = case res of
                       Just fp -> ", profile saved at " <> fp
                       _       -> ""
-              let msg = T.pack $ "Restarting build session " ++ keysMsg ++ abortMsg
-                  keysMsg = "for keys " ++ show (HSet.toList backlog) ++ " "
+              let msg = T.pack $ "Restarting build session " ++ reason' ++ keysMsg ++ abortMsg
+                  reason' = "due to " ++ reason
+                  keysMsg = " for keys " ++ show (HSet.toList backlog) ++ " "
                   abortMsg = "(aborting the previous one took " ++ showDuration stopTime ++ profile ++ ")"
               logDebug (logger shakeExtras) msg
               notifyTestingLogMessage shakeExtras msg

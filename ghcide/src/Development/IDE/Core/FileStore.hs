@@ -270,7 +270,7 @@ setFileModified state saved nfp = do
     when (isJust setVirtualFileContents) $
         fail "setFileModified can't be called on this type of VFSHandle"
     recordDirtyKeys (shakeExtras state) GetModificationTime [nfp]
-    restartShakeSession (shakeExtras state) []
+    restartShakeSession (shakeExtras state) (fromNormalizedFilePath nfp ++ " (modified)") []
     when checkParents $
       typecheckParents state nfp
 
@@ -293,8 +293,8 @@ typecheckParentsAction nfp = do
 -- | Note that some keys have been modified and restart the session
 --   Only valid if the virtual file system was initialised by LSP, as that
 --   independently tracks which files are modified.
-setSomethingModified :: IdeState -> [Key] -> IO ()
-setSomethingModified state keys = do
+setSomethingModified :: IdeState -> [Key] -> String -> IO ()
+setSomethingModified state keys reason = do
     VFSHandle{..} <- getIdeGlobalState state
     when (isJust setVirtualFileContents) $
         fail "setSomethingModified can't be called on this type of VFSHandle"
@@ -302,7 +302,7 @@ setSomethingModified state keys = do
     atomically $ writeTQueue (indexQueue $ hiedbWriter $ shakeExtras state) deleteMissingRealFiles
     atomicModifyIORef_ (dirtyKeys $ shakeExtras state) $ \x ->
         foldl' (flip HSet.insert) x keys
-    void $ restartShakeSession (shakeExtras state) []
+    void $ restartShakeSession (shakeExtras state) reason []
 
 registerFileWatches :: [String] -> LSP.LspT Config IO Bool
 registerFileWatches globs = do
