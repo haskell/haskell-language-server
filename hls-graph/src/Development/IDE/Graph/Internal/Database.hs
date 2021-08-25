@@ -114,19 +114,19 @@ builder db@Database{..} keys = do
                 val <- case fromMaybe (fromRight undefined idKey, Dirty Nothing) status of
                     (_, Clean r) -> pure r
                     (_, Running force val _) -> do
-                        liftIO $ modifyIORef toForce (force:)
+                        liftIO $ modifyIORef toForce (Wait force :)
                         pure val
                     (key, Dirty s) -> do
                         act <- unliftAIO (refresh db key id s)
                         let (force, val) = splitIO (join act)
                         liftIO $ Ids.insert databaseValues id (key, Running force val s)
-                        liftIO $ modifyIORef toForce (force:)
+                        liftIO $ modifyIORef toForce (Spawn force:)
                         pure val
 
                 pure (id, val)
 
         toForceList <- liftIO $ readIORef toForce
-        waitAll <- unliftAIO $ mapConcurrentlyAIO_ sequence_ $ increasingChunks toForceList
+        waitAll <- unliftAIO $ mapConcurrentlyAIO_ id toForceList
         case toForceList of
             [] -> return $ Left results
             _ -> return $ Right $ do
@@ -204,7 +204,7 @@ updateReverseDeps
     -> [Id] -- ^ Previous direct dependencies of Id
     -> IntSet     -- ^ Current direct dependencies of Id
     -> IO ()
-updateReverseDeps myId db prev new = uninterruptibleMask_ $ withLock (databaseReverseDepsLock db) $ do
+updateReverseDeps myId db prev new = withLock (databaseReverseDepsLock db) $ uninterruptibleMask_ $ do
     forM_ prev $ \d ->
         unless (d `Set.member` new) $
             doOne (Set.delete myId) d
@@ -263,21 +263,23 @@ cleanupAsync ref = uninterruptibleMask_ $ do
     mapM_ (\a -> throwTo (asyncThreadId a) AsyncCancelled) asyncs
     mapM_ waitCatch asyncs
 
+data Wait a
+    = Wait {justWait :: !a}
+    | Spawn {justWait :: !a}
+    deriving Functor
 
-mapConcurrentlyAIO_ :: (a -> IO ()) -> [a] -> AIO ()
+waitOrSpawn :: Wait (IO a) -> IO (Either (IO a) (Async a))
+waitOrSpawn (Wait io)  = pure $ Left io
+waitOrSpawn (Spawn io) = Right <$> async io
+
+mapConcurrentlyAIO_ :: (a -> IO ()) -> [Wait a] -> AIO ()
 mapConcurrentlyAIO_ _ [] = pure ()
-mapConcurrentlyAIO_ f [one] = liftIO $ f one
+mapConcurrentlyAIO_ f [one] = liftIO $ justWait $ fmap f one
 mapConcurrentlyAIO_ f many = do
     ref <- AIO ask
-    liftIO $ uninterruptibleMask $ \restore -> do
-        asyncs <- liftIO $ traverse async (map (restore . f) many)
+    waits <- liftIO $ uninterruptibleMask $ \restore -> do
+        waits <- liftIO $ traverse waitOrSpawn (map (fmap (restore . f)) many)
+        let asyncs = rights waits
         liftIO $ atomicModifyIORef'_ ref (asyncs ++)
-        traverse_ wait asyncs
-
--- >>> increasingChunks [1..20]
--- [[1,2],[3,4,5,6],[7,8,9,10,11,12,13,14],[15,16,17,18,19,20]]
-increasingChunks :: [a] -> [[a]]
-increasingChunks = go 2 where
-    go :: Int -> [a] -> [[a]]
-    go _ [] = []
-    go n xx = let (chunk, rest) = splitAt n xx in chunk : go (min 10 (n*2)) rest
+        return waits
+    liftIO $ traverse_ (either id wait) waits
