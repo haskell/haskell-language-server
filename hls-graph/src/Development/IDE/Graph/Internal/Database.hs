@@ -29,12 +29,12 @@ import           Data.IntSet                           (IntSet)
 import qualified Data.IntSet                           as Set
 import           Data.Maybe
 import           Data.Tuple.Extra
+import           Development.IDE.Graph.Classes
 import qualified Development.IDE.Graph.Internal.Ids    as Ids
 import           Development.IDE.Graph.Internal.Intern
 import qualified Development.IDE.Graph.Internal.Intern as Intern
 import           Development.IDE.Graph.Internal.Rules
 import           Development.IDE.Graph.Internal.Types
-import           Development.IDE.Graph.Classes
 import           System.IO.Unsafe
 import           System.Time.Extra                     (duration)
 
@@ -57,8 +57,8 @@ incDatabase db Nothing = do
     writeIORef (databaseDirtySet db) Nothing
     withLock (databaseLock db) $
         Ids.forMutate (databaseValues db) $ \_ -> second $ \case
-            Clean x     -> Dirty (Just x)
-            Dirty x     -> Dirty x
+            Clean x       -> Dirty (Just x)
+            Dirty x       -> Dirty x
             Running _ _ x -> Dirty x
 -- only some keys are dirty
 incDatabase db (Just kk) = do
@@ -126,24 +126,12 @@ builder db@Database{..} keys = do
                 pure (id, val)
 
         toForceList <- liftIO $ readIORef toForce
+        waitAll <- unliftAIO $ mapConcurrentlyAIO_ sequence_ $ increasingChunks toForceList
         case toForceList of
             [] -> return $ Left results
             _ -> return $ Right $ do
-                    parallelWait toForceList
+                    waitAll
                     pure results
-
-parallelWait :: [IO ()] -> IO ()
-parallelWait [] = pure ()
-parallelWait [one] = one
-parallelWait many = mapConcurrently_ sequence_ (increasingChunks many)
-
--- >>> increasingChunks [1..20]
--- [[1,2],[3,4,5,6],[7,8,9,10,11,12,13,14],[15,16,17,18,19,20]]
-increasingChunks :: [a] -> [[a]]
-increasingChunks = go 2 where
-    go :: Int -> [a] -> [[a]]
-    go _ [] = []
-    go n xx = let (chunk, rest) = splitAt n xx in chunk : go (min 10 (n*2)) rest
 
 -- | Refresh a key:
 --     * If no dirty dependencies and we have evaluated the key previously, then we refresh it in the current thread.
@@ -256,7 +244,7 @@ asyncWithCleanUp act = do
     io <- unliftAIO act
     liftIO $ uninterruptibleMask $ \restore -> do
         a <- async $ restore io
-        modifyIORef st (void a :)
+        atomicModifyIORef'_ st (void a :)
         return $ wait a
 
 withLockAIO :: Lock -> AIO a -> AIO a
@@ -274,3 +262,22 @@ cleanupAsync ref = uninterruptibleMask_ $ do
     asyncs <- readIORef ref
     mapM_ (\a -> throwTo (asyncThreadId a) AsyncCancelled) asyncs
     mapM_ waitCatch asyncs
+
+
+mapConcurrentlyAIO_ :: (a -> IO ()) -> [a] -> AIO ()
+mapConcurrentlyAIO_ _ [] = pure ()
+mapConcurrentlyAIO_ f [one] = liftIO $ f one
+mapConcurrentlyAIO_ f many = do
+    ref <- AIO ask
+    liftIO $ uninterruptibleMask $ \restore -> do
+        asyncs <- liftIO $ traverse async (map (restore . f) many)
+        liftIO $ atomicModifyIORef'_ ref (asyncs ++)
+        traverse_ wait asyncs
+
+-- >>> increasingChunks [1..20]
+-- [[1,2],[3,4,5,6],[7,8,9,10,11,12,13,14],[15,16,17,18,19,20]]
+increasingChunks :: [a] -> [[a]]
+increasingChunks = go 2 where
+    go :: Int -> [a] -> [[a]]
+    go _ [] = []
+    go n xx = let (chunk, rest) = splitAt n xx in chunk : go (min 10 (n*2)) rest
