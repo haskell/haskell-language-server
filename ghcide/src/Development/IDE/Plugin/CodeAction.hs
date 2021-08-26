@@ -1483,20 +1483,21 @@ rangesForBindingImport :: ImportDecl GhcPs -> String -> [Range]
 rangesForBindingImport ImportDecl{ideclHiding = Just (False, L _ lies)} b =
     concatMap (mapMaybe srcSpanToRange . rangesForBinding' b') lies
   where
-    b' = modifyBinding b
+    b' = wrapOperatorInParens b
 rangesForBindingImport _ _ = []
 
-modifyBinding :: String -> String
-modifyBinding = wrapOperatorInParens . unqualify
-  where
-    wrapOperatorInParens x = if isAlpha (head x) then x else "(" <> x <> ")"
-    unqualify x = snd $ breakOnEnd "." x
+wrapOperatorInParens :: String -> String
+wrapOperatorInParens x =
+  case uncons x of
+    Just (h, _t) -> if isAlpha h then x else "(" <> x <> ")"
+    Nothing      -> mempty
 
 smallerRangesForBindingExport :: [LIE GhcPs] -> String -> [Range]
 smallerRangesForBindingExport lies b =
     concatMap (mapMaybe srcSpanToRange . ranges') lies
   where
-    b' = modifyBinding b
+    unqualify = snd . breakOnEnd "."
+    b' = wrapOperatorInParens . unqualify $ b
     ranges' (L _ (IEThingWith _ thing _  inners labels))
       | showSDocUnsafe (ppr thing) == b' = []
       | otherwise =

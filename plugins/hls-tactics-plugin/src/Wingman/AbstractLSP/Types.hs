@@ -113,7 +113,7 @@ data Continuation sort target payload = Continuation
         -> TargetArgs target
         -> FileContext
         -> payload
-        -> MaybeT (LspM Plugin.Config) ContinuationResult
+        -> MaybeT (LspM Plugin.Config) [ContinuationResult]
   }
 
 
