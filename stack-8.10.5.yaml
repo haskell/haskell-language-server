@@ -33,6 +33,7 @@ ghc-options:
   "$everything": -haddock
 
 extra-deps:
+  - ansi-terminal-0.10.3
   - apply-refact-0.9.3.0
   - brittany-0.13.1.2
   - Cabal-3.0.2.0
