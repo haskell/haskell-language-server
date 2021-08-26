@@ -32,11 +32,6 @@ import           Development.IDE.Types.HscEnvEq               (HscEnvEq)
 import           Development.IDE.Types.KnownTargets
 import           GHC.Generics                                 (Generic)
 
-import           HscTypes                                     (HomeModInfo,
-                                                               ModGuts,
-                                                               hm_iface,
-                                                               hm_linkable)
-
 import qualified Data.Binary                                  as B
 import           Data.ByteString                              (ByteString)
 import qualified Data.ByteString.Lazy                         as LBS
@@ -46,10 +41,8 @@ import           Development.IDE.Import.FindImports           (ArtifactsLocation
 import           Development.IDE.Spans.Common
 import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Diagnostics
-import           Fingerprint
 import           GHC.Serialized                               (Serialized)
 import           Language.LSP.Types                           (NormalizedFilePath)
-import           TcRnMonad                                    (TcGblEnv)
 
 data LinkableType = ObjectLinkable | BCOLinkable
   deriving (Eq,Ord,Show, Generic)

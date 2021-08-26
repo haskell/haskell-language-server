@@ -32,7 +32,6 @@ module Development.IDE.GHC.ExactPrint
     )
 where
 
-import           BasicTypes                              (appPrec)
 import           Control.Applicative                     (Alternative)
 import           Control.Arrow
 import           Control.Monad
@@ -53,7 +52,7 @@ import           Data.Traversable                        (for)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service            (runAction)
 import           Development.IDE.Core.Shake
-import           Development.IDE.GHC.Compat              hiding (parseExpr)
+import           Development.IDE.GHC.Compat
 import           Development.IDE.Graph                   (RuleResult, Rules)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Types.Location
@@ -65,9 +64,6 @@ import           Language.Haskell.GHC.ExactPrint
 import           Language.Haskell.GHC.ExactPrint.Parsers
 import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities         (ClientCapabilities)
-import           Outputable                              (Outputable, ppr,
-                                                          showSDoc)
-import           Parser                                  (parseIdentifier)
 import           Retrie.ExactPrint                       hiding (parseDecl,
                                                           parseExpr,
                                                           parsePattern,

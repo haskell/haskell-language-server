@@ -26,22 +26,16 @@ import           Development.IDE.GHC.Error     (catchSrcErrors)
 import           Development.IDE.GHC.Util      (lookupPackageConfig)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Types.Exports (ExportsMap, createExportsMap)
-import           GhcPlugins                    (HscEnv (hsc_dflags))
-import           LoadIface                     (loadInterface)
-import qualified Maybes
--- import           Module                        (InstalledUnitId)
 import           OpenTelemetry.Eventlog        (withSpan)
 import           System.Directory              (canonicalizePath)
 import           System.FilePath
-import           TcRnMonad                     (WhereFrom (ImportByUser),
-                                                initIfaceLoad)
 
 -- | An 'HscEnv' with equality. Two values are considered equal
 --   if they are created with the same call to 'newHscEnvEq'.
 data HscEnvEq = HscEnvEq
     { envUnique             :: !Unique
     , hscEnv                :: !HscEnv
-    , deps                  :: [(InstalledUnitId, DynFlags)]
+    , deps                  :: [(UnitId, DynFlags)]
                -- ^ In memory components for this HscEnv
                -- This is only used at the moment for the import dirs in
                -- the DynFlags
@@ -57,7 +51,7 @@ data HscEnvEq = HscEnvEq
     }
 
 -- | Wrap an 'HscEnv' into an 'HscEnvEq'.
-newHscEnvEq :: FilePath -> HscEnv -> [(InstalledUnitId, DynFlags)] -> IO HscEnvEq
+newHscEnvEq :: FilePath -> HscEnv -> [(UnitId, DynFlags)] -> IO HscEnvEq
 newHscEnvEq cradlePath hscEnv0 deps = do
     let relativeToCradle = (takeDirectory cradlePath </>)
         hscEnv = removeImportPaths hscEnv0
@@ -68,7 +62,7 @@ newHscEnvEq cradlePath hscEnv0 deps = do
 
     newHscEnvEqWithImportPaths (Just $ Set.fromList importPathsCanon) hscEnv deps
 
-newHscEnvEqWithImportPaths :: Maybe (Set FilePath) -> HscEnv -> [(InstalledUnitId, DynFlags)] -> IO HscEnvEq
+newHscEnvEqWithImportPaths :: Maybe (Set FilePath) -> HscEnv -> [(UnitId, DynFlags)] -> IO HscEnvEq
 newHscEnvEqWithImportPaths envImportPaths hscEnv deps = do
 
     let dflags = hsc_dflags hscEnv
@@ -78,23 +72,23 @@ newHscEnvEqWithImportPaths envImportPaths hscEnv deps = do
     -- it's very important to delay the package exports computation
     envPackageExports <- onceAsync $ withSpan "Package Exports" $ \_sp -> do
         -- compute the package imports
-        let pkgst   = pkgState dflags
-            depends = explicitPackages pkgst
+        let pkgst   = unitState hscEnv
+            depends = explicitUnits pkgst
             targets =
                 [ (pkg, mn)
                 | d        <- depends
                 , Just pkg <- [lookupPackageConfig d hscEnv]
-                , (mn, _)  <- exposedModules pkg
+                , (mn, _)  <- unitExposedModules pkg
                 ]
 
             doOne (pkg, mn) = do
                 modIface <- liftIO $ initIfaceLoad hscEnv $ loadInterface
                     ""
-                    (mkModule (packageConfigId pkg) mn)
+                    (mkModule (unitInfoId pkg) mn)
                     (ImportByUser NotBoot)
                 return $ case modIface of
-                    Maybes.Failed    _r -> Nothing
-                    Maybes.Succeeded mi -> Just mi
+                    Failed    _r -> Nothing
+                    Succeeded mi -> Just mi
         modIfaces <- mapMaybeM doOne targets
         return $ createExportsMap modIfaces
 
@@ -104,13 +98,13 @@ newHscEnvEqWithImportPaths envImportPaths hscEnv deps = do
         <$> catchSrcErrors
           dflags
           "listVisibleModuleNames"
-          (evaluate . force . Just $ oldListVisibleModuleNames dflags)
+          (evaluate . force . Just $ listVisibleModuleNames hscEnv)
 
     return HscEnvEq{..}
 
 -- | Wrap an 'HscEnv' into an 'HscEnvEq'.
 newHscEnvEqPreserveImportPaths
-    :: HscEnv -> [(InstalledUnitId, DynFlags)] -> IO HscEnvEq
+    :: HscEnv -> [(UnitId, DynFlags)] -> IO HscEnvEq
 newHscEnvEqPreserveImportPaths = newHscEnvEqWithImportPaths Nothing
 
 -- | Unwrap the 'HscEnv' with the original import paths.
@@ -118,12 +112,12 @@ newHscEnvEqPreserveImportPaths = newHscEnvEqWithImportPaths Nothing
 hscEnvWithImportPaths :: HscEnvEq -> HscEnv
 hscEnvWithImportPaths HscEnvEq{..}
     | Just imps <- envImportPaths
-    = hscEnv{hsc_dflags = (hsc_dflags hscEnv){importPaths = Set.toList imps}}
+    = hscSetFlags (setImportPaths (Set.toList imps) (hsc_dflags hscEnv)) hscEnv
     | otherwise
     = hscEnv
 
 removeImportPaths :: HscEnv -> HscEnv
-removeImportPaths hsc = hsc{hsc_dflags = (hsc_dflags hsc){importPaths = []}}
+removeImportPaths hsc = hscSetFlags (setImportPaths [] (hsc_dflags hsc)) hsc
 
 instance Show HscEnvEq where
   show HscEnvEq{envUnique} = "HscEnvEq " ++ show (hashUnique envUnique)

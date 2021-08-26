@@ -34,7 +34,6 @@ import           Development.IDE.Types.Action
 import           Development.IDE.Types.HscEnvEq (HscEnvEq (hscEnv))
 import           Development.IDE.Types.Location (fromUri)
 import           GHC.Generics                   (Generic)
-import           GhcPlugins                     (HscEnv (hsc_dflags))
 import           Ide.Types
 import qualified Language.LSP.Server            as LSP
 import           Language.LSP.Types

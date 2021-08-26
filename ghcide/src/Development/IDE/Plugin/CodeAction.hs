@@ -18,8 +18,6 @@ module Development.IDE.Plugin.CodeAction
     , matchRegExMultipleImports
     ) where
 
-import           Bag                                               (bagToList,
-                                                                    isEmptyBag)
 import           Control.Applicative                               ((<|>))
 import           Control.Arrow                                     (second,
                                                                     (>>>))
@@ -57,8 +55,6 @@ import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 import qualified GHC.LanguageExtensions                            as Lang
-import           HscTypes                                          (ImportedModsVal (..),
-                                                                    importedByUser)
 import           Ide.PluginUtils                                   (subRange)
 import           Ide.Types
 import qualified Language.LSP.Server                               as LSP
@@ -77,18 +73,6 @@ import           Language.LSP.Types                                (CodeAction (
                                                                     type (|?) (InR),
                                                                     uriToFilePath)
 import           Language.LSP.VFS
-import           Module                                            (moduleEnvElts)
-import           OccName
-import           Outputable                                        (Outputable,
-                                                                    ppr,
-                                                                    showSDoc,
-                                                                    showSDocUnsafe)
-import           RdrName                                           (GlobalRdrElt (..),
-                                                                    lookupGlobalRdrEnv)
-import           SrcLoc                                            (realSrcSpanEnd,
-                                                                    realSrcSpanStart)
-import           TcRnTypes                                         (ImportAvails (..),
-                                                                    TcGblEnv (..))
 import           Text.Regex.TDFA                                   (mrAfter,
                                                                     (=~), (=~~))
 
@@ -256,7 +240,7 @@ suggestHideShadow ps@(L _ HsModule {hsmodImports}) fileContents mTcM mHar Diagno
       | Just tcM <- mTcM,
         Just har <- mHar,
         [s'] <- [x | (x, "") <- readSrcSpan $ T.unpack s],
-        isUnusedImportedId tcM har (T.unpack identifier) (T.unpack modName) (OldRealSrcSpan s'),
+        isUnusedImportedId tcM har (T.unpack identifier) (T.unpack modName) (RealSrcSpan s' Nothing),
         mDecl <- findImportDeclByModuleName hsmodImports $ T.unpack modName,
         title <- "Hide " <> identifier <> " from " <> modName =
         if modName == "Prelude" && null mDecl
@@ -440,10 +424,10 @@ suggestDeleteUnusedBinding
       findRelatedSpans
         indexedContent
         name
-        (L (OldRealSrcSpan l) (ValD _ (extractNameAndMatchesFromFunBind -> Just (lname, matches)))) =
+        (L (RealSrcSpan l _) (ValD _ (extractNameAndMatchesFromFunBind -> Just (lname, matches)))) =
         case lname of
           (L nLoc _name) | isTheBinding nLoc ->
-            let findSig (L (OldRealSrcSpan l) (SigD _ sig)) = findRelatedSigSpan indexedContent name l sig
+            let findSig (L (RealSrcSpan l _) (SigD _ sig)) = findRelatedSigSpan indexedContent name l sig
                 findSig _ = []
             in
               extendForSpaces indexedContent (toRange l) :
@@ -466,7 +450,7 @@ suggestDeleteUnusedBinding
         let maybeSpan = findRelatedSigSpan1 name sig
         in case maybeSpan of
           Just (_span, True) -> pure $ extendForSpaces indexedContent $ toRange l -- a :: Int
-          Just (OldRealSrcSpan span, False) -> pure $ toRange span -- a, b :: Int, a is unused
+          Just (RealSrcSpan span _, False) -> pure $ toRange span -- a, b :: Int, a is unused
           _ -> []
 
       -- Second of the tuple means there is only one match
@@ -517,10 +501,10 @@ suggestDeleteUnusedBinding
         indexedContent
         name
         lsigs
-        (L (OldRealSrcSpan l) (extractNameAndMatchesFromFunBind -> Just (lname, matches))) =
+        (L (RealSrcSpan l _) (extractNameAndMatchesFromFunBind -> Just (lname, matches))) =
         if isTheBinding (getLoc lname)
         then
-          let findSig (L (OldRealSrcSpan l) sig) = findRelatedSigSpan indexedContent name l sig
+          let findSig (L (RealSrcSpan l _) sig) = findRelatedSigSpan indexedContent name l sig
               findSig _ = []
           in extendForSpaces indexedContent (toRange l) : concatMap findSig lsigs
         else concatMap (findRelatedSpanForMatch indexedContent name) matches
@@ -562,7 +546,7 @@ suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModul
     -- we get the last export and the closing bracket and check for comma in that range
     needsComma :: T.Text -> Located [LIE GhcPs] -> Bool
     needsComma _ (L _ []) = False
-    needsComma source (L (OldRealSrcSpan l) exports) =
+    needsComma source (L (RealSrcSpan l _) exports) =
       let closeParan = _end $ realSrcSpanToRange l
           lastExport = fmap _end . getLocatedRange $ last exports
       in case lastExport of
@@ -690,7 +674,7 @@ newDefinitionAction :: IdeOptions -> ParsedModule -> Range -> T.Text -> T.Text -
 newDefinitionAction IdeOptions{..} parsedModule Range{_start} name typ
     | Range _ lastLineP : _ <-
       [ realSrcSpanToRange sp
-      | (L l@(OldRealSrcSpan sp) _) <- hsmodDecls
+      | (L l@(RealSrcSpan sp _) _) <- hsmodDecls
       , _start `isInsideSrcSpan` l]
     , nextLineP <- Position{ _line = _line lastLineP + 1, _character = 0}
     = [ ("Define " <> sig
@@ -1015,10 +999,10 @@ disambiguateSymbol pm fileContents Diagnostic {..} (T.unpack -> symbol) = \case
                     liftParseAST @(HsExpr GhcPs) df $
                     prettyPrint $
                         HsVar @GhcPs noExtField $
-                            L (oldUnhelpfulSpan  "") rdr
+                            L (mkGeneralSrcSpan  "") rdr
                 else Rewrite (rangeToSrcSpan "<dummy>" _range) $ \df ->
                     liftParseAST @RdrName df $
-                    prettyPrint $ L (oldUnhelpfulSpan  "") rdr
+                    prettyPrint $ L (mkGeneralSrcSpan  "") rdr
             ]
 
 findImportDeclByRange :: [LImportDecl GhcPs] -> Range -> Maybe (LImportDecl GhcPs)
@@ -1301,8 +1285,14 @@ newImportToEdit (unNewImport -> imp) ps fileContents
 newImportInsertRange :: ParsedSource -> T.Text -> Maybe (Range, Int)
 newImportInsertRange (L _ HsModule {..}) fileContents
   |  Just (uncurry Position -> insertPos, col) <- case hsmodImports of
-      [] -> findPositionNoImports hsmodName hsmodExports fileContents
-      _  -> findPositionFromImportsOrModuleDecl hsmodImports last True
+      [] -> case getLoc (head hsmodDecls) of
+        RealSrcSpan s _ -> let col = srcLocCol (realSrcSpanStart s) - 1
+              in Just ((srcLocLine (realSrcSpanStart s) - 1, col), col)
+        _            -> Nothing
+      _ -> case  getLoc (last hsmodImports) of
+        RealSrcSpan s _ -> let col = srcLocCol (realSrcSpanStart s) - 1
+            in Just ((srcLocLine $ realSrcSpanEnd s,col), col)
+        _            -> Nothing
     = Just (Range insertPos insertPos, col)
   | otherwise = Nothing
 
