@@ -872,9 +872,9 @@ defineEarlyCutoff
     :: IdeRule k v
     => RuleBody k v
     -> Rules ()
-defineEarlyCutoff (Rule op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode isSuccess $ do
+defineEarlyCutoff (Rule op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ do
     defineEarlyCutoff' True key file old mode $ op key file
-defineEarlyCutoff (RuleNoDiagnostics op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode isSuccess $ do
+defineEarlyCutoff (RuleNoDiagnostics op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ do
     defineEarlyCutoff' False key file old mode $ second (mempty,) <$> op key file
 
 defineNoFile :: IdeRule k v => (k -> Action v) -> Rules ()
@@ -917,7 +917,8 @@ defineEarlyCutoff' doDiagnostics key file old mode action = do
             Nothing -> do
                 (bs, (diags, res)) <- actionCatch
                     (do v <- action; liftIO $ evaluate $ force v) $
-                    \(e :: SomeException) -> pure (Nothing, ([ideErrorText file $ T.pack $ show e | not $ isBadDependency e],Nothing))
+                    \(e :: SomeException) -> do
+                        pure (Nothing, ([ideErrorText file $ T.pack $ show e | not $ isBadDependency e],Nothing))
                 modTime <- liftIO $ (currentValue . fst =<<) <$> getValues state GetModificationTime file
                 (bs, res) <- case res of
                     Nothing -> do
@@ -949,9 +950,10 @@ defineEarlyCutoff' doDiagnostics key file old mode action = do
         liftIO $ atomicModifyIORef'_ dirtyKeys (HSet.delete $ toKey key file)
         return res
 
-isSuccess :: A v -> Bool
-isSuccess (A Failed{}) = False
-isSuccess _            = True
+traceA :: A v -> String
+traceA (A Failed{})    = "Failed"
+traceA (A Stale{})     = "Stale"
+traceA (A Succeeded{}) = "Success"
 
 -- | Rule type, input file
 data QDisk k = QDisk k NormalizedFilePath

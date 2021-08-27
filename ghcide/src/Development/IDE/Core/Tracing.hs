@@ -84,10 +84,10 @@ otTracedAction
     => k -- ^ The Action's Key
     -> NormalizedFilePath -- ^ Path to the file the action was run for
     -> RunMode
-    -> (a -> Bool)
+    -> (a -> String)
     -> Action (RunResult a) -- ^ The action
     -> Action (RunResult a)
-otTracedAction key file mode success act
+otTracedAction key file mode result act
   | userTracingEnabled = fst <$>
     generalBracket
         (do
@@ -101,11 +101,11 @@ otTracedAction key file mode success act
             ExitCaseAbort -> setTag sp "aborted" "1"
             ExitCaseException e -> setTag sp "exception" (pack $ show e)
             ExitCaseSuccess res -> do
-                unless (success $ runValue res) $ setTag sp "error" "1"
+                setTag sp "result" (pack $ result $ runValue res)
                 setTag sp "changed" $ case res of
                     RunResult x _ _ -> fromString $ show x
           endSpan sp)
-        (\_ -> act)
+        (const act)
   | otherwise = act
 
 #if MIN_VERSION_ghc(8,8,0)
