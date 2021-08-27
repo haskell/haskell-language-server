@@ -1,6 +1,5 @@
-# Fixme once GHC-8.10.5 LTS is out
-resolver: nightly-2021-06-01
-compiler: ghc-8.10.5
+resolver: nightly-2021-06-14
+compiler: ghc-8.10.6
 
 packages:
   - .
@@ -17,7 +16,6 @@ packages:
   - ./plugins/hls-explicit-imports-plugin
   - ./plugins/hls-refine-imports-plugin
   - ./plugins/hls-hlint-plugin
-  - ./plugins/hls-rename-plugin
   - ./plugins/hls-retrie-plugin
   - ./plugins/hls-splice-plugin
   - ./plugins/hls-tactics-plugin
@@ -33,7 +31,6 @@ ghc-options:
   "$everything": -haddock
 
 extra-deps:
-  - ansi-terminal-0.10.3
   - apply-refact-0.9.3.0
   - brittany-0.13.1.2
   - Cabal-3.0.2.0
@@ -54,7 +51,7 @@ extra-deps:
   # For stylish-haskell-0.12.2.0
   - optparse-applicative-0.15.1.0
   - refinery-0.4.0.0
-  - retrie-0.1.1.1
+  - retrie-1.0.0.0
   - stylish-haskell-0.12.2.0
   - semigroups-0.18.5
   - temporary-1.2.1.1
