@@ -24,6 +24,9 @@ packages:
          ./plugins/hls-module-name-plugin
          ./plugins/hls-ormolu-plugin
          ./plugins/hls-call-hierarchy-plugin
+
+with-compiler: ghc-9.0.1
+
 tests: true
 
 package *
@@ -45,9 +48,9 @@ source-repository-package
 
 source-repository-package
   type: git
-  location: https://github.com/jneira/hie-bios/
-  tag: 9b1445ab5efcabfad54043fc9b8e50e9d8c5bbf3
-  -- https://github.com/mpickering/hie-bios/pull/285
+  location: https://github.com/mpickering/hie-bios/
+  tag: 1875bff093983a0506f80e214eda27e7419da3bc
+  -- https://github.com/mpickering/hie-bios/pull/300
 
 source-repository-package
   type: git
@@ -76,7 +79,7 @@ source-repository-package
 
 write-ghc-environment-files: never
 
-index-state: 2021-08-08T02:21:16Z
+index-state: 2021-08-26T12:41:26Z
 
 constraints:
     -- These plugins doesn't work on GHC9 yet
