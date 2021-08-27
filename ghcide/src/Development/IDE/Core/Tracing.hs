@@ -15,15 +15,18 @@ import           Control.Concurrent.Async       (Async, async)
 import           Control.Concurrent.Extra       (Var, modifyVar_, newVar,
                                                  readVar, threadDelay)
 import           Control.Exception              (evaluate)
-import           Control.Exception.Safe         (SomeException, catch)
-import           Control.Monad                  (forM_, forever, unless, void,
-                                                 when, (>=>))
+import           Control.Exception.Safe         (SomeException, catch,
+                                                 generalBracket)
+import           Control.Monad                  (forM_, forever, void, when,
+                                                 (>=>))
+import           Control.Monad.Catch            (ExitCase (..))
 import           Control.Monad.Extra            (whenJust)
 import           Control.Monad.IO.Unlift
 import           Control.Seq                    (r0, seqList, seqTuple2, using)
 #if MIN_VERSION_ghc(8,8,0)
 import           Data.ByteString                (ByteString)
 #endif
+import           Data.ByteString.Char8          (pack)
 import           Data.Dynamic                   (Dynamic)
 import qualified Data.HashMap.Strict            as HMap
 import           Data.IORef                     (modifyIORef', newIORef,
@@ -34,7 +37,7 @@ import           Debug.Trace.Flags              (userTracingEnabled)
 import           Development.IDE.Core.RuleTypes (GhcSession (GhcSession),
                                                  GhcSessionDeps (GhcSessionDeps),
                                                  GhcSessionIO (GhcSessionIO))
-import           Development.IDE.Graph          (Action, actionBracket)
+import           Development.IDE.Graph          (Action)
 import           Development.IDE.Graph.Rule
 import           Development.IDE.Types.Location (Uri (..))
 import           Development.IDE.Types.Logger   (Logger, logDebug, logInfo)
@@ -85,21 +88,24 @@ otTracedAction
     -> Action (RunResult a) -- ^ The action
     -> Action (RunResult a)
 otTracedAction key file mode success act
-  | userTracingEnabled =
-    actionBracket
+  | userTracingEnabled = fst <$>
+    generalBracket
         (do
             sp <- beginSpan (fromString (show key))
             setTag sp "File" (fromString $ fromNormalizedFilePath file)
             setTag sp "Mode" (fromString $ show mode)
             return sp
         )
-        endSpan
-        (\sp -> do
-            res <- act
-            unless (success $ runValue res) $ setTag sp "error" "1"
-            setTag sp "changed" $ case res of
-              RunResult x _ _ -> fromString $ show x
-            return res)
+        (\sp ec -> do
+          case ec of
+            ExitCaseAbort -> setTag sp "aborted" "1"
+            ExitCaseException e -> setTag sp "exception" (pack $ show e)
+            ExitCaseSuccess res -> do
+                unless (success $ runValue res) $ setTag sp "error" "1"
+                setTag sp "changed" $ case res of
+                    RunResult x _ _ -> fromString $ show x
+          endSpan sp)
+        (\_ -> act)
   | otherwise = act
 
 #if MIN_VERSION_ghc(8,8,0)

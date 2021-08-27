@@ -1,14 +1,15 @@
 
 
+{-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE ExistentialQuantification  #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
-{-# LANGUAGE DeriveFunctor #-}
 
 module Development.IDE.Graph.Internal.Types where
 
 import           Control.Applicative
 import           Control.Concurrent.Extra
+import           Control.Monad.Catch
 import           Control.Monad.Fail
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Reader
@@ -49,7 +50,7 @@ data SRules = SRules {
 -- ACTIONS
 
 newtype Action a = Action {fromAction :: ReaderT SAction IO a}
-    deriving (Monad, Applicative, Functor, MonadIO, MonadFail)
+    deriving (Monad, Applicative, Functor, MonadIO, MonadFail, MonadThrow, MonadCatch, MonadMask)
 
 data SAction = SAction {
     actionDatabase :: !Database,
@@ -95,8 +96,8 @@ data Status
     | Running (IO ()) Result (Maybe Result)
 
 getResult :: Status -> Maybe Result
-getResult (Clean re)       = Just re
-getResult (Dirty m_re)     = m_re
+getResult (Clean re)         = Just re
+getResult (Dirty m_re)       = m_re
 getResult (Running _ _ m_re) = m_re
 
 data Result = Result {
