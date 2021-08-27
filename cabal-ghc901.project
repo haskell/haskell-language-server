@@ -85,50 +85,9 @@ constraints:
     -- These plugins doesn't work on GHC9 yet
     haskell-language-server -brittany -class -fourmolu -splice -stylishhaskell -tactic -refineImports
 
-
 allow-newer:
-    -- -- Broken on ghc9, but let's pretend it's not so we can build the other things
-    -- brittany:base,
-    -- brittany:ghc,
-    -- brittany:ghc-boot-th,
-    -- butcher:base,
-    -- fourmolu:ghc-lib-parser,
-    -- stylish-haskell:ghc-lib-parser,
-    -- stylish-haskell:Cabal,
-    -- multistate:base,
-    -- ghc-source-gen:ghc,
-
-    assoc:base,
-    cryptohash-md5:base,
-    cryptohash-sha1:base,
-    constraints-extras:template-haskell,
-    data-tree-print:base,
-    deepseq:base,
-    dependent-sum:some,
-    dependent-sum:constraints,
-    diagrams-postscript:base,
-    diagrams-postscript:lens,
-    diagrams-postscript:diagrams-core,
-    diagrams-postscript:monoid-extras,
-    diagrams:diagrams-core,
-    Chart-diagrams:diagrams-core,
-    SVGFonts:diagrams-core,
-    dual-tree:base,
-    -- Does this make any sense?
-    entropy:Cabal,
-    force-layout:base,
-    force-layout:lens,
-    floskell:ghc-prim,
     floskell:base,
-    hashable:base,
-    hslogger:base,
-    monoid-extras:base,
-    newtype-generics:base,
-    parallel:base,
-    regex-base:base,
-    regex-tdfa:base,
-    statestack:base,
-    svg-builder:base,
-    these:base,
-    time-compat:base
-
+    floskell:ghc-prim,
+    -- for shake-bench
+    Chart-diagrams:diagrams-core,
+    SVGFonts:diagrams-core
