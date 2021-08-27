@@ -20,6 +20,7 @@ Enabled by default. You can disable it in your editor settings whenever you like
 {
   "haskell.plugin.callHierarchy.globalOn": true
 }
+```
 
 ## Change log
 ### 1.0.0.1

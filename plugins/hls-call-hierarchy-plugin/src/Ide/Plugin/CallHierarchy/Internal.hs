@@ -76,14 +76,16 @@ extract ast = let span = nodeSpan ast
               in  [ (ident, contexts, span) | (ident, contexts) <- infos ]
 
 recFieldInfo, declInfo, valBindInfo, classTyDeclInfo,
-  useInfo, patternBindInfo, tyDeclInfo :: [ContextInfo] -> Maybe ContextInfo
-recFieldInfo    ctxs = listToMaybe [ctx    | ctx@RecField{}    <- ctxs]
-declInfo        ctxs = listToMaybe [ctx    | ctx@Decl{}        <- ctxs]
-valBindInfo     ctxs = listToMaybe [ctx    | ctx@ValBind{}     <- ctxs]
-classTyDeclInfo ctxs = listToMaybe [ctx    | ctx@ClassTyDecl{} <- ctxs]
-useInfo         ctxs = listToMaybe [Use    | Use               <- ctxs]
-patternBindInfo ctxs = listToMaybe [ctx    | ctx@PatternBind{} <- ctxs]
-tyDeclInfo      ctxs = listToMaybe [TyDecl | TyDecl            <- ctxs]
+  useInfo, patternBindInfo, tyDeclInfo, matchBindInfo
+    :: [ContextInfo] -> Maybe ContextInfo
+recFieldInfo    ctxs = listToMaybe [ctx       | ctx@RecField{}    <- ctxs]
+declInfo        ctxs = listToMaybe [ctx       | ctx@Decl{}        <- ctxs]
+valBindInfo     ctxs = listToMaybe [ctx       | ctx@ValBind{}     <- ctxs]
+classTyDeclInfo ctxs = listToMaybe [ctx       | ctx@ClassTyDecl{} <- ctxs]
+useInfo         ctxs = listToMaybe [Use       | Use               <- ctxs]
+patternBindInfo ctxs = listToMaybe [ctx       | ctx@PatternBind{} <- ctxs]
+tyDeclInfo      ctxs = listToMaybe [TyDecl    | TyDecl            <- ctxs]
+matchBindInfo   ctxs = listToMaybe [MatchBind | MatchBind         <- ctxs]
 
 construct :: NormalizedFilePath -> HieASTs a -> (Identifier, S.Set ContextInfo, Span) -> Maybe CallHierarchyItem
 construct nfp hf (ident, contexts, ssp)
@@ -92,6 +94,9 @@ construct nfp hf (ident, contexts, ssp)
   | Just (RecField RecFieldDecl _) <- recFieldInfo ctxList
     -- ignored type span
     = Just $ mkCallHierarchyItem' ident SkField ssp ssp
+
+  | isJust (matchBindInfo ctxList) && isNothing (valBindInfo ctxList)
+    = Just $ mkCallHierarchyItem' ident SkFunction ssp ssp
 
   | Just ctx <- valBindInfo ctxList
     = Just $ case ctx of
