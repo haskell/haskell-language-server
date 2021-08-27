@@ -47,7 +47,7 @@ prepareCallHierarchy state pluginId param
     liftIO (runAction "CallHierarchy.prepareHierarchy" state (prepareCallHierarchyItem nfp pos)) >>=
       \case
         Just items -> pure $ Right $ Just $ List items
-        Nothing    -> pure $ Left $ responseError "Call Hierarchy: No result"
+        Nothing    -> pure $ Right Nothing
   | otherwise = pure $ Left $ responseError $ T.pack $ "Call Hierarchy: uriToNormalizedFilePath failed for: " <> show uri
   where
     uri = param ^. (L.textDocument . L.uri)
@@ -67,8 +67,11 @@ constructFromAst nfp pos =
 resolveIntoCallHierarchy :: Applicative f => HieASTs a -> Position -> NormalizedFilePath -> f (Maybe [CallHierarchyItem])
 resolveIntoCallHierarchy hf pos nfp =
   case listToMaybe $ pointCommand hf pos extract of
-    Just res -> pure $ Just $ mapMaybe (construct nfp hf) res
-    Nothing  -> pure Nothing
+    Nothing    -> pure Nothing
+    Just infos ->
+      case mapMaybe (construct nfp hf) infos of
+        []  -> pure Nothing
+        res -> pure $ Just res
 
 extract :: HieAST a -> [(Identifier, S.Set ContextInfo, Span)]
 extract ast = let span = nodeSpan ast
