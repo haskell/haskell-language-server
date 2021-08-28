@@ -23,6 +23,7 @@ where
 
 import           Control.Applicative             (Alternative ((<|>)))
 import           Control.Arrow
+import           Control.Exception
 import qualified Control.Foldl                   as L
 import           Control.Lens                    (Identity (..), ix, view, (%~),
                                                   (<&>), (^.))
@@ -43,12 +44,11 @@ import           Data.Maybe                      (fromMaybe, listToMaybe,
                                                   mapMaybe)
 import qualified Data.Text                       as T
 import           Development.IDE
-import           Development.IDE.GHC.Compat      hiding (getLoc)
+import           Development.IDE.GHC.Compat      as Compat hiding (getLoc)
+import           Development.IDE.GHC.Compat.Outputable
+import qualified Development.IDE.GHC.Compat.Util as Util
 import           Development.IDE.GHC.ExactPrint
-import           Exception
 import           GHC.Exts
-import           GhcMonad
-import           GhcPlugins                      hiding (Var, getLoc, (<>))
 import           Ide.Plugin.Splice.Types
 import           Ide.Types
 import           Language.Haskell.GHC.ExactPrint (setPrecedingLines,
@@ -57,8 +57,6 @@ import           Language.LSP.Server
 import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities
 import qualified Language.LSP.Types.Lens         as J
-import           RnSplice
-import           TcRnMonad
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
@@ -146,7 +144,7 @@ expandTHSplice _eStyle ideState params@ExpandSpliceParams {..} = do
                             dflags
                             clientCapabilities
                             uri
-                            (graft (RealSrcSpan spliceSpan) expanded)
+                            (graft (RealSrcSpan spliceSpan Nothing) expanded)
                             ps
             maybe (throwE "No splice information found") (either throwE pure) $
                 case spliceContext of
@@ -162,7 +160,7 @@ expandTHSplice _eStyle ideState params@ExpandSpliceParams {..} = do
                                 dflags
                                 clientCapabilities
                                 uri
-                                (graftDecls (RealSrcSpan spliceSpan) expanded)
+                                (graftDecls (RealSrcSpan spliceSpan Nothing) expanded)
                                 ps
                                 <&>
                                 -- FIXME: Why ghc-exactprint sweeps preceeding comments?
@@ -195,7 +193,7 @@ expandTHSplice _eStyle ideState params@ExpandSpliceParams {..} = do
 
     where
         range = realSrcSpanToRange spliceSpan
-        srcSpan = RealSrcSpan spliceSpan
+        srcSpan = RealSrcSpan spliceSpan Nothing
 
 
 setupHscEnv
@@ -217,27 +215,22 @@ setupHscEnv ideState fp pm = do
 
 setupDynFlagsForGHCiLike :: HscEnv -> DynFlags -> IO DynFlags
 setupDynFlagsForGHCiLike env dflags = do
-    let dflags3 =
-            dflags
-                { hscTarget = HscInterpreted
-                , ghcMode = CompManager
-                , ghcLink = LinkInMemory
-                }
+    let dflags3 = setInterpreterLinkerOptions dflags
         platform = targetPlatform dflags3
-        dflags3a = updateWays $ dflags3 {ways = interpWays}
+        dflags3a = setWays hostFullWays dflags3
         dflags3b =
             foldl gopt_set dflags3a $
-                concatMap (wayGeneralFlags platform) interpWays
+                concatMap (wayGeneralFlags platform) hostFullWays
         dflags3c =
             foldl gopt_unset dflags3b $
-                concatMap (wayUnsetGeneralFlags platform) interpWays
+                concatMap (wayUnsetGeneralFlags platform) hostFullWays
         dflags4 =
             dflags3c
                 `gopt_set` Opt_ImplicitImportQualified
                 `gopt_set` Opt_IgnoreOptimChanges
                 `gopt_set` Opt_IgnoreHpcChanges
                 `gopt_unset` Opt_DiagnosticsShowCaret
-    initializePlugins env dflags4
+    hsc_dflags <$> initializePlugins (hscSetFlags dflags4 env)
 
 adjustToRange :: Uri -> Range -> WorkspaceEdit -> WorkspaceEdit
 adjustToRange uri ran (WorkspaceEdit mhult mlt x) =
@@ -335,26 +328,26 @@ manualCalcEdit clientCapabilities reportEditor ran ps hscEnv typechkd srcSpan _e
                     case classifyAST spliceContext of
                         IsHsDecl -> fmap (fmap $ adjustToRange uri ran) $
                             flip (transformM dflags clientCapabilities uri) ps $
-                                graftDeclsWithM (RealSrcSpan srcSpan) $ \case
+                                graftDeclsWithM (RealSrcSpan srcSpan Nothing) $ \case
                                     (L _spn (SpliceD _ (SpliceDecl _ (L _ spl) _))) -> do
                                         eExpr <-
                                             eitherM (fail . show) pure
                                                 $ lift
                                                     ( lift $
-                                                        gtry @_ @SomeException $
+                                                        Util.try @_ @SomeException $
                                                             (fst <$> rnTopSpliceDecls spl)
                                                     )
                                         pure $ Just eExpr
                                     _ -> pure Nothing
                         OneToOneAST astP ->
                             flip (transformM dflags clientCapabilities uri) ps $
-                                graftWithM (RealSrcSpan srcSpan) $ \case
+                                graftWithM (RealSrcSpan srcSpan Nothing) $ \case
                                     (L _spn (matchSplice astP -> Just spl)) -> do
                                         eExpr <-
                                             eitherM (fail . show) pure
                                                 $ lift
                                                     ( lift $
-                                                        gtry @_ @SomeException $
+                                                        Util.try @_ @SomeException $
                                                             (fst <$> expandSplice astP spl)
                                                     )
                                         Just <$> either (pure . L _spn) (unRenamedE dflags) eExpr
@@ -428,8 +421,8 @@ codeAction state plId (CodeActionParams _ _ docId ran _) = liftIO $
             mkQ
                 Continue
                 ( \case
-                    (L l@(RealSrcSpan spLoc) expr :: LHsExpr GhcPs)
-                        | RealSrcSpan spn `isSubspanOf` l ->
+                    (L l@(RealSrcSpan spLoc _) expr :: LHsExpr GhcPs)
+                        | RealSrcSpan spn Nothing `isSubspanOf` l ->
                             case expr of
                                 HsSpliceE {} -> Here (spLoc, Expr)
                                 _            -> Continue
@@ -437,25 +430,25 @@ codeAction state plId (CodeActionParams _ _ docId ran _) = liftIO $
                 )
                 `extQ` \case
 #if __GLASGOW_HASKELL__ == 808
-                    (dL @(Pat GhcPs) -> L l@(RealSrcSpan spLoc) pat :: Located (Pat GhcPs))
+                    (dL @(Pat GhcPs) -> L l@(RealSrcSpan spLoc _) pat :: Located (Pat GhcPs))
 #else
-                    (L l@(RealSrcSpan spLoc) pat :: LPat GhcPs)
+                    (L l@(RealSrcSpan spLoc _) pat :: LPat GhcPs)
 #endif
-                        | RealSrcSpan spn `isSubspanOf` l ->
+                        | RealSrcSpan spn Nothing `isSubspanOf` l ->
                             case pat of
                                 SplicePat{} -> Here (spLoc, Pat)
                                 _           -> Continue
                     _ -> Stop
                 `extQ` \case
-                    (L l@(RealSrcSpan spLoc) ty :: LHsType GhcPs)
-                        | RealSrcSpan spn `isSubspanOf` l ->
+                    (L l@(RealSrcSpan spLoc _) ty :: LHsType GhcPs)
+                        | RealSrcSpan spn Nothing `isSubspanOf` l ->
                             case ty of
                                 HsSpliceTy {} -> Here (spLoc, HsType)
                                 _             -> Continue
                     _ -> Stop
                 `extQ` \case
-                    (L l@(RealSrcSpan spLoc) decl :: LHsDecl GhcPs)
-                        | RealSrcSpan spn `isSubspanOf` l ->
+                    (L l@(RealSrcSpan spLoc _) decl :: LHsDecl GhcPs)
+                        | RealSrcSpan spn Nothing `isSubspanOf` l ->
                             case decl of
                                 SpliceD {} -> Here (spLoc, HsDecl)
                                 _          -> Continue

@@ -23,7 +23,6 @@ packages:
          ./plugins/hls-module-name-plugin
          ./plugins/hls-ormolu-plugin
          ./plugins/hls-call-hierarchy-plugin
-         ../../../head.hackage/packages/th-extras-0.0.0.4
 
 tests: true
 
@@ -44,17 +43,25 @@ source-repository-package
   tag: b6245884ae83e00dd2b5261762549b37390179f8
   -- https://github.com/lspitzner/czipwith/pull/2
 
-source-repository-package
-  type: git
-  location: https://github.com/alanz/ghc-exactprint
-  tag: 9f20a4e880b9e81369e0d2024e60ae02c158c57c
--- https://github.com/alanz/ghc-exactprint/pull/101
-
 -- benchmark dependency
 source-repository-package
   type: git
   location: https://github.com/HeinrichApfelmus/operational
   tag: 16e19aaf34e286f3d27b3988c61040823ec66537
+
+source-repository-package
+  type: git
+  location: https://github.com/anka-213/th-extras
+  tag: 57a97b4df128eb7b360e8ab9c5759392de8d1659
+-- https://github.com/mokus0/th-extras/pull/8
+-- https://github.com/mokus0/th-extras/issues/7
+
+source-repository-package
+  type: git
+  location: https://github.com/fendor/dependent-sum
+  tag: 5de03c38b0de4945f4e9bce1b026110e69dc8118
+  subdir: dependent-sum-template
+-- https://github.com/obsidiansystems/dependent-sum/pull/59
 
 -- Head of hie-bios
 source-repository-package
@@ -67,6 +74,13 @@ source-repository-package
   type: git
   location: https://github.com/wz1000/HieDb
   tag: 45c4671db2da8ce5cd11e964573846cfbf3bbec8
+
+-- GHC 9.2 for ghc-check
+source-repository-package
+  type: git
+  location: https://github.com/fendor/ghc-check
+  tag: 224f3901eaa1b32a27e097968afd4a3894efa77e
+  -- https://github.com/pepeiborra/ghc-check/pull/14/files
 
 write-ghc-environment-files: never
 

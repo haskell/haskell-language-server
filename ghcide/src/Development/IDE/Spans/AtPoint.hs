@@ -30,6 +30,8 @@ import           Language.LSP.Types
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat.Outputable
+import qualified Development.IDE.GHC.Compat.Util as Util
 import           Development.IDE.Spans.Common
 import           Development.IDE.Types.Options
 
@@ -325,7 +327,7 @@ nameToLocation hiedb lookupModule name = runMaybeT $
   case nameSrcSpan name of
     sp@(RealSrcSpan rsp _)
       -- Lookup in the db if we got a location in a boot file
-      | fs <- unpackFS (srcSpanFile rsp)
+      | fs <- Util.unpackFS (srcSpanFile rsp)
       , not $ "boot" `isSuffixOf` fs
       -> do
           itExists <- liftIO $ doesFileExist fs

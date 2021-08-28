@@ -5,7 +5,7 @@
 {-# LANGUAGE ConstraintKinds   #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE PatternSynonyms   #-}
-{-# OPTIONS -Wno-incomplete-uni-patterns #-}
+{-# OPTIONS -Wno-incomplete-uni-patterns -Wno-dodgy-imports #-}
 
 -- | Attempt at hiding the GHC version differences we can.
 module Development.IDE.GHC.Compat(
@@ -34,9 +34,6 @@ module Development.IDE.GHC.Compat(
 #if !MIN_VERSION_ghc(9,0,1)
     RefMap,
 #endif
-    -- Linear
-    Scaled,
-    scaledThing,
 
 #if MIN_VERSION_ghc(9,0,0)
     IsBootInterface(..),
@@ -47,8 +44,6 @@ module Development.IDE.GHC.Compat(
 
     nodeInfo',
     getNodeIds,
-    stringToUnit,
-    unitString,
 
     pprSigmaType,
 
@@ -74,7 +69,6 @@ module Development.IDE.GHC.Compat(
     module Development.IDE.GHC.Compat.Env,
     module Development.IDE.GHC.Compat.Iface,
     module Development.IDE.GHC.Compat.Logger,
-    module Development.IDE.GHC.Compat.Outputable,
     module Development.IDE.GHC.Compat.Parser,
     module Development.IDE.GHC.Compat.Plugins,
     module Development.IDE.GHC.Compat.Units,
@@ -93,62 +87,31 @@ import Development.IDE.GHC.Compat.Core
 import Development.IDE.GHC.Compat.Env
 import Development.IDE.GHC.Compat.Iface
 import Development.IDE.GHC.Compat.Logger
-import Development.IDE.GHC.Compat.Outputable
 import Development.IDE.GHC.Compat.Parser
 import Development.IDE.GHC.Compat.Plugins
 import Development.IDE.GHC.Compat.Units
+import Development.IDE.GHC.Compat.Util
 
 #if MIN_VERSION_ghc(9,0,0)
-import GHC.Core.DataCon (dataConWrapId)
-import GHC.Core.ConLike (ConLike(..))
-import GHC.Core.Multiplicity
-import qualified GHC.Core.TyCo.Rep as TyCoRep
-import GHC.Data.StringBuffer
-import GHC.Data.FastString
-import GHC.Data.Bag
-import GHC.Driver.Session hiding (ExposePackage)
-import qualified GHC.Driver.Session as DynFlags
+import           GHC.Data.StringBuffer
+import           GHC.Driver.Session    hiding (ExposePackage)
 #if !MIN_VERSION_ghc(9,2,0)
-import GHC.Driver.Types
+import           GHC.Driver.Types
 #endif
-import GHC.Hs.Extension
-import qualified GHC.Hs.Type as GHC
-import GHC.Iface.Load
-import GHC.Iface.Make (mkIfaceExports)
-import GHC.Unit.Info (PackageName)
-import qualified GHC.Unit.Info as Packages
+import           GHC.Hs.Extension
+import           GHC.Iface.Make           (mkIfaceExports)
+import qualified GHC.SysTools.Tasks       as SysTools
+import           GHC.Tc.Utils.TcType      (pprSigmaType)
+import qualified GHC.Types.Avail          as Avail
 import qualified GHC.Unit.Module.Location as Module
-import GHC.Unit.Module.Name (moduleNameSlashes)
-import GHC.Unit.State (ModuleOrigin(..))
-import qualified GHC.Unit.State as Packages
-import qualified GHC.Unit.Types as Module
-import GHC.Unit.Types (unitString, IsBootInterface(..))
-import GHC.Utils.Fingerprint
-import GHC.Utils.Panic
-import qualified GHC.SysTools.Tasks as SysTools
-import GHC.Tc.Types (TcGblEnv(..))
-import GHC.Tc.Utils.TcType (pprSigmaType)
-import qualified GHC.Types.Avail as Avail
-import GHC.Types.FieldLabel
-import GHC.Types.Name
-import GHC.Types.Name.Occurrence
-import GHC.Types.Name.Cache
-import GHC.Types.Name.Env
-import GHC.Types.Name.Reader (rdrNameOcc)
-import GHC.Types.SrcLoc (BufSpan)
-import qualified GHC.Types.SrcLoc as SrcLoc
-import GHC.Types.Var
-import           Control.Exception.Safe as Safe (Exception, MonadCatch, catch)
 #else
 import           DynFlags               hiding (ExposePackage)
 import qualified Module
 #if MIN_VERSION_ghc(9,0,0)
 import           Control.Exception.Safe as Safe (Exception, MonadCatch, catch)
 import           GHC.Core.TyCo.Ppr      (pprSigmaType)
-import           GHC.Core.TyCo.Rep      (Scaled, scaledThing)
 import           GHC.Iface.Load
 import           GHC.Types.Unique.Set   (emptyUniqSet)
-import           Module                 (unitString)
 #else
 import           TcType                 (pprSigmaType)
 #endif
@@ -313,34 +276,10 @@ getModuleHash = mi_mod_hash . mi_final_exts
 getModuleHash = mi_mod_hash
 #endif
 
-#if MIN_VERSION_ghc(9,2,0)
-
-packageName            = Packages.unitPackageName
-moduleUnitId           = Module.moduleUnit
-thisInstalledUnitId    = GHC.homeUnitId_
-thisPackage            = GHC.homeUnitId_
-
-#elif MIN_VERSION_ghc(9,0,0)
-packageName            = Packages.unitPackageName
-getPackageIncludePath  = Packages.getUnitIncludePath
-moduleUnitId           = Module.moduleUnit
--- initUnits              = Packages.initUnits
--- initPackages           = initPackagesx
-
-thisInstalledUnitId    = GHC.homeUnitId
-thisPackage            = DynFlags.homeUnit
-#else
-
-
+#if !MIN_VERSION_ghc(9,0,0)
 pattern NotBoot, IsBoot :: IsBootInterface
 pattern NotBoot = False
 pattern IsBoot = True
-
-
--- Linear Haskell
-type Scaled a = a
-scaledThing :: Scaled a -> a
-scaledThing = id
 #endif
 
 
@@ -369,6 +308,8 @@ isQualifiedImport _                                         = False
 getNodeIds :: HieAST a -> Map.Map Identifier (IdentifierDetails a)
 getNodeIds = Map.foldl' combineNodeIds Map.empty . getSourcedNodeInfo . sourcedNodeInfo
 
+combineNodeIds :: Map.Map Identifier (IdentifierDetails a)
+                        -> NodeInfo a -> Map.Map Identifier (IdentifierDetails a)
 ad `combineNodeIds` (NodeInfo _ _ bd) = Map.unionWith (<>) ad bd
 
 --  Copied from GHC and adjusted to accept TypeIndex instead of Type
@@ -388,7 +329,6 @@ combineNodeInfo' :: Ord a => NodeInfo a -> NodeInfo a -> NodeInfo a
     mergeSorted as [] = as
     mergeSorted [] bs = bs
 
-stringToUnit = Module.stringToUnit
 #else
 
 getNodeIds :: HieAST a -> NodeIdentifiers a
@@ -399,10 +339,6 @@ getNodeIds = nodeIdentifiers . nodeInfo
 nodeInfo' :: Ord a => HieAST a -> NodeInfo a
 nodeInfo' = nodeInfo
 -- type Unit = UnitId
-unitString :: Unit -> String
-unitString = Module.unitIdString
-stringToUnit :: String -> Unit
-stringToUnit = Module.stringToUnitId
 -- moduleUnit :: Module -> Unit
 -- moduleUnit = moduleUnitId
 -- unhelpfulSpanFS :: FS.FastString -> FS.FastString

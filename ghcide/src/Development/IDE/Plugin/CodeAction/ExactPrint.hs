@@ -30,6 +30,8 @@ import           Data.Maybe                            (fromJust, isNothing,
                                                         mapMaybe)
 import qualified Data.Text                             as T
 import           Development.IDE.GHC.Compat
+import qualified Development.IDE.GHC.Compat.Util as Util
+import           Development.IDE.GHC.Compat.Outputable
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint        (ASTElement (parseAST),
                                                         Annotate)
@@ -448,5 +450,5 @@ deleteFromImport (T.pack -> symbol) (L l idecl) llies@(L lieLoc lies) _ = do
             ty
             wild
             (filter ((/= symbol) . unqualIEWrapName . unLoc) cons)
-            (filter ((/= symbol) . T.pack . unpackFS . flLabel . unLoc) flds)
+            (filter ((/= symbol) . T.pack . Util.unpackFS . flLabel . unLoc) flds)
   killLie v = Just v

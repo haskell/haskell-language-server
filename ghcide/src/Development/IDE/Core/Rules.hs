@@ -110,6 +110,7 @@ import           Development.IDE.GHC.Compat.Core              hiding
                                                                loadInterface,
                                                                Var)
 import qualified Development.IDE.GHC.Compat                   as Compat
+import qualified Development.IDE.GHC.Compat.Util              as Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.GHC.Util                     hiding
@@ -498,8 +499,8 @@ getDependenciesRule =
         let allFiles = reachableModules depInfo
         _ <- uses_ ReportImportCycles allFiles
         opts <- getIdeOptions
-        let mbFingerprints = map (fingerprintString . fromNormalizedFilePath) allFiles <$ optShakeFiles opts
-        return (fingerprintToBS . fingerprintFingerprints <$> mbFingerprints, transitiveDeps depInfo file)
+        let mbFingerprints = map (Util.fingerprintString . fromNormalizedFilePath) allFiles <$ optShakeFiles opts
+        return (fingerprintToBS . Util.fingerprintFingerprints <$> mbFingerprints, transitiveDeps depInfo file)
 
 getHieAstsRule :: Rules ()
 getHieAstsRule =
@@ -750,7 +751,7 @@ getModIfaceFromDiskAndIndexRule =
   -- GetModIfaceFromDisk should have written a `.hie` file, must check if it matches version in db
   let ms = hirModSummary x
       hie_loc = Compat.ml_hie_file $ ms_location ms
-  hash <- liftIO $ getFileHash hie_loc
+  hash <- liftIO $ Util.getFileHash hie_loc
   mrow <- liftIO $ HieDb.lookupHieFileFromSource hiedb (fromNormalizedFilePath f)
   hie_loc' <- liftIO $ traverse (canonicalizePath . HieDb.hieModuleHieFile) mrow
   case mrow of
@@ -815,7 +816,7 @@ getModSummaryRule = do
             Right res -> do
                 bufFingerPrint <- liftIO $
                     fingerprintFromStringBuffer $ fromJust $ ms_hspp_buf $ msrModSummary res
-                let fingerPrint = fingerprintFingerprints
+                let fingerPrint = Util.fingerprintFingerprints
                         [ msrFingerprint res, bufFingerPrint ]
                 return ( Just (fingerprintToBS fingerPrint) , ([], Just res))
             Left diags -> return (Nothing, (diags, Nothing))

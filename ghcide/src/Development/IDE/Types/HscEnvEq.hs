@@ -22,6 +22,7 @@ import           Data.Set                      (Set)
 import qualified Data.Set                      as Set
 import           Data.Unique
 import           Development.IDE.GHC.Compat
+import qualified Development.IDE.GHC.Compat.Util as Maybes
 import           Development.IDE.GHC.Error     (catchSrcErrors)
 import           Development.IDE.GHC.Util      (lookupPackageConfig)
 import           Development.IDE.Graph.Classes
@@ -87,8 +88,8 @@ newHscEnvEqWithImportPaths envImportPaths hscEnv deps = do
                     (mkModule (unitInfoId pkg) mn)
                     (ImportByUser NotBoot)
                 return $ case modIface of
-                    Failed    _r -> Nothing
-                    Succeeded mi -> Just mi
+                    Maybes.Failed    _r -> Nothing
+                    Maybes.Succeeded mi -> Just mi
         modIfaces <- mapMaybeM doOne targets
         return $ createExportsMap modIfaces
 

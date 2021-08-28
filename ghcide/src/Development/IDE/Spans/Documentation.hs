@@ -25,6 +25,7 @@ import qualified Data.Text                      as T
 import           Development.IDE.Core.Compile
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.Spans.Common
 import           System.Directory

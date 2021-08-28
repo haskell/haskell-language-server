@@ -32,7 +32,9 @@ module Development.IDE.GHC.Error
 import           Data.Maybe
 import           Data.String                       (fromString)
 import qualified Data.Text                         as T
+import qualified Development.IDE.GHC.Compat.Outputable as Compat
 import qualified Development.IDE.GHC.Compat        as Compat
+import qualified Development.IDE.GHC.Compat.Util   as Compat
 import           Development.IDE.GHC.Compat.Outputable
 import           Development.IDE.GHC.Orphans       ()
 import           Development.IDE.Types.Diagnostics as D

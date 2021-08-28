@@ -53,6 +53,7 @@ import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service            (runAction)
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat.Outputable
 import           Development.IDE.Graph                   (RuleResult, Rules)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Types.Location

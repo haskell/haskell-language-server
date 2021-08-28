@@ -14,6 +14,8 @@ module Development.IDE.Import.FindImports
   ) where
 
 import           Development.IDE.GHC.Compat        as Compat
+import           Development.IDE.GHC.Compat.Util
+import           Development.IDE.GHC.Compat.Outputable
 import           Development.IDE.GHC.Error         as ErrUtils
 import           Development.IDE.GHC.Orphans       ()
 import           Development.IDE.Types.Diagnostics

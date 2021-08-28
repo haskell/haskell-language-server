@@ -30,9 +30,8 @@ import           Data.Functor.Identity                (Identity (Identity))
 import           Data.Kind                            (Type)
 import           Data.String                          (fromString)
 import           Development.IDE.GHC.Compat           (RealSrcSpan,
-                                                       srcSpanFile,
-
-                                                       unpackFS)
+                                                       srcSpanFile)
+import           Development.IDE.GHC.Compat.Util      (unpackFS)
 import           Development.IDE                      (Action, IdeRule,
                                                        NormalizedFilePath,
                                                        Range,

@@ -22,12 +22,9 @@ import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake (IdeState (..))
 import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.Compat
-import           GhcPlugins (containsSpan, realSrcLocSpan, realSrcSpanStart)
 import           Ide.Types
 import           Language.LSP.Types
 import           Prelude hiding (span)
-import           Prelude hiding (span)
-import           TcRnTypes (tcg_binds)
 import           Wingman.GHC
 import           Wingman.Judgements.SYB (metaprogramQ)
 import           Wingman.LanguageServer
@@ -44,7 +41,7 @@ hoverProvider state plId (HoverParams (TextDocumentIdentifier uri) (unsafeMkCurr
 
       cfg <- getTacticConfig plId
       liftIO $ fromMaybeT (Right Nothing) $ do
-        holes <- getMetaprogramsAtSpan state nfp $ RealSrcSpan $ unTrack loc
+        holes <- getMetaprogramsAtSpan state nfp $ RealSrcSpan (unTrack loc) Nothing
 
         fmap (Right . Just) $
           case (find (flip containsSpan (unTrack loc) . unTrack . fst) holes) of
@@ -80,7 +77,7 @@ getMetaprogramsAtSpan state nfp ss = do
     let scrutinees = traverse (metaprogramQ ss . tcg_binds) tcg
     for scrutinees $ \aged@(unTrack -> (ss, program)) -> do
       case ss of
-        RealSrcSpan r   -> do
+        RealSrcSpan r _ -> do
           rss' <- liftMaybe $ mapAgeTo tcg_map $ unsafeCopyAge aged r
           pure (rss', program)
         UnhelpfulSpan _ -> empty

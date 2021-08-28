@@ -33,6 +33,7 @@ import           Development.IDE.Core.Rules          (IdeState, runAction)
 import           Development.IDE.Core.Service        (getDiagnostics)
 import           Development.IDE.Core.Shake          (getHiddenDiagnostics, use)
 import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat.Outputable
 import           Development.IDE.GHC.Util            (printName)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Spans.LocalBindings (Bindings, getFuzzyScope)

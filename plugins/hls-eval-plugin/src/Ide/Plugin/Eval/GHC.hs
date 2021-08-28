@@ -17,18 +17,12 @@ import           Data.List                   (isPrefixOf)
 import           Data.Maybe                  (mapMaybe)
 import           Data.String                 (fromString)
 import           Development.IDE.GHC.Compat
-import qualified EnumSet
+import           Development.IDE.GHC.Compat.Util
+import           Development.IDE.GHC.Compat.Outputable
+import qualified Development.IDE.GHC.Compat.Util as EnumSet
+
 import           GHC.LanguageExtensions.Type (Extension (..))
-import           GhcMonad                    (modifySession)
-import           GhcPlugins                  (fsLit, hsc_IC, pprHsString)
-import           HscTypes                    (InteractiveContext (ic_dflags))
 import           Ide.Plugin.Eval.Util        (asS, gStrictTry)
-import qualified Lexer
-import           Outputable                  (Outputable (ppr), SDoc,
-                                              showSDocUnsafe, text, vcat, (<+>))
-import qualified Parser
-import           SrcLoc                      (mkRealSrcLoc)
-import           StringBuffer                (stringToStringBuffer)
 
 {- $setup
 >>> import GHC
@@ -72,9 +66,9 @@ pkgNames_ :: [PackageFlag] -> [String]
 pkgNames_ =
     mapMaybe
         ( \case
-            ExposePackage _ (PackageArg n) _                 -> Just n
-            ExposePackage _ (UnitIdArg (DefiniteUnitId n)) _ -> Just $ asS n
-            _                                                -> Nothing
+            ExposePackage _ (PackageArg n) _  -> Just n
+            ExposePackage _ (UnitIdArg uid) _ -> Just $ asS uid
+            _                                 -> Nothing
         )
 
 {- | Expose a list of packages.

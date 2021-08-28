@@ -14,7 +14,6 @@ import           Development.IDE.GHC.Compat
 import           HieDb                          (HieDb (getConn), Symbol (..),
                                                  toNsChar)
 import           Ide.Plugin.CallHierarchy.Types
-import           Name
 
 incomingCalls :: HieDb -> Symbol -> IO [Vertex]
 incomingCalls (getConn -> conn) symbol = do
@@ -78,5 +77,5 @@ parseSymbol :: Symbol -> (String, String, String)
 parseSymbol Symbol{..} =
     let o = toNsChar (occNameSpace symName) : occNameString symName
         m = moduleNameString $ moduleName symModule
-        u = unitString $ moduleUnitId symModule
+        u = unitString $ moduleUnit symModule
     in  (o, m, u)

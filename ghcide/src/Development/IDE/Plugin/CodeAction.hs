@@ -42,6 +42,8 @@ import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Service
 import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat.Outputable
+import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Util                          (prettyPrint,
                                                                     printRdrName,

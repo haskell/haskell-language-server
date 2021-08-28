@@ -73,7 +73,7 @@ import qualified GHC.Types.SrcLoc as SrcLoc
 #endif
 import           GHC
 import           Control.Concurrent
-import           Control.Exception
+import           Control.Exception              as E
 import           Data.Binary.Put                (Put, runPut)
 import qualified Data.ByteString                as BS
 import           Data.ByteString.Internal       (ByteString (..))
@@ -87,6 +87,8 @@ import qualified Data.Text.Encoding             as T
 import qualified Data.Text.Encoding.Error       as T
 import           Data.Typeable
 import           Development.IDE.GHC.Compat     as GHC
+import           Development.IDE.GHC.Compat.Outputable
+import           Development.IDE.GHC.Compat.Util
 import qualified Development.IDE.GHC.Compat.Units as Compat
 import qualified Development.IDE.GHC.Compat.Parser as Compat
 import           Development.IDE.Types.Location
@@ -236,7 +238,7 @@ hDuplicateTo' h1@(FileHandle path m1) h2@(FileHandle _ m2)  = do
    -- _ <- hClose_help h2_
    -- hClose_help does two things:
    -- 1. It flushes the buffer, we replicate this here
-   _ <- flushWriteBuffer h2_ `catch` \(_ :: IOException) -> pure ()
+   _ <- flushWriteBuffer h2_ `E.catch` \(_ :: IOException) -> pure ()
    -- 2. It closes the handle. This is redundant since dup2 takes care of that
    -- but even worse it is actively harmful! Once the handle has been closed
    -- another thread is free to reallocate it. This leads to dup2 failing with EBUSY

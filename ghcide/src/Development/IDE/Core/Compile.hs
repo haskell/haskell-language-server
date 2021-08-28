@@ -44,11 +44,13 @@ import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 
+import           Development.IDE.GHC.Compat.Outputable
 import           Development.IDE.GHC.Compat        hiding (writeHieFile,
                                                            parseModule,
                                                            loadInterface,
                                                            parseHeader)
 import qualified Development.IDE.GHC.Compat        as Compat
+import qualified Development.IDE.GHC.Compat.Util   as Util
 import qualified Development.IDE.GHC.Compat        as GHC
 
 import           HieDb
@@ -455,16 +457,16 @@ generateHieAsts hscEnv tcm =
     -- These varBinds use unitDataConId but it could be anything as the id name is not used
     -- during the hie file generation process. It's a workaround for the fact that the hie modules
     -- don't export an interface which allows for additional information to be added to hie files.
-    let fake_splice_binds = listToBag (map (mkVarBind unitDataConId) (spliceExpresions $ tmrTopLevelSplices tcm))
+    let fake_splice_binds = Util.listToBag (map (mkVarBind unitDataConId) (spliceExpresions $ tmrTopLevelSplices tcm))
         real_binds = tcg_binds $ tmrTypechecked tcm
 #if MIN_VERSION_ghc(9,0,1)
         ts = tmrTypechecked tcm :: TcGblEnv
-        top_ev_binds = tcg_ev_binds ts :: Bag EvBind
+        top_ev_binds = tcg_ev_binds ts :: Util.Bag EvBind
         insts = tcg_insts ts :: [ClsInst]
         tcs = tcg_tcs ts :: [TyCon]
-    Just <$> GHC.enrichHie (fake_splice_binds `unionBags` real_binds) (tmrRenamed tcm) top_ev_binds insts tcs
+    Just <$> GHC.enrichHie (fake_splice_binds `Util.unionBags` real_binds) (tmrRenamed tcm) top_ev_binds insts tcs
 #else
-    Just <$> GHC.enrichHie (fake_splice_binds `unionBags` real_binds) (tmrRenamed tcm)
+    Just <$> GHC.enrichHie (fake_splice_binds `Util.unionBags` real_binds) (tmrRenamed tcm)
 #endif
   where
     dflags = hsc_dflags hscEnv
@@ -507,7 +509,7 @@ spliceExpresions Splices{..} =
 -- TVar to 0 in order to set it up for a fresh indexing session. Otherwise, we
 -- can just increment the 'indexCompleted' TVar and exit.
 --
-indexHieFile :: ShakeExtras -> ModSummary -> NormalizedFilePath -> Fingerprint -> Compat.HieFile -> IO ()
+indexHieFile :: ShakeExtras -> ModSummary -> NormalizedFilePath -> Util.Fingerprint -> Compat.HieFile -> IO ()
 indexHieFile se mod_summary srcPath !hash hf = do
  IdeOptions{optProgressStyle} <- getIdeOptionsIO se
  atomically $ do
@@ -614,7 +616,7 @@ writeAndIndexHieFile hscEnv se mod_summary srcPath exports ast source =
     hf <- runHsc hscEnv $
       GHC.mkHieFile' mod_summary exports ast source
     atomicFileWrite targetPath $ flip GHC.writeHieFile hf
-    hash <- getFileHash targetPath
+    hash <- Util.getFileHash targetPath
     indexHieFile se mod_summary srcPath hash hf
   where
     dflags       = hsc_dflags hscEnv
@@ -698,7 +700,7 @@ getModSummaryFromImports
   :: HscEnv
   -> FilePath
   -> UTCTime
-  -> Maybe StringBuffer
+  -> Maybe Util.StringBuffer
   -> ExceptT [FileDiagnostic] IO ModSummaryResult
 getModSummaryFromImports env fp modTime contents = do
     (contents, opts, dflags) <- preprocessor env fp contents
@@ -710,7 +712,7 @@ getModSummaryFromImports env fp modTime contents = do
     let mb_mod = hsmodName hsmod
         imps = hsmodImports hsmod
 
-        mod = fmap unLoc mb_mod `orElse` mAIN_NAME
+        mod = fmap unLoc mb_mod `Util.orElse` mAIN_NAME
 
         (src_idecls, ord_idecls) = partition ((== IsBoot) . ideclSource.unLoc) imps
 
@@ -765,14 +767,14 @@ getModSummaryFromImports env fp modTime contents = do
         -- eliding the timestamps, the preprocessed source and other non relevant fields
         computeFingerprint opts ModSummary{..} = do
             fingerPrintImports <- fingerprintFromPut $ do
-                  put $ uniq $ moduleNameFS $ moduleName ms_mod
+                  put $ Util.uniq $ moduleNameFS $ moduleName ms_mod
                   forM_ (ms_srcimps ++ ms_textual_imps) $ \(mb_p, m) -> do
-                    put $ uniq $ moduleNameFS $ unLoc m
-                    whenJust mb_p $ put . uniq
-            return $! fingerprintFingerprints $
-                    [ fingerprintString fp
+                    put $ Util.uniq $ moduleNameFS $ unLoc m
+                    whenJust mb_p $ put . Util.uniq
+            return $! Util.fingerprintFingerprints $
+                    [ Util.fingerprintString fp
                     , fingerPrintImports
-                    ] ++ map fingerprintString opts
+                    ] ++ map Util.fingerprintString opts
 
 
 -- | Parse only the module header
@@ -780,14 +782,14 @@ parseHeader
        :: Monad m
        => DynFlags -- ^ flags to use
        -> FilePath  -- ^ the filename (for source locations)
-       -> StringBuffer -- ^ Haskell module source text (full Unicode is supported)
+       -> Util.StringBuffer -- ^ Haskell module source text (full Unicode is supported)
 #if MIN_VERSION_ghc(9,0,1)
        -> ExceptT [FileDiagnostic] m ([FileDiagnostic], Located(HsModule))
 #else
        -> ExceptT [FileDiagnostic] m ([FileDiagnostic], Located(HsModule GhcPs))
 #endif
 parseHeader dflags filename contents = do
-   let loc  = mkRealSrcLoc (mkFastString filename) 1 1
+   let loc  = mkRealSrcLoc (Util.mkFastString filename) 1 1
    case unP Compat.parseHeader (initParserState (initParserOpts dflags) contents loc) of
 #if MIN_VERSION_ghc(8,10,0)
      PFailed pst ->
@@ -823,7 +825,7 @@ parseFileContents
        -> ModSummary
        -> ExceptT [FileDiagnostic] IO ([FileDiagnostic], ParsedModule)
 parseFileContents env customPreprocessor filename ms = do
-   let loc  = mkRealSrcLoc (mkFastString filename) 1 1
+   let loc  = mkRealSrcLoc (Util.mkFastString filename) 1 1
        dflags = ms_hspp_opts ms
        contents = fromJust $ ms_hspp_buf ms
    case unP Compat.parseModule (initParserState (initParserOpts dflags) contents loc) of
@@ -875,7 +877,7 @@ parseFileContents env customPreprocessor filename ms = do
                                   $ filter (/= n_hspp)
                                   $ map normalise
                                   $ filter (not . isPrefixOf "<")
-                                  $ map unpackFS
+                                  $ map Util.unpackFS
                                   $ srcfiles pst
                    srcs1 = case ml_hs_file (ms_location ms) of
                              Just f  -> filter (/= normalise f) srcs0
@@ -980,7 +982,7 @@ getDocsBatch hsc_env _mod _names = do
         UnhelpfulLoc {} -> True
 
 fakeSpan :: RealSrcSpan
-fakeSpan = realSrcLocSpan $ mkRealSrcLoc (fsLit "<ghcide>") 1 1
+fakeSpan = realSrcLocSpan $ mkRealSrcLoc (Util.fsLit "<ghcide>") 1 1
 
 -- | Non-interactive, batch version of 'InteractiveEval.lookupNames'.
 --   The interactive paths create problems in ghc-lib builds

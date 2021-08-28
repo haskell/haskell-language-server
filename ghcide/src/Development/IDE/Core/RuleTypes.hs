@@ -25,6 +25,7 @@ import           Data.Time.Clock.POSIX
 import           Data.Typeable
 import           Development.IDE.GHC.Compat                   hiding
                                                               (HieFileResult)
+import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Util
 import           Development.IDE.Graph
 import           Development.IDE.Import.DependencyInformation

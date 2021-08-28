@@ -18,6 +18,7 @@ import qualified Data.Text                      as T
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat.Outputable
 import           Development.IDE.GHC.Error      (rangeToRealSrcSpan,
                                                  realSrcSpanToRange)
 import           Development.IDE.Types.Location

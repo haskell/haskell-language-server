@@ -6,23 +6,23 @@ module Development.IDE.GHC.Compat.Iface (
     cannotFindModule,
     ) where
 
-import GHC
+import           GHC
 #if MIN_VERSION_ghc(9,2,0)
-import qualified GHC.Iface.Load as Iface
-import qualified GHC.Unit.Finder as Finder
-import           GHC.Unit.Finder.Types (FindResult)
+import qualified GHC.Iface.Load                        as Iface
+import qualified GHC.Unit.Finder                       as Finder
+import           GHC.Unit.Finder.Types                 (FindResult)
 #elif MIN_VERSION_ghc(9,0,0)
-import qualified GHC.Iface.Load as Iface
-import           GHC.Driver.Types (FindResult)
-import qualified GHC.Driver.Finder as Finder
+import qualified GHC.Driver.Finder                     as Finder
+import           GHC.Driver.Types                      (FindResult)
+import qualified GHC.Iface.Load                        as Iface
 #else
-import qualified MkIface
-import           Finder (FindResult)
+import           Finder                                (FindResult)
 import qualified Finder
+import qualified MkIface
 #endif
 
-import Development.IDE.GHC.Compat.Env
-import Development.IDE.GHC.Compat.Outputable
+import           Development.IDE.GHC.Compat.Env
+import           Development.IDE.GHC.Compat.Outputable
 
 writeIfaceFile :: HscEnv -> FilePath -> ModIface -> IO ()
 #if MIN_VERSION_ghc(9,2,0)

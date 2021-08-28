@@ -60,10 +60,10 @@ source-repository-package
 
 source-repository-package
   type: git
-  location: https://github.com/anka-213/dependent-sum
-  tag: 8cf4c7fbc3bfa2be475a17bb7c94a1e1e9a830b5
+  location: https://github.com/fendor/dependent-sum
+  tag: 5de03c38b0de4945f4e9bce1b026110e69dc8118
   subdir: dependent-sum-template
--- https://github.com/obsidiansystems/dependent-sum/pull/57
+-- https://github.com/obsidiansystems/dependent-sum/pull/59
 
 -- benchmark dependency
 source-repository-package

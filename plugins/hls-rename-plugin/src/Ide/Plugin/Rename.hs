@@ -125,7 +125,7 @@ refsAtName state nfp name = do
                 True
                 (nameOccName name)
                 (Just $ moduleName mod)
-                (Just $ moduleUnitId mod)
+                (Just $ moduleUnit mod)
                 [fromNormalizedFilePath nfp]
     pure $ nubOrd $ astRefs ++ dbRefs
 

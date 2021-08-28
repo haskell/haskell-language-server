@@ -4,15 +4,16 @@
 module Wingman.Range where
 
 import           Development.IDE hiding (rangeToRealSrcSpan, rangeToSrcSpan)
-import qualified FastString as FS
-import           SrcLoc
+import           Development.IDE.GHC.Compat.Core
+import           Development.IDE.GHC.Compat.Util as FS
+
 
 
 ------------------------------------------------------------------------------
 -- | Convert a DAML compiler Range to a GHC SrcSpan
 -- TODO(sandy): this doesn't belong here
 rangeToSrcSpan :: String -> Range -> SrcSpan
-rangeToSrcSpan file range = RealSrcSpan $ rangeToRealSrcSpan file range
+rangeToSrcSpan file range = RealSrcSpan (rangeToRealSrcSpan file range) Nothing
 
 
 rangeToRealSrcSpan :: String -> Range -> RealSrcSpan

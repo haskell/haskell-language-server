@@ -1,12 +1,6 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
--- Copied from https://github.com/ghc/ghc/blob/master/compiler/main/DriverPipeline.hs on 14 May 2019
--- Requested to be exposed at https://gitlab.haskell.org/ghc/ghc/merge_requests/944.
--- Update the above MR got merged to master on 31 May 2019. When it becomes avialable to ghc-lib, this file can be removed.
-
-{- HLINT ignore -} -- since copied from upstream
-
 {-# LANGUAGE CPP                      #-}
 {-# LANGUAGE MultiWayIf               #-}
 {-# LANGUAGE NamedFieldPuns           #-}
@@ -28,13 +22,13 @@ import           GHC
 import           Development.IDE.GHC.Compat as Compat
 #if !MIN_VERSION_ghc(8,10,0)
 import qualified Development.IDE.GHC.Compat.CPP as CPP
+#else
+import           Development.IDE.GHC.Compat.Util
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
 import qualified GHC.Driver.Pipeline as Pipeline
-import           GHC.SysTools as SysTools
 import           GHC.Settings
-import           GHC.Utils.Fingerprint
 #else
 #if MIN_VERSION_ghc (8,10,0)
 import qualified DriverPipeline as Pipeline

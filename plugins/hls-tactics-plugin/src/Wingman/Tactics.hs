@@ -6,7 +6,6 @@ module Wingman.Tactics
   , runTactic
   ) where
 
-import           ConLike (ConLike(RealDataCon))
 import           Control.Applicative (Alternative(empty), (<|>))
 import           Control.Lens ((&), (%~), (<>~))
 import           Control.Monad (filterM)
@@ -18,24 +17,19 @@ import           Data.Bool (bool)
 import           Data.Foldable
 import           Data.Functor ((<&>))
 import           Data.Generics.Labels ()
+import           Data.Traversable (for)
 import           Data.List
 import           Data.List.Extra (dropEnd, takeEnd)
 import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Set (Set)
 import qualified Data.Set as S
-import           Data.Traversable (for)
-import           DataCon
 import           Development.IDE.GHC.Compat
 import           GHC.Exts
 import           GHC.SourceGen ((@@))
 import           GHC.SourceGen.Expr
-import           Name (occNameString, occName)
-import           OccName (mkVarOcc)
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
-import           TcType
-import           Type hiding (Var)
 import           Wingman.CodeGen
 import           Wingman.GHC
 import           Wingman.Judgements
@@ -150,7 +144,7 @@ intros' params = rule $ \jdg -> do
           bound_occs = fmap fst bindings
           hy' = lambdaHypothesis top_hole bindings
           jdg' = introduce ctx hy'
-               $ withNewGoal (CType $ mkFunTys' (drop num_occs args) res) jdg
+               $ withNewGoal (CType $ mkVisFunTys (drop num_occs args) res) jdg
       ext <- newSubgoal jdg'
       pure $
         ext
@@ -289,7 +283,7 @@ apply (Unsaturated n) hi = tracing ("apply' " <> show (hi_name hi)) $ do
       saturated_args = dropEnd n all_args
       unsaturated_args = takeEnd n all_args
   rule $ \jdg -> do
-    unify g (CType $ mkFunTys' unsaturated_args ret)
+    unify g (CType $ mkVisFunTys unsaturated_args ret)
     ext
         <- fmap unzipTrace
         $ traverse ( newSubgoal
@@ -545,7 +539,7 @@ nary :: Int -> TacticsM ()
 nary n = do
   a <- newUnivar
   b <- newUnivar
-  applyByType $ mkFunTys' (replicate n a) b
+  applyByType $ mkVisFunTys (replicate n a) b
 
 
 self :: TacticsM ()
@@ -630,7 +624,7 @@ with_arg = rule $ \jdg -> do
   let g = jGoal jdg
   fresh_ty <- newUnivar
   a <- newSubgoal $ withNewGoal (CType fresh_ty) jdg
-  f <- newSubgoal $ withNewGoal (coerce mkFunTys' [fresh_ty] g) jdg
+  f <- newSubgoal $ withNewGoal (coerce mkVisFunTys [fresh_ty] g) jdg
   pure $ fmap noLoc $ (@@) <$> fmap unLoc f <*> fmap unLoc a
 
 

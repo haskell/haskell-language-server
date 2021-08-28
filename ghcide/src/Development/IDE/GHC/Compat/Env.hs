@@ -5,7 +5,10 @@
 module Development.IDE.GHC.Compat.Env (
     Env.HscEnv(hsc_FC, hsc_NC, hsc_IC, hsc_mod_graph, hsc_HPT, hsc_type_env_var),
     InteractiveContext(..),
+    setInteractivePrintName,
+    setInteractiveDynFlags,
     Env.hsc_dflags,
+    hsc_EPS,
     hsc_logger,
     hsc_tmpfs,
     hsc_unit_env,
@@ -17,45 +20,65 @@ module Development.IDE.GHC.Compat.Env (
     HomeUnit,
     setHomeUnitId_,
     mkHomeModule,
-    -- * Export so other compats works better
+    -- * Provide backwards Compatible
+    -- types and helper functions.
     Logger(..),
     UnitEnv,
+    hscSetUnitEnv,
     hscSetFlags,
     initTempFs,
     -- * Home Unit
     homeUnitId_,
     -- * DynFlags Helper
     setBytecodeLinkerOptions,
+    setInterpreterLinkerOptions,
+    -- * Ways
+    Ways,
+    Way,
+    hostFullWays,
+    setWays,
+    wayGeneralFlags,
+    wayUnsetGeneralFlags,
+    -- * Backend, backwards compatible
     Backend,
     setBackend,
     platformDefaultBackend,
     ) where
 
-import GHC
+import           GHC                  (setInteractiveDynFlags)
+
 #if MIN_VERSION_ghc(9,0,0)
 #if MIN_VERSION_ghc(9,2,0)
-import qualified GHC.Driver.Env as Env
-import GHC.Unit.Env (UnitEnv)
-import GHC.Utils.TmpFs
+import           GHC.Driver.Env       (HscEnv)
+import qualified GHC.Driver.Env       as Env
+import qualified GHC.Driver.Session   as Home
+import           GHC.Platform.Ways    hiding (hostFullWays)
+import qualified GHC.Platform.Ways    as Ways
+import           GHC.Unit.Env         (UnitEnv)
+import           GHC.Utils.TmpFs
 #else
-import           GHC.Driver.Types (InteractiveContext(..))
-import qualified GHC.Driver.Types as Env
+import qualified GHC.Driver.Session   as DynFlags
+import           GHC.Driver.Types     (HscEnv, InteractiveContext (..), hsc_EPS,
+                                       setInteractivePrintName)
+import qualified GHC.Driver.Types     as Env
+import           GHC.Driver.Ways      hiding (hostFullWays)
+import qualified GHC.Driver.Ways      as Ways
 #endif
-import GHC.Driver.Hooks (Hooks)
-import GHC.Unit.Types (UnitId, Unit)
-import qualified GHC.Driver.Session as Home
-import GHC.Driver.Session hiding (mkHomeModule)
+import           GHC.Driver.Hooks     (Hooks)
+import           GHC.Driver.Session   hiding (mkHomeModule)
+import           GHC.Unit.Module.Name
+import           GHC.Unit.Types       (Module, Unit, UnitId, mkModule)
 #else
-import HscTypes as Env
-import Module (toInstalledUnitId)
-import DynFlags (emptyFilesToClean, thisPackage, LogAction)
-#if !MIN_VERSION_ghc(8,10,0)
-import qualified DynFlags
-#endif
-import Hooks
+import           DynFlags
+import           Hooks
+import           HscTypes             as Env
+import           Module
 #endif
 
-import Data.IORef
+#if MIN_VERSION_ghc(9,0,0)
+import qualified Data.Set             as Set
+#endif
+import           Data.IORef
 
 
 #if !MIN_VERSION_ghc(9,2,0)
@@ -93,6 +116,13 @@ initTempFs env = do
   pure $ hscSetFlags dflags env
 #endif
 
+hscSetUnitEnv :: UnitEnv -> HscEnv -> HscEnv
+#if MIN_VERSION_ghc(9,2,0)
+hscSetUnitEnv ue env = env { hsc_unit_env = ue }
+#else
+hscSetUnitEnv _ env  = env
+#endif
+
 hsc_unit_env :: HscEnv -> UnitEnv
 hsc_unit_env =
 #if MIN_VERSION_ghc(9,2,0)
@@ -114,7 +144,7 @@ hsc_logger =
 #if MIN_VERSION_ghc(9,2,0)
   Env.hsc_logger
 #else
-  Logger . GHC.log_action . Env.hsc_dflags
+  Logger . DynFlags.log_action . Env.hsc_dflags
 #endif
 
 hsc_hooks :: HscEnv -> Hooks
@@ -182,6 +212,48 @@ setBytecodeLinkerOptions df = df {
   , ghcMode = CompManager
     }
 
+setInterpreterLinkerOptions :: DynFlags -> DynFlags
+setInterpreterLinkerOptions df = df {
+    ghcLink   = LinkInMemory
+#if MIN_VERSION_ghc(9,2,0)
+  , backend = Interpreter
+#else
+  , hscTarget = HscInterpreted
+#endif
+  , ghcMode = CompManager
+    }
+
+-- -------------------------------------------------------
+-- Ways helpers
+-- -------------------------------------------------------
+
+#if !MIN_VERSION_ghc(9,2,0) && MIN_VERSION_ghc(9,0,0)
+type Ways = Set.Set Way
+#elif !MIN_VERSION_ghc(9,0,0)
+type Ways = [Way]
+#endif
+
+hostFullWays :: Ways
+hostFullWays =
+#if MIN_VERSION_ghc(9,0,0)
+  Ways.hostFullWays
+#else
+  interpWays
+#endif
+
+setWays :: Ways -> DynFlags -> DynFlags
+setWays ways flags =
+#if MIN_VERSION_ghc(9,2,0)
+  flags { targetWays = ways}
+#elif MIN_VERSION_ghc(9,0,0)
+  flags {ways = ways}
+#else
+  updateWays $ flags {ways = ways}
+#endif
+
+-- -------------------------------------------------------
+-- Backend helpers
+-- -------------------------------------------------------
 
 #if !MIN_VERSION_ghc(9,2,0)
 type Backend = HscTarget

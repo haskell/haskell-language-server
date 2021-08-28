@@ -7,6 +7,8 @@ module Development.IDE.Core.Preprocessor
 
 import           Development.IDE.GHC.CPP
 import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat.Outputable
+import qualified Development.IDE.GHC.Compat.Util   as Util
 import           Development.IDE.GHC.Orphans       ()
 
 import           Control.DeepSeq                   (NFData (rnf))
@@ -30,7 +32,7 @@ import           System.IO.Extra
 
 -- | Given a file and some contents, apply any necessary preprocessors,
 --   e.g. unlit/cpp. Return the resulting buffer and the DynFlags it implies.
-preprocessor :: HscEnv -> FilePath -> Maybe StringBuffer -> ExceptT [FileDiagnostic] IO (StringBuffer, [String], DynFlags)
+preprocessor :: HscEnv -> FilePath -> Maybe Util.StringBuffer -> ExceptT [FileDiagnostic] IO (Util.StringBuffer, [String], DynFlags)
 preprocessor env0 filename mbContents = do
     -- Perform unlit
     (isOnDisk, contents) <-
@@ -38,7 +40,7 @@ preprocessor env0 filename mbContents = do
             newcontent <- liftIO $ runLhs env0 filename mbContents
             return (False, newcontent)
         else do
-            contents <- liftIO $ maybe (hGetStringBuffer filename) return mbContents
+            contents <- liftIO $ maybe (Util.hGetStringBuffer filename) return mbContents
             let isOnDisk = isNothing mbContents
             return (isOnDisk, contents)
 
@@ -56,7 +58,7 @@ preprocessor env0 filename mbContents = do
                         $ (Right <$> (runCpp (putLogHook newLogger env1) filename
                                        $ if isOnDisk then Nothing else Just contents))
                             `catch`
-                            ( \(e :: GhcException) -> do
+                            ( \(e :: Util.GhcException) -> do
                                 logs <- readIORef cppLogs
                                 case diagsFromCPPLogs filename (reverse logs) of
                                   []    -> throw e
@@ -129,7 +131,7 @@ isLiterate x = takeExtension x `elem` [".lhs",".lhs-boot"]
 parsePragmasIntoDynFlags
     :: HscEnv
     -> FilePath
-    -> StringBuffer
+    -> Util.StringBuffer
     -> IO (Either [FileDiagnostic] ([String], DynFlags))
 parsePragmasIntoDynFlags env fp contents = catchSrcErrors dflags0 "pragmas" $ do
     let opts = getOptions dflags0 contents fp
@@ -143,7 +145,7 @@ parsePragmasIntoDynFlags env fp contents = catchSrcErrors dflags0 "pragmas" $ do
   where dflags0 = hsc_dflags env
 
 -- | Run (unlit) literate haskell preprocessor on a file, or buffer if set
-runLhs :: HscEnv -> FilePath -> Maybe StringBuffer -> IO StringBuffer
+runLhs :: HscEnv -> FilePath -> Maybe Util.StringBuffer -> IO Util.StringBuffer
 runLhs env filename contents = withTempDir $ \dir -> do
     let fout = dir </> takeFileName filename <.> "unlit"
     filesrc <- case contents of
@@ -154,7 +156,7 @@ runLhs env filename contents = withTempDir $ \dir -> do
                 hPutStringBuffer h cnts
             return fsrc
     unlit filesrc fout
-    hGetStringBuffer fout
+    Util.hGetStringBuffer fout
   where
     logger = hsc_logger env
     dflags = hsc_dflags env
@@ -173,10 +175,10 @@ runLhs env filename contents = withTempDir $ \dir -> do
     escape []        = []
 
 -- | Run CPP on a file
-runCpp :: HscEnv -> FilePath -> Maybe StringBuffer -> IO StringBuffer
+runCpp :: HscEnv -> FilePath -> Maybe Util.StringBuffer -> IO Util.StringBuffer
 runCpp env0 filename contents = withTempDir $ \dir -> do
     let out = dir </> takeFileName filename <.> "out"
-    dflags1 <- pure $ addOptP "-D__GHCIDE__" (hsc_dflags env0)
+    let dflags1 = addOptP "-D__GHCIDE__" (hsc_dflags env0)
     let env1 = hscSetFlags dflags1 env0
 
     case contents of
@@ -185,14 +187,14 @@ runCpp env0 filename contents = withTempDir $ \dir -> do
             -- which also makes things like relative #include files work
             -- and means location information is correct
             doCpp env1 True filename out
-            liftIO $ hGetStringBuffer out
+            liftIO $ Util.hGetStringBuffer out
 
         Just contents -> do
             -- Sad path, we have to create a version of the path in a temp dir
             -- __FILE__ macro is wrong, ignoring that for now (likely not a real issue)
 
             -- Relative includes aren't going to work, so we fix that by adding to the include path.
-            dflags2 <- return $ addIncludePathsQuote (takeDirectory filename) dflags1
+            let dflags2 = addIncludePathsQuote (takeDirectory filename) dflags1
             let env2 = hscSetFlags dflags2 env0
             -- Location information is wrong, so we fix that by patching it afterwards.
             let inp = dir </> "___GHCIDE_MAGIC___"
@@ -210,11 +212,11 @@ runCpp env0 filename contents = withTempDir $ \dir -> do
                     -- and GHC gets all confused
                         = "# " <> num <> " \"" <> map (\x -> if isPathSeparator x then '/' else x) filename <> "\""
                     | otherwise = x
-            stringToStringBuffer . unlines . map tweak . lines <$> readFileUTF8' out
+            Util.stringToStringBuffer . unlines . map tweak . lines <$> readFileUTF8' out
 
 
 -- | Run a preprocessor on a file
-runPreprocessor :: HscEnv -> FilePath -> Maybe StringBuffer -> IO StringBuffer
+runPreprocessor :: HscEnv -> FilePath -> Maybe Util.StringBuffer -> IO Util.StringBuffer
 runPreprocessor env filename contents = withTempDir $ \dir -> do
     let out = dir </> takeFileName filename <.> "out"
     inp <- case contents of
@@ -225,7 +227,7 @@ runPreprocessor env filename contents = withTempDir $ \dir -> do
                 hPutStringBuffer h contents
             return inp
     runPp logger dflags [Option filename, Option inp, FileOption "" out]
-    hGetStringBuffer out
+    Util.hGetStringBuffer out
   where
     logger = hsc_logger env
     dflags = hsc_dflags env

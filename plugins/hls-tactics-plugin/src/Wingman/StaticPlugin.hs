@@ -9,11 +9,10 @@ module Wingman.StaticPlugin
 
 import Data.Data
 import Development.IDE.GHC.Compat
+import Development.IDE.GHC.Compat.Util
 import GHC.LanguageExtensions.Type (Extension(EmptyCase, QuasiQuotes))
 import Generics.SYB
-import GhcPlugins hiding ((<>))
 import Ide.Types
-
 
 staticPlugin :: DynFlagsModifications
 staticPlugin = mempty
@@ -63,7 +62,7 @@ metaprogrammingPlugin :: StaticPlugin
 metaprogrammingPlugin =
     StaticPlugin $ PluginWithArgs (defaultPlugin { parsedResultAction = worker })  []
   where
-    worker :: [CommandLineOption] -> ModSummary -> HsParsedModule -> Hsc HsParsedModule
+    worker :: Monad m => [CommandLineOption] -> ModSummary -> HsParsedModule -> m HsParsedModule
     worker _ _ pm = pure $ pm { hpm_module = addMetaprogrammingSyntax $ hpm_module pm }
 #endif
 

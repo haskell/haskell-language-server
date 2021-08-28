@@ -14,9 +14,8 @@ import           Control.Monad.IO.Class
 import           Data.Bifunctor              (first)
 import qualified Data.Text                   as T
 import           Development.IDE             hiding (pluginHandlers)
-import           Development.IDE.GHC.Compat  (moduleNameString)
-import qualified DynFlags                    as D
-import qualified EnumSet                     as S
+import           Development.IDE.GHC.Compat  as Compat hiding (Cpp)
+import qualified Development.IDE.GHC.Compat.Util as S
 import           GHC.LanguageExtensions.Type (Extension (Cpp))
 import           GhcPlugins                  (HscEnv (hsc_dflags))
 import           Ide.PluginUtils             (makeDiffTextEdit)
@@ -88,12 +87,12 @@ provider ideState typ contents fp fo = withIndefiniteProgress title Cancellable 
         FormatRange (Range (Position sl _) (Position el _)) ->
             RegionIndices (Just $ sl + 1) (Just $ el + 1)
 
-convertDynFlags :: D.DynFlags -> IO [DynOption]
+convertDynFlags :: DynFlags -> IO [DynOption]
 convertDynFlags df =
     let pp = ["-pgmF=" <> p | not (null p)]
-        p = D.sPgm_F $ D.settings df
-        pm = map (("-fplugin=" <>) . moduleNameString) $ D.pluginModNames df
-        ex = map showExtension $ S.toList $ D.extensionFlags df
+        p = sPgm_F $ Compat.settings df
+        pm = map (("-fplugin=" <>) . moduleNameString) $ pluginModNames df
+        ex = map showExtension $ S.toList $ extensionFlags df
         showExtension = \case
             Cpp -> "-XCPP"
             x   -> "-X" ++ show x

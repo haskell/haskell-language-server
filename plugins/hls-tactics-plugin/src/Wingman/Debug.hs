@@ -17,8 +17,7 @@ module Wingman.Debug
 import           Control.DeepSeq
 import           Control.Exception
 import           Debug.Trace
-import           DynFlags          (unsafeGlobalDynFlags)
-import           Outputable        hiding ((<>))
+import           Development.IDE.GHC.Compat.Outputable
 import           System.IO.Unsafe  (unsafePerformIO)
 
 #if __GLASGOW_HASKELL__ >= 808
@@ -38,7 +37,7 @@ unsafeRender = unsafeRender' . ppr
 
 unsafeRender' :: SDoc -> String
 unsafeRender' sdoc = unsafePerformIO $ do
-  let z = showSDoc unsafeGlobalDynFlags sdoc
+  let z = showSDocUnsafe sdoc
   -- We might not have unsafeGlobalDynFlags (like during testing), in which
   -- case GHC panics. Instead of crashing, let's just fail to print.
   !res <- try @GHC_EXCEPTION $ evaluate $ deepseq z z

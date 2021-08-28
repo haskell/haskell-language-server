@@ -28,7 +28,6 @@ import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Graph          (Action)
 import           Development.IDE.LSP.Server
-import           Development.IDE.Plugin
 import qualified Development.IDE.Plugin         as P
 import           Development.IDE.Types.Action
 import           Development.IDE.Types.HscEnvEq (HscEnvEq (hscEnv))
@@ -51,7 +50,7 @@ data TestRequest
 newtype WaitForIdeRuleResult = WaitForIdeRuleResult { ideResultSuccess::Bool}
     deriving newtype (FromJSON, ToJSON)
 
-plugin :: Plugin c
+plugin :: P.Plugin c
 plugin = def {
     P.pluginRules = return (),
     P.pluginHandlers = requestHandler (SCustomMethod "test") testRequestHandler'

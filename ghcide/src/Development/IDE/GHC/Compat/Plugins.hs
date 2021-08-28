@@ -2,29 +2,36 @@
 
 -- | Plugin Compat utils.
 module Development.IDE.GHC.Compat.Plugins (
+    Plugin(..),
+    defaultPlugin,
+#if __GLASGOW_HASKELL__ >= 808
+    PluginWithArgs(..),
+#endif
     applyPluginsParsedResultAction,
     initializePlugins,
     ) where
 
-import GHC
+import           GHC
 #if MIN_VERSION_ghc(9,0,0)
-#if MIN_VERSION_ghc(9,2,0)
-import GHC.Driver.Env
+import           GHC.Driver.Plugins                (Plugin (..),
+                                                    PluginWithArgs (..),
+                                                    defaultPlugin, withPlugins)
+import qualified GHC.Runtime.Loader                as Loader
+#elif __GLASGOW_HASKELL__ >= 808
+import qualified DynamicLoading                    as Loader
+import           Plugins                           (Plugin (..),
+                                                    PluginWithArgs (..),
+                                                    defaultPlugin, withPlugins)
 #else
-import GHC.Driver.Types
+import qualified DynamicLoading                    as Loader
+import           Plugins                           (Plugin (..), defaultPlugin,
+                                                    withPlugins)
 #endif
-import GHC.Driver.Plugins (Plugin (parsedResultAction), withPlugins)
-import qualified GHC.Runtime.Loader as Loader
-import GHC.Parser.Lexer
-#else
-import Plugins (Plugin(parsedResultAction), withPlugins )
-import qualified DynamicLoading as Loader
-#endif
-import Development.IDE.GHC.Compat.Core
-import Development.IDE.GHC.Compat.Env (hscSetFlags, hsc_dflags)
-import Development.IDE.GHC.Compat.Parser as Parser
+import           Development.IDE.GHC.Compat.Core
+import           Development.IDE.GHC.Compat.Env    (hscSetFlags, hsc_dflags)
+import           Development.IDE.GHC.Compat.Parser as Parser
 
-applyPluginsParsedResultAction :: HscEnv -> DynFlags -> ModSummary -> Parser.ApiAnns -> ParsedSource -> IO (ParsedSource)
+applyPluginsParsedResultAction :: HscEnv -> DynFlags -> ModSummary -> Parser.ApiAnns -> ParsedSource -> IO ParsedSource
 applyPluginsParsedResultAction env dflags ms hpm_annotations parsed = do
   -- Apply parsedResultAction of plugins
   let applyPluginAction p opts = parsedResultAction p opts ms

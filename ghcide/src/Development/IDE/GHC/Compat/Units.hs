@@ -1,5 +1,5 @@
-{-# LANGUAGE CPP               #-}
-{-# LANGUAGE PatternSynonyms   #-}
+{-# LANGUAGE CPP             #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 -- | Compat module for 'UnitState' and 'UnitInfo'.
 module Development.IDE.GHC.Compat.Units (
@@ -29,6 +29,8 @@ module Development.IDE.GHC.Compat.Units (
     -- * UnitId helpers
     UnitId,
     Unit,
+    unitString,
+    stringToUnit,
 #if !MIN_VERSION_ghc(9,0,0)
     pattern RealUnit,
 #endif
@@ -39,41 +41,54 @@ module Development.IDE.GHC.Compat.Units (
     toUnitId,
     moduleUnitId,
     moduleUnit,
+    -- * ExternalPackageState
+    ExternalPackageState(..),
     -- * Utils
     filterInplaceUnits,
     ) where
 
 #if MIN_VERSION_ghc(9,0,0)
 #if MIN_VERSION_ghc(9,2,0)
-import GHC.Unit.Env
+import           GHC.Unit.Env
 #else
-import           GHC.Driver.Session (PackageFlag(..), PackageArg(..))
-import qualified GHC.Driver.Session as DynFlags
+import           GHC.Driver.Session             (PackageArg (..),
+                                                 PackageFlag (..))
+import qualified GHC.Driver.Session             as DynFlags
+import           GHC.Driver.Types
 #endif
-import qualified GHC.Unit.Info as UnitInfo
-import GHC.Unit.Module.Name (ModuleName)
-import GHC.Unit.Types (UnitId, Unit, GenUnit(..), Definite(..), GenModule(Module), InstalledModule, Module)
-import qualified GHC.Unit.Types as Unit
-import GHC.Unit.State (UnitState(unitInfoMap), UnitInfo, PackageName, LookupResult)
-import qualified GHC.Unit.State as State
-import GHC.Types.Unique.Set
-import GHC.Data.FastString
+import           GHC.Data.FastString
+import           GHC.Types.Unique.Set
+import qualified GHC.Unit.Info                  as UnitInfo
+import           GHC.Unit.Module.Name           (ModuleName)
+import           GHC.Unit.State                 (LookupResult, PackageName,
+                                                 UnitInfo,
+                                                 UnitState (unitInfoMap))
+import qualified GHC.Unit.State                 as State
+import           GHC.Unit.Types                 hiding (moduleUnit, toUnitId)
+import qualified GHC.Unit.Types                 as Unit
 #else
+import           DynFlags                       (PackageArg (..),
+                                                 PackageFlag (..))
 import qualified DynFlags
-import           DynFlags (PackageFlag(..), PackageArg(..))
-import Packages (PackageState, PackageConfig, PackageConfigMap, lookupPackage', getPackageConfigMap, LookupResult, PackageName, InstalledPackageInfo (packageName, haddockInterfaces))
-import qualified Packages
+import           FastString
+import           HscTypes
+import           Module                         hiding (moduleUnitId)
 import qualified Module
-import           Module hiding (moduleUnitId)
-import FastString
+import           Packages                       (InstalledPackageInfo (haddockInterfaces, packageName),
+                                                 LookupResult, PackageConfig,
+                                                 PackageConfigMap, PackageName,
+                                                 PackageState,
+                                                 getPackageConfigMap,
+                                                 lookupPackage')
+import qualified Packages
 #endif
 
-import Development.IDE.GHC.Compat.Env
+import           Development.IDE.GHC.Compat.Env
 #if MIN_VERSION_ghc(9,0,0) && !MIN_VERSION_ghc(9,2,0)
-import Data.Map (Map)
+import           Data.Map                       (Map)
 #endif
-import Data.Version
-import Data.Either
+import           Data.Either
+import           Data.Version
 
 #if MIN_VERSION_ghc(9,0,0)
 type PreloadUnitClosure = UniqSet UnitId
@@ -88,6 +103,15 @@ type UnitInfo = PackageConfig
 type UnitInfoMap = PackageConfigMap
 type PreloadUnitClosure = ()
 type Unit = UnitId
+#endif
+
+
+#if !MIN_VERSION_ghc(9,0,0)
+unitString :: Unit -> String
+unitString = Module.unitIdString
+
+stringToUnit :: String -> Unit
+stringToUnit = Module.stringToUnitId
 #endif
 
 unitState :: HscEnv -> UnitState
@@ -121,53 +145,53 @@ initUnits env = do
         }
   pure $ hscSetFlags dflags env { hsc_unit_env = unit_env }
 #elif MIN_VERSION_ghc(9,0,0)
-    newFlags <- State.initUnits $ hsc_dflags env
-    pure $ hscSetFlags newFlags env
+  newFlags <- State.initUnits $ hsc_dflags env
+  pure $ hscSetFlags newFlags env
 #else
-    newFlags <- fmap fst . Packages.initPackages $ hsc_dflags env
-    pure $ hscSetFlags newFlags env
+  newFlags <- fmap fst . Packages.initPackages $ hsc_dflags env
+  pure $ hscSetFlags newFlags env
 #endif
 
 explicitUnits :: UnitState -> [Unit]
 explicitUnits ue =
 #if MIN_VERSION_ghc(9,0,0)
-    State.explicitUnits ue
+  State.explicitUnits ue
 #else
-    Packages.explicitPackages ue
+  Packages.explicitPackages ue
 #endif
 
 listVisibleModuleNames :: HscEnv -> [ModuleName]
 listVisibleModuleNames env =
 #if MIN_VERSION_ghc(9,0,0)
-    State.listVisibleModuleNames $ unitState env
+  State.listVisibleModuleNames $ unitState env
 #else
-    Packages.listVisibleModuleNames $ hsc_dflags env
+  Packages.listVisibleModuleNames $ hsc_dflags env
 #endif
 
 getUnitName :: HscEnv -> UnitId -> Maybe PackageName
 getUnitName env i =
 #if MIN_VERSION_ghc(9,0,0)
-    State.unitPackageName <$> State.lookupUnitId (unitState env) i
+  State.unitPackageName <$> State.lookupUnitId (unitState env) i
 #else
-    packageName <$> Packages.lookupPackage (hsc_dflags env) (definiteUnitId (defUnitId i))
+  packageName <$> Packages.lookupPackage (hsc_dflags env) (definiteUnitId (defUnitId i))
 #endif
 
 lookupModuleWithSuggestions :: HscEnv -> ModuleName -> Maybe FastString -> LookupResult
 lookupModuleWithSuggestions env modname mpkg =
 #if MIN_VERSION_ghc(9,0,0)
-    State.lookupModuleWithSuggestions (unitState env) modname mpkg
+  State.lookupModuleWithSuggestions (unitState env) modname mpkg
 #else
-    Packages.lookupModuleWithSuggestions (hsc_dflags env) modname mpkg
+  Packages.lookupModuleWithSuggestions (hsc_dflags env) modname mpkg
 #endif
 
 getUnitInfoMap :: HscEnv -> UnitInfoMap
 getUnitInfoMap =
 #if MIN_VERSION_ghc(9,2,0)
-    unitInfoMap . ue_units . hsc_unit_env
+  unitInfoMap . ue_units . hsc_unit_env
 #elif MIN_VERSION_ghc(9,0,0)
-    unitInfoMap . unitState
+  unitInfoMap . unitState
 #else
-    Packages.getPackageConfigMap . hsc_dflags
+  Packages.getPackageConfigMap . hsc_dflags
 #endif
 
 lookupUnit :: HscEnv -> Unit -> Maybe UnitInfo
@@ -196,9 +220,9 @@ preloadClosureUs = const ()
 unitExposedModules :: UnitInfo -> [(ModuleName, Maybe Module)]
 unitExposedModules ue =
 #if MIN_VERSION_ghc(9,0,0)
-    UnitInfo.unitExposedModules ue
+  UnitInfo.unitExposedModules ue
 #else
-    Packages.exposedModules ue
+  Packages.exposedModules ue
 #endif
 
 unitDepends :: UnitInfo -> [UnitId]
@@ -211,33 +235,33 @@ unitDepends = fmap (Module.DefiniteUnitId. defUnitId') . Packages.depends
 unitPackageNameString :: UnitInfo -> String
 unitPackageNameString =
 #if MIN_VERSION_ghc(9,0,0)
-    UnitInfo.unitPackageNameString
+  UnitInfo.unitPackageNameString
 #else
-    Packages.packageNameString
+  Packages.packageNameString
 #endif
 
 unitPackageVersion :: UnitInfo -> Version
 unitPackageVersion =
 #if MIN_VERSION_ghc(9,0,0)
-    UnitInfo.unitPackageVersion
+  UnitInfo.unitPackageVersion
 #else
-    Packages.packageVersion
+  Packages.packageVersion
 #endif
 
 unitInfoId :: UnitInfo -> Unit
 unitInfoId =
 #if MIN_VERSION_ghc(9,0,0)
-    UnitInfo.mkUnit
+  UnitInfo.mkUnit
 #else
-    Packages.packageConfigId
+  Packages.packageConfigId
 #endif
 
 unitHaddockInterfaces :: UnitInfo -> [FilePath]
 unitHaddockInterfaces =
 #if MIN_VERSION_ghc(9,0,0)
-    UnitInfo.unitHaddockInterfaces
+  UnitInfo.unitHaddockInterfaces
 #else
-    haddockInterfaces
+  haddockInterfaces
 #endif
 
 -- ------------------------------------------------------------------

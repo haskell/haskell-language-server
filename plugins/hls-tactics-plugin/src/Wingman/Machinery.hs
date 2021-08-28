@@ -25,15 +25,11 @@ import qualified Data.Set as S
 import           Data.Traversable (for)
 import           Development.IDE.Core.Compile (lookupName)
 import           Development.IDE.GHC.Compat
-import           GhcPlugins (GlobalRdrElt (gre_name), lookupOccEnv, varType)
 import           Refinery.Future
 import           Refinery.ProofState
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           System.Timeout (timeout)
-import           TcType
-import           Type (tyCoVarsOfTypeWellScoped)
-import           TysPrim (alphaTyVar, alphaTy)
 import           Wingman.Context (getInstance)
 import           Wingman.GHC (tryUnifyUnivarsButNotSkolems, updateSubst, tacticsGetDataCons, freshTyvars)
 import           Wingman.Judgements
@@ -235,7 +231,7 @@ newtype Reward a = Reward a
 newUnivar :: MonadState TacticState m => m Type
 newUnivar = do
   freshTyvars $
-    mkInvForAllTys [alphaTyVar] alphaTy
+    mkInfForAllTys [alphaTyVar] alphaTy
 
 
 ------------------------------------------------------------------------------

@@ -19,7 +19,7 @@ module Development.IDE.Session
 
 import           Control.Concurrent.Async
 import           Control.Concurrent.Strict
-import           Control.Exception.Safe
+import           Control.Exception.Safe               as Safe
 import           Control.Monad
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
@@ -42,12 +42,13 @@ import           Data.Time.Clock
 import           Data.Version
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
-import qualified Development.IDE.GHC.Compat.Core      as GHC
-import           Development.IDE.GHC.Compat.Core      hiding (Target,
-                                                       TargetFile, TargetModule, Var)
-import           Development.IDE.GHC.Compat.Units     (UnitId)
-import           Development.IDE.GHC.Compat.Env    hiding (Logger)
 import qualified Development.IDE.GHC.Compat           as Compat
+import           Development.IDE.GHC.Compat.Core      hiding (Target,
+                                                       TargetFile, TargetModule,
+                                                       Var)
+import qualified Development.IDE.GHC.Compat.Core      as GHC
+import           Development.IDE.GHC.Compat.Env       hiding (Logger)
+import           Development.IDE.GHC.Compat.Units     (UnitId)
 import           Development.IDE.GHC.Util
 import           Development.IDE.Graph                (Action)
 import           Development.IDE.Session.VersionCheck
@@ -170,7 +171,7 @@ runWithDb :: FilePath -> (HieDb -> IndexQueue -> IO ()) -> IO ()
 runWithDb fp k = do
   -- Delete the database if it has an incompatible schema version
   withHieDb fp (const $ pure ())
-    `catch` \IncompatibleSchemaVersion{} -> removeFile fp
+    `Safe.catch` \IncompatibleSchemaVersion{} -> removeFile fp
   withHieDb fp $ \writedb -> do
     initConn writedb
     chan <- newTQueueIO
@@ -184,9 +185,9 @@ runWithDb fp k = do
       forever $ do
         k <- atomically $ readTQueue chan
         k db
-          `catch` \e@SQLError{} -> do
+          `Safe.catch` \e@SQLError{} -> do
             hPutStrLn stderr $ "SQLite error in worker, ignoring: " ++ show e
-          `catchAny` \e -> do
+          `Safe.catchAny` \e -> do
             hPutStrLn stderr $ "Uncaught error in database worker, ignoring: " ++ show e
 
 
@@ -479,7 +480,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
             ncfp <- toNormalizedFilePath' <$> canonicalizePath file
             cachedHieYamlLocation <- HM.lookup ncfp <$> readVar filesMap
             hieYaml <- cradleLoc file
-            sessionOpts (join cachedHieYamlLocation <|> hieYaml, file) `catch` \e ->
+            sessionOpts (join cachedHieYamlLocation <|> hieYaml, file) `Safe.catch` \e ->
                 return (([renderPackageSetupException file e], Nothing), maybe [] pure hieYaml)
 
     returnWithVersion $ \file -> do
@@ -730,7 +731,7 @@ getDependencyInfo fs = Map.fromList <$> mapM do_one fs
 
   where
     tryIO :: IO a -> IO (Either IOException a)
-    tryIO = try
+    tryIO = Safe.try
 
     do_one :: FilePath -> IO (FilePath, Maybe UTCTime)
     do_one fp = (fp,) . eitherToMaybe <$> tryIO (getModificationTime fp)
@@ -790,8 +791,6 @@ setOptions (ComponentOptions theOpts compRoot _) dflags = do
     -- initPackages parses the -package flags and
     -- sets up the visibility for each component.
     -- Throws if a -package flag cannot be satisfied.
-    -- TODO: this is wrong for ghc 9.2, as the UnitState is stored in UnitEnv in HscEnv,
-    -- which we lose here
     env <- hscSetFlags dflags'' <$> getSession
     final_env' <- liftIO $ wrapPackageSetupException $ Compat.initUnits env
     return (hsc_dflags final_env', targets)

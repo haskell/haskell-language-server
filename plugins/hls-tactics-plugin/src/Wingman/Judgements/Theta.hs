@@ -12,7 +12,6 @@ module Wingman.Judgements.Theta
   , allEvidenceToSubst
   ) where
 
-import           Class (classTyVars)
 import           Control.Applicative (empty)
 import           Control.Lens (preview)
 import           Data.Coerce (coerce)
@@ -24,17 +23,6 @@ import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.Compat
 import           Generics.SYB hiding (tyConName, empty, Generic)
 import           GHC.Generics
-import           GhcPlugins (mkVarOcc, splitTyConApp_maybe, getTyVar_maybe, zipTvSubst, unionTCvSubst, emptyTCvSubst, TCvSubst)
-#if __GLASGOW_HASKELL__ > 806
-import           GhcPlugins (eqTyCon)
-#else
-import           GhcPlugins (nameRdrName, tyConName)
-import           PrelNames (eqTyCon_RDR)
-#endif
-import           TcEvidence
-import           TcType (substTy)
-import           TcType (tcTyConAppTyCon_maybe)
-import           TysPrim (eqPrimTyCon)
 import           Wingman.GHC
 import           Wingman.Types
 

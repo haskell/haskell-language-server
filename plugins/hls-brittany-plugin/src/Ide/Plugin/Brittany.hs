@@ -13,7 +13,7 @@ import           Data.Semigroup
 import           Data.Text                   (Text)
 import qualified Data.Text                   as T
 import           Development.IDE             hiding (pluginHandlers)
-import           Development.IDE.GHC.Compat  (ModSummary (ms_hspp_opts), topDir)
+import qualified Development.IDE.GHC.Compat  as GHC hiding (Cpp)
 import qualified DynFlags                    as D
 import qualified EnumSet                     as S
 import           GHC.LanguageExtensions.Type
@@ -41,7 +41,6 @@ import qualified Data.Text as Text
 import qualified Language.Haskell.GHC.ExactPrint as ExactPrint
 import qualified Language.Haskell.GHC.ExactPrint.Types as ExactPrint
 import qualified Data.Text.Lazy as TextL
-import qualified DynFlags as GHC
 import qualified GHC
 import qualified GHC.LanguageExtensions.Type as GHC
 
@@ -61,8 +60,8 @@ provider ide typ contents nfp opts = liftIO $ do
           FormatText    -> (fullRange contents, contents)
           FormatRange r -> (normalize r, extractRange r contents)
     modsum <- fmap msrModSummary $ runAction "brittany" ide $ use_ GetModSummaryWithoutTimestamps nfp
-    let dflags = ms_hspp_opts modsum
-    let withRuntimeLibdir = bracket_ (setEnv key $ topDir dflags) (unsetEnv key)
+    let dflags = GHC.ms_hspp_opts modsum
+    let withRuntimeLibdir = bracket_ (setEnv key $ GHC.topDir dflags) (unsetEnv key)
           where key = "GHC_EXACTPRINT_GHC_LIBDIR"
     res <- withRuntimeLibdir $ formatText dflags confFile opts selectedContents
     case res of

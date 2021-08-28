@@ -8,8 +8,8 @@ import           Data.Foldable (foldl')
 import           Data.Generics hiding (typeRep)
 import qualified Data.Text as T
 import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat.Util (unpackFS)
 import           GHC.Exts (Any)
-import           GhcPlugins (unpackFS)
 import           Type.Reflection
 import           Unsafe.Coerce (unsafeCoerce)
 import           Wingman.StaticPlugin (pattern WingmanMetaprogram)

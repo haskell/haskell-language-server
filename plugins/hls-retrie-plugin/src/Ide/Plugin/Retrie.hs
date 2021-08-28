@@ -68,17 +68,17 @@ import           Development.IDE.GHC.Compat           (GenLocated (L), GhcRn,
                                                        parseModule,
                                                        pattern IsBoot,
                                                        pattern NotBoot,
-                                                       pattern OldRealSrcSpan,
-                                                       rds_rules, srcSpanFile)
-import           GHC.Generics                         (Generic)
-import           GhcPlugins                           (Outputable,
-                                                       SourceText (NoSourceText),
-                                                       hm_iface, isQual,
-                                                       isQual_maybe,
+                                                       pattern RealSrcSpan,
+                                                       rds_rules, srcSpanFile,
+                                                       nameRdrName, occNameString,
+                                                       rdrNameOcc, occNameFS,
                                                        nameModule_maybe,
-                                                       nameRdrName, occNameFS,
-                                                       occNameString,
-                                                       rdrNameOcc, unpackFS)
+                                                       isQual, isQual_maybe,
+                                                       hm_iface, SourceText(..))
+import           Development.IDE.GHC.Compat.Util       hiding (try, catch)
+import           Development.IDE.GHC.Compat.Outputable(Outputable)
+import qualified GHC                                  (parseModule)
+import           GHC.Generics                         (Generic)
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Server                  (LspM,
@@ -106,7 +106,6 @@ import           Retrie.Replace                       (Change (..),
 import           Retrie.Rewrites
 import           Retrie.SYB                           (listify)
 import           Retrie.Util                          (Verbosity (Loud))
-import           StringBuffer                         (stringToStringBuffer)
 import           System.Directory                     (makeAbsolute)
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -374,7 +373,7 @@ callRetrie state session rewrites origin restrictToOriginatingFile = do
                       }
               logPriority (ideLogger state) Info $ T.pack $ "Parsing module: " <> t
               parsed <-
-                evalGhcEnv session (parseModule ms')
+                evalGhcEnv session (GHC.parseModule ms')
                   `catch` \e -> throwIO (GHCParseError nt (show @SomeException e))
               (fixities, parsed) <- fixFixities f (fixAnns parsed)
               return (fixities, parsed)
@@ -473,7 +472,7 @@ asTextEdits NoChange = []
 asTextEdits (Change reps _imports) =
   [ (filePathToUri spanLoc, edit)
     | Replacement {..} <- nubOrdOn (realSpan . replLocation) reps,
-      (OldRealSrcSpan rspan) <- [replLocation],
+      (RealSrcSpan rspan _) <- [replLocation],
       let spanLoc = unpackFS $ srcSpanFile rspan,
       let edit = TextEdit (realSrcSpanToRange rspan) (T.pack replReplacement)
   ]

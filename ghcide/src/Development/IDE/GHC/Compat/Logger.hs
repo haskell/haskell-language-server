@@ -5,19 +5,25 @@ module Development.IDE.GHC.Compat.Logger (
     pushLogHook,
     -- * Logging stuff
     LogActionCompat,
-    logActionCompat
+    logActionCompat,
+    defaultLogActionHPutStrDoc,
     ) where
 
-import Development.IDE.GHC.Compat.Core
-import Development.IDE.GHC.Compat.Env as Env
-import Development.IDE.GHC.Compat.Outputable
+import           Development.IDE.GHC.Compat.Core
+import           Development.IDE.GHC.Compat.Env        as Env
+import           Development.IDE.GHC.Compat.Outputable
 
 #if MIN_VERSION_ghc(9,0,0)
-import GHC.Driver.Session as DynFlags
-import GHC.Utils.Outputable
+import           GHC.Driver.Session                    as DynFlags
+import           GHC.Utils.Outputable
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC.Utils.Logger
 #else
-import DynFlags
-import Outputable (queryQual)
+import           GHC.Driver.Session
+#endif
+#else
+import           DynFlags
+import           Outputable                            (queryQual)
 #endif
 
 putLogHook :: Logger -> HscEnv -> HscEnv

@@ -10,6 +10,8 @@
 {-# LANGUAGE PatternSynonyms       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE TupleSections         #-}
+{-# LANGUAGE ViewPatterns          #-}
 {-# OPTIONS_GHC -Wno-orphans   #-}
 
 #ifdef HLINT_ON_GHC_LIB
@@ -51,15 +53,18 @@ import           Refact.Apply
 
 #ifdef HLINT_ON_GHC_LIB
 import           Data.List                                          (nub)
-import           "ghc" DynFlags                                     as RealGHC.DynFlags (topDir)
-import qualified "ghc" EnumSet                                      as EnumSet
-import           "ghc" GHC                                          as RealGHC (DynFlags (..))
+import           Development.IDE.GHC.Compat.Core                    (BufSpan,
+                                                                     DynFlags,
+                                                                     extensionFlags,
+                                                                     ms_hspp_opts,
+                                                                     topDir)
+import qualified Development.IDE.GHC.Compat.Util                    as EnumSet
 import           "ghc-lib" GHC                                      hiding
                                                                     (DynFlags (..),
+                                                                     RealSrcSpan,
                                                                      ms_hspp_opts)
+import qualified "ghc-lib" GHC
 import           "ghc-lib-parser" GHC.LanguageExtensions            (Extension)
-import           "ghc" HscTypes                                     as RealGHC.HscTypes (hsc_dflags,
-                                                                                         ms_hspp_opts)
 import           Language.Haskell.GhclibParserEx.GHC.Driver.Session as GhclibParserEx (readExtension)
 import           System.FilePath                                    (takeFileName)
 import           System.IO                                          (IOMode (WriteMode),
@@ -72,9 +77,7 @@ import           System.IO                                          (IOMode (Wri
                                                                      withFile)
 import           System.IO.Temp
 #else
-import           Development.IDE.GHC.Compat                         hiding
-                                                                    (DynFlags (..),
-                                                                     OldRealSrcSpan)
+import           Development.IDE.GHC.Compat.Core
 import           Language.Haskell.GHC.ExactPrint.Delta              (deltaOptions)
 import           Language.Haskell.GHC.ExactPrint.Parsers            (postParseTransform)
 import           Language.Haskell.GHC.ExactPrint.Types              (Rigidity (..))
@@ -105,14 +108,16 @@ import           System.Environment                                 (setEnv,
                                                                      unsetEnv)
 -- ---------------------------------------------------------------------
 
+#ifdef HLINT_ON_GHC_LIB
 -- Reimplementing this, since the one in Development.IDE.GHC.Compat isn't for ghc-lib
-pattern OldRealSrcSpan :: RealSrcSpan -> SrcSpan
-#if MIN_GHC_API_VERSION(9,0,0)
-pattern OldRealSrcSpan span <- RealSrcSpan span _
+pattern RealSrcSpan :: GHC.RealSrcSpan -> Maybe BufSpan -> GHC.SrcSpan
+#if MIN_VERSION_ghc(9,0,0)
+pattern RealSrcSpan x y = GHC.RealSrcSpan x y
 #else
-pattern OldRealSrcSpan span <- RealSrcSpan span
+pattern RealSrcSpan x y <- ((,Nothing) -> (GHC.RealSrcSpan x, y))
 #endif
-{-# COMPLETE OldRealSrcSpan, UnhelpfulSpan #-}
+{-# COMPLETE RealSrcSpan, UnhelpfulSpan #-}
+#endif
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
@@ -209,7 +214,7 @@ rules plugin = do
       -- This one is defined in Development.IDE.GHC.Error but here
       -- the types could come from ghc-lib or ghc
       srcSpanToRange :: SrcSpan -> LSP.Range
-      srcSpanToRange (OldRealSrcSpan span) = Range {
+      srcSpanToRange (RealSrcSpan span _) = Range {
           _start = LSP.Position {
                 _line = srcSpanStartLine span - 1
               , _character  = srcSpanStartCol span - 1}
@@ -482,7 +487,7 @@ applyHint ide nfp mhint =
                 ideaPos = (srcSpanStartLine &&& srcSpanStartCol) . toRealSrcSpan . ideaSpan
             in filter (\i -> ideaHint i == title' && ideaPos i == (l+1, c+1)) ideas
 
-          toRealSrcSpan (OldRealSrcSpan real) = real
+          toRealSrcSpan (RealSrcSpan real _) = real
           toRealSrcSpan (UnhelpfulSpan x) = error $ "No real source span: " ++ show x
 
           showParseError :: Hlint.ParseError -> String

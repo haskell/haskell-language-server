@@ -1,7 +1,7 @@
 module Wingman.KnownStrategies where
 
 import Data.Foldable (for_)
-import OccName (mkVarOcc, mkClsOcc)
+import Development.IDE.GHC.Compat.Core
 import Refinery.Tactic
 import Wingman.Judgements (jGoal)
 import Wingman.KnownStrategies.QuickCheck (deriveArbitrary)
