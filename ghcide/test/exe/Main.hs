@@ -5016,15 +5016,6 @@ retryFailedCradle = testSession' "retry failed" $ \dir -> do
   liftIO $ writeFileUTF8 hiePath $ T.unpack validCradle
   sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
           List [FileEvent (filePathToUri $ dir </> "hie.yaml") FcChanged ]
-  -- Force a session restart by making an edit, just to dirty the typecheck node
-  changeDoc
-    doc
-    [ TextDocumentContentChangeEvent
-        { _range = Just Range {_start = Position 0 0, _end = Position 0 0},
-          _rangeLength = Nothing,
-          _text = "\n"
-        }
-    ]
 
   Right WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" doc
   liftIO $ "No joy after fixing the cradle" `assertBool` ideResultSuccess
