@@ -164,7 +164,7 @@ completion _ide _ complParams = do
                     = J.List $ map buildCompletion
                         (Fuzzy.simpleFilter (VFS.prefixText pfix) allPragmas)
                     | otherwise
-                    = J.List []
+                    = J.List [buildLanguageSnippetCompletion]
                 result Nothing = J.List []
                 buildCompletion p =
                     J.CompletionItem
@@ -186,8 +186,27 @@ completion _ide _ complParams = do
                         _command = Nothing,
                         _xdata = Nothing
                       }
+                buildLanguageSnippetCompletion =                    
+                  J.CompletionItem
+                      { _label = "language",
+                        _kind = Just J.CiKeyword,
+                        _tags = Nothing,
+                        _detail = Just "{-# LANGUAGE #-}",
+                        _documentation = Nothing,
+                        _deprecated = Nothing,
+                        _preselect = Nothing,
+                        _sortText = Nothing,
+                        _filterText = Nothing,
+                        _insertText = Just "{-# LANGUAGE ${1:extension} #-}",
+                        _insertTextFormat = (Just J.Snippet),
+                        _insertTextMode = Nothing,
+                        _textEdit = Nothing,
+                        _additionalTextEdits = Nothing,
+                        _commitCharacters = Nothing,
+                        _command = Nothing,
+                        _xdata = Nothing
+                      }
         _ -> return $ J.List []
-
 -----------------------------------------------------------------------
 
 -- | Find first line after the last file header pragma
