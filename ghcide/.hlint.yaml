@@ -94,6 +94,16 @@
     - Development.IDE.Core.Rules
     - Development.IDE.Core.Tracing
     - Development.IDE.GHC.Compat
+    - Development.IDE.GHC.Compat.Core
+    - Development.IDE.GHC.Compat.Env
+    - Development.IDE.GHC.Compat.Iface
+    - Development.IDE.GHC.Compat.Logger
+    - Development.IDE.GHC.Compat.Outputable
+    - Development.IDE.GHC.Compat.Parser
+    - Development.IDE.GHC.Compat.Plugins
+    - Development.IDE.GHC.Compat.Units
+    - Development.IDE.GHC.Compat.Util
+    - Development.IDE.GHC.CPP
     - Development.IDE.GHC.ExactPrint
     - Development.IDE.GHC.Orphans
     - Development.IDE.GHC.Util
@@ -112,7 +122,7 @@
 - flags:
   - default: false
   - {name: [-Wno-missing-signatures, -Wno-orphans, -Wno-overlapping-patterns, -Wno-incomplete-patterns, -Wno-missing-fields, -Wno-unused-matches]}
-  - {name: [-Wno-dodgy-imports,-Wno-incomplete-uni-patterns], within: [Main, Development.IDE.GHC.Compat, Development.Benchmark.Rules]}
+  - {name: [-Wno-dodgy-imports,-Wno-incomplete-uni-patterns], within: [Main, Development.IDE.GHC.Compat, Development.IDE.GHC.Compat.Core, Development.Benchmark.Rules]}
   - {name: [-Wno-deprecations, -Wno-unticked-promoted-constructors], within: [Main, Experiments]}
 # - modules:
 #   - {name: [Data.Set, Data.HashSet], as: Set} # if you import Data.Set qualified, it must be as 'Set'

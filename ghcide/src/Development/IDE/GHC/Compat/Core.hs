@@ -243,6 +243,7 @@ module Development.IDE.GHC.Compat.Core (
 #if MIN_VERSION_ghc(8,8,0)
     eqTyCon,
 #endif
+    eqTyCon_RDR,
     isTupleTyCon,
     -- * Class
     Class(..),
