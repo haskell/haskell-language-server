@@ -1,4 +1,4 @@
-resolver: nightly-2021-06-14
+resolver: lts-18.7
 compiler: ghc-8.10.6
 
 packages:
