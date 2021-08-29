@@ -7,8 +7,8 @@
 [![Hackage][badge-hackage]][hackage]
 [![License Apache 2.0][badge-license]][license]
 [![CircleCI][badge-circleci]][circleci]
-![Github Testing Workflow](https://github.com/haskell/haskell-language-server/workflows/Testing/badge.svg)
-![Github Nix Workflow](https://github.com/haskell/haskell-language-server/workflows/Nix/badge.svg)
+[![GitHub Testing Workflow](https://github.com/haskell/haskell-language-server/actions/workflows/test.yml/badge.svg)](https://github.com/haskell/haskell-language-server/actions/workflows/test.yml)
+[![GitHub Nix Workflow](https://github.com/haskell/haskell-language-server/actions/workflows/nix.yml/badge.svg)](https://github.com/haskell/haskell-language-server/actions/workflows/nix.yml)
 [![codetriage][badge-codetriage]][codetriage]
 
 [logo]: ./docs/logos/logo-256.png
