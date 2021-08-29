@@ -160,7 +160,7 @@ completion _ide _ complParams = do
             result <$> VFS.getCompletionPrefix position cnts
             where
                 result (Just pfix)
-                    | "{-# LANGUAGE" `T.isPrefixOf` VFS.fullLine pfix
+                    | "{-# language" `T.isPrefixOf` T.toLower (VFS.fullLine pfix)
                     = J.List $ map buildCompletion
                         (Fuzzy.simpleFilter (VFS.prefixText pfix) allPragmas)
                     | otherwise

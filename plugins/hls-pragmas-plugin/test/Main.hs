@@ -256,6 +256,18 @@ completionTests =
         item ^. L.label @?= "OverloadedStrings"
         item ^. L.kind @?= Just CiKeyword
 
+
+    , testCase "completes language extensions case insensitive" $ runSessionWithServer pragmasPlugin testDataDir $ do
+      doc <- openDoc "Completion.hs" "haskell"
+      _ <- waitForDiagnostics
+      let te = TextEdit (Range (Position 0 4) (Position 0 34)) "lAnGuaGe Overloaded"
+      _ <- applyEdit doc te
+      compls <- getCompletions doc (Position 0 24)
+      let item = head $ filter ((== "OverloadedStrings") . (^. L.label)) compls
+      liftIO $ do
+        item ^. L.label @?= "OverloadedStrings"
+        item ^. L.kind @?= Just CiKeyword
+
   , testCase "completes the Strict language extension" $ runSessionWithServer pragmasPlugin testDataDir $ do
       doc <- openDoc "Completion.hs" "haskell"
       _ <- waitForDiagnostics
