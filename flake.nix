@@ -87,8 +87,8 @@
 
               lsp-types = hself.callCabal2nix "lsp-types"
                 (builtins.fetchTarball {
-                  url = "https://hackage.haskell.org/package/lsp-types-1.3.0.0/lsp-types-1.3.0.0.tar.gz";
-                  sha256 = "0qajyyj2d51daa4y0pqaa87n4nny0i920ivvzfnrk9gq9386iac7";
+                  url = "https://hackage.haskell.org/package/lsp-types-1.3.0.1/lsp-types-1.3.0.1.tar.gz";
+                  sha256 = "19k28zf1vw60wqfxllcs7zk9j6lnkx5kkvjnh22vkvn6m9zzflyw";
                 }) { };
 
               lsp-test = hself.callCabal2nix "lsp-test"
