@@ -47,7 +47,7 @@ prepareCallHierarchy state pluginId param
     liftIO (runAction "CallHierarchy.prepareHierarchy" state (prepareCallHierarchyItem nfp pos)) >>=
       \case
         Just items -> pure $ Right $ Just $ List items
-        Nothing    -> pure $ Left $ responseError "Call Hierarchy: No result"
+        Nothing    -> pure $ Right Nothing
   | otherwise = pure $ Left $ responseError $ T.pack $ "Call Hierarchy: uriToNormalizedFilePath failed for: " <> show uri
   where
     uri = param ^. (L.textDocument . L.uri)
@@ -67,8 +67,11 @@ constructFromAst nfp pos =
 resolveIntoCallHierarchy :: Applicative f => HieASTs a -> Position -> NormalizedFilePath -> f (Maybe [CallHierarchyItem])
 resolveIntoCallHierarchy hf pos nfp =
   case listToMaybe $ pointCommand hf pos extract of
-    Just res -> pure $ Just $ mapMaybe (construct nfp hf) res
-    Nothing  -> pure Nothing
+    Nothing    -> pure Nothing
+    Just infos ->
+      case mapMaybe (construct nfp hf) infos of
+        []  -> pure Nothing
+        res -> pure $ Just res
 
 extract :: HieAST a -> [(Identifier, S.Set ContextInfo, Span)]
 extract ast = let span = nodeSpan ast
@@ -76,14 +79,16 @@ extract ast = let span = nodeSpan ast
               in  [ (ident, contexts, span) | (ident, contexts) <- infos ]
 
 recFieldInfo, declInfo, valBindInfo, classTyDeclInfo,
-  useInfo, patternBindInfo, tyDeclInfo :: [ContextInfo] -> Maybe ContextInfo
-recFieldInfo    ctxs = listToMaybe [ctx    | ctx@RecField{}    <- ctxs]
-declInfo        ctxs = listToMaybe [ctx    | ctx@Decl{}        <- ctxs]
-valBindInfo     ctxs = listToMaybe [ctx    | ctx@ValBind{}     <- ctxs]
-classTyDeclInfo ctxs = listToMaybe [ctx    | ctx@ClassTyDecl{} <- ctxs]
-useInfo         ctxs = listToMaybe [Use    | Use               <- ctxs]
-patternBindInfo ctxs = listToMaybe [ctx    | ctx@PatternBind{} <- ctxs]
-tyDeclInfo      ctxs = listToMaybe [TyDecl | TyDecl            <- ctxs]
+  useInfo, patternBindInfo, tyDeclInfo, matchBindInfo
+    :: [ContextInfo] -> Maybe ContextInfo
+recFieldInfo    ctxs = listToMaybe [ctx       | ctx@RecField{}    <- ctxs]
+declInfo        ctxs = listToMaybe [ctx       | ctx@Decl{}        <- ctxs]
+valBindInfo     ctxs = listToMaybe [ctx       | ctx@ValBind{}     <- ctxs]
+classTyDeclInfo ctxs = listToMaybe [ctx       | ctx@ClassTyDecl{} <- ctxs]
+useInfo         ctxs = listToMaybe [Use       | Use               <- ctxs]
+patternBindInfo ctxs = listToMaybe [ctx       | ctx@PatternBind{} <- ctxs]
+tyDeclInfo      ctxs = listToMaybe [TyDecl    | TyDecl            <- ctxs]
+matchBindInfo   ctxs = listToMaybe [MatchBind | MatchBind         <- ctxs]
 
 construct :: NormalizedFilePath -> HieASTs a -> (Identifier, S.Set ContextInfo, Span) -> Maybe CallHierarchyItem
 construct nfp hf (ident, contexts, ssp)
@@ -92,6 +97,9 @@ construct nfp hf (ident, contexts, ssp)
   | Just (RecField RecFieldDecl _) <- recFieldInfo ctxList
     -- ignored type span
     = Just $ mkCallHierarchyItem' ident SkField ssp ssp
+
+  | isJust (matchBindInfo ctxList) && isNothing (valBindInfo ctxList)
+    = Just $ mkCallHierarchyItem' ident SkFunction ssp ssp
 
   | Just ctx <- valBindInfo ctxList
     = Just $ case ctx of

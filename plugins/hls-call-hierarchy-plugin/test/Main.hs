@@ -178,6 +178,15 @@ prepareCallHierarchyTests =
               expected = mkCallHierarchyItemV "b" SkFunction range selRange
           oneCaseWithCreate contents 0 2 expected
       ]
+  , testCase "multi pattern" $ do
+      let contents = T.unlines
+            [ "f (Just _) = ()"
+            , "f Nothing = ()"
+            ]
+          range = mkRange 1 0 1 1
+          selRange = mkRange 1 0 1 1
+          expected = mkCallHierarchyItemV "f" SkFunction range selRange
+      oneCaseWithCreate contents 1 0 expected
   ]
 
 incomingCallsTests :: TestTree
@@ -263,6 +272,15 @@ incomingCallsTests =
             positions = [(1, 5)]
             ranges = [mkRange 1 13 1 14]
         incomingCallTestCase contents 1 13 positions ranges
+    , testCase "multi pattern" $ do
+        let contents = T.unlines
+                [ "f 1 = 1"
+                , "f 2 = 2"
+                , "g = f"
+                ]
+            positions = [(2, 0)]
+            ranges = [mkRange 2 4 2 5]
+        incomingCallTestCase contents 1 0 positions ranges
     ]
   , testGroup "multi file"
     [ testCase "1" $ do
