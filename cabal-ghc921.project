@@ -32,13 +32,6 @@ package *
 
 source-repository-package
   type: git
-  location: https://github.com/jwaldmann/blaze-textual.git
-  tag: d8ee6cf80e27f9619d621c936bb4bda4b99a183f
-  -- https://github.com/jwaldmann/blaze-textual/commit/d8ee6cf80e27f9619d621c936bb4bda4b99a183f
-  -- https://github.com/bos/blaze-textual/issues/13
-
-source-repository-package
-  type: git
   location: https://github.com/mithrandi/czipwith.git
   tag: b6245884ae83e00dd2b5261762549b37390179f8
   -- https://github.com/lspitzner/czipwith/pull/2
@@ -63,12 +56,6 @@ source-repository-package
   subdir: dependent-sum-template
 -- https://github.com/obsidiansystems/dependent-sum/pull/59
 
--- Head of hie-bios
-source-repository-package
-  type: git
-  location: https://github.com/mpickering/hie-bios
-  tag: 1875bff093983a0506f80e214eda27e7419da3bc
-
 -- Head of hiedb
 source-repository-package
   type: git
@@ -84,7 +71,7 @@ source-repository-package
 
 write-ghc-environment-files: never
 
-index-state: 2021-08-17T02:21:16Z
+index-state: 2021-08-31T02:21:16Z
 
 constraints:
     -- These plugins doesn't work on GHC9 yet
