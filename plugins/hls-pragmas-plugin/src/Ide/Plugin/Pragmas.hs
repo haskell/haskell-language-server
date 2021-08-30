@@ -150,6 +150,9 @@ allPragmas =
 
 -- ---------------------------------------------------------------------
 
+flags :: [T.Text]
+flags = map (T.pack . stripLeading '-') $ flagsForCompletion False
+
 completion :: PluginMethodHandler IdeState 'J.TextDocumentCompletion
 completion _ide _ complParams = do
     let (J.TextDocumentIdentifier uri) = complParams ^. J.textDocument
@@ -163,6 +166,9 @@ completion _ide _ complParams = do
                     | "{-# LANGUAGE" `T.isPrefixOf` VFS.fullLine pfix
                     = J.List $ map buildCompletion
                         (Fuzzy.simpleFilter (VFS.prefixText pfix) allPragmas)
+                    | "{-# options_ghc" `T.isPrefixOf` T.toLower (VFS.fullLine pfix)
+                    = J.List $ map mkExtCompl
+                        (Fuzzy.simpleFilter (VFS.prefixText pfix) flags)
                     -- if there already is a closing bracket - complete without one
                     | isPragmaPrefix (VFS.fullLine pfix) && "}" `T.isSuffixOf` VFS.fullLine pfix
                     = J.List $ map (\(a, b, c) -> mkPragmaCompl a b c) (validPragmas Nothing)
@@ -248,3 +254,17 @@ checkPragma name = check
     check l = isPragma l && getName l == name
     getName l = T.take (T.length name) $ T.dropWhile isSpace $ T.drop 3 l
     isPragma = T.isPrefixOf "{-#"
+
+
+stripLeading :: Char -> String -> String
+stripLeading _ [] = []
+stripLeading c (s:ss)
+  | s == c = ss
+  | otherwise = s:ss
+
+
+mkExtCompl :: T.Text -> J.CompletionItem
+mkExtCompl label =
+  J.CompletionItem label (Just J.CiKeyword) Nothing Nothing
+    Nothing Nothing Nothing Nothing Nothing Nothing Nothing
+    Nothing Nothing Nothing Nothing Nothing Nothing

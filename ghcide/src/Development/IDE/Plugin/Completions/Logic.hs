@@ -596,26 +596,18 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
         ]
 
       filtImportCompls = filtListWith (mkImportCompl enteredQual) importableModules
-      filtOptsCompls   = filtListWith mkExtCompl
       filtKeywordCompls
           | T.null prefixModule = filtListWith mkExtCompl (optKeywords ideOpts)
           | otherwise = []
 
-      stripLeading :: Char -> String -> String
-      stripLeading _ [] = []
-      stripLeading c (s:ss)
-        | s == c = ss
-        | otherwise = s:ss
 
   if
     | "import " `T.isPrefixOf` fullLine
     -> return filtImportCompls
     -- we leave this condition here to avoid duplications and return empty list
-    -- since HLS implements this completion (#haskell-language-server/pull/662)
-    | "{-# language" `T.isPrefixOf` T.toLower fullLine
+    -- since HLS implements these completions (#haskell-language-server/pull/662)
+    | "{-# " `T.isPrefixOf` fullLine
     -> return []
-    | "{-# options_ghc" `T.isPrefixOf` T.toLower fullLine
-    -> return $ filtOptsCompls (map (T.pack . stripLeading '-') $ flagsForCompletion False)
     | otherwise -> do
         -- assumes that nubOrdBy is stable
         let uniqueFiltCompls = nubOrdBy uniqueCompl filtCompls
@@ -637,14 +629,6 @@ uniqueCompl x y =
         then EQ
         else compare (insertText x) (insertText y)
     other -> other
--- ---------------------------------------------------------------------
--- helper functions for pragmas
--- ---------------------------------------------------------------------
-
-pragmaSuffix :: T.Text -> T.Text
-pragmaSuffix fullLine
-  |  "}" `T.isSuffixOf` fullLine = mempty
-  | otherwise = " #-}"
 
 -- ---------------------------------------------------------------------
 -- helper functions for infix backticks
