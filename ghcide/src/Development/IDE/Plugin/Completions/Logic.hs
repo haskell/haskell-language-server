@@ -36,8 +36,8 @@ import qualified Data.HashSet                             as HashSet
 import           Development.IDE.Core.Compile
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.GHC.Compat               as GHC
-import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Compat.Outputable    hiding (ppr)
+import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Util
 import           Development.IDE.Plugin.Completions.Types
@@ -254,7 +254,7 @@ mkNameCompItem doc thingParent origName origMod thingType isInfix docs !imp = CI
         getArgs t
           | isPredTy t = []
           | isDictTy t = []
-          | isForAllTy t = getArgs $ snd (splitForAllTys t)
+          | isForAllTy t = getArgs $ snd (splitForAllTyCoVars t)
           | isFunTy t =
             let (args, ret) = splitFunTys t
               in if isForAllTy ret

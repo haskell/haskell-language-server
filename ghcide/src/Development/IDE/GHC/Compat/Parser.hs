@@ -23,6 +23,7 @@ module Development.IDE.GHC.Compat.Parser (
 import qualified GHC.Parser.Lexer                as Lexer
 #if MIN_VERSION_ghc(9,2,0)
 import qualified GHC.Driver.Config               as Config
+import           GHC.Parser.Lexer                hiding (initParserState)
 #else
 import qualified GHC.Parser.Annotation           as Anno
 #endif

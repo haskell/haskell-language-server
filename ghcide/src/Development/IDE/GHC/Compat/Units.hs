@@ -49,14 +49,17 @@ module Development.IDE.GHC.Compat.Units (
 
 #if MIN_VERSION_ghc(9,0,0)
 #if MIN_VERSION_ghc(9,2,0)
+import qualified GHC.Data.ShortText             as ST
+import           GHC.Driver.Env                 (hsc_unit_dbs)
 import           GHC.Unit.Env
+import           GHC.Unit.External
 #else
-import           GHC.Driver.Session             (PackageArg (..),
-                                                 PackageFlag (..))
-import qualified GHC.Driver.Session             as DynFlags
 import           GHC.Driver.Types
 #endif
 import           GHC.Data.FastString
+import           GHC.Driver.Session             (PackageArg (..),
+                                                 PackageFlag (..))
+import qualified GHC.Driver.Session             as DynFlags
 import           GHC.Types.Unique.Set
 import qualified GHC.Unit.Info                  as UnitInfo
 import           GHC.Unit.Module.Name           (ModuleName)
@@ -128,22 +131,21 @@ initUnits env = do
 #if MIN_VERSION_ghc(9,2,0)
   let dflags1         = hsc_dflags env
   -- Copied from GHC.setSessionDynFlags
-  let old_unit_env    = hsc_unit_env env
-  let cached_unit_dbs = ue_unit_dbs old_unit_env
-  (dbs,unit_state,home_unit,mconstants) <- liftIO $ initUnits (hsc_logger env) dflags1 cached_unit_dbs
+  let cached_unit_dbs = hsc_unit_dbs env
+  (dbs,unit_state,home_unit,mconstants) <- State.initUnits (hsc_logger env) dflags1 cached_unit_dbs
 
-  dflags <- liftIO $ updatePlatformConstants dflags1 mconstants
+  dflags <- updatePlatformConstants dflags1 mconstants
+
 
   let unit_env = UnitEnv
         { ue_platform  = targetPlatform dflags
         , ue_namever   = ghcNameVersion dflags
-        , ue_home_unit = Just home_unit
-        , ue_hpt       = ue_hpt old_unit_env
-        , ue_eps       = ue_eps old_unit_env
+        , ue_home_unit = home_unit
         , ue_units     = unit_state
-        , ue_unit_dbs  = Just dbs
         }
-  pure $ hscSetFlags dflags env { hsc_unit_env = unit_env }
+  pure $ hscSetFlags dflags $ hscSetUnitEnv unit_env env
+    { hsc_unit_dbs = Just dbs
+    }
 #elif MIN_VERSION_ghc(9,0,0)
   newFlags <- State.initUnits $ hsc_dflags env
   pure $ hscSetFlags newFlags env
@@ -258,7 +260,9 @@ unitInfoId =
 
 unitHaddockInterfaces :: UnitInfo -> [FilePath]
 unitHaddockInterfaces =
-#if MIN_VERSION_ghc(9,0,0)
+#if MIN_VERSION_ghc(9,2,0)
+  fmap ST.unpack . UnitInfo.unitHaddockInterfaces
+#elif MIN_VERSION_ghc(9,0,0)
   UnitInfo.unitHaddockInterfaces
 #else
   haddockInterfaces

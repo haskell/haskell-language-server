@@ -31,57 +31,60 @@ module Development.IDE.GHC.Compat.Outputable (
 
 
 #if MIN_VERSION_ghc(9,2,0)
-import GHC.Driver.Session
-import GHC.Driver.Ppr
-import qualified GHC.Types.Error as Error
-import GHC.Types.SrcLoc
-import GHC.Types.SourceError
-import GHC.Unit.State (emptyUnitState)
-import GHC.Utils.Error hiding (mkWarnMsg)
-import GHC.Utils.Outputable
-import GHC.Utils.Logger
-import GHC.Utils.Panic
-import GHC.Parser.Errors
-import qualified GHC.Parser.Errors.Ppr as Ppr
+import           GHC.Driver.Ppr
+import           GHC.Driver.Session
+import           GHC.Parser.Errors
+import qualified GHC.Parser.Errors.Ppr           as Ppr
+import qualified GHC.Types.Error                 as Error
+import           GHC.Types.Name.Ppr
+import           GHC.Types.SourceError
+import           GHC.Types.SrcLoc
+import           GHC.Unit.State
+import           GHC.Utils.Error                 hiding (mkWarnMsg)
+import           GHC.Utils.Logger
+import           GHC.Utils.Outputable
+import           GHC.Utils.Panic
 #elif MIN_VERSION_ghc(9,0,0)
-import GHC.Driver.Types
-import GHC.Driver.Session
-import GHC.Utils.Outputable as Out
-import GHC.Types.SrcLoc
-import GHC.Utils.Error as Err hiding (mkWarnMsg)
-import qualified GHC.Utils.Error as Err
-import GHC.Types.Name.Reader (GlobalRdrEnv)
+import           GHC.Driver.Session
+import           GHC.Driver.Types                as HscTypes
+import           GHC.Types.Name.Reader           (GlobalRdrEnv)
+import           GHC.Types.SrcLoc
+import           GHC.Utils.Error                 as Err hiding (mkWarnMsg)
+import qualified GHC.Utils.Error                 as Err
+import           GHC.Utils.Outputable            as Out
 #else
-import DynFlags
-import Outputable as Out
-import HscTypes
-import qualified ErrUtils as Err
-import SrcLoc
-import ErrUtils hiding (mkWarnMsg)
-import Development.IDE.GHC.Compat.Core (GlobalRdrEnv)
+import           DynFlags
+import           ErrUtils                        hiding (mkWarnMsg)
+import qualified ErrUtils                        as Err
+import           HscTypes
+import           Outputable                      as Out
+import           SrcLoc
 #endif
+
+import           Development.IDE.GHC.Compat.Core (GlobalRdrEnv)
 
 
 printNameWithoutUniques :: Outputable a => a -> String
 printNameWithoutUniques =
 #if MIN_VERSION_ghc(9,2,0)
-      renderWithContext (defaultSDocContext { sdocSuppressUniques = True }) . ppr
+  renderWithContext (defaultSDocContext { sdocSuppressUniques = True }) . ppr
 #else
-      printSDocAllTheWay dyn . ppr
+  printSDocAllTheWay dyn . ppr
   where
     dyn = unsafeGlobalDynFlags `gopt_set` Opt_SuppressUniques
 #endif
 
 printSDocQualifiedUnsafe :: PrintUnqualified -> SDoc -> String
-printSDocQualifiedUnsafe unqual doc =
 #if MIN_VERSION_ghc(9,2,0)
+printSDocQualifiedUnsafe unqual doc =
   -- Taken from 'showSDocForUser'
-  renderWithContext (initSDocContext dflags sty) doc'
+  renderWithContext (defaultSDocContext { sdocStyle = sty }) doc'
   where
     sty  = mkUserStyle unqual AllTheWay
     doc' = pprWithUnitState emptyUnitState doc
 #else
-  showSDocForUser unsafeGlobalDynFlags unqual doc
+printSDocQualifiedUnsafe unqual doc =
+    showSDocForUser unsafeGlobalDynFlags unqual doc
 #endif
 
 printSDocAllTheWay :: DynFlags -> SDoc -> String
@@ -135,12 +138,12 @@ pprError =
 formatErrorWithQual :: DynFlags -> MsgEnvelope DecoratedSDoc -> String
 formatErrorWithQual dflags e =
 #if MIN_VERSION_ghc(9,2,0)
-    showSDoc dflags (pprLocMsgEnvelope e)
+  showSDoc dflags (pprLocMsgEnvelope e)
 #else
-    Out.showSDoc dflags
-    $ Out.withPprStyle (oldMkErrStyle dflags $ errMsgContext e)
-    $ oldFormatErrDoc dflags
-    $ Err.errMsgDoc e
+  Out.showSDoc dflags
+  $ Out.withPprStyle (oldMkErrStyle dflags $ errMsgContext e)
+  $ oldFormatErrDoc dflags
+  $ Err.errMsgDoc e
 #endif
 
 #if !MIN_VERSION_ghc(9,2,0)
@@ -151,17 +154,13 @@ type PsWarning = ErrMsg
 type PsError = ErrMsg
 #endif
 
--- | Like 'mkPrintUnqualified', but requires no additional context,
--- such as DynFlags or, in later GHC versions, UnitState by relying
--- on defaults.
 mkPrintUnqualifiedDefault :: GlobalRdrEnv -> PrintUnqualified
 mkPrintUnqualifiedDefault =
 #if MIN_VERSION_ghc(9,2,0)
-  mkPrintUnqualified emptyUnitState
+  GHC.Types.Name.Ppr.mkPrintUnqualified undefined
 #else
-  mkPrintUnqualified unsafeGlobalDynFlags
+  HscTypes.mkPrintUnqualified unsafeGlobalDynFlags
 #endif
-
 
 mkWarnMsg :: DynFlags -> SrcSpan -> PrintUnqualified -> SDoc -> MsgEnvelope DecoratedSDoc
 mkWarnMsg =

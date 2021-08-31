@@ -2,7 +2,7 @@
 -- | Compat module for GHC 9.2 Logger infrastructure.
 module Development.IDE.GHC.Compat.Logger (
     putLogHook,
-    pushLogHook,
+    Development.IDE.GHC.Compat.Logger.pushLogHook,
     -- * Logging stuff
     LogActionCompat,
     logActionCompat,
@@ -17,9 +17,8 @@ import           Development.IDE.GHC.Compat.Outputable
 import           GHC.Driver.Session                    as DynFlags
 import           GHC.Utils.Outputable
 #if MIN_VERSION_ghc(9,2,0)
-import           GHC.Utils.Logger
-#else
-import           GHC.Driver.Session
+import           GHC.Driver.Env                        (hsc_logger)
+import           GHC.Utils.Logger                      as Logger
 #endif
 #else
 import           DynFlags
@@ -28,11 +27,19 @@ import           Outputable                            (queryQual)
 
 putLogHook :: Logger -> HscEnv -> HscEnv
 putLogHook logger env =
-    hscSetFlags ((hsc_dflags env) { DynFlags.log_action = Env.log_action logger }) env
+#if MIN_VERSION_ghc(9,2,0)
+  env { hsc_logger = logger }
+#else
+  hscSetFlags ((hsc_dflags env) { DynFlags.log_action = Env.log_action logger }) env
+#endif
 
 pushLogHook :: (LogAction -> LogAction) -> Logger -> Logger
 pushLogHook f logger =
-    logger { Env.log_action = f (Env.log_action logger) }
+#if MIN_VERSION_ghc(9,2,0)
+  Logger.pushLogHook f logger
+#else
+  logger { Env.log_action = f (Env.log_action logger) }
+#endif
 
 #if MIN_VERSION_ghc(9,0,0)
 type LogActionCompat = DynFlags -> WarnReason -> Severity -> SrcSpan -> PrintUnqualified -> SDoc -> IO ()

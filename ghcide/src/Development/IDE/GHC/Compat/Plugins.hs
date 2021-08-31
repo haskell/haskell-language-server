@@ -9,19 +9,29 @@ module Development.IDE.GHC.Compat.Plugins (
 #endif
     applyPluginsParsedResultAction,
     initializePlugins,
+
+    -- * Static plugins
+#if MIN_VERSION_ghc(8,8,0)
+    StaticPlugin(..),
+    hsc_static_plugins,
+#endif
     ) where
 
 import           GHC
 #if MIN_VERSION_ghc(9,0,0)
+#if MIN_VERSION_ghc(9,2,0)
+import qualified GHC.Driver.Env                    as Env
+#else
+import           GHC.Driver.Session                (staticPlugins)
+#endif
 import           GHC.Driver.Plugins                (Plugin (..),
                                                     PluginWithArgs (..),
+                                                    StaticPlugin (..),
                                                     defaultPlugin, withPlugins)
 import qualified GHC.Runtime.Loader                as Loader
-#elif __GLASGOW_HASKELL__ >= 808
+#elif MIN_VERSION_ghc(8,8,0)
 import qualified DynamicLoading                    as Loader
-import           Plugins                           (Plugin (..),
-                                                    PluginWithArgs (..),
-                                                    defaultPlugin, withPlugins)
+import           Plugins
 #else
 import qualified DynamicLoading                    as Loader
 import           Plugins                           (Plugin (..), defaultPlugin,
@@ -52,4 +62,14 @@ initializePlugins env = do
 #else
     newDf <- Loader.initializePlugins env (hsc_dflags env)
     pure $ hscSetFlags newDf env
+#endif
+
+
+#if MIN_VERSION_ghc(8,8,0)
+hsc_static_plugins :: HscEnv -> [StaticPlugin]
+#if MIN_VERSION_ghc(9,2,0)
+hsc_static_plugins = Env.hsc_static_plugins
+#else
+hsc_static_plugins = staticPlugins . hsc_dflags
+#endif
 #endif

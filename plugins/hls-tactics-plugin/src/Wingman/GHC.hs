@@ -75,7 +75,7 @@ tacticsThetaTy (tcSplitSigmaTy -> (_, theta,  _)) = theta
 -- | Get the data cons of a type, if it has any.
 tacticsGetDataCons :: Type -> Maybe ([DataCon], [Type])
 tacticsGetDataCons ty
-  | Just (_, ty') <- tcSplitForAllTy_maybe ty
+  | Just (_, ty') <- tcSplitForAllTyVarBinder_maybe ty
   = tacticsGetDataCons ty'
 tacticsGetDataCons ty
   | Just _ <- algebraicTyCon ty
@@ -101,7 +101,7 @@ freshTyvars t = do
         case M.lookup tv reps of
           Just tv' -> tv'
           Nothing  -> tv
-      ) $ snd $ tcSplitForAllTys t
+      ) $ snd $ tcSplitForAllTyVars t
 
 
 ------------------------------------------------------------------------------
@@ -120,7 +120,7 @@ getRecordFields dc =
 -- | Is this an algebraic type?
 algebraicTyCon :: Type -> Maybe TyCon
 algebraicTyCon ty
-  | Just (_, ty') <- tcSplitForAllTy_maybe ty
+  | Just (_, ty') <- tcSplitForAllTyVarBinder_maybe ty
   = algebraicTyCon ty'
 algebraicTyCon (splitTyConApp_maybe -> Just (tycon, _))
   | tycon == intTyCon    = Nothing

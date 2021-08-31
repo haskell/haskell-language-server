@@ -19,7 +19,7 @@ module Development.IDE.GHC.Compat.Env (
     hscHomeUnit,
     HomeUnit,
     setHomeUnitId_,
-    mkHomeModule,
+    Development.IDE.GHC.Compat.Env.mkHomeModule,
     -- * Provide backwards Compatible
     -- types and helper functions.
     Logger(..),
@@ -28,7 +28,7 @@ module Development.IDE.GHC.Compat.Env (
     hscSetFlags,
     initTempFs,
     -- * Home Unit
-    homeUnitId_,
+    Development.IDE.GHC.Compat.Env.homeUnitId_,
     -- * DynFlags Helper
     setBytecodeLinkerOptions,
     setInterpreterLinkerOptions,
@@ -42,19 +42,23 @@ module Development.IDE.GHC.Compat.Env (
     -- * Backend, backwards compatible
     Backend,
     setBackend,
-    platformDefaultBackend,
+    Development.IDE.GHC.Compat.Env.platformDefaultBackend,
     ) where
 
 import           GHC                  (setInteractiveDynFlags)
 
 #if MIN_VERSION_ghc(9,0,0)
 #if MIN_VERSION_ghc(9,2,0)
-import           GHC.Driver.Env       (HscEnv)
+import           GHC.Driver.Backend   as Backend
+import           GHC.Driver.Env       (HscEnv, hsc_EPS)
 import qualified GHC.Driver.Env       as Env
-import qualified GHC.Driver.Session   as Home
+import qualified GHC.Driver.Session   as Session
 import           GHC.Platform.Ways    hiding (hostFullWays)
 import qualified GHC.Platform.Ways    as Ways
+import           GHC.Runtime.Context
 import           GHC.Unit.Env         (UnitEnv)
+import           GHC.Unit.Home        as Home
+import           GHC.Utils.Logger
 import           GHC.Utils.TmpFs
 #else
 import qualified GHC.Driver.Session   as DynFlags
@@ -78,8 +82,9 @@ import           Module
 #if MIN_VERSION_ghc(9,0,0)
 import qualified Data.Set             as Set
 #endif
+#if !MIN_VERSION_ghc(9,2,0)
 import           Data.IORef
-
+#endif
 
 #if !MIN_VERSION_ghc(9,2,0)
 type UnitEnv = ()
@@ -89,7 +94,7 @@ type TmpFs = ()
 
 setHomeUnitId_ :: UnitId -> DynFlags -> DynFlags
 #if MIN_VERSION_ghc(9,2,0)
-setHomeUnitId_ uid df = df { homeUnitId_ = uid }
+setHomeUnitId_ uid df = df { Session.homeUnitId_ = uid }
 #elif MIN_VERSION_ghc(9,0,0)
 setHomeUnitId_ uid df = df { homeUnitId = uid }
 #else
@@ -118,7 +123,7 @@ initTempFs env = do
 
 hscSetUnitEnv :: UnitEnv -> HscEnv -> HscEnv
 #if MIN_VERSION_ghc(9,2,0)
-hscSetUnitEnv ue env = env { hsc_unit_env = ue }
+hscSetUnitEnv ue env = env { Env.hsc_unit_env = ue }
 #else
 hscSetUnitEnv _ env  = env
 #endif
@@ -166,7 +171,7 @@ hscSetHooks hooks env =
 homeUnitId_ :: DynFlags -> UnitId
 homeUnitId_ =
 #if MIN_VERSION_ghc(9,2,0)
-  homeUnitId_
+  Session.homeUnitId_
 #elif MIN_VERSION_ghc(9,0,0)
   homeUnitId
 #else
@@ -183,7 +188,7 @@ type HomeUnit = UnitId
 hscHomeUnit :: HscEnv -> HomeUnit
 hscHomeUnit =
 #if MIN_VERSION_ghc(9,2,0)
-  ue_home_unit . Env.hsc_unit_env
+  Env.hsc_home_unit
 #elif MIN_VERSION_ghc(9,0,0)
   homeUnit . Env.hsc_dflags
 #else
@@ -244,7 +249,7 @@ hostFullWays =
 setWays :: Ways -> DynFlags -> DynFlags
 setWays ways flags =
 #if MIN_VERSION_ghc(9,2,0)
-  flags { targetWays = ways}
+  flags { Session.targetWays_ = ways}
 #elif MIN_VERSION_ghc(9,0,0)
   flags {ways = ways}
 #else
@@ -262,7 +267,7 @@ type Backend = HscTarget
 platformDefaultBackend :: DynFlags -> Backend
 platformDefaultBackend =
 #if MIN_VERSION_ghc(9,2,0)
-  platformDefaultBackend . targetPlatform
+  Backend.platformDefaultBackend . targetPlatform
 #elif MIN_VERSION_ghc(8,10,0)
   defaultObjectTarget
 #else

@@ -95,27 +95,24 @@ import Development.IDE.GHC.Compat.Util
 #if MIN_VERSION_ghc(9,0,0)
 import           GHC.Data.StringBuffer
 import           GHC.Driver.Session    hiding (ExposePackage)
-#if !MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC.Driver.Env as Env
+import           GHC.Unit.Module.ModIface
+#else
 import           GHC.Driver.Types
 #endif
 import           GHC.Hs.Extension
+import           GHC.Iface.Env
 import           GHC.Iface.Make           (mkIfaceExports)
 import qualified GHC.SysTools.Tasks       as SysTools
 import           GHC.Tc.Utils.TcType      (pprSigmaType)
 import qualified GHC.Types.Avail          as Avail
 import qualified GHC.Unit.Module.Location as Module
+import           GHC.Unit.Types
 #else
 import           DynFlags               hiding (ExposePackage)
 import qualified Module
-#if MIN_VERSION_ghc(9,0,0)
-import           Control.Exception.Safe as Safe (Exception, MonadCatch, catch)
-import           GHC.Core.TyCo.Ppr      (pprSigmaType)
-import           GHC.Iface.Load
-import           GHC.Types.Unique.Set   (emptyUniqSet)
-#else
 import           TcType                 (pprSigmaType)
-#endif
-
 import           HscTypes
 import           MkIface hiding (writeIfaceFile)
 #if MIN_VERSION_ghc(8,10,0)
@@ -149,7 +146,7 @@ import           Data.IORef
 
 import qualified Data.Map               as Map
 
-#if MIN_VERSION_ghc(9,0,0) && !MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,0,0)
 import qualified Data.Set               as S
 #endif
 #if MIN_VERSION_ghc(8,8,0)

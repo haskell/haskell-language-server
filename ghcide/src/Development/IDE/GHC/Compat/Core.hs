@@ -36,8 +36,9 @@ module Development.IDE.GHC.Compat.Core (
     maxValidHoleFits,
 #if MIN_VERSION_ghc(8,8,0)
     CommandLineOption,
-    StaticPlugin(..),
+#if !MIN_VERSION_ghc(9,2,0)
     staticPlugins,
+#endif
 #endif
     sPgm_F,
     settings,
@@ -181,7 +182,7 @@ module Development.IDE.GHC.Compat.Core (
     splitFunTys,
     splitFunTy_maybe,
     splitPiTys,
-    splitForAllTys,
+    Development.IDE.GHC.Compat.Core.splitForAllTyCoVars,
     splitTyConApp_maybe,
     TCvSubst,
     extendTCvSubst,
@@ -496,8 +497,8 @@ module Development.IDE.GHC.Compat.Core (
     tcSplitTyConApp_maybe,
     tcSplitFunTys,
     tcSplitNestedSigmaTys,
-    tcSplitForAllTys,
-    tcSplitForAllTy_maybe,
+    Development.IDE.GHC.Compat.Core.tcSplitForAllTyVars,
+    Development.IDE.GHC.Compat.Core.tcSplitForAllTyVarBinder_maybe,
     tcSplitSigmaTy,
     TcTyThing(..),
     tcTyConAppTyCon_maybe,
@@ -657,12 +658,12 @@ import           GHC.Core.DataCon           as DataCon
 import           GHC.Core.FamInstEnv
 import           GHC.Core.InstEnv
 #if MIN_VERSION_ghc(9,2,0)
-import           GHC.Core.Multiplicity      (Scaled, scaledThing)
+import           GHC.Core.Multiplicity      (scaledThing)
 #else
-import           GHC.Core.PatSyn
+import           GHC.Core.Ppr.TyThing
 import           GHC.Core.TyCo.Rep          (scaledThing)
 #endif
-import           GHC.Core.Ppr.TyThing
+import           GHC.Core.PatSyn
 import           GHC.Core.Predicate
 import qualified GHC.Core.TyCo.Rep          as TyCoRep
 import           GHC.Core.TyCon
@@ -671,7 +672,6 @@ import           GHC.Core.Utils
 
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Driver.Env
-import           GHC.Driver.Env.Types
 #else
 import           GHC.Driver.Finder
 import           GHC.Driver.Types
@@ -686,11 +686,9 @@ import           GHC.Driver.Pipeline
 import           GHC.Driver.Plugins
 import           GHC.Driver.Session         hiding (ExposePackage)
 import qualified GHC.Driver.Session         as DynFlags
-#if !MIN_VERSION_ghc(9,2,0)
 import           GHC.HsToCore.Docs
 import           GHC.HsToCore.Expr
 import           GHC.HsToCore.Monad
-#endif
 import           GHC.Iface.Load
 import           GHC.Iface.Make             (mkFullIface, mkIfaceTc,
                                              mkPartialIface)
@@ -700,38 +698,41 @@ import           GHC.Iface.Tidy
 import           GHC.IfaceToCore
 import           GHC.Parser
 import           GHC.Parser.Header
+import           GHC.Parser.Lexer
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Linker.Loader
 import           GHC.Linker.Types
 import           GHC.Platform.Ways
 #else
-import           GHC.Parser.Lexer
-import           GHC.Runtime.Interpreter
 import           GHC.Runtime.Linker
 #endif
 import           GHC.Rename.Names
 import           GHC.Rename.Splice
+import           GHC.Runtime.Interpreter
 import           GHC.Tc.Instance.Family
 import           GHC.Tc.Module
 import           GHC.Tc.Types
 import           GHC.Tc.Types.Evidence
 import           GHC.Tc.Utils.Env
 import           GHC.Tc.Utils.Monad
-import           GHC.Tc.Utils.TcType
+import           GHC.Tc.Utils.TcType        as TcType
 import qualified GHC.Types.Avail            as Avail
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Types.Meta
-#else
+#endif
 import           GHC.Types.Basic
 import           GHC.Types.Id
-#endif
 import           GHC.Types.Name             hiding (varName)
 import           GHC.Types.Name.Cache
 import           GHC.Types.Name.Env
 import           GHC.Types.Name.Reader
 #if MIN_VERSION_ghc(9,2,0)
+import           GHC.Types.Name.Set
 import           GHC.Types.SourceFile       (HscSource (..),
                                              SourceModified (..))
+import           GHC.Types.SourceText
+import           GHC.Types.TyThing
+import           GHC.Types.TyThing.Ppr
 #else
 import           GHC.Types.Name.Set
 #endif
@@ -740,16 +741,16 @@ import qualified GHC.Types.SrcLoc           as SrcLoc
 import           GHC.Types.Unique.Supply
 import           GHC.Types.Var
 #if MIN_VERSION_ghc(9,2,0)
-import           GHC.Unit.Env
 import           GHC.Unit.Finder
 import           GHC.Unit.Home.ModInfo
 #endif
 import           GHC.Unit.Info              (PackageName (..))
 import           GHC.Unit.Module
 #if MIN_VERSION_ghc(9,2,0)
+import           GHC.Unit.Module.Imported
 import           GHC.Unit.Module.ModDetails
 import           GHC.Unit.Module.ModGuts
-import           GHC.Unit.Module.ModIface   (IfaceExport, mi_mod_hash)
+import           GHC.Unit.Module.ModIface   (IfaceExport)
 #endif
 import           GHC.Unit.State             (ModuleOrigin (..))
 import           GHC.Utils.Panic            hiding (try)
@@ -960,7 +961,33 @@ mkVisFunTys =
 mkInfForAllTys :: [TyVar] -> Type -> Type
 mkInfForAllTys =
 #if MIN_VERSION_ghc(9,0,0)
-    TcType.mkInfForAllTys
+  TcType.mkInfForAllTys
 #else
-    mkInvForAllTys
+  mkInvForAllTys
 #endif
+
+splitForAllTyCoVars :: Type -> ([TyCoVar], Type)
+splitForAllTyCoVars =
+#if MIN_VERSION_ghc(9,2,0)
+  TcType.splitForAllTyCoVars
+#else
+  splitForAllTys
+#endif
+
+tcSplitForAllTyVars :: Type -> ([TyVar], Type)
+tcSplitForAllTyVars =
+#if MIN_VERSION_ghc(9,2,0)
+  TcType.tcSplitForAllTyVars
+#else
+  tcSplitForAllTys
+#endif
+
+
+tcSplitForAllTyVarBinder_maybe :: Type -> Maybe (TyVarBinder, Type)
+tcSplitForAllTyVarBinder_maybe =
+#if MIN_VERSION_ghc(9,2,0)
+  TcType.tcSplitForAllTyVarBinder_maybe
+#else
+  tcSplitForAllTy_maybe
+#endif
+
