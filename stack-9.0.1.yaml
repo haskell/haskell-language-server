@@ -13,7 +13,7 @@ packages:
   - ./plugins/hls-haddock-comments-plugin
   - ./plugins/hls-eval-plugin
   - ./plugins/hls-explicit-imports-plugin
-  - ./plugins/hls-refine-imports-plugin
+  # - ./plugins/hls-refine-imports-plugin
   - ./plugins/hls-hlint-plugin
   - ./plugins/hls-rename-plugin
   - ./plugins/hls-retrie-plugin
@@ -32,12 +32,14 @@ ghc-options:
 
 extra-deps:
 
+- blaze-textual-0.2.2.1
 - bytestring-encoding-0.1.0.0@sha256:460b49779fbf0112e8e2f1753c1ed9131eb18827600c298f4d6bb51c4e8c1c0d,1727
 - dependent-map-0.4.0.0@sha256:ca2b131046f4340a1c35d138c5a003fe4a5be96b14efc26291ed35fd08c62221,1657
 - dependent-sum-0.7.1.0@sha256:0e419237f5b86da3659772afff9cab355c0f8d5b3fdb15a5b30e673d8dc83941,2147
 - floskell-0.10.5
 - ghc-source-gen-0.4.1.0
 - heapsize-0.3.0.1@sha256:0b69aa97a46d819b700ac7b145f3b5493c3565cf2c5b8298682238d405d0326e,1417
+- hie-bios-0.7.6
 - hiedb-0.4.0.0
 - hspec-2.7.10
 - hspec-core-2.7.10
@@ -53,20 +55,9 @@ extra-deps:
 - lsp-test-0.14.0.1
 - sqlite-simple-0.4.18.0
 
-# Upstream patches for ghc-9.0.1 compatability
-# Same as in cabal.project
-- github: jwaldmann/blaze-textual
-  commit: d8ee6cf80e27f9619d621c936bb4bda4b99a183f
-# https://github.com/jwaldmann/blaze-textual/commit/d8ee6cf80e27f9619d621c936bb4bda4b99a183f
-# https://github.com/bos/blaze-textual/issues/13
-
 - github: mithrandi/czipwith
   commit: b6245884ae83e00dd2b5261762549b37390179f8
 # https://github.com/lspitzner/czipwith/pull/2
-
-- github: mpickering/hie-bios
-  commit: 1875bff093983a0506f80e214eda27e7419da3bc
-# https://github.com/mpickering/hie-bios/pull/285
 
 - github: hsyl20/ghc-api-compat
   commit: 8fee87eac97a538dbe81ff1ab18cff10f2f9fa15
