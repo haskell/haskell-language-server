@@ -116,6 +116,7 @@ flags:
 
     class: false
     splice: false
+    refineImports: false
     tactic: false # Dependencies fail
 
     fourmolu: false
