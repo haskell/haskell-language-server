@@ -36,7 +36,10 @@ import           Development.Shake               (CmdOption (Cwd, FileStdout),
                                                   cmd_)
 import           Experiments.Types
 import           Language.LSP.Test
-import           Language.LSP.Types
+import           Language.LSP.Types              hiding
+                                                 (SemanticTokenAbsolute (length, line),
+                                                  SemanticTokenRelative (length),
+                                                  SemanticTokensEdit (_start))
 import           Language.LSP.Types.Capabilities
 import           Numeric.Natural
 import           Options.Applicative
@@ -71,9 +74,12 @@ experiments =
         isJust <$> getHover doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
       bench "edit" $ \docs -> do
-        forM_ docs $ \DocumentPositions{..} ->
+        forM_ docs $ \DocumentPositions{..} -> do
           changeDoc doc [charEdit stringLiteralP]
-        waitForProgressDone -- TODO check that this waits for all of them
+          -- wait for a fresh build start
+          waitForProgressStart
+        -- wait for the build to be finished
+        waitForProgressDone
         return True,
       ---------------------------------------------------------------------------------------
       bench "hover after edit" $ \docs -> do
@@ -115,8 +121,9 @@ experiments =
         ( \docs -> do
             unless (any (isJust . identifierP) docs) $
                 error "None of the example modules is suitable for this experiment"
-            forM_ docs $ \DocumentPositions{..} ->
+            forM_ docs $ \DocumentPositions{..} -> do
                 forM_ identifierP $ \p -> changeDoc doc [charEdit p]
+                waitForProgressStart
             waitForProgressDone
         )
         ( \docs -> not . null . catMaybes <$> forM docs (\DocumentPositions{..} ->
@@ -133,8 +140,9 @@ experiments =
                 forM_ identifierP $ \p -> changeDoc doc [charEdit p]
         )
         ( \docs -> do
-            forM_ docs $ \DocumentPositions{..} ->
+            forM_ docs $ \DocumentPositions{..} -> do
               changeDoc doc [charEdit stringLiteralP]
+              waitForProgressStart
             waitForProgressDone
             not . null . catMaybes <$> forM docs (\DocumentPositions{..} -> do
               forM identifierP $ \p ->
@@ -150,12 +158,13 @@ experiments =
                 forM_ identifierP $ \p -> changeDoc doc [charEdit p]
         )
         ( \docs -> do
-            Just hieYaml <- uriToFilePath <$> getDocUri "hie.yaml"
-            liftIO $ appendFile hieYaml "##\n"
+            hieYamlUri <- getDocUri "hie.yaml"
+            liftIO $ appendFile (fromJust $ uriToFilePath hieYamlUri) "##\n"
             sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
-                List [ FileEvent (filePathToUri "hie.yaml") FcChanged ]
-            forM_ docs $ \DocumentPositions{..} ->
+                List [ FileEvent hieYamlUri FcChanged ]
+            forM_ docs $ \DocumentPositions{..} -> do
               changeDoc doc [charEdit stringLiteralP]
+              waitForProgressStart
             waitForProgressDone
             not . null . catMaybes <$> forM docs (\DocumentPositions{..} -> do
               forM identifierP $ \p ->
@@ -165,10 +174,10 @@ experiments =
       bench
         "hover after cradle edit"
         (\docs -> do
-            Just hieYaml <- uriToFilePath <$> getDocUri "hie.yaml"
-            liftIO $ appendFile hieYaml "##\n"
+            hieYamlUri <- getDocUri "hie.yaml"
+            liftIO $ appendFile (fromJust $ uriToFilePath hieYamlUri) "##\n"
             sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
-                List [ FileEvent (filePathToUri "hie.yaml") FcChanged ]
+                List [ FileEvent hieYamlUri FcChanged ]
             flip allWithIdentifierPos docs $ \DocumentPositions{..} -> isJust <$> getHover doc (fromJust identifierP)
         ),
       ---------------------------------------------------------------------------------------
@@ -233,15 +242,22 @@ configP =
     <*> optional (option auto (long "samples" <> metavar "NAT" <> help "override sampling count"))
     <*> strOption (long "ghcide" <> metavar "PATH" <> help "path to ghcide" <> value "ghcide")
     <*> option auto (long "timeout" <> value 60 <> help "timeout for waiting for a ghcide response")
-    <*> ( GetPackage <$> strOption (long "example-package-name" <> value "Cabal")
+    <*> ( Example "name"
+               <$> (Right <$> packageP)
                <*> (some moduleOption <|> pure ["Distribution/Simple.hs"])
-               <*> option versionP (long "example-package-version" <> value (makeVersion [3,4,0,0]))
+               <*> pure []
          <|>
-          UsePackage <$> strOption (long "example-path")
-                     <*> some moduleOption
-         )
+          Example "name"
+                <$> (Left <$> pathP)
+                <*> some moduleOption
+                <*> pure [])
   where
       moduleOption = strOption (long "example-module" <> metavar "PATH")
+
+      packageP = ExamplePackage
+            <$> strOption (long "example-package-name" <> value "Cabal")
+            <*> option versionP (long "example-package-version" <> value (makeVersion [3,4,0,0]))
+      pathP = strOption (long "example-path")
 
 versionP :: ReadM Version
 versionP = maybeReader $ extract . readP_to_S parseVersion
@@ -387,6 +403,12 @@ data BenchRun = BenchRun
 badRun :: BenchRun
 badRun = BenchRun 0 0 0 0 0 False
 
+waitForProgressStart :: Session ()
+waitForProgressStart = void $ do
+    skipManyTill anyMessage $ satisfy $ \case
+      FromServerMess SWindowWorkDoneProgressCreate _ -> True
+      _                                              -> False
+
 -- | Wait for all progress to be done
 -- Needs at least one progress done notification to return
 waitForProgressDone :: Session ()
@@ -460,16 +482,16 @@ callCommandLogging cmd = do
 setup :: HasConfig => IO SetupResult
 setup = do
 --   when alreadyExists $ removeDirectoryRecursive examplesPath
-  benchDir <- case example ?config of
-      UsePackage{..} -> do
+  benchDir <- case exampleDetails(example ?config) of
+      Left examplePath -> do
           let hieYamlPath = examplePath </> "hie.yaml"
           alreadyExists <- doesFileExist hieYamlPath
           unless alreadyExists $
                 cmd_ (Cwd examplePath) (FileStdout hieYamlPath) ("gen-hie"::String)
           return examplePath
-      GetPackage{..} -> do
+      Right ExamplePackage{..} -> do
         let path = examplesPath </> package
-            package = exampleName <> "-" <> showVersion exampleVersion
+            package = packageName <> "-" <> showVersion packageVersion
             hieYamlPath = path </> "hie.yaml"
         alreadySetup <- doesDirectoryExist path
         unless alreadySetup $
@@ -512,9 +534,9 @@ setup = do
 
   whenJust (shakeProfiling ?config) $ createDirectoryIfMissing True
 
-  let cleanUp = case example ?config of
-        GetPackage{} -> removeDirectoryRecursive examplesPath
-        UsePackage{} -> return ()
+  let cleanUp = case exampleDetails(example ?config) of
+        Right _ -> removeDirectoryRecursive examplesPath
+        Left _  -> return ()
 
       runBenchmarks = runBenchmarksFun benchDir
 

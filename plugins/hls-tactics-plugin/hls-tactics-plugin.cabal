@@ -27,6 +27,10 @@ library
   hs-source-dirs:     src
   exposed-modules:
     Ide.Plugin.Tactic
+    Refinery.Future
+    Wingman.AbstractLSP
+    Wingman.AbstractLSP.TacticActions
+    Wingman.AbstractLSP.Types
     Wingman.Auto
     Wingman.CaseSplit
     Wingman.CodeGen
@@ -90,6 +94,7 @@ library
     , refinery              ^>=0.4
     , retrie                >=0.1.1.0
     , syb
+    , unagi-chan
     , text
     , transformers
     , unordered-containers
@@ -129,6 +134,7 @@ test-suite tests
     CodeAction.DestructPunSpec
     CodeAction.DestructSpec
     CodeAction.IntrosSpec
+    CodeAction.IntroDestructSpec
     CodeAction.RefineSpec
     CodeAction.RunMetaprogramSpec
     CodeAction.UseDataConSpec

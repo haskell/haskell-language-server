@@ -32,6 +32,66 @@ codeActionTests =
       liftIO $ "Add \"FlexibleInstances\"" `elem` map (^. L.title) cas @? "Contains FlexibleInstances code action"
       executeCodeAction $ head cas
 
+  , goldenWithPragmas "adds LANGUAGE with no other pragmas at start ignoring later INLINE pragma" "AddPragmaIgnoreInline" $ \doc -> do
+      _ <- waitForDiagnosticsFrom doc
+      cas <- map fromAction <$> getAllCodeActions doc
+      liftIO $ "Add \"TupleSections\"" `elem` map (^. L.title) cas @? "Contains TupleSections code action"
+      executeCodeAction $ head cas
+
+  , goldenWithPragmas "adds LANGUAGE after shebang preceded by other LANGUAGE and GHC_OPTIONS" "AddPragmaAfterShebangPrecededByLangAndOptsGhc" $ \doc -> do
+      _ <- waitForDiagnosticsFrom doc
+      cas <- map fromAction <$> getAllCodeActions doc
+      liftIO $ "Add \"TupleSections\"" `elem` map (^. L.title) cas @? "Contains TupleSections code action"
+      executeCodeAction $ head cas
+
+  , goldenWithPragmas "adds LANGUAGE after shebang with other Language preceding shebang" "AddPragmaAfterShebangPrecededByLanguage" $ \doc -> do
+      _ <- waitForDiagnosticsFrom doc
+      cas <- map fromAction <$> getAllCodeActions doc
+      liftIO $ "Add \"TupleSections\"" `elem` map (^. L.title) cas @? "Contains TupleSections code action"
+      executeCodeAction $ head cas
+
+  , goldenWithPragmas "adds LANGUAGE before Doc comments after interchanging pragmas" "BeforeDocInterchanging" $ \doc -> do
+      _ <- waitForDiagnosticsFrom doc
+      cas <- map fromAction <$> getAllCodeActions doc
+      liftIO $ "Add \"NamedFieldPuns\"" `elem` map (^. L.title) cas @? "Contains NamedFieldPuns code action"
+      executeCodeAction $ head cas
+
+  , goldenWithPragmas "Add language after altering OPTIONS_GHC and Language" "AddLanguagePragmaAfterInterchaningOptsGhcAndLangs" $ \doc -> do
+      _ <- waitForDiagnosticsFrom doc
+      cas <- map fromAction <$> getAllCodeActions doc
+      liftIO $ "Add \"TupleSections\"" `elem` map (^. L.title) cas @? "Contains TupleSections code action"
+      executeCodeAction $ head cas
+
+  , goldenWithPragmas "Add language after pragmas with non standard space between prefix and name" "AddPragmaWithNonStandardSpacingInPrecedingPragmas" $ \doc -> do
+      _ <- waitForDiagnosticsFrom doc
+      cas <- map fromAction <$> getAllCodeActions doc
+      liftIO $ "Add \"TupleSections\"" `elem` map (^. L.title) cas @? "Contains TupleSections code action"
+      executeCodeAction $ head cas
+
+   , goldenWithPragmas "adds LANGUAGE after OptGHC at start ignoring later INLINE pragma" "AddPragmaAfterOptsGhcIgnoreInline" $ \doc -> do
+      _ <- waitForDiagnosticsFrom doc
+      cas <- map fromAction <$> getAllCodeActions doc
+      liftIO $ "Add \"TupleSections\"" `elem` map (^. L.title) cas @? "Contains TupleSections code action"
+      executeCodeAction $ head cas
+
+  , goldenWithPragmas "adds LANGUAGE ignore later Ann pragma" "AddPragmaIgnoreLaterAnnPragma" $ \doc -> do
+      _ <- waitForDiagnosticsFrom doc
+      cas <- map fromAction <$> getAllCodeActions doc
+      liftIO $ "Add \"BangPatterns\"" `elem` map (^. L.title) cas @? "Contains BangPatterns code action"
+      executeCodeAction $ head cas
+
+  , goldenWithPragmas "adds LANGUAGE after interchanging pragmas ignoring later Ann pragma" "AddLanguageAfterInterchaningIgnoringLaterAnn" $ \doc -> do
+        _ <- waitForDiagnosticsFrom doc
+        cas <- map fromAction <$> getAllCodeActions doc
+        liftIO $ "Add \"BangPatterns\"" `elem` map (^. L.title) cas @? "Contains BangPatterns code action"
+        executeCodeAction $ head cas
+
+  , goldenWithPragmas "adds LANGUAGE after OptGHC preceded by another language pragma" "AddLanguageAfterLanguageThenOptsGhc" $ \doc -> do
+      _ <- waitForDiagnosticsFrom doc
+      cas <- map fromAction <$> getAllCodeActions doc
+      liftIO $ "Add \"NamedFieldPuns\"" `elem` map (^. L.title) cas @? "Contains NamedFieldPuns code action"
+      executeCodeAction $ head cas
+
   , goldenWithPragmas "adds LANGUAGE pragma after shebang and last language pragma" "AfterShebangAndPragma" $ \doc -> do
       _ <- waitForDiagnosticsFrom doc
       cas <- map fromAction <$> getAllCodeActions doc
@@ -123,6 +183,13 @@ codeActionTests =
       cas <- map fromAction <$> getAllCodeActions doc
       liftIO $ "Disable \"unused-imports\" warnings" `elem` map (^. L.title) cas @? "Contains unused-imports code action"
       executeCodeAction $ head cas
+
+  , goldenWithPragmas "doesn't suggest disabling type errors" "DeferredTypeErrors" $ \doc -> do
+
+      _ <- waitForDiagnosticsFrom doc
+      cas <- map fromAction <$> getAllCodeActions doc
+      liftIO $ "Disable \"deferred-type-errors\" warnings" `notElem` map (^. L.title) cas @? "Doesn't contain deferred-type-errors code action"
+      liftIO $ length cas == 0 @? "Expected no code actions, but got: " <> show cas
   ]
 
 completionTests :: TestTree

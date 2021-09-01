@@ -17,6 +17,7 @@ packages:
   - ./plugins/hls-explicit-imports-plugin
   - ./plugins/hls-refine-imports-plugin
   - ./plugins/hls-hlint-plugin
+  - ./plugins/hls-rename-plugin
   - ./plugins/hls-retrie-plugin
   - ./plugins/hls-splice-plugin
   - ./plugins/hls-tactics-plugin
@@ -32,6 +33,7 @@ ghc-options:
   "$everything": -haddock
 
 extra-deps:
+  - ansi-terminal-0.10.3
   - apply-refact-0.9.3.0
   - brittany-0.13.1.2
   - Cabal-3.0.2.0
@@ -49,8 +51,10 @@ extra-deps:
   - implicit-hie-cradle-0.3.0.5
   - implicit-hie-0.1.2.6
   - monad-dijkstra-0.1.1.2
+  # For stylish-haskell-0.12.2.0
+  - optparse-applicative-0.15.1.0
   - refinery-0.4.0.0
-  - retrie-1.0.0.0
+  - retrie-0.1.1.1
   - stylish-haskell-0.12.2.0
   - semigroups-0.18.5
   - temporary-1.2.1.1
@@ -63,14 +67,9 @@ extra-deps:
   - constraints-extras-0.3.1.0
   - some-1.0.1@sha256:26e5bab7276f48b25ea8660d3fd1166c0f20fd497dac879a40f408e23211f93e,2055
   - unliftio-core-0.2.0.1@sha256:9b3e44ea9aacacbfc35b3b54015af450091916ac3618a41868ebf6546977659a,1082
-
-  - github: haskell/lsp
-    commit: ef59c28b41ed4c5775f0ab0c1e985839359cec96
-    subdirs:
-    - lsp-types
-    - lsp
-    - lsp-test
-  # https://github.com/haskell/lsp/pull/332
+  - lsp-1.2.0.1
+  - lsp-types-1.3.0.1
+  - lsp-test-0.14.0.1
 
   # Enable these when supported by all formatters
   # - ghc-lib-9.0.1.20210324@sha256:c8b9a2541ea3424c8d0e4f80584477d0f35be03f4a47d931152042d5f446c5fc,19279
@@ -97,10 +96,6 @@ flags:
     hlint33: false
   hyphenation:
     embed: true
-
-
-# Because of implicit-hie-cradle-0.3.0.2 and stylish-haskell-0.12.2.0
-allow-newer: true
 
 nix:
   packages: [ icu libcxx zlib ]

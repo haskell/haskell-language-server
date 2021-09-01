@@ -25,11 +25,11 @@ plugin = descriptor "callHierarchy"
 
 main :: IO ()
 main = defaultTestRunner $
-         testGroup "Call Hierarchy"
-           [ prepareCallHierarchyTests
-           , incomingCallsTests
-           , outgoingCallsTests
-           ]
+  testGroup "Call Hierarchy"
+    [ prepareCallHierarchyTests
+    , incomingCallsTests
+    , outgoingCallsTests
+    ]
 
 prepareCallHierarchyTests :: TestTree
 prepareCallHierarchyTests =
@@ -164,6 +164,29 @@ prepareCallHierarchyTests =
           selRange = mkRange 1 13 1 14
           expected = mkCallHierarchyItemC "A" SkConstructor range selRange
       oneCaseWithCreate contents 1 13 expected
+  , testGroup "type signature"
+      [ testCase "next line" $ do
+          let contents = T.unlines ["a::Int", "a=3"]
+              range = mkRange 1 0 1 3
+              selRange = mkRange 1 0 1 1
+              expected = mkCallHierarchyItemV "a" SkFunction range selRange
+          oneCaseWithCreate contents 0 0 expected
+      , testCase "multi functions" $ do
+          let contents = T.unlines [ "a,b::Int", "a=3", "b=4"]
+              range = mkRange 2 0 2 3
+              selRange = mkRange 2 0 2 1
+              expected = mkCallHierarchyItemV "b" SkFunction range selRange
+          oneCaseWithCreate contents 0 2 expected
+      ]
+  , testCase "multi pattern" $ do
+      let contents = T.unlines
+            [ "f (Just _) = ()"
+            , "f Nothing = ()"
+            ]
+          range = mkRange 1 0 1 1
+          selRange = mkRange 1 0 1 1
+          expected = mkCallHierarchyItemV "f" SkFunction range selRange
+      oneCaseWithCreate contents 1 0 expected
   ]
 
 incomingCallsTests :: TestTree
@@ -249,6 +272,15 @@ incomingCallsTests =
             positions = [(1, 5)]
             ranges = [mkRange 1 13 1 14]
         incomingCallTestCase contents 1 13 positions ranges
+    , testCase "multi pattern" $ do
+        let contents = T.unlines
+                [ "f 1 = 1"
+                , "f 2 = 2"
+                , "g = f"
+                ]
+            positions = [(2, 0)]
+            ranges = [mkRange 2 4 2 5]
+        incomingCallTestCase contents 1 0 positions ranges
     ]
   , testGroup "multi file"
     [ testCase "1" $ do

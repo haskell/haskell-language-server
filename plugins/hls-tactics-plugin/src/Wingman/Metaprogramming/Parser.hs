@@ -76,7 +76,7 @@ commands =
           ])
       (pure . \case
         []    -> intros
-        names -> intros' $ Just names
+        names -> intros' $ IntroduceOnlyNamed names
       )
       [ Example
           Nothing
@@ -100,7 +100,7 @@ commands =
 
   , command "intro" Deterministic (Bind One)
       "Construct a lambda expression, binding an argument with the given name."
-      (pure . intros' . Just . pure)
+      (pure . intros' . IntroduceOnlyNamed . pure)
       [ Example
           Nothing
           ["aye"]
@@ -447,10 +447,7 @@ attempt_it rsl ctx jdg program =
   case P.runParser tacticProgram "<splice>" (T.pack program) of
     Left peb -> pure $ Left $ wrapError $ P.errorBundlePretty $ fixErrorOffset rsl peb
     Right tt -> do
-      res <- runTactic
-            ctx
-            jdg
-            tt
+      res <- runTactic 2e6 ctx jdg tt
       pure $ case res of
           Left tes -> Left $ wrapError $ show tes
           Right rtr -> Right
