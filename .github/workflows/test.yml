@@ -60,8 +60,6 @@ jobs:
             test: true
           # only build rest of supported ghc versions for windows
           - os: windows-latest
-            ghc: '8.10.7'
-          - os: windows-latest
             ghc: '8.10.6'
           - os: windows-latest
             ghc: '8.10.5'
