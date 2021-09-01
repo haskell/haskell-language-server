@@ -121,6 +121,31 @@ tests = testGroup "completions" [
          compls <- getCompletions doc (Position 5 7)
          liftIO $ length compls @?= maxCompletions def
 
+     , testCase "import function completions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
+         doc <- openDoc "FunctionCompletions.hs" "haskell"
+
+         let te = TextEdit (Range (Position 0 30) (Position 0 41)) "A"
+         _ <- applyEdit doc te
+
+         compls <- getCompletions doc (Position 0 31)
+         let item = head $ filter ((== "Alternative") . (^. label)) compls
+         liftIO $ do
+             item ^. label @?= "Alternative"
+             item ^. kind @?= Just CiFunction
+             item ^. detail @?= Just "Control.Applicative"
+
+    , testCase "import second function completion" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
+         doc <- openDoc "FunctionCompletions.hs" "haskell"
+
+         let te = TextEdit (Range (Position 0 41) (Position 0 42)) ", l"
+         _ <- applyEdit doc te
+
+         compls <- getCompletions doc (Position 0 41)
+         let item = head $ filter ((== "liftA") . (^. label)) compls
+         liftIO $ do
+             item ^. label @?= "liftA"
+             item ^. kind @?= Just CiFunction
+             item ^. detail @?= Just "Control.Applicative"
      , contextTests
      , snippetTests
     ]

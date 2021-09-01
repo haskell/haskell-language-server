@@ -41,6 +41,7 @@ import           Control.Monad
 import           Data.Aeson                               (ToJSON (toJSON))
 import           Data.Either                              (fromRight)
 import           Data.Functor
+import qualified Data.Map                                 as DM (Map)
 import qualified Data.Set                                 as Set
 import           Development.IDE.Core.Compile
 import           Development.IDE.Core.PositionMapping
@@ -54,7 +55,7 @@ import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.HscEnvEq
 import           Development.IDE.Types.Options
-import           GhcPlugins                               (flLabel, unpackFS)
+import           GhcPlugins                               (flLabel, unpackFS, lookupWithDefaultUFM)
 import           Ide.PluginUtils                          (mkLspCommand)
 import           Ide.Types                                (CommandId (..),
                                                            PluginId)
@@ -63,6 +64,7 @@ import           Language.LSP.Types.Capabilities
 import qualified Language.LSP.VFS                         as VFS
 import           Outputable                               (Outputable)
 import           TyCoRep
+
 
 -- From haskell-ide-engine/hie-plugin-api/Haskell/Ide/Engine/Context.hs
 
@@ -282,6 +284,13 @@ mkNameCompItem doc thingParent origName origMod thingType isInfix docs !imp = CI
 mkModCompl :: T.Text -> CompletionItem
 mkModCompl label =
   CompletionItem label (Just CiModule) Nothing Nothing
+    Nothing Nothing Nothing Nothing Nothing Nothing Nothing
+    Nothing Nothing Nothing Nothing Nothing Nothing
+
+
+mkModuleFunctionImport :: T.Text -> T.Text -> CompletionItem
+mkModuleFunctionImport moduleName label =
+  CompletionItem label (Just CiFunction) Nothing (Just moduleName)
     Nothing Nothing Nothing Nothing Nothing Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing Nothing
 
@@ -530,9 +539,10 @@ getCompletions
     -> VFS.PosPrefixInfo
     -> ClientCapabilities
     -> CompletionsConfig
+    -> DM.Map T.Text [T.Text]
     -> IO [CompletionItem]
 getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qualCompls, importableModules}
-               maybe_parsed (localBindings, bmapping) prefixInfo caps config = do
+               maybe_parsed (localBindings, bmapping) prefixInfo caps config exportsMap = do
   let VFS.PosPrefixInfo { fullLine, prefixModule, prefixText } = prefixInfo
       enteredQual = if T.null prefixModule then "" else prefixModule <> "."
       fullPrefix  = enteredQual <> prefixText
@@ -619,9 +629,17 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
         | s == c = ss
         | otherwise = s:ss
 
-  if
+  if 
+    | "import " `T.isPrefixOf` fullLine 
+      && (List.length (words (T.unpack fullLine)) >= 2)
+      && "(" `isInfixOf` T.unpack fullLine
+    -> do  
+      let moduleName = (words (T.unpack fullLine)) !! 1
+          funcs = Map.findWithDefault [] (T.pack moduleName) exportsMap
+      return (map (mkModuleFunctionImport (T.pack moduleName)) funcs)
     | "import " `T.isPrefixOf` fullLine
-    -> return filtImportCompls
+    -> do
+      return filtImportCompls
     -- we leave this condition here to avoid duplications and return empty list
     -- since HLS implements this completion (#haskell-language-server/pull/662)
     | "{-# language" `T.isPrefixOf` T.toLower fullLine
@@ -651,6 +669,7 @@ uniqueCompl x y =
         then EQ
         else compare (insertText x) (insertText y)
     other -> other
+
 -- ---------------------------------------------------------------------
 -- helper functions for pragmas
 -- ---------------------------------------------------------------------

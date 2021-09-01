@@ -16,6 +16,7 @@ import           Data.Aeson
 import qualified Data.HashMap.Strict                          as Map
 import qualified Data.HashSet                                 as Set
 import           Data.List                                    (find)
+import qualified Data.Map                                     as DM (Map, fromListWith, empty)
 import           Data.Maybe
 import qualified Data.Text                                    as T
 import           Development.IDE.Core.PositionMapping
@@ -131,7 +132,7 @@ getCompletionsLSP ide plId
     fmap Right $ case (contents, uriToFilePath' uri) of
       (Just cnts, Just path) -> do
         let npath = toNormalizedFilePath' path
-        (ideOpts, compls) <- liftIO $ runIdeAction "Completion" (shakeExtras ide) $ do
+        (ideOpts, compls, moduleExports) <- liftIO $ runIdeAction "Completion" (shakeExtras ide) $ do
             opts <- liftIO $ getIdeOptionsIO $ shakeExtras ide
             localCompls <- useWithStaleFast LocalCompletions npath
             nonLocalCompls <- useWithStaleFast NonLocalCompletions npath
@@ -139,12 +140,13 @@ getCompletionsLSP ide plId
             binds <- fromMaybe (mempty, zeroMapping) <$> useWithStaleFast GetBindings npath
             exportsMapIO <- fmap(envPackageExports . fst) <$> useWithStaleFast GhcSession npath
             exportsMap <- mapM liftIO exportsMapIO
+            let moduleExports = buildModouleExportMap exportsMap
             let exportsCompItems = foldMap (map (fromIdentInfo uri) . Set.toList) . Map.elems . getExportsMap <$> exportsMap
                 exportsCompls = mempty{anyQualCompls = fromMaybe [] exportsCompItems}
             let compls = (fst <$> localCompls) <> (fst <$> nonLocalCompls) <> Just exportsCompls
-            pure (opts, fmap (,pm,binds) compls)
-        case compls of
-          Just (cci', parsedMod, bindMap) -> do
+            pure (opts, fmap (,pm,binds) compls, moduleExports)
+        case (compls, moduleExports) of
+          (Just (cci', parsedMod, bindMap), mExports) -> do
             pfix <- VFS.getCompletionPrefix position cnts
             case (pfix, completionContext) of
               (Just (VFS.PosPrefixInfo _ "" _ _), Just CompletionContext { _triggerCharacter = Just "."})
@@ -152,13 +154,26 @@ getCompletionsLSP ide plId
               (Just pfix', _) -> do
                 let clientCaps = clientCapabilities $ shakeExtras ide
                 config <- getCompletionsConfig plId
-                allCompletions <- liftIO $ getCompletions plId ideOpts cci' parsedMod bindMap pfix' clientCaps config
+                allCompletions <- liftIO $ getCompletions plId ideOpts cci' parsedMod bindMap pfix' clientCaps config mExports
                 pure $ InL (List allCompletions)
               _ -> return (InL $ List [])
           _ -> return (InL $ List [])
       _ -> return (InL $ List [])
 
 ----------------------------------------------------------------------------------------------------
+
+identInfoToKeyVal :: IdentInfo -> (T.Text, T.Text)
+identInfoToKeyVal IdentInfo {rendered, moduleNameText} =
+  (moduleNameText, rendered)
+
+buildModouleExportMap:: Maybe (ExportsMap) -> DM.Map T.Text [T.Text]
+buildModouleExportMap (Just exportsMap) = do
+  sortAndGroup $ map identInfoToKeyVal $ 
+    concatMap (Set.toList . snd) $ toList $ getExportsMap exportsMap
+buildModouleExportMap (Nothing) = DM.empty 
+
+sortAndGroup :: [(T.Text, T.Text)] -> DM.Map T.Text [T.Text]
+sortAndGroup assocs = DM.fromListWith (++) [(k, [v]) | (k, v) <- assocs]  
 
 extendImportCommand :: PluginCommand IdeState
 extendImportCommand =
