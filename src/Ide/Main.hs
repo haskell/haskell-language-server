@@ -13,6 +13,7 @@ import           Control.Monad.Extra
 import qualified Data.Aeson.Encode.Pretty      as A
 import qualified Data.ByteString.Lazy.Char8    as LBS
 import           Data.Default
+import           Data.List                     (sort)
 import qualified Data.Text                     as T
 import           Development.IDE.Core.Rules
 import           Development.IDE.Graph         (ShakeOptions (shakeThreads))
@@ -25,7 +26,8 @@ import           Ide.Arguments
 import           Ide.Logger
 import           Ide.Plugin.ConfigUtils        (pluginsToDefaultConfig,
                                                 pluginsToVSCodeExtensionSchema)
-import           Ide.Types                     (IdePlugins, ipMap)
+import           Ide.Types                     (IdePlugins, PluginId (PluginId),
+                                                ipMap)
 import           Ide.Version
 import qualified Language.LSP.Server           as LSP
 import qualified System.Directory.Extra        as IO
@@ -50,6 +52,12 @@ defaultMain args idePlugins = do
 
         VersionMode PrintNumericVersion ->
             putStrLn haskellLanguageServerNumericVersion
+
+        ListPluginsMode -> do
+            let pluginNames = sort
+                    $ map ((\(PluginId t) -> T.unpack t) . fst)
+                    $ ipMap idePlugins
+            mapM_ putStrLn pluginNames
 
         BiosMode PrintCradleType -> do
             dir <- IO.getCurrentDirectory
