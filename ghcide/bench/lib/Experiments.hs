@@ -167,7 +167,7 @@ experiments =
             waitForProgressStart
             waitForProgressStart -- the Session logic restarts a second time
             waitForProgressDone
-            not . null . concat . catMaybes <$> forM docs (\DocumentPositions{..} -> do
+            not . all null . catMaybes <$> forM docs (\DocumentPositions{..} -> do
               forM identifierP $ \p ->
                 getCodeActions doc (Range p p))
         ),
