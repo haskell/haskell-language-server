@@ -41,7 +41,7 @@ extra-deps:
 - ghc-source-gen-0.4.1.0
 - heapsize-0.3.0.1@sha256:0b69aa97a46d819b700ac7b145f3b5493c3565cf2c5b8298682238d405d0326e,1417
 - hie-bios-0.7.6
-- hiedb-0.4.0.0
+- hiedb-0.4.1.0
 - hspec-2.7.10
 - hspec-core-2.7.10
 - hspec-discover-2.7.10
