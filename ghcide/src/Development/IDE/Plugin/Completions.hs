@@ -146,7 +146,7 @@ getCompletionsLSP ide plId
             let compls = (fst <$> localCompls) <> (fst <$> nonLocalCompls) <> Just exportsCompls
             pure (opts, fmap (,pm,binds) compls, moduleExports)
         case compls of
-          (Just (cci', parsedMod, bindMap)) -> do
+          Just (cci', parsedMod, bindMap) -> do
             pfix <- VFS.getCompletionPrefix position cnts
             case (pfix, completionContext) of
               (Just (VFS.PosPrefixInfo _ "" _ _), Just CompletionContext { _triggerCharacter = Just "."})

@@ -55,7 +55,7 @@ import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.HscEnvEq
 import           Development.IDE.Types.Options
-import           GhcPlugins                               (flLabel, unpackFS, lookupWithDefaultUFM)
+import           GhcPlugins                               (flLabel, unpackFS)
 import           Ide.PluginUtils                          (mkLspCommand)
 import           Ide.Types                                (CommandId (..),
                                                            PluginId)
@@ -64,7 +64,6 @@ import           Language.LSP.Types.Capabilities
 import qualified Language.LSP.VFS                         as VFS
 import           Outputable                               (Outputable)
 import           TyCoRep
-
 
 -- From haskell-ide-engine/hie-plugin-api/Haskell/Ide/Engine/Context.hs
 
@@ -286,7 +285,6 @@ mkModCompl label =
   CompletionItem label (Just CiModule) Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing Nothing
-
 
 mkModuleFunctionImport :: T.Text -> T.Text -> CompletionItem
 mkModuleFunctionImport moduleName label =
@@ -629,7 +627,7 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
         | s == c = ss
         | otherwise = s:ss
 
-  if 
+  if
     | "import " `T.isPrefixOf` fullLine 
       && (List.length (words (T.unpack fullLine)) >= 2)
       && "(" `isInfixOf` T.unpack fullLine
@@ -638,8 +636,7 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
           funcs = HM.findWithDefault [] (T.pack moduleName) exportsMap
       return (map (mkModuleFunctionImport (T.pack moduleName)) funcs)
     | "import " `T.isPrefixOf` fullLine
-    -> do
-      return filtImportCompls
+    -> return filtImportCompls
     -- we leave this condition here to avoid duplications and return empty list
     -- since HLS implements this completion (#haskell-language-server/pull/662)
     | "{-# language" `T.isPrefixOf` T.toLower fullLine
@@ -669,7 +666,6 @@ uniqueCompl x y =
         then EQ
         else compare (insertText x) (insertText y)
     other -> other
-
 -- ---------------------------------------------------------------------
 -- helper functions for pragmas
 -- ---------------------------------------------------------------------
