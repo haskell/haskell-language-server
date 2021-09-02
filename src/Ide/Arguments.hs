@@ -30,6 +30,7 @@ import           System.Environment
 data Arguments
   = VersionMode PrintVersion
   | ProbeToolsMode
+  | ListPluginsMode
   | BiosMode BiosAction
   | Ghcide GhcideArguments
   | VSCodeExtensionSchemaMode
@@ -64,6 +65,7 @@ getArguments exeName plugins = execParser opts
     opts = info ((
       VersionMode <$> printVersionParser exeName
       <|> probeToolsParser exeName
+      <|> listPluginsParser
       <|> BiosMode <$> biosParser
       <|> Ghcide <$> arguments plugins
       )
@@ -89,6 +91,11 @@ probeToolsParser :: String -> Parser Arguments
 probeToolsParser exeName =
   flag' ProbeToolsMode
     (long "probe-tools" <> help ("Show " ++ exeName  ++ " version and other tools of interest"))
+
+listPluginsParser :: Parser Arguments
+listPluginsParser =
+  flag' ListPluginsMode
+    (long "list-plugins" <> help "List all avaliable plugins")
 
 arguments :: IdePlugins IdeState -> Parser GhcideArguments
 arguments plugins = GhcideArguments
