@@ -38,7 +38,6 @@ extra-deps:
   - data-tree-print-0.1.0.2@rev:2
   - floskell-0.10.4
   - fourmolu-0.3.0.0
-  - ghc-api-compat-8.6
   - ghc-check-0.5.0.4
   - ghc-exactprint-0.6.4
   - ghc-source-gen-0.4.1.0
