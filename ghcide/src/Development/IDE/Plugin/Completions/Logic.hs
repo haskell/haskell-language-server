@@ -41,7 +41,7 @@ import           Control.Monad
 import           Data.Aeson                               (ToJSON (toJSON))
 import           Data.Either                              (fromRight)
 import           Data.Functor
-import qualified Data.Map                                 as DM (Map)
+import qualified Data.HashMap.Strict                      as HM
 import qualified Data.Set                                 as Set
 import           Development.IDE.Core.Compile
 import           Development.IDE.Core.PositionMapping
@@ -539,7 +539,7 @@ getCompletions
     -> VFS.PosPrefixInfo
     -> ClientCapabilities
     -> CompletionsConfig
-    -> DM.Map T.Text [T.Text]
+    -> HM.HashMap T.Text [T.Text]
     -> IO [CompletionItem]
 getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qualCompls, importableModules}
                maybe_parsed (localBindings, bmapping) prefixInfo caps config exportsMap = do
@@ -634,8 +634,8 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
       && (List.length (words (T.unpack fullLine)) >= 2)
       && "(" `isInfixOf` T.unpack fullLine
     -> do  
-      let moduleName = (words (T.unpack fullLine)) !! 1
-          funcs = Map.findWithDefault [] (T.pack moduleName) exportsMap
+      let moduleName = words (T.unpack fullLine) !! 1
+          funcs = HM.findWithDefault [] (T.pack moduleName) exportsMap
       return (map (mkModuleFunctionImport (T.pack moduleName)) funcs)
     | "import " `T.isPrefixOf` fullLine
     -> do
