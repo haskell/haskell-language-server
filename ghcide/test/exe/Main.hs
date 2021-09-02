@@ -78,6 +78,7 @@ import           System.FilePath
 import           System.IO.Extra                          hiding (withTempDir)
 import qualified System.IO.Extra
 import           System.Info.Extra                        (isWindows)
+import           System.Mem                               (performGC)
 import           System.Process.Extra                     (CreateProcess (cwd),
                                                            createPipe, proc,
                                                            readCreateProcessWithExitCode)
@@ -5720,6 +5721,7 @@ unitTests = do
 findResolution_us :: Int -> IO Int
 findResolution_us delay_us | delay_us >= 1000000 = error "Unable to compute timestamp resolution"
 findResolution_us delay_us = withTempFile $ \f -> withTempFile $ \f' -> do
+    performGC
     writeFile f ""
     threadDelay delay_us
     writeFile f' ""
