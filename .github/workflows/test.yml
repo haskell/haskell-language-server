@@ -65,9 +65,10 @@ jobs:
             ghc: '8.10.4'
           - os: windows-latest
             ghc: '8.10.3'
-          - os: windows-latest
-            ghc: '8.10.2.2'
-          # This build get stuck frequently
+          # These builds get stuck frequently
+          # - os: windows-latest
+          #   ghc: '8.10.2.2'
+          
           # - os: windows-latest
           #   ghc: '8.6.4'
 
