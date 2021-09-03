@@ -633,7 +633,7 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
       && "(" `isInfixOf` T.unpack fullLine
     -> do  
       let moduleName = words (T.unpack fullLine) !! 1
-          funcs = HM.findWithDefault [] (T.pack moduleName) exportsMap
+          funcs = HM.lookupDefault [] (T.pack moduleName) exportsMap
       return (map (mkModuleFunctionImport (T.pack moduleName)) funcs)
     | "import " `T.isPrefixOf` fullLine
     -> return filtImportCompls
