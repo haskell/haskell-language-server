@@ -16,7 +16,6 @@ import           Data.Aeson
 import qualified Data.HashMap.Strict                          as Map
 import qualified Data.HashSet                                 as Set
 import           Data.List                                    (find)
-import qualified Data.HashMap.Strict                          as HM
 import           Data.Maybe
 import qualified Data.Text                                    as T
 import           Development.IDE.Core.PositionMapping
@@ -166,14 +165,14 @@ identInfoToKeyVal :: IdentInfo -> (T.Text, T.Text)
 identInfoToKeyVal IdentInfo {rendered, moduleNameText} =
   (moduleNameText, rendered)
 
-buildModuleExportMap:: Maybe ExportsMap -> HM.HashMap T.Text [T.Text]
+buildModuleExportMap:: Maybe ExportsMap -> Map.HashMap T.Text [T.Text]
 buildModuleExportMap (Just exportsMap) = do
   sortAndGroup $ map identInfoToKeyVal $ 
     concatMap (Set.toList . snd) $ toList $ getExportsMap exportsMap
-buildModuleExportMap Nothing = HM.empty 
+buildModuleExportMap Nothing = Map.empty 
 
-sortAndGroup :: [(T.Text, T.Text)] -> HM.HashMap T.Text [T.Text]
-sortAndGroup assocs = HM.fromListWith (++) [(k, [v]) | (k, v) <- assocs]  
+sortAndGroup :: [(T.Text, T.Text)] -> Map.HashMap T.Text [T.Text]
+sortAndGroup assocs = Map.fromListWith (++) [(k, [v]) | (k, v) <- assocs]  
 
 extendImportCommand :: PluginCommand IdeState
 extendImportCommand =
