@@ -55,6 +55,9 @@ extra-deps:
   # - ghc-lib-parser-ex-9.0.0.4@sha256:8282b11c3797fc8ba225b245e736cc9a0745d9c48d0f9fea7f9bffb5c9997709,3642
   # - hlint-3.3@sha256:4218ad6e03050f5d68aeba0e025f5f05e366c8fd49657f2a19df04ee31b2bb23,4154
 
+# for ghc-api-compat-8.10.6
+allow-newer: true
+
 configure-options:
   ghcide:
       - --disable-library-for-ghci
