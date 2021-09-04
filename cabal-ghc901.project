@@ -64,7 +64,7 @@ write-ghc-environment-files: never
 index-state: 2021-09-06T12:12:22Z
 
 constraints:
-    -- These plugins doesn't work on GHC9 yet
+    -- These plugins don't work on GHC9 yet
     haskell-language-server -brittany -class -fourmolu -stylishhaskell -tactic
 
 allow-newer:
