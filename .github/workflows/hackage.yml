@@ -32,6 +32,20 @@ jobs:
           ghc-version: ${{ matrix.ghc }}
           cabal-version: '3.4'
 
+      - name: Cache Cabal
+        uses: actions/cache@v2
+        env:
+          cache-name: cache-cabal
+        with:
+          path: |
+            ${{ env.CABAL_PKGS_DIR }}
+            ${{ env.CABAL_STORE_DIR }}
+          key: v2-${{ runner.os }}-${{ matrix.ghc }}-build-${{ hashFiles('cabal.project') }}
+          restore-keys: |
+            v2-${{ runner.os }}-${{ matrix.ghc }}-bench-${{ hashFiles('cabal.project') }}
+            v2-${{ runner.os }}-${{ matrix.ghc }}-build-
+            v2-${{ runner.os }}-${{ matrix.ghc }}
+
       - name: "Run cabal check"
         run: |
           if [[ ${{ matrix.package }} == *plugin ]]; then
