@@ -615,6 +615,7 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
         ]
 
       filtImportCompls = filtListWith (mkImportCompl enteredQual) importableModules
+      filterModuleExports moduleName = filtListWith $mkModuleFunctionImport moduleName
       filtPragmaCompls = filtListWithSnippet mkPragmaCompl validPragmas
       filtOptsCompls   = filtListWith mkExtCompl
       filtKeywordCompls
@@ -631,10 +632,10 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
     | "import " `T.isPrefixOf` fullLine 
       && (List.length (words (T.unpack fullLine)) >= 2)
       && "(" `isInfixOf` T.unpack fullLine
-    -> do  
-      let moduleName = words (T.unpack fullLine) !! 1
-          funcs = HM.lookupDefault [] (T.pack moduleName) exportsMap
-      return (map (mkModuleFunctionImport (T.pack moduleName)) funcs)
+    -> do
+      let moduleName = T.pack $ words (T.unpack fullLine) !! 1
+          funcs = HM.lookupDefault [] moduleName exportsMap
+      return $ filterModuleExports moduleName funcs
     | "import " `T.isPrefixOf` fullLine
     -> return filtImportCompls
     -- we leave this condition here to avoid duplications and return empty list
