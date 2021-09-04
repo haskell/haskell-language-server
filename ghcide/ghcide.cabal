@@ -110,7 +110,10 @@ library
       build-depends:
         unix
 
-    if impl(ghc == 8.10.5)
+    if impl(ghc < 8.10.5)
+        build-depends:
+            ghc-api-compat ==8.6
+    elif impl(ghc == 8.10.5)
         build-depends:
             ghc-api-compat ==8.10.5
     elif impl(ghc > 8.10.5) && impl(ghc < 9)
@@ -118,7 +121,7 @@ library
             ghc-api-compat ==8.10.6
     else
         build-depends:
-            ghc-api-compat ==8.6
+            ghc-api-compat
 
     default-extensions:
         ApplicativeDo
