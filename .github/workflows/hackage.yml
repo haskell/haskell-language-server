@@ -32,6 +32,11 @@ jobs:
           ghc-version: ${{ matrix.ghc }}
           cabal-version: '3.4'
 
+      # Needs to be before Cache Cabal so the cache can detect changes to the modified cabal.project file
+      - if: ${{ matrix.ghc == '9.0.1' }}
+        name: Use modified cabal.project for ghc9
+        run: cp cabal-ghc901.project cabal.project
+
       - name: Cache Cabal
         uses: actions/cache@v2
         env:
@@ -54,10 +59,9 @@ jobs:
           cd ${{ matrix.package }}
           cabal check
 
-      - name: "Generate haddock for hackage"
-        run: cabal haddock --haddock-for-hackage ${{ matrix.package }}
-
       - name: "Build with hackage head"
         run: cabal build --index-state=HEAD ${{ matrix.package }}
 
+      - name: "Generate haddock for hackage"
+        run: cabal haddock --index-state=HEAD --haddock-for-hackage ${{ matrix.package }}
 
