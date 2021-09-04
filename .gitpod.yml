@@ -26,3 +26,9 @@ github:
     addBadge: false
     # add a label once the prebuild is ready to pull requests (defaults to false)
     addLabel: prebuilt-in-gitpod
+
+vscode:
+  extensions:
+    - "haskell.haskell"
+    - "justusadam.language-haskell"
+    - "usernamehw.errorlens"
