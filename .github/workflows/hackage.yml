@@ -38,8 +38,8 @@ jobs:
           cache-name: cache-cabal
         with:
           path: |
-            ${{ env.CABAL_PKGS_DIR }}
-            ${{ env.CABAL_STORE_DIR }}
+            ~/.cabal/packages
+            ~/.cabal/store
           key: v2-${{ runner.os }}-${{ matrix.ghc }}-build-${{ hashFiles('cabal.project') }}
           restore-keys: |
             v2-${{ runner.os }}-${{ matrix.ghc }}-bench-${{ hashFiles('cabal.project') }}
