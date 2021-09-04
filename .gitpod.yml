@@ -5,6 +5,7 @@ tasks:
       source /home/gitpod/.ghcup/env
       cabal build --enable-tests
       
+    before: source /home/gitpod/.ghcup/env
     command: cabal build --enable-tests
 
 # List the ports to expose. Learn more https://www.gitpod.io/docs/config-ports/
