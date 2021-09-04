@@ -37,7 +37,7 @@ jobs:
           if [[ ${{ matrix.package }} == *plugin ]]; then
             cd plugins
           fi
-          cd ${{ package }}
+          cd ${{ matrix.package }}
           cabal check
 
       - name: "Generate haddock for hackage"
