@@ -99,7 +99,6 @@ library
         ghc >= 8.6,
         ghc-check >=0.5.0.4,
         ghc-paths,
-        ghc-api-compat,
         cryptohash-sha1 >=0.11.100 && <0.12,
         hie-bios >= 0.7.1 && < 0.9.0,
         implicit-hie-cradle >= 0.3.0.5 && < 0.4,
@@ -110,6 +109,16 @@ library
     else
       build-depends:
         unix
+
+    if impl(ghc == 8.10.5)
+        build-depends:
+            ghc-api-compat ==8.10.5
+    elif impl(ghc > 8.10.5) && impl(ghc < 9)
+        build-depends:
+            ghc-api-compat ==8.10.6
+    else
+        build-depends:
+            ghc-api-compat ==8.6
 
     default-extensions:
         ApplicativeDo

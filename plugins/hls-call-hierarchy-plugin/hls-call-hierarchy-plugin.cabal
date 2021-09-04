@@ -27,7 +27,6 @@ library
     , containers
     , extra
     , ghc
-    , ghc-api-compat
     , ghcide                ^>=1.4.1
     , hiedb
     , hls-plugin-api        ^>=1.2
@@ -39,6 +38,16 @@ library
 
   default-language:   Haskell2010
   default-extensions: DataKinds
+
+  if impl(ghc == 8.10.5)
+    build-depends:
+      ghc-api-compat ==8.10.5
+  elif impl(ghc > 8.10.5) && impl(ghc < 9)
+    build-depends:
+      ghc-api-compat ==8.10.6
+  else
+    build-depends:
+      ghc-api-compat ==8.6
 
 test-suite tests
   type:             exitcode-stdio-1.0

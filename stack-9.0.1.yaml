@@ -59,9 +59,6 @@ extra-deps:
   commit: b6245884ae83e00dd2b5261762549b37390179f8
 # https://github.com/lspitzner/czipwith/pull/2
 
-- github: hsyl20/ghc-api-compat
-  commit: 8fee87eac97a538dbe81ff1ab18cff10f2f9fa15
-
 - github: anka-213/th-extras
   commit: 57a97b4df128eb7b360e8ab9c5759392de8d1659
 # https://github.com/mokus0/th-extras/pull/8

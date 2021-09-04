@@ -31,15 +31,9 @@ package *
   ghc-options: -haddock
   test-show-details: direct
 
--- see https://gitlab.haskell.org/haskell/ghc-api-compat/-/issues/1#note_371055
-source-repository-package
-  type: git
-  location: https://github.com/hsyl20/ghc-api-compat
-  tag: 8fee87eac97a538dbe81ff1ab18cff10f2f9fa15
-
 write-ghc-environment-files: never
 
-index-state: 2021-08-12T12:00:38Z
+index-state: 2021-08-30T20:52:40Z
 
 constraints:
     hyphenation +embed
