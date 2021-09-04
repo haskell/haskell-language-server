@@ -23,7 +23,7 @@ jobs:
     steps:
       - name: "Run cabal check"
         run: |
-          if [[ name == *plugin ]]; then
+          if [[ ${{ package }} == *plugin ]]; then
             cd plugins
           fi
           cd ${{ package }}
