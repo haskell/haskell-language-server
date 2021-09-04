@@ -1,9 +1,5 @@
 name: Hackage
 
-defaults:
-  run:
-    shell: bash
-
 on:
   push:
     branches:
