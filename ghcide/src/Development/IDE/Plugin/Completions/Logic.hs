@@ -306,11 +306,6 @@ mkExtCompl label =
     Nothing Nothing Nothing Nothing Nothing Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing Nothing
 
-mkPragmaCompl :: T.Text -> T.Text -> CompletionItem
-mkPragmaCompl label insertText =
-  CompletionItem label (Just CiKeyword) Nothing Nothing
-    Nothing Nothing Nothing Nothing Nothing (Just insertText) (Just Snippet)
-    Nothing Nothing Nothing Nothing Nothing Nothing
 
 fromIdentInfo :: Uri -> IdentInfo -> Maybe T.Text -> CompItem
 fromIdentInfo doc IdentInfo{..} q = CI
@@ -608,25 +603,12 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
         , enteredQual `T.isPrefixOf` label
         ]
 
-      filtListWithSnippet f list suffix =
-        [ toggleSnippets caps config (f label (snippet <> suffix))
-        | (snippet, label) <- list
-        , Fuzzy.test fullPrefix label
-        ]
-
       filtImportCompls = filtListWith (mkImportCompl enteredQual) importableModules
-      filterModuleExports moduleName = filtListWith $mkModuleFunctionImport moduleName
-      filtPragmaCompls = filtListWithSnippet mkPragmaCompl validPragmas
-      filtOptsCompls   = filtListWith mkExtCompl
+      filterModuleExports moduleName = filtListWith $ mkModuleFunctionImport moduleName
       filtKeywordCompls
           | T.null prefixModule = filtListWith mkExtCompl (optKeywords ideOpts)
           | otherwise = []
 
-      stripLeading :: Char -> String -> String
-      stripLeading _ [] = []
-      stripLeading c (s:ss)
-        | s == c = ss
-        | otherwise = s:ss
 
   if
     | "import " `T.isPrefixOf` fullLine 
@@ -639,13 +621,9 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
     | "import " `T.isPrefixOf` fullLine
     -> return filtImportCompls
     -- we leave this condition here to avoid duplications and return empty list
-    -- since HLS implements this completion (#haskell-language-server/pull/662)
-    | "{-# language" `T.isPrefixOf` T.toLower fullLine
-    -> return []
-    | "{-# options_ghc" `T.isPrefixOf` T.toLower fullLine
-    -> return $ filtOptsCompls (map (T.pack . stripLeading '-') $ flagsForCompletion False)
+    -- since HLS implements these completions (#haskell-language-server/pull/662)
     | "{-# " `T.isPrefixOf` fullLine
-    -> return $ filtPragmaCompls (pragmaSuffix fullLine)
+    -> return []
     | otherwise -> do
         -- assumes that nubOrdBy is stable
         let uniqueFiltCompls = nubOrdBy uniqueCompl filtCompls
@@ -667,29 +645,6 @@ uniqueCompl x y =
         then EQ
         else compare (insertText x) (insertText y)
     other -> other
--- ---------------------------------------------------------------------
--- helper functions for pragmas
--- ---------------------------------------------------------------------
-
-validPragmas :: [(T.Text, T.Text)]
-validPragmas =
-  [ ("LANGUAGE ${1:extension}"        , "LANGUAGE")
-  , ("OPTIONS_GHC -${1:option}"       , "OPTIONS_GHC")
-  , ("INLINE ${1:function}"           , "INLINE")
-  , ("NOINLINE ${1:function}"         , "NOINLINE")
-  , ("INLINABLE ${1:function}"        , "INLINABLE")
-  , ("WARNING ${1:message}"           , "WARNING")
-  , ("DEPRECATED ${1:message}"        , "DEPRECATED")
-  , ("ANN ${1:annotation}"            , "ANN")
-  , ("RULES"                          , "RULES")
-  , ("SPECIALIZE ${1:function}"       , "SPECIALIZE")
-  , ("SPECIALIZE INLINE ${1:function}", "SPECIALIZE INLINE")
-  ]
-
-pragmaSuffix :: T.Text -> T.Text
-pragmaSuffix fullLine
-  |  "}" `T.isSuffixOf` fullLine = mempty
-  | otherwise = " #-}"
 
 -- ---------------------------------------------------------------------
 -- helper functions for infix backticks
