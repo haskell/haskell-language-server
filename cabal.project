@@ -40,6 +40,8 @@ constraints:
 
 
 allow-newer:
+    -- for ghc 8.10.7
+    ghc-api-compat:ghc,
     -- for shake-bench
     Chart-diagrams:diagrams-core,
     SVGFonts:diagrams-core
