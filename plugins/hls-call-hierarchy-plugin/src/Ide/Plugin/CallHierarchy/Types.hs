@@ -35,6 +35,7 @@ instance FromRow Vertex where
                    <*> field <*> field <*> field
                    <*> field <*> field <*> field
                    <*> field <*> field
+
 data SymbolPosition = SymbolPosition {
   psl :: Int
 , psc :: Int

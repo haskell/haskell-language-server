@@ -31,12 +31,12 @@ arguments :: IdePlugins IdeState -> Parser Arguments
 arguments plugins = Arguments
       <$> optional (strOption $ long "cwd" <> metavar "DIR" <> help "Change to this directory")
       <*> switch (long "version" <> help "Show ghcide and GHC versions")
-      <*> optional (strOption $ long "shake-profiling" <> metavar "DIR" <> help "Dump profiling reports to this directory")
+      <*> optional (strOption $ long "shake-profiling" <> metavar "DIR" <> help "Dump profiling reports to this directory (env var: GHCIDE_BUILD_PROFILING)")
       <*> switch (long "ot-memory-profiling" <> help "Record OpenTelemetry info to the eventlog. Needs the -l RTS flag to have an effect")
       <*> switch (long "test" <> help "Enable additional lsp messages used by the testsuite")
       <*> switch (long "test-no-kick" <> help "Disable kick. Useful for testing cancellation")
       <*> option auto (short 'j' <> help "Number of threads (0: automatic)" <> metavar "NUM" <> value 0 <> showDefault)
-      <*> switch (long "verbose" <> help "Include internal events in logging output")
+      <*> switch (short 'd' <> long "verbose" <> help "Include internal events in logging output")
       <*> (commandP plugins <|> lspCommand <|> checkCommand)
       where
           checkCommand = Check <$> many (argument str (metavar "FILES/DIRS..."))

@@ -207,10 +207,11 @@ completionTests =
         item ^. L.kind @?= Just CiKeyword
         item ^. L.insertTextFormat @?= Just Snippet
         item ^. L.insertText @?= Just "LANGUAGE ${1:extension} #-}"
+        item ^. L.detail @?= Just "{-# LANGUAGE #-}"
 
-  , testCase "completes pragmas no close" $ runSessionWithServer pragmasPlugin testDataDir $ do
+  , testCase "completes pragmas with existing closing bracket" $ runSessionWithServer pragmasPlugin testDataDir $ do
       doc <- openDoc "Completion.hs" "haskell"
-      let te = TextEdit (Range (Position 0 4) (Position 0 24)) ""
+      let te = TextEdit (Range (Position 0 4) (Position 0 33)) ""
       _ <- applyEdit doc te
       compls <- getCompletions doc (Position 0 4)
       let item = head $ filter ((== "LANGUAGE") . (^. L.label)) compls
@@ -218,7 +219,8 @@ completionTests =
         item ^. L.label @?= "LANGUAGE"
         item ^. L.kind @?= Just CiKeyword
         item ^. L.insertTextFormat @?= Just Snippet
-        item ^. L.insertText @?= Just "LANGUAGE ${1:extension}"
+        item ^. L.insertText @?= Just "LANGUAGE ${1:extension} #-"
+        item ^. L.detail @?= Just "{-# LANGUAGE #-}"
 
   , testCase "completes options pragma" $ runSessionWithServer pragmasPlugin testDataDir $ do
       doc <- openDoc "Completion.hs" "haskell"
@@ -249,6 +251,18 @@ completionTests =
       doc <- openDoc "Completion.hs" "haskell"
       _ <- waitForDiagnostics
       let te = TextEdit (Range (Position 0 24) (Position 0 31)) ""
+      _ <- applyEdit doc te
+      compls <- getCompletions doc (Position 0 24)
+      let item = head $ filter ((== "OverloadedStrings") . (^. L.label)) compls
+      liftIO $ do
+        item ^. L.label @?= "OverloadedStrings"
+        item ^. L.kind @?= Just CiKeyword
+
+
+    , testCase "completes language extensions case insensitive" $ runSessionWithServer pragmasPlugin testDataDir $ do
+      doc <- openDoc "Completion.hs" "haskell"
+      _ <- waitForDiagnostics
+      let te = TextEdit (Range (Position 0 4) (Position 0 34)) "lAnGuaGe Overloaded"
       _ <- applyEdit doc te
       compls <- getCompletions doc (Position 0 24)
       let item = head $ filter ((== "OverloadedStrings") . (^. L.label)) compls

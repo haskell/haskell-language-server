@@ -74,10 +74,10 @@ experiments =
         isJust <$> getHover doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
       bench "edit" $ \docs -> do
-        forM_ docs $ \DocumentPositions{..} ->
+        forM_ docs $ \DocumentPositions{..} -> do
           changeDoc doc [charEdit stringLiteralP]
-        -- wait for a fresh build start
-        waitForProgressStart
+          -- wait for a fresh build start
+          waitForProgressStart
         -- wait for the build to be finished
         waitForProgressDone
         return True,
@@ -121,8 +121,9 @@ experiments =
         ( \docs -> do
             unless (any (isJust . identifierP) docs) $
                 error "None of the example modules is suitable for this experiment"
-            forM_ docs $ \DocumentPositions{..} ->
+            forM_ docs $ \DocumentPositions{..} -> do
                 forM_ identifierP $ \p -> changeDoc doc [charEdit p]
+                waitForProgressStart
             waitForProgressDone
         )
         ( \docs -> not . null . catMaybes <$> forM docs (\DocumentPositions{..} ->
@@ -139,8 +140,9 @@ experiments =
                 forM_ identifierP $ \p -> changeDoc doc [charEdit p]
         )
         ( \docs -> do
-            forM_ docs $ \DocumentPositions{..} ->
+            forM_ docs $ \DocumentPositions{..} -> do
               changeDoc doc [charEdit stringLiteralP]
+              waitForProgressStart
             waitForProgressDone
             not . null . catMaybes <$> forM docs (\DocumentPositions{..} -> do
               forM identifierP $ \p ->
@@ -160,8 +162,9 @@ experiments =
             liftIO $ appendFile (fromJust $ uriToFilePath hieYamlUri) "##\n"
             sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
                 List [ FileEvent hieYamlUri FcChanged ]
-            forM_ docs $ \DocumentPositions{..} ->
+            forM_ docs $ \DocumentPositions{..} -> do
               changeDoc doc [charEdit stringLiteralP]
+              waitForProgressStart
             waitForProgressDone
             not . null . catMaybes <$> forM docs (\DocumentPositions{..} -> do
               forM identifierP $ \p ->

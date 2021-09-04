@@ -530,6 +530,7 @@ data RunTacticResults = RunTacticResults
   , rtr_other_solns :: [Synthesized (LHsExpr GhcPs)]
   , rtr_jdg         :: Judgement
   , rtr_ctx         :: Context
+  , rtr_timed_out   :: Bool
   } deriving Show
 
 
@@ -551,7 +552,7 @@ data UserFacingMessage
 instance Show UserFacingMessage where
   show NotEnoughGas = "Wingman ran out of gas when trying to find a solution.  \nTry increasing the `auto_gas` setting."
   show TacticErrors = "Wingman couldn't find a solution"
-  show TimedOut     = "Wingman timed out while trying to find a solution"
+  show TimedOut     = "Wingman timed out while finding a solution.  \nYou might get a better result if you increase the timeout duration."
   show NothingToDo  = "Nothing to do"
   show (InfrastructureError t) = "Internal error: " <> T.unpack t
 

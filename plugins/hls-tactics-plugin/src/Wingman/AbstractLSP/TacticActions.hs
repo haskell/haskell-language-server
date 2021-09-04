@@ -52,23 +52,38 @@ makeTacticInteraction cmd =
         pm_span <- liftMaybe $ mapAgeFrom pmmap span
         let t = commandTactic cmd var_name
 
-        res <- liftIO $ timeout (cfg_timeout_seconds le_config * seconds) $ do
-          runTactic hj_ctx hj_jdg t >>= \case
-            Left err -> pure $ ErrorMessages $ pure $ mkUserFacingMessage err
-            Right rtr ->
-              case rtr_extract rtr of
-                L _ (HsVar _ (L _ rdr)) | isHole (occName rdr) ->
-                  pure $ ErrorMessages [NothingToDo]
-                _ -> do
-                  for_ (rtr_other_solns rtr) $ \soln -> do
-                    traceMX "other solution" $ syn_val soln
-                    traceMX "with score" $ scoreSolution soln (rtr_jdg rtr) []
-                  traceMX "solution" $ rtr_extract rtr
-                  pure $ GraftEdit $ graftHole (RealSrcSpan $ unTrack pm_span) rtr
+        liftIO $ runTactic (cfg_timeout_seconds le_config * seconds) hj_ctx hj_jdg t >>= \case
+          Left err ->
+            pure
+              $ pure
+              $ ErrorMessages
+              $ pure
+              $ mkUserFacingMessage err
+          Right rtr ->
+            case rtr_extract rtr of
+              L _ (HsVar _ (L _ rdr)) | isHole (occName rdr) ->
+                pure
+                  $ addTimeoutMessage rtr
+                  $ pure
+                  $ ErrorMessages
+                  $ pure NothingToDo
+              _ -> do
+                for_ (rtr_other_solns rtr) $ \soln -> do
+                  traceMX "other solution" $ syn_val soln
+                  traceMX "with score" $ scoreSolution soln (rtr_jdg rtr) []
+                traceMX "solution" $ rtr_extract rtr
+                pure
+                  $ addTimeoutMessage rtr
+                  $ pure
+                  $ GraftEdit
+                  $ graftHole (RealSrcSpan $ unTrack pm_span) rtr
 
-        pure $ case res of
-          Nothing -> ErrorMessages $ pure TimedOut
-          Just c  -> c
+
+addTimeoutMessage :: RunTacticResults -> [ContinuationResult] -> [ContinuationResult]
+addTimeoutMessage rtr = mappend
+  [ ErrorMessages $ pure TimedOut
+  | rtr_timed_out rtr
+  ]
 
 
 ------------------------------------------------------------------------------
@@ -82,6 +97,7 @@ seconds = 1e6
 mkUserFacingMessage :: [TacticError] -> UserFacingMessage
 mkUserFacingMessage errs
   | elem OutOfGas errs = NotEnoughGas
+mkUserFacingMessage [] = NothingToDo
 mkUserFacingMessage _ = TacticErrors
 
 

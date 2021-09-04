@@ -1,9 +1,11 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections   #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Wingman.Machinery where
 
 import           Control.Applicative (empty)
+import           Control.Concurrent.Chan.Unagi.NoBlocking (newChan, writeChan, OutChan, tryRead, tryReadChan)
 import           Control.Lens ((<>~))
 import           Control.Monad.Reader
 import           Control.Monad.State.Class (gets, modify, MonadState)
@@ -16,7 +18,7 @@ import           Data.Generics (everything, gcount, mkQ)
 import           Data.Generics.Product (field')
 import           Data.List (sortBy)
 import qualified Data.Map as M
-import           Data.Maybe (mapMaybe)
+import           Data.Maybe (mapMaybe, isJust)
 import           Data.Monoid (getSum)
 import           Data.Ord (Down (..), comparing)
 import qualified Data.Set as S
@@ -24,9 +26,11 @@ import           Data.Traversable (for)
 import           Development.IDE.Core.Compile (lookupName)
 import           Development.IDE.GHC.Compat
 import           GhcPlugins (GlobalRdrElt (gre_name), lookupOccEnv, varType)
+import           Refinery.Future
 import           Refinery.ProofState
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
+import           System.Timeout (timeout)
 import           TcType
 import           Type (tyCoVarsOfTypeWellScoped)
 import           Wingman.Context (getInstance)
@@ -71,15 +75,24 @@ tacticToRule :: Judgement -> TacticsM () -> Rule
 tacticToRule jdg (TacticT tt) = RuleT $ flip execStateT jdg tt >>= flip Subgoal Axiom
 
 
+consumeChan :: OutChan (Maybe a) -> IO [a]
+consumeChan chan = do
+  tryReadChan chan >>= tryRead >>= \case
+    Nothing -> pure []
+    Just (Just a) -> (:) <$> pure a <*> consumeChan chan
+    Just Nothing -> pure []
+
+
 ------------------------------------------------------------------------------
 -- | Attempt to generate a term of the right type using in-scope bindings, and
 -- a given tactic.
 runTactic
-    :: Context
+    :: Int          -- ^ Timeout
+    -> Context
     -> Judgement
-    -> TacticsM ()       -- ^ Tactic to use
+    -> TacticsM ()  -- ^ Tactic to use
     -> IO (Either [TacticError] RunTacticResults)
-runTactic ctx jdg t = do
+runTactic duration ctx jdg t = do
     let skolems = S.fromList
                 $ foldMap (tyCoVarsOfTypeWellScoped . unCType)
                 $ (:) (jGoal jdg)
@@ -91,31 +104,34 @@ runTactic ctx jdg t = do
           defaultTacticState
             { ts_skolems = skolems
             }
-    res <- flip runReaderT ctx
-         . unExtractM
-         $ runTacticT t jdg tacticState
-    pure $ case res of
-      (Left errs) -> Left $ take 50 errs
-      (Right solns) -> do
-        let sorted =
-              flip sortBy solns $ comparing $ \(Proof ext _ holes) ->
-                Down $ scoreSolution ext jdg $ fmap snd holes
-        case sorted of
-          ((Proof syn _ subgoals) : _) ->
-            Right $
-              RunTacticResults
-                { rtr_trace    = syn_trace syn
-                , rtr_extract  = simplify $ syn_val syn
-                , rtr_subgoals = fmap snd subgoals
-                , rtr_other_solns = reverse . fmap pf_extract $ sorted
-                , rtr_jdg = jdg
-                , rtr_ctx = ctx
-                }
-          -- guaranteed to not be empty
-          _ -> Left []
 
-assoc23 :: (a, b, c) -> (a, (b, c))
-assoc23 (a, b, c) = (a, (b, c))
+    let stream = hoistListT (flip runReaderT ctx . unExtractM)
+               $ runStreamingTacticT t jdg tacticState
+    (in_proofs, out_proofs) <- newChan
+    (in_errs, out_errs) <- newChan
+    timed_out <-
+      fmap (not. isJust) $ timeout duration $ consume stream $ \case
+        Left err -> writeChan in_errs $ Just err
+        Right proof -> writeChan in_proofs $ Just proof
+    writeChan in_proofs Nothing
+
+    solns <- consumeChan out_proofs
+    let sorted =
+          flip sortBy solns $ comparing $ \(Proof ext _ holes) ->
+            Down $ scoreSolution ext jdg $ fmap snd holes
+    case sorted of
+      ((Proof syn _ subgoals) : _) ->
+        pure $ Right $
+          RunTacticResults
+            { rtr_trace    = syn_trace syn
+            , rtr_extract  = simplify $ syn_val syn
+            , rtr_subgoals = fmap snd subgoals
+            , rtr_other_solns = reverse . fmap pf_extract $ sorted
+            , rtr_jdg = jdg
+            , rtr_ctx = ctx
+            , rtr_timed_out = timed_out
+            }
+      _ -> fmap Left $ consumeChan out_errs
 
 
 tracePrim :: String -> Trace
