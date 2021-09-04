@@ -85,6 +85,8 @@
 
               lsp-test = hself.lsp-test_0_14_0_1;
 
+              # required for ormolu 0.2.0.0
+              ghc-lib-parser = hself.ghc-lib-parser_9_0_1_20210324;
               ormolu = hself.ormolu_0_2_0_0;
             };
 
