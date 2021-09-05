@@ -3,6 +3,7 @@ tasks:
   - before: |
       export GHCUP_INSTALL_BASE_PREFIX=/workspace
       export BOOTSTRAP_HASKELL_NONINTERACTIVE=1
+      export CABAL_DIR=/workspace/.cabal
       curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | sh
       source /workspace/.ghcup/env
     init: | 
