@@ -1,8 +1,10 @@
 # List the start up tasks. Learn more https://www.gitpod.io/docs/config-start-tasks/
 tasks:
-  - before: | 
-      curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | BOOTSTRAP_HASKELL_NONINTERACTIVE=1 sh
-      source /home/gitpod/.ghcup/env
+  - before: |
+      export GHCUP_INSTALL_BASE_PREFIX=/workspace
+      export BOOTSTRAP_HASKELL_NONINTERACTIVE=1
+      curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | sh
+      source /workspace/.ghcup/env
     init: | 
       cabal build --enable-tests      
     command: | 
