@@ -33,7 +33,7 @@ import           TcRnTypes                   (TcGblEnv (..))
 
 data ExportsMap = ExportsMap
     {getExportsMap :: HashMap IdentifierText (HashSet IdentInfo)
-    , getModuleExportsMap :: Map.HashMap IdentifierText [Text]
+    , getModuleExportsMap :: Map.HashMap ModuleNameText [Text]
     }
     deriving (Show)
 
