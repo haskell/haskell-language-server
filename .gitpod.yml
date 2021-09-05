@@ -9,7 +9,7 @@ tasks:
       curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | sh
 
       # ensure that there is an HLS binary for the installed GHC version
-      /workspace/.ghcup/bin/ghcup install ghc 8.10.6 --set
+      /workspace/.ghcup/bin/ghcup install ghc 8.10.5 --set
       /workspace/.ghcup/bin/ghcup install cabal
 
       # Add ghcup binaries to the PATH since VSCode does not see 'source .ghcup/env'
