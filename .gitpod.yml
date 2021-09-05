@@ -3,20 +3,24 @@ tasks:
   - before: |
       export GHCUP_INSTALL_BASE_PREFIX=/workspace
       export BOOTSTRAP_HASKELL_NONINTERACTIVE=1
+      export BOOTSTRAP_HASKELL_MINIMAL=1
       export CABAL_DIR=/workspace/.cabal
       export STACK_ROOT=/workspace/.stack
       curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | sh
 
       # ensure that there is an HLS binary for the installed GHC version
-      ghcup install --set ghc 8.10.6
-
-      # Fix the default Cabal config since VSCode does not see CABAL_DIR 
-      mkdir ~/.cabal
-      cp /workspace/.cabal/config ~/.cabal/config
+      /workspace/.ghcup/bin/ghcup install ghc 8.10.6 --set
+      /workspace/.ghcup/bin/ghcup install cabal
 
       # Add ghcup binaries to the PATH since VSCode does not see 'source .ghcup/env'
-      cd /usr/local/bin
+      pushd /usr/local/bin
       sudo ln -s /workspace/.ghcup/bin/* /usr/local/bin
+      popd
+
+      # Fix the default Cabal config since VSCode does not see CABAL_DIR 
+      cabal update
+      mkdir ~/.cabal
+      cp /workspace/.cabal/config ~/.cabal/config
     init: | 
       cabal build --enable-tests      
     command: | 
