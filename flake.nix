@@ -103,6 +103,11 @@
         in {
           inherit hlsSources;
 
+          # can remove once https://github.com/NixOS/nixpkgs/pull/136818 is merged
+          tracy = prev.tracy.overrideAttrs (old: {
+            NIX_CFLAGS_COMPILE = old.NIX_CFLAGS_COMPILE ++ lib.optional stdenv.isDarwin "-Wno-format-security";
+          });
+
           # Haskell packages extended with our packages
           hlsHpkgs = compiler: extended haskell.packages.${compiler};
 
