@@ -24,6 +24,7 @@ import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Set (Set)
 import qualified Data.Set as S
+import           Data.Traversable (for)
 import           DataCon
 import           Development.IDE.GHC.Compat
 import           GHC.Exts
@@ -43,7 +44,6 @@ import           Wingman.Machinery
 import           Wingman.Naming
 import           Wingman.StaticPlugin (pattern MetaprogramSyntax)
 import           Wingman.Types
-import Data.Traversable (for)
 
 
 ------------------------------------------------------------------------------
