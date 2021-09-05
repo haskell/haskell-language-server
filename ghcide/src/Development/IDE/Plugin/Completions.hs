@@ -139,7 +139,7 @@ getCompletionsLSP ide plId
             binds <- fromMaybe (mempty, zeroMapping) <$> useWithStaleFast GetBindings npath
             exportsMapIO <- fmap(envPackageExports . fst) <$> useWithStaleFast GhcSession npath
             exportsMap <- mapM liftIO exportsMapIO
-            let moduleExports = buildModuleExportMap exportsMap
+            let moduleExports = maybe Map.empty getModuleExportsMap exportsMap
                 exportsCompItems = foldMap (map (fromIdentInfo uri) . Set.toList) . Map.elems . getExportsMap <$> exportsMap
                 exportsCompls = mempty{anyQualCompls = fromMaybe [] exportsCompItems}
             let compls = (fst <$> localCompls) <> (fst <$> nonLocalCompls) <> Just exportsCompls
@@ -160,19 +160,6 @@ getCompletionsLSP ide plId
       _ -> return (InL $ List [])
 
 ----------------------------------------------------------------------------------------------------
-
-identInfoToKeyVal :: IdentInfo -> (T.Text, T.Text)
-identInfoToKeyVal IdentInfo {rendered, moduleNameText} =
-  (moduleNameText, rendered)
-
-buildModuleExportMap:: Maybe ExportsMap -> Map.HashMap T.Text [T.Text]
-buildModuleExportMap (Just exportsMap) = do
-  sortAndGroup $ map identInfoToKeyVal $ 
-    concatMap (Set.toList . snd) $ toList $ getExportsMap exportsMap
-buildModuleExportMap Nothing = Map.empty 
-
-sortAndGroup :: [(T.Text, T.Text)] -> Map.HashMap T.Text [T.Text]
-sortAndGroup assocs = Map.fromListWith (++) [(k, [v]) | (k, v) <- assocs]  
 
 extendImportCommand :: PluginCommand IdeState
 extendImportCommand =

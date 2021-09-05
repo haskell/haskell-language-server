@@ -30,15 +30,20 @@ import           HieDb
 import           Name
 import           TcRnTypes                   (TcGblEnv (..))
 
-newtype ExportsMap = ExportsMap
-    {getExportsMap :: HashMap IdentifierText (HashSet IdentInfo)}
-    deriving newtype (Monoid, NFData, Show)
+data ExportsMap = ExportsMap
+    {getExportsMap :: HashMap IdentifierText (HashSet IdentInfo)
+    , getModuleExportsMap :: Map.HashMap IdentifierText [Text]
+    }
+    deriving (Show)
 
 size :: ExportsMap -> Int
 size = sum . map length . elems . getExportsMap
 
 instance Semigroup ExportsMap where
-    ExportsMap a <> ExportsMap b = ExportsMap $ Map.unionWith (<>) a b
+  ExportsMap a b <> ExportsMap c d = ExportsMap (Map.unionWith (<>) a c) (Map.unionWith (<>) b d)
+
+instance Monoid ExportsMap where
+  mempty = ExportsMap Map.empty Map.empty
 
 type IdentifierText = Text
 
@@ -90,26 +95,47 @@ mkIdentInfos mod (AvailTC _ nn flds)
         | n <- nn ++ map flSelector flds
       ]
 
+
+identInfoToKeyVal :: IdentInfo -> (Text, Text)
+identInfoToKeyVal IdentInfo {rendered, moduleNameText} =
+  (moduleNameText, rendered)
+
+buildModuleExportMap:: HashMap IdentifierText (HashSet IdentInfo) -> Map.HashMap Text [Text]
+buildModuleExportMap exportsMap = do
+  sortAndGroup $ map identInfoToKeyVal $
+    concatMap (Set.toList . snd) $ Map.toList exportsMap
+
+sortAndGroup :: [(Text, Text)] -> Map.HashMap Text [Text]
+sortAndGroup assocs = Map.fromListWith (++) [(k, [v]) | (k, v) <- assocs]
+
+-- reworked to enable second map
+-- how do I create mod-name -> func?
 createExportsMap :: [ModIface] -> ExportsMap
-createExportsMap = ExportsMap . Map.fromListWith (<>) . concatMap doOne
+createExportsMap modIface = do
+  let exportsMap = (Map.fromListWith (<>) . concatMap doOne) modIface
+  ExportsMap exportsMap $ buildModuleExportMap exportsMap
   where
-    doOne mi = concatMap (fmap (second Set.fromList) . unpackAvail mn) (mi_exports mi)
-      where
-        mn = moduleName $ mi_module mi
+    doOne mi = do
+      let getModDetails = unpackAvail $ moduleName $ mi_module mi
+      concatMap (fmap (second Set.fromList) . getModDetails) (mi_exports mi)
 
 createExportsMapMg :: [ModGuts] -> ExportsMap
-createExportsMapMg = ExportsMap . Map.fromListWith (<>) . concatMap doOne
+createExportsMapMg modIface = do
+  let exportsMap = (Map.fromListWith (<>) . concatMap doOne) modIface
+  ExportsMap exportsMap $ buildModuleExportMap exportsMap
   where
-    doOne mi = concatMap (fmap (second Set.fromList) . unpackAvail mn) (mg_exports mi)
-      where
-        mn = moduleName $ mg_module mi
+    doOne mi = do
+      let getModuleName = moduleName $ mg_module mi
+      concatMap (fmap (second Set.fromList) . unpackAvail getModuleName) (mg_exports mi)
 
 createExportsMapTc :: [TcGblEnv] -> ExportsMap
-createExportsMapTc = ExportsMap . Map.fromListWith (<>) . concatMap doOne
+createExportsMapTc modIface = do
+  let exportsMap = (Map.fromListWith (<>) . concatMap doOne) modIface
+  ExportsMap exportsMap $ buildModuleExportMap exportsMap
   where
-    doOne mi = concatMap (fmap (second Set.fromList) . unpackAvail mn) (tcg_exports mi)
-      where
-        mn = moduleName $ tcg_mod mi
+    doOne mi = do
+      let getModuleName = moduleName $ tcg_mod mi
+      concatMap (fmap (second Set.fromList) . unpackAvail getModuleName) (tcg_exports mi)
 
 nonInternalModules :: ModuleName -> Bool
 nonInternalModules = not . (".Internal" `isSuffixOf`) . moduleNameString
@@ -121,7 +147,8 @@ createExportsMapHieDb hiedb = do
         let mn = modInfoName $ hieModInfo m
             mText = pack $ moduleNameString mn
         fmap (wrap . unwrap mText) <$> getExportsForModule hiedb mn
-    return $ ExportsMap $ Map.fromListWith (<>) (concat idents)
+    let exportsMap = Map.fromListWith (<>) (concat idents)
+    return $ ExportsMap exportsMap $ buildModuleExportMap exportsMap 
   where
     wrap identInfo = (rendered identInfo, Set.fromList [identInfo])
     -- unwrap :: ExportRow -> IdentInfo
