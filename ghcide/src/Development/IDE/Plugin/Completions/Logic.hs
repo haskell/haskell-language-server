@@ -43,6 +43,7 @@ import           Data.Either                              (fromRight)
 import           Data.Functor
 import qualified Data.HashMap.Strict                      as HM
 import qualified Data.Set                                 as Set
+import qualified Data.HashSet                             as HashSet
 import           Development.IDE.Core.Compile
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.GHC.Compat               as GHC
@@ -532,10 +533,10 @@ getCompletions
     -> VFS.PosPrefixInfo
     -> ClientCapabilities
     -> CompletionsConfig
-    -> HM.HashMap T.Text [T.Text]
+    -> HM.HashMap T.Text (HashSet.HashSet IdentInfo)
     -> IO [CompletionItem]
 getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qualCompls, importableModules}
-               maybe_parsed (localBindings, bmapping) prefixInfo caps config exportsMap = do
+               maybe_parsed (localBindings, bmapping) prefixInfo caps config moduleExportsMap = do
   let VFS.PosPrefixInfo { fullLine, prefixModule, prefixText } = prefixInfo
       enteredQual = if T.null prefixModule then "" else prefixModule <> "."
       fullPrefix  = enteredQual <> prefixText
@@ -616,8 +617,9 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
       && "(" `isInfixOf` T.unpack fullLine
     -> do
       let moduleName = T.pack $ words (T.unpack fullLine) !! 1
-          funcs = HM.lookupDefault [] moduleName exportsMap
-      return $ filterModuleExports moduleName funcs
+          funcs = HM.lookupDefault HashSet.empty moduleName moduleExportsMap
+          funs = map (show . name) $ HashSet.toList funcs
+      return $ filterModuleExports moduleName $ map T.pack funs
     | "import " `T.isPrefixOf` fullLine
     -> return filtImportCompls
     -- we leave this condition here to avoid duplications and return empty list

@@ -9,7 +9,7 @@ module Development.IDE.Types.Exports
     createExportsMapTc
 ,createExportsMapHieDb,size) where
 
-import           Avail                       (AvailInfo (..), availName)
+import           Avail                       (AvailInfo (..))
 import           Control.DeepSeq             (NFData (..))
 import           Control.Monad
 import           Data.Bifunctor              (Bifunctor (second))
@@ -33,7 +33,7 @@ import           TcRnTypes                   (TcGblEnv (..))
 
 data ExportsMap = ExportsMap
     {getExportsMap :: HashMap IdentifierText (HashSet IdentInfo)
-    , getModuleExportsMap :: Map.HashMap ModuleNameText [Text]
+    , getModuleExportsMap :: Map.HashMap ModuleNameText (HashSet IdentInfo)
     }
     deriving (Show)
 
@@ -97,16 +97,15 @@ mkIdentInfos mod (AvailTC _ nn flds)
         | n <- nn ++ map flSelector flds
       ]
 
-buildModuleExportMap:: [ModIface] -> Map.HashMap Text [Text]
+buildModuleExportMap:: [ModIface] -> Map.HashMap Text (HashSet IdentInfo)
 buildModuleExportMap modIfaces = do
   let exports = map extractModuleExports modIfaces
   Map.fromListWith (<>) exports
 
-extractModuleExports :: ModIface -> (Text, [Text])
+extractModuleExports :: ModIface -> (Text, HashSet IdentInfo)
 extractModuleExports modIFace = do
   let modName = pack $ moduleNameString $ moduleName $ mi_module modIFace
-  let ifaces = mi_exports modIFace
-  let functionSet = map (pack . getOccString . availName) ifaces
+  let functionSet = Set.fromList $ concatMap (mkIdentInfos modName) $ mi_exports modIFace
   (modName, functionSet)
 
 createExportsMap :: [ModIface] -> ExportsMap
