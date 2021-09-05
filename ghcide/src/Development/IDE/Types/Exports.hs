@@ -22,7 +22,7 @@ import           Data.List                   (isSuffixOf)
 import           Data.Text                   (Text, pack)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Orphans ()
-import           Development.IDE.GHC.Util
+import           Development.IDE.GHC.Util 
 import           FieldLabel                  (flSelector)
 import           GHC.Generics                (Generic)
 import           GhcPlugins                  (IfaceExport, ModGuts (..))
@@ -47,6 +47,7 @@ instance Monoid ExportsMap where
   mempty = ExportsMap Map.empty Map.empty
 
 type IdentifierText = Text
+type ModuleNameText = Text
 
 data IdentInfo = IdentInfo
     { name           :: !OccName
