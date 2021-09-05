@@ -24,7 +24,7 @@ let
       blaze-textual = hself.callCabal2nix "blaze-textual"
         (builtins.fetchTarball {
           url = "https://hackage.haskell.org/package/blaze-textual-0.2.2.1/blaze-textual-0.2.2.1.tar.gz";
-          sha256 = "1lhzsraiw11ldxvxn8ax11hswpyzsvw2da2qmp3p6fc9rfpz4pj5";
+          sha256 = "1nyhc9mrnxsl21ksnpp0ryki4wgk49r581yy504g2gjq6x3bkb59";
         }) { };
 
       czipwith = hself.callCabal2nix "czipwith" (pkgs.fetchFromGitHub {
@@ -37,7 +37,7 @@ let
       hie-bios = hself.callCabal2nix "hie-bios"
         (builtins.fetchTarball {
           url = "https://hackage.haskell.org/package/hie-bios-0.7.6/hie-bios-0.7.6.tar.gz";
-          sha256 = "1lhzsraiw11ldxvxn8ax11hswpyzsvw2da2qmp3p6fc9rfpz4pj5";
+          sha256 = "0w4rhy4b3jnci9m27l79c8n28wl56x49bmhdn7pvf88mx9srjcvq";
         }) { };
 
       th-extras = hself.callCabal2nix "th-extras" (pkgs.fetchFromGitHub {
