@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TupleSections #-}
 
 module Wingman.Tactics
   ( module Wingman.Tactics
@@ -42,6 +43,7 @@ import           Wingman.Machinery
 import           Wingman.Naming
 import           Wingman.StaticPlugin (pattern MetaprogramSyntax)
 import           Wingman.Types
+import Data.Traversable (for)
 
 
 ------------------------------------------------------------------------------
@@ -577,6 +579,19 @@ cata hi = do
       (mkVarOcc . flip mappend "_c" . occNameString)
       (\hi -> self >> commit (assume $ hi_name hi) assumption)
       $ Hypothesis unifiable_diff
+
+
+letBind :: [OccName] -> TacticsM ()
+letBind occs = do
+  jdg <- goal
+  occ_tys <- for occs
+           $ \occ
+          -> fmap (occ, )
+           $ fmap (<$ jdg)
+           $ fmap CType
+           $ freshTyvars
+           $ mkInvForAllTys [alphaTyVar] alphaTy
+  rule $ nonrecLet occ_tys
 
 
 ------------------------------------------------------------------------------
