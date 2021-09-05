@@ -9,7 +9,7 @@ module Development.IDE.Types.Exports
     createExportsMapTc
 ,createExportsMapHieDb,size) where
 
-import           Avail                       (AvailInfo (..))
+import           Avail                       (AvailInfo (..), availName)
 import           Control.DeepSeq             (NFData (..))
 import           Control.Monad
 import           Data.Bifunctor              (Bifunctor (second))
@@ -29,6 +29,7 @@ import           GhcPlugins                  (IfaceExport, ModGuts (..))
 import           HieDb
 import           Name
 import           TcRnTypes                   (TcGblEnv (..))
+
 
 data ExportsMap = ExportsMap
     {getExportsMap :: HashMap IdentifierText (HashSet IdentInfo)
@@ -95,25 +96,23 @@ mkIdentInfos mod (AvailTC _ nn flds)
         | n <- nn ++ map flSelector flds
       ]
 
+buildModuleExportMap:: [ModIface] -> Map.HashMap Text [Text]
+buildModuleExportMap modIfaces = do
+  let exports = map extractModuleExports modIfaces
+  Map.fromListWith (<>) exports
 
-identInfoToKeyVal :: IdentInfo -> (Text, Text)
-identInfoToKeyVal IdentInfo {rendered, moduleNameText} =
-  (moduleNameText, rendered)
+extractModuleExports :: ModIface -> (Text, [Text])
+extractModuleExports modIFace = do
+  let modName = pack $ moduleNameString $ moduleName $ mi_module modIFace
+  let ifaces = mi_exports modIFace
+  let functionSet = map (pack . getOccString . availName) ifaces
+  (modName, functionSet)
 
-buildModuleExportMap:: HashMap IdentifierText (HashSet IdentInfo) -> Map.HashMap Text [Text]
-buildModuleExportMap exportsMap = do
-  sortAndGroup $ map identInfoToKeyVal $
-    concatMap (Set.toList . snd) $ Map.toList exportsMap
-
-sortAndGroup :: [(Text, Text)] -> Map.HashMap Text [Text]
-sortAndGroup assocs = Map.fromListWith (++) [(k, [v]) | (k, v) <- assocs]
-
--- reworked to enable second map
--- how do I create mod-name -> func?
 createExportsMap :: [ModIface] -> ExportsMap
 createExportsMap modIface = do
   let exportsMap = (Map.fromListWith (<>) . concatMap doOne) modIface
-  ExportsMap exportsMap $ buildModuleExportMap exportsMap
+      moduleExportMap = buildModuleExportMap modIface
+  ExportsMap exportsMap moduleExportMap
   where
     doOne mi = do
       let getModDetails = unpackAvail $ moduleName $ mi_module mi
@@ -122,7 +121,7 @@ createExportsMap modIface = do
 createExportsMapMg :: [ModGuts] -> ExportsMap
 createExportsMapMg modIface = do
   let exportsMap = (Map.fromListWith (<>) . concatMap doOne) modIface
-  ExportsMap exportsMap $ buildModuleExportMap exportsMap
+  ExportsMap exportsMap Map.empty
   where
     doOne mi = do
       let getModuleName = moduleName $ mg_module mi
@@ -131,7 +130,7 @@ createExportsMapMg modIface = do
 createExportsMapTc :: [TcGblEnv] -> ExportsMap
 createExportsMapTc modIface = do
   let exportsMap = (Map.fromListWith (<>) . concatMap doOne) modIface
-  ExportsMap exportsMap $ buildModuleExportMap exportsMap
+  ExportsMap exportsMap Map.empty 
   where
     doOne mi = do
       let getModuleName = moduleName $ tcg_mod mi
@@ -148,7 +147,7 @@ createExportsMapHieDb hiedb = do
             mText = pack $ moduleNameString mn
         fmap (wrap . unwrap mText) <$> getExportsForModule hiedb mn
     let exportsMap = Map.fromListWith (<>) (concat idents)
-    return $ ExportsMap exportsMap $ buildModuleExportMap exportsMap 
+    return $ ExportsMap exportsMap Map.empty
   where
     wrap identInfo = (rendered identInfo, Set.fromList [identInfo])
     -- unwrap :: ExportRow -> IdentInfo
