@@ -401,10 +401,10 @@ _ :: x
 running  `let a b c` will produce:
 
 ```haskell
-let a = _ :: a
-    b = _ :: b
-    c = _ :: c
- in (_ :: x)
+let a = _1 :: a
+    b = _2 :: b
+    c = _3 :: c
+ in (_4 :: x)
 
 ```
 
