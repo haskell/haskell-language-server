@@ -62,12 +62,15 @@ library
   elif impl(ghc == 8.10.5)
     build-depends:
       ghc-api-compat ==8.10.5
-  elif impl(ghc > 8.10.5) && impl(ghc < 9)
+  elif impl(ghc == 8.10.6)
     build-depends:
       ghc-api-compat ==8.10.6
-  else
+  elif impl(ghc == 8.10.7)
     build-depends:
-      ghc-api-compat
+      ghc-api-compat ==8.10.7
+  elif impl(ghc == 9.0.1)
+    build-depends:
+      ghc-api-compat ==9.0.1
 
   if os(windows)
     build-depends: Win32

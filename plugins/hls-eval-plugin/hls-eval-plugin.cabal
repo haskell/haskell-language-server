@@ -81,19 +81,22 @@ library
     , transformers
     , unliftio
     , unordered-containers
-    
+
   if impl(ghc < 8.10.5)
     build-depends:
       ghc-api-compat ==8.6
   elif impl(ghc == 8.10.5)
     build-depends:
       ghc-api-compat ==8.10.5
-  elif impl(ghc > 8.10.5) && impl(ghc < 9)
+  elif impl(ghc == 8.10.6)
     build-depends:
       ghc-api-compat ==8.10.6
-  else
+  elif impl(ghc == 8.10.7)
     build-depends:
-      ghc-api-compat
+      ghc-api-compat ==8.10.7
+  elif impl(ghc == 9.0.1)
+    build-depends:
+      ghc-api-compat ==9.0.1
 
   ghc-options:
     -Wall -Wno-name-shadowing -Wno-unticked-promoted-constructors

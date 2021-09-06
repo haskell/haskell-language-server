@@ -33,15 +33,12 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2021-08-30T20:52:40Z
+index-state: 2021-09-06T12:12:22Z
 
 constraints:
     hyphenation +embed
 
-
 allow-newer:
-    -- for ghc 8.10.7
-    ghc-api-compat:ghc,
     -- for shake-bench
     Chart-diagrams:diagrams-core,
     SVGFonts:diagrams-core
