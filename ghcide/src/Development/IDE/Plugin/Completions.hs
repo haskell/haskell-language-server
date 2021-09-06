@@ -169,7 +169,7 @@ getCompletionsLSP ide plId
 buildLocalModuleExports:: IdeState -> ([(Located ModuleName, Maybe ArtifactsLocation)], PositionMapping) -> IO (Map.HashMap T.Text (Set.HashSet IdentInfo))
 buildLocalModuleExports ide inMap = do
   mModIfaces <- mapM (getModIface ide) $ fst inMap
-  pure (buildModuleExportMap $ catMaybes mModIfaces)
+  pure (buildModuleExportMapFrom $ catMaybes mModIfaces)
 
 getModIface :: IdeState ->  (Located ModuleName, Maybe ArtifactsLocation) -> IO (Maybe ModIface)
 getModIface ide item = do
