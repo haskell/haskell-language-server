@@ -1,15 +1,20 @@
 # List the start up tasks. Learn more https://www.gitpod.io/docs/config-start-tasks/
 tasks:
   - before: |
+      # Only the /workspace folder is persistent
+      export XDG_DATA_HOME=/workspace/.local/share
+      export XDG_CONFIG_HOME=/workspace/.local/config
+      export XDG_STATE_HOME=/workspace/.local/state
+      export XDG_CACHE_HOME=/workspace/.cache
+      export CABAL_DIR=/workspace/.cabal
+      export STACK_ROOT=/workspace/.stack
+
+      # install ghcup, ghc and cabal
       export GHCUP_INSTALL_BASE_PREFIX=/workspace
       export BOOTSTRAP_HASKELL_NONINTERACTIVE=1
       export BOOTSTRAP_HASKELL_MINIMAL=1
-      export CABAL_DIR=/workspace/.cabal
-      export STACK_ROOT=/workspace/.stack
       curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | sh
-
-      # ensure that there is an HLS binary for the installed GHC version
-      /workspace/.ghcup/bin/ghcup install ghc 8.10.5 --set
+      /workspace/.ghcup/bin/ghcup install ghc --set
       /workspace/.ghcup/bin/ghcup install cabal
 
       # Add ghcup binaries to the PATH since VSCode does not see 'source .ghcup/env'
@@ -21,8 +26,15 @@ tasks:
       cabal update
       mkdir ~/.cabal
       cp /workspace/.cabal/config ~/.cabal/config
+
+      # Configure VSCode to use the locally built version of HLS
+      mkdir -p .vscode
+      echo '{ "haskell.serverExecutablePath": "/workspace/.cabal/bin/haskell-language-server" }' > settings.json 
+
     init: | 
-      cabal build --enable-tests      
+      cabal configure --enable-executable-dynamic
+      cabal build --enable-tests
+      cabal install exe:haskell-language-server      
     command: | 
       cabal build --enable-tests
 
