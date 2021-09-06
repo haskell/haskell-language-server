@@ -50,7 +50,7 @@ import           Development.IDE.GHC.Compat               as GHC
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Util
 import           Development.IDE.Plugin.Completions.Types
-import           Development.IDE.Spans.Common
+import           Development.IDE.Spans.Common 
 import           Development.IDE.Spans.Documentation
 import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Exports
@@ -65,6 +65,7 @@ import           Language.LSP.Types.Capabilities
 import qualified Language.LSP.VFS                         as VFS
 import           Outputable                               (Outputable)
 import           TyCoRep
+import Development.IDE.Core.RuleTypes
 
 -- From haskell-ide-engine/hie-plugin-api/Haskell/Ide/Engine/Context.hs
 
@@ -619,6 +620,7 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
       let moduleName = T.pack $ words (T.unpack fullLine) !! 1
           funcs = HM.lookupDefault HashSet.empty moduleName moduleExportsMap
           funs = map (show . name) $ HashSet.toList funcs
+          hello = GetLocatedImports 
       return $ filterModuleExports moduleName $ map T.pack funs
     | "import " `T.isPrefixOf` fullLine
     -> return filtImportCompls

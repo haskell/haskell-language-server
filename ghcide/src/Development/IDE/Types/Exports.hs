@@ -6,7 +6,8 @@ module Development.IDE.Types.Exports
     ExportsMap(..),
     createExportsMap,
     createExportsMapMg,
-    createExportsMapTc
+    createExportsMapTc,
+    buildModuleExportMap
 ,createExportsMapHieDb,size) where
 
 import           Avail                       (AvailInfo (..))

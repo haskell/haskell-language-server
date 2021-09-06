@@ -30,6 +30,7 @@ import           Development.IDE.GHC.ExactPrint               (Annotated (annsA)
 import           Development.IDE.GHC.Util                     (prettyPrint)
 import           Development.IDE.Graph
 import           Development.IDE.Graph.Classes
+import           Development.IDE.Import.FindImports           
 import           Development.IDE.Plugin.CodeAction            (newImport,
                                                                newImportToEdit)
 import           Development.IDE.Plugin.CodeAction.ExactPrint
@@ -50,6 +51,8 @@ import qualified Language.LSP.VFS                             as VFS
 import           GHC.Tc.Module                                (tcRnImportDecls)
 #else
 import           TcRnDriver                                   (tcRnImportDecls)
+
+
 #endif
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -129,7 +132,7 @@ getCompletionsLSP ide plId
                   ,_context=completionContext} = do
     contents <- LSP.getVirtualFile $ toNormalizedUri uri
     fmap Right $ case (contents, uriToFilePath' uri) of
-      (Just cnts, Just path) -> do
+      (Just cnts, Just path) -> do 
         let npath = toNormalizedFilePath' path
         (ideOpts, compls, moduleExports) <- liftIO $ runIdeAction "Completion" (shakeExtras ide) $ do
             opts <- liftIO $ getIdeOptionsIO $ shakeExtras ide
@@ -139,11 +142,13 @@ getCompletionsLSP ide plId
             binds <- fromMaybe (mempty, zeroMapping) <$> useWithStaleFast GetBindings npath
             exportsMapIO <- fmap(envPackageExports . fst) <$> useWithStaleFast GhcSession npath
             exportsMap <- mapM liftIO exportsMapIO
+            locatedImports <- fromMaybe (mempty, zeroMapping) <$> useWithStaleFast GetLocatedImports npath
+            localModuleExports <- liftIO $ buildLocalModuleExports ide locatedImports
             let moduleExports = maybe Map.empty getModuleExportsMap exportsMap
                 exportsCompItems = foldMap (map (fromIdentInfo uri) . Set.toList) . Map.elems . getExportsMap <$> exportsMap
                 exportsCompls = mempty{anyQualCompls = fromMaybe [] exportsCompItems}
             let compls = (fst <$> localCompls) <> (fst <$> nonLocalCompls) <> Just exportsCompls
-            pure (opts, fmap (,pm,binds) compls, moduleExports)
+            pure (opts, fmap (,pm,binds) compls, Map.unionWith (<>) localModuleExports moduleExports)
         case compls of
           Just (cci', parsedMod, bindMap) -> do
             pfix <- VFS.getCompletionPrefix position cnts
@@ -160,6 +165,21 @@ getCompletionsLSP ide plId
       _ -> return (InL $ List [])
 
 ----------------------------------------------------------------------------------------------------
+  
+buildLocalModuleExports:: IdeState -> ([(Located ModuleName, Maybe ArtifactsLocation)], PositionMapping) -> IO (Map.HashMap T.Text (Set.HashSet IdentInfo))
+buildLocalModuleExports ide inMap = do
+  mModIfaces <- mapM (getModIface ide) $ fst inMap
+  pure (buildModuleExportMap $ catMaybes mModIfaces)
+
+getModIface :: IdeState ->  (Located ModuleName, Maybe ArtifactsLocation) -> IO (Maybe ModIface)
+getModIface ide item = do
+  let nPath = artifactFilePath <$> snd item
+  case nPath of 
+    (Just path) -> do 
+      file <- runIdeAction "Completion" (shakeExtras ide) $ do
+        fmap fst <$> useWithStaleFast GetModIface path
+      pure $ fmap hirModIface file
+    Nothing -> pure Nothing
 
 extendImportCommand :: PluginCommand IdeState
 extendImportCommand =
