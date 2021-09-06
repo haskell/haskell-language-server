@@ -22,10 +22,10 @@ tasks:
       sudo ln -s /workspace/.ghcup/bin/* /usr/local/bin
       popd
 
-      # Fix the default Cabal config since VSCode does not see CABAL_DIR 
+      # Fix the Cabal dir since VSCode does not see CABAL_DIR 
       cabal update
-      mkdir ~/.cabal
-      cp /workspace/.cabal/config ~/.cabal/config
+      echo "Symlinking /workspace/.cabal to ~/.cabal"
+      ln -s /workspace/.cabal ~
 
       # Configure VSCode to use the locally built version of HLS
       mkdir -p .vscode
