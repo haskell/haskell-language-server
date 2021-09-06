@@ -51,8 +51,6 @@ import qualified Language.LSP.VFS                             as VFS
 import           GHC.Tc.Module                                (tcRnImportDecls)
 #else
 import           TcRnDriver                                   (tcRnImportDecls)
-
-
 #endif
 
 descriptor :: PluginId -> PluginDescriptor IdeState

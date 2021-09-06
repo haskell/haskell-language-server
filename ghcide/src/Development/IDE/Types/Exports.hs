@@ -100,8 +100,8 @@ mkIdentInfos mod (AvailTC _ nn flds)
 
 createExportsMap :: [ModIface] -> ExportsMap
 createExportsMap modIface = do
-  let exportsMap = (Map.fromListWith (<>) . concatMap doOne) modIface
-  ExportsMap exportsMap $ buildModuleExportMap exportsMap
+  let exportList = concatMap doOne modIface
+  ExportsMap (Map.fromListWith (<>) exportList) (buildModuleExportMap exportList)
   where
     doOne modIFace = do
       let getModDetails = unpackAvail $ moduleName $ mi_module modIFace
@@ -109,8 +109,8 @@ createExportsMap modIface = do
 
 createExportsMapMg :: [ModGuts] -> ExportsMap
 createExportsMapMg modGuts = do
-  let exportsMap = (Map.fromListWith (<>) . concatMap doOne) modGuts
-  ExportsMap exportsMap $ buildModuleExportMap exportsMap
+  let exportList = concatMap doOne modGuts
+  ExportsMap (Map.fromListWith (<>) exportList) (buildModuleExportMap exportList)
   where
     doOne mi = do
       let getModuleName = moduleName $ mg_module mi
@@ -118,8 +118,9 @@ createExportsMapMg modGuts = do
 
 createExportsMapTc :: [TcGblEnv] -> ExportsMap
 createExportsMapTc modIface = do
-  let exportsMap = (Map.fromListWith (<>) . concatMap doOne) modIface
-  ExportsMap exportsMap $ buildModuleExportMap exportsMap
+  let exportList = concatMap doOne modIface
+  let exportsMap = Map.fromListWith (<>) exportList
+  ExportsMap exportsMap $ buildModuleExportMap exportList
   where
     doOne mi = do
       let getModuleName = moduleName $ tcg_mod mi
@@ -136,7 +137,7 @@ createExportsMapHieDb hiedb = do
             mText = pack $ moduleNameString mn
         fmap (wrap . unwrap mText) <$> getExportsForModule hiedb mn
     let exportsMap = Map.fromListWith (<>) (concat idents)
-    return $ ExportsMap exportsMap $ buildModuleExportMap exportsMap
+    return $ ExportsMap exportsMap $ buildModuleExportMap (concat idents)
   where
     wrap identInfo = (rendered identInfo, Set.fromList [identInfo])
     -- unwrap :: ExportRow -> IdentInfo
@@ -158,9 +159,9 @@ identInfoToKeyVal :: IdentInfo -> (ModuleNameText, IdentInfo)
 identInfoToKeyVal identInfo =
   (moduleNameText identInfo, identInfo)
 
-buildModuleExportMap:: HashMap IdentifierText (HashSet IdentInfo) -> Map.HashMap ModuleNameText (HashSet IdentInfo)
+buildModuleExportMap:: [(Text, HashSet IdentInfo)] -> Map.HashMap ModuleNameText (HashSet IdentInfo)
 buildModuleExportMap exportsMap = do
-  let lst = concatMap (Set.toList. snd) $ Map.toList exportsMap
+  let lst = concatMap (Set.toList. snd) exportsMap
   let lstThree = map identInfoToKeyVal lst
   sortAndGroup lstThree
 
