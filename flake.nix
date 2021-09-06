@@ -165,7 +165,7 @@
           + pkgs.lib.replaceStrings [ "." ] [ "" ]
           pkgs.haskellPackages.ghc.version);
         ghc884 = pkgs.hlsHpkgs "ghc884";
-        ghc8106 = pkgs.hlsHpkgs "ghc8106";
+        ghc8107 = pkgs.hlsHpkgs "ghc8107";
         ghc901 = ghc901Config.tweakHpkgs (pkgs.hlsHpkgs "ghc901");
 
         # For markdown support
@@ -240,13 +240,13 @@
           # dev shell
           haskell-language-server-dev = mkDevShell ghcDefault;
           haskell-language-server-884-dev = mkDevShell ghc884;
-          haskell-language-server-8106-dev = mkDevShell ghc8106;
+          haskell-language-server-8107-dev = mkDevShell ghc8107;
           haskell-language-server-901-dev = mkDevShell ghc901;
 
           # hls package
           haskell-language-server = mkExe ghcDefault;
           haskell-language-server-884 = mkExe ghc884;
-          haskell-language-server-8106 = mkExe ghc8106;
+          haskell-language-server-8107 = mkExe ghc8107;
           haskell-language-server-901 = mkExe ghc901;
 
           # docs
