@@ -21,11 +21,10 @@ incomingCalls (getConn -> conn) symbol = do
     let (o, m, u) = parseSymbol symbol
     query conn
         (Query $ T.pack $ concat
-            [ "SELECT mods.mod, defs.occ, mods.hs_src, defs.sl, defs.sc, "
-            , "defs.el, defs.ec, refs.sl, refs.sc, refs.el, refs.ec "
+            [ "SELECT mods.mod, decls.occ, mods.hs_src, decls.sl, decls.sc, "
+            , "decls.el, decls.ec, refs.sl, refs.sc, refs.el, refs.ec "
             , "FROM refs "
             , "JOIN decls ON decls.hieFile = refs.hieFile "
-            , "JOIN defs ON defs.hieFile = decls.hieFile AND defs.occ = decls.occ "
             , "JOIN mods ON mods.hieFile = decls.hieFile "
             , "where "
             , "(refs.occ = ? AND refs.mod = ? AND refs.unit = ?) "
