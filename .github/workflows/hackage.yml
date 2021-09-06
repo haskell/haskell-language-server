@@ -53,7 +53,7 @@ jobs:
           if [[ ${{ matrix.package }} == *plugin ]]; then
             cd plugins
           fi
-          if [[ ${{ matrix.package }} != haskell-language-server ]];
+          if [[ ${{ matrix.package }} != haskell-language-server ]]; then
             cd ${{ matrix.package }}
           fi
           cabal check
