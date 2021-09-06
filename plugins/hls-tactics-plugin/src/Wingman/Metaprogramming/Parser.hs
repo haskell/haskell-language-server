@@ -348,6 +348,22 @@ commands =
           "(_ :: a -> a -> a -> a) a1 a2 a3"
       ]
 
+  , command "let" Deterministic (Bind Many)
+      "Create let-bindings for each binder given to this tactic."
+      (pure . letBind)
+      [ Example
+          Nothing
+          ["a", "b", "c"]
+          [ ]
+          (Just "x")
+          $ T.pack $ unlines
+            [ "let a = _1 :: a"
+            , "    b = _2 :: b"
+            , "    c = _3 :: c"
+            , " in (_4 :: x)"
+            ]
+      ]
+
   , command "try" Nondeterministic Tactic
       "Simultaneously run and do not run a tactic. Subsequent tactics will bind on both states."
       (pure . R.try)

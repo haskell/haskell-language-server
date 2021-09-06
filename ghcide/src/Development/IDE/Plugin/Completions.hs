@@ -206,13 +206,14 @@ extendImportHandler' ideState ExtendImport {..}
   | Just fp <- uriToFilePath doc,
     nfp <- toNormalizedFilePath' fp =
     do
-      (ModSummaryResult {..}, ps) <- MaybeT $ liftIO $
+      (ModSummaryResult {..}, ps, contents) <- MaybeT $ liftIO $
         runAction "extend import" ideState $
           runMaybeT $ do
             -- We want accurate edits, so do not use stale data here
             msr <- MaybeT $ use GetModSummaryWithoutTimestamps nfp
             ps <- MaybeT $ use GetAnnotatedParsedSource nfp
-            return (msr, ps)
+            (_, contents) <- MaybeT $ use GetFileContents nfp
+            return (msr, ps, contents)
       let df = ms_hspp_opts msrModSummary
           wantedModule = mkModuleName (T.unpack importName)
           wantedQual = mkModuleName . T.unpack <$> importQual
@@ -228,7 +229,7 @@ extendImportHandler' ideState ExtendImport {..}
                 it = case thingParent of
                   Nothing -> newThing
                   Just p  -> p <> "(" <> newThing <> ")"
-            t <- liftMaybe $ snd <$> newImportToEdit n (astA ps)
+            t <- liftMaybe $ snd <$> newImportToEdit n (astA ps) (fromMaybe "" contents)
             return (nfp, WorkspaceEdit {_changes=Just (fromList [(doc,List [t])]), _documentChanges=Nothing, _changeAnnotations=Nothing})
   | otherwise =
     mzero

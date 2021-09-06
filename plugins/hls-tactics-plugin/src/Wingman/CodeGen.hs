@@ -15,6 +15,7 @@ import           Control.Lens ((%~), (<>~), (&))
 import           Control.Monad.Except
 import           Control.Monad.Reader (ask)
 import           Control.Monad.State
+import           Data.Bifunctor (second)
 import           Data.Bool (bool)
 import           Data.Functor ((<&>))
 import           Data.Generics.Labels ()
@@ -314,4 +315,24 @@ letForEach rename solve (unHypothesis -> hy) jdg = do
           matches = fmap (fmap (\(occ, expr) -> valBind (occNameToStr occ) expr)) terms
       g <- fmap (fmap unLoc) $ newSubgoal $ introduce ctx (userHypothesis hy') jdg
       pure $ fmap noLoc $ let' <$> matches <*> g
+
+
+------------------------------------------------------------------------------
+-- | Let-bind the given occname judgement pairs.
+nonrecLet
+    :: [(OccName, Judgement)]
+    -> Judgement
+    -> RuleM (Synthesized (LHsExpr GhcPs))
+nonrecLet occjdgs jdg = do
+  occexts <- traverse newSubgoal $ fmap snd occjdgs
+  ctx     <- ask
+  ext     <- newSubgoal
+           $ introduce ctx (userHypothesis $ fmap (second jGoal) occjdgs)
+           $ jdg
+  pure $ fmap noLoc $
+    let'
+      <$> traverse
+            (\(occ, ext) -> valBind (occNameToStr occ) <$> fmap unLoc ext)
+            (zip (fmap fst occjdgs) occexts)
+      <*> fmap unLoc ext
 
