@@ -39,5 +39,7 @@ spec = do
     metaTest  4 28 "MetaUseSymbol"
     metaTest  7 53 "MetaDeepOf"
     metaTest  2 34 "MetaWithArg"
+    metaTest  2 18 "MetaLetSimple"
+
     metaTest  2 12 "IntrosTooMany"
 
