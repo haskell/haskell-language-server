@@ -58,16 +58,18 @@ jobs:
           fi
           cabal check
 
-      - name: "Generate dist tarball"
+      - name: "Generate package dist tarball"
+        id: generate-dist-tarball
         run: |
           if [[ ${{ matrix.package }} == haskell-language-server ]]; then
             cabal sdist --builddir=./
           else
             cabal sdist ${{ matrix.package }} --builddir=./
           fi
+          echo ::set-output name=path::$(ls ./sdist/${{ matrix.package }}-*)
 
-      - name: "Unpack the source in an isolated location"
-        run: cabal unpack $(ls ./sdist/${{ matrix.package }}-*) --destdir=./packages
+      - name: "Unpack package source in an isolated location"
+        run: cabal unpack ${{ generate-dist-tarball.outputs.path }} --destdir=./packages
 
       - name: "Create appropiate cabal.project"
         run: |
@@ -85,4 +87,10 @@ jobs:
         run: |
           cd $(ls -d ./packages/${{ matrix.package }}-*)
           cabal haddock --haddock-for-hackage
+
+      - name: "Upload package dist tarball"
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ matrix.package }}
+          path: ${{ generate-dist-tarball.outputs.path }}
 
