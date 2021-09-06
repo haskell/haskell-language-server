@@ -21,7 +21,7 @@ jobs:
                   "hls-splice-plugin", "hls-tactics-plugin",
                   "hls-call-hierarchy-plugin",
                   "haskell-language-server"]
-        ghc: ["8.10.7", "8.8.4", "8.6.5"]
+        ghc: ["8.10.6", "8.8.4", "8.6.5"]
 
     steps:
 
