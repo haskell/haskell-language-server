@@ -29,7 +29,7 @@ tasks:
 
       # Configure VSCode to use the locally built version of HLS
       mkdir -p .vscode
-      echo '{ "haskell.serverExecutablePath": "/workspace/.cabal/bin/haskell-language-server" }' > settings.json 
+      echo '{ "haskell.serverExecutablePath": "/workspace/.cabal/bin/haskell-language-server" }' > .vscode/settings.json 
 
     init: | 
       cabal configure --enable-executable-dynamic
