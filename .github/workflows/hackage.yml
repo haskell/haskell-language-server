@@ -71,7 +71,22 @@ jobs:
       - name: "Unpack package source in an isolated location"
         run: cabal unpack ${{ steps.generate-dist-tarball.outputs.path }} --destdir=./packages
 
+      - name: "Try to get the current hackage version"
+        id: get-hackage-version
+        run: |
+          cd ./packages
+          cabal get $(ls -d ${{ matrix.package }}-*) --destdir=../current
+          echo ::set-output name=exists::$?
+
+      - name: "Compare the incoming and the current hackage version of the package"
+        id: compare-current-version
+        if: steps.get-hackage-version.exists == 0
+        run: |
+          # This will throw an error if there is any difference casue we have to bump up the package version
+          diff -qr -x "*.md" -x "data" $(ls -d ./packages/${{ matrix.package }}-*) $(ls -d ./current/${{ matrix.package }}-*)
+
       - name: "Create appropiate cabal.project"
+        if: steps.get-hackage-version.exists == 1
         run: |
           cd $(ls -d ./packages/${{ matrix.package }}-*)
           echo "packages: . ../../* ../../plugins/*" > cabal.project
@@ -79,16 +94,19 @@ jobs:
           echo "allow-newer: Chart-diagrams:diagrams-core, SVGFonts:diagrams-core" >> cabal.project
 
       - name: "Build all package components in isolation"
+        if: steps.get-hackage-version.exists == 1
         run: |
           cd $(ls -d ./packages/${{ matrix.package }}-*)
           cabal build --enable-tests --enable-benchmarks
 
       - name: "Generate haddock for hackage"
+        if: steps.get-hackage-version.exists == 1
         run: |
           cd $(ls -d ./packages/${{ matrix.package }}-*)
           cabal haddock --haddock-for-hackage
 
       - name: "Upload package dist tarball"
+        if: steps.get-hackage-version.exists == 1
         uses: actions/upload-artifact@v2
         with:
           name: ${{ matrix.package }}
