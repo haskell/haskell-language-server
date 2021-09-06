@@ -6,7 +6,7 @@ on:
       - '*-hackage'
 
 jobs:
-  release:
+  check:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -19,7 +19,7 @@ jobs:
                   "hls-refine-imports-plugin", "hls-retrie-plugin",
                   "hls-splice-plugin", "hls-tactics-plugin",
                   "hls-call-hierarchy-plugin"]
-        ghc: ["9.0.1", "8.10.7", "8.8.4", "8.6.5"]
+        ghc: [""8.10.7", "8.8.4", "8.6.5"]
 
     steps:
 
@@ -58,6 +58,12 @@ jobs:
           fi
           cd ${{ matrix.package }}
           cabal check
+
+      - name: "Generate dist tarball"
+        run: cabal sdist ${{ matrix.package }} --builddir: .
+
+      - name: "Unpack the source in an isolated location"
+        run: cabal unpack ./sdist/${{ matrix.package }} --destdir=./packages
 
       - name: "Build with hackage head"
         run: cabal build --index-state=HEAD ${{ matrix.package }}
