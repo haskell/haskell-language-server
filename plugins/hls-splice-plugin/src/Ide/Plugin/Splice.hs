@@ -209,11 +209,10 @@ setupHscEnv ideState fp pm = do
     let ps = annotateParsedSource pm
         hscEnv0 = hscEnvWithImportPaths hscEnvEq
         modSum = pm_mod_summary pm
-    df' <- liftIO $ setupDynFlagsForGHCiLike hscEnv0 $ ms_hspp_opts modSum
-    let hscEnv = hscEnv0 { hsc_dflags = df' }
-    pure (ps, hscEnv, df')
+    hscEnv <- liftIO $ setupDynFlagsForGHCiLike hscEnv0 $ ms_hspp_opts modSum
+    pure (ps, hscEnv, hsc_dflags hscEnv)
 
-setupDynFlagsForGHCiLike :: HscEnv -> DynFlags -> IO DynFlags
+setupDynFlagsForGHCiLike :: HscEnv -> DynFlags -> IO HscEnv
 setupDynFlagsForGHCiLike env dflags = do
     let dflags3 = setInterpreterLinkerOptions dflags
         platform = targetPlatform dflags3
@@ -230,7 +229,7 @@ setupDynFlagsForGHCiLike env dflags = do
                 `gopt_set` Opt_IgnoreOptimChanges
                 `gopt_set` Opt_IgnoreHpcChanges
                 `gopt_unset` Opt_DiagnosticsShowCaret
-    hsc_dflags <$> initializePlugins (hscSetFlags dflags4 env)
+    initializePlugins (hscSetFlags dflags4 env)
 
 adjustToRange :: Uri -> Range -> WorkspaceEdit -> WorkspaceEdit
 adjustToRange uri ran (WorkspaceEdit mhult mlt x) =

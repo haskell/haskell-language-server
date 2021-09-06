@@ -29,6 +29,8 @@ module Development.IDE.GHC.ExactPrint
       Anns,
       Annotate,
       setPrecedingLinesT,
+      -- * Helper function
+      eqSrcSpan,
     )
 where
 
@@ -230,8 +232,9 @@ graft' needs_space dst val = Graft $ \dflags a -> do
         everywhere'
             ( mkT $
                 \case
-                    (L src _ :: Located ast) | src == dst -> val'
-                    l                                     -> l
+                    (L src _ :: Located ast)
+                        | src `eqSrcSpan` dst -> val'
+                    l                         -> l
             )
             a
 
@@ -264,7 +267,7 @@ getNeedsSpaceAndParenthesize dst a =
   let (needs_parens, needs_space) =
           everythingWithContext (Nothing, Nothing) (<>)
             ( mkQ (mempty, ) $ \x s -> case x of
-                (L src _ :: LHsExpr GhcPs) | src == dst ->
+                (L src _ :: LHsExpr GhcPs) | src `eqSrcSpan` dst ->
                   (s, s)
                 L _ x' -> (mempty, Just *** Just $ needsParensSpace x')
             ) a
@@ -288,7 +291,7 @@ graftExprWithM dst trans = Graft $ \dflags a -> do
         ( mkM $
             \case
                 val@(L src _ :: LHsExpr GhcPs)
-                    | src == dst -> do
+                    | src `eqSrcSpan` dst -> do
                         mval <- trans val
                         case mval of
                             Just val' -> do
@@ -313,7 +316,7 @@ graftWithM dst trans = Graft $ \dflags a -> do
         ( mkM $
             \case
                 val@(L src _ :: Located ast)
-                    | src == dst -> do
+                    | src `eqSrcSpan` dst -> do
                         mval <- trans val
                         case mval of
                             Just val' -> do
@@ -365,7 +368,7 @@ graftDecls dst decs0 = Graft $ \dflags a -> do
         annotateDecl dflags decl
     let go [] = DL.empty
         go (L src e : rest)
-            | src == dst = DL.fromList decs <> DL.fromList rest
+            | src `eqSrcSpan` dst = DL.fromList decs <> DL.fromList rest
             | otherwise = DL.singleton (L src e) <> go rest
     modifyDeclsT (pure . DL.toList . go) a
 
@@ -396,7 +399,7 @@ graftDeclsWithM ::
 graftDeclsWithM dst toDecls = Graft $ \dflags a -> do
     let go [] = pure DL.empty
         go (e@(L src _) : rest)
-            | src == dst = toDecls e >>= \case
+            | src `eqSrcSpan` dst = toDecls e >>= \case
                 Just decs0 -> do
                     decs <- forM decs0 $ \decl ->
                         hoistTransform (either Fail.fail pure) $
@@ -516,3 +519,9 @@ render dflags = showSDoc dflags . ppr
 parenthesize :: LHsExpr GhcPs -> LHsExpr GhcPs
 parenthesize = parenthesizeHsExpr appPrec
 
+------------------------------------------------------------------------------
+
+-- | Equality on SrcSpan's.
+-- Ignores the (Maybe BufSpan) field of SrcSpan's.
+eqSrcSpan :: SrcSpan -> SrcSpan -> Bool
+eqSrcSpan l r = leftmost_smallest l r == EQ

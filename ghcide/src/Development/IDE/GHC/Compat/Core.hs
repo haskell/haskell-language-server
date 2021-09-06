@@ -525,6 +525,7 @@ module Development.IDE.GHC.Compat.Core (
     SrcLoc.RealSrcLoc,
     SrcLoc.SrcLoc(..),
     BufSpan,
+    SrcLoc.leftmost_smallest,
     SrcLoc.containsSpan,
     SrcLoc.mkGeneralSrcSpan,
     SrcLoc.mkRealSrcSpan,
