@@ -620,7 +620,6 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
       let moduleName = T.pack $ words (T.unpack fullLine) !! 1
           funcs = HM.lookupDefault HashSet.empty moduleName moduleExportsMap
           funs = map (show . name) $ HashSet.toList funcs
-          hello = GetLocatedImports 
       return $ filterModuleExports moduleName $ map T.pack funs
     | "import " `T.isPrefixOf` fullLine
     -> return filtImportCompls
