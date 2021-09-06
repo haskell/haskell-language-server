@@ -69,7 +69,7 @@ jobs:
           echo ::set-output name=path::$(ls ./sdist/${{ matrix.package }}-*)
 
       - name: "Unpack package source in an isolated location"
-        run: cabal unpack ${{ generate-dist-tarball.outputs.path }} --destdir=./packages
+        run: cabal unpack ${{ steps.generate-dist-tarball.outputs.path }} --destdir=./packages
 
       - name: "Create appropiate cabal.project"
         run: |
@@ -92,5 +92,5 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: ${{ matrix.package }}
-          path: ${{ generate-dist-tarball.outputs.path }}
+          path: ${{ steps.generate-dist-tarball.outputs.path }}
 
