@@ -73,8 +73,10 @@ jobs:
         run: |
           cd $(ls -d ./packages/${{ matrix.package }}-*)
           echo "packages: . ../../* ../../plugins/*" > cabal.project
+          # TODO: remove when not needed
+          echo "allow-newer: Chart-diagrams:diagrams-core, SVGFonts:diagrams-core" >> cabal.project
 
-      - name: "Build all in isolation"
+      - name: "Build all package components in isolation"
         run: |
           cd $(ls -d ./packages/${{ matrix.package }}-*)
           cabal build --enable-tests --enable-benchmarks
