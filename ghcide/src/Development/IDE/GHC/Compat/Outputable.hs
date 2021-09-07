@@ -154,11 +154,7 @@ type PsError = ErrMsg
 
 mkPrintUnqualifiedDefault :: GlobalRdrEnv -> PrintUnqualified
 mkPrintUnqualifiedDefault =
-#if MIN_VERSION_ghc(9,2,0)
-  GHC.Types.Name.Ppr.mkPrintUnqualified undefined
-#else
   HscTypes.mkPrintUnqualified unsafeGlobalDynFlags
-#endif
 
 mkWarnMsg :: DynFlags -> SrcSpan -> PrintUnqualified -> SDoc -> MsgEnvelope DecoratedSDoc
 mkWarnMsg =
