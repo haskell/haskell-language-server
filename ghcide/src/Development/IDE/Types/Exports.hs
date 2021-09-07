@@ -23,7 +23,7 @@ import           Data.List                   (isSuffixOf)
 import           Data.Text                   (Text, pack)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Orphans ()
-import           Development.IDE.GHC.Util 
+import           Development.IDE.GHC.Util
 import           FieldLabel                  (flSelector)
 import           GHC.Generics                (Generic)
 import           GhcPlugins                  (IfaceExport, ModGuts (..))
