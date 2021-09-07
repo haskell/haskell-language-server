@@ -37,6 +37,7 @@ extra-deps:
 - dependent-map-0.4.0.0@sha256:ca2b131046f4340a1c35d138c5a003fe4a5be96b14efc26291ed35fd08c62221,1657
 - dependent-sum-0.7.1.0@sha256:0e419237f5b86da3659772afff9cab355c0f8d5b3fdb15a5b30e673d8dc83941,2147
 - floskell-0.10.5
+- ghc-api-compat-9.0.1
 - ghc-source-gen-0.4.1.0
 - heapsize-0.3.0.1@sha256:0b69aa97a46d819b700ac7b145f3b5493c3565cf2c5b8298682238d405d0326e,1417
 - hie-bios-0.7.6
@@ -58,9 +59,6 @@ extra-deps:
 - github: mithrandi/czipwith
   commit: b6245884ae83e00dd2b5261762549b37390179f8
 # https://github.com/lspitzner/czipwith/pull/2
-
-- github: hsyl20/ghc-api-compat
-  commit: 8fee87eac97a538dbe81ff1ab18cff10f2f9fa15
 
 - github: anka-213/th-extras
   commit: 57a97b4df128eb7b360e8ab9c5759392de8d1659
