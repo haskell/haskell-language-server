@@ -46,9 +46,7 @@ extra-deps:
   - floskell-0.10.4
   - fourmolu-0.3.0.0
   - fuzzy-0.1.0.0
-  - # ghc-api-compat-8.6
-    github: hsyl20/ghc-api-compat
-    commit: 8fee87eac97a538dbe81ff1ab18cff10f2f9fa15
+  - ghc-api-compat-8.6
   - ghc-check-0.5.0.4
   - ghc-events-0.13.0
   - ghc-exactprint-0.6.4
