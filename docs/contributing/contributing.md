@@ -13,6 +13,48 @@ However, most editors will need some action to honour those settings automatical
 For example vscode needs to have installed a specific [extension](https://marketplace.visualstudio.com/items?itemName=EditorConfig.EditorConfig).
 Please, try to follow those basic settings to keep the codebase as uniform as possible.
 
+## Formatter pre-commit hook
+
+We are using [pre-commit-hook.nix](https://github.com/cachix/pre-commit-hooks.nix) to configure git pre-commit hook for formatting. Although it is possible to run formatting manually, we recommend you to use it to set pre-commit hook as our CI checks pre-commit hook is applied or not.
+
+You can configure the pre-commit-hook by running
+
+``` bash
+nix-shell
+```
+
+If you don't want to use [nix](https://nixos.org/guides/install-nix.html), you can instead use [pre-commit](https://pre-commit.com) with the following config.
+
+```json
+{
+  "repos": [
+    {
+      "hooks": [
+        {
+          "entry": "stylish-haskell --inplace",
+          "exclude": "(^Setup.hs$|test/testdata/.*$|test/data/.*$|^hie-compat/.*$|^plugins/hls-tactics-plugin/.*$)",
+          "files": "\\.l?hs$",
+          "id": "stylish-haskell",
+          "language": "system",
+          "name": "stylish-haskell",
+          "pass_filenames": true,
+          "types": [
+            "file"
+          ]
+        }
+      ],
+      "repo": "local"
+    }
+  ]
+}
+```
+
+### Why some components are excluded from automatic formatting?
+
+- `test/testdata` and `test/data` are there as we want to test formatting plugins.
+- `hie-compat` is there as we want to keep its code as close to GHC as possible.
+- `hls-tactics-plugin` is there as the main contributor of the plugin (@isovector) does not want auto-formatting.
+
 ## Building haskell-language-server
 
 The project can be built with both `cabal build` and `stack build`.
@@ -72,11 +114,52 @@ To create binaries:
 
 GHC 8.6.5 is not supported here because `nixpkgs-unstable` no longer maintains the corresponding packages set.
 
-## Introduction tutorial
+## Testing
 
-See the [tutorial](./plugin-tutorial.md) on writing a plugin in HLS.
+The tests make use of the [Tasty](https://github.com/feuerbach/tasty) test framework.
 
-## Test your hacked HLS in your editor
+There are two test suites in the main haskell-language-server package, functional tests, and wrapper tests.
+Other project packages, like the core library or plugins, can have its own test suite.
+
+### Testing with Cabal
+
+Running all the tests
+
+```bash
+$ cabal test
+```
+
+Running just the functional tests
+
+```bash
+$ cabal test func-test
+```
+
+Running just the wrapper tests
+
+```bash
+$ cabal test wrapper-test
+```
+
+Running a subset of tests
+
+Tasty supports providing
+[Patterns](https://github.com/feuerbach/tasty#patterns) as command
+line arguments, to select the specific tests to run.
+
+```bash
+$ cabal test func-test --test-option "-p hlint"
+```
+
+The above recompiles everything every time you use a different test option though.
+
+An alternative is
+
+```bash
+$ cabal run haskell-language-server:func-test -- -p "hlint enables"
+```
+
+### Test your hacked HLS in your editor
 
 If you want to test HLS while hacking on it, follow the steps below.
 
@@ -96,6 +179,10 @@ To do every time you changed code and want to test it:
   - With Stack: `stack build haskell-language-server:exe:haskell-language-server`
 - Restart HLS
   - With VS Code: `Haskell: Restart Haskell LSP Server`
+
+## Introduction tutorial
+
+See the [tutorial](./plugin-tutorial.md) on writing a plugin in HLS.
 
 ## Adding support for a new editor
 
