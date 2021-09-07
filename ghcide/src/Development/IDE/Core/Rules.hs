@@ -58,6 +58,9 @@ module Development.IDE.Core.Rules(
     typeCheckRuleDefinition,
     ) where
 
+#if !MIN_VERSION_ghc(8,8,0)
+import           Control.Applicative                          (liftA2)
+#endif
 import           Control.Concurrent.Async                     (concurrently)
 import           Control.Concurrent.Strict
 import           Control.Exception.Safe
@@ -137,7 +140,6 @@ import           Language.LSP.Types                           (SMethod (SCustomM
 import           Language.LSP.VFS
 import           System.Directory                             (canonicalizePath, makeAbsolute)
 
-import           Control.Applicative
 import           Data.Default                                 (def)
 import           Ide.Plugin.Properties                        (HasProperty,
                                                                KeyNameProxy,

@@ -24,7 +24,7 @@ import           Data.Ord (Down (..), comparing)
 import qualified Data.Set as S
 import           Data.Traversable (for)
 import           Development.IDE.Core.Compile (lookupName)
-import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat hiding (isTopLevel)
 import           Refinery.Future
 import           Refinery.ProofState
 import           Refinery.Tactic

@@ -10,14 +10,14 @@
 module Development.IDE.GHC.Orphans() where
 
 #if MIN_VERSION_ghc(9,0,0)
-import GHC.Data.Bag
-import GHC.Data.FastString
+import           GHC.Data.Bag
+import           GHC.Data.FastString
 import qualified GHC.Data.StringBuffer      as SB
-import GHC.Types.Name.Occurrence
-import GHC.Types.SrcLoc
-import GHC.Types.Unique           (getKey, getUnique)
-import GHC.Unit.Info
-import GHC.Utils.Outputable
+import           GHC.Types.Name.Occurrence
+import           GHC.Types.SrcLoc
+import           GHC.Types.Unique           (getKey)
+import           GHC.Unit.Info
+import           GHC.Utils.Outputable
 #else
 import           Bag
 import           GhcPlugins

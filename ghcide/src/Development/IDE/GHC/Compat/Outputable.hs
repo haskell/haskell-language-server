@@ -53,6 +53,7 @@ import           GHC.Utils.Error                 as Err hiding (mkWarnMsg)
 import qualified GHC.Utils.Error                 as Err
 import           GHC.Utils.Outputable            as Out
 #else
+import           Development.IDE.GHC.Compat.Core (GlobalRdrEnv)
 import           DynFlags
 import           ErrUtils                        hiding (mkWarnMsg)
 import qualified ErrUtils                        as Err
@@ -60,9 +61,6 @@ import           HscTypes
 import           Outputable                      as Out
 import           SrcLoc
 #endif
-
-import           Development.IDE.GHC.Compat.Core (GlobalRdrEnv)
-
 
 printNameWithoutUniques :: Outputable a => a -> String
 printNameWithoutUniques =

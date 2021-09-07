@@ -12,7 +12,7 @@ import           Data.Maybe
 import           Data.Set (Set)
 import qualified Data.Set as S
 import           Development.IDE.Core.UseStale (Tracked, unTrack)
-import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat hiding (isTopLevel)
 import           Development.IDE.Spans.LocalBindings
 import           Wingman.GHC (algebraicTyCon, normalizeType)
 import           Wingman.Judgements.Theta

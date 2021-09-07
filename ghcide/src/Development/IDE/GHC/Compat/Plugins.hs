@@ -21,8 +21,6 @@ import           GHC
 #if MIN_VERSION_ghc(9,0,0)
 #if MIN_VERSION_ghc(9,2,0)
 import qualified GHC.Driver.Env                    as Env
-#else
-import           GHC.Driver.Session                (staticPlugins)
 #endif
 import           GHC.Driver.Plugins                (Plugin (..),
                                                     PluginWithArgs (..),

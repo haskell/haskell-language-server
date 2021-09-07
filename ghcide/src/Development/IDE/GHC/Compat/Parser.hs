@@ -17,6 +17,9 @@ module Development.IDE.GHC.Compat.Parser (
     mkHsParsedModule,
     mkParsedModule,
     mkApiAnns,
+    -- * API Annotations
+    Anno.AnnKeywordId(..),
+    Anno.AnnotationComment(..),
     ) where
 
 #if MIN_VERSION_ghc(9,0,0)

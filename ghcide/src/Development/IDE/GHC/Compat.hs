@@ -14,38 +14,15 @@ module Development.IDE.GHC.Compat(
     addIncludePathsQuote,
     getModuleHash,
     setUpTypedHoles,
-    GHC.ModLocation,
-    Module.addBootSuffix,
-    pattern ModLocation,
-    ml_hs_file,
-    ml_obj_file,
-    ml_hi_file,
-    ml_hie_file,
     upNameCache,
     disableWarningsAsErrors,
-
-#if MIN_VERSION_ghc(8,10,0)
-    module GHC.Hs.Extension,
-#else
-    module HsExtension,
-    noExtField,
-#endif
 
 #if !MIN_VERSION_ghc(9,0,1)
     RefMap,
 #endif
 
-#if MIN_VERSION_ghc(9,0,0)
-    IsBootInterface(..),
-#else
-    pattern IsBoot,
-    pattern NotBoot,
-#endif
-
     nodeInfo',
     getNodeIds,
-
-    pprSigmaType,
 
     isQualifiedImport,
     GhcVersion(..),
@@ -81,8 +58,6 @@ module Development.IDE.GHC.Compat(
 
 import           GHC                    hiding (HasSrcSpan, ModLocation, getLoc,
                                          lookupName, RealSrcSpan)
-import qualified GHC
-
 import Development.IDE.GHC.Compat.Core
 import Development.IDE.GHC.Compat.Env
 import Development.IDE.GHC.Compat.Iface
@@ -101,25 +76,14 @@ import           GHC.Unit.Module.ModIface
 #else
 import           GHC.Driver.Types
 #endif
-import           GHC.Hs.Extension
 import           GHC.Iface.Env
 import           GHC.Iface.Make           (mkIfaceExports)
 import qualified GHC.SysTools.Tasks       as SysTools
-import           GHC.Tc.Utils.TcType      (pprSigmaType)
 import qualified GHC.Types.Avail          as Avail
-import qualified GHC.Unit.Module.Location as Module
-import           GHC.Unit.Types
 #else
 import           DynFlags               hiding (ExposePackage)
-import qualified Module
-import           TcType                 (pprSigmaType)
 import           HscTypes
 import           MkIface hiding (writeIfaceFile)
-#if MIN_VERSION_ghc(8,10,0)
-import           GHC.Hs.Extension
-#else
-import           HsExtension
-#endif
 import qualified Avail
 
 #if MIN_VERSION_ghc(8,8,0)
@@ -129,7 +93,6 @@ import qualified SysTools
 
 #if !MIN_VERSION_ghc(8,8,0)
 import           SrcLoc                 (RealLocated)
-import           System.FilePath        ((-<.>))
 import qualified EnumSet
 
 import           Foreign.ForeignPtr
@@ -145,14 +108,10 @@ import qualified Data.ByteString        as BS
 import           Data.IORef
 
 import qualified Data.Map               as Map
+import           Data.List              (foldl')
 
 #if MIN_VERSION_ghc(9,0,0)
 import qualified Data.Set               as S
-#endif
-#if MIN_VERSION_ghc(8,8,0)
-import           Data.List              (foldl')
-#else
-import           Data.List              (foldl', isSuffixOf)
 #endif
 
 #if !MIN_VERSION_ghc(8,8,0)
@@ -162,23 +121,11 @@ hPutStringBuffer hdl (StringBuffer buf len cur)
              hPutBuf hdl ptr len
 #endif
 
-#if !MIN_VERSION_ghc(8,10,0)
-noExtField :: NoExt
-noExtField = noExt
-#endif
-
 supportsHieFiles :: Bool
 supportsHieFiles = True
 
 hieExportNames :: HieFile -> [(SrcSpan, Name)]
 hieExportNames = nameListFromAvails . hie_exports
-
-#if !MIN_VERSION_ghc(8,8,0)
-ml_hie_file :: GHC.ModLocation -> FilePath
-ml_hie_file ml
-  | "boot" `isSuffixOf ` ml_hi_file ml = ml_hi_file ml -<.> ".hie-boot"
-  | otherwise  = ml_hi_file ml -<.> ".hie"
-#endif
 
 upNameCache :: IORef NameCache -> (NameCache -> (NameCache, c)) -> IO c
 #if MIN_VERSION_ghc(8,8,0)
@@ -187,7 +134,6 @@ upNameCache = updNameCache
 upNameCache ref upd_fn
   = atomicModifyIORef' ref upd_fn
 #endif
-
 
 #if !MIN_VERSION_ghc(9,0,1)
 type RefMap a = Map.Map Identifier [(Span, IdentifierDetails a)]
@@ -214,15 +160,6 @@ mkHieFile' ms exports asts src = do
 addIncludePathsQuote :: FilePath -> DynFlags -> DynFlags
 addIncludePathsQuote path x = x{includePaths = f $ includePaths x}
     where f i = i{includePathsQuote = path : includePathsQuote i}
-
-pattern ModLocation :: Maybe FilePath -> FilePath -> FilePath -> GHC.ModLocation
-#if MIN_VERSION_ghc(8,8,0)
-pattern ModLocation a b c <-
-    GHC.ModLocation a b c _ where ModLocation a b c = GHC.ModLocation a b c ""
-#else
-pattern ModLocation a b c <-
-    GHC.ModLocation a b c where ModLocation a b c = GHC.ModLocation a b c
-#endif
 
 setHieDir :: FilePath -> DynFlags -> DynFlags
 setHieDir _f d =
@@ -271,12 +208,6 @@ getModuleHash :: ModIface -> Fingerprint
 getModuleHash = mi_mod_hash . mi_final_exts
 #else
 getModuleHash = mi_mod_hash
-#endif
-
-#if !MIN_VERSION_ghc(9,0,0)
-pattern NotBoot, IsBoot :: IsBootInterface
-pattern NotBoot = False
-pattern IsBoot = True
 #endif
 
 

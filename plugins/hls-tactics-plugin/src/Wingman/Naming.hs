@@ -14,7 +14,7 @@ import           Data.Monoid
 import           Data.Set (Set)
 import qualified Data.Set as S
 import           Data.Traversable
-import           Development.IDE.GHC.Compat.Core
+import           Development.IDE.GHC.Compat.Core hiding (IsFunction)
 import           Text.Hyphenation (hyphenate, english_US)
 import           Wingman.GHC (tcTyVar_maybe)
 

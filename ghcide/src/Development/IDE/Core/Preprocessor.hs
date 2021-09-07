@@ -8,25 +8,25 @@ module Development.IDE.Core.Preprocessor
 import           Development.IDE.GHC.CPP
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Outputable
-import qualified Development.IDE.GHC.Compat.Util   as Util
-import           Development.IDE.GHC.Orphans       ()
+import qualified Development.IDE.GHC.Compat.Util       as Util
+import           Development.IDE.GHC.Orphans           ()
 
-import           Control.DeepSeq                   (NFData (rnf))
-import           Control.Exception                 (evaluate)
-import           Control.Exception.Safe            (catch, throw)
-import           Control.Monad.Trans.Except
+import           Control.DeepSeq                       (NFData (rnf))
+import           Control.Exception                     (evaluate)
+import           Control.Exception.Safe                (catch, throw)
 import           Control.Monad.IO.Class
+import           Control.Monad.Trans.Except
 import           Data.Char
-import           Data.IORef                        (IORef, modifyIORef,
-                                                    newIORef, readIORef)
+import           Data.IORef                            (IORef, modifyIORef,
+                                                        newIORef, readIORef)
 import           Data.List.Extra
 import           Data.Maybe
-import           Data.Text                         (Text)
-import qualified Data.Text                         as T
+import           Data.Text                             (Text)
+import qualified Data.Text                             as T
 import           Development.IDE.GHC.Error
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
-import qualified GHC.LanguageExtensions            as LangExt
+import qualified GHC.LanguageExtensions                as LangExt
 import           System.FilePath
 import           System.IO.Extra
 

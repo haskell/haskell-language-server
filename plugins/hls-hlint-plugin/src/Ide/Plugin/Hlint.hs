@@ -9,8 +9,8 @@
 {-# LANGUAGE PackageImports        #-}
 {-# LANGUAGE PatternSynonyms       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TupleSections         #-}
+{-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE ViewPatterns          #-}
 {-# OPTIONS_GHC -Wno-orphans   #-}
 
@@ -77,7 +77,8 @@ import           System.IO                                          (IOMode (Wri
                                                                      withFile)
 import           System.IO.Temp
 #else
-import           Development.IDE.GHC.Compat.Core
+import           Development.IDE.GHC.Compat.Core                    hiding
+                                                                    (setEnv)
 import           Language.Haskell.GHC.ExactPrint.Delta              (deltaOptions)
 import           Language.Haskell.GHC.ExactPrint.Parsers            (postParseTransform)
 import           Language.Haskell.GHC.ExactPrint.Types              (Rigidity (..))

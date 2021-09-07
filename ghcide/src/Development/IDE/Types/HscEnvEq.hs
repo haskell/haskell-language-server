@@ -11,24 +11,25 @@ module Development.IDE.Types.HscEnvEq
 ) where
 
 
-import           Control.Concurrent.Async      (Async, async, waitCatch)
-import           Control.Concurrent.Strict     (modifyVar, newVar)
-import           Control.DeepSeq               (force)
-import           Control.Exception             (evaluate, mask, throwIO)
-import           Control.Monad.Extra           (eitherM, join, mapMaybeM)
+import           Control.Concurrent.Async        (Async, async, waitCatch)
+import           Control.Concurrent.Strict       (modifyVar, newVar)
+import           Control.DeepSeq                 (force)
+import           Control.Exception               (evaluate, mask, throwIO)
+import           Control.Monad.Extra             (eitherM, join, mapMaybeM)
 import           Control.Monad.IO.Class
-import           Data.Either                   (fromRight)
-import           Data.Set                      (Set)
-import qualified Data.Set                      as Set
-import           Data.Unique
+import           Data.Either                     (fromRight)
+import           Data.Set                        (Set)
+import qualified Data.Set                        as Set
+import           Data.Unique                     (Unique)
+import qualified Data.Unique                     as Unique
 import           Development.IDE.GHC.Compat
 import qualified Development.IDE.GHC.Compat.Util as Maybes
-import           Development.IDE.GHC.Error     (catchSrcErrors)
-import           Development.IDE.GHC.Util      (lookupPackageConfig)
+import           Development.IDE.GHC.Error       (catchSrcErrors)
+import           Development.IDE.GHC.Util        (lookupPackageConfig)
 import           Development.IDE.Graph.Classes
-import           Development.IDE.Types.Exports (ExportsMap, createExportsMap)
-import           OpenTelemetry.Eventlog        (withSpan)
-import           System.Directory              (canonicalizePath)
+import           Development.IDE.Types.Exports   (ExportsMap, createExportsMap)
+import           OpenTelemetry.Eventlog          (withSpan)
+import           System.Directory                (canonicalizePath)
 import           System.FilePath
 
 -- | An 'HscEnv' with equality. Two values are considered equal
@@ -68,7 +69,7 @@ newHscEnvEqWithImportPaths envImportPaths hscEnv deps = do
 
     let dflags = hsc_dflags hscEnv
 
-    envUnique <- newUnique
+    envUnique <- Unique.newUnique
 
     -- it's very important to delay the package exports computation
     envPackageExports <- onceAsync $ withSpan "Package Exports" $ \_sp -> do
@@ -121,7 +122,7 @@ removeImportPaths :: HscEnv -> HscEnv
 removeImportPaths hsc = hscSetFlags (setImportPaths [] (hsc_dflags hsc)) hsc
 
 instance Show HscEnvEq where
-  show HscEnvEq{envUnique} = "HscEnvEq " ++ show (hashUnique envUnique)
+  show HscEnvEq{envUnique} = "HscEnvEq " ++ show (Unique.hashUnique envUnique)
 
 instance Eq HscEnvEq where
   a == b = envUnique a == envUnique b
@@ -129,7 +130,7 @@ instance Eq HscEnvEq where
 instance NFData HscEnvEq where
   rnf (HscEnvEq a b c d _ _) =
       -- deliberately skip the package exports map and visible module names
-      rnf (hashUnique a) `seq` b `seq` c `seq` rnf d
+      rnf (Unique.hashUnique a) `seq` b `seq` c `seq` rnf d
 
 instance Hashable HscEnvEq where
   hashWithSalt s = hashWithSalt s . envUnique
