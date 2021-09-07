@@ -48,7 +48,7 @@ moduleOutline ideState DocumentSymbolParams{ _textDocument = TextDocumentIdentif
                    (defDocumentSymbol l :: DocumentSymbol)
                      { _name  = pprText m
                      , _kind  = SkFile
-                     , _range = Range (Position 0 0) (Position maxBound 0) -- _ltop is 0 0 0 0
+                     , _range = Range (Position 0 0) (Position 2147483647 0) -- _ltop is 0 0 0 0
                      }
                  _ -> Nothing
                importSymbols = maybe [] pure $
