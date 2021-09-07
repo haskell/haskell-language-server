@@ -381,13 +381,16 @@ generateLens pId uri minImports (L src imp)
 
 ## Wrapping up
 
-There's only one code change left to do at this point: "link" the plugin in the `Main` HLS module.
+There's only one haskell code change left to do at this point: "link" the plugin in the `Main` HLS module.
+However integrate the plugin in haskell-language-server itself will need some changes in config files. The best way is looking for the id (f.e. `hls-tactics-plugin`) of an existing plugin:
+- `./cabal*.project` and `./stack*.yaml`: add the plugin package in the `packages` field
+- `./haskell-language-server.cabal`: add a conditional block with the plugin package dependency
+- `./.github/workflows/test.yml`: add a block to run the test suite of the plugin
+- `./.github/workflows/hackage.yml`: add the plugin to the component list to release the plugin package to hackage
+- `./*.nix`: add the plugin to nix builds
 
 The full code as used in this tutorial, including imports, can be found in [this Gist](https://gist.github.com/pepeiborra/49b872b2e9ad112f61a3220cdb7db967) as well as in this [branch](https://github.com/pepeiborra/ide/blob/imports-lens/src/Ide/Plugin/ImportLens.hs)
 
 I hope this has given you a taste of how easy and joyful it is to write plugins for HLS.
 If you are looking for ideas for contributing, here are some cool ones found in the HLS issue tracker:
-- [#205](https://github.com/haskell/haskell-language-server/issues/205) Integrate code synthesis tools (djinn, hoogle+)
-- [#258](https://github.com/haskell/haskell-language-server/issues/258) Integration with [Stan](https://github.com/kowainik/stan)
-- [#282](https://github.com/haskell/haskell-language-server/issues/282) High-level refactorings (rename, move, extract)
-- [#323](https://github.com/haskell/haskell-language-server/issues/323) Case splitting
+- https://github.com/haskell/haskell-language-server/issues?q=is%3Aopen+is%3Aissue+label%3A%22type%3A+possible+new+plugin%22
