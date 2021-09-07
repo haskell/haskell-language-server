@@ -42,7 +42,8 @@ extra-deps:
 - ghc-lib-9.0.1.20210324@sha256:c8b9a2541ea3424c8d0e4f80584477d0f35be03f4a47d931152042d5f446c5fc,19279
 - ghc-lib-parser-9.0.1.20210324@sha256:fb680f78d4ab08b5d089a05bda3b84ad857e5edcc2e4ca7c188c0207d369af80
 - ghc-lib-parser-ex-9.0.0.4@sha256:8282b11c3797fc8ba225b245e736cc9a0745d9c48d0f9fea7f9bffb5c9997709,3642
-- ghc-source-gen-0.4.1.0
+- floskell-0.10.5
+- ghc-api-compat-9.0.1
 - haddock-library-1.10.0@sha256:2a6c239da9225951a5d837e1ce373faeeae60d1345c78dd0a0b0f29df30c4fe9,4098
 - heapsize-0.3.0.1@sha256:0b69aa97a46d819b700ac7b145f3b5493c3565cf2c5b8298682238d405d0326e,1417
 - hiedb-0.4.0.0
@@ -72,9 +73,6 @@ extra-deps:
 - github: jneira/hie-bios
   commit: 9b1445ab5efcabfad54043fc9b8e50e9d8c5bbf3
 # https://github.com/mpickering/hie-bios/pull/285
-
-- github: hsyl20/ghc-api-compat
-  commit: 8fee87eac97a538dbe81ff1ab18cff10f2f9fa15
 
 - github: anka-213/th-extras
   commit: 57a97b4df128eb7b360e8ab9c5759392de8d1659

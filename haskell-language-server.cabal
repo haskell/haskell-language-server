@@ -327,7 +327,6 @@ executable haskell-language-server
     , cryptohash-sha1
     , deepseq
     , ghc
-    , ghc-api-compat
     , ghc-boot-th
     , ghcide
     , hashable
@@ -349,6 +348,22 @@ executable haskell-language-server
     , temporary
     , transformers
     , unordered-containers
+
+  if impl(ghc < 8.10.5)
+    build-depends:
+      ghc-api-compat ==8.6
+  elif impl(ghc == 8.10.5)
+    build-depends:
+      ghc-api-compat ==8.10.5
+  elif impl(ghc == 8.10.6)
+    build-depends:
+      ghc-api-compat ==8.10.6
+  elif impl(ghc == 8.10.7)
+    build-depends:
+      ghc-api-compat ==8.10.7
+  elif impl(ghc == 9.0.1)
+    build-depends:
+      ghc-api-compat ==9.0.1
 
   default-language: Haskell2010
   default-extensions: DataKinds, TypeOperators
