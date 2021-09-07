@@ -104,7 +104,7 @@ $ cabal test func-test --test-option "-p hlint"
 
 The above recompiles everything every time you use a different test option though.
 
-An alternative is
+An alternative, which only recompiles when tests (or dependencies) change:
 
 ```bash
 $ cabal run haskell-language-server:func-test -- -p "hlint enables"
