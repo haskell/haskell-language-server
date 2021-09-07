@@ -24,6 +24,8 @@ import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Set (Set)
 import qualified Data.Set as S
+import           Data.Traversable (for)
+import           DataCon
 import           Development.IDE.GHC.Compat
 import           GHC.Exts
 import           GHC.SourceGen ((@@))

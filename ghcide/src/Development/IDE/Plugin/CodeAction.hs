@@ -1287,14 +1287,8 @@ newImportToEdit (unNewImport -> imp) ps fileContents
 newImportInsertRange :: ParsedSource -> T.Text -> Maybe (Range, Int)
 newImportInsertRange (L _ HsModule {..}) fileContents
   |  Just (uncurry Position -> insertPos, col) <- case hsmodImports of
-      [] -> case getLoc (head hsmodDecls) of
-        RealSrcSpan s _ -> let col = srcLocCol (realSrcSpanStart s) - 1
-              in Just ((srcLocLine (realSrcSpanStart s) - 1, col), col)
-        _            -> Nothing
-      _ -> case  getLoc (last hsmodImports) of
-        RealSrcSpan s _ -> let col = srcLocCol (realSrcSpanStart s) - 1
-            in Just ((srcLocLine $ realSrcSpanEnd s,col), col)
-        _            -> Nothing
+      [] -> findPositionNoImports hsmodName hsmodExports fileContents
+      _  -> findPositionFromImportsOrModuleDecl hsmodImports last True
     = Just (Range insertPos insertPos, col)
   | otherwise = Nothing
 
@@ -1308,7 +1302,7 @@ findPositionNoImports (Just hsmodName) _ _ = findPositionFromImportsOrModuleDecl
 
 findPositionFromImportsOrModuleDecl :: HasSrcSpan a => t -> (t -> a) -> Bool -> Maybe ((Int, Int), Int)
 findPositionFromImportsOrModuleDecl hsField f hasImports = case getLoc (f hsField) of
-  OldRealSrcSpan s ->
+  RealSrcSpan s _ ->
     let col = calcCol s
      in Just ((srcLocLine (realSrcSpanEnd s), col), col)
   _ -> Nothing

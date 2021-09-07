@@ -48,6 +48,7 @@ library
         dependent-map,
         dependent-sum,
         dlist,
+        -- we can't use >= 1.7.10 while we have to use hlint == 3.2.*
         extra >= 1.7.4 && < 1.7.10,
         fuzzy,
         filepath,
@@ -108,22 +109,6 @@ library
     else
       build-depends:
         unix
-
-    if impl(ghc < 8.10.5)
-        build-depends:
-            ghc-api-compat ==8.6
-    elif impl(ghc == 8.10.5)
-        build-depends:
-            ghc-api-compat ==8.10.5
-    elif impl(ghc == 8.10.6)
-        build-depends:
-            ghc-api-compat ==8.10.6
-    elif impl(ghc == 8.10.7)
-        build-depends:
-            ghc-api-compat ==8.10.7
-    elif impl(ghc == 9.0.1)
-        build-depends:
-            ghc-api-compat ==9.0.1
 
     default-extensions:
         ApplicativeDo
