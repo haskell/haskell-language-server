@@ -21,7 +21,7 @@ jobs:
                   "hls-splice-plugin", "hls-tactics-plugin",
                   "hls-call-hierarchy-plugin",
                   "haskell-language-server"]
-        ghc: ["8.10.6", "8.8.4", "8.6.5"]
+        ghc: ["8.10.7", "8.8.4", "8.6.5"]
 
     steps:
 
@@ -83,7 +83,7 @@ jobs:
         id: compare-current-version
         if: steps.get-hackage-version.exists == 'true'
         run: |
-          # This will throw an error if there is any difference casue we have to bump up the package version
+          # This will throw an error if there is any difference cause we have to bump up the package version
           diff -qr -x "*.md" -x "data" $(ls -d ./incoming/${{ matrix.package }}-*) $(ls -d ./current/${{ matrix.package }}-*)
 
       - name: "Create appropiate cabal.project"
