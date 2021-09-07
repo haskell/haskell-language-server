@@ -60,10 +60,11 @@ import           Development.Shake                        (getDirectoryFilesIO)
 import qualified Experiments                              as Bench
 import           Ide.Plugin.Config
 import           Language.LSP.Test
-import           Language.LSP.Types                                 hiding
-                                                                    (mkRange, SemanticTokenAbsolute (length, line),
-                                                                     SemanticTokenRelative (length),
-                                                                     SemanticTokensEdit (_start))
+import           Language.LSP.Types                       hiding
+                                                          (SemanticTokenAbsolute (length, line),
+                                                           SemanticTokenRelative (length),
+                                                           SemanticTokensEdit (_start),
+                                                           mkRange)
 import           Language.LSP.Types.Capabilities
 import qualified Language.LSP.Types.Lens                  as Lsp (diagnostics,
                                                                   message,
@@ -132,11 +133,11 @@ main = do
         waitForProgressBegin
         closeDoc doc
         waitForProgressDone
+    , codeActionTests
     , initializeResponseTests
     , completionTests
     , cppTests
     , diagnosticTests
-    , codeActionTests
     , codeLensesTests
     , outlineTests
     , highlightTests
@@ -730,10 +731,11 @@ cancellationTemplate (edit, undoEdit) mbKey = testCase (maybe "-" fst mbKey) $ r
 
 codeActionTests :: TestTree
 codeActionTests = testGroup "code actions"
-  [ renameActionTests
+  [ insertImportTests
+  , extendImportTests
+  , renameActionTests
   , typeWildCardActionTests
   , removeImportTests
-  , extendImportTests
   , suggestImportClassMethodTests
   , suggestImportTests
   , suggestHideShadowTests
@@ -787,6 +789,51 @@ watchedFilesTests = testGroup "watched files"
 
   -- TODO add a test for didChangeWorkspaceFolder
   ]
+
+insertImportTests :: TestTree
+insertImportTests = testGroup "insert import"
+  [ checkImport "above comment at top of module" "CommentAtTop.hs" "CommentAtTop.expected.hs" "import Data.Monoid"
+  , checkImport "above multiple comments below" "CommentAtTopMultipleComments.hs" "CommentAtTopMultipleComments.expected.hs" "import Data.Monoid"
+  , checkImport "above curly brace comment" "CommentCurlyBraceAtTop.hs" "CommentCurlyBraceAtTop.expected.hs" "import Data.Monoid"
+  , checkImport "above multi-line comment" "MultiLineCommentAtTop.hs" "MultiLineCommentAtTop.expected.hs" "import Data.Monoid"
+  , checkImport "above comment with no module explicit exports" "NoExplicitExportCommentAtTop.hs" "NoExplicitExportCommentAtTop.expected.hs" "import Data.Monoid"
+  , checkImport "above two-dash comment with no pipe" "TwoDashOnlyComment.hs" "TwoDashOnlyComment.expected.hs" "import Data.Monoid"
+  , checkImport "above comment with no (module .. where) decl" "NoModuleDeclarationCommentAtTop.hs" "NoModuleDeclarationCommentAtTop.expected.hs" "import Data.Monoid"
+  , checkImport "comment not at top with no (module .. where) decl" "NoModuleDeclaration.hs" "NoModuleDeclaration.expected.hs" "import Data.Monoid"
+  , checkImport "comment not at top (data dec is)" "DataAtTop.hs" "DataAtTop.expected.hs" "import Data.Monoid"
+  , checkImport "comment not at top (newtype is)" "NewTypeAtTop.hs" "NewTypeAtTop.expected.hs" "import Data.Monoid"
+  , checkImport "with no explicit module exports" "NoExplicitExports.hs" "NoExplicitExports.expected.hs" "import Data.Monoid"
+  , checkImport "add to correctly placed exisiting import" "ImportAtTop.hs" "ImportAtTop.expected.hs" "import Data.Monoid"
+  , checkImport "add to multiple correctly placed exisiting imports" "MultipleImportsAtTop.hs" "MultipleImportsAtTop.expected.hs" "import Data.Monoid"
+  , checkImport "with language pragma at top of module" "LangPragmaModuleAtTop.hs" "LangPragmaModuleAtTop.expected.hs" "import Data.Monoid"
+  , checkImport "with language pragma and explicit module exports" "LangPragmaModuleWithComment.hs" "LangPragmaModuleWithComment.expected.hs" "import Data.Monoid"
+  , checkImport "with language pragma at top and no module declaration" "LanguagePragmaAtTop.hs" "LanguagePragmaAtTop.expected.hs" "import Data.Monoid"
+  , checkImport "with multiple lang pragmas and no module declaration" "MultipleLanguagePragmasNoModuleDeclaration.hs" "MultipleLanguagePragmasNoModuleDeclaration.expected.hs" "import Data.Monoid"
+  , checkImport "with pragmas and shebangs" "LanguagePragmasThenShebangs.hs" "LanguagePragmasThenShebangs.expected.hs" "import Data.Monoid"
+  , checkImport "with pragmas and shebangs but no comment at top" "PragmasAndShebangsNoComment.hs" "PragmasAndShebangsNoComment.expected.hs" "import Data.Monoid"
+  , checkImport "module decl no exports under pragmas and shebangs" "PragmasShebangsAndModuleDecl.hs" "PragmasShebangsAndModuleDecl.expected.hs" "import Data.Monoid"
+  , checkImport "module decl with explicit import under pragmas and shebangs" "PragmasShebangsModuleExplicitExports.hs" "PragmasShebangsModuleExplicitExports.expected.hs" "import Data.Monoid"
+  , checkImport "module decl and multiple imports" "ModuleDeclAndImports.hs" "ModuleDeclAndImports.expected.hs" "import Data.Monoid"
+  ]
+
+checkImport :: String -> FilePath -> FilePath -> T.Text -> TestTree
+checkImport testComment originalPath expectedPath action =
+  testSessionWithExtraFiles "import-placement" testComment $ \dir ->
+    check (dir </> originalPath) (dir </> expectedPath) action
+  where
+    check :: FilePath -> FilePath -> T.Text -> Session ()
+    check originalPath expectedPath action = do
+      oSrc <- liftIO $ readFileUtf8 originalPath
+      eSrc <- liftIO $  readFileUtf8 expectedPath
+      originalDoc <- createDoc originalPath "haskell" oSrc
+      _ <- waitForDiagnostics
+      shouldBeDoc <- createDoc expectedPath "haskell" eSrc
+      actionsOrCommands <- getAllCodeActions originalDoc
+      chosenAction <- liftIO $ pickActionWithTitle action actionsOrCommands
+      executeCodeAction chosenAction
+      originalDocAfterAction <- documentContents originalDoc
+      shouldBeDocContents <- documentContents shouldBeDoc
+      liftIO $ T.replace "\r\n" "\n" shouldBeDocContents @=? T.replace "\r\n" "\n" originalDocAfterAction
 
 renameActionTests :: TestTree
 renameActionTests = testGroup "rename actions"
@@ -1545,15 +1592,15 @@ suggestImportClassMethodTests =
         [ testSession "via parent" $
             template'
             "import Data.Semigroup (Semigroup(stimes))"
-            (Range (Position 5 2) (Position 5 8)),
+            (Range (Position 4 2) (Position 4 8)),
           testSession "top level" $
             template'
               "import Data.Semigroup (stimes)"
-              (Range (Position 5 2) (Position 5 8)),
+              (Range (Position 4 2) (Position 4 8)),
           testSession "all" $
             template'
               "import Data.Semigroup"
-              (Range (Position 5 2) (Position 5 8))
+              (Range (Position 4 2) (Position 4 8))
         ],
       testGroup
         "extend"
@@ -1601,7 +1648,7 @@ suggestImportClassMethodTests =
       executeCodeAction $ fromJust $ find (\CodeAction {_title} -> _title == executeTitle) actions'
       content <- documentContents doc
       liftIO $ T.unlines (expectedContent <> decls) @=? content
-    template' executeTitle range = let c = ["module A where", ""] in template c range executeTitle $ c <> [executeTitle]
+    template' executeTitle range = let c = ["module A where"] in template c range executeTitle $ c <> [executeTitle]
 
 suggestImportTests :: TestTree
 suggestImportTests = testGroup "suggest import actions"
