@@ -119,9 +119,15 @@ jobs:
     steps:
 
       - uses: actions/download-artifact@v2
+        with:
+          path: packages
+
+      - name: "Join all tarballs"
+        run: find ./packages -type f -name '*.tar.gz' -exec cp {} ./packages \;
 
       - name: "Upload all tarballs to hackage"
         uses: haskell-actions/hackage-publish@v1
         with:
           hackageToken: ${{ secrets.HACKAGE_AUTH_TOKEN }}
+          packagesPath: packages
           publish: false
