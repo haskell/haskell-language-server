@@ -6,55 +6,6 @@ The Haskell tooling dream is near, we need your help!
 - Follow the [Haskell IDE team twitter account](https://twitter.com/IdeHaskell) for updates and help.
 - Join the [#haskell-tooling channel](https://discord.com/channels/280033776820813825/505370075402862594/808027763868827659) in the Functional Programming discord server. You can join the server via [this invitation](https://discord.gg/9spEdTNGrD).
 
-## Style guidelines
-
-The project includes a [`.editorconfig`](https://editorconfig.org) [file](https://github.com/haskell/haskell-language-server/blob/master/.editorconfig) with the editor basic settings used by the project.
-However, most editors will need some action to honour those settings automatically.
-For example vscode needs to have installed a specific [extension](https://marketplace.visualstudio.com/items?itemName=EditorConfig.EditorConfig).
-Please, try to follow those basic settings to keep the codebase as uniform as possible.
-
-## Formatter pre-commit hook
-
-We are using [pre-commit-hook.nix](https://github.com/cachix/pre-commit-hooks.nix) to configure git pre-commit hook for formatting. Although it is possible to run formatting manually, we recommend you to use it to set pre-commit hook as our CI checks pre-commit hook is applied or not.
-
-You can configure the pre-commit-hook by running
-
-``` bash
-nix-shell
-```
-
-If you don't want to use [nix](https://nixos.org/guides/install-nix.html), you can instead use [pre-commit](https://pre-commit.com) with the following config.
-
-```json
-{
-  "repos": [
-    {
-      "hooks": [
-        {
-          "entry": "stylish-haskell --inplace",
-          "exclude": "(^Setup.hs$|test/testdata/.*$|test/data/.*$|^hie-compat/.*$|^plugins/hls-tactics-plugin/.*$)",
-          "files": "\\.l?hs$",
-          "id": "stylish-haskell",
-          "language": "system",
-          "name": "stylish-haskell",
-          "pass_filenames": true,
-          "types": [
-            "file"
-          ]
-        }
-      ],
-      "repo": "local"
-    }
-  ]
-}
-```
-
-### Why some components are excluded from automatic formatting?
-
-- `test/testdata` and `test/data` are there as we want to test formatting plugins.
-- `hie-compat` is there as we want to keep its code as close to GHC as possible.
-- `hls-tactics-plugin` is there as the main contributor of the plugin (@isovector) does not want auto-formatting.
-
 ## Building haskell-language-server
 
 The project can be built with both `cabal build` and `stack build`.
@@ -179,6 +130,55 @@ To do every time you changed code and want to test it:
   - With Stack: `stack build haskell-language-server:exe:haskell-language-server`
 - Restart HLS
   - With VS Code: `Haskell: Restart Haskell LSP Server`
+
+## Style guidelines
+
+The project includes a [`.editorconfig`](https://editorconfig.org) [file](https://github.com/haskell/haskell-language-server/blob/master/.editorconfig) with the editor basic settings used by the project.
+However, most editors will need some action to honour those settings automatically.
+For example vscode needs to have installed a specific [extension](https://marketplace.visualstudio.com/items?itemName=EditorConfig.EditorConfig).
+Please, try to follow those basic settings to keep the codebase as uniform as possible.
+
+### Formatter pre-commit hook
+
+We are using [pre-commit-hook.nix](https://github.com/cachix/pre-commit-hooks.nix) to configure git pre-commit hook for formatting. Although it is possible to run formatting manually, we recommend you to use it to set pre-commit hook as our CI checks pre-commit hook is applied or not.
+
+You can configure the pre-commit-hook by running
+
+``` bash
+nix-shell
+```
+
+If you don't want to use [nix](https://nixos.org/guides/install-nix.html), you can instead use [pre-commit](https://pre-commit.com) with the following config.
+
+```json
+{
+  "repos": [
+    {
+      "hooks": [
+        {
+          "entry": "stylish-haskell --inplace",
+          "exclude": "(^Setup.hs$|test/testdata/.*$|test/data/.*$|^hie-compat/.*$|^plugins/hls-tactics-plugin/.*$)",
+          "files": "\\.l?hs$",
+          "id": "stylish-haskell",
+          "language": "system",
+          "name": "stylish-haskell",
+          "pass_filenames": true,
+          "types": [
+            "file"
+          ]
+        }
+      ],
+      "repo": "local"
+    }
+  ]
+}
+```
+
+#### Why some components are excluded from automatic formatting?
+
+- `test/testdata` and `test/data` are there as we want to test formatting plugins.
+- `hie-compat` is there as we want to keep its code as close to GHC as possible.
+- `hls-tactics-plugin` is there as the main contributor of the plugin (@isovector) does not want auto-formatting.
 
 ## Introduction tutorial
 
