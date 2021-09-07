@@ -50,7 +50,7 @@ import           Development.IDE.GHC.Compat               as GHC
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Util
 import           Development.IDE.Plugin.Completions.Types
-import           Development.IDE.Spans.Common 
+import           Development.IDE.Spans.Common
 import           Development.IDE.Spans.Documentation
 import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Exports

@@ -130,7 +130,7 @@ getCompletionsLSP ide plId
                   ,_context=completionContext} = do
     contents <- LSP.getVirtualFile $ toNormalizedUri uri
     fmap Right $ case (contents, uriToFilePath' uri) of
-      (Just cnts, Just path) -> do 
+      (Just cnts, Just path) -> do
         let npath = toNormalizedFilePath' path
         (ideOpts, compls, moduleExports) <- liftIO $ runIdeAction "Completion" (shakeExtras ide) $ do
             opts <- liftIO $ getIdeOptionsIO $ shakeExtras ide
