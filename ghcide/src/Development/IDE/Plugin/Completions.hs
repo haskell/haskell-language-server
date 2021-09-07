@@ -166,18 +166,9 @@ getCompletionsLSP ide plId
   
 buildLocalModuleExports:: IdeState -> ([(Located ModuleName, Maybe ArtifactsLocation)], PositionMapping) -> IO (Map.HashMap T.Text (Set.HashSet IdentInfo))
 buildLocalModuleExports ide inMap = do
-  mModIfaces <- mapM (getModIface ide) $ fst inMap
-  pure (buildModuleExportMapFrom $ catMaybes mModIfaces)
-
-getModIface :: IdeState ->  (Located ModuleName, Maybe ArtifactsLocation) -> IO (Maybe ModIface)
-getModIface ide item = do
-  let nPath = artifactFilePath <$> snd item
-  case nPath of 
-    (Just path) -> do 
-      file <- runIdeAction "Completion" (shakeExtras ide) $ do
-        fmap fst <$> useWithStaleFast GetModIface path
-      pure $ fmap hirModIface file
-    Nothing -> pure Nothing
+  let artifactLoctions = mapMaybe snd (fst inMap)
+  files <- runAction "Completion" ide $ usesWithStale GetModIface $ map artifactFilePath artifactLoctions
+  pure (buildModuleExportMapFrom $ map (hirModIface . fst) $ catMaybes files)
 
 extendImportCommand :: PluginCommand IdeState
 extendImportCommand =

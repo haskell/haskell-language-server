@@ -101,7 +101,8 @@ mkIdentInfos mod (AvailTC _ nn flds)
 createExportsMap :: [ModIface] -> ExportsMap
 createExportsMap modIface = do
   let exportList = concatMap doOne modIface
-  ExportsMap (Map.fromListWith (<>) exportList) (buildModuleExportMap exportList)
+  let exportsMap = Map.fromListWith (<>) $ map (\(a,_,c) -> (a, c)) exportList
+  ExportsMap exportsMap $ buildModuleExportMap $ map (\(_,b,c) -> (b, c)) exportList
   where
     doOne modIFace = do
       let getModDetails = unpackAvail $ moduleName $ mi_module modIFace
@@ -110,7 +111,8 @@ createExportsMap modIface = do
 createExportsMapMg :: [ModGuts] -> ExportsMap
 createExportsMapMg modGuts = do
   let exportList = concatMap doOne modGuts
-  ExportsMap (Map.fromListWith (<>) exportList) (buildModuleExportMap exportList)
+  let exportsMap = Map.fromListWith (<>) $ map (\(a,_,c) -> (a, c)) exportList
+  ExportsMap exportsMap $ buildModuleExportMap $ map (\(_,b,c) -> (b, c)) exportList
   where
     doOne mi = do
       let getModuleName = moduleName $ mg_module mi
@@ -119,8 +121,8 @@ createExportsMapMg modGuts = do
 createExportsMapTc :: [TcGblEnv] -> ExportsMap
 createExportsMapTc modIface = do
   let exportList = concatMap doOne modIface
-  let exportsMap = Map.fromListWith (<>) exportList
-  ExportsMap exportsMap $ buildModuleExportMap exportList
+  let exportsMap = Map.fromListWith (<>) $ map (\(a,_,c) -> (a, c)) exportList
+  ExportsMap exportsMap $ buildModuleExportMap $ map (\(_,b,c) -> (b, c)) exportList
   where
     doOne mi = do
       let getModuleName = moduleName $ tcg_mod mi
@@ -146,13 +148,13 @@ createExportsMapHieDb hiedb = do
           n = pack (occNameString exportName)
           p = pack . occNameString <$> exportParent
 
-unpackAvail :: ModuleName -> IfaceExport -> [(Text, [IdentInfo])]
+unpackAvail :: ModuleName -> IfaceExport -> [(Text, Text, [IdentInfo])]
 unpackAvail mn
   | nonInternalModules mn = map f . mkIdentInfos mod
   | otherwise = const []
   where
     !mod = pack $ moduleNameString mn
-    f id@IdentInfo {..} = (pack (prettyPrint name), [id])
+    f id@IdentInfo {..} = (pack (prettyPrint name), moduleNameText,[id])
 
 
 identInfoToKeyVal :: IdentInfo -> (ModuleNameText, IdentInfo)
