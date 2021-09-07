@@ -70,7 +70,7 @@ GHC 8.6.5 is not supported here because `nixpkgs-unstable` no longer maintains t
 The tests make use of the [Tasty](https://github.com/feuerbach/tasty) test framework.
 
 There are two test suites in the main haskell-language-server package, functional tests, and wrapper tests.
-Other project packages, like the core library or plugins, can have its own test suite.
+Other project packages, like the core library or plugins, can have their own test suite.
 
 ### Testing with Cabal
 
