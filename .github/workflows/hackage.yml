@@ -13,7 +13,7 @@ jobs:
         package: ["hie-compat", "hls-graph", "shake-bench",
                   "hls-plugin-api", "ghcide", "hls-test-utils",
                   "hls-brittany-plugin", "hls-floskell-plugin", "hls-fourmolu-plugin",
-                  "hls-ourmolu-plugin", "hls-stylish-haskell-plugin",
+                  "hls-ormolu-plugin", "hls-stylish-haskell-plugin",
                   "hls-class-plugin", "hls-eval-plugin", "hls-explicit-imports-plugin",
                   "hls-haddock-comments-plugin", "hls-hlint-plugin",
                   "hls-module-name-plugin", "hls-pragmas-plugin",
