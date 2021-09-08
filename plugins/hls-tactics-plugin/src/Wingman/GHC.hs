@@ -28,6 +28,7 @@ import           GHC.SourceGen (lambda)
 import           Generics.SYB (Data, everything, everywhere, listify, mkQ, mkT)
 import           GhcPlugins (Role (Nominal))
 import           OccName
+import           PrelNames (eqTyConKey, heqTyConKey)
 import           TcRnMonad
 import           TcType
 import           TyCoRep
@@ -90,17 +91,50 @@ tacticsThetaTy (tcSplitSigmaTy -> (_, theta,  _)) = theta
 
 ------------------------------------------------------------------------------
 -- | Get the data cons of a type, if it has any.
-tacticsGetDataCons :: Type -> Maybe ([DataCon], [Type])
-tacticsGetDataCons ty
+tacticsGetDataCons :: Set TyVar -> Type -> Maybe ([DataCon], [Type])
+tacticsGetDataCons skolems ty
   | Just (_, ty') <- tcSplitForAllTy_maybe ty
-  = tacticsGetDataCons ty'
-tacticsGetDataCons ty
+  = tacticsGetDataCons skolems ty'
+tacticsGetDataCons skolems ty
   | Just _ <- algebraicTyCon ty
   = splitTyConApp_maybe ty <&> \(tc, apps) ->
-      ( filter (not . dataConCannotMatch apps) $ tyConDataCons tc
+      ( filter (not . tacticsDataConCantMatch skolems apps) $ tyConDataCons tc
       , apps
       )
-tacticsGetDataCons _ = Nothing
+tacticsGetDataCons _ _ = Nothing
+
+
+------------------------------------------------------------------------------
+-- | Directly ripped from GHC; minor changes to allow for skolems.
+tacticsDataConCantMatch :: Set TyVar -> [Type] -> DataCon -> Bool
+-- Returns True iff the data con *definitely cannot* match a
+--                  scrutinee of type (T tys)
+--                  where T is the dcRepTyCon for the data con
+tacticsDataConCantMatch skolems tys con
+  | null inst_theta   = False   -- Common
+  | all isTyVarTy tys = False   -- Also common
+  | otherwise         = typesCantMatch (concatMap predEqs inst_theta)
+  where
+    (_, inst_theta, _) = dataConInstSig con tys
+
+    -- TODO: could gather equalities from superclasses too
+    predEqs pred = case classifyPredType pred of
+                     EqPred NomEq ty1 ty2         -> [(ty1, ty2)]
+                     ClassPred eq args
+                       | eq `hasKey` eqTyConKey
+                       , [_, ty1, ty2] <- args    -> [(ty1, ty2)]
+                       | eq `hasKey` heqTyConKey
+                       , [_, _, ty1, ty2] <- args -> [(ty1, ty2)]
+                     _                            -> []
+
+    typesCantMatch :: [(Type,Type)] -> Bool
+    -- See Note [Pruning dead case alternatives]
+    typesCantMatch prs = any (uncurry cant_match) prs
+      where
+        cant_match :: Type -> Type -> Bool
+        cant_match t1 t2 = case tcUnifyTysFG (isSkolem skolems) [t1] [t2] of
+          SurelyApart -> True
+          _           -> False
 
 ------------------------------------------------------------------------------
 -- | Instantiate all of the quantified type variables in a type with fresh
@@ -378,12 +412,15 @@ expandTyFam :: Context -> Type -> Type
 expandTyFam ctx = snd . normaliseType  (ctxFamInstEnvs ctx) Nominal
 
 
+isSkolem :: Set TyVar -> TyVar -> BindFlag
+isSkolem skolems = bool BindMe Skolem . flip S.member skolems
+
 ------------------------------------------------------------------------------
 -- | Like 'tcUnifyTy', but takes a list of skolems to prevent unification of.
 tryUnifyUnivarsButNotSkolems :: Set TyVar -> CType -> CType -> Maybe TCvSubst
 tryUnifyUnivarsButNotSkolems skolems goal inst =
   case tcUnifyTysFG
-         (bool BindMe Skolem . flip S.member skolems)
+         (isSkolem skolems)
          [unCType inst]
          [unCType goal] of
     Unifiable subst -> pure subst

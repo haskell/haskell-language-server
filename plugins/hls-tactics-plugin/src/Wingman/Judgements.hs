@@ -6,6 +6,7 @@ import           Control.Lens hiding (Context)
 import           Data.Bool
 import           Data.Char
 import           Data.Coerce
+import           Data.Foldable (toList)
 import           Data.Generics.Product (field)
 import           Data.Map (Map)
 import qualified Data.Map as M
@@ -473,3 +474,17 @@ isAlreadyDestructed _ = False
 expandDisallowed :: Provenance -> Provenance
 expandDisallowed (DisallowedPrv _ prv) = expandDisallowed prv
 expandDisallowed prv                   = prv
+
+
+------------------------------------------------------------------------------
+-- | Compute the skolems in scope for a given judgement.
+skolemsForJudgment :: Judgement -> Set TyVar
+skolemsForJudgment jdg
+  = S.fromList
+  $ foldMap (tyCoVarsOfTypeWellScoped . unCType)
+  $ (:) (jGoal jdg)
+  $ fmap hi_type
+  $ toList
+  $ hyByName
+  $ jHypothesis jdg
+

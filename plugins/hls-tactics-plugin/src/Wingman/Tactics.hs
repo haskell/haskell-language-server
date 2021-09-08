@@ -13,7 +13,7 @@ import           Control.Monad (filterM)
 import           Control.Monad (unless)
 import           Control.Monad.Extra (anyM)
 import           Control.Monad.Reader.Class (MonadReader (ask))
-import           Control.Monad.State.Strict (StateT(..), runStateT)
+import           Control.Monad.State.Strict (StateT(..), runStateT, gets)
 import           Data.Bool (bool)
 import           Data.Foldable
 import           Data.Functor ((<&>))
@@ -236,10 +236,11 @@ homo :: HyInfo CType -> TacticsM ()
 homo hi = requireConcreteHole . tracing "homo" $ do
   jdg <- goal
   let g = jGoal jdg
+  skolems <- gets ts_skolems
 
   -- Ensure that every data constructor in the domain type is covered in the
   -- codomain; otherwise 'homo' will produce an ill-typed program.
-  case (uncoveredDataCons (coerce $ hi_type hi) (coerce g)) of
+  case (uncoveredDataCons skolems (coerce $ hi_type hi) (coerce g)) of
     Just uncovered_dcs ->
       unless (S.null uncovered_dcs) $
         failure  $ TacticPanic "Can't cover every datacon in domain"
@@ -313,7 +314,8 @@ split :: TacticsM ()
 split = tracing "split(user)" $ do
   jdg <- goal
   let g = jGoal jdg
-  case tacticsGetDataCons $ unCType g of
+  skolems <- gets ts_skolems
+  case tacticsGetDataCons skolems $ unCType g of
     Nothing -> failure $ GoalMismatch "split" g
     Just (dcs, _) -> choice $ fmap splitDataCon dcs
 
@@ -326,7 +328,8 @@ splitAuto :: TacticsM ()
 splitAuto = requireConcreteHole $ tracing "split(auto)" $ do
   jdg <- goal
   let g = jGoal jdg
-  case tacticsGetDataCons $ unCType g of
+  skolems <- gets ts_skolems
+  case tacticsGetDataCons skolems $ unCType g of
     Nothing -> failure $ GoalMismatch "split" g
     Just (dcs, _) -> do
       case isSplitWhitelisted jdg of
@@ -343,7 +346,8 @@ splitSingle :: TacticsM ()
 splitSingle = tracing "splitSingle" $ do
   jdg <- goal
   let g = jGoal jdg
-  case tacticsGetDataCons $ unCType g of
+  skolems <- gets ts_skolems
+  case tacticsGetDataCons skolems $ unCType g of
     Just ([dc], _) -> do
       splitDataCon dc
     _ -> failure $ GoalMismatch "splitSingle" g

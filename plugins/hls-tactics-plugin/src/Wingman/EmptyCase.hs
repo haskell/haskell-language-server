@@ -68,7 +68,9 @@ emptyCaseInteraction = Interaction $
             range = realSrcSpanToRange $ unTrack ss
         matches <-
           liftMaybe $
-            destructionFor
+          -- TODO(sandy): This needs a judgment in order to correctly compute
+          -- the skolems! But we don't have a judgement yet :(
+            destructionFor mempty
               (foldMap (hySingleton . occName . fst) bindings)
               ty
         edits <- liftMaybe $ hush $
@@ -149,7 +151,9 @@ emptyCaseScrutinees state nfp = do
           . fmap (scrutinzedType <=< sequence)
           . traverse (typeCheck (hscEnv $ untrackedStaleValue hscenv) tcg')
           $ scrutinee
-      case null $ tacticsGetDataCons ty of
+      -- TODO(sandy): This needs a judgment in order to correctly compute the
+      -- skolems! But we don't have a judgement yet :(
+      case null $ tacticsGetDataCons mempty ty of
         True -> pure empty
         False ->
           case ss of

@@ -118,7 +118,8 @@ commandProvider DestructPun =
       provide DestructPun $ T.pack $ occNameString occ
 commandProvider Homomorphism =
   requireHoleSort (== Hole) $
-  filterBindingType homoFilter $ \occ _ ->
+  withSkolems $ \skolems ->
+  filterBindingType (homoFilter skolems) $ \occ _ ->
     provide Homomorphism $ T.pack $ occNameString occ
 commandProvider DestructLambdaCase =
   requireHoleSort (== Hole) $
@@ -128,7 +129,8 @@ commandProvider DestructLambdaCase =
 commandProvider HomomorphismLambdaCase =
   requireHoleSort (== Hole) $
   requireExtension LambdaCase $
-    filterGoalType (liftLambdaCase False homoFilter) $
+  withSkolems $ \skolems ->
+    filterGoalType (liftLambdaCase False $ homoFilter skolems) $
       provide HomomorphismLambdaCase ""
 commandProvider DestructAll =
   requireHoleSort (== Hole) $
@@ -138,12 +140,13 @@ commandProvider DestructAll =
         False -> mempty
 commandProvider UseDataCon =
   requireHoleSort (== Hole) $
+  withSkolems $ \skolems ->
   withConfig $ \cfg ->
     filterTypeProjection
         ( guardLength (<= cfg_max_use_ctor_actions cfg)
         . fromMaybe []
         . fmap fst
-        . tacticsGetDataCons
+        . tacticsGetDataCons skolems
         ) $ \dcon ->
       provide UseDataCon
         . T.pack
@@ -266,7 +269,17 @@ filterTypeProjection p tp tpd =
 ------------------------------------------------------------------------------
 -- | Get access to the 'Config' when building a 'TacticProvider'.
 withConfig :: (Config -> TacticProvider) -> TacticProvider
-withConfig tp tpd = tp (le_config $ tpd_lspEnv tpd) tpd
+withConfig = withs $ le_config . tpd_lspEnv
+
+
+withSkolems :: (S.Set TyVar -> TacticProvider) -> TacticProvider
+withSkolems = withs $ skolemsForJudgment . tpd_jdg
+
+
+------------------------------------------------------------------------------
+-- | Use something from the TPD to construct a 'TacticProvider'.
+withs :: (TacticProviderData -> a) -> (a -> TacticProvider) -> TacticProvider
+withs f tp tpd = tp (f tpd) tpd
 
 
 ------------------------------------------------------------------------------
@@ -286,9 +299,9 @@ tcCommandId c = coerce $ T.pack $ "tactics" <> show c <> "Command"
 ------------------------------------------------------------------------------
 -- | We should show homos only when the goal type is the same as the binding
 -- type, and that both are usual algebraic types.
-homoFilter :: Type -> Type -> Bool
-homoFilter codomain domain =
-  case uncoveredDataCons domain codomain of
+homoFilter :: S.Set TyVar -> Type -> Type -> Bool
+homoFilter skolems codomain domain =
+  case uncoveredDataCons skolems domain codomain of
     Just s -> S.null s
     _ -> False
 

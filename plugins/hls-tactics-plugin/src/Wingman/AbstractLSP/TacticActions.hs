@@ -17,7 +17,6 @@ import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.ExactPrint
 import           Generics.SYB.GHC (mkBindListT, everywhereM')
 import           GhcPlugins (occName)
-import           System.Timeout (timeout)
 import           Wingman.AbstractLSP.Types
 import           Wingman.CaseSplit
 import           Wingman.GHC (liftMaybe, isHole, pattern AMatch, unXPat)

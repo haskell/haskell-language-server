@@ -59,7 +59,8 @@ destructMatches
 destructMatches use_field_puns f scrut t jdg = do
   let hy = jEntireHypothesis jdg
       g  = jGoal jdg
-  case tacticsGetDataCons $ unCType t of
+  skolems <- gets ts_skolems
+  case tacticsGetDataCons skolems $ unCType t of
     Nothing -> cut -- throwError $ GoalMismatch "destruct" g
     Just (dcs, apps) ->
       fmap unzipTrace $ for dcs $ \dc -> do
@@ -93,11 +94,11 @@ destructMatches use_field_puns f scrut t jdg = do
 
 ------------------------------------------------------------------------------
 -- | Generate just the 'Match'es for a case split on a specific type.
-destructionFor :: Hypothesis a -> Type -> Maybe [LMatch GhcPs (LHsExpr GhcPs)]
+destructionFor :: S.Set TyVar -> Hypothesis a -> Type -> Maybe [LMatch GhcPs (LHsExpr GhcPs)]
 -- TODO(sandy): In an ideal world, this would be the same codepath as
 -- 'destructMatches'. Make sure to change that if you ever change this.
-destructionFor hy t = do
-  case tacticsGetDataCons t of
+destructionFor skolems hy t = do
+  case tacticsGetDataCons skolems t of
     Nothing -> Nothing
     Just ([], _) -> Nothing
     Just (dcs, apps) -> do
