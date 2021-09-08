@@ -112,7 +112,6 @@ tacticsDataConCantMatch :: Set TyVar -> [Type] -> DataCon -> Bool
 --                  where T is the dcRepTyCon for the data con
 tacticsDataConCantMatch skolems tys con
   | null inst_theta   = False   -- Common
-  | all isTyVarTy tys = False   -- Also common
   | otherwise         = typesCantMatch (concatMap predEqs inst_theta)
   where
     (_, inst_theta, _) = dataConInstSig con tys
@@ -134,7 +133,9 @@ tacticsDataConCantMatch skolems tys con
         cant_match :: Type -> Type -> Bool
         cant_match t1 t2 = case tcUnifyTysFG (isSkolem skolems) [t1] [t2] of
           SurelyApart -> True
-          _           -> False
+          -- Still contains skolems, so it's actually surely apart.
+          MaybeApart _ -> True
+          Unifiable _ -> False
 
 ------------------------------------------------------------------------------
 -- | Instantiate all of the quantified type variables in a type with fresh
