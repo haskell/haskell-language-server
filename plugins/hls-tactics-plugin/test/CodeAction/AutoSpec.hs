@@ -88,4 +88,5 @@ spec = do
     mkShowMessageTest Auto ""  2 8 "MessageForallA"      TacticErrors
     mkShowMessageTest Auto ""  7 8 "MessageCantUnify"    TacticErrors
     mkShowMessageTest Auto "" 12 8 "MessageNotEnoughGas" NotEnoughGas
+    mkShowMessageTest Auto ""  7 8 "MessageRespectGADTSkolem" TacticErrors
 
