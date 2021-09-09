@@ -92,7 +92,7 @@ jobs:
         if: steps.get-hackage-version.outputs.exists == 'true'
         run: |
           # This will throw an error if there is any difference cause we have to bump up the package version
-          diff -qr -x "*.md" -x "data" $(ls -d ./incoming/${{ matrix.package }}-*) $(ls -d ./current/${{ matrix.package }}-*)
+          diff -r -x "*.md" -x "data" $(ls -d ./incoming/${{ matrix.package }}-*) $(ls -d ./current/${{ matrix.package }}-*)
 
       - name: "Create appropiate cabal.project"
         if: steps.get-hackage-version.outputs.exists != 'true'
