@@ -40,6 +40,10 @@ import           Var
 import           Wingman.StaticPlugin (pattern MetaprogramSyntax)
 import           Wingman.Types
 
+#if __GLASGOW_HASKELL__ >= 810
+import GHC.Core.Predicate
+#endif
+
 
 tcTyVar_maybe :: Type -> Maybe Var
 tcTyVar_maybe ty | Just ty' <- tcView ty = tcTyVar_maybe ty'
@@ -125,6 +129,7 @@ tacticsDataConCantMatch skolems tys con
                        | eq `hasKey` heqTyConKey
                        , [_, _, ty1, ty2] <- args -> [(ty1, ty2)]
                      _                            -> []
+
 
     typesCantMatch :: [(Type,Type)] -> Bool
     -- See Note [Pruning dead case alternatives]
