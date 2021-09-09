@@ -4,6 +4,7 @@ module Main
   ) where
 
 import           Control.Lens            ((^.))
+import qualified Data.Text               as T
 import qualified Ide.Plugin.Pragmas      as Pragmas
 import qualified Language.LSP.Types.Lens as L
 import           System.FilePath
@@ -19,173 +20,61 @@ tests :: TestTree
 tests =
   testGroup "pragmas"
   [ codeActionTests
+  , codeActionTests'
   , completionTests
   ]
 
 codeActionTests :: TestTree
 codeActionTests =
   testGroup "code actions"
-  [ goldenWithPragmas "adds TypeSynonymInstances pragma" "NeedsPragmas" $ \doc -> do
-      _ <- waitForDiagnosticsFromSource doc "typecheck"
-      cas <- map fromAction <$> getAllCodeActions doc
-      liftIO $ "Add \"TypeSynonymInstances\"" `elem` map (^. L.title) cas @? "Contains TypeSynonymInstances code action"
-      liftIO $ "Add \"FlexibleInstances\"" `elem` map (^. L.title) cas @? "Contains FlexibleInstances code action"
-      executeCodeAction $ head cas
+  [ codeActionTest "adds LANGUAGE with no other pragmas at start ignoring later INLINE pragma" "AddPragmaIgnoreInline" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTest "adds LANGUAGE after shebang preceded by other LANGUAGE and GHC_OPTIONS" "AddPragmaAfterShebangPrecededByLangAndOptsGhc" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTest "adds LANGUAGE after shebang with other Language preceding shebang" "AddPragmaAfterShebangPrecededByLangAndOptsGhc" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTest "adds LANGUAGE before Doc comments after interchanging pragmas" "BeforeDocInterchanging" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
+  , codeActionTest "Add language after altering OPTIONS_GHC and Language" "AddLanguagePragmaAfterInterchaningOptsGhcAndLangs" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTest "Add language after pragmas with non standard space between prefix and name" "AddPragmaWithNonStandardSpacingInPrecedingPragmas" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTest "adds LANGUAGE after OptGHC at start ignoring later INLINE pragma" "AddPragmaAfterOptsGhcIgnoreInline" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTest "adds LANGUAGE ignore later Ann pragma" "AddPragmaIgnoreLaterAnnPragma" [("Add \"BangPatterns\"", "Contains BangPatterns code action")]
+  , codeActionTest "adds LANGUAGE after interchanging pragmas ignoring later Ann pragma" "AddLanguageAfterInterchaningIgnoringLaterAnn" [("Add \"BangPatterns\"", "Contains BangPatterns code action")]
+  , codeActionTest "adds LANGUAGE after OptGHC preceded by another language pragma" "AddLanguageAfterLanguageThenOptsGhc" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
+  , codeActionTest "adds LANGUAGE pragma after shebang and last language pragma" "AfterShebangAndPragma" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
+  , codeActionTest "adds above module keyword on first line" "ModuleOnFirstLine" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTest "adds LANGUAGE pragma after GHC_OPTIONS" "AfterGhcOptions" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTest "adds LANGUAGE pragma after shebang and GHC_OPTIONS" "AfterShebangAndOpts" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTest "adds LANGUAGE pragma after shebang, GHC_OPTIONS and language pragma" "AfterShebangAndOptionsAndPragma" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTest "adds LANGUAGE pragma after all others ignoring later INLINE pragma" "AfterShebangAndOptionsAndPragmasIgnoreInline" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTest "adds LANGUAGE pragma after all others ignoring multiple later INLINE pragma" "AfterAllWithMultipleInlines" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTest "adds LANGUAGE pragma correctly ignoring later INLINE pragma" "AddLanguagePragma" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTest "adds TypeApplications pragma" "TypeApplications" [("Add \"TypeApplications\"", "Contains TypeApplications code action")]
+  , codeActionTest "after shebang" "AfterShebang" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
+  , codeActionTest "append to existing pragmas" "AppendToExisting" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
+  , codeActionTest "before doc comments" "BeforeDocComment" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
+  , codeActionTest "before doc comments" "MissingSignatures" [("Disable \"missing-signatures\" warnings", "Contains missing-signatures code action")]
+  , codeActionTest "before doc comments" "UnusedImports" [("Disable \"unused-imports\" warnings", "Contains unused-imports code action")]
+  , codeActionTest "adds TypeSynonymInstances pragma" "NeedsPragmas" [("Add \"TypeSynonymInstances\"", "Contains TypeSynonymInstances code action"), ("Add \"FlexibleInstances\"", "Contains FlexibleInstances code action")]
+  ]
 
-  , goldenWithPragmas "adds LANGUAGE with no other pragmas at start ignoring later INLINE pragma" "AddPragmaIgnoreInline" $ \doc -> do
-      _ <- waitForDiagnosticsFrom doc
-      cas <- map fromAction <$> getAllCodeActions doc
-      liftIO $ "Add \"TupleSections\"" `elem` map (^. L.title) cas @? "Contains TupleSections code action"
-      executeCodeAction $ head cas
+codeActionTest :: String -> FilePath -> [(T.Text, String)] -> TestTree
+codeActionTest testComment fp actions =
+  goldenWithPragmas testComment fp $ \doc -> do
+    _ <- waitForDiagnosticsFrom doc
+    cas <- map fromAction <$> getAllCodeActions doc
+    mapM_ (\(action, contains) -> go action contains cas) actions
+    executeCodeAction $ head cas
+    where
+      go action contains cas = liftIO $ action `elem` map (^. L.title) cas @? contains
 
-  , goldenWithPragmas "adds LANGUAGE after shebang preceded by other LANGUAGE and GHC_OPTIONS" "AddPragmaAfterShebangPrecededByLangAndOptsGhc" $ \doc -> do
-      _ <- waitForDiagnosticsFrom doc
-      cas <- map fromAction <$> getAllCodeActions doc
-      liftIO $ "Add \"TupleSections\"" `elem` map (^. L.title) cas @? "Contains TupleSections code action"
-      executeCodeAction $ head cas
-
-  , goldenWithPragmas "adds LANGUAGE after shebang with other Language preceding shebang" "AddPragmaAfterShebangPrecededByLanguage" $ \doc -> do
-      _ <- waitForDiagnosticsFrom doc
-      cas <- map fromAction <$> getAllCodeActions doc
-      liftIO $ "Add \"TupleSections\"" `elem` map (^. L.title) cas @? "Contains TupleSections code action"
-      executeCodeAction $ head cas
-
-  , goldenWithPragmas "adds LANGUAGE before Doc comments after interchanging pragmas" "BeforeDocInterchanging" $ \doc -> do
-      _ <- waitForDiagnosticsFrom doc
-      cas <- map fromAction <$> getAllCodeActions doc
-      liftIO $ "Add \"NamedFieldPuns\"" `elem` map (^. L.title) cas @? "Contains NamedFieldPuns code action"
-      executeCodeAction $ head cas
-
-  , goldenWithPragmas "Add language after altering OPTIONS_GHC and Language" "AddLanguagePragmaAfterInterchaningOptsGhcAndLangs" $ \doc -> do
-      _ <- waitForDiagnosticsFrom doc
-      cas <- map fromAction <$> getAllCodeActions doc
-      liftIO $ "Add \"TupleSections\"" `elem` map (^. L.title) cas @? "Contains TupleSections code action"
-      executeCodeAction $ head cas
-
-  , goldenWithPragmas "Add language after pragmas with non standard space between prefix and name" "AddPragmaWithNonStandardSpacingInPrecedingPragmas" $ \doc -> do
-      _ <- waitForDiagnosticsFrom doc
-      cas <- map fromAction <$> getAllCodeActions doc
-      liftIO $ "Add \"TupleSections\"" `elem` map (^. L.title) cas @? "Contains TupleSections code action"
-      executeCodeAction $ head cas
-
-   , goldenWithPragmas "adds LANGUAGE after OptGHC at start ignoring later INLINE pragma" "AddPragmaAfterOptsGhcIgnoreInline" $ \doc -> do
-      _ <- waitForDiagnosticsFrom doc
-      cas <- map fromAction <$> getAllCodeActions doc
-      liftIO $ "Add \"TupleSections\"" `elem` map (^. L.title) cas @? "Contains TupleSections code action"
-      executeCodeAction $ head cas
-
-  , goldenWithPragmas "adds LANGUAGE ignore later Ann pragma" "AddPragmaIgnoreLaterAnnPragma" $ \doc -> do
-      _ <- waitForDiagnosticsFrom doc
-      cas <- map fromAction <$> getAllCodeActions doc
-      liftIO $ "Add \"BangPatterns\"" `elem` map (^. L.title) cas @? "Contains BangPatterns code action"
-      executeCodeAction $ head cas
-
-  , goldenWithPragmas "adds LANGUAGE after interchanging pragmas ignoring later Ann pragma" "AddLanguageAfterInterchaningIgnoringLaterAnn" $ \doc -> do
-        _ <- waitForDiagnosticsFrom doc
-        cas <- map fromAction <$> getAllCodeActions doc
-        liftIO $ "Add \"BangPatterns\"" `elem` map (^. L.title) cas @? "Contains BangPatterns code action"
-        executeCodeAction $ head cas
-
-  , goldenWithPragmas "adds LANGUAGE after OptGHC preceded by another language pragma" "AddLanguageAfterLanguageThenOptsGhc" $ \doc -> do
-      _ <- waitForDiagnosticsFrom doc
-      cas <- map fromAction <$> getAllCodeActions doc
-      liftIO $ "Add \"NamedFieldPuns\"" `elem` map (^. L.title) cas @? "Contains NamedFieldPuns code action"
-      executeCodeAction $ head cas
-
-  , goldenWithPragmas "adds LANGUAGE pragma after shebang and last language pragma" "AfterShebangAndPragma" $ \doc -> do
-      _ <- waitForDiagnosticsFrom doc
-      cas <- map fromAction <$> getAllCodeActions doc
-      liftIO $ "Add \"NamedFieldPuns\"" `elem` map (^. L.title) cas @? "Contains NamedFieldPuns code action"
-      executeCodeAction $ head cas
-
-  , goldenWithPragmas "adds above module keyword on first line" "ModuleOnFirstLine" $ \doc -> do
-      _ <- waitForDiagnosticsFrom doc
-      cas <- map fromAction <$> getAllCodeActions doc
-      liftIO $ "Add \"TupleSections\"" `elem` map (^. L.title) cas @? "Contains TupleSections code action"
-      executeCodeAction $ head cas
-
-  , goldenWithPragmas "adds LANGUAGE pragma after GHC_OPTIONS" "AfterGhcOptions" $ \doc -> do
-      _ <- waitForDiagnosticsFrom doc
-      cas <- map fromAction <$> getAllCodeActions doc
-      liftIO $ "Add \"TupleSections\"" `elem` map (^. L.title) cas @? "Contains TupleSections code action"
-      executeCodeAction $ head cas
-
-  , goldenWithPragmas "adds LANGUAGE pragma after shebang and GHC_OPTIONS" "AfterShebangAndOpts" $ \doc -> do
-      _ <- waitForDiagnosticsFrom doc
-      cas <- map fromAction <$> getAllCodeActions doc
-      liftIO $ "Add \"TupleSections\"" `elem` map (^. L.title) cas @? "Contains TupleSections code action"
-      executeCodeAction $ head cas
-
-  , goldenWithPragmas "adds LANGUAGE pragma after shebang, GHC_OPTIONS and language pragma" "AfterShebangAndOptionsAndPragma" $ \doc -> do
-      _ <- waitForDiagnosticsFrom doc
-      cas <- map fromAction <$> getAllCodeActions doc
-      liftIO $ "Add \"TupleSections\"" `elem` map (^. L.title) cas @? "Contains TupleSections code action"
-      executeCodeAction $ head cas
-
-  , goldenWithPragmas "adds LANGUAGE pragma after all others ignoring later INLINE pragma" "AfterShebangAndOptionsAndPragmasIgnoreInline" $ \doc -> do
-      _ <- waitForDiagnosticsFrom doc
-      cas <- map fromAction <$> getAllCodeActions doc
-      liftIO $ "Add \"TupleSections\"" `elem` map (^. L.title) cas @? "Contains TupleSections code action"
-      executeCodeAction $ head cas
-
-  , goldenWithPragmas "adds LANGUAGE pragma after all others ignoring multiple later INLINE pragma" "AfterAllWithMultipleInlines" $ \doc -> do
-      _ <- waitForDiagnosticsFrom doc
-      cas <- map fromAction <$> getAllCodeActions doc
-      liftIO $ "Add \"TupleSections\"" `elem` map (^. L.title) cas @? "Contains TupleSections code action"
-      executeCodeAction $ head cas
-
-  , goldenWithPragmas "adds LANGUAGE pragma correctly ignoring later INLINE pragma" "AddLanguagePragma" $ \doc -> do
-      _ <- waitForDiagnosticsFrom doc
-      cas <- map fromAction <$> getAllCodeActions doc
-      liftIO $ "Add \"TupleSections\"" `elem` map (^. L.title) cas @? "Contains TupleSections code action"
-      executeCodeAction $ head cas
-
-  , goldenWithPragmas "adds TypeApplications pragma" "TypeApplications" $ \doc -> do
-      _ <- waitForDiagnosticsFrom doc
-      cas <- map fromAction <$> getAllCodeActions doc
-      liftIO $ "Add \"TypeApplications\"" `elem` map (^. L.title) cas @? "Contains TypeApplications code action"
-      executeCodeAction $ head cas
-
-  , goldenWithPragmas "no duplication" "NamedFieldPuns" $ \doc -> do
+codeActionTests' :: TestTree
+codeActionTests' =
+  testGroup "additional code actions"
+  [ goldenWithPragmas "no duplication" "NamedFieldPuns" $ \doc -> do
       _ <- waitForDiagnosticsFrom doc
       cas <- map fromAction <$> getCodeActions doc (Range (Position 8 9) (Position 8 9))
       liftIO $ length cas == 1 @? "Expected one code action, but got: " <> show cas
       let ca = head cas
       liftIO $ (ca ^. L.title == "Add \"NamedFieldPuns\"") @? "NamedFieldPuns code action"
       executeCodeAction ca
-
-  , goldenWithPragmas "after shebang" "AfterShebang" $ \doc -> do
-      _ <- waitForDiagnosticsFrom doc
-      cas <- map fromAction <$> getAllCodeActions doc
-      liftIO $ "Add \"NamedFieldPuns\"" `elem` map (^. L.title) cas @? "Contains NamedFieldPuns code action"
-      executeCodeAction $ head cas
-
-  , goldenWithPragmas "append to existing pragmas" "AppendToExisting" $ \doc -> do
-      _ <- waitForDiagnosticsFrom doc
-      cas <- map fromAction <$> getAllCodeActions doc
-      liftIO $ "Add \"NamedFieldPuns\"" `elem` map (^. L.title) cas @? "Contains NamedFieldPuns code action"
-      executeCodeAction $ head cas
-
-  , goldenWithPragmas "before doc comments" "BeforeDocComment" $ \doc -> do
-      _ <- waitForDiagnosticsFrom doc
-      cas <- map fromAction <$> getAllCodeActions doc
-      liftIO $ "Add \"NamedFieldPuns\"" `elem` map (^. L.title) cas @? "Contains NamedFieldPuns code action"
-      executeCodeAction $ head cas
-
-  , goldenWithPragmas "before doc comments" "MissingSignatures" $ \doc -> do
-      _ <- waitForDiagnosticsFrom doc
-      cas <- map fromAction <$> getAllCodeActions doc
-      liftIO $ "Disable \"missing-signatures\" warnings" `elem` map (^. L.title) cas @? "Contains missing-signatures code action"
-      executeCodeAction $ head cas
-
-  , goldenWithPragmas "before doc comments" "UnusedImports" $ \doc -> do
-      _ <- waitForDiagnosticsFrom doc
-      cas <- map fromAction <$> getAllCodeActions doc
-      liftIO $ "Disable \"unused-imports\" warnings" `elem` map (^. L.title) cas @? "Contains unused-imports code action"
-      executeCodeAction $ head cas
-
   , goldenWithPragmas "doesn't suggest disabling type errors" "DeferredTypeErrors" $ \doc -> do
-
       _ <- waitForDiagnosticsFrom doc
       cas <- map fromAction <$> getAllCodeActions doc
       liftIO $ "Disable \"deferred-type-errors\" warnings" `notElem` map (^. L.title) cas @? "Doesn't contain deferred-type-errors code action"
@@ -194,104 +83,32 @@ codeActionTests =
 
 completionTests :: TestTree
 completionTests =
-  testGroup "completions"
-  [ testCase "completes pragmas" $ runSessionWithServer pragmasPlugin testDataDir $ do
-      doc <- openDoc "Completion.hs" "haskell"
-      _ <- waitForDiagnostics
-      let te = TextEdit (Range (Position 0 4) (Position 0 34)) ""
-      _ <- applyEdit doc te
-      compls <- getCompletions doc (Position 0 4)
-      let item = head $ filter ((== "LANGUAGE") . (^. L.label)) compls
-      liftIO $ do
-        item ^. L.label @?= "LANGUAGE"
-        item ^. L.kind @?= Just CiKeyword
-        item ^. L.insertTextFormat @?= Just Snippet
-        item ^. L.insertText @?= Just "LANGUAGE ${1:extension} #-}"
-        item ^. L.detail @?= Just "{-# LANGUAGE #-}"
-
-  , testCase "completes pragmas with existing closing bracket" $ runSessionWithServer pragmasPlugin testDataDir $ do
-      doc <- openDoc "Completion.hs" "haskell"
-      let te = TextEdit (Range (Position 0 4) (Position 0 33)) ""
-      _ <- applyEdit doc te
-      compls <- getCompletions doc (Position 0 4)
-      let item = head $ filter ((== "LANGUAGE") . (^. L.label)) compls
-      liftIO $ do
-        item ^. L.label @?= "LANGUAGE"
-        item ^. L.kind @?= Just CiKeyword
-        item ^. L.insertTextFormat @?= Just Snippet
-        item ^. L.insertText @?= Just "LANGUAGE ${1:extension} #-"
-        item ^. L.detail @?= Just "{-# LANGUAGE #-}"
-
-  , testCase "completes options pragma" $ runSessionWithServer pragmasPlugin testDataDir $ do
-      doc <- openDoc "Completion.hs" "haskell"
-      _ <- waitForDiagnostics
-      let te = TextEdit (Range (Position 0 4) (Position 0 34)) "OPTIONS"
-      _ <- applyEdit doc te
-      compls <- getCompletions doc (Position 0 4)
-      let item = head $ filter ((== "OPTIONS_GHC") . (^. L.label)) compls
-      liftIO $ do
-        item ^. L.label @?= "OPTIONS_GHC"
-        item ^. L.kind @?= Just CiKeyword
-        item ^. L.insertTextFormat @?= Just Snippet
-        item ^. L.insertText @?= Just "OPTIONS_GHC -${1:option} #-}"
-
-  , testCase "completes ghc options pragma values" $ runSessionWithServer pragmasPlugin testDataDir $ do
-      doc <- openDoc "Completion.hs" "haskell"
-      let te = TextEdit (Range (Position 0 0) (Position 0 0)) "{-# OPTIONS_GHC -Wno-red  #-}\n"
-      _ <- applyEdit doc te
-      compls <- getCompletions doc (Position 0 24)
-      let item = head $ filter ((== "Wno-redundant-constraints") . (^. L.label)) compls
-      liftIO $ do
-        item ^. L.label @?= "Wno-redundant-constraints"
-        item ^. L.kind @?= Just CiKeyword
-        item ^. L.insertTextFormat @?= Nothing
-        item ^. L.insertText @?= Nothing
-
-  , testCase "completes language extensions" $ runSessionWithServer pragmasPlugin testDataDir $ do
-      doc <- openDoc "Completion.hs" "haskell"
-      _ <- waitForDiagnostics
-      let te = TextEdit (Range (Position 0 24) (Position 0 31)) ""
-      _ <- applyEdit doc te
-      compls <- getCompletions doc (Position 0 24)
-      let item = head $ filter ((== "OverloadedStrings") . (^. L.label)) compls
-      liftIO $ do
-        item ^. L.label @?= "OverloadedStrings"
-        item ^. L.kind @?= Just CiKeyword
-
-
-    , testCase "completes language extensions case insensitive" $ runSessionWithServer pragmasPlugin testDataDir $ do
-      doc <- openDoc "Completion.hs" "haskell"
-      _ <- waitForDiagnostics
-      let te = TextEdit (Range (Position 0 4) (Position 0 34)) "lAnGuaGe Overloaded"
-      _ <- applyEdit doc te
-      compls <- getCompletions doc (Position 0 24)
-      let item = head $ filter ((== "OverloadedStrings") . (^. L.label)) compls
-      liftIO $ do
-        item ^. L.label @?= "OverloadedStrings"
-        item ^. L.kind @?= Just CiKeyword
-
-  , testCase "completes the Strict language extension" $ runSessionWithServer pragmasPlugin testDataDir $ do
-      doc <- openDoc "Completion.hs" "haskell"
-      _ <- waitForDiagnostics
-      let te = TextEdit (Range (Position 0 13) (Position 0 31)) "Str"
-      _ <- applyEdit doc te
-      compls <- getCompletions doc (Position 0 16)
-      let item = head $ filter ((== "Strict") . (^. L.label)) compls
-      liftIO $ do
-        item ^. L.label @?= "Strict"
-        item ^. L.kind @?= Just CiKeyword
-
-  , testCase "completes No- language extensions" $ runSessionWithServer pragmasPlugin testDataDir $ do
-      doc <- openDoc "Completion.hs" "haskell"
-      _ <- waitForDiagnostics
-      let te = TextEdit (Range (Position 0 13) (Position 0 31)) "NoOverload"
-      _ <- applyEdit doc te
-      compls <- getCompletions doc (Position 0 23)
-      let item = head $ filter ((== "NoOverloadedStrings") . (^. L.label)) compls
-      liftIO $ do
-        item ^. L.label @?= "NoOverloadedStrings"
-        item ^. L.kind @?= Just CiKeyword
+  testGroup "completions" [
+    completionTest "completes pragmas" "Completion.hs" "" "LANGUAGE" (Just Snippet) (Just "LANGUAGE ${1:extension} #-}") (Just "{-# LANGUAGE #-}") [0, 4, 0, 34, 0, 4]
+  , completionTest "completes pragmas with existing closing bracket" "Completion.hs" "" "LANGUAGE" (Just Snippet) (Just "LANGUAGE ${1:extension} #-") (Just "{-# LANGUAGE #-}") [0, 4, 0, 33, 0, 4]
+  , completionTest "completes options pragma" "Completion.hs" "OPTIONS" "OPTIONS_GHC" (Just Snippet) (Just "OPTIONS_GHC -${1:option} #-}") (Just "{-# OPTIONS_GHC #-}") [0, 4, 0, 34, 0, 4]
+  , completionTest "completes ghc options pragma values" "Completion.hs" "{-# OPTIONS_GHC -Wno-red  #-}\n" "Wno-redundant-constraints" Nothing Nothing Nothing [0, 0, 0, 0, 0, 24]
+  , completionTest "completes language extensions" "Completion.hs" "" "OverloadedStrings" Nothing Nothing Nothing [0, 24, 0, 31, 0, 24]
+  , completionTest "completes language extensions case insensitive" "Completion.hs" "lAnGuaGe Overloaded" "OverloadedStrings" Nothing Nothing Nothing [0, 4, 0, 34, 0, 24]
+  , completionTest "completes the Strict language extension" "Completion.hs" "Str" "Strict" Nothing Nothing Nothing [0, 13, 0, 31, 0, 16]
+  , completionTest "completes No- language extensions" "Completion.hs" "NoOverload" "NoOverloadedStrings" Nothing Nothing Nothing [0, 13, 0, 31, 0, 23]
   ]
+
+completionTest :: String -> String -> T.Text -> T.Text -> Maybe InsertTextFormat -> Maybe T.Text -> Maybe T.Text -> [Int] -> TestTree
+completionTest testComment fileName te' label textFormat insertText detail [a, b, c, d, x, y] =
+  testCase testComment $ runSessionWithServer pragmasPlugin testDataDir $ do
+    doc <- openDoc fileName "haskell"
+    _ <- waitForDiagnostics
+    let te = TextEdit (Range (Position a b) (Position c d)) te'
+    _ <- applyEdit doc te
+    compls <- getCompletions doc (Position x y)
+    let item = head $ filter ((== label) . (^. L.label)) compls
+    liftIO $ do
+      item ^. L.label @?= label
+      item ^. L.kind @?= Just CiKeyword
+      item ^. L.insertTextFormat @?= textFormat
+      item ^. L.insertText @?= insertText
+      item ^. L.detail @?= detail
 
 goldenWithPragmas :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
 goldenWithPragmas title path = goldenWithHaskellDoc pragmasPlugin title testDataDir path "expected" "hs"
