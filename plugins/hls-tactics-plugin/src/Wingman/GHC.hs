@@ -44,7 +44,7 @@ import           Wingman.Types
 import Predicate
 #elif __GLASGOW_HASKELL__ >= 900
 import GHC.Core.Predicate
-#end
+#endif
 
 
 tcTyVar_maybe :: Type -> Maybe Var
