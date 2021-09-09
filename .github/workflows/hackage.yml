@@ -71,23 +71,31 @@ jobs:
       - name: "Unpack package source in an isolated location"
         run: cabal unpack ${{ steps.generate-dist-tarball.outputs.path }} --destdir=./incoming
 
+      - name: "Ensure we will use hackage head"
+        run: cabal update
+
       - name: "Try to get the current hackage version"
         id: get-hackage-version
         run: |
           cd ./incoming
           if cabal get $(ls -d ${{ matrix.package }}-*) --destdir=../current; then
             echo ::set-output name=exists::true
+          else
+            echo ::set-output name=exists::false
           fi
+
+      - name: "Ensure we will use hackage head"
+        run: cabal update
 
       - name: "Compare the incoming and the current hackage version of the package"
         id: compare-current-version
-        if: steps.get-hackage-version.exists == 'true'
+        if: steps.get-hackage-version.outputs.exists == 'true'
         run: |
           # This will throw an error if there is any difference cause we have to bump up the package version
           diff -qr -x "*.md" -x "data" $(ls -d ./incoming/${{ matrix.package }}-*) $(ls -d ./current/${{ matrix.package }}-*)
 
       - name: "Create appropiate cabal.project"
-        if: steps.get-hackage-version.exists != 'true'
+        if: steps.get-hackage-version.outputs.exists != 'true'
         run: |
           cd $(ls -d ./incoming/${{ matrix.package }}-*)
           echo "packages: . ../../* ../../plugins/*" > cabal.project
@@ -95,19 +103,19 @@ jobs:
           echo "allow-newer: Chart-diagrams:diagrams-core, SVGFonts:diagrams-core" >> cabal.project
 
       - name: "Build all package components in isolation"
-        if: steps.get-hackage-version.exists != 'true'
+        if: steps.get-hackage-version.outputs.exists != 'true'
         run: |
           cd $(ls -d ./incoming/${{ matrix.package }}-*)
           cabal build --enable-tests --enable-benchmarks
 
       - name: "Generate haddock for hackage"
-        if: steps.get-hackage-version.exists != 'true'
+        if: steps.get-hackage-version.outputs.exists != 'true'
         run: |
           cd $(ls -d ./incoming/${{ matrix.package }}-*)
           cabal haddock --haddock-for-hackage
 
       - name: "Upload package dist tarball"
-        if: steps.get-hackage-version.exists != 'true'
+        if: steps.get-hackage-version.outputs.exists != 'true'
         uses: actions/upload-artifact@v2
         with:
           name: ${{ matrix.package }}
