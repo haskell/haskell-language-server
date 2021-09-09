@@ -71,12 +71,17 @@ jobs:
       - name: "Unpack package source in an isolated location"
         run: cabal unpack ${{ steps.generate-dist-tarball.outputs.path }} --destdir=./incoming
 
+      - name: "Ensure we will use hackage head"
+        run: cabal update
+
       - name: "Try to get the current hackage version"
         id: get-hackage-version
         run: |
           cd ./incoming
           if cabal get $(ls -d ${{ matrix.package }}-*) --destdir=../current; then
             echo ::set-output name=exists::true
+          else
+            echo ::set-output name=exists::false
           fi
 
       - name: "Ensure we will use hackage head"
