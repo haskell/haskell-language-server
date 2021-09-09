@@ -53,7 +53,7 @@ moduleOutline ideState DocumentSymbolParams{ _textDocument = TextDocumentIdentif
                      -- where uinteger is 0 - 2^31 - 1. lsp-types currently has the type of line
                      -- as Int. So instead of using `maxBound :: Int` we hardcode the maxBound of
                      -- uinteger. 2 ^ 31 - 1 == 2147483647
-                     -- Check this issue for tracking https://github.com/haskell/lsp/issues/134
+                     -- Check this issue for tracking https://github.com/haskell/lsp/issues/354
                      -- the change in lsp-types.
                      }
                  _ -> Nothing
