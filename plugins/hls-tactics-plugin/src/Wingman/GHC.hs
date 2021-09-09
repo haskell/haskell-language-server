@@ -40,9 +40,11 @@ import           Var
 import           Wingman.StaticPlugin (pattern MetaprogramSyntax)
 import           Wingman.Types
 
-#if __GLASGOW_HASKELL__ >= 810
+#if __GLASGOW_HASKELL__ == 810
+import Predicate
+#elif __GLASGOW_HASKELL__ >= 900
 import GHC.Core.Predicate
-#endif
+#end
 
 
 tcTyVar_maybe :: Type -> Maybe Var
