@@ -57,8 +57,8 @@ jobs:
         skipPush: true
     - if: ${{ needs.pre_job.outputs.should_skip_develop != 'true' }}
       run: |
-        nix develop --command cabal update
-        nix develop --command cabal build
+        nix develop --print-build-logs --command cabal update
+        nix develop --print-build-logs --command cabal build
 
   # Build and then push HLS binaries with developmet shell to cachix
   # This job runs when
@@ -91,16 +91,16 @@ jobs:
         name: haskell-language-server
         authToken: ${{ secrets.HLS_CACHIX_AUTH_TOKEN }}
     - name: Build development shell
-      run: nix develop --profile dev
+      run: nix develop --print-build-logs --profile dev
     - name: Build development shell (GHC 9.0.1)
-      run: nix develop .#haskell-language-server-901-dev --profile dev
+      run: nix develop --print-build-logs .#haskell-language-server-901-dev --profile dev
     - name: Push development shell
       if: ${{ env.HAS_TOKEN == 'true' }}
       run: cachix push haskell-language-server dev
     - name: Build binaries
-      run: nix build
+      run: nix build --print-build-logs
     - name: Build binaries (GHC 9.0.1)
-      run: nix build .#haskell-language-server-901
+      run: nix build --print-build-logs .#haskell-language-server-901
     - name: Push binaries
       if: ${{ env.HAS_TOKEN == 'true' }}
       run: nix path-info --json | jq -r '.[].path' | cachix push haskell-language-server
