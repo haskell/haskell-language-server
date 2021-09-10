@@ -41,7 +41,9 @@ import           Control.Monad
 import           Data.Aeson                               (ToJSON (toJSON))
 import           Data.Either                              (fromRight)
 import           Data.Functor
+import qualified Data.HashMap.Strict                      as HM
 import qualified Data.Set                                 as Set
+import qualified Data.HashSet                             as HashSet
 import           Development.IDE.Core.Compile
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.GHC.Compat               as GHC
@@ -285,6 +287,12 @@ mkModCompl label =
     Nothing Nothing Nothing Nothing Nothing Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing Nothing
 
+mkModuleFunctionImport :: T.Text -> T.Text -> CompletionItem
+mkModuleFunctionImport moduleName label =
+  CompletionItem label (Just CiFunction) Nothing (Just moduleName)
+    Nothing Nothing Nothing Nothing Nothing Nothing Nothing
+    Nothing Nothing Nothing Nothing Nothing Nothing
+
 mkImportCompl :: T.Text -> T.Text -> CompletionItem
 mkImportCompl enteredQual label =
   CompletionItem m (Just CiModule) Nothing (Just label)
@@ -525,9 +533,10 @@ getCompletions
     -> VFS.PosPrefixInfo
     -> ClientCapabilities
     -> CompletionsConfig
+    -> HM.HashMap T.Text (HashSet.HashSet IdentInfo)
     -> IO [CompletionItem]
 getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qualCompls, importableModules}
-               maybe_parsed (localBindings, bmapping) prefixInfo caps config = do
+               maybe_parsed (localBindings, bmapping) prefixInfo caps config moduleExportsMap = do
   let VFS.PosPrefixInfo { fullLine, prefixModule, prefixText } = prefixInfo
       enteredQual = if T.null prefixModule then "" else prefixModule <> "."
       fullPrefix  = enteredQual <> prefixText
@@ -596,12 +605,21 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
         ]
 
       filtImportCompls = filtListWith (mkImportCompl enteredQual) importableModules
+      filterModuleExports moduleName = filtListWith $ mkModuleFunctionImport moduleName
       filtKeywordCompls
           | T.null prefixModule = filtListWith mkExtCompl (optKeywords ideOpts)
           | otherwise = []
 
-
   if
+    -- TODO: handle multiline imports 
+    | "import " `T.isPrefixOf` fullLine 
+      && (List.length (words (T.unpack fullLine)) >= 2)
+      && "(" `isInfixOf` T.unpack fullLine
+    -> do
+      let moduleName = T.pack $ words (T.unpack fullLine) !! 1
+          funcs = HM.lookupDefault HashSet.empty moduleName moduleExportsMap
+          funs = map (show . name) $ HashSet.toList funcs
+      return $ filterModuleExports moduleName $ map T.pack funs
     | "import " `T.isPrefixOf` fullLine
     -> return filtImportCompls
     -- we leave this condition here to avoid duplications and return empty list
