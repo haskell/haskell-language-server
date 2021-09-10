@@ -341,6 +341,7 @@ getRhsPosVals (unTrack -> rss) (unTrack -> tcs)
       TopLevelRHS name ps
           (L (RealSrcSpan span)  -- body with no guards and a single defn
             (HsVar _ (L _ hole)))
+          _
         | containsSpan rss span  -- which contains our span
         , isHole $ occName hole  -- and the span is a hole
         -> flip evalState 0 $ buildTopLevelHypothesis name ps
@@ -482,8 +483,8 @@ mkIdHypothesis (splitId -> (name, ty)) prov =
 isRhsHole :: Tracked age RealSrcSpan -> Tracked age TypecheckedSource -> Bool
 isRhsHole (unTrack -> rss) (unTrack -> tcs) =
   everything (||) (mkQ False $ \case
-      TopLevelRHS _ _ (L (RealSrcSpan span) _) -> containsSpan rss span
-      _                                        -> False
+      TopLevelRHS _ _ (L (RealSrcSpan span) _) _ -> containsSpan rss span
+      _                                          -> False
     ) tcs
 
 
