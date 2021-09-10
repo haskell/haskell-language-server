@@ -33,6 +33,7 @@ and it is being used in nix environments.
 * [ ] create ${version}-hackage branch to trigger the hackage github workflow which will upload all changed packages to hackage as candidates
 * [ ] check manually candidates in hackage
 * [ ] publish them definitely
+
 ## Making a new release of haskell-language-server in github
 
 Go to the [GitHub releases
