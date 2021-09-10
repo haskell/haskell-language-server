@@ -109,8 +109,7 @@ import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.ProgressReporting
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Tracing
-import           Development.IDE.GHC.Compat             (NameCacheUpdater (..),
-                                                         upNameCache)
+import           Development.IDE.GHC.Compat             (NameCacheUpdater (..), upNameCache)
 import           Development.IDE.GHC.Orphans            ()
 import           Development.IDE.Graph                  hiding (ShakeValue)
 import qualified Development.IDE.Graph                  as Shake
