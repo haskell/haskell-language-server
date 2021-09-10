@@ -69,6 +69,8 @@ let
 
       ghc-lib-parser-ex = hself.ghc-lib-parser-ex_9_0_0_4;
 
+      ormolu = hself.ormolu_0_2_0_0;
+
       operational = hself.callCabal2nix "operational" (pkgs.fetchFromGitHub {
         owner = "HeinrichApfelmus";
         repo = "operational";
