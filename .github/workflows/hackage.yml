@@ -84,9 +84,6 @@ jobs:
             echo ::set-output name=exists::false
           fi
 
-      - name: "Ensure we will use hackage head"
-        run: cabal update
-
       - name: "Compare the incoming and the current hackage version of the package"
         id: compare-current-version
         if: steps.get-hackage-version.outputs.exists == 'true'
