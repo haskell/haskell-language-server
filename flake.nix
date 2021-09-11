@@ -76,8 +76,8 @@
                   domain = "gitlab.haskell.org";
                   owner = "haskell";
                   repo = "ghc-api-compat";
-                  rev = "a1a21eb4e55193f4bb415424ee4b527922d247a0";
-                  sha256 = "LQeEJhOBjXM2KGKc9dru8PNsJX4Zq5RXLazZaDE7f2o=";
+                  rev = "f2546e768f1d33418ce5012280682704d66dd364";
+                  sha256 = "Mu46OzJsP9ncSCgK32uLgq0BvHEWfBzdi3EmQ6CPywU=";
                 }) { };
 
               lsp = hself.lsp_1_2_0_1;
