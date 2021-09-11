@@ -218,6 +218,7 @@ destruct' :: Bool -> (ConLike -> Judgement -> Rule) -> HyInfo CType -> Judgement
 destruct' use_field_puns f hi jdg = do
   when (isDestructBlacklisted jdg) $ cut -- throwError NoApplicableTactic
   let term = hi_name hi
+  -- TODO(sandy): THIS NEEDS TO INTRODUCE SKOLEMS TOO
   ext
       <- destructMatches
            use_field_puns

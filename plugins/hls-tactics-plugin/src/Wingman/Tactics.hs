@@ -204,6 +204,7 @@ destructAuto hi = requireConcreteHole $ tracing "destruct(auto)" $ do
 destructOrHomoAuto :: HyInfo CType -> TacticsM ()
 destructOrHomoAuto hi = tracing "destructOrHomoAuto" $ do
   jdg <- goal
+  skolems <- gets ts_skolems
   let g  = unCType $ jGoal jdg
       ty = unCType $ hi_type hi
 
@@ -213,6 +214,7 @@ destructOrHomoAuto hi = tracing "destructOrHomoAuto" $ do
       (rule $ destruct' False (const newSubgoal) hi)
     $ case (splitTyConApp_maybe g, splitTyConApp_maybe ty) of
         (Just (gtc, _), Just (tytc, _)) -> gtc == tytc
+                                        && (maybe False id $ allDataConsAreCovered skolems ty g)
         _ -> False
 
 
@@ -240,9 +242,9 @@ homo hi = requireConcreteHole . tracing "homo" $ do
 
   -- Ensure that every data constructor in the domain type is covered in the
   -- codomain; otherwise 'homo' will produce an ill-typed program.
-  case (uncoveredDataCons skolems (coerce $ hi_type hi) (coerce g)) of
-    Just uncovered_dcs ->
-      unless (S.null uncovered_dcs) $
+  case (allDataConsAreCovered skolems (coerce $ hi_type hi) (coerce g)) of
+    Just covered ->
+      unless covered $
         failure  $ TacticPanic "Can't cover every datacon in domain"
     _ -> failure $ TacticPanic "Unable to fetch datacons"
 

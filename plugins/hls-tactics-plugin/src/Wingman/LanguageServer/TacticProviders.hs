@@ -27,7 +27,7 @@ import           Wingman.AbstractLSP.Types
 import           Wingman.Auto
 import           Wingman.GHC
 import           Wingman.Judgements
-import           Wingman.Machinery (useNameFromHypothesis, uncoveredDataCons)
+import           Wingman.Machinery (useNameFromHypothesis, allDataConsAreCovered)
 import           Wingman.Metaprogramming.Parser (parseMetaprogram)
 import           Wingman.Tactics
 import           Wingman.Types
@@ -301,9 +301,7 @@ tcCommandId c = coerce $ T.pack $ "tactics" <> show c <> "Command"
 -- type, and that both are usual algebraic types.
 homoFilter :: S.Set TyVar -> Type -> Type -> Bool
 homoFilter skolems codomain domain =
-  case uncoveredDataCons skolems domain codomain of
-    Just s -> S.null s
-    _ -> False
+  maybe False id $ allDataConsAreCovered skolems domain codomain
 
 
 ------------------------------------------------------------------------------

@@ -407,9 +407,11 @@ getCurrentDefinitions = do
 -- data constructor in the domain to the same in the codomain. This function
 -- returns 'Just' when all the lookups succeeded, and a non-empty value if the
 -- homomorphism *is not* possible.
-uncoveredDataCons :: S.Set TyVar -> Type -> Type -> Maybe (S.Set (Uniquely DataCon))
-uncoveredDataCons skolems domain codomain = do
+allDataConsAreCovered :: S.Set TyVar -> Type -> Type -> Maybe Bool
+allDataConsAreCovered skolems domain codomain = do
   (g_dcs, _) <- tacticsGetDataCons Destruction skolems codomain
-  (hi_dcs, _) <- tacticsGetDataCons Destruction skolems domain
-  pure $ S.fromList (coerce hi_dcs) S.\\ S.fromList (coerce g_dcs)
+  (hi_dcs, _) <- tacticsGetDataCons Construction skolems domain
+  let constructable = S.fromList (coerce hi_dcs)
+      destructable = S.fromList (coerce g_dcs)
+  pure $ S.isSubsetOf @(Uniquely DataCon) destructable constructable
 
