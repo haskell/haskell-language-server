@@ -315,7 +315,7 @@ split = tracing "split(user)" $ do
   jdg <- goal
   let g = jGoal jdg
   skolems <- gets ts_skolems
-  case tacticsGetDataCons skolems $ unCType g of
+  case tacticsGetDataCons Construction skolems $ unCType g of
     Nothing -> failure $ GoalMismatch "split" g
     Just (dcs, _) -> choice $ fmap splitDataCon dcs
 
@@ -329,7 +329,7 @@ splitAuto = requireConcreteHole $ tracing "split(auto)" $ do
   jdg <- goal
   let g = jGoal jdg
   skolems <- gets ts_skolems
-  case tacticsGetDataCons skolems $ unCType g of
+  case tacticsGetDataCons Construction skolems $ unCType g of
     Nothing -> failure $ GoalMismatch "split" g
     Just (dcs, _) -> do
       case isSplitWhitelisted jdg of
@@ -347,7 +347,7 @@ splitSingle = tracing "splitSingle" $ do
   jdg <- goal
   let g = jGoal jdg
   skolems <- gets ts_skolems
-  case tacticsGetDataCons skolems $ unCType g of
+  case tacticsGetDataCons Construction skolems $ unCType g of
     Just ([dc], _) -> do
       splitDataCon dc
     _ -> failure $ GoalMismatch "splitSingle" g

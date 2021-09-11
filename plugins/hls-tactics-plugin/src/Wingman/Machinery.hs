@@ -34,7 +34,7 @@ import           System.Timeout (timeout)
 import           TcType
 import           Type (tyCoVarsOfTypeWellScoped)
 import           Wingman.Context (getInstance)
-import           Wingman.GHC (tryUnifyUnivarsButNotSkolems, updateSubst, tacticsGetDataCons)
+import           Wingman.GHC (tryUnifyUnivarsButNotSkolems, updateSubst, tacticsGetDataCons, DataConMatchMode(..))
 import           Wingman.Judgements
 import           Wingman.Simplify (simplify)
 import           Wingman.Types
@@ -409,7 +409,7 @@ getCurrentDefinitions = do
 -- homomorphism *is not* possible.
 uncoveredDataCons :: S.Set TyVar -> Type -> Type -> Maybe (S.Set (Uniquely DataCon))
 uncoveredDataCons skolems domain codomain = do
-  (g_dcs, _) <- tacticsGetDataCons skolems codomain
-  (hi_dcs, _) <- tacticsGetDataCons skolems domain
+  (g_dcs, _) <- tacticsGetDataCons Destruction skolems codomain
+  (hi_dcs, _) <- tacticsGetDataCons Destruction skolems domain
   pure $ S.fromList (coerce hi_dcs) S.\\ S.fromList (coerce g_dcs)
 

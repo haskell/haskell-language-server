@@ -146,7 +146,7 @@ commandProvider UseDataCon =
         ( guardLength (<= cfg_max_use_ctor_actions cfg)
         . fromMaybe []
         . fmap fst
-        . tacticsGetDataCons skolems
+        . tacticsGetDataCons Construction skolems
         ) $ \dcon ->
       provide UseDataCon
         . T.pack

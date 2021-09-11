@@ -97,26 +97,29 @@ tacticsThetaTy (tcSplitSigmaTy -> (_, theta,  _)) = theta
 
 ------------------------------------------------------------------------------
 -- | Get the data cons of a type, if it has any.
-tacticsGetDataCons :: Set TyVar -> Type -> Maybe ([DataCon], [Type])
-tacticsGetDataCons skolems ty
+tacticsGetDataCons :: DataConMatchMode -> Set TyVar -> Type -> Maybe ([DataCon], [Type])
+tacticsGetDataCons mm skolems ty
   | Just (_, ty') <- tcSplitForAllTy_maybe ty
-  = tacticsGetDataCons skolems ty'
-tacticsGetDataCons skolems ty
+  = tacticsGetDataCons mm skolems ty'
+tacticsGetDataCons mm skolems ty
   | Just _ <- algebraicTyCon ty
   = splitTyConApp_maybe ty <&> \(tc, apps) ->
-      ( filter (not . tacticsDataConCantMatch skolems apps) $ tyConDataCons tc
+      ( filter (not . tacticsDataConCantMatch mm skolems apps) $ tyConDataCons tc
       , apps
       )
-tacticsGetDataCons _ _ = Nothing
+tacticsGetDataCons _ _ _ = Nothing
 
+
+data DataConMatchMode = Construction | Destruction
+  deriving (Eq, Ord, Show, Enum, Bounded)
 
 ------------------------------------------------------------------------------
 -- | Directly ripped from GHC; minor changes to allow for skolems.
-tacticsDataConCantMatch :: Set TyVar -> [Type] -> DataCon -> Bool
+tacticsDataConCantMatch :: DataConMatchMode -> Set TyVar -> [Type] -> DataCon -> Bool
 -- Returns True iff the data con *definitely cannot* match a
 --                  scrutinee of type (T tys)
 --                  where T is the dcRepTyCon for the data con
-tacticsDataConCantMatch skolems tys con
+tacticsDataConCantMatch mm skolems tys con
   | null inst_theta   = False   -- Common
   | otherwise         = typesCantMatch (concatMap predEqs inst_theta)
   where
@@ -140,8 +143,13 @@ tacticsDataConCantMatch skolems tys con
         cant_match :: Type -> Type -> Bool
         cant_match t1 t2 = case tcUnifyTysFG (isSkolem skolems) [t1] [t2] of
           SurelyApart -> True
-          -- Still contains skolems, so it's actually surely apart.
-          MaybeApart _ -> True
+          MaybeApart _ ->
+            -- TODO(sandy): I don't know if ths logic is reasonable.
+            -- I experimented until the tests went green, but I have to admit
+            -- it's hella suspicious.
+            case mm of
+              Construction -> True
+              Destruction -> False
           Unifiable _ -> False
 
 ------------------------------------------------------------------------------

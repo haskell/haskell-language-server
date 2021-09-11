@@ -153,7 +153,7 @@ emptyCaseScrutinees state nfp = do
           $ scrutinee
       -- TODO(sandy): This needs a judgment in order to correctly compute the
       -- skolems! But we don't have a judgement yet :(
-      case null $ tacticsGetDataCons mempty ty of
+      case null $ tacticsGetDataCons Destruction mempty ty of
         True -> pure empty
         False ->
           case ss of

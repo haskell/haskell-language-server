@@ -60,7 +60,7 @@ destructMatches use_field_puns f scrut t jdg = do
   let hy = jEntireHypothesis jdg
       g  = jGoal jdg
   skolems <- gets ts_skolems
-  case tacticsGetDataCons skolems $ unCType t of
+  case tacticsGetDataCons Destruction skolems $ unCType t of
     Nothing -> cut -- throwError $ GoalMismatch "destruct" g
     Just (dcs, apps) ->
       fmap unzipTrace $ for dcs $ \dc -> do
@@ -98,7 +98,7 @@ destructionFor :: S.Set TyVar -> Hypothesis a -> Type -> Maybe [LMatch GhcPs (LH
 -- TODO(sandy): In an ideal world, this would be the same codepath as
 -- 'destructMatches'. Make sure to change that if you ever change this.
 destructionFor skolems hy t = do
-  case tacticsGetDataCons skolems t of
+  case tacticsGetDataCons Destruction skolems t of
     Nothing -> Nothing
     Just ([], _) -> Nothing
     Just (dcs, apps) -> do
