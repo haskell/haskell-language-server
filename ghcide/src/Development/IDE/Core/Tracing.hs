@@ -144,11 +144,11 @@ performMeasurement logger stateRef instrumentFor mapCountInstrument = do
 
     values <- readVar stateRef
     let keys = Key GhcSession
-             : Key GhcSessionDeps
+             : Key (GhcSessionDeps Nothing)
              : [ k | (_,k) <- HMap.keys values
                         -- do GhcSessionIO last since it closes over stateRef itself
                         , k /= Key GhcSession
-                        , k /= Key GhcSessionDeps
+                        , k /= Key (GhcSessionDeps Nothing)
                         , k /= Key GhcSessionIO
              ] ++ [Key GhcSessionIO]
     groupedForSharing <- evaluate (keys `using` seqList r0)

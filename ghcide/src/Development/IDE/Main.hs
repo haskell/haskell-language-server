@@ -330,7 +330,7 @@ defaultMain Arguments{..} = do
                 let keys =
                         nub $
                             Key GhcSession :
-                            Key GhcSessionDeps :
+                            Key (GhcSessionDeps Nothing) :
                             [k | (_, k) <- HashMap.keys values, k /= Key GhcSessionIO]
                             ++ [Key GhcSessionIO]
                 measureMemory logger [keys] consoleObserver valuesRef

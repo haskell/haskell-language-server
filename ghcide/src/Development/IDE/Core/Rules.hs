@@ -41,7 +41,6 @@ module Development.IDE.Core.Rules(
     loadGhcSession,
     getModIfaceFromDiskRule,
     getModIfaceRule,
-    getModIfaceWithoutLinkableRule,
     getModSummaryRule,
     isHiFileStableRule,
     getModuleGraphRule,
@@ -49,7 +48,6 @@ module Development.IDE.Core.Rules(
     getClientSettingsRule,
     getHieAstsRule,
     getBindingsRule,
-    needsCompilationRule,
     generateCoreRule,
     getImportMapRule,
     regenerateHiFile,
@@ -571,11 +569,10 @@ getDocMapRule =
     define $ \GetDocMap file -> do
       -- Stale data for the scenario where a broken module has previously typechecked
       -- but we never generated a DocMap for it
-      (tmrTypechecked -> tc, _) <- useWithStale_ TypeCheck file
-      (hscEnv -> hsc, _)        <- useWithStale_ GhcSessionDeps file
+      (tmr, _) <- useWithStale_ TypeCheck file
       (HAR{refMap=rf}, _)       <- useWithStale_ GetHieAst file
 
-      dkMap <- liftIO $ mkDocMap hsc rf tc
+      dkMap <- liftIO $ mkDocMap (tmrSession tmr) rf (tmrTypechecked tmr)
       return ([],Just dkMap)
 
 -- | Persistent rule to ensure that hover doesn't block on startup
@@ -605,7 +602,8 @@ readHieFileFromDisk hie_loc = do
 typeCheckRule :: Rules ()
 typeCheckRule = define $ \TypeCheck file -> do
     pm <- use_ GetParsedModule file
-    hsc  <- hscEnv <$> use_ GhcSessionDeps file
+    linkableType <- getLinkableType file
+    hsc  <- hscEnv <$> use_ (GhcSessionDeps linkableType) file
     typeCheckRuleDefinition hsc pm
 
 knownFilesRule :: Rules ()
@@ -691,21 +689,15 @@ loadGhcSession = do
                 Nothing -> LBS.toStrict $ B.encode (hash (snd val))
         return (Just cutoffHash, val)
 
-    define $ \GhcSessionDeps file -> ghcSessionDepsDefinition file
+    define $ \(GhcSessionDeps lType) -> ghcSessionDepsDefinition lType
 
-ghcSessionDepsDefinition :: NormalizedFilePath -> Action (IdeResult HscEnvEq)
-ghcSessionDepsDefinition file = do
+ghcSessionDepsDefinition :: Maybe LinkableType -> NormalizedFilePath -> Action (IdeResult HscEnvEq)
+ghcSessionDepsDefinition linkableType file = do
         env <- use_ GhcSession file
         let hsc = hscEnv env
-        ms <- msrModSummary <$> use_ GetModSummaryWithoutTimestamps file
         deps <- use_ GetDependencies file
         let tdeps = transitiveModuleDeps deps
-            uses_th_qq =
-              xopt LangExt.TemplateHaskell dflags || xopt LangExt.QuasiQuotes dflags
-            dflags = ms_hspp_opts ms
-        ifaces <- if uses_th_qq
-                  then uses_ GetModIface tdeps
-                  else uses_ GetModIfaceWithoutLinkable tdeps
+        ifaces <- uses_ (GetModIface linkableType) tdeps
 
         -- Currently GetDependencies returns things in topological order so A comes before B if A imports B.
         -- We need to reverse this as GHC gets very unhappy otherwise and complains about broken interfaces.
@@ -720,14 +712,17 @@ ghcSessionDepsDefinition file = do
 -- | Load a iface from disk, or generate it if there isn't one or it is out of date
 -- This rule also ensures that the `.hie` and `.o` (if needed) files are written out.
 getModIfaceFromDiskRule :: Rules ()
-getModIfaceFromDiskRule = defineEarlyCutoff $ Rule $ \GetModIfaceFromDisk f -> do
+getModIfaceFromDiskRule = defineEarlyCutoff $ Rule $ \GetModIfaceFromDisk ->
+  getModIfaceFromDisk Nothing
+
+getModIfaceFromDisk :: Maybe LinkableType -> NormalizedFilePath -> Action (Maybe BS.ByteString, ([FileDiagnostic], Maybe HiFileResult))
+getModIfaceFromDisk linkableType f = do
   ms <- msrModSummary <$> use_ GetModSummary f
-  (diags_session, mb_session) <- ghcSessionDepsDefinition f
+  (diags_session, mb_session) <- ghcSessionDepsDefinition linkableType f
   case mb_session of
     Nothing -> return (Nothing, (diags_session, Nothing))
     Just session -> do
       sourceModified <- use_ IsHiFileStable f
-      linkableType <- getLinkableType f
       r <- loadInterface (hscEnv session) ms sourceModified linkableType (regenerateHiFile session f ms)
       case r of
         (diags, Nothing) -> return (Nothing, (diags ++ diags_session, Nothing))
@@ -837,7 +832,8 @@ getModSummaryRule = do
 
 generateCore :: RunSimplifier -> NormalizedFilePath -> Action (IdeResult ModGuts)
 generateCore runSimplifier file = do
-    packageState <- hscEnv <$> use_ GhcSessionDeps file
+    linkableType <- getLinkableType file
+    packageState <- hscEnv <$> use_ (GhcSessionDeps linkableType) file
     tm <- use_ TypeCheck file
     setPriority priorityGenerateCore
     liftIO $ compileModule runSimplifier packageState (tmrModSummary tm) (tmrTypechecked tm)
@@ -847,14 +843,22 @@ generateCoreRule =
     define $ \GenerateCore -> generateCore (RunSimplifier True)
 
 getModIfaceRule :: Rules ()
-getModIfaceRule = defineEarlyCutoff $ Rule $ \GetModIface f -> do
+getModIfaceRule = defineEarlyCutoff $ Rule $ \(GetModIface lt) f -> do
+  -- Certain GHC extensions have linkable type requirements
+  minlt <- getLinkableType f
+  let lt' = max minlt lt
+  if lt == lt' then getModIface (min lt lt') f else do
+    res <- use (GetModIface lt') f
+    return (hiFileFingerPrint <$> res, ([], res))
+
+getModIface :: Maybe LinkableType -> NormalizedFilePath -> Action (Maybe BS.ByteString, ([FileDiagnostic], Maybe HiFileResult))
+getModIface linkableType f = do
   fileOfInterest <- use_ IsFileOfInterest f
   res@(_,(_,mhmi)) <- case fileOfInterest of
     IsFOI status -> do
       -- Never load from disk for files of interest
       tmr <- use_ TypeCheck f
-      linkableType <- getLinkableType f
-      hsc <- hscEnv <$> use_ GhcSessionDeps f
+      hsc <- hscEnv <$> use_ (GhcSessionDeps linkableType) f
       let compile = fmap ([],) $ use GenerateCore f
       (diags, !hiFile) <- compileToObjCodeIfNeeded hsc linkableType compile tmr
       let fp = hiFileFingerPrint <$> hiFile
@@ -874,13 +878,6 @@ getModIfaceRule = defineEarlyCutoff $ Rule $ \GetModIface f -> do
       compiledLinkables <- getCompiledLinkables <$> getIdeGlobalAction
       liftIO $ void $ modifyVar' compiledLinkables $ \old -> extendModuleEnv old mod time
   pure res
-
-getModIfaceWithoutLinkableRule :: Rules ()
-getModIfaceWithoutLinkableRule = defineEarlyCutoff $ RuleNoDiagnostics $ \GetModIfaceWithoutLinkable f -> do
-  mhfr <- use GetModIface f
-  let mhfr' = fmap (\x -> x{ hirHomeMod = (hirHomeMod x){ hm_linkable = Just (error msg) } }) mhfr
-      msg = "tried to look at linkable for GetModIfaceWithoutLinkable for " ++ show f
-  pure (hirIfaceFp <$> mhfr', mhfr')
 
 -- | Also generates and indexes the `.hie` file, along with the `.o` file if needed
 -- Invariant maintained is that if the `.hi` file was successfully written, then the
@@ -984,36 +981,11 @@ usePropertyAction kn plId p = do
 
 -- ---------------------------------------------------------------------
 
--- | For now we always use bytecode unless something uses unboxed sums and tuples along with TH
 getLinkableType :: NormalizedFilePath -> Action (Maybe LinkableType)
-getLinkableType f = use_ NeedsCompilation f
+getLinkableType file = do
+  ms <- msrModSummary . fst <$> useWithStale_ GetModSummaryWithoutTimestamps file
+  pure $ computeLinkableType ms
 
-needsCompilationRule :: Rules ()
-needsCompilationRule = defineEarlyCutoff $ RuleNoDiagnostics $ \NeedsCompilation file -> do
-  graph <- useNoFile GetModuleGraph
-  res <- case graph of
-    -- Treat as False if some reverse dependency header fails to parse
-    Nothing -> pure Nothing
-    Just depinfo -> case immediateReverseDependencies file depinfo of
-      -- If we fail to get immediate reverse dependencies, fail with an error message
-      Nothing -> fail $ "Failed to get the immediate reverse dependencies of " ++ show file
-      Just revdeps -> do
-        -- It's important to use stale data here to avoid wasted work.
-        -- if NeedsCompilation fails for a module M its result will be  under-approximated
-        -- to False in its dependencies. However, if M actually used TH, this will
-        -- cause a re-evaluation of GetModIface for all dependencies
-        -- (since we don't need to generate object code anymore).
-        -- Once M is fixed we will discover that we actually needed all the object code
-        -- that we just threw away, and thus have to recompile all dependencies once
-        -- again, this time keeping the object code.
-        -- A file needs to be compiled if any file that depends on it uses TemplateHaskell or needs to be compiled
-        ms <- msrModSummary . fst <$> useWithStale_ GetModSummaryWithoutTimestamps file
-        (modsums,needsComps) <- liftA2
-            (,) (map (fmap (msrModSummary . fst)) <$> usesWithStale GetModSummaryWithoutTimestamps revdeps)
-                (uses NeedsCompilation revdeps)
-        pure $ computeLinkableType ms modsums (map join needsComps)
-
-  pure (Just $ LBS.toStrict $ B.encode $ hash res, Just res)
   where
     uses_th_qq (ms_hspp_opts -> dflags) =
       xopt LangExt.TemplateHaskell dflags || xopt LangExt.QuasiQuotes dflags
@@ -1021,12 +993,10 @@ needsCompilationRule = defineEarlyCutoff $ RuleNoDiagnostics $ \NeedsCompilation
     unboxed_tuples_or_sums (ms_hspp_opts -> d) =
       xopt LangExt.UnboxedTuples d || xopt LangExt.UnboxedSums d
 
-    computeLinkableType :: ModSummary -> [Maybe ModSummary] -> [Maybe LinkableType] -> Maybe LinkableType
-    computeLinkableType this deps xs
-      | Just ObjectLinkable `elem` xs     = Just ObjectLinkable -- If any dependent needs object code, so do we
-      | Just BCOLinkable    `elem` xs     = Just this_type      -- If any dependent needs bytecode, then we need to be compiled
-      | any (maybe False uses_th_qq) deps = Just this_type      -- If any dependent needs TH, then we need to be compiled
-      | otherwise                         = Nothing             -- If none of these conditions are satisfied, we don't need to compile
+    computeLinkableType :: ModSummary -> Maybe LinkableType
+    computeLinkableType this
+      | uses_th_qq this = Just this_type
+      | otherwise       = Nothing
       where
         -- How should we compile this module? (assuming we do in fact need to compile it)
         -- Depends on whether it uses unboxed tuples or sums
@@ -1067,7 +1037,6 @@ mainRule = do
     getModIfaceFromDiskRule
     getModIfaceFromDiskAndIndexRule
     getModIfaceRule
-    getModIfaceWithoutLinkableRule
     getModSummaryRule
     isHiFileStableRule
     getModuleGraphRule
@@ -1075,7 +1044,6 @@ mainRule = do
     getClientSettingsRule
     getHieAstsRule
     getBindingsRule
-    needsCompilationRule
     generateCoreRule
     getImportMapRule
     getAnnotatedParsedSourceRule

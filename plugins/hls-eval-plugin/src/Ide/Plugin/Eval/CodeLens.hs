@@ -71,6 +71,7 @@ import           Development.IDE.Core.Compile         (loadModulesHome,
                                                        setupFinderCache)
 import           Development.IDE.Core.PositionMapping (toCurrentRange)
 import           Development.IDE.Core.Rules           (TransitiveDependencies (transitiveModuleDeps))
+import           Development.IDE.Core.RuleTypes       (LinkableType(BCOLinkable))
 import           Development.IDE.GHC.Compat           hiding (typeKind,
                                                        unitState)
 import qualified Development.IDE.GHC.Compat           as Compat
@@ -573,12 +574,13 @@ prettyWarn Warn{..} =
     prettyPrint (SrcLoc.getLoc warnMsg) <> ": warning:\n"
     <> "    " <> SrcLoc.unLoc warnMsg
 
+
 ghcSessionDepsDefinition :: HscEnvEq -> NormalizedFilePath -> Action HscEnv
 ghcSessionDepsDefinition env file = do
         let hsc = hscEnvWithImportPaths env
         deps <- use_ GetDependencies file
         let tdeps = transitiveModuleDeps deps
-        ifaces <- uses_ GetModIface tdeps
+        ifaces <- uses_ (GetModIface (Just BCOLinkable)) tdeps
 
         -- Currently GetDependencies returns things in topological order so A comes before B if A imports B.
         -- We need to reverse this as GHC gets very unhappy otherwise and complains about broken interfaces.

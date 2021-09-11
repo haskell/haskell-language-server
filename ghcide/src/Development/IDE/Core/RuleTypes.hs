@@ -45,8 +45,14 @@ import           Development.IDE.Types.Diagnostics
 import           GHC.Serialized                               (Serialized)
 import           Language.LSP.Types                           (NormalizedFilePath)
 
-data LinkableType = ObjectLinkable | BCOLinkable
+
+-- | Linkable types ordered by cost.
+data LinkableType
+    = BCOLinkable
+    | ObjectLinkable
   deriving (Eq,Ord,Show, Generic)
+
+instance Binary   LinkableType
 instance Hashable LinkableType
 instance NFData   LinkableType
 
@@ -132,6 +138,7 @@ data TcModuleResult = TcModuleResult
     { tmrParsed          :: ParsedModule
     , tmrRenamed         :: RenamedSource
     , tmrTypechecked     :: TcGblEnv
+    , tmrSession         :: HscEnv
     , tmrTopLevelSplices :: Splices
     -- ^ Typechecked splice information
     , tmrDeferedError    :: !Bool
@@ -250,10 +257,6 @@ type instance RuleResult GetModIfaceFromDiskAndIndex = HiFileResult
 
 -- | Get a module interface details, either from an interface file or a typechecked module
 type instance RuleResult GetModIface = HiFileResult
-
--- | Get a module interface details, without the Linkable
--- For better early cuttoff
-type instance RuleResult GetModIfaceWithoutLinkable = HiFileResult
 
 -- | Get the contents of a file, either dirty (if the buffer is modified) or Nothing to mean use from disk.
 type instance RuleResult GetFileContents = (FileVersion, Maybe Text)
@@ -430,7 +433,7 @@ instance Hashable GhcSession
 instance NFData   GhcSession
 instance Binary   GhcSession
 
-data GhcSessionDeps = GhcSessionDeps deriving (Eq, Show, Typeable, Generic)
+data GhcSessionDeps = GhcSessionDeps (Maybe LinkableType) deriving (Eq, Show, Typeable, Generic)
 instance Hashable GhcSessionDeps
 instance NFData   GhcSessionDeps
 instance Binary   GhcSessionDeps
@@ -447,17 +450,11 @@ instance Hashable GetModIfaceFromDiskAndIndex
 instance NFData   GetModIfaceFromDiskAndIndex
 instance Binary   GetModIfaceFromDiskAndIndex
 
-data GetModIface = GetModIface
+data GetModIface = GetModIface (Maybe LinkableType)
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetModIface
 instance NFData   GetModIface
 instance Binary   GetModIface
-
-data GetModIfaceWithoutLinkable = GetModIfaceWithoutLinkable
-    deriving (Eq, Show, Typeable, Generic)
-instance Hashable GetModIfaceWithoutLinkable
-instance NFData   GetModIfaceWithoutLinkable
-instance Binary   GetModIfaceWithoutLinkable
 
 data IsFileOfInterest = IsFileOfInterest
     deriving (Eq, Show, Typeable, Generic)

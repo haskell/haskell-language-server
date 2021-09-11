@@ -142,7 +142,7 @@ runRetrieCmd state RunRetrieParams{originatingFile = uri, ..} =
         nfp <- MaybeT $ return $ uriToNormalizedFilePath $ toNormalizedUri uri
         (session, _) <- MaybeT $ liftIO $
             runAction "Retrie.GhcSessionDeps" state $
-                useWithStale GhcSessionDeps
+                useWithStale (GhcSessionDeps Nothing)
                 nfp
         (ms, binds, _, _, _) <- MaybeT $ liftIO $ runAction "Retrie.getBinds" state $ getBinds nfp
         let importRewrites = concatMap (extractImports ms binds) rewrites
@@ -458,7 +458,7 @@ callRetrie state session rewrites origin restrictToOriginatingFile = do
         ]
     fixFixities f pm = do
       HiFileResult {hirHomeMod} <-
-        useOrFail "GetModIface" NoTypeCheck GetModIface f
+        useOrFail "GetModIface" NoTypeCheck (GetModIface Nothing) f
       let fixities = fixityEnvFromModIface $ hm_iface hirHomeMod
       res <- transformA pm (fix fixities)
       return (fixities, res)

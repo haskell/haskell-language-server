@@ -289,7 +289,7 @@ typecheckParentsAction nfp = do
       Just rs -> do
         liftIO $ (log $ "Typechecking reverse dependencies for " ++ show nfp ++ ": " ++ show revs)
           `catch` \(e :: SomeException) -> log (show e)
-        void $ uses GetModIface rs
+        void $ uses (GetModIface Nothing) rs
 
 -- | Note that some keys have been modified and restart the session
 --   Only valid if the virtual file system was initialised by LSP, as that

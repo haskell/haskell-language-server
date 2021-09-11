@@ -181,10 +181,8 @@ minimalImportsRule :: Rules ()
 minimalImportsRule = define $ \MinimalImports nfp -> do
   -- Get the typechecking artifacts from the module
   tmr <- use TypeCheck nfp
-  -- We also need a GHC session with all the dependencies
-  hsc <- use GhcSessionDeps nfp
   -- Use the GHC api to extract the "minimal" imports
-  (imports, mbMinImports) <- liftIO $ extractMinimalImports hsc tmr
+  (imports, mbMinImports) <- liftIO $ extractMinimalImports (tmrSession <$> tmr) tmr
   let importsMap =
         Map.fromList
           [ (realSrcSpanStart l, T.pack (prettyPrint i))
@@ -201,7 +199,7 @@ minimalImportsRule = define $ \MinimalImports nfp -> do
 
 -- | Use the ghc api to extract a minimal, explicit set of imports for this module
 extractMinimalImports ::
-  Maybe HscEnvEq ->
+  Maybe HscEnv ->
   Maybe TcModuleResult ->
   IO ([LImportDecl GhcRn], Maybe [LImportDecl GhcRn])
 extractMinimalImports (Just hsc) (Just TcModuleResult {..}) = do
@@ -218,7 +216,7 @@ extractMinimalImports (Just hsc) (Just TcModuleResult {..}) = do
   -- GHC is full of treats like this
   let usage = findImportUsage imports gblElts
   (_, minimalImports) <-
-    initTcWithGbl (hscEnv hsc) tcEnv span $ getMinimalImports usage
+    initTcWithGbl hsc tcEnv span $ getMinimalImports usage
 
   -- return both the original imports and the computed minimal ones
   return (imports, minimalImports)

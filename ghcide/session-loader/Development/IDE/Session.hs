@@ -399,7 +399,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
                 void $ shakeEnqueue extras $ mkDelayedAction "InitialLoad" Debug $ void $ do
                     mmt <- uses GetModificationTime cfps'
                     let cs_exist = catMaybes (zipWith (<$) cfps' mmt)
-                    modIfaces <- uses GetModIface cs_exist
+                    modIfaces <- uses (GetModIface Nothing) cs_exist
                     -- update exports map
                     extras <- getShakeExtras
                     let !exportsMap' = createExportsMap $ mapMaybe (fmap hirModIface) modIfaces

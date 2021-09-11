@@ -168,8 +168,6 @@ refineImportsRule :: Rules ()
 refineImportsRule = define $ \RefineImports nfp -> do
   -- Get the typechecking artifacts from the module
   tmr <- use TypeCheck nfp
-  -- We also need a GHC session with all the dependencies
-  hsc <- use GhcSessionDeps nfp
 
   -- 2 layer map ModuleName -> ModuleName -> [Avails] (exports)
   import2Map <- do
@@ -186,7 +184,7 @@ refineImportsRule = define $ \RefineImports nfp -> do
   -- We shouldn't blindly refine imports
   -- instead we should generate imports statements
   -- for modules/symbols actually got used
-  (imports, mbMinImports) <- liftIO $ extractMinimalImports hsc tmr
+  (imports, mbMinImports) <- liftIO $ extractMinimalImports (tmrSession <$> tmr) tmr
 
   let filterByImport
         :: LImportDecl GhcRn

@@ -138,7 +138,7 @@ emptyCaseScrutinees state nfp = do
 
     TrackedStale tcg tcg_map <- fmap (fmap tmrTypechecked) $ stale TypeCheck
     let tcg' = unTrack tcg
-    hscenv <- stale GhcSessionDeps
+    hscenv <- stale $ GhcSessionDeps Nothing
 
     let scrutinees = traverse (emptyCaseQ . tcg_binds) tcg
     fmap catMaybes $ for scrutinees $ \aged@(unTrack -> (ss, scrutinee)) -> do

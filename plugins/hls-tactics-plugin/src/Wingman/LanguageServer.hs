@@ -204,7 +204,7 @@ judgementForHole state nfp range cfg = do
           <- fmap (fmap tmrTypechecked)
            $ stale TypeCheck
 
-      hscenv <- stale GhcSessionDeps
+      hscenv <- stale $ GhcSessionDeps Nothing
 
       (rss, g) <- liftMaybe $ getSpanAndTypeAtHole range' hf
 
@@ -213,7 +213,7 @@ judgementForHole state nfp range cfg = do
 
       -- KnownThings is just the instances in scope. There are no ranges
       -- involved, so it's not crucial to track ages.
-      let henv = untrackedStaleValue $ hscenv
+      let henv = untrackedStaleValue hscenv
       eps <- liftIO $ readIORef $ hsc_EPS $ hscEnv henv
 
       (jdg, ctx) <- liftMaybe $ mkJudgementAndContext cfg g binds new_rss tcg (hscEnv henv) eps

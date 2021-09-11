@@ -66,7 +66,7 @@ addMethodPlaceholders state AddMinimalMethodsParams{..} = do
       anns = relativiseApiAnns ps (pm_annotations pm)
       old = T.pack $ exactPrint ps anns
 
-    (hsc_dflags . hscEnv -> df) <- MaybeT . runAction "classplugin" state $ use GhcSessionDeps docPath
+    (hsc_dflags . hscEnv -> df) <- MaybeT . runAction "classplugin" state $ use (GhcSessionDeps Nothing) docPath
     List (unzip -> (mAnns, mDecls)) <- MaybeT . pure $ traverse (makeMethodDecl df) methodGroup
     let
       (ps', (anns', _), _) = runTransform (mergeAnns (mergeAnnList mAnns) anns) (addMethodDecls ps mDecls)
@@ -173,9 +173,8 @@ codeAction state plId (CodeActionParams _ _ docId _ context) = liftIO $ fmap (fr
               )
 
     findClassFromIdentifier docPath (Right name) = do
-      (hscEnv -> hscenv, _) <- MaybeT . runAction "classplugin" state $ useWithStale GhcSessionDeps docPath
-      (tmrTypechecked -> thisMod, _) <- MaybeT . runAction "classplugin" state $ useWithStale TypeCheck docPath
-      MaybeT . fmap snd . initTcWithGbl hscenv thisMod ghostSpan $ do
+      (tmr, _) <- MaybeT . runAction "classplugin" state $ useWithStale TypeCheck docPath
+      MaybeT . fmap snd . initTcWithGbl (tmrSession tmr) (tmrTypechecked tmr) ghostSpan $ do
         tcthing <- tcLookup name
         case tcthing of
           AGlobal (AConLike (RealDataCon con))

@@ -210,7 +210,7 @@ tcRnModule hsc_env keep_lbls pmod = do
   let rn_info = case mrn_info of
         Just x  -> x
         Nothing -> error "no renamed info tcRnModule"
-  pure (TcModuleResult pmod rn_info tc_gbl_env splices False)
+  pure (TcModuleResult pmod rn_info tc_gbl_env hsc_env splices False)
 
 mkHiFileResultNoCompile :: HscEnv -> TcModuleResult -> IO HiFileResult
 mkHiFileResultNoCompile session tcm = do
