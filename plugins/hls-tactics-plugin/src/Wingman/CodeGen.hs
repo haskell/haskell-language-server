@@ -64,12 +64,16 @@ destructMatches use_field_puns f scrut t jdg = do
     Nothing -> cut -- throwError $ GoalMismatch "destruct" g
     Just (dcs, apps) ->
       fmap unzipTrace $ for dcs $ \dc -> do
+        let (skolems', theta, args) = dataConInstSig dc apps
+        modify $ \ts ->
+          evidenceToSubst (foldMap mkEvidence theta) ts
+            & #ts_skolems <>~ S.fromList skolems'
+
         let con = RealDataCon dc
-            ev = concatMap mkEvidence $ dataConInstArgTys dc apps
+            ev = concatMap mkEvidence $ dataConInstArgTys dc args
             -- We explicitly do not need to add the method hypothesis to
             -- #syn_scoped
             method_hy = foldMap evidenceToHypothesis ev
-            args = conLikeInstOrigArgTys' con apps
         ctx <- ask
 
         let names_in_scope = hyNamesInScope hy
