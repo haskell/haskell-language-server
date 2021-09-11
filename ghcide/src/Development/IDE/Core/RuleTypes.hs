@@ -438,13 +438,13 @@ instance Hashable GhcSessionDeps
 instance NFData   GhcSessionDeps
 instance Binary   GhcSessionDeps
 
-data GetModIfaceFromDisk = GetModIfaceFromDisk
+data GetModIfaceFromDisk = GetModIfaceFromDisk (Maybe LinkableType)
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetModIfaceFromDisk
 instance NFData   GetModIfaceFromDisk
 instance Binary   GetModIfaceFromDisk
 
-data GetModIfaceFromDiskAndIndex = GetModIfaceFromDiskAndIndex
+data GetModIfaceFromDiskAndIndex = GetModIfaceFromDiskAndIndex (Maybe LinkableType)
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetModIfaceFromDiskAndIndex
 instance NFData   GetModIfaceFromDiskAndIndex

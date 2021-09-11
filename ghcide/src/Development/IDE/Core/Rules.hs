@@ -712,8 +712,8 @@ ghcSessionDepsDefinition linkableType file = do
 -- | Load a iface from disk, or generate it if there isn't one or it is out of date
 -- This rule also ensures that the `.hie` and `.o` (if needed) files are written out.
 getModIfaceFromDiskRule :: Rules ()
-getModIfaceFromDiskRule = defineEarlyCutoff $ Rule $ \GetModIfaceFromDisk ->
-  getModIfaceFromDisk Nothing
+getModIfaceFromDiskRule = defineEarlyCutoff $ Rule $ \(GetModIfaceFromDisk lt) ->
+  getModIfaceFromDisk lt
 
 getModIfaceFromDisk :: Maybe LinkableType -> NormalizedFilePath -> Action (Maybe BS.ByteString, ([FileDiagnostic], Maybe HiFileResult))
 getModIfaceFromDisk linkableType f = do
@@ -741,8 +741,8 @@ getModIfaceFromDisk linkableType f = do
 getModIfaceFromDiskAndIndexRule :: Rules ()
 getModIfaceFromDiskAndIndexRule =
   -- doesn't need early cutoff since all its dependencies already have it
-  defineNoDiagnostics $ \GetModIfaceFromDiskAndIndex f -> do
-  x <- use_ GetModIfaceFromDisk f
+  defineNoDiagnostics $ \(GetModIfaceFromDiskAndIndex lt) f -> do
+  x <- use_ (GetModIfaceFromDisk lt) f
   se@ShakeExtras{hiedb} <- getShakeExtras
 
   -- GetModIfaceFromDisk should have written a `.hie` file, must check if it matches version in db
@@ -869,7 +869,7 @@ getModIface linkableType f = do
         _ -> pure []
       return (fp, (diags++hiDiags, hiFile))
     NotFOI -> do
-      hiFile <- use GetModIfaceFromDiskAndIndex f
+      hiFile <- use (GetModIfaceFromDiskAndIndex linkableType) f
       let fp = hiFileFingerPrint <$> hiFile
       return (fp, ([], hiFile))
 
