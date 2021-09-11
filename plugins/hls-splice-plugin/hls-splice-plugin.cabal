@@ -5,7 +5,7 @@ synopsis:
   HLS Plugin to expand TemplateHaskell Splices and QuasiQuotes
 
 description:
-  HLS Plugin to expand TemplateHaskell Splices and QuasiQuotes.
+  Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
 
 license:            Apache-2.0
 license-file:       LICENSE

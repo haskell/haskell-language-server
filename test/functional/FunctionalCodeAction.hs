@@ -9,7 +9,7 @@ import           Control.Monad
 import           Data.Aeson
 import qualified Data.HashMap.Strict             as HM
 import           Data.List
-import qualified Data.Map as M
+import qualified Data.Map                        as M
 import           Data.Maybe
 import qualified Data.Text                       as T
 import           Ide.Plugin.Config
@@ -527,31 +527,29 @@ unusedTermTests = testGroup "unused term code actions" [
         _     <- waitForDiagnosticsFrom doc
         diags <- getCurrentDiagnostics doc
         let params = CodeActionParams Nothing Nothing doc (Range (Position 1 0) (Position 4 0)) caContext
-            caContext = CodeActionContext (List diags) (Just (List [CodeActionRefactorInline]))
+            caContext = CodeActionContext (List diags) (Just (List [CodeActionRefactor]))
             caContextAllActions = CodeActionContext (List diags) Nothing
         -- Verify that we get code actions of at least two different kinds.
-        ResponseMessage _ _ (Right (List allCodeActions))
+        ResponseMessage _ _ (Right (List res))
           <- request STextDocumentCodeAction (params & L.context .~ caContextAllActions)
         liftIO $ do
-            redundantId <- inspectCodeAction allCodeActions ["Redundant id"]
-            redundantId ^. L.kind @?= Just CodeActionQuickFix
-            unfoldFoo <- inspectCodeAction allCodeActions ["Unfold foo"]
-            unfoldFoo ^. L.kind @?= Just CodeActionRefactorInline
+            let cas = map fromAction res
+                kinds = map (^. L.kind) cas
+            nub kinds @?= [Just CodeActionRefactorInline, Just CodeActionRefactorExtract, Just CodeActionQuickFix]
         -- Verify that that when we set the only parameter, we only get actions
         -- of the right kind.
         ResponseMessage _ _ (Right (List res)) <- request STextDocumentCodeAction params
-        let cas = map fromAction res
-            kinds = map (^. L.kind) cas
         liftIO $ do
-            not (null kinds) @? "We found an action of kind RefactorInline"
-            all (Just CodeActionRefactorInline ==) kinds @? "All CodeActionRefactorInline"
+            let cas = map fromAction res
+                kinds = map (^. L.kind) cas
+            nub kinds @?= nub [Just CodeActionRefactorInline, Just CodeActionRefactorExtract]
     ]
 
 expectFailIfGhc9 :: String -> TestTree -> TestTree
 expectFailIfGhc9 reason =
   case ghcVersion of
     GHC90 -> expectFailBecause reason
-    _ -> id
+    _     -> id
 
 disableWingman :: Session ()
 disableWingman =
