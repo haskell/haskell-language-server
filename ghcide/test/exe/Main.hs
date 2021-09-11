@@ -779,25 +779,51 @@ codeLensesTests = testGroup "code lenses"
 
 watchedFilesTests :: TestTree
 watchedFilesTests = testGroup "watched files"
-  [ testSession' "workspace files" $ \sessionDir -> do
-      liftIO $ writeFile (sessionDir </> "hie.yaml") "cradle: {direct: {arguments: [\"-isrc\", \"A\", \"WatchedFilesMissingModule\"]}}"
-      _doc <- createDoc "A.hs" "haskell" "{-#LANGUAGE NoImplicitPrelude #-}\nmodule A where\nimport WatchedFilesMissingModule"
-      watchedFileRegs <- getWatchedFilesSubscriptionsUntil STextDocumentPublishDiagnostics
+  [ testGroup "Subscriptions"
+    [ testSession' "workspace files" $ \sessionDir -> do
+        liftIO $ writeFile (sessionDir </> "hie.yaml") "cradle: {direct: {arguments: [\"-isrc\", \"A\", \"WatchedFilesMissingModule\"]}}"
+        _doc <- createDoc "A.hs" "haskell" "{-#LANGUAGE NoImplicitPrelude #-}\nmodule A where\nimport WatchedFilesMissingModule"
+        watchedFileRegs <- getWatchedFilesSubscriptionsUntil STextDocumentPublishDiagnostics
 
-      -- Expect 2 subscriptions: one for all .hs files and one for the hie.yaml cradle
-      liftIO $ length watchedFileRegs @?= 2
+        -- Expect 2 subscriptions: one for all .hs files and one for the hie.yaml cradle
+        liftIO $ length watchedFileRegs @?= 2
 
-  , testSession' "non workspace file" $ \sessionDir -> do
-      tmpDir <- liftIO getTemporaryDirectory
-      let yaml = "cradle: {direct: {arguments: [\"-i" <> tail(init(show tmpDir)) <> "\", \"A\", \"WatchedFilesMissingModule\"]}}"
-      liftIO $ writeFile (sessionDir </> "hie.yaml") yaml
-      _doc <- createDoc "A.hs" "haskell" "{-# LANGUAGE NoImplicitPrelude#-}\nmodule A where\nimport WatchedFilesMissingModule"
-      watchedFileRegs <- getWatchedFilesSubscriptionsUntil STextDocumentPublishDiagnostics
+    , testSession' "non workspace file" $ \sessionDir -> do
+        tmpDir <- liftIO getTemporaryDirectory
+        let yaml = "cradle: {direct: {arguments: [\"-i" <> tail(init(show tmpDir)) <> "\", \"A\", \"WatchedFilesMissingModule\"]}}"
+        liftIO $ writeFile (sessionDir </> "hie.yaml") yaml
+        _doc <- createDoc "A.hs" "haskell" "{-# LANGUAGE NoImplicitPrelude#-}\nmodule A where\nimport WatchedFilesMissingModule"
+        watchedFileRegs <- getWatchedFilesSubscriptionsUntil STextDocumentPublishDiagnostics
 
-      -- Expect 2 subscriptions: one for all .hs files and one for the hie.yaml cradle
-      liftIO $ length watchedFileRegs @?= 2
+        -- Expect 2 subscriptions: one for all .hs files and one for the hie.yaml cradle
+        liftIO $ length watchedFileRegs @?= 2
 
-  -- TODO add a test for didChangeWorkspaceFolder
+    -- TODO add a test for didChangeWorkspaceFolder
+    ]
+  , testGroup "Changes"
+    [
+      testSession' "workspace files" $ \sessionDir -> do
+        liftIO $ writeFile (sessionDir </> "hie.yaml") "cradle: {direct: {arguments: [\"-isrc\", \"A\", \"B\"]}}"
+        liftIO $ writeFile (sessionDir </> "B.hs") $ unlines
+          ["module B where"
+          ,"b :: Bool"
+          ,"b = False"]
+        _doc <- createDoc "A.hs" "haskell" $ T.unlines
+          ["module A where"
+          ,"import B"
+          ,"a :: ()"
+          ,"a = b"
+          ]
+        expectDiagnostics [("A.hs", [(DsError, (3, 4), "Couldn't match expected type '()' with actual type 'Bool'")])]
+        -- modify B off editor
+        liftIO $ writeFile (sessionDir </> "B.hs") $ unlines
+          ["module B where"
+          ,"b :: Int"
+          ,"b = 0"]
+        sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
+                List [FileEvent (filePathToUri $ sessionDir </> "B.hs") FcChanged ]
+        expectDiagnostics [("A.hs", [(DsError, (3, 4), "Couldn't match expected type '()' with actual type 'Int'")])]
+    ]
   ]
 
 insertImportTests :: TestTree
