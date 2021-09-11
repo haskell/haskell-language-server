@@ -33,8 +33,9 @@ import           Refinery.Tactic.Internal
 import           System.Timeout (timeout)
 import           TcType
 import           Type (tyCoVarsOfTypeWellScoped)
+import           TysPrim (alphaTyVar, alphaTy)
 import           Wingman.Context (getInstance)
-import           Wingman.GHC (tryUnifyUnivarsButNotSkolems, updateSubst, tacticsGetDataCons, DataConMatchMode(..))
+import           Wingman.GHC (tryUnifyUnivarsButNotSkolems, updateSubst, tacticsGetDataCons, freshTyvars, DataConMatchMode(..))
 import           Wingman.Judgements
 import           Wingman.Simplify (simplify)
 import           Wingman.Types
@@ -222,6 +223,12 @@ newtype Reward a = Reward a
   deriving (Eq, Ord, Show) via a
 
 
+------------------------------------------------------------------------------
+-- | Generate a unique unification variable.
+newUnivar :: MonadState TacticState m => m Type
+newUnivar = do
+  freshTyvars $
+    mkInvForAllTys [alphaTyVar] alphaTy
 
 
 ------------------------------------------------------------------------------

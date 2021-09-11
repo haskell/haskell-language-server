@@ -36,7 +36,6 @@ import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           TcType
 import           Type hiding (Var)
-import           TysPrim (betaTy, alphaTy, betaTyVar, alphaTyVar)
 import           Wingman.CodeGen
 import           Wingman.GHC
 import           Wingman.Judgements
@@ -549,10 +548,10 @@ applyByType ty = tracing ("applyByType " <> show ty) $ do
 -- | Make an n-ary function call of the form
 -- @(_ :: forall a b. a -> a -> b) _ _@.
 nary :: Int -> TacticsM ()
-nary n =
-  applyByType $
-    mkInvForAllTys [alphaTyVar, betaTyVar] $
-      mkFunTys' (replicate n alphaTy) betaTy
+nary n = do
+  a <- newUnivar
+  b <- newUnivar
+  applyByType $ mkFunTys' (replicate n a) b
 
 
 self :: TacticsM ()
@@ -595,8 +594,7 @@ letBind occs = do
           -> fmap (occ, )
            $ fmap (<$ jdg)
            $ fmap CType
-           $ freshTyvars
-           $ mkInvForAllTys [alphaTyVar] alphaTy
+           $ newUnivar
   rule $ nonrecLet occ_tys
 
 
@@ -636,7 +634,7 @@ collapse = do
 with_arg :: TacticsM ()
 with_arg = rule $ \jdg -> do
   let g = jGoal jdg
-  fresh_ty <- freshTyvars $ mkInvForAllTys [alphaTyVar] alphaTy
+  fresh_ty <- newUnivar
   a <- newSubgoal $ withNewGoal (CType fresh_ty) jdg
   f <- newSubgoal $ withNewGoal (coerce mkFunTys' [fresh_ty] g) jdg
   pure $ fmap noLoc $ (@@) <$> fmap unLoc f <*> fmap unLoc a

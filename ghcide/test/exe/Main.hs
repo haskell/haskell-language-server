@@ -1729,7 +1729,7 @@ suggestImportTests = testGroup "suggest import actions"
       -- there isn't a good way to wait until the whole project is checked atm
       when waitForCheckProject $ liftIO $ sleep 0.5
       let defLine = length imps + 1
-          range = Range (Position defLine 0) (Position defLine maxBound)
+          range = Range (Position defLine 0) (Position defLine maxBoundUinteger)
       actions <- getCodeActions doc range
       if wanted
          then do
@@ -2467,7 +2467,7 @@ fillTypedHoleTests = let
     let expectedCode = sourceCode newA newB newC
     doc <- createDoc "Testing.hs" "haskell" originalCode
     _ <- waitForDiagnostics
-    actionsOrCommands <- getCodeActions doc (Range (Position 9 0) (Position 9 maxBound))
+    actionsOrCommands <- getCodeActions doc (Range (Position 9 0) (Position 9 maxBoundUinteger))
     chosenAction <- liftIO $ pickActionWithTitle actionTitle actionsOrCommands
     executeCodeAction chosenAction
     modifiedCode <- documentContents doc
@@ -2508,7 +2508,7 @@ fillTypedHoleTests = let
             , "ioToSome = " <> x ]
       doc <- createDoc "Test.hs" "haskell" $ mkDoc "_toException"
       _ <- waitForDiagnostics
-      actions <- getCodeActions doc (Range (Position 3 0) (Position 3 maxBound))
+      actions <- getCodeActions doc (Range (Position 3 0) (Position 3 maxBoundUinteger))
       chosen <- liftIO $ pickActionWithTitle "replace _toException with E.toException" actions
       executeCodeAction chosen
       modifiedCode <- documentContents doc
@@ -3003,7 +3003,7 @@ addSigActionTests = let
     let expectedCode = after' def sig
     doc <- createDoc "Sigs.hs" "haskell" originalCode
     _ <- waitForDiagnostics
-    actionsOrCommands <- getCodeActions doc (Range (Position 5 1) (Position 5 maxBound))
+    actionsOrCommands <- getCodeActions doc (Range (Position 5 1) (Position 5 maxBoundUinteger))
     chosenAction <- liftIO $ pickActionWithTitle ("add signature: " <> sig) actionsOrCommands
     executeCodeAction chosenAction
     modifiedCode <- documentContents doc
@@ -4800,7 +4800,7 @@ outlineTests = testGroup
                                             SkFile
                                             Nothing
                                             Nothing
-                                            (R 0 0 maxBound 0)
+                                            (R 0 0 maxBoundUinteger 0)
                                             loc
                                             (Just $ List cc)
   classSymbol name loc cc = DocumentSymbol name
@@ -5991,3 +5991,8 @@ listOfChar | ghcVersion >= GHC90 = "String"
 thDollarIdx :: Int
 thDollarIdx | ghcVersion >= GHC90 = 1
             | otherwise = 0
+
+-- | We don't have a uinteger type yet. So hardcode the maxBound of uinteger, 2 ^ 31 - 1
+-- as a constant.
+maxBoundUinteger :: Int
+maxBoundUinteger = 2147483647
