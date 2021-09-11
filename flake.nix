@@ -72,11 +72,12 @@
             with haskell.lib; {
 
               ghc-api-compat = hself.callCabal2nix "ghc-api-compat"
-                (pkgs.fetchFromGitHub {
-                  owner = "hsyl20";
+                (pkgs.fetchFromGitLab {
+                  domain = "gitlab.haskell.org";
+                  owner = "haskell";
                   repo = "ghc-api-compat";
-                  rev = "8fee87eac97a538dbe81ff1ab18cff10f2f9fa15";
-                  sha256 = "byehvdxQxhNk5ZQUXeFHjAZpAze4Ct9261ro4c5acZk=";
+                  rev = "a1a21eb4e55193f4bb415424ee4b527922d247a0";
+                  sha256 = "LQeEJhOBjXM2KGKc9dru8PNsJX4Zq5RXLazZaDE7f2o=";
                 }) { };
 
               lsp = hself.lsp_1_2_0_1;
