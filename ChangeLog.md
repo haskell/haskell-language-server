@@ -2,6 +2,22 @@
 
 ## 1.4.0
 
+After a month of vacation a new hls release has arrived:
+
+- Support for ghc 8.10.6 and 8.10.7
+- The ormolu formatter plugin works with ghc 9.0.1
+- We have new docs thanks to @michaelpj: <https://haskell-language-server.readthedocs.io>
+- Now you can ask the executable for included plugins with: `haskell-language-server --list-plugins`
+- Call hierarchy plugin has been improved thanks to @July541:
+  - Added call from type signature
+  - And call from a function pattern
+  - Go to typeclass instance directly
+- After this release we will drop support for ghc versions: 8.6.4, 8.10.3 and 8.10.4
+  - The advise is upgrade ghc to the last minor version: 8.6.5 or 8.10.7
+- There are several bug fixes and features you can found in the merged pull requests list
+
+### Pull requests merged for 1.4.0
+
 - Completions for project identifiers
 ([#2187](https://github.com/haskell/haskell-language-server/pull/2187)) by @pepeiborra
 - Add rerun workflow
