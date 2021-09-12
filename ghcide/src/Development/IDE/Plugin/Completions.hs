@@ -145,15 +145,13 @@ getCompletionsLSP ide plId
             packageExportsMap <- mapM liftIO packageExportsMapIO
             projectExportsMap <- liftIO $ readVar (exportsMap $ shakeExtras ide)
             let exportsMap = fromMaybe mempty packageExportsMap <> projectExportsMap
-            locatedImports <- fromMaybe (mempty, zeroMapping) <$> useWithStaleFast GetLocatedImports npath
-            localModuleExports <- liftIO $ buildLocalModuleExports ide locatedImports
 
             let moduleExports = getModuleExportsMap exportsMap
                 exportsCompItems = foldMap (map (fromIdentInfo uri) . Set.toList) . Map.elems . getExportsMap $ exportsMap
                 exportsCompls = mempty{anyQualCompls = exportsCompItems}
             let compls = (fst <$> localCompls) <> (fst <$> nonLocalCompls) <> Just exportsCompls
 
-            pure (opts, fmap (,pm,binds) compls, Map.unionWith (<>) localModuleExports moduleExports)
+            pure (opts, fmap (,pm,binds) compls, moduleExports)
         case compls of
           Just (cci', parsedMod, bindMap) -> do
             pfix <- VFS.getCompletionPrefix position cnts
@@ -170,14 +168,6 @@ getCompletionsLSP ide plId
       _ -> return (InL $ List [])
 
 ----------------------------------------------------------------------------------------------------
-
-buildLocalModuleExports:: IdeState -> ([(Located ModuleName, Maybe ArtifactsLocation)], PositionMapping) -> IO (Map.HashMap T.Text (Set.HashSet IdentInfo))
-buildLocalModuleExports ide inMap = do
-  let artifactLoctions = mapMaybe snd (fst inMap)
-  let afp = map artifactFilePath artifactLoctions
-  let queries = map (useWithStaleFast GetModIface) afp
-  files <- liftIO $ mapM (runIdeAction "Completion" (shakeExtras ide)) queries
-  pure (buildModuleExportMapFrom $ map (hirModIface . fst) $ catMaybes files)
 
 extendImportCommand :: PluginCommand IdeState
 extendImportCommand =
