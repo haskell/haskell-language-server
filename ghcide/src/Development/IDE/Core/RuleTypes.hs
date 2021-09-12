@@ -56,6 +56,13 @@ instance Binary   LinkableType
 instance Hashable LinkableType
 instance NFData   LinkableType
 
+generalizeLinkable :: Maybe LinkableType -> [Maybe LinkableType]
+generalizeLinkable Nothing  = Just <$> allLinkables
+generalizeLinkable (Just l) = Just <$> filter (>l) allLinkables
+
+allLinkables :: [LinkableType]
+allLinkables = [BCOLinkable, ObjectLinkable]
+
 -- NOTATION
 --   Foo+ means Foo for the dependencies
 --   Foo* means Foo for me and Foo+
@@ -433,24 +440,24 @@ instance Hashable GhcSession
 instance NFData   GhcSession
 instance Binary   GhcSession
 
-data GhcSessionDeps = GhcSessionDeps (Maybe LinkableType) deriving (Eq, Show, Typeable, Generic)
+newtype GhcSessionDeps = GhcSessionDeps (Maybe LinkableType) deriving (Eq, Show, Typeable, Generic)
 instance Hashable GhcSessionDeps
 instance NFData   GhcSessionDeps
 instance Binary   GhcSessionDeps
 
-data GetModIfaceFromDisk = GetModIfaceFromDisk (Maybe LinkableType)
+newtype GetModIfaceFromDisk = GetModIfaceFromDisk (Maybe LinkableType)
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetModIfaceFromDisk
 instance NFData   GetModIfaceFromDisk
 instance Binary   GetModIfaceFromDisk
 
-data GetModIfaceFromDiskAndIndex = GetModIfaceFromDiskAndIndex (Maybe LinkableType)
+newtype GetModIfaceFromDiskAndIndex = GetModIfaceFromDiskAndIndex (Maybe LinkableType)
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetModIfaceFromDiskAndIndex
 instance NFData   GetModIfaceFromDiskAndIndex
 instance Binary   GetModIfaceFromDiskAndIndex
 
-data GetModIface = GetModIface (Maybe LinkableType)
+newtype GetModIface = GetModIface (Maybe LinkableType)
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetModIface
 instance NFData   GetModIface

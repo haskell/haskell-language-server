@@ -39,7 +39,7 @@ module Development.IDE.Core.Shake(
     useWithStale_, usesWithStale_,
     BadDependency(..),
     RuleBody(..),
-    define, defineNoDiagnostics,
+    define, defineMulti, defineNoDiagnostics,
     defineEarlyCutoff,
     defineOnDisk, needOnDisk, needOnDisks,
     defineNoFile, defineEarlyCutOffNoFile,
@@ -747,6 +747,13 @@ define
     => (k -> NormalizedFilePath -> Action (IdeResult v)) -> Rules ()
 define op = defineEarlyCutoff $ Rule $ \k v -> (Nothing,) <$> op k v
 
+-- | Define a new multi-key Rule without early cutoff
+defineMulti
+    :: IdeRule k v
+    => (k -> [k])
+    -> (k -> NormalizedFilePath -> Action (IdeResult v)) -> Rules ()
+defineMulti gen op = defineEarlyCutoff $ MultiRule gen $ \k v -> (Nothing,) <$> op k v
+
 defineNoDiagnostics
     :: IdeRule k v
     => (k -> NormalizedFilePath -> Action (Maybe v)) -> Rules ()
@@ -863,6 +870,7 @@ usesWithStale key files = do
 
 data RuleBody k v
   = Rule (k -> NormalizedFilePath -> Action (Maybe BS.ByteString, IdeResult v))
+  | MultiRule (k -> [k]) (k -> NormalizedFilePath -> Action (Maybe BS.ByteString, IdeResult v))
   | RuleNoDiagnostics (k -> NormalizedFilePath -> Action (Maybe BS.ByteString, Maybe v))
 
 
@@ -872,9 +880,11 @@ defineEarlyCutoff
     => RuleBody k v
     -> Rules ()
 defineEarlyCutoff (Rule op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode isSuccess $ do
-    defineEarlyCutoff' True key file old mode $ op key file
+    defineEarlyCutoff' True key [] file old mode $ op key file
+defineEarlyCutoff (MultiRule genKey op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode isSuccess $ do
+    defineEarlyCutoff' True key (genKey key) file old mode $ op key file
 defineEarlyCutoff (RuleNoDiagnostics op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode isSuccess $ do
-    defineEarlyCutoff' False key file old mode $ second (mempty,) <$> op key file
+    defineEarlyCutoff' False key [] file old mode $ second (mempty,) <$> op key file
 
 defineNoFile :: IdeRule k v => (k -> Action v) -> Rules ()
 defineNoFile f = defineNoDiagnostics $ \k file -> do
@@ -890,23 +900,24 @@ defineEarlyCutoff'
     :: IdeRule k v
     => Bool  -- ^ update diagnostics
     -> k
+    -> [k]   -- ^ Substitutable keys
     -> NormalizedFilePath
     -> Maybe BS.ByteString
     -> RunMode
     -> Action (Maybe BS.ByteString, IdeResult v)
     -> Action (RunResult (A (RuleResult k)))
-defineEarlyCutoff' doDiagnostics key file old mode action = do
+defineEarlyCutoff' doDiagnostics key altKeys file old mode action = do
     extras@ShakeExtras{state, progress, logger, dirtyKeys} <- getShakeExtras
     options <- getIdeOptions
     (if optSkipProgress options key then id else inProgress progress file) $ do
         val <- case old of
             Just old | mode == RunDependenciesSame -> do
-                v <- liftIO $ getValues state key file
+                v <- liftIO $ firstJustM (\k -> fmap (k,) <$> getValues state k file) (key:altKeys)
                 case v of
                     -- No changes in the dependencies and we have
                     -- an existing result.
-                    Just (v, diags) -> do
-                        when doDiagnostics $
+                    Just (k, (v, diags)) -> do
+                        when (k == key && doDiagnostics) $
                             updateFileDiagnostics file (Key key) extras $ map (\(_,y,z) -> (y,z)) $ Vector.toList diags
                         return $ Just $ RunResult ChangedNothing old $ A v
                     _ -> return Nothing

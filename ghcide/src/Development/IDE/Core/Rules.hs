@@ -689,7 +689,7 @@ loadGhcSession = do
                 Nothing -> LBS.toStrict $ B.encode (hash (snd val))
         return (Just cutoffHash, val)
 
-    define $ \(GhcSessionDeps lType) -> ghcSessionDepsDefinition lType
+    defineMulti (coerce generalizeLinkable) $ \(GhcSessionDeps lType) -> ghcSessionDepsDefinition lType
 
 ghcSessionDepsDefinition :: Maybe LinkableType -> NormalizedFilePath -> Action (IdeResult HscEnvEq)
 ghcSessionDepsDefinition linkableType file = do
@@ -712,7 +712,7 @@ ghcSessionDepsDefinition linkableType file = do
 -- | Load a iface from disk, or generate it if there isn't one or it is out of date
 -- This rule also ensures that the `.hie` and `.o` (if needed) files are written out.
 getModIfaceFromDiskRule :: Rules ()
-getModIfaceFromDiskRule = defineEarlyCutoff $ Rule $ \(GetModIfaceFromDisk lt) ->
+getModIfaceFromDiskRule = defineEarlyCutoff $ MultiRule (coerce generalizeLinkable) $ \(GetModIfaceFromDisk lt) ->
   getModIfaceFromDisk lt
 
 getModIfaceFromDisk :: Maybe LinkableType -> NormalizedFilePath -> Action (Maybe BS.ByteString, ([FileDiagnostic], Maybe HiFileResult))
@@ -843,7 +843,7 @@ generateCoreRule =
     define $ \GenerateCore -> generateCore (RunSimplifier True)
 
 getModIfaceRule :: Rules ()
-getModIfaceRule = defineEarlyCutoff $ Rule $ \(GetModIface lt) f -> do
+getModIfaceRule = defineEarlyCutoff $ MultiRule (coerce generalizeLinkable) $ \(GetModIface lt) f -> do
   -- Certain GHC extensions have linkable type requirements
   minlt <- getLinkableType f
   let lt' = max minlt lt
