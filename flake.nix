@@ -74,7 +74,7 @@
               ghc-api-compat = hself.callHackageDirect {
                 pkg = "ghc-api-compat";
                 ver = "8.10.7";
-                sha256 = "0p3sxpzpnccfm9p3yvi88507kh7zcmmg52nl0z12azlh6yfcipw3";
+                sha256 = "g9/InDeQfiXCB9SK8mpl/8B5QEEobj9uqo4xe//telw=";
               } {};
 
               lsp = hself.lsp_1_2_0_1;
