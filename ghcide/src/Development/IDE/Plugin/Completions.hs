@@ -9,6 +9,7 @@ module Development.IDE.Plugin.Completions
     ) where
 
 import           Control.Concurrent.Async                     (concurrently)
+import           Control.Concurrent.Extra
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Maybe
@@ -30,7 +31,7 @@ import           Development.IDE.GHC.ExactPrint               (Annotated (annsA)
 import           Development.IDE.GHC.Util                     (prettyPrint)
 import           Development.IDE.Graph
 import           Development.IDE.Graph.Classes
-import           Development.IDE.Import.FindImports           
+import           Development.IDE.Import.FindImports
 import           Development.IDE.Plugin.CodeAction            (newImport,
                                                                newImportToEdit)
 import           Development.IDE.Plugin.CodeAction.ExactPrint
@@ -138,14 +139,20 @@ getCompletionsLSP ide plId
             nonLocalCompls <- useWithStaleFast NonLocalCompletions npath
             pm <- useWithStaleFast GetParsedModule npath
             binds <- fromMaybe (mempty, zeroMapping) <$> useWithStaleFast GetBindings npath
-            exportsMapIO <- fmap(envPackageExports . fst) <$> useWithStaleFast GhcSession npath
-            exportsMap <- mapM liftIO exportsMapIO
+
+            -- set up the exports map including both package and project-level identifiers
+            packageExportsMapIO <- fmap(envPackageExports . fst) <$> useWithStaleFast GhcSession npath
+            packageExportsMap <- mapM liftIO packageExportsMapIO
+            projectExportsMap <- liftIO $ readVar (exportsMap $ shakeExtras ide)
+            let exportsMap = fromMaybe mempty packageExportsMap <> projectExportsMap
             locatedImports <- fromMaybe (mempty, zeroMapping) <$> useWithStaleFast GetLocatedImports npath
             localModuleExports <- liftIO $ buildLocalModuleExports ide locatedImports
-            let moduleExports = maybe Map.empty getModuleExportsMap exportsMap
-                exportsCompItems = foldMap (map (fromIdentInfo uri) . Set.toList) . Map.elems . getExportsMap <$> exportsMap
-                exportsCompls = mempty{anyQualCompls = fromMaybe [] exportsCompItems}
+
+            let moduleExports = getModuleExportsMap exportsMap
+                exportsCompItems = foldMap (map (fromIdentInfo uri) . Set.toList) . Map.elems . getExportsMap $ exportsMap
+                exportsCompls = mempty{anyQualCompls = exportsCompItems}
             let compls = (fst <$> localCompls) <> (fst <$> nonLocalCompls) <> Just exportsCompls
+
             pure (opts, fmap (,pm,binds) compls, Map.unionWith (<>) localModuleExports moduleExports)
         case compls of
           Just (cci', parsedMod, bindMap) -> do
@@ -163,7 +170,7 @@ getCompletionsLSP ide plId
       _ -> return (InL $ List [])
 
 ----------------------------------------------------------------------------------------------------
-  
+
 buildLocalModuleExports:: IdeState -> ([(Located ModuleName, Maybe ArtifactsLocation)], PositionMapping) -> IO (Map.HashMap T.Text (Set.HashSet IdentInfo))
 buildLocalModuleExports ide inMap = do
   let artifactLoctions = mapMaybe snd (fst inMap)
