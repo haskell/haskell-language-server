@@ -4058,7 +4058,8 @@ completionTests
     [ testGroup "non local" nonLocalCompletionTests
     , testGroup "topLevel" topLevelCompletionTests
     , testGroup "local" localCompletionTests
-    , testGroup "global" globalCompletionTests
+    , testGroup "package" packageCompletionTests
+    , testGroup "project" projectCompletionTests
     , testGroup "other" otherCompletionTests
     ]
 
@@ -4467,8 +4468,8 @@ otherCompletionTests = [
         liftIO $ length compls @?= maxCompletions def
   ]
 
-globalCompletionTests :: [TestTree]
-globalCompletionTests =
+packageCompletionTests :: [TestTree]
+packageCompletionTests =
   [ testSessionWait "fromList" $ do
         doc <- createDoc "A.hs" "haskell" $ T.unlines
             [ "{-# OPTIONS_GHC -Wunused-binds #-}",
@@ -4565,6 +4566,31 @@ globalCompletionTests =
             ["module A where", "import qualified Data.Sequence as Seq", "foo :: Seq.Seq"]
     ]
   ]
+
+projectCompletionTests :: [TestTree]
+projectCompletionTests =
+    [ testSession' "from hiedb" $ \dir-> do
+        liftIO $ writeFile (dir </> "hie.yaml")
+            "cradle: {direct: {arguments: [\"-Wmissing-signatures\", \"A\", \"B\"]}}"
+        _ <- createDoc "A.hs" "haskell" $ T.unlines
+            [  "module A (anidentifier) where",
+               "anidentifier = ()"
+            ]
+        _ <- waitForDiagnostics
+        -- Note that B does not import A
+        doc <- createDoc "B.hs" "haskell" $ T.unlines
+            [ "module B where",
+              "b = anidenti"
+            ]
+        compls <- getCompletions doc (Position 1 10)
+        let compls' =
+              [T.drop 1 $ T.dropEnd 10 d
+              | CompletionItem {_documentation = Just (CompletionDocMarkup (MarkupContent MkMarkdown d)), _label}
+                <- compls
+              , _label == "anidentifier"
+              ]
+        liftIO $ compls' @?= ["Defined in 'A"]
+    ]
 
 highlightTests :: TestTree
 highlightTests = testGroup "highlight"
