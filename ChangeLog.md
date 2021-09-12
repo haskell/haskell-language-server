@@ -2,12 +2,24 @@
 
 ## 1.4.0
 
+- Completions for project identifiers
+([#2187](https://github.com/haskell/haskell-language-server/pull/2187)) by @pepeiborra
+- Add rerun workflow
+([#2181](https://github.com/haskell/haskell-language-server/pull/2181)) by @jneira
+- Bump up shake-bench version
+([#2178](https://github.com/haskell/haskell-language-server/pull/2178)) by @jneira
+- Fix hackage release
+([#2177](https://github.com/haskell/haskell-language-server/pull/2177)) by @jneira
+- Use maxBound of uinteger not Int.
+([#2169](https://github.com/haskell/haskell-language-server/pull/2169)) by @pranaysashank
 - enable the PR gitpod badge and drop the label
 ([#2167](https://github.com/haskell/haskell-language-server/pull/2167)) by @pepeiborra
 - Plugin in config files
 ([#2166](https://github.com/haskell/haskell-language-server/pull/2166)) by @jneira
 - Complete contributing guide
 ([#2165](https://github.com/haskell/haskell-language-server/pull/2165)) by @jneira
+- Wingman: Add "New Unification Variable" helper
+([#2164](https://github.com/haskell/haskell-language-server/pull/2164)) by @isovector
 - Semiautomatic hackage releases
 ([#2163](https://github.com/haskell/haskell-language-server/pull/2163)) by @jneira
 - Improve incoming call for typeclass and type family instance
@@ -30,6 +42,8 @@
 ([#2154](https://github.com/haskell/haskell-language-server/pull/2154)) by @jneira
 - Auto complete definitions within imports
 ([#2152](https://github.com/haskell/haskell-language-server/pull/2152)) by @alexnaspo
+- Filter code actions based on prefix, not equality
+([#2146](https://github.com/haskell/haskell-language-server/pull/2146)) by @michaelpj
 - perform a GC before find resolution
 ([#2144](https://github.com/haskell/haskell-language-server/pull/2144)) by @pepeiborra
 - case sensitive language pragmas fix
@@ -70,7 +84,6 @@
 ([#2105](https://github.com/haskell/haskell-language-server/pull/2105)) by @pepeiborra
 - [ghcide-bench] fix edit experiment
 ([#2104](https://github.com/haskell/haskell-language-server/pull/2104)) by @pepeiborra
-- Wingman: streaming tactic solutions
 ([#2102](https://github.com/haskell/haskell-language-server/pull/2102)) by @isovector
 - reduce allow-newer entries for shake-bench
 ([#2101](https://github.com/haskell/haskell-language-server/pull/2101)) by @pepeiborra
