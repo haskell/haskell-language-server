@@ -1,4 +1,4 @@
-cabal-version: 2.2
+cabal-version: 2.4
 name:          shake-bench
 version:       0.1.0.2
 synopsis:      Build rules for historical benchmarking
@@ -8,9 +8,7 @@ author:        Pepe Iborra
 maintainer:    pepeiborra@gmail.com
 category:      Development
 build-type:    Simple
-description:
-  A library Shake rules to build and run benchmarks for multiple revisions of a project.
-  An example of usage can be found in the ghcide benchmark suite
+description: A library Shake rules to build and run benchmarks for multiple revisions of a project.  An example of usage can be found in the ghcide benchmark suite
 
 library
   exposed-modules:  Development.Benchmark.Rules
