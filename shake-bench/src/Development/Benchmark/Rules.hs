@@ -67,6 +67,7 @@ module Development.Benchmark.Rules
   ) where
 
 import           Control.Applicative
+import           Control.Exception
 import           Control.Monad
 import           Data.Aeson                                (FromJSON (..),
                                                             ToJSON (..),
@@ -94,12 +95,14 @@ import           System.Directory                          (createDirectoryIfMis
                                                             findExecutable,
                                                             renameFile)
 import           System.FilePath
+import           System.IO
 import           System.Time.Extra                         (Seconds)
 import qualified Text.ParserCombinators.ReadP              as P
 import           Text.Printf
 import           Text.Read                                 (Read (..), get,
                                                             readMaybe,
                                                             readP_to_Prec)
+import Development.Shake (actionCatch)
 
 newtype GetExperiments = GetExperiments () deriving newtype (Binary, Eq, Hashable, NFData, Show)
 newtype GetVersions = GetVersions () deriving newtype (Binary, Eq, Hashable, NFData, Show)
@@ -406,13 +409,18 @@ csvRules build = do
 
 --------------------------------------------------------------------------------
 
+handleSvg act = actionCatch act $ \e@SomeException{} -> liftIO $ do
+  hPrint stderr e
+  return ()
+
+
 -- | Rules to produce charts for the GC stats
 svgRules :: FilePattern -> Rules ()
 svgRules build = do
   void $ addOracle $ \(GetParent name) -> findPrev name <$> askOracle (GetVersions ())
   -- chart GC stats for an experiment on a given revision
   priority 1 $
-    build -/- "*/*/*/*.svg" %> \out -> do
+    build -/- "*/*/*/*.svg" %> \out -> handleSvg $ do
       let [_, _, _example, ver, _exp] = splitDirectories out
       runLog <- loadRunLog (Escaped $ replaceExtension out "csv") ver
       let diagram = Diagram Live [runLog] title
