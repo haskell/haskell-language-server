@@ -138,10 +138,12 @@ more details
 
 We aim to do hackage releases following the github ones described above.
 To help in that job we have added a [github workflow](https://github.com/haskell/haskell-language-server/blob/master/.github/workflows/hackage.yml)
+
 That script checks, generates the tar.gz files, unpacks and builds them in isolation against hackage head
 if the package version in the branch is different from hackage.
 If the package in the branch has the same version as the released one,
 it will check the relevant files have not changed and will throw an error
 otherwise.
+
 The script will upload the tarballs as candidates, maintainers will have
 to check and publish them definitely.
