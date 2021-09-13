@@ -273,7 +273,7 @@ mkJudgementAndContext cfg g (TrackedStale binds bmap) rss (TrackedStale tcg tcgm
         mkFirstJudgement
           ctx
           (local_hy <> cls_hy)
-          (isRhsHole tcg_rss tcs)
+          (isRhsHoleWithoutWhere tcg_rss tcs)
           g
     , ctx
     )
@@ -341,6 +341,7 @@ getRhsPosVals (unTrack -> rss) (unTrack -> tcs)
       TopLevelRHS name ps
           (L (RealSrcSpan span)  -- body with no guards and a single defn
             (HsVar _ (L _ hole)))
+          _
         | containsSpan rss span  -- which contains our span
         , isHole $ occName hole  -- and the span is a hole
         -> flip evalState 0 $ buildTopLevelHypothesis name ps
@@ -478,12 +479,25 @@ mkIdHypothesis (splitId -> (name, ty)) prov =
 
 
 ------------------------------------------------------------------------------
--- | Is this hole immediately to the right of an equals sign?
-isRhsHole :: Tracked age RealSrcSpan -> Tracked age TypecheckedSource -> Bool
-isRhsHole (unTrack -> rss) (unTrack -> tcs) =
+-- | Is this hole immediately to the right of an equals sign --- and is there
+-- no where clause attached to it?
+--
+-- It's important that there is no where clause because otherwise it gets
+-- clobbered. See #2183 for an example.
+--
+-- This isn't a perfect check, and produces some ugly code. But it's much much
+-- better than the alternative, which is to destructively modify the user's
+-- AST.
+isRhsHoleWithoutWhere
+    :: Tracked age RealSrcSpan
+    -> Tracked age TypecheckedSource
+    -> Bool
+isRhsHoleWithoutWhere (unTrack -> rss) (unTrack -> tcs) =
   everything (||) (mkQ False $ \case
-      TopLevelRHS _ _ (L (RealSrcSpan span) _) -> containsSpan rss span
-      _                                        -> False
+      TopLevelRHS _ _
+          (L (RealSrcSpan span) _)
+          (EmptyLocalBinds _) -> containsSpan rss span
+      _                       -> False
     ) tcs
 
 
