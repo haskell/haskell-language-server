@@ -192,7 +192,16 @@ instance PluginMethod TextDocumentCodeAction where
       wasRequested (InR ca)
         | Nothing <- _only context = True
         | Just (List allowed) <- _only context
-        , Just caKind <- ca ^. kind = caKind `elem` allowed
+        -- See https://github.com/microsoft/language-server-protocol/issues/970
+        -- This is somewhat vague, but due to the hierarchical nature of action kinds, we
+        -- should check whether the requested kind is a *prefix* of the action kind.
+        -- That means, for example, we will return actions with kinds `quickfix.import` and
+        -- `quickfix.somethingElse` if the requested kind is `quickfix`.
+        -- TODO: add helpers in `lsp` for handling code action hierarchies
+        -- For now we abuse the fact that the JSON representation gives us the hierarchical string.
+        , Just caKind <- ca ^. kind
+        , String caKindStr <- toJSON caKind =
+                any (\k -> k `T.isPrefixOf` caKindStr) [kstr | k <- allowed, let String kstr = toJSON k ]
         | otherwise = False
 
 instance PluginMethod TextDocumentCodeLens where
