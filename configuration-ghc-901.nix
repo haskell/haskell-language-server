@@ -29,7 +29,7 @@ let
       ghc-api-compat = hself.callHackageDirect {
                 pkg = "ghc-api-compat";
                 ver = "9.0.1";
-                sha256 = "0p3sxpzpnccfm9p3yvi88507kh7zcmmg52nl0z12azlh6yfcixxx";
+                sha256 = "WCK1gu6iiCAc2s2rFEqn2CkvHkITPrmDjuiGsWOWerM=";
               } {};
 
       hiedb = addBuildDepend hsuper.hiedb hself.ghc-api-compat;
