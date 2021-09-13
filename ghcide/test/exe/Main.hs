@@ -4591,7 +4591,7 @@ projectCompletionTests =
               , _label == "anidentifier"
               ]
         liftIO $ compls' @?= ["Defined in 'A"], 
-      testSession' "from hiedb" $ \dir-> do
+      testSession' "auto complete project imports" $ \dir-> do
         liftIO $ writeFile (dir </> "hie.yaml")
             "cradle: {direct: {arguments: [\"-Wmissing-signatures\", \"ALocalModule\", \"B\"]}}"
         _ <- createDoc "ALocalModule.hs" "haskell" $ T.unlines
