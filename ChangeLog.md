@@ -7,6 +7,7 @@ After a month of vacation a new hls release has arrived:
 - Support for ghc 8.10.6 and 8.10.7
 - The ormolu formatter plugin works with ghc 9.0.1
 - We have a *new brand plugin to let you rename indentifiers* thanks to @OliverMadine's great work
+![rename-demo](https://user-images.githubusercontent.com/30090176/133071923-b3d91b2a-619f-4151-ab76-ca50442e5ab4.gif)
 - *Call hierarchy plugin has been improved* thanks to @July541:
   - Add call from type signature
   - Add call from a function pattern
@@ -19,6 +20,8 @@ After a month of vacation a new hls release has arrived:
 
 ### Pull requests merged for 1.4.0
 
+- Update flake to fix nix builds
+([#2188](https://github.com/haskell/haskell-language-server/pull/2188)) by @jneira
 - Completions for project identifiers
 ([#2187](https://github.com/haskell/haskell-language-server/pull/2187)) by @pepeiborra
 - Add rerun workflow
