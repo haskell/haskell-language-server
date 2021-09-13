@@ -25,6 +25,13 @@ let
 
       # we need add ghc-api-compat to build depends,
       # since its condition tree is not evaluated under ghc 9
+
+      ghc-api-compat = hself.callHackageDirect {
+                pkg = "ghc-api-compat";
+                ver = "9.0.1";
+                sha256 = "WCK1gu6iiCAc2s2rFEqn2CkvHkITPrmDjuiGsWOWerM=";
+              } {};
+
       hiedb = addBuildDepend hsuper.hiedb hself.ghc-api-compat;
 
       blaze-textual = hself.callCabal2nix "blaze-textual"
@@ -68,6 +75,8 @@ let
       ghc-lib-parser = hself.ghc-lib-parser_9_0_1_20210324;
 
       ghc-lib-parser-ex = hself.ghc-lib-parser-ex_9_0_0_4;
+
+      ormolu = hself.ormolu_0_2_0_0;
 
       operational = hself.callCabal2nix "operational" (pkgs.fetchFromGitHub {
         owner = "HeinrichApfelmus";

@@ -9,6 +9,7 @@ module Development.IDE.Plugin.Completions
     ) where
 
 import           Control.Concurrent.Async                     (concurrently)
+import           Control.Concurrent.Extra
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Maybe
@@ -30,6 +31,7 @@ import           Development.IDE.GHC.ExactPrint               (Annotated (annsA)
 import           Development.IDE.GHC.Util                     (prettyPrint)
 import           Development.IDE.Graph
 import           Development.IDE.Graph.Classes
+import           Development.IDE.Import.FindImports
 import           Development.IDE.Plugin.CodeAction            (newImport,
                                                                newImportToEdit)
 import           Development.IDE.Plugin.CodeAction.ExactPrint
@@ -131,18 +133,25 @@ getCompletionsLSP ide plId
     fmap Right $ case (contents, uriToFilePath' uri) of
       (Just cnts, Just path) -> do
         let npath = toNormalizedFilePath' path
-        (ideOpts, compls) <- liftIO $ runIdeAction "Completion" (shakeExtras ide) $ do
+        (ideOpts, compls, moduleExports) <- liftIO $ runIdeAction "Completion" (shakeExtras ide) $ do
             opts <- liftIO $ getIdeOptionsIO $ shakeExtras ide
             localCompls <- useWithStaleFast LocalCompletions npath
             nonLocalCompls <- useWithStaleFast NonLocalCompletions npath
             pm <- useWithStaleFast GetParsedModule npath
             binds <- fromMaybe (mempty, zeroMapping) <$> useWithStaleFast GetBindings npath
-            exportsMapIO <- fmap(envPackageExports . fst) <$> useWithStaleFast GhcSession npath
-            exportsMap <- mapM liftIO exportsMapIO
-            let exportsCompItems = foldMap (map (fromIdentInfo uri) . Set.toList) . Map.elems . getExportsMap <$> exportsMap
-                exportsCompls = mempty{anyQualCompls = fromMaybe [] exportsCompItems}
+
+            -- set up the exports map including both package and project-level identifiers
+            packageExportsMapIO <- fmap(envPackageExports . fst) <$> useWithStaleFast GhcSession npath
+            packageExportsMap <- mapM liftIO packageExportsMapIO
+            projectExportsMap <- liftIO $ readVar (exportsMap $ shakeExtras ide)
+            let exportsMap = fromMaybe mempty packageExportsMap <> projectExportsMap
+
+            let moduleExports = getModuleExportsMap exportsMap
+                exportsCompItems = foldMap (map (fromIdentInfo uri) . Set.toList) . Map.elems . getExportsMap $ exportsMap
+                exportsCompls = mempty{anyQualCompls = exportsCompItems}
             let compls = (fst <$> localCompls) <> (fst <$> nonLocalCompls) <> Just exportsCompls
-            pure (opts, fmap (,pm,binds) compls)
+
+            pure (opts, fmap (,pm,binds) compls, moduleExports)
         case compls of
           Just (cci', parsedMod, bindMap) -> do
             pfix <- VFS.getCompletionPrefix position cnts
@@ -152,7 +161,7 @@ getCompletionsLSP ide plId
               (Just pfix', _) -> do
                 let clientCaps = clientCapabilities $ shakeExtras ide
                 config <- getCompletionsConfig plId
-                allCompletions <- liftIO $ getCompletions plId ideOpts cci' parsedMod bindMap pfix' clientCaps config
+                allCompletions <- liftIO $ getCompletions plId ideOpts cci' parsedMod bindMap pfix' clientCaps config moduleExports
                 pure $ InL (List allCompletions)
               _ -> return (InL $ List [])
           _ -> return (InL $ List [])

@@ -187,7 +187,7 @@ experiments =
             let edit :: TextDocumentContentChangeEvent =TextDocumentContentChangeEvent
                   { _range = Just Range {_start = bottom, _end = bottom}
                   , _rangeLength = Nothing, _text = t}
-                bottom = Position maxBound 0
+                bottom = Position maxBoundUinteger 0
                 t = T.unlines
                     [""
                     ,"holef :: [Int] -> [Int]"
@@ -625,3 +625,8 @@ searchSymbol doc@TextDocumentIdentifier{_uri} fileContents pos = do
             _                      -> return False
       checkCompletions pos =
         not . null <$> getCompletions doc pos
+
+-- | We don't have a uinteger type yet. So hardcode the maxBound of uinteger, 2 ^ 31 - 1
+-- as a constant.
+maxBoundUinteger :: Int
+maxBoundUinteger = 2147483647

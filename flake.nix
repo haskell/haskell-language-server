@@ -71,31 +71,17 @@
           tweaks = hself: hsuper:
             with haskell.lib; {
 
-              ghc-api-compat = hself.callCabal2nix "ghc-api-compat"
-                (pkgs.fetchFromGitHub {
-                  owner = "hsyl20";
-                  repo = "ghc-api-compat";
-                  rev = "8fee87eac97a538dbe81ff1ab18cff10f2f9fa15";
-                  sha256 = "byehvdxQxhNk5ZQUXeFHjAZpAze4Ct9261ro4c5acZk=";
-                }) { };
+              ghc-api-compat = hself.callHackageDirect {
+                pkg = "ghc-api-compat";
+                ver = "8.10.7";
+                sha256 = "g9/InDeQfiXCB9SK8mpl/8B5QEEobj9uqo4xe//telw=";
+              } {};
 
-              lsp = hself.callCabal2nix "lsp"
-                (builtins.fetchTarball {
-                  url = "https://hackage.haskell.org/package/lsp-1.2.0.1/lsp-1.2.0.1.tar.gz";
-                  sha256 = "1lhzsraiw11ldxvxn8ax11hswpyzsvw2da2qmp3p6fc9rfpz4pj5";
-                }) { };
+              lsp = hself.lsp_1_2_0_1;
 
-              lsp-types = hself.callCabal2nix "lsp-types"
-                (builtins.fetchTarball {
-                  url = "https://hackage.haskell.org/package/lsp-types-1.3.0.0/lsp-types-1.3.0.0.tar.gz";
-                  sha256 = "0qajyyj2d51daa4y0pqaa87n4nny0i920ivvzfnrk9gq9386iac7";
-                }) { };
+              lsp-types = hself.lsp-types_1_3_0_1;
 
-              lsp-test = hself.callCabal2nix "lsp-test"
-                (builtins.fetchTarball {
-                  url = "https://hackage.haskell.org/package/lsp-test-0.14.0.1/lsp-test-0.14.0.1.tar.gz";
-                  sha256 = "10lnyg7nlbd3ymgvjjlrkfndyy7ay9cwnsk684p08k2gzlric4yq";
-                }) { };
+              lsp-test = hself.lsp-test_0_14_0_1;
             };
 
           hlsSources =
@@ -177,7 +163,7 @@
           + pkgs.lib.replaceStrings [ "." ] [ "" ]
           pkgs.haskellPackages.ghc.version);
         ghc884 = pkgs.hlsHpkgs "ghc884";
-        ghc8104 = pkgs.hlsHpkgs "ghc8104";
+        ghc8107 = pkgs.hlsHpkgs "ghc8107";
         ghc901 = ghc901Config.tweakHpkgs (pkgs.hlsHpkgs "ghc901");
 
         # For markdown support
@@ -252,15 +238,13 @@
           # dev shell
           haskell-language-server-dev = mkDevShell ghcDefault;
           haskell-language-server-884-dev = mkDevShell ghc884;
-          haskell-language-server-8104-dev = mkDevShell ghc8104;
-          haskell-language-server-8105-dev = builtins.throw "GHC 8.10.5 is not available in nixpkgs";
+          haskell-language-server-8107-dev = mkDevShell ghc8107;
           haskell-language-server-901-dev = mkDevShell ghc901;
 
           # hls package
           haskell-language-server = mkExe ghcDefault;
           haskell-language-server-884 = mkExe ghc884;
-          haskell-language-server-8104 = mkExe ghc8104;
-          haskell-language-server-8105 = builtins.throw "GHC 8.10.5 is not available in nixpkgs";
+          haskell-language-server-8107 = mkExe ghc8107;
           haskell-language-server-901 = mkExe ghc901;
 
           # docs
