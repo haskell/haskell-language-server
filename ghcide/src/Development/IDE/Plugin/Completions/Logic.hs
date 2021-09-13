@@ -600,7 +600,7 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
         , enteredQual `T.isPrefixOf` label
         ]
 
-      filtImportCompls = filtListWith (mkImportCompl enteredQual) $ map fst $ HM.toList moduleExportsMap
+      filtImportCompls = filtListWith (mkImportCompl enteredQual) $ HM.keys moduleExportsMap
       filterModuleExports moduleName = filtListWith $ mkModuleFunctionImport moduleName
       filtKeywordCompls
           | T.null prefixModule = filtListWith mkExtCompl (optKeywords ideOpts)
