@@ -2,7 +2,6 @@
 {-# LANGUAGE GADTs      #-}
 {-# LANGUAGE MultiWayIf #-}
 
-
 -- Mostly taken from "haskell-ide-engine"
 module Development.IDE.Plugin.Completions.Logic (
   CachedCompletions
@@ -65,6 +64,7 @@ import           Language.LSP.Types.Capabilities
 import qualified Language.LSP.VFS                         as VFS
 import           Outputable                               (Outputable)
 import           TyCoRep
+
 
 -- From haskell-ide-engine/hie-plugin-api/Haskell/Ide/Engine/Context.hs
 
@@ -403,15 +403,12 @@ cacheDataProducer uri env curMod globalEnv inScopeEnv limports = do
 
   (unquals,quals) <- getCompls rdrElts
 
-  -- The list of all importable Modules from all packages
-  moduleNames <- maybe [] (map showModName) <$> envVisibleModuleNames env
 
   return $ CC
     { allModNamesAsNS = allModNamesAsNS
     , unqualCompls = unquals
     , qualCompls = quals
     , anyQualCompls = []
-    , importableModules = moduleNames
     }
 
 -- | Produces completions from the top level declarations of a module.
@@ -421,7 +418,6 @@ localCompletionsForParsedModule uri pm@ParsedModule{pm_parsed_source = L _ HsMod
        , unqualCompls = compls
        , qualCompls = mempty
        , anyQualCompls = []
-       , importableModules = mempty
         }
   where
     typeSigIds = Set.fromList
@@ -535,7 +531,7 @@ getCompletions
     -> CompletionsConfig
     -> HM.HashMap T.Text (HashSet.HashSet IdentInfo)
     -> IO [CompletionItem]
-getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qualCompls, importableModules}
+getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qualCompls}
                maybe_parsed (localBindings, bmapping) prefixInfo caps config moduleExportsMap = do
   let VFS.PosPrefixInfo { fullLine, prefixModule, prefixText } = prefixInfo
       enteredQual = if T.null prefixModule then "" else prefixModule <> "."
@@ -604,12 +600,11 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
         , enteredQual `T.isPrefixOf` label
         ]
 
-      filtImportCompls = filtListWith (mkImportCompl enteredQual) importableModules
+      filtImportCompls = filtListWith (mkImportCompl enteredQual) $ map fst $ HM.toList moduleExportsMap
       filterModuleExports moduleName = filtListWith $ mkModuleFunctionImport moduleName
       filtKeywordCompls
           | T.null prefixModule = filtListWith mkExtCompl (optKeywords ideOpts)
           | otherwise = []
-
   if
     -- TODO: handle multiline imports 
     | "import " `T.isPrefixOf` fullLine 

@@ -95,7 +95,6 @@ data CachedCompletions = CC
   , qualCompls        :: QualCompls    -- ^ Completion items associated to
                                 -- to a specific module name.
   , anyQualCompls     :: [Maybe T.Text -> CompItem] -- ^ Items associated to any qualifier
-  , importableModules :: [T.Text] -- ^ All modules that may be imported.
   }
 
 instance Show CachedCompletions where show _ = "<cached completions>"
@@ -104,8 +103,8 @@ instance NFData CachedCompletions where
     rnf = rwhnf
 
 instance Monoid CachedCompletions where
-    mempty = CC mempty mempty mempty mempty mempty
+    mempty = CC mempty mempty mempty mempty
 
 instance Semigroup CachedCompletions where
-    CC a b c d e <> CC a' b' c' d' e' =
-        CC (a<>a') (b<>b') (c<>c') (d<>d') (e<>e')
+    CC a b c d <> CC a' b' c' d' =
+        CC (a<>a') (b<>b') (c<>c') (d<>d')
