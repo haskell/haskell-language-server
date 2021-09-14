@@ -48,10 +48,13 @@ import           Ide.Types
 import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.Types
 import qualified Language.LSP.VFS                             as VFS
+
+import Development.IDE.Types.KnownTargets (Target(..))
 #if MIN_VERSION_ghc(9,0,0)
 import           GHC.Tc.Module                                (tcRnImportDecls)
 #else
 import           TcRnDriver                                   (tcRnImportDecls)
+import qualified Data.HashMap.Strict as HM
 #endif
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -133,13 +136,15 @@ getCompletionsLSP ide plId
     fmap Right $ case (contents, uriToFilePath' uri) of
       (Just cnts, Just path) -> do
         let npath = toNormalizedFilePath' path
-        (ideOpts, compls, moduleExports) <- liftIO $ runIdeAction "Completion" (shakeExtras ide) $ do
+        (ideOpts, compls, moduleExports, lModules) <- liftIO $ runIdeAction "Completion" (shakeExtras ide) $ do
             opts <- liftIO $ getIdeOptionsIO $ shakeExtras ide
             localCompls <- useWithStaleFast LocalCompletions npath
             nonLocalCompls <- useWithStaleFast NonLocalCompletions npath
             pm <- useWithStaleFast GetParsedModule npath
             binds <- fromMaybe (mempty, zeroMapping) <$> useWithStaleFast GetBindings npath
-
+            knownTargets <- liftIO $ runAction  "Completion" ide $ useNoFile GetKnownTargets
+            let localModules = maybe [] HM.keys knownTargets
+            let lModules = map toModueNameText localModules
             -- set up the exports map including both package and project-level identifiers
             packageExportsMapIO <- fmap(envPackageExports . fst) <$> useWithStaleFast GhcSession npath
             packageExportsMap <- mapM liftIO packageExportsMapIO
@@ -151,7 +156,7 @@ getCompletionsLSP ide plId
                 exportsCompls = mempty{anyQualCompls = exportsCompItems}
             let compls = (fst <$> localCompls) <> (fst <$> nonLocalCompls) <> Just exportsCompls
 
-            pure (opts, fmap (,pm,binds) compls, moduleExports)
+            pure (opts, fmap (,pm,binds) compls, moduleExports, lModules)
         case compls of
           Just (cci', parsedMod, bindMap) -> do
             pfix <- VFS.getCompletionPrefix position cnts
@@ -161,13 +166,18 @@ getCompletionsLSP ide plId
               (Just pfix', _) -> do
                 let clientCaps = clientCapabilities $ shakeExtras ide
                 config <- getCompletionsConfig plId
-                allCompletions <- liftIO $ getCompletions plId ideOpts cci' parsedMod bindMap pfix' clientCaps config moduleExports
+                allCompletions <- liftIO $ getCompletions plId ideOpts cci' parsedMod bindMap pfix' clientCaps config moduleExports lModules
                 pure $ InL (List allCompletions)
               _ -> return (InL $ List [])
           _ -> return (InL $ List [])
       _ -> return (InL $ List [])
 
 ----------------------------------------------------------------------------------------------------
+
+toModueNameText :: Development.IDE.Types.KnownTargets.Target -> T.Text
+toModueNameText target = case target of
+  Development.IDE.Types.KnownTargets.TargetModule m  -> T.pack $ moduleNameString m
+  _ -> T.empty
 
 extendImportCommand :: PluginCommand IdeState
 extendImportCommand =

@@ -534,9 +534,10 @@ getCompletions
     -> ClientCapabilities
     -> CompletionsConfig
     -> HM.HashMap T.Text (HashSet.HashSet IdentInfo)
+    -> [T.Text]
     -> IO [CompletionItem]
 getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qualCompls, importableModules}
-               maybe_parsed (localBindings, bmapping) prefixInfo caps config moduleExportsMap = do
+               maybe_parsed (localBindings, bmapping) prefixInfo caps config moduleExportsMap localImportableModues = do
   let VFS.PosPrefixInfo { fullLine, prefixModule, prefixText } = prefixInfo
       enteredQual = if T.null prefixModule then "" else prefixModule <> "."
       fullPrefix  = enteredQual <> prefixText
@@ -604,7 +605,7 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
         , enteredQual `T.isPrefixOf` label
         ]
 
-      filtImportCompls = filtListWith (mkImportCompl enteredQual) importableModules
+      filtImportCompls localModules = filtListWith (mkImportCompl enteredQual) (importableModules <> localModules)
       filterModuleExports moduleName = filtListWith $ mkModuleFunctionImport moduleName
       filtKeywordCompls
           | T.null prefixModule = filtListWith mkExtCompl (optKeywords ideOpts)
@@ -621,7 +622,7 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
           funs = map (show . name) $ HashSet.toList funcs
       return $ filterModuleExports moduleName $ map T.pack funs
     | "import " `T.isPrefixOf` fullLine
-    -> return filtImportCompls
+    -> return $ filtImportCompls localImportableModues
     -- we leave this condition here to avoid duplications and return empty list
     -- since HLS implements these completions (#haskell-language-server/pull/662)
     | "{-# " `T.isPrefixOf` fullLine
