@@ -23,8 +23,17 @@ Enabled by default. You can disable it in your editor settings whenever you like
 ```
 
 ## Change log
+### 1.0.1.0
+- Support call from a type signature.
+- Support call from a function pattern.
+- Incoming call now will go to typeclass instance instand of its definition.
 ### 1.0.0.1
 - Support call hierarchy on type signatures.
+### 1.0.0.0
+- Released!
+
+## Known issues:
+- Outgoing call have difficulty with going to typeclass instance due to `HieDb` lack of adequate info.
 
 ## Acknowledgments
 Supported by
