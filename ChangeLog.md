@@ -6,8 +6,6 @@ After a month of vacation a new hls release has arrived:
 
 - Support for ghc 8.10.6 and 8.10.7
 - The ormolu formatter plugin works with ghc 9.0.1
-- We have a *new brand plugin to let you rename indentifiers* thanks to @OliverMadine's great work
-![rename-demo](https://user-images.githubusercontent.com/30090176/133071923-b3d91b2a-619f-4151-ab76-ca50442e5ab4.gif)
 - *Call hierarchy plugin has been improved* thanks to @July541:
   - Add call from type signature
   - Add call from a function pattern
@@ -317,15 +315,15 @@ We have finally released a new version of Haskell Language Server!
 Thanks for all contributors, many bugs has been fixed, and many features has landed.
 Here are the summary of changes:
 
-- Basic support for GHC 9.0.1 is added.  
+- Basic support for GHC 9.0.1 is added.
   It does not support all plugins yet, but core GHCIDE features will work. For the detailed information that which plugins work, please refer [this list](https://github.com/haskell/haskell-language-server/issues/297#issuecomment-855522891).
-- Support for GHC 8.10.5 is added.  
+- Support for GHC 8.10.5 is added.
   Note that macOS version is unfortunately not included in this release because of [a GHC issue with `network` package](https://gitlab.haskell.org/ghc/ghc/-/issues/19968).
-- HLS wrapper and GHCIDE session loader uses the same logic with implicit-hie.  
+- HLS wrapper and GHCIDE session loader uses the same logic with implicit-hie.
   This fixes [a build issue](https://github.com/haskell/haskell-language-server/issues/1782) of a stack project with implicit `hie.yaml` .
 - Wingman plugin has added numerous features and fixed many bugs:
-  - It now supports tactic metaprogramming!  
-    For list of commands, see [this document](https://github.com/haskell/haskell-language-server/blob/master/plugins/hls-tactics-plugin/COMMANDS.md#wingman-metaprogram-command-reference).  
+  - It now supports tactic metaprogramming!
+    For list of commands, see [this document](https://github.com/haskell/haskell-language-server/blob/master/plugins/hls-tactics-plugin/COMMANDS.md#wingman-metaprogram-command-reference).
     ![https://github.com/haskell/haskell-language-server/blob/master/plugins/hls-tactics-plugin/COMMANDS.md#wingman-metaprogram-command-reference](https://user-images.githubusercontent.com/307223/118190278-bdf24f80-b3f7-11eb-8838-b08a2582d7f1.gif)
   - "Refine hole" and "Split all function arguments" code actions are publicly opened.
   - "Empty case split" code lens is added.
