@@ -12,11 +12,20 @@ After a month of vacation a new hls release has arrived:
   - Add call from type signature
   - Add call from a function pattern
   - Go to typeclass instance directly
+- As usual @isovector has been busy improving wingman plugin:
+  - New "intro and destruct" code action
+  - Streaming tactic solutions: when Wingman times outs, it can still pick the best solution it found
+  - Let-bindings in metattactics: allows you to bind variables in tactic metaprogram
+  - Several bug fixes
 - We have new docs thanks to @michaelpj: <https://haskell-language-server.readthedocs.io>
 - Now you can ask the executable for included plugins with: `haskell-language-server --list-plugins`
-- *DEPRECATION NOTICE*: after this release we will drop support for ghc versions: 8.6.4, 8.10.3 and 8.10.4
-  - The advise is upgrade ghc to the last minor version: 8.6.5 or 8.10.7
 - There are several bug fixes and features you can found in the merged pull requests list
+
+### DEPRECATION NOTICE
+
+- *After* this release we will drop support for ghc versions 8.6.4, 8.10.3 and 8.10.4
+  - The advise is upgrade ghc to the last minor version: 8.6.5 or 8.10.7
+  - Take a look to [this issue](https://github.com/haskell/haskell-language-server/issues/2168) for more details
 
 ### Pull requests merged for 1.4.0
 
@@ -24,6 +33,8 @@ After a month of vacation a new hls release has arrived:
 ([#2188](https://github.com/haskell/haskell-language-server/pull/2188)) by @jneira
 - Completions for project identifiers
 ([#2187](https://github.com/haskell/haskell-language-server/pull/2187)) by @pepeiborra
+- Wingman: Don't clobber where clauses
+([#2184](https://github.com/haskell/haskell-language-server/pull/2184)) by @isovector
 - Add rerun workflow
 ([#2181](https://github.com/haskell/haskell-language-server/pull/2181)) by @jneira
 - Bump up shake-bench version
