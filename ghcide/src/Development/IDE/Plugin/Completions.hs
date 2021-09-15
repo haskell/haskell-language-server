@@ -30,7 +30,7 @@ import           Development.IDE.GHC.ExactPrint               (Annotated (annsA)
 import           Development.IDE.GHC.Util                     (prettyPrint)
 import           Development.IDE.Graph
 import           Development.IDE.Graph.Classes
-import           Development.IDE.Types.KnownTargets           (Target(..))
+import qualified Development.IDE.Types.KnownTargets           as KT
 import           Development.IDE.Plugin.CodeAction            (newImport,
                                                                newImportToEdit)
 import           Development.IDE.Plugin.CodeAction.ExactPrint
@@ -165,9 +165,9 @@ getCompletionsLSP ide plId
 
 ----------------------------------------------------------------------------------------------------
 
-toModueNameText :: Development.IDE.Types.KnownTargets.Target -> T.Text
+toModueNameText :: KT.Target -> T.Text
 toModueNameText target = case target of
-  Development.IDE.Types.KnownTargets.TargetModule m  -> T.pack $ moduleNameString m
+  KT.TargetModule m  -> T.pack $ moduleNameString m
   _ -> T.empty
 
 extendImportCommand :: PluginCommand IdeState
