@@ -136,7 +136,7 @@ getCompletionsLSP ide plId
             binds <- fromMaybe (mempty, zeroMapping) <$> useWithStaleFast GetBindings npath
             knownTargets <- liftIO $ runAction  "Completion" ide $ useNoFile GetKnownTargets
             let localModules = maybe [] Map.keys knownTargets
-            let lModules = map toModueNameText localModules
+            let lModules = mempty{importableModules = map toModueNameText localModules}
             -- set up the exports map including both package and project-level identifiers
             packageExportsMapIO <- fmap(envPackageExports . fst) <$> useWithStaleFast GhcSession npath
             packageExportsMap <- mapM liftIO packageExportsMapIO
@@ -146,7 +146,7 @@ getCompletionsLSP ide plId
             let moduleExports = getModuleExportsMap exportsMap
                 exportsCompItems = foldMap (map (fromIdentInfo uri) . Set.toList) . Map.elems . getExportsMap $ exportsMap
                 exportsCompls = mempty{anyQualCompls = exportsCompItems}
-            let compls = (fst <$> localCompls) <> (fst <$> nonLocalCompls) <> Just exportsCompls
+            let compls = (fst <$> localCompls) <> (fst <$> nonLocalCompls) <> Just exportsCompls <> Just lModules
 
             pure (opts, fmap (,pm,binds) compls, moduleExports, lModules)
         case compls of
@@ -158,7 +158,7 @@ getCompletionsLSP ide plId
               (Just pfix', _) -> do
                 let clientCaps = clientCapabilities $ shakeExtras ide
                 config <- getCompletionsConfig plId
-                allCompletions <- liftIO $ getCompletions plId ideOpts cci' parsedMod bindMap pfix' clientCaps config moduleExports lModules
+                allCompletions <- liftIO $ getCompletions plId ideOpts cci' parsedMod bindMap pfix' clientCaps config moduleExports
                 pure $ InL (List allCompletions)
               _ -> return (InL $ List [])
           _ -> return (InL $ List [])
