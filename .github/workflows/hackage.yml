@@ -103,7 +103,7 @@ jobs:
         if: steps.get-hackage-version.outputs.exists != 'true'
         run: |
           cd $(ls -d ./incoming/${{ matrix.package }}-*)
-          cabal build --enable-tests --enable-benchmarks
+          cabal build --enable-tests --enable-benchmarks || cabal build --enable-tests --enable-benchmarks -v3
 
       - name: "Generate haddock for hackage"
         if: steps.get-hackage-version.outputs.exists != 'true'
