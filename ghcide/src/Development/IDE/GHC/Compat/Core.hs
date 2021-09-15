@@ -611,7 +611,6 @@ import           PrelNames                  hiding (Unique, printName)
 import           RdrName
 import           RnNames
 import           RnSplice
-import           SrcLoc                     (SrcSpan (UnhelpfulSpan))
 import qualified SrcLoc
 import           TcEnv
 import           TcEvidence                 hiding ((<.>))
@@ -638,8 +637,10 @@ import           Var                        (Var (varName), setTyVarUnique,
 #if MIN_VERSION_ghc(8,10,0)
 import           Coercion                   (coercionKind)
 import           Predicate
+import           SrcLoc                     (SrcSpan (UnhelpfulSpan))
 #else
-import           SrcLoc                     (RealLocated)
+import           SrcLoc                     (RealLocated,
+                                             SrcSpan (UnhelpfulSpan))
 #endif
 #endif
 

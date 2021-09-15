@@ -4,7 +4,6 @@
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE ConstraintKinds   #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE PatternSynonyms   #-}
 {-# OPTIONS -Wno-incomplete-uni-patterns -Wno-dodgy-imports #-}
 
 -- | Attempt at hiding the GHC version differences we can.
