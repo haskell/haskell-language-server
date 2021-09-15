@@ -40,9 +40,15 @@ pattern MetaprogramSourceText = SourceText "wingman-meta-program"
 
 
 pattern WingmanMetaprogram :: FastString -> HsExpr p
-pattern WingmanMetaprogram mp
-  <- HsSCC _ MetaprogramSourceText (StringLiteral NoSourceText mp)
+pattern WingmanMetaprogram mp <-
+#if __GLASGOW_HASKELL__ >= 900
+  HsPragE _ (HsPragSCC _ MetaprogramSourceText (StringLiteral NoSourceText mp))
       (L _ ( HsVar _ _))
+#else
+  HsSCC _ MetaprogramSourceText (StringLiteral NoSourceText mp)
+      (L _ ( HsVar _ _))
+#endif
+
 
 
 enableQuasiQuotes :: DynFlags -> DynFlags
@@ -72,7 +78,11 @@ metaprogramHoleName = mkVarOcc "_$metaprogram"
 
 mkMetaprogram :: SrcSpan -> FastString -> HsExpr GhcPs
 mkMetaprogram ss mp =
+#if __GLASGOW_HASKELL__ >= 900
+  HsPragE noExtField (HsPragSCC noExtField MetaprogramSourceText (StringLiteral NoSourceText mp))
+#else
   HsSCC noExtField MetaprogramSourceText (StringLiteral NoSourceText mp)
+#endif
     $ L ss
     $ HsVar noExtField
     $ L ss

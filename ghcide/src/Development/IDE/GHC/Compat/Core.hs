@@ -272,6 +272,7 @@ module Development.IDE.GHC.Compat.Core (
     -- * Role
     Role(..),
     -- * Panic
+    PlainGhcException,
     panic,
     -- * Util Module re-exports
 #if MIN_VERSION_ghc(9,0,0)
@@ -293,6 +294,7 @@ module Development.IDE.GHC.Compat.Core (
     module GHC.Core.TyCon,
     module GHC.Core.TyCo.Ppr,
     module GHC.Core.Type,
+    module GHC.Core.Unify,
     module GHC.Core.Utils,
 
     module GHC.HsToCore.Docs,
@@ -301,6 +303,11 @@ module Development.IDE.GHC.Compat.Core (
 
     module GHC.Iface.Tidy,
     module GHC.Iface.Syntax,
+
+#if MIN_VERSION_ghc(9,2,0)
+    module Language.Haskell.Syntax.Expr,
+#endif
+
     module GHC.Rename.Names,
     module GHC.Rename.Splice,
 
@@ -371,6 +378,7 @@ module Development.IDE.GHC.Compat.Core (
     module TysPrim,
     module TysWiredIn,
     module Type,
+    module Unify,
     module UniqSupply,
     module Var,
 #endif
@@ -429,6 +437,7 @@ import           GHC.Core.TyCo.Ppr
 import qualified GHC.Core.TyCo.Rep          as TyCoRep
 import           GHC.Core.TyCon
 import           GHC.Core.Type              hiding (mkInfForAllTys, mkVisFunTys)
+import           GHC.Core.Unify
 import           GHC.Core.Utils
 
 #if MIN_VERSION_ghc(9,2,0)
@@ -525,6 +534,7 @@ import           GHC.Unit.Module.ModIface   (IfaceExport)
 import           GHC.Unit.State             (ModuleOrigin (..))
 import           GHC.Utils.Error            (Severity (..))
 import           GHC.Utils.Panic            hiding (try)
+import qualified GHC.Utils.Panic.Plain      as Plain
 #else
 import qualified Avail
 import           BasicTypes                 hiding (Version)
@@ -583,7 +593,13 @@ import           NameCache
 import           NameEnv
 import           NameSet
 import           Packages
+#if MIN_VERSION_ghc(8,8,0)
 import           Panic                      hiding (try)
+import qualified PlainPanic                 as Plain
+#else
+import           Panic                      hiding (GhcException, try)
+import qualified Panic                      as Plain
+#endif
 import           Parser
 import           PatSyn
 #if MIN_VERSION_ghc(8,8,0)
@@ -614,6 +630,7 @@ import           TyCon
 import           Type                       hiding (mkVisFunTys)
 import           TysPrim
 import           TysWiredIn
+import           Unify
 import           UniqSupply
 import           Var                        (Var (varName), setTyVarUnique,
                                              setVarUnique, varType)
@@ -821,4 +838,10 @@ ml_hie_file = Module.ml_hie_file
 pattern NotBoot, IsBoot :: IsBootInterface
 pattern NotBoot = False
 pattern IsBoot = True
+#endif
+
+#if MIN_VERSION_ghc(8,8,0)
+type PlainGhcException = Plain.PlainGhcException
+#else
+type PlainGhcException = Plain.GhcException
 #endif

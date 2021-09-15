@@ -18,7 +18,6 @@ import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
 import           GHC.SourceGen (lambda)
 import           Generics.SYB (Data, everything, everywhere, listify, mkQ, mkT)
-import           Unify
 import           Wingman.StaticPlugin (pattern MetaprogramSyntax)
 import           Wingman.Types
 
