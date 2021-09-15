@@ -16,8 +16,6 @@ import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.ExactPrint
 import           Generics.SYB.GHC (mkBindListT, everywhereM')
-import           GhcPlugins (occName)
-import           System.Timeout (timeout)
 import           Wingman.AbstractLSP.Types
 import           Wingman.CaseSplit
 import           Wingman.GHC (liftMaybe, isHole, pattern AMatch, unXPat)
@@ -76,7 +74,7 @@ makeTacticInteraction cmd =
                   $ addTimeoutMessage rtr
                   $ pure
                   $ GraftEdit
-                  $ graftHole (RealSrcSpan $ unTrack pm_span) rtr
+                  $ graftHole (RealSrcSpan (unTrack pm_span) Nothing) rtr
 
 
 addTimeoutMessage :: RunTacticResults -> [ContinuationResult] -> [ContinuationResult]

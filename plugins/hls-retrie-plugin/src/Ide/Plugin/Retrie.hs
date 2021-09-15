@@ -57,28 +57,30 @@ import           Development.IDE.GHC.Compat           (GenLocated (L), GhcRn,
                                                        HscEnv, IdP, LRuleDecls,
                                                        ModSummary (ModSummary, ms_hspp_buf, ms_mod),
                                                        NHsValBindsLR (..),
+                                                       Outputable,
                                                        ParsedModule (..),
                                                        RuleDecl (HsRule),
                                                        RuleDecls (HsRules),
+                                                       SourceText (..),
                                                        SrcSpan (..),
                                                        TyClDecl (SynDecl),
                                                        TyClGroup (..), fun_id,
-                                                       mi_fixities,
-                                                       moduleNameString,
-                                                       parseModule,
-                                                       pattern IsBoot,
-                                                       pattern NotBoot,
-                                                       pattern OldRealSrcSpan,
-                                                       rds_rules, srcSpanFile)
-import           GHC.Generics                         (Generic)
-import           GhcPlugins                           (Outputable,
-                                                       SourceText (NoSourceText),
                                                        hm_iface, isQual,
                                                        isQual_maybe,
+                                                       mi_fixities,
+                                                       moduleNameString,
                                                        nameModule_maybe,
                                                        nameRdrName, occNameFS,
                                                        occNameString,
-                                                       rdrNameOcc, unpackFS)
+                                                       parseModule,
+                                                       pattern IsBoot,
+                                                       pattern NotBoot,
+                                                       pattern RealSrcSpan,
+                                                       rdrNameOcc, rds_rules,
+                                                       srcSpanFile)
+import           Development.IDE.GHC.Compat.Util      hiding (catch, try)
+import qualified GHC                                  (parseModule)
+import           GHC.Generics                         (Generic)
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Server                  (LspM,
@@ -106,7 +108,6 @@ import           Retrie.Replace                       (Change (..),
 import           Retrie.Rewrites
 import           Retrie.SYB                           (listify)
 import           Retrie.Util                          (Verbosity (Loud))
-import           StringBuffer                         (stringToStringBuffer)
 import           System.Directory                     (makeAbsolute)
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -374,7 +375,7 @@ callRetrie state session rewrites origin restrictToOriginatingFile = do
                       }
               logPriority (ideLogger state) Info $ T.pack $ "Parsing module: " <> t
               parsed <-
-                evalGhcEnv session (parseModule ms')
+                evalGhcEnv session (GHC.parseModule ms')
                   `catch` \e -> throwIO (GHCParseError nt (show @SomeException e))
               (fixities, parsed) <- fixFixities f (fixAnns parsed)
               return (fixities, parsed)
@@ -473,7 +474,7 @@ asTextEdits NoChange = []
 asTextEdits (Change reps _imports) =
   [ (filePathToUri spanLoc, edit)
     | Replacement {..} <- nubOrdOn (realSpan . replLocation) reps,
-      (OldRealSrcSpan rspan) <- [replLocation],
+      (RealSrcSpan rspan _) <- [replLocation],
       let spanLoc = unpackFS $ srcSpanFile rspan,
       let edit = TextEdit (realSrcSpanToRange rspan) (T.pack replReplacement)
   ]

@@ -109,7 +109,11 @@ import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.ProgressReporting
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Tracing
-import           Development.IDE.GHC.Compat             (NameCacheUpdater (..), upNameCache)
+import           Development.IDE.GHC.Compat             (NameCacheUpdater (..),
+                                                         upNameCache, NameCache,
+                                                         initNameCache,
+                                                         mkSplitUniqSupply,
+                                                         knownKeyNames)
 import           Development.IDE.GHC.Orphans            ()
 import           Development.IDE.Graph                  hiding (ShakeValue)
 import qualified Development.IDE.Graph                  as Shake
@@ -137,10 +141,7 @@ import           System.Time.Extra
 import           Data.IORef
 import           GHC.Fingerprint
 import           Language.LSP.Types.Capabilities
-import           NameCache
 import           OpenTelemetry.Eventlog
-import           PrelInfo
-import           UniqSupply
 
 import           Control.Exception.Extra                hiding (bracket_)
 import qualified Data.ByteString.Char8                  as BS8

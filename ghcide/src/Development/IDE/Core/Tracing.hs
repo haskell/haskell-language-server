@@ -21,7 +21,9 @@ import           Control.Monad                  (forM_, forever, unless, void,
 import           Control.Monad.Extra            (whenJust)
 import           Control.Monad.IO.Unlift
 import           Control.Seq                    (r0, seqList, seqTuple2, using)
+#if MIN_VERSION_ghc(8,8,0)
 import           Data.ByteString                (ByteString)
+#endif
 import           Data.Dynamic                   (Dynamic)
 import qualified Data.HashMap.Strict            as HMap
 import           Data.IORef                     (modifyIORef', newIORef,

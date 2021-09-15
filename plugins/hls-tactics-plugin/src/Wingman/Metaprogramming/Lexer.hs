@@ -11,7 +11,7 @@ import           Data.Foldable (asum)
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Void
-import           Name
+import           Development.IDE.GHC.Compat.Core (OccName, mkVarOcc)
 import qualified Text.Megaparsec as P
 import qualified Text.Megaparsec.Char as P
 import qualified Text.Megaparsec.Char.Lexer as L

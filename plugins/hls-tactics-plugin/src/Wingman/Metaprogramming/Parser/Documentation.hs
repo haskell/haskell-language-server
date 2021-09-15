@@ -8,7 +8,7 @@ import           Data.String (IsString)
 import           Data.Text (Text)
 import           Data.Text.Prettyprint.Doc hiding (parens)
 import           Data.Text.Prettyprint.Doc.Render.String (renderString)
-import           GhcPlugins (OccName)
+import           Development.IDE.GHC.Compat (OccName)
 import qualified Text.Megaparsec as P
 import           Wingman.Metaprogramming.Lexer (Parser, identifier, variable, parens)
 import           Wingman.Types (TacticsM)

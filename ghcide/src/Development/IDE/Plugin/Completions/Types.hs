@@ -9,11 +9,11 @@ module Development.IDE.Plugin.Completions.Types (
 import           Control.DeepSeq
 import qualified Data.Map                     as Map
 import qualified Data.Text                    as T
-import           SrcLoc
 
 import           Data.Aeson                   (FromJSON, ToJSON)
 import           Data.Text                    (Text)
 import           Development.IDE.Spans.Common
+import           Development.IDE.GHC.Compat
 import           GHC.Generics                 (Generic)
 import           Ide.Plugin.Config            (Config)
 import           Ide.Plugin.Properties

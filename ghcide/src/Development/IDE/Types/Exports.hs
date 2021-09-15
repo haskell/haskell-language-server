@@ -7,10 +7,11 @@ module Development.IDE.Types.Exports
     createExportsMap,
     createExportsMapMg,
     createExportsMapTc,
-    buildModuleExportMapFrom
-,createExportsMapHieDb,size) where
+    buildModuleExportMapFrom,
+    createExportsMapHieDb,
+    size,
+    ) where
 
-import           Avail                       (AvailInfo (..))
 import           Control.DeepSeq             (NFData (..))
 import           Control.Monad
 import           Data.Bifunctor              (Bifunctor (second))
@@ -24,12 +25,8 @@ import           Data.Text                   (Text, pack)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Orphans ()
 import           Development.IDE.GHC.Util
-import           FieldLabel                  (flSelector)
 import           GHC.Generics                (Generic)
-import           GhcPlugins                  (IfaceExport, ModGuts (..))
 import           HieDb
-import           Name
-import           TcRnTypes                   (TcGblEnv (..))
 
 
 data ExportsMap = ExportsMap
@@ -81,8 +78,12 @@ renderIEWrapped n
     occ = occName n
 
 mkIdentInfos :: Text -> AvailInfo -> [IdentInfo]
-mkIdentInfos mod (Avail n) =
+mkIdentInfos mod (AvailName n) =
     [IdentInfo (nameOccName n) (renderIEWrapped n) Nothing (isDataConName n) mod]
+mkIdentInfos mod (AvailFL fl) =
+    [IdentInfo (nameOccName n) (renderIEWrapped n) Nothing (isDataConName n) mod]
+    where
+      n = flSelector fl
 mkIdentInfos mod (AvailTC parent (n:nn) flds)
     -- Following the GHC convention that parent == n if parent is exported
     | n == parent

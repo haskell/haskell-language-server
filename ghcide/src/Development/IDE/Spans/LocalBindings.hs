@@ -20,12 +20,13 @@ import qualified Data.Set                       as S
 import           Development.IDE.GHC.Compat     (Name, RefMap, Scope (..), Type,
                                                  getBindSiteFromContext,
                                                  getScopeFromContext, identInfo,
-                                                 identType)
+                                                 identType, NameEnv, nameEnvElts,
+                                                 unitNameEnv, isSystemName,
+                                                 RealSrcSpan, realSrcSpanStart,
+                                                 realSrcSpanEnd)
+
 import           Development.IDE.GHC.Error
 import           Development.IDE.Types.Location
-import           Name                           (isSystemName)
-import           NameEnv
-import           SrcLoc
 
 ------------------------------------------------------------------------------
 -- | Turn a 'RealSrcSpan' into an 'Interval'.

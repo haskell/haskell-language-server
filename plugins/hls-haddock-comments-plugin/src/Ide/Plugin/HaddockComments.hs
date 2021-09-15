@@ -91,7 +91,9 @@ genForSig = GenComments {..}
     isFresh Ann {annsDP} = null [() | (AnnComment _, _) <- annsDP]
     collectKeys = keyFromTyVar 0
 
-#if MIN_VERSION_ghc(9,0,0)
+#if MIN_VERSION_ghc(9,2,0)
+    comment = mkComment "-- ^ " (spanAsAnchor noSrcSpan)
+#elif MIN_VERSION_ghc(9,0,0)
     comment = mkComment "-- ^ " badRealSrcSpan
 #else
     comment = mkComment "-- ^ " noSrcSpan
@@ -114,7 +116,9 @@ genForRecord = GenComments {..}
 
     collectKeys = keyFromCon
 
-#if MIN_VERSION_ghc(9,0,0)
+#if MIN_VERSION_ghc(9,2,0)
+    comment = mkComment "-- | " (spanAsAnchor noSrcSpan)
+#elif MIN_VERSION_ghc(9,0,0)
     comment = mkComment "-- | " badRealSrcSpan
 #else
     comment = mkComment "-- | " noSrcSpan
@@ -140,7 +144,7 @@ toAction title uri edit = CodeAction {..}
 
 toRange :: SrcSpan -> Maybe Range
 toRange src
-  | (OldRealSrcSpan s) <- src,
+  | (RealSrcSpan s _) <- src,
     range' <- realSrcSpanToRange s =
     Just range'
   | otherwise = Nothing

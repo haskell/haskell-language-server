@@ -29,6 +29,9 @@ import           Data.Functor                         ((<&>))
 import           Data.Functor.Identity                (Identity (Identity))
 import           Data.Kind                            (Type)
 import           Data.String                          (fromString)
+import           Development.IDE.GHC.Compat           (RealSrcSpan,
+                                                       srcSpanFile)
+import           Development.IDE.GHC.Compat.Util      (unpackFS)
 import           Development.IDE                      (Action, IdeRule,
                                                        NormalizedFilePath,
                                                        Range,
@@ -36,8 +39,6 @@ import           Development.IDE                      (Action, IdeRule,
                                                        realSrcSpanToRange)
 import qualified Development.IDE.Core.PositionMapping as P
 import qualified Development.IDE.Core.Shake           as IDE
-import qualified FastString                           as FS
-import           SrcLoc
 
 
 ------------------------------------------------------------------------------
@@ -113,7 +114,7 @@ instance MapAge Range where
 
 instance MapAge RealSrcSpan where
   mapAgeFrom =
-    invMapAge (\fs -> rangeToRealSrcSpan (fromString $ FS.unpackFS fs))
+    invMapAge (\fs -> rangeToRealSrcSpan (fromString $ unpackFS fs))
               (srcSpanFile &&& realSrcSpanToRange)
       .  mapAgeFrom
 

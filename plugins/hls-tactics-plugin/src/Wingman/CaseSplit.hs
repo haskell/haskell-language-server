@@ -12,7 +12,6 @@ import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
 import           GHC.Exts (IsString (fromString))
 import           GHC.SourceGen (funBindsWithFixity, match, wildP)
-import           OccName
 import           Wingman.GHC
 import           Wingman.Types
 
