@@ -8,7 +8,15 @@ extension](https://github.com/alanz/vscode-hie-server) to provide automatic
 installation for users on VS Code, but they can also be installed manually
 when added to the path.
 
+Starting with 0.8.0.0 haskell-language-server and all its related packages
+(core libraries like ghcide, plugins and hls itself) is being released in
+[hackage](https://hackage.haskell.org/package/haskell-language-server) as well.
+This allow cabal users to install it with `cabal install haskell-language-server`
+and it is being used in nix environments.
+
 ## Minimal checklist
+
+### github release
 
 * [ ] generate the list of pull requests finished since the last release using the [haskell script](https://github.com/haskell/haskell-language-server/blob/master/GenChangelogs.hs) in the project root.
   Nix users should run command `gen-hls-changelogs` (a wrapper of the script) in nix-shell instead.
@@ -19,7 +27,14 @@ when added to the path.
 * [ ] check uploaded binaries (see windows note below) and the release description (usually the changelog entry) and uncheck the prerelease box
 * [ ] make public the release in the usual social channels: irc, twitter, reddit, discord, discourse, mailing lists, etc (not required but useful to spread the word :slightly_smiling_face:)
 
-## Making a new release of haskell-language-server
+### hackage release
+
+* [ ] bump up package versions following the [pvp specification](https://pvp.haskell.org/) if they are not already updated
+* [ ] create ${version}-hackage branch to trigger the hackage github workflow which will upload all changed packages to hackage as candidates
+* [ ] check manually candidates in hackage
+* [ ] publish them definitely
+
+## Making a new release of haskell-language-server in github
 
 Go to the [GitHub releases
 page](https://github.com/haskell/haskell-language-server/releases) for
@@ -43,7 +58,7 @@ most recent GHC version.
 
 ### ghcup
 It also creates a `haskell-language-server-${os}-${hlsVersion}.tar.gz` tarball with
-the binaries for *all* supported ghc versions, to help downstream publishers in 
+the binaries for *all* supported ghc versions, to help downstream publishers in
 the distribution of the release. The most prominent publisher using them is `ghcup`.
 The `tar` job in the workflow file automates the creation of this.
 
@@ -100,7 +115,7 @@ and add it to the existing release.
 
 ### Updating release artifacts
 
-*IMPORTANT: release artifacts must not be modified, cause it would break 
+*IMPORTANT: release artifacts must not be modified, cause it would break
 its secure distribution using their hashes. We should only add new ones.*
 
 To manually upload a new binary we should:
@@ -108,7 +123,7 @@ To manually upload a new binary we should:
 - Add the new tar/zip following the name conventions of existing ones
   - `haskell-language-server-${os}-${ghcVersion}.gz` for `Linux` and `macOS` and `haskell-language-server-Windows-${ghcVersion}.exe.zip` for `Windows`
   - the binary inside the gz file is named `haskell-language-server-${ghcVersion}` (with the `.exe` extension for `Windows`). Note that the binary name does not contain the `${os}` part.
-- Add the executable to the existing tar `haskell-language-server-${os}-${ghcVersion}.tar.gz` *locally* and upload it under a new name `haskell-language-server-${os}-${ghcVersion}-rev${n}.tar.gz` following the same schema for the binary as the previous one. 
+- Add the executable to the existing tar `haskell-language-server-${os}-${ghcVersion}.tar.gz` *locally* and upload it under a new name `haskell-language-server-${os}-${ghcVersion}-rev${n}.tar.gz` following the same schema for the binary as the previous one.
   - `-rev${n}` is the next revision number of the tarball, starting at 1.
   - we should contact users of the tarball (particularly ghcup) to notify the change
 
@@ -118,3 +133,17 @@ is not included by default in the GitHub Actions build matrix. Instead
 they need to be built and uploaded manually. See [this
 PR](https://github.com/haskell/haskell-language-server/issues/276) for
 more details
+
+## Hackage release workflow
+
+We aim to do hackage releases following the github ones described above.
+To help in that job we have added a [github workflow](https://github.com/haskell/haskell-language-server/blob/master/.github/workflows/hackage.yml)
+
+That script checks, generates the tar.gz files, unpacks and builds them in isolation against hackage head
+if the package version in the branch is different from hackage.
+If the package in the branch has the same version as the released one,
+it will check the relevant files have not changed and will throw an error
+otherwise.
+
+The script will upload the tarballs as candidates, maintainers will have
+to check and publish them definitely.

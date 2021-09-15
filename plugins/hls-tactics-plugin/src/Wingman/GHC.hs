@@ -359,13 +359,18 @@ type PatCompat pass = LPat pass
 
 ------------------------------------------------------------------------------
 -- | Should make sure it's a fun bind
-pattern TopLevelRHS :: OccName -> [PatCompat GhcTc] -> LHsExpr GhcTc -> Match GhcTc (LHsExpr GhcTc)
-pattern TopLevelRHS name ps body <-
+pattern TopLevelRHS
+    :: OccName
+    -> [PatCompat GhcTc]
+    -> LHsExpr GhcTc
+    -> HsLocalBindsLR GhcTc GhcTc
+    -> Match GhcTc (LHsExpr GhcTc)
+pattern TopLevelRHS name ps body where_binds <-
   Match _
     (FunRhs (L _ (occName -> name)) _ _)
     ps
     (GRHSs _
-      [L _ (GRHS _ [] body)] _)
+      [L _ (GRHS _ [] body)] (L _ where_binds))
 
 
 dataConExTys :: DataCon -> [TyCoVar]

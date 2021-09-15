@@ -71,13 +71,11 @@
           tweaks = hself: hsuper:
             with haskell.lib; {
 
-              ghc-api-compat = hself.callCabal2nix "ghc-api-compat"
-                (pkgs.fetchFromGitHub {
-                  owner = "hsyl20";
-                  repo = "ghc-api-compat";
-                  rev = "8fee87eac97a538dbe81ff1ab18cff10f2f9fa15";
-                  sha256 = "byehvdxQxhNk5ZQUXeFHjAZpAze4Ct9261ro4c5acZk=";
-                }) { };
+              ghc-api-compat = hself.callHackageDirect {
+                pkg = "ghc-api-compat";
+                ver = "8.10.7";
+                sha256 = "g9/InDeQfiXCB9SK8mpl/8B5QEEobj9uqo4xe//telw=";
+              } {};
 
               lsp = hself.lsp_1_2_0_1;
 
