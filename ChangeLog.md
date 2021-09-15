@@ -1,5 +1,160 @@
 # Changelog for haskell-language-server
 
+## 1.4.0
+
+After a month of vacation a new hls release has arrived:
+
+- Support for ghc 8.10.6 and 8.10.7
+- The ormolu formatter plugin works with ghc 9.0.1
+- *Call hierarchy plugin has been improved* thanks to @July541:
+  - Add call from type signature
+  - Add call from a function pattern
+  - Go to typeclass instance directly
+- As usual @isovector has been busy improving wingman plugin:
+  - New "intro and destruct" code action
+  - Streaming tactic solutions: when Wingman times outs, it can still pick the best solution it found
+  - Let-bindings in metattactics: allows you to bind variables in tactic metaprogram
+  - Several bug fixes
+- We have new docs thanks to @michaelpj: <https://haskell-language-server.readthedocs.io>
+- Now you can ask the executable for included plugins with: `haskell-language-server --list-plugins`
+- There are several bug fixes and features you can found in the merged pull requests list
+
+### DEPRECATION NOTICE
+
+- *After* this release we will drop support for ghc versions 8.6.4, 8.10.3 and 8.10.4
+  - The advise is upgrade ghc to the last minor version: 8.6.5 or 8.10.7
+  - Take a look to [this issue](https://github.com/haskell/haskell-language-server/issues/2168) for more details
+
+### Pull requests merged for 1.4.0
+
+- Update flake to fix nix builds
+([#2188](https://github.com/haskell/haskell-language-server/pull/2188)) by @jneira
+- Completions for project identifiers
+([#2187](https://github.com/haskell/haskell-language-server/pull/2187)) by @pepeiborra
+- Wingman: Don't clobber where clauses
+([#2184](https://github.com/haskell/haskell-language-server/pull/2184)) by @isovector
+- Add rerun workflow
+([#2181](https://github.com/haskell/haskell-language-server/pull/2181)) by @jneira
+- Bump up shake-bench version
+([#2178](https://github.com/haskell/haskell-language-server/pull/2178)) by @jneira
+- Fix hackage release
+([#2177](https://github.com/haskell/haskell-language-server/pull/2177)) by @jneira
+- Use maxBound of uinteger not Int.
+([#2169](https://github.com/haskell/haskell-language-server/pull/2169)) by @pranaysashank
+- enable the PR gitpod badge and drop the label
+([#2167](https://github.com/haskell/haskell-language-server/pull/2167)) by @pepeiborra
+- Plugin in config files
+([#2166](https://github.com/haskell/haskell-language-server/pull/2166)) by @jneira
+- Complete contributing guide
+([#2165](https://github.com/haskell/haskell-language-server/pull/2165)) by @jneira
+- Wingman: Add "New Unification Variable" helper
+([#2164](https://github.com/haskell/haskell-language-server/pull/2164)) by @isovector
+- Semiautomatic hackage releases
+([#2163](https://github.com/haskell/haskell-language-server/pull/2163)) by @jneira
+- Improve incoming call for typeclass and type family instance
+([#2162](https://github.com/haskell/haskell-language-server/pull/2162)) by @July541
+- Add a Gitpod descriptor
+([#2161](https://github.com/haskell/haskell-language-server/pull/2161)) by @pepeiborra
+- Wingman: Let-bindings in metatactics
+([#2160](https://github.com/haskell/haskell-language-server/pull/2160)) by @isovector
+- Update nix flake
+([#2159](https://github.com/haskell/haskell-language-server/pull/2159)) by @lf-
+- Add ghc-8.10.7 to release build
+([#2158](https://github.com/haskell/haskell-language-server/pull/2158)) by @jneira
+- Reduce duplication in pragma tests
+([#2157](https://github.com/haskell/haskell-language-server/pull/2157)) by @nini-faroux
+- Remove ghc-api source snapshot
+([#2156](https://github.com/haskell/haskell-language-server/pull/2156)) by @pepeiborra
+- Create a citation
+([#2155](https://github.com/haskell/haskell-language-server/pull/2155)) by @ndmitchell
+- Disable window job for ghc-8.10.2
+([#2154](https://github.com/haskell/haskell-language-server/pull/2154)) by @jneira
+- Auto complete definitions within imports
+([#2152](https://github.com/haskell/haskell-language-server/pull/2152)) by @alexnaspo
+- Filter code actions based on prefix, not equality
+([#2146](https://github.com/haskell/haskell-language-server/pull/2146)) by @michaelpj
+- perform a GC before find resolution
+([#2144](https://github.com/haskell/haskell-language-server/pull/2144)) by @pepeiborra
+- case sensitive language pragmas fix
+([#2142](https://github.com/haskell/haskell-language-server/pull/2142)) by @alexnaspo
+- Add ghc-8.10.7 support
+([#2141](https://github.com/haskell/haskell-language-server/pull/2141)) by @jneira
+- List all available plugins
+([#2139](https://github.com/haskell/haskell-language-server/pull/2139)) by @July541
+- update LTS for GHC 8.10.6
+([#2138](https://github.com/haskell/haskell-language-server/pull/2138)) by @peterbecich
+- fix GitHub Actions badges
+([#2135](https://github.com/haskell/haskell-language-server/pull/2135)) by @peterbecich
+- Move pragmas completion to pragmas plugin
+([#2134](https://github.com/haskell/haskell-language-server/pull/2134)) by @alexnaspo
+- Update ghc-9.0.1 support
+([#2131](https://github.com/haskell/haskell-language-server/pull/2131)) by @jneira
+- Support call hierarchy on pattern matching
+([#2129](https://github.com/haskell/haskell-language-server/pull/2129)) by @July541
+- GHCIDE_BUILD_PROFILING env var
+([#2125](https://github.com/haskell/haskell-language-server/pull/2125)) by @pepeiborra
+- [ghcide] support -d cli switch
+([#2124](https://github.com/haskell/haskell-language-server/pull/2124)) by @pepeiborra
+- don't crash when an unused operator import ends in `.`
+([#2123](https://github.com/haskell/haskell-language-server/pull/2123)) by @tscholak
+- [benchmarks] Fix edit and "after edit" experiments
+([#2122](https://github.com/haskell/haskell-language-server/pull/2122)) by @pepeiborra
+- Add fix for correct placement of import (#2100)
+([#2116](https://github.com/haskell/haskell-language-server/pull/2116)) by @nini-faroux
+- Support for ghc-8.10.6
+([#2109](https://github.com/haskell/haskell-language-server/pull/2109)) by @jneira
+- New rename plugin implementation
+([#2108](https://github.com/haskell/haskell-language-server/pull/2108)) by @OliverMadine
+- [ghcide-bench] Support extra args in examples
+([#2107](https://github.com/haskell/haskell-language-server/pull/2107)) by @pepeiborra
+- Fix filepath identity in cradle dependencies when using reactive change tracking
+([#2106](https://github.com/haskell/haskell-language-server/pull/2106)) by @pepeiborra
+- [ghcide-bench] preserve threading details in eventlogs
+([#2105](https://github.com/haskell/haskell-language-server/pull/2105)) by @pepeiborra
+- [ghcide-bench] fix edit experiment
+([#2104](https://github.com/haskell/haskell-language-server/pull/2104)) by @pepeiborra
+([#2102](https://github.com/haskell/haskell-language-server/pull/2102)) by @isovector
+- reduce allow-newer entries for shake-bench
+([#2101](https://github.com/haskell/haskell-language-server/pull/2101)) by @pepeiborra
+- Wingman: Don't count it as using a term if you only destruct it
+([#2099](https://github.com/haskell/haskell-language-server/pull/2099)) by @isovector
+- Clean cabal project
+([#2097](https://github.com/haskell/haskell-language-server/pull/2097)) by @jneira
+- Wingman: New AbstractLSP interface
+([#2094](https://github.com/haskell/haskell-language-server/pull/2094)) by @isovector
+- Add badge with github release
+([#2093](https://github.com/haskell/haskell-language-server/pull/2093)) by @jneira
+- Add a bit more prose and some links to the README
+([#2090](https://github.com/haskell/haskell-language-server/pull/2090)) by @michaelpj
+- Enable tests for ormolu plugin
+([#2086](https://github.com/haskell/haskell-language-server/pull/2086)) by @felixonmars
+- Allow ormolu 0.2 and fix compatibility with GHC 9
+([#2084](https://github.com/haskell/haskell-language-server/pull/2084)) by @felixonmars
+- Add initial sphinx doc site for RTD
+([#2083](https://github.com/haskell/haskell-language-server/pull/2083)) by @michaelpj
+- Amend fix for correct placement of file header pragmas (#1958)
+([#2078](https://github.com/haskell/haskell-language-server/pull/2078)) by @nini-faroux
+- Wingman: "Intro and destruct" code action
+([#2077](https://github.com/haskell/haskell-language-server/pull/2077)) by @isovector
+- Support call hierarchy on type signature & add plugin to generic config  & docs
+([#2072](https://github.com/haskell/haskell-language-server/pull/2072)) by @July541
+- Update nix flake
+([#2065](https://github.com/haskell/haskell-language-server/pull/2065)) by @berberman
+- Include sponsorship section
+([#2063](https://github.com/haskell/haskell-language-server/pull/2063)) by @jneira
+- Add more communication channels
+([#2062](https://github.com/haskell/haskell-language-server/pull/2062)) by @jneira
+- Don't suggest disabling type errors
+([#2061](https://github.com/haskell/haskell-language-server/pull/2061)) by @anka-213
+- Build with lsp 1.2.0.1
+([#2059](https://github.com/haskell/haskell-language-server/pull/2059)) by @pepeiborra
+- Remove HIE_CACHE from circleci cache key
+([#2050](https://github.com/haskell/haskell-language-server/pull/2050)) by @jneira
+- [#1958] Fix placement of language pragmas
+([#2043](https://github.com/haskell/haskell-language-server/pull/2043)) by @nini-faroux
+- [#2005] Fix Formatting When Brittany Returns Warnings
+([#2036](https://github.com/haskell/haskell-language-server/pull/2036)) by @prikhi
+
 ## 1.3.0
 
 2021 July release of HLS arrives! This release includes binaries for GHC 9.0.1
@@ -23,7 +178,7 @@ and some new interesting features. Here is the brief summary of changes:
   - Wingman now gives a warning if it ran out of gas during "attempt to fill hole".
   - Metaprogramming for Wingman has been improved with symbolic-name support and the `pointwise` combinator.
   - An option to enable/disable Wingman's proof state styling is added.
-  - Hole fit suggestions are now disabled for performance reasons when using Wingman. 
+  - Hole fit suggestions are now disabled for performance reasons when using Wingman.
 - Hovering on a name displays the package where the name is defined, contributed by @berberman.
   ![hover](https://user-images.githubusercontent.com/12473268/127550516-acc1f1b4-bad7-44fd-99a0-a174ce9ac909.gif)
 
@@ -160,15 +315,15 @@ We have finally released a new version of Haskell Language Server!
 Thanks for all contributors, many bugs has been fixed, and many features has landed.
 Here are the summary of changes:
 
-- Basic support for GHC 9.0.1 is added.  
+- Basic support for GHC 9.0.1 is added.
   It does not support all plugins yet, but core GHCIDE features will work. For the detailed information that which plugins work, please refer [this list](https://github.com/haskell/haskell-language-server/issues/297#issuecomment-855522891).
-- Support for GHC 8.10.5 is added.  
+- Support for GHC 8.10.5 is added.
   Note that macOS version is unfortunately not included in this release because of [a GHC issue with `network` package](https://gitlab.haskell.org/ghc/ghc/-/issues/19968).
-- HLS wrapper and GHCIDE session loader uses the same logic with implicit-hie.  
+- HLS wrapper and GHCIDE session loader uses the same logic with implicit-hie.
   This fixes [a build issue](https://github.com/haskell/haskell-language-server/issues/1782) of a stack project with implicit `hie.yaml` .
 - Wingman plugin has added numerous features and fixed many bugs:
-  - It now supports tactic metaprogramming!  
-    For list of commands, see [this document](https://github.com/haskell/haskell-language-server/blob/master/plugins/hls-tactics-plugin/COMMANDS.md#wingman-metaprogram-command-reference).  
+  - It now supports tactic metaprogramming!
+    For list of commands, see [this document](https://github.com/haskell/haskell-language-server/blob/master/plugins/hls-tactics-plugin/COMMANDS.md#wingman-metaprogram-command-reference).
     ![https://github.com/haskell/haskell-language-server/blob/master/plugins/hls-tactics-plugin/COMMANDS.md#wingman-metaprogram-command-reference](https://user-images.githubusercontent.com/307223/118190278-bdf24f80-b3f7-11eb-8838-b08a2582d7f1.gif)
   - "Refine hole" and "Split all function arguments" code actions are publicly opened.
   - "Empty case split" code lens is added.
