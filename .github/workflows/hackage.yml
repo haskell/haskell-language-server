@@ -34,6 +34,9 @@ jobs:
           ghc-version: ${{ matrix.ghc }}
           cabal-version: '3.4'
 
+      - name: "Set ghc with ghcup to workaround https://github.com/haskell/actions/issues/73"
+        run: ghcup install ghc ${{ matrix.ghc }} --set
+
       - name: Cache Cabal
         uses: actions/cache@v2
         env:
