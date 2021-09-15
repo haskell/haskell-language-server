@@ -14,7 +14,6 @@ module Wingman.Types
   , Span
   ) where
 
-import           ConLike (ConLike)
 import           Control.Lens hiding (Context)
 import           Control.Monad.Reader
 import           Control.Monad.State
@@ -33,23 +32,17 @@ import           Data.Tree
 import           Development.IDE (Range)
 import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.Compat hiding (Node)
+import qualified Development.IDE.GHC.Compat.Util as Util
 import           Development.IDE.GHC.Orphans ()
-import           FamInstEnv (FamInstEnvs)
 import           GHC.Exts (fromString)
 import           GHC.Generics
 import           GHC.SourceGen (var)
-import           GhcPlugins (GlobalRdrElt, mkRdrUnqual)
-import           InstEnv (InstEnvs(..))
-import           OccName
 import           Refinery.ProofState
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal (TacticT(TacticT), RuleT (RuleT))
 import           System.IO.Unsafe (unsafePerformIO)
-import           Type (TCvSubst, Var, eqType, nonDetCmpType, emptyTCvSubst)
-import           UniqSupply (takeUniqFromSupply, mkSplitUniqSupply, UniqSupply)
-import           Unique (nonDetCmpUnique, Uniquable, getUnique, Unique, mkUnique)
 import           Wingman.Debug
-import Data.IORef
+import           Data.IORef
 
 
 ------------------------------------------------------------------------------
@@ -199,7 +192,7 @@ defaultTacticState =
 
 ------------------------------------------------------------------------------
 -- | Generate a new 'Unique'
-freshUnique :: MonadState TacticState m => m Unique
+freshUnique :: MonadState TacticState m => m Util.Unique
 freshUnique = do
   (uniq, supply) <- gets $ takeUniqFromSupply . ts_unique_gen
   modify' $! field @"ts_unique_gen" .~ supply
@@ -269,11 +262,11 @@ newtype Uniquely a = Uniquely { getViaUnique :: a }
   deriving Show via a
   deriving stock (Data, Typeable)
 
-instance Uniquable a => Eq (Uniquely a) where
-  (==) = (==) `on` getUnique . getViaUnique
+instance Util.Uniquable a => Eq (Uniquely a) where
+  (==) = (==) `on` Util.getUnique . getViaUnique
 
-instance Uniquable a => Ord (Uniquely a) where
-  compare = nonDetCmpUnique `on` getUnique . getViaUnique
+instance Util.Uniquable a => Ord (Uniquely a) where
+  compare = Util.nonDetCmpUnique `on` Util.getUnique . getViaUnique
 
 
 -- NOTE(sandy): The usage of list here is mostly for convenience, but if it's
@@ -349,7 +342,7 @@ instance MonadReader r m => MonadReader r (RuleT jdg ext err s m) where
   local f (RuleT m) = RuleT $ Effect $ local f $ pure m
 
 mkMetaHoleName :: Int -> RdrName
-mkMetaHoleName u = mkRdrUnqual $ mkVarOcc $ "_" <> show (mkUnique 'w' u)
+mkMetaHoleName u = mkRdrUnqual $ mkVarOcc $ "_" <> show (Util.mkUnique 'w' u)
 
 instance MetaSubst Int (Synthesized (LHsExpr GhcPs)) where
   -- TODO(sandy): This join is to combine the synthesizeds

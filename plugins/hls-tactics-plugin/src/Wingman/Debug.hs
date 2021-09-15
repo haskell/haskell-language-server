@@ -17,18 +17,8 @@ module Wingman.Debug
 import           Control.DeepSeq
 import           Control.Exception
 import           Debug.Trace
-import           DynFlags          (unsafeGlobalDynFlags)
-import           Outputable        hiding ((<>))
+import           Development.IDE.GHC.Compat (PlainGhcException, Outputable(..), SDoc, showSDocUnsafe)
 import           System.IO.Unsafe  (unsafePerformIO)
-
-#if __GLASGOW_HASKELL__ >= 808
-import           PlainPanic        (PlainGhcException)
-type GHC_EXCEPTION = PlainGhcException
-#else
-import           Panic             (GhcException)
-type GHC_EXCEPTION = GhcException
-#endif
-
 
 ------------------------------------------------------------------------------
 -- | Print something
@@ -38,10 +28,10 @@ unsafeRender = unsafeRender' . ppr
 
 unsafeRender' :: SDoc -> String
 unsafeRender' sdoc = unsafePerformIO $ do
-  let z = showSDoc unsafeGlobalDynFlags sdoc
+  let z = showSDocUnsafe sdoc
   -- We might not have unsafeGlobalDynFlags (like during testing), in which
   -- case GHC panics. Instead of crashing, let's just fail to print.
-  !res <- try @GHC_EXCEPTION $ evaluate $ deepseq z z
+  !res <- try @PlainGhcException $ evaluate $ deepseq z z
   pure $ either (const "<unsafeRender'>") id res
 {-# NOINLINE unsafeRender' #-}
 

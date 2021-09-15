@@ -58,6 +58,9 @@ module Development.IDE.Core.Rules(
     typeCheckRuleDefinition,
     ) where
 
+#if !MIN_VERSION_ghc(8,8,0)
+import           Control.Applicative                          (liftA2)
+#endif
 import           Control.Concurrent.Async                     (concurrently)
 import           Control.Concurrent.Strict
 import           Control.Exception.Safe
@@ -103,12 +106,14 @@ import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
 import           Development.IDE.Core.Shake
-import           Development.IDE.GHC.Compat                   hiding
-                                                              (TargetFile,
-                                                               TargetModule,
-                                                               parseModule,
-                                                               typecheckModule,
-                                                               writeHieFile)
+import           Development.IDE.GHC.Compat.Env
+import           Development.IDE.GHC.Compat.Core              hiding
+                                                              (parseModule,
+                                                               TargetId(..),
+                                                               loadInterface,
+                                                               Var)
+import qualified Development.IDE.GHC.Compat                   as Compat
+import qualified Development.IDE.GHC.Compat.Util              as Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.GHC.Util                     hiding
@@ -125,23 +130,16 @@ import           Development.IDE.Types.HscEnvEq
 import           Development.IDE.Types.Location
 import qualified Development.IDE.Types.Logger                 as L
 import           Development.IDE.Types.Options
-import           Fingerprint
 import           GHC.Generics                                 (Generic)
 import           GHC.IO.Encoding
 import qualified GHC.LanguageExtensions                       as LangExt
 import qualified HieDb
-import           HscTypes                                     hiding
-                                                              (TargetFile,
-                                                               TargetModule)
 import           Ide.Plugin.Config
 import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.Types                           (SMethod (SCustomMethod))
 import           Language.LSP.VFS
-import           Module
 import           System.Directory                             (canonicalizePath, makeAbsolute)
-import           TcRnMonad                                    (tcg_dependent_files)
 
-import           Control.Applicative
 import           Data.Default                                 (def)
 import           Ide.Plugin.Properties                        (HasProperty,
                                                                KeyNameProxy,
@@ -343,7 +341,7 @@ getLocatedImportsRule =
                 | otherwise
                 = return Nothing
         (diags, imports') <- fmap unzip $ forM imports $ \(isSource, (mbPkgName, modName)) -> do
-            diagOrImp <- locateModule dflags import_dirs (optExtensions opt) getTargetFor modName mbPkgName isSource
+            diagOrImp <- locateModule (hscSetFlags dflags env) import_dirs (optExtensions opt) getTargetFor modName mbPkgName isSource
             case diagOrImp of
                 Left diags              -> pure (diags, Just (modName, Nothing))
                 Right (FileImport path) -> pure ([], Just (modName, Just path))
@@ -503,8 +501,8 @@ getDependenciesRule =
         let allFiles = reachableModules depInfo
         _ <- uses_ ReportImportCycles allFiles
         opts <- getIdeOptions
-        let mbFingerprints = map (fingerprintString . fromNormalizedFilePath) allFiles <$ optShakeFiles opts
-        return (fingerprintToBS . fingerprintFingerprints <$> mbFingerprints, transitiveDeps depInfo file)
+        let mbFingerprints = map (Util.fingerprintString . fromNormalizedFilePath) allFiles <$ optShakeFiles opts
+        return (fingerprintToBS . Util.fingerprintFingerprints <$> mbFingerprints, transitiveDeps depInfo file)
 
 getHieAstsRule :: Rules ()
 getHieAstsRule =
@@ -523,9 +521,9 @@ persistentHieFileRule = addPersistentRule GetHieAst $ \file -> runMaybeT $ do
     case mvf of
       Nothing -> (,Nothing) . T.decode encoding <$> BS.readFile (fromNormalizedFilePath file)
       Just vf -> pure (Rope.toText $ _text vf, Just $ _lsp_version vf)
-  let refmap = generateReferencesMap . getAsts . hie_asts $ res
-      del = deltaFromDiff (T.decode encoding $ hie_hs_src res) currentSource
-  pure (HAR (hie_module res) (hie_asts res) refmap mempty (HieFromDisk res),del,ver)
+  let refmap = Compat.generateReferencesMap . Compat.getAsts . Compat.hie_asts $ res
+      del = deltaFromDiff (T.decode encoding $ Compat.hie_hs_src res) currentSource
+  pure (HAR (Compat.hie_module res) (Compat.hie_asts res) refmap mempty (HieFromDisk res),del,ver)
 
 getHieAstRuleDefinition :: NormalizedFilePath -> HscEnv -> TcModuleResult -> Action (IdeResult HieAstResult)
 getHieAstRuleDefinition f hsc tmr = do
@@ -546,8 +544,8 @@ getHieAstRuleDefinition f hsc tmr = do
           liftIO $ writeAndIndexHieFile hsc se msum f exports asts source
     _ -> pure []
 
-  let refmap = generateReferencesMap . getAsts <$> masts
-      typemap = AtPoint.computeTypeReferences . getAsts <$> masts
+  let refmap = Compat.generateReferencesMap . Compat.getAsts <$> masts
+      typemap = AtPoint.computeTypeReferences . Compat.getAsts <$> masts
   pure (diags <> diagsWrite, HAR (ms_mod $ tmrModSummary tmr) <$> masts <*> refmap <*> typemap <*> pure HieFresh)
 
 getImportMapRule :: Rules ()
@@ -584,7 +582,7 @@ getDocMapRule =
 persistentDocMapRule :: Rules ()
 persistentDocMapRule = addPersistentRule GetDocMap $ \_ -> pure $ Just (DKMap mempty mempty, idDelta, Nothing)
 
-readHieFileForSrcFromDisk :: NormalizedFilePath -> MaybeT IdeAction HieFile
+readHieFileForSrcFromDisk :: NormalizedFilePath -> MaybeT IdeAction Compat.HieFile
 readHieFileForSrcFromDisk file = do
   db <- asks hiedb
   log <- asks $ L.logDebug . logger
@@ -593,7 +591,7 @@ readHieFileForSrcFromDisk file = do
   liftIO $ log $ "LOADING HIE FILE :" <> T.pack (show file)
   exceptToMaybeT $ readHieFileFromDisk hie_loc
 
-readHieFileFromDisk :: FilePath -> ExceptT SomeException IdeAction HieFile
+readHieFileFromDisk :: FilePath -> ExceptT SomeException IdeAction Compat.HieFile
 readHieFileFromDisk hie_loc = do
   nc <- asks ideNc
   log <- asks $ L.logDebug . logger
@@ -754,8 +752,8 @@ getModIfaceFromDiskAndIndexRule =
 
   -- GetModIfaceFromDisk should have written a `.hie` file, must check if it matches version in db
   let ms = hirModSummary x
-      hie_loc = ml_hie_file $ ms_location ms
-  hash <- liftIO $ getFileHash hie_loc
+      hie_loc = Compat.ml_hie_file $ ms_location ms
+  hash <- liftIO $ Util.getFileHash hie_loc
   mrow <- liftIO $ HieDb.lookupHieFileFromSource hiedb (fromNormalizedFilePath f)
   hie_loc' <- liftIO $ traverse (canonicalizePath . HieDb.hieModuleHieFile) mrow
   case mrow of
@@ -785,7 +783,7 @@ isHiFileStableRule :: Rules ()
 isHiFileStableRule = defineEarlyCutoff $ RuleNoDiagnostics $ \IsHiFileStable f -> do
     ms <- msrModSummary <$> use_ GetModSummaryWithoutTimestamps f
     let hiFile = toNormalizedFilePath'
-                $ ml_hi_file $ ms_location ms
+                $ Compat.ml_hi_file $ ms_location ms
     mbHiVersion <- use  GetModificationTime_{missingFileDiagnostics=False} hiFile
     modVersion  <- use_ GetModificationTime f
     sourceModified <- case mbHiVersion of
@@ -811,7 +809,7 @@ getModSummaryRule = do
     defineEarlyCutoff $ Rule $ \GetModSummary f -> do
         session' <- hscEnv <$> use_ GhcSession f
         modify_dflags <- getModifyDynFlags dynFlagsModifyGlobal
-        let session = session' { hsc_dflags = modify_dflags $ hsc_dflags session' }
+        let session = hscSetFlags (modify_dflags $ hsc_dflags session') session'
         (modTime, mFileContent) <- getFileContents f
         let fp = fromNormalizedFilePath f
         modS <- liftIO $ runExceptT $
@@ -820,7 +818,7 @@ getModSummaryRule = do
             Right res -> do
                 bufFingerPrint <- liftIO $
                     fingerprintFromStringBuffer $ fromJust $ ms_hspp_buf $ msrModSummary res
-                let fingerPrint = fingerprintFingerprints
+                let fingerPrint = Util.fingerprintFingerprints
                         [ msrFingerprint res, bufFingerPrint ]
                 return ( Just (fingerprintToBS fingerPrint) , ([], Just res))
             Left diags -> return (Nothing, (diags, Nothing))
@@ -1047,7 +1045,7 @@ instance IsIdeGlobal CompiledLinkables
 writeHiFileAction :: HscEnv -> HiFileResult -> Action [FileDiagnostic]
 writeHiFileAction hsc hiFile = do
     extras <- getShakeExtras
-    let targetPath = ml_hi_file $ ms_location $ hirModSummary hiFile
+    let targetPath = Compat.ml_hi_file $ ms_location $ hirModSummary hiFile
     liftIO $ do
         resetInterfaceStore extras $ toNormalizedFilePath' targetPath
         writeHiFile hsc hiFile

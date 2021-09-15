@@ -26,27 +26,17 @@ import           Data.Maybe                               (fromMaybe, isJust,
 import qualified Data.Text                                as T
 import qualified Text.Fuzzy                               as Fuzzy
 
-import           HscTypes
-import           Name
-import           RdrName
-import           Type
-#if MIN_VERSION_ghc(8,10,0)
-import           Coercion
-import           Pair
-import           Predicate                                (isDictTy)
-#endif
-
-import           ConLike
 import           Control.Monad
 import           Data.Aeson                               (ToJSON (toJSON))
 import           Data.Either                              (fromRight)
 import           Data.Functor
 import qualified Data.HashMap.Strict                      as HM
-import qualified Data.Set                                 as Set
 import qualified Data.HashSet                             as HashSet
+import qualified Data.Set                                 as Set
 import           Development.IDE.Core.Compile
 import           Development.IDE.Core.PositionMapping
-import           Development.IDE.GHC.Compat               as GHC
+import           Development.IDE.GHC.Compat               as GHC hiding (ppr)
+import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Util
 import           Development.IDE.Plugin.Completions.Types
@@ -56,15 +46,12 @@ import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.HscEnvEq
 import           Development.IDE.Types.Options
-import           GhcPlugins                               (flLabel, unpackFS)
 import           Ide.PluginUtils                          (mkLspCommand)
 import           Ide.Types                                (CommandId (..),
                                                            PluginId)
 import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities
 import qualified Language.LSP.VFS                         as VFS
-import           Outputable                               (Outputable)
-import           TyCoRep
 
 -- From haskell-ide-engine/hie-plugin-api/Haskell/Ide/Engine/Context.hs
 
@@ -266,7 +253,7 @@ mkNameCompItem doc thingParent origName origMod thingType isInfix docs !imp = CI
         getArgs t
           | isPredTy t = []
           | isDictTy t = []
-          | isForAllTy t = getArgs $ snd (splitForAllTys t)
+          | isForAllTy t = getArgs $ snd (splitForAllTyCoVars t)
           | isFunTy t =
             let (args, ret) = splitFunTys t
               in if isForAllTy ret
@@ -334,7 +321,7 @@ cacheDataProducer uri env curMod globalEnv inScopeEnv limports = do
       packageState = hscEnv env
       curModName = moduleName curMod
 
-      importMap = Map.fromList [ (l, imp) | imp@(L (OldRealSrcSpan l) _) <- limports ]
+      importMap = Map.fromList [ (l, imp) | imp@(L (RealSrcSpan l _) _) <- limports ]
 
       iDeclToModName :: ImportDecl name -> ModuleName
       iDeclToModName = unLoc . ideclName
@@ -612,8 +599,8 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
           | otherwise = []
 
   if
-    -- TODO: handle multiline imports 
-    | "import " `T.isPrefixOf` fullLine 
+    -- TODO: handle multiline imports
+    | "import " `T.isPrefixOf` fullLine
       && (List.length (words (T.unpack fullLine)) >= 2)
       && "(" `isInfixOf` T.unpack fullLine
     -> do

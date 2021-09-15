@@ -8,7 +8,6 @@
 
 module Wingman.LanguageServer where
 
-import           ConLike
 import           Control.Arrow ((***))
 import           Control.Monad
 import           Control.Monad.IO.Class
@@ -35,16 +34,15 @@ import           Development.IDE.Core.Service (runAction)
 import           Development.IDE.Core.Shake (IdeState (..), uses, define, use)
 import qualified Development.IDE.Core.Shake as IDE
 import           Development.IDE.Core.UseStale
-import           Development.IDE.GHC.Compat hiding (parseExpr)
+import           Development.IDE.GHC.Compat hiding (empty)
+import qualified Development.IDE.GHC.Compat.Util as FastString
 import           Development.IDE.GHC.Error (realSrcSpanToRange)
 import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.Graph (Action, RuleResult, Rules, action)
 import           Development.IDE.Graph.Classes (Binary, Hashable, NFData)
 import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindings)
-import qualified FastString
 import           GHC.Generics (Generic)
 import           Generics.SYB hiding (Generic)
-import           GhcPlugins (tupleDataCon, consDataCon, substTyAddInScope, ExternalPackageState, HscEnv (hsc_EPS), unpackFS)
 import qualified Ide.Plugin.Config as Plugin
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils (usePropertyLsp)
@@ -57,11 +55,8 @@ import           Language.LSP.Types              hiding
                                                   SemanticTokenRelative (length),
                                                   SemanticTokensEdit (_start))
 import           Language.LSP.Types.Capabilities
-import           OccName
 import           Prelude hiding (span)
 import           Retrie (transformA)
-import           SrcLoc (containsSpan)
-import           TcRnTypes (tcg_binds, TcGblEnv)
 import           Wingman.Context
 import           Wingman.GHC
 import           Wingman.Judgements
@@ -183,7 +178,7 @@ getIdeDynflags state nfp = do
 
 getAllMetaprograms :: Data a => a -> [String]
 getAllMetaprograms = everything (<>) $ mkQ mempty $ \case
-  WingmanMetaprogram fs -> [ unpackFS fs ]
+  WingmanMetaprogram fs -> [ FastString.unpackFS fs ]
   (_ :: HsExpr GhcTc)  -> mempty
 
 
@@ -222,7 +217,7 @@ judgementForHole state nfp range cfg = do
       eps <- liftIO $ readIORef $ hsc_EPS $ hscEnv henv
 
       (jdg, ctx) <- liftMaybe $ mkJudgementAndContext cfg g binds new_rss tcg (hscEnv henv) eps
-      let mp = getMetaprogramAtSpan (fmap RealSrcSpan tcg_rss) tcg_t
+      let mp = getMetaprogramAtSpan (fmap (`RealSrcSpan` Nothing) tcg_rss) tcg_t
 
       dflags <- getIdeDynflags state nfp
       pure $ HoleJudgment
@@ -261,10 +256,10 @@ mkJudgementAndContext cfg g (TrackedStale binds bmap) rss (TrackedStale tcg tcgm
               eps
               evidence
       top_provs = getRhsPosVals tcg_rss tcs
-      already_destructed = getAlreadyDestructed (fmap RealSrcSpan tcg_rss) tcs
+      already_destructed = getAlreadyDestructed (fmap (`RealSrcSpan` Nothing) tcg_rss) tcs
       local_hy = spliceProvenance top_provs
                $ hypothesisFromBindings binds_rss binds
-      evidence = getEvidenceAtHole (fmap RealSrcSpan tcg_rss) tcs
+      evidence = getEvidenceAtHole (fmap (`RealSrcSpan` Nothing) tcg_rss) tcs
       cls_hy = foldMap evidenceToHypothesis evidence
       subst = ts_unifier $ evidenceToSubst evidence defaultTacticState
   pure $
@@ -339,7 +334,7 @@ getRhsPosVals
 getRhsPosVals (unTrack -> rss) (unTrack -> tcs)
   = everything (<>) (mkQ mempty $ \case
       TopLevelRHS name ps
-          (L (RealSrcSpan span)  -- body with no guards and a single defn
+          (L (RealSrcSpan span _)  -- body with no guards and a single defn
             (HsVar _ (L _ hole)))
           _
         | containsSpan rss span  -- which contains our span
@@ -495,7 +490,7 @@ isRhsHoleWithoutWhere
 isRhsHoleWithoutWhere (unTrack -> rss) (unTrack -> tcs) =
   everything (||) (mkQ False $ \case
       TopLevelRHS _ _
-          (L (RealSrcSpan span) _)
+          (L (RealSrcSpan span _) _)
           (EmptyLocalBinds _) -> containsSpan rss span
       _                       -> False
     ) tcs

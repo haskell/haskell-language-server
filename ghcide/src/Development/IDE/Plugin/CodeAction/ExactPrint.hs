@@ -29,21 +29,17 @@ import qualified Data.Map.Strict                       as Map
 import           Data.Maybe                            (fromJust, isNothing,
                                                         mapMaybe)
 import qualified Data.Text                             as T
-import           Development.IDE.GHC.Compat            hiding (parseExpr)
+import           Development.IDE.GHC.Compat
+import qualified Development.IDE.GHC.Compat.Util       as Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint        (ASTElement (parseAST),
                                                         Annotate)
 import           Development.IDE.Spans.Common
-import           FieldLabel                            (flLabel)
 import           GHC.Exts                              (IsList (fromList))
-import           GhcPlugins                            (mkRdrUnqual, sigPrec)
 import           Language.Haskell.GHC.ExactPrint
 import           Language.Haskell.GHC.ExactPrint.Types (DeltaPos (DP),
                                                         KeywordId (G), mkAnnKey)
 import           Language.LSP.Types
-import           OccName
-import           Outputable                            (ppr, showSDocUnsafe)
-import           Retrie.GHC                            (rdrNameOcc, unpackFS)
 
 ------------------------------------------------------------------------------
 
@@ -453,5 +449,5 @@ deleteFromImport (T.pack -> symbol) (L l idecl) llies@(L lieLoc lies) _ = do
             ty
             wild
             (filter ((/= symbol) . unqualIEWrapName . unLoc) cons)
-            (filter ((/= symbol) . T.pack . unpackFS . flLabel . unLoc) flds)
+            (filter ((/= symbol) . T.pack . Util.unpackFS . flLabel . unLoc) flds)
   killLie v = Just v
