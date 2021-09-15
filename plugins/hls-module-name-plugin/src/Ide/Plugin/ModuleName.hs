@@ -21,7 +21,7 @@ import           Control.Monad.Trans.Maybe
 import           Data.Aeson                 (Value (Null), toJSON)
 import           Data.Char                  (isLower)
 import qualified Data.HashMap.Strict        as HashMap
-import           Data.List                  (find, intercalate, isPrefixOf)
+import           Data.List                  (intercalate, isPrefixOf, minimumBy)
 import           Data.Maybe                 (maybeToList)
 import           Data.String                (IsString)
 import qualified Data.Text                  as T
@@ -44,6 +44,7 @@ import           Language.LSP.VFS           (virtualFileText)
 import           System.Directory           (canonicalizePath)
 import           System.FilePath            (dropExtension, splitDirectories,
                                              takeFileName)
+import Data.Ord (comparing)
 
 -- |Plugin descriptor
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -97,36 +98,40 @@ action state uri =
     contents <- lift . getVirtualFile $ toNormalizedUri uri
     let emptyModule = maybe True (T.null . T.strip . virtualFileText) contents
 
-    correctName <- MaybeT . liftIO $ traceAs "correctName" <$> pathModuleName state nfp fp
+    correctNames <- liftIO $ traceAs "correctNames" <$> pathModuleNames state nfp fp
+    let bestName = minimumBy (comparing T.length) correctNames
 
     statedNameMaybe <- liftIO $ traceAs "statedName" <$> codeModuleName state nfp
     case statedNameMaybe of
       Just (nameRange, statedName)
-        | correctName /= statedName ->
-            pure $ Replace uri nameRange ("Set module name to " <> correctName) correctName
+        | statedName `notElem` correctNames ->
+            pure $ Replace uri nameRange ("Set module name to " <> bestName) bestName
       Nothing
         | emptyModule ->
-            let code = "module " <> correctName <> " where\n"
+            let code = "module " <> bestName <> " where\n"
             in pure $ Replace uri (Range (Position 0 0) (Position 0 0)) code code
       _ -> MaybeT $ pure Nothing
 
--- | The module name, as derived by the position of the module in its source directory
-pathModuleName :: IdeState -> NormalizedFilePath -> String -> IO (Maybe T.Text)
-pathModuleName state normFilePath filePath
-  | isLower . head $ takeFileName filePath = return $ Just "Main"
+-- | Possible module names, as derived by the position of the module in the
+-- source directories.  There may be more than one possible name, if the source
+-- directories are nested inside each other.
+pathModuleNames :: IdeState -> NormalizedFilePath -> String -> IO [T.Text]
+pathModuleNames state normFilePath filePath
+  | isLower . head $ takeFileName filePath = return ["Main"]
   | otherwise = do
       session <- runAction "ModuleName.ghcSession" state $ use_ GhcSession normFilePath
       srcPaths <- evalGhcEnv (hscEnvWithImportPaths session) $ importPaths <$> getSessionDynFlags
       paths <- mapM canonicalizePath srcPaths
       mdlPath <- canonicalizePath filePath
-      pure $ do
-        prefix <- find (`isPrefixOf` mdlPath) paths
-        pure
-          . T.pack
-          . intercalate "."
-          . splitDirectories
-          . drop (length prefix + 1)
-          $ dropExtension mdlPath
+      let prefixes = filter (`isPrefixOf` mdlPath) paths
+      pure (map (moduleNameFrom mdlPath) prefixes)
+  where
+    moduleNameFrom mdlPath prefix =
+      T.pack
+        . intercalate "."
+        . splitDirectories
+        . drop (length prefix + 1)
+        $ dropExtension mdlPath
 
 -- | The module name, as stated in the module
 codeModuleName :: IdeState -> NormalizedFilePath -> IO (Maybe (Range, T.Text))
