@@ -47,14 +47,7 @@ import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.Types
 import qualified Language.LSP.VFS                             as VFS
 
-import Development.IDE.Types.KnownTargets (Target(..))
-#if MIN_VERSION_ghc(9,0,0)
-import           GHC.Tc.Module                                (tcRnImportDecls)
-#else
-import           TcRnDriver                                   (tcRnImportDecls)
-import qualified Data.HashMap.Strict as HM
-#endif
-
+import           Development.IDE.Types.KnownTargets           (Target(..))
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
