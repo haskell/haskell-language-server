@@ -4,12 +4,11 @@
 
 module Development.IDE.GHC.Warnings(withWarnings) where
 
-import           Data.List
 import           Control.Concurrent.Strict
+import           Data.List
 import qualified Data.Text                         as T
 
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Compat.Outputable
 import           Development.IDE.GHC.Error
 import           Development.IDE.Types.Diagnostics
 import           Language.LSP.Types                (type (|?) (..))

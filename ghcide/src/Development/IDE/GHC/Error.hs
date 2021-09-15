@@ -32,10 +32,12 @@ module Development.IDE.GHC.Error
 import           Data.Maybe
 import           Data.String                       (fromString)
 import qualified Data.Text                         as T
-import qualified Development.IDE.GHC.Compat.Outputable as Compat
+import           Development.IDE.GHC.Compat        (DecoratedSDoc, MsgEnvelope,
+                                                    errMsgSeverity, errMsgSpan,
+                                                    formatErrorWithQual,
+                                                    srcErrorMessages)
 import qualified Development.IDE.GHC.Compat        as Compat
 import qualified Development.IDE.GHC.Compat.Util   as Compat
-import           Development.IDE.GHC.Compat.Outputable
 import           Development.IDE.GHC.Orphans       ()
 import           Development.IDE.Types.Diagnostics as D
 import           Development.IDE.Types.Location
@@ -66,7 +68,7 @@ diagFromErrMsgs diagSource dflags = concatMap (diagFromErrMsg diagSource dflags)
 
 -- | Convert a GHC SrcSpan to a DAML compiler Range
 srcSpanToRange :: SrcSpan -> Maybe Range
-srcSpanToRange (UnhelpfulSpan _)         = Nothing
+srcSpanToRange (UnhelpfulSpan _)           = Nothing
 srcSpanToRange (Compat.RealSrcSpan real _) = Just $ realSrcSpanToRange real
 -- srcSpanToRange = fmap realSrcSpanToRange . realSpan
 
@@ -152,7 +154,7 @@ realSpan :: SrcSpan
          -> Maybe RealSrcSpan
 realSpan = \case
   Compat.RealSrcSpan r _ -> Just r
-  UnhelpfulSpan _ -> Nothing
+  UnhelpfulSpan _        -> Nothing
 
 
 -- | Catch the errors thrown by GHC (SourceErrors and

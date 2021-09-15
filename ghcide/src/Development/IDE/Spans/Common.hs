@@ -25,7 +25,6 @@ import           GHC.Generics
 
 import           GHC
 
-import           Development.IDE.GHC.Compat.Outputable
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Orphans  ()
 import           Development.IDE.GHC.Util

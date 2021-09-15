@@ -17,7 +17,6 @@ import           Data.Bool (bool)
 import           Data.Foldable
 import           Data.Functor ((<&>))
 import           Data.Generics.Labels ()
-import           Data.Traversable (for)
 import           Data.List
 import           Data.List.Extra (dropEnd, takeEnd)
 import qualified Data.Map as M
@@ -26,7 +25,7 @@ import           Data.Set (Set)
 import qualified Data.Set as S
 import           Data.Traversable (for)
 import           DataCon
-import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat hiding (empty)
 import           GHC.Exts
 import           GHC.SourceGen ((@@))
 import           GHC.SourceGen.Expr

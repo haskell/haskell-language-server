@@ -45,6 +45,7 @@ module Development.IDE.GHC.Compat(
     module Development.IDE.GHC.Compat.Env,
     module Development.IDE.GHC.Compat.Iface,
     module Development.IDE.GHC.Compat.Logger,
+    module Development.IDE.GHC.Compat.Outputable,
     module Development.IDE.GHC.Compat.Parser,
     module Development.IDE.GHC.Compat.Plugins,
     module Development.IDE.GHC.Compat.Units,
@@ -61,6 +62,7 @@ import Development.IDE.GHC.Compat.Core
 import Development.IDE.GHC.Compat.Env
 import Development.IDE.GHC.Compat.Iface
 import Development.IDE.GHC.Compat.Logger
+import Development.IDE.GHC.Compat.Outputable
 import Development.IDE.GHC.Compat.Parser
 import Development.IDE.GHC.Compat.Plugins
 import Development.IDE.GHC.Compat.Units

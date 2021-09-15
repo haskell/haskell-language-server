@@ -17,8 +17,7 @@ module Wingman.Debug
 import           Control.DeepSeq
 import           Control.Exception
 import           Debug.Trace
-import           Development.IDE.GHC.Compat.Outputable
-import           Development.IDE.GHC.Compat (PlainGhcException)
+import           Development.IDE.GHC.Compat (PlainGhcException, Outputable(..), SDoc, showSDocUnsafe)
 import           System.IO.Unsafe  (unsafePerformIO)
 
 ------------------------------------------------------------------------------

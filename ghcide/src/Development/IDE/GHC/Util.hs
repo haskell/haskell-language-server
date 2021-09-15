@@ -33,71 +33,70 @@ module Development.IDE.GHC.Util(
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC
 import           GHC.Core.Multiplicity
-import qualified GHC.Core.TyCo.Rep                     as TyCoRep
+import qualified GHC.Core.TyCo.Rep                 as TyCoRep
 import           GHC.Data.FastString
 import           GHC.Data.StringBuffer
 import           GHC.Driver.Env
 import           GHC.Driver.Env.Types
 import           GHC.Driver.Monad
-import           GHC.Driver.Session                    hiding (ExposePackage)
-import qualified GHC.Driver.Session                    as DynFlags
+import           GHC.Driver.Session                hiding (ExposePackage)
+import qualified GHC.Driver.Session                as DynFlags
 import           GHC.Hs.Extension
-import qualified GHC.Hs.Type                           as GHC
-import           GHC.Iface.Env                         (updNameCache)
-import           GHC.Iface.Make                        (mkIfaceExports)
-import qualified GHC.Linker.Types                      as LinkerTypes
+import qualified GHC.Hs.Type                       as GHC
+import           GHC.Iface.Env                     (updNameCache)
+import           GHC.Iface.Make                    (mkIfaceExports)
+import qualified GHC.Linker.Types                  as LinkerTypes
 import           GHC.Parser.Lexer
 import           GHC.Runtime.Context
-import           GHC.Tc.Types                          (TcGblEnv (tcg_exports))
-import           GHC.Tc.Utils.TcType                   (pprSigmaType)
+import           GHC.Tc.Types                      (TcGblEnv (tcg_exports))
+import           GHC.Tc.Utils.TcType               (pprSigmaType)
 import           GHC.Types.Avail
 import           GHC.Types.Name.Cache
 import           GHC.Types.Name.Occurrence
 import           GHC.Types.Name.Reader
 import           GHC.Types.SrcLoc
-import qualified GHC.Types.SrcLoc                      as SrcLoc
+import qualified GHC.Types.SrcLoc                  as SrcLoc
 import           GHC.Unit.Env
-import           GHC.Unit.Info                         (PackageName)
-import qualified GHC.Unit.Info                         as Packages
-import qualified GHC.Unit.Module.Location              as Module
+import           GHC.Unit.Info                     (PackageName)
+import qualified GHC.Unit.Info                     as Packages
+import qualified GHC.Unit.Module.Location          as Module
 import           GHC.Unit.Module.ModDetails
 import           GHC.Unit.Module.ModGuts
-import           GHC.Unit.Module.ModIface              (mi_mod_hash)
-import           GHC.Unit.Module.Name                  (moduleNameSlashes)
-import qualified GHC.Unit.State                        as Packages
-import           GHC.Unit.Types                        (IsBootInterface (..),
-                                                        unitString)
-import qualified GHC.Unit.Types                        as Module
+import           GHC.Unit.Module.ModIface          (mi_mod_hash)
+import           GHC.Unit.Module.Name              (moduleNameSlashes)
+import qualified GHC.Unit.State                    as Packages
+import           GHC.Unit.Types                    (IsBootInterface (..),
+                                                    unitString)
+import qualified GHC.Unit.Types                    as Module
 import           GHC.Utils.Fingerprint
 import           GHC.Utils.Outputable
-import qualified GHC.Utils.Outputable                  as Outputable
+import qualified GHC.Utils.Outputable              as Outputable
 #endif
 import           Control.Concurrent
-import           Control.Exception                     as E
-import           Data.Binary.Put                       (Put, runPut)
-import qualified Data.ByteString                       as BS
-import           Data.ByteString.Internal              (ByteString (..))
-import qualified Data.ByteString.Internal              as BS
-import qualified Data.ByteString.Lazy                  as LBS
+import           Control.Exception                 as E
+import           Data.Binary.Put                   (Put, runPut)
+import qualified Data.ByteString                   as BS
+import           Data.ByteString.Internal          (ByteString (..))
+import qualified Data.ByteString.Internal          as BS
+import qualified Data.ByteString.Lazy              as LBS
 import           Data.IORef
 import           Data.List.Extra
 import           Data.Maybe
-import qualified Data.Text                             as T
-import qualified Data.Text.Encoding                    as T
-import qualified Data.Text.Encoding.Error              as T
+import qualified Data.Text                         as T
+import qualified Data.Text.Encoding                as T
+import qualified Data.Text.Encoding.Error          as T
 import           Data.Typeable
-import           Development.IDE.GHC.Compat            as GHC
-import           Development.IDE.GHC.Compat.Outputable
-import qualified Development.IDE.GHC.Compat.Parser     as Compat
-import qualified Development.IDE.GHC.Compat.Units      as Compat
+import           Development.IDE.GHC.Compat        as GHC
+import qualified Development.IDE.GHC.Compat.Parser as Compat
+import qualified Development.IDE.GHC.Compat.Units  as Compat
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.Types.Location
 import           Foreign.ForeignPtr
 import           Foreign.Ptr
 import           Foreign.Storable
 import           GHC
-import           GHC.IO.BufferedIO                     (BufferedIO)
-import           GHC.IO.Device                         as IODevice
+import           GHC.IO.BufferedIO                 (BufferedIO)
+import           GHC.IO.Device                     as IODevice
 import           GHC.IO.Encoding
 import           GHC.IO.Exception
 import           GHC.IO.Handle.Internals

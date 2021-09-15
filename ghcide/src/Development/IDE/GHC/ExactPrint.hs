@@ -57,7 +57,6 @@ import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat              hiding (parseImport,
                                                           parsePattern,
                                                           parseType)
-import           Development.IDE.GHC.Compat.Outputable
 import           Development.IDE.Graph                   (RuleResult, Rules)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Types.Location

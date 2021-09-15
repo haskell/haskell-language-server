@@ -13,16 +13,15 @@ module Ide.Plugin.Eval.GHC (
     showDynFlags,
 ) where
 
-import           Data.List                   (isPrefixOf)
-import           Data.Maybe                  (mapMaybe)
-import           Data.String                 (fromString)
+import           Data.List                       (isPrefixOf)
+import           Data.Maybe                      (mapMaybe)
+import           Data.String                     (fromString)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
-import           Development.IDE.GHC.Compat.Outputable
 import qualified Development.IDE.GHC.Compat.Util as EnumSet
 
-import           GHC.LanguageExtensions.Type (Extension (..))
-import           Ide.Plugin.Eval.Util        (asS, gStrictTry)
+import           GHC.LanguageExtensions.Type     (Extension (..))
+import           Ide.Plugin.Eval.Util            (asS, gStrictTry)
 
 {- $setup
 >>> import GHC

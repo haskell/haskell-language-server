@@ -13,14 +13,13 @@ module Development.IDE.Import.FindImports
   , mkImportDirs
   ) where
 
+import           Control.DeepSeq
 import           Development.IDE.GHC.Compat        as Compat
 import           Development.IDE.GHC.Compat.Util
-import           Development.IDE.GHC.Compat.Outputable
 import           Development.IDE.GHC.Error         as ErrUtils
 import           Development.IDE.GHC.Orphans       ()
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
-import           Control.DeepSeq
 
 -- standard imports
 import           Control.Monad.Extra
@@ -127,7 +126,7 @@ locateModule env comp_info exts targetFor modName mbPkgName isSource = do
     lookupLocal dirs = do
       mbFile <- locateModuleFile dirs exts targetFor isSource $ unLoc modName
       case mbFile of
-        Nothing -> return $ Left $ notFoundErr env modName $ LookupNotFound []
+        Nothing   -> return $ Left $ notFoundErr env modName $ LookupNotFound []
         Just file -> toModLocation file
 
     lookupInPackageDB env =

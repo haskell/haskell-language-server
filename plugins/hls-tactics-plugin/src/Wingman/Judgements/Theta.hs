@@ -20,7 +20,7 @@ import           Data.Generics.Sum (_Ctor)
 import           Data.Set (Set)
 import qualified Data.Set as S
 import           Development.IDE.Core.UseStale
-import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat hiding (empty)
 import           Generics.SYB hiding (tyConName, empty, Generic)
 import           GHC.Generics
 import           Wingman.GHC

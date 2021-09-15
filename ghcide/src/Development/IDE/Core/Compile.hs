@@ -36,7 +36,7 @@ import           Development.IDE.Core.Preprocessor
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Error
-import           Development.IDE.GHC.Orphans           ()
+import           Development.IDE.GHC.Orphans       ()
 import           Development.IDE.GHC.Util
 import           Development.IDE.GHC.Warnings
 import           Development.IDE.Spans.Common
@@ -44,23 +44,21 @@ import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 
-import           Development.IDE.GHC.Compat            hiding (loadInterface,
-                                                        parseHeader,
-                                                        parseModule, tcRnModule,
-                                                        writeHieFile)
-import qualified Development.IDE.GHC.Compat            as Compat
-import qualified Development.IDE.GHC.Compat            as GHC
-import           Development.IDE.GHC.Compat.Outputable
-import qualified Development.IDE.GHC.Compat.Util       as Util
+import           Development.IDE.GHC.Compat        hiding (loadInterface,
+                                                    parseHeader, parseModule,
+                                                    tcRnModule, writeHieFile)
+import qualified Development.IDE.GHC.Compat        as Compat
+import qualified Development.IDE.GHC.Compat        as GHC
+import qualified Development.IDE.GHC.Compat.Util   as Util
 
 import           HieDb
 
-import           Language.LSP.Types                    (DiagnosticTag (..))
+import           Language.LSP.Types                (DiagnosticTag (..))
 
 #if MIN_VERSION_ghc(8,10,0)
-import           Control.DeepSeq                       (force, rnf)
+import           Control.DeepSeq                   (force, rnf)
 #else
-import           Control.DeepSeq                       (rnf)
+import           Control.DeepSeq                   (rnf)
 import           ErrUtils
 #endif
 
@@ -71,42 +69,41 @@ import           GHC.Tc.Gen.Splice
 import           TcSplice
 #endif
 
-import           Control.Exception                     (evaluate)
+import           Control.Exception                 (evaluate)
 import           Control.Exception.Safe
-import           Control.Lens                          hiding (List)
+import           Control.Lens                      hiding (List)
 import           Control.Monad.Except
 import           Control.Monad.Extra
 import           Control.Monad.Trans.Except
-import           Data.Bifunctor                        (first, second)
-import qualified Data.ByteString                       as BS
-import qualified Data.DList                            as DL
+import           Data.Bifunctor                    (first, second)
+import qualified Data.ByteString                   as BS
+import qualified Data.DList                        as DL
 import           Data.IORef
 import           Data.List.Extra
-import qualified Data.Map.Strict                       as Map
+import qualified Data.Map.Strict                   as Map
 import           Data.Maybe
-import qualified Data.Text                             as T
-import           Data.Time                             (UTCTime, getCurrentTime)
-import qualified GHC.LanguageExtensions                as LangExt
+import qualified Data.Text                         as T
+import           Data.Time                         (UTCTime, getCurrentTime)
+import qualified GHC.LanguageExtensions            as LangExt
 import           System.Directory
 import           System.FilePath
-import           System.IO.Extra                       (fixIO,
-                                                        newTempFileWithin)
+import           System.IO.Extra                   (fixIO, newTempFileWithin)
 
 -- GHC API imports
-import           GHC                                   (GetDocsFailure (..),
-                                                        parsedSource)
+import           GHC                               (GetDocsFailure (..),
+                                                    parsedSource)
 
 import           Control.Concurrent.Extra
-import           Control.Concurrent.STM                hiding (orElse)
-import           Data.Aeson                            (toJSON)
+import           Control.Concurrent.STM            hiding (orElse)
+import           Data.Aeson                        (toJSON)
 import           Data.Binary
 import           Data.Coerce
 import           Data.Functor
-import qualified Data.HashMap.Strict                   as HashMap
-import           Data.Tuple.Extra                      (dupe)
-import           Data.Unique                           as Unique
-import qualified Language.LSP.Server                   as LSP
-import qualified Language.LSP.Types                    as LSP
+import qualified Data.HashMap.Strict               as HashMap
+import           Data.Tuple.Extra                  (dupe)
+import           Data.Unique                       as Unique
+import qualified Language.LSP.Server               as LSP
+import qualified Language.LSP.Types                as LSP
 
 -- | Given a string buffer, return the string (after preprocessing) and the 'ParsedModule'.
 parseModule

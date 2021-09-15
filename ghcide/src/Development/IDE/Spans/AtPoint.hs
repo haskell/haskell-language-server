@@ -30,8 +30,7 @@ import           Language.LSP.Types
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Compat.Outputable
-import qualified Development.IDE.GHC.Compat.Util as Util
+import qualified Development.IDE.GHC.Compat.Util      as Util
 import           Development.IDE.Spans.Common
 import           Development.IDE.Types.Options
 

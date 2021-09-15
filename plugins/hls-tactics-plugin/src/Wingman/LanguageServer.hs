@@ -34,7 +34,7 @@ import           Development.IDE.Core.Service (runAction)
 import           Development.IDE.Core.Shake (IdeState (..), uses, define, use)
 import qualified Development.IDE.Core.Shake as IDE
 import           Development.IDE.Core.UseStale
-import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat hiding (empty)
 import qualified Development.IDE.GHC.Compat.Util as FastString
 import           Development.IDE.GHC.Error (realSrcSpanToRange)
 import           Development.IDE.GHC.ExactPrint

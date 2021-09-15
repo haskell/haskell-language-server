@@ -15,30 +15,30 @@ module Ide.Plugin.Eval.Util (
     logWith,
 ) where
 
-import           Control.Exception          (SomeException, evaluate)
-import           Control.Monad.Extra        (maybeM)
-import           Control.Monad.IO.Class     (MonadIO (liftIO))
-import           Control.Monad.Trans.Class  (lift)
-import           Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
-import           Data.Aeson                 (Value (Null))
-import           Data.Bifunctor             (first)
-import           Data.String                (IsString (fromString))
-import qualified Data.Text                  as T
-import           Development.IDE            (IdeState, Priority (..), ideLogger,
-                                             logPriority)
-import           Development.IDE.GHC.Compat.Outputable
-                                            (Outputable, showSDocUnsafe, ppr)
-import           Development.IDE.GHC.Compat.Util
-                                            (MonadCatch, catch)
-import           GHC.Exts                   (toList)
-import           GHC.Stack                  (HasCallStack, callStack,
-                                             srcLocFile, srcLocStartCol,
-                                             srcLocStartLine)
+import           Control.Exception               (SomeException, evaluate)
+import           Control.Monad.Extra             (maybeM)
+import           Control.Monad.IO.Class          (MonadIO (liftIO))
+import           Control.Monad.Trans.Class       (lift)
+import           Control.Monad.Trans.Except      (ExceptT (..), runExceptT,
+                                                  throwE)
+import           Data.Aeson                      (Value (Null))
+import           Data.Bifunctor                  (first)
+import           Data.String                     (IsString (fromString))
+import qualified Data.Text                       as T
+import           Development.IDE                 (IdeState, Priority (..),
+                                                  ideLogger, logPriority)
+import           Development.IDE.GHC.Compat      (Outputable, ppr,
+                                                  showSDocUnsafe)
+import           Development.IDE.GHC.Compat.Util (MonadCatch, catch)
+import           GHC.Exts                        (toList)
+import           GHC.Stack                       (HasCallStack, callStack,
+                                                  srcLocFile, srcLocStartCol,
+                                                  srcLocStartLine)
 import           Language.LSP.Server
 import           Language.LSP.Types
-import           System.FilePath            (takeExtension)
-import           System.Time.Extra          (duration, showDuration)
-import           UnliftIO.Exception         (catchAny)
+import           System.FilePath                 (takeExtension)
+import           System.Time.Extra               (duration, showDuration)
+import           UnliftIO.Exception              (catchAny)
 
 asS :: Outputable a => a -> String
 asS = showSDocUnsafe . ppr

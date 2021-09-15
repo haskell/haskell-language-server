@@ -12,63 +12,60 @@ module Development.IDE.Plugin.TypeLenses (
   GlobalBindingTypeSigsResult (..),
 ) where
 
-import           Control.DeepSeq                       (rwhnf)
-import           Control.Monad                         (mzero)
-import           Control.Monad.Extra                   (whenMaybe)
-import           Control.Monad.IO.Class                (MonadIO (liftIO))
-import           Data.Aeson.Types                      (Value (..), toJSON)
-import qualified Data.Aeson.Types                      as A
-import qualified Data.HashMap.Strict                   as Map
-import           Data.List                             (find)
-import           Data.Maybe                            (catMaybes)
-import qualified Data.Text                             as T
-import           Development.IDE                       (GhcSession (..),
-                                                        HscEnvEq (hscEnv),
-                                                        RuleResult, Rules,
-                                                        define, srcSpanToRange)
-import           Development.IDE.Core.Compile          (TcModuleResult (..))
-import           Development.IDE.Core.RuleTypes        (GetBindings (GetBindings),
-                                                        TypeCheck (TypeCheck))
-import           Development.IDE.Core.Rules            (IdeState, runAction)
-import           Development.IDE.Core.Service          (getDiagnostics)
-import           Development.IDE.Core.Shake            (getHiddenDiagnostics,
-                                                        use)
+import           Control.DeepSeq                     (rwhnf)
+import           Control.Monad                       (mzero)
+import           Control.Monad.Extra                 (whenMaybe)
+import           Control.Monad.IO.Class              (MonadIO (liftIO))
+import           Data.Aeson.Types                    (Value (..), toJSON)
+import qualified Data.Aeson.Types                    as A
+import qualified Data.HashMap.Strict                 as Map
+import           Data.List                           (find)
+import           Data.Maybe                          (catMaybes)
+import qualified Data.Text                           as T
+import           Development.IDE                     (GhcSession (..),
+                                                      HscEnvEq (hscEnv),
+                                                      RuleResult, Rules, define,
+                                                      srcSpanToRange)
+import           Development.IDE.Core.Compile        (TcModuleResult (..))
+import           Development.IDE.Core.RuleTypes      (GetBindings (GetBindings),
+                                                      TypeCheck (TypeCheck))
+import           Development.IDE.Core.Rules          (IdeState, runAction)
+import           Development.IDE.Core.Service        (getDiagnostics)
+import           Development.IDE.Core.Shake          (getHiddenDiagnostics, use)
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Compat.Outputable
-import           Development.IDE.GHC.Util              (printName)
+import           Development.IDE.GHC.Util            (printName)
 import           Development.IDE.Graph.Classes
-import           Development.IDE.Spans.LocalBindings   (Bindings, getFuzzyScope)
-import           Development.IDE.Types.Location        (Position (Position, _character, _line),
-                                                        Range (Range, _end, _start),
-                                                        toNormalizedFilePath',
-                                                        uriToFilePath')
-import           GHC.Generics                          (Generic)
-import           Ide.Plugin.Config                     (Config)
+import           Development.IDE.Spans.LocalBindings (Bindings, getFuzzyScope)
+import           Development.IDE.Types.Location      (Position (Position, _character, _line),
+                                                      Range (Range, _end, _start),
+                                                      toNormalizedFilePath',
+                                                      uriToFilePath')
+import           GHC.Generics                        (Generic)
+import           Ide.Plugin.Config                   (Config)
 import           Ide.Plugin.Properties
-import           Ide.PluginUtils                       (mkLspCommand,
-                                                        usePropertyLsp)
-import           Ide.Types                             (CommandFunction,
-                                                        CommandId (CommandId),
-                                                        PluginCommand (PluginCommand),
-                                                        PluginDescriptor (..),
-                                                        PluginId,
-                                                        configCustomConfig,
-                                                        defaultConfigDescriptor,
-                                                        defaultPluginDescriptor,
-                                                        mkCustomConfig,
-                                                        mkPluginHandler)
-import qualified Language.LSP.Server                   as LSP
-import           Language.LSP.Types                    (ApplyWorkspaceEditParams (ApplyWorkspaceEditParams),
-                                                        CodeLens (CodeLens),
-                                                        CodeLensParams (CodeLensParams, _textDocument),
-                                                        Diagnostic (..),
-                                                        List (..),
-                                                        ResponseError,
-                                                        SMethod (..),
-                                                        TextDocumentIdentifier (TextDocumentIdentifier),
-                                                        TextEdit (TextEdit),
-                                                        WorkspaceEdit (WorkspaceEdit))
-import           Text.Regex.TDFA                       ((=~), (=~~))
+import           Ide.PluginUtils                     (mkLspCommand,
+                                                      usePropertyLsp)
+import           Ide.Types                           (CommandFunction,
+                                                      CommandId (CommandId),
+                                                      PluginCommand (PluginCommand),
+                                                      PluginDescriptor (..),
+                                                      PluginId,
+                                                      configCustomConfig,
+                                                      defaultConfigDescriptor,
+                                                      defaultPluginDescriptor,
+                                                      mkCustomConfig,
+                                                      mkPluginHandler)
+import qualified Language.LSP.Server                 as LSP
+import           Language.LSP.Types                  (ApplyWorkspaceEditParams (ApplyWorkspaceEditParams),
+                                                      CodeLens (CodeLens),
+                                                      CodeLensParams (CodeLensParams, _textDocument),
+                                                      Diagnostic (..),
+                                                      List (..), ResponseError,
+                                                      SMethod (..),
+                                                      TextDocumentIdentifier (TextDocumentIdentifier),
+                                                      TextEdit (TextEdit),
+                                                      WorkspaceEdit (WorkspaceEdit))
+import           Text.Regex.TDFA                     ((=~), (=~~))
 
 typeLensCommandId :: T.Text
 typeLensCommandId = "typesignature.add"

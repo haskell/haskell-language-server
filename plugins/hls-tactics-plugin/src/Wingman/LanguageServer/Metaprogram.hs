@@ -21,7 +21,7 @@ import           Development.IDE (realSrcSpanToRange)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake (IdeState (..))
 import           Development.IDE.Core.UseStale
-import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat hiding (empty)
 import           Ide.Types
 import           Language.LSP.Types
 import           Prelude hiding (span)

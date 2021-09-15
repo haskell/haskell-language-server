@@ -30,8 +30,7 @@ import           Data.Maybe                            (fromJust, isNothing,
                                                         mapMaybe)
 import qualified Data.Text                             as T
 import           Development.IDE.GHC.Compat
-import qualified Development.IDE.GHC.Compat.Util as Util
-import           Development.IDE.GHC.Compat.Outputable
+import qualified Development.IDE.GHC.Compat.Util       as Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint        (ASTElement (parseAST),
                                                         Annotate)

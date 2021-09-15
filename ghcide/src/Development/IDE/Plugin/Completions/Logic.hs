@@ -31,12 +31,11 @@ import           Data.Aeson                               (ToJSON (toJSON))
 import           Data.Either                              (fromRight)
 import           Data.Functor
 import qualified Data.HashMap.Strict                      as HM
-import qualified Data.Set                                 as Set
 import qualified Data.HashSet                             as HashSet
+import qualified Data.Set                                 as Set
 import           Development.IDE.Core.Compile
 import           Development.IDE.Core.PositionMapping
-import           Development.IDE.GHC.Compat               as GHC
-import           Development.IDE.GHC.Compat.Outputable    hiding (ppr)
+import           Development.IDE.GHC.Compat               as GHC hiding (ppr)
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Util
@@ -599,8 +598,8 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
           | otherwise = []
 
   if
-    -- TODO: handle multiline imports 
-    | "import " `T.isPrefixOf` fullLine 
+    -- TODO: handle multiline imports
+    | "import " `T.isPrefixOf` fullLine
       && (List.length (words (T.unpack fullLine)) >= 2)
       && "(" `isInfixOf` T.unpack fullLine
     -> do

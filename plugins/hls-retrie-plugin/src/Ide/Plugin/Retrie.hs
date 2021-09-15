@@ -57,26 +57,28 @@ import           Development.IDE.GHC.Compat           (GenLocated (L), GhcRn,
                                                        HscEnv, IdP, LRuleDecls,
                                                        ModSummary (ModSummary, ms_hspp_buf, ms_mod),
                                                        NHsValBindsLR (..),
+                                                       Outputable,
                                                        ParsedModule (..),
                                                        RuleDecl (HsRule),
                                                        RuleDecls (HsRules),
+                                                       SourceText (..),
                                                        SrcSpan (..),
                                                        TyClDecl (SynDecl),
                                                        TyClGroup (..), fun_id,
+                                                       hm_iface, isQual,
+                                                       isQual_maybe,
                                                        mi_fixities,
                                                        moduleNameString,
+                                                       nameModule_maybe,
+                                                       nameRdrName, occNameFS,
+                                                       occNameString,
                                                        parseModule,
                                                        pattern IsBoot,
                                                        pattern NotBoot,
                                                        pattern RealSrcSpan,
-                                                       rds_rules, srcSpanFile,
-                                                       nameRdrName, occNameString,
-                                                       rdrNameOcc, occNameFS,
-                                                       nameModule_maybe,
-                                                       isQual, isQual_maybe,
-                                                       hm_iface, SourceText(..))
-import           Development.IDE.GHC.Compat.Util       hiding (try, catch)
-import           Development.IDE.GHC.Compat.Outputable(Outputable)
+                                                       rdrNameOcc, rds_rules,
+                                                       srcSpanFile)
+import           Development.IDE.GHC.Compat.Util      hiding (catch, try)
 import qualified GHC                                  (parseModule)
 import           GHC.Generics                         (Generic)
 import           Ide.PluginUtils
