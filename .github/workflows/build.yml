@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ['9.0.1', '8.10.7', '8.10.6', '8.10.5', '8.10.4', '8.8.4', '8.8.3', '8.6.5']
+        ghc: ['9.0.1', '8.10.7', '8.10.6', '8.10.5', '8.8.4', '8.8.3', '8.6.5']
         os: [ubuntu-18.04, macOS-latest, windows-latest]
         exclude:
           - os: windows-latest
@@ -114,11 +114,11 @@ jobs:
         path: ${{ steps.compress_server_binary.outputs.path }}
 
     - name: Build Wrapper
-      if: matrix.ghc == '8.10.4'
+      if: matrix.ghc == '8.10.7'
       run: cabal build exe:hls-wrapper -O2 $LINUX_CABAL_ARGS
 
     - name: Compress Wrapper Binary
-      if: matrix.ghc == '8.10.4'
+      if: matrix.ghc == '8.10.7'
       id: compress_wrapper_binary
       run: |
         HLS_WRAPPER_BUILD=$(find dist-newstyle \( -name 'hls-wrapper' -o -name 'hls-wrapper.exe' \) -type f)
@@ -137,7 +137,7 @@ jobs:
         fi
 
     - name: Upload Wrapper
-      if: matrix.ghc == '8.10.4'
+      if: matrix.ghc == '8.10.7'
       uses: actions/upload-release-asset@v1.0.2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -148,7 +148,7 @@ jobs:
         asset_content_type: ${{ steps.compress_wrapper_binary.outputs.content_type}}
 
     - uses: actions/upload-artifact@v2
-      if: matrix.ghc == '8.10.4'
+      if: matrix.ghc == '8.10.7'
       with:
         name: haskell-language-server-wrapper-${{ runner.OS }}${{env.EXE_EXT}}.${{ steps.compress_wrapper_binary.outputs.extension }}
         path: ${{ steps.compress_wrapper_binary.outputs.path }}
