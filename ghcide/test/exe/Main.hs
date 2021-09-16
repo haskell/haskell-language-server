@@ -4055,7 +4055,8 @@ thLinkingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
 completionTests :: TestTree
 completionTests
   = testGroup "completion"
-    [ testGroup "non local" nonLocalCompletionTests
+    [ 
+    testGroup "non local" nonLocalCompletionTests
     , testGroup "topLevel" topLevelCompletionTests
     , testGroup "local" localCompletionTests
     , testGroup "package" packageCompletionTests
@@ -4589,7 +4590,41 @@ projectCompletionTests =
                 <- compls
               , _label == "anidentifier"
               ]
-        liftIO $ compls' @?= ["Defined in 'A"]
+        liftIO $ compls' @?= ["Defined in 'A"],
+      testSession' "auto complete functions from qualified imports without alias" $ \dir-> do
+        liftIO $ writeFile (dir </> "hie.yaml")
+            "cradle: {direct: {arguments: [\"-Wmissing-signatures\", \"A\", \"B\"]}}"
+        _ <- createDoc "A.hs" "haskell" $ T.unlines
+            [  "module A (anidentifier) where",
+               "anidentifier = ()"
+            ]
+        _ <- waitForDiagnostics
+        doc <- createDoc "B.hs" "haskell" $ T.unlines
+            [ "module B where",
+              "import qualified A",
+              "A."
+            ]
+        compls <- getCompletions doc (Position 2 2)
+        let item = head compls
+        liftIO $ do
+          item ^. L.label @?= "anidentifier",
+      testSession' "auto complete functions from qualified imports with alias" $ \dir-> do
+        liftIO $ writeFile (dir </> "hie.yaml")
+            "cradle: {direct: {arguments: [\"-Wmissing-signatures\", \"A\", \"B\"]}}"
+        _ <- createDoc "A.hs" "haskell" $ T.unlines
+            [  "module A (anidentifier) where",
+               "anidentifier = ()"
+            ]
+        _ <- waitForDiagnostics
+        doc <- createDoc "B.hs" "haskell" $ T.unlines
+            [ "module B where",
+              "import qualified A as alias",
+              "alias."
+            ]
+        compls <- getCompletions doc (Position 2 6)
+        let item = head compls
+        liftIO $ do
+          item ^. L.label @?= "anidentifier"
     ]
 
 highlightTests :: TestTree
