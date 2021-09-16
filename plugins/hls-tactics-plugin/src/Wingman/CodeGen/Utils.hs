@@ -1,14 +1,10 @@
 module Wingman.CodeGen.Utils where
 
-import ConLike (ConLike(RealDataCon), conLikeName)
+import Data.String
 import Data.List
-import DataCon
 import Development.IDE.GHC.Compat
-import GHC.Exts
 import GHC.SourceGen (RdrNameStr (UnqualStr), recordConE, string)
-import GHC.SourceGen.Overloaded
-import GhcPlugins (nilDataCon, charTy, eqType)
-import Name
+import GHC.SourceGen.Overloaded as SourceGen
 import Wingman.GHC (getRecordFields)
 
 
@@ -48,7 +44,7 @@ coerceName = UnqualStr . fromString . occNameString . occName
 
 ------------------------------------------------------------------------------
 -- | Like 'var', but works over standard GHC 'OccName's.
-var' :: Var a => OccName -> a
+var' :: SourceGen.Var a => OccName -> a
 var' = var . fromString . occNameString
 
 

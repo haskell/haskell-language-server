@@ -13,11 +13,11 @@ packages:
   - ./plugins/hls-haddock-comments-plugin
   - ./plugins/hls-eval-plugin
   - ./plugins/hls-explicit-imports-plugin
-  # - ./plugins/hls-refine-imports-plugin
+  - ./plugins/hls-refine-imports-plugin
   - ./plugins/hls-hlint-plugin
   - ./plugins/hls-rename-plugin
   - ./plugins/hls-retrie-plugin
-  # - ./plugins/hls-splice-plugin
+  - ./plugins/hls-splice-plugin
   # - ./plugins/hls-tactics-plugin
   # - ./plugins/hls-brittany-plugin
   # - ./plugins/hls-stylish-haskell-plugin
@@ -37,11 +37,10 @@ extra-deps:
 - dependent-map-0.4.0.0@sha256:ca2b131046f4340a1c35d138c5a003fe4a5be96b14efc26291ed35fd08c62221,1657
 - dependent-sum-0.7.1.0@sha256:0e419237f5b86da3659772afff9cab355c0f8d5b3fdb15a5b30e673d8dc83941,2147
 - floskell-0.10.5
-- ghc-api-compat-9.0.1
 - ghc-source-gen-0.4.1.0
 - heapsize-0.3.0.1@sha256:0b69aa97a46d819b700ac7b145f3b5493c3565cf2c5b8298682238d405d0326e,1417
 - hie-bios-0.7.6
-- hiedb-0.4.0.0
+- hiedb-0.4.1.0
 - hspec-2.7.10
 - hspec-core-2.7.10
 - hspec-discover-2.7.10
@@ -104,8 +103,6 @@ flags:
     pedantic: true
 
     class: false
-    splice: false
-    refineImports: false
     tactic: false # Dependencies fail
 
     fourmolu: false

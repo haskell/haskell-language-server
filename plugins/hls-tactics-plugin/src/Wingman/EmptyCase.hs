@@ -22,16 +22,13 @@ import           Development.IDE (realSrcSpanToRange)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake (IdeState (..))
 import           Development.IDE.Core.UseStale
-import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat hiding (empty)
 import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.Spans.LocalBindings (getLocalScope)
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
-import           OccName
 import           Prelude hiding (span)
-import           Prelude hiding (span)
-import           TcRnTypes (tcg_binds)
 import           Wingman.AbstractLSP.Types
 import           Wingman.CodeGen (destructionFor)
 import           Wingman.GHC
@@ -75,7 +72,7 @@ emptyCaseInteraction = Interaction $
               ty
         edits <- liftMaybe $ hush $
               mkWorkspaceEdits le_dflags ccs fc_uri (unTrack pm) $
-                graftMatchGroup (RealSrcSpan $ unTrack ss) $
+                graftMatchGroup (RealSrcSpan (unTrack ss) Nothing) $
                   noLoc matches
         pure
           ( range
@@ -157,7 +154,7 @@ emptyCaseScrutinees state nfp = do
         True -> pure empty
         False ->
           case ss of
-            RealSrcSpan r   -> do
+            RealSrcSpan r _ -> do
               rss' <- liftMaybe $ mapAgeTo tcg_map $ unsafeCopyAge aged r
               pure $ Just (rss', ty)
             UnhelpfulSpan _ -> empty

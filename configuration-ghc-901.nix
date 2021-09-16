@@ -7,9 +7,7 @@ let
     "hls-brittany-plugin"
     "hls-stylish-haskell-plugin"
     "hls-fourmolu-plugin"
-    "hls-splice-plugin"
     "hls-class-plugin"
-    "hls-refine-imports-plugin"
   ];
 
   hpkgsOverride = hself: hsuper:
@@ -23,16 +21,10 @@ let
       };
     in {
 
-      # we need add ghc-api-compat to build depends,
-      # since its condition tree is not evaluated under ghc 9
-      hiedb = addBuildDepend hsuper.hiedb hself.ghc-api-compat;
-
       blaze-textual = hself.callCabal2nix "blaze-textual"
-        (pkgs.fetchFromGitHub {
-          owner = "jwaldmann";
-          repo = "blaze-textual";
-          rev = "d8ee6cf80e27f9619d621c936bb4bda4b99a183f";
-          sha256 = "C0dIzf64fBaY8mlhMm1kCQC5Jc1wKBtNO2Y24k7YPUw=";
+        (builtins.fetchTarball {
+          url = "https://hackage.haskell.org/package/blaze-textual-0.2.2.1/blaze-textual-0.2.2.1.tar.gz";
+          sha256 = "1nyhc9mrnxsl21ksnpp0ryki4wgk49r581yy504g2gjq6x3bkb59";
         }) { };
 
       czipwith = hself.callCabal2nix "czipwith" (pkgs.fetchFromGitHub {
@@ -42,12 +34,11 @@ let
         sha256 = "2uSoGyrxT/OstRcpx55kwP4JwjPbWLxD72LajeyQV0E=";
       }) { };
 
-      hie-bios = hself.callCabal2nix "hie-bios" (pkgs.fetchFromGitHub {
-        owner = "jneira";
-        repo = "hie-bios";
-        rev = "9b1445ab5efcabfad54043fc9b8e50e9d8c5bbf3";
-        sha256 = "8ct7t3xIxIAoC+f8VO5e5+QKrd5L5Zu1eButSaE+1Uk=";
-      }) { };
+      hie-bios = hself.callCabal2nix "hie-bios"
+        (builtins.fetchTarball {
+          url = "https://hackage.haskell.org/package/hie-bios-0.7.6/hie-bios-0.7.6.tar.gz";
+          sha256 = "0w4rhy4b3jnci9m27l79c8n28wl56x49bmhdn7pvf88mx9srjcvq";
+        }) { };
 
       th-extras = hself.callCabal2nix "th-extras" (pkgs.fetchFromGitHub {
         owner = "anka-213";
@@ -93,10 +84,8 @@ let
           "-f-brittany"
           "-f-class"
           "-f-fourmolu"
-          "-f-splice"
           "-f-stylishhaskell"
           "-f-tactic"
-          "-f-refineImports"
         ]) { };
 
       # YOLO

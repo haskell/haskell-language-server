@@ -70,13 +70,10 @@
           # Don't use `callHackage`, it requires us to override `all-cabal-hashes`
           tweaks = hself: hsuper:
             with haskell.lib; {
-
-              ghc-api-compat = hself.callCabal2nix "ghc-api-compat"
-                (pkgs.fetchFromGitHub {
-                  owner = "hsyl20";
-                  repo = "ghc-api-compat";
-                  rev = "8fee87eac97a538dbe81ff1ab18cff10f2f9fa15";
-                  sha256 = "byehvdxQxhNk5ZQUXeFHjAZpAze4Ct9261ro4c5acZk=";
+              hiedb = hself.callCabal2nix "hiedb"
+                (builtins.fetchTarball {
+                  url = "https://hackage.haskell.org/package/hiedb-0.4.1.0/hiedb-0.4.1.0.tar.gz";
+                  sha256 = "11s7lfkd6fc3zf3kgyp3jhicbhxpn6jp0yjahl8d28hicwr2qdpi";
                 }) { };
 
               lsp = hself.lsp_1_2_0_1;

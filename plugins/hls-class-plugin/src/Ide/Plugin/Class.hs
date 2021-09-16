@@ -8,12 +8,10 @@ module Ide.Plugin.Class
   ( descriptor
   ) where
 
-import           BooleanFormula
-import           Class
-import           ConLike
 import           Control.Applicative
 import           Control.Lens                            hiding (List, use)
 import           Control.Monad
+import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
@@ -26,10 +24,9 @@ import           Development.IDE                         hiding (pluginHandlers)
 import           Development.IDE.Core.PositionMapping    (fromCurrentRange,
                                                           toCurrentRange)
 import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.Spans.AtPoint
 import qualified GHC.Generics                            as Generics
-import           GhcPlugins                              hiding (Var, getLoc,
-                                                          (<>))
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.Haskell.GHC.ExactPrint
@@ -38,8 +35,6 @@ import           Language.Haskell.GHC.ExactPrint.Types   hiding (GhcPs, Parens)
 import           Language.LSP.Server
 import           Language.LSP.Types
 import qualified Language.LSP.Types.Lens                 as J
-import           TcEnv
-import           TcRnMonad
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)

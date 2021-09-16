@@ -10,7 +10,6 @@ module Wingman.CodeGen
   ) where
 
 
-import           ConLike
 import           Control.Lens ((%~), (<>~), (&))
 import           Control.Monad.Except
 import           Control.Monad.Reader (ask)
@@ -22,7 +21,6 @@ import           Data.Generics.Labels ()
 import           Data.List
 import qualified Data.Set as S
 import           Data.Traversable
-import           DataCon
 import           Development.IDE.GHC.Compat
 import           GHC.Exts
 import           GHC.SourceGen (occNameToStr)
@@ -30,11 +28,6 @@ import           GHC.SourceGen.Binds
 import           GHC.SourceGen.Expr
 import           GHC.SourceGen.Overloaded
 import           GHC.SourceGen.Pat
-import           GhcPlugins (isSymOcc, mkVarOccFS)
-import           OccName (occName)
-import           PatSyn
-import           Type hiding (Var)
-import           TysPrim (alphaTy)
 import           Wingman.CodeGen.Utils
 import           Wingman.GHC
 import           Wingman.Judgements
@@ -207,7 +200,7 @@ conLikeInstOrigArgTys' con uniTys =
 
 
 conLikeExTys :: ConLike -> [TyCoVar]
-conLikeExTys (RealDataCon d) = dataConExTys d
+conLikeExTys (RealDataCon d) = dataConExTyCoVars d
 conLikeExTys (PatSynCon p) = patSynExTys p
 
 patSynExTys :: PatSyn -> [TyCoVar]

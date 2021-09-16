@@ -14,13 +14,8 @@ import           Data.Monoid
 import           Data.Set (Set)
 import qualified Data.Set as S
 import           Data.Traversable
-import           GhcPlugins (charTy, maybeTyCon)
-import           Name
-import           TcType
+import           Development.IDE.GHC.Compat.Core hiding (IsFunction)
 import           Text.Hyphenation (hyphenate, english_US)
-import           TyCon
-import           Type
-import           TysWiredIn (listTyCon, unitTyCon)
 import           Wingman.GHC (tcTyVar_maybe)
 
 
