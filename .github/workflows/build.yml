@@ -16,18 +16,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ['9.0.1', '8.10.7', '8.10.6', '8.10.5', '8.10.4', '8.10.3', '8.10.2', '8.8.4', '8.8.3', '8.6.5']
+        ghc: ['9.0.1', '8.10.7', '8.10.6', '8.10.5', '8.10.4', '8.10.3', '8.8.4', '8.8.3', '8.6.5']
         os: [ubuntu-18.04, macOS-latest, windows-latest]
         exclude:
-          - os: windows-latest
-            ghc: '8.10.2' # broken due to https://gitlab.haskell.org/ghc/ghc/-/issues/18550
           - os: windows-latest
             ghc: '8.8.4' # also fails due to segfault :(
           - os: windows-latest
             ghc: '8.8.3' # fails due to segfault
-        include:
-          - os: windows-latest
-            ghc: '8.10.2.2' # only available for windows and choco
 
     steps:
     - uses: actions/checkout@v2
@@ -56,8 +51,6 @@ jobs:
         GHC_VER: ${{ matrix.ghc }}
       run: |
         echo "EXE_EXT=.exe" >> $GITHUB_ENV
-        # We normalize windows+choco ghc version 8.10.2.2
-        GHC_VER=$(echo $GHC_VER | sed 's/8.10.2.2/8.10.2/g')
         echo "GHC_VERSION=$GHC_VER" >> $GITHUB_ENV
 
     - name: Set some linux specific things
