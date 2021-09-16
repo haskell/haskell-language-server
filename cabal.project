@@ -25,6 +25,8 @@ packages:
          ./plugins/hls-ormolu-plugin
          ./plugins/hls-call-hierarchy-plugin
 
+optional-packages: vendored/*/*.cabal
+
 tests: true
 
 package *
