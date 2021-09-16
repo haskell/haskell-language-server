@@ -11,6 +11,7 @@ import           Development.IDE.GHC.Compat.Util
 import           Wingman.GHC (normalizeType)
 import           Wingman.Judgements.Theta
 import           Wingman.Types
+-- import GHC.Tc.Utils.TcType (tcSplitPhiTy, tcSplitTyConApp)
 
 
 mkContext

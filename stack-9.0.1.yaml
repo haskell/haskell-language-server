@@ -18,7 +18,7 @@ packages:
   - ./plugins/hls-rename-plugin
   - ./plugins/hls-retrie-plugin
   - ./plugins/hls-splice-plugin
-  # - ./plugins/hls-tactics-plugin
+  - ./plugins/hls-tactics-plugin
   # - ./plugins/hls-brittany-plugin
   # - ./plugins/hls-stylish-haskell-plugin
   - ./plugins/hls-floskell-plugin
@@ -103,7 +103,6 @@ flags:
     pedantic: true
 
     class: false
-    tactic: false # Dependencies fail
 
     fourmolu: false
     stylishHaskell: false

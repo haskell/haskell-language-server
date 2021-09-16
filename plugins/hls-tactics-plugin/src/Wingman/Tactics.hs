@@ -24,7 +24,6 @@ import           Data.Maybe
 import           Data.Set (Set)
 import qualified Data.Set as S
 import           Data.Traversable (for)
-import           DataCon
 import           Development.IDE.GHC.Compat hiding (empty)
 import           GHC.Exts
 import           GHC.SourceGen ((@@))
@@ -132,7 +131,8 @@ intros' params = rule $ \jdg -> do
   let g  = jGoal jdg
   case tacticsSplitFunTy $ unCType g of
     (_, _, [], _) -> cut -- failure $ GoalMismatch "intros" g
-    (_, _, args, res) -> do
+    (_, _, scaledArgs, res) -> do
+      let args = map scaledThing scaledArgs
       ctx <- ask
       let gen_names = mkManyGoodNames (hyNamesInScope $ jEntireHypothesis jdg) args
           occs = case params of
@@ -145,7 +145,7 @@ intros' params = rule $ \jdg -> do
           bound_occs = fmap fst bindings
           hy' = lambdaHypothesis top_hole bindings
           jdg' = introduce ctx hy'
-               $ withNewGoal (CType $ mkVisFunTys (drop num_occs args) res) jdg
+               $ withNewGoal (CType $ mkVisFunTys (drop num_occs scaledArgs) res) jdg
       ext <- newSubgoal jdg'
       pure $
         ext
@@ -291,6 +291,7 @@ apply (Unsaturated n) hi = tracing ("apply' " <> show (hi_name hi)) $ do
                     . blacklistingDestruct
                     . flip withNewGoal jdg
                     . CType
+                    . scaledThing
                     ) saturated_args
     pure $
       ext
@@ -524,6 +525,7 @@ applyByType ty = tracing ("applyByType " <> show ty) $ do
                     . blacklistingDestruct
                     . flip withNewGoal jdg
                     . CType
+                    . scaledThing
                     ) args
     app <- newSubgoal . blacklistingDestruct $ withNewGoal (CType ty) jdg
     pure $
@@ -540,7 +542,7 @@ nary :: Int -> TacticsM ()
 nary n = do
   a <- newUnivar
   b <- newUnivar
-  applyByType $ mkVisFunTys (replicate n a) b
+  applyByType $ mkVisFunTys (replicate n $ unrestricted a) b
 
 
 self :: TacticsM ()
@@ -558,7 +560,7 @@ cata :: HyInfo CType -> TacticsM ()
 cata hi = do
   (_, _, calling_args, _)
       <- tacticsSplitFunTy . unCType <$> getDefiningType
-  freshened_args <- traverse freshTyvars calling_args
+  freshened_args <- traverse (freshTyvars . scaledThing) calling_args
   diff <- hyDiff $ destruct hi
 
   -- For for every destructed term, check to see if it can unify with any of
@@ -625,7 +627,7 @@ with_arg = rule $ \jdg -> do
   let g = jGoal jdg
   fresh_ty <- newUnivar
   a <- newSubgoal $ withNewGoal (CType fresh_ty) jdg
-  f <- newSubgoal $ withNewGoal (coerce mkVisFunTys [fresh_ty] g) jdg
+  f <- newSubgoal $ withNewGoal (coerce mkVisFunTys [unrestricted fresh_ty] g) jdg
   pure $ fmap noLoc $ (@@) <$> fmap unLoc f <*> fmap unLoc a
 
 
