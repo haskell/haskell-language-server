@@ -67,10 +67,12 @@ jobs:
             ghc: '8.10.4'
           - os: windows-latest
             ghc: '8.10.3'
+          - os: windows-latest
+            ghc: '8.8.4'
           # These builds get stuck frequently
           # - os: windows-latest
           #   ghc: '8.10.2.2'
-          
+
           # - os: windows-latest
           #   ghc: '8.6.4'
 
@@ -101,7 +103,7 @@ jobs:
           echo "CABAL_STORE_DIR=~/.cabal/store" >> $GITHUB_ENV
           echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
 
-      - name: Tentative Workaround for GHC 8.10.5 on macOS
+      - name: Workaround for GHC 8.10.5 on macOS
         if: matrix.os == 'macOS-latest' && matrix.ghc == '8.10.5'
         run: |
           echo "# uninstalling CommandLineTools (see https://github.com/haskell/haskell-language-server/issues/1913#issuecomment-861667786)"
@@ -111,6 +113,12 @@ jobs:
       - if: ${{ needs.pre_job.outputs.should_skip != 'true' && matrix.ghc == '9.0.1' }}
         name: Use modified cabal.project for ghc9
         run: cp cabal-ghc901.project cabal.project
+
+      - if: ${{ needs.pre_job.outputs.should_skip != 'true' && matrix.ghc == '8.8.4' && matrix.os == 'windows-latest' }}
+        name: Modify cabal.project to workaround segfaults for ghc-8.8.4 and windows
+        run: |
+          echo "package floskell" >> cabal.project
+          echo "  ghc-options: -O0" >> cabal.project
 
       - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
         name: Cache Cabal
