@@ -6,22 +6,20 @@
 module Ide.Plugin.Eval.Code (Statement, testRanges, resultRange, evalSetup, propSetup, testCheck, asStatements,myExecStmt) where
 
 import           Control.Lens                   ((^.))
+import           Control.Monad.IO.Class
 import           Data.Algorithm.Diff            (Diff, PolyDiff (..), getDiff)
 import qualified Data.List.NonEmpty             as NE
 import           Data.String                    (IsString)
 import qualified Data.Text                      as T
+import           Development.IDE.GHC.Compat
 import           Development.IDE.Types.Location (Position (..), Range (..))
 import           GHC                            (ExecOptions, ExecResult (..),
                                                  execStmt)
-import           GhcMonad                       (Ghc, liftIO, modifySession)
-import           HscTypes
 import           Ide.Plugin.Eval.Types          (Language (Plain), Loc,
                                                  Located (..),
                                                  Section (sectionLanguage),
                                                  Test (..), Txt, locate,
                                                  locate0)
-import           InteractiveEval                (getContext, parseImportDecl,
-                                                 runDecls, setContext)
 import           Language.LSP.Types.Lens        (line, start)
 import           System.IO.Extra                (newTempFile, readFile')
 

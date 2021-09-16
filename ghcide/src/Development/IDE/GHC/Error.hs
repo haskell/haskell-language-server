@@ -29,22 +29,19 @@ module Development.IDE.GHC.Error
   , toDSeverity
   ) where
 
-import           Bag
 import           Data.Maybe
 import           Data.String                       (fromString)
 import qualified Data.Text                         as T
-import qualified Development.IDE.GHC.Compat        as GHC
+import           Development.IDE.GHC.Compat        (DecoratedSDoc, MsgEnvelope,
+                                                    errMsgSeverity, errMsgSpan,
+                                                    formatErrorWithQual,
+                                                    srcErrorMessages)
+import qualified Development.IDE.GHC.Compat        as Compat
+import qualified Development.IDE.GHC.Compat.Util   as Compat
 import           Development.IDE.GHC.Orphans       ()
 import           Development.IDE.Types.Diagnostics as D
 import           Development.IDE.Types.Location
-import           ErrUtils
-import qualified FastString                        as FS
 import           GHC
-import           HscTypes
-import qualified Outputable                        as Out
-import           Panic
-import           SrcLoc
-
 
 
 diagFromText :: T.Text -> D.DiagnosticSeverity -> SrcSpan -> T.Text -> FileDiagnostic
@@ -60,32 +57,25 @@ diagFromText diagSource sev loc msg = (toNormalizedFilePath' $ fromMaybe noFileP
     }
 
 -- | Produce a GHC-style error from a source span and a message.
-diagFromErrMsg :: T.Text -> DynFlags -> ErrMsg -> [FileDiagnostic]
+diagFromErrMsg :: T.Text -> DynFlags -> MsgEnvelope DecoratedSDoc -> [FileDiagnostic]
 diagFromErrMsg diagSource dflags e =
     [ diagFromText diagSource sev (errMsgSpan e)
       $ T.pack $ formatErrorWithQual dflags e
     | Just sev <- [toDSeverity $ errMsgSeverity e]]
 
-formatErrorWithQual :: DynFlags -> ErrMsg -> String
-formatErrorWithQual dflags e =
-    Out.showSDoc dflags
-    $ Out.withPprStyle (GHC.oldMkErrStyle dflags $ errMsgContext e)
-    $ GHC.oldFormatErrDoc dflags
-    $ ErrUtils.errMsgDoc e
-
-diagFromErrMsgs :: T.Text -> DynFlags -> Bag ErrMsg -> [FileDiagnostic]
-diagFromErrMsgs diagSource dflags = concatMap (diagFromErrMsg diagSource dflags) . bagToList
+diagFromErrMsgs :: T.Text -> DynFlags -> Compat.Bag (MsgEnvelope DecoratedSDoc) -> [FileDiagnostic]
+diagFromErrMsgs diagSource dflags = concatMap (diagFromErrMsg diagSource dflags) . Compat.bagToList
 
 -- | Convert a GHC SrcSpan to a DAML compiler Range
 srcSpanToRange :: SrcSpan -> Maybe Range
-srcSpanToRange (UnhelpfulSpan _)         = Nothing
-srcSpanToRange (GHC.OldRealSrcSpan real) = Just $ realSrcSpanToRange real
+srcSpanToRange (UnhelpfulSpan _)           = Nothing
+srcSpanToRange (Compat.RealSrcSpan real _) = Just $ realSrcSpanToRange real
 -- srcSpanToRange = fmap realSrcSpanToRange . realSpan
 
 realSrcSpanToRange :: RealSrcSpan -> Range
 realSrcSpanToRange real =
-  Range (realSrcLocToPosition $ realSrcSpanStart real)
-        (realSrcLocToPosition $ realSrcSpanEnd   real)
+  Range (realSrcLocToPosition $ Compat.realSrcSpanStart real)
+        (realSrcLocToPosition $ Compat.realSrcSpanEnd   real)
 
 realSrcLocToPosition :: RealSrcLoc -> Position
 realSrcLocToPosition real =
@@ -95,12 +85,12 @@ realSrcLocToPosition real =
 -- FIXME This may not be an _absolute_ file name, needs fixing.
 srcSpanToFilename :: SrcSpan -> Maybe FilePath
 srcSpanToFilename (UnhelpfulSpan _)  = Nothing
-srcSpanToFilename (GHC.OldRealSrcSpan real) = Just $ FS.unpackFS $ srcSpanFile real
+srcSpanToFilename (Compat.RealSrcSpan real _) = Just $ Compat.unpackFS $ srcSpanFile real
 -- srcSpanToFilename = fmap (FS.unpackFS . srcSpanFile) . realSpan
 
 realSrcSpanToLocation :: RealSrcSpan -> Location
 realSrcSpanToLocation real = Location file (realSrcSpanToRange real)
-  where file = fromNormalizedUri $ filePathToUri' $ toNormalizedFilePath' $ FS.unpackFS $ srcSpanFile real
+  where file = fromNormalizedUri $ filePathToUri' $ toNormalizedFilePath' $ Compat.unpackFS $ srcSpanFile real
 
 srcSpanToLocation :: SrcSpan -> Maybe Location
 srcSpanToLocation src = do
@@ -110,18 +100,18 @@ srcSpanToLocation src = do
   pure $ Location (fromNormalizedUri $ filePathToUri' $ toNormalizedFilePath' fs) rng
 
 rangeToSrcSpan :: NormalizedFilePath -> Range -> SrcSpan
-rangeToSrcSpan = fmap GHC.OldRealSrcSpan . rangeToRealSrcSpan
+rangeToSrcSpan = fmap (\x -> Compat.RealSrcSpan x Nothing) . rangeToRealSrcSpan
 
 rangeToRealSrcSpan
     :: NormalizedFilePath -> Range -> RealSrcSpan
 rangeToRealSrcSpan nfp =
-    mkRealSrcSpan
+    Compat.mkRealSrcSpan
         <$> positionToRealSrcLoc nfp . _start
         <*> positionToRealSrcLoc nfp . _end
 
 positionToRealSrcLoc :: NormalizedFilePath -> Position -> RealSrcLoc
 positionToRealSrcLoc nfp (Position l c)=
-    mkRealSrcLoc (fromString $ fromNormalizedFilePath nfp) (l + 1) (c + 1)
+    Compat.mkRealSrcLoc (fromString $ fromNormalizedFilePath nfp) (l + 1) (c + 1)
 
 isInsideSrcSpan :: Position -> SrcSpan -> Bool
 p `isInsideSrcSpan` r = case srcSpanToRange r of
@@ -152,19 +142,19 @@ diagFromString diagSource sev sp x = [diagFromText diagSource sev sp $ T.pack x]
 
 -- | Produces an "unhelpful" source span with the given string.
 noSpan :: String -> SrcSpan
-noSpan = GHC.oldUnhelpfulSpan  . FS.fsLit
+noSpan = Compat.mkGeneralSrcSpan . Compat.fsLit
 
 
 -- | creates a span with zero length in the filename of the argument passed
-zeroSpan :: FS.FastString -- ^ file path of span
+zeroSpan :: Compat.FastString -- ^ file path of span
          -> RealSrcSpan
-zeroSpan file = realSrcLocSpan (mkRealSrcLoc file 1 1)
+zeroSpan file = Compat.realSrcLocSpan (Compat.mkRealSrcLoc file 1 1)
 
 realSpan :: SrcSpan
          -> Maybe RealSrcSpan
 realSpan = \case
-  GHC.OldRealSrcSpan r -> Just r
-  UnhelpfulSpan _      -> Nothing
+  Compat.RealSrcSpan r _ -> Just r
+  UnhelpfulSpan _        -> Nothing
 
 
 -- | Catch the errors thrown by GHC (SourceErrors and
@@ -172,7 +162,7 @@ realSpan = \case
 -- diagnostics
 catchSrcErrors :: DynFlags -> T.Text -> IO a -> IO (Either [FileDiagnostic] a)
 catchSrcErrors dflags fromWhere ghcM = do
-    handleGhcException (ghcExceptionToDiagnostics dflags) $
+    Compat.handleGhcException (ghcExceptionToDiagnostics dflags) $
       handleSourceError (sourceErrorToDiagnostics dflags) $
       Right <$> ghcM
     where
@@ -192,14 +182,14 @@ showGHCE dflags exc = case exc of
           -> unwords ["Compilation Issue:", s, "\n", requestReport]
         PprPanic  s sdoc
           -> unlines ["Compilation Issue", s,""
-                     , Out.showSDoc dflags sdoc
+                     , Compat.showSDoc dflags sdoc
                      , requestReport ]
 
         Sorry s
           -> "Unsupported feature: " <> s
         PprSorry s sdoc
           -> unlines ["Unsupported feature: ", s,""
-                     , Out.showSDoc dflags sdoc]
+                     , Compat.showSDoc dflags sdoc]
 
 
         ---------- errors below should not happen at all --------
@@ -216,6 +206,6 @@ showGHCE dflags exc = case exc of
             -> "Program error: " <> str
         PprProgramError str  sdoc  ->
             unlines ["Program error:", str,""
-                    , Out.showSDoc dflags sdoc]
+                    , Compat.showSDoc dflags sdoc]
   where
     requestReport = "Please report this bug to the compiler authors."

@@ -25,7 +25,6 @@ module Ide.Plugin.Eval.CodeLens (
     evalCommand,
 ) where
 
-import           CmdLineParser
 import           Control.Applicative                  (Alternative ((<|>)))
 import           Control.Arrow                        (second, (>>>))
 import           Control.Exception                    (try)
@@ -72,59 +71,30 @@ import           Development.IDE.Core.Compile         (loadModulesHome,
                                                        setupFinderCache)
 import           Development.IDE.Core.PositionMapping (toCurrentRange)
 import           Development.IDE.Core.Rules           (TransitiveDependencies (transitiveModuleDeps))
-import           Development.IDE.GHC.Compat           (AnnotationComment (AnnBlockComment, AnnLineComment),
-                                                       GenLocated (L),
-                                                       GhcException, HscEnv,
-                                                       ParsedModule (..),
-                                                       SrcSpan (UnhelpfulSpan),
-                                                       moduleName,
-                                                       setInteractiveDynFlags,
-                                                       srcSpanFile)
+import           Development.IDE.GHC.Compat           hiding (typeKind,
+                                                       unitState)
+import qualified Development.IDE.GHC.Compat           as Compat
 import qualified Development.IDE.GHC.Compat           as SrcLoc
+import           Development.IDE.GHC.Compat.Util      (GhcException,
+                                                       OverridingBool (..))
+import qualified Development.IDE.GHC.Compat.Util      as FastString
 import           Development.IDE.Types.Options
-import           DynamicLoading                       (initializePlugins)
-import           FastString                           (unpackFS)
 import           GHC                                  (ClsInst,
                                                        ExecOptions (execLineNumber, execSourceFile),
-                                                       FamInst, Fixity,
-                                                       GeneralFlag (..), Ghc,
-                                                       GhcLink (LinkInMemory),
-                                                       GhcMode (CompManager),
-                                                       GhcMonad (getSession),
-                                                       HscTarget (HscInterpreted),
+                                                       FamInst, GhcMonad,
                                                        LoadHowMuch (LoadAllTargets),
-                                                       ModSummary (ms_hspp_opts),
-                                                       NamedThing (getName, getOccName),
-                                                       SuccessFlag (Failed, Succeeded),
-                                                       TcRnExprMode (..),
-                                                       TyThing, defaultFixity,
+                                                       NamedThing (getName),
+                                                       defaultFixity,
                                                        execOptions, exprType,
                                                        getInfo,
                                                        getInteractiveDynFlags,
-                                                       getSessionDynFlags,
                                                        isImport, isStmt, load,
                                                        parseName, pprFamInst,
-                                                       pprInstance, runDecls,
-                                                       setContext, setLogAction,
-                                                       setSessionDynFlags,
-                                                       setTargets, typeKind)
+                                                       pprInstance,
+                                                       setLogAction, setTargets,
+                                                       typeKind)
 import qualified GHC.LanguageExtensions.Type          as LangExt (Extension (..))
-import           GhcPlugins                           (DynFlags (..),
-                                                       defaultLogActionHPutStrDoc,
-                                                       elemNameSet, gopt_set,
-                                                       gopt_unset, hsc_dflags,
-                                                       isSymOcc, mkNameSet,
-                                                       parseDynamicFlagsCmdLine,
-                                                       pprDefinedAt,
-                                                       pprInfixName,
-                                                       targetPlatform,
-                                                       tyThingParent_maybe,
-                                                       xopt_set, xopt_unset)
 
-import           HscTypes                             (InteractiveImport (IIModule),
-                                                       ModSummary (ms_mod),
-                                                       Target (Target),
-                                                       TargetId (TargetFile))
 import           Ide.Plugin.Eval.Code                 (Statement, asStatements,
                                                        evalSetup, myExecStmt,
                                                        propSetup, resultRange,
@@ -146,28 +116,15 @@ import           Language.LSP.Types                   hiding
                                                        SemanticTokenRelative (length))
 import           Language.LSP.Types.Lens              (end, line)
 import           Language.LSP.VFS                     (virtualFileText)
-import           Outputable                           (SDoc, empty, hang, nest,
-                                                       ppr, showSDoc, text,
-                                                       vcat, ($$), (<+>))
 import           System.FilePath                      (takeFileName)
 import           System.IO                            (hClose)
 import           UnliftIO.Temporary                   (withSystemTempFile)
-import           Util                                 (OverridingBool (Never))
 
-import           IfaceSyn                             (showToHeader)
-import           PprTyThing                           (pprTyThingInContext,
-                                                       pprTypeForUser)
 #if MIN_VERSION_ghc(9,0,0)
-import           GHC.Driver.Ways                      (hostFullWays,
-                                                       wayGeneralFlags,
-                                                       wayUnsetGeneralFlags)
-import           GHC.Parser.Annotation                (ApiAnns (apiAnnRogueComments))
-import           GHC.Parser.Lexer                     (mkParserFlags)
+import           GHC.Driver.Session                   (unitDatabases, unitState)
 import           GHC.Types.SrcLoc                     (UnhelpfulSpanReason (UnhelpfulInteractive))
 #else
-import           GhcPlugins                           (interpWays, updateWays,
-                                                       wayGeneralFlags,
-                                                       wayUnsetGeneralFlags)
+import           DynFlags
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
@@ -180,7 +137,7 @@ apiAnnComments' :: SrcLoc.ApiAnns -> [SrcLoc.Located AnnotationComment]
 apiAnnComments' = concat . Map.elems . snd
 
 pattern RealSrcSpanAlready :: SrcLoc.RealSrcSpan -> SrcSpan
-pattern RealSrcSpanAlready x = SrcLoc.RealSrcSpan x
+pattern RealSrcSpanAlready x = SrcLoc.RealSrcSpan x Nothing
 #endif
 
 
@@ -203,7 +160,7 @@ codeLens st plId CodeLensParams{_textDocument} =
                 let comments =
                          foldMap (\case
                             L (RealSrcSpanAlready real) bdy
-                                | unpackFS (srcSpanFile real) ==
+                                | FastString.unpackFS (srcSpanFile real) ==
                                     fromNormalizedFilePath nfp
                                 , let ran0 = realSrcSpanToRange real
                                 , Just curRan <- toCurrentRange posMap ran0
@@ -387,7 +344,7 @@ runEvalCmd st EvalParams{..} =
                         return $ Left err
                     Succeeded -> do
                         -- Evaluation takes place 'inside' the module
-                        setContext [IIModule modName]
+                        setContext [Compat.IIModule modName]
                         Right <$> getSession
 
             edits <-
@@ -601,11 +558,10 @@ evals (st, fp) df stmts = do
                 dbg "{DECL " stmt
                 void $ runDecls stmt
                 return Nothing
+    pf = initParserOpts df
 #if !MIN_VERSION_ghc(9,0,0)
-    pf = df
     unhelpfulReason = "<interactive>"
 #else
-    pf = mkParserFlags df
     unhelpfulReason = UnhelpfulInteractive
 #endif
     exec stmt l =
@@ -766,7 +722,7 @@ doKindCmd True df arg = do
 doTypeCmd :: DynFlags -> Text -> Ghc (Maybe Text)
 doTypeCmd dflags arg = do
     let (emod, expr) = parseExprMode arg
-    ty <- exprType emod $ T.unpack expr
+    ty <- GHC.exprType emod $ T.unpack expr
     let rawType = T.strip $ T.pack $ showSDoc dflags $ pprTypeForUser ty
         broken = T.any (\c -> c == '\r' || c == '\n') rawType
     pure $
@@ -812,29 +768,20 @@ parseGhciLikeCmd input = do
 
 setupDynFlagsForGHCiLike :: HscEnv -> DynFlags -> IO DynFlags
 setupDynFlagsForGHCiLike env dflags = do
-    let dflags3 =
-            dflags
-                { hscTarget = HscInterpreted
-                , ghcMode = CompManager
-                , ghcLink = LinkInMemory
-                }
+    let dflags3 = setInterpreterLinkerOptions dflags
         platform = targetPlatform dflags3
-#if MIN_VERSION_ghc(9,0,0)
-        evalWays = hostFullWays
-#else
-        evalWays = interpWays
-#endif
-        dflags3a = dflags3{ways = evalWays}
+        evalWays = Compat.hostFullWays
+        dflags3a = setWays evalWays dflags3
         dflags3b =
             foldl gopt_set dflags3a $
-                concatMap (wayGeneralFlags platform) evalWays
+                concatMap (Compat.wayGeneralFlags platform) evalWays
         dflags3c =
             foldl gopt_unset dflags3b $
-                concatMap (wayUnsetGeneralFlags platform) evalWays
+                concatMap (Compat.wayUnsetGeneralFlags platform) evalWays
         dflags4 =
             dflags3c
                 `gopt_set` Opt_ImplicitImportQualified
                 `gopt_set` Opt_IgnoreOptimChanges
                 `gopt_set` Opt_IgnoreHpcChanges
                 `gopt_unset` Opt_DiagnosticsShowCaret
-    initializePlugins env dflags4
+    Compat.hsc_dflags <$> Compat.initializePlugins (Compat.hscSetFlags dflags4 env)

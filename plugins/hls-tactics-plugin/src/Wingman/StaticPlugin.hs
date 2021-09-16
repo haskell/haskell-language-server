@@ -9,11 +9,10 @@ module Wingman.StaticPlugin
 
 import Data.Data
 import Development.IDE.GHC.Compat
+import Development.IDE.GHC.Compat.Util
 import GHC.LanguageExtensions.Type (Extension(EmptyCase, QuasiQuotes))
 import Generics.SYB
-import GhcPlugins hiding ((<>))
 import Ide.Types
-
 
 staticPlugin :: DynFlagsModifications
 staticPlugin = mempty
@@ -41,9 +40,15 @@ pattern MetaprogramSourceText = SourceText "wingman-meta-program"
 
 
 pattern WingmanMetaprogram :: FastString -> HsExpr p
-pattern WingmanMetaprogram mp
-  <- HsSCC _ MetaprogramSourceText (StringLiteral NoSourceText mp)
+pattern WingmanMetaprogram mp <-
+#if __GLASGOW_HASKELL__ >= 900
+  HsPragE _ (HsPragSCC _ MetaprogramSourceText (StringLiteral NoSourceText mp))
       (L _ ( HsVar _ _))
+#else
+  HsSCC _ MetaprogramSourceText (StringLiteral NoSourceText mp)
+      (L _ ( HsVar _ _))
+#endif
+
 
 
 enableQuasiQuotes :: DynFlags -> DynFlags
@@ -63,7 +68,7 @@ metaprogrammingPlugin :: StaticPlugin
 metaprogrammingPlugin =
     StaticPlugin $ PluginWithArgs (defaultPlugin { parsedResultAction = worker })  []
   where
-    worker :: [CommandLineOption] -> ModSummary -> HsParsedModule -> Hsc HsParsedModule
+    worker :: Monad m => [CommandLineOption] -> ModSummary -> HsParsedModule -> m HsParsedModule
     worker _ _ pm = pure $ pm { hpm_module = addMetaprogrammingSyntax $ hpm_module pm }
 #endif
 
@@ -73,7 +78,11 @@ metaprogramHoleName = mkVarOcc "_$metaprogram"
 
 mkMetaprogram :: SrcSpan -> FastString -> HsExpr GhcPs
 mkMetaprogram ss mp =
+#if __GLASGOW_HASKELL__ >= 900
+  HsPragE noExtField (HsPragSCC noExtField MetaprogramSourceText (StringLiteral NoSourceText mp))
+#else
   HsSCC noExtField MetaprogramSourceText (StringLiteral NoSourceText mp)
+#endif
     $ L ss
     $ HsVar noExtField
     $ L ss

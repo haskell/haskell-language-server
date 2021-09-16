@@ -160,10 +160,10 @@ defaultSkipProgress key = case () of
 
 -- | The set of options used to locate files belonging to external packages.
 data IdePkgLocationOptions = IdePkgLocationOptions
-  { optLocateHieFile :: PackageConfig -> Module -> IO (Maybe FilePath)
+  { optLocateHieFile :: UnitState -> Module -> IO (Maybe FilePath)
   -- ^ Locate the HIE file for the given module. The PackageConfig can be
   -- used to lookup settings like importDirs.
-  , optLocateSrcFile :: PackageConfig -> Module -> IO (Maybe FilePath)
+  , optLocateSrcFile :: UnitState -> Module -> IO (Maybe FilePath)
   -- ^ Locate the source file for the given module. The PackageConfig can be
   -- used to lookup settings like importDirs. For DAML, we place them in the package DB.
   -- For cabal this could point somewhere in ~/.cabal/packages.

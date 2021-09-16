@@ -19,7 +19,7 @@ module Development.IDE.Session
 
 import           Control.Concurrent.Async
 import           Control.Concurrent.Strict
-import           Control.Exception.Safe
+import           Control.Exception.Safe               as Safe
 import           Control.Monad
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
@@ -42,9 +42,13 @@ import           Data.Time.Clock
 import           Data.Version
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
-import           Development.IDE.GHC.Compat           hiding (Target,
-                                                       TargetFile, TargetModule)
-import qualified Development.IDE.GHC.Compat           as GHC
+import qualified Development.IDE.GHC.Compat           as Compat
+import           Development.IDE.GHC.Compat.Core      hiding (Target,
+                                                       TargetFile, TargetModule,
+                                                       Var)
+import qualified Development.IDE.GHC.Compat.Core      as GHC
+import           Development.IDE.GHC.Compat.Env       hiding (Logger)
+import           Development.IDE.GHC.Compat.Units     (UnitId)
 import           Development.IDE.GHC.Util
 import           Development.IDE.Graph                (Action)
 import           Development.IDE.Session.VersionCheck
@@ -71,12 +75,6 @@ import           System.Info
 import           Control.Applicative                  (Alternative ((<|>)))
 import           Control.Exception                    (evaluate)
 import           Data.Void
-import           GHCi
-import           HscTypes                             (hsc_IC, hsc_NC,
-                                                       hsc_dflags, ic_dflags)
-import           Linker
-import           Module
-import           NameCache
 
 import           Control.Concurrent.STM               (atomically)
 import           Control.Concurrent.STM.TQueue
@@ -105,7 +103,7 @@ data SessionLoadingOptions = SessionLoadingOptions
   , getCacheDirs           :: String -> [String] -> IO CacheDirs
   -- | Return the GHC lib dir to use for the 'unsafeGlobalDynFlags'
   , getInitialGhcLibDir    :: FilePath -> IO (Maybe LibDir)
-  , fakeUid                :: GHC.InstalledUnitId
+  , fakeUid                :: UnitId
     -- ^ unit id used to tag the internal component built by ghcide
     --   To reuse external interface files the unit ids must match,
     --   thus make sure to build them with `--this-unit-id` set to the
@@ -118,7 +116,7 @@ instance Default SessionLoadingOptions where
         ,loadCradle = loadWithImplicitCradle
         ,getCacheDirs = getCacheDirsDefault
         ,getInitialGhcLibDir = getInitialGhcLibDirDefault
-        ,fakeUid = GHC.toInstalledUnitId (GHC.stringToUnit "main")
+        ,fakeUid = Compat.toUnitId (Compat.stringToUnit "main")
         }
 
 -- | Find the cradle for a given 'hie.yaml' configuration.
@@ -173,7 +171,7 @@ runWithDb :: FilePath -> (HieDb -> IndexQueue -> IO ()) -> IO ()
 runWithDb fp k = do
   -- Delete the database if it has an incompatible schema version
   withHieDb fp (const $ pure ())
-    `catch` \IncompatibleSchemaVersion{} -> removeFile fp
+    `Safe.catch` \IncompatibleSchemaVersion{} -> removeFile fp
   withHieDb fp $ \writedb -> do
     initConn writedb
     chan <- newTQueueIO
@@ -187,15 +185,15 @@ runWithDb fp k = do
       forever $ do
         k <- atomically $ readTQueue chan
         k db
-          `catch` \e@SQLError{} -> do
+          `Safe.catch` \e@SQLError{} -> do
             hPutStrLn stderr $ "SQLite error in worker, ignoring: " ++ show e
-          `catchAny` \e -> do
+          `Safe.catchAny` \e -> do
             hPutStrLn stderr $ "Uncaught error in database worker, ignoring: " ++ show e
 
 
 getHieDbLoc :: FilePath -> IO FilePath
 getHieDbLoc dir = do
-  let db = intercalate "-" [dirHash, takeBaseName dir, ghcVersionStr, hiedbDataVersion] <.> "hiedb"
+  let db = intercalate "-" [dirHash, takeBaseName dir, Compat.ghcVersionStr, hiedbDataVersion] <.> "hiedb"
       dirHash = B.unpack $ B16.encode $ H.hash $ B.pack dir
   cDir <- IO.getXdgDirectory IO.XdgCache cacheDir
   createDirectoryIfMissing True cDir
@@ -297,7 +295,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
                   -- We will modify the unitId and DynFlags used for
                   -- compilation but these are the true source of
                   -- information.
-                  new_deps = RawComponentInfo (thisInstalledUnitId df) df targets cfp opts dep_info
+                  new_deps = RawComponentInfo (homeUnitId_ df) df targets cfp opts dep_info
                                 : maybe [] snd oldDeps
                   -- Get all the unit-ids for things in this component
                   inplace = map rawComponentUnitId new_deps
@@ -482,7 +480,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
             ncfp <- toNormalizedFilePath' <$> canonicalizePath file
             cachedHieYamlLocation <- HM.lookup ncfp <$> readVar filesMap
             hieYaml <- cradleLoc file
-            sessionOpts (join cachedHieYamlLocation <|> hieYaml, file) `catch` \e ->
+            sessionOpts (join cachedHieYamlLocation <|> hieYaml, file) `Safe.catch` \e ->
                 return (([renderPackageSetupException file e], Nothing), maybe [] pure hieYaml)
 
     returnWithVersion $ \file -> do
@@ -522,11 +520,11 @@ cradleToOptsAndLibDir cradle file = do
 emptyHscEnv :: IORef NameCache -> FilePath -> IO HscEnv
 emptyHscEnv nc libDir = do
     env <- runGhc (Just libDir) getSession
-    when (ghcVersion < GHC90) $
+    when (Compat.ghcVersion < Compat.GHC90) $
         -- This causes ghc9 to crash with the error:
         -- Couldn't find a target code interpreter. Try with -fexternal-interpreter
         initDynLinker env
-    pure $ setNameCache nc env{ hsc_dflags = (hsc_dflags env){useUnicode = True } }
+    pure $ setNameCache nc (hscSetFlags ((hsc_dflags env){useUnicode = True }) env)
 
 data TargetDetails = TargetDetails
   {
@@ -571,13 +569,13 @@ newComponentCache
          -> Maybe FilePath -- Path to cradle
          -> NormalizedFilePath -- Path to file that caused the creation of this component
          -> HscEnv
-         -> [(InstalledUnitId, DynFlags)]
+         -> [(UnitId, DynFlags)]
          -> ComponentInfo
          -> IO ( [TargetDetails], (IdeResult HscEnvEq, DependencyInfo))
 newComponentCache logger exts cradlePath cfp hsc_env uids ci = do
     let df = componentDynFlags ci
-    let hscEnv' = hsc_env { hsc_dflags = df
-                          , hsc_IC = (hsc_IC hsc_env) { ic_dflags = df } }
+    let hscEnv' = hscSetFlags df hsc_env
+                          { hsc_IC = (hsc_IC hsc_env) { ic_dflags = df } }
 
     let newFunc = maybe newHscEnvEqPreserveImportPaths newHscEnvEq cradlePath
     henv <- newFunc hscEnv' uids
@@ -676,7 +674,7 @@ type FilesMap = HM.HashMap NormalizedFilePath (Maybe FilePath)
 
 -- This is pristine information about a component
 data RawComponentInfo = RawComponentInfo
-  { rawComponentUnitId         :: InstalledUnitId
+  { rawComponentUnitId         :: UnitId
   -- | Unprocessed DynFlags. Contains inplace packages such as libraries.
   -- We do not want to use them unprocessed.
   , rawComponentDynFlags       :: DynFlags
@@ -693,14 +691,14 @@ data RawComponentInfo = RawComponentInfo
 
 -- This is processed information about the component, in particular the dynflags will be modified.
 data ComponentInfo = ComponentInfo
-  { componentUnitId         :: InstalledUnitId
+  { componentUnitId         :: UnitId
   -- | Processed DynFlags. Does not contain inplace packages such as local
   -- libraries. Can be used to actually load this Component.
   , componentDynFlags       :: DynFlags
   -- | Internal units, such as local libraries, that this component
   -- is loaded with. These have been extracted from the original
   -- ComponentOptions.
-  , _componentInternalUnits :: [InstalledUnitId]
+  , _componentInternalUnits :: [UnitId]
   -- | All targets of this components.
   , componentTargets        :: [GHC.Target]
   -- | Filepath which caused the creation of this component
@@ -733,7 +731,7 @@ getDependencyInfo fs = Map.fromList <$> mapM do_one fs
 
   where
     tryIO :: IO a -> IO (Either IOException a)
-    tryIO = try
+    tryIO = Safe.try
 
     do_one :: FilePath -> IO (FilePath, Maybe UTCTime)
     do_one fp = (fp,) . eitherToMaybe <$> tryIO (getModificationTime fp)
@@ -747,18 +745,14 @@ getDependencyInfo fs = Map.fromList <$> mapM do_one fs
 -- tcRnImports) which assume that all modules in the HPT have the same unit
 -- ID. Therefore we create a fake one and give them all the same unit id.
 removeInplacePackages
-    :: InstalledUnitId     -- ^ fake uid to use for our internal component
-    -> [InstalledUnitId]
+    :: UnitId     -- ^ fake uid to use for our internal component
+    -> [UnitId]
     -> DynFlags
-    -> (DynFlags, [InstalledUnitId])
-removeInplacePackages fake_uid us df = (setThisInstalledUnitId fake_uid $
+    -> (DynFlags, [UnitId])
+removeInplacePackages fake_uid us df = (setHomeUnitId_ fake_uid $
                                        df { packageFlags = ps }, uids)
   where
-    (uids, ps) = partitionEithers (map go (packageFlags df))
-    go p@(ExposePackage _ (UnitIdArg u) _) = if GHC.toInstalledUnitId u `elem` us
-                                                  then Left (GHC.toInstalledUnitId u)
-                                                  else Right p
-    go p = Right p
+    (uids, ps) = Compat.filterInplaceUnits us (packageFlags df)
 
 -- | Memoize an IO function, with the characteristics:
 --
@@ -790,25 +784,16 @@ setOptions (ComponentOptions theOpts compRoot _) dflags = do
           -- also, it can confuse the interface stale check
           dontWriteHieFiles $
           setIgnoreInterfacePragmas $
-          setLinkerOptions $
+          setBytecodeLinkerOptions $
           disableOptimisation $
-          setUpTypedHoles $
+          Compat.setUpTypedHoles $
           makeDynFlagsAbsolute compRoot dflags'
     -- initPackages parses the -package flags and
     -- sets up the visibility for each component.
     -- Throws if a -package flag cannot be satisfied.
-    final_df <- liftIO $ wrapPackageSetupException $ initUnits dflags''
-    return (final_df, targets)
-
--- we don't want to generate object code so we compile to bytecode
--- (HscInterpreted) which implies LinkInMemory
--- HscInterpreted
-setLinkerOptions :: DynFlags -> DynFlags
-setLinkerOptions df = df {
-    ghcLink   = LinkInMemory
-  , hscTarget = HscNothing
-  , ghcMode = CompManager
-  }
+    env <- hscSetFlags dflags'' <$> getSession
+    final_env' <- liftIO $ wrapPackageSetupException $ Compat.initUnits env
+    return (hsc_dflags final_env', targets)
 
 setIgnoreInterfacePragmas :: DynFlags -> DynFlags
 setIgnoreInterfacePragmas df =
