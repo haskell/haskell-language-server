@@ -46,11 +46,6 @@ defaults: &defaults
 
 version: 2
 jobs:
-  ghc-8.6.4:
-    environment:
-      - STACK_FILE: "stack-8.6.4.yaml"
-    <<: *defaults
-
   ghc-8.6.5:
     environment:
       - STACK_FILE: "stack-8.6.5.yaml"
@@ -111,7 +106,6 @@ workflows:
   version: 2
   multiple-ghcs:
     jobs:
-      - ghc-8.6.4
       - ghc-8.6.5
       - ghc-8.8.3
       - ghc-8.8.4
