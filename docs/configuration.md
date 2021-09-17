@@ -44,11 +44,11 @@ Here is a list of the additional settings currently supported by `haskell-langua
 - Format on imports (`haskell.formatOnImportOn`, default true): whether to format after adding an import.
 - Diagnostics on change (`haskell.diagnosticsOnChange`, default true): (currently unused).
 - Diagnostics debounce duration (`haskell.diagnosticsDebounceDuration`, default 350000 milliseconds).
-- Completion snippets (`haskell.completionSnippetsOn`, default true): whether to support completion snippets.
+- Completion snippets (`haskell.completionSnippetsOn`, default true): whether to support completion snippets. *Deprecated* as it is equivalent to `haskell.plugin.ghcide-completions.config.snippetsOn`.
 - Liquid Haskell (`haskell.liquidOn`, default false): whether to enable Liquid Haskell support (currently unused until the Liquid Haskell support is functional again, see <https://github.com/haskell/haskell-language-server/issues/367>).
 - Hlint (`haskell.hlintOn`, default true): whether to enable Hlint support. *Deprecated* as it is equivalen to `haskell.plugin.hlint.globalOn`
 - Max completions (`haskell.maxCompletions`, default 40): maximum number of completions sent to the LSP client.
-- Check project (`haskell.checkProject`, default true): whether to typecheck the entire project on load. AS it is activate by default could drive to bad perfomance in large projects.
+- Check project (`haskell.checkProject`, default true): whether to typecheck the entire project on load. As it is activated by default could drive to bad perfomance in large projects.
 - Check parents (`haskell.checkParents`, default `CheckOnSaveAndClose`): when to typecheck reverse dependencies of a file; one of `NeverCheck`, `CheckOnClose`, `CheckOnSaveAndClose`, or `AlwaysCheck`. 
 
 #### Generic plugin configuration
