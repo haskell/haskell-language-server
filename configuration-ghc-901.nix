@@ -3,7 +3,6 @@
 
 let
   disabledPlugins = [
-    "hls-tactics-plugin"
     "hls-brittany-plugin"
     "hls-stylish-haskell-plugin"
     "hls-fourmolu-plugin"
