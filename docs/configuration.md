@@ -94,10 +94,9 @@ This is handled by the [`hie-bios`](https://github.com/mpickering/hie-bios) proj
 
 **For a full explanation of how `hie-bios` determines the project build configuration, and how to configure it manually, refer to the [`hie-bios` README](https://github.com/mpickering/hie-bios/blob/master/README.md).**
 
-At the moment, `haskell-language-server` has some limited support to automatically detect your project build configuration.
-The plan is to improve it to handle most use cases.
+At the moment, `haskell-language-server` has support to automatically detect your project build configuration to handle most use cases. 
 
-However, for now, the most reliable way is to manually configure `hie-bios` using a `hie.yaml` file in the root of the workspace.
+However, if the automatic detection fails you can configure `hie-bios` using a `hie.yaml` file in the root of the workspace.
 A `hie.yaml` file **explicitly** describes how to setup the environment to compile the various parts of your project.
 For that you need to know what *components* your project has, and the path associated with each one.
 So you will need some knowledge about
