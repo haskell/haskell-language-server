@@ -62,10 +62,23 @@ Plugins have a generic config to control their behaviour. The schema of such con
   - Capabilities are the different ways a lsp server can interact with the editor. The current available capabilities of the server are: `callHierarchy`, `codeActions`, `codeLens`, `diagnostics`, `hover`, `symbols`, `completion`, `rename`.
   - Note that usually plugins don't provide all capabilities but some of them or even only one.
   - So to disable code changes suggestions from the `hlint` plugin (but no diagnostics) you could set `haskell.plugin.hlint.codeActionsOn: false`
-
+- Plugin specific configuration:
+  - `tactic` (aka wingman):
+    - `haskell.plugin.tactics.config.auto_gas`, default 4: The depth of the search tree when performing "Attempt to fill hole". Bigger values will be able to derive more solutions, but will take exponentially more time.
+    - `haskell.plugin.tactics.config.timeout_duration`, default 2: The timeout for Wingman actions, in seconds.
+    - `haskell.plugin.tactics.config.hole_severity`, default empty: The severity to use when showing hole diagnostics. These are noisy, but some editors don't allow jumping to all severities. One of `error`, `warning`, `info`, `hint`, `none`.
+    - `haskell.plugin.tactics.config.max_use_ctor_actions`, default 5: Maximum number of `Use constructor <x>` code actions that can appear.
+    - `haskell.plugin.tactics.config.proofstate_styling`, default true: Should Wingman emit styling markup when showing metaprogram proof states?
+  - `ghcide-completions`:
+    - `haskell.plugin.ghcide-completions.config.snippetsOn`, default true: Inserts snippets when using code completions.
+    - `haskell.plugin.ghcide-completions.config.autoExtendOn`, default true: Extends the import list automatically when completing a out-of-scope identifier.
+  - `ghcide-type-lenses`:
+    - `haskell.plugin.ghcide-type-lenses.config.mode`, default `always`: Control how type lenses are shown. One of `always`, `exported`, `diganostics`.
+  - `hlint`:
+    - `haskell.plugin.hlint.config.flags`, default empty: List of flags used by hlint
 This reference of configuration can be outdated at any time but we can query the `haskell-server-executable` about what configuration is effectively used:
 - `haskell-language-server generate-default-config`: will print the json configuration with all default values. It can be used as template to modify it.
-- `haskell-language-server vscode-extension-schema`: will print a json schema used to setup the haskell vscode extension. But it is useful to see what range of values can an option take.
+- `haskell-language-server vscode-extension-schema`: will print a json schema used to setup the haskell vscode extension. But it is useful to see what range of values can an option take and a description about it.
   
 Settings like this are typically provided by the language-specific LSP client support for your editor, for example in Emacs by `lsp-haskell`.
 
