@@ -11,8 +11,8 @@ main = do
 
 projectGhcVersionTests :: TestTree
 projectGhcVersionTests = testGroup "--project-ghc-version"
-  [ testCase "stack with ghc 8.10.4" $
-      testDir "test/wrapper/testdata/stack-8.10.4" "8.10.4"
+  [ testCase "stack with ghc 8.10.7" $
+      testDir "test/wrapper/testdata/stack-8.10.7" "8.10.7"
   , testCase "stack with ghc 8.8.3" $
       testDir "test/wrapper/testdata/stack-8.8.3" "8.8.3"
   , testCase "cabal with global ghc" $ do
