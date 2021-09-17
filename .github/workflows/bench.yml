@@ -24,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ['8.10.4']
+        ghc: ['8.10.7']
         os: [ubuntu-latest]
 
     steps:
@@ -106,7 +106,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ['8.10.4']
+        ghc: ['8.10.7']
         os: [ubuntu-latest]
         example: ['cabal', 'lsp-types']
 
