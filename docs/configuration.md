@@ -57,7 +57,7 @@ Plugins have a generic config to control their behaviour. The schema of such con
 - `haskell.plugin.${pluginName}.globalOn`: usually with default true. Wheter the plugin is enabled at runtime or it is not. That is the option you might use if you want to disable completely a plugin.
   - Actual plugin names are: `ghcide-code-actions-fill-holes`, `ghcide-completions`, `ghcide-hover-and-symbols`, `ghcide-type-lenses`, `ghcide-code-actions-type-signatures`, `ghcide-code-actions-bindings`, `ghcide-code-actions-imports-exports`, `eval`, `moduleName`, `pragmas`, `refineImports`, `importLens`, `class`, `tactics` (aka wingman), `hlint`, `haddockComments`, `retrie`, `splice`.
   - So to disable the import lens with an explicit list of module definitions you could set `haskell.plugin.importLens.globalOn: false`
-- `haskell.plugin.${pluginName}.${lspCapability}On`: usually with default true. Wheter a concrete plugin capability is enabled. 
+- `haskell.plugin.${pluginName}.${lspCapability}On`: usually with default true. Whether a concrete plugin capability is enabled. 
   - Capabilities are the different ways a lsp server can interact with the editor. The current available capabilities of the server are: `callHierarchy`, `codeActions`, `codeLens`, `diagnostics`, `hover`, `symbols`, `completion`, `rename`.
   - Note that usually plugins don't provide all capabilities but some of them or even only one.
   - So to disable code changes suggestions from the `hlint` plugin (but no diagnostics) you could set `haskell.plugin.hlint.codeActionsOn: false`
@@ -74,7 +74,7 @@ Plugins have a generic config to control their behaviour. The schema of such con
   - `ghcide-type-lenses`:
     - `haskell.plugin.ghcide-type-lenses.config.mode`, default `always`: Control how type lenses are shown. One of `always`, `exported`, `diganostics`.
   - `hlint`:
-    - `haskell.plugin.hlint.config.flags`, default empty: List of flags used by hlint
+    - `haskell.plugin.hlint.config.flags`, default empty: List of flags used by hlint.
 This reference of configuration can be outdated at any time but we can query the `haskell-server-executable` about what configuration is effectively used:
 - `haskell-language-server generate-default-config`: will print the json configuration with all default values. It can be used as template to modify it.
 - `haskell-language-server vscode-extension-schema`: will print a json schema used to setup the haskell vscode extension. But it is useful to see what range of values can an option take and a description about it.
