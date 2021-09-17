@@ -22,8 +22,6 @@ jobs:
           - os: windows-latest
             ghc: '8.10.2' # broken due to https://gitlab.haskell.org/ghc/ghc/-/issues/18550
           - os: windows-latest
-            ghc: '8.8.4' # also fails due to segfault :(
-          - os: windows-latest
             ghc: '8.8.3' # fails due to segfault
         include:
           - os: windows-latest
@@ -80,6 +78,12 @@ jobs:
       run: |
         echo "# uninstalling CommandLineTools (see https://github.com/haskell/haskell-language-server/issues/1913#issuecomment-861667786)"
         sudo rm -rf /Library/Developer/CommandLineTools
+
+    - name: Modify cabal.project to workaround segfaults for ghc-8.8.4 and windows
+      if: matrix.ghc == '8.8.4' && matrix.os == 'windows-latest'
+      run: |
+          echo "package floskell" >> cabal.project
+          echo "  ghc-options: -O0" >> cabal.project
 
     - name: Build Server
       # Try building it twice in case of flakey builds on Windows
