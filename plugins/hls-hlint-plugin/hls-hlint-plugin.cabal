@@ -85,7 +85,7 @@ library
     else
       build-depends:
         , ghc
-        , ghc-lib            ^>=8.10.4.20210206
+        , ghc-lib            ^>=8.10.7.20210828
         , ghc-lib-parser-ex  ^>=8.10
 
       cpp-options:   -DHLINT_ON_GHC_LIB
