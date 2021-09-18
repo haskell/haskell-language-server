@@ -19,6 +19,7 @@ module Test.Hls
     runSessionWithServerFormatter,
     runSessionWithServer',
     waitForProgressDone,
+    waitForAllProgressDone,
     PluginDescriptor,
     IdeState,
   )
@@ -191,6 +192,18 @@ waitForProgressDone = loop
   where
     loop = do
       () <- skipManyTill anyMessage $ satisfyMaybe $ \case
+        FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (End _))) -> Just ()
+        _ -> Nothing
+      done <- null <$> getIncompleteProgressSessions
+      unless done loop
+
+-- | Wait for all progress to be done
+-- Needs at least one progress done notification to return
+waitForAllProgressDone :: Session ()
+waitForAllProgressDone = loop
+  where
+    loop = do
+      ~() <- skipManyTill anyMessage $ satisfyMaybe $ \case
         FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (End _))) -> Just ()
         _ -> Nothing
       done <- null <$> getIncompleteProgressSessions

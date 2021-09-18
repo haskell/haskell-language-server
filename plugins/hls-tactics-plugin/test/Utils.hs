@@ -85,6 +85,7 @@ mkTest name fp line col ts = it name $ do
   runSessionForTactics $ do
     doc <- openDoc (fp <.> "hs") "haskell"
     _ <- waitForDiagnostics
+    waitForAllProgressDone
     actions <- getCodeActions doc $ pointRange line col
     let titles = mapMaybe codeActionTitle actions
     for_ ts $ \(f, tc, var) -> do
