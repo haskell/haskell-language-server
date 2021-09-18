@@ -56,6 +56,7 @@ import           Development.IDE.Test                     (Cursor,
 import           Development.IDE.Test.Runfiles
 import qualified Development.IDE.Types.Diagnostics        as Diagnostics
 import           Development.IDE.Types.Location
+import qualified Language.LSP.Types.Lens                  as Lens (label)
 import           Development.Shake                        (getDirectoryFilesIO)
 import qualified Experiments                              as Bench
 import           Ide.Plugin.Config
@@ -4589,7 +4590,24 @@ projectCompletionTests =
                 <- compls
               , _label == "anidentifier"
               ]
-        liftIO $ compls' @?= ["Defined in 'A"]
+        liftIO $ compls' @?= ["Defined in 'A"], 
+      testSession' "auto complete project imports" $ \dir-> do
+        liftIO $ writeFile (dir </> "hie.yaml")
+            "cradle: {direct: {arguments: [\"-Wmissing-signatures\", \"ALocalModule\", \"B\"]}}"
+        _ <- createDoc "ALocalModule.hs" "haskell" $ T.unlines
+            [  "module ALocalModule (anidentifier) where",
+               "anidentifier = ()"
+            ]
+        _ <- waitForDiagnostics
+        -- Note that B does not import A
+        doc <- createDoc "B.hs" "haskell" $ T.unlines
+            [ "module B where",
+              "import ALocal"
+            ]
+        compls <- getCompletions doc (Position 1 13)
+        let item = head $ filter ((== "ALocalModule") . (^. Lens.label)) compls
+        liftIO $ do
+          item ^. Lens.label @?= "ALocalModule"
     ]
 
 highlightTests :: TestTree
