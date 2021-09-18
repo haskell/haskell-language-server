@@ -23,6 +23,7 @@ import qualified Data.Text.IO as T
 import           Ide.Plugin.Tactic as Tactic
 import           Language.LSP.Types
 import           Language.LSP.Types.Lens hiding (actions, applyEdit, capabilities, executeCommand, id, line, message, name, rename, title)
+import qualified Language.LSP.Types.Lens as J
 import           System.Directory (doesFileExist)
 import           System.FilePath
 import           Test.Hls
@@ -112,7 +113,10 @@ mkGoldenTest eq tc occ line col input =
       Just (InR CodeAction {_command = Just c})
         <- pure $ find ((== Just (tacticTitle tc occ)) . codeActionTitle) actions
       executeCommand c
-      _resp <- skipManyTill anyMessage (message SWorkspaceApplyEdit)
+      resp <- skipManyTill anyMessage (Right <$> message SWorkspaceApplyEdit <|> Left <$> message SWindowShowMessage)
+      case resp of
+        Left nm -> liftIO $ expectationFailure $ "Expected WorkspaceApplyEdit.\nInstead got message:\n    " ++ show (nm ^. params . J.message)
+        Right _ -> pure ()
       edited <- documentContents doc
       let expected_name = input <.> "expected" <.> "hs"
       -- Write golden tests if they don't already exist
