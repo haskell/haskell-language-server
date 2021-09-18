@@ -1,3 +1,5 @@
+# Used for ci setup in the gitlab mirror of the project: 
+# https://gitlab.haskell.org/haskell/haskell-language-server/-/pipelines
 variables:
   # Commit of ghc/ci-images repository from which to pull Docker images
   DOCKER_REV: "853f348f9caf38b08740b280296fbd34e09abb3a"
