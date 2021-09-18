@@ -25,6 +25,8 @@ packages:
          ./plugins/hls-ormolu-plugin
          ./plugins/hls-call-hierarchy-plugin
 
+-- Standard location for temporary packages needed for particular environments
+-- For example it is used in the project gitlab mirror to help in the MAcOS M1 build script 
 optional-packages: vendored/*/*.cabal
 
 tests: true
