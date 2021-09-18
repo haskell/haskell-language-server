@@ -422,8 +422,7 @@ typedHoleTests = testGroup "typed hole code actions" [
                     , "foo x = maxBound"
                     ]
 
-      , expectFailIfGhc9 "The wingman plugin doesn't yet compile in GHC9" $
-        testCase "doesn't work when wingman is active" $
+      , testCase "doesn't work when wingman is active" $
         runSession hlsCommand fullCaps "test/testdata" $ do
             doc <- openDoc "TypedHoles.hs" "haskell"
             _ <- waitForDiagnosticsFromSource doc "typecheck"
@@ -457,8 +456,7 @@ typedHoleTests = testGroup "typed hole code actions" [
                         , "    stuff (A a) = A (a + 1)"
                         ]
 
-      , expectFailIfGhc9 "The wingman plugin doesn't yet compile in GHC9" $
-        testCase "doesnt show more suggestions when wingman is active" $
+      , testCase "doesnt show more suggestions when wingman is active" $
             runSession hlsCommand fullCaps "test/testdata" $ do
                 doc <- openDoc "TypedHoles2.hs" "haskell"
                 _ <- waitForDiagnosticsFromSource doc "typecheck"
@@ -544,12 +542,6 @@ unusedTermTests = testGroup "unused term code actions" [
                 kinds = map (^. L.kind) cas
             nub kinds @?= nub [Just CodeActionRefactorInline, Just CodeActionRefactorExtract]
     ]
-
-expectFailIfGhc9 :: String -> TestTree -> TestTree
-expectFailIfGhc9 reason =
-  case ghcVersion of
-    GHC90 -> expectFailBecause reason
-    _     -> id
 
 disableWingman :: Session ()
 disableWingman =
