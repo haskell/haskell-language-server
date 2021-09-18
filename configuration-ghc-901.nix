@@ -53,7 +53,10 @@ let
       dependent-sum-template = hself.callCabal2nix "dependent-sum-template"
         "${dependent-sum-src}/dependent-sum-template" { };
 
-      hlint = hself.hlint_3_3_1;
+      hlint = hself.hlint_3_3_4;
+
+      generic-lens = hself.generic-lens_2_2_0_0;
+      generic-lens-core = hself.generic-lens-core_2_2_0_0;
 
       ghc-lib-parser = hself.ghc-lib-parser_9_0_1_20210324;
 
@@ -84,7 +87,6 @@ let
           "-f-class"
           "-f-fourmolu"
           "-f-stylishhaskell"
-          "-f-tactic"
         ]) { };
 
       # YOLO
