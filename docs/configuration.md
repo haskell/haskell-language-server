@@ -54,7 +54,7 @@ Here is a list of the additional settings currently supported by `haskell-langua
 
 Plugins have a generic config to control their behaviour. The schema of such config is:
 
-- `haskell.plugin.${pluginName}.globalOn`: usually with default true. Wheter the plugin is enabled at runtime or it is not. That is the option you might use if you want to disable completely a plugin.
+- `haskell.plugin.${pluginName}.globalOn`: usually with default true. Whether the plugin is enabled at runtime or it is not. That is the option you might use if you want to disable completely a plugin.
   - Actual plugin names are: `ghcide-code-actions-fill-holes`, `ghcide-completions`, `ghcide-hover-and-symbols`, `ghcide-type-lenses`, `ghcide-code-actions-type-signatures`, `ghcide-code-actions-bindings`, `ghcide-code-actions-imports-exports`, `eval`, `moduleName`, `pragmas`, `refineImports`, `importLens`, `class`, `tactics` (aka wingman), `hlint`, `haddockComments`, `retrie`, `splice`.
   - So to disable the import lens with an explicit list of module definitions you could set `haskell.plugin.importLens.globalOn: false`
 - `haskell.plugin.${pluginName}.${lspCapability}On`: usually with default true. Whether a concrete plugin capability is enabled. 
