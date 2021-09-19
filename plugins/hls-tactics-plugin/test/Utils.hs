@@ -110,17 +110,18 @@ mkGoldenTest eq tc occ line col input =
       doc <- openDoc (input <.> "hs") "haskell"
       _ <- waitForDiagnostics
       actions <- getCodeActions doc $ pointRange line col
-      Just (InR CodeAction {_command = Just c})
-        <- pure $ find ((== Just (tacticTitle tc occ)) . codeActionTitle) actions
-      executeCommand c
-      _resp <- skipManyTill anyMessage (message SWorkspaceApplyEdit)
-      edited <- documentContents doc
-      let expected_name = input <.> "expected" <.> "hs"
-      -- Write golden tests if they don't already exist
-      liftIO $ (doesFileExist expected_name >>=) $ flip unless $ do
-        T.writeFile expected_name edited
-      expected <- liftIO $ T.readFile expected_name
-      liftIO $ edited `eq` expected
+      case find ((== Just (tacticTitle tc occ)) . codeActionTitle) actions of
+        Just (InR CodeAction {_command = Just c}) -> do
+            executeCommand c
+            _resp <- skipManyTill anyMessage (message SWorkspaceApplyEdit)
+            edited <- documentContents doc
+            let expected_name = input <.> "expected" <.> "hs"
+            -- Write golden tests if they don't already exist
+            liftIO $ (doesFileExist expected_name >>=) $ flip unless $ do
+                T.writeFile expected_name edited
+            expected <- liftIO $ T.readFile expected_name
+            liftIO $ edited `eq` expected
+        other -> error $ show other
 
 
 mkCodeLensTest
