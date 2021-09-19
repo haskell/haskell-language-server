@@ -1,0 +1,114 @@
+# Used for ci setup in the gitlab mirror of the project: 
+# https://gitlab.haskell.org/haskell/haskell-language-server/-/pipelines
+variables:
+  # Commit of ghc/ci-images repository from which to pull Docker images
+  DOCKER_REV: "853f348f9caf38b08740b280296fbd34e09abb3a"
+
+  CABAL_INSTALL_VERSION: 3.4.0.0
+
+.default_matrix: &default_matrix
+  matrix:
+    - GHC_VERSION: 8.8.4
+      CABAL_PROJECT: cabal.project
+    - GHC_VERSION: 8.10.7
+      CABAL_PROJECT: cabal.project
+    - GHC_VERSION: 9.0.1
+      CABAL_PROJECT: cabal-ghc901.project
+
+.m1_matrix: &m1_matrix
+  matrix:
+    - GHC_VERSION: 8.10.7
+      CABAL_PROJECT: cabal.project
+
+.arm_matrix: &arm_matrix
+  matrix:
+    - GHC_VERSION: 8.10.7
+      CABAL_PROJECT: cabal.project
+
+
+workflow:
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: always
+    - when: never
+
+.build:
+  script:
+    - bash .gitlab/ci.sh
+  artifacts:
+    expire_in: 2 week
+    paths:
+      - out
+
+build-aarch64-linux-deb10:
+  extends: .build
+  tags:
+    - aarch64-linux
+  image: "registry.gitlab.haskell.org/ghc/ci-images/aarch64-linux-deb10:$DOCKER_REV"
+  parallel: *arm_matrix
+
+build-armv7-linux-deb10:
+  extends: .build
+  tags:
+    - armv7-linux
+  image: "registry.gitlab.haskell.org/ghc/ci-images/armv7-linux-deb10:$DOCKER_REV"
+  parallel: *arm_matrix
+
+build-x86_64-linux:
+  extends: .build
+  tags:
+    - x86_64-linux
+  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-deb9:$DOCKER_REV"
+  parallel: *default_matrix
+
+build-x86_64-linux-alpine:
+  extends: .build
+  tags:
+    - x86_64-linux
+  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-alpine3_12:$DOCKER_REV"
+  parallel: *default_matrix
+
+build-x86_64-freebsd:
+  extends: .build
+  tags:
+    - x86_64-freebsd13
+  parallel: *default_matrix
+
+build-x86_64-darwin:
+  extends: .build
+  tags:
+    - x86_64-darwin
+  parallel: *default_matrix
+
+build-aarch64-darwin:
+  tags:
+    - aarch64-darwin-m1
+  script: |
+    set -Eeuo pipefail
+    function runInNixShell() {
+      time nix-shell $CI_PROJECT_DIR/.gitlab/shell-aarch64-darwin.nix \
+        -I nixpkgs=https://github.com/angerman/nixpkgs/archive/75f7281738b.tar.gz \
+        --argstr system "aarch64-darwin" \
+        --pure \
+        --keep CI_PROJECT_DIR \
+        --keep MACOSX_DEPLOYMENT_TARGET \
+        --keep GHC_VERSION \
+        --keep CABAL_PROJECT \
+        --keep CABAL_INSTALL_VERSION \
+        --run "$1" 2>&1
+    }
+    runInNixShell "cabal update && mkdir vendored && cd vendored && cabal unpack network-3.1.2.1 && cd network-3.1.2.1 && autoreconf -fi" 2>&1
+    runInNixShell "./.gitlab/ci.sh" 2>&1
+  variables:
+    MACOSX_DEPLOYMENT_TARGET: "10.7"
+  parallel: *m1_matrix
+  artifacts:
+    expire_in: 2 week
+    paths:
+      - out
+
+build-x86_64-windows:
+  extends: .build
+  tags:
+    - new-x86_64-windows
+  parallel: *default_matrix
