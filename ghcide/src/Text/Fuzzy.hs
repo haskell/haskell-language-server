@@ -1,4 +1,9 @@
+-- Copyright (c) 2015 Joomy Korkut
+-- Forked from https://github.com/joom/fuzzy/commit/eecbdd04e86c48c964544dbede2665f72fe1f923
+-- temporarily for https://github.com/joom/fuzzy/pull/3
+
 {-# LANGUAGE FlexibleContexts #-}
+
 
 -- | Fuzzy string search in Haskell.
 -- Uses 'TextualMonoid' to be able to run on different types of strings.
