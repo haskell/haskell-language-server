@@ -25,6 +25,11 @@ packages:
          ./plugins/hls-ormolu-plugin
          ./plugins/hls-call-hierarchy-plugin
 
+-- Standard location for temporary packages needed for particular environments
+-- For example it is used in the project gitlab mirror to help in the MAcOS M1 build script
+-- See https://github.com/haskell/haskell-language-server/blob/master/.gitlab-ci.yml
+optional-packages: vendored/*/*.cabal
+
 tests: true
 
 package *
