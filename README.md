@@ -9,7 +9,7 @@
 [![CircleCI][badge-circleci]][circleci]
 [![GitHub Testing Workflow](https://github.com/haskell/haskell-language-server/actions/workflows/test.yml/badge.svg)](https://github.com/haskell/haskell-language-server/actions/workflows/test.yml)
 [![GitHub Nix Workflow](https://github.com/haskell/haskell-language-server/actions/workflows/nix.yml/badge.svg)](https://github.com/haskell/haskell-language-server/actions/workflows/nix.yml)
-[!ircchat][badge-irc-chat]][ircchat]
+[![ircchat][badge-ircchat]][ircchat]
 [![codetriage][badge-codetriage]][codetriage]
 
 [logo]: ./docs/logos/logo-256.png
@@ -22,7 +22,7 @@
 [hackage]: https://hackage.haskell.org/package/haskell-language-server
 [badge-codetriage]: https://www.codetriage.com/haskell/haskell-language-server/badges/users.svg
 [codetriage]:https://www.codetriage.com/haskell/haskell-language-server
-[badge-irc-chat]:https://img.shields.io/badge/chat-on%20libera-brightgreen.svg
+[badge-ircchat]:https://img.shields.io/badge/chat-on%20libera-brightgreen.svg
 [ircchat]:https://web.libera.chat/?channels=#haskell-language-server
 [github-release]:https://github.com/haskell/haskell-language-server/releases/latest
 
