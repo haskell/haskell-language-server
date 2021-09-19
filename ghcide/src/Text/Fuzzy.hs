@@ -88,11 +88,6 @@ filter pattern ts pre post extract caseSen =
   sortOn (Down . score)
          (mapMaybe (\t -> match pattern t pre post extract caseSen) ts)
 
-filterText :: Text -> [Text] -> [Fuzzy Text Text]
-filterText s t = filter s t "" "" id False
-
-{-# SPECIALIZE simpleFilter :: Text -> [Text] -> [Fuzzy Text Text] #-}
-
 -- | Return all elements of the list that have a fuzzy
 -- match against the pattern. Runs with default settings where
 -- nothing is added around the matches, as case insensitive.
@@ -102,9 +97,9 @@ filterText s t = filter s t "" "" id False
 simpleFilter :: (T.TextualMonoid s)
              => s   -- ^ Pattern to look for.
              -> [s] -- ^ List of texts to check.
-             -> [Fuzzy s s] -- ^ The ones that match.
+             -> [s] -- ^ The ones that match.
 simpleFilter pattern xs =
-  filter pattern xs mempty mempty id False
+  map original $ filter pattern xs mempty mempty id False
 
 -- | Returns false if the pattern and the text do not match at all.
 -- Returns true otherwise.
