@@ -109,6 +109,7 @@ mkGoldenTest eq tc occ line col input =
     runSessionForTactics $ do
       doc <- openDoc (input <.> "hs") "haskell"
       _ <- waitForDiagnostics
+      waitForAllProgressDone
       actions <- getCodeActions doc $ pointRange line col
       case find ((== Just (tacticTitle tc occ)) . codeActionTitle) actions of
         Just (InR CodeAction {_command = Just c}) -> do
