@@ -40,14 +40,45 @@ This option obviously would not make sense for language servers for other langua
 
 Here is a list of the additional settings currently supported by `haskell-language-server`, along with their setting key (you may not need to know this) and default:
 
-- Formatting provider (`haskell.formattingProvider`, default `ormolu`): what formatter to use; one of `floskell`, `ormolu`, `fourmolu`, `stylish-haskell`, or `brittany` (if compiled with the brittany plugin)
-- Format on imports (`haskell.formatOnImportOn`, default true): whether to format after adding an import
-- Diagnostics on change (`haskell.diagnosticsOnChange`, default true): (currently unused)
-- Completion snippets (`haskell.completionSnippetsOn`, default true): whether to support completion snippets
-- Liquid Haskell (`haskell.liquidOn`, default false): whether to enable Liquid Haskell support (currently unused until the Liquid Haskell support is functional again)
-- Hlint (`haskell.hlintOn`, default true): whether to enable Hlint support
+- Formatting provider (`haskell.formattingProvider`, default `ormolu`): what formatter to use; one of `floskell`, `ormolu`, `fourmolu`, `stylish-haskell`, or `brittany` (if compiled with the brittany plugin).
+- Format on imports (`haskell.formatOnImportOn`, default true): whether to format after adding an import.
+- Diagnostics on change (`haskell.diagnosticsOnChange`, default true): (currently unused).
+- Completion snippets (`haskell.completionSnippetsOn`, default true): whether to support completion snippets. *Deprecated* as it is equivalent to `haskell.plugin.ghcide-completions.config.snippetsOn`.
+- Liquid Haskell (`haskell.liquidOn`, default false): whether to enable Liquid Haskell support (currently unused until the Liquid Haskell support is functional again, see <https://github.com/haskell/haskell-language-server/issues/367>).
+- Hlint (`haskell.hlintOn`, default true): whether to enable Hlint support. *Deprecated* as it is equivalen to `haskell.plugin.hlint.globalOn`
 - Max completions (`haskell.maxCompletions`, default 40): maximum number of completions sent to the LSP client.
+- Check project (`haskell.checkProject`, default true): whether to typecheck the entire project on load. As it is activated by default could drive to bad perfomance in large projects.
+- Check parents (`haskell.checkParents`, default `CheckOnSaveAndClose`): when to typecheck reverse dependencies of a file; one of `NeverCheck`, `CheckOnClose`, `CheckOnSaveAndClose`, or `AlwaysCheck`. 
 
+#### Generic plugin configuration
+
+Plugins have a generic config to control their behaviour. The schema of such config is:
+
+- `haskell.plugin.${pluginName}.globalOn`: usually with default true. Whether the plugin is enabled at runtime or it is not. That is the option you might use if you want to disable completely a plugin.
+  - Actual plugin names are: `ghcide-code-actions-fill-holes`, `ghcide-completions`, `ghcide-hover-and-symbols`, `ghcide-type-lenses`, `ghcide-code-actions-type-signatures`, `ghcide-code-actions-bindings`, `ghcide-code-actions-imports-exports`, `eval`, `moduleName`, `pragmas`, `refineImports`, `importLens`, `class`, `tactics` (aka wingman), `hlint`, `haddockComments`, `retrie`, `splice`.
+  - So to disable the import lens with an explicit list of module definitions you could set `haskell.plugin.importLens.globalOn: false`
+- `haskell.plugin.${pluginName}.${lspCapability}On`: usually with default true. Whether a concrete plugin capability is enabled. 
+  - Capabilities are the different ways a lsp server can interact with the editor. The current available capabilities of the server are: `callHierarchy`, `codeActions`, `codeLens`, `diagnostics`, `hover`, `symbols`, `completion`, `rename`.
+  - Note that usually plugins don't provide all capabilities but some of them or even only one.
+  - So to disable code changes suggestions from the `hlint` plugin (but no diagnostics) you could set `haskell.plugin.hlint.codeActionsOn: false`
+- Plugin specific configuration:
+  - `tactic` (aka wingman):
+    - `haskell.plugin.tactics.config.auto_gas`, default 4: The depth of the search tree when performing "Attempt to fill hole". Bigger values will be able to derive more solutions, but will take exponentially more time.
+    - `haskell.plugin.tactics.config.timeout_duration`, default 2: The timeout for Wingman actions, in seconds.
+    - `haskell.plugin.tactics.config.hole_severity`, default empty: The severity to use when showing hole diagnostics. These are noisy, but some editors don't allow jumping to all severities. One of `error`, `warning`, `info`, `hint`, `none`.
+    - `haskell.plugin.tactics.config.max_use_ctor_actions`, default 5: Maximum number of `Use constructor <x>` code actions that can appear.
+    - `haskell.plugin.tactics.config.proofstate_styling`, default true: Should Wingman emit styling markup when showing metaprogram proof states?
+  - `ghcide-completions`:
+    - `haskell.plugin.ghcide-completions.config.snippetsOn`, default true: Inserts snippets when using code completions.
+    - `haskell.plugin.ghcide-completions.config.autoExtendOn`, default true: Extends the import list automatically when completing a out-of-scope identifier.
+  - `ghcide-type-lenses`:
+    - `haskell.plugin.ghcide-type-lenses.config.mode`, default `always`: Control how type lenses are shown. One of `always`, `exported`, `diganostics`.
+  - `hlint`:
+    - `haskell.plugin.hlint.config.flags`, default empty: List of flags used by hlint.
+This reference of configuration can be outdated at any time but we can query the `haskell-server-executable` about what configuration is effectively used:
+- `haskell-language-server generate-default-config`: will print the json configuration with all default values. It can be used as template to modify it.
+- `haskell-language-server vscode-extension-schema`: will print a json schema used to setup the haskell vscode extension. But it is useful to see what range of values can an option take and a description about it.
+  
 Settings like this are typically provided by the language-specific LSP client support for your editor, for example in Emacs by `lsp-haskell`.
 
 ### Client options
@@ -63,10 +94,9 @@ This is handled by the [`hie-bios`](https://github.com/mpickering/hie-bios) proj
 
 **For a full explanation of how `hie-bios` determines the project build configuration, and how to configure it manually, refer to the [`hie-bios` README](https://github.com/mpickering/hie-bios/blob/master/README.md).**
 
-At the moment, `haskell-language-server` has some limited support to automatically detect your project build configuration.
-The plan is to improve it to handle most use cases.
+At the moment, `haskell-language-server` has support to automatically detect your project build configuration to handle most use cases. 
 
-However, for now, the most reliable way is to manually configure `hie-bios` using a `hie.yaml` file in the root of the workspace.
+However, if the automatic detection fails you can configure `hie-bios` using a `hie.yaml` file in the root of the workspace.
 A `hie.yaml` file **explicitly** describes how to setup the environment to compile the various parts of your project.
 For that you need to know what *components* your project has, and the path associated with each one.
 So you will need some knowledge about
