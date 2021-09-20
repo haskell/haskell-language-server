@@ -246,6 +246,11 @@
           haskell-language-server-8107 = mkExe ghc8107;
           haskell-language-server-901 = mkExe ghc901;
 
+          # hie-bios packages
+          hie-bios-884 = ghc884.hie-bios;
+          hie-bios-8107 = ghc8107.hie-bios;
+          hie-bios-901 = ghc901.hie-bios;
+
           # docs
           docs = docs;
         };
