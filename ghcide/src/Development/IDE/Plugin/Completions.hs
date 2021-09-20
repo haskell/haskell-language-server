@@ -30,6 +30,7 @@ import           Development.IDE.GHC.ExactPrint               (Annotated (annsA)
 import           Development.IDE.GHC.Util                     (prettyPrint)
 import           Development.IDE.Graph
 import           Development.IDE.Graph.Classes
+import qualified Development.IDE.Types.KnownTargets           as KT
 import           Development.IDE.Plugin.CodeAction            (newImport,
                                                                newImportToEdit)
 import           Development.IDE.Plugin.CodeAction.ExactPrint
@@ -132,7 +133,9 @@ getCompletionsLSP ide plId
             nonLocalCompls <- useWithStaleFast NonLocalCompletions npath
             pm <- useWithStaleFast GetParsedModule npath
             binds <- fromMaybe (mempty, zeroMapping) <$> useWithStaleFast GetBindings npath
-
+            knownTargets <- liftIO $ runAction  "Completion" ide $ useNoFile GetKnownTargets
+            let localModules = maybe [] Map.keys knownTargets
+            let lModules = mempty{importableModules = map toModueNameText localModules}
             -- set up the exports map including both package and project-level identifiers
             packageExportsMapIO <- fmap(envPackageExports . fst) <$> useWithStaleFast GhcSession npath
             packageExportsMap <- mapM liftIO packageExportsMapIO
@@ -142,7 +145,7 @@ getCompletionsLSP ide plId
             let moduleExports = getModuleExportsMap exportsMap
                 exportsCompItems = foldMap (map (fromIdentInfo uri) . Set.toList) . Map.elems . getExportsMap $ exportsMap
                 exportsCompls = mempty{anyQualCompls = exportsCompItems}
-            let compls = (fst <$> localCompls) <> (fst <$> nonLocalCompls) <> Just exportsCompls
+            let compls = (fst <$> localCompls) <> (fst <$> nonLocalCompls) <> Just exportsCompls <> Just lModules
 
             pure (opts, fmap (,pm,binds) compls, moduleExports)
         case compls of
@@ -161,6 +164,11 @@ getCompletionsLSP ide plId
       _ -> return (InL $ List [])
 
 ----------------------------------------------------------------------------------------------------
+
+toModueNameText :: KT.Target -> T.Text
+toModueNameText target = case target of
+  KT.TargetModule m  -> T.pack $ moduleNameString m
+  _ -> T.empty
 
 extendImportCommand :: PluginCommand IdeState
 extendImportCommand =

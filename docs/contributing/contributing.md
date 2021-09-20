@@ -5,6 +5,7 @@ The Haskell tooling dream is near, we need your help!
 - Join [our IRC channel](https://web.libera.chat/?channels=#haskell-language-server) at `#haskell-language-server` on [`libera`](https://libera.chat/).
 - Follow the [Haskell IDE team twitter account](https://twitter.com/IdeHaskell) for updates and help.
 - Join the [#haskell-tooling channel](https://discord.com/channels/280033776820813825/505370075402862594/808027763868827659) in the Functional Programming discord server. You can join the server via [this invitation](https://discord.gg/9spEdTNGrD).
+- Join the [haskell-tooling channel](https://matrix.to/#/#haskell-tooling:matrix.org) in [matrix](https://matrix.org/).
 
 ## Building haskell-language-server
 
@@ -157,7 +158,7 @@ If you don't want to use [nix](https://nixos.org/guides/install-nix.html), you c
       "hooks": [
         {
           "entry": "stylish-haskell --inplace",
-          "exclude": "(^Setup.hs$|test/testdata/.*$|test/data/.*$|^hie-compat/.*$|^plugins/hls-tactics-plugin/.*$)",
+          "exclude": "(^Setup.hs$|test/testdata/.*$|test/data/.*$|test/manual/lhs/.*$|^hie-compat/.*$|^plugins/hls-tactics-plugin/.*$|^ghcide/src/Development/IDE/GHC/Compat.hs$|^plugins/hls-splice-plugin/src/Ide/Plugin/Splice.hs$|^ghcide/test/exe/Main.hs$|ghcide/src/Development/IDE/Core/Rules.hs|^hls-test-utils/src/Test/Hls/Util.hs$)"
           "files": "\\.l?hs$",
           "id": "stylish-haskell",
           "language": "system",
