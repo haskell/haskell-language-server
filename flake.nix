@@ -203,6 +203,7 @@
             buildInputs = [ gmp zlib ncurses capstone tracy (gen-hls-changelogs hpkgs) pythonWithPackages ]
               ++ (with hpkgs; [
                 cabal-install
+                hie-bios
                 hlint
                 # ormolu
                 # stylish-haskell
