@@ -164,7 +164,7 @@ showModName = T.pack . moduleNameString
 --     Nothing Nothing Nothing Nothing (Just insertText) (Just Snippet)
 --     Nothing Nothing Nothing Nothing Nothing
 
-mkCompl :: PluginId -> IdeOptions -> CompItem -> IO CompletionItem
+mkCompl :: PluginId -> IdeOptions -> CompItem -> CompletionItem
 mkCompl
   pId
   IdeOptions {..}
@@ -178,7 +178,7 @@ mkCompl
       docs,
       additionalTextEdits
     } = do
-  mbCommand <- mkAdditionalEditsCommand pId `traverse` additionalTextEdits
+  let mbCommand = mkAdditionalEditsCommand pId `fmap` additionalTextEdits
   let ci = CompletionItem
                  {_label = label,
                   _kind = kind,
@@ -197,7 +197,7 @@ mkCompl
                   _commitCharacters = Nothing,
                   _command = mbCommand,
                   _xdata = Nothing}
-  return $ removeSnippetsWhen (isJust isInfix) ci
+  removeSnippetsWhen (isJust isInfix) ci
 
   where kind = Just compKind
         docs' = imported : spanDocToMarkdown docs
@@ -209,8 +209,8 @@ mkCompl
                         MarkupContent MkMarkdown $
                         T.intercalate sectionSeparator docs'
 
-mkAdditionalEditsCommand :: PluginId -> ExtendImport -> IO Command
-mkAdditionalEditsCommand pId edits = pure $
+mkAdditionalEditsCommand :: PluginId -> ExtendImport -> Command
+mkAdditionalEditsCommand pId edits =
   mkLspCommand pId (CommandId extendImportCommandId) "extend import" (Just [toJSON edits])
 
 mkNameCompItem :: Uri -> Maybe T.Text -> OccName -> ModuleName -> Maybe Type -> Maybe Backtick -> SpanDoc -> Maybe (LImportDecl GhcPs) -> CompItem
@@ -629,7 +629,7 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
     | otherwise -> do
         -- assumes that nubOrdBy is stable
         let uniqueFiltCompls = nubOrdBy uniqueCompl filtCompls
-        compls <- mapM (mkCompl plId ideOpts) uniqueFiltCompls
+        let compls = map (mkCompl plId ideOpts) uniqueFiltCompls
         return $ filtModNameCompls
               ++ filtKeywordCompls
               ++ map (toggleSnippets caps config) compls
