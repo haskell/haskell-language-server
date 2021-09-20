@@ -24,7 +24,7 @@ import           Data.Maybe                               (fromMaybe, isJust,
                                                            listToMaybe,
                                                            mapMaybe)
 import qualified Data.Text                                as T
-import qualified Text.Fuzzy                               as Fuzzy
+import qualified Text.Fuzzy.Parallel                      as Fuzzy
 
 import           Control.Monad
 import           Data.Aeson                               (ToJSON (toJSON))
@@ -52,6 +52,10 @@ import           Ide.Types                                (CommandId (..),
 import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities
 import qualified Language.LSP.VFS                         as VFS
+
+-- Chunk size used for parallelizing fuzzy matching
+chunkSize :: Int
+chunkSize = 1000
 
 -- From haskell-ide-engine/hie-plugin-api/Haskell/Ide/Engine/Context.hs
 
@@ -538,9 +542,9 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
       filtModNameCompls =
         map mkModCompl
           $ mapMaybe (T.stripPrefix enteredQual)
-          $ Fuzzy.simpleFilter fullPrefix allModNamesAsNS
+          $ Fuzzy.simpleFilter chunkSize fullPrefix allModNamesAsNS
 
-      filtCompls = map Fuzzy.original $ Fuzzy.filter prefixText ctxCompls "" "" label False
+      filtCompls = map Fuzzy.original $ Fuzzy.filter chunkSize prefixText ctxCompls "" "" label False
         where
 
           mcc = case maybe_parsed of
@@ -587,7 +591,7 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
 
       filtListWith f list =
         [ f label
-        | label <- Fuzzy.simpleFilter fullPrefix list
+        | label <- Fuzzy.simpleFilter chunkSize fullPrefix list
         , enteredQual `T.isPrefixOf` label
         ]
 
