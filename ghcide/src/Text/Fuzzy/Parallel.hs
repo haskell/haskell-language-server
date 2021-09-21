@@ -38,7 +38,7 @@ filter :: (TextualMonoid s)
        -> Bool     -- ^ Case sensitivity.
        -> [Fuzzy t s] -- ^ The list of results, sorted, highest score first.
 filter chunkSize maxRes pattern ts pre post extract caseSen = runST $ do
-  let v = (V.catMaybes
+  let v = (V.mapMaybe id
              (V.map (\t -> match pattern t pre post extract caseSen) (V.fromList ts)
              `using`
              parVectorChunk chunkSize (evalTraversable forceScore)))
