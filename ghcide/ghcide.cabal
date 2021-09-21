@@ -87,6 +87,7 @@ library
         unordered-containers >= 0.2.10.0,
         utf8-string,
         vector,
+        vector-algorithms,
         hslogger,
         Diff ^>=0.4.0,
         vector,

@@ -494,14 +494,14 @@ ppr :: Outputable a => a -> T.Text
 ppr = T.pack . prettyPrint
 
 toggleSnippets :: ClientCapabilities -> CompletionsConfig -> CompletionItem -> CompletionItem
-toggleSnippets ClientCapabilities {_textDocument} (CompletionsConfig with _) =
-  removeSnippetsWhen (not $ with && supported)
+toggleSnippets ClientCapabilities {_textDocument} CompletionsConfig{..} =
+  removeSnippetsWhen (not $ enableSnippets && supported)
   where
     supported =
       Just True == (_textDocument >>= _completion >>= _completionItem >>= _snippetSupport)
 
 toggleAutoExtend :: CompletionsConfig -> CompItem -> CompItem
-toggleAutoExtend (CompletionsConfig _ False) x = x {additionalTextEdits = Nothing}
+toggleAutoExtend CompletionsConfig{enableAutoExtend=False} x = x {additionalTextEdits = Nothing}
 toggleAutoExtend _ x = x
 
 removeSnippetsWhen :: Bool -> CompletionItem -> CompletionItem
@@ -539,12 +539,14 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
       -}
       pos = VFS.cursorPos prefixInfo
 
+      maxC = maxCompletions config
+
       filtModNameCompls =
         map mkModCompl
           $ mapMaybe (T.stripPrefix enteredQual)
-          $ Fuzzy.simpleFilter chunkSize fullPrefix allModNamesAsNS
+          $ Fuzzy.simpleFilter chunkSize maxC fullPrefix allModNamesAsNS
 
-      filtCompls = map Fuzzy.original $ Fuzzy.filter chunkSize prefixText ctxCompls "" "" label False
+      filtCompls = map Fuzzy.original $ Fuzzy.filter chunkSize maxC prefixText ctxCompls "" "" label False
         where
 
           mcc = case maybe_parsed of
@@ -591,7 +593,7 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
 
       filtListWith f list =
         [ f label
-        | label <- Fuzzy.simpleFilter chunkSize fullPrefix list
+        | label <- Fuzzy.simpleFilter chunkSize maxC fullPrefix list
         , enteredQual `T.isPrefixOf` label
         ]
 
