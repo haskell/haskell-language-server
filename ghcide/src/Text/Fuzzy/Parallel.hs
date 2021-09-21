@@ -1,7 +1,6 @@
 -- | Parallel versions of 'filter' and 'simpleFilter'
 module Text.Fuzzy.Parallel
-(
-    filter,
+(   filter,
     simpleFilter,
     -- reexports
     Fuzzy(..),
@@ -10,16 +9,14 @@ module Text.Fuzzy.Parallel
 
 import           Control.Monad.ST            (runST)
 import           Control.Parallel.Strategies (Eval, Strategy, evalTraversable,
-                                              parListChunk, parTraversable,
-                                              rseq, using)
+                                              parTraversable, rseq, using)
 import           Data.Function               (on)
-import           Data.List                   (sortOn)
-import           Data.Maybe                  (catMaybes)
 import           Data.Monoid.Textual         (TextualMonoid)
 import           Data.Ord                    (Down (Down))
 import           Data.Vector                 (Vector, (!))
 import qualified Data.Vector                 as V
-import qualified Data.Vector.Algorithms.Heap as VA
+-- need to use a stable sort
+import qualified Data.Vector.Algorithms.Tim  as VA
 import           Prelude                     hiding (filter)
 import           Text.Fuzzy                  (Fuzzy (..), match)
 
@@ -43,7 +40,7 @@ filter chunkSize maxRes pattern ts pre post extract caseSen = runST $ do
              `using`
              parVectorChunk chunkSize (evalTraversable forceScore)))
   v' <- V.unsafeThaw v
-  VA.partialSortBy (compare `on` (Down . score)) v' maxRes
+  VA.sortBy (compare `on` (Down . score)) v'
   v'' <- V.unsafeFreeze v'
   return $ take maxRes $ V.toList v''
 
