@@ -9,6 +9,7 @@ import           Data.Foldable
 import           Data.List
 import           Data.Void
 import qualified Development.IDE.Session as Session
+import           GHC.Environment
 import qualified HIE.Bios.Environment    as HieBios
 import           HIE.Bios.Types
 import           Ide.Arguments
@@ -72,7 +73,7 @@ launchHaskellLanguageServer parsedArgs = do
                      ++ hlsVersion
   hPutStrLn stderr $ "Current directory: " ++ d
   hPutStrLn stderr $ "Operating system: " ++ os
-  args <- getArgs
+  args <- getFullArgs
   hPutStrLn stderr $ "Arguments: " ++ show args
   hPutStrLn stderr $ "Cradle directory: " ++ cradleRootDir cradle
   hPutStrLn stderr $ "Cradle type: " ++ show (actionName (cradleOptsProg cradle))
