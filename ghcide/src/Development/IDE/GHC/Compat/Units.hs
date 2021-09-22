@@ -49,46 +49,45 @@ module Development.IDE.GHC.Compat.Units (
 
 #if MIN_VERSION_ghc(9,0,0)
 #if MIN_VERSION_ghc(9,2,0)
-import qualified GHC.Data.ShortText             as ST
-import           GHC.Driver.Env                 (hsc_unit_dbs)
+import qualified GHC.Data.ShortText              as ST
+import           GHC.Driver.Env                  (hsc_unit_dbs)
 import           GHC.Unit.Env
 import           GHC.Unit.External
 #else
 import           GHC.Driver.Types
 #endif
 import           GHC.Data.FastString
-import           GHC.Driver.Session             (PackageArg (..),
-                                                 PackageFlag (..))
-import qualified GHC.Driver.Session             as DynFlags
+import           GHC.Driver.Session              (PackageArg (..),
+                                                  PackageFlag (..))
+import qualified GHC.Driver.Session              as DynFlags
 import           GHC.Types.Unique.Set
-import qualified GHC.Unit.Info                  as UnitInfo
-import           GHC.Unit.Module.Name           (ModuleName)
-import           GHC.Unit.State                 (LookupResult, PackageName,
-                                                 UnitInfo,
-                                                 UnitState (unitInfoMap))
-import qualified GHC.Unit.State                 as State
-import           GHC.Unit.Types                 hiding (moduleUnit, toUnitId)
-import qualified GHC.Unit.Types                 as Unit
+import qualified GHC.Unit.Info                   as UnitInfo
+import           GHC.Unit.Module.Name            (ModuleName)
+import           GHC.Unit.State                  (LookupResult, PackageName,
+                                                  UnitInfo,
+                                                  UnitState (unitInfoMap))
+import qualified GHC.Unit.State                  as State
+import           GHC.Unit.Types                  hiding (moduleUnit, toUnitId)
+import qualified GHC.Unit.Types                  as Unit
 #else
-import           DynFlags                       (PackageArg (..),
-                                                 PackageFlag (..))
 import qualified DynFlags
 import           FastString
 import           HscTypes
-import           Module                         hiding (moduleUnitId)
+import           Module                          hiding (moduleUnitId)
 import qualified Module
-import           Packages                       (InstalledPackageInfo (haddockInterfaces, packageName),
-                                                 LookupResult, PackageConfig,
-                                                 PackageConfigMap, PackageName,
-                                                 PackageState,
-                                                 getPackageConfigMap,
-                                                 lookupPackage')
+import           Packages                        (InstalledPackageInfo (haddockInterfaces, packageName),
+                                                  LookupResult, PackageConfig,
+                                                  PackageConfigMap,
+                                                  PackageState,
+                                                  getPackageConfigMap,
+                                                  lookupPackage')
 import qualified Packages
 #endif
 
+import           Development.IDE.GHC.Compat.Core
 import           Development.IDE.GHC.Compat.Env
 #if MIN_VERSION_ghc(9,0,0) && !MIN_VERSION_ghc(9,2,0)
-import           Data.Map                       (Map)
+import           Data.Map                        (Map)
 #endif
 import           Data.Either
 import           Data.Version
