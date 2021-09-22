@@ -221,7 +221,7 @@ You need to provide your own GHC/Cabal/Stack as required by your project, possib
 
 ## GHC support plan
 
-Taking in account the ghc deprecation policy the support for differente ghc versions is:
+Taking in account the ghc deprecation policy the support for different ghc versions is:
 
 
 | GHC version | last supporting HLS version | deprecation status |
@@ -241,4 +241,5 @@ Taking in account the ghc deprecation policy the support for differente ghc vers
 | 8.6.5       | [current](https://github.com/haskell/haskell-language-server/releases/latest)  | with lts for ghc-9.2 |
 | 8.6.4       | [1.4.0](https://github.com/haskell/haskell-language-server/releases/tag/1.4.0) | deprecated  |
 
-- this plan is not definitive and may vary depending on changes in the criteria listed above (but always honouring the deprecation policy)
+- ghc versions not in the list were never supported by HLS
+- this plan is not definitive and may vary but always honouring the deprecation policy
