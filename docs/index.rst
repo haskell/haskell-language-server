@@ -8,7 +8,7 @@ Official haskell ide support via language server (LSP). Successor of `ghcide <ht
 
    features
    installation
+   supported-versions
    configuration
-   ghc-deprecation
    troubleshooting
    contributing/index
