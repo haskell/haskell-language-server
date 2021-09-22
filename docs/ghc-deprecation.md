@@ -1,11 +1,9 @@
 # GHC support deprecation policy
 
 - `haskell-language-server`(HLS) is highly tied to ghc api so much so that it needs a specific flavour for each ghc minor version to ensure it will work in a reliable way
-- It supposes the codebase is riddled with code conditioned to each supported ghc versions.  
-  - It even needs entire packages to fully support older versions of ghc.
+- It supposes the codebase is riddled with code conditioned to each supported ghc versions. It even needs entire packages to fully support older versions of ghc.
 - Our continouos integracion setup has to cover all those cases so it have to use lot of resources to test and build the executable.
-- So we need to limit the ghc support to save maintainers and contributors time and reduce ci resources consumption.  
-  - It becomes vital to make HLS development manageable.
+- So we need to limit the ghc support to save maintainers and contributors time and reduce ci resources consumption. It becomes vital to make HLS development manageable.
 - At same time we aim to support the right balance of ghc versions to minimize impact to final users who usually needs to keep using older ghc versions, even if they are out of the window support offered by ghc itself.
 - To establish the policy and the possible exceptions we aim to take in account:
    - completeness of support: the GHC flavour should include all plugins and features
