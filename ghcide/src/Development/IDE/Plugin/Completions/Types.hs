@@ -16,8 +16,9 @@ import           Data.Text                    (Text)
 import           Development.IDE.Spans.Common
 import           GHC.Generics                 (Generic)
 import           Ide.Plugin.Config            (Config)
+import qualified Ide.Plugin.Config            as Config
 import           Ide.Plugin.Properties
-import           Ide.PluginUtils              (usePropertyLsp)
+import           Ide.PluginUtils              (getClientConfig, usePropertyLsp)
 import           Ide.Types                    (PluginId)
 import           Language.LSP.Server          (MonadLsp)
 import           Language.LSP.Types           (CompletionItemKind (..), Uri)
@@ -46,11 +47,13 @@ getCompletionsConfig pId =
   CompletionsConfig
     <$> usePropertyLsp #snippetsOn pId properties
     <*> usePropertyLsp #autoExtendOn pId properties
+    <*> (Config.maxCompletions <$> getClientConfig)
 
 
 data CompletionsConfig = CompletionsConfig {
   enableSnippets   :: Bool,
-  enableAutoExtend :: Bool
+  enableAutoExtend :: Bool,
+  maxCompletions   :: Int
 }
 
 data ExtendImport = ExtendImport
