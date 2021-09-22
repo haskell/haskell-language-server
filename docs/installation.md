@@ -13,7 +13,7 @@ If you are using [`ghcup`](https://www.haskell.org/ghcup/) to manage your instal
 ghcup install hls
 ```
 
-Since ghcup-1.17.0 you can also install HLS from source without checking out the code manually:
+Since ghcup-0.1.17 you can also install HLS from source without checking out the code manually:
 ```bash
 ghcup compile hls -v 1.4.0 8.10.7
 ```
