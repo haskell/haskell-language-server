@@ -3,7 +3,7 @@
 ## Current GHC version support status
 
 The current support for different GHC versions is given in the following table.
- 
+
 | GHC version | Last supporting HLS version                                                                                                                              | Deprecation status                       |
 | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
 | 9.2.0       | not supported yet                                                                                                                                        |                                          |
@@ -48,22 +48,23 @@ For the rest of the supported major GHC versions, we will support at least the l
 
 We will warn users about the upcoming deprecation of a GHC version in the notes of the release *prior* to the deprecation itself.
 
-### Why deprecate older versions of GHC? 
+### Why deprecate older versions of GHC?
 
-`haskell-language-server` is highly tied to the GHC API, so much so that it needs to be specially built for each GHC minor version to ensure it will work reliably.
-This means that the codebase is riddled with CPP to handle each supported ghc versions. It even needs entire compatibility packages to fully support older versions of GHC.
-Moreover, our continuous integration setup has to cover all of those cases, which uses a lot of resources.
+`haskell-language-server`(HLS) is highly tied to the ghc api.This imposes a high maintenance cost:
 
-So we need to limit the number of versions of GHC that we support in order to save maintainers and contributors time and to reduce the consumption of CI resources. 
-This is vital to make HLS development manageable.
+- The codebase is littered with conditional logic,
+- We own auxiliary packages to support older versions of ghc.
+- CI has to cover all the supported versions.
 
-At the same time we aim to support enough GHC versions to minimize the impact on end users.
-This includes making an effort to support users who need to keep using old GHC versions, even if they are out of the support window offered by GHC itself.
+So we need to limit the ghc support to save maintainers and contributors time and reduce CI resources.
+
+At same time we aim to support the right balance of ghc versions to minimize impact to final users.
 
 ### What factors do we take into account when deprecating a version?
 
-To guide the policy (and possible exceptions) we aim to take in account:
-- Completeness of support: all plugins and features should work with that GHC version
-- GHC versions supported by newer [Stackage](https://www.stackage.org/) LTS's
-- GHC versions supported by default in the most popular [Linux distributions](https://repology.org/project/ghc/versions)
-- The specific history of GHC releases and their reliability on the major operating systems (Linux, Windows, MacOS)
+To establish and apply the policy we take into account:
+
+- Completeness: support includes all plugins and features
+- The most recent [stackage](https://www.stackage.org/) LTS snapshot
+- The GHC versions used in the most popular [linux distributions](https://repology.org/project/ghc/versions)
+- The reliability of different ghc versions on the major operating systems (Linux, Windows, MacOS)
