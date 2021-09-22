@@ -15,7 +15,7 @@ ghcup install hls
 
 Since ghcup-1.17.0 you can also install HLS from source without checking out the code manually:
 ```bash
-ghcup compile hls -v 1.4.0.0 8.10.7
+ghcup compile hls -v 1.4.0 8.10.7
 ```
 
 Check `ghcup compile hls --help` for a full list of compilation options.
