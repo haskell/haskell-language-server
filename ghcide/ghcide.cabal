@@ -50,6 +50,7 @@ library
         dlist,
         -- we can't use >= 1.7.10 while we have to use hlint == 3.2.*
         extra >= 1.7.4 && < 1.7.10,
+        fuzzy,
         filepath,
         fingertree,
         ghc-exactprint,
@@ -86,6 +87,7 @@ library
         unordered-containers >= 0.2.10.0,
         utf8-string,
         vector,
+        vector-algorithms,
         hslogger,
         Diff ^>=0.4.0,
         vector,
@@ -208,7 +210,7 @@ library
         Development.IDE.Plugin.Completions.Logic
         Development.IDE.Session.VersionCheck
         Development.IDE.Types.Action
-        Text.Fuzzy
+        Text.Fuzzy.Parallel
 
     ghc-options: -Wall -Wno-name-shadowing -Wincomplete-uni-patterns -Wno-unticked-promoted-constructors
 
