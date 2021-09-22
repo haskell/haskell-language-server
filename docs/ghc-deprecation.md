@@ -12,7 +12,7 @@
    - the specific history of ghc releases and their realibility on the major operating systems (linux, windows, macos)
 - It worths to note that users of deprecated ghc versions always will have the option of:
   - Continue using the last HLS with support for their ghc version. So they will miss new bug fixes and features.
-  - For deprecated minor versions of a still supported major version, try to build HLS from source.  
+  - For deprecated minor versions of a still supported major version, try to build HLS from source.
     - We will not guarentee it will work but will do quite likely.
 
 ## Deprecation policy
@@ -23,15 +23,3 @@
   - for the rest of major supported GHC versions we will support at least the latest GHC minor version in stackage LTS (so 1 minor version)
 - We may extend the existing discovery mechanisms (hls-wrapper, automatic download in vscode extension) to find and download older HLS binaries when it detects a legacy GHC version
 - We will warn users about the deprecated ghc version in the notes of the release *prior* to the deprecation itself.
-  
-## Deprecation prevision
-
-| newest LTS ghc version |            supported ghc versions               |
-|------------------------|-------------------------------------------------|
-| 8.10.7                 | 8.10.7, 8.10.6, 8.10.5(\*), 8.8.4, 8.8.3(\*), 8.6.5 |
-| 9.0.1                  | 9.0.1, 8.10.7, 8.8.4, 8.6.5(\*)                 |
-| 9.0.2                  | 9.0.2, 9.0.1, 8.10.7, 8.8.4, 8.6.5(\*)          |
-| 9.2.0                  | 9.2.0, 9.0.2, 8.10.7, 8.8.4                     |
-
-- versions with `*` are versions which should be removed accordingly to the policy but we will keep due to the specific history of realibilty of recent ghc versions
-- this prevision is not definitive and may vary depending on changes in the criteria listed above (but always honouring the policy)
