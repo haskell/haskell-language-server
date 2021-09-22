@@ -9,14 +9,21 @@
 ## ghcup
 
 If you are using [`ghcup`](https://www.haskell.org/ghcup/) to manage your installations, you can install `haskell-language-server` with
-```
+```bash
 ghcup install hls
 ```
+
+Since ghcup-1.17.0 you can also install HLS from source without checking out the code manually:
+```bash
+ghcup compile hls -v 1.4.0.0 8.10.7
+```
+
+Check `ghcup compile hls --help` for a full list of compilation options.
 
 ## chocolatey
 
 If you are using [`chocolatey`](https://chocolatey.org/) to manage your installations in windows, [you can install `haskell-language-server`](https://community.chocolatey.org/packages/haskell-language-server) with
-```
+```bash
 choco install haskell-language-server
 ````
 
@@ -39,7 +46,7 @@ Its size is relatively large (approx. 900 MB), but if this is a problem for you,
 Alternatively, if you want to use **dynamically linked** Haskell packages from `pacman`,
 you can install the latest pre-compiled version of `haskell-language-server` from [[community]](https://archlinux.org/packages/community/x86_64/haskell-language-server/):
 
-```
+```bash
 sudo pacman -S haskell-language-server
 ```
 
@@ -50,12 +57,15 @@ See [ArchWiki](https://wiki.archlinux.org/index.php/Haskell) for the details of 
 
 HLS is available for installation from official binary packages. Use
 
-```
+```bash
 pkg install hs-haskell-language-server
 ```
 
 to install it. At the moment, HLS installed this way only supports the same GHC
 version as the ports one.
+
+Since 1.4.0 version you also can install HLS via [ghcup](#ghcup).
+
 
 ## Installation from source
 
