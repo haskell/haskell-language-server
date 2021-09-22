@@ -219,27 +219,3 @@ This formula contains HLS binaries compiled with GHC versions available via Home
 
 You need to provide your own GHC/Cabal/Stack as required by your project, possibly via Homebrew.
 
-## GHC support plan
-
-Taking in account the ghc deprecation policy the support for different ghc versions is:
-
-
-| GHC version | last supporting HLS version | deprecation status |
-| ----------- | --------------------------- | ----------- |
-| 9.2.0       | not supported yet           |             |
-| 9.0.1       | [current](https://github.com/haskell/haskell-language-server/releases/latest) ([partially](https://github.com/haskell/haskell-language-server/issues/297)) ||
-| 8.10.7      | [current](https://github.com/haskell/haskell-language-server/releases/latest)  |             |
-| 8.10.6      | [current](https://github.com/haskell/haskell-language-server/releases/latest)  | with lts for ghc-9.0 |
-| 8.10.5      | [current](https://github.com/haskell/haskell-language-server/releases/latest)  | deprecated, will be removed *after* 1.5.0  |
-| 8.10.4      | [1.4.0](https://github.com/haskell/haskell-language-server/releases/tag/1.4.0) | deprecated  |
-| 8.10.3      | [1.4.0](https://github.com/haskell/haskell-language-server/releases/tag/1.4.0) | deprecated  |
-| 8.10.2      | [1.4.0](https://github.com/haskell/haskell-language-server/releases/tag/1.4.0) | deprecated  |
-| 8.10.1      | [0.9.0](https://github.com/haskell/haskell-language-server/releases/tag/0.9.0) | deprecated  |
-| 8.8.4       | [current](https://github.com/haskell/haskell-language-server/releases/latest)  | with lts for ghc-9.2 |
-| 8.8.3       | [current](https://github.com/haskell/haskell-language-server/releases/latest)  | deprecated, will be removed *after* 1.5.0   |
-| 8.8.2       | [1.2.0](https://github.com/haskell/haskell-language-server/releases/tag/1.2.0) | deprecated  |
-| 8.6.5       | [current](https://github.com/haskell/haskell-language-server/releases/latest)  | with lts for ghc-9.2 |
-| 8.6.4       | [1.4.0](https://github.com/haskell/haskell-language-server/releases/tag/1.4.0) | deprecated  |
-
-- ghc versions not in the list were never supported by HLS
-- this plan is not definitive and may vary but always honouring the deprecation policy
