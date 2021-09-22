@@ -16,6 +16,7 @@ import           Data.Ord                    (Down (Down))
 import           Data.Vector                 (Vector, (!))
 import qualified Data.Vector                 as V
 -- need to use a stable sort
+import           Data.Bifunctor              (second)
 import qualified Data.Vector.Algorithms.Tim  as VA
 import           Prelude                     hiding (filter)
 import           Text.Fuzzy                  (Fuzzy (..), match)
@@ -26,7 +27,6 @@ import           Text.Fuzzy                  (Fuzzy (..), match)
 -- 200
 filter :: (TextualMonoid s)
        => Int      -- ^ Chunk size. 1000 works well.
-       -> Int      -- ^ Max results
        -> s        -- ^ Pattern.
        -> [t]      -- ^ The list of values containing the text to search in.
        -> s        -- ^ The text to add before each match.
@@ -34,7 +34,7 @@ filter :: (TextualMonoid s)
        -> (t -> s) -- ^ The function to extract the text from the container.
        -> Bool     -- ^ Case sensitivity.
        -> [Fuzzy t s] -- ^ The list of results, sorted, highest score first.
-filter chunkSize maxRes pattern ts pre post extract caseSen = runST $ do
+filter chunkSize pattern ts pre post extract caseSen = runST $ do
   let v = (V.mapMaybe id
              (V.map (\t -> match pattern t pre post extract caseSen) (V.fromList ts)
              `using`
@@ -42,7 +42,7 @@ filter chunkSize maxRes pattern ts pre post extract caseSen = runST $ do
   v' <- V.unsafeThaw v
   VA.sortBy (compare `on` (Down . score)) v'
   v'' <- V.unsafeFreeze v'
-  return $ take maxRes $ V.toList v''
+  return $ V.toList v''
 
 -- | Return all elements of the list that have a fuzzy
 -- match against the pattern. Runs with default settings where
@@ -53,12 +53,19 @@ filter chunkSize maxRes pattern ts pre post extract caseSen = runST $ do
 {-# INLINABLE simpleFilter #-}
 simpleFilter :: (TextualMonoid s)
              => Int -- ^ Chunk size. 1000 works well.
-             -> Int -- ^ Max results
              -> s   -- ^ Pattern to look for.
              -> [s] -- ^ List of texts to check.
              -> [s] -- ^ The ones that match.
-simpleFilter chunk maxRes pattern xs =
-  map original $ filter chunk maxRes pattern xs mempty mempty id False
+simpleFilter chunk pattern xs =
+  map original $ filter chunk pattern xs mempty mempty id False
+
+--------------------------------------------------------------------------------
+
+-- | Evaluation that forces the 'score' field
+forceScore :: TextualMonoid s => Fuzzy t s -> Eval(Fuzzy t s)
+forceScore it@Fuzzy{score} = do
+  score' <- rseq score
+  return it{score = score'}
 
 --------------------------------------------------------------------------------
 
@@ -75,18 +82,24 @@ parVectorChunk chunkSize st v =
 -- [[0,1,2],[3,4,5],[6,7,8],[9,10,11],[12]]
 chunkVector :: Int -> Vector a -> [Vector a]
 chunkVector chunkSize v = do
-    let indices = pairwise $ [0, chunkSize .. l-1] ++ [l]
+    let indices = chunkIndices chunkSize (0,l)
         l = V.length v
-    [V.fromListN (h-l) [v ! j | j <- [l .. h-1]]
+    [V.fromListN (h-l+1) [v ! j | j <- [l .. h]]
             | (l,h) <- indices]
+
+-- >>> chunkIndices 3 (0,9)
+-- >>> chunkIndices 3 (0,10)
+-- >>> chunkIndices 3 (0,11)
+-- [(0,2),(3,5),(6,8)]
+-- [(0,2),(3,5),(6,8),(9,9)]
+-- [(0,2),(3,5),(6,8),(9,10)]
+chunkIndices :: Int -> (Int,Int) -> [(Int,Int)]
+chunkIndices chunkSize (from,to) =
+  map (second pred) $
+  pairwise $
+  [from, from+chunkSize .. to-1] ++ [to]
 
 pairwise :: [a] -> [(a,a)]
 pairwise []       = []
 pairwise [_]      = []
 pairwise (x:y:xs) = (x,y) : pairwise (y:xs)
-
--- | Evaluation that forces the 'score' field
-forceScore :: TextualMonoid s => Fuzzy t s -> Eval(Fuzzy t s)
-forceScore it@Fuzzy{score} = do
-  score' <- rseq score
-  return it{score = score'}

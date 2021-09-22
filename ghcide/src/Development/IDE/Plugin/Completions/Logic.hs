@@ -544,9 +544,9 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
       filtModNameCompls =
         map mkModCompl
           $ mapMaybe (T.stripPrefix enteredQual)
-          $ Fuzzy.simpleFilter chunkSize maxC fullPrefix allModNamesAsNS
+          $ Fuzzy.simpleFilter chunkSize fullPrefix allModNamesAsNS
 
-      filtCompls = map Fuzzy.original $ Fuzzy.filter chunkSize maxC prefixText ctxCompls "" "" label False
+      filtCompls = map Fuzzy.original $ Fuzzy.filter chunkSize prefixText ctxCompls "" "" label False
         where
 
           mcc = case maybe_parsed of
@@ -593,7 +593,7 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
 
       filtListWith f list =
         [ f label
-        | label <- Fuzzy.simpleFilter chunkSize maxC fullPrefix list
+        | label <- Fuzzy.simpleFilter chunkSize fullPrefix list
         , enteredQual `T.isPrefixOf` label
         ]
 
@@ -621,7 +621,8 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
     -> return []
     | otherwise -> do
         -- assumes that nubOrdBy is stable
-        let uniqueFiltCompls = nubOrdBy uniqueCompl filtCompls
+        -- nubOrd is very slow - take 10x the maximum configured
+        let uniqueFiltCompls = nubOrdBy uniqueCompl $ take (maxC*10) filtCompls
         let compls = map (mkCompl plId ideOpts) uniqueFiltCompls
         return $ filtModNameCompls
               ++ filtKeywordCompls
