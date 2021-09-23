@@ -57,14 +57,10 @@ import           GHC.Unit.External
 import           GHC.Driver.Types
 #endif
 import           GHC.Data.FastString
-import           GHC.Driver.Session              (PackageArg (..),
-                                                  PackageFlag (..))
 import qualified GHC.Driver.Session              as DynFlags
 import           GHC.Types.Unique.Set
 import qualified GHC.Unit.Info                   as UnitInfo
-import           GHC.Unit.Module.Name            (ModuleName)
-import           GHC.Unit.State                  (LookupResult, PackageName,
-                                                  UnitInfo,
+import           GHC.Unit.State                  (LookupResult, UnitInfo,
                                                   UnitState (unitInfoMap))
 import qualified GHC.Unit.State                  as State
 import           GHC.Unit.Types                  hiding (moduleUnit, toUnitId)
