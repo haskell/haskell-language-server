@@ -64,7 +64,6 @@ pkg install hs-haskell-language-server
 to install it. At the moment, HLS installed this way only supports the same GHC
 version as the ports one.
 
-Since 1.4.0 version you also can install HLS via [ghcup](#ghcup).
 
 
 ## Installation from source
