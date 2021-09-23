@@ -24,7 +24,7 @@ import           Data.Maybe                               (fromMaybe, isJust,
                                                            listToMaybe,
                                                            mapMaybe)
 import qualified Data.Text                                as T
-import qualified Text.Fuzzy                               as Fuzzy
+import qualified Text.Fuzzy.Parallel                      as Fuzzy
 
 import           Control.Monad
 import           Data.Aeson                               (ToJSON (toJSON))
@@ -52,6 +52,10 @@ import           Ide.Types                                (CommandId (..),
 import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities
 import qualified Language.LSP.VFS                         as VFS
+
+-- Chunk size used for parallelizing fuzzy matching
+chunkSize :: Int
+chunkSize = 1000
 
 -- From haskell-ide-engine/hie-plugin-api/Haskell/Ide/Engine/Context.hs
 
@@ -490,14 +494,14 @@ ppr :: Outputable a => a -> T.Text
 ppr = T.pack . prettyPrint
 
 toggleSnippets :: ClientCapabilities -> CompletionsConfig -> CompletionItem -> CompletionItem
-toggleSnippets ClientCapabilities {_textDocument} (CompletionsConfig with _) =
-  removeSnippetsWhen (not $ with && supported)
+toggleSnippets ClientCapabilities {_textDocument} CompletionsConfig{..} =
+  removeSnippetsWhen (not $ enableSnippets && supported)
   where
     supported =
       Just True == (_textDocument >>= _completion >>= _completionItem >>= _snippetSupport)
 
 toggleAutoExtend :: CompletionsConfig -> CompItem -> CompItem
-toggleAutoExtend (CompletionsConfig _ False) x = x {additionalTextEdits = Nothing}
+toggleAutoExtend CompletionsConfig{enableAutoExtend=False} x = x {additionalTextEdits = Nothing}
 toggleAutoExtend _ x = x
 
 removeSnippetsWhen :: Bool -> CompletionItem -> CompletionItem
@@ -535,12 +539,14 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
       -}
       pos = VFS.cursorPos prefixInfo
 
+      maxC = maxCompletions config
+
       filtModNameCompls =
         map mkModCompl
           $ mapMaybe (T.stripPrefix enteredQual)
-          $ Fuzzy.simpleFilter fullPrefix allModNamesAsNS
+          $ Fuzzy.simpleFilter chunkSize fullPrefix allModNamesAsNS
 
-      filtCompls = map Fuzzy.original $ Fuzzy.filter prefixText ctxCompls "" "" label False
+      filtCompls = map Fuzzy.original $ Fuzzy.filter chunkSize prefixText ctxCompls "" "" label False
         where
 
           mcc = case maybe_parsed of
@@ -587,7 +593,7 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
 
       filtListWith f list =
         [ f label
-        | label <- Fuzzy.simpleFilter fullPrefix list
+        | label <- Fuzzy.simpleFilter chunkSize fullPrefix list
         , enteredQual `T.isPrefixOf` label
         ]
 
@@ -615,7 +621,8 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
     -> return []
     | otherwise -> do
         -- assumes that nubOrdBy is stable
-        let uniqueFiltCompls = nubOrdBy uniqueCompl filtCompls
+        -- nubOrd is very slow - take 10x the maximum configured
+        let uniqueFiltCompls = nubOrdBy uniqueCompl $ take (maxC*10) filtCompls
         let compls = map (mkCompl plId ideOpts) uniqueFiltCompls
         return $ filtModNameCompls
               ++ filtKeywordCompls
