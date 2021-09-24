@@ -79,10 +79,8 @@ parVectorChunk chunkSize st v =
 -- [[0,1,2],[3,4,5],[6,7,8],[9,10,11],[12]]
 chunkVector :: Int -> Vector a -> [Vector a]
 chunkVector chunkSize v = do
-    let indices = chunkIndices chunkSize (0,l)
-        l = V.length v
-    [V.fromListN (h-l+1) [v ! j | j <- [l .. h]]
-            | (l,h) <- indices]
+    let indices = chunkIndices chunkSize (0,V.length v)
+    [V.slice l (h-l+1) v | (l,h) <- indices]
 
 -- >>> chunkIndices 3 (0,9)
 -- >>> chunkIndices 3 (0,10)
@@ -114,6 +112,7 @@ partialSortByAscScore wantedCount perfectScore v = loop 0 (SortState minBound pe
   loop index st@SortState{..} acc
     | foundCount == wantedCount = reverse acc
     | index == l
+-- ProgressCancelledException
     = if bestScoreSeen < scoreWanted
         then loop 0 st{scoreWanted = bestScoreSeen, bestScoreSeen = minBound} acc
         else reverse acc
