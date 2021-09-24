@@ -10,14 +10,12 @@ module Text.Fuzzy.Parallel
 import           Control.Monad.ST            (runST)
 import           Control.Parallel.Strategies (Eval, Strategy, evalTraversable,
                                               parTraversable, rseq, using)
-import           Data.Function               (on)
 import           Data.Monoid.Textual         (TextualMonoid)
-import           Data.Ord                    (Down (Down))
 import           Data.Vector                 (Vector, (!))
 import qualified Data.Vector                 as V
 -- need to use a stable sort
 import           Data.Bifunctor              (second)
-import qualified Data.Vector.Algorithms.Tim  as VA
+import qualified Data.Monoid.Factorial       as T
 import           Prelude                     hiding (filter)
 import           Text.Fuzzy                  (Fuzzy (..), match)
 
@@ -27,6 +25,7 @@ import           Text.Fuzzy                  (Fuzzy (..), match)
 -- 200
 filter :: (TextualMonoid s)
        => Int      -- ^ Chunk size. 1000 works well.
+       -> Int      -- ^ Max. number of results wanted
        -> s        -- ^ Pattern.
        -> [t]      -- ^ The list of values containing the text to search in.
        -> s        -- ^ The text to add before each match.
@@ -34,15 +33,12 @@ filter :: (TextualMonoid s)
        -> (t -> s) -- ^ The function to extract the text from the container.
        -> Bool     -- ^ Case sensitivity.
        -> [Fuzzy t s] -- ^ The list of results, sorted, highest score first.
-filter chunkSize pattern ts pre post extract caseSen = runST $ do
+filter chunkSize maxRes pattern ts pre post extract caseSen = runST $ do
   let v = (V.mapMaybe id
              (V.map (\t -> match pattern t pre post extract caseSen) (V.fromList ts)
              `using`
              parVectorChunk chunkSize (evalTraversable forceScore)))
-  v' <- V.unsafeThaw v
-  VA.sortBy (compare `on` (Down . score)) v'
-  v'' <- V.unsafeFreeze v'
-  return $ V.toList v''
+  return $ partialSortByAscScore maxRes (T.length pattern) v
 
 -- | Return all elements of the list that have a fuzzy
 -- match against the pattern. Runs with default settings where
@@ -53,11 +49,12 @@ filter chunkSize pattern ts pre post extract caseSen = runST $ do
 {-# INLINABLE simpleFilter #-}
 simpleFilter :: (TextualMonoid s)
              => Int -- ^ Chunk size. 1000 works well.
+             -> Int -- ^ Max. number of results wanted
              -> s   -- ^ Pattern to look for.
              -> [s] -- ^ List of texts to check.
              -> [s] -- ^ The ones that match.
-simpleFilter chunk pattern xs =
-  map original $ filter chunk pattern xs mempty mempty id False
+simpleFilter chunk maxRes pattern xs =
+  map original $ filter chunk maxRes pattern xs mempty mempty id False
 
 --------------------------------------------------------------------------------
 
@@ -103,3 +100,35 @@ pairwise :: [a] -> [(a,a)]
 pairwise []       = []
 pairwise [_]      = []
 pairwise (x:y:xs) = (x,y) : pairwise (y:xs)
+
+-- | A stable partial sort ascending by score. O(N) best case, O(wanted*N) worst case
+--- >>> partialSortByAscScore 3 5 $ V.fromList $ map (\x -> Fuzzy x x (length x)) ["A","B","ABCDE","ABBC"]
+-- [Fuzzy {original = "ABCDE", rendered = "ABCDE", score = 5},Fuzzy {original = "ABBC", rendered = "ABBC", score = 4},Fuzzy {original = "A", rendered = "A", score = 1}]
+partialSortByAscScore :: TextualMonoid s
+            => Int  -- ^ Number of items needed
+            -> Int  -- ^ Value of a perfect score
+            -> Vector (Fuzzy t s)
+            -> [Fuzzy t s]
+partialSortByAscScore wantedCount perfectScore v = loop 0 (SortState minBound perfectScore 0) [] where
+  l = V.length v
+  loop index st@SortState{..} acc
+    | foundCount == wantedCount = reverse acc
+    | index == l
+    = if bestScoreSeen < scoreWanted
+        then loop 0 st{scoreWanted = bestScoreSeen, bestScoreSeen = minBound} acc
+        else reverse acc
+    | otherwise =
+      case v!index of
+        x | score x == scoreWanted
+          -> loop (index+1) st{foundCount = foundCount+1} (x:acc)
+          | score x < scoreWanted && score x > bestScoreSeen
+          -> loop (index+1) st{bestScoreSeen = score x} acc
+          | otherwise
+          -> loop (index+1) st acc
+
+data SortState a = SortState
+  { bestScoreSeen :: !Int
+  , scoreWanted   :: !Int
+  , foundCount    :: !Int
+  }
+  deriving Show
