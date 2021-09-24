@@ -1,3 +1,5 @@
+-- this can be used copied as cabal.project.local
+-- or directly with `cabal build --project-file=cabal-ghc901.project`
 packages:
          ./
          ./hie-compat
@@ -6,11 +8,11 @@ packages:
          ./ghcide
          ./hls-plugin-api
          ./hls-test-utils
-        -- ./plugins/hls-tactics-plugin
-        -- ./plugins/hls-brittany-plugin
-        -- ./plugins/hls-stylish-haskell-plugin
-        -- ./plugins/hls-fourmolu-plugin
-        -- ./plugins/hls-class-plugin
+         ./plugins/hls-tactics-plugin
+         ./plugins/hls-brittany-plugin
+         ./plugins/hls-stylish-haskell-plugin
+         ./plugins/hls-fourmolu-plugin
+         ./plugins/hls-class-plugin
          ./plugins/hls-eval-plugin
          ./plugins/hls-explicit-imports-plugin
          ./plugins/hls-refine-imports-plugin
@@ -72,4 +74,20 @@ allow-newer:
     floskell:ghc-prim,
     -- for shake-bench
     Chart-diagrams:diagrams-core,
-    SVGFonts:diagrams-core
+    SVGFonts:diagrams-core,
+
+    -- This is needed to allow cabal find a build plan
+    -- for stylish-haskell, fourmolu and brittany
+    -- (even if they are not being built due to flags)
+    butcher:base,
+    data-tree-print:base,
+    multistate:base,
+    brittany:base,
+    brittany:ghc,
+    brittany:ghc-boot-th,
+    hls-brittany-plugin:brittany,
+
+    stylish-haskell:Cabal,
+    stylish-haskell:ghc-lib-parser,
+
+    fourmolu:ghc-lib-parser
