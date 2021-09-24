@@ -229,3 +229,4 @@ brew install haskell-language-server
 This formula contains HLS binaries compiled with GHC versions available via Homebrew; at the moment those are: 8.6.5, 8.8.4, 8.10.7.
 
 You need to provide your own GHC/Cabal/Stack as required by your project, possibly via Homebrew.
+
