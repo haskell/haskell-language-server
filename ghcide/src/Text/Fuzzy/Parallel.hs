@@ -15,12 +15,22 @@ import           Data.Vector                 (Vector, (!))
 import qualified Data.Vector                 as V
 -- need to use a stable sort
 import           Data.Bifunctor              (second)
+import           Data.Maybe                  (fromJust)
 import qualified Data.Monoid.Factorial       as T
 import           Prelude                     hiding (filter)
 import           Text.Fuzzy                  (Fuzzy (..), match)
 
 -- | The function to filter a list of values by fuzzy search on the text extracted from them.
 --
+-- >>> map (\x -> score <$> match ("lookup"::String) x "" "" id False) ["splitLookup"::String, "lookupInput"]
+-- WAS WAS WAS WAS NOW [Just 58,Just 120]
+-- WAS WAS WAS NOW [Just 58,Just 120]
+-- WAS WAS NOW [Just 58,Just 120]
+-- WAS NOW [Just 58,Just 120]
+-- NOW [Just 58,Just 120]
+-- >>> take 10 $ iterate (\(tot, cur) -> let cur' = 2*cur + 1 in (tot + cur', cur')) (0,0)
+-- NOW [(0,0),(1,1),(4,3),(11,7),(26,15),(57,31),(120,63),(247,127),(502,255),(1013,511)]
+
 -- >>> length $ filter 1000 200 "ML" (concat $ replicate 10000 [("Standard ML", 1990),("OCaml",1996),("Scala",2003)]) "<" ">" fst False
 -- 200
 filter :: (TextualMonoid s)
@@ -34,11 +44,12 @@ filter :: (TextualMonoid s)
        -> Bool     -- ^ Case sensitivity.
        -> [Fuzzy t s] -- ^ The list of results, sorted, highest score first.
 filter chunkSize maxRes pattern ts pre post extract caseSen = runST $ do
-  let v = (V.mapMaybe id
+  let v = V.mapMaybe id
              (V.map (\t -> match pattern t pre post extract caseSen) (V.fromList ts)
              `using`
-             parVectorChunk chunkSize (evalTraversable forceScore)))
-  return $ partialSortByAscScore maxRes (T.length pattern) v
+             parVectorChunk chunkSize (evalTraversable forceScore))
+      perfectScore = score $ fromJust $ match pattern pattern "" "" id False
+  return $ partialSortByAscScore maxRes perfectScore v
 
 -- | Return all elements of the list that have a fuzzy
 -- match against the pattern. Runs with default settings where
@@ -80,7 +91,7 @@ parVectorChunk chunkSize st v =
 chunkVector :: Int -> Vector a -> [Vector a]
 chunkVector chunkSize v = do
     let indices = chunkIndices chunkSize (0,V.length v)
-    [V.slice l (h-l+1) v | (l,h) <- indices]
+    [V.slice l (h-l) v | (l,h) <- indices]
 
 -- >>> chunkIndices 3 (0,9)
 -- >>> chunkIndices 3 (0,10)
