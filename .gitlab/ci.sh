@@ -31,7 +31,7 @@ export BOOTSTRAP_HASKELL_ADJUST_CABAL_CONFIG=yes
 curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | sh
 
 if [[ -n "$LOCAL_CABAL_PROJECT" ]]; then
-    cp $LOCAL_CABAL_PROJECT cabal.project.local
+    run cp "$LOCAL_CABAL_PROJECT" cabal.project.local
 fi
 
 # some alpines need workaround
