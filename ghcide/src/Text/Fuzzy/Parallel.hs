@@ -16,7 +16,6 @@ import qualified Data.Vector                 as V
 -- need to use a stable sort
 import           Data.Bifunctor              (second)
 import           Data.Maybe                  (fromJust)
-import qualified Data.Monoid.Factorial       as T
 import           Prelude                     hiding (filter)
 import           Text.Fuzzy                  (Fuzzy (..), match)
 
