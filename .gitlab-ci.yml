@@ -89,6 +89,7 @@ build-aarch64-darwin:
         --keep CI_PROJECT_DIR \
         --keep MACOSX_DEPLOYMENT_TARGET \
         --keep GHC_VERSION \
+        --keep LOCAL_CABAL_PROJECT \
         --keep CABAL_INSTALL_VERSION \
         --run "$1" 2>&1
     }
