@@ -9,15 +9,16 @@ import           Ide.Types            (IdePlugins)
 import           Options.Applicative
 
 data Arguments = Arguments
-    {argsCwd               :: Maybe FilePath
-    ,argsVersion           :: Bool
-    ,argsShakeProfiling    :: Maybe FilePath
-    ,argsOTMemoryProfiling :: Bool
-    ,argsTesting           :: Bool
-    ,argsDisableKick       :: Bool
-    ,argsThreads           :: Int
-    ,argsVerbose           :: Bool
-    ,argsCommand           :: Command
+    {argsCwd                        :: Maybe FilePath
+    ,argsVersion                    :: Bool
+    ,argsShakeProfiling             :: Maybe FilePath
+    ,argsOTMemoryProfiling          :: Bool
+    ,argsTesting                    :: Bool
+    ,argsDisableKick                :: Bool
+    ,argsThreads                    :: Int
+    ,argsVerbose                    :: Bool
+    ,argsCommand                    :: Command
+    ,argsConservativeChangeTracking :: Bool
     }
 
 getArguments :: IdePlugins IdeState -> IO Arguments
@@ -38,6 +39,7 @@ arguments plugins = Arguments
       <*> option auto (short 'j' <> help "Number of threads (0: automatic)" <> metavar "NUM" <> value 0 <> showDefault)
       <*> switch (short 'd' <> long "verbose" <> help "Include internal events in logging output")
       <*> (commandP plugins <|> lspCommand <|> checkCommand)
+      <*> switch (long "conservative-change-tracking" <> help "disable reactive change tracking (for testing/debugging)")
       where
           checkCommand = Check <$> many (argument str (metavar "FILES/DIRS..."))
           lspCommand = LSP <$ flag' True (long "lsp" <> help "Start talking to an LSP client")

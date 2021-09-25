@@ -215,7 +215,7 @@ showDocRdrEnv :: HscEnv -> GlobalRdrEnv -> SDoc -> String
 showDocRdrEnv env rdrEnv = showSDocForUser (hsc_dflags env) (mkPrintUnqualified (hsc_dflags env) rdrEnv)
 
 data GetGlobalBindingTypeSigs = GetGlobalBindingTypeSigs
-  deriving (Generic, Show, Eq, Ord, Hashable, NFData, Binary)
+  deriving (Generic, Show, Eq, Ord, Hashable, NFData)
 
 data GlobalBindingTypeSig = GlobalBindingTypeSig
   { gbName     :: Name

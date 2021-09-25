@@ -8,7 +8,8 @@ module Development.IDE.Main
 ,defaultMain
 ) where
 import           Control.Concurrent.Extra              (newLock, readVar,
-                                                        withLock)
+                                                        withLock,
+                                                        withNumCapabilities)
 import           Control.Exception.Safe                (Exception (displayException),
                                                         catchAny)
 import           Control.Monad.Extra                   (concatMapM, unless,
@@ -68,6 +69,7 @@ import           Development.IDE.Types.Options         (IdeGhcSession,
                                                         defaultIdeOptions,
                                                         optModifyDynFlags)
 import           Development.IDE.Types.Shake           (Key (Key))
+import           GHC.Conc                              (getNumProcessors)
 import           GHC.IO.Encoding                       (setLocaleEncoding)
 import           GHC.IO.Handle                         (hDuplicate)
 import           HIE.Bios.Cradle                       (findCradle)
@@ -86,6 +88,7 @@ import           Ide.Types                             (IdeCommand (IdeCommand),
                                                         PluginId (PluginId),
                                                         ipMap)
 import qualified Language.LSP.Server                   as LSP
+import           Numeric.Natural                       (Natural)
 import           Options.Applicative                   hiding (action)
 import qualified System.Directory.Extra                as IO
 import           System.Exit                           (ExitCode (ExitFailure),
@@ -163,6 +166,7 @@ data Arguments = Arguments
     , argsDebouncer             :: IO (Debouncer NormalizedUri) -- ^ Debouncer used for diagnostics
     , argsHandleIn              :: IO Handle
     , argsHandleOut             :: IO Handle
+    , argsThreads               :: Maybe Natural
     }
 
 instance Default Arguments where
@@ -179,6 +183,7 @@ instance Default Arguments where
         , argsDefaultHlsConfig = def
         , argsGetHieDbLoc = getHieDbLoc
         , argsDebouncer = newAsyncDebouncer
+        , argsThreads = Nothing
         , argsHandleIn = pure stdin
         , argsHandleOut = do
                 -- Move stdout to another file descriptor and duplicate stderr
@@ -221,12 +226,14 @@ defaultMain Arguments{..} = do
     inH <- argsHandleIn
     outH <- argsHandleOut
 
+    numProcessors <- getNumProcessors
+
     case argCommand of
         PrintExtensionSchema ->
             LT.putStrLn $ decodeUtf8 $ A.encodePretty $ pluginsToVSCodeExtensionSchema argsHlsPlugins
         PrintDefaultConfig ->
             LT.putStrLn $ decodeUtf8 $ A.encodePretty $ pluginsToDefaultConfig argsHlsPlugins
-        LSP -> do
+        LSP -> withNumCapabilities (maybe (numProcessors `div` 2) fromIntegral argsThreads) $ do
             t <- offsetTime
             hPutStrLn stderr "Starting LSP server..."
             hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run WITHOUT the --lsp option!"
@@ -250,6 +257,7 @@ defaultMain Arguments{..} = do
 
                 -- disable runSubset if the client doesn't support watched files
                 runSubset <- (optRunSubset def_options &&) <$> LSP.runLspT env isWatchSupported
+                hPutStrLn stderr $ "runSubset: " <> show runSubset
 
                 let options = def_options
                             { optReportProgress = clientSupportsProgress caps

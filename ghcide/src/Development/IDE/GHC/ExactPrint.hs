@@ -81,7 +81,6 @@ data GetAnnotatedParsedSource = GetAnnotatedParsedSource
 
 instance Hashable GetAnnotatedParsedSource
 instance NFData GetAnnotatedParsedSource
-instance Binary GetAnnotatedParsedSource
 type instance RuleResult GetAnnotatedParsedSource = Annotated ParsedSource
 
 -- | Get the latest version of the annotated parse source with comments.

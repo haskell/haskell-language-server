@@ -117,7 +117,6 @@ import           Development.IDE.GHC.Compat             (NameCacheUpdater (..),
 import           Development.IDE.GHC.Orphans            ()
 import           Development.IDE.Graph                  hiding (ShakeValue)
 import qualified Development.IDE.Graph                  as Shake
-import           Development.IDE.Graph.Classes
 import           Development.IDE.Graph.Database
 import           Development.IDE.Graph.Rule
 import           Development.IDE.Types.Action
@@ -195,7 +194,8 @@ data ShakeExtras = ShakeExtras
     ,ideTesting :: IdeTesting
     -- ^ Whether to enable additional lsp messages used by the test suite for checking invariants
     ,restartShakeSession
-        :: [DelayedAction ()]
+        :: String
+        -> [DelayedAction ()]
         -> IO ()
     ,ideNc :: IORef NameCache
     -- | A mapping of module name to known target (or candidate targets, if missing)
@@ -213,7 +213,7 @@ data ShakeExtras = ShakeExtras
     , vfs :: VFSHandle
     , defaultConfig :: Config
       -- ^ Default HLS config, only relevant if the client does not provide any Config
-    , dirtyKeys :: IORef (HashSet SomeShakeValue)
+    , dirtyKeys :: IORef (HashSet Key)
       -- ^ Set of dirty rule keys since the last Shake run
     }
 
@@ -584,8 +584,8 @@ delayedAction a = do
 -- | Restart the current 'ShakeSession' with the given system actions.
 --   Any actions running in the current session will be aborted,
 --   but actions added via 'shakeEnqueue' will be requeued.
-shakeRestart :: IdeState -> [DelayedAction ()] -> IO ()
-shakeRestart IdeState{..} acts =
+shakeRestart :: IdeState -> String -> [DelayedAction ()] -> IO ()
+shakeRestart IdeState{..} reason acts =
     withMVar'
         shakeSession
         (\runner -> do
@@ -595,8 +595,9 @@ shakeRestart IdeState{..} acts =
               let profile = case res of
                       Just fp -> ", profile saved at " <> fp
                       _       -> ""
-              let msg = T.pack $ "Restarting build session " ++ keysMsg ++ abortMsg
-                  keysMsg = "for keys " ++ show (HSet.toList backlog) ++ " "
+              let msg = T.pack $ "Restarting build session " ++ reason' ++ keysMsg ++ abortMsg
+                  reason' = "due to " ++ reason
+                  keysMsg = " for keys " ++ show (HSet.toList backlog) ++ " "
                   abortMsg = "(aborting the previous one took " ++ showDuration stopTime ++ profile ++ ")"
               logDebug (logger shakeExtras) msg
               notifyTestingLogMessage shakeExtras msg
@@ -655,7 +656,7 @@ newSession extras@ShakeExtras{..} shakeDb acts = do
         -- Runs actions from the work queue sequentially
         pumpActionThread otSpan = do
             d <- liftIO $ atomically $ popQueue actionQueue
-            void $ parallel [run otSpan d, pumpActionThread otSpan]
+            actionFork (run otSpan d) $ \_ -> pumpActionThread otSpan
 
         -- TODO figure out how to thread the otSpan into defineEarlyCutoff
         run _otSpan d  = do
@@ -871,9 +872,9 @@ defineEarlyCutoff
     :: IdeRule k v
     => RuleBody k v
     -> Rules ()
-defineEarlyCutoff (Rule op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode isSuccess $ do
+defineEarlyCutoff (Rule op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ do
     defineEarlyCutoff' True key file old mode $ op key file
-defineEarlyCutoff (RuleNoDiagnostics op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode isSuccess $ do
+defineEarlyCutoff (RuleNoDiagnostics op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ do
     defineEarlyCutoff' False key file old mode $ second (mempty,) <$> op key file
 
 defineNoFile :: IdeRule k v => (k -> Action v) -> Rules ()
@@ -916,7 +917,8 @@ defineEarlyCutoff' doDiagnostics key file old mode action = do
             Nothing -> do
                 (bs, (diags, res)) <- actionCatch
                     (do v <- action; liftIO $ evaluate $ force v) $
-                    \(e :: SomeException) -> pure (Nothing, ([ideErrorText file $ T.pack $ show e | not $ isBadDependency e],Nothing))
+                    \(e :: SomeException) -> do
+                        pure (Nothing, ([ideErrorText file $ T.pack $ show e | not $ isBadDependency e],Nothing))
                 modTime <- liftIO $ (currentValue . fst =<<) <$> getValues state GetModificationTime file
                 (bs, res) <- case res of
                     Nothing -> do
@@ -948,9 +950,10 @@ defineEarlyCutoff' doDiagnostics key file old mode action = do
         liftIO $ atomicModifyIORef'_ dirtyKeys (HSet.delete $ toKey key file)
         return res
 
-isSuccess :: A v -> Bool
-isSuccess (A Failed{}) = False
-isSuccess _            = True
+traceA :: A v -> String
+traceA (A Failed{})    = "Failed"
+traceA (A Stale{})     = "Stale"
+traceA (A Succeeded{}) = "Success"
 
 -- | Rule type, input file
 data QDisk k = QDisk k NormalizedFilePath
@@ -959,8 +962,6 @@ data QDisk k = QDisk k NormalizedFilePath
 instance Hashable k => Hashable (QDisk k)
 
 instance NFData k => NFData (QDisk k)
-
-instance Binary k => Binary (QDisk k)
 
 instance Show k => Show (QDisk k) where
     show (QDisk k file) =

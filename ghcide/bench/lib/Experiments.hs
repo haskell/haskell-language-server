@@ -152,21 +152,22 @@ experiments =
       benchWithSetup
         "code actions after cradle edit"
         ( \docs -> do
-            unless (any (isJust . identifierP) docs) $
-                error "None of the example modules is suitable for this experiment"
-            forM_ docs $ \DocumentPositions{..} ->
-                forM_ identifierP $ \p -> changeDoc doc [charEdit p]
+            forM_ docs $ \DocumentPositions{..} -> do
+                forM identifierP $ \p -> do
+                    changeDoc doc [charEdit p]
+                    waitForProgressStart
+            void waitForBuildQueue
         )
         ( \docs -> do
             hieYamlUri <- getDocUri "hie.yaml"
             liftIO $ appendFile (fromJust $ uriToFilePath hieYamlUri) "##\n"
             sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
                 List [ FileEvent hieYamlUri FcChanged ]
-            forM_ docs $ \DocumentPositions{..} -> do
-              changeDoc doc [charEdit stringLiteralP]
-              waitForProgressStart
+            waitForProgressStart
+            waitForProgressStart
+            waitForProgressStart -- the Session logic restarts a second time
             waitForProgressDone
-            not . null . catMaybes <$> forM docs (\DocumentPositions{..} -> do
+            not . all null . catMaybes <$> forM docs (\DocumentPositions{..} -> do
               forM identifierP $ \p ->
                 getCodeActions doc (Range p p))
         ),
@@ -421,6 +422,17 @@ waitForProgressDone = loop
       done <- null <$> getIncompleteProgressSessions
       unless done loop
 
+-- | Wait for the build queue to be empty
+waitForBuildQueue :: Session Seconds
+waitForBuildQueue = do
+    let m = SCustomMethod "test"
+    waitId <- sendRequest m (toJSON WaitForShakeQueue)
+    (td, resp) <- duration $ skipManyTill anyMessage $ responseForId m waitId
+    case resp of
+        ResponseMessage{_result=Right Null} -> return td
+        -- assume a ghcide binary lacking the WaitForShakeQueue method
+        _                                   -> return 0
+
 runBench ::
   (?config :: Config) =>
   (Session BenchRun -> IO BenchRun) ->
@@ -451,15 +463,8 @@ runBench runSess b = handleAny (\e -> print e >> return badRun)
             else do
                 output (showDuration t)
                 -- Wait for the delayed actions to finish
-                let m = SCustomMethod "test"
-                waitId <- sendRequest m (toJSON WaitForShakeQueue)
-                (td, resp) <- duration $ skipManyTill anyMessage $ responseForId m waitId
-                case resp of
-                    ResponseMessage{_result=Right Null} -> do
-                      loop (userWaits+t) (delayedWork+td) (n -1)
-                    _ ->
-                    -- Assume a ghcide build lacking the WaitForShakeQueue command
-                      loop (userWaits+t) delayedWork (n -1)
+                td <- waitForBuildQueue
+                loop (userWaits+t) (delayedWork+td) (n -1)
 
       (runExperiment, result) <- duration $ loop 0 0 samples
       let success = isJust result

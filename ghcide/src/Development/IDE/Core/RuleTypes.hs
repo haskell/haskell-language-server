@@ -18,7 +18,6 @@ module Development.IDE.Core.RuleTypes(
 import           Control.DeepSeq
 import           Control.Lens
 import           Data.Aeson.Types                             (Value)
-import           Data.Binary
 import           Data.Hashable
 import qualified Data.Map                                     as M
 import           Data.Time.Clock.POSIX
@@ -76,7 +75,6 @@ data GetKnownTargets = GetKnownTargets
   deriving (Show, Generic, Eq, Ord)
 instance Hashable GetKnownTargets
 instance NFData   GetKnownTargets
-instance Binary   GetKnownTargets
 type instance RuleResult GetKnownTargets = KnownTargets
 
 -- | Convert to Core, requires TypeCheck*
@@ -86,13 +84,11 @@ data GenerateCore = GenerateCore
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GenerateCore
 instance NFData   GenerateCore
-instance Binary   GenerateCore
 
 data GetImportMap = GetImportMap
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetImportMap
 instance NFData   GetImportMap
-instance Binary   GetImportMap
 
 type instance RuleResult GetImportMap = ImportMap
 newtype ImportMap = ImportMap
@@ -281,7 +277,6 @@ instance Hashable GetModificationTime where
     hashWithSalt salt _ = salt
 
 instance NFData   GetModificationTime
-instance Binary   GetModificationTime
 
 pattern GetModificationTime :: GetModificationTime
 pattern GetModificationTime = GetModificationTime_ {missingFileDiagnostics=True}
@@ -304,14 +299,12 @@ data GetFileContents = GetFileContents
     deriving (Eq, Show, Generic)
 instance Hashable GetFileContents
 instance NFData   GetFileContents
-instance Binary   GetFileContents
 
 data GetFileExists = GetFileExists
     deriving (Eq, Show, Typeable, Generic)
 
 instance NFData   GetFileExists
 instance Hashable GetFileExists
-instance Binary   GetFileExists
 
 data FileOfInterestStatus
   = OnDisk
@@ -320,13 +313,11 @@ data FileOfInterestStatus
   deriving (Eq, Show, Typeable, Generic)
 instance Hashable FileOfInterestStatus
 instance NFData   FileOfInterestStatus
-instance Binary   FileOfInterestStatus
 
 data IsFileOfInterestResult = NotFOI | IsFOI FileOfInterestStatus
   deriving (Eq, Show, Typeable, Generic)
 instance Hashable IsFileOfInterestResult
 instance NFData   IsFileOfInterestResult
-instance Binary   IsFileOfInterestResult
 
 type instance RuleResult IsFileOfInterest = IsFileOfInterestResult
 
@@ -353,19 +344,16 @@ data GetParsedModule = GetParsedModule
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetParsedModule
 instance NFData   GetParsedModule
-instance Binary   GetParsedModule
 
 data GetParsedModuleWithComments = GetParsedModuleWithComments
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetParsedModuleWithComments
 instance NFData   GetParsedModuleWithComments
-instance Binary   GetParsedModuleWithComments
 
 data GetLocatedImports = GetLocatedImports
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetLocatedImports
 instance NFData   GetLocatedImports
-instance Binary   GetLocatedImports
 
 -- | Does this module need to be compiled?
 type instance RuleResult NeedsCompilation = Maybe LinkableType
@@ -374,122 +362,102 @@ data NeedsCompilation = NeedsCompilation
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable NeedsCompilation
 instance NFData   NeedsCompilation
-instance Binary   NeedsCompilation
 
 data GetDependencyInformation = GetDependencyInformation
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetDependencyInformation
 instance NFData   GetDependencyInformation
-instance Binary   GetDependencyInformation
 
 data GetModuleGraph = GetModuleGraph
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetModuleGraph
 instance NFData   GetModuleGraph
-instance Binary   GetModuleGraph
 
 data ReportImportCycles = ReportImportCycles
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable ReportImportCycles
 instance NFData   ReportImportCycles
-instance Binary   ReportImportCycles
 
 data GetDependencies = GetDependencies
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetDependencies
 instance NFData   GetDependencies
-instance Binary   GetDependencies
 
 data TypeCheck = TypeCheck
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable TypeCheck
 instance NFData   TypeCheck
-instance Binary   TypeCheck
 
 data GetDocMap = GetDocMap
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetDocMap
 instance NFData   GetDocMap
-instance Binary   GetDocMap
 
 data GetHieAst = GetHieAst
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetHieAst
 instance NFData   GetHieAst
-instance Binary   GetHieAst
 
 data GetBindings = GetBindings
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetBindings
 instance NFData   GetBindings
-instance Binary   GetBindings
 
 data GhcSession = GhcSession
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GhcSession
 instance NFData   GhcSession
-instance Binary   GhcSession
 
 data GhcSessionDeps = GhcSessionDeps deriving (Eq, Show, Typeable, Generic)
 instance Hashable GhcSessionDeps
 instance NFData   GhcSessionDeps
-instance Binary   GhcSessionDeps
 
 data GetModIfaceFromDisk = GetModIfaceFromDisk
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetModIfaceFromDisk
 instance NFData   GetModIfaceFromDisk
-instance Binary   GetModIfaceFromDisk
 
 data GetModIfaceFromDiskAndIndex = GetModIfaceFromDiskAndIndex
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetModIfaceFromDiskAndIndex
 instance NFData   GetModIfaceFromDiskAndIndex
-instance Binary   GetModIfaceFromDiskAndIndex
 
 data GetModIface = GetModIface
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetModIface
 instance NFData   GetModIface
-instance Binary   GetModIface
 
 data GetModIfaceWithoutLinkable = GetModIfaceWithoutLinkable
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetModIfaceWithoutLinkable
 instance NFData   GetModIfaceWithoutLinkable
-instance Binary   GetModIfaceWithoutLinkable
 
 data IsFileOfInterest = IsFileOfInterest
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable IsFileOfInterest
 instance NFData   IsFileOfInterest
-instance Binary   IsFileOfInterest
 
 data GetModSummaryWithoutTimestamps = GetModSummaryWithoutTimestamps
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetModSummaryWithoutTimestamps
 instance NFData   GetModSummaryWithoutTimestamps
-instance Binary   GetModSummaryWithoutTimestamps
 
 data GetModSummary = GetModSummary
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetModSummary
 instance NFData   GetModSummary
-instance Binary   GetModSummary
 
 -- | Get the vscode client settings stored in the ide state
 data GetClientSettings = GetClientSettings
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetClientSettings
 instance NFData   GetClientSettings
-instance Binary   GetClientSettings
 
 type instance RuleResult GetClientSettings = Hashed (Maybe Value)
 
 data AddWatchedFile = AddWatchedFile deriving (Eq, Show, Typeable, Generic)
 instance Hashable AddWatchedFile
 instance NFData   AddWatchedFile
-instance Binary   AddWatchedFile
 
 
 -- A local rule type to get caching. We want to use newCache, but it has
@@ -510,7 +478,6 @@ instance NFData IdeGhcSession where rnf !_ = ()
 data GhcSessionIO = GhcSessionIO deriving (Eq, Show, Typeable, Generic)
 instance Hashable GhcSessionIO
 instance NFData   GhcSessionIO
-instance Binary   GhcSessionIO
 
 makeLensesWith
     (lensRules & lensField .~ mappingNamer (pure . (++ "L")))

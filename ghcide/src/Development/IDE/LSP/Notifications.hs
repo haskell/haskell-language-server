@@ -82,11 +82,11 @@ descriptor plId = (defaultPluginDescriptor plId) { pluginNotificationHandlers = 
       \ide _ (DidChangeWatchedFilesParams (List fileEvents)) -> liftIO $ do
         -- See Note [File existence cache and LSP file watchers] which explains why we get these notifications and
         -- what we do with them
-        let msg = Text.pack $ show fileEvents
-        logDebug (ideLogger ide) $ "Watched file events: " <> msg
+        let msg = show fileEvents
+        logDebug (ideLogger ide) $ "Watched file events: " <> Text.pack msg
         modifyFileExists ide fileEvents
         resetFileStore ide fileEvents
-        setSomethingModified ide []
+        setSomethingModified ide [] msg
 
   , mkPluginNotificationHandler LSP.SWorkspaceDidChangeWorkspaceFolders $
       \ide _ (DidChangeWorkspaceFoldersParams events) -> liftIO $ do
@@ -101,7 +101,7 @@ descriptor plId = (defaultPluginDescriptor plId) { pluginNotificationHandlers = 
         let msg = Text.pack $ show cfg
         logDebug (ideLogger ide) $ "Configuration changed: " <> msg
         modifyClientSettings ide (const $ Just cfg)
-        setSomethingModified ide [toKey GetClientSettings emptyFilePath ]
+        setSomethingModified ide [toKey GetClientSettings emptyFilePath] "config change"
 
   , mkPluginNotificationHandler LSP.SInitialized $ \ide _ _ -> do
       --------- Initialize Shake session --------------------------------------------------------------------

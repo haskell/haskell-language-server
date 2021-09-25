@@ -39,7 +39,7 @@ import qualified Development.IDE.GHC.Compat.Util as FastString
 import           Development.IDE.GHC.Error (realSrcSpanToRange)
 import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.Graph (Action, RuleResult, Rules, action)
-import           Development.IDE.Graph.Classes (Binary, Hashable, NFData)
+import           Development.IDE.Graph.Classes (Hashable, NFData)
 import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindings)
 import           GHC.Generics (Generic)
 import           Generics.SYB hiding (Generic)
@@ -84,7 +84,7 @@ runIde herald action state = runAction ("Wingman." <> herald <> "." <> action) s
 runCurrentIde
     :: forall a r
      . ( r ~ RuleResult a
-       , Eq a , Hashable a , Binary a , Show a , Typeable a , NFData a
+       , Eq a , Hashable a , Show a , Typeable a , NFData a
        , Show r, Typeable r, NFData r
        )
     => String
@@ -99,7 +99,7 @@ runCurrentIde herald state nfp a =
 runStaleIde
     :: forall a r
      . ( r ~ RuleResult a
-       , Eq a , Hashable a , Binary a , Show a , Typeable a , NFData a
+       , Eq a , Hashable a , Show a , Typeable a , NFData a
        , Show r, Typeable r, NFData r
        )
     => String
@@ -114,7 +114,7 @@ runStaleIde herald state nfp a =
 unsafeRunStaleIde
     :: forall a r
      . ( r ~ RuleResult a
-       , Eq a , Hashable a , Binary a , Show a , Typeable a , NFData a
+       , Eq a , Hashable a , Show a , Typeable a , NFData a
        , Show r, Typeable r, NFData r
        )
     => String
@@ -519,7 +519,6 @@ data WriteDiagnostics = WriteDiagnostics
 
 instance Hashable WriteDiagnostics
 instance NFData   WriteDiagnostics
-instance Binary   WriteDiagnostics
 
 type instance RuleResult WriteDiagnostics = ()
 
