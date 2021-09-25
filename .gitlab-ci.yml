@@ -1,4 +1,4 @@
-# Used for ci setup in the gitlab mirror of the project: 
+# Used for ci setup in the gitlab mirror of the project:
 # https://gitlab.haskell.org/haskell/haskell-language-server/-/pipelines
 variables:
   # Commit of ghc/ci-images repository from which to pull Docker images
@@ -9,21 +9,17 @@ variables:
 .default_matrix: &default_matrix
   matrix:
     - GHC_VERSION: 8.8.4
-      CABAL_PROJECT: cabal.project
     - GHC_VERSION: 8.10.7
-      CABAL_PROJECT: cabal.project
     - GHC_VERSION: 9.0.1
-      CABAL_PROJECT: cabal-ghc901.project
+      LOCAL_CABAL_PROJECT: cabal-ghc901.project.local
 
 .m1_matrix: &m1_matrix
   matrix:
     - GHC_VERSION: 8.10.7
-      CABAL_PROJECT: cabal.project
 
 .arm_matrix: &arm_matrix
   matrix:
     - GHC_VERSION: 8.10.7
-      CABAL_PROJECT: cabal.project
 
 
 workflow:
@@ -93,7 +89,6 @@ build-aarch64-darwin:
         --keep CI_PROJECT_DIR \
         --keep MACOSX_DEPLOYMENT_TARGET \
         --keep GHC_VERSION \
-        --keep CABAL_PROJECT \
         --keep CABAL_INSTALL_VERSION \
         --run "$1" 2>&1
     }
