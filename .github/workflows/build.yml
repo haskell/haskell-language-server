@@ -16,18 +16,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ['9.0.1', '8.10.7', '8.10.6', '8.10.5', '8.10.4', '8.10.3', '8.10.2', '8.8.4', '8.8.3', '8.6.5', '8.6.4']
+        ghc: ['9.0.1', '8.10.7', '8.10.6', '8.10.5', '8.8.4', '8.8.3', '8.6.5']
         os: [ubuntu-18.04, macOS-latest, windows-latest]
         exclude:
           - os: windows-latest
-            ghc: '8.10.2' # broken due to https://gitlab.haskell.org/ghc/ghc/-/issues/18550
-          - os: windows-latest
-            ghc: '8.8.4' # also fails due to segfault :(
-          - os: windows-latest
             ghc: '8.8.3' # fails due to segfault
-        include:
-          - os: windows-latest
-            ghc: '8.10.2.2' # only available for windows and choco
 
     steps:
     - uses: actions/checkout@v2
@@ -56,8 +49,6 @@ jobs:
         GHC_VER: ${{ matrix.ghc }}
       run: |
         echo "EXE_EXT=.exe" >> $GITHUB_ENV
-        # We normalize windows+choco ghc version 8.10.2.2
-        GHC_VER=$(echo $GHC_VER | sed 's/8.10.2.2/8.10.2/g')
         echo "GHC_VERSION=$GHC_VER" >> $GITHUB_ENV
 
     - name: Set some linux specific things
@@ -80,6 +71,12 @@ jobs:
       run: |
         echo "# uninstalling CommandLineTools (see https://github.com/haskell/haskell-language-server/issues/1913#issuecomment-861667786)"
         sudo rm -rf /Library/Developer/CommandLineTools
+
+    - name: Modify cabal.project to workaround segfaults for ghc-8.8.4 and windows
+      if: matrix.ghc == '8.8.4' && matrix.os == 'windows-latest'
+      run: |
+          echo "package floskell" >> cabal.project
+          echo "  ghc-options: -O0" >> cabal.project
 
     - name: Build Server
       # Try building it twice in case of flakey builds on Windows
@@ -121,11 +118,11 @@ jobs:
         path: ${{ steps.compress_server_binary.outputs.path }}
 
     - name: Build Wrapper
-      if: matrix.ghc == '8.10.4'
+      if: matrix.ghc == '8.10.7'
       run: cabal build exe:hls-wrapper -O2 $LINUX_CABAL_ARGS
 
     - name: Compress Wrapper Binary
-      if: matrix.ghc == '8.10.4'
+      if: matrix.ghc == '8.10.7'
       id: compress_wrapper_binary
       run: |
         HLS_WRAPPER_BUILD=$(find dist-newstyle \( -name 'hls-wrapper' -o -name 'hls-wrapper.exe' \) -type f)
@@ -144,7 +141,7 @@ jobs:
         fi
 
     - name: Upload Wrapper
-      if: matrix.ghc == '8.10.4'
+      if: matrix.ghc == '8.10.7'
       uses: actions/upload-release-asset@v1.0.2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -155,7 +152,7 @@ jobs:
         asset_content_type: ${{ steps.compress_wrapper_binary.outputs.content_type}}
 
     - uses: actions/upload-artifact@v2
-      if: matrix.ghc == '8.10.4'
+      if: matrix.ghc == '8.10.7'
       with:
         name: haskell-language-server-wrapper-${{ runner.OS }}${{env.EXE_EXT}}.${{ steps.compress_wrapper_binary.outputs.extension }}
         path: ${{ steps.compress_wrapper_binary.outputs.path }}
