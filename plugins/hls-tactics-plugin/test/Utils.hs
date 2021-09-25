@@ -10,7 +10,7 @@ module Utils where
 import           Control.DeepSeq (deepseq)
 import qualified Control.Exception as E
 import           Control.Lens hiding (List, failing, (<.>), (.=))
-import           Control.Monad (unless)
+import           Control.Monad (unless, void)
 import           Control.Monad.IO.Class
 import           Data.Aeson
 import           Data.Foldable
@@ -108,8 +108,11 @@ mkGoldenTest eq tc occ line col input =
     resetGlobalHoleRef
     runSessionForTactics $ do
       doc <- openDoc (input <.> "hs") "haskell"
+      -- wait for diagnostics to start coming
       _ <- waitForDiagnostics
-      waitForAllProgressDone
+      -- wait for the entire build to finish, so that Tactics code actions that
+      -- use stale data will get uptodate stuff
+      void waitForBuildQueue
       actions <- getCodeActions doc $ pointRange line col
       case find ((== Just (tacticTitle tc occ)) . codeActionTitle) actions of
         Just (InR CodeAction {_command = Just c}) -> do
@@ -122,7 +125,7 @@ mkGoldenTest eq tc occ line col input =
                 T.writeFile expected_name edited
             expected <- liftIO $ T.readFile expected_name
             liftIO $ edited `eq` expected
-        other -> error $ show other
+        _ -> error $ show actions
 
 
 mkCodeLensTest

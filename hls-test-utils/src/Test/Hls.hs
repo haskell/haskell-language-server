@@ -22,7 +22,8 @@ module Test.Hls
     waitForAllProgressDone,
     PluginDescriptor,
     IdeState,
-  )
+    waitForBuildQueue
+    )
 where
 
 import           Control.Applicative.Combinators
@@ -31,6 +32,7 @@ import           Control.Concurrent.Extra
 import           Control.Exception.Base
 import           Control.Monad                     (unless)
 import           Control.Monad.IO.Class
+import           Data.Aeson                        (Value (Null), toJSON)
 import           Data.ByteString.Lazy              (ByteString)
 import           Data.Default                      (def)
 import qualified Data.Text                         as T
@@ -42,6 +44,7 @@ import           Development.IDE.Graph             (ShakeOptions (shakeThreads))
 import           Development.IDE.Main
 import qualified Development.IDE.Main              as Ghcide
 import qualified Development.IDE.Plugin.HLS.GhcIde as Ghcide
+import           Development.IDE.Plugin.Test       (TestRequest (WaitForShakeQueue))
 import           Development.IDE.Types.Options
 import           GHC.IO.Handle
 import           Ide.Plugin.Config                 (Config, formattingProvider)
@@ -208,3 +211,14 @@ waitForAllProgressDone = loop
         _ -> Nothing
       done <- null <$> getIncompleteProgressSessions
       unless done loop
+
+-- | Wait for the build queue to be empty
+waitForBuildQueue :: Session Seconds
+waitForBuildQueue = do
+    let m = SCustomMethod "test"
+    waitId <- sendRequest m (toJSON WaitForShakeQueue)
+    (td, resp) <- duration $ skipManyTill anyMessage $ responseForId m waitId
+    case resp of
+        ResponseMessage{_result=Right Null} -> return td
+        -- assume a ghcide binary lacking the WaitForShakeQueue method
+        _                                   -> return 0
