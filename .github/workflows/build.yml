@@ -33,7 +33,7 @@ jobs:
 
     - if: ${{ matrix.ghc == '9.0.1' }}
       name: Use modified cabal.project for ghc9
-      run: cp cabal-ghc901.project cabal.project
+      run: cp cabal-ghc901.project.local cabal.project.local
 
     - name: Shorten binary names
       run: |

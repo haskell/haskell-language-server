@@ -102,7 +102,7 @@ jobs:
       # Needs to be before Cache Cabal so the cache can detect changes to the modified cabal.project file
       - if: ${{ needs.pre_job.outputs.should_skip != 'true' && matrix.ghc == '9.0.1' }}
         name: Use modified cabal.project for ghc9
-        run: cp cabal-ghc901.project cabal.project
+        run: cp cabal-ghc901.project.local cabal.project.local
 
       - if: ${{ needs.pre_job.outputs.should_skip != 'true' && matrix.ghc == '8.8.4' && matrix.os == 'windows-latest' }}
         name: Modify cabal.project to workaround segfaults for ghc-8.8.4 and windows
