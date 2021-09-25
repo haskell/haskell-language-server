@@ -1,4 +1,4 @@
-# nix version of cabal-ghc901.project
+# nix version of cabal-ghc901.project.local
 { pkgs }:
 
 let
