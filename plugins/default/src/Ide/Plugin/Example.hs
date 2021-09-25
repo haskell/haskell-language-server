@@ -18,7 +18,6 @@ import           Control.DeepSeq            (NFData)
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
-import           Data.Binary
 import           Data.Functor
 import qualified Data.HashMap.Strict        as Map
 import           Data.Hashable
@@ -71,7 +70,6 @@ data Example = Example
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable Example
 instance NFData   Example
-instance Binary   Example
 
 type instance RuleResult Example = ()
 

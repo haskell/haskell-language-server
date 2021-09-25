@@ -105,13 +105,11 @@ data LocalCompletions = LocalCompletions
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable LocalCompletions
 instance NFData   LocalCompletions
-instance Binary   LocalCompletions
 
 data NonLocalCompletions = NonLocalCompletions
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable NonLocalCompletions
 instance NFData   NonLocalCompletions
-instance Binary   NonLocalCompletions
 
 -- | Generate code actions.
 getCompletionsLSP

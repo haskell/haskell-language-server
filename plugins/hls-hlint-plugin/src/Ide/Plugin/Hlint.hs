@@ -35,7 +35,6 @@ import           Control.Monad.Trans.Except
 import           Data.Aeson.Types                                   (FromJSON (..),
                                                                      ToJSON (..),
                                                                      Value (..))
-import           Data.Binary
 import           Data.Default
 import qualified Data.HashMap.Strict                                as Map
 import           Data.Hashable
@@ -140,7 +139,6 @@ data GetHlintDiagnostics = GetHlintDiagnostics
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetHlintDiagnostics
 instance NFData   GetHlintDiagnostics
-instance Binary   GetHlintDiagnostics
 
 type instance RuleResult GetHlintDiagnostics = ()
 
@@ -286,7 +284,6 @@ instance NFData Classify where rnf = rwhnf
 instance NFData ParseFlags where rnf = rwhnf
 instance Show Hint where show = const "<hint>"
 instance Show ParseFlags where show = const "<parseFlags>"
-instance Binary GetHlintSettings
 
 type instance RuleResult GetHlintSettings = (ParseFlags, [Classify], Hint)
 

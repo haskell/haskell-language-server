@@ -5,7 +5,6 @@ module Development.IDE.Plugin.CodeAction.RuleTypes
     ) where
 
 import           Control.DeepSeq                (NFData)
-import           Data.Binary                    (Binary)
 import           Data.Hashable                  (Hashable)
 import           Data.Typeable                  (Typeable)
 import           Development.IDE.Graph          (RuleResult)
@@ -21,4 +20,3 @@ newtype PackageExports = PackageExports HscEnvEq
 
 instance Hashable PackageExports
 instance NFData   PackageExports
-instance Binary   PackageExports

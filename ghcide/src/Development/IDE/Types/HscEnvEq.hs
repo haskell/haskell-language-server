@@ -135,12 +135,6 @@ instance NFData HscEnvEq where
 instance Hashable HscEnvEq where
   hashWithSalt s = hashWithSalt s . envUnique
 
--- Fake instance needed to persuade Shake to accept this type as a key.
--- No harm done as ghcide never persists these keys currently
-instance Binary HscEnvEq where
-  put _ = error "not really"
-  get = error "not really"
-
 -- | Given an action, produce a wrapped action that runs at most once.
 --   The action is run in an async so it won't be killed by async exceptions
 --   If the function raises an exception, the same exception will be reraised each time.

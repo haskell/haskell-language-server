@@ -250,7 +250,6 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
 
     IdeOptions{ optTesting = IdeTesting optTesting
               , optCheckProject = getCheckProject
-              , optModifyDynFlags
               , optExtensions
               } <- getIdeOptions
 
@@ -264,6 +263,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
               TargetModule _ -> do
                 found <- filterM (IO.doesFileExist . fromNormalizedFilePath) targetLocations
                 return (targetTarget, found)
+          recordDirtyKeys extras GetKnownTargets  [emptyFilePath]
           modifyVarIO' knownTargetsVar $ traverseHashed $ \known -> do
             let known' = HM.unionWith (<>) known $ HM.fromList $ map (second Set.fromList) knownTargets
             when (known /= known') $
@@ -390,7 +390,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
 
           -- Invalidate all the existing GhcSession build nodes by restarting the Shake session
           invalidateShakeCache
-          restartShakeSession []
+          restartShakeSession "new component" []
 
           -- Typecheck all files in the project on startup
           checkProject <- getCheckProject
