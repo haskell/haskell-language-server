@@ -66,10 +66,7 @@ main = do
             pluginDescToIdePlugins $
             GhcIde.descriptors
             ++ [Test.blockCommandDescriptor "block-command" | argsTesting]
-
-        ,Main.argsGhcidePlugin = if argsTesting
-            then Test.plugin
-            else mempty
+            ++ [Test.plugin | argsTesting]
 
         ,Main.argsThreads = case argsThreads of 0 -> Nothing ; i -> Just (fromIntegral i)
 
