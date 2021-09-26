@@ -20,18 +20,6 @@ import           Prelude                     hiding (filter)
 import           Text.Fuzzy                  (Fuzzy (..), match)
 
 -- | The function to filter a list of values by fuzzy search on the text extracted from them.
---
--- >>> map (\x -> score <$> match ("lookup"::String) x "" "" id False) ["splitLookup"::String, "lookupInput"]
--- WAS WAS WAS WAS NOW [Just 58,Just 120]
--- WAS WAS WAS NOW [Just 58,Just 120]
--- WAS WAS NOW [Just 58,Just 120]
--- WAS NOW [Just 58,Just 120]
--- NOW [Just 58,Just 120]
--- >>> take 10 $ iterate (\(tot, cur) -> let cur' = 2*cur + 1 in (tot + cur', cur')) (0,0)
--- NOW [(0,0),(1,1),(4,3),(11,7),(26,15),(57,31),(120,63),(247,127),(502,255),(1013,511)]
-
--- >>> length $ filter 1000 200 "ML" (concat $ replicate 10000 [("Standard ML", 1990),("OCaml",1996),("Scala",2003)]) "<" ">" fst False
--- 200
 filter :: (TextualMonoid s)
        => Int      -- ^ Chunk size. 1000 works well.
        -> Int      -- ^ Max. number of results wanted
@@ -110,8 +98,6 @@ pairwise [_]      = []
 pairwise (x:y:xs) = (x,y) : pairwise (y:xs)
 
 -- | A stable partial sort ascending by score. O(N) best case, O(wanted*N) worst case
---- >>> partialSortByAscScore 3 5 $ V.fromList $ map (\x -> Fuzzy x x (length x)) ["A","B","ABCDE","ABBC"]
--- [Fuzzy {original = "ABCDE", rendered = "ABCDE", score = 5},Fuzzy {original = "ABBC", rendered = "ABBC", score = 4},Fuzzy {original = "A", rendered = "A", score = 1}]
 partialSortByAscScore :: TextualMonoid s
             => Int  -- ^ Number of items needed
             -> Int  -- ^ Value of a perfect score
