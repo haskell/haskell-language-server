@@ -50,11 +50,9 @@ newtype WaitForIdeRuleResult = WaitForIdeRuleResult { ideResultSuccess::Bool}
 
 plugin :: PluginDescriptor IdeState
 plugin = (defaultPluginDescriptor "test") {
-    pluginHandlers = mkPluginHandler (SCustomMethod "test") (\st pId ->
-        if pId == "test"
-            then testRequestHandler' st
-            else const $ return $ Left $ ResponseError MethodNotFound "" Nothing)
-}
+    pluginHandlers = mkPluginHandler (SCustomMethod "test") $ \st _ ->
+        testRequestHandler' st
+    }
   where
       testRequestHandler' ide req
         | Just customReq <- parseMaybe parseJSON req
