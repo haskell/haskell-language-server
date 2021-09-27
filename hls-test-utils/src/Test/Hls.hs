@@ -50,7 +50,7 @@ import           Development.IDE.Plugin.Test     (TestRequest (WaitForIdeRule, W
 import           Development.IDE.Types.Options
 import           GHC.IO.Handle
 import           Ide.Plugin.Config               (Config, formattingProvider)
-import           Ide.PluginUtils                 (pluginDescToIdePlugins)
+import           Ide.PluginUtils                 (idePluginsToPluginDesc, pluginDescToIdePlugins)
 import           Ide.Types
 import           Language.LSP.Test
 import           Language.LSP.Types              hiding
@@ -172,7 +172,7 @@ runSessionWithServer' plugin conf sconf caps root s = withLock lock $ keepCurren
   server <-
     async $
       Ghcide.defaultMain
-        def
+        testing
           { argsHandleIn = pure inR,
             argsHandleOut = pure outW,
             argsDefaultHlsConfig = conf,
@@ -180,7 +180,7 @@ runSessionWithServer' plugin conf sconf caps root s = withLock lock $ keepCurren
             argsIdeOptions = \config sessionLoader ->
               let ideOptions = (argsIdeOptions def config sessionLoader) {optTesting = IdeTesting True}
                in ideOptions {optShakeOptions = (optShakeOptions ideOptions) {shakeThreads = 2}},
-            argsHlsPlugins = pluginDescToIdePlugins $ plugin ++ Ghcide.descriptors
+            argsHlsPlugins = pluginDescToIdePlugins $ plugin ++ idePluginsToPluginDesc (argsHlsPlugins testing)
           }
   x <- runSessionWithHandles inW outR sconf caps root s
   hClose inW

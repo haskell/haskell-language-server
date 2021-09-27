@@ -6,7 +6,7 @@ module Development.IDE.Main
 ,isLSP
 ,commandP
 ,defaultMain
-) where
+,testing) where
 import           Control.Concurrent.Extra              (newLock, readVar,
                                                         withLock,
                                                         withNumCapabilities)
@@ -55,6 +55,7 @@ import           Development.IDE.LSP.LanguageServer    (runLanguageServer)
 import           Development.IDE.Plugin                (Plugin (pluginHandlers, pluginModifyDynflags, pluginRules))
 import           Development.IDE.Plugin.HLS            (asGhcIdePlugin)
 import qualified Development.IDE.Plugin.HLS.GhcIde     as Ghcide
+import qualified Development.IDE.Plugin.Test           as Test
 import           Development.IDE.Session               (SessionLoadingOptions,
                                                         getHieDbLoc,
                                                         loadSessionWithOptions,
@@ -65,9 +66,11 @@ import           Development.IDE.Types.Location        (NormalizedUri,
 import           Development.IDE.Types.Logger          (Logger (Logger))
 import           Development.IDE.Types.Options         (IdeGhcSession,
                                                         IdeOptions (optCheckParents, optCheckProject, optReportProgress, optRunSubset),
+                                                        IdeTesting (IdeTesting),
                                                         clientSupportsProgress,
                                                         defaultIdeOptions,
-                                                        optModifyDynFlags)
+                                                        optModifyDynFlags,
+                                                        optTesting)
 import           Development.IDE.Types.Shake           (Key (Key))
 import           GHC.Conc                              (getNumProcessors)
 import           GHC.IO.Encoding                       (setLocaleEncoding)
@@ -81,6 +84,7 @@ import           Ide.Plugin.ConfigUtils                (pluginsToDefaultConfig,
                                                         pluginsToVSCodeExtensionSchema)
 import           Ide.PluginUtils                       (allLspCmdIds',
                                                         getProcessID,
+                                                        idePluginsToPluginDesc,
                                                         pluginDescToIdePlugins)
 import           Ide.Types                             (IdeCommand (IdeCommand),
                                                         IdePlugins,
@@ -200,6 +204,18 @@ instance Default Arguments where
                 putStr " " >> hFlush stdout
                 return newStdout
         }
+
+testing :: Arguments
+testing = def {
+    argsHlsPlugins = pluginDescToIdePlugins $
+        idePluginsToPluginDesc (argsHlsPlugins def)
+        ++ [Test.blockCommandDescriptor "block-command", Test.plugin],
+    argsIdeOptions = \config sessionLoader ->
+            let defOptions = argsIdeOptions def config sessionLoader
+            in defOptions {
+                optTesting = IdeTesting True
+            }
+}
 
 -- | Cheap stderr logger that relies on LineBuffering
 stderrLogger :: IO Logger

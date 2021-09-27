@@ -4627,7 +4627,7 @@ projectCompletionTests =
                 <- compls
               , _label == "anidentifier"
               ]
-        liftIO $ compls' @?= ["Defined in 'A"], 
+        liftIO $ compls' @?= ["Defined in 'A"],
       testSession' "auto complete project imports" $ \dir-> do
         liftIO $ writeFile (dir </> "hie.yaml")
             "cradle: {direct: {arguments: [\"-Wmissing-signatures\", \"ALocalModule\", \"B\"]}}"
@@ -5822,7 +5822,7 @@ unitTests = do
                     | i <- [(1::Int)..20]
                 ] ++ Ghcide.descriptors
 
-        testIde def{IDE.argsHlsPlugins = plugins} $ do
+        testIde IDE.testing{IDE.argsHlsPlugins = plugins} $ do
             _ <- createDoc "haskell" "A.hs" "module A where"
             waitForProgressDone
             actualOrder <- liftIO $ readIORef orderRef
