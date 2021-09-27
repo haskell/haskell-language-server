@@ -32,7 +32,7 @@ import           Control.Applicative.Combinators
 import           Control.Concurrent.Async        (async, cancel, wait)
 import           Control.Concurrent.Extra
 import           Control.Exception.Base
-import           Control.Monad                   (unless)
+import           Control.Monad                   (unless, void)
 import           Control.Monad.IO.Class
 import           Data.Aeson                      (Value (Null), toJSON)
 import qualified Data.Aeson                      as A
@@ -97,6 +97,7 @@ goldenWithHaskellDoc plugin title testDataDir path desc ext act =
   $ TL.encodeUtf8 . TL.fromStrict
   <$> do
     doc <- openDoc (path <.> ext) "haskell"
+    void waitForBuildQueue
     act doc
     documentContents doc
 
@@ -116,6 +117,7 @@ goldenWithHaskellDocFormatter plugin formatter title testDataDir path desc ext a
   $ TL.encodeUtf8 . TL.fromStrict
   <$> do
     doc <- openDoc (path <.> ext) "haskell"
+    void waitForBuildQueue
     act doc
     documentContents doc
 
