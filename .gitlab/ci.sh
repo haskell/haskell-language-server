@@ -30,10 +30,6 @@ export BOOTSTRAP_HASKELL_ADJUST_CABAL_CONFIG=yes
 
 curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | sh
 
-if [[ -n "$CABAL_PROJECT" ]]; then
-    CABAL_PROJECT="cabal.project"
-fi
-
 if [[ -n "$LOCAL_CABAL_PROJECT" ]]; then
     run cp "$LOCAL_CABAL_PROJECT" cabal.project.local
 fi
@@ -46,7 +42,6 @@ fi
 run cabal v2-install exe:haskell-language-server exe:haskell-language-server-wrapper \
 	-O2 \
     -w "ghc-$GHC_VERSION" \
-	--project-file "$CABAL_PROJECT" \
     --installdir="$CI_PROJECT_DIR/out" \
     --install-method=copy \
     --overwrite-policy=always \
