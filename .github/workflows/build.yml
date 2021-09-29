@@ -9,7 +9,6 @@ on:
     types: [created]
 
 jobs:
-
   build:
     runs-on: ${{ matrix.os }}
 
@@ -157,8 +156,8 @@ jobs:
         name: haskell-language-server-wrapper-${{ runner.OS }}${{env.EXE_EXT}}.${{ steps.compress_wrapper_binary.outputs.extension }}
         path: ${{ steps.compress_wrapper_binary.outputs.path }}
 
-  # this generates .gz tarfiles containing all the GHC versions for
-  # macOS and Linux, used by ghcup
+  # this generates .gz tarfiles containing binaries for all GHC versions and OS's
+  # and a custom tarball with sources, used by ghcup
   tar:
     needs: build
     runs-on: ubuntu-18.04
@@ -183,6 +182,14 @@ jobs:
           fi
           tar -czpf haskell-language-server.tar.gz *
 
+      - name: "Create source tarball"
+        if: matrix.os == 'Linux'
+        run: |
+          git archive --prefix=haskell-language-server-${{ github.event.release.tag_name }}/ \
+                      --format=tar.gz \
+                      -o src/haskell-language-server.tar.gz \
+                      HEAD
+
       - uses: actions/upload-release-asset@v1.0.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -192,10 +199,25 @@ jobs:
           asset_name: haskell-language-server-${{ matrix.os }}-${{ github.event.release.tag_name }}.tar.gz
           asset_content_type: application/gzip
 
+      - uses: actions/upload-release-asset@v1.0.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: src/haskell-language-server.tar.gz
+          asset_name: haskell-language-server-${{ github.event.release.tag_name }}-src.tar.gz
+          asset_content_type: application/gzip
+
       - uses: actions/upload-artifact@v2
         with:
           name: haskell-language-server-${{ matrix.os }}-${{ github.event.release.tag_name }}.tar.gz
           path: bin/haskell-language-server.tar.gz
+
+      - if: matrix.os == 'Linux'
+        uses: actions/upload-artifact@v2
+        with:
+          name: haskell-language-server-${{ github.event.release.tag_name }}-src.tar.gz
+          path: src/haskell-language-server.tar.gz
 
   sha256sum:
     needs: tar
