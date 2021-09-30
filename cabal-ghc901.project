@@ -53,12 +53,6 @@ source-repository-package
   subdir: dependent-sum-template
 -- https://github.com/obsidiansystems/dependent-sum/pull/59
 
--- benchmark dependency
-source-repository-package
-  type: git
-  location: https://github.com/HeinrichApfelmus/operational
-  tag: 16e19aaf34e286f3d27b3988c61040823ec66537
-
 write-ghc-environment-files: never
 
 index-state: 2021-09-16T07:00:23Z
