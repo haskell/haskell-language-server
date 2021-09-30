@@ -181,13 +181,18 @@ jobs:
             gzip -d *.gz
           fi
           tar -czpf haskell-language-server.tar.gz *
-
+      
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+      
       - name: "Create source tarball"
         if: matrix.os == 'Linux'
         run: |
+          mkdir src-dist
           git archive --prefix=haskell-language-server-${{ github.event.release.tag_name }}/ \
                       --format=tar.gz \
-                      -o src/haskell-language-server.tar.gz \
+                      -o src-dist/haskell-language-server.tar.gz \
                       HEAD
 
       - uses: actions/upload-release-asset@v1.0.2
@@ -204,7 +209,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: src/haskell-language-server.tar.gz
+          asset_path: src-dist/haskell-language-server.tar.gz
           asset_name: haskell-language-server-${{ github.event.release.tag_name }}-src.tar.gz
           asset_content_type: application/gzip
 
@@ -217,7 +222,7 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: haskell-language-server-${{ github.event.release.tag_name }}-src.tar.gz
-          path: src/haskell-language-server.tar.gz
+          path: src-dist/haskell-language-server.tar.gz
 
   sha256sum:
     needs: tar
