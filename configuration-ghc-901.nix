@@ -62,13 +62,6 @@ let
 
       ormolu = hself.ormolu_0_2_0_0;
 
-      operational = hself.callCabal2nix "operational" (pkgs.fetchFromGitHub {
-        owner = "HeinrichApfelmus";
-        repo = "operational";
-        rev = "16e19aaf34e286f3d27b3988c61040823ec66537";
-        sha256 = "P+aocEcqCN8klnW3IMrmIqq6ztBZJxk4sBp1ewN6YaA=";
-      }) { };
-
       diagrams-core = hself.diagrams-core_1_5_0;
 
       diagrams-lib = hself.diagrams-lib_1_4_4;
