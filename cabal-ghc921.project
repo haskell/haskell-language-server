@@ -36,12 +36,6 @@ source-repository-package
   tag: b6245884ae83e00dd2b5261762549b37390179f8
   -- https://github.com/lspitzner/czipwith/pull/2
 
--- benchmark dependency
-source-repository-package
-  type: git
-  location: https://github.com/HeinrichApfelmus/operational
-  tag: 16e19aaf34e286f3d27b3988c61040823ec66537
-
 -- Head of hiedb
 source-repository-package
   type: git
@@ -57,7 +51,7 @@ source-repository-package
 
 write-ghc-environment-files: never
 
-index-state: 2021-09-16T07:00:23Z
+index-state: 2021-09-29T21:38:47Z
 
 constraints:
     -- These plugins doesn't work on GHC9 yet
