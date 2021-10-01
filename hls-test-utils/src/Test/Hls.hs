@@ -53,16 +53,14 @@ import           Ide.Plugin.Config               (Config, formattingProvider)
 import           Ide.PluginUtils                 (idePluginsToPluginDesc, pluginDescToIdePlugins)
 import           Ide.Types
 import           Language.LSP.Test
-import           Language.LSP.Types                hiding
-                                                   (SemanticTokenAbsolute (length, line),
-                                                    SemanticTokenRelative (length),
-                                                    SemanticTokensEdit (_start))
-import           Language.LSP.Types.Capabilities   (ClientCapabilities)
-import           System.Directory                  (getCurrentDirectory,
-                                                    setCurrentDirectory)
-import           System.Environment.Blank          (getEnvDefault)
+import           Language.LSP.Types              hiding
+                                                 (SemanticTokenAbsolute (length, line),
+                                                  SemanticTokenRelative (length),
+                                                  SemanticTokensEdit (_start))
+import           Language.LSP.Types.Capabilities (ClientCapabilities)
+import           System.Directory                (getCurrentDirectory,
+                                                  setCurrentDirectory)
 import           System.FilePath
-import           System.IO.Extra
 import           System.IO.Unsafe                (unsafePerformIO)
 import           System.Process.Extra            (createPipe)
 import           System.Time.Extra
@@ -133,22 +131,6 @@ runSessionWithServerFormatter plugin formatter =
     def
     fullCaps
 
--- | Run an action, with stderr silenced
-silenceStderr :: IO a -> IO a
-silenceStderr action = do
-  showStderr <- getEnvDefault "LSP_TEST_LOG_STDERR" "0"
-  case showStderr of
-    "0" -> withTempFile $ \temp ->
-      bracket (openFile temp ReadWriteMode) hClose $ \h -> do
-        old <- hDuplicate stderr
-        buf <- hGetBuffering stderr
-        h `hDuplicateTo'` stderr
-        action `finally` do
-          old `hDuplicateTo'` stderr
-          hSetBuffering stderr buf
-          hClose old
-    _ -> action
-
 -- | Restore cwd after running an action
 keepCurrentDirectory :: IO a -> IO a
 keepCurrentDirectory = bracket getCurrentDirectory setCurrentDirectory . const
@@ -171,7 +153,7 @@ runSessionWithServer' ::
   FilePath ->
   Session a ->
   IO a
-runSessionWithServer' plugin conf sconf caps root s = withLock lock $ keepCurrentDirectory $ silenceStderr $ do
+runSessionWithServer' plugin conf sconf caps root s = withLock lock $ keepCurrentDirectory $ do
   (inR, inW) <- createPipe
   (outR, outW) <- createPipe
   server <-
