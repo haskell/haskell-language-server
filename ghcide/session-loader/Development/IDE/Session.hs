@@ -102,7 +102,7 @@ data SessionLoadingOptions = SessionLoadingOptions
   --   or 'Nothing' to respect the cradle setting
   , getCacheDirs           :: String -> [String] -> IO CacheDirs
   -- | Return the GHC lib dir to use for the 'unsafeGlobalDynFlags'
-  , getInitialGhcLibDir    :: FilePath -> IO (Maybe LibDir)
+  , getInitialGhcLibDir    :: Logger -> FilePath -> IO (Maybe LibDir)
   , fakeUid                :: UnitId
     -- ^ unit id used to tag the internal component built by ghcide
     --   To reuse external interface files the unit ids must match,
@@ -140,11 +140,11 @@ loadWithImplicitCradle mHieYaml rootDir = do
     Just yaml -> HieBios.loadCradle yaml
     Nothing   -> loadImplicitHieCradle $ addTrailingPathSeparator rootDir
 
-getInitialGhcLibDirDefault :: FilePath -> IO (Maybe LibDir)
-getInitialGhcLibDirDefault rootDir = do
+getInitialGhcLibDirDefault :: Logger -> FilePath -> IO (Maybe LibDir)
+getInitialGhcLibDirDefault logger rootDir = do
   hieYaml <- findCradle def rootDir
   cradle <- loadCradle def hieYaml rootDir
-  hPutStrLn stderr $ "setInitialDynFlags cradle: " ++ show cradle
+  logDebug logger $ T.pack $ "setInitialDynFlags cradle: " ++ show cradle
   libDirRes <- getRuntimeGhcLibDir cradle
   case libDirRes of
       CradleSuccess libdir -> pure $ Just $ LibDir libdir
@@ -156,9 +156,9 @@ getInitialGhcLibDirDefault rootDir = do
         pure Nothing
 
 -- | Sets `unsafeGlobalDynFlags` on using the hie-bios cradle and returns the GHC libdir
-setInitialDynFlags :: FilePath -> SessionLoadingOptions -> IO (Maybe LibDir)
-setInitialDynFlags rootDir SessionLoadingOptions{..} = do
-  libdir <- getInitialGhcLibDir rootDir
+setInitialDynFlags :: Logger -> FilePath -> SessionLoadingOptions -> IO (Maybe LibDir)
+setInitialDynFlags logger rootDir SessionLoadingOptions{..} = do
+  libdir <- getInitialGhcLibDir logger rootDir
   dynFlags <- mapM dynFlagsForPrinting libdir
   mapM_ setUnsafeGlobalDynFlags dynFlags
   pure libdir
@@ -167,8 +167,8 @@ setInitialDynFlags rootDir SessionLoadingOptions{..} = do
 -- writing. Actions are picked off one by one from the `HieWriterChan` and executed in serial
 -- by a worker thread using a dedicated database connection.
 -- This is done in order to serialize writes to the database, or else SQLite becomes unhappy
-runWithDb :: FilePath -> (HieDb -> IndexQueue -> IO ()) -> IO ()
-runWithDb fp k = do
+runWithDb :: Logger -> FilePath -> (HieDb -> IndexQueue -> IO ()) -> IO ()
+runWithDb logger fp k = do
   -- Delete the database if it has an incompatible schema version
   withHieDb fp (const $ pure ())
     `Safe.catch` \IncompatibleSchemaVersion{} -> removeFile fp
@@ -186,9 +186,9 @@ runWithDb fp k = do
         k <- atomically $ readTQueue chan
         k db
           `Safe.catch` \e@SQLError{} -> do
-            hPutStrLn stderr $ "SQLite error in worker, ignoring: " ++ show e
+            logDebug logger $ T.pack $ "SQLite error in worker, ignoring: " ++ show e
           `Safe.catchAny` \e -> do
-            hPutStrLn stderr $ "Uncaught error in database worker, ignoring: " ++ show e
+            logDebug logger $ T.pack $ "Uncaught error in database worker, ignoring: " ++ show e
 
 
 getHieDbLoc :: FilePath -> IO FilePath
@@ -361,7 +361,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
             res <- loadDLL hscEnv "libm.so.6"
             case res of
               Nothing -> pure ()
-              Just err -> hPutStrLn stderr $
+              Just err -> logDebug logger $ T.pack $
                 "Error dynamically loading libm.so.6:\n" <> err
 
           -- Make a map from unit-id to DynFlags, this is used when trying to
@@ -425,7 +425,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
            let progMsg = "Setting up " <> T.pack (takeBaseName (cradleRootDir cradle))
                          <> " (for " <> T.pack lfp <> ")"
            eopts <- mRunLspTCallback lspEnv (withIndefiniteProgress progMsg NotCancellable) $
-              cradleToOptsAndLibDir cradle cfp
+              cradleToOptsAndLibDir logger cradle cfp
 
            logDebug logger $ T.pack ("Session loading result: " <> show eopts)
            case eopts of
@@ -495,11 +495,11 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
 -- This then builds dependencies or whatever based on the cradle, gets the
 -- GHC options/dynflags needed for the session and the GHC library directory
 
-cradleToOptsAndLibDir :: Show a => Cradle a -> FilePath
+cradleToOptsAndLibDir :: Show a => Logger -> Cradle a -> FilePath
                       -> IO (Either [CradleError] (ComponentOptions, FilePath))
-cradleToOptsAndLibDir cradle file = do
+cradleToOptsAndLibDir logger cradle file = do
     -- Start off by getting the session options
-    hPutStrLn stderr $ "Output from setting up the cradle " <> show cradle
+    logDebug logger $ T.pack $ "Output from setting up the cradle " <> show cradle
     cradleRes <- HieBios.getCompilerOptions file cradle
     case cradleRes of
         CradleSuccess r -> do

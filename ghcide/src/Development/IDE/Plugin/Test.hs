@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE GADTs              #-}
+{-# LANGUAGE PolyKinds          #-}
 -- | A plugin that adds custom messages for use in tests
 module Development.IDE.Plugin.Test
   ( TestRequest(..)
@@ -18,7 +19,6 @@ import           Data.Aeson
 import           Data.Aeson.Types
 import           Data.Bifunctor
 import           Data.CaseInsensitive           (CI, original)
-import           Data.Default                   (def)
 import           Data.Maybe                     (isJust)
 import           Data.String
 import           Data.Text                      (Text, pack)
@@ -27,8 +27,6 @@ import           Development.IDE.Core.Service
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Graph          (Action)
-import           Development.IDE.LSP.Server
-import qualified Development.IDE.Plugin         as P
 import           Development.IDE.Types.Action
 import           Development.IDE.Types.HscEnvEq (HscEnvEq (hscEnv))
 import           Development.IDE.Types.Location (fromUri)
@@ -50,11 +48,11 @@ data TestRequest
 newtype WaitForIdeRuleResult = WaitForIdeRuleResult { ideResultSuccess::Bool}
     deriving newtype (FromJSON, ToJSON)
 
-plugin :: P.Plugin c
-plugin = def {
-    P.pluginRules = return (),
-    P.pluginHandlers = requestHandler (SCustomMethod "test") testRequestHandler'
-}
+plugin :: PluginDescriptor IdeState
+plugin = (defaultPluginDescriptor "test") {
+    pluginHandlers = mkPluginHandler (SCustomMethod "test") $ \st _ ->
+        testRequestHandler' st
+    }
   where
       testRequestHandler' ide req
         | Just customReq <- parseMaybe parseJSON req
