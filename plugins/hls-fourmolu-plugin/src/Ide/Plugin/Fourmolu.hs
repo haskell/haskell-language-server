@@ -70,10 +70,10 @@ provider ideState typ contents fp fo = withIndefiniteProgress title Cancellable 
             format mempty
         ConfigParseError f (_, err) -> do
             sendNotification SWindowShowMessage $
-              ShowMessageParams
-                  { _xtype = MtError
-                  , _message = errorMessage
-                  }
+                ShowMessageParams
+                    { _xtype = MtError
+                    , _message = errorMessage
+                    }
             return . Left $ responseError errorMessage
           where
             errorMessage = "Failed to load " <> T.pack f <> ": " <> T.pack err
