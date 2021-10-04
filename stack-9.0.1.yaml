@@ -22,7 +22,7 @@ packages:
   # - ./plugins/hls-brittany-plugin
   # - ./plugins/hls-stylish-haskell-plugin
   - ./plugins/hls-floskell-plugin
-  # - ./plugins/hls-fourmolu-plugin
+  # ./plugins/hls-fourmolu-plugin
   - ./plugins/hls-pragmas-plugin
   - ./plugins/hls-module-name-plugin
   - ./plugins/hls-ormolu-plugin
@@ -38,6 +38,7 @@ extra-deps:
 - dependent-sum-0.7.1.0@sha256:0e419237f5b86da3659772afff9cab355c0f8d5b3fdb15a5b30e673d8dc83941,2147
 - extra-1.7.9
 - floskell-0.10.5
+- fourmolu-0.4.0.0
 - ghc-source-gen-0.4.1.0
 - heapsize-0.3.0.1@sha256:0b69aa97a46d819b700ac7b145f3b5493c3565cf2c5b8298682238d405d0326e,1417
 - hie-bios-0.7.6
