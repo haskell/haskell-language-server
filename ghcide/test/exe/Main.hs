@@ -21,7 +21,6 @@ import           Control.Monad
 import           Control.Monad.IO.Class                   (MonadIO, liftIO)
 import           Data.Aeson                               (fromJSON, toJSON)
 import qualified Data.Aeson                               as A
-import qualified Data.Binary                              as Binary
 import           Data.Default
 import           Data.Foldable
 import           Data.List.Extra
@@ -34,7 +33,6 @@ import           Development.IDE.Core.PositionMapping     (PositionResult (..),
                                                            fromCurrent,
                                                            positionResultToMaybe,
                                                            toCurrent)
-import           Development.IDE.Core.Shake               (Q (..))
 import           Development.IDE.GHC.Compat               (GhcVersion (..),
                                                            ghcVersion)
 import           Development.IDE.GHC.Util
@@ -124,6 +122,17 @@ waitForProgressDone = skipManyTill anyMessage $ satisfyMaybe $ \case
   FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (End _))) -> Just ()
   _ -> Nothing
 
+-- | Wait for all progress to be done
+-- Needs at least one progress done notification to return
+waitForAllProgressDone :: Session ()
+waitForAllProgressDone = loop
+  where
+    loop = do
+      ~() <- skipManyTill anyMessage $ satisfyMaybe $ \case
+        FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (End _))) -> Just ()
+        _ -> Nothing
+      done <- null <$> getIncompleteProgressSessions
+      unless done loop
 main :: IO ()
 main = do
   -- We mess with env vars so run single-threaded.
@@ -770,25 +779,51 @@ codeLensesTests = testGroup "code lenses"
 
 watchedFilesTests :: TestTree
 watchedFilesTests = testGroup "watched files"
-  [ testSession' "workspace files" $ \sessionDir -> do
-      liftIO $ writeFile (sessionDir </> "hie.yaml") "cradle: {direct: {arguments: [\"-isrc\", \"A\", \"WatchedFilesMissingModule\"]}}"
-      _doc <- createDoc "A.hs" "haskell" "{-#LANGUAGE NoImplicitPrelude #-}\nmodule A where\nimport WatchedFilesMissingModule"
-      watchedFileRegs <- getWatchedFilesSubscriptionsUntil STextDocumentPublishDiagnostics
+  [ testGroup "Subscriptions"
+    [ testSession' "workspace files" $ \sessionDir -> do
+        liftIO $ writeFile (sessionDir </> "hie.yaml") "cradle: {direct: {arguments: [\"-isrc\", \"A\", \"WatchedFilesMissingModule\"]}}"
+        _doc <- createDoc "A.hs" "haskell" "{-#LANGUAGE NoImplicitPrelude #-}\nmodule A where\nimport WatchedFilesMissingModule"
+        watchedFileRegs <- getWatchedFilesSubscriptionsUntil STextDocumentPublishDiagnostics
 
-      -- Expect 2 subscriptions: one for all .hs files and one for the hie.yaml cradle
-      liftIO $ length watchedFileRegs @?= 2
+        -- Expect 2 subscriptions: one for all .hs files and one for the hie.yaml cradle
+        liftIO $ length watchedFileRegs @?= 2
 
-  , testSession' "non workspace file" $ \sessionDir -> do
-      tmpDir <- liftIO getTemporaryDirectory
-      let yaml = "cradle: {direct: {arguments: [\"-i" <> tail(init(show tmpDir)) <> "\", \"A\", \"WatchedFilesMissingModule\"]}}"
-      liftIO $ writeFile (sessionDir </> "hie.yaml") yaml
-      _doc <- createDoc "A.hs" "haskell" "{-# LANGUAGE NoImplicitPrelude#-}\nmodule A where\nimport WatchedFilesMissingModule"
-      watchedFileRegs <- getWatchedFilesSubscriptionsUntil STextDocumentPublishDiagnostics
+    , testSession' "non workspace file" $ \sessionDir -> do
+        tmpDir <- liftIO getTemporaryDirectory
+        let yaml = "cradle: {direct: {arguments: [\"-i" <> tail(init(show tmpDir)) <> "\", \"A\", \"WatchedFilesMissingModule\"]}}"
+        liftIO $ writeFile (sessionDir </> "hie.yaml") yaml
+        _doc <- createDoc "A.hs" "haskell" "{-# LANGUAGE NoImplicitPrelude#-}\nmodule A where\nimport WatchedFilesMissingModule"
+        watchedFileRegs <- getWatchedFilesSubscriptionsUntil STextDocumentPublishDiagnostics
 
-      -- Expect 2 subscriptions: one for all .hs files and one for the hie.yaml cradle
-      liftIO $ length watchedFileRegs @?= 2
+        -- Expect 2 subscriptions: one for all .hs files and one for the hie.yaml cradle
+        liftIO $ length watchedFileRegs @?= 2
 
-  -- TODO add a test for didChangeWorkspaceFolder
+    -- TODO add a test for didChangeWorkspaceFolder
+    ]
+  , testGroup "Changes"
+    [
+      testSession' "workspace files" $ \sessionDir -> do
+        liftIO $ writeFile (sessionDir </> "hie.yaml") "cradle: {direct: {arguments: [\"-isrc\", \"A\", \"B\"]}}"
+        liftIO $ writeFile (sessionDir </> "B.hs") $ unlines
+          ["module B where"
+          ,"b :: Bool"
+          ,"b = False"]
+        _doc <- createDoc "A.hs" "haskell" $ T.unlines
+          ["module A where"
+          ,"import B"
+          ,"a :: ()"
+          ,"a = b"
+          ]
+        expectDiagnostics [("A.hs", [(DsError, (3, 4), "Couldn't match expected type '()' with actual type 'Bool'")])]
+        -- modify B off editor
+        liftIO $ writeFile (sessionDir </> "B.hs") $ unlines
+          ["module B where"
+          ,"b :: Int"
+          ,"b = 0"]
+        sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
+                List [FileEvent (filePathToUri $ sessionDir </> "B.hs") FcChanged ]
+        expectDiagnostics [("A.hs", [(DsError, (3, 4), "Couldn't match expected type '()' with actual type 'Int'")])]
+    ]
   ]
 
 insertImportTests :: TestTree
@@ -4043,8 +4078,10 @@ thLinkingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
     -- modify b too
     let bSource' = T.unlines $ init (T.lines bSource) ++ ["$th"]
     changeDoc bdoc [TextDocumentContentChangeEvent Nothing Nothing bSource']
+    waitForProgressBegin
+    waitForAllProgressDone
 
-    expectDiagnostics [("THB.hs", [(DsWarning, (4,thDollarIdx), "Top-level binding")])]
+    expectCurrentDiagnostics bdoc [(DsWarning, (4,thDollarIdx), "Top-level binding")]
 
     closeDoc adoc
     closeDoc bdoc
@@ -4590,7 +4627,7 @@ projectCompletionTests =
                 <- compls
               , _label == "anidentifier"
               ]
-        liftIO $ compls' @?= ["Defined in 'A"], 
+        liftIO $ compls' @?= ["Defined in 'A"],
       testSession' "auto complete project imports" $ \dir-> do
         liftIO $ writeFile (dir </> "hie.yaml")
             "cradle: {direct: {arguments: [\"-Wmissing-signatures\", \"ALocalModule\", \"B\"]}}"
@@ -5005,15 +5042,6 @@ retryFailedCradle = testSession' "retry failed" $ \dir -> do
   liftIO $ writeFileUTF8 hiePath $ T.unpack validCradle
   sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
           List [FileEvent (filePathToUri $ dir </> "hie.yaml") FcChanged ]
-  -- Force a session restart by making an edit, just to dirty the typecheck node
-  changeDoc
-    doc
-    [ TextDocumentContentChangeEvent
-        { _range = Just Range {_start = Position 0 0, _end = Position 0 0},
-          _rangeLength = Nothing,
-          _text = "\n"
-        }
-    ]
 
   Right WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" doc
   liftIO $ "No joy after fixing the cradle" `assertBool` ideResultSuccess
@@ -5765,8 +5793,6 @@ unitTests = do
      , testCase "from empty path URI" $ do
          let uri = Uri "file://"
          uriToFilePath' uri @?= Just ""
-     , testCase "Key with empty file path roundtrips via Binary"  $
-         Binary.decode (Binary.encode (Q ((), emptyFilePath))) @?= Q ((), emptyFilePath)
      , testCase "showDiagnostics prints ranges 1-based (like vscode)" $ do
          let diag = ("", Diagnostics.ShowDiag, Diagnostic
                { _range = Range
@@ -5796,7 +5822,7 @@ unitTests = do
                     | i <- [(1::Int)..20]
                 ] ++ Ghcide.descriptors
 
-        testIde def{IDE.argsHlsPlugins = plugins} $ do
+        testIde IDE.testing{IDE.argsHlsPlugins = plugins} $ do
             _ <- createDoc "haskell" "A.hs" "module A where"
             waitForProgressDone
             actualOrder <- liftIO $ readIORef orderRef

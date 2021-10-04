@@ -65,6 +65,9 @@ goldenTest :: FilePath -> ExpandStyle -> Int -> Int -> TestTree
 goldenTest fp tc line col =
   goldenWithHaskellDoc splicePlugin (fp <> " (golden)") testDataDir fp "expected" "hs" $ \doc -> do
     _ <- waitForDiagnostics
+    -- wait for the entire build to finish, so that code actions that
+    -- use stale data will get uptodate stuff
+    void waitForBuildQueue
     actions <- getCodeActions doc $ pointRange line col
     case find ((== Just (toExpandCmdTitle tc)) . codeActionTitle) actions of
       Just (InR CodeAction {_command = Just c}) -> do
@@ -89,6 +92,8 @@ goldenTestWithEdit fp tc line col =
      void $ applyEdit doc $ TextEdit theRange alt
      changeDoc doc [TextDocumentContentChangeEvent (Just theRange) Nothing alt]
      void waitForDiagnostics
+     -- wait for the entire build to finish
+     void waitForBuildQueue
      actions <- getCodeActions doc $ pointRange line col
      case find ((== Just (toExpandCmdTitle tc)) . codeActionTitle) actions of
        Just (InR CodeAction {_command = Just c}) -> do

@@ -166,8 +166,6 @@ instance Hashable MinimalImports
 
 instance NFData MinimalImports
 
-instance Binary MinimalImports
-
 type instance RuleResult MinimalImports = MinimalImportsResult
 
 newtype MinimalImportsResult = MinimalImportsResult

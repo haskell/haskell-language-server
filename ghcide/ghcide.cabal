@@ -2,7 +2,7 @@ cabal-version:      2.4
 build-type:         Simple
 category:           Development
 name:               ghcide
-version:            1.4.2.1
+version:            1.4.2.2
 license:            Apache-2.0
 license-file:       LICENSE
 author:             Digital Asset and Ghcide contributors
@@ -48,6 +48,7 @@ library
         dependent-map,
         dependent-sum,
         dlist,
+        exceptions,
         -- we can't use >= 1.7.10 while we have to use hlint == 3.2.*
         extra >= 1.7.4 && < 1.7.10,
         fuzzy,
@@ -76,7 +77,7 @@ library
         rope-utf16-splay,
         safe,
         safe-exceptions,
-        hls-graph ^>= 1.4,
+        hls-graph ^>= 1.5,
         sorted-list,
         sqlite-simple,
         stm,
@@ -269,6 +270,7 @@ benchmark benchHist
         directory,
         extra,
         filepath,
+        lens,
         optparse-applicative,
         shake,
         text,
