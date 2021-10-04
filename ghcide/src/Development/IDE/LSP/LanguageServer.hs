@@ -141,7 +141,8 @@ runLanguageServer options inH outH getHieDbLoc defaultConfig onConfigurationChan
                         T.pack $ "Fatal error in server thread: " <> show e
                     exitClientMsg
                 handleServerException _ = pure ()
-            _ <- flip forkFinally handleServerException $ runWithDb dbLoc $ \hiedb hieChan -> do
+                logger = ideLogger ide
+            _ <- flip forkFinally handleServerException $ runWithDb logger dbLoc $ \hiedb hieChan -> do
               putMVar dbMVar (hiedb,hieChan)
               forever $ do
                 msg <- readChan clientMsgChan

@@ -84,8 +84,11 @@ mkTest name fp line col ts = it name $ do
   resetGlobalHoleRef
   runSessionForTactics $ do
     doc <- openDoc (fp <.> "hs") "haskell"
-    _ <- waitForDiagnostics
-    waitForAllProgressDone
+    -- wait for diagnostics to start coming
+    void waitForDiagnostics
+    -- wait for the entire build to finish, so that Tactics code actions that
+    -- use stale data will get uptodate stuff
+    void $ waitForTypecheck doc
     actions <- getCodeActions doc $ pointRange line col
     let titles = mapMaybe codeActionTitle actions
     for_ ts $ \(f, tc, var) -> do
@@ -109,10 +112,10 @@ mkGoldenTest eq tc occ line col input =
     runSessionForTactics $ do
       doc <- openDoc (input <.> "hs") "haskell"
       -- wait for diagnostics to start coming
-      _ <- waitForDiagnostics
+      void waitForDiagnostics
       -- wait for the entire build to finish, so that Tactics code actions that
       -- use stale data will get uptodate stuff
-      void waitForBuildQueue
+      void $ waitForTypecheck doc
       actions <- getCodeActions doc $ pointRange line col
       case find ((== Just (tacticTitle tc occ)) . codeActionTitle) actions of
         Just (InR CodeAction {_command = Just c}) -> do
@@ -126,7 +129,6 @@ mkGoldenTest eq tc occ line col input =
             expected <- liftIO $ T.readFile expected_name
             liftIO $ edited `eq` expected
         _ -> error $ show actions
-
 
 mkCodeLensTest
     :: FilePath

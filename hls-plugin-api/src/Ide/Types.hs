@@ -46,7 +46,10 @@ import           GHC.Generics
 import           Ide.Plugin.Config
 import           Ide.Plugin.Properties
 import           Language.LSP.Server             (LspM, getVirtualFile)
-import           Language.LSP.Types              hiding (SemanticTokenAbsolute(length, line), SemanticTokenRelative(length), SemanticTokensEdit(_start))
+import           Language.LSP.Types              hiding
+                                                 (SemanticTokenAbsolute (length, line),
+                                                  SemanticTokenRelative (length),
+                                                  SemanticTokensEdit (_start))
 import           Language.LSP.Types.Capabilities (ClientCapabilities (ClientCapabilities),
                                                   TextDocumentClientCapabilities (_codeAction, _documentSymbol))
 import           Language.LSP.Types.Lens         as J (HasChildren (children),
@@ -285,6 +288,10 @@ instance PluginMethod CallHierarchyIncomingCalls where
 instance PluginMethod CallHierarchyOutgoingCalls where
   pluginEnabled _ = pluginEnabledConfig plcCallHierarchyOn
 
+instance PluginMethod CustomMethod where
+  pluginEnabled _ _ _ = True
+  combineResponses _ _ _ _ (x :| _) = x
+
 -- ---------------------------------------------------------------------
 
 -- | Methods which have a PluginMethod instance
@@ -488,8 +495,6 @@ instance HasTracing CallHierarchyOutgoingCallsParams
 -- ---------------------------------------------------------------------
 
 {-# NOINLINE pROCESS_ID #-}
-{-# LANGUAGE DerivingStrategies         #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 pROCESS_ID :: T.Text
 pROCESS_ID = unsafePerformIO getPid
 
