@@ -22,7 +22,7 @@ library
   build-depends:
     , base            >=4.12 && <5
     , filepath
-    , fourmolu        ^>=0.3
+    , fourmolu        ^>=0.3 || ^>=0.4
     , ghc
     , ghc-boot-th
     , ghcide          >=1.2  && <1.5
