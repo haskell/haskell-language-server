@@ -196,7 +196,7 @@ jobs:
         name: Test hls-ormolu-plugin
         run: cabal test hls-ormolu-plugin --test-options="-j1 --rerun-update" || cabal test hls-ormolu-plugin --test-options="-j1 --rerun" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-ormolu-plugin --test-options="-j1 --rerun"
 
-      - if: ${{ needs.pre_job.outputs.should_skip != 'true' && matrix.test && matrix.ghc != '9.0.1' }}
+      - if: ${{ needs.pre_job.outputs.should_skip != 'true' && matrix.test }}
         name: Test hls-fourmolu-plugin
         run: cabal test hls-fourmolu-plugin --test-options="-j1 --rerun-update" || cabal test hls-fourmolu-plugin --test-options="-j1 --rerun" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-fourmolu-plugin --test-options="-j1 --rerun"
 
