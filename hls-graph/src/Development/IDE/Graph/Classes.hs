@@ -1,6 +1,8 @@
 
 module Development.IDE.Graph.Classes(
-    Show(..), Typeable, Eq(..), Hashable(..), Binary(..), NFData(..)
+    Show(..), Typeable, Eq(..), Hashable(..), NFData(..)
     ) where
 
-import           Development.Shake.Classes
+import Control.DeepSeq
+import Data.Hashable
+import Data.Typeable

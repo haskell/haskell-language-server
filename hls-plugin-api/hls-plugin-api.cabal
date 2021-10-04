@@ -45,7 +45,7 @@ library
     , dlist
     , ghc
     , hashable
-    , hls-graph             ^>=1.4
+    , hls-graph             >=1.4 && < 1.6
     , hslogger
     , lens
     , lsp                   ^>=1.2.0.1

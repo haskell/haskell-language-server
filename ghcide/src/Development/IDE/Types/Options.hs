@@ -142,7 +142,7 @@ defaultIdeOptions session = IdeOptions
     ,optModifyDynFlags = mempty
     ,optSkipProgress = defaultSkipProgress
     ,optProgressStyle = Explicit
-    ,optRunSubset = False
+    ,optRunSubset = True
     }
 
 defaultSkipProgress :: Typeable a => a -> Bool
