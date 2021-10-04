@@ -10,6 +10,7 @@ module Ide.PluginUtils
     diffText,
     diffText',
     pluginDescToIdePlugins,
+    idePluginsToPluginDesc,
     responseError,
     getClientConfig,
     getPluginConfig,
@@ -24,7 +25,8 @@ module Ide.PluginUtils
     allLspCmdIds',
     installSigUsr1Handler,
     subRange,
-    usePropertyLsp)
+    usePropertyLsp,
+    )
 where
 
 
@@ -149,6 +151,8 @@ pluginDescToIdePlugins :: [PluginDescriptor ideState] -> IdePlugins ideState
 pluginDescToIdePlugins plugins =
     IdePlugins $ map (\p -> (pluginId p, p)) $ nubOrdOn pluginId plugins
 
+idePluginsToPluginDesc :: IdePlugins ideState -> [PluginDescriptor ideState]
+idePluginsToPluginDesc (IdePlugins pp) = map snd pp
 
 -- ---------------------------------------------------------------------
 -- | Returns the current client configuration. It is not wise to permanently

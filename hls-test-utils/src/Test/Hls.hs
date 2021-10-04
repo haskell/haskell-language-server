@@ -1,6 +1,8 @@
 {-# LANGUAGE GADTs             #-}
 {-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 module Test.Hls
   ( module Test.Tasty.HUnit,
     module Test.Tasty,
@@ -23,48 +25,47 @@ module Test.Hls
     PluginDescriptor,
     IdeState,
     waitForBuildQueue
-    )
+    ,waitForTypecheck,waitForAction)
 where
 
 import           Control.Applicative.Combinators
-import           Control.Concurrent.Async          (async, cancel, wait)
+import           Control.Concurrent.Async        (async, cancel, wait)
 import           Control.Concurrent.Extra
 import           Control.Exception.Base
-import           Control.Monad                     (unless)
+import           Control.Monad                   (unless, void)
 import           Control.Monad.IO.Class
-import           Data.Aeson                        (Value (Null), toJSON)
-import           Data.ByteString.Lazy              (ByteString)
-import           Data.Default                      (def)
-import qualified Data.Text                         as T
-import qualified Data.Text.Lazy                    as TL
-import qualified Data.Text.Lazy.Encoding           as TL
-import           Development.IDE                   (IdeState, hDuplicateTo',
-                                                    noLogging)
-import           Development.IDE.Graph             (ShakeOptions (shakeThreads))
+import           Data.Aeson                      (Value (Null), toJSON)
+import qualified Data.Aeson                      as A
+import           Data.ByteString.Lazy            (ByteString)
+import           Data.Default                    (def)
+import qualified Data.Text                       as T
+import qualified Data.Text.Lazy                  as TL
+import qualified Data.Text.Lazy.Encoding         as TL
+import           Development.IDE                 (IdeState, noLogging)
+import           Development.IDE.Graph           (ShakeOptions (shakeThreads))
 import           Development.IDE.Main
-import qualified Development.IDE.Main              as Ghcide
-import qualified Development.IDE.Plugin.HLS.GhcIde as Ghcide
-import           Development.IDE.Plugin.Test       (TestRequest (WaitForShakeQueue))
+import qualified Development.IDE.Main            as Ghcide
+import           Development.IDE.Plugin.Test     (TestRequest (WaitForIdeRule, WaitForShakeQueue),
+                                                  WaitForIdeRuleResult (ideResultSuccess))
 import           Development.IDE.Types.Options
 import           GHC.IO.Handle
-import           Ide.Plugin.Config                 (Config, formattingProvider)
-import           Ide.PluginUtils                   (pluginDescToIdePlugins)
+import           Ide.Plugin.Config               (Config, formattingProvider)
+import           Ide.PluginUtils                 (idePluginsToPluginDesc, pluginDescToIdePlugins)
 import           Ide.Types
 import           Language.LSP.Test
-import           Language.LSP.Types                hiding
-                                                   (SemanticTokenAbsolute (length, line),
-                                                    SemanticTokenRelative (length),
-                                                    SemanticTokensEdit (_start))
-import           Language.LSP.Types.Capabilities   (ClientCapabilities)
-import           System.Directory                  (getCurrentDirectory,
-                                                    setCurrentDirectory)
+import           Language.LSP.Types              hiding
+                                                 (SemanticTokenAbsolute (length, line),
+                                                  SemanticTokenRelative (length),
+                                                  SemanticTokensEdit (_start))
+import           Language.LSP.Types.Capabilities (ClientCapabilities)
+import           System.Directory                (getCurrentDirectory,
+                                                  setCurrentDirectory)
 import           System.FilePath
-import           System.IO.Extra
-import           System.IO.Unsafe                  (unsafePerformIO)
-import           System.Process.Extra              (createPipe)
+import           System.IO.Unsafe                (unsafePerformIO)
+import           System.Process.Extra            (createPipe)
 import           System.Time.Extra
 import           Test.Hls.Util
-import           Test.Tasty                        hiding (Timeout)
+import           Test.Tasty                      hiding (Timeout)
 import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.Golden
 import           Test.Tasty.HUnit
@@ -95,6 +96,7 @@ goldenWithHaskellDoc plugin title testDataDir path desc ext act =
   $ TL.encodeUtf8 . TL.fromStrict
   <$> do
     doc <- openDoc (path <.> ext) "haskell"
+    void waitForBuildQueue
     act doc
     documentContents doc
 
@@ -114,6 +116,7 @@ goldenWithHaskellDocFormatter plugin formatter title testDataDir path desc ext a
   $ TL.encodeUtf8 . TL.fromStrict
   <$> do
     doc <- openDoc (path <.> ext) "haskell"
+    void waitForBuildQueue
     act doc
     documentContents doc
 
@@ -127,18 +130,6 @@ runSessionWithServerFormatter plugin formatter =
     def {formattingProvider = T.pack formatter}
     def
     fullCaps
-
--- | Run an action, with stderr silenced
-silenceStderr :: IO a -> IO a
-silenceStderr action = withTempFile $ \temp ->
-  bracket (openFile temp ReadWriteMode) hClose $ \h -> do
-    old <- hDuplicate stderr
-    buf <- hGetBuffering stderr
-    h `hDuplicateTo'` stderr
-    action `finally` do
-      old `hDuplicateTo'` stderr
-      hSetBuffering stderr buf
-      hClose old
 
 -- | Restore cwd after running an action
 keepCurrentDirectory :: IO a -> IO a
@@ -162,13 +153,13 @@ runSessionWithServer' ::
   FilePath ->
   Session a ->
   IO a
-runSessionWithServer' plugin conf sconf caps root s = withLock lock $ keepCurrentDirectory $ silenceStderr $ do
+runSessionWithServer' plugin conf sconf caps root s = withLock lock $ keepCurrentDirectory $ do
   (inR, inW) <- createPipe
   (outR, outW) <- createPipe
   server <-
     async $
       Ghcide.defaultMain
-        def
+        testing
           { argsHandleIn = pure inR,
             argsHandleOut = pure outW,
             argsDefaultHlsConfig = conf,
@@ -176,7 +167,7 @@ runSessionWithServer' plugin conf sconf caps root s = withLock lock $ keepCurren
             argsIdeOptions = \config sessionLoader ->
               let ideOptions = (argsIdeOptions def config sessionLoader) {optTesting = IdeTesting True}
                in ideOptions {optShakeOptions = (optShakeOptions ideOptions) {shakeThreads = 2}},
-            argsHlsPlugins = pluginDescToIdePlugins $ plugin ++ Ghcide.descriptors
+            argsHlsPlugins = pluginDescToIdePlugins $ plugin ++ idePluginsToPluginDesc (argsHlsPlugins testing)
           }
   x <- runSessionWithHandles inW outR sconf caps root s
   hClose inW
@@ -222,3 +213,17 @@ waitForBuildQueue = do
         ResponseMessage{_result=Right Null} -> return td
         -- assume a ghcide binary lacking the WaitForShakeQueue method
         _                                   -> return 0
+
+waitForAction :: String -> TextDocumentIdentifier -> Session (Either ResponseError WaitForIdeRuleResult)
+waitForAction key TextDocumentIdentifier{_uri} = do
+    let cm = SCustomMethod "test"
+    waitId <- sendRequest cm (A.toJSON $ WaitForIdeRule key _uri)
+    ResponseMessage{_result} <- skipManyTill anyMessage $ responseForId cm waitId
+    return $ do
+      e <- _result
+      case A.fromJSON e of
+        A.Error e   -> Left $ ResponseError InternalError (T.pack e) Nothing
+        A.Success a -> pure a
+
+waitForTypecheck :: TextDocumentIdentifier -> Session (Either ResponseError Bool)
+waitForTypecheck tid = fmap ideResultSuccess <$> waitForAction "typecheck" tid
