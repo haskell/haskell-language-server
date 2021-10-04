@@ -51,7 +51,9 @@ main = do
 
     whenJust argsCwd IO.setCurrentDirectory
 
-    Main.defaultMain def
+    let arguments = if argsTesting then Main.testing else def
+
+    Main.defaultMain arguments
         {Main.argCommand = argsCommand
 
         ,Main.argsRules = do
@@ -62,23 +64,13 @@ main = do
             unless argsDisableKick $
                 action kick
 
-        ,Main.argsHlsPlugins =
-            pluginDescToIdePlugins $
-            GhcIde.descriptors
-            ++ [Test.blockCommandDescriptor "block-command" | argsTesting]
-
-        ,Main.argsGhcidePlugin = if argsTesting
-            then Test.plugin
-            else mempty
-
         ,Main.argsThreads = case argsThreads of 0 -> Nothing ; i -> Just (fromIntegral i)
 
-        ,Main.argsIdeOptions = \config  sessionLoader ->
-            let defOptions = defaultIdeOptions sessionLoader
+        ,Main.argsIdeOptions = \config sessionLoader ->
+            let defOptions = Main.argsIdeOptions arguments config sessionLoader
             in defOptions
                 { optShakeProfiling = argsShakeProfiling
                 , optOTMemoryProfiling = IdeOTMemoryProfiling argsOTMemoryProfiling
-                , optTesting = IdeTesting argsTesting
                 , optShakeOptions = (optShakeOptions defOptions){shakeThreads = argsThreads}
                 , optCheckParents = pure $ checkParents config
                 , optCheckProject = pure $ checkProject config

@@ -1,7 +1,8 @@
 {-# LANGUAGE BangPatterns     #-}
 {-# LANGUAGE CPP              #-}
 {-# LANGUAGE TypeApplications #-}
-
+{-# OPTIONS_GHC -Wno-redundant-constraints #-}
+{-# OPTIONS_GHC -Wno-unused-imports #-}
 module Wingman.Debug
   ( unsafeRender
   , unsafeRender'
@@ -16,7 +17,7 @@ module Wingman.Debug
 
 import           Control.DeepSeq
 import           Control.Exception
-import           Debug.Trace
+import qualified Debug.Trace
 import           Development.IDE.GHC.Compat (PlainGhcException, Outputable(..), SDoc, showSDocUnsafe)
 import           System.IO.Unsafe  (unsafePerformIO)
 
@@ -47,3 +48,15 @@ traceIdX str a = trace (mappend ("!!!" <> str <> ": ") $ show a) a
 traceFX :: String -> (a -> String) -> a -> a
 traceFX str f a = trace (mappend ("!!!" <> str <> ": ") $ f a) a
 
+traceM :: Applicative f => String -> f ()
+trace :: String -> a -> a
+traceShowId :: Show a => a -> a
+#ifdef DEBUG
+traceM = Debug.Trace.traceM
+trace = Debug.Trace.trace
+traceShowId = Debug.Trace.traceShowId
+#else
+traceM _ = pure ()
+trace _ = id
+traceShowId = id
+#endif
