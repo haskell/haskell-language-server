@@ -22,7 +22,7 @@ import           Ide.PluginUtils                 (makeDiffTextEdit)
 import           Ide.Types
 import           Language.LSP.Server             hiding (defaultConfig)
 import           Language.LSP.Types
-import           Language.LSP.Types.Lens
+import           Language.LSP.Types.Lens         (HasTabSize (tabSize))
 import           Ormolu
 import           System.FilePath
 
