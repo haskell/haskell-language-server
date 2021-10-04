@@ -230,3 +230,6 @@ This formula contains HLS binaries compiled with GHC versions available via Home
 
 You need to provide your own GHC/Cabal/Stack as required by your project, possibly via Homebrew.
 
+## Installation using nix
+
+You can read full instructions on how to install HLS with nix in [haskell2nix documentation](https://haskell4nix.readthedocs.io/nixpkgs-users-guide.html#how-to-install-haskell-language-server).
