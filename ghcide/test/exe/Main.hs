@@ -4508,7 +4508,9 @@ otherCompletionTests = [
 
 packageCompletionTests :: [TestTree]
 packageCompletionTests =
-  [ testSessionWait "fromList" $ do
+  [ testSession' "fromList" $ \dir -> do
+        liftIO $ writeFile (dir </> "hie.yaml")
+            "cradle: {direct: {arguments: [-hide-all-packages, -package, base, A]}}"
         doc <- createDoc "A.hs" "haskell" $ T.unlines
             [ "{-# OPTIONS_GHC -Wunused-binds #-}",
                 "module A () where",
@@ -4524,9 +4526,8 @@ packageCompletionTests =
               ]
         liftIO $ take 3 (sort compls') @?=
           map ("Defined in "<>)
-              [ "'Data.IntMap"
-              , "'Data.IntMap.Lazy"
-              , "'Data.IntMap.Strict"
+              [ "'Data.List.NonEmpty"
+              , "'GHC.Exts"
               ]
 
   , testSessionWait "Map" $ do
