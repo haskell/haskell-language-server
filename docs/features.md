@@ -2,7 +2,7 @@
 
 - Warning and error diagnostics from GHC
 - Type information and documentation on hover, [including your own comments](#how-to-show-local-documentation-on-hover).
-- Jump to definition: for now only between local code definitions
+- Jump to definition: [for now only for local code definitions](https://github.com/haskell/haskell-language-server/issues/708)
 - Document symbols
 - Highlight references in document
 - Code completion
