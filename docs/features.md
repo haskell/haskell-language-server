@@ -1,36 +1,64 @@
 # Features
 
-- Code evaluation codelens ([Tutorial](https://github.com/haskell/haskell-language-server/tree/master/plugins/hls-eval-plugin/README.md)):
+- Warning and error diagnostics from GHC
+- Type information and documentation on hover, [including your own comments](#how-to-show-local-documentation-on-hover).
+- Jump to definition: for now only between local code definitions
+- Document symbols
+- Highlight references in document
+- Code completion
+- Formatting via Brittany, Floskell, Fourmolu, Ormolu or Stylish Haskell
+- Code evaluation (Haskell Language Server), see ([Tutorial](https://github.com/haskell/haskell-language-server/blob/master/plugins/hls-eval-plugin/README.md))
 
-   ![Eval Demo](https://github.com/haskell/haskell-language-server/tree/master/plugins/hls-eval-plugin/demo.gif)
+  ![Eval Demo](https://raw.githubusercontent.com/haskell/haskell-language-server/master/plugins/hls-eval-plugin/demo.gif)
 
-- Type information and documentation on hover. Note that currently, in order for docs to be displayed for dependencies, they must have been built with GHC's `-haddock` flag:
+- Integration with [retrie](https://hackage.haskell.org/package/retrie)
 
-  - For cabal:
-      - Add to your global config file (e.g. `~/.cabal/config`):
+  ![Retrie Demo](https://i.imgur.com/Ev7B87k.gif)
 
-        ```
-        program-default-options
-          ghc-options: -haddock
-        ```
+- Code lenses for explicit import lists
 
-      - Or, for a single project, run `cabal configure --ghc-options=-haddock`
+  ![Imports code lens Demo](https://imgur.com/pX9kvY4.gif)
 
-  - For stack, add to global `$STACK_ROOT\config.yaml`, or project's `stack.yaml`:
+- Generate functions from type signatures, and intelligently complete holes using [Wingman (tactics)](https://github.com/haskell/haskell-language-server/tree/master/plugins/hls-tactics-plugin)
 
+  ![Wingman Demo](https://user-images.githubusercontent.com/307223/92657198-3d4be400-f2a9-11ea-8ad3-f541c8eea891.gif)
+
+- Integration with [hlint](https://github.com/ndmitchell/hlint) to show diagnostics and apply hints via [apply-refact](https://github.com/mpickering/apply-refact)
+
+  ![Hlint Demo](https://user-images.githubusercontent.com/54035/110860028-8f9fa900-82bc-11eb-9fe5-6483d8bb95e6.gif)
+
+- Module name suggestions for insertion or correction
+
+  ![Module Name Demo](https://user-images.githubusercontent.com/54035/110860755-78ad8680-82bd-11eb-9845-9ea4b1cc1f76.gif)
+
+- Call hierarchy support
+
+  ![Call Hierarchy in VSCode](https://github.com/haskell/haskell-language-server/raw/2857eeece0398e1cd4b2ffb6069b05c4d2308b39/plugins/hls-call-hierarchy-plugin/call-hierarchy-in-vscode.gif)
+  
+  
+## How to show local documentation on hover
+
+Haskell Language Server can display Haddock documentation on hover and completions if the project and
+its dependencies have been built with the `-haddock` GHC flag.
+
+- For cabal:
+
+  - Add to your global config file (e.g. `~/.cabal/config`):
+
+    ```yaml
+    program-default-options
+      ghc-options: -haddock
     ```
-    ghc-options:
-      "$everything": -haddock
-    ```
 
-  This will cause compilation errors if a dependency contains invalid Haddock markup, though from GHC version 9.0, [these will be demoted to warnings](https://gitlab.haskell.org/ghc/ghc/-/merge_requests/2377).
+  - Or, for a single project, run `cabal configure --ghc-options=-haddock`
 
- - Integration with [retrie](https://hackage.haskell.org/package/retrie)
+- For stack, add to global `$STACK_ROOT\config.yaml`, or project's `stack.yaml`:
 
-   ![Retrie](https://i.imgur.com/Ev7B87k.gif)
+  ```yaml
+  ghc-options:
+    '$everything': -haddock
+  ```
 
- - Code lenses for explicit import lists
-
-   ![Imports code lens](https://imgur.com/pX9kvY4.gif)
-
- - Many more (TBD)
+  Note that this flag will cause compilation errors if a dependency contains invalid Haddock markup,
+  until GHC 9.0 which [will report warnings](https://gitlab.haskell.org/ghc/ghc/-/merge_requests/2377)
+  instead.
