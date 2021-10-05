@@ -62,13 +62,6 @@ let
 
       ormolu = hself.ormolu_0_2_0_0;
 
-      operational = hself.callCabal2nix "operational" (pkgs.fetchFromGitHub {
-        owner = "HeinrichApfelmus";
-        repo = "operational";
-        rev = "16e19aaf34e286f3d27b3988c61040823ec66537";
-        sha256 = "P+aocEcqCN8klnW3IMrmIqq6ztBZJxk4sBp1ewN6YaA=";
-      }) { };
-
       diagrams-core = hself.diagrams-core_1_5_0;
 
       diagrams-lib = hself.diagrams-lib_1_4_4;
@@ -76,6 +69,14 @@ let
       dual-tree = hself.dual-tree_0_2_3_0;
 
       monoid-extras = hself.monoid-extras_0_6;
+
+      # Released on hackage, but not in nixpkgs yet
+      operational = hself.callCabal2nix "operational" (pkgs.fetchFromGitHub {
+        owner = "HeinrichApfelmus";
+        repo = "operational";
+        rev = "2b33e0055066cf92a302ee2c32058dfa44ac8882";
+        sha256 = "sha256-nwB4vssm4wUTkVryjQVb3peOwR6js7vdekkbaWedHNI=";
+      }) { };
 
       # Re-generate HLS drv excluding some plugins
       haskell-language-server =

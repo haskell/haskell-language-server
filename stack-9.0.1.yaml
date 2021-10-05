@@ -79,13 +79,11 @@ extra-deps:
 - Chart-1.9.3@sha256:640a38463318b070d80a049577e4f0b3322df98290abb7afcf0cb74a4ad5b512,2948
 - Chart-diagrams-1.9.3@sha256:1535d5d0d3febca63138cecfde234315212611c21bb7f4358b2dae8c55c59003,1801
 - statestack-0.3@sha256:be43ce2cd790a4732b88cdc9480458503cb5e307b4f79a502d99d5b3d417730e,1135
+- operational-0.2.4.0
 
 - github: diagrams/active
   commit: ca23431a8dfa013992f9164ccc882a3277361f17
 # https://github.com/diagrams/active/pull/36
-
-- github: HeinrichApfelmus/operational
-  commit: 16e19aaf34e286f3d27b3988c61040823ec66537
 
 # end of shake-bench dpendencies
 
