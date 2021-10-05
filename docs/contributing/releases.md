@@ -57,18 +57,24 @@ only one wrapper binary is created per platform, and it should be built with the
 most recent GHC version.
 
 ### ghcup
-It also creates a `haskell-language-server-${os}-${hlsVersion}.tar.gz` tarball with
-the binaries for *all* supported ghc versions, to help downstream publishers in
-the distribution of the release. The most prominent publisher using them is `ghcup`.
-The `tar` job in the workflow file automates the creation of this.
 
-Once all these binaries are present
+It creates a `haskell-language-server-${os}-${hlsVersion}.tar.gz` tarball with
+the binaries for *all* supported ghc versions and a custom source tarball to help
+downstream publishers in the distribution of the release.
+
+The most prominent publisher using them is `ghcup`.
+
+### checksums
+
+The sha256 checksum of all artifacts are listed in the `SHA256SUMS` release file.
 
 ## Distributable binaries
+
 In order to compile a hls binary on one machine and have it run on another, you
 need to make sure there are **no hardcoded paths or data-files**.
 
 ### ghc libdir
+
 One noteable thing which cannot be hardcoded is the **GHC libdir** – this is
 a path to `/usr/local/lib/ghc` or something like that, which was previously
 baked in at compile-time with ghc-paths. Note that with static binaries we
@@ -78,22 +84,24 @@ Therefore, hie-bios provides `getGhcRuntimeLibDir` to obtain this path on the fl
 by consulting the cradle.
 
 ### Static binaries
+
 We use the word "distributable" here because technically only the Linux builds
 are static. They are built by passing `--enable-executable-static` to cabal.
 Static binaries don't really exist on macOS, and there are issues with
 proprietary code being linked in on Windows. However, the `.dylib`s linked on
 macOS are all already provided by the system:
 
-```
+```bash
 $ objdump -macho --dylibs-used  haskell-language-server
 haskell-language-server:
-	/usr/lib/libncurses.5.4.dylib (compatibility version 5.4.0, current version 5.4.0)
-	/usr/lib/libiconv.2.dylib (compatibility version 7.0.0, current version 7.0.0)
-	/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1281.100.1)
-	/usr/lib/libcharset.1.dylib (compatibility version 2.0.0, current version 2.0.0)
+  /usr/lib/libncurses.5.4.dylib (compatibility version 5.4.0, current version 5.4.0)
+  /usr/lib/libiconv.2.dylib (compatibility version 7.0.0, current version 7.0.0)
+  /usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1281.100.1)
+  /usr/lib/libcharset.1.dylib (compatibility version 2.0.0, current version 2.0.0)
 ```
 
 ## The GitHub Actions workflow
+
 It just kicks off a matrix of jobs varying across GHC versions and OSs, building
 the binaries with Cabal and extracting them from the dist-newstyle directory.
 The binaries are built with -O2.
@@ -120,19 +128,12 @@ its secure distribution using their hashes. We should only add new ones.*
 
 To manually upload a new binary we should:
 
-- Add the new tar/zip following the name conventions of existing ones
-  - `haskell-language-server-${os}-${ghcVersion}.gz` for `Linux` and `macOS` and `haskell-language-server-Windows-${ghcVersion}.exe.zip` for `Windows`
-  - the binary inside the gz file is named `haskell-language-server-${ghcVersion}` (with the `.exe` extension for `Windows`). Note that the binary name does not contain the `${os}` part.
-- Add the executable to the existing tar `haskell-language-server-${os}-${ghcVersion}.tar.gz` *locally* and upload it under a new name `haskell-language-server-${os}-${ghcVersion}-rev${n}.tar.gz` following the same schema for the binary as the previous one.
-  - `-rev${n}` is the next revision number of the tarball, starting at 1.
-  - we should contact users of the tarball (particularly ghcup) to notify the change
-
-### Windows
-Currently building HLS with GHC 8.8.x on Windows is very flakey and so
-is not included by default in the GitHub Actions build matrix. Instead
-they need to be built and uploaded manually. See [this
-PR](https://github.com/haskell/haskell-language-server/issues/276) for
-more details
+* Add the new tar/zip following the name conventions of existing ones
+  * `haskell-language-server-${os}-${ghcVersion}.gz` for `Linux` and `macOS` and `haskell-language-server-Windows-${ghcVersion}.exe.zip` for `Windows`
+  * the binary inside the gz file is named `haskell-language-server-${ghcVersion}` (with the `.exe` extension for `Windows`). Note that the binary name does not contain the `${os}` part.
+* Add the executable to the existing tar `haskell-language-server-${os}-${ghcVersion}.tar.gz` *locally* and upload it under a new name `haskell-language-server-${os}-${ghcVersion}-rev${n}.tar.gz` following the same schema for the binary as the previous one.
+  * `-rev${n}` is the next revision number of the tarball, starting at 1.
+  * we should contact users of the tarball (particularly ghcup) to notify the change
 
 ## Hackage release workflow
 
