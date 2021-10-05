@@ -9,7 +9,6 @@ on:
     types: [created]
 
 jobs:
-
   build:
     runs-on: ${{ matrix.os }}
 
@@ -156,9 +155,41 @@ jobs:
       with:
         name: haskell-language-server-wrapper-${{ runner.OS }}${{env.EXE_EXT}}.${{ steps.compress_wrapper_binary.outputs.extension }}
         path: ${{ steps.compress_wrapper_binary.outputs.path }}
+  
+  # generates a custom tarball with sources, used by `ghcup compile hls` 
+  src-tar:
+    needs: build
+    runs-on: ubuntu-18.04
+    
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+      
+      - name: "Create source tarball"
+        run: |
+          mkdir src-dist
+          git archive --prefix=haskell-language-server-${{ github.event.release.tag_name }}/ \
+                      --format=tar.gz \
+                      -o src-dist/haskell-language-server.tar.gz \
+                      HEAD
+      
+      - uses: actions/upload-release-asset@v1.0.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: src-dist/haskell-language-server.tar.gz
+          asset_name: haskell-language-server-${{ github.event.release.tag_name }}-src.tar.gz
+          asset_content_type: application/gzip
 
-  # this generates .gz tarfiles containing all the GHC versions for
-  # macOS and Linux, used by ghcup
+      - uses: actions/upload-artifact@v2
+        with:
+          name: haskell-language-server-${{ github.event.release.tag_name }}-src.tar.gz
+          path: src-dist/haskell-language-server.tar.gz
+      
+  # this generates .gz tarfiles containing binaries for all GHC versions and OS's
+  # used by `ghcup install hls`
   tar:
     needs: build
     runs-on: ubuntu-18.04
@@ -198,7 +229,7 @@ jobs:
           path: bin/haskell-language-server.tar.gz
 
   sha256sum:
-    needs: tar
+    needs: [tar, src-tar]
     runs-on: ubuntu-18.04
     steps:
       - uses: actions/download-artifact@v2
