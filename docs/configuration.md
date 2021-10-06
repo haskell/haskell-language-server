@@ -28,7 +28,7 @@ Settings like this are typically provided by the generic LSP client support for 
 Your editor may provide some settings that affect how the information from the language server is used.
 For example, whether popups are shown, or whether code lenses appear by default.
 
-Settings like this are typically provided by the generic LSP client support for your editor, for example in Emacs by [`lsp-mode`](https://github.com/emacs-lsp/lsp-haskell).
+Settings like this are typically provided by the generic LSP client support for your editor, for example in Emacs by [`lsp-mode`](https://github.com/emacs-lsp/lsp-mode).
 
 ### Language-specific server options
 
