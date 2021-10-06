@@ -81,7 +81,8 @@ data Database = Database {
     databaseExtra           :: Dynamic,
     databaseRules           :: TheRules,
     databaseStep            :: !(IORef Step),
-    databaseDirtySet        :: IORef (Maybe [Id]),
+    -- | Nothing means that everything is dirty
+    databaseDirtySet        :: IORef (Maybe IntSet),
     -- Hold the lock while mutating Ids/Values
     databaseLock            :: !Lock,
     databaseIds             :: !(IORef (Intern Key)),

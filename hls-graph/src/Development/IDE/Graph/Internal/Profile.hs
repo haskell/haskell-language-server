@@ -14,6 +14,7 @@ import qualified Data.HashMap.Strict                  as Map
 import           Data.IORef
 import           Data.IntMap                          (IntMap)
 import qualified Data.IntMap                          as IntMap
+import qualified Data.IntSet                          as Set
 import           Data.List                            (dropWhileEnd, foldl',
                                                        intercalate, partition,
                                                        sort, sortBy)
@@ -45,7 +46,7 @@ writeProfile :: FilePath -> Database -> IO ()
 writeProfile out db = do
     dirtyKeys <- readIORef (databaseDirtySet db)
     (report, mapping) <- toReport db
-    let dirtyKeysMapped = mapMaybe (`IntMap.lookup` mapping) <$> dirtyKeys
+    let dirtyKeysMapped = mapMaybe (`IntMap.lookup` mapping) . Set.toList <$> dirtyKeys
     rpt <- generateHTML (sort <$> dirtyKeysMapped) report
     LBS.writeFile out rpt
 

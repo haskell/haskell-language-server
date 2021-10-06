@@ -66,7 +66,7 @@ incDatabase db (Just kk) = do
     intern <- readIORef (databaseIds db)
     let dirtyIds = mapMaybe (`Intern.lookup` intern) kk
     transitiveDirtyIds <- transitiveDirtySet db dirtyIds
-    writeIORef (databaseDirtySet db) (Just $ Set.toList transitiveDirtyIds)
+    modifyIORef (databaseDirtySet db) (\dd -> Just $ fromMaybe mempty dd <> transitiveDirtyIds)
     withLock (databaseLock db) $
         Ids.forMutate (databaseValues db) $ \i -> \case
             (k, Running _ _ x) -> (k, Dirty x)
