@@ -21,7 +21,7 @@ For example, there are protocol methods for highlighting matching identifiers th
 This is a capability which any server can implement, so the client can decide generically whether to ask the server to do it or not.
 So your editor can provide a setting to turn this on or off globally, for any language server you might use.
 
-Settings like this are typically provided by the generic LSP client support for your editor, for example in Emacs by [`lsp-mode`](https://github.com/emacs-lsp/lsp-haskell).
+Settings like this are typically provided by the generic LSP client support for your editor, for example in Emacs by [`lsp-mode`](https://github.com/emacs-lsp/lsp-mode).
 
 ### Generic editor options
 
