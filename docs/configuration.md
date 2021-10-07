@@ -96,7 +96,9 @@ This is handled by the [`hie-bios`](https://github.com/mpickering/hie-bios) proj
 
 At the moment, `haskell-language-server` has support to automatically detect your project build configuration to handle most use cases. 
 
-However, if the automatic detection fails you can configure `hie-bios` using a `hie.yaml` file in the root of the workspace.
+*So using a explicit `hie.yaml` file will not likely fix your ide setup*. It will do it almost only if you see an error like `Multi Cradle: No prefixes matched`
+
+If the automatic detection fails with that error you can configure `hie-bios` using a `hie.yaml` file in the root of the workspace.
 A `hie.yaml` file **explicitly** describes how to setup the environment to compile the various parts of your project.
 For that you need to know what *components* your project has, and the path associated with each one.
 So you will need some knowledge about
@@ -193,6 +195,34 @@ cradle:
 dependencies:
   - someDep
 ```
+
+### How to show local documentation on hover
+
+Haskell Language Server can display Haddock documentation on hover and completions if the project and
+its dependencies have been built with the `-haddock` GHC flag.
+
+- For cabal:
+
+  - Add to your global config file (e.g. `~/.cabal/config`):
+
+    ```yaml
+    program-default-options
+      ghc-options: -haddock
+    ```
+
+  - Or, for a single project, run `cabal configure --ghc-options=-haddock`
+
+- For stack, add to global `$STACK_ROOT\config.yaml`, or project's `stack.yaml`:
+
+  ```yaml
+  ghc-options:
+    '$everything': -haddock
+  ```
+
+  Note that this flag will cause compilation errors if a dependency contains invalid Haddock markup,
+  until GHC 9.0 which [will report warnings](https://gitlab.haskell.org/ghc/ghc/-/merge_requests/2377)
+  instead.
+
 
 ## Configuring your editor
 
