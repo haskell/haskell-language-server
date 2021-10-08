@@ -48,6 +48,8 @@ library
         dependent-map,
         dependent-sum,
         dlist,
+        ekg-wai,
+        ekg-core,
         exceptions,
         extra >= 1.7.4,
         enummapset,

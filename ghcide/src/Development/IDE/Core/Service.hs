@@ -38,10 +38,11 @@ import           Control.Monad
 import qualified Development.IDE.Core.FileExists as FileExists
 import qualified Development.IDE.Core.OfInterest as OfInterest
 import           Development.IDE.Core.Shake      hiding (Log)
+import           Development.IDE.Core.Shake
 import qualified Development.IDE.Core.Shake      as Shake
 import           Development.IDE.Types.Shake     (WithHieDb)
 import           System.Environment              (lookupEnv)
-
+import           System.Metrics
 
 data Log
   = LogShake Shake.Log
@@ -68,8 +69,9 @@ initialise :: Recorder (WithPriority Log)
            -> IdeOptions
            -> WithHieDb
            -> IndexQueue
+           -> Maybe Store
            -> IO IdeState
-initialise recorder defaultConfig mainRule lspEnv logger debouncer options withHieDb hiedbChan = do
+initialise recorder defaultConfig mainRule lspEnv logger debouncer options withHieDb hiedbChan metrics = do
     shakeProfiling <- do
         let fromConf = optShakeProfiling options
         fromEnv <- lookupEnv "GHCIDE_BUILD_PROFILING"
@@ -86,6 +88,7 @@ initialise recorder defaultConfig mainRule lspEnv logger debouncer options withH
         withHieDb
         hiedbChan
         (optShakeOptions options)
+        metrics
           $ do
             addIdeGlobal $ GlobalIdeOptions options
             ofInterestRules (cmapWithPrio LogOfInterest recorder)

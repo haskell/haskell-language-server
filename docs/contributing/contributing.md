@@ -225,6 +225,35 @@ If you don't want to use [nix](https://nixos.org/guides/install-nix.html), you c
 
 See the [tutorial](./plugin-tutorial.md) on writing a plugin in HLS.
 
+## Measuring, benchmarking and tracing
+
+### Metrics
+
+HLS opens a metrics server on port 8000 exposing GC and ghcide metrics. The ghcide metrics currently exposed are:
+
+- `ghcide.values_count`- count of build results in the store
+- `ghcide.database_count` - count of build keys in the store (these two would be the same in the absence of GC)
+- `ghcide.build_count` - build count. A key is GC'ed if it is dirty and older than 100 builds
+- `ghcide.dirty_keys_count` - non transitive count of dirty build keys
+- `ghcide.indexing_pending_count` - count of items in the indexing queue
+- `ghcide.exports_map_count` - count of identifiers in the exports map.
+
+### Benchmarks
+
+If you are touching performance sensitive code, take the time to run a differential
+benchmark between HEAD and master using the benchHist script. This assumes that
+"master" points to the upstream master.
+
+Run the benchmarks with `cabal bench ghcide`.
+
+It should take around 25 minutes and the results will be stored in the `ghcide/bench-results` folder. To interpret the results, see the comments in the `ghcide/bench/hist/Main.hs` module.
+
+More details in [bench/README](../../ghcide/bench/README.md)
+
+### Tracing
+
+HLS records opentelemetry eventlog traces via [opentelemetry](https://hackage.haskell.org/package/opentelemetry). To generate the traces, build with `-eventlog` and run with `+RTS -l`. To visualize the traces, install [Tracy](https://github.com/wolfpld/tracy) and use [eventlog-to-tracy](https://hackage.haskell.org/package/opentelemetry-extra) to open the generated eventlog.
+
 ## Adding support for a new editor
 
 Adding support for new editors is fairly easy if the editor already has good support for generic LSP-based extensions.

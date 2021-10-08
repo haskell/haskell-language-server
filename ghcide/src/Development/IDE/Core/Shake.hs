@@ -136,6 +136,7 @@ import           Development.IDE.Graph                  hiding (ShakeValue)
 import qualified Development.IDE.Graph                  as Shake
 import           Development.IDE.Graph.Database         (ShakeDatabase,
                                                          shakeGetBuildStep,
+                                                         shakeGetDatabaseKeys,
                                                          shakeNewDatabase,
                                                          shakeProfileDatabase,
                                                          shakeRunDatabaseForKeys)
@@ -152,6 +153,23 @@ import           Development.IDE.Types.Options
 import           Development.IDE.Types.Shake
 import qualified Focus
 import           GHC.Fingerprint
+import           Language.LSP.Types.Capabilities
+import           OpenTelemetry.Eventlog
+
+import           Control.Exception.Extra                hiding (bracket_)
+import           Data.Aeson                             (toJSON)
+import qualified Data.ByteString.Char8                  as BS8
+import           Data.Coerce                            (coerce)
+import           Data.Default
+import           Data.Foldable                          (for_, toList)
+import           Data.HashSet                           (HashSet)
+import qualified Data.HashSet                           as HSet
+import           Data.IORef.Extra                       (atomicModifyIORef'_,
+                                                         atomicModifyIORef_)
+import           Data.String                            (fromString)
+import           Data.Text                              (pack)
+import           Debug.Trace.Flags                      (userTracingEnabled)
+import qualified Development.IDE.Types.Exports          as ExportsMap
 import           HieDb.Types
 import           Ide.Plugin.Config
 import qualified Ide.PluginUtils                        as HLS
@@ -167,6 +185,7 @@ import           OpenTelemetry.Eventlog
 import qualified StmContainers.Map                      as STM
 import           System.FilePath                        hiding (makeRelative)
 import           System.IO.Unsafe (unsafePerformIO)
+import           System.Metrics                         (Store, registerCounter, registerGauge)
 import           System.Time.Extra
 
 data Log
@@ -388,7 +407,7 @@ lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
           | otherwise = do
           pmap <- readTVarIO persistentKeys
           mv <- runMaybeT $ do
-            liftIO $ Logger.logDebug (logger s) $ T.pack $ "LOOKUP UP PERSISTENT FOR: " ++ show k
+            liftIO $ Logger.logDebug (logger s) $ T.pack $ "LOOKUP PERSISTENT FOR: " ++ show k
             f <- MaybeT $ pure $ HMap.lookup (Key k) pmap
             (dv,del,ver) <- MaybeT $ runIdeAction "lastValueIO" s $ f file
             MaybeT $ pure $ (,del,ver) <$> fromDynamic dv
@@ -557,10 +576,11 @@ shakeOpen :: Recorder (WithPriority Log)
           -> WithHieDb
           -> IndexQueue
           -> ShakeOptions
+          -> Maybe Store
           -> Rules ()
           -> IO IdeState
 shakeOpen recorder lspEnv defaultConfig logger debouncer
-  shakeProfileDir (IdeReportProgress reportProgress) ideTesting@(IdeTesting testing) withHieDb indexQueue opts rules = mdo
+  shakeProfileDir (IdeReportProgress reportProgress) ideTesting@(IdeTesting testing) withHieDb indexQueue opts metrics rules = mdo
     let log :: Logger.Priority -> Log -> IO ()
         log = logWith recorder
 
@@ -613,10 +633,27 @@ shakeOpen recorder lspEnv defaultConfig logger debouncer
     IdeOptions
         { optOTMemoryProfiling = IdeOTMemoryProfiling otProfilingEnabled
         , optProgressStyle
+        , optCheckParents
         } <- getIdeOptionsIO shakeExtras
 
     void $ startTelemetry shakeDb shakeExtras
     startProfilingTelemetry otProfilingEnabled logger $ state shakeExtras
+
+    checkParents <- optCheckParents
+    for_ metrics $ \store -> do
+        let readValuesCounter = fromIntegral . countRelevantKeys checkParents . HMap.keys <$> readVar (state shakeExtras)
+            readDirtyKeys = fromIntegral . countRelevantKeys checkParents . HSet.toList <$> readIORef (dirtyKeys shakeExtras)
+            readIndexPending = fromIntegral . HMap.size <$> readTVarIO (indexPending $ hiedbWriter shakeExtras)
+            readExportsMap = fromIntegral . HMap.size . getExportsMap <$> readVar (exportsMap shakeExtras)
+            readDatabaseCount = fromIntegral . countRelevantKeys checkParents . map fst <$> shakeGetDatabaseKeys shakeDb
+            readDatabaseStep =  fromIntegral <$> shakeGetBuildStep shakeDb
+
+        registerGauge "ghcide.values_count" readValuesCounter store
+        registerGauge "ghcide.dirty_keys_count" readDirtyKeys store
+        registerGauge "ghcide.indexing_pending_count" readIndexPending store
+        registerGauge "ghcide.exports_map_count" readExportsMap store
+        registerGauge "ghcide.database_count" readDatabaseCount store
+        registerCounter "ghcide.num_builds" readDatabaseStep store
 
     return ideState
 

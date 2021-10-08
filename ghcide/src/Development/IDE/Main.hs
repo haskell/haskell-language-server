@@ -29,6 +29,7 @@ import           Data.Maybe                            (catMaybes, isJust)
 import qualified Data.Text                             as T
 import           Data.Text.Lazy.Encoding               (decodeUtf8)
 import qualified Data.Text.Lazy.IO                     as LT
+import           Data.Traversable                      (for)
 import           Data.Typeable                         (typeOf)
 import           Development.IDE                       (Action, GhcVersion (..),
                                                         Priority (Debug, Error), Rules,
@@ -126,6 +127,9 @@ import           System.IO                             (BufferMode (LineBufferin
                                                         hSetEncoding, stderr,
                                                         stdin, stdout, utf8)
 import           System.Random                         (newStdGen)
+import qualified System.Metrics                        as Monitoring
+import           System.Remote.Monitoring.Wai
+import qualified System.Remote.Monitoring.Wai          as Monitoring
 import           System.Time.Extra                     (Seconds, offsetTime,
                                                         showDuration)
 import           Text.Printf                           (printf)
@@ -231,6 +235,7 @@ data Arguments = Arguments
     , argsHandleIn              :: IO Handle
     , argsHandleOut             :: IO Handle
     , argsThreads               :: Maybe Natural
+    , argsMonitoringPort        :: Maybe Natural
     }
 
 
@@ -268,6 +273,7 @@ defaultArguments recorder logger = Arguments
                 -- the language server tests without the redirection.
                 putStr " " >> hFlush stdout
                 return newStdout
+        , argsMonitoringPort = Just 8000
         }
 
 
@@ -355,6 +361,23 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                 -- FIXME: Remove this after GHC 9 gets fully supported
                 when (ghcVersion == GHC90) $
                     log Warning LogOnlyPartialGhc9Support
+                server <- fmap join $ for argsMonitoringPort $ \p -> do
+                    store <- Monitoring.newStore
+                    let startServer = Monitoring.forkServerWith store "localhost" (fromIntegral p)
+                    -- this can fail if the port is busy, throwing an async exception back to us
+                    -- to handle that, wrap the server thread in an async
+                    mb_server <- async startServer >>= waitCatch
+                    case mb_server of
+                        Right s -> do
+                            logInfo logger $ T.pack $
+                                "Started monitoring server on port " <> show p
+                            return $ Just s
+                        Left e -> do
+                            logInfo logger $ T.pack $
+                                "Unable to bind monitoring server on port "
+                                <> show p <> ":" <> show e
+                            return Nothing
+
                 initialise
                     (cmapWithPrio LogService recorder)
                     argsDefaultHlsConfig
@@ -365,6 +388,9 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                     options
                     withHieDb
                     hieChan
+                    (Monitoring.serverMetricStore <$> server)
+                    `onException`
+                        traverse_ (killThread . serverThreadId) server
             dumpSTMStats
         Check argFiles -> do
           dir <- maybe IO.getCurrentDirectory return argsProjectRoot
@@ -397,7 +423,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                         , optCheckProject = pure False
                         , optModifyDynFlags = optModifyDynFlags def_options <> pluginModifyDynflags plugins
                         }
-            ide <- initialise (cmapWithPrio LogService recorder) argsDefaultHlsConfig rules Nothing logger debouncer options hiedb hieChan
+            ide <- initialise (cmapWithPrio LogService recorder) argsDefaultHlsConfig rules Nothing logger debouncer options hiedb hieChan Nothing
             shakeSessionInit (cmapWithPrio LogShake recorder) ide
             registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
 
@@ -450,13 +476,8 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                     , optCheckProject = pure False
                     , optModifyDynFlags = optModifyDynFlags def_options <> pluginModifyDynflags plugins
                     }
-            ide <- initialise (cmapWithPrio LogService recorder) argsDefaultHlsConfig rules Nothing logger debouncer options hiedb hieChan
+            ide <- initialise (cmapWithPrio LogService recorder) argsDefaultHlsConfig rules Nothing logger debouncer options hiedb hieChan Nothing
             shakeSessionInit (cmapWithPrio LogShake recorder) ide
-            registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
-            c ide
-
-{-# ANN defaultMain ("HLint: ignore Use nubOrd" :: String) #-}
-
 
 expandFiles :: [FilePath] -> IO [FilePath]
 expandFiles = concatMapM $ \x -> do
