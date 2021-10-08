@@ -8,21 +8,20 @@ module Ide.Plugin.Fourmolu (
     provider,
 ) where
 
-import           Control.Exception           (try)
-import           Control.Lens                ((^.))
+import           Control.Exception               (try)
+import           Control.Lens                    ((^.))
 import           Control.Monad.IO.Class
-import           Data.Bifunctor              (first)
-import qualified Data.Text                   as T
-import           Development.IDE             hiding (pluginHandlers)
-import           Development.IDE.GHC.Compat  as Compat hiding (Cpp)
+import           Data.Bifunctor                  (first)
+import qualified Data.Text                       as T
+import           Development.IDE                 hiding (pluginHandlers)
+import           Development.IDE.GHC.Compat      as Compat hiding (Cpp)
 import qualified Development.IDE.GHC.Compat.Util as S
-import           GHC.LanguageExtensions.Type (Extension (Cpp))
-import           GhcPlugins                  (HscEnv (hsc_dflags))
-import           Ide.PluginUtils             (makeDiffTextEdit)
+import           GHC.LanguageExtensions.Type     (Extension (Cpp))
+import           Ide.PluginUtils                 (makeDiffTextEdit)
 import           Ide.Types
-import           Language.LSP.Server         hiding (defaultConfig)
+import           Language.LSP.Server             hiding (defaultConfig)
 import           Language.LSP.Types
-import           Language.LSP.Types.Lens
+import           Language.LSP.Types.Lens         (HasTabSize (tabSize))
 import           Ormolu
 import           System.FilePath
 
@@ -70,10 +69,10 @@ provider ideState typ contents fp fo = withIndefiniteProgress title Cancellable 
             format mempty
         ConfigParseError f (_, err) -> do
             sendNotification SWindowShowMessage $
-              ShowMessageParams
-                  { _xtype = MtError
-                  , _message = errorMessage
-                  }
+                ShowMessageParams
+                    { _xtype = MtError
+                    , _message = errorMessage
+                    }
             return . Left $ responseError errorMessage
           where
             errorMessage = "Failed to load " <> T.pack f <> ": " <> T.pack err
