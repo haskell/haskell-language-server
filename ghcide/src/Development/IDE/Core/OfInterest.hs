@@ -8,6 +8,7 @@
 --   open in the editor. The rule is 'IsFileOfInterest'
 module Development.IDE.Core.OfInterest(
     ofInterestRules,
+    getFilesOfInterest,
     getFilesOfInterestUntracked,
     addFileOfInterest,
     deleteFileOfInterest,
@@ -56,6 +57,11 @@ ofInterestRules = do
 
 ------------------------------------------------------------
 -- Exposed API
+
+getFilesOfInterest :: IdeState -> IO( HashMap NormalizedFilePath FileOfInterestStatus)
+getFilesOfInterest state = do
+    OfInterestVar var <- getIdeGlobalState state
+    readVar var
 
 -- | Set the files-of-interest - not usually necessary or advisable.
 --   The LSP client will keep this information up to date.
