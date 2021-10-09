@@ -26,6 +26,7 @@ import qualified Data.HashSet                          as S
 import qualified Data.Text                             as Text
 
 import           Control.Monad.IO.Class
+import qualified Data.HashMap.Strict                   as HM
 import           Development.IDE.Core.FileExists       (modifyFileExists,
                                                         watchedGlobs)
 import           Development.IDE.Core.FileStore        (registerFileWatches,
@@ -84,8 +85,15 @@ descriptor plId = (defaultPluginDescriptor plId) { pluginNotificationHandlers = 
         -- what we do with them
         let msg = show fileEvents
         logDebug (ideLogger ide) $ "Watched file events: " <> Text.pack msg
-        modifyFileExists ide fileEvents
-        resetFileStore ide fileEvents
+        -- filter out files of interest, since we already know all about those
+        filesOfInterest <- getFilesOfInterest ide
+        let fileEvents' =
+                [ f | f@(FileEvent uri _) <- fileEvents
+                , Just fp <- [uriToFilePath uri]
+                , not $ HM.member (toNormalizedFilePath fp) filesOfInterest
+                ]
+        modifyFileExists ide fileEvents'
+        resetFileStore ide fileEvents'
         setSomethingModified ide [] msg
 
   , mkPluginNotificationHandler LSP.SWorkspaceDidChangeWorkspaceFolders $
