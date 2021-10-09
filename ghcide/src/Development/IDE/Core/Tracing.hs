@@ -4,13 +4,15 @@
 module Development.IDE.Core.Tracing
     ( otTracedHandler
     , otTracedAction
-    , startTelemetry
+    , startProfilingTelemetry
     , measureMemory
     , getInstrumentCached
     , otTracedProvider
     , otSetUri
+    , otTracedGarbageCollection
     , withTrace
-    ,withEventTrace)
+    , withEventTrace
+    )
 where
 
 import           Control.Concurrent.Async       (Async, async)
@@ -33,6 +35,7 @@ import           Data.IORef                     (modifyIORef', newIORef,
                                                  readIORef, writeIORef)
 import           Data.String                    (IsString (fromString))
 import           Data.Text.Encoding             (encodeUtf8)
+import           Data.Typeable                  (TypeRep, typeOf)
 import           Debug.Trace.Flags              (userTracingEnabled)
 import           Development.IDE.Core.RuleTypes (GhcSession (GhcSession),
                                                  GhcSessionDeps (GhcSessionDeps),
@@ -51,9 +54,8 @@ import           Ide.Types                      (PluginId (..))
 import           Language.LSP.Types             (NormalizedFilePath,
                                                  fromNormalizedFilePath)
 import           Numeric.Natural                (Natural)
-import           OpenTelemetry.Eventlog         (Instrument, SpanInFlight (..),
-                                                 Synchronicity (Asynchronous),
-                                                 addEvent, beginSpan, endSpan,
+import           OpenTelemetry.Eventlog         (SpanInFlight (..), addEvent,
+                                                 beginSpan, endSpan,
                                                  mkValueObserver, observe,
                                                  setTag, withSpan, withSpan_)
 
@@ -128,6 +130,20 @@ otTracedAction key file mode result act
         (const act)
   | otherwise = act
 
+otTracedGarbageCollection :: (MonadMask f, MonadIO f, Show a) => f [a] -> f ()
+otTracedGarbageCollection act
+  | userTracingEnabled = void $
+      generalBracket
+        (beginSpan "GC")
+        (\sp ec -> do
+            case ec of
+                ExitCaseAbort -> setTag sp "aborted" "1"
+                ExitCaseException e -> setTag sp "exception" (pack $ show e)
+                ExitCaseSuccess res -> setTag sp "keys" (pack $ unlines $ map show res)
+            endSpan sp)
+        (const act)
+  | otherwise = void act
+
 #if MIN_VERSION_ghc(8,8,0)
 otTracedProvider :: MonadUnliftIO m => PluginId -> ByteString -> m a -> m a
 #else
@@ -141,17 +157,17 @@ otTracedProvider (PluginId pluginName) provider act
         runInIO act
   | otherwise = act
 
-startTelemetry :: Bool -> Logger -> Var Values -> IO ()
-startTelemetry allTheTime logger stateRef = do
+
+startProfilingTelemetry :: Bool -> Logger -> Var Values -> IO ()
+startProfilingTelemetry allTheTime logger stateRef = do
     instrumentFor <- getInstrumentCached
-    mapCountInstrument <- mkValueObserver "values map count"
 
     installSigUsr1Handler $ do
         logInfo logger "SIGUSR1 received: performing memory measurement"
-        performMeasurement logger stateRef instrumentFor mapCountInstrument
+        performMeasurement logger stateRef instrumentFor
 
     when allTheTime $ void $ regularly (1 * seconds) $
-        performMeasurement logger stateRef instrumentFor mapCountInstrument
+        performMeasurement logger stateRef instrumentFor
   where
         seconds = 1000000
 
@@ -162,11 +178,9 @@ startTelemetry allTheTime logger stateRef = do
 performMeasurement ::
   Logger ->
   Var Values ->
-  (Maybe Key -> IO OurValueObserver) ->
-  Instrument 'Asynchronous a m' ->
+  (Maybe String -> IO OurValueObserver) ->
   IO ()
-performMeasurement logger stateRef instrumentFor mapCountInstrument = do
-    withSpan_ "Measure length" $ readVar stateRef >>= observe mapCountInstrument . length
+performMeasurement logger stateRef instrumentFor = do
 
     values <- readVar stateRef
     let keys = typeOf GhcSession

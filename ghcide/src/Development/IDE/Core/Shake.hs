@@ -154,6 +154,8 @@ import           Data.IORef.Extra                       (atomicModifyIORef'_,
                                                          atomicModifyIORef_)
 import           Data.String                            (fromString)
 import           Data.Text                              (pack)
+import           Debug.Trace.Flags                      (userTracingEnabled)
+import           Development.IDE.Graph.Database         (shakeGetBuildStep)
 import qualified Development.IDE.Types.Exports          as ExportsMap
 import           HieDb.Types
 import           Ide.Plugin.Config
@@ -538,9 +540,28 @@ shakeOpen lspEnv defaultConfig logger debouncer
         { optOTMemoryProfiling = IdeOTMemoryProfiling otProfilingEnabled
         , optProgressStyle
         } <- getIdeOptionsIO shakeExtras
-    startTelemetry otProfilingEnabled logger $ state shakeExtras
+
+    void $ startTelemetry shakeDb shakeExtras
+    startProfilingTelemetry otProfilingEnabled logger $ state shakeExtras
 
     return ideState
+
+startTelemetry :: ShakeDatabase -> ShakeExtras -> IO (Async ())
+startTelemetry db ShakeExtras{..}
+  | userTracingEnabled = do
+    countKeys <- mkValueObserver "cached keys count"
+    countDirty <- mkValueObserver "dirty keys count"
+    countBuilds <- mkValueObserver "builds count"
+    regularly 1 $ do
+        readVar state >>= observe countKeys . Prelude.length
+        readIORef dirtyKeys >>= observe countDirty . Prelude.length
+        shakeGetBuildStep db >>= observe countBuilds
+
+  | otherwise = async (pure ())
+    where
+        regularly :: Seconds -> IO () -> IO (Async ())
+        regularly delay act = async $ forever (act >> sleep delay)
+
 
 -- | Must be called in the 'Initialized' handler and only once
 shakeSessionInit :: IdeState -> IO ()
@@ -729,7 +750,7 @@ getHiddenDiagnostics IdeState{shakeExtras = ShakeExtras{hiddenDiagnostics}} = do
     return $ getAllDiagnostics val
 
 garbageCollectDirtyKeys :: Action ()
-garbageCollectDirtyKeys = do
+garbageCollectDirtyKeys = otTracedGarbageCollection $ do
     start <- liftIO offsetTime
     dirtySet <- getDirtySet
     extras <- getShakeExtras
@@ -742,6 +763,8 @@ garbageCollectDirtyKeys = do
     t <- liftIO start
     when (n>0) $ liftIO $ logDebug (logger extras) $ T.pack $
         "Garbage collected " <> show n <> " keys (took " <> showDuration t <> ")"
+    return garbage
+
     where
         removeDirtyKey garbageAge st@(vmap,(!counter, keys)) (k, age)
             | age > garbageAge
