@@ -1,5 +1,6 @@
 {-# LANGUAGE DerivingStrategies        #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE PatternSynonyms           #-}
 {-# LANGUAGE TypeFamilies              #-}
 module Development.IDE.Types.Shake
   ( Q (..),
@@ -12,7 +13,7 @@ module Development.IDE.Types.Shake
     ShakeValue(..),
     currentValue,
     isBadDependency,
-  toShakeValue,encodeShakeValue,decodeShakeValue,toKey,toNoFileKey)
+  toShakeValue,encodeShakeValue,decodeShakeValue,toKey,toNoFileKey,fromKey,fromKeyType)
 where
 
 import           Control.DeepSeq
@@ -21,6 +22,7 @@ import qualified Data.ByteString.Char8                as BS
 import           Data.Dynamic
 import           Data.HashMap.Strict
 import           Data.Hashable
+import           Data.Typeable                        (cast)
 import           Data.Vector                          (Vector)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Graph                (Key (..), RuleResult)
@@ -29,6 +31,10 @@ import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           GHC.Generics
 import           Language.LSP.Types
+import           Type.Reflection                      (SomeTypeRep (SomeTypeRep),
+                                                       pattern App, pattern Con,
+                                                       typeOf, typeRep,
+                                                       typeRepTyCon)
 
 data Value v
     = Succeeded TextDocumentVersion v
@@ -63,6 +69,18 @@ isBadDependency x
 
 toKey :: Shake.ShakeValue k => k -> NormalizedFilePath -> Key
 toKey = (Key.) . curry Q
+
+fromKey :: Typeable k => Key -> Maybe (k, NormalizedFilePath)
+fromKey (Key k)
+  | Just (Q (k', f)) <- cast k = Just (k', f)
+  | otherwise = Nothing
+
+-- | fromKeyType (Q a) = typeOf a
+fromKeyType :: Key -> Maybe SomeTypeRep
+fromKeyType (Key k) = case typeOf k of
+    App (Con tc) a | tc == typeRepTyCon (typeRep @Q)
+        -> Just $ SomeTypeRep a
+    _ -> Nothing
 
 toNoFileKey :: (Show k, Typeable k, Eq k, Hashable k) => k -> Key
 toNoFileKey k = Key $ Q (k, emptyFilePath)

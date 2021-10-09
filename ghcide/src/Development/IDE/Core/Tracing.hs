@@ -41,9 +41,9 @@ import           Development.IDE.Graph          (Action)
 import           Development.IDE.Graph.Rule
 import           Development.IDE.Types.Location (Uri (..))
 import           Development.IDE.Types.Logger   (Logger, logDebug, logInfo)
-import           Development.IDE.Types.Shake    (Key (..), Value,
+import           Development.IDE.Types.Shake    (Value,
                                                  ValueWithDiagnostics (..),
-                                                 Values)
+                                                 Values, fromKeyType)
 import           Foreign.Storable               (Storable (sizeOf))
 import           HeapSize                       (recursiveSize, runHeapsize)
 import           Ide.PluginUtils                (installSigUsr1Handler)
@@ -169,16 +169,18 @@ performMeasurement logger stateRef instrumentFor mapCountInstrument = do
     withSpan_ "Measure length" $ readVar stateRef >>= observe mapCountInstrument . length
 
     values <- readVar stateRef
-    let keys = Key GhcSession
-             : Key GhcSessionDeps
+    let keys = typeOf GhcSession
+             : typeOf GhcSessionDeps
              -- TODO restore
-            --  : [ k | (_,k) <- HMap.keys values
-            --             -- do GhcSessionIO last since it closes over stateRef itself
-            --             , k /= Key GhcSession
-            --             , k /= Key GhcSessionDeps
-            --             , k /= Key GhcSessionIO
-            --  ]
-             : [Key GhcSessionIO]
+             : [ kty
+                | k <- HMap.keys values
+                , Just kty <- [fromKeyType k]
+                -- do GhcSessionIO last since it closes over stateRef itself
+                , kty /= typeOf GhcSession
+                , kty /= typeOf GhcSessionDeps
+                , kty /= typeOf GhcSessionIO
+             ]
+             ++ [typeOf GhcSessionIO]
     groupedForSharing <- evaluate (keys `using` seqList r0)
     measureMemory logger [groupedForSharing] instrumentFor stateRef
         `catch` \(e::SomeException) ->
@@ -187,7 +189,7 @@ performMeasurement logger stateRef instrumentFor mapCountInstrument = do
 
 type OurValueObserver = Int -> IO ()
 
-getInstrumentCached :: IO (Maybe Key -> IO OurValueObserver)
+getInstrumentCached :: IO (Maybe String -> IO OurValueObserver)
 getInstrumentCached = do
     instrumentMap <- newVar HMap.empty
     mapBytesInstrument <- mkValueObserver "value map size_bytes"
@@ -209,8 +211,8 @@ whenNothing act mb = mb >>= f
 
 measureMemory
     :: Logger
-    -> [[Key]]     -- ^ Grouping of keys for the sharing-aware analysis
-    -> (Maybe Key -> IO OurValueObserver)
+    -> [[TypeRep]]     -- ^ Grouping of keys for the sharing-aware analysis
+    -> (Maybe String -> IO OurValueObserver)
     -> Var Values
     -> IO ()
 measureMemory logger groups instrumentFor stateRef = withSpan_ "Measure Memory" $ do
@@ -225,7 +227,7 @@ measureMemory logger groups instrumentFor stateRef = withSpan_ "Measure Memory" 
           repeatUntilJust 3 $ do
           -- logDebug logger (fromString $ show $ map fst groupedValues)
           runHeapsize 25000000 $
-              forM_ groupedValues $ \(k,v) -> withSpan ("Measure " <> (fromString $ show k)) $ \sp -> do
+              forM_ groupedValues $ \(k,v) -> withSpan ("Measure " <> fromString k) $ \sp -> do
               acc <- liftIO $ newIORef 0
               observe <- liftIO $ instrumentFor $ Just k
               mapM_ (recursiveSize >=> \x -> liftIO (modifyIORef' acc (+ x))) v
@@ -245,12 +247,13 @@ measureMemory logger groups instrumentFor stateRef = withSpan_ "Measure Memory" 
             logInfo logger "Memory profiling could not be completed: increase the size of your nursery (+RTS -Ax) and try again"
 
     where
-        groupValues :: Values -> [ [(Key, [Value Dynamic])] ]
+        groupValues :: Values -> [ [(String, [Value Dynamic])] ]
         groupValues values =
             let !groupedValues =
-                    [ [ (k, vv)
-                      | k <- groupKeys
-                      , let vv = [] -- [ v | ((_,k'), ValueWithDiagnostics v _) <- HMap.toList values , k == k']
+                    [ [ (show ty, vv)
+                      | ty <- groupKeys
+                      , let vv = [ v | (fromKeyType -> Just kty, ValueWithDiagnostics v _) <- HMap.toList values
+                                     , kty == ty]
                       ]
                     | groupKeys <- groups
                     ]

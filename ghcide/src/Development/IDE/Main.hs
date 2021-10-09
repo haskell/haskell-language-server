@@ -29,6 +29,7 @@ import           Data.Text.Encoding                    (encodeUtf8)
 import qualified Data.Text.IO                          as T
 import           Data.Text.Lazy.Encoding               (decodeUtf8)
 import qualified Data.Text.Lazy.IO                     as LT
+import           Data.Typeable                         (typeOf)
 import           Data.Word                             (Word16)
 import           Development.IDE                       (Action, GhcVersion (..),
                                                         Priority (Debug), Rules,
@@ -79,7 +80,7 @@ import           Development.IDE.Types.Options         (IdeGhcSession,
                                                         defaultIdeOptions,
                                                         optModifyDynFlags,
                                                         optTesting)
-import           Development.IDE.Types.Shake           (Key (Key))
+import           Development.IDE.Types.Shake           (fromKeyType)
 import           GHC.Conc                              (getNumProcessors)
 import           GHC.IO.Encoding                       (setLocaleEncoding)
 import           GHC.IO.Handle                         (hDuplicate)
@@ -376,11 +377,10 @@ defaultMain Arguments{..} = do
                 printf "# Shake value store contents(%d):\n" (length values)
                 let keys =
                         nub $
-                            Key GhcSession :
-                            Key GhcSessionDeps :
-                            -- TODO restore
-                            -- [fromKey k | k <- HashMap.keys values, k /= Key GhcSessionIO] ++
-                            [Key GhcSessionIO]
+                            typeOf GhcSession :
+                            typeOf GhcSessionDeps :
+                            [kty | (fromKeyType -> Just kty) <- HashMap.keys values, kty /= typeOf GhcSessionIO] ++
+                            [typeOf GhcSessionIO]
                 measureMemory logger [keys] consoleObserver valuesRef
 
             unless (null failed) (exitWith $ ExitFailure (length failed))
