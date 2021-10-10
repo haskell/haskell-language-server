@@ -50,7 +50,14 @@ import           Development.IDE.Test                     (Cursor,
                                                            expectNoMoreDiagnostics,
                                                            flushMessages,
                                                            standardizeQuotes,
-                                                           waitForAction, getInterfaceFilesDir)
+                                                           getInterfaceFilesDir
+                                                           waitForAction,
+                                                           garbageCollectDirtyKeys,
+                                                           getStoredKeys,
+                                                           waitForTypecheck,
+                                                           getFilesOfInterest,
+                                                           waitForBuildQueue,
+                                                           garbageCollectNotVisitedKeys)
 import           Development.IDE.Test.Runfiles
 import qualified Development.IDE.Types.Diagnostics        as Diagnostics
 import           Development.IDE.Types.Location
@@ -172,6 +179,7 @@ main = do
     , clientSettingsTest
     , codeActionHelperFunctionTests
     , referenceTests
+    , garbageCollectionTests
     ]
 
 initializeResponseTests :: TestTree
@@ -718,7 +726,7 @@ cancellationTemplate (edit, undoEdit) mbKey = testCase (maybe "-" fst mbKey) $ r
       -- Now we edit the document and wait for the given key (if any)
       changeDoc doc [edit]
       whenJust mbKey $ \(key, expectedResult) -> do
-        Right WaitForIdeRuleResult{ideResultSuccess} <- waitForAction key doc
+        WaitForIdeRuleResult{ideResultSuccess} <- waitForAction key doc
         liftIO $ ideResultSuccess @?= expectedResult
 
       -- The 2nd edit cancels the active session and unbreaks the file
@@ -732,7 +740,7 @@ cancellationTemplate (edit, undoEdit) mbKey = testCase (maybe "-" fst mbKey) $ r
         runTestNoKick s = withTempDir $ \dir -> runInDir' dir "." "." ["--test-no-kick"] s
 
         typeCheck doc = do
-            Right WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" doc
+            WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" doc
             liftIO $ assertBool "The file should typecheck" ideResultSuccess
             -- wait for the debouncer to publish diagnostics if the rule runs
             liftIO $ sleep 0.2
@@ -5035,7 +5043,7 @@ retryFailedCradle = testSession' "retry failed" $ \dir -> do
   liftIO $ writeFile hiePath hieContents
   let aPath = dir </> "A.hs"
   doc <- createDoc aPath "haskell" "main = return ()"
-  Right WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" doc
+  WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" doc
   liftIO $ "Test assumption failed: cradle should error out" `assertBool` not ideResultSuccess
 
   -- Fix the cradle and typecheck again
@@ -5044,7 +5052,7 @@ retryFailedCradle = testSession' "retry failed" $ \dir -> do
   sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
           List [FileEvent (filePathToUri $ dir </> "hie.yaml") FcChanged ]
 
-  Right WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" doc
+  WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" doc
   liftIO $ "No joy after fixing the cradle" `assertBool` ideResultSuccess
 
 
@@ -5123,11 +5131,11 @@ simpleMultiTest = testCase "simple-multi-test" $ withLongTimeout $ runWithExtraF
         bPath = dir </> "b/B.hs"
     aSource <- liftIO $ readFileUtf8 aPath
     adoc <- createDoc aPath "haskell" aSource
-    Right WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" adoc
+    WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" adoc
     liftIO $ assertBool "A should typecheck" ideResultSuccess
     bSource <- liftIO $ readFileUtf8 bPath
     bdoc <- createDoc bPath "haskell" bSource
-    Right WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" bdoc
+    WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" bdoc
     liftIO $ assertBool "B should typecheck" ideResultSuccess
     locs <- getDefinitions bdoc (Position 2 7)
     let fooL = mkL (adoc ^. L.uri) 2 0 2 3
@@ -5831,6 +5839,86 @@ unitTests = do
            assertBool msg (resolution_us <= 1000)
      , Progress.tests
      ]
+
+garbageCollectionTests :: TestTree
+garbageCollectionTests = testGroup "garbage collection"
+  [ testGroup "dirty keys" (sharedGCtests garbageCollectDirtyKeys)
+  , testGroup "unvisited keys" (sharedGCtests garbageCollectNotVisitedKeys)
+  ]
+  where
+    sharedGCtests gc =
+        [ testSession' "are collected" $ \dir -> do
+            liftIO $ writeFile (dir </> "hie.yaml") "cradle: {direct: {arguments: [A]}}"
+            void $ generateGarbage "A" dir
+            garbage <- gc 0
+            liftIO $ assertBool "no garbage was found" $ not $ null garbage
+
+        , testSession' "are deleted from the state" $ \dir -> do
+            liftIO $ writeFile (dir </> "hie.yaml") "cradle: {direct: {arguments: [A]}}"
+            void $ generateGarbage "A" dir
+            keys0 <- getStoredKeys
+            garbage <- gc 0
+            liftIO $ assertBool "something is wrong with this test - no garbage found" $ not $ null garbage
+            keys1 <- getStoredKeys
+            liftIO $ assertBool "keys were not deleted from the state" (length keys1 < length keys0)
+
+        , testSession' "are not regenerated unless needed" $ \dir -> do
+            liftIO $ writeFile (dir </> "hie.yaml") "cradle: {direct: {arguments: [A.hs, B.hs]}}"
+            void $ generateGarbage "A" dir
+
+            keysA <- getStoredKeys
+
+            reopenB <- generateGarbage "B" dir
+            -- garbage collect A keys
+            garbage <- gc 1
+            liftIO $ assertBool "something is wrong with this test - no garbage found" $ not $ null garbage
+            keysB <- getStoredKeys
+            liftIO $ assertBool "something is wrong with this test - keys were not deleted from the state" (length keysB < length keysA)
+            ff <- getFilesOfInterest
+            liftIO $ assertBool ("something is wrong with this test - files of interest is " <> show ff) (null ff)
+
+            -- typecheck B again
+            _ <- reopenB
+
+            -- review the keys in store now to validate that A keys have not been regenerated
+            keysB' <- getStoredKeys
+            let regeneratedKeys = Set.filter (not . isExpected) $
+                    Set.intersection (Set.fromList garbage) (Set.fromList keysB')
+            liftIO $ regeneratedKeys @?= mempty
+
+        , testSession' "regenerate successfully" $ \dir -> do
+            liftIO $ writeFile (dir </> "hie.yaml") "cradle: {direct: {arguments: [A]}}"
+            reopenA <- generateGarbage "A" dir
+            garbage <- gc 0
+            liftIO $ assertBool "no garbage was found" $ not $ null garbage
+            let edit = T.unlines
+                        [ "module A where"
+                        , "a :: Bool"
+                        , "a = ()"
+                        ]
+            doc <- reopenA
+            changeDoc doc ([TextDocumentContentChangeEvent Nothing Nothing edit])
+            builds <- waitForTypecheck doc
+            liftIO $ assertBool "it still builds" builds
+            expectCurrentDiagnostics doc ([(DsError, (2,4), "Couldn't match expected type")])
+        ]
+
+    isExpected k = any (`isPrefixOf` k) ["GhcSessionIO"]
+
+    generateGarbage :: String -> FilePath -> Session(Session TextDocumentIdentifier)
+    generateGarbage modName dir = do
+        let fp = modName <> ".hs"
+            body = printf "module %s where" modName
+        doc <- createDoc fp "haskell" (T.pack body)
+        liftIO $ writeFile (dir </> fp) body
+        builds <- waitForTypecheck doc
+        liftIO $ assertBool "something is wrong with this test" builds
+        closeDoc doc
+        waitForBuildQueue
+        -- dirty the garbage
+        sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
+            List [FileEvent (filePathToUri $ dir </> modName <> ".hs") FcChanged ]
+        return $ openDoc (modName <> ".hs") "haskell"
 
 findResolution_us :: Int -> IO Int
 findResolution_us delay_us | delay_us >= 1000000 = error "Unable to compute timestamp resolution"

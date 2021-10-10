@@ -22,6 +22,12 @@ module Development.IDE.Test
   , waitForAction
   , getLastBuildKeys
   , getInterfaceFilesDir
+  , garbageCollectDirtyKeys
+  , getFilesOfInterest
+  , waitForTypecheck
+  , waitForBuildQueue
+  , getStoredKeys
+  , garbageCollectNotVisitedKeys
   ) where
 
 import           Control.Applicative.Combinators
@@ -34,7 +40,8 @@ import qualified Data.Map.Strict                 as Map
 import           Data.Maybe                      (fromJust)
 import qualified Data.Text                       as T
 import           Development.IDE.Plugin.Test     (TestRequest (..),
-                                                  WaitForIdeRuleResult)
+                                                  WaitForIdeRuleResult,
+                                                  ideResultSuccess)
 import           Development.IDE.Test.Diagnostic
 import           Language.LSP.Test               hiding (message)
 import qualified Language.LSP.Test               as LspTest
@@ -191,3 +198,21 @@ getLastBuildKeys = callTestPlugin GetLastBuildKeys
 
 getInterfaceFilesDir :: TextDocumentIdentifier -> Session (Either ResponseError FilePath)
 getInterfaceFilesDir TextDocumentIdentifier{_uri} = callTestPlugin (GetInterfaceFilesDir _uri)
+
+garbageCollectDirtyKeys :: Int -> Session [String]
+garbageCollectDirtyKeys age = callTestPlugin (GarbageCollectDirtyKeys age)
+
+garbageCollectNotVisitedKeys :: Int -> Session [String]
+garbageCollectNotVisitedKeys age = callTestPlugin (GarbageCollectNotVisitedKeys age)
+
+getStoredKeys :: Session [String]
+getStoredKeys = callTestPlugin GetStoredKeys
+
+waitForTypecheck :: TextDocumentIdentifier -> Session Bool
+waitForTypecheck tid = ideResultSuccess <$> waitForAction "typecheck" tid
+
+waitForBuildQueue :: Session ()
+waitForBuildQueue = callTestPlugin WaitForShakeQueue
+
+getFilesOfInterest :: Session [FilePath]
+getFilesOfInterest = callTestPlugin GetFilesOfInterest
