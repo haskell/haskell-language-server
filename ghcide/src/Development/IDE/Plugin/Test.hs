@@ -37,6 +37,7 @@ import qualified Language.LSP.Server            as LSP
 import           Language.LSP.Types
 import           System.Time.Extra
 
+type Age = Int
 data TestRequest
     = BlockSeconds Seconds           -- ^ :: Null
     | GetInterfaceFilesDir Uri       -- ^ :: String
@@ -44,6 +45,7 @@ data TestRequest
     | WaitForShakeQueue -- ^ Block until the Shake queue is empty. Returns Null
     | WaitForIdeRule String Uri      -- ^ :: WaitForIdeRuleResult
     | GetLastBuildKeys               -- ^ :: [String]
+    | GarbageCollectDirtyKeys Age    -- ^ :: [String] (list of keys collected)
     deriving Generic
     deriving anyclass (FromJSON, ToJSON)
 
@@ -93,6 +95,9 @@ testRequestHandler s (WaitForIdeRule k file) = liftIO $ do
 testRequestHandler s GetLastBuildKeys = liftIO $ do
     keys <- shakeLastBuildKeys $ shakeDb s
     return $ Right $ toJSON $ map show keys
+testRequestHandler s (GarbageCollectDirtyKeys age) = do
+    res <- liftIO $ runAction "garbage collect" s $ garbageCollectDirtyKeysOlderThan age
+    return $ Right $ toJSON $ map show res
 
 mkResponseError :: Text -> ResponseError
 mkResponseError msg = ResponseError InvalidRequest msg Nothing

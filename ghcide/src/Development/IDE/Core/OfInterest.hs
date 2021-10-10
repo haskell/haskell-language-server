@@ -113,4 +113,4 @@ kick = do
 
     -- if idle, perform garbage collection
     liftIO $ sleep 5
-    garbageCollectDirtyKeys
+    void garbageCollectDirtyKeys

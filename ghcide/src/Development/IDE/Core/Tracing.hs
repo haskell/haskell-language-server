@@ -130,9 +130,9 @@ otTracedAction key file mode result act
         (const act)
   | otherwise = act
 
-otTracedGarbageCollection :: (MonadMask f, MonadIO f, Show a) => f [a] -> f ()
+otTracedGarbageCollection :: (MonadMask f, MonadIO f, Show a) => f [a] -> f [a]
 otTracedGarbageCollection act
-  | userTracingEnabled = void $
+  | userTracingEnabled = fst <$>
       generalBracket
         (beginSpan "GC")
         (\sp ec -> do
@@ -142,7 +142,7 @@ otTracedGarbageCollection act
                 ExitCaseSuccess res -> setTag sp "keys" (pack $ unlines $ map show res)
             endSpan sp)
         (const act)
-  | otherwise = void act
+  | otherwise = act
 
 #if MIN_VERSION_ghc(8,8,0)
 otTracedProvider :: MonadUnliftIO m => PluginId -> ByteString -> m a -> m a

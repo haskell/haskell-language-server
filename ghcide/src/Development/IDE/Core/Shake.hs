@@ -73,8 +73,10 @@ module Development.IDE.Core.Shake(
     HieDb,
     HieDbWriter(..),
     VFSHandle(..),
-    addPersistentRule
-    ,garbageCollectDirtyKeys) where
+    addPersistentRule,
+    garbageCollectDirtyKeys,
+    garbageCollectDirtyKeysOlderThan,
+    ) where
 
 import           Control.Concurrent.Async
 import           Control.Concurrent.STM
@@ -749,15 +751,25 @@ getHiddenDiagnostics IdeState{shakeExtras = ShakeExtras{hiddenDiagnostics}} = do
     val <- readVar hiddenDiagnostics
     return $ getAllDiagnostics val
 
-garbageCollectDirtyKeys :: Action ()
-garbageCollectDirtyKeys = otTracedGarbageCollection $ do
+-- | Find and release old keys from the state Hashmap
+--   For the record, there are other state sources that this process does not release:
+--     * diagnostics store (normal, hidden and published)
+--     * position mapping store
+--     * indexing queue
+--     * exports map
+garbageCollectDirtyKeys :: Action [Key]
+garbageCollectDirtyKeys = do
+    IdeOptions{optMaxDirtyAge} <- getIdeOptions
+    garbageCollectDirtyKeysOlderThan optMaxDirtyAge
+
+garbageCollectDirtyKeysOlderThan :: Int -> Action [Key]
+garbageCollectDirtyKeysOlderThan maxAge = otTracedGarbageCollection $ do
     start <- liftIO offsetTime
     dirtySet <- getDirtySet
     extras <- getShakeExtras
-    IdeOptions{optMaxDirtyAge} <- getIdeOptions
 
     (n::Int, garbage) <- liftIO $ modifyVar (state extras) $ \vmap ->
-        evaluate $ foldl' (removeDirtyKey optMaxDirtyAge) (vmap, (0,[])) dirtySet
+        evaluate $ foldl' removeDirtyKey (vmap, (0,[])) dirtySet
     liftIO $ atomicModifyIORef_ (dirtyKeys extras) $ \x ->
         foldl' (flip HSet.insert) x garbage
     t <- liftIO start
@@ -766,8 +778,8 @@ garbageCollectDirtyKeys = otTracedGarbageCollection $ do
     return garbage
 
     where
-        removeDirtyKey garbageAge st@(vmap,(!counter, keys)) (k, age)
-            | age > garbageAge
+        removeDirtyKey st@(vmap,(!counter, keys)) (k, age)
+            | age > maxAge
             , (True, vmap') <- HMap.alterF (\prev -> (isJust prev, Nothing)) k vmap
             = (vmap', (counter+1, k:keys))
             | otherwise = st
