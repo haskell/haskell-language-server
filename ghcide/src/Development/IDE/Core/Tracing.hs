@@ -130,11 +130,11 @@ otTracedAction key file mode result act
         (const act)
   | otherwise = act
 
-otTracedGarbageCollection :: (MonadMask f, MonadIO f, Show a) => f [a] -> f [a]
-otTracedGarbageCollection act
+otTracedGarbageCollection :: (MonadMask f, MonadIO f, Show a) => ByteString -> f [a] -> f [a]
+otTracedGarbageCollection label act
   | userTracingEnabled = fst <$>
       generalBracket
-        (beginSpan "GC")
+        (beginSpan label)
         (\sp ec -> do
             case ec of
                 ExitCaseAbort -> setTag sp "aborted" "1"

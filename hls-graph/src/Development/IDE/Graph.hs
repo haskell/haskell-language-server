@@ -17,8 +17,9 @@ module Development.IDE.Graph(
     alwaysRerun,
     -- * Batching
     reschedule,
-    -- * Dirty keys
+    -- * Actions for inspecting the keys in the database
     getDirtySet,
+    getKeysAndVisitedAge,
     ) where
 
 import           Development.IDE.Graph.Database
