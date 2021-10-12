@@ -53,7 +53,6 @@ module Development.IDE.Core.Shake(
     GlobalIdeOptions(..),
     HLS.getClientConfig,
     getPluginConfig,
-    garbageCollect,
     knownTargets,
     setPriority,
     ideLogger,
@@ -75,7 +74,7 @@ module Development.IDE.Core.Shake(
     HieDbWriter(..),
     VFSHandle(..),
     addPersistentRule
-    ) where
+    ,garbageCollectDirtyKeys) where
 
 import           Control.Concurrent.Async
 import           Control.Concurrent.STM
@@ -94,7 +93,6 @@ import           Data.List.Extra                        (foldl', partition,
 import           Data.Map.Strict                        (Map)
 import qualified Data.Map.Strict                        as Map
 import           Data.Maybe
-import qualified Data.Set                               as Set
 import qualified Data.SortedList                        as SL
 import qualified Data.Text                              as T
 import           Data.Time
@@ -118,7 +116,10 @@ import           Development.IDE.GHC.Compat             (NameCache,
 import           Development.IDE.GHC.Orphans            ()
 import           Development.IDE.Graph                  hiding (ShakeValue)
 import qualified Development.IDE.Graph                  as Shake
-import           Development.IDE.Graph.Database
+import           Development.IDE.Graph.Database         (ShakeDatabase,
+                                                         shakeOpenDatabase,
+                                                         shakeProfileDatabase,
+                                                         shakeRunDatabaseForKeys)
 import           Development.IDE.Graph.Rule
 import           Development.IDE.Types.Action
 import           Development.IDE.Types.Diagnostics
@@ -327,10 +328,10 @@ lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
             MaybeT $ pure $ (,del,ver) <$> fromDynamic dv
           case mv of
             Nothing -> do
-                void $ modifyVar' state $ HMap.alter (alterValue $ Failed True) (file,Key k)
+                void $ modifyVar' state $ HMap.alter (alterValue $ Failed True) (toKey k file)
                 return Nothing
             Just (v,del,ver) -> do
-                void $ modifyVar' state $ HMap.alter (alterValue $ Stale (Just del) ver (toDyn v)) (file,Key k)
+                void $ modifyVar' state $ HMap.alter (alterValue $ Stale (Just del) ver (toDyn v)) (toKey k file)
                 return $ Just (v,addDelta del $ mappingForVersion allMappings file ver)
 
         -- We got a new stale value from the persistent rule, insert it in the map without affecting diagnostics
@@ -341,7 +342,7 @@ lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
           -- Something already succeeded before, leave it alone
           _        -> old
 
-    case HMap.lookup (file,Key k) hm of
+    case HMap.lookup (toKey k file) hm of
       Nothing -> readPersistent
       Just (ValueWithDiagnostics v _) -> case v of
         Succeeded ver (fromDynamic -> Just v) -> pure (Just (v, mappingForVersion allMappings file ver))
@@ -355,12 +356,6 @@ lastValue :: IdeRule k v => k -> NormalizedFilePath -> Action (Maybe (v, Positio
 lastValue key file = do
     s <- getShakeExtras
     liftIO $ lastValueIO s key file
-
-valueVersion :: Value v -> Maybe TextDocumentVersion
-valueVersion = \case
-    Succeeded ver _ -> Just ver
-    Stale _ ver _   -> Just ver
-    Failed _        -> Nothing
 
 mappingForVersion
     :: HMap.HashMap NormalizedUri (Map TextDocumentVersion (a, PositionMapping))
@@ -419,7 +414,7 @@ setValues :: IdeRule k v
           -> Vector FileDiagnostic
           -> IO ()
 setValues state key file val diags =
-    void $ modifyVar' state $ HMap.insert (file, Key key) (ValueWithDiagnostics (fmap toDyn val) diags)
+    void $ modifyVar' state $ HMap.insert (toKey key file) (ValueWithDiagnostics (fmap toDyn val) diags)
 
 
 -- | Delete the value stored for a given ide build key
@@ -430,7 +425,7 @@ deleteValue
   -> NormalizedFilePath
   -> IO ()
 deleteValue ShakeExtras{dirtyKeys, state} key file = do
-    void $ modifyVar' state $ HMap.delete (file, Key key)
+    void $ modifyVar' state $ HMap.delete (toKey key file)
     atomicModifyIORef_ dirtyKeys $ HSet.insert (toKey key file)
 
 recordDirtyKeys
@@ -454,7 +449,7 @@ getValues ::
   IO (Maybe (Value v, Vector FileDiagnostic))
 getValues state key file = do
     vs <- readVar state
-    case HMap.lookup (file, Key key) vs of
+    case HMap.lookup (toKey key file) vs of
         Nothing -> pure Nothing
         Just (ValueWithDiagnostics v diagsV) -> do
             let r = fmap (fromJust . fromDynamic @v) v
@@ -733,20 +728,26 @@ getHiddenDiagnostics IdeState{shakeExtras = ShakeExtras{hiddenDiagnostics}} = do
     val <- readVar hiddenDiagnostics
     return $ getAllDiagnostics val
 
--- | Clear the results for all files that do not match the given predicate.
-garbageCollect :: (NormalizedFilePath -> Bool) -> Action ()
-garbageCollect keep = do
-    ShakeExtras{state, diagnostics,hiddenDiagnostics,publishedDiagnostics,positionMapping} <- getShakeExtras
-    liftIO $
-        do newState <- modifyVar' state $ HMap.filterWithKey (\(file, _) _ -> keep file)
-           void $ modifyVar' diagnostics $ filterDiagnostics keep
-           void $ modifyVar' hiddenDiagnostics $ filterDiagnostics keep
-           void $ modifyVar' publishedDiagnostics $ HMap.filterWithKey (\uri _ -> keep (fromUri uri))
-           let versionsForFile =
-                   HMap.fromListWith Set.union $
-                   mapMaybe (\((file, _key), ValueWithDiagnostics v _) -> (filePathToUri' file,) . Set.singleton <$> valueVersion v) $
-                   HMap.toList newState
-           void $ modifyVar' positionMapping $ filterVersionMap versionsForFile
+garbageCollectDirtyKeys :: Action ()
+garbageCollectDirtyKeys = do
+    start <- liftIO offsetTime
+    dirtySet <- getDirtySet
+    extras <- getShakeExtras
+    IdeOptions{optMaxDirtyAge} <- getIdeOptions
+
+    (n::Int, garbage) <- liftIO $ modifyVar (state extras) $ \vmap ->
+        evaluate $ foldl' (removeDirtyKey optMaxDirtyAge) (vmap, (0,[])) dirtySet
+    liftIO $ atomicModifyIORef_ (dirtyKeys extras) $ \x ->
+        foldl' (flip HSet.insert) x garbage
+    t <- liftIO start
+    when (n>0) $ liftIO $ logDebug (logger extras) $ T.pack $
+        "Garbage collected " <> show n <> " keys (took " <> showDuration t <> ")"
+    where
+        removeDirtyKey garbageAge st@(vmap,(!counter, keys)) (k, age)
+            | age > garbageAge
+            , (True, vmap') <- HMap.alterF (\prev -> (isJust prev, Nothing)) k vmap
+            = (vmap', (counter+1, k:keys))
+            | otherwise = st
 
 -- | Define a new Rule without early cutoff
 define
@@ -1127,20 +1128,6 @@ getUriDiagnostics ::
 getUriDiagnostics uri ds =
     maybe [] getDiagnosticsFromStore $
     HMap.lookup uri ds
-
-filterDiagnostics ::
-    (NormalizedFilePath -> Bool) ->
-    DiagnosticStore ->
-    DiagnosticStore
-filterDiagnostics keep =
-    HMap.filterWithKey (\uri _ -> maybe True (keep . toNormalizedFilePath') $ uriToFilePath' $ fromNormalizedUri uri)
-
-filterVersionMap
-    :: HMap.HashMap NormalizedUri (Set.Set TextDocumentVersion)
-    -> HMap.HashMap NormalizedUri (Map TextDocumentVersion a)
-    -> HMap.HashMap NormalizedUri (Map TextDocumentVersion a)
-filterVersionMap =
-    HMap.intersectionWith $ \versionsToKeep versionMap -> Map.restrictKeys versionMap versionsToKeep
 
 updatePositionMapping :: IdeState -> VersionedTextDocumentIdentifier -> List TextDocumentContentChangeEvent -> IO ()
 updatePositionMapping IdeState{shakeExtras = ShakeExtras{positionMapping}} VersionedTextDocumentIdentifier{..} (List changes) = do

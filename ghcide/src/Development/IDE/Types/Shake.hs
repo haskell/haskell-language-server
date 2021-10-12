@@ -49,7 +49,7 @@ data ValueWithDiagnostics
   = ValueWithDiagnostics !(Value Dynamic) !(Vector FileDiagnostic)
 
 -- | The state of the all values and diagnostics
-type Values = HashMap (NormalizedFilePath, Key) ValueWithDiagnostics
+type Values = HashMap Key ValueWithDiagnostics
 
 -- | When we depend on something that reported an error, and we fail as a direct result, throw BadDependency
 --   which short-circuits the rest of the action

@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP             #-}
 {-# LANGUAGE NoApplicativeDo #-}
+{-# HLINT ignore #-}
 module Development.IDE.Core.Tracing
     ( otTracedHandler
     , otTracedAction
@@ -170,12 +171,14 @@ performMeasurement logger stateRef instrumentFor mapCountInstrument = do
     values <- readVar stateRef
     let keys = Key GhcSession
              : Key GhcSessionDeps
-             : [ k | (_,k) <- HMap.keys values
-                        -- do GhcSessionIO last since it closes over stateRef itself
-                        , k /= Key GhcSession
-                        , k /= Key GhcSessionDeps
-                        , k /= Key GhcSessionIO
-             ] ++ [Key GhcSessionIO]
+             -- TODO restore
+            --  : [ k | (_,k) <- HMap.keys values
+            --             -- do GhcSessionIO last since it closes over stateRef itself
+            --             , k /= Key GhcSession
+            --             , k /= Key GhcSessionDeps
+            --             , k /= Key GhcSessionIO
+            --  ]
+             : [Key GhcSessionIO]
     groupedForSharing <- evaluate (keys `using` seqList r0)
     measureMemory logger [groupedForSharing] instrumentFor stateRef
         `catch` \(e::SomeException) ->
@@ -247,7 +250,7 @@ measureMemory logger groups instrumentFor stateRef = withSpan_ "Measure Memory" 
             let !groupedValues =
                     [ [ (k, vv)
                       | k <- groupKeys
-                      , let vv = [ v | ((_,k'), ValueWithDiagnostics v _) <- HMap.toList values , k == k']
+                      , let vv = [] -- [ v | ((_,k'), ValueWithDiagnostics v _) <- HMap.toList values , k == k']
                       ]
                     | groupKeys <- groups
                     ]

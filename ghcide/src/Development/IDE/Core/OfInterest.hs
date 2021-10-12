@@ -33,6 +33,7 @@ import           Development.IDE.Core.Shake
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger
+import           System.Time.Extra                      (sleep)
 
 newtype OfInterestVar = OfInterestVar (Var (HashMap NormalizedFilePath FileOfInterestStatus))
 instance IsIdeGlobal OfInterestVar
@@ -109,3 +110,7 @@ kick = do
     void $ liftIO $ modifyVar' exportsMap (exportsMap' <>)
 
     liftIO $ progressUpdate progress KickCompleted
+
+    -- if idle, perform garbage collection
+    liftIO $ sleep 5
+    garbageCollectDirtyKeys

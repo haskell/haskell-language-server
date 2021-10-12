@@ -50,6 +50,8 @@ data IdeOptions = IdeOptions
     -- ^ Whether to enable additional lsp messages used by the test suite for checking invariants
   , optReportProgress     :: IdeReportProgress
     -- ^ Whether to report progress during long operations.
+  , optMaxDirtyAge        :: Int
+    -- ^ Age (in # builds) at which we collect dirty keys
   , optLanguageSyntax     :: String
     -- ^ the ```language to use
   , optNewColonConvention :: Bool
@@ -143,6 +145,7 @@ defaultIdeOptions session = IdeOptions
     ,optSkipProgress = defaultSkipProgress
     ,optProgressStyle = Explicit
     ,optRunSubset = True
+    ,optMaxDirtyAge = 100
     }
 
 defaultSkipProgress :: Typeable a => a -> Bool
