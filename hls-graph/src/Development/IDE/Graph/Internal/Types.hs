@@ -10,6 +10,7 @@ module Development.IDE.Graph.Internal.Types where
 import           Control.Applicative
 import           Control.Concurrent.Extra
 import           Control.Monad.Catch
+-- Needed in GHC 8.6.5
 import           Control.Monad.Fail
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Reader
@@ -81,8 +82,6 @@ data Database = Database {
     databaseExtra           :: Dynamic,
     databaseRules           :: TheRules,
     databaseStep            :: !(IORef Step),
-    -- | Nothing means that everything is dirty
-    databaseDirtySet        :: IORef (Maybe IntSet),
     -- Hold the lock while mutating Ids/Values
     databaseLock            :: !Lock,
     databaseIds             :: !(IORef (Intern Key)),
