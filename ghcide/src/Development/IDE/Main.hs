@@ -1,6 +1,7 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 module Development.IDE.Main
 (Arguments(..)
+,defaultArguments
 ,Command(..)
 ,IdeCommand(..)
 ,isLSP
@@ -31,7 +32,8 @@ import qualified Data.Text.Lazy.IO                     as LT
 import           Data.Word                             (Word16)
 import           Debug.Trace.Flags                     (userTracingEnabled)
 import           Development.IDE                       (Action, GhcVersion (..),
-                                                        Rules, ghcVersion,
+                                                        Priority (Debug), Rules,
+                                                        ghcVersion,
                                                         hDuplicateTo')
 import           Development.IDE.Core.Debouncer        (Debouncer,
                                                         newAsyncDebouncer)
@@ -68,6 +70,7 @@ import           Development.IDE.Session               (SessionLoadingOptions,
 import           Development.IDE.Types.Location        (NormalizedUri,
                                                         toNormalizedFilePath')
 import           Development.IDE.Types.Logger          (Logger (Logger),
+                                                        Priority (Info),
                                                         logDebug, logInfo)
 import           Development.IDE.Types.Options         (IdeGhcSession,
                                                         IdeOptions (optCheckParents, optCheckProject, optReportProgress, optRunSubset),
@@ -180,10 +183,13 @@ data Arguments = Arguments
     }
 
 instance Default Arguments where
-    def = Arguments
+    def = defaultArguments Info
+
+defaultArguments :: Priority -> Arguments
+defaultArguments priority = Arguments
         { argsOTMemoryProfiling = False
         , argCommand = LSP
-        , argsLogger = stderrLogger <> telemetryLogger
+        , argsLogger = stderrLogger priority <> telemetryLogger
         , argsRules = mainRule >> action kick
         , argsGhcidePlugin = mempty
         , argsHlsPlugins = pluginDescToIdePlugins Ghcide.descriptors
@@ -212,7 +218,7 @@ instance Default Arguments where
         }
 
 testing :: Arguments
-testing = def {
+testing = (defaultArguments Debug) {
     argsHlsPlugins = pluginDescToIdePlugins $
         idePluginsToPluginDesc (argsHlsPlugins def)
         ++ [Test.blockCommandDescriptor "block-command", Test.plugin],
@@ -224,10 +230,10 @@ testing = def {
 }
 
 -- | Cheap stderr logger that relies on LineBuffering
-stderrLogger :: IO Logger
-stderrLogger = do
+stderrLogger :: Priority -> IO Logger
+stderrLogger logLevel = do
     lock <- newLock
-    return $ Logger $ \p m -> withLock lock $
+    return $ Logger $ \p m -> when (p >= logLevel) $ withLock lock $
         T.hPutStrLn stderr $ "[" <> T.pack (show p) <> "] " <> m
 
 telemetryLogger :: IO Logger
