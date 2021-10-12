@@ -16,6 +16,7 @@ module Development.IDE.Graph.Internal.Action
 , reschedule
 , runActions
 , Development.IDE.Graph.Internal.Action.getDirtySet
+, getKeysAndVisitedAge
 ) where
 
 import           Control.Concurrent.Async
@@ -130,3 +131,8 @@ getDirtySet  :: Action [(Key, Int)]
 getDirtySet = do
     db <- getDatabase
     liftIO $ fmap snd <$> Development.IDE.Graph.Internal.Database.getDirtySet db
+
+getKeysAndVisitedAge :: Action [(Key, Int)]
+getKeysAndVisitedAge = do
+    db <- getDatabase
+    liftIO $ Development.IDE.Graph.Internal.Database.getKeysAndVisitAge db

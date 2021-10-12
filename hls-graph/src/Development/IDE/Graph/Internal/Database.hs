@@ -11,7 +11,7 @@
 {-# LANGUAGE TupleSections              #-}
 {-# LANGUAGE TypeFamilies               #-}
 
-module Development.IDE.Graph.Internal.Database (newDatabase, incDatabase, build, getDirtySet) where
+module Development.IDE.Graph.Internal.Database (newDatabase, incDatabase, build, getDirtySet, getKeysAndVisitAge) where
 
 import           Control.Concurrent.Async
 import           Control.Concurrent.Extra
@@ -188,6 +188,16 @@ getDirtySet db = do
         calcAgeStatus (Dirty x)=calcAge <$> x
         calcAgeStatus _         = Nothing
     return $ mapMaybe ((secondM.secondM) calcAgeStatus) dbContents
+
+-- | Returns ann approximation of the database keys,
+--   annotated with how long ago (in # builds) they were visited
+getKeysAndVisitAge :: Database -> IO [(Key, Int)]
+getKeysAndVisitAge db = do
+    values <- Ids.elems (databaseValues db)
+    Step curr <- readIORef (databaseStep db)
+    let keysWithVisitAge = mapMaybe (secondM (fmap getAge . getResult)) values
+        getAge Result{resultVisited = Step s} = curr - s
+    return keysWithVisitAge
 --------------------------------------------------------------------------------
 -- Lazy IO trick
 

@@ -9,6 +9,7 @@ module Development.IDE.Graph.Database(
     shakeRunDatabaseForKeys,
     shakeProfileDatabase,
     shakeGetBuildStep,
+    shakeGetDatabaseKeys,
     shakeGetDirtySet,
     shakeLastBuildKeys
     ) where
@@ -46,6 +47,11 @@ shakeRunDatabase = shakeRunDatabaseForKeys Nothing
 shakeGetDirtySet :: ShakeDatabase -> IO [(Key, Int)]
 shakeGetDirtySet (ShakeDatabase _ _ db) =
     fmap snd <$> Development.IDE.Graph.Internal.Database.getDirtySet db
+
+-- | Returns ann approximation of the database keys,
+--   annotated with how long ago (in # builds) they were visited
+shakeGetDatabaseKeys :: ShakeDatabase -> IO [(Key, Int)]
+shakeGetDatabaseKeys (ShakeDatabase _ _ db) = getKeysAndVisitAge db
 
 -- | Returns the build number
 shakeGetBuildStep :: ShakeDatabase -> IO Int
