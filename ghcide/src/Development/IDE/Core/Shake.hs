@@ -121,6 +121,7 @@ import           Development.IDE.GHC.Orphans            ()
 import           Development.IDE.Graph                  hiding (ShakeValue)
 import qualified Development.IDE.Graph                  as Shake
 import           Development.IDE.Graph.Database         (ShakeDatabase,
+                                                         shakeGetBuildStep,
                                                          shakeOpenDatabase,
                                                          shakeProfileDatabase,
                                                          shakeRunDatabaseForKeys)
@@ -159,7 +160,6 @@ import           Data.IORef.Extra                       (atomicModifyIORef'_,
 import           Data.String                            (fromString)
 import           Data.Text                              (pack)
 import           Debug.Trace.Flags                      (userTracingEnabled)
-import           Development.IDE.Graph.Database         (shakeGetBuildStep)
 import qualified Development.IDE.Types.Exports          as ExportsMap
 import           HieDb.Types
 import           Ide.Plugin.Config

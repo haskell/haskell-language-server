@@ -5897,10 +5897,10 @@ garbageCollectionTests = testGroup "garbage collection"
                         , "a = ()"
                         ]
             doc <- reopenA
-            changeDoc doc ([TextDocumentContentChangeEvent Nothing Nothing edit])
+            changeDoc doc [TextDocumentContentChangeEvent Nothing Nothing edit]
             builds <- waitForTypecheck doc
             liftIO $ assertBool "it still builds" builds
-            expectCurrentDiagnostics doc ([(DsError, (2,4), "Couldn't match expected type")])
+            expectCurrentDiagnostics doc [(DsError, (2,4), "Couldn't match expected type")]
         ]
 
     isExpected k = any (`isPrefixOf` k) ["GhcSessionIO"]
