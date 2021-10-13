@@ -35,6 +35,7 @@ import           Development.IDE.Types.Action
 import           Development.IDE.Types.HscEnvEq  (HscEnvEq (hscEnv))
 import           Development.IDE.Types.Location  (fromUri)
 import           GHC.Generics                    (Generic)
+import           Ide.Plugin.Config               (CheckParents)
 import           Ide.Types
 import qualified Language.LSP.Server             as LSP
 import           Language.LSP.Types
@@ -48,8 +49,8 @@ data TestRequest
     | WaitForShakeQueue -- ^ Block until the Shake queue is empty. Returns Null
     | WaitForIdeRule String Uri      -- ^ :: WaitForIdeRuleResult
     | GetLastBuildKeys               -- ^ :: [String]
-    | GarbageCollectDirtyKeys Age    -- ^ :: [String] (list of keys collected)
-    | GarbageCollectNotVisitedKeys Age -- ^ :: [String]
+    | GarbageCollectDirtyKeys CheckParents Age    -- ^ :: [String] (list of keys collected)
+    | GarbageCollectNotVisitedKeys CheckParents Age -- ^ :: [String]
     | GetStoredKeys                  -- ^ :: [String] (list of keys in store)
     | GetFilesOfInterest             -- ^ :: [FilePath]
     deriving Generic
@@ -101,11 +102,11 @@ testRequestHandler s (WaitForIdeRule k file) = liftIO $ do
 testRequestHandler s GetLastBuildKeys = liftIO $ do
     keys <- shakeLastBuildKeys $ shakeDb s
     return $ Right $ toJSON $ map show keys
-testRequestHandler s (GarbageCollectDirtyKeys age) = do
-    res <- liftIO $ runAction "garbage collect dirty" s $ garbageCollectDirtyKeysOlderThan age
+testRequestHandler s (GarbageCollectDirtyKeys parents age) = do
+    res <- liftIO $ runAction "garbage collect dirty" s $ garbageCollectDirtyKeysOlderThan age parents
     return $ Right $ toJSON $ map show res
-testRequestHandler s (GarbageCollectNotVisitedKeys age) = do
-    res <- liftIO $ runAction "garbage collect not visited" s $ garbageCollectKeysNotVisitedFor age
+testRequestHandler s (GarbageCollectNotVisitedKeys parents age) = do
+    res <- liftIO $ runAction "garbage collect not visited" s $ garbageCollectKeysNotVisitedFor age parents
     return $ Right $ toJSON $ map show res
 testRequestHandler s GetStoredKeys = do
     keys <- liftIO $ HM.keys <$> readVar (state $ shakeExtras s)

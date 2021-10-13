@@ -551,14 +551,16 @@ shakeOpen lspEnv defaultConfig logger debouncer
     return ideState
 
 startTelemetry :: ShakeDatabase -> ShakeExtras -> IO (Async ())
-startTelemetry db ShakeExtras{..}
+startTelemetry db extras@ShakeExtras{..}
   | userTracingEnabled = do
     countKeys <- mkValueObserver "cached keys count"
     countDirty <- mkValueObserver "dirty keys count"
     countBuilds <- mkValueObserver "builds count"
+    IdeOptions{optCheckParents} <- getIdeOptionsIO extras
+    checkParents <- optCheckParents
     regularly 1 $ do
-        readVar state >>= observe countKeys . Prelude.length
-        readIORef dirtyKeys >>= observe countDirty . Prelude.length
+        readVar state >>= observe countKeys . countRelevantKeys checkParents . HMap.keys
+        readIORef dirtyKeys >>= observe countDirty . countRelevantKeys checkParents . HSet.toList
         shakeGetBuildStep db >>= observe countBuilds
 
   | otherwise = async (pure ())
@@ -761,26 +763,28 @@ getHiddenDiagnostics IdeState{shakeExtras = ShakeExtras{hiddenDiagnostics}} = do
 --     * exports map
 garbageCollectDirtyKeys :: Action [Key]
 garbageCollectDirtyKeys = do
-    IdeOptions{optMaxDirtyAge} <- getIdeOptions
-    garbageCollectDirtyKeysOlderThan optMaxDirtyAge
+    IdeOptions{optCheckParents, optMaxDirtyAge} <- getIdeOptions
+    checkParents <- liftIO optCheckParents
+    garbageCollectDirtyKeysOlderThan optMaxDirtyAge checkParents
 
 garbageCollectKeysNotVisited :: Action [Key]
 garbageCollectKeysNotVisited = do
-    IdeOptions{optMaxDirtyAge} <- getIdeOptions
-    garbageCollectKeysNotVisitedFor optMaxDirtyAge
+    IdeOptions{optCheckParents, optMaxDirtyAge} <- getIdeOptions
+    checkParents <- liftIO optCheckParents
+    garbageCollectKeysNotVisitedFor optMaxDirtyAge checkParents
 
-garbageCollectDirtyKeysOlderThan :: Int -> Action [Key]
-garbageCollectDirtyKeysOlderThan maxAge = otTracedGarbageCollection "dirty GC" $ do
+garbageCollectDirtyKeysOlderThan :: Int -> CheckParents -> Action [Key]
+garbageCollectDirtyKeysOlderThan maxAge checkParents = otTracedGarbageCollection "dirty GC" $ do
     dirtySet <- getDirtySet
-    garbageCollectKeys "dirty GC" maxAge dirtySet
+    garbageCollectKeys "dirty GC" maxAge checkParents dirtySet
 
-garbageCollectKeysNotVisitedFor :: Int -> Action [Key]
-garbageCollectKeysNotVisitedFor maxAge = otTracedGarbageCollection "not visited GC" $ do
+garbageCollectKeysNotVisitedFor :: Int -> CheckParents -> Action [Key]
+garbageCollectKeysNotVisitedFor maxAge checkParents = otTracedGarbageCollection "not visited GC" $ do
     keys <- getKeysAndVisitedAge
-    garbageCollectKeys "not visited GC" maxAge keys
+    garbageCollectKeys "not visited GC" maxAge checkParents keys
 
-garbageCollectKeys :: String -> Int -> [(Key, Int)] -> Action [Key]
-garbageCollectKeys label maxAge agedKeys = do
+garbageCollectKeys :: String -> Int -> CheckParents -> [(Key, Int)] -> Action [Key]
+garbageCollectKeys label maxAge checkParents agedKeys = do
     start <- liftIO offsetTime
     extras <- getShakeExtras
     (n::Int, garbage) <- liftIO $ modifyVar (state extras) $ \vmap ->
@@ -795,9 +799,34 @@ garbageCollectKeys label maxAge agedKeys = do
     where
         removeDirtyKey st@(vmap,(!counter, keys)) (k, age)
             | age > maxAge
+            , fromKeyType k `notElem` preservedKeys checkParents
             , (True, vmap') <- HMap.alterF (\prev -> (isJust prev, Nothing)) k vmap
             = (vmap', (counter+1, k:keys))
             | otherwise = st
+
+countRelevantKeys :: CheckParents -> [Key] -> Int
+countRelevantKeys checkParents =
+    Prelude.length . filter ((`notElem` preservedKeys checkParents) . fromKeyType)
+
+preservedKeys :: CheckParents -> [Maybe TypeRep]
+preservedKeys checkParents = map Just $
+    -- always preserved
+    [ typeOf GetFileExists
+    , typeOf GetModificationTime
+    , typeOf IsFileOfInterest
+    , typeOf GhcSessionIO
+    , typeOf GetClientSettings
+    , typeOf AddWatchedFile
+    , typeOf GetKnownTargets
+    ]
+    ++ concat
+    -- preserved if CheckParents is enabled since we need to rebuild the ModuleGraph
+    [ [ typeOf GetModSummary
+       , typeOf GetModSummaryWithoutTimestamps
+       , typeOf GetLocatedImports
+       ]
+    | checkParents /= NeverCheck
+    ]
 
 -- | Define a new Rule without early cutoff
 define
