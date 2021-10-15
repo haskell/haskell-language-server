@@ -8,10 +8,16 @@ The Haskell tooling dream is near, we need your help!
 - Follow the [Haskell IDE team twitter account](https://twitter.com/IdeHaskell) for updates and help.
 - Join the [#haskell-tooling channel](https://discord.com/channels/280033776820813825/505370075402862594/808027763868827659) in the Functional Programming discord server. You can join the server via [this invitation](https://discord.gg/9spEdTNGrD).
 - Join the [haskell-tooling channel](https://matrix.to/#/#haskell-tooling:matrix.org) in [matrix](https://matrix.org/).
+- Visit [the project GitHub repo](https://github.com/haskell/haskell-language-server) to view the source code, or open issues or pull requests.
 
 ## Building haskell-language-server
 
-The project can be built with both `cabal build` and `stack build`.
+Clone the repository:
+```shell
+$ git clone https://github.com/haskell/haskell-language-server
+```
+
+The project can then be built with both `cabal build` and `stack build`.
 
 haskell-language-server can also be used with itself. We provide preset samples of `hie.yaml` for Cabal and Stack.
 
