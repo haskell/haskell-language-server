@@ -9,8 +9,10 @@
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE PolyKinds                  #-}
+{-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE UndecidableInstances       #-}
@@ -482,7 +484,9 @@ instance {-# OVERLAPPABLE #-} (HasTextDocument a doc, HasUri doc Uri) => HasTrac
 
 instance HasTracing Value
 instance HasTracing ExecuteCommandParams
-instance HasTracing DidChangeWatchedFilesParams
+instance HasTracing DidChangeWatchedFilesParams where
+  traceWithSpan sp DidChangeWatchedFilesParams{_changes} =
+      setTag sp "changes" (encodeUtf8 $ fromString $ show _changes)
 instance HasTracing DidChangeWorkspaceFoldersParams
 instance HasTracing DidChangeConfigurationParams
 instance HasTracing InitializeParams

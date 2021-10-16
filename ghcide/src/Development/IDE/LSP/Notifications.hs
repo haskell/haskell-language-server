@@ -83,15 +83,16 @@ descriptor plId = (defaultPluginDescriptor plId) { pluginNotificationHandlers = 
       \ide _ (DidChangeWatchedFilesParams (List fileEvents)) -> liftIO $ do
         -- See Note [File existence cache and LSP file watchers] which explains why we get these notifications and
         -- what we do with them
-        let msg = show fileEvents
-        logDebug (ideLogger ide) $ "Watched file events: " <> Text.pack msg
         -- filter out files of interest, since we already know all about those
+        -- filter also uris that do not map to filenames, since we cannot handle them
         filesOfInterest <- getFilesOfInterest ide
         let fileEvents' =
                 [ f | f@(FileEvent uri _) <- fileEvents
                 , Just fp <- [uriToFilePath uri]
                 , not $ HM.member (toNormalizedFilePath fp) filesOfInterest
                 ]
+        let msg = show fileEvents'
+        logDebug (ideLogger ide) $ "Watched file events: " <> Text.pack msg
         modifyFileExists ide fileEvents'
         resetFileStore ide fileEvents'
         setSomethingModified ide [] msg

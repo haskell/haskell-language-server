@@ -8,16 +8,15 @@ module Main(main) where
 import           Arguments                         (Arguments (..),
                                                     getArguments)
 import           Control.Monad.Extra               (unless, whenJust)
-import           Data.Default                      (Default (def))
 import           Data.Version                      (showVersion)
 import           Development.GitRev                (gitHash)
-import           Development.IDE                   (action)
+import           Development.IDE                   (Priority (Debug, Info),
+                                                    action)
 import           Development.IDE.Core.OfInterest   (kick)
 import           Development.IDE.Core.Rules        (mainRule)
 import           Development.IDE.Graph             (ShakeOptions (shakeThreads))
 import qualified Development.IDE.Main              as Main
 import qualified Development.IDE.Plugin.HLS.GhcIde as GhcIde
-import qualified Development.IDE.Plugin.Test       as Test
 import           Development.IDE.Types.Options
 import           Ide.Plugin.Config                 (Config (checkParents, checkProject))
 import           Ide.PluginUtils                   (pluginDescToIdePlugins)
@@ -51,7 +50,8 @@ main = do
 
     whenJust argsCwd IO.setCurrentDirectory
 
-    let arguments = if argsTesting then Main.testing else def
+    let logPriority = if argsVerbose then Debug else Info
+        arguments = if argsTesting then Main.testing else Main.defaultArguments logPriority
 
     Main.defaultMain arguments
         {Main.argCommand = argsCommand

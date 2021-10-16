@@ -1,6 +1,7 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 module Development.IDE.Main
 (Arguments(..)
+,defaultArguments
 ,Command(..)
 ,IdeCommand(..)
 ,isLSP
@@ -22,12 +23,17 @@ import           Data.Hashable                         (hashed)
 import           Data.List.Extra                       (intercalate, isPrefixOf,
                                                         nub, nubOrd, partition)
 import           Data.Maybe                            (catMaybes, isJust)
+import           Data.String
 import qualified Data.Text                             as T
+import           Data.Text.Encoding                    (encodeUtf8)
 import qualified Data.Text.IO                          as T
 import           Data.Text.Lazy.Encoding               (decodeUtf8)
 import qualified Data.Text.Lazy.IO                     as LT
+import           Data.Word                             (Word16)
+import           Debug.Trace.Flags                     (userTracingEnabled)
 import           Development.IDE                       (Action, GhcVersion (..),
-                                                        Rules, ghcVersion,
+                                                        Priority (Debug), Rules,
+                                                        ghcVersion,
                                                         hDuplicateTo')
 import           Development.IDE.Core.Debouncer        (Debouncer,
                                                         newAsyncDebouncer)
@@ -64,6 +70,7 @@ import           Development.IDE.Session               (SessionLoadingOptions,
 import           Development.IDE.Types.Location        (NormalizedUri,
                                                         toNormalizedFilePath')
 import           Development.IDE.Types.Logger          (Logger (Logger),
+                                                        Priority (Info),
                                                         logDebug, logInfo)
 import           Development.IDE.Types.Options         (IdeGhcSession,
                                                         IdeOptions (optCheckParents, optCheckProject, optReportProgress, optRunSubset),
@@ -94,6 +101,7 @@ import           Ide.Types                             (IdeCommand (IdeCommand),
                                                         ipMap)
 import qualified Language.LSP.Server                   as LSP
 import           Numeric.Natural                       (Natural)
+import           OpenTelemetry.Eventlog                (addEvent, withSpan)
 import           Options.Applicative                   hiding (action)
 import qualified System.Directory.Extra                as IO
 import           System.Exit                           (ExitCode (ExitFailure),
@@ -175,10 +183,13 @@ data Arguments = Arguments
     }
 
 instance Default Arguments where
-    def = Arguments
+    def = defaultArguments Info
+
+defaultArguments :: Priority -> Arguments
+defaultArguments priority = Arguments
         { argsOTMemoryProfiling = False
         , argCommand = LSP
-        , argsLogger = stderrLogger
+        , argsLogger = stderrLogger priority <> telemetryLogger
         , argsRules = mainRule >> action kick
         , argsGhcidePlugin = mempty
         , argsHlsPlugins = pluginDescToIdePlugins Ghcide.descriptors
@@ -207,7 +218,7 @@ instance Default Arguments where
         }
 
 testing :: Arguments
-testing = def {
+testing = (defaultArguments Debug) {
     argsHlsPlugins = pluginDescToIdePlugins $
         idePluginsToPluginDesc (argsHlsPlugins def)
         ++ [Test.blockCommandDescriptor "block-command", Test.plugin],
@@ -219,11 +230,21 @@ testing = def {
 }
 
 -- | Cheap stderr logger that relies on LineBuffering
-stderrLogger :: IO Logger
-stderrLogger = do
+stderrLogger :: Priority -> IO Logger
+stderrLogger logLevel = do
     lock <- newLock
-    return $ Logger $ \p m -> withLock lock $
+    return $ Logger $ \p m -> when (p >= logLevel) $ withLock lock $
         T.hPutStrLn stderr $ "[" <> T.pack (show p) <> "] " <> m
+
+telemetryLogger :: IO Logger
+telemetryLogger
+    | userTracingEnabled = return $ Logger $ \p m ->
+        withSpan "log" $ \sp ->
+            addEvent sp (fromString $ "Log " <> show p) (encodeUtf8 $ trim m)
+    | otherwise = mempty
+    where
+        -- eventlog message size is limited by EVENT_PAYLOAD_SIZE_MAX = STG_WORD16_MAX
+        trim = T.take (fromIntegral(maxBound :: Word16) - 10)
 
 defaultMain :: Arguments -> IO ()
 defaultMain Arguments{..} = do
