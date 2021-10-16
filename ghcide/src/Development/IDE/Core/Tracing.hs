@@ -59,6 +59,16 @@ import           OpenTelemetry.Eventlog         (SpanInFlight (..), addEvent,
                                                  mkValueObserver, observe,
                                                  setTag, withSpan, withSpan_)
 
+#if MIN_VERSION_ghc(8,8,0)
+otTracedProvider :: MonadUnliftIO m => PluginId -> ByteString -> m a -> m a
+otTracedGarbageCollection :: (MonadMask f, MonadIO f, Show a) => ByteString -> f [a] -> f [a]
+withEventTrace :: (MonadMask m, MonadIO m) => String -> ((ByteString -> ByteString -> m ()) -> m a) -> m a
+#else
+otTracedProvider :: MonadUnliftIO m => PluginId -> String -> m a -> m a
+otTracedGarbageCollection :: (MonadMask f, MonadIO f, Show a) => String -> f [a] -> f [a]
+withEventTrace :: (MonadMask m, MonadIO m) => String -> ((String -> ByteString -> m ()) -> m a) -> m a
+#endif
+
 withTrace :: (MonadMask m, MonadIO m) =>
     String -> ((String -> String -> m ()) -> m a) -> m a
 withTrace name act
@@ -68,11 +78,6 @@ withTrace name act
       act setSpan'
   | otherwise = act (\_ _ -> pure ())
 
-#if MIN_VERSION_ghc(8,8,0)
-withEventTrace :: (MonadMask m, MonadIO m) => String -> ((ByteString -> ByteString -> m ()) -> m a) -> m a
-#else
-withEventTrace :: (MonadMask m, MonadIO m) => String -> ((String -> ByteString -> m ()) -> m a) -> m a
-#endif
 withEventTrace name act
   | userTracingEnabled
   = withSpan (fromString name) $ \sp -> do
@@ -130,7 +135,6 @@ otTracedAction key file mode result act
         (const act)
   | otherwise = act
 
-otTracedGarbageCollection :: (MonadMask f, MonadIO f, Show a) => ByteString -> f [a] -> f [a]
 otTracedGarbageCollection label act
   | userTracingEnabled = fst <$>
       generalBracket
@@ -144,11 +148,6 @@ otTracedGarbageCollection label act
         (const act)
   | otherwise = act
 
-#if MIN_VERSION_ghc(8,8,0)
-otTracedProvider :: MonadUnliftIO m => PluginId -> ByteString -> m a -> m a
-#else
-otTracedProvider :: MonadUnliftIO m => PluginId -> String -> m a -> m a
-#endif
 otTracedProvider (PluginId pluginName) provider act
   | userTracingEnabled = do
     runInIO <- askRunInIO
