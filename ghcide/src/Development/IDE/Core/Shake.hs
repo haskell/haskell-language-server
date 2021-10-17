@@ -1001,8 +1001,8 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
                 v <- liftIO $ getValues state key file
                 case v of
                     -- No changes in the dependencies and we have
-                    -- an existing result.
-                    Just (v, diags) -> do
+                    -- an existing successful result.
+                    Just (v@Succeeded{}, diags) -> do
                         when doDiagnostics $
                             updateFileDiagnostics file (Key key) extras $ map (\(_,y,z) -> (y,z)) $ Vector.toList diags
                         return $ Just $ RunResult ChangedNothing old $ A v
