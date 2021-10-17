@@ -213,7 +213,12 @@ library
         Development.IDE.Types.Action
         Text.Fuzzy.Parallel
 
-    ghc-options: -Wall -Wno-name-shadowing -Wincomplete-uni-patterns -Wno-unticked-promoted-constructors
+    ghc-options:
+                -Wall
+                -Wno-name-shadowing
+                -Wincomplete-uni-patterns
+                -Wno-unticked-promoted-constructors
+                -fno-ignore-asserts
 
     if flag(ghc-patched-unboxed-bytecode)
       cpp-options: -DGHC_PATCHED_UNBOXED_BYTECODE
