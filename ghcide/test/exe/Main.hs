@@ -56,8 +56,7 @@ import           Development.IDE.Test                     (Cursor,
                                                            getStoredKeys,
                                                            waitForTypecheck,
                                                            getFilesOfInterest,
-                                                           waitForBuildQueue,
-                                                           garbageCollectNotVisitedKeys)
+                                                           waitForBuildQueue)
 import           Development.IDE.Test.Runfiles
 import qualified Development.IDE.Types.Diagnostics        as Diagnostics
 import           Development.IDE.Types.Location
@@ -5843,7 +5842,6 @@ unitTests = do
 garbageCollectionTests :: TestTree
 garbageCollectionTests = testGroup "garbage collection"
   [ testGroup "dirty keys" (sharedGCtests $ garbageCollectDirtyKeys CheckOnSaveAndClose)
-  , testGroup "unvisited keys" (sharedGCtests $ garbageCollectNotVisitedKeys CheckOnSaveAndClose)
   ]
   where
     sharedGCtests gc =
@@ -5866,19 +5864,19 @@ garbageCollectionTests = testGroup "garbage collection"
             liftIO $ writeFile (dir </> "hie.yaml") "cradle: {direct: {arguments: [A.hs, B.hs]}}"
             void $ generateGarbage "A" dir
 
-            keysA <- getStoredKeys
-
             reopenB <- generateGarbage "B" dir
             -- garbage collect A keys
-            garbage <- gc 1
+            keysBeforeGC <- getStoredKeys
+            garbage <- gc 2
             liftIO $ assertBool "something is wrong with this test - no garbage found" $ not $ null garbage
-            keysB <- getStoredKeys
-            liftIO $ assertBool "something is wrong with this test - keys were not deleted from the state" (length keysB < length keysA)
+            keysAfterGC <- getStoredKeys
+            liftIO $ assertBool "something is wrong with this test - keys were not deleted from the state" (length keysAfterGC < length keysBeforeGC)
             ff <- getFilesOfInterest
             liftIO $ assertBool ("something is wrong with this test - files of interest is " <> show ff) (null ff)
 
             -- typecheck B again
-            _ <- reopenB
+            doc <- reopenB
+            void $ waitForTypecheck doc
 
             -- review the keys in store now to validate that A keys have not been regenerated
             keysB' <- getStoredKeys
@@ -5918,6 +5916,7 @@ garbageCollectionTests = testGroup "garbage collection"
         -- dirty the garbage
         sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
             List [FileEvent (filePathToUri $ dir </> modName <> ".hs") FcChanged ]
+
         return $ openDoc (modName <> ".hs") "haskell"
 
 findResolution_us :: Int -> IO Int

@@ -76,8 +76,6 @@ module Development.IDE.Core.Shake(
     addPersistentRule,
     garbageCollectDirtyKeys,
     garbageCollectDirtyKeysOlderThan,
-    garbageCollectKeysNotVisited,
-    garbageCollectKeysNotVisitedFor
     ) where
 
 import           Control.Concurrent.Async
@@ -767,21 +765,10 @@ garbageCollectDirtyKeys = do
     checkParents <- liftIO optCheckParents
     garbageCollectDirtyKeysOlderThan optMaxDirtyAge checkParents
 
-garbageCollectKeysNotVisited :: Action [Key]
-garbageCollectKeysNotVisited = do
-    IdeOptions{optCheckParents, optMaxDirtyAge} <- getIdeOptions
-    checkParents <- liftIO optCheckParents
-    garbageCollectKeysNotVisitedFor optMaxDirtyAge checkParents
-
 garbageCollectDirtyKeysOlderThan :: Int -> CheckParents -> Action [Key]
 garbageCollectDirtyKeysOlderThan maxAge checkParents = otTracedGarbageCollection "dirty GC" $ do
     dirtySet <- getDirtySet
     garbageCollectKeys "dirty GC" maxAge checkParents dirtySet
-
-garbageCollectKeysNotVisitedFor :: Int -> CheckParents -> Action [Key]
-garbageCollectKeysNotVisitedFor maxAge checkParents = otTracedGarbageCollection "not visited GC" $ do
-    keys <- getKeysAndVisitedAge
-    garbageCollectKeys "not visited GC" maxAge checkParents keys
 
 garbageCollectKeys :: String -> Int -> CheckParents -> [(Key, Int)] -> Action [Key]
 garbageCollectKeys label maxAge checkParents agedKeys = do

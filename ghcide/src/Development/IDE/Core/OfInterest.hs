@@ -111,9 +111,6 @@ kick = do
 
     liftIO $ progressUpdate progress KickCompleted
 
-    -- if idle, perform garbage collection
+    -- if idle, perform garbage collection of dirty keys
     liftIO $ sleep 5
     void garbageCollectDirtyKeys
-
-    -- if still idle, collect unpopular keys
-    void garbageCollectKeysNotVisited
