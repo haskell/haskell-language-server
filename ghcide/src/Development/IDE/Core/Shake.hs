@@ -109,11 +109,12 @@ import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.ProgressReporting
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Tracing
-import           Development.IDE.GHC.Compat             (NameCacheUpdater (..),
-                                                         upNameCache, NameCache,
+import           Development.IDE.GHC.Compat             (NameCache,
+                                                         NameCacheUpdater (..),
                                                          initNameCache,
+                                                         knownKeyNames,
                                                          mkSplitUniqSupply,
-                                                         knownKeyNames)
+                                                         upNameCache)
 import           Development.IDE.GHC.Orphans            ()
 import           Development.IDE.Graph                  hiding (ShakeValue)
 import qualified Development.IDE.Graph                  as Shake
@@ -914,7 +915,10 @@ defineEarlyCutoff' doDiagnostics key file old mode action = do
                             updateFileDiagnostics file (Key key) extras $ map (\(_,y,z) -> (y,z)) $ Vector.toList diags
                         return $ Just $ RunResult ChangedNothing old $ A v
                     _ -> return Nothing
-            _ -> return Nothing
+            _ ->
+                -- assert that a "clean" rule is never a cache miss
+                -- as this is likely a bug in the dirty key tracking
+                assert (mode /= RunDependenciesSame) $ return Nothing
         res <- case val of
             Just res -> return res
             Nothing -> do
