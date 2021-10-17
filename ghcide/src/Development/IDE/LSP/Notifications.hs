@@ -87,15 +87,17 @@ descriptor plId = (defaultPluginDescriptor plId) { pluginNotificationHandlers = 
         -- filter also uris that do not map to filenames, since we cannot handle them
         filesOfInterest <- getFilesOfInterest ide
         let fileEvents' =
-                [ f | f@(FileEvent uri _) <- fileEvents
+                [ (nfp, event) | (FileEvent uri event) <- fileEvents
                 , Just fp <- [uriToFilePath uri]
-                , not $ HM.member (toNormalizedFilePath fp) filesOfInterest
+                , let nfp = toNormalizedFilePath fp
+                , not $ HM.member nfp filesOfInterest
                 ]
-        let msg = show fileEvents'
-        logDebug (ideLogger ide) $ "Watched file events: " <> Text.pack msg
-        modifyFileExists ide fileEvents'
-        resetFileStore ide fileEvents'
-        setSomethingModified ide [] msg
+        unless (null fileEvents') $ do
+            let msg = show fileEvents'
+            logDebug (ideLogger ide) $ "Watched file events: " <> Text.pack msg
+            modifyFileExists ide fileEvents'
+            resetFileStore ide fileEvents'
+            setSomethingModified ide [] msg
 
   , mkPluginNotificationHandler LSP.SWorkspaceDidChangeWorkspaceFolders $
       \ide _ (DidChangeWorkspaceFoldersParams events) -> liftIO $ do
