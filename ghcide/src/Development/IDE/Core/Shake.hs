@@ -786,17 +786,18 @@ garbageCollectKeys label maxAge checkParents agedKeys = do
     where
         removeDirtyKey st@(vmap,(!counter, keys)) (k, age)
             | age > maxAge
-            , fromKeyType k `notElem` preservedKeys checkParents
+            , Just kt <- fromKeyType k
+            , not(kt `HSet.member` preservedKeys checkParents)
             , (True, vmap') <- HMap.alterF (\prev -> (isJust prev, Nothing)) k vmap
             = (vmap', (counter+1, k:keys))
             | otherwise = st
 
 countRelevantKeys :: CheckParents -> [Key] -> Int
 countRelevantKeys checkParents =
-    Prelude.length . filter ((`notElem` preservedKeys checkParents) . fromKeyType)
+    Prelude.length . filter (maybe False (not . (`HSet.member` preservedKeys checkParents)) . fromKeyType)
 
-preservedKeys :: CheckParents -> [Maybe TypeRep]
-preservedKeys checkParents = map Just $
+preservedKeys :: CheckParents -> HashSet TypeRep
+preservedKeys checkParents = HSet.fromList $
     -- always preserved
     [ typeOf GetFileExists
     , typeOf GetModificationTime
