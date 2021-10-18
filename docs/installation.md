@@ -55,6 +55,11 @@ sudo pacman -S haskell-language-server
 In this case, `haskell-language-server` is compiled against the GHC distributed to Arch Linux, so you will need maintain a system wide Haskell development environment, and install GHC from `pacman` as well.
 See [ArchWiki](https://wiki.archlinux.org/index.php/Haskell) for the details of Haskell infrastructure on Arch Linux.
 
+## Fedora
+
+Binary packages for Fedora are available from [this Copr repo](https://copr.fedorainfracloud.org/coprs/petersen/haskell-language-server),
+built against the official Fedora ghc package.
+
 ## FreeBSD
 
 HLS is available for installation from official binary packages. Use
