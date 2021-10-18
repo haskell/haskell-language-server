@@ -8,6 +8,7 @@ module Development.IDE.Core.Tracing
     , getInstrumentCached
     , otTracedProvider
     , otSetUri
+    , withTrace
     )
 where
 
@@ -19,7 +20,7 @@ import           Control.Exception.Safe         (SomeException, catch,
                                                  generalBracket)
 import           Control.Monad                  (forM_, forever, void, when,
                                                  (>=>))
-import           Control.Monad.Catch            (ExitCase (..))
+import           Control.Monad.Catch            (ExitCase (..), MonadMask)
 import           Control.Monad.Extra            (whenJust)
 import           Control.Monad.IO.Unlift
 import           Control.Seq                    (r0, seqList, seqTuple2, using)
@@ -56,6 +57,15 @@ import           OpenTelemetry.Eventlog         (Instrument, SpanInFlight (..),
                                                  addEvent, beginSpan, endSpan,
                                                  mkValueObserver, observe,
                                                  setTag, withSpan, withSpan_)
+
+withTrace :: (MonadMask m, MonadIO m) =>
+    String -> ((String -> String -> m ()) -> m a) -> m a
+withTrace name act
+  | userTracingEnabled
+  = withSpan (fromString name) $ \sp -> do
+      let setSpan' k v = setTag sp (fromString k) (fromString v)
+      act setSpan'
+  | otherwise = act (\_ _ -> pure ())
 
 -- | Trace a handler using OpenTelemetry. Adds various useful info into tags in the OpenTelemetry span.
 otTracedHandler
