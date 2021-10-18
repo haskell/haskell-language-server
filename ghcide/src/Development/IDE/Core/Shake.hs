@@ -109,11 +109,12 @@ import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.ProgressReporting
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Tracing
-import           Development.IDE.GHC.Compat             (NameCacheUpdater (..),
-                                                         upNameCache, NameCache,
+import           Development.IDE.GHC.Compat             (NameCache,
+                                                         NameCacheUpdater (..),
                                                          initNameCache,
+                                                         knownKeyNames,
                                                          mkSplitUniqSupply,
-                                                         knownKeyNames)
+                                                         upNameCache)
 import           Development.IDE.GHC.Orphans            ()
 import           Development.IDE.Graph                  hiding (ShakeValue)
 import qualified Development.IDE.Graph                  as Shake
@@ -150,6 +151,7 @@ import           Data.HashSet                           (HashSet)
 import qualified Data.HashSet                           as HSet
 import           Data.IORef.Extra                       (atomicModifyIORef'_,
                                                          atomicModifyIORef_)
+import           Data.String                            (fromString)
 import           Data.Text                              (pack)
 import qualified Development.IDE.Types.Exports          as ExportsMap
 import           HieDb.Types
@@ -546,7 +548,7 @@ shakeOpen lspEnv defaultConfig logger debouncer
 -- | Must be called in the 'Initialized' handler and only once
 shakeSessionInit :: IdeState -> IO ()
 shakeSessionInit IdeState{..} = do
-    initSession <- newSession shakeExtras shakeDb []
+    initSession <- newSession shakeExtras shakeDb [] "shakeSessionInit"
     putMVar shakeSession initSession
 
 shakeShut :: IdeState -> IO ()
@@ -606,7 +608,7 @@ shakeRestart IdeState{..} reason acts =
         -- between spawning the new thread and updating shakeSession.
         -- See https://github.com/haskell/ghcide/issues/79
         (\() -> do
-          (,()) <$> newSession shakeExtras shakeDb acts)
+          (,()) <$> newSession shakeExtras shakeDb acts reason)
 
 notifyTestingLogMessage :: ShakeExtras -> T.Text -> IO ()
 notifyTestingLogMessage extras msg = do
@@ -643,8 +645,9 @@ newSession
     :: ShakeExtras
     -> ShakeDatabase
     -> [DelayedActionInternal]
+    -> String
     -> IO ShakeSession
-newSession extras@ShakeExtras{..} shakeDb acts = do
+newSession extras@ShakeExtras{..} shakeDb acts reason = do
     IdeOptions{optRunSubset} <- getIdeOptionsIO extras
     reenqueued <- atomically $ peekInProgress actionQueue
     allPendingKeys <-
@@ -673,6 +676,7 @@ newSession extras@ShakeExtras{..} shakeDb acts = do
         -- The inferred type signature doesn't work in ghc >= 9.0.1
         workRun :: (forall b. IO b -> IO b) -> IO (IO ())
         workRun restore = withSpan "Shake session" $ \otSpan -> do
+          setTag otSpan "_reason" (fromString reason)
           whenJust allPendingKeys $ \kk -> setTag otSpan "keys" (BS8.pack $ unlines $ map show $ toList kk)
           let keysActs = pumpActionThread otSpan : map (run otSpan) (reenqueued ++ acts)
           res <- try @SomeException $
@@ -911,7 +915,10 @@ defineEarlyCutoff' doDiagnostics key file old mode action = do
                             updateFileDiagnostics file (Key key) extras $ map (\(_,y,z) -> (y,z)) $ Vector.toList diags
                         return $ Just $ RunResult ChangedNothing old $ A v
                     _ -> return Nothing
-            _ -> return Nothing
+            _ ->
+                -- assert that a "clean" rule is never a cache miss
+                -- as this is likely a bug in the dirty key tracking
+                assert (mode /= RunDependenciesSame) $ return Nothing
         res <- case val of
             Just res -> return res
             Nothing -> do

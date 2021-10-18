@@ -32,14 +32,12 @@ import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import qualified Data.ByteString                              as BS
 import           Data.Either.Extra
-import qualified Data.HashMap.Strict                          as HM
 import qualified Data.Map.Strict                              as Map
 import           Data.Maybe
 import qualified Data.Rope.UTF16                              as Rope
 import qualified Data.Text                                    as T
 import           Data.Time
 import           Data.Time.Clock.POSIX
-import           Development.IDE.Core.OfInterest              (OfInterestVar (..))
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Orphans                  ()
@@ -74,12 +72,9 @@ import           Language.LSP.Server                          hiding
 import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.Types                           (DidChangeWatchedFilesRegistrationOptions (DidChangeWatchedFilesRegistrationOptions),
                                                                FileChangeType (FcChanged),
-                                                               FileEvent (FileEvent),
                                                                FileSystemWatcher (..),
                                                                WatchKind (..),
-                                                               _watchers,
-                                                               toNormalizedFilePath,
-                                                               uriToFilePath)
+                                                               _watchers)
 import qualified Language.LSP.Types                           as LSP
 import qualified Language.LSP.Types.Capabilities              as LSP
 import           Language.LSP.VFS
@@ -170,18 +165,16 @@ resetInterfaceStore state f = do
     deleteValue state GetModificationTime f
 
 -- | Reset the GetModificationTime state of watched files
-resetFileStore :: IdeState -> [FileEvent] -> IO ()
+--   Assumes the list does not include any FOIs
+resetFileStore :: IdeState -> [(NormalizedFilePath, FileChangeType)] -> IO ()
 resetFileStore ideState changes = mask $ \_ -> do
     -- we record FOIs document versions in all the stored values
     -- so NEVER reset FOIs to avoid losing their versions
-    OfInterestVar foisVar <- getIdeGlobalExtras (shakeExtras ideState)
-    fois <- readVar foisVar
-    forM_ changes $ \(FileEvent uri c) -> do
+    -- FOI filtering is done by the caller (LSP Notification handler)
+    forM_ changes $ \(nfp, c) -> do
         case c of
             FcChanged
-              | Just f <- uriToFilePath uri
-              , nfp <- toNormalizedFilePath f
-              , not $ HM.member nfp fois
+            --  already checked elsewhere |  not $ HM.member nfp fois
               -> deleteValue (shakeExtras ideState) GetModificationTime nfp
             _ -> pure ()
 

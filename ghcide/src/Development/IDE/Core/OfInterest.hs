@@ -80,7 +80,7 @@ addFileOfInterest state f v = do
     OfInterestVar var <- getIdeGlobalState state
     (prev, files) <- modifyVar var $ \dict -> do
         let (prev, new) = HashMap.alterF (, Just v) f dict
-        pure (new, (prev, dict))
+        pure (new, (prev, new))
     when (prev /= Just v) $
         recordDirtyKeys (shakeExtras state) IsFileOfInterest [f]
     logDebug (ideLogger state) $
