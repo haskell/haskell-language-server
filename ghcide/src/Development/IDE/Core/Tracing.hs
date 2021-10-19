@@ -9,7 +9,7 @@ module Development.IDE.Core.Tracing
     , otTracedProvider
     , otSetUri
     , withTrace
-    )
+    ,withEventTrace)
 where
 
 import           Control.Concurrent.Async       (Async, async)
@@ -65,6 +65,14 @@ withTrace name act
   = withSpan (fromString name) $ \sp -> do
       let setSpan' k v = setTag sp (fromString k) (fromString v)
       act setSpan'
+  | otherwise = act (\_ _ -> pure ())
+
+withEventTrace :: (MonadMask m, MonadIO m) =>
+    String -> ((ByteString -> ByteString -> m ()) -> m a) -> m a
+withEventTrace name act
+  | userTracingEnabled
+  = withSpan (fromString name) $ \sp -> do
+      act (addEvent sp)
   | otherwise = act (\_ _ -> pure ())
 
 -- | Trace a handler using OpenTelemetry. Adds various useful info into tags in the OpenTelemetry span.

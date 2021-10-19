@@ -55,7 +55,8 @@ import           Development.IDE.Core.Service          (initialise, runAction)
 import           Development.IDE.Core.Shake            (IdeState (shakeExtras),
                                                         ShakeExtras (state),
                                                         shakeSessionInit, uses)
-import           Development.IDE.Core.Tracing          (measureMemory)
+import           Development.IDE.Core.Tracing          (measureMemory,
+                                                        withEventTrace)
 import           Development.IDE.Graph                 (action)
 import           Development.IDE.LSP.LanguageServer    (runLanguageServer)
 import           Development.IDE.Plugin                (Plugin (pluginHandlers, pluginModifyDynflags, pluginRules))
@@ -101,7 +102,6 @@ import           Ide.Types                             (IdeCommand (IdeCommand),
                                                         ipMap)
 import qualified Language.LSP.Server                   as LSP
 import           Numeric.Natural                       (Natural)
-import           OpenTelemetry.Eventlog                (addEvent, withSpan)
 import           Options.Applicative                   hiding (action)
 import qualified System.Directory.Extra                as IO
 import           System.Exit                           (ExitCode (ExitFailure),
@@ -239,8 +239,8 @@ stderrLogger logLevel = do
 telemetryLogger :: IO Logger
 telemetryLogger
     | userTracingEnabled = return $ Logger $ \p m ->
-        withSpan "log" $ \sp ->
-            addEvent sp (fromString $ "Log " <> show p) (encodeUtf8 $ trim m)
+        withEventTrace "Log" $ \addEvent ->
+            addEvent (fromString $ "Log " <> show p) (encodeUtf8 $ trim m)
     | otherwise = mempty
     where
         -- eventlog message size is limited by EVENT_PAYLOAD_SIZE_MAX = STG_WORD16_MAX
