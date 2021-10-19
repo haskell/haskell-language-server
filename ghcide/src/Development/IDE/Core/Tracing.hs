@@ -24,9 +24,7 @@ import           Control.Monad.Catch            (ExitCase (..), MonadMask)
 import           Control.Monad.Extra            (whenJust)
 import           Control.Monad.IO.Unlift
 import           Control.Seq                    (r0, seqList, seqTuple2, using)
-#if MIN_VERSION_ghc(8,8,0)
 import           Data.ByteString                (ByteString)
-#endif
 import           Data.ByteString.Char8          (pack)
 import           Data.Dynamic                   (Dynamic)
 import qualified Data.HashMap.Strict            as HMap
@@ -67,8 +65,11 @@ withTrace name act
       act setSpan'
   | otherwise = act (\_ _ -> pure ())
 
-withEventTrace :: (MonadMask m, MonadIO m) =>
-    String -> ((ByteString -> ByteString -> m ()) -> m a) -> m a
+#if MIN_VERSION_ghc(8,8,0)
+withEventTrace :: (MonadMask m, MonadIO m) => String -> ((ByteString -> ByteString -> m ()) -> m a) -> m a
+#else
+withEventTrace :: (MonadMask m, MonadIO m) => String -> ((String -> ByteString -> m ()) -> m a) -> m a
+#endif
 withEventTrace name act
   | userTracingEnabled
   = withSpan (fromString name) $ \sp -> do
