@@ -258,7 +258,7 @@ configTests = testGroup "hlint plugin config" [
 
 runHlintSession :: FilePath -> Session a -> IO a
 runHlintSession subdir  =
-    failIfSessionTimeout . runSessionWithServer hlintPlugin ("test/testdata/hlint" </> subdir)
+    failIfSessionTimeout . runSessionWithServer hlintPlugin ("test/testdata" </> subdir)
 
 noHlintDiagnostics :: [Diagnostic] -> Assertion
 noHlintDiagnostics diags =
