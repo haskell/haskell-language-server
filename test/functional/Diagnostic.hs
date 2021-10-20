@@ -21,21 +21,9 @@ tests = testGroup "diagnostics providers" [
 
 basicTests :: TestTree
 basicTests = testGroup "Diagnostics work" [
-    testCase "hlint produces diagnostics" $
-        runSession hlsCommand fullCaps "test/testdata/hlint" $ do
-            doc <- openDoc "ApplyRefact2.hs" "haskell"
-            diags <- waitForDiagnosticsFromSource doc "hlint"
-            reduceDiag <- liftIO $ inspectDiagnostic diags ["Eta reduce"]
-            redundantID <- liftIO $ inspectDiagnostic diags ["Redundant id"]
-            liftIO $ do
-                length diags @?= 2
-                reduceDiag ^. LSP.range @?= Range (Position 1 0) (Position 1 12)
-                reduceDiag ^. LSP.severity @?= Just DsInfo
-                redundantID ^. LSP.severity @?= Just DsInfo
-
-    , testCase "example plugin produces diagnostics" $
-        runSession hlsCommandExamplePlugin fullCaps "test/testdata/hlint" $ do
-            doc <- openDoc "ApplyRefact2.hs" "haskell"
+    testCase "example plugin produces diagnostics" $
+        runSession hlsCommandExamplePlugin fullCaps "test/testdata/diagnostics" $ do
+            doc <- openDoc "Foo.hs" "haskell"
             diags <- waitForDiagnosticsFromSource doc "example2"
             reduceDiag <- liftIO $ inspectDiagnostic diags ["example2 diagnostic, hello world"]
             liftIO $ do
