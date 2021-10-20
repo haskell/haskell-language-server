@@ -29,7 +29,7 @@ tests =
             runSession hlsCommand progressCaps "test/testdata" $ do
                 let path = "diagnostics" </> "Foo.hs"
                 _ <- openDoc path "haskell"
-                expectProgressReports [pack ("Setting up diagnostics (for " ++ path ++ ")"), "Processing", "Indexing"]
+                expectProgressReports [pack ("Setting up testdata (for " ++ path ++ ")"), "Processing", "Indexing"]
         , requiresEvalPlugin $ testCase "eval plugin sends progress reports" $
             runSession hlsCommand progressCaps "plugins/hls-eval-plugin/test/testdata" $ do
                 doc <- openDoc "T1.hs" "haskell"
