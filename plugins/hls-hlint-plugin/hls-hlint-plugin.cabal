@@ -111,6 +111,7 @@ test-suite tests
   build-depends:
       aeson
     , base
+    , containers
     , filepath
     , hls-hlint-plugin
     , hls-plugin-api

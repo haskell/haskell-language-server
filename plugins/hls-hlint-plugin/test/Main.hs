@@ -4,15 +4,17 @@ module Main
   ) where
 
 import           Control.Lens            ((^.))
-import           Data.Aeson              (toJSON)
+import           Data.Aeson              (toJSON, Value (..), object, (.=))
 import           Data.List               (find)
+import qualified Data.Map                as Map
 import           Data.Maybe              (fromJust, isJust)
 import qualified Data.Text               as T
 import qualified Ide.Plugin.Hlint        as HLint
-import           Ide.Plugin.Config       (hlintOn)
+import           Ide.Plugin.Config       (hlintOn, Config (..), PluginConfig (..))
 import qualified Language.LSP.Types.Lens as L
 import           System.FilePath         ((</>))
 import           Test.Hls
+import qualified Ide.Plugin.Config as Plugin
 
 main :: IO ()
 main = defaultTestRunner tests
@@ -21,7 +23,13 @@ hlintPlugin :: PluginDescriptor IdeState
 hlintPlugin = HLint.descriptor "hlint"
 
 tests :: TestTree
-tests =
+tests = testGroup "hlint" [
+      suggestionsTests
+    , configTests
+    ]
+
+suggestionsTests :: TestTree
+suggestionsTests =
   testGroup "hlint suggestions" [
     testCase "provides 3.8 code actions including apply all" $ runHlintSession "" $ do
         doc <- openDoc "ApplyRefact2.hs" "haskell"
@@ -61,20 +69,6 @@ tests =
 
         contents <- skipManyTill anyMessage $ getDocumentEdit doc
         liftIO $ contents @?= "main = undefined\nfoo = id\n"
-
-    , testCase "changing configuration enables or disables hlint diagnostics" $ runHlintSession "" $ do
-        let config = def { hlintOn = True }
-        sendConfigurationChanged config
-
-        doc <- openDoc "ApplyRefact2.hs" "haskell"
-        testHlintDiagnostics doc
-
-        let config' = def { hlintOn = False }
-        sendConfigurationChanged config'
-
-        diags' <- waitForDiagnosticsFrom doc
-
-        liftIO $ noHlintDiagnostics diags'
 
     , testCase "changing document contents updates hlint diagnostics" $ runHlintSession "" $ do
         doc <- openDoc "ApplyRefact2.hs" "haskell"
@@ -161,18 +155,6 @@ tests =
         liftIO $ hasApplyAll multiLine @? "Missing apply all code action"
     ]
     where
-        runHlintSession :: FilePath -> Session a -> IO a
-        runHlintSession subdir  =
-            failIfSessionTimeout . runSessionWithServer hlintPlugin ("test/testdata/hlint" </> subdir)
-
-        noHlintDiagnostics :: [Diagnostic] -> Assertion
-        noHlintDiagnostics diags =
-            Just "hlint" `notElem` map (^. L.source) diags @? "There are no hlint diagnostics"
-
-        testHlintDiagnostics doc = do
-            diags <- waitForDiagnosticsFromSource doc "hlint"
-            liftIO $ length diags > 0 @? "There are hlint diagnostics"
-
         testRefactor file caTitle expected = do
             doc <- openDoc file "haskell"
             testHlintDiagnostics doc
@@ -208,3 +190,98 @@ tests =
         expectedTypeApp =    [ "module ApplyRefact1 where", ""
                              , "a = id @Int 1"
                              ]
+
+configTests :: TestTree
+configTests = testGroup "hlint plugin config" [
+
+      testCase "changing hlintOn configuration enables or disables hlint diagnostics" $ runHlintSession "" $ do
+        let config = def { hlintOn = True }
+        sendConfigurationChanged (toJSON config)
+
+        doc <- openDoc "ApplyRefact2.hs" "haskell"
+        testHlintDiagnostics doc
+
+        let config' = def { hlintOn = False }
+        sendConfigurationChanged (toJSON config')
+
+        diags' <- waitForDiagnosticsFrom doc
+
+        liftIO $ noHlintDiagnostics diags'
+
+    , testCase "changing hlint plugin configuration enables or disables hlint diagnostics" $ runHlintSession "" $ do
+        let config = def { hlintOn = True }
+        sendConfigurationChanged (toJSON config)
+
+        doc <- openDoc "ApplyRefact2.hs" "haskell"
+        testHlintDiagnostics doc
+
+        let config' = pluginGlobalOn config "hlint" False
+        sendConfigurationChanged (toJSON config')
+
+        diags' <- waitForDiagnosticsFrom doc
+
+        liftIO $ noHlintDiagnostics diags'
+
+    , testCase "adding hlint flags to plugin configuration removes hlint diagnostics" $ runHlintSession "" $ do
+        let config = def { hlintOn = True }
+        sendConfigurationChanged (toJSON config)
+
+        doc <- openDoc "ApplyRefact2.hs" "haskell"
+        testHlintDiagnostics doc
+
+        let config' = hlintConfigWithFlags ["--ignore=Redundant id", "--hint=test-hlint-config.yaml"]
+        sendConfigurationChanged (toJSON config')
+
+        diags' <- waitForDiagnosticsFrom doc
+
+        liftIO $ noHlintDiagnostics diags'
+
+    , testCase "adding hlint flags to plugin configuration adds hlint diagnostics" $ runHlintSession "" $ do
+        let config = def { hlintOn = True }
+        sendConfigurationChanged (toJSON config)
+
+        doc <- openDoc "ApplyRefact7.hs" "haskell"
+
+        expectNoMoreDiagnostics 3 doc "hlint"
+
+        let config' = hlintConfigWithFlags ["--with-group=generalise"]
+        sendConfigurationChanged (toJSON config')
+
+        diags' <- waitForDiagnosticsFromSource doc "hlint"
+        d <- liftIO $ inspectDiagnostic diags' ["Use <>"]
+
+        liftIO $ do
+            length diags' @?= 1
+            d ^. L.range @?= Range (Position 1 10) (Position 1 21)
+            d ^. L.severity @?= Just DsInfo
+    ]
+
+runHlintSession :: FilePath -> Session a -> IO a
+runHlintSession subdir  =
+    failIfSessionTimeout . runSessionWithServer hlintPlugin ("test/testdata/hlint" </> subdir)
+
+noHlintDiagnostics :: [Diagnostic] -> Assertion
+noHlintDiagnostics diags =
+    Just "hlint" `notElem` map (^. L.source) diags @? "There are no hlint diagnostics"
+
+testHlintDiagnostics :: TextDocumentIdentifier -> Session ()
+testHlintDiagnostics doc = do
+    diags <- waitForDiagnosticsFromSource doc "hlint"
+    liftIO $ length diags > 0 @? "There are hlint diagnostics"
+
+pluginGlobalOn :: Config -> T.Text -> Bool -> Config
+pluginGlobalOn config pid state = config'
+  where
+      pluginConfig = def { plcGlobalOn = state }
+      config' = def { plugins = Map.insert pid pluginConfig (plugins config) }
+
+hlintConfigWithFlags :: [T.Text] -> Config
+hlintConfigWithFlags flags =
+  def
+    { hlintOn = True
+    , Plugin.plugins = Map.fromList [("hlint",
+        def { Plugin.plcConfig = unObject $ object ["flags" .= flags] }
+    )] }
+  where
+    unObject (Object obj) = obj
+    unObject _            = undefined

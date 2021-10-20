@@ -230,6 +230,6 @@ waitForAction key TextDocumentIdentifier{_uri} = do
 waitForTypecheck :: TextDocumentIdentifier -> Session (Either ResponseError Bool)
 waitForTypecheck tid = fmap ideResultSuccess <$> waitForAction "typecheck" tid
 
-sendConfigurationChanged :: Config -> Session ()
+sendConfigurationChanged :: Value -> Session ()
 sendConfigurationChanged config =
-  sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
+  sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams config)

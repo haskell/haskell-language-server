@@ -362,6 +362,6 @@ expectFailIfGhc9 reason =
 
 disableWingman :: Session ()
 disableWingman =
-  sendConfigurationChanged $ def
+  sendConfigurationChanged $ toJSON $ def
     { plugins = M.fromList [ ("tactics", def { plcGlobalOn = False }) ]
     }
