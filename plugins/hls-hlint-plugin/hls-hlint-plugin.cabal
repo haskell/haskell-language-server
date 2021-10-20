@@ -8,7 +8,7 @@ description:
 license:       Apache-2.0
 license-file:  LICENSE
 author:        The Haskell IDE Team
-maintainer:    alan.zimm@gmail.com
+maintainer:    atreyu.bbb@gmail.com
 copyright:     The Haskell IDE Team
 category:      Development
 build-type:    Simple
@@ -16,7 +16,7 @@ extra-source-files:
   LICENSE
   test/testdata/**/*.yaml
   -- this one is not matched by the previous glob
-  test/testdata/hlint/ignore/.hlint.yaml
+  test/testdata/ignore/.hlint.yaml
   test/testdata/**/*.hs
   test/testdata/**/*.h
 
