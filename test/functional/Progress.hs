@@ -27,7 +27,7 @@ tests =
         "window/workDoneProgress"
         [ testCase "sends indefinite progress notifications" $
             runSession hlsCommand progressCaps "test/testdata" $ do
-                let path = "hlint" </> "ApplyRefact2.hs"
+                let path = "diagnostics" </> "Foo.hs"
                 _ <- openDoc path "haskell"
                 expectProgressReports [pack ("Setting up hlint (for " ++ path ++ ")"), "Processing", "Indexing"]
         , requiresEvalPlugin $ testCase "eval plugin sends progress reports" $
