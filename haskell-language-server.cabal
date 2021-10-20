@@ -21,9 +21,6 @@ extra-source-files:
   test/testdata/**/*.project
   test/testdata/**/*.cabal
   test/testdata/**/*.yaml
-  -- this one is not matched by the previous glob
-  test/testdata/hlint/ignore/.hlint.yaml
-  test/testdata/**/*.h
   test/testdata/**/*.hs
 
 flag pedantic

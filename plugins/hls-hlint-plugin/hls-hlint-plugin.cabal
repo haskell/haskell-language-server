@@ -1,4 +1,4 @@
-cabal-version: 2.2
+cabal-version: 2.4
 name:          hls-hlint-plugin
 version:       1.0.1.1
 synopsis:      Hlint integration plugin with Haskell Language Server
@@ -12,6 +12,14 @@ maintainer:    alan.zimm@gmail.com
 copyright:     The Haskell IDE Team
 category:      Development
 build-type:    Simple
+extra-source-files:
+  LICENSE
+  test/testdata/**/*.cabal
+  test/testdata/**/*.yaml
+  -- this one is not matched by the previous glob
+  test/testdata/hlint/ignore/.hlint.yaml
+  test/testdata/**/*.hs
+  test/testdata/**/*.h
 
 flag pedantic
   description: Enable -Werror
