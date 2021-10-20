@@ -13,6 +13,7 @@ import Development.IDE.GHC.Compat.Util
 import GHC.LanguageExtensions.Type (Extension(EmptyCase, QuasiQuotes))
 import Generics.SYB
 import Ide.Types
+import Plugins (purePlugin)
 
 staticPlugin :: DynFlagsModifications
 staticPlugin = mempty
@@ -66,8 +67,12 @@ allowEmptyCaseButWithWarning =
 #if __GLASGOW_HASKELL__ >= 808
 metaprogrammingPlugin :: StaticPlugin
 metaprogrammingPlugin =
-    StaticPlugin $ PluginWithArgs (defaultPlugin { parsedResultAction = worker })  []
+    StaticPlugin $ PluginWithArgs pluginDefinition  []
   where
+    pluginDefinition = defaultPlugin
+        { parsedResultAction = worker
+        , pluginRecompile = purePlugin
+        }
     worker :: Monad m => [CommandLineOption] -> ModSummary -> HsParsedModule -> m HsParsedModule
     worker _ _ pm = pure $ pm { hpm_module = addMetaprogrammingSyntax $ hpm_module pm }
 #endif
