@@ -17,22 +17,40 @@ defaults: &defaults
           - v4-stack-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "resolver.txt" }}
 
     - run:
+        name: Skip ci setup
+        command: |
+          SKIP_CI=$([ ! -z "$CIRCLE_PR_NUMBER" ] && curl https://api.github.com/repos/$CIRCLE_PR_USERNAME/$CIRCLE_PR_REPONAME/issues/$CIRCLE_PR_NUMBER | grep -p "[skip ci]")
+          echo 'export SKIP_CI=$SKIP_CI' >> $BASH_ENV
+
+    - run:
         name: Stack upgrade
-        command: stack upgrade
+        command: |
+          if [ -z "$SKIP_CI" ] then
+            stack upgrade
+          fi
 
     - run:
         name: Stack setup
-        command: stack -j2 --stack-yaml=${STACK_FILE} setup
+        command: |
+          if [ -z "$SKIP_CI" ] then
+            stack -j2 --stack-yaml=${STACK_FILE} setup
+          fi
 
     - run:
         name: Build (we need the exe for tests)
         # need j1, else ghc-lib-parser triggers OOM
-        command: stack -j1 --stack-yaml=${STACK_FILE} install --no-terminal
+        command: |
+          if [ -z "$SKIP_CI" ] then
+            stack -j1 --stack-yaml=${STACK_FILE} install --no-terminal
+          fi
         no_output_timeout: 30m
 
     - run:
         name: Build Testsuite without running it
-        command: stack -j1 --stack-yaml=${STACK_FILE} build --test --no-run-tests --no-terminal
+        command: |
+          if [ -z "$SKIP_CI" ] then
+            stack -j1 --stack-yaml=${STACK_FILE} build --test --no-run-tests --no-terminal
+          fi
         no_output_timeout: 30m
 
     - store_artifacts:
