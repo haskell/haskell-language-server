@@ -210,11 +210,14 @@ its dependencies have been built with the `-haddock` GHC flag.
       ghc-options: -haddock
     ```
 
-  - Or, for a single project, run `cabal configure --ghc-options=-haddock`
+  - Or, for a single project, run `cabal configure --ghc-options=-haddock --enable-documentation`
 
 - For stack, add to global `$STACK_ROOT\config.yaml`, or project's `stack.yaml`:
 
   ```yaml
+  build:
+    haddock: true
+  
   ghc-options:
     '$everything': -haddock
   ```
