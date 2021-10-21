@@ -206,6 +206,8 @@ its dependencies have been built with the `-haddock` GHC flag.
   - Add to your global config file (e.g. `~/.cabal/config`):
 
     ```yaml
+    documentation: True
+    
     program-default-options
       ghc-options: -haddock
     ```
