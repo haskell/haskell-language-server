@@ -19,20 +19,24 @@ defaults: &defaults
     - run:
         name: Skip ci setup
         command: |
-          SKIP_CI=$([ ! -z "$CIRCLE_PR_NUMBER" ] && curl https://api.github.com/repos/$CIRCLE_PR_USERNAME/$CIRCLE_PR_REPONAME/issues/$CIRCLE_PR_NUMBER | grep -p "[skip ci]")
-          echo 'export SKIP_CI=$SKIP_CI' >> $BASH_ENV
+          set +e
+          PR_URL=https://api.github.com/repos/$CIRCLE_PR_USERNAME/$CIRCLE_PR_REPONAME/issues/$CIRCLE_PR_NUMBER
+          echo "PR_URL=$PR_URL"
+          SKIP_CI=$([ ! -z "$CIRCLE_PR_NUMBER" ] && curl $PR_URL | grep -p "[skip ci]")
+          echo "SKIP_CI=$SKIP_CI"
+          echo "export SKIP_CI=$SKIP_CI" >> $BASH_ENV
 
     - run:
         name: Stack upgrade
         command: |
-          if [ -z "$SKIP_CI" ] then
+          if [[ -z "$SKIP_CI" ]]; then
             stack upgrade
           fi
 
     - run:
         name: Stack setup
         command: |
-          if [ -z "$SKIP_CI" ] then
+          if [[ -z "$SKIP_CI" ]]; then
             stack -j2 --stack-yaml=${STACK_FILE} setup
           fi
 
@@ -40,7 +44,7 @@ defaults: &defaults
         name: Build (we need the exe for tests)
         # need j1, else ghc-lib-parser triggers OOM
         command: |
-          if [ -z "$SKIP_CI" ] then
+          if [[ -z "$SKIP_CI" ]]; then
             stack -j1 --stack-yaml=${STACK_FILE} install --no-terminal
           fi
         no_output_timeout: 30m
@@ -48,7 +52,7 @@ defaults: &defaults
     - run:
         name: Build Testsuite without running it
         command: |
-          if [ -z "$SKIP_CI" ] then
+          if [[ -z "$SKIP_CI" ]]; then
             stack -j1 --stack-yaml=${STACK_FILE} build --test --no-run-tests --no-terminal
           fi
         no_output_timeout: 30m
