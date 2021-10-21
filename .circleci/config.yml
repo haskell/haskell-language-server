@@ -21,7 +21,6 @@ defaults: &defaults
         command: |
           set +e
           PR_URL=https://api.github.com/repos/$CIRCLE_PR_USERNAME/$CIRCLE_PR_REPONAME/issues/$CIRCLE_PR_NUMBER
-          echo "PR_URL=$PR_URL"
           SKIP_CI=$([ ! -z "$CIRCLE_PR_NUMBER" ] && curl $PR_URL | grep -p "[skip ci]")
           echo "SKIP_CI=$SKIP_CI"
           echo "export SKIP_CI=$SKIP_CI" >> $BASH_ENV
