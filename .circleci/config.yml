@@ -20,13 +20,13 @@ defaults: &defaults
         name: Skip ci setup
         command: |
           set +e
-          echo $CIRCLE_PULL_REQUEST
+          echo "CIRCLE_PULL_REQUEST: $CIRCLE_PULL_REQUEST"
           if [[ ! -z $CIRCLE_PULL_REQUEST ]]; then
             PULL_REQUEST_URL=${CIRCLE_PULL_REQUEST/github.com/api.github.com/repos}
             PULL_REQUEST_URL=${PULL_REQUEST_URL/pull/pulls}
-            echo $PULL_REQUEST_URL
+            echo "PULL_REQUEST_URL: $PULL_REQUEST_URL"
             SKIP_CI=$(curl $PULL_REQUEST_URL | grep -o "\\[skip ci\\]")
-            echo $SKIP_CI
+            echo "SKIP_CI: $SKIP_CI"
           fi
           echo "export SKIP_CI=$SKIP_CI" >> $BASH_ENV
 
