@@ -30,7 +30,6 @@ import qualified Data.Text.IO                          as T
 import           Data.Text.Lazy.Encoding               (decodeUtf8)
 import qualified Data.Text.Lazy.IO                     as LT
 import           Data.Word                             (Word16)
-import           Debug.Trace.Flags                     (userTracingEnabled)
 import           Development.IDE                       (Action, GhcVersion (..),
                                                         Priority (Debug), Rules,
                                                         ghcVersion,
@@ -189,7 +188,7 @@ defaultArguments :: Priority -> Arguments
 defaultArguments priority = Arguments
         { argsOTMemoryProfiling = False
         , argCommand = LSP
-        , argsLogger = stderrLogger priority <> telemetryLogger
+        , argsLogger = stderrLogger priority <> pure telemetryLogger
         , argsRules = mainRule >> action kick
         , argsGhcidePlugin = mempty
         , argsHlsPlugins = pluginDescToIdePlugins Ghcide.descriptors
@@ -236,12 +235,10 @@ stderrLogger logLevel = do
     return $ Logger $ \p m -> when (p >= logLevel) $ withLock lock $
         T.hPutStrLn stderr $ "[" <> T.pack (show p) <> "] " <> m
 
-telemetryLogger :: IO Logger
-telemetryLogger
-    | userTracingEnabled = return $ Logger $ \p m ->
+telemetryLogger :: Logger
+telemetryLogger = Logger $ \p m ->
         withEventTrace "Log" $ \addEvent ->
             addEvent (fromString $ "Log " <> show p) (encodeUtf8 $ trim m)
-    | otherwise = mempty
     where
         -- eventlog message size is limited by EVENT_PAYLOAD_SIZE_MAX = STG_WORD16_MAX
         trim = T.take (fromIntegral(maxBound :: Word16) - 10)
