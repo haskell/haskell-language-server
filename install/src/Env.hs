@@ -51,7 +51,7 @@ findInstalledGhcs = do
 
 showInstalledGhcs :: MonadIO m => [(VersionNumber, GhcPath)] -> m ()
 showInstalledGhcs ghcPaths = do
-  let msg = "Found the following GHC paths: \n"
+  let msg = "Found the following *supported by HLS* GHC paths: \n"
               ++ unlines
                   (map (\(version, path) -> "ghc-" ++ version ++ ": " ++ path)
                     ghcPaths
