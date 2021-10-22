@@ -217,9 +217,6 @@ its dependencies have been built with the `-haddock` GHC flag.
 - For stack, add to global `$STACK_ROOT\config.yaml`, or project's `stack.yaml`:
 
   ```yaml
-  build:
-    haddock: true
-  
   ghc-options:
     '$everything': -haddock
   ```
