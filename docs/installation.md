@@ -13,7 +13,7 @@ If you are using [`ghcup`](https://www.haskell.org/ghcup/) to manage your instal
 ghcup install hls
 ```
 
-You can check if HLS is available for your platorm via ghcup here: <https://gitlab.haskell.org/haskell/ghcup-hs#supported-platforms>.
+You can check if HLS is available for your platorm via ghcup here: <https://haskell.org/ghcup/install/#supported-platforms>.
 
 You can also install HLS from source without checking out the code manually:
 ```bash
