@@ -25,7 +25,7 @@ configTests :: TestTree
 configTests = testGroup "config parsing" [
       testCase "empty object as user configuration should not send error logMessage" $ runConfigSession "" $ do
         let config = object []
-        sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
+        sendConfigurationChanged (toJSON config)
 
         -- Send custom request so server returns a response to prevent blocking
         void $ sendNotification (SCustomMethod "non-existent-method") Null

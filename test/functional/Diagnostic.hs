@@ -46,7 +46,7 @@ saveTests = testGroup  "only diagnostics on save" [
     ignoreTestBecause "diagnosticsOnChange parameter is not supported right now" $ testCase "Respects diagnosticsOnChange setting" $
         runSession hlsCommandExamplePlugin codeActionSupportCaps "test/testdata" $ do
             let config = Data.Default.def { diagnosticsOnChange = False } :: Config
-            sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
+            sendConfigurationChanged (toJSON config)
             doc <- openDoc "Hover.hs" "haskell"
             diags <- waitForDiagnosticsFrom doc
 

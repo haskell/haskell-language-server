@@ -78,7 +78,7 @@ importTests = testGroup "import suggestions" [
         doc <- openDoc "CodeActionImport.hs" "haskell"
         -- No Formatting:
         let config = def { formattingProvider = "none" }
-        sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
+        sendConfigurationChanged (toJSON config)
 
         (diag:_) <- waitForDiagnosticsFrom doc
         liftIO $ diag ^. L.message @?= "Variable not in scope: when :: Bool -> IO () -> IO ()"
