@@ -19,7 +19,7 @@ tests = testGroup "liquid haskell diagnostics" [
             doc <- openDoc "liquid/Evens.hs" "haskell"
 
             let config = def { liquidOn  = True, hlintOn = False }
-            sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
+            sendConfigurationChanged (toJSON config)
 
             diags <- waitForDiagnosticsFromSource doc "liquid"
             d <- liftIO $ inspectDiagnostic diags ["Liquid Type Mismatch"]
