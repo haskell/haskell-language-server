@@ -439,8 +439,10 @@ recordDirtyKeys
   -> k
   -> [NormalizedFilePath]
   -> IO ()
-recordDirtyKeys ShakeExtras{dirtyKeys} key file =
+recordDirtyKeys ShakeExtras{dirtyKeys} key file = withEventTrace "recordDirtyKeys" $ \addEvent -> do
     atomicModifyIORef_ dirtyKeys $ \x -> foldl' (flip HSet.insert) x (toKey key <$> file)
+    addEvent (fromString $ "dirty " <> show key) (fromString $ unlines $ map fromNormalizedFilePath file)
+
 
 -- | We return Nothing if the rule has not run and Just Failed if it has failed to produce a value.
 getValues ::
