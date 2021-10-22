@@ -16,23 +16,50 @@ defaults: &defaults
         keys:
           - v4-stack-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "resolver.txt" }}
 
+    # Looking for the string [skip ci] in all the json returned by https://docs.github.com/en/rest/reference/pulls#get-a-pull-request
+    - run:
+        name: Skip ci setup
+        command: |
+          set +e
+          echo "CIRCLE_PULL_REQUEST: $CIRCLE_PULL_REQUEST"
+          if [[ ! -z $CIRCLE_PULL_REQUEST ]]; then
+            PULL_REQUEST_URL=${CIRCLE_PULL_REQUEST/github.com/api.github.com/repos}
+            PULL_REQUEST_URL=${PULL_REQUEST_URL/pull/pulls}
+            echo "PULL_REQUEST_URL: $PULL_REQUEST_URL"
+            SKIP_CI=$(curl $PULL_REQUEST_URL | grep -o "\\[skip ci\\]")
+            echo "SKIP_CI: $SKIP_CI"
+          fi
+          echo "export SKIP_CI=$SKIP_CI" >> $BASH_ENV
+
     - run:
         name: Stack upgrade
-        command: stack upgrade
+        command: |
+          if [[ -z "$SKIP_CI" ]]; then
+            stack upgrade
+          fi
 
     - run:
         name: Stack setup
-        command: stack -j2 --stack-yaml=${STACK_FILE} setup
+        command: |
+          if [[ -z "$SKIP_CI" ]]; then
+            stack -j2 --stack-yaml=${STACK_FILE} setup
+          fi
 
     - run:
         name: Build (we need the exe for tests)
         # need j1, else ghc-lib-parser triggers OOM
-        command: stack -j1 --stack-yaml=${STACK_FILE} install --no-terminal
+        command: |
+          if [[ -z "$SKIP_CI" ]]; then
+            stack -j1 --stack-yaml=${STACK_FILE} install --no-terminal
+          fi
         no_output_timeout: 30m
 
     - run:
         name: Build Testsuite without running it
-        command: stack -j1 --stack-yaml=${STACK_FILE} build --test --no-run-tests --no-terminal
+        command: |
+          if [[ -z "$SKIP_CI" ]]; then
+            stack -j1 --stack-yaml=${STACK_FILE} build --test --no-run-tests --no-terminal
+          fi
         no_output_timeout: 30m
 
     - store_artifacts:
