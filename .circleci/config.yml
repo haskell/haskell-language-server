@@ -16,6 +16,7 @@ defaults: &defaults
         keys:
           - v4-stack-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "resolver.txt" }}
 
+    # Looking for the string [skip ci] in all the json returned by https://docs.github.com/en/rest/reference/pulls#get-a-pull-request
     - run:
         name: Skip ci setup
         command: |
