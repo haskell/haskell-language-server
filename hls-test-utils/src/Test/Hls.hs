@@ -24,8 +24,10 @@ module Test.Hls
     waitForAllProgressDone,
     PluginDescriptor,
     IdeState,
-    waitForBuildQueue
-    ,waitForTypecheck,waitForAction)
+    waitForBuildQueue,
+    waitForTypecheck,
+    waitForAction,
+    sendConfigurationChanged)
 where
 
 import           Control.Applicative.Combinators
@@ -222,8 +224,12 @@ waitForAction key TextDocumentIdentifier{_uri} = do
     return $ do
       e <- _result
       case A.fromJSON e of
-        A.Error e   -> Left $ ResponseError InternalError (T.pack e) Nothing
+        A.Error err   -> Left $ ResponseError InternalError (T.pack err) Nothing
         A.Success a -> pure a
 
 waitForTypecheck :: TextDocumentIdentifier -> Session (Either ResponseError Bool)
 waitForTypecheck tid = fmap ideResultSuccess <$> waitForAction "typecheck" tid
+
+sendConfigurationChanged :: Value -> Session ()
+sendConfigurationChanged config =
+  sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams config)
