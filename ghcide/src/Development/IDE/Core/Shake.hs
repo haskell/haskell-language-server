@@ -148,7 +148,9 @@ import           Language.LSP.Types.Capabilities
 import           OpenTelemetry.Eventlog
 
 import           Control.Exception.Extra                hiding (bracket_)
+import           Data.Aeson                             (toJSON)
 import qualified Data.ByteString.Char8                  as BS8
+import           Data.Coerce                            (coerce)
 import           Data.Default
 import           Data.Foldable                          (toList)
 import           Data.HashSet                           (HashSet)
@@ -761,9 +763,9 @@ getHiddenDiagnostics IdeState{shakeExtras = ShakeExtras{hiddenDiagnostics}} = do
 --     * exports map
 garbageCollectDirtyKeys :: Action [Key]
 garbageCollectDirtyKeys = do
-    IdeOptions{optCheckParents, optMaxDirtyAge} <- getIdeOptions
+    IdeOptions{optCheckParents} <- getIdeOptions
     checkParents <- liftIO optCheckParents
-    garbageCollectDirtyKeysOlderThan optMaxDirtyAge checkParents
+    garbageCollectDirtyKeysOlderThan 0 checkParents
 
 garbageCollectDirtyKeysOlderThan :: Int -> CheckParents -> Action [Key]
 garbageCollectDirtyKeysOlderThan maxAge checkParents = otTracedGarbageCollection "dirty GC" $ do
@@ -779,14 +781,19 @@ garbageCollectKeys label maxAge checkParents agedKeys = do
     liftIO $ atomicModifyIORef_ (dirtyKeys extras) $ \x ->
         foldl' (flip HSet.insert) x garbage
     t <- liftIO start
-    when (n>0) $ liftIO $ logDebug (logger extras) $ T.pack $
-        label <> " of " <> show n <> " keys (took " <> showDuration t <> ")"
+    when (n>0) $ liftIO $ do
+        logDebug (logger extras) $ T.pack $
+            label <> " of " <> show n <> " keys (took " <> showDuration t <> ")"
+    when (coerce $ ideTesting extras) $ liftIO $ mRunLspT (lspEnv extras) $
+        LSP.sendNotification (SCustomMethod "ghcide/GC")
+                             (toJSON $ mapMaybe (fmap showKey . fromKeyType) garbage)
     return garbage
 
     where
+        showKey = show . Q
         removeDirtyKey st@(vmap,(!counter, keys)) (k, age)
             | age > maxAge
-            , Just kt <- fromKeyType k
+            , Just (kt,_) <- fromKeyType k
             , not(kt `HSet.member` preservedKeys checkParents)
             , (True, vmap') <- HMap.alterF (\prev -> (isJust prev, Nothing)) k vmap
             = (vmap', (counter+1, k:keys))
@@ -794,7 +801,7 @@ garbageCollectKeys label maxAge checkParents agedKeys = do
 
 countRelevantKeys :: CheckParents -> [Key] -> Int
 countRelevantKeys checkParents =
-    Prelude.length . filter (maybe False (not . (`HSet.member` preservedKeys checkParents)) . fromKeyType)
+    Prelude.length . filter (maybe False (not . (`HSet.member` preservedKeys checkParents) . fst) . fromKeyType)
 
 preservedKeys :: CheckParents -> HashSet TypeRep
 preservedKeys checkParents = HSet.fromList $

@@ -187,7 +187,7 @@ performMeasurement logger stateRef instrumentFor = do
              -- TODO restore
              : [ kty
                 | k <- HMap.keys values
-                , Just kty <- [fromKeyType k]
+                , Just (kty,_) <- [fromKeyType k]
                 -- do GhcSessionIO last since it closes over stateRef itself
                 , kty /= typeOf GhcSession
                 , kty /= typeOf GhcSessionDeps
@@ -265,7 +265,7 @@ measureMemory logger groups instrumentFor stateRef = withSpan_ "Measure Memory" 
             let !groupedValues =
                     [ [ (show ty, vv)
                       | ty <- groupKeys
-                      , let vv = [ v | (fromKeyType -> Just kty, ValueWithDiagnostics v _) <- HMap.toList values
+                      , let vv = [ v | (fromKeyType -> Just (kty,_), ValueWithDiagnostics v _) <- HMap.toList values
                                      , kty == ty]
                       ]
                     | groupKeys <- groups

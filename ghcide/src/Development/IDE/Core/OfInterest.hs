@@ -15,7 +15,7 @@ module Development.IDE.Core.OfInterest(
     setFilesOfInterest,
     kick, FileOfInterestStatus(..),
     OfInterestVar(..)
-    ) where
+    ,scheduleGarbageCollection) where
 
 import           Control.Concurrent.Strict
 import           Control.Monad
@@ -33,7 +33,6 @@ import           Development.IDE.Core.Shake
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger
-import           System.Time.Extra                      (sleep)
 
 newtype OfInterestVar = OfInterestVar (Var (HashMap NormalizedFilePath FileOfInterestStatus))
 instance IsIdeGlobal OfInterestVar
@@ -42,6 +41,7 @@ instance IsIdeGlobal OfInterestVar
 ofInterestRules :: Rules ()
 ofInterestRules = do
     addIdeGlobal . OfInterestVar =<< liftIO (newVar HashMap.empty)
+    addIdeGlobal . GarbageCollectVar =<< liftIO (newVar False)
     defineEarlyCutoff $ RuleNoDiagnostics $ \IsFileOfInterest f -> do
         alwaysRerun
         filesOfInterest <- getFilesOfInterestUntracked
@@ -55,6 +55,9 @@ ofInterestRules = do
     summarize (IsFOI (Modified False)) = BS.singleton 2
     summarize (IsFOI (Modified True))  = BS.singleton 3
 
+------------------------------------------------------------
+newtype GarbageCollectVar = GarbageCollectVar (Var Bool)
+instance IsIdeGlobal GarbageCollectVar
 
 ------------------------------------------------------------
 -- Exposed API
@@ -94,6 +97,10 @@ deleteFileOfInterest state f = do
     recordDirtyKeys (shakeExtras state) IsFileOfInterest [f]
     logDebug (ideLogger state) $ "Set files of interest to: " <> T.pack (show files)
 
+scheduleGarbageCollection :: IdeState -> IO ()
+scheduleGarbageCollection state = do
+    GarbageCollectVar var <- getIdeGlobalState state
+    writeVar var True
 
 -- | Typecheck all the files of interest.
 --   Could be improved
@@ -111,6 +118,8 @@ kick = do
 
     liftIO $ progressUpdate progress KickCompleted
 
-    -- if idle, perform garbage collection of dirty keys
-    liftIO $ sleep 5
-    void garbageCollectDirtyKeys
+    GarbageCollectVar var <- getIdeGlobalAction
+    garbageCollectionScheduled <- liftIO $ readVar var
+    when garbageCollectionScheduled $ do
+        void garbageCollectDirtyKeys
+        liftIO $ writeVar var False

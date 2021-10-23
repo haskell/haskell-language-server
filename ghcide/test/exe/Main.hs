@@ -52,11 +52,9 @@ import           Development.IDE.Test                     (Cursor,
                                                            standardizeQuotes,
                                                            getInterfaceFilesDir
                                                            waitForAction,
-                                                           garbageCollectDirtyKeys,
                                                            getStoredKeys,
                                                            waitForTypecheck,
-                                                           getFilesOfInterest,
-                                                           waitForBuildQueue)
+                                                           getFilesOfInterest, waitForGC)
 import           Development.IDE.Test.Runfiles
 import qualified Development.IDE.Types.Diagnostics        as Diagnostics
 import           Development.IDE.Types.Location
@@ -5841,69 +5839,67 @@ unitTests = do
 
 garbageCollectionTests :: TestTree
 garbageCollectionTests = testGroup "garbage collection"
-  [ testGroup "dirty keys" (sharedGCtests $ garbageCollectDirtyKeys CheckOnSaveAndClose)
-  ]
-  where
-    sharedGCtests gc =
+  [ testGroup "dirty keys"
         [ testSession' "are collected" $ \dir -> do
             liftIO $ writeFile (dir </> "hie.yaml") "cradle: {direct: {arguments: [A]}}"
-            void $ generateGarbage "A" dir
-            garbage <- gc 0
+            doc <- generateGarbage "A" dir
+            closeDoc doc
+            garbage <- waitForGC
             liftIO $ assertBool "no garbage was found" $ not $ null garbage
 
         , testSession' "are deleted from the state" $ \dir -> do
             liftIO $ writeFile (dir </> "hie.yaml") "cradle: {direct: {arguments: [A]}}"
-            void $ generateGarbage "A" dir
+            docA <- generateGarbage "A" dir
             keys0 <- getStoredKeys
-            garbage <- gc 0
+            closeDoc docA
+            garbage <- waitForGC
             liftIO $ assertBool "something is wrong with this test - no garbage found" $ not $ null garbage
             keys1 <- getStoredKeys
             liftIO $ assertBool "keys were not deleted from the state" (length keys1 < length keys0)
 
         , testSession' "are not regenerated unless needed" $ \dir -> do
             liftIO $ writeFile (dir </> "hie.yaml") "cradle: {direct: {arguments: [A.hs, B.hs]}}"
-            void $ generateGarbage "A" dir
+            docA <- generateGarbage "A" dir
+            _docB <- generateGarbage "B" dir
 
-            reopenB <- generateGarbage "B" dir
             -- garbage collect A keys
             keysBeforeGC <- getStoredKeys
-            garbage <- gc 2
+            closeDoc docA
+            garbage <- waitForGC
             liftIO $ assertBool "something is wrong with this test - no garbage found" $ not $ null garbage
             keysAfterGC <- getStoredKeys
-            liftIO $ assertBool "something is wrong with this test - keys were not deleted from the state" (length keysAfterGC < length keysBeforeGC)
-            ff <- getFilesOfInterest
-            liftIO $ assertBool ("something is wrong with this test - files of interest is " <> show ff) (null ff)
+            liftIO $ assertBool "something is wrong with this test - keys were not deleted from the state"
+                (length keysAfterGC < length keysBeforeGC)
 
-            -- typecheck B again
-            doc <- reopenB
-            void $ waitForTypecheck doc
-
-            -- review the keys in store now to validate that A keys have not been regenerated
-            keysB' <- getStoredKeys
+            -- re-typecheck B and check that the keys for A have not materialized back
+            _docB <- generateGarbage "B" dir
+            keysB <- getStoredKeys
             let regeneratedKeys = Set.filter (not . isExpected) $
-                    Set.intersection (Set.fromList garbage) (Set.fromList keysB')
+                    Set.intersection (Set.fromList garbage) (Set.fromList keysB)
             liftIO $ regeneratedKeys @?= mempty
 
         , testSession' "regenerate successfully" $ \dir -> do
             liftIO $ writeFile (dir </> "hie.yaml") "cradle: {direct: {arguments: [A]}}"
-            reopenA <- generateGarbage "A" dir
-            garbage <- gc 0
+            docA <- generateGarbage "A" dir
+            closeDoc docA
+            garbage <- waitForGC
             liftIO $ assertBool "no garbage was found" $ not $ null garbage
             let edit = T.unlines
                         [ "module A where"
                         , "a :: Bool"
                         , "a = ()"
                         ]
-            doc <- reopenA
+            doc <- generateGarbage "A" dir
             changeDoc doc [TextDocumentContentChangeEvent Nothing Nothing edit]
             builds <- waitForTypecheck doc
             liftIO $ assertBool "it still builds" builds
             expectCurrentDiagnostics doc [(DsError, (2,4), "Couldn't match expected type")]
         ]
+  ]
+  where
+    isExpected k = any (`T.isPrefixOf` k) ["GhcSessionIO"]
 
-    isExpected k = any (`isPrefixOf` k) ["GhcSessionIO"]
-
-    generateGarbage :: String -> FilePath -> Session(Session TextDocumentIdentifier)
+    generateGarbage :: String -> FilePath -> Session TextDocumentIdentifier
     generateGarbage modName dir = do
         let fp = modName <> ".hs"
             body = printf "module %s where" modName
@@ -5911,13 +5907,7 @@ garbageCollectionTests = testGroup "garbage collection"
         liftIO $ writeFile (dir </> fp) body
         builds <- waitForTypecheck doc
         liftIO $ assertBool "something is wrong with this test" builds
-        closeDoc doc
-        waitForBuildQueue
-        -- dirty the garbage
-        sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
-            List [FileEvent (filePathToUri $ dir </> modName <> ".hs") FcChanged ]
-
-        return $ openDoc (modName <> ".hs") "haskell"
+        return doc
 
 findResolution_us :: Int -> IO Int
 findResolution_us delay_us | delay_us >= 1000000 = error "Unable to compute timestamp resolution"

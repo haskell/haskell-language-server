@@ -35,6 +35,7 @@ import           Type.Reflection                      (SomeTypeRep (SomeTypeRep)
                                                        pattern App, pattern Con,
                                                        typeOf, typeRep,
                                                        typeRepTyCon)
+import           Unsafe.Coerce                        (unsafeCoerce)
 
 data Value v
     = Succeeded TextDocumentVersion v
@@ -75,11 +76,12 @@ fromKey (Key k)
   | Just (Q (k', f)) <- cast k = Just (k', f)
   | otherwise = Nothing
 
--- | fromKeyType (Q a) = typeOf a
-fromKeyType :: Key -> Maybe SomeTypeRep
+-- | fromKeyType (Q (k,f)) = (typeOf k, f)
+fromKeyType :: Key -> Maybe (SomeTypeRep, NormalizedFilePath)
 fromKeyType (Key k) = case typeOf k of
     App (Con tc) a | tc == typeRepTyCon (typeRep @Q)
-        -> Just $ SomeTypeRep a
+        -> case unsafeCoerce k of
+         Q (_ :: (), f) -> Just (SomeTypeRep a, f)
     _ -> Nothing
 
 toNoFileKey :: (Show k, Typeable k, Eq k, Hashable k) => k -> Key

@@ -379,7 +379,7 @@ defaultMain Arguments{..} = do
                         nub $
                             typeOf GhcSession :
                             typeOf GhcSessionDeps :
-                            [kty | (fromKeyType -> Just kty) <- HashMap.keys values, kty /= typeOf GhcSessionIO] ++
+                            [kty | (fromKeyType -> Just (kty,_)) <- HashMap.keys values, kty /= typeOf GhcSessionIO] ++
                             [typeOf GhcSessionIO]
                 measureMemory logger [keys] consoleObserver valuesRef
 
