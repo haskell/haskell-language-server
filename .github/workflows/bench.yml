@@ -10,12 +10,16 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       should_skip: ${{ steps.skip_check.outputs.should_skip }}
+      should_skip_pr: ${{ steps.skip_pr_check.outputs.should_skip }}
     steps:
       - id: skip_check
         uses: fkirc/skip-duplicate-actions@v3.4.0
         with:
           cancel_others: true
           paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", ".circleci/**", "install/**", "**.nix", "**/test/**", "flake.lock", "**/README.md", "FUNDING.yml"]'
+      - id: skip_pr_check
+        if: contains(github.event.pull_request.title,'[skip ci]') || contains(github.event.pull_request.body,'[skip ci]')
+        run: echo "::set-output name=should_skip::true"
 
   bench-init:
     needs: pre_job
@@ -28,18 +32,20 @@ jobs:
         os: [ubuntu-latest]
 
     steps:
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+    - if: needs.pre_job.outputs.should_skip != 'true' && needs.pre_job.outputs.should_skip_pr != 'true'
       uses: actions/checkout@v2
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+
+    - if: needs.pre_job.outputs.should_skip != 'true' && needs.pre_job.outputs.should_skip_pr != 'true'
       run: git fetch origin master # check the master branch for benchmarking
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+
+    - if: needs.pre_job.outputs.should_skip != 'true' && needs.pre_job.outputs.should_skip_pr != 'true'
       uses: haskell/actions/setup@v1
       with:
         ghc-version: ${{ matrix.ghc }}
         cabal-version: '3.2'
         enable-stack: false
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+    - if: needs.pre_job.outputs.should_skip != 'true' && needs.pre_job.outputs.should_skip_pr != 'true'
       name: Cache Cabal
       uses: actions/cache@v2
       with:
@@ -52,38 +58,38 @@ jobs:
             v2-${{ runner.os }}-${{ matrix.ghc }}-bench-
             v2-${{ runner.os }}-${{ matrix.ghc }}
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+    - if: needs.pre_job.outputs.should_skip != 'true' && needs.pre_job.outputs.should_skip_pr != 'true'
       run: cabal update
 
     # max-backjumps is increased as a temporary solution
     # for dependency resolution failure
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+    - if: needs.pre_job.outputs.should_skip != 'true' && needs.pre_job.outputs.should_skip_pr != 'true'
       run: cabal configure --enable-benchmarks --max-backjumps 12000
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+    - if: needs.pre_job.outputs.should_skip != 'true' && needs.pre_job.outputs.should_skip_pr != 'true'
       name: Build
       shell: bash
       run: cabal build ghcide:benchHist
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+    - if: needs.pre_job.outputs.should_skip != 'true' && needs.pre_job.outputs.should_skip_pr != 'true'
       name: Bench init
       shell: bash
       run: cabal bench ghcide:benchHist  -j --benchmark-options="all-binaries"
 
     # tar is required to preserve file permissions
     # compression speeds up upload/download nicely
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+    - if: needs.pre_job.outputs.should_skip != 'true' && needs.pre_job.outputs.should_skip_pr != 'true'
       name: tar workspace
       shell: bash
       run: tar -czf workspace.tar.gz * .git
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+    - if: needs.pre_job.outputs.should_skip != 'true' && needs.pre_job.outputs.should_skip_pr != 'true'
       name: tar cabal
       run: |
         cd ~/.cabal
         tar -czf cabal.tar.gz *
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+    - if: needs.pre_job.outputs.should_skip != 'true' && needs.pre_job.outputs.should_skip_pr != 'true'
       name: Upload workspace
       uses: actions/upload-artifact@v2
       with:
@@ -91,7 +97,7 @@ jobs:
         retention-days: 1
         path: workspace.tar.gz
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+    - if: needs.pre_job.outputs.should_skip != 'true' && needs.pre_job.outputs.should_skip_pr != 'true'
       name: Upload .cabal
       uses: actions/upload-artifact@v2
       with:
@@ -111,46 +117,46 @@ jobs:
         example: ['cabal', 'lsp-types']
 
     steps:
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+    - if: needs.pre_job.outputs.should_skip != 'true' && needs.pre_job.outputs.should_skip_pr != 'true'
       uses: haskell/actions/setup@v1
       with:
         ghc-version: ${{ matrix.ghc }}
         cabal-version: '3.2'
         enable-stack: false
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+    - if: needs.pre_job.outputs.should_skip != 'true' && needs.pre_job.outputs.should_skip_pr != 'true'
       name: Download cabal home
       uses: actions/download-artifact@v2
       with:
         name: cabal-home
         path: .
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+    - if: needs.pre_job.outputs.should_skip != 'true' && needs.pre_job.outputs.should_skip_pr != 'true'
       name: Download workspace
       uses: actions/download-artifact@v2
       with:
         name: workspace
         path: .
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+    - if: needs.pre_job.outputs.should_skip != 'true' && needs.pre_job.outputs.should_skip_pr != 'true'
       name: untar
       run: |
         mkdir -p ~/.cabal
         tar xzf workspace.tar.gz
         tar xzf cabal.tar.gz --directory ~/.cabal
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+    - if: needs.pre_job.outputs.should_skip != 'true' && needs.pre_job.outputs.should_skip_pr != 'true'
       name: Bench
       shell: bash
       run: cabal bench ghcide:benchHist  -j --benchmark-options="${{ matrix.example }}"
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+    - if: needs.pre_job.outputs.should_skip != 'true' && needs.pre_job.outputs.should_skip_pr != 'true'
       name: Display results
       shell: bash
       run: |
         column -s, -t < ghcide/bench-results/unprofiled/${{ matrix.example }}/results.csv | tee ghcide/bench-results/unprofiled/${{ matrix.example }}/results.txt
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+    - if: needs.pre_job.outputs.should_skip != 'true' && needs.pre_job.outputs.should_skip_pr != 'true'
       name: Archive benchmarking artifacts
       uses: actions/upload-artifact@v2
       with:
@@ -161,7 +167,7 @@ jobs:
            ghcide/bench-results/**/*.svg
            ghcide/bench-results/**/*.eventlog.html
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+    - if: needs.pre_job.outputs.should_skip != 'true' && needs.pre_job.outputs.should_skip_pr != 'true'
       name: Archive benchmark logs
       uses: actions/upload-artifact@v2
       with:

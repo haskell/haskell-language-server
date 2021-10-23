@@ -14,6 +14,7 @@ jobs:
     outputs:
       should_skip_develop: ${{ steps.skip_check.outputs.should_skip }}
       should_skip_build: ${{ steps.skip_check_no_nix.outputs.should_skip }}
+      should_skip_pr: ${{ steps.skip_pr_check.outputs.should_skip }}
     steps:
       - id: skip_check
         uses: fkirc/skip-duplicate-actions@master
@@ -25,6 +26,9 @@ jobs:
         with:
           cancel_others: false
           paths: '["**.nix"]'
+      - id: skip_pr_check
+        if: contains(github.event.pull_request.title,'[skip ci]') || contains(github.event.pull_request.body,'[skip ci]')
+        run: echo "::set-output name=should_skip::true"
 
   # Enter the development shell and run `cabal build`
   develop:
@@ -37,11 +41,11 @@ jobs:
         os: [ubuntu-latest, macOS-latest]
 
     steps:
-    - if: ${{ needs.pre_job.outputs.should_skip_develop != 'true' }}
+    - if: needs.pre_job.outputs.should_skip_develop != 'true' && needs.pre_job.outputs.should_skip_pr != 'true'
       uses: actions/checkout@v2
       with:
         submodules: true
-    - if: ${{ needs.pre_job.outputs.should_skip_develop != 'true' }}
+    - if: needs.pre_job.outputs.should_skip_develop != 'true' && needs.pre_job.outputs.should_skip_pr != 'true'
       uses: cachix/install-nix-action@v13
       with:
         install_url: https://nixos-nix-install-tests.cachix.org/serve/i6laym9jw3wg9mw6ncyrk6gjx4l34vvx/install
@@ -49,13 +53,13 @@ jobs:
         extra_nix_config: |
           experimental-features = nix-command flakes
         nix_path: nixpkgs=channel:nixos-unstable
-    - if: ${{ needs.pre_job.outputs.should_skip_develop != 'true' }}
+    - if: needs.pre_job.outputs.should_skip_develop != 'true' && needs.pre_job.outputs.should_skip_pr != 'true'
       uses: cachix/cachix-action@v10
       with:
         name: haskell-language-server
         # Disable pushing, we will do that in job `build`
         skipPush: true
-    - if: ${{ needs.pre_job.outputs.should_skip_develop != 'true' }}
+    - if: needs.pre_job.outputs.should_skip_develop != 'true' && needs.pre_job.outputs.should_skip_pr != 'true'
       run: |
         nix develop --print-build-logs --command cabal update
         nix develop --print-build-logs --command cabal build
