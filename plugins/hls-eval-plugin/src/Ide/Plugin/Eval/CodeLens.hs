@@ -27,7 +27,7 @@ module Ide.Plugin.Eval.CodeLens (
 
 import           Control.Applicative             (Alternative ((<|>)))
 import           Control.Arrow                   (second, (>>>))
-import           Control.Exception               (try)
+import           Control.Exception               (assert, try)
 import qualified Control.Exception               as E
 import           Control.Lens                    (_1, _3, (%~), (<&>), (^.))
 import           Control.Monad                   (guard, join, void, when)
@@ -38,7 +38,7 @@ import           Data.Char                       (isSpace)
 import qualified Data.HashMap.Strict             as HashMap
 import           Data.List                       (dropWhileEnd, find,
                                                   intercalate, intersperse)
-import           Data.Maybe                      (catMaybes, fromMaybe)
+import           Data.Maybe                      (catMaybes, fromMaybe, isJust)
 import           Data.String                     (IsString)
 import           Data.Text                       (Text)
 import qualified Data.Text                       as T
@@ -539,6 +539,7 @@ ghcSessionDepsDefinition env file = do
         deps <- use_ GetDependencies file
         let tdeps = transitiveModuleDeps deps
         ifaces <- uses_ GetModIface tdeps
+        liftIO $ assert (all (isJust . hm_linkable . hirHomeMod) ifaces) $ pure ()
 
         -- Currently GetDependencies returns things in topological order so A comes before B if A imports B.
         -- We need to reverse this as GHC gets very unhappy otherwise and complains about broken interfaces.

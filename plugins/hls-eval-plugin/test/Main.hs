@@ -7,18 +7,19 @@ module Main
   ( main
   ) where
 
-import           Control.Lens            (_Just, preview, toListOf, view)
+import           Control.Lens            (_Just, folded, preview, toListOf,
+                                          view, (^..))
 import           Data.Aeson              (fromJSON)
 import           Data.Aeson.Types        (Result (Success))
 import           Data.List               (isInfixOf)
 import           Data.List.Extra         (nubOrdOn)
+import qualified Data.Text               as T
 import qualified Ide.Plugin.Eval         as Eval
 import           Ide.Plugin.Eval.Types   (EvalParams (..), Section (..),
                                           testOutput)
 import           Language.LSP.Types.Lens (arguments, command, range, title)
 import           System.FilePath         ((</>))
 import           Test.Hls
-import qualified Data.Text as T
 
 main :: IO ()
 main = defaultTestRunner tests
@@ -177,6 +178,22 @@ tests =
         "Ord Foo" `isInfixOf` output                @? "Output does not include instance Ord Foo"
         not ("Baz Foo" `isInfixOf` output)          @? "Output includes instance Baz Foo"
     ]
+  , testCase "Interfaces are reused after Eval" $ do
+      runSessionWithServer evalPlugin testDataDir $ do
+        doc <- openDoc "TLocalImport.hs" "haskell"
+        waitForTypecheck doc
+        lenses <- getCodeLenses doc
+        let ~cmds@[cmd] = lenses^..folded.command._Just
+        liftIO $ cmds^..folded.title @?= ["Evaluate..."]
+
+        executeCmd cmd
+
+        -- trigger a rebuild and check that dependency interfaces are not rebuilt
+        changeDoc doc []
+        waitForTypecheck doc
+        Right keys <- getLastBuildKeys
+        let ifaceKeys = filter ("GetModIface" `T.isPrefixOf`) keys
+        liftIO $ ifaceKeys @?= []
   ]
 
 goldenWithEval :: TestName -> FilePath -> FilePath -> TestTree
