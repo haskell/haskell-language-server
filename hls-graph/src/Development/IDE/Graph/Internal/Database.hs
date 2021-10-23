@@ -168,9 +168,9 @@ compute db@Database{..} key id mode result = do
         actualDeps = if runChanged /= ChangedNothing then deps else previousDeps
         previousDeps= maybe UnknownDeps resultDeps result
     let res = Result runValue built' changed built actualDeps execution runStore
-    case actualDeps of
-        ResultDeps deps | not(null deps) &&
-                    runChanged /= ChangedNothing
+    case getResultDepsDefault [] actualDeps of
+        deps | not(null deps)
+            && runChanged /= ChangedNothing
                     -> do
             void $ forkIO $
                 updateReverseDeps id db (getResultDepsDefault [] previousDeps) (Set.fromList deps)
@@ -284,7 +284,7 @@ mapConcurrentlyAIO_ f [one] = liftIO $ justWait $ fmap f one
 mapConcurrentlyAIO_ f many = do
     ref <- AIO ask
     waits <- liftIO $ uninterruptibleMask $ \restore -> do
-        waits <- liftIO $ traverse waitOrSpawn (map (fmap (restore . f)) many)
+        waits <- liftIO $ traverse (waitOrSpawn . fmap (restore . f)) many
         let asyncs = rights waits
         liftIO $ atomicModifyIORef'_ ref (asyncs ++)
         return waits

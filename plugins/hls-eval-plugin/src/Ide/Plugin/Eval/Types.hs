@@ -6,6 +6,7 @@
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE UndecidableInstances       #-}
 {-# OPTIONS_GHC -Wwarn #-}
+{-# LANGUAGE RecordWildCards            #-}
 
 module Ide.Plugin.Eval.Types
     ( locate,
@@ -28,7 +29,7 @@ module Ide.Plugin.Eval.Types
       Txt,
       EvalParams(..),
       GetEvalComments(..)
-    )
+    ,nullComments)
 where
 
 import           Control.DeepSeq               (deepseq)
@@ -106,6 +107,9 @@ data Comments = Comments
     , blockComments :: Map Range RawBlockComment
     }
     deriving (Show, Eq, Ord, Generic)
+
+nullComments :: Comments -> Bool
+nullComments Comments{..} = null lineComments && null blockComments
 
 instance NFData Comments
 

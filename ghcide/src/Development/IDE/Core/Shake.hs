@@ -871,7 +871,10 @@ usesWithStale key files = do
 data RuleBody k v
   = Rule (k -> NormalizedFilePath -> Action (Maybe BS.ByteString, IdeResult v))
   | RuleNoDiagnostics (k -> NormalizedFilePath -> Action (Maybe BS.ByteString, Maybe v))
-
+  | RuleWithCustomNewnessCheck
+    { newnessCheck :: BS.ByteString -> BS.ByteString -> Bool
+    , build :: k -> NormalizedFilePath -> Action (Maybe BS.ByteString, Maybe v)
+    }
 
 -- | Define a new Rule with early cutoff
 defineEarlyCutoff
@@ -879,9 +882,14 @@ defineEarlyCutoff
     => RuleBody k v
     -> Rules ()
 defineEarlyCutoff (Rule op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ do
-    defineEarlyCutoff' True key file old mode $ op key file
+    defineEarlyCutoff' True (==) key file old mode $ op key file
 defineEarlyCutoff (RuleNoDiagnostics op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ do
-    defineEarlyCutoff' False key file old mode $ second (mempty,) <$> op key file
+    defineEarlyCutoff' False (==) key file old mode $ second (mempty,) <$> op key file
+defineEarlyCutoff RuleWithCustomNewnessCheck{..} =
+    addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode ->
+        otTracedAction key file mode traceA $
+            defineEarlyCutoff' False newnessCheck key file old mode $
+                second (mempty,) <$> build key file
 
 defineNoFile :: IdeRule k v => (k -> Action v) -> Rules ()
 defineNoFile f = defineNoDiagnostics $ \k file -> do
@@ -896,13 +904,15 @@ defineEarlyCutOffNoFile f = defineEarlyCutoff $ RuleNoDiagnostics $ \k file -> d
 defineEarlyCutoff'
     :: IdeRule k v
     => Bool  -- ^ update diagnostics
+    -- | compare current and previous for freshness
+    -> (BS.ByteString -> BS.ByteString -> Bool)
     -> k
     -> NormalizedFilePath
     -> Maybe BS.ByteString
     -> RunMode
     -> Action (Maybe BS.ByteString, IdeResult v)
     -> Action (RunResult (A (RuleResult k)))
-defineEarlyCutoff' doDiagnostics key file old mode action = do
+defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
     extras@ShakeExtras{state, progress, logger, dirtyKeys} <- getShakeExtras
     options <- getIdeOptions
     (if optSkipProgress options key then id else inProgress progress file) $ do
@@ -947,8 +957,8 @@ defineEarlyCutoff' doDiagnostics key file old mode action = do
                     then updateFileDiagnostics file (Key key) extras $ map (\(_,y,z) -> (y,z)) diags
                     else forM_ diags $ \d -> liftIO $ logWarning logger $ showDiagnosticsColored [d]
                 let eq = case (bs, fmap decodeShakeValue old) of
-                        (ShakeResult a, Just (ShakeResult b)) -> a == b
-                        (ShakeStale a, Just (ShakeStale b))   -> a == b
+                        (ShakeResult a, Just (ShakeResult b)) -> cmp a b
+                        (ShakeStale a, Just (ShakeStale b))   -> cmp a b
                         -- If we do not have a previous result
                         -- or we got ShakeNoCutoff we always return False.
                         _                                     -> False

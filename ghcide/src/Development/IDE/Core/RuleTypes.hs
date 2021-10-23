@@ -49,6 +49,11 @@ data LinkableType = ObjectLinkable | BCOLinkable
 instance Hashable LinkableType
 instance NFData   LinkableType
 
+encodeLinkableType :: Maybe LinkableType -> ByteString
+encodeLinkableType Nothing               = "0"
+encodeLinkableType (Just BCOLinkable)    = "1"
+encodeLinkableType (Just ObjectLinkable) = "2"
+
 -- NOTATION
 --   Foo+ means Foo for the dependencies
 --   Foo* means Foo for me and Foo+

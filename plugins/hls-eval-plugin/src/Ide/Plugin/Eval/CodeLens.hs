@@ -51,6 +51,7 @@ import           Development.IDE                 (Action, GetDependencies (..),
                                                   HiFileResult (hirHomeMod, hirModSummary),
                                                   HscEnvEq, IdeState,
                                                   ModSummaryResult (..),
+                                                  NeedsCompilation (NeedsCompilation),
                                                   evalGhcEnv,
                                                   hscEnvWithImportPaths,
                                                   prettyPrint, runAction,
@@ -109,7 +110,10 @@ import           UnliftIO.Temporary              (withSystemTempFile)
 import           GHC.Driver.Session              (unitDatabases, unitState)
 import           GHC.Types.SrcLoc                (UnhelpfulSpanReason (UnhelpfulInteractive))
 #else
+import           Development.IDE.Core.FileStore  (setSomethingModified)
+import           Development.IDE.Types.Shake     (toKey)
 import           DynFlags
+import           Ide.Plugin.Eval.Rules           (queueForEvaluation)
 #endif
 
 
@@ -195,6 +199,10 @@ runEvalCmd st EvalParams{..} =
             fp <- handleMaybe "uri" $ uriToFilePath' _uri
             let nfp = toNormalizedFilePath' fp
             mdlText <- moduleText _uri
+
+            -- enable codegen
+            liftIO $ queueForEvaluation st nfp
+            liftIO $ setSomethingModified st [toKey NeedsCompilation nfp] "Eval"
 
             session <- runGetSession st nfp
 

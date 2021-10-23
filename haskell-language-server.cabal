@@ -212,7 +212,7 @@ common haddockComments
 
 common eval
   if flag(eval) || flag(all-plugins)
-    build-depends: hls-eval-plugin ^>=1.1.0.0
+    build-depends: hls-eval-plugin ^>=1.2.0.0
     cpp-options: -Deval
 
 common importLens
