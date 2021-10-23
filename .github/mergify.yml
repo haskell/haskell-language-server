@@ -1,8 +1,8 @@
+queue_rules:
+  - name: default
+    method: squash
+
 pull_request_rules:
-  - actions:
-      merge:
-        strict: smart+fasttrack
-        method: squash
     name: Automatically merge pull requests
     conditions:
       - label=merge me
