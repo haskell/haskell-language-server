@@ -48,6 +48,7 @@ library
     Ide.Plugin.Eval.GHC
     Ide.Plugin.Eval.Parse.Comments
     Ide.Plugin.Eval.Parse.Option
+    Ide.Plugin.Eval.Rules
     Ide.Plugin.Eval.Util
 
   build-depends:
@@ -65,6 +66,7 @@ library
     , ghc-paths
     , ghcide                >=1.2   && <1.5
     , hashable
+    , hls-graph
     , hls-plugin-api        ^>=1.2
     , lens
     , lsp
