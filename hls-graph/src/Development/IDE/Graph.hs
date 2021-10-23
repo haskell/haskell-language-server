@@ -17,6 +17,8 @@ module Development.IDE.Graph(
     alwaysRerun,
     -- * Batching
     reschedule,
+    -- * Dirty keys
+    getDirtySet,
     ) where
 
 import           Development.IDE.Graph.Database

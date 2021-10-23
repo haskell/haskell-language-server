@@ -8,6 +8,7 @@ module Development.IDE.Graph.Database(
     shakeRunDatabase,
     shakeRunDatabaseForKeys,
     shakeProfileDatabase,
+    shakeGetDirtySet,
     shakeLastBuildKeys
     ) where
 
@@ -40,6 +41,11 @@ shakeNewDatabase opts rules = do
 
 shakeRunDatabase :: ShakeDatabase -> [Action a] -> IO ([a], [IO ()])
 shakeRunDatabase = shakeRunDatabaseForKeys Nothing
+
+-- | Returns the set of dirty keys annotated with their age (in # of builds)
+shakeGetDirtySet :: ShakeDatabase -> IO [(Key, Int)]
+shakeGetDirtySet (ShakeDatabase _ _ db) =
+    fmap snd <$> Development.IDE.Graph.Internal.Database.getDirtySet db
 
 -- Only valid if we never pull on the results, which we don't
 unvoid :: Functor m => m () -> m a
