@@ -41,6 +41,7 @@ import           Data.Aeson                      (Value (Null), toJSON)
 import qualified Data.Aeson                      as A
 import           Data.ByteString.Lazy            (ByteString)
 import           Data.Default                    (def)
+import           Data.Maybe                      (fromMaybe)
 import qualified Data.Text                       as T
 import qualified Data.Text.Lazy                  as TL
 import qualified Data.Text.Lazy.Encoding         as TL
@@ -63,6 +64,7 @@ import           Language.LSP.Types              hiding
 import           Language.LSP.Types.Capabilities (ClientCapabilities)
 import           System.Directory                (getCurrentDirectory,
                                                   setCurrentDirectory)
+import           System.Environment              (lookupEnv)
 import           System.FilePath
 import           System.IO.Unsafe                (unsafePerformIO)
 import           System.Process.Extra            (createPipe)
@@ -159,6 +161,12 @@ runSessionWithServer' ::
 runSessionWithServer' plugin conf sconf caps root s = withLock lock $ keepCurrentDirectory $ do
   (inR, inW) <- createPipe
   (outR, outW) <- createPipe
+  let logger = do
+        logStdErr <- fromMaybe "0" <$> lookupEnv "LSP_TEST_LOG_STDERR"
+        if logStdErr == "0"
+            then return noLogging
+            else argsLogger testing
+
   server <-
     async $
       Ghcide.defaultMain
@@ -166,7 +174,7 @@ runSessionWithServer' plugin conf sconf caps root s = withLock lock $ keepCurren
           { argsHandleIn = pure inR,
             argsHandleOut = pure outW,
             argsDefaultHlsConfig = conf,
-            argsLogger = pure noLogging,
+            argsLogger = logger,
             argsIdeOptions = \config sessionLoader ->
               let ideOptions = (argsIdeOptions def config sessionLoader) {optTesting = IdeTesting True}
                in ideOptions {optShakeOptions = (optShakeOptions ideOptions) {shakeThreads = 2}},
