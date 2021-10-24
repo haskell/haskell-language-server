@@ -86,7 +86,8 @@ import           GHC.IO.Handle                         (hDuplicate)
 import           HIE.Bios.Cradle                       (findCradle)
 import qualified HieDb.Run                             as HieDb
 import           Ide.Plugin.Config                     (CheckParents (NeverCheck),
-                                                        Config,
+                                                        Config, checkParents,
+                                                        checkProject,
                                                         getConfigFromNotification)
 import           Ide.Plugin.ConfigUtils                (pluginsToDefaultConfig,
                                                         pluginsToVSCodeExtensionSchema)
@@ -193,7 +194,10 @@ defaultArguments priority = Arguments
         , argsGhcidePlugin = mempty
         , argsHlsPlugins = pluginDescToIdePlugins Ghcide.descriptors
         , argsSessionLoadingOptions = def
-        , argsIdeOptions = const defaultIdeOptions
+        , argsIdeOptions = \config ghcSession -> (defaultIdeOptions ghcSession)
+            { optCheckProject = pure $ checkProject config
+            , optCheckParents = pure $ checkParents config
+            }
         , argsLspOptions = def {LSP.completionTriggerCharacters = Just "."}
         , argsDefaultHlsConfig = def
         , argsGetHieDbLoc = getHieDbLoc
