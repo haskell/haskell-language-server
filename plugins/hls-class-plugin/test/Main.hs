@@ -54,7 +54,7 @@ _CACodeAction = prism' InR $ \case
 
 goldenWithClass :: TestName -> FilePath -> FilePath -> ([CodeAction] -> Session ()) -> TestTree
 goldenWithClass title path desc act =
-  goldenWithHaskellDoc classPlugin title testDataDir path (desc <.> "expected") "hs" $ \doc -> do
+  goldenWithHaskellDoc (runSessionWithServer classPlugin) title testDataDir path (desc <.> "expected") "hs" $ \doc -> do
     _ <- waitForDiagnosticsFromSource doc "typecheck"
     actions <- concatMap (^.. _CACodeAction) <$> getAllCodeActions doc
     act actions

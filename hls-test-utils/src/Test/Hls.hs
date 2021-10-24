@@ -52,7 +52,8 @@ import           Development.IDE.Plugin.Test     (TestRequest (WaitForIdeRule, W
 import           Development.IDE.Types.Options
 import           GHC.IO.Handle
 import           Ide.Plugin.Config               (Config, formattingProvider)
-import           Ide.PluginUtils                 (idePluginsToPluginDesc, pluginDescToIdePlugins)
+import           Ide.PluginUtils                 (idePluginsToPluginDesc,
+                                                  pluginDescToIdePlugins)
 import           Ide.Types
 import           Language.LSP.Test
 import           Language.LSP.Types              hiding
@@ -84,17 +85,17 @@ goldenGitDiff :: TestName -> FilePath -> IO ByteString -> TestTree
 goldenGitDiff name = goldenVsStringDiff name gitDiff
 
 goldenWithHaskellDoc
-  :: PluginDescriptor IdeState
+  :: (FilePath -> Session ByteString -> IO ByteString)
   -> TestName
   -> FilePath
   -> FilePath
   -> FilePath
-  -> FilePath
+  -> String
   -> (TextDocumentIdentifier -> Session ())
   -> TestTree
-goldenWithHaskellDoc plugin title testDataDir path desc ext act =
+goldenWithHaskellDoc runSessionTest title testDataDir path desc ext act =
   goldenGitDiff title (testDataDir </> path <.> desc <.> ext)
-  $ runSessionWithServer plugin testDataDir
+  $ runSessionTest testDataDir
   $ TL.encodeUtf8 . TL.fromStrict
   <$> do
     doc <- openDoc (path <.> ext) "haskell"
@@ -224,7 +225,7 @@ waitForAction key TextDocumentIdentifier{_uri} = do
     return $ do
       e <- _result
       case A.fromJSON e of
-        A.Error err   -> Left $ ResponseError InternalError (T.pack err) Nothing
+        A.Error err -> Left $ ResponseError InternalError (T.pack err) Nothing
         A.Success a -> pure a
 
 waitForTypecheck :: TextDocumentIdentifier -> Session (Either ResponseError Bool)

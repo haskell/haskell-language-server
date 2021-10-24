@@ -12,13 +12,14 @@ import           Data.Aeson              (fromJSON)
 import           Data.Aeson.Types        (Result (Success))
 import           Data.List               (isInfixOf)
 import           Data.List.Extra         (nubOrdOn)
+import qualified Data.Text               as T
+import           Ide.Plugin.Config       (checkProject)
 import qualified Ide.Plugin.Eval         as Eval
 import           Ide.Plugin.Eval.Types   (EvalParams (..), Section (..),
                                           testOutput)
 import           Language.LSP.Types.Lens (arguments, command, range, title)
 import           System.FilePath         ((</>))
 import           Test.Hls
-import qualified Data.Text as T
 
 main :: IO ()
 main = defaultTestRunner tests
@@ -30,27 +31,27 @@ tests :: TestTree
 tests =
   testGroup "eval"
   [ testCase "Produces Evaluate code lenses" $
-      runSessionWithServer evalPlugin testDataDir $ do
+      runS evalPlugin testDataDir $ do
         doc <- openDoc "T1.hs" "haskell"
         lenses <- getCodeLenses doc
         liftIO $ map (preview $ command . _Just . title) lenses @?= [Just "Evaluate..."]
   , testCase "Produces Refresh code lenses" $
-      runSessionWithServer evalPlugin testDataDir $ do
+      runS evalPlugin testDataDir $ do
         doc <- openDoc "T2.hs" "haskell"
         lenses <- getCodeLenses doc
         liftIO $ map (preview $ command . _Just . title) lenses @?= [Just "Refresh..."]
   , testCase "Code lenses have ranges" $
-      runSessionWithServer evalPlugin testDataDir $ do
+      runS evalPlugin testDataDir $ do
         doc <- openDoc "T1.hs" "haskell"
         lenses <- getCodeLenses doc
         liftIO $ map (view range) lenses @?= [Range (Position 4 0) (Position 5 0)]
   , testCase "Multi-line expressions have a multi-line range" $ do
-      runSessionWithServer evalPlugin testDataDir $ do
+      runS evalPlugin testDataDir $ do
         doc <- openDoc "T3.hs" "haskell"
         lenses <- getCodeLenses doc
         liftIO $ map (view range) lenses @?= [Range (Position 3 0) (Position 5 0)]
   , testCase "Executed expressions range covers only the expression" $ do
-      runSessionWithServer evalPlugin testDataDir $ do
+      runS evalPlugin testDataDir $ do
         doc <- openDoc "T2.hs" "haskell"
         lenses <- getCodeLenses doc
         liftIO $ map (view range) lenses @?= [Range (Position 4 0) (Position 5 0)]
@@ -181,7 +182,7 @@ tests =
 
 goldenWithEval :: TestName -> FilePath -> FilePath -> TestTree
 goldenWithEval title path ext =
-  goldenWithHaskellDoc evalPlugin title testDataDir path "expected" ext executeLensesBackwards
+  goldenWithHaskellDoc (runS evalPlugin) title testDataDir path "expected" ext executeLensesBackwards
 
 -- | Execute lenses backwards, to avoid affecting their position in the source file
 executeLensesBackwards :: TextDocumentIdentifier -> Session ()
@@ -208,7 +209,7 @@ executeCmd cmd = do
   pure ()
 
 evalLenses :: FilePath -> IO [CodeLens]
-evalLenses path = runSessionWithServer evalPlugin testDataDir $ do
+evalLenses path = runS evalPlugin testDataDir $ do
   doc <- openDoc path "haskell"
   executeLensesBackwards doc
   getCodeLenses doc
@@ -225,7 +226,7 @@ testDataDir :: FilePath
 testDataDir = "test" </> "testdata"
 
 evalInFile :: FilePath -> T.Text -> T.Text -> IO ()
-evalInFile fp e expected = runSessionWithServer evalPlugin testDataDir $ do
+evalInFile fp e expected = runS evalPlugin testDataDir $ do
   doc <- openDoc fp "haskell"
   origin <- documentContents doc
   let withEval = origin <> e
@@ -233,3 +234,9 @@ evalInFile fp e expected = runSessionWithServer evalPlugin testDataDir $ do
   executeLensesBackwards doc
   result <- fmap T.strip . T.stripPrefix withEval <$> documentContents doc
   liftIO $ result @?= Just (T.strip expected)
+
+-- Run with checkProject false to avoid loading all the test data modules,
+-- which leads to flaky test failures due to how the Eval plugin mutates
+-- the shared GHC session (this is because of how the InteractiveContext works)
+runS :: PluginDescriptor IdeState -> FilePath -> Session a -> IO a
+runS plugin = runSessionWithServer' [plugin] def{checkProject = False} def fullCaps

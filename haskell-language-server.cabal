@@ -405,7 +405,7 @@ test-suite func-test
     , hspec-expectations
     , lens
     , ghcide
-    , hls-test-utils ^>= 1.1.0.0
+    , hls-test-utils ^>= 1.2.0.0
     , lsp-types
     , aeson
     , hls-plugin-api

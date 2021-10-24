@@ -37,7 +37,7 @@ tests =
 
 goldenWithHaddockComments :: FilePath -> GenCommentsType -> Int -> Int -> TestTree
 goldenWithHaddockComments fp (toTitle -> expectedTitle) l c =
-  goldenWithHaskellDoc haddockCommentsPlugin (fp <> " (golden)") testDataDir fp "expected" "hs" $ \doc -> do
+  goldenWithHaskellDoc (runSessionWithServer haddockCommentsPlugin) (fp <> " (golden)") testDataDir fp "expected" "hs" $ \doc -> do
     actions <- getCodeActions doc (Range (Position l c) (Position l $ succ c))
     case find ((== Just expectedTitle) . caTitle) actions of
       Just (InR x) -> executeCodeAction x

@@ -44,4 +44,4 @@ test-suite tests
     , base
     , filepath
     , hls-module-name-plugin
-    , hls-test-utils          >=1.0 && <1.2
+    , hls-test-utils          >=1.0 && <1.3

@@ -40,4 +40,4 @@ test-suite tests
     , base
     , filepath
     , hls-floskell-plugin
-    , hls-test-utils       >=1.0 && <1.2
+    , hls-test-utils       >=1.0 && <1.3

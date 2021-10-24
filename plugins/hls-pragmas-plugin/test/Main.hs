@@ -111,7 +111,7 @@ completionTest testComment fileName te' label textFormat insertText detail [a, b
       item ^. L.detail @?= detail
 
 goldenWithPragmas :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
-goldenWithPragmas title path = goldenWithHaskellDoc pragmasPlugin title testDataDir path "expected" "hs"
+goldenWithPragmas title path = goldenWithHaskellDoc (runSessionWithServer pragmasPlugin) title testDataDir path "expected" "hs"
 
 testDataDir :: FilePath
 testDataDir = "test" </> "testdata"

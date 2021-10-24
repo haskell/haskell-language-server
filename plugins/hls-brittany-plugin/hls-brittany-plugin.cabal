@@ -48,4 +48,4 @@ test-suite tests
     , base
     , filepath
     , hls-brittany-plugin
-    , hls-test-utils       >=1.0 && <1.2
+    , hls-test-utils       >=1.0 && <1.3

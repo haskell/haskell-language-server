@@ -106,7 +106,8 @@ test-suite tests
     , extra
     , filepath
     , hls-eval-plugin
-    , hls-test-utils   ^>=1.1
+    , hls-plugin-api
+    , hls-test-utils   ^>=1.2
     , lens
     , lsp-types
     , text

@@ -40,7 +40,7 @@ tests =
   ]
 
 goldenWithModuleName :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
-goldenWithModuleName title path = goldenWithHaskellDoc moduleNamePlugin title testDataDir path "expected" "hs"
+goldenWithModuleName title path = goldenWithHaskellDoc (runSessionWithServer moduleNamePlugin) title testDataDir path "expected" "hs"
 
 testDataDir :: FilePath
 testDataDir = "test" </> "testdata"

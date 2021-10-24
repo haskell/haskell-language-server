@@ -67,7 +67,7 @@ executeCmd cmd = do
 -- helpers
 
 goldenWithRefineImports :: FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
-goldenWithRefineImports fp = goldenWithHaskellDoc refineImportsPlugin (fp <> " (golden)") testDataDir fp "expected" "hs"
+goldenWithRefineImports fp = goldenWithHaskellDoc (runSessionWithServer refineImportsPlugin) (fp <> " (golden)") testDataDir fp "expected" "hs"
 
 testDataDir :: String
 testDataDir = "test" </> "testdata"
