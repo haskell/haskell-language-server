@@ -31,7 +31,7 @@ jobs:
     needs: pre_job
     runs-on: ${{ matrix.os }}
     env:
-      XDG_CACHE_HOME: ${{ runner.temp }}/ghcide
+      XDG_CACHE_HOME: ${{ runner.temp }}/cache
     strategy:
       fail-fast: true
       matrix:
@@ -144,7 +144,9 @@ jobs:
       - name: clean ide cache
         run: |
           rm -rf ~/.cache/ghcide
+          rm -rf ~/.cache/hie-bios
           rm -rf $XDG_CACHE_HOME/ghcide
+          rm -rf $XDG_CACHE_HOME/hie-bios
 
       - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
         name: Build
