@@ -31,7 +31,7 @@ jobs:
     needs: pre_job
     runs-on: ${{ matrix.os }}
     env:
-      XDG_CACHE_HOME: /tmp/ghcide
+      XDG_CACHE_HOME: ${{ runner.temp }}/ghcide
     strategy:
       fail-fast: true
       matrix:
