@@ -30,6 +30,8 @@ jobs:
   test:
     needs: pre_job
     runs-on: ${{ matrix.os }}
+    env:
+      XDG_CACHE_HOME: /tmp/ghcide
     strategy:
       fail-fast: true
       matrix:
@@ -140,7 +142,9 @@ jobs:
 
       # this is only safe if the test environment is isolated
       - name: clean ide cache
-        run: rm -rf ~/.cache/ghcide
+        run: |
+          rm -rf ~/.cache/ghcide
+          rm -rf $XDG_CACHE_HOME/ghcide
 
       - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
         name: Build
