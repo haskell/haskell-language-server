@@ -54,7 +54,7 @@ newtype Action a = Action {fromAction :: ReaderT SAction IO a}
 
 data SAction = SAction {
     actionDatabase :: !Database,
-    actionDeps     :: !(IORef (Maybe [Id])) -- Nothing means always rerun
+    actionDeps     :: !(IORef ResultDeps)
     }
 
 
@@ -106,10 +106,32 @@ data Result = Result {
     resultBuilt     :: !Step, -- ^ the step when it was last recomputed
     resultChanged   :: !Step, -- ^ the step when it last changed
     resultVisited   :: !Step, -- ^ the step when it was last looked up
-    resultDeps      :: !(Maybe [Id]), -- ^ Nothing = alwaysRerun
+    resultDeps      :: !ResultDeps,
     resultExecution :: !Seconds, -- ^ How long it took, last time it ran
     resultData      :: BS.ByteString
     }
+
+data ResultDeps = UnknownDeps | AlwaysRerunDeps ![Id] | ResultDeps ![Id]
+
+getResultDepsDefault :: [Id] -> ResultDeps -> [Id]
+getResultDepsDefault _ (ResultDeps ids)      = ids
+getResultDepsDefault _ (AlwaysRerunDeps ids) = ids
+getResultDepsDefault def UnknownDeps         = def
+
+mapResultDeps :: ([Id] -> [Id]) -> ResultDeps -> ResultDeps
+mapResultDeps f (ResultDeps ids)      = ResultDeps $ f ids
+mapResultDeps f (AlwaysRerunDeps ids) = AlwaysRerunDeps $ f ids
+mapResultDeps _ UnknownDeps           = UnknownDeps
+
+instance Semigroup ResultDeps where
+    UnknownDeps <> x = x
+    x <> UnknownDeps = x
+    AlwaysRerunDeps ids <> x = AlwaysRerunDeps (ids <> getResultDepsDefault [] x)
+    x <> AlwaysRerunDeps ids = AlwaysRerunDeps (getResultDepsDefault [] x <> ids)
+    ResultDeps ids <> ResultDeps ids' = ResultDeps (ids <> ids')
+
+instance Monoid ResultDeps where
+    mempty = UnknownDeps
 
 ---------------------------------------------------------------------
 -- Running builds
