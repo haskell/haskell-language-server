@@ -82,6 +82,8 @@ import           GHC                             (ClsInst,
                                                   setTargets, typeKind)
 import qualified GHC.LanguageExtensions.Type     as LangExt (Extension (..))
 
+import           Development.IDE.Core.FileStore  (setSomethingModified)
+import           Development.IDE.Types.Shake     (toKey)
 import           Ide.Plugin.Eval.Code            (Statement, asStatements,
                                                   evalSetup, myExecStmt,
                                                   propSetup, resultRange,
@@ -90,6 +92,7 @@ import           Ide.Plugin.Eval.GHC             (addImport, addPackages,
                                                   hasPackage, showDynFlags)
 import           Ide.Plugin.Eval.Parse.Comments  (commentsToSections)
 import           Ide.Plugin.Eval.Parse.Option    (parseSetFlags)
+import           Ide.Plugin.Eval.Rules           (queueForEvaluation)
 import           Ide.Plugin.Eval.Types
 import           Ide.Plugin.Eval.Util            (asS, gStrictTry, handleMaybe,
                                                   handleMaybeM, isLiterate,
@@ -110,10 +113,7 @@ import           UnliftIO.Temporary              (withSystemTempFile)
 import           GHC.Driver.Session              (unitDatabases, unitState)
 import           GHC.Types.SrcLoc                (UnhelpfulSpanReason (UnhelpfulInteractive))
 #else
-import           Development.IDE.Core.FileStore  (setSomethingModified)
-import           Development.IDE.Types.Shake     (toKey)
 import           DynFlags
-import           Ide.Plugin.Eval.Rules           (queueForEvaluation)
 #endif
 
 
