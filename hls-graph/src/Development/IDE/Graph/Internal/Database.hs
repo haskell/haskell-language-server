@@ -138,7 +138,7 @@ builder db@Database{..} keys = do
 --       This assumes that the implementation will be a lookup
 --     * Otherwise, we spawn a new thread to refresh the dirty deps (if any) and the key itself
 refresh :: Database -> Key -> Id -> Maybe Result -> AIO (IO Result)
-refresh db key id result@(Just me@Result{resultDeps=Just deps}) = do
+refresh db key id result@(Just me@Result{resultDeps = ResultDeps deps}) = do
     res <- builder db $ map Left deps
     case res of
       Left res ->
@@ -160,7 +160,7 @@ refresh db key id result =
 compute :: Database -> Key -> Id -> RunMode -> Maybe Result -> IO Result
 compute db@Database{..} key id mode result = do
     let act = runRule databaseRules key (fmap resultData result) mode
-    deps <- newIORef $ Just []
+    deps <- newIORef UnknownDeps
     (execution, RunResult{..}) <-
         duration $ runReaderT (fromAction act) $ SAction db deps
     built <- readIORef databaseStep
@@ -169,14 +169,14 @@ compute db@Database{..} key id mode result = do
         built' = if runChanged /= ChangedNothing then built else changed
         -- only update the deps when the rule ran with changes
         actualDeps = if runChanged /= ChangedNothing then deps else previousDeps
-        previousDeps= resultDeps =<< result
+        previousDeps= maybe UnknownDeps resultDeps result
     let res = Result runValue built' changed built actualDeps execution runStore
     case actualDeps of
-        Just deps | not(null deps) &&
+        ResultDeps deps | not(null deps) &&
                     runChanged /= ChangedNothing
                     -> do
             void $ forkIO $
-                updateReverseDeps id db (fromMaybe [] previousDeps) (Set.fromList deps)
+                updateReverseDeps id db (getResultDepsDefault [] previousDeps) (Set.fromList deps)
         _ -> pure ()
     withLock databaseLock $
         Ids.insert databaseValues id (key, Clean res)
