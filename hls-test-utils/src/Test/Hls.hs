@@ -27,7 +27,8 @@ module Test.Hls
     waitForBuildQueue,
     waitForTypecheck,
     waitForAction,
-    sendConfigurationChanged)
+    sendConfigurationChanged,
+    getLastBuildKeys)
 where
 
 import           Control.Applicative.Combinators
@@ -47,7 +48,7 @@ import           Development.IDE                 (IdeState, noLogging)
 import           Development.IDE.Graph           (ShakeOptions (shakeThreads))
 import           Development.IDE.Main
 import qualified Development.IDE.Main            as Ghcide
-import           Development.IDE.Plugin.Test     (TestRequest (WaitForIdeRule, WaitForShakeQueue),
+import           Development.IDE.Plugin.Test     (TestRequest (GetLastBuildKeys, WaitForIdeRule, WaitForShakeQueue),
                                                   WaitForIdeRuleResult (ideResultSuccess))
 import           Development.IDE.Types.Options
 import           GHC.IO.Handle
@@ -216,10 +217,10 @@ waitForBuildQueue = do
         -- assume a ghcide binary lacking the WaitForShakeQueue method
         _                                   -> return 0
 
-waitForAction :: String -> TextDocumentIdentifier -> Session (Either ResponseError WaitForIdeRuleResult)
-waitForAction key TextDocumentIdentifier{_uri} = do
+callTestPlugin :: (A.FromJSON b) => TestRequest -> Session (Either ResponseError b)
+callTestPlugin cmd = do
     let cm = SCustomMethod "test"
-    waitId <- sendRequest cm (A.toJSON $ WaitForIdeRule key _uri)
+    waitId <- sendRequest cm (A.toJSON cmd)
     ResponseMessage{_result} <- skipManyTill anyMessage $ responseForId cm waitId
     return $ do
       e <- _result
@@ -227,8 +228,15 @@ waitForAction key TextDocumentIdentifier{_uri} = do
         A.Error err   -> Left $ ResponseError InternalError (T.pack err) Nothing
         A.Success a -> pure a
 
+waitForAction :: String -> TextDocumentIdentifier -> Session (Either ResponseError WaitForIdeRuleResult)
+waitForAction key TextDocumentIdentifier{_uri} =
+    callTestPlugin (WaitForIdeRule key _uri)
+
 waitForTypecheck :: TextDocumentIdentifier -> Session (Either ResponseError Bool)
 waitForTypecheck tid = fmap ideResultSuccess <$> waitForAction "typecheck" tid
+
+getLastBuildKeys :: Session (Either ResponseError [T.Text])
+getLastBuildKeys = callTestPlugin GetLastBuildKeys
 
 sendConfigurationChanged :: Value -> Session ()
 sendConfigurationChanged config =

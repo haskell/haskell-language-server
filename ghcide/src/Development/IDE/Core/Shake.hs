@@ -24,7 +24,7 @@
 --   always stored as real Haskell values, whereas Shake serialises all 'A' values
 --   between runs. To deserialise a Shake value, we just consult Values.
 module Development.IDE.Core.Shake(
-    IdeState, shakeSessionInit, shakeExtras,
+    IdeState, shakeSessionInit, shakeExtras, shakeDb,
     ShakeExtras(..), getShakeExtras, getShakeExtrasRules,
     KnownTargets, Target(..), toKnownFiles,
     IdeRule, IdeResult,

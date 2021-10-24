@@ -20,6 +20,7 @@ module Development.IDE.Test
   , standardizeQuotes
   , flushMessages
   , waitForAction
+  , getLastBuildKeys
   ) where
 
 import           Control.Applicative.Combinators
@@ -169,13 +170,20 @@ canonicalizeUri uri = filePathToUri <$> canonicalizePath (fromJust (uriToFilePat
 diagnostic :: Session (NotificationMessage TextDocumentPublishDiagnostics)
 diagnostic = LspTest.message STextDocumentPublishDiagnostics
 
-waitForAction :: String -> TextDocumentIdentifier -> Session (Either ResponseError WaitForIdeRuleResult)
-waitForAction key TextDocumentIdentifier{_uri} = do
+callTestPlugin :: (A.FromJSON b) => TestRequest -> Session (Either ResponseError b)
+callTestPlugin cmd = do
     let cm = SCustomMethod "test"
-    waitId <- sendRequest cm (A.toJSON $ WaitForIdeRule key _uri)
+    waitId <- sendRequest cm (A.toJSON cmd)
     ResponseMessage{_result} <- skipManyTill anyMessage $ responseForId cm waitId
     return $ do
       e <- _result
       case A.fromJSON e of
         A.Error e   -> Left $ ResponseError InternalError (T.pack e) Nothing
         A.Success a -> pure a
+
+waitForAction :: String -> TextDocumentIdentifier -> Session (Either ResponseError WaitForIdeRuleResult)
+waitForAction key TextDocumentIdentifier{_uri} =
+    callTestPlugin (WaitForIdeRule key _uri)
+
+getLastBuildKeys :: Session (Either ResponseError [T.Text])
+getLastBuildKeys = callTestPlugin GetLastBuildKeys
