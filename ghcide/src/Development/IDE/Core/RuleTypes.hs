@@ -49,6 +49,9 @@ data LinkableType = ObjectLinkable | BCOLinkable
 instance Hashable LinkableType
 instance NFData   LinkableType
 
+-- | Encode the linkable into an ordered bytestring.
+--   This is used to drive an ordered "newness" predicate in the
+--   'NeedsCompilation' build rule.
 encodeLinkableType :: Maybe LinkableType -> ByteString
 encodeLinkableType Nothing               = "0"
 encodeLinkableType (Just BCOLinkable)    = "1"

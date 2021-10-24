@@ -1080,7 +1080,13 @@ mainRule = do
     getClientSettingsRule
     getHieAstsRule
     getBindingsRule
-    defineEarlyCutoff $ RuleNoDiagnostics $ \NeedsCompilation file ->
+    -- This rule uses a custom newness check that relies on the encoding
+    --  produced by 'encodeLinkable'. This works as follows:
+    --   * <previous> -> <new>
+    --   * ObjectLinkable -> BCOLinkable : the prev linkable can be reused,  signal "no change"
+    --   * Object/BCO -> NoLinkable      : the prev linkable can be ignored, signal "no change"
+    --   * otherwise                     : the prev linkable cannot be reused, signal "value has changed"
+    defineEarlyCutoff $ RuleWithCustomNewnessCheck (<=) $ \NeedsCompilation file ->
         needsCompilationRule file
     generateCoreRule
     getImportMapRule
