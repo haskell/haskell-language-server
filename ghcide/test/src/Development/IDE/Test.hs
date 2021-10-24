@@ -21,6 +21,7 @@ module Development.IDE.Test
   , flushMessages
   , waitForAction
   , getLastBuildKeys
+  , getInterfaceFilesDir
   ) where
 
 import           Control.Applicative.Combinators
@@ -187,3 +188,6 @@ waitForAction key TextDocumentIdentifier{_uri} =
 
 getLastBuildKeys :: Session (Either ResponseError [T.Text])
 getLastBuildKeys = callTestPlugin GetLastBuildKeys
+
+getInterfaceFilesDir :: TextDocumentIdentifier -> Session (Either ResponseError FilePath)
+getInterfaceFilesDir TextDocumentIdentifier{_uri} = callTestPlugin (GetInterfaceFilesDir _uri)
