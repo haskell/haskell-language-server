@@ -57,7 +57,7 @@ data ProfileEntry = ProfileEntry
 -- resultsOnly :: Map.HashMap Id (Key, Status) -> Map.HashMap Id (Key, Result (Either BS.ByteString Value))
 resultsOnly :: [(Ids.Id, (k, Status))] -> Map.HashMap Ids.Id (k, Result)
 resultsOnly mp = Map.map (fmap (\r ->
-      r{resultDeps = fmap (filter (isJust . flip Map.lookup keep)) $ resultDeps r}
+      r{resultDeps = mapResultDeps (filter (isJust . flip Map.lookup keep)) $ resultDeps r}
     )) keep
     where
         keep = Map.fromList $ mapMaybe ((traverse.traverse) getResult) mp
@@ -109,7 +109,7 @@ toReport db = do
     status <- prepareForDependencyOrder db
     let order = let shw i = maybe "<unknown>" (show . fst) $ Map.lookup i status
                 in dependencyOrder shw
-                $ map (second (fromMaybe [-1] . resultDeps . snd))
+                $ map (second (getResultDepsDefault [-1] . resultDeps . snd))
                 $ Map.toList status
         ids = IntMap.fromList $ zip order [0..]
 
@@ -122,14 +122,14 @@ toReport db = do
             ,prfBuilt = fromStep resultBuilt
             ,prfVisited = fromStep resultVisited
             ,prfChanged = fromStep resultChanged
-            ,prfDepends = map pure $ mapMaybe (`IntMap.lookup` ids) $ fromMaybe [-1] $ resultDeps
+            ,prfDepends = map pure $ mapMaybe (`IntMap.lookup` ids) $ getResultDepsDefault [-1] resultDeps
             ,prfExecution = resultExecution
             }
             where fromStep i = fromJust $ Map.lookup i steps
     pure ([maybe (error "toReport") f $ Map.lookup i status | i <- order], ids)
 
 alwaysRerunResult :: Step -> Result
-alwaysRerunResult current = Result (Value $ toDyn "<alwaysRerun>") (Step 0) (Step 0) current (Just []) 0 mempty
+alwaysRerunResult current = Result (Value $ toDyn "<alwaysRerun>") (Step 0) (Step 0) current (ResultDeps []) 0 mempty
 
 readDataFileHTML :: FilePath -> IO LBS.ByteString
 readDataFileHTML file = LBS.readFile =<< getDataFile ("html" </> file)
