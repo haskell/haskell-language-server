@@ -1,8 +1,9 @@
 queue_rules:
   - name: default
+    conditions: []
 
 pull_request_rules:
-    name: Automatically merge pull requests
+  - name: Automatically merge pull requests
     conditions:
       - label=merge me
       - '#approved-reviews-by>=1'
