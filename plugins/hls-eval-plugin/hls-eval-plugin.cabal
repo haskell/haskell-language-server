@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-eval-plugin
-version:            1.1.2.0
+version:            1.2.0.0
 synopsis:           Eval plugin for Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -48,6 +48,7 @@ library
     Ide.Plugin.Eval.GHC
     Ide.Plugin.Eval.Parse.Comments
     Ide.Plugin.Eval.Parse.Option
+    Ide.Plugin.Eval.Rules
     Ide.Plugin.Eval.Util
 
   build-depends:
@@ -65,6 +66,7 @@ library
     , ghc-paths
     , ghcide                >=1.2   && <1.5
     , hashable
+    , hls-graph
     , hls-plugin-api        ^>=1.2
     , lens
     , lsp
@@ -83,7 +85,7 @@ library
     , unordered-containers
 
   ghc-options:
-    -Wall -Wno-name-shadowing -Wno-unticked-promoted-constructors
+    -Wall -Wno-name-shadowing -Wno-unticked-promoted-constructors -fno-ignore-asserts
 
   if flag(pedantic)
     ghc-options: -Werror
@@ -98,7 +100,7 @@ test-suite tests
   default-language: Haskell2010
   hs-source-dirs:   test
   main-is:          Main.hs
-  ghc-options:      -threaded -rtsopts -with-rtsopts=-N
+  ghc-options:      -threaded -rtsopts -with-rtsopts=-N -fno-ignore-asserts
   build-depends:
     , aeson
     , base

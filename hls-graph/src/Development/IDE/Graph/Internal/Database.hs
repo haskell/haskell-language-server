@@ -11,7 +11,7 @@
 {-# LANGUAGE TupleSections              #-}
 {-# LANGUAGE TypeFamilies               #-}
 
-module Development.IDE.Graph.Internal.Database (newDatabase, incDatabase, build) where
+module Development.IDE.Graph.Internal.Database (newDatabase, incDatabase, build, getDirtySet) where
 
 import           Control.Concurrent.Async
 import           Control.Concurrent.Extra
@@ -46,7 +46,6 @@ newDatabase databaseExtra databaseRules = do
     databaseValues <- Ids.empty
     databaseReverseDeps <- Ids.empty
     databaseReverseDepsLock <- newLock
-    databaseDirtySet <- newIORef Nothing
     pure Database{..}
 
 -- | Increment the step and mark dirty
@@ -54,7 +53,6 @@ incDatabase :: Database -> Maybe [Key] -> IO ()
 -- all keys are dirty
 incDatabase db Nothing = do
     modifyIORef' (databaseStep db) $ \(Step i) -> Step $ i + 1
-    writeIORef (databaseDirtySet db) Nothing
     withLock (databaseLock db) $
         Ids.forMutate (databaseValues db) $ \_ -> second $ \case
             Clean x       -> Dirty (Just x)
@@ -66,7 +64,6 @@ incDatabase db (Just kk) = do
     intern <- readIORef (databaseIds db)
     let dirtyIds = mapMaybe (`Intern.lookup` intern) kk
     transitiveDirtyIds <- transitiveDirtySet db dirtyIds
-    modifyIORef (databaseDirtySet db) (\dd -> Just $ fromMaybe mempty dd <> transitiveDirtyIds)
     withLock (databaseLock db) $
         Ids.forMutate (databaseValues db) $ \i -> \case
             (k, Running _ _ x) -> (k, Dirty x)
@@ -171,9 +168,9 @@ compute db@Database{..} key id mode result = do
         actualDeps = if runChanged /= ChangedNothing then deps else previousDeps
         previousDeps= maybe UnknownDeps resultDeps result
     let res = Result runValue built' changed built actualDeps execution runStore
-    case actualDeps of
-        ResultDeps deps | not(null deps) &&
-                    runChanged /= ChangedNothing
+    case getResultDepsDefault [] actualDeps of
+        deps | not(null deps)
+            && runChanged /= ChangedNothing
                     -> do
             void $ forkIO $
                 updateReverseDeps id db (getResultDepsDefault [] previousDeps) (Set.fromList deps)
@@ -182,6 +179,15 @@ compute db@Database{..} key id mode result = do
         Ids.insert databaseValues id (key, Clean res)
     pure res
 
+-- | Returns the set of dirty keys annotated with their age (in # of builds)
+getDirtySet :: Database -> IO [(Id,(Key, Int))]
+getDirtySet db = do
+    Step curr <- readIORef (databaseStep db)
+    dbContents <- Ids.toList (databaseValues db)
+    let calcAge Result{resultBuilt = Step x} = curr - x
+        calcAgeStatus (Dirty x)=calcAge <$> x
+        calcAgeStatus _         = Nothing
+    return $ mapMaybe ((secondM.secondM) calcAgeStatus) dbContents
 --------------------------------------------------------------------------------
 -- Lazy IO trick
 
@@ -278,7 +284,7 @@ mapConcurrentlyAIO_ f [one] = liftIO $ justWait $ fmap f one
 mapConcurrentlyAIO_ f many = do
     ref <- AIO ask
     waits <- liftIO $ uninterruptibleMask $ \restore -> do
-        waits <- liftIO $ traverse waitOrSpawn (map (fmap (restore . f)) many)
+        waits <- liftIO $ traverse (waitOrSpawn . fmap (restore . f)) many
         let asyncs = rights waits
         liftIO $ atomicModifyIORef'_ ref (asyncs ++)
         return waits
