@@ -7,3 +7,7 @@ pull_request_rules:
     conditions:
       - label=merge me
       - '#approved-reviews-by>=1'
+    actions:
+      queue:
+        method: squash
+        name: default
