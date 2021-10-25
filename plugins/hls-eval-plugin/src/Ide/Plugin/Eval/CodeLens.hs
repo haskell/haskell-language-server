@@ -113,7 +113,10 @@ import           UnliftIO.Temporary              (withSystemTempFile)
 import           GHC.Driver.Session              (unitDatabases, unitState)
 import           GHC.Types.SrcLoc                (UnhelpfulSpanReason (UnhelpfulInteractive))
 #else
+import           Control.Concurrent.MVar
 import           DynFlags
+import           HscTypes                        (HscEnv (hsc_dynLinker))
+import           LinkerTypes                     (DynLinker (..))
 #endif
 
 
@@ -556,7 +559,14 @@ runGetSession st nfp = liftIO $ runAction "eval" st $ do
     let fp = fromNormalizedFilePath nfp
     ((_, res),_) <- liftIO $ loadSessionFun fp
     let hscEnv = fromMaybe (error $ "Unknown file: " <> fp) res
-    ghcSessionDepsDefinition hscEnv nfp
+    hscEnvWithDeps <- ghcSessionDepsDefinition hscEnv nfp
+    -- duplicate the linker since it is mutable and therefore not multi-threaded
+    duplicateDynLinker hscEnvWithDeps
+
+duplicateDynLinker :: MonadIO m => HscEnv -> m HscEnv
+duplicateDynLinker hsc = do
+    newLinker <- liftIO $ newMVar =<< readMVar (dl_mpls $ hsc_dynLinker hsc)
+    return hsc{ hsc_dynLinker = DynLinker newLinker}
 
 needsQuickCheck :: [(Section, Test)] -> Bool
 needsQuickCheck = any (isProperty . snd)
