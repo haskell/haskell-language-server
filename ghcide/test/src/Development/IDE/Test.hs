@@ -182,25 +182,25 @@ canonicalizeUri uri = filePathToUri <$> canonicalizePath (fromJust (uriToFilePat
 diagnostic :: Session (NotificationMessage TextDocumentPublishDiagnostics)
 diagnostic = LspTest.message STextDocumentPublishDiagnostics
 
-callTestPlugin :: (A.FromJSON b) => TestRequest -> Session (Either ResponseError b)
+callTestPlugin :: (A.FromJSON b) => TestRequest -> Session b
 callTestPlugin cmd = do
     let cm = SCustomMethod "test"
     waitId <- sendRequest cm (A.toJSON cmd)
     ResponseMessage{_result} <- skipManyTill anyMessage $ responseForId cm waitId
-    return $ do
-      e <- _result
-      case A.fromJSON e of
-        A.Error e   -> Left $ ResponseError InternalError (T.pack e) Nothing
-        A.Success a -> pure a
+    return $ case _result of
+         Left (ResponseError t err _) -> error $ show t <> ": " <> T.unpack err
+         Right json -> case A.fromJSON json of
+             A.Success a -> a
+             A.Error e   -> error e
 
-waitForAction :: String -> TextDocumentIdentifier -> Session (Either ResponseError WaitForIdeRuleResult)
+waitForAction :: String -> TextDocumentIdentifier -> Session WaitForIdeRuleResult
 waitForAction key TextDocumentIdentifier{_uri} =
     callTestPlugin (WaitForIdeRule key _uri)
 
-getLastBuildKeys :: Session (Either ResponseError [T.Text])
+getLastBuildKeys :: Session [T.Text]
 getLastBuildKeys = callTestPlugin GetLastBuildKeys
 
-getInterfaceFilesDir :: TextDocumentIdentifier -> Session (Either ResponseError FilePath)
+getInterfaceFilesDir :: TextDocumentIdentifier -> Session FilePath
 getInterfaceFilesDir TextDocumentIdentifier{_uri} = callTestPlugin (GetInterfaceFilesDir _uri)
 
 garbageCollectDirtyKeys :: CheckParents -> Int -> Session [String]

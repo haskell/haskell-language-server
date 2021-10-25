@@ -50,11 +50,10 @@ import           Development.IDE.Test                     (Cursor,
                                                            expectNoMoreDiagnostics,
                                                            flushMessages,
                                                            standardizeQuotes,
-                                                           getInterfaceFilesDir
+                                                           getInterfaceFilesDir,
                                                            waitForAction,
                                                            getStoredKeys,
-                                                           waitForTypecheck,
-                                                           getFilesOfInterest, waitForGC)
+                                                           waitForTypecheck, waitForGC)
 import           Development.IDE.Test.Runfiles
 import qualified Development.IDE.Types.Diagnostics        as Diagnostics
 import           Development.IDE.Types.Location
@@ -5254,7 +5253,7 @@ ifaceErrorTest = testCase "iface-error-test-1" $ runWithExtraFiles "recomp" $ \d
 
 
     -- Check that we wrote the interfaces for B when we saved
-    Right hidir <- getInterfaceFilesDir bdoc
+    hidir <- getInterfaceFilesDir bdoc
     hi_exists <- liftIO $ doesFileExist $ hidir </> "B.hi"
     liftIO $ assertBool ("Couldn't find B.hi in " ++ hidir) hi_exists
 
