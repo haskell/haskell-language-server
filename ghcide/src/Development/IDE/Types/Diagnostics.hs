@@ -14,7 +14,7 @@ module Development.IDE.Types.Diagnostics (
   ideErrorWithSource,
   showDiagnostics,
   showDiagnosticsColored,
-  ) where
+  IdeResultNoDiagnosticsEarlyCutoff) where
 
 import           Control.DeepSeq
 import           Data.Maybe                                as Maybe
@@ -29,6 +29,7 @@ import           Language.LSP.Types                        as LSP (Diagnostic (.
                                                                    DiagnosticSource,
                                                                    List (..))
 
+import           Data.ByteString                           (ByteString)
 import           Development.IDE.Types.Location
 
 
@@ -43,6 +44,9 @@ import           Development.IDE.Types.Location
 --   A rule on a file should only return diagnostics for that given file. It should
 --   not propagate diagnostic errors through multiple phases.
 type IdeResult v = ([FileDiagnostic], Maybe v)
+
+-- | an IdeResult with a fingerprint
+type IdeResultNoDiagnosticsEarlyCutoff  v = (Maybe ByteString, Maybe v)
 
 ideErrorText :: NormalizedFilePath -> T.Text -> FileDiagnostic
 ideErrorText = ideErrorWithSource (Just "compiler") (Just DsError)

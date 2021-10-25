@@ -27,6 +27,7 @@ import           Development.IDE.Core.Service
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Graph          (Action)
+import           Development.IDE.Graph.Database (shakeLastBuildKeys)
 import           Development.IDE.Types.Action
 import           Development.IDE.Types.HscEnvEq (HscEnvEq (hscEnv))
 import           Development.IDE.Types.Location (fromUri)
@@ -38,10 +39,11 @@ import           System.Time.Extra
 
 data TestRequest
     = BlockSeconds Seconds           -- ^ :: Null
-    | GetInterfaceFilesDir FilePath  -- ^ :: String
+    | GetInterfaceFilesDir Uri       -- ^ :: String
     | GetShakeSessionQueueCount      -- ^ :: Number
     | WaitForShakeQueue -- ^ Block until the Shake queue is empty. Returns Null
     | WaitForIdeRule String Uri      -- ^ :: WaitForIdeRuleResult
+    | GetLastBuildKeys               -- ^ :: [String]
     deriving Generic
     deriving anyclass (FromJSON, ToJSON)
 
@@ -70,8 +72,8 @@ testRequestHandler _ (BlockSeconds secs) = do
       toJSON secs
     liftIO $ sleep secs
     return (Right Null)
-testRequestHandler s (GetInterfaceFilesDir fp) = liftIO $ do
-    let nfp = toNormalizedFilePath fp
+testRequestHandler s (GetInterfaceFilesDir file) = liftIO $ do
+    let nfp = fromUri $ toNormalizedUri file
     sess <- runAction "Test - GhcSession" s $ use_ GhcSession nfp
     let hiPath = hiDir $ hsc_dflags $ hscEnv sess
     return $ Right (toJSON hiPath)
@@ -88,6 +90,9 @@ testRequestHandler s (WaitForIdeRule k file) = liftIO $ do
     success <- runAction ("WaitForIdeRule " <> k <> " " <> show file) s $ parseAction (fromString k) nfp
     let res = WaitForIdeRuleResult <$> success
     return $ bimap mkResponseError toJSON res
+testRequestHandler s GetLastBuildKeys = liftIO $ do
+    keys <- shakeLastBuildKeys $ shakeDb s
+    return $ Right $ toJSON $ map show keys
 
 mkResponseError :: Text -> ResponseError
 mkResponseError msg = ResponseError InvalidRequest msg Nothing

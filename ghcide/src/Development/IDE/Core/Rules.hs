@@ -50,6 +50,7 @@ module Development.IDE.Core.Rules(
     getHieAstsRule,
     getBindingsRule,
     needsCompilationRule,
+    computeLinkableTypeForDynFlags,
     generateCoreRule,
     getImportMapRule,
     regenerateHiFile,
@@ -987,8 +988,9 @@ usePropertyAction kn plId p = do
 getLinkableType :: NormalizedFilePath -> Action (Maybe LinkableType)
 getLinkableType f = use_ NeedsCompilation f
 
-needsCompilationRule :: Rules ()
-needsCompilationRule = defineEarlyCutoff $ RuleNoDiagnostics $ \NeedsCompilation file -> do
+-- needsCompilationRule :: Rules ()
+needsCompilationRule :: NormalizedFilePath  -> Action (IdeResultNoDiagnosticsEarlyCutoff (Maybe LinkableType))
+needsCompilationRule file = do
   graph <- useNoFile GetModuleGraph
   res <- case graph of
     -- Treat as False if some reverse dependency header fails to parse
@@ -1012,13 +1014,10 @@ needsCompilationRule = defineEarlyCutoff $ RuleNoDiagnostics $ \NeedsCompilation
                 (uses NeedsCompilation revdeps)
         pure $ computeLinkableType ms modsums (map join needsComps)
 
-  pure (Just $ LBS.toStrict $ B.encode $ hash res, Just res)
+  pure (Just $ encodeLinkableType res, Just res)
   where
     uses_th_qq (ms_hspp_opts -> dflags) =
       xopt LangExt.TemplateHaskell dflags || xopt LangExt.QuasiQuotes dflags
-
-    unboxed_tuples_or_sums (ms_hspp_opts -> d) =
-      xopt LangExt.UnboxedTuples d || xopt LangExt.UnboxedSums d
 
     computeLinkableType :: ModSummary -> [Maybe ModSummary] -> [Maybe LinkableType] -> Maybe LinkableType
     computeLinkableType this deps xs
@@ -1027,15 +1026,22 @@ needsCompilationRule = defineEarlyCutoff $ RuleNoDiagnostics $ \NeedsCompilation
       | any (maybe False uses_th_qq) deps = Just this_type      -- If any dependent needs TH, then we need to be compiled
       | otherwise                         = Nothing             -- If none of these conditions are satisfied, we don't need to compile
       where
-        -- How should we compile this module? (assuming we do in fact need to compile it)
-        -- Depends on whether it uses unboxed tuples or sums
-        this_type
+        this_type = computeLinkableTypeForDynFlags (ms_hspp_opts this)
+
+-- | How should we compile this module?
+-- (assuming we do in fact need to compile it).
+-- Depends on whether it uses unboxed tuples or sums
+computeLinkableTypeForDynFlags :: DynFlags -> LinkableType
+computeLinkableTypeForDynFlags d
 #if defined(GHC_PATCHED_UNBOXED_BYTECODE)
           = BCOLinkable
 #else
-          | unboxed_tuples_or_sums this = ObjectLinkable
-          | otherwise                   = BCOLinkable
+          | unboxed_tuples_or_sums = ObjectLinkable
+          | otherwise              = BCOLinkable
 #endif
+  where
+        unboxed_tuples_or_sums =
+            xopt LangExt.UnboxedTuples d || xopt LangExt.UnboxedSums d
 
 -- | Tracks which linkables are current, so we don't need to unload them
 newtype CompiledLinkables = CompiledLinkables { getCompiledLinkables :: Var (ModuleEnv UTCTime) }
@@ -1074,7 +1080,14 @@ mainRule = do
     getClientSettingsRule
     getHieAstsRule
     getBindingsRule
-    needsCompilationRule
+    -- This rule uses a custom newness check that relies on the encoding
+    --  produced by 'encodeLinkable'. This works as follows:
+    --   * <previous> -> <new>
+    --   * ObjectLinkable -> BCOLinkable : the prev linkable can be reused,  signal "no change"
+    --   * Object/BCO -> NoLinkable      : the prev linkable can be ignored, signal "no change"
+    --   * otherwise                     : the prev linkable cannot be reused, signal "value has changed"
+    defineEarlyCutoff $ RuleWithCustomNewnessCheck (<=) $ \NeedsCompilation file ->
+        needsCompilationRule file
     generateCoreRule
     getImportMapRule
     getAnnotatedParsedSourceRule
