@@ -30,8 +30,6 @@ jobs:
   test:
     needs: pre_job
     runs-on: ${{ matrix.os }}
-    env:
-      XDG_CACHE_HOME: ${{ runner.temp }}/cache
     strategy:
       fail-fast: true
       matrix:
@@ -141,8 +139,9 @@ jobs:
                      src/**/*.hs exe/*.hs
 
       # this is only safe if the test environment is isolated
-      - name: clean ide cache
+      - name: setup ide cache
         run: |
+          export XDG_CACHE_HOME=$RUNNER_TEMP/cache
           rm -rf ~/.cache/ghcide
           rm -rf ~/.cache/hie-bios
           rm -rf $XDG_CACHE_HOME/ghcide
