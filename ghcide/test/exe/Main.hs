@@ -50,7 +50,7 @@ import           Development.IDE.Test                     (Cursor,
                                                            expectNoMoreDiagnostics,
                                                            flushMessages,
                                                            standardizeQuotes,
-                                                           waitForAction)
+                                                           waitForAction, getInterfaceFilesDir)
 import           Development.IDE.Test.Runfiles
 import qualified Development.IDE.Types.Diagnostics        as Diagnostics
 import           Development.IDE.Types.Location
@@ -95,7 +95,7 @@ import           Data.Tuple.Extra
 import           Development.IDE.Core.FileStore           (getModTime)
 import           Development.IDE.Plugin.CodeAction        (matchRegExMultipleImports)
 import qualified Development.IDE.Plugin.HLS.GhcIde        as Ghcide
-import           Development.IDE.Plugin.Test              (TestRequest (BlockSeconds, GetInterfaceFilesDir),
+import           Development.IDE.Plugin.Test              (TestRequest (BlockSeconds),
                                                            WaitForIdeRuleResult (..),
                                                            blockCommandId)
 import           Ide.PluginUtils                          (pluginDescToIdePlugins)
@@ -5249,14 +5249,9 @@ ifaceErrorTest = testCase "iface-error-test-1" $ runWithExtraFiles "recomp" $ \d
 
 
     -- Check that we wrote the interfaces for B when we saved
-    let m = SCustomMethod "test"
-    lid <- sendRequest m $ toJSON $ GetInterfaceFilesDir bPath
-    res <- skipManyTill anyMessage $ responseForId m lid
-    liftIO $ case res of
-      ResponseMessage{_result=Right (A.fromJSON -> A.Success hidir)} -> do
-        hi_exists <- doesFileExist $ hidir </> "B.hi"
-        assertBool ("Couldn't find B.hi in " ++ hidir) hi_exists
-      _ -> assertFailure $ "Got malformed response for CustomMessage hidir: " ++ show res
+    Right hidir <- getInterfaceFilesDir bdoc
+    hi_exists <- liftIO $ doesFileExist $ hidir </> "B.hi"
+    liftIO $ assertBool ("Couldn't find B.hi in " ++ hidir) hi_exists
 
     pdoc <- createDoc pPath "haskell" pSource
     changeDoc pdoc [TextDocumentContentChangeEvent Nothing Nothing $ pSource <> "\nfoo = y :: Bool" ]

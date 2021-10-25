@@ -8,13 +8,16 @@ module Development.IDE.Graph.Database(
     shakeRunDatabase,
     shakeRunDatabaseForKeys,
     shakeProfileDatabase,
+    shakeLastBuildKeys
     ) where
 
 import           Data.Dynamic
+import           Data.IORef
 import           Data.Maybe
-import           Development.IDE.Graph.Classes ()
+import           Development.IDE.Graph.Classes           ()
 import           Development.IDE.Graph.Internal.Action
 import           Development.IDE.Graph.Internal.Database
+import qualified Development.IDE.Graph.Internal.Ids      as Ids
 import           Development.IDE.Graph.Internal.Options
 import           Development.IDE.Graph.Internal.Profile  (writeProfile)
 import           Development.IDE.Graph.Internal.Rules
@@ -56,3 +59,10 @@ shakeRunDatabaseForKeys keysChanged (ShakeDatabase lenAs1 as1 db) as2 = do
 -- | Given a 'ShakeDatabase', write an HTML profile to the given file about the latest run.
 shakeProfileDatabase :: ShakeDatabase -> FilePath -> IO ()
 shakeProfileDatabase (ShakeDatabase _ _ s) file = writeProfile file s
+
+-- | Returns the set of keys built in the most recent step
+shakeLastBuildKeys :: ShakeDatabase -> IO [Key]
+shakeLastBuildKeys (ShakeDatabase _ _ db) = do
+    keys <- Ids.elems $ databaseValues db
+    step <- readIORef $ databaseStep db
+    return [ k | (k, Clean res) <- keys, resultBuilt res == step ]
