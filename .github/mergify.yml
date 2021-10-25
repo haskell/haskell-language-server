@@ -1,6 +1,5 @@
 queue_rules:
   - name: default
-    method: squash
 
 pull_request_rules:
     name: Automatically merge pull requests
