@@ -143,6 +143,16 @@ jobs:
                      src/**/*.hs exe/*.hs
 
       - if: needs.pre_job.outputs.should_skip != 'true' && needs.pre_job.outputs.should_skip_pr != 'true'
+      # this is only safe if the test environment is isolated
+      - name: setup ide cache
+        run: |
+          export XDG_CACHE_HOME=$RUNNER_TEMP/cache
+          rm -rf ~/.cache/ghcide
+          rm -rf ~/.cache/hie-bios
+          rm -rf $XDG_CACHE_HOME/ghcide
+          rm -rf $XDG_CACHE_HOME/hie-bios
+
+      - if: needs.pre_job.outputs.should_skip != 'true' && needs.pre_job.outputs.should_skip_pr != 'true'
         name: Build
         # Retry it three times to workaround compiler segfaults in windows
         run: cabal build || cabal build || cabal build
