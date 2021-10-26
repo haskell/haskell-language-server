@@ -28,7 +28,9 @@ jobs:
           paths: '["**.nix"]'
       - id: skip_pr_check
         if: contains(github.event.pull_request.title,'[skip ci]') || contains(github.event.pull_request.body,'[skip ci]')
-        run: echo "::set-output name=should_skip::true"
+        run: |
+          echo "Skipping main jobs cause [skip ci] was found in the pull request title or body"
+          echo "::set-output name=should_skip::true"
 
   # Enter the development shell and run `cabal build`
   develop:
