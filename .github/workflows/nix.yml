@@ -115,5 +115,8 @@ jobs:
     steps:
       - run: |
           echo "jobs info: ${{ toJSON(needs) }}"
-      - if: needs.pre_job.outputs.should_skip != 'true' && needs.pre_job.outputs.should_skip_pr != 'true' && contains(needs.*.result, 'failure')
+      - if: contains(needs.*.result, 'failure')
         run: exit 1
+      - if: contains(needs.*.result, 'cancelled')
+        name: cancelling
+        uses: andymckay/cancel-action@0.2
