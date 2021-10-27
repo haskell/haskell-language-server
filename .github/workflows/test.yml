@@ -15,26 +15,25 @@ jobs:
     outputs:
       should_skip: ${{ steps.skip_check.outputs.should_skip }}
       should_skip_ghcide: ${{ steps.skip_ghcide_check.outputs.should_skip }}
-      should_skip_pr: ${{ steps.skip_pr_check.outputs.should_skip }}
     steps:
       - id: skip_check
         uses: fkirc/skip-duplicate-actions@v3.4.0
         with:
           cancel_others: true
-          paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", ".circleci/**", "install/**", "**.nix", "flake.lock", "**/README.md", "FUNDING.yml"]'
+          paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", "install/**", "**.nix", "flake.lock", "**/README.md", "FUNDING.yml"]'
       # If we only change ghcide downstream packages we have not test ghcide itself
       - id: skip_ghcide_check
         uses: fkirc/skip-duplicate-actions@v3.4.0
         with:
           paths_ignore: '["hls-test-utils/**", "plugins/**", "src/**", "exe/**", "test/**", "shake-bench/**"]'
-      - id: skip_pr_check
-        if: contains(github.event.pull_request.title,'[skip ci]') || contains(github.event.pull_request.body,'[skip ci]')
-        run: |
-          echo "Skipping main jobs cause [skip ci] was found in the pull request title or body"
-          echo "::set-output name=should_skip::true"
+      - if: steps.skip_check.outputs.should_skip == 'true'
+        name: Skip circleci
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          message: We are gonna [skip circleci]
 
   test:
-    if: needs.pre_job.outputs.should_skip != 'true' && needs.pre_job.outputs.should_skip_pr != 'true'
+    if: needs.pre_job.outputs.should_skip != 'true'
     needs: pre_job
     runs-on: ${{ matrix.os }}
     strategy:
@@ -138,15 +137,6 @@ jobs:
                      haskell-language-server.cabal cabal.project
           sed -i.bak -e 's/Paths_haskell_language_server/Paths_hls/g' \
                      src/**/*.hs exe/*.hs
-
-      # this is only safe if the test environment is isolated
-      - name: setup ide cache
-        run: |
-          export XDG_CACHE_HOME=$RUNNER_TEMP/cache
-          rm -rf ~/.cache/ghcide
-          rm -rf ~/.cache/hie-bios
-          rm -rf $XDG_CACHE_HOME/ghcide
-          rm -rf $XDG_CACHE_HOME/hie-bios
 
       - name: Build
         # Retry it three times to workaround compiler segfaults in windows
