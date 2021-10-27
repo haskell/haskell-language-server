@@ -26,6 +26,11 @@ jobs:
         uses: fkirc/skip-duplicate-actions@v3.4.0
         with:
           paths_ignore: '["hls-test-utils/**", "plugins/**", "src/**", "exe/**", "test/**", "shake-bench/**"]'
+      - if: steps.skip_check.outputs.should_skip == 'true'
+        name: Skip circleci
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          message: We are gonna [skip circleci]
 
   test:
     if: needs.pre_job.outputs.should_skip != 'true'
