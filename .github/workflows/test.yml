@@ -15,7 +15,6 @@ jobs:
     outputs:
       should_skip: ${{ steps.skip_check.outputs.should_skip }}
       should_skip_ghcide: ${{ steps.skip_ghcide_check.outputs.should_skip }}
-      should_skip_pr: ${{ steps.skip_pr_check.outputs.should_skip }}
     steps:
       - id: skip_check
         uses: fkirc/skip-duplicate-actions@v3.4.0
@@ -27,14 +26,9 @@ jobs:
         uses: fkirc/skip-duplicate-actions@v3.4.0
         with:
           paths_ignore: '["hls-test-utils/**", "plugins/**", "src/**", "exe/**", "test/**", "shake-bench/**"]'
-      - id: skip_pr_check
-        if: contains(github.event.pull_request.title,'[skip ci]') || contains(github.event.pull_request.body,'[skip ci]')
-        run: |
-          echo "Skipping main jobs cause [skip ci] was found in the pull request title or body"
-          echo "::set-output name=should_skip::true"
 
   test:
-    if: needs.pre_job.outputs.should_skip != 'true' && needs.pre_job.outputs.should_skip_pr != 'true'
+    if: needs.pre_job.outputs.should_skip != 'true'
     needs: pre_job
     runs-on: ${{ matrix.os }}
     strategy:
