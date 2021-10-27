@@ -16,7 +16,7 @@ defaults: &defaults
         keys:
           - v4-stack-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "resolver.txt" }}
 
-    # Looking for the string [skip ci] in all the json returned by https://docs.github.com/en/rest/reference/pulls#get-a-pull-request
+    # Looking for the string [skip circleci] in all the json returned by https://docs.github.com/en/rest/reference/pulls#get-a-pull-request
     - run:
         name: Skip ci setup
         command: |
@@ -26,7 +26,7 @@ defaults: &defaults
             PULL_REQUEST_URL=${CIRCLE_PULL_REQUEST/github.com/api.github.com/repos}
             PULL_REQUEST_URL=${PULL_REQUEST_URL/pull/pulls}
             echo "PULL_REQUEST_URL: $PULL_REQUEST_URL"
-            SKIP_CI=$(curl $PULL_REQUEST_URL | grep -o "\\[skip ci\\]")
+            SKIP_CI=$(curl $PULL_REQUEST_URL | grep -o "\\[skip circleci\\]")
             echo "SKIP_CI: $SKIP_CI"
           fi
           echo "export SKIP_CI=$SKIP_CI" >> $BASH_ENV
