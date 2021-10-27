@@ -12,7 +12,7 @@ You can watch demos for some of these features [below](#demos).
 - [Code evaluation](#code-evaluation), see its [Tutorial](https://github.com/haskell/haskell-language-server/blob/master/plugins/hls-eval-plugin/README.md)
 - [Integration with](#retrie-integration) [retrie](https://hackage.haskell.org/package/retrie), a powerful, easy-to-use codemodding tool
 - [Code lenses for explicit import lists](#explicit-import-lists)
-- [Generate functions from type signatures, and intelligently complete holes using](#wingman) [Wingman (tactics)](https://github.com/haskell/haskell-language-server/tree/master/plugins/hls-tactics-plugin)
+- [Generate functions from type signatures, and intelligently complete holes](#wingman) using [Wingman (tactics)](https://github.com/haskell/haskell-language-server/tree/master/plugins/hls-tactics-plugin)
 - [Integration with](#hlint) [hlint](https://github.com/ndmitchell/hlint), the most used haskell linter, to show diagnostics and apply hints via [apply-refact](https://github.com/mpickering/apply-refact)
 - [Module name suggestions](#module-names) for insertion or correction
 - [Call hierarchy support](#call-hierarchy)
