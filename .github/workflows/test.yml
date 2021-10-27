@@ -20,7 +20,7 @@ jobs:
         uses: fkirc/skip-duplicate-actions@v3.4.0
         with:
           cancel_others: true
-          paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", ".circleci/**", "install/**", "**.nix", "flake.lock", "**/README.md", "FUNDING.yml"]'
+          paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", "install/**", "**.nix", "flake.lock", "**/README.md", "FUNDING.yml"]'
       # If we only change ghcide downstream packages we have not test ghcide itself
       - id: skip_ghcide_check
         uses: fkirc/skip-duplicate-actions@v3.4.0
