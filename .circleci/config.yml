@@ -27,6 +27,11 @@ defaults: &defaults
             PULL_REQUEST_URL=${PULL_REQUEST_URL/pull/pulls}
             echo "PULL_REQUEST_URL: $PULL_REQUEST_URL"
             SKIP_CI=$(curl $PULL_REQUEST_URL | grep -o "\\[skip circleci\\]")
+            if [[ -z "$SKIP_CI" ]]; then
+              PULL_REQUEST_COMMENTS_URL=${PULL_REQUEST_URL/pulls/issues}/comments
+              echo "PULL_REQUEST_COMMENTS_URL: $PULL_REQUEST_COMMENTS_URL"
+              SKIP_CI=$(curl $PULL_REQUEST_COMMENTS_URL | grep -o "\\[skip circleci\\]")
+            fi
             echo "SKIP_CI: $SKIP_CI"
           fi
           echo "export SKIP_CI=$SKIP_CI" >> $BASH_ENV
