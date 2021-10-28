@@ -102,7 +102,7 @@ jobs:
       if: ${{ env.HAS_TOKEN == 'true' }}
       run: nix path-info --json | jq -r '.[].path' | cachix push haskell-language-server
 
-  post_job:
+  nix_summary:
     if: always()
     runs-on: ubuntu-latest
     needs: [pre_job, develop, build]
