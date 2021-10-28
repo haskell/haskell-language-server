@@ -253,8 +253,7 @@ snippetTests = testGroup "snippets" [
 
         let config = object ["haskell" .= object ["plugin" .= object ["ghcide-completions" .= object ["config" .= object ["snippetsOn" .= False]]]]]
 
-        sendNotification SWorkspaceDidChangeConfiguration
-                        (DidChangeConfigurationParams config)
+        sendConfigurationChanged config
 
         checkNoSnippets doc
 

@@ -30,7 +30,6 @@ import qualified Data.Text.IO                          as T
 import           Data.Text.Lazy.Encoding               (decodeUtf8)
 import qualified Data.Text.Lazy.IO                     as LT
 import           Data.Word                             (Word16)
-import           Debug.Trace.Flags                     (userTracingEnabled)
 import           Development.IDE                       (Action, GhcVersion (..),
                                                         Priority (Debug), Rules,
                                                         ghcVersion,
@@ -55,7 +54,8 @@ import           Development.IDE.Core.Service          (initialise, runAction)
 import           Development.IDE.Core.Shake            (IdeState (shakeExtras),
                                                         ShakeExtras (state),
                                                         shakeSessionInit, uses)
-import           Development.IDE.Core.Tracing          (measureMemory)
+import           Development.IDE.Core.Tracing          (measureMemory,
+                                                        withEventTrace)
 import           Development.IDE.Graph                 (action)
 import           Development.IDE.LSP.LanguageServer    (runLanguageServer)
 import           Development.IDE.Plugin                (Plugin (pluginHandlers, pluginModifyDynflags, pluginRules))
@@ -86,7 +86,8 @@ import           GHC.IO.Handle                         (hDuplicate)
 import           HIE.Bios.Cradle                       (findCradle)
 import qualified HieDb.Run                             as HieDb
 import           Ide.Plugin.Config                     (CheckParents (NeverCheck),
-                                                        Config,
+                                                        Config, checkParents,
+                                                        checkProject,
                                                         getConfigFromNotification)
 import           Ide.Plugin.ConfigUtils                (pluginsToDefaultConfig,
                                                         pluginsToVSCodeExtensionSchema)
@@ -101,7 +102,6 @@ import           Ide.Types                             (IdeCommand (IdeCommand),
                                                         ipMap)
 import qualified Language.LSP.Server                   as LSP
 import           Numeric.Natural                       (Natural)
-import           OpenTelemetry.Eventlog                (addEvent, withSpan)
 import           Options.Applicative                   hiding (action)
 import qualified System.Directory.Extra                as IO
 import           System.Exit                           (ExitCode (ExitFailure),
@@ -189,12 +189,15 @@ defaultArguments :: Priority -> Arguments
 defaultArguments priority = Arguments
         { argsOTMemoryProfiling = False
         , argCommand = LSP
-        , argsLogger = stderrLogger priority <> telemetryLogger
+        , argsLogger = stderrLogger priority <> pure telemetryLogger
         , argsRules = mainRule >> action kick
         , argsGhcidePlugin = mempty
         , argsHlsPlugins = pluginDescToIdePlugins Ghcide.descriptors
         , argsSessionLoadingOptions = def
-        , argsIdeOptions = const defaultIdeOptions
+        , argsIdeOptions = \config ghcSession -> (defaultIdeOptions ghcSession)
+            { optCheckProject = pure $ checkProject config
+            , optCheckParents = pure $ checkParents config
+            }
         , argsLspOptions = def {LSP.completionTriggerCharacters = Just "."}
         , argsDefaultHlsConfig = def
         , argsGetHieDbLoc = getHieDbLoc
@@ -236,12 +239,10 @@ stderrLogger logLevel = do
     return $ Logger $ \p m -> when (p >= logLevel) $ withLock lock $
         T.hPutStrLn stderr $ "[" <> T.pack (show p) <> "] " <> m
 
-telemetryLogger :: IO Logger
-telemetryLogger
-    | userTracingEnabled = return $ Logger $ \p m ->
-        withSpan "log" $ \sp ->
-            addEvent sp (fromString $ "Log " <> show p) (encodeUtf8 $ trim m)
-    | otherwise = mempty
+telemetryLogger :: Logger
+telemetryLogger = Logger $ \p m ->
+        withEventTrace "Log" $ \addEvent ->
+            addEvent (fromString $ "Log " <> show p) (encodeUtf8 $ trim m)
     where
         -- eventlog message size is limited by EVENT_PAYLOAD_SIZE_MAX = STG_WORD16_MAX
         trim = T.take (fromIntegral(maxBound :: Word16) - 10)

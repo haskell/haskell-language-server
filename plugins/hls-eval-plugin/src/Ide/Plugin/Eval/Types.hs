@@ -3,8 +3,10 @@
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE DerivingStrategies         #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE UndecidableInstances       #-}
 {-# OPTIONS_GHC -Wwarn #-}
+{-# LANGUAGE RecordWildCards            #-}
 
 module Ide.Plugin.Eval.Types
     ( locate,
@@ -26,19 +28,21 @@ module Ide.Plugin.Eval.Types
       unLoc,
       Txt,
       EvalParams(..),
-    )
+      GetEvalComments(..)
+    ,nullComments)
 where
 
-import           Control.DeepSeq    (NFData (rnf), deepseq)
-import           Data.Aeson         (FromJSON, ToJSON)
-import           Data.List          (partition)
-import           Data.List.NonEmpty (NonEmpty)
-import           Data.Map.Strict    (Map)
-import           Data.String        (IsString (..))
-import           Development.IDE    (Range)
-import           GHC.Generics       (Generic)
-import           Language.LSP.Types (TextDocumentIdentifier)
-import qualified Text.Megaparsec    as P
+import           Control.DeepSeq               (deepseq)
+import           Data.Aeson                    (FromJSON, ToJSON)
+import           Data.List                     (partition)
+import           Data.List.NonEmpty            (NonEmpty)
+import           Data.Map.Strict               (Map)
+import           Data.String                   (IsString (..))
+import           Development.IDE               (Range, RuleResult)
+import           Development.IDE.Graph.Classes
+import           GHC.Generics                  (Generic)
+import           Language.LSP.Types            (TextDocumentIdentifier)
+import qualified Text.Megaparsec               as P
 
 -- | A thing with a location attached.
 data Located l a = Located {location :: l, located :: a}
@@ -92,11 +96,22 @@ data Test
     | Property {testline :: Txt, testOutput :: [Txt], testRange :: Range}
     deriving (Eq, Show, Generic, FromJSON, ToJSON, NFData)
 
+data GetEvalComments = GetEvalComments
+    deriving (Eq, Show, Typeable, Generic)
+instance Hashable GetEvalComments
+instance NFData   GetEvalComments
+
+type instance RuleResult GetEvalComments = Comments
 data Comments = Comments
     { lineComments  :: Map Range RawLineComment
     , blockComments :: Map Range RawBlockComment
     }
     deriving (Show, Eq, Ord, Generic)
+
+nullComments :: Comments -> Bool
+nullComments Comments{..} = null lineComments && null blockComments
+
+instance NFData Comments
 
 newtype RawBlockComment = RawBlockComment {getRawBlockComment :: String}
     deriving (Show, Eq, Ord)
@@ -107,6 +122,7 @@ newtype RawBlockComment = RawBlockComment {getRawBlockComment :: String}
         , P.VisualStream
         , Semigroup
         , Monoid
+        , NFData
         )
 
 newtype RawLineComment = RawLineComment {getRawLineComment :: String}
@@ -118,6 +134,7 @@ newtype RawLineComment = RawLineComment {getRawLineComment :: String}
         , P.VisualStream
         , Semigroup
         , Monoid
+        , NFData
         )
 
 instance Semigroup Comments where

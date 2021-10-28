@@ -102,6 +102,7 @@ import           Data.Functor
 import qualified Data.HashMap.Strict               as HashMap
 import           Data.Tuple.Extra                  (dupe)
 import           Data.Unique                       as Unique
+import           Development.IDE.Core.Tracing      (withTrace)
 import qualified Language.LSP.Server               as LSP
 import qualified Language.LSP.Types                as LSP
 
@@ -899,7 +900,8 @@ loadHieFile ncu f = do
 --   Assumes file exists.
 --   Requires the 'HscEnv' to be set up with dependencies
 loadInterface
-  :: MonadIO m => HscEnv
+  :: (MonadIO m, MonadMask m)
+  => HscEnv
   -> ModSummary
   -> SourceModified
   -> Maybe LinkableType
@@ -939,7 +941,15 @@ loadInterface session ms sourceMod linkableNeeded regen = do
                hmi <- liftIO $ mkDetailsFromIface sessionWithMsDynFlags iface linkable
                return ([], Just $ mkHiFileResult ms hmi)
              else regen linkableNeeded
-          (_reason, _) -> regen linkableNeeded
+          (_reason, _) -> withTrace "regenerate interface" $ \setTag -> do
+                 setTag "Module" $ moduleNameString $ moduleName $ ms_mod ms
+                 setTag "Reason" $ showReason _reason
+                 regen linkableNeeded
+
+showReason :: RecompileRequired -> String
+showReason UpToDate          = "UpToDate"
+showReason MustCompile       = "MustCompile"
+showReason (RecompBecause s) = s
 
 mkDetailsFromIface :: HscEnv -> ModIface -> Maybe Linkable -> IO HomeModInfo
 mkDetailsFromIface session iface linkable = do

@@ -21,9 +21,6 @@ extra-source-files:
   test/testdata/**/*.project
   test/testdata/**/*.cabal
   test/testdata/**/*.yaml
-  -- this one is not matched by the previous glob
-  test/testdata/hlint/ignore/.hlint.yaml
-  test/testdata/**/*.h
   test/testdata/**/*.hs
 
 flag pedantic
@@ -215,7 +212,7 @@ common haddockComments
 
 common eval
   if flag(eval) || flag(all-plugins)
-    build-depends: hls-eval-plugin ^>=1.1.0.0
+    build-depends: hls-eval-plugin ^>=1.2.0.0
     cpp-options: -Deval
 
 common importLens

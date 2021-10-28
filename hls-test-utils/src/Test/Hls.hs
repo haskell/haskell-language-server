@@ -24,8 +24,11 @@ module Test.Hls
     waitForAllProgressDone,
     PluginDescriptor,
     IdeState,
-    waitForBuildQueue
-    ,waitForTypecheck,waitForAction)
+    waitForBuildQueue,
+    waitForTypecheck,
+    waitForAction,
+    sendConfigurationChanged,
+    getLastBuildKeys)
 where
 
 import           Control.Applicative.Combinators
@@ -38,6 +41,7 @@ import           Data.Aeson                      (Value (Null), toJSON)
 import qualified Data.Aeson                      as A
 import           Data.ByteString.Lazy            (ByteString)
 import           Data.Default                    (def)
+import           Data.Maybe                      (fromMaybe)
 import qualified Data.Text                       as T
 import qualified Data.Text.Lazy                  as TL
 import qualified Data.Text.Lazy.Encoding         as TL
@@ -45,7 +49,7 @@ import           Development.IDE                 (IdeState, noLogging)
 import           Development.IDE.Graph           (ShakeOptions (shakeThreads))
 import           Development.IDE.Main
 import qualified Development.IDE.Main            as Ghcide
-import           Development.IDE.Plugin.Test     (TestRequest (WaitForIdeRule, WaitForShakeQueue),
+import           Development.IDE.Plugin.Test     (TestRequest (GetLastBuildKeys, WaitForIdeRule, WaitForShakeQueue),
                                                   WaitForIdeRuleResult (ideResultSuccess))
 import           Development.IDE.Types.Options
 import           GHC.IO.Handle
@@ -60,6 +64,7 @@ import           Language.LSP.Types              hiding
 import           Language.LSP.Types.Capabilities (ClientCapabilities)
 import           System.Directory                (getCurrentDirectory,
                                                   setCurrentDirectory)
+import           System.Environment              (lookupEnv)
 import           System.FilePath
 import           System.IO.Unsafe                (unsafePerformIO)
 import           System.Process.Extra            (createPipe)
@@ -156,6 +161,12 @@ runSessionWithServer' ::
 runSessionWithServer' plugin conf sconf caps root s = withLock lock $ keepCurrentDirectory $ do
   (inR, inW) <- createPipe
   (outR, outW) <- createPipe
+  let logger = do
+        logStdErr <- fromMaybe "0" <$> lookupEnv "LSP_TEST_LOG_STDERR"
+        if logStdErr == "0"
+            then return noLogging
+            else argsLogger testing
+
   server <-
     async $
       Ghcide.defaultMain
@@ -163,7 +174,7 @@ runSessionWithServer' plugin conf sconf caps root s = withLock lock $ keepCurren
           { argsHandleIn = pure inR,
             argsHandleOut = pure outW,
             argsDefaultHlsConfig = conf,
-            argsLogger = pure noLogging,
+            argsLogger = logger,
             argsIdeOptions = \config sessionLoader ->
               let ideOptions = (argsIdeOptions def config sessionLoader) {optTesting = IdeTesting True}
                in ideOptions {optShakeOptions = (optShakeOptions ideOptions) {shakeThreads = 2}},
@@ -214,16 +225,27 @@ waitForBuildQueue = do
         -- assume a ghcide binary lacking the WaitForShakeQueue method
         _                                   -> return 0
 
-waitForAction :: String -> TextDocumentIdentifier -> Session (Either ResponseError WaitForIdeRuleResult)
-waitForAction key TextDocumentIdentifier{_uri} = do
+callTestPlugin :: (A.FromJSON b) => TestRequest -> Session (Either ResponseError b)
+callTestPlugin cmd = do
     let cm = SCustomMethod "test"
-    waitId <- sendRequest cm (A.toJSON $ WaitForIdeRule key _uri)
+    waitId <- sendRequest cm (A.toJSON cmd)
     ResponseMessage{_result} <- skipManyTill anyMessage $ responseForId cm waitId
     return $ do
       e <- _result
       case A.fromJSON e of
-        A.Error e   -> Left $ ResponseError InternalError (T.pack e) Nothing
+        A.Error err   -> Left $ ResponseError InternalError (T.pack err) Nothing
         A.Success a -> pure a
+
+waitForAction :: String -> TextDocumentIdentifier -> Session (Either ResponseError WaitForIdeRuleResult)
+waitForAction key TextDocumentIdentifier{_uri} =
+    callTestPlugin (WaitForIdeRule key _uri)
 
 waitForTypecheck :: TextDocumentIdentifier -> Session (Either ResponseError Bool)
 waitForTypecheck tid = fmap ideResultSuccess <$> waitForAction "typecheck" tid
+
+getLastBuildKeys :: Session (Either ResponseError [T.Text])
+getLastBuildKeys = callTestPlugin GetLastBuildKeys
+
+sendConfigurationChanged :: Value -> Session ()
+sendConfigurationChanged config =
+  sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams config)
