@@ -1,0 +1,33 @@
+cabal-version:      2.4
+name:               hls-alternate-number-format-plugin
+version:            0.1.0.0
+synopsis:           Provide Alternate Number Formats plugin for Haskell Language Server
+description:
+  Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
+
+license:            Apache-2.0
+license-file:       LICENSE
+author:             Nick Suchecki
+maintainer:         nicksuchecki@gmail.com
+category:           Development
+build-type:         Simple
+extra-source-files: LICENSE
+
+library
+  exposed-modules:  Ide.Plugin.AlternateNumberFormat
+  hs-source-dirs:   src
+  build-depends:
+      aeson
+    , base              >=4.12 && <5
+      -- Debug - Containers
+    , containers
+    , ghcide
+    , hls-plugin-api
+    , hie-compat
+    , lens
+    , lsp
+    , mtl
+    , hls-retrie-plugin
+    , text
+
+  default-language: Haskell2010

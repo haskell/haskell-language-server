@@ -65,6 +65,10 @@ import           Ide.Plugin.Pragmas                as Pragmas
 import           Ide.Plugin.Splice                 as Splice
 #endif
 
+#if alternateNumberFormat
+import           Ide.Plugin.AlternateNumberFormat  as AlternateNumberFormat
+#endif
+
 -- formatters
 
 #if floskell
@@ -154,6 +158,9 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
 #endif
 #if splice
       Splice.descriptor "splice" :
+#endif
+#if alternateNumberFormat
+      AlternateNumberFormat.descriptor "alternateNumberFormat" :
 #endif
     -- The ghcide descriptors should come last so that the notification handlers
     -- (which restart the Shake build) run after everything else

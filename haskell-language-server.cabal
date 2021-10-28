@@ -163,6 +163,11 @@ flag splice
   default:     True
   manual:      True
 
+flag alternateNumberFormat
+  description: Enable Alternate Number Format plugin
+  default:     True
+  manual:      True
+
 -- formatters
 
 flag floskell
@@ -260,6 +265,11 @@ common splice
     build-depends: hls-splice-plugin ^>=1.0.0.1
     cpp-options: -Dsplice
 
+common alternateNumberFormat
+  if flag(alternateNumberFormat) || flag(all-plugins)
+    build-depends: hls-alternate-number-format-plugin ^>=0.1.0.0
+    cpp-options: -DalternateNumberFormat
+
 -- formatters
 
 common floskell
@@ -304,6 +314,7 @@ executable haskell-language-server
                     , moduleName
                     , pragmas
                     , splice
+                    , alternateNumberFormat
                     , floskell
                     , fourmolu
                     , ormolu
@@ -467,6 +478,8 @@ test-suite func-test
     cpp-options: -Dpragmas
   if flag(splice) || flag(all-plugins)
     cpp-options: -Dsplice
+  if flag(alternateNumberFormat) || flag(all-plugins)
+    cpp-options: -DalternateNumberFormat
 
 -- formatters
   if flag(floskell) || flag(all-formatters)
