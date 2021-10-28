@@ -1,4 +1,4 @@
-module ApplyRefact where
+module CamelCase where
 
 f = (1)
 
