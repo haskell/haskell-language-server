@@ -4,6 +4,10 @@ defaults:
   run:
     shell: bash
 
+concurrency: 
+  group: ${{ github.head_ref }}
+  cancel-in-progress: true
+
 on:
   pull_request:
     branches:
