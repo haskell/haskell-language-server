@@ -206,6 +206,7 @@
                 # ormolu
                 # stylish-haskell
                 opentelemetry-extra
+                haskell-language-server
               ]);
 
             src = null;
