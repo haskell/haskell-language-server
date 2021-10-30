@@ -4,6 +4,11 @@ defaults:
   run:
     shell: bash
 
+# See: https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#concurrency.
+concurrency: 
+  group: ${{ github.head_ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
 on:
   pull_request:
     branches:
@@ -19,12 +24,13 @@ jobs:
       - id: skip_check
         uses: fkirc/skip-duplicate-actions@v3.4.0
         with:
-          cancel_others: true
+          cancel_others: false
           paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", "install/**", "**.nix", "flake.lock", "**/README.md", "FUNDING.yml"]'
       # If we only change ghcide downstream packages we have not test ghcide itself
       - id: skip_ghcide_check
         uses: fkirc/skip-duplicate-actions@v3.4.0
         with:
+          cancel_others: false
           paths_ignore: '["hls-test-utils/**", "plugins/**", "src/**", "exe/**", "test/**", "shake-bench/**"]'
       - if: steps.skip_check.outputs.should_skip == 'true'
         name: Skip circleci
