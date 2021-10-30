@@ -53,7 +53,6 @@ module Development.IDE.Core.Shake(
     GlobalIdeOptions(..),
     HLS.getClientConfig,
     getPluginConfig,
-    garbageCollect,
     knownTargets,
     setPriority,
     ideLogger,
@@ -74,7 +73,9 @@ module Development.IDE.Core.Shake(
     HieDb,
     HieDbWriter(..),
     VFSHandle(..),
-    addPersistentRule
+    addPersistentRule,
+    garbageCollectDirtyKeys,
+    garbageCollectDirtyKeysOlderThan,
     ) where
 
 import           Control.Concurrent.Async
@@ -94,7 +95,6 @@ import           Data.List.Extra                        (foldl', partition,
 import           Data.Map.Strict                        (Map)
 import qualified Data.Map.Strict                        as Map
 import           Data.Maybe
-import qualified Data.Set                               as Set
 import qualified Data.SortedList                        as SL
 import qualified Data.Text                              as T
 import           Data.Time
@@ -118,7 +118,11 @@ import           Development.IDE.GHC.Compat             (NameCache,
 import           Development.IDE.GHC.Orphans            ()
 import           Development.IDE.Graph                  hiding (ShakeValue)
 import qualified Development.IDE.Graph                  as Shake
-import           Development.IDE.Graph.Database
+import           Development.IDE.Graph.Database         (ShakeDatabase,
+                                                         shakeGetBuildStep,
+                                                         shakeOpenDatabase,
+                                                         shakeProfileDatabase,
+                                                         shakeRunDatabaseForKeys)
 import           Development.IDE.Graph.Rule
 import           Development.IDE.Types.Action
 import           Development.IDE.Types.Diagnostics
@@ -144,7 +148,9 @@ import           Language.LSP.Types.Capabilities
 import           OpenTelemetry.Eventlog
 
 import           Control.Exception.Extra                hiding (bracket_)
+import           Data.Aeson                             (toJSON)
 import qualified Data.ByteString.Char8                  as BS8
+import           Data.Coerce                            (coerce)
 import           Data.Default
 import           Data.Foldable                          (toList)
 import           Data.HashSet                           (HashSet)
@@ -153,6 +159,7 @@ import           Data.IORef.Extra                       (atomicModifyIORef'_,
                                                          atomicModifyIORef_)
 import           Data.String                            (fromString)
 import           Data.Text                              (pack)
+import           Debug.Trace.Flags                      (userTracingEnabled)
 import qualified Development.IDE.Types.Exports          as ExportsMap
 import           HieDb.Types
 import           Ide.Plugin.Config
@@ -327,10 +334,10 @@ lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
             MaybeT $ pure $ (,del,ver) <$> fromDynamic dv
           case mv of
             Nothing -> do
-                void $ modifyVar' state $ HMap.alter (alterValue $ Failed True) (file,Key k)
+                void $ modifyVar' state $ HMap.alter (alterValue $ Failed True) (toKey k file)
                 return Nothing
             Just (v,del,ver) -> do
-                void $ modifyVar' state $ HMap.alter (alterValue $ Stale (Just del) ver (toDyn v)) (file,Key k)
+                void $ modifyVar' state $ HMap.alter (alterValue $ Stale (Just del) ver (toDyn v)) (toKey k file)
                 return $ Just (v,addDelta del $ mappingForVersion allMappings file ver)
 
         -- We got a new stale value from the persistent rule, insert it in the map without affecting diagnostics
@@ -341,7 +348,7 @@ lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
           -- Something already succeeded before, leave it alone
           _        -> old
 
-    case HMap.lookup (file,Key k) hm of
+    case HMap.lookup (toKey k file) hm of
       Nothing -> readPersistent
       Just (ValueWithDiagnostics v _) -> case v of
         Succeeded ver (fromDynamic -> Just v) -> pure (Just (v, mappingForVersion allMappings file ver))
@@ -355,12 +362,6 @@ lastValue :: IdeRule k v => k -> NormalizedFilePath -> Action (Maybe (v, Positio
 lastValue key file = do
     s <- getShakeExtras
     liftIO $ lastValueIO s key file
-
-valueVersion :: Value v -> Maybe TextDocumentVersion
-valueVersion = \case
-    Succeeded ver _ -> Just ver
-    Stale _ ver _   -> Just ver
-    Failed _        -> Nothing
 
 mappingForVersion
     :: HMap.HashMap NormalizedUri (Map TextDocumentVersion (a, PositionMapping))
@@ -419,7 +420,7 @@ setValues :: IdeRule k v
           -> Vector FileDiagnostic
           -> IO ()
 setValues state key file val diags =
-    void $ modifyVar' state $ HMap.insert (file, Key key) (ValueWithDiagnostics (fmap toDyn val) diags)
+    void $ modifyVar' state $ HMap.insert (toKey key file) (ValueWithDiagnostics (fmap toDyn val) diags)
 
 
 -- | Delete the value stored for a given ide build key
@@ -430,7 +431,7 @@ deleteValue
   -> NormalizedFilePath
   -> IO ()
 deleteValue ShakeExtras{dirtyKeys, state} key file = do
-    void $ modifyVar' state $ HMap.delete (file, Key key)
+    void $ modifyVar' state $ HMap.delete (toKey key file)
     atomicModifyIORef_ dirtyKeys $ HSet.insert (toKey key file)
 
 recordDirtyKeys
@@ -454,7 +455,7 @@ getValues ::
   IO (Maybe (Value v, Vector FileDiagnostic))
 getValues state key file = do
     vs <- readVar state
-    case HMap.lookup (file, Key key) vs of
+    case HMap.lookup (toKey key file) vs of
         Nothing -> pure Nothing
         Just (ValueWithDiagnostics v diagsV) -> do
             let r = fmap (fromJust . fromDynamic @v) v
@@ -543,9 +544,30 @@ shakeOpen lspEnv defaultConfig logger debouncer
         { optOTMemoryProfiling = IdeOTMemoryProfiling otProfilingEnabled
         , optProgressStyle
         } <- getIdeOptionsIO shakeExtras
-    startTelemetry otProfilingEnabled logger $ state shakeExtras
+
+    void $ startTelemetry shakeDb shakeExtras
+    startProfilingTelemetry otProfilingEnabled logger $ state shakeExtras
 
     return ideState
+
+startTelemetry :: ShakeDatabase -> ShakeExtras -> IO (Async ())
+startTelemetry db extras@ShakeExtras{..}
+  | userTracingEnabled = do
+    countKeys <- mkValueObserver "cached keys count"
+    countDirty <- mkValueObserver "dirty keys count"
+    countBuilds <- mkValueObserver "builds count"
+    IdeOptions{optCheckParents} <- getIdeOptionsIO extras
+    checkParents <- optCheckParents
+    regularly 1 $ do
+        readVar state >>= observe countKeys . countRelevantKeys checkParents . HMap.keys
+        readIORef dirtyKeys >>= observe countDirty . countRelevantKeys checkParents . HSet.toList
+        shakeGetBuildStep db >>= observe countBuilds
+
+  | otherwise = async (pure ())
+    where
+        regularly :: Seconds -> IO () -> IO (Async ())
+        regularly delay act = async $ forever (act >> sleep delay)
+
 
 -- | Must be called in the 'Initialized' handler and only once
 shakeSessionInit :: IdeState -> IO ()
@@ -733,20 +755,73 @@ getHiddenDiagnostics IdeState{shakeExtras = ShakeExtras{hiddenDiagnostics}} = do
     val <- readVar hiddenDiagnostics
     return $ getAllDiagnostics val
 
--- | Clear the results for all files that do not match the given predicate.
-garbageCollect :: (NormalizedFilePath -> Bool) -> Action ()
-garbageCollect keep = do
-    ShakeExtras{state, diagnostics,hiddenDiagnostics,publishedDiagnostics,positionMapping} <- getShakeExtras
-    liftIO $
-        do newState <- modifyVar' state $ HMap.filterWithKey (\(file, _) _ -> keep file)
-           void $ modifyVar' diagnostics $ filterDiagnostics keep
-           void $ modifyVar' hiddenDiagnostics $ filterDiagnostics keep
-           void $ modifyVar' publishedDiagnostics $ HMap.filterWithKey (\uri _ -> keep (fromUri uri))
-           let versionsForFile =
-                   HMap.fromListWith Set.union $
-                   mapMaybe (\((file, _key), ValueWithDiagnostics v _) -> (filePathToUri' file,) . Set.singleton <$> valueVersion v) $
-                   HMap.toList newState
-           void $ modifyVar' positionMapping $ filterVersionMap versionsForFile
+-- | Find and release old keys from the state Hashmap
+--   For the record, there are other state sources that this process does not release:
+--     * diagnostics store (normal, hidden and published)
+--     * position mapping store
+--     * indexing queue
+--     * exports map
+garbageCollectDirtyKeys :: Action [Key]
+garbageCollectDirtyKeys = do
+    IdeOptions{optCheckParents} <- getIdeOptions
+    checkParents <- liftIO optCheckParents
+    garbageCollectDirtyKeysOlderThan 0 checkParents
+
+garbageCollectDirtyKeysOlderThan :: Int -> CheckParents -> Action [Key]
+garbageCollectDirtyKeysOlderThan maxAge checkParents = otTracedGarbageCollection "dirty GC" $ do
+    dirtySet <- getDirtySet
+    garbageCollectKeys "dirty GC" maxAge checkParents dirtySet
+
+garbageCollectKeys :: String -> Int -> CheckParents -> [(Key, Int)] -> Action [Key]
+garbageCollectKeys label maxAge checkParents agedKeys = do
+    start <- liftIO offsetTime
+    extras <- getShakeExtras
+    (n::Int, garbage) <- liftIO $ modifyVar (state extras) $ \vmap ->
+        evaluate $ foldl' removeDirtyKey (vmap, (0,[])) agedKeys
+    liftIO $ atomicModifyIORef_ (dirtyKeys extras) $ \x ->
+        foldl' (flip HSet.insert) x garbage
+    t <- liftIO start
+    when (n>0) $ liftIO $ do
+        logDebug (logger extras) $ T.pack $
+            label <> " of " <> show n <> " keys (took " <> showDuration t <> ")"
+    when (coerce $ ideTesting extras) $ liftIO $ mRunLspT (lspEnv extras) $
+        LSP.sendNotification (SCustomMethod "ghcide/GC")
+                             (toJSON $ mapMaybe (fmap showKey . fromKeyType) garbage)
+    return garbage
+
+    where
+        showKey = show . Q
+        removeDirtyKey st@(vmap,(!counter, keys)) (k, age)
+            | age > maxAge
+            , Just (kt,_) <- fromKeyType k
+            , not(kt `HSet.member` preservedKeys checkParents)
+            , (True, vmap') <- HMap.alterF (\prev -> (isJust prev, Nothing)) k vmap
+            = (vmap', (counter+1, k:keys))
+            | otherwise = st
+
+countRelevantKeys :: CheckParents -> [Key] -> Int
+countRelevantKeys checkParents =
+    Prelude.length . filter (maybe False (not . (`HSet.member` preservedKeys checkParents) . fst) . fromKeyType)
+
+preservedKeys :: CheckParents -> HashSet TypeRep
+preservedKeys checkParents = HSet.fromList $
+    -- always preserved
+    [ typeOf GetFileExists
+    , typeOf GetModificationTime
+    , typeOf IsFileOfInterest
+    , typeOf GhcSessionIO
+    , typeOf GetClientSettings
+    , typeOf AddWatchedFile
+    , typeOf GetKnownTargets
+    ]
+    ++ concat
+    -- preserved if CheckParents is enabled since we need to rebuild the ModuleGraph
+    [ [ typeOf GetModSummary
+       , typeOf GetModSummaryWithoutTimestamps
+       , typeOf GetLocatedImports
+       ]
+    | checkParents /= NeverCheck
+    ]
 
 -- | Define a new Rule without early cutoff
 define
@@ -921,8 +996,8 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
                 v <- liftIO $ getValues state key file
                 case v of
                     -- No changes in the dependencies and we have
-                    -- an existing result.
-                    Just (v, diags) -> do
+                    -- an existing successful result.
+                    Just (v@Succeeded{}, diags) -> do
                         when doDiagnostics $
                             updateFileDiagnostics file (Key key) extras $ map (\(_,y,z) -> (y,z)) $ Vector.toList diags
                         return $ Just $ RunResult ChangedNothing old $ A v
@@ -1127,20 +1202,6 @@ getUriDiagnostics ::
 getUriDiagnostics uri ds =
     maybe [] getDiagnosticsFromStore $
     HMap.lookup uri ds
-
-filterDiagnostics ::
-    (NormalizedFilePath -> Bool) ->
-    DiagnosticStore ->
-    DiagnosticStore
-filterDiagnostics keep =
-    HMap.filterWithKey (\uri _ -> maybe True (keep . toNormalizedFilePath') $ uriToFilePath' $ fromNormalizedUri uri)
-
-filterVersionMap
-    :: HMap.HashMap NormalizedUri (Set.Set TextDocumentVersion)
-    -> HMap.HashMap NormalizedUri (Map TextDocumentVersion a)
-    -> HMap.HashMap NormalizedUri (Map TextDocumentVersion a)
-filterVersionMap =
-    HMap.intersectionWith $ \versionsToKeep versionMap -> Map.restrictKeys versionMap versionsToKeep
 
 updatePositionMapping :: IdeState -> VersionedTextDocumentIdentifier -> List TextDocumentContentChangeEvent -> IO ()
 updatePositionMapping IdeState{shakeExtras = ShakeExtras{positionMapping}} VersionedTextDocumentIdentifier{..} (List changes) = do

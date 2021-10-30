@@ -1,15 +1,18 @@
 {-# LANGUAGE CPP             #-}
 {-# LANGUAGE NoApplicativeDo #-}
+{-# HLINT ignore #-}
 module Development.IDE.Core.Tracing
     ( otTracedHandler
     , otTracedAction
-    , startTelemetry
+    , startProfilingTelemetry
     , measureMemory
     , getInstrumentCached
     , otTracedProvider
     , otSetUri
+    , otTracedGarbageCollection
     , withTrace
-    ,withEventTrace)
+    , withEventTrace
+    )
 where
 
 import           Control.Concurrent.Async       (Async, async)
@@ -32,6 +35,7 @@ import           Data.IORef                     (modifyIORef', newIORef,
                                                  readIORef, writeIORef)
 import           Data.String                    (IsString (fromString))
 import           Data.Text.Encoding             (encodeUtf8)
+import           Data.Typeable                  (TypeRep, typeOf)
 import           Debug.Trace.Flags              (userTracingEnabled)
 import           Development.IDE.Core.RuleTypes (GhcSession (GhcSession),
                                                  GhcSessionDeps (GhcSessionDeps),
@@ -40,9 +44,9 @@ import           Development.IDE.Graph          (Action)
 import           Development.IDE.Graph.Rule
 import           Development.IDE.Types.Location (Uri (..))
 import           Development.IDE.Types.Logger   (Logger, logDebug, logInfo)
-import           Development.IDE.Types.Shake    (Key (..), Value,
+import           Development.IDE.Types.Shake    (Value,
                                                  ValueWithDiagnostics (..),
-                                                 Values)
+                                                 Values, fromKeyType)
 import           Foreign.Storable               (Storable (sizeOf))
 import           HeapSize                       (recursiveSize, runHeapsize)
 import           Ide.PluginUtils                (installSigUsr1Handler)
@@ -50,11 +54,20 @@ import           Ide.Types                      (PluginId (..))
 import           Language.LSP.Types             (NormalizedFilePath,
                                                  fromNormalizedFilePath)
 import           Numeric.Natural                (Natural)
-import           OpenTelemetry.Eventlog         (Instrument, SpanInFlight (..),
-                                                 Synchronicity (Asynchronous),
-                                                 addEvent, beginSpan, endSpan,
+import           OpenTelemetry.Eventlog         (SpanInFlight (..), addEvent,
+                                                 beginSpan, endSpan,
                                                  mkValueObserver, observe,
                                                  setTag, withSpan, withSpan_)
+
+#if MIN_VERSION_ghc(8,8,0)
+otTracedProvider :: MonadUnliftIO m => PluginId -> ByteString -> m a -> m a
+otTracedGarbageCollection :: (MonadMask f, MonadIO f, Show a) => ByteString -> f [a] -> f [a]
+withEventTrace :: (MonadMask m, MonadIO m) => String -> ((ByteString -> ByteString -> m ()) -> m a) -> m a
+#else
+otTracedProvider :: MonadUnliftIO m => PluginId -> String -> m a -> m a
+otTracedGarbageCollection :: (MonadMask f, MonadIO f, Show a) => String -> f [a] -> f [a]
+withEventTrace :: (MonadMask m, MonadIO m) => String -> ((String -> ByteString -> m ()) -> m a) -> m a
+#endif
 
 withTrace :: (MonadMask m, MonadIO m) =>
     String -> ((String -> String -> m ()) -> m a) -> m a
@@ -65,11 +78,6 @@ withTrace name act
       act setSpan'
   | otherwise = act (\_ _ -> pure ())
 
-#if MIN_VERSION_ghc(8,8,0)
-withEventTrace :: (MonadMask m, MonadIO m) => String -> ((ByteString -> ByteString -> m ()) -> m a) -> m a
-#else
-withEventTrace :: (MonadMask m, MonadIO m) => String -> ((String -> ByteString -> m ()) -> m a) -> m a
-#endif
 withEventTrace name act
   | userTracingEnabled
   = withSpan (fromString name) $ \sp -> do
@@ -127,11 +135,19 @@ otTracedAction key file mode result act
         (const act)
   | otherwise = act
 
-#if MIN_VERSION_ghc(8,8,0)
-otTracedProvider :: MonadUnliftIO m => PluginId -> ByteString -> m a -> m a
-#else
-otTracedProvider :: MonadUnliftIO m => PluginId -> String -> m a -> m a
-#endif
+otTracedGarbageCollection label act
+  | userTracingEnabled = fst <$>
+      generalBracket
+        (beginSpan label)
+        (\sp ec -> do
+            case ec of
+                ExitCaseAbort -> setTag sp "aborted" "1"
+                ExitCaseException e -> setTag sp "exception" (pack $ show e)
+                ExitCaseSuccess res -> setTag sp "keys" (pack $ unlines $ map show res)
+            endSpan sp)
+        (const act)
+  | otherwise = act
+
 otTracedProvider (PluginId pluginName) provider act
   | userTracingEnabled = do
     runInIO <- askRunInIO
@@ -140,17 +156,17 @@ otTracedProvider (PluginId pluginName) provider act
         runInIO act
   | otherwise = act
 
-startTelemetry :: Bool -> Logger -> Var Values -> IO ()
-startTelemetry allTheTime logger stateRef = do
+
+startProfilingTelemetry :: Bool -> Logger -> Var Values -> IO ()
+startProfilingTelemetry allTheTime logger stateRef = do
     instrumentFor <- getInstrumentCached
-    mapCountInstrument <- mkValueObserver "values map count"
 
     installSigUsr1Handler $ do
         logInfo logger "SIGUSR1 received: performing memory measurement"
-        performMeasurement logger stateRef instrumentFor mapCountInstrument
+        performMeasurement logger stateRef instrumentFor
 
     when allTheTime $ void $ regularly (1 * seconds) $
-        performMeasurement logger stateRef instrumentFor mapCountInstrument
+        performMeasurement logger stateRef instrumentFor
   where
         seconds = 1000000
 
@@ -161,21 +177,23 @@ startTelemetry allTheTime logger stateRef = do
 performMeasurement ::
   Logger ->
   Var Values ->
-  (Maybe Key -> IO OurValueObserver) ->
-  Instrument 'Asynchronous a m' ->
+  (Maybe String -> IO OurValueObserver) ->
   IO ()
-performMeasurement logger stateRef instrumentFor mapCountInstrument = do
-    withSpan_ "Measure length" $ readVar stateRef >>= observe mapCountInstrument . length
+performMeasurement logger stateRef instrumentFor = do
 
     values <- readVar stateRef
-    let keys = Key GhcSession
-             : Key GhcSessionDeps
-             : [ k | (_,k) <- HMap.keys values
-                        -- do GhcSessionIO last since it closes over stateRef itself
-                        , k /= Key GhcSession
-                        , k /= Key GhcSessionDeps
-                        , k /= Key GhcSessionIO
-             ] ++ [Key GhcSessionIO]
+    let keys = typeOf GhcSession
+             : typeOf GhcSessionDeps
+             -- TODO restore
+             : [ kty
+                | k <- HMap.keys values
+                , Just (kty,_) <- [fromKeyType k]
+                -- do GhcSessionIO last since it closes over stateRef itself
+                , kty /= typeOf GhcSession
+                , kty /= typeOf GhcSessionDeps
+                , kty /= typeOf GhcSessionIO
+             ]
+             ++ [typeOf GhcSessionIO]
     groupedForSharing <- evaluate (keys `using` seqList r0)
     measureMemory logger [groupedForSharing] instrumentFor stateRef
         `catch` \(e::SomeException) ->
@@ -184,7 +202,7 @@ performMeasurement logger stateRef instrumentFor mapCountInstrument = do
 
 type OurValueObserver = Int -> IO ()
 
-getInstrumentCached :: IO (Maybe Key -> IO OurValueObserver)
+getInstrumentCached :: IO (Maybe String -> IO OurValueObserver)
 getInstrumentCached = do
     instrumentMap <- newVar HMap.empty
     mapBytesInstrument <- mkValueObserver "value map size_bytes"
@@ -206,8 +224,8 @@ whenNothing act mb = mb >>= f
 
 measureMemory
     :: Logger
-    -> [[Key]]     -- ^ Grouping of keys for the sharing-aware analysis
-    -> (Maybe Key -> IO OurValueObserver)
+    -> [[TypeRep]]     -- ^ Grouping of keys for the sharing-aware analysis
+    -> (Maybe String -> IO OurValueObserver)
     -> Var Values
     -> IO ()
 measureMemory logger groups instrumentFor stateRef = withSpan_ "Measure Memory" $ do
@@ -222,7 +240,7 @@ measureMemory logger groups instrumentFor stateRef = withSpan_ "Measure Memory" 
           repeatUntilJust 3 $ do
           -- logDebug logger (fromString $ show $ map fst groupedValues)
           runHeapsize 25000000 $
-              forM_ groupedValues $ \(k,v) -> withSpan ("Measure " <> (fromString $ show k)) $ \sp -> do
+              forM_ groupedValues $ \(k,v) -> withSpan ("Measure " <> fromString k) $ \sp -> do
               acc <- liftIO $ newIORef 0
               observe <- liftIO $ instrumentFor $ Just k
               mapM_ (recursiveSize >=> \x -> liftIO (modifyIORef' acc (+ x))) v
@@ -242,12 +260,13 @@ measureMemory logger groups instrumentFor stateRef = withSpan_ "Measure Memory" 
             logInfo logger "Memory profiling could not be completed: increase the size of your nursery (+RTS -Ax) and try again"
 
     where
-        groupValues :: Values -> [ [(Key, [Value Dynamic])] ]
+        groupValues :: Values -> [ [(String, [Value Dynamic])] ]
         groupValues values =
             let !groupedValues =
-                    [ [ (k, vv)
-                      | k <- groupKeys
-                      , let vv = [ v | ((_,k'), ValueWithDiagnostics v _) <- HMap.toList values , k == k']
+                    [ [ (show ty, vv)
+                      | ty <- groupKeys
+                      , let vv = [ v | (fromKeyType -> Just (kty,_), ValueWithDiagnostics v _) <- HMap.toList values
+                                     , kty == ty]
                       ]
                     | groupKeys <- groups
                     ]
