@@ -150,6 +150,12 @@ import           Ide.PluginUtils                              (configForPlugin)
 import           Ide.Types                                    (DynFlagsModifications (dynFlagsModifyGlobal, dynFlagsModifyParser),
                                                                PluginId)
 import qualified Data.HashSet as HS
+import Unsafe.Coerce (unsafeCoerce)
+import Data.Map (Map)
+import GhcPlugins (FinderCache, mgModSummaries)
+import qualified Development.IDE.GHC.Compat as GHC
+import Development.IDE.GHC.Compat (installedModule)
+import Data.List.Extra (nubOrdOn)
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
@@ -691,49 +697,76 @@ loadGhcSession = do
                 Nothing -> LBS.toStrict $ B.encode (hash (snd val))
         return (Just cutoffHash, val)
 
-    define $ \GhcSessionDeps file -> ghcSessionDepsDefinition file
+    defineNoDiagnostics $ \GhcSessionDeps file -> Just <$> ghcSessionDepsDefinition file
 
-ghcSessionDepsDefinition :: NormalizedFilePath -> Action (IdeResult HscEnvEq)
+ghcSessionDepsDefinition :: NormalizedFilePath -> Action HscEnvEq
 ghcSessionDepsDefinition file = do
         env <- use_ GhcSession file
         let hsc = hscEnv env
         ms <- msrModSummary <$> use_ GetModSummaryWithoutTimestamps file
-        deps <- use_ GetDependencies file
-        let tdeps = transitiveModuleDeps deps
-            uses_th_qq =
+        deps <- mapMaybe (fmap artifactFilePath . snd) <$> use_ GetLocatedImports file
+        mss <- map msrModSummary <$> uses_ GetModSummaryWithoutTimestamps deps
+
+        depSessions <- uses_ GhcSessionDeps deps
+        session' <- liftIO $ mergeEnvs hsc mss $ map hscEnv depSessions
+        let uses_th_qq =
               xopt LangExt.TemplateHaskell dflags || xopt LangExt.QuasiQuotes dflags
             dflags = ms_hspp_opts ms
         ifaces <- if uses_th_qq
-                  then uses_ GetModIface tdeps
-                  else uses_ GetModIfaceWithoutLinkable tdeps
+                  then uses_ GetModIface deps
+                  else uses_ GetModIfaceWithoutLinkable deps
 
-        -- Currently GetDependencies returns things in topological order so A comes before B if A imports B.
-        -- We need to reverse this as GHC gets very unhappy otherwise and complains about broken interfaces.
-        -- Long-term we might just want to change the order returned by GetDependencies
-        let inLoadOrder = reverse (map hirHomeMod ifaces)
+        let session'' = loadModulesHome inLoadOrder $ session'{
+                hsc_HPT = foldMap (hsc_HPT . hscEnv) depSessions
+            }
+            -- Currently GetDependencies returns things in topological order so A comes before B if A imports B.
+            -- We need to reverse this as GHC gets very unhappy otherwise and complains about broken interfaces.
+            -- Long-term we might just want to change the order returned by GetDependencies
+            inLoadOrder = reverse $ map hirHomeMod ifaces
 
-        session' <- liftIO $ loadModulesHome inLoadOrder <$> setupFinderCache (map hirModSummary ifaces) hsc
+        liftIO $ newHscEnvEqWithImportPaths (envImportPaths env) session'' []
 
-        res <- liftIO $ newHscEnvEqWithImportPaths (envImportPaths env) session' []
-        return ([], Just res)
+-- Merge the HPTs, module graphs and FinderCaches
+mergeEnvs :: HscEnv -> [ModSummary] -> [HscEnv] -> IO HscEnv
+mergeEnvs env mss envs = do
+    prevFinderCache <- concatFC <$> mapM (readIORef . hsc_FC) envs
+    let ims  = map (installedModule (homeUnitId_ $ hsc_dflags env) . moduleName . ms_mod) mss
+        ifrs = zipWith (\ms -> InstalledFound (ms_location ms)) mss ims
+    newFinderCache <- newIORef $
+            foldl'
+                (\fc (im, ifr) -> GHC.extendInstalledModuleEnv fc im ifr) prevFinderCache
+                $ zip ims ifrs
+    return env{
+        hsc_HPT = foldMap hsc_HPT envs,
+        hsc_FC = newFinderCache,
+        hsc_mod_graph = mkModuleGraph $ mss ++ nubOrdOn ms_mod (concatMap (mgModSummaries . hsc_mod_graph) envs)
+    }
+    where
+    -- required because 'FinderCache':
+    --  1) doesn't have a 'Monoid' instance,
+    --  2) is abstract and doesn't export constructors
+    -- To work around this, we coerce to the underlying type
+    -- To remove this, I plan to upstream the missing Monoid instance
+        concatFC :: [FinderCache] -> FinderCache
+        concatFC = unsafeCoerce (mconcat @(Map InstalledModule InstalledFindResult))
 
 -- | Load a iface from disk, or generate it if there isn't one or it is out of date
 -- This rule also ensures that the `.hie` and `.o` (if needed) files are written out.
 getModIfaceFromDiskRule :: Rules ()
 getModIfaceFromDiskRule = defineEarlyCutoff $ Rule $ \GetModIfaceFromDisk f -> do
   ms <- msrModSummary <$> use_ GetModSummary f
-  (diags_session, mb_session) <- ghcSessionDepsDefinition f
+  mb_session <- use GhcSessionDeps f
   case mb_session of
-    Nothing -> return (Nothing, (diags_session, Nothing))
+    Nothing -> return (Nothing, ([], Nothing))
     Just session -> do
       sourceModified <- use_ IsHiFileStable f
       linkableType <- getLinkableType f
       r <- loadInterface (hscEnv session) ms sourceModified linkableType (regenerateHiFile session f ms)
       case r of
-        (diags, Nothing) -> return (Nothing, (diags ++ diags_session, Nothing))
+        (diags, Nothing) -> return (Nothing, (diags, Nothing))
         (diags, Just x) -> do
           let !fp = Just $! hiFileFingerPrint x
-          return (fp, (diags <> diags_session, Just x))
+          return (fp, (diags, Just x))
 
 -- | Check state of hiedb after loading an iface from disk - have we indexed the corresponding `.hie` file?
 -- This function is responsible for ensuring database consistency
