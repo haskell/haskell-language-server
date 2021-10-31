@@ -272,7 +272,10 @@ newtype GetModificationTime = GetModificationTime_
     { missingFileDiagnostics :: Bool
       -- ^ If false, missing file diagnostics are not reported
     }
-    deriving (Show, Generic)
+    deriving (Generic)
+
+instance Show GetModificationTime where
+    show _ = "GetModificationTime"
 
 instance Eq GetModificationTime where
     -- Since the diagnostics are not part of the answer, the query identity is
