@@ -12,6 +12,7 @@ module Development.IDE.Core.Tracing
     , otTracedGarbageCollection
     , withTrace
     , withEventTrace
+    , withTelemetryLogger
     )
 where
 
@@ -34,8 +35,10 @@ import qualified Data.HashMap.Strict            as HMap
 import           Data.IORef                     (modifyIORef', newIORef,
                                                  readIORef, writeIORef)
 import           Data.String                    (IsString (fromString))
+import qualified Data.Text                      as T
 import           Data.Text.Encoding             (encodeUtf8)
 import           Data.Typeable                  (TypeRep, typeOf)
+import           Data.Word                      (Word16)
 import           Debug.Trace.Flags              (userTracingEnabled)
 import           Development.IDE.Core.RuleTypes (GhcSession (GhcSession),
                                                  GhcSessionDeps (GhcSessionDeps),
@@ -43,7 +46,8 @@ import           Development.IDE.Core.RuleTypes (GhcSession (GhcSession),
 import           Development.IDE.Graph          (Action)
 import           Development.IDE.Graph.Rule
 import           Development.IDE.Types.Location (Uri (..))
-import           Development.IDE.Types.Logger   (Logger, logDebug, logInfo)
+import           Development.IDE.Types.Logger   (Logger (Logger), logDebug,
+                                                 logInfo)
 import           Development.IDE.Types.Shake    (Value,
                                                  ValueWithDiagnostics (..),
                                                  Values, fromKeyType)
@@ -83,6 +87,18 @@ withEventTrace name act
   = withSpan (fromString name) $ \sp -> do
       act (addEvent sp)
   | otherwise = act (\_ _ -> pure ())
+
+-- | Returns a logger that produces telemetry events in a single span
+withTelemetryLogger :: (MonadIO m, MonadMask m) => (Logger -> m a) -> m a
+withTelemetryLogger k = withSpan "Logger" $ \sp ->
+    -- Tracy doesn't like when we create a new span for every log line.
+    -- To workaround that, we create a single span for all log events.
+    -- This is fine since we don't care about the span itself, only about the events
+    k $ Logger $ \p m ->
+            addEvent sp (fromString $ show p) (encodeUtf8 $ trim m)
+    where
+        -- eventlog message size is limited by EVENT_PAYLOAD_SIZE_MAX = STG_WORD16_MAX
+        trim = T.take (fromIntegral(maxBound :: Word16) - 10)
 
 -- | Trace a handler using OpenTelemetry. Adds various useful info into tags in the OpenTelemetry span.
 otTracedHandler
