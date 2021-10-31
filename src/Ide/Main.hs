@@ -16,6 +16,7 @@ import           Data.Default
 import           Data.List                     (sort)
 import qualified Data.Text                     as T
 import           Development.IDE.Core.Rules
+import           Development.IDE.Core.Tracing  (withTelemetryLogger)
 import           Development.IDE.Graph         (ShakeOptions (shakeThreads))
 import           Development.IDE.Main          (isLSP)
 import qualified Development.IDE.Main          as Main
@@ -90,7 +91,7 @@ hlsLogger = G.Logger $ \pri txt ->
 -- ---------------------------------------------------------------------
 
 runLspMode :: GhcideArguments -> IdePlugins IdeState -> IO ()
-runLspMode ghcideArgs@GhcideArguments{..} idePlugins = do
+runLspMode ghcideArgs@GhcideArguments{..} idePlugins = withTelemetryLogger $ \telemetryLogger -> do
     whenJust argsCwd IO.setCurrentDirectory
     dir <- IO.getCurrentDirectory
     LSP.setupLogger argsLogFile ["hls", "hie-bios"]
@@ -105,7 +106,7 @@ runLspMode ghcideArgs@GhcideArguments{..} idePlugins = do
     Main.defaultMain def
       { Main.argCommand = argsCommand
       , Main.argsHlsPlugins = idePlugins
-      , Main.argsLogger = pure hlsLogger
+      , Main.argsLogger = pure hlsLogger <> pure telemetryLogger
       , Main.argsThreads = if argsThreads == 0 then Nothing else Just $ fromIntegral argsThreads
       , Main.argsIdeOptions = \_config sessionLoader ->
         let defOptions = Ghcide.defaultIdeOptions sessionLoader

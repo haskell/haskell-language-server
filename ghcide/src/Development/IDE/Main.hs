@@ -23,14 +23,11 @@ import           Data.Hashable                         (hashed)
 import           Data.List.Extra                       (intercalate, isPrefixOf,
                                                         nub, nubOrd, partition)
 import           Data.Maybe                            (catMaybes, isJust)
-import           Data.String
 import qualified Data.Text                             as T
-import           Data.Text.Encoding                    (encodeUtf8)
 import qualified Data.Text.IO                          as T
 import           Data.Text.Lazy.Encoding               (decodeUtf8)
 import qualified Data.Text.Lazy.IO                     as LT
 import           Data.Typeable                         (typeOf)
-import           Data.Word                             (Word16)
 import           Development.IDE                       (Action, GhcVersion (..),
                                                         Priority (Debug), Rules,
                                                         ghcVersion,
@@ -55,8 +52,7 @@ import           Development.IDE.Core.Service          (initialise, runAction)
 import           Development.IDE.Core.Shake            (IdeState (shakeExtras),
                                                         ShakeExtras (state),
                                                         shakeSessionInit, uses)
-import           Development.IDE.Core.Tracing          (measureMemory,
-                                                        withEventTrace)
+import           Development.IDE.Core.Tracing          (measureMemory)
 import           Development.IDE.Graph                 (action)
 import           Development.IDE.LSP.LanguageServer    (runLanguageServer)
 import           Development.IDE.Plugin                (Plugin (pluginHandlers, pluginModifyDynflags, pluginRules))
@@ -190,7 +186,7 @@ defaultArguments :: Priority -> Arguments
 defaultArguments priority = Arguments
         { argsOTMemoryProfiling = False
         , argCommand = LSP
-        , argsLogger = stderrLogger priority <> pure telemetryLogger
+        , argsLogger = stderrLogger priority
         , argsRules = mainRule >> action kick
         , argsGhcidePlugin = mempty
         , argsHlsPlugins = pluginDescToIdePlugins Ghcide.descriptors
@@ -239,14 +235,6 @@ stderrLogger logLevel = do
     lock <- newLock
     return $ Logger $ \p m -> when (p >= logLevel) $ withLock lock $
         T.hPutStrLn stderr $ "[" <> T.pack (show p) <> "] " <> m
-
-telemetryLogger :: Logger
-telemetryLogger = Logger $ \p m ->
-        withEventTrace "Log" $ \addEvent ->
-            addEvent (fromString $ "Log " <> show p) (encodeUtf8 $ trim m)
-    where
-        -- eventlog message size is limited by EVENT_PAYLOAD_SIZE_MAX = STG_WORD16_MAX
-        trim = T.take (fromIntegral(maxBound :: Word16) - 10)
 
 defaultMain :: Arguments -> IO ()
 defaultMain Arguments{..} = do
