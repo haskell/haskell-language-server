@@ -26,12 +26,12 @@ import           Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
 import           Data.Traversable
-import           Development.IDE (getFilesOfInterestUntracked, ShowDiagnostic (ShowDiag), srcSpanToRange)
-import           Development.IDE (hscEnv)
+import           Development.IDE (hscEnv, getFilesOfInterestUntracked, ShowDiagnostic (ShowDiag), srcSpanToRange, defineNoDiagnostics, IdeAction)
+import           Development.IDE.Core.PositionMapping (idDelta)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Rules (usePropertyAction)
 import           Development.IDE.Core.Service (runAction)
-import           Development.IDE.Core.Shake (IdeState (..), uses, define, use)
+import           Development.IDE.Core.Shake (IdeState (..), uses, define, use, addPersistentRule)
 import qualified Development.IDE.Core.Shake as IDE
 import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.Compat hiding (empty)
@@ -47,8 +47,7 @@ import qualified Ide.Plugin.Config as Plugin
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils (usePropertyLsp)
 import           Ide.Types (PluginId)
-import           Language.Haskell.GHC.ExactPrint (Transform)
-import           Language.Haskell.GHC.ExactPrint (modifyAnnsT, addAnnotationsForPretty)
+import           Language.Haskell.GHC.ExactPrint (Transform, modifyAnnsT, addAnnotationsForPretty)
 import           Language.LSP.Server (MonadLsp, sendNotification)
 import           Language.LSP.Types              hiding
                                                  (SemanticTokenAbsolute (length, line),
@@ -60,7 +59,7 @@ import           Retrie (transformA)
 import           Wingman.Context
 import           Wingman.GHC
 import           Wingman.Judgements
-import           Wingman.Judgements.SYB (everythingContaining, metaprogramQ)
+import           Wingman.Judgements.SYB (everythingContaining, metaprogramQ, metaprogramAtQ)
 import           Wingman.Judgements.Theta
 import           Wingman.Range
 import           Wingman.StaticPlugin (pattern WingmanMetaprogram, pattern MetaprogramSyntax)
@@ -79,6 +78,9 @@ tcCommandName = T.pack . show
 
 runIde :: String -> String -> IdeState -> Action a -> IO a
 runIde herald action state = runAction ("Wingman." <> herald <> "." <> action) state
+
+runIdeAction :: String -> String -> IdeState -> IdeAction a -> IO a
+runIdeAction herald action state = IDE.runIdeAction ("Wingman." <> herald <> "." <> action) (shakeExtras state)
 
 
 runCurrentIde
@@ -124,6 +126,21 @@ unsafeRunStaleIde
     -> MaybeT IO r
 unsafeRunStaleIde herald state nfp a = do
   (r, _) <- MaybeT $ runIde herald (show a) state $ IDE.useWithStale a nfp
+  pure r
+
+unsafeRunStaleIdeFast
+    :: forall a r
+     . ( r ~ RuleResult a
+       , Eq a , Hashable a , Show a , Typeable a , NFData a
+       , Show r, Typeable r, NFData r
+       )
+    => String
+    -> IdeState
+    -> NormalizedFilePath
+    -> a
+    -> MaybeT IO r
+unsafeRunStaleIdeFast herald state nfp a = do
+  (r, _) <- MaybeT $ runIdeAction herald (show a) state $ IDE.useWithStaleFast a nfp
   pure r
 
 
@@ -522,6 +539,14 @@ instance NFData   WriteDiagnostics
 
 type instance RuleResult WriteDiagnostics = ()
 
+data GetMetaprograms = GetMetaprograms
+    deriving (Eq, Show, Typeable, Generic)
+
+instance Hashable GetMetaprograms
+instance NFData   GetMetaprograms
+
+type instance RuleResult GetMetaprograms = [(Tracked 'Current RealSrcSpan, T.Text)]
+
 wingmanRules :: PluginId -> Rules ()
 wingmanRules plId = do
   define $ \WriteDiagnostics nfp ->
@@ -552,6 +577,21 @@ wingmanRules plId = do
               ( fmap (\r -> (nfp, ShowDiag, mkDiagnostic severity r)) holes
               , Just ()
               )
+
+  defineNoDiagnostics $ \GetMetaprograms nfp -> do
+    TrackedStale tcg tcg_map <- fmap tmrTypechecked <$> useWithStale_ TypeCheck nfp
+    let scrutinees = traverse (metaprogramQ . tcg_binds) tcg
+    return $ Just $ flip mapMaybe scrutinees $ \aged@(unTrack -> (ss, program)) -> do
+      case ss of
+        RealSrcSpan r _ -> do
+          rss' <- mapAgeTo tcg_map $ unsafeCopyAge aged r
+          pure (rss', program)
+        UnhelpfulSpan _ -> Nothing
+
+  -- This persistent rule helps to avoid blocking HLS hover providers at startup
+  -- Without it, the GetMetaprograms rule blocks on typecheck and prevents other
+  -- hover providers from being used to produce a response
+  addPersistentRule GetMetaprograms $ \_ -> return $ Just ([], idDelta, Nothing)
 
   action $ do
     files <- getFilesOfInterestUntracked
@@ -607,7 +647,7 @@ getMetaprogramAtSpan
 getMetaprogramAtSpan (unTrack -> ss)
   = fmap snd
   . listToMaybe
-  . metaprogramQ ss
+  . metaprogramAtQ ss
   . tcg_binds
   . unTrack
 
