@@ -58,8 +58,8 @@ write-ghc-environment-files: never
 index-state: 2021-10-04T02:41:06Z
 
 constraints:
-    -- These plugins don't work on GHC9 yet
-    haskell-language-server -brittany -class -stylishhaskell -tactic
+  -- These plugins don't work on GHC9 yet
+  haskell-language-server -brittany -class -stylishhaskell -tactic
 
 allow-newer:
     floskell:base,
