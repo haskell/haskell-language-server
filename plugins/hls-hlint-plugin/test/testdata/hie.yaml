@@ -11,3 +11,4 @@ cradle:
       - "IgnoreAnnHlint"
       - "LambdaCase"
       - "TwoHints"
+      - "PatternKeyword"

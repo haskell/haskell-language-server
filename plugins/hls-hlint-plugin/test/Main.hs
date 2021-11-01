@@ -154,6 +154,20 @@ suggestionsTests =
         liftIO $ hasApplyAll secondLine @? "Missing apply all code action"
         liftIO $ not (hasApplyAll thirdLine) @? "Unexpected apply all code action"
         liftIO $ hasApplyAll multiLine @? "Missing apply all code action"
+
+    , expectFailBecause "[#2042] To investigate" $ testCase "hlint should warn about unused extensions" $ runHlintSession "" $ do
+        doc <- openDoc "UnusedExtension.hs" "haskell"
+        diags@(unusedExt:_) <- waitForDiagnosticsFromSource doc "hlint"
+
+        liftIO $ do
+            length diags @?= 1 -- "Eta Reduce" and "Redundant Id"
+            unusedExt ^. L.code @?= Just (InR "refact:Unused LANGUAGE pragma")
+    , testCase "hlint should not activate extensions like PatternSynonyms" runHlintSession "" $ do
+        doc <- openDoc "PatternKeyword.hs" "haskell"
+        diags <- waitForDiagnosticsFrom doc
+
+        -- hlint will report a parse error if PatternSynonyms is enabled
+        liftIO $ noHlintDiagnostics diags
     ]
     where
         testRefactor file caTitle expected = do
