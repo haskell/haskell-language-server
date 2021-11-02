@@ -695,9 +695,8 @@ ghcSessionDepsDefinition :: NormalizedFilePath -> Action HscEnvEq
 ghcSessionDepsDefinition file = do
         env <- use_ GhcSession file
         let hsc = hscEnv env
-        ms <- msrModSummary <$> use_ GetModSummaryWithoutTimestamps file
         deps <- mapMaybe (fmap artifactFilePath . snd) <$> use_ GetLocatedImports file
-        mss <- map msrModSummary <$> uses_ GetModSummaryWithoutTimestamps deps
+        ms:mss <- map msrModSummary <$> uses_ GetModSummaryWithoutTimestamps (file:deps)
 
         depSessions <- map hscEnv <$> uses_ GhcSessionDeps deps
         let uses_th_qq =
