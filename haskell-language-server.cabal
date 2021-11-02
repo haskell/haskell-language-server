@@ -87,7 +87,7 @@ library
 -- - Individual flags should be default:True
 
 flag force-plugins
-  description: Force the inclusion of plugins requested with flags
+  description: Force the inclusion of plugins even if they are not buildable by default with a specific ghc version
   default:     False
   manual:      True
 
