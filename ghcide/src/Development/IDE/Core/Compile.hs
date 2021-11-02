@@ -106,7 +106,6 @@ import           Data.Map                          (Map)
 import           Data.Tuple.Extra                  (dupe)
 import           Data.Unique                       as Unique
 import           Development.IDE.Core.Tracing      (withTrace)
-import           GhcPlugins                        (FinderCache)
 import qualified Language.LSP.Server               as LSP
 import qualified Language.LSP.Types                as LSP
 import           Unsafe.Coerce

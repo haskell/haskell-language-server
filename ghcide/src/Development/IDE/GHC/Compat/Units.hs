@@ -45,6 +45,7 @@ module Development.IDE.GHC.Compat.Units (
     ExternalPackageState(..),
     -- * Utils
     filterInplaceUnits,
+    FinderCache,
     ) where
 
 #if MIN_VERSION_ghc(9,0,0)
@@ -59,6 +60,7 @@ import           GHC.Driver.Types
 import           GHC.Data.FastString
 import qualified GHC.Driver.Session              as DynFlags
 import           GHC.Types.Unique.Set
+import           GHC.Unit.Finder                 (finderCache)
 import qualified GHC.Unit.Info                   as UnitInfo
 import           GHC.Unit.State                  (LookupResult, UnitInfo,
                                                   UnitState (unitInfoMap))
