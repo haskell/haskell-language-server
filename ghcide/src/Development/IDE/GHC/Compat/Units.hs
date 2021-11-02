@@ -54,13 +54,13 @@ import qualified GHC.Data.ShortText              as ST
 import           GHC.Driver.Env                  (hsc_unit_dbs)
 import           GHC.Unit.Env
 import           GHC.Unit.External
+import           GHC.Unit.Finder
 #else
 import           GHC.Driver.Types
 #endif
 import           GHC.Data.FastString
 import qualified GHC.Driver.Session              as DynFlags
 import           GHC.Types.Unique.Set
-import           GHC.Unit.Finder                 (finderCache)
 import qualified GHC.Unit.Info                   as UnitInfo
 import           GHC.Unit.State                  (LookupResult, UnitInfo,
                                                   UnitState (unitInfoMap))
