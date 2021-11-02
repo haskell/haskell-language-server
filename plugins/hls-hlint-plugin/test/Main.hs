@@ -162,7 +162,8 @@ suggestionsTests =
         liftIO $ do
             length diags @?= 1 -- "Eta Reduce" and "Redundant Id"
             unusedExt ^. L.code @?= Just (InR "refact:Unused LANGUAGE pragma")
-    , testCase "hlint should not activate extensions like PatternSynonyms" runHlintSession "" $ do
+
+    , testCase "hlint should not activate extensions like PatternSynonyms" $ runHlintSession "" $ do
         doc <- openDoc "PatternKeyword.hs" "haskell"
         diags <- waitForDiagnosticsFrom doc
 
