@@ -87,6 +87,8 @@ import           Data.IORef
 import           Data.IntMap.Strict                           (IntMap)
 import qualified Data.IntMap.Strict                           as IntMap
 import           Data.List
+import           Data.List.Extra (nubOrdOn)
+import           Data.Map                                     (Map)
 import qualified Data.Map                                     as M
 import           Data.Maybe
 import qualified Data.Rope.UTF16                              as Rope
@@ -133,13 +135,13 @@ import           Development.IDE.Types.Options
 import           GHC.Generics                                 (Generic)
 import           GHC.IO.Encoding
 import qualified GHC.LanguageExtensions                       as LangExt
+import           GhcPlugins                                   (FinderCache, mgModSummaries)
 import qualified HieDb
 import           Ide.Plugin.Config
 import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.Types                           (SMethod (SCustomMethod))
 import           Language.LSP.VFS
 import           System.Directory                             (canonicalizePath, makeAbsolute)
-
 import           Data.Default                                 (def)
 import           Ide.Plugin.Properties                        (HasProperty,
                                                                KeyNameProxy,
@@ -149,13 +151,7 @@ import           Ide.Plugin.Properties                        (HasProperty,
 import           Ide.PluginUtils                              (configForPlugin)
 import           Ide.Types                                    (DynFlagsModifications (dynFlagsModifyGlobal, dynFlagsModifyParser),
                                                                PluginId)
-import qualified Data.HashSet as HS
-import Unsafe.Coerce (unsafeCoerce)
-import Data.Map (Map)
-import GhcPlugins (FinderCache, mgModSummaries)
-import qualified Development.IDE.GHC.Compat as GHC
-import Development.IDE.GHC.Compat (installedModule)
-import Data.List.Extra (nubOrdOn)
+import           Unsafe.Coerce                                (unsafeCoerce)
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
@@ -340,7 +336,7 @@ getLocatedImportsRule =
                     return $ if itExists then Just nfp' else Nothing
                 | Just tt <- HM.lookup (TargetModule modName) targets = do
                     -- reuse the existing NormalizedFilePath in order to maximize sharing
-                    let ttmap = HM.mapWithKey const (HS.toMap tt)
+                    let ttmap = HM.mapWithKey const (HashSet.toMap tt)
                         nfp' = HM.lookupDefault nfp nfp ttmap
                     itExists <- getFileExists nfp'
                     return $ if itExists then Just nfp' else Nothing
@@ -730,11 +726,11 @@ ghcSessionDepsDefinition file = do
 mergeEnvs :: HscEnv -> [ModSummary] -> [HscEnv] -> IO HscEnv
 mergeEnvs env mss envs = do
     prevFinderCache <- concatFC <$> mapM (readIORef . hsc_FC) envs
-    let ims  = map (installedModule (homeUnitId_ $ hsc_dflags env) . moduleName . ms_mod) mss
+    let ims  = map (Compat.installedModule (homeUnitId_ $ hsc_dflags env) . moduleName . ms_mod) mss
         ifrs = zipWith (\ms -> InstalledFound (ms_location ms)) mss ims
     newFinderCache <- newIORef $
             foldl'
-                (\fc (im, ifr) -> GHC.extendInstalledModuleEnv fc im ifr) prevFinderCache
+                (\fc (im, ifr) -> Compat.extendInstalledModuleEnv fc im ifr) prevFinderCache
                 $ zip ims ifrs
     return env{
         hsc_HPT = foldMap hsc_HPT envs,
