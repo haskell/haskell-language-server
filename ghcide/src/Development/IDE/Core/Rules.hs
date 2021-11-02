@@ -689,27 +689,29 @@ loadGhcSession = do
                 Nothing -> LBS.toStrict $ B.encode (hash (snd val))
         return (Just cutoffHash, val)
 
-    defineNoDiagnostics $ \GhcSessionDeps file -> Just <$> ghcSessionDepsDefinition file
-
-ghcSessionDepsDefinition :: NormalizedFilePath -> Action HscEnvEq
-ghcSessionDepsDefinition file = do
+    defineNoDiagnostics $ \GhcSessionDeps file -> do
         env <- use_ GhcSession file
-        let hsc = hscEnv env
-        deps <- mapMaybe (fmap artifactFilePath . snd) <$> use_ GetLocatedImports file
-        ms:mss <- map msrModSummary <$> uses_ GetModSummaryWithoutTimestamps (file:deps)
+        Just <$> ghcSessionDepsDefinition False env file
 
-        depSessions <- map hscEnv <$> uses_ GhcSessionDeps deps
-        let uses_th_qq =
-              xopt LangExt.TemplateHaskell dflags || xopt LangExt.QuasiQuotes dflags
-            dflags = ms_hspp_opts ms
-        ifaces <- if uses_th_qq
-                  then uses_ GetModIface deps
-                  else uses_ GetModIfaceWithoutLinkable deps
+ghcSessionDepsDefinition :: Bool -> HscEnvEq -> NormalizedFilePath -> Action HscEnvEq
+ghcSessionDepsDefinition forceLinkable env file = do
+    let hsc = hscEnv env
+    deps <- mapMaybe (fmap artifactFilePath . snd) <$> use_ GetLocatedImports file
+    _ <- uses_ ReportImportCycles deps
+    ms:mss <- map msrModSummary <$> uses_ GetModSummaryWithoutTimestamps (file:deps)
 
-        let inLoadOrder = map hirHomeMod ifaces
-        session' <- liftIO $ mergeEnvs hsc mss inLoadOrder depSessions
+    depSessions <- map hscEnv <$> uses_ GhcSessionDeps deps
+    let uses_th_qq =
+            xopt LangExt.TemplateHaskell dflags || xopt LangExt.QuasiQuotes dflags
+        dflags = ms_hspp_opts ms
+    ifaces <- if uses_th_qq || forceLinkable
+                then uses_ GetModIface deps
+                else uses_ GetModIfaceWithoutLinkable deps
 
-        liftIO $ newHscEnvEqWithImportPaths (envImportPaths env) session' []
+    let inLoadOrder = map hirHomeMod ifaces
+    session' <- liftIO $ mergeEnvs hsc mss inLoadOrder depSessions
+
+    liftIO $ newHscEnvEqWithImportPaths (envImportPaths env) session' []
 
 -- | Load a iface from disk, or generate it if there isn't one or it is out of date
 -- This rule also ensures that the `.hie` and `.o` (if needed) files are written out.
