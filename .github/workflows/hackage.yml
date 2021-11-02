@@ -21,7 +21,7 @@ jobs:
                   "hls-splice-plugin", "hls-tactics-plugin",
                   "hls-call-hierarchy-plugin",
                   "haskell-language-server"]
-        ghc: ["8.10.7", "8.8.4", "8.6.5"]
+        ghc: ["9.0.1", "8.10.7", "8.8.4", "8.6.5"]
 
     steps:
 
@@ -119,6 +119,7 @@ jobs:
           path: ${{ steps.generate-dist-tarball.outputs.path }}
 
   upload-candidate:
+    if: ! contains(github.head_ref, 'check')
     needs: check-and-upload-tarballs
     runs-on: ubuntu-latest
     steps:
