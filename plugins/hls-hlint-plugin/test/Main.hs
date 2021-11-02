@@ -168,7 +168,7 @@ suggestionsTests =
         diags <- waitForDiagnosticsFrom doc
 
         -- hlint will report a parse error if PatternSynonyms is enabled
-        liftIO $ noHlintDiagnostics diags
+        expectNoMoreDiagnostics 3 doc "hlint"
     ]
     where
         testRefactor file caTitle expected = do
