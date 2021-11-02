@@ -11,7 +11,7 @@
 --
 module Development.IDE.Core.Rules(
     -- * Types
-    IdeState, GetDependencies(..), GetParsedModule(..), TransitiveDependencies(..),
+    IdeState, GetParsedModule(..), TransitiveDependencies(..),
     Priority(..), GhcSessionIO(..), GetClientSettings(..),
     -- * Functions
     priorityTypeCheck,
@@ -35,7 +35,6 @@ module Development.IDE.Core.Rules(
     getLocatedImportsRule,
     getDependencyInformationRule,
     reportImportCyclesRule,
-    getDependenciesRule,
     typeCheckRule,
     getDocMapRule,
     loadGhcSession,
@@ -161,7 +160,8 @@ toIdeResult = either (, Nothing) (([],) . Just)
 -- | Get all transitive file dependencies of a given module.
 -- Does not include the file itself.
 getDependencies :: NormalizedFilePath -> Action (Maybe [NormalizedFilePath])
-getDependencies file = fmap transitiveModuleDeps <$> use GetDependencies file
+getDependencies file =
+    fmap transitiveModuleDeps . (`transitiveDeps` file) <$> use_ GetDependencyInformation file
 
 getSourceFileSource :: NormalizedFilePath -> Action BS.ByteString
 getSourceFileSource nfp = do
@@ -489,18 +489,6 @@ reportImportCyclesRule =
            ms <- msrModSummary <$> use_ GetModSummaryWithoutTimestamps file
            pure (moduleNameString . moduleName . ms_mod $ ms)
           showCycle mods  = T.intercalate ", " (map T.pack mods)
-
--- returns all transitive dependencies in topological order.
--- NOTE: result does not include the argument file.
-getDependenciesRule :: Rules ()
-getDependenciesRule =
-    defineEarlyCutoff $ RuleNoDiagnostics $ \GetDependencies file -> do
-        depInfo <- use_ GetDependencyInformation file
-        let allFiles = reachableModules depInfo
-        _ <- uses_ ReportImportCycles allFiles
-        opts <- getIdeOptions
-        let mbFingerprints = map (Util.fingerprintString . fromNormalizedFilePath) allFiles <$ optShakeFiles opts
-        return (fingerprintToBS . Util.fingerprintFingerprints <$> mbFingerprints, transitiveDeps depInfo file)
 
 getHieAstsRule :: Rules ()
 getHieAstsRule =
@@ -1065,7 +1053,6 @@ mainRule = do
     getLocatedImportsRule
     getDependencyInformationRule
     reportImportCyclesRule
-    getDependenciesRule
     typeCheckRule
     getDocMapRule
     loadGhcSession

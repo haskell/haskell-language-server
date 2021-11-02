@@ -669,9 +669,9 @@ diagnosticTests = testGroup "diagnostics"
       expectDiagnostics [("Foo.hs", [(DsError, (1,7), "Could not find module 'MissingModule'")])]
 
   , testGroup "Cancellation"
-    [ cancellationTestGroup "edit header" editHeader yesDepends yesSession noParse  noTc
-    , cancellationTestGroup "edit import" editImport noDepends  noSession  yesParse noTc
-    , cancellationTestGroup "edit body"   editBody   yesDepends yesSession yesParse yesTc
+    [ cancellationTestGroup "edit header" editHeader yesSession noParse  noTc
+    , cancellationTestGroup "edit import" editImport noSession  yesParse noTc
+    , cancellationTestGroup "edit body"   editBody   yesSession yesParse yesTc
     ]
   ]
   where
@@ -685,17 +685,14 @@ diagnosticTests = testGroup "diagnostics"
       noParse = False
       yesParse = True
 
-      noDepends = False
-      yesDepends = True
-
       noSession = False
       yesSession = True
 
       noTc = False
       yesTc = True
 
-cancellationTestGroup :: TestName -> (TextDocumentContentChangeEvent, TextDocumentContentChangeEvent) -> Bool -> Bool -> Bool -> Bool -> TestTree
-cancellationTestGroup name edits dependsOutcome sessionDepsOutcome parseOutcome tcOutcome = testGroup name
+cancellationTestGroup :: TestName -> (TextDocumentContentChangeEvent, TextDocumentContentChangeEvent) -> Bool -> Bool -> Bool -> TestTree
+cancellationTestGroup name edits sessionDepsOutcome parseOutcome tcOutcome = testGroup name
     [ cancellationTemplate edits Nothing
     , cancellationTemplate edits $ Just ("GetFileContents", True)
     , cancellationTemplate edits $ Just ("GhcSession", True)
