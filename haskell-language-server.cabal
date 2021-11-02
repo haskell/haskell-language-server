@@ -86,7 +86,7 @@ library
 -- - Bulk flags should be default:False
 -- - Individual flags should be default:True
 
-flag force-plugins
+flag ignore-plugins-ghc-bounds
   description: Force the inclusion of plugins even if they are not buildable by default with a specific ghc version
   default:     False
   manual:      True
@@ -189,12 +189,12 @@ common example-plugins
                  Ide.Plugin.Example2
 
 common class
-  if flag(class) && (impl(ghc < 9.0.1) || flag(force-plugins))
+  if flag(class) && (impl(ghc < 9.0.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-class-plugin ^>=1.0.0.1
     cpp-options: -Dclass
 
 common callHierarchy
-  if flag(callHierarchy) && (impl(ghc < 9.2.1) || flag(force-plugins))
+  if flag(callHierarchy) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-call-hierarchy-plugin ^>=1.0.0.0
     cpp-options: -DcallHierarchy
 
@@ -214,7 +214,7 @@ common importLens
     cpp-options: -DimportLens
 
 common refineImports
-  if flag(refineImports) && (impl(ghc < 9.2.1) || flag(force-plugins))
+  if flag(refineImports) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-refine-imports-plugin ^>=1.0.0.0
     cpp-options: -DrefineImports
 
@@ -224,12 +224,12 @@ common rename
     cpp-options: -Drename
 
 common retrie
-  if flag(retrie) && (impl(ghc < 9.2.1) || flag(force-plugins))
+  if flag(retrie) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-retrie-plugin ^>=1.0.0.1
     cpp-options: -Dretrie
 
 common tactic
-  if flag(tactic) && (impl(ghc < 9.0.1) || flag(force-plugins))
+  if flag(tactic) && (impl(ghc < 9.0.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-tactics-plugin >=1.2.0.0 && <1.5
     cpp-options: -Dtactic
 
@@ -249,19 +249,19 @@ common pragmas
     cpp-options: -Dpragmas
 
 common splice
-  if flag(splice) && (impl(ghc < 9.2.1) || flag(force-plugins))
+  if flag(splice) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-splice-plugin ^>=1.0.0.1
     cpp-options: -Dsplice
 
 -- formatters
 
 common floskell
-  if flag(floskell) && (impl(ghc < 9.0.1) || flag(force-plugins))
+  if flag(floskell) && (impl(ghc < 9.0.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-floskell-plugin ^>=1.0.0.0
     cpp-options: -Dfloskell
 
 common fourmolu
-  if flag(fourmolu) && (impl(ghc < 9.2.1) || flag(force-plugins))
+  if flag(fourmolu) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-fourmolu-plugin ^>=1.0.0.0
     cpp-options: -Dfourmolu
 
@@ -271,12 +271,12 @@ common ormolu
     cpp-options: -Dormolu
 
 common stylishHaskell
-  if flag(stylishHaskell) && (impl(ghc < 9.0.1) || flag(force-plugins))
+  if flag(stylishHaskell) && (impl(ghc < 9.0.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-stylish-haskell-plugin ^>=1.0.0.0
     cpp-options: -DstylishHaskell
 
 common brittany
-  if flag(brittany) && (impl(ghc < 9.0.1) || flag(force-plugins))
+  if flag(brittany) && (impl(ghc < 9.0.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-brittany-plugin ^>=1.0.0.1
     cpp-options: -Dbrittany
 
@@ -440,9 +440,9 @@ test-suite func-test
   if flag(eval)
     cpp-options: -Deval
 -- formatters
-  if flag(floskell) && (impl(ghc < 9.0.1) || flag(force-plugins))
+  if flag(floskell) && (impl(ghc < 9.0.1) || flag(ignore-plugins-ghc-bounds))
     cpp-options: -Dfloskell
-  if flag(fourmolu) && (impl(ghc < 9.2.1) || flag(force-plugins))
+  if flag(fourmolu) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
     cpp-options: -Dfourmolu
   if flag(ormolu)
     cpp-options: -Dormolu
