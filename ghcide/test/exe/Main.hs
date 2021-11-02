@@ -410,6 +410,30 @@ diagnosticTests = testGroup "diagnostics"
           , [(DsError, (1, 7), "Cyclic module dependency between ModuleA, ModuleB")]
           )
         ]
+  , testSession' "deeply nested cyclic module dependency" $ \path -> do
+      let contentA = unlines
+            [ "module ModuleA where" , "import ModuleB" ]
+      let contentB = unlines
+            [ "module ModuleB where" , "import ModuleA" ]
+      let contentC = unlines
+            [ "module ModuleC where" , "import ModuleB" ]
+      let contentD = T.unlines
+            [ "module ModuleD where" , "import ModuleC" ]
+          cradle =
+            "cradle: {direct: {arguments: [ModuleA, ModuleB, ModuleC, ModuleD]}}"
+      liftIO $ writeFile (path </> "ModuleA.hs") contentA
+      liftIO $ writeFile (path </> "ModuleB.hs") contentB
+      liftIO $ writeFile (path </> "ModuleC.hs") contentC
+      liftIO $ writeFile (path </> "hie.yaml") cradle
+      _ <- createDoc "ModuleD.hs" "haskell" contentD
+      expectDiagnostics
+        [ ( "ModuleA.hs"
+          , [(DsError, (1, 7), "Cyclic module dependency between ModuleA, ModuleB")]
+          )
+        , ( "ModuleB.hs"
+          , [(DsError, (1, 7), "Cyclic module dependency between ModuleA, ModuleB")]
+          )
+        ]
   , testSessionWait "cyclic module dependency with hs-boot" $ do
       let contentA = T.unlines
             [ "module ModuleA where"
