@@ -119,7 +119,7 @@ jobs:
           path: ${{ steps.generate-dist-tarball.outputs.path }}
 
   upload-candidate:
-    if: ! contains(github.head_ref, 'check')
+    if: ${{ !contains(github.head_ref, 'check') }}
     needs: check-and-upload-tarballs
     runs-on: ubuntu-latest
     steps:
