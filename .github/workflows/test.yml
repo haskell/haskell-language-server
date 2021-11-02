@@ -5,7 +5,7 @@ defaults:
     shell: bash
 
 # See: https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#concurrency.
-concurrency: 
+concurrency:
   group: ${{ github.head_ref }}-${{ github.workflow }}
   cancel-in-progress: true
 
@@ -154,7 +154,7 @@ jobs:
         # run the tests without parallelism to avoid running out of memory
         run: cabal test ghcide --test-options="-j1 --rerun-update" || cabal test ghcide --test-options="-j1 --rerun" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test ghcide --test-options="-j1 --rerun"
 
-      - if: matrix.test && !(matrix.os == 'windows-latest' && matrix.ghc == '9.0.1')
+      - if: matrix.test
         name: Test func-test suite
         env:
           HLS_TEST_EXE: hls
