@@ -59,7 +59,7 @@ index-state: 2021-10-04T02:41:06Z
 
 constraints:
   -- These plugins don't work on GHC9 yet
-  haskell-language-server +force-plugins -brittany -class -stylishhaskell -tactic
+  haskell-language-server +ignore-plugins-ghc-bounds -brittany -class -stylishhaskell -tactic
 
 allow-newer:
     floskell:base,
