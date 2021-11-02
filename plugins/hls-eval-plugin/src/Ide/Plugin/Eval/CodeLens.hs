@@ -27,7 +27,7 @@ module Ide.Plugin.Eval.CodeLens (
 
 import           Control.Applicative             (Alternative ((<|>)))
 import           Control.Arrow                   (second, (>>>))
-import           Control.Exception               (assert, try)
+import           Control.Exception               (try)
 import qualified Control.Exception               as E
 import           Control.Lens                    (_1, _3, (%~), (<&>), (^.))
 import           Control.Monad                   (guard, join, void, when)
@@ -38,31 +38,23 @@ import           Data.Char                       (isSpace)
 import qualified Data.HashMap.Strict             as HashMap
 import           Data.List                       (dropWhileEnd, find,
                                                   intercalate, intersperse)
-import           Data.Maybe                      (catMaybes, fromMaybe, isJust)
+import           Data.Maybe                      (catMaybes, fromMaybe)
 import           Data.String                     (IsString)
 import           Data.Text                       (Text)
 import qualified Data.Text                       as T
 import           Data.Time                       (getCurrentTime)
 import           Data.Typeable                   (Typeable)
-import           Development.IDE                 (Action, GetDependencies (..),
-                                                  GetModIface (..),
-                                                  GetModSummary (..),
-                                                  GhcSessionIO (..),
-                                                  HiFileResult (hirHomeMod, hirModSummary),
-                                                  HscEnvEq, IdeState,
+import           Development.IDE                 (GetModSummary (..),
+                                                  GhcSessionIO (..), IdeState,
                                                   ModSummaryResult (..),
                                                   NeedsCompilation (NeedsCompilation),
                                                   evalGhcEnv, hscEnv,
-                                                  hscEnvWithImportPaths,
                                                   prettyPrint, runAction,
                                                   textToStringBuffer,
                                                   toNormalizedFilePath',
                                                   uriToFilePath', useNoFile_,
-                                                  useWithStale_, use_, uses_)
-import           Development.IDE.Core.Compile    (loadModulesHome,
-                                                  setupFinderCache)
-import           Development.IDE.Core.Rules      (TransitiveDependencies (transitiveModuleDeps),
-                                                  ghcSessionDepsDefinition)
+                                                  useWithStale_, use_)
+import           Development.IDE.Core.Rules      (ghcSessionDepsDefinition)
 import           Development.IDE.GHC.Compat      hiding (typeKind, unitState)
 import qualified Development.IDE.GHC.Compat      as Compat
 import qualified Development.IDE.GHC.Compat      as SrcLoc
@@ -544,7 +536,8 @@ runGetSession st nfp = liftIO $ runAction "eval" st $ do
     let fp = fromNormalizedFilePath nfp
     ((_, res),_) <- liftIO $ loadSessionFun fp
     let env = fromMaybe (error $ "Unknown file: " <> fp) res
-    hscEnv <$> ghcSessionDepsDefinition False env nfp
+    res <- fmap hscEnv <$> ghcSessionDepsDefinition False env nfp
+    return $ fromMaybe (error $ "Unable to load file: " <> fp) res
 
 needsQuickCheck :: [(Section, Test)] -> Bool
 needsQuickCheck = any (isProperty . snd)
