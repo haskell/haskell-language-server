@@ -707,11 +707,8 @@ ghcSessionDepsDefinition file = do
                   then uses_ GetModIface deps
                   else uses_ GetModIfaceWithoutLinkable deps
 
-        let inLoadOrder = reverse $ map hirHomeMod ifaces
+        let inLoadOrder = map hirHomeMod ifaces
         session' <- liftIO $ mergeEnvs hsc mss inLoadOrder depSessions
-            -- Currently GetDependencies returns things in topological order so A comes before B if A imports B.
-            -- We need to reverse this as GHC gets very unhappy otherwise and complains about broken interfaces.
-            -- Long-term we might just want to change the order returned by GetDependencies
 
         liftIO $ newHscEnvEqWithImportPaths (envImportPaths env) session' []
 
