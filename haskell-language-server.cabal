@@ -83,8 +83,6 @@ library
   default-extensions: DataKinds, TypeOperators
 
 -- Plugin flags are designed for 'cabal install haskell-language-server':
--- - Packaged plugins should be manual:False
--- - Non packaged plugins and bulk flags should be manual:True
 -- - Bulk flags should be default:False
 -- - Individual flags should be default:True
 
@@ -258,7 +256,7 @@ common splice
 -- formatters
 
 common floskell
-  if flag(floskell)
+  if flag(floskell) && (impl(ghc < 9.0.1) || flag(force-plugins))
     build-depends: hls-floskell-plugin ^>=1.0.0.0
     cpp-options: -Dfloskell
 
@@ -438,42 +436,16 @@ test-suite func-test
   if flag(pedantic)
     ghc-options: -Werror -Wredundant-constraints
 
-  if flag(callHierarchy)
-    cpp-options: -DcallHierarchy
-  if flag(class)
-    cpp-options: -Dclass
-  if flag(haddockComments)
-    cpp-options: -DhaddockComments
+-- Duplicating inclusion plugin conditions until tests are moved to their own packages
   if flag(eval)
     cpp-options: -Deval
-  if flag(importLens) || flag(all-plugins)
-    cpp-options: -DimportLens
-  if flag(rename) || flag(all-plugins)
-    cpp-options: -Drename
-  if flag(retrie) || flag(all-plugins)
-    cpp-options: -Dretrie
-  if flag(tactic) || flag(all-plugins)
-    cpp-options: -Dtactic
-  if flag(hlint) || flag(all-plugins)
-    cpp-options: -Dhlint
-  if flag(moduleName) || flag(all-plugins)
-    cpp-options: -DmoduleName
-  if flag(pragmas) || flag(all-plugins)
-    cpp-options: -Dpragmas
-  if flag(splice) || flag(all-plugins)
-    cpp-options: -Dsplice
-
 -- formatters
-  if flag(floskell) || flag(all-formatters)
+  if flag(floskell) && (impl(ghc < 9.0.1) || flag(force-plugins))
     cpp-options: -Dfloskell
-  if flag(fourmolu) || flag(all-formatters)
+  if flag(fourmolu) && (impl(ghc < 9.2.1) || flag(force-plugins))
     cpp-options: -Dfourmolu
-  if flag(ormolu) || flag(all-formatters)
+  if flag(ormolu)
     cpp-options: -Dormolu
-  if flag(stylishHaskell) || flag(all-formatters)
-    cpp-options: -DstylishHaskell
-  if (flag(brittany) || flag(all-formatters))
-    cpp-options: -Dbrittany
 
 test-suite wrapper-test
   type:               exitcode-stdio-1.0
