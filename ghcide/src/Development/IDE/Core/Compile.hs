@@ -30,7 +30,7 @@ module Development.IDE.Core.Compile
   , setupFinderCache
   , getDocsBatch
   , lookupName
-  ) where
+  ,mergeEnvs) where
 
 import           Development.IDE.Core.Preprocessor
 import           Development.IDE.Core.RuleTypes
@@ -90,7 +90,9 @@ import           System.FilePath
 import           System.IO.Extra                   (fixIO, newTempFileWithin)
 
 -- GHC API imports
+-- GHC API imports
 import           GHC                               (GetDocsFailure (..),
+                                                    mgModSummaries,
                                                     parsedSource)
 
 import           Control.Concurrent.Extra
@@ -100,11 +102,14 @@ import           Data.Binary
 import           Data.Coerce
 import           Data.Functor
 import qualified Data.HashMap.Strict               as HashMap
+import           Data.Map                          (Map)
 import           Data.Tuple.Extra                  (dupe)
 import           Data.Unique                       as Unique
 import           Development.IDE.Core.Tracing      (withTrace)
+import           GhcPlugins                        (FinderCache)
 import qualified Language.LSP.Server               as LSP
 import qualified Language.LSP.Types                as LSP
+import           Unsafe.Coerce
 
 -- | Given a string buffer, return the string (after preprocessing) and the 'ParsedModule'.
 parseModule
@@ -685,6 +690,30 @@ loadModulesHome mod_infos e =
       , hsc_type_env_var = Nothing }
     where
       mod_name = moduleName . mi_module . hm_iface
+
+-- Merge the HPTs, module graphs and FinderCaches
+mergeEnvs :: HscEnv -> [ModSummary] -> [HomeModInfo] -> [HscEnv] -> IO HscEnv
+mergeEnvs env extraModSummaries extraMods envs = do
+    prevFinderCache <- concatFC <$> mapM (readIORef . hsc_FC) envs
+    let ims  = map (Compat.installedModule (homeUnitId_ $ hsc_dflags env) . moduleName . ms_mod) extraModSummaries
+        ifrs = zipWith (\ms -> InstalledFound (ms_location ms)) extraModSummaries ims
+    newFinderCache <- newIORef $
+            foldl'
+                (\fc (im, ifr) -> Compat.extendInstalledModuleEnv fc im ifr) prevFinderCache
+                $ zip ims ifrs
+    return $ loadModulesHome extraMods $ env{
+        hsc_HPT = foldMap hsc_HPT envs,
+        hsc_FC = newFinderCache,
+        hsc_mod_graph = mkModuleGraph $ extraModSummaries ++ nubOrdOn ms_mod (concatMap (mgModSummaries . hsc_mod_graph) envs)
+    }
+    where
+    -- required because 'FinderCache':
+    --  1) doesn't have a 'Monoid' instance,
+    --  2) is abstract and doesn't export constructors
+    -- To work around this, we coerce to the underlying type
+    -- To remove this, I plan to upstream the missing Monoid instance
+        concatFC :: [FinderCache] -> FinderCache
+        concatFC = unsafeCoerce (mconcat @(Map InstalledModule InstalledFindResult))
 
 withBootSuffix :: HscSource -> ModLocation -> ModLocation
 withBootSuffix HsBootFile = addBootSuffixLocnOut

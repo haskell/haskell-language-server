@@ -87,8 +87,6 @@ import           Data.IORef
 import           Data.IntMap.Strict                           (IntMap)
 import qualified Data.IntMap.Strict                           as IntMap
 import           Data.List
-import           Data.List.Extra (nubOrdOn)
-import           Data.Map                                     (Map)
 import qualified Data.Map                                     as M
 import           Data.Maybe
 import qualified Data.Rope.UTF16                              as Rope
@@ -135,7 +133,6 @@ import           Development.IDE.Types.Options
 import           GHC.Generics                                 (Generic)
 import           GHC.IO.Encoding
 import qualified GHC.LanguageExtensions                       as LangExt
-import           GhcPlugins                                   (FinderCache, mgModSummaries)
 import qualified HieDb
 import           Ide.Plugin.Config
 import qualified Language.LSP.Server                          as LSP
@@ -151,7 +148,6 @@ import           Ide.Plugin.Properties                        (HasProperty,
 import           Ide.PluginUtils                              (configForPlugin)
 import           Ide.Types                                    (DynFlagsModifications (dynFlagsModifyGlobal, dynFlagsModifyParser),
                                                                PluginId)
-import           Unsafe.Coerce                                (unsafeCoerce)
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
@@ -703,8 +699,7 @@ ghcSessionDepsDefinition file = do
         deps <- mapMaybe (fmap artifactFilePath . snd) <$> use_ GetLocatedImports file
         mss <- map msrModSummary <$> uses_ GetModSummaryWithoutTimestamps deps
 
-        depSessions <- uses_ GhcSessionDeps deps
-        session' <- liftIO $ mergeEnvs hsc mss $ map hscEnv depSessions
+        depSessions <- map hscEnv <$> uses_ GhcSessionDeps deps
         let uses_th_qq =
               xopt LangExt.TemplateHaskell dflags || xopt LangExt.QuasiQuotes dflags
             dflags = ms_hspp_opts ms
@@ -712,39 +707,13 @@ ghcSessionDepsDefinition file = do
                   then uses_ GetModIface deps
                   else uses_ GetModIfaceWithoutLinkable deps
 
-        let session'' = loadModulesHome inLoadOrder $ session'{
-                hsc_HPT = foldMap (hsc_HPT . hscEnv) depSessions
-            }
+        let inLoadOrder = reverse $ map hirHomeMod ifaces
+        session' <- liftIO $ mergeEnvs hsc mss inLoadOrder depSessions
             -- Currently GetDependencies returns things in topological order so A comes before B if A imports B.
             -- We need to reverse this as GHC gets very unhappy otherwise and complains about broken interfaces.
             -- Long-term we might just want to change the order returned by GetDependencies
-            inLoadOrder = reverse $ map hirHomeMod ifaces
 
-        liftIO $ newHscEnvEqWithImportPaths (envImportPaths env) session'' []
-
--- Merge the HPTs, module graphs and FinderCaches
-mergeEnvs :: HscEnv -> [ModSummary] -> [HscEnv] -> IO HscEnv
-mergeEnvs env mss envs = do
-    prevFinderCache <- concatFC <$> mapM (readIORef . hsc_FC) envs
-    let ims  = map (Compat.installedModule (homeUnitId_ $ hsc_dflags env) . moduleName . ms_mod) mss
-        ifrs = zipWith (\ms -> InstalledFound (ms_location ms)) mss ims
-    newFinderCache <- newIORef $
-            foldl'
-                (\fc (im, ifr) -> Compat.extendInstalledModuleEnv fc im ifr) prevFinderCache
-                $ zip ims ifrs
-    return env{
-        hsc_HPT = foldMap hsc_HPT envs,
-        hsc_FC = newFinderCache,
-        hsc_mod_graph = mkModuleGraph $ mss ++ nubOrdOn ms_mod (concatMap (mgModSummaries . hsc_mod_graph) envs)
-    }
-    where
-    -- required because 'FinderCache':
-    --  1) doesn't have a 'Monoid' instance,
-    --  2) is abstract and doesn't export constructors
-    -- To work around this, we coerce to the underlying type
-    -- To remove this, I plan to upstream the missing Monoid instance
-        concatFC :: [FinderCache] -> FinderCache
-        concatFC = unsafeCoerce (mconcat @(Map InstalledModule InstalledFindResult))
+        liftIO $ newHscEnvEqWithImportPaths (envImportPaths env) session' []
 
 -- | Load a iface from disk, or generate it if there isn't one or it is out of date
 -- This rule also ensures that the `.hie` and `.o` (if needed) files are written out.
