@@ -1,8 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -Wno-unused-imports #-}
 -- | Module for disabling tests if their plugins are disabled
-{-# DEPRECATED "To be removed when all plugin tests are in their own packages" #-}
-module Test.Hls.Flags where
+module Test.Hls.Flags {-# DEPRECATED "To be removed when all plugin tests are in their own packages" #-} where
 
 import           Test.Hls (TestTree, ignoreTestBecause)
 
