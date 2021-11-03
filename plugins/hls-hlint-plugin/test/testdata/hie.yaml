@@ -12,3 +12,4 @@ cradle:
       - "LambdaCase"
       - "TwoHints"
       - "PatternKeyword"
+      - "StrictData"
