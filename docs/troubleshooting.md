@@ -27,7 +27,6 @@ Due to some limitations in the interaction between HLS and stack, there are some
 - The stack project has to be built succesfully *before* loading it with HLS to get components other than the library work.
 - Changes in the library are not automatically propagated to other components, especially in the presence of errors in the library, so you have to restart HLS to get those components correctly loaded. The usual symptom is the editor showing errors like `Could not load module ...` or `Cannot satisfy -package ...`
 - See https://github.com/haskell/haskell-language-server/issues/366 for more info about.
-- 
 ## Common issues
 
 ### Problems with dynamic linking
