@@ -155,12 +155,12 @@ suggestionsTests =
         liftIO $ not (hasApplyAll thirdLine) @? "Unexpected apply all code action"
         liftIO $ hasApplyAll multiLine @? "Missing apply all code action"
 
-    , expectFailBecause "[#2042] To investigate" $ testCase "hlint should warn about unused extensions" $ runHlintSession "" $ do
+    , testCase "hlint should warn about unused extensions" $ runHlintSession "unusedext" $ do
         doc <- openDoc "UnusedExtension.hs" "haskell"
         diags@(unusedExt:_) <- waitForDiagnosticsFromSource doc "hlint"
 
         liftIO $ do
-            length diags @?= 1 -- "Eta Reduce" and "Redundant Id"
+            length diags @?= 1
             unusedExt ^. L.code @?= Just (InR "refact:Unused LANGUAGE pragma")
 
     , knownBrokenForHlintOnGhcLib "[#1279] hlint uses a fixed set of extensions" $
