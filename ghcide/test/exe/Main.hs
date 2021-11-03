@@ -112,11 +112,14 @@ import           Test.Tasty.QuickCheck
 import           Text.Printf                              (printf)
 import           Text.Regex.TDFA                          ((=~))
 
+-- | Wait for the next progress begin step
 waitForProgressBegin :: Session ()
 waitForProgressBegin = skipManyTill anyMessage $ satisfyMaybe $ \case
   FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (Begin _))) -> Just ()
   _ -> Nothing
 
+-- | Wait for the first progress end step
+-- Also implemented in hls-test-utils Test.Hls
 waitForProgressDone :: Session ()
 waitForProgressDone = skipManyTill anyMessage $ satisfyMaybe $ \case
   FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (End _))) -> Just ()
@@ -124,6 +127,7 @@ waitForProgressDone = skipManyTill anyMessage $ satisfyMaybe $ \case
 
 -- | Wait for all progress to be done
 -- Needs at least one progress done notification to return
+-- Also implemented in hls-test-utils Test.Hls
 waitForAllProgressDone :: Session ()
 waitForAllProgressDone = loop
   where
@@ -133,6 +137,7 @@ waitForAllProgressDone = loop
         _ -> Nothing
       done <- null <$> getIncompleteProgressSessions
       unless done loop
+
 main :: IO ()
 main = do
   -- We mess with env vars so run single-threaded.
