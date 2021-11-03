@@ -1798,10 +1798,20 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
             compareHideFunctionTo [(8,9),(10,8)]
                 "Use EVec for ++, hiding other imports"
                 "HideFunction.expected.append.E.hs"
+        , testCase "Hide functions without local" $
+            compareTwo
+                "HideFunctionWithoutLocal.hs" [(8,8)]
+                "Use local definition for ++, hiding other imports"
+                "HideFunctionWithoutLocal.expected.hs"
         , testCase "Prelude" $
             compareHideFunctionTo [(8,9),(10,8)]
                 "Use Prelude for ++, hiding other imports"
                 "HideFunction.expected.append.Prelude.hs"
+        , testCase "Prelude and local definition, infix" $
+            compareTwo
+                "HidePreludeLocalInfix.hs" [(2,19)]
+                "Use local definition for ++, hiding other imports"
+                "HidePreludeLocalInfix.expected.hs"
         , testCase "AVec, indented" $
             compareTwo "HidePreludeIndented.hs" [(3,8)]
             "Use AVec for ++, hiding other imports"
