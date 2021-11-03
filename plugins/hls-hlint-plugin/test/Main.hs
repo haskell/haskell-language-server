@@ -155,7 +155,8 @@ suggestionsTests =
         liftIO $ not (hasApplyAll thirdLine) @? "Unexpected apply all code action"
         liftIO $ hasApplyAll multiLine @? "Missing apply all code action"
 
-    , testCase "hlint should warn about unused extensions" $ runHlintSession "unusedext" $ do
+    , knownBrokenForHlintOnRawGhc "[#2042] maybe hlint is ignoring pragmas" $
+      testCase "hlint should warn about unused extensions" $ runHlintSession "unusedext" $ do
         doc <- openDoc "UnusedExtension.hs" "haskell"
         diags@(unusedExt:_) <- waitForDiagnosticsFromSource doc "hlint"
 
@@ -164,7 +165,7 @@ suggestionsTests =
             unusedExt ^. L.code @?= Just (InR "refact:Unused LANGUAGE pragma")
 
     , knownBrokenForHlintOnGhcLib "[#1279] hlint uses a fixed set of extensions" $
-            testCase "hlint should not activate extensions like PatternSynonyms" $ runHlintSession "" $ do
+      testCase "hlint should not activate extensions like PatternSynonyms" $ runHlintSession "" $ do
         doc <- openDoc "PatternKeyword.hs" "haskell"
 
         waitForAllProgressDone
