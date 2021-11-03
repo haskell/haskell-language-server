@@ -40,7 +40,7 @@ The workaround is to use a version of haskell-language-server compiled from sour
 
 Due to how Template Haskell code is evaluated at compile time and some limitations in the interaction between HLS and GHC, the loading of modules using TH can be problematic.
 
-The errors thrown usually are related with linking and usually makes HLS crash: `Segmentation fault`, `GHC runtime linker: fatal error`, etc
+The errors thrown are usually related to linking and usually make HLS crash: `Segmentation fault`, `GHC runtime linker: fatal error`, etc
 
 A workaround which have helped in some cases is compile HLS from source with the ghc option `-dynamic` enabled, like the previous issue.
 
