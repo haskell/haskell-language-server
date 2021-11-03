@@ -165,8 +165,8 @@ suggestionsTests =
 
     , testCase "hlint should not activate extensions like PatternSynonyms" $ runHlintSession "" $ do
         doc <- openDoc "PatternKeyword.hs" "haskell"
-        diags <- waitForDiagnosticsFrom doc
 
+        waitForAllProgressDone
         -- hlint will report a parse error if PatternSynonyms is enabled
         expectNoMoreDiagnostics 3 doc "hlint"
     ]
