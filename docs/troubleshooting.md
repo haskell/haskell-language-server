@@ -38,7 +38,7 @@ The workaround is to use a version of haskell-language-server compiled from sour
 
 ### Problems with Template Haskell
 
-Due to how the template haskell code is evaluated at compile time and some limitations in the interacion between HLS and GHC the load of modules using TH could be problematic.
+Due to how Template Haskell code is evaluated at compile time and some limitations in the interaction between HLS and GHC, the loading of modules using TH can be problematic.
 
 The errors thrown usually are related with linking and usually makes HLS crash: `Segmentation fault`, `GHC runtime linker: fatal error`, etc
 
