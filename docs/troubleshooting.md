@@ -25,7 +25,7 @@ This returns an error in HLS if 'tasty-discover' is not in the path: `could not 
 
 Due to some limitations in the interaction between HLS and stack, there are some issues in projects with a main library and executables, test suites or benchmarks:
 - The stack project has to be built succesfully *before* loading it with HLS to get components other than the library work.
-- Changes in the library are not automatically propagated to other components, specially in face of presence of error in the library, so you have to restart HLS to get those components correctly loaded. The common symptom is the editor showing errors like `Could not load module ...` or `Cannot satisfy -package ...`
+- Changes in the library are not automatically propagated to other components, especially in the presence of errors in the library, so you have to restart HLS to get those components correctly loaded. The usual symptom is the editor showing errors like `Could not load module ...` or `Cannot satisfy -package ...`
 - See https://github.com/haskell/haskell-language-server/issues/366 for more info about.
 - 
 ## Common issues
