@@ -42,9 +42,9 @@ Due to how Template Haskell code is evaluated at compile time and some limitatio
 
 The errors thrown are usually related to linking and usually make HLS crash: `Segmentation fault`, `GHC runtime linker: fatal error`, etc
 
-A workaround which have helped in some cases is compile HLS from source with the ghc option `-dynamic` enabled, like the previous issue.
+A workaround which has helped in some cases is to compile HLS from source with the ghc option `-dynamic` enabled, as in the previous issue.
 
-We have a [dedicated label](https://github.com/haskell/haskell-language-server/issues?q=is%3Aissue+is%3Aopen+label%3A%22type%3A+template+haskell+related%22) in the issue tracker and an [general issue](https://github.com/haskell/haskell-language-server/issues/1431) tracking the support for TH.
+We have a [dedicated label](https://github.com/haskell/haskell-language-server/issues?q=is%3Aissue+is%3Aopen+label%3A%22type%3A+template+haskell+related%22) in the issue tracker and an [general issue](https://github.com/haskell/haskell-language-server/issues/1431) tracking support for TH.
 
 ## Troubleshooting the server
 
@@ -67,17 +67,17 @@ sent, or if there are any errors.
 
 To get a more verbose, also pass `--debug` to the executable.
 
-### Identify which plugin is the possible cause of the issue.
+### Identify which plugin could be the cause of the issue.
 
-Sometimes the issue is produced by one of the plugins included in HLS. To diagnose that and help to trace the final cause one possible startegy is simple diable all plugins, check if the issue is gone and then enable them selectively until the issue is reproduced again.
+Sometimes the issue is produced by one of the plugins included in HLS. To diagnose that and help to trace the final cause one possible strategy is simple disable all plugins, check if the issue is gone and then enable them selectively until the issue is reproduced again.
 
-You have a configuration json snippet disabling all plugins [here](https://github.com/haskell/haskell-language-server/issues/2151#issuecomment-911397030).
+There is a configuration json snippet which disables all plugins [here](https://github.com/haskell/haskell-language-server/issues/2151#issuecomment-911397030).
 
 ## Troubleshooting the client
 
 Many clients provide diagnostic information about a LSP session.
 In particular, look for a way to get the status of the server, the server stderr, or a log of the messages that the client has sent to the server.
 For example, `lsp-mode` provides all of these (see its [troubleshooting page](https://emacs-lsp.github.io/lsp-mode/page/troubleshooting/) for details).
-For vscode you can read how to access the lsp session log here: https://github.com/haskell/vscode-haskell#investigating-and-reporting-problems
+For vscode you can read how to access the lsp session log [here])https://github.com/haskell/vscode-haskell#investigating-and-reporting-problems).
 
-The most common client-related problem is the client simply not finding the server executable or the tools needed to load haskell code (ghc, cabal and stac) so make sure that you have the right `PATH` and you have configured it to look for the right executables.
+The most common client-related problem is the client simply not finding the server executable or the tools needed to load Haskell code (`ghc`, `cabal`, or `stack`). So make sure that you have the right `PATH` and you have configured the client to look for the right executables.
