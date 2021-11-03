@@ -87,25 +87,25 @@ suggestionsTests =
         changeDoc doc [change']
         testHlintDiagnostics doc
 
-    , knownBrokenForGhcVersions [GHC88, GHC86] "hlint doesn't take in account cpp flag as ghc -D argument" $
-      testCase "hlint diagnostics works with CPP via ghc -XCPP argument (#554)" $ runHlintSession "cpp" $ do
+    , knownBrokenForHlintOnGhcLib "hlint doesn't take in account cpp flag as ghc -D argument" $
+      testCase "[#554] hlint diagnostics works with CPP via ghc -XCPP argument" $ runHlintSession "cpp" $ do
         doc <- openDoc "CppCond.hs" "haskell"
         testHlintDiagnostics doc
 
-    , knownBrokenForGhcVersions [GHC88, GHC86] "hlint doesn't take in account cpp flag as ghc -D argument" $
-      testCase "hlint diagnostics works with CPP via language pragma (#554)" $ runHlintSession "" $ do
+    , knownBrokenForHlintOnGhcLib "hlint doesn't take in account cpp flag as ghc -D argument" $
+      testCase "[#554] hlint diagnostics works with CPP via language pragma" $ runHlintSession "" $ do
         doc <- openDoc "CppCond.hs" "haskell"
         testHlintDiagnostics doc
 
-    , testCase "hlint diagnostics works with CPP via -XCPP argument and flag via #include header (#554)" $ runHlintSession "cpp" $ do
+    , testCase "[#554] hlint diagnostics works with CPP via -XCPP argument and flag via #include header" $ runHlintSession "cpp" $ do
         doc <- openDoc "CppHeader.hs" "haskell"
         testHlintDiagnostics doc
 
-    , testCase "apply-refact works with -XLambdaCase argument (#590)" $ runHlintSession "lambdacase" $ do
+    , testCase "[#590] apply-refact works with -XLambdaCase argument" $ runHlintSession "lambdacase" $ do
         testRefactor "LambdaCase.hs" "Redundant bracket"
             expectedLambdaCase
 
-    , testCase "apply-refact works with -XTypeApplications argument (#1242)" $ runHlintSession "typeapps" $ do
+    , testCase "[#1242] apply-refact works with -XTypeApplications argument" $ runHlintSession "typeapps" $ do
         testRefactor "TypeApplication.hs" "Redundant bracket"
             expectedTypeApp
 
@@ -131,7 +131,7 @@ suggestionsTests =
         doc <- openDoc "IgnoreAnn.hs" "haskell"
         expectNoMoreDiagnostics 3 doc "hlint"
 
-    , knownBrokenForGhcVersions [GHC810, GHC90] "hlint plugin doesn't honour HLINT annotations (#838)" $
+    , knownBrokenForHlintOnRawGhc "[#838] hlint plugin doesn't honour HLINT annotations" $
       testCase "hlint diagnostics ignore hints honouring HLINT annotations" $ runHlintSession "" $ do
         doc <- openDoc "IgnoreAnnHlint.hs" "haskell"
         expectNoMoreDiagnostics 3 doc "hlint"
@@ -163,7 +163,8 @@ suggestionsTests =
             length diags @?= 1 -- "Eta Reduce" and "Redundant Id"
             unusedExt ^. L.code @?= Just (InR "refact:Unused LANGUAGE pragma")
 
-    , testCase "hlint should not activate extensions like PatternSynonyms" $ runHlintSession "" $ do
+    , knownBrokenForHlintOnGhcLib "[#1279] hlint uses a fixed set of extensions" $
+            testCase "hlint should not activate extensions like PatternSynonyms" $ runHlintSession "" $ do
         doc <- openDoc "PatternKeyword.hs" "haskell"
 
         waitForAllProgressDone
@@ -301,3 +302,9 @@ hlintConfigWithFlags flags =
   where
     unObject (Object obj) = obj
     unObject _            = undefined
+
+knownBrokenForHlintOnGhcLib :: String -> TestTree -> TestTree
+knownBrokenForHlintOnGhcLib = knownBrokenForGhcVersions [GHC88, GHC86]
+
+knownBrokenForHlintOnRawGhc :: String -> TestTree -> TestTree
+knownBrokenForHlintOnRawGhc = knownBrokenForGhcVersions [GHC810, GHC90]
