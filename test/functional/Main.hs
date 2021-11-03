@@ -34,7 +34,7 @@ main = defaultTestRunner
             , FunctionalLiquid.tests
             , HieBios.tests
             , Highlight.tests
-            , Progress.tests
+            , ignoreInEnv [HostOS Windows, GhcVer GHC90] "Tests gets stuck in ci" $ Progress.tests
             , Reference.tests
             , Symbol.tests
             , TypeDefinition.tests

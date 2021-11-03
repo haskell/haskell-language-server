@@ -5,7 +5,7 @@ defaults:
     shell: bash
 
 # See: https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#concurrency.
-concurrency: 
+concurrency:
   group: ${{ github.head_ref }}-${{ github.workflow }}
   cancel-in-progress: true
 
@@ -25,19 +25,13 @@ jobs:
         uses: fkirc/skip-duplicate-actions@v3.4.0
         with:
           cancel_others: false
-          paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", "install/**", "**.nix", "flake.lock", "**/README.md", "FUNDING.yml"]'
+          paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", "install/**", "**.nix", "flake.lock", "**/README.md", "FUNDING.yml", ".circleci/**"]'
       # If we only change ghcide downstream packages we have not test ghcide itself
       - id: skip_ghcide_check
         uses: fkirc/skip-duplicate-actions@v3.4.0
         with:
           cancel_others: false
           paths_ignore: '["hls-test-utils/**", "plugins/**", "src/**", "exe/**", "test/**", "shake-bench/**"]'
-      - if: steps.skip_check.outputs.should_skip == 'true'
-        name: Skip circleci
-        uses: marocchino/sticky-pull-request-comment@v2
-        with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          message: We are gonna [skip circleci]
 
   test:
     if: needs.pre_job.outputs.should_skip != 'true'
@@ -154,7 +148,7 @@ jobs:
         # run the tests without parallelism to avoid running out of memory
         run: cabal test ghcide --test-options="-j1 --rerun-update" || cabal test ghcide --test-options="-j1 --rerun" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test ghcide --test-options="-j1 --rerun"
 
-      - if: matrix.test && !(matrix.os == 'windows-latest' && matrix.ghc == '9.0.1')
+      - if: matrix.test
         name: Test func-test suite
         env:
           HLS_TEST_EXE: hls
