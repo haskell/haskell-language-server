@@ -171,6 +171,13 @@ suggestionsTests =
         waitForAllProgressDone
         -- hlint will report a parse error if PatternSynonyms is enabled
         expectNoMoreDiagnostics 3 doc "hlint"
+    , knownBrokenForHlintOnRawGhc "[#2280] maybe hlint is ignoring pragmas" $
+      testCase "hlint should not warn about redundant irrefutable pattern with LANGUAGE Strict" $ runHlintSession "" $ do
+        doc <- openDoc "StrictDo.hs" "haskell"
+
+        waitForAllProgressDone
+
+        expectNoMoreDiagnostics 3 doc "hlint"
     ]
     where
         testRefactor file caTitle expected = do
