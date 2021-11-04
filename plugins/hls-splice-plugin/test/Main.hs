@@ -86,8 +86,7 @@ goldenTestWithEdit fp tc line col =
          { _start = Position 0 0
          , _end = Position (length lns + 1) 1
          }
-     waitForProgressDone -- cradle
-     waitForProgressDone
+     waitForAllProgressDone -- cradle
      alt <- liftIO $ T.readFile (fp <.> "error.hs")
      void $ applyEdit doc $ TextEdit theRange alt
      changeDoc doc [TextDocumentContentChangeEvent (Just theRange) Nothing alt]
