@@ -15,12 +15,11 @@ extra-source-files: LICENSE
 
 library
   exposed-modules:  Ide.Plugin.AlternateNumberFormat
+  other-modules:    Ide.Plugin.Traverse.Literals
   hs-source-dirs:   src
   build-depends:
       aeson
     , base              >=4.12 && <5
-      -- Debug - Containers
-    , containers
     , ghcide
     , hls-plugin-api
     , hie-compat
@@ -31,3 +30,8 @@ library
     , text
 
   default-language: Haskell2010
+  default-extensions:
+    LambdaCase
+    NamedFieldPuns
+    OverloadedStrings
+    RecordWildCards
