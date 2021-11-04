@@ -173,7 +173,7 @@ suggestionsTests =
         expectNoMoreDiagnostics 3 doc "hlint"
     , knownBrokenForHlintOnRawGhc "[#2280] maybe hlint is ignoring pragmas" $
       testCase "hlint should not warn about redundant irrefutable pattern with LANGUAGE Strict" $ runHlintSession "" $ do
-        doc <- openDoc "StrictDo.hs" "haskell"
+        doc <- openDoc "StrictData.hs" "haskell"
 
         waitForAllProgressDone
 
