@@ -37,8 +37,7 @@ data CheckParents
     -- Note that ordering of constructors is meaningful and must be monotonically
     -- increasing in the scenarios where parents are checked
     = NeverCheck
-    | CheckOnClose
-    | CheckOnSaveAndClose
+    | CheckOnSave
     | AlwaysCheck
   deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (FromJSON, ToJSON)
@@ -61,7 +60,7 @@ data Config =
 
 instance Default Config where
   def = Config
-    { checkParents                = CheckOnSaveAndClose
+    { checkParents                = CheckOnSave
     , checkProject                = True
     , hlintOn                     = True
     , diagnosticsOnChange         = True

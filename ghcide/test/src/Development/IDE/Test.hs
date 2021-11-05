@@ -3,6 +3,7 @@
 
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE PolyKinds             #-}
 
 module Development.IDE.Test
@@ -22,6 +23,13 @@ module Development.IDE.Test
   , waitForAction
   , getLastBuildKeys
   , getInterfaceFilesDir
+  , garbageCollectDirtyKeys
+  , getFilesOfInterest
+  , waitForTypecheck
+  , waitForBuildQueue
+  , getStoredKeys
+  , waitForCustomMessage
+  , waitForGC
   ) where
 
 import           Control.Applicative.Combinators
@@ -32,10 +40,13 @@ import qualified Data.Aeson                      as A
 import           Data.Bifunctor                  (second)
 import qualified Data.Map.Strict                 as Map
 import           Data.Maybe                      (fromJust)
+import           Data.Text                       (Text)
 import qualified Data.Text                       as T
 import           Development.IDE.Plugin.Test     (TestRequest (..),
-                                                  WaitForIdeRuleResult)
+                                                  WaitForIdeRuleResult,
+                                                  ideResultSuccess)
 import           Development.IDE.Test.Diagnostic
+import           Ide.Plugin.Config               (CheckParents)
 import           Language.LSP.Test               hiding (message)
 import qualified Language.LSP.Test               as LspTest
 import           Language.LSP.Types              hiding
@@ -171,23 +182,51 @@ canonicalizeUri uri = filePathToUri <$> canonicalizePath (fromJust (uriToFilePat
 diagnostic :: Session (NotificationMessage TextDocumentPublishDiagnostics)
 diagnostic = LspTest.message STextDocumentPublishDiagnostics
 
-callTestPlugin :: (A.FromJSON b) => TestRequest -> Session (Either ResponseError b)
+callTestPlugin :: (A.FromJSON b) => TestRequest -> Session b
 callTestPlugin cmd = do
     let cm = SCustomMethod "test"
     waitId <- sendRequest cm (A.toJSON cmd)
     ResponseMessage{_result} <- skipManyTill anyMessage $ responseForId cm waitId
-    return $ do
-      e <- _result
-      case A.fromJSON e of
-        A.Error e   -> Left $ ResponseError InternalError (T.pack e) Nothing
-        A.Success a -> pure a
+    return $ case _result of
+         Left (ResponseError t err _) -> error $ show t <> ": " <> T.unpack err
+         Right json -> case A.fromJSON json of
+             A.Success a -> a
+             A.Error e   -> error e
 
-waitForAction :: String -> TextDocumentIdentifier -> Session (Either ResponseError WaitForIdeRuleResult)
+waitForAction :: String -> TextDocumentIdentifier -> Session WaitForIdeRuleResult
 waitForAction key TextDocumentIdentifier{_uri} =
     callTestPlugin (WaitForIdeRule key _uri)
 
-getLastBuildKeys :: Session (Either ResponseError [T.Text])
+getLastBuildKeys :: Session [T.Text]
 getLastBuildKeys = callTestPlugin GetLastBuildKeys
 
-getInterfaceFilesDir :: TextDocumentIdentifier -> Session (Either ResponseError FilePath)
+getInterfaceFilesDir :: TextDocumentIdentifier -> Session FilePath
 getInterfaceFilesDir TextDocumentIdentifier{_uri} = callTestPlugin (GetInterfaceFilesDir _uri)
+
+garbageCollectDirtyKeys :: CheckParents -> Int -> Session [String]
+garbageCollectDirtyKeys parents age = callTestPlugin (GarbageCollectDirtyKeys parents age)
+
+getStoredKeys :: Session [Text]
+getStoredKeys = callTestPlugin GetStoredKeys
+
+waitForTypecheck :: TextDocumentIdentifier -> Session Bool
+waitForTypecheck tid = ideResultSuccess <$> waitForAction "typecheck" tid
+
+waitForBuildQueue :: Session ()
+waitForBuildQueue = callTestPlugin WaitForShakeQueue
+
+getFilesOfInterest :: Session [FilePath]
+getFilesOfInterest = callTestPlugin GetFilesOfInterest
+
+waitForCustomMessage :: T.Text -> (A.Value -> Maybe res) -> Session res
+waitForCustomMessage msg pred =
+    skipManyTill anyMessage $ satisfyMaybe $ \case
+        FromServerMess (SCustomMethod lbl) (NotMess NotificationMessage{_params = value})
+            | lbl == msg -> pred value
+        _ -> Nothing
+
+waitForGC :: Session [T.Text]
+waitForGC = waitForCustomMessage "ghcide/GC" $ \v ->
+    case A.fromJSON v of
+        A.Success x -> Just x
+        _           -> Nothing
