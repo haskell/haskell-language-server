@@ -217,6 +217,8 @@ extractMinimalImports (Just hsc) (Just TcModuleResult {..}) = do
       ParsedModule {pm_parsed_source = L loc _} = tmrParsed
       emss = exportedModuleStrings tmrParsed
       span = fromMaybe (error "expected real") $ realSpan loc
+  -- Don't make suggestions for modules which are also exported, the user probably doesn't want this!
+  -- See https://github.com/haskell/haskell-language-server/issues/2079
   let notExportedImports = filter (notExported emss) imports
 
   -- GHC is secretly full of mutable state
