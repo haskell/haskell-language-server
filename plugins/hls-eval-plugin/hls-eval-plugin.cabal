@@ -55,6 +55,7 @@ library
     , aeson
     , base                  >=4.12  && <5
     , containers
+    , data-default
     , deepseq
     , Diff                  ^>=0.4.0
     , directory

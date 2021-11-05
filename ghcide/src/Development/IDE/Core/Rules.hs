@@ -22,6 +22,7 @@ module Development.IDE.Core.Rules(
     defineNoFile,
     defineEarlyCutOffNoFile,
     mainRule,
+    RulesConfig(..),
     getDependencies,
     getParsedModule,
     getParsedModuleWithComments,
@@ -56,6 +57,7 @@ module Development.IDE.Core.Rules(
     ghcSessionDepsDefinition,
     getParsedModuleDefinition,
     typeCheckRuleDefinition,
+    GhcSessionDepsConfig(..),
     ) where
 
 #if !MIN_VERSION_ghc(8,8,0)
@@ -138,7 +140,7 @@ import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.Types                           (SMethod (SCustomMethod))
 import           Language.LSP.VFS
 import           System.Directory                             (canonicalizePath, makeAbsolute)
-import           Data.Default                                 (def)
+import           Data.Default                                 (def, Default)
 import           Ide.Plugin.Properties                        (HasProperty,
                                                                KeyNameProxy,
                                                                Properties,
@@ -640,8 +642,8 @@ currentLinkables = do
   where
     go (mod, time) = LM time mod []
 
-loadGhcSession :: Rules ()
-loadGhcSession = do
+loadGhcSession :: GhcSessionDepsConfig -> Rules ()
+loadGhcSession ghcSessionDepsConfig = do
     -- This function should always be rerun because it tracks changes
     -- to the version of the collection of HscEnv's.
     defineEarlyCutOffNoFile $ \GhcSessionIO -> do
@@ -679,24 +681,34 @@ loadGhcSession = do
 
     defineNoDiagnostics $ \GhcSessionDeps file -> do
         env <- use_ GhcSession file
-        ghcSessionDepsDefinition False env file
+        ghcSessionDepsDefinition ghcSessionDepsConfig env file
 
-ghcSessionDepsDefinition :: Bool -> HscEnvEq -> NormalizedFilePath -> Action (Maybe HscEnvEq)
-ghcSessionDepsDefinition forceLinkable env file = do
+data GhcSessionDepsConfig = GhcSessionDepsConfig
+    { checkForImportCycles :: Bool
+    , forceLinkables       :: Bool
+    }
+instance Default GhcSessionDepsConfig where
+  def = GhcSessionDepsConfig
+    { checkForImportCycles = True
+    , forceLinkables = False
+    }
+
+ghcSessionDepsDefinition :: GhcSessionDepsConfig -> HscEnvEq -> NormalizedFilePath -> Action (Maybe HscEnvEq)
+ghcSessionDepsDefinition GhcSessionDepsConfig{..} env file = do
     let hsc = hscEnv env
 
     mbdeps <- mapM(fmap artifactFilePath . snd) <$> use_ GetLocatedImports file
     case mbdeps of
         Nothing -> return Nothing
         Just deps -> do
-            _ <- uses_ ReportImportCycles deps
+            when checkForImportCycles $ void $ uses_ ReportImportCycles deps
             ms:mss <- map msrModSummary <$> uses_ GetModSummaryWithoutTimestamps (file:deps)
 
             depSessions <- map hscEnv <$> uses_ GhcSessionDeps deps
             let uses_th_qq =
                     xopt LangExt.TemplateHaskell dflags || xopt LangExt.QuasiQuotes dflags
                 dflags = ms_hspp_opts ms
-            ifaces <- if uses_th_qq || forceLinkable
+            ifaces <- if uses_th_qq || forceLinkables
                         then uses_ GetModIface deps
                         else uses_ GetModIfaceWithoutLinkable deps
 
@@ -1043,9 +1055,18 @@ writeHiFileAction hsc hiFile = do
         resetInterfaceStore extras $ toNormalizedFilePath' targetPath
         writeHiFile hsc hiFile
 
+data RulesConfig = RulesConfig
+    { -- | Disable import cycle checking for improved performance in large codebases
+      checkForImportCycles :: Bool
+    -- | Disable TH for improved performance in large codebases
+    , enableTemplateHaskell :: Bool
+    }
+
+instance Default RulesConfig where def = RulesConfig True True
+
 -- | A rule that wires per-file rules together
-mainRule :: Rules ()
-mainRule = do
+mainRule :: RulesConfig -> Rules ()
+mainRule RulesConfig{..} = do
     linkables <- liftIO $ newVar emptyModuleEnv
     addIdeGlobal $ CompiledLinkables linkables
     getParsedModuleRule
@@ -1055,7 +1076,7 @@ mainRule = do
     reportImportCyclesRule
     typeCheckRule
     getDocMapRule
-    loadGhcSession
+    loadGhcSession def{checkForImportCycles}
     getModIfaceFromDiskRule
     getModIfaceFromDiskAndIndexRule
     getModIfaceRule
@@ -1073,8 +1094,10 @@ mainRule = do
     --   * ObjectLinkable -> BCOLinkable : the prev linkable can be reused,  signal "no change"
     --   * Object/BCO -> NoLinkable      : the prev linkable can be ignored, signal "no change"
     --   * otherwise                     : the prev linkable cannot be reused, signal "value has changed"
-    defineEarlyCutoff $ RuleWithCustomNewnessCheck (<=) $ \NeedsCompilation file ->
-        needsCompilationRule file
+    if enableTemplateHaskell
+      then defineEarlyCutoff $ RuleWithCustomNewnessCheck (<=) $ \NeedsCompilation file ->
+                needsCompilationRule file
+      else defineNoDiagnostics $ \NeedsCompilation _ -> return $ Just Nothing
     generateCoreRule
     getImportMapRule
     getAnnotatedParsedSourceRule

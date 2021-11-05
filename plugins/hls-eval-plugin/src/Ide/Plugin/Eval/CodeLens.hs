@@ -35,6 +35,7 @@ import           Control.Monad.IO.Class          (MonadIO (liftIO))
 import           Control.Monad.Trans.Except      (ExceptT (..))
 import           Data.Aeson                      (toJSON)
 import           Data.Char                       (isSpace)
+import           Data.Default
 import qualified Data.HashMap.Strict             as HashMap
 import           Data.List                       (dropWhileEnd, find,
                                                   intercalate, intersperse)
@@ -54,7 +55,8 @@ import           Development.IDE                 (GetModSummary (..),
                                                   toNormalizedFilePath',
                                                   uriToFilePath', useNoFile_,
                                                   useWithStale_, use_)
-import           Development.IDE.Core.Rules      (ghcSessionDepsDefinition)
+import           Development.IDE.Core.Rules      (GhcSessionDepsConfig (..),
+                                                  ghcSessionDepsDefinition)
 import           Development.IDE.GHC.Compat      hiding (typeKind, unitState)
 import qualified Development.IDE.GHC.Compat      as Compat
 import qualified Development.IDE.GHC.Compat      as SrcLoc
@@ -536,7 +538,8 @@ runGetSession st nfp = liftIO $ runAction "eval" st $ do
     let fp = fromNormalizedFilePath nfp
     ((_, res),_) <- liftIO $ loadSessionFun fp
     let env = fromMaybe (error $ "Unknown file: " <> fp) res
-    res <- fmap hscEnv <$> ghcSessionDepsDefinition False env nfp
+        ghcSessionDepsConfig = def{forceLinkables = True, checkForImportCycles = False}
+    res <- fmap hscEnv <$> ghcSessionDepsDefinition ghcSessionDepsConfig env nfp
     return $ fromMaybe (error $ "Unable to load file: " <> fp) res
 
 needsQuickCheck :: [(Section, Test)] -> Bool

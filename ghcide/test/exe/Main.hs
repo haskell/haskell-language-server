@@ -725,7 +725,6 @@ cancellationTestGroup name edits sessionDepsOutcome parseOutcome tcOutcome = tes
     , cancellationTemplate edits $ Just ("GetModSummaryWithoutTimestamps", True)
       -- getLocatedImports never fails
     , cancellationTemplate edits $ Just ("GetLocatedImports", True)
-    , cancellationTemplate edits $ Just ("GetDependencies", dependsOutcome)
     , cancellationTemplate edits $ Just ("GhcSessionDeps", sessionDepsOutcome)
     , cancellationTemplate edits $ Just ("GetParsedModule", parseOutcome)
     , cancellationTemplate edits $ Just ("TypeCheck", tcOutcome)
