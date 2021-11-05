@@ -139,6 +139,9 @@ suggestionsTests =
     , testCase "apply-refact preserve regular comments" $ runHlintSession "" $ do
         testRefactor "Comments.hs" "Redundant bracket" expectedComments
 
+    , testCase "[#2290] apply all hints works with a trailing comment" $ runHlintSession "" $ do
+        testRefactor "TwoHintsAndComment.hs" "Apply all hints" expectedComments2
+
     , testCase "applyAll is shown only when there is at least one diagnostic in range" $  runHlintSession "" $ do
         doc <- openDoc "TwoHints.hs" "haskell"
         _ <- waitForDiagnosticsFromSource doc "hlint"
@@ -211,6 +214,9 @@ suggestionsTests =
                              , "-- | haddock comment"
                              , "f = {- inline comment -}{- inline comment inside refactored code -} 1 -- ending comment", ""
                              , "-- final comment"
+                             ]
+        expectedComments2 =  [ "module TwoHintsAndComment where"
+                             , "biggest items = foldr1 max -- the line above will show two hlint hints, \"eta reduce\" and \"use maximum\""
                              ]
         expectedTypeApp =    [ "module TypeApplication where", ""
                              , "a = id @Int 1"

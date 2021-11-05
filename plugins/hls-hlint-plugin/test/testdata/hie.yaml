@@ -13,3 +13,4 @@ cradle:
       - "TwoHints"
       - "PatternKeyword"
       - "StrictData"
+      - "TwoHintsAndComment"
