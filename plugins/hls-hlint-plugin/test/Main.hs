@@ -216,7 +216,7 @@ suggestionsTests =
                              , "-- final comment"
                              ]
         expectedComments2 =  [ "module TwoHintsAndComment where"
-                             , "biggest items = foldr1 max -- the line above will show two hlint hints, \"eta reduce\" and \"use maximum\""
+                             , "biggest = foldr1 max -- the line above will show two hlint hints, \"eta reduce\" and \"use maximum\""
                              ]
         expectedTypeApp =    [ "module TypeApplication where", ""
                              , "a = id @Int 1"
