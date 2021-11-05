@@ -77,7 +77,7 @@ library
         rope-utf16-splay,
         safe,
         safe-exceptions,
-        hls-graph ^>= 1.5,
+        hls-graph ^>= 1.5.1,
         sorted-list,
         sqlite-simple,
         stm,

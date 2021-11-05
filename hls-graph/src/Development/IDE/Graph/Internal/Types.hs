@@ -58,6 +58,8 @@ data SAction = SAction {
     actionDeps     :: !(IORef ResultDeps)
     }
 
+getDatabase :: Action Database
+getDatabase = Action $ asks actionDatabase
 
 ---------------------------------------------------------------------
 -- DATABASE

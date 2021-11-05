@@ -256,9 +256,9 @@ setFileModified state saved nfp = do
     ideOptions <- getIdeOptionsIO $ shakeExtras state
     doCheckParents <- optCheckParents ideOptions
     let checkParents = case doCheckParents of
-          AlwaysCheck         -> True
-          CheckOnSaveAndClose -> saved
-          _                   -> False
+          AlwaysCheck -> True
+          CheckOnSave -> saved
+          _           -> False
     VFSHandle{..} <- getIdeGlobalState state
     when (isJust setVirtualFileContents) $
         fail "setFileModified can't be called on this type of VFSHandle"

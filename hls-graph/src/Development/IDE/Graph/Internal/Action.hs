@@ -15,6 +15,8 @@ module Development.IDE.Graph.Internal.Action
 , parallel
 , reschedule
 , runActions
+, Development.IDE.Graph.Internal.Action.getDirtySet
+, getKeysAndVisitedAge
 ) where
 
 import           Control.Concurrent.Async
@@ -123,3 +125,14 @@ runActions :: Database -> [Action a] -> IO [a]
 runActions db xs = do
     deps <- newIORef mempty
     runReaderT (fromAction $ parallel xs) $ SAction db deps
+
+-- | Returns the set of dirty keys annotated with their age (in # of builds)
+getDirtySet  :: Action [(Key, Int)]
+getDirtySet = do
+    db <- getDatabase
+    liftIO $ fmap snd <$> Development.IDE.Graph.Internal.Database.getDirtySet db
+
+getKeysAndVisitedAge :: Action [(Key, Int)]
+getKeysAndVisitedAge = do
+    db <- getDatabase
+    liftIO $ Development.IDE.Graph.Internal.Database.getKeysAndVisitAge db
