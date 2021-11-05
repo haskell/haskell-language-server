@@ -23,7 +23,8 @@ import           Data.Aeson.Types                     (FromJSON)
 import qualified Data.HashMap.Strict                  as HashMap
 import           Data.IORef                           (readIORef)
 import qualified Data.Map.Strict                      as Map
-import           Data.Maybe                           (catMaybes, fromMaybe)
+import           Data.Maybe                           (catMaybes, fromMaybe,
+                                                       isJust)
 import qualified Data.Text                            as T
 import           Development.IDE                      hiding (pluginHandlers,
                                                        pluginRules)
@@ -175,6 +176,13 @@ instance Show MinimalImportsResult where show _ = "<minimalImportsResult>"
 
 instance NFData MinimalImportsResult where rnf = rwhnf
 
+exportedModuleStrings :: ParsedModule -> [String]
+exportedModuleStrings ParsedModule{pm_parsed_source = L _ HsModule{..}}
+  | Just export <- hsmodExports,
+    exports <- unLoc export
+    = map show exports
+exportedModuleStrings _ = []
+
 minimalImportsRule :: Rules ()
 minimalImportsRule = define $ \MinimalImports nfp -> do
   -- Get the typechecking artifacts from the module
@@ -207,19 +215,27 @@ extractMinimalImports (Just hsc) (Just TcModuleResult {..}) = do
   let tcEnv = tmrTypechecked
       (_, imports, _, _) = tmrRenamed
       ParsedModule {pm_parsed_source = L loc _} = tmrParsed
+      emss = exportedModuleStrings tmrParsed
       span = fromMaybe (error "expected real") $ realSpan loc
+  let notExportedImports = filter (notExported emss) imports
 
   -- GHC is secretly full of mutable state
   gblElts <- readIORef (tcg_used_gres tcEnv)
 
   -- call findImportUsage does exactly what we need
   -- GHC is full of treats like this
-  let usage = findImportUsage imports gblElts
+  let usage = findImportUsage notExportedImports gblElts
   (_, minimalImports) <-
     initTcWithGbl (hscEnv hsc) tcEnv span $ getMinimalImports usage
 
   -- return both the original imports and the computed minimal ones
   return (imports, minimalImports)
+  where
+      notExported :: [String] -> LImportDecl GhcRn -> Bool
+      notExported []  _ = True
+      notExported exports (L _ ImportDecl{ideclName = L _ name}) =
+          not $ any (\e -> ("module " ++ moduleNameString name) == e) exports
+      notExported _ _ = False
 extractMinimalImports _ _ = return ([], Nothing)
 
 mkExplicitEdit :: (ModuleName -> Bool) -> PositionMapping -> LImportDecl pass -> T.Text -> Maybe TextEdit
