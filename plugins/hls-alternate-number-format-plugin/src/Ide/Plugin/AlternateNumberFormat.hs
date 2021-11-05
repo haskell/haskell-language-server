@@ -21,8 +21,8 @@ import           Development.IDE.GHC.Compat.Util      (FastString, mkFastString)
 import           Development.IDE.Types.Logger         as Logger
 import           Ide.Plugin.Retrie                    (handleMaybe,
                                                        handleMaybeM, response)
-import           Ide.Plugin.Traverse.Literals         (collectLiterals,
-                                                       collectTcLiterals)
+import           Ide.Plugin.Traverse.Literals         (collectLiterals
+                                                       )
 import           Ide.Types
 import           Language.LSP.Types
 import           Language.LSP.Types.Lens              (textDocument, uri)
