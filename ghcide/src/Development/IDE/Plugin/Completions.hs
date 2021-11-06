@@ -30,7 +30,6 @@ import           Development.IDE.GHC.ExactPrint               (Annotated (annsA)
 import           Development.IDE.GHC.Util                     (prettyPrint)
 import           Development.IDE.Graph
 import           Development.IDE.Graph.Classes
-import qualified Development.IDE.Types.KnownTargets           as KT
 import           Development.IDE.Plugin.CodeAction            (newImport,
                                                                newImportToEdit)
 import           Development.IDE.Plugin.CodeAction.ExactPrint
@@ -39,6 +38,7 @@ import           Development.IDE.Plugin.Completions.Types
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.HscEnvEq               (HscEnvEq (envPackageExports),
                                                                hscEnv)
+import qualified Development.IDE.Types.KnownTargets           as KT
 import           Development.IDE.Types.Location
 import           GHC.Exts                                     (fromList, toList)
 import           GHC.Generics
@@ -156,17 +156,37 @@ getCompletionsLSP ide plId
                 let clientCaps = clientCapabilities $ shakeExtras ide
                 config <- getCompletionsConfig plId
                 allCompletions <- liftIO $ getCompletions plId ideOpts cci' parsedMod bindMap pfix' clientCaps config moduleExports
-                pure $ InL (List allCompletions)
+                pure $ InL (List $ orderedCompletions allCompletions)
               _ -> return (InL $ List [])
           _ -> return (InL $ List [])
       _ -> return (InL $ List [])
+
+{- COMPLETION SORTING
+   We return an ordered set of completions (local -> nonlocal -> global).
+   Ordering is important because local/nonlocal are import aware, whereas
+   global are not and will always insert import statements, potentially redundant.
+
+   On the other hand the fuzzy sort algorithm doesn't always sort in the optimal way,
+   there is room for the LSP client to improve.
+
+   According to the LSP specification, if no sortText is provided, the label is used.
+   To allow the LSP client to reorder identifiers while preserving the relative ordering
+   of repeated occurrences we generate sortText values that include both the label and
+   an index denoting the relative order
+-}
+orderedCompletions :: [CompletionItem] -> [CompletionItem]
+orderedCompletions = zipWith addOrder [0..]
+    where
+    addOrder :: Int -> CompletionItem -> CompletionItem
+    addOrder n it@CompletionItem{_label} =
+        it{_sortText = Just $ _label <> T.pack(show n)}
 
 ----------------------------------------------------------------------------------------------------
 
 toModueNameText :: KT.Target -> T.Text
 toModueNameText target = case target of
-  KT.TargetModule m  -> T.pack $ moduleNameString m
-  _ -> T.empty
+  KT.TargetModule m -> T.pack $ moduleNameString m
+  _                 -> T.empty
 
 extendImportCommand :: PluginCommand IdeState
 extendImportCommand =
