@@ -108,6 +108,7 @@ import           Data.Unique                       as Unique
 import           Development.IDE.Core.Tracing      (withTrace)
 import qualified Language.LSP.Server               as LSP
 import qualified Language.LSP.Types                as LSP
+import           UniqDFM                           (emptyUDFM, plusUDFM)
 import           Unsafe.Coerce
 
 -- | Given a string buffer, return the string (after preprocessing) and the 'ParsedModule'.
@@ -701,7 +702,7 @@ mergeEnvs env extraModSummaries extraMods envs = do
                 (\fc (im, ifr) -> Compat.extendInstalledModuleEnv fc im ifr) prevFinderCache
                 $ zip ims ifrs
     return $ loadModulesHome extraMods $ env{
-        hsc_HPT = foldMap hsc_HPT envs,
+        hsc_HPT = foldMapBy plusUDFM emptyUDFM hsc_HPT envs,
         hsc_FC = newFinderCache,
         hsc_mod_graph = mkModuleGraph $ extraModSummaries ++ nubOrdOn ms_mod (concatMap (mgModSummaries . hsc_mod_graph) envs)
     }
