@@ -173,6 +173,23 @@ getCompletionsLSP ide plId
    To allow the LSP client to reorder identifiers while preserving the relative ordering
    of repeated occurrences we generate sortText values that include both the label and
    an index denoting the relative order
+
+   EXAMPLE
+   We produce completions:
+   x -- local
+   y -- local
+   x -- global
+   y -- global
+
+   The LSP client decides to present:
+   y -- local
+   y -- global
+   x -- local
+   x -- global
+
+   This is fine if the LSP client thinks that 'y' is more relevant than 'x'.
+   We are OK with that choice since the local options are presented before the global ones
+
 -}
 orderedCompletions :: [CompletionItem] -> [CompletionItem]
 orderedCompletions = zipWith addOrder [0..]
