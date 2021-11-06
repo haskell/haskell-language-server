@@ -54,7 +54,8 @@ import           Development.IDE.Plugin.Test     (TestRequest (GetLastBuildKeys,
 import           Development.IDE.Types.Options
 import           GHC.IO.Handle
 import           Ide.Plugin.Config               (Config, formattingProvider)
-import           Ide.PluginUtils                 (idePluginsToPluginDesc, pluginDescToIdePlugins)
+import           Ide.PluginUtils                 (idePluginsToPluginDesc,
+                                                  pluginDescToIdePlugins)
 import           Ide.Types
 import           Language.LSP.Test
 import           Language.LSP.Types              hiding
@@ -176,7 +177,10 @@ runSessionWithServer' plugin conf sconf caps root s = withLock lock $ keepCurren
             argsDefaultHlsConfig = conf,
             argsLogger = logger,
             argsIdeOptions = \config sessionLoader ->
-              let ideOptions = (argsIdeOptions def config sessionLoader) {optTesting = IdeTesting True}
+              let ideOptions = (argsIdeOptions def config sessionLoader)
+                    {optTesting = IdeTesting True
+                    ,optCheckProject = pure False
+                    }
                in ideOptions {optShakeOptions = (optShakeOptions ideOptions) {shakeThreads = 2}},
             argsHlsPlugins = pluginDescToIdePlugins $ plugin ++ idePluginsToPluginDesc (argsHlsPlugins testing)
           }
@@ -233,7 +237,7 @@ callTestPlugin cmd = do
     return $ do
       e <- _result
       case A.fromJSON e of
-        A.Error err   -> Left $ ResponseError InternalError (T.pack err) Nothing
+        A.Error err -> Left $ ResponseError InternalError (T.pack err) Nothing
         A.Success a -> pure a
 
 waitForAction :: String -> TextDocumentIdentifier -> Session (Either ResponseError WaitForIdeRuleResult)
