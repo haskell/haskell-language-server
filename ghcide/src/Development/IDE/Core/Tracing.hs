@@ -16,65 +16,62 @@ module Development.IDE.Core.Tracing
     )
 where
 
-import           Control.Concurrent.Async          (Async, async)
-import           Control.Concurrent.Extra          (Var, modifyVar_, newVar,
-                                                    readVar, threadDelay)
-import           Control.Exception                 (evaluate)
-import           Control.Exception.Safe            (SomeException, catch,
-                                                    generalBracket)
-import           Control.Monad                     (forM_, forever, void, when,
-                                                    (>=>))
-import           Control.Monad.Catch               (ExitCase (..), MonadMask)
-import           Control.Monad.Extra               (whenJust)
+import           Control.Concurrent.Async       (Async, async)
+import           Control.Concurrent.Extra       (Var, modifyVar_, newVar,
+                                                 readVar, threadDelay)
+import           Control.Exception              (evaluate)
+import           Control.Exception.Safe         (SomeException, catch,
+                                                 generalBracket)
+import           Control.Monad                  (forM_, forever, void, when,
+                                                 (>=>))
+import           Control.Monad.Catch            (ExitCase (..), MonadMask)
+import           Control.Monad.Extra            (whenJust)
 import           Control.Monad.IO.Unlift
-import           Control.Seq                       (r0, seqList, seqTuple2,
-                                                    using)
-import           Data.ByteString                   (ByteString)
-import           Data.ByteString.Char8             (pack)
-import           Data.Dynamic                      (Dynamic)
-import qualified Data.HashMap.Strict               as HMap
-import           Data.IORef                        (modifyIORef', newIORef,
-                                                    readIORef, writeIORef)
-import           Data.String                       (IsString (fromString))
-import qualified Data.Text                         as T
-import           Data.Text.Encoding                (encodeUtf8)
-import           Data.Typeable                     (TypeRep, typeOf)
-import           Data.Word                         (Word16)
-import           Debug.Trace.Flags                 (userTracingEnabled)
-import           Development.IDE.Core.RuleTypes    (GhcSession (GhcSession),
-                                                    GhcSessionDeps (GhcSessionDeps),
-                                                    GhcSessionIO (GhcSessionIO))
-import           Development.IDE.Graph             (Action)
+import           Control.Seq                    (r0, seqList, seqTuple2, using)
+import           Data.ByteString                (ByteString)
+import           Data.ByteString.Char8          (pack)
+import           Data.Dynamic                   (Dynamic)
+import qualified Data.HashMap.Strict            as HMap
+import           Data.IORef                     (modifyIORef', newIORef,
+                                                 readIORef, writeIORef)
+import           Data.String                    (IsString (fromString))
+import qualified Data.Text                      as T
+import           Data.Text.Encoding             (encodeUtf8)
+import           Data.Typeable                  (TypeRep, typeOf)
+import           Data.Word                      (Word16)
+import           Debug.Trace.Flags              (userTracingEnabled)
+import           Development.IDE.Core.RuleTypes (GhcSession (GhcSession),
+                                                 GhcSessionDeps (GhcSessionDeps),
+                                                 GhcSessionIO (GhcSessionIO))
+import           Development.IDE.Graph          (Action)
 import           Development.IDE.Graph.Rule
-import           Development.IDE.Types.Diagnostics (FileDiagnostic,
-                                                    showDiagnostics)
-import           Development.IDE.Types.Location    (Uri (..))
-import           Development.IDE.Types.Logger      (Logger (Logger), logDebug,
-                                                    logInfo)
-import           Development.IDE.Types.Shake       (Value,
-                                                    ValueWithDiagnostics (..),
-                                                    Values, fromKeyType)
-import           Foreign.Storable                  (Storable (sizeOf))
-import           HeapSize                          (recursiveSize, runHeapsize)
-import           Ide.PluginUtils                   (installSigUsr1Handler)
-import           Ide.Types                         (PluginId (..))
-import           Language.LSP.Types                (NormalizedFilePath,
-                                                    fromNormalizedFilePath)
-import           Numeric.Natural                   (Natural)
-import           OpenTelemetry.Eventlog            (SpanInFlight (..), addEvent,
-                                                    beginSpan, endSpan,
-                                                    mkValueObserver, observe,
-                                                    setTag, withSpan, withSpan_)
+import           Development.IDE.Types.Location (Uri (..))
+import           Development.IDE.Types.Logger   (Logger (Logger), logDebug,
+                                                 logInfo)
+import           Development.IDE.Types.Shake    (Value,
+                                                 ValueWithDiagnostics (..),
+                                                 Values, fromKeyType)
+import           Foreign.Storable               (Storable (sizeOf))
+import           HeapSize                       (recursiveSize, runHeapsize)
+import           Ide.PluginUtils                (installSigUsr1Handler)
+import           Ide.Types                      (PluginId (..))
+import           Language.LSP.Types             (NormalizedFilePath,
+                                                 fromNormalizedFilePath)
+import           Numeric.Natural                (Natural)
+import           OpenTelemetry.Eventlog         (SpanInFlight (..), addEvent,
+                                                 beginSpan, endSpan,
+                                                 mkValueObserver, observe,
+                                                 setTag, withSpan, withSpan_)
 
-
+#if MIN_VERSION_ghc(8,8,0)
 otTracedProvider :: MonadUnliftIO m => PluginId -> ByteString -> m a -> m a
 otTracedGarbageCollection :: (MonadMask f, MonadIO f, Show a) => ByteString -> f [a] -> f [a]
 withEventTrace :: (MonadMask m, MonadIO m) => String -> ((ByteString -> ByteString -> m ()) -> m a) -> m a
-
-
-
-
-
+#else
+otTracedProvider :: MonadUnliftIO m => PluginId -> String -> m a -> m a
+otTracedGarbageCollection :: (MonadMask f, MonadIO f, Show a) => String -> f [a] -> f [a]
+withEventTrace :: (MonadMask m, MonadIO m) => String -> ((String -> ByteString -> m ()) -> m a) -> m a
+#endif
 
 withTrace :: (MonadMask m, MonadIO m) =>
     String -> ((String -> String -> m ()) -> m a) -> m a
