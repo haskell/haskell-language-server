@@ -45,6 +45,7 @@ import           Development.IDE.Core.RuleTypes (GhcSession (GhcSession),
                                                  GhcSessionIO (GhcSessionIO))
 import           Development.IDE.Graph          (Action)
 import           Development.IDE.Graph.Rule
+import           Development.IDE.Types.Diagnostics (FileDiagnostic, showDiagnostics)
 import           Development.IDE.Types.Location (Uri (..))
 import           Development.IDE.Types.Logger   (Logger (Logger), logDebug,
                                                  logInfo)
