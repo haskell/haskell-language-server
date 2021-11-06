@@ -686,11 +686,13 @@ loadGhcSession ghcSessionDepsConfig = do
 data GhcSessionDepsConfig = GhcSessionDepsConfig
     { checkForImportCycles :: Bool
     , forceLinkables       :: Bool
+    , fullModSummary       :: Bool
     }
 instance Default GhcSessionDepsConfig where
   def = GhcSessionDepsConfig
     { checkForImportCycles = True
     , forceLinkables = False
+    , fullModSummary = False
     }
 
 ghcSessionDepsDefinition :: GhcSessionDepsConfig -> HscEnvEq -> NormalizedFilePath -> Action (Maybe HscEnvEq)
@@ -702,7 +704,9 @@ ghcSessionDepsDefinition GhcSessionDepsConfig{..} env file = do
         Nothing -> return Nothing
         Just deps -> do
             when checkForImportCycles $ void $ uses_ ReportImportCycles deps
-            ms:mss <- map msrModSummary <$> uses_ GetModSummaryWithoutTimestamps (file:deps)
+            ms:mss <- map msrModSummary <$> if fullModSummary
+                then uses_ GetModSummary (file:deps)
+                else uses_ GetModSummaryWithoutTimestamps (file:deps)
 
             depSessions <- map hscEnv <$> uses_ GhcSessionDeps deps
             let uses_th_qq =

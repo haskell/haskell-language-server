@@ -50,6 +50,7 @@ import           Development.IDE                 (GetModSummary (..),
                                                   ModSummaryResult (..),
                                                   NeedsCompilation (NeedsCompilation),
                                                   evalGhcEnv, hscEnv,
+                                                  hscEnvWithImportPaths,
                                                   prettyPrint, runAction,
                                                   textToStringBuffer,
                                                   toNormalizedFilePath',
@@ -538,8 +539,12 @@ runGetSession st nfp = liftIO $ runAction "eval" st $ do
     let fp = fromNormalizedFilePath nfp
     ((_, res),_) <- liftIO $ loadSessionFun fp
     let env = fromMaybe (error $ "Unknown file: " <> fp) res
-        ghcSessionDepsConfig = def{forceLinkables = True, checkForImportCycles = False}
-    res <- fmap hscEnv <$> ghcSessionDepsDefinition ghcSessionDepsConfig env nfp
+        ghcSessionDepsConfig = def
+            { forceLinkables = True
+            , checkForImportCycles = False
+            , fullModSummary = True
+            }
+    res <- fmap hscEnvWithImportPaths <$> ghcSessionDepsDefinition ghcSessionDepsConfig env nfp
     return $ fromMaybe (error $ "Unable to load file: " <> fp) res
 
 needsQuickCheck :: [(Section, Test)] -> Bool
