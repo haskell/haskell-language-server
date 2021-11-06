@@ -106,9 +106,9 @@ import           Data.Map                          (Map)
 import           Data.Tuple.Extra                  (dupe)
 import           Data.Unique                       as Unique
 import           Development.IDE.Core.Tracing      (withTrace)
+import           Development.IDE.GHC.Compat.Util   (emptyUDFM, plusUDFM)
 import qualified Language.LSP.Server               as LSP
 import qualified Language.LSP.Types                as LSP
-import           UniqDFM                           (emptyUDFM, plusUDFM)
 import           Unsafe.Coerce
 
 -- | Given a string buffer, return the string (after preprocessing) and the 'ParsedModule'.
