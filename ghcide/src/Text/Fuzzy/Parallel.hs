@@ -2,8 +2,9 @@
 module Text.Fuzzy.Parallel
 (   filter,
     simpleFilter,
+    Scored(..),
     -- reexports
-    Fuzzy(..),
+    Fuzzy,
     match
 ) where
 
@@ -19,6 +20,9 @@ import           Data.Maybe                  (fromJust)
 import           Prelude                     hiding (filter)
 import           Text.Fuzzy                  (Fuzzy (..), match)
 
+data Scored a = Scored {score_ :: !Int, original:: !a}
+  deriving Functor
+
 -- | The function to filter a list of values by fuzzy search on the text extracted from them.
 filter :: (TextualMonoid s)
        => Int      -- ^ Chunk size. 1000 works well.
@@ -29,7 +33,7 @@ filter :: (TextualMonoid s)
        -> s        -- ^ The text to add after each match.
        -> (t -> s) -- ^ The function to extract the text from the container.
        -> Bool     -- ^ Case sensitivity.
-       -> [Fuzzy t s] -- ^ The list of results, sorted, highest score first.
+       -> [Scored t] -- ^ The list of results, sorted, highest score first.
 filter chunkSize maxRes pattern ts pre post extract caseSen = runST $ do
   let v = V.mapMaybe id
              (V.map (\t -> match pattern t pre post extract caseSen) (V.fromList ts)
@@ -50,9 +54,9 @@ simpleFilter :: (TextualMonoid s)
              -> Int -- ^ Max. number of results wanted
              -> s   -- ^ Pattern to look for.
              -> [s] -- ^ List of texts to check.
-             -> [s] -- ^ The ones that match.
+             -> [Scored s] -- ^ The ones that match.
 simpleFilter chunk maxRes pattern xs =
-  map original $ filter chunk maxRes pattern xs mempty mempty id False
+  filter chunk maxRes pattern xs mempty mempty id False
 
 --------------------------------------------------------------------------------
 
@@ -102,7 +106,7 @@ partialSortByAscScore :: TextualMonoid s
             => Int  -- ^ Number of items needed
             -> Int  -- ^ Value of a perfect score
             -> Vector (Fuzzy t s)
-            -> [Fuzzy t s]
+            -> [Scored t]
 partialSortByAscScore wantedCount perfectScore v = loop 0 (SortState minBound perfectScore 0) [] where
   l = V.length v
   loop index st@SortState{..} acc
@@ -115,11 +119,14 @@ partialSortByAscScore wantedCount perfectScore v = loop 0 (SortState minBound pe
     | otherwise =
       case v!index of
         x | score x == scoreWanted
-          -> loop (index+1) st{foundCount = foundCount+1} (x:acc)
+          -> loop (index+1) st{foundCount = foundCount+1} (toScored x:acc)
           | score x < scoreWanted && score x > bestScoreSeen
           -> loop (index+1) st{bestScoreSeen = score x} acc
           | otherwise
           -> loop (index+1) st acc
+
+toScored :: TextualMonoid s => Fuzzy t s -> Scored t
+toScored Fuzzy{..} = Scored score original
 
 data SortState a = SortState
   { bestScoreSeen :: !Int

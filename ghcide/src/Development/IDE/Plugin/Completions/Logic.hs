@@ -29,6 +29,7 @@ import qualified Text.Fuzzy.Parallel                      as Fuzzy
 import           Control.Monad
 import           Data.Aeson                               (ToJSON (toJSON))
 import           Data.Either                              (fromRight)
+import           Data.Function                            (on)
 import           Data.Functor
 import qualified Data.HashMap.Strict                      as HM
 import qualified Data.HashSet                             as HashSet
@@ -52,6 +53,8 @@ import           Ide.Types                                (CommandId (..),
 import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities
 import qualified Language.LSP.VFS                         as VFS
+import           Text.Fuzzy.Parallel                      (Scored (score_),
+                                                           original)
 
 -- Chunk size used for parallelizing fuzzy matching
 chunkSize :: Int
@@ -199,6 +202,7 @@ mkCompl
         documentation = Just $ CompletionDocMarkup $
                         MarkupContent MkMarkdown $
                         T.intercalate sectionSeparator docs'
+
 
 mkAdditionalEditsCommand :: PluginId -> ExtendImport -> Command
 mkAdditionalEditsCommand pId edits =
@@ -525,7 +529,7 @@ getCompletions
     -> ClientCapabilities
     -> CompletionsConfig
     -> HM.HashMap T.Text (HashSet.HashSet IdentInfo)
-    -> IO [CompletionItem]
+    -> IO [Scored CompletionItem]
 getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qualCompls, importableModules}
                maybe_parsed (localBindings, bmapping) prefixInfo caps config moduleExportsMap = do
   let VFS.PosPrefixInfo { fullLine, prefixModule, prefixText } = prefixInfo
@@ -541,12 +545,14 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
 
       maxC = maxCompletions config
 
+      filtModNameCompls :: [Scored CompletionItem]
       filtModNameCompls =
-        map mkModCompl
-          $ mapMaybe (T.stripPrefix enteredQual)
-          $ Fuzzy.simpleFilter chunkSize maxC fullPrefix allModNamesAsNS
+        (fmap.fmap) mkModCompl
+          $ Fuzzy.simpleFilter chunkSize maxC fullPrefix
+          $ (if T.null enteredQual then id else mapMaybe (T.stripPrefix enteredQual))
+          $ allModNamesAsNS
 
-      filtCompls = map Fuzzy.original $ Fuzzy.filter chunkSize maxC prefixText ctxCompls "" "" label False
+      filtCompls = Fuzzy.filter chunkSize maxC prefixText ctxCompls "" "" label False
         where
 
           mcc = case maybe_parsed of
@@ -592,9 +598,9 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
                  ++ (($ Just prefixModule) <$> anyQualCompls)
 
       filtListWith f list =
-        [ f label
+        [ fmap f label
         | label <- Fuzzy.simpleFilter chunkSize maxC fullPrefix list
-        , enteredQual `T.isPrefixOf` label
+        , enteredQual `T.isPrefixOf` original label
         ]
 
       filtImportCompls = filtListWith (mkImportCompl enteredQual) importableModules
@@ -621,11 +627,13 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
     -> return []
     | otherwise -> do
         -- assumes that nubOrdBy is stable
-        let uniqueFiltCompls = nubOrdBy uniqueCompl filtCompls
-        let compls = map (mkCompl plId ideOpts) uniqueFiltCompls
-        return $ filtModNameCompls
-              ++ filtKeywordCompls
-              ++ map (toggleSnippets caps config) compls
+        let uniqueFiltCompls = nubOrdBy (uniqueCompl `on` Fuzzy.original) filtCompls
+        let compls = (fmap.fmap) (mkCompl plId ideOpts) uniqueFiltCompls
+        return $ mergeListsBy (flip compare `on` score_)
+            [ filtModNameCompls
+            , filtKeywordCompls
+            , (fmap.fmap) (toggleSnippets caps config) compls
+            ]
 
 uniqueCompl :: CompItem -> CompItem -> Ordering
 uniqueCompl x y =
@@ -777,3 +785,44 @@ getImportQual :: LImportDecl GhcPs -> Maybe T.Text
 getImportQual (L _ imp)
     | isQualifiedImport imp = Just $ T.pack $ moduleNameString $ maybe (unLoc $ ideclName imp) unLoc (ideclAs imp)
     | otherwise = Nothing
+
+--------------------------------------------------------------------------------
+
+-- This comes from the GHC.Utils.Misc module (not exported)
+-- | Merge an unsorted list of sorted lists, for example:
+--
+--  > mergeListsBy compare [ [2,5,15], [1,10,100] ] = [1,2,5,10,15,100]
+--
+--  \( O(n \log{} k) \)
+mergeListsBy :: forall a. (a -> a -> Ordering) -> [[a]] -> [a]
+mergeListsBy cmp all_lists = merge_lists all_lists
+  where
+    -- Implements "Iterative 2-Way merge" described at
+    -- https://en.wikipedia.org/wiki/K-way_merge_algorithm
+
+    -- Merge two sorted lists into one in O(n).
+    merge2 :: [a] -> [a] -> [a]
+    merge2 [] ys = ys
+    merge2 xs [] = xs
+    merge2 (x:xs) (y:ys) =
+      case cmp x y of
+        Prelude.GT -> y : merge2 (x:xs) ys
+        _          -> x : merge2 xs (y:ys)
+
+    -- Merge the first list with the second, the third with the fourth, and so
+    -- on. The output has half as much lists as the input.
+    merge_neighbours :: [[a]] -> [[a]]
+    merge_neighbours []   = []
+    merge_neighbours [xs] = [xs]
+    merge_neighbours (xs : ys : lists) =
+      merge2 xs ys : merge_neighbours lists
+
+    -- Since 'merge_neighbours' halves the amount of lists in each iteration,
+    -- we perform O(log k) iteration. Each iteration is O(n). The total running
+    -- time is therefore O(n log k).
+    merge_lists :: [[a]] -> [a]
+    merge_lists lists =
+      case merge_neighbours lists of
+        []     -> []
+        [xs]   -> xs
+        lists' -> merge_lists lists'

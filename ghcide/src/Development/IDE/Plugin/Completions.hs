@@ -47,6 +47,8 @@ import           Ide.Types
 import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.Types
 import qualified Language.LSP.VFS                             as VFS
+import           Text.Fuzzy.Parallel                          (Scored (..))
+
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
@@ -174,7 +176,7 @@ getCompletionsLSP ide plId
    of repeated occurrences we generate sortText values that include both the label and
    an index denoting the relative order
 
-   EXAMPLE
+   EXAMPLE OF DESIRED BEHAVIOUR
    We produce completions:
    x -- local
    y -- local
@@ -188,15 +190,33 @@ getCompletionsLSP ide plId
    x -- global
 
    This is fine if the LSP client thinks that 'y' is more relevant than 'x'.
-   We are OK with that choice since the local options are presented before the global ones
+   Importantly, the local options are presented before the global ones
 
+   We provide the LSP client with 3 sorting measures encoded in _sortText:
+   1. The distance to the best fuzzy score
+   2. The label
+   3. The index in our original sorted list
 -}
-orderedCompletions :: [CompletionItem] -> [CompletionItem]
-orderedCompletions = zipWith addOrder [0..]
+
+orderedCompletions :: [Scored CompletionItem] -> [CompletionItem]
+orderedCompletions [] = []
+orderedCompletions xx@(h:_) = zipWith addOrder [0..] xx
     where
-    addOrder :: Int -> CompletionItem -> CompletionItem
-    addOrder n it@CompletionItem{_label} =
-        it{_sortText = Just $ _label <> T.pack(show n)}
+    lxx = digits $ Prelude.length xx
+    lm = digits maxScore
+    maxScore = score_ h
+
+    digits = Prelude.length . show
+
+    addOrder :: Int -> Scored CompletionItem -> CompletionItem
+    addOrder n Scored{score_, original = it@CompletionItem{_label,_sortText}} =
+        it{_sortText = Just $
+                (T.pack(pad lm (maxScore - score_))) <>
+                _label <>
+                T.pack(pad lxx n)
+                }
+
+    pad n x = let sx = show x in replicate (n - Prelude.length sx) '0' <> sx
 
 ----------------------------------------------------------------------------------------------------
 
