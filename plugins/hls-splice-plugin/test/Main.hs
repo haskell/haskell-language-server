@@ -64,7 +64,6 @@ tests = testGroup "splice"
 goldenTest :: FilePath -> ExpandStyle -> Int -> Int -> TestTree
 goldenTest fp tc line col =
   goldenWithHaskellDoc splicePlugin (fp <> " (golden)") testDataDir fp "expected" "hs" $ \doc -> do
-    _ <- waitForDiagnostics
     -- wait for the entire build to finish, so that code actions that
     -- use stale data will get uptodate stuff
     void waitForBuildQueue
