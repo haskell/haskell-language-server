@@ -49,7 +49,6 @@ import           Language.LSP.Types
 import qualified Language.LSP.VFS                             as VFS
 import           Text.Fuzzy.Parallel                          (Scored (..))
 
-
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
   { pluginRules = produceCompletions
@@ -168,51 +167,29 @@ getCompletionsLSP ide plId
    Ordering is important because local/nonlocal are import aware, whereas
    global are not and will always insert import statements, potentially redundant.
 
-   On the other hand the fuzzy sort algorithm doesn't always sort in the optimal way,
-   there is room for the LSP client to improve.
+   Moreover, the order prioritizes qualifiers, for instance, given:
 
-   According to the LSP specification, if no sortText is provided, the label is used.
-   To allow the LSP client to reorder identifiers while preserving the relative ordering
-   of repeated occurrences we generate sortText values that include both the label and
-   an index denoting the relative order
+   import qualified MyModule
+   foo = MyModule.<complete>
 
-   EXAMPLE OF DESIRED BEHAVIOUR
-   We produce completions:
-   x -- local
-   y -- local
-   x -- global
-   y -- global
+   The identifiers defined in MyModule will be listed first, followed by other
+   identifiers in importable modules.
 
-   The LSP client decides to present:
-   y -- local
-   y -- global
-   x -- local
-   x -- global
-
-   This is fine if the LSP client thinks that 'y' is more relevant than 'x'.
-   Importantly, the local options are presented before the global ones
-
-   We provide the LSP client with 3 sorting measures encoded in _sortText:
-   1. The distance to the best fuzzy score
-   2. The label
-   3. The index in our original sorted list
+   According to the LSP specification, if no sortText is provided, the label is used
+   to sort alphabetically. Alphabetical ordering is almost never what we want,
+   so we force the LSP client to respect our ordering by using a numbered sequence.
 -}
 
 orderedCompletions :: [Scored CompletionItem] -> [CompletionItem]
 orderedCompletions [] = []
-orderedCompletions xx@(h:_) = zipWith addOrder [0..] xx
+orderedCompletions xx = zipWith addOrder [0..] xx
     where
     lxx = digits $ Prelude.length xx
-    lm = digits maxScore
-    maxScore = score_ h
-
     digits = Prelude.length . show
 
     addOrder :: Int -> Scored CompletionItem -> CompletionItem
-    addOrder n Scored{score_, original = it@CompletionItem{_label,_sortText}} =
+    addOrder n Scored{original = it@CompletionItem{_label,_sortText}} =
         it{_sortText = Just $
-                T.pack(pad lm (maxScore - score_)) <>
-                _label <>
                 T.pack(pad lxx n)
                 }
 
