@@ -550,7 +550,7 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
         (fmap.fmap) mkModCompl
           $ Fuzzy.simpleFilter chunkSize maxC fullPrefix
           $ (if T.null enteredQual then id else mapMaybe (T.stripPrefix enteredQual))
-          $ allModNamesAsNS
+            allModNamesAsNS
 
       filtCompls = Fuzzy.filter chunkSize maxC prefixText ctxCompls "" "" label False
         where

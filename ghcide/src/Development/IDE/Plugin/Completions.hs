@@ -211,7 +211,7 @@ orderedCompletions xx@(h:_) = zipWith addOrder [0..] xx
     addOrder :: Int -> Scored CompletionItem -> CompletionItem
     addOrder n Scored{score_, original = it@CompletionItem{_label,_sortText}} =
         it{_sortText = Just $
-                (T.pack(pad lm (maxScore - score_))) <>
+                T.pack(pad lm (maxScore - score_)) <>
                 _label <>
                 T.pack(pad lxx n)
                 }
