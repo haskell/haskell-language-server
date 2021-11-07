@@ -4189,15 +4189,13 @@ topLevelCompletionTests = [
         "variable"
         ["bar = xx", "-- | haddock", "xxx :: ()", "xxx = ()", "-- | haddock", "data Xxx = XxxCon"]
         (Position 0 8)
-        [("xxx", CiFunction, "xxx", True, True, Nothing),
-         ("XxxCon", CiConstructor, "XxxCon", False, True, Nothing)
+        [("xxx", CiFunction, "xxx", True, True, Nothing)
         ],
     completionTest
         "constructor"
         ["bar = xx", "-- | haddock", "xxx :: ()", "xxx = ()", "-- | haddock", "data Xxx = XxxCon"]
         (Position 0 8)
-        [("xxx", CiFunction, "xxx", True, True, Nothing),
-         ("XxxCon", CiConstructor, "XxxCon", False, True, Nothing)
+        [("xxx", CiFunction, "xxx", True, True, Nothing)
         ],
     completionTest
         "class method"
@@ -4311,10 +4309,9 @@ nonLocalCompletionTests =
       [("head", CiFunction, "head ${1:([a])}", True, True, Nothing)],
     completionTest
       "constructor"
-      ["module A where", "f = Tru"]
-      (Position 1 7)
-      [ ("True", CiConstructor, "True ", True, True, Nothing),
-        ("truncate", CiFunction, "truncate ${1:a}", True, True, Nothing)
+      ["{-# OPTIONS_GHC -Wall #-}", "module A where", "f = True"]
+      (Position 2 8)
+      [ ("True", CiConstructor, "True ", True, True, Nothing)
       ],
     completionTest
       "type"
@@ -4331,8 +4328,8 @@ nonLocalCompletionTests =
       ],
     completionTest
       "duplicate import"
-      ["module A where", "import Data.List", "import Data.List", "f = perm"]
-      (Position 3 8)
+      ["module A where", "import Data.List", "import Data.List", "f = permu"]
+      (Position 3 9)
       [ ("permutations", CiFunction, "permutations ${1:([a])}", False, False, Nothing)
       ],
     completionTest
