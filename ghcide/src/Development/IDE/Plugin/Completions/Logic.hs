@@ -195,9 +195,11 @@ mkCompl
 
   where kind = Just compKind
         docs' = imported : spanDocToMarkdown docs
+        isImported = isNothing additionalTextEdits
+        definedOrImported = if isImported then "*Imported from '" else "*Defined in '"
         imported = case importedFrom of
           Left pos  -> "*Defined at '" <> ppr pos <> "'*\n'"
-          Right mod -> "*Defined in '" <> mod <> "'*\n"
+          Right mod -> definedOrImported <> mod <> "'*\n"
         colon = if optNewColonConvention then ": " else ":: "
         documentation = Just $ CompletionDocMarkup $
                         MarkupContent MkMarkdown $
