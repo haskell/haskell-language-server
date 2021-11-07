@@ -13,6 +13,7 @@ import qualified Data.Text                    as T
 import           Data.Aeson                   (FromJSON, ToJSON)
 import           Data.Text                    (Text)
 import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat   (ModuleName)
 import           Development.IDE.Spans.Common
 import           GHC.Generics                 (Generic)
 import           Ide.Plugin.Config            (Config)
@@ -66,10 +67,16 @@ data ExtendImport = ExtendImport
   deriving (Eq, Show, Generic)
   deriving anyclass (FromJSON, ToJSON)
 
+data Provenance
+    = ImportedFrom Text
+    | DefinedIn Text
+    | Local SrcSpan
+    deriving (Eq, Ord, Show)
+
 data CompItem = CI
   { compKind            :: CompletionItemKind
   , insertText          :: T.Text         -- ^ Snippet for the completion
-  , importedFrom        :: Either SrcSpan T.Text         -- ^ From where this item is imported from.
+  , provenance          :: Provenance     -- ^ From where this item is imported from.
   , typeText            :: Maybe T.Text   -- ^ Available type information.
   , label               :: T.Text         -- ^ Label to display to the user.
   , isInfix             :: Maybe Backtick -- ^ Did the completion happen
