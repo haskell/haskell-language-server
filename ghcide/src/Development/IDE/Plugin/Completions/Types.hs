@@ -13,7 +13,6 @@ import qualified Data.Text                    as T
 import           Data.Aeson                   (FromJSON, ToJSON)
 import           Data.Text                    (Text)
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Compat   (ModuleName)
 import           Development.IDE.Spans.Common
 import           GHC.Generics                 (Generic)
 import           Ide.Plugin.Config            (Config)
