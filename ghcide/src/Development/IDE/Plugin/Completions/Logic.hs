@@ -33,6 +33,7 @@ import           Data.Function                            (on)
 import           Data.Functor
 import qualified Data.HashMap.Strict                      as HM
 import qualified Data.HashSet                             as HashSet
+import           Data.Ord                                 (Down (Down))
 import qualified Data.Set                                 as Set
 import           Development.IDE.Core.Compile
 import           Development.IDE.Core.PositionMapping
@@ -540,6 +541,10 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
       enteredQual = if T.null prefixModule then "" else prefixModule <> "."
       fullPrefix  = enteredQual <> prefixText
 
+      -- Boolean labels to tag suggestions as qualified (or not)
+      qual = not(T.null prefixModule)
+      notQual = False
+
       {- correct the position by moving 'foo :: Int -> String ->    '
                                                                     ^
           to                             'foo :: Int -> String ->    '
@@ -556,7 +561,7 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
           $ (if T.null enteredQual then id else mapMaybe (T.stripPrefix enteredQual))
             allModNamesAsNS
 
-      filtCompls = Fuzzy.filter chunkSize maxC prefixText ctxCompls "" "" label False
+      filtCompls = Fuzzy.filter chunkSize maxC prefixText ctxCompls "" "" (label . snd)
         where
 
           mcc = case maybe_parsed of
@@ -571,11 +576,11 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
           -- completions specific to the current context
           ctxCompls' = case mcc of
                         Nothing           -> compls
-                        Just TypeContext  -> filter isTypeCompl compls
-                        Just ValueContext -> filter (not . isTypeCompl) compls
-                        Just _            -> filter (not . isTypeCompl) compls
+                        Just TypeContext  -> filter ( isTypeCompl . snd) compls
+                        Just ValueContext -> filter (not . isTypeCompl . snd) compls
+                        Just _            -> filter (not . isTypeCompl . snd) compls
           -- Add whether the text to insert has backticks
-          ctxCompls = map (\comp -> toggleAutoExtend config $ comp { isInfix = infixCompls }) ctxCompls'
+          ctxCompls = (fmap.fmap) (\comp -> toggleAutoExtend config $ comp { isInfix = infixCompls }) ctxCompls'
 
           infixCompls :: Maybe Backtick
           infixCompls = isUsedAsInfix fullLine prefixModule prefixText pos
@@ -595,9 +600,9 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
               thisModName = Local $ nameSrcSpan name
 
           compls = if T.null prefixModule
-            then localCompls ++ unqualCompls ++ (($Nothing) <$> anyQualCompls)
-            else Map.findWithDefault [] prefixModule (getQualCompls qualCompls)
-                 ++ (($ Just prefixModule) <$> anyQualCompls)
+            then map (notQual,) localCompls ++ map (qual,) unqualCompls ++ ((notQual,) . ($Nothing) <$> anyQualCompls)
+            else ((qual,) <$> Map.findWithDefault [] prefixModule (getQualCompls qualCompls))
+                 ++ ((notQual,) . ($ Just prefixModule) <$> anyQualCompls)
 
       filtListWith f list =
         [ fmap f label
@@ -629,13 +634,26 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
     -> return []
     | otherwise -> do
         -- assumes that nubOrdBy is stable
-        let uniqueFiltCompls = nubOrdBy (uniqueCompl `on` Fuzzy.original) filtCompls
-        let compls = (fmap.fmap) (mkCompl plId ideOpts) uniqueFiltCompls
-        return $ mergeListsBy (flip compare `on` score_)
-            [ filtModNameCompls
-            , filtKeywordCompls
-            , (fmap.fmap) (toggleSnippets caps config) compls
+        let uniqueFiltCompls = nubOrdBy (uniqueCompl `on` snd . Fuzzy.original) filtCompls
+        let compls = (fmap.fmap.fmap) (mkCompl plId ideOpts) uniqueFiltCompls
+        return $
+          (fmap.fmap) snd $
+          sortBy (compare `on` lexicographicOrdering) $
+          mergeListsBy (flip compare `on` score_)
+            [ (fmap.fmap) (notQual,) filtModNameCompls
+            , (fmap.fmap) (notQual,) filtKeywordCompls
+            , (fmap.fmap.fmap) (toggleSnippets caps config) compls
             ]
+    where
+        -- We use this ordering to alphabetically sort suggestions while respecting
+        -- all the previously applied ordering sources. These are:
+        --  1. Qualified suggestions go first
+        --  2. Fuzzy score ranks next
+        --  3. label alphabetical ordering next
+        --  4. module alphabetical ordering
+        lexicographicOrdering Fuzzy.Scored{score_, original=(isQual, CompletionItem{_label,_detail})} =
+            -- TODO uncomment the line below to sort alphabetically and fix tests
+            Down isQual -- , Down score_, _label, _detail)
 
 uniqueCompl :: CompItem -> CompItem -> Ordering
 uniqueCompl x y =
