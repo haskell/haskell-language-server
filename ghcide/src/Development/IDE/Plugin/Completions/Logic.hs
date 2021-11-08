@@ -639,8 +639,8 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
 
 uniqueCompl :: CompItem -> CompItem -> Ordering
 uniqueCompl x y =
-  case compare (label x, importedFrom (provenance x), compKind x)
-               (label y, importedFrom (provenance x), compKind y) of
+  case compare (label x, importedFrom x, compKind x)
+               (label y, importedFrom y, compKind y) of
     EQ ->
       -- preserve completions for duplicate record fields where the only difference is in the type
       -- remove redundant completions with less type info
@@ -651,10 +651,10 @@ uniqueCompl x y =
         else compare (insertText x) (insertText y)
     other -> other
   where
-      importedFrom :: Provenance -> T.Text
-      importedFrom (ImportedFrom m) = m
-      importedFrom (DefinedIn m)    = m
-      importedFrom (Local _)        = "local"
+      importedFrom :: CompItem -> T.Text
+      importedFrom (provenance -> ImportedFrom m) = m
+      importedFrom (provenance -> DefinedIn m)    = m
+      importedFrom (provenance -> Local _)        = "local"
 
 -- ---------------------------------------------------------------------
 -- helper functions for infix backticks
