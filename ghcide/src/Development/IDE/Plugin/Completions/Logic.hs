@@ -210,7 +210,7 @@ mkCompl
                         T.intercalate sectionSeparator docs'
         pprLineCol :: SrcLoc -> T.Text
         pprLineCol (UnhelpfulLoc fs) = T.pack $ unpackFS fs
-        pprLineCol (RealSrcLoc loc) =
+        pprLineCol (RealSrcLoc loc _) =
             "line " <> ppr(srcLocLine loc) <> ", column " <> ppr(srcLocCol loc)
 
 
