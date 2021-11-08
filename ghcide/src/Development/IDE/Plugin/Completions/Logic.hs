@@ -653,10 +653,16 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
         -- all the previously applied ordering sources. These are:
         --  1. Qualified suggestions go first
         --  2. Fuzzy score ranks next
-        --  3. label alphabetical ordering next
-        --  4. module alphabetical ordering
-        lexicographicOrdering Fuzzy.Scored{score_, original=(isQual, CompletionItem{_label,_detail})} =
-            (Down isQual, Down score_, _label, _detail)
+        --  3. In-scope completions rank next
+        --  4. label alphabetical ordering next
+        --  4. detail alphabetical ordering (proxy for module)
+        lexicographicOrdering Fuzzy.Scored{score_, original} =
+          case original of
+            (isQual, CompletionItem{_label,_detail}) -> do
+              let isLocal = maybe False (":" `T.isPrefixOf`) _detail
+              (Down isQual, Down score_, Down isLocal, _label, _detail)
+
+
 
 uniqueCompl :: CompItem -> CompItem -> Ordering
 uniqueCompl candidate unique =
