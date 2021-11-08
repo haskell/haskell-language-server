@@ -652,8 +652,7 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
         --  3. label alphabetical ordering next
         --  4. module alphabetical ordering
         lexicographicOrdering Fuzzy.Scored{score_, original=(isQual, CompletionItem{_label,_detail})} =
-            -- TODO uncomment the line below to sort alphabetically and fix tests
-            Down isQual -- , Down score_, _label, _detail)
+            (Down isQual, Down score_, _label, _detail)
 
 uniqueCompl :: CompItem -> CompItem -> Ordering
 uniqueCompl candidate unique =

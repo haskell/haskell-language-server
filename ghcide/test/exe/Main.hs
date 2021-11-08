@@ -4315,10 +4315,9 @@ nonLocalCompletionTests =
       ],
     completionTest
       "type"
-      ["{-# OPTIONS_GHC -Wall #-}", "module A () where", "f :: Bo", "f = True"]
-      (Position 2 7)
-      [ ("Bounded", CiInterface, "Bounded ${1:(*)}", True, True, Nothing),
-        ("Bool", CiStruct, "Bool ", True, True, Nothing)
+      ["{-# OPTIONS_GHC -Wall #-}", "module A () where", "f :: Boo", "f = True"]
+      (Position 2 8)
+      [ ("Bool", CiStruct, "Bool ", True, True, Nothing)
       ],
     completionTest
       "qualified"
@@ -4505,7 +4504,7 @@ otherCompletionTests = [
       _ <- waitForDiagnostics
       compls <- getCompletions docA $ Position 2 4
       let compls' = [txt | CompletionItem {_insertText = Just txt, ..} <- compls, _label == "member"]
-      liftIO $ take 2 compls' @?= ["member ${1:Foo}", "member ${1:Bar}"],
+      liftIO $ take 2 compls' @?= ["member ${1:Bar}", "member ${1:Foo}"],
 
     testSessionWait "maxCompletions" $ do
         doc <- createDoc "A.hs" "haskell" $ T.unlines
