@@ -20,7 +20,6 @@ import           Data.List.Extra                          as List hiding
 import qualified Data.Map                                 as Map
 
 import           Data.Maybe                               (fromMaybe, isJust,
-                                                           isNothing,
                                                            listToMaybe,
                                                            mapMaybe)
 import qualified Data.Text                                as T
@@ -178,7 +177,12 @@ mkCompl
                  {_label = label,
                   _kind = kind,
                   _tags = Nothing,
-                  _detail = (colon <>) <$> typeText,
+                  _detail =
+                      case (typeText, provenance) of
+                          (Just t,_) -> Just $ colon <> t
+                          (_, ImportedFrom mod) -> Just $ "from " <> mod
+                          (_, DefinedIn mod) -> Just $ "from " <> mod
+                          _ -> Nothing,
                   _documentation = documentation,
                   _deprecated = Nothing,
                   _preselect = Nothing,
