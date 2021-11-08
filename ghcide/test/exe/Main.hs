@@ -4600,7 +4600,7 @@ packageCompletionTests =
               , _label == "fromList"
               ]
         liftIO $ take 3 compls' @?=
-          map Just ["fromList ${1:([Item l])}", "fromList", "fromList"]
+          map Just ["fromList ${1:([Item l])}"]
   , testGroup "auto import snippets"
     [ completionCommandTest
             "import Data.Sequence"

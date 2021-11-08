@@ -656,19 +656,21 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
             Down isQual -- , Down score_, _label, _detail)
 
 uniqueCompl :: CompItem -> CompItem -> Ordering
-uniqueCompl x y =
-  case compare (label x, importedFrom x, compKind x)
-               (label y, importedFrom y, compKind y) of
+uniqueCompl candidate unique =
+  case compare (label candidate, compKind candidate)
+               (label unique, compKind unique) of
     EQ ->
       -- preserve completions for duplicate record fields where the only difference is in the type
-      -- remove redundant completions with less type info
-      if typeText x == typeText y
-        || isNothing (typeText x)
-        || isNothing (typeText y)
+      -- remove redundant completions with less type info than the previous
+      if (typeText candidate == typeText unique && isLocalCompletion unique)
+        -- filter global completions when we already have a local one
+        || not(isLocalCompletion candidate) && isLocalCompletion unique
         then EQ
-        else compare (insertText x) (insertText y)
+        else compare (importedFrom candidate, insertText candidate) (importedFrom unique, insertText unique)
     other -> other
   where
+      isLocalCompletion ci = isJust(typeText ci)
+
       importedFrom :: CompItem -> T.Text
       importedFrom (provenance -> ImportedFrom m) = m
       importedFrom (provenance -> DefinedIn m)    = m
