@@ -28,7 +28,7 @@ main = defaultTestRunner
             , Deferred.tests
             , Definition.tests
             , Diagnostic.tests
-            , Format.tests
+            , ignoreInEnv [HostOS Windows, GhcVer GHC90] "Tests gets stuck in ci" $ Format.tests
             , FunctionalBadProject.tests
             , FunctionalCodeAction.tests
             , FunctionalLiquid.tests
