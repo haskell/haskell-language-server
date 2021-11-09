@@ -1,5 +1,10 @@
 name: Benchmark
 
+# See: https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#concurrency.
+concurrency:
+  group: ${{ github.head_ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
 on:
   pull_request:
     branches:
@@ -14,7 +19,7 @@ jobs:
       - id: skip_check
         uses: fkirc/skip-duplicate-actions@v3.4.0
         with:
-          cancel_others: true
+          cancel_others: false
           paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", ".circleci/**", "install/**", "**.nix", "**/test/**", "flake.lock", "**/README.md", "FUNDING.yml"]'
 
   bench_init:
