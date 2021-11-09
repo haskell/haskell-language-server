@@ -1,5 +1,10 @@
 name: Nix
 
+# See: https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#concurrency.
+concurrency:
+  group: ${{ github.head_ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
 on:
   pull_request:
     branches:
