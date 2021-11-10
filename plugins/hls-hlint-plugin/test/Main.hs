@@ -321,7 +321,7 @@ hlintConfigWithFlags flags =
 -- * One when hlint uses ghc-lib (all ghc versions but the last version supported by hlint)
 -- * Another one when hlint uses directly ghc (only one version, which not have to be the last version supported by ghcide)
 -- As we always are using ghc through ghcide the code to get the ghc parsed AST differs
--- So the issues and bugs usually only affects to one oce path or the other.
+-- So the issues and bugs usually only affects to one code path or the other.
 -- Although a given hlint version supports one direct ghc, we could use several versions of hlint
 -- each one supporting a different ghc version. It should be a temporary situation though.
 knownBrokenForHlintOnGhcLib :: String -> TestTree -> TestTree
