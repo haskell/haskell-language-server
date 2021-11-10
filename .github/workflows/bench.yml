@@ -159,7 +159,7 @@ jobs:
            ghcide/bench-results/**/*.eventlog
            ghcide/bench-results/**/*.hp
 
-  post_job:
+  bench_post_job:
     if: always()
     runs-on: ubuntu-latest
     needs: [pre_job, bench_init, bench_example]
