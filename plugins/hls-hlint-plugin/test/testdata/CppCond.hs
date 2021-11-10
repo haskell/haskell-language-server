@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP #-}
-module ApplyRefact3 where
+module CppCond where
 
 #ifdef FLAG
 f = (1)

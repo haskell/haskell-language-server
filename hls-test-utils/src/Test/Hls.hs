@@ -194,17 +194,11 @@ runSessionWithServer' plugin conf sconf caps root s = withLock lock $ keepCurren
       putStrLn $ "Finishing canceling (took " <> showDuration t <> "s)"
   pure x
 
--- | Wait for all progress to be done
--- Needs at least one progress done notification to return
+-- | Wait for the next progress end step
 waitForProgressDone :: Session ()
-waitForProgressDone = loop
-  where
-    loop = do
-      () <- skipManyTill anyMessage $ satisfyMaybe $ \case
-        FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (End _))) -> Just ()
-        _ -> Nothing
-      done <- null <$> getIncompleteProgressSessions
-      unless done loop
+waitForProgressDone = skipManyTill anyMessage $ satisfyMaybe $ \case
+  FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (End _))) -> Just ()
+  _ -> Nothing
 
 -- | Wait for all progress to be done
 -- Needs at least one progress done notification to return
