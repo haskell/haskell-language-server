@@ -1,4 +1,4 @@
-module ApplyRefact2 where
+module CppHeader where
 
 #include "test.h"
 

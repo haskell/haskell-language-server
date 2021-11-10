@@ -2,4 +2,4 @@ cradle:
   direct:
     arguments:
       - "-XTypeApplications"
-      - "ApplyRefact1"
+      - "TypeApplications"
