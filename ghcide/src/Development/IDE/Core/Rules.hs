@@ -218,13 +218,9 @@ getParsedModuleRule =
         mainParse = getParsedModuleDefinition hsc opt file ms
         reset_ms pm = pm { pm_mod_summary = ms' }
 
-#if MIN_VERSION_ghc(9,0,1)
-    -- We no longer need to parse again if GHC version is above 9.0
-    -- https://github.com/haskell/haskell-language-server/issues/1892
-    res@(_,pmod) <- liftIO $ (fmap.fmap.fmap) reset_ms mainParse
-#else
     -- Parse again (if necessary) to capture Haddock parse errors
-    res@(_,pmod) <- if gopt Opt_Haddock dflags
+    -- We no longer need to parse again if GHC version is above 9.0. https://github.com/haskell/haskell-language-server/issues/1892
+    res@(_,pmod) <- if Compat.ghcVersion >= Compat.GHC90 || gopt Opt_Haddock dflags
         then
             liftIO $ (fmap.fmap.fmap) reset_ms mainParse
         else do
@@ -250,7 +246,6 @@ getParsedModuleRule =
               -- This seems to be the correct behaviour because the Haddock flag is added
               -- by us and not the user, so our IDE shouldn't stop working because of it.
               _ -> pure (diagsM, res)
-#endif
     -- Add dependencies on included files
     _ <- uses GetModificationTime $ map toNormalizedFilePath' (maybe [] pm_extra_src_files pmod)
     pure res
@@ -898,17 +893,14 @@ regenerateHiFile sess f ms compNeeded = do
 
     -- Embed haddocks in the interface file
     (diags, mb_pm) <- liftIO $ getParsedModuleDefinition hsc opt f (withOptHaddock ms)
-#if MIN_VERSION_ghc(9,0,1)
-    -- We no longer need to parse again if GHC version is above 9.0
-    -- https://github.com/haskell/haskell-language-server/issues/1892
-#else
-    (diags, mb_pm) <- case mb_pm of
-        Just _ -> return (diags, mb_pm)
-        Nothing -> do
+    (diags, mb_pm) <-
+        -- We no longer need to parse again if GHC version is above 9.0. https://github.com/haskell/haskell-language-server/issues/1892
+        if Compat.ghcVersion >= Compat.GHC90 || isJust mb_pm then do
+            return (diags, mb_pm)
+        else do
             -- if parsing fails, try parsing again with Haddock turned off
             (diagsNoHaddock, mb_pm) <- liftIO $ getParsedModuleDefinition hsc opt f ms
             return (mergeParseErrorsHaddock diagsNoHaddock diags, mb_pm)
-#endif
     case mb_pm of
         Nothing -> return (diags, Nothing)
         Just pm -> do
