@@ -66,10 +66,16 @@ data ExtendImport = ExtendImport
   deriving (Eq, Show, Generic)
   deriving anyclass (FromJSON, ToJSON)
 
+data Provenance
+    = ImportedFrom Text
+    | DefinedIn Text
+    | Local SrcSpan
+    deriving (Eq, Ord, Show)
+
 data CompItem = CI
   { compKind            :: CompletionItemKind
   , insertText          :: T.Text         -- ^ Snippet for the completion
-  , importedFrom        :: Either SrcSpan T.Text         -- ^ From where this item is imported from.
+  , provenance          :: Provenance     -- ^ From where this item is imported from.
   , typeText            :: Maybe T.Text   -- ^ Available type information.
   , label               :: T.Text         -- ^ Label to display to the user.
   , isInfix             :: Maybe Backtick -- ^ Did the completion happen

@@ -4112,7 +4112,8 @@ thLinkingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
 completionTests :: TestTree
 completionTests
   = testGroup "completion"
-    [ testGroup "non local" nonLocalCompletionTests
+    [
+    testGroup "non local" nonLocalCompletionTests
     , testGroup "topLevel" topLevelCompletionTests
     , testGroup "local" localCompletionTests
     , testGroup "package" packageCompletionTests
@@ -4193,15 +4194,13 @@ topLevelCompletionTests = [
         "variable"
         ["bar = xx", "-- | haddock", "xxx :: ()", "xxx = ()", "-- | haddock", "data Xxx = XxxCon"]
         (Position 0 8)
-        [("xxx", CiFunction, "xxx", True, True, Nothing),
-         ("XxxCon", CiConstructor, "XxxCon", False, True, Nothing)
+        [("xxx", CiFunction, "xxx", True, True, Nothing)
         ],
     completionTest
         "constructor"
         ["bar = xx", "-- | haddock", "xxx :: ()", "xxx = ()", "-- | haddock", "data Xxx = XxxCon"]
         (Position 0 8)
-        [("xxx", CiFunction, "xxx", True, True, Nothing),
-         ("XxxCon", CiConstructor, "XxxCon", False, True, Nothing)
+        [("xxx", CiFunction, "xxx", True, True, Nothing)
         ],
     completionTest
         "class method"
@@ -4315,17 +4314,15 @@ nonLocalCompletionTests =
       [("head", CiFunction, "head ${1:([a])}", True, True, Nothing)],
     completionTest
       "constructor"
-      ["module A where", "f = Tru"]
-      (Position 1 7)
-      [ ("True", CiConstructor, "True ", True, True, Nothing),
-        ("truncate", CiFunction, "truncate ${1:a}", True, True, Nothing)
+      ["{-# OPTIONS_GHC -Wall #-}", "module A where", "f = True"]
+      (Position 2 8)
+      [ ("True", CiConstructor, "True ", True, True, Nothing)
       ],
     completionTest
       "type"
-      ["{-# OPTIONS_GHC -Wall #-}", "module A () where", "f :: Bo", "f = True"]
-      (Position 2 7)
-      [ ("Bounded", CiInterface, "Bounded ${1:(*)}", True, True, Nothing),
-        ("Bool", CiStruct, "Bool ", True, True, Nothing)
+      ["{-# OPTIONS_GHC -Wall #-}", "module A () where", "f :: Boo", "f = True"]
+      (Position 2 8)
+      [ ("Bool", CiStruct, "Bool ", True, True, Nothing)
       ],
     completionTest
       "qualified"
@@ -4335,8 +4332,8 @@ nonLocalCompletionTests =
       ],
     completionTest
       "duplicate import"
-      ["module A where", "import Data.List", "import Data.List", "f = perm"]
-      (Position 3 8)
+      ["module A where", "import Data.List", "import Data.List", "f = permu"]
+      (Position 3 9)
       [ ("permutations", CiFunction, "permutations ${1:([a])}", False, False, Nothing)
       ],
     completionTest
@@ -4512,7 +4509,7 @@ otherCompletionTests = [
       _ <- waitForDiagnostics
       compls <- getCompletions docA $ Position 2 4
       let compls' = [txt | CompletionItem {_insertText = Just txt, ..} <- compls, _label == "member"]
-      liftIO $ take 2 compls' @?= ["member ${1:Foo}", "member ${1:Bar}"],
+      liftIO $ take 2 compls' @?= ["member ${1:Bar}", "member ${1:Foo}"],
 
     testSessionWait "maxCompletions" $ do
         doc <- createDoc "A.hs" "haskell" $ T.unlines
@@ -4607,7 +4604,7 @@ packageCompletionTests =
               , _label == "fromList"
               ]
         liftIO $ take 3 compls' @?=
-          map Just ["fromList ${1:([Item l])}", "fromList", "fromList"]
+          map Just ["fromList ${1:([Item l])}"]
   , testGroup "auto import snippets"
     [ completionCommandTest
             "import Data.Sequence"
@@ -4664,7 +4661,41 @@ projectCompletionTests =
         compls <- getCompletions doc (Position 1 13)
         let item = head $ filter ((== "ALocalModule") . (^. Lens.label)) compls
         liftIO $ do
-          item ^. Lens.label @?= "ALocalModule"
+          item ^. Lens.label @?= "ALocalModule",
+      testSession' "auto complete functions from qualified imports without alias" $ \dir-> do
+        liftIO $ writeFile (dir </> "hie.yaml")
+            "cradle: {direct: {arguments: [\"-Wmissing-signatures\", \"A\", \"B\"]}}"
+        _ <- createDoc "A.hs" "haskell" $ T.unlines
+            [  "module A (anidentifier) where",
+               "anidentifier = ()"
+            ]
+        _ <- waitForDiagnostics
+        doc <- createDoc "B.hs" "haskell" $ T.unlines
+            [ "module B where",
+              "import qualified A",
+              "A."
+            ]
+        compls <- getCompletions doc (Position 2 2)
+        let item = head compls
+        liftIO $ do
+          item ^. L.label @?= "anidentifier",
+      testSession' "auto complete functions from qualified imports with alias" $ \dir-> do
+        liftIO $ writeFile (dir </> "hie.yaml")
+            "cradle: {direct: {arguments: [\"-Wmissing-signatures\", \"A\", \"B\"]}}"
+        _ <- createDoc "A.hs" "haskell" $ T.unlines
+            [  "module A (anidentifier) where",
+               "anidentifier = ()"
+            ]
+        _ <- waitForDiagnostics
+        doc <- createDoc "B.hs" "haskell" $ T.unlines
+            [ "module B where",
+              "import qualified A as Alias",
+              "foo = Alias."
+            ]
+        compls <- getCompletions doc (Position 2 12)
+        let item = head compls
+        liftIO $ do
+          item ^. L.label @?= "anidentifier"
     ]
 
 highlightTests :: TestTree

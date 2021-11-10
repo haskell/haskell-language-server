@@ -36,6 +36,6 @@ main = defaultTestRunner
             , Highlight.tests
             , ignoreInEnv [HostOS Windows, GhcVer GHC90] "Tests gets stuck in ci" $ Progress.tests
             , Reference.tests
-            , Symbol.tests
+            , ignoreInEnv [HostOS Windows, GhcVer GHC90] "Tests gets stuck in ci" $ Symbol.tests
             , TypeDefinition.tests
             ]
