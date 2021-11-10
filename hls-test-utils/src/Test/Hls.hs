@@ -177,7 +177,10 @@ runSessionWithServer' plugin conf sconf caps root s = withLock lock $ keepCurren
             argsDefaultHlsConfig = conf,
             argsLogger = logger,
             argsIdeOptions = \config sessionLoader ->
-              let ideOptions = (argsIdeOptions def config sessionLoader) {optTesting = IdeTesting True}
+              let ideOptions = (argsIdeOptions def config sessionLoader)
+                    {optTesting = IdeTesting True
+                    ,optCheckProject = pure False
+                    }
                in ideOptions {optShakeOptions = (optShakeOptions ideOptions) {shakeThreads = 2}},
             argsHlsPlugins = pluginDescToIdePlugins $ plugin ++ idePluginsToPluginDesc (argsHlsPlugins testing)
           }
