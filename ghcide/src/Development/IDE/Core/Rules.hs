@@ -217,10 +217,6 @@ getParsedModuleRule =
     let dflags    = ms_hspp_opts ms
         mainParse = getParsedModuleDefinition hsc opt file ms
         reset_ms pm = pm { pm_mod_summary = ms' }
-
-    -- Parse again (if necessary) to capture Haddock parse errors
-    -- We no longer need to parse again if GHC version is above 9.0. https://github.com/haskell/haskell-language-server/issues/1892
-    res@(_,pmod) <- if Compat.ghcVersion >= Compat.GHC90 || gopt Opt_Haddock dflags
     res@(_,pmod) <- if gopt Opt_Haddock dflags
         then
             liftIO $ (fmap.fmap.fmap) reset_ms mainParse
