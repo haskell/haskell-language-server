@@ -1,4 +1,4 @@
 cradle:
   direct:
     arguments:
-      - "CamelCase"
+      - "UnusedExtension"
