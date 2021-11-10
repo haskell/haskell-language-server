@@ -45,6 +45,7 @@ import           Development.IDE.Core.RuleTypes (GhcSession (GhcSession),
                                                  GhcSessionIO (GhcSessionIO))
 import           Development.IDE.Graph          (Action)
 import           Development.IDE.Graph.Rule
+import           Development.IDE.Types.Diagnostics (FileDiagnostic, showDiagnostics)
 import           Development.IDE.Types.Location (Uri (..))
 import           Development.IDE.Types.Logger   (Logger (Logger), logDebug,
                                                  logInfo)
@@ -128,7 +129,7 @@ otTracedAction
     -> NormalizedFilePath -- ^ Path to the file the action was run for
     -> RunMode
     -> (a -> String)
-    -> Action (RunResult a) -- ^ The action
+    -> (([FileDiagnostic] -> Action ()) -> Action (RunResult a)) -- ^ The action
     -> Action (RunResult a)
 otTracedAction key file mode result act
   | userTracingEnabled = fst <$>
@@ -148,8 +149,8 @@ otTracedAction key file mode result act
                 setTag sp "changed" $ case res of
                     RunResult x _ _ -> fromString $ show x
           endSpan sp)
-        (const act)
-  | otherwise = act
+        (\sp -> act (liftIO . setTag sp "diagnostics" . encodeUtf8 . showDiagnostics ))
+  | otherwise = act (\_ -> return ())
 
 otTracedGarbageCollection label act
   | userTracingEnabled = fst <$>
@@ -296,3 +297,4 @@ repeatUntilJust nattempts action = do
     case res of
         Nothing -> repeatUntilJust (nattempts-1) action
         Just{}  -> return res
+

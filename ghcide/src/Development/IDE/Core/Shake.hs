@@ -956,14 +956,26 @@ defineEarlyCutoff
     :: IdeRule k v
     => RuleBody k v
     -> Rules ()
-defineEarlyCutoff (Rule op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ do
-    defineEarlyCutoff' True (==) key file old mode $ op key file
-defineEarlyCutoff (RuleNoDiagnostics op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ do
-    defineEarlyCutoff' False (==) key file old mode $ second (mempty,) <$> op key file
+defineEarlyCutoff (Rule op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ \traceDiagnostics -> do
+    extras <- getShakeExtras
+    let diagnostics diags = do
+            traceDiagnostics diags
+            updateFileDiagnostics file (Key key) extras . map (\(_,y,z) -> (y,z)) $ diags
+    defineEarlyCutoff' diagnostics (==) key file old mode $ op key file
+defineEarlyCutoff (RuleNoDiagnostics op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ \traceDiagnostics -> do
+    ShakeExtras{logger} <- getShakeExtras
+    let diagnostics diags = do
+            traceDiagnostics diags
+            mapM_ (\d -> liftIO $ logWarning logger $ showDiagnosticsColored [d]) diags
+    defineEarlyCutoff' diagnostics (==) key file old mode $ second (mempty,) <$> op key file
 defineEarlyCutoff RuleWithCustomNewnessCheck{..} =
     addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode ->
-        otTracedAction key file mode traceA $
-            defineEarlyCutoff' False newnessCheck key file old mode $
+        otTracedAction key file mode traceA $ \ traceDiagnostics -> do
+            ShakeExtras{logger} <- getShakeExtras
+            let diagnostics diags = do
+                    mapM_ (\d -> liftIO $ logWarning logger $ showDiagnosticsColored [d]) diags
+                    traceDiagnostics diags
+            defineEarlyCutoff' diagnostics newnessCheck key file old mode $
                 second (mempty,) <$> build key file
 
 defineNoFile :: IdeRule k v => (k -> Action v) -> Rules ()
@@ -978,7 +990,7 @@ defineEarlyCutOffNoFile f = defineEarlyCutoff $ RuleNoDiagnostics $ \k file -> d
 
 defineEarlyCutoff'
     :: IdeRule k v
-    => Bool  -- ^ update diagnostics
+    => ([FileDiagnostic] -> Action ()) -- ^ update diagnostics
     -- | compare current and previous for freshness
     -> (BS.ByteString -> BS.ByteString -> Bool)
     -> k
@@ -988,7 +1000,7 @@ defineEarlyCutoff'
     -> Action (Maybe BS.ByteString, IdeResult v)
     -> Action (RunResult (A (RuleResult k)))
 defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
-    extras@ShakeExtras{state, progress, logger, dirtyKeys} <- getShakeExtras
+    ShakeExtras{state, progress, dirtyKeys} <- getShakeExtras
     options <- getIdeOptions
     (if optSkipProgress options key then id else inProgress progress file) $ do
         val <- case old of
@@ -998,8 +1010,7 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
                     -- No changes in the dependencies and we have
                     -- an existing successful result.
                     Just (v@Succeeded{}, diags) -> do
-                        when doDiagnostics $
-                            updateFileDiagnostics file (Key key) extras $ map (\(_,y,z) -> (y,z)) $ Vector.toList diags
+                        doDiagnostics $ Vector.toList diags
                         return $ Just $ RunResult ChangedNothing old $ A v
                     _ -> return Nothing
             _ ->
@@ -1028,9 +1039,7 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
                                     (toShakeValue ShakeResult bs, Failed b)
                     Just v -> pure (maybe ShakeNoCutoff ShakeResult bs, Succeeded (vfsVersion =<< modTime) v)
                 liftIO $ setValues state key file res (Vector.fromList diags)
-                if doDiagnostics
-                    then updateFileDiagnostics file (Key key) extras $ map (\(_,y,z) -> (y,z)) diags
-                    else forM_ diags $ \d -> liftIO $ logWarning logger $ showDiagnosticsColored [d]
+                doDiagnostics diags
                 let eq = case (bs, fmap decodeShakeValue old) of
                         (ShakeResult a, Just (ShakeResult b)) -> cmp a b
                         (ShakeStale a, Just (ShakeStale b))   -> cmp a b
