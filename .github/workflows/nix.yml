@@ -21,12 +21,12 @@ jobs:
       should_skip_build: ${{ steps.skip_check_no_nix.outputs.should_skip }}
     steps:
       - id: skip_check
-        uses: fkirc/skip-duplicate-actions@master
+        uses: fkirc/skip-duplicate-actions@v3.4.1
         with:
           cancel_others: false
           paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", ".circleci/**", "install/**", "**/README.md", "FUNDING.yml"]'
       - id: skip_check_no_nix
-        uses: fkirc/skip-duplicate-actions@master
+        uses: fkirc/skip-duplicate-actions@v3.4.1
         with:
           cancel_others: false
           paths: '["**.nix"]'
