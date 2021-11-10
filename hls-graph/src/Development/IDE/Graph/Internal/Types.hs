@@ -1,6 +1,9 @@
 
 
+{-# LANGUAGE DeriveAnyClass             #-}
 {-# LANGUAGE DeriveFunctor              #-}
+{-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE DerivingStrategies         #-}
 {-# LANGUAGE ExistentialQuantification  #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
@@ -14,6 +17,7 @@ import           Control.Monad.Catch
 import           Control.Monad.Fail
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Reader
+import           Data.Aeson                            (FromJSON, ToJSON)
 import qualified Data.ByteString                       as BS
 import           Data.Dynamic
 import qualified Data.HashMap.Strict                   as Map
@@ -24,6 +28,7 @@ import           Data.Typeable
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Graph.Internal.Ids
 import           Development.IDE.Graph.Internal.Intern
+import           GHC.Generics                          (Generic)
 import           System.Time.Extra                     (Seconds)
 
 
@@ -38,7 +43,7 @@ unwrapDynamic x = fromMaybe (error msg) $ fromDynamic x
 type TheRules = Map.HashMap TypeRep Dynamic
 
 newtype Rules a = Rules (ReaderT SRules IO a)
-    deriving (Monad, Applicative, Functor, MonadIO, MonadFail)
+    deriving newtype (Monad, Applicative, Functor, MonadIO, MonadFail)
 
 data SRules = SRules {
     rulesExtra   :: !Dynamic,
@@ -51,7 +56,7 @@ data SRules = SRules {
 -- ACTIONS
 
 newtype Action a = Action {fromAction :: ReaderT SAction IO a}
-    deriving (Monad, Applicative, Functor, MonadIO, MonadFail, MonadThrow, MonadCatch, MonadMask)
+    deriving newtype (Monad, Applicative, Functor, MonadIO, MonadFail, MonadThrow, MonadCatch, MonadMask)
 
 data SAction = SAction {
     actionDatabase :: !Database,
@@ -65,7 +70,7 @@ getDatabase = Action $ asks actionDatabase
 -- DATABASE
 
 newtype Step = Step Int
-    deriving (Eq,Ord,Hashable)
+    deriving newtype (Eq,Ord,Hashable)
 
 data Key = forall a . (Typeable a, Eq a, Hashable a, Show a) => Key a
 
@@ -151,7 +156,8 @@ data RunChanged
     | ChangedStore -- ^ The stored value has changed, but in a way that should be considered identical (used rarely).
     | ChangedRecomputeSame -- ^ I recomputed the value and it was the same.
     | ChangedRecomputeDiff -- ^ I recomputed the value and it was different.
-      deriving (Eq,Show)
+      deriving (Eq,Show,Generic)
+      deriving anyclass (FromJSON, ToJSON)
 
 instance NFData RunChanged where rnf x = x `seq` ()
 

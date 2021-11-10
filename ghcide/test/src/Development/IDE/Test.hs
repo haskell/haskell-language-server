@@ -21,7 +21,6 @@ module Development.IDE.Test
   , standardizeQuotes
   , flushMessages
   , waitForAction
-  , getLastBuildKeys
   , getInterfaceFilesDir
   , garbageCollectDirtyKeys
   , getFilesOfInterest
@@ -30,7 +29,7 @@ module Development.IDE.Test
   , getStoredKeys
   , waitForCustomMessage
   , waitForGC
-  ) where
+  ,getBuildKeysBuilt,getBuildKeysVisited,getBuildKeysChanged,getBuildEdgesCount) where
 
 import           Control.Applicative.Combinators
 import           Control.Lens                    hiding (List)
@@ -197,8 +196,17 @@ waitForAction :: String -> TextDocumentIdentifier -> Session WaitForIdeRuleResul
 waitForAction key TextDocumentIdentifier{_uri} =
     callTestPlugin (WaitForIdeRule key _uri)
 
-getLastBuildKeys :: Session [T.Text]
-getLastBuildKeys = callTestPlugin GetLastBuildKeys
+getBuildKeysBuilt :: Session [T.Text]
+getBuildKeysBuilt = callTestPlugin GetBuildKeysBuilt
+
+getBuildKeysVisited :: Session [T.Text]
+getBuildKeysVisited = callTestPlugin GetBuildKeysVisited
+
+getBuildKeysChanged :: Session [T.Text]
+getBuildKeysChanged = callTestPlugin GetBuildKeysChanged
+
+getBuildEdgesCount :: Session Int
+getBuildEdgesCount = callTestPlugin GetBuildEdgesCount
 
 getInterfaceFilesDir :: TextDocumentIdentifier -> Session FilePath
 getInterfaceFilesDir TextDocumentIdentifier{_uri} = callTestPlugin (GetInterfaceFilesDir _uri)
