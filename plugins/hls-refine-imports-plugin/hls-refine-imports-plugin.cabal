@@ -24,7 +24,7 @@ library
     , containers
     , deepseq
     , ghc
-    , ghcide                       ^>=1.4
+    , ghcide                       ^>=1.4 || ^>=1.5
     , hls-explicit-imports-plugin  ^>=1.0.0.1
     , hls-graph
     , hls-plugin-api               >=1.1     && <1.3

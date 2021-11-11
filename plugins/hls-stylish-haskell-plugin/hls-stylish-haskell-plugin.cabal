@@ -24,7 +24,7 @@ library
     , filepath
     , ghc
     , ghc-boot-th
-    , ghcide           >=1.2  && <1.5
+    , ghcide           >=1.2  && <1.6
     , hls-plugin-api   >=1.1  && <1.3
     , lsp-types
     , stylish-haskell  ^>=0.12 || ^>=0.13
