@@ -40,6 +40,7 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Maybe
 import           Data.Coerce                          (coerce)
+import           Data.Set                             (Set)
 import qualified Data.HashMap.Strict                  as HM
 import qualified Data.Map.Strict                      as M
 import           Data.Maybe
@@ -163,8 +164,12 @@ documentHighlight hf rf pos = pure highlights
       n <- ns
       ref <- fromMaybe [] (M.lookup (Right n) rf)
       pure $ makeHighlight ref
+
+    makeHighlight :: (RealSrcSpan, IdentifierDetails a) -> DocumentHighlight
     makeHighlight (sp,dets) =
       DocumentHighlight (realSrcSpanToRange sp) (Just $ highlightType $ identInfo dets)
+
+    highlightType :: Set ContextInfo -> DocumentHighlightKind
     highlightType s =
       if any (isJust . getScopeFromContext) s
         then HkWrite
