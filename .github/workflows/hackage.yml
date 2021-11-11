@@ -23,6 +23,15 @@ jobs:
                   "hls-call-hierarchy-plugin",
                   "haskell-language-server"]
         ghc: ["9.0.1", "8.10.7", "8.8.4", "8.6.5"]
+        exclude:
+        - ghc: "9.0.1"
+          package: "hls-brittany-plugin"
+        - ghc: "9.0.1"
+          package: "hls-stylish-haskell-plugin"
+        - ghc: "9.0.1"
+          package: "hls-class-plugin"
+        - ghc: "9.0.1"
+          package: "hls-tactics-plugin"
 
     steps:
 
