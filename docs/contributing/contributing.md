@@ -113,16 +113,32 @@ $ cabal run haskell-language-server:func-test -- -p "hlint enables"
 
 ## Using HLS on HLS code
 
-[HLS project configuration guidelines](../configuration.md#configuring-your-project-build) also apply to the HLS project itself.
+Project source code should load without `hie.yaml` setup.
 
-Note: HLS implicitly detects HLS codebase as a Stack project (see [hie-bios implicit configuration documentation](https://github.com/haskell/hie-bios/blob/master/README.md#implicit-configuration)).
-If you want HLS to use Cabal, you need to create an `hie.yaml` file:
+In other cases:
+
+1. Check if `hie.yaml` (& `hie.yml`) files left from previous configurations.
+
+2. If the main project needs special configuration, note that other internal subprojects probably also would need configuration.
+
+To create an explicit configuration for all projects - use [implicit-hie](https://github.com/Avi-D-coder/implicit-hie) generator directly:
+
+```shell
+gen-hie > hie.yaml  # into the main HLS directory
+```
+
+that configuration should help.
+
+3. Inspect & tune configuration explicitly.
+
+[Configuring project build](../configuration.md#configuring-your-project-build) applies to HLS project source code loading just as to any other.
+
+Note: HLS may implicitly detect codebase as a Stack project (see [hie-bios implicit configuration documentation](https://github.com/haskell/hie-bios/blob/master/README.md#implicit-configuration)). To use Cabal, try creating an `hie.yaml` file:
+
 ```yaml
 cradle:
   cabal:
 ```
-
-Also note that the `install/` subdirectory is a different project, so if you want to work on this part of the code, you may also have to create an `install/hie.yaml` file.
 
 ### Manually testing your hacked HLS
 If you want to test HLS while hacking on it, follow the steps below.
