@@ -102,12 +102,14 @@ jobs:
         if: steps.get-hackage-version.outputs.exists != 'true'
         run: |
           # TODO: remove when not needed
+          cd $(ls -d ./incoming/${{ matrix.package }}-*)
           echo "allow-newer: Chart-diagrams:diagrams-core, SVGFonts:diagrams-core," >> cabal.project
 
       - name: "Add temporary needed allow-newer for ghc-9.0"
         if: steps.get-hackage-version.outputs.exists != 'true' && matrix.ghc == '9.0.1'
         run: |
           # TODO: remove when not needed
+          cd $(ls -d ./incoming/${{ matrix.package }}-*)
           # For brittany
           echo " brittany:base, brittany:ghc, brittany:ghc-boot-th, butcher:base, multistate:base, czipwith:base, czipwith:template-haskell, data-tree-print:base," >> cabal.project
           # For floskell and stylish-haskell
