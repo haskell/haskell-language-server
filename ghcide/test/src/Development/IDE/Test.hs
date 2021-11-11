@@ -21,7 +21,6 @@ module Development.IDE.Test
   , standardizeQuotes
   , flushMessages
   , waitForAction
-  , getLastBuildKeys
   , getInterfaceFilesDir
   , garbageCollectDirtyKeys
   , getFilesOfInterest
@@ -30,7 +29,7 @@ module Development.IDE.Test
   , getStoredKeys
   , waitForCustomMessage
   , waitForGC
-  ) where
+  ,getBuildKeysBuilt,getBuildKeysVisited,getBuildKeysChanged,getBuildEdgesCount) where
 
 import           Control.Applicative.Combinators
 import           Control.Lens                    hiding (List)
@@ -182,23 +181,40 @@ canonicalizeUri uri = filePathToUri <$> canonicalizePath (fromJust (uriToFilePat
 diagnostic :: Session (NotificationMessage TextDocumentPublishDiagnostics)
 diagnostic = LspTest.message STextDocumentPublishDiagnostics
 
-callTestPlugin :: (A.FromJSON b) => TestRequest -> Session b
-callTestPlugin cmd = do
+tryCallTestPlugin :: (A.FromJSON b) => TestRequest -> Session (Either ResponseError b)
+tryCallTestPlugin cmd = do
     let cm = SCustomMethod "test"
     waitId <- sendRequest cm (A.toJSON cmd)
     ResponseMessage{_result} <- skipManyTill anyMessage $ responseForId cm waitId
     return $ case _result of
-         Left (ResponseError t err _) -> error $ show t <> ": " <> T.unpack err
+         Left e -> Left e
          Right json -> case A.fromJSON json of
-             A.Success a -> a
+             A.Success a -> Right a
              A.Error e   -> error e
+
+callTestPlugin :: (A.FromJSON b) => TestRequest -> Session b
+callTestPlugin cmd = do
+    res <- tryCallTestPlugin cmd
+    case res of
+        Left (ResponseError t err _) -> error $ show t <> ": " <> T.unpack err
+        Right a                      -> pure a
+
 
 waitForAction :: String -> TextDocumentIdentifier -> Session WaitForIdeRuleResult
 waitForAction key TextDocumentIdentifier{_uri} =
     callTestPlugin (WaitForIdeRule key _uri)
 
-getLastBuildKeys :: Session [T.Text]
-getLastBuildKeys = callTestPlugin GetLastBuildKeys
+getBuildKeysBuilt :: Session (Either ResponseError [T.Text])
+getBuildKeysBuilt = tryCallTestPlugin GetBuildKeysBuilt
+
+getBuildKeysVisited :: Session (Either ResponseError [T.Text])
+getBuildKeysVisited = tryCallTestPlugin GetBuildKeysVisited
+
+getBuildKeysChanged :: Session (Either ResponseError [T.Text])
+getBuildKeysChanged = tryCallTestPlugin GetBuildKeysChanged
+
+getBuildEdgesCount :: Session (Either ResponseError Int)
+getBuildEdgesCount = tryCallTestPlugin GetBuildEdgesCount
 
 getInterfaceFilesDir :: TextDocumentIdentifier -> Session FilePath
 getInterfaceFilesDir TextDocumentIdentifier{_uri} = callTestPlugin (GetInterfaceFilesDir _uri)

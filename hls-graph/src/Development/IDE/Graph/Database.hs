@@ -9,10 +9,9 @@ module Development.IDE.Graph.Database(
     shakeRunDatabaseForKeys,
     shakeProfileDatabase,
     shakeGetBuildStep,
-    shakeGetDatabaseKeys,
     shakeGetDirtySet,
-    shakeLastBuildKeys
-    ) where
+    shakeGetCleanKeys
+    ,shakeGetBuildEdges) where
 import           Data.Dynamic
 import           Data.IORef                              (readIORef)
 import           Data.Maybe
@@ -48,11 +47,6 @@ shakeGetDirtySet :: ShakeDatabase -> IO [(Key, Int)]
 shakeGetDirtySet (ShakeDatabase _ _ db) =
     fmap snd <$> Development.IDE.Graph.Internal.Database.getDirtySet db
 
--- | Returns ann approximation of the database keys,
---   annotated with how long ago (in # builds) they were visited
-shakeGetDatabaseKeys :: ShakeDatabase -> IO [(Key, Int)]
-shakeGetDatabaseKeys (ShakeDatabase _ _ db) = getKeysAndVisitAge db
-
 -- | Returns the build number
 shakeGetBuildStep :: ShakeDatabase -> IO Int
 shakeGetBuildStep (ShakeDatabase _ _ db) = do
@@ -78,9 +72,15 @@ shakeRunDatabaseForKeys keysChanged (ShakeDatabase lenAs1 as1 db) as2 = do
 shakeProfileDatabase :: ShakeDatabase -> FilePath -> IO ()
 shakeProfileDatabase (ShakeDatabase _ _ s) file = writeProfile file s
 
--- | Returns the set of keys built in the most recent step
-shakeLastBuildKeys :: ShakeDatabase -> IO [Key]
-shakeLastBuildKeys (ShakeDatabase _ _ db) = do
+-- | Returns the clean keys in the database
+shakeGetCleanKeys :: ShakeDatabase -> IO [(Key, Result )]
+shakeGetCleanKeys (ShakeDatabase _ _ db) = do
     keys <- Ids.elems $ databaseValues db
-    step <- readIORef $ databaseStep db
-    return [ k | (k, Clean res) <- keys, resultBuilt res == step ]
+    return [ (k,res) | (k, Clean res) <- keys]
+
+-- | Returns the total count of edges in the build graph
+shakeGetBuildEdges :: ShakeDatabase -> IO Int
+shakeGetBuildEdges (ShakeDatabase _ _ db) = do
+    keys <- Ids.elems $ databaseValues db
+    let ress = mapMaybe (getResult . snd) keys
+    return $ sum $ map (length . getResultDepsDefault [] . resultDeps) ress
