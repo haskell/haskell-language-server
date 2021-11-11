@@ -100,6 +100,21 @@ jobs:
           # TODO: remove when not needed
           echo "allow-newer: Chart-diagrams:diagrams-core, SVGFonts:diagrams-core, czipwith:base, czipwith:template-haskell" >> cabal.project
 
+      - name: "Add temporary needed allow-newer"
+        if: steps.get-hackage-version.outputs.exists != 'true'
+        run: |
+          # TODO: remove when not needed
+          echo "allow-newer: Chart-diagrams:diagrams-core, SVGFonts:diagrams-core" >> cabal.project
+
+      - name: "Add temporary needed allow-newer for ghc-9.0"
+        if: steps.get-hackage-version.outputs.exists != 'true' && matrix.ghc == '9.0.1'
+        run: |
+          # TODO: remove when not needed
+          # For brittany
+          echo "allow-newer: czipwith:base, czipwith:template-haskell, brittany:base, brittany:ghc, brittany:ghc-boot-th, butcher:base, multistate:base, czipwith:base, czipwith:template-haskell" >> cabal.project
+          # For floskell and stylish-haskell
+          echo "floskell:base,floskell:ghc-prim,stylish-haskell:Cabal" >> cabal.project
+
       - name: "Build all package components in isolation"
         if: steps.get-hackage-version.outputs.exists != 'true'
         run: |
