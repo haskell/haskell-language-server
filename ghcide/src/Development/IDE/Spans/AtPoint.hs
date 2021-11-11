@@ -387,7 +387,7 @@ defRowToSymbolInfo (DefRow{..}:.(modInfoSrcFile -> Just srcFile))
 defRowToSymbolInfo _ = Nothing
 
 pointCommand :: HieASTs t -> Position -> (HieAST t -> a) -> [a]
-pointCommand hf pos k =
+pointCommand hf pos getter =
     catMaybes $ M.elems $ flip M.mapWithKey (getAsts hf) $ \fs ast ->
       -- Since GHC 9.2:
       -- getAsts :: Map HiePath (HieAst a)
@@ -399,9 +399,8 @@ pointCommand hf pos k =
       --
       -- 'coerce' here to avoid an additional function for maintaining
       -- backwards compatibility.
-      case selectSmallestContaining (sp $ coerce fs) ast of
-        Nothing   -> Nothing
-        Just ast' -> Just $ k ast'
+      let smallestRange = selectSmallestContaining (sp $ coerce fs) ast in
+      fmap getter smallestRange
  where
    sloc fs = mkRealSrcLoc fs (line+1) (cha+1)
    sp fs = mkRealSrcSpan (sloc fs) (sloc fs)
