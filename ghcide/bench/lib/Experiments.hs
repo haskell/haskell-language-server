@@ -26,6 +26,7 @@ import           Control.Exception.Safe          (IOException, handleAny, try)
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Data.Aeson                      (Value (Null), toJSON)
+import           Data.Either                     (fromRight)
 import           Data.List
 import           Data.Maybe
 import qualified Data.Text                       as T
@@ -496,10 +497,10 @@ runBench runSess b = handleAny (\e -> print e >> return badRun)
           (userWaits, delayedWork) = fromMaybe (0,0) result
 
       rulesTotal <- length <$> getStoredKeys
-      rulesBuilt <- length <$> getBuildKeysBuilt
-      rulesChanged <- length <$> getBuildKeysChanged
-      rulesVisited <- length <$> getBuildKeysVisited
-      edgesTotal   <- getBuildEdgesCount
+      rulesBuilt <- either (const 0) length <$> getBuildKeysBuilt
+      rulesChanged <- either (const 0) length <$> getBuildKeysChanged
+      rulesVisited <- either (const 0) length <$> getBuildKeysVisited
+      edgesTotal   <- fromRight 0 <$> getBuildEdgesCount
 
       return BenchRun {..}
 
