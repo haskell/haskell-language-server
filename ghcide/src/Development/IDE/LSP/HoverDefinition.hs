@@ -24,14 +24,14 @@ import           Language.LSP.Types
 
 import qualified Data.Text                      as T
 
-gotoDefinition :: IdeState -> TextDocumentPositionParams -> LSP.LspM c (Either ResponseError (ResponseResult TextDocumentDefinition))
-hover          :: IdeState -> TextDocumentPositionParams -> LSP.LspM c (Either ResponseError (Maybe Hover))
+gotoDefinition     :: IdeState -> TextDocumentPositionParams -> LSP.LspM c (Either ResponseError (ResponseResult TextDocumentDefinition))
+hover              :: IdeState -> TextDocumentPositionParams -> LSP.LspM c (Either ResponseError (Maybe Hover))
 gotoTypeDefinition :: IdeState -> TextDocumentPositionParams -> LSP.LspM c (Either ResponseError (ResponseResult TextDocumentTypeDefinition))
-documentHighlight :: IdeState -> TextDocumentPositionParams -> LSP.LspM c (Either ResponseError (List DocumentHighlight))
-gotoDefinition = request "Definition" getDefinition (InR $ InL $ List []) (InR . InL . List)
-gotoTypeDefinition = request "TypeDefinition" getTypeDefinition (InR $ InL $ List []) (InR . InL . List)
-hover          = request "Hover"      getAtPoint     Nothing      foundHover
-documentHighlight = request "DocumentHighlight" highlightAtPoint (List []) List
+documentHighlight  :: IdeState -> TextDocumentPositionParams -> LSP.LspM c (Either ResponseError (List DocumentHighlight))
+gotoDefinition     = request "Definition"        getDefinition     (InR $ InL $ List []) (InR . InL . List)
+gotoTypeDefinition = request "TypeDefinition"    getTypeDefinition (InR $ InL $ List []) (InR . InL . List)
+hover              = request "Hover"             getAtPoint        Nothing                     foundHover
+documentHighlight  = request "DocumentHighlight" highlightAtPoint  (List [])             List
 
 references :: IdeState -> ReferenceParams -> LSP.LspM c (Either ResponseError (List Location))
 references ide (ReferenceParams (TextDocumentIdentifier uri) pos _ _ _) = liftIO $
