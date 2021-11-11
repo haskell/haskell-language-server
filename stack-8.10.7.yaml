@@ -1,4 +1,4 @@
-resolver: lts-18.10
+resolver: lts-18.16
 
 packages:
   - .
