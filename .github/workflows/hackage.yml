@@ -98,7 +98,7 @@ jobs:
           cd $(ls -d ./incoming/${{ matrix.package }}-*)
           echo "packages: . ../../* ../../plugins/*" > cabal.project
           # TODO: remove when not needed
-          echo "allow-newer: Chart-diagrams:diagrams-core, SVGFonts:diagrams-core" >> cabal.project
+          echo "allow-newer: Chart-diagrams:diagrams-core, SVGFonts:diagrams-core, czipwith:base, czipwith:template-haskell" >> cabal.project
 
       - name: "Build all package components in isolation"
         if: steps.get-hackage-version.outputs.exists != 'true'
