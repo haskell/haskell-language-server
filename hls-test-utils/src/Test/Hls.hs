@@ -49,7 +49,7 @@ import           Development.IDE                 (IdeState, noLogging)
 import           Development.IDE.Graph           (ShakeOptions (shakeThreads))
 import           Development.IDE.Main
 import qualified Development.IDE.Main            as Ghcide
-import           Development.IDE.Plugin.Test     (TestRequest (GetLastBuildKeys, WaitForIdeRule, WaitForShakeQueue),
+import           Development.IDE.Plugin.Test     (TestRequest (GetBuildKeysBuilt, WaitForIdeRule, WaitForShakeQueue),
                                                   WaitForIdeRuleResult (ideResultSuccess))
 import           Development.IDE.Types.Options
 import           GHC.IO.Handle
@@ -242,7 +242,7 @@ waitForTypecheck :: TextDocumentIdentifier -> Session (Either ResponseError Bool
 waitForTypecheck tid = fmap ideResultSuccess <$> waitForAction "typecheck" tid
 
 getLastBuildKeys :: Session (Either ResponseError [T.Text])
-getLastBuildKeys = callTestPlugin GetLastBuildKeys
+getLastBuildKeys = callTestPlugin GetBuildKeysBuilt
 
 sendConfigurationChanged :: Value -> Session ()
 sendConfigurationChanged config =
