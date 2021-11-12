@@ -209,12 +209,12 @@ atPoint
   -> Maybe (Maybe Range, [T.Text])
 atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) env pos = listToMaybe $ pointCommand hf pos hoverInfo
   where
-    -- Hover info for values/data
+    -- | Get hover info for values/data
     hoverInfo ast = (Just range, prettyNames ++ pTypes)
       where
         pTypes
-          | Prelude.length names == 1 = dropEnd1 $ map wrapHaskell prettyTypes
-          | otherwise = map wrapHaskell prettyTypes
+          | Prelude.length names == 1 = dropEnd1 $ map wrapHaskell prettyConcreteTypes
+          | otherwise = map wrapHaskell prettyConcreteTypes
 
         range = realSrcSpanToRange $ nodeSpan ast
 
@@ -242,10 +242,12 @@ atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) env pos = listToMaybe $ p
               version = T.pack $ showVersion (unitPackageVersion conf)
           pure $ " *(" <> pkgName <> "-" <> version <> ")*"
 
-        prettyTypes = map (("_ :: "<>) . prettyType) types
         prettyType t = case kind of
           HieFresh -> showGhc t
           HieFromDisk full_file -> showGhc $ hieTypeToIface $ recoverFullType t (hie_types full_file)
+
+        -- | Local inferred most concrete type signature.
+        prettyConcreteTypes = map (("_ :: "<>) . prettyType) types
 
         definedAt name =
           -- do not show "at <no location info>" and similar messages
