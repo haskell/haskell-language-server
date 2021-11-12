@@ -12,6 +12,10 @@ import           Ide.Plugin.Example                as Example
 import           Ide.Plugin.Example2               as Example2
 
 -- haskell-language-server optional plugins
+#if aliasImport
+import           Ide.Plugin.AliasImport            as AliasImport
+#endif
+
 
 #if callHierarchy
 import           Ide.Plugin.CallHierarchy          as CallHierarchy
@@ -142,6 +146,9 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
 #endif
 #if importLens
       ExplicitImports.descriptor "importLens" :
+#endif
+#if aliasImport
+      AliasImport.descriptor "aliasImports" :
 #endif
 #if refineImports
       RefineImports.descriptor "refineImports" :

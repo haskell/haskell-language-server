@@ -17,6 +17,7 @@ packages:
   - ./plugins/hls-hlint-plugin
   - ./plugins/hls-retrie-plugin
   - ./plugins/hls-splice-plugin
+  - ./plugins/hls-alias-import-plugin
   - ./plugins/hls-tactics-plugin
   - ./plugins/hls-brittany-plugin
   - ./plugins/hls-stylish-haskell-plugin

@@ -1,0 +1,34 @@
+cabal-version:      2.2
+name:               hls-alias-import-plugin
+version:            1.0.0.0
+synopsis:           Alias import plugin for Haskell Language Server
+description:
+  Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
+license:            Apache-2.0
+license-file:       LICENSE
+author:             Jonathan Shen
+maintainer:         shenjonathan0@gmail.com
+category:           Development
+build-type:         Simple
+extra-source-files: LICENSE
+
+library
+  exposed-modules:    Ide.Plugin.AliasImport
+  hs-source-dirs:     src
+  build-depends:
+    , aeson
+    , base                  >=4.12 && <5
+    , containers
+    , deepseq
+    , ghc
+    , ghcide                ^>=1.4
+    , hls-graph
+    , hls-plugin-api        >=1.1  && <1.3
+    , lsp
+    , text
+    , unordered-containers
+
+  default-language:   Haskell2010
+  default-extensions:
+    DataKinds
+    TypeOperators
