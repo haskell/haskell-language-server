@@ -8,6 +8,7 @@ module Main(main) where
 import           Arguments                         (Arguments (..),
                                                     getArguments)
 import           Control.Monad.Extra               (unless, whenJust)
+import           Data.Default                      (def)
 import           Data.Version                      (showVersion)
 import           Development.GitRev                (gitHash)
 import           Development.IDE                   (Priority (Debug, Info),
@@ -60,7 +61,7 @@ main = withTelemetryLogger $ \telemetryLogger -> do
 
         ,Main.argsRules = do
             -- install the main and ghcide-plugin rules
-            mainRule
+            mainRule def
             -- install the kick action, which triggers a typecheck on every
             -- Shake database restart, i.e. on every user edit.
             unless argsDisableKick $
