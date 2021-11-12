@@ -213,38 +213,43 @@ getParsedModuleRule =
     opt <- getIdeOptions
     modify_dflags <- getModifyDynFlags dynFlagsModifyParser
     let ms = ms' { ms_hspp_opts = modify_dflags $ ms_hspp_opts ms' }
-
-    let dflags    = ms_hspp_opts ms
-        mainParse = getParsedModuleDefinition hsc opt file ms
         reset_ms pm = pm { pm_mod_summary = ms' }
 
-    -- Parse again (if necessary) to capture Haddock parse errors
-    res@(_,pmod) <- if gopt Opt_Haddock dflags
-        then
-            liftIO $ (fmap.fmap.fmap) reset_ms mainParse
-        else do
-            let haddockParse = getParsedModuleDefinition hsc opt file (withOptHaddock ms)
+    -- We still parse with Haddocks whether Opt_Haddock is True or False to collect information
+    -- but we no longer need to parse with and without Haddocks separately for above GHC90.
+    res@(_,pmod) <- if Compat.ghcVersion >= Compat.GHC90 then
+      liftIO $ (fmap.fmap.fmap) reset_ms $ getParsedModuleDefinition hsc opt file (withOptHaddock ms)
+    else do
+        let dflags    = ms_hspp_opts ms
+            mainParse = getParsedModuleDefinition hsc opt file ms
 
-            -- parse twice, with and without Haddocks, concurrently
-            -- we cannot ignore Haddock parse errors because files of
-            -- non-interest are always parsed with Haddocks
-            -- If we can parse Haddocks, might as well use them
-            --
-            -- HLINT INTEGRATION: might need to save the other parsed module too
-            ((diags,res),(diagsh,resh)) <- liftIO $ (fmap.fmap.fmap.fmap) reset_ms $ concurrently mainParse haddockParse
+        -- Parse again (if necessary) to capture Haddock parse errors
+        if gopt Opt_Haddock dflags
+            then
+                liftIO $ (fmap.fmap.fmap) reset_ms mainParse
+            else do
+                let haddockParse = getParsedModuleDefinition hsc opt file (withOptHaddock ms)
 
-            -- Merge haddock and regular diagnostics so we can always report haddock
-            -- parse errors
-            let diagsM = mergeParseErrorsHaddock diags diagsh
-            case resh of
-              Just _
-                | HaddockParse <- optHaddockParse opt
-                -> pure (diagsM, resh)
-              -- If we fail to parse haddocks, report the haddock diagnostics as well and
-              -- return the non-haddock parse.
-              -- This seems to be the correct behaviour because the Haddock flag is added
-              -- by us and not the user, so our IDE shouldn't stop working because of it.
-              _ -> pure (diagsM, res)
+                -- parse twice, with and without Haddocks, concurrently
+                -- we cannot ignore Haddock parse errors because files of
+                -- non-interest are always parsed with Haddocks
+                -- If we can parse Haddocks, might as well use them
+                --
+                -- HLINT INTEGRATION: might need to save the other parsed module too
+                ((diags,res),(diagsh,resh)) <- liftIO $ (fmap.fmap.fmap.fmap) reset_ms $ concurrently mainParse haddockParse
+
+                -- Merge haddock and regular diagnostics so we can always report haddock
+                -- parse errors
+                let diagsM = mergeParseErrorsHaddock diags diagsh
+                case resh of
+                  Just _
+                    | HaddockParse <- optHaddockParse opt
+                    -> pure (diagsM, resh)
+                  -- If we fail to parse haddocks, report the haddock diagnostics as well and
+                  -- return the non-haddock parse.
+                  -- This seems to be the correct behaviour because the Haddock flag is added
+                  -- by us and not the user, so our IDE shouldn't stop working because of it.
+                  _ -> pure (diagsM, res)
     -- Add dependencies on included files
     _ <- uses GetModificationTime $ map toNormalizedFilePath' (maybe [] pm_extra_src_files pmod)
     pure res
