@@ -150,7 +150,6 @@ parseAction "getparsedmodule" fp = Right . isJust <$> use GetParsedModule fp
 parseAction "ghcsession" fp = Right . isJust <$> use GhcSession fp
 parseAction "ghcsessiondeps" fp = Right . isJust <$> use GhcSessionDeps fp
 parseAction "gethieast" fp = Right . isJust <$> use GetHieAst fp
-parseAction "getDependencies" fp = Right . isJust <$> use GetDependencies fp
 parseAction "getFileContents" fp = Right . isJust <$> use GetFileContents fp
 parseAction other _ = return $ Left $ "Cannot parse ide rule: " <> pack (original other)
 
