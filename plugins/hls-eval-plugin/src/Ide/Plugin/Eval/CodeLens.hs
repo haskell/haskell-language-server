@@ -27,7 +27,7 @@ module Ide.Plugin.Eval.CodeLens (
 
 import           Control.Applicative             (Alternative ((<|>)))
 import           Control.Arrow                   (second, (>>>))
-import           Control.Exception               (assert, try)
+import           Control.Exception               (try)
 import qualified Control.Exception               as E
 import           Control.Lens                    (_1, _3, (%~), (<&>), (^.))
 import           Control.Monad                   (guard, join, void, when)
@@ -35,33 +35,29 @@ import           Control.Monad.IO.Class          (MonadIO (liftIO))
 import           Control.Monad.Trans.Except      (ExceptT (..))
 import           Data.Aeson                      (toJSON)
 import           Data.Char                       (isSpace)
+import           Data.Default
 import qualified Data.HashMap.Strict             as HashMap
 import           Data.List                       (dropWhileEnd, find,
                                                   intercalate, intersperse)
-import           Data.Maybe                      (catMaybes, fromMaybe, isJust)
+import           Data.Maybe                      (catMaybes, fromMaybe)
 import           Data.String                     (IsString)
 import           Data.Text                       (Text)
 import qualified Data.Text                       as T
 import           Data.Time                       (getCurrentTime)
 import           Data.Typeable                   (Typeable)
-import           Development.IDE                 (Action, GetDependencies (..),
-                                                  GetModIface (..),
-                                                  GetModSummary (..),
-                                                  GhcSessionIO (..),
-                                                  HiFileResult (hirHomeMod, hirModSummary),
-                                                  HscEnvEq, IdeState,
+import           Development.IDE                 (GetModSummary (..),
+                                                  GhcSessionIO (..), IdeState,
                                                   ModSummaryResult (..),
                                                   NeedsCompilation (NeedsCompilation),
-                                                  evalGhcEnv,
+                                                  evalGhcEnv, hscEnv,
                                                   hscEnvWithImportPaths,
                                                   prettyPrint, runAction,
                                                   textToStringBuffer,
                                                   toNormalizedFilePath',
                                                   uriToFilePath', useNoFile_,
-                                                  useWithStale_, use_, uses_)
-import           Development.IDE.Core.Compile    (loadModulesHome,
-                                                  setupFinderCache)
-import           Development.IDE.Core.Rules      (TransitiveDependencies (transitiveModuleDeps))
+                                                  useWithStale_, use_)
+import           Development.IDE.Core.Rules      (GhcSessionDepsConfig (..),
+                                                  ghcSessionDepsDefinition)
 import           Development.IDE.GHC.Compat      hiding (typeKind, unitState)
 import qualified Development.IDE.GHC.Compat      as Compat
 import qualified Development.IDE.GHC.Compat      as SrcLoc
@@ -533,30 +529,23 @@ prettyWarn Warn{..} =
     prettyPrint (SrcLoc.getLoc warnMsg) <> ": warning:\n"
     <> "    " <> SrcLoc.unLoc warnMsg
 
-ghcSessionDepsDefinition :: HscEnvEq -> NormalizedFilePath -> Action HscEnv
-ghcSessionDepsDefinition env file = do
-        let hsc = hscEnvWithImportPaths env
-        deps <- use_ GetDependencies file
-        let tdeps = transitiveModuleDeps deps
-        ifaces <- uses_ GetModIface tdeps
-        liftIO $ assert (all (isJust . hm_linkable . hirHomeMod) ifaces) $ pure ()
-
-        -- Currently GetDependencies returns things in topological order so A comes before B if A imports B.
-        -- We need to reverse this as GHC gets very unhappy otherwise and complains about broken interfaces.
-        -- Long-term we might just want to change the order returned by GetDependencies
-        let inLoadOrder = reverse (map hirHomeMod ifaces)
-
-        liftIO $ loadModulesHome inLoadOrder <$> setupFinderCache (map hirModSummary ifaces) hsc
-
 runGetSession :: MonadIO m => IdeState -> NormalizedFilePath -> m HscEnv
 runGetSession st nfp = liftIO $ runAction "eval" st $ do
     -- Create a new GHC Session rather than reusing an existing one
     -- to avoid interfering with ghcide
+    -- UPDATE: I suspect that this doesn't really work, we always get the same Session
+    --         we probably cache hscEnvs in the Session state
     IdeGhcSession{loadSessionFun} <- useNoFile_ GhcSessionIO
     let fp = fromNormalizedFilePath nfp
     ((_, res),_) <- liftIO $ loadSessionFun fp
-    let hscEnv = fromMaybe (error $ "Unknown file: " <> fp) res
-    ghcSessionDepsDefinition hscEnv nfp
+    let env = fromMaybe (error $ "Unknown file: " <> fp) res
+        ghcSessionDepsConfig = def
+            { forceLinkables = True
+            , checkForImportCycles = False
+            , fullModSummary = True
+            }
+    res <- fmap hscEnvWithImportPaths <$> ghcSessionDepsDefinition ghcSessionDepsConfig env nfp
+    return $ fromMaybe (error $ "Unable to load file: " <> fp) res
 
 needsQuickCheck :: [(Section, Test)] -> Bool
 needsQuickCheck = any (isProperty . snd)

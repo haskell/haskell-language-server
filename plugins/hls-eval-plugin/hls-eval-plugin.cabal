@@ -55,6 +55,7 @@ library
     , aeson
     , base                  >=4.12  && <5
     , containers
+    , data-default
     , deepseq
     , Diff                  ^>=0.4.0
     , directory
@@ -64,7 +65,7 @@ library
     , ghc
     , ghc-boot-th
     , ghc-paths
-    , ghcide                >=1.2   && <1.5
+    , ghcide                >=1.4.2.4 && <1.5
     , hashable
     , hls-graph
     , hls-plugin-api        ^>=1.2
