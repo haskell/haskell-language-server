@@ -78,6 +78,17 @@ collectLiteralsRule = define $ \CollectLiterals nfp -> do
         getFormatTypes = toFormatTypes . toList . extensionFlags . ms_hspp_opts . pm_mod_summary
         mkFileDiagnostic nfp' diag = (nfp', HideDiag, diag)
 
+mkDiagnostic :: Literal -> Diagnostic
+mkDiagnostic lit = Diagnostic {
+            _range = fromMaybe noRange $ srcSpanToRange $ getSrcSpan lit
+            , _severity = Just DsHint
+            , _code = Nothing
+            , _source = getSrcText lit
+            , _message = "alternateNumberFormat"
+            , _tags = Nothing
+            , _relatedInformation = Nothing
+            }
+
 codeActionHandler :: PluginMethodHandler IdeState 'TextDocumentCodeAction
 codeActionHandler state _ (CodeActionParams _ _ docId currRange _) = response $ do
     nfp <- getNormalizedFilePath docId
@@ -123,21 +134,11 @@ codeActionHandler state _ (CodeActionParams _ _ docId currRange _) = response $ 
 contains :: Range -> SrcSpan -> Bool
 contains Range {_start, _end} x = isInsideSrcSpan _start x || isInsideSrcSpan _end x
 
--- a source span provides no meaningful information to edit
+-- a source span that provides no meaningful information is NOT a valid source span for our use case
 isRealSrcSpan :: SrcSpan -> Bool
 isRealSrcSpan (UnhelpfulSpan _) = False
 isRealSrcSpan _                 = True
 
-mkDiagnostic :: Literal -> Diagnostic
-mkDiagnostic lit = Diagnostic {
-            _range = fromMaybe noRange $ srcSpanToRange $ getSrcSpan lit
-            , _severity = Just DsHint
-            , _code = Nothing
-            , _source = getSrcText lit
-            , _message = "alternateNumberFormat"
-            , _tags = Nothing
-            , _relatedInformation = Nothing
-            }
 
 getNormalizedFilePath :: Monad m => TextDocumentIdentifier -> ExceptT String m NormalizedFilePath
 getNormalizedFilePath docId = handleMaybe "Error: converting to NormalizedFilePath"
@@ -152,14 +153,5 @@ getCollectLiterals state = handleMaybeM "Error: Could not get ParsedModule"
 
 
 logIO :: (MonadIO m, Show a) => IdeState -> a -> m ()
-logIO state = liftIO . log state
-
-log :: Show a => IdeState -> a -> IO ()
-log state = log' state . show
-
-logIO' :: MonadIO m => IdeState -> String -> m ()
-logIO' state = liftIO . log' state
-
-log' :: IdeState -> String -> IO ()
-log' state = Logger.logError (ideLogger state) . T.pack
+logIO state = liftIO . Logger.logInfo (ideLogger state) . T.pack . show
 
