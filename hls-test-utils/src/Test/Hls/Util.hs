@@ -22,6 +22,7 @@ module Test.Hls.Util
     , ghcVersion, GhcVersion(..)
     , hostOS, OS(..)
     , matchesCurrentEnv, EnvSpec(..)
+    , noLiteralCaps
     , ignoreForGhcVersions
     , ignoreInEnv
     , inspectCodeAction
@@ -73,6 +74,12 @@ import           Test.Tasty.HUnit                (Assertion, assertFailure,
                                                   (@?=))
 import           Text.Blaze.Internal             hiding (null)
 import           Text.Blaze.Renderer.String      (renderMarkup)
+
+noLiteralCaps :: C.ClientCapabilities
+noLiteralCaps = def { C._textDocument = Just textDocumentCaps }
+  where
+    textDocumentCaps = def { C._codeAction = Just codeActionCaps }
+    codeActionCaps = CodeActionClientCapabilities (Just True) Nothing Nothing Nothing Nothing Nothing Nothing
 
 codeActionSupportCaps :: C.ClientCapabilities
 codeActionSupportCaps = def { C._textDocument = Just textDocumentCaps }

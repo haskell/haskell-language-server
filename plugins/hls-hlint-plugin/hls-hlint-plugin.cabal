@@ -1,4 +1,4 @@
-cabal-version: 2.2
+cabal-version: 2.4
 name:          hls-hlint-plugin
 version:       1.0.1.1
 synopsis:      Hlint integration plugin with Haskell Language Server
@@ -8,10 +8,17 @@ description:
 license:       Apache-2.0
 license-file:  LICENSE
 author:        The Haskell IDE Team
-maintainer:    alan.zimm@gmail.com
+maintainer:    atreyu.bbb@gmail.com
 copyright:     The Haskell IDE Team
 category:      Development
 build-type:    Simple
+extra-source-files:
+  LICENSE
+  test/testdata/**/*.yaml
+  -- this one is not matched by the previous glob
+  test/testdata/ignore/.hlint.yaml
+  test/testdata/**/*.hs
+  test/testdata/**/*.h
 
 flag pedantic
   description: Enable -Werror
@@ -101,3 +108,21 @@ library
   default-extensions:
     DataKinds
     TypeOperators
+
+test-suite tests
+  type:             exitcode-stdio-1.0
+  default-language: Haskell2010
+  hs-source-dirs:   test
+  main-is:          Main.hs
+  ghc-options:      -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      aeson
+    , base
+    , containers
+    , filepath
+    , hls-hlint-plugin
+    , hls-plugin-api
+    , hls-test-utils      >=1.0 && <1.2
+    , lens
+    , lsp-types
+    , text

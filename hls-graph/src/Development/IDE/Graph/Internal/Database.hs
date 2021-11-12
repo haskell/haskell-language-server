@@ -11,7 +11,7 @@
 {-# LANGUAGE TupleSections              #-}
 {-# LANGUAGE TypeFamilies               #-}
 
-module Development.IDE.Graph.Internal.Database (newDatabase, incDatabase, build) where
+module Development.IDE.Graph.Internal.Database (newDatabase, incDatabase, build, getDirtySet, getKeysAndVisitAge) where
 
 import           Control.Concurrent.Async
 import           Control.Concurrent.Extra
@@ -46,7 +46,6 @@ newDatabase databaseExtra databaseRules = do
     databaseValues <- Ids.empty
     databaseReverseDeps <- Ids.empty
     databaseReverseDepsLock <- newLock
-    databaseDirtySet <- newIORef Nothing
     pure Database{..}
 
 -- | Increment the step and mark dirty
@@ -54,7 +53,6 @@ incDatabase :: Database -> Maybe [Key] -> IO ()
 -- all keys are dirty
 incDatabase db Nothing = do
     modifyIORef' (databaseStep db) $ \(Step i) -> Step $ i + 1
-    writeIORef (databaseDirtySet db) Nothing
     withLock (databaseLock db) $
         Ids.forMutate (databaseValues db) $ \_ -> second $ \case
             Clean x       -> Dirty (Just x)
@@ -66,7 +64,6 @@ incDatabase db (Just kk) = do
     intern <- readIORef (databaseIds db)
     let dirtyIds = mapMaybe (`Intern.lookup` intern) kk
     transitiveDirtyIds <- transitiveDirtySet db dirtyIds
-    modifyIORef (databaseDirtySet db) (\dd -> Just $ fromMaybe mempty dd <> transitiveDirtyIds)
     withLock (databaseLock db) $
         Ids.forMutate (databaseValues db) $ \i -> \case
             (k, Running _ _ x) -> (k, Dirty x)
@@ -138,7 +135,7 @@ builder db@Database{..} keys = do
 --       This assumes that the implementation will be a lookup
 --     * Otherwise, we spawn a new thread to refresh the dirty deps (if any) and the key itself
 refresh :: Database -> Key -> Id -> Maybe Result -> AIO (IO Result)
-refresh db key id result@(Just me@Result{resultDeps=Just deps}) = do
+refresh db key id result@(Just me@Result{resultDeps = ResultDeps deps}) = do
     res <- builder db $ map Left deps
     case res of
       Left res ->
@@ -160,7 +157,7 @@ refresh db key id result =
 compute :: Database -> Key -> Id -> RunMode -> Maybe Result -> IO Result
 compute db@Database{..} key id mode result = do
     let act = runRule databaseRules key (fmap resultData result) mode
-    deps <- newIORef $ Just []
+    deps <- newIORef UnknownDeps
     (execution, RunResult{..}) <-
         duration $ runReaderT (fromAction act) $ SAction db deps
     built <- readIORef databaseStep
@@ -169,19 +166,38 @@ compute db@Database{..} key id mode result = do
         built' = if runChanged /= ChangedNothing then built else changed
         -- only update the deps when the rule ran with changes
         actualDeps = if runChanged /= ChangedNothing then deps else previousDeps
-        previousDeps= resultDeps =<< result
+        previousDeps= maybe UnknownDeps resultDeps result
     let res = Result runValue built' changed built actualDeps execution runStore
-    case actualDeps of
-        Just deps | not(null deps) &&
-                    runChanged /= ChangedNothing
+    case getResultDepsDefault [] actualDeps of
+        deps | not(null deps)
+            && runChanged /= ChangedNothing
                     -> do
             void $ forkIO $
-                updateReverseDeps id db (fromMaybe [] previousDeps) (Set.fromList deps)
+                updateReverseDeps id db (getResultDepsDefault [] previousDeps) (Set.fromList deps)
         _ -> pure ()
     withLock databaseLock $
         Ids.insert databaseValues id (key, Clean res)
     pure res
 
+-- | Returns the set of dirty keys annotated with their age (in # of builds)
+getDirtySet :: Database -> IO [(Id,(Key, Int))]
+getDirtySet db = do
+    Step curr <- readIORef (databaseStep db)
+    dbContents <- Ids.toList (databaseValues db)
+    let calcAge Result{resultBuilt = Step x} = curr - x
+        calcAgeStatus (Dirty x)=calcAge <$> x
+        calcAgeStatus _         = Nothing
+    return $ mapMaybe ((secondM.secondM) calcAgeStatus) dbContents
+
+-- | Returns ann approximation of the database keys,
+--   annotated with how long ago (in # builds) they were visited
+getKeysAndVisitAge :: Database -> IO [(Key, Int)]
+getKeysAndVisitAge db = do
+    values <- Ids.elems (databaseValues db)
+    Step curr <- readIORef (databaseStep db)
+    let keysWithVisitAge = mapMaybe (secondM (fmap getAge . getResult)) values
+        getAge Result{resultVisited = Step s} = curr - s
+    return keysWithVisitAge
 --------------------------------------------------------------------------------
 -- Lazy IO trick
 
@@ -278,7 +294,7 @@ mapConcurrentlyAIO_ f [one] = liftIO $ justWait $ fmap f one
 mapConcurrentlyAIO_ f many = do
     ref <- AIO ask
     waits <- liftIO $ uninterruptibleMask $ \restore -> do
-        waits <- liftIO $ traverse waitOrSpawn (map (fmap (restore . f)) many)
+        waits <- liftIO $ traverse (waitOrSpawn . fmap (restore . f)) many
         let asyncs = rights waits
         liftIO $ atomicModifyIORef'_ ref (asyncs ++)
         return waits

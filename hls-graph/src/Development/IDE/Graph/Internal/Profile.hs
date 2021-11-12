@@ -7,47 +7,51 @@
 module Development.IDE.Graph.Internal.Profile (writeProfile) where
 
 import           Data.Bifunctor
-import qualified Data.ByteString.Lazy.Char8           as LBS
+import qualified Data.ByteString.Lazy.Char8              as LBS
 import           Data.Char
-import           Data.Dynamic                         (toDyn)
-import qualified Data.HashMap.Strict                  as Map
+import           Data.Dynamic                            (toDyn)
+import qualified Data.HashMap.Strict                     as Map
 import           Data.IORef
-import           Data.IntMap                          (IntMap)
-import qualified Data.IntMap                          as IntMap
-import qualified Data.IntSet                          as Set
-import           Data.List                            (dropWhileEnd, foldl',
-                                                       intercalate, partition,
-                                                       sort, sortBy)
-import           Data.List.Extra                      (nubOrd)
+import           Data.IntMap                             (IntMap)
+import qualified Data.IntMap                             as IntMap
+import qualified Data.IntSet                             as Set
+import           Data.List                               (dropWhileEnd, foldl',
+                                                          intercalate,
+                                                          partition, sort,
+                                                          sortBy)
+import           Data.List.Extra                         (nubOrd)
 import           Data.Maybe
-import           Data.Time                            (defaultTimeLocale,
-                                                       formatTime,
-                                                       getCurrentTime,
-                                                       iso8601DateFormat)
+import           Data.Time                               (defaultTimeLocale,
+                                                          formatTime,
+                                                          getCurrentTime,
+                                                          iso8601DateFormat)
 import           Development.IDE.Graph.Classes
-import qualified Development.IDE.Graph.Internal.Ids   as Ids
+import           Development.IDE.Graph.Internal.Database (getDirtySet)
+import qualified Development.IDE.Graph.Internal.Ids      as Ids
 import           Development.IDE.Graph.Internal.Paths
 import           Development.IDE.Graph.Internal.Types
-import qualified Language.Javascript.DGTable          as DGTable
-import qualified Language.Javascript.Flot             as Flot
-import qualified Language.Javascript.JQuery           as JQuery
-import           Numeric.Extra                        (showDP)
+import qualified Language.Javascript.DGTable             as DGTable
+import qualified Language.Javascript.Flot                as Flot
+import qualified Language.Javascript.JQuery              as JQuery
+import           Numeric.Extra                           (showDP)
 import           System.FilePath
-import           System.IO.Unsafe                     (unsafePerformIO)
-import           System.Time.Extra                    (Seconds)
+import           System.IO.Unsafe                        (unsafePerformIO)
+import           System.Time.Extra                       (Seconds)
 
 #ifdef FILE_EMBED
 import           Data.FileEmbed
-import           Language.Haskell.TH.Syntax           (runIO)
+import           Language.Haskell.TH.Syntax              (runIO)
 #endif
 
 -- | Generates an report given some build system profiling data.
 writeProfile :: FilePath -> Database -> IO ()
 writeProfile out db = do
-    dirtyKeys <- readIORef (databaseDirtySet db)
     (report, mapping) <- toReport db
-    let dirtyKeysMapped = mapMaybe (`IntMap.lookup` mapping) . Set.toList <$> dirtyKeys
-    rpt <- generateHTML (sort <$> dirtyKeysMapped) report
+    dirtyKeysMapped <- do
+        dirtyIds <- Set.fromList . fmap fst <$> getDirtySet db
+        let dirtyKeysMapped = mapMaybe (`IntMap.lookup` mapping) . Set.toList $ dirtyIds
+        return $ Just $ sort dirtyKeysMapped
+    rpt <- generateHTML dirtyKeysMapped report
     LBS.writeFile out rpt
 
 data ProfileEntry = ProfileEntry
@@ -57,7 +61,7 @@ data ProfileEntry = ProfileEntry
 -- resultsOnly :: Map.HashMap Id (Key, Status) -> Map.HashMap Id (Key, Result (Either BS.ByteString Value))
 resultsOnly :: [(Ids.Id, (k, Status))] -> Map.HashMap Ids.Id (k, Result)
 resultsOnly mp = Map.map (fmap (\r ->
-      r{resultDeps = fmap (filter (isJust . flip Map.lookup keep)) $ resultDeps r}
+      r{resultDeps = mapResultDeps (filter (isJust . flip Map.lookup keep)) $ resultDeps r}
     )) keep
     where
         keep = Map.fromList $ mapMaybe ((traverse.traverse) getResult) mp
@@ -109,7 +113,7 @@ toReport db = do
     status <- prepareForDependencyOrder db
     let order = let shw i = maybe "<unknown>" (show . fst) $ Map.lookup i status
                 in dependencyOrder shw
-                $ map (second (fromMaybe [-1] . resultDeps . snd))
+                $ map (second (getResultDepsDefault [-1] . resultDeps . snd))
                 $ Map.toList status
         ids = IntMap.fromList $ zip order [0..]
 
@@ -122,14 +126,14 @@ toReport db = do
             ,prfBuilt = fromStep resultBuilt
             ,prfVisited = fromStep resultVisited
             ,prfChanged = fromStep resultChanged
-            ,prfDepends = map pure $ mapMaybe (`IntMap.lookup` ids) $ fromMaybe [-1] $ resultDeps
+            ,prfDepends = map pure $ mapMaybe (`IntMap.lookup` ids) $ getResultDepsDefault [-1] resultDeps
             ,prfExecution = resultExecution
             }
             where fromStep i = fromJust $ Map.lookup i steps
     pure ([maybe (error "toReport") f $ Map.lookup i status | i <- order], ids)
 
 alwaysRerunResult :: Step -> Result
-alwaysRerunResult current = Result (Value $ toDyn "<alwaysRerun>") (Step 0) (Step 0) current (Just []) 0 mempty
+alwaysRerunResult current = Result (Value $ toDyn "<alwaysRerun>") (Step 0) (Step 0) current (ResultDeps []) 0 mempty
 
 readDataFileHTML :: FilePath -> IO LBS.ByteString
 readDataFileHTML file = LBS.readFile =<< getDataFile ("html" </> file)

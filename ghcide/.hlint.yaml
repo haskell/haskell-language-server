@@ -133,7 +133,7 @@
   # Things that are unsafe in Haskell base library
   - {name: unsafeInterleaveIO, within: [Development.IDE.LSP.LanguageServer]}
   - {name: unsafeDupablePerformIO, within: []}
-  - {name: unsafeCoerce, within: [Ide.Plugin.Eval.Code]}
+  - {name: unsafeCoerce, within: [Ide.Plugin.Eval.Code, Development.IDE.Types.Shake]}
   # Things that are a bit dangerous in the GHC API
   - {name: nameModule, within: []}
 

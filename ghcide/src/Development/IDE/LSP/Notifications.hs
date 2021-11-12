@@ -14,30 +14,25 @@ module Development.IDE.LSP.Notifications
 import           Language.LSP.Types
 import qualified Language.LSP.Types                    as LSP
 
-import           Development.IDE.Core.IdeConfiguration
-import           Development.IDE.Core.Service
-import           Development.IDE.Core.Shake
-import           Development.IDE.Types.Location
-import           Development.IDE.Types.Logger
-import           Development.IDE.Types.Options
-
 import           Control.Monad.Extra
-import qualified Data.HashSet                          as S
-import qualified Data.Text                             as Text
-
 import           Control.Monad.IO.Class
 import qualified Data.HashMap.Strict                   as HM
+import qualified Data.HashSet                          as S
+import qualified Data.Text                             as Text
 import           Development.IDE.Core.FileExists       (modifyFileExists,
                                                         watchedGlobs)
 import           Development.IDE.Core.FileStore        (registerFileWatches,
                                                         resetFileStore,
                                                         setFileModified,
-                                                        setSomethingModified,
-                                                        typecheckParents)
+                                                        setSomethingModified)
+import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.OfInterest
 import           Development.IDE.Core.RuleTypes        (GetClientSettings (..))
+import           Development.IDE.Core.Service
+import           Development.IDE.Core.Shake
+import           Development.IDE.Types.Location
+import           Development.IDE.Types.Logger
 import           Development.IDE.Types.Shake           (toKey)
-import           Ide.Plugin.Config                     (CheckParents (CheckOnClose))
 import           Ide.Types
 
 whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
@@ -74,10 +69,10 @@ descriptor plId = (defaultPluginDescriptor plId) { pluginNotificationHandlers = 
         \ide _ (DidCloseTextDocumentParams TextDocumentIdentifier{_uri}) -> liftIO $ do
           whenUriFile _uri $ \file -> do
               deleteFileOfInterest ide file
-              -- Refresh all the files that depended on this
-              checkParents <- optCheckParents =<< getIdeOptionsIO (shakeExtras ide)
-              when (checkParents >= CheckOnClose) $ typecheckParents ide file
-              logDebug (ideLogger ide) $ "Closed text document: " <> getUri _uri
+              let msg = "Closed text document: " <> getUri _uri
+              scheduleGarbageCollection ide
+              setSomethingModified ide [] $ Text.unpack msg
+              logDebug (ideLogger ide) msg
 
   , mkPluginNotificationHandler LSP.SWorkspaceDidChangeWatchedFiles $
       \ide _ (DidChangeWatchedFilesParams (List fileEvents)) -> liftIO $ do

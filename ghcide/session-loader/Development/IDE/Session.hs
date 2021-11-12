@@ -80,6 +80,7 @@ import           Control.Concurrent.STM               (atomically)
 import           Control.Concurrent.STM.TQueue
 import qualified Data.HashSet                         as Set
 import           Database.SQLite.Simple
+import           Development.IDE.Core.Tracing         (withTrace)
 import           HieDb.Create
 import           HieDb.Types
 import           HieDb.Utils
@@ -425,7 +426,12 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
            let progMsg = "Setting up " <> T.pack (takeBaseName (cradleRootDir cradle))
                          <> " (for " <> T.pack lfp <> ")"
            eopts <- mRunLspTCallback lspEnv (withIndefiniteProgress progMsg NotCancellable) $
-              cradleToOptsAndLibDir logger cradle cfp
+              withTrace "Load cradle" $ \addTag -> do
+                  addTag "file" lfp
+                  res <- cradleToOptsAndLibDir logger cradle cfp
+                  addTag "result" (show res)
+                  return res
+
 
            logDebug logger $ T.pack ("Session loading result: " <> show eopts)
            case eopts of

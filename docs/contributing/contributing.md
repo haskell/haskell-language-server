@@ -10,7 +10,7 @@ The Haskell tooling dream is near, we need your help!
 - Join the [haskell-tooling channel](https://matrix.to/#/#haskell-tooling:matrix.org) in [matrix](https://matrix.org/).
 - Visit [the project GitHub repo](https://github.com/haskell/haskell-language-server) to view the source code, or open issues or pull requests.
 
-## Building haskell-language-server
+## Building
 
 Clone the repository:
 ```shell
@@ -19,26 +19,18 @@ $ git clone https://github.com/haskell/haskell-language-server
 
 The project can then be built with both `cabal build` and `stack build`.
 
-haskell-language-server can also be used with itself. We provide preset samples of `hie.yaml` for Cabal and Stack.
-
-Note: the `./install/` folder is not directly tied to the project so it has dedicated `./install/hie.yaml.[cbl|stack]`
-templates.
-
 ### Using Cabal
 
 ```shell
-$ cp hie-cabal.yaml hie.yaml
-$ cp install/hie-cabal.yaml install/hie.yaml
+# If you have not run `cabal update` in a while
+$ cabal update
+# Then
+$ cabal build
 ```
 
 ### Using Stack
 
 ```shell
-$ cp hie-stack.yaml hie.yaml
-$ cp install/hie-stack.yaml install/hie.yaml
-$ cp ghcide/hie-stack.yaml ghcide/hie.yaml
-$ stack build --test --no-run-tests
-$ cd install
 $ stack build
 ```
 
@@ -119,26 +111,55 @@ An alternative, which only recompiles when tests (or dependencies) change:
 $ cabal run haskell-language-server:func-test -- -p "hlint enables"
 ```
 
-### Test your hacked HLS in your editor
+## Using HLS on HLS code
 
+Project source code should load without `hie.yaml` setup.
+
+In other cases:
+
+1. Check if `hie.yaml` (& `hie.yml`) files left from previous configurations.
+
+2. If the main project needs special configuration, note that other internal subprojects probably also would need configuration.
+
+To create an explicit configuration for all projects - use [implicit-hie](https://github.com/Avi-D-coder/implicit-hie) generator directly:
+
+```shell
+gen-hie > hie.yaml  # into the main HLS directory
+```
+
+that configuration should help.
+
+3. Inspect & tune configuration explicitly.
+
+[Configuring project build](../configuration.md#configuring-your-project-build) applies to HLS project source code loading just as to any other.
+
+Note: HLS may implicitly detect codebase as a Stack project (see [hie-bios implicit configuration documentation](https://github.com/haskell/hie-bios/blob/master/README.md#implicit-configuration)). To use Cabal, try creating an `hie.yaml` file:
+
+```yaml
+cradle:
+  cabal:
+```
+
+### Manually testing your hacked HLS
 If you want to test HLS while hacking on it, follow the steps below.
 
 To do once:
 
-- Open some codebase on which you want to test your hacked HLS in your favorite editor
+- Open some codebase on which you want to test your hacked HLS in your favorite editor (it can also be HLS codebase itself: see previous section for configuration)
 - Configure this editor to use your custom HLS executable
   - With Cabal:
     - On Unix systems: `cabal exec which haskell-language-server`
     - On Windows: `cabal exec where haskell-language-server`
   - With Stack: `$(stack path --dist-dir)/build/haskell-language-server/haskell-language-server`
 
-To do every time you changed code and want to test it:
+To do every time you change HLS code and want to test it:
 
 - Build HLS
   - With Cabal: `cabal build exe:haskell-language-server`
   - With Stack: `stack build haskell-language-server:exe:haskell-language-server`
 - Restart HLS
   - With VS Code: `Haskell: Restart Haskell LSP Server`
+  - With Emacs: `lsp-workspace-restart`
 
 ## Style guidelines
 

@@ -56,15 +56,15 @@ providerTests = testGroup "formatting provider" [
 
         doc <- openDoc "Format.hs" "haskell"
 
-        sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "ormolu"))
+        sendConfigurationChanged (formatLspConfig "ormolu")
         formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
         documentContents doc >>= liftIO . (@?= formattedOrmolu)
 
-        sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "floskell"))
+        sendConfigurationChanged (formatLspConfig "floskell")
         formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
         documentContents doc >>= liftIO . (@?= formattedFloskell)
 
-        sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "ormolu"))
+        sendConfigurationChanged (formatLspConfig "ormolu")
         formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
         documentContents doc >>= liftIO . (@?= formattedOrmoluPostFloskell)
     , requiresOrmoluPlugin . requiresFloskellPlugin $ testCase "supports both new and old configuration sections" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
@@ -73,11 +73,11 @@ providerTests = testGroup "formatting provider" [
 
        doc <- openDoc "Format.hs" "haskell"
 
-       sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfigOld "ormolu"))
+       sendConfigurationChanged (formatLspConfigOld "ormolu")
        formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
        documentContents doc >>= liftIO . (@?= formattedOrmolu)
 
-       sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfigOld "floskell"))
+       sendConfigurationChanged (formatLspConfigOld "floskell")
        formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
        documentContents doc >>= liftIO . (@?= formattedFloskell)
     ]

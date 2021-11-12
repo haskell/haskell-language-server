@@ -23,14 +23,11 @@ import           Data.Hashable                         (hashed)
 import           Data.List.Extra                       (intercalate, isPrefixOf,
                                                         nub, nubOrd, partition)
 import           Data.Maybe                            (catMaybes, isJust)
-import           Data.String
 import qualified Data.Text                             as T
-import           Data.Text.Encoding                    (encodeUtf8)
 import qualified Data.Text.IO                          as T
 import           Data.Text.Lazy.Encoding               (decodeUtf8)
 import qualified Data.Text.Lazy.IO                     as LT
-import           Data.Word                             (Word16)
-import           Debug.Trace.Flags                     (userTracingEnabled)
+import           Data.Typeable                         (typeOf)
 import           Development.IDE                       (Action, GhcVersion (..),
                                                         Priority (Debug), Rules,
                                                         ghcVersion,
@@ -79,14 +76,15 @@ import           Development.IDE.Types.Options         (IdeGhcSession,
                                                         defaultIdeOptions,
                                                         optModifyDynFlags,
                                                         optTesting)
-import           Development.IDE.Types.Shake           (Key (Key))
+import           Development.IDE.Types.Shake           (fromKeyType)
 import           GHC.Conc                              (getNumProcessors)
 import           GHC.IO.Encoding                       (setLocaleEncoding)
 import           GHC.IO.Handle                         (hDuplicate)
 import           HIE.Bios.Cradle                       (findCradle)
 import qualified HieDb.Run                             as HieDb
 import           Ide.Plugin.Config                     (CheckParents (NeverCheck),
-                                                        Config,
+                                                        Config, checkParents,
+                                                        checkProject,
                                                         getConfigFromNotification)
 import           Ide.Plugin.ConfigUtils                (pluginsToDefaultConfig,
                                                         pluginsToVSCodeExtensionSchema)
@@ -101,7 +99,6 @@ import           Ide.Types                             (IdeCommand (IdeCommand),
                                                         ipMap)
 import qualified Language.LSP.Server                   as LSP
 import           Numeric.Natural                       (Natural)
-import           OpenTelemetry.Eventlog                (addEvent, withSpan)
 import           Options.Applicative                   hiding (action)
 import qualified System.Directory.Extra                as IO
 import           System.Exit                           (ExitCode (ExitFailure),
@@ -189,12 +186,15 @@ defaultArguments :: Priority -> Arguments
 defaultArguments priority = Arguments
         { argsOTMemoryProfiling = False
         , argCommand = LSP
-        , argsLogger = stderrLogger priority <> telemetryLogger
+        , argsLogger = stderrLogger priority
         , argsRules = mainRule >> action kick
         , argsGhcidePlugin = mempty
         , argsHlsPlugins = pluginDescToIdePlugins Ghcide.descriptors
         , argsSessionLoadingOptions = def
-        , argsIdeOptions = const defaultIdeOptions
+        , argsIdeOptions = \config ghcSession -> (defaultIdeOptions ghcSession)
+            { optCheckProject = pure $ checkProject config
+            , optCheckParents = pure $ checkParents config
+            }
         , argsLspOptions = def {LSP.completionTriggerCharacters = Just "."}
         , argsDefaultHlsConfig = def
         , argsGetHieDbLoc = getHieDbLoc
@@ -235,16 +235,6 @@ stderrLogger logLevel = do
     lock <- newLock
     return $ Logger $ \p m -> when (p >= logLevel) $ withLock lock $
         T.hPutStrLn stderr $ "[" <> T.pack (show p) <> "] " <> m
-
-telemetryLogger :: IO Logger
-telemetryLogger
-    | userTracingEnabled = return $ Logger $ \p m ->
-        withSpan "log" $ \sp ->
-            addEvent sp (fromString $ "Log " <> show p) (encodeUtf8 $ trim m)
-    | otherwise = mempty
-    where
-        -- eventlog message size is limited by EVENT_PAYLOAD_SIZE_MAX = STG_WORD16_MAX
-        trim = T.take (fromIntegral(maxBound :: Word16) - 10)
 
 defaultMain :: Arguments -> IO ()
 defaultMain Arguments{..} = do
@@ -375,10 +365,10 @@ defaultMain Arguments{..} = do
                 printf "# Shake value store contents(%d):\n" (length values)
                 let keys =
                         nub $
-                            Key GhcSession :
-                            Key GhcSessionDeps :
-                            [k | (_, k) <- HashMap.keys values, k /= Key GhcSessionIO]
-                            ++ [Key GhcSessionIO]
+                            typeOf GhcSession :
+                            typeOf GhcSessionDeps :
+                            [kty | (fromKeyType -> Just (kty,_)) <- HashMap.keys values, kty /= typeOf GhcSessionIO] ++
+                            [typeOf GhcSessionIO]
                 measureMemory logger [keys] consoleObserver valuesRef
 
             unless (null failed) (exitWith $ ExitFailure (length failed))

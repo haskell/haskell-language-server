@@ -30,7 +30,6 @@ import           Development.IDE.GHC.ExactPrint               (Annotated (annsA)
 import           Development.IDE.GHC.Util                     (prettyPrint)
 import           Development.IDE.Graph
 import           Development.IDE.Graph.Classes
-import qualified Development.IDE.Types.KnownTargets           as KT
 import           Development.IDE.Plugin.CodeAction            (newImport,
                                                                newImportToEdit)
 import           Development.IDE.Plugin.CodeAction.ExactPrint
@@ -39,6 +38,7 @@ import           Development.IDE.Plugin.Completions.Types
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.HscEnvEq               (HscEnvEq (envPackageExports),
                                                                hscEnv)
+import qualified Development.IDE.Types.KnownTargets           as KT
 import           Development.IDE.Types.Location
 import           GHC.Exts                                     (fromList, toList)
 import           GHC.Generics
@@ -47,6 +47,7 @@ import           Ide.Types
 import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.Types
 import qualified Language.LSP.VFS                             as VFS
+import           Text.Fuzzy.Parallel                          (Scored (..))
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
@@ -156,17 +157,50 @@ getCompletionsLSP ide plId
                 let clientCaps = clientCapabilities $ shakeExtras ide
                 config <- getCompletionsConfig plId
                 allCompletions <- liftIO $ getCompletions plId ideOpts cci' parsedMod bindMap pfix' clientCaps config moduleExports
-                pure $ InL (List allCompletions)
+                pure $ InL (List $ orderedCompletions allCompletions)
               _ -> return (InL $ List [])
           _ -> return (InL $ List [])
       _ -> return (InL $ List [])
+
+{- COMPLETION SORTING
+   We return an ordered set of completions (local -> nonlocal -> global).
+   Ordering is important because local/nonlocal are import aware, whereas
+   global are not and will always insert import statements, potentially redundant.
+
+   Moreover, the order prioritizes qualifiers, for instance, given:
+
+   import qualified MyModule
+   foo = MyModule.<complete>
+
+   The identifiers defined in MyModule will be listed first, followed by other
+   identifiers in importable modules.
+
+   According to the LSP specification, if no sortText is provided, the label is used
+   to sort alphabetically. Alphabetical ordering is almost never what we want,
+   so we force the LSP client to respect our ordering by using a numbered sequence.
+-}
+
+orderedCompletions :: [Scored CompletionItem] -> [CompletionItem]
+orderedCompletions [] = []
+orderedCompletions xx = zipWith addOrder [0..] xx
+    where
+    lxx = digits $ Prelude.length xx
+    digits = Prelude.length . show
+
+    addOrder :: Int -> Scored CompletionItem -> CompletionItem
+    addOrder n Scored{original = it@CompletionItem{_label,_sortText}} =
+        it{_sortText = Just $
+                T.pack(pad lxx n)
+                }
+
+    pad n x = let sx = show x in replicate (n - Prelude.length sx) '0' <> sx
 
 ----------------------------------------------------------------------------------------------------
 
 toModueNameText :: KT.Target -> T.Text
 toModueNameText target = case target of
-  KT.TargetModule m  -> T.pack $ moduleNameString m
-  _ -> T.empty
+  KT.TargetModule m -> T.pack $ moduleNameString m
+  _                 -> T.empty
 
 extendImportCommand :: PluginCommand IdeState
 extendImportCommand =

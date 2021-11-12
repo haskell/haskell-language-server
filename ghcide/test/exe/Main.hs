@@ -50,7 +50,10 @@ import           Development.IDE.Test                     (Cursor,
                                                            expectNoMoreDiagnostics,
                                                            flushMessages,
                                                            standardizeQuotes,
-                                                           waitForAction)
+                                                           getInterfaceFilesDir,
+                                                           waitForAction,
+                                                           getStoredKeys,
+                                                           waitForTypecheck, waitForGC)
 import           Development.IDE.Test.Runfiles
 import qualified Development.IDE.Types.Diagnostics        as Diagnostics
 import           Development.IDE.Types.Location
@@ -95,7 +98,7 @@ import           Data.Tuple.Extra
 import           Development.IDE.Core.FileStore           (getModTime)
 import           Development.IDE.Plugin.CodeAction        (matchRegExMultipleImports)
 import qualified Development.IDE.Plugin.HLS.GhcIde        as Ghcide
-import           Development.IDE.Plugin.Test              (TestRequest (BlockSeconds, GetInterfaceFilesDir),
+import           Development.IDE.Plugin.Test              (TestRequest (BlockSeconds),
                                                            WaitForIdeRuleResult (..),
                                                            blockCommandId)
 import           Ide.PluginUtils                          (pluginDescToIdePlugins)
@@ -112,11 +115,14 @@ import           Test.Tasty.QuickCheck
 import           Text.Printf                              (printf)
 import           Text.Regex.TDFA                          ((=~))
 
+-- | Wait for the next progress begin step
 waitForProgressBegin :: Session ()
 waitForProgressBegin = skipManyTill anyMessage $ satisfyMaybe $ \case
   FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (Begin _))) -> Just ()
   _ -> Nothing
 
+-- | Wait for the first progress end step
+-- Also implemented in hls-test-utils Test.Hls
 waitForProgressDone :: Session ()
 waitForProgressDone = skipManyTill anyMessage $ satisfyMaybe $ \case
   FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (End _))) -> Just ()
@@ -124,6 +130,7 @@ waitForProgressDone = skipManyTill anyMessage $ satisfyMaybe $ \case
 
 -- | Wait for all progress to be done
 -- Needs at least one progress done notification to return
+-- Also implemented in hls-test-utils Test.Hls
 waitForAllProgressDone :: Session ()
 waitForAllProgressDone = loop
   where
@@ -133,6 +140,7 @@ waitForAllProgressDone = loop
         _ -> Nothing
       done <- null <$> getIncompleteProgressSessions
       unless done loop
+
 main :: IO ()
 main = do
   -- We mess with env vars so run single-threaded.
@@ -172,6 +180,7 @@ main = do
     , clientSettingsTest
     , codeActionHelperFunctionTests
     , referenceTests
+    , garbageCollectionTests
     ]
 
 initializeResponseTests :: TestTree
@@ -718,7 +727,7 @@ cancellationTemplate (edit, undoEdit) mbKey = testCase (maybe "-" fst mbKey) $ r
       -- Now we edit the document and wait for the given key (if any)
       changeDoc doc [edit]
       whenJust mbKey $ \(key, expectedResult) -> do
-        Right WaitForIdeRuleResult{ideResultSuccess} <- waitForAction key doc
+        WaitForIdeRuleResult{ideResultSuccess} <- waitForAction key doc
         liftIO $ ideResultSuccess @?= expectedResult
 
       -- The 2nd edit cancels the active session and unbreaks the file
@@ -732,7 +741,7 @@ cancellationTemplate (edit, undoEdit) mbKey = testCase (maybe "-" fst mbKey) $ r
         runTestNoKick s = withTempDir $ \dir -> runInDir' dir "." "." ["--test-no-kick"] s
 
         typeCheck doc = do
-            Right WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" doc
+            WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" doc
             liftIO $ assertBool "The file should typecheck" ideResultSuccess
             -- wait for the debouncer to publish diagnostics if the rule runs
             liftIO $ sleep 0.2
@@ -1794,10 +1803,20 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
             compareHideFunctionTo [(8,9),(10,8)]
                 "Use EVec for ++, hiding other imports"
                 "HideFunction.expected.append.E.hs"
+        , testCase "Hide functions without local" $
+            compareTwo
+                "HideFunctionWithoutLocal.hs" [(8,8)]
+                "Use local definition for ++, hiding other imports"
+                "HideFunctionWithoutLocal.expected.hs"
         , testCase "Prelude" $
             compareHideFunctionTo [(8,9),(10,8)]
                 "Use Prelude for ++, hiding other imports"
                 "HideFunction.expected.append.Prelude.hs"
+        , testCase "Prelude and local definition, infix" $
+            compareTwo
+                "HidePreludeLocalInfix.hs" [(2,19)]
+                "Use local definition for ++, hiding other imports"
+                "HidePreludeLocalInfix.expected.hs"
         , testCase "AVec, indented" $
             compareTwo "HidePreludeIndented.hs" [(3,8)]
             "Use AVec for ++, hiding other imports"
@@ -4093,7 +4112,8 @@ thLinkingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
 completionTests :: TestTree
 completionTests
   = testGroup "completion"
-    [ testGroup "non local" nonLocalCompletionTests
+    [
+    testGroup "non local" nonLocalCompletionTests
     , testGroup "topLevel" topLevelCompletionTests
     , testGroup "local" localCompletionTests
     , testGroup "package" packageCompletionTests
@@ -4174,15 +4194,13 @@ topLevelCompletionTests = [
         "variable"
         ["bar = xx", "-- | haddock", "xxx :: ()", "xxx = ()", "-- | haddock", "data Xxx = XxxCon"]
         (Position 0 8)
-        [("xxx", CiFunction, "xxx", True, True, Nothing),
-         ("XxxCon", CiConstructor, "XxxCon", False, True, Nothing)
+        [("xxx", CiFunction, "xxx", True, True, Nothing)
         ],
     completionTest
         "constructor"
         ["bar = xx", "-- | haddock", "xxx :: ()", "xxx = ()", "-- | haddock", "data Xxx = XxxCon"]
         (Position 0 8)
-        [("xxx", CiFunction, "xxx", True, True, Nothing),
-         ("XxxCon", CiConstructor, "XxxCon", False, True, Nothing)
+        [("xxx", CiFunction, "xxx", True, True, Nothing)
         ],
     completionTest
         "class method"
@@ -4296,17 +4314,15 @@ nonLocalCompletionTests =
       [("head", CiFunction, "head ${1:([a])}", True, True, Nothing)],
     completionTest
       "constructor"
-      ["module A where", "f = Tru"]
-      (Position 1 7)
-      [ ("True", CiConstructor, "True ", True, True, Nothing),
-        ("truncate", CiFunction, "truncate ${1:a}", True, True, Nothing)
+      ["{-# OPTIONS_GHC -Wall #-}", "module A where", "f = True"]
+      (Position 2 8)
+      [ ("True", CiConstructor, "True ", True, True, Nothing)
       ],
     completionTest
       "type"
-      ["{-# OPTIONS_GHC -Wall #-}", "module A () where", "f :: Bo", "f = True"]
-      (Position 2 7)
-      [ ("Bounded", CiInterface, "Bounded ${1:(*)}", True, True, Nothing),
-        ("Bool", CiStruct, "Bool ", True, True, Nothing)
+      ["{-# OPTIONS_GHC -Wall #-}", "module A () where", "f :: Boo", "f = True"]
+      (Position 2 8)
+      [ ("Bool", CiStruct, "Bool ", True, True, Nothing)
       ],
     completionTest
       "qualified"
@@ -4316,8 +4332,8 @@ nonLocalCompletionTests =
       ],
     completionTest
       "duplicate import"
-      ["module A where", "import Data.List", "import Data.List", "f = perm"]
-      (Position 3 8)
+      ["module A where", "import Data.List", "import Data.List", "f = permu"]
+      (Position 3 9)
       [ ("permutations", CiFunction, "permutations ${1:([a])}", False, False, Nothing)
       ],
     completionTest
@@ -4493,7 +4509,7 @@ otherCompletionTests = [
       _ <- waitForDiagnostics
       compls <- getCompletions docA $ Position 2 4
       let compls' = [txt | CompletionItem {_insertText = Just txt, ..} <- compls, _label == "member"]
-      liftIO $ take 2 compls' @?= ["member ${1:Foo}", "member ${1:Bar}"],
+      liftIO $ take 2 compls' @?= ["member ${1:Bar}", "member ${1:Foo}"],
 
     testSessionWait "maxCompletions" $ do
         doc <- createDoc "A.hs" "haskell" $ T.unlines
@@ -4588,7 +4604,7 @@ packageCompletionTests =
               , _label == "fromList"
               ]
         liftIO $ take 3 compls' @?=
-          map Just ["fromList ${1:([Item l])}", "fromList", "fromList"]
+          map Just ["fromList ${1:([Item l])}"]
   , testGroup "auto import snippets"
     [ completionCommandTest
             "import Data.Sequence"
@@ -4645,7 +4661,41 @@ projectCompletionTests =
         compls <- getCompletions doc (Position 1 13)
         let item = head $ filter ((== "ALocalModule") . (^. Lens.label)) compls
         liftIO $ do
-          item ^. Lens.label @?= "ALocalModule"
+          item ^. Lens.label @?= "ALocalModule",
+      testSession' "auto complete functions from qualified imports without alias" $ \dir-> do
+        liftIO $ writeFile (dir </> "hie.yaml")
+            "cradle: {direct: {arguments: [\"-Wmissing-signatures\", \"A\", \"B\"]}}"
+        _ <- createDoc "A.hs" "haskell" $ T.unlines
+            [  "module A (anidentifier) where",
+               "anidentifier = ()"
+            ]
+        _ <- waitForDiagnostics
+        doc <- createDoc "B.hs" "haskell" $ T.unlines
+            [ "module B where",
+              "import qualified A",
+              "A."
+            ]
+        compls <- getCompletions doc (Position 2 2)
+        let item = head compls
+        liftIO $ do
+          item ^. L.label @?= "anidentifier",
+      testSession' "auto complete functions from qualified imports with alias" $ \dir-> do
+        liftIO $ writeFile (dir </> "hie.yaml")
+            "cradle: {direct: {arguments: [\"-Wmissing-signatures\", \"A\", \"B\"]}}"
+        _ <- createDoc "A.hs" "haskell" $ T.unlines
+            [  "module A (anidentifier) where",
+               "anidentifier = ()"
+            ]
+        _ <- waitForDiagnostics
+        doc <- createDoc "B.hs" "haskell" $ T.unlines
+            [ "module B where",
+              "import qualified A as Alias",
+              "foo = Alias."
+            ]
+        compls <- getCompletions doc (Position 2 12)
+        let item = head compls
+        liftIO $ do
+          item ^. L.label @?= "anidentifier"
     ]
 
 highlightTests :: TestTree
@@ -5035,7 +5085,7 @@ retryFailedCradle = testSession' "retry failed" $ \dir -> do
   liftIO $ writeFile hiePath hieContents
   let aPath = dir </> "A.hs"
   doc <- createDoc aPath "haskell" "main = return ()"
-  Right WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" doc
+  WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" doc
   liftIO $ "Test assumption failed: cradle should error out" `assertBool` not ideResultSuccess
 
   -- Fix the cradle and typecheck again
@@ -5044,7 +5094,7 @@ retryFailedCradle = testSession' "retry failed" $ \dir -> do
   sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
           List [FileEvent (filePathToUri $ dir </> "hie.yaml") FcChanged ]
 
-  Right WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" doc
+  WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" doc
   liftIO $ "No joy after fixing the cradle" `assertBool` ideResultSuccess
 
 
@@ -5123,11 +5173,11 @@ simpleMultiTest = testCase "simple-multi-test" $ withLongTimeout $ runWithExtraF
         bPath = dir </> "b/B.hs"
     aSource <- liftIO $ readFileUtf8 aPath
     adoc <- createDoc aPath "haskell" aSource
-    Right WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" adoc
+    WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" adoc
     liftIO $ assertBool "A should typecheck" ideResultSuccess
     bSource <- liftIO $ readFileUtf8 bPath
     bdoc <- createDoc bPath "haskell" bSource
-    Right WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" bdoc
+    WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" bdoc
     liftIO $ assertBool "B should typecheck" ideResultSuccess
     locs <- getDefinitions bdoc (Position 2 7)
     let fooL = mkL (adoc ^. L.uri) 2 0 2 3
@@ -5249,14 +5299,9 @@ ifaceErrorTest = testCase "iface-error-test-1" $ runWithExtraFiles "recomp" $ \d
 
 
     -- Check that we wrote the interfaces for B when we saved
-    let m = SCustomMethod "test"
-    lid <- sendRequest m $ toJSON $ GetInterfaceFilesDir bPath
-    res <- skipManyTill anyMessage $ responseForId m lid
-    liftIO $ case res of
-      ResponseMessage{_result=Right (A.fromJSON -> A.Success hidir)} -> do
-        hi_exists <- doesFileExist $ hidir </> "B.hi"
-        assertBool ("Couldn't find B.hi in " ++ hidir) hi_exists
-      _ -> assertFailure $ "Got malformed response for CustomMessage hidir: " ++ show res
+    hidir <- getInterfaceFilesDir bdoc
+    hi_exists <- liftIO $ doesFileExist $ hidir </> "B.hi"
+    liftIO $ assertBool ("Couldn't find B.hi in " ++ hidir) hi_exists
 
     pdoc <- createDoc pPath "haskell" pSource
     changeDoc pdoc [TextDocumentContentChangeEvent Nothing Nothing $ pSource <> "\nfoo = y :: Bool" ]
@@ -5836,6 +5881,78 @@ unitTests = do
            assertBool msg (resolution_us <= 1000)
      , Progress.tests
      ]
+
+garbageCollectionTests :: TestTree
+garbageCollectionTests = testGroup "garbage collection"
+  [ testGroup "dirty keys"
+        [ testSession' "are collected" $ \dir -> do
+            liftIO $ writeFile (dir </> "hie.yaml") "cradle: {direct: {arguments: [A]}}"
+            doc <- generateGarbage "A" dir
+            closeDoc doc
+            garbage <- waitForGC
+            liftIO $ assertBool "no garbage was found" $ not $ null garbage
+
+        , testSession' "are deleted from the state" $ \dir -> do
+            liftIO $ writeFile (dir </> "hie.yaml") "cradle: {direct: {arguments: [A]}}"
+            docA <- generateGarbage "A" dir
+            keys0 <- getStoredKeys
+            closeDoc docA
+            garbage <- waitForGC
+            liftIO $ assertBool "something is wrong with this test - no garbage found" $ not $ null garbage
+            keys1 <- getStoredKeys
+            liftIO $ assertBool "keys were not deleted from the state" (length keys1 < length keys0)
+
+        , testSession' "are not regenerated unless needed" $ \dir -> do
+            liftIO $ writeFile (dir </> "hie.yaml") "cradle: {direct: {arguments: [A.hs, B.hs]}}"
+            docA <- generateGarbage "A" dir
+            _docB <- generateGarbage "B" dir
+
+            -- garbage collect A keys
+            keysBeforeGC <- getStoredKeys
+            closeDoc docA
+            garbage <- waitForGC
+            liftIO $ assertBool "something is wrong with this test - no garbage found" $ not $ null garbage
+            keysAfterGC <- getStoredKeys
+            liftIO $ assertBool "something is wrong with this test - keys were not deleted from the state"
+                (length keysAfterGC < length keysBeforeGC)
+
+            -- re-typecheck B and check that the keys for A have not materialized back
+            _docB <- generateGarbage "B" dir
+            keysB <- getStoredKeys
+            let regeneratedKeys = Set.filter (not . isExpected) $
+                    Set.intersection (Set.fromList garbage) (Set.fromList keysB)
+            liftIO $ regeneratedKeys @?= mempty
+
+        , testSession' "regenerate successfully" $ \dir -> do
+            liftIO $ writeFile (dir </> "hie.yaml") "cradle: {direct: {arguments: [A]}}"
+            docA <- generateGarbage "A" dir
+            closeDoc docA
+            garbage <- waitForGC
+            liftIO $ assertBool "no garbage was found" $ not $ null garbage
+            let edit = T.unlines
+                        [ "module A where"
+                        , "a :: Bool"
+                        , "a = ()"
+                        ]
+            doc <- generateGarbage "A" dir
+            changeDoc doc [TextDocumentContentChangeEvent Nothing Nothing edit]
+            builds <- waitForTypecheck doc
+            liftIO $ assertBool "it still builds" builds
+            expectCurrentDiagnostics doc [(DsError, (2,4), "Couldn't match expected type")]
+        ]
+  ]
+  where
+    isExpected k = any (`T.isPrefixOf` k) ["GhcSessionIO"]
+
+    generateGarbage :: String -> FilePath -> Session TextDocumentIdentifier
+    generateGarbage modName dir = do
+        let fp = modName <> ".hs"
+            body = printf "module %s where" modName
+        doc <- createDoc fp "haskell" (T.pack body)
+        liftIO $ writeFile (dir </> fp) body
+        builds <- waitForTypecheck doc
+        liftIO $ assertBool "something is wrong with this test" builds
+        return doc
 
 findResolution_us :: Int -> IO Int
 findResolution_us delay_us | delay_us >= 1000000 = error "Unable to compute timestamp resolution"
