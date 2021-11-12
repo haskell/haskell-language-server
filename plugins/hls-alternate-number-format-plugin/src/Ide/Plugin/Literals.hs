@@ -1,8 +1,14 @@
+{-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE DerivingVia       #-}
 {-# LANGUAGE FlexibleInstances #-}
-module Ide.Plugin.Traverse.Literals where
+module Ide.Plugin.Literals where
+import           Data.Maybe                    (maybeToList)
+import           Data.Text                     (Text)
+import qualified Data.Text                     as T
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Util   (unsafePrintSDoc)
+import           Development.IDE.GHC.Util      (unsafePrintSDoc)
+import           Development.IDE.Graph.Classes (NFData)
+import           GHC.Generics                  (Generic)
 
 -- Depending on our traversal path sometimes we have to parse the "body" of an expression or AST node
 -- in the context of how we got there. I.E. we could be in "CMD Mode" where we are parsing a HsCmd or
@@ -16,19 +22,35 @@ instance Traverse (LHsExpr GhcPs) where
 instance Traverse (LHsCmd GhcPs) where
     traverseTree = traverseLCmd
 
-data Literal = Overloaded SrcSpan (HsOverLit GhcPs)
-             | NonOverloaded SrcSpan (HsLit GhcPs)
-             | NoLocation Literal -- Unused
+-- data type to capture what type of literal we are dealing with
+-- provides location and possibly source text (for OverLits) as well as it's value
+-- we currently don't have any use for PrimLiterals. They never have source text so we always drop them
+data Literal = IntLiteral      SrcSpan (Maybe Text) Integer
+             | FracLiteral     SrcSpan (Maybe Text) Rational
+             | IntPrimLiteral  SrcSpan (Maybe Text) Integer
+             | FracPrimLiteral SrcSpan (Maybe Text) Rational
+             deriving (Generic, Show)
 
-instance Show Literal where
-    show  = \case
-      Overloaded ss hol -> "SourceLoc: " <> show ss <> " - " <> overLitToString hol
-      NonOverloaded ss hl -> "SourceLoc: " <> show ss <> " - " <> literalToString hl
-      NoLocation lit -> "NoLocation ---> " <> show lit
+instance NFData Literal where
+
+getSrcText :: Literal -> Maybe Text
+getSrcText = \case
+  IntLiteral _ txt _      -> txt
+  FracLiteral _ txt _     -> txt
+  IntPrimLiteral _ txt _  -> txt
+  FracPrimLiteral _ txt _ -> txt
+
+getSrcSpan :: Literal -> SrcSpan
+getSrcSpan = \case
+    IntLiteral ss _ _      -> ss
+    FracLiteral ss _ _     -> ss
+    IntPrimLiteral ss _ _  -> ss
+    FracPrimLiteral ss _ _ -> ss
+
 
 -- | Find all literals in a Parsed Source File
-collectLiterals :: ParsedModule -> [Literal]
-collectLiterals = concatMap traverseLDecl . hsmodDecls . unLoc . pm_parsed_source
+collectLiterals :: ParsedSource -> [Literal]
+collectLiterals = concatMap traverseLDecl . hsmodDecls . unLoc
 
 ----------------------------------------- DECLARATIONS -----------------------------------------
 -- | Find all Literals in a Declaration.
@@ -116,12 +138,12 @@ traversePat sSpan = \case
       -------------------------------------------------------------------
       ViewPat _ expr lpat                      -> traverseLExpr expr <> traverseLPat lpat
       SplicePat _ splice                       -> traverseSplice sSpan splice
-      LitPat _ lit                             -> getLiteral sSpan lit
-      NPat _ (L olSpan overLit) sexpr1 sexpr2  -> getOverLiteral olSpan overLit
+      LitPat _ lit                             -> getLiteralAsList sSpan lit
+      NPat _ (L olSpan overLit) sexpr1 sexpr2  -> getOverLiteralAsList olSpan overLit
                                                 <> maybe [] (traverseSynExpr sSpan) sexpr1
                                                 <> traverseSynExpr sSpan sexpr2
-      NPlusKPat _ _ (L olSpan loverLit) overLit sexpr1 sexpr2 -> getOverLiteral olSpan loverLit
-                                                      <> getOverLiteral sSpan overLit
+      NPlusKPat _ _ (L olSpan loverLit) overLit sexpr1 sexpr2 -> getOverLiteralAsList olSpan loverLit
+                                                      <> getOverLiteralAsList sSpan overLit
                                                       <> traverseSynExpr sSpan sexpr1
                                                       <> traverseSynExpr sSpan sexpr2
       SigPat _ lpat _                          -> traverseLPat lpat
@@ -182,8 +204,8 @@ traverseLExpr (L sSpan hsExpr) = traverseExpr sSpan hsExpr
 
 traverseExpr :: SrcSpan -> HsExpr GhcPs -> [Literal]
 traverseExpr sSpan = \case
-      HsOverLit _ overLit             -> [Overloaded sSpan overLit | isNumericOverLit overLit]
-      HsLit _ lit                     -> [NonOverloaded sSpan lit | isNumericLiteral lit]
+      HsOverLit _ overLit             -> getOverLiteralAsList sSpan overLit
+      HsLit _ lit                     -> getLiteralAsList sSpan lit
       HsLam _ group                   -> traverseMatchGroup group
       HsLamCase _ group               -> traverseMatchGroup group
       HsApp _ expr1 expr2             -> concatMap traverseLExpr [expr1, expr2]
@@ -313,32 +335,43 @@ traverseSplice sSpan = \case
 traverseSynExpr :: SrcSpan -> SyntaxExpr GhcPs -> [Literal]
 traverseSynExpr sSpan SyntaxExpr{syn_expr} = traverseExpr sSpan syn_expr
 
+getLiteralAsList :: SrcSpan -> HsLit GhcPs -> [Literal]
+getLiteralAsList sSpan = maybeToList . getLiteral sSpan
+
 -- Translate from Hs Type to our Literal type
-getLiteral :: SrcSpan -> HsLit GhcPs -> [Literal]
-getLiteral sSpan lit = [NonOverloaded sSpan lit | isNumericLiteral lit]
+getLiteral :: SrcSpan -> HsLit GhcPs -> Maybe Literal
+getLiteral sSpan = \case
+  HsInt _ val                 -> Just $ fromIntegralLit sSpan val
+  HsIntPrim _ val             -> Just $ IntPrimLiteral sSpan Nothing val
+  HsWordPrim _ val            -> Just $ IntPrimLiteral sSpan Nothing val
+  HsInt64Prim _ val           -> Just $ IntPrimLiteral sSpan Nothing val
+  HsWord64Prim _ val          -> Just $ IntPrimLiteral sSpan Nothing val
+  HsInteger _ val _           -> Just $ IntLiteral sSpan Nothing val
+  HsRat _ val _               -> Just $ fromFractionalLit sSpan val
+  HsFloatPrim _ (FL _ _ val)  -> Just $ FracPrimLiteral sSpan Nothing val
+  HsDoublePrim _ (FL _ _ val) -> Just $ FracPrimLiteral sSpan Nothing val
+  _                           -> Nothing
 
-getOverLiteral :: SrcSpan -> HsOverLit GhcPs -> [Literal]
-getOverLiteral sSpan lit = [Overloaded sSpan lit | isNumericOverLit lit]
+getOverLiteralAsList :: SrcSpan -> HsOverLit GhcPs -> [Literal]
+getOverLiteralAsList sSpan = maybeToList . getOverLiteral sSpan
 
--- Ignore non-numerics
-isNumericLiteral :: HsLit p -> Bool
-isNumericLiteral = \case
-    HsChar _ _       -> False
-    HsCharPrim _ _   -> False
-    HsString _ _     -> False
-    HsStringPrim _ _ -> False
-    _                -> True
+getOverLiteral :: SrcSpan -> HsOverLit GhcPs -> Maybe Literal
+getOverLiteral sSpan OverLit{..} = case ol_val of
+  HsIntegral il   -> Just $ fromIntegralLit sSpan il
+  HsFractional fl -> Just $ fromFractionalLit sSpan fl
+  _               -> Nothing
+getOverLiteral _ _ = Nothing
 
-isNumericOverLit :: HsOverLit p -> Bool
-isNumericOverLit = \case
-    OverLit{ol_val} -> isNumericOverLit' ol_val
-    _               -> False
+fromIntegralLit :: SrcSpan -> IntegralLit -> Literal
+fromIntegralLit s (IL txt _ val) = IntLiteral s (fromSourceText txt) val
 
--- only a single non-numeric literal
-isNumericOverLit' :: OverLitVal -> Bool
-isNumericOverLit' = \case
-    HsIsString _ _ -> False
-    _              -> True
+fromFractionalLit  :: SrcSpan -> FractionalLit -> Literal
+fromFractionalLit s (FL txt _ val) = FracLiteral s (fromSourceText txt) val
+
+fromSourceText :: SourceText -> Maybe Text
+fromSourceText = \case
+  SourceText s -> Just $ T.pack s
+  NoSourceText -> Nothing
 
 -- mostly for debugging purposes
 literalToString :: HsLit p -> String
@@ -361,10 +394,8 @@ literalToString = \case
     tyToLiteral :: Type -> String
     tyToLiteral = unsafePrintSDoc .  ppr
 
-overLitToString :: HsOverLit GhcPs -> String
+overLitToString :: OverLitVal -> String
 overLitToString = \case
-  OverLit _ overLit _ -> case overLit of
      HsIntegral int -> case int of { IL _ _ val -> "IntegralOverLit: " <> show val }
      HsFractional frac -> case frac of { FL _ _ val -> "RationalOverLit: " <> show val }
      HsIsString _ str -> "HIsString: " <> show str
-  _ -> "XOverLit"

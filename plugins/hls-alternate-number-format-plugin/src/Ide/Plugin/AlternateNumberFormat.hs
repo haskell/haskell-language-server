@@ -1,70 +1,155 @@
 {-# LANGUAGE DataKinds                  #-}
+{-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE TypeOperators              #-}
 
 module Ide.Plugin.AlternateNumberFormat where
 
 import           Control.Lens                         ((^.))
 import           Control.Monad.Except                 (ExceptT, MonadIO, liftIO)
-import           Data.Aeson                           (FromJSON, ToJSON,
-                                                       Value (Null))
+import qualified Data.HashMap.Strict                  as HashMap
+import           Data.Maybe                           (fromMaybe, isJust)
+import           Data.Text                            (Text)
 import qualified Data.Text                            as T
-import           Development.IDE                      (GetParsedModuleWithComments (GetParsedModuleWithComments),
-                                                       IdeState,
-                                                       TcModuleResult (TcModuleResult, tmrParsed, tmrTypechecked),
-                                                       TypeCheck (TypeCheck),
-                                                       ideLogger, runAction,
+import           Development.IDE                      (GetParsedModule (GetParsedModule),
+                                                       IdeState, RuleResult,
+                                                       Rules,
+                                                       ShowDiagnostic (HideDiag),
+                                                       define, ideLogger,
+                                                       isInsideSrcSpan, noRange,
+                                                       runAction,
+                                                       srcSpanToRange, use,
                                                        useWithStale)
 import           Development.IDE.Core.PositionMapping (PositionMapping)
-import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Compat.Util      (FastString, mkFastString)
+import           Development.IDE.GHC.Compat           hiding (getSrcSpan)
+import           Development.IDE.GHC.Compat.Util      (toList)
+import           Development.IDE.Graph.Classes        (Hashable, NFData)
 import           Development.IDE.Types.Logger         as Logger
+import           GHC.Generics                         (Generic)
+import           Ide.Plugin.Conversion                (FormatType,
+                                                       alternateFormat,
+                                                       toFormatTypes)
+import           Ide.Plugin.Literals                  (Literal (..),
+                                                       collectLiterals,
+                                                       getSrcSpan, getSrcText)
 import           Ide.Plugin.Retrie                    (handleMaybe,
                                                        handleMaybeM, response)
-import           Ide.Plugin.Traverse.Literals         (collectLiterals
-                                                       )
 import           Ide.Types
 import           Language.LSP.Types
-import           Language.LSP.Types.Lens              (textDocument, uri)
+import           Language.LSP.Types.Lens              (uri)
 import           Prelude                              hiding (log)
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
-    { pluginHandlers = mkPluginHandler STextDocumentHover codeActionHandler
-    , pluginCommands = commands
+    { pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionHandler
+    , pluginRules = collectLiteralsRule
     }
 
-commands :: [PluginCommand IdeState]
-commands = [PluginCommand "alternateNumberFormat" "Provide alternate number formats based on LanguagePragmas and Type" provideFormat]
+data CollectLiterals = CollectLiterals
+                     deriving (Show, Eq, Generic)
 
-newtype AlternateNumberParams = AlternateNumberParams Int
-    deriving(FromJSON, ToJSON)
+instance Hashable CollectLiterals
+instance NFData CollectLiterals
 
-provideFormat :: CommandFunction IdeState AlternateNumberParams
-provideFormat _ _ = pure $ Right Null
+type instance RuleResult CollectLiterals = CollectLiteralsResult
 
-codeActionHandler :: PluginMethodHandler IdeState 'TextDocumentHover
-codeActionHandler state _ caParams = response $ do
-    logIO' state "We are HERE"
-    nfp <- getNormalizedFilePath caParams
-    logIO state nfp
-    (pm, _) <- getHieAst state nfp
-    -- (TcModuleResult{..}, _) <- getHieAst state nfp
-    logIO state (collectLiterals pm)
-    logIO state $ "File: " <> nfpToFastString nfp
-    -- logIO state (collectTcLiterals $ tcg_binds tmrTypechecked )
-    pure Nothing
+data CollectLiteralsResult = CLR {
+    literals      :: [Literal]
+    , formatTypes :: [FormatType]
+    } deriving (Generic)
 
-getNormalizedFilePath :: Monad m => HoverParams -> ExceptT String m NormalizedFilePath
-getNormalizedFilePath caParams = handleMaybe "Error: converting to NormalizedFilePath"
+instance Show CollectLiteralsResult where
+    show _ = "<CollectLiteralResult>"
+
+instance NFData CollectLiteralsResult
+
+collectLiteralsRule :: Rules ()
+collectLiteralsRule = define $ \CollectLiterals nfp -> do
+    pm <- use GetParsedModule nfp
+    -- get the current extensions active and transform them into FormatTypes
+    let fmts = getFormatTypes <$> pm
+        -- collect all the literals for a file
+        lits = collectLiterals . pm_parsed_source <$> pm
+        -- make diagnostics for each literal (they will be hidden from editor)
+        litDiags = maybe [] (map (mkFileDiagnostic nfp . mkDiagnostic)) lits
+    pure (litDiags, CLR <$> lits <*> fmts)
+    where
+        getFormatTypes = toFormatTypes . toList . extensionFlags . ms_hspp_opts . pm_mod_summary
+        mkFileDiagnostic nfp' diag = (nfp', HideDiag, diag)
+
+codeActionHandler :: PluginMethodHandler IdeState 'TextDocumentCodeAction
+codeActionHandler state _ (CodeActionParams _ _ docId currRange _) = response $ do
+    nfp <- getNormalizedFilePath docId
+    (CLR{..}, _) <- getCollectLiterals state nfp
+        -- remove any invalid literals (see validTarget comment)
+    let litsInRange = filter validTarget literals
+        -- generate alternateFormats and zip with the literal that generated the alternates
+        literalPairs = map (\lit -> (lit, alternateFormat formatTypes lit)) litsInRange
+        -- make a code action for every literal and its' alternates (then flatten the result)
+        actions = concatMap (\(lit, alts) -> map (mkCodeAction nfp lit) alts) literalPairs
+
+    pure $ List actions
+    where
+        getSrcTextDefault = fromMaybe "" . getSrcText
+        -- for now we ignore literals with no attached source text/span (TH I believe)
+        validTarget :: Literal -> Bool
+        validTarget lit = let srcSpan = getSrcSpan lit
+                              in currRange `contains` srcSpan
+                                 && isJust (getSrcText lit)
+                                 && isRealSrcSpan srcSpan
+
+        mkCodeAction :: NormalizedFilePath -> Literal -> Text -> Command |? CodeAction
+        mkCodeAction nfp lit alt = InR CodeAction {
+            _title = "Convert " <> getSrcTextDefault lit <> " into " <> alt
+            -- what should this actually be?
+            , _kind = Just $ CodeActionUnknown "alternate.style"
+            , _diagnostics = Nothing
+            , _isPreferred = Just True
+            , _disabled = Nothing
+            , _edit = Just $ mkWorkspaceEdit nfp lit alt
+            , _command = Nothing
+            , _xdata = Nothing
+            }
+
+        mkWorkspaceEdit :: NormalizedFilePath -> Literal -> Text -> WorkspaceEdit
+        mkWorkspaceEdit nfp lit alt = WorkspaceEdit changes Nothing Nothing
+            where
+                -- NOTE: currently our logic filters our any noRange possibilities
+                txtEdit = TextEdit (fromMaybe noRange $ srcSpanToRange $ getSrcSpan lit) alt
+                changes = Just $ HashMap.fromList [( filePathToUri $ fromNormalizedFilePath nfp, List [txtEdit])]
+
+-- from HaddockComments.hs
+contains :: Range -> SrcSpan -> Bool
+contains Range {_start, _end} x = isInsideSrcSpan _start x || isInsideSrcSpan _end x
+
+-- a source span provides no meaningful information to edit
+isRealSrcSpan :: SrcSpan -> Bool
+isRealSrcSpan (UnhelpfulSpan _) = False
+isRealSrcSpan _                 = True
+
+mkDiagnostic :: Literal -> Diagnostic
+mkDiagnostic lit = Diagnostic {
+            _range = fromMaybe noRange $ srcSpanToRange $ getSrcSpan lit
+            , _severity = Just DsHint
+            , _code = Nothing
+            , _source = getSrcText lit
+            , _message = "alternateNumberFormat"
+            , _tags = Nothing
+            , _relatedInformation = Nothing
+            }
+
+getNormalizedFilePath :: Monad m => TextDocumentIdentifier -> ExceptT String m NormalizedFilePath
+getNormalizedFilePath docId = handleMaybe "Error: converting to NormalizedFilePath"
         $ uriToNormalizedFilePath
-        $ toNormalizedUri (caParams ^. (textDocument . uri))
+        $ toNormalizedUri (docId ^. uri)
 
-getHieAst :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m (ParsedModule, PositionMapping)
-getHieAst state = handleMaybeM "Error: Could not get AST" . liftIO . runAction "AlternateNumberFormat.GetHieAst" state . useWithStale GetParsedModuleWithComments
+getCollectLiterals :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m (CollectLiteralsResult, PositionMapping)
+getCollectLiterals state = handleMaybeM "Error: Could not get ParsedModule"
+                . liftIO
+                . runAction "AlternateNumberFormat.CollectLiterals" state
+                . useWithStale CollectLiterals
 
-nfpToFastString :: NormalizedFilePath -> FastString
-nfpToFastString = mkFastString . fromNormalizedFilePath
 
 logIO :: (MonadIO m, Show a) => IdeState -> a -> m ()
 logIO state = liftIO . log state

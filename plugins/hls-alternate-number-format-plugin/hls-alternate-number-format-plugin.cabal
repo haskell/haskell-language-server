@@ -15,19 +15,22 @@ extra-source-files: LICENSE
 
 library
   exposed-modules:  Ide.Plugin.AlternateNumberFormat
-  other-modules:    Ide.Plugin.Traverse.Literals
+  other-modules:    Ide.Plugin.Literals, Ide.Plugin.Conversion
   hs-source-dirs:   src
   build-depends:
       aeson
-    , base              >=4.12 && <5
+    , base              >=4.13 && <5
     , ghcide
+    , ghc-boot-th
+    , hls-graph
     , hls-plugin-api
+    , hls-retrie-plugin
     , hie-compat
     , lens
     , lsp
     , mtl
-    , hls-retrie-plugin
     , text
+    , unordered-containers
 
   default-language: Haskell2010
   default-extensions:
