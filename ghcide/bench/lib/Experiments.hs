@@ -26,11 +26,17 @@ import           Control.Exception.Safe          (IOException, handleAny, try)
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Data.Aeson                      (Value (Null), toJSON)
+import           Data.Either                     (fromRight)
 import           Data.List
 import           Data.Maybe
 import qualified Data.Text                       as T
 import           Data.Version
 import           Development.IDE.Plugin.Test
+import           Development.IDE.Test            (getBuildEdgesCount,
+                                                  getBuildKeysBuilt,
+                                                  getBuildKeysChanged,
+                                                  getBuildKeysVisited,
+                                                  getStoredKeys)
 import           Development.IDE.Test.Diagnostic
 import           Development.Shake               (CmdOption (Cwd, FileStdout),
                                                   cmd_)
@@ -323,6 +329,11 @@ runBenchmarksFun dir allBenchmarks = do
         , "userTime"
         , "delayedTime"
         , "totalTime"
+        , "buildRulesBuilt"
+        , "buildRulesChanged"
+        , "buildRulesVisited"
+        , "buildRulesTotal"
+        , "buildEdges"
         ]
       rows =
         [ [ name,
@@ -332,7 +343,12 @@ runBenchmarksFun dir allBenchmarks = do
             show runSetup',
             show userWaits,
             show delayedWork,
-            show runExperiment
+            show runExperiment,
+            show rulesBuilt,
+            show rulesChanged,
+            show rulesVisited,
+            show rulesTotal,
+            show edgesTotal
           ]
           | (Bench {name, samples}, BenchRun {..}) <- results,
             let runSetup' = if runSetup < 0.01 then 0 else runSetup
@@ -352,7 +368,12 @@ runBenchmarksFun dir allBenchmarks = do
             showDuration runSetup',
             showDuration userWaits,
             showDuration delayedWork,
-            showDuration runExperiment
+            showDuration runExperiment,
+            show rulesBuilt,
+            show rulesChanged,
+            show rulesVisited,
+            show rulesTotal,
+            show edgesTotal
           ]
           | (Bench {name, samples}, BenchRun {..}) <- results,
             let runSetup' = if runSetup < 0.01 then 0 else runSetup
@@ -398,11 +419,16 @@ data BenchRun = BenchRun
     runExperiment :: !Seconds,
     userWaits     :: !Seconds,
     delayedWork   :: !Seconds,
+    rulesBuilt    :: !Int,
+    rulesChanged  :: !Int,
+    rulesVisited  :: !Int,
+    rulesTotal    :: !Int,
+    edgesTotal    :: !Int,
     success       :: !Bool
   }
 
 badRun :: BenchRun
-badRun = BenchRun 0 0 0 0 0 False
+badRun = BenchRun 0 0 0 0 0 0 0 0 0 0 False
 
 waitForProgressStart :: Session ()
 waitForProgressStart = void $ do
@@ -469,6 +495,12 @@ runBench runSess b = handleAny (\e -> print e >> return badRun)
       (runExperiment, result) <- duration $ loop 0 0 samples
       let success = isJust result
           (userWaits, delayedWork) = fromMaybe (0,0) result
+
+      rulesTotal <- length <$> getStoredKeys
+      rulesBuilt <- either (const 0) length <$> getBuildKeysBuilt
+      rulesChanged <- either (const 0) length <$> getBuildKeysChanged
+      rulesVisited <- either (const 0) length <$> getBuildKeysVisited
+      edgesTotal   <- fromRight 0 <$> getBuildEdgesCount
 
       return BenchRun {..}
 

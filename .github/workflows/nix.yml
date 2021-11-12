@@ -21,12 +21,12 @@ jobs:
       should_skip_build: ${{ steps.skip_check_no_nix.outputs.should_skip }}
     steps:
       - id: skip_check
-        uses: fkirc/skip-duplicate-actions@master
+        uses: fkirc/skip-duplicate-actions@v3.4.1
         with:
           cancel_others: false
           paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", ".circleci/**", "install/**", "**/README.md", "FUNDING.yml"]'
       - id: skip_check_no_nix
-        uses: fkirc/skip-duplicate-actions@master
+        uses: fkirc/skip-duplicate-actions@v3.4.1
         with:
           cancel_others: false
           paths: '["**.nix"]'
@@ -46,7 +46,7 @@ jobs:
     - uses: actions/checkout@v2
       with:
         submodules: true
-    - uses: cachix/install-nix-action@v13
+    - uses: cachix/install-nix-action@v14.1
       with:
         install_url: https://nixos-nix-install-tests.cachix.org/serve/i6laym9jw3wg9mw6ncyrk6gjx4l34vvx/install
         install_options: '--tarball-url-prefix https://nixos-nix-install-tests.cachix.org/serve'
@@ -81,7 +81,7 @@ jobs:
     - uses: actions/checkout@v2
       with:
         submodules: true
-    - uses: cachix/install-nix-action@v13
+    - uses: cachix/install-nix-action@v14.1
       with:
         install_url: https://nixos-nix-install-tests.cachix.org/serve/i6laym9jw3wg9mw6ncyrk6gjx4l34vvx/install
         install_options: '--tarball-url-prefix https://nixos-nix-install-tests.cachix.org/serve'

@@ -49,7 +49,7 @@ import           Development.IDE                 (IdeState, noLogging)
 import           Development.IDE.Graph           (ShakeOptions (shakeThreads))
 import           Development.IDE.Main
 import qualified Development.IDE.Main            as Ghcide
-import           Development.IDE.Plugin.Test     (TestRequest (GetLastBuildKeys, WaitForIdeRule, WaitForShakeQueue),
+import           Development.IDE.Plugin.Test     (TestRequest (GetBuildKeysBuilt, WaitForIdeRule, WaitForShakeQueue),
                                                   WaitForIdeRuleResult (ideResultSuccess))
 import           Development.IDE.Types.Options
 import           GHC.IO.Handle
@@ -177,7 +177,10 @@ runSessionWithServer' plugin conf sconf caps root s = withLock lock $ keepCurren
             argsDefaultHlsConfig = conf,
             argsLogger = logger,
             argsIdeOptions = \config sessionLoader ->
-              let ideOptions = (argsIdeOptions def config sessionLoader) {optTesting = IdeTesting True}
+              let ideOptions = (argsIdeOptions def config sessionLoader)
+                    {optTesting = IdeTesting True
+                    ,optCheckProject = pure False
+                    }
                in ideOptions {optShakeOptions = (optShakeOptions ideOptions) {shakeThreads = 2}},
             argsHlsPlugins = pluginDescToIdePlugins $ plugin ++ idePluginsToPluginDesc (argsHlsPlugins testing)
           }
@@ -239,7 +242,7 @@ waitForTypecheck :: TextDocumentIdentifier -> Session (Either ResponseError Bool
 waitForTypecheck tid = fmap ideResultSuccess <$> waitForAction "typecheck" tid
 
 getLastBuildKeys :: Session (Either ResponseError [T.Text])
-getLastBuildKeys = callTestPlugin GetLastBuildKeys
+getLastBuildKeys = callTestPlugin GetBuildKeysBuilt
 
 sendConfigurationChanged :: Value -> Session ()
 sendConfigurationChanged config =
