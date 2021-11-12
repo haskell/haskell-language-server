@@ -120,7 +120,7 @@ jobs:
           # TODO: remove when not needed
           cd $(ls -d ./incoming/${{ matrix.package }}-*)
           # For brittany
-          echo " brittany:base, brittany:ghc, brittany:ghc-boot-th, butcher:base, multistate:base, czipwith:base, czipwith:template-haskell, data-tree-print:base," >> cabal.project
+          echo " brittany:base, brittany:ghc, brittany:ghc-boot-th, butcher:base, multistate:base, data-tree-print:base," >> cabal.project
           # For floskell and stylish-haskell
           echo " floskell:base, floskell:ghc-prim, stylish-haskell:Cabal," >> cabal.project
 
