@@ -15,7 +15,7 @@ module Development.IDE.Core.OfInterest(
     setFilesOfInterest,
     kick, FileOfInterestStatus(..),
     OfInterestVar(..)
-    ) where
+    ,scheduleGarbageCollection) where
 
 import           Control.Concurrent.Strict
 import           Control.Monad
@@ -41,6 +41,7 @@ instance IsIdeGlobal OfInterestVar
 ofInterestRules :: Rules ()
 ofInterestRules = do
     addIdeGlobal . OfInterestVar =<< liftIO (newVar HashMap.empty)
+    addIdeGlobal . GarbageCollectVar =<< liftIO (newVar False)
     defineEarlyCutoff $ RuleNoDiagnostics $ \IsFileOfInterest f -> do
         alwaysRerun
         filesOfInterest <- getFilesOfInterestUntracked
@@ -54,6 +55,9 @@ ofInterestRules = do
     summarize (IsFOI (Modified False)) = BS.singleton 2
     summarize (IsFOI (Modified True))  = BS.singleton 3
 
+------------------------------------------------------------
+newtype GarbageCollectVar = GarbageCollectVar (Var Bool)
+instance IsIdeGlobal GarbageCollectVar
 
 ------------------------------------------------------------
 -- Exposed API
@@ -93,6 +97,10 @@ deleteFileOfInterest state f = do
     recordDirtyKeys (shakeExtras state) IsFileOfInterest [f]
     logDebug (ideLogger state) $ "Set files of interest to: " <> T.pack (show files)
 
+scheduleGarbageCollection :: IdeState -> IO ()
+scheduleGarbageCollection state = do
+    GarbageCollectVar var <- getIdeGlobalState state
+    writeVar var True
 
 -- | Typecheck all the files of interest.
 --   Could be improved
@@ -109,3 +117,9 @@ kick = do
     void $ liftIO $ modifyVar' exportsMap (exportsMap' <>)
 
     liftIO $ progressUpdate progress KickCompleted
+
+    GarbageCollectVar var <- getIdeGlobalAction
+    garbageCollectionScheduled <- liftIO $ readVar var
+    when garbageCollectionScheduled $ do
+        void garbageCollectDirtyKeys
+        liftIO $ writeVar var False

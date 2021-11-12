@@ -1,0 +1,6 @@
+cradle:
+  direct:
+    arguments:
+    - UsualCase.hs
+    - Exported.hs
+    - A.hs

@@ -190,7 +190,8 @@ module Development.IDE.GHC.Compat.Core (
     SrcLoc.RealSrcSpan,
     pattern RealSrcSpan,
     SrcLoc.RealSrcLoc,
-    SrcLoc.SrcLoc(..),
+    pattern RealSrcLoc,
+    SrcLoc.SrcLoc(SrcLoc.UnhelpfulLoc),
     BufSpan,
     SrcLoc.leftmost_smallest,
     SrcLoc.containsSpan,
@@ -511,7 +512,7 @@ import           GHC.Types.TyThing.Ppr
 #else
 import           GHC.Types.Name.Set
 #endif
-import           GHC.Types.SrcLoc           (BufSpan, SrcSpan (UnhelpfulSpan))
+import           GHC.Types.SrcLoc           (BufPos, BufSpan, SrcSpan (UnhelpfulSpan), SrcLoc(UnhelpfulLoc))
 import qualified GHC.Types.SrcLoc           as SrcLoc
 import           GHC.Types.Unique.Supply
 import           GHC.Types.Var              (Var (varName), setTyVarUnique,
@@ -637,10 +638,11 @@ import           Var                        (Var (varName), setTyVarUnique,
 #if MIN_VERSION_ghc(8,10,0)
 import           Coercion                   (coercionKind)
 import           Predicate
-import           SrcLoc                     (SrcSpan (UnhelpfulSpan))
+import           SrcLoc                     (SrcSpan (UnhelpfulSpan), SrcLoc (UnhelpfulLoc))
 #else
 import           SrcLoc                     (RealLocated,
-                                             SrcSpan (UnhelpfulSpan))
+                                             SrcSpan (UnhelpfulSpan),
+                                             SrcLoc (UnhelpfulLoc))
 #endif
 #endif
 
@@ -651,6 +653,7 @@ import           System.FilePath
 
 #if !MIN_VERSION_ghc(9,0,0)
 type BufSpan = ()
+type BufPos = ()
 #endif
 
 pattern RealSrcSpan :: SrcLoc.RealSrcSpan -> Maybe BufSpan -> SrcLoc.SrcSpan
@@ -661,6 +664,15 @@ pattern RealSrcSpan x y <- ((,Nothing) -> (SrcLoc.RealSrcSpan x, y)) where
     RealSrcSpan x _ = SrcLoc.RealSrcSpan x
 #endif
 {-# COMPLETE RealSrcSpan, UnhelpfulSpan #-}
+
+pattern RealSrcLoc :: SrcLoc.RealSrcLoc -> Maybe BufPos-> SrcLoc.SrcLoc
+#if MIN_VERSION_ghc(9,0,0)
+pattern RealSrcLoc x y = SrcLoc.RealSrcLoc x y
+#else
+pattern RealSrcLoc x y <- ((,Nothing) -> (SrcLoc.RealSrcLoc x, y)) where
+    RealSrcLoc x _ = SrcLoc.RealSrcLoc x
+#endif
+{-# COMPLETE RealSrcLoc, UnhelpfulLoc #-}
 
 
 pattern AvailTC :: Name -> [Name] -> [FieldLabel] -> Avail.AvailInfo

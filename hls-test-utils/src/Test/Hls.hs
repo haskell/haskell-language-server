@@ -49,12 +49,13 @@ import           Development.IDE                 (IdeState, noLogging)
 import           Development.IDE.Graph           (ShakeOptions (shakeThreads))
 import           Development.IDE.Main
 import qualified Development.IDE.Main            as Ghcide
-import           Development.IDE.Plugin.Test     (TestRequest (GetLastBuildKeys, WaitForIdeRule, WaitForShakeQueue),
+import           Development.IDE.Plugin.Test     (TestRequest (GetBuildKeysBuilt, WaitForIdeRule, WaitForShakeQueue),
                                                   WaitForIdeRuleResult (ideResultSuccess))
 import           Development.IDE.Types.Options
 import           GHC.IO.Handle
 import           Ide.Plugin.Config               (Config, formattingProvider)
-import           Ide.PluginUtils                 (idePluginsToPluginDesc, pluginDescToIdePlugins)
+import           Ide.PluginUtils                 (idePluginsToPluginDesc,
+                                                  pluginDescToIdePlugins)
 import           Ide.Types
 import           Language.LSP.Test
 import           Language.LSP.Types              hiding
@@ -176,7 +177,10 @@ runSessionWithServer' plugin conf sconf caps root s = withLock lock $ keepCurren
             argsDefaultHlsConfig = conf,
             argsLogger = logger,
             argsIdeOptions = \config sessionLoader ->
-              let ideOptions = (argsIdeOptions def config sessionLoader) {optTesting = IdeTesting True}
+              let ideOptions = (argsIdeOptions def config sessionLoader)
+                    {optTesting = IdeTesting True
+                    ,optCheckProject = pure False
+                    }
                in ideOptions {optShakeOptions = (optShakeOptions ideOptions) {shakeThreads = 2}},
             argsHlsPlugins = pluginDescToIdePlugins $ plugin ++ idePluginsToPluginDesc (argsHlsPlugins testing)
           }
@@ -190,17 +194,11 @@ runSessionWithServer' plugin conf sconf caps root s = withLock lock $ keepCurren
       putStrLn $ "Finishing canceling (took " <> showDuration t <> "s)"
   pure x
 
--- | Wait for all progress to be done
--- Needs at least one progress done notification to return
+-- | Wait for the next progress end step
 waitForProgressDone :: Session ()
-waitForProgressDone = loop
-  where
-    loop = do
-      () <- skipManyTill anyMessage $ satisfyMaybe $ \case
-        FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (End _))) -> Just ()
-        _ -> Nothing
-      done <- null <$> getIncompleteProgressSessions
-      unless done loop
+waitForProgressDone = skipManyTill anyMessage $ satisfyMaybe $ \case
+  FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (End _))) -> Just ()
+  _ -> Nothing
 
 -- | Wait for all progress to be done
 -- Needs at least one progress done notification to return
@@ -233,7 +231,7 @@ callTestPlugin cmd = do
     return $ do
       e <- _result
       case A.fromJSON e of
-        A.Error err   -> Left $ ResponseError InternalError (T.pack err) Nothing
+        A.Error err -> Left $ ResponseError InternalError (T.pack err) Nothing
         A.Success a -> pure a
 
 waitForAction :: String -> TextDocumentIdentifier -> Session (Either ResponseError WaitForIdeRuleResult)
@@ -244,7 +242,7 @@ waitForTypecheck :: TextDocumentIdentifier -> Session (Either ResponseError Bool
 waitForTypecheck tid = fmap ideResultSuccess <$> waitForAction "typecheck" tid
 
 getLastBuildKeys :: Session (Either ResponseError [T.Text])
-getLastBuildKeys = callTestPlugin GetLastBuildKeys
+getLastBuildKeys = callTestPlugin GetBuildKeysBuilt
 
 sendConfigurationChanged :: Value -> Session ()
 sendConfigurationChanged config =

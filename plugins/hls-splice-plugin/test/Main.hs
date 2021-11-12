@@ -64,7 +64,6 @@ tests = testGroup "splice"
 goldenTest :: FilePath -> ExpandStyle -> Int -> Int -> TestTree
 goldenTest fp tc line col =
   goldenWithHaskellDoc splicePlugin (fp <> " (golden)") testDataDir fp "expected" "hs" $ \doc -> do
-    _ <- waitForDiagnostics
     -- wait for the entire build to finish, so that code actions that
     -- use stale data will get uptodate stuff
     void waitForBuildQueue
@@ -86,8 +85,8 @@ goldenTestWithEdit fp tc line col =
          { _start = Position 0 0
          , _end = Position (length lns + 1) 1
          }
-     waitForProgressDone -- cradle
-     waitForProgressDone
+     waitForAllProgressDone -- cradle
+     waitForAllProgressDone
      alt <- liftIO $ T.readFile (fp <.> "error.hs")
      void $ applyEdit doc $ TextEdit theRange alt
      changeDoc doc [TextDocumentContentChangeEvent (Just theRange) Nothing alt]

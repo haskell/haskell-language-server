@@ -1,5 +1,5 @@
 -- comment before header
-module ApplyRefact6 where
+module Comments where
 
 {-# standalone annotation #-}
 

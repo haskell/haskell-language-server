@@ -1,4 +1,4 @@
-module ApplyRefact5 where
+module IgnoreHlintAnn where
 
 {- HLINT ignore "Redundant bracket" -}
 f = (1)

@@ -1,5 +1,10 @@
 name: Benchmark
 
+# See: https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#concurrency.
+concurrency:
+  group: ${{ github.head_ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
 on:
   pull_request:
     branches:
@@ -12,12 +17,13 @@ jobs:
       should_skip: ${{ steps.skip_check.outputs.should_skip }}
     steps:
       - id: skip_check
-        uses: fkirc/skip-duplicate-actions@v3.4.0
+        uses: fkirc/skip-duplicate-actions@v3.4.1
         with:
-          cancel_others: true
+          cancel_others: false
           paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", ".circleci/**", "install/**", "**.nix", "**/test/**", "flake.lock", "**/README.md", "FUNDING.yml"]'
 
-  bench-init:
+  bench_init:
+    if: needs.pre_job.outputs.should_skip != 'true'
     needs: pre_job
     runs-on: ${{ matrix.os }}
 
@@ -28,19 +34,17 @@ jobs:
         os: [ubuntu-latest]
 
     steps:
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      uses: actions/checkout@v2
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      run: git fetch origin master # check the master branch for benchmarking
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      uses: haskell/actions/setup@v1
+    - uses: actions/checkout@v2
+
+    - run: git fetch origin master # check the master branch for benchmarking
+
+    - uses: haskell/actions/setup@v1
       with:
         ghc-version: ${{ matrix.ghc }}
         cabal-version: '3.2'
         enable-stack: false
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      name: Cache Cabal
+    - name: Cache Cabal
       uses: actions/cache@v2
       with:
         path: |
@@ -52,55 +56,47 @@ jobs:
             v2-${{ runner.os }}-${{ matrix.ghc }}-bench-
             v2-${{ runner.os }}-${{ matrix.ghc }}
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      run: cabal update
+    - run: cabal update
 
     # max-backjumps is increased as a temporary solution
     # for dependency resolution failure
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      run: cabal configure --enable-benchmarks --max-backjumps 12000
+    - run: cabal configure --enable-benchmarks --max-backjumps 12000
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      name: Build
+    - name: Build
       shell: bash
       run: cabal build ghcide:benchHist
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      name: Bench init
+    - name: Bench init
       shell: bash
       run: cabal bench ghcide:benchHist  -j --benchmark-options="all-binaries"
 
     # tar is required to preserve file permissions
     # compression speeds up upload/download nicely
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      name: tar workspace
+    - name: tar workspace
       shell: bash
       run: tar -czf workspace.tar.gz * .git
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      name: tar cabal
+    - name: tar cabal
       run: |
         cd ~/.cabal
         tar -czf cabal.tar.gz *
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      name: Upload workspace
+    - name: Upload workspace
       uses: actions/upload-artifact@v2
       with:
         name: workspace
         retention-days: 1
         path: workspace.tar.gz
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      name: Upload .cabal
+    - name: Upload .cabal
       uses: actions/upload-artifact@v2
       with:
         name: cabal-home
         retention-days: 1
         path: ~/.cabal/cabal.tar.gz
 
-  bench-example:
-    needs: [bench-init, pre_job]
+  bench_example:
+    needs: [bench_init, pre_job]
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -111,47 +107,40 @@ jobs:
         example: ['cabal', 'lsp-types']
 
     steps:
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      uses: haskell/actions/setup@v1
+    - uses: haskell/actions/setup@v1
       with:
         ghc-version: ${{ matrix.ghc }}
         cabal-version: '3.2'
         enable-stack: false
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      name: Download cabal home
+    - name: Download cabal home
       uses: actions/download-artifact@v2
       with:
         name: cabal-home
         path: .
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      name: Download workspace
+    - name: Download workspace
       uses: actions/download-artifact@v2
       with:
         name: workspace
         path: .
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      name: untar
+    - name: untar
       run: |
         mkdir -p ~/.cabal
         tar xzf workspace.tar.gz
         tar xzf cabal.tar.gz --directory ~/.cabal
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      name: Bench
+    - name: Bench
       shell: bash
       run: cabal bench ghcide:benchHist  -j --benchmark-options="${{ matrix.example }}"
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      name: Display results
+    - name: Display results
       shell: bash
       run: |
         column -s, -t < ghcide/bench-results/unprofiled/${{ matrix.example }}/results.csv | tee ghcide/bench-results/unprofiled/${{ matrix.example }}/results.txt
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      name: Archive benchmarking artifacts
+    - name: Archive benchmarking artifacts
       uses: actions/upload-artifact@v2
       with:
         name: bench-results-${{ runner.os }}-${{ matrix.ghc }}
@@ -161,8 +150,7 @@ jobs:
            ghcide/bench-results/**/*.svg
            ghcide/bench-results/**/*.eventlog.html
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      name: Archive benchmark logs
+    - name: Archive benchmark logs
       uses: actions/upload-artifact@v2
       with:
         name: bench-logs-${{ runner.os }}-${{ matrix.ghc }}
@@ -170,3 +158,16 @@ jobs:
            ghcide/bench-results/**/*.log
            ghcide/bench-results/**/*.eventlog
            ghcide/bench-results/**/*.hp
+
+  bench_post_job:
+    if: always()
+    runs-on: ubuntu-latest
+    needs: [pre_job, bench_init, bench_example]
+    steps:
+      - run: |
+          echo "jobs info: ${{ toJSON(needs) }}"
+      - if: contains(needs.*.result, 'failure')
+        run: exit 1
+      - if: contains(needs.*.result, 'cancelled')
+        name: cancelling
+        uses: andymckay/cancel-action@0.2

@@ -1,4 +1,4 @@
-module ApplyRefact1 where
+module LambdaCase where
 
 f = \case "true" -> (True)
           _ -> False
