@@ -11,7 +11,7 @@
 --
 module Development.IDE.Core.Rules(
     -- * Types
-    IdeState, GetDependencies(..), GetParsedModule(..), TransitiveDependencies(..),
+    IdeState, GetParsedModule(..), TransitiveDependencies(..),
     Priority(..), GhcSessionIO(..), GetClientSettings(..),
     -- * Functions
     priorityTypeCheck,
@@ -22,6 +22,7 @@ module Development.IDE.Core.Rules(
     defineNoFile,
     defineEarlyCutOffNoFile,
     mainRule,
+    RulesConfig(..),
     getDependencies,
     getParsedModule,
     getParsedModuleWithComments,
@@ -35,7 +36,6 @@ module Development.IDE.Core.Rules(
     getLocatedImportsRule,
     getDependencyInformationRule,
     reportImportCyclesRule,
-    getDependenciesRule,
     typeCheckRule,
     getDocMapRule,
     loadGhcSession,
@@ -57,6 +57,7 @@ module Development.IDE.Core.Rules(
     ghcSessionDepsDefinition,
     getParsedModuleDefinition,
     typeCheckRuleDefinition,
+    GhcSessionDepsConfig(..),
     ) where
 
 #if !MIN_VERSION_ghc(8,8,0)
@@ -139,8 +140,7 @@ import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.Types                           (SMethod (SCustomMethod))
 import           Language.LSP.VFS
 import           System.Directory                             (canonicalizePath, makeAbsolute)
-
-import           Data.Default                                 (def)
+import           Data.Default                                 (def, Default)
 import           Ide.Plugin.Properties                        (HasProperty,
                                                                KeyNameProxy,
                                                                Properties,
@@ -149,7 +149,6 @@ import           Ide.Plugin.Properties                        (HasProperty,
 import           Ide.PluginUtils                              (configForPlugin)
 import           Ide.Types                                    (DynFlagsModifications (dynFlagsModifyGlobal, dynFlagsModifyParser),
                                                                PluginId)
-import qualified Data.HashSet as HS
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
@@ -163,7 +162,8 @@ toIdeResult = either (, Nothing) (([],) . Just)
 -- | Get all transitive file dependencies of a given module.
 -- Does not include the file itself.
 getDependencies :: NormalizedFilePath -> Action (Maybe [NormalizedFilePath])
-getDependencies file = fmap transitiveModuleDeps <$> use GetDependencies file
+getDependencies file =
+    fmap transitiveModuleDeps . (`transitiveDeps` file) <$> use_ GetDependencyInformation file
 
 getSourceFileSource :: NormalizedFilePath -> Action BS.ByteString
 getSourceFileSource nfp = do
@@ -339,7 +339,7 @@ getLocatedImportsRule =
                     return $ if itExists then Just nfp' else Nothing
                 | Just tt <- HM.lookup (TargetModule modName) targets = do
                     -- reuse the existing NormalizedFilePath in order to maximize sharing
-                    let ttmap = HM.mapWithKey const (HS.toMap tt)
+                    let ttmap = HM.mapWithKey const (HashSet.toMap tt)
                         nfp' = HM.lookupDefault nfp nfp ttmap
                     itExists <- getFileExists nfp'
                     return $ if itExists then Just nfp' else Nothing
@@ -497,18 +497,6 @@ reportImportCyclesRule =
            pure (moduleNameString . moduleName . ms_mod $ ms)
           showCycle mods  = T.intercalate ", " (map T.pack mods)
 
--- returns all transitive dependencies in topological order.
--- NOTE: result does not include the argument file.
-getDependenciesRule :: Rules ()
-getDependenciesRule =
-    defineEarlyCutoff $ RuleNoDiagnostics $ \GetDependencies file -> do
-        depInfo <- use_ GetDependencyInformation file
-        let allFiles = reachableModules depInfo
-        _ <- uses_ ReportImportCycles allFiles
-        opts <- getIdeOptions
-        let mbFingerprints = map (Util.fingerprintString . fromNormalizedFilePath) allFiles <$ optShakeFiles opts
-        return (fingerprintToBS . Util.fingerprintFingerprints <$> mbFingerprints, transitiveDeps depInfo file)
-
 getHieAstsRule :: Rules ()
 getHieAstsRule =
     define $ \GetHieAst f -> do
@@ -659,8 +647,8 @@ currentLinkables = do
   where
     go (mod, time) = LM time mod []
 
-loadGhcSession :: Rules ()
-loadGhcSession = do
+loadGhcSession :: GhcSessionDepsConfig -> Rules ()
+loadGhcSession ghcSessionDepsConfig = do
     -- This function should always be rerun because it tracks changes
     -- to the version of the collection of HscEnv's.
     defineEarlyCutOffNoFile $ \GhcSessionIO -> do
@@ -696,49 +684,65 @@ loadGhcSession = do
                 Nothing -> LBS.toStrict $ B.encode (hash (snd val))
         return (Just cutoffHash, val)
 
-    define $ \GhcSessionDeps file -> ghcSessionDepsDefinition file
-
-ghcSessionDepsDefinition :: NormalizedFilePath -> Action (IdeResult HscEnvEq)
-ghcSessionDepsDefinition file = do
+    defineNoDiagnostics $ \GhcSessionDeps file -> do
         env <- use_ GhcSession file
-        let hsc = hscEnv env
-        ms <- msrModSummary <$> use_ GetModSummaryWithoutTimestamps file
-        deps <- use_ GetDependencies file
-        let tdeps = transitiveModuleDeps deps
-            uses_th_qq =
-              xopt LangExt.TemplateHaskell dflags || xopt LangExt.QuasiQuotes dflags
-            dflags = ms_hspp_opts ms
-        ifaces <- if uses_th_qq
-                  then uses_ GetModIface tdeps
-                  else uses_ GetModIfaceWithoutLinkable tdeps
+        ghcSessionDepsDefinition ghcSessionDepsConfig env file
 
-        -- Currently GetDependencies returns things in topological order so A comes before B if A imports B.
-        -- We need to reverse this as GHC gets very unhappy otherwise and complains about broken interfaces.
-        -- Long-term we might just want to change the order returned by GetDependencies
-        let inLoadOrder = reverse (map hirHomeMod ifaces)
+data GhcSessionDepsConfig = GhcSessionDepsConfig
+    { checkForImportCycles :: Bool
+    , forceLinkables       :: Bool
+    , fullModSummary       :: Bool
+    }
+instance Default GhcSessionDepsConfig where
+  def = GhcSessionDepsConfig
+    { checkForImportCycles = True
+    , forceLinkables = False
+    , fullModSummary = False
+    }
 
-        session' <- liftIO $ loadModulesHome inLoadOrder <$> setupFinderCache (map hirModSummary ifaces) hsc
+ghcSessionDepsDefinition :: GhcSessionDepsConfig -> HscEnvEq -> NormalizedFilePath -> Action (Maybe HscEnvEq)
+ghcSessionDepsDefinition GhcSessionDepsConfig{..} env file = do
+    let hsc = hscEnv env
 
-        res <- liftIO $ newHscEnvEqWithImportPaths (envImportPaths env) session' []
-        return ([], Just res)
+    mbdeps <- mapM(fmap artifactFilePath . snd) <$> use_ GetLocatedImports file
+    case mbdeps of
+        Nothing -> return Nothing
+        Just deps -> do
+            when checkForImportCycles $ void $ uses_ ReportImportCycles deps
+            ms:mss <- map msrModSummary <$> if fullModSummary
+                then uses_ GetModSummary (file:deps)
+                else uses_ GetModSummaryWithoutTimestamps (file:deps)
+
+            depSessions <- map hscEnv <$> uses_ GhcSessionDeps deps
+            let uses_th_qq =
+                    xopt LangExt.TemplateHaskell dflags || xopt LangExt.QuasiQuotes dflags
+                dflags = ms_hspp_opts ms
+            ifaces <- if uses_th_qq || forceLinkables
+                        then uses_ GetModIface deps
+                        else uses_ GetModIfaceWithoutLinkable deps
+
+            let inLoadOrder = map hirHomeMod ifaces
+            session' <- liftIO $ mergeEnvs hsc mss inLoadOrder depSessions
+
+            Just <$> liftIO (newHscEnvEqWithImportPaths (envImportPaths env) session' [])
 
 -- | Load a iface from disk, or generate it if there isn't one or it is out of date
 -- This rule also ensures that the `.hie` and `.o` (if needed) files are written out.
 getModIfaceFromDiskRule :: Rules ()
 getModIfaceFromDiskRule = defineEarlyCutoff $ Rule $ \GetModIfaceFromDisk f -> do
   ms <- msrModSummary <$> use_ GetModSummary f
-  (diags_session, mb_session) <- ghcSessionDepsDefinition f
+  mb_session <- use GhcSessionDeps f
   case mb_session of
-    Nothing -> return (Nothing, (diags_session, Nothing))
+    Nothing -> return (Nothing, ([], Nothing))
     Just session -> do
       sourceModified <- use_ IsHiFileStable f
       linkableType <- getLinkableType f
       r <- loadInterface (hscEnv session) ms sourceModified linkableType (regenerateHiFile session f ms)
       case r of
-        (diags, Nothing) -> return (Nothing, (diags ++ diags_session, Nothing))
+        (diags, Nothing) -> return (Nothing, (diags, Nothing))
         (diags, Just x) -> do
           let !fp = Just $! hiFileFingerPrint x
-          return (fp, (diags <> diags_session, Just x))
+          return (fp, (diags, Just x))
 
 -- | Check state of hiedb after loading an iface from disk - have we indexed the corresponding `.hie` file?
 -- This function is responsible for ensuring database consistency
@@ -1062,9 +1066,18 @@ writeHiFileAction hsc hiFile = do
         resetInterfaceStore extras $ toNormalizedFilePath' targetPath
         writeHiFile hsc hiFile
 
+data RulesConfig = RulesConfig
+    { -- | Disable import cycle checking for improved performance in large codebases
+      checkForImportCycles :: Bool
+    -- | Disable TH for improved performance in large codebases
+    , enableTemplateHaskell :: Bool
+    }
+
+instance Default RulesConfig where def = RulesConfig True True
+
 -- | A rule that wires per-file rules together
-mainRule :: Rules ()
-mainRule = do
+mainRule :: RulesConfig -> Rules ()
+mainRule RulesConfig{..} = do
     linkables <- liftIO $ newVar emptyModuleEnv
     addIdeGlobal $ CompiledLinkables linkables
     getParsedModuleRule
@@ -1072,10 +1085,9 @@ mainRule = do
     getLocatedImportsRule
     getDependencyInformationRule
     reportImportCyclesRule
-    getDependenciesRule
     typeCheckRule
     getDocMapRule
-    loadGhcSession
+    loadGhcSession def{checkForImportCycles}
     getModIfaceFromDiskRule
     getModIfaceFromDiskAndIndexRule
     getModIfaceRule
@@ -1093,8 +1105,10 @@ mainRule = do
     --   * ObjectLinkable -> BCOLinkable : the prev linkable can be reused,  signal "no change"
     --   * Object/BCO -> NoLinkable      : the prev linkable can be ignored, signal "no change"
     --   * otherwise                     : the prev linkable cannot be reused, signal "value has changed"
-    defineEarlyCutoff $ RuleWithCustomNewnessCheck (<=) $ \NeedsCompilation file ->
-        needsCompilationRule file
+    if enableTemplateHaskell
+      then defineEarlyCutoff $ RuleWithCustomNewnessCheck (<=) $ \NeedsCompilation file ->
+                needsCompilationRule file
+      else defineNoDiagnostics $ \NeedsCompilation _ -> return $ Just Nothing
     generateCoreRule
     getImportMapRule
     getAnnotatedParsedSourceRule
