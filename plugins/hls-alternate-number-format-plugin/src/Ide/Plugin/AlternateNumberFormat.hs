@@ -38,7 +38,7 @@ import           Ide.Plugin.Retrie                    (handleMaybe,
 import           Ide.Types
 import           Language.LSP.Types
 import           Language.LSP.Types.Lens              (uri)
-import           Prelude                              hiding (log)
+import           Prelude
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)

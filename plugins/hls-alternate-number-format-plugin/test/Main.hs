@@ -24,7 +24,7 @@ test = testGroup "alternateNumberFormat" [
 testDataDir :: FilePath
 testDataDir = "test" </> "testdata"
 
--- helpers defined from explicit-imports-plugin Main Test file
+-- most helpers derived from explicit-imports-plugin Main Test file
 
 goldenAlternateFormat :: FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
 goldenAlternateFormat fp = goldenWithHaskellDoc alternateNumberFormatPlugin (fp <> " (golden)") testDataDir fp "expected" "hs"
@@ -56,10 +56,10 @@ pointRange
 
 convertPrefix, hexRegex, hexFloatRegex, binaryRegex, octalRegex, decimalRegex :: Text
 convertPrefix = "^Convert"
-hexRegex = "into 0x\\d+$"
-hexFloatRegex = "into 0x\\d+\\."
-binaryRegex = "into 0b\\d+$"
-octalRegex = "into 0o\\d+$"
+hexRegex = "into 0x[a-fA-F0-9]+$"
+hexFloatRegex = "into 0x[a-fA-F0-9]+\\."
+binaryRegex = "into 0b[0|1]+$"
+octalRegex = "into 0o[0-8]+$"
 decimalRegex = "into \\d+$"
 
 isCodeAction :: Text -> Maybe Text -> Bool

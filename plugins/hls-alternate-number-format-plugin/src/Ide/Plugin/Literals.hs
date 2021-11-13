@@ -31,7 +31,7 @@ data Literal = IntLiteral      SrcSpan (Maybe Text) Integer
              | FracPrimLiteral SrcSpan (Maybe Text) Rational
              deriving (Generic, Show)
 
-instance NFData Literal where
+instance NFData Literal
 
 getSrcText :: Literal -> Maybe Text
 getSrcText = \case
