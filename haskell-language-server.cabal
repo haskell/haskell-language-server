@@ -259,7 +259,7 @@ common splice
     cpp-options: -Dsplice
 
 common alternateNumberFormat
-  if flag(alternateNumberFormat) || flag(all-plugins)
+  if flag(alternateNumberFormat)
     build-depends: hls-alternate-number-format-plugin ^>=0.1.0.0
     cpp-options: -DalternateNumberFormat
 
