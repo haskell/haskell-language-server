@@ -14,9 +14,7 @@ import           Data.Text                            (Text)
 import qualified Data.Text                            as T
 import           Development.IDE                      (GetParsedModule (GetParsedModule),
                                                        IdeState, RuleResult,
-                                                       Rules,
-                                                       ShowDiagnostic (HideDiag),
-                                                       define, ideLogger,
+                                                       Rules, define, ideLogger,
                                                        isInsideSrcSpan, noRange,
                                                        runAction,
                                                        srcSpanToRange, use,
@@ -71,23 +69,9 @@ collectLiteralsRule = define $ \CollectLiterals nfp -> do
     let fmts = getFormatTypes <$> pm
         -- collect all the literals for a file
         lits = collectLiterals . pm_parsed_source <$> pm
-        -- make diagnostics for each literal (they will be hidden from editor)
-        litDiags = maybe [] (map (mkFileDiagnostic nfp . mkDiagnostic)) lits
-    pure (litDiags, CLR <$> lits <*> fmts)
+    pure ([], CLR <$> lits <*> fmts)
     where
         getFormatTypes = toFormatTypes . toList . extensionFlags . ms_hspp_opts . pm_mod_summary
-        mkFileDiagnostic nfp' diag = (nfp', HideDiag, diag)
-
-mkDiagnostic :: Literal -> Diagnostic
-mkDiagnostic lit = Diagnostic {
-            _range = fromMaybe noRange $ srcSpanToRange $ getSrcSpan lit
-            , _severity = Just DsHint
-            , _code = Nothing
-            , _source = getSrcText lit
-            , _message = "alternateNumberFormat"
-            , _tags = Nothing
-            , _relatedInformation = Nothing
-            }
 
 codeActionHandler :: PluginMethodHandler IdeState 'TextDocumentCodeAction
 codeActionHandler state _ (CodeActionParams _ _ docId currRange _) = response $ do
