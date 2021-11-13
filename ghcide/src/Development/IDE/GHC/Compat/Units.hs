@@ -45,6 +45,7 @@ module Development.IDE.GHC.Compat.Units (
     ExternalPackageState(..),
     -- * Utils
     filterInplaceUnits,
+    FinderCache,
     ) where
 
 #if MIN_VERSION_ghc(9,0,0)
@@ -53,6 +54,7 @@ import qualified GHC.Data.ShortText              as ST
 import           GHC.Driver.Env                  (hsc_unit_dbs)
 import           GHC.Unit.Env
 import           GHC.Unit.External
+import           GHC.Unit.Finder
 #else
 import           GHC.Driver.Types
 #endif
