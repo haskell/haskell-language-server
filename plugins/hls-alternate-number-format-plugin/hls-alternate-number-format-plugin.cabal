@@ -29,6 +29,7 @@ library
     , lens
     , lsp
     , mtl
+    , regex-tdfa
     , text
     , unordered-containers
 

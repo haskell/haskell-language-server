@@ -13,6 +13,7 @@ import           GHC.LanguageExtensions.Type   (Extension (..))
 import           GHC.Show                      (intToDigit)
 import           Ide.Plugin.Literals           (Literal (..), getSrcText)
 import           Numeric
+import           Text.Regex.TDFA               ((=~))
 
 data FormatType = IntFormat IntFormatType
                 | FracFormat FracFormatType
@@ -37,7 +38,7 @@ data FracFormatType = HexFloatFormat
 instance NFData FracFormatType
 
 data AnyFormatType = DecimalFormat
-                    deriving (Show, Eq, Generic)
+                   deriving (Show, Eq, Generic)
 
 instance NFData AnyFormatType
 
@@ -62,34 +63,44 @@ alternateIntFormat val fmt = case fmt of
 alternateFracFormat :: Rational -> FormatType -> [Text]
 alternateFracFormat val fmt = case fmt of
   AnyFormat DecimalFormat   -> [T.pack $ toFloatDecimal (fromRational val)]
-  FracFormat HexFloatFormat -> [T.pack $ toHexFloat (fromRational val)]
   FracFormat ExponentFormat -> [T.pack $ toFloatExpDecimal (fromRational val)]
+  FracFormat HexFloatFormat -> [T.pack $ toHexFloat (fromRational val)]
   _                         -> []
 
--- TODO: implement logic
 removeCurrentFormat :: Literal -> [FormatType] -> [FormatType]
 removeCurrentFormat lit fmts = case getSrcText lit of
-    Just src -> delete (sourceToFormatType src) fmts
+    Just src -> foldl (flip delete) fmts (sourceToFormatType src)
     Nothing  -> fmts
 
-sourceToFormatType :: Text -> FormatType
+hexRegex, hexFloatRegex, binaryRegex, octalRegex, decimalRegex, numDecimalRegex :: Text
+hexRegex = "0[xX][a-fA-F0-9]+"
+hexFloatRegex = "0[xX][a-fA-F0-9]+\\.[a-fA-F0-9]+(p[+-]?[0-9]+)?"
+binaryRegex = "0[bB][0|1]+"
+octalRegex = "0[oO][0-8]+"
+decimalRegex = "\\d+"
+numDecimalRegex = "[0-9]+\\.[0-9]+[eE][+-]?[0-9]+"
+
+-- we export the regex for tests, but we want to be explicit in our matches
+-- so we need to match the beginning/end of the source text
+wrap :: Text -> Text
+wrap regex = "^" <> regex <> "$"
+
+sourceToFormatType :: Text -> [FormatType]
 sourceToFormatType srcText
-    -- is in Hex format, if so, is it a float format or regular format?
-    | T.isPrefixOf "0x" srcText ||  T.isPrefixOf "0X" srcText = if T.any (== '.') srcText then FracFormat HexFloatFormat else IntFormat HexFormat
-    -- Octal
-    | T.isPrefixOf "0o" srcText ||  T.isPrefixOf "0O" srcText = IntFormat OctalFormat
-    -- Binary
-    | T.isPrefixOf "0b" srcText ||  T.isPrefixOf "0B" srcText = IntFormat BinaryFormat
-    -- Note: the text package doesn't export T.elem until 1.2.5(!!)
-    -- Num Decimal Format (we just assume this is an Int using NumDecimal Extension)
-    -- nothing happens if a Fractional value is the source text
-    | T.any (== 'e') srcText || T.any (== 'E') srcText = IntFormat NumDecimalFormat
-    -- just assume we are in base 10
-    | otherwise = AnyFormat DecimalFormat
+    | srcText =~ wrap hexRegex = [IntFormat HexFormat]
+    | srcText =~ wrap hexFloatRegex = [FracFormat HexFloatFormat]
+    | srcText =~ wrap octalRegex = [IntFormat OctalFormat]
+    | srcText =~ wrap binaryRegex = [IntFormat BinaryFormat]
+    -- can either be a NumDecimal or just a regular Fractional with an exponent
+    -- otherwise we wouldn't need to return a list
+    | srcText =~ wrap numDecimalRegex  = [IntFormat NumDecimalFormat, FracFormat ExponentFormat]
+    -- just assume we are in base 10 with no decimals
+    | otherwise = [AnyFormat DecimalFormat]
 
 -- grab the Numeric related extensions that are turned on for a file
 toFormatTypes :: [Extension] -> [FormatType]
-toFormatTypes =  (<>) [IntFormat HexFormat, IntFormat OctalFormat, AnyFormat DecimalFormat] . mapMaybe (`lookup` numericPairs)
+toFormatTypes =  (<>) [IntFormat HexFormat, IntFormat OctalFormat, FracFormat ExponentFormat, AnyFormat DecimalFormat]
+                 . mapMaybe (`lookup` numericPairs)
 
 -- current list of Numeric related extensions
 -- LexicalNegation --- 9.0.1 > --- superset of NegativeLiterals

@@ -7,6 +7,7 @@ import           Data.List                        (find)
 import           Data.Text                        (Text)
 import qualified Data.Text                        as T
 import qualified Ide.Plugin.AlternateNumberFormat as AlternateNumberFormat
+import qualified Ide.Plugin.Conversion            as Conversion
 import           System.FilePath                  ((</>))
 import           Test.Hls
 import           Text.Regex.TDFA                  ((=~))
@@ -54,16 +55,18 @@ pointRange
   (subtract 1 -> col) =
     Range (Position line col) (Position line $ col + 2)
 
-convertPrefix, hexRegex, hexFloatRegex, binaryRegex, octalRegex, decimalRegex :: Text
-convertPrefix = "^Convert"
-hexRegex = "into 0x[a-fA-F0-9]+$"
-hexFloatRegex = "into 0x[a-fA-F0-9]+\\."
-binaryRegex = "into 0b[0|1]+$"
-octalRegex = "into 0o[0-8]+$"
-decimalRegex = "into \\d+$"
+convertPrefix, intoInfix, hexRegex, hexFloatRegex, binaryRegex, octalRegex, numDecimalRegex, decimalRegex :: Text
+convertPrefix = "Convert (" <> T.intercalate "|" [Conversion.hexRegex, Conversion.hexFloatRegex, Conversion.binaryRegex, Conversion.octalRegex, Conversion.numDecimalRegex, Conversion.decimalRegex] <> ")"
+intoInfix = " into "
+hexRegex = intoInfix <> Conversion.hexRegex
+hexFloatRegex = intoInfix <> Conversion.hexFloatRegex
+binaryRegex = intoInfix <> Conversion.binaryRegex
+octalRegex = intoInfix <> Conversion.octalRegex
+numDecimalRegex = intoInfix <> Conversion.numDecimalRegex
+decimalRegex = intoInfix <> Conversion.decimalRegex
 
 isCodeAction :: Text -> Maybe Text -> Bool
-isCodeAction userRegex (Just txt) = (txt =~ convertPrefix) && (txt =~ userRegex)
+isCodeAction userRegex (Just txt) = txt =~ Conversion.wrap (convertPrefix <> userRegex)
 isCodeAction _ _                  = False
 
 isHexCodeAction :: Maybe Text -> Bool
@@ -77,6 +80,9 @@ isBinaryCodeAction = isCodeAction binaryRegex
 
 isOctalCodeAction :: Maybe Text -> Bool
 isOctalCodeAction = isCodeAction octalRegex
+
+isNumDecimalCodeAction :: Maybe Text -> Bool
+isNumDecimalCodeAction = isCodeAction numDecimalRegex
 
 isDecimalCodeAction :: Maybe Text -> Bool
 isDecimalCodeAction = isCodeAction decimalRegex
