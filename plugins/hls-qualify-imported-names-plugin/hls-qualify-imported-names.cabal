@@ -28,6 +28,7 @@ library
     , text
     , unordered-containers
     , dlist
+    , transformers
 
   default-language:   Haskell2010
   default-extensions:

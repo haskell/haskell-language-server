@@ -9,6 +9,8 @@ cradle:
     - UnaliasedImport.hs
     - ExplicitImport.hs
     - ExplicitHidingImport.hs
-    - Reexport.hs
+    - Reexported.hs
     - ExplicitPrelude.hs
+    - OnlyImportedNames.hs
+    - Parenthesized.hs
 

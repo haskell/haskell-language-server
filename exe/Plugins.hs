@@ -16,7 +16,6 @@ import           Ide.Plugin.Example2               as Example2
 import           Ide.Plugin.QualifyImportedNames   as QualifyImportedNames
 #endif
 
-
 #if callHierarchy
 import           Ide.Plugin.CallHierarchy          as CallHierarchy
 #endif

@@ -28,11 +28,16 @@ import           Test.Hls                        (CodeAction (CodeAction, _title
                                                   testCase, testGroup,
                                                   type (|?) (InR), (@?=))
 
+import           Prelude
+
 -- 1's based
 data Point = Point {
   line   :: !Int,
   column :: !Int
 }
+
+blah :: [Int] -> [Int] -> [Int]
+blah = (<>)
 
 makePoint line column
   | line >= 1 && column >= 1 = Point line column
@@ -94,6 +99,10 @@ main = defaultTestRunner $ testGroup "Qualify Imported Names"
   , codeActionGoldenTest
       "CodeAction qualifies only imported names"
       "OnlyImportedNames"
+      (makePoint 3 1)
+  , codeActionGoldenTest
+      "CodeAction qualifies parenthesized operators properly"
+      "Parenthesized"
       (makePoint 3 1)
   ]
 
