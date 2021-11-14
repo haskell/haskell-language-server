@@ -179,10 +179,10 @@ mkCompl
                   _tags = Nothing,
                   _detail =
                       case (typeText, provenance) of
-                          (Just t,_) -> Just $ colon <> t
+                          (Just t,_)            -> Just $ colon <> t
                           (_, ImportedFrom mod) -> Just $ "from " <> mod
-                          (_, DefinedIn mod) -> Just $ "from " <> mod
-                          _ -> Nothing,
+                          (_, DefinedIn mod)    -> Just $ "from " <> mod
+                          _                     -> Nothing,
                   _documentation = documentation,
                   _deprecated = Nothing,
                   _preselect = Nothing,
@@ -448,12 +448,12 @@ localCompletionsForParsedModule uri pm@ParsedModule{pm_parsed_source = L _ HsMod
                 [mkComp id CiVariable Nothing
                 | VarPat _ id <- listify (\(_ :: Pat GhcPs) -> True) pat_lhs]
             TyClD _ ClassDecl{tcdLName, tcdSigs} ->
-                mkComp tcdLName CiInterface Nothing :
+                mkComp tcdLName CiInterface (Just $ ppr tcdLName) :
                 [ mkComp id CiFunction (Just $ ppr typ)
                 | L _ (ClassOpSig _ _ ids typ) <- tcdSigs
                 , id <- ids]
             TyClD _ x ->
-                let generalCompls = [mkComp id cl Nothing
+                let generalCompls = [mkComp id cl (Just $ ppr $ tcdLName x)
                         | id <- listify (\(_ :: Located(IdP GhcPs)) -> True) x
                         , let cl = occNameToComKind Nothing (rdrNameOcc $ unLoc id)]
                     -- here we only have to look at the outermost type
@@ -678,6 +678,7 @@ uniqueCompl candidate unique =
         else compare (importedFrom candidate, insertText candidate) (importedFrom unique, insertText unique)
     other -> other
   where
+      -- This is an inaccurate predicate - some local completions do not have typeText
       isLocalCompletion ci = isJust(typeText ci)
 
       importedFrom :: CompItem -> T.Text
