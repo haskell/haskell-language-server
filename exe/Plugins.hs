@@ -12,8 +12,8 @@ import           Ide.Plugin.Example                as Example
 import           Ide.Plugin.Example2               as Example2
 
 -- haskell-language-server optional plugins
-#if aliasImport
-import           Ide.Plugin.AliasImport            as AliasImport
+#if qualifyImportedNames
+import           Ide.Plugin.QualifyImportedNames   as QualifyImportedNames
 #endif
 
 
@@ -147,8 +147,8 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
 #if importLens
       ExplicitImports.descriptor "importLens" :
 #endif
-#if aliasImport
-      AliasImport.descriptor "aliasImports" :
+#if qualifyImportedNames
+      QualifyImportedNames.descriptor "qualifyImportedNames" :
 #endif
 #if refineImports
       RefineImports.descriptor "refineImports" :

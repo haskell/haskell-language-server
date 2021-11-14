@@ -1,0 +1,14 @@
+cradle:
+  direct:
+    arguments:
+    - A.hs
+    - B.hs
+    - QualifiedImport.hs
+    - NoImport.hs
+    - AliasedImport.hs
+    - UnaliasedImport.hs
+    - ExplicitImport.hs
+    - ExplicitHidingImport.hs
+    - Reexport.hs
+    - ExplicitPrelude.hs
+

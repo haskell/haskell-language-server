@@ -156,8 +156,8 @@ flag splice
   default:     True
   manual:      True
 
-flag aliasImport
-  description: Enable aliasImport plugin
+flag qualifyImportedNames
+  description: Enable qualifyImportedNames plugin
   default:     True
   manual:      True
 
@@ -258,10 +258,10 @@ common splice
     build-depends: hls-splice-plugin ^>=1.0.0.1
     cpp-options: -Dsplice
 
-common aliasImport
-  if flag(aliasImport) || flag(all-plugins)
-    build-depends: hls-alias-import-plugin ^>=1.0.0.0
-    cpp-options: -DaliasImport
+common qualifyImportedNames
+  if flag(qualifyImportedNames)
+    build-depends: hls-qualify-imported-names-plugin ^>=1.0.0.0
+    cpp-options: -DqualifyImportedNames
 
 -- formatters
 
@@ -307,7 +307,7 @@ executable haskell-language-server
                     , moduleName
                     , pragmas
                     , splice
-                    , aliasImport
+                    , qualifyImportedNames
                     , floskell
                     , fourmolu
                     , ormolu
@@ -450,25 +450,6 @@ test-suite func-test
 -- Duplicating inclusion plugin conditions until tests are moved to their own packages
   if flag(eval)
     cpp-options: -Deval
-  if flag(importLens) || flag(all-plugins)
-    cpp-options: -DimportLens
-  if flag(rename) || flag(all-plugins)
-    cpp-options: -Drename
-  if flag(retrie) || flag(all-plugins)
-    cpp-options: -Dretrie
-  if flag(tactic) || flag(all-plugins)
-    cpp-options: -Dtactic
-  if flag(hlint) || flag(all-plugins)
-    cpp-options: -Dhlint
-  if flag(moduleName) || flag(all-plugins)
-    cpp-options: -DmoduleName
-  if flag(pragmas) || flag(all-plugins)
-    cpp-options: -Dpragmas
-  if flag(splice) || flag(all-plugins)
-    cpp-options: -Dsplice
-  if flag(aliasImport) || flag(all-plugins)
-    cpp-options: -DaliasImport
-
 -- formatters
   if flag(floskell) && (impl(ghc < 9.0.1) || flag(ignore-plugins-ghc-bounds))
     cpp-options: -Dfloskell

@@ -18,7 +18,7 @@ packages:
   - ./plugins/hls-retrie-plugin
   - ./plugins/hls-splice-plugin
   - ./plugins/hls-tactics-plugin
-  - ./plugins/hls-alias-import-plugin
+  - ./plugins/hls-qualify-imported-names-plugin
   - ./plugins/hls-brittany-plugin
   - ./plugins/hls-stylish-haskell-plugin
   - ./plugins/hls-floskell-plugin
