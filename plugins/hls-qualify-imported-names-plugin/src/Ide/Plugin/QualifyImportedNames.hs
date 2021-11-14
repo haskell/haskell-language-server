@@ -225,14 +225,12 @@ appendToLog :: Text -> State ([Text], Int, Int, DList Text) ()
 appendToLog text = do
   State.modify' (\(a, b, c, log) -> (a, b, c, DList.snoc log text))
 
-usedIdentifiersToTextEdits :: Range -> NameEnv [ImportedBy] -> Text -> [UsedIdentifier] -> ([TextEdit], DList Text)
+usedIdentifiersToTextEdits :: Range -> NameEnv [ImportedBy] -> Text -> [UsedIdentifier] -> [TextEdit]
 usedIdentifiersToTextEdits range nameToImportedByMap sourceText usedIdentifiers
   | let sortedUsedIdentifiers = sortOn usedIdentifierSpan usedIdentifiers =
-      let (edits, (_,_,_,log)) = State.runState (makeStateComputation sortedUsedIdentifiers) (Text.lines sourceText, 0, 0, DList.empty)
-
-      in (edits, DList.cons (Text.pack $ show (map usedIdentifierSpan usedIdentifiers)) log)
+      State.evalState (makeStateComputation sortedUsedIdentifiers) (Text.lines sourceText, 0, 0)
   where
-    folder :: [TextEdit] -> UsedIdentifier -> State ([Text], Int, Int, DList Text) [TextEdit]
+    folder :: [TextEdit] -> UsedIdentifier -> State ([Text], Int, Int) [TextEdit]
     folder prevTextEdits (UsedIdentifier identifierName identifierSpan)
       | Just importedBys <- lookupNameEnv nameToImportedByMap identifierName
       , Just (ImportedBy alias _) <- find (isRangeWithinImportedBy range) importedBys
@@ -241,17 +239,12 @@ usedIdentifiersToTextEdits range nameToImportedByMap sourceText usedIdentifiers
       , let aliasText = Text.pack $ moduleNameString alias
       , let identifierText = Text.pack $ occNameString $ nameOccName identifierName
       , let qualifiedIdentifierText = aliasText <> "." <> identifierText = do
-          (sourceTextLines, lineOffset, updateColOffset row lineOffset -> colOffset, log) <- State.get
+          (sourceTextLines, lineOffset, updateColOffset row lineOffset -> colOffset) <- State.get
           let lines = List.drop (row - lineOffset) sourceTextLines
-          appendToLog (Text.pack $ show (row, startCol))
-          appendToLog (Text.pack $ show (sourceTextLines, lineOffset, colOffset))
-          trace (show (row, startCol)) (pure ())
-          trace (show (sourceTextLines, lineOffset, colOffset)) (pure ())
           let (replacementText, remainingLines) =
                 if | line : remainingLines <- lines
                    , let lineStartingAtIdentifier = Text.drop (startCol - colOffset) line
                    , Just (c, _) <- Text.uncons lineStartingAtIdentifier
-                   , trace (show c) True
                    , let isParenthesized = c == '('
                    , let isBackticked = c == '`'
                    , let replacementText =
@@ -260,14 +253,12 @@ usedIdentifiersToTextEdits range nameToImportedByMap sourceText usedIdentifiers
                               | otherwise -> qualifiedIdentifierText ->
                        (replacementText, lineStartingAtIdentifier : remainingLines)
                    | otherwise -> (qualifiedIdentifierText, lines)
-          appendToLog (Text.pack $ show replacementText)
-          trace (show replacementText) (pure ())
           let textEdit = TextEdit identifierRange replacementText
-          State.modify' (\(_,_,_,log) -> (remainingLines, row, startCol, log))
+          State.put (remainingLines, row, startCol)
           pure $ textEdit : prevTextEdits
       | otherwise = pure prevTextEdits
 
-    makeStateComputation :: [UsedIdentifier] -> State ([Text], Int, Int, DList Text) [TextEdit]
+    makeStateComputation :: [UsedIdentifier] -> State ([Text], Int, Int) [TextEdit]
     makeStateComputation usedIdentifiers = foldM folder [] usedIdentifiers
 
 -- The overall idea:
@@ -290,9 +281,7 @@ codeActionProvider ideState pluginId (CodeActionParams _ _ documentId range cont
                 , let globalRdrEnv = tmrTypechecked & tcg_rdr_env
                 , let nameToImportedByMap = globalRdrEnvToNameToImportedByMap globalRdrEnv
                 , let usedIdentifiers = refMapToUsedIdentifiers refMap
-                , let (textEdits, log) = usedIdentifiersToTextEdits range nameToImportedByMap sourceText usedIdentifiers ->
-                  do
-                    logInfo logger (Text.unlines $ DList.toList log)
+                , let textEdits = usedIdentifiersToTextEdits range nameToImportedByMap sourceText usedIdentifiers ->
                     pure $ Right $ List (makeCodeActions uri textEdits)
                 | otherwise -> pure $ Right $ List []
          | otherwise -> pure $ Right $ List []

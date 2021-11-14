@@ -13,4 +13,5 @@ cradle:
     - ExplicitPrelude.hs
     - OnlyImportedNames.hs
     - Parenthesized.hs
+    - Backticked.hs
 
