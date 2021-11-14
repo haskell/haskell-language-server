@@ -1,5 +1,15 @@
 {-# LANGUAGE DeriveGeneric #-}
-module Ide.Plugin.Conversion where
+module Ide.Plugin.Conversion (
+    alternateFormat
+    , hexRegex
+    , hexFloatRegex
+    , binaryRegex
+    , octalRegex
+    , decimalRegex
+    , numDecimalRegex
+    , toFormatTypes
+    , FormatType
+) where
 
 import           Data.Char                     (toUpper)
 import           Data.List                     (delete)
@@ -42,13 +52,14 @@ data AnyFormatType = DecimalFormat
 
 instance NFData AnyFormatType
 
+-- | Generate alternate formats for a single Literal based on FormatType's given.
 alternateFormat :: [FormatType] -> Literal -> [Text]
 alternateFormat fmts lit = case lit of
   IntLiteral _ (Just _) val  -> concatMap (alternateIntFormat val) (removeCurrentFormat lit fmts)
   FracLiteral _ (Just _) val -> if denominator val == 1 -- floats that can be integers we can represent as ints
       then concatMap (alternateIntFormat (numerator val)) (removeCurrentFormat lit fmts)
       else concatMap (alternateFracFormat val) (removeCurrentFormat lit fmts)
-  _                          -> ["Uh Oh"] -- This means there is no Source Text so we just ignore it
+  _                          -> [] -- This means there is no Source Text so we just ignore it
 
 alternateIntFormat :: Integer -> FormatType -> [Text]
 alternateIntFormat val fmt = case fmt of
@@ -56,7 +67,7 @@ alternateIntFormat val fmt = case fmt of
     HexFormat        -> [T.pack $ toHex val]
     OctalFormat      -> [T.pack $ toOctal val]
     BinaryFormat     -> [T.pack $ toBinary val]
-    NumDecimalFormat -> toNumDecimal val  -- this is the only reason we return List of Text :/
+    NumDecimalFormat -> generateNumDecimal val  -- this is the only reason we return List of Text :/
   AnyFormat DecimalFormat -> [T.pack $ toDecimal val]
   _                       -> []
 
@@ -72,32 +83,48 @@ removeCurrentFormat lit fmts = case getSrcText lit of
     Just src -> foldl (flip delete) fmts (sourceToFormatType src)
     Nothing  -> fmts
 
-hexRegex, hexFloatRegex, binaryRegex, octalRegex, decimalRegex, numDecimalRegex :: Text
+-- | Regex to match a Haskell Hex Literal
+hexRegex :: Text
 hexRegex = "0[xX][a-fA-F0-9]+"
+
+-- | Regex to match a Haskell Hex Float Literal
+hexFloatRegex :: Text
 hexFloatRegex = "0[xX][a-fA-F0-9]+\\.[a-fA-F0-9]+(p[+-]?[0-9]+)?"
+
+-- | Regex to match a Haskell Binary Literal
+binaryRegex :: Text
 binaryRegex = "0[bB][0|1]+"
+
+-- | Regex to match a Haskell Octal Literal
+octalRegex :: Text
 octalRegex = "0[oO][0-8]+"
-decimalRegex = "\\d+"
+
+-- | Regex to match a Haskell Decimal Literal (no decimal points)
+decimalRegex :: Text
+decimalRegex = "[0-9]+"
+
+-- | Regex to match a Haskell Literal with an explicit exponent
+numDecimalRegex :: Text
 numDecimalRegex = "[0-9]+\\.[0-9]+[eE][+-]?[0-9]+"
 
--- we export the regex for tests, but we want to be explicit in our matches
+-- we want to be explicit in our matches
 -- so we need to match the beginning/end of the source text
-wrap :: Text -> Text
-wrap regex = "^" <> regex <> "$"
+matchLineRegex :: Text -> Text
+matchLineRegex regex = "^" <> regex <> "$"
 
 sourceToFormatType :: Text -> [FormatType]
 sourceToFormatType srcText
-    | srcText =~ wrap hexRegex = [IntFormat HexFormat]
-    | srcText =~ wrap hexFloatRegex = [FracFormat HexFloatFormat]
-    | srcText =~ wrap octalRegex = [IntFormat OctalFormat]
-    | srcText =~ wrap binaryRegex = [IntFormat BinaryFormat]
+    | srcText =~ matchLineRegex hexRegex = [IntFormat HexFormat]
+    | srcText =~ matchLineRegex hexFloatRegex = [FracFormat HexFloatFormat]
+    | srcText =~ matchLineRegex octalRegex = [IntFormat OctalFormat]
+    | srcText =~ matchLineRegex binaryRegex = [IntFormat BinaryFormat]
     -- can either be a NumDecimal or just a regular Fractional with an exponent
     -- otherwise we wouldn't need to return a list
-    | srcText =~ wrap numDecimalRegex  = [IntFormat NumDecimalFormat, FracFormat ExponentFormat]
+    | srcText =~ matchLineRegex numDecimalRegex  = [IntFormat NumDecimalFormat, FracFormat ExponentFormat]
     -- just assume we are in base 10 with no decimals
     | otherwise = [AnyFormat DecimalFormat]
 
--- grab the Numeric related extensions that are turned on for a file
+-- | Translate a list of Extensions into Format Types (plus a base set of Formats)
 toFormatTypes :: [Extension] -> [FormatType]
 toFormatTypes =  (<>) [IntFormat HexFormat, IntFormat OctalFormat, FracFormat ExponentFormat, AnyFormat DecimalFormat]
                  . mapMaybe (`lookup` numericPairs)
@@ -130,15 +157,15 @@ fracFormats = map snd fracPairs
 --    - 50.0123e5
 --    - 5e.00123e6
 -- NOTE: showEFloat would also work, but results in only one option
-toNumDecimal :: Integer -> [Text]
-toNumDecimal val = map (showNumDecimal val) $ take 3 $ takeWhile (val >= ) $ dropWhile (\d -> (val `div` d) > 1000) divisors
+generateNumDecimal :: Integer -> [Text]
+generateNumDecimal val = map (toNumDecimal val) $ take 3 $ takeWhile (val >= ) $ dropWhile (\d -> (val `div` d) > 1000) divisors
     where
         divisors = 10 : map (*10) divisors
 
-showNumDecimal :: Integer -> Integer -> Text
-showNumDecimal val divisor = let (q, r) = val `quotRem` divisor
-                                 numExponent = length $ filter (== '0') $ show divisor
-                                 in T.pack $ show q <> "." <> show r <> "e" <> show numExponent
+toNumDecimal :: Integer -> Integer -> Text
+toNumDecimal val divisor = let (q, r) = val `quotRem` divisor
+                               numExponent = length $ filter (== '0') $ show divisor
+                               in T.pack $ show q <> "." <> show r <> "e" <> show numExponent
 
 toBase :: (Num a, Ord a) => (a -> ShowS) -> String -> a -> String
 toBase conv header n
