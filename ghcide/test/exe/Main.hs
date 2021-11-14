@@ -4336,7 +4336,7 @@ localCompletionTests = [
         void $ waitForTypecheck doc
 
         compls <- getCompletions doc (Position 0 15)
-        liftIO $ take 2 (map _insertText compls) @?= [Just "AAAAA", Just "ArchAArch64"]
+        liftIO $ filter ("AAA" `T.isPrefixOf`) (mapMaybe _insertText compls) @?= ["AAAAA"]
         pure ()
     ]
 
