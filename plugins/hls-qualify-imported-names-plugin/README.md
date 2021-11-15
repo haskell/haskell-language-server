@@ -2,7 +2,7 @@
 
 ## Demo
 
-![QualifyImportedNamesDemo](qualify-imported-names-demo.mp4)
+![Qualify Imported Names Demo](qualify-imported-names-demo.gif)
 
 ## Usage
 
