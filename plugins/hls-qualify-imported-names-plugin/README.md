@@ -1,7 +1,5 @@
 # Qualify Imported Names
 
-## Demo
-
 ![Qualify Imported Names Demo](qualify-imported-names-demo.gif)
 
 ## Usage
