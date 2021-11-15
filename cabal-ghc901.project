@@ -53,7 +53,8 @@ index-state: 2021-11-11T19:25:51Z
 
 constraints:
   -- These plugins don't work on GHC9 yet
-  haskell-language-server +ignore-plugins-ghc-bounds -brittany -class -stylishhaskell -tactic
+  haskell-language-server +ignore-plugins-ghc-bounds -brittany -class -stylishhaskell -tactic,
+  ghc-lib-parser ^>= 9.0
 
 -- although we are not building all plugins cabal solver phase is run for all packages
 -- this way we track explicitly all transitive dependencies which need support for ghc-9
@@ -67,9 +68,13 @@ allow-newer:
     data-tree-print:base,
 
     stylish-haskell:Cabal,
+    stylish-haskell:ghc-lib-parser,
 
     floskell:base,
     floskell:ghc-prim,
+
+    ormolu:ghc-lib-parser,
+    fourmolu:ghc-lib-parser,
 
     -- for shake-bench
     Chart-diagrams:diagrams-core,
