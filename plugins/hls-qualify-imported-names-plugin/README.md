@@ -12,9 +12,9 @@
 
 ## Features
 - Names are qualified on a per-import declaration basis.
-- If the import declaration has an explicit import list then the plugin will qualify only names on that list.
-- If an import declaration has an explicit hiding import list then the plugin will qualify names from the imported module not on that list.
-- Names will be qualified by the imported module's alias, if the module import is not aliased, then by the module's name.
+- Names are qualified by the imported module's alias if it has one, otherwise by the imported module's name.
+- If the import declaration has an explicit import list then the plugin will qualify only names on the list.
+- If the import declaration has an explicit hiding list then the plugin will qualify names from the imported module not on the list.
  
 ## Change log
 ### 1.0.0.0
