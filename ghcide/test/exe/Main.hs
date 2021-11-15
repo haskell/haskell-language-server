@@ -410,6 +410,30 @@ diagnosticTests = testGroup "diagnostics"
           , [(DsError, (1, 7), "Cyclic module dependency between ModuleA, ModuleB")]
           )
         ]
+  , testSession' "deeply nested cyclic module dependency" $ \path -> do
+      let contentA = unlines
+            [ "module ModuleA where" , "import ModuleB" ]
+      let contentB = unlines
+            [ "module ModuleB where" , "import ModuleA" ]
+      let contentC = unlines
+            [ "module ModuleC where" , "import ModuleB" ]
+      let contentD = T.unlines
+            [ "module ModuleD where" , "import ModuleC" ]
+          cradle =
+            "cradle: {direct: {arguments: [ModuleA, ModuleB, ModuleC, ModuleD]}}"
+      liftIO $ writeFile (path </> "ModuleA.hs") contentA
+      liftIO $ writeFile (path </> "ModuleB.hs") contentB
+      liftIO $ writeFile (path </> "ModuleC.hs") contentC
+      liftIO $ writeFile (path </> "hie.yaml") cradle
+      _ <- createDoc "ModuleD.hs" "haskell" contentD
+      expectDiagnostics
+        [ ( "ModuleA.hs"
+          , [(DsError, (1, 7), "Cyclic module dependency between ModuleA, ModuleB")]
+          )
+        , ( "ModuleB.hs"
+          , [(DsError, (1, 7), "Cyclic module dependency between ModuleA, ModuleB")]
+          )
+        ]
   , testSessionWait "cyclic module dependency with hs-boot" $ do
       let contentA = T.unlines
             [ "module ModuleA where"
@@ -669,9 +693,9 @@ diagnosticTests = testGroup "diagnostics"
       expectDiagnostics [("Foo.hs", [(DsError, (1,7), "Could not find module 'MissingModule'")])]
 
   , testGroup "Cancellation"
-    [ cancellationTestGroup "edit header" editHeader yesDepends yesSession noParse  noTc
-    , cancellationTestGroup "edit import" editImport noDepends  noSession  yesParse noTc
-    , cancellationTestGroup "edit body"   editBody   yesDepends yesSession yesParse yesTc
+    [ cancellationTestGroup "edit header" editHeader yesSession noParse  noTc
+    , cancellationTestGroup "edit import" editImport noSession  yesParse noTc
+    , cancellationTestGroup "edit body"   editBody   yesSession yesParse yesTc
     ]
   ]
   where
@@ -685,17 +709,14 @@ diagnosticTests = testGroup "diagnostics"
       noParse = False
       yesParse = True
 
-      noDepends = False
-      yesDepends = True
-
       noSession = False
       yesSession = True
 
       noTc = False
       yesTc = True
 
-cancellationTestGroup :: TestName -> (TextDocumentContentChangeEvent, TextDocumentContentChangeEvent) -> Bool -> Bool -> Bool -> Bool -> TestTree
-cancellationTestGroup name edits dependsOutcome sessionDepsOutcome parseOutcome tcOutcome = testGroup name
+cancellationTestGroup :: TestName -> (TextDocumentContentChangeEvent, TextDocumentContentChangeEvent) -> Bool -> Bool -> Bool -> TestTree
+cancellationTestGroup name edits sessionDepsOutcome parseOutcome tcOutcome = testGroup name
     [ cancellationTemplate edits Nothing
     , cancellationTemplate edits $ Just ("GetFileContents", True)
     , cancellationTemplate edits $ Just ("GhcSession", True)
@@ -704,7 +725,6 @@ cancellationTestGroup name edits dependsOutcome sessionDepsOutcome parseOutcome 
     , cancellationTemplate edits $ Just ("GetModSummaryWithoutTimestamps", True)
       -- getLocatedImports never fails
     , cancellationTemplate edits $ Just ("GetLocatedImports", True)
-    , cancellationTemplate edits $ Just ("GetDependencies", dependsOutcome)
     , cancellationTemplate edits $ Just ("GhcSessionDeps", sessionDepsOutcome)
     , cancellationTemplate edits $ Just ("GetParsedModule", parseOutcome)
     , cancellationTemplate edits $ Just ("TypeCheck", tcOutcome)
@@ -3843,9 +3863,6 @@ checkFileCompiles fp diag =
 pluginSimpleTests :: TestTree
 pluginSimpleTests =
   ignoreInWindowsForGHC88And810 $
-#if __GLASGOW_HASKELL__ == 810 && __GLASGOW_HASKELL_PATCHLEVEL1__ == 5
-  expectFailBecause "known broken for ghc 8.10.5 (see GHC #19763)" $
-#endif
   testSessionWithExtraFiles "plugin-knownnat" "simple plugin" $ \dir -> do
     _ <- openDoc (dir </> "KnownNat.hs") "haskell"
     liftIO $ writeFile (dir</>"hie.yaml")
