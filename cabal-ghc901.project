@@ -73,9 +73,6 @@ allow-newer:
     floskell:base,
     floskell:ghc-prim,
 
-    ormolu:ghc-lib-parser,
-    fourmolu:ghc-lib-parser,
-
     -- for shake-bench
     Chart-diagrams:diagrams-core,
     SVGFonts:diagrams-core
