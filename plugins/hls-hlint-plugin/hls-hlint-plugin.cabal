@@ -78,8 +78,8 @@ library
     else
       build-depends:
         , ghc
-        , ghc-lib            ==9.0.*
-        , ghc-lib-parser-ex  ==9.0.*
+        , ghc-lib            ^>=9.0
+        , ghc-lib-parser-ex  ^>=9.0
 
       cpp-options:   -DHLINT_ON_GHC_LIB
 
