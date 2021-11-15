@@ -287,6 +287,7 @@ module Development.IDE.GHC.Compat.Core (
     module GHC.Core.DataCon,
     module GHC.Core.FamInstEnv,
     module GHC.Core.InstEnv,
+    module GHC.Types.Unique.FM
 #if !MIN_VERSION_ghc(9,2,0)
     module GHC.Core.Ppr.TyThing,
 #endif
@@ -380,6 +381,7 @@ module Development.IDE.GHC.Compat.Core (
     module TysWiredIn,
     module Type,
     module Unify,
+    module UniqFM,
     module UniqSupply,
     module Var,
 #endif
@@ -426,6 +428,7 @@ import           GHC.Core.DataCon           hiding (dataConExTyCoVars)
 import qualified GHC.Core.DataCon           as DataCon
 import           GHC.Core.FamInstEnv
 import           GHC.Core.InstEnv
+import           GHC.Types.Unique.FM
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Core.Multiplicity      (scaledThing)
 #else
@@ -631,6 +634,7 @@ import           Type                       hiding (mkVisFunTys)
 import           TysPrim
 import           TysWiredIn
 import           Unify
+import           UniqFM
 import           UniqSupply
 import           Var                        (Var (varName), setTyVarUnique,
                                              setVarUnique, varType)
@@ -645,6 +649,7 @@ import           SrcLoc                     (RealLocated,
                                              SrcLoc (UnhelpfulLoc))
 #endif
 #endif
+
 
 #if !MIN_VERSION_ghc(8,8,0)
 import           Data.List                  (isSuffixOf)

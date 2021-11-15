@@ -49,14 +49,13 @@ import           Development.IDE.GHC.Compat.Core   (GenLocated (L), GhcPs,
                                                     ImportDecl (ImportDecl, ideclAs, ideclHiding, ideclName, ideclQualified),
                                                     ImportDeclQualifiedStyle (NotQualified),
                                                     ImportSpec (ImpSpec),
-                                                    LImportDecl,
-                                                    Module (Module), ModuleName,
+                                                    LImportDecl, ModuleName,
                                                     Name, NameEnv, OccName,
                                                     ParsedModule (ParsedModule, pm_parsed_source),
                                                     ParsedSource, SrcSpan,
                                                     TcGblEnv (TcGblEnv, tcg_imports, tcg_mod, tcg_rdr_env, tcg_used_gres),
-                                                    findImportUsage, getLoc,
-                                                    getMinimalImports,
+                                                    emptyUFM, findImportUsage,
+                                                    getLoc, getMinimalImports,
                                                     globalRdrEnvElts,
                                                     hsmodImports, ieNames,
                                                     initTcWithGbl,
@@ -65,12 +64,13 @@ import           Development.IDE.GHC.Compat.Core   (GenLocated (L), GhcPs,
                                                     moduleNameString,
                                                     nameModule_maybe,
                                                     nameOccName, occNameString,
-                                                    rdrNameOcc,
+                                                    plusUFM_C, rdrNameOcc,
                                                     realSrcSpanStart,
                                                     srcSpanEndCol,
                                                     srcSpanEndLine,
                                                     srcSpanStartCol,
-                                                    srcSpanStartLine, unLoc)
+                                                    srcSpanStartLine, unLoc,
+                                                    unitUFM)
 import           Development.IDE.GHC.Error         (isInsideSrcSpan,
                                                     realSrcSpanToRange)
 import           Development.IDE.Types.Diagnostics (List (List))
@@ -96,9 +96,11 @@ import           Language.LSP.Types                (ApplyWorkspaceEditParams (Ap
                                                     toNormalizedUri,
                                                     type (|?) (..),
                                                     uriToNormalizedFilePath)
-import           UniqFM                            (emptyUFM, plusUFM_C,
-                                                    unitUFM)
-import           Util                              (thenCmp)
+
+thenCmp :: Ordering -> Ordering -> Ordering
+{-# INLINE thenCmp #-}
+thenCmp EQ       ordering = ordering
+thenCmp ordering _        = ordering
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor pluginId = (defaultPluginDescriptor pluginId) {
