@@ -6,8 +6,8 @@ module Wingman.Metaprogramming.ProofState where
 import           Data.Bool (bool)
 import           Data.Functor ((<&>))
 import qualified Data.Text as T
-import           Data.Text.Prettyprint.Doc
-import           Data.Text.Prettyprint.Doc.Render.Util.Panic
+import           Prettyprinter
+import           Prettyprinter.Render.Util.Panic
 import           Language.LSP.Types (sectionSeparator)
 import           Wingman.Judgements (jHypothesis)
 import           Wingman.Types
