@@ -100,9 +100,6 @@ import           UniqFM                            (emptyUFM, plusUFM_C,
                                                     unitUFM)
 import           Util                              (thenCmp)
 
-import           Debug.Trace                       (trace, traceM)
-import           Development.IDE.Types.Logger      (logInfo)
-
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor pluginId = (defaultPluginDescriptor pluginId) {
   pluginHandlers = mconcat
@@ -221,10 +218,6 @@ updateColOffset row lineOffset colOffset
   | row == lineOffset = colOffset
   | otherwise = 0
 
-appendToLog :: Text -> State ([Text], Int, Int, DList Text) ()
-appendToLog text = do
-  State.modify' (\(a, b, c, log) -> (a, b, c, DList.snoc log text))
-
 usedIdentifiersToTextEdits :: Range -> NameEnv [ImportedBy] -> Text -> [UsedIdentifier] -> [TextEdit]
 usedIdentifiersToTextEdits range nameToImportedByMap sourceText usedIdentifiers
   | let sortedUsedIdentifiers = sortOn usedIdentifierSpan usedIdentifiers =
@@ -262,7 +255,8 @@ usedIdentifiersToTextEdits range nameToImportedByMap sourceText usedIdentifiers
     makeStateComputation usedIdentifiers = foldM folder [] usedIdentifiers
 
 -- The overall idea:
--- 1. GlobalRdrEnv from typechecking phase contains info on what imported a name.
+-- 1. GlobalRdrEnv from typechecking phase contains info on what imported a
+--    name.
 -- 2. refMap from GetHieAst contains location of names and how they are used.
 -- 3. For each used name in refMap check whether the name comes from an import
 --    at the origin of the code action.
@@ -270,7 +264,6 @@ codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
 codeActionProvider ideState pluginId (CodeActionParams _ _ documentId range context)
   | TextDocumentIdentifier uri <- documentId
   , Just normalizedFilePath <- uriToNormalizedFilePath (toNormalizedUri uri) = liftIO $ do
-      ShakeExtras{logger} <- runAction "QualifyImportedNames.GetShakeExtras" ideState getShakeExtras
       tcModuleResult <- getTypeCheckedModule ideState normalizedFilePath
       if | Just TcModuleResult { tmrParsed, tmrTypechecked } <- tcModuleResult
          , Just _ <- findLImportDeclAt range tmrParsed -> do
