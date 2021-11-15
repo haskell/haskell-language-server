@@ -12,13 +12,13 @@ module Development.IDE.Graph.Database(
     shakeGetDirtySet,
     shakeGetCleanKeys
     ,shakeGetBuildEdges) where
+import           Control.Concurrent.STM                  (atomically,
+                                                          readTVarIO)
 import           Data.Dynamic
-import           Data.IORef                              (readIORef)
 import           Data.Maybe
 import           Development.IDE.Graph.Classes           ()
 import           Development.IDE.Graph.Internal.Action
 import           Development.IDE.Graph.Internal.Database
-import qualified Development.IDE.Graph.Internal.Ids      as Ids
 import           Development.IDE.Graph.Internal.Options
 import           Development.IDE.Graph.Internal.Profile  (writeProfile)
 import           Development.IDE.Graph.Internal.Rules
@@ -45,12 +45,12 @@ shakeRunDatabase = shakeRunDatabaseForKeys Nothing
 -- | Returns the set of dirty keys annotated with their age (in # of builds)
 shakeGetDirtySet :: ShakeDatabase -> IO [(Key, Int)]
 shakeGetDirtySet (ShakeDatabase _ _ db) =
-    fmap snd <$> Development.IDE.Graph.Internal.Database.getDirtySet db
+    Development.IDE.Graph.Internal.Database.getDirtySet db
 
 -- | Returns the build number
 shakeGetBuildStep :: ShakeDatabase -> IO Int
 shakeGetBuildStep (ShakeDatabase _ _ db) = do
-    Step s <- readIORef $ databaseStep db
+    Step s <- readTVarIO $ databaseStep db
     return s
 
 -- Only valid if we never pull on the results, which we don't
@@ -64,7 +64,7 @@ shakeRunDatabaseForKeys
     -> [Action a]
     -> IO ([a], [IO ()])
 shakeRunDatabaseForKeys keysChanged (ShakeDatabase lenAs1 as1 db) as2 = do
-    incDatabase db keysChanged
+    atomically $ incDatabase db keysChanged
     as <- fmap (drop lenAs1) $ runActions db $ map unvoid as1 ++ as2
     return (as, [])
 
@@ -75,12 +75,12 @@ shakeProfileDatabase (ShakeDatabase _ _ s) file = writeProfile file s
 -- | Returns the clean keys in the database
 shakeGetCleanKeys :: ShakeDatabase -> IO [(Key, Result )]
 shakeGetCleanKeys (ShakeDatabase _ _ db) = do
-    keys <- Ids.elems $ databaseValues db
+    keys <- getDatabaseValues db
     return [ (k,res) | (k, Clean res) <- keys]
 
 -- | Returns the total count of edges in the build graph
 shakeGetBuildEdges :: ShakeDatabase -> IO Int
 shakeGetBuildEdges (ShakeDatabase _ _ db) = do
-    keys <- Ids.elems $ databaseValues db
+    keys <- getDatabaseValues db
     let ress = mapMaybe (getResult . snd) keys
     return $ sum $ map (length . getResultDepsDefault [] . resultDeps) ress
