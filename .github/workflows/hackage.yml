@@ -126,7 +126,7 @@ jobs:
           # For brittany
           echo " brittany:base, brittany:ghc, brittany:ghc-boot-th, butcher:base, multistate:base, data-tree-print:base," >> cabal.project
           # For floskell and stylish-haskell
-          echo " floskell:base, floskell:ghc-prim, stylish-haskell:Cabal," >> cabal.project
+          echo " floskell:base, floskell:ghc-prim, stylish-haskell:Cabal,stylish-haskell:ghc-lib-parser," >> cabal.project
 
       - name: "Build all package components in isolation"
         if: steps.get-hackage-version.outputs.exists != 'true'
