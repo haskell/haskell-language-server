@@ -136,7 +136,6 @@ jobs:
 
       - name: "Generate haddock for hackage"
         if: steps.get-hackage-version.outputs.exists != 'true'
-        continue-on-error: matrix.ghc == "9.0.1"
         run: |
           cd $(ls -d ./incoming/${{ matrix.package }}-*)
           cabal haddock --haddock-for-hackage
