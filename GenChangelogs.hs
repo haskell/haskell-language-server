@@ -1,6 +1,6 @@
 #!/usr/bin/env cabal
 {- cabal:
-build-depends: base, process, text, github, time
+build-depends: base, process, text, github, time >= 1.9
 -}
 
 {-# LANGUAGE OverloadedStrings #-}
