@@ -19,10 +19,10 @@ module Development.IDE.Types.Diagnostics (
 import           Control.DeepSeq
 import           Data.Maybe                                as Maybe
 import qualified Data.Text                                 as T
-import           Data.Text.Prettyprint.Doc
-import           Data.Text.Prettyprint.Doc.Render.Terminal (Color (..), color)
-import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Terminal
-import           Data.Text.Prettyprint.Doc.Render.Text
+import           Prettyprinter
+import           Prettyprinter.Render.Terminal (Color (..), color)
+import qualified Prettyprinter.Render.Terminal as Terminal
+import           Prettyprinter.Render.Text
 import           Language.LSP.Diagnostics
 import           Language.LSP.Types                        as LSP (Diagnostic (..),
                                                                    DiagnosticSeverity (..),
