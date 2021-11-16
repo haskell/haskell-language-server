@@ -113,8 +113,7 @@ kick = do
     -- Update the exports map
     results <- uses GenerateCore files <* uses GetHieAst files
     let mguts = catMaybes results
-        !exportsMap' = createExportsMapMg mguts
-    void $ liftIO $ modifyVar' exportsMap (exportsMap' <>)
+    void $ liftIO $ modifyVar' exportsMap (updateExportsMapMg mguts)
 
     liftIO $ progressUpdate progress KickCompleted
 
