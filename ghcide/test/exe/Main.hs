@@ -164,6 +164,7 @@ main = do
     , pluginParsedResultTests
     , preprocessorTests
     , thTests
+    , symlinkTests
     , safeTests
     , unitTests
     , haddockTests
@@ -4053,6 +4054,18 @@ thTests =
     let cPath = dir </> "C.hs"
     _ <- openDoc cPath "haskell"
     expectDiagnostics [ ( cPath, [(DsWarning, (3, 0), "Top-level binding with no type signature: a :: A")] ) ]
+    ]
+
+-- | Tests for projects that use symbolic links one way or another
+symlinkTests :: TestTree
+symlinkTests =
+  testGroup "Projects using Symlinks"
+    [ expectFailBecause "Filetargets are canonicalised and can't be found" $ testCase "Module is symlinked" $ runWithExtraFiles "symlink" $ \dir -> do
+        liftIO $ createFileLink (dir </> "some_loc" </> "Sym.hs") (dir </> "other_loc" </> "Sym.hs")
+        let fooPath = dir </> "src" </> "Foo.hs"
+        _ <- openDoc fooPath "haskell"
+        expectDiagnosticsWithTags  [("src" </> "Foo.hs", [(DsWarning, (2, 0), "The import of 'Sym' is redundant", Just DtUnnecessary)])]
+        pure ()
     ]
 
 -- | test that TH is reevaluated on typecheck
