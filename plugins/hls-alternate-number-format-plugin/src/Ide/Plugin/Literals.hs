@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE DerivingVia       #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE RankNTypes        #-}
 module Ide.Plugin.Literals where
 import           Data.Maybe                    (maybeToList)
 import           Data.Text                     (Text)
@@ -8,7 +9,8 @@ import qualified Data.Text                     as T
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Util      (unsafePrintSDoc)
 import           Development.IDE.Graph.Classes (NFData)
-import           GHC.Generics                  (Generic)
+import qualified GHC.Generics                  as GHC
+import           Generics.SYB
 
 -- Depending on our traversal path sometimes we have to parse the "body" of an expression or AST node
 -- in the context of how we got there. I.E. we could be in "CMD Mode" where we are parsing a HsCmd or
@@ -29,7 +31,7 @@ data Literal = IntLiteral      SrcSpan (Maybe Text) Integer
              | FracLiteral     SrcSpan (Maybe Text) Rational
              | IntPrimLiteral  SrcSpan (Maybe Text) Integer
              | FracPrimLiteral SrcSpan (Maybe Text) Rational
-             deriving (Generic, Show)
+             deriving (GHC.Generic, Show)
 
 instance NFData Literal
 
@@ -51,6 +53,9 @@ getSrcSpan = \case
 -- | Find all literals in a Parsed Source File
 collectLiterals :: ParsedSource -> [Literal]
 collectLiterals = concatMap traverseLDecl . hsmodDecls . unLoc
+
+traverseNode :: (Data ast, Typeable ast) => ast -> [Literal]
+traverseNode = everything (<>) (([] :: [Literal]) `mkQ` traverseLExpr)
 
 ----------------------------------------- DECLARATIONS -----------------------------------------
 -- | Find all Literals in a Declaration.
@@ -204,40 +209,10 @@ traverseLExpr (L sSpan hsExpr) = traverseExpr sSpan hsExpr
 
 traverseExpr :: SrcSpan -> HsExpr GhcPs -> [Literal]
 traverseExpr sSpan = \case
-      HsOverLit _ overLit             -> getOverLiteralAsList sSpan overLit
-      HsLit _ lit                     -> getLiteralAsList sSpan lit
-      HsLam _ group                   -> traverseMatchGroup group
-      HsLamCase _ group               -> traverseMatchGroup group
-      HsApp _ expr1 expr2             -> concatMap traverseLExpr [expr1, expr2]
-      HsAppType _ expr _              -> traverseLExpr expr
-      OpApp _ expr1 expr2 expr3       -> concatMap traverseLExpr [expr1, expr2, expr3]
-      NegApp _ expr _                 -> traverseLExpr expr
-      HsPar _ expr                    -> traverseLExpr expr
-      SectionL _ expr1 expr2          -> concatMap traverseLExpr [expr1, expr2]
-      SectionR _ expr1 expr2          -> concatMap traverseLExpr [expr1, expr2]
-      ExplicitTuple _ args _          -> concatMap traverseLTuple args
-      ExplicitSum _ _ _ expr          -> traverseLExpr expr
-      HsCase _ expr group             -> traverseLExpr expr <> traverseMatchGroup group
-      HsIf _ sexpr expr1 expr2 expr3  -> concatMap traverseLExpr [expr1, expr2, expr3] <> maybe [] (traverseSynExpr sSpan) sexpr
-      HsMultiIf _ grhss               -> concatMap traverseLGRHS grhss
-      HsLet _ locBinds expr           -> traverseLLocalBinds locBinds <> traverseLExpr expr
-      HsDo _ _ stmt                   -> concatMap traverseLStmt (unLoc stmt)
-      ExplicitList _ sexpr exprs      -> concatMap traverseLExpr exprs <> maybe [] (traverseSynExpr sSpan) sexpr
-      RecordCon{rcon_flds}            -> traverseRecordBinds rcon_flds
-      RecordUpd{..}                   -> traverseLExpr rupd_expr <> concatMap traverseLRecordUpdate rupd_flds
-      ExprWithTySig _ expr _          -> traverseLExpr expr
-      ArithSeq _ sexpr seqInfo        -> maybe [] (traverseSynExpr sSpan) sexpr <> traverseArithSeqInfo seqInfo
-      HsSCC _ _ _ expr                -> traverseLExpr expr
-      HsCoreAnn _ _ _ expr            -> traverseLExpr expr
-      HsBracket _ brackets            -> traverseBrackets brackets
-      HsSpliceE _ splice              -> traverseSplice sSpan splice
-      HsProc _ _ cmdTop               -> traverseLCmdTop cmdTop
-      HsStatic _ expr                 -> traverseLExpr expr
-      HsTick _ _ expr                 -> traverseLExpr expr
-      HsBinTick _ _ _ expr            -> traverseLExpr expr
-      HsTickPragma _ _ _ _ expr       -> traverseLExpr expr
-      HsWrap _ _ expr                 -> traverseExpr sSpan expr
-      _                               -> []
+      HsOverLit _ overLit -> getOverLiteralAsList sSpan overLit
+      HsLit _ lit         -> getLiteralAsList sSpan lit
+      _                   -> []
+    --   _                -> traverseNode expr
 
 traverseLCmdTop :: LHsCmdTop GhcPs -> [Literal]
 traverseLCmdTop = traverseCmdTop . unLoc

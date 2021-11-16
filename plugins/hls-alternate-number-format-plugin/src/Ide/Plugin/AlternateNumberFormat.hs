@@ -30,7 +30,8 @@ import           Ide.Plugin.Conversion                (FormatType,
                                                        toFormatTypes)
 import           Ide.Plugin.Literals                  (Literal (..),
                                                        collectLiterals,
-                                                       getSrcSpan, getSrcText)
+                                                       getSrcSpan, getSrcText,
+                                                       traverseNode)
 import           Ide.Plugin.Retrie                    (handleMaybe,
                                                        handleMaybeM, response)
 import           Ide.Types
@@ -54,6 +55,7 @@ type instance RuleResult CollectLiterals = CollectLiteralsResult
 data CollectLiteralsResult = CLR {
     literals      :: [Literal]
     , formatTypes :: [FormatType]
+    , lits        :: [Literal]
     } deriving (Generic)
 
 instance Show CollectLiteralsResult where
@@ -68,7 +70,8 @@ collectLiteralsRule = define $ \CollectLiterals nfp -> do
     let fmts = getFormatTypes <$> pm
         -- collect all the literals for a file
         lits = collectLiterals . pm_parsed_source <$> pm
-    pure ([], CLR <$> lits <*> fmts)
+        lits' = traverseNode . pm_parsed_source  <$> pm
+    pure ([], CLR <$> lits <*> fmts <*> lits')
     where
         getFormatTypes = toFormatTypes . toList . extensionFlags . ms_hspp_opts . pm_mod_summary
 
@@ -82,6 +85,8 @@ codeActionHandler state _ (CodeActionParams _ _ docId currRange _) = response $ 
         literalPairs = map (\lit -> (lit, alternateFormat formatTypes lit)) litsInRange
         -- make a code action for every literal and its' alternates (then flatten the result)
         actions = concatMap (\(lit, alts) -> map (mkCodeAction nfp lit) alts) literalPairs
+
+    logIO state $ "Lits: " <> (show lits)
 
     pure $ List actions
     where

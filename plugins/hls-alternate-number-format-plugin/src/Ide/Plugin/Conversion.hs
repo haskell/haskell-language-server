@@ -7,6 +7,7 @@ module Ide.Plugin.Conversion (
     , octalRegex
     , decimalRegex
     , numDecimalRegex
+    , matchLineRegex
     , toFormatTypes
     , FormatType
 ) where
@@ -109,6 +110,7 @@ numDecimalRegex = "[0-9]+\\.[0-9]+[eE][+-]?[0-9]+"
 
 -- we want to be explicit in our matches
 -- so we need to match the beginning/end of the source text
+-- | Wraps a Regex with a beginning ("^") and end ("$") token
 matchLineRegex :: Text -> Text
 matchLineRegex regex = "^" <> regex <> "$"
 
