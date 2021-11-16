@@ -141,7 +141,7 @@ jobs:
           cabal haddock --haddock-for-hackage
 
       - name: "Upload package dist tarball"
-        if: steps.get-hackage-version.outputs.exists != 'true' && matrix.ghc =="8.10.7"
+        if: steps.get-hackage-version.outputs.exists != 'true' && matrix.ghc == '8.10.7'
         uses: actions/upload-artifact@v2
         with:
           name: ${{ matrix.package }}
