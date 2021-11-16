@@ -14,11 +14,8 @@ import           Control.Monad.Trans.State.Strict  (State)
 import qualified Control.Monad.Trans.State.Strict  as State
 import           Data.DList                        (DList)
 import qualified Data.DList                        as DList
-import           Data.Foldable                     (Foldable (fold, foldl'),
-                                                    find)
-import           Data.Function                     ((&))
+import           Data.Foldable                     (Foldable (foldl'), find)
 import qualified Data.HashMap.Internal.Strict      as HashMap
-import qualified Data.IntMap.Strict                as IntMap
 import           Data.List                         (sortOn)
 import qualified Data.List                         as List
 import qualified Data.Map.Strict                   as Map
@@ -27,74 +24,54 @@ import           Data.Text                         (Text)
 import qualified Data.Text                         as Text
 import           Development.IDE.Core.RuleTypes    (GetFileContents (GetFileContents),
                                                     GetHieAst (GetHieAst),
-                                                    GetParsedModule (GetParsedModule),
                                                     HieAstResult (HAR, refMap),
                                                     TcModuleResult (TcModuleResult, tmrParsed, tmrTypechecked),
                                                     TypeCheck (TypeCheck))
 import           Development.IDE.Core.Service      (runAction)
-import           Development.IDE.Core.Shake        (IdeState,
-                                                    ShakeExtras (ShakeExtras, logger),
-                                                    getShakeExtras, hiedb, use)
+import           Development.IDE.Core.Shake        (IdeState, use)
 import           Development.IDE.GHC.Compat        (ContextInfo (Use),
-                                                    GhcVersion (GHC810),
                                                     Identifier,
                                                     IdentifierDetails (IdentifierDetails, identInfo),
                                                     RefMap, Span)
 import           Development.IDE.GHC.Compat.Core   (GenLocated (L), GhcPs,
-                                                    GhcRn,
                                                     GlobalRdrElt (GRE, gre_imp, gre_name),
                                                     GlobalRdrEnv,
+                                                    HsModule (hsmodImports),
                                                     ImpDeclSpec (ImpDeclSpec, is_as, is_dloc, is_qual),
-                                                    ImportAvails (ImportAvails, imp_mods),
-                                                    ImportDecl (ImportDecl, ideclAs, ideclHiding, ideclName, ideclQualified),
-                                                    ImportDeclQualifiedStyle (NotQualified),
                                                     ImportSpec (ImpSpec),
                                                     LImportDecl, ModuleName,
                                                     Name, NameEnv, OccName,
                                                     ParsedModule (ParsedModule, pm_parsed_source),
-                                                    ParsedSource, SrcSpan,
-                                                    TcGblEnv (TcGblEnv, tcg_imports, tcg_mod, tcg_rdr_env, tcg_used_gres),
-                                                    emptyUFM, findImportUsage,
-                                                    getLoc, getMinimalImports,
-                                                    globalRdrEnvElts,
-                                                    hsmodImports, ieNames,
-                                                    initTcWithGbl,
-                                                    lookupModuleEnv,
-                                                    lookupNameEnv, mkNameEnv,
+                                                    SrcSpan,
+                                                    TcGblEnv (tcg_rdr_env),
+                                                    emptyUFM, globalRdrEnvElts,
+                                                    lookupNameEnv,
                                                     moduleNameString,
-                                                    nameModule_maybe,
                                                     nameOccName, occNameString,
-                                                    plusUFM_C, rdrNameOcc,
-                                                    realSrcSpanStart,
-                                                    srcSpanEndCol,
+                                                    plusUFM_C, srcSpanEndCol,
                                                     srcSpanEndLine,
                                                     srcSpanStartCol,
-                                                    srcSpanStartLine, unLoc,
-                                                    unitUFM)
-import           Development.IDE.GHC.Error         (isInsideSrcSpan,
-                                                    realSrcSpanToRange)
+                                                    srcSpanStartLine, unitUFM)
+import           Development.IDE.GHC.Error         (isInsideSrcSpan)
 import           Development.IDE.Types.Diagnostics (List (List))
 import           Development.IDE.Types.Location    (NormalizedFilePath,
                                                     Position (Position),
-                                                    Range (Range), Uri)
-import           Ide.Types                         (CommandFunction, CommandId,
-                                                    PluginCommand (PluginCommand),
-                                                    PluginDescriptor (pluginCommands, pluginHandlers, pluginRules),
+                                                    Range (Range), Uri,
+                                                    toNormalizedUri)
+import           Ide.Types                         (PluginDescriptor (pluginHandlers),
                                                     PluginId,
                                                     PluginMethodHandler,
                                                     defaultPluginDescriptor,
                                                     mkPluginHandler)
-import           Language.LSP.Types                (ApplyWorkspaceEditParams (ApplyWorkspaceEditParams),
-                                                    CodeAction (..),
-                                                    CodeActionKind (..),
-                                                    CodeActionParams (..),
+import           Language.LSP.Types                (CodeAction (CodeAction, _command, _diagnostics, _disabled, _edit, _isPreferred, _kind, _title, _xdata),
+                                                    CodeActionKind (CodeActionQuickFix),
+                                                    CodeActionParams (CodeActionParams),
                                                     Method (TextDocumentCodeAction),
-                                                    SMethod (STextDocumentCodeAction, SWorkspaceApplyEdit),
-                                                    TextDocumentIdentifier (..),
+                                                    SMethod (STextDocumentCodeAction),
+                                                    TextDocumentIdentifier (TextDocumentIdentifier),
                                                     TextEdit (TextEdit),
-                                                    WorkspaceEdit (..),
-                                                    toNormalizedUri,
-                                                    type (|?) (..),
+                                                    WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
+                                                    type (|?) (InR),
                                                     uriToNormalizedFilePath)
 
 thenCmp :: Ordering -> Ordering -> Ordering
@@ -273,7 +250,7 @@ codeActionProvider ideState pluginId (CodeActionParams _ _ documentId range cont
              sourceText <- getSourceText ideState normalizedFilePath
              if | Just HAR {..} <- hieAstResult
                 , Just sourceText <- sourceText
-                , let globalRdrEnv = tmrTypechecked & tcg_rdr_env
+                , let globalRdrEnv = tcg_rdr_env tmrTypechecked
                 , let nameToImportedByMap = globalRdrEnvToNameToImportedByMap globalRdrEnv
                 , let usedIdentifiers = refMapToUsedIdentifiers refMap
                 , let textEdits = usedIdentifiersToTextEdits range nameToImportedByMap sourceText usedIdentifiers ->
