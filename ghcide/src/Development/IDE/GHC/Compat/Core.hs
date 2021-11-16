@@ -287,7 +287,7 @@ module Development.IDE.GHC.Compat.Core (
     module GHC.Core.DataCon,
     module GHC.Core.FamInstEnv,
     module GHC.Core.InstEnv,
-    module GHC.Types.Unique.FM
+    module GHC.Types.Unique.FM,
 #if !MIN_VERSION_ghc(9,2,0)
     module GHC.Core.Ppr.TyThing,
 #endif
@@ -515,7 +515,9 @@ import           GHC.Types.TyThing.Ppr
 #else
 import           GHC.Types.Name.Set
 #endif
-import           GHC.Types.SrcLoc           (BufPos, BufSpan, SrcSpan (UnhelpfulSpan), SrcLoc(UnhelpfulLoc))
+import           GHC.Types.SrcLoc           (BufPos, BufSpan,
+                                             SrcLoc (UnhelpfulLoc),
+                                             SrcSpan (UnhelpfulSpan))
 import qualified GHC.Types.SrcLoc           as SrcLoc
 import           GHC.Types.Unique.Supply
 import           GHC.Types.Var              (Var (varName), setTyVarUnique,
@@ -642,11 +644,11 @@ import           Var                        (Var (varName), setTyVarUnique,
 #if MIN_VERSION_ghc(8,10,0)
 import           Coercion                   (coercionKind)
 import           Predicate
-import           SrcLoc                     (SrcSpan (UnhelpfulSpan), SrcLoc (UnhelpfulLoc))
+import           SrcLoc                     (SrcLoc (UnhelpfulLoc),
+                                             SrcSpan (UnhelpfulSpan))
 #else
-import           SrcLoc                     (RealLocated,
-                                             SrcSpan (UnhelpfulSpan),
-                                             SrcLoc (UnhelpfulLoc))
+import           SrcLoc                     (RealLocated, SrcLoc (UnhelpfulLoc),
+                                             SrcSpan (UnhelpfulSpan))
 #endif
 #endif
 
