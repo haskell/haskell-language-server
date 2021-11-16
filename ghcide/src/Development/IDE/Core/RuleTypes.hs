@@ -73,10 +73,6 @@ type instance RuleResult GetParsedModuleWithComments = ParsedModule
 -- a module could not be parsed or an import cycle.
 type instance RuleResult GetDependencyInformation = DependencyInformation
 
--- | Transitive module and pkg dependencies based on the information produced by GetDependencyInformation.
--- This rule is also responsible for calling ReportImportCycles for each file in the transitive closure.
-type instance RuleResult GetDependencies = TransitiveDependencies
-
 type instance RuleResult GetModuleGraph = DependencyInformation
 
 data GetKnownTargets = GetKnownTargets
@@ -234,6 +230,7 @@ type instance RuleResult GetDocMap = DocAndKindMap
 type instance RuleResult GhcSession = HscEnvEq
 
 -- | A GHC session preloaded with all the dependencies
+-- This rule is also responsible for calling ReportImportCycles for the direct dependencies
 type instance RuleResult GhcSessionDeps = HscEnvEq
 
 -- | Resolve the imports in a module to the file path of a module in the same package
@@ -388,11 +385,6 @@ data ReportImportCycles = ReportImportCycles
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable ReportImportCycles
 instance NFData   ReportImportCycles
-
-data GetDependencies = GetDependencies
-    deriving (Eq, Show, Typeable, Generic)
-instance Hashable GetDependencies
-instance NFData   GetDependencies
 
 data TypeCheck = TypeCheck
     deriving (Eq, Show, Typeable, Generic)
