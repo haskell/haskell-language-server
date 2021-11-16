@@ -553,11 +553,11 @@ fromTargetId is exts (GHC.TargetModule mod) env dep = do
               , i <- is
               , boot <- ["", "-boot"]
               ]
-    locs <- mapM (fmap toNormalizedFilePath' . canonicalizePath) fps
+    let locs = map toNormalizedFilePath' fps
     return [TargetDetails (TargetModule mod) env dep locs]
 -- For a 'TargetFile' we consider all the possible module names
 fromTargetId _ _ (GHC.TargetFile f _) env deps = do
-    nf <- toNormalizedFilePath' <$> canonicalizePath f
+    let nf = toNormalizedFilePath' f
     return [TargetDetails (TargetFile nf) env deps [nf]]
 
 toFlagsMap :: TargetDetails -> [(NormalizedFilePath, (IdeResult HscEnvEq, DependencyInfo))]

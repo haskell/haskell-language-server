@@ -4060,7 +4060,7 @@ thTests =
 symlinkTests :: TestTree
 symlinkTests =
   testGroup "Projects using Symlinks"
-    [ expectFailBecause "Filetargets are canonicalised and can't be found" $ testCase "Module is symlinked" $ runWithExtraFiles "symlink" $ \dir -> do
+    [ testCase "Module is symlinked" $ runWithExtraFiles "symlink" $ \dir -> do
         liftIO $ createFileLink (dir </> "some_loc" </> "Sym.hs") (dir </> "other_loc" </> "Sym.hs")
         let fooPath = dir </> "src" </> "Foo.hs"
         _ <- openDoc fooPath "haskell"
