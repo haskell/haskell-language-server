@@ -72,10 +72,10 @@ getDocumentationsTryGhc env mod names = do
   res <- fun
   case res of
       Left _    -> return []
-      Right res -> zipWithM unwrap (fmap snd res) names
+      Right res -> zipWithM unwrap (fmap snd $ Map.toList res) names
   where
-    fun :: IO (Either [FileDiagnostic] [(Name, Either String (Maybe HsDocString, Map.Map Int HsDocString))])
-    fun = catchSrcErrors (hsc_dflags env) "docs" $ Map.toList <$> getDocsBatch env mod names
+    fun :: IO (Either [FileDiagnostic] (Map.Map Name (Either String (Maybe HsDocString, Map.Map Int HsDocString))))
+    fun = catchSrcErrors (hsc_dflags env) "docs" $ getDocsBatch env mod names
 
     unwrap (Right (Just docs, _)) n = SpanDocString docs <$> getUris n
     unwrap _ n                      = mkSpanDocText n
