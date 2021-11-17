@@ -26,6 +26,8 @@ Time for another hls release:
 ([#2354](https://github.com/haskell/haskell-language-server/pull/2354)) by @pepeiborra
 - Update to latest prettyprinter API
 ([#2352](https://github.com/haskell/haskell-language-server/pull/2352)) by @fendor
+- Use hackage version of czipwith
+([#2346](https://github.com/haskell/haskell-language-server/pull/2346)) by @jneira
 - Show build graph statistics in ghcide-bench
 ([#2343](https://github.com/haskell/haskell-language-server/pull/2343)) by @pepeiborra
 - contributing: add implicit-hie gen-hie > hie.yaml note
