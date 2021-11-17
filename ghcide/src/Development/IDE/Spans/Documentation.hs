@@ -33,6 +33,7 @@ import           System.FilePath
 
 import           Language.LSP.Types             (filePathToUri, getUri)
 import qualified Data.Map                       as Map
+import           Development.IDE.Types.Diagnostics (FileDiagnostic)
 
 mkDocMap
   :: HscEnv
@@ -68,11 +69,14 @@ getDocumentationTryGhc env mod n = head <$> getDocumentationsTryGhc env mod [n]
 
 getDocumentationsTryGhc :: HscEnv -> Module -> [Name] -> IO [SpanDoc]
 getDocumentationsTryGhc env mod names = do
-  res <- catchSrcErrors (hsc_dflags env) "docs" $ (fmap . fmap) snd $ fmap Map.toList $ getDocsBatch env mod names
+  res <- fun
   case res of
       Left _    -> return []
-      Right res -> zipWithM unwrap res names
+      Right res -> zipWithM unwrap (fmap snd res) names
   where
+    fun :: IO (Either [FileDiagnostic] [(Name, Either String (Maybe HsDocString, Map.Map Int HsDocString))])
+    fun = catchSrcErrors (hsc_dflags env) "docs" $ Map.toList <$> getDocsBatch env mod names
+
     unwrap (Right (Just docs, _)) n = SpanDocString docs <$> getUris n
     unwrap _ n                      = mkSpanDocText n
 
