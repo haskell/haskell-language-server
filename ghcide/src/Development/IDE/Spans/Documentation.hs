@@ -65,7 +65,8 @@ lookupKind env mod =
     fmap (fromRight Nothing) . catchSrcErrors (hsc_dflags env) "span" . lookupName env mod
 
 getDocumentationTryGhc :: HscEnv -> Module -> Name -> IO SpanDoc
-getDocumentationTryGhc env mod n = fmap head ((fmap . fmap) snd $ fmap Map.toList $ getDocumentationsTryGhc env mod [n])
+--  2021-11-17: FIXME: Code uses batch search for singleton & assumes that search always succeeds.
+getDocumentationTryGhc env mod n = fromJust . Map.lookup n <$> getDocumentationsTryGhc env mod [n]
 
 getDocumentationsTryGhc :: HscEnv -> Module -> [Name] -> IO (Map.Map Name SpanDoc)
 getDocumentationsTryGhc env mod names = do
