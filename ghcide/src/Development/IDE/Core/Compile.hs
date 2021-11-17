@@ -998,11 +998,11 @@ getDocsBatch
   :: HscEnv
   -> Module  -- ^ a moudle where the names are in scope
   -> [Name]
-  -> IO [(Name, Either String (Maybe HsDocString, Map.Map Int HsDocString))]
+  -> IO (Map.Map Name (Either String (Maybe HsDocString, Map.Map Int HsDocString)))
 getDocsBatch hsc_env _mod _names = do
     ((_warns,errs), res) <- initTc hsc_env HsSrcFile False _mod fakeSpan $ traverse findNameInfo _names
     case res of
-        Just x  -> return $ fun x
+        Just x  -> return $ Map.fromList $ fun x
         Nothing -> throwErrors errs
   where
     fun :: [(Name, Either GetDocsFailure c)] -> [(Name, Either String c)]
