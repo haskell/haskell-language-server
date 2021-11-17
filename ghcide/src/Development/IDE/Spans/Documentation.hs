@@ -72,16 +72,14 @@ getDocumentationsTryGhc env mod names = do
   res <- fun
   case res of
       Left _    -> return []
-      Right res -> zipWithM unwrap (fmap snd $ Map.toList res) names
+      Right res -> sequenceA $ unwrap <$> Map.toList res
   where
     fun :: IO (Either [FileDiagnostic] (Map.Map Name (Either String (Maybe HsDocString, Map.Map Int HsDocString))))
     fun = catchSrcErrors (hsc_dflags env) "docs" $ getDocsBatch env mod names
 
-    unwrap (Right (Just docs, _)) n = SpanDocString docs <$> getUris n
-    unwrap _ n                      = mkSpanDocText n
-
-    mkSpanDocText name =
-      SpanDocText [] <$> getUris name
+    unwrap :: (Name,  Either a (Maybe HsDocString, b)) -> IO SpanDoc
+    unwrap (name, Right (Just docs, _)) = SpanDocString docs <$> getUris name
+    unwrap (name, _)                    = SpanDocText [] <$> getUris name
 
     -- Get the uris to the documentation and source html pages if they exist
     getUris name = do
