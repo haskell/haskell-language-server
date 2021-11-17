@@ -39,6 +39,7 @@ source-repository-package
   tag: 0d050b24ec5ef37c825b6f28ebd46787191e2a2d
 -- https://github.com/mokus0/th-extras/issues/10
 
+
 source-repository-package
   type: git
   location: https://github.com/fendor/dependent-sum
