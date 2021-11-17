@@ -9,7 +9,7 @@ packages:
   - ./hls-test-utils
   - ./shake-bench
   - ./plugins/hls-call-hierarchy-plugin
-  - ./plugins/hls-class-plugin
+  # - ./plugins/hls-class-plugin
   - ./plugins/hls-haddock-comments-plugin
   - ./plugins/hls-eval-plugin
   - ./plugins/hls-explicit-imports-plugin
@@ -18,9 +18,9 @@ packages:
   - ./plugins/hls-rename-plugin
   - ./plugins/hls-retrie-plugin
   - ./plugins/hls-splice-plugin
-  - ./plugins/hls-tactics-plugin
-  - ./plugins/hls-brittany-plugin
-  - ./plugins/hls-stylish-haskell-plugin
+  # - ./plugins/hls-tactics-plugin
+  # - ./plugins/hls-brittany-plugin
+  # - ./plugins/hls-stylish-haskell-plugin
   - ./plugins/hls-floskell-plugin
   - ./plugins/hls-fourmolu-plugin
   - ./plugins/hls-pragmas-plugin
@@ -33,17 +33,10 @@ ghc-options:
 extra-deps:
 
 - blaze-textual-0.2.2.1
-- brittany-0.13.1.2
-- butcher-1.3.3.2
 - bytestring-encoding-0.1.0.0@sha256:460b49779fbf0112e8e2f1753c1ed9131eb18827600c298f4d6bb51c4e8c1c0d,1727
-- czipwith-1.0.1.4
-- data-tree-print-0.1.0.2
 - dependent-map-0.4.0.0@sha256:ca2b131046f4340a1c35d138c5a003fe4a5be96b14efc26291ed35fd08c62221,1657
 - dependent-sum-0.7.1.0@sha256:0e419237f5b86da3659772afff9cab355c0f8d5b3fdb15a5b30e673d8dc83941,2147
-- extra-1.7.9
 - floskell-0.10.5
-- generic-lens-2.2.0.0
-- generic-lens-core-2.2.0.0
 - heapsize-0.3.0.1@sha256:0b69aa97a46d819b700ac7b145f3b5493c3565cf2c5b8298682238d405d0326e,1417
 - hiedb-0.4.1.0
 - hspec-2.7.10
@@ -52,7 +45,6 @@ extra-deps:
 - implicit-hie-0.1.2.6
 - implicit-hie-cradle-0.3.0.5
 - monad-dijkstra-0.1.1.2
-- multistate-0.8.0.3
 - refinery-0.4.0.0
 - retrie-1.0.0.0
 - some-1.0.2
@@ -60,11 +52,11 @@ extra-deps:
 - lsp-types-1.3.0.1
 - lsp-test-0.14.0.1
 - sqlite-simple-0.4.18.0
-- stylish-haskell-0.13.0.0
 
-- github: mokus0/th-extras
-  commit: 0d050b24ec5ef37c825b6f28ebd46787191e2a2d
-# https://github.com/mokus0/th-extras/issues/10
+- github: anka-213/th-extras
+  commit: 57a97b4df128eb7b360e8ab9c5759392de8d1659
+# https://github.com/mokus0/th-extras/pull/8
+# https://github.com/mokus0/th-extras/issues/7
 
 - github: anka-213/dependent-sum
   commit: 8cf4c7fbc3bfa2be475a17bb7c94a1e1e9a830b5
@@ -84,7 +76,7 @@ extra-deps:
 
 # end of shake-bench dpendencies
 
-# due to floskell, stylish-haskell, brittany and shake-bench
+# due to floskell-0.10.5 and diagrams-core-1.5.0
 allow-newer: true
 
 configure-options:
@@ -99,7 +91,6 @@ flags:
   haskell-language-server:
     pedantic: true
 
-    ignore-plugins-ghc-bounds: true
     class: false
     tactic: false # Dependencies fail
     stylishHaskell: false
@@ -107,11 +98,9 @@ flags:
 
   retrie:
     BuildExecutable: false
-
   # Stack doesn't support automatic flags.
   hls-hlint-plugin:
     hlint33: true
-
   hyphenation:
     embed: true
 
