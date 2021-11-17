@@ -52,7 +52,7 @@ We will warn users about the upcoming deprecation of a GHC version in the notes 
 
 ### Why deprecate older versions of GHC?
 
-`haskell-language-server`(HLS) is highly tied to the ghc api.This imposes a high maintenance cost:
+`haskell-language-server`(HLS) is highly tied to the ghc api. This imposes a high maintenance cost:
 
 - The codebase is littered with conditional logic,
 - We own auxiliary packages to support older versions of ghc.
