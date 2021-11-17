@@ -91,6 +91,7 @@ flags:
   haskell-language-server:
     pedantic: true
 
+    ignore-plugins-ghc-bounds: true
     class: false
     tactic: false # Dependencies fail
     stylishHaskell: false
