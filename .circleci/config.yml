@@ -2,6 +2,7 @@ defaults: &defaults
   working_directory: ~/build
   docker:
     - image: alanz/haskell-hie-ci
+  resource_class: large
   steps:
     - checkout
     - run:
