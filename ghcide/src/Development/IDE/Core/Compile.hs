@@ -38,7 +38,6 @@ import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Orphans       ()
 import           Development.IDE.GHC.Util
 import           Development.IDE.GHC.Warnings
-import           Development.IDE.Spans.Common
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
@@ -78,7 +77,7 @@ import           Control.Lens                      hiding (List)
 import           Control.Monad.Except
 import           Control.Monad.Extra
 import           Control.Monad.Trans.Except
-import           Data.Bifunctor                    (first, second)
+import           Data.Bifunctor                    (second)
 import qualified Data.ByteString                   as BS
 import qualified Data.DList                        as DL
 import           Data.IORef
@@ -109,6 +108,7 @@ import qualified Data.HashMap.Strict               as HashMap
 import           Data.IntMap                       (IntMap)
 import           Data.Map                          (Map)
 import           Data.Tuple.Extra                  (dupe)
+import           Data.Either.Extra                 (maybeToEither)
 import           Data.Unique                       as Unique
 import           Development.IDE.Core.Tracing      (withTrace)
 import           Development.IDE.GHC.Compat.Util   (emptyUDFM, plusUDFM_C)
@@ -1025,20 +1025,11 @@ getDocsBatch
   :: HscEnv
   -> Module  -- ^ a moudle where the names are in scope
   -> [Name]
-  -> IO (Either ErrorMessages (Map.Map Name (Either T.Text (Maybe HsDocString, Maybe (Map.Map Int HsDocString)))))
+  -> IO (Either ErrorMessages (Map.Map Name (Either GetDocsFailure (Maybe HsDocString, Maybe (Map.Map Int HsDocString)))))
 getDocsBatch hsc_env _mod _names = do
     ((_warns,errs), res) <- initTc hsc_env HsSrcFile False _mod fakeSpan $ Map.fromList <$> traverse findNameInfo _names
-    pure $ case res of
-        Just x  -> pure $ fun x
-        Nothing -> Left errs
-  where
-    fun :: Map.Map Name (Either GetDocsFailure c) -> Map.Map Name (Either T.Text c)
-    fun =
-      Map.map fun1
-     where
-      fun1 :: Either GetDocsFailure c -> Either T.Text c
-      fun1 = first showGhc
-
+    pure $ maybeToEither errs res
+ where
     findNameInfo :: Name -> IOEnv (Env TcGblEnv TcLclEnv) (Name, Either GetDocsFailure (Maybe HsDocString, Maybe (Map.Map Int HsDocString)))
     findNameInfo name =
         case nameModule_maybe name of
