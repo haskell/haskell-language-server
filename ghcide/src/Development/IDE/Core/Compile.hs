@@ -213,9 +213,7 @@ tcRnModule hsc_env keep_lbls pmod = do
                           HsParsedModule { hpm_module = parsedSource pmod,
                                            hpm_src_files = pm_extra_src_files pmod,
                                            hpm_annotations = pm_annotations pmod }
-  let rn_info = case mrn_info of
-        Just x  -> x
-        Nothing -> error "no renamed info tcRnModule"
+  let rn_info = fromMaybe (error "no renamed info tcRnModule") mrn_info
   pure (TcModuleResult pmod rn_info tc_gbl_env splices False)
 
 mkHiFileResultNoCompile :: HscEnv -> TcModuleResult -> IO HiFileResult
@@ -999,6 +997,7 @@ getDocsBatch
   -> Module  -- ^ a moudle where the names are in scope
   -> [Name]
   -> IO (Either ErrorMessages (Map.Map Name (Either GetDocsFailure (Maybe HsDocString, Maybe (Map.Map Int HsDocString)))))
+  -- ^ Return a 'Map' of 'Name's to 'Either' (no docs messages) (general doc body & arg docs)
 getDocsBatch hsc_env _mod _names = do
     ((_warns,errs), res) <- initTc hsc_env HsSrcFile False _mod fakeSpan $ Map.fromList <$> traverse findNameInfo _names
     pure $ maybeToEither errs res
@@ -1016,9 +1015,9 @@ getDocsBatch hsc_env _mod _names = do
                 <- loadModuleInterface "getModuleInterface" mod
               pure . (name,) $
                 if isNothing mb_doc_hdr && Map.null dmap && Map.null amap
-                then Left $ NoDocsInIface mod $ compiled name
+                then Left $ NoDocsInIface mod $ isCompiled name
                 else Right (Map.lookup name dmap, Map.lookup name amap)
-    compiled n =
+    isCompiled n =
       -- TODO: Find a more direct indicator.
       case nameSrcLoc n of
         RealSrcLoc {}   -> False
@@ -1039,7 +1038,7 @@ lookupName hsc_env mod name = do
         tcthing <- tcLookup name
         case tcthing of
             AGlobal thing    -> return thing
-            ATcId{tct_id=id} -> return (AnId id)
+            ATcId{tct_id=id} -> return $ AnId id
             _                -> panic "tcRnLookupName'"
     return res
 
