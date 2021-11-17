@@ -1014,6 +1014,7 @@ getDocsBatch hsc_env _mod _names = do
                 }
                 <- loadModuleInterface "getModuleInterface" mod
               pure . (name,) $
+                --  2021-11-17: NOTE: one does not simply check into Mordor (not 1 mode)
                 if isNothing mb_doc_hdr && Map.null dmap && Map.null amap
                 then Left $ NoDocsInIface mod $ isCompiled name
                 else Right (Map.lookup name dmap, Map.lookup name amap)
