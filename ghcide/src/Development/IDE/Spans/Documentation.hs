@@ -73,32 +73,38 @@ getDocumentationsTryGhc env mod names = do
   res <- fun
   case res of
       Left _    -> return mempty
-      Right res -> fmap Map.fromList $ sequenceA $ unwrap <$> Map.toList res
+      Right res -> fmap Map.fromList $ sequenceA $ uncurry unwrap <$> Map.toList res
   where
     fun :: IO (Either [FileDiagnostic] (Map.Map Name (Either String (Maybe HsDocString, Map.Map Int HsDocString))))
     fun = catchSrcErrors (hsc_dflags env) "docs" $ getDocsBatch env mod names
 
-    unwrap :: (Name,  Either a (Maybe HsDocString, b)) -> IO (Name, SpanDoc)
-    unwrap (name, Right (Just docs, _)) = (name,) . SpanDocString docs <$> getUris name
-    unwrap (name, _)                    = (name,) . SpanDocText mempty <$> getUris name
+    unwrap :: Name -> Either a (Maybe HsDocString, b) -> IO (Name, SpanDoc)
+    unwrap name a = (name,) . extractDocString a <$> getSpanDocUris name
+     where
+      extractDocString :: Either b1 (Maybe HsDocString, b2) -> SpanDocUris -> SpanDoc
+      --  2021-11-17: FIXME: ArgDocs get dropped here - instead propagate them.
+      extractDocString (Right (Just docs, _)) = SpanDocString docs
+      extractDocString _ = SpanDocText mempty
 
-    -- Get the uris to the documentation and source html pages if they exist
-    getUris name = do
-      (docFu, srcFu) <-
-        case nameModule_maybe name of
-          Just mod -> liftIO $ do
-            doc <- toFileUriText $ lookupDocHtmlForModule env mod
-            src <- toFileUriText $ lookupSrcHtmlForModule env mod
-            return (doc, src)
-          Nothing -> pure (Nothing, Nothing)
-      let docUri = (<> "#" <> selector <> showNameWithoutUniques name) <$> docFu
-          srcUri = (<> "#" <> showNameWithoutUniques name) <$> srcFu
-          selector
-            | isValName name = "v:"
-            | otherwise = "t:"
-      return $ SpanDocUris docUri srcUri
-
-    toFileUriText = (fmap . fmap) (getUri . filePathToUri)
+      -- | Get the uris to the documentation and source html pages if they exist
+      getSpanDocUris :: Name -> IO SpanDocUris
+      getSpanDocUris name = do
+        (docFu, srcFu) <-
+            case nameModule_maybe name of
+            Just mod -> liftIO $ do
+                doc <- toFileUriText $ lookupDocHtmlForModule env mod
+                src <- toFileUriText $ lookupSrcHtmlForModule env mod
+                return (doc, src)
+            Nothing -> pure mempty
+        let docUri = (<> "#" <> selector <> showNameWithoutUniques name) <$> docFu
+            srcUri = (<> "#" <> showNameWithoutUniques name) <$> srcFu
+            selector
+                | isValName name = "v:"
+                | otherwise = "t:"
+        return $ SpanDocUris docUri srcUri
+       where
+        toFileUriText :: IO (Maybe FilePath) -> IO (Maybe T.Text)
+        toFileUriText = (fmap . fmap) (getUri . filePathToUri)
 
 getDocumentation
  :: HasSrcSpan name
@@ -165,7 +171,7 @@ getDocumentation sources targetName = fromMaybe [] $ do
 docHeaders :: [RealLocated AnnotationComment]
            -> [T.Text]
 docHeaders = mapMaybe (\(L _ x) -> wrk x)
-  where
+ where
   wrk = \case
     -- When `Opt_Haddock` is enabled.
     AnnDocCommentNext s -> Just $ T.pack s
