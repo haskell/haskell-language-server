@@ -69,14 +69,11 @@ getDocumentationTryGhc env mod n = fromJust . Map.lookup n <$> getDocumentations
 
 getDocumentationsTryGhc :: HscEnv -> Module -> [Name] -> IO (Map.Map Name SpanDoc)
 getDocumentationsTryGhc env mod names = do
-  res <- fun
+  res <- getDocsBatch env mod names
   case res of
     Left _    -> return mempty -- catchSrcErrors (hsc_dflags env) "docs"
     Right res -> sequenceA $ Map.mapWithKey unwrap res
   where
-    fun :: IO (Either ErrorMessages (Map.Map Name (Either T.Text (Maybe HsDocString, Maybe (Map.Map Int HsDocString)))))
-    fun = getDocsBatch env mod names
-
     unwrap :: Name -> Either a (Maybe HsDocString, b) -> IO SpanDoc
     unwrap name a = extractDocString a <$> getSpanDocUris name
      where
