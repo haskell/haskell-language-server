@@ -35,12 +35,6 @@ package *
 
 source-repository-package
   type: git
-  location: https://github.com/mithrandi/czipwith.git
-  tag: b6245884ae83e00dd2b5261762549b37390179f8
-  -- https://github.com/lspitzner/czipwith/pull/2
-
-source-repository-package
-  type: git
   location: https://github.com/anka-213/th-extras
   tag: 57a97b4df128eb7b360e8ab9c5759392de8d1659
 -- https://github.com/mokus0/th-extras/pull/8
@@ -55,7 +49,7 @@ source-repository-package
 
 write-ghc-environment-files: never
 
-index-state: 2021-11-11T13:26:38Z
+index-state: 2021-11-11T19:25:51Z
 
 constraints:
   -- These plugins don't work on GHC9 yet
