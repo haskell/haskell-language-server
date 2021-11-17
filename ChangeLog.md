@@ -4,11 +4,12 @@
 
 Time for another hls release:
 
-- @pepeiborra has worked hard to fix some 1.4.0 performance regressions and to make new improvements in the area
+- @pepeiborra has done an epic work to improve performance, redefining some of the core pieces of HLS
+  - You can take an overall look to improvements in [these slides](https://drive.google.com/file/d/16FpmiHXX_rd2gAf5XVgWAIr4kg-AkUqX/view)
 - We have fourmolu support for ghc-9.0.1 thanks to @georgefst
-- We have got improvements over import suggestions thanks to @yoshitsugu and alexnaspo
-- Completions also has been improved thanks to @pepeiborra
-- There has been lot of documentation updates by several contributors, thanks to you all too
+- We have got improvements over import suggestions thanks to @yoshitsugu and @alexnaspo
+- Completions also has been improved in general thanks to @pepeiborra
+- There have been lot of documentation updates by several contributors, thanks also to all of you
 
 ### Deprecation notice for 1.5.0
 
