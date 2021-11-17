@@ -701,34 +701,34 @@ Here are the summary of changes:
 Haskell Language Server 1.1.0 has finally come! Many thanks to all contributors -- since the last release, we have merged over 100 PRs!
 As always, there are many internal bug fixes and performance improvements in ghcide. Apart from that,
 
-* Wingman gets many enhancements, thanks to @isovector for this epic work!
-  * Wingman actions can now be bound to editor hotkeys
-  * Experimental support for "jump to next unsolved hole"
-  * Improved layout algorithm --- don't reflow instances, or break do-blocks
-  * Wingman can now deal with GADTs, rank-n types and pattern synonyms
-  * Wingman now respects user-written bindings on the left side of the equals sign
-  * Significantly more-natural synthesized code when dealing with newtypes, infix operators, records and strings
-  * Improved user experience --- less waiting, and friendly errors for when things go wrong
-* hlint plugin not working in some cases gets fixed
-* annoying log message "haskell-lsp:incoming message parse error" gets fixed in `lsp-1.2`
-* eval plugin now supports `it` variable, like GHCi
-* verbose message "No cradle found for ... Proceeding with implicit cradle" is GONE
-* type lenses plugin now has its custom config `mode` (enum) [`always`] to control its working mode:
-  * `always`: always displays type signature lenses of global bindings
-  * `exported`: similar to `always`, but only displays for exported global bindings
-  * `diagnostics`: follows diagnostic messages produced by GHC
-* top-level LSP option `completionSnippetsOn` and `maxNumberOfProblems` are deprecated
-* completions plugin now has its custom config:
-  * `autoExtendOn` (boolean) [`true`]: whether to enable auto extending import lists
-  * `snippetsOn` (boolean) [`true`]: wheter to enable completion snippets, taking the place of `completionSnippetsOn`
-* Wingman has its custom config:
-  * `timeout_duration` (integer) [`2`]: the timeout for Wingman actions, in seconds
-  * `features` (string) [`""`]: feature set used by Wingman (See [the README of Wingman](https://github.com/haskell/haskell-language-server/tree/master/plugins/hls-tactics-plugin#readme))
-  * `max_use_ctor_actions` (integer) [`5`]: maximum number of `Use constructor <x>` code actions that can appear
-  * `hole_severity` (enum) [`none`]: the severity to use when showing hole diagnostics
-* LSP symbols of typeclass and type families are more appropriate
-* test suite of plugins are reorganized, which no longer need to be run with `test-server` executable
-* two new packages `hls-test-utils` and `hls-stylish-haskell-plugin` are extracted
+- Wingman gets many enhancements, thanks to @isovector for this epic work!
+  - Wingman actions can now be bound to editor hotkeys
+  - Experimental support for "jump to next unsolved hole"
+  - Improved layout algorithm --- don't reflow instances, or break do-blocks
+  - Wingman can now deal with GADTs, rank-n types and pattern synonyms
+  - Wingman now respects user-written bindings on the left side of the equals sign
+  - Significantly more-natural synthesized code when dealing with newtypes, infix operators, records and strings
+  - Improved user experience --- less waiting, and friendly errors for when things go wrong
+- hlint plugin not working in some cases gets fixed
+- annoying log message "haskell-lsp:incoming message parse error" gets fixed in `lsp-1.2`
+- eval plugin now supports `it` variable, like GHCi
+- verbose message "No cradle found for ... Proceeding with implicit cradle" is GONE
+- type lenses plugin now has its custom config `mode` (enum) [`always`] to control its working mode:
+  - `always`: always displays type signature lenses of global bindings
+  - `exported`: similar to `always`, but only displays for exported global bindings
+  - `diagnostics`: follows diagnostic messages produced by GHC
+- top-level LSP option `completionSnippetsOn` and `maxNumberOfProblems` are deprecated
+- completions plugin now has its custom config:
+  - `autoExtendOn` (boolean) [`true`]: whether to enable auto extending import lists
+  - `snippetsOn` (boolean) [`true`]: wheter to enable completion snippets, taking the place of `completionSnippetsOn`
+- Wingman has its custom config:
+  - `timeout_duration` (integer) [`2`]: the timeout for Wingman actions, in seconds
+  - `features` (string) [`""`]: feature set used by Wingman (See [the README of Wingman](https://github.com/haskell/haskell-language-server/tree/master/plugins/hls-tactics-plugin#readme))
+  - `max_use_ctor_actions` (integer) [`5`]: maximum number of `Use constructor <x>` code actions that can appear
+  - `hole_severity` (enum) [`none`]: the severity to use when showing hole diagnostics
+- LSP symbols of typeclass and type families are more appropriate
+- test suite of plugins are reorganized, which no longer need to be run with `test-server` executable
+- two new packages `hls-test-utils` and `hls-stylish-haskell-plugin` are extracted
 
 This version uses `lsp-1.2.0`, `hls-plugin-api-1.1.0`, and `ghcide-1.2.0.2`.
 
