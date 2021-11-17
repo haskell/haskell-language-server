@@ -65,9 +65,9 @@ lookupKind env mod =
     fmap (fromRight Nothing) . catchSrcErrors (hsc_dflags env) "span" . lookupName env mod
 
 getDocumentationTryGhc :: HscEnv -> Module -> Name -> IO SpanDoc
-getDocumentationTryGhc env mod n = head <$> getDocumentationsTryGhc env mod [n]
+getDocumentationTryGhc env mod n = fmap head ((fmap . fmap) snd $ getDocumentationsTryGhc env mod [n])
 
-getDocumentationsTryGhc :: HscEnv -> Module -> [Name] -> IO [SpanDoc]
+getDocumentationsTryGhc :: HscEnv -> Module -> [Name] -> IO [(Name, SpanDoc)]
 getDocumentationsTryGhc env mod names = do
   res <- fun
   case res of
@@ -77,9 +77,9 @@ getDocumentationsTryGhc env mod names = do
     fun :: IO (Either [FileDiagnostic] (Map.Map Name (Either String (Maybe HsDocString, Map.Map Int HsDocString))))
     fun = catchSrcErrors (hsc_dflags env) "docs" $ getDocsBatch env mod names
 
-    unwrap :: (Name,  Either a (Maybe HsDocString, b)) -> IO SpanDoc
-    unwrap (name, Right (Just docs, _)) = SpanDocString docs <$> getUris name
-    unwrap (name, _)                    = SpanDocText [] <$> getUris name
+    unwrap :: (Name,  Either a (Maybe HsDocString, b)) -> IO (Name, SpanDoc)
+    unwrap (name, Right (Just docs, _)) = (name,) . SpanDocString docs <$> getUris name
+    unwrap (name, _)                    = (name,) . SpanDocText [] <$> getUris name
 
     -- Get the uris to the documentation and source html pages if they exist
     getUris name = do
