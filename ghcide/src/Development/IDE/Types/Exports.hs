@@ -10,6 +10,7 @@ module Development.IDE.Types.Exports
     buildModuleExportMapFrom,
     createExportsMapHieDb,
     size,
+    updateExportsMapMg
     ) where
 
 import           Control.DeepSeq             (NFData (..))
@@ -30,10 +31,22 @@ import           HieDb
 
 
 data ExportsMap = ExportsMap
-    {getExportsMap :: HashMap IdentifierText (HashSet IdentInfo)
-    , getModuleExportsMap :: Map.HashMap ModuleNameText (HashSet IdentInfo)
+    { getExportsMap       :: HashMap IdentifierText (HashSet IdentInfo)
+    , getModuleExportsMap :: HashMap ModuleNameText (HashSet IdentInfo)
     }
     deriving (Show)
+
+deleteEntriesForModule :: ModuleNameText -> ExportsMap -> ExportsMap
+deleteEntriesForModule m em = ExportsMap
+    { getExportsMap =
+        let moduleIds = Map.lookupDefault mempty m (getModuleExportsMap em)
+        in deleteAll
+            (rendered <$> Set.toList moduleIds)
+            (getExportsMap em)
+    , getModuleExportsMap = Map.delete m (getModuleExportsMap em)
+    }
+    where
+        deleteAll keys map = foldr Map.delete map keys
 
 size :: ExportsMap -> Int
 size = sum . map length . elems . getExportsMap
@@ -118,6 +131,15 @@ createExportsMapMg modGuts = do
     doOne mi = do
       let getModuleName = moduleName $ mg_module mi
       concatMap (fmap (second Set.fromList) . unpackAvail getModuleName) (mg_exports mi)
+
+updateExportsMapMg :: [ModGuts] -> ExportsMap -> ExportsMap
+updateExportsMapMg modGuts old =
+    old' <> new
+    where
+        new = createExportsMapMg modGuts
+        old' = deleteAll old (Map.keys $ getModuleExportsMap new)
+        deleteAll = foldr deleteEntriesForModule
+
 
 createExportsMapTc :: [TcGblEnv] -> ExportsMap
 createExportsMapTc modIface = do

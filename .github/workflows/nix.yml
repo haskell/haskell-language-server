@@ -68,7 +68,7 @@ jobs:
   #   2. Nix files are changed (runs on PR)
   build:
     needs: pre_job
-    runs-on: matrix.os
+    runs-on: ${{ matrix.os }}
     env:
       HAS_TOKEN: ${{ secrets.HLS_CACHIX_AUTH_TOKEN != '' }}
     if: (needs.pre_job.outputs.should_skip_build != 'true' && needs.pre_job.outputs.should_skip_pr != 'true') || (github.repository_owner == 'haskell' && github.ref == 'refs/heads/master')
