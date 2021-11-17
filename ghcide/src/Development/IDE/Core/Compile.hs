@@ -1000,17 +1000,17 @@ getDocsBatch
   -> [Name]
   -> IO (Map.Map Name (Either String (Maybe HsDocString, Map.Map Int HsDocString)))
 getDocsBatch hsc_env _mod _names = do
-    ((_warns,errs), res) <- initTc hsc_env HsSrcFile False _mod fakeSpan $ traverse findNameInfo _names
+    ((_warns,errs), res) <- initTc hsc_env HsSrcFile False _mod fakeSpan $ Map.fromList <$> traverse findNameInfo _names
     case res of
-        Just x  -> return $ Map.fromList $ fun x
+        Just x  -> return $ fun x
         Nothing -> throwErrors errs
   where
-    fun :: [(Name, Either GetDocsFailure c)] -> [(Name, Either String c)]
+    fun :: Map.Map Name (Either GetDocsFailure c) -> Map.Map Name (Either String c)
     fun =
-      map fun1
+      Map.map fun1
      where
-      fun1 :: ((Name, Either GetDocsFailure c) -> (Name, Either String c))
-      fun1 = fmap (first $ T.unpack . showGhc)
+      fun1 :: Either GetDocsFailure c -> Either String c
+      fun1 = first $ T.unpack . showGhc
 
     throwErrors = liftIO . throwIO . mkSrcErr
 
