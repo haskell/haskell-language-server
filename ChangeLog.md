@@ -20,6 +20,8 @@ Time for another hls release:
 
 ### Pull requests merged for 1.5.0
 
+- More completion fixes
+([#2354](https://github.com/haskell/haskell-language-server/pull/2354)) by @pepeiborra
 - Update to latest prettyprinter API
 ([#2352](https://github.com/haskell/haskell-language-server/pull/2352)) by @fendor
 - Show build graph statistics in ghcide-bench
