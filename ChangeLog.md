@@ -10,12 +10,14 @@ Time for another hls release:
 - We have got improvements over import suggestions thanks to @yoshitsugu and @alexnaspo
 - Completions also has been improved in general thanks to @pepeiborra
 - There have been lot of documentation updates by several contributors, thanks also to all of you
+- In this release we still don't have full support for all plugins and ghc-9.0.1
+  - Missing plugins for ghc-9.0.1 are: hls-class-plugin, hls-tactics-plugin (wingman), hls-brittany-plugin and hls-stylish-haskell-plugin
 
 ### Deprecation notice for 1.5.0
 
 - As we noted in the previous release we have dropped support for ghc versions 8.6.4, 8.10.2, 8.10.3, 8.10.4 in *this release*
-- We will drop support for ghc version 8.10.5 *after this release*
-- The advise is upgrade ghc to the last minor version: 8.6.5 or 8.10.7
+- We will drop support for ghc versions 8.10.5 and 8.8.3 *after this release*
+- The advise is upgrade ghc to the last minor version: 8.6.5, 8.8.4 or 8.10.7
 - You can read more about ghc deprecation policy and schedule [here](https://haskell-language-server.readthedocs.io/en/latest/supported-versions.html)
 
 ### Pull requests merged for 1.5.0
