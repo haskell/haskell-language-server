@@ -998,27 +998,37 @@ getDocsBatch
   :: HscEnv
   -> Module  -- ^ a moudle where the names are in scope
   -> [Name]
-  -> IO [Either String (Maybe HsDocString, Map.Map Int HsDocString)]
+  -> IO [(Name, Either String (Maybe HsDocString, Map.Map Int HsDocString))]
 getDocsBatch hsc_env _mod _names = do
     ((_warns,errs), res) <- initTc hsc_env HsSrcFile False _mod fakeSpan $ traverse findNameInfo _names
     case res of
-        Just x  -> return $ map (first $ T.unpack . showGhc) x
+        Just x  -> return $ fun x
         Nothing -> throwErrors errs
   where
+    fun :: [(Name, Either GetDocsFailure c)] -> [(Name, Either String c)]
+    fun =
+      map fun1
+     where
+      fun1 :: ((Name, Either GetDocsFailure c) -> (Name, Either String c))
+      fun1 = fmap (first $ T.unpack . showGhc)
+
     throwErrors = liftIO . throwIO . mkSrcErr
 
-    findNameInfo :: Name -> IOEnv (Env TcGblEnv TcLclEnv) (Either GetDocsFailure (Maybe HsDocString, Map.Map Int HsDocString))
+    findNameInfo :: Name -> IOEnv (Env TcGblEnv TcLclEnv) (Name, Either GetDocsFailure (Maybe HsDocString, Map.Map Int HsDocString))
     findNameInfo name =
         case nameModule_maybe name of
-            Nothing -> return (Left $ NameHasNoModule name)
+            Nothing -> return (name, Left $ NameHasNoModule name)
             Just mod -> do
-             ModIface { mi_doc_hdr = mb_doc_hdr
-                      , mi_decl_docs = DeclDocMap dmap
-                      , mi_arg_docs = ArgDocMap amap
-                      } <- loadModuleInterface "getModuleInterface" mod
-             pure $ if isNothing mb_doc_hdr && Map.null dmap && Map.null amap
-               then Left (NoDocsInIface mod $ compiled name)
-               else Right (Map.lookup name dmap, Map.findWithDefault mempty name amap)
+              ModIface
+                { mi_doc_hdr = mb_doc_hdr
+                , mi_decl_docs = DeclDocMap dmap
+                , mi_arg_docs = ArgDocMap amap
+                }
+                <- loadModuleInterface "getModuleInterface" mod
+              pure . (name,) $
+                if isNothing mb_doc_hdr && Map.null dmap && Map.null amap
+                then Left $ NoDocsInIface mod $ compiled name
+                else Right (Map.lookup name dmap, Map.findWithDefault mempty name amap)
     compiled n =
       -- TODO: Find a more direct indicator.
       case nameSrcLoc n of

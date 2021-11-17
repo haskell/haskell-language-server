@@ -67,7 +67,7 @@ getDocumentationTryGhc env mod n = head <$> getDocumentationsTryGhc env mod [n]
 
 getDocumentationsTryGhc :: HscEnv -> Module -> [Name] -> IO [SpanDoc]
 getDocumentationsTryGhc env mod names = do
-  res <- catchSrcErrors (hsc_dflags env) "docs" $ getDocsBatch env mod names
+  res <- catchSrcErrors (hsc_dflags env) "docs" $ (fmap . fmap) snd $ getDocsBatch env mod names
   case res of
       Left _    -> return []
       Right res -> zipWithM unwrap res names
