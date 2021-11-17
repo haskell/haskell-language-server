@@ -74,7 +74,7 @@ getDocumentationsTryGhc env mod names = do
     Left _    -> return mempty -- catchSrcErrors (hsc_dflags env) "docs"
     Right res -> fmap Map.fromList $ sequenceA $ uncurry unwrap <$> Map.toList res
   where
-    fun :: IO (Either ErrorMessages (Map.Map Name (Either T.Text (Maybe HsDocString, Map.Map Int HsDocString))))
+    fun :: IO (Either ErrorMessages (Map.Map Name (Either T.Text (Maybe HsDocString, Maybe (Map.Map Int HsDocString)))))
     fun = getDocsBatch env mod names
 
     unwrap :: Name -> Either a (Maybe HsDocString, b) -> IO (Name, SpanDoc)

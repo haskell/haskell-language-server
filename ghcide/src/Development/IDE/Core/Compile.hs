@@ -998,12 +998,12 @@ getDocsBatch
   :: HscEnv
   -> Module  -- ^ a moudle where the names are in scope
   -> [Name]
-  -> IO (Either ErrorMessages (Map.Map Name (Either T.Text (Maybe HsDocString, Map.Map Int HsDocString))))
+  -> IO (Either ErrorMessages (Map.Map Name (Either T.Text (Maybe HsDocString, Maybe (Map.Map Int HsDocString)))))
 getDocsBatch hsc_env _mod _names = do
     ((_warns,errs), res) <- initTc hsc_env HsSrcFile False _mod fakeSpan $ Map.fromList <$> traverse findNameInfo _names
-    case res of
-        Just x  -> pure $ pure $ fun x
-        Nothing -> pure $ Left errs
+    pure $ case res of
+        Just x  -> pure $ fun x
+        Nothing -> Left errs
   where
     fun :: Map.Map Name (Either GetDocsFailure c) -> Map.Map Name (Either T.Text c)
     fun =
@@ -1012,7 +1012,7 @@ getDocsBatch hsc_env _mod _names = do
       fun1 :: Either GetDocsFailure c -> Either T.Text c
       fun1 = first showGhc
 
-    findNameInfo :: Name -> IOEnv (Env TcGblEnv TcLclEnv) (Name, Either GetDocsFailure (Maybe HsDocString, Map.Map Int HsDocString))
+    findNameInfo :: Name -> IOEnv (Env TcGblEnv TcLclEnv) (Name, Either GetDocsFailure (Maybe HsDocString, Maybe (Map.Map Int HsDocString)))
     findNameInfo name =
         case nameModule_maybe name of
             Nothing -> return (name, Left $ NameHasNoModule name)
@@ -1026,7 +1026,7 @@ getDocsBatch hsc_env _mod _names = do
               pure . (name,) $
                 if isNothing mb_doc_hdr && Map.null dmap && Map.null amap
                 then Left $ NoDocsInIface mod $ compiled name
-                else Right (Map.lookup name dmap, Map.findWithDefault mempty name amap)
+                else Right (Map.lookup name dmap, Map.lookup name amap)
     compiled n =
       -- TODO: Find a more direct indicator.
       case nameSrcLoc n of
