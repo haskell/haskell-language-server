@@ -72,13 +72,13 @@ getDocumentationsTryGhc env mod names = do
   res <- fun
   case res of
     Left _    -> return mempty -- catchSrcErrors (hsc_dflags env) "docs"
-    Right res -> fmap Map.fromList $ sequenceA $ uncurry unwrap <$> Map.toList res
+    Right res -> sequenceA $ Map.mapWithKey unwrap res
   where
     fun :: IO (Either ErrorMessages (Map.Map Name (Either T.Text (Maybe HsDocString, Maybe (Map.Map Int HsDocString)))))
     fun = getDocsBatch env mod names
 
-    unwrap :: Name -> Either a (Maybe HsDocString, b) -> IO (Name, SpanDoc)
-    unwrap name a = (name,) . extractDocString a <$> getSpanDocUris name
+    unwrap :: Name -> Either a (Maybe HsDocString, b) -> IO SpanDoc
+    unwrap name a = extractDocString a <$> getSpanDocUris name
      where
       extractDocString :: Either b1 (Maybe HsDocString, b2) -> SpanDocUris -> SpanDoc
       --  2021-11-17: FIXME: ArgDocs get dropped here - instead propagate them.
