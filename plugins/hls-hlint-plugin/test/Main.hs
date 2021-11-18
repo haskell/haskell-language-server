@@ -131,8 +131,7 @@ suggestionsTests =
         doc <- openDoc "IgnoreAnn.hs" "haskell"
         expectNoMoreDiagnostics 3 doc "hlint"
 
-    , knownBrokenForHlintOnRawGhc "[#638] hlint plugin doesn't honour HLINT annotations" $
-      testCase "hlint diagnostics ignore hints honouring HLINT annotations" $ runHlintSession "" $ do
+    , testCase "hlint diagnostics ignore hints honouring HLINT annotations" $ runHlintSession "" $ do
         doc <- openDoc "IgnoreAnnHlint.hs" "haskell"
         expectNoMoreDiagnostics 3 doc "hlint"
 
@@ -158,8 +157,7 @@ suggestionsTests =
         liftIO $ not (hasApplyAll thirdLine) @? "Unexpected apply all code action"
         liftIO $ hasApplyAll multiLine @? "Missing apply all code action"
 
-    , knownBrokenForHlintOnRawGhc "[#2042] maybe hlint is ignoring pragmas" $
-      testCase "hlint should warn about unused extensions" $ runHlintSession "unusedext" $ do
+    , testCase "hlint should warn about unused extensions" $ runHlintSession "unusedext" $ do
         doc <- openDoc "UnusedExtension.hs" "haskell"
         diags@(unusedExt:_) <- waitForDiagnosticsFromSource doc "hlint"
 
@@ -174,8 +172,7 @@ suggestionsTests =
         waitForAllProgressDone
         -- hlint will report a parse error if PatternSynonyms is enabled
         expectNoMoreDiagnostics 3 doc "hlint"
-    , knownBrokenForHlintOnRawGhc "[#2280] maybe hlint is ignoring pragmas" $
-      testCase "hlint should not warn about redundant irrefutable pattern with LANGUAGE Strict" $ runHlintSession "" $ do
+    , testCase "hlint should not warn about redundant irrefutable pattern with LANGUAGE Strict" $ runHlintSession "" $ do
         doc <- openDoc "StrictData.hs" "haskell"
 
         waitForAllProgressDone
