@@ -1,0 +1,7 @@
+cradle:
+  direct:
+    arguments:
+      - -i
+      - -i.
+      - TIntDtoH
+      - -Wall
