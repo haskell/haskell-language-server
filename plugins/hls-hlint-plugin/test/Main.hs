@@ -131,7 +131,7 @@ suggestionsTests =
         doc <- openDoc "IgnoreAnn.hs" "haskell"
         expectNoMoreDiagnostics 3 doc "hlint"
 
-    , knownBrokenForHlintOnRawGhc "[#838] hlint plugin doesn't honour HLINT annotations" $
+    , knownBrokenForHlintOnRawGhc "[#638] hlint plugin doesn't honour HLINT annotations" $
       testCase "hlint diagnostics ignore hints honouring HLINT annotations" $ runHlintSession "" $ do
         doc <- openDoc "IgnoreAnnHlint.hs" "haskell"
         expectNoMoreDiagnostics 3 doc "hlint"
