@@ -694,7 +694,7 @@ mergeEnvs :: HscEnv -> [ModSummary] -> [HomeModInfo] -> [HscEnv] -> IO HscEnv
 mergeEnvs env extraModSummaries extraMods envs = do
     prevFinderCache <- concatFC <$> mapM (readIORef . hsc_FC) envs
     let ims  = map (Compat.installedModule (homeUnitId_ $ hsc_dflags env) . moduleName . ms_mod) extraModSummaries
-        ifrs = zipWith (\ms -> InstalledFound (ms_location ms)) extraModSummaries ims
+        ifrs = zipWith (InstalledFound . ms_location) extraModSummaries ims
     newFinderCache <- newIORef $
             foldl'
                 (\fc (im, ifr) -> Compat.extendInstalledModuleEnv fc im ifr) prevFinderCache
@@ -996,6 +996,7 @@ getDocsBatch
   :: HscEnv
   -> Module  -- ^ a moudle where the names are in scope
   -> [Name]
+  --  2021-11-18: NOTE: Map Int would become IntMap if next GHCs.
   -> IO (Either ErrorMessages (Map.Map Name (Either GetDocsFailure (Maybe HsDocString, Maybe (Map.Map Int HsDocString)))))
   -- ^ Return a 'Map' of 'Name's to 'Either' (no docs messages) (general doc body & arg docs)
 getDocsBatch hsc_env _mod _names = do

@@ -574,9 +574,9 @@ getBindingsRule :: Rules ()
 getBindingsRule =
   define $ \GetBindings f -> do
     HAR{hieKind=kind, refMap=rm} <- use_ GetHieAst f
-    case kind of
-      HieFresh      -> pure ([], Just $ bindings rm)
-      HieFromDisk _ -> pure ([], Nothing)
+    pure . (mempty,) $ case kind of
+      HieFresh      -> Just $ bindings rm
+      HieFromDisk _ -> Nothing
 
 getDocMapRule :: Rules ()
 getDocMapRule =
@@ -688,8 +688,7 @@ loadGhcSession ghcSessionDepsConfig = do
                 afp <- liftIO $ makeAbsolute fp
                 let nfp = toNormalizedFilePath' afp
                 itExists <- getFileExists nfp
-                when itExists $ void $ do
-                  use_ GetModificationTime nfp
+                when itExists $ void $ use_ GetModificationTime nfp
         mapM_ addDependency deps
 
         opts <- getIdeOptions
@@ -722,7 +721,7 @@ ghcSessionDepsDefinition
 ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
     let hsc = hscEnv env
 
-    mbdeps <- mapM(fmap artifactFilePath . snd) <$> use_ GetLocatedImports file
+    mbdeps <- traverse (fmap artifactFilePath . snd) <$> use_ GetLocatedImports file
     case mbdeps of
         Nothing -> return Nothing
         Just deps -> do

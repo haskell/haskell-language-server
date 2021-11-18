@@ -97,9 +97,7 @@ spanDocToMarkdownForTest
   = haddockToMarkdown . H.toRegular . H._doc . H.parseParas Nothing
 
 -- Simple (and a bit hacky) conversion from Haddock markup to Markdown
-haddockToMarkdown
-  :: H.DocH String String -> String
-
+haddockToMarkdown :: H.DocH String String -> String
 haddockToMarkdown H.DocEmpty
   = ""
 haddockToMarkdown (H.DocAppend d1 d2)

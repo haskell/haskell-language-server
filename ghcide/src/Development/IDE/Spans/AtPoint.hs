@@ -54,6 +54,7 @@ import           Data.List.Extra                      (dropEnd1, nubOrd)
 import           Data.Version                         (showVersion)
 import           HieDb                                hiding (pointCommand)
 import           System.Directory                     (doesFileExist)
+import           Data.Bool                            (bool)
 
 -- | Gives a Uri for the module, given the .hie file location and the the module info
 -- The Bool denotes if it is a boot module
@@ -63,13 +64,13 @@ type LookupModule m = FilePath -> ModuleName -> Unit -> Bool -> MaybeT m Uri
 newtype FOIReferences = FOIReferences (HM.HashMap NormalizedFilePath (HieAstResult, PositionMapping))
 
 computeTypeReferences :: Foldable f => f (HieAST Type) -> M.Map Name [Span]
-computeTypeReferences = foldr (\ast m -> M.unionWith (++) (go ast) m) M.empty
+computeTypeReferences = foldr (\ast m -> M.unionWith (<>) (go ast) m) M.empty
   where
     go ast = M.unionsWith (++) (this : map go (nodeChildren ast))
       where
         this = M.fromListWith (++)
           $ map (, [nodeSpan ast])
-          $ concatMap namesInType
+          $ foldMap namesInType
           $ mapMaybe (\x -> guard (not $ all isOccurrence $ identInfo x) *> identType x)
           $ M.elems
           $ nodeIdentifiers $ nodeInfo ast
@@ -212,9 +213,9 @@ atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) env pos = listToMaybe $ p
     -- | Get hover info for values/data
     hoverInfo ast = (Just range, prettyNames ++ pTypes)
       where
-        pTypes
-          | Prelude.length names == 1 = dropEnd1 $ map wrapHaskell prettyConcreteTypes
-          | otherwise = map wrapHaskell prettyConcreteTypes
+        pTypes =
+          bool id dropEnd1 (Prelude.length names == 1)
+            $ map wrapHaskell prettyConcreteTypes
 
         range = realSrcSpanToRange $ nodeSpan ast
 
