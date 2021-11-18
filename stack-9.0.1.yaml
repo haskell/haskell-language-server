@@ -92,11 +92,12 @@ flags:
   haskell-language-server:
     pedantic: true
 
+    ignore-plugins-ghc-bounds: true
     class: false
     tactic: false # Dependencies fail
-
     stylishHaskell: false
     brittany: false
+
   retrie:
     BuildExecutable: false
   # Stack doesn't support automatic flags.

@@ -1,7 +1,7 @@
 cabal-version:      2.4
 category:           Development
 name:               haskell-language-server
-version:            1.4.0.0
+version:            1.5.0.0
 synopsis:           LSP server for GHC
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -58,7 +58,7 @@ library
     , cryptohash-sha1
     , data-default
     , ghc
-    , ghcide                ^>=1.4
+    , ghcide                ^>=1.4 || ^>=1.5
     , gitrev
     , lsp
     , hie-bios
@@ -230,7 +230,7 @@ common retrie
 
 common tactic
   if flag(tactic) && (impl(ghc < 9.0.1) || flag(ignore-plugins-ghc-bounds))
-    build-depends: hls-tactics-plugin >=1.2.0.0 && <1.5
+    build-depends: hls-tactics-plugin >=1.2.0.0 && <1.6
     cpp-options: -Dtactic
 
 common hlint
