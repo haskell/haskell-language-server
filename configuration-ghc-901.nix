@@ -27,13 +27,6 @@ let
           sha256 = "1nyhc9mrnxsl21ksnpp0ryki4wgk49r581yy504g2gjq6x3bkb59";
         }) { };
 
-      czipwith = hself.callCabal2nix "czipwith" (pkgs.fetchFromGitHub {
-        owner = "mithrandi";
-        repo = "czipwith";
-        rev = "b6245884ae83e00dd2b5261762549b37390179f8";
-        sha256 = "2uSoGyrxT/OstRcpx55kwP4JwjPbWLxD72LajeyQV0E=";
-      }) { };
-
       hie-bios = hself.callCabal2nix "hie-bios"
         (builtins.fetchTarball {
           url = "https://hackage.haskell.org/package/hie-bios-0.7.6/hie-bios-0.7.6.tar.gz";
