@@ -1,8 +1,6 @@
-{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE MultiWayIf        #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE PatternSynonyms   #-}
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE ViewPatterns      #-}
 
@@ -15,7 +13,7 @@ import qualified Control.Monad.Trans.State.Strict  as State
 import           Data.DList                        (DList)
 import qualified Data.DList                        as DList
 import           Data.Foldable                     (Foldable (foldl'), find)
-import qualified Data.HashMap.Internal.Strict      as HashMap
+import qualified Data.HashMap.Strict               as HashMap
 import           Data.List                         (sortOn)
 import qualified Data.List                         as List
 import qualified Data.Map.Strict                   as Map
