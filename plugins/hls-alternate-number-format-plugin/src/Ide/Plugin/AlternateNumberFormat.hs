@@ -30,8 +30,7 @@ import           Ide.Plugin.Conversion                (FormatType,
                                                        toFormatTypes)
 import           Ide.Plugin.Literals                  (Literal (..),
                                                        collectLiterals,
-                                                       getSrcSpan, getSrcText,
-                                                       traverseNode)
+                                                       getSrcSpan, getSrcText)
 import           Ide.Plugin.Retrie                    (handleMaybe,
                                                        handleMaybeM, response)
 import           Ide.Types
@@ -55,7 +54,6 @@ type instance RuleResult CollectLiterals = CollectLiteralsResult
 data CollectLiteralsResult = CLR {
     literals      :: [Literal]
     , formatTypes :: [FormatType]
-    , lits        :: [Literal]
     } deriving (Generic)
 
 instance Show CollectLiteralsResult where
@@ -70,15 +68,14 @@ collectLiteralsRule = define $ \CollectLiterals nfp -> do
     let fmts = getFormatTypes <$> pm
         -- collect all the literals for a file
         lits = collectLiterals . pm_parsed_source <$> pm
-        lits' = traverseNode . pm_parsed_source  <$> pm
-    pure ([], CLR <$> lits <*> fmts <*> lits')
+    pure ([], CLR <$> lits <*> fmts)
     where
         getFormatTypes = toFormatTypes . toList . extensionFlags . ms_hspp_opts . pm_mod_summary
 
 codeActionHandler :: PluginMethodHandler IdeState 'TextDocumentCodeAction
 codeActionHandler state _ (CodeActionParams _ _ docId currRange _) = response $ do
     nfp <- getNormalizedFilePath docId
-    (CLR{..}, _) <- getCollectLiterals state nfp
+    CLR{..} <- requestLiterals state nfp
         -- remove any invalid literals (see validTarget comment)
     let litsInRange = filter validTarget literals
         -- generate alternateFormats and zip with the literal that generated the alternates
@@ -86,7 +83,8 @@ codeActionHandler state _ (CodeActionParams _ _ docId currRange _) = response $ 
         -- make a code action for every literal and its' alternates (then flatten the result)
         actions = concatMap (\(lit, alts) -> map (mkCodeAction nfp lit) alts) literalPairs
 
-    logIO state $ "Lits: " <> (show lits)
+    logIO state "Literals: "
+    mapM_ (logIO state) literals
 
     pure $ List actions
     where
@@ -133,13 +131,13 @@ getNormalizedFilePath docId = handleMaybe "Error: converting to NormalizedFilePa
         $ uriToNormalizedFilePath
         $ toNormalizedUri (docId ^. uri)
 
-getCollectLiterals :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m (CollectLiteralsResult, PositionMapping)
-getCollectLiterals state = handleMaybeM "Error: Could not get ParsedModule"
+requestLiterals :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m CollectLiteralsResult
+requestLiterals state = handleMaybeM "Error: Could not get ParsedModule"
                 . liftIO
                 . runAction "AlternateNumberFormat.CollectLiterals" state
-                . useWithStale CollectLiterals
+                . use CollectLiterals
 
 
 logIO :: (MonadIO m, Show a) => IdeState -> a -> m ()
-logIO state = liftIO . Logger.logInfo (ideLogger state) . T.pack . show
+logIO state = liftIO . Logger.logDebug (ideLogger state) . T.pack . show
 
