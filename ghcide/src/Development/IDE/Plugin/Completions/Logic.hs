@@ -151,13 +151,6 @@ occNameToComKind ty oc
 showModName :: ModuleName -> T.Text
 showModName = T.pack . moduleNameString
 
--- mkCompl :: IdeOptions -> CompItem -> CompletionItem
--- mkCompl IdeOptions{..} CI{compKind,insertText, importedFrom,typeText,label,docs} =
---   CompletionItem label kind (List []) ((colon <>) <$> typeText)
---     (Just $ CompletionDocMarkup $ MarkupContent MkMarkdown $ T.intercalate sectionSeparator docs')
---     Nothing Nothing Nothing Nothing (Just insertText) (Just Snippet)
---     Nothing Nothing Nothing Nothing Nothing
-
 mkCompl :: PluginId -> IdeOptions -> CompItem -> CompletionItem
 mkCompl
   pId
@@ -179,10 +172,10 @@ mkCompl
                   _tags = Nothing,
                   _detail =
                       case (typeText, provenance) of
-                          (Just t,_) -> Just $ colon <> t
-                          (_, ImportedFrom mod) -> Just $ "from " <> mod
-                          (_, DefinedIn mod) -> Just $ "from " <> mod
-                          _ -> Nothing,
+                          (Just t,_) | not(T.null t) -> Just $ colon <> t
+                          (_, ImportedFrom mod)      -> Just $ "from " <> mod
+                          (_, DefinedIn mod)         -> Just $ "from " <> mod
+                          _                          -> Nothing,
                   _documentation = documentation,
                   _deprecated = Nothing,
                   _preselect = Nothing,
@@ -448,12 +441,12 @@ localCompletionsForParsedModule uri pm@ParsedModule{pm_parsed_source = L _ HsMod
                 [mkComp id CiVariable Nothing
                 | VarPat _ id <- listify (\(_ :: Pat GhcPs) -> True) pat_lhs]
             TyClD _ ClassDecl{tcdLName, tcdSigs} ->
-                mkComp tcdLName CiInterface Nothing :
+                mkComp tcdLName CiInterface (Just $ ppr tcdLName) :
                 [ mkComp id CiFunction (Just $ ppr typ)
                 | L _ (ClassOpSig _ _ ids typ) <- tcdSigs
                 , id <- ids]
             TyClD _ x ->
-                let generalCompls = [mkComp id cl Nothing
+                let generalCompls = [mkComp id cl (Just $ ppr $ tcdLName x)
                         | id <- listify (\(_ :: Located(IdP GhcPs)) -> True) x
                         , let cl = occNameToComKind Nothing (rdrNameOcc $ unLoc id)]
                     -- here we only have to look at the outermost type
@@ -471,8 +464,12 @@ localCompletionsForParsedModule uri pm@ParsedModule{pm_parsed_source = L _ HsMod
         ]
 
     mkLocalComp pos n ctyp ty =
-        CI ctyp pn (Local pos) ty pn Nothing doc (ctyp `elem` [CiStruct, CiInterface]) Nothing
+        CI ctyp pn (Local pos) ensureTypeText pn Nothing doc (ctyp `elem` [CiStruct, CiInterface]) Nothing
       where
+        -- when sorting completions, we use the presence of typeText
+        -- to tell local completions and global completions apart
+        -- instead of using the empty string here, we should probably introduce a new field...
+        ensureTypeText = Just $ fromMaybe "" ty
         pn = ppr n
         doc = SpanDocText (getDocumentation [pm] n) (SpanDocUris Nothing Nothing)
 

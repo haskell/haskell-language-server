@@ -2,6 +2,7 @@ defaults: &defaults
   working_directory: ~/build
   docker:
     - image: alanz/haskell-hie-ci
+  resource_class: large
   steps:
     - checkout
     - run:
@@ -47,7 +48,7 @@ defaults: &defaults
         name: Stack setup
         command: |
           if [[ -z "$SKIP_CI" ]]; then
-            stack -j2 --stack-yaml=${STACK_FILE} setup
+            stack -j4 --stack-yaml=${STACK_FILE} setup
           fi
 
     - run:
@@ -55,7 +56,7 @@ defaults: &defaults
         # need j1, else ghc-lib-parser triggers OOM
         command: |
           if [[ -z "$SKIP_CI" ]]; then
-            stack -j1 --stack-yaml=${STACK_FILE} install --no-terminal
+            stack -j4 --stack-yaml=${STACK_FILE} install --no-terminal
           fi
         no_output_timeout: 30m
 
@@ -63,7 +64,7 @@ defaults: &defaults
         name: Build Testsuite without running it
         command: |
           if [[ -z "$SKIP_CI" ]]; then
-            stack -j1 --stack-yaml=${STACK_FILE} build --test --no-run-tests --no-terminal
+            stack -j4 --stack-yaml=${STACK_FILE} build --test --no-run-tests --no-terminal
           fi
         no_output_timeout: 30m
 
