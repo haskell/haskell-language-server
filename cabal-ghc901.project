@@ -6,11 +6,11 @@ packages:
          ./ghcide
          ./hls-plugin-api
          ./hls-test-utils
-        -- ./plugins/hls-tactics-plugin
-        -- ./plugins/hls-brittany-plugin
-        -- ./plugins/hls-stylish-haskell-plugin
+         ./plugins/hls-tactics-plugin
+         ./plugins/hls-brittany-plugin
+         ./plugins/hls-stylish-haskell-plugin
          ./plugins/hls-fourmolu-plugin
-        -- ./plugins/hls-class-plugin
+         ./plugins/hls-class-plugin
          ./plugins/hls-eval-plugin
          ./plugins/hls-explicit-imports-plugin
          ./plugins/hls-refine-imports-plugin
@@ -35,10 +35,10 @@ package *
 
 source-repository-package
   type: git
-  location: https://github.com/anka-213/th-extras
-  tag: 57a97b4df128eb7b360e8ab9c5759392de8d1659
--- https://github.com/mokus0/th-extras/pull/8
--- https://github.com/mokus0/th-extras/issues/7
+  location: https://github.com/mokus0/th-extras
+  tag: 0d050b24ec5ef37c825b6f28ebd46787191e2a2d
+-- https://github.com/mokus0/th-extras/issues/10
+
 
 source-repository-package
   type: git
@@ -53,11 +53,26 @@ index-state: 2021-11-11T19:25:51Z
 
 constraints:
   -- These plugins don't work on GHC9 yet
-  haskell-language-server +ignore-plugins-ghc-bounds -brittany -class -stylishhaskell -tactic
+  haskell-language-server +ignore-plugins-ghc-bounds -brittany -class -stylishhaskell -tactic,
+  ghc-lib-parser ^>= 9.0
 
+-- although we are not building all plugins cabal solver phase is run for all packages
+-- this way we track explicitly all transitive dependencies which need support for ghc-9
 allow-newer:
+    brittany:base,
+    brittany:ghc,
+    brittany:ghc-boot-th,
+    -- for brittany
+    butcher:base,
+    multistate:base,
+    data-tree-print:base,
+
+    stylish-haskell:Cabal,
+    stylish-haskell:ghc-lib-parser,
+
     floskell:base,
     floskell:ghc-prim,
+
     -- for shake-bench
     Chart-diagrams:diagrams-core,
     SVGFonts:diagrams-core
