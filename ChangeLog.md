@@ -1,5 +1,178 @@
 # Changelog for haskell-language-server
 
+## 1.5.0
+
+Time for another hls release:
+
+- @pepeiborra has done an epic work to improve performance, redefining some of the core pieces of HLS
+  - You can take an overall look to improvements in [these slides](https://drive.google.com/file/d/16FpmiHXX_rd2gAf5XVgWAIr4kg-AkUqX/view)
+- We have fourmolu support for ghc-9.0.1 thanks to @georgefst
+- We have got improvements over import suggestions thanks to @yoshitsugu and @alexnaspo
+- Completions also has been improved in general thanks to @pepeiborra
+- There have been lot of documentation updates by several contributors, thanks also to all of you
+- In this release we still don't have full support for all plugins and ghc-9.0.1
+  - Missing plugins for ghc-9.0.1 are: hls-class-plugin, hls-tactics-plugin (wingman), hls-brittany-plugin and hls-stylish-haskell-plugin
+
+### Deprecation notice for 1.5.0
+
+- As we noted in the previous release we have dropped support for ghc versions 8.6.4, 8.10.2, 8.10.3, 8.10.4 in *this release*
+- We will drop support for ghc versions 8.10.5 and 8.8.3 *after this release*
+- The advise is upgrade ghc to the last minor version: 8.6.5, 8.8.4 or 8.10.7
+- You can read more about ghc deprecation policy and schedule [here](https://haskell-language-server.readthedocs.io/en/latest/supported-versions.html)
+
+### Pull requests merged for 1.5.0
+
+- More completion fixes
+([#2354](https://github.com/haskell/haskell-language-server/pull/2354)) by @pepeiborra
+- Update to latest prettyprinter API
+([#2352](https://github.com/haskell/haskell-language-server/pull/2352)) by @fendor
+- Use hackage version of czipwith
+([#2346](https://github.com/haskell/haskell-language-server/pull/2346)) by @jneira
+- Show build graph statistics in ghcide-bench
+([#2343](https://github.com/haskell/haskell-language-server/pull/2343)) by @pepeiborra
+- contributing: add implicit-hie gen-hie > hie.yaml note
+([#2341](https://github.com/haskell/haskell-language-server/pull/2341)) by @Anton-Latukha
+- add dependabot: add Actions CI merge requests automation
+([#2339](https://github.com/haskell/haskell-language-server/pull/2339)) by @Anton-Latukha
+- Skip parsing without haddock for above GHC9.0
+([#2338](https://github.com/haskell/haskell-language-server/pull/2338)) by @yoshitsugu
+- Give unique names to post-jobs
+([#2337](https://github.com/haskell/haskell-language-server/pull/2337)) by @jneira
+- Cancel prev runs for bench and nix
+([#2335](https://github.com/haskell/haskell-language-server/pull/2335)) by @jneira
+- Trace diagnostics
+([#2333](https://github.com/haskell/haskell-language-server/pull/2333)) by @pepeiborra
+- Include sortText in completions and improve suggestions
+([#2332](https://github.com/haskell/haskell-language-server/pull/2332)) by @pepeiborra
+- Not suggest exported imports
+([#2329](https://github.com/haskell/haskell-language-server/pull/2329)) by @yoshitsugu
+- Update troubleshooting section
+([#2326](https://github.com/haskell/haskell-language-server/pull/2326)) by @jneira
+- Remove automatic comment to [skip circleci]
+([#2325](https://github.com/haskell/haskell-language-server/pull/2325)) by @jneira
+- Add README.md in install/ subproject
+([#2324](https://github.com/haskell/haskell-language-server/pull/2324)) by @sir4ur0n
+- Improve the performance of GetModIfaceFromDisk in large repos and delete GetDependencies
+([#2323](https://github.com/haskell/haskell-language-server/pull/2323)) by @pepeiborra
+- Add support for install hls from hackage using ghc 9.0.1
+([#2322](https://github.com/haskell/haskell-language-server/pull/2322)) by @jneira
+- Rename hlint test data files and add regression tests
+([#2321](https://github.com/haskell/haskell-language-server/pull/2321)) by @jneira
+- Suggest hiding imports when local definition exists
+([#2320](https://github.com/haskell/haskell-language-server/pull/2320)) by @yoshitsugu
+- Improve trace readability
+([#2319](https://github.com/haskell/haskell-language-server/pull/2319)) by @pepeiborra
+- Sir4ur0n/doc/cleanup hie
+([#2311](https://github.com/haskell/haskell-language-server/pull/2311)) by @sir4ur0n
+- Add option to effectively cancel prev runs
+([#2310](https://github.com/haskell/haskell-language-server/pull/2310)) by @jneira
+- Separate features from demos
+([#2307](https://github.com/haskell/haskell-language-server/pull/2307)) by @jneira
+- Prevent Tactics hover provider from blocking at startup
+([#2306](https://github.com/haskell/haskell-language-server/pull/2306)) by @pepeiborra
+- Fix defaultIdeOptions to use the initial config settings
+([#2302](https://github.com/haskell/haskell-language-server/pull/2302)) by @pepeiborra
+- Use new queue rules for mergify bot
+([#2301](https://github.com/haskell/haskell-language-server/pull/2301)) by @jneira
+- Fix reverse dep. tracking for alwaysRerun rules
+([#2298](https://github.com/haskell/haskell-language-server/pull/2298)) by @pepeiborra
+- Reorganize github workflows and use specific label [skip circleci]
+([#2297](https://github.com/haskell/haskell-language-server/pull/2297)) by @jneira
+- Enable func-test suite for windows
+([#2296](https://github.com/haskell/haskell-language-server/pull/2296)) by @jneira
+- Generate linkables in the Eval plugin
+([#2295](https://github.com/haskell/haskell-language-server/pull/2295)) by @pepeiborra
+- [hls-graph] clean up databaseDirtySet
+([#2294](https://github.com/haskell/haskell-language-server/pull/2294)) by @pepeiborra
+- Update link to supported platforms by ghcup
+([#2293](https://github.com/haskell/haskell-language-server/pull/2293)) by @chshersh
+- Make circleci honour [skip ci] wherever is placed in the pr info (title, description)
+([#2289](https://github.com/haskell/haskell-language-server/pull/2289)) by @jneira
+- Note in the install script that listed ghcs are the supported ones
+([#2286](https://github.com/haskell/haskell-language-server/pull/2286)) by @jneira
+- Move hlint tests to its own package (and other clean ups)
+([#2284](https://github.com/haskell/haskell-language-server/pull/2284)) by @jneira
+- Trace rebuilds
+([#2283](https://github.com/haskell/haskell-language-server/pull/2283)) by @pepeiborra
+- Fix excessive interface recompilation caused by the Tactics plugin
+([#2282](https://github.com/haskell/haskell-language-server/pull/2282)) by @pepeiborra
+- Preserve dirty set and add dirtiness assertion
+([#2279](https://github.com/haskell/haskell-language-server/pull/2279)) by @pepeiborra
+- Ignore null WatchedFile events
+([#2278](https://github.com/haskell/haskell-language-server/pull/2278)) by @pepeiborra
+- Trace log events and fix ghcide logger
+([#2277](https://github.com/haskell/haskell-language-server/pull/2277)) by @pepeiborra
+- Point to GitHub from Contributing.md
+([#2275](https://github.com/haskell/haskell-language-server/pull/2275)) by @georgefst
+- installation.md: add Fedora copr repo
+([#2274](https://github.com/haskell/haskell-language-server/pull/2274)) by @juhp
+- avoid double rebuilds for FOIs
+([#2266](https://github.com/haskell/haskell-language-server/pull/2266)) by @pepeiborra
+- Update installation on ArchLinux - new package
+([#2265](https://github.com/haskell/haskell-language-server/pull/2265)) by @marcin-rzeznicki
+- Garbage collection of dirty keys
+([#2263](https://github.com/haskell/haskell-language-server/pull/2263)) by @pepeiborra
+- Add lsp-mode links
+([#2260](https://github.com/haskell/haskell-language-server/pull/2260)) by @jneira
+- Add more features and demos in docs
+([#2257](https://github.com/haskell/haskell-language-server/pull/2257)) by @jneira
+- Add nix installation section
+([#2256](https://github.com/haskell/haskell-language-server/pull/2256)) by @jneira
+- Bump Fourmolu to 0.4
+([#2254](https://github.com/haskell/haskell-language-server/pull/2254)) by @georgefst
+- Remove custom version of operational
+([#2249](https://github.com/haskell/haskell-language-server/pull/2249)) by @jneira
+- Generate custom source tarball
+([#2248](https://github.com/haskell/haskell-language-server/pull/2248)) by @jneira
+- Enable the ghcide test plugin in HLS test suites
+([#2243](https://github.com/haskell/haskell-language-server/pull/2243)) by @pepeiborra
+- Partial sort of fuzzy filtering results
+([#2240](https://github.com/haskell/haskell-language-server/pull/2240)) by @pepeiborra
+- Fix build with fbghc
+([#2234](https://github.com/haskell/haskell-language-server/pull/2234)) by @pepeiborra
+- Tweaks to GHC support docs
+([#2232](https://github.com/haskell/haskell-language-server/pull/2232)) by @michaelpj
+- Add ghc deprecation policy to documentation
+([#2231](https://github.com/haskell/haskell-language-server/pull/2231)) by @jneira
+- Add ghcup compile option
+([#2230](https://github.com/haskell/haskell-language-server/pull/2230)) by @jneira
+- Parallel fuzzy filtering
+([#2225](https://github.com/haskell/haskell-language-server/pull/2225)) by @pepeiborra
+- Revert "Inline Text.Fuzzy to add INLINABLE pragmas"
+([#2223](https://github.com/haskell/haskell-language-server/pull/2223)) by @pepeiborra
+- feat(flake): expose hie-bios
+([#2221](https://github.com/haskell/haskell-language-server/pull/2221)) by @teto
+- flake: remove the 'follows' directive
+([#2218](https://github.com/haskell/haskell-language-server/pull/2218)) by @teto
+- Return completions lazily for massive savings
+([#2217](https://github.com/haskell/haskell-language-server/pull/2217)) by @pepeiborra
+- Inline Text.Fuzzy to add INLINABLE pragmas
+([#2215](https://github.com/haskell/haskell-language-server/pull/2215)) by @pepeiborra
+- Add chat on irc badge
+([#2214](https://github.com/haskell/haskell-language-server/pull/2214)) by @jneira
+- ghcide: Add flags to toggle building each executable
+([#2212](https://github.com/haskell/haskell-language-server/pull/2212)) by @hololeap
+- Add matrix haskell-tooling channel
+([#2210](https://github.com/haskell/haskell-language-server/pull/2210)) by @jneira
+- Relax upper bounds over ormolu and stylish-haskell
+([#2207](https://github.com/haskell/haskell-language-server/pull/2207)) by @jneira
+- Add missing config options in documentation
+([#2203](https://github.com/haskell/haskell-language-server/pull/2203)) by @jneira
+- Add gitlab CI
+([#2200](https://github.com/haskell/haskell-language-server/pull/2200)) by @hasufell
+- Apply workaround for 8.8.4 and windows to enable it in ci
+([#2199](https://github.com/haskell/haskell-language-server/pull/2199)) by @jneira
+- Drop ghc support for 8.6.4, 8.10.2, 8.10.3, 8.10.4
+([#2197](https://github.com/haskell/haskell-language-server/pull/2197)) by @jneira
+- Consider all root paths when suggesting module name change.
+([#2195](https://github.com/haskell/haskell-language-server/pull/2195)) by @cdsmith
+- enable completions of local imports
+([#2190](https://github.com/haskell/haskell-language-server/pull/2190)) by @alexnaspo
+- Drop ghc-api-compat from dependency closure
+([#2128](https://github.com/haskell/haskell-language-server/pull/2128)) by @fendor
+- Reimplement shake (continued)
+([#2060](https://github.com/haskell/haskell-language-server/pull/2060)) by @pepeiborra
+
 ## 1.4.0
 
 After a month of vacation a new hls release has arrived:
@@ -27,6 +200,8 @@ After a month of vacation a new hls release has arrived:
 
 ### Pull requests merged for 1.4.0
 
+- Prepare 1.4.0
+([#2182](https://github.com/haskell/haskell-language-server/pull/2182)) by @jneira
 - Update flake to fix nix builds
 ([#2188](https://github.com/haskell/haskell-language-server/pull/2188)) by @jneira
 - Completions for project identifiers

@@ -4332,7 +4332,25 @@ localCompletionTests = [
         (Position 4 14)
         [("abcd", CiFunction, "abcd", True, False, Nothing)
         ,("abcde", CiFunction, "abcde", True, False, Nothing)
-        ]
+        ],
+    testSessionWait "incomplete entries" $ do
+        let src a = "data Data = " <> a
+        doc <- createDoc "A.hs" "haskell" $ src "AAA"
+        void $ waitForTypecheck doc
+        let editA rhs =
+                changeDoc doc [TextDocumentContentChangeEvent
+                    { _range=Nothing
+                    , _rangeLength=Nothing
+                    , _text=src rhs}]
+
+        editA "AAAA"
+        void $ waitForTypecheck doc
+        editA "AAAAA"
+        void $ waitForTypecheck doc
+
+        compls <- getCompletions doc (Position 0 15)
+        liftIO $ filter ("AAA" `T.isPrefixOf`) (mapMaybe _insertText compls) @?= ["AAAAA"]
+        pure ()
     ]
 
 nonLocalCompletionTests :: [TestTree]
