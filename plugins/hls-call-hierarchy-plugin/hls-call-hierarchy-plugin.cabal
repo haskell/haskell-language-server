@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-call-hierarchy-plugin
-version:            1.0.1.0
+version:            1.0.1.1
 synopsis:           Call hierarchy plugin for Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server/tree/master/plugins/hls-call-hierarchy-plugin#readme>
@@ -30,7 +30,7 @@ library
     , containers
     , extra
     , ghc
-    , ghcide                ^>=1.4.1
+    , ghcide                ^>=1.4.1 || ^>= 1.5.0
     , hiedb
     , hls-plugin-api        ^>=1.2
     , lens
