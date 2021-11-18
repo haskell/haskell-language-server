@@ -79,6 +79,12 @@
               lsp-types = hself.lsp-types_1_3_0_1;
 
               lsp-test = hself.lsp-test_0_14_0_1;
+
+              implicit-hie-cradle = hself.callCabal2nix "implicit-hie-cradle"
+                (builtins.fetchTarball {
+                  url = "https://hackage.haskell.org/package/implicit-hie-cradle/implicit-hie-cradle-0.4.0.1.tar.gz";
+                  sha256 = "sha256:08jggkgdgxxpsvkm45lv0cv63yb8qq5vvz2hlzb32hh0zdm646h9";
+                }) { };
             };
 
           hlsSources =
