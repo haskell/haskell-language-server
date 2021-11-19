@@ -989,9 +989,33 @@ mkDetailsFromIface session iface linkable = do
     initIfaceLoad hsc' (typecheckIface iface)
   return (HomeModInfo iface details linkable)
 
--- | Non-interactive, batch version of 'InteractiveEval.getDocs'.
+
+-- | Non-interactive modification of 'GHC.Runtime.Eval.getDocs'.
 --   The interactive paths create problems in ghc-lib builds
---- and leads to fun errors like "Cannot continue after interface file error".
+---  and lead to fun errors like "Cannot continue after interface file error".
+getDocsNonInteractive :: Name -> IOEnv (Env TcGblEnv TcLclEnv) (Name, Either GetDocsFailure (Maybe HsDocString, Maybe (Map.Map Int HsDocString)))
+getDocsNonInteractive name = do
+    case nameModule_maybe name of
+        Nothing -> return (name, Left $ NameHasNoModule name)
+        Just mod -> do
+            ModIface
+                { mi_doc_hdr = mb_doc_hdr
+                , mi_decl_docs = DeclDocMap dmap
+                , mi_arg_docs = ArgDocMap amap
+                }
+                <- loadModuleInterface "getModuleInterface" mod
+            let
+                isNameCompiled =
+                    -- TODO: Find a more direct indicator.
+                    case nameSrcLoc name of
+                        RealSrcLoc {}   -> False
+                        UnhelpfulLoc {} -> True
+            pure . (name,) $
+                if isNothing mb_doc_hdr && Map.null dmap && Map.null amap
+                    then Left $ NoDocsInIface mod isNameCompiled
+                    else Right (Map.lookup name dmap, Map.lookup name amap)
+
+-- | Non-interactive, batch version of 'GHC.Runtime.Eval.getDocs'.
 getDocsBatch
   :: HscEnv
   -> Module  -- ^ a moudle where the names are in scope
@@ -1000,30 +1024,8 @@ getDocsBatch
   -> IO (Either ErrorMessages (Map.Map Name (Either GetDocsFailure (Maybe HsDocString, Maybe (Map.Map Int HsDocString)))))
   -- ^ Return a 'Map' of 'Name's to 'Either' (no docs messages) (general doc body & arg docs)
 getDocsBatch hsc_env _mod _names = do
-    ((_warns,errs), res) <- initTc hsc_env HsSrcFile False _mod fakeSpan $ Map.fromList <$> traverse findNameInfo _names
+    ((_warns,errs), res) <- initTc hsc_env HsSrcFile False _mod fakeSpan $ Map.fromList <$> traverse getDocsNonInteractive _names
     pure $ maybeToEither errs res
- where
-    findNameInfo :: Name -> IOEnv (Env TcGblEnv TcLclEnv) (Name, Either GetDocsFailure (Maybe HsDocString, Maybe (Map.Map Int HsDocString)))
-    findNameInfo name =
-        case nameModule_maybe name of
-            Nothing -> return (name, Left $ NameHasNoModule name)
-            Just mod -> do
-              ModIface
-                { mi_doc_hdr = mb_doc_hdr
-                , mi_decl_docs = DeclDocMap dmap
-                , mi_arg_docs = ArgDocMap amap
-                }
-                <- loadModuleInterface "getModuleInterface" mod
-              pure . (name,) $
-                --  2021-11-17: NOTE: one does not simply check into Mordor (not 1 mode)
-                if isNothing mb_doc_hdr && Map.null dmap && Map.null amap
-                then Left $ NoDocsInIface mod $ isCompiled name
-                else Right (Map.lookup name dmap, Map.lookup name amap)
-    isCompiled n =
-      -- TODO: Find a more direct indicator.
-      case nameSrcLoc n of
-        RealSrcLoc {}   -> False
-        UnhelpfulLoc {} -> True
 
 fakeSpan :: RealSrcSpan
 fakeSpan = realSrcLocSpan $ mkRealSrcLoc (Util.fsLit "<ghcide>") 1 1
