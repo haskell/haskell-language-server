@@ -237,14 +237,14 @@ getIdeas nfp = do
   where moduleEx :: ParseFlags -> Action (Maybe (Either ParseError ModuleEx))
 #ifndef HLINT_ON_GHC_LIB
         moduleEx _flags = do
-          mbpm <- getParsedModule nfp
+          mbpm <- getParsedModuleWithComments nfp
           return $ createModule <$> mbpm
           where createModule pm = Right (createModuleEx anns modu)
                   where anns = pm_annotations pm
                         modu = pm_parsed_source pm
 #else
         moduleEx flags = do
-          mbpm <- getParsedModule nfp
+          mbpm <- getParsedModuleWithComments nfp
           -- If ghc was not able to parse the module, we disable hlint diagnostics
           if isNothing mbpm
               then return Nothing
