@@ -5,6 +5,7 @@
 {-# LANGUAGE DerivingStrategies        #-}
 {-# LANGUAGE DuplicateRecordFields     #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE PackageImports            #-}
 {-# LANGUAGE PolyKinds                 #-}
 {-# LANGUAGE RankNTypes                #-}
 {-# LANGUAGE RecursiveDo               #-}
@@ -161,10 +162,13 @@ import           Data.String                            (fromString)
 import           Data.Text                              (pack)
 import           Debug.Trace.Flags                      (userTracingEnabled)
 import qualified Development.IDE.Types.Exports          as ExportsMap
+import qualified Focus
 import           HieDb.Types
 import           Ide.Plugin.Config
 import qualified Ide.PluginUtils                        as HLS
 import           Ide.Types                              (PluginId)
+import qualified "list-t" ListT
+import qualified StmContainers.Map                      as STM
 
 -- | We need to serialize writes to the database, so we send any function that
 -- needs to write to the database over the channel, where it will be picked up by
@@ -188,7 +192,7 @@ data ShakeExtras = ShakeExtras
     ,debouncer :: Debouncer NormalizedUri
     ,logger :: Logger
     ,globals :: Var (HMap.HashMap TypeRep Dynamic)
-    ,state :: Var Values
+    ,state :: Values
     ,diagnostics :: Var DiagnosticStore
     ,hiddenDiagnostics :: Var DiagnosticStore
     ,publishedDiagnostics :: Var (HMap.HashMap NormalizedUri [Diagnostic])
@@ -326,7 +330,6 @@ getIdeOptionsIO ide = do
 -- for the version of that value.
 lastValueIO :: IdeRule k v => ShakeExtras -> k -> NormalizedFilePath -> IO (Maybe (v, PositionMapping))
 lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
-    hm <- readVar state
     allMappings <- readVar positionMapping
 
     let readPersistent
@@ -341,10 +344,10 @@ lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
             MaybeT $ pure $ (,del,ver) <$> fromDynamic dv
           case mv of
             Nothing -> do
-                void $ modifyVar' state $ HMap.alter (alterValue $ Failed True) (toKey k file)
+                void $ atomically $ STM.focus (Focus.alter (alterValue $ Failed True)) (toKey k file) state
                 return Nothing
             Just (v,del,ver) -> do
-                void $ modifyVar' state $ HMap.alter (alterValue $ Stale (Just del) ver (toDyn v)) (toKey k file)
+                void $ atomically $ STM.focus (Focus.alter (alterValue $ Stale (Just del) ver (toDyn v))) (toKey k file) state
                 return $ Just (v,addDelta del $ mappingForVersion allMappings file ver)
 
         -- We got a new stale value from the persistent rule, insert it in the map without affecting diagnostics
@@ -355,7 +358,7 @@ lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
           -- Something already succeeded before, leave it alone
           _        -> old
 
-    case HMap.lookup (toKey k file) hm of
+    atomically (STM.lookup (toKey k file) state) >>= \case
       Nothing -> readPersistent
       Just (ValueWithDiagnostics v _) -> case v of
         Succeeded ver (fromDynamic -> Just v) -> pure (Just (v, mappingForVersion allMappings file ver))
@@ -420,14 +423,14 @@ shakeDatabaseProfileIO mbProfileDir = do
                 return (dir </> file)
 
 setValues :: IdeRule k v
-          => Var Values
+          => Values
           -> k
           -> NormalizedFilePath
           -> Value v
           -> Vector FileDiagnostic
           -> IO ()
 setValues state key file val diags =
-    void $ modifyVar' state $ HMap.insert (toKey key file) (ValueWithDiagnostics (fmap toDyn val) diags)
+    atomically $ STM.insert (ValueWithDiagnostics (fmap toDyn val) diags) (toKey key file) state
 
 
 -- | Delete the value stored for a given ide build key
@@ -438,7 +441,7 @@ deleteValue
   -> NormalizedFilePath
   -> IO ()
 deleteValue ShakeExtras{dirtyKeys, state} key file = do
-    void $ modifyVar' state $ HMap.delete (toKey key file)
+    atomically $ STM.delete (toKey key file) state
     atomicModifyIORef_ dirtyKeys $ HSet.insert (toKey key file)
 
 recordDirtyKeys
@@ -456,13 +459,12 @@ recordDirtyKeys ShakeExtras{dirtyKeys} key file = withEventTrace "recordDirtyKey
 getValues ::
   forall k v.
   IdeRule k v =>
-  Var Values ->
+  Values ->
   k ->
   NormalizedFilePath ->
   IO (Maybe (Value v, Vector FileDiagnostic))
 getValues state key file = do
-    vs <- readVar state
-    case HMap.lookup (toKey key file) vs of
+    atomically (STM.lookup (toKey key file) state) >>= \case
         Nothing -> pure Nothing
         Just (ValueWithDiagnostics v diagsV) -> do
             let r = fmap (fromJust . fromDynamic @v) v
@@ -507,7 +509,7 @@ shakeOpen lspEnv defaultConfig logger debouncer
     ideNc <- newIORef (initNameCache us knownKeyNames)
     shakeExtras <- do
         globals <- newVar HMap.empty
-        state <- newVar HMap.empty
+        state <- STM.newIO
         diagnostics <- newVar mempty
         hiddenDiagnostics <- newVar mempty
         publishedDiagnostics <- newVar mempty
@@ -566,7 +568,7 @@ startTelemetry db extras@ShakeExtras{..}
     IdeOptions{optCheckParents} <- getIdeOptionsIO extras
     checkParents <- optCheckParents
     regularly 1 $ do
-        readVar state >>= observe countKeys . countRelevantKeys checkParents . HMap.keys
+        observe countKeys . countRelevantKeys checkParents . map fst =<< (atomically . ListT.toList . STM.listT) state
         readIORef dirtyKeys >>= observe countDirty . countRelevantKeys checkParents . HSet.toList
         shakeGetBuildStep db >>= observe countBuilds
 
@@ -786,8 +788,9 @@ garbageCollectKeys :: String -> Int -> CheckParents -> [(Key, Int)] -> Action [K
 garbageCollectKeys label maxAge checkParents agedKeys = do
     start <- liftIO offsetTime
     extras <- getShakeExtras
-    (n::Int, garbage) <- liftIO $ modifyVar (state extras) $ \vmap ->
-        evaluate $ foldl' removeDirtyKey (vmap, (0,[])) agedKeys
+    let values = state extras
+    (n::Int, garbage) <- liftIO $ atomically $
+        foldM (removeDirtyKey values) (0,[]) agedKeys
     liftIO $ atomicModifyIORef_ (dirtyKeys extras) $ \x ->
         foldl' (flip HSet.insert) x garbage
     t <- liftIO start
@@ -801,13 +804,13 @@ garbageCollectKeys label maxAge checkParents agedKeys = do
 
     where
         showKey = show . Q
-        removeDirtyKey st@(vmap,(!counter, keys)) (k, age)
+        removeDirtyKey m st@(!counter, keys) (k, age)
             | age > maxAge
             , Just (kt,_) <- fromKeyType k
             , not(kt `HSet.member` preservedKeys checkParents)
-            , (True, vmap') <- HMap.alterF (\prev -> (isJust prev, Nothing)) k vmap
-            = (vmap', (counter+1, k:keys))
-            | otherwise = st
+            = do gotIt <- STM.focus (Focus.member <* Focus.delete) k m
+                 return $ if gotIt then (counter+1, k:keys) else st
+            | otherwise = pure st
 
 countRelevantKeys :: CheckParents -> [Key] -> Int
 countRelevantKeys checkParents =
