@@ -991,6 +991,7 @@ mkDetailsFromIface session iface linkable = do
     initIfaceLoad hsc' (typecheckIface iface)
   return (HomeModInfo iface details linkable)
 
+
 -- | Non-interactive, batch version of 'InteractiveEval.getDocs'.
 --   The interactive paths create problems in ghc-lib builds
 --- and leads to fun errors like "Cannot continue after interface file error".
@@ -998,26 +999,80 @@ getDocsBatch
   :: HscEnv
   -> Module  -- ^ a moudle where the names are in scope
   -> [Name]
-  -> IO [Either String (Maybe HsDocString, Map.Map Int HsDocString)]
+  -- 2021-11-19: NOTE: Don't forget these 'Map' currently lazy.
+  --  2021-11-18: NOTE: Map Int would become IntMap if next GHCs.
+  -> IO (Either ErrorMessages (Map.Map Name (Either GetDocsFailure (Maybe HsDocString, Maybe (Map.Map Int HsDocString)))))
+  -- ^ Return a 'Map' of 'Name's to 'Either' (no docs messages) (general doc body & arg docs)
 getDocsBatch hsc_env _mod _names = do
-    ((_warns,errs), res) <- initTc hsc_env HsSrcFile False _mod fakeSpan $ forM _names $ \name ->
-        case nameModule_maybe name of
-            Nothing -> return (Left $ NameHasNoModule name)
-            Just mod -> do
-             ModIface { mi_doc_hdr = mb_doc_hdr
-                      , mi_decl_docs = DeclDocMap dmap
-                      , mi_arg_docs = ArgDocMap amap
-                      } <- loadModuleInterface "getModuleInterface" mod
-             if isNothing mb_doc_hdr && Map.null dmap && Map.null amap
-               then pure (Left (NoDocsInIface mod $ compiled name))
-               else pure (Right ( Map.lookup name dmap
-                                , Map.findWithDefault Map.empty name amap))
-    case res of
-        Just x  -> return $ map (first $ T.unpack . showGhc) x
-        Nothing -> throwErrors errs
-  where
-    throwErrors = liftIO . throwIO . mkSrcErr
-    compiled n =
+    ((_warns,errs), res) <- initTc hsc_env HsSrcFile False _mod fakeSpan $ Map.fromList <$> traverse undefined undefined
+    pure $ maybeToEither errs res
+ where
+    mapOfRequestedDocs :: IOEnv (Env TcGblEnv TcLclEnv) (Map Name (Maybe HsDocString, Maybe (Map Int HsDocString)))
+    mapOfRequestedDocs = Map.fromList . foldMap getAskedIfaceDocs <$> loadIfaces
+
+    getAskedIfaceDocs :: ((Map Name HsDocString, Map Name (Map Int HsDocString)), [Name]) -> [(Name, (Maybe HsDocString, Maybe (Map Int HsDocString)))]
+    getAskedIfaceDocs a = lookupDocs <$> snd a
+      where
+       lookupDocs :: Name -> (Name, (Maybe HsDocString, Maybe (Map Int HsDocString)))
+       lookupDocs n = (n, bimap (Map.lookup n) (Map.lookup n) $ fst a)
+
+    loadIfaces :: IOEnv (Env TcGblEnv TcLclEnv) [((Map Name HsDocString, Map Name (Map Int HsDocString)), [Name])]
+    loadIfaces = mkOneEnv (fmap (first getIfaceGenNArgDocMaps) loadModules)
+      where
+          mkOneEnv :: Applicative env => [(env ms, ns)] -> env [(ms, ns)]
+          mkOneEnv a = traverse (fmap swap . sequenceA . swap) a
+
+    getIfaceGenNArgDocMaps :: TcRn ModIface -> IOEnv (Env TcGblEnv TcLclEnv) (Map Name HsDocString, Map Name (Map Int HsDocString))
+    getIfaceGenNArgDocMaps mi = do
+        ModIface
+            { mi_doc_hdr = mb_doc_hdr
+            , mi_decl_docs = DeclDocMap dmap
+            , mi_arg_docs = ArgDocMap amap
+            }
+            <- mi
+        pure $
+            if isNothing mb_doc_hdr && Map.null dmap && Map.null amap
+            then error "Instead of 'error' here handle 'NoDocsInIface mod $ isCompiled name' case"
+            else (dmap, amap)
+
+    loadModules :: [(TcRn ModIface, [Name])]
+    loadModules = fmap loadAvailableModules namesGroupedByModule
+     where
+        loadAvailableModules :: (Module, [Name]) -> (TcRn ModIface, [Name])
+        loadAvailableModules = first loadModuleInterfaceOnce
+
+
+        loadModuleInterfaceOnce :: Module -> TcRn ModIface
+        loadModuleInterfaceOnce =
+            loadModuleInterface "getModuleInterface"
+
+        namesGroupedByModule :: [(Module, [Name])]
+        namesGroupedByModule =
+            groupSort $ fmap (first (fromMaybe (error "Instead of 'error' handle here 'NameHasNoModule' case") . nameModule_maybe) . dupe) _names
+
+        -- modulesPartitionedOnAvalability :: [(Either (Name -> GetDocsFailure) Module, [Name])]
+        -- modulesPartitionedOnAvalability = fmap partitionOnModuleAvalibility namesGroupedByModule
+
+        -- partitionOnModuleAvalibility :: (Maybe Module, [Name]) -> (Either (Name -> GetDocsFailure) Module, [Name])
+        -- partitionOnModuleAvalibility =
+        --     first (maybeToEither NameHasNoModule)
+
+
+    --  2021-11-18: NOTE: This code initially was taken from: https://hackage.haskell.org/package/ghc-9.2.1/docs/src/GHC.Runtime.Eval.html#getDocs
+    findNameInfo :: Maybe Module -> Name -> IOEnv (Env TcGblEnv TcLclEnv) (Name, Either GetDocsFailure (Maybe HsDocString, Maybe (Map.Map Int HsDocString)))
+    findNameInfo Nothing name = return (name, Left $ NameHasNoModule name)
+    findNameInfo (Just mod) name = do
+              ModIface
+                { mi_doc_hdr = mb_doc_hdr
+                , mi_decl_docs = DeclDocMap dmap
+                , mi_arg_docs = ArgDocMap amap
+                }
+                <- loadModuleInterface "getModuleInterface" mod
+              pure . (name,) $
+                if isNothing mb_doc_hdr && Map.null dmap && Map.null amap
+                then Left $ NoDocsInIface mod $ isCompiled name
+                else Right (Map.lookup name dmap, Map.lookup name amap)
+    isCompiled n =
       -- TODO: Find a more direct indicator.
       case nameSrcLoc n of
         RealSrcLoc {}   -> False
