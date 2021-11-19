@@ -193,7 +193,7 @@ data ShakeExtras = ShakeExtras
     ,state :: Values
     ,diagnostics :: Var DiagnosticStore
     ,hiddenDiagnostics :: Var DiagnosticStore
-    ,publishedDiagnostics :: Var (HMap.HashMap NormalizedUri [Diagnostic])
+    ,publishedDiagnostics :: STM.Map NormalizedUri [Diagnostic]
     -- ^ This represents the set of diagnostics that we have published.
     -- Due to debouncing not every change might get published.
     ,positionMapping :: Var (HMap.HashMap NormalizedUri (Map TextDocumentVersion (PositionDelta, PositionMapping)))
@@ -511,7 +511,7 @@ shakeOpen lspEnv defaultConfig logger debouncer
         state <- STM.newIO
         diagnostics <- newVar mempty
         hiddenDiagnostics <- newVar mempty
-        publishedDiagnostics <- newVar mempty
+        publishedDiagnostics <- STM.newIO
         positionMapping <- newVar HMap.empty
         knownTargetsVar <- newVar $ hashed HMap.empty
         let restartShakeSession = shakeRestart ideState
@@ -1168,16 +1168,15 @@ updateFileDiagnostics fp k ShakeExtras{logger, diagnostics, hiddenDiagnostics, p
         let uri = filePathToUri' fp
         let delay = if null newDiags then 0.1 else 0
         registerEvent debouncer delay uri $ do
-             join $ mask_ $ modifyVar publishedDiagnostics $ \published -> do
-                 let lastPublish = HMap.lookupDefault [] uri published
-                     !published' = HMap.insert uri newDiags published
-                     action = when (lastPublish /= newDiags) $ case lspEnv of
+             join $ mask_ $ do
+                 lastPublish <- atomically $ STM.focus (Focus.lookupWithDefault [] <* Focus.insert newDiags) uri publishedDiagnostics
+                 let action = when (lastPublish /= newDiags) $ case lspEnv of
                         Nothing -> -- Print an LSP event.
                             logInfo logger $ showDiagnosticsColored $ map (fp,ShowDiag,) newDiags
                         Just env -> LSP.runLspT env $
                             LSP.sendNotification LSP.STextDocumentPublishDiagnostics $
                             LSP.PublishDiagnosticsParams (fromNormalizedUri uri) ver (List newDiags)
-                 return (published', action)
+                 return action
 
 newtype Priority = Priority Double
 
