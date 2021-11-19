@@ -3,9 +3,11 @@
 {-# LANGUAGE ViewPatterns   #-}
 module Main ( main ) where
 
+import           Control.Concurrent               (threadDelay)
 import           Data.List                        (find)
 import           Data.Text                        (Text)
 import qualified Data.Text                        as T
+import           Debug.Trace
 import qualified Ide.Plugin.AlternateNumberFormat as AlternateNumberFormat
 import qualified Ide.Plugin.Conversion            as Conversion
 import           System.FilePath                  ((</>))
@@ -20,7 +22,7 @@ alternateNumberFormatPlugin = AlternateNumberFormat.descriptor "alternateNumberF
 
 test :: TestTree
 test = testGroup "alternateNumberFormat" [
-    codeActionHex "TIntDtoH" 3 13]
+    codeActionHex "TIntDtoH" 4 13]
 
 testDataDir :: FilePath
 testDataDir = "test" </> "testdata"
@@ -32,9 +34,13 @@ goldenAlternateFormat fp = goldenWithHaskellDoc alternateNumberFormatPlugin (fp 
 
 codeActionTest :: (Maybe Text -> Bool) -> FilePath -> Int -> Int -> TestTree
 codeActionTest filter' fp line col = goldenAlternateFormat fp $ \doc -> do
-  actions <- getAllCodeActions doc
+  -- _ <- waitForDiagnostics
+  actions <- getCodeActions doc (Range (Position 4 12) (Position 4 14))
+  case actions of
+    InR action:_ -> executeCodeAction action
+    _            -> pure ()
+  traceM $ "Code actions: " ++ show actions
   -- can't generate code actions?
-  liftIO $ assertBool "Actions is Not Null" (not $ null actions)
 --   case find (filter' . caTitle) actions of
 --     Just (InR x)  -> executeCodeAction x
 --     _             -> liftIO $ assertFailure "Unable to find CodeAction"
@@ -66,7 +72,7 @@ numDecimalRegex = intoInfix <> Conversion.numDecimalRegex
 decimalRegex = intoInfix <> Conversion.decimalRegex
 
 isCodeAction :: Text -> Maybe Text -> Bool
-isCodeAction userRegex (Just txt) = txt =~ Conversion.wrap (convertPrefix <> userRegex)
+isCodeAction userRegex (Just txt) = txt =~ Conversion.matchLineRegex (convertPrefix <> userRegex)
 isCodeAction _ _                  = False
 
 isHexCodeAction :: Maybe Text -> Bool
