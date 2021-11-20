@@ -196,7 +196,7 @@ data ShakeExtras = ShakeExtras
     ,publishedDiagnostics :: STM.Map NormalizedUri [Diagnostic]
     -- ^ This represents the set of diagnostics that we have published.
     -- Due to debouncing not every change might get published.
-    ,positionMapping :: Var (HMap.HashMap NormalizedUri (Map TextDocumentVersion (PositionDelta, PositionMapping)))
+    ,positionMapping :: STM.Map NormalizedUri (Map TextDocumentVersion (PositionDelta, PositionMapping))
     -- ^ Map from a text document version to a PositionMapping that describes how to map
     -- positions in a version of that document to positions in the latest version
     -- First mapping is delta from previous version and second one is an
@@ -328,7 +328,6 @@ getIdeOptionsIO ide = do
 -- for the version of that value.
 lastValueIO :: IdeRule k v => ShakeExtras -> k -> NormalizedFilePath -> IO (Maybe (v, PositionMapping))
 lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
-    allMappings <- readVar positionMapping
 
     let readPersistent
           | IdeTesting testing <- ideTesting s -- Don't read stale persistent values in tests
@@ -346,7 +345,7 @@ lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
                 return Nothing
             Just (v,del,ver) -> do
                 void $ atomically $ STM.focus (Focus.alter (alterValue $ Stale (Just del) ver (toDyn v))) (toKey k file) state
-                return $ Just (v,addDelta del $ mappingForVersion allMappings file ver)
+                atomically $ Just . (v,) . addDelta del <$> mappingForVersion positionMapping file ver
 
         -- We got a new stale value from the persistent rule, insert it in the map without affecting diagnostics
         alterValue new Nothing = Just (ValueWithDiagnostics new mempty) -- If it wasn't in the map, give it empty diagnostics
@@ -359,8 +358,10 @@ lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
     atomically (STM.lookup (toKey k file) state) >>= \case
       Nothing -> readPersistent
       Just (ValueWithDiagnostics v _) -> case v of
-        Succeeded ver (fromDynamic -> Just v) -> pure (Just (v, mappingForVersion allMappings file ver))
-        Stale del ver (fromDynamic -> Just v) -> pure (Just (v, maybe id addDelta del $ mappingForVersion allMappings file ver))
+        Succeeded ver (fromDynamic -> Just v) ->
+            atomically $ Just . (v,) <$> mappingForVersion positionMapping file ver
+        Stale del ver (fromDynamic -> Just v) ->
+            atomically $ Just . (v,) . maybe id addDelta del <$> mappingForVersion positionMapping file ver
         Failed p | not p -> readPersistent
         _ -> pure Nothing
 
@@ -372,14 +373,13 @@ lastValue key file = do
     liftIO $ lastValueIO s key file
 
 mappingForVersion
-    :: HMap.HashMap NormalizedUri (Map TextDocumentVersion (a, PositionMapping))
+    :: STM.Map NormalizedUri (Map TextDocumentVersion (a, PositionMapping))
     -> NormalizedFilePath
     -> TextDocumentVersion
-    -> PositionMapping
-mappingForVersion allMappings file ver =
-    maybe zeroMapping snd $
-    Map.lookup ver =<<
-    HMap.lookup (filePathToUri' file) allMappings
+    -> STM PositionMapping
+mappingForVersion allMappings file ver = do
+    mapping <- STM.lookup (filePathToUri' file) allMappings
+    return $ maybe zeroMapping snd $ Map.lookup ver =<< mapping
 
 type IdeRule k v =
   ( Shake.RuleResult k ~ v
@@ -513,7 +513,7 @@ shakeOpen lspEnv defaultConfig logger debouncer
         diagnostics <- STM.newIO
         hiddenDiagnostics <- STM.newIO
         publishedDiagnostics <- STM.newIO
-        positionMapping <- newVar HMap.empty
+        positionMapping <- STM.newIO
         knownTargetsVar <- newVar $ hashed HMap.empty
         let restartShakeSession = shakeRestart ideState
         persistentKeys <- newVar HMap.empty
@@ -1223,17 +1223,16 @@ getAllDiagnostics =
     fmap (concatMap (\(k,v) -> map (fromUri k,ShowDiag,) $ getDiagnosticsFromStore v)) . ListT.toList . STM.listT
 
 updatePositionMapping :: IdeState -> VersionedTextDocumentIdentifier -> List TextDocumentContentChangeEvent -> IO ()
-updatePositionMapping IdeState{shakeExtras = ShakeExtras{positionMapping}} VersionedTextDocumentIdentifier{..} (List changes) = do
-    modifyVar_ positionMapping $ \allMappings -> do
-        let uri = toNormalizedUri _uri
-        let mappingForUri = HMap.lookupDefault Map.empty uri allMappings
-        let (_, updatedMapping) =
+updatePositionMapping IdeState{shakeExtras = ShakeExtras{positionMapping}} VersionedTextDocumentIdentifier{..} (List changes) =
+    atomically $ STM.focus (Focus.alter f) uri positionMapping
+      where
+        uri = toNormalizedUri _uri
+        f = Just . f' . fromMaybe mempty
+        f' mappingForUri = snd $
                 -- Very important to use mapAccum here so that the tails of
                 -- each mapping can be shared, otherwise quadratic space is
                 -- used which is evident in long running sessions.
                 Map.mapAccumRWithKey (\acc _k (delta, _) -> let new = addDelta delta acc in (new, (delta, acc)))
                   zeroMapping
                   (Map.insert _version (shared_change, zeroMapping) mappingForUri)
-        pure $ HMap.insert uri updatedMapping allMappings
-  where
-    shared_change = mkDelta changes
+        shared_change = mkDelta changes
