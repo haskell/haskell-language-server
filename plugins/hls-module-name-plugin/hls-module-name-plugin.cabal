@@ -16,6 +16,7 @@ extra-source-files:
   LICENSE
   test/testdata/*.hs
   test/testdata/*.yaml
+  test/testdata/subdir/*.hs
 
 library
   exposed-modules:  Ide.Plugin.ModuleName
