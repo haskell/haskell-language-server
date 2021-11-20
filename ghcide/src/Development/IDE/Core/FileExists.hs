@@ -10,14 +10,11 @@ module Development.IDE.Core.FileExists
   )
 where
 
-import           Control.Concurrent.STM.Stats
-import           Control.Concurrent.Strict
+import           Control.Concurrent.STM.Stats          (atomically)
 import           Control.Exception
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import qualified Data.ByteString                       as BS
-import           Data.HashMap.Strict                   (HashMap)
-import qualified Data.HashMap.Strict                   as HashMap
 import           Data.List                             (partition)
 import           Data.Maybe
 import           Development.IDE.Core.FileStore
@@ -27,9 +24,11 @@ import           Development.IDE.Core.Shake
 import           Development.IDE.Graph
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
+import qualified Focus
 import           Ide.Plugin.Config                     (Config)
 import           Language.LSP.Server                   hiding (getVirtualFile)
 import           Language.LSP.Types
+import qualified StmContainers.Map                     as STM
 import qualified System.Directory                      as Dir
 import qualified System.FilePath.Glob                  as Glob
 
@@ -75,10 +74,10 @@ fast path by a check that the path also matches our watching patterns.
 -- | A map for tracking the file existence.
 -- If a path maps to 'True' then it exists; if it maps to 'False' then it doesn't exist'; and
 -- if it's not in the map then we don't know.
-type FileExistsMap = (HashMap NormalizedFilePath Bool)
+type FileExistsMap = STM.Map NormalizedFilePath Bool
 
 -- | A wrapper around a mutable 'FileExistsState'
-newtype FileExistsMapVar = FileExistsMapVar (Var FileExistsMap)
+newtype FileExistsMapVar = FileExistsMapVar FileExistsMap
 
 instance IsIdeGlobal FileExistsMapVar
 
@@ -86,21 +85,23 @@ instance IsIdeGlobal FileExistsMapVar
 getFileExistsMapUntracked :: Action FileExistsMap
 getFileExistsMapUntracked = do
   FileExistsMapVar v <- getIdeGlobalAction
-  liftIO $ readVar v
+  return v
 
 -- | Modify the global store of file exists.
 modifyFileExists :: IdeState -> [(NormalizedFilePath, FileChangeType)] -> IO ()
 modifyFileExists state changes = do
   FileExistsMapVar var <- getIdeGlobalState state
-  changesMap           <- evaluate $ HashMap.fromList changes
   -- Masked to ensure that the previous values are flushed together with the map update
   mask $ \_ -> do
     -- update the map
-    void $ modifyVar' var $ HashMap.union (HashMap.mapMaybe fromChange changesMap)
+    void $ atomically $ forM_ changes $ \(f,c) ->
+        case fromChange c of
+            Just c' -> STM.focus (Focus.insert c') f var
+            Nothing -> pure ()
     -- See Note [Invalidating file existence results]
     -- flush previous values
     let (fileModifChanges, fileExistChanges) =
-            partition ((== FcChanged) . snd) (HashMap.toList changesMap)
+            partition ((== FcChanged) . snd) changes
     join $ atomically $ do
         mapM_ (deleteValue (shakeExtras state) GetFileExists . fst) fileExistChanges
         io1 <- recordDirtyKeys (shakeExtras state) GetFileExists $ map fst fileExistChanges
@@ -164,7 +165,7 @@ fileExistsRules lspEnv vfs = do
   -- Create the global always, although it should only be used if we have fast rules.
   -- But there's a chance someone will send unexpected notifications anyway,
   -- e.g. https://github.com/haskell/ghcide/issues/599
-  addIdeGlobal . FileExistsMapVar =<< liftIO (newVar [])
+  addIdeGlobal . FileExistsMapVar =<< liftIO STM.newIO
 
   extras <- getShakeExtrasRules
   opts <- liftIO $ getIdeOptionsIO extras
@@ -213,7 +214,7 @@ fileExistsFast vfs file = do
     -- Could in principle use 'alwaysRerun' here, but it's too slwo, See Note [Invalidating file existence results]
     mp <- getFileExistsMapUntracked
 
-    let mbFilesWatched = HashMap.lookup file mp
+    mbFilesWatched <- liftIO $ atomically $ STM.lookup file mp
     exist <- case mbFilesWatched of
       Just exist -> pure exist
       -- We don't know about it: use the slow route.
