@@ -3,14 +3,16 @@
 {-# LANGUAGE ViewPatterns   #-}
 module Main ( main ) where
 
-import           Control.Concurrent               (threadDelay)
+import           Data.Either                      (rights)
 import           Data.List                        (find)
 import           Data.Text                        (Text)
 import qualified Data.Text                        as T
 import           Debug.Trace
 import qualified Ide.Plugin.AlternateNumberFormat as AlternateNumberFormat
 import qualified Ide.Plugin.Conversion            as Conversion
-import           Properties.Conversion
+import           Language.LSP.Types               (toEither)
+import           Language.LSP.Types.Lens          (kind)
+import           Properties.Conversion            (conversions)
 import           System.FilePath                  ((</>))
 import           Test.Hls
 import           Text.Regex.TDFA                  ((=~))
@@ -21,31 +23,86 @@ main = defaultTestRunner test
 alternateNumberFormatPlugin :: PluginDescriptor IdeState
 alternateNumberFormatPlugin = AlternateNumberFormat.descriptor "alternateNumberFormat"
 
+
+-- NOTE: For whatever reason, this plugin does not play nice with creating Code Actions on time.
+-- As a result tests will mostly pass if `import Prelude` is added at the top. We (mostly fendor) surmise this has something
+-- to do with how
 test :: TestTree
 test = testGroup "alternateNumberFormat" [
-    -- codeActionHex "TIntDtoH" 4 13
-    conversions ]
+    codeActionHex "TIntDtoH" 3 13
+    , codeActionOctal "TIntDtoO" 3 13
+    , codeActionBinary "TIntDtoB" 4 13
+    , codeActionNumDecimal "TIntDtoND" 5 13
+    , codeActionFracExp "TFracDtoE" 3 13
+    , codeActionFloatHex "TFracDtoHF" 4 13
+    , codeActionDecimal "TIntHtoD" 3 13
+    , codeActionDecimal "TFracHFtoD" 4 13
+    , codeActionProperties "TFindLiteralIntPattern" [(3, 25), (4,25)] $ \actions -> do
+        liftIO $ length actions @?= 4
+    , codeActionProperties "TFindLiteralIntCase" [(3, 29)] $ \actions -> do
+        liftIO $ length actions @?= 2
+    , codeActionProperties "TFindLiteralIntCase2" [(4, 21)] $ \actions -> do
+        liftIO $ length actions @?= 2
+    , codeActionProperties "TFindLiteralDoReturn" [(5, 10)] $ \actions -> do
+        liftIO $ length actions @?= 2
+    , codeActionProperties "TFindLiteralDoLet" [(5, 13), (6, 13)] $ \actions -> do
+        liftIO $ length actions @?= 4
+    , codeActionProperties "TFindLiteralList" [(3, 28)] $ \actions -> do
+        liftIO $ length actions @?= 2
+    , conversions
+    ]
+
+codeActionProperties :: TestName -> [(Int, Int)] -> ([CodeAction] -> Session ()) -> TestTree
+codeActionProperties fp locs assertions = testCase fp $ do
+    runSessionWithServer alternateNumberFormatPlugin testDataDir $ do
+        openDoc (fp <> ".hs") "haskell" >>= codeActionsFromLocs >>= findAlternateNumberActions >>= assertions
+    where
+        -- similar to codeActionTest
+        codeActionsFromLocs doc = concat <$> mapM (getCodeActions doc . uncurry pointRange) locs
+
+findAlternateNumberActions :: [Command |? CodeAction] -> Session [CodeAction]
+findAlternateNumberActions = pure . filter isAlternateNumberCodeAction . rights . map toEither
+    where
+        isAlternateNumberCodeAction CodeAction{_kind} = case _kind of
+          Nothing -> False
+          Just kind -> case kind of
+            CodeActionUnknown txt -> txt == "alternate.style"
+            _                     -> False
+
+-- most helpers derived from explicit-imports-plugin Main Test file
 
 testDataDir :: FilePath
 testDataDir = "test" </> "testdata"
-
--- most helpers derived from explicit-imports-plugin Main Test file
 
 goldenAlternateFormat :: FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
 goldenAlternateFormat fp = goldenWithHaskellDoc alternateNumberFormatPlugin (fp <> " (golden)") testDataDir fp "expected" "hs"
 
 codeActionTest :: (Maybe Text -> Bool) -> FilePath -> Int -> Int -> TestTree
 codeActionTest filter' fp line col = goldenAlternateFormat fp $ \doc -> do
-  -- _ <- waitForDiagnostics
   actions <- getCodeActions doc (pointRange line col)
-  traceM $ "Code actions: " ++ show actions
   -- can't generate code actions?
   case find (filter' . codeActionTitle) actions of
     Just (InR x) -> executeCodeAction x
     _            -> liftIO $ assertFailure "Unable to find CodeAction"
 
+
+codeActionDecimal :: FilePath -> Int -> Int -> TestTree
+codeActionDecimal = codeActionTest isDecimalCodeAction
+
 codeActionHex :: FilePath -> Int -> Int -> TestTree
 codeActionHex = codeActionTest isHexCodeAction
+
+codeActionOctal :: FilePath -> Int -> Int -> TestTree
+codeActionOctal = codeActionTest isOctalCodeAction
+
+codeActionBinary :: FilePath -> Int -> Int -> TestTree
+codeActionBinary = codeActionTest isBinaryCodeAction
+
+codeActionNumDecimal :: FilePath -> Int -> Int -> TestTree
+codeActionNumDecimal = codeActionTest isNumDecimalCodeAction
+
+codeActionFracExp :: FilePath -> Int -> Int -> TestTree
+codeActionFracExp = codeActionTest isNumDecimalCodeAction
 
 codeActionFloatHex :: FilePath -> Int -> Int -> TestTree
 codeActionFloatHex = codeActionTest isHexFloatCodeAction
@@ -86,6 +143,8 @@ isBinaryCodeAction = isCodeAction binaryRegex
 isOctalCodeAction :: Maybe Text -> Bool
 isOctalCodeAction = isCodeAction octalRegex
 
+-- This can match EITHER an integer as NumDecimal extension or a Fractional
+-- as in 1.23e-3 (so anything with an exponent really)
 isNumDecimalCodeAction :: Maybe Text -> Bool
 isNumDecimalCodeAction = isCodeAction numDecimalRegex
 

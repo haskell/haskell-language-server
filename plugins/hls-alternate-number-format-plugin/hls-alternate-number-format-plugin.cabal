@@ -20,6 +20,7 @@ library
   build-depends:
       aeson
     , base                 >=4.12 && < 5
+    , containers
     , ghcide               >=1.5.0  && <1.6
     , ghc-boot-th
     , hls-graph
@@ -54,8 +55,9 @@ test-suite tests
     , filepath
     , hls-alternate-number-format-plugin
     , hls-test-utils       >=1.0 && <1.2
-    , regex-tdfa
+    , lsp
     , QuickCheck
+    , regex-tdfa
     , tasty-quickcheck
     , text
 

@@ -12,10 +12,10 @@ import qualified Data.HashMap.Strict                  as HashMap
 import           Data.Maybe                           (fromMaybe, isJust)
 import           Data.Text                            (Text)
 import qualified Data.Text                            as T
+import           Debug.Trace                          (traceM)
 import           Development.IDE                      (GetParsedModule (GetParsedModule),
                                                        IdeState, RuleResult,
                                                        Rules, define, ideLogger,
-                                                       noRange,
                                                        realSrcSpanToRange,
                                                        runAction, use,
                                                        useWithStale)
@@ -83,8 +83,7 @@ codeActionHandler state _ (CodeActionParams _ _ docId currRange _) = response $ 
         -- make a code action for every literal and its' alternates (then flatten the result)
         actions = concatMap (\(lit, alts) -> map (mkCodeAction nfp lit) alts) literalPairs
 
-    logIO state "Literals: "
-    mapM_ (logIO state) literals
+    logIO state $ "Literals: " <> show literals
 
     pure $ List actions
     where
@@ -108,7 +107,6 @@ codeActionHandler state _ (CodeActionParams _ _ docId currRange _) = response $ 
         mkWorkspaceEdit :: NormalizedFilePath -> Literal -> Text -> WorkspaceEdit
         mkWorkspaceEdit nfp lit alt = WorkspaceEdit changes Nothing Nothing
             where
-                -- NOTE: currently our logic filters our any noRange possibilities
                 txtEdit = TextEdit (realSrcSpanToRange $ getSrcSpan lit) alt
                 changes = Just $ HashMap.fromList [( filePathToUri $ fromNormalizedFilePath nfp, List [txtEdit])]
 
@@ -118,12 +116,6 @@ contains Range {_start, _end} x = isInsideRealSrcSpan _start x || isInsideRealSr
 
 isInsideRealSrcSpan :: Position -> RealSrcSpan -> Bool
 p `isInsideRealSrcSpan` r = let (Range sp ep) = realSrcSpanToRange r in sp <= p && p <= ep
-
--- a source span that provides no meaningful information is NOT a valid source span for our use case
-isRealSrcSpan :: SrcSpan -> Bool
-isRealSrcSpan (UnhelpfulSpan _) = False
-isRealSrcSpan _                 = True
-
 
 getNormalizedFilePath :: Monad m => TextDocumentIdentifier -> ExceptT String m NormalizedFilePath
 getNormalizedFilePath docId = handleMaybe "Error: converting to NormalizedFilePath"
@@ -138,5 +130,5 @@ requestLiterals state = handleMaybeM "Error: Could not get ParsedModule"
 
 
 logIO :: (MonadIO m, Show a) => IdeState -> a -> m ()
-logIO state = liftIO . Logger.logDebug (ideLogger state) . T.pack . show
+logIO state = liftIO . Logger.logInfo (ideLogger state) . T.pack . show
 
