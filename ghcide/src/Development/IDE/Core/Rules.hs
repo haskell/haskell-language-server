@@ -41,7 +41,6 @@ module Development.IDE.Core.Rules(
     loadGhcSession,
     getModIfaceFromDiskRule,
     getModIfaceRule,
-    getModIfaceWithoutLinkableRule,
     getModSummaryRule,
     isHiFileStableRule,
     getModuleGraphRule,
@@ -705,9 +704,9 @@ ghcSessionDepsDefinition GhcSessionDepsConfig{..} env file = do
         Nothing -> return Nothing
         Just deps -> do
             when checkForImportCycles $ void $ uses_ ReportImportCycles deps
-            ms:mss <- map msrModSummary <$> if fullModSummary
-                then uses_ GetModSummary (file:deps)
-                else uses_ GetModSummaryWithoutTimestamps (file:deps)
+            mss <- map msrModSummary <$> if fullModSummary
+                then uses_ GetModSummary deps
+                else uses_ GetModSummaryWithoutTimestamps deps
 
             depSessions <- map hscEnv <$> uses_ GhcSessionDeps deps
             ifaces <- uses_ GetModIface deps
@@ -874,13 +873,6 @@ getModIfaceRule = defineEarlyCutoff $ Rule $ \GetModIface f -> do
       compiledLinkables <- getCompiledLinkables <$> getIdeGlobalAction
       liftIO $ void $ modifyVar' compiledLinkables $ \old -> extendModuleEnv old mod time
   pure res
-
-getModIfaceWithoutLinkableRule :: Rules ()
-getModIfaceWithoutLinkableRule = defineEarlyCutoff $ RuleNoDiagnostics $ \GetModIfaceWithoutLinkable f -> do
-  mhfr <- use GetModIface f
-  let mhfr' = fmap (\x -> x{ hirHomeMod = (hirHomeMod x){ hm_linkable = Just (error msg) } }) mhfr
-      msg = "tried to look at linkable for GetModIfaceWithoutLinkable for " ++ show f
-  pure (hirIfaceFp <$> mhfr', mhfr')
 
 -- | Also generates and indexes the `.hie` file, along with the `.o` file if needed
 -- Invariant maintained is that if the `.hi` file was successfully written, then the
@@ -1082,7 +1074,6 @@ mainRule RulesConfig{..} = do
     getModIfaceFromDiskRule
     getModIfaceFromDiskAndIndexRule
     getModIfaceRule
-    getModIfaceWithoutLinkableRule
     getModSummaryRule
     isHiFileStableRule
     getModuleGraphRule
