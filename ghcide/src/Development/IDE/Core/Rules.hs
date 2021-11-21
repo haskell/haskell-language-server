@@ -688,13 +688,11 @@ loadGhcSession ghcSessionDepsConfig = do
 
 data GhcSessionDepsConfig = GhcSessionDepsConfig
     { checkForImportCycles :: Bool
-    , forceLinkables       :: Bool
     , fullModSummary       :: Bool
     }
 instance Default GhcSessionDepsConfig where
   def = GhcSessionDepsConfig
     { checkForImportCycles = True
-    , forceLinkables = False
     , fullModSummary = False
     }
 
@@ -712,12 +710,7 @@ ghcSessionDepsDefinition GhcSessionDepsConfig{..} env file = do
                 else uses_ GetModSummaryWithoutTimestamps (file:deps)
 
             depSessions <- map hscEnv <$> uses_ GhcSessionDeps deps
-            let uses_th_qq =
-                    xopt LangExt.TemplateHaskell dflags || xopt LangExt.QuasiQuotes dflags
-                dflags = ms_hspp_opts ms
-            ifaces <- if uses_th_qq || forceLinkables
-                        then uses_ GetModIface deps
-                        else uses_ GetModIfaceWithoutLinkable deps
+            ifaces <- uses_ GetModIface deps
 
             let inLoadOrder = map hirHomeMod ifaces
             session' <- liftIO $ mergeEnvs hsc mss inLoadOrder depSessions
