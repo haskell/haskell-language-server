@@ -4061,7 +4061,7 @@ thLoadingTest :: TestTree
 thLoadingTest = testCase "Loading linkables" $ runWithExtraFiles "THLoading" $ \dir -> do
     let thb = dir </> "THB.hs"
     _ <- openDoc thb "haskell"
-    expectDiagnostics [ ( thb, [(DsWarning, (4, 0), "Top-level binding with no type signature: a :: ()")] ) ]
+    expectNoMoreDiagnostics 1
 
 
 -- | test that TH is reevaluated on typecheck
