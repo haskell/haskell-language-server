@@ -105,6 +105,14 @@ main = defaultTestRunner $ testGroup "Qualify Imported Names"
       "CodeAction qualifies backticked operators properly"
       "Backticked"
       (makePoint 3 1)
+  , codeActionGoldenTest
+      "CodeAction qualifies parenthesized and backticked operators on the same line properly"
+      "SameLine"
+      (makePoint 3 1)
+  , codeActionGoldenTest
+      "CodeAction doesn't qualify already qualified names"
+      "NoDoubleQualify"
+      (makePoint 3 1)
   ]
 
 codeActionGoldenTest :: TestName -> FilePath -> Point -> TestTree

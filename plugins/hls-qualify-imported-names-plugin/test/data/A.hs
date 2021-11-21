@@ -1,4 +1,4 @@
-module A (module B, a, b) where
+module A (module B, a, b, op) where
 
 import B
 
@@ -8,3 +8,5 @@ a = id
 b :: String -> String
 b = id
 
+op :: Int -> Int -> Int
+op = (+)
