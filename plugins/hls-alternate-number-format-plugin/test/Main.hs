@@ -10,6 +10,7 @@ import qualified Data.Text                        as T
 import           Debug.Trace
 import qualified Ide.Plugin.AlternateNumberFormat as AlternateNumberFormat
 import qualified Ide.Plugin.Conversion            as Conversion
+import           Properties.Conversion
 import           System.FilePath                  ((</>))
 import           Test.Hls
 import           Text.Regex.TDFA                  ((=~))
@@ -22,7 +23,8 @@ alternateNumberFormatPlugin = AlternateNumberFormat.descriptor "alternateNumberF
 
 test :: TestTree
 test = testGroup "alternateNumberFormat" [
-    codeActionHex "TIntDtoH" 4 13]
+    -- codeActionHex "TIntDtoH" 4 13
+    conversions ]
 
 testDataDir :: FilePath
 testDataDir = "test" </> "testdata"
@@ -35,15 +37,12 @@ goldenAlternateFormat fp = goldenWithHaskellDoc alternateNumberFormatPlugin (fp 
 codeActionTest :: (Maybe Text -> Bool) -> FilePath -> Int -> Int -> TestTree
 codeActionTest filter' fp line col = goldenAlternateFormat fp $ \doc -> do
   -- _ <- waitForDiagnostics
-  actions <- getCodeActions doc (Range (Position 4 12) (Position 4 14))
-  case actions of
-    InR action:_ -> executeCodeAction action
-    _            -> pure ()
+  actions <- getCodeActions doc (pointRange line col)
   traceM $ "Code actions: " ++ show actions
   -- can't generate code actions?
---   case find (filter' . caTitle) actions of
---     Just (InR x)  -> executeCodeAction x
---     _             -> liftIO $ assertFailure "Unable to find CodeAction"
+  case find (filter' . codeActionTitle) actions of
+    Just (InR x) -> executeCodeAction x
+    _            -> liftIO $ assertFailure "Unable to find CodeAction"
 
 codeActionHex :: FilePath -> Int -> Int -> TestTree
 codeActionHex = codeActionTest isHexCodeAction
@@ -51,15 +50,15 @@ codeActionHex = codeActionTest isHexCodeAction
 codeActionFloatHex :: FilePath -> Int -> Int -> TestTree
 codeActionFloatHex = codeActionTest isHexFloatCodeAction
 
-caTitle :: (Command |? CodeAction) -> Maybe Text
-caTitle (InR CodeAction {_title}) = Just _title
-caTitle _                         = Nothing
+codeActionTitle :: (Command |? CodeAction) -> Maybe Text
+codeActionTitle (InR CodeAction {_title}) = Just _title
+codeActionTitle _                         = Nothing
 
 pointRange :: Int -> Int -> Range
 pointRange
   (subtract 1 -> line)
   (subtract 1 -> col) =
-    Range (Position line col) (Position line $ col + 2)
+    Range (Position line col) (Position line $ col + 1)
 
 convertPrefix, intoInfix, hexRegex, hexFloatRegex, binaryRegex, octalRegex, numDecimalRegex, decimalRegex :: Text
 convertPrefix = "Convert (" <> T.intercalate "|" [Conversion.hexRegex, Conversion.hexFloatRegex, Conversion.binaryRegex, Conversion.octalRegex, Conversion.numDecimalRegex, Conversion.decimalRegex] <> ")"

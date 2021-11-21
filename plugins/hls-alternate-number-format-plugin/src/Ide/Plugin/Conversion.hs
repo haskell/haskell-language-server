@@ -10,6 +10,14 @@ module Ide.Plugin.Conversion (
     , matchLineRegex
     , toFormatTypes
     , FormatType
+    , generateNumDecimal
+    , toNumDecimal
+    , toBinary
+    , toOctal
+    , toHex
+    , toHexFloat
+    , toFloatDecimal
+    , toFloatExpDecimal
 ) where
 
 import           Data.Char                     (toUpper)
@@ -90,7 +98,7 @@ hexRegex = "0[xX][a-fA-F0-9]+"
 
 -- | Regex to match a Haskell Hex Float Literal
 hexFloatRegex :: Text
-hexFloatRegex = "0[xX][a-fA-F0-9]+\\.[a-fA-F0-9]+(p[+-]?[0-9]+)?"
+hexFloatRegex = "0[xX][a-fA-F0-9]+(\\.)?[a-fA-F0-9]*(p[+-]?[0-9]+)?"
 
 -- | Regex to match a Haskell Binary Literal
 binaryRegex :: Text
@@ -102,7 +110,7 @@ octalRegex = "0[oO][0-8]+"
 
 -- | Regex to match a Haskell Decimal Literal (no decimal points)
 decimalRegex :: Text
-decimalRegex = "[0-9]+"
+decimalRegex = "[0-9]+(\\.[0-9]+)?"
 
 -- | Regex to match a Haskell Literal with an explicit exponent
 numDecimalRegex :: Text

@@ -49,8 +49,7 @@ mkQ2 def left right datum = case cast datum of
   Just datum' -> left datum'
   Nothing     -> maybe def right (cast datum)
 
-
-traverseLPat :: LPat GhcPs -> [Literal]
+traverseLPat :: GenLocated SrcSpan (Pat GhcPs) -> [Literal]
 traverseLPat (L sSpan pat) = traversePat sSpan pat
 
 traversePat :: SrcSpan -> Pat GhcPs -> [Literal]
@@ -65,7 +64,7 @@ traversePat sSpan = \case
                                                     <> collectLiterals sexpr2
     ast -> collectLiterals ast
 
-traverseLExpr :: LHsExpr GhcPs -> [Literal]
+traverseLExpr :: GenLocated SrcSpan (HsExpr GhcPs) -> [Literal]
 traverseLExpr (L sSpan hsExpr) = traverseExpr sSpan hsExpr
 
 traverseExpr :: SrcSpan -> HsExpr GhcPs -> [Literal]
