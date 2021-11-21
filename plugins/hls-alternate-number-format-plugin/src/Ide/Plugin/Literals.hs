@@ -3,40 +3,37 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RankNTypes        #-}
 module Ide.Plugin.Literals where
-import           Data.Maybe                    (maybeToList)
+import           Data.Maybe                    (fromMaybe, maybeToList)
 import           Data.Text                     (Text)
 import qualified Data.Text                     as T
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Util      (unsafePrintSDoc)
-import           Development.IDE.Graph.Classes (NFData)
+import           Development.IDE.Graph.Classes (NFData (rnf))
 import qualified GHC.Generics                  as GHC
-import           Generics.SYB
+import           Generics.SYB                  (Data, Typeable, cast,
+                                                everything)
 
 -- data type to capture what type of literal we are dealing with
 -- provides location and possibly source text (for OverLits) as well as it's value
 -- we currently don't have any use for PrimLiterals. They never have source text so we always drop them
-data Literal = IntLiteral      SrcSpan (Maybe Text) Integer
-             | FracLiteral     SrcSpan (Maybe Text) Rational
-             | IntPrimLiteral  SrcSpan (Maybe Text) Integer
-             | FracPrimLiteral SrcSpan (Maybe Text) Rational
+data Literal = IntLiteral      RealSrcSpan Text Integer
+             | FracLiteral     RealSrcSpan Text Rational
              deriving (GHC.Generic, Show)
+
+instance NFData RealSrcSpan where
+    rnf x = x `seq` ()
 
 instance NFData Literal
 
-getSrcText :: Literal -> Maybe Text
+getSrcText :: Literal -> Text
 getSrcText = \case
-  IntLiteral _ txt _      -> txt
-  FracLiteral _ txt _     -> txt
-  IntPrimLiteral _ txt _  -> txt
-  FracPrimLiteral _ txt _ -> txt
+  IntLiteral _ txt _  -> txt
+  FracLiteral _ txt _ -> txt
 
-getSrcSpan :: Literal -> SrcSpan
+getSrcSpan :: Literal -> RealSrcSpan
 getSrcSpan = \case
-    IntLiteral ss _ _      -> ss
-    FracLiteral ss _ _     -> ss
-    IntPrimLiteral ss _ _  -> ss
-    FracPrimLiteral ss _ _ -> ss
-
+    IntLiteral ss _ _  -> ss
+    FracLiteral ss _ _ -> ss
 
 -- | Find all literals in a Parsed Source File
 collectLiterals :: (Data ast, Typeable ast) => ast -> [Literal]
@@ -74,37 +71,42 @@ traverseExpr sSpan = \case
       expr                -> collectLiterals expr
 
 getLiteralAsList :: SrcSpan -> HsLit GhcPs -> [Literal]
-getLiteralAsList sSpan = maybeToList . getLiteral sSpan
+getLiteralAsList sSpan lit =  case sSpan of
+    RealSrcSpan rss _ -> getLiteralAsList' lit rss
+    _                 -> []
+
+getLiteralAsList' :: HsLit GhcPs -> RealSrcSpan -> [Literal]
+getLiteralAsList' lit = maybeToList . flip getLiteral lit
 
 -- Translate from Hs Type to our Literal type
-getLiteral :: SrcSpan -> HsLit GhcPs -> Maybe Literal
+getLiteral :: RealSrcSpan -> HsLit GhcPs -> Maybe Literal
 getLiteral sSpan = \case
-  HsInt _ val                 -> Just $ fromIntegralLit sSpan val
-  HsIntPrim _ val             -> Just $ IntPrimLiteral sSpan Nothing val
-  HsWordPrim _ val            -> Just $ IntPrimLiteral sSpan Nothing val
-  HsInt64Prim _ val           -> Just $ IntPrimLiteral sSpan Nothing val
-  HsWord64Prim _ val          -> Just $ IntPrimLiteral sSpan Nothing val
-  HsInteger _ val _           -> Just $ IntLiteral sSpan Nothing val
-  HsRat _ val _               -> Just $ fromFractionalLit sSpan val
-  HsFloatPrim _ (FL _ _ val)  -> Just $ FracPrimLiteral sSpan Nothing val
-  HsDoublePrim _ (FL _ _ val) -> Just $ FracPrimLiteral sSpan Nothing val
-  _                           -> Nothing
+  HsInt _ val   -> fromIntegralLit sSpan val
+-- Ignore this case for now
+--   HsInteger _ val _           -> Just $ IntLiteral sSpan Nothing val
+  HsRat _ val _ -> fromFractionalLit sSpan val
+  _             -> Nothing
 
 getOverLiteralAsList :: SrcSpan -> HsOverLit GhcPs -> [Literal]
-getOverLiteralAsList sSpan = maybeToList . getOverLiteral sSpan
+getOverLiteralAsList sSpan lit =  case sSpan of
+    RealSrcSpan rss _ -> getOverLiteralAsList' lit rss
+    _                 -> []
 
-getOverLiteral :: SrcSpan -> HsOverLit GhcPs -> Maybe Literal
+getOverLiteralAsList' :: HsOverLit GhcPs -> RealSrcSpan -> [Literal]
+getOverLiteralAsList' lit = maybeToList . flip getOverLiteral lit
+
+getOverLiteral :: RealSrcSpan -> HsOverLit GhcPs -> Maybe Literal
 getOverLiteral sSpan OverLit{..} = case ol_val of
-  HsIntegral il   -> Just $ fromIntegralLit sSpan il
-  HsFractional fl -> Just $ fromFractionalLit sSpan fl
+  HsIntegral il   -> fromIntegralLit sSpan il
+  HsFractional fl -> fromFractionalLit sSpan fl
   _               -> Nothing
 getOverLiteral _ _ = Nothing
 
-fromIntegralLit :: SrcSpan -> IntegralLit -> Literal
-fromIntegralLit s (IL txt _ val) = IntLiteral s (fromSourceText txt) val
+fromIntegralLit :: RealSrcSpan -> IntegralLit -> Maybe Literal
+fromIntegralLit s (IL txt _ val) = fmap (\txt' -> IntLiteral s txt' val) (fromSourceText txt)
 
-fromFractionalLit  :: SrcSpan -> FractionalLit -> Literal
-fromFractionalLit s (FL txt _ val) = FracLiteral s (fromSourceText txt) val
+fromFractionalLit  :: RealSrcSpan -> FractionalLit -> Maybe Literal
+fromFractionalLit s (FL txt _ val) = fmap (\txt' -> FracLiteral s txt' val) (fromSourceText txt)
 
 fromSourceText :: SourceText -> Maybe Text
 fromSourceText = \case

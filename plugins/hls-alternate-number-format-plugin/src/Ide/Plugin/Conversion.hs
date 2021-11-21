@@ -64,11 +64,10 @@ instance NFData AnyFormatType
 -- | Generate alternate formats for a single Literal based on FormatType's given.
 alternateFormat :: [FormatType] -> Literal -> [Text]
 alternateFormat fmts lit = case lit of
-  IntLiteral _ (Just _) val  -> concatMap (alternateIntFormat val) (removeCurrentFormat lit fmts)
-  FracLiteral _ (Just _) val -> if denominator val == 1 -- floats that can be integers we can represent as ints
+  IntLiteral _ _ val  -> concatMap (alternateIntFormat val) (removeCurrentFormat lit fmts)
+  FracLiteral _ _  val -> if denominator val == 1 -- floats that can be integers we can represent as ints
       then concatMap (alternateIntFormat (numerator val)) (removeCurrentFormat lit fmts)
       else concatMap (alternateFracFormat val) (removeCurrentFormat lit fmts)
-  _                          -> [] -- This means there is no Source Text so we just ignore it
 
 alternateIntFormat :: Integer -> FormatType -> [Text]
 alternateIntFormat val fmt = case fmt of
@@ -88,9 +87,8 @@ alternateFracFormat val fmt = case fmt of
   _                         -> []
 
 removeCurrentFormat :: Literal -> [FormatType] -> [FormatType]
-removeCurrentFormat lit fmts = case getSrcText lit of
-    Just src -> foldl (flip delete) fmts (sourceToFormatType src)
-    Nothing  -> fmts
+removeCurrentFormat lit fmts = let srcText = getSrcText lit
+                                in foldl (flip delete) fmts (sourceToFormatType srcText)
 
 -- | Regex to match a Haskell Hex Literal
 hexRegex :: Text
@@ -136,8 +134,9 @@ sourceToFormatType srcText
 
 -- | Translate a list of Extensions into Format Types (plus a base set of Formats)
 toFormatTypes :: [Extension] -> [FormatType]
-toFormatTypes =  (<>) [IntFormat HexFormat, IntFormat OctalFormat, FracFormat ExponentFormat, AnyFormat DecimalFormat]
-                 . mapMaybe (`lookup` numericPairs)
+toFormatTypes =  (<>) baseFormatTypes . mapMaybe (`lookup` numericPairs)
+    where
+        baseFormatTypes = [IntFormat HexFormat, IntFormat OctalFormat, FracFormat ExponentFormat, AnyFormat DecimalFormat]
 
 -- current list of Numeric related extensions
 -- LexicalNegation --- 9.0.1 > --- superset of NegativeLiterals

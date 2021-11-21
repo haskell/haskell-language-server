@@ -15,9 +15,9 @@ import qualified Data.Text                            as T
 import           Development.IDE                      (GetParsedModule (GetParsedModule),
                                                        IdeState, RuleResult,
                                                        Rules, define, ideLogger,
-                                                       isInsideSrcSpan, noRange,
-                                                       runAction,
-                                                       srcSpanToRange, use,
+                                                       noRange,
+                                                       realSrcSpanToRange,
+                                                       runAction, use,
                                                        useWithStale)
 import           Development.IDE.Core.PositionMapping (PositionMapping)
 import           Development.IDE.GHC.Compat           hiding (getSrcSpan)
@@ -77,7 +77,7 @@ codeActionHandler state _ (CodeActionParams _ _ docId currRange _) = response $ 
     nfp <- getNormalizedFilePath docId
     CLR{..} <- requestLiterals state nfp
         -- remove any invalid literals (see validTarget comment)
-    let litsInRange = filter validTarget literals
+    let litsInRange = filter inCurrentRange literals
         -- generate alternateFormats and zip with the literal that generated the alternates
         literalPairs = map (\lit -> (lit, alternateFormat formatTypes lit)) litsInRange
         -- make a code action for every literal and its' alternates (then flatten the result)
@@ -88,17 +88,13 @@ codeActionHandler state _ (CodeActionParams _ _ docId currRange _) = response $ 
 
     pure $ List actions
     where
-        getSrcTextDefault = fromMaybe "" . getSrcText
-        -- for now we ignore literals with no attached source text/span (TH I believe)
-        validTarget :: Literal -> Bool
-        validTarget lit = let srcSpan = getSrcSpan lit
+        inCurrentRange :: Literal -> Bool
+        inCurrentRange lit = let srcSpan = getSrcSpan lit
                               in currRange `contains` srcSpan
-                                 && isJust (getSrcText lit)
-                                 && isRealSrcSpan srcSpan
 
         mkCodeAction :: NormalizedFilePath -> Literal -> Text -> Command |? CodeAction
         mkCodeAction nfp lit alt = InR CodeAction {
-            _title = "Convert " <> getSrcTextDefault lit <> " into " <> alt
+            _title = "Convert " <> getSrcText lit <> " into " <> alt
             -- what should this actually be?
             , _kind = Just $ CodeActionUnknown "alternate.style"
             , _diagnostics = Nothing
@@ -113,12 +109,15 @@ codeActionHandler state _ (CodeActionParams _ _ docId currRange _) = response $ 
         mkWorkspaceEdit nfp lit alt = WorkspaceEdit changes Nothing Nothing
             where
                 -- NOTE: currently our logic filters our any noRange possibilities
-                txtEdit = TextEdit (fromMaybe noRange $ srcSpanToRange $ getSrcSpan lit) alt
+                txtEdit = TextEdit (realSrcSpanToRange $ getSrcSpan lit) alt
                 changes = Just $ HashMap.fromList [( filePathToUri $ fromNormalizedFilePath nfp, List [txtEdit])]
 
 -- from HaddockComments.hs
-contains :: Range -> SrcSpan -> Bool
-contains Range {_start, _end} x = isInsideSrcSpan _start x || isInsideSrcSpan _end x
+contains :: Range -> RealSrcSpan -> Bool
+contains Range {_start, _end} x = isInsideRealSrcSpan _start x || isInsideRealSrcSpan _end x
+
+isInsideRealSrcSpan :: Position -> RealSrcSpan -> Bool
+p `isInsideRealSrcSpan` r = let (Range sp ep) = realSrcSpanToRange r in sp <= p && p <= ep
 
 -- a source span that provides no meaningful information is NOT a valid source span for our use case
 isRealSrcSpan :: SrcSpan -> Bool
