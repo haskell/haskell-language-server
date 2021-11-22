@@ -237,4 +237,4 @@ You need to provide your own GHC/Cabal/Stack as required by your project, possib
 
 ## Installation using nix
 
-You can read full instructions on how to install HLS with nix in [haskell2nix documentation](https://haskell4nix.readthedocs.io/nixpkgs-users-guide.html#how-to-install-haskell-language-server).
+You can read full instructions on how to install HLS with nix in [haskell4nix documentation](https://haskell4nix.readthedocs.io/nixpkgs-users-guide.html#how-to-install-haskell-language-server).
