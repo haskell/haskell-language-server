@@ -540,8 +540,7 @@ runGetSession st nfp = liftIO $ runAction "eval" st $ do
     ((_, res),_) <- liftIO $ loadSessionFun fp
     let env = fromMaybe (error $ "Unknown file: " <> fp) res
         ghcSessionDepsConfig = def
-            { forceLinkables = True
-            , checkForImportCycles = False
+            { checkForImportCycles = False
             , fullModSummary = True
             }
     res <- fmap hscEnvWithImportPaths <$> ghcSessionDepsDefinition ghcSessionDepsConfig env nfp
