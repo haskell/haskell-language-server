@@ -148,8 +148,6 @@ import           Ide.Plugin.Properties                        (HasProperty,
 import           Ide.PluginUtils                              (configForPlugin)
 import           Ide.Types                                    (DynFlagsModifications (dynFlagsModifyGlobal, dynFlagsModifyParser),
                                                                PluginId)
-import System.FilePath ((<.>))
-import GHC (ms_mod_name)
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
