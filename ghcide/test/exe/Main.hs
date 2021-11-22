@@ -4018,6 +4018,7 @@ thTests =
         _ <- createDoc "B.hs" "haskell" sourceB
         return ()
     , thReloadingTest False
+    , thLoadingTest
     , ignoreInWindowsBecause "Broken in windows" $ thReloadingTest True
     -- Regression test for https://github.com/haskell/haskell-language-server/issues/891
     , thLinkingTest False
@@ -4054,6 +4055,14 @@ thTests =
     _ <- openDoc cPath "haskell"
     expectDiagnostics [ ( cPath, [(DsWarning, (3, 0), "Top-level binding with no type signature: a :: A")] ) ]
     ]
+
+-- | Test that all modules have linkables
+thLoadingTest :: TestTree
+thLoadingTest = testCase "Loading linkables" $ runWithExtraFiles "THLoading" $ \dir -> do
+    let thb = dir </> "THB.hs"
+    _ <- openDoc thb "haskell"
+    expectNoMoreDiagnostics 1
+
 
 -- | test that TH is reevaluated on typecheck
 thReloadingTest :: Bool -> TestTree
