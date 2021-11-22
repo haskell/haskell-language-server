@@ -260,7 +260,7 @@ common splice
 
 common alternateNumberFormat
   if flag(alternateNumberFormat)
-    build-depends: hls-alternate-number-format-plugin ^>=0.1.0.0
+    build-depends: hls-alternate-number-format-plugin ^>=1.0.0.0
     cpp-options: -DalternateNumberFormat
 
 -- formatters
