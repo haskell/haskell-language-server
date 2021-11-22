@@ -49,6 +49,24 @@ test = testGroup "alternateNumberFormat" [
         liftIO $ length actions @?= 4
     , codeActionProperties "TFindLiteralList" [(3, 28)] $ \actions -> do
         liftIO $ length actions @?= 2
+    , codeActionProperties "TExpectNoBinaryFormat" [(3, 12)] $ \actions -> do
+        liftIO $ length actions @?= 2
+        liftIO $ actions `doesNotContain` binaryRegex @? "Contains binary codeAction"
+    , codeActionProperties "TExpectBinaryFormat" [(4, 10)] $ \actions -> do
+        liftIO $ length actions @?= 3
+        liftIO $ actions `contains` binaryRegex @? "Does not contain binary codeAction"
+    , codeActionProperties "TExpectNoHexFloatFormat" [(3, 14)] $ \actions -> do
+        liftIO $ length actions @?= 1
+        liftIO $ actions `doesNotContain` hexFloatRegex @? "Contains hex float codeAction"
+    , codeActionProperties "TExpectHexFloatFormat" [(4, 12)] $ \actions -> do
+        liftIO $ length actions @?= 2
+        liftIO $ actions `contains` hexFloatRegex @? "Does not contain hex float codeAction"
+    , codeActionProperties "TExpectNoNumDecimalFormat" [(3, 16)] $ \actions -> do
+        liftIO $ length actions @?= 2
+        liftIO $ actions `doesNotContain` numDecimalRegex @? "Contains numDecimal codeAction"
+    , codeActionProperties "TExpectNumDecimalFormat" [(4, 14)] $ \actions -> do
+        liftIO $ length actions @?= 5
+        liftIO $ actions `contains` numDecimalRegex @? "Contains numDecimal codeAction"
     , conversions
     ]
 
@@ -85,7 +103,6 @@ codeActionTest filter' fp line col = goldenAlternateFormat fp $ \doc -> do
     Just (InR x) -> executeCodeAction x
     _            -> liftIO $ assertFailure "Unable to find CodeAction"
 
-
 codeActionDecimal :: FilePath -> Int -> Int -> TestTree
 codeActionDecimal = codeActionTest isDecimalCodeAction
 
@@ -111,11 +128,20 @@ codeActionTitle :: (Command |? CodeAction) -> Maybe Text
 codeActionTitle (InR CodeAction {_title}) = Just _title
 codeActionTitle _                         = Nothing
 
+codeActionTitle' :: CodeAction -> Text
+codeActionTitle' CodeAction{_title} = _title
+
 pointRange :: Int -> Int -> Range
 pointRange
   (subtract 1 -> line)
   (subtract 1 -> col) =
     Range (Position line col) (Position line $ col + 1)
+
+contains :: [CodeAction] -> Text -> Bool
+acts `contains` regex = any (\action -> codeActionTitle' action =~ regex) acts
+
+doesNotContain :: [CodeAction] -> Text -> Bool
+acts `doesNotContain` regex = not $ acts `contains` regex
 
 convertPrefix, intoInfix, hexRegex, hexFloatRegex, binaryRegex, octalRegex, numDecimalRegex, decimalRegex :: Text
 convertPrefix = "Convert (" <> T.intercalate "|" [Conversion.hexRegex, Conversion.hexFloatRegex, Conversion.binaryRegex, Conversion.octalRegex, Conversion.numDecimalRegex, Conversion.decimalRegex] <> ")"

@@ -17,4 +17,8 @@ cradle:
       - TFindLiteralDoReturn
       - TFindLiteralDoLet
       - TFindLiteralList
+      - TExpectNoBinaryFormat
+      - TExpectBinaryFormat
+      - TExpectNoHexFloatFormat
+      - TExpectHexFloatFormat
       - -Wall
