@@ -252,10 +252,6 @@ type instance RuleResult GetModIfaceFromDiskAndIndex = HiFileResult
 -- | Get a module interface details, either from an interface file or a typechecked module
 type instance RuleResult GetModIface = HiFileResult
 
--- | Get a module interface details, without the Linkable
--- For better early cuttoff
-type instance RuleResult GetModIfaceWithoutLinkable = HiFileResult
-
 -- | Get the contents of a file, either dirty (if the buffer is modified) or Nothing to mean use from disk.
 type instance RuleResult GetFileContents = (FileVersion, Maybe Text)
 
@@ -429,11 +425,6 @@ data GetModIface = GetModIface
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetModIface
 instance NFData   GetModIface
-
-data GetModIfaceWithoutLinkable = GetModIfaceWithoutLinkable
-    deriving (Eq, Show, Typeable, Generic)
-instance Hashable GetModIfaceWithoutLinkable
-instance NFData   GetModIfaceWithoutLinkable
 
 data IsFileOfInterest = IsFileOfInterest
     deriving (Eq, Show, Typeable, Generic)
