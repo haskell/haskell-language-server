@@ -1,7 +1,7 @@
 cabal-version:      2.4
 category:           Development
 name:               hls-tactics-plugin
-version:            1.5.0.0
+version:            1.5.0.1
 synopsis:           Wingman plugin for Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
