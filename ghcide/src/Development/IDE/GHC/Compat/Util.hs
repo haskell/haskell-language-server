@@ -62,6 +62,7 @@ module Development.IDE.GHC.Compat.Util (
     -- * UniqDFM
     emptyUDFM,
     plusUDFM,
+    plusUDFM_C,
     -- * String Buffer
     StringBuffer(..),
     hGetStringBuffer,
