@@ -160,14 +160,14 @@ against hackage head if the package version in the branch is different from hack
 If the package in the branch has the same version as the released one, it will check
 the relevant files have not changed and will throw an error otherwise.
 
-You can trigger a build only doing the above step pushing a branch named `*-check-hackage`.
+You can trigger a build which only does the above step by pushing a branch named `${version}-check-hackage`.
 
 The script will upload the tarballs as candidates, maintainers will have to check and publish them definitely.
 
 ## haskell gitlab release pipeline
 
 The project is present in the haskell gitlab server: https://gitlab.haskell.org/haskell/haskell-language-server
-The main motivation is leverage the ci infrastructure which includes architectures not included in the github ci.
+The main motivation is to leverage the ci infrastructure which includes architectures not included in the github ci.
 The specific architectures only available through gitlab are: `armv7-linux`, `x86_64-freebsd`, `aarch64-darwin`, `aarch64-linux`
 The gitlab pipeline uses the configuration file [.gitlab-ci.yml](https://github.com/haskell/haskell-language-server/blob/master/.gitlab-ci.yml)
 and the sh/nix scripts in [.gitlab](https://github.com/haskell/haskell-language-server/tree/master/.gitlab)
