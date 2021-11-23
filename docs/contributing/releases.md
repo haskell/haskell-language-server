@@ -29,7 +29,7 @@ and it is being used in nix environments.
 - [ ] bump up versions of changed packages. All are optional but [haskell-language-server itself](https://github.com/haskell/haskell-language-server/blob/master/haskell-language-server.cabal).
 - [ ] create the tag and make an initial prerelease to trigger the ci workflow (see details below)
 - [ ] contact ghcup team (#haskell-ghcup irc channel or via its [repo](https://gitlab.haskell.org/haskell/ghcup-hs/-/issues)) to try to sync our release and its inclusion in ghcup
-- [ ] check uploaded binaries (see windows note below) and the release description (usually the changelog entry) and uncheck the prerelease box
+- [ ] in the github release edit page, check the attached binaries and the release description (usually the changelog entry) and uncheck the prerelease box
 - [ ] make public the release in the usual social channels (not required but useful to spread the word :slightly_smiling_face:):
   - [ ] irc
   - [ ] matrix
