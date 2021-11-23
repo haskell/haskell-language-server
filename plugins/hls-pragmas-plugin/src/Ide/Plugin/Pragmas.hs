@@ -1,7 +1,11 @@
+{-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE MultiWayIf            #-}
 {-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE TupleSections         #-}
+{-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE ViewPatterns          #-}
 
@@ -10,24 +14,36 @@ module Ide.Plugin.Pragmas
   ( descriptor
   ) where
 
-import           Control.Applicative        ((<|>))
-import           Control.Lens               hiding (List)
-import           Control.Monad              (join)
-import           Control.Monad.IO.Class     (MonadIO (liftIO))
-import           Data.Char                  (isSpace)
-import qualified Data.HashMap.Strict        as H
+import           Control.Applicative              ((<|>))
+import           Control.Lens                     hiding (List)
+import           Control.Monad                    (join)
+import           Control.Monad.IO.Class           (MonadIO (liftIO))
+import           Control.Monad.Trans.State.Strict (State)
+import qualified Data.Attoparsec.Text             as Atto
+import           Data.Char                        (isSpace)
+import qualified Data.Char                        as Char
+import           Data.Coerce                      (coerce)
+import           Data.Functor                     (void, ($>))
+import qualified Data.HashMap.Strict              as H
 import           Data.List
-import           Data.List.Extra            (nubOrdOn)
-import           Data.Maybe                 (catMaybes, listToMaybe)
-import qualified Data.Text                  as T
-import           Development.IDE            as D
+import           Data.List.Extra                  (nubOrdOn)
+import qualified Data.Map.Strict                  as Map
+import           Data.Maybe                       (catMaybes, listToMaybe,
+                                                   mapMaybe)
+import qualified Data.Maybe                       as Maybe
+import           Data.Monoid                      (Endo (Endo, appEndo))
+import           Data.Ord                         (Down (Down))
+import qualified Data.Text                        as T
+import           Development.IDE                  as D
 import           Development.IDE.GHC.Compat
 import           Ide.Types
-import qualified Language.LSP.Server        as LSP
-import qualified Language.LSP.Types         as J
-import qualified Language.LSP.Types.Lens    as J
-import qualified Language.LSP.VFS           as VFS
-import qualified Text.Fuzzy                 as Fuzzy
+import qualified Language.LSP.Server              as LSP
+import qualified Language.LSP.Types               as J
+import qualified Language.LSP.Types.Lens          as J
+import qualified Language.LSP.VFS                 as VFS
+import qualified Text.Fuzzy                       as Fuzzy
+-- import GHC.Exts (Proxy#, proxy#)
+-- import Text.Heredoc (here)
 
 -- ---------------------------------------------------------------------
 
@@ -38,7 +54,6 @@ descriptor plId = (defaultPluginDescriptor plId)
   }
 
 -- ---------------------------------------------------------------------
-
 -- | Title and pragma
 type PragmaEdit = (T.Text, Pragma)
 
@@ -52,7 +67,8 @@ codeActionProvider state _plId (J.CodeActionParams _ _ docId _ (J.CodeActionCont
   pm <- liftIO $ fmap join $ runAction "Pragmas.GetParsedModule" state $ getParsedModule `traverse` mFile
   mbContents <- liftIO $ fmap (snd =<<) $ runAction "Pragmas.GetFileContents" state $ getFileContents `traverse` mFile
   let dflags = ms_hspp_opts . pm_mod_summary <$> pm
-      insertRange = maybe (Range (Position 0 0) (Position 0 0)) findNextPragmaPosition mbContents
+      insertLine = maybe 0 getNextPragmaInsertLine mbContents
+      insertRange = Range (Position insertLine 0) (Position insertLine 0)
       pedits = nubOrdOn snd . concat $ suggest dflags <$> diags
   return $ Right $ List $ pragmaEditToAction uri insertRange <$> pedits
 
@@ -149,7 +165,6 @@ allPragmas =
   ]
 
 -- ---------------------------------------------------------------------
-
 flags :: [T.Text]
 flags = map (T.pack . stripLeading '-') $ flagsForCompletion False
 
@@ -217,7 +232,7 @@ validPragmas mSuffix =
   ]
   where suffix = case mSuffix of
                   (Just s) -> s
-                  Nothing -> ""
+                  Nothing  -> ""
 
 
 mkPragmaCompl :: T.Text -> T.Text -> T.Text -> J.CompletionItem
@@ -225,35 +240,6 @@ mkPragmaCompl insertText label detail =
   J.CompletionItem label (Just J.CiKeyword) Nothing (Just detail)
     Nothing Nothing Nothing Nothing Nothing (Just insertText) (Just J.Snippet)
     Nothing Nothing Nothing Nothing Nothing Nothing
-
--- | Find first line after the last file header pragma
--- Defaults to line 0 if the file contains no shebang(s), OPTIONS_GHC pragma(s), or LANGUAGE pragma(s)
--- Otherwise it will be one after the count of line numbers, checking in order: Shebangs -> OPTIONS_GHC -> LANGUAGE
--- Taking the max of these to account for the possibility of interchanging order of these three Pragma types
-findNextPragmaPosition :: T.Text -> Range
-findNextPragmaPosition contents = Range loc loc
-  where
-    loc = Position line 0
-    line = afterLangPragma . afterOptsGhc $ afterShebang
-    afterLangPragma = afterPragma "LANGUAGE" contents'
-    afterOptsGhc = afterPragma "OPTIONS_GHC" contents'
-    afterShebang = lastLineWithPrefix (T.isPrefixOf "#!") contents' 0
-    contents' = T.lines contents
-
-afterPragma :: T.Text -> [T.Text] -> Int -> Int
-afterPragma name contents lineNum = lastLineWithPrefix (checkPragma name) contents lineNum
-
-lastLineWithPrefix :: (T.Text -> Bool) -> [T.Text] -> Int -> Int
-lastLineWithPrefix p contents lineNum = max lineNum next
-  where
-    next = maybe lineNum succ $ listToMaybe . reverse $ findIndices p contents
-
-checkPragma :: T.Text -> T.Text -> Bool
-checkPragma name = check
-  where
-    check l = isPragma l && getName l == name
-    getName l = T.take (T.length name) $ T.dropWhile isSpace $ T.drop 3 l
-    isPragma = T.isPrefixOf "{-#"
 
 
 stripLeading :: Char -> String -> String
@@ -268,3 +254,199 @@ mkExtCompl label =
   J.CompletionItem label (Just J.CiKeyword) Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing Nothing
+
+-- Parser
+data LineType = LineTypeBlank | LineTypeComment | LineTypePragma | LineTypeHash | LineTypeShebang deriving Show
+
+data InsertMode = InsertModeInitial | InsertModeComment | InsertModeHaddock | InsertModePragma deriving Show
+
+data ParserState = ParserState {
+  pragmaInsertLine    :: !Int,
+  lineCount           :: !Int,
+  insertMode          :: !InsertMode,
+  lineType            :: !LineType,
+  isAfterBlockComment :: !Bool,
+  isAfterPragma       :: !Bool
+} deriving Show
+
+type ParserStateUpdater = ParserState -> ParserState
+
+incrementLines :: Int -> ParserStateUpdater
+incrementLines n state@ParserState{ lineCount = prevLineCount
+                                  , insertMode
+                                  , lineType
+                                  , isAfterBlockComment
+                                  , isAfterPragma } =
+  let
+    lineCount = prevLineCount + n
+    pragmaInsertLine = lineCount
+    stateWithIncrementedLineCount = state { lineCount = lineCount }
+  in
+    case insertMode of
+      InsertModeInitial ->
+        case lineType of
+          LineTypeShebang -> stateWithIncrementedLineCount { pragmaInsertLine = pragmaInsertLine }
+          LineTypeComment -> stateWithIncrementedLineCount { pragmaInsertLine = pragmaInsertLine, insertMode = InsertModeComment }
+          LineTypePragma -> stateWithIncrementedLineCount { pragmaInsertLine = pragmaInsertLine, insertMode = InsertModePragma }
+          _ -> stateWithIncrementedLineCount
+      InsertModeComment ->
+        case lineType of
+          LineTypeBlank | isAfterBlockComment -> stateWithIncrementedLineCount { pragmaInsertLine = prevLineCount + 1 }
+          LineTypeComment -> stateWithIncrementedLineCount { pragmaInsertLine = pragmaInsertLine }
+          LineTypePragma -> stateWithIncrementedLineCount { pragmaInsertLine = pragmaInsertLine, insertMode = InsertModePragma }
+          _ -> stateWithIncrementedLineCount
+      InsertModeHaddock ->
+        case lineType of
+          LineTypePragma -> stateWithIncrementedLineCount { pragmaInsertLine = pragmaInsertLine, insertMode = InsertModePragma }
+          _ -> stateWithIncrementedLineCount
+      InsertModePragma ->
+        case lineType of
+          LineTypeBlank | isAfterPragma -> stateWithIncrementedLineCount { pragmaInsertLine = prevLineCount + 1 }
+          LineTypeComment | isAfterPragma -> stateWithIncrementedLineCount { pragmaInsertLine = pragmaInsertLine }
+          LineTypePragma -> stateWithIncrementedLineCount { pragmaInsertLine = pragmaInsertLine }
+          _ -> stateWithIncrementedLineCount
+
+incrementLine :: ParserStateUpdater
+incrementLine = incrementLines 1
+
+setLineType :: LineType -> ParserStateUpdater
+setLineType lineType1 state = state { lineType = lineType1 }
+
+updateInsertMode :: InsertMode -> ParserStateUpdater
+updateInsertMode insertMode state@ParserState{ insertMode = prevInsertMode } =
+  case prevInsertMode of
+    InsertModeInitial -> state { insertMode = insertMode }
+    InsertModeComment ->
+      case insertMode of
+        InsertModeHaddock -> state { insertMode = insertMode }
+        InsertModePragma  -> state { insertMode = insertMode }
+        _                 -> state
+    InsertModeHaddock ->
+      case insertMode of
+        InsertModePragma -> state {insertMode = insertMode}
+        _                -> state
+    InsertModePragma -> state
+
+setIsAfterBlockComment :: Bool -> ParserStateUpdater
+setIsAfterBlockComment isAfterBlockComment state =
+  state { isAfterBlockComment = isAfterBlockComment }
+
+setIsAfterPragma :: Bool -> ParserStateUpdater
+setIsAfterPragma isAfterPragma state =
+  state { isAfterPragma = isAfterPragma }
+
+incrementLineThenSetIsAfterBlock :: Bool -> ParserStateUpdater
+incrementLineThenSetIsAfterBlock isAfterBlock =
+  setIsAfterPragma isAfterBlock . setIsAfterBlockComment isAfterBlock . incrementLine
+
+spacesP :: Atto.Parser ParserStateUpdater
+spacesP = Atto.takeWhile Atto.isHorizontalSpace $> id
+
+shebangLineP :: Atto.Parser ParserStateUpdater
+shebangLineP =
+  spacesP
+  *> Atto.string "#!"
+  *> Atto.takeTill Atto.isEndOfLine
+  *> Atto.endOfLine
+  $> (incrementLineThenSetIsAfterBlock False . setLineType LineTypeShebang)
+
+blankLineP :: Atto.Parser ParserStateUpdater
+blankLineP =
+  spacesP
+  *> Atto.endOfLine
+  $> (incrementLineThenSetIsAfterBlock False . setLineType LineTypeBlank)
+
+hashLineP :: Atto.Parser ParserStateUpdater
+hashLineP =
+  spacesP
+  *> Atto.char '#'
+  *> Atto.takeTill Atto.isEndOfLine
+  *> Atto.endOfLine
+  $> (incrementLineThenSetIsAfterBlock False . setLineType LineTypeHash)
+
+lineCommentP :: Atto.Parser ParserStateUpdater
+lineCommentP =
+  spacesP
+  *> Atto.string "--"
+  *> Atto.takeTill Atto.isEndOfLine
+  *> Atto.endOfLine
+  $> (incrementLineThenSetIsAfterBlock False . setLineType LineTypeComment . updateInsertMode InsertModeComment)
+
+lineHaddockP :: Atto.Parser ParserStateUpdater
+lineHaddockP =
+  spacesP
+  *> Atto.string "-- |"
+  *> Atto.takeTill Atto.isEndOfLine
+  *> Atto.endOfLine
+  $> (incrementLineThenSetIsAfterBlock False . setLineType LineTypeComment . updateInsertMode InsertModeHaddock)
+
+tillBlockBreakpointP :: T.Text -> T.Text -> Atto.Parser ParserStateUpdater
+tillBlockBreakpointP openText closeText
+  | Just (openChar, _) <- T.uncons openText
+  , Just (closeChar, _) <- T.uncons closeText =
+      Atto.takeTill (\c -> c == openChar || c == closeChar)
+      & fmap (incrementLines . T.length . T.filter Atto.isEndOfLine)
+  | otherwise = fail "empty open or close breakpoint texts"
+
+finishBlockP :: T.Text -> T.Text -> Atto.Parser ParserStateUpdater
+finishBlockP openText closeText =
+  flip (.)
+  <$> tillBlockBreakpointP openText closeText
+  <*> do
+    endOrStartOrContinue <- Atto.eitherP (Atto.eitherP (void (Atto.string closeText)) (Atto.string openText)) (Atto.take 1)
+    case endOrStartOrContinue of
+      Left (Left _end) -> pure id
+      Left (Right _start) -> flip (.) <$> finishBlockP openText closeText <*> finishBlockP openText closeText
+      Right continue -> finishBlockP openText closeText & fmap (. incrementLines (T.length $ T.filter Atto.isEndOfLine continue))
+
+blockP :: InsertMode -> LineType -> T.Text -> T.Text -> Atto.Parser ParserStateUpdater
+blockP insertMode lineType openText closeText =
+  spacesP
+  *> ( flip (.)
+       <$> (Atto.string openText $> (setLineType lineType . updateInsertMode insertMode ))
+       <*> finishBlockP openText closeText )
+
+blockCommentP :: Atto.Parser ParserStateUpdater
+blockCommentP = blockP InsertModeComment LineTypeComment "{-" "-}" & fmap (setIsAfterBlockComment True .)
+
+blockHaddockP :: Atto.Parser ParserStateUpdater
+blockHaddockP = blockP InsertModeHaddock LineTypeComment "{-|" "-}" & fmap (setIsAfterBlockComment True .)
+
+pragmaP :: Atto.Parser ParserStateUpdater
+pragmaP = blockP InsertModePragma LineTypePragma "{-#" "#-}" & fmap (setIsAfterPragma True .)
+
+preDeclP :: Atto.Parser ParserStateUpdater
+preDeclP =
+  fmap (appEndo . (mconcat . fmap Endo) . reverse)
+       (Atto.many' ( blankLineP
+                 <|> shebangLineP
+                 <|> hashLineP
+                 <|> lineHaddockP
+                 <|> lineCommentP
+                 <|> pragmaP
+                 <|> blockHaddockP
+                 <|> blockCommentP))
+
+-- Parses blank lines, comments, lines that start with "#!", lines that start
+-- with "#", pragma lines.
+-- When it doesn't find one of these things then it's assumed that we've found
+-- a declaration, end-of-file, or parse error and parser stops.
+-- While doing this, the parser keeps track of state in order to place the
+-- next pragma line according to some rules:
+-- 1. If only shebang lines, blank lines - place after last shebang.
+-- 2. If only shebang lines, blank lines, comments - place after last comment.
+-- 3. If only shebang lines, blank lines, comments, pragmas - place after last
+--    pragma.
+-- 4. Ignore hash lines.
+getNextPragmaInsertLine :: T.Text -> Int
+getNextPragmaInsertLine text =
+  let
+    result = Atto.parseOnly preDeclP text & fmap ($ ParserState 0 0 InsertModeInitial LineTypeBlank False False)
+  in
+    case result of
+      Left _                                -> 0
+      Right ParserState{ pragmaInsertLine } -> pragmaInsertLine
+
+
+
+
