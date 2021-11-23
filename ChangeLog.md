@@ -1022,6 +1022,7 @@ This version uses `lsp-1.2.0`, `hls-plugin-api-1.1.0`, and `ghcide-1.2.0.2`.
 This is the celebratory release of Haskell Language Server 1.0.0!
 This release includes a lot of internal changes, bug fixes, leaks plugged, and performance improvements, thanks to all our contributors.
 Among others,
+
 - We added the support for GHC 8.10.4, and removed the support for GHC 8.10.1
     Afterward, we will support upmost 3 patch versions for each minor version of GHC, if no special situation happens.
 - As by hie-bios >= 0.7.3, we use (`${XDG_CACHE_HOME}`)[https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html]`/hie-bios/...` (or similar depends on OS) as a build directory for Cabal.
@@ -1205,7 +1206,7 @@ Among others,
 ([#1266](https://github.com/haskell/haskell-language-server/pull/1266)) by @pepeiborra
 - ghcide: Implements a CodeAction to disambiguate ambiguous symbols
 ([#1264](https://github.com/haskell/haskell-language-server/pull/1264)) by @konn
--  Doctest comment parsing using module annotations in Eval Plugin
+- Doctest comment parsing using module annotations in Eval Plugin
 ([#1232](https://github.com/haskell/haskell-language-server/pull/1232)) by @konn
 - Apply some hlint suggestions, silence some others.
 ([#1227](https://github.com/haskell/haskell-language-server/pull/1227)) by @peterwicksstringfield
@@ -1405,7 +1406,6 @@ And remember, we have a new brand logo, courtesy of @Ailrun :slightly_smiling_fa
 - There had been lot of internal changes:
   - ghcide lives now directly in this repository
   - the test suite has been cleaned and improved (continuing the work done in 0.7.0)
-
 
 Thanks to all contributors and happy new year!
 
@@ -1660,7 +1660,7 @@ There's also plenty of bug fixes, improvements and updates to the underlying too
 If you're eager to try all this out, haskell-language-server is now also installable via [ghcup](https://www.haskell.org/ghcup/):
 
 ```shell
-$ ghcup install hls
+> ghcup install hls
 ```
 
 ### Pull requests merged for 0.5.0
