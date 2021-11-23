@@ -1,11 +1,8 @@
 {-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE MultiWayIf            #-}
 {-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE TupleSections         #-}
-{-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE ViewPatterns          #-}
 
@@ -42,8 +39,6 @@ import qualified Language.LSP.Types               as J
 import qualified Language.LSP.Types.Lens          as J
 import qualified Language.LSP.VFS                 as VFS
 import qualified Text.Fuzzy                       as Fuzzy
--- import GHC.Exts (Proxy#, proxy#)
--- import Text.Heredoc (here)
 
 -- ---------------------------------------------------------------------
 
@@ -427,17 +422,38 @@ preDeclP =
                  <|> blockHaddockP
                  <|> blockCommentP))
 
--- Parses blank lines, comments, lines that start with "#!", lines that start
--- with "#", pragma lines.
+-- | Parses blank lines, comments, haddock comments ("-- |"), lines that start
+-- with "#!", lines that start with "#", pragma lines. It should work with
+-- multi-line comments and pragmas with things after them on the same line, as
+-- well as nested forms of both.
 -- When it doesn't find one of these things then it's assumed that we've found
--- a declaration, end-of-file, or parse error and parser stops.
+-- a declaration, end-of-file, or a ghc parse error, and the parser stops.
+--
 -- While doing this, the parser keeps track of state in order to place the
 -- next pragma line according to some rules:
--- 1. If only shebang lines, blank lines - place after last shebang.
--- 2. If only shebang lines, blank lines, comments - place after last comment.
--- 3. If only shebang lines, blank lines, comments, pragmas - place after last
---    pragma.
--- 4. Ignore hash lines.
+-- - Ignore lines starting with '#' except for shebangs.
+-- - If pragmas exist place after last pragma
+-- - else if haddock comments exist:
+--     - If comments exist place after last comment
+--     - else if shebangs exist place after last shebang
+--     - else place at first line
+-- - else if comments exist place after last comment
+-- - else if shebangs exist place after last shebang
+-- - else place at first line
+--
+-- In particular this means that this is possible:
+-- -- some comment
+-- #! some shebang stuff
+--
+-- After insert:
+--
+-- -- some comment
+-- {-# some pragma #-}
+-- #! some shebang stuff
+--
+-- This should be fine because it makes no sense to have shebangs not at the
+-- top of the file, but can be changed by modifying `insertLines` and/or maybe
+-- changing an `InsertMode`.
 getNextPragmaInsertLine :: T.Text -> Int
 getNextPragmaInsertLine text =
   let
