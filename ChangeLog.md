@@ -1,5 +1,39 @@
 # Changelog for haskell-language-server
 
+## 1.5.1
+
+This is a bug fix release for two regressions found after releasing 1.5.0:
+
+- [#2365](https://github.com/haskell/haskell-language-server/issue/2365): hs-boot files not handled correctly, discovered in the ghc codebase and fixed with [#2377](https://github.com/haskell/haskell-language-server/pull/2377)
+- [#2379](https://github.com/haskell/haskell-language-server/issue/2379): `tried to look at linkable for GetModIfaceWithoutLinkable for NormalizedFilePath...` error handling template haskell, fixed with [#2380](https://github.com/haskell/haskell-language-server/pull/2380)
+
+Both quick fixes thanks to @pepeiborra
+
+Also it fixes some long standing bugs in the hlint plugin due to comments being ignored (see [#2366](https://github.com/haskell/haskell-language-server/pull/2366))
+
+### Pull requests merged for 1.5.1
+
+- Revert "Update to latest prettyprinter API (#2352)"
+([#2389](https://github.com/haskell/haskell-language-server/pull/2389)) by @pepeiborra
+- Add extra logging around build queue
+([#2388](https://github.com/haskell/haskell-language-server/pull/2388)) by @pepeiborra
+- docs: Fix typo
+([#2386](https://github.com/haskell/haskell-language-server/pull/2386)) by @nh2
+- ghcide: Update dependency on `hls-plugin-api`
+([#2382](https://github.com/haskell/haskell-language-server/pull/2382)) by @hololeap
+- Fix regression in GhcSessionDeps
+([#2380](https://github.com/haskell/haskell-language-server/pull/2380)) by @pepeiborra
+- Boot files
+([#2377](https://github.com/haskell/haskell-language-server/pull/2377)) by @pepeiborra
+- hls-module-name-plugin: Add missing golden file to hackage tarball
+([#2374](https://github.com/haskell/haskell-language-server/pull/2374)) by @maralorn
+- hls-explicit-imports-plugin: Add golden files to hackage tarball
+([#2373](https://github.com/haskell/haskell-language-server/pull/2373)) by @maralorn
+- Update ghcide dependency for various plugins
+([#2368](https://github.com/haskell/haskell-language-server/pull/2368)) by @hololeap
+- Fix several hlint issues related with the use of parsed module without comments
+([#2366](https://github.com/haskell/haskell-language-server/pull/2366)) by @jneira
+
 ## 1.5.0
 
 Time for another hls release:
@@ -22,6 +56,8 @@ Time for another hls release:
 
 ### Pull requests merged for 1.5.0
 
+- Prepare 1.5.0
+([#2361](https://github.com/haskell/haskell-language-server/pull/2361)) by @jneira
 - More completion fixes
 ([#2354](https://github.com/haskell/haskell-language-server/pull/2354)) by @pepeiborra
 - Update to latest prettyprinter API
