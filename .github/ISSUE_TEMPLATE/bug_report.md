@@ -9,7 +9,7 @@ assignees: ''
 
 <!--
 If you encounter a bug or you have a support question, please try to fill out some of the information below.
-Please take a look to the [troubleshooting guide](https://haskell-language-server.readthedocs.io/en/latest/troubleshooting.html) before filling this new one.
+Please take a look at the [troubleshooting guide](https://haskell-language-server.readthedocs.io/en/latest/troubleshooting.html) before filing a new issue.
 The information below is meant to help debugging issues but is no prerequisite for opening an issue.
 -->
 
