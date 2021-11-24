@@ -45,7 +45,7 @@ extra-deps:
   - ghc-exactprint-0.6.4
   - ghc-source-gen-0.4.1.0
   - heapsize-0.3.0
-  - implicit-hie-cradle-0.4.0.0
+  - implicit-hie-cradle-0.4.0.2
   - implicit-hie-0.1.2.6
   - monad-dijkstra-0.1.1.2
   # For stylish-haskell-0.12.2.0
