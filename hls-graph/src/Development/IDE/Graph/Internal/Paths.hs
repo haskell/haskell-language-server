@@ -12,10 +12,10 @@ import           System.Environment   (getExecutablePath)
 import           System.FilePath      (takeDirectory, (</>))
 import           System.IO.Unsafe     (unsafePerformIO)
 #endif
+import qualified Data.ByteString.Lazy as LBS
 
 #ifdef FILE_EMBED
 import qualified Data.ByteString      as BS
-import qualified Data.ByteString.Lazy as LBS
 import           Data.FileEmbed
 
 htmlDataFiles :: [(FilePath, BS.ByteString)]
