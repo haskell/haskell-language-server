@@ -8,9 +8,9 @@ assignees: ''
 ---
 
 <!--
-If you encounter a bug or you have a support question, please try to fill out some of the information below.
-Please take a look at the [troubleshooting guide](https://haskell-language-server.readthedocs.io/en/latest/troubleshooting.html) before filing a new issue.
-The information below is meant to help debugging issues but is no prerequisite for opening an issue.
+Before opening an issue, please take a look at the [troubleshooting guide](https://haskell-language-server.readthedocs.io/en/latest/troubleshooting.html). This explains some common issues and will also help you to find the information that the issue template asks for.
+
+When filing an issue, please fill out as much of the information below as you can. This helps us to debug your issue, but is not required!
 -->
 
 ### Your environment
