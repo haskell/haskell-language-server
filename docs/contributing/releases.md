@@ -16,23 +16,38 @@ and it is being used in nix environments.
 
 ## Minimal checklist
 
+### prerelease sanity checks
+
+- [ ] create a branch named `${version}-check-hackage`: it will trigger the hackage workflow *without* uploading the packages
+- [ ] trigger the build workflow pushing a branch named `${version}-check-build`
+- [ ] create a prerelease tag `${version}-check-gitlab` and push it to the [project repo in gitlab](https://gitlab.haskell.org/haskell/haskell-language-server) to check the build is fine
 ### github release
 
-* [ ] generate the list of pull requests finished since the last release using the [haskell script](https://github.com/haskell/haskell-language-server/blob/master/GenChangelogs.hs) in the project root.
+- [ ] generate the list of pull requests finished since the last release using the [haskell script](https://github.com/haskell/haskell-language-server/blob/master/GenChangelogs.hs) in the project root.
   Nix users should run command `gen-hls-changelogs` (a wrapper of the script) in nix-shell instead.
-* [ ] add that list to the actual [Changelog](https://github.com/haskell/haskell-language-server/blob/master/ChangeLog.md) with a description of the release.
-* [ ] bump up versions of changed packages. All are optional but [haskell-language-server itself](https://github.com/haskell/haskell-language-server/blob/master/haskell-language-server.cabal).
-* [ ] create the tag and make an initial prerelease to trigger the ci workflow (see details below)
-* [ ] contact ghcup team (#haskell-ghcup irc channel or via its [repo](https://gitlab.haskell.org/haskell/ghcup-hs/-/issues)) to try to sync our release and its inclusion in ghcup
-* [ ] check uploaded binaries (see windows note below) and the release description (usually the changelog entry) and uncheck the prerelease box
-* [ ] make public the release in the usual social channels: irc, twitter, reddit, discord, discourse, mailing lists, etc (not required but useful to spread the word :slightly_smiling_face:)
-
+- [ ] add that list to the actual [Changelog](https://github.com/haskell/haskell-language-server/blob/master/ChangeLog.md) with a description of the release.
+- [ ] bump up versions of changed packages. All are optional but [haskell-language-server itself](https://github.com/haskell/haskell-language-server/blob/master/haskell-language-server.cabal).
+- [ ] create the tag and make an initial prerelease to trigger the ci workflow (see details below)
+- [ ] contact ghcup team (#haskell-ghcup irc channel or via its [repo](https://gitlab.haskell.org/haskell/ghcup-hs/-/issues)) to try to sync our release and its inclusion in ghcup
+- [ ] in the github release edit page, check the attached binaries and the release description (usually the changelog entry) and uncheck the prerelease box
+- [ ] make public the release in the usual social channels (not required but useful to spread the word :slightly_smiling_face:):
+  - [ ] irc
+  - [ ] matrix
+  - [ ] twitter
+  - [ ] discord
+  - [ ] discourse
+  - [ ] reddit
 ### hackage release
 
-* [ ] bump up package versions following the [pvp specification](https://pvp.haskell.org/) if they are not already updated
-* [ ] create ${version}-hackage branch to trigger the hackage github workflow which will upload all changed packages to hackage as candidates
-* [ ] check manually candidates in hackage
-* [ ] publish them definitely
+- [ ] bump up package versions following the [pvp specification](https://pvp.haskell.org/) if they are not already updated. You could use [policeman](https://github.com/kowainik/policeman) to help with this step.
+- [ ] create ${version}-hackage branch to trigger the hackage github workflow which will upload all changed packages to hackage as candidates
+- [ ] check manually candidates in hackage
+- [ ] publish them definitely
+
+### ghcup release
+
+* [ ] push the release tag to the [haskell-language-server gitlab repo](https://gitlab.haskell.org/haskell/haskell-language-server) to trigger the build of ghcup specific artifacts
+* [ ] change ghcup metadata to include the new release in https://github.com/haskell/ghcup-metadata
 
 ## Making a new release of haskell-language-server in github
 
@@ -140,11 +155,20 @@ To manually upload a new binary we should:
 We aim to do hackage releases following the github ones described above.
 To help in that job we have added a [github workflow](https://github.com/haskell/haskell-language-server/blob/master/.github/workflows/hackage.yml)
 
-That script checks, generates the tar.gz files, unpacks and builds them in isolation against hackage head
-if the package version in the branch is different from hackage.
-If the package in the branch has the same version as the released one,
-it will check the relevant files have not changed and will throw an error
-otherwise.
+That script checks, generates the tar.gz files, unpacks and builds them in isolation
+against hackage head if the package version in the branch is different from hackage.
+If the package in the branch has the same version as the released one, it will check
+the relevant files have not changed and will throw an error otherwise.
 
-The script will upload the tarballs as candidates, maintainers will have
-to check and publish them definitely.
+You can trigger a build which only does the above step by pushing a branch named `${version}-check-hackage`.
+
+The script will upload the tarballs as candidates, maintainers will have to check and publish them definitely.
+
+## haskell gitlab release pipeline
+
+The project is present in the haskell gitlab server: https://gitlab.haskell.org/haskell/haskell-language-server
+The main motivation is to leverage the ci infrastructure which includes architectures not included in the github ci.
+The specific architectures only available through gitlab are: `armv7-linux`, `x86_64-freebsd`, `aarch64-darwin`, `aarch64-linux`
+The gitlab pipeline uses the configuration file [.gitlab-ci.yml](https://github.com/haskell/haskell-language-server/blob/master/.gitlab-ci.yml)
+and the sh/nix scripts in [.gitlab](https://github.com/haskell/haskell-language-server/tree/master/.gitlab)
+It is triggered by pushing a tag to the gitlab repo.
