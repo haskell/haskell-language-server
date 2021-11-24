@@ -32,8 +32,8 @@ Describe your project (alternative: link to the project):
 <!-- Tell us what happens instead. -->
 
 ### Include debug information
-Execute in the root of your project the command `haskell-language-server-wrapper --debug .` or `haskell-language-server --debug .` and paste the logs here:
-
+Execute in the root of your project the command `haskell-language-server-wrapper --debug .` and paste the logs here:
+(if you are using the vscode extension check the executable location [here](https://github.com/haskell/vscode-haskell#downloaded-binaries))
 <details>
 <summary>
 Debug output:
