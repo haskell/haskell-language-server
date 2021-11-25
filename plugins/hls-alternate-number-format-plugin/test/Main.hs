@@ -13,7 +13,7 @@ import qualified Ide.Plugin.Conversion            as Conversion
 import           Language.LSP.Types               (toEither)
 import           Language.LSP.Types.Lens          (kind)
 import           Properties.Conversion            (conversions)
-import           System.FilePath                  ((</>))
+import           System.FilePath                  ((<.>), (</>))
 import           Test.Hls
 import           Text.Regex.TDFA                  ((=~))
 
@@ -73,7 +73,7 @@ test = testGroup "alternateNumberFormat" [
 codeActionProperties :: TestName -> [(Int, Int)] -> ([CodeAction] -> Session ()) -> TestTree
 codeActionProperties fp locs assertions = testCase fp $ do
     runSessionWithServer alternateNumberFormatPlugin testDataDir $ do
-        openDoc (fp <> ".hs") "haskell" >>= codeActionsFromLocs >>= findAlternateNumberActions >>= assertions
+        openDoc (fp <.> ".hs") "haskell" >>= codeActionsFromLocs >>= findAlternateNumberActions >>= assertions
     where
         -- similar to codeActionTest
         codeActionsFromLocs doc = concat <$> mapM (getCodeActions doc . uncurry pointRange) locs
