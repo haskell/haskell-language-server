@@ -5816,7 +5816,9 @@ runInDir' dir startExeIn startSessionIn extraOptions s = do
   -- Only sets HOME if it wasn't already set.
   setEnv "HOME" "/homeless-shelter" False
   conf <- getConfigFromEnv
-  runSessionWithConfig conf cmd lspTestCaps projDir s
+  runSessionWithConfig conf cmd lspTestCaps projDir $ do
+      configureCheckProject False
+      s
 
 getConfigFromEnv :: IO SessionConfig
 getConfigFromEnv = do
