@@ -27,7 +27,10 @@ tests =
 codeActionTests :: TestTree
 codeActionTests =
   testGroup "code actions"
-  [ codeActionTest "adds LANGUAGE with no other pragmas at start ignoring later INLINE pragma" "AddPragmaIgnoreInline" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  [ codeActionTest "add pragma after mix of multi line lang and opts pragmas" "MultiLangOptsMix" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTest "add LANGUAGE pragma after multi line options_ghc" "AfterMultiOptionsPragma" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTest "add LANGUAGE pragma after multi line lang pragma" "PragmaAfterMultilinePragma" [("Add \"BangPatterns\"", "Contains BangPatterns code action")]
+  , codeActionTest "adds LANGUAGE with no other pragmas at start ignoring later INLINE pragma" "AddPragmaIgnoreInline" [("Add \"TupleSections\"", "Contains TupleSections code action")]
   , codeActionTest "adds LANGUAGE after shebang preceded by other LANGUAGE and GHC_OPTIONS" "AddPragmaAfterShebangPrecededByLangAndOptsGhc" [("Add \"TupleSections\"", "Contains TupleSections code action")]
   , codeActionTest "adds LANGUAGE after shebang with other Language preceding shebang" "AddPragmaAfterShebangPrecededByLangAndOptsGhc" [("Add \"TupleSections\"", "Contains TupleSections code action")]
   , codeActionTest "adds LANGUAGE before Doc comments after interchanging pragmas" "BeforeDocInterchanging" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
