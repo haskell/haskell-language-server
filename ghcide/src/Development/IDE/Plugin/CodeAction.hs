@@ -21,10 +21,12 @@ module Development.IDE.Plugin.CodeAction
 import           Control.Applicative                               ((<|>))
 import           Control.Arrow                                     (second,
                                                                     (>>>))
-import           Control.Monad                                     (guard, join)
+import           Control.Monad                                     (foldM,
+                                                                    guard, join)
 import           Control.Monad.IO.Class
 import           Data.Char
 import qualified Data.DList                                        as DL
+import           Data.Either.Extra                                 (fromEither)
 import           Data.Function
 import           Data.Functor
 import qualified Data.HashMap.Strict                               as Map
@@ -1323,12 +1325,32 @@ findNextPragmaPosition contents = Just ((lineNumber, 0), 0)
     contents' = T.lines contents
 
 afterPragma :: T.Text -> [T.Text] -> Int -> Int
-afterPragma name contents lineNum = lastLineWithPrefix (checkPragma name) contents lineNum
+afterPragma name = lastLineWithPrefixMulti (checkPragma name)
 
 lastLineWithPrefix :: (T.Text -> Bool) -> [T.Text] -> Int -> Int
 lastLineWithPrefix p contents lineNum = max lineNum next
   where
-    next = maybe lineNum succ $ listToMaybe . reverse $ findIndices p contents
+    next = maybe lineNum succ $ listToMaybe $ reverse $ findIndices p contents
+
+-- | Accounts for the case where the LANGUAGE or OPTIONS_GHC
+-- pragma spans multiple lines or just a single line
+lastLineWithPrefixMulti :: (T.Text -> Bool) -> [T.Text] -> Int -> Int
+lastLineWithPrefixMulti p contents lineNum = max lineNum next
+  where
+    mIndex = listToMaybe . reverse $ findIndices p contents
+    next = case mIndex of
+      Nothing    -> 0
+      Just index -> getEndOfPragmaBlock index $ drop index contents
+
+getEndOfPragmaBlock :: Int -> [T.Text] -> Int
+getEndOfPragmaBlock start contents = lineNumber
+  where
+    lineNumber = fromEither lineNum
+    lineNum = foldM go start contents
+    go pos txt
+      | endOfBlock txt = Left $ pos + 1
+      | otherwise = Right $ pos + 1
+    endOfBlock txt = T.dropWhile (/= '}') (T.dropWhile (/= '-') txt) == "}"
 
 checkPragma :: T.Text -> T.Text -> Bool
 checkPragma name = check

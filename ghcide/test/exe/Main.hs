@@ -857,7 +857,9 @@ watchedFilesTests = testGroup "watched files"
 
 insertImportTests :: TestTree
 insertImportTests = testGroup "insert import"
-  [ checkImport "above comment at top of module" "CommentAtTop.hs" "CommentAtTop.expected.hs" "import Data.Monoid"
+  [ checkImport "after multiline pragmas and opts no module or imports" "AfterMultilineOptsPragma.hs" "AfterMultilineOptsPragma.expected.hs" "import Data.Monoid" 
+  , checkImport "after multiline pragma no module or imports" "AfterMultilinePragma.hs" "AfterMultilinePragma.expected.hs" "import Data.Monoid"
+  , checkImport "above comment at top of module" "CommentAtTop.hs" "CommentAtTop.expected.hs" "import Data.Monoid"
   , checkImport "above multiple comments below" "CommentAtTopMultipleComments.hs" "CommentAtTopMultipleComments.expected.hs" "import Data.Monoid"
   , checkImport "above curly brace comment" "CommentCurlyBraceAtTop.hs" "CommentCurlyBraceAtTop.expected.hs" "import Data.Monoid"
   , checkImport "above multi-line comment" "MultiLineCommentAtTop.hs" "MultiLineCommentAtTop.expected.hs" "import Data.Monoid"
