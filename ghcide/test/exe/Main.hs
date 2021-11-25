@@ -53,7 +53,7 @@ import           Development.IDE.Test                     (Cursor,
                                                            getInterfaceFilesDir,
                                                            waitForAction,
                                                            getStoredKeys,
-                                                           waitForTypecheck, waitForGC)
+                                                           waitForTypecheck, waitForGC, configureCheckProject)
 import           Development.IDE.Test.Runfiles
 import qualified Development.IDE.Types.Diagnostics        as Diagnostics
 import           Development.IDE.Types.Location
@@ -1603,10 +1603,7 @@ extendImportTests = testGroup "extend import actions"
         codeActionTitle CodeAction{_title=x} = x
 
         template setUpModules moduleUnderTest range expectedTitles expectedContentB = do
-            sendNotification SWorkspaceDidChangeConfiguration
-                (DidChangeConfigurationParams $ toJSON
-                  def{checkProject = overrideCheckProject})
-
+            configureCheckProject overrideCheckProject
 
             mapM_ (\x -> createDoc (fst x) "haskell" (snd x)) setUpModules
             docB <- createDoc (fst moduleUnderTest) "haskell" (snd moduleUnderTest)
