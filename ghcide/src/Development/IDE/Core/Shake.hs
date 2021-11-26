@@ -163,6 +163,7 @@ import           Debug.Trace.Flags                      (userTracingEnabled)
 import qualified Development.IDE.Types.Exports          as ExportsMap
 import           HieDb.Types
 import           Ide.Plugin.Config
+import           Ide.Plugin.Properties                  (useProperty)
 import qualified Ide.PluginUtils                        as HLS
 import           Ide.Types                              (PluginId)
 
@@ -308,7 +309,14 @@ instance IsIdeGlobal GlobalIdeOptions
 getIdeOptions :: Action IdeOptions
 getIdeOptions = do
     GlobalIdeOptions x <- getIdeGlobalAction
-    return x
+    env <- lspEnv <$> getShakeExtras
+    case env of
+        Nothing -> return x
+        Just env -> do
+            config <- liftIO $ LSP.runLspT env HLS.getClientConfig
+            return x{optCheckProject = pure $ checkProject config,
+                     optCheckParents = pure $ checkParents config
+                }
 
 getIdeOptionsIO :: ShakeExtras -> IO IdeOptions
 getIdeOptionsIO ide = do
