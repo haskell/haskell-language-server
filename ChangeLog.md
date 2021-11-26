@@ -13,8 +13,10 @@ Also it fixes some long standing bugs in the hlint plugin due to comments being 
 
 ### Pull requests merged for 1.5.1
 
+- Fix hls-graph build with embed-files flag
+([#2395](https://github.com/haskell/haskell-language-server/pull/2395)) by @pepeiborra
 - Prepare 1.5.1
-([#2393](https://github.com/haskell/haskell-language-server/pull/2393) by @jneira
+([#2393](https://github.com/haskell/haskell-language-server/pull/2393)) by @jneira
 - Revert "Update to latest prettyprinter API (#2352)"
 ([#2389](https://github.com/haskell/haskell-language-server/pull/2389)) by @pepeiborra
 - Add extra logging around build queue
@@ -22,7 +24,7 @@ Also it fixes some long standing bugs in the hlint plugin due to comments being 
 - docs: Fix typo
 ([#2386](https://github.com/haskell/haskell-language-server/pull/2386)) by @nh2
 - Update release instructions
-([#2384](https://github.com/haskell/haskell-language-server/pull/2384) by @jneira
+([#2384](https://github.com/haskell/haskell-language-server/pull/2384)) by @jneira
 - ghcide: Update dependency on `hls-plugin-api`
 ([#2382](https://github.com/haskell/haskell-language-server/pull/2382)) by @hololeap
 - Fix regression in GhcSessionDeps
