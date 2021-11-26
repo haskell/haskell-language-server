@@ -44,16 +44,16 @@ mkDocMap env rm this_mod =
      k <- foldrM getType (tcg_type_env this_mod) names
      pure $ DKMap d k
   where
-    getDocs n map
-      | maybe True (mod ==) $ nameModule_maybe n = pure map -- we already have the docs in this_docs, or they do not exist
+    getDocs n mapToSpanDoc
+      | maybe True (mod ==) $ nameModule_maybe n = pure mapToSpanDoc -- we already have the docs in this_docs, or they do not exist
       | otherwise = do
       doc <- getDocumentationTryGhc env mod n
-      pure $ extendNameEnv map n doc
-    getType n map
+      pure $ extendNameEnv mapToSpanDoc n doc
+    getType n mapToTyThing
       | isTcOcc $ occName n = do
         kind <- lookupKind env mod n
-        pure $ maybe map (extendNameEnv map n) kind
-      | otherwise = pure map
+        pure $ maybe mapToTyThing (extendNameEnv mapToTyThing n) kind
+      | otherwise = pure mapToTyThing
     names = rights $ S.toList idents
     idents = M.keysSet rm
     mod = tcg_mod this_mod

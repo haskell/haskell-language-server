@@ -991,11 +991,12 @@ mkDetailsFromIface session iface linkable = do
     initIfaceLoad hsc' (typecheckIface iface)
   return (HomeModInfo iface details linkable)
 
-fakeSpan :: RealSrcSpan
-fakeSpan = realSrcLocSpan $ mkRealSrcLoc (Util.fsLit "<ghcide>") 1 1
-
 initTypecheckEnv :: HscEnv -> Module -> TcRn r -> IO (Messages, Maybe r)
 initTypecheckEnv hsc_env mod = initTc hsc_env HsSrcFile False mod fakeSpan
+  where
+    fakeSpan :: RealSrcSpan
+    fakeSpan = realSrcLocSpan $ mkRealSrcLoc (Util.fsLit "<ghcide>") 1 1
+
 
 getDocsNonInteractive'
     :: Name
