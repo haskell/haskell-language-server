@@ -27,6 +27,7 @@ import           Development.IDE.Graph
 
 import           Control.Concurrent.STM.Stats           (atomically)
 import qualified Data.ByteString                        as BS
+import           Data.IORef.Extra                       (atomicModifyIORef'_)
 import           Data.Maybe                             (catMaybes)
 import           Development.IDE.Core.ProgressReporting
 import           Development.IDE.Core.RuleTypes
@@ -114,7 +115,7 @@ kick = do
     -- Update the exports map
     results <- uses GenerateCore files <* uses GetHieAst files
     let mguts = catMaybes results
-    void $ liftIO $ modifyVar' exportsMap (updateExportsMapMg mguts)
+    void $ liftIO $ atomicModifyIORef'_ exportsMap (updateExportsMapMg mguts)
 
     liftIO $ progressUpdate progress KickCompleted
 

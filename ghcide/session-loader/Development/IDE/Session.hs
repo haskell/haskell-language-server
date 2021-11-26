@@ -73,13 +73,13 @@ import           System.IO
 import           System.Info
 
 import           Control.Applicative                  (Alternative ((<|>)))
-import           Control.Exception                    (evaluate)
 import           Data.Void
 
 import           Control.Concurrent.STM               (atomically)
 import           Control.Concurrent.STM.TQueue
 import           Data.Foldable                        (for_)
 import qualified Data.HashSet                         as Set
+import           Data.IORef.Extra                     (atomicModifyIORef'_)
 import           Data.Tuple                           (swap)
 import           Database.SQLite.Simple
 import           Development.IDE.Core.Tracing         (withTrace)
@@ -408,7 +408,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
                     -- update exports map
                     extras <- getShakeExtras
                     let !exportsMap' = createExportsMap $ mapMaybe (fmap hirModIface) modIfaces
-                    liftIO $ modifyVar_ (exportsMap extras) $ evaluate . (exportsMap' <>)
+                    liftIO $ atomicModifyIORef'_ (exportsMap extras) $ (exportsMap' <>)
 
           return (second Map.keys res)
 
