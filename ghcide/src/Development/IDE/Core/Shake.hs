@@ -210,7 +210,7 @@ data ShakeExtras = ShakeExtras
         -> IO ()
     ,ideNc :: IORef NameCache
     -- | A mapping of module name to known target (or candidate targets, if missing)
-    ,knownTargetsVar :: Var (Hashed KnownTargets)
+    ,knownTargetsVar :: IORef (Hashed KnownTargets)
     -- | A mapping of exported identifiers for local modules. Updated on kick
     ,exportsMap :: Var ExportsMap
     -- | A work queue for actions added via 'runInShakeSession'
@@ -477,7 +477,7 @@ getValues state key file = do
 knownTargets :: Action (Hashed KnownTargets)
 knownTargets = do
   ShakeExtras{knownTargetsVar} <- getShakeExtras
-  liftIO $ readVar knownTargetsVar
+  liftIO $ readIORef knownTargetsVar
 
 -- | Seq the result stored in the Shake value. This only
 -- evaluates the value to WHNF not NF. We take care of the latter
@@ -514,7 +514,7 @@ shakeOpen lspEnv defaultConfig logger debouncer
         hiddenDiagnostics <- STM.newIO
         publishedDiagnostics <- STM.newIO
         positionMapping <- STM.newIO
-        knownTargetsVar <- newVar $ hashed HMap.empty
+        knownTargetsVar <- newIORef $ hashed HMap.empty
         let restartShakeSession = shakeRestart ideState
         persistentKeys <- newVar HMap.empty
         indexPending <- newTVarIO HMap.empty

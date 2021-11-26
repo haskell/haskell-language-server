@@ -356,7 +356,7 @@ callRetrie ::
   Bool ->
   IO ([CallRetrieError], WorkspaceEdit)
 callRetrie state session rewrites origin restrictToOriginatingFile = do
-  knownFiles <- toKnownFiles . unhashed <$> readVar (knownTargetsVar $ shakeExtras state)
+  knownFiles <- toKnownFiles . unhashed <$> readIORef (knownTargetsVar $ shakeExtras state)
   let reuseParsedModule f = do
         pm <-
           useOrFail "GetParsedModule" NoParse GetParsedModule f

@@ -78,7 +78,9 @@ import           Data.Void
 
 import           Control.Concurrent.STM               (atomically)
 import           Control.Concurrent.STM.TQueue
+import           Data.Foldable                        (for_)
 import qualified Data.HashSet                         as Set
+import           Data.Tuple                           (swap)
 import           Database.SQLite.Simple
 import           Development.IDE.Core.Tracing         (withTrace)
 import           HieDb.Create
@@ -266,12 +268,13 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
                 found <- filterM (IO.doesFileExist . fromNormalizedFilePath) targetLocations
                 return (targetTarget, found)
           join $ atomically $ recordDirtyKeys extras GetKnownTargets  [emptyFilePath]
-          modifyVarIO' knownTargetsVar $ traverseHashed $ \known -> do
+          hasUpdate <- atomicModifyIORef' knownTargetsVar $ (swap .) $ traverseHashed $ \known -> do
             let known' = HM.unionWith (<>) known $ HM.fromList $ map (second Set.fromList) knownTargets
-            when (known /= known') $
+                hasUpdate = if known /= known' then Just known' else Nothing
+            (hasUpdate, known')
+          for_ hasUpdate $ \x ->
                 logDebug logger $ "Known files updated: " <>
-                    T.pack(show $ (HM.map . Set.map) fromNormalizedFilePath known')
-            pure known'
+                    T.pack(show $ (HM.map . Set.map) fromNormalizedFilePath x)
 
     -- Create a new HscEnv from a hieYaml root and a set of options
     -- If the hieYaml file already has an HscEnv, the new component is
