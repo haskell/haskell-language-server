@@ -28,6 +28,7 @@ module Development.IDE.Core.Compile
   , loadInterface
   , loadModulesHome
   , setupFinderCache
+  , getDocsNonInteractive
   , getDocsBatch
   , lookupName
   ,mergeEnvs) where
@@ -990,12 +991,20 @@ mkDetailsFromIface session iface linkable = do
     initIfaceLoad hsc' (typecheckIface iface)
   return (HomeModInfo iface details linkable)
 
+fakeSpan :: RealSrcSpan
+fakeSpan = realSrcLocSpan $ mkRealSrcLoc (Util.fsLit "<ghcide>") 1 1
 
--- | Non-interactive modification of 'GHC.Runtime.Eval.getDocs'.
---   The interactive paths create problems in ghc-lib builds
----  and lead to fun errors like "Cannot continue after interface file error".
-getDocsNonInteractive :: Name -> IOEnv (Env TcGblEnv TcLclEnv) (Name, Either GetDocsFailure (Maybe HsDocString, Maybe (Map.Map Int HsDocString)))
-getDocsNonInteractive name = do
+initTypecheckEnv :: HscEnv -> Module -> TcRn r -> IO (Messages, Maybe r)
+initTypecheckEnv hsc_env mod = initTc hsc_env HsSrcFile False mod fakeSpan
+
+getDocsNonInteractive'
+    :: Name
+    -> IOEnv
+        (Env TcGblEnv TcLclEnv)
+        (Name,
+        Either
+            GetDocsFailure (Maybe HsDocString, Maybe (Map.Map Int HsDocString)))
+getDocsNonInteractive' name =
     case nameModule_maybe name of
         Nothing -> return (name, Left $ NameHasNoModule name)
         Just mod -> do
@@ -1007,7 +1016,7 @@ getDocsNonInteractive name = do
                 <- loadModuleInterface "getModuleInterface" mod
             let
                 isNameCompiled =
-                    -- TODO: Find a more direct indicator.
+                    -- comment from GHC: Find a more direct indicator.
                     case nameSrcLoc name of
                         RealSrcLoc {}   -> False
                         UnhelpfulLoc {} -> True
@@ -1015,6 +1024,15 @@ getDocsNonInteractive name = do
                 if isNothing mb_doc_hdr && Map.null dmap && Map.null amap
                     then Left $ NoDocsInIface mod isNameCompiled
                     else Right (Map.lookup name dmap, Map.lookup name amap)
+
+-- | Non-interactive modification of 'GHC.Runtime.Eval.getDocs'.
+--   The interactive paths create problems in ghc-lib builds
+---  and lead to fun errors like "Cannot continue after interface file error".
+getDocsNonInteractive :: HscEnv -> Module -> Name -> IO (Either ErrorMessages (Name, Either GetDocsFailure (Maybe HsDocString, Maybe (Map.Map Int HsDocString))))
+getDocsNonInteractive hsc_env mod name = do
+    ((_warns,errs), res) <- initTypecheckEnv hsc_env mod $ getDocsNonInteractive' name
+    pure $ maybeToEither errs res
+
 
 -- | Non-interactive, batch version of 'GHC.Runtime.Eval.getDocs'.
 getDocsBatch
@@ -1024,12 +1042,9 @@ getDocsBatch
   --  2021-11-18: NOTE: Map Int would become IntMap if next GHCs.
   -> IO (Either ErrorMessages (Map.Map Name (Either GetDocsFailure (Maybe HsDocString, Maybe (Map.Map Int HsDocString)))))
   -- ^ Return a 'Map' of 'Name's to 'Either' (no docs messages) (general doc body & arg docs)
-getDocsBatch hsc_env _mod _names = do
-    ((_warns,errs), res) <- initTc hsc_env HsSrcFile False _mod fakeSpan $ Map.fromList <$> traverse getDocsNonInteractive _names
+getDocsBatch hsc_env mod names = do
+    ((_warns,errs), res) <- initTypecheckEnv hsc_env mod $ Map.fromList <$> traverse getDocsNonInteractive' names
     pure $ maybeToEither errs res
-
-fakeSpan :: RealSrcSpan
-fakeSpan = realSrcLocSpan $ mkRealSrcLoc (Util.fsLit "<ghcide>") 1 1
 
 -- | Non-interactive, batch version of 'InteractiveEval.lookupNames'.
 --   The interactive paths create problems in ghc-lib builds
@@ -1039,7 +1054,7 @@ lookupName :: HscEnv
            -> Name
            -> IO (Maybe TyThing)
 lookupName hsc_env mod name = do
-    (_messages, res) <- initTc hsc_env HsSrcFile False mod fakeSpan $ do
+    (_messages, res) <- initTypecheckEnv hsc_env mod $ do
         tcthing <- tcLookup name
         case tcthing of
             AGlobal thing    -> return thing
