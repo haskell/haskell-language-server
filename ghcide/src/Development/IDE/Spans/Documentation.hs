@@ -62,71 +62,23 @@ lookupKind :: HscEnv -> Module -> Name -> IO (Maybe TyThing)
 lookupKind env mod =
     fmap (fromRight Nothing) . catchSrcErrors (hsc_dflags env) "span" . lookupName env mod
 
-getDocumentationTryGhc :: HscEnv -> Module -> Name -> IO SpanDoc
---  2021-11-17: FIXME: Code uses batch search for singleton & assumes that search always succeeds.
-getDocumentationTryGhc env mod = fun
- where
-  fun :: Name -> IO SpanDoc
-  fun name = do
-    res <- getDocsNonInteractive env mod name
-    case res of
-        Left _    -> pure emptySpanDoc -- catchSrcErrors (hsc_dflags env) "docs"
-        Right res -> uncurry unwrap res
-      where
-        unwrap :: Name -> Either a (Maybe HsDocString, b) -> IO SpanDoc
-        unwrap name a = extractDocString a <$> getSpanDocUris name
-          where
-            extractDocString :: Either b1 (Maybe HsDocString, b2) -> SpanDocUris -> SpanDoc
-            --  2021-11-17: FIXME: ArgDocs get dropped here - instead propagate them.
-            extractDocString (Right (Just docs, _)) = SpanDocString docs
-            extractDocString _ = SpanDocText mempty
-
-            -- | Get the uris to the documentation and source html pages if they exist
-            getSpanDocUris :: Name -> IO SpanDocUris
-            getSpanDocUris name = do
-                (docFu, srcFu) <-
-                    case nameModule_maybe name of
-                    Just mod -> liftIO $ do
-                        let
-                            toUriFileText :: (HscEnv -> Module -> IO (Maybe FilePath)) -> IO (Maybe T.Text)
-                            toUriFileText f = (fmap . fmap) (getUri . filePathToUri) $ f env mod
-                        doc <- toUriFileText lookupDocHtmlForModule
-                        src <- toUriFileText lookupSrcHtmlForModule
-                        return (doc, src)
-                    Nothing -> pure mempty
-                let
-                    embelishUri :: Functor f => T.Text -> f T.Text -> f T.Text
-                    embelishUri f = fmap (<> "#" <> f <> showNameWithoutUniques name)
-
-                    docUri = embelishUri (bool "t:" "v:" $ isValName name) docFu
-                    srcUri = embelishUri mempty srcFu
-
-                return $ SpanDocUris docUri srcUri
-
-getDocumentationsTryGhc :: HscEnv -> Module -> [Name] -> IO (M.Map Name SpanDoc)
-getDocumentationsTryGhc env mod names = do
-  res <- getDocsBatch env mod names
-  case res of
-    Left _    -> return mempty -- catchSrcErrors (hsc_dflags env) "docs"
-    Right res -> sequenceA $ M.mapWithKey unwrap res
+intoSpanDoc :: HscEnv -> Name -> Either a (Maybe HsDocString, b) -> IO SpanDoc
+intoSpanDoc env name a = extractDocString a <$> getSpanDocUris name
   where
-    unwrap :: Name -> Either a (Maybe HsDocString, b) -> IO SpanDoc
-    unwrap name a = extractDocString a <$> getSpanDocUris name
-     where
-      extractDocString :: Either b1 (Maybe HsDocString, b2) -> SpanDocUris -> SpanDoc
-      --  2021-11-17: FIXME: ArgDocs get dropped here - instead propagate them.
-      extractDocString (Right (Just docs, _)) = SpanDocString docs
-      extractDocString _ = SpanDocText mempty
+    extractDocString :: Either b1 (Maybe HsDocString, b2) -> SpanDocUris -> SpanDoc
+    --  2021-11-17: FIXME: ArgDocs get dropped here - instead propagate them.
+    extractDocString (Right (Just docs, _)) = SpanDocString docs
+    extractDocString _ = SpanDocText mempty
 
-      -- | Get the uris to the documentation and source html pages if they exist
-      getSpanDocUris :: Name -> IO SpanDocUris
-      getSpanDocUris name = do
+    -- | Get the uris to the documentation and source html pages if they exist
+    getSpanDocUris :: Name -> IO SpanDocUris
+    getSpanDocUris name = do
         (docFu, srcFu) <-
             case nameModule_maybe name of
             Just mod -> liftIO $ do
                 let
-                  toUriFileText :: (HscEnv -> Module -> IO (Maybe FilePath)) -> IO (Maybe T.Text)
-                  toUriFileText f = (fmap . fmap) (getUri . filePathToUri) $ f env mod
+                    toUriFileText :: (HscEnv -> Module -> IO (Maybe FilePath)) -> IO (Maybe T.Text)
+                    toUriFileText f = (fmap . fmap) (getUri . filePathToUri) $ f env mod
                 doc <- toUriFileText lookupDocHtmlForModule
                 src <- toUriFileText lookupSrcHtmlForModule
                 return (doc, src)
@@ -139,6 +91,20 @@ getDocumentationsTryGhc env mod names = do
             srcUri = embelishUri mempty srcFu
 
         return $ SpanDocUris docUri srcUri
+
+getDocumentationTryGhc :: HscEnv -> Module -> Name -> IO SpanDoc
+getDocumentationTryGhc env mod name = do
+  res <- getDocsNonInteractive env mod name
+  case res of
+      Left _    -> pure emptySpanDoc
+      Right res -> uncurry (intoSpanDoc env) res
+
+getDocumentationsTryGhc :: HscEnv -> Module -> [Name] -> IO (M.Map Name SpanDoc)
+getDocumentationsTryGhc env mod names = do
+  res <- getDocsBatch env mod names
+  case res of
+    Left _    -> return mempty
+    Right res -> sequenceA $ M.mapWithKey (intoSpanDoc env) res
 
 getDocumentation
  :: HasSrcSpan name
