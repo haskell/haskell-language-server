@@ -190,7 +190,7 @@ data ShakeExtras = ShakeExtras
      lspEnv :: Maybe (LSP.LanguageContextEnv Config)
     ,debouncer :: Debouncer NormalizedUri
     ,logger :: Logger
-    ,globals :: Var (HMap.HashMap TypeRep Dynamic)
+    ,globals :: IORef (HMap.HashMap TypeRep Dynamic)
     ,state :: Values
     ,diagnostics :: STMDiagnosticStore
     ,hiddenDiagnostics :: STMDiagnosticStore
@@ -283,15 +283,15 @@ addIdeGlobal x = do
 
 addIdeGlobalExtras :: IsIdeGlobal a => ShakeExtras -> a -> IO ()
 addIdeGlobalExtras ShakeExtras{globals} x@(typeOf -> ty) =
-    void $ liftIO $ modifyVarIO' globals $ \mp -> case HMap.lookup ty mp of
-        Just _ -> errorIO $ "Internal error, addIdeGlobalExtras, got the same type twice for " ++ show ty
-        Nothing -> return $! HMap.insert ty (toDyn x) mp
+    void $ liftIO $ atomicModifyIORef'_ globals $ \mp -> case HMap.lookup ty mp of
+        Just _ -> error $ "Internal error, addIdeGlobalExtras, got the same type twice for " ++ show ty
+        Nothing -> HMap.insert ty (toDyn x) mp
 
 
 getIdeGlobalExtras :: forall a . IsIdeGlobal a => ShakeExtras -> IO a
 getIdeGlobalExtras ShakeExtras{globals} = do
     let typ = typeRep (Proxy :: Proxy a)
-    x <- HMap.lookup (typeRep (Proxy :: Proxy a)) <$> readVar globals
+    x <- HMap.lookup (typeRep (Proxy :: Proxy a)) <$> readIORef globals
     case x of
         Just x
             | Just x <- fromDynamic x -> pure x
@@ -509,7 +509,7 @@ shakeOpen lspEnv defaultConfig logger debouncer
     us <- mkSplitUniqSupply 'r'
     ideNc <- newIORef (initNameCache us knownKeyNames)
     shakeExtras <- do
-        globals <- newVar HMap.empty
+        globals <- newIORef HMap.empty
         state <- STM.newIO
         diagnostics <- STM.newIO
         hiddenDiagnostics <- STM.newIO
