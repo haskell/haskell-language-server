@@ -89,7 +89,6 @@ import           System.FilePath
 import           System.IO.Extra                   (fixIO, newTempFileWithin)
 
 -- GHC API imports
--- GHC API imports
 import           GHC                               (GetDocsFailure (..),
                                                     mgModSummaries,
                                                     parsedSource)
@@ -807,6 +806,8 @@ getModSummaryFromImports env fp modTime contents = do
                     , fingerPrintImports
                     ] ++ map Util.fingerprintString opts
 
+diagMsgs :: DynFlags -> Util.Bag (MsgEnvelope DecoratedSDoc) -> [FileDiagnostic]
+diagMsgs = diagFromErrMsgs "parser"
 
 -- | Parse only the module header
 parseHeader
@@ -824,7 +825,7 @@ parseHeader dflags filename contents = do
    case unP Compat.parseHeader (initParserState (initParserOpts dflags) contents loc) of
 #if MIN_VERSION_ghc(8,10,0)
      PFailed pst ->
-        throwE $ diagFromErrMsgs "parser" dflags $ getErrorMessages pst dflags
+        throwE $ diagMsgs dflags $ getErrorMessages pst dflags
 #else
      PFailed _ locErr msgErr ->
         throwE $ diagFromErrMsg "parser" dflags $ mkPlainErrMsg dflags locErr msgErr
@@ -841,9 +842,9 @@ parseHeader dflags filename contents = do
         -- errors are those from which a parse tree just can't
         -- be produced.
         unless (null errs) $
-            throwE $ diagFromErrMsgs "parser" dflags (fmap pprError errs)
+            throwE $ diagMsgs dflags (fmap pprError errs)
 
-        let warnings = diagFromErrMsgs "parser" dflags (fmap pprWarning warns)
+        let warnings = diagMsgs dflags (fmap pprWarning warns)
         return (warnings, rdr_module)
 
 -- | Given a buffer, flags, and file path, produce a
@@ -861,7 +862,7 @@ parseFileContents env customPreprocessor filename ms = do
        contents = fromJust $ ms_hspp_buf ms
    case unP Compat.parseModule (initParserState (initParserOpts dflags) contents loc) of
 #if MIN_VERSION_ghc(8,10,0)
-     PFailed pst -> throwE $ diagFromErrMsgs "parser" dflags $ getErrorMessages pst dflags
+     PFailed pst -> throwE $ diagMsgs dflags $ getErrorMessages pst dflags
 #else
      PFailed _ locErr msgErr ->
       throwE $ diagFromErrMsg "parser" dflags $ mkPlainErrMsg dflags locErr msgErr
@@ -882,7 +883,7 @@ parseFileContents env customPreprocessor filename ms = do
                -- errors are those from which a parse tree just can't
                -- be produced.
                unless (null errs) $
-                 throwE $ diagFromErrMsgs "parser" dflags errs
+                 throwE $ diagMsgs dflags errs
 
                -- Ok, we got here. It's safe to continue.
                let IdePreprocessedSource preproc_warns errs parsed = customPreprocessor rdr_module
@@ -920,7 +921,7 @@ parseFileContents env customPreprocessor filename ms = do
                srcs2 <- liftIO $ filterM doesFileExist srcs1
 
                let pm = mkParsedModule ms parsed' srcs2 hpm_annotations
-                   warnings = diagFromErrMsgs "parser" dflags warns
+                   warnings = diagMsgs dflags warns
                pure (warnings ++ preproc_warnings, pm)
 
 loadHieFile :: Compat.NameCacheUpdater -> FilePath -> IO GHC.HieFile
