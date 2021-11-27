@@ -84,7 +84,7 @@ findAlternateNumberActions = pure . filter isAlternateNumberCodeAction . rights 
         isAlternateNumberCodeAction CodeAction{_kind} = case _kind of
           Nothing -> False
           Just kind -> case kind of
-            CodeActionUnknown txt -> txt == "alternate.style"
+            CodeActionUnknown txt -> txt == "quickfix.literals.style"
             _                     -> False
 
 -- most helpers derived from explicit-imports-plugin Main Test file

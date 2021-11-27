@@ -143,20 +143,11 @@ toFormatTypes =  (<>) baseFormatTypes . mapMaybe (`lookup` numericPairs)
 numericPairs :: [(Extension, FormatType)]
 numericPairs = [(NumericUnderscores, NoFormat), (NegativeLiterals, NoFormat)] <> intPairs <> fracPairs
 
-numericFormats :: [FormatType]
-numericFormats = map snd numericPairs
-
 intPairs :: [(Extension, FormatType)]
 intPairs = [(BinaryLiterals, IntFormat BinaryFormat), (NumDecimals, IntFormat NumDecimalFormat)]
 
-intFormats :: [FormatType]
-intFormats = map snd intPairs
-
 fracPairs :: [(Extension, FormatType)]
 fracPairs = [(HexFloatLiterals, FracFormat HexFloatFormat)]
-
-fracFormats :: [FormatType]
-fracFormats = map snd fracPairs
 
 -- Generate up to 3 possible choices where:
 -- dropWhile (\d -> val `div` d) > 1000) implies we want at MOST 3 digits to left of decimal

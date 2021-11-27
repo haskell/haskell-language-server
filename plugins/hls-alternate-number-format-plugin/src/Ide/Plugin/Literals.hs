@@ -2,13 +2,18 @@
 {-# LANGUAGE DerivingVia       #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RankNTypes        #-}
-module Ide.Plugin.Literals where
-import           Data.Maybe                    (fromMaybe, maybeToList)
+module Ide.Plugin.Literals (
+    collectLiterals
+    , Literal(..)
+    , getSrcText
+    , getSrcSpan
+) where
+
 import           Data.Set                      (Set)
 import qualified Data.Set                      as S
 import           Data.Text                     (Text)
 import qualified Data.Text                     as T
-import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat    hiding (getSrcSpan)
 import           Development.IDE.GHC.Util      (unsafePrintSDoc)
 import           Development.IDE.Graph.Classes (NFData (rnf))
 import qualified GHC.Generics                  as GHC
@@ -18,6 +23,7 @@ import           Generics.SYB                  (Data, Typeable, cast,
 -- data type to capture what type of literal we are dealing with
 -- provides location and possibly source text (for OverLits) as well as it's value
 -- we currently don't have any use for PrimLiterals. They never have source text so we always drop them
+-- | Captures a Numeric Literals Location, Source Text, and Value.
 data Literal = IntLiteral      RealSrcSpan Text Integer
              | FracLiteral     RealSrcSpan Text Rational
              deriving (GHC.Generic, Show, Ord, Eq)
@@ -27,11 +33,13 @@ instance NFData RealSrcSpan where
 
 instance NFData Literal
 
+-- | Return a Literal's Source representation
 getSrcText :: Literal -> Text
 getSrcText = \case
   IntLiteral _ txt _  -> txt
   FracLiteral _ txt _ -> txt
 
+-- | Return a Literal's Real Source location
 getSrcSpan :: Literal -> RealSrcSpan
 getSrcSpan = \case
     IntLiteral ss _ _  -> ss
@@ -87,8 +95,6 @@ getLiteralAsList' lit = maybe S.empty S.singleton . flip getLiteral lit
 getLiteral :: RealSrcSpan -> HsLit GhcPs -> Maybe Literal
 getLiteral sSpan = \case
   HsInt _ val   -> fromIntegralLit sSpan val
--- Ignore this case for now
---   HsInteger _ val _           -> Just $ IntLiteral sSpan Nothing val
   HsRat _ val _ -> fromFractionalLit sSpan val
   _             -> Nothing
 

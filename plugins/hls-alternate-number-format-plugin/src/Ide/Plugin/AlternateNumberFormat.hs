@@ -1,41 +1,33 @@
-{-# LANGUAGE DataKinds                  #-}
-{-# LANGUAGE DeriveGeneric              #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE TypeFamilies               #-}
-{-# LANGUAGE TypeOperators              #-}
+{-# LANGUAGE DataKinds     #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE TypeFamilies  #-}
+{-# LANGUAGE TypeOperators #-}
+module Ide.Plugin.AlternateNumberFormat (descriptor) where
 
-module Ide.Plugin.AlternateNumberFormat where
-
-import           Control.Lens                         ((^.))
-import           Control.Monad.Except                 (ExceptT, MonadIO, liftIO)
-import qualified Data.HashMap.Strict                  as HashMap
-import           Data.Maybe                           (fromMaybe, isJust)
-import           Data.Text                            (Text)
-import qualified Data.Text                            as T
-import           Debug.Trace                          (traceM)
-import           Development.IDE                      (GetParsedModule (GetParsedModule),
-                                                       IdeState, RuleResult,
-                                                       Rules, define, ideLogger,
-                                                       realSrcSpanToRange,
-                                                       runAction, use,
-                                                       useWithStale)
-import           Development.IDE.Core.PositionMapping (PositionMapping)
-import           Development.IDE.GHC.Compat           hiding (getSrcSpan)
-import           Development.IDE.GHC.Compat.Util      (toList)
-import           Development.IDE.Graph.Classes        (Hashable, NFData)
-import           Development.IDE.Types.Logger         as Logger
-import           GHC.Generics                         (Generic)
-import           Ide.Plugin.Conversion                (FormatType,
-                                                       alternateFormat,
-                                                       toFormatTypes)
-import           Ide.Plugin.Literals                  (Literal (..),
-                                                       collectLiterals,
-                                                       getSrcSpan, getSrcText)
-import           Ide.Plugin.Retrie                    (handleMaybe,
-                                                       handleMaybeM, response)
+import           Control.Lens                    ((^.))
+import           Control.Monad.Except            (ExceptT, MonadIO, liftIO)
+import qualified Data.HashMap.Strict             as HashMap
+import           Data.Text                       (Text)
+import qualified Data.Text                       as T
+import           Development.IDE                 (GetParsedModule (GetParsedModule),
+                                                  IdeState, RuleResult, Rules,
+                                                  define, ideLogger,
+                                                  realSrcSpanToRange, runAction,
+                                                  use)
+import           Development.IDE.GHC.Compat      hiding (getSrcSpan)
+import           Development.IDE.GHC.Compat.Util (toList)
+import           Development.IDE.Graph.Classes   (Hashable, NFData)
+import           Development.IDE.Types.Logger    as Logger
+import           GHC.Generics                    (Generic)
+import           Ide.Plugin.Conversion           (FormatType, alternateFormat,
+                                                  toFormatTypes)
+import           Ide.Plugin.Literals             (Literal (..), collectLiterals,
+                                                  getSrcSpan, getSrcText)
+import           Ide.Plugin.Retrie               (handleMaybe, handleMaybeM,
+                                                  response)
 import           Ide.Types
 import           Language.LSP.Types
-import           Language.LSP.Types.Lens              (uri)
+import           Language.LSP.Types.Lens         (uri)
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
@@ -51,8 +43,8 @@ instance NFData CollectLiterals
 
 type instance RuleResult CollectLiterals = CollectLiteralsResult
 
-data CollectLiteralsResult = CLR {
-    literals      :: [Literal]
+data CollectLiteralsResult = CLR
+    { literals    :: [Literal]
     , formatTypes :: [FormatType]
     } deriving (Generic)
 
@@ -94,10 +86,9 @@ codeActionHandler state _ (CodeActionParams _ _ docId currRange _) = response $ 
         mkCodeAction :: NormalizedFilePath -> Literal -> Text -> Command |? CodeAction
         mkCodeAction nfp lit alt = InR CodeAction {
             _title = "Convert " <> getSrcText lit <> " into " <> alt
-            -- what should this actually be?
-            , _kind = Just $ CodeActionUnknown "alternate.style"
+            , _kind = Just $ CodeActionUnknown "quickfix.literals.style"
             , _diagnostics = Nothing
-            , _isPreferred = Just True
+            , _isPreferred = Nothing
             , _disabled = Nothing
             , _edit = Just $ mkWorkspaceEdit nfp lit alt
             , _command = Nothing
@@ -123,12 +114,12 @@ getNormalizedFilePath docId = handleMaybe "Error: converting to NormalizedFilePa
         $ toNormalizedUri (docId ^. uri)
 
 requestLiterals :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m CollectLiteralsResult
-requestLiterals state = handleMaybeM "Error: Could not get ParsedModule"
+requestLiterals state = handleMaybeM "Error: Could not Collect Literals"
                 . liftIO
                 . runAction "AlternateNumberFormat.CollectLiterals" state
                 . use CollectLiterals
 
 
 logIO :: (MonadIO m, Show a) => IdeState -> a -> m ()
-logIO state = liftIO . Logger.logInfo (ideLogger state) . T.pack . show
+logIO state = liftIO . Logger.logDebug (ideLogger state) . T.pack . show
 
