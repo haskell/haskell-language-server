@@ -18,7 +18,6 @@ import           Control.Lens                     hiding (List)
 import           Control.Monad                    (join)
 import           Control.Monad.IO.Class           (MonadIO (liftIO))
 import           Control.Monad.Trans.State.Strict (State)
-import qualified Data.Attoparsec.Text             as Atto
 import           Data.Bits                        (Bits (bit, complement, (.&.)))
 import           Data.Char                        (isSpace)
 import qualified Data.Char                        as Char
@@ -34,6 +33,7 @@ import           Data.Maybe                       (catMaybes, listToMaybe,
 import qualified Data.Maybe                       as Maybe
 import           Data.Monoid                      (Endo (Endo, appEndo))
 import           Data.Ord                         (Down (Down))
+import           Data.Semigroup                   (Semigroup ((<>)))
 import qualified Data.Text                        as T
 import           Data.Word                        (Word64)
 import qualified Debug.Trace                      as Debug
@@ -69,32 +69,29 @@ codeActionProvider :: PluginMethodHandler IdeState 'J.TextDocumentCodeAction
 codeActionProvider state _plId (J.CodeActionParams _ _ docId _ (J.CodeActionContext (J.List diags) _monly))
   | let J.TextDocumentIdentifier{ _uri = uri } = docId
   , Just normalizedFilePath <- J.uriToNormalizedFilePath $ toNormalizedUri uri = do
-  let mFile = docId ^. J.uri & J.uriToFilePath <&> toNormalizedFilePath'
-      uri = docId ^. J.uri
-  ghcSession <- liftIO $ runAction "Pragmas.GhcSession" state $ useWithStale GhcSession normalizedFilePath
-  (_, mbContents) <- liftIO $ runAction "Pragmas.GetFileContents" state $ getFileContents normalizedFilePath
-  parsedModule <- liftIO $ runAction "Pragmas.GetParsedModule" state $ getParsedModule normalizedFilePath
-  let dflags = ms_hspp_opts . pm_mod_summary <$> parsedModule
-  case ghcSession of
-    Just (hscEnv -> hsc_dflags -> dynFlags, _) ->
-      let nextPragmaInfo = if | Debug.trace "before mbcontents" True
-                              , Just sourceText <- mbContents
-                              , Debug.trace "after mbcontents, before dflags" True
-                              , Debug.trace "after dflags" True
-                              , let sourceStringBuffer = stringToStringBuffer (T.unpack sourceText)
-                              , POk _ parserState <- parsePreDecl dynFlags sourceStringBuffer
-                              , let nextPragma = case parserState of
-                                      ParserStateNotDone { nextPragma } -> nextPragma
-                                      ParserStateDone { nextPragma } -> nextPragma
-                              -> nextPragma
-                              | otherwise
-                              -> NextPragma 0 []
-          pedits = nubOrdOn snd . concat $ suggest dflags <$> diags
-      in do
-        return $ Right $ List $ pragmaEditToAction uri nextPragmaInfo <$> Debug.trace (show nextPragmaInfo) pedits
-    Nothing -> pure $ Right $ List []
-  | otherwise
-  = pure $ Right $ List []
+      -- ghc session to get dynflags even if module isn't parsed
+      ghcSession <- liftIO $ runAction "Pragmas.GhcSession" state $ useWithStale GhcSession normalizedFilePath
+      (_, fileContents) <- liftIO $ runAction "Pragmas.GetFileContents" state $ getFileContents normalizedFilePath
+      parsedModule <- liftIO $ runAction "Pragmas.GetParsedModule" state $ getParsedModule normalizedFilePath
+      let parsedModuleDynFlags = ms_hspp_opts . pm_mod_summary <$> parsedModule
+
+      case ghcSession of
+        Just (hscEnv -> hsc_dflags -> sessionDynFlags, _) ->
+          let nextPragmaInfo =
+                if | Just sourceText <- fileContents
+                   , let sourceStringBuffer = stringToStringBuffer (T.unpack sourceText)
+                   , POk _ parserState <- parsePreDecl sessionDynFlags sourceStringBuffer
+                   , let nextPragma = case parserState of
+                           ParserStateNotDone { nextPragma } -> nextPragma
+                           ParserStateDone { nextPragma }    -> nextPragma
+                   -> nextPragma
+                   | otherwise
+                   -> NextPragma 0 Nothing
+              pedits = nubOrdOn snd . concat $ suggest parsedModuleDynFlags <$> diags
+          in
+            pure $ Right $ List $ pragmaEditToAction uri nextPragmaInfo <$> pedits
+        Nothing -> pure $ Right $ List []
+  | otherwise = pure $ Right $ List []
 
 
 -- | Add a Pragma to the given URI at the top of the file.
@@ -108,7 +105,13 @@ pragmaEditToAction uri NextPragma{ nextPragmaLine, lineSplitTextEdits } (title, 
     render (LangExt x) = "{-# LANGUAGE " <> x <> " #-}\n"
     pragmaInsertPosition = Position nextPragmaLine 0
     pragmaInsertRange = Range pragmaInsertPosition pragmaInsertPosition
-    textEdits = lineSplitTextEdits ++ [J.TextEdit pragmaInsertRange $ render p]
+    -- workaround the fact that for some reason lsp-test applies text
+    -- edits in reverse order than actual clients (coc.nvim, vscode)
+    textEdits =
+      if | Just (LineSplitTextEdits insertTextEdit deleteTextEdit) <- lineSplitTextEdits
+         , let J.TextEdit{ _range, _newText } = insertTextEdit ->
+             [J.TextEdit _range (render p <> _newText), deleteTextEdit]
+         | otherwise -> [J.TextEdit pragmaInsertRange (render p)]
 
     edit =
       J.WorkspaceEdit
@@ -198,27 +201,27 @@ flags = map (T.pack . stripLeading '-') $ flagsForCompletion False
 
 completion :: PluginMethodHandler IdeState 'J.TextDocumentCompletion
 completion _ide _ complParams = do
-    -- let (J.TextDocumentIdentifier uri) = complParams ^. J.textDocument
-        -- position = complParams ^. J.position
-    -- contents <- LSP.getVirtualFile $ toNormalizedUri uri
+    let (J.TextDocumentIdentifier uri) = complParams ^. J.textDocument
+        position = complParams ^. J.position
+    contents <- LSP.getVirtualFile $ toNormalizedUri uri
     fmap (Right . J.InL) $ case (undefined, uriToFilePath' undefined) of
         (Just cnts, Just _path) ->
-            result <$> pure Nothing    --   VFS.getCompletionPrefix position cnts
+            result <$> VFS.getCompletionPrefix position cnts
             where
                 result (Just pfix)
-                    --  | "{-# language" `T.isPrefixOf` T.toLower (VFS.fullLine pfix)
-                    --  = J.List $ map buildCompletion
-                    --      (Fuzzy.simpleFilter (VFS.prefixText pfix) allPragmas)
-                    --  | "{-# options_ghc" `T.isPrefixOf` T.toLower (VFS.fullLine pfix)
-                    --  = J.List $ map mkExtCompl
-                    --      (Fuzzy.simpleFilter (VFS.prefixText pfix) flags)
-                    --  -- if there already is a closing bracket - complete without one
-                    --  | isPragmaPrefix (VFS.fullLine pfix) && "}" `T.isSuffixOf` VFS.fullLine pfix
-                    --  = J.List $ map (\(a, b, c) -> mkPragmaCompl a b c) (validPragmas Nothing)
-                    --  -- if there is no closing bracket - complete with one
-                    --  | isPragmaPrefix (VFS.fullLine pfix)
-                    --  = J.List $ map (\(a, b, c) -> mkPragmaCompl a b c) (validPragmas (Just "}"))
-                    --  | otherwise
+                    | "{-# language" `T.isPrefixOf` T.toLower (VFS.fullLine pfix)
+                    = J.List $ map buildCompletion
+                        (Fuzzy.simpleFilter (VFS.prefixText pfix) allPragmas)
+                    | "{-# options_ghc" `T.isPrefixOf` T.toLower (VFS.fullLine pfix)
+                    = J.List $ map mkExtCompl
+                        (Fuzzy.simpleFilter (VFS.prefixText pfix) flags)
+                    -- if there already is a closing bracket - complete without one
+                    | isPragmaPrefix (VFS.fullLine pfix) && "}" `T.isSuffixOf` VFS.fullLine pfix
+                    = J.List $ map (\(a, b, c) -> mkPragmaCompl a b c) (validPragmas Nothing)
+                    -- if there is no closing bracket - complete with one
+                    | isPragmaPrefix (VFS.fullLine pfix)
+                    = J.List $ map (\(a, b, c) -> mkPragmaCompl a b c) (validPragmas (Just "}"))
+                    | otherwise
                     = J.List []
                 result Nothing = J.List []
                 isPragmaPrefix line = "{-#" `T.isPrefixOf` line
@@ -291,9 +294,14 @@ xbit = bit . fromEnum
 
 data Mode = ModePragma | ModeHaddock | ModeComment | ModeInitial deriving Show
 
+data LineSplitTextEdits = LineSplitTextEdits {
+  lineSplitInsertTextEdit :: J.TextEdit,
+  lineSplitDeleteTextEdit :: J.TextEdit
+} deriving Show
+
 data NextPragma = NextPragma {
   nextPragmaLine     :: Int,
-  lineSplitTextEdits :: [J.TextEdit]
+  lineSplitTextEdits :: Maybe LineSplitTextEdits
 } deriving Show
 
 data ParserState
@@ -336,116 +344,195 @@ srcSpanToRange srcSpan
   | otherwise
   = Nothing
 
-getLineSplitTextEdits :: J.Range -> String -> [J.TextEdit]
-getLineSplitTextEdits (J.Range startPosition@(J.Position startLine startCol) _) s
-  --  | Debug.trace ("linesplit" ++ show startLine ++ s) False = undefined
-  | Just newLineCol <- if isLineComment s then Just (length s) else List.elemIndex '\n' s
-  = let
-      isLine = isLineComment s
-      deleteTextEdit = J.TextEdit (J.Range startPosition startPosition{ J._character = startCol + newLineCol }) ""
-      insertPosition = J.Position (startLine + 1) 0
-      insertRange = J.Range insertPosition insertPosition
-      insertText = T.pack $ List.take newLineCol s
-      insertTextEdit = J.TextEdit insertRange insertText
-    in
-      [deleteTextEdit, J.TextEdit insertRange "\n", insertTextEdit]
-  | otherwise = []
+updateLineSplitTextEdits :: J.Range -> String -> Maybe LineSplitTextEdits -> LineSplitTextEdits
+updateLineSplitTextEdits tokenRange tokenString prevLineSplitTextEdits
+  | Just prevLineSplitTextEdits <- prevLineSplitTextEdits
+  , let LineSplitTextEdits
+          { lineSplitInsertTextEdit = prevInsertTextEdit
+          , lineSplitDeleteTextEdit = prevDeleteTextEdit } = prevLineSplitTextEdits
+  , let J.TextEdit prevInsertRange prevInsertText = prevInsertTextEdit
+  , let J.TextEdit prevDeleteRange prevDeleteText = prevDeleteTextEdit
+  , let J.Range prevInsertStartPos  prevInsertEndPos = prevInsertRange
+  , let J.Position prevInsertStartLine prevInsertStartCol = prevInsertStartPos
+  , let J.Position prevInsertEndLine prevInsertEndCol = prevInsertEndPos
+  , let J.Range prevDeleteStartPos prevDeleteEndPos = prevDeleteRange
+  , let J.Position prevDeleteStartLine prevDeleteStartCol = prevDeleteStartPos
+  , let J.Position prevDeleteEndLine prevDeleteEndCol = prevDeleteEndPos
+  , let currInsertRange = prevInsertRange
+  , let currInsertText =
+          T.init prevInsertText
+          <> T.replicate (startCol - prevInsertEndCol) " "
+          <> T.pack (List.take newLineCol tokenString)
+          <> "\n"
+  , let currInsertTextEdit = J.TextEdit currInsertRange currInsertText
+  , let currDeleteStartPos = prevDeleteStartPos
+  , let currDeleteEndPos = J.Position endLine endCol
+  , let currDeleteRange = J.Range currDeleteStartPos currDeleteEndPos
+  , let currDeleteTextEdit = J.TextEdit currDeleteRange ""
+  = LineSplitTextEdits currInsertTextEdit currDeleteTextEdit
+  | otherwise
+  , let J.Range startPos _ = tokenRange
+  , let deleteTextEdit = J.TextEdit (J.Range startPos startPos{ J._character = startCol + newLineCol }) ""
+  , let insertPosition = J.Position (startLine + 1) 0
+  , let insertRange = J.Range insertPosition insertPosition
+  , let insertText = T.pack (List.take newLineCol tokenString) <> "\n"
+  , let insertTextEdit = J.TextEdit insertRange insertText
+  = LineSplitTextEdits insertTextEdit deleteTextEdit
+  where
+    J.Range (J.Position startLine startCol) (J.Position endLine endCol) = tokenRange
+
+    newLineCol = Maybe.fromMaybe (length tokenString) (List.elemIndex '\n' tokenString)
+
+  -- lineSplitTextEdits
+  -- where
+  --   startPosition@J.Position{ _line = startLine, _character = startCol } =
+  --     if | Just LineSplitTextEdits{ lineSplitInsertTextEdit } <- prevLineSplitTextEdits
+  --        , let J.TextEdit{ _range = J.Range{ _start } } = lineSplitInsertTextEdit
+  --        -> _start
+  --        | otherwise
+  --        , let J.Range{ _start } = tokenRange
+  --        -> _start
+
+  --   lineSplitTextEdits =
+  --     let
+  --       newLineCol = Maybe.fromMaybe (length tokenString) (List.elemIndex '\n' tokenString)
+  --       deleteTextEdit = J.TextEdit (J.Range startPosition startPosition{ J._character = startCol + newLineCol }) ""
+  --       insertPosition = J.Position (startLine + 1) 0
+  --       insertRange = J.Range insertPosition insertPosition
+  --       insertText = T.pack (List.take newLineCol tokenString) <> "\n"
+  --       insertTextEdit = J.TextEdit insertRange insertText
+  --     in
+  --       LineSplitTextEdits{ lineSplitInsertTextEdit = insertTextEdit, lineSplitDeleteTextEdit = deleteTextEdit}
+
 
 -- ITvarsym "#" after a block comment is a parse error so we don't need to worry about it
 updateParserState :: Token -> J.Range -> ParserState -> ParserState
 updateParserState token range prevParserState
-  -- don't reset lineSplitTextEdits, insertPragmaLine and lineSplitTextEdits should be an item
-  | let defaultParserState = prevParserState{ isLastTokenHash = False }
-  , let (J.Range startPosition@(J.Position startLine _) (J.Position endLine endCol)) = range
-  -- , Debug.trace (show prevParserState) True
-  = case prevParserState of
-      ParserStateNotDone{
-        nextPragma = prevNextPragma,
-        mode = prevMode,
-        lastBlockCommentLine,
-        lastPragmaLine } ->
-        case prevMode of
-          ModeInitial ->
-            case token of
-              ITvarsym "#" -> defaultParserState{ isLastTokenHash = True }
-              ITlineComment s
-                --  | Debug.trace ("linecomment: " ++ s ++ show endLine) False -> undefined
-                | isDownwardLineHaddock s -> defaultParserState{ mode = ModeHaddock }
-                | otherwise ->
-                    defaultParserState{
-                      nextPragma = NextPragma (endLine + 1) [],
-                      mode = ModeComment }
-              ITblockComment s
-                | isPragma s ->
-                    defaultParserState{
-                      nextPragma = NextPragma (endLine + 1) [] ,
-                      mode = ModePragma,
-                      lastPragmaLine = endLine }
-                | isDownwardBlockHaddock s -> defaultParserState{ mode = ModeHaddock }
-                | otherwise ->
-                    defaultParserState{
-                      nextPragma = NextPragma (endLine + 1) [],
-                      mode = ModeComment,
-                      lastBlockCommentLine = endLine }
-              _ -> ParserStateDone prevNextPragma
-          ModeComment ->
-            case token of
-              ITvarsym "#" -> defaultParserState{ isLastTokenHash = True}
-              ITlineComment s
-                | isDownwardLineHaddock s
-                , let lineSplitTextEdits = if lastBlockCommentLine == startLine then getLineSplitTextEdits range s else [] ->
-                    defaultParserState{
-                      nextPragma = prevNextPragma{ lineSplitTextEdits = lineSplitTextEdits },
-                      mode = ModeHaddock }
-                | otherwise -> defaultParserState{ nextPragma = NextPragma (endLine + 1) [] }
-              ITblockComment s
-                --  | Debug.trace (show $ isAfterBlockComment) False -> undefined
-                | isPragma s ->
-                    defaultParserState{
-                      nextPragma = NextPragma (endLine + 1) [],
-                      mode = ModePragma,
-                      lastPragmaLine = endLine }
-                | isDownwardBlockHaddock s
-                , let lineSplitTextEdits = if lastBlockCommentLine == startLine then getLineSplitTextEdits range s else [] ->
-                    defaultParserState{
-                      nextPragma = prevNextPragma{ lineSplitTextEdits = lineSplitTextEdits },
-                      mode = ModeHaddock }
-                | otherwise ->
-                    defaultParserState{
-                      nextPragma = NextPragma (endLine + 1) [],
-                      lastBlockCommentLine = endLine }
-              _ -> ParserStateDone prevNextPragma
-          ModeHaddock ->
-            case token of
-              ITvarsym "#" -> defaultParserState{ isLastTokenHash = True }
-              ITlineComment _ -> defaultParserState
-              ITblockComment s
-                | isPragma s ->
-                    defaultParserState{
-                      nextPragma = NextPragma (endLine + 1) [],
-                      mode = ModePragma,
-                      lastPragmaLine = endLine }
-                | otherwise -> defaultParserState{ lastBlockCommentLine = endLine }
-              _ -> ParserStateDone prevNextPragma
-          ModePragma ->
-            case token of
-              ITvarsym "#" -> defaultParserState{ isLastTokenHash = True }
-              ITlineComment s
-                --  | Debug.trace ("pragma - linecomment - " ++ s ++ show (getLineSplitTextEdits range s) ++ show endLine) False -> undefined
-                | isDownwardLineHaddock s
-                , lastPragmaLine == startLine ->
-                    defaultParserState{ nextPragma = prevNextPragma{ lineSplitTextEdits = getLineSplitTextEdits range s } }
-                | otherwise -> defaultParserState
-              ITblockComment s
-                | isPragma s ->
-                    defaultParserState{
-                      nextPragma = NextPragma (endLine + 1) [],
-                      lastPragmaLine = endLine }
-                | lastPragmaLine == startLine ->
-                    defaultParserState{ nextPragma = prevNextPragma{ lineSplitTextEdits = getLineSplitTextEdits range s} }
-                | otherwise -> defaultParserState{ lastBlockCommentLine = endLine }
-              _ -> ParserStateDone prevNextPragma
-      ParserStateDone _ -> defaultParserState
+  | ParserStateNotDone
+      { nextPragma = prevNextPragma@NextPragma{ lineSplitTextEdits = prevLineSplitTextEdits }
+      , mode = prevMode
+      , lastBlockCommentLine
+      , lastPragmaLine
+      } <- prevParserState
+  , let defaultParserState =
+          prevParserState
+            { nextPragma = prevNextPragma{ lineSplitTextEdits = Nothing }
+            , isLastTokenHash = False }
+  , let J.Range (J.Position startLine _) (J.Position endLine _) = range
+  = case prevMode of
+      ModeInitial ->
+        case token of
+          ITvarsym "#" -> defaultParserState{ isLastTokenHash = True }
+          ITlineComment s
+            | isDownwardLineHaddock s -> defaultParserState{ mode = ModeHaddock }
+            | otherwise ->
+                defaultParserState
+                  { nextPragma = NextPragma (endLine + 1) Nothing
+                  , mode = ModeComment }
+          ITblockComment s
+            | isPragma s ->
+                defaultParserState
+                  { nextPragma = NextPragma (endLine + 1) Nothing
+                  , mode = ModePragma
+                  , lastPragmaLine = endLine }
+            | isDownwardBlockHaddock s -> defaultParserState{ mode = ModeHaddock }
+            | otherwise ->
+                defaultParserState
+                  { nextPragma = NextPragma (endLine + 1) Nothing
+                  , mode = ModeComment
+                  , lastBlockCommentLine = endLine }
+          _ -> ParserStateDone prevNextPragma
+      ModeComment ->
+        case token of
+          ITvarsym "#" -> defaultParserState{ isLastTokenHash = True }
+          ITlineComment s
+            | hasDeleteStartedOnSameLine startLine prevLineSplitTextEdits
+            , let currLineSplitTextEdits = updateLineSplitTextEdits range s prevLineSplitTextEdits ->
+                defaultParserState{ nextPragma = prevNextPragma{ lineSplitTextEdits = Just currLineSplitTextEdits } }
+            | isDownwardLineHaddock s
+            , lastBlockCommentLine == startLine
+            , let currLineSplitTextEdits = updateLineSplitTextEdits range s Nothing ->
+                defaultParserState
+                  { nextPragma = prevNextPragma{ lineSplitTextEdits = Just currLineSplitTextEdits }
+                  , mode = ModeHaddock }
+            | otherwise ->
+                defaultParserState { nextPragma = NextPragma (endLine + 1) Nothing }
+          ITblockComment s
+            | isPragma s ->
+                defaultParserState
+                  { nextPragma = NextPragma (endLine + 1) Nothing
+                  , mode = ModePragma
+                  , lastPragmaLine = endLine }
+            | hasDeleteStartedOnSameLine startLine prevLineSplitTextEdits
+            , let currLineSplitTextEdits = updateLineSplitTextEdits range s prevLineSplitTextEdits ->
+                defaultParserState{ nextPragma = prevNextPragma{ lineSplitTextEdits = Just currLineSplitTextEdits } }
+            | isDownwardBlockHaddock s
+            , lastBlockCommentLine == startLine
+            , let currLineSplitTextEdits = updateLineSplitTextEdits range s Nothing ->
+                defaultParserState{
+                  nextPragma = prevNextPragma{ lineSplitTextEdits = Just currLineSplitTextEdits },
+                  mode = ModeHaddock }
+            | otherwise ->
+                defaultParserState{
+                  nextPragma = NextPragma (endLine + 1) Nothing,
+                  lastBlockCommentLine = endLine }
+          _ -> ParserStateDone prevNextPragma
+      ModeHaddock ->
+        case token of
+          ITvarsym "#" ->
+            defaultParserState{ isLastTokenHash = True }
+          ITlineComment _ ->
+            defaultParserState
+          ITblockComment s
+            | isPragma s ->
+                defaultParserState{
+                  nextPragma = NextPragma (endLine + 1) Nothing,
+                  mode = ModePragma,
+                  lastPragmaLine = endLine
+                }
+            | otherwise -> defaultParserState{ lastBlockCommentLine = endLine }
+          _ -> ParserStateDone prevNextPragma
+      ModePragma ->
+        case token of
+          ITvarsym "#" -> defaultParserState{ isLastTokenHash = True }
+          ITlineComment s
+            | hasDeleteStartedOnSameLine startLine prevLineSplitTextEdits
+            , let currLineSplitTextEdits = updateLineSplitTextEdits range s prevLineSplitTextEdits ->
+                defaultParserState{ nextPragma = prevNextPragma{ lineSplitTextEdits = Just currLineSplitTextEdits } }
+            | isDownwardLineHaddock s
+            , lastPragmaLine == startLine
+            , let currLineSplitTextEdits = updateLineSplitTextEdits range s Nothing ->
+                defaultParserState{ nextPragma = prevNextPragma{ lineSplitTextEdits = Just currLineSplitTextEdits } }
+            | otherwise ->
+                defaultParserState
+          ITblockComment s
+            | isPragma s ->
+                defaultParserState{ nextPragma = NextPragma (endLine + 1) Nothing, lastPragmaLine = endLine }
+            | hasDeleteStartedOnSameLine startLine prevLineSplitTextEdits
+            , let currLineSplitTextEdits = updateLineSplitTextEdits range s prevLineSplitTextEdits ->
+                defaultParserState{ nextPragma = prevNextPragma{ lineSplitTextEdits = Just currLineSplitTextEdits } }
+            | isDownwardBlockHaddock s
+            , lastPragmaLine == startLine
+            , let currLineSplitTextEdits = updateLineSplitTextEdits range s Nothing ->
+                defaultParserState{ nextPragma = prevNextPragma{ lineSplitTextEdits = Just currLineSplitTextEdits } }
+            | lastPragmaLine < endLine
+            , let currLineSplitTextEdits = updateLineSplitTextEdits range s Nothing ->
+                defaultParserState{ nextPragma = prevNextPragma{ lineSplitTextEdits = Just currLineSplitTextEdits } }
+            | otherwise ->
+                defaultParserState{ lastBlockCommentLine = endLine }
+          _ -> ParserStateDone prevNextPragma
+  | otherwise = prevParserState
+  where
+    hasDeleteStartedOnSameLine :: Int -> Maybe LineSplitTextEdits -> Bool
+    hasDeleteStartedOnSameLine line lineSplitTextEdits
+      | Just lineSplitTextEdits <- lineSplitTextEdits
+      , let LineSplitTextEdits{ lineSplitDeleteTextEdit } = lineSplitTextEdits
+      , let J.TextEdit deleteRange _ = lineSplitDeleteTextEdit
+      , let J.Range _ deleteEndPosition = deleteRange
+      , let J.Position deleteEndLine _ = deleteEndPosition
+      = deleteEndLine == line
+      | otherwise = False
+
 
 lexUntilNextLineIncl :: P (Located Token)
 lexUntilNextLineIncl = do
@@ -463,7 +550,6 @@ dropWhileStringBuffer :: (Char -> Bool) -> StringBuffer -> StringBuffer
 dropWhileStringBuffer predicate buffer
   | atEnd buffer = buffer
   | let (c, remainingBuffer) = nextChar buffer
-  -- , Debug.trace ("dropwhile" ++ show c) True
   = if predicate c then
       dropWhileStringBuffer predicate remainingBuffer
     else
@@ -483,10 +569,8 @@ data ShebangParserState = ShebangParserState {
 parseShebangs :: ShebangParserState -> ShebangParserState
 parseShebangs prev@ShebangParserState{ nextPragmaLine, newlineCount = prevNewlineCount, prevCharIsHash, buffer = prevBuffer }
   | atEnd prevBuffer
-  -- , Debug.trace "end" True
   = prev
   | let (c, currBuffer) = nextChar (dropWhileStringBuffer isHorizontalSpace prevBuffer)
-  -- , Debug.trace (show c ++ show nextPragmaLine ++ show prevNewlineCount) True
   = if c == '#' then
       parseShebangs prev{ prevCharIsHash = True, buffer = currBuffer }
     else if c == '!' && prevCharIsHash then
@@ -509,7 +593,7 @@ parsePreDecl dynFlags buffer = unP (go initialParserState) pState{ options = opt
     dynFlagsWithoutHaddockWithRawTokenStream = gopt_set (gopt_unset dynFlags Opt_Haddock) Opt_KeepRawTokenStream
     pState@PState{ options = pStateOptions } = mkPState dynFlagsWithoutHaddockWithRawTokenStream buffer start
     options = pStateOptions{ pExtsBitmap = complement (xbit UsePosPragsBit) .&. pExtsBitmap pStateOptions }
-    initialParserState = ParserStateNotDone (NextPragma nextPragmaLine []) ModeInitial (-1) (-1) False
+    initialParserState = ParserStateNotDone (NextPragma nextPragmaLine Nothing) ModeInitial (-1) (-1) False
 
     go :: ParserState -> P ParserState
     go prevParserState =

@@ -32,7 +32,6 @@ library
     , transformers
     , unordered-containers
     , containers
-    , attoparsec
 
   default-language: Haskell2010
 
