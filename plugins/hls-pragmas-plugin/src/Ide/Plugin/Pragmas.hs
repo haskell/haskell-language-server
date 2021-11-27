@@ -36,7 +36,6 @@ import           Data.Ord                         (Down (Down))
 import           Data.Semigroup                   (Semigroup ((<>)))
 import qualified Data.Text                        as T
 import           Data.Word                        (Word64)
-import qualified Debug.Trace                      as Debug
 import           Development.IDE                  as D
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util  (StringBuffer, atEnd,
@@ -69,7 +68,7 @@ codeActionProvider :: PluginMethodHandler IdeState 'J.TextDocumentCodeAction
 codeActionProvider state _plId (J.CodeActionParams _ _ docId _ (J.CodeActionContext (J.List diags) _monly))
   | let J.TextDocumentIdentifier{ _uri = uri } = docId
   , Just normalizedFilePath <- J.uriToNormalizedFilePath $ toNormalizedUri uri = do
-      -- ghc session to get dynflags even if module isn't parsed
+      -- ghc session to get some dynflags even if module isn't parsed
       ghcSession <- liftIO $ runAction "Pragmas.GhcSession" state $ useWithStale GhcSession normalizedFilePath
       (_, fileContents) <- liftIO $ runAction "Pragmas.GetFileContents" state $ getFileContents normalizedFilePath
       parsedModule <- liftIO $ runAction "Pragmas.GetParsedModule" state $ getParsedModule normalizedFilePath
@@ -106,7 +105,7 @@ pragmaEditToAction uri NextPragma{ nextPragmaLine, lineSplitTextEdits } (title, 
     pragmaInsertPosition = Position nextPragmaLine 0
     pragmaInsertRange = Range pragmaInsertPosition pragmaInsertPosition
     -- workaround the fact that for some reason lsp-test applies text
-    -- edits in reverse order than actual clients (coc.nvim, vscode)
+    -- edits in reverse order than lsp (tried in both coc.nvim and vscode)
     textEdits =
       if | Just (LineSplitTextEdits insertTextEdit deleteTextEdit) <- lineSplitTextEdits
          , let J.TextEdit{ _range, _newText } = insertTextEdit ->
@@ -115,7 +114,7 @@ pragmaEditToAction uri NextPragma{ nextPragmaLine, lineSplitTextEdits } (title, 
 
     edit =
       J.WorkspaceEdit
-        (Just $ H.singleton uri (J.List $ Debug.trace (show textEdits) textEdits))
+        (Just $ H.singleton uri (J.List textEdits))
         Nothing
         Nothing
 
@@ -286,12 +285,15 @@ mkExtCompl label =
     Nothing Nothing Nothing Nothing Nothing Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing Nothing
 
--- Parser
+-- Parser stuff -----------------------------------------------------
 type ExtsBitmap = Word64
 
 xbit :: ExtBits -> ExtsBitmap
 xbit = bit . fromEnum
 
+-- | Each mode represents the "strongest" thing we've seen so far.
+-- From strongest to weakest:
+-- ModePragma, ModeHaddock, ModeComment, ModeInitial
 data Mode = ModePragma | ModeHaddock | ModeComment | ModeInitial deriving Show
 
 data LineSplitTextEdits = LineSplitTextEdits {
@@ -344,6 +346,8 @@ srcSpanToRange srcSpan
   | otherwise
   = Nothing
 
+-- need to merge tokens that are deleted/inserted into one TextEdit each
+-- to work around some weird TextEdits applied in reversed order issue
 updateLineSplitTextEdits :: J.Range -> String -> Maybe LineSplitTextEdits -> LineSplitTextEdits
 updateLineSplitTextEdits tokenRange tokenString prevLineSplitTextEdits
   | Just prevLineSplitTextEdits <- prevLineSplitTextEdits
@@ -361,7 +365,7 @@ updateLineSplitTextEdits tokenRange tokenString prevLineSplitTextEdits
   , let currInsertRange = prevInsertRange
   , let currInsertText =
           T.init prevInsertText
-          <> T.replicate (startCol - prevInsertEndCol) " "
+          <> T.replicate (startCol - prevDeleteEndCol) " "
           <> T.pack (List.take newLineCol tokenString)
           <> "\n"
   , let currInsertTextEdit = J.TextEdit currInsertRange currInsertText
@@ -383,28 +387,6 @@ updateLineSplitTextEdits tokenRange tokenString prevLineSplitTextEdits
 
     newLineCol = Maybe.fromMaybe (length tokenString) (List.elemIndex '\n' tokenString)
 
-  -- lineSplitTextEdits
-  -- where
-  --   startPosition@J.Position{ _line = startLine, _character = startCol } =
-  --     if | Just LineSplitTextEdits{ lineSplitInsertTextEdit } <- prevLineSplitTextEdits
-  --        , let J.TextEdit{ _range = J.Range{ _start } } = lineSplitInsertTextEdit
-  --        -> _start
-  --        | otherwise
-  --        , let J.Range{ _start } = tokenRange
-  --        -> _start
-
-  --   lineSplitTextEdits =
-  --     let
-  --       newLineCol = Maybe.fromMaybe (length tokenString) (List.elemIndex '\n' tokenString)
-  --       deleteTextEdit = J.TextEdit (J.Range startPosition startPosition{ J._character = startCol + newLineCol }) ""
-  --       insertPosition = J.Position (startLine + 1) 0
-  --       insertRange = J.Range insertPosition insertPosition
-  --       insertText = T.pack (List.take newLineCol tokenString) <> "\n"
-  --       insertTextEdit = J.TextEdit insertRange insertText
-  --     in
-  --       LineSplitTextEdits{ lineSplitInsertTextEdit = insertTextEdit, lineSplitDeleteTextEdit = deleteTextEdit}
-
-
 -- ITvarsym "#" after a block comment is a parse error so we don't need to worry about it
 updateParserState :: Token -> J.Range -> ParserState -> ParserState
 updateParserState token range prevParserState
@@ -414,10 +396,7 @@ updateParserState token range prevParserState
       , lastBlockCommentLine
       , lastPragmaLine
       } <- prevParserState
-  , let defaultParserState =
-          prevParserState
-            { nextPragma = prevNextPragma{ lineSplitTextEdits = Nothing }
-            , isLastTokenHash = False }
+  , let defaultParserState = prevParserState { isLastTokenHash = False }
   , let J.Range (J.Position startLine _) (J.Position endLine _) = range
   = case prevMode of
       ModeInitial ->
@@ -481,15 +460,21 @@ updateParserState token range prevParserState
         case token of
           ITvarsym "#" ->
             defaultParserState{ isLastTokenHash = True }
-          ITlineComment _ ->
-            defaultParserState
+          ITlineComment s
+            | hasDeleteStartedOnSameLine startLine prevLineSplitTextEdits
+            , let currLineSplitTextEdits = updateLineSplitTextEdits range s prevLineSplitTextEdits ->
+                defaultParserState{ nextPragma = prevNextPragma{ lineSplitTextEdits = Just currLineSplitTextEdits } }
+            | otherwise ->
+                defaultParserState
           ITblockComment s
             | isPragma s ->
                 defaultParserState{
                   nextPragma = NextPragma (endLine + 1) Nothing,
                   mode = ModePragma,
-                  lastPragmaLine = endLine
-                }
+                  lastPragmaLine = endLine }
+            | hasDeleteStartedOnSameLine startLine prevLineSplitTextEdits
+            , let currLineSplitTextEdits = updateLineSplitTextEdits range s prevLineSplitTextEdits ->
+                defaultParserState{ nextPragma = prevNextPragma{ lineSplitTextEdits = Just currLineSplitTextEdits } }
             | otherwise -> defaultParserState{ lastBlockCommentLine = endLine }
           _ -> ParserStateDone prevNextPragma
       ModePragma ->
@@ -515,7 +500,7 @@ updateParserState token range prevParserState
             , lastPragmaLine == startLine
             , let currLineSplitTextEdits = updateLineSplitTextEdits range s Nothing ->
                 defaultParserState{ nextPragma = prevNextPragma{ lineSplitTextEdits = Just currLineSplitTextEdits } }
-            | lastPragmaLine < endLine
+            | lastPragmaLine == startLine && startLine < endLine
             , let currLineSplitTextEdits = updateLineSplitTextEdits range s Nothing ->
                 defaultParserState{ nextPragma = prevNextPragma{ lineSplitTextEdits = Just currLineSplitTextEdits } }
             | otherwise ->
@@ -532,7 +517,6 @@ updateParserState token range prevParserState
       , let J.Position deleteEndLine _ = deleteEndPosition
       = deleteEndLine == line
       | otherwise = False
-
 
 lexUntilNextLineIncl :: P (Located Token)
 lexUntilNextLineIncl = do
@@ -580,6 +564,56 @@ parseShebangs prev@ShebangParserState{ nextPragmaLine, newlineCount = prevNewlin
     else
       prev
 
+-- | Parses blank lines, comments, haddock comments ("-- |"), lines that start
+-- with "#!", lines that start with "#", pragma lines using the GHC API lexer.
+-- When it doesn't find one of these things then it's assumed that we've found
+-- a declaration, end-of-file, or a ghc parse error, and the parser stops.
+-- Shebangs are parsed separately than the rest becaues the lexer ignores them.
+--
+-- The reason for parsing instead of using annotations, or turning on/off
+-- extensions in the dynflags is because there are a number of extensions that
+-- while removing parse errors, can also introduce them. Hence, there are
+-- cases where the file cannot be parsed at all when we want to insert extension
+-- (and other) pragmas. So if the compiler someday returns annotation or
+-- equivalent information on parse errors then we can replace this with that.
+--
+-- The reason for using the GHC API lexer instead of without is because despite
+-- misgivings that it would be twice as hard to do with the lexer (it was), and
+-- less flexible, might as well give it a try.
+--
+-- The parser keeps track of state in order to place the next pragma line
+-- according to some rules:
+--
+-- - Ignore lines starting with '#' except for shebangs.
+-- - If pragmas exist place after last pragma
+-- - else if haddock comments exist:
+--     - If comments exist place after last comment
+--     - else if shebangs exist place after last shebang
+--     - else place at first line
+-- - else if comments exist place after last comment
+-- - else if shebangs exist place after last shebang
+-- - else place at first line
+--
+-- Additionally the parser keeps track of information to be able to insert
+-- pragmas inbetween lines.
+--
+-- For example the parser keeps track of information so that
+--
+-- > {- block comment -} -- | haddock
+--
+-- can become
+--
+-- > {- block comment -}
+-- > {-# pragma #-}
+-- > -- | haddock
+--
+-- This information does not respect the type of whitespace, because the lexer
+-- strips whitespace and gives locations.
+--
+-- In this example the tabs are converted to spaces in the TextEdits:
+--
+-- > {- block comment -}<space><tab><tab><space>-- | haddock
+--
 parsePreDecl :: DynFlags -> StringBuffer -> ParseResult ParserState
 parsePreDecl dynFlags buffer = unP (go initialParserState) pState{ options = options }
   where
@@ -608,48 +642,4 @@ parsePreDecl dynFlags buffer = unP (go initialParserState) pState{ options = opt
           case D.srcSpanToRange srcSpan of
             Just range -> go (updateParserState token range prevParserState)
             Nothing    -> pure prevParserState
-
--- | Parses blank lines, comments, haddock comments ("-- |"), lines that start
--- with "#!", lines that start with "#", pragma lines. It should work with
--- multi-line comments and pragmas with things after them on the same line, as
--- well as nested forms of both.
--- When it doesn't find one of these things then it's assumed that we've found
--- a declaration, end-of-file, or a ghc parse error, and the parser stops.
---
--- While doing this, the parser keeps track of state in order to place the
--- next pragma line according to some rules:
--- - Ignore lines starting with '#' except for shebangs.
--- - If pragmas exist place after last pragma
--- - else if haddock comments exist:
---     - If comments exist place after last comment
---     - else if shebangs exist place after last shebang
---     - else place at first line
--- - else if comments exist place after last comment
--- - else if shebangs exist place after last shebang
--- - else place at first line
---
--- In particular this means that this is possible:
--- -- some comment
--- #! some shebang stuff
---
--- After insert:
---
--- -- some comment
--- {-# some pragma #-}
--- #! some shebang stuff
---
--- This should be fine because it makes no sense to have shebangs not at the
--- top of the file, but can be changed by modifying `insertLines` and/or maybe
--- changing an `InsertMode`.
--- getNextPragmaInsertLine :: T.Text -> Int
--- getNextPragmaInsertLine text =
---   let
---     result = Atto.parseOnly preDeclP text & fmap ($ ParserState 0 0 InsertModeInitial LineTypeBlank False False)
---   in
---     case result of
---       Left _                                -> 0
---       Right ParserState{ pragmaInsertLine } -> pragmaInsertLine
-
-
-
 

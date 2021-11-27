@@ -1,6 +1,6 @@
 {- block comment -} 
 {-# LANGUAGE TupleSections #-}
--- | haddock
+-- | line haddock
 
 module BlockCommentThenLineHaddock where
 

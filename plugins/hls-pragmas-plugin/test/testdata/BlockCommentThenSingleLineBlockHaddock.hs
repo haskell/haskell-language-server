@@ -1,4 +1,4 @@
-{- comment -} {-| haddock -}
+{- block comment -} {-| single line block haddock -}
 
 module BlockCommentThenSingleLineBlockHaddock where
 
