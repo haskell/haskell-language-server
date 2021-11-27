@@ -5277,25 +5277,28 @@ ifaceTests = testGroup "Interface loading tests"
     ]
 
 bootTests :: TestTree
-bootTests = testCase "boot-def-test" $ runWithExtraFiles "boot" $ \dir -> do
-  let cPath = dir </> "C.hs"
-  cSource <- liftIO $ readFileUtf8 cPath
-
-  -- Dirty the cache
-  liftIO $ runInDir dir $ do
-    cDoc <- createDoc cPath "haskell" cSource
-    _ <- getHover cDoc $ Position 4 3
-    ~() <- skipManyTill anyMessage $ satisfyMaybe $ \case
-      FromServerMess (SCustomMethod "ghcide/reference/ready") (NotMess NotificationMessage{_params = fp}) -> do
-        A.Success fp' <- pure $ fromJSON fp
-        if equalFilePath fp' cPath then pure () else Nothing
-      _ -> Nothing
-    closeDoc cDoc
-
-  cdoc <- createDoc cPath "haskell" cSource
-  locs <- getDefinitions cdoc (Position 7 4)
-  let floc = mkR 9 0 9 1
-  checkDefs locs (pure [floc])
+bootTests = testGroup "boot"
+  [ testCase "boot-def-test" $ runWithExtraFiles "boot" $ \dir -> do
+        let cPath = dir </> "C.hs"
+        cSource <- liftIO $ readFileUtf8 cPath
+        -- Dirty the cache
+        liftIO $ runInDir dir $ do
+            cDoc <- createDoc cPath "haskell" cSource
+            _ <- getHover cDoc $ Position 4 3
+            ~() <- skipManyTill anyMessage $ satisfyMaybe $ \case
+                FromServerMess (SCustomMethod "ghcide/reference/ready") (NotMess NotificationMessage{_params = fp}) -> do
+                    A.Success fp' <- pure $ fromJSON fp
+                    if equalFilePath fp' cPath then pure () else Nothing
+                _ -> Nothing
+            closeDoc cDoc
+        cdoc <- createDoc cPath "haskell" cSource
+        locs <- getDefinitions cdoc (Position 7 4)
+        let floc = mkR 9 0 9 1
+        checkDefs locs (pure [floc])
+  , testCase "graph with boot modules" $ runWithExtraFiles "boot2" $ \dir -> do
+      _ <- openDoc (dir </> "A.hs") "haskell"
+      expectNoMoreDiagnostics 2
+  ]
 
 -- | test that TH reevaluates across interfaces
 ifaceTHTest :: TestTree
