@@ -427,10 +427,7 @@ diagnosticTests = testGroup "diagnostics"
       liftIO $ writeFile (path </> "hie.yaml") cradle
       _ <- createDoc "ModuleD.hs" "haskell" contentD
       expectDiagnostics
-        [ ( "ModuleA.hs"
-          , [(DsError, (1, 7), "Cyclic module dependency between ModuleA, ModuleB")]
-          )
-        , ( "ModuleB.hs"
+        [ ( "ModuleB.hs"
           , [(DsError, (1, 7), "Cyclic module dependency between ModuleA, ModuleB")]
           )
         ]
@@ -1780,6 +1777,7 @@ suggestImportTests = testGroup "suggest import actions"
     test = test' False
     wantWait = test' True True
     test' waitForCheckProject wanted imps def other newImp = testSessionWithExtraFiles "hover" (T.unpack def) $ \dir -> do
+      configureCheckProject waitForCheckProject
       let before = T.unlines $ "module A where" : ["import " <> x | x <- imps] ++ def : other
           after  = T.unlines $ "module A where" : ["import " <> x | x <- imps] ++ [newImp] ++ def : other
           cradle = "cradle: {direct: {arguments: [-hide-all-packages, -package, base, -package, text, -package-env, -, A, Bar, Foo, B]}}"
@@ -5322,6 +5320,7 @@ ifaceTHTest = testCase "iface-th-test" $ runWithExtraFiles "TH" $ \dir -> do
 
 ifaceErrorTest :: TestTree
 ifaceErrorTest = testCase "iface-error-test-1" $ runWithExtraFiles "recomp" $ \dir -> do
+    configureCheckProject True
     let bPath = dir </> "B.hs"
         pPath = dir </> "P.hs"
 
@@ -5686,6 +5685,8 @@ getReferences' (file, l, c) includeDeclaration = do
 
 referenceTestSession :: String -> FilePath -> [FilePath] -> (FilePath -> Session ()) -> TestTree
 referenceTestSession name thisDoc docs' f = testSessionWithExtraFiles "references" name $ \dir -> do
+  -- needed to build whole project indexing
+  configureCheckProject True
   let docs = map (dir </>) $ delete thisDoc $ nubOrd docs'
   -- Initial Index
   docid <- openDoc thisDoc "haskell"
