@@ -163,7 +163,6 @@ import           Debug.Trace.Flags                      (userTracingEnabled)
 import qualified Development.IDE.Types.Exports          as ExportsMap
 import           HieDb.Types
 import           Ide.Plugin.Config
-import           Ide.Plugin.Properties                  (useProperty)
 import qualified Ide.PluginUtils                        as HLS
 import           Ide.Types                              (PluginId)
 
