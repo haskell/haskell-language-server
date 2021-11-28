@@ -16,7 +16,8 @@ module Development.IDE.Graph.Internal.Database (newDatabase, incDatabase, build,
 
 import           Control.Concurrent.Async
 import           Control.Concurrent.Extra
-import           Control.Concurrent.STM               (STM, atomically,
+import           Control.Concurrent.STM.Stats         (STM, atomically,
+                                                       atomicallyNamed,
                                                        modifyTVar', newTVarIO,
                                                        readTVarIO)
 import           Control.Exception
@@ -93,7 +94,7 @@ builder db@Database{..} keys = withRunInIO $ \(RunInIO run) -> do
     -- Things that I need to force before my results are ready
     toForce <- liftIO $ newTVarIO []
     current <- liftIO $ readTVarIO databaseStep
-    results <- liftIO $ atomically $ for keys $ \id -> do
+    results <- liftIO $ atomicallyNamed "builder" $ for keys $ \id -> do
             -- Spawn the id if needed
             status <- SMap.lookup id databaseValues
             val <- case viewDirty current $ maybe (Dirty Nothing) keyStatus status of
@@ -165,7 +166,7 @@ compute db@Database{..} key mode result = do
                     (getResultDepsDefault [] previousDeps)
                     (HSet.fromList deps)
         _ -> pure ()
-    atomically $ SMap.focus (updateStatus $ Clean res) key databaseValues
+    atomicallyNamed "compute" $ SMap.focus (updateStatus $ Clean res) key databaseValues
     pure res
 
 updateStatus :: Monad m => Status -> Focus.Focus KeyDetails m ()
@@ -214,7 +215,7 @@ updateReverseDeps
     -> [Key] -- ^ Previous direct dependencies of Id
     -> HashSet Key -- ^ Current direct dependencies of Id
     -> IO ()
-updateReverseDeps myId db prev new = uninterruptibleMask_ $ atomically $ do
+updateReverseDeps myId db prev new = uninterruptibleMask_ $ atomicallyNamed "updateReverseDeps" $ do
     forM_ prev $ \d ->
         unless (d `HSet.member` new) $
             doOne (HSet.delete myId) d

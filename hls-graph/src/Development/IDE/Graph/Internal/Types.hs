@@ -14,7 +14,7 @@ module Development.IDE.Graph.Internal.Types where
 import           Control.Applicative
 import           Control.Monad.Catch
 -- Needed in GHC 8.6.5
-import           Control.Concurrent.STM        (TVar, atomically)
+import           Control.Concurrent.STM.Stats  (TVar, atomically)
 import           Control.Monad.Fail
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Reader
