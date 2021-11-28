@@ -144,7 +144,7 @@ jobs:
 
       - name: Set test options
         run: |
-          echo "TEST_OPTS=\"-j1 --rerun-update --rerun-filter failures,exceptions,new\"" >> $GITHUB_ENV
+          echo "TEST_OPTS=-j1 --rerun-update --rerun-filter failures,exceptions,new" >> $GITHUB_ENV
 
       - name: Cache test log bewteen attempts of the same run
         uses: actions/cache@v2
