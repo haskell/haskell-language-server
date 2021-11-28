@@ -14,7 +14,7 @@ module Development.IDE.Core.ProgressReporting
    where
 
 import           Control.Concurrent.Async
-import           Control.Concurrent.STM.Stats   (STM, TVar, atomically,
+import           Control.Concurrent.STM.Stats   (STM, TVar, atomicallyNamed,
                                                  newTVarIO, readTVar,
                                                  readTVarIO, writeTVar)
 import           Control.Concurrent.Strict
@@ -186,7 +186,7 @@ delayedProgressReporting before after lspEnv optProgressStyle = do
             -- Do not remove the eta-expansion without profiling a session with at
             -- least 1000 modifications.
             where
-              f shift = atomically $ recordProgress inProgress file shift
+              f shift = atomicallyNamed "recordProgress" $ recordProgress inProgress file shift
 
 mRunLspT :: Applicative m => Maybe (LSP.LanguageContextEnv c ) -> LSP.LspT c m () -> m ()
 mRunLspT (Just lspEnv) f = LSP.runLspT lspEnv f
