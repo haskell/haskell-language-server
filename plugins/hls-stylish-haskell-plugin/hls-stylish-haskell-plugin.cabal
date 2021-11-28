@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-stylish-haskell-plugin
-version:            1.0.0.3
+version:            1.0.0.4
 synopsis:           Integration with the Stylish Haskell code formatter
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
