@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-splice-plugin
-version:            1.0.0.5
+version:            1.0.0.6
 synopsis:
   HLS Plugin to expand TemplateHaskell Splices and QuasiQuotes
 
