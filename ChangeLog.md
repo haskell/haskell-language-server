@@ -1,5 +1,45 @@
 # Changelog for haskell-language-server
 
+## 1.5.1
+
+This is a bug fix release for two regressions found after releasing 1.5.0:
+
+- [#2365](https://github.com/haskell/haskell-language-server/issue/2365): hs-boot files not handled correctly, discovered in the ghc codebase and fixed with [#2377](https://github.com/haskell/haskell-language-server/pull/2377)
+- [#2379](https://github.com/haskell/haskell-language-server/issue/2379): `tried to look at linkable for GetModIfaceWithoutLinkable for NormalizedFilePath...` error handling template haskell, fixed with [#2380](https://github.com/haskell/haskell-language-server/pull/2380)
+
+Both quick fixes thanks to @pepeiborra
+
+Also it fixes some long standing bugs in the hlint plugin due to comments being ignored (see [#2366](https://github.com/haskell/haskell-language-server/pull/2366))
+
+### Pull requests merged for 1.5.1
+
+- Fix hls-graph build with embed-files flag
+([#2395](https://github.com/haskell/haskell-language-server/pull/2395)) by @pepeiborra
+- Prepare 1.5.1
+([#2393](https://github.com/haskell/haskell-language-server/pull/2393)) by @jneira
+- Revert "Update to latest prettyprinter API (#2352)"
+([#2389](https://github.com/haskell/haskell-language-server/pull/2389)) by @pepeiborra
+- Add extra logging around build queue
+([#2388](https://github.com/haskell/haskell-language-server/pull/2388)) by @pepeiborra
+- docs: Fix typo
+([#2386](https://github.com/haskell/haskell-language-server/pull/2386)) by @nh2
+- Update release instructions
+([#2384](https://github.com/haskell/haskell-language-server/pull/2384)) by @jneira
+- ghcide: Update dependency on `hls-plugin-api`
+([#2382](https://github.com/haskell/haskell-language-server/pull/2382)) by @hololeap
+- Fix regression in GhcSessionDeps
+([#2380](https://github.com/haskell/haskell-language-server/pull/2380)) by @pepeiborra
+- Boot files
+([#2377](https://github.com/haskell/haskell-language-server/pull/2377)) by @pepeiborra
+- hls-module-name-plugin: Add missing golden file to hackage tarball
+([#2374](https://github.com/haskell/haskell-language-server/pull/2374)) by @maralorn
+- hls-explicit-imports-plugin: Add golden files to hackage tarball
+([#2373](https://github.com/haskell/haskell-language-server/pull/2373)) by @maralorn
+- Update ghcide dependency for various plugins
+([#2368](https://github.com/haskell/haskell-language-server/pull/2368)) by @hololeap
+- Fix several hlint issues related with the use of parsed module without comments
+([#2366](https://github.com/haskell/haskell-language-server/pull/2366)) by @jneira
+
 ## 1.5.0
 
 Time for another hls release:
@@ -22,6 +62,8 @@ Time for another hls release:
 
 ### Pull requests merged for 1.5.0
 
+- Prepare 1.5.0
+([#2361](https://github.com/haskell/haskell-language-server/pull/2361)) by @jneira
 - More completion fixes
 ([#2354](https://github.com/haskell/haskell-language-server/pull/2354)) by @pepeiborra
 - Update to latest prettyprinter API
@@ -986,6 +1028,7 @@ This version uses `lsp-1.2.0`, `hls-plugin-api-1.1.0`, and `ghcide-1.2.0.2`.
 This is the celebratory release of Haskell Language Server 1.0.0!
 This release includes a lot of internal changes, bug fixes, leaks plugged, and performance improvements, thanks to all our contributors.
 Among others,
+
 - We added the support for GHC 8.10.4, and removed the support for GHC 8.10.1
     Afterward, we will support upmost 3 patch versions for each minor version of GHC, if no special situation happens.
 - As by hie-bios >= 0.7.3, we use (`${XDG_CACHE_HOME}`)[https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html]`/hie-bios/...` (or similar depends on OS) as a build directory for Cabal.
@@ -1169,7 +1212,7 @@ Among others,
 ([#1266](https://github.com/haskell/haskell-language-server/pull/1266)) by @pepeiborra
 - ghcide: Implements a CodeAction to disambiguate ambiguous symbols
 ([#1264](https://github.com/haskell/haskell-language-server/pull/1264)) by @konn
--  Doctest comment parsing using module annotations in Eval Plugin
+- Doctest comment parsing using module annotations in Eval Plugin
 ([#1232](https://github.com/haskell/haskell-language-server/pull/1232)) by @konn
 - Apply some hlint suggestions, silence some others.
 ([#1227](https://github.com/haskell/haskell-language-server/pull/1227)) by @peterwicksstringfield
@@ -1369,7 +1412,6 @@ And remember, we have a new brand logo, courtesy of @Ailrun :slightly_smiling_fa
 - There had been lot of internal changes:
   - ghcide lives now directly in this repository
   - the test suite has been cleaned and improved (continuing the work done in 0.7.0)
-
 
 Thanks to all contributors and happy new year!
 
@@ -1624,7 +1666,7 @@ There's also plenty of bug fixes, improvements and updates to the underlying too
 If you're eager to try all this out, haskell-language-server is now also installable via [ghcup](https://www.haskell.org/ghcup/):
 
 ```shell
-$ ghcup install hls
+> ghcup install hls
 ```
 
 ### Pull requests merged for 0.5.0
