@@ -12,8 +12,7 @@ module Development.IDE.Graph.Database(
     shakeGetDirtySet,
     shakeGetCleanKeys
     ,shakeGetBuildEdges) where
-import           Control.Concurrent.STM.Stats            (atomicallyNamed,
-                                                          readTVarIO)
+import           Control.Concurrent.STM.Stats            (readTVarIO)
 import           Data.Dynamic
 import           Data.Maybe
 import           Development.IDE.Graph.Classes           ()
@@ -64,7 +63,7 @@ shakeRunDatabaseForKeys
     -> [Action a]
     -> IO ([a], [IO ()])
 shakeRunDatabaseForKeys keysChanged (ShakeDatabase lenAs1 as1 db) as2 = do
-    atomicallyNamed "incDatabase" $ incDatabase db keysChanged
+    incDatabase db keysChanged
     as <- fmap (drop lenAs1) $ runActions db $ map unvoid as1 ++ as2
     return (as, [])
 

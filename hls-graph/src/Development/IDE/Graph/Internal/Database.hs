@@ -51,19 +51,19 @@ newDatabase databaseExtra databaseRules = do
     pure Database{..}
 
 -- | Increment the step and mark dirty
-incDatabase :: Database -> Maybe [Key] -> STM ()
+incDatabase :: Database -> Maybe [Key] -> IO ()
 -- only some keys are dirty
 incDatabase db (Just kk) = do
-    modifyTVar'  (databaseStep db) $ \(Step i) -> Step $ i + 1
+    atomicallyNamed "incDatabase" $ modifyTVar'  (databaseStep db) $ \(Step i) -> Step $ i + 1
     transitiveDirtyKeys <- transitiveDirtySet db kk
     for_ transitiveDirtyKeys $ \k ->
-        SMap.focus updateDirty k (databaseValues db)
+        atomicallyNamed "incDatabase" $ SMap.focus updateDirty k (databaseValues db)
 
 -- all keys are dirty
 incDatabase db Nothing = do
-    modifyTVar'  (databaseStep db) $ \(Step i) -> Step $ i + 1
+    atomically $ modifyTVar'  (databaseStep db) $ \(Step i) -> Step $ i + 1
     let list = SMap.listT (databaseValues db)
-    flip ListT.traverse_ list $ \(k,_) -> do
+    atomicallyNamed "incDatabase - all " $ flip ListT.traverse_ list $ \(k,_) ->
         SMap.focus updateDirty k (databaseValues db)
 
 updateDirty :: Monad m => Focus.Focus KeyDetails m ()
@@ -94,7 +94,7 @@ builder db@Database{..} keys = withRunInIO $ \(RunInIO run) -> do
     -- Things that I need to force before my results are ready
     toForce <- liftIO $ newTVarIO []
     current <- liftIO $ readTVarIO databaseStep
-    results <- liftIO $ atomicallyNamed "builder" $ for keys $ \id -> do
+    results <- liftIO $ for keys $ \id -> atomicallyNamed "builder" $ do
             -- Spawn the id if needed
             status <- SMap.lookup id databaseValues
             val <- case viewDirty current $ maybe (Dirty Nothing) keyStatus status of
@@ -215,7 +215,7 @@ updateReverseDeps
     -> [Key] -- ^ Previous direct dependencies of Id
     -> HashSet Key -- ^ Current direct dependencies of Id
     -> IO ()
-updateReverseDeps myId db prev new = uninterruptibleMask_ $ atomicallyNamed "updateReverseDeps" $ do
+updateReverseDeps myId db prev new = uninterruptibleMask_ $ do
     forM_ prev $ \d ->
         unless (d `HSet.member` new) $
             doOne (HSet.delete myId) d
@@ -224,20 +224,20 @@ updateReverseDeps myId db prev new = uninterruptibleMask_ $ atomicallyNamed "upd
     where
         alterRDeps f =
             Focus.adjust (onKeyReverseDeps f)
-        doOne f id =
+        doOne f id = atomicallyNamed "updateReverseDeps" $
             SMap.focus (alterRDeps f) id (databaseValues db)
 
 getReverseDependencies :: Database -> Key -> STM (Maybe (HashSet Key))
 getReverseDependencies db = (fmap.fmap) keyReverseDeps  . flip SMap.lookup (databaseValues db)
 
-transitiveDirtySet :: Foldable t => Database -> t Key -> STM (HashSet Key)
+transitiveDirtySet :: Foldable t => Database -> t Key -> IO (HashSet Key)
 transitiveDirtySet database = flip State.execStateT HSet.empty . traverse_ loop
   where
     loop x = do
         seen <- State.get
         if x `HSet.member` seen then pure () else do
             State.put (HSet.insert x seen)
-            next <- lift $ getReverseDependencies database x
+            next <- lift $ atomically $ getReverseDependencies database x
             traverse_ loop (maybe mempty HSet.toList next)
 
 -- | IO extended to track created asyncs to clean them up when the thread is killed,
