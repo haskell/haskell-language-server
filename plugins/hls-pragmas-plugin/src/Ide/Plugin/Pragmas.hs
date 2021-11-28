@@ -4,6 +4,7 @@
 {-# LANGUAGE MultiWayIf            #-}
 {-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE PatternSynonyms       #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE ViewPatterns          #-}
@@ -18,30 +19,65 @@ import           Control.Lens                     hiding (List)
 import           Control.Monad                    (join)
 import           Control.Monad.IO.Class           (MonadIO (liftIO))
 import           Control.Monad.Trans.State.Strict (State)
-import           Data.Bits                        (Bits (bit, complement, (.&.)))
+import           Data.Bits                        (Bits (bit, complement, setBit, (.&.)))
 import           Data.Char                        (isSpace)
 import qualified Data.Char                        as Char
 import           Data.Coerce                      (coerce)
 import           Data.Functor                     (void, ($>))
 import qualified Data.HashMap.Strict              as H
-import           Data.List
 import qualified Data.List                        as List
 import           Data.List.Extra                  (nubOrdOn)
 import qualified Data.Map.Strict                  as Map
 import           Data.Maybe                       (catMaybes, listToMaybe,
                                                    mapMaybe)
 import qualified Data.Maybe                       as Maybe
-import           Data.Monoid                      (Endo (Endo, appEndo))
 import           Data.Ord                         (Down (Down))
 import           Data.Semigroup                   (Semigroup ((<>)))
 import qualified Data.Text                        as T
 import           Data.Word                        (Word64)
-import           Development.IDE                  as D
-import           Development.IDE.GHC.Compat
+import           Development.IDE                  as D (Diagnostic (Diagnostic, _code, _message),
+                                                        GhcSession (GhcSession),
+                                                        HscEnvEq (hscEnv),
+                                                        IdeState, List (List),
+                                                        ParseResult (POk),
+                                                        Position (Position),
+                                                        Range (Range), Uri,
+                                                        getFileContents,
+                                                        getParsedModule,
+                                                        prettyPrint, runAction,
+                                                        srcSpanToRange,
+                                                        toNormalizedUri,
+                                                        uriToFilePath',
+                                                        useWithStale)
+import           Development.IDE.GHC.Compat       (DynFlags (extensions),
+                                                   ExtBits (UsePosPragsBit),
+                                                   FlagSpec (FlagSpec, flagSpecName),
+                                                   GenLocated (L),
+                                                   GeneralFlag (Opt_Haddock, Opt_KeepRawTokenStream),
+                                                   HscEnv (hsc_dflags), Located,
+                                                   ModSummary (ms_hspp_opts),
+                                                   P (unP),
+                                                   PState (PState, annotations, last_loc, options),
+                                                   ParsedModule (pm_mod_summary),
+                                                   ParserFlags (pExtsBitmap),
+                                                   SrcSpan,
+                                                   Token (ITblockComment, ITlineComment, ITvarsym),
+                                                   flagsForCompletion,
+                                                   getPState, gopt_set,
+                                                   gopt_unset, lexer, mkPState,
+                                                   mkRealSrcLoc,
+                                                   pattern RealSrcLoc,
+                                                   realSrcSpanEnd, srcLocCol,
+                                                   srcLocLine, srcSpanEnd,
+                                                   srcSpanStart, xFlags)
+import           Development.IDE.GHC.Compat.Core  (DynFlags (extensionFlags, warningFlags),
+                                                   gopt, mkPStatePure,
+                                                   mkParserFlags')
 import           Development.IDE.GHC.Compat.Util  (StringBuffer, atEnd,
                                                    nextChar,
                                                    stringToStringBuffer)
 import           Development.IDE.Types.HscEnvEq   (HscEnvEq, hscEnv)
+import qualified DynFlags
 import           Ide.Types
 import qualified Language.LSP.Server              as LSP
 import qualified Language.LSP.Types               as J
@@ -564,22 +600,26 @@ parseShebangs prev@ShebangParserState{ nextPragmaLine, newlineCount = prevNewlin
     else
       prev
 
+
 -- | Parses blank lines, comments, haddock comments ("-- |"), lines that start
 -- with "#!", lines that start with "#", pragma lines using the GHC API lexer.
 -- When it doesn't find one of these things then it's assumed that we've found
 -- a declaration, end-of-file, or a ghc parse error, and the parser stops.
 -- Shebangs are parsed separately than the rest becaues the lexer ignores them.
 --
--- The reason for parsing instead of using annotations, or turning on/off
+-- The reason for custom parsing instead of using annotations, or turning on/off
 -- extensions in the dynflags is because there are a number of extensions that
 -- while removing parse errors, can also introduce them. Hence, there are
--- cases where the file cannot be parsed at all when we want to insert extension
--- (and other) pragmas. So if the compiler someday returns annotation or
--- equivalent information on parse errors then we can replace this with that.
+-- cases where the file cannot be parsed without error when we want to insert
+-- extension (and other) pragmas. The compiler (8.10.7) doesn't include
+-- annotations in its failure state. So if the compiler someday returns
+-- annotation or equivalent information when it fails then we can replace this
+-- with that.
 --
--- The reason for using the GHC API lexer instead of without is because despite
--- misgivings that it would be twice as hard to do with the lexer (it was), and
--- less flexible, might as well give it a try.
+-- The reason for using the compiler lexer is to reduce duplicated
+-- implementation, particularly nested comments, but in retrospect this comes
+-- with the disadvantage of the logic feeling more complex, and not being able
+-- to handle whitespace directly.
 --
 -- The parser keeps track of state in order to place the next pragma line
 -- according to some rules:
@@ -615,7 +655,7 @@ parseShebangs prev@ShebangParserState{ nextPragmaLine, newlineCount = prevNewlin
 -- > {- block comment -}<space><tab><tab><space>-- | haddock
 --
 parsePreDecl :: DynFlags -> StringBuffer -> ParseResult ParserState
-parsePreDecl dynFlags buffer = unP (go initialParserState) pState{ options = options }
+parsePreDecl dynFlags buffer = unP (go initialParserState) pState
   where
     initialShebangParserState = ShebangParserState{
       nextPragmaLine = 0,
@@ -623,10 +663,7 @@ parsePreDecl dynFlags buffer = unP (go initialParserState) pState{ options = opt
       prevCharIsHash = False,
       buffer = buffer }
     ShebangParserState{ nextPragmaLine } = parseShebangs initialShebangParserState
-    start = mkRealSrcLoc "asdf" 1 1
-    dynFlagsWithoutHaddockWithRawTokenStream = gopt_set (gopt_unset dynFlags Opt_Haddock) Opt_KeepRawTokenStream
-    pState@PState{ options = pStateOptions } = mkPState dynFlagsWithoutHaddockWithRawTokenStream buffer start
-    options = pStateOptions{ pExtsBitmap = complement (xbit UsePosPragsBit) .&. pExtsBitmap pStateOptions }
+    pState = mkLexerPState dynFlags buffer
     initialParserState = ParserStateNotDone (NextPragma nextPragmaLine Nothing) ModeInitial (-1) (-1) False
 
     go :: ParserState -> P ParserState
@@ -642,4 +679,35 @@ parsePreDecl dynFlags buffer = unP (go initialParserState) pState{ options = opt
           case D.srcSpanToRange srcSpan of
             Just range -> go (updateParserState token range prevParserState)
             Nothing    -> pure prevParserState
+
+mkLexerPState :: DynFlags -> StringBuffer -> PState
+mkLexerPState dynFlags stringBuffer =
+  let
+    startRealSrcLoc = mkRealSrcLoc "asdf" 1 1
+    updateDynFlags = flip gopt_unset Opt_Haddock . flip gopt_set Opt_KeepRawTokenStream
+    finalDynFlags = updateDynFlags dynFlags
+#if !MIN_VERSION_ghc(8,8,1)
+    pState = mkPState finalDynFlags stringBuffer startRealSrcLoc
+    finalState = pState{ use_pos_prags = False }
+#elif !MIN_VERSION_ghc(8,10,1)
+    mkLexerParserFlags =
+      mkParserFlags'
+      <$> warningFlags
+      <*> extensionFlags
+      <*> DynFlags.thisPackage
+      <*> DynFlags.safeImportsOn
+      <*> gopt Opt_Haddock
+      <*> gopt Opt_KeepRawTokenStream
+      <*> const False
+    finalPState = mkPStatePure (mkLexerParserFlags dynFlags) stringBuffer startRealSrcLoc
+#else
+    pState = mkPState finalDynFlags stringBuffer startRealSrcLoc
+    PState{ options = pStateOptions } = pState
+    finalExtBitsMap = setBit (pExtsBitmap pStateOptions) (fromEnum UsePosPragsBit)
+    finalPStateOptions = pStateOptions{ pExtsBitmap = finalExtBitsMap }
+    finalPState = pState{ options = finalPStateOptions }
+#endif
+  in
+    finalPState
+
 
