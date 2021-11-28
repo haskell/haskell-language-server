@@ -9,12 +9,12 @@ module Development.IDE.Core.Debouncer
     ) where
 
 import           Control.Concurrent.Async
-import           Control.Concurrent.STM.Stats (atomically, atomicallyNamed)
+import           Control.Concurrent.STM
+import           Control.Concurrent.STM.Stats (atomicallyNamed)
 import           Control.Exception
 import           Control.Monad                (join)
-import           Data.Foldable                (traverse_)
 import           Data.Hashable
-import qualified Focus
+import           GHC.Conc                     (unsafeIOToSTM)
 import qualified StmContainers.Map            as STM
 import           System.Time.Extra
 
@@ -39,20 +39,21 @@ newAsyncDebouncer = Debouncer . asyncRegisterEvent <$> STM.newIO
 -- If there is a pending event for the same key, the pending event will be killed.
 -- Events are run unmasked so it is up to the user of `registerEvent`
 -- to mask if required.
-asyncRegisterEvent :: (Eq k, Hashable k) => STM.Map k (Async ()) -> Seconds -> k -> IO () -> IO ()
-asyncRegisterEvent d 0 k fire = do
-    join $ atomically $ do
-        prev <- STM.focus Focus.lookupAndDelete k d
-        return $ traverse_ cancel prev
-    fire
+asyncRegisterEvent :: (Eq k, Hashable k) => STM.Map k (TVar (Seconds, IO())) -> Seconds -> k -> IO () -> IO ()
 asyncRegisterEvent d delay k fire = mask_ $ do
-    a <- asyncWithUnmask $ \unmask -> unmask $ do
-        sleep delay
-        fire
-        atomically $ STM.delete k d
-    do
-        prev <- atomicallyNamed "debouncer" $ STM.focus (Focus.lookup <* Focus.insert a) k d
-        traverse_ cancel prev
+    prev <- atomically $ STM.lookup k d
+    case prev of
+        Just v -> do
+            atomicallyNamed "debouncer - reset" $ writeTVar v (delay, fire)
+        Nothing -> do
+            var <- newTVarIO (delay, fire)
+            _ <- asyncWithUnmask $ \unmask -> unmask $ do
+                join $ atomicallyNamed "debouncer - sleep" $ do
+                    (s,act) <- readTVar var
+                    unsafeIOToSTM $ sleep s
+                    STM.delete k d
+                    return act
+            atomicallyNamed "debouncer2" $ STM.insert var k d
 
 -- | Debouncer used in the DAML CLI compiler that emits events immediately.
 noopDebouncer :: Debouncer k
