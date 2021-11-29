@@ -7,22 +7,15 @@ module Ide.Plugin.Eval.Util (
     asS,
     timed,
     isLiterate,
-    handleMaybe,
-    handleMaybeM,
-    response,
     response',
     gStrictTry,
     logWith,
 ) where
 
 import           Control.Exception               (SomeException, evaluate)
-import           Control.Monad.Extra             (maybeM)
 import           Control.Monad.IO.Class          (MonadIO (liftIO))
-import           Control.Monad.Trans.Class       (lift)
-import           Control.Monad.Trans.Except      (ExceptT (..), runExceptT,
-                                                  throwE)
+import           Control.Monad.Trans.Except      (ExceptT (..), runExceptT)
 import           Data.Aeson                      (Value (Null))
-import           Data.Bifunctor                  (first)
 import           Data.String                     (IsString (fromString))
 import qualified Data.Text                       as T
 import           Development.IDE                 (IdeState, Priority (..),
@@ -70,17 +63,6 @@ logLevel = Debug -- Info
 
 isLiterate :: FilePath -> Bool
 isLiterate x = takeExtension x `elem` [".lhs", ".lhs-boot"]
-
-handleMaybe :: Monad m => e -> Maybe b -> ExceptT e m b
-handleMaybe msg = maybe (throwE msg) return
-
-handleMaybeM :: Monad m => e -> m (Maybe b) -> ExceptT e m b
-handleMaybeM msg act = maybeM (throwE msg) return $ lift act
-
-response :: Functor f => ExceptT String f c -> f (Either ResponseError c)
-response =
-    fmap (first (\msg -> ResponseError InternalError (fromString msg) Nothing))
-        . runExceptT
 
 response' :: ExceptT String (LspM c) WorkspaceEdit -> LspM c (Either ResponseError Value)
 response' act = do
