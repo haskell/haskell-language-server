@@ -48,9 +48,7 @@ import           Development.IDE                  as D (Diagnostic (Diagnostic, 
                                                         toNormalizedUri,
                                                         uriToFilePath',
                                                         useWithStale)
-import           Development.IDE.GHC.Compat       (homeUnitId_, hsc_dflags,
-                                                   safeImportsOn)
-import           Development.IDE.GHC.Compat.Core
+import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util  (StringBuffer, atEnd,
                                                    nextChar,
                                                    stringToStringBuffer)
@@ -299,11 +297,6 @@ mkExtCompl label =
     Nothing Nothing Nothing Nothing Nothing Nothing
 
 -- Parser stuff -----------------------------------------------------
-type ExtsBitmap = Word64
-
-xbit :: ExtBits -> ExtsBitmap
-xbit = bit . fromEnum
-
 -- | Each mode represents the "strongest" thing we've seen so far.
 -- From strongest to weakest:
 -- ModePragma, ModeHaddock, ModeComment, ModeInitial
@@ -534,7 +527,12 @@ updateParserState token range prevParserState
 lexUntilNextLineIncl :: P (Located Token)
 lexUntilNextLineIncl = do
   PState{ last_loc } <- getPState
-  let prevEndLine = last_loc & realSrcSpanEnd & srcLocLine
+#if MIN_VERSION_ghc(9,0,0)
+  let PsSpan{ psRealSpan } = last_loc
+#else
+  let lastRealSrcSpan = last_loc
+#endif
+  let prevEndLine = lastRealSrcSpan & realSrcSpanEnd & srcLocLine
   locatedToken@(L srcSpan token) <- lexer False pure
   if | RealSrcLoc currEndRealSrcLoc _ <- srcSpan & srcSpanEnd
      , let currEndLine = currEndRealSrcLoc & srcLocLine
