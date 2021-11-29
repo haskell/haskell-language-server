@@ -27,6 +27,7 @@ module Development.IDE.GHC.Compat.Parser (
 
 #if MIN_VERSION_ghc(9,0,0)
 import qualified GHC.Parser.Lexer                as Lexer
+import qualified GHC.Types.SrcLoc
 #if MIN_VERSION_ghc(9,2,0)
 import qualified GHC.Driver.Config               as Config
 import           GHC.Parser.Lexer                hiding (initParserState)
