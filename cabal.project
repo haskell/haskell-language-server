@@ -25,6 +25,7 @@ packages:
          ./plugins/hls-ormolu-plugin
          ./plugins/hls-call-hierarchy-plugin
          ./plugins/hls-alternate-number-format-plugin
+         ./plugins/hls-qualify-imported-names-plugin
 
 -- Standard location for temporary packages needed for particular environments
 -- For example it is used in the project gitlab mirror to help in the MAcOS M1 build script
@@ -39,7 +40,7 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2021-11-23T21:12:30Z
+index-state: 2021-11-29T08:11:07Z
 
 constraints:
     hyphenation +embed

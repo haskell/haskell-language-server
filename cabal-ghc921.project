@@ -18,6 +18,7 @@ packages:
         -- ./plugins/hls-retrie-plugin
          ./plugins/hls-haddock-comments-plugin
         --  ./plugins/hls-splice-plugin
+         ./plugins/hls-qualify-imported-names-plugin
          ./plugins/hls-floskell-plugin
          ./plugins/hls-pragmas-plugin
          ./plugins/hls-module-name-plugin
@@ -35,7 +36,7 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2021-11-23T21:12:30Z
+index-state: 2021-11-29T08:11:07Z
 
 constraints:
   -- These plugins doesn't work on GHC92 yet
