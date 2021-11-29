@@ -18,6 +18,9 @@ data-files:
     html/profile.html
     html/shake.js
 
+extra-source-files:
+    README.md
+
 flag pedantic
   description: Enable -Werror
   default:     False
