@@ -214,7 +214,7 @@ completion _ide _ complParams = do
     let (J.TextDocumentIdentifier uri) = complParams ^. J.textDocument
         position = complParams ^. J.position
     contents <- LSP.getVirtualFile $ toNormalizedUri uri
-    fmap (Right . J.InL) $ case (undefined, uriToFilePath' undefined) of
+    fmap (Right . J.InL) $ case (contents, uriToFilePath' uri) of
         (Just cnts, Just _path) ->
             result <$> VFS.getCompletionPrefix position cnts
             where

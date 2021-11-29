@@ -20,8 +20,8 @@ tests :: TestTree
 tests =
   testGroup "pragmas"
   [ codeActionTests
-  -- , codeActionTests'
-  -- , completionTests
+  , codeActionTests'
+  , completionTests
   ]
 
 codeActionTests :: TestTree
@@ -125,7 +125,6 @@ completionTest testComment fileName te' label textFormat insertText detail [a, b
       item ^. L.insertTextFormat @?= textFormat
       item ^. L.insertText @?= insertText
       item ^. L.detail @?= detail
-completionTest _ _ _ _ _ _ _ _ = undefined
 
 goldenWithPragmas :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
 goldenWithPragmas title path = goldenWithHaskellDoc pragmasPlugin title testDataDir path "expected" "hs"
