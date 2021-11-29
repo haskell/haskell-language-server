@@ -25,7 +25,7 @@ main = defaultTestRunner
             [ Command.tests
             , Completion.tests
             , Config.tests
-            , Deferred.tests
+            , ignoreInEnv [HostOS Windows, GhcVer GHC90] "Tests gets stuck in ci" $ Deferred.tests
             , Definition.tests
             , Diagnostic.tests
             , ignoreInEnv [HostOS Windows, GhcVer GHC90] "Tests gets stuck in ci" $ Format.tests

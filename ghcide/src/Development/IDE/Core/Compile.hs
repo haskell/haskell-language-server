@@ -106,7 +106,7 @@ import           Data.Map                          (Map)
 import           Data.Tuple.Extra                  (dupe)
 import           Data.Unique                       as Unique
 import           Development.IDE.Core.Tracing      (withTrace)
-import           Development.IDE.GHC.Compat.Util   (emptyUDFM, plusUDFM)
+import           Development.IDE.GHC.Compat.Util   (emptyUDFM, plusUDFM_C)
 import qualified Language.LSP.Server               as LSP
 import qualified Language.LSP.Types                as LSP
 import           Unsafe.Coerce
@@ -702,11 +702,15 @@ mergeEnvs env extraModSummaries extraMods envs = do
                 (\fc (im, ifr) -> Compat.extendInstalledModuleEnv fc im ifr) prevFinderCache
                 $ zip ims ifrs
     return $ loadModulesHome extraMods $ env{
-        hsc_HPT = foldMapBy plusUDFM emptyUDFM hsc_HPT envs,
+        hsc_HPT = foldMapBy mergeUDFM emptyUDFM hsc_HPT envs,
         hsc_FC = newFinderCache,
         hsc_mod_graph = mkModuleGraph $ extraModSummaries ++ nubOrdOn ms_mod (concatMap (mgModSummaries . hsc_mod_graph) envs)
     }
     where
+        mergeUDFM = plusUDFM_C combineModules
+        combineModules a b
+          | HsSrcFile <- mi_hsc_src (hm_iface a) = a
+          | otherwise = b
     -- required because 'FinderCache':
     --  1) doesn't have a 'Monoid' instance,
     --  2) is abstract and doesn't export constructors

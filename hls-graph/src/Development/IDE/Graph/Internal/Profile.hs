@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP             #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ViewPatterns    #-}
 
 {- HLINT ignore "Redundant bracket" -} -- a result of CPP expansion
@@ -134,9 +135,6 @@ toReport db = do
 
 alwaysRerunResult :: Step -> Result
 alwaysRerunResult current = Result (Value $ toDyn "<alwaysRerun>") (Step 0) (Step 0) current (ResultDeps []) 0 mempty
-
-readDataFileHTML :: FilePath -> IO LBS.ByteString
-readDataFileHTML file = LBS.readFile =<< getDataFile ("html" </> file)
 
 generateHTML :: Maybe [Int] -> [ProfileEntry] -> IO LBS.ByteString
 generateHTML dirtyKeys xs = do
