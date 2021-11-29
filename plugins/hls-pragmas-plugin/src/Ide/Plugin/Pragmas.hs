@@ -663,7 +663,7 @@ mkLexerPState dynFlags stringBuffer =
     finalDynFlags = updateDynFlags dynFlags
 #if !MIN_VERSION_ghc(8,8,1)
     pState = mkPState finalDynFlags stringBuffer startRealSrcLoc
-    finalState = pState{ use_pos_prags = False }
+    finalPState = pState{ use_pos_prags = False }
 #elif !MIN_VERSION_ghc(8,10,1)
     mkLexerParserFlags =
       mkParserFlags'
