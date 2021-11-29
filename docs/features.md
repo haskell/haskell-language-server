@@ -16,6 +16,7 @@ You can watch demos for some of these features [below](#demos).
 - [Integration](#hlint) with [hlint](https://github.com/ndmitchell/hlint), the most used haskell linter, to show diagnostics and apply hints via [apply-refact](https://github.com/mpickering/apply-refact)
 - [Module name suggestions](#module-names) for insertion or correction
 - [Call hierarchy support](#call-hierarchy)
+- [Qualify names from an import declaration](#qualify-imported-names) in your code
 
 ## Demos
 
@@ -46,3 +47,7 @@ You can watch demos for some of these features [below](#demos).
 ### Call hierarchy
 
 ![Call Hierarchy in VSCode](https://github.com/haskell/haskell-language-server/raw/2857eeece0398e1cd4b2ffb6069b05c4d2308b39/plugins/hls-call-hierarchy-plugin/call-hierarchy-in-vscode.gif)
+
+### Qualify imported names
+
+![Qualify Imported Names Demo](../plugins/hls-qualify-imported-names-plugin/qualify-imported-names-demo.gif)
