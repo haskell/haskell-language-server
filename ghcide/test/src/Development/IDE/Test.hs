@@ -29,14 +29,16 @@ module Development.IDE.Test
   , getStoredKeys
   , waitForCustomMessage
   , waitForGC
-  ,getBuildKeysBuilt,getBuildKeysVisited,getBuildKeysChanged,getBuildEdgesCount) where
+  ,getBuildKeysBuilt,getBuildKeysVisited,getBuildKeysChanged,getBuildEdgesCount,configureCheckProject) where
 
 import           Control.Applicative.Combinators
 import           Control.Lens                    hiding (List)
 import           Control.Monad
 import           Control.Monad.IO.Class
+import           Data.Aeson                      (toJSON)
 import qualified Data.Aeson                      as A
 import           Data.Bifunctor                  (second)
+import           Data.Default
 import qualified Data.Map.Strict                 as Map
 import           Data.Maybe                      (fromJust)
 import           Data.Text                       (Text)
@@ -45,7 +47,7 @@ import           Development.IDE.Plugin.Test     (TestRequest (..),
                                                   WaitForIdeRuleResult,
                                                   ideResultSuccess)
 import           Development.IDE.Test.Diagnostic
-import           Ide.Plugin.Config               (CheckParents)
+import           Ide.Plugin.Config               (CheckParents, checkProject)
 import           Language.LSP.Test               hiding (message)
 import qualified Language.LSP.Test               as LspTest
 import           Language.LSP.Types              hiding
@@ -246,3 +248,9 @@ waitForGC = waitForCustomMessage "ghcide/GC" $ \v ->
     case A.fromJSON v of
         A.Success x -> Just x
         _           -> Nothing
+
+configureCheckProject :: Bool -> Session ()
+configureCheckProject overrideCheckProject =
+    sendNotification SWorkspaceDidChangeConfiguration
+        (DidChangeConfigurationParams $ toJSON
+            def{checkProject = overrideCheckProject})
