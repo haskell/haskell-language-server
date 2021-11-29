@@ -23,6 +23,7 @@ import           Data.Char                  (isLower)
 import qualified Data.HashMap.Strict        as HashMap
 import           Data.List                  (intercalate, isPrefixOf, minimumBy)
 import           Data.Maybe                 (maybeToList)
+import           Data.Ord                   (comparing)
 import           Data.String                (IsString)
 import qualified Data.Text                  as T
 import           Development.IDE            (GetParsedModule (GetParsedModule),
@@ -41,10 +42,9 @@ import           Language.LSP.Types         hiding
                                              SemanticTokenRelative (length),
                                              SemanticTokensEdit (_start))
 import           Language.LSP.VFS           (virtualFileText)
-import           System.Directory           (canonicalizePath)
+import           System.Directory           (makeAbsolute)
 import           System.FilePath            (dropExtension, splitDirectories,
                                              takeFileName)
-import Data.Ord (comparing)
 
 -- |Plugin descriptor
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -121,8 +121,8 @@ pathModuleNames state normFilePath filePath
   | otherwise = do
       session <- runAction "ModuleName.ghcSession" state $ use_ GhcSession normFilePath
       srcPaths <- evalGhcEnv (hscEnvWithImportPaths session) $ importPaths <$> getSessionDynFlags
-      paths <- mapM canonicalizePath srcPaths
-      mdlPath <- canonicalizePath filePath
+      paths <- mapM makeAbsolute srcPaths
+      mdlPath <- makeAbsolute filePath
       let prefixes = filter (`isPrefixOf` mdlPath) paths
       pure (map (moduleNameFrom mdlPath) prefixes)
   where

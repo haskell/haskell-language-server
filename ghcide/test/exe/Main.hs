@@ -164,6 +164,7 @@ main = do
     , pluginParsedResultTests
     , preprocessorTests
     , thTests
+    , symlinkTests
     , safeTests
     , unitTests
     , haddockTests
@@ -4051,13 +4052,24 @@ thTests =
     expectDiagnostics [ ( cPath, [(DsWarning, (3, 0), "Top-level binding with no type signature: a :: A")] ) ]
     ]
 
+-- | Tests for projects that use symbolic links one way or another
+symlinkTests :: TestTree
+symlinkTests =
+  testGroup "Projects using Symlinks"
+    [ testCase "Module is symlinked" $ runWithExtraFiles "symlink" $ \dir -> do
+        liftIO $ createFileLink (dir </> "some_loc" </> "Sym.hs") (dir </> "other_loc" </> "Sym.hs")
+        let fooPath = dir </> "src" </> "Foo.hs"
+        _ <- openDoc fooPath "haskell"
+        expectDiagnosticsWithTags  [("src" </> "Foo.hs", [(DsWarning, (2, 0), "The import of 'Sym' is redundant", Just DtUnnecessary)])]
+        pure ()
+    ]
+
 -- | Test that all modules have linkables
 thLoadingTest :: TestTree
 thLoadingTest = testCase "Loading linkables" $ runWithExtraFiles "THLoading" $ \dir -> do
     let thb = dir </> "THB.hs"
     _ <- openDoc thb "haskell"
     expectNoMoreDiagnostics 1
-
 
 -- | test that TH is reevaluated on typecheck
 thReloadingTest :: Bool -> TestTree
