@@ -308,7 +308,14 @@ instance IsIdeGlobal GlobalIdeOptions
 getIdeOptions :: Action IdeOptions
 getIdeOptions = do
     GlobalIdeOptions x <- getIdeGlobalAction
-    return x
+    env <- lspEnv <$> getShakeExtras
+    case env of
+        Nothing -> return x
+        Just env -> do
+            config <- liftIO $ LSP.runLspT env HLS.getClientConfig
+            return x{optCheckProject = pure $ checkProject config,
+                     optCheckParents = pure $ checkParents config
+                }
 
 getIdeOptionsIO :: ShakeExtras -> IO IdeOptions
 getIdeOptionsIO ide = do

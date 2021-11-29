@@ -442,6 +442,7 @@ executable ghcide-bench
         base,
         bytestring,
         containers,
+        data-default,
         directory,
         extra,
         filepath,
