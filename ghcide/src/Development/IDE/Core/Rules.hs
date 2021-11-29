@@ -41,7 +41,6 @@ module Development.IDE.Core.Rules(
     loadGhcSession,
     getModIfaceFromDiskRule,
     getModIfaceRule,
-    getModIfaceWithoutLinkableRule,
     getModSummaryRule,
     isHiFileStableRule,
     getModuleGraphRule,
@@ -349,7 +348,22 @@ getLocatedImportsRule =
                 Left diags              -> pure (diags, Just (modName, Nothing))
                 Right (FileImport path) -> pure ([], Just (modName, Just path))
                 Right PackageImport     -> pure ([], Nothing)
-        let moduleImports = catMaybes imports'
+
+        {- IS THIS REALLY NEEDED? DOESNT SEEM SO
+
+        -- does this module have an hs-boot file? If so add a direct dependency
+        let bootPath = toNormalizedFilePath' $ fromNormalizedFilePath file <.> "hs-boot"
+        boot <- use GetFileExists bootPath
+        bootArtifact <- if boot == Just True
+              then do
+                let modName = ms_mod_name ms
+                loc <- liftIO $ mkHomeModLocation dflags modName (fromNormalizedFilePath bootPath)
+                return $ Just (noLoc modName, Just (ArtifactsLocation bootPath (Just loc) True))
+              else pure Nothing
+        -}
+        let bootArtifact = Nothing
+
+        let moduleImports = catMaybes $ bootArtifact : imports'
         pure (concat diags, Just moduleImports)
 
 type RawDepM a = StateT (RawDependencyInformation, IntMap ArtifactsLocation) Action a
@@ -375,7 +389,7 @@ rawDependencyInformation fs = do
 
     go :: NormalizedFilePath -- ^ Current module being processed
        -> Maybe ModSummary   -- ^ ModSummary of the module
-       -> StateT (RawDependencyInformation, IntMap ArtifactsLocation) Action FilePathId
+       -> RawDepM FilePathId
     go f msum = do
       -- First check to see if we have already processed the FilePath
       -- If we have, just return its Id but don't update any of the state.
@@ -688,13 +702,11 @@ loadGhcSession ghcSessionDepsConfig = do
 
 data GhcSessionDepsConfig = GhcSessionDepsConfig
     { checkForImportCycles :: Bool
-    , forceLinkables       :: Bool
     , fullModSummary       :: Bool
     }
 instance Default GhcSessionDepsConfig where
   def = GhcSessionDepsConfig
     { checkForImportCycles = True
-    , forceLinkables = False
     , fullModSummary = False
     }
 
@@ -707,17 +719,12 @@ ghcSessionDepsDefinition GhcSessionDepsConfig{..} env file = do
         Nothing -> return Nothing
         Just deps -> do
             when checkForImportCycles $ void $ uses_ ReportImportCycles deps
-            ms:mss <- map msrModSummary <$> if fullModSummary
-                then uses_ GetModSummary (file:deps)
-                else uses_ GetModSummaryWithoutTimestamps (file:deps)
+            mss <- map msrModSummary <$> if fullModSummary
+                then uses_ GetModSummary deps
+                else uses_ GetModSummaryWithoutTimestamps deps
 
             depSessions <- map hscEnv <$> uses_ GhcSessionDeps deps
-            let uses_th_qq =
-                    xopt LangExt.TemplateHaskell dflags || xopt LangExt.QuasiQuotes dflags
-                dflags = ms_hspp_opts ms
-            ifaces <- if uses_th_qq || forceLinkables
-                        then uses_ GetModIface deps
-                        else uses_ GetModIfaceWithoutLinkable deps
+            ifaces <- uses_ GetModIface deps
 
             let inLoadOrder = map hirHomeMod ifaces
             session' <- liftIO $ mergeEnvs hsc mss inLoadOrder depSessions
@@ -881,13 +888,6 @@ getModIfaceRule = defineEarlyCutoff $ Rule $ \GetModIface f -> do
       compiledLinkables <- getCompiledLinkables <$> getIdeGlobalAction
       liftIO $ void $ modifyVar' compiledLinkables $ \old -> extendModuleEnv old mod time
   pure res
-
-getModIfaceWithoutLinkableRule :: Rules ()
-getModIfaceWithoutLinkableRule = defineEarlyCutoff $ RuleNoDiagnostics $ \GetModIfaceWithoutLinkable f -> do
-  mhfr <- use GetModIface f
-  let mhfr' = fmap (\x -> x{ hirHomeMod = (hirHomeMod x){ hm_linkable = Just (error msg) } }) mhfr
-      msg = "tried to look at linkable for GetModIfaceWithoutLinkable for " ++ show f
-  pure (hirIfaceFp <$> mhfr', mhfr')
 
 -- | Also generates and indexes the `.hie` file, along with the `.o` file if needed
 -- Invariant maintained is that if the `.hi` file was successfully written, then the
@@ -1089,7 +1089,6 @@ mainRule RulesConfig{..} = do
     getModIfaceFromDiskRule
     getModIfaceFromDiskAndIndexRule
     getModIfaceRule
-    getModIfaceWithoutLinkableRule
     getModSummaryRule
     isHiFileStableRule
     getModuleGraphRule
