@@ -10,7 +10,12 @@ author:             Jonathan Shen
 maintainer:         shenjonathan0@gmail.com
 category:           Development
 build-type:         Simple
-extra-source-files: LICENSE
+extra-source-files:
+  LICENSE
+  qualify-imported-names-demo.gif
+  README.md
+  test/data/*.hs
+  test/data/*.yaml
 
 library
   exposed-modules:    Ide.Plugin.QualifyImportedNames
