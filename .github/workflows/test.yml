@@ -214,7 +214,7 @@ jobs:
 
       - if: matrix.test && matrix.ghc != '9.0.1'
         name: Test hls-tactics-plugin test suite
-        run: cabal test hls-tactics-plugin --test-options="$TEST_OPTS" || cabal test hls-tactics-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-tactics-plugin --test-options="$TEST_OPTS"
+        run: cabal test hls-tactics-plugin --test-options="-j1 --rerun-update" || cabal test hls-tactics-plugin --test-options="-j1 --rerun" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-tactics-plugin --test-options="-j1 --rerun"
 
       - if: matrix.test
         name: Test hls-refine-imports-plugin test suite
