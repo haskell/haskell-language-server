@@ -528,7 +528,7 @@ lexUntilNextLineIncl :: P (Located Token)
 lexUntilNextLineIncl = do
   PState{ last_loc } <- getPState
 #if MIN_VERSION_ghc(9,0,0)
-  let PsSpan{ psRealSpan } = last_loc
+  let PsSpan{ psRealSpan = lastRealSrcSpan } = last_loc
 #else
   let lastRealSrcSpan = last_loc
 #endif
