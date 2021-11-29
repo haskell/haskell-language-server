@@ -29,7 +29,7 @@ import           Development.IDE.GHC.Util        (lookupPackageConfig)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Types.Exports   (ExportsMap, createExportsMap)
 import           OpenTelemetry.Eventlog          (withSpan)
-import           System.Directory                (canonicalizePath)
+import           System.Directory                (makeAbsolute)
 import           System.FilePath
 
 -- | An 'HscEnv' with equality. Two values are considered equal
@@ -58,9 +58,9 @@ newHscEnvEq cradlePath hscEnv0 deps = do
     let relativeToCradle = (takeDirectory cradlePath </>)
         hscEnv = removeImportPaths hscEnv0
 
-    -- Canonicalize import paths since we also canonicalize targets
+    -- Make Absolute since targets are also absolute
     importPathsCanon <-
-      mapM canonicalizePath $ relativeToCradle <$> importPaths (hsc_dflags hscEnv0)
+      mapM makeAbsolute $ relativeToCradle <$> importPaths (hsc_dflags hscEnv0)
 
     newHscEnvEqWithImportPaths (Just $ Set.fromList importPathsCanon) hscEnv deps
 
