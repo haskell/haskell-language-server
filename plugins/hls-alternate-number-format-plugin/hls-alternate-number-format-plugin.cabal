@@ -11,7 +11,9 @@ author:             Nick Suchecki
 maintainer:         nicksuchecki@gmail.com
 category:           Development
 build-type:         Simple
-extra-source-files: LICENSE
+extra-source-files:
+  LICENSE
+  README.md
 
 library
   exposed-modules:  Ide.Plugin.AlternateNumberFormat, Ide.Plugin.Conversion
