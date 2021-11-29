@@ -181,7 +181,7 @@ homeUnitId_ =
 
 safeImportsOn :: DynFlags -> Bool
 safeImportsOn =
-#if MIN_VERSION_ghc(9,0,0)
+#if MIN_VERSION_ghc(9,2,0)
   Session.safeImportsOn
 #else
   DynFlags.safeImportsOn
