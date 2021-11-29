@@ -287,6 +287,7 @@ module Development.IDE.GHC.Compat.Core (
     module GHC.Core.DataCon,
     module GHC.Core.FamInstEnv,
     module GHC.Core.InstEnv,
+    module GHC.Types.Unique.FM,
 #if !MIN_VERSION_ghc(9,2,0)
     module GHC.Core.Ppr.TyThing,
 #endif
@@ -380,6 +381,7 @@ module Development.IDE.GHC.Compat.Core (
     module TysWiredIn,
     module Type,
     module Unify,
+    module UniqFM,
     module UniqSupply,
     module Var,
 #endif
@@ -426,6 +428,7 @@ import           GHC.Core.DataCon           hiding (dataConExTyCoVars)
 import qualified GHC.Core.DataCon           as DataCon
 import           GHC.Core.FamInstEnv
 import           GHC.Core.InstEnv
+import           GHC.Types.Unique.FM
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Core.Multiplicity      (scaledThing)
 #else
@@ -512,7 +515,9 @@ import           GHC.Types.TyThing.Ppr
 #else
 import           GHC.Types.Name.Set
 #endif
-import           GHC.Types.SrcLoc           (BufPos, BufSpan, SrcSpan (UnhelpfulSpan), SrcLoc(UnhelpfulLoc))
+import           GHC.Types.SrcLoc           (BufPos, BufSpan,
+                                             SrcLoc (UnhelpfulLoc),
+                                             SrcSpan (UnhelpfulSpan))
 import qualified GHC.Types.SrcLoc           as SrcLoc
 import           GHC.Types.Unique.Supply
 import           GHC.Types.Var              (Var (varName), setTyVarUnique,
@@ -631,6 +636,7 @@ import           Type                       hiding (mkVisFunTys)
 import           TysPrim
 import           TysWiredIn
 import           Unify
+import           UniqFM
 import           UniqSupply
 import           Var                        (Var (varName), setTyVarUnique,
                                              setVarUnique, varType)
@@ -638,13 +644,14 @@ import           Var                        (Var (varName), setTyVarUnique,
 #if MIN_VERSION_ghc(8,10,0)
 import           Coercion                   (coercionKind)
 import           Predicate
-import           SrcLoc                     (SrcSpan (UnhelpfulSpan), SrcLoc (UnhelpfulLoc))
+import           SrcLoc                     (SrcLoc (UnhelpfulLoc),
+                                             SrcSpan (UnhelpfulSpan))
 #else
-import           SrcLoc                     (RealLocated,
-                                             SrcSpan (UnhelpfulSpan),
-                                             SrcLoc (UnhelpfulLoc))
+import           SrcLoc                     (RealLocated, SrcLoc (UnhelpfulLoc),
+                                             SrcSpan (UnhelpfulSpan))
 #endif
 #endif
+
 
 #if !MIN_VERSION_ghc(8,8,0)
 import           Data.List                  (isSuffixOf)
