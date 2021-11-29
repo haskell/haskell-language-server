@@ -4,7 +4,6 @@
 {-# LANGUAGE MultiWayIf            #-}
 {-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE PatternSynonyms       #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE ViewPatterns          #-}
@@ -49,35 +48,13 @@ import           Development.IDE                  as D (Diagnostic (Diagnostic, 
                                                         toNormalizedUri,
                                                         uriToFilePath',
                                                         useWithStale)
-import           Development.IDE.GHC.Compat       (DynFlags (extensions),
-                                                   ExtBits (UsePosPragsBit),
-                                                   FlagSpec (FlagSpec, flagSpecName),
-                                                   GenLocated (L),
-                                                   GeneralFlag (Opt_Haddock, Opt_KeepRawTokenStream),
-                                                   HscEnv (hsc_dflags), Located,
-                                                   ModSummary (ms_hspp_opts),
-                                                   P (unP),
-                                                   PState (PState, annotations, last_loc, options),
-                                                   ParsedModule (pm_mod_summary),
-                                                   ParserFlags (pExtsBitmap),
-                                                   SrcSpan,
-                                                   Token (ITblockComment, ITlineComment, ITvarsym),
-                                                   flagsForCompletion,
-                                                   getPState, gopt_set,
-                                                   gopt_unset, lexer, mkPState,
-                                                   mkRealSrcLoc,
-                                                   pattern RealSrcLoc,
-                                                   realSrcSpanEnd, srcLocCol,
-                                                   srcLocLine, srcSpanEnd,
-                                                   srcSpanStart, xFlags)
-import           Development.IDE.GHC.Compat.Core  (DynFlags (extensionFlags, warningFlags),
-                                                   gopt, mkPStatePure,
-                                                   mkParserFlags')
+import           Development.IDE.GHC.Compat       (homeUnitId_, hsc_dflags,
+                                                   safeImportsOn)
+import           Development.IDE.GHC.Compat.Core
 import           Development.IDE.GHC.Compat.Util  (StringBuffer, atEnd,
                                                    nextChar,
                                                    stringToStringBuffer)
 import           Development.IDE.Types.HscEnvEq   (HscEnvEq, hscEnv)
-import qualified DynFlags
 import           Ide.Types
 import qualified Language.LSP.Server              as LSP
 import qualified Language.LSP.Types               as J
@@ -694,8 +671,8 @@ mkLexerPState dynFlags stringBuffer =
       mkParserFlags'
       <$> warningFlags
       <*> extensionFlags
-      <*> DynFlags.thisPackage
-      <*> DynFlags.safeImportsOn
+      <*> homeUnitId_
+      <*> safeImportsOn
       <*> gopt Opt_Haddock
       <*> gopt Opt_KeepRawTokenStream
       <*> const False
