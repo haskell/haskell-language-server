@@ -15,7 +15,7 @@ module Development.IDE.GHC.Compat.Parser (
     ApiAnns,
 #endif
 #if MIN_VERSION_ghc(9,0,0)
-    module GHC.Types.SrcLoc,
+    PsSpan(..),
 #endif
     mkHsParsedModule,
     mkParsedModule,
@@ -27,7 +27,7 @@ module Development.IDE.GHC.Compat.Parser (
 
 #if MIN_VERSION_ghc(9,0,0)
 import qualified GHC.Parser.Lexer                as Lexer
-import qualified GHC.Types.SrcLoc
+import           GHC.Types.SrcLoc                (PsSpan (..))
 #if MIN_VERSION_ghc(9,2,0)
 import qualified GHC.Driver.Config               as Config
 import           GHC.Parser.Lexer                hiding (initParserState)
