@@ -67,6 +67,8 @@ module Development.IDE.GHC.Compat.Util (
     StringBuffer(..),
     hGetStringBuffer,
     stringToStringBuffer,
+    nextChar,
+    atEnd
     ) where
 
 #if MIN_VERSION_ghc(9,0,0)
