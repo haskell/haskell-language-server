@@ -18,6 +18,9 @@ on:
   schedule:
     # Try to save snapshot every day at 03:45 UTC (~21:45 in California)
     - cron: "45 3 * * *"
+  pull_request:
+    branches:
+      - '**'
 
 jobs:
   pre_job:
