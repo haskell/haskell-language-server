@@ -1029,7 +1029,7 @@ getDocsNonInteractive' name =
 -- | Non-interactive modification of 'GHC.Runtime.Eval.getDocs'.
 --   The interactive paths create problems in ghc-lib builds
 ---  and lead to fun errors like "Cannot continue after interface file error".
-getDocsNonInteractive :: HscEnv -> Module -> Name -> IO (Either ErrorMessages (Name, Either GetDocsFailure (Maybe HsDocString, Maybe (Map.Map Int HsDocString))))
+getDocsNonInteractive :: HscEnv -> Module -> Name -> IO (Either GHC.ErrorMessages (Name, Either GetDocsFailure (Maybe HsDocString, Maybe (Map.Map Int HsDocString))))
 getDocsNonInteractive hsc_env mod name = do
     ((_warns,errs), res) <- initTypecheckEnv hsc_env mod $ getDocsNonInteractive' name
     pure $ maybeToEither errs res
@@ -1041,7 +1041,7 @@ getDocsBatch
   -> Module  -- ^ a moudle where the names are in scope
   -> [Name]
   --  2021-11-18: NOTE: Map Int would become IntMap if next GHCs.
-  -> IO (Either ErrorMessages (Map.Map Name (Either GetDocsFailure (Maybe HsDocString, Maybe (Map.Map Int HsDocString)))))
+  -> IO (Either GHC.ErrorMessages (Map.Map Name (Either GetDocsFailure (Maybe HsDocString, Maybe (Map.Map Int HsDocString)))))
   -- ^ Return a 'Map' of 'Name's to 'Either' (no docs messages) (general doc body & arg docs)
 getDocsBatch hsc_env mod names = do
     ((_warns,errs), res) <- initTypecheckEnv hsc_env mod $ Map.fromList <$> traverse getDocsNonInteractive' names
