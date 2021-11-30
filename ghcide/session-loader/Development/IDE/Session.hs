@@ -462,7 +462,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
                     -> IO (IdeResult HscEnvEq, [FilePath])
         sessionOpts (hieYaml, file) = do
           v <- fromMaybe HM.empty . Map.lookup hieYaml <$> readVar fileToFlags
-          cfp <- canonicalizePath file
+          cfp <- makeAbsolute file
           case HM.lookup (toNormalizedFilePath' cfp) v of
             Just (opts, old_di) -> do
               deps_ok <- checkDependencyInfo old_di
@@ -483,7 +483,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
     -- before attempting to do so.
     let getOptions :: FilePath -> IO (IdeResult HscEnvEq, [FilePath])
         getOptions file = do
-            ncfp <- toNormalizedFilePath' <$> canonicalizePath file
+            ncfp <- toNormalizedFilePath' <$> makeAbsolute file
             cachedHieYamlLocation <- HM.lookup ncfp <$> readVar filesMap
             hieYaml <- cradleLoc file
             sessionOpts (join cachedHieYamlLocation <|> hieYaml, file) `Safe.catch` \e ->
@@ -553,11 +553,11 @@ fromTargetId is exts (GHC.TargetModule mod) env dep = do
               , i <- is
               , boot <- ["", "-boot"]
               ]
-    locs <- mapM (fmap toNormalizedFilePath' . canonicalizePath) fps
+    locs <- mapM (fmap toNormalizedFilePath' . makeAbsolute) fps
     return [TargetDetails (TargetModule mod) env dep locs]
 -- For a 'TargetFile' we consider all the possible module names
 fromTargetId _ _ (GHC.TargetFile f _) env deps = do
-    nf <- toNormalizedFilePath' <$> canonicalizePath f
+    nf <- toNormalizedFilePath' <$> makeAbsolute f
     return [TargetDetails (TargetFile nf) env deps [nf]]
 
 toFlagsMap :: TargetDetails -> [(NormalizedFilePath, (IdeResult HscEnvEq, DependencyInfo))]

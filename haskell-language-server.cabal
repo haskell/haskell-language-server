@@ -161,6 +161,11 @@ flag alternateNumberFormat
   default:     True
   manual:      True
 
+flag qualifyImportedNames
+  description: Enable qualifyImportedNames plugin
+  default:     True
+  manual:      True
+
 -- formatters
 
 flag floskell
@@ -263,6 +268,11 @@ common alternateNumberFormat
     build-depends: hls-alternate-number-format-plugin ^>=1.0.0.0
     cpp-options: -DalternateNumberFormat
 
+common qualifyImportedNames
+  if flag(qualifyImportedNames)
+    build-depends: hls-qualify-imported-names-plugin ^>=1.0.0.0
+    cpp-options: -DqualifyImportedNames
+
 -- formatters
 
 common floskell
@@ -308,6 +318,7 @@ executable haskell-language-server
                     , pragmas
                     , splice
                     , alternateNumberFormat
+                    , qualifyImportedNames
                     , floskell
                     , fourmolu
                     , ormolu

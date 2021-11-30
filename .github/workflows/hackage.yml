@@ -28,7 +28,7 @@ jobs:
                   "hls-call-hierarchy-plugin",
                   "haskell-language-server"]
         # Uncomment 9.0.1 when ghcide is buildable
-        ghc: [ # "9.0.1",
+        ghc: [ "9.0.1",
               "8.10.7",
               "8.8.4",
               "8.6.5"]
