@@ -681,6 +681,9 @@ uniqueCompl candidate unique =
       importedFrom (provenance -> ImportedFrom m) = m
       importedFrom (provenance -> DefinedIn m)    = m
       importedFrom (provenance -> Local _)        = "local"
+#if __GLASGOW_HASKELL__ < 810
+      importedFrom _                              = ""
+#endif
 
 -- ---------------------------------------------------------------------
 -- helper functions for infix backticks

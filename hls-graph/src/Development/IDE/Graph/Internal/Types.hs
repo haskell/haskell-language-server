@@ -6,30 +6,33 @@
 {-# LANGUAGE DerivingStrategies         #-}
 {-# LANGUAGE ExistentialQuantification  #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 
 module Development.IDE.Graph.Internal.Types where
 
 import           Control.Applicative
-import           Control.Concurrent.Extra
 import           Control.Monad.Catch
 -- Needed in GHC 8.6.5
+import           Control.Concurrent.STM        (TVar, atomically)
 import           Control.Monad.Fail
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Reader
-import           Data.Aeson                            (FromJSON, ToJSON)
-import qualified Data.ByteString                       as BS
+import           Data.Aeson                    (FromJSON, ToJSON)
+import           Data.Bifunctor                (second)
+import qualified Data.ByteString               as BS
 import           Data.Dynamic
-import qualified Data.HashMap.Strict                   as Map
+import qualified Data.HashMap.Strict           as Map
+import           Data.HashSet                  (HashSet)
 import           Data.IORef
-import           Data.IntSet                           (IntSet)
 import           Data.Maybe
 import           Data.Typeable
 import           Development.IDE.Graph.Classes
-import           Development.IDE.Graph.Internal.Ids
-import           Development.IDE.Graph.Internal.Intern
-import           GHC.Generics                          (Generic)
-import           System.Time.Extra                     (Seconds)
+import           GHC.Generics                  (Generic)
+import qualified ListT
+import           StmContainers.Map             (Map)
+import qualified StmContainers.Map             as SMap
+import           System.Time.Extra             (Seconds)
 
 
 unwrapDynamic :: forall a . Typeable a => Dynamic -> a
@@ -85,27 +88,47 @@ instance Show Key where
 
 newtype Value = Value Dynamic
 
-data Database = Database {
-    databaseExtra           :: Dynamic,
-    databaseRules           :: TheRules,
-    databaseStep            :: !(IORef Step),
-    -- Hold the lock while mutating Ids/Values
-    databaseLock            :: !Lock,
-    databaseIds             :: !(IORef (Intern Key)),
-    databaseValues          :: !(Ids (Key, Status)),
-    databaseReverseDeps     :: !(Ids IntSet),
-    databaseReverseDepsLock :: !Lock
+data KeyDetails = KeyDetails {
+    keyStatus      :: !Status,
+    keyReverseDeps :: !(HashSet Key)
     }
+
+onKeyReverseDeps :: (HashSet Key -> HashSet Key) -> KeyDetails -> KeyDetails
+onKeyReverseDeps f it@KeyDetails{..} =
+    it{keyReverseDeps = f keyReverseDeps}
+
+data Database = Database {
+    databaseExtra  :: Dynamic,
+    databaseRules  :: TheRules,
+    databaseStep   :: !(TVar Step),
+    databaseValues :: !(Map Key KeyDetails)
+    }
+
+getDatabaseValues :: Database -> IO [(Key, Status)]
+getDatabaseValues = atomically
+                  . (fmap.fmap) (second keyStatus)
+                  . ListT.toList
+                  . SMap.listT
+                  . databaseValues
 
 data Status
     = Clean Result
     | Dirty (Maybe Result)
-    | Running (IO ()) Result (Maybe Result)
+    | Running {
+        runningStep   :: !Step,
+        runningWait   :: !(IO ()),
+        runningResult :: Result,
+        runningPrev   :: !(Maybe Result)
+        }
+
+viewDirty :: Step -> Status -> Status
+viewDirty currentStep (Running s _ _ re) | currentStep /= s = Dirty re
+viewDirty _ other = other
 
 getResult :: Status -> Maybe Result
-getResult (Clean re)         = Just re
-getResult (Dirty m_re)       = m_re
-getResult (Running _ _ m_re) = m_re
+getResult (Clean re)           = Just re
+getResult (Dirty m_re)         = m_re
+getResult (Running _ _ _ m_re) = m_re -- watch out: this returns the previous result
 
 data Result = Result {
     resultValue     :: !Value,
@@ -117,14 +140,14 @@ data Result = Result {
     resultData      :: BS.ByteString
     }
 
-data ResultDeps = UnknownDeps | AlwaysRerunDeps ![Id] | ResultDeps ![Id]
+data ResultDeps = UnknownDeps | AlwaysRerunDeps ![Key] | ResultDeps ![Key]
 
-getResultDepsDefault :: [Id] -> ResultDeps -> [Id]
+getResultDepsDefault :: [Key] -> ResultDeps -> [Key]
 getResultDepsDefault _ (ResultDeps ids)      = ids
 getResultDepsDefault _ (AlwaysRerunDeps ids) = ids
 getResultDepsDefault def UnknownDeps         = def
 
-mapResultDeps :: ([Id] -> [Id]) -> ResultDeps -> ResultDeps
+mapResultDeps :: ([Key] -> [Key]) -> ResultDeps -> ResultDeps
 mapResultDeps f (ResultDeps ids)      = ResultDeps $ f ids
 mapResultDeps f (AlwaysRerunDeps ids) = AlwaysRerunDeps $ f ids
 mapResultDeps _ UnknownDeps           = UnknownDeps

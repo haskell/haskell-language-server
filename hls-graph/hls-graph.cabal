@@ -45,8 +45,6 @@ library
     Development.IDE.Graph.Internal.Options
     Development.IDE.Graph.Internal.Rules
     Development.IDE.Graph.Internal.Database
-    Development.IDE.Graph.Internal.Ids
-    Development.IDE.Graph.Internal.Intern
     Development.IDE.Graph.Internal.Paths
     Development.IDE.Graph.Internal.Profile
     Development.IDE.Graph.Internal.Types
@@ -66,11 +64,15 @@ library
     , exceptions
     , extra
     , filepath
+    , focus
     , hashable
     , js-dgtable
     , js-flot
     , js-jquery
+    , list-t
     , primitive
+    , stm
+    , stm-containers
     , time
     , transformers
     , unordered-containers
