@@ -1,4 +1,4 @@
-# Used for ci setup in the gitlab mirror of the project: 
+# Used for ci setup in the gitlab mirror of the project:
 # https://gitlab.haskell.org/haskell/haskell-language-server/-/pipelines
 variables:
   # Commit of ghc/ci-images repository from which to pull Docker images
@@ -71,7 +71,7 @@ build-x86_64-linux-alpine:
 build-x86_64-freebsd:
   extends: .build
   tags:
-    - x86_64-freebsd13
+    - x86_64-freebsd12
   parallel: *default_matrix
 
 build-x86_64-darwin:
