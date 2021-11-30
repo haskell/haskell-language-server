@@ -32,6 +32,7 @@ module Development.IDE.GHC.Compat.Env (
     -- * DynFlags Helper
     setBytecodeLinkerOptions,
     setInterpreterLinkerOptions,
+    Development.IDE.GHC.Compat.Env.safeImportsOn,
     -- * Ways
     Ways,
     Way,
@@ -178,6 +179,13 @@ homeUnitId_ =
   thisPackage
 #endif
 
+safeImportsOn :: DynFlags -> Bool
+safeImportsOn =
+#if MIN_VERSION_ghc(9,2,0)
+  Session.safeImportsOn
+#else
+  DynFlags.safeImportsOn
+#endif
 
 #if MIN_VERSION_ghc(9,0,0) && !MIN_VERSION_ghc(9,2,0)
 type HomeUnit = Unit
