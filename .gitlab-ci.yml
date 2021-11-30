@@ -2,9 +2,9 @@
 # https://gitlab.haskell.org/haskell/haskell-language-server/-/pipelines
 variables:
   # Commit of ghc/ci-images repository from which to pull Docker images
-  DOCKER_REV: "853f348f9caf38b08740b280296fbd34e09abb3a"
+  DOCKER_REV: "4ed1a4f27828ba96a34662dc954335e29b470cd2"
 
-  CABAL_INSTALL_VERSION: 3.4.0.0
+  CABAL_INSTALL_VERSION: 3.6.2.0
 
 .default_matrix: &default_matrix
   matrix:
@@ -46,6 +46,10 @@ build-aarch64-linux-deb10:
     - aarch64-linux
   image: "registry.gitlab.haskell.org/ghc/ci-images/aarch64-linux-deb10:$DOCKER_REV"
   parallel: *arm_matrix
+  variables:
+    TARBALL_ARCHIVE_SUFFIX: aarch64-linux-deb10
+    TARBALL_EXT: tar.xz
+    ADD_CABAL_ARGS: ""
 
 build-armv7-linux-deb10:
   extends: .build
@@ -53,6 +57,10 @@ build-armv7-linux-deb10:
     - armv7-linux
   image: "registry.gitlab.haskell.org/ghc/ci-images/armv7-linux-deb10:$DOCKER_REV"
   parallel: *arm_matrix
+  variables:
+    TARBALL_ARCHIVE_SUFFIX: armv7-linux-deb10
+    TARBALL_EXT: tar.xz
+    ADD_CABAL_ARGS: ""
 
 build-x86_64-linux:
   extends: .build
@@ -60,47 +68,96 @@ build-x86_64-linux:
     - x86_64-linux
   image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-deb10:$DOCKER_REV"
   parallel: *default_matrix
+  variables:
+    TARBALL_ARCHIVE_SUFFIX: armv7-linux-deb10
+    TARBALL_EXT: tar.xz
+    ADD_CABAL_ARGS: "--enable-split-sections"
 
 build-x86_64-linux-alpine:
   extends: .build
   tags:
     - x86_64-linux
   image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-alpine3_12:$DOCKER_REV"
+  before_script:
+    - sudo apk add --no-cache zlib zlib-dev zlib-static bzip2 bzip2-dev bzip2-static gmp gmp-dev xz xz-dev ncurses-static
   parallel: *default_matrix
+  variables:
+    TARBALL_ARCHIVE_SUFFIX: x86_64-linux-alpine
+    TARBALL_EXT: tar.xz
+    ADD_CABAL_ARGS: "--enable-split-sections --enable-executable-static"
 
-build-x86_64-freebsd:
+build-x86_64-freebsd12:
   extends: .build
   tags:
     - x86_64-freebsd12
   parallel: *default_matrix
+  variables:
+    TARBALL_ARCHIVE_SUFFIX: x86_64-freebsd12
+    TARBALL_EXT: tar.xz
+    ADD_CABAL_ARGS: "--enable-split-sections"
+
+build-x86_64-freebsd13:
+  extends: .build
+  tags:
+    - x86_64-freebsd13
+  parallel: *default_matrix
+  before_script:
+    - sudo pkg update
+    - sudo pkg install --yes compat12x-amd64
+    - sudo ln -s libncurses.so.6 /usr/local/lib/libncurses.so.6.2
+  variables:
+    TARBALL_ARCHIVE_SUFFIX: x86_64-freebsd13
+    TARBALL_EXT: tar.xz
+    ADD_CABAL_ARGS: "--enable-split-sections"
 
 build-x86_64-darwin:
   extends: .build
   tags:
     - x86_64-darwin
   parallel: *default_matrix
+  variables:
+    TARBALL_ARCHIVE_SUFFIX: x86_64-darwin
+    TARBALL_EXT: tar.xz
+    ADD_CABAL_ARGS: ""
 
 build-aarch64-darwin:
   tags:
     - aarch64-darwin-m1
+  before_script:
+    # Install brew locally in the project dir. Packages will also be installed here.
+    - '[ -e "$CI_PROJECT_DIR/.brew" ] || git clone --depth=1 https://github.com/Homebrew/brew $CI_PROJECT_DIR/.brew'
+    - export PATH="$CI_PROJECT_DIR/.brew/bin:$CI_PROJECT_DIR/.brew/sbin:$PATH"
+
+    # otherwise we seem to get intel binaries
+    - export HOMEBREW_CHANGE_ARCH_TO_ARM=1
+
+    # make sure to not pollute the machine with temp files etc
+    - mkdir -p $CI_PROJECT_DIR/.brew_cache
+    - export HOMEBREW_CACHE=$CI_PROJECT_DIR/.brew_cache
+    - mkdir -p $CI_PROJECT_DIR/.brew_logs
+    - export HOMEBREW_LOGS=$CI_PROJECT_DIR/.brew_logs
+    - mkdir -p /private/tmp/.brew_tmp
+    - export HOMEBREW_TEMP=/private/tmp/.brew_tmp
+
+    # update and install packages
+    - brew update
+    - brew install llvm
+    - brew install autoconf automake coreutils
   script: |
-    set -Eeuo pipefail
-    function runInNixShell() {
-      time nix-shell $CI_PROJECT_DIR/.gitlab/shell-aarch64-darwin.nix \
-        -I nixpkgs=https://github.com/angerman/nixpkgs/archive/75f7281738b.tar.gz \
-        --argstr system "aarch64-darwin" \
-        --pure \
-        --keep CI_PROJECT_DIR \
-        --keep MACOSX_DEPLOYMENT_TARGET \
-        --keep GHC_VERSION \
-        --keep CABAL_PROJECT \
-        --keep CABAL_INSTALL_VERSION \
-        --run "$1" 2>&1
-    }
-    runInNixShell "cabal update && mkdir vendored && cd vendored && cabal unpack network-3.1.2.1 && cd network-3.1.2.1 && autoreconf -fi" 2>&1
-    runInNixShell "./.gitlab/ci.sh" 2>&1
+    export PATH="$CI_PROJECT_DIR/.brew/opt/llvm/bin:$CI_PROJECT_DIR/.brew/bin:$CI_PROJECT_DIR/.brew/sbin:$PATH"
+    export CC=$CI_PROJECT_DIR/.brew/opt/llvm/bin/clang
+    export CXX=$CI_PROJECT_DIR/.brew/opt/llvm/bin/clang++
+    export LD=ld
+    export AR=$CI_PROJECT_DIR/.brew/opt/llvm/bin/llvm-ar
+    export RANLIB=$CI_PROJECT_DIR/.brew/opt/llvm/bin/llvm-ranlib
+    arch -arm64 /bin/bash ./.gitlab/ci.sh
+  after_script:
+    - rm -Rf /private/tmp/.brew_tmp
   variables:
     MACOSX_DEPLOYMENT_TARGET: "10.7"
+    TARBALL_ARCHIVE_SUFFIX: aarch64-darwin
+    TARBALL_EXT: tar.xz
+    ADD_CABAL_ARGS: ""
   parallel: *m1_matrix
   artifacts:
     expire_in: 2 week
@@ -112,3 +169,11 @@ build-x86_64-windows:
   tags:
     - new-x86_64-windows
   parallel: *default_matrix
+  script:
+    - bash '-lc' 'pacman --noconfirm -S zip'
+    - $env:CHERE_INVOKING = "yes"
+    - bash '-lc' "TARBALL_ARCHIVE_SUFFIX=$env:TARBALL_ARCHIVE_SUFFIX TARBALL_EXT=$env:TARBALL_EXT ADD_CABAL_ARGS=$env:ADD_CABAL_ARGS GHC_VERSION=$env:GHC_VERSION CABAL_INSTALL_VERSION=$CABAL_INSTALL_VERSION .gitlab/ci.sh"
+  variables:
+    TARBALL_ARCHIVE_SUFFIX: x86_64-windows
+    TARBALL_EXT: zip
+    ADD_CABAL_ARGS: ""
