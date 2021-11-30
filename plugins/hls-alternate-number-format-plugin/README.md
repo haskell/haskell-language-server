@@ -10,7 +10,7 @@ The plugin requires no extra setup to work. Simply place your cursor on top of a
 
 ## Demo
 
-![Alternate format suggestions](HLSInt.gif)
+![Alternate format suggestions](HLSAll.gif)
 
 ### Currently Supported GHC Extensions:
 - `BinaryLiterals`

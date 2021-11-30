@@ -21,7 +21,7 @@ module Ide.Plugin.Conversion (
 ) where
 
 import           Data.Char                     (toUpper)
-import           Data.List                     (delete)
+import           Data.List                     (delete, dropWhileEnd)
 import           Data.Maybe                    (mapMaybe)
 import           Data.Ratio                    (denominator, numerator)
 import           Data.Text                     (Text)
@@ -165,7 +165,9 @@ generateNumDecimal val = map (toNumDecimal val) $ take 3 $ takeWhile (val >= ) $
 toNumDecimal :: Integer -> Integer -> Text
 toNumDecimal val divisor = let (q, r) = val `quotRem` divisor
                                numExponent = length $ filter (== '0') $ show divisor
-                               in T.pack $ show q <> "." <> show r <> "e" <> show numExponent
+                               -- remove unnecessary trailing zeroes from output
+                               r' = dropWhileEnd (== '0') $ show r
+                               in T.pack $ show q <> "." <> r' <> "e" <> show numExponent
 
 toBase :: (Num a, Ord a) => (a -> ShowS) -> String -> a -> String
 toBase conv header n
