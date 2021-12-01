@@ -126,8 +126,9 @@ jobs:
 
       - run: cabal update
 
-      # Need this to work around filepath length limits in Windows
-      - name: Shorten binary names
+      # Work around for filepath length limits in Windows
+      - if: ${{ env.RUNNER_OS }} == 'Windows'
+        name: Shorten binary names
         run: |
           sed -i.bak -e 's/haskell-language-server/hls/g' \
                      -e 's/haskell_language_server/hls/g' \
