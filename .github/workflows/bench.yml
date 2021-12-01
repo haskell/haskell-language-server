@@ -50,10 +50,7 @@ jobs:
         path: |
           ~/.cabal/packages
           ~/.cabal/store
-        restore-keys: |
-            v2-${{ runner.os }}-${{ matrix.ghc }}-build-${{ hashFiles('cabal.project') }}
-            v2-${{ runner.os }}-${{ matrix.ghc }}-build-
-            v2-${{ runner.os }}-${{ matrix.ghc }}
+        restore-keys: v2-${{ runner.os }}-${{ matrix.ghc }}-build-
 
     - run: cabal update
 
