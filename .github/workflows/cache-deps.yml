@@ -43,13 +43,13 @@ jobs:
           ghc-version: ${{ matrix.ghc }}
           cabal-version: "3.4"
 
-      - if: matrix.os == 'windows-latest'
-        name: Set some window specific things
+      - if: runner.os == 'Windows'
+        name: (Windows) Platform config
         run: |
           echo "CABAL_PKGS_DIR=~\\AppData\\cabal\\packages" >> $GITHUB_ENV
 
-      - if: (${{ env.RUNNER_OS }} == 'Linux') || (${{ env.RUNNER_OS}} == 'macOS')
-        name: Set some Linux/macOS specific things
+      - if: ( runner.os == 'Linux' ) || ( runner.os == 'macOS' )
+        name: (Linux,macOS) Platform config
         run: |
           echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
 
@@ -84,8 +84,8 @@ jobs:
       - run: cabal update
 
       # Work around for filepath length limits in Windows
-      - if: ${{ env.RUNNER_OS }} == 'Windows'
-        name: Shorten binary names
+      - if: runner.os == 'Windows'
+        name: (Windows) Shorten binary names
         run: |
           sed -i.bak -e 's/haskell-language-server/hls/g' \
                      -e 's/haskell_language_server/hls/g' \
@@ -97,6 +97,6 @@ jobs:
         run: cabal v2-build --enable-tests --enable-benchmarks --only-dependencies
 
       # repeating builds to workaround segfaults in windows and ghc-8.8.4
-      - if: ${{ env.RUNNER_OS }} == 'Windows'
-        name: In Windows run build additional 2 times
+      - if: runner.os == 'Windows'
+        name: (Windows) Run build additional 2 times
         run: cabal v2-build --enable-tests --enable-benchmarks --only-dependencies || cabal v2-build --enable-tests --enable-benchmarks --only-dependencies
