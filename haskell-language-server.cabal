@@ -156,6 +156,11 @@ flag splice
   default:     True
   manual:      True
 
+flag alternateNumberFormat
+  description: Enable Alternate Number Format plugin
+  default:     True
+  manual:      True
+
 flag qualifyImportedNames
   description: Enable qualifyImportedNames plugin
   default:     True
@@ -258,6 +263,11 @@ common splice
     build-depends: hls-splice-plugin ^>=1.0.0.1
     cpp-options: -Dsplice
 
+common alternateNumberFormat
+  if flag(alternateNumberFormat)
+    build-depends: hls-alternate-number-format-plugin ^>=1.0.0.0
+    cpp-options: -DalternateNumberFormat
+
 common qualifyImportedNames
   if flag(qualifyImportedNames)
     build-depends: hls-qualify-imported-names-plugin ^>=1.0.0.0
@@ -307,6 +317,7 @@ executable haskell-language-server
                     , moduleName
                     , pragmas
                     , splice
+                    , alternateNumberFormat
                     , qualifyImportedNames
                     , floskell
                     , fourmolu

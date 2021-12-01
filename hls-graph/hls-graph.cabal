@@ -3,7 +3,7 @@ name:          hls-graph
 version:       1.5.1.1
 synopsis:      Haskell Language Server internal graph API
 description:
-  Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
+  Please see the README on GitHub at <https://github.com/haskell/haskell-language-server/tree/master/hls-graph#readme>
 
 homepage:      https://github.com/haskell/haskell-language-server#readme
 bug-reports:   https://github.com/haskell/haskell-language-server/issues
@@ -17,6 +17,9 @@ build-type:    Simple
 data-files:
     html/profile.html
     html/shake.js
+
+extra-source-files:
+    README.md
 
 flag pedantic
   description: Enable -Werror
@@ -42,8 +45,6 @@ library
     Development.IDE.Graph.Internal.Options
     Development.IDE.Graph.Internal.Rules
     Development.IDE.Graph.Internal.Database
-    Development.IDE.Graph.Internal.Ids
-    Development.IDE.Graph.Internal.Intern
     Development.IDE.Graph.Internal.Paths
     Development.IDE.Graph.Internal.Profile
     Development.IDE.Graph.Internal.Types
@@ -63,11 +64,15 @@ library
     , exceptions
     , extra
     , filepath
+    , focus
     , hashable
     , js-dgtable
     , js-flot
     , js-jquery
+    , list-t
     , primitive
+    , stm
+    , stm-containers
     , time
     , transformers
     , unordered-containers
