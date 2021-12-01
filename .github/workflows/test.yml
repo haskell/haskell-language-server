@@ -78,6 +78,7 @@ jobs:
         with:
           submodules: true
       - uses: haskell/actions/setup@v1
+        id: HaskEnvSetup
         with:
           ghc-version: ${{ matrix.ghc }}
           cabal-version: "3.4"
@@ -88,14 +89,12 @@ jobs:
       - if: ${{ env.RUNNER_OS }} == 'Windows'
         name: Set some window specific things
         run: |
-          echo "CABAL_STORE_DIR=$SYSTEMDRIVE\\SR" >> $GITHUB_ENV
           echo "CABAL_PKGS_DIR=~\\AppData\\cabal\\packages" >> $GITHUB_ENV
 
 
       - if: (${{ env.RUNNER_OS }} == 'Linux') || (${{ env.RUNNER_OS}} == 'macOS')
         name: Set some Linux/macOS specific things
         run: |
-          echo "CABAL_STORE_DIR=~/.cabal/store" >> $GITHUB_ENV
           echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
 
       - if: matrix.os == 'macOS-latest' && matrix.ghc == '8.10.5'
@@ -121,8 +120,8 @@ jobs:
           cache-name: cache-cabal
         with:
           path: |
+            ${{ steps.HaskEnvSetup.outputs.cabal-store }}
             ${{ env.CABAL_PKGS_DIR }}
-            ${{ env.CABAL_STORE_DIR }}
           restore-keys: v2-${{ runner.os }}-${{ matrix.ghc }}-build-
 
       - run: cabal update
