@@ -50,13 +50,17 @@ newDatabase databaseExtra databaseRules = do
     databaseValues <- atomically SMap.new
     pure Database{..}
 
--- | Increment the step and mark dirty
+-- | Increment the step and mark dirty.
+--   Assumes that the database is not running a build
 incDatabase :: Database -> Maybe [Key] -> IO ()
 -- only some keys are dirty
 incDatabase db (Just kk) = do
     atomicallyNamed "incDatabase" $ modifyTVar'  (databaseStep db) $ \(Step i) -> Step $ i + 1
     transitiveDirtyKeys <- transitiveDirtySet db kk
     for_ transitiveDirtyKeys $ \k ->
+        -- Updating all the keys atomically is not necessary
+        -- since we assume that no build is mutating the db.
+        -- Therefore run one transaction per key to minimise contention.
         atomicallyNamed "incDatabase" $ SMap.focus updateDirty k (databaseValues db)
 
 -- all keys are dirty
@@ -94,7 +98,10 @@ builder db@Database{..} keys = withRunInIO $ \(RunInIO run) -> do
     -- Things that I need to force before my results are ready
     toForce <- liftIO $ newTVarIO []
     current <- liftIO $ readTVarIO databaseStep
-    results <- liftIO $ for keys $ \id -> atomicallyNamed "builder" $ do
+    results <- liftIO $ for keys $ \id ->
+        -- Updating the status of all the dependencies atomically is not necessary.
+        -- Therefore, run one transaction per dep. to avoid contention
+        atomicallyNamed "builder" $ do
             -- Spawn the id if needed
             status <- SMap.lookup id databaseValues
             val <- case viewDirty current $ maybe (Dirty Nothing) keyStatus status of
@@ -224,6 +231,9 @@ updateReverseDeps myId db prev new = uninterruptibleMask_ $ do
     where
         alterRDeps f =
             Focus.adjust (onKeyReverseDeps f)
+        -- updating all the reverse deps atomically is not needed.
+        -- Therefore, run individual transactions for each update
+        -- in order to avoid contention
         doOne f id = atomicallyNamed "updateReverseDeps" $
             SMap.focus (alterRDeps f) id (databaseValues db)
 

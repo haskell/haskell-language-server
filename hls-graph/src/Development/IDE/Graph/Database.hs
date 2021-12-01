@@ -56,6 +56,7 @@ shakeGetBuildStep (ShakeDatabase _ _ db) = do
 unvoid :: Functor m => m () -> m a
 unvoid = fmap undefined
 
+-- | Assumes that the database is not running a build
 shakeRunDatabaseForKeys
     :: Maybe [Key]
       -- ^ Set of keys changed since last run. 'Nothing' means everything has changed
