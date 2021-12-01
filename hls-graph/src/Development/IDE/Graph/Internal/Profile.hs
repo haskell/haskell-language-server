@@ -7,15 +7,14 @@
 
 module Development.IDE.Graph.Internal.Profile (writeProfile) where
 
+import           Control.Concurrent.STM                  (readTVarIO)
 import           Data.Bifunctor
 import qualified Data.ByteString.Lazy.Char8              as LBS
 import           Data.Char
 import           Data.Dynamic                            (toDyn)
+import           Data.HashMap.Strict                     (HashMap)
 import qualified Data.HashMap.Strict                     as Map
-import           Data.IORef
-import           Data.IntMap                             (IntMap)
-import qualified Data.IntMap                             as IntMap
-import qualified Data.IntSet                             as Set
+import qualified Data.HashSet                            as Set
 import           Data.List                               (dropWhileEnd, foldl',
                                                           intercalate,
                                                           partition, sort,
@@ -28,7 +27,6 @@ import           Data.Time                               (defaultTimeLocale,
                                                           iso8601DateFormat)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Graph.Internal.Database (getDirtySet)
-import qualified Development.IDE.Graph.Internal.Ids      as Ids
 import           Development.IDE.Graph.Internal.Paths
 import           Development.IDE.Graph.Internal.Types
 import qualified Language.Javascript.DGTable             as DGTable
@@ -50,7 +48,7 @@ writeProfile out db = do
     (report, mapping) <- toReport db
     dirtyKeysMapped <- do
         dirtyIds <- Set.fromList . fmap fst <$> getDirtySet db
-        let dirtyKeysMapped = mapMaybe (`IntMap.lookup` mapping) . Set.toList $ dirtyIds
+        let dirtyKeysMapped = mapMaybe (`Map.lookup` mapping) . Set.toList $ dirtyIds
         return $ Just $ sort dirtyKeysMapped
     rpt <- generateHTML dirtyKeysMapped report
     LBS.writeFile out rpt
@@ -60,12 +58,12 @@ data ProfileEntry = ProfileEntry
 
 -- | Eliminate all errors from the database, pretending they don't exist
 -- resultsOnly :: Map.HashMap Id (Key, Status) -> Map.HashMap Id (Key, Result (Either BS.ByteString Value))
-resultsOnly :: [(Ids.Id, (k, Status))] -> Map.HashMap Ids.Id (k, Result)
-resultsOnly mp = Map.map (fmap (\r ->
+resultsOnly :: [(Key, Status)] -> Map.HashMap Key Result
+resultsOnly mp = Map.map (\r ->
       r{resultDeps = mapResultDeps (filter (isJust . flip Map.lookup keep)) $ resultDeps r}
-    )) keep
+    ) keep
     where
-        keep = Map.fromList $ mapMaybe ((traverse.traverse) getResult) mp
+        keep = Map.fromList $ mapMaybe (traverse getResult) mp
 
 -- | Given a map of representing a dependency order (with a show for error messages), find an ordering for the items such
 --   that no item points to an item before itself.
@@ -102,36 +100,35 @@ dependencyOrder shw status =
             Nothing   -> g (free, mp) (k, ds)
             Just todo -> (free, Map.insert d (Just $ (k,ds) : todo) mp)
 
-prepareForDependencyOrder :: Database -> IO (Map.HashMap Ids.Id (Key, Result))
+prepareForDependencyOrder :: Database -> IO (HashMap Key Result)
 prepareForDependencyOrder db = do
-    current <- readIORef $ databaseStep db
-    Map.insert (-1) (Key "alwaysRerun", alwaysRerunResult current) .  resultsOnly
-        <$> Ids.toList (databaseValues db)
+    current <- readTVarIO $ databaseStep db
+    Map.insert (Key "alwaysRerun") (alwaysRerunResult current) .  resultsOnly
+        <$> getDatabaseValues db
 
 -- | Returns a list of profile entries, and a mapping linking a non-error Id to its profile entry
-toReport :: Database -> IO ([ProfileEntry], IntMap Int)
+toReport :: Database -> IO ([ProfileEntry], HashMap Key Int)
 toReport db = do
     status <- prepareForDependencyOrder db
-    let order = let shw i = maybe "<unknown>" (show . fst) $ Map.lookup i status
-                in dependencyOrder shw
-                $ map (second (getResultDepsDefault [-1] . resultDeps . snd))
+    let order = dependencyOrder show
+                $ map (second (getResultDepsDefault [Key "alwaysRerun"] . resultDeps))
                 $ Map.toList status
-        ids = IntMap.fromList $ zip order [0..]
+        ids = Map.fromList $ zip order [0..]
 
-        steps = let xs = nubOrd $ concat [[resultChanged, resultBuilt, resultVisited] | (_k, Result{..}) <- Map.elems status]
+        steps = let xs = nubOrd $ concat [[resultChanged, resultBuilt, resultVisited] | Result{..} <- Map.elems status]
 
                 in Map.fromList $ zip (sortBy (flip compare) xs) [0..]
 
-        f (k, Result{..}) = ProfileEntry
+        f k Result{..} = ProfileEntry
             {prfName = show k
             ,prfBuilt = fromStep resultBuilt
             ,prfVisited = fromStep resultVisited
             ,prfChanged = fromStep resultChanged
-            ,prfDepends = map pure $ mapMaybe (`IntMap.lookup` ids) $ getResultDepsDefault [-1] resultDeps
+            ,prfDepends = map pure $ mapMaybe (`Map.lookup` ids) $ getResultDepsDefault [Key "alwaysRerun"] resultDeps
             ,prfExecution = resultExecution
             }
             where fromStep i = fromJust $ Map.lookup i steps
-    pure ([maybe (error "toReport") f $ Map.lookup i status | i <- order], ids)
+    pure ([maybe (error "toReport") (f i) $ Map.lookup i status | i <- order], ids)
 
 alwaysRerunResult :: Step -> Result
 alwaysRerunResult current = Result (Value $ toDyn "<alwaysRerun>") (Step 0) (Step 0) current (ResultDeps []) 0 mempty
@@ -144,7 +141,7 @@ generateHTML dirtyKeys xs = do
         f other = error other
     runTemplate f report
 
-generateJSONBuild :: Maybe [Ids.Id] -> String
+generateJSONBuild :: Maybe [Int] -> String
 generateJSONBuild (Just dirtyKeys) = jsonList [jsonList (map show dirtyKeys)]
 generateJSONBuild Nothing          = jsonList []
 
