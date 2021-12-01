@@ -65,8 +65,8 @@ jobs:
           echo "CABAL_STORE_DIR=$SYSTEMDRIVE\\SR" >> $GITHUB_ENV
           echo "CABAL_PKGS_DIR=~\\AppData\\cabal\\packages" >> $GITHUB_ENV
 
-      - if: matrix.os != 'windows-latest'
-        name: Set some linux/macOS specific things
+      - if: (${{ env.RUNNER_OS }} == 'Linux') || (${{ env.RUNNER_OS}} == 'macOS')
+        name: Set some Linux/macOS specific things
         run: |
           echo "CABAL_STORE_DIR=~/.cabal/store" >> $GITHUB_ENV
           echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
