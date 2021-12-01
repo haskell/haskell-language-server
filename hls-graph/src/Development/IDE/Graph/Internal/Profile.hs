@@ -7,7 +7,7 @@
 
 module Development.IDE.Graph.Internal.Profile (writeProfile) where
 
-import           Control.Concurrent.STM                  (readTVarIO)
+import           Control.Concurrent.STM.Stats            (readTVarIO)
 import           Data.Bifunctor
 import qualified Data.ByteString.Lazy.Char8              as LBS
 import           Data.Char

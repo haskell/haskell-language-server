@@ -11,6 +11,7 @@ module Development.IDE.Main
 import           Control.Concurrent.Extra              (newLock, readVar,
                                                         withLock,
                                                         withNumCapabilities)
+import           Control.Concurrent.STM.Stats          (dumpSTMStats)
 import           Control.Exception.Safe                (Exception (displayException),
                                                         catchAny)
 import           Control.Monad.Extra                   (concatMapM, unless,
@@ -308,6 +309,7 @@ defaultMain Arguments{..} = do
                     vfs
                     hiedb
                     hieChan
+            dumpSTMStats
         Check argFiles -> do
           dir <- IO.getCurrentDirectory
           dbLoc <- getHieDbLoc dir
