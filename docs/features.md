@@ -17,6 +17,7 @@ You can watch demos for some of these features [below](#demos).
 - [Module name suggestions](#module-names) for insertion or correction
 - [Call hierarchy support](#call-hierarchy)
 - [Qualify names from an import declaration](#qualify-imported-names) in your code
+- [Suggest alternate numeric formats](#alternate-number-formatting)
 
 ## Demos
 
@@ -51,3 +52,7 @@ You can watch demos for some of these features [below](#demos).
 ### Qualify imported names
 
 ![Qualify Imported Names Demo](../plugins/hls-qualify-imported-names-plugin/qualify-imported-names-demo.gif)
+
+### Alternate Number Formatting
+
+![Alternate Number Format Demo](../plugins/hls-alternate-number-format-plugin/HLSAll.gif)
