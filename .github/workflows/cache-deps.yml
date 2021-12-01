@@ -115,4 +115,4 @@ jobs:
 
       # repeating builds to workaround segfaults in windows and ghc-8.8.4
       - name: Build
-        run: cabal build --only-dependencies || cabal build --only-dependencies || cabal build --only-dependencies
+        run: cabal v2-build --enable-tests --enable-benchmarks --only-dependencies || cabal v2-build --enable-tests --enable-benchmarks --only-dependencies || cabal v2-build --enable-tests --enable-benchmarks --only-dependencies
