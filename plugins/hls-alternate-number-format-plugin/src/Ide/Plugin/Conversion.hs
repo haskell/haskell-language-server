@@ -167,7 +167,9 @@ toNumDecimal val divisor = let (q, r) = val `quotRem` divisor
                                numExponent = length $ filter (== '0') $ show divisor
                                -- remove unnecessary trailing zeroes from output
                                r' = dropWhileEnd (== '0') $ show r
-                               in T.pack $ show q <> "." <> r' <> "e" <> show numExponent
+                               -- but make sure there are still digits left!!!
+                               r'' = if null r' then "0" else r'
+                               in T.pack $ show q <> "." <> r'' <> "e" <> show numExponent
 
 toBase :: (Num a, Ord a) => (a -> ShowS) -> String -> a -> String
 toBase conv header n
