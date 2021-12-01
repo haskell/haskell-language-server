@@ -27,6 +27,7 @@ packages:
   - ./plugins/hls-pragmas-plugin
   - ./plugins/hls-module-name-plugin
   - ./plugins/hls-ormolu-plugin
+  - ./plugins/hls-alternate-number-format-plugin
 
 ghc-options:
   "$everything": -haddock

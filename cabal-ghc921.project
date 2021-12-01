@@ -24,6 +24,7 @@ packages:
          ./plugins/hls-module-name-plugin
          ./plugins/hls-ormolu-plugin
          ./plugins/hls-call-hierarchy-plugin
+         ./plugins/hls-alternate-number-format-plugin
 
 with-compiler: ghc-9.2.1
 
