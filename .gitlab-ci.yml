@@ -1,3 +1,7 @@
+stages:
+  - build
+  - tar
+
 # Used for ci setup in the gitlab mirror of the project:
 # https://gitlab.haskell.org/haskell/haskell-language-server/-/pipelines
 variables:
@@ -32,13 +36,23 @@ workflow:
       when: always
     - when: never
 
-.build:
-  script:
-    - bash .gitlab/ci.sh
+.artifacts:
   artifacts:
     expire_in: 2 week
     paths:
       - out
+
+.artifacts:short:
+  artifacts:
+    expire_in: 1 day
+    paths:
+      - out
+
+.build:
+  extends: .artifacts:short
+  stage: build
+  script:
+    - bash .gitlab/ci.sh
 
 build-aarch64-linux-deb10:
   extends: .build
@@ -47,9 +61,20 @@ build-aarch64-linux-deb10:
   image: "registry.gitlab.haskell.org/ghc/ci-images/aarch64-linux-deb10:$DOCKER_REV"
   parallel: *arm_matrix
   variables:
+    ADD_CABAL_ARGS: ""
+
+tar-aarch64-linux-deb10:
+  extends: .artifacts
+  stage: tar
+  needs: ["build-aarch64-linux-deb10"]
+  tags:
+    - aarch64-linux
+  image: "registry.gitlab.haskell.org/ghc/ci-images/aarch64-linux-deb10:$DOCKER_REV"
+  script:
+    - ./.gitlab/tar.sh
+  variables:
     TARBALL_ARCHIVE_SUFFIX: aarch64-linux-deb10
     TARBALL_EXT: tar.xz
-    ADD_CABAL_ARGS: ""
 
 build-armv7-linux-deb10:
   extends: .build
@@ -58,9 +83,20 @@ build-armv7-linux-deb10:
   image: "registry.gitlab.haskell.org/ghc/ci-images/armv7-linux-deb10:$DOCKER_REV"
   parallel: *arm_matrix
   variables:
+    ADD_CABAL_ARGS: ""
+
+tar-armv7-linux-deb10:
+  extends: .artifacts
+  stage: tar
+  needs: ["build-armv7-linux-deb10"]
+  tags:
+    - armv7-linux
+  image: "registry.gitlab.haskell.org/ghc/ci-images/armv7-linux-deb10:$DOCKER_REV"
+  script:
+    - ./.gitlab/tar.sh
+  variables:
     TARBALL_ARCHIVE_SUFFIX: armv7-linux-deb10
     TARBALL_EXT: tar.xz
-    ADD_CABAL_ARGS: ""
 
 build-x86_64-linux:
   extends: .build
@@ -69,9 +105,20 @@ build-x86_64-linux:
   image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-deb10:$DOCKER_REV"
   parallel: *default_matrix
   variables:
-    TARBALL_ARCHIVE_SUFFIX: armv7-linux-deb10
-    TARBALL_EXT: tar.xz
     ADD_CABAL_ARGS: "--enable-split-sections"
+
+tar-x86_64-linux:
+  extends: .artifacts
+  stage: tar
+  needs: ["build-x86_64-linux"]
+  tags:
+    - x86_64-linux
+  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-deb10:$DOCKER_REV"
+  script:
+    - ./.gitlab/tar.sh
+  variables:
+    TARBALL_ARCHIVE_SUFFIX: x86_64-linux
+    TARBALL_EXT: tar.xz
 
 build-x86_64-linux-alpine:
   extends: .build
@@ -82,9 +129,20 @@ build-x86_64-linux-alpine:
     - sudo apk add --no-cache zlib zlib-dev zlib-static bzip2 bzip2-dev bzip2-static gmp gmp-dev xz xz-dev ncurses-static
   parallel: *default_matrix
   variables:
+    ADD_CABAL_ARGS: "--enable-split-sections --enable-executable-static"
+
+tar-x86_64-linux-alpine:
+  extends: .artifacts
+  stage: tar
+  needs: ["build-x86_64-linux-alpine"]
+  tags:
+    - x86_64-linux
+  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-alpine3_12:$DOCKER_REV"
+  script:
+    - ./.gitlab/tar.sh
+  variables:
     TARBALL_ARCHIVE_SUFFIX: x86_64-linux-alpine
     TARBALL_EXT: tar.xz
-    ADD_CABAL_ARGS: "--enable-split-sections --enable-executable-static"
 
 build-x86_64-freebsd12:
   extends: .build
@@ -92,9 +150,19 @@ build-x86_64-freebsd12:
     - x86_64-freebsd12
   parallel: *default_matrix
   variables:
+    ADD_CABAL_ARGS: "--enable-split-sections"
+
+tar-x86_64-freebsd12:
+  extends: .artifacts
+  stage: tar
+  needs: ["build-x86_64-freebsd12"]
+  tags:
+    - x86_64-freebsd12
+  script:
+    - ./.gitlab/tar.sh
+  variables:
     TARBALL_ARCHIVE_SUFFIX: x86_64-freebsd12
     TARBALL_EXT: tar.xz
-    ADD_CABAL_ARGS: "--enable-split-sections"
 
 build-x86_64-freebsd13:
   extends: .build
@@ -106,9 +174,19 @@ build-x86_64-freebsd13:
     - sudo pkg install --yes compat12x-amd64
     - sudo ln -s libncurses.so.6 /usr/local/lib/libncurses.so.6.2
   variables:
+    ADD_CABAL_ARGS: "--enable-split-sections"
+
+tar-x86_64-freebsd13:
+  extends: .artifacts
+  stage: tar
+  needs: ["build-x86_64-freebsd13"]
+  tags:
+    - x86_64-freebsd13
+  script:
+    - ./.gitlab/tar.sh
+  variables:
     TARBALL_ARCHIVE_SUFFIX: x86_64-freebsd13
     TARBALL_EXT: tar.xz
-    ADD_CABAL_ARGS: "--enable-split-sections"
 
 build-x86_64-darwin:
   extends: .build
@@ -116,11 +194,23 @@ build-x86_64-darwin:
     - x86_64-darwin
   parallel: *default_matrix
   variables:
-    TARBALL_ARCHIVE_SUFFIX: x86_64-darwin
-    TARBALL_EXT: tar.xz
     ADD_CABAL_ARGS: ""
 
+tar-x86_64-darwin:
+  extends: .artifacts
+  stage: tar
+  needs: ["build-x86_64-darwin"]
+  tags:
+    - x86_64-darwin
+  script:
+    - ./.gitlab/tar.sh
+  variables:
+    TARBALL_ARCHIVE_SUFFIX: x86_64-darwin
+    TARBALL_EXT: tar.xz
+
 build-aarch64-darwin:
+  extends: .artifacts:short
+  stage: build
   tags:
     - aarch64-darwin-m1
   before_script:
@@ -155,14 +245,20 @@ build-aarch64-darwin:
     - rm -Rf /private/tmp/.brew_tmp
   variables:
     MACOSX_DEPLOYMENT_TARGET: "10.7"
-    TARBALL_ARCHIVE_SUFFIX: aarch64-darwin
-    TARBALL_EXT: tar.xz
     ADD_CABAL_ARGS: ""
   parallel: *m1_matrix
-  artifacts:
-    expire_in: 2 week
-    paths:
-      - out
+
+tar-aarch64-darwin:
+  extends: .artifacts
+  stage: tar
+  needs: ["build-aarch64-darwin"]
+  tags:
+    - aarch64-darwin-m1
+  script:
+    - arch -arm64 /bin/bash ./.gitlab/tar.sh
+  variables:
+    TARBALL_ARCHIVE_SUFFIX: aarch64-darwin
+    TARBALL_EXT: tar.xz
 
 build-x86_64-windows:
   extends: .build
@@ -172,8 +268,20 @@ build-x86_64-windows:
   script:
     - bash '-lc' 'pacman --noconfirm -S zip'
     - $env:CHERE_INVOKING = "yes"
-    - bash '-lc' "TARBALL_ARCHIVE_SUFFIX=$env:TARBALL_ARCHIVE_SUFFIX TARBALL_EXT=$env:TARBALL_EXT ADD_CABAL_ARGS=$env:ADD_CABAL_ARGS GHC_VERSION=$env:GHC_VERSION CABAL_INSTALL_VERSION=$CABAL_INSTALL_VERSION .gitlab/ci.sh"
+    - bash '-lc' "ADD_CABAL_ARGS=$env:ADD_CABAL_ARGS GHC_VERSION=$env:GHC_VERSION CABAL_INSTALL_VERSION=$CABAL_INSTALL_VERSION .gitlab/ci.sh"
+  variables:
+    ADD_CABAL_ARGS: ""
+
+tar-x86_64-windows:
+  extends: .artifacts
+  stage: tar
+  needs: ["build-x86_64-windows"]
+  tags:
+    - new-x86_64-windows
+  script:
+    - $env:CHERE_INVOKING = "yes"
+    - bash '-lc' "TARBALL_ARCHIVE_SUFFIX=$env:TARBALL_ARCHIVE_SUFFIX TARBALL_EXT=$env:TARBALL_EXT .gitlab/tar.sh"
   variables:
     TARBALL_ARCHIVE_SUFFIX: x86_64-windows
     TARBALL_EXT: zip
-    ADD_CABAL_ARGS: ""
+

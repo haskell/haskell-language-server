@@ -78,17 +78,3 @@ cp dist-newstyle/cache/plan.json "$CI_PROJECT_DIR/out/plan.json"
 
 cd "$CI_PROJECT_DIR/out/"
 
-# create tarball/zip
-TARBALL_PREFIX="haskell-language-server-$("$CI_PROJECT_DIR/out/haskell-language-server-${GHC_VERSION}" --numeric-version)"
-case "${TARBALL_EXT}" in
-    zip)
-        zip "${TARBALL_PREFIX}-${TARBALL_ARCHIVE_SUFFIX}.${TARBALL_EXT}" haskell-language-server-${GHC_VERSION} haskell-language-server-wrapper plan.json
-        ;;
-    tar.xz)
-        tar caf "${TARBALL_PREFIX}-${TARBALL_ARCHIVE_SUFFIX}.${TARBALL_EXT}" haskell-language-server-${GHC_VERSION} haskell-language-server-wrapper plan.json
-        ;;
-    *)
-        fail "Unknown TARBALL_EXT: ${TARBALL_EXT}"
-        ;;
-esac
-
