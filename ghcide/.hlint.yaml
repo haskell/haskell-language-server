@@ -112,6 +112,7 @@
     - Development.IDE.Spans.Documentation
     - Development.IDE.Spans.Common
     - Development.IDE.Spans.AtPoint
+    - Development.IDE.Spans.Pragmas
     - Development.IDE.Plugin.CodeAction
     - Development.IDE.Plugin.Completions
     - Development.IDE.Plugin.Completions.Logic
