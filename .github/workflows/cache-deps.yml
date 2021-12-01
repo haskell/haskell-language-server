@@ -64,13 +64,20 @@ jobs:
       - name: Cache Cabal
         uses: actions/cache@v2
         env:
-          cache-name: cache-cabal
+          cache-name: hackage-sources
         with:
-          path: |
-            ${{ steps.HaskEnvSetup.outputs.cabal-store }}
-            ${{ env.CABAL_PKGS_DIR }}
-          key: v2-${{ runner.os }}-${{ matrix.ghc }}-build-${{ hashFiles('cabal.project') }}
-          restore-keys: v2-${{ runner.os }}-${{ matrix.ghc }}-build-
+          path: ${{ env.CABAL_PKGS_DIR }}
+          key:          ${{ runner.os }}-${{ matrix.ghc }}-${{ env.cache-name }}-${{ hashFiles('cabal.project') }}
+          restore-keys: ${{ runner.os }}-${{ matrix.ghc }}-${{ env.cache-name }}-
+
+      - name: Cache Cabal
+        uses: actions/cache@v2
+        env:
+          cache-name: compiled-deps
+        with:
+          path: ${{ steps.HaskEnvSetup.outputs.cabal-store }}
+          key:          ${{ runner.os }}-${{ matrix.ghc }}-${{ env.cache-name }}-${{ hashFiles('cabal.project') }}
+          restore-keys: ${{ runner.os }}-${{ matrix.ghc }}-${{ env.cache-name }}-
 
       - run: cabal update
 
