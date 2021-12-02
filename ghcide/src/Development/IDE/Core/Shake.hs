@@ -787,7 +787,7 @@ garbageCollectKeys :: String -> Int -> CheckParents -> [(Key, Int)] -> Action [K
 garbageCollectKeys label maxAge checkParents agedKeys = do
     start <- liftIO offsetTime
     ShakeExtras{state, dirtyKeys, lspEnv, logger, ideTesting} <- getShakeExtras
-    (n::Int, garbage) <- liftIO $ atomically $
+    (n::Int, garbage) <- liftIO $
         foldM (removeDirtyKey dirtyKeys state) (0,[]) agedKeys
     t <- liftIO start
     when (n>0) $ liftIO $ do
@@ -804,10 +804,11 @@ garbageCollectKeys label maxAge checkParents agedKeys = do
             | age > maxAge
             , Just (kt,_) <- fromKeyType k
             , not(kt `HSet.member` preservedKeys checkParents)
-            = do gotIt <- STM.focus (Focus.member <* Focus.delete) k values
-                 when gotIt $
-                    modifyTVar' dk (HSet.insert k)
-                 return $ if gotIt then (counter+1, k:keys) else st
+            = atomically $ do
+                gotIt <- STM.focus (Focus.member <* Focus.delete) k values
+                when gotIt $
+                   modifyTVar' dk (HSet.insert k)
+                return $ if gotIt then (counter+1, k:keys) else st
             | otherwise = pure st
 
 countRelevantKeys :: CheckParents -> [Key] -> Int
