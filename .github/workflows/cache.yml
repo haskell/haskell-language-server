@@ -126,6 +126,8 @@ jobs:
 
       - if: ( runner.os != 'Windows' ) && ( matrix.ghc != '8.6.5' )
         name: (Default) Build all targets
+        # If some builds not passed, atill cache what is available.
+        continue-on-error: true
         run: |
           cabal v2-build all
 
@@ -133,12 +135,15 @@ jobs:
       # separate build steps for platforms are needed because if Windows build aborts once - it returns the error code but despite how it is on other platforms - repeated compilation may succeed.
       - if: runner.os == 'Windows'  && ( matrix.ghc != '8.6.5' )
         name: (Windows) Build only dep targets; Restart build 3 times
+        continue-on-error: true
         run: cabal v2-build all || cabal v2-build all || cabal v2-build all
 
       - if: ( runner.os != 'Windows' ) && ( matrix.ghc == '8.6.5' )
         name: (!Windows,8.6.5) Build only dep targets
+        continue-on-error: true
         run: cabal v2-build --only-dependencies
 
       - if: ( runner.os == 'Windows' ) && ( matrix.ghc == '8.6.5' )
         name: (Windows,8.6.5)
+        continue-on-error: true
         run: cabal v2-build --only-dependencies || cabal v2-build --only-dependencies || cabal v2-build --only-dependencies
