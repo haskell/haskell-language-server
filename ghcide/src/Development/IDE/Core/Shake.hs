@@ -156,8 +156,6 @@ import           Data.Default
 import           Data.Foldable                          (toList)
 import           Data.HashSet                           (HashSet)
 import qualified Data.HashSet                           as HSet
-import           Data.IORef.Extra                       (atomicModifyIORef'_,
-                                                         atomicModifyIORef_)
 import           Data.String                            (fromString)
 import           Data.Text                              (pack)
 import           Debug.Trace.Flags                      (userTracingEnabled)
@@ -226,7 +224,7 @@ data ShakeExtras = ShakeExtras
     , vfs :: VFSHandle
     , defaultConfig :: Config
       -- ^ Default HLS config, only relevant if the client does not provide any Config
-    , dirtyKeys :: IORef (HashSet Key)
+    , dirtyKeys :: TVar (HashSet Key)
       -- ^ Set of dirty rule keys since the last Shake run
     }
 
@@ -440,9 +438,9 @@ deleteValue
   -> k
   -> NormalizedFilePath
   -> IO ()
-deleteValue ShakeExtras{dirtyKeys, state} key file = do
-    atomically $ STM.delete (toKey key file) state
-    atomicModifyIORef_ dirtyKeys $ HSet.insert (toKey key file)
+deleteValue ShakeExtras{dirtyKeys, state} key file = atomically $ do
+    STM.delete (toKey key file) state
+    modifyTVar' dirtyKeys $ HSet.insert (toKey key file)
 
 recordDirtyKeys
   :: Shake.ShakeValue k
@@ -451,7 +449,7 @@ recordDirtyKeys
   -> [NormalizedFilePath]
   -> IO ()
 recordDirtyKeys ShakeExtras{dirtyKeys} key file = withEventTrace "recordDirtyKeys" $ \addEvent -> do
-    atomicModifyIORef_ dirtyKeys $ \x -> foldl' (flip HSet.insert) x (toKey key <$> file)
+    atomically $ modifyTVar' dirtyKeys $ \x -> foldl' (flip HSet.insert) x (toKey key <$> file)
     addEvent (fromString $ "dirty " <> show key) (fromString $ unlines $ map fromNormalizedFilePath file)
 
 
@@ -538,7 +536,7 @@ shakeOpen lspEnv defaultConfig logger debouncer
 
         let clientCapabilities = maybe def LSP.resClientCapabilities lspEnv
 
-        dirtyKeys <- newIORef mempty
+        dirtyKeys <- newTVarIO mempty
         pure ShakeExtras{..}
     (shakeDbM, shakeClose) <-
         shakeOpenDatabase
@@ -569,7 +567,7 @@ startTelemetry db extras@ShakeExtras{..}
     checkParents <- optCheckParents
     regularly 1 $ do
         observe countKeys . countRelevantKeys checkParents . map fst =<< (atomically . ListT.toList . STM.listT) state
-        readIORef dirtyKeys >>= observe countDirty . countRelevantKeys checkParents . HSet.toList
+        readTVarIO dirtyKeys >>= observe countDirty . countRelevantKeys checkParents . HSet.toList
         shakeGetBuildStep db >>= observe countBuilds
 
   | otherwise = async (pure ())
@@ -626,7 +624,7 @@ shakeRestart IdeState{..} reason acts =
         (\runner -> do
               (stopTime,()) <- duration (cancelShakeSession runner)
               res <- shakeDatabaseProfile shakeDb
-              backlog <- readIORef $ dirtyKeys shakeExtras
+              backlog <- readTVarIO (dirtyKeys shakeExtras)
               queue <- atomically $ peekInProgress $ actionQueue shakeExtras
               let profile = case res of
                       Just fp -> ", profile saved at " <> fp
@@ -687,7 +685,7 @@ newSession extras@ShakeExtras{..} shakeDb acts reason = do
     reenqueued <- atomically $ peekInProgress actionQueue
     allPendingKeys <-
         if optRunSubset
-          then Just <$> readIORef dirtyKeys
+          then Just <$> readTVarIO dirtyKeys
           else return Nothing
     let
         -- A daemon-like action used to inject additional work
@@ -787,28 +785,27 @@ garbageCollectDirtyKeysOlderThan maxAge checkParents = otTracedGarbageCollection
 garbageCollectKeys :: String -> Int -> CheckParents -> [(Key, Int)] -> Action [Key]
 garbageCollectKeys label maxAge checkParents agedKeys = do
     start <- liftIO offsetTime
-    extras <- getShakeExtras
-    let values = state extras
+    ShakeExtras{state, dirtyKeys, lspEnv, logger, ideTesting} <- getShakeExtras
     (n::Int, garbage) <- liftIO $ atomically $
-        foldM (removeDirtyKey values) (0,[]) agedKeys
-    liftIO $ atomicModifyIORef_ (dirtyKeys extras) $ \x ->
-        foldl' (flip HSet.insert) x garbage
+        foldM (removeDirtyKey dirtyKeys state) (0,[]) agedKeys
     t <- liftIO start
     when (n>0) $ liftIO $ do
-        logDebug (logger extras) $ T.pack $
+        logDebug logger $ T.pack $
             label <> " of " <> show n <> " keys (took " <> showDuration t <> ")"
-    when (coerce $ ideTesting extras) $ liftIO $ mRunLspT (lspEnv extras) $
+    when (coerce ideTesting) $ liftIO $ mRunLspT lspEnv $
         LSP.sendNotification (SCustomMethod "ghcide/GC")
                              (toJSON $ mapMaybe (fmap showKey . fromKeyType) garbage)
     return garbage
 
     where
         showKey = show . Q
-        removeDirtyKey m st@(!counter, keys) (k, age)
+        removeDirtyKey dk values st@(!counter, keys) (k, age)
             | age > maxAge
             , Just (kt,_) <- fromKeyType k
             , not(kt `HSet.member` preservedKeys checkParents)
-            = do gotIt <- STM.focus (Focus.member <* Focus.delete) k m
+            = do gotIt <- STM.focus (Focus.member <* Focus.delete) k values
+                 when gotIt $
+                    modifyTVar' dk (HSet.insert k)
                  return $ if gotIt then (counter+1, k:keys) else st
             | otherwise = pure st
 
@@ -1063,7 +1060,7 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
                     (if eq then ChangedRecomputeSame else ChangedRecomputeDiff)
                     (encodeShakeValue bs) $
                     A res
-        liftIO $ atomicModifyIORef'_ dirtyKeys (HSet.delete $ toKey key file)
+        liftIO $ atomically $ modifyTVar' dirtyKeys (HSet.delete $ toKey key file)
         return res
 
 traceA :: A v -> String
