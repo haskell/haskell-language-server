@@ -81,8 +81,8 @@ jobs:
           ghc-version: ${{ matrix.ghc }}
           cabal-version: "3.4"
 
-      - run: ./fmt.sh
-        name: "HLint via ./fmt.sh"
+      - name: "HLint via ./fmt.sh"
+        run: ./fmt.sh
 
       - if: runner.os == 'Windows'
         name: (Windows) Platform config
