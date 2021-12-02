@@ -1,4 +1,4 @@
-name: Caching of dependencies
+name: Caching
 
 #  2021-11-30: NOTE: This workflow currently a trimmed copy of a main `test.yml` workflow. Workflows need further deduplication: https://docs.github.com/en/actions/learn-github-actions/reusing-workflows#overview
 
