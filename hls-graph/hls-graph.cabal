@@ -31,12 +31,18 @@ flag embed-files
   manual: True
   description: Embed data files into the shake library
 
+flag stm-stats
+  default: False
+  manual: True
+  description: Collect STM transaction stats
+
 source-repository head
   type:     git
   location: https://github.com/haskell/haskell-language-server
 
 library
   exposed-modules:
+    Control.Concurrent.STM.Stats
     Development.IDE.Graph
     Development.IDE.Graph.Classes
     Development.IDE.Graph.Database
@@ -82,6 +88,9 @@ library
         build-depends:
             file-embed >= 0.0.11,
             template-haskell
+  if flag(stm-stats)
+        cpp-options: -DSTM_STATS
+
 
   ghc-options:
     -Wall -Wredundant-constraints -Wno-name-shadowing
