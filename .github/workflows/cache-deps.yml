@@ -110,13 +110,11 @@ jobs:
 
       - if: ( runner.os != 'Windows' ) && ( matrix.ghc != '8.6.5' )
         name: Build
-        #  2021-12-02: NOTE: After HLS Cabal 3.6 support - add:
-        #
-        #  cabal v2-build --enable-tests --enable-benchmarks --only-download
-        #  # ^ To download deps for everything.
         run: |
+          # Download dep sources for all targets.
+          cabal v2-build --enable-tests --enable-benchmarks --only-download
+          # Build only dep targets.
           cabal v2-build --enable-tests --enable-benchmarks --only-dependencies
-          # ^ To target build only deps.
 
       # repeating builds to workaround segfaults in windows and ghc-8.8.4
       # separate build steps for platforms are needed because if Windows build aborts once - it returns the error code but despite how it is on other platforms - repeated compilation may succeed.
