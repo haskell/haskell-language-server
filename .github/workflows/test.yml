@@ -90,7 +90,6 @@ jobs:
         run: |
           echo "CABAL_PKGS_DIR=~\\AppData\\cabal\\packages" >> $GITHUB_ENV
 
-
       - if: ( runner.os == 'Linux' ) || ( runner.os == 'macOS' )
         name: (Linux,macOS) Platform config
         run: |
@@ -118,8 +117,11 @@ jobs:
 
       - name: Retrieving `cabal.project` Hackage timestamp
         run: |
-          TIMESTAMP="$(grep index-state cabal.project)"
-          echo "HACKAGE_TIMESTAMP=$TIMESTAMP" >> $GITHUB_ENV
+          # Form: index-state: 2021-11-29T08:11:08Z
+          INDEX_STATE_ENTRY=$(grep index-state cabal.project)
+          # Form: 2021-11-29T08-11-08Z
+          INDEX_STATE1=$(echo "$INDEX_STATE_ENTRY" | cut -d' ' -f2 | tr ':' '-')
+          echo "INDEX_STATE=$INDEX_STATE1" >> $GITHUB_ENV
 
       # 2021-12-02: NOTE: Cabal Hackage source tree storage does not depend on OS or GHC really,
       # but can depend on `base`.
@@ -132,7 +134,7 @@ jobs:
           cache-name: hackage-sources
         with:
           path: ${{ env.CABAL_PKGS_DIR }}
-          key:          ${{ env.cache-name }}-${{ env.HACKAGE_TIMESTAMP }}
+          key:          ${{ env.cache-name }}-${{ env.INDEX_STATE }}
           restore-keys: ${{ env.cache-name }}-
 
       - run: cabal v2-update
@@ -143,9 +145,21 @@ jobs:
           cache-name: compiled-deps
         with:
           path: ${{ steps.HaskEnvSetup.outputs.cabal-store }}
-          key:  ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.HACKAGE_TIMESTAMP }}-${{ hashFiles('cabal.project') }}
+          key:  ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project') }}
           restore-keys: |
-                ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.HACKAGE_TIMESTAMP }}-
+                ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-
+                ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
+                ${{ env.cache-name }}-${{ runner.os }}-
+
+      - name: dist-newstyle cache
+        uses: actions/cache@v2
+        env:
+          cache-name: dist-newstyle
+        with:
+          path: dist-newstyle
+          key:  ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project') }}
+          restore-keys: |
+                ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-
                 ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
                 ${{ env.cache-name }}-${{ runner.os }}-
 

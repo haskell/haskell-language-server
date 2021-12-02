@@ -55,19 +55,53 @@ jobs:
           ghc-version: ${{ matrix.ghc }}
           cabal-version: ${{ matrix.cabal }}
 
-      - name: Cache Cabal
+      - name: Retrieving `cabal.project` Hackage timestamp
+        run: |
+          # Form: index-state: 2021-11-29T08:11:08Z
+          INDEX_STATE_ENTRY=$(grep index-state cabal.project)
+          # Form: 2021-11-29T08-11-08Z
+          INDEX_STATE1=$(echo "$INDEX_STATE_ENTRY" | cut -d' ' -f2 | tr ':' '-')
+          echo "INDEX_STATE=$INDEX_STATE1" >> $GITHUB_ENV
+
+      # 2021-12-02: NOTE: Cabal Hackage source tree storage does not depend on OS or GHC really,
+      # but can depend on `base`.
+      # But this caching is happens only inside `master` for `master` purposes of compiling the deps
+      # so having a shared pool here that depends only on Hackage pin & does not depend on `base` is "good enough"
+      # & used such because it preserves 10% of a global cache storage pool.
+      - name: Hackage sources cache
         uses: actions/cache@v2
         env:
-          cache-name: cache-cabal
+          cache-name: hackage-sources
         with:
-          path: |
-            ~/.cabal/packages
-            ~/.cabal/store
-          key: v2-${{ runner.os }}-${{ matrix.ghc }}-build-${{ hashFiles('cabal.project') }}
+          path: ${{ env.CABAL_PKGS_DIR }}
+          key:          ${{ env.cache-name }}-${{ env.INDEX_STATE }}
+          restore-keys: ${{ env.cache-name }}-
+
+      - run: cabal v2-update
+
+      - name: Compiled deps cache
+        uses: actions/cache@v2
+        env:
+          cache-name: compiled-deps
+        with:
+          path: ${{ steps.HaskEnvSetup.outputs.cabal-store }}
+          key:  ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project') }}
           restore-keys: |
-            v2-${{ runner.os }}-${{ matrix.ghc }}-bench-${{ hashFiles('cabal.project') }}
-            v2-${{ runner.os }}-${{ matrix.ghc }}-build-
-            v2-${{ runner.os }}-${{ matrix.ghc }}
+                ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-
+                ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
+                ${{ env.cache-name }}-${{ runner.os }}-
+
+      - name: dist-newstyle cache
+        uses: actions/cache@v2
+        env:
+          cache-name: dist-newstyle
+        with:
+          path: dist-newstyle
+          key:  ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project') }}
+          restore-keys: |
+                ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-
+                ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
+                ${{ env.cache-name }}-${{ runner.os }}-
 
       - name: "Run cabal check"
         run: |
