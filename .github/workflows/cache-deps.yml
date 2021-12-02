@@ -62,6 +62,16 @@ jobs:
           echo "package floskell" >> cabal.project
           echo "  ghc-options: -O0" >> cabal.project
 
+      # Work around for filepath length limits in Windows
+      - if: runner.os == 'Windows'
+        name: (Windows) Shorten binary names
+        run: |
+          sed -i.bak -e 's/haskell-language-server/hls/g' \
+                     -e 's/haskell_language_server/hls/g' \
+                     haskell-language-server.cabal cabal.project
+          sed -i.bak -e 's/Paths_haskell_language_server/Paths_hls/g' \
+                     src/**/*.hs exe/*.hs
+
       - name: Retrieving `cabal.project` Hackage timestamp
         run: |
           TIMESTAMP="$(grep index-state cabal.project)"
@@ -88,16 +98,6 @@ jobs:
           restore-keys: |
                         ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.HACKAGE_TIMESTAMP }}-
                         ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
-
-      # Work around for filepath length limits in Windows
-      - if: runner.os == 'Windows'
-        name: (Windows) Shorten binary names
-        run: |
-          sed -i.bak -e 's/haskell-language-server/hls/g' \
-                     -e 's/haskell_language_server/hls/g' \
-                     haskell-language-server.cabal cabal.project
-          sed -i.bak -e 's/Paths_haskell_language_server/Paths_hls/g' \
-                     src/**/*.hs exe/*.hs
 
       - name: Build
         run: cabal v2-build --enable-tests --enable-benchmarks --only-dependencies
