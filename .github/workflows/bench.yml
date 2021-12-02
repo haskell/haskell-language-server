@@ -31,6 +31,7 @@ jobs:
       fail-fast: false
       matrix:
         ghc: ['8.10.7']
+        cabal: ["3.6"]
         os: [ubuntu-latest]
 
     steps:
@@ -42,7 +43,7 @@ jobs:
       id: HaskEnvSetup
       with:
         ghc-version: ${{ matrix.ghc }}
-        cabal-version: '3.2'
+        cabal-version: ${{ matrix.cabal }}
         enable-stack: false
 
     - if: ( runner.os == 'Linux' ) || ( runner.os == 'macOS' )

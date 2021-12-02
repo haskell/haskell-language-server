@@ -41,6 +41,7 @@ jobs:
       fail-fast: true
       matrix:
         ghc: ["9.0.1", '8.10.7', '8.10.6', "8.8.4", "8.8.3", "8.6.5"]
+        cabal: ["3.6"]
         os: [ubuntu-latest, macOS-latest]
         include:
           # only test supported ghc major versions
@@ -79,7 +80,7 @@ jobs:
         id: HaskEnvSetup
         with:
           ghc-version: ${{ matrix.ghc }}
-          cabal-version: "3.4"
+          cabal-version: ${{ matrix.cabal }}
 
       - name: "HLint via ./fmt.sh"
         run: ./fmt.sh

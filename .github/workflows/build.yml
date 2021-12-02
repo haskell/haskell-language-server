@@ -19,6 +19,7 @@ jobs:
       fail-fast: false
       matrix:
         ghc: ['9.0.1', '8.10.7', '8.10.6', '8.8.4', '8.8.3', '8.6.5']
+        cabal: ["3.6"]
         os: [ubuntu-18.04, macOS-latest, windows-latest]
         exclude:
           - os: windows-latest
@@ -31,7 +32,7 @@ jobs:
     - uses: haskell/actions/setup@v1
       with:
         ghc-version: ${{ matrix.ghc }}
-        cabal-version: '3.4'
+        cabal-version: ${{ matrix.cabal }}
 
     - name: Use modified cabal.project for ghc9
       if: ${{ matrix.ghc == '9.0.1' }}
