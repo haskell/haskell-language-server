@@ -1,0 +1,118 @@
+name: Caching of dependencies
+
+#  2021-11-30: NOTE: This workflow currently a trimmed copy of a main `test.yml` workflow. Workflows need further deduplication: https://docs.github.com/en/actions/learn-github-actions/reusing-workflows#overview
+
+defaults:
+  run:
+    shell: bash
+
+# See: https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#concurrency.
+concurrency:
+  group: ${{ github.head_ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches:
+      - master
+  schedule:
+    # Try to save snapshot every day at 08:25 UTC (~00:25 in California)
+    - cron: "25 8 * * *"
+
+jobs:
+  pre_job:
+    runs-on: ubuntu-latest
+    outputs:
+      should_skip: ${{ steps.skip_check.outputs.should_skip }}
+      should_skip_ghcide: ${{ steps.skip_ghcide_check.outputs.should_skip }}
+    steps:
+      - id: skip_check
+        uses: fkirc/skip-duplicate-actions@v3.4.1
+        with:
+          cancel_others: false
+          paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", "install/**", "**.nix", "flake.lock", "**/README.md", "FUNDING.yml", ".circleci/**"]'
+      # If we only change ghcide downstream packages we have not test ghcide itself
+      - id: skip_ghcide_check
+        uses: fkirc/skip-duplicate-actions@v3.4.1
+        with:
+          cancel_others: false
+          paths_ignore: '["hls-test-utils/**", "plugins/**", "src/**", "exe/**", "test/**", "shake-bench/**"]'
+
+  deps:
+    if: needs.pre_job.outputs.should_skip != 'true'
+    needs: pre_job
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        ghc: ["9.0.1", '8.10.7', '8.10.6', "8.10.5", "8.8.4", "8.8.3", "8.6.5"]
+        os: [ubuntu-latest, macOS-latest, windows-latest]
+        exclude:
+          - os: windows-latest
+            ghc: '8.8.3'
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+      - uses: haskell/actions/setup@v1
+        with:
+          ghc-version: ${{ matrix.ghc }}
+          cabal-version: "3.4"
+
+      - if: matrix.os == 'windows-latest'
+        name: Set some window specific things
+        run: |
+          echo "CABAL_STORE_DIR=$SYSTEMDRIVE\\SR" >> $GITHUB_ENV
+          echo "CABAL_PKGS_DIR=~\\AppData\\cabal\\packages" >> $GITHUB_ENV
+
+      - if: matrix.os != 'windows-latest'
+        name: Set some linux/macOS specific things
+        run: |
+          echo "CABAL_STORE_DIR=~/.cabal/store" >> $GITHUB_ENV
+          echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
+
+      - if: matrix.os == 'macOS-latest' && matrix.ghc == '8.10.5'
+        name: Workaround for GHC 8.10.5 on macOS
+        run: |
+          echo "# uninstalling CommandLineTools (see https://github.com/haskell/haskell-language-server/issues/1913#issuecomment-861667786)"
+          sudo rm -rf /Library/Developer/CommandLineTools
+
+      # Needs to be before Cache Cabal so the cache can detect changes to the modified cabal.project file
+      - if: matrix.ghc == '9.0.1'
+        name: Use modified cabal.project for ghc9
+        run: cp cabal-ghc901.project cabal.project
+
+      - if: matrix.ghc == '8.8.4' && matrix.os == 'windows-latest'
+        name: Modify cabal.project to workaround segfaults for ghc-8.8.4 and windows
+        run: |
+          echo "package floskell" >> cabal.project
+          echo "  ghc-options: -O0" >> cabal.project
+
+      - name: Cache Cabal
+        uses: actions/cache@v2
+        env:
+          cache-name: cache-cabal
+        with:
+          path: |
+            ${{ env.CABAL_PKGS_DIR }}
+            ${{ env.CABAL_STORE_DIR }}
+          key: v2-${{ runner.os }}-${{ matrix.ghc }}-build-${{ hashFiles('cabal.project') }}
+          restore-keys: |
+            v2-${{ runner.os }}-${{ matrix.ghc }}-bench-${{ hashFiles('cabal.project') }}
+            v2-${{ runner.os }}-${{ matrix.ghc }}-build-
+            v2-${{ runner.os }}-${{ matrix.ghc }}
+
+      - run: cabal update
+
+      # Need this to work around filepath length limits in Windows
+      - name: Shorten binary names
+        run: |
+          sed -i.bak -e 's/haskell-language-server/hls/g' \
+                     -e 's/haskell_language_server/hls/g' \
+                     haskell-language-server.cabal cabal.project
+          sed -i.bak -e 's/Paths_haskell_language_server/Paths_hls/g' \
+                     src/**/*.hs exe/*.hs
+
+      # repeating builds to workaround segfaults in windows and ghc-8.8.4
+      - name: Build
+        run: cabal build --only-dependencies || cabal build --only-dependencies || cabal build --only-dependencies
