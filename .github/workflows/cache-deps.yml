@@ -24,6 +24,7 @@ jobs:
       fail-fast: false
       matrix:
         ghc: ["9.0.1", '8.10.7', '8.10.6', "8.8.4", "8.8.3", "8.6.5"]
+        cabal: ["3.4"]
         os: [ubuntu-latest, macOS-latest, windows-latest]
         exclude:
           - os: windows-latest
@@ -38,7 +39,7 @@ jobs:
         id: HaskEnvSetup
         with:
           ghc-version: ${{ matrix.ghc }}
-          cabal-version: "3.4"
+          cabal-version: ${{ matrix.cabal }}
 
       - if: runner.os == 'Windows'
         name: (Windows) Platform config
@@ -61,25 +62,25 @@ jobs:
           echo "package floskell" >> cabal.project
           echo "  ghc-options: -O0" >> cabal.project
 
-      - name: Cache Cabal
+      - name: Hackage sources cache
         uses: actions/cache@v2
         env:
           cache-name: hackage-sources
         with:
           path: ${{ env.CABAL_PKGS_DIR }}
-          key:          ${{ runner.os }}-${{ matrix.ghc }}-${{ env.cache-name }}-${{ hashFiles('cabal.project') }}
-          restore-keys: ${{ runner.os }}-${{ matrix.ghc }}-${{ env.cache-name }}-
+          key:          ${{ env.cache-name }}-${{ hashFiles('cabal.project') }}
+          restore-keys: ${{ env.cache-name }}-
 
-      - name: Cache Cabal
+      - name: Compiled deps cache
         uses: actions/cache@v2
         env:
           cache-name: compiled-deps
         with:
           path: ${{ steps.HaskEnvSetup.outputs.cabal-store }}
-          key:          ${{ runner.os }}-${{ matrix.ghc }}-${{ env.cache-name }}-${{ hashFiles('cabal.project') }}
-          restore-keys: ${{ runner.os }}-${{ matrix.ghc }}-${{ env.cache-name }}-
+          key:          ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('cabal.project') }}
+          restore-keys: ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
 
-      - run: cabal update
+      - run: cabal v2-update
 
       # Work around for filepath length limits in Windows
       - if: runner.os == 'Windows'
