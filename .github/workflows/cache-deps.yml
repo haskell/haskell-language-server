@@ -62,14 +62,21 @@ jobs:
           echo "package floskell" >> cabal.project
           echo "  ghc-options: -O0" >> cabal.project
 
+      - name: Retrieving `cabal.project` Hackage timestamp
+        run: |
+          TIMESTAMP="$(grep index-state cabal.project)"
+          echo "HACKAGE_TIMESTAMP=$TIMESTAMP" >> $GITHUB_ENV
+
       - name: Hackage sources cache
         uses: actions/cache@v2
         env:
           cache-name: hackage-sources
         with:
           path: ${{ env.CABAL_PKGS_DIR }}
-          key:          ${{ env.cache-name }}-${{ hashFiles('cabal.project') }}
+          key:          ${{ env.cache-name }}-${{ env.HACKAGE_TIMESTAMP }}
           restore-keys: ${{ env.cache-name }}-
+
+      - run: cabal v2-update
 
       - name: Compiled deps cache
         uses: actions/cache@v2
@@ -77,10 +84,10 @@ jobs:
           cache-name: compiled-deps
         with:
           path: ${{ steps.HaskEnvSetup.outputs.cabal-store }}
-          key:          ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('cabal.project') }}
-          restore-keys: ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
-
-      - run: cabal v2-update
+          key:          ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.HACKAGE_TIMESTAMP }}-${{ hashFiles('cabal.project') }}
+          restore-keys: |
+                        ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.HACKAGE_TIMESTAMP }}-
+                        ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
 
       # Work around for filepath length limits in Windows
       - if: runner.os == 'Windows'
