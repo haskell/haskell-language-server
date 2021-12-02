@@ -95,7 +95,6 @@ jobs:
         run: |
           echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
 
-      # Needs to be before Cache Cabal so the cache can detect changes to the modified cabal.project file
       - if: matrix.ghc == '9.0.1'
         name: Use modified cabal.project for ghc9
         run: cp cabal-ghc901.project cabal.project
@@ -106,18 +105,6 @@ jobs:
           echo "package floskell" >> cabal.project
           echo "  ghc-options: -O0" >> cabal.project
 
-      - name: Cache Cabal
-        uses: actions/cache@v2
-        env:
-          cache-name: cache-cabal
-        with:
-          path: |
-            ${{ steps.HaskEnvSetup.outputs.cabal-store }}
-            ${{ env.CABAL_PKGS_DIR }}
-          restore-keys: v2-${{ runner.os }}-${{ matrix.ghc }}-build-
-
-      - run: cabal update
-
       # Work around for filepath length limits in Windows
       - if: runner.os == 'Windows'
         name: (Windows) Shorten binary names
@@ -127,6 +114,39 @@ jobs:
                      haskell-language-server.cabal cabal.project
           sed -i.bak -e 's/Paths_haskell_language_server/Paths_hls/g' \
                      src/**/*.hs exe/*.hs
+
+      - name: Retrieving `cabal.project` Hackage timestamp
+        run: |
+          TIMESTAMP="$(grep index-state cabal.project)"
+          echo "HACKAGE_TIMESTAMP=$TIMESTAMP" >> $GITHUB_ENV
+
+      # 2021-12-02: NOTE: Cabal Hackage source tree storage does not depend on OS or GHC really,
+      # but can depend on `base`.
+      # But this caching is happens only inside `master` for `master` purposes of compiling the deps
+      # so having a shared pool here that depends only on Hackage pin & does not depend on `base` is "good enough"
+      # & used such because it preserves 10% of a global cache storage pool.
+      - name: Hackage sources cache
+        uses: actions/cache@v2
+        env:
+          cache-name: hackage-sources
+        with:
+          path: ${{ env.CABAL_PKGS_DIR }}
+          key:          ${{ env.cache-name }}-${{ env.HACKAGE_TIMESTAMP }}
+          restore-keys: ${{ env.cache-name }}-
+
+      - run: cabal v2-update
+
+      - name: Compiled deps cache
+        uses: actions/cache@v2
+        env:
+          cache-name: compiled-deps
+        with:
+          path: ${{ steps.HaskEnvSetup.outputs.cabal-store }}
+          key:  ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.HACKAGE_TIMESTAMP }}-${{ hashFiles('cabal.project') }}
+          restore-keys: |
+                ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.HACKAGE_TIMESTAMP }}-
+                ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
+                ${{ env.cache-name }}-${{ runner.os }}-
 
       - name: Build
         run: cabal v2-build
