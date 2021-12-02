@@ -163,10 +163,10 @@ jobs:
       - name: Cache test log bewteen attempts of the same run
         uses: actions/cache@v2
         env:
-          cache-name: cache-test-log
+          cache-name: test-log
         with:
           path: .tasty-rerun-log
-          key: v1-${{ runner.os }}-${{ matrix.ghc }}-test-log-${{ github.sha }}
+          key: ${{ runner.os }}-${{ matrix.ghc }}-${{ env.cache-name }}-${{ github.sha }}
 
       - if: needs.pre_job.outputs.should_skip_ghcide != 'true' && matrix.test
         name: Test ghcide
