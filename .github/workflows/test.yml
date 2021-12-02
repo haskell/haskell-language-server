@@ -151,18 +151,6 @@ jobs:
                 ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
                 ${{ env.cache-name }}-${{ runner.os }}-
 
-      - name: dist-newstyle cache
-        uses: actions/cache@v2
-        env:
-          cache-name: dist-newstyle
-        with:
-          path: dist-newstyle
-          key:  ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project') }}
-          restore-keys: |
-                ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-
-                ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
-                ${{ env.cache-name }}-${{ runner.os }}-
-
       - name: Build
         run: cabal v2-build
 
