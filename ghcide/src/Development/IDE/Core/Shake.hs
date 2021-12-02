@@ -426,9 +426,9 @@ setValues :: IdeRule k v
           -> NormalizedFilePath
           -> Value v
           -> Vector FileDiagnostic
-          -> IO ()
+          -> STM ()
 setValues state key file val diags =
-    atomically $ STM.insert (ValueWithDiagnostics (fmap toDyn val) diags) (toKey key file) state
+    STM.insert (ValueWithDiagnostics (fmap toDyn val) diags) (toKey key file) state
 
 
 -- | Delete the value stored for a given ide build key
@@ -460,16 +460,17 @@ getValues ::
   Values ->
   k ->
   NormalizedFilePath ->
-  IO (Maybe (Value v, Vector FileDiagnostic))
+  STM (Maybe (Value v, Vector FileDiagnostic))
 getValues state key file = do
-    atomically (STM.lookup (toKey key file) state) >>= \case
+    STM.lookup (toKey key file) state >>= \case
         Nothing -> pure Nothing
         Just (ValueWithDiagnostics v diagsV) -> do
-            let r = fmap (fromJust . fromDynamic @v) v
+            let !r = seqValue $ fmap (fromJust . fromDynamic @v) v
+                !res = (r,diagsV)
             -- Force to make sure we do not retain a reference to the HashMap
             -- and we blow up immediately if the fromJust should fail
             -- (which would be an internal error).
-            evaluate (r `seqValue` Just (r, diagsV))
+            return $ Just res
 
 -- | Get all the files in the project
 knownTargets :: Action (Hashed KnownTargets)
@@ -480,11 +481,11 @@ knownTargets = do
 -- | Seq the result stored in the Shake value. This only
 -- evaluates the value to WHNF not NF. We take care of the latter
 -- elsewhere and doing it twice is expensive.
-seqValue :: Value v -> b -> b
-seqValue v b = case v of
-    Succeeded ver v -> rnf ver `seq` v `seq` b
-    Stale d ver v   -> rnf d `seq` rnf ver `seq` v `seq` b
-    Failed _        -> b
+seqValue :: Value v -> Value v
+seqValue val = case val of
+    Succeeded ver v -> rnf ver `seq` v `seq` val
+    Stale d ver v   -> rnf d `seq` rnf ver `seq` v `seq` val
+    Failed _        -> val
 
 -- | Open a 'IdeState', should be shut using 'shakeShut'.
 shakeOpen :: Maybe (LSP.LanguageContextEnv Config)
@@ -906,7 +907,7 @@ useWithStaleFast' key file = do
   wait <- delayedAction $ mkDelayedAction ("C:" ++ show key ++ ":" ++ fromNormalizedFilePath file) Debug $ use key file
 
   s@ShakeExtras{state} <- askShake
-  r <- liftIO $ getValues state key file
+  r <- liftIO $ atomically $ getValues state key file
   liftIO $ case r of
     -- block for the result if we haven't computed before
     Nothing -> do
@@ -1015,7 +1016,7 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
     (if optSkipProgress options key then id else inProgress progress file) $ do
         val <- case old of
             Just old | mode == RunDependenciesSame -> do
-                v <- liftIO $ getValues state key file
+                v <- liftIO $ atomically $ getValues state key file
                 case v of
                     -- No changes in the dependencies and we have
                     -- an existing successful result.
@@ -1034,10 +1035,10 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
                     (do v <- action; liftIO $ evaluate $ force v) $
                     \(e :: SomeException) -> do
                         pure (Nothing, ([ideErrorText file $ T.pack $ show e | not $ isBadDependency e],Nothing))
-                modTime <- liftIO $ (currentValue . fst =<<) <$> getValues state GetModificationTime file
+                modTime <- liftIO $ (currentValue . fst =<<) <$> atomically (getValues state GetModificationTime file)
                 (bs, res) <- case res of
                     Nothing -> do
-                        staleV <- liftIO $ getValues state key file
+                        staleV <- liftIO $ atomically $ getValues state key file
                         pure $ case staleV of
                             Nothing -> (toShakeValue ShakeResult bs, Failed False)
                             Just v -> case v of
@@ -1048,7 +1049,7 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
                                 (Failed b, _) ->
                                     (toShakeValue ShakeResult bs, Failed b)
                     Just v -> pure (maybe ShakeNoCutoff ShakeResult bs, Succeeded (vfsVersion =<< modTime) v)
-                liftIO $ setValues state key file res (Vector.fromList diags)
+                liftIO $ atomically $ setValues state key file res (Vector.fromList diags)
                 doDiagnostics diags
                 let eq = case (bs, fmap decodeShakeValue old) of
                         (ShakeResult a, Just (ShakeResult b)) -> cmp a b
@@ -1148,7 +1149,7 @@ updateFileDiagnostics :: MonadIO m
   -> [(ShowDiagnostic,Diagnostic)] -- ^ current results
   -> m ()
 updateFileDiagnostics fp k ShakeExtras{logger, diagnostics, hiddenDiagnostics, publishedDiagnostics, state, debouncer, lspEnv} current = liftIO $ do
-    modTime <- (currentValue . fst =<<) <$> getValues state GetModificationTime fp
+    modTime <- (currentValue . fst =<<) <$> atomically (getValues state GetModificationTime fp)
     let (currentShown, currentHidden) = partition ((== ShowDiag) . fst) current
         uri = filePathToUri' fp
         ver = vfsVersion =<< modTime
