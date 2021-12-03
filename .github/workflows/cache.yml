@@ -55,17 +55,18 @@ jobs:
       - if: ( runner.os == 'Linux' ) || ( runner.os == 'macOS' )
         name: (Linux,macOS) Platform config
         run: |
-          echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
+          echo "CABAL_PKGS_DIR=~/.cabal/packages"           >> $GITHUB_ENV
 
       # Needs to be before Cache Cabal so the cache can detect changes to the modified cabal.project file
       - if: matrix.ghc == '9.0.1'
         name: (GHC 9.0.1) Use modified `cabal.project`
-        run: cp cabal-ghc901.project cabal.project
+        run: |
+          cp cabal-ghc901.project cabal.project
 
       - if: runner.os == 'Windows' && matrix.ghc == '8.8.4'
         name: (Windows,GHC 8.8) Modify `cabal.project` to workaround segfaults
         run: |
-          echo "package floskell" >> cabal.project
+          echo "package floskell"   >> cabal.project
           echo "  ghc-options: -O0" >> cabal.project
 
       # Work around for filepath length limits in Windows
@@ -128,6 +129,7 @@ jobs:
       # repeating builds to workaround segfaults in windows and ghc-8.8.4
       # separate build steps for platforms are needed because if Windows build aborts once - it returns the error code but despite how it is on other platforms - repeated compilation may succeed.
       - if: runner.os == 'Windows'
-        name: (Windows) Build only dep targets; Restart build 3 times
+        name: (Windows) Build all targets; Restart build 3 times
         continue-on-error: true
-        run: cabal $cabalBuild || cabal $cabalBuild || cabal $cabalBuild
+        run: |
+          cabal $cabalBuild || cabal $cabalBuild || cabal $cabalBuild
