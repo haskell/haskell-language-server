@@ -88,7 +88,7 @@ jobs:
       - if: ( runner.os == 'Linux' ) || ( runner.os == 'macOS' )
         name: (Linux,macOS) Platform config
         run: |
-          echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
+          echo "CABAL_PKGS_DIR=~/.cabal/packages"           >> $GITHUB_ENV
 
       - if: matrix.ghc == '9.0.1'
         name: Use modified cabal.project for ghc9
@@ -97,7 +97,7 @@ jobs:
       - if: matrix.ghc == '8.8.4' && matrix.os == 'windows-latest'
         name: Modify cabal.project to workaround segfaults for ghc-8.8.4 and windows
         run: |
-          echo "package floskell" >> cabal.project
+          echo "package floskell"   >> cabal.project
           echo "  ghc-options: -O0" >> cabal.project
 
       # Work around for filepath length limits in Windows
