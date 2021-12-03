@@ -10,6 +10,7 @@ module Development.IDE.Core.FileExists
   )
 where
 
+import           Control.Concurrent.STM.Stats
 import           Control.Concurrent.Strict
 import           Control.Exception
 import           Control.Monad.Extra
@@ -100,9 +101,11 @@ modifyFileExists state changes = do
     -- flush previous values
     let (fileModifChanges, fileExistChanges) =
             partition ((== FcChanged) . snd) (HashMap.toList changesMap)
-    mapM_ (deleteValue (shakeExtras state) GetFileExists . fst) fileExistChanges
-    recordDirtyKeys (shakeExtras state) GetFileExists $ map fst fileExistChanges
-    recordDirtyKeys (shakeExtras state) GetModificationTime $ map fst fileModifChanges
+    join $ atomically $ do
+        mapM_ (deleteValue (shakeExtras state) GetFileExists . fst) fileExistChanges
+        io1 <- recordDirtyKeys (shakeExtras state) GetFileExists $ map fst fileExistChanges
+        io2 <- recordDirtyKeys (shakeExtras state) GetModificationTime $ map fst fileModifChanges
+        return (io1 <> io2)
 
 fromChange :: FileChangeType -> Maybe Bool
 fromChange FcCreated = Just True

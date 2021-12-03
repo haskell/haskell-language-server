@@ -437,8 +437,8 @@ deleteValue
   => ShakeExtras
   -> k
   -> NormalizedFilePath
-  -> IO ()
-deleteValue ShakeExtras{dirtyKeys, state} key file = atomically $ do
+  -> STM ()
+deleteValue ShakeExtras{dirtyKeys, state} key file = do
     STM.delete (toKey key file) state
     modifyTVar' dirtyKeys $ HSet.insert (toKey key file)
 
@@ -447,10 +447,11 @@ recordDirtyKeys
   => ShakeExtras
   -> k
   -> [NormalizedFilePath]
-  -> IO ()
-recordDirtyKeys ShakeExtras{dirtyKeys} key file = withEventTrace "recordDirtyKeys" $ \addEvent -> do
-    atomically $ modifyTVar' dirtyKeys $ \x -> foldl' (flip HSet.insert) x (toKey key <$> file)
-    addEvent (fromString $ "dirty " <> show key) (fromString $ unlines $ map fromNormalizedFilePath file)
+  -> STM (IO ())
+recordDirtyKeys ShakeExtras{dirtyKeys} key file = do
+    modifyTVar' dirtyKeys $ \x -> foldl' (flip HSet.insert) x (toKey key <$> file)
+    return $ withEventTrace "recordDirtyKeys" $ \addEvent -> do
+        addEvent (fromString $ "dirty " <> show key) (fromString $ unlines $ map fromNormalizedFilePath file)
 
 
 -- | We return Nothing if the rule has not run and Just Failed if it has failed to produce a value.

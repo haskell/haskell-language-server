@@ -24,7 +24,7 @@ module Development.IDE.Core.FileStore(
     registerFileWatches
     ) where
 
-import           Control.Concurrent.STM                       (atomically,
+import           Control.Concurrent.STM.Stats                 (STM, atomically,
                                                                modifyTVar')
 import           Control.Concurrent.STM.TQueue                (writeTQueue)
 import           Control.Concurrent.Strict
@@ -160,7 +160,7 @@ isInterface :: NormalizedFilePath -> Bool
 isInterface f = takeExtension (fromNormalizedFilePath f) `elem` [".hi", ".hi-boot"]
 
 -- | Reset the GetModificationTime state of interface files
-resetInterfaceStore :: ShakeExtras -> NormalizedFilePath -> IO ()
+resetInterfaceStore :: ShakeExtras -> NormalizedFilePath -> STM ()
 resetInterfaceStore state f = do
     deleteValue state GetModificationTime f
 
@@ -175,7 +175,8 @@ resetFileStore ideState changes = mask $ \_ -> do
         case c of
             FcChanged
             --  already checked elsewhere |  not $ HM.member nfp fois
-              -> deleteValue (shakeExtras ideState) GetModificationTime nfp
+              -> atomically $
+               deleteValue (shakeExtras ideState) GetModificationTime nfp
             _ -> pure ()
 
 
@@ -262,7 +263,7 @@ setFileModified state saved nfp = do
     VFSHandle{..} <- getIdeGlobalState state
     when (isJust setVirtualFileContents) $
         fail "setFileModified can't be called on this type of VFSHandle"
-    recordDirtyKeys (shakeExtras state) GetModificationTime [nfp]
+    atomically $ recordDirtyKeys (shakeExtras state) GetModificationTime [nfp]
     restartShakeSession (shakeExtras state) (fromNormalizedFilePath nfp ++ " (modified)") []
     when checkParents $
       typecheckParents state nfp
