@@ -1,3 +1,4 @@
+{-# LANGUAGE PackageImports #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 module Development.IDE.Main
 (Arguments(..)
@@ -8,10 +9,9 @@ module Development.IDE.Main
 ,commandP
 ,defaultMain
 ,testing) where
-import           Control.Concurrent.Extra              (newLock, readVar,
-                                                        withLock,
+import           Control.Concurrent.Extra              (newLock, withLock,
                                                         withNumCapabilities)
-import           Control.Concurrent.STM.Stats          (dumpSTMStats)
+import           Control.Concurrent.STM.Stats          (atomically, dumpSTMStats)
 import           Control.Exception.Safe                (Exception (displayException),
                                                         catchAny)
 import           Control.Monad.Extra                   (concatMapM, unless,
@@ -99,8 +99,10 @@ import           Ide.Types                             (IdeCommand (IdeCommand),
                                                         PluginId (PluginId),
                                                         ipMap)
 import qualified Language.LSP.Server                   as LSP
+import qualified "list-t" ListT
 import           Numeric.Natural                       (Natural)
 import           Options.Applicative                   hiding (action)
+import qualified StmContainers.Map                     as STM
 import qualified System.Directory.Extra                as IO
 import           System.Exit                           (ExitCode (ExitFailure),
                                                         exitWith)
@@ -359,19 +361,19 @@ defaultMain Arguments{..} = do
             putStrLn $ "\nCompleted (" ++ nfiles worked ++ " worked, " ++ nfiles failed ++ " failed)"
 
             when argsOTMemoryProfiling $ do
-                let valuesRef = state $ shakeExtras ide
-                values <- readVar valuesRef
+                let values = state $ shakeExtras ide
                 let consoleObserver Nothing = return $ \size -> printf "Total: %.2fMB\n" (fromIntegral @Int @Double size / 1e6)
                     consoleObserver (Just k) = return $ \size -> printf "  - %s: %.2fKB\n" (show k) (fromIntegral @Int @Double size / 1e3)
 
-                printf "# Shake value store contents(%d):\n" (length values)
+                stateContents <- atomically $ ListT.toList $ STM.listT values
+                printf "# Shake value store contents(%d):\n" (length stateContents)
                 let keys =
                         nub $
                             typeOf GhcSession :
                             typeOf GhcSessionDeps :
-                            [kty | (fromKeyType -> Just (kty,_)) <- HashMap.keys values, kty /= typeOf GhcSessionIO] ++
+                            [kty | (fromKeyType -> Just (kty,_), _) <- stateContents, kty /= typeOf GhcSessionIO] ++
                             [typeOf GhcSessionIO]
-                measureMemory logger [keys] consoleObserver valuesRef
+                measureMemory logger [keys] consoleObserver values
 
             unless (null failed) (exitWith $ ExitFailure (length failed))
         Db dir opts cmd -> do
