@@ -130,7 +130,7 @@ runActions db xs = do
 getDirtySet  :: Action [(Key, Int)]
 getDirtySet = do
     db <- getDatabase
-    liftIO $ fmap snd <$> Development.IDE.Graph.Internal.Database.getDirtySet db
+    liftIO $ Development.IDE.Graph.Internal.Database.getDirtySet db
 
 getKeysAndVisitedAge :: Action [(Key, Int)]
 getKeysAndVisitedAge = do

@@ -19,11 +19,13 @@ packages:
          ./plugins/hls-retrie-plugin
          ./plugins/hls-haddock-comments-plugin
          ./plugins/hls-splice-plugin
+         ./plugins/hls-qualify-imported-names-plugin
          ./plugins/hls-floskell-plugin
          ./plugins/hls-pragmas-plugin
          ./plugins/hls-module-name-plugin
          ./plugins/hls-ormolu-plugin
          ./plugins/hls-call-hierarchy-plugin
+         ./plugins/hls-alternate-number-format-plugin
 
 with-compiler: ghc-9.0.1
 

@@ -21,6 +21,7 @@ packages:
   - ./plugins/hls-retrie-plugin
   - ./plugins/hls-splice-plugin
   - ./plugins/hls-tactics-plugin
+  - ./plugins/hls-qualify-imported-names-plugin
   - ./plugins/hls-brittany-plugin
   - ./plugins/hls-stylish-haskell-plugin
   - ./plugins/hls-floskell-plugin
@@ -28,6 +29,7 @@ packages:
   - ./plugins/hls-pragmas-plugin
   - ./plugins/hls-module-name-plugin
   - ./plugins/hls-ormolu-plugin
+  - ./plugins/hls-alternate-number-format-plugin
 
 ghc-options:
   "$everything": -haddock

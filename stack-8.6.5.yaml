@@ -19,6 +19,7 @@ packages:
   - ./plugins/hls-retrie-plugin
   - ./plugins/hls-splice-plugin
   - ./plugins/hls-tactics-plugin
+  - ./plugins/hls-qualify-imported-names-plugin
   - ./plugins/hls-brittany-plugin
   - ./plugins/hls-stylish-haskell-plugin
   - ./plugins/hls-floskell-plugin
@@ -26,6 +27,7 @@ packages:
   - ./plugins/hls-pragmas-plugin
   - ./plugins/hls-module-name-plugin
   - ./plugins/hls-ormolu-plugin
+  - ./plugins/hls-alternate-number-format-plugin
 
 ghc-options:
   "$everything": -haddock
@@ -104,6 +106,10 @@ extra-deps:
   - lsp-1.2.0.1
   - lsp-types-1.3.0.1
   - lsp-test-0.14.0.1
+  - stm-containers-1.1.0.4
+  - stm-hamt-1.2.0.6@sha256:fba86ccb4b45c5706c19b0e1315ba63dcac3b5d71de945ec001ba921fae80061,3972
+  - primitive-extras-0.10.1
+  - primitive-unlifted-0.1.3.1
 
 configure-options:
   ghcide:
