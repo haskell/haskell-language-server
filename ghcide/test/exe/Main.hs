@@ -4008,8 +4008,8 @@ findDefinitionAndHoverTests = let
         test  no     yes    docL41     constr        "type constraint in hover info   #1012"
     else
         test  no     broken docL41     constr        "type constraint in hover info   #1012"
-  , test  broken broken outL45     outSig        "top-level signature              #767"
-  , test  broken broken innL48     innSig        "inner     signature              #767"
+  , test  no     yes    outL45     outSig        "top-level signature              #767"
+  , test  no     yes    innL48     innSig        "inner     signature              #767"
   , test  no     yes    holeL60    hleInfo       "hole without internal name       #831"
   , test  no     skip   cccL17     docLink       "Haddock html links"
   , testM yes    yes    imported   importedSig   "Imported symbol"
