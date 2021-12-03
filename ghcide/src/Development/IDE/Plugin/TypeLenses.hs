@@ -12,6 +12,7 @@ module Development.IDE.Plugin.TypeLenses (
   GlobalBindingTypeSigsResult (..),
 ) where
 
+import           Control.Concurrent.STM.Stats        (atomically)
 import           Control.DeepSeq                     (rwhnf)
 import           Control.Monad                       (mzero)
 import           Control.Monad.Extra                 (whenMaybe)
@@ -100,8 +101,8 @@ codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentif
       bindings <- runAction "codeLens.GetBindings" ideState (use GetBindings filePath)
       gblSigs <- runAction "codeLens.GetGlobalBindingTypeSigs" ideState (use GetGlobalBindingTypeSigs filePath)
 
-      diag <- getDiagnostics ideState
-      hDiag <- getHiddenDiagnostics ideState
+      diag <- atomically $ getDiagnostics ideState
+      hDiag <- atomically $ getHiddenDiagnostics ideState
 
       let toWorkSpaceEdit tedit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing Nothing
           generateLensForGlobal sig@GlobalBindingTypeSig{..} = do

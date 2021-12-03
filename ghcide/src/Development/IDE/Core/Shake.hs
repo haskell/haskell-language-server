@@ -757,13 +757,13 @@ instantiateDelayedAction (DelayedAction _ s p a) = do
       d' = DelayedAction (Just u) s p a'
   return (b, d')
 
-getDiagnostics :: IdeState -> IO [FileDiagnostic]
+getDiagnostics :: IdeState -> STM [FileDiagnostic]
 getDiagnostics IdeState{shakeExtras = ShakeExtras{diagnostics}} = do
-    atomically $ getAllDiagnostics diagnostics
+    getAllDiagnostics diagnostics
 
-getHiddenDiagnostics :: IdeState -> IO [FileDiagnostic]
+getHiddenDiagnostics :: IdeState -> STM [FileDiagnostic]
 getHiddenDiagnostics IdeState{shakeExtras = ShakeExtras{hiddenDiagnostics}} = do
-    atomically $ getAllDiagnostics hiddenDiagnostics
+    getAllDiagnostics hiddenDiagnostics
 
 -- | Find and release old keys from the state Hashmap
 --   For the record, there are other state sources that this process does not release:
