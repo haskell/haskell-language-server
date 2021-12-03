@@ -19,7 +19,7 @@ env:
 
 jobs:
 
-  deps:
+  caches:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
