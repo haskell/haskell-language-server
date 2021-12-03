@@ -131,8 +131,6 @@ jobs:
           key:          ${{ env.cache-name }}-${{ env.INDEX_STATE }}
           restore-keys: ${{ env.cache-name }}-
 
-      - run: cabal v2-update
-
       - name: Compiled deps cache
         uses: actions/cache@v2
         env:
@@ -157,8 +155,9 @@ jobs:
                 ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
                 ${{ env.cache-name }}-${{ runner.os }}-
 
-      - name: Build
-        run: cabal v2-build
+      - run: cabal v2-update
+
+      - run: cabal v2-build
 
       # repeating builds to workaround segfaults in windows and ghc-8.8.4
       - if: runner.os == 'Windows'

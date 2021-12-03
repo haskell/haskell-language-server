@@ -73,8 +73,6 @@ jobs:
         key:          ${{ env.cache-name }}-${{ env.INDEX_STATE }}
         restore-keys: ${{ env.cache-name }}-
 
-    - run: cabal v2-update
-
     - name: Compiled deps cache
       uses: actions/cache@v2
       env:
@@ -98,6 +96,8 @@ jobs:
               ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-
               ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
               ${{ env.cache-name }}-${{ runner.os }}-
+
+    - run: cabal v2-update
 
     # max-backjumps is increased as a temporary solution
     # for dependency resolution failure
