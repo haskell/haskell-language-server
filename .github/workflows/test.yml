@@ -148,7 +148,7 @@ jobs:
         env:
           cache-name: dist-newstyle
         with:
-          path: compiled-deps
+          path: dist-newstyle
           key:  ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project') }}
           restore-keys: |
                 ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-
