@@ -14,6 +14,7 @@ module Ide.Plugin.Example
     descriptor
   ) where
 
+import           Control.Concurrent.STM
 import           Control.DeepSeq            (NFData)
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Maybe
@@ -126,8 +127,8 @@ codeLens ideState plId CodeLensParams{_textDocument=TextDocumentIdentifier uri} 
     case uriToFilePath' uri of
       Just (toNormalizedFilePath -> filePath) -> do
         _ <- runIdeAction "Example.codeLens" (shakeExtras ideState) $ runMaybeT $ useE TypeCheck filePath
-        _diag <- getDiagnostics ideState
-        _hDiag <- getHiddenDiagnostics ideState
+        _diag <- atomically $ getDiagnostics ideState
+        _hDiag <- atomically $ getHiddenDiagnostics ideState
         let
           title = "Add TODO Item via Code Lens"
           -- tedit = [TextEdit (Range (Position 3 0) (Position 3 0))
