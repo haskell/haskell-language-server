@@ -24,7 +24,8 @@ module Development.IDE.Core.FileStore(
     registerFileWatches
     ) where
 
-import           Control.Concurrent.STM                       (atomically)
+import           Control.Concurrent.STM                       (atomically,
+                                                               modifyTVar')
 import           Control.Concurrent.STM.TQueue                (writeTQueue)
 import           Control.Concurrent.Strict
 import           Control.Exception
@@ -63,7 +64,6 @@ import qualified Development.IDE.Types.Logger                 as L
 import qualified Data.Binary                                  as B
 import qualified Data.ByteString.Lazy                         as LBS
 import qualified Data.HashSet                                 as HSet
-import           Data.IORef.Extra                             (atomicModifyIORef_)
 import           Data.List                                    (foldl')
 import qualified Data.Text                                    as Text
 import           Development.IDE.Core.IdeConfiguration        (isWorkspaceFile)
@@ -292,9 +292,10 @@ setSomethingModified state keys reason = do
     when (isJust setVirtualFileContents) $
         fail "setSomethingModified can't be called on this type of VFSHandle"
     -- Update database to remove any files that might have been renamed/deleted
-    atomically $ writeTQueue (indexQueue $ hiedbWriter $ shakeExtras state) deleteMissingRealFiles
-    atomicModifyIORef_ (dirtyKeys $ shakeExtras state) $ \x ->
-        foldl' (flip HSet.insert) x keys
+    atomically $ do
+        writeTQueue (indexQueue $ hiedbWriter $ shakeExtras state) deleteMissingRealFiles
+        modifyTVar' (dirtyKeys $ shakeExtras state) $ \x ->
+            foldl' (flip HSet.insert) x keys
     void $ restartShakeSession (shakeExtras state) reason []
 
 registerFileWatches :: [String] -> LSP.LspT Config IO Bool
