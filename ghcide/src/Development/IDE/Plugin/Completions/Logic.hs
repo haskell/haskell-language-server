@@ -20,7 +20,6 @@ import           Data.List.Extra                          as List hiding
 import qualified Data.Map                                 as Map
 
 import           Data.Maybe                               (fromMaybe, isJust,
-                                                           listToMaybe,
                                                            mapMaybe)
 import qualified Data.Text                                as T
 import qualified Text.Fuzzy.Parallel                      as Fuzzy
@@ -502,7 +501,7 @@ findRecordCompl uri pmod mn DataDecl {tcdLName, tcdDataDefn} = result
             --
             -- is encoded as @[[arg1, arg2], [arg3], [arg4]]@
             -- Hence, we must concat nested arguments into one to get all the fields.
-            = concatMap (rdrNameFieldOcc . unLoc) cd_fld_names
+            = map (rdrNameFieldOcc . unLoc) cd_fld_names
         -- XConDeclField
         extract _ = []
 findRecordCompl _ _ _ _ = []
