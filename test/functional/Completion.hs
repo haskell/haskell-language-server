@@ -94,7 +94,6 @@ tests = testGroup "completions" [
          liftIO $ do
              item ^. label @?= "accessor"
              item ^. kind @?= Just CiFunction
-
      , testCase "have implicit foralls on basic polymorphic types" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
 
@@ -261,6 +260,17 @@ snippetTests = testGroup "snippets" [
         doc <- openDoc "Completion.hs" "haskell"
 
         checkNoSnippets doc
+    , testCase "works for record fields sharing the single signature" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
+         doc <- openDoc "FieldsSharingSignature.hs" "haskell"
+
+         let te = TextEdit (Range (Position 1 0) (Position 1 2)) "MkF"
+         _ <- applyEdit doc te
+
+         compls <- getCompletions doc (Position 1 6)
+         let item = head $ filter (\c -> (c ^. label == "MkFoo") && maybe False ("MkFoo {" `T.isPrefixOf`) (c ^. insertText)) compls
+         liftIO $ do
+            item ^. insertTextFormat @?= Just Snippet
+            item ^. insertText @?= Just "MkFoo {arg1=${1:_arg1}, arg2=${2:_arg2}, arg3=${3:_arg3}, arg4=${4:_arg4}, arg5=${5:_arg5}}"
     ]
     where
         checkNoSnippets doc = do
