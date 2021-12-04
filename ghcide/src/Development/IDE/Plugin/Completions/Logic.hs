@@ -20,7 +20,6 @@ import           Data.List.Extra                          as List hiding
 import qualified Data.Map                                 as Map
 
 import           Data.Maybe                               (fromMaybe, isJust,
-                                                           listToMaybe,
                                                            mapMaybe)
 import qualified Data.Text                                as T
 import qualified Text.Fuzzy.Parallel                      as Fuzzy
@@ -480,7 +479,7 @@ findRecordCompl uri pmod mn DataDecl {tcdLName, tcdDataDefn} = result
                         (showGhc . unLoc $ con_name) field_labels mn doc Nothing
                  | ConDeclH98{..} <- unLoc <$> dd_cons tcdDataDefn
                  , Just  con_details <- [getFlds con_args]
-                 , let field_names = mapMaybe extract con_details
+                 , let field_names = concatMap extract con_details
                  , let field_labels = showGhc . unLoc <$> field_names
                  , (not . List.null) field_labels
                  ]
@@ -493,11 +492,18 @@ findRecordCompl uri pmod mn DataDecl {tcdLName, tcdDataDefn} = result
                              _           -> Nothing
 
         extract ConDeclField{..}
-             -- TODO: Why is cd_fld_names a list?
-            | Just fld_name <- rdrNameFieldOcc . unLoc <$> listToMaybe cd_fld_names = Just fld_name
-            | otherwise = Nothing
+            -- NOTE: 'cd_fld_names' is grouped so that the fields
+            -- sharing the same type declaration to fit in the same group; e.g.
+            --
+            -- @
+            --   data Foo = Foo {arg1, arg2 :: Int, arg3 :: Int, arg4 :: Bool}
+            -- @
+            --
+            -- is encoded as @[[arg1, arg2], [arg3], [arg4]]@
+            -- Hence, we must concat nested arguments into one to get all the fields.
+            = map (rdrNameFieldOcc . unLoc) cd_fld_names
         -- XConDeclField
-        extract _ = Nothing
+        extract _ = []
 findRecordCompl _ _ _ _ = []
 
 ppr :: Outputable a => a -> T.Text
