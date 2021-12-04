@@ -23,7 +23,7 @@ import           Ide.Plugin.Conversion           (FormatType, alternateFormat,
                                                   toFormatTypes)
 import           Ide.Plugin.Literals             (Literal (..), collectLiterals,
                                                   getSrcSpan, getSrcText)
-import           Ide.Plugin.Retrie               (handleMaybe, handleMaybeM,
+import           Ide.PluginUtils                 (handleMaybe, handleMaybeM,
                                                   response)
 import           Ide.Types
 import           Language.LSP.Types

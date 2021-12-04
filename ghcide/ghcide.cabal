@@ -186,6 +186,7 @@ library
         Development.IDE.Spans.Documentation
         Development.IDE.Spans.AtPoint
         Development.IDE.Spans.LocalBindings
+        Development.IDE.Spans.Pragmas
         Development.IDE.Types.Diagnostics
         Development.IDE.Types.Exports
         Development.IDE.Types.HscEnvEq
