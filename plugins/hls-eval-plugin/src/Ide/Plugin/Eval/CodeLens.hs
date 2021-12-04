@@ -90,10 +90,10 @@ import           Ide.Plugin.Eval.Parse.Comments  (commentsToSections)
 import           Ide.Plugin.Eval.Parse.Option    (parseSetFlags)
 import           Ide.Plugin.Eval.Rules           (queueForEvaluation)
 import           Ide.Plugin.Eval.Types
-import           Ide.Plugin.Eval.Util            (asS, gStrictTry, handleMaybe,
-                                                  handleMaybeM, isLiterate,
-                                                  logWith, response, response',
-                                                  timed)
+import           Ide.Plugin.Eval.Util            (asS, gStrictTry, isLiterate,
+                                                  logWith, response', timed)
+import           Ide.PluginUtils                 (handleMaybe, handleMaybeM,
+                                                  response)
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types              hiding

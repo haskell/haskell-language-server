@@ -29,7 +29,6 @@ library
     , ghc-boot-th
     , hls-graph
     , hls-plugin-api       >=1.1 && < 1.3
-    , hls-retrie-plugin
     , hie-compat
     , lens
     , lsp
@@ -41,7 +40,6 @@ library
 
   default-language: Haskell2010
   default-extensions:
-    CPP
     LambdaCase
     NamedFieldPuns
     OverloadedStrings
