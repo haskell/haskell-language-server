@@ -247,7 +247,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
                       } <- getShakeExtras
     let invalidateShakeCache = do
             void $ modifyVar' version succ
-            recordDirtyKeys extras GhcSessionIO [emptyFilePath]
+            atomically $ recordDirtyKeys extras GhcSessionIO [emptyFilePath]
 
     IdeOptions{ optTesting = IdeTesting optTesting
               , optCheckProject = getCheckProject
@@ -264,7 +264,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
               TargetModule _ -> do
                 found <- filterM (IO.doesFileExist . fromNormalizedFilePath) targetLocations
                 return (targetTarget, found)
-          recordDirtyKeys extras GetKnownTargets  [emptyFilePath]
+          atomically $ recordDirtyKeys extras GetKnownTargets  [emptyFilePath]
           modifyVarIO' knownTargetsVar $ traverseHashed $ \known -> do
             let known' = HM.unionWith (<>) known $ HM.fromList $ map (second Set.fromList) knownTargets
             when (known /= known') $

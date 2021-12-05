@@ -368,6 +368,7 @@ executable haskell-language-server
     , safe-exceptions
     , hls-graph
     , sqlite-simple
+    , stm
     , temporary
     , transformers
     , unordered-containers

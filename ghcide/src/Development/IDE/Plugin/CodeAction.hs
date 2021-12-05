@@ -21,6 +21,7 @@ module Development.IDE.Plugin.CodeAction
 import           Control.Applicative                               ((<|>))
 import           Control.Arrow                                     (second,
                                                                     (>>>))
+import           Control.Concurrent.STM.Stats                      (atomically)
 import           Control.Monad                                     (guard, join)
 import           Control.Monad.IO.Class
 import           Data.Char
@@ -90,7 +91,7 @@ codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range Cod
   liftIO $ do
     let text = Rope.toText . (_text :: VirtualFile -> Rope.Rope) <$> contents
         mbFile = toNormalizedFilePath' <$> uriToFilePath uri
-    diag <- fmap (\(_, _, d) -> d) . filter (\(p, _, _) -> mbFile == Just p) <$> getDiagnostics state
+    diag <- atomically $ fmap (\(_, _, d) -> d) . filter (\(p, _, _) -> mbFile == Just p) <$> getDiagnostics state
     (join -> parsedModule) <- runAction "GhcideCodeActions.getParsedModule" state $ getParsedModule `traverse` mbFile
     let
       actions = caRemoveRedundantImports parsedModule text diag xs uri
