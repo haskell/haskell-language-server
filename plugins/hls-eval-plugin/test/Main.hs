@@ -112,6 +112,7 @@ tests =
   , goldenWithEval "Evaluate expressions in Haddock comments in both single line and multi line format" "THaddock" "hs"
   , goldenWithEval "Compare results (for Haddock tests only)" "TCompare" "hs"
   , goldenWithEval "Local Modules imports are accessible in a test" "TLocalImport" "hs"
+  , goldenWithEval "Transitive local dependency" "TTransitive" "hs"
   -- , goldenWithEval "Local Modules can be imported in a test" "TLocalImportInTest" "hs"
   , goldenWithEval "Setting language option TupleSections" "TLanguageOptionsTupleSections" "hs"
   , goldenWithEval ":set accepts ghci flags" "TFlags" "hs"
