@@ -3954,7 +3954,7 @@ findDefinitionAndHoverTests = let
   chrL36 = Position 41 24  ;  litC   = [ExpectHoverText ["'f'"]]
   txtL8  = Position 12 14  ;  litT   = [ExpectHoverText ["\"dfgy\""]]
   lstL43 = Position 47 12  ;  litL   = [ExpectHoverText ["[8391 :: Int, 6268]"]]
-  outL45 = Position 49  3  ;  outSig = [ExpectHoverText ["outer", "Bool"], mkR 46 0 46 5]
+  outL45 = Position 49  3  ;  outSig = [ExpectHoverText ["outer", "Bool"], mkR 50 0 50 5]
   innL48 = Position 52  5  ;  innSig = [ExpectHoverText ["inner", "Char"], mkR 49 2 49 7]
   holeL60 = Position 62 7  ;  hleInfo = [ExpectHoverText ["_ ::"]]
   cccL17 = Position 17 16  ;  docLink = [ExpectHoverText ["[Documentation](file:///"]]
@@ -4008,7 +4008,7 @@ findDefinitionAndHoverTests = let
         test  no     yes    docL41     constr        "type constraint in hover info   #1012"
     else
         test  no     broken docL41     constr        "type constraint in hover info   #1012"
-  , test  broken broken outL45     outSig        "top-level signature              #767"
+  , test  no     yes    outL45     outSig        "top-level signature              #767"
   , test  broken broken innL48     innSig        "inner     signature              #767"
   , test  no     yes    holeL60    hleInfo       "hole without internal name       #831"
   , test  no     skip   cccL17     docLink       "Haddock html links"
