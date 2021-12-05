@@ -23,7 +23,7 @@ hlsCommand :: String
 {-# NOINLINE hlsCommand #-}
 hlsCommand = unsafePerformIO $ do
   testExe <- fromMaybe "haskell-language-server" <$> lookupEnv "HLS_TEST_EXE"
-  pure $ testExe ++ " --lsp -d -j4 -l test-logs/" ++ logFilePath
+  pure $ testExe ++ " --lsp -d -j4"
 
 hlsCommandVomit :: String
 hlsCommandVomit = hlsCommand ++ " --vomit"
