@@ -191,9 +191,9 @@ data ShakeExtras = ShakeExtras
     ,logger :: Logger
     ,globals :: Var (HMap.HashMap TypeRep Dynamic)
     ,state :: Values
-    ,diagnostics :: Var DiagnosticStore
-    ,hiddenDiagnostics :: Var DiagnosticStore
-    ,publishedDiagnostics :: Var (HMap.HashMap NormalizedUri [Diagnostic])
+    ,diagnostics :: STMDiagnosticStore
+    ,hiddenDiagnostics :: STMDiagnosticStore
+    ,publishedDiagnostics :: STM.Map NormalizedUri [Diagnostic]
     -- ^ This represents the set of diagnostics that we have published.
     -- Due to debouncing not every change might get published.
     ,positionMapping :: Var (HMap.HashMap NormalizedUri (Map TextDocumentVersion (PositionDelta, PositionMapping)))
@@ -437,8 +437,8 @@ deleteValue
   => ShakeExtras
   -> k
   -> NormalizedFilePath
-  -> IO ()
-deleteValue ShakeExtras{dirtyKeys, state} key file = atomically $ do
+  -> STM ()
+deleteValue ShakeExtras{dirtyKeys, state} key file = do
     STM.delete (toKey key file) state
     modifyTVar' dirtyKeys $ HSet.insert (toKey key file)
 
@@ -447,10 +447,11 @@ recordDirtyKeys
   => ShakeExtras
   -> k
   -> [NormalizedFilePath]
-  -> IO ()
-recordDirtyKeys ShakeExtras{dirtyKeys} key file = withEventTrace "recordDirtyKeys" $ \addEvent -> do
-    atomically $ modifyTVar' dirtyKeys $ \x -> foldl' (flip HSet.insert) x (toKey key <$> file)
-    addEvent (fromString $ "dirty " <> show key) (fromString $ unlines $ map fromNormalizedFilePath file)
+  -> STM (IO ())
+recordDirtyKeys ShakeExtras{dirtyKeys} key file = do
+    modifyTVar' dirtyKeys $ \x -> foldl' (flip HSet.insert) x (toKey key <$> file)
+    return $ withEventTrace "recordDirtyKeys" $ \addEvent -> do
+        addEvent (fromString $ "dirty " <> show key) (fromString $ unlines $ map fromNormalizedFilePath file)
 
 
 -- | We return Nothing if the rule has not run and Just Failed if it has failed to produce a value.
@@ -509,9 +510,9 @@ shakeOpen lspEnv defaultConfig logger debouncer
     shakeExtras <- do
         globals <- newVar HMap.empty
         state <- STM.newIO
-        diagnostics <- newVar mempty
-        hiddenDiagnostics <- newVar mempty
-        publishedDiagnostics <- newVar mempty
+        diagnostics <- STM.newIO
+        hiddenDiagnostics <- STM.newIO
+        publishedDiagnostics <- STM.newIO
         positionMapping <- newVar HMap.empty
         knownTargetsVar <- newVar $ hashed HMap.empty
         let restartShakeSession = shakeRestart ideState
@@ -756,15 +757,13 @@ instantiateDelayedAction (DelayedAction _ s p a) = do
       d' = DelayedAction (Just u) s p a'
   return (b, d')
 
-getDiagnostics :: IdeState -> IO [FileDiagnostic]
+getDiagnostics :: IdeState -> STM [FileDiagnostic]
 getDiagnostics IdeState{shakeExtras = ShakeExtras{diagnostics}} = do
-    val <- readVar diagnostics
-    return $ getAllDiagnostics val
+    getAllDiagnostics diagnostics
 
-getHiddenDiagnostics :: IdeState -> IO [FileDiagnostic]
+getHiddenDiagnostics :: IdeState -> STM [FileDiagnostic]
 getHiddenDiagnostics IdeState{shakeExtras = ShakeExtras{hiddenDiagnostics}} = do
-    val <- readVar hiddenDiagnostics
-    return $ getAllDiagnostics val
+    getAllDiagnostics hiddenDiagnostics
 
 -- | Find and release old keys from the state Hashmap
 --   For the record, there are other state sources that this process does not release:
@@ -1154,30 +1153,26 @@ updateFileDiagnostics fp k ShakeExtras{logger, diagnostics, hiddenDiagnostics, p
     let (currentShown, currentHidden) = partition ((== ShowDiag) . fst) current
         uri = filePathToUri' fp
         ver = vfsVersion =<< modTime
-        update new store =
-            let store' = setStageDiagnostics uri ver (T.pack $ show k) new store
-                new' = getUriDiagnostics uri store'
-            in (store', new')
+        update new store = setStageDiagnostics uri ver (T.pack $ show k) new store
     mask_ $ do
         -- Mask async exceptions to ensure that updated diagnostics are always
         -- published. Otherwise, we might never publish certain diagnostics if
         -- an exception strikes between modifyVar but before
         -- publishDiagnosticsNotification.
-        newDiags <- modifyVar diagnostics $ pure . update (map snd currentShown)
-        _ <- modifyVar hiddenDiagnostics $  pure . update (map snd currentHidden)
+        newDiags <- liftIO $ atomically $ update (map snd currentShown) diagnostics
+        _ <- liftIO $ atomically $ update (map snd currentHidden) hiddenDiagnostics
         let uri = filePathToUri' fp
         let delay = if null newDiags then 0.1 else 0
         registerEvent debouncer delay uri $ do
-             join $ mask_ $ modifyVar publishedDiagnostics $ \published -> do
-                 let lastPublish = HMap.lookupDefault [] uri published
-                     !published' = HMap.insert uri newDiags published
-                     action = when (lastPublish /= newDiags) $ case lspEnv of
+             join $ mask_ $ do
+                 lastPublish <- atomically $ STM.focus (Focus.lookupWithDefault [] <* Focus.insert newDiags) uri publishedDiagnostics
+                 let action = when (lastPublish /= newDiags) $ case lspEnv of
                         Nothing -> -- Print an LSP event.
                             logInfo logger $ showDiagnosticsColored $ map (fp,ShowDiag,) newDiags
                         Just env -> LSP.runLspT env $
                             LSP.sendNotification LSP.STextDocumentPublishDiagnostics $
                             LSP.PublishDiagnosticsParams (fromNormalizedUri uri) ver (List newDiags)
-                 return (published', action)
+                 return action
 
 newtype Priority = Priority Double
 
@@ -1192,10 +1187,21 @@ actionLogger = do
     ShakeExtras{logger} <- getShakeExtras
     return logger
 
+--------------------------------------------------------------------------------
+type STMDiagnosticStore = STM.Map NormalizedUri StoreItem
 
 getDiagnosticsFromStore :: StoreItem -> [Diagnostic]
 getDiagnosticsFromStore (StoreItem _ diags) = concatMap SL.fromSortedList $ Map.elems diags
 
+updateSTMDiagnostics :: STMDiagnosticStore
+                  -> NormalizedUri -> TextDocumentVersion -> DiagnosticsBySource
+                  -> STM [LSP.Diagnostic]
+updateSTMDiagnostics store uri mv newDiagsBySource =
+    getDiagnosticsFromStore . fromJust <$> STM.focus (Focus.alter update *> Focus.lookup) uri store
+  where
+    update (Just(StoreItem mvs dbs))
+      | mvs == mv = Just (StoreItem mv (newDiagsBySource <> dbs))
+    update _ = Just (StoreItem mv newDiagsBySource)
 
 -- | Sets the diagnostics for a file and compilation step
 --   if you want to clear the diagnostics call this with an empty list
@@ -1204,25 +1210,17 @@ setStageDiagnostics
     -> TextDocumentVersion -- ^ the time that the file these diagnostics originate from was last edited
     -> T.Text
     -> [LSP.Diagnostic]
-    -> DiagnosticStore
-    -> DiagnosticStore
-setStageDiagnostics uri ver stage diags ds = updateDiagnostics ds uri ver updatedDiags
+    -> STMDiagnosticStore
+    -> STM [LSP.Diagnostic]
+setStageDiagnostics uri ver stage diags ds = updateSTMDiagnostics ds uri ver updatedDiags
   where
     updatedDiags = Map.singleton (Just stage) (SL.toSortedList diags)
 
 getAllDiagnostics ::
-    DiagnosticStore ->
-    [FileDiagnostic]
+    STMDiagnosticStore ->
+    STM [FileDiagnostic]
 getAllDiagnostics =
-    concatMap (\(k,v) -> map (fromUri k,ShowDiag,) $ getDiagnosticsFromStore v) . HMap.toList
-
-getUriDiagnostics ::
-    NormalizedUri ->
-    DiagnosticStore ->
-    [LSP.Diagnostic]
-getUriDiagnostics uri ds =
-    maybe [] getDiagnosticsFromStore $
-    HMap.lookup uri ds
+    fmap (concatMap (\(k,v) -> map (fromUri k,ShowDiag,) $ getDiagnosticsFromStore v)) . ListT.toList . STM.listT
 
 updatePositionMapping :: IdeState -> VersionedTextDocumentIdentifier -> List TextDocumentContentChangeEvent -> IO ()
 updatePositionMapping IdeState{shakeExtras = ShakeExtras{positionMapping}} VersionedTextDocumentIdentifier{..} (List changes) = do

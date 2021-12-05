@@ -63,6 +63,7 @@ library
     , lens
     , lsp
     , regex-tdfa
+    , stm
     , temporary
     , text
     , transformers

@@ -148,6 +148,7 @@ import           Ide.Plugin.Properties                        (HasProperty,
 import           Ide.PluginUtils                              (configForPlugin)
 import           Ide.Types                                    (DynFlagsModifications (dynFlagsModifyGlobal, dynFlagsModifyParser),
                                                                PluginId)
+import Control.Concurrent.STM.Stats (atomically)
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
@@ -1061,7 +1062,7 @@ writeHiFileAction hsc hiFile = do
     extras <- getShakeExtras
     let targetPath = Compat.ml_hi_file $ ms_location $ hirModSummary hiFile
     liftIO $ do
-        resetInterfaceStore extras $ toNormalizedFilePath' targetPath
+        atomically $ resetInterfaceStore extras $ toNormalizedFilePath' targetPath
         writeHiFile hsc hiFile
 
 data RulesConfig = RulesConfig
