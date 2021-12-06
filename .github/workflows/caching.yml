@@ -46,12 +46,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        ghc: ["9.0.1", '8.10.7', '8.10.6', "8.8.4", "8.8.3", "8.6.5"]
+        ghc: ["9.0.1", '8.10.7', '8.10.6', "8.8.4", "8.6.5"]
         os: [ubuntu-latest, macOS-latest, windows-latest]
         cabal: ['3.6']
-        exclude:
-          - os: windows-latest
-            ghc: '8.8.3'
 
     steps:
       - uses: actions/checkout@v2
@@ -73,12 +70,6 @@ jobs:
         run: |
           echo "CABAL_STORE_DIR=~/.cabal/store" >> $GITHUB_ENV
           echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
-
-      - if: matrix.os == 'macOS-latest' && matrix.ghc == '8.10.5'
-        name: Workaround for GHC 8.10.5 on macOS
-        run: |
-          echo "# uninstalling CommandLineTools (see https://github.com/haskell/haskell-language-server/issues/1913#issuecomment-861667786)"
-          sudo rm -rf /Library/Developer/CommandLineTools
 
       # Needs to be before Cache Cabal so the cache can detect changes to the modified cabal.project file
       - if: matrix.ghc == '9.0.1'
