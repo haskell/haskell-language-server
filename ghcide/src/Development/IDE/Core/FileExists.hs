@@ -10,7 +10,8 @@ module Development.IDE.Core.FileExists
   )
 where
 
-import           Control.Concurrent.STM.Stats          (atomically)
+import           Control.Concurrent.STM.Stats          (atomically,
+                                                        atomicallyNamed)
 import           Control.Exception
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
@@ -92,9 +93,9 @@ modifyFileExists :: IdeState -> [(NormalizedFilePath, FileChangeType)] -> IO ()
 modifyFileExists state changes = do
   FileExistsMapVar var <- getIdeGlobalState state
   -- Masked to ensure that the previous values are flushed together with the map update
-  mask $ \_ -> do
     -- update the map
-    void $ atomically $ forM_ changes $ \(f,c) ->
+  mask_ $ join $ atomicallyNamed "modifyFileExists" $ do
+    forM_ changes $ \(f,c) ->
         case fromChange c of
             Just c' -> STM.focus (Focus.insert c') f var
             Nothing -> pure ()
@@ -102,11 +103,10 @@ modifyFileExists state changes = do
     -- flush previous values
     let (fileModifChanges, fileExistChanges) =
             partition ((== FcChanged) . snd) changes
-    join $ atomically $ do
-        mapM_ (deleteValue (shakeExtras state) GetFileExists . fst) fileExistChanges
-        io1 <- recordDirtyKeys (shakeExtras state) GetFileExists $ map fst fileExistChanges
-        io2 <- recordDirtyKeys (shakeExtras state) GetModificationTime $ map fst fileModifChanges
-        return (io1 <> io2)
+    mapM_ (deleteValue (shakeExtras state) GetFileExists . fst) fileExistChanges
+    io1 <- recordDirtyKeys (shakeExtras state) GetFileExists $ map fst fileExistChanges
+    io2 <- recordDirtyKeys (shakeExtras state) GetModificationTime $ map fst fileModifChanges
+    return (io1 <> io2)
 
 fromChange :: FileChangeType -> Maybe Bool
 fromChange FcCreated = Just True

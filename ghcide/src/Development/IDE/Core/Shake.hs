@@ -339,13 +339,13 @@ lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
             f <- MaybeT $ pure $ HMap.lookup (Key k) pmap
             (dv,del,ver) <- MaybeT $ runIdeAction "lastValueIO" s $ f file
             MaybeT $ pure $ (,del,ver) <$> fromDynamic dv
-          case mv of
+          atomically $ case mv of
             Nothing -> do
-                void $ atomically $ STM.focus (Focus.alter (alterValue $ Failed True)) (toKey k file) state
+                STM.focus (Focus.alter (alterValue $ Failed True)) (toKey k file) state
                 return Nothing
             Just (v,del,ver) -> do
-                void $ atomically $ STM.focus (Focus.alter (alterValue $ Stale (Just del) ver (toDyn v))) (toKey k file) state
-                atomically $ Just . (v,) . addDelta del <$> mappingForVersion positionMapping file ver
+                STM.focus (Focus.alter (alterValue $ Stale (Just del) ver (toDyn v))) (toKey k file) state
+                Just . (v,) . addDelta del <$> mappingForVersion positionMapping file ver
 
         -- We got a new stale value from the persistent rule, insert it in the map without affecting diagnostics
         alterValue new Nothing = Just (ValueWithDiagnostics new mempty) -- If it wasn't in the map, give it empty diagnostics
@@ -1222,9 +1222,9 @@ getAllDiagnostics ::
 getAllDiagnostics =
     fmap (concatMap (\(k,v) -> map (fromUri k,ShowDiag,) $ getDiagnosticsFromStore v)) . ListT.toList . STM.listT
 
-updatePositionMapping :: IdeState -> VersionedTextDocumentIdentifier -> List TextDocumentContentChangeEvent -> IO ()
+updatePositionMapping :: IdeState -> VersionedTextDocumentIdentifier -> List TextDocumentContentChangeEvent -> STM ()
 updatePositionMapping IdeState{shakeExtras = ShakeExtras{positionMapping}} VersionedTextDocumentIdentifier{..} (List changes) =
-    atomically $ STM.focus (Focus.alter f) uri positionMapping
+    STM.focus (Focus.alter f) uri positionMapping
       where
         uri = toNormalizedUri _uri
         f = Just . f' . fromMaybe mempty
