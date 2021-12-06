@@ -157,11 +157,8 @@ jobs:
 
       - run: cabal v2-update
 
-      - run: cabal v2-build
-
       # repeating builds to workaround segfaults in windows and ghc-8.8.4
-      - if: runner.os == 'Windows'
-        name: (Windows) Run build additional 2 times
+      - name: Build, try x3 times
         run: cabal v2-build || cabal v2-build
 
       - name: Set test options
