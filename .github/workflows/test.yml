@@ -42,6 +42,7 @@ jobs:
       matrix:
         ghc: ["9.0.1", '8.10.7', '8.10.6', "8.8.4", "8.8.3", "8.6.5"]
         os: [ubuntu-latest, macOS-latest]
+        cabal: ['3.6']
         include:
           # only test supported ghc major versions
           - os: ubuntu-latest
@@ -77,8 +78,8 @@ jobs:
           submodules: true
       - uses: haskell/actions/setup@v1
         with:
-          ghc-version: ${{ matrix.ghc }}
-          cabal-version: "3.4"
+          ghc-version  : ${{ matrix.ghc   }}
+          cabal-version: ${{ matrix.cabal }}
 
       - run: ./fmt.sh
         name: "HLint via ./fmt.sh"

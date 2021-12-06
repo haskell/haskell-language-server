@@ -20,6 +20,7 @@ jobs:
       matrix:
         ghc: ['9.0.1', '8.10.7', '8.10.6', '8.8.4', '8.8.3', '8.6.5']
         os: [ubuntu-18.04, macOS-latest, windows-latest]
+        cabal: ['3.6']
         exclude:
           - os: windows-latest
             ghc: '8.8.3' # fails due to segfault
@@ -30,8 +31,8 @@ jobs:
         submodules: true
     - uses: haskell/actions/setup@v1
       with:
-        ghc-version: ${{ matrix.ghc }}
-        cabal-version: '3.4'
+        ghc-version  : ${{ matrix.ghc   }}
+        cabal-version: ${{ matrix.cabal }}
 
     - name: Use modified cabal.project for ghc9
       if: ${{ matrix.ghc == '9.0.1' }}
