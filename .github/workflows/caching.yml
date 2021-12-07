@@ -30,9 +30,6 @@ on:
   push:
     branches:
       - master
-  schedule:
-    # Try to save snapshot every day at 08:25 UTC (~00:25 in California)
-    - cron: "25 8 * * *"
 
 jobs:
   pre_job:
