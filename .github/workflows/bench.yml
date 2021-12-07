@@ -32,6 +32,7 @@ jobs:
       matrix:
         ghc: ['8.10.7']
         os: [ubuntu-latest]
+        cabal: ['3.6']
 
     steps:
     - uses: actions/checkout@v2
@@ -40,8 +41,8 @@ jobs:
 
     - uses: haskell/actions/setup@v1
       with:
-        ghc-version: ${{ matrix.ghc }}
-        cabal-version: '3.2'
+        ghc-version  : ${{ matrix.ghc   }}
+        cabal-version: ${{ matrix.cabal }}
         enable-stack: false
 
     - name: Cache Cabal
@@ -109,8 +110,8 @@ jobs:
     steps:
     - uses: haskell/actions/setup@v1
       with:
-        ghc-version: ${{ matrix.ghc }}
-        cabal-version: '3.2'
+        ghc-version  : ${{ matrix.ghc   }}
+        cabal-version: ${{ matrix.cabal }}
         enable-stack: false
 
     - name: Download cabal home

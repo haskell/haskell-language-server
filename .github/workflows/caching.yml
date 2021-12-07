@@ -1,6 +1,8 @@
-name: Caching of dependencies
+name: Caching
 
-#  2021-11-30: NOTE: This workflow currently a trimmed copy of a main `test.yml` workflow. Workflows need further deduplication: https://docs.github.com/en/actions/learn-github-actions/reusing-workflows#overview
+# Docs on the workflow:
+# 1. GitHub cache scoping goes: main branch -> PR main branch -> PR. (essentially in a tree fashion). That is why it is useful to build caches on `master` - to generate & keep the main project state & they would be shared to the whole tree.
+# 2. GitHub has a 10G default limit of cache pool per repo. HLS is a big project & monorepo of many projects, so to keep cache useful - the main branch state caches should be preserved & their storage preferred to the PRs, since PRs from internal branches - would count into 10G pool, but would be available only inside of the PR scope, which can bork cache fore the whole community. That is short story why `dist-newstyle` (especially full) - is not includded into `master` cache.
 
 defaults:
   run:
@@ -44,8 +46,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        ghc: ["9.0.1", '8.10.7', '8.10.6', "8.10.5", "8.8.4", "8.8.3", "8.6.5"]
+        ghc: ["9.0.1", '8.10.7', '8.10.6', "8.8.4", "8.8.3", "8.6.5"]
         os: [ubuntu-latest, macOS-latest, windows-latest]
+        cabal: ['3.6']
         exclude:
           - os: windows-latest
             ghc: '8.8.3'
@@ -56,8 +59,8 @@ jobs:
           submodules: true
       - uses: haskell/actions/setup@v1
         with:
-          ghc-version: ${{ matrix.ghc }}
-          cabal-version: "3.4"
+          ghc-version  : ${{ matrix.ghc   }}
+          cabal-version: ${{ matrix.cabal }}
 
       - if: matrix.os == 'windows-latest'
         name: Set some window specific things

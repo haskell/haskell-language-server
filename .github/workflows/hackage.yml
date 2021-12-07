@@ -33,6 +33,7 @@ jobs:
               "8.10.7",
               "8.8.4",
               "8.6.5"]
+        cabal: ['3.6']
         exclude:
         - ghc: "9.0.1"
           package: "hls-brittany-plugin"
@@ -51,8 +52,8 @@ jobs:
 
       - uses: haskell/actions/setup@v1
         with:
-          ghc-version: ${{ matrix.ghc }}
-          cabal-version: '3.4'
+          ghc-version  : ${{ matrix.ghc   }}
+          cabal-version: ${{ matrix.cabal }}
 
       - name: Cache Cabal
         uses: actions/cache@v2
