@@ -1,5 +1,11 @@
 # Installation
 
+A typical haskell-language-server installation consists of:
+- One binary file for each supported ghc version: `haskell-language-server-${ghcVersion}`
+- Another binary named `haskell-language-version-wrapper` which analyzes the project or file in the current working dir
+  and calls the appropiate `haskell-language-server-${ghcVersion}` variant.
+  - It accepts all executable arguments from the plain `haskell-language-server`
+
 ## Prerequisites
 
 - For standalone `.hs`/`.lhs` files, [ghc](https://www.haskell.org/ghc/) must be installed and on the PATH. The easiest way to install it is with [ghcup](https://www.haskell.org/ghcup/) or [chocolatey](https://community.chocolatey.org/packages/ghc) on Windows.
