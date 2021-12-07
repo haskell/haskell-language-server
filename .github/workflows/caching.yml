@@ -55,6 +55,7 @@ jobs:
     needs: pre_job
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         ghc: ["9.0.1", '8.10.7', '8.10.6', "8.8.4", "8.6.5"]
         os: [ubuntu-latest, macOS-latest, windows-latest]
