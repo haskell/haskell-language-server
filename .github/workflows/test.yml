@@ -40,8 +40,9 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        ghc: ["9.0.1", '8.10.7', '8.10.6', "8.10.5", "8.8.4", "8.8.3", "8.6.5"]
+        ghc: ["9.0.1", '8.10.7', '8.10.6', "8.8.4", "8.8.3", "8.6.5"]
         os: [ubuntu-latest, macOS-latest]
+        cabal: ['3.6']
         include:
           # only test supported ghc major versions
           - os: ubuntu-latest
@@ -69,8 +70,6 @@ jobs:
           - os: windows-latest
             ghc: '8.10.6'
           - os: windows-latest
-            ghc: '8.10.5'
-          - os: windows-latest
             ghc: '8.8.4'
 
     steps:
@@ -79,8 +78,8 @@ jobs:
           submodules: true
       - uses: haskell/actions/setup@v1
         with:
-          ghc-version: ${{ matrix.ghc }}
-          cabal-version: "3.4"
+          ghc-version  : ${{ matrix.ghc   }}
+          cabal-version: ${{ matrix.cabal }}
 
       - run: ./fmt.sh
         name: "HLint via ./fmt.sh"
@@ -96,12 +95,6 @@ jobs:
         run: |
           echo "CABAL_STORE_DIR=~/.cabal/store" >> $GITHUB_ENV
           echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
-
-      - if: matrix.os == 'macOS-latest' && matrix.ghc == '8.10.5'
-        name: Workaround for GHC 8.10.5 on macOS
-        run: |
-          echo "# uninstalling CommandLineTools (see https://github.com/haskell/haskell-language-server/issues/1913#issuecomment-861667786)"
-          sudo rm -rf /Library/Developer/CommandLineTools
 
       # Needs to be before Cache Cabal so the cache can detect changes to the modified cabal.project file
       - if: matrix.ghc == '9.0.1'
