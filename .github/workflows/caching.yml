@@ -1,8 +1,21 @@
 name: Caching
 
 # Docs on the workflow:
-# 1. GitHub cache scoping goes: main branch -> PR main branch -> PR. (essentially in a tree fashion). That is why it is useful to build caches on `master` - to generate & keep the main project state & they would be shared to the whole tree.
-# 2. GitHub has a 10G default limit of cache pool per repo. HLS is a big project & monorepo of many projects, so to keep cache useful - the main branch state caches should be preserved & their storage preferred to the PRs, since PRs from internal branches - would count into 10G pool, but would be available only inside of the PR scope, which can bork cache fore the whole community. That is short story why `dist-newstyle` (especially full) - is not includded into `master` cache.
+# 1. GitHub cache scoping goes:
+#   [main branch -> PR main branch -> PR. (essentially in a tree fashion)](https://web.archive.org/web/20211125171853/https://docs.github.com/en/actions/advanced-guides/caching-dependencies-to-speed-up-workflows#restrictions-for-accessing-a-cache).
+#   Building & keeping caches on `master` allows
+#   to share the main project state cache be shared to the whole tree.
+# 2. GitHub has a [default 10G cache pool limit](https://web.archive.org/web/20211125171853/https://docs.github.com/en/actions/advanced-guides/caching-dependencies-to-speed-up-workflows#usage-limits-and-eviction-policy) per repo.
+#   HLS is a big monorepo codebase, which means easy cache pool
+#   invalidation & exhaustion because of the pool limit.
+#   To keep caches useful - the main state of the main branch should remain
+#   & so keep caching in the repo well below the limit.
+#   that means preferring main branch to the PR caches
+#   (especially internal branch ones), since PRs from internal branches -
+#   count into the repo 10G pool, while that cache gets used only inside of the PR,
+#   while exhausting the pool would bork cache for the rest of the community.
+#   That is a short story why `dist-newstyle` (especially full) currently is not
+#   includded into `master` or PR caches.
 
 defaults:
   run:
