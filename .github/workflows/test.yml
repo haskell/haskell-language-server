@@ -138,14 +138,14 @@ jobs:
 
       - name: Set test options
         run: |
-          echo "TEST_OPTS=-j1 --rerun-update --rerun-filter failures,exceptions,new" >> $GITHUB_ENV
+          echo "TEST_OPTS=-j1 --rerun-update --rerun-filter failures,exceptions" >> $GITHUB_ENV
 
       - name: Cache test log bewteen attempts of the same run
         uses: actions/cache@v2
         env:
           cache-name: cache-test-log
         with:
-          path: .tasty-rerun-log
+          path: "**/.tasty-rerun-log*"
           key: v1-${{ runner.os }}-${{ matrix.ghc }}-test-log-${{ github.sha }}
 
       - if: needs.pre_job.outputs.should_skip_ghcide != 'true' && matrix.test
@@ -172,7 +172,7 @@ jobs:
         # all functional test cases simultaneously which causes way too many hls
         # instances to be spun up for the poor github actions runner to handle
 
-        run: cabal test wrapper-test --test-options="$TEST_OPTS" || cabal test wrapper-test --test-options="$TEST_OPTS" || cabal test wrapper-test --test-options="$TEST_OPTS"
+        run: cabal test wrapper-test --test-options="$TEST_OPTS --rerun-log-file .tasty-rerun-log-wrapper" || cabal test wrapper-test --test-options="$TEST_OPTS  --rerun-log-file .tasty-rerun-log-wrapper" || cabal test wrapper-test --test-options="$TEST_OPTS  --rerun-log-file .tasty-rerun-log-wrapper"
 
       - if: matrix.test && matrix.ghc != '9.0.1'
         name: Test hls-brittany-plugin
