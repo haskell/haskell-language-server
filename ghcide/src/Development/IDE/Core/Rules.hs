@@ -697,22 +697,23 @@ loadGhcSession ghcSessionDepsConfig = do
                 Nothing -> LBS.toStrict $ B.encode (hash (snd val))
         return (Just cutoffHash, val)
 
-    defineNoDiagnostics $ \GhcSessionDeps file -> do
+    defineNoDiagnostics $ \(GhcSessionDeps_ fullModSummary) file -> do
         env <- use_ GhcSession file
-        ghcSessionDepsDefinition ghcSessionDepsConfig env file
+        ghcSessionDepsDefinition fullModSummary ghcSessionDepsConfig env file
 
-data GhcSessionDepsConfig = GhcSessionDepsConfig
+newtype GhcSessionDepsConfig = GhcSessionDepsConfig
     { checkForImportCycles :: Bool
-    , fullModSummary       :: Bool
     }
 instance Default GhcSessionDepsConfig where
   def = GhcSessionDepsConfig
     { checkForImportCycles = True
-    , fullModSummary = False
     }
 
-ghcSessionDepsDefinition :: GhcSessionDepsConfig -> HscEnvEq -> NormalizedFilePath -> Action (Maybe HscEnvEq)
-ghcSessionDepsDefinition GhcSessionDepsConfig{..} env file = do
+ghcSessionDepsDefinition
+    :: -- | full mod summary
+        Bool ->
+        GhcSessionDepsConfig -> HscEnvEq -> NormalizedFilePath -> Action (Maybe HscEnvEq)
+ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
     let hsc = hscEnv env
 
     mbdeps <- mapM(fmap artifactFilePath . snd) <$> use_ GetLocatedImports file
@@ -724,7 +725,7 @@ ghcSessionDepsDefinition GhcSessionDepsConfig{..} env file = do
                 then uses_ GetModSummary deps
                 else uses_ GetModSummaryWithoutTimestamps deps
 
-            depSessions <- map hscEnv <$> uses_ GhcSessionDeps deps
+            depSessions <- map hscEnv <$> uses_ (GhcSessionDeps_ fullModSummary) deps
             ifaces <- uses_ GetModIface deps
 
             let inLoadOrder = map hirHomeMod ifaces
