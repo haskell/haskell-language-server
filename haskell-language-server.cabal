@@ -40,8 +40,20 @@ common common-deps
     , filepath
     , text
 
+-- Default warnings in HLS
+common warnings
+  ghc-options: -Wall -Wredundant-constraints -Wno-name-shadowing -Wno-unticked-promoted-constructors
+
+-- Allow compiling in pedantic mode
+common pedantic
+  if flag(pedantic)
+    ghc-options: -Werror
+
 library
   import:           common-deps
+                    -- configuration
+                  , warnings
+                  , pedantic
   exposed-modules:
     Ide.Arguments
     Ide.Main
@@ -73,11 +85,6 @@ library
     , sqlite-simple
     , unordered-containers
     , aeson-pretty
-
-  ghc-options:      -Wall -Wredundant-constraints -Wno-name-shadowing -Wno-unticked-promoted-constructors
-
-  if flag(pedantic)
-    ghc-options: -Werror
 
   default-language: Haskell2010
   default-extensions: DataKinds, TypeOperators
@@ -302,6 +309,9 @@ common brittany
 
 executable haskell-language-server
   import:             common-deps
+                    -- configuration
+                    , warnings
+                    , pedantic
                     -- plugins
                     , example-plugins
                     , callHierarchy
@@ -330,15 +340,12 @@ executable haskell-language-server
   other-modules:    Plugins
 
   ghc-options:
-    -threaded -Wall -Wno-name-shadowing -Wredundant-constraints
+    -threaded
     -- allow user RTS overrides
     -rtsopts
     -- disable idle GC
     -- increase nursery size
     "-with-rtsopts=-I0 -A128M"
-    -Wno-unticked-promoted-constructors
-  if flag(pedantic)
-    ghc-options: -Werror
 
   build-depends:
     , aeson
@@ -378,19 +385,19 @@ executable haskell-language-server
 
 executable haskell-language-server-wrapper
   import:           common-deps
+                  , warnings
+                  , pedantic
   main-is:          Wrapper.hs
   hs-source-dirs:   exe
   other-modules:    Paths_haskell_language_server
   autogen-modules:  Paths_haskell_language_server
   ghc-options:
-    -threaded -Wall -Wno-name-shadowing -Wredundant-constraints
+    -threaded
     -- allow user RTS overrides
     -rtsopts
     -- disable idle GC
     -- increase nursery size
     "-with-rtsopts=-I0 -A128M"
-  if flag(pedantic)
-    ghc-options: -Werror
 
   build-depends:
     , data-default
@@ -409,6 +416,8 @@ executable haskell-language-server-wrapper
 
 test-suite func-test
   import:             common-deps
+                    , warnings
+                    , pedantic
   type:               exitcode-stdio-1.0
   default-language:   Haskell2010
   build-tool-depends:
@@ -454,10 +463,7 @@ test-suite func-test
 
   default-extensions: OverloadedStrings
   ghc-options:
-    -Wall -Wno-name-shadowing -threaded -rtsopts -with-rtsopts=-N -Wno-unticked-promoted-constructors
-
-  if flag(pedantic)
-    ghc-options: -Werror -Wredundant-constraints
+    -threaded -rtsopts -with-rtsopts=-N
 
 -- Duplicating inclusion plugin conditions until tests are moved to their own packages
   if flag(eval)
@@ -471,6 +477,9 @@ test-suite func-test
     cpp-options: -Dormolu
 
 test-suite wrapper-test
+  import:             common-deps
+                    , warnings
+                    , pedantic
   type:               exitcode-stdio-1.0
   build-tool-depends:
     haskell-language-server:haskell-language-server-wrapper -any,
@@ -478,12 +487,8 @@ test-suite wrapper-test
 
   default-language:   Haskell2010
   build-depends:
-    , base
-    , directory
-    , process
+      process
     , hls-test-utils
-    , extra
 
   hs-source-dirs:     test/wrapper
   main-is:            Main.hs
-  ghc-options:        -Wall
