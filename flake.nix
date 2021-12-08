@@ -68,17 +68,8 @@
           # Don't use `callHackage`, it requires us to override `all-cabal-hashes`
           tweaks = hself: hsuper:
             with haskell.lib; {
-              hiedb = hself.callCabal2nix "hiedb"
-                (builtins.fetchTarball {
-                  url = "https://hackage.haskell.org/package/hiedb-0.4.1.0/hiedb-0.4.1.0.tar.gz";
-                  sha256 = "11s7lfkd6fc3zf3kgyp3jhicbhxpn6jp0yjahl8d28hicwr2qdpi";
-                }) { };
-
-              lsp = hself.lsp_1_2_0_1;
-
-              lsp-types = hself.lsp-types_1_3_0_1;
-
-              lsp-test = hself.lsp-test_0_14_0_1;
+              # Patches don't apply
+              github = overrideCabal hsuper.github (drv: { patches = []; });
             };
 
           hlsSources =
