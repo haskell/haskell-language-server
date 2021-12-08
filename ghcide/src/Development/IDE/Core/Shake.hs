@@ -5,6 +5,7 @@
 {-# LANGUAGE DerivingStrategies        #-}
 {-# LANGUAGE DuplicateRecordFields     #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE PackageImports            #-}
 {-# LANGUAGE PolyKinds                 #-}
 {-# LANGUAGE RankNTypes                #-}
 {-# LANGUAGE RecursiveDo               #-}
@@ -155,16 +156,17 @@ import           Data.Default
 import           Data.Foldable                          (toList)
 import           Data.HashSet                           (HashSet)
 import qualified Data.HashSet                           as HSet
-import           Data.IORef.Extra                       (atomicModifyIORef'_,
-                                                         atomicModifyIORef_)
 import           Data.String                            (fromString)
 import           Data.Text                              (pack)
 import           Debug.Trace.Flags                      (userTracingEnabled)
 import qualified Development.IDE.Types.Exports          as ExportsMap
+import qualified Focus
 import           HieDb.Types
 import           Ide.Plugin.Config
 import qualified Ide.PluginUtils                        as HLS
 import           Ide.Types                              (PluginId)
+import qualified "list-t" ListT
+import qualified StmContainers.Map                      as STM
 
 -- | We need to serialize writes to the database, so we send any function that
 -- needs to write to the database over the channel, where it will be picked up by
@@ -188,13 +190,13 @@ data ShakeExtras = ShakeExtras
     ,debouncer :: Debouncer NormalizedUri
     ,logger :: Logger
     ,globals :: Var (HMap.HashMap TypeRep Dynamic)
-    ,state :: Var Values
-    ,diagnostics :: Var DiagnosticStore
-    ,hiddenDiagnostics :: Var DiagnosticStore
-    ,publishedDiagnostics :: Var (HMap.HashMap NormalizedUri [Diagnostic])
+    ,state :: Values
+    ,diagnostics :: STMDiagnosticStore
+    ,hiddenDiagnostics :: STMDiagnosticStore
+    ,publishedDiagnostics :: STM.Map NormalizedUri [Diagnostic]
     -- ^ This represents the set of diagnostics that we have published.
     -- Due to debouncing not every change might get published.
-    ,positionMapping :: Var (HMap.HashMap NormalizedUri (Map TextDocumentVersion (PositionDelta, PositionMapping)))
+    ,positionMapping :: STM.Map NormalizedUri (Map TextDocumentVersion (PositionDelta, PositionMapping))
     -- ^ Map from a text document version to a PositionMapping that describes how to map
     -- positions in a version of that document to positions in the latest version
     -- First mapping is delta from previous version and second one is an
@@ -222,7 +224,7 @@ data ShakeExtras = ShakeExtras
     , vfs :: VFSHandle
     , defaultConfig :: Config
       -- ^ Default HLS config, only relevant if the client does not provide any Config
-    , dirtyKeys :: IORef (HashSet Key)
+    , dirtyKeys :: TVar (HashSet Key)
       -- ^ Set of dirty rule keys since the last Shake run
     }
 
@@ -326,8 +328,6 @@ getIdeOptionsIO ide = do
 -- for the version of that value.
 lastValueIO :: IdeRule k v => ShakeExtras -> k -> NormalizedFilePath -> IO (Maybe (v, PositionMapping))
 lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
-    hm <- readVar state
-    allMappings <- readVar positionMapping
 
     let readPersistent
           | IdeTesting testing <- ideTesting s -- Don't read stale persistent values in tests
@@ -339,13 +339,13 @@ lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
             f <- MaybeT $ pure $ HMap.lookup (Key k) pmap
             (dv,del,ver) <- MaybeT $ runIdeAction "lastValueIO" s $ f file
             MaybeT $ pure $ (,del,ver) <$> fromDynamic dv
-          case mv of
+          atomically $ case mv of
             Nothing -> do
-                void $ modifyVar' state $ HMap.alter (alterValue $ Failed True) (toKey k file)
+                STM.focus (Focus.alter (alterValue $ Failed True)) (toKey k file) state
                 return Nothing
             Just (v,del,ver) -> do
-                void $ modifyVar' state $ HMap.alter (alterValue $ Stale (Just del) ver (toDyn v)) (toKey k file)
-                return $ Just (v,addDelta del $ mappingForVersion allMappings file ver)
+                STM.focus (Focus.alter (alterValue $ Stale (Just del) ver (toDyn v))) (toKey k file) state
+                Just . (v,) . addDelta del <$> mappingForVersion positionMapping file ver
 
         -- We got a new stale value from the persistent rule, insert it in the map without affecting diagnostics
         alterValue new Nothing = Just (ValueWithDiagnostics new mempty) -- If it wasn't in the map, give it empty diagnostics
@@ -355,11 +355,13 @@ lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
           -- Something already succeeded before, leave it alone
           _        -> old
 
-    case HMap.lookup (toKey k file) hm of
+    atomically (STM.lookup (toKey k file) state) >>= \case
       Nothing -> readPersistent
       Just (ValueWithDiagnostics v _) -> case v of
-        Succeeded ver (fromDynamic -> Just v) -> pure (Just (v, mappingForVersion allMappings file ver))
-        Stale del ver (fromDynamic -> Just v) -> pure (Just (v, maybe id addDelta del $ mappingForVersion allMappings file ver))
+        Succeeded ver (fromDynamic -> Just v) ->
+            atomically $ Just . (v,) <$> mappingForVersion positionMapping file ver
+        Stale del ver (fromDynamic -> Just v) ->
+            atomically $ Just . (v,) . maybe id addDelta del <$> mappingForVersion positionMapping file ver
         Failed p | not p -> readPersistent
         _ -> pure Nothing
 
@@ -371,14 +373,13 @@ lastValue key file = do
     liftIO $ lastValueIO s key file
 
 mappingForVersion
-    :: HMap.HashMap NormalizedUri (Map TextDocumentVersion (a, PositionMapping))
+    :: STM.Map NormalizedUri (Map TextDocumentVersion (a, PositionMapping))
     -> NormalizedFilePath
     -> TextDocumentVersion
-    -> PositionMapping
-mappingForVersion allMappings file ver =
-    maybe zeroMapping snd $
-    Map.lookup ver =<<
-    HMap.lookup (filePathToUri' file) allMappings
+    -> STM PositionMapping
+mappingForVersion allMappings file ver = do
+    mapping <- STM.lookup (filePathToUri' file) allMappings
+    return $ maybe zeroMapping snd $ Map.lookup ver =<< mapping
 
 type IdeRule k v =
   ( Shake.RuleResult k ~ v
@@ -420,14 +421,14 @@ shakeDatabaseProfileIO mbProfileDir = do
                 return (dir </> file)
 
 setValues :: IdeRule k v
-          => Var Values
+          => Values
           -> k
           -> NormalizedFilePath
           -> Value v
           -> Vector FileDiagnostic
-          -> IO ()
+          -> STM ()
 setValues state key file val diags =
-    void $ modifyVar' state $ HMap.insert (toKey key file) (ValueWithDiagnostics (fmap toDyn val) diags)
+    STM.insert (ValueWithDiagnostics (fmap toDyn val) diags) (toKey key file) state
 
 
 -- | Delete the value stored for a given ide build key
@@ -436,40 +437,41 @@ deleteValue
   => ShakeExtras
   -> k
   -> NormalizedFilePath
-  -> IO ()
+  -> STM ()
 deleteValue ShakeExtras{dirtyKeys, state} key file = do
-    void $ modifyVar' state $ HMap.delete (toKey key file)
-    atomicModifyIORef_ dirtyKeys $ HSet.insert (toKey key file)
+    STM.delete (toKey key file) state
+    modifyTVar' dirtyKeys $ HSet.insert (toKey key file)
 
 recordDirtyKeys
   :: Shake.ShakeValue k
   => ShakeExtras
   -> k
   -> [NormalizedFilePath]
-  -> IO ()
-recordDirtyKeys ShakeExtras{dirtyKeys} key file = withEventTrace "recordDirtyKeys" $ \addEvent -> do
-    atomicModifyIORef_ dirtyKeys $ \x -> foldl' (flip HSet.insert) x (toKey key <$> file)
-    addEvent (fromString $ "dirty " <> show key) (fromString $ unlines $ map fromNormalizedFilePath file)
+  -> STM (IO ())
+recordDirtyKeys ShakeExtras{dirtyKeys} key file = do
+    modifyTVar' dirtyKeys $ \x -> foldl' (flip HSet.insert) x (toKey key <$> file)
+    return $ withEventTrace "recordDirtyKeys" $ \addEvent -> do
+        addEvent (fromString $ "dirty " <> show key) (fromString $ unlines $ map fromNormalizedFilePath file)
 
 
 -- | We return Nothing if the rule has not run and Just Failed if it has failed to produce a value.
 getValues ::
   forall k v.
   IdeRule k v =>
-  Var Values ->
+  Values ->
   k ->
   NormalizedFilePath ->
-  IO (Maybe (Value v, Vector FileDiagnostic))
+  STM (Maybe (Value v, Vector FileDiagnostic))
 getValues state key file = do
-    vs <- readVar state
-    case HMap.lookup (toKey key file) vs of
+    STM.lookup (toKey key file) state >>= \case
         Nothing -> pure Nothing
         Just (ValueWithDiagnostics v diagsV) -> do
-            let r = fmap (fromJust . fromDynamic @v) v
+            let !r = seqValue $ fmap (fromJust . fromDynamic @v) v
+                !res = (r,diagsV)
             -- Force to make sure we do not retain a reference to the HashMap
             -- and we blow up immediately if the fromJust should fail
             -- (which would be an internal error).
-            evaluate (r `seqValue` Just (r, diagsV))
+            return $ Just res
 
 -- | Get all the files in the project
 knownTargets :: Action (Hashed KnownTargets)
@@ -480,11 +482,11 @@ knownTargets = do
 -- | Seq the result stored in the Shake value. This only
 -- evaluates the value to WHNF not NF. We take care of the latter
 -- elsewhere and doing it twice is expensive.
-seqValue :: Value v -> b -> b
-seqValue v b = case v of
-    Succeeded ver v -> rnf ver `seq` v `seq` b
-    Stale d ver v   -> rnf d `seq` rnf ver `seq` v `seq` b
-    Failed _        -> b
+seqValue :: Value v -> Value v
+seqValue val = case val of
+    Succeeded ver v -> rnf ver `seq` v `seq` val
+    Stale d ver v   -> rnf d `seq` rnf ver `seq` v `seq` val
+    Failed _        -> val
 
 -- | Open a 'IdeState', should be shut using 'shakeShut'.
 shakeOpen :: Maybe (LSP.LanguageContextEnv Config)
@@ -507,11 +509,11 @@ shakeOpen lspEnv defaultConfig logger debouncer
     ideNc <- newIORef (initNameCache us knownKeyNames)
     shakeExtras <- do
         globals <- newVar HMap.empty
-        state <- newVar HMap.empty
-        diagnostics <- newVar mempty
-        hiddenDiagnostics <- newVar mempty
-        publishedDiagnostics <- newVar mempty
-        positionMapping <- newVar HMap.empty
+        state <- STM.newIO
+        diagnostics <- STM.newIO
+        hiddenDiagnostics <- STM.newIO
+        publishedDiagnostics <- STM.newIO
+        positionMapping <- STM.newIO
         knownTargetsVar <- newVar $ hashed HMap.empty
         let restartShakeSession = shakeRestart ideState
         persistentKeys <- newVar HMap.empty
@@ -536,7 +538,7 @@ shakeOpen lspEnv defaultConfig logger debouncer
 
         let clientCapabilities = maybe def LSP.resClientCapabilities lspEnv
 
-        dirtyKeys <- newIORef mempty
+        dirtyKeys <- newTVarIO mempty
         pure ShakeExtras{..}
     (shakeDbM, shakeClose) <-
         shakeOpenDatabase
@@ -566,8 +568,8 @@ startTelemetry db extras@ShakeExtras{..}
     IdeOptions{optCheckParents} <- getIdeOptionsIO extras
     checkParents <- optCheckParents
     regularly 1 $ do
-        readVar state >>= observe countKeys . countRelevantKeys checkParents . HMap.keys
-        readIORef dirtyKeys >>= observe countDirty . countRelevantKeys checkParents . HSet.toList
+        observe countKeys . countRelevantKeys checkParents . map fst =<< (atomically . ListT.toList . STM.listT) state
+        readTVarIO dirtyKeys >>= observe countDirty . countRelevantKeys checkParents . HSet.toList
         shakeGetBuildStep db >>= observe countBuilds
 
   | otherwise = async (pure ())
@@ -624,7 +626,7 @@ shakeRestart IdeState{..} reason acts =
         (\runner -> do
               (stopTime,()) <- duration (cancelShakeSession runner)
               res <- shakeDatabaseProfile shakeDb
-              backlog <- readIORef $ dirtyKeys shakeExtras
+              backlog <- readTVarIO (dirtyKeys shakeExtras)
               queue <- atomically $ peekInProgress $ actionQueue shakeExtras
               let profile = case res of
                       Just fp -> ", profile saved at " <> fp
@@ -685,7 +687,7 @@ newSession extras@ShakeExtras{..} shakeDb acts reason = do
     reenqueued <- atomically $ peekInProgress actionQueue
     allPendingKeys <-
         if optRunSubset
-          then Just <$> readIORef dirtyKeys
+          then Just <$> readTVarIO dirtyKeys
           else return Nothing
     let
         -- A daemon-like action used to inject additional work
@@ -755,15 +757,13 @@ instantiateDelayedAction (DelayedAction _ s p a) = do
       d' = DelayedAction (Just u) s p a'
   return (b, d')
 
-getDiagnostics :: IdeState -> IO [FileDiagnostic]
+getDiagnostics :: IdeState -> STM [FileDiagnostic]
 getDiagnostics IdeState{shakeExtras = ShakeExtras{diagnostics}} = do
-    val <- readVar diagnostics
-    return $ getAllDiagnostics val
+    getAllDiagnostics diagnostics
 
-getHiddenDiagnostics :: IdeState -> IO [FileDiagnostic]
+getHiddenDiagnostics :: IdeState -> STM [FileDiagnostic]
 getHiddenDiagnostics IdeState{shakeExtras = ShakeExtras{hiddenDiagnostics}} = do
-    val <- readVar hiddenDiagnostics
-    return $ getAllDiagnostics val
+    getAllDiagnostics hiddenDiagnostics
 
 -- | Find and release old keys from the state Hashmap
 --   For the record, there are other state sources that this process does not release:
@@ -785,29 +785,30 @@ garbageCollectDirtyKeysOlderThan maxAge checkParents = otTracedGarbageCollection
 garbageCollectKeys :: String -> Int -> CheckParents -> [(Key, Int)] -> Action [Key]
 garbageCollectKeys label maxAge checkParents agedKeys = do
     start <- liftIO offsetTime
-    extras <- getShakeExtras
-    (n::Int, garbage) <- liftIO $ modifyVar (state extras) $ \vmap ->
-        evaluate $ foldl' removeDirtyKey (vmap, (0,[])) agedKeys
-    liftIO $ atomicModifyIORef_ (dirtyKeys extras) $ \x ->
-        foldl' (flip HSet.insert) x garbage
+    ShakeExtras{state, dirtyKeys, lspEnv, logger, ideTesting} <- getShakeExtras
+    (n::Int, garbage) <- liftIO $
+        foldM (removeDirtyKey dirtyKeys state) (0,[]) agedKeys
     t <- liftIO start
     when (n>0) $ liftIO $ do
-        logDebug (logger extras) $ T.pack $
+        logDebug logger $ T.pack $
             label <> " of " <> show n <> " keys (took " <> showDuration t <> ")"
-    when (coerce $ ideTesting extras) $ liftIO $ mRunLspT (lspEnv extras) $
+    when (coerce ideTesting) $ liftIO $ mRunLspT lspEnv $
         LSP.sendNotification (SCustomMethod "ghcide/GC")
                              (toJSON $ mapMaybe (fmap showKey . fromKeyType) garbage)
     return garbage
 
     where
         showKey = show . Q
-        removeDirtyKey st@(vmap,(!counter, keys)) (k, age)
+        removeDirtyKey dk values st@(!counter, keys) (k, age)
             | age > maxAge
             , Just (kt,_) <- fromKeyType k
             , not(kt `HSet.member` preservedKeys checkParents)
-            , (True, vmap') <- HMap.alterF (\prev -> (isJust prev, Nothing)) k vmap
-            = (vmap', (counter+1, k:keys))
-            | otherwise = st
+            = atomically $ do
+                gotIt <- STM.focus (Focus.member <* Focus.delete) k values
+                when gotIt $
+                   modifyTVar' dk (HSet.insert k)
+                return $ if gotIt then (counter+1, k:keys) else st
+            | otherwise = pure st
 
 countRelevantKeys :: CheckParents -> [Key] -> Int
 countRelevantKeys checkParents =
@@ -906,7 +907,7 @@ useWithStaleFast' key file = do
   wait <- delayedAction $ mkDelayedAction ("C:" ++ show key ++ ":" ++ fromNormalizedFilePath file) Debug $ use key file
 
   s@ShakeExtras{state} <- askShake
-  r <- liftIO $ getValues state key file
+  r <- liftIO $ atomically $ getValues state key file
   liftIO $ case r of
     -- block for the result if we haven't computed before
     Nothing -> do
@@ -1015,7 +1016,7 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
     (if optSkipProgress options key then id else inProgress progress file) $ do
         val <- case old of
             Just old | mode == RunDependenciesSame -> do
-                v <- liftIO $ getValues state key file
+                v <- liftIO $ atomically $ getValues state key file
                 case v of
                     -- No changes in the dependencies and we have
                     -- an existing successful result.
@@ -1034,10 +1035,10 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
                     (do v <- action; liftIO $ evaluate $ force v) $
                     \(e :: SomeException) -> do
                         pure (Nothing, ([ideErrorText file $ T.pack $ show e | not $ isBadDependency e],Nothing))
-                modTime <- liftIO $ (currentValue . fst =<<) <$> getValues state GetModificationTime file
+                modTime <- liftIO $ (currentValue . fst =<<) <$> atomically (getValues state GetModificationTime file)
                 (bs, res) <- case res of
                     Nothing -> do
-                        staleV <- liftIO $ getValues state key file
+                        staleV <- liftIO $ atomically $ getValues state key file
                         pure $ case staleV of
                             Nothing -> (toShakeValue ShakeResult bs, Failed False)
                             Just v -> case v of
@@ -1048,7 +1049,7 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
                                 (Failed b, _) ->
                                     (toShakeValue ShakeResult bs, Failed b)
                     Just v -> pure (maybe ShakeNoCutoff ShakeResult bs, Succeeded (vfsVersion =<< modTime) v)
-                liftIO $ setValues state key file res (Vector.fromList diags)
+                liftIO $ atomically $ setValues state key file res (Vector.fromList diags)
                 doDiagnostics diags
                 let eq = case (bs, fmap decodeShakeValue old) of
                         (ShakeResult a, Just (ShakeResult b)) -> cmp a b
@@ -1060,7 +1061,7 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
                     (if eq then ChangedRecomputeSame else ChangedRecomputeDiff)
                     (encodeShakeValue bs) $
                     A res
-        liftIO $ atomicModifyIORef'_ dirtyKeys (HSet.delete $ toKey key file)
+        liftIO $ atomically $ modifyTVar' dirtyKeys (HSet.delete $ toKey key file)
         return res
 
 traceA :: A v -> String
@@ -1148,34 +1149,30 @@ updateFileDiagnostics :: MonadIO m
   -> [(ShowDiagnostic,Diagnostic)] -- ^ current results
   -> m ()
 updateFileDiagnostics fp k ShakeExtras{logger, diagnostics, hiddenDiagnostics, publishedDiagnostics, state, debouncer, lspEnv} current = liftIO $ do
-    modTime <- (currentValue . fst =<<) <$> getValues state GetModificationTime fp
+    modTime <- (currentValue . fst =<<) <$> atomically (getValues state GetModificationTime fp)
     let (currentShown, currentHidden) = partition ((== ShowDiag) . fst) current
         uri = filePathToUri' fp
         ver = vfsVersion =<< modTime
-        update new store =
-            let store' = setStageDiagnostics uri ver (T.pack $ show k) new store
-                new' = getUriDiagnostics uri store'
-            in (store', new')
+        update new store = setStageDiagnostics uri ver (T.pack $ show k) new store
     mask_ $ do
         -- Mask async exceptions to ensure that updated diagnostics are always
         -- published. Otherwise, we might never publish certain diagnostics if
         -- an exception strikes between modifyVar but before
         -- publishDiagnosticsNotification.
-        newDiags <- modifyVar diagnostics $ pure . update (map snd currentShown)
-        _ <- modifyVar hiddenDiagnostics $  pure . update (map snd currentHidden)
+        newDiags <- liftIO $ atomically $ update (map snd currentShown) diagnostics
+        _ <- liftIO $ atomically $ update (map snd currentHidden) hiddenDiagnostics
         let uri = filePathToUri' fp
         let delay = if null newDiags then 0.1 else 0
         registerEvent debouncer delay uri $ do
-             join $ mask_ $ modifyVar publishedDiagnostics $ \published -> do
-                 let lastPublish = HMap.lookupDefault [] uri published
-                     !published' = HMap.insert uri newDiags published
-                     action = when (lastPublish /= newDiags) $ case lspEnv of
+             join $ mask_ $ do
+                 lastPublish <- atomically $ STM.focus (Focus.lookupWithDefault [] <* Focus.insert newDiags) uri publishedDiagnostics
+                 let action = when (lastPublish /= newDiags) $ case lspEnv of
                         Nothing -> -- Print an LSP event.
                             logInfo logger $ showDiagnosticsColored $ map (fp,ShowDiag,) newDiags
                         Just env -> LSP.runLspT env $
                             LSP.sendNotification LSP.STextDocumentPublishDiagnostics $
                             LSP.PublishDiagnosticsParams (fromNormalizedUri uri) ver (List newDiags)
-                 return (published', action)
+                 return action
 
 newtype Priority = Priority Double
 
@@ -1190,10 +1187,21 @@ actionLogger = do
     ShakeExtras{logger} <- getShakeExtras
     return logger
 
+--------------------------------------------------------------------------------
+type STMDiagnosticStore = STM.Map NormalizedUri StoreItem
 
 getDiagnosticsFromStore :: StoreItem -> [Diagnostic]
 getDiagnosticsFromStore (StoreItem _ diags) = concatMap SL.fromSortedList $ Map.elems diags
 
+updateSTMDiagnostics :: STMDiagnosticStore
+                  -> NormalizedUri -> TextDocumentVersion -> DiagnosticsBySource
+                  -> STM [LSP.Diagnostic]
+updateSTMDiagnostics store uri mv newDiagsBySource =
+    getDiagnosticsFromStore . fromJust <$> STM.focus (Focus.alter update *> Focus.lookup) uri store
+  where
+    update (Just(StoreItem mvs dbs))
+      | mvs == mv = Just (StoreItem mv (newDiagsBySource <> dbs))
+    update _ = Just (StoreItem mv newDiagsBySource)
 
 -- | Sets the diagnostics for a file and compilation step
 --   if you want to clear the diagnostics call this with an empty list
@@ -1202,38 +1210,29 @@ setStageDiagnostics
     -> TextDocumentVersion -- ^ the time that the file these diagnostics originate from was last edited
     -> T.Text
     -> [LSP.Diagnostic]
-    -> DiagnosticStore
-    -> DiagnosticStore
-setStageDiagnostics uri ver stage diags ds = updateDiagnostics ds uri ver updatedDiags
+    -> STMDiagnosticStore
+    -> STM [LSP.Diagnostic]
+setStageDiagnostics uri ver stage diags ds = updateSTMDiagnostics ds uri ver updatedDiags
   where
     updatedDiags = Map.singleton (Just stage) (SL.toSortedList diags)
 
 getAllDiagnostics ::
-    DiagnosticStore ->
-    [FileDiagnostic]
+    STMDiagnosticStore ->
+    STM [FileDiagnostic]
 getAllDiagnostics =
-    concatMap (\(k,v) -> map (fromUri k,ShowDiag,) $ getDiagnosticsFromStore v) . HMap.toList
+    fmap (concatMap (\(k,v) -> map (fromUri k,ShowDiag,) $ getDiagnosticsFromStore v)) . ListT.toList . STM.listT
 
-getUriDiagnostics ::
-    NormalizedUri ->
-    DiagnosticStore ->
-    [LSP.Diagnostic]
-getUriDiagnostics uri ds =
-    maybe [] getDiagnosticsFromStore $
-    HMap.lookup uri ds
-
-updatePositionMapping :: IdeState -> VersionedTextDocumentIdentifier -> List TextDocumentContentChangeEvent -> IO ()
-updatePositionMapping IdeState{shakeExtras = ShakeExtras{positionMapping}} VersionedTextDocumentIdentifier{..} (List changes) = do
-    modifyVar_ positionMapping $ \allMappings -> do
-        let uri = toNormalizedUri _uri
-        let mappingForUri = HMap.lookupDefault Map.empty uri allMappings
-        let (_, updatedMapping) =
+updatePositionMapping :: IdeState -> VersionedTextDocumentIdentifier -> List TextDocumentContentChangeEvent -> STM ()
+updatePositionMapping IdeState{shakeExtras = ShakeExtras{positionMapping}} VersionedTextDocumentIdentifier{..} (List changes) =
+    STM.focus (Focus.alter f) uri positionMapping
+      where
+        uri = toNormalizedUri _uri
+        f = Just . f' . fromMaybe mempty
+        f' mappingForUri = snd $
                 -- Very important to use mapAccum here so that the tails of
                 -- each mapping can be shared, otherwise quadratic space is
                 -- used which is evident in long running sessions.
                 Map.mapAccumRWithKey (\acc _k (delta, _) -> let new = addDelta delta acc in (new, (delta, acc)))
                   zeroMapping
                   (Map.insert _version (shared_change, zeroMapping) mappingForUri)
-        pure $ HMap.insert uri updatedMapping allMappings
-  where
-    shared_change = mkDelta changes
+        shared_change = mkDelta changes

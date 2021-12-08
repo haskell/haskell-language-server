@@ -148,6 +148,7 @@ import           Ide.Plugin.Properties                        (HasProperty,
 import           Ide.PluginUtils                              (configForPlugin)
 import           Ide.Types                                    (DynFlagsModifications (dynFlagsModifyGlobal, dynFlagsModifyParser),
                                                                PluginId)
+import Control.Concurrent.STM.Stats (atomically)
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
@@ -696,22 +697,23 @@ loadGhcSession ghcSessionDepsConfig = do
                 Nothing -> LBS.toStrict $ B.encode (hash (snd val))
         return (Just cutoffHash, val)
 
-    defineNoDiagnostics $ \GhcSessionDeps file -> do
+    defineNoDiagnostics $ \(GhcSessionDeps_ fullModSummary) file -> do
         env <- use_ GhcSession file
-        ghcSessionDepsDefinition ghcSessionDepsConfig env file
+        ghcSessionDepsDefinition fullModSummary ghcSessionDepsConfig env file
 
-data GhcSessionDepsConfig = GhcSessionDepsConfig
+newtype GhcSessionDepsConfig = GhcSessionDepsConfig
     { checkForImportCycles :: Bool
-    , fullModSummary       :: Bool
     }
 instance Default GhcSessionDepsConfig where
   def = GhcSessionDepsConfig
     { checkForImportCycles = True
-    , fullModSummary = False
     }
 
-ghcSessionDepsDefinition :: GhcSessionDepsConfig -> HscEnvEq -> NormalizedFilePath -> Action (Maybe HscEnvEq)
-ghcSessionDepsDefinition GhcSessionDepsConfig{..} env file = do
+ghcSessionDepsDefinition
+    :: -- | full mod summary
+        Bool ->
+        GhcSessionDepsConfig -> HscEnvEq -> NormalizedFilePath -> Action (Maybe HscEnvEq)
+ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
     let hsc = hscEnv env
 
     mbdeps <- mapM(fmap artifactFilePath . snd) <$> use_ GetLocatedImports file
@@ -723,7 +725,7 @@ ghcSessionDepsDefinition GhcSessionDepsConfig{..} env file = do
                 then uses_ GetModSummary deps
                 else uses_ GetModSummaryWithoutTimestamps deps
 
-            depSessions <- map hscEnv <$> uses_ GhcSessionDeps deps
+            depSessions <- map hscEnv <$> uses_ (GhcSessionDeps_ fullModSummary) deps
             ifaces <- uses_ GetModIface deps
 
             let inLoadOrder = map hirHomeMod ifaces
@@ -1061,7 +1063,7 @@ writeHiFileAction hsc hiFile = do
     extras <- getShakeExtras
     let targetPath = Compat.ml_hi_file $ ms_location $ hirModSummary hiFile
     liftIO $ do
-        resetInterfaceStore extras $ toNormalizedFilePath' targetPath
+        atomically $ resetInterfaceStore extras $ toNormalizedFilePath' targetPath
         writeHiFile hsc hiFile
 
 data RulesConfig = RulesConfig

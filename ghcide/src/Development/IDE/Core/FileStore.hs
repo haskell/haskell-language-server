@@ -24,7 +24,8 @@ module Development.IDE.Core.FileStore(
     registerFileWatches
     ) where
 
-import           Control.Concurrent.STM                       (atomically)
+import           Control.Concurrent.STM.Stats                 (STM, atomically,
+                                                               modifyTVar')
 import           Control.Concurrent.STM.TQueue                (writeTQueue)
 import           Control.Concurrent.Strict
 import           Control.Exception
@@ -63,7 +64,6 @@ import qualified Development.IDE.Types.Logger                 as L
 import qualified Data.Binary                                  as B
 import qualified Data.ByteString.Lazy                         as LBS
 import qualified Data.HashSet                                 as HSet
-import           Data.IORef.Extra                             (atomicModifyIORef_)
 import           Data.List                                    (foldl')
 import qualified Data.Text                                    as Text
 import           Development.IDE.Core.IdeConfiguration        (isWorkspaceFile)
@@ -160,7 +160,7 @@ isInterface :: NormalizedFilePath -> Bool
 isInterface f = takeExtension (fromNormalizedFilePath f) `elem` [".hi", ".hi-boot"]
 
 -- | Reset the GetModificationTime state of interface files
-resetInterfaceStore :: ShakeExtras -> NormalizedFilePath -> IO ()
+resetInterfaceStore :: ShakeExtras -> NormalizedFilePath -> STM ()
 resetInterfaceStore state f = do
     deleteValue state GetModificationTime f
 
@@ -175,7 +175,8 @@ resetFileStore ideState changes = mask $ \_ -> do
         case c of
             FcChanged
             --  already checked elsewhere |  not $ HM.member nfp fois
-              -> deleteValue (shakeExtras ideState) GetModificationTime nfp
+              -> atomically $
+               deleteValue (shakeExtras ideState) GetModificationTime nfp
             _ -> pure ()
 
 
@@ -262,7 +263,7 @@ setFileModified state saved nfp = do
     VFSHandle{..} <- getIdeGlobalState state
     when (isJust setVirtualFileContents) $
         fail "setFileModified can't be called on this type of VFSHandle"
-    recordDirtyKeys (shakeExtras state) GetModificationTime [nfp]
+    atomically $ recordDirtyKeys (shakeExtras state) GetModificationTime [nfp]
     restartShakeSession (shakeExtras state) (fromNormalizedFilePath nfp ++ " (modified)") []
     when checkParents $
       typecheckParents state nfp
@@ -292,9 +293,10 @@ setSomethingModified state keys reason = do
     when (isJust setVirtualFileContents) $
         fail "setSomethingModified can't be called on this type of VFSHandle"
     -- Update database to remove any files that might have been renamed/deleted
-    atomically $ writeTQueue (indexQueue $ hiedbWriter $ shakeExtras state) deleteMissingRealFiles
-    atomicModifyIORef_ (dirtyKeys $ shakeExtras state) $ \x ->
-        foldl' (flip HSet.insert) x keys
+    atomically $ do
+        writeTQueue (indexQueue $ hiedbWriter $ shakeExtras state) deleteMissingRealFiles
+        modifyTVar' (dirtyKeys $ shakeExtras state) $ \x ->
+            foldl' (flip HSet.insert) x keys
     void $ restartShakeSession (shakeExtras state) reason []
 
 registerFileWatches :: [String] -> LSP.LspT Config IO Bool

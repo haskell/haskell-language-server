@@ -26,6 +26,7 @@ module Ide.Plugin.Hlint
   --, provider
   ) where
 import           Control.Arrow                                      ((&&&))
+import           Control.Concurrent.STM
 import           Control.DeepSeq
 import           Control.Exception
 import           Control.Lens                                       ((^.))
@@ -308,7 +309,7 @@ codeActionProvider ideState plId (CodeActionParams _ _ docId _ context) = Right 
   where
 
     getCodeActions = do
-        allDiags <- getDiagnostics ideState
+        allDiags <- atomically $ getDiagnostics ideState
         let docNfp = toNormalizedFilePath' <$> uriToFilePath' (docId ^. LSP.uri)
             numHintsInDoc = length
               [d | (nfp, _, d) <- allDiags

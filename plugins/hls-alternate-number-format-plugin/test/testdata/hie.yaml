@@ -1,0 +1,24 @@
+cradle:
+  direct:
+    arguments:
+      - -i
+      - -i.
+      - TIntDtoH
+      - TIntDtoB
+      - TIntDtoO
+      - TIntDtoND
+      - TFracDtoE
+      - TFracDtoHF
+      - TIntHtoD
+      - TFracHFtoD
+      - TFindLiteralIntPattern
+      - TFindLiteralIntCase
+      - TFindLiteralIntCase2
+      - TFindLiteralDoReturn
+      - TFindLiteralDoLet
+      - TFindLiteralList
+      - TExpectNoBinaryFormat
+      - TExpectBinaryFormat
+      - TExpectNoHexFloatFormat
+      - TExpectHexFloatFormat
+      - -Wall

@@ -12,8 +12,7 @@ module Development.IDE.Graph.Database(
     shakeGetDirtySet,
     shakeGetCleanKeys
     ,shakeGetBuildEdges) where
-import           Control.Concurrent.STM                  (atomically,
-                                                          readTVarIO)
+import           Control.Concurrent.STM.Stats            (readTVarIO)
 import           Data.Dynamic
 import           Data.Maybe
 import           Development.IDE.Graph.Classes           ()
@@ -57,6 +56,7 @@ shakeGetBuildStep (ShakeDatabase _ _ db) = do
 unvoid :: Functor m => m () -> m a
 unvoid = fmap undefined
 
+-- | Assumes that the database is not running a build
 shakeRunDatabaseForKeys
     :: Maybe [Key]
       -- ^ Set of keys changed since last run. 'Nothing' means everything has changed
@@ -64,7 +64,7 @@ shakeRunDatabaseForKeys
     -> [Action a]
     -> IO ([a], [IO ()])
 shakeRunDatabaseForKeys keysChanged (ShakeDatabase lenAs1 as1 db) as2 = do
-    atomically $ incDatabase db keysChanged
+    incDatabase db keysChanged
     as <- fmap (drop lenAs1) $ runActions db $ map unvoid as1 ++ as2
     return (as, [])
 

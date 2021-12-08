@@ -18,8 +18,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ['9.0.1', '8.10.7', '8.10.6', '8.10.5', '8.8.4', '8.8.3', '8.6.5']
+        ghc: ['9.0.1', '8.10.7', '8.10.6', '8.8.4', '8.8.3', '8.6.5']
         os: [ubuntu-18.04, macOS-latest, windows-latest]
+        cabal: ['3.6']
         exclude:
           - os: windows-latest
             ghc: '8.8.3' # fails due to segfault
@@ -30,8 +31,8 @@ jobs:
         submodules: true
     - uses: haskell/actions/setup@v1
       with:
-        ghc-version: ${{ matrix.ghc }}
-        cabal-version: '3.4'
+        ghc-version  : ${{ matrix.ghc   }}
+        cabal-version: ${{ matrix.cabal }}
 
     - name: Use modified cabal.project for ghc9
       if: ${{ matrix.ghc == '9.0.1' }}
@@ -67,12 +68,6 @@ jobs:
         GHC_VER: ${{ matrix.ghc }}
       run: |
         echo "GHC_VERSION=$GHC_VER" >> $GITHUB_ENV
-
-    - name: Workaround for GHC 8.10.5 on macOS
-      if: matrix.os == 'macOS-latest' && matrix.ghc == '8.10.5'
-      run: |
-        echo "# uninstalling CommandLineTools (see https://github.com/haskell/haskell-language-server/issues/1913#issuecomment-861667786)"
-        sudo rm -rf /Library/Developer/CommandLineTools
 
     - name: Modify cabal.project to workaround segfaults for ghc-8.8.4 and windows
       if: matrix.ghc == '8.8.4' && matrix.os == 'windows-latest'
