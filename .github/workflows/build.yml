@@ -19,6 +19,7 @@ jobs:
       fail-fast: false
       matrix:
         ghc: ['9.0.1', '8.10.7', '8.10.6', '8.8.4', '8.8.3', '8.6.5']
+        # stay on the oldest Linux os image available for glibc compatibility
         os: [ubuntu-18.04, macOS-latest, windows-latest]
         cabal: ['3.6']
         exclude:
@@ -59,7 +60,6 @@ jobs:
       env:
         GHC_VER: ${{ matrix.ghc }}
       run: |
-        echo "LINUX_CABAL_ARGS=--enable-executable-static --ghc-options=-split-sections" >> $GITHUB_ENV
         echo "GHC_VERSION=$GHC_VER" >> $GITHUB_ENV
 
     - name: Set some macOs specific things
