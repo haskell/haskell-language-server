@@ -52,11 +52,6 @@ jobs:
         cabal-version: ${{ matrix.cabal }}
         enable-stack: false
 
-    - name: Platform config
-      run: |
-        echo "CABAL_STORE_DIR=~/.cabal/store" >> $GITHUB_ENV
-        echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
-
     - name: Cache Cabal
       uses: actions/cache@v2
       with:
