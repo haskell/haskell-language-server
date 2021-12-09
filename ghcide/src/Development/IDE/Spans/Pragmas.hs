@@ -388,7 +388,7 @@ mkLexerPState dynFlags stringBuffer =
       <*> gopt Opt_Haddock
       <*> gopt Opt_KeepRawTokenStream
       <*> const False
-    finalPState = mkPStatePure (mkLexerParserFlags dynFlags) stringBuffer startRealSrcLoc
+    finalPState = mkPStatePure (mkLexerParserFlags finalDynFlags) stringBuffer startRealSrcLoc
 #else
     pState = mkPState finalDynFlags stringBuffer startRealSrcLoc
     PState{ options = pStateOptions } = pState
