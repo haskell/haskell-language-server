@@ -6,13 +6,13 @@
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE OverloadedLabels      #-}
 {-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE PackageImports        #-}
 {-# LANGUAGE PatternSynonyms       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE ViewPatterns          #-}
 {-# OPTIONS_GHC -Wno-orphans   #-}
+{-# LANGUAGE MultiWayIf            #-}
+{-# LANGUAGE NamedFieldPuns        #-}
+{-# LANGUAGE RecordWildCards       #-}
 
 #ifdef HLINT_ON_GHC_LIB
 #define MIN_GHC_API_VERSION(x,y,z) MIN_VERSION_ghc_lib(x,y,z)
@@ -23,7 +23,6 @@
 module Ide.Plugin.Hlint
   (
     descriptor
-  --, provider
   ) where
 import           Control.Arrow                                      ((&&&))
 import           Control.Concurrent.STM
@@ -105,6 +104,13 @@ import qualified Language.LSP.Types.Lens                            as LSP
 import           GHC.Generics                                       (Generic)
 import           Text.Regex.TDFA.Text                               ()
 
+import           Development.IDE.Spans.Pragmas                      (LineSplitTextEdits (LineSplitTextEdits),
+                                                                     NextPragmaInfo (NextPragmaInfo),
+                                                                     getNextPragmaInfo,
+                                                                     lineSplitDeleteTextEdit,
+                                                                     lineSplitInsertTextEdit,
+                                                                     lineSplitTextEdits,
+                                                                     nextPragmaLine)
 import           System.Environment                                 (setEnv,
                                                                      unsetEnv)
 -- ---------------------------------------------------------------------
@@ -303,38 +309,56 @@ getHlintConfig pId =
   Config
     <$> usePropertyAction #flags pId properties
 
+runHlintAction
+ :: (Eq k, Hashable k, Show k, Show (RuleResult k), Typeable k, Typeable (RuleResult k), NFData k, NFData (RuleResult k))
+ => IdeState
+ -> NormalizedFilePath -> String -> k -> IO (Maybe (RuleResult k))
+runHlintAction ideState normalizedFilePath desc rule = runAction desc ideState $ use rule normalizedFilePath
+
+runGetFileContentsAction :: IdeState -> NormalizedFilePath -> IO (Maybe (FileVersion, Maybe T.Text))
+runGetFileContentsAction ideState normalizedFilePath = runHlintAction ideState normalizedFilePath "Hlint.GetFileContents" GetFileContents
+
+runGetModSummaryAction :: IdeState -> NormalizedFilePath -> IO (Maybe ModSummaryResult)
+runGetModSummaryAction ideState normalizedFilePath = runHlintAction ideState normalizedFilePath "Hlint.GetModSummary" GetModSummary
+
 -- ---------------------------------------------------------------------
 codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
-codeActionProvider ideState plId (CodeActionParams _ _ docId _ context) = Right . LSP.List . map InR <$> liftIO getCodeActions
+codeActionProvider ideState pluginId (CodeActionParams _ _ documentId _ context)
+  | let TextDocumentIdentifier uri = documentId
+  , Just docNormalizedFilePath <- uriToNormalizedFilePath (toNormalizedUri uri)
+  = liftIO $ fmap (Right . LSP.List . map LSP.InR) $ do
+      allDiagnostics <- atomically $ getDiagnostics ideState
+      let numHintsInDoc = length
+            [diagnostic | (diagnosticNormalizedFilePath, _, diagnostic) <- allDiagnostics
+                        , validCommand diagnostic
+                        , diagnosticNormalizedFilePath == docNormalizedFilePath
+            ]
+      let numHintsInContext = length
+            [diagnostic | diagnostic <- diags
+                        , validCommand diagnostic
+            ]
+      file <- runGetFileContentsAction ideState docNormalizedFilePath
+      singleHintCodeActions <-
+        if | Just (_, source) <- file -> do
+               modSummaryResult <- runGetModSummaryAction ideState docNormalizedFilePath
+               pure if | Just modSummaryResult <- modSummaryResult
+                       , Just source <- source
+                       , let dynFlags = ms_hspp_opts $ msrModSummary modSummaryResult ->
+                           diags >>= diagnosticToCodeActions dynFlags source pluginId documentId
+                       | otherwise -> []
+           | otherwise -> pure []
+      if numHintsInDoc > 1 && numHintsInContext > 0 then do
+        pure $ singleHintCodeActions ++ [applyAllAction]
+      else
+        pure singleHintCodeActions
+  | otherwise
+  = pure $ Right $ LSP.List []
+
   where
-
-    getCodeActions = do
-        allDiags <- atomically $ getDiagnostics ideState
-        let docNfp = toNormalizedFilePath' <$> uriToFilePath' (docId ^. LSP.uri)
-            numHintsInDoc = length
-              [d | (nfp, _, d) <- allDiags
-                 , validCommand d
-                 , Just nfp == docNfp
-              ]
-            numHintsInContext = length
-              [d | d <- diags
-                 , validCommand d
-              ]
-        -- We only want to show the applyAll code action if there is more than 1
-        -- hint in the current document and if code action range contains at
-        -- least one hint
-        if numHintsInDoc > 1 && numHintsInContext > 0 then do
-          pure $ applyAllAction:applyOneActions
-        else
-          pure applyOneActions
-
     applyAllAction =
-      let args = Just [toJSON (docId ^. LSP.uri)]
-          cmd = mkLspCommand plId "applyAll" "Apply all hints" args
+      let args = Just [toJSON (documentId ^. LSP.uri)]
+          cmd = mkLspCommand pluginId "applyAll" "Apply all hints" args
         in LSP.CodeAction "Apply all hints" (Just LSP.CodeActionQuickFix) Nothing Nothing Nothing Nothing (Just cmd) Nothing
-
-    applyOneActions :: [LSP.CodeAction]
-    applyOneActions = mapMaybe mkHlintAction (filter validCommand diags)
 
     -- |Some hints do not have an associated refactoring
     validCommand (LSP.Diagnostic _ _ (Just (InR code)) (Just "hlint") _ _ _) =
@@ -344,18 +368,64 @@ codeActionProvider ideState plId (CodeActionParams _ _ docId _ context) = Right 
 
     LSP.List diags = context ^. LSP.diagnostics
 
-    mkHlintAction :: LSP.Diagnostic -> Maybe LSP.CodeAction
-    mkHlintAction diag@(LSP.Diagnostic (LSP.Range start _) _s (Just (InR code)) (Just "hlint") _ _ _) =
-      Just . codeAction $ mkLspCommand plId "applyOne" title (Just args)
-     where
-       codeAction cmd = LSP.CodeAction title (Just LSP.CodeActionQuickFix) (Just (LSP.List [diag])) Nothing Nothing Nothing (Just cmd) Nothing
-       -- we have to recover the original ideaHint removing the prefix
-       ideaHint = T.replace "refact:" "" code
-       title = "Apply hint: " <> ideaHint
-       -- need 'file', 'start_pos' and hint title (to distinguish between alternative suggestions at the same location)
-       args = [toJSON (AOP (docId ^. LSP.uri) start ideaHint)]
-    mkHlintAction (LSP.Diagnostic _r _s _c _source _m _ _) = Nothing
+-- | Convert a hlint diagonistic into an apply and an ignore code action
+-- if applicable
+diagnosticToCodeActions :: DynFlags -> T.Text -> PluginId -> TextDocumentIdentifier -> LSP.Diagnostic -> [LSP.CodeAction]
+diagnosticToCodeActions dynFlags fileContents pluginId documentId diagnostic
+  | LSP.Diagnostic{ _source = Just "hlint", _code = Just (InR code), _range = LSP.Range start _ } <- diagnostic
+  , let TextDocumentIdentifier uri = documentId
+  , let isHintApplicable = "refact:" `T.isPrefixOf` code
+  , let hint = T.replace "refact:" "" code
+  , let suppressHintTitle = "Ignore hint \"" <> hint <> "\" in this module"
+  , let suppressHintTextEdits = mkSuppressHintTextEdits dynFlags fileContents hint
+  , let suppressHintWorkspaceEdit =
+          LSP.WorkspaceEdit
+            (Just (Map.singleton uri (List suppressHintTextEdits)))
+            Nothing
+            Nothing
+  = catMaybes
+      [ if | isHintApplicable
+           , let applyHintTitle = "Apply hint \"" <> hint <> "\""
+                 applyHintArguments = [toJSON (AOP (documentId ^. LSP.uri) start hint)]
+                 applyHintCommand = mkLspCommand pluginId "applyOne" applyHintTitle (Just applyHintArguments) ->
+               Just (mkCodeAction applyHintTitle diagnostic Nothing (Just applyHintCommand))
+           | otherwise -> Nothing
+      , Just (mkCodeAction suppressHintTitle diagnostic (Just suppressHintWorkspaceEdit) Nothing)
+      ]
+  | otherwise = []
 
+mkCodeAction :: T.Text -> LSP.Diagnostic -> Maybe LSP.WorkspaceEdit -> Maybe LSP.Command -> LSP.CodeAction
+mkCodeAction title diagnostic workspaceEdit command =
+  LSP.CodeAction
+    { _title = title
+    , _kind = Just LSP.CodeActionQuickFix
+    , _diagnostics = Just (LSP.List [diagnostic])
+    , _isPreferred = Nothing
+    , _disabled = Nothing
+    , _edit = workspaceEdit
+    , _command = command
+    , _xdata = Nothing
+    }
+
+mkSuppressHintTextEdits :: DynFlags -> T.Text -> T.Text -> [LSP.TextEdit]
+mkSuppressHintTextEdits dynFlags fileContents hint =
+  let
+    NextPragmaInfo{ nextPragmaLine, lineSplitTextEdits } = getNextPragmaInfo dynFlags (Just fileContents)
+    nextPragmaLinePosition = Position nextPragmaLine 0
+    nextPragmaRange = Range nextPragmaLinePosition nextPragmaLinePosition
+    wnoUnrecognisedPragmasText =
+      if wopt Opt_WarnUnrecognisedPragmas dynFlags
+      then Just "{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}\n"
+      else Nothing
+    hlintIgnoreText = Just ("{-# HLINT ignore \"" <> hint <> "\" #-}\n")
+    -- we combine the texts into a single text because lsp-test currently
+    -- applies text edits backwards and I want the options pragma to
+    -- appear above the hlint pragma in the tests
+    combinedText = mconcat $ catMaybes [wnoUnrecognisedPragmasText, hlintIgnoreText]
+    combinedTextEdit = LSP.TextEdit nextPragmaRange combinedText
+    lineSplitTextEditList = maybe [] (\LineSplitTextEdits{..} -> [lineSplitInsertTextEdit, lineSplitDeleteTextEdit]) lineSplitTextEdits
+  in
+    combinedTextEdit : lineSplitTextEditList
 -- ---------------------------------------------------------------------
 
 applyAllCmd :: CommandFunction IdeState Uri

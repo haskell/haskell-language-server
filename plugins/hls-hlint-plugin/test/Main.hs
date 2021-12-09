@@ -1,4 +1,7 @@
+{-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE TypeOperators     #-}
 module Main
   ( main
   ) where
@@ -9,6 +12,7 @@ import           Data.List               (find)
 import qualified Data.Map                as Map
 import           Data.Maybe              (fromJust, isJust)
 import qualified Data.Text               as T
+import qualified Debug.Trace             as Debug
 import           Ide.Plugin.Config       (Config (..), PluginConfig (..),
                                           hlintOn)
 import qualified Ide.Plugin.Config       as Plugin
@@ -27,7 +31,29 @@ tests :: TestTree
 tests = testGroup "hlint" [
       suggestionsTests
     , configTests
+    , ignoreHintTests
     ]
+
+getIgnoreHintText :: T.Text -> T.Text
+getIgnoreHintText name = "Ignore hint \"" <> name <> "\" in this module"
+
+ignoreHintTests :: TestTree
+ignoreHintTests = testGroup "hlint ignore hint tests"
+  [
+    ignoreGoldenTest
+      "Ignore hint in this module inserts -Wno-unrecognised-pragmas and hlint ignore pragma if warn unrecognized pragmas is off"
+      "UnrecognizedPragmasOff"
+      (Point 3 8)
+      "Eta reduce"
+  -- in this test the options and hlint pragmas are inserted in opposite order
+  -- in the golden test but in correct order in vscode and coc.nvim so lsp-test
+  -- applies text edits backwards.
+  , ignoreGoldenTest
+      "Ignore hint in this module inserts only hlint ignore pragma if warn unrecognized pragmas is on"
+      "UnrecognizedPragmasOn"
+      (Point 3 9)
+      "Eta reduce"
+  ]
 
 suggestionsTests :: TestTree
 suggestionsTests =
@@ -45,13 +71,19 @@ suggestionsTests =
 
         cas <- map fromAction <$> getAllCodeActions doc
 
+        let redundantIdHintName = "Redundant id"
+        let etaReduceHintName = "Eta reduce"
         let applyAll = find (\ca -> "Apply all hints" `T.isSuffixOf` (ca ^. L.title)) cas
-        let redId = find (\ca -> "Redundant id" `T.isSuffixOf` (ca ^. L.title)) cas
-        let redEta = find (\ca -> "Eta reduce" `T.isSuffixOf` (ca ^. L.title)) cas
+        let redId = find (\ca -> redundantIdHintName `T.isInfixOf` (ca ^. L.title)) cas
+        let redEta = find (\ca -> etaReduceHintName `T.isInfixOf` (ca ^. L.title)) cas
+        let ignoreRedundantIdInThisModule = find (\ca -> getIgnoreHintText redundantIdHintName == (ca ^.L.title)) cas
+        let ignoreEtaReduceThisModule = find (\ca -> getIgnoreHintText etaReduceHintName == (ca ^.L.title)) cas
 
-        liftIO $ isJust applyAll @? "There is 'Apply all hints' code action"
-        liftIO $ isJust redId @? "There is 'Redundant id' code action"
-        liftIO $ isJust redEta @? "There is 'Eta reduce' code action"
+        liftIO $ isJust applyAll @? "There is Apply all hints code action"
+        liftIO $ isJust redId @? "There is Redundant id code action"
+        liftIO $ isJust redEta @? "There is Eta reduce code action"
+        liftIO $ isJust ignoreRedundantIdInThisModule @? "There is ignore Redundant id code action"
+        liftIO $ isJust ignoreEtaReduceThisModule @? "There is ignore Eta reduce code action"
 
         executeCodeAction (fromJust redId)
 
@@ -185,7 +217,7 @@ suggestionsTests =
             testHlintDiagnostics doc
 
             cas <- map fromAction <$> getAllCodeActions doc
-            let ca = find (\ca -> caTitle `T.isSuffixOf` (ca ^. L.title)) cas
+            let ca = find (\ca -> caTitle `T.isInfixOf` (ca ^. L.title)) cas
             liftIO $ isJust ca @? ("There is '" ++ T.unpack caTitle ++"' code action")
 
             executeCodeAction (fromJust ca)
@@ -284,9 +316,12 @@ configTests = testGroup "hlint plugin config" [
             d ^. L.severity @?= Just DsInfo
     ]
 
+testDir :: FilePath
+testDir = "test/testdata"
+
 runHlintSession :: FilePath -> Session a -> IO a
 runHlintSession subdir  =
-    failIfSessionTimeout . runSessionWithServer hlintPlugin ("test/testdata" </> subdir)
+    failIfSessionTimeout . runSessionWithServer hlintPlugin (testDir </> subdir)
 
 noHlintDiagnostics :: [Diagnostic] -> Assertion
 noHlintDiagnostics diags =
@@ -326,3 +361,46 @@ knownBrokenForHlintOnGhcLib = knownBrokenForGhcVersions [GHC88, GHC86]
 
 knownBrokenForHlintOnRawGhc :: String -> TestTree -> TestTree
 knownBrokenForHlintOnRawGhc = knownBrokenForGhcVersions [GHC810, GHC90]
+
+-- 1's based
+data Point = Point {
+  line   :: !Int,
+  column :: !Int
+}
+
+makePoint line column
+  | line >= 1 && column >= 1 = Point line column
+  | otherwise = error "Line or column is less than 1."
+
+pointToRange :: Point -> Range
+pointToRange Point {..}
+  | line <- subtract 1 line
+  , column <- subtract 1 column =
+      Range (Position line column) (Position line $ column + 1)
+
+getCodeActionTitle :: (Command |? CodeAction) -> Maybe T.Text
+getCodeActionTitle commandOrCodeAction
+  | InR CodeAction {_title} <- commandOrCodeAction = Just _title
+  | otherwise = Nothing
+
+makeCodeActionNotFoundAtString :: Point -> String
+makeCodeActionNotFoundAtString Point {..} =
+  "CodeAction not found at line: " <> show line <> ", column: " <> show column
+
+makeCodeActionFoundAtString :: Point -> String
+makeCodeActionFoundAtString Point {..} =
+  "CodeAction found at line: " <> show line <> ", column: " <> show column
+
+ignoreGoldenTest :: TestName -> FilePath -> Point -> T.Text -> TestTree
+ignoreGoldenTest testCaseName goldenFilename point hintName =
+  setupGoldenHlintTest testCaseName goldenFilename $ \document -> do
+    waitForDiagnosticsFromSource document "hlint"
+    actions <- getCodeActions document $ pointToRange point
+    case find ((== Just (getIgnoreHintText hintName)) . getCodeActionTitle) actions of
+      Just (InR codeAction) -> executeCodeAction codeAction
+      _ -> liftIO $ assertFailure $ makeCodeActionNotFoundAtString point
+
+setupGoldenHlintTest :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
+setupGoldenHlintTest testName path =
+  goldenWithHaskellDoc hlintPlugin testName testDir path "expected" "hs"
+
