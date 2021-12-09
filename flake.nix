@@ -70,6 +70,8 @@
             with haskell.lib; {
               # Patches don't apply
               github = overrideCabal hsuper.github (drv: { patches = []; });
+              # We need an older version  
+              hiedb = hself.hiedb_0_4_1_0;
             };
 
           hlsSources =
