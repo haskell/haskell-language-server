@@ -36,8 +36,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-      with:
-        submodules: true
 
     - run: git fetch origin master # check the master branch for benchmarking
 
