@@ -72,6 +72,12 @@
               github = overrideCabal hsuper.github (drv: { patches = []; });
               # We need an older version  
               hiedb = hself.hiedb_0_4_1_0;
+
+              implicit-hie-cradle = hself.callCabal2nix "implicit-hie-cradle"
+                (builtins.fetchTarball {
+                  url = "https://hackage.haskell.org/package/implicit-hie-cradle-0.3.0.5/implicit-hie-cradle-0.3.0.5.tar.gz";
+                  sha256 = "15a7g9x6cjk2b92hb2wilxx4550msxp1pmk5a2shiva821qaxnfq";
+                }) { };
             };
 
           hlsSources =
