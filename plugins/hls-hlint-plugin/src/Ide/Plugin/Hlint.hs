@@ -107,6 +107,8 @@ import qualified Language.LSP.Types.Lens                            as LSP
 import           GHC.Generics                                       (Generic)
 import           Text.Regex.TDFA.Text                               ()
 
+import           Development.IDE.GHC.Compat.Core                    (WarningFlag (Opt_WarnUnrecognisedPragmas),
+                                                                     wopt)
 import           Development.IDE.Spans.Pragmas                      (LineSplitTextEdits (LineSplitTextEdits),
                                                                      NextPragmaInfo (NextPragmaInfo),
                                                                      getNextPragmaInfo,
