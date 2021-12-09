@@ -34,6 +34,9 @@ jobs:
         os: [ubuntu-latest]
         cabal: ['3.6']
 
+    # This code is fitted to the strategy: assumes Linux is used ... etc,
+    # change of the strategy may require changing the bootstrapping/run code
+
     steps:
     - uses: actions/checkout@v2
 
@@ -45,38 +48,10 @@ jobs:
         cabal-version: ${{ matrix.cabal }}
         enable-stack: false
 
-    - if: runner.os == 'Windows'
-      name: (Windows) Platform config
-      run: |
-        echo "CABAL_STORE_DIR=$SYSTEMDRIVE\\SR" >> $GITHUB_ENV
-        echo "CABAL_PKGS_DIR=~\\AppData\\cabal\\packages" >> $GITHUB_ENV
-    - if: ( runner.os == 'Linux' ) || ( runner.os == 'macOS' )
-      name: (Linux,macOS) Platform config
+    - name: Platform config
       run: |
         echo "CABAL_STORE_DIR=~/.cabal/store" >> $GITHUB_ENV
         echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
-
-    # Needs to be before Cache Cabal so the cache can detect changes to the modified cabal.project file
-    - if: matrix.ghc == '9.0.1'
-      name: (GHC 9.0.1) Use modified `cabal.project`
-      run: |
-        cp cabal-ghc901.project cabal.project
-    - if: runner.os == 'Windows' && matrix.ghc == '8.8.4'
-      name: (Windows,GHC 8.8) Modify `cabal.project` to workaround segfaults
-      run: |
-        echo "package floskell" >> cabal.project
-        echo "  ghc-options: -O0" >> cabal.project
-
-    # Shorten binary names as a workaround for filepath length limits in Windows,
-    # but since tests are hardcoded on this workaround -
-    # all platforms (in 2021-12-07) need it.
-    - name: Workaround shorten binary names
-      run: |
-        sed -i.bak -e 's/haskell-language-server/hls/g' \
-                   -e 's/haskell_language_server/hls/g' \
-                   haskell-language-server.cabal cabal.project
-        sed -i.bak -e 's/Paths_haskell_language_server/Paths_hls/g' \
-                   src/**/*.hs exe/*.hs
 
     - name: Cache Cabal
       uses: actions/cache@v2
