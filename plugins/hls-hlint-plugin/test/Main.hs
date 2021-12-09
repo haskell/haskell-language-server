@@ -45,9 +45,6 @@ ignoreHintTests = testGroup "hlint ignore hint tests"
       "UnrecognizedPragmasOff"
       (Point 3 8)
       "Eta reduce"
-  -- in this test the options and hlint pragmas are inserted in opposite order
-  -- in the golden test but in correct order in vscode and coc.nvim so lsp-test
-  -- applies text edits backwards.
   , ignoreGoldenTest
       "Ignore hint in this module inserts only hlint ignore pragma if warn unrecognized pragmas is on"
       "UnrecognizedPragmasOn"
