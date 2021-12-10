@@ -172,7 +172,12 @@ jobs:
       with:
         ghc-version  : ${{ matrix.ghc   }}
         cabal-version: ${{ matrix.cabal }}
-
+# some alpines need workaround
+    - name: Force integer-simple
+      run: |
+        if ghc --info | grep -q integer-simple ; then
+          echo -e 'package blaze-textual\n    flags: +integer-simple' >> cabal.project.local
+        fi
     - name: Use modified cabal.project for ghc9
       if: ${{ matrix.ghc == '9.0.1' }}
       run: cp cabal-ghc901.project cabal.project
