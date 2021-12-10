@@ -12,7 +12,6 @@ import           Data.List               (find)
 import qualified Data.Map                as Map
 import           Data.Maybe              (fromJust, isJust)
 import qualified Data.Text               as T
-import qualified Debug.Trace             as Debug
 import           Ide.Plugin.Config       (Config (..), PluginConfig (..),
                                           hlintOn)
 import qualified Ide.Plugin.Config       as Plugin
