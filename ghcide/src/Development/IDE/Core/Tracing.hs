@@ -1,5 +1,4 @@
 {-# LANGUAGE CPP             #-}
-{-# LANGUAGE NoApplicativeDo #-}
 {-# LANGUAGE PackageImports  #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# HLINT ignore #-}

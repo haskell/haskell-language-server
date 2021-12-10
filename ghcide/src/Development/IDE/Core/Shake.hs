@@ -526,7 +526,7 @@ shakeOpen lspEnv defaultConfig logger debouncer
         _ <- async $ do
             logDebug logger "Initializing exports map from hiedb"
             em <- createExportsMapHieDb hiedb
-            modifyVar' exportsMap (<> em)
+            _ <- modifyVar' exportsMap (<> em)
             logDebug logger $ "Done initializing exports map from hiedb (" <> pack(show (ExportsMap.size em)) <> ")"
 
         progress <- do

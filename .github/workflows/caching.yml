@@ -1,8 +1,21 @@
 name: Caching
 
 # Docs on the workflow:
-# 1. GitHub cache scoping goes: main branch -> PR main branch -> PR. (essentially in a tree fashion). That is why it is useful to build caches on `master` - to generate & keep the main project state & they would be shared to the whole tree.
-# 2. GitHub has a 10G default limit of cache pool per repo. HLS is a big project & monorepo of many projects, so to keep cache useful - the main branch state caches should be preserved & their storage preferred to the PRs, since PRs from internal branches - would count into 10G pool, but would be available only inside of the PR scope, which can bork cache fore the whole community. That is short story why `dist-newstyle` (especially full) - is not includded into `master` cache.
+# 1. GitHub cache scoping goes:
+#   [main branch -> PR main branch -> PR. (essentially in a tree fashion)](https://web.archive.org/web/20211125171853/https://docs.github.com/en/actions/advanced-guides/caching-dependencies-to-speed-up-workflows#restrictions-for-accessing-a-cache).
+#   Building & keeping caches on `master` allows
+#   to share the main project state cache be shared to the whole tree.
+# 2. GitHub has a [default 10G cache pool limit](https://web.archive.org/web/20211125171853/https://docs.github.com/en/actions/advanced-guides/caching-dependencies-to-speed-up-workflows#usage-limits-and-eviction-policy) per repo.
+#   HLS is a big monorepo codebase, which means easy cache pool
+#   invalidation & exhaustion because of the pool limit.
+#   To keep caches useful - the main state of the main branch should remain
+#   & so keep caching in the repo well below the limit.
+#   that means preferring main branch to the PR caches
+#   (especially internal branch ones), since PRs from internal branches -
+#   count into the repo 10G pool, while that cache gets used only inside of the PR,
+#   while exhausting the pool would bork cache for the rest of the community.
+#   That is a short story why `dist-newstyle` (especially full) currently is not
+#   includded into `master` or PR caches.
 
 defaults:
   run:
@@ -17,11 +30,9 @@ on:
   push:
     branches:
       - master
-  schedule:
-    # Try to save snapshot every day at 08:25 UTC (~00:25 in California)
-    - cron: "25 8 * * *"
 
 jobs:
+
   pre_job:
     runs-on: ubuntu-latest
     outputs:
@@ -40,53 +51,43 @@ jobs:
           cancel_others: false
           paths_ignore: '["hls-test-utils/**", "plugins/**", "src/**", "exe/**", "test/**", "shake-bench/**"]'
 
-  deps:
+  caching:
     if: needs.pre_job.outputs.should_skip != 'true'
     needs: pre_job
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        ghc: ["9.0.1", '8.10.7', '8.10.6', "8.8.4", "8.8.3", "8.6.5"]
+        ghc: ["9.0.1", '8.10.7', '8.10.6', "8.8.4", "8.6.5"]
         os: [ubuntu-latest, macOS-latest, windows-latest]
         cabal: ['3.6']
-        exclude:
-          - os: windows-latest
-            ghc: '8.8.3'
 
     steps:
       - uses: actions/checkout@v2
-        with:
-          submodules: true
+
       - uses: haskell/actions/setup@v1
         with:
-          ghc-version  : ${{ matrix.ghc   }}
+          ghc-version: ${{ matrix.ghc }}
           cabal-version: ${{ matrix.cabal }}
 
-      - if: matrix.os == 'windows-latest'
-        name: Set some window specific things
+      - if: runner.os == 'Windows'
+        name: (Windows) Platform config
         run: |
           echo "CABAL_STORE_DIR=$SYSTEMDRIVE\\SR" >> $GITHUB_ENV
           echo "CABAL_PKGS_DIR=~\\AppData\\cabal\\packages" >> $GITHUB_ENV
-
-      - if: matrix.os != 'windows-latest'
-        name: Set some linux/macOS specific things
+      - if: ( runner.os == 'Linux' ) || ( runner.os == 'macOS' )
+        name: (Linux,macOS) Platform config
         run: |
           echo "CABAL_STORE_DIR=~/.cabal/store" >> $GITHUB_ENV
           echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
 
-      - if: matrix.os == 'macOS-latest' && matrix.ghc == '8.10.5'
-        name: Workaround for GHC 8.10.5 on macOS
-        run: |
-          echo "# uninstalling CommandLineTools (see https://github.com/haskell/haskell-language-server/issues/1913#issuecomment-861667786)"
-          sudo rm -rf /Library/Developer/CommandLineTools
-
       # Needs to be before Cache Cabal so the cache can detect changes to the modified cabal.project file
       - if: matrix.ghc == '9.0.1'
-        name: Use modified cabal.project for ghc9
-        run: cp cabal-ghc901.project cabal.project
-
-      - if: matrix.ghc == '8.8.4' && matrix.os == 'windows-latest'
-        name: Modify cabal.project to workaround segfaults for ghc-8.8.4 and windows
+        name: (GHC 9.0.1) Use modified `cabal.project`
+        run: |
+          cp cabal-ghc901.project cabal.project
+      - if: runner.os == 'Windows' && matrix.ghc == '8.8.4'
+        name: (Windows,GHC 8.8) Modify `cabal.project` to workaround segfaults
         run: |
           echo "package floskell" >> cabal.project
           echo "  ghc-options: -O0" >> cabal.project
@@ -106,15 +107,6 @@ jobs:
             v2-${{ runner.os }}-${{ matrix.ghc }}
 
       - run: cabal update
-
-      # Need this to work around filepath length limits in Windows
-      - name: Shorten binary names
-        run: |
-          sed -i.bak -e 's/haskell-language-server/hls/g' \
-                     -e 's/haskell_language_server/hls/g' \
-                     haskell-language-server.cabal cabal.project
-          sed -i.bak -e 's/Paths_haskell_language_server/Paths_hls/g' \
-                     src/**/*.hs exe/*.hs
 
       # repeating builds to workaround segfaults in windows and ghc-8.8.4
       - name: Build

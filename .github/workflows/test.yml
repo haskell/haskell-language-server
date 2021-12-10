@@ -40,7 +40,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        ghc: ["9.0.1", '8.10.7', '8.10.6', "8.8.4", "8.8.3", "8.6.5"]
+        ghc: ["9.0.1", '8.10.7', '8.10.6', "8.8.4", "8.6.5"]
         os: [ubuntu-latest, macOS-latest]
         cabal: ['3.6']
         include:
@@ -74,38 +74,44 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
-        with:
-          submodules: true
+
       - uses: haskell/actions/setup@v1
         with:
           ghc-version  : ${{ matrix.ghc   }}
           cabal-version: ${{ matrix.cabal }}
 
-      - run: ./fmt.sh
-        name: "HLint via ./fmt.sh"
-
-      - if: matrix.os == 'windows-latest'
-        name: Set some window specific things
+      - if: runner.os == 'Windows'
+        name: (Windows) Platform config
         run: |
           echo "CABAL_STORE_DIR=$SYSTEMDRIVE\\SR" >> $GITHUB_ENV
           echo "CABAL_PKGS_DIR=~\\AppData\\cabal\\packages" >> $GITHUB_ENV
-
-      - if: matrix.os != 'windows-latest'
-        name: Set some linux/macOS specific things
+      - if: ( runner.os == 'Linux' ) || ( runner.os == 'macOS' )
+        name: (Linux,macOS) Platform config
         run: |
           echo "CABAL_STORE_DIR=~/.cabal/store" >> $GITHUB_ENV
           echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
 
       # Needs to be before Cache Cabal so the cache can detect changes to the modified cabal.project file
       - if: matrix.ghc == '9.0.1'
-        name: Use modified cabal.project for ghc9
-        run: cp cabal-ghc901.project cabal.project
-
-      - if: matrix.ghc == '8.8.4' && matrix.os == 'windows-latest'
-        name: Modify cabal.project to workaround segfaults for ghc-8.8.4 and windows
+        name: (GHC 9.0.1) Use modified `cabal.project`
+        run: |
+          cp cabal-ghc901.project cabal.project
+      - if: runner.os == 'Windows' && matrix.ghc == '8.8.4'
+        name: (Windows,GHC 8.8) Modify `cabal.project` to workaround segfaults
         run: |
           echo "package floskell" >> cabal.project
           echo "  ghc-options: -O0" >> cabal.project
+
+      # Shorten binary names as a workaround for filepath length limits in Windows,
+      # but since tests are hardcoded on this workaround -
+      # all platforms (in 2021-12-07) need it.
+      - name: Workaround shorten binary names
+        run: |
+          sed -i.bak -e 's/haskell-language-server/hls/g' \
+                     -e 's/haskell_language_server/hls/g' \
+                     haskell-language-server.cabal cabal.project
+          sed -i.bak -e 's/Paths_haskell_language_server/Paths_hls/g' \
+                     src/**/*.hs exe/*.hs
 
       - name: Cache Cabal
         uses: actions/cache@v2
@@ -123,14 +129,9 @@ jobs:
 
       - run: cabal update
 
-      # Need this to work around filepath length limits in Windows
-      - name: Shorten binary names
+      - name: "HLint via ./fmt.sh"
         run: |
-          sed -i.bak -e 's/haskell-language-server/hls/g' \
-                     -e 's/haskell_language_server/hls/g' \
-                     haskell-language-server.cabal cabal.project
-          sed -i.bak -e 's/Paths_haskell_language_server/Paths_hls/g' \
-                     src/**/*.hs exe/*.hs
+          ./fmt.sh
 
       # repeating builds to workaround segfaults in windows and ghc-8.8.4
       - name: Build

@@ -263,7 +263,7 @@ setFileModified state saved nfp = do
     VFSHandle{..} <- getIdeGlobalState state
     when (isJust setVirtualFileContents) $
         fail "setFileModified can't be called on this type of VFSHandle"
-    atomically $ recordDirtyKeys (shakeExtras state) GetModificationTime [nfp]
+    join $ atomically $ recordDirtyKeys (shakeExtras state) GetModificationTime [nfp]
     restartShakeSession (shakeExtras state) (fromNormalizedFilePath nfp ++ " (modified)") []
     when checkParents $
       typecheckParents state nfp
