@@ -164,8 +164,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-      with:
-        submodules: true
     - uses: haskell/actions/setup@v1
       with:
         ghc-version  : ${{ matrix.ghc   }}
