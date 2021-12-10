@@ -18,12 +18,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ['9.0.1', '8.10.7', '8.10.6', '8.8.4', '8.8.3', '8.6.5']
+        ghc: ['9.0.1', '8.10.7', '8.10.6', '8.8.4', '8.6.5']
         os: [ubuntu-18.04, macOS-latest, windows-latest]
         cabal: ['3.6']
-        exclude:
-          - os: windows-latest
-            ghc: '8.8.3' # fails due to segfault
 
     steps:
     - uses: actions/checkout@v2
