@@ -68,6 +68,7 @@ library
     , text
     , transformers
     , unordered-containers
+    , ghc-lib-parser-ex
 
   if (flag(hlint33))
     -- This mirrors the logic in hlint.cabal for hlint-3.3
