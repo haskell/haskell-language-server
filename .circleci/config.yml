@@ -6,12 +6,8 @@ defaults: &defaults
   steps:
     - checkout
     - run:
-        name: Write provided stack.yaml with predictable name
-        command: cp ${STACK_FILE} stack-build.txt
-
-    - run:
-        name: Figure out resolver for better caching
-        command: grep '^resolver:' stack-build.txt > resolver.txt
+        name: Save resolver field into file
+        command: grep '^resolver:' ${STACK_FILE} > resolver.txt
 
     - restore_cache:
         keys:
