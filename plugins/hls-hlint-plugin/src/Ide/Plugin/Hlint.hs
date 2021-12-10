@@ -107,7 +107,6 @@ import           GHC.Generics                                       (Associativi
                                                                      Generic)
 import           Text.Regex.TDFA.Text                               ()
 
-import qualified Debug.Trace                                        as Debug
 import           System.Environment                                 (setEnv,
                                                                      unsetEnv)
 -- ---------------------------------------------------------------------
