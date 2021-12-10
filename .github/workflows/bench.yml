@@ -1,5 +1,9 @@
 name: Benchmark
 
+defaults:
+  run:
+    shell: bash
+
 # See: https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#concurrency.
 concurrency:
   group: ${{ github.head_ref }}-${{ github.workflow }}
@@ -34,6 +38,9 @@ jobs:
         os: [ubuntu-latest]
         cabal: ['3.6']
 
+    # This code is fitted to the strategy: assumes Linux is used ... etc,
+    # change of the strategy may require changing the bootstrapping/run code
+
     steps:
     - uses: actions/checkout@v2
 
@@ -64,17 +71,14 @@ jobs:
     - run: cabal configure --enable-benchmarks --max-backjumps 12000
 
     - name: Build
-      shell: bash
       run: cabal build ghcide:benchHist
 
     - name: Bench init
-      shell: bash
       run: cabal bench ghcide:benchHist  -j --benchmark-options="all-binaries"
 
     # tar is required to preserve file permissions
     # compression speeds up upload/download nicely
     - name: tar workspace
-      shell: bash
       run: tar -czf workspace.tar.gz * .git
 
     - name: tar cabal
@@ -105,6 +109,7 @@ jobs:
       matrix:
         ghc: ['8.10.7']
         os: [ubuntu-latest]
+        cabal: ['3.6']
         example: ['cabal', 'lsp-types']
 
     steps:
@@ -133,11 +138,9 @@ jobs:
         tar xzf cabal.tar.gz --directory ~/.cabal
 
     - name: Bench
-      shell: bash
       run: cabal bench ghcide:benchHist  -j --benchmark-options="${{ matrix.example }}"
 
     - name: Display results
-      shell: bash
       run: |
         column -s, -t < ghcide/bench-results/unprofiled/${{ matrix.example }}/results.csv | tee ghcide/bench-results/unprofiled/${{ matrix.example }}/results.txt
 
