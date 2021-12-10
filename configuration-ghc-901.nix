@@ -12,63 +12,14 @@ let
 
   hpkgsOverride = hself: hsuper:
     with pkgs.haskell.lib;
-    let
-      dependent-sum-src = pkgs.fetchFromGitHub {
-        owner = "anka-213";
-        repo = "dependent-sum";
-        rev = "8cf4c7fbc3bfa2be475a17bb7c94a1e1e9a830b5";
-        sha256 = "WtxTB6ufTZC6SxOtGSfhlO4mY0y9eWejMSa0yUJ7dHQ=";
-      };
-    in {
-
-      blaze-textual = hself.callCabal2nix "blaze-textual"
-        (builtins.fetchTarball {
-          url = "https://hackage.haskell.org/package/blaze-textual-0.2.2.1/blaze-textual-0.2.2.1.tar.gz";
-          sha256 = "1nyhc9mrnxsl21ksnpp0ryki4wgk49r581yy504g2gjq6x3bkb59";
-        }) { };
-
-      hie-bios = hself.callCabal2nix "hie-bios"
-        (builtins.fetchTarball {
-          url = "https://hackage.haskell.org/package/hie-bios-0.7.6/hie-bios-0.7.6.tar.gz";
-          sha256 = "0w4rhy4b3jnci9m27l79c8n28wl56x49bmhdn7pvf88mx9srjcvq";
-        }) { };
-
-      th-extras = hself.callCabal2nix "th-extras" (pkgs.fetchFromGitHub {
-        owner = "anka-213";
-        repo = "th-extras";
-        rev = "57a97b4df128eb7b360e8ab9c5759392de8d1659";
-        sha256 = "Qtha1ge/C0L+uFcV2dZ5xpG59DCxQT7LuK/OYfiM4Pk=";
-      }) { };
-
-      dependent-sum =
-        hself.callCabal2nix "dependent-sum" "${dependent-sum-src}/dependent-sum"
-        { };
-
-      dependent-sum-template = hself.callCabal2nix "dependent-sum-template"
-        "${dependent-sum-src}/dependent-sum-template" { };
-
-      hlint = hself.hlint_3_3_1;
-
-      ghc-lib-parser = hself.ghc-lib-parser_9_0_1_20210324;
-
-      ghc-lib-parser-ex = hself.ghc-lib-parser-ex_9_0_0_4;
-
-      ormolu = hself.ormolu_0_2_0_0;
-
-      diagrams-core = hself.diagrams-core_1_5_0;
-
-      diagrams-lib = hself.diagrams-lib_1_4_4;
-
-      dual-tree = hself.dual-tree_0_2_3_0;
-
-      monoid-extras = hself.monoid-extras_0_6;
+    {
 
       # Released on hackage, but not in nixpkgs yet
-      operational = hself.callCabal2nix "operational" (pkgs.fetchFromGitHub {
-        owner = "HeinrichApfelmus";
-        repo = "operational";
-        rev = "2b33e0055066cf92a302ee2c32058dfa44ac8882";
-        sha256 = "sha256-nwB4vssm4wUTkVryjQVb3peOwR6js7vdekkbaWedHNI=";
+      primitive-extras = hself.callCabal2nix "primitive-extras" (pkgs.fetchFromGitHub {
+        owner = "metrix-ai";
+        repo = "primitive-extras";
+        rev = "c758d7366b99d85889cb13425fc0140879f8b936";
+        sha256 = "sha256-vTT7svbM7IkhyxYx2xQ8p1ptoYe+ndcMN5+j9qx++7E=";
       }) { };
 
       # Re-generate HLS drv excluding some plugins

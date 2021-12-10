@@ -68,17 +68,16 @@
           # Don't use `callHackage`, it requires us to override `all-cabal-hashes`
           tweaks = hself: hsuper:
             with haskell.lib; {
-              hiedb = hself.callCabal2nix "hiedb"
+              # Patches don't apply
+              github = overrideCabal hsuper.github (drv: { patches = []; });
+              # We need an older version  
+              hiedb = hself.hiedb_0_4_1_0;
+
+              implicit-hie-cradle = hself.callCabal2nix "implicit-hie-cradle"
                 (builtins.fetchTarball {
-                  url = "https://hackage.haskell.org/package/hiedb-0.4.1.0/hiedb-0.4.1.0.tar.gz";
-                  sha256 = "11s7lfkd6fc3zf3kgyp3jhicbhxpn6jp0yjahl8d28hicwr2qdpi";
+                  url = "https://hackage.haskell.org/package/implicit-hie-cradle-0.3.0.5/implicit-hie-cradle-0.3.0.5.tar.gz";
+                  sha256 = "15a7g9x6cjk2b92hb2wilxx4550msxp1pmk5a2shiva821qaxnfq";
                 }) { };
-
-              lsp = hself.lsp_1_2_0_1;
-
-              lsp-types = hself.lsp-types_1_3_0_1;
-
-              lsp-test = hself.lsp-test_0_14_0_1;
             };
 
           hlsSources =
