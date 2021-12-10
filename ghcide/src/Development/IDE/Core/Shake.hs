@@ -156,7 +156,6 @@ import           Data.Default
 import           Data.Foldable                          (toList)
 import           Data.HashSet                           (HashSet)
 import qualified Data.HashSet                           as HSet
-import           Data.IORef.Extra                       (atomicModifyIORef'_)
 import           Data.String                            (fromString)
 import           Data.Text                              (pack)
 import           Debug.Trace.Flags                      (userTracingEnabled)
@@ -190,7 +189,7 @@ data ShakeExtras = ShakeExtras
      lspEnv :: Maybe (LSP.LanguageContextEnv Config)
     ,debouncer :: Debouncer NormalizedUri
     ,logger :: Logger
-    ,globals :: IORef (HMap.HashMap TypeRep Dynamic)
+    ,globals :: TVar (HMap.HashMap TypeRep Dynamic)
     ,state :: Values
     ,diagnostics :: STMDiagnosticStore
     ,hiddenDiagnostics :: STMDiagnosticStore
@@ -211,15 +210,15 @@ data ShakeExtras = ShakeExtras
         -> IO ()
     ,ideNc :: IORef NameCache
     -- | A mapping of module name to known target (or candidate targets, if missing)
-    ,knownTargetsVar :: IORef (Hashed KnownTargets)
+    ,knownTargetsVar :: TVar (Hashed KnownTargets)
     -- | A mapping of exported identifiers for local modules. Updated on kick
-    ,exportsMap :: IORef ExportsMap
+    ,exportsMap :: TVar ExportsMap
     -- | A work queue for actions added via 'runInShakeSession'
     ,actionQueue :: ActionQueue
     ,clientCapabilities :: ClientCapabilities
     , hiedb :: HieDb -- ^ Use only to read.
     , hiedbWriter :: HieDbWriter -- ^ use to write
-    , persistentKeys :: IORef (HMap.HashMap Key GetStalePersistent)
+    , persistentKeys :: TVar (HMap.HashMap Key GetStalePersistent)
       -- ^ Registery for functions that compute/get "stale" results for the rule
       -- (possibly from disk)
     , vfs :: VFSHandle
@@ -259,7 +258,7 @@ getPluginConfig plugin = do
 addPersistentRule :: IdeRule k v => k -> (NormalizedFilePath -> IdeAction (Maybe (v,PositionDelta,TextDocumentVersion))) -> Rules ()
 addPersistentRule k getVal = do
   ShakeExtras{persistentKeys} <- getShakeExtrasRules
-  void $ liftIO $ atomicModifyIORef'_ persistentKeys $ HMap.insert (Key k) (fmap (fmap (first3 toDyn)) . getVal)
+  void $ liftIO $ atomically $ modifyTVar' persistentKeys $ HMap.insert (Key k) (fmap (fmap (first3 toDyn)) . getVal)
 
 class Typeable a => IsIdeGlobal a where
 
@@ -283,7 +282,7 @@ addIdeGlobal x = do
 
 addIdeGlobalExtras :: IsIdeGlobal a => ShakeExtras -> a -> IO ()
 addIdeGlobalExtras ShakeExtras{globals} x@(typeOf -> ty) =
-    void $ liftIO $ atomicModifyIORef'_ globals $ \mp -> case HMap.lookup ty mp of
+    void $ liftIO $ atomically $ modifyTVar' globals $ \mp -> case HMap.lookup ty mp of
         Just _ -> error $ "Internal error, addIdeGlobalExtras, got the same type twice for " ++ show ty
         Nothing -> HMap.insert ty (toDyn x) mp
 
@@ -291,7 +290,7 @@ addIdeGlobalExtras ShakeExtras{globals} x@(typeOf -> ty) =
 getIdeGlobalExtras :: forall a . IsIdeGlobal a => ShakeExtras -> IO a
 getIdeGlobalExtras ShakeExtras{globals} = do
     let typ = typeRep (Proxy :: Proxy a)
-    x <- HMap.lookup (typeRep (Proxy :: Proxy a)) <$> readIORef globals
+    x <- HMap.lookup (typeRep (Proxy :: Proxy a)) <$> readTVarIO globals
     case x of
         Just x
             | Just x <- fromDynamic x -> pure x
@@ -334,7 +333,7 @@ lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
           | IdeTesting testing <- ideTesting s -- Don't read stale persistent values in tests
           , testing = pure Nothing
           | otherwise = do
-          pmap <- readIORef persistentKeys
+          pmap <- readTVarIO persistentKeys
           mv <- runMaybeT $ do
             liftIO $ Logger.logDebug (logger s) $ T.pack $ "LOOKUP UP PERSISTENT FOR: " ++ show k
             f <- MaybeT $ pure $ HMap.lookup (Key k) pmap
@@ -478,7 +477,7 @@ getValues state key file = do
 knownTargets :: Action (Hashed KnownTargets)
 knownTargets = do
   ShakeExtras{knownTargetsVar} <- getShakeExtras
-  liftIO $ readIORef knownTargetsVar
+  liftIO $ readTVarIO knownTargetsVar
 
 -- | Seq the result stored in the Shake value. This only
 -- evaluates the value to WHNF not NF. We take care of the latter
@@ -509,25 +508,25 @@ shakeOpen lspEnv defaultConfig logger debouncer
     us <- mkSplitUniqSupply 'r'
     ideNc <- newIORef (initNameCache us knownKeyNames)
     shakeExtras <- do
-        globals <- newIORef HMap.empty
+        globals <- newTVarIO HMap.empty
         state <- STM.newIO
         diagnostics <- STM.newIO
         hiddenDiagnostics <- STM.newIO
         publishedDiagnostics <- STM.newIO
         positionMapping <- STM.newIO
-        knownTargetsVar <- newIORef $ hashed HMap.empty
+        knownTargetsVar <- newTVarIO $ hashed HMap.empty
         let restartShakeSession = shakeRestart ideState
-        persistentKeys <- newIORef HMap.empty
+        persistentKeys <- newTVarIO HMap.empty
         indexPending <- newTVarIO HMap.empty
         indexCompleted <- newTVarIO 0
         indexProgressToken <- newVar Nothing
         let hiedbWriter = HieDbWriter{..}
-        exportsMap <- newIORef mempty
+        exportsMap <- newTVarIO mempty
         -- lazily initialize the exports map with the contents of the hiedb
         _ <- async $ do
             logDebug logger "Initializing exports map from hiedb"
             em <- createExportsMapHieDb hiedb
-            atomicModifyIORef'_ exportsMap (<> em)
+            atomically $ modifyTVar' exportsMap (<> em)
             logDebug logger $ "Done initializing exports map from hiedb (" <> pack(show (ExportsMap.size em)) <> ")"
 
         progress <- do

@@ -75,12 +75,11 @@ import           System.Info
 import           Control.Applicative                  (Alternative ((<|>)))
 import           Data.Void
 
-import           Control.Concurrent.STM               (atomically)
+import           Control.Concurrent.STM.Stats         (atomically, modifyTVar',
+                                                       readTVar, writeTVar)
 import           Control.Concurrent.STM.TQueue
 import           Data.Foldable                        (for_)
 import qualified Data.HashSet                         as Set
-import           Data.IORef.Extra                     (atomicModifyIORef'_)
-import           Data.Tuple                           (swap)
 import           Database.SQLite.Simple
 import           Development.IDE.Core.Tracing         (withTrace)
 import           HieDb.Create
@@ -267,11 +266,14 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
               TargetModule _ -> do
                 found <- filterM (IO.doesFileExist . fromNormalizedFilePath) targetLocations
                 return (targetTarget, found)
-          join $ atomically $ recordDirtyKeys extras GetKnownTargets  [emptyFilePath]
-          hasUpdate <- atomicModifyIORef' knownTargetsVar $ (swap .) $ traverseHashed $ \known -> do
-            let known' = HM.unionWith (<>) known $ HM.fromList $ map (second Set.fromList) knownTargets
-                hasUpdate = if known /= known' then Just known' else Nothing
-            (hasUpdate, known')
+          hasUpdate <- join $ atomically $ do
+            known <- readTVar knownTargetsVar
+            let known' = flip mapHashed known $ \k ->
+                            HM.unionWith (<>) k $ HM.fromList $ map (second Set.fromList) knownTargets
+                hasUpdate = if known /= known' then Just (unhashed known') else Nothing
+            writeTVar knownTargetsVar known'
+            logDirtyKeys <- recordDirtyKeys extras GetKnownTargets [emptyFilePath]
+            return (logDirtyKeys >> pure hasUpdate)
           for_ hasUpdate $ \x ->
                 logDebug logger $ "Known files updated: " <>
                     T.pack(show $ (HM.map . Set.map) fromNormalizedFilePath x)
@@ -408,7 +410,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
                     -- update exports map
                     extras <- getShakeExtras
                     let !exportsMap' = createExportsMap $ mapMaybe (fmap hirModIface) modIfaces
-                    liftIO $ atomicModifyIORef'_ (exportsMap extras) $ (exportsMap' <>)
+                    liftIO $ atomically $ modifyTVar' (exportsMap extras) (exportsMap' <>)
 
           return (second Map.keys res)
 

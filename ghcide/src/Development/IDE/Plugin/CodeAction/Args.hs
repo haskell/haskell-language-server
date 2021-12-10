@@ -14,6 +14,7 @@ module Development.IDE.Plugin.CodeAction.Args
   )
 where
 
+import           Control.Concurrent.STM.Stats                 (readTVarIO)
 import           Control.Monad.Reader
 import           Control.Monad.Trans.Maybe
 import           Data.Either                                  (fromRight)
@@ -58,7 +59,7 @@ runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) _ra
       runRule GhcSession >>= \case
         Just env -> do
           pkgExports <- envPackageExports env
-          localExports <- readIORef (exportsMap $ shakeExtras state)
+          localExports <- readTVarIO (exportsMap $ shakeExtras state)
           pure $ localExports <> pkgExports
         _ -> pure mempty
   caaIdeOptions <- onceIO $ runAction "GhcideCodeActions.getIdeOptions" state getIdeOptions

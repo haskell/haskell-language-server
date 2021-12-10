@@ -25,9 +25,9 @@ import qualified Data.HashMap.Strict                    as HashMap
 import qualified Data.Text                              as T
 import           Development.IDE.Graph
 
-import           Control.Concurrent.STM.Stats           (atomically)
+import           Control.Concurrent.STM.Stats           (atomically,
+                                                         modifyTVar')
 import qualified Data.ByteString                        as BS
-import           Data.IORef.Extra                       (atomicModifyIORef'_)
 import           Data.Maybe                             (catMaybes)
 import           Development.IDE.Core.ProgressReporting
 import           Development.IDE.Core.RuleTypes
@@ -115,7 +115,7 @@ kick = do
     -- Update the exports map
     results <- uses GenerateCore files <* uses GetHieAst files
     let mguts = catMaybes results
-    void $ liftIO $ atomicModifyIORef'_ exportsMap (updateExportsMapMg mguts)
+    void $ liftIO $ atomically $ modifyTVar' exportsMap (updateExportsMapMg mguts)
 
     liftIO $ progressUpdate progress KickCompleted
 
