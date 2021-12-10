@@ -190,6 +190,8 @@ data ShakeExtras = ShakeExtras
     ,debouncer :: Debouncer NormalizedUri
     ,logger :: Logger
     ,globals :: TVar (HMap.HashMap TypeRep Dynamic)
+      -- ^ Registry of global state used by rules.
+      -- Small and immutable after startup, so not worth using an STM.Map.
     ,state :: Values
     ,diagnostics :: STMDiagnosticStore
     ,hiddenDiagnostics :: STMDiagnosticStore
@@ -221,6 +223,7 @@ data ShakeExtras = ShakeExtras
     , persistentKeys :: TVar (HMap.HashMap Key GetStalePersistent)
       -- ^ Registery for functions that compute/get "stale" results for the rule
       -- (possibly from disk)
+      -- Small and immutable after startup, so not worth using an STM.Map.
     , vfs :: VFSHandle
     , defaultConfig :: Config
       -- ^ Default HLS config, only relevant if the client does not provide any Config
