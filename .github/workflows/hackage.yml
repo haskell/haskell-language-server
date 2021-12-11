@@ -55,6 +55,10 @@ jobs:
           enable-stack: false
 
       - name: Cache Cabal
+      - name: Linux Platform config
+        run: |
+          echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
+
         uses: actions/cache@v2
         env:
           cache-name: cache-cabal
