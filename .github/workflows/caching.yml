@@ -31,6 +31,9 @@ on:
     branches:
       - master
 
+env:
+  cabalBuild: "v2-build all --enable-tests --enable-benchmarks"
+
 jobs:
 
   pre_job:
@@ -128,6 +131,16 @@ jobs:
 
       - run: cabal update
 
+      - name: Download all sources
+        run: |
+          cabal $cabalBuild --only-download
+
       # repeating builds to workaround segfaults in windows and ghc-8.8.4
-      - name: Build
-        run: cabal build --only-dependencies || cabal build --only-dependencies || cabal build --only-dependencies
+      # This build agenda in not to have successful code,
+      # but to cache what can be cached, so step is fault tolerant & would always succseed.
+      # 2021-12-11: NOTE: Building all targets, since
+      # current Cabal does not allow `all --enable-tests --enable-benchmarks --only-dependencies`
+      - name: Build all targets; try 3 times
+        continue-on-error: true
+        run: |
+          cabal $cabalBuild || cabal $cabalBuild || cabal $cabalBuild
