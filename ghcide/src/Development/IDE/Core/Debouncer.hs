@@ -11,7 +11,6 @@ module Development.IDE.Core.Debouncer
 import           Control.Concurrent.Async
 import           Control.Concurrent.STM
 import           Control.Concurrent.STM.Stats (atomicallyNamed)
-import           Control.Exception
 import           Control.Monad                (join, void)
 import           Data.Hashable
 import           GHC.Conc                     (unsafeIOToSTM)
@@ -49,8 +48,9 @@ asyncRegisterEvent d delay k fire = join $ atomicallyNamed "debouncer - register
                 join $ atomicallyNamed "debouncer - sleep" $ do
                     (s,act) <- readTVar var
                     unsafeIOToSTM $ sleep s
-                    STM.delete k d
-                    return act
+                    return $ do
+                        atomically (STM.delete k d)
+                        act
 
 -- | Debouncer used in the DAML CLI compiler that emits events immediately.
 noopDebouncer :: Debouncer k
