@@ -102,9 +102,7 @@ jobs:
           echo "package floskell" >> cabal.project
           echo "  ghc-options: -O0" >> cabal.project
 
-      # Shorten binary names as a workaround for filepath length limits in Windows,
-      # but since tests are hardcoded on this workaround -
-      # all platforms (in 2021-12-07) need it.
+      # All workflows which distinquishes cache on `cabal.project` needs this.
       - name: Workaround shorten binary names
         run: |
           sed -i.bak -e 's/haskell-language-server/hls/g' \

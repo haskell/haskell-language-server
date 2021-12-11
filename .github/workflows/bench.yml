@@ -57,6 +57,15 @@ jobs:
       run: |
         echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
 
+    # All workflows which distinquishes cache on `cabal.project` needs this.
+    - name: Workaround shorten binary names
+      run: |
+        sed -i.bak -e 's/haskell-language-server/hls/g' \
+                    -e 's/haskell_language_server/hls/g' \
+                    haskell-language-server.cabal cabal.project
+        sed -i.bak -e 's/Paths_haskell_language_server/Paths_hls/g' \
+                    src/**/*.hs exe/*.hs
+
     - name: Retrieving `cabal.project` Hackage timestamp
       run: |
         # Form: index-state: 2021-11-29T08:11:08Z
