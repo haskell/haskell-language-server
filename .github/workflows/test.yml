@@ -79,6 +79,7 @@ jobs:
         with:
           ghc-version  : ${{ matrix.ghc   }}
           cabal-version: ${{ matrix.cabal }}
+          enable-stack: false
 
       - if: runner.os == 'Windows'
         name: (Windows) Platform config
