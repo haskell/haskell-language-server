@@ -12,16 +12,22 @@ on:
       - '*-check-build'
 
 jobs:
-  build-mac-win:
+  build:
     runs-on: ${{ matrix.os }}
+    container: ${{ (matrix.os == 'ubuntu-18.04' && 'alpine:3.12') || '' }}
     strategy:
       fail-fast: false
       matrix:
         ghc: ['9.0.1', '8.10.7', '8.10.6', '8.8.4', '8.6.5']
-        os: [macOS-latest, windows-latest]
+        os: [ubuntu-18.04, macOS-latest, windows-latest]
         cabal: ['3.6']
 
     steps:
+    - name: Install system dependencies
+      if: matrix.os == 'ubuntu-18.04'
+      run: |
+        apk add --no-cache curl gcc g++ gmp-dev ncurses-dev libffi-dev make xz gzip tar perl git bash sudo binutils-gold
+        apk add --no-cache zlib zlib-dev zlib-static gmp gmp-dev ncurses-static
     - uses: actions/checkout@v2
 
     - uses: haskell/actions/setup@v1
@@ -29,9 +35,18 @@ jobs:
         ghc-version  : ${{ matrix.ghc   }}
         cabal-version: ${{ matrix.cabal }}
 
+    # some alpines come with integer-simple instead of integer-gmp
+    - name: Force integer-simple
+      if: matrix.os == 'ubuntu-18.04'
+      run: |
+        if ghc --info | grep -q integer-simple ; then
+          echo -e 'package blaze-textual\n    flags: +integer-simple' >> cabal.project.local
+        fi
+
     - name: Use modified cabal.project for ghc9
       if: ${{ matrix.ghc == '9.0.1' }}
       run: cp cabal-ghc901.project cabal.project
+      shell: bash
 
     - name: Shorten binary names
       run: |
@@ -40,6 +55,7 @@ jobs:
                    haskell-language-server.cabal cabal.project
         sed -i.bak -e 's/Paths_haskell_language_server/Paths_hls/g' \
                    src/**/*.hs exe/*.hs
+      shell: bash
 
     - name: Set some window specific things
       if: matrix.os == 'windows-latest'
@@ -48,6 +64,7 @@ jobs:
       run: |
         echo "EXE_EXT=.exe" >> $GITHUB_ENV
         echo "GHC_VERSION=$GHC_VER" >> $GITHUB_ENV
+      shell: bash
 
     - name: Set some linux specific things
       if: matrix.os == 'ubuntu-18.04'
@@ -78,134 +95,7 @@ jobs:
 
     - name: Compress server binary
       id: compress_server_binary
-      run: |
-        HLS_BUILD=$(find dist-newstyle \( -name 'hls' -o -name 'hls.exe' \) -type f)
-        HLS=haskell-language-server-${{env.GHC_VERSION}}
-        mv $HLS_BUILD $HLS${{env.EXE_EXT}}
-        if [[ "$OSTYPE" == "msys" ]]; then
-          7z a $HLS.zip $HLS${{env.EXE_EXT}}
-          echo ::set-output name=path::$HLS.zip
-          echo ::set-output name=content_type::application/zip
-          echo ::set-output name=extension::zip
-        else
-          gzip --best $HLS
-          echo ::set-output name=path::$HLS.gz
-          echo ::set-output name=content_type::application/gzip
-          echo ::set-output name=extension::gz
-        fi
-
-    - name: Upload server to release
-      if: ${{ !contains(github.ref_name, 'check') }}
-      uses: actions/upload-release-asset@v1.0.2
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ${{ steps.compress_server_binary.outputs.path }}
-        asset_name: haskell-language-server-${{ runner.OS }}-${{ env.GHC_VERSION }}${{env.EXE_EXT}}.${{ steps.compress_server_binary.outputs.extension }}
-        asset_content_type: ${{ steps.compress_server_binary.outputs.content_type }}
-
-    - name: Upload server to workflow artifacts
-      uses: actions/upload-artifact@v2
-      with:
-        name: haskell-language-server-${{ runner.OS }}-${{ matrix.ghc }}${{env.EXE_EXT}}.${{ steps.compress_server_binary.outputs.extension }}
-        path: ${{ steps.compress_server_binary.outputs.path }}
-
-    - name: Build wrapper
-      if: matrix.ghc == '8.10.7'
-      run: cabal build exe:hls-wrapper -O2 $LINUX_CABAL_ARGS
-
-    - name: Compress wrapper binary
-      if: matrix.ghc == '8.10.7'
-      id: compress_wrapper_binary
-      run: |
-        HLS_WRAPPER_BUILD=$(find dist-newstyle \( -name 'hls-wrapper' -o -name 'hls-wrapper.exe' \) -type f)
-        HLS_WRAPPER=haskell-language-server-wrapper
-        mv $HLS_WRAPPER_BUILD $HLS_WRAPPER${{env.EXE_EXT}}
-        if [[ "$OSTYPE" == "msys" ]]; then
-          7z a $HLS_WRAPPER.zip $HLS_WRAPPER${{env.EXE_EXT}}
-          echo ::set-output name=path::$HLS_WRAPPER.zip
-          echo ::set-output name=content_type::application/zip
-          echo ::set-output name=extension::zip
-        else
-          gzip --best $HLS_WRAPPER
-          echo ::set-output name=path::$HLS_WRAPPER.gz
-          echo ::set-output name=content_type::application/gzip
-          echo ::set-output name=extension::gz
-        fi
-
-    - name: Upload wrapper to the release
-      if: ${{ matrix.ghc == '8.10.7' && !contains(github.ref_name, 'check') }}
-      uses: actions/upload-release-asset@v1.0.2
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ${{ steps.compress_wrapper_binary.outputs.path }}
-        asset_name: haskell-language-server-wrapper-${{ runner.OS }}${{env.EXE_EXT}}.${{ steps.compress_wrapper_binary.outputs.extension }}
-        asset_content_type: ${{ steps.compress_wrapper_binary.outputs.content_type}}
-
-    - name: Upload wrapper to workflow artifacts
-      uses: actions/upload-artifact@v2
-      if: matrix.ghc == '8.10.7'
-      with:
-        name: haskell-language-server-wrapper-${{ runner.OS }}${{env.EXE_EXT}}.${{ steps.compress_wrapper_binary.outputs.extension }}
-        path: ${{ steps.compress_wrapper_binary.outputs.path }}
-
-  build-linux:
-    runs-on: ubuntu-latest
-    container: alpine:3.12
-
-    strategy:
-      fail-fast: false
-      matrix:
-        ghc: ['9.0.1', '8.10.7', '8.10.6', '8.8.4', '8.6.5']
-        cabal: ['3.6']
-
-    steps:
-    - name: Install system dependencies
-      run: |
-        apk add --no-cache curl gcc g++ gmp-dev ncurses-dev libffi-dev make xz gzip tar perl git bash sudo binutils-gold
-        apk add --no-cache zlib zlib-dev zlib-static gmp gmp-dev ncurses-static
-    - uses: actions/checkout@v2
-    - uses: haskell/actions/setup@v1
-      with:
-        ghc-version  : ${{ matrix.ghc   }}
-        cabal-version: ${{ matrix.cabal }}
-# some alpines need workaround
-    - name: Force integer-simple
-      run: |
-        if ghc --info | grep -q integer-simple ; then
-          echo -e 'package blaze-textual\n    flags: +integer-simple' >> cabal.project.local
-        fi
-    - name: Use modified cabal.project for ghc9
-      if: ${{ matrix.ghc == '9.0.1' }}
-      run: cp cabal-ghc901.project cabal.project
-
-    - name: Shorten binary names
-      run: |
-        sed -i.bak -e 's/haskell-language-server/hls/g' \
-                   -e 's/haskell_language_server/hls/g' \
-                   haskell-language-server.cabal cabal.project
-        sed -i.bak -e 's/Paths_haskell_language_server/Paths_hls/g' \
-                   src/**/*.hs exe/*.hs
-
-    - name: Set some linux specific things
-      if: matrix.os == 'ubuntu-18.04'
-      env:
-        GHC_VER: ${{ matrix.ghc }}
-      run: |
-        echo "LINUX_CABAL_ARGS=--enable-executable-static --ghc-options=-split-sections" >> $GITHUB_ENV
-        echo "GHC_VERSION=$GHC_VER" >> $GITHUB_ENV
-
-    - name: Build server
-      # Try building it twice in case of flakey builds on Windows
-      run: |
-        cabal build exe:hls -O2 $LINUX_CABAL_ARGS || \
-        cabal build exe:hls -O2 $LINUX_CABAL_ARGS -j1
-
-    - name: Compress server binary
-      id: compress_server_binary
+      shell: bash
       run: |
         HLS_BUILD=$(find dist-newstyle \( -name 'hls' -o -name 'hls.exe' \) -type f)
         HLS=haskell-language-server-${{env.GHC_VERSION}}
