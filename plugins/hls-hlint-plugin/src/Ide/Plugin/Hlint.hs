@@ -84,6 +84,7 @@ import           Development.IDE.GHC.Compat.Core                    hiding
 import           Language.Haskell.GHC.ExactPrint.Delta              (deltaOptions)
 import           Language.Haskell.GHC.ExactPrint.Parsers            (postParseTransform)
 import           Language.Haskell.GHC.ExactPrint.Types              (Rigidity (..))
+import           Language.Haskell.GhclibParserEx.Fixity             as GhclibParserEx (applyFixities)
 #endif
 
 import           Ide.Logger
@@ -104,7 +105,8 @@ import           Language.LSP.Types                                 hiding
 import qualified Language.LSP.Types                                 as LSP
 import qualified Language.LSP.Types.Lens                            as LSP
 
-import           GHC.Generics                                       (Generic)
+import           GHC.Generics                                       (Associativity (LeftAssociative, NotAssociative, RightAssociative),
+                                                                     Generic)
 import           Text.Regex.TDFA.Text                               ()
 
 import           Development.IDE.GHC.Compat.Core                    (WarningFlag (Opt_WarnUnrecognisedPragmas),
@@ -251,9 +253,23 @@ getIdeas nfp = do
         moduleEx _flags = do
           mbpm <- getParsedModuleWithComments nfp
           return $ createModule <$> mbpm
-          where createModule pm = Right (createModuleEx anns modu)
+          where
+            createModule pm = Right (createModuleEx anns (applyParseFlagsFixities modu))
                   where anns = pm_annotations pm
                         modu = pm_parsed_source pm
+
+            applyParseFlagsFixities :: ParsedSource -> ParsedSource
+            applyParseFlagsFixities modul = GhclibParserEx.applyFixities (parseFlagsToFixities _flags) modul
+
+            parseFlagsToFixities :: ParseFlags -> [(String, Fixity)]
+            parseFlagsToFixities = map toFixity . Hlint.fixities
+
+            toFixity :: FixityInfo -> (String, Fixity)
+            toFixity (name, dir, i) = (name, Fixity NoSourceText i $ f dir)
+                where
+                    f LeftAssociative  = InfixL
+                    f RightAssociative = InfixR
+                    f NotAssociative   = InfixN
 #else
         moduleEx flags = do
           mbpm <- getParsedModuleWithComments nfp
