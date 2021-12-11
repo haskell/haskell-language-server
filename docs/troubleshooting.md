@@ -38,13 +38,9 @@ The workaround is to use a version of haskell-language-server compiled from sour
 
 ### Support for Template Haskell
 
-Template Haskell should work fine in Linux with the distributed binaries
+Template Haskell should work fine in Linux and Windows with the distributed binaries. In Mac Os a dynamically linked binary of HLS is required to avoid segmentation faults. The easiest way to obtain a dynamically linked HLS binary is to build it locally. With cabal install this can be done as follows:
 
-Usage of Template Haskell in Mac Os requires a dynamically linked binary of HLS or risk encountering linker errors and/or segmentation faults.
-
-The best and currently only way to obtain a dynamically linked HLS binary is to build it locally. With cabal install this can be done as follows:
-
-    cabal install haskell-language-server --enable-executable-dynamic
+    cabal update && cabal install haskell-language-server --enable-executable-dynamic
 
 ## Troubleshooting the server
 
