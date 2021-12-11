@@ -35,19 +35,14 @@ newAsyncDebouncer = Debouncer . asyncRegisterEvent <$> STM.newIO
 
 -- | Register an event that will fire after the given delay if no other event
 -- for the same key gets registered until then.
---
--- If there is a pending event for the same key, the pending event will be killed.
--- Events are run unmasked so it is up to the user of `registerEvent`
--- to mask if required.
 asyncRegisterEvent :: (Eq k, Hashable k) => STM.Map k (TVar (Seconds, IO())) -> Seconds -> k -> IO () -> IO ()
-asyncRegisterEvent d delay k fire = mask_ $ do
-    prev <- atomically $ STM.lookup k d
+asyncRegisterEvent d delay k fire = join $ atomically $ do
+    prev <- STM.lookup k d
     case prev of
-        Just v -> do
-            atomicallyNamed "debouncer - reset" $ writeTVar v (delay, fire)
-        Nothing -> do
+        Just v -> writeTVar v (delay, fire) >> return (pure ())
+        Nothing -> return $ do
             var <- newTVarIO (delay, fire)
-            _ <- asyncWithUnmask $ \unmask -> unmask $ do
+            _ <- async $ do
                 join $ atomicallyNamed "debouncer - sleep" $ do
                     (s,act) <- readTVar var
                     unsafeIOToSTM $ sleep s
