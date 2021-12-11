@@ -680,7 +680,7 @@ newDefinitionAction IdeOptions{..} parsedModule Range{_start} name typ
       , _start `isInsideSrcSpan` l]
     , nextLineP <- Position{ _line = _line lastLineP + 1, _character = 0}
     = [ ("Define " <> sig
-        , [TextEdit (Range nextLineP nextLineP) (T.unlines ["", sig, name <> " = error \"not implemented\""])]
+        , [TextEdit (Range nextLineP nextLineP) (T.unlines ["", sig, name <> " = error \" " <> name <> " not implemented\""])]
         )]
     | otherwise = []
   where
