@@ -34,23 +34,50 @@ newAsyncDebouncer = Debouncer . asyncRegisterEvent <$> STM.newIO
 
 -- | Register an event that will fire after the given delay if no other event
 -- for the same key gets registered until then.
-asyncRegisterEvent :: (Eq k, Hashable k) => STM.Map k (TVar (Seconds, IO())) -> Seconds -> k -> IO () -> IO ()
+asyncRegisterEvent
+    :: (Eq k, Hashable k)
+    => STM.Map k (TVar (Maybe (Seconds, IO())))
+    -> Seconds
+    -> k
+    -> IO ()
+    -> IO ()
 asyncRegisterEvent d delay k fire = join $ atomicallyNamed "debouncer - register" $ do
+    -- The previous TVar for this key, if any
     prev <- STM.lookup k d
     case prev of
-        Just v -> writeTVar v (delay, fire) >> return (pure ())
+        Just v -> do
+            current <- readTVar v
+            case current of
+                -- Not empty, means that there is a thread running the actions
+                Just _  -> writeTVar v (Just (delay, fire)) >> return (pure ())
+                -- Empty = no thread. We need to start one for running the action
+                Nothing -> writeTVar v (Just (delay, fire)) >> return (restart v)
+
+        -- No previous TVar, we need to insert one and restart a thread for running the action
         Nothing
           | delay == 0 -> return fire
           | otherwise  -> do
-            var <- newTVar (delay, fire)
+            var <- newTVar (Just (delay, fire))
             STM.insert var k d
-            return $ void $ async $
+            return (restart var)
+    where
+        -- | Restart a thread to run the action stored in the given TVar
+        --   Once the action is done, the thread dies.
+        --   Assumes the Tvar is not empty
+        restart var =
+            void $ async $
                 join $ atomicallyNamed "debouncer - sleep" $ do
-                    (s,act) <- readTVar var
-                    unsafeIOToSTM $ sleep s
-                    return $ do
-                        atomically (STM.delete k d)
-                        act
+                    contents <- readTVar var
+                    case contents of
+                        Nothing -> error "impossible"
+                        Just (s,act) -> do
+                            -- sleep for the given delay
+                            -- If the TVar is written while sleeping,
+                            -- the transaction will restart
+                            unsafeIOToSTM $ sleep s
+                            -- we are done - empty the TVar before exiting
+                            writeTVar var Nothing
+                            return act
 
 -- | Debouncer used in the DAML CLI compiler that emits events immediately.
 noopDebouncer :: Debouncer k
