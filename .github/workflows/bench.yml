@@ -47,12 +47,12 @@ jobs:
     - run: git fetch origin master # check the master branch for benchmarking
 
     - uses: haskell/actions/setup@v1
+      id: HaskEnvSetup
       with:
         ghc-version  : ${{ matrix.ghc   }}
         cabal-version: ${{ matrix.cabal }}
         enable-stack: false
 
-    - name: Cache Cabal
     - name: Linux Platform config
       run: |
         echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
@@ -65,16 +65,26 @@ jobs:
         INDEX_STATE1=$(echo "$INDEX_STATE_ENTRY" | cut -d' ' -f2 | tr ':' '-')
         echo "INDEX_STATE=$INDEX_STATE1" >> $GITHUB_ENV
 
+    - name: Hackage sources cache
       uses: actions/cache@v2
+      env:
+        cache-name: hackage-sources
       with:
-        path: |
-          ~/.cabal/packages
-          ~/.cabal/store
-        key: v2-${{ runner.os }}-${{ matrix.ghc }}-bench-${{ hashFiles('cabal.project') }}
+        path: ${{ env.CABAL_PKGS_DIR }}
+        key:          ${{ env.cache-name }}-${{ env.INDEX_STATE }}
+        restore-keys: ${{ env.cache-name }}-
+
+    - name: Compiled deps cache
+      uses: actions/cache@v2
+      env:
+        cache-name: compiled-deps
+      with:
+        path: ${{ steps.HaskEnvSetup.outputs.cabal-store }}
+        key:  ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project') }}
         restore-keys: |
-            v2-${{ runner.os }}-${{ matrix.ghc }}-build-${{ hashFiles('cabal.project') }}
-            v2-${{ runner.os }}-${{ matrix.ghc }}-bench-
-            v2-${{ runner.os }}-${{ matrix.ghc }}
+              ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-
+              ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
+              ${{ env.cache-name }}-${{ runner.os }}-
 
     - run: cabal update
 
