@@ -17,6 +17,7 @@
 module Ide.Plugin.Retrie (descriptor) where
 
 import           Control.Concurrent.Extra             (readVar)
+import           Control.Concurrent.STM               (readTVarIO)
 import           Control.Exception.Safe               (Exception (..),
                                                        SomeException, catch,
                                                        throwIO, try)
@@ -356,7 +357,7 @@ callRetrie ::
   Bool ->
   IO ([CallRetrieError], WorkspaceEdit)
 callRetrie state session rewrites origin restrictToOriginatingFile = do
-  knownFiles <- toKnownFiles . unhashed <$> readVar (knownTargetsVar $ shakeExtras state)
+  knownFiles <- toKnownFiles . unhashed <$> readTVarIO (knownTargetsVar $ shakeExtras state)
   let reuseParsedModule f = do
         pm <-
           useOrFail "GetParsedModule" NoParse GetParsedModule f
