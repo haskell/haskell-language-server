@@ -68,6 +68,10 @@ library
     , text
     , transformers
     , unordered-containers
+    -- can be removed if https://github.com/ndmitchell/hlint/pull/1325#issue-1077062712 is merged
+    -- and https://github.com/haskell/haskell-language-server/pull/2464#issue-1077133441 is updated
+    -- accordingly
+    , ghc-lib-parser-ex
 
   if (flag(hlint33))
     -- This mirrors the logic in hlint.cabal for hlint-3.3

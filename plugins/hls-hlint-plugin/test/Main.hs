@@ -99,6 +99,10 @@ suggestionsTests =
         contents <- skipManyTill anyMessage $ getDocumentEdit doc
         liftIO $ contents @?= "main = undefined\nfoo = id\n"
 
+    , testCase ".hlint.yaml fixity rules are applied" $ runHlintSession "fixity" $ do
+        doc <- openDoc "FixityUse.hs" "haskell"
+        expectNoMoreDiagnostics 3 doc "hlint"
+
     , testCase "changing document contents updates hlint diagnostics" $ runHlintSession "" $ do
         doc <- openDoc "Base.hs" "haskell"
         testHlintDiagnostics doc
