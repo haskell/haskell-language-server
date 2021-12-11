@@ -12,7 +12,7 @@ import           Control.Concurrent.Async
 import           Control.Concurrent.STM
 import           Control.Concurrent.STM.Stats (atomicallyNamed)
 import           Control.Exception
-import           Control.Monad                (join)
+import           Control.Monad                (join, void)
 import           Data.Hashable
 import           GHC.Conc                     (unsafeIOToSTM)
 import qualified StmContainers.Map            as STM
@@ -40,15 +40,15 @@ asyncRegisterEvent d delay k fire = join $ atomically $ do
     prev <- STM.lookup k d
     case prev of
         Just v -> writeTVar v (delay, fire) >> return (pure ())
-        Nothing -> return $ do
-            var <- newTVarIO (delay, fire)
-            _ <- async $ do
+        Nothing -> do
+            var <- newTVar (delay, fire)
+            STM.insert var k d
+            return $ void $ async $ do
                 join $ atomicallyNamed "debouncer - sleep" $ do
                     (s,act) <- readTVar var
                     unsafeIOToSTM $ sleep s
                     STM.delete k d
                     return act
-            atomicallyNamed "debouncer2" $ STM.insert var k d
 
 -- | Debouncer used in the DAML CLI compiler that emits events immediately.
 noopDebouncer :: Debouncer k
