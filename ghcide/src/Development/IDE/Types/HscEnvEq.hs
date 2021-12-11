@@ -16,7 +16,6 @@ import           Control.Concurrent.Strict       (modifyVar, newVar)
 import           Control.DeepSeq                 (force)
 import           Control.Exception               (evaluate, mask, throwIO)
 import           Control.Monad.Extra             (eitherM, join, mapMaybeM)
-import           Control.Monad.IO.Class
 import           Data.Either                     (fromRight)
 import           Data.Set                        (Set)
 import qualified Data.Set                        as Set
@@ -81,11 +80,11 @@ newHscEnvEqWithImportPaths envImportPaths hscEnv deps = do
                 | d        <- depends
                 , Just pkg <- [lookupPackageConfig d hscEnv]
                 , (modName, maybeOtherPkgMod) <- unitExposedModules pkg
-                , m <- pure $ case maybeOtherPkgMod of
-                    -- When module is re-exported from another package,
-                    -- the origin module is represented by value in Just
-                    Just otherPkgMod -> otherPkgMod
-                    Nothing -> mkModule (unitInfoId pkg) modName
+                , let m = case maybeOtherPkgMod of
+                        -- When module is re-exported from another package,
+                        -- the origin module is represented by value in Just
+                        Just otherPkgMod -> otherPkgMod
+                        Nothing -> mkModule (unitInfoId pkg) modName
                 ]
 
             doOne m = do
