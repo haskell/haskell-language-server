@@ -90,8 +90,8 @@ jobs:
     - name: Build server
       # Try building it twice in case of flakey builds on Windows
       run: |
-        cabal build exe:hls -O2 $LINUX_CABAL_ARGS || \
-        cabal build exe:hls -O2 $LINUX_CABAL_ARGS -j1
+        cabal build --disable-tests exe:hls -O2 $LINUX_CABAL_ARGS || \
+        cabal build --disable-tests exe:hls -O2 $LINUX_CABAL_ARGS -j1
 
     - name: Compress server binary
       id: compress_server_binary
@@ -131,7 +131,7 @@ jobs:
 
     - name: Build wrapper
       if: matrix.ghc == '8.10.7'
-      run: cabal build exe:hls-wrapper -O2 $LINUX_CABAL_ARGS
+      run: cabal build --disable-tests exe:hls-wrapper -O2 $LINUX_CABAL_ARGS
 
     - name: Compress wrapper binary
       if: matrix.ghc == '8.10.7'
