@@ -36,15 +36,15 @@ An usual symptom is the presence of errors containing `unknown symbol` and it is
 
 The workaround is to use a version of haskell-language-server compiled from source with the ghc option `-dynamic` enabled. See more details [here](https://github.com/haskell/haskell-language-server/issues/1160#issuecomment-756566273).
 
-### Problems with Template Haskell
+### Support for Template Haskell
 
-Due to how Template Haskell code is evaluated at compile time and some limitations in the interaction between HLS and GHC, the loading of modules using TH can be problematic.
+Template Haskell should work fine in Linux with the distributed binaries
 
-The errors thrown are usually related to linking and usually make HLS crash: `Segmentation fault`, `GHC runtime linker: fatal error`, etc
+Usage of Template Haskell in Mac Os requires a dynamically linked binary of HLS or risk encountering linker errors and/or segmentation faults.
 
-A workaround which has helped in some cases is to compile HLS from source with the ghc option `-dynamic` enabled, as in the previous issue.
+The best and currently only way to obtain a dynamically linked HLS binary is to build it locally. With cabal install this can be done as follows:
 
-We have a [dedicated label](https://github.com/haskell/haskell-language-server/issues?q=is%3Aissue+is%3Aopen+label%3A%22type%3A+template+haskell+related%22) in the issue tracker and an [general issue](https://github.com/haskell/haskell-language-server/issues/1431) tracking support for TH.
+    cabal install haskell-language-server --enable-executable-dynamic
 
 ## Troubleshooting the server
 
