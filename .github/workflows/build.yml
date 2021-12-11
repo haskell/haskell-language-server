@@ -1,9 +1,5 @@
 name: Builds
 
-defaults:
-  run:
-    shell: bash
-
 on:
   release:
     types: [created]
@@ -15,6 +11,9 @@ jobs:
   build:
     runs-on: ${{ matrix.os }}
     container: ${{ (matrix.os == 'ubuntu-18.04' && 'alpine:3.12') || '' }}
+    defaults:
+      run:
+        shell: ${{ (matrix.os == 'windows-latest' && 'bash') || 'sh' }}
     strategy:
       fail-fast: false
       matrix:
@@ -46,7 +45,6 @@ jobs:
     - name: Use modified cabal.project for ghc9
       if: ${{ matrix.ghc == '9.0.1' }}
       run: cp cabal-ghc901.project cabal.project
-      shell: bash
 
     - name: Shorten binary names
       run: |
@@ -55,7 +53,6 @@ jobs:
                    haskell-language-server.cabal cabal.project
         sed -i.bak -e 's/Paths_haskell_language_server/Paths_hls/g' \
                    src/**/*.hs exe/*.hs
-      shell: bash
 
     - name: Set some window specific things
       if: matrix.os == 'windows-latest'
@@ -64,7 +61,6 @@ jobs:
       run: |
         echo "EXE_EXT=.exe" >> $GITHUB_ENV
         echo "GHC_VERSION=$GHC_VER" >> $GITHUB_ENV
-      shell: bash
 
     - name: Set some linux specific things
       if: matrix.os == 'ubuntu-18.04'
@@ -95,7 +91,6 @@ jobs:
 
     - name: Compress server binary
       id: compress_server_binary
-      shell: bash
       run: |
         HLS_BUILD=$(find dist-newstyle \( -name 'hls' -o -name 'hls.exe' \) -type f)
         HLS=haskell-language-server-${{env.GHC_VERSION}}
