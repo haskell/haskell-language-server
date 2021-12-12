@@ -5,5 +5,5 @@ Contributing
    :maxdepth: 2
 
    contributing
-   releases
    plugin-tutorial
+   releases
