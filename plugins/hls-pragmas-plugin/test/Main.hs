@@ -27,14 +27,13 @@ tests =
 codeActionTests :: TestTree
 codeActionTests =
   testGroup "code actions"
-  [
-    codeActionTest "Block comment then line comment doesn't split line" "BlockCommentThenLineComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  [ codeActionTest "Block comment then line comment doesn't split line" "BlockCommentThenLineComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
   , codeActionTest "Block comment then single-line block comment doesn't split line" "BlockCommentThenSingleLineBlockComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
   , codeActionTest "Block comment then multi-line block comment doesn't split line" "BlockCommentThenMultiLineBlockComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
   , codeActionTest "Block comment then line haddock splits line" "BlockCommentThenLineHaddock" [("Add \"TupleSections\"", "Contains TupleSections code action")]
-  ,  codeActionTest "Block comment then single-line block haddock splits line" "BlockCommentThenSingleLineBlockHaddock" [("Add \"TupleSections\"", "Contains TupleSections code action")]
-  ,  codeActionTest "Block comment then multi-line block haddock splits line" "BlockCommentThenMultiLineBlockHaddock" [("Add \"TupleSections\"", "Contains TupleSections code action")]
-  ,  codeActionTest "Pragma then line comment doesn't split line" "PragmaThenLineComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTest "Block comment then single-line block haddock splits line" "BlockCommentThenSingleLineBlockHaddock" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTest "Block comment then multi-line block haddock splits line" "BlockCommentThenMultiLineBlockHaddock" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTest "Pragma then line comment doesn't split line" "PragmaThenLineComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
   , codeActionTest "Pragma then single-line block comment doesn't split line" "PragmaThenSingleLineBlockComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
   , codeActionTest "Pragma then multi-line block comment splits line" "PragmaThenMultiLineBlockComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
   , codeActionTest "Pragma then line haddock splits line" "PragmaThenLineHaddock" [("Add \"TupleSections\"", "Contains TupleSections code action")]
