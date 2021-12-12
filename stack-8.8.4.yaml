@@ -50,7 +50,7 @@ extra-deps:
   - ghc-trace-events-0.1.2.1
   - haskell-src-exts-1.21.1
   - heapsize-0.3.0
-  - hie-bios-0.7.5
+  - hie-bios-0.8.0
   - hlint-3.2.3
   - HsYAML-aeson-0.2.0.0@rev:2
   - hoogle-5.0.17.11
