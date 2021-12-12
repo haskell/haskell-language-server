@@ -14,17 +14,33 @@ packages:
          ./plugins/hls-eval-plugin
          ./plugins/hls-explicit-imports-plugin
          ./plugins/hls-refine-imports-plugin
-         ./plugins/hls-hlint-plugin
-        -- ./plugins/hls-retrie-plugin
+         -- ./plugins/hls-hlint-plugin
+         ./plugins/hls-retrie-plugin
          ./plugins/hls-haddock-comments-plugin
         --  ./plugins/hls-splice-plugin
          ./plugins/hls-qualify-imported-names-plugin
-         ./plugins/hls-floskell-plugin
+        -- ./plugins/hls-floskell-plugin
          ./plugins/hls-pragmas-plugin
          ./plugins/hls-module-name-plugin
-         ./plugins/hls-ormolu-plugin
+        -- ./plugins/hls-ormolu-plugin
          ./plugins/hls-call-hierarchy-plugin
          ./plugins/hls-alternate-number-format-plugin
+
+source-repository-package
+  type: git
+  location: https://github.com/Bodigrim/th-extras
+  tag: f00ebca78f474d271fd7989cae0a0a47559b2efd
+  -- https://github.com/mokus0/th-extras/pull/14
+
+repository head.hackage.ghc.haskell.org
+   url: https://ghc.gitlab.haskell.org/head.hackage/
+   secure: True
+   key-threshold: 3
+   root-keys:
+       f76d08be13e9a61a377a85e2fb63f4c5435d40f8feb3e12eb05905edb8cdea89
+       26021a13b401500c8eb2761ca95c61f2d625bfef951b939a8124ed12ecf07329
+       7541f32a4ccca4f97aea3b22f5e593ba2c0267546016b992dfadcd2fe944e55d
+
 
 with-compiler: ghc-9.2.1
 
@@ -36,11 +52,17 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2021-11-29T12:30:07Z
+index-state: 2021-12-12T08:11:07Z
 
 constraints:
   -- These plugins doesn't work on GHC92 yet
-  haskell-language-server +ignore-plugins-ghc-bounds -brittany -class -fourmolu -splice -stylishhaskell -tactic -refineImports -callhierarchy -retrie
+  haskell-language-server +ignore-plugins-ghc-bounds -brittany -class -fourmolu -splice -stylishhaskell -tactic -refineImports -callhierarchy -hlint -ormolu -floskell,
+  ghc-lib-parser ^>= 9.2,
+  attoparsec ^>= 0.14.3,
+  primitive-extras ==0.10.1.2,
+  -- these constraints are for head.hackage
+  aeson ==1.5.6.0,
+  primitive-unlifted ==0.1.3.0,
 
 allow-newer:
   Cabal,
