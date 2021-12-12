@@ -92,6 +92,7 @@ library
     -- This mirrors the logic in hlint.cabal for hlint-3.2
     -- https://github.com/ndmitchell/hlint/blob/c7354e473c7d09213c8adc3dc94bf50a6eb4a42d/hlint.cabal#L79-L88
     build-depends: hlint ^>=3.2
+                 , extra < 1.7.10
     if (!flag(ghc-lib) && impl(ghc >=8.10.1) && impl(ghc < 8.11.0))
       build-depends: ghc >=8.10 && <9.0
     else

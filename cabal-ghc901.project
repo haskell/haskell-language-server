@@ -48,6 +48,9 @@ constraints:
 -- this way we track explicitly all transitive dependencies which need support for ghc-9
 allow-newer:
 
+    -- brittany
+    multistate:base,
+
     stylish-haskell:Cabal,
     stylish-haskell:ghc-lib-parser,
 
