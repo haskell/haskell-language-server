@@ -15,8 +15,8 @@ module Development.IDE.Core.ProgressReporting
 
 import           Control.Concurrent.Async
 import           Control.Concurrent.STM.Stats   (TVar, atomicallyNamed,
-                                                 newTVarIO, readTVar,
-                                                 readTVarIO, writeTVar)
+                                                 modifyTVar', newTVarIO,
+                                                 readTVarIO)
 import           Control.Concurrent.Strict
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
@@ -86,14 +86,12 @@ recordProgress :: InProgressState -> NormalizedFilePath -> (Int -> Int) -> IO ()
 recordProgress InProgressState{..} file shift = do
     (prev, new) <- atomicallyNamed "recordProgress" $ STM.focus alterPrevAndNew file currentVar
     atomicallyNamed "recordProgress2" $ do
-        done <- readTVar doneVar
-        todo <- readTVar todoVar
         case (prev,new) of
-            (Nothing,0) -> writeTVar doneVar (done+1) >> writeTVar todoVar (todo+1)
-            (Nothing,_) -> writeTVar todoVar (todo+1)
+            (Nothing,0) -> modifyTVar' doneVar (+1) >> modifyTVar' todoVar (+1)
+            (Nothing,_) -> modifyTVar' todoVar (+1)
             (Just 0, 0) -> pure ()
-            (Just 0, _) -> writeTVar doneVar (done-1)
-            (Just _, 0) -> writeTVar doneVar (done+1)
+            (Just 0, _) -> modifyTVar' doneVar pred
+            (Just _, 0) -> modifyTVar' doneVar (+1)
             (Just _, _) -> pure()
   where
     alterPrevAndNew = do
