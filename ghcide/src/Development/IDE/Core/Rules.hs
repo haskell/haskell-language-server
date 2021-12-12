@@ -154,6 +154,7 @@ import System.Environment (getExecutablePath)
 import System.Process.Extra (readProcessWithExitCode)
 import Text.Read (readMaybe)
 import System.Info.Extra (isMac)
+import HIE.Bios.Ghc.Gap (hostIsDynamic)
 
 templateHaskellInstructions :: T.Text
 templateHaskellInstructions = "https://haskell-language-server.readthedocs.io/en/latest/troubleshooting.html#support-for-template-haskell"
@@ -830,15 +831,7 @@ isHiFileStableRule = defineEarlyCutoff $ RuleNoDiagnostics $ \IsHiFileStable f -
 
 displayTHWarning :: LspT c IO ()
 displayTHWarning
-  | isMac = do
-    isDynamicBinary <- lift $ do
-        exe <- getExecutablePath
-        (_, out, _) <- readProcessWithExitCode exe ["+RTS", "--info"] ""
-        return $ fromMaybe False $ do
-            fields <- readMaybe out
-            rtsWay <- lookup ("RTS way" :: String) fields
-            return $ "dyn" `isInfixOf` rtsWay
-    unless isDynamicBinary $
+  | isMac && not hostIsDynamic = do
       LSP.sendNotification SWindowShowMessage $
         ShowMessageParams MtInfo $ T.unwords
           [ "This HLS binary does not support Template Haskell."
