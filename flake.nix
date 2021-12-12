@@ -70,7 +70,7 @@
             with haskell.lib; {
               # Patches don't apply
               github = overrideCabal hsuper.github (drv: { patches = []; });
-              # We need an older version  
+              # We need an older version
               hiedb = hself.hiedb_0_4_1_0;
 
               implicit-hie-cradle = hself.callCabal2nix "implicit-hie-cradle"

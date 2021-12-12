@@ -7,7 +7,6 @@ let
     "hls-brittany-plugin"
     "hls-stylish-haskell-plugin"
     "hls-fourmolu-plugin"
-    "hls-class-plugin"
   ];
 
   hpkgsOverride = hself: hsuper:
@@ -27,7 +26,6 @@ let
         hself.callCabal2nixWithOptions "haskell-language-server" ./.
         (pkgs.lib.concatStringsSep " " [
           "-f-brittany"
-          "-f-class"
           "-f-fourmolu"
           "-f-stylishhaskell"
           "-f-tactic"
