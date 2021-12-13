@@ -166,6 +166,11 @@ instance IsTarget HoleTarget where
   type TargetArgs HoleTarget = HoleJudgment
   fetchTargetArgs LspEnv{..} = do
     let FileContext{..} = le_fileContext
+    traceMX "targeting" "getting range"
     range <- MaybeT $ pure fc_range
-    mapMaybeT liftIO $ judgementForHole le_ideState fc_nfp range le_config
+    traceMX "targeting" "got range"
+    r <- mapMaybeT liftIO $ judgementForHole le_ideState fc_nfp range le_config
+    traceMX "targeting" "TARGET ACQUIRED"
+    pure r
+
 

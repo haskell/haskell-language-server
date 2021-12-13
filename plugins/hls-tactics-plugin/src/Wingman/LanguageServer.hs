@@ -5,9 +5,11 @@
 {-# LANGUAGE TypeFamilies      #-}
 
 {-# LANGUAGE NoMonoLocalBinds  #-}
+{-# LANGUAGE StandaloneDeriving #-}
 
 module Wingman.LanguageServer where
 
+import GHC.Hs.Dump
 import           Control.Arrow ((***))
 import           Control.Monad
 import           Control.Monad.IO.Class
@@ -34,7 +36,7 @@ import           Development.IDE.Core.Service (runAction)
 import           Development.IDE.Core.Shake (IdeState (..), uses, define, use, addPersistentRule)
 import qualified Development.IDE.Core.Shake as IDE
 import           Development.IDE.Core.UseStale
-import           Development.IDE.GHC.Compat hiding (empty)
+import           Development.IDE.GHC.Compat hiding (empty, selectSmallestContaining)
 import qualified Development.IDE.GHC.Compat.Util as FastString
 import           Development.IDE.GHC.Error (realSrcSpanToRange)
 import           Development.IDE.GHC.ExactPrint
@@ -211,11 +213,12 @@ judgementForHole
 judgementForHole state nfp range cfg = do
   let stale a = runStaleIde "judgementForHole" state nfp a
 
-  TrackedStale asts amapping  <- stale GetHieAst
+  asts <- runCurrentIde "judgementForHole" state nfp GetHieAst
   case unTrack asts of
-    HAR _ _  _ _ (HieFromDisk _) -> fail "Need a fresh hie file"
+    HAR _ _  _ _ (HieFromDisk _) -> do
+      fail "Need a fresh hie file"
     HAR _ (unsafeCopyAge asts -> hf) _ _ HieFresh -> do
-      range' <- liftMaybe $ mapAgeFrom amapping range
+      let range' = range
       binds <- stale GetBindings
       tcg@(TrackedStale tcg_t tcg_map)
           <- fmap (fmap tmrTypechecked)
@@ -223,9 +226,9 @@ judgementForHole state nfp range cfg = do
 
       hscenv <- stale GhcSessionDeps
 
-      (rss, g) <- liftMaybe $ getSpanAndTypeAtHole range' hf
+      (new_rss, g) <- liftMaybe $ getSpanAndTypeAtHole range' hf
 
-      new_rss <- liftMaybe $ mapAgeTo amapping rss
+      -- new_rss <- liftMaybe $ mapAgeTo amapping rss
       tcg_rss <- liftMaybe $ mapAgeFrom tcg_map new_rss
 
       -- KnownThings is just the instances in scope. There are no ranges
@@ -307,24 +310,45 @@ getAlreadyDestructed (unTrack -> span) (unTrack -> binds) =
     ) binds
 
 
+selectSmallestContaining :: Span -> HieAST a -> Maybe (HieAST a)
+selectSmallestContaining sp node
+  | (traceIdX "node span" $ nodeSpan node) `containsSpan` sp = getFirst $ mconcat
+      [ foldMap (First . selectSmallestContaining sp) $ nodeChildren node
+      , First (Just node)
+      ]
+  | sp `containsSpan` nodeSpan node = Nothing
+  | otherwise = Nothing
+
 getSpanAndTypeAtHole
-    :: Tracked age Range
+    :: Data b => Tracked age Range
     -> Tracked age (HieASTs b)
     -> Maybe (Tracked age RealSrcSpan, b)
 getSpanAndTypeAtHole r@(unTrack -> range) (unTrack -> hf) = do
-  join $ listToMaybe $ M.elems $ flip M.mapWithKey (getAsts hf) $ \fs ast ->
+  traceMX "size of asts" $ M.size $ getAsts hf
+  join $ listToMaybe $ M.elems $ flip M.mapWithKey (getAsts hf) $ \fs ast -> do
+    traceMX "wtf" "inside block"
+    traceMX "OK?" $ rangeToRealSrcSpan (FastString.unpackFS fs) range
+
     case selectSmallestContaining (rangeToRealSrcSpan (FastString.unpackFS fs) range) ast of
-      Nothing -> Nothing
+      Nothing -> do
+        traceMX "wtf" "no smallest containing"
+        Nothing
       Just ast' -> do
+        traceMX "NICE" $ nodeSpan ast'
+
         let info = nodeInfo ast'
+        traceMX "wtf" "do i have a node type"
         ty <- listToMaybe $ nodeType info
+        traceMX "wtf" "can i guard"
         guard $ ("HsUnboundVar","HsExpr") `S.member` nodeAnnotations info
         -- Ensure we're actually looking at a hole here
+        traceMX "wtf" "isere than an occ"
         occ <- (either (const Nothing) (Just . occName) =<<)
              . listToMaybe
              . S.toList
              . M.keysSet
              $ nodeIdentifiers info
+        traceMX "wtf" "am i a hole"
         guard $ isHole occ
         pure (unsafeCopyAge r $ nodeSpan ast', ty)
 

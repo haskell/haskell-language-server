@@ -93,13 +93,15 @@ runContinuation plId cont state (fc, b) = do
               , _message = T.pack "TODO(sandy)"
               , _xdata =  Nothing
               } ) $ do
+      traceMX "RUNNING CONTINUATION" ""
       env@LspEnv{..} <- buildEnv state plId fc
       let stale a = runStaleIde "runContinuation" state (fc_nfp le_fileContext) a
       args <- fetchTargetArgs @a env
+      traceMX "running the command" ""
       res <- c_runCommand cont env args fc b
 
       -- This block returns a maybe error.
-      fmap (maybe (Right $ A.Null) Left . coerce . foldMap Last) $
+      fmap (maybe (Right $ A.Null) Left . coerce . foldMap Last) $ do
         for res $ \case
           ErrorMessages errs -> do
             traverse_ showUserFacingMessage errs

@@ -37,6 +37,7 @@ makeTacticInteraction
 makeTacticInteraction cmd =
   Interaction $ Continuation @_ @HoleTarget cmd
     (SynthesizeCodeAction $ \env hj -> do
+      traceMX "synthesizing code action" cmd
       pure $ commandProvider cmd $
             TacticProviderData
               { tpd_lspEnv    = env
@@ -45,10 +46,14 @@ makeTacticInteraction cmd =
               }
     )
     $ \LspEnv{..} HoleJudgment{..} FileContext{..} var_name -> do
+        traceMX "the actual continuation for" cmd
+        traceMX "inside yo" "getting run"
         let stale a = runStaleIde "tacticCmd" le_ideState fc_nfp a
 
         let span = fmap (rangeToRealSrcSpan (fromNormalizedFilePath fc_nfp)) hj_range
+        traceMX "inside yo" "getting annotated parsed source"
         TrackedStale _ pmmap <- mapMaybeT liftIO $ stale GetAnnotatedParsedSource
+        traceMX "inside yo" "mapping age"
         pm_span <- liftMaybe $ mapAgeFrom pmmap span
         IdeOptions{optTesting = IdeTesting isTesting} <-
             liftIO $ getIdeOptionsIO (shakeExtras le_ideState)

@@ -37,13 +37,17 @@ unsafeRender' sdoc = unsafePerformIO $ do
 {-# NOINLINE unsafeRender' #-}
 
 traceMX :: (Monad m, Show a) => String -> a -> m ()
-traceMX str a = traceM $ mappend ("!!!" <> str <> ": ") $ show a
+traceMX str a = unsafePerformIO $ do
+  putStrLn $ mappend ("!!!" <> str <> ": ") $ show a
+  pure $ pure ()
 
 traceX :: (Show a) => String -> a -> b -> b
-traceX str a = trace (mappend ("!!!" <> str <> ": ") $ show a)
+traceX str a b = unsafePerformIO $ do
+  putStrLn $ (mappend ("!!!" <> str <> ": ") $ show a)
+  pure b
 
 traceIdX :: (Show a) => String -> a -> a
-traceIdX str a = trace (mappend ("!!!" <> str <> ": ") $ show a) a
+traceIdX str a = traceX str a a
 
 traceFX :: String -> (a -> String) -> a -> a
 traceFX str f a = trace (mappend ("!!!" <> str <> ": ") $ f a) a
