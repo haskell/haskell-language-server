@@ -167,9 +167,8 @@ rules :: PluginId -> Rules ()
 rules plugin = do
   define $ \GetHlintDiagnostics file -> do
     config <- getClientConfigAction def
-    let pluginConfig = configForPlugin config plugin
-    let hlintOn' = hlintOn config && plcGlobalOn pluginConfig && plcDiagnosticsOn pluginConfig
-    ideas <- if hlintOn' then getIdeas file else return (Right [])
+    let hlintOn = pluginEnabledConfig plcDiagnosticsOn plugin config
+    ideas <- if hlintOn then getIdeas file else return (Right [])
     return (diagnostics file ideas, Just ())
 
   defineNoFile $ \GetHlintSettings -> do

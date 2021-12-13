@@ -49,7 +49,6 @@ data Config =
   Config
     { checkParents       :: CheckParents
     , checkProject       :: !Bool
-    , hlintOn            :: !Bool
     , formattingProvider :: !T.Text
     , maxCompletions     :: !Int
     , plugins            :: !(Map.Map T.Text PluginConfig)
@@ -59,7 +58,6 @@ instance Default Config where
   def = Config
     { checkParents                = CheckOnSave
     , checkProject                = True
-    , hlintOn                     = True
     -- , formattingProvider          = "brittany"
     , formattingProvider          = "ormolu"
     -- , formattingProvider          = "floskell"
@@ -79,7 +77,6 @@ parseConfig defValue = A.withObject "Config" $ \v -> do
       Just s -> flip (A.withObject "Config.settings") s $ \o -> Config
         <$> (o .:? "checkParents" <|> v .:? "checkParents") .!= checkParents defValue
         <*> (o .:? "checkProject" <|> v .:? "checkProject") .!= checkProject defValue
-        <*> o .:? "hlintOn"                                 .!= hlintOn defValue
         <*> o .:? "formattingProvider"                      .!= formattingProvider defValue
         <*> o .:? "maxCompletions"                          .!= maxCompletions defValue
         <*> o .:? "plugin"                                  .!= plugins defValue
@@ -90,7 +87,6 @@ instance A.ToJSON Config where
     where
       r = object [ "checkParents"                .= checkParents
                  , "checkProject"                .= checkProject
-                 , "hlintOn"                     .= hlintOn
                  , "formattingProvider"          .= formattingProvider
                  , "maxCompletions"              .= maxCompletions
                  , "plugin"                      .= plugins

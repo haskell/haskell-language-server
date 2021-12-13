@@ -41,7 +41,6 @@ This option obviously would not make sense for language servers for other langua
 Here is a list of the additional settings currently supported by `haskell-language-server`, along with their setting key (you may not need to know this) and default:
 
 - Formatting provider (`haskell.formattingProvider`, default `ormolu`): what formatter to use; one of `floskell`, `ormolu`, `fourmolu`, `stylish-haskell`, or `brittany` (if compiled with the brittany plugin).
-- Hlint (`haskell.hlintOn`, default true): whether to enable Hlint support. *Deprecated* as it is equivalent to `haskell.plugin.hlint.globalOn`
 - Max completions (`haskell.maxCompletions`, default 40): maximum number of completions sent to the LSP client.
 - Check project (`haskell.checkProject`, default true): whether to typecheck the entire project on load. As it is activated by default could drive to bad perfomance in large projects.
 - Check parents (`haskell.checkParents`, default `CheckOnSaveAndClose`): when to typecheck reverse dependencies of a file; one of `NeverCheck`, `CheckOnClose`, `CheckOnSaveAndClose`, or `AlwaysCheck`.
