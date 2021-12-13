@@ -136,7 +136,7 @@ import qualified GHC.LanguageExtensions                       as LangExt
 import qualified HieDb
 import           Ide.Plugin.Config
 import qualified Language.LSP.Server                          as LSP
-import           Language.LSP.Types                           (SMethod (SCustomMethod))
+import           Language.LSP.Types                           (SMethod (SCustomMethod, SWindowShowMessage), ShowMessageParams (ShowMessageParams), MessageType (MtInfo))
 import           Language.LSP.VFS
 import           System.Directory                             (makeAbsolute)
 import           Data.Default                                 (def, Default)
@@ -149,6 +149,15 @@ import           Ide.PluginUtils                              (configForPlugin)
 import           Ide.Types                                    (DynFlagsModifications (dynFlagsModifyGlobal, dynFlagsModifyParser),
                                                                PluginId)
 import Control.Concurrent.STM.Stats (atomically)
+import Language.LSP.Server (LspT)
+import System.Environment (getExecutablePath)
+import System.Process.Extra (readProcessWithExitCode)
+import Text.Read (readMaybe)
+import System.Info.Extra (isMac)
+import HIE.Bios.Ghc.Gap (hostIsDynamic)
+
+templateHaskellInstructions :: T.Text
+templateHaskellInstructions = "https://haskell-language-server.readthedocs.io/en/latest/troubleshooting.html#support-for-template-haskell"
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
@@ -820,8 +829,26 @@ isHiFileStableRule = defineEarlyCutoff $ RuleNoDiagnostics $ \IsHiFileStable f -
       summarize SourceUnmodified          = BS.singleton 2
       summarize SourceUnmodifiedAndStable = BS.singleton 3
 
+displayTHWarning :: LspT c IO ()
+displayTHWarning
+  | isMac && not hostIsDynamic = do
+      LSP.sendNotification SWindowShowMessage $
+        ShowMessageParams MtInfo $ T.unwords
+          [ "This HLS binary does not support Template Haskell."
+          , "Follow the [instructions](" <> templateHaskellInstructions <> ")"
+          , "to build an HLS binary with support for Template Haskell."
+          ]
+  | otherwise = return ()
+
+newtype DisplayTHWarning = DisplayTHWarning (IO ())
+instance IsIdeGlobal DisplayTHWarning
+
 getModSummaryRule :: Rules ()
 getModSummaryRule = do
+    env <- lspEnv <$> getShakeExtrasRules
+    displayItOnce <- liftIO $ once $ LSP.runLspT (fromJust env) displayTHWarning
+    addIdeGlobal (DisplayTHWarning displayItOnce)
+
     defineEarlyCutoff $ Rule $ \GetModSummary f -> do
         session' <- hscEnv <$> use_ GhcSession f
         modify_dflags <- getModifyDynFlags dynFlagsModifyGlobal
@@ -832,6 +859,10 @@ getModSummaryRule = do
                 getModSummaryFromImports session fp modTime (textToStringBuffer <$> mFileContent)
         case modS of
             Right res -> do
+                -- Check for Template Haskell
+                when (uses_th_qq $ msrModSummary res) $ do
+                    DisplayTHWarning act <- getIdeGlobalAction
+                    liftIO act
                 bufFingerPrint <- liftIO $
                     fingerprintFromStringBuffer $ fromJust $ ms_hspp_buf $ msrModSummary res
                 let fingerPrint = Util.fingerprintFingerprints
@@ -1027,9 +1058,6 @@ needsCompilationRule file = do
 
   pure (Just $ encodeLinkableType res, Just res)
   where
-    uses_th_qq (ms_hspp_opts -> dflags) =
-      xopt LangExt.TemplateHaskell dflags || xopt LangExt.QuasiQuotes dflags
-
     computeLinkableType :: ModSummary -> [Maybe ModSummary] -> [Maybe LinkableType] -> Maybe LinkableType
     computeLinkableType this deps xs
       | Just ObjectLinkable `elem` xs     = Just ObjectLinkable -- If any dependent needs object code, so do we
@@ -1038,6 +1066,10 @@ needsCompilationRule file = do
       | otherwise                         = Nothing             -- If none of these conditions are satisfied, we don't need to compile
       where
         this_type = computeLinkableTypeForDynFlags (ms_hspp_opts this)
+
+uses_th_qq :: ModSummary -> Bool
+uses_th_qq (ms_hspp_opts -> dflags) =
+      xopt LangExt.TemplateHaskell dflags || xopt LangExt.QuasiQuotes dflags
 
 -- | How should we compile this module?
 -- (assuming we do in fact need to compile it).
