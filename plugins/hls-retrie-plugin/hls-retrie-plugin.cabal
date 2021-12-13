@@ -30,6 +30,7 @@ library
     , lsp-types
     , retrie                >=0.1.1.0
     , safe-exceptions
+    , stm
     , text
     , transformers
     , unordered-containers

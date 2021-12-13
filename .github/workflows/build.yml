@@ -1,9 +1,5 @@
 name: Builds
 
-defaults:
-  run:
-    shell: bash
-
 on:
   release:
     types: [created]
@@ -14,7 +10,10 @@ on:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
-
+    container: ${{ (matrix.os == 'ubuntu-18.04' && 'alpine:3.12') || '' }}
+    defaults:
+      run:
+        shell: ${{ (matrix.os == 'windows-latest' && 'bash') || 'sh' }}
     strategy:
       fail-fast: false
       matrix:
@@ -23,12 +22,26 @@ jobs:
         cabal: ['3.6']
 
     steps:
+    - name: Install system dependencies
+      if: matrix.os == 'ubuntu-18.04'
+      run: |
+        apk add --no-cache curl gcc g++ gmp-dev ncurses-dev libffi-dev make xz gzip tar perl git bash sudo binutils-gold
+        apk add --no-cache zlib zlib-dev zlib-static gmp gmp-dev ncurses-static
     - uses: actions/checkout@v2
 
     - uses: haskell/actions/setup@v1
       with:
         ghc-version  : ${{ matrix.ghc   }}
         cabal-version: ${{ matrix.cabal }}
+        enable-stack: false
+
+    # some alpines come with integer-simple instead of integer-gmp
+    - name: Force integer-simple
+      if: matrix.os == 'ubuntu-18.04'
+      run: |
+        if ghc --info | grep -q integer-simple ; then
+          echo -e 'package blaze-textual\n    flags: +integer-simple' >> cabal.project.local
+        fi
 
     - name: Use modified cabal.project for ghc9
       if: ${{ matrix.ghc == '9.0.1' }}
@@ -74,8 +87,8 @@ jobs:
     - name: Build server
       # Try building it twice in case of flakey builds on Windows
       run: |
-        cabal build exe:hls -O2 $LINUX_CABAL_ARGS || \
-        cabal build exe:hls -O2 $LINUX_CABAL_ARGS -j1
+        cabal build --disable-tests exe:hls -O2 $LINUX_CABAL_ARGS || \
+        cabal build --disable-tests exe:hls -O2 $LINUX_CABAL_ARGS -j1
 
     - name: Compress server binary
       id: compress_server_binary
@@ -114,7 +127,7 @@ jobs:
 
     - name: Build wrapper
       if: matrix.ghc == '8.10.7'
-      run: cabal build exe:hls-wrapper -O2 $LINUX_CABAL_ARGS
+      run: cabal build --disable-tests exe:hls-wrapper -O2 $LINUX_CABAL_ARGS
 
     - name: Compress wrapper binary
       if: matrix.ghc == '8.10.7'

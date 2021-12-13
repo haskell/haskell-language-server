@@ -14,9 +14,9 @@ module Development.IDE.Core.ProgressReporting
    where
 
 import           Control.Concurrent.Async
-import           Control.Concurrent.STM.Stats   (STM, TVar, atomically,
-                                                 newTVarIO, readTVar,
-                                                 readTVarIO, writeTVar)
+import           Control.Concurrent.STM.Stats   (TVar, atomicallyNamed,
+                                                 modifyTVar', newTVarIO,
+                                                 readTVarIO)
 import           Control.Concurrent.Strict
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
@@ -82,21 +82,17 @@ data InProgressState = InProgressState
 newInProgress :: IO InProgressState
 newInProgress = InProgressState <$> newTVarIO 0 <*> newTVarIO 0 <*> STM.newIO
 
-recordProgress :: InProgressState -> NormalizedFilePath -> (Int -> Int) -> STM ()
+recordProgress :: InProgressState -> NormalizedFilePath -> (Int -> Int) -> IO ()
 recordProgress InProgressState{..} file shift = do
-    done <- readTVar doneVar
-    todo <- readTVar todoVar
-    (prev, new) <- STM.focus alterPrevAndNew file currentVar
-    let (done',todo') =
-            case (prev,new) of
-                (Nothing,0) -> (done+1, todo+1)
-                (Nothing,_) -> (done,   todo+1)
-                (Just 0, 0) -> (done  , todo)
-                (Just 0, _) -> (done-1, todo)
-                (Just _, 0) -> (done+1, todo)
-                (Just _, _) -> (done  , todo)
-    writeTVar todoVar todo'
-    writeTVar doneVar done'
+    (prev, new) <- atomicallyNamed "recordProgress" $ STM.focus alterPrevAndNew file currentVar
+    atomicallyNamed "recordProgress2" $ do
+        case (prev,new) of
+            (Nothing,0) -> modifyTVar' doneVar (+1) >> modifyTVar' todoVar (+1)
+            (Nothing,_) -> modifyTVar' todoVar (+1)
+            (Just 0, 0) -> pure ()
+            (Just 0, _) -> modifyTVar' doneVar pred
+            (Just _, 0) -> modifyTVar' doneVar (+1)
+            (Just _, _) -> pure()
   where
     alterPrevAndNew = do
         prev <- Focus.lookup
@@ -186,7 +182,7 @@ delayedProgressReporting before after lspEnv optProgressStyle = do
             -- Do not remove the eta-expansion without profiling a session with at
             -- least 1000 modifications.
             where
-              f shift = atomically $ recordProgress inProgress file shift
+              f shift = recordProgress inProgress file shift
 
 mRunLspT :: Applicative m => Maybe (LSP.LanguageContextEnv c ) -> LSP.LspT c m () -> m ()
 mRunLspT (Just lspEnv) f = LSP.runLspT lspEnv f

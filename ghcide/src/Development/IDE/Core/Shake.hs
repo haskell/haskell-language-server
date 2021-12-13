@@ -148,6 +148,7 @@ import           GHC.Fingerprint
 import           Language.LSP.Types.Capabilities
 import           OpenTelemetry.Eventlog
 
+import           Control.Concurrent.STM.Stats           (atomicallyNamed)
 import           Control.Exception.Extra                hiding (bracket_)
 import           Data.Aeson                             (toJSON)
 import qualified Data.ByteString.Char8                  as BS8
@@ -189,7 +190,9 @@ data ShakeExtras = ShakeExtras
      lspEnv :: Maybe (LSP.LanguageContextEnv Config)
     ,debouncer :: Debouncer NormalizedUri
     ,logger :: Logger
-    ,globals :: Var (HMap.HashMap TypeRep Dynamic)
+    ,globals :: TVar (HMap.HashMap TypeRep Dynamic)
+      -- ^ Registry of global state used by rules.
+      -- Small and immutable after startup, so not worth using an STM.Map.
     ,state :: Values
     ,diagnostics :: STMDiagnosticStore
     ,hiddenDiagnostics :: STMDiagnosticStore
@@ -210,17 +213,18 @@ data ShakeExtras = ShakeExtras
         -> IO ()
     ,ideNc :: IORef NameCache
     -- | A mapping of module name to known target (or candidate targets, if missing)
-    ,knownTargetsVar :: Var (Hashed KnownTargets)
+    ,knownTargetsVar :: TVar (Hashed KnownTargets)
     -- | A mapping of exported identifiers for local modules. Updated on kick
-    ,exportsMap :: Var ExportsMap
+    ,exportsMap :: TVar ExportsMap
     -- | A work queue for actions added via 'runInShakeSession'
     ,actionQueue :: ActionQueue
     ,clientCapabilities :: ClientCapabilities
     , hiedb :: HieDb -- ^ Use only to read.
     , hiedbWriter :: HieDbWriter -- ^ use to write
-    , persistentKeys :: Var (HMap.HashMap Key GetStalePersistent)
+    , persistentKeys :: TVar (HMap.HashMap Key GetStalePersistent)
       -- ^ Registery for functions that compute/get "stale" results for the rule
       -- (possibly from disk)
+      -- Small and immutable after startup, so not worth using an STM.Map.
     , vfs :: VFSHandle
     , defaultConfig :: Config
       -- ^ Default HLS config, only relevant if the client does not provide any Config
@@ -258,7 +262,7 @@ getPluginConfig plugin = do
 addPersistentRule :: IdeRule k v => k -> (NormalizedFilePath -> IdeAction (Maybe (v,PositionDelta,TextDocumentVersion))) -> Rules ()
 addPersistentRule k getVal = do
   ShakeExtras{persistentKeys} <- getShakeExtrasRules
-  void $ liftIO $ modifyVar' persistentKeys $ HMap.insert (Key k) (fmap (fmap (first3 toDyn)) . getVal)
+  void $ liftIO $ atomically $ modifyTVar' persistentKeys $ HMap.insert (Key k) (fmap (fmap (first3 toDyn)) . getVal)
 
 class Typeable a => IsIdeGlobal a where
 
@@ -282,15 +286,15 @@ addIdeGlobal x = do
 
 addIdeGlobalExtras :: IsIdeGlobal a => ShakeExtras -> a -> IO ()
 addIdeGlobalExtras ShakeExtras{globals} x@(typeOf -> ty) =
-    void $ liftIO $ modifyVarIO' globals $ \mp -> case HMap.lookup ty mp of
-        Just _ -> errorIO $ "Internal error, addIdeGlobalExtras, got the same type twice for " ++ show ty
-        Nothing -> return $! HMap.insert ty (toDyn x) mp
+    void $ liftIO $ atomically $ modifyTVar' globals $ \mp -> case HMap.lookup ty mp of
+        Just _ -> error $ "Internal error, addIdeGlobalExtras, got the same type twice for " ++ show ty
+        Nothing -> HMap.insert ty (toDyn x) mp
 
 
 getIdeGlobalExtras :: forall a . IsIdeGlobal a => ShakeExtras -> IO a
 getIdeGlobalExtras ShakeExtras{globals} = do
     let typ = typeRep (Proxy :: Proxy a)
-    x <- HMap.lookup (typeRep (Proxy :: Proxy a)) <$> readVar globals
+    x <- HMap.lookup (typeRep (Proxy :: Proxy a)) <$> readTVarIO globals
     case x of
         Just x
             | Just x <- fromDynamic x -> pure x
@@ -333,13 +337,13 @@ lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
           | IdeTesting testing <- ideTesting s -- Don't read stale persistent values in tests
           , testing = pure Nothing
           | otherwise = do
-          pmap <- readVar persistentKeys
+          pmap <- readTVarIO persistentKeys
           mv <- runMaybeT $ do
             liftIO $ Logger.logDebug (logger s) $ T.pack $ "LOOKUP UP PERSISTENT FOR: " ++ show k
             f <- MaybeT $ pure $ HMap.lookup (Key k) pmap
             (dv,del,ver) <- MaybeT $ runIdeAction "lastValueIO" s $ f file
             MaybeT $ pure $ (,del,ver) <$> fromDynamic dv
-          atomically $ case mv of
+          atomicallyNamed "lastValueIO" $ case mv of
             Nothing -> do
                 STM.focus (Focus.alter (alterValue $ Failed True)) (toKey k file) state
                 return Nothing
@@ -355,13 +359,13 @@ lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
           -- Something already succeeded before, leave it alone
           _        -> old
 
-    atomically (STM.lookup (toKey k file) state) >>= \case
+    atomicallyNamed "lastValueIO 4"  (STM.lookup (toKey k file) state) >>= \case
       Nothing -> readPersistent
       Just (ValueWithDiagnostics v _) -> case v of
         Succeeded ver (fromDynamic -> Just v) ->
-            atomically $ Just . (v,) <$> mappingForVersion positionMapping file ver
+            atomicallyNamed "lastValueIO 5"  $ Just . (v,) <$> mappingForVersion positionMapping file ver
         Stale del ver (fromDynamic -> Just v) ->
-            atomically $ Just . (v,) . maybe id addDelta del <$> mappingForVersion positionMapping file ver
+            atomicallyNamed "lastValueIO 6"  $ Just . (v,) . maybe id addDelta del <$> mappingForVersion positionMapping file ver
         Failed p | not p -> readPersistent
         _ -> pure Nothing
 
@@ -453,7 +457,6 @@ recordDirtyKeys ShakeExtras{dirtyKeys} key file = do
     return $ withEventTrace "recordDirtyKeys" $ \addEvent -> do
         addEvent (fromString $ "dirty " <> show key) (fromString $ unlines $ map fromNormalizedFilePath file)
 
-
 -- | We return Nothing if the rule has not run and Just Failed if it has failed to produce a value.
 getValues ::
   forall k v.
@@ -477,7 +480,7 @@ getValues state key file = do
 knownTargets :: Action (Hashed KnownTargets)
 knownTargets = do
   ShakeExtras{knownTargetsVar} <- getShakeExtras
-  liftIO $ readVar knownTargetsVar
+  liftIO $ readTVarIO knownTargetsVar
 
 -- | Seq the result stored in the Shake value. This only
 -- evaluates the value to WHNF not NF. We take care of the latter
@@ -508,25 +511,25 @@ shakeOpen lspEnv defaultConfig logger debouncer
     us <- mkSplitUniqSupply 'r'
     ideNc <- newIORef (initNameCache us knownKeyNames)
     shakeExtras <- do
-        globals <- newVar HMap.empty
+        globals <- newTVarIO HMap.empty
         state <- STM.newIO
         diagnostics <- STM.newIO
         hiddenDiagnostics <- STM.newIO
         publishedDiagnostics <- STM.newIO
         positionMapping <- STM.newIO
-        knownTargetsVar <- newVar $ hashed HMap.empty
+        knownTargetsVar <- newTVarIO $ hashed HMap.empty
         let restartShakeSession = shakeRestart ideState
-        persistentKeys <- newVar HMap.empty
+        persistentKeys <- newTVarIO HMap.empty
         indexPending <- newTVarIO HMap.empty
         indexCompleted <- newTVarIO 0
         indexProgressToken <- newVar Nothing
         let hiedbWriter = HieDbWriter{..}
-        exportsMap <- newVar mempty
+        exportsMap <- newTVarIO mempty
         -- lazily initialize the exports map with the contents of the hiedb
         _ <- async $ do
             logDebug logger "Initializing exports map from hiedb"
             em <- createExportsMapHieDb hiedb
-            _ <- modifyVar' exportsMap (<> em)
+            atomically $ modifyTVar' exportsMap (<> em)
             logDebug logger $ "Done initializing exports map from hiedb (" <> pack(show (ExportsMap.size em)) <> ")"
 
         progress <- do
@@ -626,8 +629,8 @@ shakeRestart IdeState{..} reason acts =
         (\runner -> do
               (stopTime,()) <- duration (cancelShakeSession runner)
               res <- shakeDatabaseProfile shakeDb
-              backlog <- readTVarIO (dirtyKeys shakeExtras)
-              queue <- atomically $ peekInProgress $ actionQueue shakeExtras
+              backlog <- readTVarIO $ dirtyKeys shakeExtras
+              queue <- atomicallyNamed "actionQueue - peek" $ peekInProgress $ actionQueue shakeExtras
               let profile = case res of
                       Just fp -> ", profile saved at " <> fp
                       _       -> ""
@@ -660,7 +663,7 @@ notifyTestingLogMessage extras msg = do
 shakeEnqueue :: ShakeExtras -> DelayedAction a -> IO (IO a)
 shakeEnqueue ShakeExtras{actionQueue, logger} act = do
     (b, dai) <- instantiateDelayedAction act
-    atomically $ pushQueue dai actionQueue
+    atomicallyNamed "actionQueue - push" $ pushQueue dai actionQueue
     let wait' b =
             waitBarrier b `catches`
               [ Handler(\BlockedIndefinitelyOnMVar ->
@@ -669,7 +672,7 @@ shakeEnqueue ShakeExtras{actionQueue, logger} act = do
               , Handler (\e@AsyncCancelled -> do
                   logPriority logger Debug $ T.pack $ actionName act <> " was cancelled"
 
-                  atomically $ abortQueue dai actionQueue
+                  atomicallyNamed "actionQueue - abort" $ abortQueue dai actionQueue
                   throw e)
               ]
     return (wait' b >>= either throwIO return)
@@ -684,7 +687,7 @@ newSession
     -> IO ShakeSession
 newSession extras@ShakeExtras{..} shakeDb acts reason = do
     IdeOptions{optRunSubset} <- getIdeOptionsIO extras
-    reenqueued <- atomically $ peekInProgress actionQueue
+    reenqueued <- atomicallyNamed "actionQueue - peek" $ peekInProgress actionQueue
     allPendingKeys <-
         if optRunSubset
           then Just <$> readTVarIO dirtyKeys
@@ -693,14 +696,14 @@ newSession extras@ShakeExtras{..} shakeDb acts reason = do
         -- A daemon-like action used to inject additional work
         -- Runs actions from the work queue sequentially
         pumpActionThread otSpan = do
-            d <- liftIO $ atomically $ popQueue actionQueue
+            d <- liftIO $ atomicallyNamed "action queue - pop" $ popQueue actionQueue
             actionFork (run otSpan d) $ \_ -> pumpActionThread otSpan
 
         -- TODO figure out how to thread the otSpan into defineEarlyCutoff
         run _otSpan d  = do
             start <- liftIO offsetTime
             getAction d
-            liftIO $ atomically $ doneQueue d actionQueue
+            liftIO $ atomicallyNamed "actionQueue - done" $ doneQueue d actionQueue
             runTime <- liftIO start
             let msg = T.pack $ "finish: " ++ actionName d
                             ++ " (took " ++ showDuration runTime ++ ")"
@@ -803,7 +806,7 @@ garbageCollectKeys label maxAge checkParents agedKeys = do
             | age > maxAge
             , Just (kt,_) <- fromKeyType k
             , not(kt `HSet.member` preservedKeys checkParents)
-            = atomically $ do
+            = atomicallyNamed "GC" $ do
                 gotIt <- STM.focus (Focus.member <* Focus.delete) k values
                 when gotIt $
                    modifyTVar' dk (HSet.insert k)
@@ -907,7 +910,7 @@ useWithStaleFast' key file = do
   wait <- delayedAction $ mkDelayedAction ("C:" ++ show key ++ ":" ++ fromNormalizedFilePath file) Debug $ use key file
 
   s@ShakeExtras{state} <- askShake
-  r <- liftIO $ atomically $ getValues state key file
+  r <- liftIO $ atomicallyNamed "useStateFast" $ getValues state key file
   liftIO $ case r of
     -- block for the result if we haven't computed before
     Nothing -> do
@@ -1016,7 +1019,7 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
     (if optSkipProgress options key then id else inProgress progress file) $ do
         val <- case old of
             Just old | mode == RunDependenciesSame -> do
-                v <- liftIO $ atomically $ getValues state key file
+                v <- liftIO $ atomicallyNamed "define - read 1" $ getValues state key file
                 case v of
                     -- No changes in the dependencies and we have
                     -- an existing successful result.
@@ -1035,10 +1038,10 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
                     (do v <- action; liftIO $ evaluate $ force v) $
                     \(e :: SomeException) -> do
                         pure (Nothing, ([ideErrorText file $ T.pack $ show e | not $ isBadDependency e],Nothing))
-                modTime <- liftIO $ (currentValue . fst =<<) <$> atomically (getValues state GetModificationTime file)
+                modTime <- liftIO $ (currentValue . fst =<<) <$> atomicallyNamed "define - read 2" (getValues state GetModificationTime file)
                 (bs, res) <- case res of
                     Nothing -> do
-                        staleV <- liftIO $ atomically $ getValues state key file
+                        staleV <- liftIO $ atomicallyNamed "define -read 3" $ getValues state key file
                         pure $ case staleV of
                             Nothing -> (toShakeValue ShakeResult bs, Failed False)
                             Just v -> case v of
@@ -1049,7 +1052,7 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
                                 (Failed b, _) ->
                                     (toShakeValue ShakeResult bs, Failed b)
                     Just v -> pure (maybe ShakeNoCutoff ShakeResult bs, Succeeded (vfsVersion =<< modTime) v)
-                liftIO $ atomically $ setValues state key file res (Vector.fromList diags)
+                liftIO $ atomicallyNamed "define - write" $ setValues state key file res (Vector.fromList diags)
                 doDiagnostics diags
                 let eq = case (bs, fmap decodeShakeValue old) of
                         (ShakeResult a, Just (ShakeResult b)) -> cmp a b
@@ -1061,7 +1064,7 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
                     (if eq then ChangedRecomputeSame else ChangedRecomputeDiff)
                     (encodeShakeValue bs) $
                     A res
-        liftIO $ atomically $ modifyTVar' dirtyKeys (HSet.delete $ toKey key file)
+        liftIO $ atomicallyNamed "define - dirtyKeys" $ modifyTVar' dirtyKeys (HSet.delete $ toKey key file)
         return res
 
 traceA :: A v -> String
@@ -1149,7 +1152,7 @@ updateFileDiagnostics :: MonadIO m
   -> [(ShowDiagnostic,Diagnostic)] -- ^ current results
   -> m ()
 updateFileDiagnostics fp k ShakeExtras{logger, diagnostics, hiddenDiagnostics, publishedDiagnostics, state, debouncer, lspEnv} current = liftIO $ do
-    modTime <- (currentValue . fst =<<) <$> atomically (getValues state GetModificationTime fp)
+    modTime <- (currentValue . fst =<<) <$> atomicallyNamed "diagnostics - read" (getValues state GetModificationTime fp)
     let (currentShown, currentHidden) = partition ((== ShowDiag) . fst) current
         uri = filePathToUri' fp
         ver = vfsVersion =<< modTime
@@ -1159,13 +1162,13 @@ updateFileDiagnostics fp k ShakeExtras{logger, diagnostics, hiddenDiagnostics, p
         -- published. Otherwise, we might never publish certain diagnostics if
         -- an exception strikes between modifyVar but before
         -- publishDiagnosticsNotification.
-        newDiags <- liftIO $ atomically $ update (map snd currentShown) diagnostics
-        _ <- liftIO $ atomically $ update (map snd currentHidden) hiddenDiagnostics
+        newDiags <- liftIO $ atomicallyNamed "diagnostics - update" $ update (map snd currentShown) diagnostics
+        _ <- liftIO $ atomicallyNamed "diagnostics - hidden" $ update (map snd currentHidden) hiddenDiagnostics
         let uri = filePathToUri' fp
         let delay = if null newDiags then 0.1 else 0
         registerEvent debouncer delay uri $ do
              join $ mask_ $ do
-                 lastPublish <- atomically $ STM.focus (Focus.lookupWithDefault [] <* Focus.insert newDiags) uri publishedDiagnostics
+                 lastPublish <- atomicallyNamed "diagnostics - publish" $ STM.focus (Focus.lookupWithDefault [] <* Focus.insert newDiags) uri publishedDiagnostics
                  let action = when (lastPublish /= newDiags) $ case lspEnv of
                         Nothing -> -- Print an LSP event.
                             logInfo logger $ showDiagnosticsColored $ map (fp,ShowDiag,) newDiags
