@@ -37,11 +37,11 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2021-11-29T08:11:07Z
+index-state: 2021-11-29T12:30:07Z
 
 constraints:
   -- These plugins don't work on GHC9 yet
-  haskell-language-server +ignore-plugins-ghc-bounds -brittany -class -stylishhaskell -tactic,
+  haskell-language-server +ignore-plugins-ghc-bounds -brittany -stylishhaskell -tactic,
   ghc-lib-parser ^>= 9.0
 
 -- although we are not building all plugins cabal solver phase is run for all packages
