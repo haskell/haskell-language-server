@@ -9,7 +9,7 @@ packages:
   - ./hls-test-utils
   - ./shake-bench
   - ./plugins/hls-call-hierarchy-plugin
-  # - ./plugins/hls-class-plugin
+  - ./plugins/hls-class-plugin
   - ./plugins/hls-haddock-comments-plugin
   - ./plugins/hls-eval-plugin
   - ./plugins/hls-explicit-imports-plugin
