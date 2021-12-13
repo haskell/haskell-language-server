@@ -40,6 +40,8 @@ import           Development.IDE.Types.Logger
 
 import           System.IO.Unsafe                      (unsafeInterleaveIO)
 
+issueTrackerUrl = "https://github.com/haskell/haskell-language-server/issues"
+
 runLanguageServer
     :: forall config. (Show config)
     => LSP.Options
@@ -138,11 +140,38 @@ runLanguageServer options inH outH getHieDbLoc defaultConfig onConfigurationChan
             registerIdeConfiguration (shakeExtras ide) initConfig
 
             let handleServerException (Left e) = do
-                    logError (ideLogger ide) $
+                    logError logger $
                         T.pack $ "Fatal error in server thread: " <> show e
                     exitClientMsg
                 handleServerException _ = pure ()
+
+                uncaughtError (e :: SomeException) = do
+                    logError logger $ T.pack $
+                        "Unexpected exception on notification, please report!\n" ++
+                        "Exception: " ++ show e
+                    LSP.runLspT env $ LSP.sendNotification SWindowShowMessage $
+                        ShowMessageParams MtError $ T.unlines
+                        [ "Unhandled error, please [report](" <> issueTrackerUrl <> "): "
+                        , T.pack(show e)
+                        ]
                 logger = ideLogger ide
+
+                checkCancelled _id act k =
+                    flip finally (clearReqId _id) $
+                        catch (do
+                            -- We could optimize this by first checking if the id
+                            -- is in the cancelled set. However, this is unlikely to be a
+                            -- bottleneck and the additional check might hide
+                            -- issues with async exceptions that need to be fixed.
+                            cancelOrRes <- race (waitForCancel _id) act
+                            case cancelOrRes of
+                                Left () -> do
+                                    logDebug (ideLogger ide) $ T.pack $ "Cancelled request " <> show _id
+                                    k $ ResponseError RequestCancelled "" Nothing
+                                Right res -> pure res
+                        ) $ \(e :: SomeException) -> do
+                            uncaughtError e
+                            k $ ResponseError InternalError (T.pack $ show e) Nothing
             _ <- flip forkFinally handleServerException $ runWithDb logger dbLoc $ \hiedb hieChan -> do
               putMVar dbMVar (hiedb,hieChan)
               forever $ do
@@ -150,36 +179,10 @@ runLanguageServer options inH outH getHieDbLoc defaultConfig onConfigurationChan
                 -- We dispatch notifications synchronously and requests asynchronously
                 -- This is to ensure that all file edits and config changes are applied before a request is handled
                 case msg of
-                    ReactorNotification act -> do
-                      catch act $ \(e :: SomeException) ->
-                        logError (ideLogger ide) $ T.pack $
-                          "Unexpected exception on notification, please report!\n" ++
-                          "Exception: " ++ show e
-                    ReactorRequest _id act k -> void $ async $
-                      checkCancelled ide clearReqId waitForCancel _id act k
+                    ReactorNotification act -> handle uncaughtError act
+                    ReactorRequest _id act k -> void $ async $ checkCancelled _id act k
             pure $ Right (env,ide)
 
-        checkCancelled
-          :: IdeState -> (SomeLspId -> IO ()) -> (SomeLspId -> IO ()) -> SomeLspId
-          -> IO () -> (ResponseError -> IO ()) -> IO ()
-        checkCancelled ide clearReqId waitForCancel _id act k =
-            flip finally (clearReqId _id) $
-                catch (do
-                    -- We could optimize this by first checking if the id
-                    -- is in the cancelled set. However, this is unlikely to be a
-                    -- bottleneck and the additional check might hide
-                    -- issues with async exceptions that need to be fixed.
-                    cancelOrRes <- race (waitForCancel _id) act
-                    case cancelOrRes of
-                        Left () -> do
-                            logDebug (ideLogger ide) $ T.pack $ "Cancelled request " <> show _id
-                            k $ ResponseError RequestCancelled "" Nothing
-                        Right res -> pure res
-                ) $ \(e :: SomeException) -> do
-                    logError (ideLogger ide) $ T.pack $
-                        "Unexpected exception on request, please report!\n" ++
-                        "Exception: " ++ show e
-                    k $ ResponseError InternalError (T.pack $ show e) Nothing
 
 
 cancelHandler :: (SomeLspId -> IO ()) -> LSP.Handlers (ServerM c)
