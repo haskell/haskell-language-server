@@ -16,8 +16,6 @@
     flake-utils.url = "github:numtide/flake-utils";
     pre-commit-hooks = {
       url = "github:cachix/pre-commit-hooks.nix";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.flake-utils.follows = "flake-utils";
     };
     gitignore = {
       url = "github:hercules-ci/gitignore.nix";
@@ -30,24 +28,22 @@
       overlay = final: prev:
         with prev;
         let
-          haskellOverrides = {
-            overrides = hself: hsuper: {
-              # we override mkDerivation here to apply the following
-              # tweak to each haskell package:
-              #   if the package is broken, then we disable its check and relax the cabal bounds;
-              #   otherwise, we leave it unchanged.
-              # hopefully, this could fix packages marked as broken by nix due to check failures
-              # or the build failure because of tight cabal bounds
-              mkDerivation = args:
-                let
-                  broken = args.broken or false;
-                  check = args.doCheck or true;
-                  jailbreak = args.jailbreak or false;
-                in hsuper.mkDerivation (args // {
-                  jailbreak = if broken then true else jailbreak;
-                  doCheck = if broken then false else check;
-                });
-            };
+          haskellOverrides = hself: hsuper: {
+            # we override mkDerivation here to apply the following
+            # tweak to each haskell package:
+            #   if the package is broken, then we disable its check and relax the cabal bounds;
+            #   otherwise, we leave it unchanged.
+            # hopefully, this could fix packages marked as broken by nix due to check failures
+            # or the build failure because of tight cabal bounds
+            mkDerivation = args:
+              let
+                broken = args.broken or false;
+                check = args.doCheck or true;
+                jailbreak = args.jailbreak or false;
+              in hsuper.mkDerivation (args // {
+                jailbreak = if broken then true else jailbreak;
+                doCheck = if broken then false else check;
+              });
           };
           gitignoreSource = (import gitignore { inherit lib; }).gitignoreSource;
 
@@ -72,33 +68,26 @@
           # Don't use `callHackage`, it requires us to override `all-cabal-hashes`
           tweaks = hself: hsuper:
             with haskell.lib; {
+              # Patches don't apply
+              github = overrideCabal hsuper.github (drv: { patches = []; });
+              # We need an older version  
+              hiedb = hself.hiedb_0_4_1_0;
 
-              # https://github.com/haskell/haskell-language-server/pull/1858
-              # Remove this override when nixpkgs has this package
-              apply-refact_0_9_3_0 = hself.callCabal2nix "apply-refact"
+              implicit-hie-cradle = hself.callCabal2nix "implicit-hie-cradle"
                 (builtins.fetchTarball {
-                  url =
-                    "https://hackage.haskell.org/package/apply-refact-0.9.3.0/apply-refact-0.9.3.0.tar.gz";
-                  sha256 =
-                    "1jfq1aw91finlpq5nn7a96za4c8j13jk6jmx2867fildxwrik2qj";
+                  url = "https://hackage.haskell.org/package/implicit-hie-cradle-0.3.0.5/implicit-hie-cradle-0.3.0.5.tar.gz";
+                  sha256 = "15a7g9x6cjk2b92hb2wilxx4550msxp1pmk5a2shiva821qaxnfq";
                 }) { };
-
-              hls-hlint-plugin = hsuper.hls-hlint-plugin.override {
-                hlint = hself.hlint_3_2_7;
-                apply-refact = hself.apply-refact_0_9_3_0;
-              };
-
-              hls-tactics-plugin = hsuper.hls-tactics-plugin.override {
-                refinery = hself.refinery_0_3_0_0;
-              };
-
             };
 
           hlsSources =
             builtins.mapAttrs (_: dir: gitignoreSource dir) sourceDirs;
 
           extended = hpkgs:
-            (hpkgs.override haskellOverrides).extend (hself: hsuper:
+            (hpkgs.override (old: {
+              overrides = lib.composeExtensions (old.overrides or (_: _: { }))
+                haskellOverrides;
+            })).extend (hself: hsuper:
               # disable all checks for our packages
               builtins.mapAttrs (_: drv: haskell.lib.dontCheck drv)
               (lib.composeExtensions
@@ -112,8 +101,8 @@
           hlsHpkgs = compiler: extended haskell.packages.${compiler};
 
           # Support of GenChangelogs.hs
-          gen-hls-changelogs =
-            let myGHC = haskellPackages.ghcWithPackages (p: with p; [ github ]);
+          gen-hls-changelogs = hpkgs:
+            let myGHC = hpkgs.ghcWithPackages (p: with p; [ github ]);
             in runCommand "gen-hls-changelogs" {
               passAsFile = [ "text" ];
               preferLocalBuild = true;
@@ -137,10 +126,12 @@
         };
 
         # Pre-commit hooks to run stylish-haskell
-        pre-commit-check = pre-commit-hooks.lib.${system}.run {
+        pre-commit-check = hpkgs: pre-commit-hooks.lib.${system}.run {
           src = ./.;
           hooks = {
             stylish-haskell.enable = true;
+            # use stylish-haskell with our target ghc
+            stylish-haskell.entry = pkgs.lib.mkForce "${hpkgs.stylish-haskell}/bin/stylish-haskell --inplace";
             stylish-haskell.excludes = [
               # Ignored files
               "^Setup.hs$"
@@ -161,14 +152,37 @@
           };
         };
 
+        ghc901Config = (import ./configuration-ghc-901.nix) { inherit pkgs; };
+
         # GHC versions
         ghcDefault = pkgs.hlsHpkgs ("ghc"
           + pkgs.lib.replaceStrings [ "." ] [ "" ]
           pkgs.haskellPackages.ghc.version);
         ghc884 = pkgs.hlsHpkgs "ghc884";
-        ghc8104 = pkgs.hlsHpkgs "ghc8104";
-        ghc8105 = pkgs.hlsHpkgs "ghc8105";
-        ghc901 = pkgs.hlsHpkgs "ghc901";
+        ghc8107 = pkgs.hlsHpkgs "ghc8107";
+        ghc901 = ghc901Config.tweakHpkgs (pkgs.hlsHpkgs "ghc901");
+
+        # For markdown support
+        myst-parser = pkgs.python3Packages.callPackage ./myst-parser.nix {};
+        sphinx_rtd_theme = pkgs.python3Packages.sphinx_rtd_theme.overrideAttrs (oldAttrs: {
+          # For https://github.com/readthedocs/sphinx_rtd_theme/pull/1185, otherwise lists are broken locally
+          src = pkgs.fetchFromGitHub {
+            owner = "readthedocs";
+            repo = "sphinx_rtd_theme";
+            rev = "34f81daaf52466366c80003db293d50075c1b896";
+            sha256 = "0rkrsvvqr6g2p3v5vq88jhfp5sd0r1jqjh3vc5y26jn30z8s4fkz";
+          };
+        });
+        pythonWithPackages = pkgs.python3.withPackages (ps: [ps.sphinx myst-parser sphinx_rtd_theme ps.pip]);
+
+        docs = pkgs.stdenv.mkDerivation {
+          name = "hls-docs";
+          src = pkgs.lib.sourceFilesBySuffices ./docs [ ".py" ".rst" ".md" ".png" ".gif" ".svg" ];
+          buildInputs = [ pythonWithPackages ];
+          # -n gives warnings on missing link targets, -W makes warnings into errors
+          buildPhase = ''sphinx-build -n -W . $out'';
+          dontInstall = true;
+        };
 
         # Create a development shell of hls project
         # See https://github.com/NixOS/nixpkgs/blob/5d4a430472cafada97888cc80672fab255231f57/pkgs/development/haskell-modules/make-package-set.nix#L319
@@ -178,13 +192,18 @@
             doBenchmark = true;
             packages = p:
               with builtins;
-              map (name: p.${name}) (attrNames pkgs.hlsSources);
-            buildInputs = [ gmp zlib ncurses capstone tracy gen-hls-changelogs ]
-              ++ (with haskellPackages; [
+              map (name: p.${name}) (attrNames
+                (if hpkgs.ghc.version == "9.0.1" then
+                  removeAttrs hlsSources ghc901Config.disabledPlugins
+                else
+                  hlsSources));
+            buildInputs = [ gmp zlib ncurses capstone tracy (gen-hls-changelogs hpkgs) pythonWithPackages ]
+              ++ (with hpkgs; [
                 cabal-install
+                hie-bios
                 hlint
-                ormolu
-                stylish-haskell
+                # ormolu
+                # stylish-haskell
                 opentelemetry-extra
               ]);
 
@@ -193,7 +212,7 @@
               export LD_LIBRARY_PATH=${gmp}/lib:${zlib}/lib:${ncurses}/lib:${capstone}/lib
               export DYLD_LIBRARY_PATH=${gmp}/lib:${zlib}/lib:${ncurses}/lib:${capstone}/lib
               export PATH=$PATH:$HOME/.local/bin
-              ${pre-commit-check.shellHook}
+              ${if hpkgs.ghc.version != "9.0.1" then (pre-commit-check hpkgs).shellHook else ""}
             '';
           };
         # Create a hls executable
@@ -216,16 +235,17 @@
           # dev shell
           haskell-language-server-dev = mkDevShell ghcDefault;
           haskell-language-server-884-dev = mkDevShell ghc884;
-          haskell-language-server-8104-dev = mkDevShell ghc8104;
-          haskell-language-server-8105-dev = mkDevShell ghc8105;
+          haskell-language-server-8107-dev = mkDevShell ghc8107;
           haskell-language-server-901-dev = mkDevShell ghc901;
 
           # hls package
           haskell-language-server = mkExe ghcDefault;
           haskell-language-server-884 = mkExe ghc884;
-          haskell-language-server-8104 = mkExe ghc8104;
-          haskell-language-server-8105 = mkExe ghc8105;
+          haskell-language-server-8107 = mkExe ghc8107;
           haskell-language-server-901 = mkExe ghc901;
+
+          # docs
+          docs = docs;
         };
 
         defaultPackage = packages.haskell-language-server;

@@ -29,9 +29,9 @@ genericIsSubspan ::
     -- | The type of nodes we'd like to consider.
     Proxy (Located ast) ->
     SrcSpan ->
-    GenericQ (Maybe Bool)
+    GenericQ (Maybe (Bool, ast))
 genericIsSubspan _ dst = mkQ Nothing $ \case
-  (L span _ :: Located ast) -> Just $ dst `isSubspanOf` span
+  (L span ast :: Located ast) -> Just (dst `isSubspanOf` span, ast)
 
 
 -- | Lift a function that replaces a value with several values into a generic
@@ -70,19 +70,19 @@ type GenericMQ r m = forall a. Data a => a -> m (r, a)
 -- with data nodes, so for any given node we can only definitely return an
 -- answer if it's a 'Located'. See 'genericIsSubspan' for how this parameter is
 -- used.
-smallestM :: forall m. Monad m => GenericQ (Maybe Bool) -> GenericM m -> GenericM m
+smallestM :: forall m a. Monad m => GenericQ (Maybe (Bool, a)) -> (a -> GenericM m) -> GenericM m
 smallestM q f = fmap snd . go
   where
     go :: GenericMQ Any m
     go x = do
       case q x of
         Nothing -> gmapMQ go x
-        Just True -> do
+        Just (True, a) -> do
           it@(r, x') <- gmapMQ go x
           case r of
             Any True  -> pure it
-            Any False -> fmap (Any True,) $ f x'
-        Just False -> pure (mempty, x)
+            Any False -> fmap (Any True,) $ f a x'
+        Just (False, _) -> pure (mempty, x)
 
 ------------------------------------------------------------------------------
 -- | Apply the given 'GenericM' at every node that passes the 'GenericQ', but
@@ -94,14 +94,14 @@ smallestM q f = fmap snd . go
 -- with data nodes, so for any given node we can only definitely return an
 -- answer if it's a 'Located'. See 'genericIsSubspan' for how this parameter is
 -- used.
-largestM :: forall m. Monad m => GenericQ (Maybe Bool) -> GenericM m -> GenericM m
+largestM :: forall m a. Monad m => GenericQ (Maybe (Bool, a)) -> (a -> GenericM m) -> GenericM m
 largestM q f = go
   where
     go :: GenericM m
     go x = do
       case q x of
-        Just True  -> f x
-        Just False -> pure x
+        Just (True, a)  -> f a x
+        Just (False, _) -> pure x
         Nothing    -> gmapM go x
 
 newtype MonadicQuery r m a = MonadicQuery

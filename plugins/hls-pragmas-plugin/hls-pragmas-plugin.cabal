@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-pragmas-plugin
-version:            1.0.0.0
+version:            1.0.1.1
 synopsis:           Pragmas plugin for Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -24,13 +24,15 @@ library
     , base                  >=4.12 && <5
     , extra
     , fuzzy
-    , ghcide                >=1.2  && <1.5
-    , hls-plugin-api        ^>=1.1
+    , ghc
+    , ghcide                >=1.2  && <1.6
+    , hls-plugin-api        >=1.1  && <1.3
     , lens
     , lsp
     , text
     , transformers
     , unordered-containers
+    , containers
 
   default-language: Haskell2010
 
@@ -44,6 +46,7 @@ test-suite tests
     , base
     , filepath
     , hls-pragmas-plugin
-    , hls-test-utils      ^>=1.0
+    , hls-test-utils      >=1.0 && <1.2
     , lens
     , lsp-types
+    , text

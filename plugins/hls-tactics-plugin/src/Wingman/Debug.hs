@@ -1,7 +1,8 @@
 {-# LANGUAGE BangPatterns     #-}
 {-# LANGUAGE CPP              #-}
 {-# LANGUAGE TypeApplications #-}
-
+{-# OPTIONS_GHC -Wno-redundant-constraints #-}
+{-# OPTIONS_GHC -Wno-unused-imports #-}
 module Wingman.Debug
   ( unsafeRender
   , unsafeRender'
@@ -16,19 +17,9 @@ module Wingman.Debug
 
 import           Control.DeepSeq
 import           Control.Exception
-import           Debug.Trace
-import           DynFlags          (unsafeGlobalDynFlags)
-import           Outputable        hiding ((<>))
+import qualified Debug.Trace
+import           Development.IDE.GHC.Compat (PlainGhcException, Outputable(..), SDoc, showSDocUnsafe)
 import           System.IO.Unsafe  (unsafePerformIO)
-
-#if __GLASGOW_HASKELL__ >= 808
-import           PlainPanic        (PlainGhcException)
-type GHC_EXCEPTION = PlainGhcException
-#else
-import           Panic             (GhcException)
-type GHC_EXCEPTION = GhcException
-#endif
-
 
 ------------------------------------------------------------------------------
 -- | Print something
@@ -38,10 +29,10 @@ unsafeRender = unsafeRender' . ppr
 
 unsafeRender' :: SDoc -> String
 unsafeRender' sdoc = unsafePerformIO $ do
-  let z = showSDoc unsafeGlobalDynFlags sdoc
+  let z = showSDocUnsafe sdoc
   -- We might not have unsafeGlobalDynFlags (like during testing), in which
   -- case GHC panics. Instead of crashing, let's just fail to print.
-  !res <- try @GHC_EXCEPTION $ evaluate $ deepseq z z
+  !res <- try @PlainGhcException $ evaluate $ deepseq z z
   pure $ either (const "<unsafeRender'>") id res
 {-# NOINLINE unsafeRender' #-}
 
@@ -57,3 +48,15 @@ traceIdX str a = trace (mappend ("!!!" <> str <> ": ") $ show a) a
 traceFX :: String -> (a -> String) -> a -> a
 traceFX str f a = trace (mappend ("!!!" <> str <> ": ") $ f a) a
 
+traceM :: Applicative f => String -> f ()
+trace :: String -> a -> a
+traceShowId :: Show a => a -> a
+#ifdef DEBUG
+traceM = Debug.Trace.traceM
+trace = Debug.Trace.trace
+traceShowId = Debug.Trace.traceShowId
+#else
+traceM _ = pure ()
+trace _ = id
+traceShowId = id
+#endif

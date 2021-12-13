@@ -3,6 +3,7 @@
 
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE PolyKinds             #-}
 
 module Development.IDE.Test
@@ -20,52 +21,52 @@ module Development.IDE.Test
   , standardizeQuotes
   , flushMessages
   , waitForAction
-  ) where
+  , getInterfaceFilesDir
+  , garbageCollectDirtyKeys
+  , getFilesOfInterest
+  , waitForTypecheck
+  , waitForBuildQueue
+  , getStoredKeys
+  , waitForCustomMessage
+  , waitForGC
+  ,getBuildKeysBuilt,getBuildKeysVisited,getBuildKeysChanged,getBuildEdgesCount,configureCheckProject) where
 
 import           Control.Applicative.Combinators
 import           Control.Lens                    hiding (List)
 import           Control.Monad
 import           Control.Monad.IO.Class
+import           Data.Aeson                      (toJSON)
 import qualified Data.Aeson                      as A
 import           Data.Bifunctor                  (second)
+import           Data.Default
 import qualified Data.Map.Strict                 as Map
 import           Data.Maybe                      (fromJust)
+import           Data.Text                       (Text)
 import qualified Data.Text                       as T
 import           Development.IDE.Plugin.Test     (TestRequest (..),
-                                                  WaitForIdeRuleResult)
+                                                  WaitForIdeRuleResult,
+                                                  ideResultSuccess)
+import           Development.IDE.Test.Diagnostic
+import           Ide.Plugin.Config               (CheckParents, checkProject)
 import           Language.LSP.Test               hiding (message)
 import qualified Language.LSP.Test               as LspTest
-import           Language.LSP.Types
+import           Language.LSP.Types              hiding
+                                                 (SemanticTokenAbsolute (length, line),
+                                                  SemanticTokenRelative (length),
+                                                  SemanticTokensEdit (_start))
 import           Language.LSP.Types.Lens         as Lsp
 import           System.Directory                (canonicalizePath)
 import           System.Time.Extra
 import           Test.Tasty.HUnit
 
--- | (0-based line number, 0-based column number)
-type Cursor = (Int, Int)
-
-cursorPosition :: Cursor -> Position
-cursorPosition (line,  col) = Position line col
-
-requireDiagnostic :: HasCallStack => List Diagnostic -> (DiagnosticSeverity, Cursor, T.Text, Maybe DiagnosticTag) -> Assertion
-requireDiagnostic actuals expected@(severity, cursor, expectedMsg, expectedTag) = do
-    unless (any match actuals) $
-        assertFailure $
-            "Could not find " <> show expected <>
-            " in " <> show actuals
-  where
-    match :: Diagnostic -> Bool
-    match d =
-        Just severity == _severity d
-        && cursorPosition cursor == d ^. range . start
-        && standardizeQuotes (T.toLower expectedMsg) `T.isInfixOf`
-           standardizeQuotes (T.toLower $ d ^. message)
-        && hasTag expectedTag (d ^. tags)
-
-    hasTag :: Maybe DiagnosticTag -> Maybe (List DiagnosticTag) -> Bool
-    hasTag Nothing  _                          = True
-    hasTag (Just _) Nothing                    = False
-    hasTag (Just actualTag) (Just (List tags)) = actualTag `elem` tags
+requireDiagnosticM
+    :: (Foldable f, Show (f Diagnostic), HasCallStack)
+    => f Diagnostic
+    -> (DiagnosticSeverity, Cursor, T.Text, Maybe DiagnosticTag)
+    -> Assertion
+requireDiagnosticM actuals expected = case requireDiagnostic actuals expected of
+    Nothing  -> pure ()
+    Just err -> assertFailure err
 
 -- |wait for @timeout@ seconds and report an assertion failure
 -- if any diagnostic messages arrive in that period
@@ -154,7 +155,7 @@ expectDiagnosticsWithTags' next expected = go expected
                   <> " got "
                   <> show actual
           Just expected -> do
-            liftIO $ mapM_ (requireDiagnostic actual) expected
+            liftIO $ mapM_ (requireDiagnosticM actual) expected
             liftIO $
               unless (length expected == length actual) $
                 assertFailure $
@@ -182,21 +183,74 @@ canonicalizeUri uri = filePathToUri <$> canonicalizePath (fromJust (uriToFilePat
 diagnostic :: Session (NotificationMessage TextDocumentPublishDiagnostics)
 diagnostic = LspTest.message STextDocumentPublishDiagnostics
 
-standardizeQuotes :: T.Text -> T.Text
-standardizeQuotes msg = let
-        repl '‘' = '\''
-        repl '’' = '\''
-        repl '`' = '\''
-        repl  c  = c
-    in  T.map repl msg
-
-waitForAction :: String -> TextDocumentIdentifier -> Session (Either ResponseError WaitForIdeRuleResult)
-waitForAction key TextDocumentIdentifier{_uri} = do
+tryCallTestPlugin :: (A.FromJSON b) => TestRequest -> Session (Either ResponseError b)
+tryCallTestPlugin cmd = do
     let cm = SCustomMethod "test"
-    waitId <- sendRequest cm (A.toJSON $ WaitForIdeRule key _uri)
+    waitId <- sendRequest cm (A.toJSON cmd)
     ResponseMessage{_result} <- skipManyTill anyMessage $ responseForId cm waitId
-    return $ do
-      e <- _result
-      case A.fromJSON e of
-        A.Error e   -> Left $ ResponseError InternalError (T.pack e) Nothing
-        A.Success a -> pure a
+    return $ case _result of
+         Left e -> Left e
+         Right json -> case A.fromJSON json of
+             A.Success a -> Right a
+             A.Error e   -> error e
+
+callTestPlugin :: (A.FromJSON b) => TestRequest -> Session b
+callTestPlugin cmd = do
+    res <- tryCallTestPlugin cmd
+    case res of
+        Left (ResponseError t err _) -> error $ show t <> ": " <> T.unpack err
+        Right a                      -> pure a
+
+
+waitForAction :: String -> TextDocumentIdentifier -> Session WaitForIdeRuleResult
+waitForAction key TextDocumentIdentifier{_uri} =
+    callTestPlugin (WaitForIdeRule key _uri)
+
+getBuildKeysBuilt :: Session (Either ResponseError [T.Text])
+getBuildKeysBuilt = tryCallTestPlugin GetBuildKeysBuilt
+
+getBuildKeysVisited :: Session (Either ResponseError [T.Text])
+getBuildKeysVisited = tryCallTestPlugin GetBuildKeysVisited
+
+getBuildKeysChanged :: Session (Either ResponseError [T.Text])
+getBuildKeysChanged = tryCallTestPlugin GetBuildKeysChanged
+
+getBuildEdgesCount :: Session (Either ResponseError Int)
+getBuildEdgesCount = tryCallTestPlugin GetBuildEdgesCount
+
+getInterfaceFilesDir :: TextDocumentIdentifier -> Session FilePath
+getInterfaceFilesDir TextDocumentIdentifier{_uri} = callTestPlugin (GetInterfaceFilesDir _uri)
+
+garbageCollectDirtyKeys :: CheckParents -> Int -> Session [String]
+garbageCollectDirtyKeys parents age = callTestPlugin (GarbageCollectDirtyKeys parents age)
+
+getStoredKeys :: Session [Text]
+getStoredKeys = callTestPlugin GetStoredKeys
+
+waitForTypecheck :: TextDocumentIdentifier -> Session Bool
+waitForTypecheck tid = ideResultSuccess <$> waitForAction "typecheck" tid
+
+waitForBuildQueue :: Session ()
+waitForBuildQueue = callTestPlugin WaitForShakeQueue
+
+getFilesOfInterest :: Session [FilePath]
+getFilesOfInterest = callTestPlugin GetFilesOfInterest
+
+waitForCustomMessage :: T.Text -> (A.Value -> Maybe res) -> Session res
+waitForCustomMessage msg pred =
+    skipManyTill anyMessage $ satisfyMaybe $ \case
+        FromServerMess (SCustomMethod lbl) (NotMess NotificationMessage{_params = value})
+            | lbl == msg -> pred value
+        _ -> Nothing
+
+waitForGC :: Session [T.Text]
+waitForGC = waitForCustomMessage "ghcide/GC" $ \v ->
+    case A.fromJSON v of
+        A.Success x -> Just x
+        _           -> Nothing
+
+configureCheckProject :: Bool -> Session ()
+configureCheckProject overrideCheckProject =
+    sendNotification SWorkspaceDidChangeConfiguration
+        (DidChangeConfigurationParams $ toJSON
+            def{checkProject = overrideCheckProject})

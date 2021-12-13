@@ -7,29 +7,20 @@ module Main(main) where
 
 import           Arguments                         (Arguments (..),
                                                     getArguments)
-import           Control.Concurrent.Extra          (newLock, withLock)
-import           Control.Monad.Extra               (unless, when, whenJust)
-import qualified Data.Aeson.Encode.Pretty          as A
-import           Data.Default                      (Default (def))
-import           Data.List.Extra                   (upper)
-import qualified Data.Text                         as T
-import qualified Data.Text.IO                      as T
-import           Data.Text.Lazy.Encoding           (decodeUtf8)
-import qualified Data.Text.Lazy.IO                 as LT
+import           Control.Monad.Extra               (unless, whenJust)
+import           Data.Default                      (def)
 import           Data.Version                      (showVersion)
 import           Development.GitRev                (gitHash)
-import           Development.IDE                   (Logger (Logger),
-                                                    Priority (Info), action)
+import           Development.IDE                   (Priority (Debug, Info),
+                                                    action)
 import           Development.IDE.Core.OfInterest   (kick)
 import           Development.IDE.Core.Rules        (mainRule)
+import           Development.IDE.Core.Tracing      (withTelemetryLogger)
 import           Development.IDE.Graph             (ShakeOptions (shakeThreads))
 import qualified Development.IDE.Main              as Main
 import qualified Development.IDE.Plugin.HLS.GhcIde as GhcIde
-import qualified Development.IDE.Plugin.Test       as Test
 import           Development.IDE.Types.Options
 import           Ide.Plugin.Config                 (Config (checkParents, checkProject))
-import           Ide.Plugin.ConfigUtils            (pluginsToDefaultConfig,
-                                                    pluginsToVSCodeExtensionSchema)
 import           Ide.PluginUtils                   (pluginDescToIdePlugins)
 import           Paths_ghcide                      (version)
 import qualified System.Directory.Extra            as IO
@@ -50,62 +41,42 @@ ghcideVersion = do
              <> gitHashSection
 
 main :: IO ()
-main = do
+main = withTelemetryLogger $ \telemetryLogger -> do
+    let hlsPlugins = pluginDescToIdePlugins GhcIde.descriptors
     -- WARNING: If you write to stdout before runLanguageServer
     --          then the language server will not work
-    Arguments{..} <- getArguments
+    Arguments{..} <- getArguments hlsPlugins
 
     if argsVersion then ghcideVersion >>= putStrLn >> exitSuccess
     else hPutStrLn stderr {- see WARNING above -} =<< ghcideVersion
 
-    let hlsPlugins = pluginDescToIdePlugins GhcIde.descriptors
-
-    when argsVSCodeExtensionSchema $ do
-      LT.putStrLn $ decodeUtf8 $ A.encodePretty $ pluginsToVSCodeExtensionSchema hlsPlugins
-      exitSuccess
-
-    when argsDefaultConfig $ do
-      LT.putStrLn $ decodeUtf8 $ A.encodePretty $ pluginsToDefaultConfig hlsPlugins
-      exitSuccess
-
     whenJust argsCwd IO.setCurrentDirectory
 
-    -- lock to avoid overlapping output on stdout
-    lock <- newLock
-    let logger = Logger $ \pri msg -> when (pri >= logLevel) $ withLock lock $
-            T.putStrLn $ T.pack ("[" ++ upper (show pri) ++ "] ") <> msg
-        logLevel = if argsVerbose then minBound else Info
+    let logPriority = if argsVerbose then Debug else Info
+        arguments = if argsTesting then Main.testing else Main.defaultArguments logPriority
 
-    Main.defaultMain def
+    Main.defaultMain arguments
         {Main.argCommand = argsCommand
-
-        ,Main.argsLogger = pure logger
+        ,Main.argsLogger = Main.argsLogger arguments <> pure telemetryLogger
 
         ,Main.argsRules = do
             -- install the main and ghcide-plugin rules
-            mainRule
+            mainRule def
             -- install the kick action, which triggers a typecheck on every
             -- Shake database restart, i.e. on every user edit.
             unless argsDisableKick $
                 action kick
 
-        ,Main.argsHlsPlugins =
-            pluginDescToIdePlugins $
-            GhcIde.descriptors
-            ++ [Test.blockCommandDescriptor "block-command" | argsTesting]
+        ,Main.argsThreads = case argsThreads of 0 -> Nothing ; i -> Just (fromIntegral i)
 
-        ,Main.argsGhcidePlugin = if argsTesting
-            then Test.plugin
-            else mempty
-
-        ,Main.argsIdeOptions = \config  sessionLoader ->
-            let defOptions = defaultIdeOptions sessionLoader
+        ,Main.argsIdeOptions = \config sessionLoader ->
+            let defOptions = Main.argsIdeOptions arguments config sessionLoader
             in defOptions
                 { optShakeProfiling = argsShakeProfiling
                 , optOTMemoryProfiling = IdeOTMemoryProfiling argsOTMemoryProfiling
-                , optTesting = IdeTesting argsTesting
                 , optShakeOptions = (optShakeOptions defOptions){shakeThreads = argsThreads}
                 , optCheckParents = pure $ checkParents config
                 , optCheckProject = pure $ checkProject config
+                , optRunSubset = not argsConservativeChangeTracking
                 }
         }

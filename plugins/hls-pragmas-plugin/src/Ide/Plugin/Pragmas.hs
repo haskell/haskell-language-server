@@ -1,5 +1,7 @@
+{-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE MultiWayIf            #-}
 {-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE TypeOperators         #-}
@@ -10,23 +12,53 @@ module Ide.Plugin.Pragmas
   ( descriptor
   ) where
 
-import           Control.Applicative        ((<|>))
-import           Control.Lens               hiding (List)
-import           Control.Monad              (join)
-import           Control.Monad.IO.Class     (MonadIO (liftIO))
-import qualified Data.HashMap.Strict        as H
-import           Data.List
-import           Data.List.Extra            (nubOrdOn)
-import           Data.Maybe                 (catMaybes, listToMaybe)
-import qualified Data.Text                  as T
-import           Development.IDE            as D
+import           Control.Applicative              ((<|>))
+import           Control.Lens                     hiding (List)
+import           Control.Monad                    (join)
+import           Control.Monad.IO.Class           (MonadIO (liftIO))
+import           Control.Monad.Trans.State.Strict (State)
+import           Data.Bits                        (Bits (bit, complement, setBit, (.&.)))
+import           Data.Char                        (isSpace)
+import qualified Data.Char                        as Char
+import           Data.Coerce                      (coerce)
+import           Data.Functor                     (void, ($>))
+import qualified Data.HashMap.Strict              as H
+import qualified Data.List                        as List
+import           Data.List.Extra                  (nubOrdOn)
+import qualified Data.Map.Strict                  as Map
+import           Data.Maybe                       (catMaybes, listToMaybe,
+                                                   mapMaybe)
+import qualified Data.Maybe                       as Maybe
+import           Data.Ord                         (Down (Down))
+import           Data.Semigroup                   (Semigroup ((<>)))
+import qualified Data.Text                        as T
+import           Data.Word                        (Word64)
+import           Development.IDE                  as D (Diagnostic (Diagnostic, _code, _message),
+                                                        GhcSession (GhcSession),
+                                                        HscEnvEq (hscEnv),
+                                                        IdeState, List (List),
+                                                        ParseResult (POk),
+                                                        Position (Position),
+                                                        Range (Range), Uri,
+                                                        getFileContents,
+                                                        getParsedModule,
+                                                        prettyPrint, runAction,
+                                                        srcSpanToRange,
+                                                        toNormalizedUri,
+                                                        uriToFilePath',
+                                                        useWithStale)
 import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat.Util  (StringBuffer, atEnd,
+                                                   nextChar,
+                                                   stringToStringBuffer)
+import qualified Development.IDE.Spans.Pragmas    as Pragmas
+import           Development.IDE.Types.HscEnvEq   (HscEnvEq, hscEnv)
 import           Ide.Types
-import qualified Language.LSP.Server        as LSP
-import qualified Language.LSP.Types         as J
-import qualified Language.LSP.Types.Lens    as J
-import qualified Language.LSP.VFS           as VFS
-import qualified Text.Fuzzy                 as Fuzzy
+import qualified Language.LSP.Server              as LSP
+import qualified Language.LSP.Types               as J
+import qualified Language.LSP.Types.Lens          as J
+import qualified Language.LSP.VFS                 as VFS
+import qualified Text.Fuzzy                       as Fuzzy
 
 -- ---------------------------------------------------------------------
 
@@ -37,7 +69,6 @@ descriptor plId = (defaultPluginDescriptor plId)
   }
 
 -- ---------------------------------------------------------------------
-
 -- | Title and pragma
 type PragmaEdit = (T.Text, Pragma)
 
@@ -45,29 +76,47 @@ data Pragma = LangExt T.Text | OptGHC T.Text
   deriving (Show, Eq, Ord)
 
 codeActionProvider :: PluginMethodHandler IdeState 'J.TextDocumentCodeAction
-codeActionProvider state _plId (J.CodeActionParams _ _ docId _ (J.CodeActionContext (J.List diags) _monly)) = do
-  let mFile = docId ^. J.uri & J.uriToFilePath <&> toNormalizedFilePath'
-      uri = docId ^. J.uri
-  pm <- liftIO $ fmap join $ runAction "Pragmas.GetParsedModule" state $ getParsedModule `traverse` mFile
-  mbContents <- liftIO $ fmap (snd =<<) $ runAction "Pragmas.GetFileContents" state $ getFileContents `traverse` mFile
-  let dflags = ms_hspp_opts . pm_mod_summary <$> pm
-      insertRange = maybe (Range (Position 0 0) (Position 0 0)) endOfModuleHeader mbContents
-      pedits = nubOrdOn snd . concat $ suggest dflags <$> diags
-  return $ Right $ List $ pragmaEditToAction uri insertRange <$> pedits
+codeActionProvider state _plId (J.CodeActionParams _ _ docId _ (J.CodeActionContext (J.List diags) _monly))
+  | let J.TextDocumentIdentifier{ _uri = uri } = docId
+  , Just normalizedFilePath <- J.uriToNormalizedFilePath $ toNormalizedUri uri = do
+      -- ghc session to get some dynflags even if module isn't parsed
+      ghcSession <- liftIO $ runAction "Pragmas.GhcSession" state $ useWithStale GhcSession normalizedFilePath
+      (_, fileContents) <- liftIO $ runAction "Pragmas.GetFileContents" state $ getFileContents normalizedFilePath
+      parsedModule <- liftIO $ runAction "Pragmas.GetParsedModule" state $ getParsedModule normalizedFilePath
+      let parsedModuleDynFlags = ms_hspp_opts . pm_mod_summary <$> parsedModule
+
+      case ghcSession of
+        Just (hscEnv -> hsc_dflags -> sessionDynFlags, _) ->
+          let nextPragmaInfo = Pragmas.getNextPragmaInfo sessionDynFlags fileContents
+              pedits = nubOrdOn snd . concat $ suggest parsedModuleDynFlags <$> diags
+          in
+            pure $ Right $ List $ pragmaEditToAction uri nextPragmaInfo <$> pedits
+        Nothing -> pure $ Right $ List []
+  | otherwise = pure $ Right $ List []
+
 
 -- | Add a Pragma to the given URI at the top of the file.
 -- It is assumed that the pragma name is a valid pragma,
 -- thus, not validated.
-pragmaEditToAction :: Uri -> Range -> PragmaEdit -> (J.Command J.|? J.CodeAction)
-pragmaEditToAction uri range (title, p) =
+pragmaEditToAction :: Uri -> Pragmas.NextPragmaInfo -> PragmaEdit -> (J.Command J.|? J.CodeAction)
+pragmaEditToAction uri Pragmas.NextPragmaInfo{ nextPragmaLine, lineSplitTextEdits } (title, p) =
   J.InR $ J.CodeAction title (Just J.CodeActionQuickFix) (Just (J.List [])) Nothing Nothing (Just edit) Nothing Nothing
   where
     render (OptGHC x)  = "{-# OPTIONS_GHC -Wno-" <> x <> " #-}\n"
     render (LangExt x) = "{-# LANGUAGE " <> x <> " #-}\n"
-    textEdits = J.List [J.TextEdit range $ render p]
+    pragmaInsertPosition = Position nextPragmaLine 0
+    pragmaInsertRange = Range pragmaInsertPosition pragmaInsertPosition
+    -- workaround the fact that for some reason lsp-test applies text
+    -- edits in reverse order than lsp (tried in both coc.nvim and vscode)
+    textEdits =
+      if | Just (Pragmas.LineSplitTextEdits insertTextEdit deleteTextEdit) <- lineSplitTextEdits
+         , let J.TextEdit{ _range, _newText } = insertTextEdit ->
+             [J.TextEdit _range (render p <> _newText), deleteTextEdit]
+         | otherwise -> [J.TextEdit pragmaInsertRange (render p)]
+
     edit =
       J.WorkspaceEdit
-        (Just $ H.singleton uri textEdits)
+        (Just $ H.singleton uri (J.List textEdits))
         Nothing
         Nothing
 
@@ -80,9 +129,15 @@ suggest dflags diag =
 
 suggestDisableWarning :: Diagnostic -> [PragmaEdit]
 suggestDisableWarning Diagnostic {_code}
-  | Just (J.InR (T.stripPrefix "-W" -> Just w)) <- _code =
+  | Just (J.InR (T.stripPrefix "-W" -> Just w)) <- _code
+  , w `notElem` warningBlacklist =
     pure ("Disable \"" <> w <> "\" warnings", OptGHC w)
   | otherwise = []
+
+-- Don't suggest disabling type errors as a solution to all type errors
+warningBlacklist :: [T.Text]
+-- warningBlacklist = []
+warningBlacklist = ["deferred-type-errors"]
 
 -- ---------------------------------------------------------------------
 
@@ -142,6 +197,8 @@ allPragmas =
   ]
 
 -- ---------------------------------------------------------------------
+flags :: [T.Text]
+flags = map (T.pack . stripLeading '-') $ flagsForCompletion False
 
 completion :: PluginMethodHandler IdeState 'J.TextDocumentCompletion
 completion _ide _ complParams = do
@@ -153,11 +210,23 @@ completion _ide _ complParams = do
             result <$> VFS.getCompletionPrefix position cnts
             where
                 result (Just pfix)
-                    | "{-# LANGUAGE" `T.isPrefixOf` VFS.fullLine pfix
+                    | "{-# language" `T.isPrefixOf` line
                     = J.List $ map buildCompletion
                         (Fuzzy.simpleFilter (VFS.prefixText pfix) allPragmas)
+                    | "{-# options_ghc" `T.isPrefixOf` line
+                    = J.List $ map mkExtCompl
+                        (Fuzzy.simpleFilter (VFS.prefixText pfix) flags)
+                    | "{-#" `T.isPrefixOf` line
+                    = J.List $ map (\(a, b, c) -> mkPragmaCompl (a <> suffix) b c) validPragmas
                     | otherwise
                     = J.List []
+                    where
+                        line = T.toLower $ VFS.fullLine pfix
+                        suffix
+                            | "#-}" `T.isSuffixOf` line = " "
+                            | "-}"  `T.isSuffixOf` line = " #"
+                            | "}"   `T.isSuffixOf` line = " #-"
+                            | otherwise                 = " #-}"
                 result Nothing = J.List []
                 buildCompletion p =
                     J.CompletionItem
@@ -181,13 +250,42 @@ completion _ide _ complParams = do
                       }
         _ -> return $ J.List []
 
--- ---------------------------------------------------------------------
+-----------------------------------------------------------------------
+validPragmas :: [(T.Text, T.Text, T.Text)]
+validPragmas =
+  [ ("LANGUAGE ${1:extension}"         , "LANGUAGE",           "{-# LANGUAGE #-}")
+  , ("OPTIONS_GHC -${1:option}"        , "OPTIONS_GHC",        "{-# OPTIONS_GHC #-}")
+  , ("INLINE ${1:function}"            , "INLINE",             "{-# INLINE #-}")
+  , ("NOINLINE ${1:function}"          , "NOINLINE",           "{-# NOINLINE #-}")
+  , ("INLINABLE ${1:function}"         , "INLINABLE",          "{-# INLINABLE #-}")
+  , ("WARNING ${1:message}"            , "WARNING",            "{-# WARNING #-}")
+  , ("DEPRECATED ${1:message}"         , "DEPRECATED",         "{-# DEPRECATED  #-}")
+  , ("ANN ${1:annotation}"             , "ANN",                "{-# ANN #-}")
+  , ("RULES"                           , "RULES",              "{-# RULES #-}")
+  , ("SPECIALIZE ${1:function}"        , "SPECIALIZE",         "{-# SPECIALIZE #-}")
+  , ("SPECIALIZE INLINE ${1:function}" , "SPECIALIZE INLINE",  "{-# SPECIALIZE INLINE #-}")
+  ]
 
--- | Find first line after (last pragma / last shebang / beginning of file).
--- Useful for inserting pragmas.
-endOfModuleHeader :: T.Text -> Range
-endOfModuleHeader contents = Range loc loc
-    where
-        loc = Position line 0
-        line = maybe 0 succ (lastLineWithPrefix "{-#" <|> lastLineWithPrefix "#!")
-        lastLineWithPrefix pre = listToMaybe $ reverse $ findIndices (T.isPrefixOf pre) $ T.lines contents
+
+mkPragmaCompl :: T.Text -> T.Text -> T.Text -> J.CompletionItem
+mkPragmaCompl insertText label detail =
+  J.CompletionItem label (Just J.CiKeyword) Nothing (Just detail)
+    Nothing Nothing Nothing Nothing Nothing (Just insertText) (Just J.Snippet)
+    Nothing Nothing Nothing Nothing Nothing Nothing
+
+
+stripLeading :: Char -> String -> String
+stripLeading _ [] = []
+stripLeading c (s:ss)
+  | s == c = ss
+  | otherwise = s:ss
+
+
+mkExtCompl :: T.Text -> J.CompletionItem
+mkExtCompl label =
+  J.CompletionItem label (Just J.CiKeyword) Nothing Nothing
+    Nothing Nothing Nothing Nothing Nothing Nothing Nothing
+    Nothing Nothing Nothing Nothing Nothing Nothing
+
+
+

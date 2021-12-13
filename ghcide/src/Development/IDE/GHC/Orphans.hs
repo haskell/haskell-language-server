@@ -9,19 +9,34 @@
 --   Note that the 'NFData' instances may not be law abiding.
 module Development.IDE.GHC.Orphans() where
 
+#if MIN_VERSION_ghc(9,0,0)
+import           GHC.Data.Bag
+import           GHC.Data.FastString
+import qualified GHC.Data.StringBuffer      as SB
+import           GHC.Types.Name.Occurrence
+import           GHC.Types.SrcLoc
+import           GHC.Types.Unique           (getKey)
+import           GHC.Unit.Info
+import           GHC.Utils.Outputable
+#else
 import           Bag
+import           GhcPlugins
+import qualified StringBuffer               as SB
+import           Unique                     (getKey)
+#endif
+
+import           GHC
+
+import           Retrie.ExactPrint          (Annotated)
+
+import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Util
+
 import           Control.DeepSeq
 import           Data.Aeson
 import           Data.Hashable
 import           Data.String                (IsString (fromString))
 import           Data.Text                  (Text)
-import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Util
-import           GHC                        ()
-import           GhcPlugins
-import           Retrie.ExactPrint          (Annotated)
-import qualified StringBuffer               as SB
-
 
 -- Orphan instances for types from the GHC API.
 instance Show CoreModule where show = prettyPrint
@@ -49,7 +64,9 @@ instance NFData GhcPlugins.InstalledUnitId where rnf = rwhnf . installedUnitIdFS
 instance Hashable GhcPlugins.InstalledUnitId where
   hashWithSalt salt = hashWithSalt salt . installedUnitIdString
 #else
-instance Show InstalledUnitId where show = prettyPrint
+instance Show UnitId where show = prettyPrint
+deriving instance Ord SrcSpan
+deriving instance Ord UnhelpfulSpanReason
 #endif
 
 instance NFData SB.StringBuffer where rnf = rwhnf
@@ -90,8 +107,10 @@ deriving instance Show SourceModified
 instance NFData SourceModified where
     rnf = rwhnf
 
+#if !MIN_VERSION_ghc(9,2,0)
 instance Show ModuleName where
     show = moduleNameString
+#endif
 instance Hashable ModuleName where
     hashWithSalt salt = hashWithSalt salt . show
 
@@ -162,3 +181,6 @@ instance (NFData HsModule) where
 instance (NFData (HsModule a)) where
 #endif
   rnf = rwhnf
+
+instance Show OccName where show = prettyPrint
+instance Hashable OccName where hashWithSalt s n = hashWithSalt s (getKey $ getUnique n)

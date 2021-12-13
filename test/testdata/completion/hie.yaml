@@ -4,3 +4,4 @@ cradle:
       - "Completion"
       - "Context"
       - "DupRecFields"
+      - "FieldsSharingSignature"

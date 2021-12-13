@@ -7,15 +7,16 @@
 module Wingman.Metaprogramming.Parser where
 
 import qualified Control.Monad.Combinators.Expr as P
-import qualified Control.Monad.Error.Class as E
-import           Control.Monad.Reader (ask)
 import           Data.Functor
 import           Data.Maybe (listToMaybe)
 import qualified Data.Text as T
+import           Development.IDE.GHC.Compat (RealSrcLoc, srcLocLine, srcLocCol, srcLocFile)
+import           Development.IDE.GHC.Compat.Util (unpackFS)
+import           Refinery.Tactic (failure)
 import qualified Refinery.Tactic as R
 import qualified Text.Megaparsec as P
 import           Wingman.Auto
-import           Wingman.Machinery (useNameFromHypothesis, getOccNameType, createImportedHyInfo, useNameFromContext, lookupNameInContext, getCurrentDefinitions)
+import           Wingman.Machinery (useNameFromHypothesis, useNameFromContext, getCurrentDefinitions)
 import           Wingman.Metaprogramming.Lexer
 import           Wingman.Metaprogramming.Parser.Documentation
 import           Wingman.Metaprogramming.ProofState (proofState, layout)
@@ -75,7 +76,7 @@ commands =
           ])
       (pure . \case
         []    -> intros
-        names -> intros' $ Just names
+        names -> intros' $ IntroduceOnlyNamed names
       )
       [ Example
           Nothing
@@ -99,7 +100,7 @@ commands =
 
   , command "intro" Deterministic (Bind One)
       "Construct a lambda expression, binding an argument with the given name."
-      (pure . intros' . Just . pure)
+      (pure . intros' . IntroduceOnlyNamed . pure)
       [ Example
           Nothing
           ["aye"]
@@ -295,7 +296,7 @@ commands =
       ( pure $
           fmap listToMaybe getCurrentDefinitions >>= \case
             Just (self, _) -> useNameFromContext (apply Saturated) self
-            Nothing -> E.throwError $ TacticPanic "no defining function"
+            Nothing -> failure $ TacticPanic "no defining function"
       )
       [ Example
           (Just "In the context of `foo (a :: Int) (b :: b) = _`:")
@@ -345,6 +346,22 @@ commands =
           ]
           (Just "a")
           "(_ :: a -> a -> a -> a) a1 a2 a3"
+      ]
+
+  , command "let" Deterministic (Bind Many)
+      "Create let-bindings for each binder given to this tactic."
+      (pure . letBind)
+      [ Example
+          Nothing
+          ["a", "b", "c"]
+          [ ]
+          (Just "x")
+          $ T.pack $ unlines
+            [ "let a = _1 :: a"
+            , "    b = _2 :: b"
+            , "    c = _3 :: c"
+            , " in (_4 :: x)"
+            ]
       ]
 
   , command "try" Nondeterministic Tactic
@@ -421,25 +438,37 @@ wrapError :: String -> String
 wrapError err = "```\n" <> err <> "\n```\n"
 
 
+fixErrorOffset :: RealSrcLoc -> P.ParseErrorBundle a b -> P.ParseErrorBundle a b
+fixErrorOffset rsl (P.ParseErrorBundle ne (P.PosState a n (P.SourcePos _ line col) pos s))
+  = P.ParseErrorBundle ne
+  $ P.PosState a n
+      (P.SourcePos
+        (unpackFS $ srcLocFile rsl)
+        ((<>) line $ P.mkPos $ srcLocLine rsl - 1)
+        ((<>) col  $ P.mkPos $ srcLocCol  rsl - 1 + length @[] "[wingman|")
+      )
+      pos
+      s
+
 ------------------------------------------------------------------------------
 -- | Attempt to run a metaprogram tactic, returning the proof state, or the
 -- errors.
 attempt_it
-    :: Context
+    :: RealSrcLoc
+    -> Context
     -> Judgement
     -> String
     -> IO (Either String String)
-attempt_it ctx jdg program =
+attempt_it rsl ctx jdg program =
   case P.runParser tacticProgram "<splice>" (T.pack program) of
-    Left peb -> pure $ Left $ wrapError $ P.errorBundlePretty peb
+    Left peb -> pure $ Left $ wrapError $ P.errorBundlePretty $ fixErrorOffset rsl peb
     Right tt -> do
-      res <- runTactic
-            ctx
-            jdg
-            tt
+      res <- runTactic 2e6 ctx jdg tt
       pure $ case res of
           Left tes -> Left $ wrapError $ show tes
-          Right rtr -> Right $ layout $ proofState rtr
+          Right rtr -> Right
+                     $ layout (cfg_proofstate_styling $ ctxConfig ctx)
+                     $ proofState rtr
 
 
 parseMetaprogram :: T.Text -> TacticsM ()

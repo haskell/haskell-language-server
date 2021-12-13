@@ -29,10 +29,11 @@ module Development.IDE.GHC.ExactPrint
       Anns,
       Annotate,
       setPrecedingLinesT,
+      -- * Helper function
+      eqSrcSpan,
     )
 where
 
-import           BasicTypes                              (appPrec)
 import           Control.Applicative                     (Alternative)
 import           Control.Arrow
 import           Control.Monad
@@ -53,7 +54,9 @@ import           Data.Traversable                        (for)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service            (runAction)
 import           Development.IDE.Core.Shake
-import           Development.IDE.GHC.Compat              hiding (parseExpr)
+import           Development.IDE.GHC.Compat              hiding (parseImport,
+                                                          parsePattern,
+                                                          parseType)
 import           Development.IDE.Graph                   (RuleResult, Rules)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Types.Location
@@ -65,9 +68,6 @@ import           Language.Haskell.GHC.ExactPrint
 import           Language.Haskell.GHC.ExactPrint.Parsers
 import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities         (ClientCapabilities)
-import           Outputable                              (Outputable, ppr,
-                                                          showSDoc)
-import           Parser                                  (parseIdentifier)
 import           Retrie.ExactPrint                       hiding (parseDecl,
                                                           parseExpr,
                                                           parsePattern,
@@ -81,7 +81,6 @@ data GetAnnotatedParsedSource = GetAnnotatedParsedSource
 
 instance Hashable GetAnnotatedParsedSource
 instance NFData GetAnnotatedParsedSource
-instance Binary GetAnnotatedParsedSource
 type instance RuleResult GetAnnotatedParsedSource = Annotated ParsedSource
 
 -- | Get the latest version of the annotated parse source with comments.
@@ -233,8 +232,9 @@ graft' needs_space dst val = Graft $ \dflags a -> do
         everywhere'
             ( mkT $
                 \case
-                    (L src _ :: Located ast) | src == dst -> val'
-                    l                                     -> l
+                    (L src _ :: Located ast)
+                        | src `eqSrcSpan` dst -> val'
+                    l                         -> l
             )
             a
 
@@ -267,7 +267,7 @@ getNeedsSpaceAndParenthesize dst a =
   let (needs_parens, needs_space) =
           everythingWithContext (Nothing, Nothing) (<>)
             ( mkQ (mempty, ) $ \x s -> case x of
-                (L src _ :: LHsExpr GhcPs) | src == dst ->
+                (L src _ :: LHsExpr GhcPs) | src `eqSrcSpan` dst ->
                   (s, s)
                 L _ x' -> (mempty, Just *** Just $ needsParensSpace x')
             ) a
@@ -291,7 +291,7 @@ graftExprWithM dst trans = Graft $ \dflags a -> do
         ( mkM $
             \case
                 val@(L src _ :: LHsExpr GhcPs)
-                    | src == dst -> do
+                    | src `eqSrcSpan` dst -> do
                         mval <- trans val
                         case mval of
                             Just val' -> do
@@ -316,7 +316,7 @@ graftWithM dst trans = Graft $ \dflags a -> do
         ( mkM $
             \case
                 val@(L src _ :: Located ast)
-                    | src == dst -> do
+                    | src `eqSrcSpan` dst -> do
                         mval <- trans val
                         case mval of
                             Just val' -> do
@@ -338,7 +338,7 @@ genericGraftWithSmallestM ::
     -- | The type of nodes we'd like to consider when finding the smallest.
     Proxy (Located ast) ->
     SrcSpan ->
-    (DynFlags -> GenericM (TransformT m)) ->
+    (DynFlags -> ast -> GenericM (TransformT m)) ->
     Graft m a
 genericGraftWithSmallestM proxy dst trans = Graft $ \dflags ->
     smallestM (genericIsSubspan proxy dst) (trans dflags)
@@ -351,7 +351,7 @@ genericGraftWithLargestM ::
     -- | The type of nodes we'd like to consider when finding the largest.
     Proxy (Located ast) ->
     SrcSpan ->
-    (DynFlags -> GenericM (TransformT m)) ->
+    (DynFlags -> ast -> GenericM (TransformT m)) ->
     Graft m a
 genericGraftWithLargestM proxy dst trans = Graft $ \dflags ->
     largestM (genericIsSubspan proxy dst) (trans dflags)
@@ -368,7 +368,7 @@ graftDecls dst decs0 = Graft $ \dflags a -> do
         annotateDecl dflags decl
     let go [] = DL.empty
         go (L src e : rest)
-            | src == dst = DL.fromList decs <> DL.fromList rest
+            | src `eqSrcSpan` dst = DL.fromList decs <> DL.fromList rest
             | otherwise = DL.singleton (L src e) <> go rest
     modifyDeclsT (pure . DL.toList . go) a
 
@@ -399,7 +399,7 @@ graftDeclsWithM ::
 graftDeclsWithM dst toDecls = Graft $ \dflags a -> do
     let go [] = pure DL.empty
         go (e@(L src _) : rest)
-            | src == dst = toDecls e >>= \case
+            | src `eqSrcSpan` dst = toDecls e >>= \case
                 Just decs0 -> do
                     decs <- forM decs0 $ \decl ->
                         hoistTransform (either Fail.fail pure) $
@@ -519,3 +519,9 @@ render dflags = showSDoc dflags . ppr
 parenthesize :: LHsExpr GhcPs -> LHsExpr GhcPs
 parenthesize = parenthesizeHsExpr appPrec
 
+------------------------------------------------------------------------------
+
+-- | Equality on SrcSpan's.
+-- Ignores the (Maybe BufSpan) field of SrcSpan's.
+eqSrcSpan :: SrcSpan -> SrcSpan -> Bool
+eqSrcSpan l r = leftmost_smallest l r == EQ

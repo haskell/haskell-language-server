@@ -48,6 +48,8 @@ spec = do
     autoTest  2 19 "AutoInfixApplyMany"
     autoTest  2 25 "AutoInfixInfix"
     autoTest 19 12 "AutoTypeLevel"
+    autoTest 11  9 "AutoForallClassMethod"
+    autoTest  2  8 "AutoUnusedPatternMatch"
 
     failing "flaky in CI" $
       autoTest 2 11 "GoldenApplicativeThen"
@@ -83,6 +85,7 @@ spec = do
 
 
   describe "messages" $ do
-    mkShowMessageTest Auto "" 2 8 "MessageForallA" TacticErrors
-    mkShowMessageTest Auto "" 7 8 "MessageCantUnify" TacticErrors
+    mkShowMessageTest Auto ""  2 8 "MessageForallA"      TacticErrors
+    mkShowMessageTest Auto ""  7 8 "MessageCantUnify"    TacticErrors
+    mkShowMessageTest Auto "" 12 8 "MessageNotEnoughGas" NotEnoughGas
 

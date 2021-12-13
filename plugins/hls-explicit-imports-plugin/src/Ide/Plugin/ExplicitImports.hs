@@ -23,7 +23,8 @@ import           Data.Aeson.Types                     (FromJSON)
 import qualified Data.HashMap.Strict                  as HashMap
 import           Data.IORef                           (readIORef)
 import qualified Data.Map.Strict                      as Map
-import           Data.Maybe                           (catMaybes, fromMaybe)
+import           Data.Maybe                           (catMaybes, fromMaybe,
+                                                       isJust)
 import qualified Data.Text                            as T
 import           Development.IDE                      hiding (pluginHandlers,
                                                        pluginRules)
@@ -35,16 +36,6 @@ import           Ide.PluginUtils                      (mkLspCommand)
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
-#if MIN_VERSION_ghc(9,0,0)
-import           GHC.Builtin.Names                    (pRELUDE)
-#else
-import           PrelNames                            (pRELUDE)
-#endif
-import           RnNames                              (findImportUsage,
-                                                       getMinimalImports)
-import qualified SrcLoc
-import           TcRnMonad                            (initTcWithGbl)
-import           TcRnTypes                            (TcGblEnv (tcg_used_gres))
 
 importCommandId :: CommandId
 importCommandId = "ImportLensCommand"
@@ -176,8 +167,6 @@ instance Hashable MinimalImports
 
 instance NFData MinimalImports
 
-instance Binary MinimalImports
-
 type instance RuleResult MinimalImports = MinimalImportsResult
 
 newtype MinimalImportsResult = MinimalImportsResult
@@ -186,6 +175,13 @@ newtype MinimalImportsResult = MinimalImportsResult
 instance Show MinimalImportsResult where show _ = "<minimalImportsResult>"
 
 instance NFData MinimalImportsResult where rnf = rwhnf
+
+exportedModuleStrings :: ParsedModule -> [String]
+exportedModuleStrings ParsedModule{pm_parsed_source = L _ HsModule{..}}
+  | Just export <- hsmodExports,
+    exports <- unLoc export
+    = map show exports
+exportedModuleStrings _ = []
 
 minimalImportsRule :: Rules ()
 minimalImportsRule = define $ \MinimalImports nfp -> do
@@ -197,13 +193,13 @@ minimalImportsRule = define $ \MinimalImports nfp -> do
   (imports, mbMinImports) <- liftIO $ extractMinimalImports hsc tmr
   let importsMap =
         Map.fromList
-          [ (SrcLoc.realSrcSpanStart l, T.pack (prettyPrint i))
-            | L (OldRealSrcSpan l) i <- fromMaybe [] mbMinImports
+          [ (realSrcSpanStart l, T.pack (prettyPrint i))
+            | L (RealSrcSpan l _) i <- fromMaybe [] mbMinImports
           ]
       res =
-        [ (i, Map.lookup (SrcLoc.realSrcSpanStart l) importsMap)
+        [ (i, Map.lookup (realSrcSpanStart l) importsMap)
           | i <- imports
-          , OldRealSrcSpan l <- [getLoc i]
+          , RealSrcSpan l _ <- [getLoc i]
         ]
   return ([], MinimalImportsResult res <$ mbMinImports)
 
@@ -219,19 +215,29 @@ extractMinimalImports (Just hsc) (Just TcModuleResult {..}) = do
   let tcEnv = tmrTypechecked
       (_, imports, _, _) = tmrRenamed
       ParsedModule {pm_parsed_source = L loc _} = tmrParsed
+      emss = exportedModuleStrings tmrParsed
       span = fromMaybe (error "expected real") $ realSpan loc
+  -- Don't make suggestions for modules which are also exported, the user probably doesn't want this!
+  -- See https://github.com/haskell/haskell-language-server/issues/2079
+  let notExportedImports = filter (notExported emss) imports
 
   -- GHC is secretly full of mutable state
   gblElts <- readIORef (tcg_used_gres tcEnv)
 
   -- call findImportUsage does exactly what we need
   -- GHC is full of treats like this
-  let usage = findImportUsage imports gblElts
+  let usage = findImportUsage notExportedImports gblElts
   (_, minimalImports) <-
     initTcWithGbl (hscEnv hsc) tcEnv span $ getMinimalImports usage
 
   -- return both the original imports and the computed minimal ones
   return (imports, minimalImports)
+  where
+      notExported :: [String] -> LImportDecl GhcRn -> Bool
+      notExported []  _ = True
+      notExported exports (L _ ImportDecl{ideclName = L _ name}) =
+          not $ any (\e -> ("module " ++ moduleNameString name) == e) exports
+      notExported _ _ = False
 extractMinimalImports _ _ = return ([], Nothing)
 
 mkExplicitEdit :: (ModuleName -> Bool) -> PositionMapping -> LImportDecl pass -> T.Text -> Maybe TextEdit
@@ -240,7 +246,7 @@ mkExplicitEdit pred posMapping (L src imp) explicit
   | ImportDecl {ideclHiding = Just (False, _)} <- imp =
     Nothing
   | not (isQualifiedImport imp),
-    OldRealSrcSpan l <- src,
+    RealSrcSpan l _ <- src,
     L _ mn <- ideclName imp,
     -- (almost) no one wants to see an explicit import list for Prelude
     pred mn,

@@ -1,16 +1,15 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TupleSections #-}
 
 module Wingman.Tactics
   ( module Wingman.Tactics
   , runTactic
   ) where
 
-import           ConLike (ConLike(RealDataCon))
-import           Control.Applicative (Alternative(empty))
+import           Control.Applicative (Alternative(empty), (<|>))
 import           Control.Lens ((&), (%~), (<>~))
 import           Control.Monad (filterM)
 import           Control.Monad (unless)
-import           Control.Monad.Except (throwError)
 import           Control.Monad.Extra (anyM)
 import           Control.Monad.Reader.Class (MonadReader (ask))
 import           Control.Monad.State.Strict (StateT(..), runStateT)
@@ -24,18 +23,14 @@ import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Set (Set)
 import qualified Data.Set as S
+import           Data.Traversable (for)
 import           DataCon
-import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat hiding (empty)
 import           GHC.Exts
 import           GHC.SourceGen ((@@))
 import           GHC.SourceGen.Expr
-import           Name (occNameString, occName)
-import           OccName (mkVarOcc)
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
-import           TcType
-import           Type hiding (Var)
-import           TysPrim (betaTy, alphaTy, betaTyVar, alphaTyVar)
 import           Wingman.CodeGen
 import           Wingman.GHC
 import           Wingman.Judgements
@@ -64,9 +59,9 @@ assume name = rule $ \jdg -> do
         -- reasonable for a default value.
         (pure (noLoc $ var' name))
           { syn_trace = tracePrim $ "assume " <> occNameString name
-          , syn_used_vals = S.singleton name
+          , syn_used_vals = S.singleton name <> getAncestry jdg name
           }
-    Nothing -> throwError $ UndefinedHypothesis name
+    Nothing -> cut
 
 
 ------------------------------------------------------------------------------
@@ -87,19 +82,22 @@ recursion :: TacticsM ()
 recursion = requireConcreteHole $ tracing "recursion" $ do
   defs <- getCurrentDefinitions
   attemptOn (const defs) $ \(name, ty) -> markRecursion $ do
+    jdg <- goal
     -- Peek allows us to look at the extract produced by this block.
-    peek $ \ext -> do
-      jdg <- goal
-      let pat_vals = jPatHypothesis jdg
-      -- Make sure that the recursive call contains at least one already-bound
-      -- pattern value. This ensures it is structurally smaller, and thus
-      -- suggests termination.
-      unless (any (flip M.member pat_vals) $ syn_used_vals ext) empty
-
-    let hy' = recursiveHypothesis defs
-    ctx <- ask
-    localTactic (apply Saturated $ HyInfo name RecursivePrv ty) (introduce ctx hy')
-      <@> fmap (localTactic assumption . filterPosition name) [0..]
+    peek
+      ( do
+          let hy' = recursiveHypothesis defs
+          ctx <- ask
+          localTactic (apply Saturated $ HyInfo name RecursivePrv ty) (introduce ctx hy')
+            <@> fmap (localTactic assumption . filterPosition name) [0..]
+      ) $ \ext -> do
+        let pat_vals = jPatHypothesis jdg
+        -- Make sure that the recursive call contains at least one already-bound
+        -- pattern value. This ensures it is structurally smaller, and thus
+        -- suggests termination.
+        case (any (flip M.member pat_vals) $ syn_used_vals ext) of
+          True -> Nothing
+          False -> Just UnhelpfulRecursion
 
 
 restrictPositionForApplication :: TacticsM () -> TacticsM () -> TacticsM ()
@@ -115,33 +113,64 @@ restrictPositionForApplication f app = do
 ------------------------------------------------------------------------------
 -- | Introduce a lambda binding every variable.
 intros :: TacticsM ()
-intros = intros' Nothing
+intros = intros' IntroduceAllUnnamed
+
+
+data IntroParams
+  = IntroduceAllUnnamed
+  | IntroduceOnlyNamed [OccName]
+  | IntroduceOnlyUnnamed Int
+  deriving stock (Eq, Ord, Show)
+
 
 ------------------------------------------------------------------------------
 -- | Introduce a lambda binding every variable.
 intros'
-    :: Maybe [OccName]  -- ^ When 'Nothing', generate a new name for every
-                        -- variable. Otherwise, only bind the variables named.
+    :: IntroParams
     -> TacticsM ()
-intros' names = rule $ \jdg -> do
+intros' params = rule $ \jdg -> do
   let g  = jGoal jdg
   case tacticsSplitFunTy $ unCType g of
-    (_, _, [], _) -> throwError $ GoalMismatch "intros" g
-    (_, _, as, b) -> do
+    (_, _, [], _) -> cut -- failure $ GoalMismatch "intros" g
+    (_, _, args, res) -> do
       ctx <- ask
-      let vs = fromMaybe (mkManyGoodNames (hyNamesInScope $ jEntireHypothesis jdg) as) names
-          num_args = length vs
+      let gen_names = mkManyGoodNames (hyNamesInScope $ jEntireHypothesis jdg) args
+          occs = case params of
+            IntroduceAllUnnamed -> gen_names
+            IntroduceOnlyNamed names -> names
+            IntroduceOnlyUnnamed n -> take n gen_names
+          num_occs = length occs
           top_hole = isTopHole ctx jdg
-          hy' = lambdaHypothesis top_hole $ zip vs $ coerce as
+          bindings = zip occs $ coerce args
+          bound_occs = fmap fst bindings
+          hy' = lambdaHypothesis top_hole bindings
           jdg' = introduce ctx hy'
-               $ withNewGoal (CType $ mkFunTys' (drop num_args as) b) jdg
+               $ withNewGoal (CType $ mkVisFunTys (drop num_occs args) res) jdg
       ext <- newSubgoal jdg'
       pure $
         ext
-          & #syn_trace %~ rose ("intros {" <> intercalate ", " (fmap show vs) <> "}")
+          & #syn_trace %~ rose ("intros {" <> intercalate ", " (fmap show bound_occs) <> "}")
                         . pure
           & #syn_scoped <>~ hy'
-          & #syn_val   %~ noLoc . lambda (fmap bvar' vs) . unLoc
+          & #syn_val   %~ noLoc . lambda (fmap bvar' bound_occs) . unLoc
+
+
+------------------------------------------------------------------------------
+-- | Introduce a single lambda argument, and immediately destruct it.
+introAndDestruct :: TacticsM ()
+introAndDestruct = do
+  hy <- fmap unHypothesis $ hyDiff $ intros' $ IntroduceOnlyUnnamed 1
+  -- This case should never happen, but I'm validating instead of parsing.
+  -- Adding a log to be reminded if the invariant ever goes false.
+  --
+  -- But note that this isn't a game-ending bug. In the worst case, we'll
+  -- accidentally bind too many variables, and incorrectly unify between them.
+  -- Which means some GADT cases that should be eliminated won't be --- not the
+  -- end of the world.
+  unless (length hy == 1) $
+    traceMX "BUG: Introduced too many variables for introAndDestruct! Please report me if you see this! " hy
+
+  for_ hy destruct
 
 
 ------------------------------------------------------------------------------
@@ -198,8 +227,23 @@ destructPun hi = requireConcreteHole $ tracing "destructPun(user)" $
 ------------------------------------------------------------------------------
 -- | Case split, using the same data constructor in the matches.
 homo :: HyInfo CType -> TacticsM ()
-homo = requireConcreteHole . tracing "homo" . rule . destruct' False (\dc jdg ->
-  buildDataCon False jdg dc $ snd $ splitAppTys $ unCType $ jGoal jdg)
+homo hi = requireConcreteHole . tracing "homo" $ do
+  jdg <- goal
+  let g = jGoal jdg
+
+  -- Ensure that every data constructor in the domain type is covered in the
+  -- codomain; otherwise 'homo' will produce an ill-typed program.
+  case (uncoveredDataCons (coerce $ hi_type hi) (coerce g)) of
+    Just uncovered_dcs ->
+      unless (S.null uncovered_dcs) $
+        failure  $ TacticPanic "Can't cover every datacon in domain"
+    _ -> failure $ TacticPanic "Unable to fetch datacons"
+
+  rule
+    $ destruct'
+        False
+        (\dc jdg -> buildDataCon False jdg dc $ snd $ splitAppTys $ unCType $ jGoal jdg)
+    $ hi
 
 
 ------------------------------------------------------------------------------
@@ -240,7 +284,7 @@ apply (Unsaturated n) hi = tracing ("apply' " <> show (hi_name hi)) $ do
       saturated_args = dropEnd n all_args
       unsaturated_args = takeEnd n all_args
   rule $ \jdg -> do
-    unify g (CType $ mkFunTys' unsaturated_args ret)
+    unify g (CType $ mkVisFunTys unsaturated_args ret)
     ext
         <- fmap unzipTrace
         $ traverse ( newSubgoal
@@ -250,7 +294,7 @@ apply (Unsaturated n) hi = tracing ("apply' " <> show (hi_name hi)) $ do
                     ) saturated_args
     pure $
       ext
-        & #syn_used_vals %~ S.insert func
+        & #syn_used_vals %~ (\x -> S.insert func x <> getAncestry jdg func)
         & #syn_val       %~ mkApply func . fmap unLoc
 
 application :: TacticsM ()
@@ -264,7 +308,7 @@ split = tracing "split(user)" $ do
   jdg <- goal
   let g = jGoal jdg
   case tacticsGetDataCons $ unCType g of
-    Nothing -> throwError $ GoalMismatch "split" g
+    Nothing -> failure $ GoalMismatch "split" g
     Just (dcs, _) -> choice $ fmap splitDataCon dcs
 
 
@@ -277,7 +321,7 @@ splitAuto = requireConcreteHole $ tracing "split(auto)" $ do
   jdg <- goal
   let g = jGoal jdg
   case tacticsGetDataCons $ unCType g of
-    Nothing -> throwError $ GoalMismatch "split" g
+    Nothing -> failure $ GoalMismatch "split" g
     Just (dcs, _) -> do
       case isSplitWhitelisted jdg of
         True -> choice $ fmap splitDataCon dcs
@@ -296,7 +340,7 @@ splitSingle = tracing "splitSingle" $ do
   case tacticsGetDataCons $ unCType g of
     Just ([dc], _) -> do
       splitDataCon dc
-    _ -> throwError $ GoalMismatch "splitSingle" g
+    _ -> failure $ GoalMismatch "splitSingle" g
 
 ------------------------------------------------------------------------------
 -- | Like 'split', but prunes any data constructors which have holes.
@@ -341,7 +385,7 @@ splitConLike dc =
     case splitTyConApp_maybe $ unCType g of
       Just (_, apps) -> do
         buildDataCon True (unwhitelistingSplit jdg) dc apps
-      Nothing -> throwError $ GoalMismatch "splitDataCon" g
+      Nothing -> cut -- failure $ GoalMismatch "splitDataCon" g
 
 ------------------------------------------------------------------------------
 -- | Attempt to instantiate the given data constructor to solve the goal.
@@ -387,8 +431,8 @@ userSplit occ = do
       case find (sloppyEqOccName occ . occName . dataConName)
              $ tyConDataCons tc of
         Just dc -> splitDataCon dc
-        Nothing -> throwError $ NotInScope occ
-    Nothing -> throwError $ NotInScope occ
+        Nothing -> failure $ NotInScope occ
+    Nothing -> failure $ NotInScope occ
 
 
 ------------------------------------------------------------------------------
@@ -413,21 +457,21 @@ refine = intros <%> splitSingle
 
 
 auto' :: Int -> TacticsM ()
-auto' 0 = throwError NoProgress
+auto' 0 = failure OutOfGas
 auto' n = do
   let loop = auto' (n - 1)
   try intros
-  choice
-    [ overFunctions $ \fname -> do
-        requireConcreteHole $ apply Saturated fname
-        loop
-    , overAlgebraicTerms $ \aname -> do
-        destructAuto aname
-        loop
-    , splitAuto >> loop
-    , assumption >> loop
-    , recursion
-    ]
+  assumption <|>
+    choice
+      [ overFunctions $ \fname -> do
+          requireConcreteHole $ apply Saturated fname
+          loop
+      , overAlgebraicTerms $ \aname -> do
+          destructAuto aname
+          loop
+      , splitAuto >> loop
+      , recursion
+      ]
 
 overFunctions :: (HyInfo CType -> TacticsM ()) -> TacticsM ()
 overFunctions =
@@ -451,7 +495,7 @@ applyMethod cls df method_name = do
       let (_, apps) = splitAppTys df
       let ty = piResultTys (idType method) apps
       apply Saturated $ HyInfo method_name (ClassMethodPrv $ Uniquely cls) $ CType ty
-    Nothing -> throwError $ NotInScope method_name
+    Nothing -> failure $ NotInScope method_name
 
 
 applyByName :: OccName -> TacticsM ()
@@ -493,17 +537,17 @@ applyByType ty = tracing ("applyByType " <> show ty) $ do
 -- | Make an n-ary function call of the form
 -- @(_ :: forall a b. a -> a -> b) _ _@.
 nary :: Int -> TacticsM ()
-nary n =
-  applyByType $
-    mkInvForAllTys [alphaTyVar, betaTyVar] $
-      mkFunTys' (replicate n alphaTy) betaTy
+nary n = do
+  a <- newUnivar
+  b <- newUnivar
+  applyByType $ mkVisFunTys (replicate n a) b
 
 
 self :: TacticsM ()
 self =
   fmap listToMaybe getCurrentDefinitions >>= \case
     Just (self, _) -> useNameFromContext (apply Saturated) self
-    Nothing -> throwError $ TacticPanic "no defining function"
+    Nothing -> failure $ TacticPanic "no defining function"
 
 
 ------------------------------------------------------------------------------
@@ -529,6 +573,18 @@ cata hi = do
       (mkVarOcc . flip mappend "_c" . occNameString)
       (\hi -> self >> commit (assume $ hi_name hi) assumption)
       $ Hypothesis unifiable_diff
+
+
+letBind :: [OccName] -> TacticsM ()
+letBind occs = do
+  jdg <- goal
+  occ_tys <- for occs
+           $ \occ
+          -> fmap (occ, )
+           $ fmap (<$ jdg)
+           $ fmap CType
+           $ newUnivar
+  rule $ nonrecLet occ_tys
 
 
 ------------------------------------------------------------------------------
@@ -567,9 +623,9 @@ collapse = do
 with_arg :: TacticsM ()
 with_arg = rule $ \jdg -> do
   let g = jGoal jdg
-  fresh_ty <- freshTyvars $ mkInvForAllTys [alphaTyVar] alphaTy
+  fresh_ty <- newUnivar
   a <- newSubgoal $ withNewGoal (CType fresh_ty) jdg
-  f <- newSubgoal $ withNewGoal (coerce mkFunTys' [fresh_ty] g) jdg
+  f <- newSubgoal $ withNewGoal (coerce mkVisFunTys [fresh_ty] g) jdg
   pure $ fmap noLoc $ (@@) <$> fmap unLoc f <*> fmap unLoc a
 
 

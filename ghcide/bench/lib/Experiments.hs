@@ -26,16 +26,26 @@ import           Control.Exception.Safe          (IOException, handleAny, try)
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Data.Aeson                      (Value (Null), toJSON)
+import           Data.Either                     (fromRight)
 import           Data.List
 import           Data.Maybe
 import qualified Data.Text                       as T
 import           Data.Version
 import           Development.IDE.Plugin.Test
+import           Development.IDE.Test            (getBuildEdgesCount,
+                                                  getBuildKeysBuilt,
+                                                  getBuildKeysChanged,
+                                                  getBuildKeysVisited,
+                                                  getStoredKeys)
+import           Development.IDE.Test.Diagnostic
 import           Development.Shake               (CmdOption (Cwd, FileStdout),
                                                   cmd_)
 import           Experiments.Types
 import           Language.LSP.Test
-import           Language.LSP.Types
+import           Language.LSP.Types              hiding
+                                                 (SemanticTokenAbsolute (length, line),
+                                                  SemanticTokenRelative (length),
+                                                  SemanticTokensEdit (_start))
 import           Language.LSP.Types.Capabilities
 import           Numeric.Natural
 import           Options.Applicative
@@ -70,9 +80,12 @@ experiments =
         isJust <$> getHover doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
       bench "edit" $ \docs -> do
-        forM_ docs $ \DocumentPositions{..} ->
+        forM_ docs $ \DocumentPositions{..} -> do
           changeDoc doc [charEdit stringLiteralP]
-        waitForProgressDone -- TODO check that this waits for all of them
+          -- wait for a fresh build start
+          waitForProgressStart
+        -- wait for the build to be finished
+        waitForProgressDone
         return True,
       ---------------------------------------------------------------------------------------
       bench "hover after edit" $ \docs -> do
@@ -114,8 +127,9 @@ experiments =
         ( \docs -> do
             unless (any (isJust . identifierP) docs) $
                 error "None of the example modules is suitable for this experiment"
-            forM_ docs $ \DocumentPositions{..} ->
+            forM_ docs $ \DocumentPositions{..} -> do
                 forM_ identifierP $ \p -> changeDoc doc [charEdit p]
+                waitForProgressStart
             waitForProgressDone
         )
         ( \docs -> not . null . catMaybes <$> forM docs (\DocumentPositions{..} ->
@@ -132,8 +146,9 @@ experiments =
                 forM_ identifierP $ \p -> changeDoc doc [charEdit p]
         )
         ( \docs -> do
-            forM_ docs $ \DocumentPositions{..} ->
+            forM_ docs $ \DocumentPositions{..} -> do
               changeDoc doc [charEdit stringLiteralP]
+              waitForProgressStart
             waitForProgressDone
             not . null . catMaybes <$> forM docs (\DocumentPositions{..} -> do
               forM identifierP $ \p ->
@@ -143,20 +158,22 @@ experiments =
       benchWithSetup
         "code actions after cradle edit"
         ( \docs -> do
-            unless (any (isJust . identifierP) docs) $
-                error "None of the example modules is suitable for this experiment"
-            forM_ docs $ \DocumentPositions{..} ->
-                forM_ identifierP $ \p -> changeDoc doc [charEdit p]
+            forM_ docs $ \DocumentPositions{..} -> do
+                forM identifierP $ \p -> do
+                    changeDoc doc [charEdit p]
+                    waitForProgressStart
+            void waitForBuildQueue
         )
         ( \docs -> do
-            Just hieYaml <- uriToFilePath <$> getDocUri "hie.yaml"
-            liftIO $ appendFile hieYaml "##\n"
+            hieYamlUri <- getDocUri "hie.yaml"
+            liftIO $ appendFile (fromJust $ uriToFilePath hieYamlUri) "##\n"
             sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
-                List [ FileEvent (filePathToUri "hie.yaml") FcChanged ]
-            forM_ docs $ \DocumentPositions{..} ->
-              changeDoc doc [charEdit stringLiteralP]
+                List [ FileEvent hieYamlUri FcChanged ]
+            waitForProgressStart
+            waitForProgressStart
+            waitForProgressStart -- the Session logic restarts a second time
             waitForProgressDone
-            not . null . catMaybes <$> forM docs (\DocumentPositions{..} -> do
+            not . all null . catMaybes <$> forM docs (\DocumentPositions{..} -> do
               forM identifierP $ \p ->
                 getCodeActions doc (Range p p))
         ),
@@ -164,11 +181,41 @@ experiments =
       bench
         "hover after cradle edit"
         (\docs -> do
-            Just hieYaml <- uriToFilePath <$> getDocUri "hie.yaml"
-            liftIO $ appendFile hieYaml "##\n"
+            hieYamlUri <- getDocUri "hie.yaml"
+            liftIO $ appendFile (fromJust $ uriToFilePath hieYamlUri) "##\n"
             sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
-                List [ FileEvent (filePathToUri "hie.yaml") FcChanged ]
+                List [ FileEvent hieYamlUri FcChanged ]
             flip allWithIdentifierPos docs $ \DocumentPositions{..} -> isJust <$> getHover doc (fromJust identifierP)
+        ),
+      ---------------------------------------------------------------------------------------
+      benchWithSetup
+        "hole fit suggestions"
+        ( mapM_ $ \DocumentPositions{..} -> do
+            let edit :: TextDocumentContentChangeEvent =TextDocumentContentChangeEvent
+                  { _range = Just Range {_start = bottom, _end = bottom}
+                  , _rangeLength = Nothing, _text = t}
+                bottom = Position maxBoundUinteger 0
+                t = T.unlines
+                    [""
+                    ,"holef :: [Int] -> [Int]"
+                    ,"holef = _"
+                    ,""
+                    ,"holeg :: [()] -> [()]"
+                    ,"holeg = _"
+                    ]
+            changeDoc doc [edit]
+        )
+        (\docs -> do
+            forM_ docs $ \DocumentPositions{..} ->
+              changeDoc doc [charEdit stringLiteralP]
+            void waitForDiagnostics
+            waitForProgressDone
+            flip allM docs $ \DocumentPositions{..} -> do
+                bottom <- pred . length . T.lines <$> documentContents doc
+                diags <- getCurrentDiagnostics doc
+                case requireDiagnostic diags (DsError, (bottom, 8), "Found hole", Nothing) of
+                    Nothing   -> pure True
+                    Just _err -> pure False
         )
     ]
 
@@ -202,15 +249,22 @@ configP =
     <*> optional (option auto (long "samples" <> metavar "NAT" <> help "override sampling count"))
     <*> strOption (long "ghcide" <> metavar "PATH" <> help "path to ghcide" <> value "ghcide")
     <*> option auto (long "timeout" <> value 60 <> help "timeout for waiting for a ghcide response")
-    <*> ( GetPackage <$> strOption (long "example-package-name" <> value "Cabal")
+    <*> ( Example "name"
+               <$> (Right <$> packageP)
                <*> (some moduleOption <|> pure ["Distribution/Simple.hs"])
-               <*> option versionP (long "example-package-version" <> value (makeVersion [3,4,0,0]))
+               <*> pure []
          <|>
-          UsePackage <$> strOption (long "example-path")
-                     <*> some moduleOption
-         )
+          Example "name"
+                <$> (Left <$> pathP)
+                <*> some moduleOption
+                <*> pure [])
   where
       moduleOption = strOption (long "example-module" <> metavar "PATH")
+
+      packageP = ExamplePackage
+            <$> strOption (long "example-package-name" <> value "Cabal")
+            <*> option versionP (long "example-package-version" <> value (makeVersion [3,4,0,0]))
+      pathP = strOption (long "example-path")
 
 versionP :: ReadM Version
 versionP = maybeReader $ extract . readP_to_S parseVersion
@@ -275,6 +329,11 @@ runBenchmarksFun dir allBenchmarks = do
         , "userTime"
         , "delayedTime"
         , "totalTime"
+        , "buildRulesBuilt"
+        , "buildRulesChanged"
+        , "buildRulesVisited"
+        , "buildRulesTotal"
+        , "buildEdges"
         ]
       rows =
         [ [ name,
@@ -284,7 +343,12 @@ runBenchmarksFun dir allBenchmarks = do
             show runSetup',
             show userWaits,
             show delayedWork,
-            show runExperiment
+            show runExperiment,
+            show rulesBuilt,
+            show rulesChanged,
+            show rulesVisited,
+            show rulesTotal,
+            show edgesTotal
           ]
           | (Bench {name, samples}, BenchRun {..}) <- results,
             let runSetup' = if runSetup < 0.01 then 0 else runSetup
@@ -304,7 +368,12 @@ runBenchmarksFun dir allBenchmarks = do
             showDuration runSetup',
             showDuration userWaits,
             showDuration delayedWork,
-            showDuration runExperiment
+            showDuration runExperiment,
+            show rulesBuilt,
+            show rulesChanged,
+            show rulesVisited,
+            show rulesTotal,
+            show edgesTotal
           ]
           | (Bench {name, samples}, BenchRun {..}) <- results,
             let runSetup' = if runSetup < 0.01 then 0 else runSetup
@@ -350,11 +419,22 @@ data BenchRun = BenchRun
     runExperiment :: !Seconds,
     userWaits     :: !Seconds,
     delayedWork   :: !Seconds,
+    rulesBuilt    :: !Int,
+    rulesChanged  :: !Int,
+    rulesVisited  :: !Int,
+    rulesTotal    :: !Int,
+    edgesTotal    :: !Int,
     success       :: !Bool
   }
 
 badRun :: BenchRun
-badRun = BenchRun 0 0 0 0 0 False
+badRun = BenchRun 0 0 0 0 0 0 0 0 0 0 False
+
+waitForProgressStart :: Session ()
+waitForProgressStart = void $ do
+    skipManyTill anyMessage $ satisfy $ \case
+      FromServerMess SWindowWorkDoneProgressCreate _ -> True
+      _                                              -> False
 
 -- | Wait for all progress to be done
 -- Needs at least one progress done notification to return
@@ -367,6 +447,17 @@ waitForProgressDone = loop
         _ -> Nothing
       done <- null <$> getIncompleteProgressSessions
       unless done loop
+
+-- | Wait for the build queue to be empty
+waitForBuildQueue :: Session Seconds
+waitForBuildQueue = do
+    let m = SCustomMethod "test"
+    waitId <- sendRequest m (toJSON WaitForShakeQueue)
+    (td, resp) <- duration $ skipManyTill anyMessage $ responseForId m waitId
+    case resp of
+        ResponseMessage{_result=Right Null} -> return td
+        -- assume a ghcide binary lacking the WaitForShakeQueue method
+        _                                   -> return 0
 
 runBench ::
   (?config :: Config) =>
@@ -398,19 +489,18 @@ runBench runSess b = handleAny (\e -> print e >> return badRun)
             else do
                 output (showDuration t)
                 -- Wait for the delayed actions to finish
-                let m = SCustomMethod "test"
-                waitId <- sendRequest m (toJSON WaitForShakeQueue)
-                (td, resp) <- duration $ skipManyTill anyMessage $ responseForId m waitId
-                case resp of
-                    ResponseMessage{_result=Right Null} -> do
-                      loop (userWaits+t) (delayedWork+td) (n -1)
-                    _ ->
-                    -- Assume a ghcide build lacking the WaitForShakeQueue command
-                      loop (userWaits+t) delayedWork (n -1)
+                td <- waitForBuildQueue
+                loop (userWaits+t) (delayedWork+td) (n -1)
 
       (runExperiment, result) <- duration $ loop 0 0 samples
       let success = isJust result
           (userWaits, delayedWork) = fromMaybe (0,0) result
+
+      rulesTotal <- length <$> getStoredKeys
+      rulesBuilt <- either (const 0) length <$> getBuildKeysBuilt
+      rulesChanged <- either (const 0) length <$> getBuildKeysChanged
+      rulesVisited <- either (const 0) length <$> getBuildKeysVisited
+      edgesTotal   <- fromRight 0 <$> getBuildEdgesCount
 
       return BenchRun {..}
 
@@ -429,16 +519,16 @@ callCommandLogging cmd = do
 setup :: HasConfig => IO SetupResult
 setup = do
 --   when alreadyExists $ removeDirectoryRecursive examplesPath
-  benchDir <- case example ?config of
-      UsePackage{..} -> do
+  benchDir <- case exampleDetails(example ?config) of
+      Left examplePath -> do
           let hieYamlPath = examplePath </> "hie.yaml"
           alreadyExists <- doesFileExist hieYamlPath
           unless alreadyExists $
                 cmd_ (Cwd examplePath) (FileStdout hieYamlPath) ("gen-hie"::String)
           return examplePath
-      GetPackage{..} -> do
+      Right ExamplePackage{..} -> do
         let path = examplesPath </> package
-            package = exampleName <> "-" <> showVersion exampleVersion
+            package = packageName <> "-" <> showVersion packageVersion
             hieYamlPath = path </> "hie.yaml"
         alreadySetup <- doesDirectoryExist path
         unless alreadySetup $
@@ -481,9 +571,9 @@ setup = do
 
   whenJust (shakeProfiling ?config) $ createDirectoryIfMissing True
 
-  let cleanUp = case example ?config of
-        GetPackage{} -> removeDirectoryRecursive examplesPath
-        UsePackage{} -> return ()
+  let cleanUp = case exampleDetails(example ?config) of
+        Right _ -> removeDirectoryRecursive examplesPath
+        Left _  -> return ()
 
       runBenchmarks = runBenchmarksFun benchDir
 
@@ -572,3 +662,8 @@ searchSymbol doc@TextDocumentIdentifier{_uri} fileContents pos = do
             _                      -> return False
       checkCompletions pos =
         not . null <$> getCompletions doc pos
+
+-- | We don't have a uinteger type yet. So hardcode the maxBound of uinteger, 2 ^ 31 - 1
+-- as a constant.
+maxBoundUinteger :: Int
+maxBoundUinteger = 2147483647

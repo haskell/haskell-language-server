@@ -1,14 +1,16 @@
+{-# LANGUAGE NumDecimals #-}
+
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module AutoTupleSpec where
 
+import Control.Monad (replicateM)
+import Control.Monad.State (evalState)
 import Data.Either (isRight)
 import OccName (mkVarOcc)
 import System.IO.Unsafe
 import Test.Hspec
 import Test.QuickCheck
-import Type (mkTyVarTy)
-import TysPrim (alphaTyVars)
 import TysWiredIn (mkBoxedTupleTy)
 import Wingman.Judgements (mkFirstJudgement)
 import Wingman.Machinery
@@ -22,7 +24,8 @@ spec = describe "auto for tuple" $ do
     property $ do
       -- Pick some number of variables
       n <- choose (1, 7)
-      let vars = fmap mkTyVarTy $ take n alphaTyVars
+      let vars = flip evalState defaultTacticState
+               $ replicateM n newUnivar
       -- Pick a random ordering
       in_vars  <- shuffle vars
       -- Randomly associate them into tuple types
@@ -36,6 +39,7 @@ spec = describe "auto for tuple" $ do
           -- We should always be able to find a solution
           unsafePerformIO
             (runTactic
+              2e6
               emptyContext
               (mkFirstJudgement
                 emptyContext

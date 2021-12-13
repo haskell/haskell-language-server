@@ -9,9 +9,6 @@
 
 module Ide.Plugin.RefineImports (descriptor) where
 
-import           Avail                                (AvailInfo (Avail),
-                                                       availName, availNames,
-                                                       availNamesWithSelectors)
 import           Control.Arrow                        (Arrow (second))
 import           Control.DeepSeq                      (rwhnf)
 import           Control.Monad                        (join)
@@ -27,7 +24,8 @@ import qualified Data.Text                            as T
 import           Data.Traversable                     (forM)
 import           Development.IDE
 import           Development.IDE.Core.PositionMapping
-import           Development.IDE.GHC.Compat           (AvailInfo,
+import           Development.IDE.GHC.Compat
+                                                      {- (AvailInfo,
                                                        GenLocated (L), GhcRn,
                                                        HsModule (hsmodImports),
                                                        ImportDecl (ImportDecl, ideclHiding, ideclName),
@@ -35,9 +33,10 @@ import           Development.IDE.GHC.Compat           (AvailInfo,
                                                        Module (moduleName),
                                                        ModuleName,
                                                        ParsedModule (ParsedModule, pm_parsed_source),
-                                                       SrcSpan (RealSrcSpan),
+                                                       SrcSpan(..),
+                                                       RealSrcSpan(..),
                                                        getLoc, ieName, noLoc,
-                                                       tcg_exports, unLoc)
+                                                       tcg_exports, unLoc) -}
 import           Development.IDE.Graph.Classes
 import           GHC.Generics                         (Generic)
 import           Ide.Plugin.ExplicitImports           (extractMinimalImports,
@@ -46,12 +45,6 @@ import           Ide.PluginUtils                      (mkLspCommand)
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
-import           PrelNames                            (pRELUDE)
-import           RnNames                              (findImportUsage,
-                                                       getMinimalImports)
-import           TcRnMonad                            (initTcWithGbl,
-                                                       tcg_rn_exports,
-                                                       tcg_used_gres)
 
 -- | plugin declaration
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -162,7 +155,6 @@ data RefineImports = RefineImports
 
 instance Hashable RefineImports
 instance NFData RefineImports
-instance Binary RefineImports
 type instance RuleResult RefineImports = RefineImportsResult
 
 newtype RefineImportsResult = RefineImportsResult
@@ -257,7 +249,7 @@ refineImportsRule = define $ \RefineImports nfp -> do
 
 mkExplicitEdit :: PositionMapping -> LImportDecl pass -> T.Text -> Maybe TextEdit
 mkExplicitEdit posMapping (L src imp) explicit
-  | RealSrcSpan l <- src,
+  | RealSrcSpan l _ <- src,
     L _ mn <- ideclName imp,
     -- (almost) no one wants to see an refine import list for Prelude
     mn /= moduleName pRELUDE,

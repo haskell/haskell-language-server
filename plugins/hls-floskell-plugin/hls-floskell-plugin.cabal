@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-floskell-plugin
-version:            1.0.0.0
+version:            1.0.0.2
 synopsis:           Integration with the Floskell code formatter
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -22,8 +22,8 @@ library
   build-depends:
     , base            >=4.12 && <5
     , floskell        ^>=0.10
-    , ghcide          >=1.2  && <1.5
-    , hls-plugin-api  ^>=1.1
+    , ghcide          >=1.2  && <1.6
+    , hls-plugin-api  >=1.1  && <1.3
     , lsp-types
     , text
     , transformers
@@ -40,4 +40,4 @@ test-suite tests
     , base
     , filepath
     , hls-floskell-plugin
-    , hls-test-utils       ^>=1.0
+    , hls-test-utils       >=1.0 && <1.2

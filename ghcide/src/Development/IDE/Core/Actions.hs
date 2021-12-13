@@ -1,4 +1,3 @@
-{-# LANGUAGE NoApplicativeDo #-}
 {-# LANGUAGE TypeFamilies    #-}
 module Development.IDE.Core.Actions
 ( getAtPoint
@@ -23,13 +22,10 @@ import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
 import           Development.IDE.Core.Shake
-import           Development.IDE.GHC.Compat           hiding (TargetFile,
-                                                       TargetModule,
-                                                       parseModule,
-                                                       typecheckModule,
-                                                       writeHieFile)
+import           Development.IDE.GHC.Compat           hiding (writeHieFile)
 import           Development.IDE.Graph
 import qualified Development.IDE.Spans.AtPoint        as AtPoint
+import           Development.IDE.Types.HscEnvEq       (hscEnv)
 import           Development.IDE.Types.Location
 import qualified HieDb
 import           Language.LSP.Types                   (DocumentHighlight (..),
@@ -42,7 +38,7 @@ lookupMod
   :: HieDbWriter -- ^ access the database
   -> FilePath -- ^ The `.hie` file we got from the database
   -> ModuleName
-  -> UnitId
+  -> Unit
   -> Bool -- ^ Is this file a boot file?
   -> MaybeT IdeAction Uri
 lookupMod _dbchan _hie_f _mod _uid _boot = MaybeT $ pure Nothing
@@ -62,10 +58,11 @@ getAtPoint file pos = runMaybeT $ do
   opts <- liftIO $ getIdeOptionsIO ide
 
   (hf, mapping) <- useE GetHieAst file
-  dkMap <- lift $ maybe (DKMap mempty mempty) fst <$> (runMaybeT $ useE GetDocMap file)
+  env <- hscEnv . fst <$> useE GhcSession file
+  dkMap <- lift $ maybe (DKMap mempty mempty) fst <$> runMaybeT (useE GetDocMap file)
 
   !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
-  MaybeT $ pure $ fmap (first (toCurrentRange mapping =<<)) $ AtPoint.atPoint opts hf dkMap pos'
+  MaybeT $ pure $ first (toCurrentRange mapping =<<) <$> AtPoint.atPoint opts hf dkMap env pos'
 
 toCurrentLocations :: PositionMapping -> [Location] -> [Location]
 toCurrentLocations mapping = mapMaybe go

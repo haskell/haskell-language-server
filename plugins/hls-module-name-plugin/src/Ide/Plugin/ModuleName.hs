@@ -21,8 +21,9 @@ import           Control.Monad.Trans.Maybe
 import           Data.Aeson                 (Value (Null), toJSON)
 import           Data.Char                  (isLower)
 import qualified Data.HashMap.Strict        as HashMap
-import           Data.List                  (find, intercalate, isPrefixOf)
+import           Data.List                  (intercalate, isPrefixOf, minimumBy)
 import           Data.Maybe                 (maybeToList)
+import           Data.Ord                   (comparing)
 import           Data.String                (IsString)
 import qualified Data.Text                  as T
 import           Development.IDE            (GetParsedModule (GetParsedModule),
@@ -32,13 +33,16 @@ import           Development.IDE            (GetParsedModule (GetParsedModule),
                                              uriToFilePath', use, use_)
 import           Development.IDE.GHC.Compat (GenLocated (L), getSessionDynFlags,
                                              hsmodName, importPaths,
-                                             pattern OldRealSrcSpan,
+                                             pattern RealSrcSpan,
                                              pm_parsed_source, unLoc)
 import           Ide.Types
 import           Language.LSP.Server
-import           Language.LSP.Types
+import           Language.LSP.Types         hiding
+                                            (SemanticTokenAbsolute (length, line),
+                                             SemanticTokenRelative (length),
+                                             SemanticTokensEdit (_start))
 import           Language.LSP.VFS           (virtualFileText)
-import           System.Directory           (canonicalizePath)
+import           System.Directory           (makeAbsolute)
 import           System.FilePath            (dropExtension, splitDirectories,
                                              takeFileName)
 
@@ -94,42 +98,46 @@ action state uri =
     contents <- lift . getVirtualFile $ toNormalizedUri uri
     let emptyModule = maybe True (T.null . T.strip . virtualFileText) contents
 
-    correctName <- MaybeT . liftIO $ traceAs "correctName" <$> pathModuleName state nfp fp
+    correctNames <- liftIO $ traceAs "correctNames" <$> pathModuleNames state nfp fp
+    let bestName = minimumBy (comparing T.length) correctNames
 
     statedNameMaybe <- liftIO $ traceAs "statedName" <$> codeModuleName state nfp
     case statedNameMaybe of
       Just (nameRange, statedName)
-        | correctName /= statedName ->
-            pure $ Replace uri nameRange ("Set module name to " <> correctName) correctName
+        | statedName `notElem` correctNames ->
+            pure $ Replace uri nameRange ("Set module name to " <> bestName) bestName
       Nothing
         | emptyModule ->
-            let code = "module " <> correctName <> " where\n"
+            let code = "module " <> bestName <> " where\n"
             in pure $ Replace uri (Range (Position 0 0) (Position 0 0)) code code
       _ -> MaybeT $ pure Nothing
 
--- | The module name, as derived by the position of the module in its source directory
-pathModuleName :: IdeState -> NormalizedFilePath -> String -> IO (Maybe T.Text)
-pathModuleName state normFilePath filePath
-  | isLower . head $ takeFileName filePath = return $ Just "Main"
+-- | Possible module names, as derived by the position of the module in the
+-- source directories.  There may be more than one possible name, if the source
+-- directories are nested inside each other.
+pathModuleNames :: IdeState -> NormalizedFilePath -> String -> IO [T.Text]
+pathModuleNames state normFilePath filePath
+  | isLower . head $ takeFileName filePath = return ["Main"]
   | otherwise = do
       session <- runAction "ModuleName.ghcSession" state $ use_ GhcSession normFilePath
       srcPaths <- evalGhcEnv (hscEnvWithImportPaths session) $ importPaths <$> getSessionDynFlags
-      paths <- mapM canonicalizePath srcPaths
-      mdlPath <- canonicalizePath filePath
-      pure $ do
-        prefix <- find (`isPrefixOf` mdlPath) paths
-        pure
-          . T.pack
-          . intercalate "."
-          . splitDirectories
-          . drop (length prefix + 1)
-          $ dropExtension mdlPath
+      paths <- mapM makeAbsolute srcPaths
+      mdlPath <- makeAbsolute filePath
+      let prefixes = filter (`isPrefixOf` mdlPath) paths
+      pure (map (moduleNameFrom mdlPath) prefixes)
+  where
+    moduleNameFrom mdlPath prefix =
+      T.pack
+        . intercalate "."
+        . splitDirectories
+        . drop (length prefix + 1)
+        $ dropExtension mdlPath
 
 -- | The module name, as stated in the module
 codeModuleName :: IdeState -> NormalizedFilePath -> IO (Maybe (Range, T.Text))
 codeModuleName state nfp = runMaybeT $ do
   pm <- MaybeT . runAction "ModuleName.GetParsedModule" state $ use GetParsedModule nfp
-  L (OldRealSrcSpan l) m <- MaybeT . pure . hsmodName . unLoc $ pm_parsed_source pm
+  L (RealSrcSpan l _) m <- MaybeT . pure . hsmodName . unLoc $ pm_parsed_source pm
   pure (realSrcSpanToRange l, T.pack $ show m)
 
 -- traceAs :: Show a => String -> a -> a

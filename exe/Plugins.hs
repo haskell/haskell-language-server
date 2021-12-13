@@ -12,6 +12,13 @@ import           Ide.Plugin.Example                as Example
 import           Ide.Plugin.Example2               as Example2
 
 -- haskell-language-server optional plugins
+#if qualifyImportedNames
+import           Ide.Plugin.QualifyImportedNames   as QualifyImportedNames
+#endif
+
+#if callHierarchy
+import           Ide.Plugin.CallHierarchy          as CallHierarchy
+#endif
 
 #if class
 import           Ide.Plugin.Class                  as Class
@@ -31,6 +38,10 @@ import           Ide.Plugin.ExplicitImports        as ExplicitImports
 
 #if refineImports
 import           Ide.Plugin.RefineImports          as RefineImports
+#endif
+
+#if rename
+import           Ide.Plugin.Rename                 as Rename
 #endif
 
 #if retrie
@@ -55,6 +66,10 @@ import           Ide.Plugin.Pragmas                as Pragmas
 
 #if splice
 import           Ide.Plugin.Splice                 as Splice
+#endif
+
+#if alternateNumberFormat
+import           Ide.Plugin.AlternateNumberFormat  as AlternateNumberFormat
 #endif
 
 -- formatters
@@ -111,11 +126,17 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
 #if stylishHaskell
       StylishHaskell.descriptor "stylish-haskell" :
 #endif
+#if rename
+      Rename.descriptor "rename" :
+#endif
 #if retrie
       Retrie.descriptor "retrie" :
 #endif
 #if brittany
       Brittany.descriptor "brittany" :
+#endif
+#if callHierarchy
+      CallHierarchy.descriptor "callHierarchy":
 #endif
 #if class
       Class.descriptor "class" :
@@ -129,6 +150,9 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
 #if importLens
       ExplicitImports.descriptor "importLens" :
 #endif
+#if qualifyImportedNames
+      QualifyImportedNames.descriptor "qualifyImportedNames" :
+#endif
 #if refineImports
       RefineImports.descriptor "refineImports" :
 #endif
@@ -140,6 +164,9 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
 #endif
 #if splice
       Splice.descriptor "splice" :
+#endif
+#if alternateNumberFormat
+      AlternateNumberFormat.descriptor "alternateNumberFormat" :
 #endif
     -- The ghcide descriptors should come last so that the notification handlers
     -- (which restart the Shake build) run after everything else

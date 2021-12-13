@@ -1,17 +1,24 @@
-cabal-version: 2.2
+cabal-version: 2.4
 name:          hls-hlint-plugin
-version:       1.0.1.0
+version:       1.0.2.1
 synopsis:      Hlint integration plugin with Haskell Language Server
 description:
-  Please see Haskell Language Server Readme (https://github.com/haskell/haskell-language-server#readme)
+  Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
 
 license:       Apache-2.0
 license-file:  LICENSE
 author:        The Haskell IDE Team
-maintainer:    alan.zimm@gmail.com
+maintainer:    atreyu.bbb@gmail.com
 copyright:     The Haskell IDE Team
 category:      Development
 build-type:    Simple
+extra-source-files:
+  LICENSE
+  test/testdata/**/*.yaml
+  -- this one is not matched by the previous glob
+  test/testdata/ignore/.hlint.yaml
+  test/testdata/**/*.hs
+  test/testdata/**/*.h
 
 flag pedantic
   description: Enable -Werror
@@ -48,18 +55,23 @@ library
     , extra
     , filepath
     , ghc-exactprint        >=0.6.3.4
-    , ghcide                ^>=1.4
+    , ghcide                ^>=1.5.0
     , hashable
     , hlint
-    , hls-plugin-api        ^>=1.1
+    , hls-plugin-api        >=1.1     && <1.3
     , hslogger
     , lens
     , lsp
     , regex-tdfa
+    , stm
     , temporary
     , text
     , transformers
     , unordered-containers
+    -- can be removed if https://github.com/ndmitchell/hlint/pull/1325#issue-1077062712 is merged
+    -- and https://github.com/haskell/haskell-language-server/pull/2464#issue-1077133441 is updated
+    -- accordingly
+    , ghc-lib-parser-ex
 
   if (flag(hlint33))
     -- This mirrors the logic in hlint.cabal for hlint-3.3
@@ -71,8 +83,8 @@ library
     else
       build-depends:
         , ghc
-        , ghc-lib            == 9.0.*
-        , ghc-lib-parser-ex  == 9.0.*
+        , ghc-lib            ^>=9.0
+        , ghc-lib-parser-ex  ^>=9.0
 
       cpp-options:   -DHLINT_ON_GHC_LIB
 
@@ -81,12 +93,12 @@ library
     -- https://github.com/ndmitchell/hlint/blob/c7354e473c7d09213c8adc3dc94bf50a6eb4a42d/hlint.cabal#L79-L88
     build-depends: hlint ^>=3.2
     if (!flag(ghc-lib) && impl(ghc >=8.10.1) && impl(ghc < 8.11.0))
-        build-depends: ghc >=8.10 && < 9.0
+      build-depends: ghc >=8.10 && <9.0
     else
       build-depends:
         , ghc
-        , ghc-lib            ^>= 8.10.4.20210206
-        , ghc-lib-parser-ex  ^>= 8.10
+        , ghc-lib            ^>=8.10.7.20210828
+        , ghc-lib-parser-ex  ^>=8.10
 
       cpp-options:   -DHLINT_ON_GHC_LIB
 
@@ -101,3 +113,21 @@ library
   default-extensions:
     DataKinds
     TypeOperators
+
+test-suite tests
+  type:             exitcode-stdio-1.0
+  default-language: Haskell2010
+  hs-source-dirs:   test
+  main-is:          Main.hs
+  ghc-options:      -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      aeson
+    , base
+    , containers
+    , filepath
+    , hls-hlint-plugin
+    , hls-plugin-api
+    , hls-test-utils      >=1.0 && <1.2
+    , lens
+    , lsp-types
+    , text

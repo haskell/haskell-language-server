@@ -1,17 +1,19 @@
 {-# LANGUAGE PolyKinds    #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE MultiWayIf   #-}
+{-# LANGUAGE LambdaCase   #-}
 module Ide.Plugin.Brittany where
 
 import           Control.Exception           (bracket_)
 import           Control.Lens
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Maybe   (MaybeT, runMaybeT)
-import           Data.Maybe                  (mapMaybe, maybeToList)
+import           Data.Maybe                  (mapMaybe, maybeToList, fromMaybe)
 import           Data.Semigroup
 import           Data.Text                   (Text)
 import qualified Data.Text                   as T
 import           Development.IDE             hiding (pluginHandlers)
-import           Development.IDE.GHC.Compat  (ModSummary (ms_hspp_opts), topDir)
+import qualified Development.IDE.GHC.Compat  as GHC hiding (Cpp)
 import qualified DynFlags                    as D
 import qualified EnumSet                     as S
 import           GHC.LanguageExtensions.Type
@@ -22,6 +24,26 @@ import           Language.LSP.Types          as J
 import qualified Language.LSP.Types.Lens     as J
 import           System.Environment          (setEnv, unsetEnv)
 import           System.FilePath
+
+-- These imports are for the temporary pPrintText & can be removed when
+-- issue #2005 is resolved
+import           Language.Haskell.Brittany.Internal.Config.Types
+import           Language.Haskell.Brittany.Internal
+import           Language.Haskell.Brittany.Internal.Types
+import           Language.Haskell.Brittany.Internal.Utils
+import           Language.Haskell.Brittany.Internal.Obfuscation
+import           Language.Haskell.Brittany.Internal.Config
+import           Data.CZipWith
+import           Control.Monad.Trans.Class (lift)
+import qualified Control.Monad.Trans.Except as ExceptT
+import qualified Data.List as List
+import qualified Data.Text as Text
+import qualified Language.Haskell.GHC.ExactPrint as ExactPrint
+import qualified Language.Haskell.GHC.ExactPrint.Types as ExactPrint
+import qualified Data.Text.Lazy as TextL
+import qualified GHC
+import qualified GHC.LanguageExtensions.Type as GHC
+
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
@@ -38,8 +60,8 @@ provider ide typ contents nfp opts = liftIO $ do
           FormatText    -> (fullRange contents, contents)
           FormatRange r -> (normalize r, extractRange r contents)
     modsum <- fmap msrModSummary $ runAction "brittany" ide $ use_ GetModSummaryWithoutTimestamps nfp
-    let dflags = ms_hspp_opts modsum
-    let withRuntimeLibdir = bracket_ (setEnv key $ topDir dflags) (unsetEnv key)
+    let dflags = GHC.ms_hspp_opts modsum
+    let withRuntimeLibdir = bracket_ (setEnv key $ GHC.topDir dflags) (unsetEnv key)
           where key = "GHC_EXACTPRINT_GHC_LIBDIR"
     res <- withRuntimeLibdir $ formatText dflags confFile opts selectedContents
     case res of
@@ -89,7 +111,11 @@ runBrittany tabSize df confPath text = do
               }
 
   config <- fromMaybeT (pure staticDefaultConfig) (readConfigsWithUserConfig cfg (maybeToList confPath))
-  parsePrintModule config text
+  (errsAndWarnings, resultText) <- pPrintText config text
+  if any isError errsAndWarnings then
+    return $ Left errsAndWarnings
+  else
+    return $ Right resultText
 
 fromMaybeT :: Monad m => m a -> MaybeT m a -> m a
 fromMaybeT def act = runMaybeT act >>= maybe def return
@@ -115,3 +141,126 @@ showExtension other            = Just $ "-X" ++ show other
 
 getExtensions :: D.DynFlags -> [String]
 getExtensions = mapMaybe showExtension . S.toList . D.extensionFlags
+
+
+-- | This is a temporary fix that allows us to format the text if brittany
+-- throws warnings during pretty printing.
+--
+-- It should be removed when our PR to brittany is merged + released.
+-- See:
+--  - https://github.com/haskell/haskell-language-server/issues/2005
+--  - https://github.com/lspitzner/brittany/pull/351
+pPrintText
+  :: Config -- ^ global program config
+  -> Text   -- ^ input text
+  -> IO ([BrittanyError], Text) -- ^ list of errors/warnings & result text
+pPrintText config text =
+  fmap (either id id) . ExceptT.runExceptT $ do
+    let ghcOptions = config & _conf_forward & _options_ghc & runIdentity
+    -- there is a good of code duplication between the following code and the
+    -- `pureModuleTransform` function. Unfortunately, there are also a good
+    -- amount of slight differences: This module is a bit more verbose, and
+    -- it tries to use the full-blown `parseModule` function which supports
+    -- CPP (but requires the input to be a file..).
+    let cppMode    = config & _conf_preprocessor & _ppconf_CPPMode & confUnpack
+    -- the flag will do the following: insert a marker string
+    -- ("-- BRITANY_INCLUDE_HACK ") right before any lines starting with
+    -- "#include" before processing (parsing) input; and remove that marker
+    -- string from the transformation output.
+    -- The flag is intentionally misspelled to prevent clashing with
+    -- inline-config stuff.
+    let hackAroundIncludes =
+          config & _conf_preprocessor & _ppconf_hackAroundIncludes & confUnpack
+    let exactprintOnly = viaGlobal || viaDebug
+         where
+          viaGlobal = config & _conf_roundtrip_exactprint_only & confUnpack
+          viaDebug =
+            config & _conf_debug & _dconf_roundtrip_exactprint_only & confUnpack
+
+    let cppCheckFunc dynFlags = if GHC.xopt GHC.Cpp dynFlags
+          then case cppMode of
+            CPPModeAbort ->
+              return $ Left "Encountered -XCPP. Aborting."
+            CPPModeWarn ->
+              return $ Right True
+            CPPModeNowarn ->
+              return $ Right True
+          else return $ Right False
+    parseResult <- do
+        -- TODO: refactor this hack to not be mixed into parsing logic
+        let hackF s = if "#include" `List.isPrefixOf` s
+              then "-- BRITANY_INCLUDE_HACK " ++ s
+              else s
+        let hackTransform = if hackAroundIncludes && not exactprintOnly
+              then List.intercalate "\n" . fmap hackF . lines'
+              else id
+        liftIO $ parseModuleFromString ghcOptions
+                                                   "stdin"
+                                                   cppCheckFunc
+                                                   (hackTransform $ Text.unpack text)
+    case parseResult of
+      Left left -> do
+        ExceptT.throwE ([ErrorInput left], text)
+      Right (anns, parsedSource, hasCPP) -> do
+        (inlineConf, perItemConf) <-
+          case
+            extractCommentConfigs anns (getTopLevelDeclNameMap parsedSource)
+          of
+            Left (err, input) -> do
+              let errMsg =
+                    "Error: parse error in inline configuration: "
+                    <> err
+                    <> "  in the string \""
+                    <> input
+                    <> "\"."
+              ExceptT.throwE ([ErrorInput errMsg], text)
+            Right c ->
+              pure c
+        let moduleConf = cZipWith fromOptionIdentity config inlineConf
+        let disableFormatting =
+              moduleConf & _conf_disable_formatting & confUnpack
+        (errsWarns, outSText, _) <- do
+          if
+            | disableFormatting -> do
+              pure ([], text, False)
+            | exactprintOnly -> do
+              let r = Text.pack $ ExactPrint.exactPrint parsedSource anns
+              pure ([], r, r /= text)
+            | otherwise -> do
+              (ews, outRaw) <- if hasCPP
+                then return
+                  $ pPrintModule moduleConf perItemConf anns parsedSource
+                else liftIO $ pPrintModuleAndCheck moduleConf
+                                                   perItemConf
+                                                   anns
+                                                   parsedSource
+              let hackF s = fromMaybe s $ TextL.stripPrefix
+                    (TextL.pack "-- BRITANY_INCLUDE_HACK ")
+                    s
+              let out = TextL.toStrict $ if hackAroundIncludes
+                    then
+                      TextL.intercalate (TextL.pack "\n")
+                      $ hackF
+                      <$> TextL.splitOn (TextL.pack "\n") outRaw
+                    else outRaw
+              out' <- if moduleConf & _conf_obfuscate & confUnpack
+                then lift $ obfuscate out
+                else pure out
+              pure (ews, out', out' /= text)
+        let customErrOrder ErrorInput{}         = 4
+            customErrOrder LayoutWarning{}      = -1 :: Int
+            customErrOrder ErrorOutputCheck{}   = 1
+            customErrOrder ErrorUnusedComment{} = 2
+            customErrOrder ErrorUnknownNode{}   = -2 :: Int
+            customErrOrder ErrorMacroConfig{}   = 5
+            hasErrors =
+              if config & _conf_errorHandling & _econf_Werror & confUnpack
+                then not $ null errsWarns
+                else 0 < maximum (-1 : fmap customErrOrder errsWarns)
+        return (errsWarns, if hasErrors then text else outSText)
+
+isError :: BrittanyError -> Bool
+isError = \case
+    LayoutWarning{} -> False
+    ErrorUnknownNode{} -> False
+    _ -> True

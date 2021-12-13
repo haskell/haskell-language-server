@@ -7,21 +7,20 @@ module Ide.Plugin.Ormolu
   )
 where
 
-import           Control.Exception           (try)
-import           Control.Monad.IO.Class      (liftIO)
-import qualified Data.Text                   as T
-import           Development.IDE             hiding (pluginHandlers)
-import           Development.IDE.GHC.Compat  (moduleNameString)
-import qualified DynFlags                    as D
-import qualified EnumSet                     as S
+import           Control.Exception               (try)
+import           Control.Monad.IO.Class          (liftIO)
+import qualified Data.Text                       as T
+import           Development.IDE                 hiding (pluginHandlers)
+import           Development.IDE.GHC.Compat      (moduleNameString, hsc_dflags)
+import qualified Development.IDE.GHC.Compat      as D
+import qualified Development.IDE.GHC.Compat.Util as S
 import           GHC.LanguageExtensions.Type
-import           GhcPlugins                  (HscEnv (hsc_dflags))
 import           Ide.PluginUtils
 import           Ide.Types
-import           Language.LSP.Server         hiding (defaultConfig)
+import           Language.LSP.Server             hiding (defaultConfig)
 import           Language.LSP.Types
 import           Ormolu
-import           System.FilePath             (takeFileName)
+import           System.FilePath                 (takeFileName)
 
 -- ---------------------------------------------------------------------
 

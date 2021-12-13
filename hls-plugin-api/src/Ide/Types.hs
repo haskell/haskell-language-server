@@ -1,18 +1,22 @@
-{-# LANGUAGE BangPatterns         #-}
-{-# LANGUAGE CPP                  #-}
-{-# LANGUAGE ConstraintKinds      #-}
-{-# LANGUAGE DefaultSignatures    #-}
-{-# LANGUAGE DeriveAnyClass       #-}
-{-# LANGUAGE DeriveGeneric        #-}
-{-# LANGUAGE FlexibleContexts     #-}
-{-# LANGUAGE FlexibleInstances    #-}
-{-# LANGUAGE GADTs                #-}
-{-# LANGUAGE OverloadedStrings    #-}
-{-# LANGUAGE PolyKinds            #-}
-{-# LANGUAGE ScopedTypeVariables  #-}
-{-# LANGUAGE TypeFamilies         #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE ViewPatterns         #-}
+{-# LANGUAGE BangPatterns               #-}
+{-# LANGUAGE CPP                        #-}
+{-# LANGUAGE ConstraintKinds            #-}
+{-# LANGUAGE DefaultSignatures          #-}
+{-# LANGUAGE DeriveAnyClass             #-}
+{-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE DerivingStrategies         #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE GADTs                      #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE NamedFieldPuns             #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE PolyKinds                  #-}
+{-# LANGUAGE RecordWildCards            #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE UndecidableInstances       #-}
+{-# LANGUAGE ViewPatterns               #-}
 
 module Ide.Types
     where
@@ -39,16 +43,32 @@ import           Data.String
 import qualified Data.Text                       as T
 import           Data.Text.Encoding              (encodeUtf8)
 import           Development.IDE.Graph
-import           DynFlags                        (DynFlags)
+import           GHC                             (DynFlags)
 import           GHC.Generics
 import           Ide.Plugin.Config
 import           Ide.Plugin.Properties
 import           Language.LSP.Server             (LspM, getVirtualFile)
-import           Language.LSP.Types
-import           Language.LSP.Types.Capabilities
-import           Language.LSP.Types.Lens         as J hiding (id)
+import           Language.LSP.Types              hiding
+                                                 (SemanticTokenAbsolute (length, line),
+                                                  SemanticTokenRelative (length),
+                                                  SemanticTokensEdit (_start))
+import           Language.LSP.Types.Capabilities (ClientCapabilities (ClientCapabilities),
+                                                  TextDocumentClientCapabilities (_codeAction, _documentSymbol))
+import           Language.LSP.Types.Lens         as J (HasChildren (children),
+                                                       HasCommand (command),
+                                                       HasContents (contents),
+                                                       HasDeprecated (deprecated),
+                                                       HasEdit (edit),
+                                                       HasKind (kind),
+                                                       HasName (name),
+                                                       HasOptions (..),
+                                                       HasRange (range),
+                                                       HasTextDocument (..),
+                                                       HasTitle (title),
+                                                       HasUri (..))
 import           Language.LSP.VFS
 import           OpenTelemetry.Eventlog
+import           Options.Applicative             (ParserInfo)
 import           System.IO.Unsafe
 import           Text.Regex.TDFA.Text            ()
 
@@ -56,6 +76,7 @@ import           Text.Regex.TDFA.Text            ()
 
 newtype IdePlugins ideState = IdePlugins
   { ipMap :: [(PluginId, PluginDescriptor ideState)]}
+  deriving newtype (Monoid, Semigroup)
 
 -- | Hooks for modifying the 'DynFlags' at different times of the compilation
 -- process. Plugins can install a 'DynFlagsModifications' via
@@ -80,6 +101,10 @@ instance Semigroup DynFlagsModifications where
 instance Monoid DynFlagsModifications where
   mempty = DynFlagsModifications id id
 
+-- ---------------------------------------------------------------------
+
+newtype IdeCommand state = IdeCommand (state -> IO ())
+instance Show (IdeCommand st) where show _ = "<ide command>"
 
 -- ---------------------------------------------------------------------
 
@@ -91,6 +116,7 @@ data PluginDescriptor ideState =
                    , pluginConfigDescriptor :: ConfigDescriptor
                    , pluginNotificationHandlers :: PluginNotificationHandlers ideState
                    , pluginModifyDynflags :: DynFlagsModifications
+                   , pluginCli            :: Maybe (ParserInfo (IdeCommand ideState))
                    }
 
 -- | An existential wrapper of 'Properties'
@@ -171,7 +197,16 @@ instance PluginMethod TextDocumentCodeAction where
       wasRequested (InR ca)
         | Nothing <- _only context = True
         | Just (List allowed) <- _only context
-        , Just caKind <- ca ^. kind = caKind `elem` allowed
+        -- See https://github.com/microsoft/language-server-protocol/issues/970
+        -- This is somewhat vague, but due to the hierarchical nature of action kinds, we
+        -- should check whether the requested kind is a *prefix* of the action kind.
+        -- That means, for example, we will return actions with kinds `quickfix.import` and
+        -- `quickfix.somethingElse` if the requested kind is `quickfix`.
+        -- TODO: add helpers in `lsp` for handling code action hierarchies
+        -- For now we abuse the fact that the JSON representation gives us the hierarchical string.
+        , Just caKind <- ca ^. kind
+        , String caKindStr <- toJSON caKind =
+                any (\k -> k `T.isPrefixOf` caKindStr) [kstr | k <- allowed, let String kstr = toJSON k ]
         | otherwise = False
 
 instance PluginMethod TextDocumentCodeLens where
@@ -244,6 +279,19 @@ instance PluginMethod TextDocumentFormatting where
 
 instance PluginMethod TextDocumentRangeFormatting where
   pluginEnabled _ pid conf = (PluginId $ formattingProvider conf) == pid
+  combineResponses _ _ _ _ (x :| _) = x
+
+instance PluginMethod TextDocumentPrepareCallHierarchy where
+  pluginEnabled _ = pluginEnabledConfig plcCallHierarchyOn
+
+instance PluginMethod CallHierarchyIncomingCalls where
+  pluginEnabled _ = pluginEnabledConfig plcCallHierarchyOn
+
+instance PluginMethod CallHierarchyOutgoingCalls where
+  pluginEnabled _ = pluginEnabledConfig plcCallHierarchyOn
+
+instance PluginMethod CustomMethod where
+  pluginEnabled _ _ _ = True
   combineResponses _ _ _ _ (x :| _) = x
 
 -- ---------------------------------------------------------------------
@@ -324,6 +372,7 @@ defaultPluginDescriptor plId =
     defaultConfigDescriptor
     mempty
     mempty
+    Nothing
 
 newtype CommandId = CommandId T.Text
   deriving (Show, Read, Eq, Ord)
@@ -435,13 +484,17 @@ instance {-# OVERLAPPABLE #-} (HasTextDocument a doc, HasUri doc Uri) => HasTrac
 
 instance HasTracing Value
 instance HasTracing ExecuteCommandParams
-instance HasTracing DidChangeWatchedFilesParams
+instance HasTracing DidChangeWatchedFilesParams where
+  traceWithSpan sp DidChangeWatchedFilesParams{_changes} =
+      setTag sp "changes" (encodeUtf8 $ fromString $ show _changes)
 instance HasTracing DidChangeWorkspaceFoldersParams
 instance HasTracing DidChangeConfigurationParams
 instance HasTracing InitializeParams
 instance HasTracing (Maybe InitializedParams)
 instance HasTracing WorkspaceSymbolParams where
   traceWithSpan sp (WorkspaceSymbolParams _ _ query) = setTag sp "query" (encodeUtf8 query)
+instance HasTracing CallHierarchyIncomingCallsParams
+instance HasTracing CallHierarchyOutgoingCallsParams
 
 -- ---------------------------------------------------------------------
 

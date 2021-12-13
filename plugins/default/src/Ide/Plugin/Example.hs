@@ -14,11 +14,11 @@ module Ide.Plugin.Example
     descriptor
   ) where
 
+import           Control.Concurrent.STM
 import           Control.DeepSeq            (NFData)
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
-import           Data.Binary
 import           Data.Functor
 import qualified Data.HashMap.Strict        as Map
 import           Data.Hashable
@@ -33,6 +33,7 @@ import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
+import           Options.Applicative        (ParserInfo, info)
 import           Text.Regex.TDFA.Text       ()
 
 -- ---------------------------------------------------------------------
@@ -46,7 +47,12 @@ descriptor plId = (defaultPluginDescriptor plId)
                   <> mkPluginHandler STextDocumentHover          hover
                   <> mkPluginHandler STextDocumentDocumentSymbol symbols
                   <> mkPluginHandler STextDocumentCompletion     completion
+  , pluginCli = Just exampleCli
   }
+
+exampleCli :: ParserInfo (IdeCommand IdeState)
+exampleCli = info p mempty
+  where p = pure $ IdeCommand $ \_ideState -> putStrLn "hello HLS"
 
 -- ---------------------------------------------------------------------
 
@@ -65,7 +71,6 @@ data Example = Example
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable Example
 instance NFData   Example
-instance Binary   Example
 
 type instance RuleResult Example = ()
 
@@ -122,8 +127,8 @@ codeLens ideState plId CodeLensParams{_textDocument=TextDocumentIdentifier uri} 
     case uriToFilePath' uri of
       Just (toNormalizedFilePath -> filePath) -> do
         _ <- runIdeAction "Example.codeLens" (shakeExtras ideState) $ runMaybeT $ useE TypeCheck filePath
-        _diag <- getDiagnostics ideState
-        _hDiag <- getHiddenDiagnostics ideState
+        _diag <- atomically $ getDiagnostics ideState
+        _hDiag <- atomically $ getHiddenDiagnostics ideState
         let
           title = "Add TODO Item via Code Lens"
           -- tedit = [TextEdit (Range (Position 3 0) (Position 3 0))

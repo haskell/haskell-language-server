@@ -32,6 +32,11 @@ tests =
       [CodeLens { _command = Just c }] <- getCodeLenses doc
       executeCommand c
       void $ skipManyTill anyMessage (message SWorkspaceApplyEdit)
+
+  , goldenWithModuleName "Fix wrong module name in nested directory" "subdir/TWrongModuleName" $ \doc -> do
+      [CodeLens { _command = Just c }] <- getCodeLenses doc
+      executeCommand c
+      void $ skipManyTill anyMessage (message SWorkspaceApplyEdit)
   ]
 
 goldenWithModuleName :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree

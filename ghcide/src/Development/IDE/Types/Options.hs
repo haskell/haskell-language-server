@@ -50,6 +50,8 @@ data IdeOptions = IdeOptions
     -- ^ Whether to enable additional lsp messages used by the test suite for checking invariants
   , optReportProgress     :: IdeReportProgress
     -- ^ Whether to report progress during long operations.
+  , optMaxDirtyAge        :: Int
+    -- ^ Age (in # builds) at which we collect dirty keys
   , optLanguageSyntax     :: String
     -- ^ the ```language to use
   , optNewColonConvention :: Bool
@@ -72,7 +74,7 @@ data IdeOptions = IdeOptions
     --   Otherwise, return the result of parsing without Opt_Haddock, so
     --   that the parsed module contains the result of Opt_KeepRawTokenStream,
     --   which might be necessary for hlint.
-  , optModifyDynFlags     :: DynFlagsModifications
+  , optModifyDynFlags     :: Config -> DynFlagsModifications
     -- ^ Will be called right after setting up a new cradle,
     --   allowing to customize the Ghc options used
   , optShakeOptions       :: ShakeOptions
@@ -137,12 +139,13 @@ defaultIdeOptions session = IdeOptions
     ,optDefer = IdeDefer True
     ,optTesting = IdeTesting False
     ,optCheckProject = pure True
-    ,optCheckParents = pure CheckOnSaveAndClose
+    ,optCheckParents = pure CheckOnSave
     ,optHaddockParse = HaddockParse
     ,optModifyDynFlags = mempty
     ,optSkipProgress = defaultSkipProgress
     ,optProgressStyle = Explicit
-    ,optRunSubset = False
+    ,optRunSubset = True
+    ,optMaxDirtyAge = 100
     }
 
 defaultSkipProgress :: Typeable a => a -> Bool
@@ -160,10 +163,10 @@ defaultSkipProgress key = case () of
 
 -- | The set of options used to locate files belonging to external packages.
 data IdePkgLocationOptions = IdePkgLocationOptions
-  { optLocateHieFile :: PackageConfig -> Module -> IO (Maybe FilePath)
+  { optLocateHieFile :: UnitState -> Module -> IO (Maybe FilePath)
   -- ^ Locate the HIE file for the given module. The PackageConfig can be
   -- used to lookup settings like importDirs.
-  , optLocateSrcFile :: PackageConfig -> Module -> IO (Maybe FilePath)
+  , optLocateSrcFile :: UnitState -> Module -> IO (Maybe FilePath)
   -- ^ Locate the source file for the given module. The PackageConfig can be
   -- used to lookup settings like importDirs. For DAML, we place them in the package DB.
   -- For cabal this could point somewhere in ~/.cabal/packages.
