@@ -4,6 +4,7 @@
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE ViewPatterns          #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Utils where
 
@@ -96,39 +97,45 @@ mkTest name fp line col ts = it name $ do
       liftIO $
         (title `elem` titles) `shouldSatisfy` f
 
+data InvokeTactic = InvokeTactic
+  { it_command :: TacticCommand
+  , it_argument :: Text
+  , it_line :: Int
+  , it_col :: Int
+  }
+
+invokeTactic :: TextDocumentIdentifier -> InvokeTactic -> Session ()
+invokeTactic doc InvokeTactic{..} = do
+    -- wait for the entire build to finish, so that Tactics code actions that
+    -- use stale data will get uptodate stuff
+    void waitForDiagnostics
+    void $ waitForTypecheck doc
+    actions <- getCodeActions doc $ pointRange it_line it_col
+    case find ((== Just (tacticTitle it_command it_argument)) . codeActionTitle) actions of
+      Just (InR CodeAction {_command = Just c}) -> do
+          executeCommand c
+          void $ skipManyTill anyMessage $ message SWorkspaceApplyEdit
+      _ -> error $ show actions
 
 
 mkGoldenTest
     :: (Text -> Text -> Assertion)
-    -> TacticCommand
-    -> Text
-    -> Int
-    -> Int
+    -> [InvokeTactic]
     -> FilePath
     -> SpecWith ()
-mkGoldenTest eq tc occ line col input =
+mkGoldenTest eq invocations input =
   it (input <> " (golden)") $ do
     resetGlobalHoleRef
     runSessionForTactics $ do
       doc <- openDoc (input <.> "hs") "haskell"
-      -- wait for diagnostics to start coming
-      void waitForDiagnostics
-      -- wait for the entire build to finish, so that Tactics code actions that
-      -- use stale data will get uptodate stuff
-      void $ waitForTypecheck doc
-      actions <- getCodeActions doc $ pointRange line col
-      case find ((== Just (tacticTitle tc occ)) . codeActionTitle) actions of
-        Just (InR CodeAction {_command = Just c}) -> do
-            executeCommand c
-            _resp <- skipManyTill anyMessage (message SWorkspaceApplyEdit)
-            edited <- documentContents doc
-            let expected_name = input <.> "expected" <.> "hs"
-            -- Write golden tests if they don't already exist
-            liftIO $ (doesFileExist expected_name >>=) $ flip unless $ do
-                T.writeFile expected_name edited
-            expected <- liftIO $ T.readFile expected_name
-            liftIO $ edited `eq` expected
-        _ -> error $ show actions
+      traverse_ (invokeTactic doc) invocations
+      edited <- documentContents doc
+      let expected_name = input <.> "expected" <.> "hs"
+      -- Write golden tests if they don't already exist
+      liftIO $ (doesFileExist expected_name >>=) $ flip unless $ do
+          T.writeFile expected_name edited
+      expected <- liftIO $ T.readFile expected_name
+      liftIO $ edited `eq` expected
 
 mkCodeLensTest
     :: FilePath
@@ -197,10 +204,13 @@ mkShowMessageTest tc occ line col input ufm =
 
 
 goldenTest :: TacticCommand -> Text -> Int -> Int -> FilePath -> SpecWith ()
-goldenTest = mkGoldenTest shouldBe
+goldenTest tc occ line col = mkGoldenTest shouldBe [InvokeTactic tc occ line col]
+
+goldenTestMany :: FilePath -> [InvokeTactic] -> SpecWith ()
+goldenTestMany = flip $ mkGoldenTest shouldBe
 
 goldenTestNoWhitespace :: TacticCommand -> Text -> Int -> Int -> FilePath -> SpecWith ()
-goldenTestNoWhitespace = mkGoldenTest shouldBeIgnoringSpaces
+goldenTestNoWhitespace tc occ line col = mkGoldenTest shouldBeIgnoringSpaces [InvokeTactic tc occ line col]
 
 
 shouldBeIgnoringSpaces :: Text -> Text -> Assertion
