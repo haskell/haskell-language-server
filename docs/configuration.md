@@ -376,11 +376,7 @@ are included below.
 Make sure to check the READMEs of each of these packages, which explain how to configure the
 various parts of the Emacs integration.
 In particular, `lsp-haskell` provides customization options for the `haskell-language-server`-specific parts,
-such as the path to the server executable.
-
-#### Vanilla Emacs
-
-If you're using `lsp-mode` generic plugin configuration can be added using `lsp--set-configuration`:
+such as the path to the server executable, or configuring the tactics plugin. For example:
 
 ```emacs-lisp
 (add-hook 'lsp-after-initialize-hook
