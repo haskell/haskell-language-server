@@ -451,7 +451,6 @@ test-suite func-test
     Format
     FunctionalBadProject
     FunctionalCodeAction
-    FunctionalLiquid
     HieBios
     Highlight
     Progress

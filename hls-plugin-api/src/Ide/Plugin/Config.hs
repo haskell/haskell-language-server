@@ -50,8 +50,6 @@ data Config =
     { checkParents       :: CheckParents
     , checkProject       :: !Bool
     , hlintOn            :: !Bool
-    , liquidOn           :: !Bool
-    , formatOnImportOn   :: !Bool
     , formattingProvider :: !T.Text
     , maxCompletions     :: !Int
     , plugins            :: !(Map.Map T.Text PluginConfig)
@@ -62,8 +60,6 @@ instance Default Config where
     { checkParents                = CheckOnSave
     , checkProject                = True
     , hlintOn                     = True
-    , liquidOn                    = False
-    , formatOnImportOn            = True
     -- , formattingProvider          = "brittany"
     , formattingProvider          = "ormolu"
     -- , formattingProvider          = "floskell"
@@ -84,8 +80,6 @@ parseConfig defValue = A.withObject "Config" $ \v -> do
         <$> (o .:? "checkParents" <|> v .:? "checkParents") .!= checkParents defValue
         <*> (o .:? "checkProject" <|> v .:? "checkProject") .!= checkProject defValue
         <*> o .:? "hlintOn"                                 .!= hlintOn defValue
-        <*> o .:? "liquidOn"                                .!= liquidOn defValue
-        <*> o .:? "formatOnImportOn"                        .!= formatOnImportOn defValue
         <*> o .:? "formattingProvider"                      .!= formattingProvider defValue
         <*> o .:? "maxCompletions"                          .!= maxCompletions defValue
         <*> o .:? "plugin"                                  .!= plugins defValue
@@ -97,8 +91,6 @@ instance A.ToJSON Config where
       r = object [ "checkParents"                .= checkParents
                  , "checkProject"                .= checkProject
                  , "hlintOn"                     .= hlintOn
-                 , "liquidOn"                    .= liquidOn
-                 , "formatOnImportOn"            .= formatOnImportOn
                  , "formattingProvider"          .= formattingProvider
                  , "maxCompletions"              .= maxCompletions
                  , "plugin"                      .= plugins
