@@ -35,7 +35,7 @@ reportProgressTests = testGroup "recordProgress"
         decrease = recordProgressModel "A" succ increase
         done = recordProgressModel "A" pred decrease
         recordProgressModel key change state =
-            model state $ \st -> atomically $ recordProgress st key change
+            model state $ \st -> recordProgress st key change
         model stateModelIO k = do
             state <- fromModel =<< stateModelIO
             k state

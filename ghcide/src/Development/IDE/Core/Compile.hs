@@ -96,7 +96,7 @@ import           GHC                               (GetDocsFailure (..),
                                                     parsedSource)
 
 import           Control.Concurrent.Extra
-import           Control.Concurrent.STM            hiding (orElse)
+import           Control.Concurrent.STM.Stats      hiding (orElse)
 import           Data.Aeson                        (toJSON)
 import           Data.Binary
 import           Data.Coerce
