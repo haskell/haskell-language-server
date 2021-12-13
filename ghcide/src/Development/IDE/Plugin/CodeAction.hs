@@ -24,9 +24,6 @@ import           Control.Arrow                                     (second,
 import           Control.Concurrent.STM.Stats                      (atomically)
 import           Control.Monad                                     (guard, join)
 import           Control.Monad.IO.Class
-#if !MIN_VERSION_ghc(9,0,0)
-import           Ctype                                             (is_ident)
-#endif
 import           Data.Char
 import qualified Data.DList                                        as DL
 import           Data.Function
@@ -60,9 +57,6 @@ import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 import qualified GHC.LanguageExtensions                            as Lang
-#if MIN_VERSION_ghc(9,0,0)
-import           GHC.Parser.CharClass                              (is_ident)
-#endif
 import           Ide.PluginUtils                                   (subRange)
 import           Ide.Types
 import qualified Language.LSP.Server                               as LSP
