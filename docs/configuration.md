@@ -386,7 +386,7 @@ If you're using `lsp-mode` generic plugin configuration can be added using `lsp-
 (add-hook 'lsp-after-initialize-hook
           '(lambda ()
              (lsp--set-configuration
-              `(:haskell (:plugin (:tactics (:config (:timeout_duration 5)))))
+              '(:haskell (:plugin (:tactics (:config (:timeout_duration 5)))))
               )))
 ```
 
