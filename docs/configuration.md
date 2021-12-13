@@ -42,7 +42,6 @@ Here is a list of the additional settings currently supported by `haskell-langua
 
 - Formatting provider (`haskell.formattingProvider`, default `ormolu`): what formatter to use; one of `floskell`, `ormolu`, `fourmolu`, `stylish-haskell`, or `brittany` (if compiled with the brittany plugin).
 - Format on imports (`haskell.formatOnImportOn`, default true): whether to format after adding an import.
-- Diagnostics on change (`haskell.diagnosticsOnChange`, default true): (currently unused).
 - Completion snippets (`haskell.completionSnippetsOn`, default true): whether to support completion snippets. *Deprecated* as it is equivalent to `haskell.plugin.ghcide-completions.config.snippetsOn`.
 - Liquid Haskell (`haskell.liquidOn`, default false): whether to enable Liquid Haskell support (currently unused until the Liquid Haskell support is functional again, see <https://github.com/haskell/haskell-language-server/issues/367>).
 - Hlint (`haskell.hlintOn`, default true): whether to enable Hlint support. *Deprecated* as it is equivalent to `haskell.plugin.hlint.globalOn`

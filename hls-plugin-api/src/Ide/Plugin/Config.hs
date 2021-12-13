@@ -47,15 +47,14 @@ data CheckParents
 -- will be surprises relating to config options being ignored, initially though.
 data Config =
   Config
-    { checkParents        :: CheckParents
-    , checkProject        :: !Bool
-    , hlintOn             :: !Bool
-    , diagnosticsOnChange :: !Bool
-    , liquidOn            :: !Bool
-    , formatOnImportOn    :: !Bool
-    , formattingProvider  :: !T.Text
-    , maxCompletions      :: !Int
-    , plugins             :: !(Map.Map T.Text PluginConfig)
+    { checkParents       :: CheckParents
+    , checkProject       :: !Bool
+    , hlintOn            :: !Bool
+    , liquidOn           :: !Bool
+    , formatOnImportOn   :: !Bool
+    , formattingProvider :: !T.Text
+    , maxCompletions     :: !Int
+    , plugins            :: !(Map.Map T.Text PluginConfig)
     } deriving (Show,Eq)
 
 instance Default Config where
@@ -63,7 +62,6 @@ instance Default Config where
     { checkParents                = CheckOnSave
     , checkProject                = True
     , hlintOn                     = True
-    , diagnosticsOnChange         = True
     , liquidOn                    = False
     , formatOnImportOn            = True
     -- , formattingProvider          = "brittany"
@@ -86,7 +84,6 @@ parseConfig defValue = A.withObject "Config" $ \v -> do
         <$> (o .:? "checkParents" <|> v .:? "checkParents") .!= checkParents defValue
         <*> (o .:? "checkProject" <|> v .:? "checkProject") .!= checkProject defValue
         <*> o .:? "hlintOn"                                 .!= hlintOn defValue
-        <*> o .:? "diagnosticsOnChange"                     .!= diagnosticsOnChange defValue
         <*> o .:? "liquidOn"                                .!= liquidOn defValue
         <*> o .:? "formatOnImportOn"                        .!= formatOnImportOn defValue
         <*> o .:? "formattingProvider"                      .!= formattingProvider defValue
@@ -100,7 +97,6 @@ instance A.ToJSON Config where
       r = object [ "checkParents"                .= checkParents
                  , "checkProject"                .= checkProject
                  , "hlintOn"                     .= hlintOn
-                 , "diagnosticsOnChange"         .= diagnosticsOnChange
                  , "liquidOn"                    .= liquidOn
                  , "formatOnImportOn"            .= formatOnImportOn
                  , "formattingProvider"          .= formattingProvider
