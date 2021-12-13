@@ -142,18 +142,23 @@ runLanguageServer options inH outH getHieDbLoc defaultConfig onConfigurationChan
             let handleServerException (Left e) = do
                     logError logger $
                         T.pack $ "Fatal error in server thread: " <> show e
+                    sendErrorMessage e
                     exitClientMsg
                 handleServerException _ = pure ()
 
-                uncaughtError (e :: SomeException) = do
-                    logError logger $ T.pack $
-                        "Unexpected exception on notification, please report!\n" ++
-                        "Exception: " ++ show e
+                sendErrorMessage (e :: SomeException) = do
                     LSP.runLspT env $ LSP.sendNotification SWindowShowMessage $
                         ShowMessageParams MtError $ T.unlines
-                        [ "Unhandled error, please [report](" <> issueTrackerUrl <> "): "
+                        [ "Unhandled exception, please [report](" <> issueTrackerUrl <> "): "
                         , T.pack(show e)
                         ]
+
+                exceptionInHandler e = do
+                    logError logger $ T.pack $
+                        "Unexpected exception, please report!\n" ++
+                        "Exception: " ++ show e
+                    sendErrorMessage e
+
                 logger = ideLogger ide
 
                 checkCancelled _id act k =
@@ -170,7 +175,7 @@ runLanguageServer options inH outH getHieDbLoc defaultConfig onConfigurationChan
                                     k $ ResponseError RequestCancelled "" Nothing
                                 Right res -> pure res
                         ) $ \(e :: SomeException) -> do
-                            uncaughtError e
+                            exceptionInHandler e
                             k $ ResponseError InternalError (T.pack $ show e) Nothing
             _ <- flip forkFinally handleServerException $ runWithDb logger dbLoc $ \hiedb hieChan -> do
               putMVar dbMVar (hiedb,hieChan)
@@ -179,7 +184,7 @@ runLanguageServer options inH outH getHieDbLoc defaultConfig onConfigurationChan
                 -- We dispatch notifications synchronously and requests asynchronously
                 -- This is to ensure that all file edits and config changes are applied before a request is handled
                 case msg of
-                    ReactorNotification act -> handle uncaughtError act
+                    ReactorNotification act -> handle exceptionInHandler act
                     ReactorRequest _id act k -> void $ async $ checkCancelled _id act k
             pure $ Right (env,ide)
 
