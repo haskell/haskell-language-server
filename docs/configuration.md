@@ -378,6 +378,18 @@ various parts of the Emacs integration.
 In particular, `lsp-haskell` provides customization options for the `haskell-language-server`-specific parts,
 such as the path to the server executable.
 
+#### Vanilla Emacs
+
+If you're using `lsp-mode` generic plugin configuration can be added using `lsp--set-configuration`:
+
+```emacs-lisp
+(add-hook 'lsp-after-initialize-hook
+          '(lambda ()
+             (lsp--set-configuration
+              `(:haskell (:plugin (:tactics (:config (:timeout_duration 5)))))
+              )))
+```
+
 #### [doom-emacs](https://github.com/hlissner/doom-emacs/tree/develop/modules/lang/haskell#module-flags)
 
 Manual installation of packages is not required.
