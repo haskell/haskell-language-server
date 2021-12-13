@@ -1,5 +1,6 @@
 {-# LANGUAGE DerivingStrategies        #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE PatternSynonyms           #-}
 {-# LANGUAGE TypeFamilies              #-}
 module Development.IDE.Types.Shake
   ( Q (..),
@@ -12,15 +13,15 @@ module Development.IDE.Types.Shake
     ShakeValue(..),
     currentValue,
     isBadDependency,
-  toShakeValue,encodeShakeValue,decodeShakeValue,toKey,toNoFileKey)
+  toShakeValue,encodeShakeValue,decodeShakeValue,toKey,toNoFileKey,fromKey,fromKeyType)
 where
 
 import           Control.DeepSeq
 import           Control.Exception
 import qualified Data.ByteString.Char8                as BS
 import           Data.Dynamic
-import           Data.HashMap.Strict
 import           Data.Hashable
+import           Data.Typeable                        (cast)
 import           Data.Vector                          (Vector)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Graph                (Key (..), RuleResult)
@@ -29,6 +30,12 @@ import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           GHC.Generics
 import           Language.LSP.Types
+import qualified StmContainers.Map                    as STM
+import           Type.Reflection                      (SomeTypeRep (SomeTypeRep),
+                                                       pattern App, pattern Con,
+                                                       typeOf, typeRep,
+                                                       typeRepTyCon)
+import           Unsafe.Coerce                        (unsafeCoerce)
 
 data Value v
     = Succeeded TextDocumentVersion v
@@ -49,7 +56,7 @@ data ValueWithDiagnostics
   = ValueWithDiagnostics !(Value Dynamic) !(Vector FileDiagnostic)
 
 -- | The state of the all values and diagnostics
-type Values = HashMap (NormalizedFilePath, Key) ValueWithDiagnostics
+type Values = STM.Map Key ValueWithDiagnostics
 
 -- | When we depend on something that reported an error, and we fail as a direct result, throw BadDependency
 --   which short-circuits the rest of the action
@@ -63,6 +70,19 @@ isBadDependency x
 
 toKey :: Shake.ShakeValue k => k -> NormalizedFilePath -> Key
 toKey = (Key.) . curry Q
+
+fromKey :: Typeable k => Key -> Maybe (k, NormalizedFilePath)
+fromKey (Key k)
+  | Just (Q (k', f)) <- cast k = Just (k', f)
+  | otherwise = Nothing
+
+-- | fromKeyType (Q (k,f)) = (typeOf k, f)
+fromKeyType :: Key -> Maybe (SomeTypeRep, NormalizedFilePath)
+fromKeyType (Key k) = case typeOf k of
+    App (Con tc) a | tc == typeRepTyCon (typeRep @Q)
+        -> case unsafeCoerce k of
+         Q (_ :: (), f) -> Just (SomeTypeRep a, f)
+    _ -> Nothing
 
 toNoFileKey :: (Show k, Typeable k, Eq k, Hashable k) => k -> Key
 toNoFileKey k = Key $ Q (k, emptyFilePath)

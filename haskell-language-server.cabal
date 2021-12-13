@@ -1,7 +1,7 @@
 cabal-version:      2.4
 category:           Development
 name:               haskell-language-server
-version:            1.4.0.0
+version:            1.5.1.0
 synopsis:           LSP server for GHC
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -14,7 +14,7 @@ copyright:          The Haskell IDE Team
 license:            Apache-2.0
 license-file:       LICENSE
 build-type:         Simple
-tested-with:        GHC == 8.6.5 || == 8.8.3 || == 8.8.4 || == 8.10.5 || == 8.10.6 || == 8.10.7 || == 9.0.1
+tested-with:        GHC == 8.6.5 || == 8.8.4 || == 8.10.6 || == 8.10.7 || == 9.0.1
 extra-source-files:
   README.md
   ChangeLog.md
@@ -40,8 +40,20 @@ common common-deps
     , filepath
     , text
 
+-- Default warnings in HLS
+common warnings
+  ghc-options: -Wall -Wredundant-constraints -Wno-name-shadowing -Wno-unticked-promoted-constructors
+
+-- Allow compiling in pedantic mode
+common pedantic
+  if flag(pedantic)
+    ghc-options: -Werror
+
 library
   import:           common-deps
+                    -- configuration
+                  , warnings
+                  , pedantic
   exposed-modules:
     Ide.Arguments
     Ide.Main
@@ -58,7 +70,7 @@ library
     , cryptohash-sha1
     , data-default
     , ghc
-    , ghcide                ^>=1.4
+    , ghcide                ^>=1.4 || ^>=1.5
     , gitrev
     , lsp
     , hie-bios
@@ -74,27 +86,15 @@ library
     , unordered-containers
     , aeson-pretty
 
-  ghc-options:      -Wall -Wredundant-constraints -Wno-name-shadowing -Wno-unticked-promoted-constructors
-
-  if flag(pedantic)
-    ghc-options: -Werror
-
   default-language: Haskell2010
   default-extensions: DataKinds, TypeOperators
 
 -- Plugin flags are designed for 'cabal install haskell-language-server':
--- - Packaged plugins should be manual:False
--- - Non packaged plugins and bulk flags should be manual:True
 -- - Bulk flags should be default:False
 -- - Individual flags should be default:True
 
-flag all-plugins
-  description: Enable all non formatter plugins
-  default:     False
-  manual:      True
-
-flag all-formatters
-  description: Enable all fomatters
+flag ignore-plugins-ghc-bounds
+  description: Force the inclusion of plugins even if they are not buildable by default with a specific ghc version
   default:     False
   manual:      True
 
@@ -163,6 +163,16 @@ flag splice
   default:     True
   manual:      True
 
+flag alternateNumberFormat
+  description: Enable Alternate Number Format plugin
+  default:     True
+  manual:      True
+
+flag qualifyImportedNames
+  description: Enable qualifyImportedNames plugin
+  default:     True
+  manual:      True
+
 -- formatters
 
 flag floskell
@@ -196,99 +206,112 @@ common example-plugins
                  Ide.Plugin.Example2
 
 common class
-  if flag(class) || flag(all-plugins)
+  if flag(class) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-class-plugin ^>=1.0.0.1
     cpp-options: -Dclass
 
 common callHierarchy
-  if flag(callHierarchy) || flag(all-plugins)
+  if flag(callHierarchy) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-call-hierarchy-plugin ^>=1.0.0.0
     cpp-options: -DcallHierarchy
 
 common haddockComments
-  if flag(haddockComments) || flag(all-plugins)
+  if flag(haddockComments)
     build-depends: hls-haddock-comments-plugin ^>=1.0.0.1
     cpp-options: -DhaddockComments
 
 common eval
-  if flag(eval) || flag(all-plugins)
+  if flag(eval)
     build-depends: hls-eval-plugin ^>=1.2.0.0
     cpp-options: -Deval
 
 common importLens
-  if flag(importLens) || flag(all-plugins)
+  if flag(importLens)
     build-depends: hls-explicit-imports-plugin ^>=1.0.0.1
     cpp-options: -DimportLens
 
 common refineImports
-  if flag(refineImports) || flag(all-plugins)
+  if flag(refineImports) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-refine-imports-plugin ^>=1.0.0.0
     cpp-options: -DrefineImports
 
 common rename
-  if flag(rename) || flag(all-plugins)
+  if flag(rename)
     build-depends: hls-rename-plugin ^>= 1.0.0.0
     cpp-options: -Drename
 
 common retrie
-  if flag(retrie) || flag(all-plugins)
+  if flag(retrie) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-retrie-plugin ^>=1.0.0.1
     cpp-options: -Dretrie
 
 common tactic
-  if flag(tactic) || flag(all-plugins)
-    build-depends: hls-tactics-plugin >=1.2.0.0 && <1.5
+  if flag(tactic) && (impl(ghc < 9.0.1) || flag(ignore-plugins-ghc-bounds))
+    build-depends: hls-tactics-plugin >=1.2.0.0 && <1.6
     cpp-options: -Dtactic
 
 common hlint
-  if flag(hlint) || flag(all-plugins)
+  if flag(hlint)
     build-depends: hls-hlint-plugin ^>=1.0.0.2
     cpp-options: -Dhlint
 
 common moduleName
-  if flag(moduleName) || flag(all-plugins)
+  if flag(moduleName)
     build-depends: hls-module-name-plugin ^>=1.0.0.0
     cpp-options: -DmoduleName
 
 common pragmas
-  if flag(pragmas) || flag(all-plugins)
+  if flag(pragmas)
     build-depends: hls-pragmas-plugin ^>=1.0.0.0
     cpp-options: -Dpragmas
 
 common splice
-  if flag(splice) || flag(all-plugins)
+  if flag(splice) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-splice-plugin ^>=1.0.0.1
     cpp-options: -Dsplice
+
+common alternateNumberFormat
+  if flag(alternateNumberFormat)
+    build-depends: hls-alternate-number-format-plugin ^>=1.0.0.0
+    cpp-options: -DalternateNumberFormat
+
+common qualifyImportedNames
+  if flag(qualifyImportedNames)
+    build-depends: hls-qualify-imported-names-plugin ^>=1.0.0.0
+    cpp-options: -DqualifyImportedNames
 
 -- formatters
 
 common floskell
-  if flag(floskell) || flag(all-formatters)
+  if flag(floskell) && (impl(ghc < 9.0.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-floskell-plugin ^>=1.0.0.0
     cpp-options: -Dfloskell
 
 common fourmolu
-  if flag(fourmolu) || flag(all-formatters)
+  if flag(fourmolu) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-fourmolu-plugin ^>=1.0.0.0
     cpp-options: -Dfourmolu
 
 common ormolu
-  if flag(ormolu) || flag(all-formatters)
+  if flag(ormolu)
     build-depends: hls-ormolu-plugin ^>=1.0.0.0
     cpp-options: -Dormolu
 
 common stylishHaskell
-  if flag(stylishHaskell) || flag(all-formatters)
+  if flag(stylishHaskell) && (impl(ghc < 9.0.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-stylish-haskell-plugin ^>=1.0.0.0
     cpp-options: -DstylishHaskell
 
 common brittany
-  if (flag(brittany) || flag(all-formatters))
+  if flag(brittany) && (impl(ghc < 9.0.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-brittany-plugin ^>=1.0.0.1
     cpp-options: -Dbrittany
 
 executable haskell-language-server
   import:             common-deps
+                    -- configuration
+                    , warnings
+                    , pedantic
                     -- plugins
                     , example-plugins
                     , callHierarchy
@@ -304,6 +327,8 @@ executable haskell-language-server
                     , moduleName
                     , pragmas
                     , splice
+                    , alternateNumberFormat
+                    , qualifyImportedNames
                     , floskell
                     , fourmolu
                     , ormolu
@@ -315,15 +340,12 @@ executable haskell-language-server
   other-modules:    Plugins
 
   ghc-options:
-    -threaded -Wall -Wno-name-shadowing -Wredundant-constraints
+    -threaded
     -- allow user RTS overrides
     -rtsopts
     -- disable idle GC
     -- increase nursery size
     "-with-rtsopts=-I0 -A128M"
-    -Wno-unticked-promoted-constructors
-  if flag(pedantic)
-    ghc-options: -Werror
 
   build-depends:
     , aeson
@@ -353,6 +375,7 @@ executable haskell-language-server
     , safe-exceptions
     , hls-graph
     , sqlite-simple
+    , stm
     , temporary
     , transformers
     , unordered-containers
@@ -362,19 +385,19 @@ executable haskell-language-server
 
 executable haskell-language-server-wrapper
   import:           common-deps
+                  , warnings
+                  , pedantic
   main-is:          Wrapper.hs
   hs-source-dirs:   exe
   other-modules:    Paths_haskell_language_server
   autogen-modules:  Paths_haskell_language_server
   ghc-options:
-    -threaded -Wall -Wno-name-shadowing -Wredundant-constraints
+    -threaded
     -- allow user RTS overrides
     -rtsopts
     -- disable idle GC
     -- increase nursery size
     "-with-rtsopts=-I0 -A128M"
-  if flag(pedantic)
-    ghc-options: -Werror
 
   build-depends:
     , data-default
@@ -393,6 +416,8 @@ executable haskell-language-server-wrapper
 
 test-suite func-test
   import:             common-deps
+                    , warnings
+                    , pedantic
   type:               exitcode-stdio-1.0
   default-language:   Haskell2010
   build-tool-depends:
@@ -438,49 +463,23 @@ test-suite func-test
 
   default-extensions: OverloadedStrings
   ghc-options:
-    -Wall -Wno-name-shadowing -threaded -rtsopts -with-rtsopts=-N -Wno-unticked-promoted-constructors
+    -threaded -rtsopts -with-rtsopts=-N
 
-  if flag(pedantic)
-    ghc-options: -Werror -Wredundant-constraints
-
-  if flag(callHierarchy) || flag(all-plugins)
-    cpp-options: -DcallHierarchy
-  if flag(class) || flag(all-plugins)
-    cpp-options: -Dclass
-  if flag(haddockComments) || flag(all-plugins)
-    cpp-options: -DhaddockComments
-  if flag(eval) || flag(all-plugins)
+-- Duplicating inclusion plugin conditions until tests are moved to their own packages
+  if flag(eval)
     cpp-options: -Deval
-  if flag(importLens) || flag(all-plugins)
-    cpp-options: -DimportLens
-  if flag(rename) || flag(all-plugins)
-    cpp-options: -Drename
-  if flag(retrie) || flag(all-plugins)
-    cpp-options: -Dretrie
-  if flag(tactic) || flag(all-plugins)
-    cpp-options: -Dtactic
-  if flag(hlint) || flag(all-plugins)
-    cpp-options: -Dhlint
-  if flag(moduleName) || flag(all-plugins)
-    cpp-options: -DmoduleName
-  if flag(pragmas) || flag(all-plugins)
-    cpp-options: -Dpragmas
-  if flag(splice) || flag(all-plugins)
-    cpp-options: -Dsplice
-
 -- formatters
-  if flag(floskell) || flag(all-formatters)
+  if flag(floskell) && (impl(ghc < 9.0.1) || flag(ignore-plugins-ghc-bounds))
     cpp-options: -Dfloskell
-  if flag(fourmolu) || flag(all-formatters)
+  if flag(fourmolu) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
     cpp-options: -Dfourmolu
-  if flag(ormolu) || flag(all-formatters)
+  if flag(ormolu)
     cpp-options: -Dormolu
-  if flag(stylishHaskell) || flag(all-formatters)
-    cpp-options: -DstylishHaskell
-  if (flag(brittany) || flag(all-formatters))
-    cpp-options: -Dbrittany
 
 test-suite wrapper-test
+  import:             common-deps
+                    , warnings
+                    , pedantic
   type:               exitcode-stdio-1.0
   build-tool-depends:
     haskell-language-server:haskell-language-server-wrapper -any,
@@ -488,12 +487,8 @@ test-suite wrapper-test
 
   default-language:   Haskell2010
   build-depends:
-    , base
-    , directory
-    , process
+      process
     , hls-test-utils
-    , extra
 
   hs-source-dirs:     test/wrapper
   main-is:            Main.hs
-  ghc-options:        -Wall

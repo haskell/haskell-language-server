@@ -3,6 +3,7 @@
 
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE PolyKinds             #-}
 
 module Development.IDE.Test
@@ -20,22 +21,33 @@ module Development.IDE.Test
   , standardizeQuotes
   , flushMessages
   , waitForAction
-  , getLastBuildKeys
   , getInterfaceFilesDir
-  ) where
+  , garbageCollectDirtyKeys
+  , getFilesOfInterest
+  , waitForTypecheck
+  , waitForBuildQueue
+  , getStoredKeys
+  , waitForCustomMessage
+  , waitForGC
+  ,getBuildKeysBuilt,getBuildKeysVisited,getBuildKeysChanged,getBuildEdgesCount,configureCheckProject) where
 
 import           Control.Applicative.Combinators
 import           Control.Lens                    hiding (List)
 import           Control.Monad
 import           Control.Monad.IO.Class
+import           Data.Aeson                      (toJSON)
 import qualified Data.Aeson                      as A
 import           Data.Bifunctor                  (second)
+import           Data.Default
 import qualified Data.Map.Strict                 as Map
 import           Data.Maybe                      (fromJust)
+import           Data.Text                       (Text)
 import qualified Data.Text                       as T
 import           Development.IDE.Plugin.Test     (TestRequest (..),
-                                                  WaitForIdeRuleResult)
+                                                  WaitForIdeRuleResult,
+                                                  ideResultSuccess)
 import           Development.IDE.Test.Diagnostic
+import           Ide.Plugin.Config               (CheckParents, checkProject)
 import           Language.LSP.Test               hiding (message)
 import qualified Language.LSP.Test               as LspTest
 import           Language.LSP.Types              hiding
@@ -171,23 +183,74 @@ canonicalizeUri uri = filePathToUri <$> canonicalizePath (fromJust (uriToFilePat
 diagnostic :: Session (NotificationMessage TextDocumentPublishDiagnostics)
 diagnostic = LspTest.message STextDocumentPublishDiagnostics
 
-callTestPlugin :: (A.FromJSON b) => TestRequest -> Session (Either ResponseError b)
-callTestPlugin cmd = do
+tryCallTestPlugin :: (A.FromJSON b) => TestRequest -> Session (Either ResponseError b)
+tryCallTestPlugin cmd = do
     let cm = SCustomMethod "test"
     waitId <- sendRequest cm (A.toJSON cmd)
     ResponseMessage{_result} <- skipManyTill anyMessage $ responseForId cm waitId
-    return $ do
-      e <- _result
-      case A.fromJSON e of
-        A.Error e   -> Left $ ResponseError InternalError (T.pack e) Nothing
-        A.Success a -> pure a
+    return $ case _result of
+         Left e -> Left e
+         Right json -> case A.fromJSON json of
+             A.Success a -> Right a
+             A.Error e   -> error e
 
-waitForAction :: String -> TextDocumentIdentifier -> Session (Either ResponseError WaitForIdeRuleResult)
+callTestPlugin :: (A.FromJSON b) => TestRequest -> Session b
+callTestPlugin cmd = do
+    res <- tryCallTestPlugin cmd
+    case res of
+        Left (ResponseError t err _) -> error $ show t <> ": " <> T.unpack err
+        Right a                      -> pure a
+
+
+waitForAction :: String -> TextDocumentIdentifier -> Session WaitForIdeRuleResult
 waitForAction key TextDocumentIdentifier{_uri} =
     callTestPlugin (WaitForIdeRule key _uri)
 
-getLastBuildKeys :: Session (Either ResponseError [T.Text])
-getLastBuildKeys = callTestPlugin GetLastBuildKeys
+getBuildKeysBuilt :: Session (Either ResponseError [T.Text])
+getBuildKeysBuilt = tryCallTestPlugin GetBuildKeysBuilt
 
-getInterfaceFilesDir :: TextDocumentIdentifier -> Session (Either ResponseError FilePath)
+getBuildKeysVisited :: Session (Either ResponseError [T.Text])
+getBuildKeysVisited = tryCallTestPlugin GetBuildKeysVisited
+
+getBuildKeysChanged :: Session (Either ResponseError [T.Text])
+getBuildKeysChanged = tryCallTestPlugin GetBuildKeysChanged
+
+getBuildEdgesCount :: Session (Either ResponseError Int)
+getBuildEdgesCount = tryCallTestPlugin GetBuildEdgesCount
+
+getInterfaceFilesDir :: TextDocumentIdentifier -> Session FilePath
 getInterfaceFilesDir TextDocumentIdentifier{_uri} = callTestPlugin (GetInterfaceFilesDir _uri)
+
+garbageCollectDirtyKeys :: CheckParents -> Int -> Session [String]
+garbageCollectDirtyKeys parents age = callTestPlugin (GarbageCollectDirtyKeys parents age)
+
+getStoredKeys :: Session [Text]
+getStoredKeys = callTestPlugin GetStoredKeys
+
+waitForTypecheck :: TextDocumentIdentifier -> Session Bool
+waitForTypecheck tid = ideResultSuccess <$> waitForAction "typecheck" tid
+
+waitForBuildQueue :: Session ()
+waitForBuildQueue = callTestPlugin WaitForShakeQueue
+
+getFilesOfInterest :: Session [FilePath]
+getFilesOfInterest = callTestPlugin GetFilesOfInterest
+
+waitForCustomMessage :: T.Text -> (A.Value -> Maybe res) -> Session res
+waitForCustomMessage msg pred =
+    skipManyTill anyMessage $ satisfyMaybe $ \case
+        FromServerMess (SCustomMethod lbl) (NotMess NotificationMessage{_params = value})
+            | lbl == msg -> pred value
+        _ -> Nothing
+
+waitForGC :: Session [T.Text]
+waitForGC = waitForCustomMessage "ghcide/GC" $ \v ->
+    case A.fromJSON v of
+        A.Success x -> Just x
+        _           -> Nothing
+
+configureCheckProject :: Bool -> Session ()
+configureCheckProject overrideCheckProject =
+    sendNotification SWorkspaceDidChangeConfiguration
+        (DidChangeConfigurationParams $ toJSON
+            def{checkProject = overrideCheckProject})

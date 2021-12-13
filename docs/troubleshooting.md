@@ -21,19 +21,26 @@ Example with `tasty-discover`:
 
 This returns an error in HLS if 'tasty-discover' is not in the path: `could not execute: tasty-discover`.
 
+### Problems with multi component (tests suites, executables, benchmarks) support using stack
+
+Due to some limitations in the interaction between HLS and stack, there are some issues in projects with a main library and executables, test suites or benchmarks:
+- The stack project has to be built succesfully *before* loading it with HLS to get components other than the library work.
+- Changes in the library are not automatically propagated to other components, especially in the presence of errors in the library, so you have to restart HLS to get those components correctly loaded. The usual symptom is the editor showing errors like `Could not load module ...` or `Cannot satisfy -package ...`
+- See https://github.com/haskell/haskell-language-server/issues/366 for more info about.
 ## Common issues
-
-### Difficulties with Stack and `Paths_` modules
-
-These are known to be somewhat buggy at the moment: <https://github.com/haskell/haskell-language-server/issues/478>.
-This issue should be fixed in Stack versions >= 2.5.
 
 ### Problems with dynamic linking
 
 As haskell-language-server prebuilt binaries are statically linked, they don't play well with projects using dynamic linking.
 An usual symptom is the presence of errors containing `unknown symbol` and it is typical in arch linux, where a dynamically linked version of ghc is used.
 
-The workaround is to use a version of haskell-language-server compiled from source with `-dynamic` enabled`. See more details [here](https://github.com/haskell/haskell-language-server/issues/1160#issuecomment-756566273).
+The workaround is to use a version of haskell-language-server compiled from source with the ghc option `-dynamic` enabled. See more details [here](https://github.com/haskell/haskell-language-server/issues/1160#issuecomment-756566273).
+
+### Support for Template Haskell
+
+Template Haskell should work fine in Linux and Windows with the distributed binaries. In Mac Os a dynamically linked binary of HLS is required to avoid segmentation faults. The easiest way to obtain a dynamically linked HLS binary is to build it locally. With cabal install this can be done as follows:
+
+    cabal update && cabal install haskell-language-server --enable-executable-dynamic
 
 ## Troubleshooting the server
 
@@ -56,11 +63,17 @@ sent, or if there are any errors.
 
 To get a more verbose, also pass `--debug` to the executable.
 
+### Identify which plugin could be the cause of the issue.
+
+Sometimes the issue is produced by one of the plugins included in HLS. To diagnose that and help to trace the final cause one possible strategy is simple disable all plugins, check if the issue is gone and then enable them selectively until the issue is reproduced again.
+
+There is a configuration json snippet which disables all plugins [here](https://github.com/haskell/haskell-language-server/issues/2151#issuecomment-911397030).
+
 ## Troubleshooting the client
 
 Many clients provide diagnostic information about a LSP session.
 In particular, look for a way to get the status of the server, the server stderr, or a log of the messages that the client has sent to the server.
 For example, `lsp-mode` provides all of these (see its [troubleshooting page](https://emacs-lsp.github.io/lsp-mode/page/troubleshooting/) for details).
+For vscode you can read how to access the lsp session log [here])https://github.com/haskell/vscode-haskell#investigating-and-reporting-problems).
 
-The most common client-related problem is the client simply not finding the server executable, so make sure that you have the right `PATH` and you have configured
-it to look for the right executable.
+The most common client-related problem is the client simply not finding the server executable or the tools needed to load Haskell code (`ghc`, `cabal`, or `stack`). So make sure that you have the right `PATH` and you have configured the client to look for the right executables.

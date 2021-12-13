@@ -327,6 +327,7 @@ immediateReverseDependencies file DependencyInformation{..} = do
   FilePathId cur_id <- lookupPathToId depPathIdMap file
   return $ map (idToPath depPathIdMap . FilePathId) (maybe mempty IntSet.toList (IntMap.lookup cur_id depReverseModuleDeps))
 
+-- | returns all transitive dependencies in topological order.
 transitiveDeps :: DependencyInformation -> NormalizedFilePath -> Maybe TransitiveDependencies
 transitiveDeps DependencyInformation{..} file = do
   let !fileId = pathToId depPathIdMap file

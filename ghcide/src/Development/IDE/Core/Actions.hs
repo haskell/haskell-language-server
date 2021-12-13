@@ -1,4 +1,3 @@
-{-# LANGUAGE NoApplicativeDo #-}
 {-# LANGUAGE TypeFamilies    #-}
 module Development.IDE.Core.Actions
 ( getAtPoint

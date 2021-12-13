@@ -59,10 +59,16 @@ module Development.IDE.GHC.Compat.Util (
     Unique,
     mkUnique,
     newTagUnique,
+    -- * UniqDFM
+    emptyUDFM,
+    plusUDFM,
+    plusUDFM_C,
     -- * String Buffer
     StringBuffer(..),
     hGetStringBuffer,
     stringToStringBuffer,
+    nextChar,
+    atEnd
     ) where
 
 #if MIN_VERSION_ghc(9,0,0)
@@ -76,6 +82,7 @@ import           GHC.Data.Maybe
 import           GHC.Data.Pair
 import           GHC.Data.StringBuffer
 import           GHC.Types.Unique
+import           GHC.Types.Unique.DFM
 import           GHC.Utils.Fingerprint
 import           GHC.Utils.Misc
 import           GHC.Utils.Outputable    (pprHsString)
@@ -94,6 +101,7 @@ import           Pair
 import           Outputable              (pprHsString)
 import           Panic                   hiding (try)
 import           StringBuffer
+import           UniqDFM
 import           Unique
 import           Util
 #endif

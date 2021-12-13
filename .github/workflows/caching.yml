@@ -1,0 +1,158 @@
+name: Caching
+
+# Docs on the workflow:
+# 1. GitHub cache scoping goes:
+#   [main branch -> PR main branch -> PR. (essentially in a tree fashion)](https://web.archive.org/web/20211125171853/https://docs.github.com/en/actions/advanced-guides/caching-dependencies-to-speed-up-workflows#restrictions-for-accessing-a-cache).
+#   Building & keeping caches on `master` allows
+#   to share the main project state cache be shared to the whole tree.
+# 2. GitHub has a [default 10G cache pool limit](https://web.archive.org/web/20211125171853/https://docs.github.com/en/actions/advanced-guides/caching-dependencies-to-speed-up-workflows#usage-limits-and-eviction-policy) per repo.
+#   HLS is a big monorepo codebase, which means easy cache pool
+#   invalidation & exhaustion because of the pool limit.
+#   To keep caches useful - the main state of the main branch should remain
+#   & so keep caching in the repo well below the limit.
+#   that means preferring main branch to the PR caches
+#   (especially internal branch ones), since PRs from internal branches -
+#   count into the repo 10G pool, while that cache gets used only inside of the PR,
+#   while exhausting the pool would bork cache for the rest of the community.
+#   That is a short story why `dist-newstyle` (especially full) currently is not
+#   includded into `master` or PR caches.
+
+defaults:
+  run:
+    shell: bash
+
+# See: https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#concurrency.
+concurrency:
+  group: ${{ github.head_ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches:
+      - master
+
+env:
+  cabalBuild: "v2-build all --enable-tests --enable-benchmarks"
+
+jobs:
+
+  pre_job:
+    runs-on: ubuntu-latest
+    outputs:
+      should_skip: ${{ steps.skip_check.outputs.should_skip }}
+      should_skip_ghcide: ${{ steps.skip_ghcide_check.outputs.should_skip }}
+    steps:
+      - id: skip_check
+        uses: fkirc/skip-duplicate-actions@v3.4.1
+        with:
+          cancel_others: false
+          paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", "install/**", "**.nix", "flake.lock", "**/README.md", "FUNDING.yml", ".circleci/**"]'
+      # If we only change ghcide downstream packages we have not test ghcide itself
+      - id: skip_ghcide_check
+        uses: fkirc/skip-duplicate-actions@v3.4.1
+        with:
+          cancel_others: false
+          paths_ignore: '["hls-test-utils/**", "plugins/**", "src/**", "exe/**", "test/**", "shake-bench/**"]'
+
+  caching:
+    if: needs.pre_job.outputs.should_skip != 'true'
+    needs: pre_job
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        ghc: ["9.0.1", '8.10.7', '8.10.6', "8.8.4", "8.6.5"]
+        os: [ubuntu-latest, macOS-latest, windows-latest]
+        cabal: ['3.6']
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: haskell/actions/setup@v1
+        id: HaskEnvSetup
+        with:
+          ghc-version  : ${{ matrix.ghc   }}
+          cabal-version: ${{ matrix.cabal }}
+          enable-stack: false
+
+      - if: runner.os == 'Windows'
+        name: (Windows) Platform config
+        run: |
+          echo "CABAL_PKGS_DIR=~\\AppData\\cabal\\packages" >> $GITHUB_ENV
+      - if: ( runner.os == 'Linux' ) || ( runner.os == 'macOS' )
+        name: (Linux,macOS) Platform config
+        run: |
+          echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
+
+      # Needs to be before Cache Cabal so the cache can detect changes to the modified cabal.project file
+      - if: matrix.ghc == '9.0.1'
+        name: (GHC 9.0.1) Use modified `cabal.project`
+        run: |
+          cp cabal-ghc901.project cabal.project
+      - if: runner.os == 'Windows' && matrix.ghc == '8.8.4'
+        name: (Windows,GHC 8.8) Modify `cabal.project` to workaround segfaults
+        run: |
+          echo "package floskell" >> cabal.project
+          echo "  ghc-options: -O0" >> cabal.project
+
+      # Shorten binary names as a workaround for filepath length limits in Windows,
+      # but since tests are hardcoded on this workaround -
+      # all platforms (in 2021-12-07) need it.
+      # All workflows which distinquishes cache on `cabal.project` needs this.
+      - name: Workaround shorten binary names
+        run: |
+          sed -i.bak -e 's/haskell-language-server/hls/g' \
+                     -e 's/haskell_language_server/hls/g' \
+                     haskell-language-server.cabal cabal.project
+          sed -i.bak -e 's/Paths_haskell_language_server/Paths_hls/g' \
+                     src/**/*.hs exe/*.hs
+
+      - name: Retrieving `cabal.project` Hackage timestamp
+        run: |
+          # Form: index-state: 2021-11-29T08:11:08Z
+          INDEX_STATE_ENTRY=$(grep index-state cabal.project)
+          # Form: 2021-11-29T08-11-08Z
+          INDEX_STATE1=$(echo "$INDEX_STATE_ENTRY" | cut -d' ' -f2 | tr ':' '-')
+          echo "INDEX_STATE=$INDEX_STATE1" >> $GITHUB_ENV
+
+      # 2021-12-02: NOTE: Cabal Hackage source tree storage does not depend on OS or GHC really,
+      # but can depend on `base`.
+      # But this caching is happens only inside `master` for `master` purposes of compiling the deps
+      # so having a shared pool here that depends only on Hackage pin & does not depend on `base` is "good enough"
+      # & used such because it preserves 10% of a global cache storage pool.
+      - name: Hackage sources cache
+        uses: actions/cache@v2
+        env:
+          cache-name: hackage-sources
+        with:
+          path: ${{ env.CABAL_PKGS_DIR }}
+          key:          ${{ env.cache-name }}-${{ env.INDEX_STATE }}
+          restore-keys: ${{ env.cache-name }}-
+
+      - name: Compiled deps cache
+        uses: actions/cache@v2
+        env:
+          cache-name: compiled-deps
+        with:
+          path: ${{ steps.HaskEnvSetup.outputs.cabal-store }}
+          key:  ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project') }}
+          restore-keys: |
+                ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-
+                ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
+                ${{ env.cache-name }}-${{ runner.os }}-
+
+      - run: cabal update
+
+      - name: Download all sources
+        run: |
+          cabal $cabalBuild --only-download
+
+      # repeating builds to workaround segfaults in windows and ghc-8.8.4
+      # This build agenda in not to have successful code,
+      # but to cache what can be cached, so step is fault tolerant & would always succseed.
+      # 2021-12-11: NOTE: Building all targets, since
+      # current Cabal does not allow `all --enable-tests --enable-benchmarks --only-dependencies`
+      - name: Build all targets; try 3 times
+        continue-on-error: true
+        run: |
+          cabal $cabalBuild || cabal $cabalBuild || cabal $cabalBuild

@@ -2,4 +2,4 @@ cradle:
   direct:
     arguments:
       - "-XLambdaCase"
-      - "ApplyRefact1"
+      - "LambdaCase"

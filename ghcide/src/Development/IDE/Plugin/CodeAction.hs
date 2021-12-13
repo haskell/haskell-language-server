@@ -21,6 +21,7 @@ module Development.IDE.Plugin.CodeAction
 import           Control.Applicative                               ((<|>))
 import           Control.Arrow                                     (second,
                                                                     (>>>))
+import           Control.Concurrent.STM.Stats                      (atomically)
 import           Control.Monad                                     (guard, join)
 import           Control.Monad.IO.Class
 import           Data.Char
@@ -90,7 +91,7 @@ codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range Cod
   liftIO $ do
     let text = Rope.toText . (_text :: VirtualFile -> Rope.Rope) <$> contents
         mbFile = toNormalizedFilePath' <$> uriToFilePath uri
-    diag <- fmap (\(_, _, d) -> d) . filter (\(p, _, _) -> mbFile == Just p) <$> getDiagnostics state
+    diag <- atomically $ fmap (\(_, _, d) -> d) . filter (\(p, _, _) -> mbFile == Just p) <$> getDiagnostics state
     (join -> parsedModule) <- runAction "GhcideCodeActions.getParsedModule" state $ getParsedModule `traverse` mbFile
     let
       actions = caRemoveRedundantImports parsedModule text diag xs uri
@@ -882,8 +883,9 @@ suggestImportDisambiguation df (Just txt) ps@(L _ HsModule {hsmodImports}) fileC
             "Ambiguous occurrence ‘([^’]+)’"
       , Just modules <-
             map last
-                <$> allMatchRegexUnifySpaces _message "imported from ‘([^’]+)’" =
-        suggestions ambiguous modules
+                <$> allMatchRegexUnifySpaces _message "imported from ‘([^’]+)’"
+      , local <- matchRegexUnifySpaces _message "defined at .+:[0-9]+:[0-9]+" =
+        suggestions ambiguous modules (isJust local)
     | otherwise = []
     where
         locDic =
@@ -906,16 +908,16 @@ suggestImportDisambiguation df (Just txt) ps@(L _ HsModule {hsmodImports}) fileC
         -- > removeAllDuplicates [1, 1, 2, 3, 2] = [3]
         removeAllDuplicates = map head . filter ((==1) <$> length) . group . sort
         hasDuplicate xs = length xs /= length (S.fromList xs)
-        suggestions symbol mods
+        suggestions symbol mods local
           | hasDuplicate mods = case mapM toModuleTarget (removeAllDuplicates mods) of
-                                  Just targets -> suggestionsImpl symbol (map (, []) targets)
+                                  Just targets -> suggestionsImpl symbol (map (, []) targets) local
                                   Nothing      -> []
           | otherwise         = case mapM toModuleTarget mods of
-                                  Just targets -> suggestionsImpl symbol (oneAndOthers targets)
+                                  Just targets -> suggestionsImpl symbol (oneAndOthers targets) local
                                   Nothing      -> []
-        suggestionsImpl symbol targetsWithRestImports =
+        suggestionsImpl symbol targetsWithRestImports local =
             sortOn fst
-            [ ( renderUniquify mode modNameText symbol
+            [ ( renderUniquify mode modNameText symbol False
               , disambiguateSymbol ps fileContents diag symbol mode
               )
             | (modTarget, restImports) <- targetsWithRestImports
@@ -942,10 +944,14 @@ suggestImportDisambiguation df (Just txt) ps@(L _ HsModule {hsmodImports}) fileC
                         _                 -> False
                     ]
                 ++ [HideOthers restImports | not (null restImports)]
+            ] ++ [ ( renderUniquify mode T.empty symbol True
+              , disambiguateSymbol ps fileContents diag symbol mode
+              ) | local, not (null targetsWithRestImports)
+                , let mode = HideOthers (uncurry (:) (head targetsWithRestImports))
             ]
-        renderUniquify HideOthers {} modName symbol =
-            "Use " <> modName <> " for " <> symbol <> ", hiding other imports"
-        renderUniquify (ToQualified _ qual) _ symbol =
+        renderUniquify HideOthers {} modName symbol local =
+            "Use " <> (if local then "local definition" else modName) <> " for " <> symbol <> ", hiding other imports"
+        renderUniquify (ToQualified _ qual) _ symbol _ =
             "Replace with qualified: "
                 <> T.pack (moduleNameString qual)
                 <> "."
@@ -1005,7 +1011,6 @@ disambiguateSymbol pm fileContents Diagnostic {..} (T.unpack -> symbol) = \case
                     liftParseAST @RdrName df $
                     prettyPrint $ L (mkGeneralSrcSpan  "") rdr
             ]
-
 findImportDeclByRange :: [LImportDecl GhcPs] -> Range -> Maybe (LImportDecl GhcPs)
 findImportDeclByRange xs range = find (\(L l _)-> srcSpanToRange l == Just range) xs
 

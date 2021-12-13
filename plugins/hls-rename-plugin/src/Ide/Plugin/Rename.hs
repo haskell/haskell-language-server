@@ -27,7 +27,6 @@ import           Name
 #endif
 import           HieDb.Query
 import           Ide.Plugin.Config
-import           Ide.Plugin.Retrie                    hiding (descriptor)
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.Haskell.GHC.ExactPrint

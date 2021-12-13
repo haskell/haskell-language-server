@@ -190,7 +190,8 @@ module Development.IDE.GHC.Compat.Core (
     SrcLoc.RealSrcSpan,
     pattern RealSrcSpan,
     SrcLoc.RealSrcLoc,
-    SrcLoc.SrcLoc(..),
+    pattern RealSrcLoc,
+    SrcLoc.SrcLoc(SrcLoc.UnhelpfulLoc),
     BufSpan,
     SrcLoc.leftmost_smallest,
     SrcLoc.containsSpan,
@@ -286,6 +287,7 @@ module Development.IDE.GHC.Compat.Core (
     module GHC.Core.DataCon,
     module GHC.Core.FamInstEnv,
     module GHC.Core.InstEnv,
+    module GHC.Types.Unique.FM,
 #if !MIN_VERSION_ghc(9,2,0)
     module GHC.Core.Ppr.TyThing,
 #endif
@@ -379,6 +381,7 @@ module Development.IDE.GHC.Compat.Core (
     module TysWiredIn,
     module Type,
     module Unify,
+    module UniqFM,
     module UniqSupply,
     module Var,
 #endif
@@ -425,6 +428,7 @@ import           GHC.Core.DataCon           hiding (dataConExTyCoVars)
 import qualified GHC.Core.DataCon           as DataCon
 import           GHC.Core.FamInstEnv
 import           GHC.Core.InstEnv
+import           GHC.Types.Unique.FM
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Core.Multiplicity      (scaledThing)
 #else
@@ -511,7 +515,9 @@ import           GHC.Types.TyThing.Ppr
 #else
 import           GHC.Types.Name.Set
 #endif
-import           GHC.Types.SrcLoc           (BufSpan, SrcSpan (UnhelpfulSpan))
+import           GHC.Types.SrcLoc           (BufPos, BufSpan,
+                                             SrcLoc (UnhelpfulLoc),
+                                             SrcSpan (UnhelpfulSpan))
 import qualified GHC.Types.SrcLoc           as SrcLoc
 import           GHC.Types.Unique.Supply
 import           GHC.Types.Var              (Var (varName), setTyVarUnique,
@@ -630,6 +636,7 @@ import           Type                       hiding (mkVisFunTys)
 import           TysPrim
 import           TysWiredIn
 import           Unify
+import           UniqFM
 import           UniqSupply
 import           Var                        (Var (varName), setTyVarUnique,
                                              setVarUnique, varType)
@@ -637,12 +644,14 @@ import           Var                        (Var (varName), setTyVarUnique,
 #if MIN_VERSION_ghc(8,10,0)
 import           Coercion                   (coercionKind)
 import           Predicate
-import           SrcLoc                     (SrcSpan (UnhelpfulSpan))
+import           SrcLoc                     (SrcLoc (UnhelpfulLoc),
+                                             SrcSpan (UnhelpfulSpan))
 #else
-import           SrcLoc                     (RealLocated,
+import           SrcLoc                     (RealLocated, SrcLoc (UnhelpfulLoc),
                                              SrcSpan (UnhelpfulSpan))
 #endif
 #endif
+
 
 #if !MIN_VERSION_ghc(8,8,0)
 import           Data.List                  (isSuffixOf)
@@ -651,6 +660,7 @@ import           System.FilePath
 
 #if !MIN_VERSION_ghc(9,0,0)
 type BufSpan = ()
+type BufPos = ()
 #endif
 
 pattern RealSrcSpan :: SrcLoc.RealSrcSpan -> Maybe BufSpan -> SrcLoc.SrcSpan
@@ -661,6 +671,15 @@ pattern RealSrcSpan x y <- ((,Nothing) -> (SrcLoc.RealSrcSpan x, y)) where
     RealSrcSpan x _ = SrcLoc.RealSrcSpan x
 #endif
 {-# COMPLETE RealSrcSpan, UnhelpfulSpan #-}
+
+pattern RealSrcLoc :: SrcLoc.RealSrcLoc -> Maybe BufPos-> SrcLoc.SrcLoc
+#if MIN_VERSION_ghc(9,0,0)
+pattern RealSrcLoc x y = SrcLoc.RealSrcLoc x y
+#else
+pattern RealSrcLoc x y <- ((,Nothing) -> (SrcLoc.RealSrcLoc x, y)) where
+    RealSrcLoc x _ = SrcLoc.RealSrcLoc x
+#endif
+{-# COMPLETE RealSrcLoc, UnhelpfulLoc #-}
 
 
 pattern AvailTC :: Name -> [Name] -> [FieldLabel] -> Avail.AvailInfo

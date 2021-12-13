@@ -162,7 +162,7 @@ mkNoCodeLensTest input =
     resetGlobalHoleRef
     runSessionForTactics $ do
       doc <- openDoc (input <.> "hs") "haskell"
-      _ <- waitForDiagnostics
+      _ <- waitForBuildQueue
       lenses <- fmap (reverse . filter isWingmanLens) $ getCodeLenses doc
       liftIO $ lenses `shouldBe` []
 

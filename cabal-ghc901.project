@@ -6,11 +6,11 @@ packages:
          ./ghcide
          ./hls-plugin-api
          ./hls-test-utils
-        -- ./plugins/hls-tactics-plugin
-        -- ./plugins/hls-brittany-plugin
-        -- ./plugins/hls-stylish-haskell-plugin
+         ./plugins/hls-tactics-plugin
+         ./plugins/hls-brittany-plugin
+         ./plugins/hls-stylish-haskell-plugin
          ./plugins/hls-fourmolu-plugin
-        -- ./plugins/hls-class-plugin
+         ./plugins/hls-class-plugin
          ./plugins/hls-eval-plugin
          ./plugins/hls-explicit-imports-plugin
          ./plugins/hls-refine-imports-plugin
@@ -19,11 +19,13 @@ packages:
          ./plugins/hls-retrie-plugin
          ./plugins/hls-haddock-comments-plugin
          ./plugins/hls-splice-plugin
+         ./plugins/hls-qualify-imported-names-plugin
          ./plugins/hls-floskell-plugin
          ./plugins/hls-pragmas-plugin
          ./plugins/hls-module-name-plugin
          ./plugins/hls-ormolu-plugin
          ./plugins/hls-call-hierarchy-plugin
+         ./plugins/hls-alternate-number-format-plugin
 
 with-compiler: ghc-9.0.1
 
@@ -33,37 +35,32 @@ package *
   ghc-options: -haddock
   test-show-details: direct
 
-source-repository-package
-  type: git
-  location: https://github.com/mithrandi/czipwith.git
-  tag: b6245884ae83e00dd2b5261762549b37390179f8
-  -- https://github.com/lspitzner/czipwith/pull/2
-
-source-repository-package
-  type: git
-  location: https://github.com/anka-213/th-extras
-  tag: 57a97b4df128eb7b360e8ab9c5759392de8d1659
--- https://github.com/mokus0/th-extras/pull/8
--- https://github.com/mokus0/th-extras/issues/7
-
-source-repository-package
-  type: git
-  location: https://github.com/fendor/dependent-sum
-  tag: 5de03c38b0de4945f4e9bce1b026110e69dc8118
-  subdir: dependent-sum-template
--- https://github.com/obsidiansystems/dependent-sum/pull/59
-
 write-ghc-environment-files: never
 
-index-state: 2021-10-04T02:41:06Z
+index-state: 2021-11-29T12:30:07Z
 
 constraints:
-    -- These plugins don't work on GHC9 yet
-    haskell-language-server -brittany -class -stylishhaskell -tactic
+  -- These plugins don't work on GHC9 yet
+  haskell-language-server +ignore-plugins-ghc-bounds -brittany -stylishhaskell -tactic,
+  ghc-lib-parser ^>= 9.0
 
+-- although we are not building all plugins cabal solver phase is run for all packages
+-- this way we track explicitly all transitive dependencies which need support for ghc-9
 allow-newer:
+    brittany:base,
+    brittany:ghc,
+    brittany:ghc-boot-th,
+    -- for brittany
+    butcher:base,
+    multistate:base,
+    data-tree-print:base,
+
+    stylish-haskell:Cabal,
+    stylish-haskell:ghc-lib-parser,
+
     floskell:base,
     floskell:ghc-prim,
+
     -- for shake-bench
     Chart-diagrams:diagrams-core,
     SVGFonts:diagrams-core

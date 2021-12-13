@@ -1,0 +1,54 @@
+cabal-version:      2.2
+name:               hls-qualify-imported-names-plugin
+version:            1.0.0.0
+synopsis:           A Haskell Language Server plugin that qualifies imported names
+description:
+  Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
+license:            Apache-2.0
+license-file:       LICENSE
+author:             Jonathan Shen
+maintainer:         shenjonathan0@gmail.com
+category:           Development
+build-type:         Simple
+extra-source-files:
+  LICENSE
+  qualify-imported-names-demo.gif
+  README.md
+  test/data/*.hs
+  test/data/*.yaml
+
+library
+  exposed-modules:    Ide.Plugin.QualifyImportedNames
+  hs-source-dirs:     src
+  build-depends:
+    , aeson
+    , base                  >=4.12 && <5
+    , containers
+    , deepseq
+    , ghc
+    , ghcide                ^>=1.5.0
+    , hls-graph
+    , hls-plugin-api        >=1.1  && <1.3
+    , lsp
+    , text
+    , unordered-containers
+    , dlist
+    , transformers
+
+  default-language:   Haskell2010
+  default-extensions:
+    DataKinds
+    TypeOperators
+
+test-suite tests
+  type:             exitcode-stdio-1.0
+  default-language: Haskell2010
+  hs-source-dirs:   test
+  main-is:          Main.hs
+  ghc-options:      -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+    , base
+    , text
+    , filepath
+    , hls-qualify-imported-names-plugin
+    , hls-test-utils             >=1.0 && <1.2

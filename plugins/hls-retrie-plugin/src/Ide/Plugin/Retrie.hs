@@ -14,18 +14,18 @@
 
 {-# OPTIONS -Wno-orphans #-}
 
-module Ide.Plugin.Retrie (descriptor, response, handleMaybe, handleMaybeM) where
+module Ide.Plugin.Retrie (descriptor) where
 
 import           Control.Concurrent.Extra             (readVar)
+import           Control.Concurrent.STM               (readTVarIO)
 import           Control.Exception.Safe               (Exception (..),
                                                        SomeException, catch,
                                                        throwIO, try)
 import           Control.Monad                        (forM, unless)
-import           Control.Monad.Extra                  (maybeM)
 import           Control.Monad.IO.Class               (MonadIO (liftIO))
 import           Control.Monad.Trans.Class            (MonadTrans (lift))
-import           Control.Monad.Trans.Except           (ExceptT (..), runExceptT,
-                                                       throwE)
+import           Control.Monad.Trans.Except           (ExceptT (ExceptT),
+                                                       runExceptT)
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson                           (FromJSON (..),
                                                        ToJSON (..),
@@ -357,7 +357,7 @@ callRetrie ::
   Bool ->
   IO ([CallRetrieError], WorkspaceEdit)
 callRetrie state session rewrites origin restrictToOriginatingFile = do
-  knownFiles <- toKnownFiles . unhashed <$> readVar (knownTargetsVar $ shakeExtras state)
+  knownFiles <- toKnownFiles . unhashed <$> readTVarIO (knownTargetsVar $ shakeExtras state)
   let reuseParsedModule f = do
         pm <-
           useOrFail "GetParsedModule" NoParse GetParsedModule f
@@ -498,20 +498,6 @@ _useRuleStale label state rule f =
 
 -- | Chosen approach for calling ghcide Shake rules
 useRule label = _useRuleStale ("Retrie." <> label)
-
--------------------------------------------------------------------------------
--- Error handling combinators
-
-handleMaybe :: Monad m => e -> Maybe b -> ExceptT e m b
-handleMaybe msg = maybe (throwE msg) return
-
-handleMaybeM :: Monad m => e -> m (Maybe b) -> ExceptT e m b
-handleMaybeM msg act = maybeM (throwE msg) return $ lift act
-
-response :: Monad m => ExceptT String m a -> m (Either ResponseError a)
-response =
-  fmap (first (\msg -> ResponseError InternalError (fromString msg) Nothing))
-    . runExceptT
 
 -------------------------------------------------------------------------------
 -- Serialization wrappers and instances

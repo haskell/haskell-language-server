@@ -12,6 +12,7 @@
 --   using the "Shaker" abstraction layer for in-memory use.
 --
 module Development.IDE.Core.RuleTypes(
+    GhcSessionDeps(.., GhcSessionDeps),
     module Development.IDE.Core.RuleTypes
     ) where
 
@@ -72,10 +73,6 @@ type instance RuleResult GetParsedModuleWithComments = ParsedModule
 -- This rule will succeed even if there is an error, e.g., a module could not be located,
 -- a module could not be parsed or an import cycle.
 type instance RuleResult GetDependencyInformation = DependencyInformation
-
--- | Transitive module and pkg dependencies based on the information produced by GetDependencyInformation.
--- This rule is also responsible for calling ReportImportCycles for each file in the transitive closure.
-type instance RuleResult GetDependencies = TransitiveDependencies
 
 type instance RuleResult GetModuleGraph = DependencyInformation
 
@@ -234,6 +231,7 @@ type instance RuleResult GetDocMap = DocAndKindMap
 type instance RuleResult GhcSession = HscEnvEq
 
 -- | A GHC session preloaded with all the dependencies
+-- This rule is also responsible for calling ReportImportCycles for the direct dependencies
 type instance RuleResult GhcSessionDeps = HscEnvEq
 
 -- | Resolve the imports in a module to the file path of a module in the same package
@@ -255,10 +253,6 @@ type instance RuleResult GetModIfaceFromDiskAndIndex = HiFileResult
 -- | Get a module interface details, either from an interface file or a typechecked module
 type instance RuleResult GetModIface = HiFileResult
 
--- | Get a module interface details, without the Linkable
--- For better early cuttoff
-type instance RuleResult GetModIfaceWithoutLinkable = HiFileResult
-
 -- | Get the contents of a file, either dirty (if the buffer is modified) or Nothing to mean use from disk.
 type instance RuleResult GetFileContents = (FileVersion, Maybe Text)
 
@@ -272,7 +266,10 @@ newtype GetModificationTime = GetModificationTime_
     { missingFileDiagnostics :: Bool
       -- ^ If false, missing file diagnostics are not reported
     }
-    deriving (Show, Generic)
+    deriving (Generic)
+
+instance Show GetModificationTime where
+    show _ = "GetModificationTime"
 
 instance Eq GetModificationTime where
     -- Since the diagnostics are not part of the answer, the query identity is
@@ -386,11 +383,6 @@ data ReportImportCycles = ReportImportCycles
 instance Hashable ReportImportCycles
 instance NFData   ReportImportCycles
 
-data GetDependencies = GetDependencies
-    deriving (Eq, Show, Typeable, Generic)
-instance Hashable GetDependencies
-instance NFData   GetDependencies
-
 data TypeCheck = TypeCheck
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable TypeCheck
@@ -416,9 +408,15 @@ data GhcSession = GhcSession
 instance Hashable GhcSession
 instance NFData   GhcSession
 
-data GhcSessionDeps = GhcSessionDeps deriving (Eq, Show, Typeable, Generic)
-instance Hashable GhcSessionDeps
-instance NFData   GhcSessionDeps
+newtype GhcSessionDeps = GhcSessionDeps_
+    { -- | Load full ModSummary values in the GHC session.
+        -- Required for interactive evaluation, but leads to more cache invalidations
+        fullModSummary :: Bool
+    }
+    deriving newtype (Eq, Show, Typeable, Hashable, NFData)
+
+pattern GhcSessionDeps :: GhcSessionDeps
+pattern GhcSessionDeps = GhcSessionDeps_ False
 
 data GetModIfaceFromDisk = GetModIfaceFromDisk
     deriving (Eq, Show, Typeable, Generic)
@@ -434,11 +432,6 @@ data GetModIface = GetModIface
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetModIface
 instance NFData   GetModIface
-
-data GetModIfaceWithoutLinkable = GetModIfaceWithoutLinkable
-    deriving (Eq, Show, Typeable, Generic)
-instance Hashable GetModIfaceWithoutLinkable
-instance NFData   GetModIfaceWithoutLinkable
 
 data IsFileOfInterest = IsFileOfInterest
     deriving (Eq, Show, Typeable, Generic)

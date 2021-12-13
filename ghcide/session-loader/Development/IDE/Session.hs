@@ -73,13 +73,15 @@ import           System.IO
 import           System.Info
 
 import           Control.Applicative                  (Alternative ((<|>)))
-import           Control.Exception                    (evaluate)
 import           Data.Void
 
-import           Control.Concurrent.STM               (atomically)
+import           Control.Concurrent.STM.Stats         (atomically, modifyTVar',
+                                                       readTVar, writeTVar)
 import           Control.Concurrent.STM.TQueue
+import           Data.Foldable                        (for_)
 import qualified Data.HashSet                         as Set
 import           Database.SQLite.Simple
+import           Development.IDE.Core.Tracing         (withTrace)
 import           HieDb.Create
 import           HieDb.Types
 import           HieDb.Utils
@@ -244,9 +246,10 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
   return $ do
     extras@ShakeExtras{logger, restartShakeSession, ideNc, knownTargetsVar, lspEnv
                       } <- getShakeExtras
-    let invalidateShakeCache = do
+    let invalidateShakeCache :: IO ()
+        invalidateShakeCache = do
             void $ modifyVar' version succ
-            recordDirtyKeys extras GhcSessionIO [emptyFilePath]
+            join $ atomically $ recordDirtyKeys extras GhcSessionIO [emptyFilePath]
 
     IdeOptions{ optTesting = IdeTesting optTesting
               , optCheckProject = getCheckProject
@@ -263,13 +266,17 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
               TargetModule _ -> do
                 found <- filterM (IO.doesFileExist . fromNormalizedFilePath) targetLocations
                 return (targetTarget, found)
-          recordDirtyKeys extras GetKnownTargets  [emptyFilePath]
-          modifyVarIO' knownTargetsVar $ traverseHashed $ \known -> do
-            let known' = HM.unionWith (<>) known $ HM.fromList $ map (second Set.fromList) knownTargets
-            when (known /= known') $
+          hasUpdate <- join $ atomically $ do
+            known <- readTVar knownTargetsVar
+            let known' = flip mapHashed known $ \k ->
+                            HM.unionWith (<>) k $ HM.fromList $ map (second Set.fromList) knownTargets
+                hasUpdate = if known /= known' then Just (unhashed known') else Nothing
+            writeTVar knownTargetsVar known'
+            logDirtyKeys <- recordDirtyKeys extras GetKnownTargets [emptyFilePath]
+            return (logDirtyKeys >> pure hasUpdate)
+          for_ hasUpdate $ \x ->
                 logDebug logger $ "Known files updated: " <>
-                    T.pack(show $ (HM.map . Set.map) fromNormalizedFilePath known')
-            pure known'
+                    T.pack(show $ (HM.map . Set.map) fromNormalizedFilePath x)
 
     -- Create a new HscEnv from a hieYaml root and a set of options
     -- If the hieYaml file already has an HscEnv, the new component is
@@ -403,7 +410,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
                     -- update exports map
                     extras <- getShakeExtras
                     let !exportsMap' = createExportsMap $ mapMaybe (fmap hirModIface) modIfaces
-                    liftIO $ modifyVar_ (exportsMap extras) $ evaluate . (exportsMap' <>)
+                    liftIO $ atomically $ modifyTVar' (exportsMap extras) (exportsMap' <>)
 
           return (second Map.keys res)
 
@@ -425,7 +432,12 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
            let progMsg = "Setting up " <> T.pack (takeBaseName (cradleRootDir cradle))
                          <> " (for " <> T.pack lfp <> ")"
            eopts <- mRunLspTCallback lspEnv (withIndefiniteProgress progMsg NotCancellable) $
-              cradleToOptsAndLibDir logger cradle cfp
+              withTrace "Load cradle" $ \addTag -> do
+                  addTag "file" lfp
+                  res <- cradleToOptsAndLibDir logger cradle cfp
+                  addTag "result" (show res)
+                  return res
+
 
            logDebug logger $ T.pack ("Session loading result: " <> show eopts)
            case eopts of
@@ -456,7 +468,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
                     -> IO (IdeResult HscEnvEq, [FilePath])
         sessionOpts (hieYaml, file) = do
           v <- fromMaybe HM.empty . Map.lookup hieYaml <$> readVar fileToFlags
-          cfp <- canonicalizePath file
+          cfp <- makeAbsolute file
           case HM.lookup (toNormalizedFilePath' cfp) v of
             Just (opts, old_di) -> do
               deps_ok <- checkDependencyInfo old_di
@@ -477,7 +489,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
     -- before attempting to do so.
     let getOptions :: FilePath -> IO (IdeResult HscEnvEq, [FilePath])
         getOptions file = do
-            ncfp <- toNormalizedFilePath' <$> canonicalizePath file
+            ncfp <- toNormalizedFilePath' <$> makeAbsolute file
             cachedHieYamlLocation <- HM.lookup ncfp <$> readVar filesMap
             hieYaml <- cradleLoc file
             sessionOpts (join cachedHieYamlLocation <|> hieYaml, file) `Safe.catch` \e ->
@@ -547,11 +559,11 @@ fromTargetId is exts (GHC.TargetModule mod) env dep = do
               , i <- is
               , boot <- ["", "-boot"]
               ]
-    locs <- mapM (fmap toNormalizedFilePath' . canonicalizePath) fps
+    locs <- mapM (fmap toNormalizedFilePath' . makeAbsolute) fps
     return [TargetDetails (TargetModule mod) env dep locs]
 -- For a 'TargetFile' we consider all the possible module names
 fromTargetId _ _ (GHC.TargetFile f _) env deps = do
-    nf <- toNormalizedFilePath' <$> canonicalizePath f
+    nf <- toNormalizedFilePath' <$> makeAbsolute f
     return [TargetDetails (TargetFile nf) env deps [nf]]
 
 toFlagsMap :: TargetDetails -> [(NormalizedFilePath, (IdeResult HscEnvEq, DependencyInfo))]

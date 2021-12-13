@@ -8,12 +8,14 @@ module Main(main) where
 import           Arguments                         (Arguments (..),
                                                     getArguments)
 import           Control.Monad.Extra               (unless, whenJust)
+import           Data.Default                      (def)
 import           Data.Version                      (showVersion)
 import           Development.GitRev                (gitHash)
 import           Development.IDE                   (Priority (Debug, Info),
                                                     action)
 import           Development.IDE.Core.OfInterest   (kick)
 import           Development.IDE.Core.Rules        (mainRule)
+import           Development.IDE.Core.Tracing      (withTelemetryLogger)
 import           Development.IDE.Graph             (ShakeOptions (shakeThreads))
 import qualified Development.IDE.Main              as Main
 import qualified Development.IDE.Plugin.HLS.GhcIde as GhcIde
@@ -39,7 +41,7 @@ ghcideVersion = do
              <> gitHashSection
 
 main :: IO ()
-main = do
+main = withTelemetryLogger $ \telemetryLogger -> do
     let hlsPlugins = pluginDescToIdePlugins GhcIde.descriptors
     -- WARNING: If you write to stdout before runLanguageServer
     --          then the language server will not work
@@ -55,10 +57,11 @@ main = do
 
     Main.defaultMain arguments
         {Main.argCommand = argsCommand
+        ,Main.argsLogger = Main.argsLogger arguments <> pure telemetryLogger
 
         ,Main.argsRules = do
             -- install the main and ghcide-plugin rules
-            mainRule
+            mainRule def
             -- install the kick action, which triggers a typecheck on every
             -- Shake database restart, i.e. on every user edit.
             unless argsDisableKick $

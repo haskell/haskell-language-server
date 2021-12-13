@@ -3,5 +3,5 @@ cradle:
     arguments:
       - "-XCPP"
       - "-DFLAG"
-      - "ApplyRefact3"
-      - "ApplyRefact2"
+      - "CppCond"
+      - "CppHeader"

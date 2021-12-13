@@ -1,5 +1,11 @@
 # Installation
 
+A typical haskell-language-server installation consists of:
+- One binary file for each supported ghc version: `haskell-language-server-${ghcVersion}`
+- Another binary named `haskell-language-version-wrapper` which analyzes the project or file in the current working dir
+  and calls the appropiate `haskell-language-server-${ghcVersion}` variant.
+  - It accepts all executable arguments from the plain `haskell-language-server`
+
 ## Prerequisites
 
 - For standalone `.hs`/`.lhs` files, [ghc](https://www.haskell.org/ghc/) must be installed and on the PATH. The easiest way to install it is with [ghcup](https://www.haskell.org/ghcup/) or [chocolatey](https://community.chocolatey.org/packages/ghc) on Windows.
@@ -183,12 +189,11 @@ stack ./install.hs hls
 Install haskell-language-server for a specific GHC version (and hoogle docs):
 
 ```bash
-stack ./install.hs hls-8.8.3
+stack ./install.hs hls-8.10.7
 ```
 
-`hls-8.8.3` target will build the project and install `haskell-language-server-wrapper`,
-`haskell-language-server`, `haskell-language-server-8.8.3` and `haskell-language-server-8.8`
-executables.
+`hls-8.10.7` target will build the project and install `haskell-language-server-wrapper`,
+`haskell-language-server` and `haskell-language-server-8.10.7` executables.
 
 The Haskell Language Server can also be built with `cabal v2-build` instead of `stack build`.
 This has the advantage that you can decide how the GHC versions have been installed.
@@ -204,7 +209,7 @@ An example output is:
 ******************************************************************
 Found the following GHC paths:
 ghc-8.6.5: /opt/bin/ghc-8.6.5
-ghc-8.8.3: /opt/bin/ghc-8.8.3
+ghc-8.8.4: /opt/bin/ghc-8.8.4
 
 ******************************************************************
 ```
@@ -237,4 +242,4 @@ You need to provide your own GHC/Cabal/Stack as required by your project, possib
 
 ## Installation using nix
 
-You can read full instructions on how to install HLS with nix in [haskell2nix documentation](https://haskell4nix.readthedocs.io/nixpkgs-users-guide.html#how-to-install-haskell-language-server).
+You can read full instructions on how to install HLS with nix in [haskell4nix documentation](https://haskell4nix.readthedocs.io/nixpkgs-users-guide.html#how-to-install-haskell-language-server).

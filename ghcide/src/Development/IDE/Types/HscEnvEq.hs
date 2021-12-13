@@ -16,7 +16,6 @@ import           Control.Concurrent.Strict       (modifyVar, newVar)
 import           Control.DeepSeq                 (force)
 import           Control.Exception               (evaluate, mask, throwIO)
 import           Control.Monad.Extra             (eitherM, join, mapMaybeM)
-import           Control.Monad.IO.Class
 import           Data.Either                     (fromRight)
 import           Data.Set                        (Set)
 import qualified Data.Set                        as Set
@@ -29,7 +28,7 @@ import           Development.IDE.GHC.Util        (lookupPackageConfig)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Types.Exports   (ExportsMap, createExportsMap)
 import           OpenTelemetry.Eventlog          (withSpan)
-import           System.Directory                (canonicalizePath)
+import           System.Directory                (makeAbsolute)
 import           System.FilePath
 
 -- | An 'HscEnv' with equality. Two values are considered equal
@@ -58,9 +57,9 @@ newHscEnvEq cradlePath hscEnv0 deps = do
     let relativeToCradle = (takeDirectory cradlePath </>)
         hscEnv = removeImportPaths hscEnv0
 
-    -- Canonicalize import paths since we also canonicalize targets
+    -- Make Absolute since targets are also absolute
     importPathsCanon <-
-      mapM canonicalizePath $ relativeToCradle <$> importPaths (hsc_dflags hscEnv0)
+      mapM makeAbsolute $ relativeToCradle <$> importPaths (hsc_dflags hscEnv0)
 
     newHscEnvEqWithImportPaths (Just $ Set.fromList importPathsCanon) hscEnv deps
 
@@ -76,22 +75,25 @@ newHscEnvEqWithImportPaths envImportPaths hscEnv deps = do
         -- compute the package imports
         let pkgst   = unitState hscEnv
             depends = explicitUnits pkgst
-            targets =
-                [ (pkg, mn)
+            modules =
+                [ m
                 | d        <- depends
                 , Just pkg <- [lookupPackageConfig d hscEnv]
-                , (mn, _)  <- unitExposedModules pkg
+                , (modName, maybeOtherPkgMod) <- unitExposedModules pkg
+                , let m = case maybeOtherPkgMod of
+                        -- When module is re-exported from another package,
+                        -- the origin module is represented by value in Just
+                        Just otherPkgMod -> otherPkgMod
+                        Nothing -> mkModule (unitInfoId pkg) modName
                 ]
 
-            doOne (pkg, mn) = do
-                modIface <- liftIO $ initIfaceLoad hscEnv $ loadInterface
-                    ""
-                    (mkModule (unitInfoId pkg) mn)
-                    (ImportByUser NotBoot)
+            doOne m = do
+                modIface <- initIfaceLoad hscEnv $
+                    loadInterface "" m (ImportByUser NotBoot)
                 return $ case modIface of
                     Maybes.Failed    _r -> Nothing
                     Maybes.Succeeded mi -> Just mi
-        modIfaces <- mapMaybeM doOne targets
+        modIfaces <- mapMaybeM doOne modules
         return $ createExportsMap modIfaces
 
     -- similar to envPackageExports, evaluated lazily
