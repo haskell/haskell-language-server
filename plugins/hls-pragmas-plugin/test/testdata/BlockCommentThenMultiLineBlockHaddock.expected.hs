@@ -7,7 +7,7 @@ haddock
 -}
 
 module BlockCommentThenMultiLineBlockHaddock where
-import GHC.SourceGen (multiIf)
-import Diagrams (block)
+import Data.List (intercalate)
+import System.IO (hFlush)
 
 a = (1,)

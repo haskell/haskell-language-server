@@ -210,22 +210,24 @@ completion _ide _ complParams = do
             result <$> VFS.getCompletionPrefix position cnts
             where
                 result (Just pfix)
-                    | "{-# language" `T.isPrefixOf` T.toLower (VFS.fullLine pfix)
+                    | "{-# language" `T.isPrefixOf` line
                     = J.List $ map buildCompletion
                         (Fuzzy.simpleFilter (VFS.prefixText pfix) allPragmas)
-                    | "{-# options_ghc" `T.isPrefixOf` T.toLower (VFS.fullLine pfix)
+                    | "{-# options_ghc" `T.isPrefixOf` line
                     = J.List $ map mkExtCompl
                         (Fuzzy.simpleFilter (VFS.prefixText pfix) flags)
-                    -- if there already is a closing bracket - complete without one
-                    | isPragmaPrefix (VFS.fullLine pfix) && "}" `T.isSuffixOf` VFS.fullLine pfix
-                    = J.List $ map (\(a, b, c) -> mkPragmaCompl a b c) (validPragmas Nothing)
-                    -- if there is no closing bracket - complete with one
-                    | isPragmaPrefix (VFS.fullLine pfix)
-                    = J.List $ map (\(a, b, c) -> mkPragmaCompl a b c) (validPragmas (Just "}"))
+                    | "{-#" `T.isPrefixOf` line
+                    = J.List $ map (\(a, b, c) -> mkPragmaCompl (a <> suffix) b c) validPragmas
                     | otherwise
                     = J.List []
+                    where
+                        line = T.toLower $ VFS.fullLine pfix
+                        suffix
+                            | "#-}" `T.isSuffixOf` line = " "
+                            | "-}"  `T.isSuffixOf` line = " #"
+                            | "}"   `T.isSuffixOf` line = " #-"
+                            | otherwise                 = " #-}"
                 result Nothing = J.List []
-                isPragmaPrefix line = "{-#" `T.isPrefixOf` line
                 buildCompletion p =
                     J.CompletionItem
                       { _label = p,
@@ -247,24 +249,22 @@ completion _ide _ complParams = do
                         _xdata = Nothing
                       }
         _ -> return $ J.List []
+
 -----------------------------------------------------------------------
-validPragmas :: Maybe T.Text -> [(T.Text, T.Text, T.Text)]
-validPragmas mSuffix =
-  [ ("LANGUAGE ${1:extension} #-" <> suffix         , "LANGUAGE",           "{-# LANGUAGE #-}")
-  , ("OPTIONS_GHC -${1:option} #-" <> suffix        , "OPTIONS_GHC",        "{-# OPTIONS_GHC #-}")
-  , ("INLINE ${1:function} #-" <> suffix            , "INLINE",             "{-# INLINE #-}")
-  , ("NOINLINE ${1:function} #-" <> suffix          , "NOINLINE",           "{-# NOINLINE #-}")
-  , ("INLINABLE ${1:function} #-"<> suffix          , "INLINABLE",          "{-# INLINABLE #-}")
-  , ("WARNING ${1:message} #-" <> suffix            , "WARNING",            "{-# WARNING #-}")
-  , ("DEPRECATED ${1:message} #-" <> suffix         , "DEPRECATED",         "{-# DEPRECATED  #-}")
-  , ("ANN ${1:annotation} #-" <> suffix             , "ANN",                "{-# ANN #-}")
-  , ("RULES #-" <> suffix                           , "RULES",              "{-# RULES #-}")
-  , ("SPECIALIZE ${1:function} #-" <> suffix        , "SPECIALIZE",         "{-# SPECIALIZE #-}")
-  , ("SPECIALIZE INLINE ${1:function} #-"<> suffix  , "SPECIALIZE INLINE",  "{-# SPECIALIZE INLINE #-}")
+validPragmas :: [(T.Text, T.Text, T.Text)]
+validPragmas =
+  [ ("LANGUAGE ${1:extension}"         , "LANGUAGE",           "{-# LANGUAGE #-}")
+  , ("OPTIONS_GHC -${1:option}"        , "OPTIONS_GHC",        "{-# OPTIONS_GHC #-}")
+  , ("INLINE ${1:function}"            , "INLINE",             "{-# INLINE #-}")
+  , ("NOINLINE ${1:function}"          , "NOINLINE",           "{-# NOINLINE #-}")
+  , ("INLINABLE ${1:function}"         , "INLINABLE",          "{-# INLINABLE #-}")
+  , ("WARNING ${1:message}"            , "WARNING",            "{-# WARNING #-}")
+  , ("DEPRECATED ${1:message}"         , "DEPRECATED",         "{-# DEPRECATED  #-}")
+  , ("ANN ${1:annotation}"             , "ANN",                "{-# ANN #-}")
+  , ("RULES"                           , "RULES",              "{-# RULES #-}")
+  , ("SPECIALIZE ${1:function}"        , "SPECIALIZE",         "{-# SPECIALIZE #-}")
+  , ("SPECIALIZE INLINE ${1:function}" , "SPECIALIZE INLINE",  "{-# SPECIALIZE INLINE #-}")
   ]
-  where suffix = case mSuffix of
-                  (Just s) -> s
-                  Nothing  -> ""
 
 
 mkPragmaCompl :: T.Text -> T.Text -> T.Text -> J.CompletionItem
