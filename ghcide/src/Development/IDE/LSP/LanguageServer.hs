@@ -93,6 +93,7 @@ runLanguageServer options inH outH getHieDbLoc defaultConfig onConfigurationChan
           [ ideHandlers
           , cancelHandler cancelRequest
           , exitHandler exit
+          , shutdownHandler
           ]
           -- Cancel requests are special since they need to be handled
           -- out of order to be useful. Existing handlers are run afterwards.
@@ -185,13 +186,16 @@ cancelHandler :: (SomeLspId -> IO ()) -> LSP.Handlers (ServerM c)
 cancelHandler cancelRequest = LSP.notificationHandler SCancelRequest $ \NotificationMessage{_params=CancelParams{_id}} ->
   liftIO $ cancelRequest (SomeLspId _id)
 
-exitHandler :: IO () -> LSP.Handlers (ServerM c)
-exitHandler exit = LSP.notificationHandler SExit $ const $ do
+shutdownHandler :: LSP.Handlers (ServerM c)
+shutdownHandler = LSP.requestHandler SShutdown $ \_ resp -> do
     (_, ide) <- ask
     liftIO $ logDebug (ideLogger ide) "Received exit message"
     -- flush out the Shake session to record a Shake profile if applicable
     liftIO $ shakeShut ide
-    liftIO exit
+    resp $ Right Empty
+
+exitHandler :: IO () -> LSP.Handlers (ServerM c)
+exitHandler exit = LSP.notificationHandler SExit $ const $ liftIO exit
 
 modifyOptions :: LSP.Options -> LSP.Options
 modifyOptions x = x{ LSP.textDocumentSync   = Just $ tweakTDS origTDS
