@@ -68,7 +68,9 @@ module Development.IDE.GHC.Compat.Util (
     hGetStringBuffer,
     stringToStringBuffer,
     nextChar,
-    atEnd
+    atEnd,
+    -- * Char
+    is_ident
     ) where
 
 #if MIN_VERSION_ghc(9,0,0)
@@ -81,6 +83,7 @@ import           GHC.Data.FastString
 import           GHC.Data.Maybe
 import           GHC.Data.Pair
 import           GHC.Data.StringBuffer
+import           GHC.Parser.CharClass    (is_ident)
 import           GHC.Types.Unique
 import           GHC.Types.Unique.DFM
 import           GHC.Utils.Fingerprint
@@ -90,6 +93,7 @@ import           GHC.Utils.Panic         hiding (try)
 #else
 import           Bag
 import           BooleanFormula
+import           Ctype                   (is_ident)
 import           EnumSet
 import qualified Exception
 import           FastString
