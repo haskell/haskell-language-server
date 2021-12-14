@@ -20,8 +20,14 @@ import           Data.FileEmbed
 
 htmlDataFiles :: [(FilePath, BS.ByteString)]
 htmlDataFiles =
-  [ ("profile.html",  $(embedFile "html/profile.html"))
+  [
+#ifdef __GHCIDE__
+    ("profile.html",  $(embedFile "hls-graph/html/profile.html"))
+  , ("shake.js",      $(embedFile "hls-graph/html/shake.js"))
+#else
+    ("profile.html",  $(embedFile "html/profile.html"))
   , ("shake.js",      $(embedFile "html/shake.js"))
+#endif
   ]
 
 readDataFileHTML :: FilePath -> IO LBS.ByteString
