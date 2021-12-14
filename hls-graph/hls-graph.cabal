@@ -10,7 +10,7 @@ bug-reports:   https://github.com/haskell/haskell-language-server/issues
 license:       Apache-2.0
 license-file:  LICENSE
 author:        The Haskell IDE Team
-maintainer:    alan.zimm@gmail.com
+maintainer:    The Haskell IDE Team
 copyright:     The Haskell IDE Team
 category:      Development
 build-type:    Simple

@@ -1525,7 +1525,7 @@ rangesForBindingImport _ _ = []
 wrapOperatorInParens :: String -> String
 wrapOperatorInParens x =
   case uncons x of
-    Just (h, _t) -> if isAlpha h then x else "(" <> x <> ")"
+    Just (h, _t) -> if is_ident h then x else "(" <> x <> ")"
     Nothing      -> mempty
 
 smallerRangesForBindingExport :: [LIE GhcPs] -> String -> [Range]
