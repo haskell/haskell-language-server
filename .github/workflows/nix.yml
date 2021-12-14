@@ -35,6 +35,7 @@ jobs:
   develop:
     if: needs.pre_job.outputs.should_skip_develop != 'true'
     needs: pre_job
+    continue-on-error: true
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -68,6 +69,7 @@ jobs:
   build:
     needs: pre_job
     runs-on: ${{ matrix.os }}
+    continue-on-error: true
     env:
       HAS_TOKEN: ${{ secrets.HLS_CACHIX_AUTH_TOKEN != '' }}
     if: (needs.pre_job.outputs.should_skip_build != 'true' && needs.pre_job.outputs.should_skip_pr != 'true') || (github.repository_owner == 'haskell' && github.ref == 'refs/heads/master')
