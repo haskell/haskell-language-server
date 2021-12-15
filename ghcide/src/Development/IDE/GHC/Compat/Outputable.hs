@@ -49,7 +49,7 @@ import           GHC.Driver.Session
 import           GHC.Driver.Types                as HscTypes
 import           GHC.Types.Name.Reader           (GlobalRdrEnv)
 import           GHC.Types.SrcLoc
-import           GHC.Utils.Error                 as Err hiding (mkWarnMsg)
+import           GHC.Utils.Error                 hiding (mkWarnMsg)
 import qualified GHC.Utils.Error                 as Err
 import           GHC.Utils.Outputable            as Out
 #else
