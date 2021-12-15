@@ -396,7 +396,9 @@ defRowToSymbolInfo _ = Nothing
 
 pointCommand :: HieASTs t -> Position -> (HieAST t -> a) -> [a]
 pointCommand hf pos getter =
-    catMaybes $ M.elems $ flip M.mapWithKey (getAsts hf) $ \fs ast ->
+    catMaybes $ M.elems $ M.mapWithKey findInfo (getAsts hf)
+ where
+   findInfo fs ast =
       -- Since GHC 9.2:
       -- getAsts :: Map HiePath (HieAst a)
       -- type HiePath = LexialFastString
@@ -409,7 +411,6 @@ pointCommand hf pos getter =
       -- backwards compatibility.
       let smallestRange = selectSmallestContaining (sp $ coerce fs) ast in
       fmap getter smallestRange
- where
    sloc fs = mkRealSrcLoc fs (line+1) (cha+1)
    sp fs = mkRealSrcSpan (sloc fs) (sloc fs)
    line = _line pos
