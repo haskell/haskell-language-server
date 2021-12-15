@@ -27,6 +27,7 @@ module Development.IDE.GHC.Compat.Outputable (
     mkWarnMsg,
     mkSrcErr,
     srcErrorMessages,
+    Messages
     ) where
 
 
