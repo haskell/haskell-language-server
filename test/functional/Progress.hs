@@ -57,7 +57,7 @@ formatLspConfig :: Value -> Value
 formatLspConfig provider = object ["haskell" .= object ["formattingProvider" .= (provider :: Value)]]
 
 progressCaps :: ClientCapabilities
-progressCaps = fullCaps{_window = Just (WindowClientCapabilities (Just True))}
+progressCaps = fullCaps{_window = Just (WindowClientCapabilities (Just True) Nothing Nothing)}
 
 data CollectedProgressNotification
     = CreateM WorkDoneProgressCreateParams
