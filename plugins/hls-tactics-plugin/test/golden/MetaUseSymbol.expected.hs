@@ -1,4 +1,4 @@
 import Data.Monoid
 
 resolve :: Sum Int
-resolve = _ <> _
+resolve = _w0 <> _w1

@@ -43,24 +43,26 @@ data Ann
 forceMarkdownNewlines :: String -> String
 forceMarkdownNewlines = unlines . fmap (<> "  ") . lines
 
-layout :: Doc Ann -> String
-layout
+layout :: Bool -> Doc Ann -> String
+layout use_styling
   = forceMarkdownNewlines
   . T.unpack
   . renderSimplyDecorated id
-    renderAnn
-    renderUnann
+    (renderAnn use_styling)
+    (renderUnann use_styling)
   . layoutPretty (LayoutOptions $ AvailablePerLine 80 0.6)
 
-renderAnn :: Ann -> T.Text
-renderAnn Goal = "<span style='color:#ef4026;'>"
-renderAnn Hypoth = "```haskell\n"
-renderAnn Status = "<span style='color:#6495ED;'>"
+renderAnn :: Bool -> Ann -> T.Text
+renderAnn False _ = ""
+renderAnn _ Goal = "<span style='color:#ef4026;'>"
+renderAnn _ Hypoth = "```haskell\n"
+renderAnn _ Status = "<span style='color:#6495ED;'>"
 
-renderUnann :: Ann -> T.Text
-renderUnann Goal = "</span>"
-renderUnann Hypoth = "\n```\n"
-renderUnann Status = "</span>"
+renderUnann :: Bool -> Ann -> T.Text
+renderUnann False _ = ""
+renderUnann _ Goal = "</span>"
+renderUnann _ Hypoth = "\n```\n"
+renderUnann _ Status = "</span>"
 
 proofState :: RunTacticResults -> Doc Ann
 proofState RunTacticResults{rtr_subgoals} =

@@ -12,20 +12,46 @@ outputFolder: bench-results
 # or a local project (path) with a valid `hie.yaml` file
 examples:
   # Medium-sized project without TH
-  - name: Cabal
+  - name: cabal
+    package: Cabal
     version: 3.0.0.0
     modules:
         - Distribution/Simple.hs
         - Distribution/Types/Module.hs
+    extra-args: [] # extra ghcide command line args
+  - name: cabal-1module
+    package: Cabal
+    version: 3.0.0.0
+    modules:
+        - Distribution/Simple.hs
+  - name: cabal-conservative
+    package: Cabal
+    version: 3.0.0.0
+    modules:
+        - Distribution/Simple.hs
+        - Distribution/Types/Module.hs
+    extra-args:  # extra ghcide command line args
+      - --conservative-change-tracking
   # Small-sized project with TH
   - name: lsp-types
+    package: lsp-types
     version: 1.0.0.1
     modules:
         - src/Language/LSP/VFS.hs
         - src/Language/LSP/Types/Lens.hs
+  - name: lsp-types-conservative
+    package: lsp-types
+    version: 1.0.0.1
+    modules:
+        - src/Language/LSP/VFS.hs
+        - src/Language/LSP/Types/Lens.hs
+    extra-args:
+      - --conservative-change-tracking
+  # Small-sized project with TH
   # Small but heavily multi-component example
   # Disabled as it is far to slow. hie-bios >0.7.2 should help
-  # - path: bench/example/HLS
+  # - name: HLS
+  #   path: bench/example/HLS
   #   modules:
   #       - hls-plugin-api/src/Ide/Plugin/Config.hs
   #       - ghcide/src/Development/IDE/Plugin/CodeAction/ExactPrint.hs
@@ -48,6 +74,7 @@ experiments:
     - "code actions after edit"
     - "code actions after cradle edit"
     - "documentSymbols after edit"
+    - "hole fit suggestions"
 
 # An ordered list of versions to analyze
 versions:

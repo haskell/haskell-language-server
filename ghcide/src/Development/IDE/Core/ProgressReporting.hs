@@ -9,27 +9,31 @@ module Development.IDE.Core.ProgressReporting
   , mRunLspTCallback
   -- for tests
   , recordProgress
-  , InProgress(..)
+  , InProgressState(..)
   )
    where
 
 import           Control.Concurrent.Async
+import           Control.Concurrent.STM.Stats   (TVar, atomicallyNamed,
+                                                 modifyTVar', newTVarIO,
+                                                 readTVarIO)
 import           Control.Concurrent.Strict
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class      (lift)
 import           Data.Foldable                  (for_)
 import           Data.Functor                   (($>))
-import qualified Data.HashMap.Strict            as HMap
 import qualified Data.Text                      as T
 import           Data.Unique
 import           Development.IDE.GHC.Orphans    ()
 import           Development.IDE.Graph          hiding (ShakeValue)
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
+import qualified Focus
 import qualified Language.LSP.Server            as LSP
 import           Language.LSP.Types
 import qualified Language.LSP.Types             as LSP
+import qualified StmContainers.Map              as STM
 import           System.Time.Extra
 import           UnliftIO.Exception             (bracket_)
 
@@ -69,26 +73,33 @@ updateState _     StopProgress          (Running a) = cancel a $> Stopped
 updateState _     StopProgress          st          = pure st
 
 -- | Data structure to track progress across the project
-data InProgress = InProgress
-    { todo    :: !Int  -- ^ Number of files to do
-    , done    :: !Int  -- ^ Number of files done
-    , current :: !(HMap.HashMap NormalizedFilePath Int)
+data InProgressState = InProgressState
+    { todoVar    :: TVar Int  -- ^ Number of files to do
+    , doneVar    :: TVar Int  -- ^ Number of files done
+    , currentVar :: STM.Map NormalizedFilePath Int
     }
 
-recordProgress :: NormalizedFilePath -> (Int -> Int) -> InProgress -> InProgress
-recordProgress file shift InProgress{..} = case HMap.alterF alter file current of
-    ((prev, new), m') ->
-        let (done',todo') =
-                case (prev,new) of
-                    (Nothing,0) -> (done+1, todo+1)
-                    (Nothing,_) -> (done,   todo+1)
-                    (Just 0, 0) -> (done  , todo)
-                    (Just 0, _) -> (done-1, todo)
-                    (Just _, 0) -> (done+1, todo)
-                    (Just _, _) -> (done  , todo)
-        in InProgress todo' done' m'
+newInProgress :: IO InProgressState
+newInProgress = InProgressState <$> newTVarIO 0 <*> newTVarIO 0 <*> STM.newIO
+
+recordProgress :: InProgressState -> NormalizedFilePath -> (Int -> Int) -> IO ()
+recordProgress InProgressState{..} file shift = do
+    (prev, new) <- atomicallyNamed "recordProgress" $ STM.focus alterPrevAndNew file currentVar
+    atomicallyNamed "recordProgress2" $ do
+        case (prev,new) of
+            (Nothing,0) -> modifyTVar' doneVar (+1) >> modifyTVar' todoVar (+1)
+            (Nothing,_) -> modifyTVar' todoVar (+1)
+            (Just 0, 0) -> pure ()
+            (Just 0, _) -> modifyTVar' doneVar pred
+            (Just _, 0) -> modifyTVar' doneVar (+1)
+            (Just _, _) -> pure()
   where
-    alter x = let x' = maybe (shift 0) shift x in ((x,x'), Just x')
+    alterPrevAndNew = do
+        prev <- Focus.lookup
+        Focus.alter alter
+        new <- Focus.lookupWithDefault 0
+        return (prev, new)
+    alter x = let x' = maybe (shift 0) shift x in Just x'
 
 -- | A 'ProgressReporting' that enqueues Begin and End notifications in a new
 --   thread, with a grace period (nothing will be sent if 'KickCompleted' arrives
@@ -100,17 +111,16 @@ delayedProgressReporting
   -> ProgressReportingStyle
   -> IO ProgressReporting
 delayedProgressReporting before after lspEnv optProgressStyle = do
-    inProgressVar <- newVar $ InProgress 0 0 mempty
+    inProgressState <- newInProgress
     progressState <- newVar NotStarted
     let progressUpdate event = updateStateVar $ Event event
         progressStop   =  updateStateVar StopProgress
-        updateStateVar = modifyVar_ progressState . updateState (mRunLspT lspEnv $ lspShakeProgress inProgressVar)
+        updateStateVar = modifyVar_ progressState . updateState (mRunLspT lspEnv $ lspShakeProgress inProgressState)
 
-        inProgress :: NormalizedFilePath -> Action a -> Action a
-        inProgress = withProgressVar inProgressVar
+        inProgress = updateStateForFile inProgressState
     return ProgressReporting{..}
     where
-        lspShakeProgress inProgress = do
+        lspShakeProgress InProgressState{..} = do
             -- first sleep a bit, so we only show progress messages if it's going to take
             -- a "noticable amount of time" (we often expect a thread kill to arrive before the sleep finishes)
             liftIO $ sleep before
@@ -143,7 +153,8 @@ delayedProgressReporting before after lspEnv optProgressStyle = do
                 loop _ _ | optProgressStyle == NoProgress =
                     forever $ liftIO $ threadDelay maxBound
                 loop id prev = do
-                    InProgress{..} <- liftIO $ readVar inProgress
+                    done <- liftIO $ readTVarIO doneVar
+                    todo <- liftIO $ readTVarIO todoVar
                     liftIO $ sleep after
                     if todo == 0 then loop id 0 else do
                         let next = 100 * fromIntegral done / fromIntegral todo
@@ -166,12 +177,12 @@ delayedProgressReporting before after lspEnv optProgressStyle = do
                               }
                         loop id next
 
-        withProgressVar var file = actionBracket (f succ) (const $ f pred) . const
+        updateStateForFile inProgress file = actionBracket (f succ) (const $ f pred) . const
             -- This functions are deliberately eta-expanded to avoid space leaks.
             -- Do not remove the eta-expansion without profiling a session with at
             -- least 1000 modifications.
             where
-              f shift = modifyVar' var $ recordProgress file shift
+              f shift = recordProgress inProgress file shift
 
 mRunLspT :: Applicative m => Maybe (LSP.LanguageContextEnv c ) -> LSP.LspT c m () -> m ()
 mRunLspT (Just lspEnv) f = LSP.runLspT lspEnv f

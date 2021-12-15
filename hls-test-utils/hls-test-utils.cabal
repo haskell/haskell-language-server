@@ -1,6 +1,6 @@
 cabal-version: 2.4
 name:          hls-test-utils
-version:       1.0.1.0
+version:       1.1.0.2
 synopsis:      Utilities used in the tests of Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -41,15 +41,15 @@ library
     , directory
     , extra
     , filepath
-    , ghcide                  ^>=1.4
+    , ghcide                  ^>=1.5.0
     , hls-graph
-    , hls-plugin-api          ^>=1.1
+    , hls-plugin-api          ^>=1.2
     , hspec                   <2.8
     , hspec-core
     , lens
     , lsp                     ^>=1.2
-    , lsp-test                ==0.14.0.0
-    , lsp-types               ^>=1.2
+    , lsp-test                ^>=0.14
+    , lsp-types               >=1.2  && <1.4
     , tasty
     , tasty-expected-failure
     , tasty-golden

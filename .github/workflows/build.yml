@@ -1,48 +1,57 @@
 name: Builds
 
-defaults:
-  run:
-    shell: bash
-
 on:
   release:
     types: [created]
+  push:
+    branches:
+      - '*-check-build'
 
 jobs:
-
   build:
     runs-on: ${{ matrix.os }}
-
+    container: ${{ (matrix.os == 'ubuntu-18.04' && 'alpine:3.12') || '' }}
+    defaults:
+      run:
+        shell: ${{ (matrix.os == 'windows-latest' && 'bash') || 'sh' }}
     strategy:
       fail-fast: false
       matrix:
-        ghc: ['8.10.5', '8.10.4', '8.10.3', '8.10.2', '8.8.4', '8.8.3', '8.6.5', '8.6.4']
+        ghc: ['9.0.1', '8.10.7', '8.10.6', '8.8.4', '8.6.5']
         os: [ubuntu-18.04, macOS-latest, windows-latest]
-        exclude:
-          - os: windows-latest
-            ghc: '8.10.2' # broken due to https://gitlab.haskell.org/ghc/ghc/-/issues/18550
-          - os: windows-latest
-            ghc: '8.8.4' # also fails due to segfault :(
-          - os: windows-latest
-            ghc: '8.8.3' # fails due to segfault
-        include:
-          - os: windows-latest
-            ghc: '8.10.2.2' # only available for windows and choco
+        cabal: ['3.6']
 
     steps:
+    - name: Install system dependencies
+      if: matrix.os == 'ubuntu-18.04'
+      run: |
+        apk add --no-cache curl gcc g++ gmp-dev ncurses-dev libffi-dev make xz gzip tar perl git bash sudo binutils-gold
+        apk add --no-cache zlib zlib-dev zlib-static gmp gmp-dev ncurses-static
     - uses: actions/checkout@v2
-      with:
-        submodules: true
+
     - uses: haskell/actions/setup@v1
       with:
-        ghc-version: ${{ matrix.ghc }}
-        cabal-version: '3.2'
+        ghc-version  : ${{ matrix.ghc   }}
+        cabal-version: ${{ matrix.cabal }}
+        enable-stack: false
+
+    # some alpines come with integer-simple instead of integer-gmp
+    - name: Force integer-simple
+      if: matrix.os == 'ubuntu-18.04'
+      run: |
+        if ghc --info | grep -q integer-simple ; then
+          echo -e 'package blaze-textual\n    flags: +integer-simple' >> cabal.project.local
+        fi
+
+    - name: Use modified cabal.project for ghc9
+      if: ${{ matrix.ghc == '9.0.1' }}
+      run: cp cabal-ghc901.project cabal.project
 
     - name: Shorten binary names
       run: |
         sed -i.bak -e 's/haskell-language-server/hls/g' \
                    -e 's/haskell_language_server/hls/g' \
-                   haskell-language-server.cabal
+                   haskell-language-server.cabal cabal.project
         sed -i.bak -e 's/Paths_haskell_language_server/Paths_hls/g' \
                    src/**/*.hs exe/*.hs
 
@@ -52,7 +61,6 @@ jobs:
         GHC_VER: ${{ matrix.ghc }}
       run: |
         echo "EXE_EXT=.exe" >> $GITHUB_ENV
-        GHC_VER=$(echo $GHC_VER | sed 's/8.10.2.2/8.10.2/g')
         echo "GHC_VERSION=$GHC_VER" >> $GITHUB_ENV
 
     - name: Set some linux specific things
@@ -70,22 +78,21 @@ jobs:
       run: |
         echo "GHC_VERSION=$GHC_VER" >> $GITHUB_ENV
 
-    - name: Tentative Workaround for GHC 8.10.5 on macOS
-      if: matrix.os == 'macOS-latest' && matrix.ghc == '8.10.5'
+    - name: Modify cabal.project to workaround segfaults for ghc-8.8.4 and windows
+      if: matrix.ghc == '8.8.4' && matrix.os == 'windows-latest'
       run: |
-        echo "# uninstalling CommandLineTools (see https://github.com/haskell/haskell-language-server/issues/1913#issuecomment-861667786)"
-        sudo rm -rf /Library/Developer/CommandLineTools
+          echo "package floskell" >> cabal.project
+          echo "  ghc-options: -O0" >> cabal.project
 
-    - name: Build Server
+    - name: Build server
       # Try building it twice in case of flakey builds on Windows
       run: |
-        cabal build exe:hls -O2 $LINUX_CABAL_ARGS || \
-        cabal build exe:hls -O2 $LINUX_CABAL_ARGS -j1
+        cabal build --disable-tests exe:hls -O2 $LINUX_CABAL_ARGS || \
+        cabal build --disable-tests exe:hls -O2 $LINUX_CABAL_ARGS -j1
 
-    - name: Compress Server Binary
+    - name: Compress server binary
       id: compress_server_binary
       run: |
-        # We normalize windows+choco ghc version 8.10.2.2
         HLS_BUILD=$(find dist-newstyle \( -name 'hls' -o -name 'hls.exe' \) -type f)
         HLS=haskell-language-server-${{env.GHC_VERSION}}
         mv $HLS_BUILD $HLS${{env.EXE_EXT}}
@@ -101,7 +108,8 @@ jobs:
           echo ::set-output name=extension::gz
         fi
 
-    - name: Upload Server Binary
+    - name: Upload server to release
+      if: ${{ !contains(github.ref_name, 'check') }}
       uses: actions/upload-release-asset@v1.0.2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -111,17 +119,18 @@ jobs:
         asset_name: haskell-language-server-${{ runner.OS }}-${{ env.GHC_VERSION }}${{env.EXE_EXT}}.${{ steps.compress_server_binary.outputs.extension }}
         asset_content_type: ${{ steps.compress_server_binary.outputs.content_type }}
 
-    - uses: actions/upload-artifact@v2
+    - name: Upload server to workflow artifacts
+      uses: actions/upload-artifact@v2
       with:
         name: haskell-language-server-${{ runner.OS }}-${{ matrix.ghc }}${{env.EXE_EXT}}.${{ steps.compress_server_binary.outputs.extension }}
         path: ${{ steps.compress_server_binary.outputs.path }}
 
-    - name: Build Wrapper
-      if: matrix.ghc == '8.10.4'
-      run: cabal build exe:hls-wrapper -O2 $LINUX_CABAL_ARGS
+    - name: Build wrapper
+      if: matrix.ghc == '8.10.7'
+      run: cabal build --disable-tests exe:hls-wrapper -O2 $LINUX_CABAL_ARGS
 
-    - name: Compress Wrapper Binary
-      if: matrix.ghc == '8.10.4'
+    - name: Compress wrapper binary
+      if: matrix.ghc == '8.10.7'
       id: compress_wrapper_binary
       run: |
         HLS_WRAPPER_BUILD=$(find dist-newstyle \( -name 'hls-wrapper' -o -name 'hls-wrapper.exe' \) -type f)
@@ -139,8 +148,8 @@ jobs:
           echo ::set-output name=extension::gz
         fi
 
-    - name: Upload Wrapper
-      if: matrix.ghc == '8.10.4'
+    - name: Upload wrapper to the release
+      if: ${{ matrix.ghc == '8.10.7' && !contains(github.ref_name, 'check') }}
       uses: actions/upload-release-asset@v1.0.2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -150,34 +159,76 @@ jobs:
         asset_name: haskell-language-server-wrapper-${{ runner.OS }}${{env.EXE_EXT}}.${{ steps.compress_wrapper_binary.outputs.extension }}
         asset_content_type: ${{ steps.compress_wrapper_binary.outputs.content_type}}
 
-    - uses: actions/upload-artifact@v2
-      if: matrix.ghc == '8.10.4'
+    - name: Upload wrapper to workflow artifacts
+      uses: actions/upload-artifact@v2
+      if: matrix.ghc == '8.10.7'
       with:
         name: haskell-language-server-wrapper-${{ runner.OS }}${{env.EXE_EXT}}.${{ steps.compress_wrapper_binary.outputs.extension }}
         path: ${{ steps.compress_wrapper_binary.outputs.path }}
 
-  # this generates .gz tarfiles containing all the GHC versions for
-  # macOS and Linux, used by ghcup
+  # generates a custom tarball with sources, used by `ghcup compile hls`
+  src-tar:
+    needs: build
+    runs-on: ubuntu-18.04
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Create source tarball
+        run: |
+          mkdir src-dist
+          git archive --prefix=haskell-language-server-${{ github.event.release.tag_name }}/ \
+                      --format=tar.gz \
+                      -o src-dist/haskell-language-server.tar.gz \
+                      HEAD
+
+      - name: Upload source tarball to the release
+        if: ${{ !contains(github.ref_name, 'check') }}
+        uses: actions/upload-release-asset@v1.0.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: src-dist/haskell-language-server.tar.gz
+          asset_name: haskell-language-server-${{ github.event.release.tag_name }}-src.tar.gz
+          asset_content_type: application/gzip
+
+      - name: Upload source tarball to workflow artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: haskell-language-server-${{ github.event.release.tag_name }}-src.tar.gz
+          path: src-dist/haskell-language-server.tar.gz
+
+  # this generates .gz tarfiles containing binaries for all GHC versions and OS's
+  # used by `ghcup install hls`
   tar:
     needs: build
     runs-on: ubuntu-18.04
     strategy:
       matrix:
-        os: [Linux, macOS]
+        os: [Linux, macOS, Windows]
     steps:
       - uses: actions/download-artifact@v2
 
-      - run: |
+      - name: Generate tarball with all binaries
+        run: |
           # move the binaries for the specific platform into bin/
           mkdir bin
-          mv haskell-language-server-${{ matrix.os }}-*.gz/haskell-language-server-*.gz bin
-          mv haskell-language-server-wrapper-${{ matrix.os }}.gz/haskell-language-server-wrapper.gz bin
+          mv haskell-language-server-${{ matrix.os }}-*/* bin
+          mv haskell-language-server-wrapper-${{ matrix.os }}.*/* bin
           # decompress them
-          gzip -d bin/*.gz
           cd bin
+          if [[ "${{ matrix.os }}" == "Windows" ]]; then
+            7z x "*.zip"
+            rm *.zip
+          else
+            gzip -d *.gz
+          fi
           tar -czpf haskell-language-server.tar.gz *
 
-      - uses: actions/upload-release-asset@v1.0.2
+      - name: Upload binaries tarball to the release
+        if: ${{ !contains(github.ref_name, 'check') }}
+        uses: actions/upload-release-asset@v1.0.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -185,3 +236,38 @@ jobs:
           asset_path: bin/haskell-language-server.tar.gz
           asset_name: haskell-language-server-${{ matrix.os }}-${{ github.event.release.tag_name }}.tar.gz
           asset_content_type: application/gzip
+
+      - name: Upload binaries tarball to workflow artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: haskell-language-server-${{ matrix.os }}-${{ github.event.release.tag_name }}.tar.gz
+          path: bin/haskell-language-server.tar.gz
+
+  sha256sum:
+    needs: [tar, src-tar]
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/download-artifact@v2
+
+      - name: Generate sha256 sums for all workflow artifacts
+        run: |
+          sha256sum --tag haskell-language-server*/* >> SHA256SUMS
+          # we clean up tags to match the release file names
+          sed -i 's/\/.*)/)/g' SHA256SUMS
+
+      - name: Upload sha256sums to the release
+        if: ${{ !contains(github.ref_name, 'check') }}
+        uses: actions/upload-release-asset@v1.0.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: SHA256SUMS
+          asset_name: SHA256SUMS
+          asset_content_type: plain/text
+
+      - name: Upload sha256sums to workflow artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: SHA256SUMS
+          path: SHA256SUMS

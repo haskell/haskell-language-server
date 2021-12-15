@@ -2,43 +2,66 @@ defaults: &defaults
   working_directory: ~/build
   docker:
     - image: alanz/haskell-hie-ci
+  resource_class: large
   steps:
     - checkout
     - run:
-        name: Write provided stack.yaml with predictable name
-        command: cp ${STACK_FILE} stack-build.txt
-
-    - run:
-        name: Figure out resolver for better caching
-        command: grep '^resolver:' stack-build.txt > resolver.txt
-
-    - run:
-        name: Create a composite cabal file for changes detection
-        command: find . -name "*.cabal" | grep -v -e "stack-work" -e "dist-newstyle" -e "submodules" -e "testdata" | sort | xargs cat > all-cabal.txt
+        name: Save resolver field into file
+        command: grep '^resolver:' ${STACK_FILE} > resolver.txt
 
     - restore_cache:
         keys:
-          - stack-cache-{{ .Environment.HIE_CACHE }}-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "stack-build.txt" }}-{{ checksum "all-cabal.txt" }}
-          - stack-cache-{{ .Environment.HIE_CACHE }}-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "stack-build.txt" }}
-          - stack-cache-{{ .Environment.HIE_CACHE }}-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "resolver.txt" }}
+          - v4-stack-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "resolver.txt" }}
+
+    # Looking for the string [skip circleci] in all the json returned by https://docs.github.com/en/rest/reference/pulls#get-a-pull-request
+    - run:
+        name: Skip ci setup
+        command: |
+          set +e
+          echo "CIRCLE_PULL_REQUEST: $CIRCLE_PULL_REQUEST"
+          if [[ ! -z $CIRCLE_PULL_REQUEST ]]; then
+            PULL_REQUEST_URL=${CIRCLE_PULL_REQUEST/github.com/api.github.com/repos}
+            PULL_REQUEST_URL=${PULL_REQUEST_URL/pull/pulls}
+            echo "PULL_REQUEST_URL: $PULL_REQUEST_URL"
+            SKIP_CI=$(curl $PULL_REQUEST_URL | grep -o "\\[skip circleci\\]")
+            if [[ -z "$SKIP_CI" ]]; then
+              PULL_REQUEST_COMMENTS_URL=${PULL_REQUEST_URL/pulls/issues}/comments
+              echo "PULL_REQUEST_COMMENTS_URL: $PULL_REQUEST_COMMENTS_URL"
+              SKIP_CI=$(curl $PULL_REQUEST_COMMENTS_URL | grep -o "\\[skip circleci\\]")
+            fi
+            echo "SKIP_CI: $SKIP_CI"
+          fi
+          echo "export SKIP_CI=$SKIP_CI" >> $BASH_ENV
 
     - run:
         name: Stack upgrade
-        command: stack upgrade
+        command: |
+          if [[ -z "$SKIP_CI" ]]; then
+            stack upgrade
+          fi
 
     - run:
         name: Stack setup
-        command: stack -j 2 --stack-yaml=${STACK_FILE} setup
+        command: |
+          if [[ -z "$SKIP_CI" ]]; then
+            stack -j4 --stack-yaml=${STACK_FILE} setup
+          fi
 
     - run:
         name: Build (we need the exe for tests)
         # need j1, else ghc-lib-parser triggers OOM
-        command: stack -j 1 --stack-yaml=${STACK_FILE} install --no-terminal
+        command: |
+          if [[ -z "$SKIP_CI" ]]; then
+            stack -j4 --stack-yaml=${STACK_FILE} install --no-terminal
+          fi
         no_output_timeout: 30m
 
     - run:
         name: Build Testsuite without running it
-        command: stack -j 1 --stack-yaml=${STACK_FILE} build --test --no-run-tests --no-terminal
+        command: |
+          if [[ -z "$SKIP_CI" ]]; then
+            stack -j4 --stack-yaml=${STACK_FILE} build --test --no-run-tests --no-terminal
+          fi
         no_output_timeout: 30m
 
     - store_artifacts:
@@ -46,36 +69,15 @@ defaults: &defaults
         destination: bin
 
     - save_cache:
-        key: stack-cache-{{ .Environment.HIE_CACHE }}-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "resolver.txt" }}
+        key: v4-stack-cache-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "resolver.txt" }}
         paths: &cache_paths
           - ~/.stack
-          - ~/build/.stack-work
-          - ~/build/ghcide/.stack-work
-
-    - run:
-        name: Build including tests
-        command: stack --stack-yaml=${STACK_FILE} test --no-run-tests --no-terminal
-        no_output_timeout: 120m
-
-    - save_cache:
-        key: stack-cache-{{ .Environment.HIE_CACHE }}-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "stack-build.txt" }}-{{ checksum "all-cabal.txt" }}
-        paths: *cache_paths
 
 version: 2
 jobs:
-  ghc-8.6.4:
-    environment:
-      - STACK_FILE: "stack-8.6.4.yaml"
-    <<: *defaults
-
   ghc-8.6.5:
     environment:
       - STACK_FILE: "stack-8.6.5.yaml"
-    <<: *defaults
-
-  ghc-8.8.3:
-    environment:
-      - STACK_FILE: "stack-8.8.3.yaml"
     <<: *defaults
 
   ghc-8.8.4:
@@ -83,24 +85,14 @@ jobs:
       - STACK_FILE: "stack-8.8.4.yaml"
     <<: *defaults
 
-  ghc-8.10.2:
+  ghc-8.10.6:
     environment:
-      - STACK_FILE: "stack-8.10.2.yaml"
+      - STACK_FILE: "stack-8.10.6.yaml"
     <<: *defaults
 
-  ghc-8.10.3:
+  ghc-8.10.7:
     environment:
-      - STACK_FILE: "stack-8.10.3.yaml"
-    <<: *defaults
-
-  ghc-8.10.4:
-    environment:
-      - STACK_FILE: "stack-8.10.4.yaml"
-    <<: *defaults
-
-  ghc-8.10.5:
-    environment:
-      - STACK_FILE: "stack-8.10.5.yaml"
+      - STACK_FILE: "stack-8.10.7.yaml"
     <<: *defaults
 
   ghc-9.0.1:
@@ -118,13 +110,9 @@ workflows:
   version: 2
   multiple-ghcs:
     jobs:
-      - ghc-8.6.4
       - ghc-8.6.5
-      - ghc-8.8.3
       - ghc-8.8.4
-      - ghc-8.10.2
-      - ghc-8.10.3
-      - ghc-8.10.4
-      - ghc-8.10.5
+      - ghc-8.10.6
+      - ghc-8.10.7
       - ghc-9.0.1
       - ghc-default

@@ -4,6 +4,8 @@
 module UnificationSpec where
 
 import           Control.Arrow
+import           Control.Monad (replicateM, join)
+import           Control.Monad.State (evalState)
 import           Data.Bool (bool)
 import           Data.Functor ((<&>))
 import           Data.Maybe (mapMaybe)
@@ -13,10 +15,9 @@ import           Data.Tuple (swap)
 import           TcType (substTy, tcGetTyVar_maybe)
 import           Test.Hspec
 import           Test.QuickCheck
-import           Type (mkTyVarTy)
-import           TysPrim (alphaTyVars)
 import           TysWiredIn (mkBoxedTupleTy)
 import           Wingman.GHC
+import           Wingman.Machinery (newUnivar)
 import           Wingman.Types
 
 
@@ -25,8 +26,11 @@ spec = describe "unification" $ do
   it "should be able to unify univars with skolems on either side of the equality" $ do
     property $ do
       -- Pick some number of unification vars and skolem
-      n <- choose (1, 1)
-      let (skolems, take n -> univars) = splitAt n $ fmap mkTyVarTy alphaTyVars
+      n <- choose (1, 20)
+      let (skolems, take n -> univars)
+            = splitAt n
+            $ flip evalState defaultTacticState
+            $ replicateM (n * 2) newUnivar
       -- Randomly pair them
       skolem_uni_pairs <-
         for (zip skolems univars) randomSwap
@@ -42,13 +46,25 @@ spec = describe "unification" $ do
                  (CType lhs)
                  (CType rhs) of
             Just subst ->
-              -- For each pair, running the unification over the univar should
-              -- result in the skolem
-              conjoin $ zip univars skolems <&> \(uni, skolem) ->
-                let substd = substTy subst uni
-                 in counterexample (show substd) $
-                    counterexample (show skolem) $
-                      CType substd === CType skolem
+              conjoin $ join $
+                [ -- For each pair, running the unification over the univar should
+                  -- result in the skolem
+                  zip univars skolems <&> \(uni, skolem) ->
+                    let substd = substTy subst uni
+                    in counterexample (show substd) $
+                        counterexample (show skolem) $
+                          CType substd === CType skolem
+
+                  -- And also, no two univars should equal to one another
+                  -- before or after substitution.
+                , zip univars (tail univars) <&> \(uni1, uni2) ->
+                    let uni1_sub = substTy subst uni1
+                        uni2_sub = substTy subst uni2
+                    in counterexample (show uni1) $
+                        counterexample (show uni2) $
+                          CType uni1 =/= CType uni2 .&&.
+                          CType uni1_sub =/= CType uni2_sub
+                ]
             Nothing -> True === False
 
 

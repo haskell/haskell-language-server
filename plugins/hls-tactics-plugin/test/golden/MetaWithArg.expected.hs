@@ -1,2 +1,2 @@
 wat :: a -> b
-wat a = _ a
+wat a = _w0 a

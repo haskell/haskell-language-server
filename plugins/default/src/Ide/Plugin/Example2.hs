@@ -14,11 +14,11 @@ module Ide.Plugin.Example2
     descriptor
   ) where
 
+import           Control.Concurrent.STM
 import           Control.DeepSeq            (NFData)
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
-import           Data.Binary
 import           Data.Functor
 import qualified Data.HashMap.Strict        as Map
 import           Data.Hashable
@@ -63,7 +63,6 @@ data Example2 = Example2
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable Example2
 instance NFData   Example2
-instance Binary   Example2
 
 type instance RuleResult Example2 = ()
 
@@ -118,8 +117,8 @@ codeLens ideState plId CodeLensParams{_textDocument=TextDocumentIdentifier uri} 
     case uriToFilePath' uri of
       Just (toNormalizedFilePath -> filePath) -> do
         _ <- runIdeAction (fromNormalizedFilePath filePath) (shakeExtras ideState) $ runMaybeT $ useE TypeCheck filePath
-        _diag <- getDiagnostics ideState
-        _hDiag <- getHiddenDiagnostics ideState
+        _diag <- atomically $ getDiagnostics ideState
+        _hDiag <- atomically $ getHiddenDiagnostics ideState
         let
           title = "Add TODO2 Item via Code Lens"
           range = Range (Position 3 0) (Position 4 0)

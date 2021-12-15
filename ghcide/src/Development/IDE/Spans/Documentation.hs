@@ -13,6 +13,7 @@ module Development.IDE.Spans.Documentation (
   ) where
 
 import           Control.Monad
+import           Control.Monad.IO.Class
 import           Control.Monad.Extra            (findM)
 import           Data.Either
 import           Data.Foldable
@@ -24,20 +25,13 @@ import qualified Data.Text                      as T
 import           Development.IDE.Core.Compile
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.Spans.Common
 import           System.Directory
 import           System.FilePath
 
-import           ExtractDocs
-import           FastString
-import           GhcMonad
-import           HscTypes                       (HscEnv (hsc_dflags))
 import           Language.LSP.Types             (filePathToUri, getUri)
-import           Name
-import           NameEnv
-import           SrcLoc                         (RealLocated)
-import           TcRnTypes
 
 mkDocMap
   :: HscEnv
@@ -86,12 +80,11 @@ getDocumentationsTryGhc env mod names = do
 
     -- Get the uris to the documentation and source html pages if they exist
     getUris name = do
-      let df = hsc_dflags env
       (docFu, srcFu) <-
         case nameModule_maybe name of
           Just mod -> liftIO $ do
-            doc <- toFileUriText $ lookupDocHtmlForModule df mod
-            src <- toFileUriText $ lookupSrcHtmlForModule df mod
+            doc <- toFileUriText $ lookupDocHtmlForModule env mod
+            src <- toFileUriText $ lookupSrcHtmlForModule env mod
             return (doc, src)
           Nothing -> pure (Nothing, Nothing)
       let docUri = (<> "#" <> selector <> showNameWithoutUniques name) <$> docFu
@@ -183,28 +176,28 @@ docHeaders = mapMaybe (\(L _ x) -> wrk x)
 -- | Given a module finds the local @doc/html/Foo-Bar-Baz.html@ page.
 -- An example for a cabal installed module:
 -- @~/.cabal/store/ghc-8.10.1/vctr-0.12.1.2-98e2e861/share/doc/html/Data-Vector-Primitive.html@
-lookupDocHtmlForModule :: DynFlags -> Module -> IO (Maybe FilePath)
+lookupDocHtmlForModule :: HscEnv -> Module -> IO (Maybe FilePath)
 lookupDocHtmlForModule =
   lookupHtmlForModule (\pkgDocDir modDocName -> pkgDocDir </> modDocName <.> "html")
 
 -- | Given a module finds the hyperlinked source @doc/html/src/Foo.Bar.Baz.html@ page.
 -- An example for a cabal installed module:
 -- @~/.cabal/store/ghc-8.10.1/vctr-0.12.1.2-98e2e861/share/doc/html/src/Data.Vector.Primitive.html@
-lookupSrcHtmlForModule :: DynFlags -> Module -> IO (Maybe FilePath)
+lookupSrcHtmlForModule :: HscEnv -> Module -> IO (Maybe FilePath)
 lookupSrcHtmlForModule =
   lookupHtmlForModule (\pkgDocDir modDocName -> pkgDocDir </> "src" </> modDocName <.> "html")
 
-lookupHtmlForModule :: (FilePath -> FilePath -> FilePath) -> DynFlags -> Module -> IO (Maybe FilePath)
-lookupHtmlForModule mkDocPath df m = do
+lookupHtmlForModule :: (FilePath -> FilePath -> FilePath) -> HscEnv -> Module -> IO (Maybe FilePath)
+lookupHtmlForModule mkDocPath hscEnv m = do
   -- try all directories
-  let mfs = fmap (concatMap go) (lookupHtmls df ui)
+  let mfs = fmap (concatMap go) (lookupHtmls hscEnv ui)
   html <- findM doesFileExist (concat . maybeToList $ mfs)
   -- canonicalize located html to remove /../ indirection which can break some clients
   -- (vscode on Windows at least)
   traverse canonicalizePath html
   where
     go pkgDocDir = map (mkDocPath pkgDocDir) mns
-    ui = moduleUnitId m
+    ui = moduleUnit m
     -- try to locate html file from most to least specific name e.g.
     --  first Language.LSP.Types.Uri.html and Language-Haskell-LSP-Types-Uri.html
     --  then Language.LSP.Types.html and Language-Haskell-LSP-Types.html etc.
@@ -213,8 +206,8 @@ lookupHtmlForModule mkDocPath df m = do
       -- The file might use "." or "-" as separator
       map (`intercalate` chunks) [".", "-"]
 
-lookupHtmls :: DynFlags -> Unit -> Maybe [FilePath]
+lookupHtmls :: HscEnv -> Unit -> Maybe [FilePath]
 lookupHtmls df ui =
   -- use haddockInterfaces instead of haddockHTMLs: GHC treats haddockHTMLs as URL not path
   -- and therefore doesn't expand $topdir on Windows
-  map takeDirectory . haddockInterfaces <$> lookupPackage df ui
+  map takeDirectory . unitHaddockInterfaces <$> lookupUnit df ui

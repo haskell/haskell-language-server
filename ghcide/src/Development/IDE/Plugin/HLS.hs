@@ -70,7 +70,14 @@ rulesPlugins rs = mempty { P.pluginRules = rules }
         rules = foldMap snd rs
 
 dynFlagsPlugins :: [(PluginId, DynFlagsModifications)] -> Plugin Config
-dynFlagsPlugins rs = mempty { P.pluginModifyDynflags = foldMap snd rs }
+dynFlagsPlugins rs = mempty
+  { P.pluginModifyDynflags =
+      flip foldMap rs $ \(plId, dflag_mods) cfg ->
+        let plg_cfg = configForPlugin cfg plId
+         in if plcGlobalOn plg_cfg
+              then dflag_mods
+              else mempty
+  }
 
 -- ---------------------------------------------------------------------
 

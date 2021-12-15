@@ -1,7 +1,9 @@
 cabal-version:      2.4
 name:               hls-stylish-haskell-plugin
-version:            1.0.0.1
+version:            1.0.0.4
 synopsis:           Integration with the Stylish Haskell code formatter
+description:
+  Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
 license:            Apache-2.0
 license-file:       LICENSE
 author:             The Haskell IDE Team
@@ -22,10 +24,10 @@ library
     , filepath
     , ghc
     , ghc-boot-th
-    , ghcide           >=1.2  && <1.5
-    , hls-plugin-api   ^>=1.1
+    , ghcide           ^>=1.5.0
+    , hls-plugin-api   >=1.1  && <1.3
     , lsp-types
-    , stylish-haskell  ^>=0.12
+    , stylish-haskell  ^>=0.12 || ^>=0.13
     , text
 
   default-language: Haskell2010
@@ -40,4 +42,4 @@ test-suite tests
     , base
     , filepath
     , hls-stylish-haskell-plugin
-    , hls-test-utils              ^>=1.0
+    , hls-test-utils              >=1.0 && <1.2

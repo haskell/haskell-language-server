@@ -1,9 +1,10 @@
 cabal-version:      2.4
 category:           Development
 name:               hls-tactics-plugin
-version:            1.2.0.0
+version:            1.5.0.1
 synopsis:           Wingman plugin for Haskell Language Server
-description:        Please see README.md
+description:
+  Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
 author:             Sandy Maguire, Reed Mullanix
 maintainer:         sandy@sandymaguire.me
 copyright:          Sandy Maguire, Reed Mullanix
@@ -27,6 +28,10 @@ library
   hs-source-dirs:     src
   exposed-modules:
     Ide.Plugin.Tactic
+    Refinery.Future
+    Wingman.AbstractLSP
+    Wingman.AbstractLSP.TacticActions
+    Wingman.AbstractLSP.Types
     Wingman.Auto
     Wingman.CaseSplit
     Wingman.CodeGen
@@ -69,27 +74,28 @@ library
     , containers
     , deepseq
     , directory
-    , extra
+    , extra                 >=1.7.8
     , filepath
     , fingertree
     , generic-lens
     , ghc
     , ghc-boot-th
     , ghc-exactprint
-    , ghc-source-gen
-    , ghcide                ^>=1.4
+    , ghc-source-gen        ^>=0.4.1
+    , ghcide                ^>=1.5.0
     , hls-graph
-    , hls-plugin-api        ^>=1.1
+    , hls-plugin-api        >=1.1     && <1.3
     , hyphenation
     , lens
     , lsp
-    , megaparsec            ^>=9
+    , megaparsec            >=8       && <10
     , mtl
     , parser-combinators
     , prettyprinter
-    , refinery              ^>=0.3
+    , refinery              ^>=0.4
     , retrie                >=0.1.1.0
     , syb
+    , unagi-chan
     , text
     , transformers
     , unordered-containers
@@ -129,6 +135,7 @@ test-suite tests
     CodeAction.DestructPunSpec
     CodeAction.DestructSpec
     CodeAction.IntrosSpec
+    CodeAction.IntroDestructSpec
     CodeAction.RefineSpec
     CodeAction.RunMetaprogramSpec
     CodeAction.UseDataConSpec
@@ -153,7 +160,7 @@ test-suite tests
     , ghcide
     , hls-plugin-api
     , hls-tactics-plugin
-    , hls-test-utils      ^>=1.0
+    , hls-test-utils      >=1.0 && <1.2
     , hspec
     , hspec-expectations
     , lens

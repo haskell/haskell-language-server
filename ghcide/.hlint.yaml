@@ -77,7 +77,6 @@
   - {name: GeneralizedNewtypeDeriving, within: []}
   - {name: LambdaCase, within: []}
   - {name: NamedFieldPuns, within: []}
-  - {name: PackageImports, within: []}
   - {name: RecordWildCards, within: []}
   - {name: ScopedTypeVariables, within: []}
   - {name: StandaloneDeriving, within: []}
@@ -94,6 +93,16 @@
     - Development.IDE.Core.Rules
     - Development.IDE.Core.Tracing
     - Development.IDE.GHC.Compat
+    - Development.IDE.GHC.Compat.Core
+    - Development.IDE.GHC.Compat.Env
+    - Development.IDE.GHC.Compat.Iface
+    - Development.IDE.GHC.Compat.Logger
+    - Development.IDE.GHC.Compat.Outputable
+    - Development.IDE.GHC.Compat.Parser
+    - Development.IDE.GHC.Compat.Plugins
+    - Development.IDE.GHC.Compat.Units
+    - Development.IDE.GHC.Compat.Util
+    - Development.IDE.GHC.CPP
     - Development.IDE.GHC.ExactPrint
     - Development.IDE.GHC.Orphans
     - Development.IDE.GHC.Util
@@ -103,15 +112,18 @@
     - Development.IDE.Spans.Documentation
     - Development.IDE.Spans.Common
     - Development.IDE.Spans.AtPoint
+    - Development.IDE.Spans.Pragmas
     - Development.IDE.Plugin.CodeAction
     - Development.IDE.Plugin.Completions
     - Development.IDE.Plugin.Completions.Logic
+    - Development.IDE.Types.Location
     - Main
 
 - flags:
   - default: false
   - {name: [-Wno-missing-signatures, -Wno-orphans, -Wno-overlapping-patterns, -Wno-incomplete-patterns, -Wno-missing-fields, -Wno-unused-matches]}
-  - {name: [-Wno-dodgy-imports,-Wno-incomplete-uni-patterns], within: [Main, Development.IDE.GHC.Compat, Development.Benchmark.Rules]}
+  - {name: [-Wno-dodgy-imports,-Wno-incomplete-uni-patterns], within: [Main, Development.IDE.GHC.Compat, Development.IDE.GHC.Compat.Core, Development.Benchmark.Rules]}
+  - {name: [-Wno-unused-imports], within: [Development.IDE.GHC.Compat.Core]}
   - {name: [-Wno-deprecations, -Wno-unticked-promoted-constructors], within: [Main, Experiments]}
 # - modules:
 #   - {name: [Data.Set, Data.HashSet], as: Set} # if you import Data.Set qualified, it must be as 'Set'
@@ -121,7 +133,7 @@
   # Things that are unsafe in Haskell base library
   - {name: unsafeInterleaveIO, within: [Development.IDE.LSP.LanguageServer]}
   - {name: unsafeDupablePerformIO, within: []}
-  - {name: unsafeCoerce, within: [Ide.Plugin.Eval.Code]}
+  - {name: unsafeCoerce, within: [Ide.Plugin.Eval.Code, Development.IDE.Core.Compile, Development.IDE.Types.Shake]}
   # Things that are a bit dangerous in the GHC API
   - {name: nameModule, within: []}
 

@@ -17,15 +17,15 @@
 module Ide.Plugin.Retrie (descriptor) where
 
 import           Control.Concurrent.Extra             (readVar)
+import           Control.Concurrent.STM               (readTVarIO)
 import           Control.Exception.Safe               (Exception (..),
                                                        SomeException, catch,
                                                        throwIO, try)
 import           Control.Monad                        (forM, unless)
-import           Control.Monad.Extra                  (maybeM)
 import           Control.Monad.IO.Class               (MonadIO (liftIO))
 import           Control.Monad.Trans.Class            (MonadTrans (lift))
-import           Control.Monad.Trans.Except           (ExceptT (..), runExceptT,
-                                                       throwE)
+import           Control.Monad.Trans.Except           (ExceptT (ExceptT),
+                                                       runExceptT)
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson                           (FromJSON (..),
                                                        ToJSON (..),
@@ -57,28 +57,30 @@ import           Development.IDE.GHC.Compat           (GenLocated (L), GhcRn,
                                                        HscEnv, IdP, LRuleDecls,
                                                        ModSummary (ModSummary, ms_hspp_buf, ms_mod),
                                                        NHsValBindsLR (..),
+                                                       Outputable,
                                                        ParsedModule (..),
                                                        RuleDecl (HsRule),
                                                        RuleDecls (HsRules),
+                                                       SourceText (..),
                                                        SrcSpan (..),
                                                        TyClDecl (SynDecl),
                                                        TyClGroup (..), fun_id,
-                                                       mi_fixities,
-                                                       moduleNameString,
-                                                       parseModule,
-                                                       pattern IsBoot,
-                                                       pattern NotBoot,
-                                                       pattern OldRealSrcSpan,
-                                                       rds_rules, srcSpanFile)
-import           GHC.Generics                         (Generic)
-import           GhcPlugins                           (Outputable,
-                                                       SourceText (NoSourceText),
                                                        hm_iface, isQual,
                                                        isQual_maybe,
+                                                       mi_fixities,
+                                                       moduleNameString,
                                                        nameModule_maybe,
                                                        nameRdrName, occNameFS,
                                                        occNameString,
-                                                       rdrNameOcc, unpackFS)
+                                                       parseModule,
+                                                       pattern IsBoot,
+                                                       pattern NotBoot,
+                                                       pattern RealSrcSpan,
+                                                       rdrNameOcc, rds_rules,
+                                                       srcSpanFile)
+import           Development.IDE.GHC.Compat.Util      hiding (catch, try)
+import qualified GHC                                  (parseModule)
+import           GHC.Generics                         (Generic)
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Server                  (LspM,
@@ -86,7 +88,10 @@ import           Language.LSP.Server                  (LspM,
                                                        sendNotification,
                                                        sendRequest,
                                                        withIndefiniteProgress)
-import           Language.LSP.Types                   as J
+import           Language.LSP.Types                   as J hiding
+                                                           (SemanticTokenAbsolute (length, line),
+                                                            SemanticTokenRelative (length),
+                                                            SemanticTokensEdit (_start))
 import           Retrie.CPP                           (CPP (NoCPP), parseCPP)
 import           Retrie.ExactPrint                    (fix, relativiseApiAnns,
                                                        transformA, unsafeMkA)
@@ -103,7 +108,6 @@ import           Retrie.Replace                       (Change (..),
 import           Retrie.Rewrites
 import           Retrie.SYB                           (listify)
 import           Retrie.Util                          (Verbosity (Loud))
-import           StringBuffer                         (stringToStringBuffer)
 import           System.Directory                     (makeAbsolute)
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -353,7 +357,7 @@ callRetrie ::
   Bool ->
   IO ([CallRetrieError], WorkspaceEdit)
 callRetrie state session rewrites origin restrictToOriginatingFile = do
-  knownFiles <- toKnownFiles . unhashed <$> readVar (knownTargetsVar $ shakeExtras state)
+  knownFiles <- toKnownFiles . unhashed <$> readTVarIO (knownTargetsVar $ shakeExtras state)
   let reuseParsedModule f = do
         pm <-
           useOrFail "GetParsedModule" NoParse GetParsedModule f
@@ -371,7 +375,7 @@ callRetrie state session rewrites origin restrictToOriginatingFile = do
                       }
               logPriority (ideLogger state) Info $ T.pack $ "Parsing module: " <> t
               parsed <-
-                evalGhcEnv session (parseModule ms')
+                evalGhcEnv session (GHC.parseModule ms')
                   `catch` \e -> throwIO (GHCParseError nt (show @SomeException e))
               (fixities, parsed) <- fixFixities f (fixAnns parsed)
               return (fixities, parsed)
@@ -470,7 +474,7 @@ asTextEdits NoChange = []
 asTextEdits (Change reps _imports) =
   [ (filePathToUri spanLoc, edit)
     | Replacement {..} <- nubOrdOn (realSpan . replLocation) reps,
-      (OldRealSrcSpan rspan) <- [replLocation],
+      (RealSrcSpan rspan _) <- [replLocation],
       let spanLoc = unpackFS $ srcSpanFile rspan,
       let edit = TextEdit (realSrcSpanToRange rspan) (T.pack replReplacement)
   ]
@@ -494,20 +498,6 @@ _useRuleStale label state rule f =
 
 -- | Chosen approach for calling ghcide Shake rules
 useRule label = _useRuleStale ("Retrie." <> label)
-
--------------------------------------------------------------------------------
--- Error handling combinators
-
-handleMaybe :: Monad m => e -> Maybe b -> ExceptT e m b
-handleMaybe msg = maybe (throwE msg) return
-
-handleMaybeM :: Monad m => e -> m (Maybe b) -> ExceptT e m b
-handleMaybeM msg act = maybeM (throwE msg) return $ lift act
-
-response :: Monad m => ExceptT String m a -> m (Either ResponseError a)
-response =
-  fmap (first (\msg -> ResponseError InternalError (fromString msg) Nothing))
-    . runExceptT
 
 -------------------------------------------------------------------------------
 -- Serialization wrappers and instances

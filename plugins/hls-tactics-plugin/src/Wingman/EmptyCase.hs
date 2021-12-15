@@ -1,4 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE TypeFamilies      #-}
 
 {-# LANGUAGE NoMonoLocalBinds  #-}
 
@@ -9,7 +11,6 @@ import           Control.Monad
 import           Control.Monad.Except (runExcept)
 import           Control.Monad.Trans
 import           Control.Monad.Trans.Maybe
-import           Data.Aeson
 import           Data.Generics.Aliases (mkQ, GenericQ)
 import           Data.Generics.Schemes (everything)
 import           Data.Maybe
@@ -21,16 +22,14 @@ import           Development.IDE (realSrcSpanToRange)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake (IdeState (..))
 import           Development.IDE.Core.UseStale
-import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat hiding (empty)
 import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.Spans.LocalBindings (getLocalScope)
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
-import           OccName
 import           Prelude hiding (span)
-import           Prelude hiding (span)
-import           TcRnTypes (tcg_binds)
+import           Wingman.AbstractLSP.Types
 import           Wingman.CodeGen (destructionFor)
 import           Wingman.GHC
 import           Wingman.Judgements
@@ -38,59 +37,51 @@ import           Wingman.LanguageServer
 import           Wingman.Types
 
 
-------------------------------------------------------------------------------
--- | The 'CommandId' for the empty case completion.
-emptyCaseLensCommandId :: CommandId
-emptyCaseLensCommandId = CommandId "wingman.emptyCase"
+data EmptyCaseT = EmptyCaseT
 
+instance IsContinuationSort EmptyCaseT where
+  toCommandId _ = CommandId "wingman.emptyCase"
 
-------------------------------------------------------------------------------
--- | A command function that just applies a 'WorkspaceEdit'.
-workspaceEditHandler :: CommandFunction IdeState WorkspaceEdit
-workspaceEditHandler _ideState wedit = do
-  _ <- sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
-  return $ Right Null
+instance IsTarget EmptyCaseT where
+  type TargetArgs EmptyCaseT = ()
+  fetchTargetArgs _ = pure ()
 
+emptyCaseInteraction :: Interaction
+emptyCaseInteraction = Interaction $
+  Continuation @EmptyCaseT @EmptyCaseT @WorkspaceEdit EmptyCaseT
+    (SynthesizeCodeLens $ \LspEnv{..} _ -> do
+      let FileContext{..} = le_fileContext
 
-------------------------------------------------------------------------------
--- | Provide the "empty case completion" code lens
-codeLensProvider :: PluginMethodHandler IdeState TextDocumentCodeLens
-codeLensProvider state plId (CodeLensParams _ _ (TextDocumentIdentifier uri))
-  | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
-      let stale a = runStaleIde "codeLensProvider" state nfp a
+      let stale a = runStaleIde "codeLensProvider" le_ideState fc_nfp a
 
-      ccs <- getClientCapabilities
-      liftIO $ fromMaybeT (Right $ List []) $ do
-        dflags <- getIdeDynflags state nfp
-        TrackedStale pm _ <- stale GetAnnotatedParsedSource
-        TrackedStale binds bind_map <- stale GetBindings
-        holes <- emptyCaseScrutinees state nfp
+      ccs <- lift getClientCapabilities
+      TrackedStale pm _ <- mapMaybeT liftIO $ stale GetAnnotatedParsedSource
+      TrackedStale binds bind_map <- mapMaybeT liftIO $ stale GetBindings
+      holes <- mapMaybeT liftIO $ emptyCaseScrutinees le_ideState fc_nfp
 
-        fmap (Right . List) $ for holes $ \(ss, ty) -> do
-          binds_ss <- liftMaybe $ mapAgeFrom bind_map ss
-          let bindings = getLocalScope (unTrack binds) $ unTrack binds_ss
-              range = realSrcSpanToRange $ unTrack ss
-          matches <-
-            liftMaybe $
-              destructionFor
-                (foldMap (hySingleton . occName . fst) bindings)
-                ty
-          edits <- liftMaybe $ hush $
-                mkWorkspaceEdits dflags ccs uri (unTrack pm) $
-                  graftMatchGroup (RealSrcSpan $ unTrack ss) $
-                    noLoc matches
-
-          pure $
-            CodeLens range
-              (Just
-                $ mkLspCommand
-                    plId
-                    emptyCaseLensCommandId
-                    (mkEmptyCaseLensDesc ty)
-                $ Just $ pure $ toJSON $ edits
-              )
-              Nothing
-codeLensProvider _ _ _ = pure $ Right $ List []
+      for holes $ \(ss, ty) -> do
+        binds_ss <- liftMaybe $ mapAgeFrom bind_map ss
+        let bindings = getLocalScope (unTrack binds) $ unTrack binds_ss
+            range = realSrcSpanToRange $ unTrack ss
+        matches <-
+          liftMaybe $
+            destructionFor
+              (foldMap (hySingleton . occName . fst) bindings)
+              ty
+        edits <- liftMaybe $ hush $
+              mkWorkspaceEdits le_dflags ccs fc_uri (unTrack pm) $
+                graftMatchGroup (RealSrcSpan (unTrack ss) Nothing) $
+                  noLoc matches
+        pure
+          ( range
+          , Metadata
+              (mkEmptyCaseLensDesc ty)
+              (CodeActionUnknown "refactor.wingman.completeEmptyCase")
+              False
+          , edits
+          )
+    )
+  $ (\ _ _ _ we -> pure $ pure $ RawEdit we)
 
 
 scrutinzedType :: EmptyCaseSort Type -> Maybe Type
@@ -150,16 +141,19 @@ emptyCaseScrutinees state nfp = do
     hscenv <- stale GhcSessionDeps
 
     let scrutinees = traverse (emptyCaseQ . tcg_binds) tcg
-    for scrutinees $ \aged@(unTrack -> (ss, scrutinee)) -> do
+    fmap catMaybes $ for scrutinees $ \aged@(unTrack -> (ss, scrutinee)) -> do
       ty <- MaybeT
           . fmap (scrutinzedType <=< sequence)
           . traverse (typeCheck (hscEnv $ untrackedStaleValue hscenv) tcg')
           $ scrutinee
-      case ss of
-        RealSrcSpan r   -> do
-          rss' <- liftMaybe $ mapAgeTo tcg_map $ unsafeCopyAge aged r
-          pure (rss', ty)
-        UnhelpfulSpan _ -> empty
+      case null $ tacticsGetDataCons ty of
+        True -> pure empty
+        False ->
+          case ss of
+            RealSrcSpan r _ -> do
+              rss' <- liftMaybe $ mapAgeTo tcg_map $ unsafeCopyAge aged r
+              pure $ Just (rss', ty)
+            UnhelpfulSpan _ -> empty
 
 data EmptyCaseSort a
   = EmptyCase a

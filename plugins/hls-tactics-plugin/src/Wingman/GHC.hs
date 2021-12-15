@@ -3,12 +3,8 @@
 
 module Wingman.GHC where
 
-import           Bag (bagToList)
-import           Class (classTyVars)
-import           ConLike
 import           Control.Monad.State
 import           Control.Monad.Trans.Maybe (MaybeT(..))
-import           CoreUtils (exprType)
 import           Data.Bool (bool)
 import           Data.Function (on)
 import           Data.Functor ((<&>))
@@ -18,24 +14,11 @@ import           Data.Maybe (isJust)
 import           Data.Set (Set)
 import qualified Data.Set as S
 import           Data.Traversable
-import           DataCon
-import           Development.IDE.GHC.Compat hiding (exprType)
-import           DsExpr (dsExpr)
-import           DsMonad (initDs)
-import           FamInst (tcLookupDataFamInst_maybe)
-import           FamInstEnv (normaliseType)
+import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat.Util
 import           GHC.SourceGen (lambda)
 import           Generics.SYB (Data, everything, everywhere, listify, mkQ, mkT)
-import           GhcPlugins (Role (Nominal))
-import           OccName
-import           TcRnMonad
-import           TcType
-import           TyCoRep
-import           Type
-import           TysWiredIn (charTyCon, doubleTyCon, floatTyCon, intTyCon)
-import           Unify
-import           Unique
-import           Var
+import           Wingman.StaticPlugin (pattern MetaprogramSyntax)
 import           Wingman.Types
 
 
@@ -60,8 +43,8 @@ instantiateType t = do
 cloneTyVar :: TyVar -> TyVar
 cloneTyVar t =
   let uniq = getUnique t
-      some_magic_number = 49
-   in setVarUnique t $ deriveUnique uniq some_magic_number
+      some_magic_char = 'w' -- 'w' for wingman ;D
+   in setVarUnique t $ newTagUnique uniq some_magic_char
 
 
 ------------------------------------------------------------------------------
@@ -90,11 +73,15 @@ tacticsThetaTy (tcSplitSigmaTy -> (_, theta,  _)) = theta
 ------------------------------------------------------------------------------
 -- | Get the data cons of a type, if it has any.
 tacticsGetDataCons :: Type -> Maybe ([DataCon], [Type])
-tacticsGetDataCons ty | Just _ <- algebraicTyCon ty =
-  splitTyConApp_maybe ty <&> \(tc, apps) ->
-    ( filter (not . dataConCannotMatch apps) $ tyConDataCons tc
-    , apps
-    )
+tacticsGetDataCons ty
+  | Just (_, ty') <- tcSplitForAllTyVarBinder_maybe ty
+  = tacticsGetDataCons ty'
+tacticsGetDataCons ty
+  | Just _ <- algebraicTyCon ty
+  = splitTyConApp_maybe ty <&> \(tc, apps) ->
+      ( filter (not . dataConCannotMatch apps) $ tyConDataCons tc
+      , apps
+      )
 tacticsGetDataCons _ = Nothing
 
 ------------------------------------------------------------------------------
@@ -113,7 +100,7 @@ freshTyvars t = do
         case M.lookup tv reps of
           Just tv' -> tv'
           Nothing  -> tv
-      ) $ snd $ tcSplitForAllTys t
+      ) $ snd $ tcSplitForAllTyVars t
 
 
 ------------------------------------------------------------------------------
@@ -131,6 +118,9 @@ getRecordFields dc =
 ------------------------------------------------------------------------------
 -- | Is this an algebraic type?
 algebraicTyCon :: Type -> Maybe TyCon
+algebraicTyCon ty
+  | Just (_, ty') <- tcSplitForAllTyVarBinder_maybe ty
+  = algebraicTyCon ty'
 algebraicTyCon (splitTyConApp_maybe -> Just (tycon, _))
   | tycon == intTyCon    = Nothing
   | tycon == floatTyCon  = Nothing
@@ -171,6 +161,7 @@ containsHole :: Data a => a -> Bool
 containsHole x = not $ null $ listify (
   \case
     ((HsVar _ (L _ name)) :: HsExpr GhcPs) -> isHole $ occName name
+    MetaprogramSyntax _                    -> True
     _                                      -> False
   ) x
 
@@ -300,22 +291,18 @@ type PatCompat pass = LPat pass
 
 ------------------------------------------------------------------------------
 -- | Should make sure it's a fun bind
-pattern TopLevelRHS :: OccName -> [PatCompat GhcTc] -> LHsExpr GhcTc -> Match GhcTc (LHsExpr GhcTc)
-pattern TopLevelRHS name ps body <-
+pattern TopLevelRHS
+    :: OccName
+    -> [PatCompat GhcTc]
+    -> LHsExpr GhcTc
+    -> HsLocalBindsLR GhcTc GhcTc
+    -> Match GhcTc (LHsExpr GhcTc)
+pattern TopLevelRHS name ps body where_binds <-
   Match _
     (FunRhs (L _ (occName -> name)) _ _)
     ps
     (GRHSs _
-      [L _ (GRHS _ [] body)] _)
-
-
-dataConExTys :: DataCon -> [TyCoVar]
-#if __GLASGOW_HASKELL__ >= 808
-dataConExTys = DataCon.dataConExTyCoVars
-#else
-dataConExTys = DataCon.dataConExTyVars
-#endif
-
+      [L _ (GRHS _ [] body)] (L _ where_binds))
 
 ------------------------------------------------------------------------------
 -- | In GHC 8.8, sometimes patterns are wrapped in 'XPat'.
@@ -339,16 +326,6 @@ liftMaybe a = MaybeT $ pure a
 -- not use it, but sometimes it can't be helped.
 typeCheck :: HscEnv -> TcGblEnv -> HsExpr GhcTc -> IO (Maybe Type)
 typeCheck hscenv tcg = fmap snd . initDs hscenv tcg . fmap exprType . dsExpr
-
-
-mkFunTys' :: [Type] -> Type -> Type
-mkFunTys' =
-#if __GLASGOW_HASKELL__ <= 808
-  mkFunTys
-#else
-  mkVisFunTys
-#endif
-
 
 ------------------------------------------------------------------------------
 -- | Expand type and data families

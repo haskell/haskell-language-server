@@ -16,6 +16,6 @@ data ElemAt (n :: Nat) t (ts :: [Type]) where
   AtS :: ElemAt k t ts -> ElemAt ('S k) t (u ': ts)
 
 lookMeUp :: ElemAt i ty tys -> HList tys -> ty
-lookMeUp AtZ (HCons t hl') = _
-lookMeUp (AtS ea') (HCons t hl') = _
+lookMeUp AtZ (HCons t hl') = _w0
+lookMeUp (AtS ea') (HCons t hl') = _w1
 

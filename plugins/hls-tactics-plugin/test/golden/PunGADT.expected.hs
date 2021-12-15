@@ -8,5 +8,5 @@ data GADT a where
 
 
 split :: GADT a -> a
-split GADT {blah, bar} = _
+split GADT {blah, bar} = _w0
 

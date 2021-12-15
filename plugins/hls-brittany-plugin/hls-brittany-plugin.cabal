@@ -1,11 +1,11 @@
 cabal-version:      2.4
 name:               hls-brittany-plugin
-version:            1.0.0.1
+version:            1.0.1.1
 synopsis:           Integration with the Brittany code formatter
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
 
-license:            Apache-2.0
+license:            AGPL-3.0-only
 license-file:       LICENSE
 author:             The Haskell IDE Team
 copyright:          The Haskell IDE Team
@@ -25,12 +25,16 @@ library
     , filepath
     , ghc
     , ghc-boot-th
-    , ghcide           >=1.2 && <1.5
-    , hls-plugin-api  ^>=1.1
+    , ghcide          >=1.2      && <1.6
+    , hls-plugin-api  >=1.1      && <1.3
     , lens
     , lsp-types
     , text
     , transformers
+    -- TODO: remove these when GH issue #2005 is resolved
+    , extra
+    , ghc-exactprint
+    , czipwith
 
   default-language: Haskell2010
 
@@ -44,4 +48,4 @@ test-suite tests
     , base
     , filepath
     , hls-brittany-plugin
-    , hls-test-utils       ^>=1.0
+    , hls-test-utils       >=1.0 && <1.2

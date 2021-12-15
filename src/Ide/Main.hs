@@ -13,8 +13,10 @@ import           Control.Monad.Extra
 import qualified Data.Aeson.Encode.Pretty      as A
 import qualified Data.ByteString.Lazy.Char8    as LBS
 import           Data.Default
+import           Data.List                     (sort)
 import qualified Data.Text                     as T
 import           Development.IDE.Core.Rules
+import           Development.IDE.Core.Tracing  (withTelemetryLogger)
 import           Development.IDE.Graph         (ShakeOptions (shakeThreads))
 import           Development.IDE.Main          (isLSP)
 import qualified Development.IDE.Main          as Main
@@ -25,7 +27,8 @@ import           Ide.Arguments
 import           Ide.Logger
 import           Ide.Plugin.ConfigUtils        (pluginsToDefaultConfig,
                                                 pluginsToVSCodeExtensionSchema)
-import           Ide.Types                     (IdePlugins, ipMap)
+import           Ide.Types                     (IdePlugins, PluginId (PluginId),
+                                                ipMap)
 import           Ide.Version
 import qualified Language.LSP.Server           as LSP
 import qualified System.Directory.Extra        as IO
@@ -50,6 +53,12 @@ defaultMain args idePlugins = do
 
         VersionMode PrintNumericVersion ->
             putStrLn haskellLanguageServerNumericVersion
+
+        ListPluginsMode -> do
+            let pluginNames = sort
+                    $ map ((\(PluginId t) -> T.unpack t) . fst)
+                    $ ipMap idePlugins
+            mapM_ putStrLn pluginNames
 
         BiosMode PrintCradleType -> do
             dir <- IO.getCurrentDirectory
@@ -82,7 +91,7 @@ hlsLogger = G.Logger $ \pri txt ->
 -- ---------------------------------------------------------------------
 
 runLspMode :: GhcideArguments -> IdePlugins IdeState -> IO ()
-runLspMode ghcideArgs@GhcideArguments{..} idePlugins = do
+runLspMode ghcideArgs@GhcideArguments{..} idePlugins = withTelemetryLogger $ \telemetryLogger -> do
     whenJust argsCwd IO.setCurrentDirectory
     dir <- IO.getCurrentDirectory
     LSP.setupLogger argsLogFile ["hls", "hie-bios"]
@@ -97,7 +106,8 @@ runLspMode ghcideArgs@GhcideArguments{..} idePlugins = do
     Main.defaultMain def
       { Main.argCommand = argsCommand
       , Main.argsHlsPlugins = idePlugins
-      , Main.argsLogger = pure hlsLogger
+      , Main.argsLogger = pure hlsLogger <> pure telemetryLogger
+      , Main.argsThreads = if argsThreads == 0 then Nothing else Just $ fromIntegral argsThreads
       , Main.argsIdeOptions = \_config sessionLoader ->
         let defOptions = Ghcide.defaultIdeOptions sessionLoader
         in defOptions

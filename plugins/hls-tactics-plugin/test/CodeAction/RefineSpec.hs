@@ -16,6 +16,7 @@ spec = do
     refineTest  2  8 "RefineCon"
     refineTest  4 10 "RefineReader"
     refineTest  8 10 "RefineGADT"
+    refineTest  2  8 "RefineIntroWhere"
 
   describe "messages" $ do
     mkShowMessageTest Refine "" 2 8 "MessageForallA" TacticErrors

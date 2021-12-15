@@ -7,38 +7,31 @@ module Ide.Plugin.Eval.Util (
     asS,
     timed,
     isLiterate,
-    handleMaybe,
-    handleMaybeM,
-    response,
     response',
     gStrictTry,
     logWith,
 ) where
 
-import           Control.Monad.Extra        (maybeM)
-import           Control.Monad.IO.Class     (MonadIO (liftIO))
-import           Control.Monad.Trans.Class  (lift)
-import           Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
-import           Data.Aeson                 (Value (Null))
-import           Data.Bifunctor             (first)
-import           Data.String                (IsString (fromString))
-import qualified Data.Text                  as T
-import           Development.IDE            (IdeState, Priority (..), ideLogger,
-                                             logPriority)
-import           Development.IDE.GHC.Compat (gcatch)
-import           Exception                  (ExceptionMonad, SomeException (..),
-                                             evaluate)
-import           GHC.Exts                   (toList)
-import           GHC.Stack                  (HasCallStack, callStack,
-                                             srcLocFile, srcLocStartCol,
-                                             srcLocStartLine)
+import           Control.Exception               (SomeException, evaluate)
+import           Control.Monad.IO.Class          (MonadIO (liftIO))
+import           Control.Monad.Trans.Except      (ExceptT (..), runExceptT)
+import           Data.Aeson                      (Value (Null))
+import           Data.String                     (IsString (fromString))
+import qualified Data.Text                       as T
+import           Development.IDE                 (IdeState, Priority (..),
+                                                  ideLogger, logPriority)
+import           Development.IDE.GHC.Compat      (Outputable, ppr,
+                                                  showSDocUnsafe)
+import           Development.IDE.GHC.Compat.Util (MonadCatch, catch)
+import           GHC.Exts                        (toList)
+import           GHC.Stack                       (HasCallStack, callStack,
+                                                  srcLocFile, srcLocStartCol,
+                                                  srcLocStartLine)
 import           Language.LSP.Server
 import           Language.LSP.Types
-import           Outputable                 (Outputable (ppr), ppr,
-                                             showSDocUnsafe)
-import           System.FilePath            (takeExtension)
-import           System.Time.Extra          (duration, showDuration)
-import           UnliftIO.Exception         (catchAny)
+import           System.FilePath                 (takeExtension)
+import           System.Time.Extra               (duration, showDuration)
+import           UnliftIO.Exception              (catchAny)
 
 asS :: Outputable a => a -> String
 asS = showSDocUnsafe . ppr
@@ -71,17 +64,6 @@ logLevel = Debug -- Info
 isLiterate :: FilePath -> Bool
 isLiterate x = takeExtension x `elem` [".lhs", ".lhs-boot"]
 
-handleMaybe :: Monad m => e -> Maybe b -> ExceptT e m b
-handleMaybe msg = maybe (throwE msg) return
-
-handleMaybeM :: Monad m => e -> m (Maybe b) -> ExceptT e m b
-handleMaybeM msg act = maybeM (throwE msg) return $ lift act
-
-response :: Functor f => ExceptT String f c -> f (Either ResponseError c)
-response =
-    fmap (first (\msg -> ResponseError InternalError (fromString msg) Nothing))
-        . runExceptT
-
 response' :: ExceptT String (LspM c) WorkspaceEdit -> LspM c (Either ResponseError Value)
 response' act = do
     res <- runExceptT act
@@ -93,9 +75,9 @@ response' act = do
         _ <- sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing a) (\_ -> pure ())
         return $ Right Null
 
-gStrictTry :: ExceptionMonad m => m b -> m (Either String b)
+gStrictTry :: (MonadIO m, MonadCatch m) => m b -> m (Either String b)
 gStrictTry op =
-    gcatch
+    catch
         (op >>= fmap Right . gevaluate)
         showErr
 

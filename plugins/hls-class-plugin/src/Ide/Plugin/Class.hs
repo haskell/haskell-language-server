@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -8,12 +9,10 @@ module Ide.Plugin.Class
   ( descriptor
   ) where
 
-import           BooleanFormula
-import           Class
-import           ConLike
 import           Control.Applicative
 import           Control.Lens                            hiding (List, use)
 import           Control.Monad
+import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
@@ -26,20 +25,18 @@ import           Development.IDE                         hiding (pluginHandlers)
 import           Development.IDE.Core.PositionMapping    (fromCurrentRange,
                                                           toCurrentRange)
 import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.Spans.AtPoint
 import qualified GHC.Generics                            as Generics
-import           GhcPlugins                              hiding (Var, getLoc,
-                                                          (<>))
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.Haskell.GHC.ExactPrint
 import           Language.Haskell.GHC.ExactPrint.Parsers (parseDecl)
 import           Language.Haskell.GHC.ExactPrint.Types   hiding (GhcPs, Parens)
+import           Language.Haskell.GHC.ExactPrint.Utils   (rs)
 import           Language.LSP.Server
 import           Language.LSP.Types
 import qualified Language.LSP.Types.Lens                 as J
-import           TcEnv
-import           TcRnMonad
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
@@ -90,20 +87,19 @@ addMethodPlaceholders state AddMinimalMethodsParams{..} = do
         Right (ann, d) -> Just (setPrecedingLines d 1 indent ann, d)
         Left _         -> Nothing
 
-    addMethodDecls :: ParsedSource -> [LHsDecl GhcPs] -> Transform (Located (HsModule GhcPs))
     addMethodDecls ps mDecls = do
       d <- findInstDecl ps
       newSpan <- uniqueSrcSpanT
       let
         annKey = mkAnnKey d
-        newAnnKey = AnnKey newSpan (CN "HsValBinds")
+        newAnnKey = AnnKey (rs newSpan) (CN "HsValBinds")
         addWhere mkds@(Map.lookup annKey -> Just ann)
           = Map.insert newAnnKey ann2 mkds2
           where
             ann1 = ann
                    { annsDP = annsDP ann ++ [(G AnnWhere, DP (0, 1))]
                    , annCapturedSpan = Just newAnnKey
-                   , annSortKey = Just (fmap getLoc mDecls)
+                   , annSortKey = Just (fmap (rs . getLoc) mDecls)
                    }
             mkds2 = Map.insert annKey ann1 mkds
             ann2 = annNone
@@ -173,9 +169,15 @@ codeAction state plId (CodeActionParams _ _ docId _ context) = liftIO $ fmap (fr
           pure
             $ head . head
             $ pointCommand hf (fromJust (fromCurrentRange pmap range) ^. J.start & J.character -~ 1)
+#if !MIN_VERSION_ghc(9,0,0)
               ( (Map.keys . Map.filter isClassNodeIdentifier . nodeIdentifiers . nodeInfo)
                 <=< nodeChildren
               )
+#else
+              ( (Map.keys . Map.filter isClassNodeIdentifier . sourcedNodeIdents . sourcedNodeInfo)
+                <=< nodeChildren
+              )
+#endif
 
     findClassFromIdentifier docPath (Right name) = do
       (hscEnv -> hscenv, _) <- MaybeT . runAction "classplugin" state $ useWithStale GhcSessionDeps docPath

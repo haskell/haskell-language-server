@@ -1,14 +1,19 @@
 cabal-version:      2.2
 name:               hls-explicit-imports-plugin
-version:            1.0.0.3
+version:            1.0.1.2
 synopsis:           Explicit imports plugin for Haskell Language Server
+description:
+  Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
 license:            Apache-2.0
 license-file:       LICENSE
 author:             Pepe Iborra
 maintainer:         pepeiborra@gmail.com
 category:           Development
 build-type:         Simple
-extra-source-files: LICENSE
+extra-source-files:
+  LICENSE
+  test/testdata/*.hs
+  test/testdata/*.yaml
 
 library
   exposed-modules:    Ide.Plugin.ExplicitImports
@@ -19,10 +24,9 @@ library
     , containers
     , deepseq
     , ghc
-    , ghc-api-compat
-    , ghcide                ^>=1.4
+    , ghcide                ^>=1.4 || ^>=1.5
     , hls-graph
-    , hls-plugin-api        ^>=1.1
+    , hls-plugin-api        >=1.1  && <1.3
     , lsp
     , text
     , unordered-containers
@@ -31,3 +35,16 @@ library
   default-extensions:
     DataKinds
     TypeOperators
+
+test-suite tests
+  type:             exitcode-stdio-1.0
+  default-language: Haskell2010
+  hs-source-dirs:   test
+  main-is:          Main.hs
+  ghc-options:      -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+    , base
+    , filepath
+    , hls-explicit-imports-plugin
+    , hls-test-utils
+    , text

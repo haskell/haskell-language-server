@@ -1,24 +1,40 @@
 cabal-version: 2.4
 name:          hls-graph
-version:       1.4.0.0
+version:       1.5.1.1
 synopsis:      Haskell Language Server internal graph API
 description:
-  Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
+  Please see the README on GitHub at <https://github.com/haskell/haskell-language-server/tree/master/hls-graph#readme>
 
 homepage:      https://github.com/haskell/haskell-language-server#readme
 bug-reports:   https://github.com/haskell/haskell-language-server/issues
 license:       Apache-2.0
 license-file:  LICENSE
 author:        The Haskell IDE Team
-maintainer:    alan.zimm@gmail.com
+maintainer:    The Haskell IDE Team
 copyright:     The Haskell IDE Team
 category:      Development
 build-type:    Simple
+data-files:
+    html/profile.html
+    html/shake.js
+
+extra-source-files:
+    README.md
 
 flag pedantic
   description: Enable -Werror
   default:     False
   manual:      True
+
+flag embed-files
+  default: False
+  manual: True
+  description: Embed data files into the shake library
+
+flag stm-stats
+  default: False
+  manual: True
+  description: Collect STM transaction stats
 
 source-repository head
   type:     git
@@ -26,22 +42,55 @@ source-repository head
 
 library
   exposed-modules:
+    Control.Concurrent.STM.Stats
     Development.IDE.Graph
     Development.IDE.Graph.Classes
     Development.IDE.Graph.Database
     Development.IDE.Graph.Rule
-
-  other-modules:
     Development.IDE.Graph.Internal.Action
     Development.IDE.Graph.Internal.Options
     Development.IDE.Graph.Internal.Rules
+    Development.IDE.Graph.Internal.Database
+    Development.IDE.Graph.Internal.Paths
+    Development.IDE.Graph.Internal.Profile
+    Development.IDE.Graph.Internal.Types
+    Paths_hls_graph
+
+  autogen-modules:  Paths_hls_graph
 
   hs-source-dirs:     src
   build-depends:
+    , aeson
+    , async
     , base >=4.12 && <5
     , bytestring
-    , shake >= 0.19.4
+    , containers
+    , deepseq
+    , directory
+    , exceptions
+    , extra
+    , filepath
+    , focus
+    , hashable
+    , js-dgtable
+    , js-flot
+    , js-jquery
+    , list-t
+    , primitive
+    , stm
+    , stm-containers
+    , time
+    , transformers
     , unordered-containers
+
+  if flag(embed-files)
+        cpp-options: -DFILE_EMBED
+        build-depends:
+            file-embed >= 0.0.11,
+            template-haskell
+  if flag(stm-stats)
+        cpp-options: -DSTM_STATS
+
 
   ghc-options:
     -Wall -Wredundant-constraints -Wno-name-shadowing

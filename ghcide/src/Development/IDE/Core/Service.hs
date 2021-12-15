@@ -12,12 +12,12 @@ module Development.IDE.Core.Service(
     getIdeOptions, getIdeOptionsIO,
     IdeState, initialise, shutdown,
     runAction,
-    writeProfile,
     getDiagnostics,
     ideLogger,
     updatePositionMapping,
     ) where
 
+import           Control.Applicative             ((<|>))
 import           Development.IDE.Core.Debouncer
 import           Development.IDE.Core.FileExists (fileExistsRules)
 import           Development.IDE.Core.OfInterest
@@ -30,6 +30,7 @@ import qualified Language.LSP.Types              as LSP
 
 import           Control.Monad
 import           Development.IDE.Core.Shake
+import           System.Environment             (lookupEnv)
 
 
 ------------------------------------------------------------
@@ -46,13 +47,17 @@ initialise :: Config
            -> HieDb
            -> IndexQueue
            -> IO IdeState
-initialise defaultConfig mainRule lspEnv logger debouncer options vfs hiedb hiedbChan =
+initialise defaultConfig mainRule lspEnv logger debouncer options vfs hiedb hiedbChan = do
+    shakeProfiling <- do
+        let fromConf = optShakeProfiling options
+        fromEnv <- lookupEnv "GHCIDE_BUILD_PROFILING"
+        return $ fromConf <|> fromEnv
     shakeOpen
         lspEnv
         defaultConfig
         logger
         debouncer
-        (optShakeProfiling options)
+        shakeProfiling
         (optReportProgress options)
         (optTesting options)
         hiedb
@@ -64,9 +69,6 @@ initialise defaultConfig mainRule lspEnv logger debouncer options vfs hiedb hied
             ofInterestRules
             fileExistsRules lspEnv vfs
             mainRule
-
-writeProfile :: IdeState -> FilePath -> IO ()
-writeProfile = shakeProfile
 
 -- | Shutdown the Compiler Service.
 shutdown :: IdeState -> IO ()

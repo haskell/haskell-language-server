@@ -9,13 +9,13 @@ module Development.IDE.Core.Debouncer
     ) where
 
 import           Control.Concurrent.Async
-import           Control.Concurrent.Strict
+import           Control.Concurrent.STM.Stats (atomically, atomicallyNamed)
 import           Control.Exception
-import           Control.Monad             (join)
-import           Data.Foldable             (traverse_)
-import           Data.HashMap.Strict       (HashMap)
-import qualified Data.HashMap.Strict       as Map
+import           Control.Monad                (join)
+import           Data.Foldable                (traverse_)
 import           Data.Hashable
+import qualified Focus
+import qualified StmContainers.Map            as STM
 import           System.Time.Extra
 
 -- | A debouncer can be used to avoid triggering many events
@@ -31,7 +31,7 @@ newtype Debouncer k = Debouncer { registerEvent :: Seconds -> k -> IO () -> IO (
 
 -- | Debouncer used in the IDE that delays events as expected.
 newAsyncDebouncer :: (Eq k, Hashable k) => IO (Debouncer k)
-newAsyncDebouncer = Debouncer . asyncRegisterEvent <$> newVar Map.empty
+newAsyncDebouncer = Debouncer . asyncRegisterEvent <$> STM.newIO
 
 -- | Register an event that will fire after the given delay if no other event
 -- for the same key gets registered until then.
@@ -39,20 +39,20 @@ newAsyncDebouncer = Debouncer . asyncRegisterEvent <$> newVar Map.empty
 -- If there is a pending event for the same key, the pending event will be killed.
 -- Events are run unmasked so it is up to the user of `registerEvent`
 -- to mask if required.
-asyncRegisterEvent :: (Eq k, Hashable k) => Var (HashMap k (Async ())) -> Seconds -> k -> IO () -> IO ()
+asyncRegisterEvent :: (Eq k, Hashable k) => STM.Map k (Async ()) -> Seconds -> k -> IO () -> IO ()
 asyncRegisterEvent d 0 k fire = do
-    join $ modifyVar d $ \m -> do
-        (cancel, !m') <- evaluate $ Map.alterF (\prev -> (traverse_ cancel prev, Nothing)) k m
-        return (m', cancel)
+    join $ atomically $ do
+        prev <- STM.focus Focus.lookupAndDelete k d
+        return $ traverse_ cancel prev
     fire
 asyncRegisterEvent d delay k fire = mask_ $ do
     a <- asyncWithUnmask $ \unmask -> unmask $ do
         sleep delay
         fire
-        modifyVar_ d (evaluate . Map.delete k)
-    join $ modifyVar d $ \m -> do
-        (cancel, !m') <- evaluate $ Map.alterF (\prev -> (traverse_ cancel prev, Just a)) k m
-        return (m', cancel)
+        atomically $ STM.delete k d
+    do
+        prev <- atomicallyNamed "debouncer" $ STM.focus (Focus.lookup <* Focus.insert a) k d
+        traverse_ cancel prev
 
 -- | Debouncer used in the DAML CLI compiler that emits events immediately.
 noopDebouncer :: Debouncer k

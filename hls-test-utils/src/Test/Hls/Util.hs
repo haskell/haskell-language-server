@@ -10,6 +10,7 @@ module Test.Hls.Util
   (
       codeActionSupportCaps
     , expectCodeAction
+    , dontExpectCodeAction
     , expectDiagnostic
     , expectNoMoreDiagnostics
     , expectSameLocations
@@ -21,6 +22,7 @@ module Test.Hls.Util
     , ghcVersion, GhcVersion(..)
     , hostOS, OS(..)
     , matchesCurrentEnv, EnvSpec(..)
+    , noLiteralCaps
     , ignoreForGhcVersions
     , ignoreInEnv
     , inspectCodeAction
@@ -45,12 +47,14 @@ import           Control.Lens                    ((^.))
 import           Control.Monad
 import           Control.Monad.IO.Class
 import qualified Data.Aeson                      as A
+import           Data.Bool                       (bool)
 import           Data.Default
 import           Data.List                       (intercalate)
 import           Data.List.Extra                 (find)
 import           Data.Maybe
 import qualified Data.Set                        as Set
 import qualified Data.Text                       as T
+import           Development.IDE                 (GhcVersion(..), ghcVersion)
 import qualified Language.LSP.Test               as Test
 import           Language.LSP.Types              hiding (Reason (..))
 import qualified Language.LSP.Types.Capabilities as C
@@ -70,6 +74,12 @@ import           Test.Tasty.HUnit                (Assertion, assertFailure,
                                                   (@?=))
 import           Text.Blaze.Internal             hiding (null)
 import           Text.Blaze.Renderer.String      (renderMarkup)
+
+noLiteralCaps :: C.ClientCapabilities
+noLiteralCaps = def { C._textDocument = Just textDocumentCaps }
+  where
+    textDocumentCaps = def { C._codeAction = Just codeActionCaps }
+    codeActionCaps = CodeActionClientCapabilities (Just True) Nothing Nothing Nothing Nothing Nothing Nothing
 
 codeActionSupportCaps :: C.ClientCapabilities
 codeActionSupportCaps = def { C._textDocument = Just textDocumentCaps }
@@ -107,24 +117,6 @@ files =
    -- , "./test/testdata/wErrorTest/"
   ]
 
-data GhcVersion
-  = GHC810
-  | GHC88
-  | GHC86
-  | GHC84
-  deriving (Eq,Show)
-
-ghcVersion :: GhcVersion
-#if (defined(MIN_VERSION_GLASGOW_HASKELL) && (MIN_VERSION_GLASGOW_HASKELL(8,10,0,0)))
-ghcVersion = GHC810
-#elif (defined(MIN_VERSION_GLASGOW_HASKELL) && (MIN_VERSION_GLASGOW_HASKELL(8,8,0,0)))
-ghcVersion = GHC88
-#elif (defined(MIN_VERSION_GLASGOW_HASKELL) && (MIN_VERSION_GLASGOW_HASKELL(8,6,0,0)))
-ghcVersion = GHC86
-#elif (defined(MIN_VERSION_GLASGOW_HASKELL) && (MIN_VERSION_GLASGOW_HASKELL(8,4,0,0)))
-ghcVersion = GHC84
-#endif
-
 data EnvSpec = HostOS OS | GhcVer GhcVersion
     deriving (Show, Eq)
 
@@ -148,25 +140,19 @@ knownBrokenInEnv envSpecs reason
     | otherwise = id
 
 knownBrokenOnWindows :: String -> TestTree -> TestTree
-knownBrokenOnWindows reason
-    | isWindows = expectFailBecause reason
-    | otherwise = id
+knownBrokenOnWindows = knownBrokenInEnv [HostOS Windows]
 
 knownBrokenForGhcVersions :: [GhcVersion] -> String -> TestTree -> TestTree
-knownBrokenForGhcVersions vers reason
-    | ghcVersion `elem` vers =  expectFailBecause reason
-    | otherwise = id
+knownBrokenForGhcVersions vers = knownBrokenInEnv (map GhcVer vers)
 
--- | IgnroeTest if /any/ of environmental spec mathces the current environment.
+-- | IgnoreTest if /any/ of environmental spec mathces the current environment.
 ignoreInEnv :: [EnvSpec] -> String -> TestTree -> TestTree
 ignoreInEnv envSpecs reason
     | any matchesCurrentEnv envSpecs = ignoreTestBecause reason
     | otherwise = id
 
 ignoreForGhcVersions :: [GhcVersion] -> String -> TestTree -> TestTree
-ignoreForGhcVersions vers reason
-    | ghcVersion `elem` vers =  ignoreTestBecause reason
-    | otherwise = id
+ignoreForGhcVersions vers = ignoreInEnv (map GhcVer vers)
 
 -- ---------------------------------------------------------------------
 
@@ -338,6 +324,10 @@ fromCommand _             = error "Not a command"
 onMatch :: [a] -> (a -> Bool) -> String -> IO a
 onMatch as predicate err = maybe (fail err) return (find predicate as)
 
+noMatch :: [a] -> (a -> Bool) -> String -> IO ()
+noMatch [] _ _ = pure ()
+noMatch as predicate err = bool (pure ()) (fail err) (any predicate as)
+
 inspectDiagnostic :: [Diagnostic] -> [T.Text] -> IO Diagnostic
 inspectDiagnostic diags s = onMatch diags (\ca -> all (`T.isInfixOf` (ca ^. L.message)) s) err
     where err = "expected diagnostic matching '" ++ show s ++ "' but did not find one"
@@ -353,6 +343,14 @@ inspectCodeAction cars s = fromAction <$> onMatch cars predicate err
 
 expectCodeAction :: [Command |? CodeAction] -> [T.Text] -> IO ()
 expectCodeAction cars s = void $ inspectCodeAction cars s
+
+dontExpectCodeAction :: [Command |? CodeAction] -> [T.Text] -> IO ()
+dontExpectCodeAction cars s =
+  noMatch cars predicate err
+    where predicate (InR ca) = all (`T.isInfixOf` (ca ^. L.title)) s
+          predicate _        = False
+          err = "didn't expected code action matching '" ++ show s ++ "' but found one anyway"
+
 
 inspectCommand :: [Command |? CodeAction] -> [T.Text] -> IO Command
 inspectCommand cars s = fromCommand <$> onMatch cars predicate err

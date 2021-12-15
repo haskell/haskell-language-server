@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-ormolu-plugin
-version:            1.0.0.0
+version:            1.0.1.2
 synopsis:           Integration with the Ormolu code formatter
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -24,11 +24,11 @@ library
     , filepath
     , ghc
     , ghc-boot-th
-    , ghcide          >=1.2   && <1.5
-    , hls-plugin-api  ^>=1.1
+    , ghcide          ^>=1.5.0
+    , hls-plugin-api  >=1.1   && <1.3
     , lens
     , lsp
-    , ormolu          ^>=0.1.2
+    , ormolu          ^>=0.1.2 || ^>= 0.2 || ^>= 0.3
     , text
 
   default-language: Haskell2010
@@ -43,5 +43,5 @@ test-suite tests
     , base
     , filepath
     , hls-ormolu-plugin
-    , hls-test-utils     ^>=1.0
+    , hls-test-utils     >=1.0 && <1.2
     , lsp-types

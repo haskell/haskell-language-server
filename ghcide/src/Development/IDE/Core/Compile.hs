@@ -30,7 +30,7 @@ module Development.IDE.Core.Compile
   , setupFinderCache
   , getDocsBatch
   , lookupName
-  ) where
+  ,mergeEnvs) where
 
 import           Development.IDE.Core.Preprocessor
 import           Development.IDE.Core.RuleTypes
@@ -43,19 +43,18 @@ import           Development.IDE.Spans.Common
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
-import           Outputable                        hiding ((<>))
+
+import           Development.IDE.GHC.Compat        hiding (loadInterface,
+                                                    parseHeader, parseModule,
+                                                    tcRnModule, writeHieFile)
+import qualified Development.IDE.GHC.Compat        as Compat
+import qualified Development.IDE.GHC.Compat        as GHC
+import qualified Development.IDE.GHC.Compat.Util   as Util
 
 import           HieDb
 
 import           Language.LSP.Types                (DiagnosticTag (..))
 
-import           DriverPhases
-import           DriverPipeline                    hiding (unP)
-import           HscTypes
-import           LoadIface                         (loadModuleInterface)
-
-import           Lexer
-import qualified Parser
 #if MIN_VERSION_ghc(8,10,0)
 import           Control.DeepSeq                   (force, rnf)
 #else
@@ -63,35 +62,13 @@ import           Control.DeepSeq                   (rnf)
 import           ErrUtils
 #endif
 
-import           Development.IDE.GHC.Compat        hiding (parseModule,
-                                                    typecheckModule,
-                                                    writeHieFile)
-import qualified Development.IDE.GHC.Compat        as Compat
-import qualified Development.IDE.GHC.Compat        as GHC
-import           Finder
-import           GhcMonad
-import           GhcPlugins                        as GHC hiding (fst3, (<>))
-import           Hooks
-import           HscMain                           (hscDesugar, hscGenHardCode,
-                                                    hscInteractive, hscSimplify,
-                                                    hscTypecheckRename,
-                                                    makeSimpleDetails)
-import           MkIface
-import           StringBuffer                      as SB
-import           TcIface                           (typecheckIface)
-import           TcRnMonad                         hiding (newUnique)
+
 #if MIN_VERSION_ghc(9,0,1)
-import           GHC.Builtin.Names
-import           GHC.Iface.Recomp
 import           GHC.Tc.Gen.Splice
-import           GHC.Tc.Types.Evidence             (EvBind)
 #else
-import           PrelNames
 import           TcSplice
 #endif
-import           TidyPgm
 
-import           Bag
 import           Control.Exception                 (evaluate)
 import           Control.Exception.Safe
 import           Control.Lens                      hiding (List)
@@ -108,26 +85,31 @@ import           Data.Maybe
 import qualified Data.Text                         as T
 import           Data.Time                         (UTCTime, getCurrentTime)
 import qualified GHC.LanguageExtensions            as LangExt
-import           HeaderInfo
-import           Linker                            (unload)
-import           Maybes                            (orElse)
 import           System.Directory
 import           System.FilePath
 import           System.IO.Extra                   (fixIO, newTempFileWithin)
-import           TcEnv                             (tcLookup)
+
+-- GHC API imports
+-- GHC API imports
+import           GHC                               (GetDocsFailure (..),
+                                                    mgModSummaries,
+                                                    parsedSource)
 
 import           Control.Concurrent.Extra
-import           Control.Concurrent.STM            hiding (orElse)
+import           Control.Concurrent.STM.Stats      hiding (orElse)
 import           Data.Aeson                        (toJSON)
 import           Data.Binary
 import           Data.Coerce
 import           Data.Functor
 import qualified Data.HashMap.Strict               as HashMap
+import           Data.Map                          (Map)
 import           Data.Tuple.Extra                  (dupe)
-import           Data.Unique
-import           GHC.Fingerprint
+import           Data.Unique                       as Unique
+import           Development.IDE.Core.Tracing      (withTrace)
+import           Development.IDE.GHC.Compat.Util   (emptyUDFM, plusUDFM_C)
 import qualified Language.LSP.Server               as LSP
 import qualified Language.LSP.Types                as LSP
+import           Unsafe.Coerce
 
 -- | Given a string buffer, return the string (after preprocessing) and the 'ParsedModule'.
 parseModule
@@ -146,11 +128,10 @@ parseModule IdeOptions{..} env filename ms =
 -- | Given a package identifier, what packages does it depend on
 computePackageDeps
     :: HscEnv
-    -> InstalledUnitId
-    -> IO (Either [FileDiagnostic] [InstalledUnitId])
+    -> Unit
+    -> IO (Either [FileDiagnostic] [UnitId])
 computePackageDeps env pkg = do
-    let dflags = hsc_dflags env
-    case oldLookupInstalledPackage dflags pkg of
+    case lookupUnit env pkg of
         Nothing -> return $ Left [ideErrorText (toNormalizedFilePath' noFilePath) $
             T.pack $ "unknown package: " ++ show pkg]
         Just pkgInfo -> return $ Right $ unitDepends pkgInfo
@@ -169,7 +150,12 @@ typecheckModule (IdeDefer defer) hsc keep_lbls pm = do
 
         modSummary' <- initPlugins hsc modSummary
         (warnings, tcm) <- withWarnings "typecheck" $ \tweak ->
-            tcRnModule hsc keep_lbls $ demoteIfDefer pm{pm_mod_summary = tweak modSummary'}
+            let
+              session = tweak (hscSetFlags dflags hsc)
+               -- TODO: maybe settings ms_hspp_opts is unnecessary?
+              mod_summary'' = modSummary' { ms_hspp_opts = hsc_dflags session}
+            in
+              tcRnModule hsc keep_lbls $ demoteIfDefer pm{pm_mod_summary = mod_summary''}
         let errorPipeline = unDefer . hideDiag dflags . tagDiag
             diags = map errorPipeline warnings
             deferedError = any fst diags
@@ -180,10 +166,10 @@ typecheckModule (IdeDefer defer) hsc keep_lbls pm = do
 -- | Add a Hook to the DynFlags which captures and returns the
 -- typechecked splices before they are run. This information
 -- is used for hover.
-captureSplices :: DynFlags -> (DynFlags -> IO a) -> IO (a, Splices)
-captureSplices dflags k = do
+captureSplices :: HscEnv -> (HscEnv -> IO a) -> IO (a, Splices)
+captureSplices env k = do
   splice_ref <- newIORef mempty
-  res <- k (dflags { hooks = addSpliceHook splice_ref (hooks dflags)})
+  res <- k (hscSetHooks (addSpliceHook splice_ref (hsc_hooks env)) env)
   splices <- readIORef splice_ref
   return (res, splices)
   where
@@ -217,14 +203,13 @@ captureSplices dflags k = do
 tcRnModule :: HscEnv -> [Linkable] -> ParsedModule -> IO TcModuleResult
 tcRnModule hsc_env keep_lbls pmod = do
   let ms = pm_mod_summary pmod
-      hsc_env_tmp = hsc_env { hsc_dflags = ms_hspp_opts ms }
+      hsc_env_tmp = hscSetFlags (ms_hspp_opts ms) hsc_env
 
   unload hsc_env_tmp keep_lbls
 
   ((tc_gbl_env, mrn_info), splices)
-      <- liftIO $ captureSplices (ms_hspp_opts ms) $ \dflags ->
-             do  let hsc_env_tmp = hsc_env { hsc_dflags = dflags }
-                 hscTypecheckRename hsc_env_tmp ms $
+      <- liftIO $ captureSplices (hscSetFlags (ms_hspp_opts ms) hsc_env) $ \hsc_env_tmp ->
+             do  hscTypecheckRename hsc_env_tmp ms $
                           HsParsedModule { hpm_module = parsedSource pmod,
                                            hpm_src_files = pm_extra_src_files pmod,
                                            hpm_annotations = pm_annotations pmod }
@@ -235,7 +220,7 @@ tcRnModule hsc_env keep_lbls pmod = do
 
 mkHiFileResultNoCompile :: HscEnv -> TcModuleResult -> IO HiFileResult
 mkHiFileResultNoCompile session tcm = do
-  let hsc_env_tmp = session { hsc_dflags = ms_hspp_opts ms }
+  let hsc_env_tmp = hscSetFlags (ms_hspp_opts ms) session
       ms = pm_mod_summary $ tmrParsed tcm
       tcGblEnv = tmrTypechecked tcm
   details <- makeSimpleDetails hsc_env_tmp tcGblEnv
@@ -255,7 +240,7 @@ mkHiFileResultCompile
     -> LinkableType -- ^ use object code or byte code?
     -> IO (IdeResult HiFileResult)
 mkHiFileResultCompile session' tcm simplified_guts ltype = catchErrs $ do
-  let session = session' { hsc_dflags = ms_hspp_opts ms }
+  let session = hscSetFlags (ms_hspp_opts ms) session'
       ms = pm_mod_summary $ tmrParsed tcm
       tcGblEnv = tmrTypechecked tcm
 
@@ -297,8 +282,8 @@ mkHiFileResultCompile session' tcm simplified_guts ltype = catchErrs $ do
 
 initPlugins :: HscEnv -> ModSummary -> IO ModSummary
 initPlugins session modSummary = do
-    dflags <- liftIO $ initializePlugins session $ ms_hspp_opts modSummary
-    return modSummary{ms_hspp_opts = dflags}
+    session1 <- liftIO $ initializePlugins (hscSetFlags (ms_hspp_opts modSummary) session)
+    return modSummary{ms_hspp_opts = hsc_dflags session1}
 
 -- | Whether we should run the -O0 simplifier when generating core.
 --
@@ -318,9 +303,9 @@ compileModule (RunSimplifier simplify) session ms tcg =
     fmap (either (, Nothing) (second Just)) $
         catchSrcErrors (hsc_dflags session) "compile" $ do
             (warnings,desugared_guts) <- withWarnings "compile" $ \tweak -> do
-               let ms' = tweak ms
-                   session' = session{ hsc_dflags = ms_hspp_opts ms'}
-               desugar <- hscDesugar session' ms' tcg
+               let session' = tweak (hscSetFlags (ms_hspp_opts ms) session)
+               -- TODO: maybe settings ms_hspp_opts is unnecessary?
+               desugar <- hscDesugar session' (ms { ms_hspp_opts = hsc_dflags session' })  tcg
                if simplify
                then do
                  plugins <- readIORef (tcg_th_coreplugins tcg)
@@ -337,23 +322,20 @@ generateObjectCode session summary guts = do
                   fp = replaceExtension dot_o "s"
               createDirectoryIfMissing True (takeDirectory fp)
               (warnings, dot_o_fp) <-
-                withWarnings "object" $ \_tweak -> do
-                      let summary' = _tweak summary
-#if MIN_VERSION_ghc(8,10,0)
-                          target = defaultObjectTarget $ hsc_dflags session
-#else
-                          target = defaultObjectTarget $ targetPlatform $ hsc_dflags session
-#endif
-                          session' = session { hsc_dflags = updOptLevel 0 $ (ms_hspp_opts summary') { outputFile = Just dot_o , hscTarget = target}}
+                withWarnings "object" $ \tweak -> do
+                      let env' = tweak (hscSetFlags (ms_hspp_opts summary) session)
+                          target = platformDefaultBackend (hsc_dflags env')
+                          newFlags = setBackend target $ updOptLevel 0 $ (hsc_dflags env') { outputFile = Just dot_o }
+                          session' = hscSetFlags newFlags session
 #if MIN_VERSION_ghc(9,0,1)
                       (outputFilename, _mStub, _foreign_files, _cinfos) <- hscGenHardCode session' guts
 #else
                       (outputFilename, _mStub, _foreign_files) <- hscGenHardCode session' guts
 #endif
 #if MIN_VERSION_ghc(8,10,0)
-                                (ms_location summary')
+                                (ms_location summary)
 #else
-                                summary'
+                                summary
 #endif
                                 fp
                       compileFile session' StopLn (outputFilename, Just (As False))
@@ -370,8 +352,9 @@ generateByteCode hscEnv summary guts = do
           catchSrcErrors (hsc_dflags hscEnv) "bytecode" $ do
               (warnings, (_, bytecode, sptEntries)) <-
                 withWarnings "bytecode" $ \_tweak -> do
-                      let summary' = _tweak summary
-                          session = hscEnv { hsc_dflags = ms_hspp_opts summary' }
+                      let session = _tweak (hscSetFlags (ms_hspp_opts summary) hscEnv)
+                          -- TODO: maybe settings ms_hspp_opts is unnecessary?
+                          summary' = summary { ms_hspp_opts = hsc_dflags session }
                       hscInteractive session guts
 #if MIN_VERSION_ghc(8,10,0)
                                 (ms_location summary')
@@ -475,16 +458,16 @@ generateHieAsts hscEnv tcm =
     -- These varBinds use unitDataConId but it could be anything as the id name is not used
     -- during the hie file generation process. It's a workaround for the fact that the hie modules
     -- don't export an interface which allows for additional information to be added to hie files.
-    let fake_splice_binds = listToBag (map (mkVarBind unitDataConId) (spliceExpresions $ tmrTopLevelSplices tcm))
+    let fake_splice_binds = Util.listToBag (map (mkVarBind unitDataConId) (spliceExpresions $ tmrTopLevelSplices tcm))
         real_binds = tcg_binds $ tmrTypechecked tcm
 #if MIN_VERSION_ghc(9,0,1)
         ts = tmrTypechecked tcm :: TcGblEnv
-        top_ev_binds = tcg_ev_binds ts :: Bag EvBind
+        top_ev_binds = tcg_ev_binds ts :: Util.Bag EvBind
         insts = tcg_insts ts :: [ClsInst]
         tcs = tcg_tcs ts :: [TyCon]
-    Just <$> GHC.enrichHie (fake_splice_binds `unionBags` real_binds) (tmrRenamed tcm) top_ev_binds insts tcs
+    Just <$> GHC.enrichHie (fake_splice_binds `Util.unionBags` real_binds) (tmrRenamed tcm) top_ev_binds insts tcs
 #else
-    Just <$> GHC.enrichHie (fake_splice_binds `unionBags` real_binds) (tmrRenamed tcm)
+    Just <$> GHC.enrichHie (fake_splice_binds `Util.unionBags` real_binds) (tmrRenamed tcm)
 #endif
   where
     dflags = hsc_dflags hscEnv
@@ -527,7 +510,7 @@ spliceExpresions Splices{..} =
 -- TVar to 0 in order to set it up for a fresh indexing session. Otherwise, we
 -- can just increment the 'indexCompleted' TVar and exit.
 --
-indexHieFile :: ShakeExtras -> ModSummary -> NormalizedFilePath -> Fingerprint -> Compat.HieFile -> IO ()
+indexHieFile :: ShakeExtras -> ModSummary -> NormalizedFilePath -> Util.Fingerprint -> Compat.HieFile -> IO ()
 indexHieFile se mod_summary srcPath !hash hf = do
  IdeOptions{optProgressStyle} <- getIdeOptionsIO se
  atomically $ do
@@ -565,7 +548,7 @@ indexHieFile se mod_summary srcPath !hash hf = do
           case lspEnv se of
             Nothing -> pure Nothing
             Just env -> LSP.runLspT env $ do
-              u <- LSP.ProgressTextToken . T.pack . show . hashUnique <$> liftIO newUnique
+              u <- LSP.ProgressTextToken . T.pack . show . hashUnique <$> liftIO Unique.newUnique
               -- TODO: Wait for the progress create response to use the token
               _ <- LSP.sendRequest LSP.SWindowWorkDoneProgressCreate (LSP.WorkDoneProgressCreateParams u) (const $ pure ())
               LSP.sendNotification LSP.SProgress $ LSP.ProgressParams u $
@@ -634,7 +617,7 @@ writeAndIndexHieFile hscEnv se mod_summary srcPath exports ast source =
     hf <- runHsc hscEnv $
       GHC.mkHieFile' mod_summary exports ast source
     atomicFileWrite targetPath $ flip GHC.writeHieFile hf
-    hash <- getFileHash targetPath
+    hash <- Util.getFileHash targetPath
     indexHieFile se mod_summary srcPath hash hf
   where
     dflags       = hsc_dflags hscEnv
@@ -645,7 +628,7 @@ writeHiFile :: HscEnv -> HiFileResult -> IO [FileDiagnostic]
 writeHiFile hscEnv tc =
   handleGenerationErrors dflags "interface write" $ do
     atomicFileWrite targetPath $ \fp ->
-      writeIfaceFile dflags fp modIface
+      writeIfaceFile hscEnv fp modIface
   where
     modIface = hm_iface $ hirHomeMod tc
     targetPath = ml_hi_file $ ms_location $ hirModSummary tc
@@ -674,7 +657,7 @@ setupFinderCache mss session = do
 
     -- Make modules available for others that import them,
     -- by putting them in the finder cache.
-    let ims  = map (installedModule (thisInstalledUnitId $ hsc_dflags session) . moduleName . ms_mod) mss
+    let ims  = map (installedModule (homeUnitId_ $ hsc_dflags session) . moduleName . ms_mod) mss
         ifrs = zipWith (\ms -> InstalledFound (ms_location ms)) mss ims
     -- set the target and module graph in the session
         graph = mkModuleGraph mss
@@ -708,6 +691,34 @@ loadModulesHome mod_infos e =
     where
       mod_name = moduleName . mi_module . hm_iface
 
+-- Merge the HPTs, module graphs and FinderCaches
+mergeEnvs :: HscEnv -> [ModSummary] -> [HomeModInfo] -> [HscEnv] -> IO HscEnv
+mergeEnvs env extraModSummaries extraMods envs = do
+    prevFinderCache <- concatFC <$> mapM (readIORef . hsc_FC) envs
+    let ims  = map (Compat.installedModule (homeUnitId_ $ hsc_dflags env) . moduleName . ms_mod) extraModSummaries
+        ifrs = zipWith (\ms -> InstalledFound (ms_location ms)) extraModSummaries ims
+    newFinderCache <- newIORef $
+            foldl'
+                (\fc (im, ifr) -> Compat.extendInstalledModuleEnv fc im ifr) prevFinderCache
+                $ zip ims ifrs
+    return $ loadModulesHome extraMods $ env{
+        hsc_HPT = foldMapBy mergeUDFM emptyUDFM hsc_HPT envs,
+        hsc_FC = newFinderCache,
+        hsc_mod_graph = mkModuleGraph $ extraModSummaries ++ nubOrdOn ms_mod (concatMap (mgModSummaries . hsc_mod_graph) envs)
+    }
+    where
+        mergeUDFM = plusUDFM_C combineModules
+        combineModules a b
+          | HsSrcFile <- mi_hsc_src (hm_iface a) = a
+          | otherwise = b
+    -- required because 'FinderCache':
+    --  1) doesn't have a 'Monoid' instance,
+    --  2) is abstract and doesn't export constructors
+    -- To work around this, we coerce to the underlying type
+    -- To remove this, I plan to upstream the missing Monoid instance
+        concatFC :: [FinderCache] -> FinderCache
+        concatFC = unsafeCoerce (mconcat @(Map InstalledModule InstalledFindResult))
+
 withBootSuffix :: HscSource -> ModLocation -> ModLocation
 withBootSuffix HsBootFile = addBootSuffixLocnOut
 withBootSuffix _          = id
@@ -718,7 +729,7 @@ getModSummaryFromImports
   :: HscEnv
   -> FilePath
   -> UTCTime
-  -> Maybe SB.StringBuffer
+  -> Maybe Util.StringBuffer
   -> ExceptT [FileDiagnostic] IO ModSummaryResult
 getModSummaryFromImports env fp modTime contents = do
     (contents, opts, dflags) <- preprocessor env fp contents
@@ -730,7 +741,7 @@ getModSummaryFromImports env fp modTime contents = do
     let mb_mod = hsmodName hsmod
         imps = hsmodImports hsmod
 
-        mod = fmap unLoc mb_mod `orElse` mAIN_NAME
+        mod = fmap unLoc mb_mod `Util.orElse` mAIN_NAME
 
         (src_idecls, ord_idecls) = partition ((== IsBoot) . ideclSource.unLoc) imps
 
@@ -754,9 +765,13 @@ getModSummaryFromImports env fp modTime contents = do
     liftIO $ evaluate $ rnf srcImports
     liftIO $ evaluate $ rnf textualImports
 
-    modLoc <- liftIO $ mkHomeModLocation dflags mod fp
+    modLoc <- liftIO $ if mod == mAIN_NAME
+        -- specially in tests it's common to have lots of nameless modules
+        -- mkHomeModLocation will map them to the same hi/hie locations
+        then mkHomeModLocation dflags (pathToModuleName fp) fp
+        else mkHomeModLocation dflags mod fp
 
-    let modl = mkModule (thisPackage dflags) mod
+    let modl = mkHomeModule (hscHomeUnit (hscSetFlags dflags env)) mod
         sourceType = if "-boot" `isSuffixOf` takeExtension fp then HsBootFile else HsSrcFile
         msrModSummary =
             ModSummary
@@ -785,14 +800,14 @@ getModSummaryFromImports env fp modTime contents = do
         -- eliding the timestamps, the preprocessed source and other non relevant fields
         computeFingerprint opts ModSummary{..} = do
             fingerPrintImports <- fingerprintFromPut $ do
-                  put $ uniq $ moduleNameFS $ moduleName ms_mod
+                  put $ Util.uniq $ moduleNameFS $ moduleName ms_mod
                   forM_ (ms_srcimps ++ ms_textual_imps) $ \(mb_p, m) -> do
-                    put $ uniq $ moduleNameFS $ unLoc m
-                    whenJust mb_p $ put . uniq
-            return $! fingerprintFingerprints $
-                    [ fingerprintString fp
+                    put $ Util.uniq $ moduleNameFS $ unLoc m
+                    whenJust mb_p $ put . Util.uniq
+            return $! Util.fingerprintFingerprints $
+                    [ Util.fingerprintString fp
                     , fingerPrintImports
-                    ] ++ map fingerprintString opts
+                    ] ++ map Util.fingerprintString opts
 
 
 -- | Parse only the module header
@@ -800,15 +815,15 @@ parseHeader
        :: Monad m
        => DynFlags -- ^ flags to use
        -> FilePath  -- ^ the filename (for source locations)
-       -> SB.StringBuffer -- ^ Haskell module source text (full Unicode is supported)
+       -> Util.StringBuffer -- ^ Haskell module source text (full Unicode is supported)
 #if MIN_VERSION_ghc(9,0,1)
        -> ExceptT [FileDiagnostic] m ([FileDiagnostic], Located(HsModule))
 #else
        -> ExceptT [FileDiagnostic] m ([FileDiagnostic], Located(HsModule GhcPs))
 #endif
 parseHeader dflags filename contents = do
-   let loc  = mkRealSrcLoc (mkFastString filename) 1 1
-   case unP Parser.parseHeader (mkPState dflags contents loc) of
+   let loc  = mkRealSrcLoc (Util.mkFastString filename) 1 1
+   case unP Compat.parseHeader (initParserState (initParserOpts dflags) contents loc) of
 #if MIN_VERSION_ghc(8,10,0)
      PFailed pst ->
         throwE $ diagFromErrMsgs "parser" dflags $ getErrorMessages pst dflags
@@ -828,9 +843,9 @@ parseHeader dflags filename contents = do
         -- errors are those from which a parse tree just can't
         -- be produced.
         unless (null errs) $
-            throwE $ diagFromErrMsgs "parser" dflags errs
+            throwE $ diagFromErrMsgs "parser" dflags (fmap pprError errs)
 
-        let warnings = diagFromErrMsgs "parser" dflags warns
+        let warnings = diagFromErrMsgs "parser" dflags (fmap pprWarning warns)
         return (warnings, rdr_module)
 
 -- | Given a buffer, flags, and file path, produce a
@@ -843,10 +858,10 @@ parseFileContents
        -> ModSummary
        -> ExceptT [FileDiagnostic] IO ([FileDiagnostic], ParsedModule)
 parseFileContents env customPreprocessor filename ms = do
-   let loc  = mkRealSrcLoc (mkFastString filename) 1 1
+   let loc  = mkRealSrcLoc (Util.mkFastString filename) 1 1
        dflags = ms_hspp_opts ms
        contents = fromJust $ ms_hspp_buf ms
-   case unP Parser.parseModule (mkPState dflags contents loc) of
+   case unP Compat.parseModule (initParserState (initParserOpts dflags) contents loc) of
 #if MIN_VERSION_ghc(8,10,0)
      PFailed pst -> throwE $ diagFromErrMsgs "parser" dflags $ getErrorMessages pst dflags
 #else
@@ -854,21 +869,8 @@ parseFileContents env customPreprocessor filename ms = do
       throwE $ diagFromErrMsg "parser" dflags $ mkPlainErrMsg dflags locErr msgErr
 #endif
      POk pst rdr_module ->
-         let hpm_annotations :: ApiAnns
-             hpm_annotations =
-#if MIN_VERSION_ghc(9,0,1)
-               -- Copied from GHC.Driver.Main
-               ApiAnns {
-                      apiAnnItems = Map.fromListWith (++) $ annotations pst,
-                      apiAnnEofPos = eof_pos pst,
-                      apiAnnComments = Map.fromList (annotations_comments pst),
-                      apiAnnRogueComments = comment_q pst
-                   }
-#else
-               (Map.fromListWith (++) $ annotations pst,
-                 Map.fromList ((noSrcSpan,comment_q pst)
-                                  :annotations_comments pst))
-#endif
+         let
+             hpm_annotations = mkApiAnns pst
              (warns, errs) = getMessages pst dflags
          in
            do
@@ -908,7 +910,7 @@ parseFileContents env customPreprocessor filename ms = do
                                   $ filter (/= n_hspp)
                                   $ map normalise
                                   $ filter (not . isPrefixOf "<")
-                                  $ map unpackFS
+                                  $ map Util.unpackFS
                                   $ srcfiles pst
                    srcs1 = case ml_hs_file (ms_location ms) of
                              Just f  -> filter (/= normalise f) srcs0
@@ -919,13 +921,7 @@ parseFileContents env customPreprocessor filename ms = do
                -- filter them out:
                srcs2 <- liftIO $ filterM doesFileExist srcs1
 
-               let pm =
-                     ParsedModule {
-                         pm_mod_summary = ms
-                       , pm_parsed_source = parsed'
-                       , pm_extra_src_files = srcs2
-                       , pm_annotations = hpm_annotations
-                      }
+               let pm = mkParsedModule ms parsed' srcs2 hpm_annotations
                    warnings = diagFromErrMsgs "parser" dflags warns
                pure (warnings ++ preproc_warnings, pm)
 
@@ -937,14 +933,15 @@ loadHieFile ncu f = do
 --   Assumes file exists.
 --   Requires the 'HscEnv' to be set up with dependencies
 loadInterface
-  :: MonadIO m => HscEnv
+  :: (MonadIO m, MonadMask m)
+  => HscEnv
   -> ModSummary
   -> SourceModified
   -> Maybe LinkableType
   -> (Maybe LinkableType -> m ([FileDiagnostic], Maybe HiFileResult)) -- ^ Action to regenerate an interface
   -> m ([FileDiagnostic], Maybe HiFileResult)
 loadInterface session ms sourceMod linkableNeeded regen = do
-    let sessionWithMsDynFlags = session{hsc_dflags = ms_hspp_opts ms}
+    let sessionWithMsDynFlags = hscSetFlags (ms_hspp_opts ms) session
     res <- liftIO $ checkOldIface sessionWithMsDynFlags ms sourceMod Nothing
     case res of
           (UpToDate, Just iface)
@@ -977,7 +974,15 @@ loadInterface session ms sourceMod linkableNeeded regen = do
                hmi <- liftIO $ mkDetailsFromIface sessionWithMsDynFlags iface linkable
                return ([], Just $ mkHiFileResult ms hmi)
              else regen linkableNeeded
-          (_reason, _) -> regen linkableNeeded
+          (_reason, _) -> withTrace "regenerate interface" $ \setTag -> do
+                 setTag "Module" $ moduleNameString $ moduleName $ ms_mod ms
+                 setTag "Reason" $ showReason _reason
+                 regen linkableNeeded
+
+showReason :: RecompileRequired -> String
+showReason UpToDate          = "UpToDate"
+showReason MustCompile       = "MustCompile"
+showReason (RecompBecause s) = s
 
 mkDetailsFromIface :: HscEnv -> ModIface -> Maybe Linkable -> IO HomeModInfo
 mkDetailsFromIface session iface linkable = do
@@ -1019,7 +1024,7 @@ getDocsBatch hsc_env _mod _names = do
         UnhelpfulLoc {} -> True
 
 fakeSpan :: RealSrcSpan
-fakeSpan = realSrcLocSpan $ mkRealSrcLoc (fsLit "<ghcide>") 1 1
+fakeSpan = realSrcLocSpan $ mkRealSrcLoc (Util.fsLit "<ghcide>") 1 1
 
 -- | Non-interactive, batch version of 'InteractiveEval.lookupNames'.
 --   The interactive paths create problems in ghc-lib builds
@@ -1036,3 +1041,11 @@ lookupName hsc_env mod name = do
             ATcId{tct_id=id} -> return (AnId id)
             _                -> panic "tcRnLookupName'"
     return res
+
+
+pathToModuleName :: FilePath -> ModuleName
+pathToModuleName = mkModuleName . map rep
+  where
+      rep c | isPathSeparator c = '_'
+      rep ':' = '_'
+      rep c = c

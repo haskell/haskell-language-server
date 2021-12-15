@@ -1,6 +1,5 @@
 module Wingman.Judgements where
 
-import           ConLike (ConLike)
 import           Control.Arrow
 import           Control.Lens hiding (Context)
 import           Data.Bool
@@ -13,10 +12,8 @@ import           Data.Maybe
 import           Data.Set (Set)
 import qualified Data.Set as S
 import           Development.IDE.Core.UseStale (Tracked, unTrack)
+import           Development.IDE.GHC.Compat hiding (isTopLevel)
 import           Development.IDE.Spans.LocalBindings
-import           OccName
-import           SrcLoc
-import           Type
 import           Wingman.GHC (algebraicTyCon, normalizeType)
 import           Wingman.Judgements.Theta
 import           Wingman.Types
@@ -373,6 +370,10 @@ jHasBoundArgs
   . filter (isTopLevel . hi_provenance)
   . unHypothesis
   . jLocalHypothesis
+
+
+jNeedsToBindArgs :: Judgement' CType -> Bool
+jNeedsToBindArgs = isFunTy . unCType . jGoal
 
 
 ------------------------------------------------------------------------------
