@@ -40,6 +40,7 @@ import           Development.IDE.Types.Logger
 
 import           System.IO.Unsafe                      (unsafeInterleaveIO)
 
+issueTrackerUrl :: T.Text
 issueTrackerUrl = "https://github.com/haskell/haskell-language-server/issues"
 
 runLanguageServer
