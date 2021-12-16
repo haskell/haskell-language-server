@@ -38,6 +38,7 @@ import           Development.IDE.Core.Tracing
 import           Development.IDE.LSP.HoverDefinition
 import           Development.IDE.Types.Logger
 
+import           Control.Monad.IO.Unlift               (MonadUnliftIO)
 import           System.IO.Unsafe                      (unsafeInterleaveIO)
 
 issueTrackerUrl :: T.Text
@@ -57,10 +58,15 @@ runLanguageServer
 runLanguageServer options inH outH getHieDbLoc defaultConfig onConfigurationChange userHandlers getIdeState = do
 
     -- This MVar becomes full when the server thread exits or we receive exit message from client.
-    -- LSP loop will be canceled when it's full.
+    -- LSP server will be canceled when it's full.
     clientMsgVar <- newEmptyMVar
     -- Forcefully exit
     let exit = void $ tryPutMVar clientMsgVar ()
+
+    -- An MVar to control the lifetime of the reactor loop.
+    -- The loop will be stopped and resources freed when it's full
+    reactorLifetime <- newEmptyMVar
+    let stopReactorLoop = void $ tryPutMVar reactorLifetime ()
 
     -- The set of requests ids that we have received but not finished processing
     pendingRequests <- newTVarIO Set.empty
@@ -96,7 +102,7 @@ runLanguageServer options inH outH getHieDbLoc defaultConfig onConfigurationChan
           [ ideHandlers
           , cancelHandler cancelRequest
           , exitHandler exit
-          , shutdownHandler
+          , shutdownHandler stopReactorLoop
           ]
           -- Cancel requests are special since they need to be handled
           -- out of order to be useful. Existing handlers are run afterwards.
@@ -105,25 +111,23 @@ runLanguageServer options inH outH getHieDbLoc defaultConfig onConfigurationChan
     let serverDefinition = LSP.ServerDefinition
             { LSP.onConfigurationChange = onConfigurationChange
             , LSP.defaultConfig = defaultConfig
-            , LSP.doInitialize = handleInit exit clearReqId waitForCancel clientMsgChan
+            , LSP.doInitialize = handleInit reactorLifetime exit clearReqId waitForCancel clientMsgChan
             , LSP.staticHandlers = asyncHandlers
             , LSP.interpretHandler = \(env, st) -> LSP.Iso (LSP.runLspT env . flip runReaderT (clientMsgChan,st)) liftIO
             , LSP.options = modifyOptions options
             }
 
-    void $ waitAnyCancel =<< traverse async
-        [ void $ LSP.runServerWithHandles
+    void $ untilMVar clientMsgVar $
+          void $ LSP.runServerWithHandles
             inH
             outH
             serverDefinition
-        , void $ readMVar clientMsgVar
-        ]
 
     where
         handleInit
-          :: IO () -> (SomeLspId -> IO ()) -> (SomeLspId -> IO ()) -> Chan ReactorMessage
+          :: MVar () -> IO () -> (SomeLspId -> IO ()) -> (SomeLspId -> IO ()) -> Chan ReactorMessage
           -> LSP.LanguageContextEnv config -> RequestMessage Initialize -> IO (Either err (LSP.LanguageContextEnv config, IdeState))
-        handleInit exitClientMsg clearReqId waitForCancel clientMsgChan env (RequestMessage _ _ m params) = otTracedHandler "Initialize" (show m) $ \sp -> do
+        handleInit lifetime exitClientMsg clearReqId waitForCancel clientMsgChan env (RequestMessage _ _ m params) = otTracedHandler "Initialize" (show m) $ \sp -> do
             traceWithSpan sp params
             let root = LSP.resRootPath env
             dir <- maybe getCurrentDirectory return root
@@ -145,7 +149,7 @@ runLanguageServer options inH outH getHieDbLoc defaultConfig onConfigurationChan
                         T.pack $ "Fatal error in server thread: " <> show e
                     sendErrorMessage e
                     exitClientMsg
-                handleServerException _ = pure ()
+                handleServerException (Right _) = pure ()
 
                 sendErrorMessage (e :: SomeException) = do
                     LSP.runLspT env $ LSP.sendNotification SWindowShowMessage $
@@ -178,7 +182,7 @@ runLanguageServer options inH outH getHieDbLoc defaultConfig onConfigurationChan
                         ) $ \(e :: SomeException) -> do
                             exceptionInHandler e
                             k $ ResponseError InternalError (T.pack $ show e) Nothing
-            _ <- flip forkFinally handleServerException $ runWithDb logger dbLoc $ \hiedb hieChan -> do
+            _ <- flip forkFinally handleServerException $ untilMVar lifetime $ runWithDb logger dbLoc $ \hiedb hieChan -> do
               putMVar dbMVar (hiedb,hieChan)
               forever $ do
                 msg <- readChan clientMsgChan
@@ -190,15 +194,22 @@ runLanguageServer options inH outH getHieDbLoc defaultConfig onConfigurationChan
             pure $ Right (env,ide)
 
 
+-- | Runs the action until it ends or until the given MVar is put.
+--   Rethrows any exceptions.
+untilMVar :: MonadUnliftIO m => MVar () -> m () -> m ()
+untilMVar mvar io = void $
+    waitAnyCancel =<< traverse async [ io , readMVar mvar ]
 
 cancelHandler :: (SomeLspId -> IO ()) -> LSP.Handlers (ServerM c)
 cancelHandler cancelRequest = LSP.notificationHandler SCancelRequest $ \NotificationMessage{_params=CancelParams{_id}} ->
   liftIO $ cancelRequest (SomeLspId _id)
 
-shutdownHandler :: LSP.Handlers (ServerM c)
-shutdownHandler = LSP.requestHandler SShutdown $ \_ resp -> do
+shutdownHandler :: IO () -> LSP.Handlers (ServerM c)
+shutdownHandler stopReactor = LSP.requestHandler SShutdown $ \_ resp -> do
     (_, ide) <- ask
-    liftIO $ logDebug (ideLogger ide) "Received exit message"
+    liftIO $ logDebug (ideLogger ide) "Received shutdown message"
+    -- stop the reactor to free up the hiedb connection
+    liftIO stopReactor
     -- flush out the Shake session to record a Shake profile if applicable
     liftIO $ shakeShut ide
     resp $ Right Empty
