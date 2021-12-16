@@ -997,7 +997,10 @@ initTypecheckEnv hsc_env mod = initTc hsc_env HsSrcFile False mod fakeSpan
     fakeSpan :: RealSrcSpan
     fakeSpan = realSrcLocSpan $ mkRealSrcLoc (Util.fsLit "<ghcide>") 1 1
 
-
+-- | Non-interactive handling of the module interface.
+--   A non-interactive modification of code from the 'GHC.Runtime.Eval.getDocs'.
+--   The interactive paths create problems in ghc-lib builds
+---  and lead to fun errors like "Cannot continue after interface file error".
 getDocsNonInteractive'
     :: Name
     -> IOEnv
@@ -1008,7 +1011,7 @@ getDocsNonInteractive'
 getDocsNonInteractive' name =
     case nameModule_maybe name of
         Nothing -> return (name, Left $ NameHasNoModule name)
-        Just mod -> do
+        Just mod -> do -- in GHC here was an interactive check & handling.
             ModIface
                 { mi_doc_hdr = mb_doc_hdr
                 , mi_decl_docs = DeclDocMap dmap
@@ -1027,8 +1030,6 @@ getDocsNonInteractive' name =
                     else Right (Map.lookup name dmap, Map.lookup name amap)
 
 -- | Non-interactive modification of 'GHC.Runtime.Eval.getDocs'.
---   The interactive paths create problems in ghc-lib builds
----  and lead to fun errors like "Cannot continue after interface file error".
 getDocsNonInteractive :: HscEnv -> Module -> Name -> IO (Either GHC.ErrorMessages (Name, Either GetDocsFailure (Maybe HsDocString, Maybe (Map.Map Int HsDocString))))
 getDocsNonInteractive hsc_env mod name = do
     ((_warns,errs), res) <- initTypecheckEnv hsc_env mod $ getDocsNonInteractive' name
