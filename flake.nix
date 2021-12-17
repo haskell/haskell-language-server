@@ -179,10 +179,10 @@
 
         docs = pkgs.stdenv.mkDerivation {
           name = "hls-docs";
-          src = pkgs.lib.sourceFilesBySuffices ./docs [ ".py" ".rst" ".md" ".png" ".gif" ".svg" ];
+          src = pkgs.lib.sourceFilesBySuffices ./. [ ".py" ".rst" ".md" ".png" ".gif" ".svg" ".cabal" ];
           buildInputs = [ pythonWithPackages ];
           # -n gives warnings on missing link targets, -W makes warnings into errors
-          buildPhase = ''sphinx-build -n -W . $out'';
+          buildPhase = ''cd docs; sphinx-build -n -W . $out'';
           dontInstall = true;
         };
 
