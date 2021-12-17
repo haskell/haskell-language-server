@@ -125,8 +125,8 @@ jobs:
           cache-name: hackage-sources
         with:
           path: ${{ env.CABAL_PKGS_DIR }}
-          key:          ${{ env.cache-name }}-${{ env.INDEX_STATE }}
-          restore-keys: ${{ env.cache-name }}-
+          key:          v2-${{ env.cache-name }}-${{ env.INDEX_STATE }}
+          restore-keys: v2-${{ env.cache-name }}-
 
       - name: Compiled deps cache
         uses: actions/cache@v2
@@ -134,11 +134,11 @@ jobs:
           cache-name: compiled-deps
         with:
           path: ${{ steps.HaskEnvSetup.outputs.cabal-store }}
-          key:  ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project') }}
+          key:  v2-${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project') }}
           restore-keys: |
-                ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-
-                ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
-                ${{ env.cache-name }}-${{ runner.os }}-
+                v2-${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-
+                v2-${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
+                v2-${{ env.cache-name }}-${{ runner.os }}-
 
       - run: cabal update
 
