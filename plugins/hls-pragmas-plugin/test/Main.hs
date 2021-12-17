@@ -27,9 +27,23 @@ tests =
 codeActionTests :: TestTree
 codeActionTests =
   testGroup "code actions"
-  [ codeActionTest "adds LANGUAGE with no other pragmas at start ignoring later INLINE pragma" "AddPragmaIgnoreInline" [("Add \"TupleSections\"", "Contains TupleSections code action")]
-  , codeActionTest "adds LANGUAGE after shebang preceded by other LANGUAGE and GHC_OPTIONS" "AddPragmaAfterShebangPrecededByLangAndOptsGhc" [("Add \"TupleSections\"", "Contains TupleSections code action")]
-  , codeActionTest "adds LANGUAGE after shebang with other Language preceding shebang" "AddPragmaAfterShebangPrecededByLangAndOptsGhc" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  [ codeActionTest "Block comment then line comment doesn't split line" "BlockCommentThenLineComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTest "Block comment then single-line block comment doesn't split line" "BlockCommentThenSingleLineBlockComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTest "Block comment then multi-line block comment doesn't split line" "BlockCommentThenMultiLineBlockComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTest "Block comment then line haddock splits line" "BlockCommentThenLineHaddock" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTest "Block comment then single-line block haddock splits line" "BlockCommentThenSingleLineBlockHaddock" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTest "Block comment then multi-line block haddock splits line" "BlockCommentThenMultiLineBlockHaddock" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTest "Pragma then line comment doesn't split line" "PragmaThenLineComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTest "Pragma then single-line block comment doesn't split line" "PragmaThenSingleLineBlockComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTest "Pragma then multi-line block comment splits line" "PragmaThenMultiLineBlockComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTest "Pragma then line haddock splits line" "PragmaThenLineHaddock" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTest "Pragma then single-line block haddock splits line" "PragmaThenSingleLineBlockHaddock" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTest "Pragma then multi-line block haddock splits line" "PragmaThenMultiLineBlockHaddock" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTest "Pragma then single-line block haddock single-line block comment splits line" "PragmaThenSingleLineBlockHaddockSingleLineBlockComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTest "Block comment then single-line block haddock single-line block comment splits line" "BlockCommentThenSingleLineBlockHaddockSingleLineBlockComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTest "Pragma then line haddock then newline line comment splits line" "PragmaThenLineHaddockNewlineLineComment" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTest "does not add pragma after OPTIONS_GHC pragma located after a declaration" "OptionsGhcAfterDecl" [("Add \"TupleSections\"", "Contains TupleSections code action")]
+  , codeActionTest "adds LANGUAGE with no other pragmas at start ignoring later INLINE pragma" "AddPragmaIgnoreInline" [("Add \"TupleSections\"", "Contains TupleSections code action")]
   , codeActionTest "adds LANGUAGE before Doc comments after interchanging pragmas" "BeforeDocInterchanging" [("Add \"NamedFieldPuns\"", "Contains NamedFieldPuns code action")]
   , codeActionTest "Add language after altering OPTIONS_GHC and Language" "AddLanguagePragmaAfterInterchaningOptsGhcAndLangs" [("Add \"TupleSections\"", "Contains TupleSections code action")]
   , codeActionTest "Add language after pragmas with non standard space between prefix and name" "AddPragmaWithNonStandardSpacingInPrecedingPragmas" [("Add \"TupleSections\"", "Contains TupleSections code action")]
@@ -67,7 +81,8 @@ codeActionTest testComment fp actions =
 codeActionTests' :: TestTree
 codeActionTests' =
   testGroup "additional code actions"
-  [ goldenWithPragmas "no duplication" "NamedFieldPuns" $ \doc -> do
+  [
+    goldenWithPragmas "no duplication" "NamedFieldPuns" $ \doc -> do
       _ <- waitForDiagnosticsFrom doc
       cas <- map fromAction <$> getCodeActions doc (Range (Position 8 9) (Position 8 9))
       liftIO $ length cas == 1 @? "Expected one code action, but got: " <> show cas
@@ -83,8 +98,10 @@ codeActionTests' =
 
 completionTests :: TestTree
 completionTests =
-  testGroup "completions" [
-    completionTest "completes pragmas" "Completion.hs" "" "LANGUAGE" (Just Snippet) (Just "LANGUAGE ${1:extension} #-}") (Just "{-# LANGUAGE #-}") [0, 4, 0, 34, 0, 4]
+  testGroup "completions"
+  [ completionTest "completes pragmas" "Completion.hs" "" "LANGUAGE" (Just Snippet) (Just "LANGUAGE ${1:extension} #-}") (Just "{-# LANGUAGE #-}") [0, 4, 0, 34, 0, 4]
+  , completionTest "completes pragmas with existing closing pragma bracket" "Completion.hs" "" "LANGUAGE" (Just Snippet) (Just "LANGUAGE ${1:extension} ") (Just "{-# LANGUAGE #-}") [0, 4, 0, 31, 0, 4]
+  , completionTest "completes pragmas with existing closing comment bracket" "Completion.hs" "" "LANGUAGE" (Just Snippet) (Just "LANGUAGE ${1:extension} #") (Just "{-# LANGUAGE #-}") [0, 4, 0, 32, 0, 4]
   , completionTest "completes pragmas with existing closing bracket" "Completion.hs" "" "LANGUAGE" (Just Snippet) (Just "LANGUAGE ${1:extension} #-") (Just "{-# LANGUAGE #-}") [0, 4, 0, 33, 0, 4]
   , completionTest "completes options pragma" "Completion.hs" "OPTIONS" "OPTIONS_GHC" (Just Snippet) (Just "OPTIONS_GHC -${1:option} #-}") (Just "{-# OPTIONS_GHC #-}") [0, 4, 0, 34, 0, 4]
   , completionTest "completes ghc options pragma values" "Completion.hs" "{-# OPTIONS_GHC -Wno-red  #-}\n" "Wno-redundant-constraints" Nothing Nothing Nothing [0, 0, 0, 0, 0, 24]

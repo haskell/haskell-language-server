@@ -1,5 +1,9 @@
 name: Benchmark
 
+defaults:
+  run:
+    shell: bash
+
 # See: https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#concurrency.
 concurrency:
   group: ${{ github.head_ref }}-${{ github.workflow }}
@@ -32,6 +36,10 @@ jobs:
       matrix:
         ghc: ['8.10.7']
         os: [ubuntu-latest]
+        cabal: ['3.6']
+
+    # This code is fitted to the strategy: assumes Linux is used ... etc,
+    # change of the strategy may require changing the bootstrapping/run code
 
     steps:
     - uses: actions/checkout@v2
@@ -39,22 +47,53 @@ jobs:
     - run: git fetch origin master # check the master branch for benchmarking
 
     - uses: haskell/actions/setup@v1
+      id: HaskEnvSetup
       with:
-        ghc-version: ${{ matrix.ghc }}
-        cabal-version: '3.2'
+        ghc-version  : ${{ matrix.ghc   }}
+        cabal-version: ${{ matrix.cabal }}
         enable-stack: false
 
-    - name: Cache Cabal
+    - name: Linux Platform config
+      run: |
+        echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
+
+    # All workflows which distinquishes cache on `cabal.project` needs this.
+    - name: Workaround shorten binary names
+      run: |
+        sed -i.bak -e 's/haskell-language-server/hls/g' \
+                    -e 's/haskell_language_server/hls/g' \
+                    haskell-language-server.cabal cabal.project
+        sed -i.bak -e 's/Paths_haskell_language_server/Paths_hls/g' \
+                    src/**/*.hs exe/*.hs
+
+    - name: Retrieving `cabal.project` Hackage timestamp
+      run: |
+        # Form: index-state: 2021-11-29T08:11:08Z
+        INDEX_STATE_ENTRY=$(grep index-state cabal.project)
+        # Form: 2021-11-29T08-11-08Z
+        INDEX_STATE1=$(echo "$INDEX_STATE_ENTRY" | cut -d' ' -f2 | tr ':' '-')
+        echo "INDEX_STATE=$INDEX_STATE1" >> $GITHUB_ENV
+
+    - name: Hackage sources cache
       uses: actions/cache@v2
+      env:
+        cache-name: hackage-sources
       with:
-        path: |
-          ~/.cabal/packages
-          ~/.cabal/store
-        key: v2-${{ runner.os }}-${{ matrix.ghc }}-bench-${{ hashFiles('cabal.project') }}
+        path: ${{ env.CABAL_PKGS_DIR }}
+        key:          ${{ env.cache-name }}-${{ env.INDEX_STATE }}
+        restore-keys: ${{ env.cache-name }}-
+
+    - name: Compiled deps cache
+      uses: actions/cache@v2
+      env:
+        cache-name: compiled-deps
+      with:
+        path: ${{ steps.HaskEnvSetup.outputs.cabal-store }}
+        key:  ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project') }}
         restore-keys: |
-            v2-${{ runner.os }}-${{ matrix.ghc }}-build-${{ hashFiles('cabal.project') }}
-            v2-${{ runner.os }}-${{ matrix.ghc }}-bench-
-            v2-${{ runner.os }}-${{ matrix.ghc }}
+              ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-
+              ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
+              ${{ env.cache-name }}-${{ runner.os }}-
 
     - run: cabal update
 
@@ -63,17 +102,14 @@ jobs:
     - run: cabal configure --enable-benchmarks --max-backjumps 12000
 
     - name: Build
-      shell: bash
       run: cabal build ghcide:benchHist
 
     - name: Bench init
-      shell: bash
       run: cabal bench ghcide:benchHist  -j --benchmark-options="all-binaries"
 
     # tar is required to preserve file permissions
     # compression speeds up upload/download nicely
     - name: tar workspace
-      shell: bash
       run: tar -czf workspace.tar.gz * .git
 
     - name: tar cabal
@@ -104,13 +140,14 @@ jobs:
       matrix:
         ghc: ['8.10.7']
         os: [ubuntu-latest]
+        cabal: ['3.6']
         example: ['cabal', 'lsp-types']
 
     steps:
     - uses: haskell/actions/setup@v1
       with:
-        ghc-version: ${{ matrix.ghc }}
-        cabal-version: '3.2'
+        ghc-version  : ${{ matrix.ghc   }}
+        cabal-version: ${{ matrix.cabal }}
         enable-stack: false
 
     - name: Download cabal home
@@ -132,11 +169,9 @@ jobs:
         tar xzf cabal.tar.gz --directory ~/.cabal
 
     - name: Bench
-      shell: bash
       run: cabal bench ghcide:benchHist  -j --benchmark-options="${{ matrix.example }}"
 
     - name: Display results
-      shell: bash
       run: |
         column -s, -t < ghcide/bench-results/unprofiled/${{ matrix.example }}/results.csv | tee ghcide/bench-results/unprofiled/${{ matrix.example }}/results.txt
 

@@ -136,9 +136,9 @@ import qualified GHC.LanguageExtensions                       as LangExt
 import qualified HieDb
 import           Ide.Plugin.Config
 import qualified Language.LSP.Server                          as LSP
-import           Language.LSP.Types                           (SMethod (SCustomMethod))
+import           Language.LSP.Types                           (SMethod (SCustomMethod, SWindowShowMessage), ShowMessageParams (ShowMessageParams), MessageType (MtInfo))
 import           Language.LSP.VFS
-import           System.Directory                             (canonicalizePath, makeAbsolute)
+import           System.Directory                             (makeAbsolute)
 import           Data.Default                                 (def, Default)
 import           Ide.Plugin.Properties                        (HasProperty,
                                                                KeyNameProxy,
@@ -148,6 +148,13 @@ import           Ide.Plugin.Properties                        (HasProperty,
 import           Ide.PluginUtils                              (configForPlugin)
 import           Ide.Types                                    (DynFlagsModifications (dynFlagsModifyGlobal, dynFlagsModifyParser),
                                                                PluginId)
+import Control.Concurrent.STM.Stats (atomically)
+import Language.LSP.Server (LspT)
+import System.Info.Extra (isMac)
+import HIE.Bios.Ghc.Gap (hostIsDynamic)
+
+templateHaskellInstructions :: T.Text
+templateHaskellInstructions = "https://haskell-language-server.readthedocs.io/en/latest/troubleshooting.html#support-for-template-haskell"
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
@@ -696,22 +703,23 @@ loadGhcSession ghcSessionDepsConfig = do
                 Nothing -> LBS.toStrict $ B.encode (hash (snd val))
         return (Just cutoffHash, val)
 
-    defineNoDiagnostics $ \GhcSessionDeps file -> do
+    defineNoDiagnostics $ \(GhcSessionDeps_ fullModSummary) file -> do
         env <- use_ GhcSession file
-        ghcSessionDepsDefinition ghcSessionDepsConfig env file
+        ghcSessionDepsDefinition fullModSummary ghcSessionDepsConfig env file
 
-data GhcSessionDepsConfig = GhcSessionDepsConfig
+newtype GhcSessionDepsConfig = GhcSessionDepsConfig
     { checkForImportCycles :: Bool
-    , fullModSummary       :: Bool
     }
 instance Default GhcSessionDepsConfig where
   def = GhcSessionDepsConfig
     { checkForImportCycles = True
-    , fullModSummary = False
     }
 
-ghcSessionDepsDefinition :: GhcSessionDepsConfig -> HscEnvEq -> NormalizedFilePath -> Action (Maybe HscEnvEq)
-ghcSessionDepsDefinition GhcSessionDepsConfig{..} env file = do
+ghcSessionDepsDefinition
+    :: -- | full mod summary
+        Bool ->
+        GhcSessionDepsConfig -> HscEnvEq -> NormalizedFilePath -> Action (Maybe HscEnvEq)
+ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
     let hsc = hscEnv env
 
     mbdeps <- mapM(fmap artifactFilePath . snd) <$> use_ GetLocatedImports file
@@ -723,7 +731,7 @@ ghcSessionDepsDefinition GhcSessionDepsConfig{..} env file = do
                 then uses_ GetModSummary deps
                 else uses_ GetModSummaryWithoutTimestamps deps
 
-            depSessions <- map hscEnv <$> uses_ GhcSessionDeps deps
+            depSessions <- map hscEnv <$> uses_ (GhcSessionDeps_ fullModSummary) deps
             ifaces <- uses_ GetModIface deps
 
             let inLoadOrder = map hirHomeMod ifaces
@@ -769,7 +777,7 @@ getModIfaceFromDiskAndIndexRule =
       hie_loc = Compat.ml_hie_file $ ms_location ms
   hash <- liftIO $ Util.getFileHash hie_loc
   mrow <- liftIO $ HieDb.lookupHieFileFromSource hiedb (fromNormalizedFilePath f)
-  hie_loc' <- liftIO $ traverse (canonicalizePath . HieDb.hieModuleHieFile) mrow
+  hie_loc' <- liftIO $ traverse (makeAbsolute . HieDb.hieModuleHieFile) mrow
   case mrow of
     Just row
       | hash == HieDb.modInfoHash (HieDb.hieModInfo row)
@@ -818,8 +826,26 @@ isHiFileStableRule = defineEarlyCutoff $ RuleNoDiagnostics $ \IsHiFileStable f -
       summarize SourceUnmodified          = BS.singleton 2
       summarize SourceUnmodifiedAndStable = BS.singleton 3
 
+displayTHWarning :: LspT c IO ()
+displayTHWarning
+  | isMac && not hostIsDynamic = do
+      LSP.sendNotification SWindowShowMessage $
+        ShowMessageParams MtInfo $ T.unwords
+          [ "This HLS binary does not support Template Haskell."
+          , "Follow the [instructions](" <> templateHaskellInstructions <> ")"
+          , "to build an HLS binary with support for Template Haskell."
+          ]
+  | otherwise = return ()
+
+newtype DisplayTHWarning = DisplayTHWarning (IO ())
+instance IsIdeGlobal DisplayTHWarning
+
 getModSummaryRule :: Rules ()
 getModSummaryRule = do
+    env <- lspEnv <$> getShakeExtrasRules
+    displayItOnce <- liftIO $ once $ LSP.runLspT (fromJust env) displayTHWarning
+    addIdeGlobal (DisplayTHWarning displayItOnce)
+
     defineEarlyCutoff $ Rule $ \GetModSummary f -> do
         session' <- hscEnv <$> use_ GhcSession f
         modify_dflags <- getModifyDynFlags dynFlagsModifyGlobal
@@ -830,6 +856,10 @@ getModSummaryRule = do
                 getModSummaryFromImports session fp modTime (textToStringBuffer <$> mFileContent)
         case modS of
             Right res -> do
+                -- Check for Template Haskell
+                when (uses_th_qq $ msrModSummary res) $ do
+                    DisplayTHWarning act <- getIdeGlobalAction
+                    liftIO act
                 bufFingerPrint <- liftIO $
                     fingerprintFromStringBuffer $ fromJust $ ms_hspp_buf $ msrModSummary res
                 let fingerPrint = Util.fingerprintFingerprints
@@ -1025,9 +1055,6 @@ needsCompilationRule file = do
 
   pure (Just $ encodeLinkableType res, Just res)
   where
-    uses_th_qq (ms_hspp_opts -> dflags) =
-      xopt LangExt.TemplateHaskell dflags || xopt LangExt.QuasiQuotes dflags
-
     computeLinkableType :: ModSummary -> [Maybe ModSummary] -> [Maybe LinkableType] -> Maybe LinkableType
     computeLinkableType this deps xs
       | Just ObjectLinkable `elem` xs     = Just ObjectLinkable -- If any dependent needs object code, so do we
@@ -1036,6 +1063,10 @@ needsCompilationRule file = do
       | otherwise                         = Nothing             -- If none of these conditions are satisfied, we don't need to compile
       where
         this_type = computeLinkableTypeForDynFlags (ms_hspp_opts this)
+
+uses_th_qq :: ModSummary -> Bool
+uses_th_qq (ms_hspp_opts -> dflags) =
+      xopt LangExt.TemplateHaskell dflags || xopt LangExt.QuasiQuotes dflags
 
 -- | How should we compile this module?
 -- (assuming we do in fact need to compile it).
@@ -1061,7 +1092,7 @@ writeHiFileAction hsc hiFile = do
     extras <- getShakeExtras
     let targetPath = Compat.ml_hi_file $ ms_location $ hirModSummary hiFile
     liftIO $ do
-        resetInterfaceStore extras $ toNormalizedFilePath' targetPath
+        atomically $ resetInterfaceStore extras $ toNormalizedFilePath' targetPath
         writeHiFile hsc hiFile
 
 data RulesConfig = RulesConfig

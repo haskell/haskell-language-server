@@ -6,6 +6,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE NamedFieldPuns             #-}
+{-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE TupleSections              #-}
@@ -15,69 +16,74 @@ module Development.IDE.Graph.Internal.Database (newDatabase, incDatabase, build,
 
 import           Control.Concurrent.Async
 import           Control.Concurrent.Extra
+import           Control.Concurrent.STM.Stats         (STM, atomically,
+                                                       atomicallyNamed,
+                                                       modifyTVar', newTVarIO,
+                                                       readTVarIO)
 import           Control.Exception
 import           Control.Monad
-import           Control.Monad.IO.Class                (MonadIO (liftIO))
-import           Control.Monad.Trans.Class             (lift)
+import           Control.Monad.IO.Class               (MonadIO (liftIO))
+import           Control.Monad.Trans.Class            (lift)
 import           Control.Monad.Trans.Reader
-import qualified Control.Monad.Trans.State.Strict      as State
+import qualified Control.Monad.Trans.State.Strict     as State
 import           Data.Dynamic
 import           Data.Either
-import           Data.Foldable                         (traverse_)
+import           Data.Foldable                        (for_, traverse_)
+import           Data.HashSet                         (HashSet)
+import qualified Data.HashSet                         as HSet
 import           Data.IORef.Extra
-import           Data.IntSet                           (IntSet)
-import qualified Data.IntSet                           as Set
 import           Data.Maybe
+import           Data.Traversable                     (for)
 import           Data.Tuple.Extra
 import           Development.IDE.Graph.Classes
-import qualified Development.IDE.Graph.Internal.Ids    as Ids
-import           Development.IDE.Graph.Internal.Intern
-import qualified Development.IDE.Graph.Internal.Intern as Intern
 import           Development.IDE.Graph.Internal.Rules
 import           Development.IDE.Graph.Internal.Types
+import qualified Focus
+import qualified ListT
+import qualified StmContainers.Map                    as SMap
 import           System.IO.Unsafe
-import           System.Time.Extra                     (duration)
+import           System.Time.Extra                    (duration)
 
 newDatabase :: Dynamic -> TheRules -> IO Database
 newDatabase databaseExtra databaseRules = do
-    databaseStep <- newIORef $ Step 0
-    databaseLock <- newLock
-    databaseIds <- newIORef Intern.empty
-    databaseValues <- Ids.empty
-    databaseReverseDeps <- Ids.empty
-    databaseReverseDepsLock <- newLock
+    databaseStep <- newTVarIO $ Step 0
+    databaseValues <- atomically SMap.new
     pure Database{..}
 
--- | Increment the step and mark dirty
+-- | Increment the step and mark dirty.
+--   Assumes that the database is not running a build
 incDatabase :: Database -> Maybe [Key] -> IO ()
--- all keys are dirty
-incDatabase db Nothing = do
-    modifyIORef' (databaseStep db) $ \(Step i) -> Step $ i + 1
-    withLock (databaseLock db) $
-        Ids.forMutate (databaseValues db) $ \_ -> second $ \case
-            Clean x       -> Dirty (Just x)
-            Dirty x       -> Dirty x
-            Running _ _ x -> Dirty x
 -- only some keys are dirty
 incDatabase db (Just kk) = do
-    modifyIORef' (databaseStep db) $ \(Step i) -> Step $ i + 1
-    intern <- readIORef (databaseIds db)
-    let dirtyIds = mapMaybe (`Intern.lookup` intern) kk
-    transitiveDirtyIds <- transitiveDirtySet db dirtyIds
-    withLock (databaseLock db) $
-        Ids.forMutate (databaseValues db) $ \i -> \case
-            (k, Running _ _ x) -> (k, Dirty x)
-            (k, Clean x) | i `Set.member` transitiveDirtyIds ->
-                (k, Dirty (Just x))
-            other -> other
+    atomicallyNamed "incDatabase" $ modifyTVar'  (databaseStep db) $ \(Step i) -> Step $ i + 1
+    transitiveDirtyKeys <- transitiveDirtySet db kk
+    for_ transitiveDirtyKeys $ \k ->
+        -- Updating all the keys atomically is not necessary
+        -- since we assume that no build is mutating the db.
+        -- Therefore run one transaction per key to minimise contention.
+        atomicallyNamed "incDatabase" $ SMap.focus updateDirty k (databaseValues db)
 
+-- all keys are dirty
+incDatabase db Nothing = do
+    atomically $ modifyTVar'  (databaseStep db) $ \(Step i) -> Step $ i + 1
+    let list = SMap.listT (databaseValues db)
+    atomicallyNamed "incDatabase - all " $ flip ListT.traverse_ list $ \(k,_) ->
+        SMap.focus updateDirty k (databaseValues db)
 
+updateDirty :: Monad m => Focus.Focus KeyDetails m ()
+updateDirty = Focus.adjust $ \(KeyDetails status rdeps) ->
+            let status'
+                  | Running _ _ _ x <- status = Dirty x
+                  | Clean x <- status = Dirty (Just x)
+                  | otherwise = status
+            in KeyDetails status' rdeps
 -- | Unwrap and build a list of keys in parallel
 build
     :: forall key value . (RuleResult key ~ value, Typeable key, Show key, Hashable key, Eq key, Typeable value)
-    => Database -> [key] -> IO ([Id], [value])
+    => Database -> [key] -> IO ([Key], [value])
 build db keys = do
-    (ids, vs) <- runAIO $ fmap unzip $ either return liftIO =<< builder db (map (Right . Key) keys)
+    (ids, vs) <- runAIO $ fmap unzip $ either return liftIO =<<
+            builder db (map Key keys)
     pure (ids, map (asV . resultValue) vs)
     where
         asV :: Value -> value
@@ -87,80 +93,70 @@ build db keys = do
 --  If none of the keys are dirty, we can return the results immediately.
 --  Otherwise, a blocking computation is returned *which must be evaluated asynchronously* to avoid deadlock.
 builder
-    :: Database -> [Either Id Key] -> AIO (Either [(Id, Result)] (IO [(Id, Result)]))
-builder db@Database{..} keys = do
-        -- Things that I need to force before my results are ready
-        toForce <- liftIO $ newIORef []
+    :: Database -> [Key] -> AIO (Either [(Key, Result)] (IO [(Key, Result)]))
+builder db@Database{..} keys = withRunInIO $ \(RunInIO run) -> do
+    -- Things that I need to force before my results are ready
+    toForce <- liftIO $ newTVarIO []
+    current <- liftIO $ readTVarIO databaseStep
+    results <- liftIO $ for keys $ \id ->
+        -- Updating the status of all the dependencies atomically is not necessary.
+        -- Therefore, run one transaction per dep. to avoid contention
+        atomicallyNamed "builder" $ do
+            -- Spawn the id if needed
+            status <- SMap.lookup id databaseValues
+            val <- case viewDirty current $ maybe (Dirty Nothing) keyStatus status of
+                Clean r -> pure r
+                Running _ force val _ -> do
+                    modifyTVar' toForce (Wait force :)
+                    pure val
+                Dirty s -> do
+                    let act = run (refresh db id s)
+                        (force, val) = splitIO (join act)
+                    SMap.focus (updateStatus $ Running current force val s) id databaseValues
+                    modifyTVar' toForce (Spawn force:)
+                    pure val
 
-        results <- withLockAIO databaseLock $ do
-            flip traverse keys $ \idKey -> do
-                -- Resolve the id
-                id <- case idKey of
-                    Left id -> pure id
-                    Right key -> liftIO $ do
-                        ids <- readIORef databaseIds
-                        case Intern.lookup key ids of
-                            Just v -> pure v
-                            Nothing -> do
-                                (ids, id) <- pure $ Intern.add key ids
-                                writeIORef' databaseIds ids
-                                return id
+            pure (id, val)
 
-                -- Spawn the id if needed
-                status <- liftIO $ Ids.lookup databaseValues id
-                val <- case fromMaybe (fromRight undefined idKey, Dirty Nothing) status of
-                    (_, Clean r) -> pure r
-                    (_, Running force val _) -> do
-                        liftIO $ modifyIORef toForce (Wait force :)
-                        pure val
-                    (key, Dirty s) -> do
-                        act <- unliftAIO (refresh db key id s)
-                        let (force, val) = splitIO (join act)
-                        liftIO $ Ids.insert databaseValues id (key, Running force val s)
-                        liftIO $ modifyIORef toForce (Spawn force:)
-                        pure val
-
-                pure (id, val)
-
-        toForceList <- liftIO $ readIORef toForce
-        waitAll <- unliftAIO $ mapConcurrentlyAIO_ id toForceList
-        case toForceList of
-            [] -> return $ Left results
-            _ -> return $ Right $ do
-                    waitAll
-                    pure results
+    toForceList <- liftIO $ readTVarIO toForce
+    let waitAll = run $ mapConcurrentlyAIO_ id toForceList
+    case toForceList of
+        [] -> return $ Left results
+        _ -> return $ Right $ do
+                waitAll
+                pure results
 
 -- | Refresh a key:
 --     * If no dirty dependencies and we have evaluated the key previously, then we refresh it in the current thread.
 --       This assumes that the implementation will be a lookup
 --     * Otherwise, we spawn a new thread to refresh the dirty deps (if any) and the key itself
-refresh :: Database -> Key -> Id -> Maybe Result -> AIO (IO Result)
-refresh db key id result@(Just me@Result{resultDeps = ResultDeps deps}) = do
-    res <- builder db $ map Left deps
+refresh :: Database -> Key -> Maybe Result -> AIO (IO Result)
+refresh db key result@(Just me@Result{resultDeps = ResultDeps deps}) = do
+    res <- builder db deps
     case res of
       Left res ->
         if isDirty res
-            then asyncWithCleanUp $ liftIO $ compute db key id RunDependenciesChanged result
-            else pure $ compute db key id RunDependenciesSame result
+            then asyncWithCleanUp $ liftIO $ compute db key RunDependenciesChanged result
+            else pure $ compute db key RunDependenciesSame result
       Right iores -> asyncWithCleanUp $ liftIO $ do
         res <- iores
         let mode = if isDirty res then RunDependenciesChanged else RunDependenciesSame
-        compute db key id mode result
+        compute db key mode result
     where
         isDirty = any (\(_,dep) -> resultBuilt me < resultChanged dep)
 
-refresh db key id result =
-    asyncWithCleanUp $ liftIO $ compute db key id RunDependenciesChanged result
+refresh db key result =
+    asyncWithCleanUp $ liftIO $ compute db key RunDependenciesChanged result
 
 
 -- | Compute a key.
-compute :: Database -> Key -> Id -> RunMode -> Maybe Result -> IO Result
-compute db@Database{..} key id mode result = do
+compute :: Database -> Key -> RunMode -> Maybe Result -> IO Result
+compute db@Database{..} key mode result = do
     let act = runRule databaseRules key (fmap resultData result) mode
     deps <- newIORef UnknownDeps
     (execution, RunResult{..}) <-
         duration $ runReaderT (fromAction act) $ SAction db deps
-    built <- readIORef databaseStep
+    built <- readTVarIO databaseStep
     deps <- readIORef deps
     let changed = if runChanged == ChangedRecomputeDiff then built else maybe built resultChanged result
         built' = if runChanged /= ChangedNothing then built else changed
@@ -173,28 +169,34 @@ compute db@Database{..} key id mode result = do
             && runChanged /= ChangedNothing
                     -> do
             void $ forkIO $
-                updateReverseDeps id db (getResultDepsDefault [] previousDeps) (Set.fromList deps)
+                updateReverseDeps key db
+                    (getResultDepsDefault [] previousDeps)
+                    (HSet.fromList deps)
         _ -> pure ()
-    withLock databaseLock $
-        Ids.insert databaseValues id (key, Clean res)
+    atomicallyNamed "compute" $ SMap.focus (updateStatus $ Clean res) key databaseValues
     pure res
 
+updateStatus :: Monad m => Status -> Focus.Focus KeyDetails m ()
+updateStatus res = Focus.alter
+    (Just . maybe (KeyDetails res mempty)
+    (\it -> it{keyStatus = res}))
+
 -- | Returns the set of dirty keys annotated with their age (in # of builds)
-getDirtySet :: Database -> IO [(Id,(Key, Int))]
+getDirtySet :: Database -> IO [(Key, Int)]
 getDirtySet db = do
-    Step curr <- readIORef (databaseStep db)
-    dbContents <- Ids.toList (databaseValues db)
+    Step curr <- readTVarIO (databaseStep db)
+    dbContents <- getDatabaseValues db
     let calcAge Result{resultBuilt = Step x} = curr - x
         calcAgeStatus (Dirty x)=calcAge <$> x
         calcAgeStatus _         = Nothing
-    return $ mapMaybe ((secondM.secondM) calcAgeStatus) dbContents
+    return $ mapMaybe (secondM calcAgeStatus) dbContents
 
 -- | Returns ann approximation of the database keys,
 --   annotated with how long ago (in # builds) they were visited
 getKeysAndVisitAge :: Database -> IO [(Key, Int)]
 getKeysAndVisitAge db = do
-    values <- Ids.elems (databaseValues db)
-    Step curr <- readIORef (databaseStep db)
+    values <- getDatabaseValues db
+    Step curr <- readTVarIO (databaseStep db)
     let keysWithVisitAge = mapMaybe (secondM (fmap getAge . getResult)) values
         getAge Result{resultVisited = Step s} = curr - s
     return keysWithVisitAge
@@ -215,34 +217,38 @@ splitIO act = do
 
 -- | Update the reverse dependencies of an Id
 updateReverseDeps
-    :: Id         -- ^ Id
+    :: Key        -- ^ Id
     -> Database
-    -> [Id] -- ^ Previous direct dependencies of Id
-    -> IntSet     -- ^ Current direct dependencies of Id
+    -> [Key] -- ^ Previous direct dependencies of Id
+    -> HashSet Key -- ^ Current direct dependencies of Id
     -> IO ()
-updateReverseDeps myId db prev new = withLock (databaseReverseDepsLock db) $ uninterruptibleMask_ $ do
+updateReverseDeps myId db prev new = uninterruptibleMask_ $ do
     forM_ prev $ \d ->
-        unless (d `Set.member` new) $
-            doOne (Set.delete myId) d
-    forM_ (Set.elems new) $
-        doOne (Set.insert myId)
+        unless (d `HSet.member` new) $
+            doOne (HSet.delete myId) d
+    forM_ (HSet.toList new) $
+        doOne (HSet.insert myId)
     where
-        doOne f id = do
-            rdeps <- getReverseDependencies db id
-            Ids.insert (databaseReverseDeps db) id (f $ fromMaybe mempty rdeps)
+        alterRDeps f =
+            Focus.adjust (onKeyReverseDeps f)
+        -- updating all the reverse deps atomically is not needed.
+        -- Therefore, run individual transactions for each update
+        -- in order to avoid contention
+        doOne f id = atomicallyNamed "updateReverseDeps" $
+            SMap.focus (alterRDeps f) id (databaseValues db)
 
-getReverseDependencies :: Database -> Id -> IO (Maybe (IntSet))
-getReverseDependencies db = Ids.lookup (databaseReverseDeps db)
+getReverseDependencies :: Database -> Key -> STM (Maybe (HashSet Key))
+getReverseDependencies db = (fmap.fmap) keyReverseDeps  . flip SMap.lookup (databaseValues db)
 
-transitiveDirtySet :: Foldable t => Database -> t Id -> IO IntSet
-transitiveDirtySet database = flip State.execStateT Set.empty . traverse_ loop
+transitiveDirtySet :: Foldable t => Database -> t Key -> IO (HashSet Key)
+transitiveDirtySet database = flip State.execStateT HSet.empty . traverse_ loop
   where
     loop x = do
         seen <- State.get
-        if x `Set.member` seen then pure () else do
-            State.put (Set.insert x seen)
-            next <- lift $ getReverseDependencies database x
-            traverse_ loop (maybe mempty Set.toList next)
+        if x `HSet.member` seen then pure () else do
+            State.put (HSet.insert x seen)
+            next <- lift $ atomically $ getReverseDependencies database x
+            traverse_ loop (maybe mempty HSet.toList next)
 
 -- | IO extended to track created asyncs to clean them up when the thread is killed,
 --   generalizing 'withAsync'
@@ -263,15 +269,17 @@ asyncWithCleanUp act = do
         atomicModifyIORef'_ st (void a :)
         return $ wait a
 
-withLockAIO :: Lock -> AIO a -> AIO a
-withLockAIO lock act = do
-    io <- unliftAIO act
-    liftIO $ withLock lock io
-
 unliftAIO :: AIO a -> AIO (IO a)
 unliftAIO act = do
     st <- AIO ask
     return $ runReaderT (unAIO act) st
+
+newtype RunInIO = RunInIO (forall a. AIO a -> IO a)
+
+withRunInIO :: (RunInIO -> AIO b) -> AIO b
+withRunInIO k = do
+    st <- AIO ask
+    k $ RunInIO (\aio -> runReaderT (unAIO aio) st)
 
 cleanupAsync :: IORef [Async a] -> IO ()
 cleanupAsync ref = uninterruptibleMask_ $ do

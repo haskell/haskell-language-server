@@ -8,7 +8,7 @@ module Development.IDE.Plugin.Completions
     ) where
 
 import           Control.Concurrent.Async                     (concurrently)
-import           Control.Concurrent.Extra
+import           Control.Concurrent.STM.Stats                 (readTVarIO)
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Maybe
@@ -138,7 +138,7 @@ getCompletionsLSP ide plId
             -- set up the exports map including both package and project-level identifiers
             packageExportsMapIO <- fmap(envPackageExports . fst) <$> useWithStaleFast GhcSession npath
             packageExportsMap <- mapM liftIO packageExportsMapIO
-            projectExportsMap <- liftIO $ readVar (exportsMap $ shakeExtras ide)
+            projectExportsMap <- liftIO $ readTVarIO (exportsMap $ shakeExtras ide)
             let exportsMap = fromMaybe mempty packageExportsMap <> projectExportsMap
 
             let moduleExports = getModuleExportsMap exportsMap

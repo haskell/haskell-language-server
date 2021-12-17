@@ -14,6 +14,7 @@ module Development.IDE.LSP.Notifications
 import           Language.LSP.Types
 import qualified Language.LSP.Types                    as LSP
 
+import           Control.Concurrent.STM.Stats          (atomically)
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import qualified Data.HashMap.Strict                   as HM
@@ -42,7 +43,7 @@ descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId) { pluginNotificationHandlers = mconcat
   [ mkPluginNotificationHandler LSP.STextDocumentDidOpen $
       \ide _ (DidOpenTextDocumentParams TextDocumentItem{_uri,_version}) -> liftIO $ do
-      updatePositionMapping ide (VersionedTextDocumentIdentifier _uri (Just _version)) (List [])
+      atomically $ updatePositionMapping ide (VersionedTextDocumentIdentifier _uri (Just _version)) (List [])
       whenUriFile _uri $ \file -> do
           -- We don't know if the file actually exists, or if the contents match those on disk
           -- For example, vscode restores previously unsaved contents on open
@@ -52,7 +53,7 @@ descriptor plId = (defaultPluginDescriptor plId) { pluginNotificationHandlers = 
 
   , mkPluginNotificationHandler LSP.STextDocumentDidChange $
       \ide _ (DidChangeTextDocumentParams identifier@VersionedTextDocumentIdentifier{_uri} changes) -> liftIO $ do
-        updatePositionMapping ide identifier changes
+        atomically $ updatePositionMapping ide identifier changes
         whenUriFile _uri $ \file -> do
           addFileOfInterest ide file Modified{firstOpen=False}
           setFileModified ide False file

@@ -25,6 +25,8 @@ import qualified Data.HashMap.Strict                    as HashMap
 import qualified Data.Text                              as T
 import           Development.IDE.Graph
 
+import           Control.Concurrent.STM.Stats           (atomically,
+                                                         modifyTVar')
 import qualified Data.ByteString                        as BS
 import           Data.Maybe                             (catMaybes)
 import           Development.IDE.Core.ProgressReporting
@@ -86,7 +88,7 @@ addFileOfInterest state f v = do
         let (prev, new) = HashMap.alterF (, Just v) f dict
         pure (new, (prev, new))
     when (prev /= Just v) $
-        recordDirtyKeys (shakeExtras state) IsFileOfInterest [f]
+        join $ atomically $ recordDirtyKeys (shakeExtras state) IsFileOfInterest [f]
     logDebug (ideLogger state) $
         "Set files of interest to: " <> T.pack (show files)
 
@@ -94,7 +96,7 @@ deleteFileOfInterest :: IdeState -> NormalizedFilePath -> IO ()
 deleteFileOfInterest state f = do
     OfInterestVar var <- getIdeGlobalState state
     files <- modifyVar' var $ HashMap.delete f
-    recordDirtyKeys (shakeExtras state) IsFileOfInterest [f]
+    join $ atomically $ recordDirtyKeys (shakeExtras state) IsFileOfInterest [f]
     logDebug (ideLogger state) $ "Set files of interest to: " <> T.pack (show files)
 
 scheduleGarbageCollection :: IdeState -> IO ()
@@ -113,7 +115,7 @@ kick = do
     -- Update the exports map
     results <- uses GenerateCore files <* uses GetHieAst files
     let mguts = catMaybes results
-    void $ liftIO $ modifyVar' exportsMap (updateExportsMapMg mguts)
+    void $ liftIO $ atomically $ modifyTVar' exportsMap (updateExportsMapMg mguts)
 
     liftIO $ progressUpdate progress KickCompleted
 

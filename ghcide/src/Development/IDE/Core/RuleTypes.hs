@@ -12,6 +12,7 @@
 --   using the "Shaker" abstraction layer for in-memory use.
 --
 module Development.IDE.Core.RuleTypes(
+    GhcSessionDeps(.., GhcSessionDeps),
     module Development.IDE.Core.RuleTypes
     ) where
 
@@ -407,9 +408,15 @@ data GhcSession = GhcSession
 instance Hashable GhcSession
 instance NFData   GhcSession
 
-data GhcSessionDeps = GhcSessionDeps deriving (Eq, Show, Typeable, Generic)
-instance Hashable GhcSessionDeps
-instance NFData   GhcSessionDeps
+newtype GhcSessionDeps = GhcSessionDeps_
+    { -- | Load full ModSummary values in the GHC session.
+        -- Required for interactive evaluation, but leads to more cache invalidations
+        fullModSummary :: Bool
+    }
+    deriving newtype (Eq, Show, Typeable, Hashable, NFData)
+
+pattern GhcSessionDeps :: GhcSessionDeps
+pattern GhcSessionDeps = GhcSessionDeps_ False
 
 data GetModIfaceFromDisk = GetModIfaceFromDisk
     deriving (Eq, Show, Typeable, Generic)

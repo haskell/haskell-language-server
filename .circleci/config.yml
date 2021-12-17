@@ -6,12 +6,8 @@ defaults: &defaults
   steps:
     - checkout
     - run:
-        name: Write provided stack.yaml with predictable name
-        command: cp ${STACK_FILE} stack-build.txt
-
-    - run:
-        name: Figure out resolver for better caching
-        command: grep '^resolver:' stack-build.txt > resolver.txt
+        name: Save resolver field into file
+        command: grep '^resolver:' ${STACK_FILE} > resolver.txt
 
     - restore_cache:
         keys:
@@ -84,19 +80,9 @@ jobs:
       - STACK_FILE: "stack-8.6.5.yaml"
     <<: *defaults
 
-  ghc-8.8.3:
-    environment:
-      - STACK_FILE: "stack-8.8.3.yaml"
-    <<: *defaults
-
   ghc-8.8.4:
     environment:
       - STACK_FILE: "stack-8.8.4.yaml"
-    <<: *defaults
-
-  ghc-8.10.5:
-    environment:
-      - STACK_FILE: "stack-8.10.5.yaml"
     <<: *defaults
 
   ghc-8.10.6:
@@ -125,9 +111,7 @@ workflows:
   multiple-ghcs:
     jobs:
       - ghc-8.6.5
-      - ghc-8.8.3
       - ghc-8.8.4
-      - ghc-8.10.5
       - ghc-8.10.6
       - ghc-8.10.7
       - ghc-9.0.1

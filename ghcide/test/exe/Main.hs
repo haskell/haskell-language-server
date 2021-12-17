@@ -164,6 +164,7 @@ main = do
     , pluginParsedResultTests
     , preprocessorTests
     , thTests
+    , symlinkTests
     , safeTests
     , unitTests
     , haddockTests
@@ -854,28 +855,203 @@ watchedFilesTests = testGroup "watched files"
 
 insertImportTests :: TestTree
 insertImportTests = testGroup "insert import"
-  [ checkImport "above comment at top of module" "CommentAtTop.hs" "CommentAtTop.expected.hs" "import Data.Monoid"
-  , checkImport "above multiple comments below" "CommentAtTopMultipleComments.hs" "CommentAtTopMultipleComments.expected.hs" "import Data.Monoid"
-  , checkImport "above curly brace comment" "CommentCurlyBraceAtTop.hs" "CommentCurlyBraceAtTop.expected.hs" "import Data.Monoid"
-  , checkImport "above multi-line comment" "MultiLineCommentAtTop.hs" "MultiLineCommentAtTop.expected.hs" "import Data.Monoid"
-  , checkImport "above comment with no module explicit exports" "NoExplicitExportCommentAtTop.hs" "NoExplicitExportCommentAtTop.expected.hs" "import Data.Monoid"
-  , checkImport "above two-dash comment with no pipe" "TwoDashOnlyComment.hs" "TwoDashOnlyComment.expected.hs" "import Data.Monoid"
-  , checkImport "above comment with no (module .. where) decl" "NoModuleDeclarationCommentAtTop.hs" "NoModuleDeclarationCommentAtTop.expected.hs" "import Data.Monoid"
-  , checkImport "comment not at top with no (module .. where) decl" "NoModuleDeclaration.hs" "NoModuleDeclaration.expected.hs" "import Data.Monoid"
-  , checkImport "comment not at top (data dec is)" "DataAtTop.hs" "DataAtTop.expected.hs" "import Data.Monoid"
-  , checkImport "comment not at top (newtype is)" "NewTypeAtTop.hs" "NewTypeAtTop.expected.hs" "import Data.Monoid"
-  , checkImport "with no explicit module exports" "NoExplicitExports.hs" "NoExplicitExports.expected.hs" "import Data.Monoid"
-  , checkImport "add to correctly placed exisiting import" "ImportAtTop.hs" "ImportAtTop.expected.hs" "import Data.Monoid"
-  , checkImport "add to multiple correctly placed exisiting imports" "MultipleImportsAtTop.hs" "MultipleImportsAtTop.expected.hs" "import Data.Monoid"
-  , checkImport "with language pragma at top of module" "LangPragmaModuleAtTop.hs" "LangPragmaModuleAtTop.expected.hs" "import Data.Monoid"
-  , checkImport "with language pragma and explicit module exports" "LangPragmaModuleWithComment.hs" "LangPragmaModuleWithComment.expected.hs" "import Data.Monoid"
-  , checkImport "with language pragma at top and no module declaration" "LanguagePragmaAtTop.hs" "LanguagePragmaAtTop.expected.hs" "import Data.Monoid"
-  , checkImport "with multiple lang pragmas and no module declaration" "MultipleLanguagePragmasNoModuleDeclaration.hs" "MultipleLanguagePragmasNoModuleDeclaration.expected.hs" "import Data.Monoid"
-  , checkImport "with pragmas and shebangs" "LanguagePragmasThenShebangs.hs" "LanguagePragmasThenShebangs.expected.hs" "import Data.Monoid"
-  , checkImport "with pragmas and shebangs but no comment at top" "PragmasAndShebangsNoComment.hs" "PragmasAndShebangsNoComment.expected.hs" "import Data.Monoid"
-  , checkImport "module decl no exports under pragmas and shebangs" "PragmasShebangsAndModuleDecl.hs" "PragmasShebangsAndModuleDecl.expected.hs" "import Data.Monoid"
-  , checkImport "module decl with explicit import under pragmas and shebangs" "PragmasShebangsModuleExplicitExports.hs" "PragmasShebangsModuleExplicitExports.expected.hs" "import Data.Monoid"
-  , checkImport "module decl and multiple imports" "ModuleDeclAndImports.hs" "ModuleDeclAndImports.expected.hs" "import Data.Monoid"
+  [ expectFailBecause
+      ("'findPositionFromImportsOrModuleDecl' function adds import directly under line with module declaration, "
+      ++ "not accounting for case when 'where' keyword is placed on lower line")
+      (checkImport
+         "module where keyword lower in file no exports"
+         "WhereKeywordLowerInFileNoExports.hs"
+         "WhereKeywordLowerInFileNoExports.expected.hs"
+         "import Data.Int")
+  , expectFailBecause
+      ("'findPositionFromImportsOrModuleDecl' function adds import directly under line with module exports list, "
+      ++ "not accounting for case when 'where' keyword is placed on lower line")
+      (checkImport
+         "module where keyword lower in file with exports"
+         "WhereDeclLowerInFile.hs"
+         "WhereDeclLowerInFile.expected.hs"
+         "import Data.Int")
+  , expectFailBecause
+      "'findNextPragmaPosition' function doesn't account for case when shebang is not placed at top of file"
+      (checkImport
+         "Shebang not at top with spaces"
+         "ShebangNotAtTopWithSpaces.hs"
+         "ShebangNotAtTopWithSpaces.expected.hs"
+         "import Data.Monoid")
+  , expectFailBecause
+      "'findNextPragmaPosition' function doesn't account for case when shebang is not placed at top of file"
+      (checkImport
+         "Shebang not at top no space"
+         "ShebangNotAtTopNoSpace.hs"
+         "ShebangNotAtTopNoSpace.expected.hs"
+         "import Data.Monoid")
+  , expectFailBecause
+      ("'findNextPragmaPosition' function doesn't account for case "
+      ++ "when OPTIONS_GHC pragma is not placed at top of file")
+      (checkImport
+         "OPTIONS_GHC pragma not at top with spaces"
+         "OptionsNotAtTopWithSpaces.hs"
+         "OptionsNotAtTopWithSpaces.expected.hs"
+         "import Data.Monoid")
+  , expectFailBecause
+      ("'findNextPragmaPosition' function doesn't account for "
+      ++ "case when shebang is not placed at top of file")
+      (checkImport
+         "Shebang not at top of file"
+         "ShebangNotAtTop.hs"
+         "ShebangNotAtTop.expected.hs"
+         "import Data.Monoid")
+  , expectFailBecause
+      ("'findNextPragmaPosition' function doesn't account for case "
+      ++ "when OPTIONS_GHC is not placed at top of file")
+      (checkImport
+         "OPTIONS_GHC pragma not at top of file"
+         "OptionsPragmaNotAtTop.hs"
+         "OptionsPragmaNotAtTop.expected.hs"
+         "import Data.Monoid")
+  , expectFailBecause
+      ("'findNextPragmaPosition' function doesn't account for case when "
+      ++ "OPTIONS_GHC pragma is not placed at top of file")
+      (checkImport
+         "pragma not at top with comment at top"
+         "PragmaNotAtTopWithCommentsAtTop.hs"
+         "PragmaNotAtTopWithCommentsAtTop.expected.hs"
+         "import Data.Monoid")
+  , expectFailBecause
+      ("'findNextPragmaPosition' function doesn't account for case when "
+      ++ "OPTIONS_GHC pragma is not placed at top of file")
+      (checkImport
+         "pragma not at top multiple comments"
+         "PragmaNotAtTopMultipleComments.hs"
+         "PragmaNotAtTopMultipleComments.expected.hs"
+         "import Data.Monoid")
+  , expectFailBecause
+      "'findNextPragmaPosition' function doesn't account for case of multiline pragmas"
+      (checkImport
+         "after multiline language pragmas"
+         "MultiLinePragma.hs"
+         "MultiLinePragma.expected.hs"
+         "import Data.Monoid")
+  , checkImport
+      "pragmas not at top with module declaration"
+      "PragmaNotAtTopWithModuleDecl.hs"
+      "PragmaNotAtTopWithModuleDecl.expected.hs"
+      "import Data.Monoid"
+  , checkImport
+      "pragmas not at top with imports"
+      "PragmaNotAtTopWithImports.hs"
+      "PragmaNotAtTopWithImports.expected.hs"
+      "import Data.Monoid"
+  , checkImport
+      "above comment at top of module"
+      "CommentAtTop.hs"
+      "CommentAtTop.expected.hs"
+      "import Data.Monoid"
+  , checkImport
+      "above multiple comments below"
+      "CommentAtTopMultipleComments.hs"
+      "CommentAtTopMultipleComments.expected.hs"
+      "import Data.Monoid"
+  , checkImport
+      "above curly brace comment"
+      "CommentCurlyBraceAtTop.hs"
+      "CommentCurlyBraceAtTop.expected.hs"
+      "import Data.Monoid"
+  , checkImport
+      "above multi-line comment"
+      "MultiLineCommentAtTop.hs"
+      "MultiLineCommentAtTop.expected.hs"
+      "import Data.Monoid"
+  , checkImport
+      "above comment with no module explicit exports"
+      "NoExplicitExportCommentAtTop.hs"
+      "NoExplicitExportCommentAtTop.expected.hs"
+      "import Data.Monoid"
+  , checkImport
+      "above two-dash comment with no pipe"
+      "TwoDashOnlyComment.hs"
+      "TwoDashOnlyComment.expected.hs"
+      "import Data.Monoid"
+  , checkImport
+      "above comment with no (module .. where) decl"
+      "NoModuleDeclarationCommentAtTop.hs"
+      "NoModuleDeclarationCommentAtTop.expected.hs"
+      "import Data.Monoid"
+  , checkImport
+      "comment not at top with no (module .. where) decl"
+      "NoModuleDeclaration.hs"
+      "NoModuleDeclaration.expected.hs"
+      "import Data.Monoid"
+  , checkImport
+      "comment not at top (data dec is)"
+      "DataAtTop.hs"
+      "DataAtTop.expected.hs"
+      "import Data.Monoid"
+  , checkImport
+      "comment not at top (newtype is)"
+      "NewTypeAtTop.hs"
+      "NewTypeAtTop.expected.hs"
+      "import Data.Monoid"
+  , checkImport
+      "with no explicit module exports"
+      "NoExplicitExports.hs"
+      "NoExplicitExports.expected.hs"
+      "import Data.Monoid"
+  , checkImport
+      "add to correctly placed exisiting import"
+      "ImportAtTop.hs"
+      "ImportAtTop.expected.hs"
+      "import Data.Monoid"
+  , checkImport
+      "add to multiple correctly placed exisiting imports"
+      "MultipleImportsAtTop.hs"
+      "MultipleImportsAtTop.expected.hs"
+      "import Data.Monoid"
+  , checkImport
+      "with language pragma at top of module"
+      "LangPragmaModuleAtTop.hs"
+      "LangPragmaModuleAtTop.expected.hs"
+      "import Data.Monoid"
+  , checkImport
+      "with language pragma and explicit module exports"
+      "LangPragmaModuleWithComment.hs"
+      "LangPragmaModuleWithComment.expected.hs"
+      "import Data.Monoid"
+  , checkImport
+      "with language pragma at top and no module declaration"
+      "LanguagePragmaAtTop.hs"
+      "LanguagePragmaAtTop.expected.hs"
+      "import Data.Monoid"
+  , checkImport
+      "with multiple lang pragmas and no module declaration"
+      "MultipleLanguagePragmasNoModuleDeclaration.hs"
+      "MultipleLanguagePragmasNoModuleDeclaration.expected.hs"
+      "import Data.Monoid"
+  , checkImport
+      "with pragmas and shebangs"
+      "LanguagePragmasThenShebangs.hs"
+      "LanguagePragmasThenShebangs.expected.hs"
+      "import Data.Monoid"
+  , checkImport
+      "with pragmas and shebangs but no comment at top"
+      "PragmasAndShebangsNoComment.hs"
+      "PragmasAndShebangsNoComment.expected.hs"
+      "import Data.Monoid"
+  , checkImport
+      "module decl no exports under pragmas and shebangs"
+      "PragmasShebangsAndModuleDecl.hs"
+      "PragmasShebangsAndModuleDecl.expected.hs"
+      "import Data.Monoid"
+  , checkImport
+      "module decl with explicit import under pragmas and shebangs"
+      "PragmasShebangsModuleExplicitExports.hs"
+      "PragmasShebangsModuleExplicitExports.expected.hs"
+      "import Data.Monoid"
+  , checkImport
+      "module decl and multiple imports"
+      "ModuleDeclAndImports.hs"
+      "ModuleDeclAndImports.expected.hs"
+      "import Data.Monoid"
   ]
 
 checkImport :: String -> FilePath -> FilePath -> T.Text -> TestTree
@@ -1100,19 +1276,20 @@ removeImportTests = testGroup "remove import actions"
             , "stuffB :: Integer"
             , "stuffB = 123"
             , "stuffC = ()"
+            , "_stuffD = '_'"
             ]
       _docA <- createDoc "ModuleA.hs" "haskell" contentA
       let contentB = T.unlines
             [ "{-# OPTIONS_GHC -Wunused-imports #-}"
             , "module ModuleB where"
-            , "import ModuleA (stuffA, stuffB, stuffC, stuffA)"
+            , "import ModuleA (stuffA, stuffB, _stuffD, stuffC, stuffA)"
             , "main = print stuffB"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- waitForDiagnostics
       [InR action@CodeAction { _title = actionTitle }, _]
           <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
-      liftIO $ "Remove stuffA, stuffC from import" @=? actionTitle
+      liftIO $ "Remove _stuffD, stuffA, stuffC from import" @=? actionTitle
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines
@@ -3778,7 +3955,7 @@ findDefinitionAndHoverTests = let
   chrL36 = Position 41 24  ;  litC   = [ExpectHoverText ["'f'"]]
   txtL8  = Position 12 14  ;  litT   = [ExpectHoverText ["\"dfgy\""]]
   lstL43 = Position 47 12  ;  litL   = [ExpectHoverText ["[8391 :: Int, 6268]"]]
-  outL45 = Position 49  3  ;  outSig = [ExpectHoverText ["outer", "Bool"], mkR 46 0 46 5]
+  outL45 = Position 49  3  ;  outSig = [ExpectHoverText ["outer", "Bool"], mkR 50 0 50 5]
   innL48 = Position 52  5  ;  innSig = [ExpectHoverText ["inner", "Char"], mkR 49 2 49 7]
   holeL60 = Position 62 7  ;  hleInfo = [ExpectHoverText ["_ ::"]]
   cccL17 = Position 17 16  ;  docLink = [ExpectHoverText ["[Documentation](file:///"]]
@@ -3832,7 +4009,7 @@ findDefinitionAndHoverTests = let
         test  no     yes    docL41     constr        "type constraint in hover info   #1012"
     else
         test  no     broken docL41     constr        "type constraint in hover info   #1012"
-  , test  broken broken outL45     outSig        "top-level signature              #767"
+  , test  no     yes    outL45     outSig        "top-level signature              #767"
   , test  broken broken innL48     innSig        "inner     signature              #767"
   , test  no     yes    holeL60    hleInfo       "hole without internal name       #831"
   , test  no     skip   cccL17     docLink       "Haddock html links"
@@ -4051,13 +4228,24 @@ thTests =
     expectDiagnostics [ ( cPath, [(DsWarning, (3, 0), "Top-level binding with no type signature: a :: A")] ) ]
     ]
 
+-- | Tests for projects that use symbolic links one way or another
+symlinkTests :: TestTree
+symlinkTests =
+  testGroup "Projects using Symlinks"
+    [ testCase "Module is symlinked" $ runWithExtraFiles "symlink" $ \dir -> do
+        liftIO $ createFileLink (dir </> "some_loc" </> "Sym.hs") (dir </> "other_loc" </> "Sym.hs")
+        let fooPath = dir </> "src" </> "Foo.hs"
+        _ <- openDoc fooPath "haskell"
+        expectDiagnosticsWithTags  [("src" </> "Foo.hs", [(DsWarning, (2, 0), "The import of 'Sym' is redundant", Just DtUnnecessary)])]
+        pure ()
+    ]
+
 -- | Test that all modules have linkables
 thLoadingTest :: TestTree
 thLoadingTest = testCase "Loading linkables" $ runWithExtraFiles "THLoading" $ \dir -> do
     let thb = dir </> "THB.hs"
     _ <- openDoc thb "haskell"
     expectNoMoreDiagnostics 1
-
 
 -- | test that TH is reevaluated on typecheck
 thReloadingTest :: Bool -> TestTree

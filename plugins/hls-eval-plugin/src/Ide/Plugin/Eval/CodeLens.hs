@@ -49,7 +49,7 @@ import           Development.IDE                 (GetModSummary (..),
                                                   GhcSessionIO (..), IdeState,
                                                   ModSummaryResult (..),
                                                   NeedsCompilation (NeedsCompilation),
-                                                  evalGhcEnv, hscEnv,
+                                                  evalGhcEnv,
                                                   hscEnvWithImportPaths,
                                                   prettyPrint, runAction,
                                                   textToStringBuffer,
@@ -90,10 +90,10 @@ import           Ide.Plugin.Eval.Parse.Comments  (commentsToSections)
 import           Ide.Plugin.Eval.Parse.Option    (parseSetFlags)
 import           Ide.Plugin.Eval.Rules           (queueForEvaluation)
 import           Ide.Plugin.Eval.Types
-import           Ide.Plugin.Eval.Util            (asS, gStrictTry, handleMaybe,
-                                                  handleMaybeM, isLiterate,
-                                                  logWith, response, response',
-                                                  timed)
+import           Ide.Plugin.Eval.Util            (asS, gStrictTry, isLiterate,
+                                                  logWith, response', timed)
+import           Ide.PluginUtils                 (handleMaybe, handleMaybeM,
+                                                  response)
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types              hiding
@@ -541,9 +541,8 @@ runGetSession st nfp = liftIO $ runAction "eval" st $ do
     let env = fromMaybe (error $ "Unknown file: " <> fp) res
         ghcSessionDepsConfig = def
             { checkForImportCycles = False
-            , fullModSummary = True
             }
-    res <- fmap hscEnvWithImportPaths <$> ghcSessionDepsDefinition ghcSessionDepsConfig env nfp
+    res <- fmap hscEnvWithImportPaths <$> ghcSessionDepsDefinition True ghcSessionDepsConfig env nfp
     return $ fromMaybe (error $ "Unable to load file: " <> fp) res
 
 needsQuickCheck :: [(Section, Test)] -> Bool

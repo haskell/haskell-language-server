@@ -25,13 +25,15 @@ jobs:
                   "hls-module-name-plugin", "hls-pragmas-plugin",
                   "hls-refine-imports-plugin", "hls-retrie-plugin",
                   "hls-splice-plugin", "hls-tactics-plugin",
-                  "hls-call-hierarchy-plugin",
+                  "hls-call-hierarchy-plugin", "hls-alternate-number-format-plugin",
+                  "hls-qualify-imported-names-plugin",
                   "haskell-language-server"]
         # Uncomment 9.0.1 when ghcide is buildable
         ghc: [ "9.0.1",
               "8.10.7",
               "8.8.4",
               "8.6.5"]
+        cabal: ['3.6']
         exclude:
         - ghc: "9.0.1"
           package: "hls-brittany-plugin"
@@ -45,27 +47,46 @@ jobs:
     steps:
 
       - uses: actions/checkout@v2
-        with:
-          submodules: true
 
       - uses: haskell/actions/setup@v1
+        id: HaskEnvSetup
         with:
-          ghc-version: ${{ matrix.ghc }}
-          cabal-version: '3.4'
+          ghc-version  : ${{ matrix.ghc   }}
+          cabal-version: ${{ matrix.cabal }}
+          enable-stack: false
 
-      - name: Cache Cabal
+      - name: Linux Platform config
+        run: |
+          echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
+
+      - name: Retrieving `cabal.project` Hackage timestamp
+        run: |
+          # Form: index-state: 2021-11-29T08:11:08Z
+          INDEX_STATE_ENTRY=$(grep index-state cabal.project)
+          # Form: 2021-11-29T08-11-08Z
+          INDEX_STATE1=$(echo "$INDEX_STATE_ENTRY" | cut -d' ' -f2 | tr ':' '-')
+          echo "INDEX_STATE=$INDEX_STATE1" >> $GITHUB_ENV
+
+      - name: Hackage sources cache
         uses: actions/cache@v2
         env:
-          cache-name: cache-cabal
+          cache-name: hackage-sources
         with:
-          path: |
-            ~/.cabal/packages
-            ~/.cabal/store
-          key: v2-${{ runner.os }}-${{ matrix.ghc }}-build-${{ hashFiles('cabal.project') }}
+          path: ${{ env.CABAL_PKGS_DIR }}
+          key:          ${{ env.cache-name }}-${{ env.INDEX_STATE }}
+          restore-keys: ${{ env.cache-name }}-
+
+      - name: Compiled deps cache
+        uses: actions/cache@v2
+        env:
+          cache-name: compiled-deps
+        with:
+          path: ${{ steps.HaskEnvSetup.outputs.cabal-store }}
+          key:  ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project') }}
           restore-keys: |
-            v2-${{ runner.os }}-${{ matrix.ghc }}-bench-${{ hashFiles('cabal.project') }}
-            v2-${{ runner.os }}-${{ matrix.ghc }}-build-
-            v2-${{ runner.os }}-${{ matrix.ghc }}
+                ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-
+                ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
+                ${{ env.cache-name }}-${{ runner.os }}-
 
       - name: "Run cabal check"
         run: |
