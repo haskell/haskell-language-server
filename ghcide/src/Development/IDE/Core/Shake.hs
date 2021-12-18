@@ -455,7 +455,7 @@ recordDirtyKeys
 recordDirtyKeys ShakeExtras{dirtyKeys} key file = do
     modifyTVar' dirtyKeys $ \x -> foldl' (flip HSet.insert) x (toKey key <$> file)
     return $ withEventTrace "recordDirtyKeys" $ \addEvent -> do
-        addEvent (fromString $ "dirty " <> show key) (fromString $ unlines $ map fromNormalizedFilePath file)
+        addEvent (fromString $ unlines $ "dirty " <> show key : map fromNormalizedFilePath file)
 
 -- | We return Nothing if the rule has not run and Just Failed if it has failed to produce a value.
 getValues ::
