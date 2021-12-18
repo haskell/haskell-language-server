@@ -30,6 +30,18 @@ on:
   push:
     branches:
       - master
+  schedule:
+    # Refresh snapshot every (02+8*x):25 UTC
+    # When cache is present it is a light check workflow with early termination.
+    # When primary cache is not hit - runs the cache generation.
+    # Why: GitHub repo has 10G pool & on overflow GitHub removes caches in FIFO manner.
+    # When internal branche PRs save into the same pool -
+    #   their cache is accessible only inside of the scope of the PR.
+    # If main cache is forced out - there are no cache shared between PRs,
+    #   which implies all PRs would start to create & save their cache.
+    # Reinstitution of the main chache puts it back into FIFO
+    #   & so it gets shared across all PRs.
+    - cron: "25 2/8 * * *"
 
 env:
   cabalBuild: "v2-build all --enable-tests --enable-benchmarks"
