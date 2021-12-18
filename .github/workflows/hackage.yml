@@ -28,7 +28,6 @@ jobs:
                   "hls-call-hierarchy-plugin", "hls-alternate-number-format-plugin",
                   "hls-qualify-imported-names-plugin",
                   "haskell-language-server"]
-        # Uncomment 9.0.1 when ghcide is buildable
         ghc: [ "9.0.1",
               "8.10.7",
               "8.8.4",

@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ['9.0.1', '8.10.7', '8.10.6', '8.8.4', '8.6.5']
+        ghc: ['9.2.1', '9.0.1', '8.10.7', '8.10.6', '8.8.4', '8.6.5']
         os: [ubuntu-18.04, macOS-latest, windows-latest]
         cabal: ['3.6']
 
@@ -43,9 +43,12 @@ jobs:
           echo -e 'package blaze-textual\n    flags: +integer-simple' >> cabal.project.local
         fi
 
-    - name: Use modified cabal.project for ghc9
+    - name: Use modified cabal.project for ghc9.0
       if: ${{ matrix.ghc == '9.0.1' }}
       run: cp cabal-ghc901.project cabal.project
+    - name: Use modified cabal.project for ghc9.2
+      if: ${{ matrix.ghc == '9.2.1' }}
+      run: cp cabal-ghc921.project cabal.project
 
     - name: Shorten binary names
       run: |
