@@ -165,7 +165,7 @@ flag splice
 
 flag alternateNumberFormat
   description: Enable Alternate Number Format plugin
-  default:     True
+  default:     False
   manual:      True
 
 flag qualifyImportedNames
