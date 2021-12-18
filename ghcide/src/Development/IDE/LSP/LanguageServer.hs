@@ -182,15 +182,17 @@ runLanguageServer options inH outH getHieDbLoc defaultConfig onConfigurationChan
                         ) $ \(e :: SomeException) -> do
                             exceptionInHandler e
                             k $ ResponseError InternalError (T.pack $ show e) Nothing
-            _ <- flip forkFinally handleServerException $ untilMVar lifetime $ runWithDb logger dbLoc $ \hiedb hieChan -> do
-              putMVar dbMVar (hiedb,hieChan)
-              forever $ do
-                msg <- readChan clientMsgChan
-                -- We dispatch notifications synchronously and requests asynchronously
-                -- This is to ensure that all file edits and config changes are applied before a request is handled
-                case msg of
-                    ReactorNotification act -> handle exceptionInHandler act
-                    ReactorRequest _id act k -> void $ async $ checkCancelled _id act k
+            _ <- flip forkFinally handleServerException $ do
+                untilMVar lifetime $ runWithDb logger dbLoc $ \hiedb hieChan -> do
+                    putMVar dbMVar (hiedb,hieChan)
+                    forever $ do
+                        msg <- readChan clientMsgChan
+                        -- We dispatch notifications synchronously and requests asynchronously
+                        -- This is to ensure that all file edits and config changes are applied before a request is handled
+                        case msg of
+                            ReactorNotification act -> handle exceptionInHandler act
+                            ReactorRequest _id act k -> void $ async $ checkCancelled _id act k
+                logInfo logger "Reactor thread stopped"
             pure $ Right (env,ide)
 
 
