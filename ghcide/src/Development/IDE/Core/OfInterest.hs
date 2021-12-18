@@ -20,18 +20,19 @@ module Development.IDE.Core.OfInterest(
 import           Control.Concurrent.Strict
 import           Control.Monad
 import           Control.Monad.IO.Class
-import           Data.HashMap.Strict                    (HashMap)
-import qualified Data.HashMap.Strict                    as HashMap
-import qualified Data.Text                              as T
+import           Data.HashMap.Strict                      (HashMap)
+import qualified Data.HashMap.Strict                      as HashMap
+import qualified Data.Text                                as T
 import           Development.IDE.Graph
 
-import           Control.Concurrent.STM.Stats           (atomically,
-                                                         modifyTVar')
-import qualified Data.ByteString                        as BS
-import           Data.Maybe                             (catMaybes)
+import           Control.Concurrent.STM.Stats             (atomically,
+                                                           modifyTVar')
+import qualified Data.ByteString                          as BS
+import           Data.Maybe                               (catMaybes)
 import           Development.IDE.Core.ProgressReporting
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
+import           Development.IDE.Plugin.Completions.Types
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger
@@ -113,7 +114,11 @@ kick = do
     liftIO $ progressUpdate progress KickStarted
 
     -- Update the exports map
-    results <- uses GenerateCore files <* uses GetHieAst files
+    results <- uses GenerateCore files
+            <* uses GetHieAst files
+            -- needed to have non local completions on the first edit
+            -- when the first edit breaks the module header
+            <* uses NonLocalCompletions files
     let mguts = catMaybes results
     void $ liftIO $ atomically $ modifyTVar' exportsMap (updateExportsMapMg mguts)
 
