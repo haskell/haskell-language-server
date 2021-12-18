@@ -27,6 +27,7 @@ import           Development.IDE.Graph
 
 import           Control.Concurrent.STM.Stats             (atomically,
                                                            modifyTVar')
+import           Data.Aeson                               (toJSON)
 import qualified Data.ByteString                          as BS
 import           Data.Maybe                               (catMaybes)
 import           Development.IDE.Core.ProgressReporting
@@ -36,6 +37,9 @@ import           Development.IDE.Plugin.Completions.Types
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger
+import           Development.IDE.Types.Options            (IdeTesting (..))
+import qualified Language.LSP.Server                      as LSP
+import qualified Language.LSP.Types                       as LSP
 
 newtype OfInterestVar = OfInterestVar (Var (HashMap NormalizedFilePath FileOfInterestStatus))
 instance IsIdeGlobal OfInterestVar
@@ -110,7 +114,13 @@ scheduleGarbageCollection state = do
 kick :: Action ()
 kick = do
     files <- HashMap.keys <$> getFilesOfInterestUntracked
-    ShakeExtras{exportsMap, progress} <- getShakeExtras
+    ShakeExtras{exportsMap, ideTesting = IdeTesting testing, lspEnv, progress} <- getShakeExtras
+    let signal msg = when testing $ liftIO $
+            mRunLspT lspEnv $
+                LSP.sendNotification (LSP.SCustomMethod msg) $
+                toJSON $ map fromNormalizedFilePath files
+
+    signal "kick/start"
     liftIO $ progressUpdate progress KickStarted
 
     -- Update the exports map
@@ -129,3 +139,5 @@ kick = do
     when garbageCollectionScheduled $ do
         void garbageCollectDirtyKeys
         liftIO $ writeVar var False
+
+    signal "kick/done"
