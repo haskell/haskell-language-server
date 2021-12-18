@@ -150,9 +150,6 @@ import           Ide.Types                                    (DynFlagsModificat
                                                                PluginId)
 import Control.Concurrent.STM.Stats (atomically)
 import Language.LSP.Server (LspT)
-import System.Environment (getExecutablePath)
-import System.Process.Extra (readProcessWithExitCode)
-import Text.Read (readMaybe)
 import System.Info.Extra (isMac)
 import HIE.Bios.Ghc.Gap (hostIsDynamic)
 
