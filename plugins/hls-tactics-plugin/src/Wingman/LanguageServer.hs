@@ -30,7 +30,7 @@ import           Development.IDE.Core.PositionMapping (idDelta)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Rules (usePropertyAction)
 import           Development.IDE.Core.Service (runAction)
-import           Development.IDE.Core.Shake (IdeState (..), uses, define, use, addPersistentRule, getShakeExtras, recordDirtyKeys)
+import           Development.IDE.Core.Shake (IdeState (..), uses, define, use, addPersistentRule)
 import qualified Development.IDE.Core.Shake as IDE
 import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.Compat hiding (empty)
@@ -63,7 +63,6 @@ import           Wingman.Judgements.Theta
 import           Wingman.Range
 import           Wingman.StaticPlugin (pattern WingmanMetaprogram, pattern MetaprogramSyntax)
 import           Wingman.Types
-import Control.Concurrent.STM.Stats (atomically)
 
 
 tacticDesc :: T.Text -> T.Text
@@ -595,13 +594,6 @@ wingmanRules plId = do
 
   action $ do
     files <- getFilesOfInterestUntracked
-    extras <- getShakeExtras
-    void
-      $ liftIO
-      $ join
-      $ atomically
-      $ recordDirtyKeys extras WriteDiagnostics
-      $ Map.keys files
     void $ uses WriteDiagnostics $ Map.keys files
 
 
