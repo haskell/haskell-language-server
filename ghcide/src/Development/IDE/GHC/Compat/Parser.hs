@@ -22,17 +22,18 @@ module Development.IDE.GHC.Compat.Parser (
     mkApiAnns,
     -- * API Annotations
     Anno.AnnKeywordId(..),
+#if !MIN_VERSION_ghc(9,2,0)
     Anno.AnnotationComment(..),
+#endif
     ) where
 
 #if MIN_VERSION_ghc(9,0,0)
+import qualified GHC.Parser.Annotation           as Anno
 import qualified GHC.Parser.Lexer                as Lexer
 import           GHC.Types.SrcLoc                (PsSpan (..))
 #if MIN_VERSION_ghc(9,2,0)
 import qualified GHC.Driver.Config               as Config
 import           GHC.Parser.Lexer                hiding (initParserState)
-#else
-import qualified GHC.Parser.Annotation           as Anno
 #endif
 #else
 import qualified ApiAnnotation                   as Anno
