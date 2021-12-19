@@ -71,11 +71,11 @@ import qualified StmContainers.Map                 as STM
 #if MIN_VERSION_ghc(8,8,0)
 otTracedProvider :: MonadUnliftIO m => PluginId -> ByteString -> m a -> m a
 otTracedGarbageCollection :: (MonadMask f, MonadIO f, Show a) => ByteString -> f [a] -> f [a]
-withEventTrace :: (MonadMask m, MonadIO m) => String -> ((ByteString -> ByteString -> m ()) -> m a) -> m a
+withEventTrace :: (MonadMask m, MonadIO m) => String -> ((ByteString -> m ()) -> m a) -> m a
 #else
 otTracedProvider :: MonadUnliftIO m => PluginId -> String -> m a -> m a
 otTracedGarbageCollection :: (MonadMask f, MonadIO f, Show a) => String -> f [a] -> f [a]
-withEventTrace :: (MonadMask m, MonadIO m) => String -> ((String -> ByteString -> m ()) -> m a) -> m a
+withEventTrace :: (MonadMask m, MonadIO m) => String -> ((ByteString -> m ()) -> m a) -> m a
 #endif
 
 withTrace :: (MonadMask m, MonadIO m) =>
@@ -90,8 +90,8 @@ withTrace name act
 withEventTrace name act
   | userTracingEnabled
   = withSpan (fromString name) $ \sp -> do
-      act (addEvent sp)
-  | otherwise = act (\_ _ -> pure ())
+      act (addEvent sp "")
+  | otherwise = act (\_ -> pure ())
 
 -- | Returns a logger that produces telemetry events in a single span
 withTelemetryLogger :: (MonadIO m, MonadMask m) => (Logger -> m a) -> m a
