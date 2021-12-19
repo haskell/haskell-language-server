@@ -121,7 +121,9 @@ module Development.IDE.GHC.Compat.Core (
       TyCoRep.CoercionTy
       ),
     pattern FunTy,
+#if !MIN_VERSION_ghc(9,2,0)
     Development.IDE.GHC.Compat.Core.splitForAllTyCoVars,
+#endif
     Development.IDE.GHC.Compat.Core.mkVisFunTys,
     Development.IDE.GHC.Compat.Core.mkInfForAllTys,
     -- * Specs
@@ -234,7 +236,9 @@ module Development.IDE.GHC.Compat.Core (
     Unlinked(..),
     Linkable(..),
     unload,
+#if !MIN_VERSION_ghc(9,2,0)
     initDynLinker,
+#endif
     -- * Hooks
     Hooks,
     runMetaHook,
@@ -426,7 +430,7 @@ import           GHC.Core.Coercion
 import           GHC.Core.ConLike
 import           GHC.Core.DataCon           hiding (dataConExTyCoVars)
 import qualified GHC.Core.DataCon           as DataCon
-import           GHC.Core.FamInstEnv
+import           GHC.Core.FamInstEnv hiding (pprFamInst)
 import           GHC.Core.InstEnv
 import           GHC.Types.Unique.FM
 #if MIN_VERSION_ghc(9,2,0)
@@ -444,6 +448,7 @@ import           GHC.Core.Type              hiding (mkInfForAllTys, mkVisFunTys)
 import           GHC.Core.Unify
 import           GHC.Core.Utils
 
+
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Driver.Env
 #else
@@ -460,6 +465,9 @@ import           GHC.Driver.Pipeline
 import           GHC.Driver.Plugins
 import           GHC.Driver.Session         hiding (ExposePackage)
 import qualified GHC.Driver.Session         as DynFlags
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC.Hs (HsParsedModule(..))
+#endif
 #if !MIN_VERSION_ghc(9,2,0)
 import           GHC.Hs
 #endif
@@ -480,6 +488,7 @@ import           GHC.Parser.Lexer
 import           GHC.Linker.Loader
 import           GHC.Linker.Types
 import           GHC.Platform.Ways
+import           GHC.Runtime.Context (InteractiveImport(..))
 #else
 import           GHC.Runtime.Linker
 #endif
@@ -497,6 +506,9 @@ import           GHC.Tc.Utils.Monad         hiding (Applicative (..), IORef,
 import           GHC.Tc.Utils.TcType        as TcType
 import qualified GHC.Types.Avail            as Avail
 #if MIN_VERSION_ghc(9,2,0)
+import           GHC.Types.Fixity (LexicalFixity(..))
+#endif
+#if MIN_VERSION_ghc(9,2,0)
 import           GHC.Types.Meta
 #endif
 import           GHC.Types.Basic
@@ -510,6 +522,7 @@ import           GHC.Types.Name.Set
 import           GHC.Types.SourceFile       (HscSource (..),
                                              SourceModified (..))
 import           GHC.Types.SourceText
+import           GHC.Types.Target (Target(..), TargetId(..))
 import           GHC.Types.TyThing
 import           GHC.Types.TyThing.Ppr
 #else
@@ -532,10 +545,12 @@ import           GHC.Unit.Module            hiding (ModLocation (..), UnitId,
                                              toUnitId)
 import qualified GHC.Unit.Module            as Module
 #if MIN_VERSION_ghc(9,2,0)
+import           GHC.Unit.Module.Graph (mkModuleGraph)
 import           GHC.Unit.Module.Imported
 import           GHC.Unit.Module.ModDetails
 import           GHC.Unit.Module.ModGuts
-import           GHC.Unit.Module.ModIface   (IfaceExport)
+import           GHC.Unit.Module.ModIface   (IfaceExport, ModIface(..), ModIface_(..))
+import           GHC.Unit.Module.ModSummary (ModSummary(..))
 #endif
 import           GHC.Unit.State             (ModuleOrigin (..))
 import           GHC.Utils.Error            (Severity (..))
@@ -656,6 +671,11 @@ import           SrcLoc                     (RealLocated, SrcLoc (UnhelpfulLoc),
 #if !MIN_VERSION_ghc(8,8,0)
 import           Data.List                  (isSuffixOf)
 import           System.FilePath
+#endif
+
+
+#if MIN_VERSION_ghc(9,2,0)
+import           Language.Haskell.Syntax.Expr
 #endif
 
 #if !MIN_VERSION_ghc(9,0,0)
@@ -806,11 +826,9 @@ mkInfForAllTys =
   mkInvForAllTys
 #endif
 
+#if !MIN_VERSION_ghc(9,2,0)
 splitForAllTyCoVars :: Type -> ([TyCoVar], Type)
 splitForAllTyCoVars =
-#if MIN_VERSION_ghc(9,2,0)
-  TcType.splitForAllTyCoVars
-#else
   splitForAllTys
 #endif
 
