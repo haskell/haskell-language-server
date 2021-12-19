@@ -37,6 +37,7 @@ import           GHC.Parser.Errors
 import qualified GHC.Parser.Errors.Ppr           as Ppr
 import qualified GHC.Types.Error                 as Error
 import           GHC.Types.Name.Ppr
+import           GHC.Types.Name.Reader
 import           GHC.Types.SourceError
 import           GHC.Types.SrcLoc
 import           GHC.Unit.State
@@ -154,7 +155,13 @@ type PsError = ErrMsg
 
 mkPrintUnqualifiedDefault :: GlobalRdrEnv -> PrintUnqualified
 mkPrintUnqualifiedDefault =
+#if MIN_VERSION_ghc(9,2,0)
+  -- GHC 9.2.1 version
+  -- mkPrintUnqualified :: UnitEnv -> GlobalRdrEnv -> PrintUnqualified
+  mkPrintUnqualified unsafeGlobalDynFlags
+#else
   HscTypes.mkPrintUnqualified unsafeGlobalDynFlags
+#endif
 
 mkWarnMsg :: DynFlags -> SrcSpan -> PrintUnqualified -> SDoc -> MsgEnvelope DecoratedSDoc
 mkWarnMsg =
