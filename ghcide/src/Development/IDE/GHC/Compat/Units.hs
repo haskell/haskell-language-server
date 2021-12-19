@@ -131,12 +131,12 @@ initUnits env = do
   let cached_unit_dbs = hsc_unit_dbs env
   (dbs,unit_state,home_unit,mconstants) <- State.initUnits (hsc_logger env) dflags1 cached_unit_dbs
 
-  dflags <- updatePlatformConstants dflags1 mconstants
+  dflags <- DynFlags.updatePlatformConstants dflags1 mconstants
 
 
   let unit_env = UnitEnv
         { ue_platform  = targetPlatform dflags
-        , ue_namever   = ghcNameVersion dflags
+        , ue_namever   = DynFlags.ghcNameVersion dflags
         , ue_home_unit = home_unit
         , ue_units     = unit_state
         }
