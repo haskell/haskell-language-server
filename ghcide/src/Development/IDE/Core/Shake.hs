@@ -154,7 +154,7 @@ import           Data.Aeson                             (toJSON)
 import qualified Data.ByteString.Char8                  as BS8
 import           Data.Coerce                            (coerce)
 import           Data.Default
-import           Data.Foldable                          (toList)
+import           Data.Foldable                          (for_, toList)
 import           Data.HashSet                           (HashSet)
 import qualified Data.HashSet                           as HSet
 import           Data.String                            (fromString)
@@ -583,15 +583,17 @@ startTelemetry db extras@ShakeExtras{..}
 
 -- | Must be called in the 'Initialized' handler and only once
 shakeSessionInit :: IdeState -> IO ()
-shakeSessionInit IdeState{..} = do
+shakeSessionInit ide@IdeState{..} = do
     initSession <- newSession shakeExtras shakeDb [] "shakeSessionInit"
     putMVar shakeSession initSession
+    logDebug (ideLogger ide) "Shake session initialized"
 
 shakeShut :: IdeState -> IO ()
-shakeShut IdeState{..} = withMVar shakeSession $ \runner -> do
+shakeShut IdeState{..} = do
+    runner <- tryReadMVar shakeSession
     -- Shake gets unhappy if you try to close when there is a running
     -- request so we first abort that.
-    void $ cancelShakeSession runner
+    for_ runner cancelShakeSession
     void $ shakeDatabaseProfile shakeDb
     shakeClose
     progressStop $ progress shakeExtras
