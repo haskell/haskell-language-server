@@ -31,6 +31,7 @@ module Development.IDE.GHC.Compat.Outputable (
 
 
 #if MIN_VERSION_ghc(9,2,0)
+import           GHC.Driver.Env
 import           GHC.Driver.Ppr
 import           GHC.Driver.Session
 import           GHC.Parser.Errors
@@ -153,14 +154,14 @@ type PsWarning = ErrMsg
 type PsError = ErrMsg
 #endif
 
-mkPrintUnqualifiedDefault :: GlobalRdrEnv -> PrintUnqualified
-mkPrintUnqualifiedDefault =
+mkPrintUnqualifiedDefault :: HscEnv -> GlobalRdrEnv -> PrintUnqualified
+mkPrintUnqualifiedDefault env =
 #if MIN_VERSION_ghc(9,2,0)
   -- GHC 9.2.1 version
   -- mkPrintUnqualified :: UnitEnv -> GlobalRdrEnv -> PrintUnqualified
-  mkPrintUnqualified unsafeGlobalDynFlags
+  mkPrintUnqualified (hsc_unit_env env)
 #else
-  HscTypes.mkPrintUnqualified unsafeGlobalDynFlags
+  HscTypes.mkPrintUnqualified (hsc_dflags env)
 #endif
 
 mkWarnMsg :: DynFlags -> SrcSpan -> PrintUnqualified -> SDoc -> MsgEnvelope DecoratedSDoc

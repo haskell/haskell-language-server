@@ -54,9 +54,10 @@ runGhcideCodeAction :: LSP.MonadLsp Config m => IdeState -> MessageParams TextDo
 runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext {_diagnostics = List diags}) codeAction = do
   let mbFile = toNormalizedFilePath' <$> uriToFilePath uri
       runRule key = runAction ("GhcideCodeActions." <> show key) state $ runMaybeT $ MaybeT (pure mbFile) >>= MaybeT . use key
+  caaGhcSession <- onceIO $ runRule GhcSession
   caaExportsMap <-
     onceIO $
-      runRule GhcSession >>= \case
+      caaGhcSession >>= \case
         Just env -> do
           pkgExports <- envPackageExports env
           localExports <- readTVarIO (exportsMap $ shakeExtras state)
@@ -134,6 +135,7 @@ instance (ToTextEdit a, ToTextEdit b) => ToTextEdit (Either a b) where
 
 data CodeActionArgs = CodeActionArgs
   { caaExportsMap   :: IO ExportsMap,
+    caaGhcSession   :: IO (Maybe HscEnvEq),
     caaIdeOptions   :: IO IdeOptions,
     caaParsedModule :: IO (Maybe ParsedModule),
     caaContents     :: IO (Maybe T.Text),
@@ -267,3 +269,9 @@ instance ToCodeAction r => ToCodeAction (Maybe GlobalBindingTypeSigsResult -> r)
 
 instance ToCodeAction r => ToCodeAction (GlobalBindingTypeSigsResult -> r) where
   toCodeAction = toCodeAction2 caaGblSigs
+
+instance ToCodeAction r => ToCodeAction (Maybe HscEnvEq -> r) where
+  toCodeAction = toCodeAction1 caaGhcSession
+
+instance ToCodeAction r => ToCodeAction (Maybe HscEnv -> r) where
+  toCodeAction = toCodeAction1 ((fmap.fmap.fmap) hscEnv caaGhcSession)
