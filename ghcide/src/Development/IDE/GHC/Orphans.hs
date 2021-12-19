@@ -93,6 +93,14 @@ instance NFData FastString where
     rnf = rwhnf
 #endif
 
+#if MIN_VERSION_ghc(9,2,0)
+instance Ord FastString where
+    compare a b = if a == b then EQ else compare (fs_sbs a) (fs_sbs b)
+
+instance NFData (SrcSpanAnn' a) where
+    rnf = rwhnf
+#endif
+
 instance NFData ParsedModule where
     rnf = rwhnf
 
