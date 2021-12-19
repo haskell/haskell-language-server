@@ -414,7 +414,7 @@ newtype GhcSessionDeps = GhcSessionDeps_
         -- Required for interactive evaluation, but leads to more cache invalidations
         fullModSummary :: Bool
     }
-    deriving newtype (Eq, Show, Typeable, Hashable, NFData)
+    deriving (Eq, Show, Typeable, Hashable, NFData)
 
 pattern GhcSessionDeps :: GhcSessionDeps
 pattern GhcSessionDeps = GhcSessionDeps_ False
