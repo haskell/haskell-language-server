@@ -25,7 +25,6 @@ import qualified StringBuffer               as SB
 import           Unique                     (getKey)
 #endif
 
-import           GHC
 
 import           Retrie.ExactPrint          (Annotated)
 

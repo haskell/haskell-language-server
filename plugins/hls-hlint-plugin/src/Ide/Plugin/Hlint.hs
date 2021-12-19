@@ -55,7 +55,7 @@ import           Refact.Apply
 
 #ifdef HLINT_ON_GHC_LIB
 import           Data.List                                          (nub)
-import           Development.IDE.GHC.Compat.Core                    (BufSpan,
+import           Development.IDE.GHC.Compat                         (BufSpan,
                                                                      DynFlags,
                                                                      extensionFlags,
                                                                      ms_hspp_opts,
@@ -79,7 +79,7 @@ import           System.IO                                          (IOMode (Wri
                                                                      withFile)
 import           System.IO.Temp
 #else
-import           Development.IDE.GHC.Compat.Core                    hiding
+import           Development.IDE.GHC.Compat                         hiding
                                                                     (setEnv)
 import           Language.Haskell.GHC.ExactPrint.Delta              (deltaOptions)
 import           Language.Haskell.GHC.ExactPrint.Parsers            (postParseTransform)
@@ -109,7 +109,7 @@ import           GHC.Generics                                       (Associativi
                                                                      Generic)
 import           Text.Regex.TDFA.Text                               ()
 
-import           Development.IDE.GHC.Compat.Core                    (WarningFlag (Opt_WarnUnrecognisedPragmas),
+import           Development.IDE.GHC.Compat                         (WarningFlag (Opt_WarnUnrecognisedPragmas),
                                                                      wopt)
 import           Development.IDE.Spans.Pragmas                      (LineSplitTextEdits (LineSplitTextEdits),
                                                                      NextPragmaInfo (NextPragmaInfo),

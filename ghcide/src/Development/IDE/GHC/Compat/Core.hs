@@ -149,8 +149,7 @@ module Development.IDE.GHC.Compat.Core (
     -- * TcGblEnv
     TcGblEnv(..),
     -- * Parsing and LExer types
-    HsParsedModule(..),
-    GHC.ParsedModule(..),
+    HsModule(..),
     GHC.ParsedSource,
     GHC.RenamedSource,
     -- * Compilation Main
@@ -195,6 +194,9 @@ module Development.IDE.GHC.Compat.Core (
     pattern RealSrcLoc,
     SrcLoc.SrcLoc(SrcLoc.UnhelpfulLoc),
     BufSpan,
+#if MIN_VERSION_ghc(9,2,0)
+    SrcSpanAnn',
+#endif
     SrcLoc.leftmost_smallest,
     SrcLoc.containsSpan,
     SrcLoc.mkGeneralSrcSpan,
@@ -277,6 +279,9 @@ module Development.IDE.GHC.Compat.Core (
     -- * Panic
     PlainGhcException,
     panic,
+    -- * Other
+    GHC.CoreModule(..),
+    GHC.SafeHaskellMode(..),
     -- * Util Module re-exports
 #if MIN_VERSION_ghc(9,0,0)
     module GHC.Builtin.Names,
@@ -310,6 +315,7 @@ module Development.IDE.GHC.Compat.Core (
 
 #if MIN_VERSION_ghc(9,2,0)
     module GHC.Hs.Decls,
+    module GHC.Hs.Doc,
     module GHC.Hs.Extension,
     module GHC.Hs.ImpExp,
     module GHC.Hs.Pat,
@@ -470,8 +476,9 @@ import           GHC.Driver.Plugins
 import           GHC.Driver.Session           hiding (ExposePackage)
 import qualified GHC.Driver.Session           as DynFlags
 #if MIN_VERSION_ghc(9,2,0)
-import           GHC.Hs                       (HsParsedModule (..))
+import           GHC.Hs                       (HsModule (..), SrcSpanAnn')
 import           GHC.Hs.Decls                 hiding (FunDep)
+import           GHC.Hs.Doc
 import           GHC.Hs.Extension
 import           GHC.Hs.ImpExp
 import           GHC.Hs.Pat
@@ -672,7 +679,7 @@ import           Var                          (Var (varName), setTyVarUnique,
 #if MIN_VERSION_ghc(8,10,0)
 import           Coercion                     (coercionKind)
 import           Predicate
-import           SrcLoc                       (SrcLoc (UnhelpfulLoc),
+import           SrcLoc                       (Located, SrcLoc (UnhelpfulLoc),
                                                SrcSpan (UnhelpfulSpan))
 #else
 import           SrcLoc                       (RealLocated,

@@ -921,7 +921,7 @@ parseFileContents env customPreprocessor filename ms = do
                -- filter them out:
                srcs2 <- liftIO $ filterM doesFileExist srcs1
 
-               let pm = mkParsedModule ms parsed' srcs2 hpm_annotations
+               let pm = ParsedModule ms parsed' srcs2 hpm_annotations
                    warnings = diagFromErrMsgs "parser" dflags warns
                pure (warnings ++ preproc_warnings, pm)
 
