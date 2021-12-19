@@ -583,9 +583,10 @@ startTelemetry db extras@ShakeExtras{..}
 
 -- | Must be called in the 'Initialized' handler and only once
 shakeSessionInit :: IdeState -> IO ()
-shakeSessionInit IdeState{..} = do
+shakeSessionInit ide@IdeState{..} = do
     initSession <- newSession shakeExtras shakeDb [] "shakeSessionInit"
     putMVar shakeSession initSession
+    logDebug (ideLogger ide) "Shake session initialized"
 
 shakeShut :: IdeState -> IO ()
 shakeShut IdeState{..} = withMVar shakeSession $ \runner -> do
