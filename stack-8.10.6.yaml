@@ -1,3 +1,6 @@
+# Build plan for GHC 8.10.6.
+# Like stack-8.10.7.yaml but with an older resolver.
+
 resolver: lts-18.8
 
 packages:

@@ -1,4 +1,8 @@
-resolver: lts-18.16
+# Build plan for GHC 8.10.7. 
+# stack-8.10.7.yaml is for install script, stack.yaml is for default builds, keep these identical.
+# https://github.com/haskell/haskell-language-server/issues/2491
+
+resolver: lts-18.18
 
 packages:
   - .
