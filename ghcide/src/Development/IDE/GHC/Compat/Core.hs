@@ -500,11 +500,11 @@ import           GHC.Platform.Ways
 import           GHC.Runtime.Context          (InteractiveImport (..))
 #else
 import           GHC.Parser.Lexer
-import           GHC.Runtime.Linker
+import qualified GHC.Runtime.Linker           as Linker
 #endif
 import           GHC.Rename.Names
 import           GHC.Rename.Splice
-import           GHC.Runtime.Interpreter
+import qualified GHC.Runtime.Interpreter      as GHCi
 import           GHC.Tc.Instance.Family
 import           GHC.Tc.Module
 import           GHC.Tc.Types
@@ -591,7 +591,7 @@ import           Finder
 #if MIN_VERSION_ghc(8,10,0)
 import           GHC.Hs
 #endif
-import           GHCi
+import qualified GHCi
 import           GhcMonad
 import           HeaderInfo                   hiding (getImports)
 import           Hooks
@@ -898,11 +898,26 @@ type PlainGhcException = Plain.PlainGhcException
 type PlainGhcException = Plain.GhcException
 #endif
 
-initDynLinker :: HscEnv -> IO ()
+initDynLinker, initObjLinker :: HscEnv -> IO ()
 initDynLinker =
 #if !MIN_VERSION_ghc(9,0,0)
     Linker.initDynLinker
 #else
     -- It errors out in GHC 9.0 and doesn't exist in 9.2
     const $ return ()
+#endif
+
+initObjLinker env =
+#if !MIN_VERSION_ghc(9,2,0)
+    GHCi.initObjLinker env
+#else
+    GHCi.initObjLinker (GHCi.hscInterp env)
+#endif
+
+loadDLL :: HscEnv -> String -> IO (Maybe String)
+loadDLL env =
+#if !MIN_VERSION_ghc(9,2,0)
+    GHCi.loadDLL env
+#else
+    GHCi.loadDLL (GHCi.hscInterp env)
 #endif
