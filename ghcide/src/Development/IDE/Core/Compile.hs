@@ -27,7 +27,6 @@ module Development.IDE.Core.Compile
   , loadHieFile
   , loadInterface
   , loadModulesHome
-  , setupFinderCache
   , getDocsBatch
   , lookupName
   ,mergeEnvs) where
@@ -653,30 +652,6 @@ handleGenerationErrors' dflags source action =
     , Handler $ return . (,Nothing) . diagFromString source DsError (noSpan "<internal>")
     . (("Error during " ++ T.unpack source) ++) . show @SomeException
     ]
-
--- | Initialise the finder cache, dependencies should be topologically
--- sorted.
-setupFinderCache :: [ModSummary] -> HscEnv -> IO HscEnv
-setupFinderCache mss session = do
-
-    -- Make modules available for others that import them,
-    -- by putting them in the finder cache.
-    let ims  = map (installedModule (homeUnitId_ $ hsc_dflags session) . moduleName . ms_mod) mss
-        ifrs = zipWith (\ms -> InstalledFound (ms_location ms)) mss ims
-    -- set the target and module graph in the session
-        graph = mkModuleGraph mss
-
-    -- We have to create a new IORef here instead of modifying the existing IORef as
-    -- it is shared between concurrent compilations.
-    prevFinderCache <- readIORef $ hsc_FC session
-    let newFinderCache =
-            foldl'
-                (\fc (im, ifr) -> GHC.extendInstalledModuleEnv fc im ifr) prevFinderCache
-                $ zip ims ifrs
-    newFinderCacheVar <- newIORef $! newFinderCache
-
-    pure $ session { hsc_FC = newFinderCacheVar, hsc_mod_graph = graph }
-
 
 -- | Load modules, quickly. Input doesn't need to be desugared.
 -- A module must be loaded before dependent modules can be typechecked.
