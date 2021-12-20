@@ -15,9 +15,15 @@ module Development.IDE.GHC.Compat(
     setUpTypedHoles,
     upNameCache,
     disableWarningsAsErrors,
+    reLoc,
 
 #if !MIN_VERSION_ghc(9,0,1)
     RefMap,
+#endif
+
+#if MIN_VERSION_ghc(9,2,0)
+    extendModSummaryNoDeps,
+    emsModSummary,
 #endif
 
     nodeInfo',
@@ -72,6 +78,7 @@ import Development.IDE.GHC.Compat.Util
 import           GHC.Data.StringBuffer
 import           GHC.Driver.Session    hiding (ExposePackage)
 #if MIN_VERSION_ghc(9,2,0)
+import           GHC.Unit.Module.ModSummary
 import           GHC.Driver.Env as Env
 import           GHC.Unit.Module.ModIface
 #else
@@ -115,6 +122,11 @@ import           Data.List              (foldl')
 import qualified Data.Set               as S
 #endif
 
+#if !MIN_VERSION_ghc(9,2,0)
+reLoc :: Located a -> Located a
+reLoc = id
+#endif
+
 #if !MIN_VERSION_ghc(8,8,0)
 hPutStringBuffer :: Handle -> StringBuffer -> IO ()
 hPutStringBuffer hdl (StringBuffer buf len cur)
@@ -127,6 +139,7 @@ supportsHieFiles = True
 
 hieExportNames :: HieFile -> [(SrcSpan, Name)]
 hieExportNames = nameListFromAvails . hie_exports
+
 
 upNameCache :: IORef NameCache -> (NameCache -> (NameCache, c)) -> IO c
 #if MIN_VERSION_ghc(8,8,0)

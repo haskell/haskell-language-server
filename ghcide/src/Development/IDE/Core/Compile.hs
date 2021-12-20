@@ -68,6 +68,10 @@ import           GHC.Tc.Gen.Splice
 import           TcSplice
 #endif
 
+#if MIN_VERSION_ghc(9,2,0)
+import qualified GHC.Types.Error                   as Error
+#endif
+
 import           Control.Exception                 (evaluate)
 import           Control.Exception.Safe
 import           Control.Lens                      hiding (List)
@@ -80,6 +84,7 @@ import qualified Data.DList                        as DL
 import           Data.IORef
 import           Data.List.Extra
 import qualified Data.Map.Strict                   as Map
+import qualified Data.IntMap.Strict                as IntMap
 import           Data.Maybe
 import qualified Data.Text                         as T
 import           Data.Time                         (UTCTime, getCurrentTime)
@@ -102,6 +107,7 @@ import           Data.Coerce
 import           Data.Functor
 import qualified Data.HashMap.Strict               as HashMap
 import           Data.Map                          (Map)
+import           Data.IntMap                       (IntMap)
 import           Data.Tuple.Extra                  (dupe)
 import           Data.Unique                       as Unique
 import           Development.IDE.Core.Tracing      (withTrace)
@@ -676,6 +682,15 @@ mergeEnvs env extraModSummaries extraMods envs = do
     prevFinderCache <- concatFC <$> mapM (readIORef . hsc_FC) envs
     let ims  = map (Compat.installedModule (homeUnitId_ $ hsc_dflags env) . moduleName . ms_mod) extraModSummaries
         ifrs = zipWith (\ms -> InstalledFound (ms_location ms)) extraModSummaries ims
+        -- We don't do any instantiation for backpack at this point of time, so it is OK to use
+        -- 'extendModSummaryNoDeps'.
+        -- This may have to change in the future.
+        module_graph_nodes =
+#if MIN_VERSION_ghc(9,2,0)
+          map extendModSummaryNoDeps $
+#endif
+          extraModSummaries ++ nubOrdOn ms_mod (concatMap (mgModSummaries . hsc_mod_graph) envs)
+
     newFinderCache <- newIORef $
             foldl'
                 (\fc (im, ifr) -> Compat.extendInstalledModuleEnv fc im ifr) prevFinderCache
@@ -683,7 +698,7 @@ mergeEnvs env extraModSummaries extraMods envs = do
     return $ loadModulesHome extraMods $ env{
         hsc_HPT = foldMapBy mergeUDFM emptyUDFM hsc_HPT envs,
         hsc_FC = newFinderCache,
-        hsc_mod_graph = mkModuleGraph $ extraModSummaries ++ nubOrdOn ms_mod (concatMap (mgModSummaries . hsc_mod_graph) envs)
+        hsc_mod_graph = mkModuleGraph module_graph_nodes
     }
     where
         mergeUDFM = plusUDFM_C combineModules
@@ -732,8 +747,9 @@ getModSummaryFromImports env fp modTime contents = do
         implicit_prelude = xopt LangExt.ImplicitPrelude dflags
         implicit_imports = mkPrelImports mod main_loc
                                          implicit_prelude imps
+
         convImport (L _ i) = (fmap sl_fs (ideclPkgQual i)
-                                         , ideclName i)
+                                         , reLoc $ ideclName i)
 
         srcImports = map convImport src_idecls
         textualImports = map convImport (implicit_imports ++ ordinary_imps)
@@ -805,13 +821,23 @@ parseHeader dflags filename contents = do
    case unP Compat.parseHeader (initParserState (initParserOpts dflags) contents loc) of
 #if MIN_VERSION_ghc(8,10,0)
      PFailed pst ->
-        throwE $ diagFromErrMsgs "parser" dflags $ getErrorMessages pst dflags
+        throwE $ diagFromErrMsgs "parser" dflags
+#if MIN_VERSION_ghc(9,2,0)
+               $ fmap pprError
+#endif
+               $ getErrorMessages pst
+#if !MIN_VERSION_ghc(9,2,0)
+                   dflags
+#endif
 #else
      PFailed _ locErr msgErr ->
         throwE $ diagFromErrMsg "parser" dflags $ mkPlainErrMsg dflags locErr msgErr
 #endif
      POk pst rdr_module -> do
-        let (warns, errs) = getMessages pst dflags
+        let (warns, errs) = getMessages pst
+#if !MIN_VERSION_ghc(9,2,0)
+                              dflags
+#endif
         -- Just because we got a `POk`, it doesn't mean there
         -- weren't errors! To clarify, the GHC parser
         -- distinguishes between fatal and non-fatal
@@ -842,7 +868,15 @@ parseFileContents env customPreprocessor filename ms = do
        contents = fromJust $ ms_hspp_buf ms
    case unP Compat.parseModule (initParserState (initParserOpts dflags) contents loc) of
 #if MIN_VERSION_ghc(8,10,0)
-     PFailed pst -> throwE $ diagFromErrMsgs "parser" dflags $ getErrorMessages pst dflags
+     PFailed pst -> throwE
+                  $ diagFromErrMsgs "parser" dflags
+#if  MIN_VERSION_ghc(9,2,0)
+                  $ fmap pprError
+#endif
+                  $ getErrorMessages pst
+#if !MIN_VERSION_ghc(9,2,0)
+                  $ dflags
+#endif
 #else
      PFailed _ locErr msgErr ->
       throwE $ diagFromErrMsg "parser" dflags $ mkPlainErrMsg dflags locErr msgErr
@@ -850,7 +884,14 @@ parseFileContents env customPreprocessor filename ms = do
      POk pst rdr_module ->
          let
              hpm_annotations = mkApiAnns pst
-             (warns, errs) = getMessages pst dflags
+             (warns, errs) = id
+#if MIN_VERSION_ghc(9,2,0)
+                           $ bimap (fmap pprWarning) (fmap pprError)
+#endif
+                           $ getMessages pst
+#if !MIN_VERSION_ghc(9,2,0)
+                           $ dflags
+#endif
          in
            do
                -- Just because we got a `POk`, it doesn't mean there
@@ -977,9 +1018,9 @@ getDocsBatch
   :: HscEnv
   -> Module  -- ^ a moudle where the names are in scope
   -> [Name]
-  -> IO [Either String (Maybe HsDocString, Map.Map Int HsDocString)]
+  -> IO [Either String (Maybe HsDocString, IntMap HsDocString)]
 getDocsBatch hsc_env _mod _names = do
-    ((_warns,errs), res) <- initTc hsc_env HsSrcFile False _mod fakeSpan $ forM _names $ \name ->
+    (msgs, res) <- initTc hsc_env HsSrcFile False _mod fakeSpan $ forM _names $ \name ->
         case nameModule_maybe name of
             Nothing -> return (Left $ NameHasNoModule name)
             Just mod -> do
@@ -987,13 +1028,21 @@ getDocsBatch hsc_env _mod _names = do
                       , mi_decl_docs = DeclDocMap dmap
                       , mi_arg_docs = ArgDocMap amap
                       } <- loadModuleInterface "getModuleInterface" mod
-             if isNothing mb_doc_hdr && Map.null dmap && Map.null amap
+             if isNothing mb_doc_hdr && Map.null dmap && null amap
                then pure (Left (NoDocsInIface mod $ compiled name))
-               else pure (Right ( Map.lookup name dmap
-                                , Map.findWithDefault Map.empty name amap))
+               else pure (Right ( Map.lookup name dmap ,
+#if !MIN_VERSION_ghc(9,2,0)
+                                  IntMap.fromAscList $ Map.toAscList $
+#endif
+                                  Map.findWithDefault mempty name amap))
     case res of
         Just x  -> return $ map (first $ T.unpack . showGhc) x
-        Nothing -> throwErrors errs
+        Nothing -> throwErrors 
+#if MIN_VERSION_ghc(9,2,0)
+                     $ Error.getErrorMessages msgs
+#else
+                     $ snd msgs
+#endif
   where
     throwErrors = liftIO . throwIO . mkSrcErr
     compiled n =
