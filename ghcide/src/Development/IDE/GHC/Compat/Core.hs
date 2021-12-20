@@ -320,6 +320,7 @@ module Development.IDE.GHC.Compat.Core (
     module GHC.Hs.ImpExp,
     module GHC.Hs.Pat,
     module GHC.Hs.Type,
+    module GHC.Hs.Utils,
     module Language.Haskell.Syntax.Expr,
 #endif
 
@@ -483,6 +484,7 @@ import           GHC.Hs.Extension
 import           GHC.Hs.ImpExp
 import           GHC.Hs.Pat
 import           GHC.Hs.Type
+import           GHC.Hs.Utils
 #endif
 #if !MIN_VERSION_ghc(9,2,0)
 import           GHC.Hs
