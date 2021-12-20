@@ -821,23 +821,14 @@ parseHeader dflags filename contents = do
    case unP Compat.parseHeader (initParserState (initParserOpts dflags) contents loc) of
 #if MIN_VERSION_ghc(8,10,0)
      PFailed pst ->
-        throwE $ diagFromErrMsgs "parser" dflags
-#if MIN_VERSION_ghc(9,2,0)
-               $ fmap pprError
-#endif
-               $ getErrorMessages pst
-#if !MIN_VERSION_ghc(9,2,0)
-                   dflags
-#endif
+        throwE $ diagFromErrMsgs "parser" dflags $ getErrorMessages' pst dflags
 #else
      PFailed _ locErr msgErr ->
         throwE $ diagFromErrMsg "parser" dflags $ mkPlainErrMsg dflags locErr msgErr
 #endif
      POk pst rdr_module -> do
-        let (warns, errs) = getMessages pst
-#if !MIN_VERSION_ghc(9,2,0)
-                              dflags
-#endif
+        let (warns, errs) = getMessages' pst dflags
+
         -- Just because we got a `POk`, it doesn't mean there
         -- weren't errors! To clarify, the GHC parser
         -- distinguishes between fatal and non-fatal
@@ -848,9 +839,9 @@ parseHeader dflags filename contents = do
         -- errors are those from which a parse tree just can't
         -- be produced.
         unless (null errs) $
-            throwE $ diagFromErrMsgs "parser" dflags (fmap pprError errs)
+            throwE $ diagFromErrMsgs "parser" dflags errs
 
-        let warnings = diagFromErrMsgs "parser" dflags (fmap pprWarning warns)
+        let warnings = diagFromErrMsgs "parser" dflags warns
         return (warnings, rdr_module)
 
 -- | Given a buffer, flags, and file path, produce a
@@ -870,13 +861,7 @@ parseFileContents env customPreprocessor filename ms = do
 #if MIN_VERSION_ghc(8,10,0)
      PFailed pst -> throwE
                   $ diagFromErrMsgs "parser" dflags
-#if  MIN_VERSION_ghc(9,2,0)
-                  $ fmap pprError
-#endif
-                  $ getErrorMessages pst
-#if !MIN_VERSION_ghc(9,2,0)
-                  $ dflags
-#endif
+                  $ getErrorMessages' pst dflags
 #else
      PFailed _ locErr msgErr ->
       throwE $ diagFromErrMsg "parser" dflags $ mkPlainErrMsg dflags locErr msgErr
@@ -884,14 +869,7 @@ parseFileContents env customPreprocessor filename ms = do
      POk pst rdr_module ->
          let
              hpm_annotations = mkApiAnns pst
-             (warns, errs) = id
-#if MIN_VERSION_ghc(9,2,0)
-                           $ bimap (fmap pprWarning) (fmap pprError)
-#endif
-                           $ getMessages pst
-#if !MIN_VERSION_ghc(9,2,0)
-                           $ dflags
-#endif
+             (warns, errs) = getMessages' pst dflags
          in
            do
                -- Just because we got a `POk`, it doesn't mean there

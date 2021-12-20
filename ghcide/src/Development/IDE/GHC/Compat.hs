@@ -16,6 +16,8 @@ module Development.IDE.GHC.Compat(
     upNameCache,
     disableWarningsAsErrors,
     reLoc,
+    getErrorMessages',
+    getMessages',
 
 #if !MIN_VERSION_ghc(9,0,1)
     RefMap,
@@ -117,6 +119,7 @@ import           Data.IORef
 
 import qualified Data.Map               as Map
 import           Data.List              (foldl')
+import           Data.Bifunctor
 
 #if MIN_VERSION_ghc(9,0,0)
 import qualified Data.Set               as S
@@ -132,6 +135,31 @@ hPutStringBuffer :: Handle -> StringBuffer -> IO ()
 hPutStringBuffer hdl (StringBuffer buf len cur)
     = withForeignPtr (plusForeignPtr buf cur) $ \ptr ->
              hPutBuf hdl ptr len
+#endif
+
+#if MIN_VERSION_ghc(9,2,0)
+type ErrMsg  = MsgEnvelope DecoratedSDoc
+type WarnMsg = MsgEnvelope DecoratedSDoc
+#endif
+
+getErrorMessages' :: PState -> DynFlags -> Bag ErrMsg
+getErrorMessages' pst dflags =
+#if MIN_VERSION_ghc(9,2,0)
+                 fmap pprError $
+#endif
+                 getErrorMessages pst
+#if !MIN_VERSION_ghc(9,2,0)
+                   dflags
+#endif
+
+getMessages' :: PState -> DynFlags -> (Bag WarnMsg, Bag ErrMsg)
+getMessages' pst dflags =
+#if MIN_VERSION_ghc(9,2,0)
+                 bimap (fmap pprWarning) (fmap pprError) $
+#endif
+                 getMessages pst
+#if !MIN_VERSION_ghc(9,2,0)
+                   dflags
 #endif
 
 supportsHieFiles :: Bool
