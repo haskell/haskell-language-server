@@ -5,6 +5,7 @@
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE PatternSynonyms     #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving  #-}
@@ -12,20 +13,19 @@
 {-# LANGUAGE TypeFamilies        #-}
 
 {-# OPTIONS -Wno-orphans #-}
-#include "ghc-api-version.h"
 
 module Ide.Plugin.Retrie (descriptor) where
 
 import           Control.Concurrent.Extra             (readVar)
+import           Control.Concurrent.STM               (readTVarIO)
 import           Control.Exception.Safe               (Exception (..),
                                                        SomeException, catch,
                                                        throwIO, try)
 import           Control.Monad                        (forM, unless)
-import           Control.Monad.Extra                  (maybeM)
 import           Control.Monad.IO.Class               (MonadIO (liftIO))
 import           Control.Monad.Trans.Class            (MonadTrans (lift))
-import           Control.Monad.Trans.Except           (ExceptT (..), runExceptT,
-                                                       throwE)
+import           Control.Monad.Trans.Except           (ExceptT (ExceptT),
+                                                       runExceptT)
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson                           (FromJSON (..),
                                                        ToJSON (..),
@@ -57,25 +57,30 @@ import           Development.IDE.GHC.Compat           (GenLocated (L), GhcRn,
                                                        HscEnv, IdP, LRuleDecls,
                                                        ModSummary (ModSummary, ms_hspp_buf, ms_mod),
                                                        NHsValBindsLR (..),
+                                                       Outputable,
                                                        ParsedModule (..),
                                                        RuleDecl (HsRule),
                                                        RuleDecls (HsRules),
+                                                       SourceText (..),
                                                        SrcSpan (..),
                                                        TyClDecl (SynDecl),
                                                        TyClGroup (..), fun_id,
-                                                       mi_fixities,
-                                                       moduleNameString,
-                                                       parseModule, rds_rules,
-                                                       srcSpanFile)
-import           GHC.Generics                         (Generic)
-import           GhcPlugins                           (Outputable,
-                                                       SourceText (NoSourceText),
                                                        hm_iface, isQual,
                                                        isQual_maybe,
+                                                       mi_fixities,
+                                                       moduleNameString,
                                                        nameModule_maybe,
                                                        nameRdrName, occNameFS,
                                                        occNameString,
-                                                       rdrNameOcc, unpackFS)
+                                                       parseModule,
+                                                       pattern IsBoot,
+                                                       pattern NotBoot,
+                                                       pattern RealSrcSpan,
+                                                       rdrNameOcc, rds_rules,
+                                                       srcSpanFile)
+import           Development.IDE.GHC.Compat.Util      hiding (catch, try)
+import qualified GHC                                  (parseModule)
+import           GHC.Generics                         (Generic)
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Server                  (LspM,
@@ -83,7 +88,10 @@ import           Language.LSP.Server                  (LspM,
                                                        sendNotification,
                                                        sendRequest,
                                                        withIndefiniteProgress)
-import           Language.LSP.Types                   as J
+import           Language.LSP.Types                   as J hiding
+                                                           (SemanticTokenAbsolute (length, line),
+                                                            SemanticTokenRelative (length),
+                                                            SemanticTokensEdit (_start))
 import           Retrie.CPP                           (CPP (NoCPP), parseCPP)
 import           Retrie.ExactPrint                    (fix, relativiseApiAnns,
                                                        transformA, unsafeMkA)
@@ -100,7 +108,6 @@ import           Retrie.Replace                       (Change (..),
 import           Retrie.Rewrites
 import           Retrie.SYB                           (listify)
 import           Retrie.Util                          (Verbosity (Loud))
-import           StringBuffer                         (stringToStringBuffer)
 import           System.Directory                     (makeAbsolute)
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -203,7 +210,7 @@ provider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range ca)
   commands <- lift $
     forM rewrites $ \(title, kind, params) -> liftIO $ do
       let c = mkLspCommand plId (coerce retrieCommandName) title (Just [toJSON params])
-      return $ CodeAction title (Just kind) Nothing Nothing Nothing Nothing (Just c)
+      return $ CodeAction title (Just kind) Nothing Nothing Nothing Nothing (Just c) Nothing
 
   return $ J.List [InR c | c <- commands]
 
@@ -293,7 +300,7 @@ suggestRuleRewrites originatingFile pos ms_mod (L _ HsRules {rds_rules}) =
           ]
         | L l r  <- rds_rules,
           pos `isInsideSrcSpan` l,
-#if MIN_GHC_API_VERSION(8,8,0)
+#if MIN_VERSION_ghc(8,8,0)
           let HsRule {rd_name = L _ (_, rn)} = r,
 #else
           let HsRule _ (L _ (_,rn)) _ _ _ _ = r,
@@ -350,7 +357,7 @@ callRetrie ::
   Bool ->
   IO ([CallRetrieError], WorkspaceEdit)
 callRetrie state session rewrites origin restrictToOriginatingFile = do
-  knownFiles <- toKnownFiles . unhashed <$> readVar (knownTargetsVar $ shakeExtras state)
+  knownFiles <- toKnownFiles . unhashed <$> readTVarIO (knownTargetsVar $ shakeExtras state)
   let reuseParsedModule f = do
         pm <-
           useOrFail "GetParsedModule" NoParse GetParsedModule f
@@ -368,7 +375,7 @@ callRetrie state session rewrites origin restrictToOriginatingFile = do
                       }
               logPriority (ideLogger state) Info $ T.pack $ "Parsing module: " <> t
               parsed <-
-                evalGhcEnv session (parseModule ms')
+                evalGhcEnv session (GHC.parseModule ms')
                   `catch` \e -> throwIO (GHCParseError nt (show @SomeException e))
               (fixities, parsed) <- fixFixities f (fixAnns parsed)
               return (fixities, parsed)
@@ -430,7 +437,7 @@ callRetrie state session rewrites origin restrictToOriginatingFile = do
   let (errors :: [CallRetrieError], replacements) = partitionEithers results
       editParams :: WorkspaceEdit
       editParams =
-        WorkspaceEdit (Just $ asEditMap replacements) Nothing
+        WorkspaceEdit (Just $ asEditMap replacements) Nothing Nothing
 
   return (errors, editParams)
   where
@@ -466,8 +473,8 @@ asTextEdits :: Change -> [(Uri, TextEdit)]
 asTextEdits NoChange = []
 asTextEdits (Change reps _imports) =
   [ (filePathToUri spanLoc, edit)
-    | Replacement {..} <- nubOrdOn replLocation reps,
-      (RealSrcSpan rspan) <- [replLocation],
+    | Replacement {..} <- nubOrdOn (realSpan . replLocation) reps,
+      (RealSrcSpan rspan _) <- [replLocation],
       let spanLoc = unpackFS $ srcSpanFile rspan,
       let edit = TextEdit (realSrcSpanToRange rspan) (T.pack replReplacement)
   ]
@@ -491,20 +498,6 @@ _useRuleStale label state rule f =
 
 -- | Chosen approach for calling ghcide Shake rules
 useRule label = _useRuleStale ("Retrie." <> label)
-
--------------------------------------------------------------------------------
--- Error handling combinators
-
-handleMaybe :: Monad m => e -> Maybe b -> ExceptT e m b
-handleMaybe msg = maybe (throwE msg) return
-
-handleMaybeM :: Monad m => e -> m (Maybe b) -> ExceptT e m b
-handleMaybeM msg act = maybeM (throwE msg) return $ lift act
-
-response :: Monad m => ExceptT String m a -> m (Either ResponseError a)
-response =
-  fmap (first (\msg -> ResponseError InternalError (fromString msg) Nothing))
-    . runExceptT
 
 -------------------------------------------------------------------------------
 -- Serialization wrappers and instances
@@ -536,8 +529,9 @@ data ImportSpec = AddImport
   deriving (Eq, Show, Generic, FromJSON, ToJSON)
 
 toImportDecl :: ImportSpec -> GHC.ImportDecl GHC.GhcPs
-toImportDecl AddImport {..} = GHC.ImportDecl {..}
+toImportDecl AddImport {..} = GHC.ImportDecl {ideclSource = ideclSource', ..}
   where
+    ideclSource' = if ideclSource then IsBoot else NotBoot
     toMod = GHC.noLoc . GHC.mkModuleName
     ideclName = toMod ideclNameString
     ideclPkgQual = Nothing
@@ -547,7 +541,7 @@ toImportDecl AddImport {..} = GHC.ImportDecl {..}
     ideclSourceSrc = NoSourceText
     ideclExt = GHC.noExtField
     ideclAs = toMod <$> ideclAsString
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
     ideclQualified = if ideclQualifiedBool then GHC.QualifiedPre else GHC.NotQualified
 #else
     ideclQualified = ideclQualifiedBool

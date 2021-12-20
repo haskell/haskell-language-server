@@ -48,7 +48,7 @@ import           Data.Either          (fromRight)
 import           Data.Function        ((&))
 import           Data.Kind            (Constraint, Type)
 import qualified Data.Map.Strict      as Map
-import           Data.Proxy (Proxy (..))
+import           Data.Proxy           (Proxy (..))
 import qualified Data.Text            as T
 import           GHC.OverloadedLabels (IsLabel (..))
 import           GHC.TypeLits
@@ -215,12 +215,9 @@ useProperty ::
   (HasProperty s k t r) =>
   KeyNameProxy s ->
   Properties r ->
-  Maybe A.Object ->
+  A.Object ->
   ToHsType t
-useProperty kn p =
-  maybe
-    (defaultValue metadata)
-    (fromRight (defaultValue metadata) . usePropertyEither kn p)
+useProperty kn p = fromRight (defaultValue metadata) . usePropertyEither kn p
   where
     (_, metadata) = find kn p
 

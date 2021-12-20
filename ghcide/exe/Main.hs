@@ -5,41 +5,27 @@
 
 module Main(main) where
 
-import           Arguments                         (Arguments' (..),
-                                                    IdeCmd (..), getArguments)
-import           Control.Concurrent.Extra          (newLock, withLock)
-import           Control.Monad.Extra               (unless, when, whenJust)
-import qualified Data.Aeson.Encode.Pretty          as A
-import           Data.Default                      (Default (def))
-import           Data.List.Extra                   (upper)
-import           Data.Maybe                        (fromMaybe)
-import qualified Data.Text                         as T
-import qualified Data.Text.IO                      as T
-import           Data.Text.Lazy.Encoding           (decodeUtf8)
-import qualified Data.Text.Lazy.IO                 as LT
+import           Arguments                         (Arguments (..),
+                                                    getArguments)
+import           Control.Monad.Extra               (unless, whenJust)
+import           Data.Default                      (def)
 import           Data.Version                      (showVersion)
 import           Development.GitRev                (gitHash)
-import           Development.IDE                   (Logger (Logger),
-                                                    Priority (Info), action)
+import           Development.IDE                   (Priority (Debug, Info),
+                                                    action)
 import           Development.IDE.Core.OfInterest   (kick)
 import           Development.IDE.Core.Rules        (mainRule)
+import           Development.IDE.Core.Tracing      (withTelemetryLogger)
+import           Development.IDE.Graph             (ShakeOptions (shakeThreads))
 import qualified Development.IDE.Main              as Main
 import qualified Development.IDE.Plugin.HLS.GhcIde as GhcIde
-import qualified Development.IDE.Plugin.Test       as Test
-import           Development.IDE.Session           (getHieDbLoc,
-                                                    setInitialDynFlags)
 import           Development.IDE.Types.Options
-import           Development.Shake                 (ShakeOptions (shakeThreads))
-import           HieDb.Run                         (Options (..), runCommand)
 import           Ide.Plugin.Config                 (Config (checkParents, checkProject))
-import           Ide.Plugin.ConfigUtils            (pluginsToDefaultConfig,
-                                                    pluginsToVSCodeExtensionSchema)
 import           Ide.PluginUtils                   (pluginDescToIdePlugins)
 import           Paths_ghcide                      (version)
 import qualified System.Directory.Extra            as IO
 import           System.Environment                (getExecutablePath)
-import           System.Exit                       (ExitCode (ExitFailure),
-                                                    exitSuccess, exitWith)
+import           System.Exit                       (exitSuccess)
 import           System.IO                         (hPutStrLn, stderr)
 import           System.Info                       (compilerVersion)
 
@@ -55,82 +41,42 @@ ghcideVersion = do
              <> gitHashSection
 
 main :: IO ()
-main = do
+main = withTelemetryLogger $ \telemetryLogger -> do
+    let hlsPlugins = pluginDescToIdePlugins GhcIde.descriptors
     -- WARNING: If you write to stdout before runLanguageServer
     --          then the language server will not work
-    Arguments{..} <- getArguments
+    Arguments{..} <- getArguments hlsPlugins
 
     if argsVersion then ghcideVersion >>= putStrLn >> exitSuccess
     else hPutStrLn stderr {- see WARNING above -} =<< ghcideVersion
 
-    let hlsPlugins = pluginDescToIdePlugins GhcIde.descriptors
-
-    when argsVSCodeExtensionSchema $ do
-      LT.putStrLn $ decodeUtf8 $ A.encodePretty $ pluginsToVSCodeExtensionSchema hlsPlugins
-      exitSuccess
-
-    when argsDefaultConfig $ do
-      LT.putStrLn $ decodeUtf8 $ A.encodePretty $ pluginsToDefaultConfig hlsPlugins
-      exitSuccess
-
     whenJust argsCwd IO.setCurrentDirectory
 
-    -- lock to avoid overlapping output on stdout
-    lock <- newLock
-    let logger = Logger $ \pri msg -> when (pri >= logLevel) $ withLock lock $
-            T.putStrLn $ T.pack ("[" ++ upper (show pri) ++ "] ") <> msg
-        logLevel = if argsVerbose then minBound else Info
+    let logPriority = if argsVerbose then Debug else Info
+        arguments = if argsTesting then Main.testing else Main.defaultArguments logPriority
 
-    case argFilesOrCmd of
-      DbCmd opts cmd -> do
-        dir <- IO.getCurrentDirectory
-        dbLoc <- getHieDbLoc dir
-        mlibdir <- setInitialDynFlags def
-        case mlibdir of
-          Nothing     -> exitWith $ ExitFailure 1
-          Just libdir -> runCommand libdir opts{database = dbLoc} cmd
+    Main.defaultMain arguments
+        {Main.argCommand = argsCommand
+        ,Main.argsLogger = Main.argsLogger arguments <> pure telemetryLogger
 
-      _ -> do
+        ,Main.argsRules = do
+            -- install the main and ghcide-plugin rules
+            mainRule def
+            -- install the kick action, which triggers a typecheck on every
+            -- Shake database restart, i.e. on every user edit.
+            unless argsDisableKick $
+                action kick
 
-          case argFilesOrCmd of
-              LSP -> do
-                hPutStrLn stderr "Starting LSP server..."
-                hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
-              _ -> return ()
+        ,Main.argsThreads = case argsThreads of 0 -> Nothing ; i -> Just (fromIntegral i)
 
-          Main.defaultMain def
-            {Main.argFiles = case argFilesOrCmd of
-                Typecheck x | not argLSP -> Just x
-                _                        -> Nothing
-
-            ,Main.argsLogger = pure logger
-
-            ,Main.argsRules = do
-                -- install the main and ghcide-plugin rules
-                mainRule
-                -- install the kick action, which triggers a typecheck on every
-                -- Shake database restart, i.e. on every user edit.
-                unless argsDisableKick $
-                    action kick
-
-            ,Main.argsHlsPlugins =
-                pluginDescToIdePlugins $
-                GhcIde.descriptors
-                ++ [Test.blockCommandDescriptor "block-command" | argsTesting]
-
-            ,Main.argsGhcidePlugin = if argsTesting
-                then Test.plugin
-                else mempty
-
-            ,Main.argsIdeOptions = \(fromMaybe def -> config) sessionLoader ->
-                let defOptions = defaultIdeOptions sessionLoader
-                in defOptions
-                  { optShakeProfiling = argsShakeProfiling
-                  , optOTMemoryProfiling = IdeOTMemoryProfiling argsOTMemoryProfiling
-                  , optTesting = IdeTesting argsTesting
-                  , optShakeOptions = (optShakeOptions defOptions){shakeThreads = argsThreads}
-                  , optCheckParents = pure $ checkParents config
-                  , optCheckProject = pure $ checkProject config
-                  }
-            }
-
+        ,Main.argsIdeOptions = \config sessionLoader ->
+            let defOptions = Main.argsIdeOptions arguments config sessionLoader
+            in defOptions
+                { optShakeProfiling = argsShakeProfiling
+                , optOTMemoryProfiling = IdeOTMemoryProfiling argsOTMemoryProfiling
+                , optShakeOptions = (optShakeOptions defOptions){shakeThreads = argsThreads}
+                , optCheckParents = pure $ checkParents config
+                , optCheckProject = pure $ checkProject config
+                , optRunSubset = not argsConservativeChangeTracking
+                }
+        }

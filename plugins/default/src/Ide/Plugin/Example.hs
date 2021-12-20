@@ -14,18 +14,17 @@ module Ide.Plugin.Example
     descriptor
   ) where
 
+import           Control.Concurrent.STM
 import           Control.DeepSeq            (NFData)
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
-import           Data.Binary
 import           Data.Functor
 import qualified Data.HashMap.Strict        as Map
 import           Data.Hashable
 import qualified Data.Text                  as T
 import           Data.Typeable
 import           Development.IDE            as D
-import           Development.IDE.Core.Rules (useE)
 import           Development.IDE.Core.Shake (getDiagnostics,
                                              getHiddenDiagnostics)
 import           Development.IDE.GHC.Compat (ParsedModule (ParsedModule))
@@ -34,6 +33,7 @@ import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
+import           Options.Applicative        (ParserInfo, info)
 import           Text.Regex.TDFA.Text       ()
 
 -- ---------------------------------------------------------------------
@@ -47,7 +47,12 @@ descriptor plId = (defaultPluginDescriptor plId)
                   <> mkPluginHandler STextDocumentHover          hover
                   <> mkPluginHandler STextDocumentDocumentSymbol symbols
                   <> mkPluginHandler STextDocumentCompletion     completion
+  , pluginCli = Just exampleCli
   }
+
+exampleCli :: ParserInfo (IdeCommand IdeState)
+exampleCli = info p mempty
+  where p = pure $ IdeCommand $ \_ideState -> putStrLn "hello HLS"
 
 -- ---------------------------------------------------------------------
 
@@ -66,7 +71,6 @@ data Example = Example
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable Example
 instance NFData   Example
-instance Binary   Example
 
 type instance RuleResult Example = ()
 
@@ -78,7 +82,7 @@ exampleRules = do
     return ([diag], Just ())
 
   action $ do
-    files <- getFilesOfInterest
+    files <- getFilesOfInterestUntracked
     void $ uses Example $ Map.keys files
 
 mkDiag :: NormalizedFilePath
@@ -111,9 +115,9 @@ codeAction state _pid (CodeActionParams _ _ (TextDocumentIdentifier uri) _range 
       title = "Add TODO Item 1"
       tedit = [TextEdit (Range (Position 2 0) (Position 2 0))
                "-- TODO1 added by Example Plugin directly\n"]
-      edit  = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
+      edit  = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing Nothing
     pure $ Right $ List
-        [ InR $ CodeAction title (Just CodeActionQuickFix) (Just $ List []) Nothing Nothing (Just edit) Nothing]
+        [ InR $ CodeAction title (Just CodeActionQuickFix) (Just $ List []) Nothing Nothing (Just edit) Nothing Nothing]
 
 -- ---------------------------------------------------------------------
 
@@ -123,8 +127,8 @@ codeLens ideState plId CodeLensParams{_textDocument=TextDocumentIdentifier uri} 
     case uriToFilePath' uri of
       Just (toNormalizedFilePath -> filePath) -> do
         _ <- runIdeAction "Example.codeLens" (shakeExtras ideState) $ runMaybeT $ useE TypeCheck filePath
-        _diag <- getDiagnostics ideState
-        _hDiag <- getHiddenDiagnostics ideState
+        _diag <- atomically $ getDiagnostics ideState
+        _hDiag <- atomically $ getHiddenDiagnostics ideState
         let
           title = "Add TODO Item via Code Lens"
           -- tedit = [TextEdit (Range (Position 3 0) (Position 3 0))
@@ -154,6 +158,7 @@ addTodoCmd _ide (AddTodoParams uri todoText) = do
       ]
     res = WorkspaceEdit
       (Just $ Map.singleton uri textEdits)
+      Nothing
       Nothing
   _ <- sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing res) (\_ -> pure ())
   return $ Right Null
@@ -196,7 +201,7 @@ symbols :: PluginMethodHandler IdeState TextDocumentDocumentSymbol
 symbols _ide _pid (DocumentSymbolParams _ _ _doc)
     = pure $ Right $ InL $ List [r]
     where
-        r = DocumentSymbol name detail kind deprecation range selR chList
+        r = DocumentSymbol name detail kind Nothing deprecation range selR chList
         name = "Example_symbol_name"
         detail = Nothing
         kind = SkVariable
@@ -212,7 +217,7 @@ completion _ide _pid (CompletionParams _doc _pos _ _ _mctxt)
     = pure $ Right $ InL $ List [r]
     where
         r = CompletionItem label kind tags detail documentation deprecated preselect
-                           sortText filterText insertText insertTextFormat
+                           sortText filterText insertText insertTextFormat insertTextMode
                            textEdit additionalTextEdits commitCharacters
                            command xd
         label = "Example completion"
@@ -225,6 +230,7 @@ completion _ide _pid (CompletionParams _doc _pos _ _ _mctxt)
         sortText = Nothing
         filterText = Nothing
         insertText = Nothing
+        insertTextMode = Nothing
         insertTextFormat = Nothing
         textEdit = Nothing
         additionalTextEdits = Nothing

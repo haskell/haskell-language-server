@@ -322,7 +322,7 @@ resultBlockP :: BlockCommentParser [String]
 resultBlockP = do
     BlockEnv {..} <- ask
     many $
-        fmap fst . nonEmptyNormalLineP isLhs $
+        fmap fst $ nonEmptyNormalLineP isLhs $
             Block blockRange
 
 positionToSourcePos :: Position -> SourcePos

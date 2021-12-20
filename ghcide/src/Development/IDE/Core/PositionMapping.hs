@@ -11,6 +11,7 @@ module Development.IDE.Core.PositionMapping
   , PositionDelta(..)
   , addDelta
   , idDelta
+  , composeDelta
   , mkDelta
   , toCurrentRange
   , fromCurrentRange
@@ -29,7 +30,8 @@ import           Data.Bifunctor
 import           Data.List
 import qualified Data.Text           as T
 import qualified Data.Vector.Unboxed as V
-import           Language.LSP.Types
+import           Language.LSP.Types  (Position (Position), Range (Range),
+                                      TextDocumentContentChangeEvent (TextDocumentContentChangeEvent))
 
 -- | Either an exact position, or the range of text that was substituted
 data PositionResult a

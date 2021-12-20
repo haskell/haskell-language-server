@@ -33,3 +33,15 @@ test/testdata/**/hie.yaml
 
 # pre-commit-hook.nix
 .pre-commit-config.yaml
+
+# direnv
+/.direnv/
+/.envrc
+
+# ghcide-bench
+*.identifierPosition
+/bench/example
+
+# nix
+result
+result-doc

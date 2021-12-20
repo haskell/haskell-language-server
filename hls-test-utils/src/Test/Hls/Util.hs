@@ -1,9 +1,16 @@
-{-# LANGUAGE CPP, OverloadedStrings, NamedFieldPuns, MultiParamTypeClasses, DuplicateRecordFields, TypeOperators, GADTs #-}
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE CPP                   #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NamedFieldPuns        #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE TypeOperators         #-}
 module Test.Hls.Util
   (
       codeActionSupportCaps
     , expectCodeAction
+    , dontExpectCodeAction
     , expectDiagnostic
     , expectNoMoreDiagnostics
     , expectSameLocations
@@ -15,6 +22,7 @@ module Test.Hls.Util
     , ghcVersion, GhcVersion(..)
     , hostOS, OS(..)
     , matchesCurrentEnv, EnvSpec(..)
+    , noLiteralCaps
     , ignoreForGhcVersions
     , ignoreInEnv
     , inspectCodeAction
@@ -29,44 +37,55 @@ module Test.Hls.Util
     , waitForDiagnosticsFromSource
     , waitForDiagnosticsFromSourceWithTimeout
     , withCurrentDirectoryInTmp
+    , withCurrentDirectoryInTmp'
   )
 where
 
-import qualified Data.Aeson as A
-import           Control.Exception (throwIO, catch)
+import           Control.Applicative.Combinators (skipManyTill, (<|>))
+import           Control.Exception               (catch, throwIO)
+import           Control.Lens                    ((^.))
 import           Control.Monad
 import           Control.Monad.IO.Class
-import           Control.Applicative.Combinators (skipManyTill, (<|>))
-import           Control.Lens ((^.))
+import qualified Data.Aeson                      as A
+import           Data.Bool                       (bool)
 import           Data.Default
-import           Data.List (intercalate)
-import           Data.List.Extra (find)
+import           Data.List                       (intercalate)
+import           Data.List.Extra                 (find)
 import           Data.Maybe
-import qualified Data.Set as Set
-import qualified Data.Text as T
-import           Language.LSP.Types hiding (Reason(..))
-import qualified Language.LSP.Test as Test
-import qualified Language.LSP.Types.Lens as L
+import qualified Data.Set                        as Set
+import qualified Data.Text                       as T
+import           Development.IDE                 (GhcVersion(..), ghcVersion)
+import qualified Language.LSP.Test               as Test
+import           Language.LSP.Types              hiding (Reason (..))
 import qualified Language.LSP.Types.Capabilities as C
+import qualified Language.LSP.Types.Lens         as L
 import           System.Directory
 import           System.Environment
-import           System.Time.Extra (Seconds, sleep)
 import           System.FilePath
 import           System.IO.Temp
+import           System.Info.Extra               (isMac, isWindows)
+import           System.Time.Extra               (Seconds, sleep)
+import           Test.Hspec.Core.Formatters      hiding (Seconds)
 import           Test.Hspec.Runner
-import           Test.Hspec.Core.Formatters hiding (Seconds)
-import           Test.Tasty (TestTree)
-import           Test.Tasty.ExpectedFailure (ignoreTestBecause, expectFailBecause)
-import           Test.Tasty.HUnit (Assertion, assertFailure, (@?=))
-import           Text.Blaze.Renderer.String (renderMarkup)
-import           Text.Blaze.Internal hiding (null)
-import System.Info.Extra (isWindows, isMac)
+import           Test.Tasty                      (TestTree)
+import           Test.Tasty.ExpectedFailure      (expectFailBecause,
+                                                  ignoreTestBecause)
+import           Test.Tasty.HUnit                (Assertion, assertFailure,
+                                                  (@?=))
+import           Text.Blaze.Internal             hiding (null)
+import           Text.Blaze.Renderer.String      (renderMarkup)
+
+noLiteralCaps :: C.ClientCapabilities
+noLiteralCaps = def { C._textDocument = Just textDocumentCaps }
+  where
+    textDocumentCaps = def { C._codeAction = Just codeActionCaps }
+    codeActionCaps = CodeActionClientCapabilities (Just True) Nothing Nothing Nothing Nothing Nothing Nothing
 
 codeActionSupportCaps :: C.ClientCapabilities
 codeActionSupportCaps = def { C._textDocument = Just textDocumentCaps }
   where
     textDocumentCaps = def { C._codeAction = Just codeActionCaps }
-    codeActionCaps = CodeActionClientCapabilities (Just True) (Just literalSupport) (Just True)
+    codeActionCaps = CodeActionClientCapabilities (Just True) (Just literalSupport) (Just True) Nothing Nothing Nothing Nothing
     literalSupport = CodeActionLiteralSupport def
 
 -- ---------------------------------------------------------------------
@@ -98,29 +117,11 @@ files =
    -- , "./test/testdata/wErrorTest/"
   ]
 
-data GhcVersion
-  = GHC810
-  | GHC88
-  | GHC86
-  | GHC84
-  deriving (Eq,Show)
-
-ghcVersion :: GhcVersion
-#if (defined(MIN_VERSION_GLASGOW_HASKELL) && (MIN_VERSION_GLASGOW_HASKELL(8,10,0,0)))
-ghcVersion = GHC810
-#elif (defined(MIN_VERSION_GLASGOW_HASKELL) && (MIN_VERSION_GLASGOW_HASKELL(8,8,0,0)))
-ghcVersion = GHC88
-#elif (defined(MIN_VERSION_GLASGOW_HASKELL) && (MIN_VERSION_GLASGOW_HASKELL(8,6,0,0)))
-ghcVersion = GHC86
-#elif (defined(MIN_VERSION_GLASGOW_HASKELL) && (MIN_VERSION_GLASGOW_HASKELL(8,4,0,0)))
-ghcVersion = GHC84
-#endif
-
 data EnvSpec = HostOS OS | GhcVer GhcVersion
     deriving (Show, Eq)
 
 matchesCurrentEnv :: EnvSpec -> Bool
-matchesCurrentEnv (HostOS os) = hostOS == os
+matchesCurrentEnv (HostOS os)  = hostOS == os
 matchesCurrentEnv (GhcVer ver) = ghcVersion == ver
 
 data OS = Windows | MacOS | Linux
@@ -139,25 +140,19 @@ knownBrokenInEnv envSpecs reason
     | otherwise = id
 
 knownBrokenOnWindows :: String -> TestTree -> TestTree
-knownBrokenOnWindows reason
-    | isWindows = expectFailBecause reason
-    | otherwise = id
+knownBrokenOnWindows = knownBrokenInEnv [HostOS Windows]
 
 knownBrokenForGhcVersions :: [GhcVersion] -> String -> TestTree -> TestTree
-knownBrokenForGhcVersions vers reason
-    | ghcVersion `elem` vers =  expectFailBecause reason
-    | otherwise = id
+knownBrokenForGhcVersions vers = knownBrokenInEnv (map GhcVer vers)
 
--- | IgnroeTest if /any/ of environmental spec mathces the current environment.
+-- | IgnoreTest if /any/ of environmental spec mathces the current environment.
 ignoreInEnv :: [EnvSpec] -> String -> TestTree -> TestTree
 ignoreInEnv envSpecs reason
     | any matchesCurrentEnv envSpecs = ignoreTestBecause reason
     | otherwise = id
 
 ignoreForGhcVersions :: [GhcVersion] -> String -> TestTree -> TestTree
-ignoreForGhcVersions vers reason
-    | ghcVersion `elem` vers =  ignoreTestBecause reason
-    | otherwise = id
+ignoreForGhcVersions vers = ignoreInEnv (map GhcVer vers)
 
 -- ---------------------------------------------------------------------
 
@@ -229,7 +224,7 @@ xmlFormatter = silent {
       writeLine $ renderMarkup $ testcase path $
         case reason of
           Just desc -> skipped ! message desc  $ ""
-          Nothing -> skipped ""
+          Nothing   -> skipped ""
 
     failure, skipped :: Markup -> Markup
     failure = customParent "failure"
@@ -269,20 +264,45 @@ flushStackEnvironment = do
 
 -- | Like 'withCurrentDirectory', but will copy the directory over to the system
 -- temporary directory first to avoid haskell-language-server's source tree from
--- interfering with the cradle
+-- interfering with the cradle.
+--
+-- Ignores directories containing build artefacts to avoid interference and
+-- provide reproducible test-behaviour.
 withCurrentDirectoryInTmp :: FilePath -> IO a -> IO a
 withCurrentDirectoryInTmp dir f =
-  withTempCopy dir $ \newDir ->
+  withTempCopy ignored dir $ \newDir ->
+    withCurrentDirectory newDir f
+  where
+    ignored = ["dist", "dist-newstyle", ".stack-work"]
+
+
+-- | Like 'withCurrentDirectory', but will copy the directory over to the system
+-- temporary directory first to avoid haskell-language-server's source tree from
+-- interfering with the cradle.
+--
+-- You may specify directories to ignore, but should be careful to maintain reproducibility.
+withCurrentDirectoryInTmp' :: [FilePath] -> FilePath -> IO a -> IO a
+withCurrentDirectoryInTmp' ignored dir f =
+  withTempCopy ignored dir $ \newDir ->
     withCurrentDirectory newDir f
 
-withTempCopy :: FilePath -> (FilePath -> IO a) -> IO a
-withTempCopy srcDir f = do
+-- | Example call: @withTempCopy ignored src f@
+--
+-- Copy directory 'src' to into a temporary directory ignoring any directories
+-- (and files) that are listed in 'ignored'. Pass the temporary directory
+-- containing the copied sources to the continuation.
+withTempCopy :: [FilePath] -> FilePath -> (FilePath -> IO a) -> IO a
+withTempCopy ignored srcDir f = do
   withSystemTempDirectory "hls-test" $ \newDir -> do
-    copyDir srcDir newDir
+    copyDir ignored srcDir newDir
     f newDir
 
-copyDir :: FilePath -> FilePath -> IO ()
-copyDir src dst = do
+-- | Example call: @copyDir ignored src dst@
+--
+-- Copy directory 'src' to 'dst' ignoring any directories (and files)
+-- that are listed in 'ignored'.
+copyDir :: [FilePath] -> FilePath -> FilePath -> IO ()
+copyDir ignored src dst = do
   cnts <- listDirectory src
   forM_ cnts $ \file -> do
     unless (file `elem` ignored) $ do
@@ -290,20 +310,23 @@ copyDir src dst = do
           dstFp = dst </> file
       isDir <- doesDirectoryExist srcFp
       if isDir
-        then createDirectory dstFp >> copyDir srcFp dstFp
+        then createDirectory dstFp >> copyDir ignored srcFp dstFp
         else copyFile srcFp dstFp
-  where ignored = ["dist", "dist-newstyle", ".stack-work"]
 
 fromAction :: (Command |? CodeAction) -> CodeAction
 fromAction (InR action) = action
-fromAction _ = error "Not a code action"
+fromAction _            = error "Not a code action"
 
 fromCommand :: (Command |? CodeAction) -> Command
 fromCommand (InL command) = command
-fromCommand _ = error "Not a command"
+fromCommand _             = error "Not a command"
 
 onMatch :: [a] -> (a -> Bool) -> String -> IO a
 onMatch as predicate err = maybe (fail err) return (find predicate as)
+
+noMatch :: [a] -> (a -> Bool) -> String -> IO ()
+noMatch [] _ _ = pure ()
+noMatch as predicate err = bool (pure ()) (fail err) (any predicate as)
 
 inspectDiagnostic :: [Diagnostic] -> [T.Text] -> IO Diagnostic
 inspectDiagnostic diags s = onMatch diags (\ca -> all (`T.isInfixOf` (ca ^. L.message)) s) err
@@ -315,16 +338,24 @@ expectDiagnostic diags s = void $ inspectDiagnostic diags s
 inspectCodeAction :: [Command |? CodeAction] -> [T.Text] -> IO CodeAction
 inspectCodeAction cars s = fromAction <$> onMatch cars predicate err
     where predicate (InR ca) = all (`T.isInfixOf` (ca ^. L.title)) s
-          predicate _ = False
+          predicate _        = False
           err = "expected code action matching '" ++ show s ++ "' but did not find one"
 
 expectCodeAction :: [Command |? CodeAction] -> [T.Text] -> IO ()
 expectCodeAction cars s = void $ inspectCodeAction cars s
 
+dontExpectCodeAction :: [Command |? CodeAction] -> [T.Text] -> IO ()
+dontExpectCodeAction cars s =
+  noMatch cars predicate err
+    where predicate (InR ca) = all (`T.isInfixOf` (ca ^. L.title)) s
+          predicate _        = False
+          err = "didn't expected code action matching '" ++ show s ++ "' but found one anyway"
+
+
 inspectCommand :: [Command |? CodeAction] -> [T.Text] -> IO Command
 inspectCommand cars s = fromCommand <$> onMatch cars predicate err
     where predicate (InL command) = all  (`T.isInfixOf` (command ^. L.title)) s
-          predicate _ = False
+          predicate _             = False
           err = "expected code action matching '" ++ show s ++ "' but did not find one"
 
 waitForDiagnosticsFrom :: TextDocumentIdentifier -> Test.Session [Diagnostic]
@@ -398,7 +429,7 @@ failIfSessionTimeout :: IO a -> IO a
 failIfSessionTimeout action = action `catch` errorHandler
     where errorHandler :: Test.SessionException -> IO a
           errorHandler e@(Test.Timeout _) = assertFailure $ show e
-          errorHandler e = throwIO e
+          errorHandler e                  = throwIO e
 
 -- | To locate a symbol, we provide a path to the file from the HLS root
 -- directory, the line number, and the column number. (0 indexed.)
