@@ -9,11 +9,10 @@ module Progress (tests) where
 
 import           Control.Lens                    hiding ((.=))
 import           Data.Aeson                      (Value, decode, encode, object,
-                                                  toJSON, (.=))
+                                                  (.=))
 import           Data.List                       (delete)
 import           Data.Maybe                      (fromJust)
 import           Data.Text                       (Text, pack)
-import           Ide.Plugin.Config
 import           Language.LSP.Types.Capabilities
 import qualified Language.LSP.Types.Lens         as L
 import           System.FilePath                 ((</>))
@@ -52,14 +51,6 @@ tests =
                 expectProgressReports ["Setting up testdata (for Format.hs)", "Processing", "Indexing"]
                 _ <- sendRequest STextDocumentFormatting $ DocumentFormattingParams Nothing doc (FormattingOptions 2 True Nothing Nothing Nothing)
                 expectProgressReports ["Formatting Format.hs"]
-        , ignoreTestBecause "no liquid Haskell support" $
-            testCase "liquid haskell plugin sends progress notifications" $ do
-                runSession hlsCommand progressCaps "test/testdata" $ do
-                    doc <- openDoc "liquid/Evens.hs" "haskell"
-                    let config = def{liquidOn = True, hlintOn = False}
-                    sendConfigurationChanged (toJSON config)
-                    sendNotification STextDocumentDidSave (DidSaveTextDocumentParams doc Nothing)
-                    expectProgressReports ["Running Liquid Haskell on Evens.hs"]
         ]
 
 formatLspConfig :: Value -> Value

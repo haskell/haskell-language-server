@@ -9,7 +9,6 @@ import           Diagnostic
 import           Format
 import           FunctionalBadProject
 import           FunctionalCodeAction
-import           FunctionalLiquid
 import           HieBios
 import           Highlight
 import           Progress
@@ -31,7 +30,6 @@ main = defaultTestRunner
             , ignoreInEnv [HostOS Windows, GhcVer GHC90] "Tests gets stuck in ci" $ Format.tests
             , FunctionalBadProject.tests
             , FunctionalCodeAction.tests
-            , FunctionalLiquid.tests
             , HieBios.tests
             , Highlight.tests
             , ignoreInEnv [HostOS Windows, GhcVer GHC90] "Tests gets stuck in ci" $ Progress.tests

@@ -1276,19 +1276,20 @@ removeImportTests = testGroup "remove import actions"
             , "stuffB :: Integer"
             , "stuffB = 123"
             , "stuffC = ()"
+            , "_stuffD = '_'"
             ]
       _docA <- createDoc "ModuleA.hs" "haskell" contentA
       let contentB = T.unlines
             [ "{-# OPTIONS_GHC -Wunused-imports #-}"
             , "module ModuleB where"
-            , "import ModuleA (stuffA, stuffB, stuffC, stuffA)"
+            , "import ModuleA (stuffA, stuffB, _stuffD, stuffC, stuffA)"
             , "main = print stuffB"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- waitForDiagnostics
       [InR action@CodeAction { _title = actionTitle }, _]
           <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
-      liftIO $ "Remove stuffA, stuffC from import" @=? actionTitle
+      liftIO $ "Remove _stuffD, stuffA, stuffC from import" @=? actionTitle
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines

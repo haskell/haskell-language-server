@@ -70,6 +70,8 @@
             with haskell.lib; {
               # Patches don't apply
               github = overrideCabal hsuper.github (drv: { patches = []; });
+              # GHCIDE requires hie-bios >=0.8 && <0.9.0
+              hie-bios = hself.hie-bios_0_8_0;
               # We need an older version
               hiedb = hself.hiedb_0_4_1_0;
 
@@ -177,10 +179,10 @@
 
         docs = pkgs.stdenv.mkDerivation {
           name = "hls-docs";
-          src = pkgs.lib.sourceFilesBySuffices ./docs [ ".py" ".rst" ".md" ".png" ".gif" ".svg" ];
+          src = pkgs.lib.sourceFilesBySuffices ./. [ ".py" ".rst" ".md" ".png" ".gif" ".svg" ".cabal" ];
           buildInputs = [ pythonWithPackages ];
           # -n gives warnings on missing link targets, -W makes warnings into errors
-          buildPhase = ''sphinx-build -n -W . $out'';
+          buildPhase = ''cd docs; sphinx-build -n -W . $out'';
           dontInstall = true;
         };
 
