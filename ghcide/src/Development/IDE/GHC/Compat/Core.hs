@@ -34,6 +34,7 @@ module Development.IDE.GHC.Compat.Core (
     refLevelHoleFits,
     maxRefHoleFits,
     maxValidHoleFits,
+    setOutputFile,
 #if MIN_VERSION_ghc(8,8,0)
     CommandLineOption,
 #if !MIN_VERSION_ghc(9,2,0)
@@ -237,7 +238,7 @@ module Development.IDE.GHC.Compat.Core (
     -- * Linker
     Unlinked(..),
     Linkable(..),
-    Linker.unload,
+    unload,
     initDynLinker,
     -- * Hooks
     Hooks,
@@ -502,7 +503,7 @@ import           GHC.IfaceToCore
 import           GHC.Parser
 import           GHC.Parser.Header            hiding (getImports)
 #if MIN_VERSION_ghc(9,2,0)
-import           GHC.Linker.Loader            as Linker
+import qualified GHC.Linker.Loader            as Linker
 import           GHC.Linker.Types
 import           GHC.Parser.Lexer             hiding (initParserState)
 import           GHC.Platform.Ways
@@ -930,3 +931,20 @@ loadDLL env =
 #else
     GHCi.loadDLL (GHCi.hscInterp env)
 #endif
+
+unload :: HscEnv -> [Linkable] -> IO ()
+unload hsc_env linkables =
+  Linker.unload
+#if MIN_VERSION_ghc(9,2,0)
+    (GHCi.hscInterp hsc_env)
+#endif
+    hsc_env linkables
+
+setOutputFile :: FilePath -> DynFlags -> DynFlags
+setOutputFile f d = d {
+#if MIN_VERSION_ghc(9,2,0)
+  outputFile_    = Just f
+#else
+  outputFile     = Just f
+#endif
+  }

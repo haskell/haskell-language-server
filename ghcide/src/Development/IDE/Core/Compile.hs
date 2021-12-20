@@ -325,7 +325,7 @@ generateObjectCode session summary guts = do
                 withWarnings "object" $ \tweak -> do
                       let env' = tweak (hscSetFlags (ms_hspp_opts summary) session)
                           target = platformDefaultBackend (hsc_dflags env')
-                          newFlags = setBackend target $ updOptLevel 0 $ (hsc_dflags env') { outputFile = Just dot_o }
+                          newFlags = setBackend target $ updOptLevel 0 $ setOutputFile dot_o $ hsc_dflags env'
                           session' = hscSetFlags newFlags session
 #if MIN_VERSION_ghc(9,0,1)
                       (outputFilename, _mStub, _foreign_files, _cinfos) <- hscGenHardCode session' guts
@@ -454,7 +454,7 @@ atomicFileWrite targetPath write = do
 
 generateHieAsts :: HscEnv -> TcModuleResult -> IO ([FileDiagnostic], Maybe (HieASTs Type))
 generateHieAsts hscEnv tcm =
-  handleGenerationErrors' dflags "extended interface generation" $ runHsc hscEnv $ do
+  handleGenerationErrors' dflags "extended interface generation" $ runHsc hscEnv $
     -- These varBinds use unitDataConId but it could be anything as the id name is not used
     -- during the hie file generation process. It's a workaround for the fact that the hie modules
     -- don't export an interface which allows for additional information to be added to hie files.
@@ -465,9 +465,13 @@ generateHieAsts hscEnv tcm =
         top_ev_binds = tcg_ev_binds ts :: Util.Bag EvBind
         insts = tcg_insts ts :: [ClsInst]
         tcs = tcg_tcs ts :: [TyCon]
-    Just <$> GHC.enrichHie (fake_splice_binds `Util.unionBags` real_binds) (tmrRenamed tcm) top_ev_binds insts tcs
+    in
+#if MIN_VERSION_ghc(9,2,0)
+    fmap (join . snd) $ liftIO $ initDs hscEnv ts $
+#endif
+      Just <$> GHC.enrichHie (fake_splice_binds `Util.unionBags` real_binds) (tmrRenamed tcm) top_ev_binds insts tcs
 #else
-    Just <$> GHC.enrichHie (fake_splice_binds `Util.unionBags` real_binds) (tmrRenamed tcm)
+    in Just <$> GHC.enrichHie (fake_splice_binds `Util.unionBags` real_binds) (tmrRenamed tcm)
 #endif
   where
     dflags = hsc_dflags hscEnv
