@@ -322,6 +322,7 @@ module Development.IDE.GHC.Compat.Core (
     module GHC.Hs.Pat,
     module GHC.Hs.Type,
     module GHC.Hs.Utils,
+    module Language.Haskell.Syntax.Binds,
     module Language.Haskell.Syntax.Expr,
 #endif
 
@@ -699,6 +700,7 @@ import           System.FilePath
 
 
 #if MIN_VERSION_ghc(9,2,0)
+import           Language.Haskell.Syntax.Binds
 import           Language.Haskell.Syntax.Expr
 #endif
 
