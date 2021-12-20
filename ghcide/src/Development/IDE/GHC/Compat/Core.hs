@@ -186,6 +186,11 @@ module Development.IDE.GHC.Compat.Core (
     SrcLoc.Located,
     SrcLoc.unLoc,
     getLoc,
+    getLocA,
+    locA,
+    LocatedAn,
+    AnnListItem,
+    NameAnn,
     SrcLoc.RealLocated,
     SrcLoc.GenLocated(..),
     SrcLoc.SrcSpan(SrcLoc.UnhelpfulSpan),
@@ -197,6 +202,7 @@ module Development.IDE.GHC.Compat.Core (
     BufSpan,
 #if MIN_VERSION_ghc(9,2,0)
     SrcSpanAnn',
+    GHC.SrcAnn,
 #endif
     SrcLoc.leftmost_smallest,
     SrcLoc.containsSpan,
@@ -207,6 +213,7 @@ module Development.IDE.GHC.Compat.Core (
     SrcLoc.realSrcLocSpan,
     SrcLoc.realSrcSpanStart,
     SrcLoc.realSrcSpanEnd,
+    isSubspanOfA,
     SrcLoc.isSubspanOf,
     SrcLoc.wiredInSrcSpan,
     SrcLoc.mkSrcSpan,
@@ -316,14 +323,14 @@ module Development.IDE.GHC.Compat.Core (
 
 #if MIN_VERSION_ghc(9,2,0)
     module GHC.Hs.Decls,
+    module GHC.Hs.Expr,
     module GHC.Hs.Doc,
     module GHC.Hs.Extension,
     module GHC.Hs.ImpExp,
     module GHC.Hs.Pat,
     module GHC.Hs.Type,
     module GHC.Hs.Utils,
-    module Language.Haskell.Syntax.Binds,
-    module Language.Haskell.Syntax.Expr,
+    module Language.Haskell.Syntax,
 #endif
 
     module GHC.Rename.Names,
@@ -482,6 +489,7 @@ import qualified GHC.Driver.Session           as DynFlags
 import           GHC.Hs                       (HsModule (..), SrcSpanAnn')
 import           GHC.Hs.Decls                 hiding (FunDep)
 import           GHC.Hs.Doc
+import           GHC.Hs.Expr
 import           GHC.Hs.Extension
 import           GHC.Hs.ImpExp
 import           GHC.Hs.Pat
@@ -700,8 +708,7 @@ import           System.FilePath
 
 
 #if MIN_VERSION_ghc(9,2,0)
-import           Language.Haskell.Syntax.Binds
-import           Language.Haskell.Syntax.Expr
+import           Language.Haskell.Syntax hiding (FunDep)
 #endif
 
 #if !MIN_VERSION_ghc(9,0,0)
@@ -950,3 +957,41 @@ setOutputFile f d = d {
   outputFile     = Just f
 #endif
   }
+
+#if MIN_VERSION_ghc(9,2,0)
+isSubspanOfA :: GHC.LocatedAn la a -> GHC.LocatedAn lb b -> Bool
+isSubspanOfA a b = SrcLoc.isSubspanOf (GHC.getLocA a) (GHC.getLocA b)
+#else
+isSubspanOfA :: Located a -> Located b -> Bool
+isSubspanOfA = isSubspanOf
+#endif
+
+#if MIN_VERSION_ghc(9,2,0)
+type LocatedAn a = GHC.LocatedAn a
+#else
+type LocatedAn a = Located
+#endif
+
+#if MIN_VERSION_ghc(9,2,0)
+locA = GHC.locA
+#else
+locA = id
+#endif
+
+#if MIN_VERSION_ghc(9,2,0)
+getLocA = GHC.getLocA
+#else
+getLocA = GHC.getLoc
+#endif
+
+#if MIN_VERSION_ghc(9,2,0)
+type AnnListItem = GHC.AnnListItem
+#else
+type AnnListItem = SrcLoc.SrcSpan
+#endif
+
+#if MIN_VERSION_ghc(9,2,0)
+type NameAnn = GHC.NameAnn
+#else
+type NameAnn = SrcLoc.SrcSpan
+#endif
