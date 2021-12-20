@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP             #-}
 {-# LANGUAGE PatternSynonyms #-}
+{-# HLINT ignore "Unused LANGUAGE pragma" #-}
 
 -- | Parser compaibility module.
 module Development.IDE.GHC.Compat.Parser (
