@@ -16,6 +16,7 @@ module Development.IDE.GHC.Compat(
     upNameCache,
     disableWarningsAsErrors,
     reLoc,
+    reLocA,
     getErrorMessages',
     getMessages',
 
@@ -128,6 +129,9 @@ import qualified Data.Set               as S
 #if !MIN_VERSION_ghc(9,2,0)
 reLoc :: Located a -> Located a
 reLoc = id
+
+reLocA :: Located a -> Located a
+reLocA = id
 #endif
 
 #if !MIN_VERSION_ghc(8,8,0)
