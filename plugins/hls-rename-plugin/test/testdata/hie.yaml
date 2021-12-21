@@ -1,0 +1,22 @@
+cradle:
+  direct:
+    arguments:
+      - "DataConstructor"
+      - "ExportedFunction"
+      - "Foo"
+      - "FunctionArgument"
+      - "FunctionName"
+      - "Gadt"
+      - "HiddenFunction"
+      - "ImportHiding"
+      - "ImportedFunction"
+      - "LetExpression"
+      - "QualifiedAs"
+      - "QualifiedFunction"
+      - "QualifiedShadowing"
+      - "RealignDo"
+      - "RecordField"
+      - "ShadowedName"
+      - "TypeClass"
+      - "TypeConstructor"
+      - "TypeVariable"

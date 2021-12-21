@@ -16,7 +16,7 @@ Main functions for .hie file generation
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE DeriveDataTypeable #-}
-module Compat.HieAst ( mkHieFile, enrichHie ) where
+module Compat.HieAst ( enrichHie ) where
 
 import Avail                      ( Avails )
 import Bag                        ( Bag, bagToList )
@@ -89,32 +89,6 @@ modifyState = foldr go id
     go _ f = f
 
 type HieM = ReaderT HieState Hsc
-
--- | Construct an 'HieFile' from the outputs of the typechecker.
-mkHieFile :: ModSummary
-          -> TcGblEnv
-          -> RenamedSource
-          -> BS.ByteString
-          -> Hsc HieFile
-mkHieFile ms ts rs src = do
-  let tc_binds = tcg_binds ts
-  (asts', arr) <- getCompressedAsts tc_binds rs
-  let Just src_file = ml_hs_file $ ms_location ms
-  return $ HieFile
-      { hie_hs_file = src_file
-      , hie_module = ms_mod ms
-      , hie_types = arr
-      , hie_asts = asts'
-      -- mkIfaceExports sorts the AvailInfos for stability
-      , hie_exports = mkIfaceExports (tcg_exports ts)
-      , hie_hs_src = src
-      }
-
-getCompressedAsts :: TypecheckedSource -> RenamedSource
-  -> Hsc (HieASTs TypeIndex, A.Array TypeIndex HieTypeFlat)
-getCompressedAsts ts rs = do
-  asts <- enrichHie ts rs
-  return $ compressTypes asts
 
 enrichHie :: TypecheckedSource -> RenamedSource -> Hsc (HieASTs Type)
 enrichHie ts (hsGrp, imports, exports, _) = flip runReaderT initState $ do

@@ -4,18 +4,31 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE OverloadedLabels      #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE PackageImports        #-}
+{-# LANGUAGE PatternSynonyms       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE ViewPatterns          #-}
 {-# OPTIONS_GHC -Wno-orphans   #-}
+{-# LANGUAGE MultiWayIf            #-}
+{-# LANGUAGE NamedFieldPuns        #-}
+{-# LANGUAGE RecordWildCards       #-}
+
+#ifdef HLINT_ON_GHC_LIB
+#define MIN_GHC_API_VERSION(x,y,z) MIN_VERSION_ghc_lib(x,y,z)
+#else
+#define MIN_GHC_API_VERSION(x,y,z) MIN_VERSION_ghc(x,y,z)
+#endif
 
 module Ide.Plugin.Hlint
   (
     descriptor
-  --, provider
   ) where
 import           Control.Arrow                                      ((&&&))
+import           Control.Concurrent.STM
 import           Control.DeepSeq
 import           Control.Exception
 import           Control.Lens                                       ((^.))
@@ -25,7 +38,6 @@ import           Control.Monad.Trans.Except
 import           Data.Aeson.Types                                   (FromJSON (..),
                                                                      ToJSON (..),
                                                                      Value (..))
-import           Data.Binary
 import           Data.Default
 import qualified Data.HashMap.Strict                                as Map
 import           Data.Hashable
@@ -33,23 +45,28 @@ import           Data.Maybe
 import qualified Data.Text                                          as T
 import qualified Data.Text.IO                                       as T
 import           Data.Typeable
-import           Development.IDE
+import           Development.IDE                                    hiding
+                                                                    (Error)
 import           Development.IDE.Core.Rules                         (defineNoFile,
-                                                                     getParsedModuleWithComments)
+                                                                     getParsedModuleWithComments,
+                                                                     usePropertyAction)
 import           Development.IDE.Core.Shake                         (getDiagnostics)
 import           Refact.Apply
 
 #ifdef HLINT_ON_GHC_LIB
 import           Data.List                                          (nub)
-import           "ghc" DynFlags                                     as RealGHC.DynFlags (topDir)
-import qualified "ghc" EnumSet                                      as EnumSet
-import           "ghc" GHC                                          as RealGHC (DynFlags (..))
+import           Development.IDE.GHC.Compat.Core                    (BufSpan,
+                                                                     DynFlags,
+                                                                     extensionFlags,
+                                                                     ms_hspp_opts,
+                                                                     topDir)
+import qualified Development.IDE.GHC.Compat.Util                    as EnumSet
 import           "ghc-lib" GHC                                      hiding
                                                                     (DynFlags (..),
+                                                                     RealSrcSpan,
                                                                      ms_hspp_opts)
+import qualified "ghc-lib" GHC
 import           "ghc-lib-parser" GHC.LanguageExtensions            (Extension)
-import           "ghc" HscTypes                                     as RealGHC.HscTypes (hsc_dflags,
-                                                                                         ms_hspp_opts)
 import           Language.Haskell.GhclibParserEx.GHC.Driver.Session as GhclibParserEx (readExtension)
 import           System.FilePath                                    (takeFileName)
 import           System.IO                                          (IOMode (WriteMode),
@@ -62,31 +79,59 @@ import           System.IO                                          (IOMode (Wri
                                                                      withFile)
 import           System.IO.Temp
 #else
-import           Development.IDE.GHC.Compat                         hiding
-                                                                    (DynFlags (..))
+import           Development.IDE.GHC.Compat.Core                    hiding
+                                                                    (setEnv)
 import           Language.Haskell.GHC.ExactPrint.Delta              (deltaOptions)
 import           Language.Haskell.GHC.ExactPrint.Parsers            (postParseTransform)
 import           Language.Haskell.GHC.ExactPrint.Types              (Rigidity (..))
+import           Language.Haskell.GhclibParserEx.Fixity             as GhclibParserEx (applyFixities)
 #endif
 
 import           Ide.Logger
-import           Ide.Plugin.Config
+import           Ide.Plugin.Config                                  hiding
+                                                                    (Config)
+import           Ide.Plugin.Properties
 import           Ide.PluginUtils
 import           Ide.Types
-import           Language.Haskell.HLint                             as Hlint
+import           Language.Haskell.HLint                             as Hlint hiding
+                                                                             (Error)
 import           Language.LSP.Server                                (ProgressCancellable (Cancellable),
                                                                      sendRequest,
                                                                      withIndefiniteProgress)
-import           Language.LSP.Types
+import           Language.LSP.Types                                 hiding
+                                                                    (SemanticTokenAbsolute (length, line),
+                                                                     SemanticTokenRelative (length),
+                                                                     SemanticTokensEdit (_start))
 import qualified Language.LSP.Types                                 as LSP
 import qualified Language.LSP.Types.Lens                            as LSP
 
-import           GHC.Generics                                       (Generic)
+import           GHC.Generics                                       (Associativity (LeftAssociative, NotAssociative, RightAssociative),
+                                                                     Generic)
 import           Text.Regex.TDFA.Text                               ()
 
+import           Development.IDE.GHC.Compat.Core                    (WarningFlag (Opt_WarnUnrecognisedPragmas),
+                                                                     wopt)
+import           Development.IDE.Spans.Pragmas                      (LineSplitTextEdits (LineSplitTextEdits),
+                                                                     NextPragmaInfo (NextPragmaInfo),
+                                                                     getNextPragmaInfo,
+                                                                     lineSplitDeleteTextEdit,
+                                                                     lineSplitInsertTextEdit,
+                                                                     lineSplitTextEdits,
+                                                                     nextPragmaLine)
 import           System.Environment                                 (setEnv,
                                                                      unsetEnv)
 -- ---------------------------------------------------------------------
+
+#ifdef HLINT_ON_GHC_LIB
+-- Reimplementing this, since the one in Development.IDE.GHC.Compat isn't for ghc-lib
+pattern RealSrcSpan :: GHC.RealSrcSpan -> Maybe BufSpan -> GHC.SrcSpan
+#if MIN_VERSION_ghc(9,0,0)
+pattern RealSrcSpan x y = GHC.RealSrcSpan x y
+#else
+pattern RealSrcSpan x y <- ((,Nothing) -> (GHC.RealSrcSpan x, y))
+#endif
+{-# COMPLETE RealSrcSpan, UnhelpfulSpan #-}
+#endif
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
@@ -95,7 +140,11 @@ descriptor plId = (defaultPluginDescriptor plId)
       [ PluginCommand "applyOne" "Apply a single hint" applyOneCmd
       , PluginCommand "applyAll" "Apply all hints to the file" applyAllCmd
       ]
-    , pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionProvider
+  , pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionProvider
+  , pluginConfigDescriptor = defaultConfigDescriptor
+      { configHasDiagnostics = True
+      , configCustomConfig = mkCustomConfig properties
+      }
   }
 
 -- This rule only exists for generating file diagnostics
@@ -104,14 +153,12 @@ data GetHlintDiagnostics = GetHlintDiagnostics
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetHlintDiagnostics
 instance NFData   GetHlintDiagnostics
-instance Binary   GetHlintDiagnostics
 
 type instance RuleResult GetHlintDiagnostics = ()
 
 -- | Hlint rules to generate file diagnostics based on hlint hints
 -- | This rule is recomputed when:
--- | - The files of interest have changed via `getFilesOfInterest`
--- | - One of those files has been edited via
+-- | - A file has been edited via
 -- |    - `getIdeas` -> `getParsedModule` in any case
 -- |    - `getIdeas` -> `getFileContents` if the hls ghc does not match the hlint default ghc
 -- | - The client settings have changed, to honour the `hlintOn` setting, via `getClientConfigAction`
@@ -120,15 +167,16 @@ rules :: PluginId -> Rules ()
 rules plugin = do
   define $ \GetHlintDiagnostics file -> do
     config <- getClientConfigAction def
-    let pluginConfig = configForPlugin config plugin
-    let hlintOn' = hlintOn config && plcGlobalOn pluginConfig && plcDiagnosticsOn pluginConfig
-    ideas <- if hlintOn' then getIdeas file else return (Right [])
+    let hlintOn = pluginEnabledConfig plcDiagnosticsOn plugin config
+    ideas <- if hlintOn then getIdeas file else return (Right [])
     return (diagnostics file ideas, Just ())
 
-  getHlintSettingsRule (HlintEnabled [])
+  defineNoFile $ \GetHlintSettings -> do
+    (Config flags) <- getHlintConfig plugin
+    liftIO $ argsSettings flags
 
   action $ do
-    files <- getFilesOfInterest
+    files <- getFilesOfInterestUntracked
     void $ uses GetHlintDiagnostics $ Map.keys files
 
   where
@@ -178,7 +226,7 @@ rules plugin = do
       -- This one is defined in Development.IDE.GHC.Error but here
       -- the types could come from ghc-lib or ghc
       srcSpanToRange :: SrcSpan -> LSP.Range
-      srcSpanToRange (RealSrcSpan span) = Range {
+      srcSpanToRange (RealSrcSpan span _) = Range {
           _start = LSP.Position {
                 _line = srcSpanStartLine span - 1
               , _character  = srcSpanStartCol span - 1}
@@ -202,14 +250,28 @@ getIdeas nfp = do
   where moduleEx :: ParseFlags -> Action (Maybe (Either ParseError ModuleEx))
 #ifndef HLINT_ON_GHC_LIB
         moduleEx _flags = do
-          mbpm <- getParsedModule nfp
+          mbpm <- getParsedModuleWithComments nfp
           return $ createModule <$> mbpm
-          where createModule pm = Right (createModuleEx anns modu)
+          where
+            createModule pm = Right (createModuleEx anns (applyParseFlagsFixities modu))
                   where anns = pm_annotations pm
                         modu = pm_parsed_source pm
+
+            applyParseFlagsFixities :: ParsedSource -> ParsedSource
+            applyParseFlagsFixities modul = GhclibParserEx.applyFixities (parseFlagsToFixities _flags) modul
+
+            parseFlagsToFixities :: ParseFlags -> [(String, Fixity)]
+            parseFlagsToFixities = map toFixity . Hlint.fixities
+
+            toFixity :: FixityInfo -> (String, Fixity)
+            toFixity (name, dir, i) = (name, Fixity NoSourceText i $ f dir)
+                where
+                    f LeftAssociative  = InfixL
+                    f RightAssociative = InfixR
+                    f NotAssociative   = InfixN
 #else
         moduleEx flags = do
-          mbpm <- getParsedModule nfp
+          mbpm <- getParsedModuleWithComments nfp
           -- If ghc was not able to parse the module, we disable hlint diagnostics
           if isNothing mbpm
               then return Nothing
@@ -218,7 +280,7 @@ getIdeas nfp = do
                      (_, contents) <- getFileContents nfp
                      let fp = fromNormalizedFilePath nfp
                      let contents' = T.unpack <$> contents
-                     Just <$> (liftIO $ parseModuleEx flags' fp contents')
+                     Just <$> liftIO (parseModuleEx flags' fp contents')
 
         setExtensions flags = do
           hlintExts <- getExtensions flags nfp
@@ -240,11 +302,6 @@ getExtensions pflags nfp = do
 
 -- ---------------------------------------------------------------------
 
-data HlintUsage
-  = HlintEnabled { cmdArgs :: [String] }
-  | HlintDisabled
-  deriving Show
-
 data GetHlintSettings = GetHlintSettings
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetHlintSettings
@@ -254,45 +311,74 @@ instance NFData Classify where rnf = rwhnf
 instance NFData ParseFlags where rnf = rwhnf
 instance Show Hint where show = const "<hint>"
 instance Show ParseFlags where show = const "<parseFlags>"
-instance Binary GetHlintSettings
 
 type instance RuleResult GetHlintSettings = (ParseFlags, [Classify], Hint)
 
-getHlintSettingsRule :: HlintUsage -> Rules ()
-getHlintSettingsRule usage =
-    defineNoFile $ \GetHlintSettings ->
-      liftIO $ case usage of
-          HlintEnabled cmdArgs -> argsSettings cmdArgs
-          HlintDisabled        -> fail "hlint configuration unspecified"
-
 -- ---------------------------------------------------------------------
 
+newtype Config = Config [String]
+
+properties :: Properties '[ 'PropertyKey "flags" ('TArray String)]
+properties = emptyProperties
+  & defineArrayProperty #flags
+    "Flags used by hlint" []
+
+-- | Get the plugin config
+getHlintConfig :: PluginId -> Action Config
+getHlintConfig pId =
+  Config
+    <$> usePropertyAction #flags pId properties
+
+runHlintAction
+ :: (Eq k, Hashable k, Show k, Show (RuleResult k), Typeable k, Typeable (RuleResult k), NFData k, NFData (RuleResult k))
+ => IdeState
+ -> NormalizedFilePath -> String -> k -> IO (Maybe (RuleResult k))
+runHlintAction ideState normalizedFilePath desc rule = runAction desc ideState $ use rule normalizedFilePath
+
+runGetFileContentsAction :: IdeState -> NormalizedFilePath -> IO (Maybe (FileVersion, Maybe T.Text))
+runGetFileContentsAction ideState normalizedFilePath = runHlintAction ideState normalizedFilePath "Hlint.GetFileContents" GetFileContents
+
+runGetModSummaryAction :: IdeState -> NormalizedFilePath -> IO (Maybe ModSummaryResult)
+runGetModSummaryAction ideState normalizedFilePath = runHlintAction ideState normalizedFilePath "Hlint.GetModSummary" GetModSummary
+
+-- ---------------------------------------------------------------------
 codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
-codeActionProvider ideState plId (CodeActionParams _ _ docId _ context) = Right . LSP.List . map InR <$> liftIO getCodeActions
+codeActionProvider ideState pluginId (CodeActionParams _ _ documentId _ context)
+  | let TextDocumentIdentifier uri = documentId
+  , Just docNormalizedFilePath <- uriToNormalizedFilePath (toNormalizedUri uri)
+  = liftIO $ fmap (Right . LSP.List . map LSP.InR) $ do
+      allDiagnostics <- atomically $ getDiagnostics ideState
+      let numHintsInDoc = length
+            [diagnostic | (diagnosticNormalizedFilePath, _, diagnostic) <- allDiagnostics
+                        , validCommand diagnostic
+                        , diagnosticNormalizedFilePath == docNormalizedFilePath
+            ]
+      let numHintsInContext = length
+            [diagnostic | diagnostic <- diags
+                        , validCommand diagnostic
+            ]
+      file <- runGetFileContentsAction ideState docNormalizedFilePath
+      singleHintCodeActions <-
+        if | Just (_, source) <- file -> do
+               modSummaryResult <- runGetModSummaryAction ideState docNormalizedFilePath
+               pure if | Just modSummaryResult <- modSummaryResult
+                       , Just source <- source
+                       , let dynFlags = ms_hspp_opts $ msrModSummary modSummaryResult ->
+                           diags >>= diagnosticToCodeActions dynFlags source pluginId documentId
+                       | otherwise -> []
+           | otherwise -> pure []
+      if numHintsInDoc > 1 && numHintsInContext > 0 then do
+        pure $ singleHintCodeActions ++ [applyAllAction]
+      else
+        pure singleHintCodeActions
+  | otherwise
+  = pure $ Right $ LSP.List []
+
   where
-
-    getCodeActions = do
-        diags <- getDiagnostics ideState
-        let docNfp = toNormalizedFilePath' <$> uriToFilePath' (docId ^. LSP.uri)
-            numHintsInDoc = length
-              [d | (nfp, _, d) <- diags
-                 , validCommand d
-                 , Just nfp == docNfp
-              ]
-        -- We only want to show the applyAll code action if there is more than 1
-        -- hint in the current document
-        if numHintsInDoc > 1 then do
-          pure $ applyAllAction:applyOneActions
-        else
-          pure applyOneActions
-
     applyAllAction =
-      let args = Just [toJSON (docId ^. LSP.uri)]
-          cmd = mkLspCommand plId "applyAll" "Apply all hints" args
+      let args = Just [toJSON (documentId ^. LSP.uri)]
+          cmd = mkLspCommand pluginId "applyAll" "Apply all hints" args
         in LSP.CodeAction "Apply all hints" (Just LSP.CodeActionQuickFix) Nothing Nothing Nothing Nothing (Just cmd) Nothing
-
-    applyOneActions :: [LSP.CodeAction]
-    applyOneActions = mapMaybe mkHlintAction (filter validCommand diags)
 
     -- |Some hints do not have an associated refactoring
     validCommand (LSP.Diagnostic _ _ (Just (InR code)) (Just "hlint") _ _ _) =
@@ -302,18 +388,64 @@ codeActionProvider ideState plId (CodeActionParams _ _ docId _ context) = Right 
 
     LSP.List diags = context ^. LSP.diagnostics
 
-    mkHlintAction :: LSP.Diagnostic -> Maybe LSP.CodeAction
-    mkHlintAction diag@(LSP.Diagnostic (LSP.Range start _) _s (Just (InR code)) (Just "hlint") _ _ _) =
-      Just . codeAction $ mkLspCommand plId "applyOne" title (Just args)
-     where
-       codeAction cmd = LSP.CodeAction title (Just LSP.CodeActionQuickFix) (Just (LSP.List [diag])) Nothing Nothing Nothing (Just cmd) Nothing
-       -- we have to recover the original ideaHint removing the prefix
-       ideaHint = T.replace "refact:" "" code
-       title = "Apply hint: " <> ideaHint
-       -- need 'file', 'start_pos' and hint title (to distinguish between alternative suggestions at the same location)
-       args = [toJSON (AOP (docId ^. LSP.uri) start ideaHint)]
-    mkHlintAction (LSP.Diagnostic _r _s _c _source _m _ _) = Nothing
+-- | Convert a hlint diagonistic into an apply and an ignore code action
+-- if applicable
+diagnosticToCodeActions :: DynFlags -> T.Text -> PluginId -> TextDocumentIdentifier -> LSP.Diagnostic -> [LSP.CodeAction]
+diagnosticToCodeActions dynFlags fileContents pluginId documentId diagnostic
+  | LSP.Diagnostic{ _source = Just "hlint", _code = Just (InR code), _range = LSP.Range start _ } <- diagnostic
+  , let TextDocumentIdentifier uri = documentId
+  , let isHintApplicable = "refact:" `T.isPrefixOf` code
+  , let hint = T.replace "refact:" "" code
+  , let suppressHintTitle = "Ignore hint \"" <> hint <> "\" in this module"
+  , let suppressHintTextEdits = mkSuppressHintTextEdits dynFlags fileContents hint
+  , let suppressHintWorkspaceEdit =
+          LSP.WorkspaceEdit
+            (Just (Map.singleton uri (List suppressHintTextEdits)))
+            Nothing
+            Nothing
+  = catMaybes
+      [ if | isHintApplicable
+           , let applyHintTitle = "Apply hint \"" <> hint <> "\""
+                 applyHintArguments = [toJSON (AOP (documentId ^. LSP.uri) start hint)]
+                 applyHintCommand = mkLspCommand pluginId "applyOne" applyHintTitle (Just applyHintArguments) ->
+               Just (mkCodeAction applyHintTitle diagnostic Nothing (Just applyHintCommand))
+           | otherwise -> Nothing
+      , Just (mkCodeAction suppressHintTitle diagnostic (Just suppressHintWorkspaceEdit) Nothing)
+      ]
+  | otherwise = []
 
+mkCodeAction :: T.Text -> LSP.Diagnostic -> Maybe LSP.WorkspaceEdit -> Maybe LSP.Command -> LSP.CodeAction
+mkCodeAction title diagnostic workspaceEdit command =
+  LSP.CodeAction
+    { _title = title
+    , _kind = Just LSP.CodeActionQuickFix
+    , _diagnostics = Just (LSP.List [diagnostic])
+    , _isPreferred = Nothing
+    , _disabled = Nothing
+    , _edit = workspaceEdit
+    , _command = command
+    , _xdata = Nothing
+    }
+
+mkSuppressHintTextEdits :: DynFlags -> T.Text -> T.Text -> [LSP.TextEdit]
+mkSuppressHintTextEdits dynFlags fileContents hint =
+  let
+    NextPragmaInfo{ nextPragmaLine, lineSplitTextEdits } = getNextPragmaInfo dynFlags (Just fileContents)
+    nextPragmaLinePosition = Position nextPragmaLine 0
+    nextPragmaRange = Range nextPragmaLinePosition nextPragmaLinePosition
+    wnoUnrecognisedPragmasText =
+      if wopt Opt_WarnUnrecognisedPragmas dynFlags
+      then Just "{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}\n"
+      else Nothing
+    hlintIgnoreText = Just ("{-# HLINT ignore \"" <> hint <> "\" #-}\n")
+    -- we combine the texts into a single text because lsp-test currently
+    -- applies text edits backwards and I want the options pragma to
+    -- appear above the hlint pragma in the tests
+    combinedText = mconcat $ catMaybes [wnoUnrecognisedPragmasText, hlintIgnoreText]
+    combinedTextEdit = LSP.TextEdit nextPragmaRange combinedText
+    lineSplitTextEditList = maybe [] (\LineSplitTextEdits{..} -> [lineSplitInsertTextEdit, lineSplitDeleteTextEdit]) lineSplitTextEdits
+  in
+    combinedTextEdit : lineSplitTextEditList
 -- ---------------------------------------------------------------------
 
 applyAllCmd :: CommandFunction IdeState Uri
@@ -444,7 +576,7 @@ applyHint ide nfp mhint =
                 ideaPos = (srcSpanStartLine &&& srcSpanStartCol) . toRealSrcSpan . ideaSpan
             in filter (\i -> ideaHint i == title' && ideaPos i == (l+1, c+1)) ideas
 
-          toRealSrcSpan (RealSrcSpan real) = real
+          toRealSrcSpan (RealSrcSpan real _) = real
           toRealSrcSpan (UnhelpfulSpan x) = error $ "No real source span: " ++ show x
 
           showParseError :: Hlint.ParseError -> String

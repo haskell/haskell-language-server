@@ -1,0 +1,7 @@
+cradle:
+  direct:
+    arguments:
+      - "-isubdir"
+      - "TEmptyModule"
+      - "TWrongModuleName"
+      - "mainlike"

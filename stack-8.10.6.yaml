@@ -1,0 +1,87 @@
+# Build plan for GHC 8.10.6.
+# Like stack-8.10.7.yaml but with an older resolver.
+
+resolver: lts-18.8
+
+packages:
+  - .
+  - ./hie-compat
+  - ./hls-graph
+  - ./ghcide/
+  - ./hls-plugin-api
+  - ./hls-test-utils
+  # - ./shake-bench
+  - ./plugins/hls-call-hierarchy-plugin
+  - ./plugins/hls-class-plugin
+  - ./plugins/hls-haddock-comments-plugin
+  - ./plugins/hls-eval-plugin
+  - ./plugins/hls-explicit-imports-plugin
+  - ./plugins/hls-refine-imports-plugin
+  - ./plugins/hls-hlint-plugin
+  - ./plugins/hls-retrie-plugin
+  - ./plugins/hls-splice-plugin
+  - ./plugins/hls-tactics-plugin
+  - ./plugins/hls-qualify-imported-names-plugin
+  - ./plugins/hls-brittany-plugin
+  - ./plugins/hls-stylish-haskell-plugin
+  - ./plugins/hls-floskell-plugin
+  - ./plugins/hls-fourmolu-plugin
+  - ./plugins/hls-pragmas-plugin
+  - ./plugins/hls-module-name-plugin
+  - ./plugins/hls-ormolu-plugin
+  - ./plugins/hls-alternate-number-format-plugin
+
+ghc-options:
+  "$everything": -haddock
+
+extra-deps:
+  - brittany-0.13.1.2@sha256:9922614f1df18c63755a37c144033988788e0769fd9c2630b64ed0dfb49462bd,8197
+  - bytestring-encoding-0.1.1.0@sha256:1c3b97eb6345fd7153006211c8272215cd78bb0cf440c41185290822f1e3f2c2,1738
+  - data-tree-print-0.1.0.2@sha256:d845e99f322df70e0c06d6743bf80336f5918d5423498528beb0593a2afc1703,1620
+  - floskell-0.10.5@sha256:77f0bc1569573d9666b10975a5357fef631d32266c071733739393ccae521dab,3803
+  - heapsize-0.3.0.1@sha256:0b69aa97a46d819b700ac7b145f3b5493c3565cf2c5b8298682238d405d0326e,1417
+  - hie-bios-0.8.0
+  - hiedb-0.4.1.0
+  - implicit-hie-0.1.2.6@sha256:f50a908979a574a881f753c0f9a5224f023f438b30fdefc5b7fa01803b07a280,2998
+  - implicit-hie-cradle-0.3.0.5@sha256:5f5e575f549b2a9db664be7650b5c3c9226e313bddc46c79e2e83eb349f8e692,2610
+  - lsp-1.2.0.1@sha256:5b37d26fcbf037434e257e953c08513d4cb125ed784d4611038905c72dc0f58c,5431
+  - lsp-test-0.14.0.1@sha256:efce2ddec4183390341db7667e63936954c654a14d809ad7b61e4010a2fde97e,4739
+  - lsp-types-1.3.0.1@sha256:1dc41eb358345c1927fb8f285e7d951869623fe5b695fbbecf2fe6a3cee9fcfd,4646
+  - monad-dijkstra-0.1.1.3@sha256:d2fc098d7c122555e726830a12ae0423ac187f89de9228f32e56e2f6fc2238e1,1900
+  - optparse-applicative-0.15.1.0@sha256:29ff6146aabf54d46c4c8788e8d1eadaea27c94f6d360c690c5f6c93dac4b07e,4810
+  - refinery-0.4.0.0@sha256:fe3a43add8ff1db5cfffee7e7694c86128b1dfe62c541f26e25a8eadf9585610,1663
+  - retrie-1.1.0.0
+  - stylish-haskell-0.12.2.0@sha256:38f7fd9ca30c9aad34f176dae4564576899e9c197b6b8557b59c5e8c6a622c74,6108
+  - stm-containers-1.2@sha256:a887f2e7692b7cf20e0b081e2d66e21076e2bd4b57016ec59c484edfa2d29397,3244
+  - stm-hamt-1.2.0.6@sha256:fba86ccb4b45c5706c19b0e1315ba63dcac3b5d71de945ec001ba921fae80061,3972
+
+  # Enable these when supported by all formatters
+  # - ghc-lib-9.0.1.20210324@sha256:c8b9a2541ea3424c8d0e4f80584477d0f35be03f4a47d931152042d5f446c5fc,19279
+  # - ghc-lib-parser-9.0.1.20210324@sha256:fb680f78d4ab08b5d089a05bda3b84ad857e5edcc2e4ca7c188c0207d369af80
+  # - ghc-lib-parser-ex-9.0.0.4@sha256:8282b11c3797fc8ba225b245e736cc9a0745d9c48d0f9fea7f9bffb5c9997709,3642
+  # - hlint-3.3@sha256:4218ad6e03050f5d68aeba0e025f5f05e366c8fd49657f2a19df04ee31b2bb23,4154
+
+configure-options:
+  ghcide:
+      - --disable-library-for-ghci
+  haskell-language-server:
+      - --disable-library-for-ghci
+  heapsize:
+      - --disable-library-for-ghci
+
+flags:
+  haskell-language-server:
+    pedantic: true
+  retrie:
+    BuildExecutable: false
+  # Stack doesn't support automatic flags.
+  # Until the formatters support ghc-lib-9, we need this flag disabled
+  hls-hlint-plugin:
+    hlint33: false
+  hyphenation:
+    embed: true
+
+nix:
+  packages: [ icu libcxx zlib ]
+
+concurrent-tests: false

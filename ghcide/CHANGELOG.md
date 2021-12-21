@@ -1,3 +1,56 @@
+### 1.3.0.0 (2021-05-09)
+* Replace unsafe getmodtime with unix package (#1778) - Pepe Iborra
+* Progress reporting improvements (#1784) - Pepe Iborra
+* Unify session loading using implicit-hie (#1783) - fendor
+* Fix remove constraint (#1578) - Kostas Dermentzis
+* Fix wrong extend import while type constuctor and data constructor have the same name (#1775) - Lei Zhu
+* Imporve vscode extension schema generation (#1742) - Potato Hatsue
+* Add hls-graph abstracting over shake (#1748) - Neil Mitchell
+* Tease apart the custom SYB from ExactPrint (#1746) - Sandy Maguire
+* fix class method completion (#1741) - Lei Zhu
+* Fix: #1690 - Infix typed holes are now filled using infix notation (#1708) - Oliver Madine
+
+### 1.2.0.2 (2021-04-13)
+* Bracketing for snippet completions (#1709) - Oliver Madine
+* Don't suggest destruct actions for already-destructed terms (#1715) - Sandy Maguire
+
+### 1.2.0.1 (2021-04-12)
+* restore compat. with haddock-library 1.8 (#1717) - Pepe Iborra
+
+### 1.2.0 (2021-04-11)
+* Emit holes as diagnostics (#1653) - Sandy Maguire
+* Fix ghcide and HLS enter lsp mode by default (#1692) - Potato Hatsue
+* support custom Ide commands (#1666) - Pepe Iborra
+* ghcide - enable ApplicativeDo everywhere (#1667) - Pepe Iborra
+* Intelligent derivations of Semigroup and Monoid for Wingman (#1671) - Sandy Maguire
+* Avoid creating IsFileOfInterest keys for non workspace files (#1661) - Pepe Iborra
+* Fix a wingman bug caused by mismanaged stale data (#1657) - Sandy Maguire
+* Skip tracing unless eventlog is enabled (#1658) - Pepe Iborra
+* optimize ambiguity import suggestions (#1669) - Lei Zhu
+* Replace Barrier with MVar in lsp main (#1668) - Potato Hatsue
+* Add bounds for Diff (#1665) - Potato Hatsue
+* log exceptions before killing the server (#1651) - Pepe Iborra
+* Fix importing type operators (#1644) - Potato Hatsue
+* Shut the Shake session on exit, instead of restarting it (#1655) - Pepe Iborra
+* Do not override custom user commands (#1650) - Pepe Iborra
+* Civilized indexing progress reporting (#1633) - Pepe Iborra
+* Avoid reordering plugins (#1629) - Pepe Iborra
+* Update to lsp-1.2 (#1631) - wz1000
+* Use custom config for completions plugin (#1619) - Potato Hatsue
+* Configurable I/O handles (#1617) - Pepe Iborra
+* Add test data files to extra-source-files (#1605) - Javier Neira
+* Allow for customizable Haskell views of Property types (#1608) - Sandy Maguire
+* Extract hls-test-utils (#1606) - Potato Hatsue
+* Add ability for plugins to handle file change notifications (#1588) - Pepe Iborra
+* Bump haddock-library to 1.10.0 (#1598) - Potato Hatsue
+* Use CiInterface/SkInterface for typeclass symbols (#1592) - FW
+* Relax ghcides upper bound on base16-bytestring (#1595) - maralorn
+* Regularize custom config of plugins (#1576) - Potato Hatsue
+* Avoid duplicating known targets and import paths (#1590) - Pepe Iborra
+* Update homepage and other urls for ghcide (#1580) - Felix Yan
+* Add custom code action kinds for import related code actions (#1570) - Potato Hatsue
+* Use TextEdit to insert new imports (#1554) - Potato Hatsue
+
 ### 1.1.0 (2021-03-09)
 * Add an option to control progress reporting (#1513) - Pepe Iborra
 * Fix missing parens of auto extending imports (#1526) - Potato Hatsue

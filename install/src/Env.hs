@@ -51,7 +51,7 @@ findInstalledGhcs = do
 
 showInstalledGhcs :: MonadIO m => [(VersionNumber, GhcPath)] -> m ()
 showInstalledGhcs ghcPaths = do
-  let msg = "Found the following GHC paths: \n"
+  let msg = "Found the following *supported by HLS* GHC paths: \n"
               ++ unlines
                   (map (\(version, path) -> "ghc-" ++ version ++ ": " ++ path)
                     ghcPaths
@@ -108,8 +108,6 @@ getHlsVersions = do
           & mapMaybe
               (T.stripPrefix stackYamlPrefix >=> T.stripSuffix stackYamlSuffix)
           & map T.unpack
-        -- the following line excludes `8.6.3`, `8.8.1` and `8.8.2` on windows systems
-          & filter (\p -> not (isWindowsSystem && p `elem` ["8.6.3", "8.8.1", "8.8.2"]))
           & sort
   return hlsVersions
 

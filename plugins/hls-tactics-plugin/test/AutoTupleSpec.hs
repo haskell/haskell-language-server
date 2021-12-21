@@ -1,18 +1,21 @@
+{-# LANGUAGE NumDecimals #-}
+
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module AutoTupleSpec where
 
-import           Data.Either                  (isRight)
-import           Wingman.Judgements (mkFirstJudgement)
-import           Wingman.Machinery
-import           Wingman.Tactics    (auto')
-import           Wingman.Types
-import           OccName                      (mkVarOcc)
-import           Test.Hspec
-import           Test.QuickCheck
-import           Type                         (mkTyVarTy)
-import           TysPrim                      (alphaTyVars)
-import           TysWiredIn                   (mkBoxedTupleTy)
+import Control.Monad (replicateM)
+import Control.Monad.State (evalState)
+import Data.Either (isRight)
+import OccName (mkVarOcc)
+import System.IO.Unsafe
+import Test.Hspec
+import Test.QuickCheck
+import TysWiredIn (mkBoxedTupleTy)
+import Wingman.Judgements (mkFirstJudgement)
+import Wingman.Machinery
+import Wingman.Tactics (auto')
+import Wingman.Types
 
 
 spec :: Spec
@@ -21,7 +24,8 @@ spec = describe "auto for tuple" $ do
     property $ do
       -- Pick some number of variables
       n <- choose (1, 7)
-      let vars = fmap mkTyVarTy $ take n alphaTyVars
+      let vars = flip evalState defaultTacticState
+               $ replicateM n newUnivar
       -- Pick a random ordering
       in_vars  <- shuffle vars
       -- Randomly associate them into tuple types
@@ -33,13 +37,16 @@ spec = describe "auto for tuple" $ do
               <$> randomGroups vars
       pure $
           -- We should always be able to find a solution
-          runTactic
-            emptyContext
-            (mkFirstJudgement
-              (Hypothesis $ pure $ HyInfo (mkVarOcc "x") UserPrv $ CType in_type)
-              True
-              out_type)
-            (auto' $ n * 2) `shouldSatisfy` isRight
+          unsafePerformIO
+            (runTactic
+              2e6
+              emptyContext
+              (mkFirstJudgement
+                emptyContext
+                (Hypothesis $ pure $ HyInfo (mkVarOcc "x") UserPrv $ CType in_type)
+                True
+                out_type)
+              (auto' $ n * 2)) `shouldSatisfy` isRight
 
 
 randomGroups :: [a] -> Gen [[a]]

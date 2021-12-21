@@ -1,3 +1,0 @@
-fmapList :: (a -> b) -> [a] -> [b]
-fmapList _ [] = []
-fmapList fab (a : l_a3) = fab a : fmapList fab l_a3

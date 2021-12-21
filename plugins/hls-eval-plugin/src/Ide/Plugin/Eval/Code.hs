@@ -3,26 +3,23 @@
 {-# OPTIONS_GHC -Wwarn -fno-warn-orphans #-}
 
 -- | Expression execution
-module Ide.Plugin.Eval.Code (Statement, testRanges, resultRange, evalExtensions, evalSetup, propSetup, testCheck, asStatements,myExecStmt) where
+module Ide.Plugin.Eval.Code (Statement, testRanges, resultRange, evalSetup, propSetup, testCheck, asStatements,myExecStmt) where
 
 import           Control.Lens                   ((^.))
+import           Control.Monad.IO.Class
 import           Data.Algorithm.Diff            (Diff, PolyDiff (..), getDiff)
 import qualified Data.List.NonEmpty             as NE
 import           Data.String                    (IsString)
 import qualified Data.Text                      as T
+import           Development.IDE.GHC.Compat
 import           Development.IDE.Types.Location (Position (..), Range (..))
 import           GHC                            (ExecOptions, ExecResult (..),
                                                  execStmt)
-import           GHC.LanguageExtensions.Type    (Extension (..))
-import           GhcMonad                       (Ghc, liftIO, modifySession)
-import           HscTypes
 import           Ide.Plugin.Eval.Types          (Language (Plain), Loc,
                                                  Located (..),
                                                  Section (sectionLanguage),
                                                  Test (..), Txt, locate,
                                                  locate0)
-import           InteractiveEval                (getContext, parseImportDecl,
-                                                 runDecls, setContext)
 import           Language.LSP.Types.Lens        (line, start)
 import           System.IO.Extra                (newTempFile, readFile')
 
@@ -81,15 +78,6 @@ asStmts (Example e _ _) = NE.toList e
 asStmts (Property t _ _) =
     ["prop11 = " ++ t, "(propEvaluation prop11 :: IO String)"]
 
--- |GHC extensions required for expression evaluation
-evalExtensions :: [Extension]
-evalExtensions =
-    [ OverlappingInstances
-    , UndecidableInstances
-    , FlexibleInstances
-    , IncoherentInstances
-    , TupleSections
-    ]
 
 -- |GHC declarations required for expression evaluation
 evalSetup :: Ghc ()

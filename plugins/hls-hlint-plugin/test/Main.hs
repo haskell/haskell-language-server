@@ -1,0 +1,393 @@
+{-# LANGUAGE NamedFieldPuns    #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE TypeOperators     #-}
+module Main
+  ( main
+  ) where
+
+import           Control.Lens            ((^.))
+import           Data.Aeson              (Value (..), object, toJSON, (.=))
+import           Data.List               (find)
+import qualified Data.Map                as Map
+import           Data.Maybe              (fromJust, isJust)
+import qualified Data.Text               as T
+import           Ide.Plugin.Config       (Config (..), PluginConfig (..))
+import qualified Ide.Plugin.Config       as Plugin
+import qualified Ide.Plugin.Hlint        as HLint
+import qualified Language.LSP.Types.Lens as L
+import           System.FilePath         ((</>))
+import           Test.Hls
+
+main :: IO ()
+main = defaultTestRunner tests
+
+hlintPlugin :: PluginDescriptor IdeState
+hlintPlugin = HLint.descriptor "hlint"
+
+tests :: TestTree
+tests = testGroup "hlint" [
+      suggestionsTests
+    , configTests
+    , ignoreHintTests
+    ]
+
+getIgnoreHintText :: T.Text -> T.Text
+getIgnoreHintText name = "Ignore hint \"" <> name <> "\" in this module"
+
+ignoreHintTests :: TestTree
+ignoreHintTests = testGroup "hlint ignore hint tests"
+  [
+    ignoreGoldenTest
+      "Ignore hint in this module inserts -Wno-unrecognised-pragmas and hlint ignore pragma if warn unrecognized pragmas is off"
+      "UnrecognizedPragmasOff"
+      (Point 3 8)
+      "Eta reduce"
+  , ignoreGoldenTest
+      "Ignore hint in this module inserts only hlint ignore pragma if warn unrecognized pragmas is on"
+      "UnrecognizedPragmasOn"
+      (Point 3 9)
+      "Eta reduce"
+  ]
+
+suggestionsTests :: TestTree
+suggestionsTests =
+  testGroup "hlint suggestions" [
+    testCase "provides 3.8 code actions including apply all" $ runHlintSession "" $ do
+        doc <- openDoc "Base.hs" "haskell"
+        diags@(reduceDiag:_) <- waitForDiagnosticsFromSource doc "hlint"
+
+        liftIO $ do
+            length diags @?= 2 -- "Eta Reduce" and "Redundant Id"
+            reduceDiag ^. L.range @?= Range (Position 1 0) (Position 1 12)
+            reduceDiag ^. L.severity @?= Just DsInfo
+            reduceDiag ^. L.code @?= Just (InR "refact:Eta reduce")
+            reduceDiag ^. L.source @?= Just "hlint"
+
+        cas <- map fromAction <$> getAllCodeActions doc
+
+        let redundantIdHintName = "Redundant id"
+        let etaReduceHintName = "Eta reduce"
+        let applyAll = find (\ca -> "Apply all hints" `T.isSuffixOf` (ca ^. L.title)) cas
+        let redId = find (\ca -> redundantIdHintName `T.isInfixOf` (ca ^. L.title)) cas
+        let redEta = find (\ca -> etaReduceHintName `T.isInfixOf` (ca ^. L.title)) cas
+        let ignoreRedundantIdInThisModule = find (\ca -> getIgnoreHintText redundantIdHintName == (ca ^.L.title)) cas
+        let ignoreEtaReduceThisModule = find (\ca -> getIgnoreHintText etaReduceHintName == (ca ^.L.title)) cas
+
+        liftIO $ isJust applyAll @? "There is Apply all hints code action"
+        liftIO $ isJust redId @? "There is Redundant id code action"
+        liftIO $ isJust redEta @? "There is Eta reduce code action"
+        liftIO $ isJust ignoreRedundantIdInThisModule @? "There is ignore Redundant id code action"
+        liftIO $ isJust ignoreEtaReduceThisModule @? "There is ignore Eta reduce code action"
+
+        executeCodeAction (fromJust redId)
+
+        contents <- skipManyTill anyMessage $ getDocumentEdit doc
+        liftIO $ contents @?= "main = undefined\nfoo x = x\n"
+
+    , testCase "falls back to pre 3.8 code actions" $ runSessionWithServer' [hlintPlugin] def def noLiteralCaps "test/testdata" $ do
+        doc <- openDoc "Base.hs" "haskell"
+
+        _ <- waitForDiagnosticsFromSource doc "hlint"
+
+        cars <- getAllCodeActions doc
+        etaReduce <- liftIO $ inspectCommand cars ["Eta reduce"]
+
+        executeCommand etaReduce
+
+        contents <- skipManyTill anyMessage $ getDocumentEdit doc
+        liftIO $ contents @?= "main = undefined\nfoo = id\n"
+
+    , testCase ".hlint.yaml fixity rules are applied" $ runHlintSession "fixity" $ do
+        doc <- openDoc "FixityUse.hs" "haskell"
+        expectNoMoreDiagnostics 3 doc "hlint"
+
+    , testCase "changing document contents updates hlint diagnostics" $ runHlintSession "" $ do
+        doc <- openDoc "Base.hs" "haskell"
+        testHlintDiagnostics doc
+
+        let change = TextDocumentContentChangeEvent
+                        (Just (Range (Position 1 8) (Position 1 12)))
+                         Nothing "x"
+        changeDoc doc [change]
+        expectNoMoreDiagnostics 3 doc "hlint"
+
+        let change' = TextDocumentContentChangeEvent
+                        (Just (Range (Position 1 8) (Position 1 12)))
+                         Nothing "id x"
+        changeDoc doc [change']
+        testHlintDiagnostics doc
+
+    , knownBrokenForHlintOnGhcLib "hlint doesn't take in account cpp flag as ghc -D argument" $
+      testCase "[#554] hlint diagnostics works with CPP via ghc -XCPP argument" $ runHlintSession "cpp" $ do
+        doc <- openDoc "CppCond.hs" "haskell"
+        testHlintDiagnostics doc
+
+    , knownBrokenForHlintOnGhcLib "hlint doesn't take in account cpp flag as ghc -D argument" $
+      testCase "[#554] hlint diagnostics works with CPP via language pragma" $ runHlintSession "" $ do
+        doc <- openDoc "CppCond.hs" "haskell"
+        testHlintDiagnostics doc
+
+    , testCase "[#554] hlint diagnostics works with CPP via -XCPP argument and flag via #include header" $ runHlintSession "cpp" $ do
+        doc <- openDoc "CppHeader.hs" "haskell"
+        testHlintDiagnostics doc
+
+    , testCase "[#590] apply-refact works with -XLambdaCase argument" $ runHlintSession "lambdacase" $ do
+        testRefactor "LambdaCase.hs" "Redundant bracket"
+            expectedLambdaCase
+
+    , testCase "[#1242] apply-refact works with -XTypeApplications argument" $ runHlintSession "typeapps" $ do
+        testRefactor "TypeApplication.hs" "Redundant bracket"
+            expectedTypeApp
+
+    , testCase "apply hints works with LambdaCase via language pragma" $ runHlintSession "" $ do
+        testRefactor "LambdaCase.hs" "Redundant bracket"
+            ("{-# LANGUAGE LambdaCase #-}" : expectedLambdaCase)
+
+    , expectFailBecause "apply-refact doesn't work with cpp" $
+      testCase "apply hints works with CPP via -XCPP argument" $ runHlintSession "cpp" $ do
+        testRefactor "CppCond.hs" "Redundant bracket"
+            expectedCPP
+
+    , expectFailBecause "apply-refact doesn't work with cpp" $
+      testCase "apply hints works with CPP via language pragma" $ runHlintSession "" $ do
+        testRefactor "CppCond.hs" "Redundant bracket"
+            ("{-# LANGUAGE CPP #-}" : expectedCPP)
+
+    , testCase "hlint diagnostics ignore hints honouring .hlint.yaml" $ runHlintSession "ignore" $ do
+        doc <- openDoc "CamelCase.hs" "haskell"
+        expectNoMoreDiagnostics 3 doc "hlint"
+
+    , testCase "hlint diagnostics ignore hints honouring ANN annotations" $ runHlintSession "" $ do
+        doc <- openDoc "IgnoreAnn.hs" "haskell"
+        expectNoMoreDiagnostics 3 doc "hlint"
+
+    , testCase "hlint diagnostics ignore hints honouring HLINT annotations" $ runHlintSession "" $ do
+        doc <- openDoc "IgnoreAnnHlint.hs" "haskell"
+        expectNoMoreDiagnostics 3 doc "hlint"
+
+    , testCase "apply-refact preserve regular comments" $ runHlintSession "" $ do
+        testRefactor "Comments.hs" "Redundant bracket" expectedComments
+
+    , testCase "[#2290] apply all hints works with a trailing comment" $ runHlintSession "" $ do
+        testRefactor "TwoHintsAndComment.hs" "Apply all hints" expectedComments2
+
+    , testCase "applyAll is shown only when there is at least one diagnostic in range" $  runHlintSession "" $ do
+        doc <- openDoc "TwoHints.hs" "haskell"
+        _ <- waitForDiagnosticsFromSource doc "hlint"
+
+        firstLine <- map fromAction <$> getCodeActions doc (mkRange 0 0 0 0)
+        secondLine <- map fromAction <$> getCodeActions doc (mkRange 1 0 1 0)
+        thirdLine <- map fromAction <$> getCodeActions doc (mkRange 2 0 2 0)
+        multiLine <- map fromAction <$> getCodeActions doc (mkRange 0 0 2 0)
+
+        let hasApplyAll = isJust . find (\ca -> "Apply all hints" `T.isSuffixOf` (ca ^. L.title))
+
+        liftIO $ hasApplyAll firstLine @? "Missing apply all code action"
+        liftIO $ hasApplyAll secondLine @? "Missing apply all code action"
+        liftIO $ not (hasApplyAll thirdLine) @? "Unexpected apply all code action"
+        liftIO $ hasApplyAll multiLine @? "Missing apply all code action"
+
+    , testCase "hlint should warn about unused extensions" $ runHlintSession "unusedext" $ do
+        doc <- openDoc "UnusedExtension.hs" "haskell"
+        diags@(unusedExt:_) <- waitForDiagnosticsFromSource doc "hlint"
+
+        liftIO $ do
+            length diags @?= 1
+            unusedExt ^. L.code @?= Just (InR "refact:Unused LANGUAGE pragma")
+
+    , knownBrokenForHlintOnGhcLib "[#1279] hlint uses a fixed set of extensions" $
+      testCase "hlint should not activate extensions like PatternSynonyms" $ runHlintSession "" $ do
+        doc <- openDoc "PatternKeyword.hs" "haskell"
+
+        waitForAllProgressDone
+        -- hlint will report a parse error if PatternSynonyms is enabled
+        expectNoMoreDiagnostics 3 doc "hlint"
+    , testCase "hlint should not warn about redundant irrefutable pattern with LANGUAGE Strict" $ runHlintSession "" $ do
+        doc <- openDoc "StrictData.hs" "haskell"
+
+        waitForAllProgressDone
+
+        expectNoMoreDiagnostics 3 doc "hlint"
+    ]
+    where
+        testRefactor file caTitle expected = do
+            doc <- openDoc file "haskell"
+            testHlintDiagnostics doc
+
+            cas <- map fromAction <$> getAllCodeActions doc
+            let ca = find (\ca -> caTitle `T.isInfixOf` (ca ^. L.title)) cas
+            liftIO $ isJust ca @? ("There is '" ++ T.unpack caTitle ++"' code action")
+
+            executeCodeAction (fromJust ca)
+
+            contents <- skipManyTill anyMessage $ getDocumentEdit doc
+            liftIO $ contents @?= T.unlines expected
+
+        expectedLambdaCase = [ "module LambdaCase where", ""
+                             , "f = \\case \"true\" -> True"
+                             , "          _ -> False"
+                             ]
+        expectedCPP =        [ "module CppCond where", ""
+                             , "#ifdef FLAG"
+                             , "f = 1"
+                             , "#else"
+                             , "g = 2"
+                             , "#endif", ""
+                             ]
+        expectedComments =   [ "-- comment before header"
+                             , "module Comments where", ""
+                             , "{-# standalone annotation #-}", ""
+                             , "-- standalone comment", ""
+                             , "-- | haddock comment"
+                             , "f = {- inline comment -}{- inline comment inside refactored code -} 1 -- ending comment", ""
+                             , "-- final comment"
+                             ]
+        expectedComments2 =  [ "module TwoHintsAndComment where"
+                             , "biggest = foldr1 max -- the line above will show two hlint hints, \"eta reduce\" and \"use maximum\""
+                             ]
+        expectedTypeApp =    [ "module TypeApplication where", ""
+                             , "a = id @Int 1"
+                             ]
+
+
+configTests :: TestTree
+configTests = testGroup "hlint plugin config" [
+
+    testCase "changing hlint plugin configuration enables or disables hlint diagnostics" $ runHlintSession "" $ do
+        enableHlint
+
+        doc <- openDoc "Base.hs" "haskell"
+        testHlintDiagnostics doc
+
+        disableHlint
+
+        diags' <- waitForDiagnosticsFrom doc
+
+        liftIO $ noHlintDiagnostics diags'
+
+    , testCase "adding hlint flags to plugin configuration removes hlint diagnostics" $ runHlintSession "" $ do
+        enableHlint
+
+        doc <- openDoc "Base.hs" "haskell"
+        testHlintDiagnostics doc
+
+        let config' = hlintConfigWithFlags ["--ignore=Redundant id", "--hint=test-hlint-config.yaml"]
+        sendConfigurationChanged (toJSON config')
+
+        diags' <- waitForDiagnosticsFrom doc
+
+        liftIO $ noHlintDiagnostics diags'
+
+    , testCase "adding hlint flags to plugin configuration adds hlint diagnostics" $ runHlintSession "" $ do
+        enableHlint
+
+        doc <- openDoc "Generalise.hs" "haskell"
+
+        expectNoMoreDiagnostics 3 doc "hlint"
+
+        let config' = hlintConfigWithFlags ["--with-group=generalise"]
+        sendConfigurationChanged (toJSON config')
+
+        diags' <- waitForDiagnosticsFromSource doc "hlint"
+        d <- liftIO $ inspectDiagnostic diags' ["Use <>"]
+
+        liftIO $ do
+            length diags' @?= 1
+            d ^. L.range @?= Range (Position 1 10) (Position 1 21)
+            d ^. L.severity @?= Just DsInfo
+    ]
+
+testDir :: FilePath
+testDir = "test/testdata"
+
+runHlintSession :: FilePath -> Session a -> IO a
+runHlintSession subdir  =
+    failIfSessionTimeout . runSessionWithServer hlintPlugin (testDir </> subdir)
+
+noHlintDiagnostics :: [Diagnostic] -> Assertion
+noHlintDiagnostics diags =
+    Just "hlint" `notElem` map (^. L.source) diags @? "There are no hlint diagnostics"
+
+testHlintDiagnostics :: TextDocumentIdentifier -> Session ()
+testHlintDiagnostics doc = do
+    diags <- waitForDiagnosticsFromSource doc "hlint"
+    liftIO $ length diags > 0 @? "There are hlint diagnostics"
+
+pluginGlobalOn :: Config -> T.Text -> Bool -> Config
+pluginGlobalOn config pid state = config'
+  where
+      pluginConfig = def { plcGlobalOn = state }
+      config' = def { plugins = Map.insert pid pluginConfig (plugins config) }
+
+hlintConfigWithFlags :: [T.Text] -> Config
+hlintConfigWithFlags flags =
+  def
+    { Plugin.plugins = Map.fromList [("hlint",
+        def { Plugin.plcGlobalOn = True, Plugin.plcConfig = unObject $ object ["flags" .= flags] }
+    )] }
+  where
+    unObject (Object obj) = obj
+    unObject _            = undefined
+
+enableHlint :: Session ()
+enableHlint = sendConfigurationChanged $ toJSON $ def { Plugin.plugins = Map.fromList [ ("hlint", def { Plugin.plcGlobalOn = True }) ] }
+
+disableHlint :: Session ()
+disableHlint = sendConfigurationChanged $ toJSON $ def { Plugin.plugins = Map.fromList [ ("hlint", def { Plugin.plcGlobalOn = False }) ] }
+
+-- We have two main code paths in the plugin depending on how hlint interacts with ghc:
+-- * One when hlint uses ghc-lib (all ghc versions but the last version supported by hlint)
+-- * Another one when hlint uses directly ghc (only one version, which not have to be the last version supported by ghcide)
+-- As we always are using ghc through ghcide the code to get the ghc parsed AST differs
+-- So the issues and bugs usually only affects to one code path or the other.
+-- Although a given hlint version supports one direct ghc, we could use several versions of hlint
+-- each one supporting a different ghc version. It should be a temporary situation though.
+knownBrokenForHlintOnGhcLib :: String -> TestTree -> TestTree
+knownBrokenForHlintOnGhcLib = knownBrokenForGhcVersions [GHC88, GHC86]
+
+knownBrokenForHlintOnRawGhc :: String -> TestTree -> TestTree
+knownBrokenForHlintOnRawGhc = knownBrokenForGhcVersions [GHC810, GHC90]
+
+-- 1's based
+data Point = Point {
+  line   :: !Int,
+  column :: !Int
+}
+
+makePoint line column
+  | line >= 1 && column >= 1 = Point line column
+  | otherwise = error "Line or column is less than 1."
+
+pointToRange :: Point -> Range
+pointToRange Point {..}
+  | line <- subtract 1 line
+  , column <- subtract 1 column =
+      Range (Position line column) (Position line $ column + 1)
+
+getCodeActionTitle :: (Command |? CodeAction) -> Maybe T.Text
+getCodeActionTitle commandOrCodeAction
+  | InR CodeAction {_title} <- commandOrCodeAction = Just _title
+  | otherwise = Nothing
+
+makeCodeActionNotFoundAtString :: Point -> String
+makeCodeActionNotFoundAtString Point {..} =
+  "CodeAction not found at line: " <> show line <> ", column: " <> show column
+
+makeCodeActionFoundAtString :: Point -> String
+makeCodeActionFoundAtString Point {..} =
+  "CodeAction found at line: " <> show line <> ", column: " <> show column
+
+ignoreGoldenTest :: TestName -> FilePath -> Point -> T.Text -> TestTree
+ignoreGoldenTest testCaseName goldenFilename point hintName =
+  setupGoldenHlintTest testCaseName goldenFilename $ \document -> do
+    waitForDiagnosticsFromSource document "hlint"
+    actions <- getCodeActions document $ pointToRange point
+    case find ((== Just (getIgnoreHintText hintName)) . getCodeActionTitle) actions of
+      Just (InR codeAction) -> executeCodeAction codeAction
+      _ -> liftIO $ assertFailure $ makeCodeActionNotFoundAtString point
+
+setupGoldenHlintTest :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
+setupGoldenHlintTest testName path =
+  goldenWithHaskellDoc hlintPlugin testName testDir path "expected" "hs"
+

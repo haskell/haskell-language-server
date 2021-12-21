@@ -1,5 +1,0 @@
-cradle:
-  direct:
-    arguments:
-      - "-XLambdaCase"
-      - "ApplyRefact1"

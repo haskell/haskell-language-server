@@ -1,12 +1,9 @@
 module Wingman.KnownStrategies.QuickCheck where
 
-import ConLike (ConLike(RealDataCon))
-import Control.Monad.Except (MonadError (throwError))
 import Data.Bool (bool)
 import Data.Generics (everything, mkQ)
 import Data.List (partition)
-import DataCon (DataCon, dataConName)
-import Development.IDE.GHC.Compat (GhcPs, HsExpr, noLoc)
+import Development.IDE.GHC.Compat
 import GHC.Exts (IsString (fromString))
 import GHC.List (foldl')
 import GHC.SourceGen (int)
@@ -14,10 +11,7 @@ import GHC.SourceGen.Binds (match, valBind)
 import GHC.SourceGen.Expr (case', lambda, let')
 import GHC.SourceGen.Overloaded (App ((@@)), HasList (list))
 import GHC.SourceGen.Pat (conP)
-import OccName (HasOccName (occName), mkVarOcc, occNameString)
-import Refinery.Tactic (goal, rule)
-import TyCon (TyCon, tyConDataCons, tyConName)
-import Type (splitTyConApp_maybe)
+import Refinery.Tactic (goal, rule, failure)
 import Wingman.CodeGen
 import Wingman.Judgements (jGoal)
 import Wingman.Machinery (tracePrim)
@@ -61,7 +55,7 @@ deriveArbitrary = do
                             (list $ fmap genExpr big)
                             terminal_expr
                     ]
-    _ -> throwError $ GoalMismatch "deriveArbitrary" ty
+    _ -> failure $ GoalMismatch "deriveArbitrary" ty
 
 
 ------------------------------------------------------------------------------

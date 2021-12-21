@@ -5,12 +5,11 @@ module Development.IDE.Plugin.CodeAction.RuleTypes
     ) where
 
 import           Control.DeepSeq                (NFData)
-import           Data.Binary                    (Binary)
 import           Data.Hashable                  (Hashable)
 import           Data.Typeable                  (Typeable)
+import           Development.IDE.Graph          (RuleResult)
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.HscEnvEq (HscEnvEq)
-import           Development.Shake              (RuleResult)
 import           GHC.Generics                   (Generic)
 
 -- Rule type for caching Package Exports
@@ -21,4 +20,3 @@ newtype PackageExports = PackageExports HscEnvEq
 
 instance Hashable PackageExports
 instance NFData   PackageExports
-instance Binary   PackageExports

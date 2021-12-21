@@ -11,6 +11,7 @@ module Development.IDE.Plugin.CodeAction.ExactPrint (
 
   -- * Utilities
   appendConstraint,
+  removeConstraint,
   extendImport,
   hideSymbol,
   liftParseAST,
@@ -28,21 +29,17 @@ import qualified Data.Map.Strict                       as Map
 import           Data.Maybe                            (fromJust, isNothing,
                                                         mapMaybe)
 import qualified Data.Text                             as T
-import           Development.IDE.GHC.Compat            hiding (parseExpr)
+import           Development.IDE.GHC.Compat
+import qualified Development.IDE.GHC.Compat.Util       as Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint        (ASTElement (parseAST),
                                                         Annotate)
 import           Development.IDE.Spans.Common
-import           FieldLabel                            (flLabel)
 import           GHC.Exts                              (IsList (fromList))
-import           GhcPlugins                            (mkRdrUnqual, sigPrec)
 import           Language.Haskell.GHC.ExactPrint
 import           Language.Haskell.GHC.ExactPrint.Types (DeltaPos (DP),
                                                         KeywordId (G), mkAnnKey)
 import           Language.LSP.Types
-import           OccName
-import           Outputable                            (ppr, showSDocUnsafe)
-import           Retrie.GHC                            (rdrNameOcc, unpackFS)
 
 ------------------------------------------------------------------------------
 
@@ -118,6 +115,22 @@ fixParens openDP closeDP ctxt@(L _ elems) = do
   dropHsParTy :: LHsType pass -> LHsType pass
   dropHsParTy (L _ (HsParTy _ ty)) = ty
   dropHsParTy other                = other
+
+removeConstraint ::
+  -- | Predicate: Which context to drop.
+  (LHsType GhcPs -> Bool) ->
+  LHsType GhcPs ->
+  Rewrite
+removeConstraint toRemove = go
+  where
+    go (L l it@HsQualTy{hst_ctxt = L l' ctxt, hst_body}) = Rewrite l $ \_ -> do
+      let ctxt' = L l' $ filter (not . toRemove) ctxt
+      when ((toRemove <$> headMaybe ctxt) == Just True) $
+        setEntryDPT hst_body (DP (0, 0))
+      return $ L l $ it{hst_ctxt = ctxt'}
+    go (L _ (HsParTy _ ty)) = go ty
+    go (L _ HsForAllTy{hst_body}) = go hst_body
+    go (L l other) = Rewrite l $ \_ -> return $ L l other
 
 -- | Append a constraint at the end of a type context.
 --   If no context is present, a new one will be created.
@@ -436,5 +449,5 @@ deleteFromImport (T.pack -> symbol) (L l idecl) llies@(L lieLoc lies) _ = do
             ty
             wild
             (filter ((/= symbol) . unqualIEWrapName . unLoc) cons)
-            (filter ((/= symbol) . T.pack . unpackFS . flLabel . unLoc) flds)
+            (filter ((/= symbol) . T.pack . Util.unpackFS . flLabel . unLoc) flds)
   killLie v = Just v

@@ -20,20 +20,25 @@ module Development.IDE.Core.UseStale
   ) where
 
 import           Control.Arrow
-import           Control.Category (Category)
-import qualified Control.Category as C
-import           Control.DeepSeq (NFData)
+import           Control.Category                     (Category)
+import qualified Control.Category                     as C
+import           Control.DeepSeq                      (NFData)
 import           Data.Aeson
-import           Data.Coerce (coerce)
-import           Data.Functor ((<&>))
-import           Data.Functor.Identity (Identity(Identity))
-import           Data.Kind (Type)
-import           Data.String (fromString)
-import           Development.IDE (NormalizedFilePath, IdeRule, Action, Range, rangeToRealSrcSpan, realSrcSpanToRange)
+import           Data.Coerce                          (coerce)
+import           Data.Functor                         ((<&>))
+import           Data.Functor.Identity                (Identity (Identity))
+import           Data.Kind                            (Type)
+import           Data.String                          (fromString)
+import           Development.IDE.GHC.Compat           (RealSrcSpan,
+                                                       srcSpanFile)
+import           Development.IDE.GHC.Compat.Util      (unpackFS)
+import           Development.IDE                      (Action, IdeRule,
+                                                       NormalizedFilePath,
+                                                       Range,
+                                                       rangeToRealSrcSpan,
+                                                       realSrcSpanToRange)
 import qualified Development.IDE.Core.PositionMapping as P
-import qualified Development.IDE.Core.Shake as IDE
-import qualified FastString as FS
-import           SrcLoc
+import qualified Development.IDE.Core.Shake           as IDE
 
 
 ------------------------------------------------------------------------------
@@ -58,7 +63,7 @@ newtype Tracked (age :: Age) a  = UnsafeTracked
 -- change. Use the 'Category' instance to compose 'PositionMapping's in order
 -- to transform between values of different stale ages.
 newtype PositionMap (from :: Age) (to :: Age) = PositionMap
-  { getPositionMapping :: P.PositionMapping
+  { _getPositionMapping :: P.PositionMapping
   }
 
 instance Category PositionMap where
@@ -109,7 +114,7 @@ instance MapAge Range where
 
 instance MapAge RealSrcSpan where
   mapAgeFrom =
-    invMapAge (\fs -> rangeToRealSrcSpan (fromString $ FS.unpackFS fs))
+    invMapAge (\fs -> rangeToRealSrcSpan (fromString $ unpackFS fs))
               (srcSpanFile &&& realSrcSpanToRange)
       .  mapAgeFrom
 

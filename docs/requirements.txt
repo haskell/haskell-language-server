@@ -1,0 +1,4 @@
+Sphinx==4.0.2
+sphinx-rtd-theme==0.5.2
+myst-parser==0.15.1
+docutils<0.17

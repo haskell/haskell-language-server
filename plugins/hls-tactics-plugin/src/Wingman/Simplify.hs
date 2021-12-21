@@ -11,7 +11,7 @@ import Development.IDE.GHC.Compat
 import GHC.SourceGen (var)
 import GHC.SourceGen.Expr (lambda)
 import Wingman.CodeGen.Utils
-import Wingman.GHC (containsHsVar, fromPatCompatPs)
+import Wingman.GHC (containsHsVar, fromPatCompat, pattern SingleLet)
 
 
 ------------------------------------------------------------------------------
@@ -20,7 +20,7 @@ pattern Lambda :: [Pat GhcPs] -> HsExpr GhcPs -> HsExpr GhcPs
 pattern Lambda pats body <-
   HsLam _
     (MG {mg_alts = L _ [L _
-      (Match { m_pats = fmap fromPatCompatPs -> pats
+      (Match { m_pats = fmap fromPatCompat -> pats
              , m_grhss = GRHSs {grhssGRHSs = [L _ (
                  GRHS _ [] (L _ body))]}
              })]})
@@ -28,6 +28,7 @@ pattern Lambda pats body <-
     -- If there are no patterns to bind, just stick in the body
     Lambda [] body   = body
     Lambda pats body = lambda pats body
+
 
 
 ------------------------------------------------------------------------------
@@ -41,6 +42,7 @@ simplify
     [ simplifyEtaReduce
     , simplifyRemoveParens
     , simplifyCompose
+    , simplifySingleLet
     ])
 
 
@@ -66,6 +68,13 @@ simplifyEtaReduce = mkT $ \case
         -- We can only perform this simplifiation if @pat@ is otherwise unused.
       , not (containsHsVar pat f) ->
     Lambda pats f
+  x -> x
+
+------------------------------------------------------------------------------
+-- | Eliminates the unnecessary binding in @let a = b in a@
+simplifySingleLet :: GenericT
+simplifySingleLet = mkT $ \case
+  SingleLet bind [] val (HsVar _ (L _ a)) | a == bind -> val
   x -> x
 
 

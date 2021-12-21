@@ -3,7 +3,6 @@
 
 {-# LANGUAGE CPP   #-}
 {-# LANGUAGE GADTs #-}
-#include "ghc-api-version.h"
 
 -- | Gives information about symbols at a given point in DAML files.
 -- These are all pure functions that should execute quickly.
@@ -17,6 +16,9 @@ module Development.IDE.Spans.AtPoint (
   , computeTypeReferences
   , FOIReferences(..)
   , defRowToSymbolInfo
+  , getAstNamesAtPoint
+  , toCurrentLocation
+  , rowToLoc
   ) where
 
 import           Development.IDE.GHC.Error
@@ -28,25 +30,16 @@ import           Language.LSP.Types
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.GHC.Compat
+import qualified Development.IDE.GHC.Compat.Util      as Util
 import           Development.IDE.Spans.Common
 import           Development.IDE.Types.Options
-
--- GHC API imports
-import           FastString                           (unpackFS)
-import           IfaceType
-import           Name
-import           NameEnv
-import           Outputable                           hiding ((<>))
-import           SrcLoc
-import           TyCoRep                              hiding (FunTy)
-import           TyCon
-import qualified Var
 
 import           Control.Applicative
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Maybe
+import           Data.Coerce                          (coerce)
 import qualified Data.HashMap.Strict                  as HM
 import qualified Data.Map.Strict                      as M
 import           Data.Maybe
@@ -57,11 +50,13 @@ import           Data.Either
 import           Data.List                            (isSuffixOf)
 import           Data.List.Extra                      (dropEnd1, nubOrd)
 
+import           Data.Version                         (showVersion)
 import           HieDb                                hiding (pointCommand)
+import           System.Directory                     (doesFileExist)
 
 -- | Gives a Uri for the module, given the .hie file location and the the module info
 -- The Bool denotes if it is a boot module
-type LookupModule m = FilePath -> ModuleName -> UnitId -> Bool -> MaybeT m Uri
+type LookupModule m = FilePath -> ModuleName -> Unit -> Bool -> MaybeT m Uri
 
 -- | HieFileResult for files of interest, along with the position mappings
 newtype FOIReferences = FOIReferences (HM.HashMap NormalizedFilePath (HieAstResult, PositionMapping))
@@ -89,8 +84,7 @@ foiReferencesAtPoint file pos (FOIReferences asts) =
   case HM.lookup file asts of
     Nothing -> ([],[],[])
     Just (HAR _ hf _ _ _,mapping) ->
-      let posFile = fromMaybe pos $ fromCurrentPosition mapping pos
-          names = concat $ pointCommand hf posFile (rights . M.keys . nodeIdentifiers . nodeInfo)
+      let names = getAstNamesAtPoint hf pos mapping
           adjustedLocs = HM.foldr go [] asts
           go (HAR _ _ rf tr _, mapping) xs = refs ++ typerefs ++ xs
             where
@@ -98,8 +92,17 @@ foiReferencesAtPoint file pos (FOIReferences asts) =
                    $ concat $ mapMaybe (\n -> M.lookup (Right n) rf) names
               typerefs = mapMaybe (toCurrentLocation mapping . realSrcSpanToLocation)
                    $ concat $ mapMaybe (`M.lookup` tr) names
-          toCurrentLocation mapping (Location uri range) = Location uri <$> toCurrentRange mapping range
         in (names, adjustedLocs,map fromNormalizedFilePath $ HM.keys asts)
+
+getAstNamesAtPoint :: HieASTs a -> Position -> PositionMapping -> [Name]
+getAstNamesAtPoint hf pos mapping =
+  concat $ pointCommand hf posFile (rights . M.keys . getNodeIds)
+    where
+      posFile = fromMaybe pos $ fromCurrentPosition mapping pos
+
+toCurrentLocation :: PositionMapping -> Location -> Maybe Location
+toCurrentLocation mapping (Location uri range) =
+  Location uri <$> toCurrentRange mapping range
 
 referencesAtPoint
   :: MonadIO m
@@ -118,12 +121,12 @@ referencesAtPoint hiedb nfp pos refs = do
       Just mod -> do
          -- Look for references (strictly in project files, not dependencies),
          -- excluding the files in the FOIs (since those are in foiRefs)
-         rows <- liftIO $ findReferences hiedb True (nameOccName name) (Just $ moduleName mod) (Just $ moduleUnitId mod) exclude
+         rows <- liftIO $ findReferences hiedb True (nameOccName name) (Just $ moduleName mod) (Just $ moduleUnit mod) exclude
          pure $ mapMaybe rowToLoc rows
   typeRefs <- forM names $ \name ->
     case nameModule_maybe name of
       Just mod | isTcClsNameSpace (occNameSpace $ nameOccName name) -> do
-        refs <- liftIO $ findTypeRefs hiedb True (nameOccName name) (Just $ moduleName mod) (Just $ moduleUnitId mod) exclude
+        refs <- liftIO $ findTypeRefs hiedb True (nameOccName name) (Just $ moduleName mod) (Just $ moduleUnit mod) exclude
         pure $ mapMaybe typeRowToLoc refs
       _ -> pure []
   pure $ nubOrd $ foiRefs ++ concat nonFOIRefs ++ concat typeRefs
@@ -155,7 +158,7 @@ documentHighlight
   -> MaybeT m [DocumentHighlight]
 documentHighlight hf rf pos = pure highlights
   where
-    ns = concat $ pointCommand hf pos (rights . M.keys . nodeIdentifiers . nodeInfo)
+    ns = concat $ pointCommand hf pos (rights . M.keys . getNodeIds)
     highlights = do
       n <- ns
       ref <- fromMaybe [] (M.lookup (Right n) rf)
@@ -196,21 +199,22 @@ atPoint
   :: IdeOptions
   -> HieAstResult
   -> DocAndKindMap
+  -> HscEnv
   -> Position
   -> Maybe (Maybe Range, [T.Text])
-atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) pos = listToMaybe $ pointCommand hf pos hoverInfo
+atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) env pos = listToMaybe $ pointCommand hf pos hoverInfo
   where
     -- Hover info for values/data
     hoverInfo ast = (Just range, prettyNames ++ pTypes)
       where
         pTypes
-          | length names == 1 = dropEnd1 $ map wrapHaskell prettyTypes
+          | Prelude.length names == 1 = dropEnd1 $ map wrapHaskell prettyTypes
           | otherwise = map wrapHaskell prettyTypes
 
         range = realSrcSpanToRange $ nodeSpan ast
 
         wrapHaskell x = "\n```haskell\n"<>x<>"\n```\n"
-        info = nodeInfo ast
+        info = nodeInfoH kind ast
         names = M.assocs $ nodeIdentifiers info
         types = nodeType info
 
@@ -219,10 +223,19 @@ atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) pos = listToMaybe $ point
         prettyName (Right n, dets) = T.unlines $
           wrapHaskell (showNameWithoutUniques n <> maybe "" (" :: " <>) ((prettyType <$> identType dets) <|> maybeKind))
           : definedAt n
+          ++ maybeToList (prettyPackageName n)
           ++ catMaybes [ T.unlines . spanDocToMarkdown <$> lookupNameEnv dm n
                        ]
           where maybeKind = fmap showGhc $ safeTyThingType =<< lookupNameEnv km n
         prettyName (Left m,_) = showGhc m
+
+        prettyPackageName n = do
+          m <- nameModule_maybe n
+          let pid = moduleUnit m
+          conf <- lookupUnit env pid
+          let pkgName = T.pack $ unitPackageNameString conf
+              version = T.pack $ showVersion (unitPackageVersion conf)
+          pure $ " *(" <> pkgName <> "-" <> version <> ")*"
 
         prettyTypes = map (("_ :: "<>) . prettyType) types
         prettyType t = case kind of
@@ -252,17 +265,21 @@ typeLocationsAtPoint hiedb lookupModule _ideOptions pos (HAR _ ast _ _ hieKind) 
           ts = concat $ pointCommand ast pos getts
           unfold = map (arr A.!)
           getts x = nodeType ni  ++ (mapMaybe identType $ M.elems $ nodeIdentifiers ni)
-            where ni = nodeInfo x
+            where ni = nodeInfo' x
           getTypes ts = flip concatMap (unfold ts) $ \case
             HTyVarTy n -> [n]
-#if MIN_GHC_API_VERSION(8,8,0)
+#if MIN_VERSION_ghc(8,8,0)
             HAppTy a (HieArgs xs) -> getTypes (a : map snd xs)
 #else
             HAppTy a b -> getTypes [a,b]
 #endif
             HTyConApp tc (HieArgs xs) -> ifaceTyConName tc : getTypes (map snd xs)
             HForAllTy _ a -> getTypes [a]
+#if MIN_VERSION_ghc(9,0,1)
+            HFunTy a b c -> getTypes [a,b,c]
+#else
             HFunTy a b -> getTypes [a,b]
+#endif
             HQualTy a b -> getTypes [a,b]
             HCastTy a -> getTypes [a]
             _ -> []
@@ -274,10 +291,10 @@ typeLocationsAtPoint hiedb lookupModule _ideOptions pos (HAR _ ast _ _ hieKind) 
         in fmap nubOrd $ concatMapM (fmap (fromMaybe []) . nameToLocation hiedb lookupModule) (getTypes ts)
 
 namesInType :: Type -> [Name]
-namesInType (TyVarTy n)      = [Var.varName n]
+namesInType (TyVarTy n)      = [varName n]
 namesInType (AppTy a b)      = getTypes [a,b]
 namesInType (TyConApp tc ts) = tyConName tc : getTypes ts
-namesInType (ForAllTy b t)   = Var.varName (binderVar b) : namesInType t
+namesInType (ForAllTy b t)   = varName (binderVar b) : namesInType t
 namesInType (FunTy a b)      = getTypes [a,b]
 namesInType (CastTy t _)     = namesInType t
 namesInType (LitTy _)        = []
@@ -297,7 +314,7 @@ locationsAtPoint
   -> HieASTs a
   -> m [Location]
 locationsAtPoint hiedb lookupModule _ideOptions imports pos ast =
-  let ns = concat $ pointCommand ast pos (M.keys . nodeIdentifiers . nodeInfo)
+  let ns = concat $ pointCommand ast pos (M.keys . getNodeIds)
       zeroPos = Position 0 0
       zeroRange = Range zeroPos zeroPos
       modToLocation m = fmap (\fs -> pure $ Location (fromNormalizedUri $ filePathToUri' fs) zeroRange) $ M.lookup m imports
@@ -307,16 +324,27 @@ locationsAtPoint hiedb lookupModule _ideOptions imports pos ast =
 nameToLocation :: MonadIO m => HieDb -> LookupModule m -> Name -> m (Maybe [Location])
 nameToLocation hiedb lookupModule name = runMaybeT $
   case nameSrcSpan name of
-    sp@(RealSrcSpan rsp)
+    sp@(RealSrcSpan rsp _)
       -- Lookup in the db if we got a location in a boot file
-      | not $ "boot" `isSuffixOf` unpackFS (srcSpanFile rsp) -> MaybeT $ pure $ fmap pure $ srcSpanToLocation sp
-    sp -> do
+      | fs <- Util.unpackFS (srcSpanFile rsp)
+      , not $ "boot" `isSuffixOf` fs
+      -> do
+          itExists <- liftIO $ doesFileExist fs
+          if itExists
+              then MaybeT $ pure $ fmap pure $ srcSpanToLocation sp
+              -- When reusing .hie files from a cloud cache,
+              -- the paths may not match the local file system.
+              -- Let's fall back to the hiedb in case it contains local paths
+              else fallbackToDb sp
+    sp -> fallbackToDb sp
+  where
+    fallbackToDb sp = do
       guard (sp /= wiredInSrcSpan)
       -- This case usually arises when the definition is in an external package.
       -- In this case the interface files contain garbage source spans
       -- so we instead read the .hie files to get useful source spans.
       mod <- MaybeT $ return $ nameModule_maybe name
-      erow <- liftIO $ findDef hiedb (nameOccName name) (Just $ moduleName mod) (Just $ moduleUnitId mod)
+      erow <- liftIO $ findDef hiedb (nameOccName name) (Just $ moduleName mod) (Just $ moduleUnit mod)
       case erow of
         [] -> do
           -- If the lookup failed, try again without specifying a unit-id.
@@ -361,7 +389,17 @@ defRowToSymbolInfo _ = Nothing
 pointCommand :: HieASTs t -> Position -> (HieAST t -> a) -> [a]
 pointCommand hf pos k =
     catMaybes $ M.elems $ flip M.mapWithKey (getAsts hf) $ \fs ast ->
-      case selectSmallestContaining (sp fs) ast of
+      -- Since GHC 9.2:
+      -- getAsts :: Map HiePath (HieAst a)
+      -- type HiePath = LexialFastString
+      --
+      -- but before:
+      -- getAsts :: Map HiePath (HieAst a)
+      -- type HiePath = FastString
+      --
+      -- 'coerce' here to avoid an additional function for maintaining
+      -- backwards compatibility.
+      case selectSmallestContaining (sp $ coerce fs) ast of
         Nothing   -> Nothing
         Just ast' -> Just $ k ast'
  where
@@ -369,3 +407,8 @@ pointCommand hf pos k =
    sp fs = mkRealSrcSpan (sloc fs) (sloc fs)
    line = _line pos
    cha = _character pos
+
+-- In ghc9, nodeInfo is monomorphic, so we need a case split here
+nodeInfoH :: HieKind a -> HieAST a -> NodeInfo a
+nodeInfoH (HieFromDisk _) = nodeInfo'
+nodeInfoH HieFresh        = nodeInfo

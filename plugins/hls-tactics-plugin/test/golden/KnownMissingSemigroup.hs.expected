@@ -1,5 +1,0 @@
-data Semi = Semi [String] Int
-
-instance Semigroup Semi where
-  (<>) (Semi l_l_c4 i5) (Semi l_l_c i) = Semi ((<>) l_l_c4 l_l_c) _
-

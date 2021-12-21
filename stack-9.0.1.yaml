@@ -1,0 +1,95 @@
+resolver: nightly-2021-12-14
+
+packages:
+- .
+- ./hie-compat
+- ./hls-graph
+- ./ghcide/
+- ./hls-plugin-api
+- ./hls-test-utils
+- ./shake-bench
+- ./plugins/hls-call-hierarchy-plugin
+- ./plugins/hls-class-plugin
+- ./plugins/hls-haddock-comments-plugin
+- ./plugins/hls-eval-plugin
+- ./plugins/hls-explicit-imports-plugin
+- ./plugins/hls-qualify-imported-names-plugin
+- ./plugins/hls-refine-imports-plugin
+- ./plugins/hls-hlint-plugin
+- ./plugins/hls-rename-plugin
+- ./plugins/hls-retrie-plugin
+- ./plugins/hls-splice-plugin
+# - ./plugins/hls-tactics-plugin
+# - ./plugins/hls-brittany-plugin
+# - ./plugins/hls-stylish-haskell-plugin
+- ./plugins/hls-floskell-plugin
+- ./plugins/hls-fourmolu-plugin
+- ./plugins/hls-pragmas-plugin
+- ./plugins/hls-module-name-plugin
+- ./plugins/hls-ormolu-plugin
+- ./plugins/hls-alternate-number-format-plugin
+
+extra-deps:
+- bytestring-encoding-0.1.1.0
+- dependent-map-0.4.0.0
+- dependent-sum-0.7.1.0
+- extra-1.7.9        # for ghcide, https://github.com/haskell/haskell-language-server/pull/2131
+- hspec-2.7.10       # for hls-test-utils
+- hspec-core-2.7.10  # for hls-test-utils
+- some-1.0.2         # for dependent-sum, https://github.com/obsidiansystems/dependent-sum/issues/66
+- dependent-sum-template-0.1.1.1
+- floskell-0.10.6
+- heapsize-0.3.0.1
+- hiedb-0.4.1.0
+- implicit-hie-0.1.2.6
+- implicit-hie-cradle-0.3.0.5
+- monad-dijkstra-0.1.1.3
+- retrie-1.1.0.0
+- lsp-1.2.0.1
+- lsp-types-1.3.0.1
+- lsp-test-0.14.0.1
+
+# shake-bench dependencies
+- Chart-1.9.3
+- Chart-diagrams-1.9.3
+- SVGFonts-1.7.0.1  # for Chart-diagrams, https://github.com/timbod7/haskell-chart/issues/232
+- diagrams-postscript-1.5
+- statestack-0.3
+- operational-0.2.4.1
+
+# currently needed for ghcide>extra, etc.
+allow-newer: true
+
+ghc-options:
+  "$everything": -haddock
+
+configure-options:
+  ghcide:
+    - --disable-library-for-ghci
+  haskell-language-server:
+    - --disable-library-for-ghci
+  heapsize:
+    - --disable-library-for-ghci
+
+flags:
+  haskell-language-server:
+    pedantic: true
+
+    ignore-plugins-ghc-bounds: true
+    class: false
+    tactic: false # Dependencies fail
+    stylishHaskell: false
+    brittany: false
+
+  retrie:
+    BuildExecutable: false
+  # Stack doesn't support automatic flags.
+  hls-hlint-plugin:
+    hlint33: true
+  hyphenation:
+    embed: true
+
+nix:
+  packages: [ icu libcxx zlib ]
+
+concurrent-tests: false

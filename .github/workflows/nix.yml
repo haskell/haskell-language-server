@@ -1,45 +1,118 @@
 name: Nix
 
+# See: https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#concurrency.
+concurrency:
+  group: ${{ github.head_ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
 on:
   pull_request:
     branches:
       - '**'
+  push:
+    branches:
+      - master
 
 jobs:
   pre_job:
     runs-on: ubuntu-latest
     outputs:
-      should_skip: ${{ steps.skip_check.outputs.should_skip }}
+      should_skip_develop: ${{ steps.skip_check.outputs.should_skip }}
+      should_skip_build: ${{ steps.skip_check_no_nix.outputs.should_skip }}
     steps:
       - id: skip_check
-        uses: fkirc/skip-duplicate-actions@master
+        uses: fkirc/skip-duplicate-actions@v3.4.1
         with:
-          cancel_others: true
-          paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", ".circleci/**", "install/**"]'
+          cancel_others: false
+          paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", ".circleci/**", "install/**", "**/README.md", "FUNDING.yml", "**/stack*.yaml"]'
+      - id: skip_check_no_nix
+        uses: fkirc/skip-duplicate-actions@v3.4.1
+        with:
+          cancel_others: false
+          paths: '["**.nix"]'
 
-  nix:
+  # Enter the development shell and run `cabal build`
+  develop:
+    if: needs.pre_job.outputs.should_skip_develop != 'true'
     needs: pre_job
     runs-on: ${{ matrix.os }}
 
     strategy:
       fail-fast: false
       matrix:
-        ghc: ['default']
         os: [ubuntu-latest, macOS-latest]
 
     steps:
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      uses: actions/checkout@v2
+    - uses: actions/checkout@v2
+
+    - uses: cachix/install-nix-action@v16
       with:
-        submodules: true
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      uses: cachix/install-nix-action@v12
-      with:
+        install_url: https://nixos-nix-install-tests.cachix.org/serve/i6laym9jw3wg9mw6ncyrk6gjx4l34vvx/install
+        install_options: '--tarball-url-prefix https://nixos-nix-install-tests.cachix.org/serve'
+        extra_nix_config: |
+          experimental-features = nix-command flakes
         nix_path: nixpkgs=channel:nixos-unstable
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      uses: cachix/cachix-action@v8
+    - uses: cachix/cachix-action@v10
+      with:
+        name: haskell-language-server
+        # Disable pushing, we will do that in job `build`
+        skipPush: true
+    - run: |
+        nix develop --print-build-logs --command cabal update
+        nix develop --print-build-logs --command cabal build
+
+  # Build and then push HLS binaries with developmet shell to cachix
+  # This job runs when
+  #   1. PRs are merged to master (runs on master)
+  #   2. Nix files are changed (runs on PR)
+  build:
+    needs: pre_job
+    runs-on: ${{ matrix.os }}
+    env:
+      HAS_TOKEN: ${{ secrets.HLS_CACHIX_AUTH_TOKEN != '' }}
+    if: (needs.pre_job.outputs.should_skip_build != 'true' && needs.pre_job.outputs.should_skip_pr != 'true') || (github.repository_owner == 'haskell' && github.ref == 'refs/heads/master')
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macOS-latest]
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - uses: cachix/install-nix-action@v16
+      with:
+        install_url: https://nixos-nix-install-tests.cachix.org/serve/i6laym9jw3wg9mw6ncyrk6gjx4l34vvx/install
+        install_options: '--tarball-url-prefix https://nixos-nix-install-tests.cachix.org/serve'
+        extra_nix_config: |
+          experimental-features = nix-command flakes
+        nix_path: nixpkgs=channel:nixos-unstable
+    - uses: cachix/cachix-action@v10
       with:
         name: haskell-language-server
         authToken: ${{ secrets.HLS_CACHIX_AUTH_TOKEN }}
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      run: nix-shell --argstr compiler ${{ matrix.ghc }} --run "cabal update && cabal build"
+    - name: Build development shell
+      run: nix develop --print-build-logs --profile dev
+    - name: Build development shell (GHC 9.0.1)
+      run: nix develop --print-build-logs .#haskell-language-server-901-dev --profile dev
+    - name: Push development shell
+      if: ${{ env.HAS_TOKEN == 'true' }}
+      run: cachix push haskell-language-server dev
+    - name: Build binaries
+      run: nix build --print-build-logs
+    - name: Build binaries (GHC 9.0.1)
+      run: nix build --print-build-logs .#haskell-language-server-901
+    - name: Push binaries
+      if: ${{ env.HAS_TOKEN == 'true' }}
+      run: nix path-info --json | jq -r '.[].path' | cachix push haskell-language-server
+
+  nix_post_job:
+    if: always()
+    runs-on: ubuntu-latest
+    needs: [pre_job, develop, build]
+    steps:
+      - run: |
+          echo "jobs info: ${{ toJSON(needs) }}"
+      - if: contains(needs.*.result, 'failure')
+        run: exit 1
+      - if: contains(needs.*.result, 'cancelled') && needs.pre_job.outputs.should_skip != 'true'
+        run: exit 1

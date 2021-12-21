@@ -1,0 +1,11 @@
+version: 2
+updates:
+
+  # NOTE: Dependabot official configuration documentation:
+  # https://docs.github.com/en/code-security/supply-chain-security/keeping-your-dependencies-updated-automatically/configuration-options-for-dependency-updates#package-ecosystem
+
+  # Maintain dependencies for internal GitHub Actions CI for pull requests
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

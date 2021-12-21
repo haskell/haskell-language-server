@@ -8,9 +8,8 @@ import           Data.Default
 import           Data.Foldable
 import           Data.List
 import           Data.Void
-import           Development.IDE.Session (findCradle)
-import           HIE.Bios                hiding (findCradle)
-import           HIE.Bios.Environment
+import qualified Development.IDE.Session as Session
+import qualified HIE.Bios.Environment    as HieBios
 import           HIE.Bios.Types
 import           Ide.Arguments
 import           Ide.Version
@@ -28,7 +27,7 @@ main :: IO ()
 main = do
   -- WARNING: If you write to stdout before runLanguageServer
   --          then the language server will not work
-  args <- getArguments "haskell-language-server-wrapper"
+  args <- getArguments "haskell-language-server-wrapper" mempty
 
   hlsVer <- haskellLanguageServerVersion
   case args of
@@ -44,6 +43,9 @@ main = do
       VersionMode PrintNumericVersion ->
           putStrLn haskellLanguageServerNumericVersion
 
+      BiosMode PrintCradleType ->
+          print =<< findProjectCradle
+
       _ -> launchHaskellLanguageServer args
 
 launchHaskellLanguageServer :: Arguments -> IO ()
@@ -54,8 +56,10 @@ launchHaskellLanguageServer parsedArgs = do
 
   d <- getCurrentDirectory
 
-  -- Get the cabal directory from the cradle
-  cradle <- findLocalCradle (d </> "a")
+  -- search for the project cradle type
+  cradle <- findProjectCradle
+
+  -- Get the root directory from the cradle
   setCurrentDirectory $ cradleRootDir cradle
 
   case parsedArgs of
@@ -84,11 +88,7 @@ launchHaskellLanguageServer parsedArgs = do
 
   let
     hlsBin = "haskell-language-server-" ++ ghcVersion
-    backupHlsBin =
-      case dropWhileEnd (/='.') ghcVersion of
-        [] -> "haskell-language-server"
-        xs -> "haskell-language-server-" ++ init xs
-    candidates' = [hlsBin, backupHlsBin, "haskell-language-server"]
+    candidates' = [hlsBin, "haskell-language-server"]
     candidates = map (++ exeExtension) candidates'
 
   hPutStrLn stderr $ "haskell-language-server exe candidates: " ++ show candidates
@@ -114,7 +114,7 @@ getRuntimeGhcVersion' cradle = do
     Direct  -> checkToolExists "ghc"
     _       -> pure ()
 
-  ghcVersionRes <- getRuntimeGhcVersion cradle
+  ghcVersionRes <- HieBios.getRuntimeGhcVersion cradle
   case ghcVersionRes of
     CradleSuccess ver -> do
       return ver
@@ -129,23 +129,16 @@ getRuntimeGhcVersion' cradle = do
           die $ "Cradle requires " ++ exe ++ " but couldn't find it" ++ "\n"
            ++ show cradle
 
--- | Find the cradle that the given File belongs to.
---
--- First looks for a "hie.yaml" file in the directory of the file
--- or one of its parents. If this file is found, the cradle
--- is read from the config. If this config does not comply to the "hie.yaml"
--- specification, an error is raised.
---
--- If no "hie.yaml" can be found, the implicit config is used.
--- The implicit config uses different heuristics to determine the type
--- of the project that may or may not be accurate.
-findLocalCradle :: FilePath -> IO (Cradle Void)
-findLocalCradle fp = do
-  cradleConf <- findCradle def fp
-  crdl       <- case cradleConf of
-    Just yaml -> do
-      hPutStrLn stderr $ "Found \"" ++ yaml ++ "\" for \"" ++ fp ++ "\""
-      loadCradle yaml
-    Nothing -> loadImplicitCradle fp
-  hPutStrLn stderr $ "Module \"" ++ fp ++ "\" is loaded by Cradle: " ++ show crdl
-  return crdl
+findProjectCradle :: IO (Cradle Void)
+findProjectCradle = do
+  d <- getCurrentDirectory
+
+  let initialFp = d </> "a"
+  hieYaml <- Session.findCradle def initialFp
+
+  -- Some log messages
+  case hieYaml of
+    Just yaml -> hPutStrLn stderr $ "Found \"" ++ yaml ++ "\" for \"" ++ initialFp ++ "\""
+    Nothing -> hPutStrLn stderr "No 'hie.yaml' found. Try to discover the project type!"
+
+  Session.loadCradle def hieYaml d

@@ -11,8 +11,7 @@ import           Data.Set (Set)
 import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
 import           GHC.Exts (IsString (fromString))
-import           GHC.SourceGen (funBinds, match, wildP)
-import           OccName
+import           GHC.SourceGen (funBindsWithFixity, match, wildP)
 import           Wingman.GHC
 import           Wingman.Types
 
@@ -30,10 +29,14 @@ mkFirstAgda pats body                = AgdaMatch pats body
 -- | Transform an 'AgdaMatch' whose body is a case over a bound pattern, by
 -- splitting it into multiple matches: one for each alternative of the case.
 agdaSplit :: AgdaMatch -> [AgdaMatch]
-agdaSplit (AgdaMatch pats (Case (HsVar _ (L _ var)) matches)) = do
-  (pat, body) <- matches
-  -- TODO(sandy): use an at pattern if necessary
-  pure $ AgdaMatch (rewriteVarPat var pat pats) body
+agdaSplit (AgdaMatch pats (Case (HsVar _ (L _ var)) matches))
+  -- Ensure the thing we're destructing is actually a pattern that's been
+  -- bound.
+  | containsVar var pats
+  = do
+    (pat, body) <- matches
+    -- TODO(sandy): use an at pattern if necessary
+    pure $ AgdaMatch (rewriteVarPat var pat pats) $ unLoc body
 agdaSplit x = [x]
 
 
@@ -54,22 +57,46 @@ wildifyT (S.map occNameString -> used) = everywhere $ mkT $ \case
 
 
 ------------------------------------------------------------------------------
+-- | Determine whether the given 'RdrName' exists as a 'VarPat' inside of @a@.
+containsVar :: Data a => RdrName -> a -> Bool
+containsVar name = everything (||) $
+  mkQ False (\case
+    VarPat _ (L _ var) -> eqRdrName name var
+    (_ :: Pat GhcPs)   -> False
+      )
+  `extQ` \case
+    HsRecField lbl _ True ->  eqRdrName name $ unLoc $ rdrNameFieldOcc $ unLoc lbl
+    (_ :: HsRecField' (FieldOcc GhcPs) (PatCompat GhcPs)) -> False
+
+
+------------------------------------------------------------------------------
 -- | Replace a 'VarPat' with the given @'Pat' GhcPs@.
 rewriteVarPat :: Data a => RdrName -> Pat GhcPs -> a -> a
-rewriteVarPat name rep = everywhere $ mkT $ \case
-  VarPat _ (L _ var) | eqRdrName name var -> rep
-  (x :: Pat GhcPs)                        -> x
+rewriteVarPat name rep = everywhere $
+  mkT (\case
+    VarPat _ (L _ var) | eqRdrName name var -> rep
+    (x :: Pat GhcPs)                        -> x
+      )
+  `extT` \case
+    HsRecField lbl _ True
+      | eqRdrName name $ unLoc $ rdrNameFieldOcc $ unLoc lbl
+          -> HsRecField lbl (toPatCompat rep) False
+    (x :: HsRecField' (FieldOcc GhcPs) (PatCompat GhcPs)) -> x
 
 
 ------------------------------------------------------------------------------
 -- | Construct an 'HsDecl' from a set of 'AgdaMatch'es.
 splitToDecl
-    :: OccName  -- ^ The name of the function
+    :: Maybe LexicalFixity
+    -> OccName  -- ^ The name of the function
     -> [AgdaMatch]
     -> LHsDecl GhcPs
-splitToDecl name ams = noLoc $ funBinds (fromString . occNameString . occName $ name) $ do
-  AgdaMatch pats body <- ams
-  pure $ match pats body
+splitToDecl fixity name ams = do
+  traceX "fixity" fixity $
+    noLoc $
+      funBindsWithFixity fixity (fromString . occNameString . occName $ name) $ do
+        AgdaMatch pats body <- ams
+        pure $ match pats body
 
 
 ------------------------------------------------------------------------------

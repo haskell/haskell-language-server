@@ -13,7 +13,7 @@ module Development.IDE.Plugin.TypeLenses
   )
 where
 
-import           Avail                               (availsToNameSet)
+import           Control.Concurrent.STM.Stats        (atomically)
 import           Control.DeepSeq                     (rwhnf)
 import           Control.Monad                       (mzero)
 import           Control.Monad.IO.Class              (MonadIO (liftIO))
@@ -34,13 +34,12 @@ import           Development.IDE.Core.Service        (getDiagnostics)
 import           Development.IDE.Core.Shake          (getHiddenDiagnostics, use)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Util            (printName)
-import           Development.IDE.Spans.Common        (safeTyThingType)
+import           Development.IDE.Graph.Classes
 import           Development.IDE.Spans.LocalBindings (Bindings, getFuzzyScope)
 import           Development.IDE.Types.Location      (Position (Position, _character, _line),
                                                       Range (Range, _end, _start),
                                                       toNormalizedFilePath',
                                                       uriToFilePath')
-import           Development.Shake.Classes
 import           GHC.Generics                        (Generic)
 import           GhcPlugins                          (GlobalRdrEnv, SDoc,
                                                       elemNameSet, getSrcSpan,
@@ -55,6 +54,8 @@ import           Ide.Types                           (CommandFunction,
                                                       PluginCommand (PluginCommand),
                                                       PluginDescriptor (..),
                                                       PluginId,
+                                                      configCustomConfig,
+                                                      defaultConfigDescriptor,
                                                       defaultPluginDescriptor,
                                                       mkCustomConfig,
                                                       mkPluginHandler)
@@ -80,10 +81,10 @@ typeLensCommandId = "typesignature.add"
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
   (defaultPluginDescriptor plId)
-    { pluginHandlers = mkPluginHandler STextDocumentCodeLens codeLensProvider,
-      pluginCommands = [PluginCommand (CommandId typeLensCommandId) "adds a signature" commandHandler],
-      pluginRules = rules,
-      pluginCustomConfig = mkCustomConfig properties
+    { pluginHandlers = mkPluginHandler STextDocumentCodeLens codeLensProvider
+    , pluginCommands = [PluginCommand (CommandId typeLensCommandId) "adds a signature" commandHandler]
+    , pluginRules = rules
+    , pluginConfigDescriptor = defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
     }
 
 properties :: Properties '[ 'PropertyKey "mode" ('TEnum Mode)]
@@ -111,8 +112,8 @@ codeLensProvider ideState pId CodeLensParams {_textDocument = TextDocumentIdenti
       bindings <- runAction "codeLens.GetBindings" ideState (use GetBindings filePath)
       gblSigs <- runAction "codeLens.GetGlobalBindingTypeSigs" ideState (use GetGlobalBindingTypeSigs filePath)
 
-      diag <- getDiagnostics ideState
-      hDiag <- getHiddenDiagnostics ideState
+      diag <- atomically $ getDiagnostics ideState
+      hDiag <- atomically $ getHiddenDiagnostics ideState
 
       let toWorkSpaceEdit tedit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing Nothing
           generateLensForGlobal sig@GlobalBindingTypeSig {..} = do
@@ -170,21 +171,21 @@ suggestLocalSignature :: Bool -> Maybe TcModuleResult -> Maybe Bindings -> Diagn
 suggestLocalSignature isQuickFix mTmr mBindings Diagnostic {_message, _range = _range@Range {..}}
   | Just (_ :: T.Text, _ :: T.Text, _ :: T.Text, [identifier]) <-
       (T.unwords . T.words $ _message)
-        =~~ ("Polymorphic local binding with no type signature: (.*) ::" :: T.Text),
-    Just bindings <- mBindings,
-    localScope <- getFuzzyScope bindings _start _end,
-    -- we can't use srcspan to lookup scoped bindings, because the error message reported by GHC includes the entire binding, instead of simply the name
-    Just (name, ty) <- find (\(x, _) -> printName x == T.unpack identifier) localScope >>= \(name, mTy) -> (name,) <$> mTy,
-    Just TcModuleResult {tmrTypechecked = TcGblEnv {tcg_rdr_env, tcg_sigs}} <- mTmr,
-    -- not a top-level thing, to avoid duplication
-    not $ name `elemNameSet` tcg_sigs,
-    tyMsg <- showSDocForUser unsafeGlobalDynFlags (mkPrintUnqualified unsafeGlobalDynFlags tcg_rdr_env) $ pprSigmaType ty,
-    signature <- T.pack $ printName name <> " :: " <> tyMsg,
-    startCharacter <- _character _start,
-    startOfLine <- Position (_line _start) startCharacter,
-    beforeLine <- Range startOfLine startOfLine,
-    title <- if isQuickFix then "add signature: " <> signature else signature,
-    action <- TextEdit beforeLine $ signature <> "\n" <> T.replicate startCharacter " " =
+        =~~ ("Polymorphic local binding with no type signature: (.*) ::" :: T.Text)
+    , Just bindings <- mBindings
+    , localScope <- getFuzzyScope bindings _start _end
+    , -- we can't use srcspan to lookup scoped bindings, because the error message reported by GHC includes the entire binding, instead of simply the name
+      Just (name, ty) <- find (\(x, _) -> printName x == T.unpack identifier) localScope >>= \(name, mTy) -> (name,) <$> mTy
+    , Just TcModuleResult{tmrTypechecked = TcGblEnv{tcg_rdr_env, tcg_sigs}} <- mTmr
+    , -- not a top-level thing, to avoid duplication
+      not $ name `elemNameSet` tcg_sigs
+    , tyMsg <- printSDocQualifiedUnsafe (mkPrintUnqualifiedDefault tcg_rdr_env) $ pprSigmaType ty
+    , signature <- T.pack $ printName name <> " :: " <> tyMsg
+    , startCharacter <- _character _start
+    , startOfLine <- Position (_line _start) startCharacter
+    , beforeLine <- Range startOfLine startOfLine
+    , title <- if isQuickFix then "add signature: " <> signature else signature
+    , action <- TextEdit beforeLine $ signature <> "\n" <> T.replicate startCharacter " " =
     [(title, [action])]
   | otherwise = []
 
@@ -222,11 +223,11 @@ instance A.FromJSON Mode where
 
 --------------------------------------------------------------------------------
 
-showDocRdrEnv :: DynFlags -> GlobalRdrEnv -> SDoc -> String
-showDocRdrEnv dflags rdrEnv = showSDocForUser dflags (mkPrintUnqualified dflags rdrEnv)
+showDocRdrEnv :: HscEnv -> GlobalRdrEnv -> SDoc -> String
+showDocRdrEnv env rdrEnv = showSDocForUser (hsc_dflags env) (mkPrintUnqualified (hsc_dflags env) rdrEnv)
 
 data GetGlobalBindingTypeSigs = GetGlobalBindingTypeSigs
-  deriving (Generic, Show, Eq, Ord, Hashable, NFData, Binary)
+  deriving (Generic, Show, Eq, Ord, Hashable, NFData)
 
 data GlobalBindingTypeSig = GlobalBindingTypeSig
   { gbName     :: Name,
@@ -261,10 +262,13 @@ gblBindingType (Just dflags) (Just gblEnv) =
       binds = collectHsBindsBinders $ tcg_binds gblEnv
       patSyns = tcg_patsyns gblEnv
       rdrEnv = tcg_rdr_env gblEnv
-      showDoc = showDocRdrEnv dflags rdrEnv
+      showDoc = showDocRdrEnv hsc rdrEnv
       tyEnv = tcg_type_env gblEnv
       isExported name = name `elemNameSet` exports
       prettyPrintTy ty = showDoc (pprSigmaType ty)
+      hasSig :: (Monad m) => Name -> m a -> m (Maybe a)
+      hasSig name f = whenMaybe (name `elemNameSet` sigs) f
+
       bindToSig id
         | name <- idName id,
           name `elemNameSet` sigs,
@@ -278,7 +282,21 @@ gblBindingType (Just dflags) (Just gblEnv) =
           Just ty <- lookupTypeEnv tyEnv name >>= safeTyThingType =
           Just $ GlobalBindingTypeSig name ("pattern " <> printName name <> " :: " <> prettyPrintTy ty) (isExported name)
         | otherwise = Nothing
-      bindings = catMaybes $ bindToSig <$> binds
-      patterns = catMaybes $ patToSig <$> patSyns
-   in Just . GlobalBindingTypeSigsResult $ bindings <> patterns
+
+    bindings = catMaybes $ bindToSig <$> binds
+    patterns = catMaybes $ patToSig <$> patSyns
+  in Just . GlobalBindingTypeSigsResult $ bindings <> patterns
+
 gblBindingType _ _ = Nothing
+
+pprPatSynTypeWithoutForalls :: PatSyn -> SDoc
+pprPatSynTypeWithoutForalls p = pprPatSynType pWithoutTypeVariables
+  where
+    pWithoutTypeVariables = mkPatSyn name declared_infix ([], req_theta) ([], prov_theta) orig_args' orig_res_ty matcher builder field_labels
+    (_univ_tvs, req_theta, _ex_tvs, prov_theta, orig_args, orig_res_ty) = patSynSig p
+    name = patSynName p
+    declared_infix = patSynIsInfix p
+    matcher = patSynMatcher p
+    builder = patSynBuilder p
+    field_labels = patSynFieldLabels p
+    orig_args' = map scaledThing orig_args
