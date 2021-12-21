@@ -48,6 +48,7 @@ import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.Types
 import qualified Language.LSP.VFS                             as VFS
 import           Text.Fuzzy.Parallel                          (Scored (..))
+import           Safe                                         (headNote)
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
@@ -210,7 +211,7 @@ extendImportHandler :: CommandFunction IdeState ExtendImport
 extendImportHandler ideState edit@ExtendImport {..} = do
   res <- liftIO $ runMaybeT $ extendImportHandler' ideState edit
   whenJust res $ \(nfp, wedit@WorkspaceEdit {_changes}) -> do
-    let (_, List (head -> TextEdit {_range})) = fromJust $ _changes >>= listToMaybe . toList
+    let (_, List (headNote "Development.IDE.Plugin.Completions.extendImportHandler" -> TextEdit {_range})) = fromJust $ _changes >>= listToMaybe . toList
         srcSpan = rangeToSrcSpan nfp _range
     LSP.sendNotification SWindowShowMessage $
       ShowMessageParams MtInfo $

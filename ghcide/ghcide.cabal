@@ -461,6 +461,7 @@ executable ghcide-bench
         lsp-types,
         optparse-applicative,
         process,
+        safe,
         safe-exceptions,
         hls-graph,
         shake,

@@ -28,6 +28,7 @@ import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.Spans.Common
+import           Safe                           (headNote)
 import           System.Directory
 import           System.FilePath
 
@@ -63,7 +64,9 @@ lookupKind env mod =
     fmap (fromRight Nothing) . catchSrcErrors (hsc_dflags env) "span" . lookupName env mod
 
 getDocumentationTryGhc :: HscEnv -> Module -> Name -> IO SpanDoc
-getDocumentationTryGhc env mod n = head <$> getDocumentationsTryGhc env mod [n]
+getDocumentationTryGhc env mod n =
+    headNote "Development.IDE.Spans.Documentation.getDocumentationTryGhc"
+    <$> getDocumentationsTryGhc env mod [n]
 
 getDocumentationsTryGhc :: HscEnv -> Module -> [Name] -> IO [SpanDoc]
 getDocumentationsTryGhc env mod names = do

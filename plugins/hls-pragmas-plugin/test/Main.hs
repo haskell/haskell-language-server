@@ -4,6 +4,7 @@ module Main
   ) where
 
 import           Control.Lens            ((^.))
+import           Data.Foldable           (find)
 import qualified Data.Text               as T
 import qualified Ide.Plugin.Pragmas      as Pragmas
 import qualified Language.LSP.Types.Lens as L
@@ -99,27 +100,29 @@ codeActionTests' =
 completionTests :: TestTree
 completionTests =
   testGroup "completions"
-  [ completionTest "completes pragmas" "Completion.hs" "" "LANGUAGE" (Just Snippet) (Just "LANGUAGE ${1:extension} #-}") (Just "{-# LANGUAGE #-}") [0, 4, 0, 34, 0, 4]
-  , completionTest "completes pragmas with existing closing pragma bracket" "Completion.hs" "" "LANGUAGE" (Just Snippet) (Just "LANGUAGE ${1:extension} ") (Just "{-# LANGUAGE #-}") [0, 4, 0, 31, 0, 4]
-  , completionTest "completes pragmas with existing closing comment bracket" "Completion.hs" "" "LANGUAGE" (Just Snippet) (Just "LANGUAGE ${1:extension} #") (Just "{-# LANGUAGE #-}") [0, 4, 0, 32, 0, 4]
-  , completionTest "completes pragmas with existing closing bracket" "Completion.hs" "" "LANGUAGE" (Just Snippet) (Just "LANGUAGE ${1:extension} #-") (Just "{-# LANGUAGE #-}") [0, 4, 0, 33, 0, 4]
-  , completionTest "completes options pragma" "Completion.hs" "OPTIONS" "OPTIONS_GHC" (Just Snippet) (Just "OPTIONS_GHC -${1:option} #-}") (Just "{-# OPTIONS_GHC #-}") [0, 4, 0, 34, 0, 4]
-  , completionTest "completes ghc options pragma values" "Completion.hs" "{-# OPTIONS_GHC -Wno-red  #-}\n" "Wno-redundant-constraints" Nothing Nothing Nothing [0, 0, 0, 0, 0, 24]
-  , completionTest "completes language extensions" "Completion.hs" "" "OverloadedStrings" Nothing Nothing Nothing [0, 24, 0, 31, 0, 24]
-  , completionTest "completes language extensions case insensitive" "Completion.hs" "lAnGuaGe Overloaded" "OverloadedStrings" Nothing Nothing Nothing [0, 4, 0, 34, 0, 24]
-  , completionTest "completes the Strict language extension" "Completion.hs" "Str" "Strict" Nothing Nothing Nothing [0, 13, 0, 31, 0, 16]
-  , completionTest "completes No- language extensions" "Completion.hs" "NoOverload" "NoOverloadedStrings" Nothing Nothing Nothing [0, 13, 0, 31, 0, 23]
+  [ completionTest "completes pragmas" "Completion.hs" "" "LANGUAGE" (Just Snippet) (Just "LANGUAGE ${1:extension} #-}") (Just "{-# LANGUAGE #-}") (0, 4, 0, 34, 0, 4)
+  , completionTest "completes pragmas with existing closing pragma bracket" "Completion.hs" "" "LANGUAGE" (Just Snippet) (Just "LANGUAGE ${1:extension} ") (Just "{-# LANGUAGE #-}") (0, 4, 0, 31, 0, 4)
+  , completionTest "completes pragmas with existing closing comment bracket" "Completion.hs" "" "LANGUAGE" (Just Snippet) (Just "LANGUAGE ${1:extension} #") (Just "{-# LANGUAGE #-}") (0, 4, 0, 32, 0, 4)
+  , completionTest "completes pragmas with existing closing bracket" "Completion.hs" "" "LANGUAGE" (Just Snippet) (Just "LANGUAGE ${1:extension} #-") (Just "{-# LANGUAGE #-}") (0, 4, 0, 33, 0, 4)
+  , completionTest "completes options pragma" "Completion.hs" "OPTIONS" "OPTIONS_GHC" (Just Snippet) (Just "OPTIONS_GHC -${1:option} #-}") (Just "{-# OPTIONS_GHC #-}") (0, 4, 0, 34, 0, 4)
+  , completionTest "completes ghc options pragma values" "Completion.hs" "{-# OPTIONS_GHC -Wno-red  #-}\n" "Wno-redundant-constraints" Nothing Nothing Nothing (0, 0, 0, 0, 0, 24)
+  , completionTest "completes language extensions" "Completion.hs" "" "OverloadedStrings" Nothing Nothing Nothing (0, 24, 0, 31, 0, 24)
+  , completionTest "completes language extensions case insensitive" "Completion.hs" "lAnGuaGe Overloaded" "OverloadedStrings" Nothing Nothing Nothing (0, 4, 0, 34, 0, 24)
+  , completionTest "completes the Strict language extension" "Completion.hs" "Str" "Strict" Nothing Nothing Nothing (0, 13, 0, 31, 0, 16)
+  , completionTest "completes No- language extensions" "Completion.hs" "NoOverload" "NoOverloadedStrings" Nothing Nothing Nothing (0, 13, 0, 31, 0, 23)
   ]
 
-completionTest :: String -> String -> T.Text -> T.Text -> Maybe InsertTextFormat -> Maybe T.Text -> Maybe T.Text -> [Int] -> TestTree
-completionTest testComment fileName te' label textFormat insertText detail [a, b, c, d, x, y] =
+completionTest :: String -> String -> T.Text -> T.Text -> Maybe InsertTextFormat -> Maybe T.Text -> Maybe T.Text -> (Int, Int, Int, Int, Int, Int) -> TestTree
+completionTest testComment fileName te' label textFormat insertText detail (a, b, c, d, x, y) =
   testCase testComment $ runSessionWithServer pragmasPlugin testDataDir $ do
     doc <- openDoc fileName "haskell"
     _ <- waitForDiagnostics
     let te = TextEdit (Range (Position a b) (Position c d)) te'
     _ <- applyEdit doc te
     compls <- getCompletions doc (Position x y)
-    let item = head $ filter ((== label) . (^. L.label)) compls
+    item <- case find (\c -> c ^. L.label == label) compls of
+      Just c -> pure c
+      Nothing -> liftIO . assertFailure $ "No completion with label " <> show label <> " found in " <> show compls
     liftIO $ do
       item ^. L.label @?= label
       item ^. L.kind @?= Just CiKeyword

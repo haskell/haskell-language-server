@@ -35,6 +35,8 @@ import qualified Data.HashMap.Strict                  as HM
 import           Data.Hashable
 import           Data.IORef
 import           Data.List
+import           Data.List.NonEmpty                   (NonEmpty ((:|)))
+import qualified Data.List.NonEmpty                   as NE
 import qualified Data.Map.Strict                      as Map
 import           Data.Maybe
 import qualified Data.Text                            as T
@@ -303,9 +305,9 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
                   -- compilation but these are the true source of
                   -- information.
                   new_deps = RawComponentInfo (homeUnitId_ df) df targets cfp opts dep_info
-                                : maybe [] snd oldDeps
+                                :| maybe [] snd oldDeps
                   -- Get all the unit-ids for things in this component
-                  inplace = map rawComponentUnitId new_deps
+                  inplace = fmap rawComponentUnitId new_deps
 
               new_deps' <- forM new_deps $ \RawComponentInfo{..} -> do
                   -- Remove all inplace dependencies from package flags for
@@ -347,7 +349,9 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
               -- . The information for the new component which caused this cache miss
               -- . The modified information (without -inplace flags) for
               --   existing packages
-              pure (Map.insert hieYaml (newHscEnv, new_deps) m, (newHscEnv, head new_deps', tail new_deps'))
+              pure ( Map.insert hieYaml (newHscEnv, NE.toList new_deps) m
+                   , (newHscEnv, NE.head new_deps', NE.tail new_deps')
+                   )
 
 
     let session :: (Maybe FilePath, NormalizedFilePath, ComponentOptions, FilePath)
@@ -495,13 +499,12 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
             sessionOpts (join cachedHieYamlLocation <|> hieYaml, file) `Safe.catch` \e ->
                 return (([renderPackageSetupException file e], Nothing), maybe [] pure hieYaml)
 
-    returnWithVersion $ \file -> do
-      opts <- liftIO $ join $ mask_ $ modifyVar runningCradle $ \as -> do
+    returnWithVersion $ \file ->
+      liftIO $ join $ mask_ $ modifyVar runningCradle $ \as -> do
         -- If the cradle is not finished, then wait for it to finish.
         void $ wait as
         as <- async $ getOptions file
         return (as, wait as)
-      pure opts
 
 -- | Run the specific cradle on a specific FilePath via hie-bios.
 -- This then builds dependencies or whatever based on the cradle, gets the
@@ -758,7 +761,7 @@ getDependencyInfo fs = Map.fromList <$> mapM do_one fs
 -- ID. Therefore we create a fake one and give them all the same unit id.
 removeInplacePackages
     :: UnitId     -- ^ fake uid to use for our internal component
-    -> [UnitId]
+    -> NonEmpty UnitId
     -> DynFlags
     -> (DynFlags, [UnitId])
 removeInplacePackages fake_uid us df = (setHomeUnitId_ fake_uid $

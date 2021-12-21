@@ -89,6 +89,7 @@ import           Data.Map                        (Map)
 #endif
 import           Data.Either
 import           Data.Version
+import qualified Data.List.NonEmpty              as NE
 
 #if MIN_VERSION_ghc(9,0,0)
 type PreloadUnitClosure = UniqSet UnitId
@@ -324,7 +325,7 @@ moduleUnit =
     Module.moduleUnitId
 #endif
 
-filterInplaceUnits :: [UnitId] -> [PackageFlag] -> ([UnitId], [PackageFlag])
+filterInplaceUnits :: NE.NonEmpty UnitId -> [PackageFlag] -> ([UnitId], [PackageFlag])
 filterInplaceUnits us packageFlags =
   partitionEithers (map isInplace packageFlags)
   where
@@ -335,7 +336,7 @@ filterInplaceUnits us packageFlags =
         then Left $ toUnitId  u
         else Right p
 #else
-      if u `elem` us
+      if u `elem` NE.toList us
         then Left u
         else Right p
 #endif

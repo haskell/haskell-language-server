@@ -49,6 +49,7 @@ import           Language.LSP.Types              hiding
 import           Language.LSP.Types.Capabilities
 import           Numeric.Natural
 import           Options.Applicative
+import           Safe                            (headNote)
 import           System.Directory
 import           System.Environment.Blank        (getEnv)
 import           System.FilePath                 ((<.>), (</>))
@@ -474,7 +475,7 @@ runBench runSess b = handleAny (\e -> print e >> return badRun)
         output $ "Setting up document contents took " <> showDuration d
         -- wait again, as the progress is restarted once while loading the cradle
         -- make an edit, to ensure this doesn't block
-        let DocumentPositions{..} = head docs
+        let DocumentPositions{..} = headNote "Experiments.runBench" docs
         changeDoc doc [charEdit stringLiteralP]
         waitForProgressDone
         return docs

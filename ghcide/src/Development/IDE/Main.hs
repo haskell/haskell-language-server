@@ -77,8 +77,7 @@ import           Development.IDE.Types.Options         (IdeGhcSession,
                                                         defaultIdeOptions,
                                                         optModifyDynFlags,
                                                         optTesting)
-import           Development.IDE.Types.Shake           (Key(Key),
-                                                        fromKeyType)
+import           Development.IDE.Types.Shake           (fromKeyType)
 import           GHC.Conc                              (getNumProcessors)
 import           GHC.IO.Encoding                       (setLocaleEncoding)
 import           GHC.IO.Handle                         (hDuplicate)
@@ -283,7 +282,7 @@ defaultMain Arguments{..} = flip withHeapStats fun =<< argsLogger
                 -- `unsafeGlobalDynFlags` even before the project is configured
                 _mlibdir <-
                     setInitialDynFlags logger dir argsSessionLoadingOptions
-                        `catchAny` (\e -> (logDebug logger $ T.pack $ "setInitialDynFlags: " ++ displayException e) >> pure Nothing)
+                        `catchAny` (\e -> logDebug logger (T.pack $ "setInitialDynFlags: " ++ displayException e) >> pure Nothing)
 
 
                 sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions dir

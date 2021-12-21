@@ -28,8 +28,7 @@ mkContext cfg locals tcg hscenv eps ev = fix $ \ctx ->
     , ctxModuleFuncs
         = fmap (second (coerce $ normalizeType ctx) . splitId)
         . mappend (locallyDefinedMethods tcg)
-        . (getFunBindId =<<)
-        . fmap unLoc
+        . (getFunBindId . unLoc =<<)
         . bagToList
         $ tcg_binds tcg
     , ctxConfig = cfg
@@ -102,5 +101,5 @@ hasClassInstance predty = do
       let (con, apps) = tcSplitTyConApp predty
       case tyConClass_maybe con of
         Nothing -> pure False
-        Just cls -> fmap isJust $ getInstance cls apps
+        Just cls -> isJust <$> getInstance cls apps
 

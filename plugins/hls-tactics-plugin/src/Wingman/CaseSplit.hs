@@ -12,6 +12,7 @@ import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
 import           GHC.Exts (IsString (fromString))
 import           GHC.SourceGen (funBindsWithFixity, match, wildP)
+import           Safe (atNote)
 import           Wingman.GHC
 import           Wingman.Types
 
@@ -105,5 +106,5 @@ splitToDecl fixity name ams = do
 iterateSplit :: AgdaMatch -> [AgdaMatch]
 iterateSplit am =
   let iterated = iterate (agdaSplit =<<) $ pure am
-   in fmap wildify . head . drop 5 $ iterated
+   in fmap wildify . (\xs -> atNote "Wingman.CaseSplit.iterateSplit" xs 5) $ iterated
 

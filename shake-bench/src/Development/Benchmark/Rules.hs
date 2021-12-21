@@ -336,15 +336,16 @@ benchRules build MkBenchRules{..} = do
 
         -- extend csv output with allocation data
         csvContents <- liftIO $ lines <$> readFile outcsv
-        let header = head csvContents
-            results = tail csvContents
-            header' = header <> ", maxResidency, allocatedBytes"
-        results' <- forM results $ \row -> do
-            (maxResidency, allocations) <- liftIO
-                    (parseMaxResidencyAndAllocations <$> readFile outGc)
-            return $ printf "%s, %s, %s" row (showMB maxResidency) (showMB allocations)
-        let csvContents' = header' : results'
-        writeFileLines outcsv csvContents'
+        case csvContents of
+          [] -> error $ "empty csv file : " <> outcsv
+          (header:results) -> do
+            let header' = header <> ", maxResidency, allocatedBytes"
+            results' <- forM results $ \row -> do
+                (maxResidency, allocations) <- liftIO
+                        (parseMaxResidencyAndAllocations <$> readFile outGc)
+                return $ printf "%s, %s, %s" row (showMB maxResidency) (showMB allocations)
+            let csvContents' = header' : results'
+            writeFileLines outcsv csvContents'
     where
         showMB :: Int -> String
         showMB x = show (x `div` 2^(20::Int)) <> "MB"

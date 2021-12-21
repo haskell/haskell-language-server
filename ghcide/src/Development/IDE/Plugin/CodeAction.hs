@@ -169,7 +169,7 @@ findSigOfBind range bind =
 
     findSigOfGRHSs :: GRHSs p (LHsExpr p) -> Maybe (Sig p)
     findSigOfGRHSs grhs = do
-        if _start range `isInsideSrcSpan` (getLoc $ grhssLocalBinds grhs)
+        if _start range `isInsideSrcSpan` getLoc (grhssLocalBinds grhs)
         then findSigOfBinds range (unLoc (grhssLocalBinds grhs)) -- where clause
         else do
           grhs <- findDeclContainingLoc (_start range) (grhssGRHSs grhs)
@@ -222,12 +222,12 @@ findDeclContainingLoc loc = find (\(L l _) -> loc `isInsideSrcSpan` l)
 --  imported from ‘Data.Text’ at B.hs:7:1-16
 suggestHideShadow :: ParsedSource -> T.Text -> Maybe TcModuleResult -> Maybe HieAstResult -> Diagnostic -> [(T.Text, [Either TextEdit Rewrite])]
 suggestHideShadow ps@(L _ HsModule {hsmodImports}) fileContents mTcM mHar Diagnostic {_message, _range}
-  | Just [identifier, modName, s] <-
+  | Just (identifier:|[modName, s]) <-
       matchRegexUnifySpaces
         _message
         "This binding for ‘([^`]+)’ shadows the existing binding imported from ‘([^`]+)’ at ([^ ]*)" =
     suggests identifier modName s
-  | Just [identifier] <-
+  | Just (identifier:|[]) <-
       matchRegexUnifySpaces
         _message
         "This binding for ‘([^`]+)’ shadows the existing bindings",
@@ -289,7 +289,7 @@ isUnusedImportedId
 suggestRemoveRedundantImport :: ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
 suggestRemoveRedundantImport ParsedModule{pm_parsed_source = L _  HsModule{hsmodImports}} contents Diagnostic{_range=_range,..}
 --     The qualified import of ‘many’ from module ‘Control.Applicative’ is redundant
-    | Just [_, bindings] <- matchRegexUnifySpaces _message "The( qualified)? import of ‘([^’]*)’ from module [^ ]* is redundant"
+    | Just (_:|[bindings]) <- matchRegexUnifySpaces _message "The( qualified)? import of ‘([^’]*)’ from module [^ ]* is redundant"
     , Just (L _ impDecl) <- find (\(L l _) -> _start _range `isInsideSrcSpan` l && _end _range `isInsideSrcSpan` l ) hsmodImports
     , Just c <- contents
     , ranges <- map (rangesForBindingImport impDecl . T.unpack) (T.splitOn ", " bindings)
@@ -411,7 +411,7 @@ suggestDeleteUnusedBinding
   contents
   Diagnostic{_range=_range,..}
 -- Foo.hs:4:1: warning: [-Wunused-binds] Defined but not used: ‘f’
-    | Just [name] <- matchRegexUnifySpaces _message ".*Defined but not used: ‘([^ ]+)’"
+    | Just (name:|[]) <- matchRegexUnifySpaces _message ".*Defined but not used: ‘([^ ]+)’"
     , Just indexedContent <- indexedByPosition . T.unpack <$> contents
       = let edits = flip TextEdit "" <$> relatedRanges indexedContent (T.unpack name)
         in ([("Delete ‘" <> name <> "’", edits) | not (null edits)])
@@ -530,7 +530,7 @@ suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModul
 -- Foo.hs:5:1: warning: [-Wunused-top-binds] Defined but not used: type constructor or class ‘F’
 -- Foo.hs:6:1: warning: [-Wunused-top-binds] Defined but not used: data constructor ‘Bar’
   | Just source <- srcOpt
-  , Just [name] <- matchRegexUnifySpaces _message ".*Defined but not used: ‘([^ ]+)’"
+  , Just (name :|[]) <- matchRegexUnifySpaces _message ".*Defined but not used: ‘([^ ]+)’"
                    <|> matchRegexUnifySpaces _message ".*Defined but not used: type constructor or class ‘([^ ]+)’"
                    <|> matchRegexUnifySpaces _message ".*Defined but not used: data constructor ‘([^ ]+)’"
   , Just (exportType, _) <- find (matchWithDiagnostic _range . snd)
@@ -560,9 +560,9 @@ suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModul
     opLetter = ":!#$%&*+./<=>?@\\^|-~"
 
     parenthesizeIfNeeds :: Bool -> T.Text -> T.Text
-    parenthesizeIfNeeds needsTypeKeyword x
-      | T.head x `elem` opLetter = (if needsTypeKeyword then "type " else "") <> "(" <> x <>")"
-      | otherwise = x
+    parenthesizeIfNeeds needsTypeKeyword x = case T.uncons x of
+      Just (c,_) | c `elem` opLetter -> (if needsTypeKeyword then "type (" else "(") <> x <>")"
+      _ -> x
 
     matchWithDiagnostic :: Range -> Located (IdP GhcPs) -> Bool
     matchWithDiagnostic Range{_start=l,_end=r} x =
@@ -615,12 +615,12 @@ suggestAddTypeAnnotationToSatisfyContraints sourceOpt Diagnostic{_range=_range,.
 --       In the expression: seq "test" seq "test" (traceShow "test")
 --       In an equation for ‘f’:
 --          f = seq "test" seq "test" (traceShow "test")
-    | Just [ty, lit] <- matchRegexUnifySpaces _message (pat False False True False)
+    | Just (ty :| [lit]) <- matchRegexUnifySpaces _message (pat False False True False)
                         <|> matchRegexUnifySpaces _message (pat False False False True)
                         <|> matchRegexUnifySpaces _message (pat False False False False)
             = codeEdit ty lit (makeAnnotatedLit ty lit)
     | Just source <- sourceOpt
-    , Just [ty, lit] <- matchRegexUnifySpaces _message (pat True True False False)
+    , Just (ty :| [lit]) <- matchRegexUnifySpaces _message (pat True True False False)
             = let lit' = makeAnnotatedLit ty lit;
                   tir = textInRange _range source
               in codeEdit ty lit (T.replace lit lit' tir)
@@ -663,9 +663,9 @@ suggestNewDefinition :: IdeOptions -> ParsedModule -> Maybe T.Text -> Diagnostic
 suggestNewDefinition ideOptions parsedModule contents Diagnostic{_message, _range}
 --     * Variable not in scope:
 --         suggestAcion :: Maybe T.Text -> Range -> Range
-    | Just [name, typ] <- matchRegexUnifySpaces message "Variable not in scope: ([^ ]+) :: ([^*•]+)"
+    | Just (name :| [typ]) <- matchRegexUnifySpaces message "Variable not in scope: ([^ ]+) :: ([^*•]+)"
     = newDefinitionAction ideOptions parsedModule _range name typ
-    | Just [name, typ] <- matchRegexUnifySpaces message "Found hole: _([^ ]+) :: ([^*•]+) Or perhaps"
+    | Just (name :| [typ]) <- matchRegexUnifySpaces message "Found hole: _([^ ]+) :: ([^*•]+) Or perhaps"
     , [(label, newDefinitionEdits)] <- newDefinitionAction ideOptions parsedModule _range name typ
     = [(label, mkRenameEdit contents _range name : newDefinitionEdits)]
     | otherwise = []
@@ -706,9 +706,10 @@ suggestModuleTypo Diagnostic{_range=_range,..}
 --     Could not find module ‘Data.Cha’
 --     Perhaps you meant Data.Char (from base-4.12.0.0)
     | "Could not find module" `T.isInfixOf` _message
-    , "Perhaps you meant"     `T.isInfixOf` _message = let
-      findSuggestedModules = map (head . T.words) . drop 2 . T.lines
-      proposeModule mod = ("replace with " <> mod, TextEdit _range mod)
+    , "Perhaps you meant"     `T.isInfixOf` _message =
+      -- TODO findSuggestedModules never extracts module name - fix the parsing logic
+      let findSuggestedModules = map (head . T.words) . drop 2 . T.lines
+          proposeModule mod = ("replace with " <> mod, TextEdit _range mod)
       in map proposeModule $ nubOrd $ findSuggestedModules _message
     | otherwise = []
 
@@ -721,11 +722,13 @@ suggestFillHole Diagnostic{_range=_range,..}
         ++ map (proposeHoleFit holeName True isInfixHole) refFits
     | otherwise = []
     where
-      extractHoleName = fmap head . flip matchRegexUnifySpaces "Found hole: ([^ ]*)"
+      extractHoleName msg = regexSingleMatch msg "Found hole: ([^ ]*)"
       addBackticks text = "`" <> text <> "`"
       addParens text = "(" <> text <> ")"
       proposeHoleFit holeName parenthise isInfixHole name =
-        let isInfixOperator = T.head name == '('
+        let isInfixOperator = case T.uncons name of
+                Just ('(',_) -> True
+                _ -> False
             name' = getOperatorNotation isInfixHole isInfixOperator name in
           ( "replace " <> holeName <> " with " <> name
           , TextEdit _range (if parenthise then addParens name' else name')
@@ -796,7 +799,7 @@ indentation = T.length . T.takeWhile isSpace
 
 suggestExtendImport :: ExportsMap -> ParsedSource -> Diagnostic -> [(T.Text, CodeActionKind, Rewrite)]
 suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_range,..}
-    | Just [binding, mod, srcspan] <-
+    | Just (binding:|[mod, srcspan]) <-
       matchRegexUnifySpaces _message
       "Perhaps you want to add ‘([^’]*)’ to the import list in the import of ‘([^’]*)’ *\\((.*)\\).$"
     = suggestions hsmodImports binding mod srcspan
@@ -829,8 +832,7 @@ suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_
           -- let ident with parent be in front of the one without.
           , sortedMatch <- sortBy (\ident1 ident2 -> parent ident2 `compare` parent ident1) (Set.toList match)
           , idents <- filter (\ident -> moduleNameText ident == mod && (canUseDatacon || not (isDatacon ident))) sortedMatch
-          , (not . null) idents -- Ensure fallback while `idents` is empty
-          , ident <- head idents
+          , (ident:_) <- idents -- Ensure fallback while `idents` is empty
           = Just ident
 
             -- fallback to using GHC suggestion even though it is not always correct
@@ -859,6 +861,8 @@ targetImports :: ModuleTarget -> [LImportDecl GhcPs]
 targetImports (ExistingImp ne)     = NE.toList ne
 targetImports (ImplicitPrelude xs) = xs
 
+-- >>> oneAndOthers [1,2,3]
+-- [(1,[2,3]),(2,[1,3]),(3,[1,2])]
 oneAndOthers :: [a] -> [(a, [a])]
 oneAndOthers = go
     where
@@ -877,7 +881,7 @@ suggestImportDisambiguation ::
     Diagnostic ->
     [(T.Text, [Either TextEdit Rewrite])]
 suggestImportDisambiguation df (Just txt) ps@(L _ HsModule {hsmodImports}) fileContents diag@Diagnostic {..}
-    | Just [ambiguous] <-
+    | Just (ambiguous:|[]) <-
         matchRegexUnifySpaces
             _message
             "Ambiguous occurrence ‘([^’]+)’"
@@ -906,7 +910,7 @@ suggestImportDisambiguation df (Just txt) ps@(L _ HsModule {hsmodImports}) fileC
         parensed =
             "(" `T.isPrefixOf` T.strip (textInRange _range txt)
         -- > removeAllDuplicates [1, 1, 2, 3, 2] = [3]
-        removeAllDuplicates = map head . filter ((==1) <$> length) . group . sort
+        removeAllDuplicates = mapMaybe (\case [x] -> Just x; _ -> Nothing) . group . sort
         hasDuplicate xs = length xs /= length (S.fromList xs)
         suggestions symbol mods local
           | hasDuplicate mods = case mapM toModuleTarget (removeAllDuplicates mods) of
@@ -945,9 +949,11 @@ suggestImportDisambiguation df (Just txt) ps@(L _ HsModule {hsmodImports}) fileC
                     ]
                 ++ [HideOthers restImports | not (null restImports)]
             ] ++ [ ( renderUniquify mode T.empty symbol True
-              , disambiguateSymbol ps fileContents diag symbol mode
-              ) | local, not (null targetsWithRestImports)
-                , let mode = HideOthers (uncurry (:) (head targetsWithRestImports))
+                   , disambiguateSymbol ps fileContents diag symbol mode
+                   )
+                 | local
+                 , not (null targetsWithRestImports)
+                 , let mode = HideOthers (uncurry (:) (head targetsWithRestImports))
             ]
         renderUniquify HideOthers {} modName symbol local =
             "Use " <> (if local then "local definition" else modName) <> " for " <> symbol <> ", hiding other imports"
@@ -1021,7 +1027,7 @@ suggestFixConstructorImport Diagnostic{_range=_range,..}
     -- import Data.Aeson.Types( Result( Success ) )
     -- or
     -- import Data.Aeson.Types( Result(..) ) (lsp-ui)
-  | Just [constructor, typ] <-
+  | Just (constructor:|[typ]) <-
     matchRegexUnifySpaces _message
     "‘([^’]*)’ is a data constructor of ‘([^’]*)’ To import it use"
   = let fixedImport = typ <> "(" <> constructor <> ")"
@@ -1043,7 +1049,7 @@ suggestConstraint df parsedModule diag@Diagnostic {..}
             regexImplicitParams = "Could not deduce: (\\?.+) arising from a use of"
             match = matchRegexUnifySpaces t regex
             matchImplicitParams = matchRegexUnifySpaces t regexImplicitParams
-        in match <|> matchImplicitParams <&> last
+        in match <|> matchImplicitParams <&> NE.last
 
 -- | Suggests a constraint for an instance declaration for which a constraint is missing.
 suggestInstanceConstraint :: DynFlags -> ParsedSource -> Diagnostic -> T.Text -> [(T.Text, Rewrite)]
@@ -1060,7 +1066,7 @@ suggestInstanceConstraint df (L _ HsModule {hsmodDecls}) Diagnostic {..} missing
         -- • In the expression: x == y
         --   In an equation for ‘==’: (Wrap x) == (Wrap y) = x == y
         --   In the instance declaration for ‘Eq (Wrap a)’
-        | Just [instanceDeclaration] <- matchRegexUnifySpaces _message "In the instance declaration for ‘([^`]*)’"
+        | Just (instanceDeclaration:|[]) <- matchRegexUnifySpaces _message "In the instance declaration for ‘([^`]*)’"
         , Just instHead <- findInstanceHead df (T.unpack instanceDeclaration) hsmodDecls
         = Just instHead
         -- Suggests a constraint for an instance declaration with one or more existing constraints.
@@ -1072,7 +1078,7 @@ suggestInstanceConstraint df (L _ HsModule {hsmodDecls}) Diagnostic {..} missing
         --   In the expression: x == y && x' == y'
         --   In an equation for ‘==’:
         --       (Pair x x') == (Pair y y') = x == y && x' == y'
-        | Just [instanceLineStr, constraintFirstCharStr]
+        | Just (instanceLineStr :| [constraintFirstCharStr])
             <- matchRegexUnifySpaces _message "bound by the instance declaration at .+:([0-9]+):([0-9]+)"
         , Just (L _ (InstD _ (ClsInstD _ ClsInstDecl {cid_poly_ty = HsIB{hsib_body}})))
             <- findDeclContainingLoc (Position (readPositionNumber instanceLineStr) (readPositionNumber constraintFirstCharStr)) hsmodDecls
@@ -1092,7 +1098,7 @@ suggestImplicitParameter ::
   Diagnostic ->
   [(T.Text, Rewrite)]
 suggestImplicitParameter (L _ HsModule {hsmodDecls}) Diagnostic {_message, _range}
-  | Just [implicitT] <- matchRegexUnifySpaces _message "Unbound implicit parameter \\(([^:]+::.+)\\) arising",
+  | Just (implicitT:|[]) <- matchRegexUnifySpaces _message "Unbound implicit parameter \\(([^:]+::.+)\\) arising",
     Just (L _ (ValD _ FunBind {fun_id = L _ funId})) <- findDeclContainingLoc (_start _range) hsmodDecls,
     Just (TypeSig _ _ HsWC {hswc_body = HsIB {hsib_body}}) <- findSigOfDecl (== funId) hsmodDecls
     =
@@ -1101,7 +1107,7 @@ suggestImplicitParameter (L _ HsModule {hsmodDecls}) Diagnostic {_message, _rang
   | otherwise = []
 
 findTypeSignatureName :: T.Text -> Maybe T.Text
-findTypeSignatureName t = matchRegexUnifySpaces t "([^ ]+) :: " <&> head
+findTypeSignatureName t = regexSingleMatch t "([^ ]+) :: "
 
 -- | Suggests a constraint for a type signature with any number of existing constraints.
 suggestFunctionConstraint :: DynFlags -> ParsedSource -> Diagnostic -> T.Text -> [(T.Text, Rewrite)]
@@ -1173,12 +1179,9 @@ removeRedundantConstraints df (L _ HsModule {hsmodDecls}) Diagnostic{..}
            else constraints
 
       findRedundantConstraints :: T.Text -> Maybe [T.Text]
-      findRedundantConstraints t = t
-        & T.lines
-        & head
-        & T.strip
-        & (`matchRegexUnifySpaces` "Redundant constraints?: (.+)")
-        <&> (head >>> parseConstraints)
+      findRedundantConstraints t = case T.lines t of
+        (ln:_) -> parseConstraints <$> regexSingleMatch (T.strip ln) "Redundant constraints?: (.+)"
+        []     -> Nothing
 
       formatConstraints :: [T.Text] -> T.Text
       formatConstraints [] = ""
@@ -1197,7 +1200,7 @@ removeRedundantConstraints df (L _ HsModule {hsmodDecls}) Diagnostic{..}
 
 suggestNewOrExtendImportForClassMethod :: ExportsMap -> ParsedSource -> T.Text -> Diagnostic -> [(T.Text, CodeActionKind, [Either TextEdit Rewrite])]
 suggestNewOrExtendImportForClassMethod packageExportsMap ps fileContents Diagnostic {_message}
-  | Just [methodName, className] <-
+  | Just (methodName :|[className]) <-
       matchRegexUnifySpaces
         _message
         "‘([^’]*)’ is not a \\(visible\\) method of class ‘([^’]*)’",
@@ -1250,13 +1253,13 @@ suggestNewImport packageExportsMap ps@(L _ HsModule {..}) fileContents Diagnosti
 suggestNewImport _ _ _ _ = []
 
 constructNewImportSuggestions
-  :: ExportsMap -> (Maybe T.Text, NotInScope) -> Maybe [T.Text] -> [(CodeActionKind, NewImport)]
+  :: ExportsMap -> (Maybe T.Text, NotInScope) -> Maybe (NonEmpty T.Text) -> [(CodeActionKind, NewImport)]
 constructNewImportSuggestions exportsMap (qual, thingMissing) notTheseModules = nubOrdOn snd
   [ suggestion
   | Just name <- [T.stripPrefix (maybe "" (<> ".") qual) $ notInScope thingMissing]
   , identInfo <- maybe [] Set.toList $ Map.lookup name (getExportsMap exportsMap)
   , canUseIdent thingMissing identInfo
-  , moduleNameText identInfo `notElem` fromMaybe [] notTheseModules
+  , moduleNameText identInfo `notElem` maybe [] NE.toList notTheseModules
   , suggestion <- renderNewImport identInfo
   ]
  where
@@ -1390,27 +1393,25 @@ notInScope (NotInScopeThing t)                  = t
 
 extractNotInScopeName :: T.Text -> Maybe NotInScope
 extractNotInScopeName x
-  | Just [name] <- matchRegexUnifySpaces x "Data constructor not in scope: ([^ ]+)"
+  | Just name <- regexSingleMatch x "Data constructor not in scope: ([^ ]+)"
   = Just $ NotInScopeDataConstructor name
-  | Just [name] <- matchRegexUnifySpaces x "Not in scope: data constructor [^‘]*‘([^’]*)’"
+  | Just name <- regexSingleMatch x "Not in scope: data constructor [^‘]*‘([^’]*)’"
   = Just $ NotInScopeDataConstructor name
-  | Just [name] <- matchRegexUnifySpaces x "ot in scope: type constructor or class [^‘]*‘([^’]*)’"
+  | Just name <- regexSingleMatch x "ot in scope: type constructor or class [^‘]*‘([^’]*)’"
   = Just $ NotInScopeTypeConstructorOrClass name
-  | Just [name] <- matchRegexUnifySpaces x "ot in scope: \\(([^‘ ]+)\\)"
+  | Just name <- regexSingleMatch x "ot in scope: \\(([^‘ ]+)\\)"
   = Just $ NotInScopeThing name
-  | Just [name] <- matchRegexUnifySpaces x "ot in scope: ([^‘ ]+)"
+  | Just name <- regexSingleMatch x "ot in scope: ([^‘ ]+)"
   = Just $ NotInScopeThing name
-  | Just [name] <- matchRegexUnifySpaces x "ot in scope:[^‘]*‘([^’]*)’"
+  | Just name <- regexSingleMatch x "ot in scope:[^‘]*‘([^’]*)’"
   = Just $ NotInScopeThing name
   | otherwise
   = Nothing
 
 extractQualifiedModuleName :: T.Text -> Maybe T.Text
-extractQualifiedModuleName x
-  | Just [m] <- matchRegexUnifySpaces x "module named [^‘]*‘([^’]*)’"
-  = Just m
-  | otherwise
-  = Nothing
+extractQualifiedModuleName x =
+  regexSingleMatch x "module named [^‘]*‘([^’]*)’"
+  
 
 -- | If a module has been imported qualified, and we want to ues the same qualifier for other modules
 -- which haven't been imported, 'extractQualifiedModuleName' won't work. Thus we need extract the qualifier
@@ -1436,13 +1437,10 @@ extractQualifiedModuleName x
 -- Neither ‘Data.Function’,
 --         ‘Data.Functor’ nor ‘Data.Text’ exports ‘putStrLn’.
 extractDoesNotExportModuleName :: T.Text -> Maybe T.Text
-extractDoesNotExportModuleName x
-  | Just [m] <-
-    matchRegexUnifySpaces x "Module ‘([^’]*)’ does not export"
-      <|> matchRegexUnifySpaces x "nor ‘([^’]*)’ exports"
-  = Just m
-  | otherwise
-  = Nothing
+extractDoesNotExportModuleName x =
+       regexSingleMatch x "Module ‘([^’]*)’ does not export"
+   <|> regexSingleMatch x "nor ‘([^’]*)’ exports"
+  
 -------------------------------------------------------------------------------------------------
 
 
@@ -1553,7 +1551,7 @@ rangesForBinding' b (L l (IEThingWith _ thing _  inners labels))
 rangesForBinding' _ _ = []
 
 -- | 'matchRegex' combined with 'unifySpaces'
-matchRegexUnifySpaces :: T.Text -> T.Text -> Maybe [T.Text]
+matchRegexUnifySpaces :: T.Text -> T.Text -> Maybe (NonEmpty T.Text)
 matchRegexUnifySpaces message = matchRegex (unifySpaces message)
 
 -- | 'allMatchRegex' combined with 'unifySpaces'
@@ -1562,9 +1560,9 @@ allMatchRegexUnifySpaces message =
     allMatchRegex (unifySpaces message)
 
 -- | Returns Just (the submatches) for the first capture, or Nothing.
-matchRegex :: T.Text -> T.Text -> Maybe [T.Text]
+matchRegex :: T.Text -> T.Text -> Maybe (NonEmpty T.Text)
 matchRegex message regex = case message =~~ regex of
-    Just (_ :: T.Text, _ :: T.Text, _ :: T.Text, bindings) -> Just bindings
+    Just (_ :: T.Text, _ :: T.Text, _ :: T.Text, bindings) -> NE.nonEmpty bindings
     Nothing                                                -> Nothing
 
 -- | Returns Just (all matches) for the first capture, or Nothing.
@@ -1579,9 +1577,8 @@ unifySpaces    = T.unwords . T.words
 
 -- | Returns the first match if found
 regexSingleMatch :: T.Text -> T.Text -> Maybe T.Text
-regexSingleMatch msg regex = case matchRegexUnifySpaces msg regex of
-    Just (h:_) -> Just h
-    _          -> Nothing
+regexSingleMatch msg regex =
+  NE.head <$> matchRegexUnifySpaces msg regex
 
 -- | Parses tuples like (‘Data.Map’, (app/ModuleB.hs:2:1-18)) and
 -- | return (Data.Map, app/ModuleB.hs:2:1-18)
@@ -1608,8 +1605,8 @@ matchRegExMultipleImports :: T.Text -> Maybe (T.Text, [(T.Text, T.Text)])
 matchRegExMultipleImports message = do
   let pat = T.pack "Perhaps you want to add ‘([^’]*)’ to one of these import lists: *(‘.*\\))$"
   (binding, imports) <- case matchRegexUnifySpaces message pat of
-                            Just [x, xs] -> Just (x, xs)
-                            _            -> Nothing
+                            Just (x:|[xs]) -> Just (x, xs)
+                            _              -> Nothing
   imps <- regExImports imports
   return (binding, imps)
 

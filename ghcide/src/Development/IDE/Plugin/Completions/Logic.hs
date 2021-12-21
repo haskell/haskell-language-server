@@ -626,10 +626,10 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
   if
     -- TODO: handle multiline imports
     | "import " `T.isPrefixOf` fullLine
-      && (List.length (words (T.unpack fullLine)) >= 2)
-      && "(" `isInfixOf` T.unpack fullLine
+      && List.length (T.words fullLine) >= 2
+      && T.any (=='(') fullLine
     -> do
-      let moduleName = T.pack $ words (T.unpack fullLine) !! 1
+      let moduleName = T.words fullLine !! 1
           funcs = HM.lookupDefault HashSet.empty moduleName moduleExportsMap
           funs = map (show . name) $ HashSet.toList funcs
       return $ filterModuleExports moduleName $ map T.pack funs

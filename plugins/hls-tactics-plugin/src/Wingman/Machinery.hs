@@ -1,4 +1,3 @@
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections   #-}
 {-# LANGUAGE RankNTypes #-}
 
@@ -18,7 +17,7 @@ import           Data.Generics (everything, gcount, mkQ)
 import           Data.Generics.Product (field')
 import           Data.List (sortBy)
 import qualified Data.Map as M
-import           Data.Maybe (mapMaybe, isJust)
+import           Data.Maybe (mapMaybe, isNothing)
 import           Data.Monoid (getSum)
 import           Data.Ord (Down (..), comparing)
 import qualified Data.Set as S
@@ -29,6 +28,7 @@ import           Refinery.Future
 import           Refinery.ProofState
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
+import           Safe (headNote)
 import           System.Timeout (timeout)
 import           Wingman.Context (getInstance)
 import           Wingman.GHC (tryUnifyUnivarsButNotSkolems, updateSubst, tacticsGetDataCons, freshTyvars)
@@ -69,14 +69,14 @@ newSubgoal j = do
 
 
 tacticToRule :: Judgement -> TacticsM () -> Rule
-tacticToRule jdg (TacticT tt) = RuleT $ flip execStateT jdg tt >>= flip Subgoal Axiom
+tacticToRule jdg (TacticT tt) = RuleT $ execStateT tt jdg >>= flip Subgoal Axiom
 
 
 consumeChan :: OutChan (Maybe a) -> IO [a]
 consumeChan chan = do
   tryReadChan chan >>= tryRead >>= \case
     Nothing -> pure []
-    Just (Just a) -> (:) <$> pure a <*> consumeChan chan
+    Just (Just a) -> (a:) <$> consumeChan chan
     Just Nothing -> pure []
 
 
@@ -107,7 +107,7 @@ runTactic duration ctx jdg t = do
     (in_proofs, out_proofs) <- newChan
     (in_errs, out_errs) <- newChan
     timed_out <-
-      fmap (not. isJust) $ timeout duration $ consume stream $ \case
+      fmap isNothing $ timeout duration $ consume stream $ \case
         Left err -> writeChan in_errs $ Just err
         Right proof -> writeChan in_proofs $ Just proof
     writeChan in_proofs Nothing
@@ -128,7 +128,7 @@ runTactic duration ctx jdg t = do
             , rtr_ctx = ctx
             , rtr_timed_out = timed_out
             }
-      _ -> fmap Left $ consumeChan out_errs
+      _ -> Left <$> consumeChan out_errs
 
 
 tracePrim :: String -> Trace
@@ -342,7 +342,7 @@ lookupNameInContext name = do
 getDefiningType
     :: TacticsM CType
 getDefiningType = do
-  calling_fun_name <- fst . head <$> asks ctxDefiningFuncs
+  calling_fun_name <- asks (fst . headNote "Wingman.Machinery.getDefiningType" . ctxDefiningFuncs)
   maybe
     (failure $ NotInScope calling_fun_name)
     pure
@@ -365,13 +365,11 @@ getTyThing
 getTyThing occ = do
   ctx <- ask
   case lookupOccEnv (ctx_occEnv ctx) occ of
-    Just (elt : _) -> do
-      mvar <- lift
+    Just (elt : _) -> lift
             $ ExtractM
             $ lift
             $ lookupName (ctx_hscEnv ctx) (ctx_module ctx)
             $ gre_name elt
-      pure mvar
     _ -> pure Nothing
 
 
@@ -409,7 +407,7 @@ getCurrentDefinitions :: TacticsM [(OccName, CType)]
 getCurrentDefinitions = do
   ctx_funcs <- asks ctxDefiningFuncs
   for ctx_funcs $ \res@(occ, _) ->
-    pure . maybe res (occ,) =<< lookupNameInContext occ
+    maybe res (occ,) <$> lookupNameInContext occ
 
 
 ------------------------------------------------------------------------------

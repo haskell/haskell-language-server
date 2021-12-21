@@ -14,6 +14,7 @@ import           Floskell
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Types
+import Data.Foldable (find)
 
 -- ---------------------------------------------------------------------
 
@@ -49,7 +50,9 @@ findConfigOrDefault file = do
   case mbConf of
     Just confFile -> readAppConfig confFile
     Nothing ->
-      let gibiansky = head (filter (\s -> styleName s == "gibiansky") styles)
+      let gibiansky = case find (\s -> styleName s == "gibiansky") styles of
+            Just gibStyle -> gibStyle
+            Nothing -> error "Ide.Plugin.Floskell.findConfigOrDefault: Style with name 'gibiansky' not found"
       in pure $ defaultAppConfig { appStyle = gibiansky }
 
 -- ---------------------------------------------------------------------

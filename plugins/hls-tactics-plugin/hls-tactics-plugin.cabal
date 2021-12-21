@@ -94,6 +94,7 @@ library
     , prettyprinter
     , refinery              ^>=0.4
     , retrie                >=0.1.1.0
+    , safe
     , syb
     , unagi-chan
     , text

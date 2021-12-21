@@ -135,7 +135,8 @@ packageTests = testGroup "add package suggestions" [
             -- ignore the first empty hlint diagnostic publish
             [_,_:diag:_] <- count 2 $ waitForDiagnosticsFrom doc
 
-            let prefixes = [ "Could not load module `Codec.Compression.GZip'" -- Windows && GHC >= 8.6
+            let prefixes =
+                        [ "Could not load module `Codec.Compression.GZip'" -- Windows && GHC >= 8.6
                         , "Could not find module `Codec.Compression.GZip'" -- Windows
                         , "Could not load module ‘Codec.Compression.GZip’" -- GHC >= 8.6
                         , "Could not find module ‘Codec.Compression.GZip’"

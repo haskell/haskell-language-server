@@ -40,6 +40,7 @@ import           Language.Haskell.GHC.ExactPrint
 import           Language.Haskell.GHC.ExactPrint.Types (DeltaPos (DP),
                                                         KeywordId (G), mkAnnKey)
 import           Language.LSP.Types
+import           Safe                                  (headNote)
 
 ------------------------------------------------------------------------------
 
@@ -321,7 +322,7 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
       let childRdr = L srcChild $ mkRdrUnqual $ mkVarOcc child
           isParentOperator = hasParen parent
       when hasSibling $
-        addTrailingCommaT (head pre)
+        addTrailingCommaT (headNote "Development.IDE.Plugin.CodeAction.ExactPrint.extendImportViaParent" pre)
       let parentLIE = L srcParent $ (if isParentOperator then IEType else IEName) parentRdr
           childLIE = L srcChild $ IEName childRdr
           x :: LIE GhcPs = L l'' $ IEThingWith noExtField parentLIE NoIEWildcard [childLIE] []
@@ -396,9 +397,9 @@ extendHiding symbol (L l idecls) mlies df = do
   if hasSibling
     then when hasSibling $ do
       addTrailingCommaT x
-      addSimpleAnnT (head lies) (DP (0, 1)) []
+      addSimpleAnnT (headNote "Development.IDE.Plugin.CodeAction.ExactPrint.extendHiding1" lies) (DP (0, 1)) []
       unless (null $ tail lies) $
-        addTrailingCommaT (head lies) -- Why we need this?
+        addTrailingCommaT (headNote "Development.IDE.Plugin.CodeAction.ExactPrint.extendHiding2" lies) -- Why we need this?
     else forM_ mlies $ \lies0 -> do
       transferAnn lies0 singleHide id
   return $ L l idecls{ideclHiding = Just (True, L l' $ x : lies)}

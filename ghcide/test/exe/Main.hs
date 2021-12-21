@@ -4067,7 +4067,7 @@ cppTests =
         -- The error locations differ depending on which C-preprocessor is used.
         -- Some give the column number and others don't (hence -1). Assert either
         -- of them.
-        (run $ expectError content (2, -1))
+        run (expectError content (2, -1))
           `catch` ( \e -> do
                       let _ = e :: HUnitFailure
                       run $ expectError content (2, 1)
@@ -4886,7 +4886,9 @@ projectCompletionTests =
               "import ALocal"
             ]
         compls <- getCompletions doc (Position 1 13)
-        let item = head $ filter ((== "ALocalModule") . (^. Lens.label)) compls
+        item <- case find (\c -> c ^. Lens.label == "ALocalModule") compls of
+            Nothing -> liftIO . assertFail $ "No completion with label ALocalModule found in : " <> show compls
+            Just c -> pure c
         liftIO $ do
           item ^. Lens.label @?= "ALocalModule",
       testSession' "auto complete functions from qualified imports without alias" $ \dir-> do
@@ -5912,7 +5914,7 @@ expectSameLocations actual expected = do
                                    , location ^. L.range . L.start . L.character))
             $ Set.fromList actual
     expected' <- Set.fromList <$>
-        (forM expected $ \(file, l, c) -> do
+        forM expected (\(file, l, c) -> do
                               fp <- canonicalizePath file
                               return (filePathToUri fp, l, c))
     actual' @?= expected'
@@ -6054,8 +6056,7 @@ findCodeActions' op errMsg doc range expectedTitles = do
             ++ show expectedTitles
   liftIO $ case matches of
     Nothing -> assertFailure msg
-    Just _  -> pure ()
-  return (fromJust matches)
+    Just m  -> pure m
 
 findCodeAction :: TextDocumentIdentifier -> Range -> T.Text -> Session CodeAction
 findCodeAction doc range t = head <$> findCodeActions doc range [t]

@@ -168,6 +168,7 @@ import qualified Ide.PluginUtils                        as HLS
 import           Ide.Types                              (PluginId)
 import qualified "list-t" ListT
 import qualified StmContainers.Map                      as STM
+import           Safe                                   (headNote)
 
 -- | We need to serialize writes to the database, so we send any function that
 -- needs to write to the database over the channel, where it will be picked up by
@@ -853,18 +854,18 @@ defineNoDiagnostics op = defineEarlyCutoff $ RuleNoDiagnostics $ \k v -> (Nothin
 -- | Request a Rule result if available
 use :: IdeRule k v
     => k -> NormalizedFilePath -> Action (Maybe v)
-use key file = head <$> uses key [file]
+use key file = headNote "Development.IDE.Core.Shake.use" <$> uses key [file]
 
 -- | Request a Rule result, it not available return the last computed result, if any, which may be stale
 useWithStale :: IdeRule k v
     => k -> NormalizedFilePath -> Action (Maybe (v, PositionMapping))
-useWithStale key file = head <$> usesWithStale key [file]
+useWithStale key file = headNote "Development.IDE.Core.Shake.useWithStale" <$> usesWithStale key [file]
 
 -- | Request a Rule result, it not available return the last computed result which may be stale.
 --   Errors out if none available.
 useWithStale_ :: IdeRule k v
     => k -> NormalizedFilePath -> Action (v, PositionMapping)
-useWithStale_ key file = head <$> usesWithStale_ key [file]
+useWithStale_ key file = headNote "Development.IDE.Core.Shake.useWithStale_" <$> usesWithStale_ key [file]
 
 -- | Plural version of 'useWithStale_'
 usesWithStale_ :: IdeRule k v => k -> [NormalizedFilePath] -> Action [(v, PositionMapping)]
@@ -932,7 +933,7 @@ useNoFile :: IdeRule k v => k -> Action (Maybe v)
 useNoFile key = use key emptyFilePath
 
 use_ :: IdeRule k v => k -> NormalizedFilePath -> Action v
-use_ key file = head <$> uses_ key [file]
+use_ key file = headNote "Development.IDE.Core.Shake.use_" <$> uses_ key [file]
 
 useNoFile_ :: IdeRule k v => k -> Action v
 useNoFile_ key = use_ key emptyFilePath
