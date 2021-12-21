@@ -172,7 +172,7 @@ toKey :: String -> A.Key
 toKey = A.Key.fromString
 #else
 toKey :: String -> T.Text
-toKey = pack
+toKey = T.pack
 #endif
 
 emptyProperties :: Properties '[]

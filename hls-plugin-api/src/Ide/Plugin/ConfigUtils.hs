@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE GADTs             #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
@@ -10,7 +11,11 @@ import qualified Data.Aeson.Types      as A
 import           Data.Default          (def)
 import qualified Data.Dependent.Map    as DMap
 import qualified Data.Dependent.Sum    as DSum
-import qualified Data.HashMap.Lazy     as HMap
+#if MIN_VERSION_aeson(2,0,0)
+import qualified Data.Aeson.KeyMap     as Map
+#else
+import qualified Data.HasMap.Lazy      as Map
+#endif
 import           Data.List             (nub)
 import           Ide.Plugin.Config
 import           Ide.Plugin.Properties (toDefaultJSON, toVSCodeExtensionSchema)
@@ -26,9 +31,9 @@ import           Language.LSP.Types
 pluginsToDefaultConfig :: IdePlugins a -> A.Value
 pluginsToDefaultConfig IdePlugins {..} =
   A.Object $
-    HMap.adjust
+    Map.alter
       ( \(unsafeValueToObject -> o) ->
-          A.Object $ HMap.insert "plugin" elems o -- inplace the "plugin" section with our 'elems', leaving others unchanged
+          Just $ A.Object $ Map.insert "plugin" elems o -- inplace the "plugin" section with our 'elems', leaving others unchanged
       )
       "haskell"
       (unsafeValueToObject (A.toJSON defaultConfig))
