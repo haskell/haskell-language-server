@@ -91,7 +91,6 @@ import qualified Avail
 import           StringBuffer           (hPutStringBuffer)
 #endif
 
-import           Control.Applicative    ((<|>))
 import qualified Data.Map               as M
 import           DynamicLoading
 import           Plugins                (Plugin (parsedResultAction),
@@ -116,6 +115,7 @@ import           Data.IORef
 
 import qualified Data.Map               as Map
 import           Data.List              (foldl')
+import           Control.Applicative    ((<|>))
 
 #if MIN_VERSION_ghc(9,0,0)
 import qualified Data.Set               as S
