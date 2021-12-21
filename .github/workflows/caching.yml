@@ -42,6 +42,10 @@ on:
     # Reinstitution of the main chache puts it back into FIFO
     #   & so it gets shared across all PRs.
     - cron: "25 2/8 * * *"
+  #  2021-12-21: FIXME: Remove this endry before merge.
+  pull_request:
+    branches:
+      - '**'
 
 env:
   cabalBuild: "v2-build all --enable-tests --enable-benchmarks"
