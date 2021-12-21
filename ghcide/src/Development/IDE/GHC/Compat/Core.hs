@@ -963,7 +963,7 @@ isSubspanOfA :: GHC.LocatedAn la a -> GHC.LocatedAn lb b -> Bool
 isSubspanOfA a b = SrcLoc.isSubspanOf (GHC.getLocA a) (GHC.getLocA b)
 #else
 isSubspanOfA :: Located a -> Located b -> Bool
-isSubspanOfA = isSubspanOf
+isSubspanOfA a b = SrcLoc.isSubspanOf (GHC.getLoc a) (GHC.getLoc b)
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
@@ -981,6 +981,7 @@ locA = id
 #if MIN_VERSION_ghc(9,2,0)
 getLocA = GHC.getLocA
 #else
+getLocA :: HasSrcSpan a => a -> SrcSpan
 getLocA = GHC.getLoc
 #endif
 

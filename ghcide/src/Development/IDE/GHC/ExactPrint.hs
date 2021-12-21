@@ -510,7 +510,7 @@ annotate :: (ASTElement l ast, Outputable l)
 #if MIN_VERSION_ghc(9,2,0)
     => DynFlags -> Bool -> LocatedAn l ast -> TransformT (Either String) (LocatedAn l ast)
 #else
-    => DynFlags -> Bool -> LocatedAn l ast -> TransformT (Either String) (_, LocatedAn l ast)
+    => DynFlags -> Bool -> LocatedAn l ast -> TransformT (Either String) (Anns, LocatedAn l ast)
 #endif
 annotate dflags needs_space ast = do
     uniq <- show <$> uniqueSrcSpanT
@@ -601,5 +601,5 @@ eqSrcSpanA :: SrcAnn la -> SrcAnn b -> Bool
 eqSrcSpanA l r = leftmost_smallest (locA l) (locA r) == EQ
 #else
 eqSrcSpanA :: SrcSpan -> SrcSpan -> Bool
-eqSrcSpan l r = leftmost_smallest l r == EQ
+eqSrcSpanA l r = leftmost_smallest l r == EQ
 #endif

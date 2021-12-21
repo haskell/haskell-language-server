@@ -173,7 +173,7 @@ appendConstraint constraintT = go
         ]
     return $ L lTop $ HsQualTy noExtField context (L l other)
 
-liftParseAST :: ASTElement ast => DynFlags -> String -> TransformT (Either String) (Located ast)
+liftParseAST :: forall ast l. ASTElement l ast => DynFlags -> String -> TransformT (Either String) (Located ast)
 liftParseAST df s = case parseAST df "" s of
   Right (anns, x) -> modifyAnnsT (anns <>) $> x
   Left _          -> lift $ Left $ "No parse: " <> s
