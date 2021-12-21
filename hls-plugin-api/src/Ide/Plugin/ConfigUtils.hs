@@ -12,15 +12,27 @@ import           Data.Default          (def)
 import qualified Data.Dependent.Map    as DMap
 import qualified Data.Dependent.Sum    as DSum
 #if MIN_VERSION_aeson(2,0,0)
+import qualified Data.Aeson.Key        as A.Key
 import qualified Data.Aeson.KeyMap     as Map
 #else
-import qualified Data.HasMap.Lazy      as Map
+import qualified Data.HashMap.Lazy     as Map
 #endif
+import           Data.Functor.Identity
 import           Data.List             (nub)
+import           Data.Maybe            (fromJust)
+import           Data.Text             (Text)
 import           Ide.Plugin.Config
 import           Ide.Plugin.Properties (toDefaultJSON, toVSCodeExtensionSchema)
 import           Ide.Types
 import           Language.LSP.Types
+
+#if MIN_VERSION_aeson(2,0,0)
+toKey :: Text -> A.Key
+toKey = A.Key.fromText
+#else
+toKey :: Text -> Text
+toKey = id
+#endif
 
 -- Attention:
 -- 'diagnosticsOn' will never be added into the default config or the schema,
@@ -30,10 +42,10 @@ import           Language.LSP.Types
 -- | Generates a default 'Config', but remains only effective items
 pluginsToDefaultConfig :: IdePlugins a -> A.Value
 pluginsToDefaultConfig IdePlugins {..} =
-  A.Object $
-    Map.alter
-      ( \(unsafeValueToObject -> o) ->
-          Just $ A.Object $ Map.insert "plugin" elems o -- inplace the "plugin" section with our 'elems', leaving others unchanged
+  A.Object $ runIdentity $
+    Map.alterF
+      ( \(unsafeValueToObject . fromJust -> o) ->
+          Identity $ Just $ A.Object $ Map.insert "plugin" elems o -- inplace the "plugin" section with our 'elems', leaving others unchanged
       )
       "haskell"
       (unsafeValueToObject (A.toJSON defaultConfig))
@@ -57,7 +69,7 @@ pluginsToDefaultConfig IdePlugins {..} =
     -- }
     singlePlugin PluginDescriptor {pluginConfigDescriptor = ConfigDescriptor {..}, ..} =
       let x = genericDefaultConfig <> dedicatedDefaultConfig
-       in [pId A..= A.object x | not $ null x]
+       in [(toKey pId) A..= A.object x | not $ null x]
       where
         (PluginHandlers (DMap.toList -> handlers)) = pluginHandlers
         customConfigToDedicatedDefaultConfig (CustomConfig p) = toDefaultJSON p
@@ -136,4 +148,4 @@ pluginsToVSCodeExtensionSchema IdePlugins {..} = A.object $ mconcat $ singlePlug
               "default" A..= True,
               "description" A..= A.String ("Enables " <> pId <> " " <> desc)
             ]
-        withIdPrefix x = "haskell.plugin." <> pId <> "." <> x
+        withIdPrefix x = toKey $ "haskell.plugin." <> pId <> "." <> x
