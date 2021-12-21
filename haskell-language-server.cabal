@@ -472,7 +472,7 @@ test-suite func-test
   if flag(eval)
     cpp-options: -Deval
 -- formatters
-  if flag(floskell) && (impl(ghc < 9.0.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(floskell) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
     cpp-options: -Dfloskell
   if flag(fourmolu) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
     cpp-options: -Dfourmolu
