@@ -148,9 +148,9 @@ jobs:
 
       - run: cabal update
 
-      - name: "HLint via ./fmt.sh"
-        run: |
-          ./fmt.sh
+      # - name: "HLint via ./fmt.sh"
+      #   run: |
+      #     ./fmt.sh
 
       # repeating builds to workaround segfaults in windows and ghc-8.8.4
       - name: Build
