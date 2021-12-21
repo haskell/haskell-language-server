@@ -4887,7 +4887,7 @@ projectCompletionTests =
             ]
         compls <- getCompletions doc (Position 1 13)
         item <- case find (\c -> c ^. Lens.label == "ALocalModule") compls of
-            Nothing -> liftIO . assertFail $ "No completion with label ALocalModule found in : " <> show compls
+            Nothing -> liftIO . assertFailure $ "No completion with label ALocalModule found in : " <> show compls
             Just c -> pure c
         liftIO $ do
           item ^. Lens.label @?= "ALocalModule",
