@@ -22,6 +22,7 @@ import           Data.Aeson                 (Value (Null), toJSON)
 import           Data.Char                  (isLower)
 import qualified Data.HashMap.Strict        as HashMap
 import           Data.List                  (intercalate, isPrefixOf, minimumBy)
+import qualified Data.List.NonEmpty         as NE
 import           Data.Maybe                 (maybeToList)
 import           Data.Ord                   (comparing)
 import           Data.String                (IsString)
@@ -99,7 +100,7 @@ action state uri =
     let emptyModule = maybe True (T.null . T.strip . virtualFileText) contents
 
     correctNames <- liftIO $ traceAs "correctNames" <$> pathModuleNames state nfp fp
-    let bestName = minimumBy (comparing T.length) correctNames
+    bestName <- minimumBy (comparing T.length) <$> (MaybeT . pure $ NE.nonEmpty correctNames)
 
     statedNameMaybe <- liftIO $ traceAs "statedName" <$> codeModuleName state nfp
     case statedNameMaybe of
