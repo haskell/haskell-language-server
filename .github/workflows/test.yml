@@ -95,10 +95,12 @@ jobs:
       - if: matrix.ghc == '9.0.1'
         name: (GHC 9.0.1) Use modified `cabal.project`
         run: |
+          rm cabal.project
           cp cabal-ghc901.project cabal.project
       - if: matrix.ghc == '9.2.1'
         name: (GHC 9.2.1) Use modified `cabal.project`
         run: |
+          rm cabal.project
           cp cabal-ghc921.project cabal.project
       - if: runner.os == 'Windows' && matrix.ghc == '8.8.4'
         name: (Windows,GHC 8.8) Modify `cabal.project` to workaround segfaults
