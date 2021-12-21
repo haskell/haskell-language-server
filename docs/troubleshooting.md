@@ -21,31 +21,11 @@ In particular, the more you can diagnose the problem, the better.
 
 ## Basic diagnosis steps
 
-### Quick diagnosis checklist
+This section lists a few basic diagnostic steps that are almost always helpful.
 
-1. Is the server binary running at all? (check process monitors etc.) If not, there may be a client or installation problem.
-2. Is the client connecting to the server? (check for indicators in the editor etc.) If not, there may be a client problem.
-3. Is the project being built correctly by HLS? (check for "wrong" compilation errors etc.) If not, there may be a cradle problem.
-4. Is basic functionality working? (check hover documentation etc.) If not, there may be a server problem.
-5. Are there specific files that exhibit problems? If not, there may be a server problem.
-
-### Finding your `haskell-language-server` binary
-
-Several of the diagnostic steps require you to run the actual `haskell-language-server` binary that is installed on your computer.
-
-Where the binary is will depend on how you installed HLS.
-Consult the [installation](./installation.md) page for help.
-
-As usual, if you installed HLS with the wrapper, you will want to run `haskell-language-server-wrapper` instead.
-
-### Getting basic information
-
-Running `haskell-language-server --probe-tools` will produce useful information, such as the version of HLS that you are using.
-Including this in issue reports is helpful.
-
-### Working out where the problem is
-
-The most important thing to figure out is whether you are looking at an issue with the _client_ or the _server_.
+Sometimes these checks may be enough to work out where the problem is.
+If not, refer to the sections below about diagnosing problems with the server and client, respectively.
+That will also require you to figure out is whether you are looking at an issue with the server or the client.
 This can be tricky to work out: if in doubt, open an issue and we'll help you figure it out.
 
 Typical examples of client issues:
@@ -59,6 +39,50 @@ Typical examples of server issues:
 Unclear examples:
 - Hover documentation looks wrong (the client might be rendering it wrong, or the server might be sending the wrong thing)
 - Missing functionality (the client might not support it, or the server might not support it)
+
+### Finding your `haskell-language-server` binary
+
+Several of the diagnostic steps require you to run the actual `haskell-language-server` binary that is installed on your computer.
+
+Where the binary is will depend on how you installed HLS.
+Consult the [installation](./installation.md) page for help.
+
+As usual, if you installed HLS with the wrapper, you will want to run `haskell-language-server-wrapper` instead.
+
+### Getting basic information about your installation
+
+Running `haskell-language-server --probe-tools` will produce useful information, such as the version of HLS that you are using.
+Including this in issue reports is helpful.
+
+### Checking that the server is running
+
+If the server isn't running at all when you are editing a Haskell file in your project, then that suggests that the client is having difficulty launching it.
+Often this means that the client is configured to run the wrong binary, or the correct one is not available in your `PATH`.
+
+The easiest way to check whether the server is running is to use an OS process monitor to see if there is a `haskell-language-server` process running.
+
+### Checking whether the client is connecting to the server
+
+If the server is running, you should see some kind of indicator in your client.
+In some clients (e.g. `coc`) you may need to run a command to query the client's beliefs about the server state.
+If the client doesn't seem to be connected despite the server running, this may indicate a bug in the client or HLS.
+
+### Checking whether the project is being built correctly by HLS
+
+HLS needs to build the project correctly, with the correct flags, and if it does not do so then very little is likely to work.
+A typical symptom of this going wrong is "incorrect" compilation errors being sent to the client.
+
+If this is happening, then it usually indicates a problem in the server's configuration.
+
+### Checking whether basic functionality is working
+
+If everything otherwise seems to be fine, then it is useful to check whether basic functionality is working.
+Hover documentation (at least including type signatures) is usually a good one to try.
+
+### Identifying specific files that cause problems
+
+If possible, identifying specific files that cause problems is helpful.
+If you want to be really helpful, minimising the example can really speed up diagnosis.
 
 ## Diagnosing problems with the server
 
@@ -74,10 +98,14 @@ To get a more verbose log, you can also pass the `--debug` argument to the serve
 
 ### Reproducing failures on the command-line
 
-The `haskell-language-server` binary can be with a specific file as an argument, which will make it try and load that file specifically.
-If you are having trouble loading a file in the editor, then loading it in this way can help make the failure more obvious and reproducible.
+The `haskell-language-server` binary can be run from the command line.
 
-This also provides an easy way to get the logs (with or without `--debug`) if you are having trouble finding them when the server is launched by the client.
+If it is run with a specific file as an argument, it will try and load that file specifically.
+If it is run without a specific file, it will try and load all the files in the project.
+
+If you are having trouble loading one or many files in the editor, then testing it this way can help make the failure more obvious and reproducible.
+
+Running HLS from the command-line directly also provides an easy way to get the logs (with or without `--debug`).
 
 ### Plugin-related issues
 
@@ -128,9 +156,10 @@ The server log will show which cradle is being chosen.
 
 Using an explicit `hie.yaml` to configure the cradle can resolve the problem, see the [configuration page](./configuration.md#configuring-your-project-build).
 
-### Template Haskell
+### Static binaries
 
-**tl;dr** Use a dynamically linked HLS binary.
+Static binaries use the GHC linker for dynamically loading dependencies when typechecking TH code, and this can run into issues when loading shared objects linked against mismatching system libraries, or into GHC linker  bugs (mainly the Mach linker used in Mac OS, but also potentially the ELF linker).
+Dynamically linked binaries (including`ghci`) use the system linker instead of the GHC linker and avoid both issues.
 
 The easiest way to obtain a dynamically linked HLS binary is to build it locally. With `cabal` this can be done as follows:
 
@@ -138,9 +167,7 @@ The easiest way to obtain a dynamically linked HLS binary is to build it locally
 
 With `stack` you need to manually add the ghc option `-dynamic`.
 
-Static binaries use the GHC linker for dynamically loading dependencies when typechecking TH code, and this can run into issues when loading shared objects linked against mismatching system libraries, or into GHC linker  bugs (mainly the Mach linker used in Mac OS, but also potentially the ELF linker). Dynamically linked binaries (including`ghci`) use the system linker instead of the GHC linker and avoid both issues. 
-
-Note: HLS binaries prior to 1.6.0 were statically linking `glibc` which is not a supported configuration and has been replaced by `musl`. 
+Note: HLS binaries prior to 1.6.0 were statically linking `glibc` which is not a supported configuration and has been replaced by `musl`.
 
 ### Preprocessors
 

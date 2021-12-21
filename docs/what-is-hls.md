@@ -5,7 +5,7 @@ A language server talks to a client (typically an editor), which can ask the ser
 The advantage of this system is that clients and servers can interoperate more easily so long as they all speak the LSP protocol.
 In the case of HLS, that means that it can be used with many different editors, since editor support for the LSP protocol is now widespread.
 
-## Language Server Protocol basics
+## Language Server Protocol
 
 ### Servers and clients
 
@@ -20,7 +20,7 @@ Some clients will even install the server binaries for you!
 Common clients include:
 - VSCode (the reference implementation for a LSP client)
 - Emacs, with the `lsp-mode`+`lsp-haskell` or `eglot` packages
-- Vim/neovim, with the `coc.vim` or `LanguageClient-neovim` packages
+- Vim/neovim, with the builtin LSP support or `coc.vim`
 - Kate
 - ... and more every day!
 
@@ -34,7 +34,7 @@ Here are a few pieces of jargon that you may come across in the HLS docs or when
 - *Diagnostic*: Any information about the project that is shown in the editor, including errors, warnings, and hints from tools such as hlint.
 - *Semantic highlighting*: Special syntax highlighting performed by the server.
 
-## The structure of HLS
+## haskell-language-server
 
 ### HLS and its wrapper
 
@@ -50,9 +50,13 @@ Plugins can also be disabled independently to allow users to customize the behav
 
 These plugins all (currently) live in the HLS repository and are developed in tandem with the core HLS functionality.
 
+See the [configuration page](./configuration.md#generic-plugin-configuration) for more on configuring plugins.
+
 ### hie-bios
 
 HLS needs to know how to build your Haskell project: what flags to pass, what packages to provide, etc.
 It gets this information from the build system used by your project (typically `cabal` or `stack`).
 The tool used to do this is called [`hie-bios`](https://github.com/haskell/hie-bios).
 `hie-bios` calls the strategy it uses to get compilation flags (e.g. "ask `cabal`") a "cradle".
+
+See the [configuration page](./configuration.md#configuring-your-project-build) for more on configuring cradles.
