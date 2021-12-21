@@ -1,3 +1,6 @@
+# Build plan for GHC 8.10.6.
+# Like stack-8.10.7.yaml but with an older resolver.
+
 resolver: lts-18.8
 
 packages:
@@ -47,7 +50,7 @@ extra-deps:
   - monad-dijkstra-0.1.1.3@sha256:d2fc098d7c122555e726830a12ae0423ac187f89de9228f32e56e2f6fc2238e1,1900
   - optparse-applicative-0.15.1.0@sha256:29ff6146aabf54d46c4c8788e8d1eadaea27c94f6d360c690c5f6c93dac4b07e,4810
   - refinery-0.4.0.0@sha256:fe3a43add8ff1db5cfffee7e7694c86128b1dfe62c541f26e25a8eadf9585610,1663
-  - retrie-1.0.0.0@sha256:82014773115807f649f60fe4a3246911bbccd063a3c846cf5665e71f237bdd2d,4241
+  - retrie-1.1.0.0
   - stylish-haskell-0.12.2.0@sha256:38f7fd9ca30c9aad34f176dae4564576899e9c197b6b8557b59c5e8c6a622c74,6108
   - stm-containers-1.2@sha256:a887f2e7692b7cf20e0b081e2d66e21076e2bd4b57016ec59c484edfa2d29397,3244
   - stm-hamt-1.2.0.6@sha256:fba86ccb4b45c5706c19b0e1315ba63dcac3b5d71de945ec001ba921fae80061,3972
