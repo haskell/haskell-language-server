@@ -9,10 +9,11 @@ concurrency:
   group: ${{ github.head_ref }}-${{ github.workflow }}
   cancel-in-progress: true
 
-on:
-  pull_request:
-    branches:
-      - '**'
+#  2021-12-21: FIXME: Revert this to enable test build, which now would be with hot cache
+# on:
+#   pull_request:
+#     branches:
+#       - '**'
 
 jobs:
   pre_job:
