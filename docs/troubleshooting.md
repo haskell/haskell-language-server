@@ -128,21 +128,19 @@ The server log will show which cradle is being chosen.
 
 Using an explicit `hie.yaml` to configure the cradle can resolve the problem, see the [configuration page](./configuration.md#configuring-your-project-build).
 
-### Problems with dynamic linking
+### Template Haskell
 
-The prebuilt binaries which we provide are statically linked, which means that they don't work well with projects which use dynamic linking.
-A typical symptom is the presence of errors containing `unknown symbol`, and it is common for users Arch Linux, which ships a dynamically linked version of `ghc`.
+**tl;dr** Use a dynamically linked HLS binary.
 
-The workaround is to use a version of HLS compiled from source with the `ghc` option `-dynamic` enabled. See more details [here](https://github.com/haskell/haskell-language-server/issues/1160#issuecomment-756566273).
-
-### Support for Template Haskell
-
-Template Haskell should work fine in Linux and Windows with the distributed binaries.
-In MacOs a dynamically linked binary of HLS is required, otherwise use of TH can lead to segmentation faults.
-The easiest way to obtain a dynamically linked HLS binary is to build it locally.
-With `cabal` this can be done as follows:
+The easiest way to obtain a dynamically linked HLS binary is to build it locally. With `cabal` this can be done as follows:
 
     cabal update && cabal install haskell-language-server --enable-executable-dynamic
+
+With `stack` you need to manually add the ghc option `-dynamic`.
+
+Static binaries use the GHC linker for dynamically loading dependencies when typechecking TH code, and this can run into issues when loading shared objects linked against mismatching system libraries, or into GHC linker  bugs (mainly the Mach linker used in Mac OS, but also potentially the ELF linker). Dynamically linked binaries (including`ghci`) use the system linker instead of the GHC linker and avoid both issues. 
+
+Note: HLS binaries prior to 1.6.0 were statically linking `glibc` which is not a supported configuration and has been replaced by `musl`. 
 
 ### Preprocessors
 
