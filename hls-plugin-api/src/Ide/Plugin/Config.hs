@@ -37,8 +37,7 @@ data CheckParents
     -- Note that ordering of constructors is meaningful and must be monotonically
     -- increasing in the scenarios where parents are checked
     = NeverCheck
-    | CheckOnClose
-    | CheckOnSaveAndClose
+    | CheckOnSave
     | AlwaysCheck
   deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (FromJSON, ToJSON)
@@ -48,27 +47,17 @@ data CheckParents
 -- will be surprises relating to config options being ignored, initially though.
 data Config =
   Config
-    { checkParents                :: CheckParents
-    , checkProject                :: !Bool
-    , hlintOn                     :: !Bool
-    , diagnosticsOnChange         :: !Bool
-    , diagnosticsDebounceDuration :: !Int
-    , liquidOn                    :: !Bool
-    , formatOnImportOn            :: !Bool
-    , formattingProvider          :: !T.Text
-    , maxCompletions              :: !Int
-    , plugins                     :: !(Map.Map T.Text PluginConfig)
+    { checkParents       :: CheckParents
+    , checkProject       :: !Bool
+    , formattingProvider :: !T.Text
+    , maxCompletions     :: !Int
+    , plugins            :: !(Map.Map T.Text PluginConfig)
     } deriving (Show,Eq)
 
 instance Default Config where
   def = Config
-    { checkParents                = CheckOnSaveAndClose
+    { checkParents                = CheckOnSave
     , checkProject                = True
-    , hlintOn                     = True
-    , diagnosticsOnChange         = True
-    , diagnosticsDebounceDuration = 350000
-    , liquidOn                    = False
-    , formatOnImportOn            = True
     -- , formattingProvider          = "brittany"
     , formattingProvider          = "ormolu"
     -- , formattingProvider          = "floskell"
@@ -88,11 +77,6 @@ parseConfig defValue = A.withObject "Config" $ \v -> do
       Just s -> flip (A.withObject "Config.settings") s $ \o -> Config
         <$> (o .:? "checkParents" <|> v .:? "checkParents") .!= checkParents defValue
         <*> (o .:? "checkProject" <|> v .:? "checkProject") .!= checkProject defValue
-        <*> o .:? "hlintOn"                                 .!= hlintOn defValue
-        <*> o .:? "diagnosticsOnChange"                     .!= diagnosticsOnChange defValue
-        <*> o .:? "diagnosticsDebounceDuration"             .!= diagnosticsDebounceDuration defValue
-        <*> o .:? "liquidOn"                                .!= liquidOn defValue
-        <*> o .:? "formatOnImportOn"                        .!= formatOnImportOn defValue
         <*> o .:? "formattingProvider"                      .!= formattingProvider defValue
         <*> o .:? "maxCompletions"                          .!= maxCompletions defValue
         <*> o .:? "plugin"                                  .!= plugins defValue
@@ -103,11 +87,6 @@ instance A.ToJSON Config where
     where
       r = object [ "checkParents"                .= checkParents
                  , "checkProject"                .= checkProject
-                 , "hlintOn"                     .= hlintOn
-                 , "diagnosticsOnChange"         .= diagnosticsOnChange
-                 , "diagnosticsDebounceDuration" .= diagnosticsDebounceDuration
-                 , "liquidOn"                    .= liquidOn
-                 , "formatOnImportOn"            .= formatOnImportOn
                  , "formattingProvider"          .= formattingProvider
                  , "maxCompletions"              .= maxCompletions
                  , "plugin"                      .= plugins

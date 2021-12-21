@@ -26,11 +26,17 @@ import           Control.Exception.Safe          (IOException, handleAny, try)
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Data.Aeson                      (Value (Null), toJSON)
+import           Data.Either                     (fromRight)
 import           Data.List
 import           Data.Maybe
 import qualified Data.Text                       as T
 import           Data.Version
 import           Development.IDE.Plugin.Test
+import           Development.IDE.Test            (getBuildEdgesCount,
+                                                  getBuildKeysBuilt,
+                                                  getBuildKeysChanged,
+                                                  getBuildKeysVisited,
+                                                  getStoredKeys)
 import           Development.IDE.Test.Diagnostic
 import           Development.Shake               (CmdOption (Cwd, FileStdout),
                                                   cmd_)
@@ -152,21 +158,22 @@ experiments =
       benchWithSetup
         "code actions after cradle edit"
         ( \docs -> do
-            unless (any (isJust . identifierP) docs) $
-                error "None of the example modules is suitable for this experiment"
-            forM_ docs $ \DocumentPositions{..} ->
-                forM_ identifierP $ \p -> changeDoc doc [charEdit p]
+            forM_ docs $ \DocumentPositions{..} -> do
+                forM identifierP $ \p -> do
+                    changeDoc doc [charEdit p]
+                    waitForProgressStart
+            void waitForBuildQueue
         )
         ( \docs -> do
             hieYamlUri <- getDocUri "hie.yaml"
             liftIO $ appendFile (fromJust $ uriToFilePath hieYamlUri) "##\n"
             sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
                 List [ FileEvent hieYamlUri FcChanged ]
-            forM_ docs $ \DocumentPositions{..} -> do
-              changeDoc doc [charEdit stringLiteralP]
-              waitForProgressStart
+            waitForProgressStart
+            waitForProgressStart
+            waitForProgressStart -- the Session logic restarts a second time
             waitForProgressDone
-            not . null . catMaybes <$> forM docs (\DocumentPositions{..} -> do
+            not . all null . catMaybes <$> forM docs (\DocumentPositions{..} -> do
               forM identifierP $ \p ->
                 getCodeActions doc (Range p p))
         ),
@@ -187,7 +194,7 @@ experiments =
             let edit :: TextDocumentContentChangeEvent =TextDocumentContentChangeEvent
                   { _range = Just Range {_start = bottom, _end = bottom}
                   , _rangeLength = Nothing, _text = t}
-                bottom = Position maxBound 0
+                bottom = Position maxBoundUinteger 0
                 t = T.unlines
                     [""
                     ,"holef :: [Int] -> [Int]"
@@ -322,6 +329,11 @@ runBenchmarksFun dir allBenchmarks = do
         , "userTime"
         , "delayedTime"
         , "totalTime"
+        , "buildRulesBuilt"
+        , "buildRulesChanged"
+        , "buildRulesVisited"
+        , "buildRulesTotal"
+        , "buildEdges"
         ]
       rows =
         [ [ name,
@@ -331,7 +343,12 @@ runBenchmarksFun dir allBenchmarks = do
             show runSetup',
             show userWaits,
             show delayedWork,
-            show runExperiment
+            show runExperiment,
+            show rulesBuilt,
+            show rulesChanged,
+            show rulesVisited,
+            show rulesTotal,
+            show edgesTotal
           ]
           | (Bench {name, samples}, BenchRun {..}) <- results,
             let runSetup' = if runSetup < 0.01 then 0 else runSetup
@@ -351,7 +368,12 @@ runBenchmarksFun dir allBenchmarks = do
             showDuration runSetup',
             showDuration userWaits,
             showDuration delayedWork,
-            showDuration runExperiment
+            showDuration runExperiment,
+            show rulesBuilt,
+            show rulesChanged,
+            show rulesVisited,
+            show rulesTotal,
+            show edgesTotal
           ]
           | (Bench {name, samples}, BenchRun {..}) <- results,
             let runSetup' = if runSetup < 0.01 then 0 else runSetup
@@ -397,11 +419,16 @@ data BenchRun = BenchRun
     runExperiment :: !Seconds,
     userWaits     :: !Seconds,
     delayedWork   :: !Seconds,
+    rulesBuilt    :: !Int,
+    rulesChanged  :: !Int,
+    rulesVisited  :: !Int,
+    rulesTotal    :: !Int,
+    edgesTotal    :: !Int,
     success       :: !Bool
   }
 
 badRun :: BenchRun
-badRun = BenchRun 0 0 0 0 0 False
+badRun = BenchRun 0 0 0 0 0 0 0 0 0 0 False
 
 waitForProgressStart :: Session ()
 waitForProgressStart = void $ do
@@ -420,6 +447,17 @@ waitForProgressDone = loop
         _ -> Nothing
       done <- null <$> getIncompleteProgressSessions
       unless done loop
+
+-- | Wait for the build queue to be empty
+waitForBuildQueue :: Session Seconds
+waitForBuildQueue = do
+    let m = SCustomMethod "test"
+    waitId <- sendRequest m (toJSON WaitForShakeQueue)
+    (td, resp) <- duration $ skipManyTill anyMessage $ responseForId m waitId
+    case resp of
+        ResponseMessage{_result=Right Null} -> return td
+        -- assume a ghcide binary lacking the WaitForShakeQueue method
+        _                                   -> return 0
 
 runBench ::
   (?config :: Config) =>
@@ -451,19 +489,18 @@ runBench runSess b = handleAny (\e -> print e >> return badRun)
             else do
                 output (showDuration t)
                 -- Wait for the delayed actions to finish
-                let m = SCustomMethod "test"
-                waitId <- sendRequest m (toJSON WaitForShakeQueue)
-                (td, resp) <- duration $ skipManyTill anyMessage $ responseForId m waitId
-                case resp of
-                    ResponseMessage{_result=Right Null} -> do
-                      loop (userWaits+t) (delayedWork+td) (n -1)
-                    _ ->
-                    -- Assume a ghcide build lacking the WaitForShakeQueue command
-                      loop (userWaits+t) delayedWork (n -1)
+                td <- waitForBuildQueue
+                loop (userWaits+t) (delayedWork+td) (n -1)
 
       (runExperiment, result) <- duration $ loop 0 0 samples
       let success = isJust result
           (userWaits, delayedWork) = fromMaybe (0,0) result
+
+      rulesTotal <- length <$> getStoredKeys
+      rulesBuilt <- either (const 0) length <$> getBuildKeysBuilt
+      rulesChanged <- either (const 0) length <$> getBuildKeysChanged
+      rulesVisited <- either (const 0) length <$> getBuildKeysVisited
+      edgesTotal   <- fromRight 0 <$> getBuildEdgesCount
 
       return BenchRun {..}
 
@@ -625,3 +662,8 @@ searchSymbol doc@TextDocumentIdentifier{_uri} fileContents pos = do
             _                      -> return False
       checkCompletions pos =
         not . null <$> getCompletions doc pos
+
+-- | We don't have a uinteger type yet. So hardcode the maxBound of uinteger, 2 ^ 31 - 1
+-- as a constant.
+maxBoundUinteger :: Int
+maxBoundUinteger = 2147483647

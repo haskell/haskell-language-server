@@ -1,14 +1,17 @@
+{-# LANGUAGE PackageImports #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 module Development.IDE.Main
 (Arguments(..)
+,defaultArguments
 ,Command(..)
 ,IdeCommand(..)
 ,isLSP
 ,commandP
 ,defaultMain
-) where
-import           Control.Concurrent.Extra              (newLock, readVar,
-                                                        withLock)
+,testing) where
+import           Control.Concurrent.Extra              (newLock, withLock,
+                                                        withNumCapabilities)
+import           Control.Concurrent.STM.Stats          (atomically, dumpSTMStats)
 import           Control.Exception.Safe                (Exception (displayException),
                                                         catchAny)
 import           Control.Monad.Extra                   (concatMapM, unless,
@@ -25,8 +28,10 @@ import qualified Data.Text                             as T
 import qualified Data.Text.IO                          as T
 import           Data.Text.Lazy.Encoding               (decodeUtf8)
 import qualified Data.Text.Lazy.IO                     as LT
+import           Data.Typeable                         (typeOf)
 import           Development.IDE                       (Action, GhcVersion (..),
-                                                        Rules, ghcVersion,
+                                                        Priority (Debug), Rules,
+                                                        ghcVersion,
                                                         hDuplicateTo')
 import           Development.IDE.Core.Debouncer        (Debouncer,
                                                         newAsyncDebouncer)
@@ -54,6 +59,7 @@ import           Development.IDE.LSP.LanguageServer    (runLanguageServer)
 import           Development.IDE.Plugin                (Plugin (pluginHandlers, pluginModifyDynflags, pluginRules))
 import           Development.IDE.Plugin.HLS            (asGhcIdePlugin)
 import qualified Development.IDE.Plugin.HLS.GhcIde     as Ghcide
+import qualified Development.IDE.Plugin.Test           as Test
 import           Development.IDE.Session               (SessionLoadingOptions,
                                                         getHieDbLoc,
                                                         loadSessionWithOptions,
@@ -61,24 +67,33 @@ import           Development.IDE.Session               (SessionLoadingOptions,
                                                         setInitialDynFlags)
 import           Development.IDE.Types.Location        (NormalizedUri,
                                                         toNormalizedFilePath')
-import           Development.IDE.Types.Logger          (Logger (Logger))
+import           Development.IDE.Types.Logger          (Logger (Logger),
+                                                        Priority (Info),
+                                                        logDebug, logInfo)
 import           Development.IDE.Types.Options         (IdeGhcSession,
                                                         IdeOptions (optCheckParents, optCheckProject, optReportProgress, optRunSubset),
+                                                        IdeTesting (IdeTesting),
                                                         clientSupportsProgress,
                                                         defaultIdeOptions,
-                                                        optModifyDynFlags)
-import           Development.IDE.Types.Shake           (Key (Key))
+                                                        optModifyDynFlags,
+                                                        optTesting)
+import           Development.IDE.Types.Shake           (Key(Key),
+                                                        fromKeyType)
+import           GHC.Conc                              (getNumProcessors)
 import           GHC.IO.Encoding                       (setLocaleEncoding)
 import           GHC.IO.Handle                         (hDuplicate)
+import           Development.IDE.Main.HeapStats        (withHeapStats)
 import           HIE.Bios.Cradle                       (findCradle)
 import qualified HieDb.Run                             as HieDb
 import           Ide.Plugin.Config                     (CheckParents (NeverCheck),
-                                                        Config,
+                                                        Config, checkParents,
+                                                        checkProject,
                                                         getConfigFromNotification)
 import           Ide.Plugin.ConfigUtils                (pluginsToDefaultConfig,
                                                         pluginsToVSCodeExtensionSchema)
 import           Ide.PluginUtils                       (allLspCmdIds',
                                                         getProcessID,
+                                                        idePluginsToPluginDesc,
                                                         pluginDescToIdePlugins)
 import           Ide.Types                             (IdeCommand (IdeCommand),
                                                         IdePlugins,
@@ -86,7 +101,10 @@ import           Ide.Types                             (IdeCommand (IdeCommand),
                                                         PluginId (PluginId),
                                                         ipMap)
 import qualified Language.LSP.Server                   as LSP
+import qualified "list-t" ListT
+import           Numeric.Natural                       (Natural)
 import           Options.Applicative                   hiding (action)
+import qualified StmContainers.Map                     as STM
 import qualified System.Directory.Extra                as IO
 import           System.Exit                           (ExitCode (ExitFailure),
                                                         exitWith)
@@ -163,22 +181,30 @@ data Arguments = Arguments
     , argsDebouncer             :: IO (Debouncer NormalizedUri) -- ^ Debouncer used for diagnostics
     , argsHandleIn              :: IO Handle
     , argsHandleOut             :: IO Handle
+    , argsThreads               :: Maybe Natural
     }
 
 instance Default Arguments where
-    def = Arguments
+    def = defaultArguments Info
+
+defaultArguments :: Priority -> Arguments
+defaultArguments priority = Arguments
         { argsOTMemoryProfiling = False
         , argCommand = LSP
-        , argsLogger = stderrLogger
-        , argsRules = mainRule >> action kick
+        , argsLogger = stderrLogger priority
+        , argsRules = mainRule def >> action kick
         , argsGhcidePlugin = mempty
         , argsHlsPlugins = pluginDescToIdePlugins Ghcide.descriptors
         , argsSessionLoadingOptions = def
-        , argsIdeOptions = const defaultIdeOptions
+        , argsIdeOptions = \config ghcSession -> (defaultIdeOptions ghcSession)
+            { optCheckProject = pure $ checkProject config
+            , optCheckParents = pure $ checkParents config
+            }
         , argsLspOptions = def {LSP.completionTriggerCharacters = Just "."}
         , argsDefaultHlsConfig = def
         , argsGetHieDbLoc = getHieDbLoc
         , argsDebouncer = newAsyncDebouncer
+        , argsThreads = Nothing
         , argsHandleIn = pure stdin
         , argsHandleOut = do
                 -- Move stdout to another file descriptor and duplicate stderr
@@ -196,15 +222,29 @@ instance Default Arguments where
                 return newStdout
         }
 
+testing :: Arguments
+testing = (defaultArguments Debug) {
+    argsHlsPlugins = pluginDescToIdePlugins $
+        idePluginsToPluginDesc (argsHlsPlugins def)
+        ++ [Test.blockCommandDescriptor "block-command", Test.plugin],
+    argsIdeOptions = \config sessionLoader ->
+            let defOptions = argsIdeOptions def config sessionLoader
+            in defOptions {
+                optTesting = IdeTesting True
+            }
+}
+
 -- | Cheap stderr logger that relies on LineBuffering
-stderrLogger :: IO Logger
-stderrLogger = do
+stderrLogger :: Priority -> IO Logger
+stderrLogger logLevel = do
     lock <- newLock
-    return $ Logger $ \p m -> withLock lock $
+    return $ Logger $ \p m -> when (p >= logLevel) $ withLock lock $
         T.hPutStrLn stderr $ "[" <> T.pack (show p) <> "] " <> m
 
 defaultMain :: Arguments -> IO ()
-defaultMain Arguments{..} = do
+defaultMain Arguments{..} = flip withHeapStats fun =<< argsLogger
+ where
+  fun = do
     setLocaleEncoding utf8
     pid <- T.pack . show <$> getProcessID
     logger <- argsLogger
@@ -221,27 +261,29 @@ defaultMain Arguments{..} = do
     inH <- argsHandleIn
     outH <- argsHandleOut
 
+    numProcessors <- getNumProcessors
+
     case argCommand of
         PrintExtensionSchema ->
             LT.putStrLn $ decodeUtf8 $ A.encodePretty $ pluginsToVSCodeExtensionSchema argsHlsPlugins
         PrintDefaultConfig ->
             LT.putStrLn $ decodeUtf8 $ A.encodePretty $ pluginsToDefaultConfig argsHlsPlugins
-        LSP -> do
+        LSP -> withNumCapabilities (maybe (numProcessors `div` 2) fromIntegral argsThreads) $ do
             t <- offsetTime
-            hPutStrLn stderr "Starting LSP server..."
-            hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run WITHOUT the --lsp option!"
+            logInfo logger "Starting LSP server..."
+            logInfo logger "If you are seeing this in a terminal, you probably should have run WITHOUT the --lsp option!"
             runLanguageServer options inH outH argsGetHieDbLoc argsDefaultHlsConfig argsOnConfigChange (pluginHandlers plugins) $ \env vfs rootPath hiedb hieChan -> do
                 traverse_ IO.setCurrentDirectory rootPath
                 t <- t
-                hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
+                logInfo logger $ T.pack $ "Started LSP server in " ++ showDuration t
 
                 dir <- maybe IO.getCurrentDirectory return rootPath
 
                 -- We want to set the global DynFlags right now, so that we can use
                 -- `unsafeGlobalDynFlags` even before the project is configured
                 _mlibdir <-
-                    setInitialDynFlags dir argsSessionLoadingOptions
-                        `catchAny` (\e -> (hPutStrLn stderr $ "setInitialDynFlags: " ++ displayException e) >> pure Nothing)
+                    setInitialDynFlags logger dir argsSessionLoadingOptions
+                        `catchAny` (\e -> (logDebug logger $ T.pack $ "setInitialDynFlags: " ++ displayException e) >> pure Nothing)
 
 
                 sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions dir
@@ -250,6 +292,7 @@ defaultMain Arguments{..} = do
 
                 -- disable runSubset if the client doesn't support watched files
                 runSubset <- (optRunSubset def_options &&) <$> LSP.runLspT env isWatchSupported
+                logDebug logger $ T.pack $ "runSubset: " <> show runSubset
 
                 let options = def_options
                             { optReportProgress = clientSupportsProgress caps
@@ -272,10 +315,11 @@ defaultMain Arguments{..} = do
                     vfs
                     hiedb
                     hieChan
+            dumpSTMStats
         Check argFiles -> do
           dir <- IO.getCurrentDirectory
           dbLoc <- getHieDbLoc dir
-          runWithDb dbLoc $ \hiedb hieChan -> do
+          runWithDb logger dbLoc $ \hiedb hieChan -> do
             -- GHC produces messages with UTF8 in them, so make sure the terminal doesn't error
             hSetEncoding stdout utf8
             hSetEncoding stderr utf8
@@ -321,32 +365,32 @@ defaultMain Arguments{..} = do
             putStrLn $ "\nCompleted (" ++ nfiles worked ++ " worked, " ++ nfiles failed ++ " failed)"
 
             when argsOTMemoryProfiling $ do
-                let valuesRef = state $ shakeExtras ide
-                values <- readVar valuesRef
+                let values = state $ shakeExtras ide
                 let consoleObserver Nothing = return $ \size -> printf "Total: %.2fMB\n" (fromIntegral @Int @Double size / 1e6)
                     consoleObserver (Just k) = return $ \size -> printf "  - %s: %.2fKB\n" (show k) (fromIntegral @Int @Double size / 1e3)
 
-                printf "# Shake value store contents(%d):\n" (length values)
+                stateContents <- atomically $ ListT.toList $ STM.listT values
+                printf "# Shake value store contents(%d):\n" (length stateContents)
                 let keys =
                         nub $
-                            Key GhcSession :
-                            Key GhcSessionDeps :
-                            [k | (_, k) <- HashMap.keys values, k /= Key GhcSessionIO]
-                            ++ [Key GhcSessionIO]
-                measureMemory logger [keys] consoleObserver valuesRef
+                            typeOf GhcSession :
+                            typeOf GhcSessionDeps :
+                            [kty | (fromKeyType -> Just (kty,_), _) <- stateContents, kty /= typeOf GhcSessionIO] ++
+                            [typeOf GhcSessionIO]
+                measureMemory logger [keys] consoleObserver values
 
             unless (null failed) (exitWith $ ExitFailure (length failed))
         Db dir opts cmd -> do
             dbLoc <- getHieDbLoc dir
             hPutStrLn stderr $ "Using hiedb at: " ++ dbLoc
-            mlibdir <- setInitialDynFlags dir def
+            mlibdir <- setInitialDynFlags logger dir def
             case mlibdir of
                 Nothing     -> exitWith $ ExitFailure 1
                 Just libdir -> HieDb.runCommand libdir opts{HieDb.database = dbLoc} cmd
 
         Custom projectRoot (IdeCommand c) -> do
           dbLoc <- getHieDbLoc projectRoot
-          runWithDb dbLoc $ \hiedb hieChan -> do
+          runWithDb logger dbLoc $ \hiedb hieChan -> do
             vfs <- makeVFSHandle
             sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions "."
             let def_options = argsIdeOptions argsDefaultHlsConfig sessionLoader

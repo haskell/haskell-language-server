@@ -1,0 +1,201 @@
+name: Hackage
+
+# See: https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#concurrency.
+concurrency:
+  group: ${{ github.head_ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches:
+      - '*-hackage'
+
+jobs:
+  check-and-upload-tarballs:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: ${{ !contains(github.ref_name, 'check') }}
+      matrix:
+        package: ["hie-compat", "hls-graph", "shake-bench",
+                  "hls-plugin-api", "ghcide", "hls-test-utils",
+                  "hls-brittany-plugin", "hls-floskell-plugin", "hls-fourmolu-plugin",
+                  "hls-ormolu-plugin", "hls-stylish-haskell-plugin",
+                  "hls-class-plugin", "hls-eval-plugin", "hls-explicit-imports-plugin",
+                  "hls-haddock-comments-plugin", "hls-hlint-plugin",
+                  "hls-module-name-plugin", "hls-pragmas-plugin",
+                  "hls-refine-imports-plugin", "hls-retrie-plugin",
+                  "hls-splice-plugin", "hls-tactics-plugin",
+                  "hls-call-hierarchy-plugin", "hls-alternate-number-format-plugin",
+                  "hls-qualify-imported-names-plugin",
+                  "haskell-language-server"]
+        # Uncomment 9.0.1 when ghcide is buildable
+        ghc: [ "9.0.1",
+              "8.10.7",
+              "8.8.4",
+              "8.6.5"]
+        cabal: ['3.6']
+        exclude:
+        - ghc: "9.0.1"
+          package: "hls-brittany-plugin"
+        - ghc: "9.0.1"
+          package: "hls-stylish-haskell-plugin"
+        - ghc: "9.0.1"
+          package: "hls-class-plugin"
+        - ghc: "9.0.1"
+          package: "hls-tactics-plugin"
+
+    steps:
+
+      - uses: actions/checkout@v2
+
+      - uses: haskell/actions/setup@v1
+        id: HaskEnvSetup
+        with:
+          ghc-version  : ${{ matrix.ghc   }}
+          cabal-version: ${{ matrix.cabal }}
+          enable-stack: false
+
+      - name: Linux Platform config
+        run: |
+          echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
+
+      - name: Retrieving `cabal.project` Hackage timestamp
+        run: |
+          # Form: index-state: 2021-11-29T08:11:08Z
+          INDEX_STATE_ENTRY=$(grep index-state cabal.project)
+          # Form: 2021-11-29T08-11-08Z
+          INDEX_STATE1=$(echo "$INDEX_STATE_ENTRY" | cut -d' ' -f2 | tr ':' '-')
+          echo "INDEX_STATE=$INDEX_STATE1" >> $GITHUB_ENV
+
+      - name: Hackage sources cache
+        uses: actions/cache@v2
+        env:
+          cache-name: hackage-sources
+        with:
+          path: ${{ env.CABAL_PKGS_DIR }}
+          key:          ${{ env.cache-name }}-${{ env.INDEX_STATE }}
+          restore-keys: ${{ env.cache-name }}-
+
+      - name: Compiled deps cache
+        uses: actions/cache@v2
+        env:
+          cache-name: compiled-deps
+        with:
+          path: ${{ steps.HaskEnvSetup.outputs.cabal-store }}
+          key:  ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project') }}
+          restore-keys: |
+                ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-
+                ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
+                ${{ env.cache-name }}-${{ runner.os }}-
+
+      - name: "Run cabal check"
+        run: |
+          if [[ ${{ matrix.package }} == *plugin ]]; then
+            cd plugins
+          fi
+          if [[ ${{ matrix.package }} != haskell-language-server ]]; then
+            cd ${{ matrix.package }}
+          fi
+          cabal check
+
+      - name: "Generate package dist tarball"
+        id: generate-dist-tarball
+        run: |
+          if [[ ${{ matrix.package }} == haskell-language-server ]]; then
+            cabal sdist --builddir=./
+          else
+            cabal sdist ${{ matrix.package }} --builddir=./
+          fi
+          echo ::set-output name=path::$(ls ./sdist/${{ matrix.package }}-*)
+
+      - name: "Unpack package source in an isolated location"
+        run: cabal unpack ${{ steps.generate-dist-tarball.outputs.path }} --destdir=./incoming
+
+      - name: "Ensure we will use hackage head"
+        run: cabal update
+
+      - name: "Try to get the current hackage version"
+        id: get-hackage-version
+        run: |
+          cd ./incoming
+          if cabal get $(ls -d ${{ matrix.package }}-*) --destdir=../current; then
+            echo ::set-output name=exists::true
+          else
+            echo ::set-output name=exists::false
+          fi
+
+      - name: "Compare the incoming and the current hackage version of the package"
+        id: compare-current-version
+        if: steps.get-hackage-version.outputs.exists == 'true'
+        run: |
+          # This will throw an error if there is any difference cause we have to bump up the package version
+          diff -r -x "*.md" -x "data" $(ls -d ./incoming/${{ matrix.package }}-*) $(ls -d ./current/${{ matrix.package }}-*)
+
+      - name: "Create appropiate cabal.project"
+        if: steps.get-hackage-version.outputs.exists != 'true'
+        run: |
+          cd $(ls -d ./incoming/${{ matrix.package }}-*)
+          echo "packages: . ../../* ../../plugins/*" > cabal.project
+
+      - name: "Add temporary needed allow-newer"
+        if: steps.get-hackage-version.outputs.exists != 'true'
+        run: |
+          # TODO: remove when not needed
+          cd $(ls -d ./incoming/${{ matrix.package }}-*)
+          echo "allow-newer: Chart-diagrams:diagrams-core, SVGFonts:diagrams-core," >> cabal.project
+
+      - name: "Add temporary needed allow-newer for ghc-9.0"
+        if: steps.get-hackage-version.outputs.exists != 'true' && matrix.ghc == '9.0.1'
+        run: |
+          # TODO: remove when not needed
+          cd $(ls -d ./incoming/${{ matrix.package }}-*)
+          # For brittany
+          echo " brittany:base, brittany:ghc, brittany:ghc-boot-th, butcher:base, multistate:base, data-tree-print:base," >> cabal.project
+          # For floskell and stylish-haskell
+          echo " floskell:base, floskell:ghc-prim, stylish-haskell:Cabal,stylish-haskell:ghc-lib-parser," >> cabal.project
+
+      - name: "Build main package components in isolation"
+        if: steps.get-hackage-version.outputs.exists != 'true'
+        run: |
+          cd $(ls -d ./incoming/${{ matrix.package }}-*)
+          cabal build
+
+      - name: "Build package tests and benchmarks in isolation"
+        if: steps.get-hackage-version.outputs.exists != 'true'
+        run: |
+          cd $(ls -d ./incoming/${{ matrix.package }}-*)
+          # cabal-3.4.0.0 run out of backjumps with tests and benchs enabled
+          cabal build --enable-tests --enable-benchmarks --max-backjumps 8000
+
+      - name: "Generate haddock for hackage"
+        if: steps.get-hackage-version.outputs.exists != 'true'
+        run: |
+          cd $(ls -d ./incoming/${{ matrix.package }}-*)
+          cabal haddock --haddock-for-hackage
+
+      - name: "Upload package dist tarball"
+        if: steps.get-hackage-version.outputs.exists != 'true' && matrix.ghc == '8.10.7'
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ matrix.package }}
+          path: ${{ steps.generate-dist-tarball.outputs.path }}
+
+  upload-candidate:
+    if: ${{ !contains(github.ref_name, 'check') }}
+    needs: check-and-upload-tarballs
+    runs-on: ubuntu-latest
+    steps:
+
+      - uses: actions/download-artifact@v2
+        with:
+          path: packages
+
+      - name: "Join all tarballs"
+        run: find ./packages -type f -name '*.tar.gz' -exec cp {} ./packages \;
+
+      - name: "Upload all tarballs to hackage"
+        uses: haskell-actions/hackage-publish@v1
+        with:
+          hackageToken: ${{ secrets.HACKAGE_AUTH_TOKEN }}
+          packagesPath: packages
+          publish: false

@@ -27,7 +27,6 @@ import           Name
 #endif
 import           HieDb.Query
 import           Ide.Plugin.Config
-import           Ide.Plugin.Retrie                    hiding (descriptor)
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.Haskell.GHC.ExactPrint
@@ -125,7 +124,7 @@ refsAtName state nfp name = do
                 True
                 (nameOccName name)
                 (Just $ moduleName mod)
-                (Just $ moduleUnitId mod)
+                (Just $ moduleUnit mod)
                 [fromNormalizedFilePath nfp]
     pure $ nubOrd $ astRefs ++ dbRefs
 

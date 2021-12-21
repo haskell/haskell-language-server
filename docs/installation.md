@@ -1,5 +1,11 @@
 # Installation
 
+A typical haskell-language-server installation consists of:
+- One binary file for each supported ghc version: `haskell-language-server-${ghcVersion}`
+- Another binary named `haskell-language-version-wrapper` which analyzes the project or file in the current working dir
+  and calls the appropiate `haskell-language-server-${ghcVersion}` variant.
+  - It accepts all executable arguments from the plain `haskell-language-server`
+
 ## Prerequisites
 
 - For standalone `.hs`/`.lhs` files, [ghc](https://www.haskell.org/ghc/) must be installed and on the PATH. The easiest way to install it is with [ghcup](https://www.haskell.org/ghcup/) or [chocolatey](https://community.chocolatey.org/packages/ghc) on Windows.
@@ -9,14 +15,23 @@
 ## ghcup
 
 If you are using [`ghcup`](https://www.haskell.org/ghcup/) to manage your installations, you can install `haskell-language-server` with
-```
+```bash
 ghcup install hls
 ```
+
+You can check if HLS is available for your platorm via ghcup here: <https://haskell.org/ghcup/install/#supported-platforms>.
+
+You can also install HLS from source without checking out the code manually:
+```bash
+ghcup compile hls -v 1.4.0 8.10.7
+```
+
+Check `ghcup compile hls --help` for a full list of compilation options.
 
 ## chocolatey
 
 If you are using [`chocolatey`](https://chocolatey.org/) to manage your installations in windows, [you can install `haskell-language-server`](https://community.chocolatey.org/packages/haskell-language-server) with
-```
+```bash
 choco install haskell-language-server
 ````
 
@@ -31,7 +46,7 @@ To install, download the `haskell-language-server-wrapper` executable for your p
 
 ## Arch Linux
 
-The preferred method of installation for development purposes is to use the [haskell-language-server-bin](https://aur.archlinux.org/packages/haskell-language-server-bin) package from AUR.
+The preferred method of installation for development purposes is to use the [haskell-language-server-static](https://aur.archlinux.org/packages/haskell-language-server-static) package from AUR.
 This package contains statically linked binaries for each supported GHC version and `haskell-language-server-wrapper` for automatic GHC version selection.
 It is updated regularly, requires no additional dependencies, and is independent of other haskell packages you may have on your system, including GHC.
 Its size is relatively large (approx. 900 MB), but if this is a problem for you, during installation you can disable the GHC versions you will not be using by editing the PKGBUILD file.
@@ -39,23 +54,30 @@ Its size is relatively large (approx. 900 MB), but if this is a problem for you,
 Alternatively, if you want to use **dynamically linked** Haskell packages from `pacman`,
 you can install the latest pre-compiled version of `haskell-language-server` from [[community]](https://archlinux.org/packages/community/x86_64/haskell-language-server/):
 
-```
+```bash
 sudo pacman -S haskell-language-server
 ```
 
 In this case, `haskell-language-server` is compiled against the GHC distributed to Arch Linux, so you will need maintain a system wide Haskell development environment, and install GHC from `pacman` as well.
 See [ArchWiki](https://wiki.archlinux.org/index.php/Haskell) for the details of Haskell infrastructure on Arch Linux.
 
+## Fedora
+
+Binary packages for Fedora are available from [this Copr repo](https://copr.fedorainfracloud.org/coprs/petersen/haskell-language-server),
+built against the official Fedora ghc package.
+
 ## FreeBSD
 
 HLS is available for installation from official binary packages. Use
 
-```
+```bash
 pkg install hs-haskell-language-server
 ```
 
 to install it. At the moment, HLS installed this way only supports the same GHC
 version as the ports one.
+
+
 
 ## Installation from source
 
@@ -167,12 +189,11 @@ stack ./install.hs hls
 Install haskell-language-server for a specific GHC version (and hoogle docs):
 
 ```bash
-stack ./install.hs hls-8.8.3
+stack ./install.hs hls-8.10.7
 ```
 
-`hls-8.8.3` target will build the project and install `haskell-language-server-wrapper`,
-`haskell-language-server`, `haskell-language-server-8.8.3` and `haskell-language-server-8.8`
-executables.
+`hls-8.10.7` target will build the project and install `haskell-language-server-wrapper`,
+`haskell-language-server` and `haskell-language-server-8.10.7` executables.
 
 The Haskell Language Server can also be built with `cabal v2-build` instead of `stack build`.
 This has the advantage that you can decide how the GHC versions have been installed.
@@ -188,7 +209,7 @@ An example output is:
 ******************************************************************
 Found the following GHC paths:
 ghc-8.6.5: /opt/bin/ghc-8.6.5
-ghc-8.8.3: /opt/bin/ghc-8.8.3
+ghc-8.8.4: /opt/bin/ghc-8.8.4
 
 ******************************************************************
 ```
@@ -215,6 +236,10 @@ Homebrew users can install `haskell-language-server` using the following command
 brew install haskell-language-server
 ```
 
-This formula contains HLS binaries compiled with GHC versions available via Homebrew; at the moment those are: 8.6.5, 8.8.4, 8.10.4.
+This formula contains HLS binaries compiled with GHC versions available via Homebrew; at the moment those are: 8.6.5, 8.8.4, 8.10.7.
 
 You need to provide your own GHC/Cabal/Stack as required by your project, possibly via Homebrew.
+
+## Installation using nix
+
+You can read full instructions on how to install HLS with nix in [haskell4nix documentation](https://haskell4nix.readthedocs.io/nixpkgs-users-guide.html#how-to-install-haskell-language-server).

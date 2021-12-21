@@ -382,6 +382,32 @@ running  `intros x y z w` will produce:
 \x y z -> (_ :: d)
 ```
 
+## let
+
+arguments: varadic binding.  
+deterministic.
+
+> Create let-bindings for each binder given to this tactic.
+
+
+### Example
+
+Given:
+
+```haskell
+_ :: x
+```
+
+running  `let a b c` will produce:
+
+```haskell
+let a = _1 :: a
+    b = _2 :: b
+    c = _3 :: c
+ in (_4 :: x)
+
+```
+
 ## nested
 
 arguments: single reference.  

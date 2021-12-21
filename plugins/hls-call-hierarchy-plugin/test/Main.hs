@@ -254,6 +254,16 @@ incomingCallsTests =
               positions = [(0, 6)]
               ranges = [mkRange 0 16 0 17]
           incomingCallTestCase contents 1 20 positions ranges
+      , testCase "goto typeclass instance" $ do
+          let contents = T.unlines
+                [ "class F a where f :: a"
+                , "instance F Bool where f = x"
+                , "instance F Int where f = 3"
+                , "x = True"
+                ]
+              positions = [(1, 22)]
+              ranges = [mkRange 1 26 1 27]
+          incomingCallTestCase contents 3 0 positions ranges
       ]
     , testCase "type family instance" $ do
         let contents = T.unlines
@@ -261,7 +271,7 @@ incomingCallsTests =
               , "type family A a"
               , "type instance A Int = Char"
               ]
-            positions = [(1, 12)]
+            positions = [(2, 14)]
             ranges = [mkRange 2 22 2 26]
         incomingCallTestCase contents 2 22 positions ranges
     , testCase "GADT" $ do

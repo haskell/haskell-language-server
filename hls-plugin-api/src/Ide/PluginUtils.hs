@@ -10,6 +10,7 @@ module Ide.PluginUtils
     diffText,
     diffText',
     pluginDescToIdePlugins,
+    idePluginsToPluginDesc,
     responseError,
     getClientConfig,
     getPluginConfig,
@@ -24,14 +25,23 @@ module Ide.PluginUtils
     allLspCmdIds',
     installSigUsr1Handler,
     subRange,
-    usePropertyLsp)
+    usePropertyLsp,
+    response,
+    handleMaybe,
+    handleMaybeM,
+    )
 where
 
 
+import           Control.Monad.Extra             (maybeM)
+import           Control.Monad.Trans.Class       (lift)
+import           Control.Monad.Trans.Except      (ExceptT, runExceptT, throwE)
 import           Data.Algorithm.Diff
 import           Data.Algorithm.DiffOutput
+import           Data.Bifunctor                  (Bifunctor (first))
 import           Data.Containers.ListUtils       (nubOrdOn)
 import qualified Data.HashMap.Strict             as H
+import           Data.String                     (IsString (fromString))
 import qualified Data.Text                       as T
 import           Ide.Plugin.Config
 import           Ide.Plugin.Properties
@@ -149,6 +159,8 @@ pluginDescToIdePlugins :: [PluginDescriptor ideState] -> IdePlugins ideState
 pluginDescToIdePlugins plugins =
     IdePlugins $ map (\p -> (pluginId p, p)) $ nubOrdOn pluginId plugins
 
+idePluginsToPluginDesc :: IdePlugins ideState -> [PluginDescriptor ideState]
+idePluginsToPluginDesc (IdePlugins pp) = map snd pp
 
 -- ---------------------------------------------------------------------
 -- | Returns the current client configuration. It is not wise to permanently
@@ -232,3 +244,15 @@ allLspCmdIds pid commands = concatMap go commands
   where
     go (plid, cmds) = map (mkLspCmdId pid plid . commandId) cmds
 
+-- ---------------------------------------------------------------------
+
+handleMaybe :: Monad m => e -> Maybe b -> ExceptT e m b
+handleMaybe msg = maybe (throwE msg) return
+
+handleMaybeM :: Monad m => e -> m (Maybe b) -> ExceptT e m b
+handleMaybeM msg act = maybeM (throwE msg) return $ lift act
+
+response :: Monad m => ExceptT String m a -> m (Either ResponseError a)
+response =
+  fmap (first (\msg -> ResponseError InternalError (fromString msg) Nothing))
+    . runExceptT

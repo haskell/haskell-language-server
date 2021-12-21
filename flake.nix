@@ -16,8 +16,6 @@
     flake-utils.url = "github:numtide/flake-utils";
     pre-commit-hooks = {
       url = "github:cachix/pre-commit-hooks.nix";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.flake-utils.follows = "flake-utils";
     };
     gitignore = {
       url = "github:hercules-ci/gitignore.nix";
@@ -70,31 +68,17 @@
           # Don't use `callHackage`, it requires us to override `all-cabal-hashes`
           tweaks = hself: hsuper:
             with haskell.lib; {
+              # Patches don't apply
+              github = overrideCabal hsuper.github (drv: { patches = []; });
+              # GHCIDE requires hie-bios >=0.8 && <0.9.0
+              hie-bios = hself.hie-bios_0_8_0;
+              # We need an older version
+              hiedb = hself.hiedb_0_4_1_0;
 
-              ghc-api-compat = hself.callCabal2nix "ghc-api-compat"
-                (pkgs.fetchFromGitHub {
-                  owner = "hsyl20";
-                  repo = "ghc-api-compat";
-                  rev = "8fee87eac97a538dbe81ff1ab18cff10f2f9fa15";
-                  sha256 = "byehvdxQxhNk5ZQUXeFHjAZpAze4Ct9261ro4c5acZk=";
-                }) { };
-
-              lsp = hself.callCabal2nix "lsp"
+              implicit-hie-cradle = hself.callCabal2nix "implicit-hie-cradle"
                 (builtins.fetchTarball {
-                  url = "https://hackage.haskell.org/package/lsp-1.2.0.1/lsp-1.2.0.1.tar.gz";
-                  sha256 = "1lhzsraiw11ldxvxn8ax11hswpyzsvw2da2qmp3p6fc9rfpz4pj5";
-                }) { };
-
-              lsp-types = hself.callCabal2nix "lsp-types"
-                (builtins.fetchTarball {
-                  url = "https://hackage.haskell.org/package/lsp-types-1.3.0.0/lsp-types-1.3.0.0.tar.gz";
-                  sha256 = "0qajyyj2d51daa4y0pqaa87n4nny0i920ivvzfnrk9gq9386iac7";
-                }) { };
-
-              lsp-test = hself.callCabal2nix "lsp-test"
-                (builtins.fetchTarball {
-                  url = "https://hackage.haskell.org/package/lsp-test-0.14.0.1/lsp-test-0.14.0.1.tar.gz";
-                  sha256 = "10lnyg7nlbd3ymgvjjlrkfndyy7ay9cwnsk684p08k2gzlric4yq";
+                  url = "https://hackage.haskell.org/package/implicit-hie-cradle-0.3.0.5/implicit-hie-cradle-0.3.0.5.tar.gz";
+                  sha256 = "15a7g9x6cjk2b92hb2wilxx4550msxp1pmk5a2shiva821qaxnfq";
                 }) { };
             };
 
@@ -177,7 +161,7 @@
           + pkgs.lib.replaceStrings [ "." ] [ "" ]
           pkgs.haskellPackages.ghc.version);
         ghc884 = pkgs.hlsHpkgs "ghc884";
-        ghc8104 = pkgs.hlsHpkgs "ghc8104";
+        ghc8107 = pkgs.hlsHpkgs "ghc8107";
         ghc901 = ghc901Config.tweakHpkgs (pkgs.hlsHpkgs "ghc901");
 
         # For markdown support
@@ -195,10 +179,10 @@
 
         docs = pkgs.stdenv.mkDerivation {
           name = "hls-docs";
-          src = pkgs.lib.sourceFilesBySuffices ./docs [ ".py" ".rst" ".md" ".png" ".gif" ".svg" ];
+          src = pkgs.lib.sourceFilesBySuffices ./. [ ".py" ".rst" ".md" ".png" ".gif" ".svg" ".cabal" ];
           buildInputs = [ pythonWithPackages ];
           # -n gives warnings on missing link targets, -W makes warnings into errors
-          buildPhase = ''sphinx-build -n -W . $out'';
+          buildPhase = ''cd docs; sphinx-build -n -W . $out'';
           dontInstall = true;
         };
 
@@ -218,6 +202,7 @@
             buildInputs = [ gmp zlib ncurses capstone tracy (gen-hls-changelogs hpkgs) pythonWithPackages ]
               ++ (with hpkgs; [
                 cabal-install
+                hie-bios
                 hlint
                 # ormolu
                 # stylish-haskell
@@ -252,15 +237,13 @@
           # dev shell
           haskell-language-server-dev = mkDevShell ghcDefault;
           haskell-language-server-884-dev = mkDevShell ghc884;
-          haskell-language-server-8104-dev = mkDevShell ghc8104;
-          haskell-language-server-8105-dev = builtins.throw "GHC 8.10.5 is not available in nixpkgs";
+          haskell-language-server-8107-dev = mkDevShell ghc8107;
           haskell-language-server-901-dev = mkDevShell ghc901;
 
           # hls package
           haskell-language-server = mkExe ghcDefault;
           haskell-language-server-884 = mkExe ghc884;
-          haskell-language-server-8104 = mkExe ghc8104;
-          haskell-language-server-8105 = builtins.throw "GHC 8.10.5 is not available in nixpkgs";
+          haskell-language-server-8107 = mkExe ghc8107;
           haskell-language-server-901 = mkExe ghc901;
 
           # docs

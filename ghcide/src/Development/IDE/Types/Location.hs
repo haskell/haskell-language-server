@@ -31,11 +31,17 @@ import           Control.Monad
 import           Data.Hashable                (Hashable (hash))
 import           Data.Maybe                   (fromMaybe)
 import           Data.String
+
+#if MIN_VERSION_ghc(9,0,0)
+import           GHC.Data.FastString
+import           GHC.Types.SrcLoc             as GHC
+#else
 import           FastString
+import           SrcLoc                       as GHC
+#endif
 import           Language.LSP.Types           (Location (..), Position (..),
                                                Range (..))
 import qualified Language.LSP.Types           as LSP
-import           SrcLoc                       as GHC
 import           Text.ParserCombinators.ReadP as ReadP
 
 toNormalizedFilePath' :: FilePath -> LSP.NormalizedFilePath

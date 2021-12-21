@@ -8,7 +8,6 @@
 
 module Wingman.LanguageServer where
 
-import           ConLike
 import           Control.Arrow ((***))
 import           Control.Monad
 import           Control.Monad.IO.Class
@@ -27,45 +26,40 @@ import           Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
 import           Data.Traversable
-import           Development.IDE (getFilesOfInterestUntracked, ShowDiagnostic (ShowDiag), srcSpanToRange)
-import           Development.IDE (hscEnv)
+import           Development.IDE (hscEnv, getFilesOfInterestUntracked, ShowDiagnostic (ShowDiag), srcSpanToRange, defineNoDiagnostics, IdeAction)
+import           Development.IDE.Core.PositionMapping (idDelta)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Rules (usePropertyAction)
 import           Development.IDE.Core.Service (runAction)
-import           Development.IDE.Core.Shake (IdeState (..), uses, define, use)
+import           Development.IDE.Core.Shake (IdeState (..), uses, define, use, addPersistentRule)
 import qualified Development.IDE.Core.Shake as IDE
 import           Development.IDE.Core.UseStale
-import           Development.IDE.GHC.Compat hiding (parseExpr)
+import           Development.IDE.GHC.Compat hiding (empty)
+import qualified Development.IDE.GHC.Compat.Util as FastString
 import           Development.IDE.GHC.Error (realSrcSpanToRange)
 import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.Graph (Action, RuleResult, Rules, action)
-import           Development.IDE.Graph.Classes (Binary, Hashable, NFData)
+import           Development.IDE.Graph.Classes (Hashable, NFData)
 import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindings)
-import qualified FastString
 import           GHC.Generics (Generic)
 import           Generics.SYB hiding (Generic)
-import           GhcPlugins (tupleDataCon, consDataCon, substTyAddInScope, ExternalPackageState, HscEnv (hsc_EPS), unpackFS)
 import qualified Ide.Plugin.Config as Plugin
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils (usePropertyLsp)
 import           Ide.Types (PluginId)
-import           Language.Haskell.GHC.ExactPrint (Transform)
-import           Language.Haskell.GHC.ExactPrint (modifyAnnsT, addAnnotationsForPretty)
+import           Language.Haskell.GHC.ExactPrint (Transform, modifyAnnsT, addAnnotationsForPretty)
 import           Language.LSP.Server (MonadLsp, sendNotification)
 import           Language.LSP.Types              hiding
                                                  (SemanticTokenAbsolute (length, line),
                                                   SemanticTokenRelative (length),
                                                   SemanticTokensEdit (_start))
 import           Language.LSP.Types.Capabilities
-import           OccName
 import           Prelude hiding (span)
 import           Retrie (transformA)
-import           SrcLoc (containsSpan)
-import           TcRnTypes (tcg_binds, TcGblEnv)
 import           Wingman.Context
 import           Wingman.GHC
 import           Wingman.Judgements
-import           Wingman.Judgements.SYB (everythingContaining, metaprogramQ)
+import           Wingman.Judgements.SYB (everythingContaining, metaprogramQ, metaprogramAtQ)
 import           Wingman.Judgements.Theta
 import           Wingman.Range
 import           Wingman.StaticPlugin (pattern WingmanMetaprogram, pattern MetaprogramSyntax)
@@ -85,11 +79,14 @@ tcCommandName = T.pack . show
 runIde :: String -> String -> IdeState -> Action a -> IO a
 runIde herald action state = runAction ("Wingman." <> herald <> "." <> action) state
 
+runIdeAction :: String -> String -> IdeState -> IdeAction a -> IO a
+runIdeAction herald action state = IDE.runIdeAction ("Wingman." <> herald <> "." <> action) (shakeExtras state)
+
 
 runCurrentIde
     :: forall a r
      . ( r ~ RuleResult a
-       , Eq a , Hashable a , Binary a , Show a , Typeable a , NFData a
+       , Eq a , Hashable a , Show a , Typeable a , NFData a
        , Show r, Typeable r, NFData r
        )
     => String
@@ -104,7 +101,7 @@ runCurrentIde herald state nfp a =
 runStaleIde
     :: forall a r
      . ( r ~ RuleResult a
-       , Eq a , Hashable a , Binary a , Show a , Typeable a , NFData a
+       , Eq a , Hashable a , Show a , Typeable a , NFData a
        , Show r, Typeable r, NFData r
        )
     => String
@@ -119,7 +116,7 @@ runStaleIde herald state nfp a =
 unsafeRunStaleIde
     :: forall a r
      . ( r ~ RuleResult a
-       , Eq a , Hashable a , Binary a , Show a , Typeable a , NFData a
+       , Eq a , Hashable a , Show a , Typeable a , NFData a
        , Show r, Typeable r, NFData r
        )
     => String
@@ -129,6 +126,21 @@ unsafeRunStaleIde
     -> MaybeT IO r
 unsafeRunStaleIde herald state nfp a = do
   (r, _) <- MaybeT $ runIde herald (show a) state $ IDE.useWithStale a nfp
+  pure r
+
+unsafeRunStaleIdeFast
+    :: forall a r
+     . ( r ~ RuleResult a
+       , Eq a , Hashable a , Show a , Typeable a , NFData a
+       , Show r, Typeable r, NFData r
+       )
+    => String
+    -> IdeState
+    -> NormalizedFilePath
+    -> a
+    -> MaybeT IO r
+unsafeRunStaleIdeFast herald state nfp a = do
+  (r, _) <- MaybeT $ runIdeAction herald (show a) state $ IDE.useWithStaleFast a nfp
   pure r
 
 
@@ -183,7 +195,7 @@ getIdeDynflags state nfp = do
 
 getAllMetaprograms :: Data a => a -> [String]
 getAllMetaprograms = everything (<>) $ mkQ mempty $ \case
-  WingmanMetaprogram fs -> [ unpackFS fs ]
+  WingmanMetaprogram fs -> [ FastString.unpackFS fs ]
   (_ :: HsExpr GhcTc)  -> mempty
 
 
@@ -222,7 +234,7 @@ judgementForHole state nfp range cfg = do
       eps <- liftIO $ readIORef $ hsc_EPS $ hscEnv henv
 
       (jdg, ctx) <- liftMaybe $ mkJudgementAndContext cfg g binds new_rss tcg (hscEnv henv) eps
-      let mp = getMetaprogramAtSpan (fmap RealSrcSpan tcg_rss) tcg_t
+      let mp = getMetaprogramAtSpan (fmap (`RealSrcSpan` Nothing) tcg_rss) tcg_t
 
       dflags <- getIdeDynflags state nfp
       pure $ HoleJudgment
@@ -261,10 +273,10 @@ mkJudgementAndContext cfg g (TrackedStale binds bmap) rss (TrackedStale tcg tcgm
               eps
               evidence
       top_provs = getRhsPosVals tcg_rss tcs
-      already_destructed = getAlreadyDestructed (fmap RealSrcSpan tcg_rss) tcs
+      already_destructed = getAlreadyDestructed (fmap (`RealSrcSpan` Nothing) tcg_rss) tcs
       local_hy = spliceProvenance top_provs
                $ hypothesisFromBindings binds_rss binds
-      evidence = getEvidenceAtHole (fmap RealSrcSpan tcg_rss) tcs
+      evidence = getEvidenceAtHole (fmap (`RealSrcSpan` Nothing) tcg_rss) tcs
       cls_hy = foldMap evidenceToHypothesis evidence
       subst = ts_unifier $ evidenceToSubst evidence defaultTacticState
   pure $
@@ -273,7 +285,7 @@ mkJudgementAndContext cfg g (TrackedStale binds bmap) rss (TrackedStale tcg tcgm
         mkFirstJudgement
           ctx
           (local_hy <> cls_hy)
-          (isRhsHole tcg_rss tcs)
+          (isRhsHoleWithoutWhere tcg_rss tcs)
           g
     , ctx
     )
@@ -339,8 +351,9 @@ getRhsPosVals
 getRhsPosVals (unTrack -> rss) (unTrack -> tcs)
   = everything (<>) (mkQ mempty $ \case
       TopLevelRHS name ps
-          (L (RealSrcSpan span)  -- body with no guards and a single defn
+          (L (RealSrcSpan span _)  -- body with no guards and a single defn
             (HsVar _ (L _ hole)))
+          _
         | containsSpan rss span  -- which contains our span
         , isHole $ occName hole  -- and the span is a hole
         -> flip evalState 0 $ buildTopLevelHypothesis name ps
@@ -478,12 +491,25 @@ mkIdHypothesis (splitId -> (name, ty)) prov =
 
 
 ------------------------------------------------------------------------------
--- | Is this hole immediately to the right of an equals sign?
-isRhsHole :: Tracked age RealSrcSpan -> Tracked age TypecheckedSource -> Bool
-isRhsHole (unTrack -> rss) (unTrack -> tcs) =
+-- | Is this hole immediately to the right of an equals sign --- and is there
+-- no where clause attached to it?
+--
+-- It's important that there is no where clause because otherwise it gets
+-- clobbered. See #2183 for an example.
+--
+-- This isn't a perfect check, and produces some ugly code. But it's much much
+-- better than the alternative, which is to destructively modify the user's
+-- AST.
+isRhsHoleWithoutWhere
+    :: Tracked age RealSrcSpan
+    -> Tracked age TypecheckedSource
+    -> Bool
+isRhsHoleWithoutWhere (unTrack -> rss) (unTrack -> tcs) =
   everything (||) (mkQ False $ \case
-      TopLevelRHS _ _ (L (RealSrcSpan span) _) -> containsSpan rss span
-      _                                        -> False
+      TopLevelRHS _ _
+          (L (RealSrcSpan span _) _)
+          (EmptyLocalBinds _) -> containsSpan rss span
+      _                       -> False
     ) tcs
 
 
@@ -510,9 +536,16 @@ data WriteDiagnostics = WriteDiagnostics
 
 instance Hashable WriteDiagnostics
 instance NFData   WriteDiagnostics
-instance Binary   WriteDiagnostics
 
 type instance RuleResult WriteDiagnostics = ()
+
+data GetMetaprograms = GetMetaprograms
+    deriving (Eq, Show, Typeable, Generic)
+
+instance Hashable GetMetaprograms
+instance NFData   GetMetaprograms
+
+type instance RuleResult GetMetaprograms = [(Tracked 'Current RealSrcSpan, T.Text)]
 
 wingmanRules :: PluginId -> Rules ()
 wingmanRules plId = do
@@ -544,6 +577,21 @@ wingmanRules plId = do
               ( fmap (\r -> (nfp, ShowDiag, mkDiagnostic severity r)) holes
               , Just ()
               )
+
+  defineNoDiagnostics $ \GetMetaprograms nfp -> do
+    TrackedStale tcg tcg_map <- fmap tmrTypechecked <$> useWithStale_ TypeCheck nfp
+    let scrutinees = traverse (metaprogramQ . tcg_binds) tcg
+    return $ Just $ flip mapMaybe scrutinees $ \aged@(unTrack -> (ss, program)) -> do
+      case ss of
+        RealSrcSpan r _ -> do
+          rss' <- mapAgeTo tcg_map $ unsafeCopyAge aged r
+          pure (rss', program)
+        UnhelpfulSpan _ -> Nothing
+
+  -- This persistent rule helps to avoid blocking HLS hover providers at startup
+  -- Without it, the GetMetaprograms rule blocks on typecheck and prevents other
+  -- hover providers from being used to produce a response
+  addPersistentRule GetMetaprograms $ \_ -> return $ Just ([], idDelta, Nothing)
 
   action $ do
     files <- getFilesOfInterestUntracked
@@ -599,7 +647,7 @@ getMetaprogramAtSpan
 getMetaprogramAtSpan (unTrack -> ss)
   = fmap snd
   . listToMaybe
-  . metaprogramQ ss
+  . metaprogramAtQ ss
   . tcg_binds
   . unTrack
 

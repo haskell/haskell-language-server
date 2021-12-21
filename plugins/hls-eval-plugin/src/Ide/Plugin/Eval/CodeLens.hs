@@ -25,162 +25,91 @@ module Ide.Plugin.Eval.CodeLens (
     evalCommand,
 ) where
 
-import           CmdLineParser
-import           Control.Applicative                  (Alternative ((<|>)))
-import           Control.Arrow                        (second, (>>>))
-import           Control.Exception                    (try)
-import qualified Control.Exception                    as E
-import           Control.Lens                         (_1, _3, (%~), (<&>),
-                                                       (^.))
-import           Control.Monad                        (guard, join, void, when)
-import           Control.Monad.IO.Class               (MonadIO (liftIO))
-import           Control.Monad.Trans.Except           (ExceptT (..))
-import           Data.Aeson                           (toJSON)
-import           Data.Char                            (isSpace)
-import qualified Data.DList                           as DL
-import qualified Data.HashMap.Strict                  as HashMap
-import           Data.List                            (dropWhileEnd, find,
-                                                       intercalate, intersperse)
-import qualified Data.Map.Strict                      as Map
-import           Data.Maybe                           (catMaybes, fromMaybe)
-import           Data.String                          (IsString)
-import           Data.Text                            (Text)
-import qualified Data.Text                            as T
-import           Data.Time                            (getCurrentTime)
-import           Data.Typeable                        (Typeable)
-import           Development.IDE                      (Action,
-                                                       GetDependencies (..),
-                                                       GetModIface (..),
-                                                       GetModSummary (..),
-                                                       GetParsedModuleWithComments (..),
-                                                       GhcSessionIO (..),
-                                                       HiFileResult (hirHomeMod, hirModSummary),
-                                                       HscEnvEq, IdeState,
-                                                       ModSummaryResult (..),
-                                                       evalGhcEnv,
-                                                       hscEnvWithImportPaths,
-                                                       prettyPrint,
-                                                       realSrcSpanToRange,
-                                                       runAction,
-                                                       textToStringBuffer,
-                                                       toNormalizedFilePath',
-                                                       uriToFilePath',
-                                                       useNoFile_,
-                                                       useWithStale_, use_,
-                                                       uses_)
-import           Development.IDE.Core.Compile         (loadModulesHome,
-                                                       setupFinderCache)
-import           Development.IDE.Core.PositionMapping (toCurrentRange)
-import           Development.IDE.Core.Rules           (TransitiveDependencies (transitiveModuleDeps))
-import           Development.IDE.GHC.Compat           (AnnotationComment (AnnBlockComment, AnnLineComment),
-                                                       GenLocated (L),
-                                                       GhcException, HscEnv,
-                                                       ParsedModule (..),
-                                                       SrcSpan (UnhelpfulSpan),
-                                                       moduleName,
-                                                       setInteractiveDynFlags,
-                                                       srcSpanFile)
-import qualified Development.IDE.GHC.Compat           as SrcLoc
+import           Control.Applicative             (Alternative ((<|>)))
+import           Control.Arrow                   (second, (>>>))
+import           Control.Exception               (try)
+import qualified Control.Exception               as E
+import           Control.Lens                    (_1, _3, (%~), (<&>), (^.))
+import           Control.Monad                   (guard, join, void, when)
+import           Control.Monad.IO.Class          (MonadIO (liftIO))
+import           Control.Monad.Trans.Except      (ExceptT (..))
+import           Data.Aeson                      (toJSON)
+import           Data.Char                       (isSpace)
+import           Data.Default
+import qualified Data.HashMap.Strict             as HashMap
+import           Data.List                       (dropWhileEnd, find,
+                                                  intercalate, intersperse)
+import           Data.Maybe                      (catMaybes, fromMaybe)
+import           Data.String                     (IsString)
+import           Data.Text                       (Text)
+import qualified Data.Text                       as T
+import           Data.Time                       (getCurrentTime)
+import           Data.Typeable                   (Typeable)
+import           Development.IDE                 (GetModSummary (..),
+                                                  GhcSessionIO (..), IdeState,
+                                                  ModSummaryResult (..),
+                                                  NeedsCompilation (NeedsCompilation),
+                                                  evalGhcEnv,
+                                                  hscEnvWithImportPaths,
+                                                  prettyPrint, runAction,
+                                                  textToStringBuffer,
+                                                  toNormalizedFilePath',
+                                                  uriToFilePath', useNoFile_,
+                                                  useWithStale_, use_)
+import           Development.IDE.Core.Rules      (GhcSessionDepsConfig (..),
+                                                  ghcSessionDepsDefinition)
+import           Development.IDE.GHC.Compat      hiding (typeKind, unitState)
+import qualified Development.IDE.GHC.Compat      as Compat
+import qualified Development.IDE.GHC.Compat      as SrcLoc
+import           Development.IDE.GHC.Compat.Util (GhcException,
+                                                  OverridingBool (..))
 import           Development.IDE.Types.Options
-import           DynamicLoading                       (initializePlugins)
-import           FastString                           (unpackFS)
-import           GHC                                  (ClsInst,
-                                                       ExecOptions (execLineNumber, execSourceFile),
-                                                       FamInst, Fixity,
-                                                       GeneralFlag (..), Ghc,
-                                                       GhcLink (LinkInMemory),
-                                                       GhcMode (CompManager),
-                                                       GhcMonad (getSession),
-                                                       HscTarget (HscInterpreted),
-                                                       LoadHowMuch (LoadAllTargets),
-                                                       ModSummary (ms_hspp_opts),
-                                                       NamedThing (getName, getOccName),
-                                                       SuccessFlag (Failed, Succeeded),
-                                                       TcRnExprMode (..),
-                                                       TyThing, defaultFixity,
-                                                       execOptions, exprType,
-                                                       getInfo,
-                                                       getInteractiveDynFlags,
-                                                       getSessionDynFlags,
-                                                       isImport, isStmt, load,
-                                                       parseName, pprFamInst,
-                                                       pprInstance, runDecls,
-                                                       setContext, setLogAction,
-                                                       setSessionDynFlags,
-                                                       setTargets, typeKind)
-import qualified GHC.LanguageExtensions.Type          as LangExt (Extension (..))
-import           GhcPlugins                           (DynFlags (..),
-                                                       defaultLogActionHPutStrDoc,
-                                                       elemNameSet, gopt_set,
-                                                       gopt_unset, hsc_dflags,
-                                                       isSymOcc, mkNameSet,
-                                                       parseDynamicFlagsCmdLine,
-                                                       pprDefinedAt,
-                                                       pprInfixName,
-                                                       targetPlatform,
-                                                       tyThingParent_maybe,
-                                                       xopt_set, xopt_unset)
+import           GHC                             (ClsInst,
+                                                  ExecOptions (execLineNumber, execSourceFile),
+                                                  FamInst, GhcMonad,
+                                                  LoadHowMuch (LoadAllTargets),
+                                                  NamedThing (getName),
+                                                  defaultFixity, execOptions,
+                                                  exprType, getInfo,
+                                                  getInteractiveDynFlags,
+                                                  isImport, isStmt, load,
+                                                  parseName, pprFamInst,
+                                                  pprInstance, setLogAction,
+                                                  setTargets, typeKind)
+import qualified GHC.LanguageExtensions.Type     as LangExt (Extension (..))
 
-import           HscTypes                             (InteractiveImport (IIModule),
-                                                       ModSummary (ms_mod),
-                                                       Target (Target),
-                                                       TargetId (TargetFile))
-import           Ide.Plugin.Eval.Code                 (Statement, asStatements,
-                                                       evalSetup, myExecStmt,
-                                                       propSetup, resultRange,
-                                                       testCheck, testRanges)
-import           Ide.Plugin.Eval.GHC                  (addImport, addPackages,
-                                                       hasPackage, showDynFlags)
-import           Ide.Plugin.Eval.Parse.Comments       (commentsToSections)
-import           Ide.Plugin.Eval.Parse.Option         (parseSetFlags)
+import           Development.IDE.Core.FileStore  (setSomethingModified)
+import           Development.IDE.Types.Shake     (toKey)
+import           Ide.Plugin.Eval.Code            (Statement, asStatements,
+                                                  evalSetup, myExecStmt,
+                                                  propSetup, resultRange,
+                                                  testCheck, testRanges)
+import           Ide.Plugin.Eval.GHC             (addImport, addPackages,
+                                                  hasPackage, showDynFlags)
+import           Ide.Plugin.Eval.Parse.Comments  (commentsToSections)
+import           Ide.Plugin.Eval.Parse.Option    (parseSetFlags)
+import           Ide.Plugin.Eval.Rules           (queueForEvaluation)
 import           Ide.Plugin.Eval.Types
-import           Ide.Plugin.Eval.Util                 (asS, gStrictTry,
-                                                       handleMaybe,
-                                                       handleMaybeM, isLiterate,
-                                                       logWith, response,
-                                                       response', timed)
+import           Ide.Plugin.Eval.Util            (asS, gStrictTry, isLiterate,
+                                                  logWith, response', timed)
+import           Ide.PluginUtils                 (handleMaybe, handleMaybeM,
+                                                  response)
 import           Ide.Types
 import           Language.LSP.Server
-import           Language.LSP.Types                   hiding
-                                                      (SemanticTokenAbsolute (length, line),
-                                                       SemanticTokenRelative (length))
-import           Language.LSP.Types.Lens              (end, line)
-import           Language.LSP.VFS                     (virtualFileText)
-import           Outputable                           (SDoc, empty, hang, nest,
-                                                       ppr, showSDoc, text,
-                                                       vcat, ($$), (<+>))
-import           System.FilePath                      (takeFileName)
-import           System.IO                            (hClose)
-import           UnliftIO.Temporary                   (withSystemTempFile)
-import           Util                                 (OverridingBool (Never))
-
-import           IfaceSyn                             (showToHeader)
-import           PprTyThing                           (pprTyThingInContext,
-                                                       pprTypeForUser)
-#if MIN_VERSION_ghc(9,0,0)
-import           GHC.Driver.Ways                      (hostFullWays,
-                                                       wayGeneralFlags,
-                                                       wayUnsetGeneralFlags)
-import           GHC.Parser.Annotation                (ApiAnns (apiAnnRogueComments))
-import           GHC.Parser.Lexer                     (mkParserFlags)
-import           GHC.Types.SrcLoc                     (UnhelpfulSpanReason (UnhelpfulInteractive))
-#else
-import           GhcPlugins                           (interpWays, updateWays,
-                                                       wayGeneralFlags,
-                                                       wayUnsetGeneralFlags)
-#endif
+import           Language.LSP.Types              hiding
+                                                 (SemanticTokenAbsolute (length, line),
+                                                  SemanticTokenRelative (length))
+import           Language.LSP.Types.Lens         (end, line)
+import           Language.LSP.VFS                (virtualFileText)
+import           System.FilePath                 (takeFileName)
+import           System.IO                       (hClose)
+import           UnliftIO.Temporary              (withSystemTempFile)
 
 #if MIN_VERSION_ghc(9,0,0)
-pattern RealSrcSpanAlready :: SrcLoc.RealSrcSpan -> SrcLoc.RealSrcSpan
-pattern RealSrcSpanAlready x = x
-apiAnnComments' :: SrcLoc.ApiAnns -> [SrcLoc.RealLocated AnnotationComment]
-apiAnnComments' = apiAnnRogueComments
+import           GHC.Driver.Session              (unitDatabases, unitState)
+import           GHC.Types.SrcLoc                (UnhelpfulSpanReason (UnhelpfulInteractive))
 #else
-apiAnnComments' :: SrcLoc.ApiAnns -> [SrcLoc.Located AnnotationComment]
-apiAnnComments' = concat . Map.elems . snd
-
-pattern RealSrcSpanAlready :: SrcLoc.RealSrcSpan -> SrcSpan
-pattern RealSrcSpanAlready x = SrcLoc.RealSrcSpan x
+import           DynFlags
 #endif
 
 
@@ -198,36 +127,16 @@ codeLens st plId CodeLensParams{_textDocument} =
                 let nfp = toNormalizedFilePath' fp
                     isLHS = isLiterate fp
                 dbg "fp" fp
-                (ParsedModule{..}, posMap) <- liftIO $
-                    runAction "eval.GetParsedModuleWithComments" st $ useWithStale_ GetParsedModuleWithComments nfp
-                let comments =
-                         foldMap (\case
-                            L (RealSrcSpanAlready real) bdy
-                                | unpackFS (srcSpanFile real) ==
-                                    fromNormalizedFilePath nfp
-                                , let ran0 = realSrcSpanToRange real
-                                , Just curRan <- toCurrentRange posMap ran0
-                                ->
-
-                                    -- since Haddock parsing is unset explicitly in 'getParsedModuleWithComments',
-                                    -- we can concentrate on these two
-                                    case bdy of
-                                        AnnLineComment cmt ->
-                                            mempty { lineComments = Map.singleton curRan (RawLineComment cmt) }
-                                        AnnBlockComment cmt ->
-                                            mempty { blockComments = Map.singleton curRan $ RawBlockComment cmt }
-                                        _ -> mempty
-                            _ -> mempty
-                        )
-                        $ apiAnnComments' pm_annotations
-                dbg "excluded comments" $ show $  DL.toList $
-                    foldMap (\(L a b) ->
-                        case b of
-                            AnnLineComment{}  -> mempty
-                            AnnBlockComment{} -> mempty
-                            _                 -> DL.singleton (a, b)
-                    )
-                    $ apiAnnComments' pm_annotations
+                (comments, _) <- liftIO $
+                    runAction "eval.GetParsedModuleWithComments" st $ useWithStale_ GetEvalComments nfp
+                -- dbg "excluded comments" $ show $  DL.toList $
+                --     foldMap (\(L a b) ->
+                --         case b of
+                --             AnnLineComment{}  -> mempty
+                --             AnnBlockComment{} -> mempty
+                --             _                 -> DL.singleton (a, b)
+                --     )
+                --     $ apiAnnComments' pm_annotations
                 dbg "comments" $ show comments
 
                 -- Extract tests from source code
@@ -286,6 +195,10 @@ runEvalCmd st EvalParams{..} =
             fp <- handleMaybe "uri" $ uriToFilePath' _uri
             let nfp = toNormalizedFilePath' fp
             mdlText <- moduleText _uri
+
+            -- enable codegen
+            liftIO $ queueForEvaluation st nfp
+            liftIO $ setSomethingModified st [toKey NeedsCompilation nfp] "Eval"
 
             session <- runGetSession st nfp
 
@@ -387,7 +300,7 @@ runEvalCmd st EvalParams{..} =
                         return $ Left err
                     Succeeded -> do
                         -- Evaluation takes place 'inside' the module
-                        setContext [IIModule modName]
+                        setContext [Compat.IIModule modName]
                         Right <$> getSession
 
             edits <-
@@ -601,11 +514,10 @@ evals (st, fp) df stmts = do
                 dbg "{DECL " stmt
                 void $ runDecls stmt
                 return Nothing
+    pf = initParserOpts df
 #if !MIN_VERSION_ghc(9,0,0)
-    pf = df
     unhelpfulReason = "<interactive>"
 #else
-    pf = mkParserFlags df
     unhelpfulReason = UnhelpfulInteractive
 #endif
     exec stmt l =
@@ -617,29 +529,21 @@ prettyWarn Warn{..} =
     prettyPrint (SrcLoc.getLoc warnMsg) <> ": warning:\n"
     <> "    " <> SrcLoc.unLoc warnMsg
 
-ghcSessionDepsDefinition :: HscEnvEq -> NormalizedFilePath -> Action HscEnv
-ghcSessionDepsDefinition env file = do
-        let hsc = hscEnvWithImportPaths env
-        deps <- use_ GetDependencies file
-        let tdeps = transitiveModuleDeps deps
-        ifaces <- uses_ GetModIface tdeps
-
-        -- Currently GetDependencies returns things in topological order so A comes before B if A imports B.
-        -- We need to reverse this as GHC gets very unhappy otherwise and complains about broken interfaces.
-        -- Long-term we might just want to change the order returned by GetDependencies
-        let inLoadOrder = reverse (map hirHomeMod ifaces)
-
-        liftIO $ loadModulesHome inLoadOrder <$> setupFinderCache (map hirModSummary ifaces) hsc
-
 runGetSession :: MonadIO m => IdeState -> NormalizedFilePath -> m HscEnv
 runGetSession st nfp = liftIO $ runAction "eval" st $ do
     -- Create a new GHC Session rather than reusing an existing one
     -- to avoid interfering with ghcide
+    -- UPDATE: I suspect that this doesn't really work, we always get the same Session
+    --         we probably cache hscEnvs in the Session state
     IdeGhcSession{loadSessionFun} <- useNoFile_ GhcSessionIO
     let fp = fromNormalizedFilePath nfp
     ((_, res),_) <- liftIO $ loadSessionFun fp
-    let hscEnv = fromMaybe (error $ "Unknown file: " <> fp) res
-    ghcSessionDepsDefinition hscEnv nfp
+    let env = fromMaybe (error $ "Unknown file: " <> fp) res
+        ghcSessionDepsConfig = def
+            { checkForImportCycles = False
+            }
+    res <- fmap hscEnvWithImportPaths <$> ghcSessionDepsDefinition True ghcSessionDepsConfig env nfp
+    return $ fromMaybe (error $ "Unable to load file: " <> fp) res
 
 needsQuickCheck :: [(Section, Test)] -> Bool
 needsQuickCheck = any (isProperty . snd)
@@ -766,7 +670,7 @@ doKindCmd True df arg = do
 doTypeCmd :: DynFlags -> Text -> Ghc (Maybe Text)
 doTypeCmd dflags arg = do
     let (emod, expr) = parseExprMode arg
-    ty <- exprType emod $ T.unpack expr
+    ty <- GHC.exprType emod $ T.unpack expr
     let rawType = T.strip $ T.pack $ showSDoc dflags $ pprTypeForUser ty
         broken = T.any (\c -> c == '\r' || c == '\n') rawType
     pure $
@@ -812,29 +716,20 @@ parseGhciLikeCmd input = do
 
 setupDynFlagsForGHCiLike :: HscEnv -> DynFlags -> IO DynFlags
 setupDynFlagsForGHCiLike env dflags = do
-    let dflags3 =
-            dflags
-                { hscTarget = HscInterpreted
-                , ghcMode = CompManager
-                , ghcLink = LinkInMemory
-                }
+    let dflags3 = setInterpreterLinkerOptions dflags
         platform = targetPlatform dflags3
-#if MIN_VERSION_ghc(9,0,0)
-        evalWays = hostFullWays
-#else
-        evalWays = interpWays
-#endif
-        dflags3a = dflags3{ways = evalWays}
+        evalWays = Compat.hostFullWays
+        dflags3a = setWays evalWays dflags3
         dflags3b =
             foldl gopt_set dflags3a $
-                concatMap (wayGeneralFlags platform) evalWays
+                concatMap (Compat.wayGeneralFlags platform) evalWays
         dflags3c =
             foldl gopt_unset dflags3b $
-                concatMap (wayUnsetGeneralFlags platform) evalWays
+                concatMap (Compat.wayUnsetGeneralFlags platform) evalWays
         dflags4 =
             dflags3c
                 `gopt_set` Opt_ImplicitImportQualified
                 `gopt_set` Opt_IgnoreOptimChanges
                 `gopt_set` Opt_IgnoreHpcChanges
                 `gopt_unset` Opt_DiagnosticsShowCaret
-    initializePlugins env dflags4
+    Compat.hsc_dflags <$> Compat.initializePlugins (Compat.hscSetFlags dflags4 env)

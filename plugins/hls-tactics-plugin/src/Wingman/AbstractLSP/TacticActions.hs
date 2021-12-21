@@ -16,8 +16,6 @@ import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.ExactPrint
 import           Generics.SYB.GHC (mkBindListT, everywhereM')
-import           GhcPlugins (occName)
-import           System.Timeout (timeout)
 import           Wingman.AbstractLSP.Types
 import           Wingman.CaseSplit
 import           Wingman.GHC (liftMaybe, isHole, pattern AMatch, unXPat)
@@ -27,6 +25,8 @@ import           Wingman.LanguageServer.TacticProviders
 import           Wingman.Machinery (runTactic, scoreSolution)
 import           Wingman.Range
 import           Wingman.Types
+import Development.IDE.Core.Service (getIdeOptionsIO)
+import Development.IDE.Types.Options (IdeTesting(IdeTesting), IdeOptions (IdeOptions, optTesting))
 
 
 ------------------------------------------------------------------------------
@@ -36,7 +36,7 @@ makeTacticInteraction
     -> Interaction
 makeTacticInteraction cmd =
   Interaction $ Continuation @_ @HoleTarget cmd
-    (SynthesizeCodeAction $ \env@LspEnv{..} hj -> do
+    (SynthesizeCodeAction $ \env hj -> do
       pure $ commandProvider cmd $
             TacticProviderData
               { tpd_lspEnv    = env
@@ -50,9 +50,13 @@ makeTacticInteraction cmd =
         let span = fmap (rangeToRealSrcSpan (fromNormalizedFilePath fc_nfp)) hj_range
         TrackedStale _ pmmap <- mapMaybeT liftIO $ stale GetAnnotatedParsedSource
         pm_span <- liftMaybe $ mapAgeFrom pmmap span
-        let t = commandTactic cmd var_name
+        IdeOptions{optTesting = IdeTesting isTesting} <-
+            liftIO $ getIdeOptionsIO (shakeExtras le_ideState)
 
-        liftIO $ runTactic (cfg_timeout_seconds le_config * seconds) hj_ctx hj_jdg t >>= \case
+        let t = commandTactic cmd var_name
+            timeout = if isTesting then maxBound else cfg_timeout_seconds le_config * seconds
+
+        liftIO $ runTactic timeout hj_ctx hj_jdg t >>= \case
           Left err ->
             pure
               $ pure
@@ -76,7 +80,7 @@ makeTacticInteraction cmd =
                   $ addTimeoutMessage rtr
                   $ pure
                   $ GraftEdit
-                  $ graftHole (RealSrcSpan $ unTrack pm_span) rtr
+                  $ graftHole (RealSrcSpan (unTrack pm_span) Nothing) rtr
 
 
 addTimeoutMessage :: RunTacticResults -> [ContinuationResult] -> [ContinuationResult]

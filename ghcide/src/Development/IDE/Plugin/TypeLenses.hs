@@ -12,7 +12,7 @@ module Development.IDE.Plugin.TypeLenses (
   GlobalBindingTypeSigsResult (..),
 ) where
 
-import           Avail                               (availsToNameSet)
+import           Control.Concurrent.STM.Stats        (atomically)
 import           Control.DeepSeq                     (rwhnf)
 import           Control.Monad                       (mzero)
 import           Control.Monad.Extra                 (whenMaybe)
@@ -42,13 +42,6 @@ import           Development.IDE.Types.Location      (Position (Position, _chara
                                                       toNormalizedFilePath',
                                                       uriToFilePath')
 import           GHC.Generics                        (Generic)
-import           GhcPlugins                          (GlobalRdrEnv,
-                                                      HscEnv (hsc_dflags), SDoc,
-                                                      elemNameSet, getSrcSpan,
-                                                      idName, mkRealSrcLoc,
-                                                      realSrcLocSpan,
-                                                      tidyOpenType)
-import           HscTypes                            (mkPrintUnqualified)
 import           Ide.Plugin.Config                   (Config)
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils                     (mkLspCommand,
@@ -73,16 +66,6 @@ import           Language.LSP.Types                  (ApplyWorkspaceEditParams (
                                                       TextDocumentIdentifier (TextDocumentIdentifier),
                                                       TextEdit (TextEdit),
                                                       WorkspaceEdit (WorkspaceEdit))
-import           Outputable                          (showSDocForUser)
-import           PatSyn                              (PatSyn, mkPatSyn,
-                                                      patSynBuilder,
-                                                      patSynFieldLabels,
-                                                      patSynIsInfix,
-                                                      patSynMatcher, patSynName,
-                                                      patSynSig, pprPatSynType)
-import           TcEnv                               (tcInitTidyEnv)
-import           TcRnMonad                           (initTcWithGbl)
-import           TcRnTypes                           (TcGblEnv (..))
 import           Text.Regex.TDFA                     ((=~), (=~~))
 
 typeLensCommandId :: T.Text
@@ -118,8 +101,8 @@ codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentif
       bindings <- runAction "codeLens.GetBindings" ideState (use GetBindings filePath)
       gblSigs <- runAction "codeLens.GetGlobalBindingTypeSigs" ideState (use GetGlobalBindingTypeSigs filePath)
 
-      diag <- getDiagnostics ideState
-      hDiag <- getHiddenDiagnostics ideState
+      diag <- atomically $ getDiagnostics ideState
+      hDiag <- atomically $ getHiddenDiagnostics ideState
 
       let toWorkSpaceEdit tedit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing Nothing
           generateLensForGlobal sig@GlobalBindingTypeSig{..} = do
@@ -185,7 +168,7 @@ suggestLocalSignature isQuickFix mTmr mBindings Diagnostic{_message, _range = _r
     , Just TcModuleResult{tmrTypechecked = TcGblEnv{tcg_rdr_env, tcg_sigs}} <- mTmr
     , -- not a top-level thing, to avoid duplication
       not $ name `elemNameSet` tcg_sigs
-    , tyMsg <- showSDocForUser unsafeGlobalDynFlags (mkPrintUnqualified unsafeGlobalDynFlags tcg_rdr_env) $ pprSigmaType ty
+    , tyMsg <- printSDocQualifiedUnsafe (mkPrintUnqualifiedDefault tcg_rdr_env) $ pprSigmaType ty
     , signature <- T.pack $ printName name <> " :: " <> tyMsg
     , startCharacter <- _character _start
     , startOfLine <- Position (_line _start) startCharacter
@@ -229,11 +212,11 @@ instance A.FromJSON Mode where
 
 --------------------------------------------------------------------------------
 
-showDocRdrEnv :: DynFlags -> GlobalRdrEnv -> SDoc -> String
-showDocRdrEnv dflags rdrEnv = showSDocForUser dflags (mkPrintUnqualified dflags rdrEnv)
+showDocRdrEnv :: HscEnv -> GlobalRdrEnv -> SDoc -> String
+showDocRdrEnv env rdrEnv = showSDocForUser (hsc_dflags env) (mkPrintUnqualified (hsc_dflags env) rdrEnv)
 
 data GetGlobalBindingTypeSigs = GetGlobalBindingTypeSigs
-  deriving (Generic, Show, Eq, Ord, Hashable, NFData, Binary)
+  deriving (Generic, Show, Eq, Ord, Hashable, NFData)
 
 data GlobalBindingTypeSig = GlobalBindingTypeSig
   { gbName     :: Name
@@ -269,9 +252,8 @@ gblBindingType (Just hsc) (Just gblEnv) = do
       sigs = tcg_sigs gblEnv
       binds = collectHsBindsBinders $ tcg_binds gblEnv
       patSyns = tcg_patsyns gblEnv
-      dflags = hsc_dflags hsc
       rdrEnv = tcg_rdr_env gblEnv
-      showDoc = showDocRdrEnv dflags rdrEnv
+      showDoc = showDocRdrEnv hsc rdrEnv
       hasSig :: (Monad m) => Name -> m a -> m (Maybe a)
       hasSig name f = whenMaybe (name `elemNameSet` sigs) f
       bindToSig id = do

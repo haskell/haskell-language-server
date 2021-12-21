@@ -7,7 +7,9 @@ cabal.project.local
 /.tasty-rerun-log
 .vscode
 /.hlint-*
-bench/example/
+bench/example/*
+# don't ignore the example file, we need it!
+!bench/example/HLS
 bench-results/
 bench-temp/
 .shake/

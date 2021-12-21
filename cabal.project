@@ -24,6 +24,13 @@ packages:
          ./plugins/hls-module-name-plugin
          ./plugins/hls-ormolu-plugin
          ./plugins/hls-call-hierarchy-plugin
+         ./plugins/hls-alternate-number-format-plugin
+         ./plugins/hls-qualify-imported-names-plugin
+
+-- Standard location for temporary packages needed for particular environments
+-- For example it is used in the project gitlab mirror to help in the MAcOS M1 build script
+-- See https://github.com/haskell/haskell-language-server/blob/master/.gitlab-ci.yml
+optional-packages: vendored/*/*.cabal
 
 tests: true
 
@@ -31,19 +38,12 @@ package *
   ghc-options: -haddock
   test-show-details: direct
 
--- see https://gitlab.haskell.org/haskell/ghc-api-compat/-/issues/1#note_371055
-source-repository-package
-  type: git
-  location: https://github.com/hsyl20/ghc-api-compat
-  tag: 8fee87eac97a538dbe81ff1ab18cff10f2f9fa15
-
 write-ghc-environment-files: never
 
-index-state: 2021-08-12T12:00:38Z
+index-state: 2021-11-29T12:30:07Z
 
 constraints:
     hyphenation +embed
-
 
 allow-newer:
     -- for shake-bench

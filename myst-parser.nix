@@ -10,11 +10,11 @@
 
 buildPythonPackage rec {
   pname = "myst-parser";
-  version = "0.15.1";
+  version = "0.16.0";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "00qnpkfjrn7bqbazm20n3zcci05803cfncvrlvk0rhsbdjiphg3w";
+    sha256 = "14lzbhciw7ksi219lrcy9afglmg5mx0rmfvrr2x8ssghv4kf8cdy";
   };
 
   propagatedBuildInputs = [

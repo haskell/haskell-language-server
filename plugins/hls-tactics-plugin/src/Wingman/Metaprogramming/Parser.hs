@@ -11,7 +11,7 @@ import           Data.Functor
 import           Data.Maybe (listToMaybe)
 import qualified Data.Text as T
 import           Development.IDE.GHC.Compat (RealSrcLoc, srcLocLine, srcLocCol, srcLocFile)
-import           FastString (unpackFS)
+import           Development.IDE.GHC.Compat.Util (unpackFS)
 import           Refinery.Tactic (failure)
 import qualified Refinery.Tactic as R
 import qualified Text.Megaparsec as P
@@ -346,6 +346,22 @@ commands =
           ]
           (Just "a")
           "(_ :: a -> a -> a -> a) a1 a2 a3"
+      ]
+
+  , command "let" Deterministic (Bind Many)
+      "Create let-bindings for each binder given to this tactic."
+      (pure . letBind)
+      [ Example
+          Nothing
+          ["a", "b", "c"]
+          [ ]
+          (Just "x")
+          $ T.pack $ unlines
+            [ "let a = _1 :: a"
+            , "    b = _2 :: b"
+            , "    c = _3 :: c"
+            , " in (_4 :: x)"
+            ]
       ]
 
   , command "try" Nondeterministic Tactic

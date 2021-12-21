@@ -1,5 +1,14 @@
 name: Benchmark
 
+defaults:
+  run:
+    shell: bash
+
+# See: https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#concurrency.
+concurrency:
+  group: ${{ github.head_ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
 on:
   pull_request:
     branches:
@@ -12,146 +21,161 @@ jobs:
       should_skip: ${{ steps.skip_check.outputs.should_skip }}
     steps:
       - id: skip_check
-        uses: fkirc/skip-duplicate-actions@v3.4.0
+        uses: fkirc/skip-duplicate-actions@v3.4.1
         with:
-          cancel_others: true
-          paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", ".circleci/**", "install/**", "**.nix", "**/test/**", "flake.lock", "**/README.md", "FUNDING.yml"]'
+          cancel_others: false
+          paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", ".circleci/**", "install/**", "**.nix", "**/test/**", "flake.lock", "**/README.md", "FUNDING.yml", "**/stack*.yaml"]'
 
-  bench-init:
+  bench_init:
+    if: needs.pre_job.outputs.should_skip != 'true'
     needs: pre_job
     runs-on: ${{ matrix.os }}
 
     strategy:
       fail-fast: false
       matrix:
-        ghc: ['8.10.4']
+        ghc: ['8.10.7']
         os: [ubuntu-latest]
+        cabal: ['3.6']
+
+    # This code is fitted to the strategy: assumes Linux is used ... etc,
+    # change of the strategy may require changing the bootstrapping/run code
 
     steps:
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      uses: actions/checkout@v2
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      run: git fetch origin master # check the master branch for benchmarking
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      uses: haskell/actions/setup@v1
+    - uses: actions/checkout@v2
+
+    - run: git fetch origin master # check the master branch for benchmarking
+
+    - uses: haskell/actions/setup@v1
+      id: HaskEnvSetup
       with:
-        ghc-version: ${{ matrix.ghc }}
-        cabal-version: '3.2'
+        ghc-version  : ${{ matrix.ghc   }}
+        cabal-version: ${{ matrix.cabal }}
         enable-stack: false
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      name: Cache Cabal
-      uses: actions/cache@v2
-      with:
-        path: |
-          ~/.cabal/packages
-          ~/.cabal/store
-        key: v2-${{ runner.os }}-${{ matrix.ghc }}-bench-${{ hashFiles('cabal.project') }}
-        restore-keys: |
-            v2-${{ runner.os }}-${{ matrix.ghc }}-build-${{ hashFiles('cabal.project') }}
-            v2-${{ runner.os }}-${{ matrix.ghc }}-bench-
-            v2-${{ runner.os }}-${{ matrix.ghc }}
+    - name: Linux Platform config
+      run: |
+        echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      run: cabal update
+    # All workflows which distinquishes cache on `cabal.project` needs this.
+    - name: Workaround shorten binary names
+      run: |
+        sed -i.bak -e 's/haskell-language-server/hls/g' \
+                    -e 's/haskell_language_server/hls/g' \
+                    haskell-language-server.cabal cabal.project
+        sed -i.bak -e 's/Paths_haskell_language_server/Paths_hls/g' \
+                    src/**/*.hs exe/*.hs
+
+    - name: Retrieving `cabal.project` Hackage timestamp
+      run: |
+        # Form: index-state: 2021-11-29T08:11:08Z
+        INDEX_STATE_ENTRY=$(grep index-state cabal.project)
+        # Form: 2021-11-29T08-11-08Z
+        INDEX_STATE1=$(echo "$INDEX_STATE_ENTRY" | cut -d' ' -f2 | tr ':' '-')
+        echo "INDEX_STATE=$INDEX_STATE1" >> $GITHUB_ENV
+
+    - name: Hackage sources cache
+      uses: actions/cache@v2
+      env:
+        cache-name: hackage-sources
+      with:
+        path: ${{ env.CABAL_PKGS_DIR }}
+        key:          ${{ env.cache-name }}-${{ env.INDEX_STATE }}
+        restore-keys: ${{ env.cache-name }}-
+
+    - name: Compiled deps cache
+      uses: actions/cache@v2
+      env:
+        cache-name: compiled-deps
+      with:
+        path: ${{ steps.HaskEnvSetup.outputs.cabal-store }}
+        key:  ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project') }}
+        restore-keys: |
+              ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-
+              ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
+              ${{ env.cache-name }}-${{ runner.os }}-
+
+    - run: cabal update
 
     # max-backjumps is increased as a temporary solution
     # for dependency resolution failure
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      run: cabal configure --enable-benchmarks --max-backjumps 12000
+    - run: cabal configure --enable-benchmarks --max-backjumps 12000
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      name: Build
-      shell: bash
+    - name: Build
       run: cabal build ghcide:benchHist
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      name: Bench init
-      shell: bash
+    - name: Bench init
       run: cabal bench ghcide:benchHist  -j --benchmark-options="all-binaries"
 
     # tar is required to preserve file permissions
     # compression speeds up upload/download nicely
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      name: tar workspace
-      shell: bash
+    - name: tar workspace
       run: tar -czf workspace.tar.gz * .git
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      name: tar cabal
+    - name: tar cabal
       run: |
         cd ~/.cabal
         tar -czf cabal.tar.gz *
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      name: Upload workspace
+    - name: Upload workspace
       uses: actions/upload-artifact@v2
       with:
         name: workspace
         retention-days: 1
         path: workspace.tar.gz
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      name: Upload .cabal
+    - name: Upload .cabal
       uses: actions/upload-artifact@v2
       with:
         name: cabal-home
         retention-days: 1
         path: ~/.cabal/cabal.tar.gz
 
-  bench-example:
-    needs: [bench-init, pre_job]
+  bench_example:
+    needs: [bench_init, pre_job]
     runs-on: ${{ matrix.os }}
 
     strategy:
       fail-fast: false
       matrix:
-        ghc: ['8.10.4']
+        ghc: ['8.10.7']
         os: [ubuntu-latest]
+        cabal: ['3.6']
         example: ['cabal', 'lsp-types']
 
     steps:
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      uses: haskell/actions/setup@v1
+    - uses: haskell/actions/setup@v1
       with:
-        ghc-version: ${{ matrix.ghc }}
-        cabal-version: '3.2'
+        ghc-version  : ${{ matrix.ghc   }}
+        cabal-version: ${{ matrix.cabal }}
         enable-stack: false
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      name: Download cabal home
+    - name: Download cabal home
       uses: actions/download-artifact@v2
       with:
         name: cabal-home
         path: .
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      name: Download workspace
+    - name: Download workspace
       uses: actions/download-artifact@v2
       with:
         name: workspace
         path: .
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      name: untar
+    - name: untar
       run: |
         mkdir -p ~/.cabal
         tar xzf workspace.tar.gz
         tar xzf cabal.tar.gz --directory ~/.cabal
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      name: Bench
-      shell: bash
+    - name: Bench
       run: cabal bench ghcide:benchHist  -j --benchmark-options="${{ matrix.example }}"
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      name: Display results
-      shell: bash
+    - name: Display results
       run: |
         column -s, -t < ghcide/bench-results/unprofiled/${{ matrix.example }}/results.csv | tee ghcide/bench-results/unprofiled/${{ matrix.example }}/results.txt
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      name: Archive benchmarking artifacts
+    - name: Archive benchmarking artifacts
       uses: actions/upload-artifact@v2
       with:
         name: bench-results-${{ runner.os }}-${{ matrix.ghc }}
@@ -161,8 +185,7 @@ jobs:
            ghcide/bench-results/**/*.svg
            ghcide/bench-results/**/*.eventlog.html
 
-    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-      name: Archive benchmark logs
+    - name: Archive benchmark logs
       uses: actions/upload-artifact@v2
       with:
         name: bench-logs-${{ runner.os }}-${{ matrix.ghc }}
@@ -170,3 +193,15 @@ jobs:
            ghcide/bench-results/**/*.log
            ghcide/bench-results/**/*.eventlog
            ghcide/bench-results/**/*.hp
+
+  bench_post_job:
+    if: always()
+    runs-on: ubuntu-latest
+    needs: [pre_job, bench_init, bench_example]
+    steps:
+      - run: |
+          echo "jobs info: ${{ toJSON(needs) }}"
+      - if: contains(needs.*.result, 'failure')
+        run: exit 1
+      - if: contains(needs.*.result, 'cancelled') && needs.pre_job.outputs.should_skip != 'true'
+        run: exit 1

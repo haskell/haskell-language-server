@@ -12,7 +12,6 @@ module Ide.Plugin.CallHierarchy.Internal (
 , outgoingCalls
 ) where
 
-import           Control.Concurrent
 import           Control.Lens                   ((^.))
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
@@ -31,13 +30,13 @@ import           Development.IDE.Core.Compile
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat     as Compat
 import           Development.IDE.Spans.AtPoint
+import           GHC.Conc.Sync
 import           HieDb                          (Symbol (Symbol))
 import qualified Ide.Plugin.CallHierarchy.Query as Q
 import           Ide.Plugin.CallHierarchy.Types
 import           Ide.Types
 import           Language.LSP.Types
 import qualified Language.LSP.Types.Lens        as L
-import           Name
 import           Text.Read                      (readMaybe)
 
 -- | Render prepare call hierarchy request.
@@ -318,7 +317,12 @@ refreshHieDb = do
                 liftIO $ writeAndIndexHieFile hsc se msum f exports asts source
                 pure ()
         )
-    liftIO $ threadDelay 100000 -- delay 0.1 sec to make more exact results.
+    ShakeExtras{hiedbWriter} <- getShakeExtras
+    liftIO $ atomically $ check $ indexPending hiedbWriter
+    where
+      check p = do
+        v <- readTVar p
+        if HM.null v then pure () else retry
 
 -- Copy unexport function form `ghcide/src/Development/IDE/Core/Rules.hs`
 getSourceFileSource :: NormalizedFilePath -> Action BS.ByteString

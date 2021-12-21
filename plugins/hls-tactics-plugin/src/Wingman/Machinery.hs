@@ -24,17 +24,14 @@ import           Data.Ord (Down (..), comparing)
 import qualified Data.Set as S
 import           Data.Traversable (for)
 import           Development.IDE.Core.Compile (lookupName)
-import           Development.IDE.GHC.Compat
-import           GhcPlugins (GlobalRdrElt (gre_name), lookupOccEnv, varType)
+import           Development.IDE.GHC.Compat hiding (isTopLevel, empty)
 import           Refinery.Future
 import           Refinery.ProofState
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           System.Timeout (timeout)
-import           TcType
-import           Type (tyCoVarsOfTypeWellScoped)
 import           Wingman.Context (getInstance)
-import           Wingman.GHC (tryUnifyUnivarsButNotSkolems, updateSubst, tacticsGetDataCons)
+import           Wingman.GHC (tryUnifyUnivarsButNotSkolems, updateSubst, tacticsGetDataCons, freshTyvars)
 import           Wingman.Judgements
 import           Wingman.Simplify (simplify)
 import           Wingman.Types
@@ -229,6 +226,12 @@ newtype Reward a = Reward a
   deriving (Eq, Ord, Show) via a
 
 
+------------------------------------------------------------------------------
+-- | Generate a unique unification variable.
+newUnivar :: MonadState TacticState m => m Type
+newUnivar = do
+  freshTyvars $
+    mkInfForAllTys [alphaTyVar] alphaTy
 
 
 ------------------------------------------------------------------------------

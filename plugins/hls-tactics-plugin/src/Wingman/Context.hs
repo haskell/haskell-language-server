@@ -1,6 +1,5 @@
 module Wingman.Context where
 
-import           Bag
 import           Control.Arrow
 import           Control.Monad.Reader
 import           Data.Coerce (coerce)
@@ -8,12 +7,7 @@ import           Data.Foldable.Extra (allM)
 import           Data.Maybe (fromMaybe, isJust, mapMaybe)
 import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
-import           GhcPlugins (ExternalPackageState (eps_inst_env), piResultTys, eps_fam_inst_env, extractModule)
-import           InstEnv (lookupInstEnv, InstEnvs(..), is_dfun)
-import           OccName
-import           TcRnTypes
-import           TcType (tcSplitTyConApp, tcSplitPhiTy)
-import           TysPrim (alphaTys)
+import           Development.IDE.GHC.Compat.Util
 import           Wingman.GHC (normalizeType)
 import           Wingman.Judgements.Theta
 import           Wingman.Types

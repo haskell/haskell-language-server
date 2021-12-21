@@ -8,16 +8,17 @@ module Main(main) where
 import           Arguments                         (Arguments (..),
                                                     getArguments)
 import           Control.Monad.Extra               (unless, whenJust)
-import           Data.Default                      (Default (def))
+import           Data.Default                      (def)
 import           Data.Version                      (showVersion)
 import           Development.GitRev                (gitHash)
-import           Development.IDE                   (action)
+import           Development.IDE                   (Priority (Debug, Info),
+                                                    action)
 import           Development.IDE.Core.OfInterest   (kick)
 import           Development.IDE.Core.Rules        (mainRule)
+import           Development.IDE.Core.Tracing      (withTelemetryLogger)
 import           Development.IDE.Graph             (ShakeOptions (shakeThreads))
 import qualified Development.IDE.Main              as Main
 import qualified Development.IDE.Plugin.HLS.GhcIde as GhcIde
-import qualified Development.IDE.Plugin.Test       as Test
 import           Development.IDE.Types.Options
 import           Ide.Plugin.Config                 (Config (checkParents, checkProject))
 import           Ide.PluginUtils                   (pluginDescToIdePlugins)
@@ -40,7 +41,7 @@ ghcideVersion = do
              <> gitHashSection
 
 main :: IO ()
-main = do
+main = withTelemetryLogger $ \telemetryLogger -> do
     let hlsPlugins = pluginDescToIdePlugins GhcIde.descriptors
     -- WARNING: If you write to stdout before runLanguageServer
     --          then the language server will not work
@@ -51,34 +52,31 @@ main = do
 
     whenJust argsCwd IO.setCurrentDirectory
 
-    Main.defaultMain def
+    let logPriority = if argsVerbose then Debug else Info
+        arguments = if argsTesting then Main.testing else Main.defaultArguments logPriority
+
+    Main.defaultMain arguments
         {Main.argCommand = argsCommand
+        ,Main.argsLogger = Main.argsLogger arguments <> pure telemetryLogger
 
         ,Main.argsRules = do
             -- install the main and ghcide-plugin rules
-            mainRule
+            mainRule def
             -- install the kick action, which triggers a typecheck on every
             -- Shake database restart, i.e. on every user edit.
             unless argsDisableKick $
                 action kick
 
-        ,Main.argsHlsPlugins =
-            pluginDescToIdePlugins $
-            GhcIde.descriptors
-            ++ [Test.blockCommandDescriptor "block-command" | argsTesting]
+        ,Main.argsThreads = case argsThreads of 0 -> Nothing ; i -> Just (fromIntegral i)
 
-        ,Main.argsGhcidePlugin = if argsTesting
-            then Test.plugin
-            else mempty
-
-        ,Main.argsIdeOptions = \config  sessionLoader ->
-            let defOptions = defaultIdeOptions sessionLoader
+        ,Main.argsIdeOptions = \config sessionLoader ->
+            let defOptions = Main.argsIdeOptions arguments config sessionLoader
             in defOptions
                 { optShakeProfiling = argsShakeProfiling
                 , optOTMemoryProfiling = IdeOTMemoryProfiling argsOTMemoryProfiling
-                , optTesting = IdeTesting argsTesting
                 , optShakeOptions = (optShakeOptions defOptions){shakeThreads = argsThreads}
                 , optCheckParents = pure $ checkParents config
                 , optCheckProject = pure $ checkProject config
+                , optRunSubset = not argsConservativeChangeTracking
                 }
         }

@@ -10,7 +10,7 @@ module Development.IDE.GHC.Util(
     prettyPrint,
     unsafePrintSDoc,
     printRdrName,
-    printName,
+    Development.IDE.GHC.Util.printName,
     ParseResult(..), runParser,
     lookupPackageConfig,
     textToStringBuffer,
@@ -30,48 +30,78 @@ module Development.IDE.GHC.Util(
     disableWarningsAsErrors,
     ) where
 
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC
+import           GHC.Core.Multiplicity
+import qualified GHC.Core.TyCo.Rep                 as TyCoRep
+import           GHC.Data.FastString
+import           GHC.Data.StringBuffer
+import           GHC.Driver.Env
+import           GHC.Driver.Env.Types
+import           GHC.Driver.Monad
+import           GHC.Driver.Session                hiding (ExposePackage)
+import qualified GHC.Driver.Session                as DynFlags
+import           GHC.Hs.Extension
+import qualified GHC.Hs.Type                       as GHC
+import           GHC.Iface.Env                     (updNameCache)
+import           GHC.Iface.Make                    (mkIfaceExports)
+import qualified GHC.Linker.Types                  as LinkerTypes
+import           GHC.Parser.Lexer
+import           GHC.Runtime.Context
+import           GHC.Tc.Types                      (TcGblEnv (tcg_exports))
+import           GHC.Tc.Utils.TcType               (pprSigmaType)
+import           GHC.Types.Avail
+import           GHC.Types.Name.Cache
+import           GHC.Types.Name.Occurrence
+import           GHC.Types.Name.Reader
+import           GHC.Types.SrcLoc
+import qualified GHC.Types.SrcLoc                  as SrcLoc
+import           GHC.Unit.Env
+import           GHC.Unit.Info                     (PackageName)
+import qualified GHC.Unit.Info                     as Packages
+import qualified GHC.Unit.Module.Location          as Module
+import           GHC.Unit.Module.ModDetails
+import           GHC.Unit.Module.ModGuts
+import           GHC.Unit.Module.ModIface          (mi_mod_hash)
+import           GHC.Unit.Module.Name              (moduleNameSlashes)
+import qualified GHC.Unit.State                    as Packages
+import           GHC.Unit.Types                    (IsBootInterface (..),
+                                                    unitString)
+import qualified GHC.Unit.Types                    as Module
+import           GHC.Utils.Fingerprint
+import           GHC.Utils.Outputable
+import qualified GHC.Utils.Outputable              as Outputable
+#endif
 import           Control.Concurrent
-import           Control.Exception
-import           Data.Binary.Put                (Put, runPut)
-import qualified Data.ByteString                as BS
-import           Data.ByteString.Internal       (ByteString (..))
-import qualified Data.ByteString.Internal       as BS
-import qualified Data.ByteString.Lazy           as LBS
+import           Control.Exception                 as E
+import           Data.Binary.Put                   (Put, runPut)
+import qualified Data.ByteString                   as BS
+import           Data.ByteString.Internal          (ByteString (..))
+import qualified Data.ByteString.Internal          as BS
+import qualified Data.ByteString.Lazy              as LBS
 import           Data.IORef
 import           Data.List.Extra
 import           Data.Maybe
-import qualified Data.Text                      as T
-import qualified Data.Text.Encoding             as T
-import qualified Data.Text.Encoding.Error       as T
+import qualified Data.Text                         as T
+import qualified Data.Text.Encoding                as T
+import qualified Data.Text.Encoding.Error          as T
 import           Data.Typeable
-import           Development.IDE.GHC.Compat     as GHC
+import           Development.IDE.GHC.Compat        as GHC
+import qualified Development.IDE.GHC.Compat.Parser as Compat
+import qualified Development.IDE.GHC.Compat.Units  as Compat
+import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.Types.Location
-import           FastString                     (mkFastString)
-import           FileCleanup
-import           Fingerprint
 import           Foreign.ForeignPtr
 import           Foreign.Ptr
 import           Foreign.Storable
-import           GHC.IO.BufferedIO              (BufferedIO)
-import           GHC.IO.Device                  as IODevice
+import           GHC
+import           GHC.IO.BufferedIO                 (BufferedIO)
+import           GHC.IO.Device                     as IODevice
 import           GHC.IO.Encoding
 import           GHC.IO.Exception
 import           GHC.IO.Handle.Internals
 import           GHC.IO.Handle.Types
-import           GhcMonad
-import           HscTypes                       (CgGuts, HscEnv (hsc_dflags),
-                                                 ModDetails, cg_binds,
-                                                 cg_module, hsc_IC, ic_dflags,
-                                                 md_types)
-import           Lexer
-import           Module                         (moduleNameSlashes)
-import           OccName                        (parenSymOcc)
-import           Outputable                     (Depth (..), Outputable, SDoc,
-                                                 neverQualify, ppr,
-                                                 showSDocUnsafe)
-import           RdrName                        (nameRdrName, rdrNameOcc)
-import           SrcLoc                         (mkRealSrcLoc)
-import           StringBuffer
+
 import           System.FilePath
 
 
@@ -86,19 +116,15 @@ modifyDynFlags f = do
   -- We do not use setSessionDynFlags here since we handle package
   -- initialization separately.
   modifySession $ \h ->
-    h { hsc_dflags = newFlags, hsc_IC = (hsc_IC h) {ic_dflags = newFlags} }
+    hscSetFlags newFlags h { hsc_IC = (hsc_IC h) {ic_dflags = newFlags} }
 
 -- | Given a 'Unit' try and find the associated 'PackageConfig' in the environment.
-lookupPackageConfig :: Unit -> HscEnv -> Maybe GHC.PackageConfig
+lookupPackageConfig :: Unit -> HscEnv -> Maybe GHC.UnitInfo
 lookupPackageConfig unit env =
-    -- GHC.lookupPackage' False pkgConfigMap unit
-    GHC.lookupUnit' False pkgConfigMap prClsre unit
+    Compat.lookupUnit' False unitState prClsre unit
     where
-        pkgConfigMap =
-            -- For some weird reason, the GHC API does not provide a way to get the PackageConfigMap
-            -- from PackageState so we have to wrap it in DynFlags first.
-            getPackageConfigMap $ hsc_dflags env
-        prClsre = preloadClosureUs $ hsc_dflags env
+        unitState = Compat.getUnitInfoMap env
+        prClsre = preloadClosureUs env
 
 
 -- | Convert from the @text@ package to the @GHC@ 'StringBuffer'.
@@ -112,7 +138,7 @@ runParser flags str parser = unP parser parseState
       filename = "<interactive>"
       location = mkRealSrcLoc (mkFastString filename) 1 1
       buffer = stringToStringBuffer str
-      parseState = mkPState flags buffer location
+      parseState = Compat.initParserState (Compat.initParserOpts flags) buffer location
 
 stringBufferToByteString :: StringBuffer -> ByteString
 stringBufferToByteString StringBuffer{..} = PS buf cur len
@@ -125,9 +151,7 @@ prettyPrint :: Outputable a => a -> String
 prettyPrint = unsafePrintSDoc . ppr
 
 unsafePrintSDoc :: SDoc -> String
-unsafePrintSDoc sdoc = oldRenderWithStyle dflags sdoc (oldMkUserStyle dflags neverQualify AllTheWay)
-  where
-    dflags = unsafeGlobalDynFlags
+unsafePrintSDoc sdoc = showSDocUnsafe sdoc
 
 -- | Pretty print a 'RdrName' wrapping operators in parens
 printRdrName :: RdrName -> String
@@ -148,13 +172,9 @@ evalGhcEnv env act = snd <$> runGhcEnv env act
 --   pieces, but designed to be more efficient than a standard 'runGhc'.
 runGhcEnv :: HscEnv -> Ghc a -> IO (HscEnv, a)
 runGhcEnv env act = do
-    filesToClean <- newIORef emptyFilesToClean
-    dirsToClean <- newIORef mempty
-    let dflags = (hsc_dflags env){filesToClean=filesToClean, dirsToClean=dirsToClean, useUnicode=True}
-    ref <- newIORef env{hsc_dflags=dflags}
-    res <- unGhc act (Session ref) `finally` do
-        cleanTempFiles dflags
-        cleanTempDirs dflags
+    hsc_env <- initTempFs env
+    ref <- newIORef hsc_env
+    res <- unGhc (withCleanupSession act) (Session ref)
     (,res) <$> readIORef ref
 
 -- | Given a module location, and its parse tree, figure out what is the include directory implied by it.
@@ -218,7 +238,7 @@ hDuplicateTo' h1@(FileHandle path m1) h2@(FileHandle _ m2)  = do
    -- _ <- hClose_help h2_
    -- hClose_help does two things:
    -- 1. It flushes the buffer, we replicate this here
-   _ <- flushWriteBuffer h2_ `catch` \(_ :: IOException) -> pure ()
+   _ <- flushWriteBuffer h2_ `E.catch` \(_ :: IOException) -> pure ()
    -- 2. It closes the handle. This is redundant since dup2 takes care of that
    -- but even worse it is actively harmful! Once the handle has been closed
    -- another thread is free to reallocate it. This leads to dup2 failing with EBUSY

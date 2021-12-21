@@ -1,5 +1,6 @@
 {-# LANGUAGE DerivingStrategies        #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE PatternSynonyms           #-}
 {-# LANGUAGE TypeFamilies              #-}
 module Development.IDE.Types.Shake
   ( Q (..),
@@ -8,32 +9,33 @@ module Development.IDE.Types.Shake
     ValueWithDiagnostics (..),
     Values,
     Key (..),
-    SomeShakeValue,
     BadDependency (..),
     ShakeValue(..),
     currentValue,
     isBadDependency,
-  toShakeValue,encodeShakeValue,decodeShakeValue,toKey,toNoFileKey)
+  toShakeValue,encodeShakeValue,decodeShakeValue,toKey,toNoFileKey,fromKey,fromKeyType)
 where
 
 import           Control.DeepSeq
 import           Control.Exception
 import qualified Data.ByteString.Char8                as BS
 import           Data.Dynamic
-import           Data.HashMap.Strict
 import           Data.Hashable
-import           Data.Typeable
+import           Data.Typeable                        (cast)
 import           Data.Vector                          (Vector)
 import           Development.IDE.Core.PositionMapping
-import           Development.IDE.Graph                (RuleResult,
-                                                       ShakeException (shakeExceptionInner))
+import           Development.IDE.Graph                (Key (..), RuleResult)
 import qualified Development.IDE.Graph                as Shake
-import           Development.IDE.Graph.Classes
-import           Development.IDE.Graph.Database       (SomeShakeValue (..))
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           GHC.Generics
 import           Language.LSP.Types
+import qualified StmContainers.Map                    as STM
+import           Type.Reflection                      (SomeTypeRep (SomeTypeRep),
+                                                       pattern App, pattern Con,
+                                                       typeOf, typeRep,
+                                                       typeRepTyCon)
+import           Unsafe.Coerce                        (unsafeCoerce)
 
 data Value v
     = Succeeded TextDocumentVersion v
@@ -54,27 +56,7 @@ data ValueWithDiagnostics
   = ValueWithDiagnostics !(Value Dynamic) !(Vector FileDiagnostic)
 
 -- | The state of the all values and diagnostics
-type Values = HashMap (NormalizedFilePath, Key) ValueWithDiagnostics
-
--- | Key type
-data Key = forall k . (Typeable k, Hashable k, Eq k, NFData k, Show k) => Key k
-
-instance Show Key where
-  show (Key k) = show k
-
-instance Eq Key where
-    Key k1 == Key k2 | Just k2' <- cast k2 = k1 == k2'
-                     | otherwise = False
-
-instance Hashable Key where
-    hashWithSalt salt (Key key) = hashWithSalt salt key
-
-instance Binary Key where
-    get = error "not really"
-    put _ = error "not really"
-
-instance NFData Key where
-    rnf (Key k) = rnf k
+type Values = STM.Map Key ValueWithDiagnostics
 
 -- | When we depend on something that reported an error, and we fail as a direct result, throw BadDependency
 --   which short-circuits the rest of the action
@@ -83,28 +65,30 @@ instance Exception BadDependency
 
 isBadDependency :: SomeException -> Bool
 isBadDependency x
-    | Just (x :: ShakeException) <- fromException x = isBadDependency $ shakeExceptionInner x
     | Just (_ :: BadDependency) <- fromException x = True
     | otherwise = False
 
+toKey :: Shake.ShakeValue k => k -> NormalizedFilePath -> Key
+toKey = (Key.) . curry Q
 
-toKey :: Shake.ShakeValue k => k -> NormalizedFilePath -> SomeShakeValue
-toKey = (SomeShakeValue .) . curry Q
+fromKey :: Typeable k => Key -> Maybe (k, NormalizedFilePath)
+fromKey (Key k)
+  | Just (Q (k', f)) <- cast k = Just (k', f)
+  | otherwise = Nothing
 
-toNoFileKey :: (Show k, Typeable k, Eq k, Hashable k, Binary k, NFData k) => k -> SomeShakeValue
-toNoFileKey k = toKey k emptyFilePath
+-- | fromKeyType (Q (k,f)) = (typeOf k, f)
+fromKeyType :: Key -> Maybe (SomeTypeRep, NormalizedFilePath)
+fromKeyType (Key k) = case typeOf k of
+    App (Con tc) a | tc == typeRepTyCon (typeRep @Q)
+        -> case unsafeCoerce k of
+         Q (_ :: (), f) -> Just (SomeTypeRep a, f)
+    _ -> Nothing
+
+toNoFileKey :: (Show k, Typeable k, Eq k, Hashable k) => k -> Key
+toNoFileKey k = Key $ Q (k, emptyFilePath)
 
 newtype Q k = Q (k, NormalizedFilePath)
     deriving newtype (Eq, Hashable, NFData)
-
-instance Binary k => Binary (Q k) where
-    put (Q (k, fp)) = put (k, fp)
-    get = do
-        (k, fp) <- get
-        -- The `get` implementation of NormalizedFilePath
-        -- does not handle empty file paths so we
-        -- need to handle this ourselves here.
-        pure (Q (k, toNormalizedFilePath' fp))
 
 instance Show k => Show (Q k) where
     show (Q (k, file)) = show k ++ "; " ++ fromNormalizedFilePath file

@@ -1,0 +1,65 @@
+packages:
+         ./
+         ./hie-compat
+         ./shake-bench
+         ./hls-graph
+         ./ghcide
+         ./hls-plugin-api
+         ./hls-test-utils
+        --  ./plugins/hls-tactics-plugin
+        --  ./plugins/hls-brittany-plugin
+        --  ./plugins/hls-stylish-haskell-plugin
+        --  ./plugins/hls-fourmolu-plugin
+         ./plugins/hls-class-plugin
+         ./plugins/hls-eval-plugin
+         ./plugins/hls-explicit-imports-plugin
+         ./plugins/hls-refine-imports-plugin
+         ./plugins/hls-hlint-plugin
+        -- ./plugins/hls-retrie-plugin
+         ./plugins/hls-haddock-comments-plugin
+        --  ./plugins/hls-splice-plugin
+         ./plugins/hls-qualify-imported-names-plugin
+         ./plugins/hls-floskell-plugin
+         ./plugins/hls-pragmas-plugin
+         ./plugins/hls-module-name-plugin
+         ./plugins/hls-ormolu-plugin
+         ./plugins/hls-call-hierarchy-plugin
+         ./plugins/hls-alternate-number-format-plugin
+
+with-compiler: ghc-9.2.1
+
+tests: true
+
+package *
+  ghc-options: -haddock
+  test-show-details: direct
+
+write-ghc-environment-files: never
+
+index-state: 2021-11-29T12:30:07Z
+
+constraints:
+  -- These plugins doesn't work on GHC92 yet
+  haskell-language-server +ignore-plugins-ghc-bounds -brittany -class -fourmolu -splice -stylishhaskell -tactic -refineImports -callhierarchy -retrie
+
+allow-newer:
+  Cabal,
+  base,
+  binary,
+  bytestring,
+  ghc,
+  ghc-bignum,
+  ghc-prim,
+  integer-gmp,
+  template-haskell,
+  text,
+  time,
+
+  diagrams-postscript:lens,
+  diagrams-postscript:diagrams-core,
+  diagrams-postscript:monoid-extras,
+  dependent-sum:some,
+  dependent-sum:constraints,
+  diagrams:diagrams-core,
+  Chart-diagrams:diagrams-core,
+  SVGFonts:diagrams-core

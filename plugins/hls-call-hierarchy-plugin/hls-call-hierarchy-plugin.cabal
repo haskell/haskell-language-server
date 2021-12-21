@@ -1,7 +1,10 @@
 cabal-version:      2.4
 name:               hls-call-hierarchy-plugin
-version:            1.0.0.2
+version:            1.0.1.1
 synopsis:           Call hierarchy plugin for Haskell Language Server
+description:
+  Please see the README on GitHub at <https://github.com/haskell/haskell-language-server/tree/master/plugins/hls-call-hierarchy-plugin#readme>
+
 license:            Apache-2.0
 license-file:       LICENSE
 author:             Lei Zhu
@@ -21,14 +24,13 @@ library
 
   hs-source-dirs:     src
   build-depends:
-    , aeson
+    , aeson                 >=1.5.2.0
     , base                  >=4.12 && <5
     , bytestring
     , containers
     , extra
     , ghc
-    , ghc-api-compat
-    , ghcide                ^>=1.4.1
+    , ghcide                ^>=1.4.1 || ^>= 1.5.0
     , hiedb
     , hls-plugin-api        ^>=1.2
     , lens
