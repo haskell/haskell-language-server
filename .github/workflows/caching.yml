@@ -154,11 +154,11 @@ jobs:
                 ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
                 ${{ env.cache-name }}-${{ runner.os }}-
 
-      - if: (! steps.compiled-deps.outputs.cache-hit)
+      - if: steps.compiled-deps.outputs.cache-hit != 'true'
         run: |
           cabal update
 
-      - if: (! steps.compiled-deps.outputs.cache-hit)
+      - if: steps.compiled-deps.outputs.cache-hit != 'true'
         name: Download all sources
         run: |
           cabal $cabalBuild --only-download
@@ -168,7 +168,7 @@ jobs:
       # but to cache what can be cached, so step is fault tolerant & would always succseed.
       # 2021-12-11: NOTE: Building all targets, since
       # current Cabal does not allow `all --enable-tests --enable-benchmarks --only-dependencies`
-      - if: (! steps.compiled-deps.outputs.cache-hit)
+      - if: steps.compiled-deps.outputs.cache-hit != 'true'
         name: Build all targets; try 3 times
         continue-on-error: true
         run: |
