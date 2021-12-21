@@ -2,6 +2,8 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 {-# LANGUAGE CPP                   #-}
+{-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 
 -- | Go to the definition of a variable.
@@ -78,6 +80,7 @@ import           Language.LSP.VFS
 import           Text.Regex.TDFA                                   (mrAfter,
                                                                     (=~), (=~~))
 
+import GHC.Types.Avail (greNameMangledName)
 -------------------------------------------------------------------------------------------------
 
 -- | Generate code actions.
@@ -140,7 +143,7 @@ fillHolePluginDescriptor = mkGhcideCAPlugin $ wrap suggestFillHole
 
 -------------------------------------------------------------------------------------------------
 
-findSigOfDecl :: (IdP p -> Bool) -> [LHsDecl p] -> Maybe (Sig p)
+findSigOfDecl :: p ~ GhcPass p0 => (IdP p -> Bool) -> [LHsDecl p] -> Maybe (Sig p)
 findSigOfDecl pred decls =
   listToMaybe
     [ sig
@@ -148,7 +151,7 @@ findSigOfDecl pred decls =
         any (pred . unLoc) idsSig
     ]
 
-findSigOfDeclRanged :: Range -> [LHsDecl p] -> Maybe (Sig p)
+findSigOfDeclRanged :: p ~ GhcPass p0 => Range -> [LHsDecl p] -> Maybe (Sig p)
 findSigOfDeclRanged range decls = do
   dec <- findDeclContainingLoc (_start range) decls
   case dec of
@@ -156,7 +159,7 @@ findSigOfDeclRanged range decls = do
      L _ (ValD _ (bind :: HsBind p)) -> findSigOfBind range bind
      _                               -> Nothing
 
-findSigOfBind :: Range -> HsBind p -> Maybe (Sig p)
+findSigOfBind :: forall p p0. p ~ GhcPass p0 => Range -> HsBind p -> Maybe (Sig p)
 findSigOfBind range bind =
     case bind of
       FunBind {} -> findSigOfLMatch (unLoc $ mg_alts (fun_matches bind))
@@ -165,14 +168,18 @@ findSigOfBind range bind =
     findSigOfLMatch :: [LMatch p (LHsExpr p)] -> Maybe (Sig p)
     findSigOfLMatch ls = do
       match <- findDeclContainingLoc (_start range) ls
-      findSigOfGRHSs (m_grhss (unLoc match))
+      findSigOfGRHSs (getLoc $ reLoc match) (m_grhss (unLoc match))
 
-    findSigOfGRHSs :: GRHSs p (LHsExpr p) -> Maybe (Sig p)
-    findSigOfGRHSs grhs = do
-        if _start range `isInsideSrcSpan` (getLoc $ grhssLocalBinds grhs)
+    findSigOfGRHSs :: SrcSpan -> GRHSs p (LHsExpr p) -> Maybe (Sig p)
+    findSigOfGRHSs span grhs = do
+        if _start range `isInsideSrcSpan` span
+#if !MIN_VERSION_ghc(9,2,0)
         then findSigOfBinds range (unLoc (grhssLocalBinds grhs)) -- where clause
+#else
+        then findSigOfBinds range (grhssLocalBinds grhs) -- where clause
+#endif
         else do
-          grhs <- findDeclContainingLoc (_start range) (grhssGRHSs grhs)
+          grhs <- findDeclContainingLoc (_start range) (map reLocA $ grhssGRHSs grhs)
           case unLoc grhs of
             GRHS _ _ bd -> findSigOfExpr (unLoc bd)
             _           -> Nothing
@@ -180,15 +187,15 @@ findSigOfBind range bind =
     findSigOfExpr :: HsExpr p -> Maybe (Sig p)
     findSigOfExpr = go
       where
-        go (HsLet _ binds _) = findSigOfBinds range (unLoc binds)
+        go (HsLet _ binds _) = findSigOfBinds range binds
         go (HsDo _ _ stmts) = do
           stmtlr <- unLoc <$> findDeclContainingLoc (_start range) (unLoc stmts)
           case stmtlr of
-            LetStmt _ lhsLocalBindsLR -> findSigOfBinds range $ unLoc lhsLocalBindsLR
+            LetStmt _ lhsLocalBindsLR -> findSigOfBinds range $ lhsLocalBindsLR
             _ -> Nothing
         go _ = Nothing
 
-findSigOfBinds :: Range -> HsLocalBinds p -> Maybe (Sig p)
+findSigOfBinds :: p ~ GhcPass p0 => Range -> HsLocalBinds p -> Maybe (Sig p)
 findSigOfBinds range = go
   where
     go (HsValBinds _ (ValBinds _ binds lsigs)) =
@@ -199,16 +206,19 @@ findSigOfBinds range = go
             findSigOfBind range (unLoc lHsBindLR)
     go _ = Nothing
 
-findInstanceHead :: (Outputable (HsType p)) => DynFlags -> String -> [LHsDecl p] -> Maybe (LHsType p)
+findInstanceHead :: (Outputable (HsType p), p ~ GhcPass p0) => DynFlags -> String -> [LHsDecl p] -> Maybe (LHsType p)
 findInstanceHead df instanceHead decls =
   listToMaybe
     [ hsib_body
+#if !MIN_VERSION_ghc(9,2,0)
       | L _ (InstD _ (ClsInstD _ ClsInstDecl {cid_poly_ty = HsIB {hsib_body}})) <- decls,
+#else
+      | L _ (InstD _ (ClsInstD _ ClsInstDecl {cid_poly_ty = (unLoc -> HsSig {sig_body = hsib_body})})) <- decls,
+#endif
         showSDoc df (ppr hsib_body) == instanceHead
     ]
 
-findDeclContainingLoc :: Position -> [Located a] -> Maybe (Located a)
-findDeclContainingLoc loc = find (\(L l _) -> loc `isInsideSrcSpan` l)
+findDeclContainingLoc loc = find (\(L l _) -> loc `isInsideSrcSpan` locA l)
 
 
 -- Single:
@@ -280,9 +290,9 @@ isUnusedImportedId
               imv_name == mkModuleName modName,
               isTheSameLine imv_span importSpan
           ],
-      [GRE {..}] <- lookupGlobalRdrEnv rdrEnv occ,
-      importedIdentifier <- Right gre_name,
-      refs <- M.lookup importedIdentifier refMap =
+      [GRE {gre_name = name}] <- lookupGlobalRdrEnv rdrEnv occ,
+      importedIdentifier <- Right name,
+      refs <- M.lookup (fmap greNameMangledName importedIdentifier) refMap =
       maybe True (not . any (\(_, IdentifierDetails {..}) -> identInfo == S.singleton Use)) refs
     | otherwise = False
 
@@ -290,7 +300,7 @@ suggestRemoveRedundantImport :: ParsedModule -> Maybe T.Text -> Diagnostic -> [(
 suggestRemoveRedundantImport ParsedModule{pm_parsed_source = L _  HsModule{hsmodImports}} contents Diagnostic{_range=_range,..}
 --     The qualified import of ‘many’ from module ‘Control.Applicative’ is redundant
     | Just [_, bindings] <- matchRegexUnifySpaces _message "The( qualified)? import of ‘([^’]*)’ from module [^ ]* is redundant"
-    , Just (L _ impDecl) <- find (\(L l _) -> _start _range `isInsideSrcSpan` l && _end _range `isInsideSrcSpan` l ) hsmodImports
+    , Just (L _ impDecl) <- find (\(L (locA -> l) _) -> _start _range `isInsideSrcSpan` l && _end _range `isInsideSrcSpan` l ) hsmodImports
     , Just c <- contents
     , ranges <- map (rangesForBindingImport impDecl . T.unpack) (T.splitOn ", " bindings)
     , ranges' <- extendAllToIncludeCommaIfPossible False (indexedByPosition $ T.unpack c) (concat ranges)
@@ -390,7 +400,7 @@ suggestRemoveRedundantExport :: ParsedModule -> Diagnostic -> Maybe (T.Text, [Ra
 suggestRemoveRedundantExport ParsedModule{pm_parsed_source = L _ HsModule{..}} Diagnostic{..}
   | msg <- unifySpaces _message
   , Just export <- hsmodExports
-  , Just exportRange <- getLocatedRange export
+  , Just exportRange <- getLocatedRange $ reLoc export
   , exports <- unLoc export
   , Just (removeFromExport, !ranges) <- fmap (getRanges exports . notInScope) (extractNotInScopeName msg)
                          <|> (,[_range]) <$> matchExportItem msg
@@ -418,7 +428,7 @@ suggestDeleteUnusedBinding
     | otherwise = []
     where
       relatedRanges indexedContent name =
-        concatMap (findRelatedSpans indexedContent name) hsmodDecls
+        concatMap (findRelatedSpans indexedContent name) $ map reLoc hsmodDecls
       toRange = realSrcSpanToRange
       extendForSpaces = extendToIncludePreviousNewlineIfPossible
 
@@ -433,7 +443,7 @@ suggestDeleteUnusedBinding
                 findSig _ = []
             in
               extendForSpaces indexedContent (toRange l) :
-              concatMap findSig hsmodDecls
+              concatMap findSig (map reLoc hsmodDecls)
           _ -> concatMap (findRelatedSpanForMatch indexedContent name) matches
       findRelatedSpans _ _ _ = []
 
@@ -444,7 +454,7 @@ suggestDeleteUnusedBinding
         FunBind
           { fun_id=lname
           , fun_matches=MG {mg_alts=L _ matches}
-          } = Just (lname, matches)
+          } = Just (reLoc lname, matches)
       extractNameAndMatchesFromFunBind _ = Nothing
 
       findRelatedSigSpan :: PositionIndexedString -> String -> RealSrcSpan -> Sig GhcPs -> [Range]
@@ -461,16 +471,16 @@ suggestDeleteUnusedBinding
         let maybeIdx = findIndex (\(L _ id) -> isSameName id name) lnames
         in case maybeIdx of
             Nothing -> Nothing
-            Just _ | length lnames == 1 -> Just (getLoc $ head lnames, True)
+            Just _ | length lnames == 1 -> Just (getLoc $ reLoc $ head lnames, True)
             Just idx ->
-              let targetLname = getLoc $ lnames !! idx
+              let targetLname = getLoc $ reLoc $ lnames !! idx
                   startLoc = srcSpanStart targetLname
                   endLoc = srcSpanEnd targetLname
                   startLoc' = if idx == 0
                               then startLoc
-                              else srcSpanEnd . getLoc $ lnames !! (idx - 1)
+                              else srcSpanEnd . getLoc . reLoc $ lnames !! (idx - 1)
                   endLoc' = if idx == 0 && idx < length lnames - 1
-                            then srcSpanStart . getLoc $ lnames !! (idx + 1)
+                            then srcSpanStart . getLoc . reLoc $ lnames !! (idx + 1)
                             else endLoc
               in Just (mkSrcSpan startLoc' endLoc', False)
       findRelatedSigSpan1 _ _ = Nothing
@@ -486,7 +496,11 @@ suggestDeleteUnusedBinding
         name
         (L _ Match{m_grhss=GRHSs{grhssLocalBinds}}) = do
         case grhssLocalBinds of
+#if !MIN_VERSION_ghc(9,2,0)
           (L _ (HsValBinds _ (ValBinds _ bag lsigs))) ->
+#else
+          (HsValBinds _ (ValBinds _ bag lsigs)) ->
+#endif
             if isEmptyBag bag
             then []
             else concatMap (findRelatedSpanForHsBind indexedContent name lsigs) bag
@@ -503,12 +517,12 @@ suggestDeleteUnusedBinding
         indexedContent
         name
         lsigs
-        (L (RealSrcSpan l _) (extractNameAndMatchesFromFunBind -> Just (lname, matches))) =
+        (L (locA -> (RealSrcSpan l _)) (extractNameAndMatchesFromFunBind -> Just (lname, matches))) =
         if isTheBinding (getLoc lname)
         then
           let findSig (L (RealSrcSpan l _) sig) = findRelatedSigSpan indexedContent name l sig
               findSig _ = []
-          in extendForSpaces indexedContent (toRange l) : concatMap findSig lsigs
+          in extendForSpaces indexedContent (toRange l) : concatMap findSig (map reLoc lsigs)
         else concatMap (findRelatedSpanForMatch indexedContent name) matches
       findRelatedSpanForHsBind _ _ _ _ = []
 
@@ -535,11 +549,11 @@ suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModul
                    <|> matchRegexUnifySpaces _message ".*Defined but not used: data constructor ‘([^ ]+)’"
   , Just (exportType, _) <- find (matchWithDiagnostic _range . snd)
                             . mapMaybe
-                                (\(L l b) -> if maybe False isTopLevel $ srcSpanToRange l
+                                (\(L (locA -> l) b) -> if maybe False isTopLevel $ srcSpanToRange l
                                                 then exportsAs b else Nothing)
                             $ hsmodDecls
-  , Just pos <- fmap _end . getLocatedRange =<< hsmodExports
-  , Just needComma <- needsComma source <$> hsmodExports
+  , Just pos <- fmap _end . getLocatedRange =<< fmap reLoc hsmodExports
+  , Just needComma <- needsComma source <$> fmap reLoc hsmodExports
   , let exportName = (if needComma then "," else "") <> printExport exportType name
         insertPos = pos {_character = pred $ _character pos}
   = [("Export ‘" <> name <> "’", TextEdit (Range insertPos insertPos) exportName)]
@@ -550,7 +564,7 @@ suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModul
     needsComma _ (L _ []) = False
     needsComma source (L (RealSrcSpan l _) exports) =
       let closeParan = _end $ realSrcSpanToRange l
-          lastExport = fmap _end . getLocatedRange $ last exports
+          lastExport = fmap _end . getLocatedRange $ last $ fmap reLoc exports
       in case lastExport of
         Just lastExport -> not $ T.isInfixOf "," $ textInRange (Range lastExport closeParan) source
         _ -> False
@@ -577,13 +591,13 @@ suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModul
     isTopLevel :: Range -> Bool
     isTopLevel l = (_character . _start) l == 0
 
-    exportsAs :: HsDecl p -> Maybe (ExportsAs, Located (IdP p))
-    exportsAs (ValD _ FunBind {fun_id})          = Just (ExportName, fun_id)
-    exportsAs (ValD _ (PatSynBind _ PSB {psb_id})) = Just (ExportPattern, psb_id)
-    exportsAs (TyClD _ SynDecl{tcdLName})      = Just (ExportName, tcdLName)
-    exportsAs (TyClD _ DataDecl{tcdLName})     = Just (ExportAll, tcdLName)
-    exportsAs (TyClD _ ClassDecl{tcdLName})    = Just (ExportAll, tcdLName)
-    exportsAs (TyClD _ FamDecl{tcdFam})        = Just (ExportAll, fdLName tcdFam)
+    exportsAs :: HsDecl GhcPs -> Maybe (ExportsAs, Located (IdP GhcPs))
+    exportsAs (ValD _ FunBind {fun_id})          = Just (ExportName, reLoc fun_id)
+    exportsAs (ValD _ (PatSynBind _ PSB {psb_id})) = Just (ExportPattern, reLoc psb_id)
+    exportsAs (TyClD _ SynDecl{tcdLName})      = Just (ExportName, reLoc tcdLName)
+    exportsAs (TyClD _ DataDecl{tcdLName})     = Just (ExportAll, reLoc $ tcdLName)
+    exportsAs (TyClD _ ClassDecl{tcdLName})    = Just (ExportAll, reLoc $ tcdLName)
+    exportsAs (TyClD _ FamDecl{tcdFam})        = Just (ExportAll, reLoc $ fdLName tcdFam)
     exportsAs _                                = Nothing
 
 suggestAddTypeAnnotationToSatisfyContraints :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
@@ -676,7 +690,7 @@ newDefinitionAction :: IdeOptions -> ParsedModule -> Range -> T.Text -> T.Text -
 newDefinitionAction IdeOptions{..} parsedModule Range{_start} name typ
     | Range _ lastLineP : _ <-
       [ realSrcSpanToRange sp
-      | (L l@(RealSrcSpan sp _) _) <- hsmodDecls
+      | (L (locA -> l@(RealSrcSpan sp _)) _) <- hsmodDecls
       , _start `isInsideSrcSpan` l]
     , nextLineP <- Position{ _line = _line lastLineP + 1, _character = 0}
     = [ ("Define " <> sig
@@ -848,12 +862,12 @@ data HidingMode
         Bool
         -- ^ Parenthesised?
         ModuleName
-    deriving (Show)
+    -- deriving (Show)
 
 data ModuleTarget
     = ExistingImp (NonEmpty (LImportDecl GhcPs))
     | ImplicitPrelude [LImportDecl GhcPs]
-    deriving (Show)
+    -- deriving (Show)
 
 targetImports :: ModuleTarget -> [LImportDecl GhcPs]
 targetImports (ExistingImp ne)     = NE.toList ne
@@ -1006,13 +1020,13 @@ disambiguateSymbol pm fileContents Diagnostic {..} (T.unpack -> symbol) = \case
                     liftParseAST @(HsExpr GhcPs) df $
                     prettyPrint $
                         HsVar @GhcPs noExtField $
-                            L (mkGeneralSrcSpan  "") rdr
+                            reLocA $ L (mkGeneralSrcSpan  "") rdr
                 else Rewrite (rangeToSrcSpan "<dummy>" _range) $ \df ->
                     liftParseAST @RdrName df $
                     prettyPrint $ L (mkGeneralSrcSpan  "") rdr
             ]
 findImportDeclByRange :: [LImportDecl GhcPs] -> Range -> Maybe (LImportDecl GhcPs)
-findImportDeclByRange xs range = find (\(L l _)-> srcSpanToRange l == Just range) xs
+findImportDeclByRange xs range = find (\(L (locA -> l) _)-> srcSpanToRange l == Just range) xs
 
 suggestFixConstructorImport :: Diagnostic -> [(T.Text, TextEdit)]
 suggestFixConstructorImport Diagnostic{_range=_range,..}
@@ -1074,7 +1088,11 @@ suggestInstanceConstraint df (L _ HsModule {hsmodDecls}) Diagnostic {..} missing
         --       (Pair x x') == (Pair y y') = x == y && x' == y'
         | Just [instanceLineStr, constraintFirstCharStr]
             <- matchRegexUnifySpaces _message "bound by the instance declaration at .+:([0-9]+):([0-9]+)"
+#if !MIN_VERSION_ghc(9,2,0)
         , Just (L _ (InstD _ (ClsInstD _ ClsInstDecl {cid_poly_ty = HsIB{hsib_body}})))
+#else
+        , Just (L _ (InstD _ (ClsInstD _ ClsInstDecl {cid_poly_ty = (unLoc -> HsSig{sig_body = hsib_body})})))
+#endif
             <- findDeclContainingLoc (Position (readPositionNumber instanceLineStr) (readPositionNumber constraintFirstCharStr)) hsmodDecls
         = Just hsib_body
         | otherwise
@@ -1094,7 +1112,12 @@ suggestImplicitParameter ::
 suggestImplicitParameter (L _ HsModule {hsmodDecls}) Diagnostic {_message, _range}
   | Just [implicitT] <- matchRegexUnifySpaces _message "Unbound implicit parameter \\(([^:]+::.+)\\) arising",
     Just (L _ (ValD _ FunBind {fun_id = L _ funId})) <- findDeclContainingLoc (_start _range) hsmodDecls,
-    Just (TypeSig _ _ HsWC {hswc_body = HsIB {hsib_body}}) <- findSigOfDecl (== funId) hsmodDecls
+#if !MIN_VERSION_ghc(9,2,0)
+    Just (TypeSig _ _ HsWC {hswc_body = HsIB {hsib_body}})
+#else
+    Just (TypeSig _ _ HsWC {hswc_body = (unLoc -> HsSig {sig_body = hsib_body})})
+#endif
+      <- findSigOfDecl (== funId) hsmodDecls
     =
       [( "Add " <> implicitT <> " to the context of " <> T.pack (printRdrName funId)
         , appendConstraint (T.unpack implicitT) hsib_body)]
@@ -1129,7 +1152,11 @@ suggestFunctionConstraint df (L _ HsModule {hsmodDecls}) Diagnostic {..} missing
 --   In an equation for ‘eq’:
 --       eq (Pair x y) (Pair x' y') = x == x' && y == y'
   | Just typeSignatureName <- findTypeSignatureName _message
+#if !MIN_VERSION_ghc(9,2,0)
   , Just (TypeSig _ _ HsWC{hswc_body = HsIB {hsib_body = sig}})
+#else
+  , Just (TypeSig _ _ HsWC{hswc_body = (unLoc -> HsSig {sig_body = sig})})
+#endif
     <- findSigOfDecl ((T.unpack typeSignatureName ==) . showSDoc df . ppr) hsmodDecls
   , title <- actionTitle missingConstraint typeSignatureName
   = [(title, appendConstraint (T.unpack missingConstraint) sig)]
@@ -1152,7 +1179,11 @@ removeRedundantConstraints df (L _ HsModule {hsmodDecls}) Diagnostic{..}
   -- Account for both "Redundant constraint" and "Redundant constraints".
   | "Redundant constraint" `T.isInfixOf` _message
   , Just typeSignatureName <- findTypeSignatureName _message
+#if !MIN_VERSION_ghc(9,2,0)
   , Just (TypeSig _ _ HsWC{hswc_body = HsIB {hsib_body = sig}})
+#else
+  , Just (TypeSig _ _ HsWC{hswc_body = (unLoc -> HsSig {sig_body = sig})})
+#endif
     <- findSigOfDeclRanged _range hsmodDecls
   , Just redundantConstraintList <- findRedundantConstraints _message
   , rewrite <- removeConstraint (toRemove df redundantConstraintList) sig
@@ -1291,8 +1322,8 @@ newImportToEdit (unNewImport -> imp) ps fileContents
 newImportInsertRange :: ParsedSource -> T.Text -> Maybe (Range, Int)
 newImportInsertRange (L _ HsModule {..}) fileContents
   |  Just (uncurry Position -> insertPos, col) <- case hsmodImports of
-      [] -> findPositionNoImports hsmodName hsmodExports fileContents
-      _  -> findPositionFromImportsOrModuleDecl hsmodImports last True
+      [] -> findPositionNoImports (fmap reLoc hsmodName) (fmap reLoc hsmodExports) fileContents
+      _  -> findPositionFromImportsOrModuleDecl (map reLoc hsmodImports) last True
     = Just (Range insertPos insertPos, col)
   | otherwise = Nothing
 
@@ -1534,22 +1565,34 @@ smallerRangesForBindingExport lies b =
   where
     unqualify = snd . breakOnEnd "."
     b' = wrapOperatorInParens . unqualify $ b
+#if !MIN_VERSION_ghc(9,2,0)
     ranges' (L _ (IEThingWith _ thing _  inners labels))
+#else
+    ranges' (L _ (IEThingWith _ thing _  inners))
+#endif
       | showSDocUnsafe (ppr thing) == b' = []
       | otherwise =
-          [ l' | L l' x <- inners, showSDocUnsafe (ppr x) == b'] ++
-          [ l' | L l' x <- labels, showSDocUnsafe (ppr x) == b']
+          [ locA l' | L l' x <- inners, showSDocUnsafe (ppr x) == b']
+#if !MIN_VERSION_ghc(9,2,0)
+          ++ [ l' | L l' x <- labels, showSDocUnsafe (ppr x) == b']
+#endif
     ranges' _ = []
 
 rangesForBinding' :: String -> LIE GhcPs -> [SrcSpan]
-rangesForBinding' b (L l x@IEVar{}) | showSDocUnsafe (ppr x) == b = [l]
-rangesForBinding' b (L l x@IEThingAbs{}) | showSDocUnsafe (ppr x) == b = [l]
-rangesForBinding' b (L l (IEThingAll _ x)) | showSDocUnsafe (ppr x) == b = [l]
+rangesForBinding' b (L (locA -> l) x@IEVar{}) | showSDocUnsafe (ppr x) == b = [l]
+rangesForBinding' b (L (locA -> l) x@IEThingAbs{}) | showSDocUnsafe (ppr x) == b = [l]
+rangesForBinding' b (L (locA -> l) (IEThingAll _ x)) | showSDocUnsafe (ppr x) == b = [l]
+#if !MIN_VERSION_ghc(9,2,0)
 rangesForBinding' b (L l (IEThingWith _ thing _  inners labels))
+#else
+rangesForBinding' b (L (locA -> l) (IEThingWith _ thing _  inners))
+#endif
     | showSDocUnsafe (ppr thing) == b = [l]
     | otherwise =
-        [ l' | L l' x <- inners, showSDocUnsafe (ppr x) == b] ++
-        [ l' | L l' x <- labels, showSDocUnsafe (ppr x) == b]
+        [ locA l' | L l' x <- inners, showSDocUnsafe (ppr x) == b]
+#if !MIN_VERSION_ghc(9,2,0)
+        ++ [ l' | L l' x <- labels, showSDocUnsafe (ppr x) == b]
+#endif
 rangesForBinding' _ _ = []
 
 -- | 'matchRegex' combined with 'unifySpaces'

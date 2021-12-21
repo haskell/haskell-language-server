@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE CPP #-}
 
 module Development.IDE.Plugin.CodeAction.Args
   ( CodeActionTitle,
@@ -119,7 +120,11 @@ instance ToTextEdit Rewrite where
     runMaybeT $ do
       df <- MaybeT caaDf
       ps <- MaybeT caaAnnSource
+#if !MIN_VERSION_ghc(9,2,0)
       let r = rewriteToEdit df (annsA ps) rw
+#else
+      let r = rewriteToEdit df rw
+#endif
       pure $ fromRight [] r
 
 instance ToTextEdit a => ToTextEdit [a] where
@@ -140,7 +145,11 @@ data CodeActionArgs = CodeActionArgs
     caaParsedModule :: IO (Maybe ParsedModule),
     caaContents     :: IO (Maybe T.Text),
     caaDf           :: IO (Maybe DynFlags),
+#if !MIN_VERSION_ghc(9,2,0)
     caaAnnSource    :: IO (Maybe (Annotated ParsedSource)),
+#else
+    caaAnnSource    :: IO (Maybe ParsedSource),
+#endif
     caaTmr          :: IO (Maybe TcModuleResult),
     caaHar          :: IO (Maybe HieAstResult),
     caaBindings     :: IO (Maybe Bindings),
@@ -210,7 +219,11 @@ toCodeAction3 get f = ReaderT $ \caa -> get caa >>= flip runReaderT caa . toCode
 instance ToCodeAction r => ToCodeAction (ParsedSource -> r) where
   toCodeAction f = ReaderT $ \caa@CodeActionArgs {caaAnnSource = x} ->
     x >>= \case
+#if !MIN_VERSION_ghc(9,2,0)
       Just s -> flip runReaderT caa . toCodeAction . f . astA $ s
+#else
+      Just s -> flip runReaderT caa . toCodeAction . f $ s
+#endif
       _      -> pure []
 
 instance ToCodeAction r => ToCodeAction (ExportsMap -> r) where
@@ -240,11 +253,16 @@ instance ToCodeAction r => ToCodeAction (Maybe DynFlags -> r) where
 instance ToCodeAction r => ToCodeAction (DynFlags -> r) where
   toCodeAction = toCodeAction2 caaDf
 
+#if !MIN_VERSION_ghc(9,2,0)
 instance ToCodeAction r => ToCodeAction (Maybe (Annotated ParsedSource) -> r) where
   toCodeAction = toCodeAction1 caaAnnSource
 
 instance ToCodeAction r => ToCodeAction (Annotated ParsedSource -> r) where
   toCodeAction = toCodeAction2 caaAnnSource
+#else
+instance ToCodeAction r => ToCodeAction (Maybe ParsedSource -> r) where
+  toCodeAction = toCodeAction1 caaAnnSource
+#endif
 
 instance ToCodeAction r => ToCodeAction (Maybe TcModuleResult -> r) where
   toCodeAction = toCodeAction1 caaTmr

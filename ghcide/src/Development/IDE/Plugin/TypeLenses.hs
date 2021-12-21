@@ -216,7 +216,7 @@ instance A.FromJSON Mode where
 --------------------------------------------------------------------------------
 
 showDocRdrEnv :: HscEnv -> GlobalRdrEnv -> SDoc -> String
-showDocRdrEnv env rdrEnv = showSDocForUser (hsc_dflags env) (mkPrintUnqualified (hsc_dflags env) rdrEnv)
+showDocRdrEnv env rdrEnv = showSDocForUser (hsc_dflags env) (unitState env) (mkPrintUnqualifiedDefault env rdrEnv)
 
 data GetGlobalBindingTypeSigs = GetGlobalBindingTypeSigs
   deriving (Generic, Show, Eq, Ord, Hashable, NFData)
@@ -253,7 +253,7 @@ gblBindingType :: Maybe HscEnv -> Maybe TcGblEnv -> IO (Maybe GlobalBindingTypeS
 gblBindingType (Just hsc) (Just gblEnv) = do
   let exports = availsToNameSet $ tcg_exports gblEnv
       sigs = tcg_sigs gblEnv
-      binds = collectHsBindsBinders $ tcg_binds gblEnv
+      binds = collectHsBindsBinders CollNoDictBinders $ tcg_binds gblEnv
       patSyns = tcg_patsyns gblEnv
       rdrEnv = tcg_rdr_env gblEnv
       showDoc = showDocRdrEnv hsc rdrEnv
