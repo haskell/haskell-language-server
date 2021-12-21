@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                   #-}
 {-# LANGUAGE ConstraintKinds       #-}
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE FlexibleContexts      #-}
@@ -41,6 +42,9 @@ module Ide.Plugin.Properties
 where
 
 import qualified Data.Aeson           as A
+#if MIN_VERSION_aeson(2,0,0)
+import qualified Data.Aeson.Key       as A.Key
+#endif
 import qualified Data.Aeson.Types     as A
 import           Data.Either          (fromRight)
 import           Data.Function        ((&))
@@ -162,6 +166,15 @@ type HasProperty s k t r = (k ~ 'PropertyKey s t, Elem s r, FindByKeyName s r ~ 
 --      "Description of exampleNumber"
 --      233
 -- @
+
+#if MIN_VERSION_aeson(2,0,0)
+toKey :: String -> A.Key
+toKey = A.Key.fromString
+#else
+toKey :: String -> T.Text
+toKey = pack
+#endif
+
 emptyProperties :: Properties '[]
 emptyProperties = Properties Map.empty
 
@@ -247,7 +260,7 @@ parseProperty kn k x = case k of
       )
       x
   where
-    keyName = T.pack $ symbolVal kn
+    keyName = toKey $ symbolVal kn
     parseEither :: forall a. A.FromJSON a => Either String a
     parseEither = A.parseEither (A..: keyName) x
 
@@ -352,7 +365,7 @@ toDefaultJSON :: Properties r -> [A.Pair]
 toDefaultJSON (Properties p) = [toEntry s v | (s, v) <- Map.toList p]
   where
     toEntry :: String -> SomePropertyKeyWithMetaData -> A.Pair
-    toEntry (T.pack -> s) = \case
+    toEntry (toKey -> s) = \case
       (SomePropertyKeyWithMetaData SNumber MetaData {..}) ->
         s A..= defaultValue
       (SomePropertyKeyWithMetaData SInteger MetaData {..}) ->
@@ -371,7 +384,7 @@ toDefaultJSON (Properties p) = [toEntry s v | (s, v) <- Map.toList p]
 -- | Converts a properties definition into kv pairs as vscode schema
 toVSCodeExtensionSchema :: T.Text -> Properties r -> [A.Pair]
 toVSCodeExtensionSchema prefix (Properties p) =
-  [(prefix <> T.pack k) A..= toEntry v | (k, v) <- Map.toList p]
+  [(toKey $ T.unpack prefix <> k) A..= toEntry v | (k, v) <- Map.toList p]
   where
     toEntry :: SomePropertyKeyWithMetaData -> A.Value
     toEntry = \case
