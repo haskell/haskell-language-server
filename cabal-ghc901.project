@@ -27,6 +27,15 @@ packages:
          ./plugins/hls-call-hierarchy-plugin
          ./plugins/hls-alternate-number-format-plugin
 
+-- lsp needs a release with support for aeson >= 2.0
+-- see https://github.com/haskell/lsp/issues/373
+
+source-repository-package
+    type: git
+    location: https://github.com/haskell/lsp
+    tag: b48cf78d52152e13bd402d530dd4ceb7ad91b750
+    subdir: lsp lsp-types lsp-test
+
 with-compiler: ghc-9.0.1
 
 tests: true
