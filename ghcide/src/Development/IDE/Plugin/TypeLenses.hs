@@ -283,8 +283,8 @@ gblBindingType (Just dflags) (Just gblEnv) =
           Just $ GlobalBindingTypeSig name ("pattern " <> printName name <> " :: " <> prettyPrintTy ty) (isExported name)
         | otherwise = Nothing
 
-    bindings = catMaybes $ bindToSig <$> binds
-    patterns = catMaybes $ patToSig <$> patSyns
+      bindings = catMaybes $ bindToSig <$> binds
+      patterns = catMaybes $ patToSig <$> patSyns
   in Just . GlobalBindingTypeSigsResult $ bindings <> patterns
 
 gblBindingType _ _ = Nothing
