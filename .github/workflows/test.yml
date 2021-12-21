@@ -25,7 +25,7 @@ jobs:
         uses: fkirc/skip-duplicate-actions@v3.4.1
         with:
           cancel_others: false
-          paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", "install/**", "**.nix", "flake.lock", "**/README.md", "FUNDING.yml", ".circleci/**"]'
+          paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", "install/**", "**.nix", "flake.lock", "**/README.md", "FUNDING.yml", ".circleci/**", "**/stack*.yaml"]'
       # If we only change ghcide downstream packages we have not test ghcide itself
       - id: skip_ghcide_check
         uses: fkirc/skip-duplicate-actions@v3.4.1
@@ -85,7 +85,7 @@ jobs:
       - if: runner.os == 'Windows'
         name: (Windows) Platform config
         run: |
-          echo "CABAL_PKGS_DIR=~\\AppData\\cabal\\packages" >> $GITHUB_ENV
+          echo "CABAL_PKGS_DIR=C:\\cabal\\packages" >> $GITHUB_ENV
       - if: ( runner.os == 'Linux' ) || ( runner.os == 'macOS' )
         name: (Linux,macOS) Platform config
         run: |
