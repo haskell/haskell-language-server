@@ -49,8 +49,13 @@ constraints:
 -- this way we track explicitly all transitive dependencies which need support for ghc-9
 allow-newer:
 
-    -- brittany
+    -- brittany: update ghc bounds in hls.cabal when those are removed
+    -- https://github.com/lspitzner/multistate/pull/8
     multistate:base,
+    -- https://github.com/lspitzner/data-tree-print/pull/3
+    data-tree-print:base,
+    -- https://github.com/lspitzner/butcher/issues/7
+    butcher:base,
 
     stylish-haskell:Cabal,
     stylish-haskell:ghc-lib-parser,

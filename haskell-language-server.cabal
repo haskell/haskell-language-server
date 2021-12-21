@@ -303,7 +303,7 @@ common stylishHaskell
     cpp-options: -DstylishHaskell
 
 common brittany
-  if flag(brittany) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(brittany) && (impl(ghc < 9.0.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-brittany-plugin ^>=1.0.0.1
     cpp-options: -Dbrittany
 
