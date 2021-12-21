@@ -26,6 +26,7 @@ module Development.IDE.GHC.Compat.Parser (
     Development.IDE.GHC.Compat.Parser.hpm_src_files,
     Development.IDE.GHC.Compat.Parser.hpm_annotations,
     pattern ParsedModule,
+    Development.IDE.GHC.Compat.Parser.pm_parsed_source,
     type GHC.ParsedModule,
     Development.IDE.GHC.Compat.Parser.pm_mod_summary,
     Development.IDE.GHC.Compat.Parser.pm_extra_src_files,
