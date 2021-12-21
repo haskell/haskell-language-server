@@ -48,7 +48,7 @@ renameProvider state pluginId (RenameParams (TextDocumentIdentifier uri) pos _pr
             getFileEdits = ap (getSrcEdits state . renameModRefs newNameText) (locToUri . head)
 
         fileEdits <- mapM getFileEdits filesRefs
-        pure $ foldl1 (<>) fileEdits
+        pure $ foldl' (<>) mempty fileEdits
 
 -------------------------------------------------------------------------------
 -- Source renaming

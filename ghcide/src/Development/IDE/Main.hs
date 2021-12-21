@@ -77,10 +77,12 @@ import           Development.IDE.Types.Options         (IdeGhcSession,
                                                         defaultIdeOptions,
                                                         optModifyDynFlags,
                                                         optTesting)
-import           Development.IDE.Types.Shake           (fromKeyType)
+import           Development.IDE.Types.Shake           (Key(Key),
+                                                        fromKeyType)
 import           GHC.Conc                              (getNumProcessors)
 import           GHC.IO.Encoding                       (setLocaleEncoding)
 import           GHC.IO.Handle                         (hDuplicate)
+import           Development.IDE.Main.HeapStats        (withHeapStats)
 import           HIE.Bios.Cradle                       (findCradle)
 import qualified HieDb.Run                             as HieDb
 import           Ide.Plugin.Config                     (CheckParents (NeverCheck),
@@ -240,7 +242,9 @@ stderrLogger logLevel = do
         T.hPutStrLn stderr $ "[" <> T.pack (show p) <> "] " <> m
 
 defaultMain :: Arguments -> IO ()
-defaultMain Arguments{..} = do
+defaultMain Arguments{..} = flip withHeapStats fun =<< argsLogger
+ where
+  fun = do
     setLocaleEncoding utf8
     pid <- T.pack . show <$> getProcessID
     logger <- argsLogger

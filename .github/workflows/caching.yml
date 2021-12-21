@@ -30,6 +30,18 @@ on:
   push:
     branches:
       - master
+  schedule:
+    # Refresh snapshot every (02+8*x):25 UTC
+    # When cache is present it is a light check workflow with early termination.
+    # When primary cache is not hit - runs the cache generation.
+    # Why: GitHub repo has 10G pool & on overflow GitHub removes caches in FIFO manner.
+    # When internal branche PRs save into the same pool -
+    #   their cache is accessible only inside of the scope of the PR.
+    # If main cache is forced out - there are no cache shared between PRs,
+    #   which implies all PRs would start to create & save their cache.
+    # Reinstitution of the main chache puts it back into FIFO
+    #   & so it gets shared across all PRs.
+    - cron: "25 2/8 * * *"
 
 env:
   cabalBuild: "v2-build all --enable-tests --enable-benchmarks"
@@ -78,7 +90,7 @@ jobs:
       - if: runner.os == 'Windows'
         name: (Windows) Platform config
         run: |
-          echo "CABAL_PKGS_DIR=~\\AppData\\cabal\\packages" >> $GITHUB_ENV
+          echo "CABAL_PKGS_DIR=C:\\cabal\\packages" >> $GITHUB_ENV
       - if: ( runner.os == 'Linux' ) || ( runner.os == 'macOS' )
         name: (Linux,macOS) Platform config
         run: |
@@ -130,6 +142,7 @@ jobs:
           restore-keys: ${{ env.cache-name }}-
 
       - name: Compiled deps cache
+        id: compiled-deps
         uses: actions/cache@v2
         env:
           cache-name: compiled-deps
@@ -141,9 +154,12 @@ jobs:
                 ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
                 ${{ env.cache-name }}-${{ runner.os }}-
 
-      - run: cabal update
+      - if: (! steps.compiled-deps.outputs.cache-hit)
+        run: |
+          cabal update
 
-      - name: Download all sources
+      - if: (! steps.compiled-deps.outputs.cache-hit)
+        name: Download all sources
         run: |
           cabal $cabalBuild --only-download
 
@@ -152,7 +168,8 @@ jobs:
       # but to cache what can be cached, so step is fault tolerant & would always succseed.
       # 2021-12-11: NOTE: Building all targets, since
       # current Cabal does not allow `all --enable-tests --enable-benchmarks --only-dependencies`
-      - name: Build all targets; try 3 times
+      - if: (! steps.compiled-deps.outputs.cache-hit)
+        name: Build all targets; try 3 times
         continue-on-error: true
         run: |
           cabal $cabalBuild || cabal $cabalBuild || cabal $cabalBuild

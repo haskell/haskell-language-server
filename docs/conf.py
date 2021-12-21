@@ -14,16 +14,41 @@
 # import sys
 # sys.path.insert(0, os.path.abspath('.'))
 
+import re
+import sys
 
 # -- Project information -----------------------------------------------------
 
 project = 'haskell-language-server'
-copyright = '2021, The Haskell IDE Team'
-author = 'The Haskell IDE Team'
 
-# The full version, including alpha/beta/rc tags
-release = '1.3.0'
+# We want to take some of the metadata from the Cabal file, especially the version.
+# (otherwise it's very easy to forget to update it!)
+release = None
+copyright = None
+author = None
+versionPattern = re.compile("^version:\s*([\d.]+)")
+copyrightPattern = re.compile("^copyright:\s*(.+)")
+authorPattern = re.compile("^author:\s*(.+)")
+for i, line in enumerate(open('../haskell-language-server.cabal')):
+    versionMatch = re.search(versionPattern, line)
+    if versionMatch:
+        release = versionMatch.group(1)
+    copyrightMatch = re.search(copyrightPattern, line)
+    if copyrightMatch:
+        copyright = copyrightMatch.group(1)
+    authorMatch = re.search(authorPattern, line)
+    if authorMatch:
+        author = authorMatch.group(1)
 
+if not release:
+    print("Couldn't find version")
+    sys.exit()
+if not copyright:
+    print("Couldn't find copyright")
+    sys.exit()
+if not author:
+    print("Couldn't find author")
+    sys.exit()
 
 # -- General configuration ---------------------------------------------------
 
@@ -32,7 +57,8 @@ release = '1.3.0'
 # ones.
 extensions = [
     'myst_parser',
-    'sphinx_rtd_theme'
+    'sphinx_rtd_theme',
+    'sphinx.ext.autosectionlabel'
 ]
 
 # Add any paths that contain templates here, relative to this directory.

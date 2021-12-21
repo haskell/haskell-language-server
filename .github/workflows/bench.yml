@@ -24,7 +24,7 @@ jobs:
         uses: fkirc/skip-duplicate-actions@v3.4.1
         with:
           cancel_others: false
-          paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", ".circleci/**", "install/**", "**.nix", "**/test/**", "flake.lock", "**/README.md", "FUNDING.yml"]'
+          paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", ".circleci/**", "install/**", "**.nix", "**/test/**", "flake.lock", "**/README.md", "FUNDING.yml", "**/stack*.yaml"]'
 
   bench_init:
     if: needs.pre_job.outputs.should_skip != 'true'
@@ -203,6 +203,5 @@ jobs:
           echo "jobs info: ${{ toJSON(needs) }}"
       - if: contains(needs.*.result, 'failure')
         run: exit 1
-      - if: contains(needs.*.result, 'cancelled')
-        name: cancelling
-        uses: andymckay/cancel-action@0.2
+      - if: contains(needs.*.result, 'cancelled') && needs.pre_job.outputs.should_skip != 'true'
+        run: exit 1
