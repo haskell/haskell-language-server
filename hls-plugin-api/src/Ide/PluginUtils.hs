@@ -178,7 +178,7 @@ getClientConfig = getConfig
 getPluginConfig :: MonadLsp Config m => PluginId -> m PluginConfig
 getPluginConfig plugin = do
     config <- getClientConfig
-    return $ flip configForPlugin plugin config
+    return $ configForPlugin config plugin 
 
 -- ---------------------------------------------------------------------
 

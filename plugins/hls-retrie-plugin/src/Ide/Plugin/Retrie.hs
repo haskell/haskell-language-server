@@ -515,7 +515,7 @@ deriving instance ToJSON RewriteSpec
 data QualName = QualName {qual, name :: String}
   deriving (Eq, Show, Generic, FromJSON, ToJSON)
 
-data IE name
+newtype IE name
   = IEVar name
   deriving (Eq, Show, Generic, FromJSON, ToJSON)
 

@@ -467,7 +467,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
     let sessionOpts :: (Maybe FilePath, FilePath)
                     -> IO (IdeResult HscEnvEq, [FilePath])
         sessionOpts (hieYaml, file) = do
-          v <- fromMaybe HM.empty . Map.lookup hieYaml <$> readVar fileToFlags
+          v <- Map.findWithDefault HM.empty hieYaml <$> readVar fileToFlags
           cfp <- makeAbsolute file
           case HM.lookup (toNormalizedFilePath' cfp) v of
             Just (opts, old_di) -> do

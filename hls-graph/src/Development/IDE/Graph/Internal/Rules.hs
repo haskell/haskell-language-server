@@ -1,9 +1,7 @@
 -- We deliberately want to ensure the function we add to the rule database
 -- has the constraints we need on it when we get it out.
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -44,7 +42,7 @@ addRule f = do
         f2 (Key a) b c = do
             v <- f (fromJust $ cast a :: key) b c
             v <- liftIO $ evaluate v
-            pure $ (Value . toDyn) <$> v
+            pure $ Value . toDyn <$> v
 
 runRule
     :: TheRules -> Key -> Maybe BS.ByteString -> RunMode -> Action (RunResult Value)

@@ -249,7 +249,7 @@ instance PluginMethod TextDocumentCompletion where
   combineResponses _ conf _ _ (toList -> xs) = snd $ consumeCompletionResponse limit $ combine xs
       where
         limit = maxCompletions conf
-        combine :: [List CompletionItem |? CompletionList] -> ((List CompletionItem) |? CompletionList)
+        combine :: [List CompletionItem |? CompletionList] -> (List CompletionItem |? CompletionList)
         combine cs = go True mempty cs
 
         go !comp acc [] =

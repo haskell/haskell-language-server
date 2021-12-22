@@ -1,6 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
-
 -- | A plugin that uses tactics to synthesize code
 module Wingman.Plugin where
 

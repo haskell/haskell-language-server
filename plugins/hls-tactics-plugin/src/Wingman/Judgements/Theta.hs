@@ -196,7 +196,7 @@ matchBinds _ _ = []
 ------------------------------------------------------------------------------
 -- | Extract evidence from a 'ConPatOut'.
 patBinds ::  Pat GhcTc -> [PredType]
-patBinds (ConPatOut { pat_dicts = dicts })
+patBinds ConPatOut{ pat_dicts = dicts }
   = fmap idType dicts
 patBinds _ = []
 

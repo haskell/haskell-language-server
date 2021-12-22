@@ -2,7 +2,6 @@
 {-# LANGUAGE OverloadedLabels  #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections     #-}
-{-# LANGUAGE TypeApplications  #-}
 
 module Wingman.CodeGen
   ( module Wingman.CodeGen
@@ -141,8 +140,7 @@ mkDestructPat already_in_scope con names
         in (names', )
          $ ConPatIn (noLoc $ Unqual $ occName $ conLikeName con)
          $ RecCon
-         $ HsRecFields rec_fields
-         $ Nothing
+         $ HsRecFields rec_fields Nothing
   | otherwise =
       (names, ) $ infixifyPatIfNecessary con $
         conP
@@ -208,7 +206,7 @@ patSynExTys ps = patSynExTyVars ps
 
 destruct' :: Bool -> (ConLike -> Judgement -> Rule) -> HyInfo CType -> Judgement -> Rule
 destruct' use_field_puns f hi jdg = do
-  when (isDestructBlacklisted jdg) $ cut -- throwError NoApplicableTactic
+  when (isDestructBlacklisted jdg) cut -- throwError NoApplicableTactic
   let term = hi_name hi
   ext
       <- destructMatches
@@ -227,7 +225,7 @@ destruct' use_field_puns f hi jdg = do
 -- resulting matches.
 destructLambdaCase' :: Bool -> (ConLike -> Judgement -> Rule) -> Judgement -> Rule
 destructLambdaCase' use_field_puns f jdg = do
-  when (isDestructBlacklisted jdg) $ cut -- throwError NoApplicableTactic
+  when (isDestructBlacklisted jdg) cut -- throwError NoApplicableTactic
   let g  = jGoal jdg
   case splitFunTy_maybe (unCType g) of
     Just (arg, _) | isAlgType arg ->
@@ -320,8 +318,7 @@ nonrecLet occjdgs jdg = do
   occexts <- traverse newSubgoal $ fmap snd occjdgs
   ctx     <- ask
   ext     <- newSubgoal
-           $ introduce ctx (userHypothesis $ fmap (second jGoal) occjdgs)
-           $ jdg
+           $ introduce ctx (userHypothesis $ fmap (second jGoal) occjdgs) jdg
   pure $ fmap noLoc $
     let'
       <$> traverse

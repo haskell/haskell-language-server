@@ -156,8 +156,7 @@ mkTyConName tc
       = foldMap (fmap toLower . take 1) camels
   | otherwise
       = getStem
-      $ fmap toLower
-      $ name
+      $ fmap toLower name
   where
     occ = getOccName tc
     name = occNameString occ

@@ -70,7 +70,7 @@ importLensCommand =
   PluginCommand importCommandId "Explicit import command" runImportCommand
 
 -- | The type of the parameters accepted by our command
-data ImportCommandParams = ImportCommandParams WorkspaceEdit
+newtype ImportCommandParams = ImportCommandParams WorkspaceEdit
   deriving (Generic)
   deriving anyclass (FromJSON, ToJSON)
 
