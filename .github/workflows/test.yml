@@ -85,7 +85,7 @@ jobs:
       - if: runner.os == 'Windows'
         name: (Windows) Platform config
         run: |
-          echo "CABAL_PKGS_DIR=~\\AppData\\cabal\\packages" >> $GITHUB_ENV
+          echo "CABAL_PKGS_DIR=C:\\cabal\\packages" >> $GITHUB_ENV
       - if: ( runner.os == 'Linux' ) || ( runner.os == 'macOS' )
         name: (Linux,macOS) Platform config
         run: |
