@@ -11,12 +11,12 @@ packages:
         --  ./plugins/hls-stylish-haskell-plugin
         --  ./plugins/hls-fourmolu-plugin
          ./plugins/hls-class-plugin
-         ./plugins/hls-eval-plugin
-         ./plugins/hls-explicit-imports-plugin
+        -- ./plugins/hls-eval-plugin
+        -- ./plugins/hls-explicit-imports-plugin
          ./plugins/hls-refine-imports-plugin
-         -- ./plugins/hls-hlint-plugin
-         ./plugins/hls-retrie-plugin
-         ./plugins/hls-haddock-comments-plugin
+        -- ./plugins/hls-hlint-plugin
+        -- ./plugins/hls-retrie-plugin
+        -- ./plugins/hls-haddock-comments-plugin
         --  ./plugins/hls-splice-plugin
          ./plugins/hls-qualify-imported-names-plugin
         -- ./plugins/hls-floskell-plugin
@@ -24,7 +24,7 @@ packages:
          ./plugins/hls-module-name-plugin
         -- ./plugins/hls-ormolu-plugin
          ./plugins/hls-call-hierarchy-plugin
-         ./plugins/hls-alternate-number-format-plugin
+        -- ./plugins/hls-alternate-number-format-plugin
 
 source-repository-package
   type: git
@@ -56,7 +56,26 @@ index-state: 2021-12-18T00:00:07Z
 
 constraints:
   -- These plugins doesn't work on GHC92 yet
-  haskell-language-server +ignore-plugins-ghc-bounds -brittany -class -fourmolu -splice -stylishhaskell -tactic -refineImports -callhierarchy -hlint -ormolu -floskell,
+  haskell-language-server
+    +ignore-plugins-ghc-bounds
+    -alternateNumberFormat
+    -brittany
+    -callhierarchy
+    -class
+    -eval
+    -floskell
+    -fourmolu
+    -haddockComments
+    -hlint
+    -importLens
+    -moduleName
+    -ormolu
+    -qualifyImportedNames
+    -refineImports
+    -retrie
+    -splice
+    -stylishhaskell
+    -tactic,
   ghc-lib-parser ^>= 9.2,
   attoparsec ^>= 0.14.3,
   primitive-extras ==0.10.1.2,
