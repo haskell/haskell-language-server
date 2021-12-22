@@ -253,7 +253,7 @@ gblBindingType :: Maybe HscEnv -> Maybe TcGblEnv -> IO (Maybe GlobalBindingTypeS
 gblBindingType (Just hsc) (Just gblEnv) = do
   let exports = availsToNameSet $ tcg_exports gblEnv
       sigs = tcg_sigs gblEnv
-      binds = collectHsBindsBinders CollNoDictBinders $ tcg_binds gblEnv
+      binds = collectHsBindsBinders $ tcg_binds gblEnv
       patSyns = tcg_patsyns gblEnv
       rdrEnv = tcg_rdr_env gblEnv
       showDoc = showDocRdrEnv hsc rdrEnv

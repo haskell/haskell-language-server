@@ -295,6 +295,9 @@ module Development.IDE.GHC.Compat.Core (
     gre_imp,
     gre_lcl,
     gre_par,
+#if MIN_VERSION_ghc(9,2,0)
+    collectHsBindsBinders,
+#endif
     -- * Util Module re-exports
 #if MIN_VERSION_ghc(9,0,0)
     module GHC.Builtin.Names,
@@ -500,7 +503,8 @@ import           GHC.Hs.Extension
 import           GHC.Hs.ImpExp
 import           GHC.Hs.Pat
 import           GHC.Hs.Type
-import           GHC.Hs.Utils
+import           GHC.Hs.Utils                 hiding (collectHsBindsBinders)
+import qualified GHC.Hs.Utils                 as GHC
 #endif
 #if !MIN_VERSION_ghc(9,2,0)
 import           GHC.Hs
@@ -1013,4 +1017,8 @@ pattern GRE{gre_name, gre_par, gre_lcl, gre_imp} <- RdrName.GRE
     ,gre_par, gre_lcl, gre_imp}
 #else
 pattern GRE{gre_name, gre_par, gre_lcl, gre_imp} = RdrName.GRE{..}
+#endif
+
+#if MIN_VERSION_ghc(9,2,0)
+collectHsBindsBinders x = GHC.collectHsBindsBinders CollNoDictBinders x
 #endif
