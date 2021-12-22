@@ -1,7 +1,7 @@
-{-# LANGUAGE DeriveGeneric     #-}
-{-# LANGUAGE DerivingVia       #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE RankNTypes        #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveGeneric      #-}
+{-# LANGUAGE FlexibleInstances  #-}
+{-# LANGUAGE RankNTypes         #-}
 module Ide.Plugin.Literals (
     collectLiterals
     , Literal(..)
@@ -9,24 +9,23 @@ module Ide.Plugin.Literals (
     , getSrcSpan
 ) where
 
-import           Data.Set                      (Set)
-import qualified Data.Set                      as S
+import           Data.Maybe                    (maybeToList)
 import           Data.Text                     (Text)
 import qualified Data.Text                     as T
 import           Development.IDE.GHC.Compat    hiding (getSrcSpan)
 import           Development.IDE.GHC.Util      (unsafePrintSDoc)
 import           Development.IDE.Graph.Classes (NFData (rnf))
 import qualified GHC.Generics                  as GHC
-import           Generics.SYB                  (Data, Typeable, cast,
-                                                everything)
+import           Generics.SYB                  (Data, Typeable, everything,
+                                                extQ)
 
 -- data type to capture what type of literal we are dealing with
 -- provides location and possibly source text (for OverLits) as well as it's value
 -- we currently don't have any use for PrimLiterals. They never have source text so we always drop them
 -- | Captures a Numeric Literals Location, Source Text, and Value.
-data Literal = IntLiteral      RealSrcSpan Text Integer
-             | FracLiteral     RealSrcSpan Text Rational
-             deriving (GHC.Generic, Show, Ord, Eq)
+data Literal = IntLiteral  RealSrcSpan Text Integer
+             | FracLiteral RealSrcSpan Text Rational
+             deriving (GHC.Generic, Show, Ord, Eq, Data)
 
 instance NFData RealSrcSpan where
     rnf x = x `seq` ()
@@ -47,71 +46,40 @@ getSrcSpan = \case
 
 -- | Find all literals in a Parsed Source File
 collectLiterals :: (Data ast, Typeable ast) => ast -> [Literal]
-collectLiterals = S.toList . collectLiterals'
+collectLiterals = everything (<>) (maybeToList . (const Nothing `extQ` getLiteral `extQ` getPattern))
 
-collectLiterals' :: (Data ast, Typeable ast) => ast -> Set Literal
-collectLiterals' = everything (<>) (mkQ2 (S.empty :: Set Literal)  traverseLExpr traverseLPat)
+-- | Translate from HsLit and HsOverLit Types to our Literal Type
+getLiteral :: GenLocated SrcSpan (HsExpr GhcPs) -> Maybe Literal
+getLiteral (L (UnhelpfulSpan _) _) = Nothing
+getLiteral (L (RealSrcSpan sSpan _ ) expr) = case expr of
+    HsLit _ lit         -> fromLit lit sSpan
+    HsOverLit _ overLit -> fromOverLit overLit sSpan
+    _                   -> Nothing
 
--- Located Patterns for whatever reason don't get picked up when using `(mkQ (S.empty :: Set Literal) traverseLExpr)
--- as such we need to explicit traverse those in order to pull out any literals
-mkQ2 :: (Typeable a, Typeable b, Typeable c) => r -> (b -> r) -> (c -> r) -> a -> r
-mkQ2 def left right datum = case cast datum of
-        Just datum' -> left datum'
-        Nothing     -> maybe def right (cast datum)
+-- | Destructure Patterns to unwrap any Literals
+getPattern :: GenLocated SrcSpan (Pat GhcPs) -> Maybe Literal
+getPattern (L (UnhelpfulSpan _) _)       = Nothing
+getPattern (L (RealSrcSpan patSpan _) pat) = case pat of
+    LitPat _ lit -> case lit of
+        HsInt _ val   -> fromIntegralLit patSpan val
+        HsRat _ val _ -> fromFractionalLit patSpan val
+        _             -> Nothing
+    NPat _ (L (RealSrcSpan sSpan _) overLit) _ _ -> fromOverLit overLit sSpan
+    NPlusKPat _ _ (L (RealSrcSpan sSpan _) overLit1) _ _ _ -> fromOverLit overLit1 sSpan
+    _ -> Nothing
 
-traverseLPat :: GenLocated SrcSpan (Pat GhcPs) -> Set Literal
-traverseLPat (L sSpan pat) = traversePat sSpan pat
+fromLit :: HsLit p -> RealSrcSpan -> Maybe Literal
+fromLit lit sSpan = case lit of
+        HsInt _ val   -> fromIntegralLit sSpan val
+        HsRat _ val _ -> fromFractionalLit sSpan val
+        _             -> Nothing
 
-traversePat :: SrcSpan -> Pat GhcPs -> Set Literal
-traversePat sSpan = \case
-    LitPat _ lit                             -> getLiteralAsList sSpan lit
-    NPat _ (L olSpan overLit) sexpr1 sexpr2  -> getOverLiteralAsList olSpan overLit
-                                            <> collectLiterals' sexpr1
-                                            <> collectLiterals' sexpr2
-    NPlusKPat _ _ (L olSpan loverLit) overLit sexpr1 sexpr2 -> getOverLiteralAsList olSpan loverLit
-                                                    <> getOverLiteralAsList sSpan overLit
-                                                    <> collectLiterals' sexpr1
-                                                    <> collectLiterals' sexpr2
-    ast -> collectLiterals' ast
-
-traverseLExpr :: GenLocated SrcSpan (HsExpr GhcPs) -> Set Literal
-traverseLExpr (L sSpan hsExpr) = traverseExpr sSpan hsExpr
-
-traverseExpr :: SrcSpan -> HsExpr GhcPs -> Set Literal
-traverseExpr sSpan = \case
-      HsOverLit _ overLit -> getOverLiteralAsList sSpan overLit
-      HsLit _ lit         -> getLiteralAsList sSpan lit
-      expr                -> collectLiterals' expr
-
-getLiteralAsList :: SrcSpan -> HsLit GhcPs -> Set Literal
-getLiteralAsList sSpan lit =  case sSpan of
-    RealSrcSpan rss _ -> getLiteralAsList' lit rss
-    _                 -> S.empty
-
-getLiteralAsList' :: HsLit GhcPs -> RealSrcSpan -> Set Literal
-getLiteralAsList' lit = maybe S.empty S.singleton . flip getLiteral lit
-
--- Translate from Hs Type to our Literal type
-getLiteral :: RealSrcSpan -> HsLit GhcPs -> Maybe Literal
-getLiteral sSpan = \case
-  HsInt _ val   -> fromIntegralLit sSpan val
-  HsRat _ val _ -> fromFractionalLit sSpan val
-  _             -> Nothing
-
-getOverLiteralAsList :: SrcSpan -> HsOverLit GhcPs -> Set Literal
-getOverLiteralAsList sSpan lit =  case sSpan of
-    RealSrcSpan rss _ -> getOverLiteralAsList' lit rss
-    _                 -> S.empty
-
-getOverLiteralAsList' :: HsOverLit GhcPs -> RealSrcSpan -> Set Literal
-getOverLiteralAsList' lit sSpan = maybe S.empty S.singleton (getOverLiteral sSpan lit)
-
-getOverLiteral :: RealSrcSpan -> HsOverLit GhcPs -> Maybe Literal
-getOverLiteral sSpan OverLit{..} = case ol_val of
-  HsIntegral il   -> fromIntegralLit sSpan il
-  HsFractional fl -> fromFractionalLit sSpan fl
-  _               -> Nothing
-getOverLiteral _ _ = Nothing
+fromOverLit :: HsOverLit p -> RealSrcSpan -> Maybe Literal
+fromOverLit OverLit{..} sSpan = case ol_val of
+        HsIntegral il   -> fromIntegralLit sSpan il
+        HsFractional fl -> fromFractionalLit sSpan fl
+        _               -> Nothing
+fromOverLit _ _ = Nothing
 
 fromIntegralLit :: RealSrcSpan -> IntegralLit -> Maybe Literal
 fromIntegralLit s (IL txt _ val) = fmap (\txt' -> IntLiteral s txt' val) (fromSourceText txt)
