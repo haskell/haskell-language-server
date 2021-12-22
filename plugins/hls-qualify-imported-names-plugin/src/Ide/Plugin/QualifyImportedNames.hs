@@ -27,10 +27,9 @@ import           Development.IDE.Core.RuleTypes    (GetFileContents (GetFileCont
                                                     TypeCheck (TypeCheck))
 import           Development.IDE.Core.Service      (runAction)
 import           Development.IDE.Core.Shake        (IdeState, use)
-import           Development.IDE.GHC.Compat        (ContextInfo (Use),
+import           Development.IDE.GHC.Compat        (ContextInfo (Use), GRE,
                                                     GenLocated (..), GhcPs,
-                                                    GlobalRdrElt (GRE, gre_imp, gre_name),
-                                                    GlobalRdrEnv,
+                                                    GlobalRdrElt, GlobalRdrEnv,
                                                     HsModule (hsmodImports),
                                                     Identifier,
                                                     IdentifierDetails (IdentifierDetails, identInfo),
@@ -42,6 +41,7 @@ import           Development.IDE.GHC.Compat        (ContextInfo (Use),
                                                     RefMap, Span, SrcSpan,
                                                     TcGblEnv (tcg_rdr_env),
                                                     emptyUFM, globalRdrEnvElts,
+                                                    gre_imp, gre_name,
                                                     lookupNameEnv,
                                                     moduleNameString,
                                                     nameOccName, occNameString,
