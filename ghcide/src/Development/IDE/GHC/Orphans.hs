@@ -31,6 +31,7 @@ import           Retrie.ExactPrint          (Annotated)
 
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Util
+import           Ide.Compat                 (toJsonKey)
 
 import           Control.DeepSeq
 import           Data.Aeson
@@ -132,11 +133,11 @@ srcSpanEndColTag = "srcSpanEndCol"
 instance ToJSON RealSrcSpan where
   toJSON spn =
       object
-        [ srcSpanFileTag .= unpackFS (srcSpanFile spn)
-        , srcSpanStartLineTag .= srcSpanStartLine spn
-        , srcSpanStartColTag .= srcSpanStartCol spn
-        , srcSpanEndLineTag .= srcSpanEndLine spn
-        , srcSpanEndColTag .= srcSpanEndCol spn
+        [ toJsonKey srcSpanFileTag .= unpackFS (srcSpanFile spn)
+        , toJsonKey srcSpanStartLineTag .= srcSpanStartLine spn
+        , toJsonKey srcSpanStartColTag .= srcSpanStartCol spn
+        , toJsonKey srcSpanEndLineTag .= srcSpanEndLine spn
+        , toJsonKey srcSpanEndColTag .= srcSpanEndCol spn
         ]
 
 instance FromJSON RealSrcSpan where

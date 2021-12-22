@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP               #-}
 {-# LANGUAGE GADTs             #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
@@ -11,28 +10,16 @@ import qualified Data.Aeson.Types      as A
 import           Data.Default          (def)
 import qualified Data.Dependent.Map    as DMap
 import qualified Data.Dependent.Sum    as DSum
-#if MIN_VERSION_aeson(2,0,0)
-import qualified Data.Aeson.Key        as A.Key
-import qualified Data.Aeson.KeyMap     as Map
-#else
-import qualified Data.HashMap.Lazy     as Map
-#endif
 import           Data.Functor.Identity
+import qualified Data.HashMap.Lazy     as Map
 import           Data.List             (nub)
 import           Data.Maybe            (fromJust)
 import           Data.Text             (Text)
+import           Ide.Compat            (toKey)
 import           Ide.Plugin.Config
 import           Ide.Plugin.Properties (toDefaultJSON, toVSCodeExtensionSchema)
 import           Ide.Types
 import           Language.LSP.Types
-
-#if MIN_VERSION_aeson(2,0,0)
-toKey :: Text -> A.Key
-toKey = A.Key.fromText
-#else
-toKey :: Text -> Text
-toKey = id
-#endif
 
 -- Attention:
 -- 'diagnosticsOn' will never be added into the default config or the schema,
@@ -124,22 +111,22 @@ pluginsToVSCodeExtensionSchema IdePlugins {..} = A.object $ mconcat $ singlePlug
         (PluginId pId) = pluginId
         genericSchema =
           let x =
-                [withIdPrefix "diagnosticsOn" A..= schemaEntry "diagnostics" | configHasDiagnostics]
+                [toKey' "diagnosticsOn" A..= schemaEntry "diagnostics" | configHasDiagnostics]
                   <> nub (mconcat (handlersToGenericSchema <$> handlers))
            in case x of
                 -- If the plugin has only one capability, we produce globalOn instead of the specific one;
                 -- otherwise we don't produce globalOn at all
-                [_] -> [withIdPrefix "globalOn" A..= schemaEntry "plugin"]
+                [_] -> [toKey' "globalOn" A..= schemaEntry "plugin"]
                 _   -> x
         dedicatedSchema = customConfigToDedicatedSchema configCustomConfig
         handlersToGenericSchema (IdeMethod m DSum.:=> _) = case m of
-          STextDocumentCodeAction -> [withIdPrefix "codeActionsOn" A..= schemaEntry "code actions"]
-          STextDocumentCodeLens -> [withIdPrefix "codeLensOn" A..= schemaEntry "code lenses"]
-          STextDocumentRename -> [withIdPrefix "renameOn" A..= schemaEntry "rename"]
-          STextDocumentHover -> [withIdPrefix "hoverOn" A..= schemaEntry "hover"]
-          STextDocumentDocumentSymbol -> [withIdPrefix "symbolsOn" A..= schemaEntry "symbols"]
-          STextDocumentCompletion -> [withIdPrefix "completionOn" A..= schemaEntry "completions"]
-          STextDocumentPrepareCallHierarchy -> [withIdPrefix "callHierarchyOn" A..= schemaEntry "call hierarchy"]
+          STextDocumentCodeAction -> [toKey' "codeActionsOn" A..= schemaEntry "code actions"]
+          STextDocumentCodeLens -> [toKey' "codeLensOn" A..= schemaEntry "code lenses"]
+          STextDocumentRename -> [toKey' "renameOn" A..= schemaEntry "rename"]
+          STextDocumentHover -> [toKey' "hoverOn" A..= schemaEntry "hover"]
+          STextDocumentDocumentSymbol -> [toKey' "symbolsOn" A..= schemaEntry "symbols"]
+          STextDocumentCompletion -> [toKey' "completionOn" A..= schemaEntry "completions"]
+          STextDocumentPrepareCallHierarchy -> [toKey' "callHierarchyOn" A..= schemaEntry "call hierarchy"]
           _ -> []
         schemaEntry desc =
           A.object
@@ -148,4 +135,5 @@ pluginsToVSCodeExtensionSchema IdePlugins {..} = A.object $ mconcat $ singlePlug
               "default" A..= True,
               "description" A..= A.String ("Enables " <> pId <> " " <> desc)
             ]
-        withIdPrefix x = toKey $ "haskell.plugin." <> pId <> "." <> x
+        withIdPrefix x = "haskell.plugin." <> pId <> "." <> x
+        toKey' = toJsonKey . withIdPrefix

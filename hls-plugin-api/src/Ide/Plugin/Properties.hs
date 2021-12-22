@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP                   #-}
 {-# LANGUAGE ConstraintKinds       #-}
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE FlexibleContexts      #-}
@@ -42,9 +41,6 @@ module Ide.Plugin.Properties
 where
 
 import qualified Data.Aeson           as A
-#if MIN_VERSION_aeson(2,0,0)
-import qualified Data.Aeson.Key       as A.Key
-#endif
 import qualified Data.Aeson.Types     as A
 import           Data.Either          (fromRight)
 import           Data.Function        ((&))
@@ -54,6 +50,7 @@ import           Data.Proxy           (Proxy (..))
 import qualified Data.Text            as T
 import           GHC.OverloadedLabels (IsLabel (..))
 import           GHC.TypeLits
+import           Ide.Types            (toJsonKey)
 import           Unsafe.Coerce        (unsafeCoerce)
 
 -- | Types properties may have
@@ -167,14 +164,6 @@ type HasProperty s k t r = (k ~ 'PropertyKey s t, Elem s r, FindByKeyName s r ~ 
 --      233
 -- @
 
-#if MIN_VERSION_aeson(2,0,0)
-toKey :: String -> A.Key
-toKey = A.Key.fromString
-#else
-toKey :: String -> T.Text
-toKey = T.pack
-#endif
-
 emptyProperties :: Properties '[]
 emptyProperties = Properties Map.empty
 
@@ -248,7 +237,7 @@ parseProperty kn k x = case k of
   (SEnum _, EnumMetaData {..}) ->
     A.parseEither
       ( \o -> do
-          txt <- o A..: keyName
+          txt <- o A..: key
           if txt `elem` enumValues
             then pure txt
             else
@@ -260,7 +249,7 @@ parseProperty kn k x = case k of
       )
       x
   where
-    keyName = toKey $ symbolVal kn
+    key = toJsonKey . pack $ symbolVal kn
     parseEither :: forall a. A.FromJSON a => Either String a
     parseEither = A.parseEither (A..: keyName) x
 
@@ -365,7 +354,7 @@ toDefaultJSON :: Properties r -> [A.Pair]
 toDefaultJSON (Properties p) = [toEntry s v | (s, v) <- Map.toList p]
   where
     toEntry :: String -> SomePropertyKeyWithMetaData -> A.Pair
-    toEntry (toKey -> s) = \case
+    toEntry (toJsonKey . pack -> s) = \case
       (SomePropertyKeyWithMetaData SNumber MetaData {..}) ->
         s A..= defaultValue
       (SomePropertyKeyWithMetaData SInteger MetaData {..}) ->
@@ -384,7 +373,7 @@ toDefaultJSON (Properties p) = [toEntry s v | (s, v) <- Map.toList p]
 -- | Converts a properties definition into kv pairs as vscode schema
 toVSCodeExtensionSchema :: T.Text -> Properties r -> [A.Pair]
 toVSCodeExtensionSchema prefix (Properties p) =
-  [(toKey $ T.unpack prefix <> k) A..= toEntry v | (k, v) <- Map.toList p]
+  [(toJsonKey prefix <> k) A..= toEntry v | (k, v) <- Map.toList p]
   where
     toEntry :: SomePropertyKeyWithMetaData -> A.Value
     toEntry = \case
