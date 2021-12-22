@@ -100,7 +100,11 @@ jobs:
       - if: matrix.ghc == '9.0.1'
         name: (GHC 9.0.1) Use modified `cabal.project`
         run: |
-          cp cabal-ghc901.project cabal.project
+          # File has some protections preventing regular `rm`.
+          # (most probably sticky bit is set on $HOME)
+          # `&&` insures `rm -f` return is positive.
+          # Many platforms also have `alias cp='cp -i'`.
+          rm -f -v cabal.project && cp -v cabal-ghc901.project cabal.project
       - if: runner.os == 'Windows' && matrix.ghc == '8.8.4'
         name: (Windows,GHC 8.8) Modify `cabal.project` to workaround segfaults
         run: |
@@ -154,11 +158,11 @@ jobs:
                 ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
                 ${{ env.cache-name }}-${{ runner.os }}-
 
-      - if: (! steps.compiled-deps.outputs.cache-hit)
+      - if: steps.compiled-deps.outputs.cache-hit != 'true'
         run: |
           cabal update
 
-      - if: (! steps.compiled-deps.outputs.cache-hit)
+      - if: steps.compiled-deps.outputs.cache-hit != 'true'
         name: Download all sources
         run: |
           cabal $cabalBuild --only-download
@@ -168,7 +172,7 @@ jobs:
       # but to cache what can be cached, so step is fault tolerant & would always succseed.
       # 2021-12-11: NOTE: Building all targets, since
       # current Cabal does not allow `all --enable-tests --enable-benchmarks --only-dependencies`
-      - if: (! steps.compiled-deps.outputs.cache-hit)
+      - if: steps.compiled-deps.outputs.cache-hit != 'true'
         name: Build all targets; try 3 times
         continue-on-error: true
         run: |
