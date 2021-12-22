@@ -110,7 +110,8 @@ module Development.IDE.GHC.Compat.Core (
     ModDetails(..),
     -- * HsExpr,
 #if !MIN_VERSION_ghc(9,2,0)
-    pattern Development.IDE.GHC.Compat.Core.HsLet,
+    pattern HsLet,
+    pattern LetStmt,
 #endif
     -- * Var
     Type (
@@ -511,7 +512,7 @@ import           GHC.Hs.Utils                 hiding (collectHsBindsBinders)
 import qualified GHC.Hs.Utils                 as GHC
 #endif
 #if !MIN_VERSION_ghc(9,2,0)
-import           GHC.Hs                       hiding (HsLet)
+import           GHC.Hs                       hiding (HsLet, LetStmt)
 #endif
 import           GHC.HsToCore.Docs
 import           GHC.HsToCore.Expr
@@ -624,7 +625,7 @@ import           FamInst
 import           FamInstEnv
 import           Finder
 #if MIN_VERSION_ghc(8,10,0)
-import           GHC.Hs                       hiding (HsLet)
+import           GHC.Hs                       hiding (HsLet, LetStmt)
 #endif
 import qualified GHCi
 import           GhcMonad
@@ -1029,4 +1030,5 @@ collectHsBindsBinders x = GHC.collectHsBindsBinders CollNoDictBinders x
 
 #if !MIN_VERSION_ghc(9,2,0)
 pattern HsLet xlet localBinds expr <- GHC.HsLet xlet (SrcLoc.unLoc -> localBinds) expr
+pattern LetStmt xlet localBinds <- GHC.LetStmt xlet (SrcLoc.unLoc -> localBinds)
 #endif
