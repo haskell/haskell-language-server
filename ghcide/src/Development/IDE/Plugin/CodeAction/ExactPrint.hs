@@ -433,7 +433,7 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
 #if !MIN_VERSION_ghc(9,2,0)
       when hasSibling $
         addTrailingCommaT (head pre)
-      let parentLIE = L srcParent $ (if isParentOperator then IEType parentRdr else IEName parentRdr)
+      let parentLIE = L srcParent (if isParentOperator then IEType parentRdr else IEName parentRdr)
           childLIE = reLocA $ L srcChild $ IEName childRdr
 #else
       let parentLIE = reLocA $ L srcParent $ (if isParentOperator then IEType mempty parentRdr else IEName parentRdr)

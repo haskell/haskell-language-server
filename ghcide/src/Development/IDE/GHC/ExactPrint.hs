@@ -313,7 +313,7 @@ graftExprWithM dst trans = Graft $ \dflags a -> do
         ( mkM $
             \case
                 val@(L src _ :: LHsExpr GhcPs)
-                    | (locA src) `eqSrcSpan` dst -> do
+                    | locA src `eqSrcSpan` dst -> do
                         mval <- trans val
                         case mval of
                             Just val' -> do
@@ -435,7 +435,7 @@ graftDeclsWithM ::
 graftDeclsWithM dst toDecls = Graft $ \dflags a -> do
     let go [] = pure DL.empty
         go (e@(L src _) : rest)
-            | (locA src) `eqSrcSpan` dst = toDecls e >>= \case
+            | locA src `eqSrcSpan` dst = toDecls e >>= \case
                 Just decs0 -> do
                     decs <- forM decs0 $ \decl ->
                         hoistTransform (either Fail.fail pure) $
