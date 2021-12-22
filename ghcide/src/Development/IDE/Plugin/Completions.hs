@@ -1,6 +1,6 @@
+{-# LANGUAGE CPP          #-}
 {-# LANGUAGE RankNTypes   #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE CPP          #-}
 
 module Development.IDE.Plugin.Completions
     ( descriptor
@@ -25,7 +25,7 @@ import           Development.IDE.Core.Service
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error                    (rangeToSrcSpan)
-import           Development.IDE.GHC.ExactPrint               (Annotated(..),
+import           Development.IDE.GHC.ExactPrint               (Annotated (..),
                                                                GetAnnotatedParsedSource (GetAnnotatedParsedSource),
                                                                astA)
 import           Development.IDE.GHC.Util                     (prettyPrint)
@@ -257,7 +257,14 @@ extendImportHandler' ideState ExtendImport {..}
                 it = case thingParent of
                   Nothing -> newThing
                   Just p  -> p <> "(" <> newThing <> ")"
-            t <- liftMaybe $ snd <$> newImportToEdit n ps (fromMaybe "" contents)
+            t <- liftMaybe $ snd <$> newImportToEdit
+                n
+#if !MIN_VERSION_ghc(9,2,0)
+                (astA ps)
+#else
+                ps
+#endif
+                (fromMaybe "" contents)
             return (nfp, WorkspaceEdit {_changes=Just (fromList [(doc,List [t])]), _documentChanges=Nothing, _changeAnnotations=Nothing})
   | otherwise =
     mzero
