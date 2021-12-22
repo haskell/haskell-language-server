@@ -291,7 +291,7 @@ isUnusedImportedId
           ],
       [GRE {gre_name = name}] <- lookupGlobalRdrEnv rdrEnv occ,
       importedIdentifier <- Right name,
-      refs <- M.lookup (fmap greNameMangledName importedIdentifier) refMap =
+      refs <- M.lookup importedIdentifier refMap =
       maybe True (not . any (\(_, IdentifierDetails {..}) -> identInfo == S.singleton Use)) refs
     | otherwise = False
 
@@ -738,7 +738,7 @@ suggestModuleTypo Diagnostic{_range=_range,..}
     extractModule line = case T.words line of
         [modul, "(from", _] -> Just modul
         _ -> Nothing
-    
+
 
 suggestFillHole :: Diagnostic -> [(T.Text, TextEdit)]
 suggestFillHole Diagnostic{_range=_range,..}

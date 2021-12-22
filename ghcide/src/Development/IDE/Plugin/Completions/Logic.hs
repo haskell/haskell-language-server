@@ -54,7 +54,6 @@ import           Language.LSP.Types.Capabilities
 import qualified Language.LSP.VFS                         as VFS
 import           Text.Fuzzy.Parallel                      (Scored (score_),
                                                            original)
-import GHC.Types.Avail (greNamePrintableName)
 
 -- Chunk size used for parallelizing fuzzy matching
 chunkSize :: Int
@@ -357,8 +356,8 @@ cacheDataProducer uri env curMod globalEnv inScopeEnv limports = do
 
       getComplsForOne :: GlobalRdrElt -> IO ([CompItem],QualCompls)
       getComplsForOne (GRE n par True _) =
-          (, mempty) <$> toCompItem par curMod curModNameText (greNamePrintableName n) Nothing
-      getComplsForOne (GRE (greNamePrintableName -> n) par False prov) =
+          (, mempty) <$> toCompItem par curMod curModNameText n Nothing
+      getComplsForOne (GRE n par False prov) =
         flip foldMapM (map is_decl prov) $ \spec -> do
           let originalImportDecl = do
                 -- we don't want to extend import if it's already in scope

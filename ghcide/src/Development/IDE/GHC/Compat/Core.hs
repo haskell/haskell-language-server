@@ -290,6 +290,11 @@ module Development.IDE.GHC.Compat.Core (
     -- * Other
     GHC.CoreModule(..),
     GHC.SafeHaskellMode(..),
+    pattern GRE,
+    gre_name,
+    gre_imp,
+    gre_lcl,
+    gre_par,
     -- * Util Module re-exports
 #if MIN_VERSION_ghc(9,0,0)
     module GHC.Builtin.Names,
@@ -352,6 +357,7 @@ module Development.IDE.GHC.Compat.Core (
     module GHC.Types.Name.Env,
     module GHC.Types.Name.Reader,
 #if MIN_VERSION_ghc(9,2,0)
+    module GHC.Types.Avail,
     module GHC.Types.SourceFile,
     module GHC.Types.SourceText,
     module GHC.Types.TyThing,
@@ -536,6 +542,7 @@ import           GHC.Tc.Utils.Monad           hiding (Applicative (..), IORef,
 import           GHC.Tc.Utils.TcType          as TcType
 import qualified GHC.Types.Avail              as Avail
 #if MIN_VERSION_ghc(9,2,0)
+import           GHC.Types.Avail              (greNamePrintableName)
 import           GHC.Types.Fixity             (LexicalFixity (..))
 #endif
 #if MIN_VERSION_ghc(9,2,0)
@@ -546,7 +553,8 @@ import           GHC.Types.Id
 import           GHC.Types.Name               hiding (varName)
 import           GHC.Types.Name.Cache
 import           GHC.Types.Name.Env
-import           GHC.Types.Name.Reader
+import           GHC.Types.Name.Reader        hiding (GRE, gre_name, gre_imp, gre_lcl, gre_par)
+import qualified GHC.Types.Name.Reader        as RdrName
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Types.Name.Set
 import           GHC.Types.SourceFile         (HscSource (..),
@@ -661,7 +669,8 @@ import           Plugins
 import           PprTyThing                   hiding (pprFamInst)
 import           PrelInfo
 import           PrelNames                    hiding (Unique, printName)
-import           RdrName
+import           RdrName                      hiding (GRE, gre_name, gre_imp, gre_lcl, gre_par)
+import qualified RdrName
 import           RnNames
 import           RnSplice
 import qualified SrcLoc
@@ -969,7 +978,7 @@ isSubspanOfA a b = SrcLoc.isSubspanOf (GHC.getLoc a) (GHC.getLoc b)
 #if MIN_VERSION_ghc(9,2,0)
 type LocatedAn a = GHC.LocatedAn a
 #else
-type LocatedAn a = Located
+type LocatedAn a = GHC.Located
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
@@ -995,4 +1004,14 @@ type AnnListItem = SrcLoc.SrcSpan
 type NameAnn = GHC.NameAnn
 #else
 type NameAnn = SrcLoc.SrcSpan
+#endif
+
+pattern GRE :: Name -> Parent -> Bool -> [ImportSpec] -> RdrName.GlobalRdrElt
+{-# COMPLETE GRE #-}
+#if MIN_VERSION_ghc(9,2,0)
+pattern GRE{gre_name, gre_par, gre_lcl, gre_imp} <- RdrName.GRE
+    {gre_name = (greNamePrintableName -> gre_name)
+    ,gre_par, gre_lcl, gre_imp}
+#else
+pattern GRE{gre_name, gre_par, gre_lcl, gre_imp} = RdrName.GRE{..}
 #endif
