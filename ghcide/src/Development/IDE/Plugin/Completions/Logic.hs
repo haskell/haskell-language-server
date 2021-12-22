@@ -488,10 +488,10 @@ findRecordCompl uri pmod mn DataDecl {tcdLName, tcdDataDefn} = result
                  ]
         doc = SpanDocText (getDocumentation [pmod] $ reLoc tcdLName) (SpanDocUris Nothing Nothing)
 
-        getFlds :: HsConDeclH98Details GhcPs -> Maybe [ConDeclField GhcPs]
+        -- getFlds :: HsConDeclH98Details GhcPs -> Maybe [ConDeclField GhcPs]
         getFlds conArg = case conArg of
                              RecCon rec  -> Just $ unLoc <$> unLoc rec
-                             PrefixCon _ _ -> Just []
+                             PrefixCon{} -> Just []
                              _           -> Nothing
 
         extract ConDeclField{..}
