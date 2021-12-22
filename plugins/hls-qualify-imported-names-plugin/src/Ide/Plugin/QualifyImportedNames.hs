@@ -1,6 +1,7 @@
 {-# LANGUAGE MultiWayIf        #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms   #-}
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE ViewPatterns      #-}
 
@@ -27,7 +28,7 @@ import           Development.IDE.Core.RuleTypes    (GetFileContents (GetFileCont
                                                     TypeCheck (TypeCheck))
 import           Development.IDE.Core.Service      (runAction)
 import           Development.IDE.Core.Shake        (IdeState, use)
-import           Development.IDE.GHC.Compat        (ContextInfo (Use), GRE,
+import           Development.IDE.GHC.Compat        (ContextInfo (Use),
                                                     GenLocated (..), GhcPs,
                                                     GlobalRdrElt, GlobalRdrEnv,
                                                     HsModule (hsmodImports),
@@ -45,7 +46,8 @@ import           Development.IDE.GHC.Compat        (ContextInfo (Use), GRE,
                                                     lookupNameEnv,
                                                     moduleNameString,
                                                     nameOccName, occNameString,
-                                                    plusUFM_C, srcSpanEndCol,
+                                                    pattern GRE, plusUFM_C,
+                                                    srcSpanEndCol,
                                                     srcSpanEndLine,
                                                     srcSpanStartCol,
                                                     srcSpanStartLine, unitUFM)
