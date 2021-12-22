@@ -41,7 +41,7 @@ jobs:
       fail-fast: true
       matrix:
         ghc: ["9.2.1", "9.0.1", '8.10.7', '8.10.6', "8.8.4", "8.6.5"]
-        os: [ubuntu-latest, macOS-latest]
+        os: [ubuntu-latest, macOS-latest, windows-latest]
         cabal: ['3.6']
         include:
            # only test supported ghc major versions
@@ -72,11 +72,6 @@ jobs:
            - os: windows-latest
              ghc: '8.6.5'
              test: true
-           # only build rest of supported ghc versions for windows
-           - os: windows-latest
-             ghc: '8.10.6'
-           - os: windows-latest
-             ghc: '8.8.4'
 
     steps:
       - uses: actions/checkout@v2
