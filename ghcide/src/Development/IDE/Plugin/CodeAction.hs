@@ -79,7 +79,6 @@ import           Language.LSP.VFS
 import           Text.Regex.TDFA                                   (mrAfter,
                                                                     (=~), (=~~))
 
-import GHC.Types.Avail (greNameMangledName)
 -------------------------------------------------------------------------------------------------
 
 -- | Generate code actions.
