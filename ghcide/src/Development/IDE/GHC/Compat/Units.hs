@@ -46,12 +46,14 @@ module Development.IDE.GHC.Compat.Units (
     -- * Utils
     filterInplaceUnits,
     FinderCache,
+    showSDocForUser',
     ) where
 
 #if MIN_VERSION_ghc(9,0,0)
 #if MIN_VERSION_ghc(9,2,0)
 import qualified GHC.Data.ShortText              as ST
 import           GHC.Driver.Env                  (hsc_unit_dbs)
+import           GHC.Driver.Ppr
 import           GHC.Unit.Env
 import           GHC.Unit.External
 import           GHC.Unit.Finder
@@ -67,9 +69,11 @@ import           GHC.Unit.State                  (LookupResult, UnitInfo,
 import qualified GHC.Unit.State                  as State
 import           GHC.Unit.Types                  hiding (moduleUnit, toUnitId)
 import qualified GHC.Unit.Types                  as Unit
+import           GHC.Utils.Outputable
 #else
 import qualified DynFlags
 import           FastString
+import           GhcPlugins                      (SDoc, showSDocForUser)
 import           HscTypes
 import           Module                          hiding (moduleUnitId)
 import qualified Module
@@ -89,6 +93,7 @@ import           Data.Map                        (Map)
 #endif
 import           Data.Either
 import           Data.Version
+import qualified GHC
 
 #if MIN_VERSION_ghc(9,0,0)
 type PreloadUnitClosure = UniqSet UnitId
@@ -340,3 +345,10 @@ filterInplaceUnits us packageFlags =
         else Right p
 #endif
     isInplace p = Right p
+
+showSDocForUser' :: HscEnv -> GHC.PrintUnqualified -> SDoc -> String
+#if MIN_VERSION_ghc(9,2,0)
+showSDocForUser' env = showSDocForUser (hsc_dflags env) (unitState env)
+#else
+showSDocForUser' env = showSDocForUser (hsc_dflags env)
+#endif

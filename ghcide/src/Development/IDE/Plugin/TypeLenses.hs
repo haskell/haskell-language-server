@@ -26,8 +26,7 @@ import qualified Data.Text                           as T
 import           Development.IDE                     (GhcSession (..),
                                                       HscEnvEq (hscEnv),
                                                       RuleResult, Rules, define,
-                                                      srcSpanToRange,
-                                                      tmrModSummary)
+                                                      srcSpanToRange)
 import           Development.IDE.Core.Compile        (TcModuleResult (..))
 import           Development.IDE.Core.RuleTypes      (GetBindings (GetBindings),
                                                       TypeCheck (TypeCheck))
@@ -216,7 +215,7 @@ instance A.FromJSON Mode where
 --------------------------------------------------------------------------------
 
 showDocRdrEnv :: HscEnv -> GlobalRdrEnv -> SDoc -> String
-showDocRdrEnv env rdrEnv = showSDocForUser (hsc_dflags env) (unitState env) (mkPrintUnqualifiedDefault env rdrEnv)
+showDocRdrEnv env rdrEnv = showSDocForUser' env (mkPrintUnqualifiedDefault env rdrEnv)
 
 data GetGlobalBindingTypeSigs = GetGlobalBindingTypeSigs
   deriving (Generic, Show, Eq, Ord, Hashable, NFData)
