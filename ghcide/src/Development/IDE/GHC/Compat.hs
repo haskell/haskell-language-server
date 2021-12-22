@@ -144,7 +144,6 @@ hPutStringBuffer hdl (StringBuffer buf len cur)
 
 #if MIN_VERSION_ghc(9,2,0)
 type ErrMsg  = MsgEnvelope DecoratedSDoc
-type WarnMsg = MsgEnvelope DecoratedSDoc
 #endif
 
 getErrorMessages' :: PState -> DynFlags -> Bag ErrMsg
