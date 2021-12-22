@@ -129,7 +129,11 @@ pattern ParsedModule
     } <- ( (,()) -> (GHC.ParsedModule{..}, pm_annotations))
     where
         ParsedModule ms parsed extra_src_files _anns =
-            GHC.ParsedModule { pm_mod_summary = ms , pm_parsed_source = parsed , pm_extra_src_files = extra_src_files }
+            GHC.ParsedModule
+             { pm_mod_summary = ms
+             , pm_parsed_source = parsed
+             , pm_extra_src_files = extra_src_files
+             }
 #endif
 
 mkApiAnns :: PState -> ApiAnns
