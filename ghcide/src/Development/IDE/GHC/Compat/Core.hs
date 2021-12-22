@@ -108,6 +108,10 @@ module Development.IDE.GHC.Compat.Core (
     CgGuts(..),
     -- * ModDetails
     ModDetails(..),
+    -- * HsExpr,
+#if !MIN_VERSION_ghc(9,2,0)
+    pattern Development.IDE.GHC.Compat.Core.HsLet,
+#endif
     -- * Var
     Type (
       TyCoRep.TyVarTy,
@@ -507,7 +511,7 @@ import           GHC.Hs.Utils                 hiding (collectHsBindsBinders)
 import qualified GHC.Hs.Utils                 as GHC
 #endif
 #if !MIN_VERSION_ghc(9,2,0)
-import           GHC.Hs
+import           GHC.Hs                       hiding (HsLet)
 #endif
 import           GHC.HsToCore.Docs
 import           GHC.HsToCore.Expr
@@ -620,7 +624,7 @@ import           FamInst
 import           FamInstEnv
 import           Finder
 #if MIN_VERSION_ghc(8,10,0)
-import           GHC.Hs
+import           GHC.Hs                       hiding (HsLet)
 #endif
 import qualified GHCi
 import           GhcMonad
@@ -1021,4 +1025,8 @@ pattern GRE{gre_name, gre_par, gre_lcl, gre_imp} = RdrName.GRE{..}
 
 #if MIN_VERSION_ghc(9,2,0)
 collectHsBindsBinders x = GHC.collectHsBindsBinders CollNoDictBinders x
+#endif
+
+#if !MIN_VERSION_ghc(9,2,0)
+pattern HsLet xlet localBinds expr <- GHC.HsLet xlet (SrcLoc.unLoc -> localBinds) expr
 #endif
