@@ -39,6 +39,8 @@ choco install haskell-language-server
 
 If you are using Visual Studio Code, the [Haskell extension](https://marketplace.visualstudio.com/items?itemName=haskell.haskell) will automatically download and install `haskell-language-server` for you.
 
+If you need to find the binaries, please consult the [documentation](https://github.com/haskell/vscode-haskell#downloaded-binaries) for the extension.
+
 ## Pre-built binaries
 
 There are pre-built binaries available from the [releases page](https://github.com/haskell/haskell-language-server/releases) for Linux, Windows and macOS.

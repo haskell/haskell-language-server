@@ -1,11 +1,12 @@
 haskell-language-server
 =======================
 
-Official haskell ide support via language server (LSP). Successor of `ghcide <https://github.com/haskell/ghcide>`_ and `haskell-ide-engine <https://github.com/haskell/haskell-ide-engine>`_. Read the `project's background <https://neilmitchell.blogspot.com/2020/01/one-haskell-ide-to-rule-them-all.html>`_.
+Official Haskell Language Server implementation. :ref:`Read more<What is haskell-language-server?>`.
 
 .. toctree::
    :maxdepth: 2
 
+   what-is-hls
    features
    installation
    supported-versions
