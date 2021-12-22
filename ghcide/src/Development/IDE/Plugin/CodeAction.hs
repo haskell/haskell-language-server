@@ -3,7 +3,6 @@
 
 {-# LANGUAGE CPP                   #-}
 {-# LANGUAGE GADTs                 #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 
 -- | Go to the definition of a variable.
@@ -191,7 +190,7 @@ findSigOfBind range bind =
         go (HsDo _ _ stmts) = do
           stmtlr <- unLoc <$> findDeclContainingLoc (_start range) (unLoc stmts)
           case stmtlr of
-            LetStmt _ lhsLocalBindsLR -> findSigOfBinds range $ lhsLocalBindsLR
+            LetStmt _ lhsLocalBindsLR -> findSigOfBinds range lhsLocalBindsLR
             _ -> Nothing
         go _ = Nothing
 
@@ -428,7 +427,7 @@ suggestDeleteUnusedBinding
     | otherwise = []
     where
       relatedRanges indexedContent name =
-        concatMap (findRelatedSpans indexedContent name) $ map reLoc hsmodDecls
+        concatMap (findRelatedSpans indexedContent name . reLoc) hsmodDecls
       toRange = realSrcSpanToRange
       extendForSpaces = extendToIncludePreviousNewlineIfPossible
 
@@ -443,7 +442,7 @@ suggestDeleteUnusedBinding
                 findSig _ = []
             in
               extendForSpaces indexedContent (toRange l) :
-              concatMap findSig (map reLoc hsmodDecls)
+              concatMap (findSig . reLoc) hsmodDecls
           _ -> concatMap (findRelatedSpanForMatch indexedContent name) matches
       findRelatedSpans _ _ _ = []
 
@@ -522,7 +521,7 @@ suggestDeleteUnusedBinding
         then
           let findSig (L (RealSrcSpan l _) sig) = findRelatedSigSpan indexedContent name l sig
               findSig _ = []
-          in extendForSpaces indexedContent (toRange l) : concatMap findSig (map reLoc lsigs)
+          in extendForSpaces indexedContent (toRange l) : concatMap (findSig . reLoc) lsigs
         else concatMap (findRelatedSpanForMatch indexedContent name) matches
       findRelatedSpanForHsBind _ _ _ _ = []
 
@@ -552,7 +551,7 @@ suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModul
                                 (\(L (locA -> l) b) -> if maybe False isTopLevel $ srcSpanToRange l
                                                 then exportsAs b else Nothing)
                             $ hsmodDecls
-  , Just pos <- fmap _end . getLocatedRange =<< fmap reLoc hsmodExports
+  , Just pos <- (fmap _end . getLocatedRange) . reLoc =<< hsmodExports
   , Just needComma <- needsComma source <$> fmap reLoc hsmodExports
   , let exportName = (if needComma then "," else "") <> printExport exportType name
         insertPos = pos {_character = pred $ _character pos}
@@ -595,8 +594,8 @@ suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModul
     exportsAs (ValD _ FunBind {fun_id})          = Just (ExportName, reLoc fun_id)
     exportsAs (ValD _ (PatSynBind _ PSB {psb_id})) = Just (ExportPattern, reLoc psb_id)
     exportsAs (TyClD _ SynDecl{tcdLName})      = Just (ExportName, reLoc tcdLName)
-    exportsAs (TyClD _ DataDecl{tcdLName})     = Just (ExportAll, reLoc $ tcdLName)
-    exportsAs (TyClD _ ClassDecl{tcdLName})    = Just (ExportAll, reLoc $ tcdLName)
+    exportsAs (TyClD _ DataDecl{tcdLName})     = Just (ExportAll, reLoc tcdLName)
+    exportsAs (TyClD _ ClassDecl{tcdLName})    = Just (ExportAll, reLoc tcdLName)
     exportsAs (TyClD _ FamDecl{tcdFam})        = Just (ExportAll, reLoc $ fdLName tcdFam)
     exportsAs _                                = Nothing
 

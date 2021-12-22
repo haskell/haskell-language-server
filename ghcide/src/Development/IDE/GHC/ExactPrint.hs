@@ -2,7 +2,6 @@
 {-# LANGUAGE DerivingVia            #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GADTs                  #-}
-{-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE RankNTypes             #-}
 {-# LANGUAGE TypeFamilies           #-}
 {-# LANGUAGE TypeSynonymInstances   #-}
@@ -256,7 +255,7 @@ graft' needs_space dst val = Graft $ \dflags a -> do
             ( mkT $
                 \case
                     (L src _ :: LocatedAn l ast)
-                        | (locA src) `eqSrcSpan` dst -> val'
+                        | locA src `eqSrcSpan` dst -> val'
                     l                         -> l
             )
             a
@@ -290,7 +289,7 @@ getNeedsSpaceAndParenthesize dst a =
   let (needs_parens, needs_space) =
           everythingWithContext (Nothing, Nothing) (<>)
             ( mkQ (mempty, ) $ \x s -> case x of
-                (L src _ :: LHsExpr GhcPs) | (locA src) `eqSrcSpan` dst ->
+                (L src _ :: LHsExpr GhcPs) | locA src `eqSrcSpan` dst ->
                   (s, s)
                 L _ x' -> (mempty, Just *** Just $ needsParensSpace x')
             ) a
@@ -346,7 +345,7 @@ graftWithM dst trans = Graft $ \dflags a -> do
         ( mkM $
             \case
                 val@(L src _ :: LocatedAn l ast)
-                    | (locA src) `eqSrcSpan` dst -> do
+                    | locA src `eqSrcSpan` dst -> do
                         mval <- trans val
                         case mval of
                             Just val' -> do
@@ -405,7 +404,7 @@ graftDecls dst decs0 = Graft $ \dflags a -> do
         annotateDecl dflags decl
     let go [] = DL.empty
         go (L src e : rest)
-            | (locA src) `eqSrcSpan` dst = DL.fromList decs <> DL.fromList rest
+            | locA src `eqSrcSpan` dst = DL.fromList decs <> DL.fromList rest
             | otherwise = DL.singleton (L src e) <> go rest
     modifyDeclsT (pure . DL.toList . go) a
 
@@ -418,7 +417,7 @@ graftSmallestDeclsWithM ::
 graftSmallestDeclsWithM dst toDecls = Graft $ \dflags a -> do
     let go [] = pure DL.empty
         go (e@(L src _) : rest)
-            | dst `isSubspanOf` (locA src) = toDecls e >>= \case
+            | dst `isSubspanOf` locA src = toDecls e >>= \case
                 Just decs0 -> do
                     decs <- forM decs0 $ \decl ->
                         annotateDecl dflags decl
