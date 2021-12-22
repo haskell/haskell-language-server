@@ -700,17 +700,32 @@ suggestFillTypeWildcard Diagnostic{_range=_range,..}
         =  [("Use type signature: ‘" <> typeSignature <> "’", TextEdit _range typeSignature)]
     | otherwise = []
 
+{- Handles two variants with different formatting
+
+1. Could not find module ‘Data.Cha’
+   Perhaps you meant Data.Char (from base-4.12.0.0)
+
+2. Could not find module ‘Data.I’
+   Perhaps you meant
+      Data.Ix (from base-4.14.3.0)
+      Data.Eq (from base-4.14.3.0)
+      Data.Int (from base-4.14.3.0)
+-}
 suggestModuleTypo :: Diagnostic -> [(T.Text, TextEdit)]
 suggestModuleTypo Diagnostic{_range=_range,..}
--- src/Development/IDE/Core/Compile.hs:58:1: error:
---     Could not find module ‘Data.Cha’
---     Perhaps you meant Data.Char (from base-4.12.0.0)
-    | "Could not find module" `T.isInfixOf` _message
-    , "Perhaps you meant"     `T.isInfixOf` _message = let
-      findSuggestedModules = map (head . T.words) . drop 2 . T.lines
-      proposeModule mod = ("replace with " <> mod, TextEdit _range mod)
-      in map proposeModule $ nubOrd $ findSuggestedModules _message
+    | "Could not find module" `T.isInfixOf` _message =
+      case T.splitOn "Perhaps you meant" _message of
+          [_, stuff] ->
+              [ ("replace with " <> modul, TextEdit _range modul)
+              | modul <- mapMaybe extractModule (T.lines stuff)
+              ]
+          _ -> []
     | otherwise = []
+  where
+    extractModule line = case T.words line of
+        [modul, "(from", _] -> Just modul
+        _ -> Nothing
+    
 
 suggestFillHole :: Diagnostic -> [(T.Text, TextEdit)]
 suggestFillHole Diagnostic{_range=_range,..}

@@ -778,6 +778,7 @@ codeActionTests = testGroup "code actions"
   , suggestHideShadowTests
   , suggestImportDisambiguationTests
   , fixConstructorImportTests
+  , fixModuleImportTypoTests
   , importRenameActionTests
   , fillTypedHoleTests
   , addSigActionTests
@@ -1803,6 +1804,31 @@ extendImportTests = testGroup "extend import actions"
             executeCodeAction action
             contentAfterAction <- documentContents docB
             liftIO $ expectedContentB @=? contentAfterAction
+
+fixModuleImportTypoTests :: TestTree
+fixModuleImportTypoTests = testGroup "fix module import typo"
+    [ testSession "works when single module suggested" $ do
+        doc <- createDoc "A.hs" "haskell" "import Data.Cha"
+        _ <- waitForDiagnostics
+        InR action@CodeAction { _title = actionTitle } : _  <- getCodeActions doc (R 0 0 0 10)
+        liftIO $ actionTitle @?= "replace with Data.Char"
+        executeCodeAction action
+        contentAfterAction <- documentContents doc
+        liftIO $ contentAfterAction @?= "import Data.Char"
+    , testSession "works when multiple modules suggested" $ do
+        doc <- createDoc "A.hs" "haskell" "import Data.I"
+        _ <- waitForDiagnostics
+        actions <- sortOn (\(InR CodeAction{_title=x}) -> x) <$> getCodeActions doc (R 0 0 0 10)
+        let actionTitles = [ title | InR CodeAction{_title=title} <- actions ]
+        liftIO $ actionTitles @?= [ "replace with Data.Eq"
+                                  , "replace with Data.Int"
+                                  , "replace with Data.Ix"
+                                  ]
+        let InR replaceWithDataEq : _ = actions
+        executeCodeAction replaceWithDataEq
+        contentAfterAction <- documentContents doc
+        liftIO $ contentAfterAction @?= "import Data.Eq"
+    ]
 
 extendImportTestsRegEx :: TestTree
 extendImportTestsRegEx = testGroup "regex parsing"

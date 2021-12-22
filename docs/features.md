@@ -17,7 +17,7 @@ You can watch demos for some of these features [below](#demos).
 - [Module name suggestions](#module-names) for insertion or correction
 - [Call hierarchy support](#call-hierarchy)
 - [Qualify names from an import declaration](#qualify-imported-names) in your code
-- [Suggest alternate numeric formats](#alternate-number-formatting). This plugin is not included by default yet due to a performance issue, see <https://github.com/haskell/haskell-language-server/issues/2490>
+- [Suggest alternate numeric formats](#alternate-number-formatting)
 
 ## Demos
 
