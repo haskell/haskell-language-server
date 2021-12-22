@@ -713,8 +713,7 @@ suggestFillTypeWildcard Diagnostic{_range=_range,..}
 -}
 suggestModuleTypo :: Diagnostic -> [(T.Text, TextEdit)]
 suggestModuleTypo Diagnostic{_range=_range,..}
-    | "Could not find module" `T.isInfixOf` _message
-    , "Perhaps you meant" `T.isInfixOf` _message =
+    | "Could not find module" `T.isInfixOf` _message =
       case T.splitOn "Perhaps you meant" _message of
           [_, stuff] ->
               [ ("replace with " <> modul, TextEdit _range modul)
