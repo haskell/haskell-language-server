@@ -1,4 +1,5 @@
-{-# LANGUAGE TypeFamilies    #-}
+{-# LANGUAGE RankNTypes   #-}
+{-# LANGUAGE TypeFamilies #-}
 module Development.IDE.Core.Actions
 ( getAtPoint
 , getDefinition
@@ -83,24 +84,20 @@ usesE k = MaybeT . fmap sequence . mapM (useWithStaleFast k)
 -- | Goto Definition.
 getDefinition :: NormalizedFilePath -> Position -> IdeAction (Maybe [Location])
 getDefinition file pos = runMaybeT $ do
-    ide <- ask
+    ide@ShakeExtras{ withHieDb, hiedbWriter } <- ask
     opts <- liftIO $ getIdeOptionsIO ide
     (HAR _ hf _ _ _, mapping) <- useE GetHieAst file
     (ImportMap imports, _) <- useE GetImportMap file
     !pos' <- MaybeT (pure $ fromCurrentPosition mapping pos)
-    hiedb <- lift $ asks hiedb
-    dbWriter <- lift $ asks hiedbWriter
-    toCurrentLocations mapping <$> AtPoint.gotoDefinition hiedb (lookupMod dbWriter) opts imports hf pos'
+    toCurrentLocations mapping <$> AtPoint.gotoDefinition withHieDb (lookupMod hiedbWriter) opts imports hf pos'
 
 getTypeDefinition :: NormalizedFilePath -> Position -> IdeAction (Maybe [Location])
 getTypeDefinition file pos = runMaybeT $ do
-    ide <- ask
+    ide@ShakeExtras{ withHieDb, hiedbWriter } <- ask
     opts <- liftIO $ getIdeOptionsIO ide
     (hf, mapping) <- useE GetHieAst file
     !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
-    hiedb <- lift $ asks hiedb
-    dbWriter <- lift $ asks hiedbWriter
-    toCurrentLocations mapping <$> AtPoint.gotoTypeDefinition hiedb (lookupMod dbWriter) opts hf pos'
+    toCurrentLocations mapping <$> AtPoint.gotoTypeDefinition withHieDb (lookupMod hiedbWriter) opts hf pos'
 
 highlightAtPoint :: NormalizedFilePath -> Position -> IdeAction (Maybe [DocumentHighlight])
 highlightAtPoint file pos = runMaybeT $ do
@@ -112,13 +109,13 @@ highlightAtPoint file pos = runMaybeT $ do
 -- Refs are not an IDE action, so it is OK to be slow and (more) accurate
 refsAtPoint :: NormalizedFilePath -> Position -> Action [Location]
 refsAtPoint file pos = do
-    ShakeExtras{hiedb} <- getShakeExtras
+    ShakeExtras{withHieDb} <- getShakeExtras
     fs <- HM.keys <$> getFilesOfInterestUntracked
     asts <- HM.fromList . mapMaybe sequence . zip fs <$> usesWithStale GetHieAst fs
-    AtPoint.referencesAtPoint hiedb file pos (AtPoint.FOIReferences asts)
+    liftIO $ AtPoint.referencesAtPoint withHieDb file pos (AtPoint.FOIReferences asts)
 
 workspaceSymbols :: T.Text -> IdeAction (Maybe [SymbolInformation])
 workspaceSymbols query = runMaybeT $ do
-  hiedb <- lift $ asks hiedb
-  res <- liftIO $ HieDb.searchDef hiedb $ T.unpack query
+  withHieDb <- lift $ asks withHieDb
+  res <- liftIO $ withHieDb (\hieDb -> HieDb.searchDef hieDb $ T.unpack query)
   pure $ mapMaybe AtPoint.defRowToSymbolInfo res

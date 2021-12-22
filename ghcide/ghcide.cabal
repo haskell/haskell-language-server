@@ -397,6 +397,7 @@ test-suite ghcide-tests
         safe,
         safe-exceptions,
         shake,
+        sqlite-simple,
         stm,
         stm-containers,
         hls-graph,

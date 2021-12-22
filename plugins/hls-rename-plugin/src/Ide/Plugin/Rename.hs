@@ -113,19 +113,21 @@ renameModRefs newNameText refs = everywhere $ mkT replace
 -- | Note: We only find exact name occurences (i.e. type reference "depth" is 0).
 refsAtName :: IdeState -> NormalizedFilePath -> Name -> ExceptT [Char] (LspT Config IO) [Location]
 refsAtName state nfp name = do
-    ShakeExtras{hiedb} <- liftIO $ runAction "Rename.HieDb" state getShakeExtras
+    ShakeExtras{withHieDb} <- liftIO $ runAction "Rename.HieDb" state getShakeExtras
     ast <- safeGetHieAst state nfp
     astRefs <- handleMaybe "Error: Could not get name AST references" $ getNameAstLocations name ast
     dbRefs <- case nameModule_maybe name of
         Nothing -> pure []
         Just mod -> liftIO $ mapMaybe rowToLoc <$>
-            findReferences
-                hiedb
-                True
-                (nameOccName name)
-                (Just $ moduleName mod)
-                (Just $ moduleUnit mod)
-                [fromNormalizedFilePath nfp]
+            withHieDb (\hieDb ->
+              findReferences
+                  hieDb
+                  True
+                  (nameOccName name)
+                  (Just $ moduleName mod)
+                  (Just $ moduleUnit mod)
+                  [fromNormalizedFilePath nfp]
+              )
     pure $ nubOrd $ astRefs ++ dbRefs
 
 getNameAstLocations :: Name -> (HieAstResult, PositionMapping) -> Maybe [Location]

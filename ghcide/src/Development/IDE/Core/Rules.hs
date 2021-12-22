@@ -596,9 +596,9 @@ persistentDocMapRule = addPersistentRule GetDocMap $ \_ -> pure $ Just (DKMap me
 
 readHieFileForSrcFromDisk :: NormalizedFilePath -> MaybeT IdeAction Compat.HieFile
 readHieFileForSrcFromDisk file = do
-  db <- asks hiedb
+  withHieDb <- asks withHieDb
   log <- asks $ L.logDebug . logger
-  row <- MaybeT $ liftIO $ HieDb.lookupHieFileFromSource db $ fromNormalizedFilePath file
+  row <- MaybeT $ liftIO $ withHieDb (\hieDb -> HieDb.lookupHieFileFromSource hieDb $ fromNormalizedFilePath file)
   let hie_loc = HieDb.hieModuleHieFile row
   liftIO $ log $ "LOADING HIE FILE :" <> T.pack (show file)
   exceptToMaybeT $ readHieFileFromDisk hie_loc
@@ -770,13 +770,13 @@ getModIfaceFromDiskAndIndexRule =
   -- doesn't need early cutoff since all its dependencies already have it
   defineNoDiagnostics $ \GetModIfaceFromDiskAndIndex f -> do
   x <- use_ GetModIfaceFromDisk f
-  se@ShakeExtras{hiedb} <- getShakeExtras
+  se@ShakeExtras{withHieDb} <- getShakeExtras
 
   -- GetModIfaceFromDisk should have written a `.hie` file, must check if it matches version in db
   let ms = hirModSummary x
       hie_loc = Compat.ml_hie_file $ ms_location ms
   hash <- liftIO $ Util.getFileHash hie_loc
-  mrow <- liftIO $ HieDb.lookupHieFileFromSource hiedb (fromNormalizedFilePath f)
+  mrow <- liftIO $ withHieDb (\hieDb -> HieDb.lookupHieFileFromSource hieDb (fromNormalizedFilePath f))
   hie_loc' <- liftIO $ traverse (makeAbsolute . HieDb.hieModuleHieFile) mrow
   case mrow of
     Just row

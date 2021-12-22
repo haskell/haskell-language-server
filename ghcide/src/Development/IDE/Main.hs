@@ -11,7 +11,8 @@ module Development.IDE.Main
 ,testing) where
 import           Control.Concurrent.Extra              (newLock, withLock,
                                                         withNumCapabilities)
-import           Control.Concurrent.STM.Stats          (atomically, dumpSTMStats)
+import           Control.Concurrent.STM.Stats          (atomically,
+                                                        dumpSTMStats)
 import           Control.Exception.Safe                (Exception (displayException),
                                                         catchAny)
 import           Control.Monad.Extra                   (concatMapM, unless,
@@ -56,6 +57,7 @@ import           Development.IDE.Core.Shake            (IdeState (shakeExtras),
 import           Development.IDE.Core.Tracing          (measureMemory)
 import           Development.IDE.Graph                 (action)
 import           Development.IDE.LSP.LanguageServer    (runLanguageServer)
+import           Development.IDE.Main.HeapStats        (withHeapStats)
 import           Development.IDE.Plugin                (Plugin (pluginHandlers, pluginModifyDynflags, pluginRules))
 import           Development.IDE.Plugin.HLS            (asGhcIdePlugin)
 import qualified Development.IDE.Plugin.HLS.GhcIde     as Ghcide
@@ -77,12 +79,10 @@ import           Development.IDE.Types.Options         (IdeGhcSession,
                                                         defaultIdeOptions,
                                                         optModifyDynFlags,
                                                         optTesting)
-import           Development.IDE.Types.Shake           (Key(Key),
-                                                        fromKeyType)
+import           Development.IDE.Types.Shake           (Key (Key), fromKeyType)
 import           GHC.Conc                              (getNumProcessors)
 import           GHC.IO.Encoding                       (setLocaleEncoding)
 import           GHC.IO.Handle                         (hDuplicate)
-import           Development.IDE.Main.HeapStats        (withHeapStats)
 import           HIE.Bios.Cradle                       (findCradle)
 import qualified HieDb.Run                             as HieDb
 import           Ide.Plugin.Config                     (CheckParents (NeverCheck),
@@ -272,7 +272,7 @@ defaultMain Arguments{..} = flip withHeapStats fun =<< argsLogger
             t <- offsetTime
             logInfo logger "Starting LSP server..."
             logInfo logger "If you are seeing this in a terminal, you probably should have run WITHOUT the --lsp option!"
-            runLanguageServer options inH outH argsGetHieDbLoc argsDefaultHlsConfig argsOnConfigChange (pluginHandlers plugins) $ \env vfs rootPath hiedb hieChan -> do
+            runLanguageServer options inH outH argsGetHieDbLoc argsDefaultHlsConfig argsOnConfigChange (pluginHandlers plugins) $ \env vfs rootPath withHieDb hieChan -> do
                 traverse_ IO.setCurrentDirectory rootPath
                 t <- t
                 logInfo logger $ T.pack $ "Started LSP server in " ++ showDuration t
@@ -313,7 +313,7 @@ defaultMain Arguments{..} = flip withHeapStats fun =<< argsLogger
                     debouncer
                     options
                     vfs
-                    hiedb
+                    withHieDb
                     hieChan
             dumpSTMStats
         Check argFiles -> do

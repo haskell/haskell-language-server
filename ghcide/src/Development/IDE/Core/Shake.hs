@@ -73,6 +73,7 @@ module Development.IDE.Core.Shake(
     IndexQueue,
     HieDb,
     HieDbWriter(..),
+    WithHieDb,
     VFSHandle(..),
     addPersistentRule,
     garbageCollectDirtyKeys,
@@ -169,6 +170,8 @@ import           Ide.Types                              (PluginId)
 import qualified "list-t" ListT
 import qualified StmContainers.Map                      as STM
 
+
+
 -- | We need to serialize writes to the database, so we send any function that
 -- needs to write to the database over the channel, where it will be picked up by
 -- a worker thread.
@@ -183,6 +186,10 @@ data HieDbWriter
 
 -- | Actions to queue up on the index worker thread
 type IndexQueue = TQueue (HieDb -> IO ())
+
+-- | Intended to represent HieDb calls wrapped with (currently) retry
+-- functionality
+type WithHieDb = forall a. (HieDb -> IO a) -> IO a
 
 -- information we stash inside the shakeExtra field
 data ShakeExtras = ShakeExtras
@@ -219,7 +226,7 @@ data ShakeExtras = ShakeExtras
     -- | A work queue for actions added via 'runInShakeSession'
     ,actionQueue :: ActionQueue
     ,clientCapabilities :: ClientCapabilities
-    , hiedb :: HieDb -- ^ Use only to read.
+    , withHieDb :: WithHieDb -- ^ Use only to read.
     , hiedbWriter :: HieDbWriter -- ^ use to write
     , persistentKeys :: TVar (HMap.HashMap Key GetStalePersistent)
       -- ^ Registery for functions that compute/get "stale" results for the rule
@@ -499,14 +506,14 @@ shakeOpen :: Maybe (LSP.LanguageContextEnv Config)
           -> Maybe FilePath
           -> IdeReportProgress
           -> IdeTesting
-          -> HieDb
+          -> WithHieDb
           -> IndexQueue
           -> VFSHandle
           -> ShakeOptions
           -> Rules ()
           -> IO IdeState
 shakeOpen lspEnv defaultConfig logger debouncer
-  shakeProfileDir (IdeReportProgress reportProgress) ideTesting@(IdeTesting testing) hiedb indexQueue vfs opts rules = mdo
+  shakeProfileDir (IdeReportProgress reportProgress) ideTesting@(IdeTesting testing) withHieDb indexQueue vfs opts rules = mdo
 
     us <- mkSplitUniqSupply 'r'
     ideNc <- newIORef (initNameCache us knownKeyNames)
@@ -528,7 +535,7 @@ shakeOpen lspEnv defaultConfig logger debouncer
         -- lazily initialize the exports map with the contents of the hiedb
         _ <- async $ do
             logDebug logger "Initializing exports map from hiedb"
-            em <- createExportsMapHieDb hiedb
+            em <- withHieDb createExportsMapHieDb
             atomically $ modifyTVar' exportsMap (<> em)
             logDebug logger $ "Done initializing exports map from hiedb (" <> pack(show (ExportsMap.size em)) <> ")"
 

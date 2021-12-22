@@ -1,3 +1,4 @@
+{-# LANGUAGE RankNTypes   #-}
 {-# LANGUAGE TypeFamilies #-}
 
 {-|
@@ -11,6 +12,7 @@ module Development.IDE.Session
   ,setInitialDynFlags
   ,getHieDbLoc
   ,runWithDb
+  ,retryOnSqliteBusy
   ) where
 
 -- Unfortunately, we cannot use loadSession with ghc-lib since hie-bios uses
@@ -41,7 +43,7 @@ import qualified Data.Text                            as T
 import           Data.Time.Clock
 import           Data.Version
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Shake
+import           Development.IDE.Core.Shake           hiding (withHieDb)
 import qualified Development.IDE.GHC.Compat           as Compat
 import           Development.IDE.GHC.Compat.Core      hiding (Target,
                                                        TargetFile, TargetModule,
@@ -165,11 +167,32 @@ setInitialDynFlags logger rootDir SessionLoadingOptions{..} = do
   mapM_ setUnsafeGlobalDynFlags dynFlags
   pure libdir
 
+
+-- | If the sqlite returns an SQLITE_BUSY then we sleep for a millisecond
+-- and try action again for a maximum of `maxRetryCount` times.
+-- `MonadIO`, `MonadCatch` are used as constraints because there are a few
+-- HieDb functions that don't return IO values.
+retryOnSqliteBusy :: (MonadIO m, MonadCatch m) => HieDb -> Int -> (HieDb -> m b) -> m b
+retryOnSqliteBusy hieDb !maxRetryCount f = do
+  let hieDbAction = f hieDb
+  let isErrorBusy e
+        | SQLError{ sqlError = ErrorBusy } <- e = Just e
+        | otherwise = Nothing
+  result <- tryJust isErrorBusy hieDbAction
+  case result of
+    Left e
+      | maxRetryCount > 0 ->
+        -- 1 millisecond
+        liftIO (threadDelay 1000) >> retryOnSqliteBusy hieDb (maxRetryCount - 1) f
+      | otherwise ->
+        liftIO $ throwIO e
+    Right b -> pure b
+
 -- | Wraps `withHieDb` to provide a database connection for reading, and a `HieWriterChan` for
 -- writing. Actions are picked off one by one from the `HieWriterChan` and executed in serial
 -- by a worker thread using a dedicated database connection.
 -- This is done in order to serialize writes to the database, or else SQLite becomes unhappy
-runWithDb :: Logger -> FilePath -> (HieDb -> IndexQueue -> IO ()) -> IO ()
+runWithDb :: Logger -> FilePath -> (WithHieDb -> IndexQueue -> IO ()) -> IO ()
 runWithDb logger fp k = do
   -- Delete the database if it has an incompatible schema version
   withHieDb fp (const $ pure ())
@@ -178,7 +201,7 @@ runWithDb logger fp k = do
     initConn writedb
     chan <- newTQueueIO
     withAsync (writerThread writedb chan) $ \_ -> do
-      withHieDb fp (flip k chan)
+      withHieDb fp (\readDb -> k (retryOnSqliteBusy readDb 10) chan)
   where
     writerThread db chan = do
       -- Clear the index of any files that might have been deleted since the last run
