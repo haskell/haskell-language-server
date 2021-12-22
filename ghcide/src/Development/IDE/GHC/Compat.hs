@@ -80,6 +80,7 @@ import Development.IDE.GHC.Compat.Util
 #if MIN_VERSION_ghc(9,0,0)
 import           GHC.Data.StringBuffer
 import           GHC.Driver.Session    hiding (ExposePackage)
+import           GHC.Utils.Error
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Unit.Module.ModSummary
 import           GHC.Driver.Env as Env
