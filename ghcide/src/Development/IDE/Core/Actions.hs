@@ -116,6 +116,6 @@ refsAtPoint file pos = do
 
 workspaceSymbols :: T.Text -> IdeAction (Maybe [SymbolInformation])
 workspaceSymbols query = runMaybeT $ do
-  withHieDb <- lift $ asks withHieDb
+  ShakeExtras{withHieDb} <- ask
   res <- liftIO $ withHieDb (\hieDb -> HieDb.searchDef hieDb $ T.unpack query)
   pure $ mapMaybe AtPoint.defRowToSymbolInfo res
