@@ -125,6 +125,10 @@ jobs:
           INDEX_STATE1=$(echo "$INDEX_STATE_ENTRY" | cut -d' ' -f2 | tr ':' '-')
           echo "INDEX_STATE=$INDEX_STATE1" >> $GITHUB_ENV
 
+      - name: Form the package list ('cabal.project.freeze')
+        run: |
+          cabal v2-freeze
+
       # 2021-12-02: NOTE: Cabal Hackage source tree storage does not depend on OS or GHC really,
       # but can depend on `base`.
       # But this caching is happens only inside `master` for `master` purposes of compiling the deps
@@ -135,9 +139,11 @@ jobs:
         env:
           cache-name: hackage-sources
         with:
-          path: ${{ env.CABAL_PKGS_DIR }}
-          key:          ${{ env.cache-name }}-${{ env.INDEX_STATE }}
-          restore-keys: ${{ env.cache-name }}-
+          path:  ${{ env.CABAL_PKGS_DIR }}
+          key:   ${{ env.cache-name }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project.freeze') }}
+          restore-keys: |
+                 ${{ env.cache-name }}-${{ env.INDEX_STATE }}-
+                 ${{ env.cache-name }}-
 
       - name: Compiled deps cache
         id: compiled-deps
@@ -146,8 +152,9 @@ jobs:
           cache-name: compiled-deps
         with:
           path: ${{ steps.HaskEnvSetup.outputs.cabal-store }}
-          key:  ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project') }}
+          key:  ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project') }}-${{ hashFiles('cabal.project.freeze') }}
           restore-keys: |
+                ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project') }}
                 ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-
                 ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
                 ${{ env.cache-name }}-${{ runner.os }}-
