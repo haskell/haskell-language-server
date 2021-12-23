@@ -53,19 +53,12 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       should_skip: ${{ steps.skip_check.outputs.should_skip }}
-      should_skip_ghcide: ${{ steps.skip_ghcide_check.outputs.should_skip }}
     steps:
       - id: skip_check
         uses: fkirc/skip-duplicate-actions@v3.4.1
         with:
           cancel_others: false
           paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", "install/**", "**.nix", "flake.lock", "**/README.md", "FUNDING.yml", ".circleci/**"]'
-      # If we only change ghcide downstream packages we have not test ghcide itself
-      - id: skip_ghcide_check
-        uses: fkirc/skip-duplicate-actions@v3.4.1
-        with:
-          cancel_others: false
-          paths_ignore: '["hls-test-utils/**", "plugins/**", "src/**", "exe/**", "test/**", "shake-bench/**"]'
 
   caching:
     if: needs.pre_job.outputs.should_skip != 'true'
