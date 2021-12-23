@@ -638,12 +638,12 @@ import           HscTypes
 import           HsBinds
 import           HsDecls
 import           HsDoc
-import           HsExpr
+import           HsExpr                       hiding (HsLet, LetStmt)
 import           HsExtension
 import           HsImpExp
 import           HsLit
 import           HsPat
-import           HsSyn                        hiding (wildCardName)
+import           HsSyn                        hiding (wildCardName, HsLet, LetStmt)
 import           HsTypes                      hiding (wildCardName)
 import           HsUtils
 #endif

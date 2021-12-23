@@ -4,6 +4,7 @@
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE ConstraintKinds   #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE PatternSynonyms   #-}
 {-# OPTIONS -Wno-incomplete-uni-patterns -Wno-dodgy-imports #-}
 
 -- | Attempt at hiding the GHC version differences we can.
@@ -17,8 +18,8 @@ module Development.IDE.GHC.Compat(
     disableWarningsAsErrors,
     reLoc,
     reLocA,
-    getErrorMessages',
     getMessages',
+    pattern PFailedWithErrorMessages,
 
 #if !MIN_VERSION_ghc(9,0,1)
     RefMap,
@@ -82,6 +83,7 @@ import           GHC.Data.StringBuffer
 import           GHC.Driver.Session    hiding (ExposePackage)
 import           GHC.Utils.Error
 #if MIN_VERSION_ghc(9,2,0)
+import           Data.Bifunctor
 import           GHC.Unit.Module.ModSummary
 import           GHC.Driver.Env as Env
 import           GHC.Unit.Module.ModIface
@@ -121,10 +123,13 @@ import           Data.IORef
 
 import qualified Data.Map               as Map
 import           Data.List              (foldl')
-import           Data.Bifunctor
 
 #if MIN_VERSION_ghc(9,0,0)
 import qualified Data.Set               as S
+#endif
+
+#if !MIN_VERSION_ghc(8,10,0)
+import Bag (unitBag)
 #endif
 
 #if !MIN_VERSION_ghc(9,2,0)
@@ -146,16 +151,6 @@ hPutStringBuffer hdl (StringBuffer buf len cur)
 type ErrMsg  = MsgEnvelope DecoratedSDoc
 #endif
 
-getErrorMessages' :: PState -> DynFlags -> Bag ErrMsg
-getErrorMessages' pst dflags =
-#if MIN_VERSION_ghc(9,2,0)
-                 fmap pprError $
-#endif
-                 getErrorMessages pst
-#if !MIN_VERSION_ghc(9,2,0)
-                   dflags
-#endif
-
 getMessages' :: PState -> DynFlags -> (Bag WarnMsg, Bag ErrMsg)
 getMessages' pst dflags =
 #if MIN_VERSION_ghc(9,2,0)
@@ -166,6 +161,19 @@ getMessages' pst dflags =
                    dflags
 #endif
 
+-- pattern PFailedWithErrorMessages :: (DynFlags -> ErrorMessages) -> ParseResult a
+pattern PFailedWithErrorMessages msgs
+#if MIN_VERSION_ghc(9,2,0)
+     <- PFailed (const . fmap pprError . getErrorMessages -> msgs)
+#elif MIN_VERSION_ghc(8,10,0)
+     <- PFailed (getErrorMessages -> msgs)
+#else
+     <- ((fmap.fmap) unitBag . mkPlainErrMsgIfPFailed -> Just msgs)
+{-# COMPLETE PFailedWithErrorMessages #-}
+
+mkPlainErrMsgIfPFailed (PFailed _ pst err) = Just (\dflags -> mkPlainErrMsg dflags pst err)
+mkPlainErrMsgIfPFailed _ = Nothing
+#endif
 supportsHieFiles :: Bool
 supportsHieFiles = True
 

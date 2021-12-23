@@ -819,13 +819,8 @@ parseHeader
 parseHeader dflags filename contents = do
    let loc  = mkRealSrcLoc (Util.mkFastString filename) 1 1
    case unP Compat.parseHeader (initParserState (initParserOpts dflags) contents loc) of
-#if MIN_VERSION_ghc(8,10,0)
-     PFailed pst ->
-        throwE $ diagFromErrMsgs "parser" dflags $ getErrorMessages' pst dflags
-#else
-     PFailed _ locErr msgErr ->
-        throwE $ diagFromErrMsg "parser" dflags $ mkPlainErrMsg dflags locErr msgErr
-#endif
+     PFailedWithErrorMessages msgs ->
+        throwE $ diagFromErrMsgs "parser" dflags $ msgs dflags
      POk pst rdr_module -> do
         let (warns, errs) = getMessages' pst dflags
 
@@ -858,14 +853,7 @@ parseFileContents env customPreprocessor filename ms = do
        dflags = ms_hspp_opts ms
        contents = fromJust $ ms_hspp_buf ms
    case unP Compat.parseModule (initParserState (initParserOpts dflags) contents loc) of
-#if MIN_VERSION_ghc(8,10,0)
-     PFailed pst -> throwE
-                  $ diagFromErrMsgs "parser" dflags
-                  $ getErrorMessages' pst dflags
-#else
-     PFailed _ locErr msgErr ->
-      throwE $ diagFromErrMsg "parser" dflags $ mkPlainErrMsg dflags locErr msgErr
-#endif
+     PFailedWithErrorMessages msgs -> throwE $ diagFromErrMsgs "parser" dflags $ msgs dflags
      POk pst rdr_module ->
          let
              hpm_annotations = mkApiAnns pst
@@ -1015,7 +1003,7 @@ getDocsBatch hsc_env _mod _names = do
                                   Map.findWithDefault mempty name amap))
     case res of
         Just x  -> return $ map (first $ T.unpack . showGhc) x
-        Nothing -> throwErrors 
+        Nothing -> throwErrors
 #if MIN_VERSION_ghc(9,2,0)
                      $ Error.getErrorMessages msgs
 #else
