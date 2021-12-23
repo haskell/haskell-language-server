@@ -110,4 +110,10 @@ allow-newer:
   dependent-sum:constraints,
   diagrams:diagrams-core,
   Chart-diagrams:diagrams-core,
-  SVGFonts:diagrams-core
+  SVGFonts:diagrams-core,
+
+  -- for head.hackage
+  primitive-unlifted:base
+
+allow-older:
+  primitive-extras:primitive-unlifted
