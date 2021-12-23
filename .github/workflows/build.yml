@@ -1,6 +1,7 @@
 name: Builds
 
 on:
+  workflow_dispatch:
   release:
     types: [created]
   push:
