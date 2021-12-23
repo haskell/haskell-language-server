@@ -87,6 +87,8 @@ import           Development.IDE.Core.Tracing         (withTrace)
 import           HieDb.Create
 import           HieDb.Types
 import           HieDb.Utils
+import           System.Random                        (RandomGen)
+import qualified System.Random                        as Random
 
 -- | Bump this version number when making changes to the format of the data stored in hiedb
 hiedbDataVersion :: String
@@ -168,12 +170,22 @@ setInitialDynFlags logger rootDir SessionLoadingOptions{..} = do
   pure libdir
 
 
--- | If the sqlite returns an SQLITE_BUSY then we sleep for a millisecond
--- and try action again for a maximum of `maxRetryCount` times.
+-- | If the sqlite db returns an SQLITE_BUSY then we sleep for a duration
+-- determined by the random exponential backoff formula,
+-- `uniformRandom(0, min (maxDelay, (baseDelay * 2) ^ retryAttempt))`, and try the
+-- action again for a maximum of `maxRetryCount` times.
 -- `MonadIO`, `MonadCatch` are used as constraints because there are a few
 -- HieDb functions that don't return IO values.
-retryOnSqliteBusy :: (MonadIO m, MonadCatch m) => HieDb -> Int -> (HieDb -> m b) -> m b
-retryOnSqliteBusy hieDb !maxRetryCount f = do
+retryOnSqliteBusy :: (MonadIO m, MonadCatch m, RandomGen g)
+                  => Logger
+                  -> HieDb -- ^ HieDb connection
+                  -> Int -- ^ maximum backoff delay in microseconds
+                  -> Int -- ^ base backoff delay in microseconds
+                  -> Int -- ^ maximum number of times to retry
+                  -> g -- ^ random number generator
+                  -> (HieDb -> m b) -- ^ function that uses HieDb connection
+                  -> m b
+retryOnSqliteBusy logger hieDb maxDelay !baseDelay !maxRetryCount rng f = do
   let hieDbAction = f hieDb
   let isErrorBusy e
         | SQLError{ sqlError = ErrorBusy } <- e = Just e
@@ -181,12 +193,38 @@ retryOnSqliteBusy hieDb !maxRetryCount f = do
   result <- tryJust isErrorBusy hieDbAction
   case result of
     Left e
-      | maxRetryCount > 0 ->
-        -- 1 millisecond
-        liftIO (threadDelay 1000) >> retryOnSqliteBusy hieDb (maxRetryCount - 1) f
-      | otherwise ->
-        liftIO $ throwIO e
+      | maxRetryCount > 0 -> do
+        -- multiply by 2 because baseDelay is midpoint of uniform range
+        let newBaseDelay = min maxDelay (baseDelay * 2)
+        let (delay, newRng) = Random.uniformR (0, newBaseDelay) rng
+        let newMaxRetryCount = maxRetryCount - 1
+        liftIO $ do
+          logInfo logger $ "Retrying - " <> makeLogMsgComponentsText (Right delay) newMaxRetryCount e
+          threadDelay delay
+        retryOnSqliteBusy logger hieDb maxDelay newBaseDelay newMaxRetryCount newRng f
+
+      | otherwise -> do
+        liftIO $ do
+          logDebug logger $ "Retries exhausted - " <> makeLogMsgComponentsText (Left baseDelay) maxRetryCount e
+          throwIO e
+
     Right b -> pure b
+  where
+    -- e.g. delay: 1010102, maximumDelay: 12010, maxRetryCount: 9, exception: SQLError { ... }
+    makeLogMsgComponentsText delay newMaxRetryCount e =
+      let
+        logMsgComponents =
+          [ either
+              (("base delay: " <>) . T.pack . show)
+              (("delay: " <>) . T.pack . show)
+              delay
+          , "maximumDelay: " <> T.pack (show maxDelay)
+          , "maxRetryCount: " <> T.pack (show newMaxRetryCount)
+          , "exception: " <> T.pack (show e)]
+      in
+        T.intercalate ", " logMsgComponents
+
+
 
 -- | Wraps `withHieDb` to provide a database connection for reading, and a `HieWriterChan` for
 -- writing. Actions are picked off one by one from the `HieWriterChan` and executed in serial
@@ -200,16 +238,22 @@ runWithDb logger fp k = do
   withHieDb fp $ \writedb -> do
     initConn writedb
     chan <- newTQueueIO
-    withAsync (writerThread writedb chan) $ \_ -> do
-      withHieDb fp (\readDb -> k (retryOnSqliteBusy readDb 10) chan)
+    -- use newStdGen because what if multiple HLS start at same time and send bursts of requests
+    rng <- Random.newStdGen
+    withAsync (writerThread writedb chan rng) $ \_ -> do
+      withHieDb fp (\readDb -> k (retryOnSqliteBusy logger readDb oneSecond oneMillisecond maxRetryCount rng) chan)
   where
-    writerThread db chan = do
+    oneSecond = 1000000
+    oneMillisecond = 1000
+    maxRetryCount = 10
+
+    writerThread db chan rng = do
       -- Clear the index of any files that might have been deleted since the last run
       deleteMissingRealFiles db
       _ <- garbageCollectTypeNames db
       forever $ do
         k <- atomically $ readTQueue chan
-        k db
+        retryOnSqliteBusy logger db oneSecond oneMillisecond maxRetryCount rng k
           `Safe.catch` \e@SQLError{} -> do
             logDebug logger $ T.pack $ "SQLite error in worker, ignoring: " ++ show e
           `Safe.catchAny` \e -> do

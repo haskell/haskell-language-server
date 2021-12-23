@@ -16,7 +16,7 @@ module Main (main) where
 
 import           Control.Applicative.Combinators
 import           Control.Concurrent.Extra                 as Concurrent
-import           Control.Exception                        (bracket_, catch, throwIO, tryJust, ErrorCall(ErrorCall), evaluate)
+import           Control.Exception                        (bracket_, catch)
 import qualified Control.Lens                             as Lens
 import           Control.Monad
 import           Control.Monad.IO.Class                   (MonadIO, liftIO)
@@ -58,7 +58,6 @@ import           Development.IDE.Test                     (Cursor,
 import           Development.IDE.Test.Runfiles
 import qualified Development.IDE.Types.Diagnostics        as Diagnostics
 import           Development.IDE.Types.Location
-import           Development.IDE.Session                  (retryOnSqliteBusy)
 import qualified Language.LSP.Types.Lens                  as Lens (label)
 import           Development.Shake                        (getDirectoryFilesIO)
 import qualified Experiments                              as Bench
@@ -115,7 +114,7 @@ import           Test.Tasty.Ingredients.Rerun
 import           Test.Tasty.QuickCheck
 import           Text.Printf                              (printf)
 import           Text.Regex.TDFA                          ((=~))
-import           Database.SQLite.Simple                   as SQLite
+import qualified HieDbRetry
 
 -- | Wait for the next progress begin step
 waitForProgressBegin :: Session ()
@@ -184,6 +183,7 @@ main = do
     , codeActionHelperFunctionTests
     , referenceTests
     , garbageCollectionTests
+    , HieDbRetry.tests
     ]
 
 initializeResponseTests :: TestTree
@@ -6143,65 +6143,6 @@ unitTests = do
            let msg = printf "Timestamps do not have millisecond resolution: %dus" resolution_us
            assertBool msg (resolution_us <= 1000)
      , Progress.tests
-     , testCase "retryOnSqliteBusy throws ErrorBusy after max retries" $ do
-        let isErrorBusy e
-              | SQLite.SQLError { sqlError = SQLite.ErrorBusy } <- e = Just e
-              | otherwise = Nothing
-        let expected = SQLite.SQLError{ sqlError = SQLite.ErrorBusy, sqlErrorDetails = "", sqlErrorContext = "" }
-        let hieDbAction _ = throwIO expected
-        let action = retryOnSqliteBusy undefined 1 hieDbAction
-           
-        result <- tryJust isErrorBusy action
-
-        case result of
-          Left actual -> actual @?= expected
-          Right _ -> assertFailure "Expected ErrorBusy exception"
-     , testCase "retryOnSqliteBusy doesn't throw if given function doesn't throw" $ do
-        let expected = 1 :: Int
-        let action = retryOnSqliteBusy undefined 0 (\_ -> pure expected)
-
-        actual <- action
-
-        actual @?= expected
-     , testCase "retryOnSqliteBusy retries the number of times it should" $ do
-        let isErrorBusy e
-              | SQLite.SQLError { sqlError = SQLite.ErrorBusy } <- e = Just e
-              | otherwise = Nothing
-        let errorBusy = SQLite.SQLError{ sqlError = SQLite.ErrorBusy, sqlErrorDetails = "", sqlErrorContext = "" }
-        let maxRetryCount = 3
-        let expected = maxRetryCount + 1
-
-        countVar <- newVar 0
-
-        let hieDbAction _ = Concurrent.modifyVar countVar (\count -> pure (dupe (count + 1))) >> throwIO errorBusy
-        let action = retryOnSqliteBusy undefined maxRetryCount hieDbAction
-
-        _ <- tryJust isErrorBusy action
-
-        actual <- Concurrent.readVar countVar
-
-        actual @?= expected
-     , testCase "retryOnSqliteBusy doesn't retry if exception is not ErrorBusy" $ do
-        let isErrorCall e
-              | ErrorCall _ <- e = Just e
-              | otherwise = Nothing
-
-        countVar <- newVar 0
-
-        let hieDbAction _ = do
-              count <- readVar countVar
-              if count == 0 then
-                evaluate (error "dummy exception")
-              else
-                Concurrent.modifyVar countVar (\count -> pure (dupe (count + 1)))
-
-        let action = retryOnSqliteBusy undefined 1 hieDbAction
-        let expected = 0 :: Int
-
-        void $ tryJust isErrorCall action
-        actual <- readVar countVar
-
-        actual @?= expected
      ]
 
 garbageCollectionTests :: TestTree
