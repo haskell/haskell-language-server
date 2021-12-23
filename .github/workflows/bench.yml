@@ -78,6 +78,10 @@ jobs:
       continue-on-error: true
       run: |
         cabal v2-freeze
+        echo ''
+        echo 'Output:'
+        echo ''
+        cat 'cabal.project.freeze'
 
     - name: Hackage sources cache
       uses: actions/cache@v2
