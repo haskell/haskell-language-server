@@ -243,7 +243,7 @@ mkCallHierarchyCall mk v@Vertex{..} = do
       Just [item] -> pure $ Just $ mk item (List [range])
       _           -> do
         ShakeExtras{withHieDb} <- getShakeExtras
-        liftIO (withHieDb (\hieDb -> Q.getSymbolPosition hieDb v)) >>=
+        liftIO (withHieDb (`Q.getSymbolPosition` v)) >>=
           \case
             (x:_) ->
               prepareCallHierarchyItem nfp (Position (psl x - 1) (psc x - 1)) >>=
@@ -268,7 +268,7 @@ queryCalls item queryFunc makeFunc merge
     case maySymbol of
       Nothing -> error "CallHierarchy.Impossible"
       Just symbol -> do
-        vs <- liftIO $ withHieDb (\hieDb -> queryFunc hieDb symbol)
+        vs <- liftIO $ withHieDb (`queryFunc` symbol)
         items <- Just . catMaybes <$> mapM makeFunc vs
         pure $ merge <$> items
   | otherwise = pure Nothing
