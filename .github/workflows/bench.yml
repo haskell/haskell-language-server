@@ -75,6 +75,7 @@ jobs:
         echo "INDEX_STATE=$INDEX_STATE1" >> $GITHUB_ENV
 
     - name: Form the package list ('cabal.project.freeze')
+      continue-on-error: true
       run: |
         cabal v2-freeze
 
