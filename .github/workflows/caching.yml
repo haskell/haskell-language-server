@@ -45,7 +45,7 @@ on:
     - cron: "25 2/8 * * *"
 
 env:
-  cabalBuild: "v2-build all --enable-tests --enable-benchmarks"
+  cabalBuild: "v2-build all --enable-tests --enable-benchmarks --keep-going"
 
 jobs:
 
