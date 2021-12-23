@@ -183,3 +183,8 @@ jobs:
         continue-on-error: true
         run: |
           cabal $cabalBuild || cabal $cabalBuild || cabal $cabalBuild
+
+      # Despite the `continue-on-error: true` directive - CI does not ignore the return code of the last step
+      - name: Workaround to CI platform
+        run: |
+          true
