@@ -596,7 +596,7 @@ persistentDocMapRule = addPersistentRule GetDocMap $ \_ -> pure $ Just (DKMap me
 
 readHieFileForSrcFromDisk :: NormalizedFilePath -> MaybeT IdeAction Compat.HieFile
 readHieFileForSrcFromDisk file = do
-  withHieDb <- asks withHieDb
+  ShakeExtras{withHieDb} <- ask
   log <- asks $ L.logDebug . logger
   row <- MaybeT $ liftIO $ withHieDb (\hieDb -> HieDb.lookupHieFileFromSource hieDb $ fromNormalizedFilePath file)
   let hie_loc = HieDb.hieModuleHieFile row
