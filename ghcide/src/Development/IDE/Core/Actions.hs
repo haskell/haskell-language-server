@@ -112,7 +112,7 @@ refsAtPoint file pos = do
     ShakeExtras{withHieDb} <- getShakeExtras
     fs <- HM.keys <$> getFilesOfInterestUntracked
     asts <- HM.fromList . mapMaybe sequence . zip fs <$> usesWithStale GetHieAst fs
-    liftIO $ AtPoint.referencesAtPoint withHieDb file pos (AtPoint.FOIReferences asts)
+    AtPoint.referencesAtPoint withHieDb file pos (AtPoint.FOIReferences asts)
 
 workspaceSymbols :: T.Text -> IdeAction (Maybe [SymbolInformation])
 workspaceSymbols query = runMaybeT $ do

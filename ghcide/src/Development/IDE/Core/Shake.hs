@@ -170,8 +170,6 @@ import           Ide.Types                              (PluginId)
 import qualified "list-t" ListT
 import qualified StmContainers.Map                      as STM
 
-
-
 -- | We need to serialize writes to the database, so we send any function that
 -- needs to write to the database over the channel, where it will be picked up by
 -- a worker thread.
