@@ -205,7 +205,7 @@ retryOnSqliteBusy logger hieDb maxDelay !baseDelay !maxRetryCount rng f = do
 
       | otherwise -> do
         liftIO $ do
-          logDebug logger $ "Retries exhausted - " <> makeLogMsgComponentsText (Left baseDelay) maxRetryCount e
+          logInfo logger $ "Retries exhausted - " <> makeLogMsgComponentsText (Left baseDelay) maxRetryCount e
           throwIO e
 
     Right b -> pure b
