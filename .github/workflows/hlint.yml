@@ -1,0 +1,17 @@
+name: "Checking with HLint"
+
+on:
+  pull_request:
+    branches:
+      - '**'
+
+jobs:
+  build10:
+    name: "HLint check"
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: "HLint via ./fmt.sh"
+      run: |
+        ./fmt.sh
