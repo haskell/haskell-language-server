@@ -310,6 +310,8 @@ compileModule (RunSimplifier simplify) session ms tcg =
             (warnings,desugared_guts) <- withWarnings "compile" $ \tweak -> do
                let session' = tweak (hscSetFlags (ms_hspp_opts ms) session)
                -- TODO: maybe settings ms_hspp_opts is unnecessary?
+               -- MP: the flags in ModSummary should be right, if they are wrong then
+               -- the correct place to fix this is when the ModSummary is created.
                desugar <- hscDesugar session' (ms { ms_hspp_opts = hsc_dflags session' })  tcg
                if simplify
                then do
