@@ -87,12 +87,12 @@ sameTypeModuloLastApp =
 
 metaprogramAtQ :: SrcSpan -> GenericQ [(SrcSpan, T.Text)]
 metaprogramAtQ ss = everythingContaining ss $ mkQ mempty $ \case
-  L new_span (WingmanMetaprogram program) -> pure (new_span, T.pack $ unpackFS $ program)
+  L new_span (WingmanMetaprogram program) -> pure (new_span, T.pack $ unpackFS program)
   (_ :: LHsExpr GhcTc) -> mempty
 
 
 metaprogramQ :: GenericQ [(SrcSpan, T.Text)]
 metaprogramQ = everything (<>) $ mkQ mempty $ \case
-  L new_span (WingmanMetaprogram program) -> pure (new_span, T.pack $ unpackFS $ program)
+  L new_span (WingmanMetaprogram program) -> pure (new_span, T.pack $ unpackFS program)
   (_ :: LHsExpr GhcTc) -> mempty
 

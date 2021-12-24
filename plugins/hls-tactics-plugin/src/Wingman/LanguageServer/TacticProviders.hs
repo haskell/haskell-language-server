@@ -1,6 +1,5 @@
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Wingman.LanguageServer.TacticProviders
@@ -139,8 +138,7 @@ commandProvider UseDataCon =
   withConfig $ \cfg ->
     filterTypeProjection
         ( guardLength (<= cfg_max_use_ctor_actions cfg)
-        . fromMaybe []
-        . fmap fst
+        . maybe [] fst
         . tacticsGetDataCons
         ) $ \dcon ->
       provide UseDataCon
@@ -272,7 +270,7 @@ withConfig tp tpd = tp (le_config $ tpd_lspEnv tpd) tpd
 -- given by 'provide' are always available.
 provide :: TacticCommand -> T.Text -> TacticProvider
 provide tc name _ =
-  pure $ (Metadata (tacticTitle tc name) (mkTacticKind tc) (tacticPreferred tc), name)
+  pure (Metadata (tacticTitle tc name) (mkTacticKind tc) (tacticPreferred tc), name)
 
 
 ------------------------------------------------------------------------------
@@ -314,7 +312,7 @@ destructFilter _ _ = False
 -- usual algebraic types, and when any of their data constructors are records.
 destructPunFilter :: Type -> Type -> Bool
 destructPunFilter _ (algebraicTyCon -> Just tc) =
-  any (not . null . dataConFieldLabels) $ tyConDataCons tc
+  not . all (null . dataConFieldLabels) $ tyConDataCons tc
 destructPunFilter _ _ = False
 
 

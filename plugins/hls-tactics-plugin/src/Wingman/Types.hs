@@ -333,12 +333,12 @@ instance MonadExtract Int (Synthesized (LHsExpr GhcPs)) TacticError TacticState 
 
 
 instance MonadReader r m => MonadReader r (TacticT jdg ext err s m) where
-  ask = TacticT $ lift $ Effect $ fmap pure ask
+  ask = TacticT $ lift $ Effect $ asks pure
   local f (TacticT m) = TacticT $ Strict.StateT $ \jdg ->
     Effect $ local f $ pure $ Strict.runStateT m jdg
 
 instance MonadReader r m => MonadReader r (RuleT jdg ext err s m) where
-  ask = RuleT $ Effect $ fmap Axiom ask
+  ask = RuleT $ Effect $ asks Axiom
   local f (RuleT m) = RuleT $ Effect $ local f $ pure m
 
 mkMetaHoleName :: Int -> RdrName
@@ -463,7 +463,7 @@ data Context = Context
   }
 
 instance Show Context where
-  show (Context {..}) = mconcat
+  show Context{..} = mconcat
     [ "Context "
     , showsPrec 10 ctxDefiningFuncs ""
     , showsPrec 10 ctxModuleFuncs ""

@@ -15,8 +15,7 @@ import           Control.Monad.Trans.Maybe
 import           Data.List (find)
 import           Data.Maybe
 import qualified Data.Text as T
-import           Development.IDE (positionToRealSrcLoc)
-import           Development.IDE (realSrcSpanToRange)
+import           Development.IDE (positionToRealSrcLoc, realSrcSpanToRange)
 import           Development.IDE.Core.Shake (IdeState (..))
 import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.Compat hiding (empty)

@@ -1,6 +1,5 @@
 {-# LANGUAGE CPP             #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ViewPatterns    #-}
 
 {- HLINT ignore "Redundant bracket" -} -- a result of CPP expansion

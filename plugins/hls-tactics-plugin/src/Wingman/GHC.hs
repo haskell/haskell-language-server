@@ -96,10 +96,7 @@ freshTyvars t = do
             pure (tv, setTyVarUnique tv uniq)
   pure $
     everywhere
-      (mkT $ \tv ->
-        case M.lookup tv reps of
-          Just tv' -> tv'
-          Nothing  -> tv
+      (mkT $ \tv -> M.findWithDefault tv tv reps
       ) $ snd $ tcSplitForAllTyVars t
 
 
@@ -195,7 +192,7 @@ pattern SingleLet bind pats val expr <-
   HsLet _
     (L _ (HsValBinds _
       (ValBinds _ (bagToList ->
-        [(L _ (FunBind _ (L _ bind) (MG _ (L _ [L _ (AMatch _ pats val)]) _) _ _))]) _)))
+        [L _ (FunBind _ (L _ bind) (MG _ (L _ [L _ (AMatch _ pats val)]) _) _ _)]) _)))
     (L _ expr)
 
 
@@ -204,7 +201,7 @@ pattern SingleLet bind pats val expr <-
 pattern Lambda :: [Pat GhcPs] -> HsExpr GhcPs -> HsExpr GhcPs
 pattern Lambda pats body <-
   HsLam _
-    (MG {mg_alts = L _ [L _ (AMatch _ pats body) ]})
+    MG {mg_alts = L _ [L _ (AMatch _ pats body) ]}
   where
     -- If there are no patterns to bind, just stick in the body
     Lambda [] body   = body
@@ -232,7 +229,7 @@ pattern SinglePatMatch pat body <-
 unpackMatches :: PatCompattable p => [Match p (LHsExpr p)] -> Maybe [(Pat p, LHsExpr p)]
 unpackMatches [] = Just []
 unpackMatches (SinglePatMatch pat body : matches) =
-  (:) <$> pure (pat, body) <*> unpackMatches matches
+  ((pat, body):) <$> unpackMatches matches
 unpackMatches _ = Nothing
 
 
@@ -241,14 +238,14 @@ unpackMatches _ = Nothing
 pattern Case :: PatCompattable p => HsExpr p -> [(Pat p, LHsExpr p)] -> HsExpr p
 pattern Case scrutinee matches <-
   HsCase _ (L _ scrutinee)
-    (MG {mg_alts = L _ (fmap unLoc -> unpackMatches -> Just matches)})
+    MG {mg_alts = L _ (fmap unLoc -> unpackMatches -> Just matches)}
 
 ------------------------------------------------------------------------------
 -- | Like 'Case', but for lambda cases.
 pattern LamCase :: PatCompattable p => [(Pat p, LHsExpr p)] -> HsExpr p
 pattern LamCase matches <-
   HsLamCase _
-    (MG {mg_alts = L _ (fmap unLoc -> unpackMatches -> Just matches)})
+    MG {mg_alts = L _ (fmap unLoc -> unpackMatches -> Just matches)}
 
 
 ------------------------------------------------------------------------------
