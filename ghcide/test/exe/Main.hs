@@ -4075,6 +4075,7 @@ pluginSimpleTests =
 pluginParsedResultTests :: TestTree
 pluginParsedResultTests =
   ignoreInWindowsForGHC88And810 $
+  ignoreForGHC92 $
   testSessionWithExtraFiles "plugin-recorddot" "parsedResultAction plugin" $ \dir -> do
     _ <- openDoc (dir</> "RecordDot.hs") "haskell"
     expectNoMoreDiagnostics 2
@@ -5212,6 +5213,11 @@ ignoreInWindowsForGHC88And810 :: TestTree -> TestTree
 ignoreInWindowsForGHC88And810
     | ghcVersion `elem` [GHC88, GHC810] =
         ignoreInWindowsBecause "tests are unreliable in windows for ghc 8.8 and 8.10"
+    | otherwise = id
+
+ignoreForGHC92 :: TestTree -> TestTree
+ignoreForGHC92
+    | ghcVersion == GHC92 = ignoreTestBecause "GHC 9.2"
     | otherwise = id
 
 ignoreInWindowsForGHC88 :: TestTree -> TestTree

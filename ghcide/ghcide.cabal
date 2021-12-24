@@ -407,7 +407,7 @@ test-suite ghcide-tests
         tasty-rerun,
         text,
         unordered-containers,
-    if (impl(ghc >= 8.6))
+    if (impl(ghc >= 8.6) && impl(ghc < 9.2))
       build-depends:
           record-dot-preprocessor,
           record-hasfield

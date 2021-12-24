@@ -3,6 +3,7 @@
 {-# LANGUAGE GADTs                     #-}
 {-# LANGUAGE ImplicitParams            #-}
 {-# LANGUAGE ImpredicativeTypes        #-}
+{-# LANGUAGE PolyKinds                 #-}
 {-# OPTIONS_GHC -Wno-deprecations -Wno-unticked-promoted-constructors #-}
 
 module Experiments
