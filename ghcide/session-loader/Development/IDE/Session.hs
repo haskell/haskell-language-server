@@ -196,7 +196,7 @@ retryOnSqliteBusy logger hieDb maxDelay !baseDelay !maxRetryCount rng f = do
       | maxRetryCount > 0 -> do
         -- multiply by 2 because baseDelay is midpoint of uniform range
         let newBaseDelay = min maxDelay (baseDelay * 2)
-        let (delay, newRng) = Random.uniformR (0, newBaseDelay) rng
+        let (delay, newRng) = Random.randomR (0, newBaseDelay) rng
         let newMaxRetryCount = maxRetryCount - 1
         liftIO $ do
           logInfo logger $ "Retrying - " <> makeLogMsgComponentsText (Right delay) newMaxRetryCount e
