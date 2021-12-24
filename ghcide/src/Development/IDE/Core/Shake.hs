@@ -711,7 +711,7 @@ newSession extras@ShakeExtras{..} shakeDb acts reason = do
                             ++ " (took " ++ showDuration runTime ++ ")"
             liftIO $ do
                 logPriority logger (actionPriority d) msg
-                notifyTestingLogMessage extras msg
+                -- notifyTestingLogMessage extras msg
 
         -- The inferred type signature doesn't work in ghc >= 9.0.1
         workRun :: (forall b. IO b -> IO b) -> IO (IO ())
