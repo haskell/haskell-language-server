@@ -519,7 +519,7 @@ getHieAstsRule :: Rules ()
 getHieAstsRule =
     define $ \GetHieAst f -> do
       tmr <- use_ TypeCheck f
-      hsc <- hscEnv <$> use_ GhcSession f
+      hsc <- hscEnv <$> use_ GhcSessionDeps f
       getHieAstRuleDefinition f hsc tmr
 
 persistentHieFileRule :: Rules ()
