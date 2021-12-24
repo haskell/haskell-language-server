@@ -111,6 +111,7 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ DataDecl { tcdLNam
             { _name           = showRdrName n
             , _kind           = SkConstructor
             , _selectionRange = realSrcSpanToRange l'
+#if MIN_VERSION_ghc(9,2,0)
             , _children       = Just $ List $ childs
             }
         | con <- dd_cons
@@ -126,6 +127,14 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ DataDecl { tcdLNam
                 , _kind = SkField
                 }
     cvtFld _  = Nothing
+#else
+           , _children       = conArgRecordFields (con_args x)
+            }
+        | L (locA -> (RealSrcSpan l _ )) x <- dd_cons
+        , L (locA -> (RealSrcSpan l' _)) n <- getConNames' x
+        ]
+    }
+  where
     -- | Extract the record fields of a constructor
     conArgRecordFields (RecCon (L _ lcdfs)) = Just $ List
       [ (defDocumentSymbol l :: DocumentSymbol)
@@ -136,6 +145,7 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ DataDecl { tcdLNam
       , L (locA -> (RealSrcSpan l _)) n <- rdrNameFieldOcc . unLoc <$> cd_fld_names cdf
       ]
     conArgRecordFields _ = Nothing
+#endif
 documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ SynDecl { tcdLName = L (locA -> (RealSrcSpan l' _)) n })) = Just
   (defDocumentSymbol l :: DocumentSymbol) { _name           = showRdrName n
                                           , _kind           = SkTypeParameter
@@ -248,9 +258,6 @@ pprText = pack . showSDocUnsafe . ppr
 -- the version of getConNames for ghc9 is restricted to only the renaming phase
 #if !MIN_VERSION_ghc(9,2,0)
 getConNames' :: ConDecl GhcPs -> [Located (IdP GhcPs)]
-#else
-getConNames' :: ConDecl GhcPs -> [XRec GhcPs (IdP GhcPs)]
-#endif
 getConNames' ConDeclH98  {con_name  = name}  = [name]
 getConNames' ConDeclGADT {con_names = names} = names
 #if !MIN_VERSION_ghc(8,10,0)
@@ -258,7 +265,7 @@ getConNames' (XConDecl NoExt)                = []
 #elif !MIN_VERSION_ghc(9,0,0)
 getConNames' (XConDecl x)                    = noExtCon x
 #endif
-
+#else
 hsConDeclsBinders :: LConDecl GhcPs
                   -> ([Located (IdP GhcPs)], [LFieldOcc GhcPs])
    -- See hsLTyClDeclBinders for what this does
@@ -299,4 +306,4 @@ hsConDeclsBinders cons
     get_flds :: Located [LConDeclField GhcPs]
              -> ([LFieldOcc GhcPs])
     get_flds flds = concatMap (cd_fld_names . unLoc) (unLoc flds)
-
+#endif
