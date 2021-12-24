@@ -131,15 +131,6 @@ jobs:
           INDEX_STATE1=$(echo "$INDEX_STATE_ENTRY" | cut -d' ' -f2 | tr ':' '-')
           echo "INDEX_STATE=$INDEX_STATE1" >> $GITHUB_ENV
 
-      - name: Form the package list ('cabal.project.freeze')
-        continue-on-error: true
-        run: |
-          cabal v2-freeze
-          echo ''
-          echo 'Output:'
-          echo ''
-          cat 'cabal.project.freeze'
-
       # 2021-12-02: NOTE: Cabal Hackage source tree storage does not depend on OS or GHC really,
       # but can depend on `base`.
       # But this caching is happens only inside `master` for `master` purposes of compiling the deps
@@ -150,11 +141,9 @@ jobs:
         env:
           cache-name: hackage-sources
         with:
-          path:  ${{ env.CABAL_PKGS_DIR }}
-          key:   ${{ env.cache-name }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project.freeze') }}
-          restore-keys: |
-                 ${{ env.cache-name }}-${{ env.INDEX_STATE }}-
-                 ${{ env.cache-name }}-
+          path: ${{ env.CABAL_PKGS_DIR }}
+          key:          ${{ env.cache-name }}-${{ env.INDEX_STATE }}
+          restore-keys: ${{ env.cache-name }}-
 
       - name: Compiled deps cache
         id: compiled-deps
@@ -163,7 +152,7 @@ jobs:
           cache-name: compiled-deps
         with:
           path: ${{ steps.HaskEnvSetup.outputs.cabal-store }}
-          key:  ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project.freeze') }}
+          key:  ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project') }}
           restore-keys: |
                 ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-
                 ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
@@ -187,8 +176,3 @@ jobs:
         name: Build all targets; try 3 times
         run: |
           cabal $cabalBuild || cabal $cabalBuild || cabal $cabalBuild
-
-      # Despite the `continue-on-error: true` directive - CI does not ignore the return code of the last step
-      - name: Workaround to CI platform
-        run: |
-          true
