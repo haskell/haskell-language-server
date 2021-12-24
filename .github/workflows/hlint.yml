@@ -20,4 +20,5 @@ jobs:
     - name: 'Checking code'
       uses: rwe/actions-hlint-run@v1
       with:
-        path: '[ "--with-group=extra", "--hint=ghcide/.hlint.yaml", "ghcide/src", "ghcide/exe", "ghcide/bench/lib", "ghcide/bench/exe", "ghcide/bench/hist", "shake-bench/src", "ghcide/test/exe" ]'
+        hlint-bin: "hlint --with-group=extra --hint=ghcide/.hlint.yaml"
+        path: '[ "ghcide/src", "ghcide/exe", "ghcide/bench/lib", "ghcide/bench/exe", "ghcide/bench/hist", "shake-bench/src", "ghcide/test/exe" ]'
