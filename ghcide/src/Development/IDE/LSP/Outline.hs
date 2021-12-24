@@ -111,13 +111,21 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ DataDecl { tcdLNam
             { _name           = showRdrName n
             , _kind           = SkConstructor
             , _selectionRange = realSrcSpanToRange l'
-            , _children       = conArgRecordFields (con_args x)
+            , _children       = Just $ List $ childs
             }
-        | L (locA -> (RealSrcSpan l _ )) x <- dd_cons
-        , L (locA -> (RealSrcSpan l' _)) n <- getConNames' x
+        | con <- dd_cons
+        , let (cs, flds) = hsConDeclsBinders con
+        , let childs = mapMaybe cvtFld flds
+        , L (RealSrcSpan l' _) n <- cs
         ]
     }
   where
+    cvtFld :: LFieldOcc GhcPs -> Maybe DocumentSymbol
+    cvtFld (L (RealSrcSpan l _) n) = Just $ (defDocumentSymbol l :: DocumentSymbol)
+                { _name = showRdrName (unLoc (rdrNameFieldOcc n))
+                , _kind = SkField
+                }
+    cvtFld _  = Nothing
     -- | Extract the record fields of a constructor
     conArgRecordFields (RecCon (L _ lcdfs)) = Just $ List
       [ (defDocumentSymbol l :: DocumentSymbol)
@@ -244,3 +252,45 @@ getConNames' (XConDecl NoExt)                = []
 #elif !MIN_VERSION_ghc(9,0,0)
 getConNames' (XConDecl x)                    = noExtCon x
 #endif
+
+hsConDeclsBinders :: LConDecl GhcPs
+                  -> ([Located (IdP GhcPs)], [LFieldOcc GhcPs])
+   -- See hsLTyClDeclBinders for what this does
+   -- The function is boringly complicated because of the records
+   -- And since we only have equality, we have to be a little careful
+hsConDeclsBinders cons
+  = go cons
+  where
+    go :: LConDecl GhcPs
+       -> ([Located (IdP GhcPs)], [LFieldOcc GhcPs])
+    go r
+      -- Don't re-mangle the location of field names, because we don't
+      -- have a record of the full location of the field declaration anyway
+      = let loc = getLoc (reLoc r)
+        in case unLoc r of
+           -- remove only the first occurrence of any seen field in order to
+           -- avoid circumventing detection of duplicate fields (#9156)
+           ConDeclGADT { con_names = names, con_g_args = args }
+             -> (map (L loc . unLoc) names, flds)
+             where
+                (flds) = get_flds_gadt args
+
+           ConDeclH98 { con_name = name, con_args = args }
+             -> ([L loc (unLoc name)], flds)
+             where
+                flds = get_flds_h98 args
+
+    get_flds_h98 :: HsConDeclH98Details GhcPs
+                 -> [LFieldOcc GhcPs]
+    get_flds_h98 (RecCon flds) = get_flds (reLoc flds)
+    get_flds_h98 _ = []
+
+    get_flds_gadt :: HsConDeclGADTDetails GhcPs
+                  -> ([LFieldOcc GhcPs])
+    get_flds_gadt (RecConGADT flds) = get_flds (reLoc flds)
+    get_flds_gadt _ = []
+
+    get_flds :: Located [LConDeclField GhcPs]
+             -> ([LFieldOcc GhcPs])
+    get_flds flds = concatMap (cd_fld_names . unLoc) (unLoc flds)
+
