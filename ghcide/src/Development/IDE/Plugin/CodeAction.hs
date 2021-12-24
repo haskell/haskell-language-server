@@ -167,7 +167,12 @@ findSigOfBind range bind =
     findSigOfLMatch ls = do
       match <- findDeclContainingLoc (_start range) ls
       let rhs = m_grhss $ unLoc match
-      findSigOfGRHSs (getLoc $ reLoc $ grhssLocalBinds rhs ) rhs
+#if !MIN_VERSION_ghc(9,2,0)
+          span = getLoc $ reLoc $ grhssLocalBinds rhs
+#else
+          span = getLoc $ reLoc $ match
+#endif
+      findSigOfGRHSs span rhs
 
     findSigOfGRHSs :: SrcSpan -> GRHSs p (LHsExpr p) -> Maybe (Sig p)
     findSigOfGRHSs span grhs = do
