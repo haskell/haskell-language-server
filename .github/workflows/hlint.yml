@@ -1,4 +1,4 @@
-name: "Checking with HLint"
+name: "HLint check"
 
 on:
   pull_request:
@@ -7,11 +7,17 @@ on:
 
 jobs:
   build10:
-    name: "HLint check"
+    name: "Run"
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
 
-    - name: "HLint via ./fmt.sh"
-      run: |
-        ./fmt.sh
+    - name: 'Installing'
+      uses: rwe/actions-hlint-setup@v1
+      with:
+        version: '3.3.5'
+
+    - name: 'Checking code'
+      uses: rwe/actions-hlint-run@v1
+      with:
+        path: '[ "--with-group=extra", "--hint=ghcide/.hlint.yaml", "ghcide/src", "ghcide/exe", "ghcide/bench/lib", "ghcide/bench/exe", "ghcide/bench/hist", "shake-bench/src", "ghcide/test/exe" ]'
