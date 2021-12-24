@@ -6,6 +6,12 @@ concurrency:
   cancel-in-progress: true
 
 on:
+  workflow_dispatch:
+    inputs:
+      upload-candidates:
+        description: 'Whether packages should be uploaded'
+        required: true
+        default: 'true'
   push:
     branches:
       - '*-hackage'
@@ -14,7 +20,7 @@ jobs:
   check-and-upload-tarballs:
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: ${{ !contains(github.ref_name, 'check') }}
+      fail-fast: ${{ !contains(github.ref_name, 'check') && github.event.inputs.upload-candidates != 'true' }}
       matrix:
         package: ["hie-compat", "hls-graph", "shake-bench",
                   "hls-plugin-api", "ghcide", "hls-test-utils",
@@ -28,7 +34,6 @@ jobs:
                   "hls-call-hierarchy-plugin", "hls-alternate-number-format-plugin",
                   "hls-qualify-imported-names-plugin",
                   "haskell-language-server"]
-        # Uncomment 9.0.1 when ghcide is buildable
         ghc: [ "9.0.1",
               "8.10.7",
               "8.8.4",
@@ -181,7 +186,7 @@ jobs:
           path: ${{ steps.generate-dist-tarball.outputs.path }}
 
   upload-candidate:
-    if: ${{ !contains(github.ref_name, 'check') }}
+    if: ${{ !contains(github.ref_name, 'check') || github.event.inputs.name == 'true' }}
     needs: check-and-upload-tarballs
     runs-on: ubuntu-latest
     steps:
