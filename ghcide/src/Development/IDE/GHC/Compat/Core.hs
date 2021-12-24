@@ -804,11 +804,20 @@ pattern FunTy arg res <- TyCoRep.FunTy arg res
 class HasSrcSpan a where
   getLoc :: a -> SrcSpan
 
+instance HasSrcSpan SrcSpan where
+  getLoc = id
+
 instance HasSrcSpan (SrcLoc.GenLocated SrcSpan a) where
   getLoc = GHC.getLoc
 
--- getLoc :: GenLocated l a -> l
--- getLoc = GHC.getLoc
+#if MIN_VERSION_ghc(9,2,0)
+instance HasSrcSpan (SrcSpanAnn' ann) where
+  getLoc = locA
+instance HasSrcSpan (SrcLoc.GenLocated (SrcSpanAnn' ann) a) where
+  getLoc = getLoc . getLoc
+
+pattern L l a <- GHC.L (getLoc -> l) a
+#endif
 
 #elif MIN_VERSION_ghc(8,8,0)
 type HasSrcSpan = SrcLoc.HasSrcSpan
