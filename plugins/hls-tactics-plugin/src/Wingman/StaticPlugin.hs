@@ -91,8 +91,7 @@ mkMetaprogram ss mp =
     $ L ss
     $ HsVar noExtField
     $ L ss
-    $ mkRdrUnqual
-    $ metaprogramHoleName
+    $ mkRdrUnqual metaprogramHoleName
 
 
 addMetaprogrammingSyntax :: Data a => a -> a

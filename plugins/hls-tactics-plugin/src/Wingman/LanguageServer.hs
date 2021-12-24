@@ -1,7 +1,6 @@
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes        #-}
-{-# LANGUAGE TupleSections     #-}
 {-# LANGUAGE TypeFamilies      #-}
 
 {-# LANGUAGE NoMonoLocalBinds  #-}
@@ -230,7 +229,7 @@ judgementForHole state nfp range cfg = do
 
       -- KnownThings is just the instances in scope. There are no ranges
       -- involved, so it's not crucial to track ages.
-      let henv = untrackedStaleValue $ hscenv
+      let henv = untrackedStaleValue hscenv
       eps <- liftIO $ readIORef $ hsc_EPS $ hscEnv henv
 
       (jdg, ctx) <- liftMaybe $ mkJudgementAndContext cfg g binds new_rss tcg (hscEnv henv) eps
@@ -279,7 +278,7 @@ mkJudgementAndContext cfg g (TrackedStale binds bmap) rss (TrackedStale tcg tcgm
       evidence = getEvidenceAtHole (fmap (`RealSrcSpan` Nothing) tcg_rss) tcs
       cls_hy = foldMap evidenceToHypothesis evidence
       subst = ts_unifier $ evidenceToSubst evidence defaultTacticState
-  pure $
+  pure
     ( disallowing AlreadyDestructed already_destructed
     $ fmap (CType . substTyAddInScope subst . unCType) $
         mkFirstJudgement

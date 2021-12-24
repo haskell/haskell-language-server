@@ -17,8 +17,7 @@ import           Data.Maybe
 import           Data.Monoid
 import qualified Data.Text as T
 import           Data.Traversable
-import           Development.IDE (hscEnv)
-import           Development.IDE (realSrcSpanToRange)
+import           Development.IDE (hscEnv, realSrcSpanToRange)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake (IdeState (..))
 import           Development.IDE.Core.UseStale
@@ -81,7 +80,7 @@ emptyCaseInteraction = Interaction $
           , edits
           )
     )
-  $ (\ _ _ _ we -> pure $ pure $ RawEdit we)
+    (\ _ _ _ we -> pure $ pure $ RawEdit we)
 
 
 scrutinzedType :: EmptyCaseSort Type -> Maybe Type
@@ -115,9 +114,9 @@ graftMatchGroup
     -> Graft (Either String) ParsedSource
 graftMatchGroup ss l =
   hoistGraft (runExcept . runExceptString) $ graftExprWithM ss $ \case
-    L span (HsCase ext scrut mg@_) -> do
+    L span (HsCase ext scrut mg) -> do
       pure $ Just $ L span $ HsCase ext scrut $ mg { mg_alts = l }
-    L span (HsLamCase ext mg@_) -> do
+    L span (HsLamCase ext mg) -> do
       pure $ Just $ L span $ HsLamCase ext $ mg { mg_alts = l }
     (_ :: LHsExpr GhcPs) -> pure Nothing
 
@@ -165,6 +164,6 @@ data EmptyCaseSort a
 emptyCaseQ :: GenericQ [(SrcSpan, EmptyCaseSort (HsExpr GhcTc))]
 emptyCaseQ = everything (<>) $ mkQ mempty $ \case
   L new_span (Case scrutinee []) -> pure (new_span, EmptyCase scrutinee)
-  L new_span (expr@(LamCase [])) -> pure (new_span, EmptyLamCase expr)
+  L new_span expr@(LamCase []) -> pure (new_span, EmptyLamCase expr)
   (_ :: LHsExpr GhcTc) -> mempty
 

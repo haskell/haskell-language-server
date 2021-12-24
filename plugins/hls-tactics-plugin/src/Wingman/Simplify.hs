@@ -19,11 +19,12 @@ import Wingman.GHC (containsHsVar, fromPatCompat, pattern SingleLet)
 pattern Lambda :: [Pat GhcPs] -> HsExpr GhcPs -> HsExpr GhcPs
 pattern Lambda pats body <-
   HsLam _
-    (MG {mg_alts = L _ [L _
-      (Match { m_pats = fmap fromPatCompat -> pats
-             , m_grhss = GRHSs {grhssGRHSs = [L _ (
+    MG {mg_alts = L _ [L _
+      Match { m_pats = fmap fromPatCompat -> pats
+            , m_grhss = GRHSs {grhssGRHSs = [L _ (
                  GRHS _ [] (L _ body))]}
-             })]})
+            }]
+        }
   where
     -- If there are no patterns to bind, just stick in the body
     Lambda [] body   = body
@@ -35,9 +36,8 @@ pattern Lambda pats body <-
 -- | Simlify an expression.
 simplify :: LHsExpr GhcPs -> LHsExpr GhcPs
 simplify
-  = head
-  . drop 3   -- Do three passes; this should be good enough for the limited
-             -- amount of gas we give to auto
+  = (!!3) -- Do three passes; this should be good enough for the limited
+          -- amount of gas we give to auto
   . iterate (everywhere $ foldEndo
     [ simplifyEtaReduce
     , simplifyRemoveParens
@@ -62,7 +62,7 @@ simplifyEtaReduce = mkT $ \case
       (HsVar _ (L _ a)) | pat == a ->
     var "id"
   Lambda
-      (unsnoc -> Just (pats, (VarPat _ (L _ pat))))
+      (unsnoc -> Just (pats, VarPat _ (L _ pat)))
       (HsApp _ (L _ f) (L _ (HsVar _ (L _ a))))
       | pat == a
         -- We can only perform this simplifiation if @pat@ is otherwise unused.
@@ -84,8 +84,8 @@ simplifySingleLet = mkT $ \case
 simplifyCompose :: GenericT
 simplifyCompose = mkT $ \case
   Lambda
-      (unsnoc -> Just (pats, (VarPat _ (L _ pat))))
-      (unroll -> (fs@(_:_), (HsVar _ (L _ a))))
+      (unsnoc -> Just (pats, VarPat _ (L _ pat)))
+      (unroll -> (fs@(_:_), HsVar _ (L _ a)))
       | pat == a
         -- We can only perform this simplifiation if @pat@ is otherwise unused.
       , not (containsHsVar pat fs) ->
