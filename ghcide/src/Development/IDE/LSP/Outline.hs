@@ -145,20 +145,26 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (InstD _ ClsInstD { cid_ins
   = Just (defDocumentSymbol l :: DocumentSymbol) { _name = pprText cid_poly_ty
                                                  , _kind = SkInterface
                                                  }
-#if !MIN_VERSION_ghc(9,2,0)
+#if MIN_VERSION_ghc(9,2,0)
+documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (InstD _ DataFamInstD { dfid_inst = DataFamInstDecl FamEqn { feqn_tycon, feqn_pats } }))
+#else
 documentSymbolForDecl (L (RealSrcSpan l _) (InstD _ DataFamInstD { dfid_inst = DataFamInstDecl HsIB { hsib_body = FamEqn { feqn_tycon, feqn_pats } } }))
-  = Just (defDocumentSymbol l :: DocumentSymbol)
-    { _name = showRdrName (unLoc feqn_tycon) <> " " <> T.unwords
-                (map pprText feqn_pats)
-    , _kind = SkInterface
-    }
-documentSymbolForDecl (L (RealSrcSpan l _) (InstD _ TyFamInstD { tfid_inst = TyFamInstDecl HsIB { hsib_body = FamEqn { feqn_tycon, feqn_pats } } }))
-  = Just (defDocumentSymbol l :: DocumentSymbol)
-    { _name = showRdrName (unLoc feqn_tycon) <> " " <> T.unwords
-                (map pprText feqn_pats)
-    , _kind = SkInterface
-    }
 #endif
+  = Just (defDocumentSymbol l :: DocumentSymbol)
+    { _name = showRdrName (unLoc feqn_tycon) <> " " <> T.unwords
+                (map pprText feqn_pats)
+    , _kind = SkInterface
+    }
+#if MIN_VERSION_ghc(9,2,0)
+documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (InstD _ TyFamInstD { tfid_inst = TyFamInstDecl _ FamEqn { feqn_tycon, feqn_pats } }))
+#else
+documentSymbolForDecl (L (RealSrcSpan l _) (InstD _ TyFamInstD { tfid_inst = TyFamInstDecl HsIB { hsib_body = FamEqn { feqn_tycon, feqn_pats } } }))
+#endif
+  = Just (defDocumentSymbol l :: DocumentSymbol)
+    { _name = showRdrName (unLoc feqn_tycon) <> " " <> T.unwords
+                (map pprText feqn_pats)
+    , _kind = SkInterface
+    }
 documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (DerivD _ DerivDecl { deriv_type })) =
   gfindtype deriv_type <&> \(L (_ :: SrcSpan) name) ->
     (defDocumentSymbol l :: DocumentSymbol) { _name = pprText @(HsType GhcPs)
