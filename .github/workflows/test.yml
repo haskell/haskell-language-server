@@ -123,6 +123,15 @@ jobs:
           INDEX_STATE1=$(echo "$INDEX_STATE_ENTRY" | cut -d' ' -f2 | tr ':' '-')
           echo "INDEX_STATE=$INDEX_STATE1" >> $GITHUB_ENV
 
+      - name: Form the package list ('cabal.project.freeze')
+        continue-on-error: true
+        run: |
+          cabal v2-freeze
+          echo ''
+          echo 'Output:'
+          echo ''
+          cat 'cabal.project.freeze'
+
       - name: Hackage sources cache
         uses: actions/cache@v2
         env:
@@ -133,12 +142,13 @@ jobs:
           restore-keys: ${{ env.cache-name }}-
 
       - name: Compiled deps cache
+        id: compiled-deps
         uses: actions/cache@v2
         env:
           cache-name: compiled-deps
         with:
           path: ${{ steps.HaskEnvSetup.outputs.cabal-store }}
-          key:  ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project') }}
+          key:  ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project.freeze') }}
           restore-keys: |
                 ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-
                 ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
@@ -199,6 +209,10 @@ jobs:
       - if: matrix.test
         name: Test hls-class-plugin
         run: cabal test hls-class-plugin --test-options="$TEST_OPTS" || cabal test hls-class-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-class-plugin --test-options="$TEST_OPTS"
+
+      - if: matrix.test
+        name: Test hls-pragmas-plugin
+        run: cabal test hls-pragmas-plugin --test-options="$TEST_OPTS" || cabal test hls-pragmas-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-pragmas-plugin --test-options="$TEST_OPTS"
 
       - if: matrix.test
         name: Test hls-eval-plugin
