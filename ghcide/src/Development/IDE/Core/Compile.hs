@@ -160,7 +160,7 @@ typecheckModule (IdeDefer defer) hsc keep_lbls pm = do
                -- TODO: maybe settings ms_hspp_opts is unnecessary?
               mod_summary'' = modSummary' { ms_hspp_opts = hsc_dflags session}
             in
-              tcRnModule hsc keep_lbls $ demoteIfDefer pm{pm_mod_summary = mod_summary''}
+              tcRnModule session keep_lbls $ demoteIfDefer pm{pm_mod_summary = mod_summary''}
         let errorPipeline = unDefer . hideDiag dflags . tagDiag
             diags = map errorPipeline warnings
             deferedError = any fst diags
