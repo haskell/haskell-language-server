@@ -294,7 +294,7 @@ setSomethingModified state keys reason = do
         fail "setSomethingModified can't be called on this type of VFSHandle"
     -- Update database to remove any files that might have been renamed/deleted
     atomically $ do
-        writeTQueue (indexQueue $ hiedbWriter $ shakeExtras state) deleteMissingRealFiles
+        writeTQueue (indexQueue $ hiedbWriter $ shakeExtras state) (\withHieDb -> withHieDb deleteMissingRealFiles)
         modifyTVar' (dirtyKeys $ shakeExtras state) $ \x ->
             foldl' (flip HSet.insert) x keys
     void $ restartShakeSession (shakeExtras state) reason []

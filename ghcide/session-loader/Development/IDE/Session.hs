@@ -253,7 +253,7 @@ runWithDb logger fp k = do
       _ <- garbageCollectTypeNames db
       forever $ do
         k <- atomically $ readTQueue chan
-        retryOnSqliteBusy logger db oneSecond oneMillisecond maxRetryCount rng k
+        k (retryOnSqliteBusy logger db oneSecond oneMillisecond maxRetryCount rng)
           `Safe.catch` \e@SQLError{} -> do
             logDebug logger $ T.pack $ "SQLite error in worker, ignoring: " ++ show e
           `Safe.catchAny` \e -> do

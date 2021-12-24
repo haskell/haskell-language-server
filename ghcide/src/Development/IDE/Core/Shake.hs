@@ -183,7 +183,9 @@ data HieDbWriter
   }
 
 -- | Actions to queue up on the index worker thread
-type IndexQueue = TQueue (HieDb -> IO ())
+-- The inner `(HieDb -> IO ()) -> IO ()` wraps `HieDb -> IO ()`
+-- with (currently) retry functionality
+type IndexQueue = TQueue (((HieDb -> IO ()) -> IO ()) -> IO ())
 
 -- | Intended to represent HieDb calls wrapped with (currently) retry
 -- functionality
