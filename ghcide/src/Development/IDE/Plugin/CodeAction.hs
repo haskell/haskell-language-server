@@ -1216,12 +1216,23 @@ removeRedundantConstraints df (L _ HsModule {hsmodDecls}) Diagnostic{..}
            then constraints & T.drop 1 & T.dropEnd 1 & T.strip
            else constraints
 
+{-
+9.2: "message": "/private/var/folders/4m/d38fhm3936x_gy_9883zbq8h0000gn/T/extra-dir-53173393699/Testing.hs:4:1: warning:
+    â¢ Redundant constraints: (Eq a, Show a)
+    â¢ In the type signature for:
+               foo :: forall a. (Eq a, Show a) => a -> Bool",
+
+9.0: "message": "â¢ Redundant constraints: (Eq a, Show a)
+    â¢ In the type signature for:
+           foo :: forall a. (Eq a, Show a) => a -> Bool",
+-}
       findRedundantConstraints :: T.Text -> Maybe [T.Text]
       findRedundantConstraints t = t
         & T.lines
-        & head
-        & T.strip
-        & (`matchRegexUnifySpaces` "Redundant constraints?: (.+)")
+        -- In <9.2 it's the first line, in 9.2 it' the second line
+        & take 2
+        & mapMaybe ((`matchRegexUnifySpaces` "Redundant constraints?: (.+)") . T.strip)
+        & listToMaybe
         <&> (head >>> parseConstraints)
 
       formatConstraints :: [T.Text] -> T.Text
