@@ -58,7 +58,16 @@ jobs:
         uses: fkirc/skip-duplicate-actions@v3.4.1
         with:
           cancel_others: false
-          paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", "install/**", "**.nix", "flake.lock", "**/README.md", "FUNDING.yml", ".circleci/**"]'
+          paths_ignore: '["**/docs/**"
+                         , "**.md"
+                         , "**/LICENSE"
+                         , "install/**"
+                         , "**.nix"
+                         , "flake.lock"
+                         , "**/README.md"
+                         , "FUNDING.yml"
+                         , ".circleci/**"
+                         ]'
 
   caching:
     if: needs.pre_job.outputs.should_skip != 'true'
