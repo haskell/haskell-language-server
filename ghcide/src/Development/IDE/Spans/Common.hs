@@ -40,7 +40,7 @@ showGhc = showSD . ppr
 showSD :: SDoc -> T.Text
 showSD = T.pack . unsafePrintSDoc
 
--- | Print name dropping unique tagging.
+-- | Print the name, dropping the unique tagging from it.
 showNameWithoutUniques :: Outputable a => a -> T.Text
 showNameWithoutUniques = T.pack . printNameWithoutUniques
 
