@@ -11,7 +11,8 @@ module Development.IDE.Main
 ,testing) where
 import           Control.Concurrent.Extra              (newLock, withLock,
                                                         withNumCapabilities)
-import           Control.Concurrent.STM.Stats          (atomically, dumpSTMStats)
+import           Control.Concurrent.STM.Stats          (atomically,
+                                                        dumpSTMStats)
 import           Control.Exception.Safe                (Exception (displayException),
                                                         catchAny)
 import           Control.Monad.Extra                   (concatMapM, unless,
@@ -56,6 +57,7 @@ import           Development.IDE.Core.Shake            (IdeState (shakeExtras),
 import           Development.IDE.Core.Tracing          (measureMemory)
 import           Development.IDE.Graph                 (action)
 import           Development.IDE.LSP.LanguageServer    (runLanguageServer)
+import           Development.IDE.Main.HeapStats        (withHeapStats)
 import           Development.IDE.Plugin                (Plugin (pluginHandlers, pluginModifyDynflags, pluginRules))
 import           Development.IDE.Plugin.HLS            (asGhcIdePlugin)
 import qualified Development.IDE.Plugin.HLS.GhcIde     as Ghcide
@@ -77,12 +79,10 @@ import           Development.IDE.Types.Options         (IdeGhcSession,
                                                         defaultIdeOptions,
                                                         optModifyDynFlags,
                                                         optTesting)
-import           Development.IDE.Types.Shake           (Key(Key),
-                                                        fromKeyType)
+import           Development.IDE.Types.Shake           (Key (Key), fromKeyType)
 import           GHC.Conc                              (getNumProcessors)
 import           GHC.IO.Encoding                       (setLocaleEncoding)
 import           GHC.IO.Handle                         (hDuplicate)
-import           Development.IDE.Main.HeapStats        (withHeapStats)
 import           HIE.Bios.Cradle                       (findCradle)
 import qualified HieDb.Run                             as HieDb
 import           Ide.Plugin.Config                     (CheckParents (NeverCheck),
@@ -122,12 +122,12 @@ import           Text.Printf                           (printf)
 
 data Command
     = Check [FilePath]  -- ^ Typecheck some paths and print diagnostics. Exit code is the number of failures
-    | Db {projectRoot :: FilePath, hieOptions ::  HieDb.Options, hieCommand :: HieDb.Command}
+    | Db {hieOptions ::  HieDb.Options, hieCommand :: HieDb.Command}
      -- ^ Run a command in the hiedb
     | LSP   -- ^ Run the LSP server
     | PrintExtensionSchema
     | PrintDefaultConfig
-    | Custom {projectRoot :: FilePath, ideCommand :: IdeCommand IdeState} -- ^ User defined
+    | Custom {ideCommand :: IdeCommand IdeState} -- ^ User defined
     deriving Show
 
 
@@ -142,7 +142,7 @@ isLSP _   = False
 commandP :: IdePlugins IdeState -> Parser Command
 commandP plugins =
     hsubparser(command "typecheck" (info (Check <$> fileCmd) fileInfo)
-            <> command "hiedb" (info (Db "." <$> HieDb.optParser "" True <*> HieDb.cmdParser <**> helper) hieInfo)
+            <> command "hiedb" (info (Db <$> HieDb.optParser "" True <*> HieDb.cmdParser <**> helper) hieInfo)
             <> command "lsp" (info (pure LSP <**> helper) lspInfo)
             <> command "vscode-extension-schema" extensionSchemaCommand
             <> command "generate-default-config" generateDefaultConfigCommand
@@ -161,13 +161,14 @@ commandP plugins =
              (fullDesc <> progDesc "Print config supported by the server with default values")
 
     pluginCommands = mconcat
-        [ command (T.unpack pId) (Custom "." <$> p)
+        [ command (T.unpack pId) (Custom <$> p)
         | (PluginId pId, PluginDescriptor{pluginCli = Just p}) <- ipMap plugins
         ]
 
 
 data Arguments = Arguments
-    { argsOTMemoryProfiling     :: Bool
+    { argsProjectRoot           :: Maybe FilePath
+    , argsOTMemoryProfiling     :: Bool
     , argCommand                :: Command
     , argsLogger                :: IO Logger
     , argsRules                 :: Rules ()
@@ -189,7 +190,8 @@ instance Default Arguments where
 
 defaultArguments :: Priority -> Arguments
 defaultArguments priority = Arguments
-        { argsOTMemoryProfiling = False
+        { argsProjectRoot = Nothing
+        , argsOTMemoryProfiling = False
         , argCommand = LSP
         , argsLogger = stderrLogger priority
         , argsRules = mainRule def >> action kick
@@ -380,16 +382,18 @@ defaultMain Arguments{..} = flip withHeapStats fun =<< argsLogger
                 measureMemory logger [keys] consoleObserver values
 
             unless (null failed) (exitWith $ ExitFailure (length failed))
-        Db dir opts cmd -> do
-            dbLoc <- getHieDbLoc dir
+        Db opts cmd -> do
+            root <-  maybe IO.getCurrentDirectory return argsProjectRoot
+            dbLoc <- getHieDbLoc root
             hPutStrLn stderr $ "Using hiedb at: " ++ dbLoc
-            mlibdir <- setInitialDynFlags logger dir def
+            mlibdir <- setInitialDynFlags logger root def
             case mlibdir of
                 Nothing     -> exitWith $ ExitFailure 1
                 Just libdir -> HieDb.runCommand libdir opts{HieDb.database = dbLoc} cmd
 
-        Custom projectRoot (IdeCommand c) -> do
-          dbLoc <- getHieDbLoc projectRoot
+        Custom (IdeCommand c) -> do
+          root <-  maybe IO.getCurrentDirectory return argsProjectRoot
+          dbLoc <- getHieDbLoc root
           runWithDb logger dbLoc $ \hiedb hieChan -> do
             vfs <- makeVFSHandle
             sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions "."
