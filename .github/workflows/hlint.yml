@@ -1,0 +1,24 @@
+name: "HLint check"
+
+on:
+  pull_request:
+    branches:
+      - '**'
+
+jobs:
+  build10:
+    name: "Run"
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: 'Installing'
+      uses: rwe/actions-hlint-setup@v1
+      with:
+        version: '3.3.4'
+
+    - name: 'Checking code'
+      uses: rwe/actions-hlint-run@v1
+      with:
+        hlint-bin: "hlint --with-group=extra --hint=ghcide/.hlint.yaml"
+        path: '[ "ghcide/src", "ghcide/exe", "ghcide/bench/lib", "ghcide/bench/exe", "ghcide/bench/hist", "shake-bench/src", "ghcide/test/exe" ]'
