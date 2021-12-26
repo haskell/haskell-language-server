@@ -25,13 +25,29 @@ jobs:
         uses: fkirc/skip-duplicate-actions@v3.4.1
         with:
           cancel_others: false
-          paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", "install/**", "**.nix", "flake.lock", "**/README.md", "FUNDING.yml", ".circleci/**", "**/stack*.yaml"]'
+          paths_ignore: '[ "**/docs/**"
+                         , "**.md"
+                         , "**/LICENSE"
+                         , "install/**"
+                         , "**.nix"
+                         , "flake.lock"
+                         , "**/README.md"
+                         , "FUNDING.yml"
+                         , ".circleci/**"
+                         , "**/stack*.yaml"
+                         ]'
       # If we only change ghcide downstream packages we have not test ghcide itself
       - id: skip_ghcide_check
         uses: fkirc/skip-duplicate-actions@v3.4.1
         with:
           cancel_others: false
-          paths_ignore: '["hls-test-utils/**", "plugins/**", "src/**", "exe/**", "test/**", "shake-bench/**"]'
+          paths_ignore: '[ "hls-test-utils/**"
+                         , "plugins/**"
+                         , "src/**"
+                         , "exe/**"
+                         , "test/**"
+                         , "shake-bench/**"
+                         ]'
 
   test:
     if: needs.pre_job.outputs.should_skip != 'true'
@@ -40,8 +56,15 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        ghc: ["9.0.1", '8.10.7', '8.10.6', "8.8.4", "8.6.5"]
-        os: [ubuntu-latest, macOS-latest]
+        ghc: [ "9.0.1"
+             , "8.10.7"
+             , "8.10.6"
+             , "8.8.4"
+             , "8.6.5"
+             ]
+        os: [ "ubuntu-latest"
+            , "macOS-latest"
+            ]
         cabal: ['3.6']
         include:
           # only test supported ghc major versions
@@ -93,7 +116,7 @@ jobs:
 
       # Needs to be before Cache Cabal so the cache can detect changes to the modified cabal.project file
       - if: matrix.ghc == '9.0.1'
-        name: (GHC 9.0.1) Use modified `cabal.project`
+        name: (GHC 9.0) Use modified `cabal.project`
         run: |
           # File has some protections preventing regular `rm`.
           # (most probably sticky bit is set on $HOME)

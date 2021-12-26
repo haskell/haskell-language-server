@@ -58,7 +58,16 @@ jobs:
         uses: fkirc/skip-duplicate-actions@v3.4.1
         with:
           cancel_others: false
-          paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", "install/**", "**.nix", "flake.lock", "**/README.md", "FUNDING.yml", ".circleci/**"]'
+          paths_ignore: '["**/docs/**"
+                         , "**.md"
+                         , "**/LICENSE"
+                         , "install/**"
+                         , "**.nix"
+                         , "flake.lock"
+                         , "**/README.md"
+                         , "FUNDING.yml"
+                         , ".circleci/**"
+                         ]'
 
   caching:
     if: needs.pre_job.outputs.should_skip != 'true'
@@ -67,8 +76,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.0.1", '8.10.7', '8.10.6', "8.8.4", "8.6.5"]
-        os: [ubuntu-latest, macOS-latest, windows-latest]
+        ghc: [ "9.0.1"
+             , "8.10.7"
+             , "8.10.6"
+             , "8.8.4"
+             , "8.6.5"
+             ]
+        os: [ "ubuntu-latest"
+            , "macOS-latest"
+            , "windows-latest"
+            ]
         cabal: ['3.6']
 
     steps:
