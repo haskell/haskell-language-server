@@ -45,7 +45,7 @@ on:
     - cron: "25 2/8 * * *"
 
 env:
-  cabalBuild: "v2-build all --enable-tests --enable-benchmarks --keep-going"
+  cabalBuild: "v2-build all --keep-going"
 
 jobs:
 
@@ -186,8 +186,10 @@ jobs:
 
       - if: steps.compiled-deps.outputs.cache-hit != 'true'
         name: Download all sources
+        #  Downloaded separately, to match the tested work/PR workflow guarantees
         run: |
-          cabal $cabalBuild --only-download
+          cabal $cabalBuild --enable-benchmarks --only-download
+          cabal $cabalBuild --enable-tests      --only-download
 
       # repeating builds to workaround segfaults in windows and ghc-8.8.4
       # This build agenda in not to have successful code,
@@ -197,10 +199,12 @@ jobs:
       - if: steps.compiled-deps.outputs.cache-hit != 'true'
         name: Build all targets; try 3 times
         continue-on-error: true
+        # Done separately, matching the tested work/PR workflow guarantees
         run: |
-          cabal $cabalBuild || cabal $cabalBuild || cabal $cabalBuild
 
       # Despite the `continue-on-error: true` directive - CI does not ignore the return code of the last step
       - name: Workaround to CI platform
         run: |
           true
+          cabal $cabalBuild --enable-benchmarks || cabal $cabalBuild --enable-benchmarks || cabal $cabalBuild --enable-benchmarks
+          cabal $cabalBuild --enable-test || cabal $cabalBuild --enable-test || cabal $cabalBuild --enable-test
