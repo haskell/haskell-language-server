@@ -186,11 +186,16 @@ jobs:
         run: |
           cabal v2-update
 
-      - if: steps.compiled-deps.outputs.cache-hit != 'true'
-        name: Download all sources
+      - if: steps.compiled-deps.outputs.cache-hit != 'true' && runner.os == 'Linux' && matrix.ghc == '8.10.7'
+        name: Download sources for bench
         #  Downloaded separately, to match the tested work/PR workflow guarantees
         run: |
           cabal $cabalBuild --enable-benchmarks --only-download
+
+      - if: steps.compiled-deps.outputs.cache-hit != 'true'
+        name: Download the rest of the sources
+        #  Downloaded separately, to match the tested work/PR workflow guarantees
+        run: |
           cabal $cabalBuild --enable-tests      --only-download
 
       # repeating builds to workaround segfaults in windows and ghc-8.8.4
@@ -198,10 +203,16 @@ jobs:
       # but to cache what can be cached, so step is fault tolerant & would always succseed.
       # 2021-12-11: NOTE: Building all targets, since
       # current Cabal does not allow `all --enable-tests --enable-benchmarks --only-dependencies`
+
+      - if: steps.compiled-deps.outputs.cache-hit != 'true' && runner.os == 'Linux' && matrix.ghc == '8.10.7'
+        name: (For Bench workflow) Build benchmark targets
+        #  Downloaded separately, to match the tested work/PR workflow guarantees
+        run: |
+          cabal $cabalBuild --enable-benchmarks || cabal $cabalBuild --enable-benchmarks || cabal $cabalBuild --enable-benchmarks
+
       - if: steps.compiled-deps.outputs.cache-hit != 'true'
-        name: Build all targets; try 3 times
+        name: Build targets; try 3 times
         continue-on-error: true
         # Done separately, matching the tested work/PR workflow guarantees
         run: |
-          cabal $cabalBuild --enable-benchmarks || cabal $cabalBuild --enable-benchmarks || cabal $cabalBuild --enable-benchmarks
           cabal $cabalBuild --enable-test || cabal $cabalBuild --enable-test || cabal $cabalBuild --enable-test
