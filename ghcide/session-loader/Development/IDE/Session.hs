@@ -246,7 +246,7 @@ runWithDb logger fp k = do
   -- and send bursts of requests
   rng <- Random.newStdGen
   -- Delete the database if it has an incompatible schema version
-  withHieDb fp (const (pure ()) . makeWithRetryableHieDb rng)
+  withHieDb fp (\hieDb -> makeWithRetryableHieDb rng hieDb $ const (pure ()))
     `Safe.catch` \IncompatibleSchemaVersion{} -> removeFile fp
   withHieDb fp $ \writedb -> do
     -- the type signature is necessary to avoid concretizing the RankNType
