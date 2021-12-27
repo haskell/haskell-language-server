@@ -199,13 +199,13 @@ retryOnSqliteBusy logger hieDb maxDelay !baseDelay !maxRetryCount rng f = do
         let (delay, newRng) = Random.randomR (0, newBaseDelay) rng
         let newMaxRetryCount = maxRetryCount - 1
         liftIO $ do
-          logInfo logger $ "Retrying - " <> makeLogMsgComponentsText (Right delay) newMaxRetryCount e
+          logWarning logger $ "Retrying - " <> makeLogMsgComponentsText (Right delay) newMaxRetryCount e
           threadDelay delay
         retryOnSqliteBusy logger hieDb maxDelay newBaseDelay newMaxRetryCount newRng f
 
       | otherwise -> do
         liftIO $ do
-          logInfo logger $ "Retries exhausted - " <> makeLogMsgComponentsText (Left baseDelay) maxRetryCount e
+          logWarning logger $ "Retries exhausted - " <> makeLogMsgComponentsText (Left baseDelay) maxRetryCount e
           throwIO e
 
     Right b -> pure b
@@ -224,7 +224,17 @@ retryOnSqliteBusy logger hieDb maxDelay !baseDelay !maxRetryCount rng f = do
       in
         T.intercalate ", " logMsgComponents
 
+-- | in microseconds
+oneSecond :: Int
+oneSecond = 1000000
 
+-- | in microseconds
+oneMillisecond :: Int
+oneMillisecond = 1000
+
+-- | default maximum number of times to retry hiedb call
+maxRetryCount :: Int
+maxRetryCount = 10
 
 -- | Wraps `withHieDb` to provide a database connection for reading, and a `HieWriterChan` for
 -- writing. Actions are picked off one by one from the `HieWriterChan` and executed in serial
@@ -232,28 +242,35 @@ retryOnSqliteBusy logger hieDb maxDelay !baseDelay !maxRetryCount rng f = do
 -- This is done in order to serialize writes to the database, or else SQLite becomes unhappy
 runWithDb :: Logger -> FilePath -> (WithHieDb -> IndexQueue -> IO ()) -> IO ()
 runWithDb logger fp k = do
+  -- use non-deterministic seed because maybe multiple HLS start at same time
+  -- and send bursts of requests
+  rng <- Random.newStdGen
   -- Delete the database if it has an incompatible schema version
-  withHieDb fp (const $ pure ())
+  withHieDb fp (const (pure ()) . makeWithRetryableHieDb rng)
     `Safe.catch` \IncompatibleSchemaVersion{} -> removeFile fp
   withHieDb fp $ \writedb -> do
-    initConn writedb
-    chan <- newTQueueIO
-    -- use newStdGen because what if multiple HLS start at same time and send bursts of requests
-    rng <- Random.newStdGen
-    withAsync (writerThread writedb chan rng) $ \_ -> do
-      withHieDb fp (\readDb -> k (retryOnSqliteBusy logger readDb oneSecond oneMillisecond maxRetryCount rng) chan)
-  where
-    oneSecond = 1000000
-    oneMillisecond = 1000
-    maxRetryCount = 10
+    -- the type signature is necessary to avoid concretizing the RankNType
+    -- e.g. using it with initConn will set tyvar a to ()
+    let withRetryableWriteDb :: WithHieDb
+        withRetryableWriteDb = makeWithRetryableHieDb rng writedb
+    withRetryableWriteDb initConn
 
-    writerThread db chan rng = do
+    chan <- newTQueueIO
+
+    withAsync (writerThread withRetryableWriteDb chan) $ \_ -> do
+      withHieDb fp (\readDb -> k (makeWithRetryableHieDb rng readDb) chan)
+  where
+    makeWithRetryableHieDb :: RandomGen g => g -> HieDb -> WithHieDb
+    makeWithRetryableHieDb rng hieDb = retryOnSqliteBusy logger hieDb oneSecond oneMillisecond maxRetryCount rng
+
+    writerThread :: WithHieDb -> IndexQueue -> IO ()
+    writerThread withRetryableWriteDb chan = do
       -- Clear the index of any files that might have been deleted since the last run
-      deleteMissingRealFiles db
-      _ <- garbageCollectTypeNames db
+      _ <- withRetryableWriteDb deleteMissingRealFiles
+      _ <- withRetryableWriteDb garbageCollectTypeNames
       forever $ do
         k <- atomically $ readTQueue chan
-        k (retryOnSqliteBusy logger db oneSecond oneMillisecond maxRetryCount rng)
+        k withRetryableWriteDb
           `Safe.catch` \e@SQLError{} -> do
             logDebug logger $ T.pack $ "SQLite error in worker, ignoring: " ++ show e
           `Safe.catchAny` \e -> do
