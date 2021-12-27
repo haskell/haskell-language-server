@@ -65,6 +65,7 @@ import qualified Development.IDE.Plugin.Test           as Test
 import           Development.IDE.Session               (SessionLoadingOptions,
                                                         getHieDbLoc,
                                                         loadSessionWithOptions,
+                                                        retryOnSqliteBusy,
                                                         runWithDb,
                                                         setInitialDynFlags)
 import           Development.IDE.Types.Location        (NormalizedUri,
@@ -116,6 +117,7 @@ import           System.IO                             (BufferMode (LineBufferin
                                                         hSetBuffering,
                                                         hSetEncoding, stderr,
                                                         stdin, stdout, utf8)
+import           System.Random                         (newStdGen)
 import           System.Time.Extra                     (offsetTime,
                                                         showDuration)
 import           Text.Printf                           (printf)
@@ -384,9 +386,10 @@ defaultMain Arguments{..} = flip withHeapStats fun =<< argsLogger
             dbLoc <- getHieDbLoc dir
             hPutStrLn stderr $ "Using hiedb at: " ++ dbLoc
             mlibdir <- setInitialDynFlags logger dir def
+            rng <- newStdGen
             case mlibdir of
                 Nothing     -> exitWith $ ExitFailure 1
-                Just libdir -> HieDb.runCommand libdir opts{HieDb.database = dbLoc} cmd
+                Just libdir -> retryOnSqliteBusy logger rng (HieDb.runCommand libdir opts{HieDb.database = dbLoc} cmd)
 
         Custom projectRoot (IdeCommand c) -> do
           dbLoc <- getHieDbLoc projectRoot

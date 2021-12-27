@@ -13,6 +13,7 @@ module Development.IDE.Session
   ,getHieDbLoc
   ,runWithDb
   ,retryOnSqliteBusy
+  ,retryOnException
   ) where
 
 -- Unfortunately, we cannot use loadSession with ghc-lib since hie-bios uses
@@ -169,28 +170,24 @@ setInitialDynFlags logger rootDir SessionLoadingOptions{..} = do
   mapM_ setUnsafeGlobalDynFlags dynFlags
   pure libdir
 
-
--- | If the sqlite db returns an SQLITE_BUSY then we sleep for a duration
--- determined by the random exponential backoff formula,
--- `uniformRandom(0, min (maxDelay, (baseDelay * 2) ^ retryAttempt))`, and try the
--- action again for a maximum of `maxRetryCount` times.
+-- | If the action throws exception that satisfies predicate then we sleep for
+-- a duration determined by the random exponential backoff formula,
+-- `uniformRandom(0, min (maxDelay, (baseDelay * 2) ^ retryAttempt))`, and try
+-- the action again for a maximum of `maxRetryCount` times.
 -- `MonadIO`, `MonadCatch` are used as constraints because there are a few
 -- HieDb functions that don't return IO values.
-retryOnSqliteBusy :: (MonadIO m, MonadCatch m, RandomGen g)
-                  => Logger
-                  -> HieDb -- ^ HieDb connection
-                  -> Int -- ^ maximum backoff delay in microseconds
-                  -> Int -- ^ base backoff delay in microseconds
-                  -> Int -- ^ maximum number of times to retry
-                  -> g -- ^ random number generator
-                  -> (HieDb -> m b) -- ^ function that uses HieDb connection
-                  -> m b
-retryOnSqliteBusy logger hieDb maxDelay !baseDelay !maxRetryCount rng f = do
-  let hieDbAction = f hieDb
-  let isErrorBusy e
-        | SQLError{ sqlError = ErrorBusy } <- e = Just e
-        | otherwise = Nothing
-  result <- tryJust isErrorBusy hieDbAction
+retryOnException
+  :: (MonadIO m, MonadCatch m, RandomGen g, Exception e)
+  => (e -> Maybe e) -- ^ only retry on exception if this predicate returns Just
+  -> Logger
+  -> Int -- ^ maximum backoff delay in microseconds
+  -> Int -- ^ base backoff delay in microseconds
+  -> Int -- ^ maximum number of times to retry
+  -> g -- ^ random number generator
+  -> m a -- ^ action that may throw exception
+  -> m a
+retryOnException exceptionPred logger maxDelay !baseDelay !maxRetryCount rng action = do
+  result <- tryJust exceptionPred action
   case result of
     Left e
       | maxRetryCount > 0 -> do
@@ -201,7 +198,7 @@ retryOnSqliteBusy logger hieDb maxDelay !baseDelay !maxRetryCount rng f = do
         liftIO $ do
           logWarning logger $ "Retrying - " <> makeLogMsgComponentsText (Right delay) newMaxRetryCount e
           threadDelay delay
-        retryOnSqliteBusy logger hieDb maxDelay newBaseDelay newMaxRetryCount newRng f
+        retryOnException exceptionPred logger maxDelay newBaseDelay newMaxRetryCount newRng action
 
       | otherwise -> do
         liftIO $ do
@@ -236,6 +233,19 @@ oneMillisecond = 1000
 maxRetryCount :: Int
 maxRetryCount = 10
 
+retryOnSqliteBusy :: (MonadIO m, MonadCatch m, RandomGen g)
+                  => Logger -> g -> m a -> m a
+retryOnSqliteBusy logger rng action =
+  let isErrorBusy e
+        | SQLError{ sqlError = ErrorBusy } <- e = Just e
+        | otherwise = Nothing
+  in
+    retryOnException isErrorBusy logger oneSecond oneMillisecond maxRetryCount rng action
+
+makeWithHieDbRetryable :: RandomGen g => Logger -> g -> HieDb -> WithHieDb
+makeWithHieDbRetryable logger rng hieDb f =
+  retryOnSqliteBusy logger rng (f hieDb)
+
 -- | Wraps `withHieDb` to provide a database connection for reading, and a `HieWriterChan` for
 -- writing. Actions are picked off one by one from the `HieWriterChan` and executed in serial
 -- by a worker thread using a dedicated database connection.
@@ -246,31 +256,32 @@ runWithDb logger fp k = do
   -- and send bursts of requests
   rng <- Random.newStdGen
   -- Delete the database if it has an incompatible schema version
-  withHieDb fp (\hieDb -> makeWithRetryableHieDb rng hieDb $ const (pure ()))
-    `Safe.catch` \IncompatibleSchemaVersion{} -> removeFile fp
+  retryOnSqliteBusy
+    logger
+    rng
+    (withHieDb fp (const $ pure ()) `Safe.catch` \IncompatibleSchemaVersion{} -> removeFile fp)
+
   withHieDb fp $ \writedb -> do
-    -- the type signature is necessary to avoid concretizing the RankNType
-    -- e.g. using it with initConn will set tyvar a to ()
-    let withRetryableWriteDb :: WithHieDb
-        withRetryableWriteDb = makeWithRetryableHieDb rng writedb
-    withRetryableWriteDb initConn
+    -- the type signature is necessary to avoid concretizing the tyvar
+    -- e.g. `withWriteDbRetrable initConn` without type signature will
+    -- instantiate tyvar `a` to `()`
+    let withWriteDbRetryable :: WithHieDb
+        withWriteDbRetryable = makeWithHieDbRetryable logger rng writedb
+    withWriteDbRetryable initConn
 
     chan <- newTQueueIO
 
-    withAsync (writerThread withRetryableWriteDb chan) $ \_ -> do
-      withHieDb fp (\readDb -> k (makeWithRetryableHieDb rng readDb) chan)
+    withAsync (writerThread withWriteDbRetryable chan) $ \_ -> do
+      withHieDb fp (\readDb -> k (makeWithHieDbRetryable logger rng readDb) chan)
   where
-    makeWithRetryableHieDb :: RandomGen g => g -> HieDb -> WithHieDb
-    makeWithRetryableHieDb rng hieDb = retryOnSqliteBusy logger hieDb oneSecond oneMillisecond maxRetryCount rng
-
     writerThread :: WithHieDb -> IndexQueue -> IO ()
-    writerThread withRetryableWriteDb chan = do
+    writerThread withHieDbRetryable chan = do
       -- Clear the index of any files that might have been deleted since the last run
-      _ <- withRetryableWriteDb deleteMissingRealFiles
-      _ <- withRetryableWriteDb garbageCollectTypeNames
+      _ <- withHieDbRetryable deleteMissingRealFiles
+      _ <- withHieDbRetryable garbageCollectTypeNames
       forever $ do
         k <- atomically $ readTQueue chan
-        k withRetryableWriteDb
+        k withHieDbRetryable
           `Safe.catch` \e@SQLError{} -> do
             logDebug logger $ T.pack $ "SQLite error in worker, ignoring: " ++ show e
           `Safe.catchAny` \e -> do

@@ -8,8 +8,8 @@ import           Control.Exception            (ErrorCall (ErrorCall), evaluate,
 import           Data.Text                    (Text)
 import           Data.Tuple.Extra             (dupe)
 import qualified Database.SQLite.Simple       as SQLite
-import           Development.IDE.Core.Shake   (HieDb)
-import           Development.IDE.Session      (retryOnSqliteBusy)
+import           Development.IDE.Session      (retryOnException,
+                                               retryOnSqliteBusy)
 import           Development.IDE.Types.Logger (Logger (Logger), Priority,
                                                noLogging)
 import qualified System.Random                as Random
@@ -22,8 +22,8 @@ makeLogger msgsVar = Logger $ \priority msg -> modifyVar msgsVar (\msgs -> pure 
 rng :: Random.StdGen
 rng = Random.mkStdGen 0
 
-defaultRetryOnSqliteBusy :: Logger -> Int -> (HieDb -> IO b) -> IO b
-defaultRetryOnSqliteBusy logger maxRetryCount = retryOnSqliteBusy logger undefined 1 1 maxRetryCount rng
+retryOnSqliteBusyForTest :: Logger -> Int -> IO a -> IO a
+retryOnSqliteBusyForTest logger maxRetryCount = retryOnException isErrorBusy logger 1 1 maxRetryCount rng
 
 isErrorBusy :: SQLite.SQLError -> Maybe SQLite.SQLError
 isErrorBusy e
@@ -40,13 +40,12 @@ isErrorCall e
 
 tests :: TestTree
 tests = testGroup "RetryHieDb"
-  [ testCase "retryOnSqliteBusy throws ErrorBusy after max retries" $ do
+  [ testCase "retryOnException throws exception after max retries" $ do
       logMsgsVar <- newVar []
       let logger = makeLogger logMsgsVar
       let maxRetryCount = 1
-      let action = defaultRetryOnSqliteBusy logger maxRetryCount (\_ -> throwIO errorBusy)
 
-      result <- tryJust isErrorBusy action
+      result <- tryJust isErrorBusy (retryOnSqliteBusyForTest logger maxRetryCount (throwIO errorBusy))
 
       case result of
         Left exception -> do
@@ -57,54 +56,65 @@ tests = testGroup "RetryHieDb"
             -- logMsgs @?= []
         Right _ -> assertFailure "Expected ErrorBusy exception"
 
-   , testCase "retryOnSqliteBusy doesn't throw if given function doesn't throw" $ do
+   , testCase "retryOnException doesn't throw if given function doesn't throw" $ do
       let expected = 1 :: Int
       let maxRetryCount = 0
-      let action = defaultRetryOnSqliteBusy noLogging maxRetryCount (\_ -> pure expected)
 
-      actual <- action
+      actual <- retryOnSqliteBusyForTest noLogging maxRetryCount (pure expected)
 
       actual @?= expected
 
-   , testCase "retryOnSqliteBusy retries the number of times it should" $ do
+   , testCase "retryOnException retries the number of times it should" $ do
       countVar <- newVar 0
       let maxRetryCount = 3
-      let hieDbAction _ = modifyVar countVar (\count -> pure (dupe (count + 1))) >> throwIO errorBusy
-      let action = defaultRetryOnSqliteBusy noLogging maxRetryCount hieDbAction
+      let incrementThenThrow = modifyVar countVar (\count -> pure (dupe (count + 1))) >> throwIO errorBusy
 
-      _ <- tryJust isErrorBusy action
+      _ <- tryJust isErrorBusy (retryOnSqliteBusyForTest noLogging maxRetryCount incrementThenThrow)
 
       withVar countVar $ \count ->
         count @?= maxRetryCount + 1
 
-   , testCase "retryOnSqliteBusy doesn't retry if exception is not ErrorBusy" $ do
+   , testCase "retryOnException doesn't retry if exception is not ErrorBusy" $ do
       countVar <- newVar (0 :: Int)
       let maxRetryCount = 1
 
-      let hieDbAction _ = do
+      let throwThenIncrement = do
             count <- readVar countVar
             if count == 0 then
               evaluate (error "dummy exception")
             else
               modifyVar countVar (\count -> pure (dupe (count + 1)))
 
-      let action = defaultRetryOnSqliteBusy noLogging maxRetryCount hieDbAction
 
-      _ <- tryJust isErrorCall action
+      _ <- tryJust isErrorCall (retryOnSqliteBusyForTest noLogging maxRetryCount throwThenIncrement)
 
       withVar countVar $ \count ->
         count @?= 0
 
-    , testCase "retryOnSqliteBusy exponentially backs off" $ do
+   , testCase "retryOnSqliteBusy retries on ErrorBusy" $ do
+      countVar <- newVar (0 :: Int)
+
+      let incrementThenThrowThenIncrement = do
+            count <- readVar countVar
+            if count == 0 then
+              modifyVar countVar (\count -> pure (dupe (count + 1))) >> throwIO errorBusy
+            else
+              modifyVar countVar (\count -> pure (dupe (count + 1)))
+
+      _ <- retryOnSqliteBusy noLogging rng incrementThenThrowThenIncrement
+
+      withVar countVar $ \count ->
+        count @?= 2
+
+    , testCase "retryOnException exponentially backs off" $ do
        logMsgsVar <- newVar ([] :: [(Priority, Text)])
 
        let maxDelay = 100
        let baseDelay = 1
        let maxRetryCount = 6
        let logger = makeLogger logMsgsVar
-       let action = retryOnSqliteBusy logger undefined maxDelay baseDelay maxRetryCount rng (\_ -> throwIO errorBusy)
 
-       result <- tryJust isErrorBusy action
+       result <- tryJust isErrorBusy (retryOnException isErrorBusy logger maxDelay baseDelay maxRetryCount rng (throwIO errorBusy))
 
        case result of
          Left _ -> do
