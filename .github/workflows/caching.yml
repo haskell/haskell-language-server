@@ -184,7 +184,7 @@ jobs:
 
       - if: steps.compiled-deps.outputs.cache-hit != 'true'
         run: |
-          cabal update
+          cabal v2-update
 
       - if: steps.compiled-deps.outputs.cache-hit != 'true'
         name: Download all sources

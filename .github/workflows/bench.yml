@@ -118,7 +118,8 @@ jobs:
               ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
               ${{ env.cache-name }}-${{ runner.os }}-
 
-    - run: cabal update
+    - run: |
+        cabal v2-update
 
     # max-backjumps is increased as a temporary solution
     # for dependency resolution failure
