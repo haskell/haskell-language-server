@@ -35,7 +35,8 @@ import           Data.Ord                                 (Down (Down))
 import qualified Data.Set                                 as Set
 import           Development.IDE.Core.Compile
 import           Development.IDE.Core.PositionMapping
-import           Development.IDE.GHC.Compat               as GHC hiding (ppr)
+import           Development.IDE.GHC.Compat               hiding (ppr)
+import qualified Development.IDE.GHC.Compat               as GHC
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Util
@@ -46,6 +47,15 @@ import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.HscEnvEq
 import           Development.IDE.Types.Options
+
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC.Plugins                              (Depth (AllTheWay),
+                                                           defaultSDocContext,
+                                                           mkUserStyle,
+                                                           neverQualify,
+                                                           renderWithContext,
+                                                           sdocStyle)
+#endif
 import           Ide.PluginUtils                          (mkLspCommand)
 import           Ide.Types                                (CommandId (..),
                                                            PluginId)
@@ -254,10 +264,16 @@ mkNameCompItem doc thingParent origName provenance thingType isInfix docs !imp =
             (TyVarTy _)     -> noParensSnippet
             (LitTy _)       -> noParensSnippet
             (TyConApp _ []) -> noParensSnippet
-            _               -> snippetText i ("(" <> showGhc t <> ")")
+            _               -> snippetText i ("(" <> showForSnippet t <> ")")
             where
-                noParensSnippet = snippetText i (showGhc t)
+                noParensSnippet = snippetText i (showForSnippet t)
                 snippetText i t = "${" <> T.pack (show i) <> ":" <> t <> "}"
+#if MIN_VERSION_ghc(9,2,0)
+        showForSnippet x = T.pack $ renderWithContext ctxt $ GHC.ppr x -- FIXme
+        ctxt = defaultSDocContext{sdocStyle = mkUserStyle neverQualify AllTheWay}
+#else
+        showForSnippet x = showGhc x
+#endif
         getArgs :: Type -> [Type]
         getArgs t
           | isPredTy t = []
@@ -276,6 +292,7 @@ mkNameCompItem doc thingParent origName provenance thingType isInfix docs !imp =
           | isCoercionTy t = maybe [] (getArgs . snd) (splitCoercionType_maybe t)
 #endif
           | otherwise = []
+
 
 mkModCompl :: T.Text -> CompletionItem
 mkModCompl label =
