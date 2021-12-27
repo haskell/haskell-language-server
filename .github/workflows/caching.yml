@@ -186,19 +186,19 @@ jobs:
         name: Download sources for bench
         #  Downloaded separately, to match the tested work/PR workflow guarantees
         run: |
-          cabal $cabalBuild --enable-benchmarks --only-download
+          cabal $cabalBuild --only-download --enable-benchmarks
 
       - if: steps.compiled-deps.outputs.cache-hit != 'true'
         name: Download the rest of the sources
         #  Downloaded separately, to match the tested work/PR workflow guarantees
         run: |
-          cabal $cabalBuild --enable-tests      --only-download
+          cabal $cabalBuild --only-download --enable-tests
 
       # repeating builds to workaround segfaults in windows and ghc-8.8.4
       # This build agenda in not to have successful code,
-      # but to cache what can be cached, so step is fault tolerant & would always succseed.
-      # 2021-12-11: NOTE: Building all targets, since
-      # current Cabal does not allow `all --enable-tests --enable-benchmarks --only-dependencies`
+      # but to cache what can be cached, so step is fault tolerant & would always succeed.
+      # 2021-12-11: NOTE: Need to building all targets (build the project also), since
+      # current Cabal does not allow `all --enable-tests --enable-benchmarks --only-dependencies` combination
 
       - if: steps.compiled-deps.outputs.cache-hit != 'true' && runner.os == 'Linux' && matrix.ghc == '8.10.7'
         name: (For Bench workflow) Build benchmark targets
