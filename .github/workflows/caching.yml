@@ -182,10 +182,6 @@ jobs:
                 ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
                 ${{ env.cache-name }}-${{ runner.os }}-
 
-      - if: steps.compiled-deps.outputs.cache-hit != 'true'
-        run: |
-          cabal v2-update
-
       - if: steps.compiled-deps.outputs.cache-hit != 'true' && runner.os == 'Linux' && matrix.ghc == '8.10.7'
         name: Download sources for bench
         #  Downloaded separately, to match the tested work/PR workflow guarantees

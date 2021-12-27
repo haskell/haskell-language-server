@@ -179,9 +179,6 @@ jobs:
                 ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
                 ${{ env.cache-name }}-${{ runner.os }}-
 
-      - run: |
-          cabal v2-update
-
       # repeating builds to workaround segfaults in windows and ghc-8.8.4
       - name: Build
         run: cabal build || cabal build || cabal build
