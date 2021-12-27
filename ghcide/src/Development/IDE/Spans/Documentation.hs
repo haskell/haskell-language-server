@@ -15,6 +15,7 @@ module Development.IDE.Spans.Documentation (
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.Extra            (findM)
+import           Data.Char
 import           Data.Either
 import           Data.Foldable
 import           Data.List.Extra
@@ -87,7 +88,7 @@ getDocumentationsTryGhc env mod names = do
             src <- toFileUriText $ lookupSrcHtmlForModule env mod
             return (doc, src)
           Nothing -> pure (Nothing, Nothing)
-      let docUri = (<> "#" <> selector <> showNameWithoutUniques name) <$> docFu
+      let docUri = (<> "#" <> selector <> makeDocAnchor (showNameWithoutUniques name)) <$> docFu
           srcUri = (<> "#" <> showNameWithoutUniques name) <$> srcFu
           selector
             | isValName name = "v:"
@@ -95,6 +96,27 @@ getDocumentationsTryGhc env mod names = do
       return $ SpanDocUris docUri srcUri
 
     toFileUriText = (fmap . fmap) (getUri . filePathToUri)
+
+-- | Takes an arbitrary string and makes it a valid anchor ID. This is ported
+-- from the function @Haddock.Utils.makeAnchorId@ in the @haddock-api@ package,
+-- which seems to be the function in haddock that does the original encoding
+-- that we reproduce here.
+--
+-- Note that this isn't just necessary for operators, it also affects function
+-- names like @foldl'@ with apostrophes in them.
+makeDocAnchor :: T.Text -> T.Text
+makeDocAnchor = T.concatMap docEscapeChar
+  where
+    docEscapeChar :: Char -> T.Text
+    docEscapeChar c
+      | isLegal c = T.singleton c
+      | otherwise = T.pack $ '-' : show (ord c) ++ "-"
+
+    isLegal :: Char -> Bool
+    isLegal ':' = True
+    isLegal '_' = True
+    isLegal '.' = True
+    isLegal c = isAscii c && isAlphaNum c
 
 getDocumentation
  :: HasSrcSpan name
