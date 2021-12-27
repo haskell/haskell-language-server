@@ -26,6 +26,26 @@ GHC versions not in the list have never been supported by HLS, or are not planne
 
 The policy for when we deprecate support for versions of GHC is given below. The table reflects that, but we may decide to deviate from it for good reasons.
 
+### Support of new GHCs
+
+  1. The platform installers of GHC must provide install support for new GHC version.
+    * [ghcup-metadata](https://github.com/haskell/ghcup-metadata) for `ghcup`.
+    * [GhcChoco](https://github.com/Mistuke/GhcChoco) for Windows.
+  2. A report opened in [HLS reports](https://github.com/haskell/haskell-language-server/issues?q=is%3Aissue+is%3Aopen+sort%3Aupdated-desc+label%3A%22type%3A+distribution%22) with `type: distribution` label.
+  3. Provision the code for HLS to work with new GHC version. That PR would:
+    * Have the code that supports new GHC.
+      * Major GHC release support [is a complex task](https://github.com/haskell/haskell-language-server/pull/2503) & so would be often a crowdsource work, in that case in the branch do not force push.
+      * [Minor GHC release support example](https://github.com/haskell/haskell-language-server/pull/1899)
+      * Regardless of the type of GHC release the PR would need to (can be asked to crowdsource):
+        * Update to `.cabal` (at least `tested-with`), create new/update `.project` files (at least update `index-state`).
+        * Provide support through `stack*.yml` files.
+        * During work/builds GHC API changes would/may appear, they should be mirrored in `Compat*` modules.
+        * Enable CI to build-test with new GHC release.
+        * Pass the CI.
+  4. A period of testing.
+  5. Doing [the HLS release](./contributing/releases.md).
+  6. `ghcup` to support the installation.
+
 ### Using deprecated GHC versions
 
 Users who want to use a GHC version which is not supported by the latest HLS can still use older versions of HLS (consult the version support table above to identify the appropriate HLS version).
