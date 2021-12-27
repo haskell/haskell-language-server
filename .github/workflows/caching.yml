@@ -206,6 +206,7 @@ jobs:
 
       - if: steps.compiled-deps.outputs.cache-hit != 'true' && runner.os == 'Linux' && matrix.ghc == '8.10.7'
         name: (For Bench workflow) Build benchmark targets
+        continue-on-error: true
         #  Downloaded separately, to match the tested work/PR workflow guarantees
         run: |
           cabal $cabalBuild --enable-benchmarks || cabal $cabalBuild --enable-benchmarks || cabal $cabalBuild --enable-benchmarks
