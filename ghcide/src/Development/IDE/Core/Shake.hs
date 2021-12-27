@@ -73,7 +73,6 @@ module Development.IDE.Core.Shake(
     IndexQueue,
     HieDb,
     HieDbWriter(..),
-    WithHieDb,
     VFSHandle(..),
     addPersistentRule,
     garbageCollectDirtyKeys,
@@ -186,10 +185,6 @@ data HieDbWriter
 -- The inner `(HieDb -> IO ()) -> IO ()` wraps `HieDb -> IO ()`
 -- with (currently) retry functionality
 type IndexQueue = TQueue (((HieDb -> IO ()) -> IO ()) -> IO ())
-
--- | Intended to represent HieDb calls wrapped with (currently) retry
--- functionality
-type WithHieDb = forall a. (HieDb -> IO a) -> IO a
 
 -- information we stash inside the shakeExtra field
 data ShakeExtras = ShakeExtras
@@ -535,7 +530,7 @@ shakeOpen lspEnv defaultConfig logger debouncer
         -- lazily initialize the exports map with the contents of the hiedb
         _ <- async $ do
             logDebug logger "Initializing exports map from hiedb"
-            em <- withHieDb createExportsMapHieDb
+            em <- createExportsMapHieDb withHieDb
             atomically $ modifyTVar' exportsMap (<> em)
             logDebug logger $ "Done initializing exports map from hiedb (" <> pack(show (ExportsMap.size em)) <> ")"
 

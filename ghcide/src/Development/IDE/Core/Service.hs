@@ -30,6 +30,7 @@ import qualified Language.LSP.Types              as LSP
 
 import           Control.Monad
 import           Development.IDE.Core.Shake
+import           Development.IDE.Types.Shake     (WithHieDb)
 import           System.Environment              (lookupEnv)
 
 

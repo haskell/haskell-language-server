@@ -39,6 +39,7 @@ import           Development.IDE.LSP.HoverDefinition
 import           Development.IDE.Types.Logger
 
 import           Control.Monad.IO.Unlift               (MonadUnliftIO)
+import           Development.IDE.Types.Shake           (WithHieDb)
 import           System.IO.Unsafe                      (unsafeInterleaveIO)
 
 issueTrackerUrl :: T.Text
