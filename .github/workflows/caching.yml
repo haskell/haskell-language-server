@@ -201,10 +201,5 @@ jobs:
         continue-on-error: true
         # Done separately, matching the tested work/PR workflow guarantees
         run: |
-
-      # Despite the `continue-on-error: true` directive - CI does not ignore the return code of the last step
-      - name: Workaround to CI platform
-        run: |
-          true
           cabal $cabalBuild --enable-benchmarks || cabal $cabalBuild --enable-benchmarks || cabal $cabalBuild --enable-benchmarks
           cabal $cabalBuild --enable-test || cabal $cabalBuild --enable-test || cabal $cabalBuild --enable-test
