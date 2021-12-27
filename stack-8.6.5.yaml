@@ -45,6 +45,7 @@ extra-deps:
   - cabal-plan-0.6.2.0
   - clock-0.7.2
   - Diff-0.4.0
+  - extra-1.7.10
   - floskell-0.10.4
   - fourmolu-0.3.0.0
   - fuzzy-0.1.0.1
@@ -61,7 +62,7 @@ extra-deps:
   - hashable-1.3.0.0
   - heapsize-0.3.0
   - hie-bios-0.8.0
-  - hlint-3.2.3
+  - hlint-3.2.8
   - HsYAML-0.2.1.0@rev:1
   - HsYAML-aeson-0.2.0.0@rev:2
   - implicit-hie-cradle-0.3.0.5
@@ -95,7 +96,6 @@ extra-deps:
   - th-compat-0.1.2@sha256:3d55de1adc542c1a870c9ada90da2fbbe5f4e8bcd3eed545a55c3df9311b32a8,2854
   - bytestring-encoding-0.1.0.0@sha256:460b49779fbf0112e8e2f1753c1ed9131eb18827600c298f4d6bb51c4e8c1c0d,1727
   - hiedb-0.4.1.0
-  - extra-1.7.9@sha256:f1dec740f0f2025790c540732bfd52c556ec55bde4f5dfd7cf18e22bd44ff3d0,2683
   - dependent-map-0.4.0.0@sha256:ca2b131046f4340a1c35d138c5a003fe4a5be96b14efc26291ed35fd08c62221,1657
   - dependent-sum-0.7.1.0@sha256:5599aa89637db434431b1dd3fa7c34bc3d565ee44f0519bfbc877be1927c2531,2068
   - dependent-sum-template-0.1.0.3@sha256:0bbbacdfbd3abf2a15aaf0cf2c27e5bdd159b519441fec39e1e6f2f54424adde,1682

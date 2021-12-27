@@ -142,15 +142,15 @@ instance ToJSON RealSrcSpan where
 
 instance FromJSON RealSrcSpan where
   parseJSON = withObject "object" $ \obj -> do
-      file <- fromString <$> (obj .: srcSpanFileTag)
+      file <- fromString <$> (obj .: toJsonKey srcSpanFileTag)
       mkRealSrcSpan
         <$> (mkRealSrcLoc file
-                <$> obj .: srcSpanStartLineTag
-                <*> obj .: srcSpanStartColTag
+                <$> obj .: toJsonKey srcSpanStartLineTag
+                <*> obj .: toJsonKey srcSpanStartColTag
             )
         <*> (mkRealSrcLoc file
-                <$> obj .: srcSpanEndLineTag
-                <*> obj .: srcSpanEndColTag
+                <$> obj .: toJsonKey srcSpanEndLineTag
+                <*> obj .: toJsonKey srcSpanEndColTag
             )
 
 instance NFData Type where

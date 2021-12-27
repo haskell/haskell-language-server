@@ -1,8 +1,11 @@
 module Control.Concurrent.Strict
     (modifyVar', modifyVarIO'
     ,modifyVar, modifyVar_
+    ,module Control.Concurrent.Extra
     ) where
 
+import           Control.Concurrent.Extra hiding (modifyVar, modifyVar',
+                                           modifyVar_)
 import qualified Control.Concurrent.Extra as Extra
 import           Control.Exception        (evaluate)
 import           Control.Monad            (void)

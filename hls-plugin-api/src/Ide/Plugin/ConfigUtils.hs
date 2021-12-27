@@ -10,12 +10,8 @@ import qualified Data.Aeson.Types      as A
 import           Data.Default          (def)
 import qualified Data.Dependent.Map    as DMap
 import qualified Data.Dependent.Sum    as DSum
-import           Data.Functor.Identity
-import qualified Data.HashMap.Lazy     as Map
 import           Data.List             (nub)
-import           Data.Maybe            (fromJust)
-import           Data.Text             (Text)
-import           Ide.Compat            (toKey)
+import           Ide.Compat            (adjustJson, insertJson, toJsonKey)
 import           Ide.Plugin.Config
 import           Ide.Plugin.Properties (toDefaultJSON, toVSCodeExtensionSchema)
 import           Ide.Types
@@ -29,10 +25,10 @@ import           Language.LSP.Types
 -- | Generates a default 'Config', but remains only effective items
 pluginsToDefaultConfig :: IdePlugins a -> A.Value
 pluginsToDefaultConfig IdePlugins {..} =
-  A.Object $ runIdentity $
-    Map.alterF
-      ( \(unsafeValueToObject . fromJust -> o) ->
-          Identity $ Just $ A.Object $ Map.insert "plugin" elems o -- inplace the "plugin" section with our 'elems', leaving others unchanged
+  A.Object $
+    adjustJson
+      ( \(unsafeValueToObject -> o) ->
+        A.Object $ insertJson "plugin" elems o -- inplace the "plugin" section with our 'elems', leaving others unchanged
       )
       "haskell"
       (unsafeValueToObject (A.toJSON defaultConfig))
@@ -56,7 +52,7 @@ pluginsToDefaultConfig IdePlugins {..} =
     -- }
     singlePlugin PluginDescriptor {pluginConfigDescriptor = ConfigDescriptor {..}, ..} =
       let x = genericDefaultConfig <> dedicatedDefaultConfig
-       in [(toKey pId) A..= A.object x | not $ null x]
+       in [toJsonKey pId A..= A.object x | not $ null x]
       where
         (PluginHandlers (DMap.toList -> handlers)) = pluginHandlers
         customConfigToDedicatedDefaultConfig (CustomConfig p) = toDefaultJSON p

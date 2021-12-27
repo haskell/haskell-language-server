@@ -50,7 +50,7 @@ import           Data.Proxy           (Proxy (..))
 import qualified Data.Text            as T
 import           GHC.OverloadedLabels (IsLabel (..))
 import           GHC.TypeLits
-import           Ide.Types            (toJsonKey)
+import           Ide.Compat           (toJsonKey)
 import           Unsafe.Coerce        (unsafeCoerce)
 
 -- | Types properties may have
@@ -249,9 +249,9 @@ parseProperty kn k x = case k of
       )
       x
   where
-    key = toJsonKey . pack $ symbolVal kn
+    key = toJsonKey . T.pack $ symbolVal kn
     parseEither :: forall a. A.FromJSON a => Either String a
-    parseEither = A.parseEither (A..: keyName) x
+    parseEither = A.parseEither (A..: key) x
 
 -- ---------------------------------------------------------------------
 
@@ -354,7 +354,7 @@ toDefaultJSON :: Properties r -> [A.Pair]
 toDefaultJSON (Properties p) = [toEntry s v | (s, v) <- Map.toList p]
   where
     toEntry :: String -> SomePropertyKeyWithMetaData -> A.Pair
-    toEntry (toJsonKey . pack -> s) = \case
+    toEntry (toJsonKey . T.pack -> s) = \case
       (SomePropertyKeyWithMetaData SNumber MetaData {..}) ->
         s A..= defaultValue
       (SomePropertyKeyWithMetaData SInteger MetaData {..}) ->
@@ -373,7 +373,7 @@ toDefaultJSON (Properties p) = [toEntry s v | (s, v) <- Map.toList p]
 -- | Converts a properties definition into kv pairs as vscode schema
 toVSCodeExtensionSchema :: T.Text -> Properties r -> [A.Pair]
 toVSCodeExtensionSchema prefix (Properties p) =
-  [(toJsonKey prefix <> k) A..= toEntry v | (k, v) <- Map.toList p]
+  [toJsonKey (prefix <> T.pack k) A..= toEntry v | (k, v) <- Map.toList p]
   where
     toEntry :: SomePropertyKeyWithMetaData -> A.Value
     toEntry = \case
