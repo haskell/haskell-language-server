@@ -1,0 +1,165 @@
+name: Flags
+
+defaults:
+  run:
+    shell: bash
+
+# See: https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#concurrency.
+concurrency:
+  group: ${{ github.head_ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+    branches:
+      - '**'
+
+jobs:
+  pre_job:
+    runs-on: ubuntu-latest
+    outputs:
+      should_skip: ${{ steps.skip_check.outputs.should_skip }}
+      should_skip_ghcide: ${{ steps.skip_ghcide_check.outputs.should_skip }}
+    steps:
+      - id: skip_check
+        uses: fkirc/skip-duplicate-actions@v3.4.1
+        with:
+          cancel_others: false
+          paths_ignore: '[ "**/docs/**"
+                         , "**.md"
+                         , "**/LICENSE"
+                         , "install/**"
+                         , "**.nix"
+                         , "flake.lock"
+                         , "**/README.md"
+                         , "FUNDING.yml"
+                         , ".circleci/**"
+                         , "**/stack*.yaml"
+                         ]'
+      # If we only change ghcide downstream packages we have not test ghcide itself
+      - id: skip_ghcide_check
+        uses: fkirc/skip-duplicate-actions@v3.4.1
+        with:
+          cancel_others: false
+          paths_ignore: '[ "hls-test-utils/**"
+                         , "plugins/**"
+                         , "src/**"
+                         , "exe/**"
+                         , "test/**"
+                         , "shake-bench/**"
+                         ]'
+
+  flags:
+    if: needs.pre_job.outputs.should_skip != 'true'
+    needs: pre_job
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        ghc: [ "8.10.7"
+             ]
+        os: [ "ubuntu-latest"
+            ]
+        cabal: ['3.6']
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: haskell/actions/setup@v1
+        id: HaskEnvSetup
+        with:
+          ghc-version  : ${{ matrix.ghc   }}
+          cabal-version: ${{ matrix.cabal }}
+          enable-stack: false
+
+      - if: runner.os == 'Windows'
+        name: (Windows) Platform config
+        run: |
+          echo "CABAL_PKGS_DIR=C:\\cabal\\packages" >> $GITHUB_ENV
+      - if: ( runner.os == 'Linux' ) || ( runner.os == 'macOS' )
+        name: (Linux,macOS) Platform config
+        run: |
+          echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
+
+      # All workflows which distinquishes cache on `cabal.project` needs this.
+      - name: Workaround shorten binary names
+        run: |
+          sed -i.bak -e 's/haskell-language-server/hls/g' \
+                     -e 's/haskell_language_server/hls/g' \
+                     haskell-language-server.cabal cabal.project
+          sed -i.bak -e 's/Paths_haskell_language_server/Paths_hls/g' \
+                     src/**/*.hs exe/*.hs
+
+      - name: Retrieving `cabal.project` Hackage timestamp
+        run: |
+          # Form: index-state: 2021-11-29T08:11:08Z
+          INDEX_STATE_ENTRY=$(grep index-state cabal.project)
+          # Form: 2021-11-29T08-11-08Z
+          INDEX_STATE1=$(echo "$INDEX_STATE_ENTRY" | cut -d' ' -f2 | tr ':' '-')
+          echo "INDEX_STATE=$INDEX_STATE1" >> $GITHUB_ENV
+
+      - name: Form the package list ('cabal.project.freeze')
+        continue-on-error: true
+        run: |
+          cabal v2-freeze && \
+          echo '' && \
+          echo 'Output:' && \
+          echo '' && \
+          cat 'cabal.project.freeze' && \
+          echo '' || \
+          echo 'WARNING: Could not produce the `freeze`.
+
+      - name: Hackage sources cache
+        uses: actions/cache@v2
+        env:
+          cache-name: hackage-sources
+        with:
+          path: ${{ env.CABAL_PKGS_DIR }}
+          key:          ${{ env.cache-name }}-${{ env.INDEX_STATE }}
+          restore-keys: ${{ env.cache-name }}-
+
+      - name: Compiled deps cache
+        id: compiled-deps
+        uses: actions/cache@v2
+        env:
+          cache-name: compiled-deps
+        with:
+          path: ${{ steps.HaskEnvSetup.outputs.cabal-store }}
+          key:  ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project.freeze') }}
+          restore-keys: |
+                ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-
+                ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
+                ${{ env.cache-name }}-${{ runner.os }}-
+
+      - if: needs.pre_job.outputs.should_skip != 'true'
+        name: Build `hls-graph` with flags
+        run: cabal v2-build hls-graph --flags="pedantic embed-files stm-stats"
+
+      - if: needs.pre_job.outputs.should_skip != 'true'
+        name: Build `hie-compat` with flags
+        run: cabal v2-build hie-compat --flags="ghc-lib"
+
+      - if: needs.pre_job.outputs.should_skip != 'true'
+        name: Build `hls-plugin-api` with flags
+        run: cabal v2-build hls-plugin-api --flags="pedantic"
+
+      - if: needs.pre_job.outputs.should_skip != 'true'
+        name: Build `hls-test-utils` with flags
+        run: cabal v2-build hls-test-utils --flags="pedantic"
+
+      # repeating builds to workaround segfaults in windows and ghc-8.8.4
+      - if: needs.pre_job.outputs.should_skip_ghcide != 'true'
+        name: Build
+        run: cabal v2-build ghcide --flags="ghc-patched-unboxed-bytecode test-exe executable bench-exe" || cabal v2-build ghcide --flags="ghc-patched-unboxed-bytecode test-exe executable bench-exe" || cabal v2-build ghcide --flags="ghc-patched-unboxed-bytecode test-exe executable bench-exe"
+
+  flags_post_job:
+    if: always()
+    runs-on: ubuntu-latest
+    needs: [pre_job, flags]
+    steps:
+      - run: |
+          echo "jobs info: ${{ toJSON(needs) }}"
+      - if: contains(needs.*.result, 'failure')
+        run: exit 1
+      - if: contains(needs.*.result, 'cancelled') && needs.pre_job.outputs.should_skip != 'true'
+        run: exit 1
