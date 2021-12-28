@@ -155,7 +155,7 @@ jobs:
           echo '' && \
           cat 'cabal.project.freeze' && \
           echo '' || \
-          echo 'WARNING: Could not produce the `freeze`.
+          echo 'WARNING: Could not produce the `freeze`.'
 
       - name: Hackage sources cache
         uses: actions/cache@v2

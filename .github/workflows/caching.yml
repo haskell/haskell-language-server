@@ -151,7 +151,7 @@ jobs:
           echo '' && \
           cat 'cabal.project.freeze' && \
           echo '' || \
-          echo 'WARNING: Could not produce the `freeze`.
+          echo 'WARNING: Could not produce the `freeze`.'
 
       # 2021-12-02: NOTE: Cabal Hackage source tree storage does not depend on OS or GHC really,
       # but can depend on `base`.
