@@ -33,6 +33,7 @@ import           Development.IDE.GHC.Util
 
 import           Control.DeepSeq
 import           Data.Aeson
+import           Data.Bifunctor             (Bifunctor (..))
 import           Data.Hashable
 import           Data.String                (IsString (fromString))
 import           Data.Text                  (Text)
@@ -98,6 +99,9 @@ instance Ord FastString where
 
 instance NFData (SrcSpanAnn' a) where
     rnf = rwhnf
+
+instance Bifunctor (GenLocated) where
+    bimap f g (L l x) = L (f l) (g x)
 #endif
 
 instance NFData ParsedModule where
