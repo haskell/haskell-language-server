@@ -118,6 +118,9 @@ jobs:
               ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
               ${{ env.cache-name }}-${{ runner.os }}-
 
+    # To ensure we get the lastest hackage index and not relying on haskell action logic
+    - run: cabal update
+
     # max-backjumps is increased as a temporary solution
     # for dependency resolution failure
     - run: cabal configure --enable-benchmarks --max-backjumps 12000
