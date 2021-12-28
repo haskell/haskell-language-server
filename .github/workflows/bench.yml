@@ -88,11 +88,13 @@ jobs:
     - name: Form the package list ('cabal.project.freeze')
       continue-on-error: true
       run: |
-        cabal v2-freeze
-        echo ''
-        echo 'Output:'
-        echo ''
-        cat 'cabal.project.freeze'
+        cabal v2-freeze && \
+        echo '' && \
+        echo 'Output:' && \
+        echo '' && \
+        cat 'cabal.project.freeze' && \
+        echo '' || \
+        echo 'WARNING: Could not produce the `freeze`.
 
     - name: Hackage sources cache
       uses: actions/cache@v2
@@ -115,8 +117,6 @@ jobs:
               ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-
               ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
               ${{ env.cache-name }}-${{ runner.os }}-
-
-    - run: cabal update
 
     # max-backjumps is increased as a temporary solution
     # for dependency resolution failure
