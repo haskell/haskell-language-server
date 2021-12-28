@@ -18,7 +18,10 @@ import           Control.Monad.Catch
 -- Needed in GHC 8.6.5
 import           Control.Concurrent.STM.Stats  (TVar, atomically)
 #endif
+#if __GLASGOW_HASKELL__ < 880
+import           Prelude hiding (MonadFail)
 import           Control.Monad.Fail
+#endif
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Reader
 import           Data.Aeson                    (FromJSON, ToJSON)
