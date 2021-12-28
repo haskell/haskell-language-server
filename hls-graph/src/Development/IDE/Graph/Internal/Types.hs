@@ -8,13 +8,16 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE CPP                        #-}
 
 module Development.IDE.Graph.Internal.Types where
 
 import           Control.Applicative
 import           Control.Monad.Catch
+#if __GLASGOW_HASKELL__ < 870
 -- Needed in GHC 8.6.5
 import           Control.Concurrent.STM.Stats  (TVar, atomically)
+#endif
 import           Control.Monad.Fail
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Reader
