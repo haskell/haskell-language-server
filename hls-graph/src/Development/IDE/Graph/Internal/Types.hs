@@ -17,6 +17,8 @@ import           Control.Monad.Catch
 #if __GLASGOW_HASKELL__ < 870
 -- Needed in GHC 8.6.5
 import           Control.Concurrent.STM.Stats  (TVar, atomically)
+#else
+import           GHC.Conc (TVar, atomically)
 #endif
 #if __GLASGOW_HASKELL__ < 880
 import           Prelude hiding (MonadFail)
