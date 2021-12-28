@@ -15,6 +15,7 @@
 module Main (main) where
 
 import           Control.Applicative.Combinators
+import           Control.Concurrent.Extra                 as Concurrent
 import           Control.Exception                        (bracket_, catch)
 import qualified Control.Lens                             as Lens
 import           Control.Monad
@@ -87,7 +88,6 @@ import           System.Process.Extra                     (CreateProcess (cwd),
                                                            readCreateProcessWithExitCode)
 import           Test.QuickCheck
 -- import Test.QuickCheck.Instances ()
-import           Control.Concurrent                       (threadDelay)
 import           Control.Concurrent.Async
 import           Control.Lens                             ((^.), to)
 import           Control.Monad.Extra                      (whenJust)
@@ -114,6 +114,7 @@ import           Test.Tasty.Ingredients.Rerun
 import           Test.Tasty.QuickCheck
 import           Text.Printf                              (printf)
 import           Text.Regex.TDFA                          ((=~))
+import qualified HieDbRetry
 
 -- | Wait for the next progress begin step
 waitForProgressBegin :: Session ()
@@ -182,6 +183,7 @@ main = do
     , codeActionHelperFunctionTests
     , referenceTests
     , garbageCollectionTests
+    , HieDbRetry.tests
     ]
 
 initializeResponseTests :: TestTree
