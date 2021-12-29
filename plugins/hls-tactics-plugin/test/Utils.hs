@@ -42,8 +42,8 @@ plugin = Tactic.descriptor "tactics"
 -- NB: These coordinates are in "file space", ie, 1-indexed.
 pointRange :: Int -> Int -> Range
 pointRange
-  (subtract 1 -> line)
-  (subtract 1 -> col) =
+  (subtract 1 -> fromIntegral -> line)
+  (subtract 1 -> fromIntegral -> col) =
     Range (Position line col) (Position line $ col + 1)
 
 

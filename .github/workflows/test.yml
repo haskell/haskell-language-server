@@ -149,11 +149,13 @@ jobs:
       - name: Form the package list ('cabal.project.freeze')
         continue-on-error: true
         run: |
-          cabal v2-freeze
-          echo ''
-          echo 'Output:'
-          echo ''
-          cat 'cabal.project.freeze'
+          cabal v2-freeze && \
+          echo '' && \
+          echo 'Output:' && \
+          echo '' && \
+          cat 'cabal.project.freeze' && \
+          echo '' || \
+          echo 'WARNING: Could not produce the `freeze`.
 
       - name: Hackage sources cache
         uses: actions/cache@v2
@@ -177,7 +179,9 @@ jobs:
                 ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
                 ${{ env.cache-name }}-${{ runner.os }}-
 
-      - run: cabal v2-update
+      # To ensure we get the lastest hackage index and not relying on haskell action logic
+      - if: steps.compiled-deps.outputs.cache-hit != 'true'
+        run: cabal update
 
       # repeating builds to workaround segfaults in windows and ghc-8.8.4
       - name: Build

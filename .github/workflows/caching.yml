@@ -45,7 +45,7 @@ on:
     - cron: "25 2/8 * * *"
 
 env:
-  cabalBuild: "v2-build all --enable-tests --enable-benchmarks --keep-going"
+  cabalBuild: "v2-build all --keep-going"
 
 jobs:
 
@@ -145,11 +145,13 @@ jobs:
       - name: Form the package list ('cabal.project.freeze')
         continue-on-error: true
         run: |
-          cabal v2-freeze
-          echo ''
-          echo 'Output:'
-          echo ''
-          cat 'cabal.project.freeze'
+          cabal v2-freeze && \
+          echo '' && \
+          echo 'Output:' && \
+          echo '' && \
+          cat 'cabal.project.freeze' && \
+          echo '' || \
+          echo 'WARNING: Could not produce the `freeze`.
 
       # 2021-12-02: NOTE: Cabal Hackage source tree storage does not depend on OS or GHC really,
       # but can depend on `base`.
@@ -180,27 +182,38 @@ jobs:
                 ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
                 ${{ env.cache-name }}-${{ runner.os }}-
 
+      # To ensure we get the lastest hackage index and not relying on haskell action logic
       - if: steps.compiled-deps.outputs.cache-hit != 'true'
+        run: cabal update
+
+      - if: steps.compiled-deps.outputs.cache-hit != 'true' && runner.os == 'Linux' && matrix.ghc == '8.10.7'
+        name: Download sources for bench
+        #  Downloaded separately, to match the tested work/PR workflow guarantees
         run: |
-          cabal update
+          cabal $cabalBuild --only-download --enable-benchmarks
 
       - if: steps.compiled-deps.outputs.cache-hit != 'true'
-        name: Download all sources
+        name: Download the rest of the sources
+        #  Downloaded separately, to match the tested work/PR workflow guarantees
         run: |
-          cabal $cabalBuild --only-download
+          cabal $cabalBuild --only-download --enable-tests
 
       # repeating builds to workaround segfaults in windows and ghc-8.8.4
       # This build agenda in not to have successful code,
-      # but to cache what can be cached, so step is fault tolerant & would always succseed.
-      # 2021-12-11: NOTE: Building all targets, since
-      # current Cabal does not allow `all --enable-tests --enable-benchmarks --only-dependencies`
-      - if: steps.compiled-deps.outputs.cache-hit != 'true'
-        name: Build all targets; try 3 times
-        continue-on-error: true
-        run: |
-          cabal $cabalBuild || cabal $cabalBuild || cabal $cabalBuild
+      # but to cache what can be cached, so step is fault tolerant & would always succeed.
+      # 2021-12-11: NOTE: Need to building all targets (build the project also), since
+      # current Cabal does not allow `all --enable-tests --enable-benchmarks --only-dependencies` combination
 
-      # Despite the `continue-on-error: true` directive - CI does not ignore the return code of the last step
-      - name: Workaround to CI platform
+      - if: steps.compiled-deps.outputs.cache-hit != 'true' && runner.os == 'Linux' && matrix.ghc == '8.10.7'
+        name: (For Bench workflow) Build benchmark targets
+        continue-on-error: true
+        #  Downloaded separately, to match the tested work/PR workflow guarantees
         run: |
-          true
+          cabal $cabalBuild --enable-benchmarks || cabal $cabalBuild --enable-benchmarks || cabal $cabalBuild --enable-benchmarks
+
+      - if: steps.compiled-deps.outputs.cache-hit != 'true'
+        name: Build targets; try 3 times
+        continue-on-error: true
+        # Done separately, matching the tested work/PR workflow guarantees
+        run: |
+          cabal $cabalBuild --enable-test || cabal $cabalBuild --enable-test || cabal $cabalBuild --enable-test

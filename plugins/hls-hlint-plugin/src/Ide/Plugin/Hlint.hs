@@ -228,11 +228,11 @@ rules plugin = do
       srcSpanToRange :: SrcSpan -> LSP.Range
       srcSpanToRange (RealSrcSpan span _) = Range {
           _start = LSP.Position {
-                _line = srcSpanStartLine span - 1
-              , _character  = srcSpanStartCol span - 1}
+                _line = fromIntegral $ srcSpanStartLine span - 1
+              , _character  = fromIntegral $ srcSpanStartCol span - 1}
         , _end   = LSP.Position {
-                _line = srcSpanEndLine span - 1
-             , _character = srcSpanEndCol span - 1}
+                _line = fromIntegral $ srcSpanEndLine span - 1
+             , _character = fromIntegral $ srcSpanEndCol span - 1}
         }
       srcSpanToRange (UnhelpfulSpan _) = noRange
 
@@ -431,7 +431,7 @@ mkSuppressHintTextEdits :: DynFlags -> T.Text -> T.Text -> [LSP.TextEdit]
 mkSuppressHintTextEdits dynFlags fileContents hint =
   let
     NextPragmaInfo{ nextPragmaLine, lineSplitTextEdits } = getNextPragmaInfo dynFlags (Just fileContents)
-    nextPragmaLinePosition = Position nextPragmaLine 0
+    nextPragmaLinePosition = Position (fromIntegral nextPragmaLine) 0
     nextPragmaRange = Range nextPragmaLinePosition nextPragmaLinePosition
     wnoUnrecognisedPragmasText =
       if wopt Opt_WarnUnrecognisedPragmas dynFlags
@@ -574,7 +574,7 @@ applyHint ide nfp mhint =
           filterIdeas (OneHint (Position l c) title) ideas =
             let title' = T.unpack title
                 ideaPos = (srcSpanStartLine &&& srcSpanStartCol) . toRealSrcSpan . ideaSpan
-            in filter (\i -> ideaHint i == title' && ideaPos i == (l+1, c+1)) ideas
+            in filter (\i -> ideaHint i == title' && ideaPos i == (fromIntegral $ l+1, fromIntegral $ c+1)) ideas
 
           toRealSrcSpan (RealSrcSpan real _) = real
           toRealSrcSpan (UnhelpfulSpan x) = error $ "No real source span: " ++ show x

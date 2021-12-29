@@ -1,6 +1,7 @@
 {-# LANGUAGE DerivingStrategies        #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE PatternSynonyms           #-}
+{-# LANGUAGE RankNTypes                #-}
 {-# LANGUAGE TypeFamilies              #-}
 module Development.IDE.Types.Shake
   ( Q (..),
@@ -13,7 +14,7 @@ module Development.IDE.Types.Shake
     ShakeValue(..),
     currentValue,
     isBadDependency,
-  toShakeValue,encodeShakeValue,decodeShakeValue,toKey,toNoFileKey,fromKey,fromKeyType)
+  toShakeValue,encodeShakeValue,decodeShakeValue,toKey,toNoFileKey,fromKey,fromKeyType,WithHieDb)
 where
 
 import           Control.DeepSeq
@@ -29,6 +30,7 @@ import qualified Development.IDE.Graph                as Shake
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           GHC.Generics
+import           HieDb.Types                          (HieDb)
 import           Language.LSP.Types
 import qualified StmContainers.Map                    as STM
 import           Type.Reflection                      (SomeTypeRep (SomeTypeRep),
@@ -36,6 +38,10 @@ import           Type.Reflection                      (SomeTypeRep (SomeTypeRep)
                                                        typeOf, typeRep,
                                                        typeRepTyCon)
 import           Unsafe.Coerce                        (unsafeCoerce)
+
+-- | Intended to represent HieDb calls wrapped with (currently) retry
+-- functionality
+type WithHieDb = forall a. (HieDb -> IO a) -> IO a
 
 data Value v
     = Succeeded TextDocumentVersion v

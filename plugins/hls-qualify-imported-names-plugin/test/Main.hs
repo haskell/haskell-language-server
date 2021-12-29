@@ -140,7 +140,7 @@ goldenWithQualifyImportedNames testName path =
 
 pointToRange :: Point -> Range
 pointToRange Point {..}
-  | line <- subtract 1 line
-  , column <- subtract 1 column =
+  | line <- fromIntegral $ subtract 1 line
+  , column <- fromIntegral $ subtract 1 column =
       Range (Position line column) (Position line $ column + 1)
 

@@ -65,6 +65,7 @@ import qualified Development.IDE.Plugin.Test           as Test
 import           Development.IDE.Session               (SessionLoadingOptions,
                                                         getHieDbLoc,
                                                         loadSessionWithOptions,
+                                                        retryOnSqliteBusy,
                                                         runWithDb,
                                                         setInitialDynFlags)
 import           Development.IDE.Types.Location        (NormalizedUri,
@@ -116,6 +117,7 @@ import           System.IO                             (BufferMode (LineBufferin
                                                         hSetBuffering,
                                                         hSetEncoding, stderr,
                                                         stdin, stdout, utf8)
+import           System.Random                         (newStdGen)
 import           System.Time.Extra                     (offsetTime,
                                                         showDuration)
 import           Text.Printf                           (printf)
@@ -274,7 +276,7 @@ defaultMain Arguments{..} = flip withHeapStats fun =<< argsLogger
             t <- offsetTime
             logInfo logger "Starting LSP server..."
             logInfo logger "If you are seeing this in a terminal, you probably should have run WITHOUT the --lsp option!"
-            runLanguageServer options inH outH argsGetHieDbLoc argsDefaultHlsConfig argsOnConfigChange (pluginHandlers plugins) $ \env vfs rootPath hiedb hieChan -> do
+            runLanguageServer options inH outH argsGetHieDbLoc argsDefaultHlsConfig argsOnConfigChange (pluginHandlers plugins) $ \env vfs rootPath withHieDb hieChan -> do
                 traverse_ IO.setCurrentDirectory rootPath
                 t <- t
                 logInfo logger $ T.pack $ "Started LSP server in " ++ showDuration t
@@ -315,7 +317,7 @@ defaultMain Arguments{..} = flip withHeapStats fun =<< argsLogger
                     debouncer
                     options
                     vfs
-                    hiedb
+                    withHieDb
                     hieChan
             dumpSTMStats
         Check argFiles -> do
@@ -387,9 +389,10 @@ defaultMain Arguments{..} = flip withHeapStats fun =<< argsLogger
             dbLoc <- getHieDbLoc root
             hPutStrLn stderr $ "Using hiedb at: " ++ dbLoc
             mlibdir <- setInitialDynFlags logger root def
+            rng <- newStdGen
             case mlibdir of
                 Nothing     -> exitWith $ ExitFailure 1
-                Just libdir -> HieDb.runCommand libdir opts{HieDb.database = dbLoc} cmd
+                Just libdir -> retryOnSqliteBusy logger rng (HieDb.runCommand libdir opts{HieDb.database = dbLoc} cmd)
 
         Custom (IdeCommand c) -> do
           root <-  maybe IO.getCurrentDirectory return argsProjectRoot
