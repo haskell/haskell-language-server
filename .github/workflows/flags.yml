@@ -131,25 +131,20 @@ jobs:
                 ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
                 ${{ env.cache-name }}-${{ runner.os }}-
 
-      - if: needs.pre_job.outputs.should_skip != 'true'
-        name: Build `hls-graph` with flags
+      - name: Build `hls-graph` with flags
         run: cabal v2-build hls-graph --flags="pedantic embed-files stm-stats"
 
-      - if: needs.pre_job.outputs.should_skip != 'true'
-        name: Build `hie-compat` with flags
+      - name: Build `hie-compat` with flags
         run: cabal v2-build hie-compat --flags="ghc-lib"
 
-      - if: needs.pre_job.outputs.should_skip != 'true'
-        name: Build `hls-plugin-api` with flags
+      - name: Build `hls-plugin-api` with flags
         run: cabal v2-build hls-plugin-api --flags="pedantic"
 
-      - if: needs.pre_job.outputs.should_skip != 'true'
-        name: Build `hls-test-utils` with flags
+      - name: Build `hls-test-utils` with flags
         run: cabal v2-build hls-test-utils --flags="pedantic"
 
       # repeating builds to workaround segfaults in windows and ghc-8.8.4
-      - if: needs.pre_job.outputs.should_skip_ghcide != 'true'
-        name: Build
+      - name: Build
         run: cabal v2-build ghcide --flags="ghc-patched-unboxed-bytecode test-exe executable bench-exe" || cabal v2-build ghcide --flags="ghc-patched-unboxed-bytecode test-exe executable bench-exe" || cabal v2-build ghcide --flags="ghc-patched-unboxed-bytecode test-exe executable bench-exe"
 
   flags_post_job:
