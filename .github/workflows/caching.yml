@@ -146,11 +146,11 @@ jobs:
         continue-on-error: true
         run: |
           cabal v2-freeze && \
-          echo '' && \
+          echo "" && \
           echo 'Output:' && \
-          echo '' && \
+          echo "" && \
           cat 'cabal.project.freeze' && \
-          echo '' || \
+          echo "" || \
           echo 'WARNING: Could not produce the `freeze`.'
 
       # 2021-12-02: NOTE: Cabal Hackage source tree storage does not depend on OS or GHC really,

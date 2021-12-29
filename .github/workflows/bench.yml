@@ -89,11 +89,11 @@ jobs:
       continue-on-error: true
       run: |
         cabal v2-freeze && \
-        echo '' && \
+        echo "" && \
         echo 'Output:' && \
-        echo '' && \
+        echo "" && \
         cat 'cabal.project.freeze' && \
-        echo '' || \
+        echo "" || \
         echo 'WARNING: Could not produce the `freeze`.'
 
     - name: Hackage sources cache
