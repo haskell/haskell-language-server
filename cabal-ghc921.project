@@ -53,7 +53,7 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2021-12-23T00:00:00Z
+index-state: 2021-12-29T12:30:08Z
 
 constraints:
   -- These plugins doesn't work on GHC92 yet

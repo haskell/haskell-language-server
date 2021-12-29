@@ -46,13 +46,7 @@ moduleOutline ideState DocumentSymbolParams{ _textDocument = TextDocumentIdentif
                    (defDocumentSymbol l :: DocumentSymbol)
                      { _name  = pprText m
                      , _kind  = SkFile
-                     , _range = Range (Position 0 0) (Position 2147483647 0) -- _ltop is 0 0 0 0
-                     -- In the lsp spec from 3.16 Position takes a uinteger,
-                     -- where uinteger is 0 - 2^31 - 1. lsp-types currently has the type of line
-                     -- as Int. So instead of using `maxBound :: Int` we hardcode the maxBound of
-                     -- uinteger. 2 ^ 31 - 1 == 2147483647
-                     -- Check this issue for tracking https://github.com/haskell/lsp/issues/354
-                     -- the change in lsp-types.
+                     , _range = Range (Position 0 0) (Position maxBound 0) -- _ltop is 0 0 0 0
                      }
                  _ -> Nothing
                importSymbols = maybe [] pure $

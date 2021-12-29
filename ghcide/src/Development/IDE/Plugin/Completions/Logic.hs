@@ -715,8 +715,8 @@ uniqueCompl candidate unique =
 -- ---------------------------------------------------------------------
 
 hasTrailingBacktick :: T.Text -> Position -> Bool
-hasTrailingBacktick line Position { _character }
-    | T.length line > _character = (line `T.index` _character) == '`'
+hasTrailingBacktick line Position { _character=(fromIntegral -> c) }
+    | T.length line > c = (line `T.index` c) == '`'
     | otherwise = False
 
 isUsedAsInfix :: T.Text -> T.Text -> T.Text -> Position -> Maybe Backtick
@@ -729,7 +729,7 @@ isUsedAsInfix line prefixMod prefixText pos
     hasClosingBacktick = hasTrailingBacktick line pos
 
 openingBacktick :: T.Text -> T.Text -> T.Text -> Position -> Bool
-openingBacktick line prefixModule prefixText Position { _character }
+openingBacktick line prefixModule prefixText Position { _character=(fromIntegral -> c) }
   | backtickIndex < 0 || backtickIndex > T.length line = False
   | otherwise = (line `T.index` backtickIndex) == '`'
     where
@@ -742,7 +742,7 @@ openingBacktick line prefixModule prefixText Position { _character }
                     else T.length prefixModule + 1 {- Because of "." -}
       in
         -- Points to the first letter of either the module or prefix text
-        _character - (prefixLength + moduleLength) - 1
+        c - (prefixLength + moduleLength) - 1
 
 
 -- ---------------------------------------------------------------------

@@ -182,7 +182,9 @@ data HieDbWriter
   }
 
 -- | Actions to queue up on the index worker thread
-type IndexQueue = TQueue (HieDb -> IO ())
+-- The inner `(HieDb -> IO ()) -> IO ()` wraps `HieDb -> IO ()`
+-- with (currently) retry functionality
+type IndexQueue = TQueue (((HieDb -> IO ()) -> IO ()) -> IO ())
 
 -- information we stash inside the shakeExtra field
 data ShakeExtras = ShakeExtras
@@ -219,7 +221,7 @@ data ShakeExtras = ShakeExtras
     -- | A work queue for actions added via 'runInShakeSession'
     ,actionQueue :: ActionQueue
     ,clientCapabilities :: ClientCapabilities
-    , hiedb :: HieDb -- ^ Use only to read.
+    , withHieDb :: WithHieDb -- ^ Use only to read.
     , hiedbWriter :: HieDbWriter -- ^ use to write
     , persistentKeys :: TVar (HMap.HashMap Key GetStalePersistent)
       -- ^ Registery for functions that compute/get "stale" results for the rule
@@ -499,14 +501,14 @@ shakeOpen :: Maybe (LSP.LanguageContextEnv Config)
           -> Maybe FilePath
           -> IdeReportProgress
           -> IdeTesting
-          -> HieDb
+          -> WithHieDb
           -> IndexQueue
           -> VFSHandle
           -> ShakeOptions
           -> Rules ()
           -> IO IdeState
 shakeOpen lspEnv defaultConfig logger debouncer
-  shakeProfileDir (IdeReportProgress reportProgress) ideTesting@(IdeTesting testing) hiedb indexQueue vfs opts rules = mdo
+  shakeProfileDir (IdeReportProgress reportProgress) ideTesting@(IdeTesting testing) withHieDb indexQueue vfs opts rules = mdo
 
     us <- mkSplitUniqSupply 'r'
     ideNc <- newIORef (initNameCache us knownKeyNames)
@@ -528,7 +530,7 @@ shakeOpen lspEnv defaultConfig logger debouncer
         -- lazily initialize the exports map with the contents of the hiedb
         _ <- async $ do
             logDebug logger "Initializing exports map from hiedb"
-            em <- createExportsMapHieDb hiedb
+            em <- createExportsMapHieDb withHieDb
             atomically $ modifyTVar' exportsMap (<> em)
             logDebug logger $ "Done initializing exports map from hiedb (" <> pack(show (ExportsMap.size em)) <> ")"
 
@@ -1176,7 +1178,7 @@ updateFileDiagnostics fp k ShakeExtras{logger, diagnostics, hiddenDiagnostics, p
                             logInfo logger $ showDiagnosticsColored $ map (fp,ShowDiag,) newDiags
                         Just env -> LSP.runLspT env $
                             LSP.sendNotification LSP.STextDocumentPublishDiagnostics $
-                            LSP.PublishDiagnosticsParams (fromNormalizedUri uri) ver (List newDiags)
+                            LSP.PublishDiagnosticsParams (fromNormalizedUri uri) (fmap fromIntegral ver) (List newDiags)
                  return action
 
 newtype Priority = Priority Double

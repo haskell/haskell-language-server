@@ -85,7 +85,7 @@ updateLineSplitTextEdits tokenRange tokenString prevLineSplitTextEdits
   , let currInsertRange = prevInsertRange
   , let currInsertText =
           Text.init prevInsertText
-          <> Text.replicate (startCol - prevDeleteEndCol) " "
+          <> Text.replicate (fromIntegral $ startCol - prevDeleteEndCol) " "
           <> Text.pack (List.take newLineCol tokenString)
           <> "\n"
   , let currInsertTextEdit = LSP.TextEdit currInsertRange currInsertText
@@ -96,7 +96,7 @@ updateLineSplitTextEdits tokenRange tokenString prevLineSplitTextEdits
   = LineSplitTextEdits currInsertTextEdit currDeleteTextEdit
   | otherwise
   , let LSP.Range startPos _ = tokenRange
-  , let deleteTextEdit = LSP.TextEdit (LSP.Range startPos startPos{ LSP._character = startCol + newLineCol }) ""
+  , let deleteTextEdit = LSP.TextEdit (LSP.Range startPos startPos{ LSP._character = startCol + fromIntegral newLineCol }) ""
   , let insertPosition = LSP.Position (startLine + 1) 0
   , let insertRange = LSP.Range insertPosition insertPosition
   , let insertText = Text.pack (List.take newLineCol tokenString) <> "\n"
@@ -117,7 +117,7 @@ updateParserState token range prevParserState
       , lastPragmaLine
       } <- prevParserState
   , let defaultParserState = prevParserState { isLastTokenHash = False }
-  , let LSP.Range (LSP.Position startLine _) (LSP.Position endLine _) = range
+  , let LSP.Range (LSP.Position (fromIntegral -> startLine) _) (LSP.Position (fromIntegral -> endLine) _) = range
   = case prevMode of
       ModeInitial ->
         case token of
@@ -267,7 +267,7 @@ updateParserState token range prevParserState
       , let LSP.TextEdit deleteRange _ = lineSplitDeleteTextEdit
       , let LSP.Range _ deleteEndPosition = deleteRange
       , let LSP.Position deleteEndLine _ = deleteEndPosition
-      = deleteEndLine == line
+      = fromIntegral deleteEndLine == line
       | otherwise = False
 
 lexUntilNextLineIncl :: P (Located Token)

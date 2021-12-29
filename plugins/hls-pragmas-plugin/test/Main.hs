@@ -111,7 +111,7 @@ completionTests =
   , completionTest "completes No- language extensions" "Completion.hs" "NoOverload" "NoOverloadedStrings" Nothing Nothing Nothing [0, 13, 0, 31, 0, 23]
   ]
 
-completionTest :: String -> String -> T.Text -> T.Text -> Maybe InsertTextFormat -> Maybe T.Text -> Maybe T.Text -> [Int] -> TestTree
+completionTest :: String -> String -> T.Text -> T.Text -> Maybe InsertTextFormat -> Maybe T.Text -> Maybe T.Text -> [UInt] -> TestTree
 completionTest testComment fileName te' label textFormat insertText detail [a, b, c, d, x, y] =
   testCase testComment $ runSessionWithServer pragmasPlugin testDataDir $ do
     doc <- openDoc fileName "haskell"

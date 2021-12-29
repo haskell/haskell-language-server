@@ -532,7 +532,7 @@ indexHieFile se mod_summary srcPath !hash hf = do
       -- hiedb doesn't use the Haskell src, so we clear it to avoid unnecessarily keeping it around
       let !hf' = hf{hie_hs_src = mempty}
       modifyTVar' indexPending $ HashMap.insert srcPath hash
-      writeTQueue indexQueue $ \db -> do
+      writeTQueue indexQueue $ \withHieDb -> do
         -- We are now in the worker thread
         -- Check if a newer index of this file has been scheduled, and if so skip this one
         newerScheduled <- atomically $ do
@@ -543,7 +543,7 @@ indexHieFile se mod_summary srcPath !hash hf = do
             Just pendingHash -> pendingHash /= hash
         unless newerScheduled $ do
           pre optProgressStyle
-          addRefsFromLoaded db targetPath (RealFile $ fromNormalizedFilePath srcPath) hash hf'
+          withHieDb (\db -> HieDb.addRefsFromLoaded db targetPath (HieDb.RealFile $ fromNormalizedFilePath srcPath) hash hf')
           post
   where
     mod_location    = ms_location mod_summary
@@ -575,6 +575,11 @@ indexHieFile se mod_summary srcPath !hash hf = do
         done <- readTVar indexCompleted
         remaining <- HashMap.size <$> readTVar indexPending
         pure (done, remaining)
+      let
+        progressFrac :: Double
+        progressFrac = fromIntegral done / fromIntegral (done + remaining)
+        progressPct :: LSP.UInt
+        progressPct = floor $ 100 * progressFrac
 
       whenJust (lspEnv se) $ \env -> whenJust tok $ \tok -> LSP.runLspT env $
         LSP.sendNotification LSP.SProgress $ LSP.ProgressParams tok $
@@ -583,7 +588,7 @@ indexHieFile se mod_summary srcPath !hash hf = do
                 Percentage -> LSP.WorkDoneProgressReportParams
                     { _cancellable = Nothing
                     , _message = Nothing
-                    , _percentage = Just (100 * fromIntegral done / fromIntegral (done + remaining) )
+                    , _percentage = Just progressPct
                     }
                 Explicit -> LSP.WorkDoneProgressReportParams
                     { _cancellable = Nothing
