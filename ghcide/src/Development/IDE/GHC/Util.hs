@@ -28,7 +28,7 @@ module Development.IDE.GHC.Util(
     setHieDir,
     dontWriteHieFiles,
     disableWarningsAsErrors,
-    ) where
+    tracePpr) where
 
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC
@@ -79,30 +79,38 @@ import qualified Data.ByteString                   as BS
 import           Data.ByteString.Internal          (ByteString (..))
 import qualified Data.ByteString.Internal          as BS
 import qualified Data.ByteString.Lazy              as LBS
+import           Data.Data                         (Data)
 import           Data.IORef
 import           Data.List.Extra
 import           Data.Maybe
 import qualified Data.Text                         as T
 import qualified Data.Text.Encoding                as T
 import qualified Data.Text.Encoding.Error          as T
+import           Data.Time.Clock.POSIX             (POSIXTime, getCurrentTime,
+                                                    utcTimeToPOSIXSeconds)
 import           Data.Typeable
+import qualified Data.Unique                       as U
+import           Debug.Trace
 import           Development.IDE.GHC.Compat        as GHC
 import qualified Development.IDE.GHC.Compat.Parser as Compat
 import qualified Development.IDE.GHC.Compat.Units  as Compat
-import           Development.IDE.GHC.Compat.Util
+import           Development.IDE.GHC.Dump          (showAstDataHtml)
 import           Development.IDE.Types.Location
 import           Foreign.ForeignPtr
 import           Foreign.Ptr
 import           Foreign.Storable
-import           GHC
 import           GHC.IO.BufferedIO                 (BufferedIO)
 import           GHC.IO.Device                     as IODevice
 import           GHC.IO.Encoding
 import           GHC.IO.Exception
 import           GHC.IO.Handle.Internals
 import           GHC.IO.Handle.Types
-
+import           GHC.Stack
+import           Language.Haskell.GHC.ExactPrint   (ExactPrint, exactPrint)
+import           System.Environment.Blank          (getEnvDefault)
 import           System.FilePath
+import           System.IO.Unsafe
+import           Text.Printf
 
 
 ----------------------------------------------------------------------
@@ -300,3 +308,34 @@ ioe_dupHandlesNotCompatible :: Handle -> IO a
 ioe_dupHandlesNotCompatible h =
    ioException (IOError (Just h) IllegalOperation "hDuplicateTo"
                 "handles are incompatible" Nothing Nothing)
+
+--------------------------------------------------------------------------------
+-- Tracing exactprint terms
+
+{-# NOINLINE timestamp #-}
+timestamp :: POSIXTime
+timestamp = utcTimeToPOSIXSeconds $ unsafePerformIO getCurrentTime
+
+debugAST :: Bool
+debugAST = unsafePerformIO (getEnvDefault "GHCIDE_DEBUG_AST" "0") == "1"
+
+-- | Prints an 'Outputable' value to stderr and to an HTML file for further inspection
+traceAst :: (Data a, ExactPrint a, Outputable a, HasCallStack) => String -> a -> a
+traceAst lbl x
+  | debugAST = trace doTrace x
+  | otherwise = x
+  where
+    renderDump = renderWithContext defaultSDocContext{sdocStyle = defaultDumpStyle, sdocPprDebug = True}
+    -- plainDump = showAstData NoBlankSrcSpan NoBlankEpAnnotations x
+    htmlDump = showAstDataHtml x
+    doTrace = unsafePerformIO $ do
+        u <- U.newUnique
+        let htmlDumpFileName = printf "/tmp/hls/%s-%s-%d.html" (show timestamp) lbl (U.hashUnique u)
+        writeFile htmlDumpFileName $ renderDump htmlDump
+        return $ unlines
+            [prettyCallStack callStack ++ ":"
+            , exactPrint x
+            -- , renderDump plainDump
+            , "file://" ++ htmlDumpFileName]
+
+

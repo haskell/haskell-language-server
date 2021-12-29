@@ -58,7 +58,7 @@ data Rewrite where
 #if !MIN_VERSION_ghc(9,2,0)
     Annotate ast =>
 #else
-    ExactPrint (GenLocated (Anno ast) ast) =>
+    (ExactPrint (GenLocated (Anno ast) ast), ResetEntryDP (Anno ast), Outputable (GenLocated (Anno ast) ast), Data (GenLocated (Anno ast) ast)) =>
 #endif
     -- | The 'SrcSpan' that we want to rewrite
     SrcSpan ->
@@ -135,6 +135,8 @@ rewriteToWEdit dflags uri
 -- | Fix the parentheses around a type context
 fixParens ::
   (Monad m, Data (HsType pass), pass ~ GhcPass p0) =>
+
+  (ExactPrint (HsType pass), Outputable (LHsType pass)) =>
 #if !MIN_VERSION_ghc(9,2,0)
   Maybe DeltaPos ->
   Maybe DeltaPos ->
