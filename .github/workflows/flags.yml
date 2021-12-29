@@ -19,7 +19,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       should_skip: ${{ steps.skip_check.outputs.should_skip }}
-      should_skip_ghcide: ${{ steps.skip_ghcide_check.outputs.should_skip }}
     steps:
       - id: skip_check
         uses: fkirc/skip-duplicate-actions@v3.4.1
@@ -35,18 +34,6 @@ jobs:
                          , "FUNDING.yml"
                          , ".circleci/**"
                          , "**/stack*.yaml"
-                         ]'
-      # If we only change ghcide downstream packages we have not test ghcide itself
-      - id: skip_ghcide_check
-        uses: fkirc/skip-duplicate-actions@v3.4.1
-        with:
-          cancel_others: false
-          paths_ignore: '[ "hls-test-utils/**"
-                         , "plugins/**"
-                         , "src/**"
-                         , "exe/**"
-                         , "test/**"
-                         , "shake-bench/**"
                          ]'
 
   flags:
@@ -131,6 +118,10 @@ jobs:
                 ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
                 ${{ env.cache-name }}-${{ runner.os }}-
 
+      # To ensure we get the lastest hackage index and not relying on haskell action logic
+      - if: steps.compiled-deps.outputs.cache-hit != 'true'
+        run: cabal update
+
       - name: Build `hls-graph` with flags
         run: cabal v2-build hls-graph --flags="pedantic embed-files stm-stats"
 
@@ -143,9 +134,8 @@ jobs:
       - name: Build `hls-test-utils` with flags
         run: cabal v2-build hls-test-utils --flags="pedantic"
 
-      # repeating builds to workaround segfaults in windows and ghc-8.8.4
       - name: Build
-        run: cabal v2-build ghcide --flags="ghc-patched-unboxed-bytecode test-exe executable bench-exe" || cabal v2-build ghcide --flags="ghc-patched-unboxed-bytecode test-exe executable bench-exe" || cabal v2-build ghcide --flags="ghc-patched-unboxed-bytecode test-exe executable bench-exe"
+        run: cabal v2-build ghcide --flags="ghc-patched-unboxed-bytecode test-exe executable bench-exe"
 
   flags_post_job:
     if: always()
