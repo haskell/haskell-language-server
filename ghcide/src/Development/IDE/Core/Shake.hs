@@ -1178,7 +1178,7 @@ updateFileDiagnostics fp k ShakeExtras{logger, diagnostics, hiddenDiagnostics, p
                             logInfo logger $ showDiagnosticsColored $ map (fp,ShowDiag,) newDiags
                         Just env -> LSP.runLspT env $
                             LSP.sendNotification LSP.STextDocumentPublishDiagnostics $
-                            LSP.PublishDiagnosticsParams (fromNormalizedUri uri) ver (List newDiags)
+                            LSP.PublishDiagnosticsParams (fromNormalizedUri uri) (fmap fromIntegral ver) (List newDiags)
                  return action
 
 newtype Priority = Priority Double

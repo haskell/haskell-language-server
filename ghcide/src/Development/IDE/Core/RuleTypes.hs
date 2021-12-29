@@ -43,7 +43,8 @@ import           Development.IDE.Spans.Common
 import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Diagnostics
 import           GHC.Serialized                               (Serialized)
-import           Language.LSP.Types                           (NormalizedFilePath)
+import           Language.LSP.Types                           (Int32,
+                                                               NormalizedFilePath)
 
 data LinkableType = ObjectLinkable | BCOLinkable
   deriving (Eq,Ord,Show, Generic)
@@ -290,13 +291,13 @@ pattern GetModificationTime = GetModificationTime_ {missingFileDiagnostics=True}
 type instance RuleResult GetModificationTime = FileVersion
 
 data FileVersion
-    = VFSVersion !Int
+    = VFSVersion !Int32
     | ModificationTime !POSIXTime
     deriving (Show, Generic)
 
 instance NFData FileVersion
 
-vfsVersion :: FileVersion -> Maybe Int
+vfsVersion :: FileVersion -> Maybe Int32
 vfsVersion (VFSVersion i)     = Just i
 vfsVersion ModificationTime{} = Nothing
 

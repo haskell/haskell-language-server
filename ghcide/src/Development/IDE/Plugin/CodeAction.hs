@@ -71,6 +71,7 @@ import           Language.LSP.Types                                (CodeAction (
                                                                     SMethod (STextDocumentCodeAction),
                                                                     TextDocumentIdentifier (TextDocumentIdentifier),
                                                                     TextEdit (TextEdit),
+                                                                    UInt,
                                                                     WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
                                                                     type (|?) (InR),
                                                                     uriToFilePath)
@@ -1095,8 +1096,8 @@ suggestInstanceConstraint df (L _ HsModule {hsmodDecls}) Diagnostic {..} missing
         | otherwise
         = Nothing
 
-      readPositionNumber :: T.Text -> Int
-      readPositionNumber = T.unpack >>> read
+      readPositionNumber :: T.Text -> UInt
+      readPositionNumber = T.unpack >>> read @Integer >>> fromIntegral
 
       actionTitle :: T.Text -> T.Text
       actionTitle constraint = "Add `" <> constraint
@@ -1305,9 +1306,10 @@ newImportToEdit (unNewImport -> imp) ps fileContents
 -- * otherwise inserted one line after the last file-header pragma
 newImportInsertRange :: ParsedSource -> T.Text -> Maybe (Range, Int)
 newImportInsertRange (L _ HsModule {..}) fileContents
-  |  Just (uncurry Position -> insertPos, col) <- case hsmodImports of
+  |  Just ((l, c), col) <- case hsmodImports of
       [] -> findPositionNoImports hsmodName hsmodExports fileContents
       _  -> findPositionFromImportsOrModuleDecl hsmodImports last True
+  , let insertPos = Position (fromIntegral l) (fromIntegral c)
     = Just (Range insertPos insertPos, col)
   | otherwise = Nothing
 
@@ -1505,7 +1507,7 @@ extendToWholeLineIfPossible contents range@Range{..} =
     in if extend then Range _start (Position (_line _end + 1) 0) else range
 
 splitTextAtPosition :: Position -> T.Text -> (T.Text, T.Text)
-splitTextAtPosition (Position row col) x
+splitTextAtPosition (Position (fromIntegral -> row) (fromIntegral -> col)) x
     | (preRow, mid:postRow) <- splitAt row $ T.splitOn "\n" x
     , (preCol, postCol) <- T.splitAt col mid
         = (T.intercalate "\n" $ preRow ++ [preCol], T.intercalate "\n" $ postCol : postRow)
@@ -1513,7 +1515,7 @@ splitTextAtPosition (Position row col) x
 
 -- | Returns [start .. end[
 textInRange :: Range -> T.Text -> T.Text
-textInRange (Range (Position startRow startCol) (Position endRow endCol)) text =
+textInRange (Range (Position (fromIntegral -> startRow) (fromIntegral -> startCol)) (Position (fromIntegral -> endRow) (fromIntegral -> endCol))) text =
     case compare startRow endRow of
       LT ->
         let (linesInRangeBeforeEndLine, endLineAndFurtherLines) = splitAt (endRow - startRow) linesBeginningWithStartLine

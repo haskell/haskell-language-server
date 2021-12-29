@@ -137,8 +137,8 @@ rowToLoc :: Res RefRow -> Maybe Location
 rowToLoc (row:.info) = flip Location range <$> mfile
   where
     range = Range start end
-    start = Position (refSLine row - 1) (refSCol row -1)
-    end = Position (refELine row - 1) (refECol row -1)
+    start = Position (fromIntegral $ refSLine row - 1) (fromIntegral $ refSCol row -1)
+    end = Position (fromIntegral $ refELine row - 1) (fromIntegral $ refECol row -1)
     mfile = case modInfoSrcFile info of
       Just f  -> Just $ toUri f
       Nothing -> Nothing
@@ -149,8 +149,8 @@ typeRowToLoc (row:.info) = do
   pure $ Location (toUri file) range
   where
     range = Range start end
-    start = Position (typeRefSLine row - 1) (typeRefSCol row -1)
-    end = Position (typeRefELine row - 1) (typeRefECol row -1)
+    start = Position (fromIntegral $ typeRefSLine row - 1) (fromIntegral $ typeRefSCol row -1)
+    end = Position (fromIntegral $ typeRefELine row - 1) (fromIntegral $ typeRefECol row -1)
 
 documentHighlight
   :: Monad m
@@ -361,8 +361,8 @@ nameToLocation withHieDb lookupModule name = runMaybeT $
 
 defRowToLocation :: Monad m => LookupModule m -> Res DefRow -> MaybeT m Location
 defRowToLocation lookupModule (row:.info) = do
-  let start = Position (defSLine row - 1) (defSCol row - 1)
-      end   = Position (defELine row - 1) (defECol row - 1)
+  let start = Position (fromIntegral $ defSLine row - 1) (fromIntegral $ defSCol row - 1)
+      end   = Position (fromIntegral $ defELine row - 1) (fromIntegral $ defECol row - 1)
       range = Range start end
   file <- case modInfoSrcFile info of
     Just src -> pure $ toUri src
@@ -384,8 +384,8 @@ defRowToSymbolInfo (DefRow{..}:.(modInfoSrcFile -> Just srcFile))
     loc   = Location file range
     file  = fromNormalizedUri . filePathToUri' . toNormalizedFilePath' $ srcFile
     range = Range start end
-    start = Position (defSLine - 1) (defSCol - 1)
-    end   = Position (defELine - 1) (defECol - 1)
+    start = Position (fromIntegral $ defSLine - 1) (fromIntegral $ defSCol - 1)
+    end   = Position (fromIntegral $ defELine - 1) (fromIntegral $ defECol - 1)
 defRowToSymbolInfo _ = Nothing
 
 pointCommand :: HieASTs t -> Position -> (HieAST t -> a) -> [a]
@@ -405,7 +405,7 @@ pointCommand hf pos k =
         Nothing   -> Nothing
         Just ast' -> Just $ k ast'
  where
-   sloc fs = mkRealSrcLoc fs (line+1) (cha+1)
+   sloc fs = mkRealSrcLoc fs (fromIntegral $ line+1) (fromIntegral $ cha+1)
    sp fs = mkRealSrcSpan (sloc fs) (sloc fs)
    line = _line pos
    cha = _character pos

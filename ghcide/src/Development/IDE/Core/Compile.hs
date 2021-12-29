@@ -564,6 +564,11 @@ indexHieFile se mod_summary srcPath !hash hf = do
         done <- readTVar indexCompleted
         remaining <- HashMap.size <$> readTVar indexPending
         pure (done, remaining)
+      let
+        progressFrac :: Double
+        progressFrac = fromIntegral done / fromIntegral (done + remaining)
+        progressPct :: LSP.UInt
+        progressPct = floor $ 100 * progressFrac
 
       whenJust (lspEnv se) $ \env -> whenJust tok $ \tok -> LSP.runLspT env $
         LSP.sendNotification LSP.SProgress $ LSP.ProgressParams tok $
@@ -572,7 +577,7 @@ indexHieFile se mod_summary srcPath !hash hf = do
                 Percentage -> LSP.WorkDoneProgressReportParams
                     { _cancellable = Nothing
                     , _message = Nothing
-                    , _percentage = Just (100 * fromIntegral done / fromIntegral (done + remaining) )
+                    , _percentage = Just progressPct
                     }
                 Explicit -> LSP.WorkDoneProgressReportParams
                     { _cancellable = Nothing
