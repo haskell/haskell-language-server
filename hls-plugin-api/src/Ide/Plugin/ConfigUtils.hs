@@ -11,7 +11,9 @@ import           Data.Default          (def)
 import qualified Data.Dependent.Map    as DMap
 import qualified Data.Dependent.Sum    as DSum
 import           Data.List             (nub)
-import           Ide.Compat            (adjustJson, insertJson, toJsonKey)
+import           Data.String           (IsString (fromString))
+import qualified Data.Text             as T
+import           Ide.Compat            (adjustJson)
 import           Ide.Plugin.Config
 import           Ide.Plugin.Properties (toDefaultJSON, toVSCodeExtensionSchema)
 import           Ide.Types
@@ -27,8 +29,8 @@ pluginsToDefaultConfig :: IdePlugins a -> A.Value
 pluginsToDefaultConfig IdePlugins {..} =
   A.Object $
     adjustJson
-      ( \(unsafeValueToObject -> o) ->
-        A.Object $ insertJson "plugin" elems o -- inplace the "plugin" section with our 'elems', leaving others unchanged
+      ( \ (unsafeValueToObject -> obj) ->
+        A.Object $ obj <> unsafeValueToObject (A.object ["plugin" A..= elems]) -- inplace the "plugin" section with our 'elems', leaving others unchanged
       )
       "haskell"
       (unsafeValueToObject (A.toJSON defaultConfig))
@@ -52,7 +54,7 @@ pluginsToDefaultConfig IdePlugins {..} =
     -- }
     singlePlugin PluginDescriptor {pluginConfigDescriptor = ConfigDescriptor {..}, ..} =
       let x = genericDefaultConfig <> dedicatedDefaultConfig
-       in [toJsonKey pId A..= A.object x | not $ null x]
+       in [fromString (T.unpack pId) A..= A.object x | not $ null x]
       where
         (PluginHandlers (DMap.toList -> handlers)) = pluginHandlers
         customConfigToDedicatedDefaultConfig (CustomConfig p) = toDefaultJSON p
@@ -132,4 +134,4 @@ pluginsToVSCodeExtensionSchema IdePlugins {..} = A.object $ mconcat $ singlePlug
               "description" A..= A.String ("Enables " <> pId <> " " <> desc)
             ]
         withIdPrefix x = "haskell.plugin." <> pId <> "." <> x
-        toKey' = toJsonKey . withIdPrefix
+        toKey' = fromString . T.unpack . withIdPrefix

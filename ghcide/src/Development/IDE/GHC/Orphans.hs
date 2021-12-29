@@ -31,13 +31,11 @@ import           Retrie.ExactPrint          (Annotated)
 
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Util
-import           Ide.Compat                 (toJsonKey)
 
 import           Control.DeepSeq
 import           Data.Aeson
 import           Data.Hashable
 import           Data.String                (IsString (fromString))
-import           Data.Text                  (Text)
 
 -- Orphan instances for types from the GHC API.
 instance Show CoreModule where show = prettyPrint
@@ -123,7 +121,7 @@ instance NFData RealSrcSpan where
     rnf = rwhnf
 
 srcSpanFileTag, srcSpanStartLineTag, srcSpanStartColTag,
-    srcSpanEndLineTag, srcSpanEndColTag :: Text
+    srcSpanEndLineTag, srcSpanEndColTag :: String
 srcSpanFileTag = "srcSpanFile"
 srcSpanStartLineTag = "srcSpanStartLine"
 srcSpanStartColTag = "srcSpanStartCol"
@@ -133,24 +131,24 @@ srcSpanEndColTag = "srcSpanEndCol"
 instance ToJSON RealSrcSpan where
   toJSON spn =
       object
-        [ toJsonKey srcSpanFileTag .= unpackFS (srcSpanFile spn)
-        , toJsonKey srcSpanStartLineTag .= srcSpanStartLine spn
-        , toJsonKey srcSpanStartColTag .= srcSpanStartCol spn
-        , toJsonKey srcSpanEndLineTag .= srcSpanEndLine spn
-        , toJsonKey srcSpanEndColTag .= srcSpanEndCol spn
+        [ fromString srcSpanFileTag .= unpackFS (srcSpanFile spn)
+        , fromString srcSpanStartLineTag .= srcSpanStartLine spn
+        , fromString srcSpanStartColTag .= srcSpanStartCol spn
+        , fromString srcSpanEndLineTag .= srcSpanEndLine spn
+        , fromString srcSpanEndColTag .= srcSpanEndCol spn
         ]
 
 instance FromJSON RealSrcSpan where
   parseJSON = withObject "object" $ \obj -> do
-      file <- fromString <$> (obj .: toJsonKey srcSpanFileTag)
+      file <- fromString <$> (obj .: fromString srcSpanFileTag)
       mkRealSrcSpan
         <$> (mkRealSrcLoc file
-                <$> obj .: toJsonKey srcSpanStartLineTag
-                <*> obj .: toJsonKey srcSpanStartColTag
+                <$> obj .: fromString srcSpanStartLineTag
+                <*> obj .: fromString srcSpanStartColTag
             )
         <*> (mkRealSrcLoc file
-                <$> obj .: toJsonKey srcSpanEndLineTag
-                <*> obj .: toJsonKey srcSpanEndColTag
+                <$> obj .: fromString srcSpanEndLineTag
+                <*> obj .: fromString srcSpanEndColTag
             )
 
 instance NFData Type where

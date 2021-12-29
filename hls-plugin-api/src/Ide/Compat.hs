@@ -2,8 +2,6 @@
 module Ide.Compat where
 
 #if MIN_VERSION_aeson(2,0,0)
-import           Data.Aeson.Key        as A (Key)
-import qualified Data.Aeson.Key        as A.Key
 import qualified Data.Aeson.KeyMap     as A
 import           Data.Functor.Identity (Identity (..), runIdentity)
 #else
@@ -11,23 +9,6 @@ import qualified Data.HashMap.Lazy     as Map
 #endif
 import           Data.Aeson            as A (Value)
 import           Data.Text             as T
-
-#if MIN_VERSION_aeson(2,0,0)
-toJsonKey :: T.Text -> A.Key
-toJsonKey = A.Key.fromText
-#else
-toJsonKey :: T.Text -> T.Text
-toJsonKey = id
-#endif
-
-#if MIN_VERSION_aeson(2,0,0)
-insertJson :: A.Key -> A.Value -> A.KeyMap A.Value -> A.KeyMap A.Value
-insertJson = A.insert
-#else
-insertJson :: T.Text -> A.Value -> Map.HashMap T.Text A.Value -> Map.HashMap T.Text A.Value
-insertJson = Map.insert
-#endif
-
 
 #if MIN_VERSION_aeson(2,0,0)
 adjustJson :: (A.Value -> A.Value) -> A.Key -> A.KeyMap A.Value -> A.KeyMap A.Value
