@@ -50,9 +50,8 @@ main = withTelemetryLogger $ \telemetryLogger -> do
     if argsVersion then ghcideVersion >>= putStrLn >> exitSuccess
     else hPutStrLn stderr {- see WARNING above -} =<< ghcideVersion
 
-    -- getHieDbLoc takes a directory path (the project root) and hashes it to find the location of the hiedb
-    -- when running commands directly from GHCIDE we need to provide the ABSOLUTE path to the project root (that's what HLS uses)
-    argsCwd <-case argsCwd of
+    -- if user uses --cwd option we need to make this path absolute (and set the current directory to it)
+    argsCwd <- case argsCwd of
       Nothing   -> IO.getCurrentDirectory
       Just root -> IO.setCurrentDirectory root >> IO.getCurrentDirectory
 

@@ -319,7 +319,7 @@ defaultMain Arguments{..} = flip withHeapStats fun =<< argsLogger
                     hieChan
             dumpSTMStats
         Check argFiles -> do
-          dir <- IO.getCurrentDirectory
+          dir <- maybe IO.getCurrentDirectory return argsProjectRoot
           dbLoc <- getHieDbLoc dir
           runWithDb logger dbLoc $ \hiedb hieChan -> do
             -- GHC produces messages with UTF8 in them, so make sure the terminal doesn't error
