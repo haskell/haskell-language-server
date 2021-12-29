@@ -3985,6 +3985,8 @@ findDefinitionAndHoverTests = let
   innL48 = Position 52  5  ;  innSig = [ExpectHoverText ["inner", "Char"], mkR 49 2 49 7]
   holeL60 = Position 62 7  ;  hleInfo = [ExpectHoverText ["_ ::"]]
   cccL17 = Position 17 16  ;  docLink = [ExpectHoverText ["[Documentation](file:///"]]
+  opL25 = Position 24 18   ;  docOpEnc = [ExpectHoverText ["[Documentation](file:///", "#v:-60--62-)"]]
+  funcL66 = Position 65 26 ;  docFuncEnc = [ExpectHoverText ["[Documentation](file:///", "#v:foldl-39-)"]]
   imported = Position 56 13 ; importedSig = getDocUri "Foo.hs" >>= \foo -> return [ExpectHoverText ["foo", "Foo", "Haddock"], mkL foo 5 0 5 3]
   reexported = Position 55 14 ; reexportedSig = getDocUri "Bar.hs" >>= \bar -> return [ExpectHoverText ["Bar", "Bar", "Haddock"], mkL bar 3 0 3 14]
   thLocL57 = Position 59 10 ; thLoc = [ExpectHoverText ["Identity"]]
@@ -4039,6 +4041,8 @@ findDefinitionAndHoverTests = let
   , test  broken broken innL48     innSig        "inner     signature              #767"
   , test  no     yes    holeL60    hleInfo       "hole without internal name       #831"
   , test  no     skip   cccL17     docLink       "Haddock html links"
+  , test  yes    yes    opL25      docOpEnc      "Haddock html doc link operator  #2542"
+  , test  yes    yes    funcL66    docFuncEnc    "Haddock html doc link function  #2542"
   , testM yes    yes    imported   importedSig   "Imported symbol"
   , testM yes    yes    reexported reexportedSig "Imported symbol (reexported)"
   , if ghcVersion == GHC90 && isWindows then
