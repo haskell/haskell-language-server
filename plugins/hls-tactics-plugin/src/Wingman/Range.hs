@@ -19,6 +19,5 @@ rangeToSrcSpan file range = RealSrcSpan (rangeToRealSrcSpan file range) Nothing
 rangeToRealSrcSpan :: String -> Range -> RealSrcSpan
 rangeToRealSrcSpan file (Range (Position startLn startCh) (Position endLn endCh)) =
   mkRealSrcSpan
-    (mkRealSrcLoc (FS.fsLit file) (startLn + 1) (startCh + 1))
-    (mkRealSrcLoc (FS.fsLit file) (endLn + 1) (endCh + 1))
-
+    (mkRealSrcLoc (FS.fsLit file) (fromIntegral $ startLn + 1) (fromIntegral $ startCh + 1))
+    (mkRealSrcLoc (FS.fsLit file) (fromIntegral $ endLn + 1) (fromIntegral $ endCh + 1))

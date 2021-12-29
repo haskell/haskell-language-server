@@ -179,6 +179,10 @@ jobs:
                 ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
                 ${{ env.cache-name }}-${{ runner.os }}-
 
+      # To ensure we get the lastest hackage index and not relying on haskell action logic
+      - if: steps.compiled-deps.outputs.cache-hit != 'true'
+        run: cabal update
+
       # repeating builds to workaround segfaults in windows and ghc-8.8.4
       - name: Build
         run: cabal build || cabal build || cabal build

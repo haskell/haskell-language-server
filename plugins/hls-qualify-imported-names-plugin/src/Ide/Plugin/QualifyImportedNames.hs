@@ -167,7 +167,7 @@ realSrcSpanToIdentifierSpan realSrcSpan
 
 identifierSpanToRange :: IdentifierSpan -> Range
 identifierSpanToRange (IdentifierSpan line startCol endCol) =
-  Range (Position line startCol) (Position line endCol)
+  Range (Position (fromIntegral line) (fromIntegral startCol)) (Position (fromIntegral line) (fromIntegral endCol))
 
 data UsedIdentifier = UsedIdentifier {
   usedIdentifierName :: !Name,
