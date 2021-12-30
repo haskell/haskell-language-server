@@ -541,7 +541,7 @@ suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModul
                             $ hsmodDecls
   , Just pos <- fmap _end . getLocatedRange =<< hsmodExports
   , Just needComma <- needsComma source <$> hsmodExports
-  , let exportName = (if needComma then "," else "") <> printExport exportType name
+  , let exportName = (if needComma then ", " else "") <> printExport exportType name
         insertPos = pos {_character = pred $ _character pos}
   = [("Export ‘" <> name <> "’", TextEdit (Range insertPos insertPos) exportName)]
   | otherwise = []
