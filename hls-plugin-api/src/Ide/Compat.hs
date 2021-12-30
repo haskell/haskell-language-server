@@ -2,6 +2,7 @@
 module Ide.Compat where
 
 #if MIN_VERSION_aeson(2,0,0)
+import qualified Data.Aeson.Key        as A
 import qualified Data.Aeson.KeyMap     as A
 import           Data.Functor.Identity (Identity (..), runIdentity)
 #else
