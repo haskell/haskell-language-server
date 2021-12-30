@@ -11,7 +11,7 @@ import           Control.Exception               (try)
 import           Control.Monad.IO.Class          (liftIO)
 import qualified Data.Text                       as T
 import           Development.IDE                 hiding (pluginHandlers)
-import           Development.IDE.GHC.Compat      (moduleNameString, hsc_dflags)
+import           Development.IDE.GHC.Compat      (hsc_dflags, moduleNameString)
 import qualified Development.IDE.GHC.Compat      as D
 import qualified Development.IDE.GHC.Compat.Util as S
 import           GHC.LanguageExtensions.Type
@@ -50,7 +50,7 @@ provider ideState typ contents fp _ = withIndefiniteProgress title Cancellable $
   case typ of
     FormatText -> ret <$> fmt contents (mkConf fileOpts fullRegion)
     FormatRange (Range (Position sl _) (Position el _)) ->
-      ret <$> fmt contents (mkConf fileOpts (rangeRegion sl el))
+      ret <$> fmt contents (mkConf fileOpts (rangeRegion (fromIntegral sl) (fromIntegral el)))
  where
    title = T.pack $ "Formatting " <> takeFileName (fromNormalizedFilePath fp)
 

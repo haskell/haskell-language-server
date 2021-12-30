@@ -46,10 +46,10 @@ tests = testGroup "completions" [
              resolved ^. insertTextFormat @?= Just Snippet
              resolved ^. insertText @?= Just "putStrLn ${1:String}"
 
-     , testCase "completes imports" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
+     , testCase "completes imports" $ runSession (hlsCommand <> " --test") fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
 
-         _ <- waitForDiagnostics
+         waitForKickDone
 
          let te = TextEdit (Range (Position 1 17) (Position 1 26)) "Data.M"
          _ <- applyEdit doc te
@@ -61,10 +61,10 @@ tests = testGroup "completions" [
              item ^. detail @?= Just "Data.Maybe"
              item ^. kind @?= Just CiModule
 
-     , testCase "completes qualified imports" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
+     , testCase "completes qualified imports" $ runSession (hlsCommand <> " --test") fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
 
-         _ <- waitForDiagnostics
+         _ <- waitForKickDone
 
          let te = TextEdit (Range (Position 2 17) (Position 2 25)) "Data.L"
          _ <- applyEdit doc te

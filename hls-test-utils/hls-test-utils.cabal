@@ -47,9 +47,9 @@ library
     , hspec                   <2.8
     , hspec-core
     , lens
-    , lsp                     ^>=1.2
+    , lsp                     ^>=1.4
     , lsp-test                ^>=0.14
-    , lsp-types               >=1.2  && <1.4
+    , lsp-types               ^>=1.4
     , tasty
     , tasty-expected-failure
     , tasty-golden

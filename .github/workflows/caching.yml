@@ -182,6 +182,10 @@ jobs:
                 ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
                 ${{ env.cache-name }}-${{ runner.os }}-
 
+      # To ensure we get the lastest hackage index and not relying on haskell action logic
+      - if: steps.compiled-deps.outputs.cache-hit != 'true'
+        run: cabal update
+
       - if: steps.compiled-deps.outputs.cache-hit != 'true' && runner.os == 'Linux' && matrix.ghc == '8.10.7'
         name: Download sources for bench
         #  Downloaded separately, to match the tested work/PR workflow guarantees
