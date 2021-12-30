@@ -4041,8 +4041,8 @@ findDefinitionAndHoverTests = let
   , test  broken broken innL48     innSig        "inner     signature              #767"
   , test  no     yes    holeL60    hleInfo       "hole without internal name       #831"
   , test  no     skip   cccL17     docLink       "Haddock html links"
-  , test  yes    yes    opL25      docOpEnc      "Haddock html doc link operator  #2542"
-  , test  yes    yes    funcL66    docFuncEnc    "Haddock html doc link function  #2542"
+  , test  yes    skip   opL25      docOpEnc      "Haddock html doc link operator  #2542"
+  , test  yes    skip   funcL66    docFuncEnc    "Haddock html doc link function  #2542"
   , testM yes    yes    imported   importedSig   "Imported symbol"
   , testM yes    yes    reexported reexportedSig "Imported symbol (reexported)"
   , if ghcVersion == GHC90 && isWindows then
