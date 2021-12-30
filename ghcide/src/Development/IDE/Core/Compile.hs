@@ -56,9 +56,9 @@ import           HieDb
 import           Language.LSP.Types                (DiagnosticTag (..))
 
 #if MIN_VERSION_ghc(8,10,0)
-import           Control.DeepSeq                   (force, rnf)
+import           Control.DeepSeq                   (force, rnf, liftRnf, rwhnf)
 #else
-import           Control.DeepSeq                   (rnf)
+import           Control.DeepSeq                   (rnf, liftRnf, rwhnf)
 import           ErrUtils
 #endif
 
@@ -691,7 +691,8 @@ loadModulesHome
     -> HscEnv
     -> HscEnv
 loadModulesHome mod_infos e =
-    e { hsc_HPT = addListToHpt (hsc_HPT e) [(mod_name x, x) | x <- mod_infos]
+  let !new_modules = addListToHpt (hsc_HPT e) [(mod_name x, x) | x <- mod_infos]
+  in e { hsc_HPT = new_modules
       , hsc_type_env_var = Nothing }
     where
       mod_name = moduleName . mi_module . hm_iface
@@ -702,15 +703,21 @@ mergeEnvs env extraModSummaries extraMods envs = do
     prevFinderCache <- concatFC <$> mapM (readIORef . hsc_FC) envs
     let ims  = map (Compat.installedModule (homeUnitId_ $ hsc_dflags env) . moduleName . ms_mod) extraModSummaries
         ifrs = zipWith (\ms -> InstalledFound (ms_location ms)) extraModSummaries ims
+        -- Very important to force this as otherwise the hsc_mod_graph field is not
+        -- forced and ends up retaining a reference to all the old hsc_envs we have merged to get
+        -- this new one, which in turn leads to the EPS referencing the HPT.
+        module_graph_nodes =
+          extraModSummaries ++ nubOrdOn ms_mod (concatMap (mgModSummaries . hsc_mod_graph) envs)
+
     newFinderCache <- newIORef $
             foldl'
                 (\fc (im, ifr) -> Compat.extendInstalledModuleEnv fc im ifr) prevFinderCache
                 $ zip ims ifrs
-    return $ loadModulesHome extraMods $ env{
+    liftRnf rwhnf module_graph_nodes `seq` (return $ loadModulesHome extraMods $ env{
         hsc_HPT = foldMapBy mergeUDFM emptyUDFM hsc_HPT envs,
         hsc_FC = newFinderCache,
-        hsc_mod_graph = mkModuleGraph $ extraModSummaries ++ nubOrdOn ms_mod (concatMap (mgModSummaries . hsc_mod_graph) envs)
-    }
+        hsc_mod_graph = mkModuleGraph module_graph_nodes
+    })
     where
         mergeUDFM = plusUDFM_C combineModules
         combineModules a b
