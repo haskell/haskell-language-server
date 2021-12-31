@@ -167,10 +167,8 @@ jobs:
           cache-name: hackage-sources
         with:
           path:  ${{ env.CABAL_PKGS_DIR }}
-          key:   ${{ env.cache-name }}-${{ env.INDEX_STATE }}-${{ steps.compute-cache-key.outputs.value }}
-          restore-keys: |
-                 ${{ env.cache-name }}-${{ env.INDEX_STATE }}-
-                 ${{ env.cache-name }}-
+          key:   ${{ env.cache-name }}-${{ env.INDEX_STATE }}
+          restore-keys: ${{ env.cache-name }}-
 
       - name: Compiled deps cache
         id: compiled-deps
