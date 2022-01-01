@@ -84,11 +84,9 @@ jobs:
            - os: ubuntu-latest
              ghc: '8.6.5'
              test: true
-          # Blocked on unix-compat
-          # https://github.com/jacobstanley/unix-compat/issues/52
-          #  - os: windows-latest
-          #    ghc: '9.2.1'
-          #    test: true
+           - os: windows-latest
+             ghc: '9.2.1'
+             test: true
            - os: windows-latest
              ghc: '9.0.1'
              test: true
