@@ -104,7 +104,7 @@ pragmaEditToAction uri Pragmas.NextPragmaInfo{ nextPragmaLine, lineSplitTextEdit
   where
     render (OptGHC x)  = "{-# OPTIONS_GHC -Wno-" <> x <> " #-}\n"
     render (LangExt x) = "{-# LANGUAGE " <> x <> " #-}\n"
-    pragmaInsertPosition = Position nextPragmaLine 0
+    pragmaInsertPosition = Position (fromIntegral nextPragmaLine) 0
     pragmaInsertRange = Range pragmaInsertPosition pragmaInsertPosition
     -- workaround the fact that for some reason lsp-test applies text
     -- edits in reverse order than lsp (tried in both coc.nvim and vscode)

@@ -79,12 +79,12 @@ provider ideState typ contents fp fo = withIndefiniteProgress title Cancellable 
   where
     fp' = fromNormalizedFilePath fp
     title = "Formatting " <> T.pack (takeFileName fp')
-    lspPrinterOpts = mempty{poIndentation = Just $ fo ^. tabSize}
+    lspPrinterOpts = mempty{poIndentation = Just $ fromIntegral $ fo ^. tabSize}
     region = case typ of
         FormatText ->
             RegionIndices Nothing Nothing
         FormatRange (Range (Position sl _) (Position el _)) ->
-            RegionIndices (Just $ sl + 1) (Just $ el + 1)
+            RegionIndices (Just $ fromIntegral $ sl + 1) (Just $ fromIntegral $ el + 1)
 
 convertDynFlags :: DynFlags -> IO [DynOption]
 convertDynFlags df =

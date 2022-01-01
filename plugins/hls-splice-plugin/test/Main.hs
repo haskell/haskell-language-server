@@ -83,7 +83,7 @@ goldenTestWithEdit fp tc line col =
        theRange =
          Range
          { _start = Position 0 0
-         , _end = Position (length lns + 1) 1
+         , _end = Position (fromIntegral $ length lns + 1) 1
          }
      waitForAllProgressDone -- cradle
      waitForAllProgressDone
@@ -104,7 +104,7 @@ testDataDir :: FilePath
 testDataDir = "test" </> "testdata"
 
 pointRange :: Int -> Int -> Range
-pointRange (subtract 1 -> line) (subtract 1 -> col) =
+pointRange (subtract 1 -> fromIntegral -> line) (subtract 1 -> fromIntegral -> col) =
   Range (Position line col) (Position line $ col + 1)
 
 -- | Get the title of a code action.

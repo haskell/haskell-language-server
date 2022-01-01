@@ -15,6 +15,7 @@
 module Main (main) where
 
 import           Control.Applicative.Combinators
+import           Control.Concurrent.Extra                 as Concurrent
 import           Control.Exception                        (bracket_, catch)
 import qualified Control.Lens                             as Lens
 import           Control.Monad
@@ -87,9 +88,8 @@ import           System.Process.Extra                     (CreateProcess (cwd),
                                                            readCreateProcessWithExitCode)
 import           Test.QuickCheck
 -- import Test.QuickCheck.Instances ()
-import           Control.Concurrent                       (threadDelay)
 import           Control.Concurrent.Async
-import           Control.Lens                             ((^.))
+import           Control.Lens                             ((^.), to)
 import           Control.Monad.Extra                      (whenJust)
 import           Data.IORef
 import           Data.IORef.Extra                         (atomicModifyIORef_)
@@ -114,6 +114,7 @@ import           Test.Tasty.Ingredients.Rerun
 import           Test.Tasty.QuickCheck
 import           Text.Printf                              (printf)
 import           Text.Regex.TDFA                          ((=~))
+import qualified HieDbRetry
 
 -- | Wait for the next progress begin step
 waitForProgressBegin :: Session ()
@@ -182,6 +183,7 @@ main = do
     , codeActionHelperFunctionTests
     , referenceTests
     , garbageCollectionTests
+    , HieDbRetry.tests
     ]
 
 initializeResponseTests :: TestTree
@@ -1991,8 +1993,8 @@ suggestImportTests = testGroup "suggest import actions"
       _diags <- waitForDiagnostics
       -- there isn't a good way to wait until the whole project is checked atm
       when waitForCheckProject $ liftIO $ sleep 0.5
-      let defLine = length imps + 1
-          range = Range (Position defLine 0) (Position defLine maxBoundUinteger)
+      let defLine = fromIntegral $ length imps + 1
+          range = Range (Position defLine 0) (Position defLine maxBound)
       actions <- getCodeActions doc range
       if wanted
          then do
@@ -2305,7 +2307,7 @@ suggestHideShadowTests =
     doc <- createDoc "A.hs" "haskell" $ T.unlines (header <> origin)
     void waitForDiagnostics
     waitForProgressDone
-    cas <- getCodeActions doc (Range (Position (line1 + length header) col1) (Position (line2 + length header) col2))
+    cas <- getCodeActions doc (Range (Position (fromIntegral $ line1 + length header) col1) (Position (fromIntegral $ line2 + length header) col2))
     void $ k [x | x@(InR ca) <- cas, "Hide" `T.isPrefixOf` (ca ^. L.title)]
     contentAfter <- documentContents doc
     liftIO $ contentAfter @?= T.unlines (header <> expected)
@@ -2740,7 +2742,7 @@ fillTypedHoleTests = let
     let expectedCode = sourceCode newA newB newC
     doc <- createDoc "Testing.hs" "haskell" originalCode
     _ <- waitForDiagnostics
-    actionsOrCommands <- getCodeActions doc (Range (Position 9 0) (Position 9 maxBoundUinteger))
+    actionsOrCommands <- getCodeActions doc (Range (Position 9 0) (Position 9 maxBound))
     chosenAction <- liftIO $ pickActionWithTitle actionTitle actionsOrCommands
     executeCodeAction chosenAction
     modifiedCode <- documentContents doc
@@ -2781,7 +2783,7 @@ fillTypedHoleTests = let
             , "ioToSome = " <> x ]
       doc <- createDoc "Test.hs" "haskell" $ mkDoc "_toException"
       _ <- waitForDiagnostics
-      actions <- getCodeActions doc (Range (Position 3 0) (Position 3 maxBoundUinteger))
+      actions <- getCodeActions doc (Range (Position 3 0) (Position 3 maxBound))
       chosen <- liftIO $ pickActionWithTitle "replace _toException with E.toException" actions
       executeCodeAction chosen
       modifiedCode <- documentContents doc
@@ -3276,7 +3278,7 @@ addSigActionTests = let
     let expectedCode = after' def sig
     doc <- createDoc "Sigs.hs" "haskell" originalCode
     _ <- waitForDiagnostics
-    actionsOrCommands <- getCodeActions doc (Range (Position 5 1) (Position 5 maxBoundUinteger))
+    actionsOrCommands <- getCodeActions doc (Range (Position 5 1) (Position 5 maxBound))
     chosenAction <- liftIO $ pickActionWithTitle ("add signature: " <> sig) actionsOrCommands
     executeCodeAction chosenAction
     modifiedCode <- documentContents doc
@@ -3365,7 +3367,7 @@ exportUnusedTests = testGroup "export unused actions"
         "Export ‘bar’"
         (Just $ T.unlines
               [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "module A (foo,bar) where"
+              , "module A (foo, bar) where"
               , "foo = id"
               , "bar = foo"])
     , testSession "multi line explicit exports" $ template
@@ -3382,7 +3384,7 @@ exportUnusedTests = testGroup "export unused actions"
               [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
               , "module A"
               , "  ("
-              , "    foo,bar) where"
+              , "    foo, bar) where"
               , "foo = id"
               , "bar = foo"])
     , testSession "export list ends in comma" $ template
@@ -4095,9 +4097,9 @@ cppTests =
                   "foo = 42"
                 ]
         -- The error locations differ depending on which C-preprocessor is used.
-        -- Some give the column number and others don't (hence -1). Assert either
+        -- Some give the column number and others don't (hence maxBound == -1 unsigned). Assert either
         -- of them.
-        (run $ expectError content (2, -1))
+        (run $ expectError content (2, maxBound))
           `catch` ( \e -> do
                       let _ = e :: HUnitFailure
                       run $ expectError content (2, 1)
@@ -5189,7 +5191,7 @@ outlineTests = testGroup
                                             SkFile
                                             Nothing
                                             Nothing
-                                            (R 0 0 maxBoundUinteger 0)
+                                            (R 0 0 maxBound 0)
                                             loc
                                             (Just $ List cc)
   classSymbol name loc cc = DocumentSymbol name
@@ -5201,7 +5203,7 @@ outlineTests = testGroup
                                            loc
                                            (Just $ List cc)
 
-pattern R :: Int -> Int -> Int -> Int -> Range
+pattern R :: UInt -> UInt -> UInt -> UInt -> Range
 pattern R x y x' y' = Range (Position x y) (Position x' y')
 
 xfail :: TestTree -> String -> TestTree
@@ -5242,10 +5244,10 @@ data Expect
 --  | ExpectExtern -- TODO: as above, but expected to succeed: need some more info in here, once we have some working examples
   deriving Eq
 
-mkR :: Int -> Int -> Int -> Int -> Expect
+mkR :: UInt -> UInt -> UInt -> UInt -> Expect
 mkR startLine startColumn endLine endColumn = ExpectRange $ mkRange startLine startColumn endLine endColumn
 
-mkL :: Uri -> Int -> Int -> Int -> Int -> Expect
+mkL :: Uri -> UInt -> UInt -> UInt -> UInt -> Expect
 mkL uri startLine startColumn endLine endColumn = ExpectLocation $ Location uri $ mkRange startLine startColumn endLine endColumn
 
 haddockTests :: TestTree
@@ -5932,14 +5934,14 @@ referenceTest name loc includeDeclaration expected =
   where
     docs = map fst3 expected
 
-type SymbolLocation = (FilePath, Int, Int)
+type SymbolLocation = (FilePath, UInt, UInt)
 
 expectSameLocations :: [Location] -> [SymbolLocation] -> Assertion
 expectSameLocations actual expected = do
     let actual' =
             Set.map (\location -> (location ^. L.uri
-                                   , location ^. L.range . L.start . L.line
-                                   , location ^. L.range . L.start . L.character))
+                                   , location ^. L.range . L.start . L.line . to fromIntegral
+                                   , location ^. L.range . L.start . L.character . to fromIntegral))
             $ Set.fromList actual
     expected' <- Set.fromList <$>
         (forM expected $ \(file, l, c) -> do
@@ -5985,7 +5987,7 @@ pickActionWithTitle title actions = do
         , title == actionTitle
         ]
 
-mkRange :: Int -> Int -> Int -> Int -> Range
+mkRange :: UInt -> UInt -> UInt -> UInt -> Range
 mkRange a b c d = Range (Position a b) (Position c d)
 
 run :: Session a -> IO a
@@ -6054,7 +6056,7 @@ getConfigFromEnv = do
     convertVal _   = True
 
 lspTestCaps :: ClientCapabilities
-lspTestCaps = fullCaps { _window = Just $ WindowClientCapabilities $ Just True }
+lspTestCaps = fullCaps { _window = Just $ WindowClientCapabilities (Just True) Nothing Nothing }
 
 openTestDataDoc :: FilePath -> Session TextDocumentIdentifier
 openTestDataDoc path = do
@@ -6386,24 +6388,28 @@ genRope = Rope.fromText . getPrintableText <$> arbitrary
 
 genPosition :: Rope -> Gen Position
 genPosition r = do
-    row <- choose (0, max 0 $ rows - 1)
+    let rows = Rope.rows r
+    row <- choose (0, max 0 $ rows - 1) `suchThat` inBounds @UInt
     let columns = Rope.columns (nthLine row r)
-    column <- choose (0, max 0 $ columns - 1)
-    pure $ Position row column
-    where rows = Rope.rows r
+    column <- choose (0, max 0 $ columns - 1) `suchThat` inBounds @UInt
+    pure $ Position (fromIntegral row) (fromIntegral column)
 
 genRange :: Rope -> Gen Range
 genRange r = do
+    let rows = Rope.rows r
     startPos@(Position startLine startColumn) <- genPosition r
-    let maxLineDiff = max 0 $ rows - 1 - startLine
-    endLine <- choose (startLine, startLine + maxLineDiff)
-    let columns = Rope.columns (nthLine endLine r)
+    let maxLineDiff = max 0 $ rows - 1 - fromIntegral startLine
+    endLine <- choose (fromIntegral startLine, fromIntegral startLine + maxLineDiff) `suchThat` inBounds @UInt
+    let columns = Rope.columns (nthLine (fromIntegral endLine) r)
     endColumn <-
-        if startLine == endLine
-            then choose (startColumn, columns)
+        if fromIntegral startLine == endLine
+            then choose (fromIntegral startColumn, columns)
             else choose (0, max 0 $ columns - 1)
-    pure $ Range startPos (Position endLine endColumn)
-    where rows = Rope.rows r
+        `suchThat` inBounds @UInt
+    pure $ Range startPos (Position (fromIntegral endLine) (fromIntegral endColumn))
+
+inBounds :: forall b a . (Integral a, Integral b, Bounded b) => a -> Bool
+inBounds a = let i = toInteger a in i <= toInteger (maxBound @b) && i >= toInteger (minBound @b)
 
 -- | Get the ith line of a rope, starting from 0. Trailing newline not included.
 nthLine :: Int -> Rope -> Rope
@@ -6442,11 +6448,6 @@ listOfChar | ghcVersion >= GHC90 = "String"
            | otherwise = "[Char]"
 
 -- | Ghc 9 doesn't include the $-sign in TH warnings like earlier versions did
-thDollarIdx :: Int
+thDollarIdx :: UInt
 thDollarIdx | ghcVersion >= GHC90 = 1
             | otherwise = 0
-
--- | We don't have a uinteger type yet. So hardcode the maxBound of uinteger, 2 ^ 31 - 1
--- as a constant.
-maxBoundUinteger :: Int
-maxBoundUinteger = 2147483647

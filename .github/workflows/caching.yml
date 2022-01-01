@@ -143,15 +143,18 @@ jobs:
           echo "INDEX_STATE=$INDEX_STATE1" >> $GITHUB_ENV
 
       - name: Form the package list ('cabal.project.freeze')
-        continue-on-error: true
+        id: compute-cache-key
         run: |
           cabal v2-freeze && \
-          echo '' && \
+          echo "" && \
           echo 'Output:' && \
-          echo '' && \
+          echo "" && \
           cat 'cabal.project.freeze' && \
           echo '' || \
-          echo 'WARNING: Could not produce the `freeze`.
+          echo 'WARNING: Could not produce the `freeze`.'
+          echo ::set-output name=value::${{ hashFiles('cabal.project.freeze') }}
+          # Removing freeze file as it can break builds using allow-newer
+          rm -f cabal.project.freeze
 
       # 2021-12-02: NOTE: Cabal Hackage source tree storage does not depend on OS or GHC really,
       # but can depend on `base`.
@@ -164,10 +167,8 @@ jobs:
           cache-name: hackage-sources
         with:
           path:  ${{ env.CABAL_PKGS_DIR }}
-          key:   ${{ env.cache-name }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project.freeze') }}
-          restore-keys: |
-                 ${{ env.cache-name }}-${{ env.INDEX_STATE }}-
-                 ${{ env.cache-name }}-
+          key:   ${{ env.cache-name }}-${{ env.INDEX_STATE }}
+          restore-keys: ${{ env.cache-name }}-
 
       - name: Compiled deps cache
         id: compiled-deps
@@ -176,11 +177,15 @@ jobs:
           cache-name: compiled-deps
         with:
           path: ${{ steps.HaskEnvSetup.outputs.cabal-store }}
-          key:  ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project.freeze') }}
+          key:  ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-${{ steps.compute-cache-key.outputs.value }}
           restore-keys: |
                 ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-
                 ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
                 ${{ env.cache-name }}-${{ runner.os }}-
+
+      # To ensure we get the lastest hackage index and not relying on haskell action logic
+      - if: steps.compiled-deps.outputs.cache-hit != 'true'
+        run: cabal update
 
       - if: steps.compiled-deps.outputs.cache-hit != 'true' && runner.os == 'Linux' && matrix.ghc == '8.10.7'
         name: Download sources for bench

@@ -234,19 +234,19 @@ outgoingCalls state pluginId param = do
 
 mkCallHierarchyCall :: (CallHierarchyItem -> List Range -> a) -> Vertex -> Action (Maybe a)
 mkCallHierarchyCall mk v@Vertex{..} = do
-  let pos = Position (sl - 1) (sc - 1)
+  let pos = Position (fromIntegral $ sl - 1) (fromIntegral $ sc - 1)
       nfp = toNormalizedFilePath' hieSrc
-      range = mkRange (casl - 1) (casc - 1) (cael - 1) (caec - 1)
+      range = mkRange (fromIntegral $ casl - 1) (fromIntegral $ casc - 1) (fromIntegral $ cael - 1) (fromIntegral $ caec - 1)
 
   prepareCallHierarchyItem nfp pos >>=
     \case
       Just [item] -> pure $ Just $ mk item (List [range])
       _           -> do
-        ShakeExtras{hiedb} <- getShakeExtras
-        liftIO (Q.getSymbolPosition hiedb v) >>=
+        ShakeExtras{withHieDb} <- getShakeExtras
+        liftIO (withHieDb (`Q.getSymbolPosition` v)) >>=
           \case
             (x:_) ->
-              prepareCallHierarchyItem nfp (Position (psl x - 1) (psc x - 1)) >>=
+              prepareCallHierarchyItem nfp (Position (fromIntegral $ psl x - 1) (fromIntegral $ psc x - 1)) >>=
                 \case
                   Just [item] -> pure $ Just $ mk item (List [range])
                   _           -> pure Nothing
@@ -263,12 +263,12 @@ queryCalls item queryFunc makeFunc merge
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
     refreshHieDb
 
-    ShakeExtras{hiedb} <- getShakeExtras
+    ShakeExtras{withHieDb} <- getShakeExtras
     maySymbol <- getSymbol nfp
     case maySymbol of
       Nothing -> error "CallHierarchy.Impossible"
       Just symbol -> do
-        vs <- liftIO $ queryFunc hiedb symbol
+        vs <- liftIO $ withHieDb (`queryFunc` symbol)
         items <- Just . catMaybes <$> mapM makeFunc vs
         pure $ merge <$> items
   | otherwise = pure Nothing

@@ -152,13 +152,17 @@ delayedProgressReporting before after lspEnv optProgressStyle = do
                         }
                 loop _ _ | optProgressStyle == NoProgress =
                     forever $ liftIO $ threadDelay maxBound
-                loop id prev = do
+                loop id prevPct = do
                     done <- liftIO $ readTVarIO doneVar
                     todo <- liftIO $ readTVarIO todoVar
                     liftIO $ sleep after
                     if todo == 0 then loop id 0 else do
-                        let next = 100 * fromIntegral done / fromIntegral todo
-                        when (next /= prev) $
+                        let
+                            nextFrac :: Double
+                            nextFrac = fromIntegral done / fromIntegral todo
+                            nextPct :: UInt
+                            nextPct = floor $ 100 * nextFrac
+                        when (nextPct /= prevPct) $
                           LSP.sendNotification LSP.SProgress $
                           LSP.ProgressParams
                               { _token = id
@@ -171,11 +175,11 @@ delayedProgressReporting before after lspEnv optProgressStyle = do
                                   Percentage -> LSP.WorkDoneProgressReportParams
                                     { _cancellable = Nothing
                                     , _message = Nothing
-                                    , _percentage = Just next
+                                    , _percentage = Just nextPct
                                     }
                                   NoProgress -> error "unreachable"
                               }
-                        loop id next
+                        loop id nextPct
 
         updateStateForFile inProgress file = actionBracket (f succ) (const $ f pred) . const
             -- This functions are deliberately eta-expanded to avoid space leaks.

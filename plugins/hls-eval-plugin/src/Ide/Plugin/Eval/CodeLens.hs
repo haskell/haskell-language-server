@@ -326,8 +326,8 @@ addFinalReturn mdlText edits
 finalReturn :: Text -> TextEdit
 finalReturn txt =
     let ls = T.lines txt
-        l = length ls -1
-        c = T.length . last $ ls
+        l = fromIntegral $ length ls -1
+        c = fromIntegral $ T.length . last $ ls
         p = Position l c
      in TextEdit (Range p p) "\n"
 

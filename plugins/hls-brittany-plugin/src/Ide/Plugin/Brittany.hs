@@ -1,48 +1,54 @@
+{-# LANGUAGE LambdaCase   #-}
+{-# LANGUAGE MultiWayIf   #-}
 {-# LANGUAGE PolyKinds    #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE MultiWayIf   #-}
-{-# LANGUAGE LambdaCase   #-}
 module Ide.Plugin.Brittany where
 
-import           Control.Exception           (bracket_)
+import           Control.Exception                               (bracket_)
 import           Control.Lens
 import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Maybe   (MaybeT, runMaybeT)
-import           Data.Maybe                  (mapMaybe, maybeToList, fromMaybe)
+import           Control.Monad.Trans.Maybe                       (MaybeT,
+                                                                  runMaybeT)
+import           Data.Maybe                                      (fromMaybe,
+                                                                  mapMaybe,
+                                                                  maybeToList)
 import           Data.Semigroup
-import           Data.Text                   (Text)
-import qualified Data.Text                   as T
-import           Development.IDE             hiding (pluginHandlers)
-import qualified Development.IDE.GHC.Compat  as GHC hiding (Cpp)
-import qualified DynFlags                    as D
-import qualified EnumSet                     as S
+import           Data.Text                                       (Text)
+import qualified Data.Text                                       as T
+import           Development.IDE                                 hiding
+                                                                 (pluginHandlers)
+import qualified Development.IDE.GHC.Compat                      as GHC hiding
+                                                                        (Cpp)
+import qualified DynFlags                                        as D
+import qualified EnumSet                                         as S
 import           GHC.LanguageExtensions.Type
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.Haskell.Brittany
-import           Language.LSP.Types          as J
-import qualified Language.LSP.Types.Lens     as J
-import           System.Environment          (setEnv, unsetEnv)
+import           Language.LSP.Types                              as J
+import qualified Language.LSP.Types.Lens                         as J
+import           System.Environment                              (setEnv,
+                                                                  unsetEnv)
 import           System.FilePath
 
 -- These imports are for the temporary pPrintText & can be removed when
 -- issue #2005 is resolved
-import           Language.Haskell.Brittany.Internal.Config.Types
+import           Control.Monad.Trans.Class                       (lift)
+import qualified Control.Monad.Trans.Except                      as ExceptT
+import           Data.CZipWith
+import qualified Data.List                                       as List
+import qualified Data.Text                                       as Text
+import qualified Data.Text.Lazy                                  as TextL
+import qualified GHC
+import qualified GHC.LanguageExtensions.Type                     as GHC
 import           Language.Haskell.Brittany.Internal
+import           Language.Haskell.Brittany.Internal.Config
+import           Language.Haskell.Brittany.Internal.Config.Types
+import           Language.Haskell.Brittany.Internal.Obfuscation
 import           Language.Haskell.Brittany.Internal.Types
 import           Language.Haskell.Brittany.Internal.Utils
-import           Language.Haskell.Brittany.Internal.Obfuscation
-import           Language.Haskell.Brittany.Internal.Config
-import           Data.CZipWith
-import           Control.Monad.Trans.Class (lift)
-import qualified Control.Monad.Trans.Except as ExceptT
-import qualified Data.List as List
-import qualified Data.Text as Text
-import qualified Language.Haskell.GHC.ExactPrint as ExactPrint
-import qualified Language.Haskell.GHC.ExactPrint.Types as ExactPrint
-import qualified Data.Text.Lazy as TextL
-import qualified GHC
-import qualified GHC.LanguageExtensions.Type as GHC
+import qualified Language.Haskell.GHC.ExactPrint                 as ExactPrint
+import qualified Language.Haskell.GHC.ExactPrint.Types           as ExactPrint
 
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -80,7 +86,7 @@ formatText
   -> m (Either [BrittanyError] Text) -- ^ Either formatted Text or a error from Brittany.
 formatText df confFile opts text =
   liftIO $ runBrittany tabSize df confFile text
-  where tabSize = opts ^. J.tabSize
+  where tabSize = fromIntegral $ opts ^. J.tabSize
 
 -- | Recursively search in every directory of the given filepath for brittany.yaml.
 -- If no such file has been found, return Nothing.
@@ -261,6 +267,6 @@ pPrintText config text =
 
 isError :: BrittanyError -> Bool
 isError = \case
-    LayoutWarning{} -> False
+    LayoutWarning{}    -> False
     ErrorUnknownNode{} -> False
-    _ -> True
+    _                  -> True

@@ -433,7 +433,7 @@ failIfSessionTimeout action = action `catch` errorHandler
 
 -- | To locate a symbol, we provide a path to the file from the HLS root
 -- directory, the line number, and the column number. (0 indexed.)
-type SymbolLocation = (FilePath, Int, Int)
+type SymbolLocation = (FilePath, UInt, UInt)
 
 expectSameLocations :: [Location] -> [SymbolLocation] -> Assertion
 actual `expectSameLocations` expected = do
