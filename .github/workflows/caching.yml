@@ -146,9 +146,9 @@ jobs:
         id: compute-cache-key
         run: |
           cabal v2-freeze && \
-          echo '' && \
+          echo "" && \
           echo 'Output:' && \
-          echo '' && \
+          echo "" && \
           cat 'cabal.project.freeze' && \
           echo '' || \
           echo 'WARNING: Could not produce the `freeze`.'

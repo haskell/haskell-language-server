@@ -1,5 +1,8 @@
 {-# LANGUAGE CPP                 #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+#ifdef STM_STATS
+{-# LANGUAGE RecordWildCards #-}
+#endif
 module Control.Concurrent.STM.Stats
     ( atomicallyNamed
     , atomically
@@ -180,4 +183,3 @@ dumpSTMStats = do
 
 
 #endif
-
