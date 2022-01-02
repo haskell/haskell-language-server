@@ -8,9 +8,9 @@ import           Prelude                         hiding ((<>))
 import qualified Data.ByteString                 as B
 import           Development.IDE.GHC.Compat.Util (Bag, bagToList)
 import           GHC.Hs
-import           GHC.Plugins
 import           Generics.SYB                    (ext1Q, ext2Q, extQ)
-import           Language.Haskell.GHC.ExactPrint (ExactPrint, exactPrint)
+#elif MIN_VERSION_ghc(9,0,1)
+import           GHC.Plugins
 #else
 import           GhcPlugins
 #endif
