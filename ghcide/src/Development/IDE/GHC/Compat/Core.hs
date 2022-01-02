@@ -194,7 +194,11 @@ module Development.IDE.GHC.Compat.Core (
     getLocA,
     locA,
     LocatedAn,
+#if MIN_VERSION_ghc(9,2,0)
+    GHC.AnnListItem(..),
+#else
     AnnListItem,
+#endif
     NameAnn,
     SrcLoc.RealLocated,
     SrcLoc.GenLocated(..),
@@ -814,7 +818,7 @@ instance HasSrcSpan (SrcLoc.GenLocated SrcSpan a) where
 instance HasSrcSpan (SrcSpanAnn' ann) where
   getLoc = locA
 instance HasSrcSpan (SrcLoc.GenLocated (SrcSpanAnn' ann) a) where
-  getLoc = getLoc . getLoc
+  getLoc (L l _) = l
 
 pattern L l a <- GHC.L (getLoc -> l) a
 #endif
@@ -1011,9 +1015,7 @@ getLocA = GHC.getLocA
 getLocA x = GHC.getLoc x
 #endif
 
-#if MIN_VERSION_ghc(9,2,0)
-type AnnListItem = GHC.AnnListItem
-#else
+#if !MIN_VERSION_ghc(9,2,0)
 type AnnListItem = SrcLoc.SrcSpan
 #endif
 

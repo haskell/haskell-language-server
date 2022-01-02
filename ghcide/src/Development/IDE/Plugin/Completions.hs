@@ -23,9 +23,7 @@ import           Development.IDE.Core.Service
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error                    (rangeToSrcSpan)
-import           Development.IDE.GHC.ExactPrint               (Annotated (..),
-                                                               GetAnnotatedParsedSource (GetAnnotatedParsedSource),
-                                                               astA)
+import           Development.IDE.GHC.ExactPrint               (GetAnnotatedParsedSource (GetAnnotatedParsedSource))
 import           Development.IDE.GHC.Util                     (prettyPrint)
 import           Development.IDE.Graph
 import           Development.IDE.Plugin.CodeAction            (newImport,
@@ -232,7 +230,7 @@ extendImportHandler' ideState ExtendImport {..}
                 (annsA ps)
 #endif
                 $
-                  extendImport (T.unpack <$> thingParent) (T.unpack newThing) imp
+                  extendImport (T.unpack <$> thingParent) (T.unpack newThing) (makeDeltaAst imp)
         Nothing -> do
             let n = newImport importName sym importQual False
                 sym = if isNothing importQual then Just it else Nothing

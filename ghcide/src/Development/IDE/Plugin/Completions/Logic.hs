@@ -268,12 +268,6 @@ mkNameCompItem doc thingParent origName provenance thingType isInfix docs !imp =
             where
                 noParensSnippet = snippetText i (showForSnippet t)
                 snippetText i t = "${" <> T.pack (show i) <> ":" <> t <> "}"
-#if MIN_VERSION_ghc(9,2,0)
-        showForSnippet x = T.pack $ renderWithContext ctxt $ GHC.ppr x -- FIXme
-        ctxt = defaultSDocContext{sdocStyle = mkUserStyle neverQualify AllTheWay}
-#else
-        showForSnippet x = showGhc x
-#endif
         getArgs :: Type -> [Type]
         getArgs t
           | isPredTy t = []
@@ -293,6 +287,15 @@ mkNameCompItem doc thingParent origName provenance thingType isInfix docs !imp =
 #endif
           | otherwise = []
 
+
+showForSnippet :: Outputable a => a -> T.Text
+#if MIN_VERSION_ghc(9,2,0)
+showForSnippet x = T.pack $ renderWithContext ctxt $ GHC.ppr x -- FIXme
+    where
+        ctxt = defaultSDocContext{sdocStyle = mkUserStyle neverQualify AllTheWay}
+#else
+showForSnippet x = showGhc x
+#endif
 
 mkModCompl :: T.Text -> CompletionItem
 mkModCompl label =
@@ -450,7 +453,7 @@ localCompletionsForParsedModule uri pm@ParsedModule{pm_parsed_source = L _ HsMod
     compls = concat
         [ case decl of
             SigD _ (TypeSig _ ids typ) ->
-                [mkComp id CiFunction (Just $ ppr typ) | id <- ids]
+                [mkComp id CiFunction (Just $ showForSnippet typ) | id <- ids]
             ValD _ FunBind{fun_id} ->
                 [ mkComp fun_id CiFunction Nothing
                 | not (hasTypeSig fun_id)
@@ -459,12 +462,12 @@ localCompletionsForParsedModule uri pm@ParsedModule{pm_parsed_source = L _ HsMod
                 [mkComp id CiVariable Nothing
                 | VarPat _ id <- listify (\(_ :: Pat GhcPs) -> True) pat_lhs]
             TyClD _ ClassDecl{tcdLName, tcdSigs} ->
-                mkComp tcdLName CiInterface (Just $ ppr tcdLName) :
-                [ mkComp id CiFunction (Just $ ppr typ)
+                mkComp tcdLName CiInterface (Just $ showForSnippet tcdLName) :
+                [ mkComp id CiFunction (Just $ showForSnippet typ)
                 | L _ (ClassOpSig _ _ ids typ) <- tcdSigs
                 , id <- ids]
             TyClD _ x ->
-                let generalCompls = [mkComp id cl (Just $ ppr $ tcdLName x)
+                let generalCompls = [mkComp id cl (Just $ showForSnippet $ tcdLName x)
                         | id <- listify (\(_ :: LIdP GhcPs) -> True) x
                         , let cl = occNameToComKind Nothing (rdrNameOcc $ unLoc id)]
                     -- here we only have to look at the outermost type
@@ -473,9 +476,9 @@ localCompletionsForParsedModule uri pm@ParsedModule{pm_parsed_source = L _ HsMod
                    -- the constructors and snippets will be duplicated here giving the user 2 choices.
                    generalCompls ++ recordCompls
             ForD _ ForeignImport{fd_name,fd_sig_ty} ->
-                [mkComp fd_name CiVariable (Just $ ppr fd_sig_ty)]
+                [mkComp fd_name CiVariable (Just $ showForSnippet fd_sig_ty)]
             ForD _ ForeignExport{fd_name,fd_sig_ty} ->
-                [mkComp fd_name CiVariable (Just $ ppr fd_sig_ty)]
+                [mkComp fd_name CiVariable (Just $ showForSnippet fd_sig_ty)]
             _ -> []
             | L (locA -> pos) decl <- hsmodDecls,
             let mkComp = mkLocalComp pos
@@ -488,7 +491,7 @@ localCompletionsForParsedModule uri pm@ParsedModule{pm_parsed_source = L _ HsMod
         -- to tell local completions and global completions apart
         -- instead of using the empty string here, we should probably introduce a new field...
         ensureTypeText = Just $ fromMaybe "" ty
-        pn = ppr n
+        pn = showForSnippet n
         doc = SpanDocText (getDocumentation [pm] $ reLoc n) (SpanDocUris Nothing Nothing)
 
 findRecordCompl :: Uri -> ParsedModule -> Provenance -> TyClDecl GhcPs -> [CompItem]
@@ -621,8 +624,8 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
             where
               occ = nameOccName name
               ctyp = occNameToComKind Nothing occ
-              pn = ppr name
-              ty = ppr <$> typ
+              pn = showForSnippet name
+              ty = showForSnippet <$> typ
               thisModName = Local $ nameSrcSpan name
 
           compls = if T.null prefixModule

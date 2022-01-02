@@ -23,7 +23,7 @@ import           Control.Applicative                               ((<|>))
 import           Control.Arrow                                     (second,
                                                                     (>>>))
 import           Control.Concurrent.STM.Stats                      (atomically)
-import           Control.Monad                                     (guard, join)
+import           Control.Monad                                     (guard, join, msum)
 import           Control.Monad.IO.Class
 import           Data.Char
 import qualified Data.DList                                        as DL
@@ -48,7 +48,7 @@ import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Util                          (prettyPrint,
                                                                     printRdrName,
-                                                                    unsafePrintSDoc)
+                                                                    unsafePrintSDoc, traceAst)
 import           Development.IDE.Plugin.CodeAction.Args
 import           Development.IDE.Plugin.CodeAction.ExactPrint
 import           Development.IDE.Plugin.CodeAction.PositionIndexed
@@ -79,6 +79,7 @@ import           Language.LSP.Types                                (CodeAction (
 import           Language.LSP.VFS
 import           Text.Regex.TDFA                                   (mrAfter,
                                                                     (=~), (=~~))
+import Development.IDE.GHC.ExactPrint
 
 -------------------------------------------------------------------------------------------------
 
@@ -150,12 +151,12 @@ findSigOfDecl pred decls =
         any (pred . unLoc) idsSig
     ]
 
-findSigOfDeclRanged :: p ~ GhcPass p0 => Range -> [LHsDecl p] -> Maybe (Sig p)
+findSigOfDeclRanged :: Range -> [LHsDecl GhcPs] -> Maybe (Sig GhcPs)
 findSigOfDeclRanged range decls = do
   dec <- findDeclContainingLoc (_start range) decls
   case dec of
      L _ (SigD _ sig@TypeSig {})     -> Just sig
-     L _ (ValD _ (bind :: HsBind p)) -> findSigOfBind range bind
+     L _ (ValD _ (bind :: HsBind p)) -> findSigOfBind range (traceAst "bind" bind)
      _                               -> Nothing
 
 findSigOfBind :: forall p p0. p ~ GhcPass p0 => Range -> HsBind p -> Maybe (Sig p)
@@ -167,27 +168,25 @@ findSigOfBind range bind =
     findSigOfLMatch :: [LMatch p (LHsExpr p)] -> Maybe (Sig p)
     findSigOfLMatch ls = do
       match <- findDeclContainingLoc (_start range) ls
-      let rhs = m_grhss $ unLoc match
+      let grhs = m_grhss $ unLoc match
 #if !MIN_VERSION_ghc(9,2,0)
-          span = getLoc $ reLoc $ grhssLocalBinds rhs
-#else
-          span = getLoc $ reLoc $ match
-#endif
-      findSigOfGRHSs span rhs
-
-    findSigOfGRHSs :: SrcSpan -> GRHSs p (LHsExpr p) -> Maybe (Sig p)
-    findSigOfGRHSs span grhs = do
-        if _start range `isInsideSrcSpan` span
-#if !MIN_VERSION_ghc(9,2,0)
+          span = getLoc $ reLoc $ grhssLocalBinds grhs
+      if _start range `isInsideSrcSpan` span
         then findSigOfBinds range (unLoc (grhssLocalBinds grhs)) -- where clause
-#else
-        then findSigOfBinds range (grhssLocalBinds grhs) -- where clause
-#endif
         else do
           grhs <- findDeclContainingLoc (_start range) (map reLocA $ grhssGRHSs grhs)
           case unLoc grhs of
             GRHS _ _ bd -> findSigOfExpr (unLoc bd)
             _           -> Nothing
+#else
+      msum
+        [findSigOfBinds range (grhssLocalBinds grhs) -- where clause
+        , do
+          grhs <- findDeclContainingLoc (_start range) (map reLocA $ grhssGRHSs grhs)
+          case unLoc grhs of
+            GRHS _ _ bd -> findSigOfExpr (unLoc bd)
+        ]
+#endif
 
     findSigOfExpr :: HsExpr p -> Maybe (Sig p)
     findSigOfExpr = go
@@ -223,8 +222,8 @@ findInstanceHead df instanceHead decls =
         showSDoc df (ppr hsib_body) == instanceHead
     ]
 
+-- findDeclContainingLoc :: Position -> [GenLocated (SrcSpanAnn' a) e] -> Maybe (GenLocated (SrcSpanAnn' a) e)
 findDeclContainingLoc loc = find (\(L l _) -> loc `isInsideSrcSpan` locA l)
-
 
 -- Single:
 -- This binding for ‘mod’ shadows the existing binding
@@ -1061,9 +1060,10 @@ suggestFixConstructorImport Diagnostic{_range=_range,..}
   = let fixedImport = typ <> "(" <> constructor <> ")"
     in [("Fix import of " <> fixedImport, TextEdit _range fixedImport)]
   | otherwise = []
+
 -- | Suggests a constraint for a declaration for which a constraint is missing.
 suggestConstraint :: DynFlags -> ParsedSource -> Diagnostic -> [(T.Text, Rewrite)]
-suggestConstraint df parsedModule diag@Diagnostic {..}
+suggestConstraint df (makeDeltaAst -> parsedModule) diag@Diagnostic {..}
   | Just missingConstraint <- findMissingConstraint _message
   = let codeAction = if _message =~ ("the type signature for:" :: String)
                         then suggestFunctionConstraint df parsedModule
@@ -1204,7 +1204,7 @@ removeRedundantConstraints df (L _ HsModule {hsmodDecls}) Diagnostic{..}
 #else
   , Just (TypeSig _ _ HsWC{hswc_body = (unLoc -> HsSig {sig_body = sig})})
 #endif
-    <- findSigOfDeclRanged _range hsmodDecls
+    <- fmap(traceAst "redundantConstraint") $ findSigOfDeclRanged _range hsmodDecls
   , Just redundantConstraintList <- findRedundantConstraints _message
   , rewrite <- removeConstraint (toRemove df redundantConstraintList) sig
       = [(actionTitle redundantConstraintList typeSignatureName, rewrite)]

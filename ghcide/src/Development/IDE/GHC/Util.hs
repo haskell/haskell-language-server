@@ -28,49 +28,25 @@ module Development.IDE.GHC.Util(
     setHieDir,
     dontWriteHieFiles,
     disableWarningsAsErrors,
-    tracePpr) where
+    traceAst) where
 
 #if MIN_VERSION_ghc(9,2,0)
-import           GHC
-import           GHC.Core.Multiplicity
-import qualified GHC.Core.TyCo.Rep                 as TyCoRep
 import           GHC.Data.FastString
 import           GHC.Data.StringBuffer
 import           GHC.Driver.Env
-import           GHC.Driver.Env.Types
 import           GHC.Driver.Monad
 import           GHC.Driver.Session                hiding (ExposePackage)
-import qualified GHC.Driver.Session                as DynFlags
-import           GHC.Hs.Extension
-import qualified GHC.Hs.Type                       as GHC
-import           GHC.Iface.Env                     (updNameCache)
-import           GHC.Iface.Make                    (mkIfaceExports)
-import qualified GHC.Linker.Types                  as LinkerTypes
 import           GHC.Parser.Lexer
 import           GHC.Runtime.Context
-import           GHC.Tc.Types                      (TcGblEnv (tcg_exports))
-import           GHC.Tc.Utils.TcType               (pprSigmaType)
-import           GHC.Types.Avail
-import           GHC.Types.Name.Cache
 import           GHC.Types.Name.Occurrence
 import           GHC.Types.Name.Reader
 import           GHC.Types.SrcLoc
-import qualified GHC.Types.SrcLoc                  as SrcLoc
-import           GHC.Unit.Env
-import           GHC.Unit.Info                     (PackageName)
-import qualified GHC.Unit.Info                     as Packages
-import qualified GHC.Unit.Module.Location          as Module
 import           GHC.Unit.Module.ModDetails
 import           GHC.Unit.Module.ModGuts
-import           GHC.Unit.Module.ModIface          (mi_mod_hash)
-import           GHC.Unit.Module.Name              (moduleNameSlashes)
-import qualified GHC.Unit.State                    as Packages
-import           GHC.Unit.Types                    (IsBootInterface (..),
-                                                    unitString)
-import qualified GHC.Unit.Types                    as Module
 import           GHC.Utils.Fingerprint
 import           GHC.Utils.Outputable
-import qualified GHC.Utils.Outputable              as Outputable
+#else
+import           Development.IDE.GHC.Compat.Util
 #endif
 import           Control.Concurrent
 import           Control.Exception                 as E
@@ -99,6 +75,7 @@ import           Development.IDE.Types.Location
 import           Foreign.ForeignPtr
 import           Foreign.Ptr
 import           Foreign.Storable
+import           GHC
 import           GHC.IO.BufferedIO                 (BufferedIO)
 import           GHC.IO.Device                     as IODevice
 import           GHC.IO.Encoding
@@ -106,7 +83,6 @@ import           GHC.IO.Exception
 import           GHC.IO.Handle.Internals
 import           GHC.IO.Handle.Types
 import           GHC.Stack
-import           Language.Haskell.GHC.ExactPrint   (ExactPrint, exactPrint)
 import           System.Environment.Blank          (getEnvDefault)
 import           System.FilePath
 import           System.IO.Unsafe
@@ -325,8 +301,11 @@ traceAst lbl x
   | debugAST = trace doTrace x
   | otherwise = x
   where
+#if MIN_VERSION_ghc(9,2,0)
     renderDump = renderWithContext defaultSDocContext{sdocStyle = defaultDumpStyle, sdocPprDebug = True}
-    -- plainDump = showAstData NoBlankSrcSpan NoBlankEpAnnotations x
+#else
+    renderDump = unsafePrintSDoc
+#endif
     htmlDump = showAstDataHtml x
     doTrace = unsafePerformIO $ do
         u <- U.newUnique
@@ -334,8 +313,9 @@ traceAst lbl x
         writeFile htmlDumpFileName $ renderDump htmlDump
         return $ unlines
             [prettyCallStack callStack ++ ":"
+#if MIN_VERSION_ghc(9,2,0)
             , exactPrint x
-            -- , renderDump plainDump
+#endif
             , "file://" ++ htmlDumpFileName]
 
 

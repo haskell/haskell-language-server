@@ -53,6 +53,7 @@ module Development.IDE.GHC.Compat(
     -- * Compat modules
     module Development.IDE.GHC.Compat.Core,
     module Development.IDE.GHC.Compat.Env,
+    module Development.IDE.GHC.Compat.ExactPrint,
     module Development.IDE.GHC.Compat.Iface,
     module Development.IDE.GHC.Compat.Logger,
     module Development.IDE.GHC.Compat.Outputable,
@@ -70,6 +71,7 @@ import           GHC                    hiding (HasSrcSpan, ModLocation, getLoc,
                                          lookupName, RealSrcSpan)
 import Development.IDE.GHC.Compat.Core
 import Development.IDE.GHC.Compat.Env
+import Development.IDE.GHC.Compat.ExactPrint
 import Development.IDE.GHC.Compat.Iface
 import Development.IDE.GHC.Compat.Logger
 import Development.IDE.GHC.Compat.Outputable

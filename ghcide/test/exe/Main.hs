@@ -1737,7 +1737,8 @@ extendImportTests = testGroup "extend import actions"
                     , "import A (pattern Some)"
                     , "k (Some x) = x"
                     ])
-        , testSession "type constructor name same as data constructor name" $ template
+        , ignoreForGHC92 "Diagnostic message has no suggestions" $
+          testSession "type constructor name same as data constructor name" $ template
             [("ModuleA.hs", T.unlines
                     [ "module ModuleA where"
                     , "newtype Foo = Foo Int"
@@ -3326,7 +3327,8 @@ exportUnusedTests = testGroup "export unused actions"
         (R 2 0 2 11)
         "Export ‘bar’"
         Nothing
-    , testSession "type is exported but not the constructor of same name" $ template
+    , ignoreForGHC92 "Diagnostic message has no suggestions" $
+      testSession "type is exported but not the constructor of same name" $ template
         (T.unlines
               [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
               , "module A (Foo) where"
@@ -4077,7 +4079,7 @@ pluginSimpleTests =
 pluginParsedResultTests :: TestTree
 pluginParsedResultTests =
   ignoreInWindowsForGHC88And810 $
-  ignoreForGHC92 $
+  ignoreForGHC92 "No need for this plugin anymore!" $
   testSessionWithExtraFiles "plugin-recorddot" "parsedResultAction plugin" $ \dir -> do
     _ <- openDoc (dir</> "RecordDot.hs") "haskell"
     expectNoMoreDiagnostics 2
@@ -5217,9 +5219,9 @@ ignoreInWindowsForGHC88And810
         ignoreInWindowsBecause "tests are unreliable in windows for ghc 8.8 and 8.10"
     | otherwise = id
 
-ignoreForGHC92 :: TestTree -> TestTree
-ignoreForGHC92
-    | ghcVersion == GHC92 = ignoreTestBecause "GHC 9.2"
+ignoreForGHC92 :: String -> TestTree -> TestTree
+ignoreForGHC92 msg
+    | ghcVersion == GHC92 = ignoreTestBecause msg
     | otherwise = id
 
 ignoreInWindowsForGHC88 :: TestTree -> TestTree

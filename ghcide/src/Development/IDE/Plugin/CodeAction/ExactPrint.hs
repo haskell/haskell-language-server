@@ -3,6 +3,8 @@
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RankNTypes         #-}
 {-# LANGUAGE CPP                #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module Development.IDE.Plugin.CodeAction.ExactPrint (
   Rewrite (..),
@@ -33,21 +35,30 @@ import           Data.Maybe                            (fromJust, isNothing,
                                                         mapMaybe)
 import qualified Data.Text                             as T
 import           Development.IDE.GHC.Compat
-import qualified Development.IDE.GHC.Compat.Util       as Util
 import           Development.IDE.GHC.Error
-import           Development.IDE.GHC.ExactPrint        (ASTElement (parseAST),
-#if !MIN_VERSION_ghc(9,2,0)
-                                                        Annotate
-#endif
-                                                        )
+import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.Spans.Common
 import           GHC.Exts                              (IsList (fromList))
 import           Language.Haskell.GHC.ExactPrint
 #if !MIN_VERSION_ghc(9,2,0)
+import qualified Development.IDE.GHC.Compat.Util       as Util
 import           Language.Haskell.GHC.ExactPrint.Types (DeltaPos (DP),
                                                         KeywordId (G), mkAnnKey)
+#else
+import Data.Default
+import           GHC (AddEpAnn (..), AnnContext (..), AnnParen (..),
+                      DeltaPos (SameLine), EpAnn (..), EpaLocation (EpaDelta),
+                      IsUnicodeSyntax (NormalSyntax),
+                      NameAdornment (NameParens), NameAnn (..),
+                      SrcSpanAnn' (SrcSpanAnn), SrcSpanAnnA,
+                      TrailingAnn (AddCommaAnn), addAnns, ann, emptyComments,
+                      reAnnL)
 #endif
 import           Language.LSP.Types
+import Development.IDE.GHC.Util
+import Data.Bifunctor (first)
+import Control.Lens (_last, over)
+import GHC.Stack (HasCallStack)
 
 ------------------------------------------------------------------------------
 
@@ -71,9 +82,18 @@ data Rewrite where
     Rewrite
 
 ------------------------------------------------------------------------------
+#if MIN_VERSION_ghc(9,2,0)
+class ResetEntryDP ann where
+    resetEntryDP :: GenLocated ann ast -> GenLocated ann ast
+instance {-# OVERLAPPING #-} Default an => ResetEntryDP (SrcAnn an) where
+    -- resetEntryDP = flip setEntryDP (SameLine 0)
+    resetEntryDP (L srcAnn x) = setEntryDP (L srcAnn{ann=EpAnnNotUsed} x) (SameLine 0)
+instance {-# OVERLAPPABLE #-} ResetEntryDP fallback where
+    resetEntryDP = id
+#endif
 
 -- | Convert a 'Rewrite' into a list of '[TextEdit]'.
-rewriteToEdit ::
+rewriteToEdit :: HasCallStack =>
   DynFlags ->
 #if !MIN_VERSION_ghc(9,2,0)
   Anns ->
@@ -94,7 +114,7 @@ rewriteToEdit dflags
 #if !MIN_VERSION_ghc(9,2,0)
     ast <$ setEntryDPT ast (DP (0, 0))
 #else
-    pure ast
+    pure $ traceAst "REWRITE_result" $ resetEntryDP ast
 #endif
   let editMap =
         [ TextEdit (fromJust $ srcSpanToRange dst) $
@@ -132,25 +152,19 @@ rewriteToWEdit dflags uri
 
 ------------------------------------------------------------------------------
 
+#if !MIN_VERSION_ghc(9,2,0)
 -- | Fix the parentheses around a type context
 fixParens ::
   (Monad m, Data (HsType pass), pass ~ GhcPass p0) =>
-
-  (ExactPrint (HsType pass), Outputable (LHsType pass)) =>
-#if !MIN_VERSION_ghc(9,2,0)
   Maybe DeltaPos ->
   Maybe DeltaPos ->
-#endif
   LHsContext pass ->
   TransformT m [LHsType pass]
 fixParens
-#if !MIN_VERSION_ghc(9,2,0)
           openDP closeDP
-#endif
           ctxt@(L _ elems) = do
   -- Paren annotation for type contexts are usually quite screwed up
   -- we remove duplicates and fix negative DPs
-#if !MIN_VERSION_ghc(9,2,0)
   let parens = Map.fromList [(G AnnOpenP, dp00), (G AnnCloseP, dp00)]
   modifyAnnsT $
     Map.adjust
@@ -165,20 +179,19 @@ fixParens
                 }
       )
       (mkAnnKey ctxt)
-#endif
   return $ map dropHsParTy elems
- where
+#endif
 
-  dropHsParTy :: LHsType (GhcPass pass) -> LHsType (GhcPass pass)
-  dropHsParTy (L _ (HsParTy _ ty)) = ty
-  dropHsParTy other                = other
+dropHsParTy :: LHsType (GhcPass pass) -> LHsType (GhcPass pass)
+dropHsParTy (L _ (HsParTy _ ty)) = ty
+dropHsParTy other                = other
 
 removeConstraint ::
   -- | Predicate: Which context to drop.
   (LHsType GhcPs -> Bool) ->
   LHsType GhcPs ->
   Rewrite
-removeConstraint toRemove = go
+removeConstraint toRemove = go . traceAst "REMOVE_CONSTRAINT_input"
   where
     go :: LHsType GhcPs -> Rewrite
 #if !MIN_VERSION_ghc(9,2,0)
@@ -186,13 +199,21 @@ removeConstraint toRemove = go
 #else
     go (L l it@HsQualTy{hst_ctxt = Just (L l' ctxt), hst_body}) = Rewrite (locA l) $ \_ -> do
 #endif
-      let ctxt' = L l' $ filter (not . toRemove) ctxt
+      let ctxt' = filter (not . toRemove) ctxt
+          removeStuff = (toRemove <$> headMaybe ctxt) == Just True
 #if !MIN_VERSION_ghc(9,2,0)
-      when ((toRemove <$> headMaybe ctxt) == Just True) $
+      when removeStuff  $
         setEntryDPT hst_body (DP (0, 0))
-      return $ L l $ it{hst_ctxt = ctxt'}
+      return $ L l $ it{hst_ctxt =  L l' ctxt'}
 #else
-      return $ L l $ it{hst_ctxt = Just ctxt'}
+      let hst_body' = if removeStuff then resetEntryDP hst_body else hst_body
+      return $ case ctxt' of
+          [] -> hst_body'
+          _ -> do
+            let ctxt'' = over _last (first removeComma) ctxt'
+            L l $ it{ hst_ctxt = Just $ L l' ctxt''
+                    , hst_body = hst_body'
+                    }
 #endif
     go (L _ (HsParTy _ ty)) = go ty
     go (L _ HsForAllTy{hst_body}) = go hst_body
@@ -206,7 +227,7 @@ appendConstraint ::
   -- | The type signature where the constraint is to be inserted, also assuming annotated
   LHsType GhcPs ->
   Rewrite
-appendConstraint constraintT = go
+appendConstraint constraintT = go . traceAst "appendConstraint"
  where
 #if !MIN_VERSION_ghc(9,2,0)
   go (L l it@HsQualTy{hst_ctxt = L l' ctxt}) = Rewrite (locA l) $ \df -> do
@@ -221,29 +242,32 @@ appendConstraint constraintT = go
     -- rather than to the constraint list itself, so to preserve them we need to reposition them
     closeParenDP <- lookupAnn (G AnnCloseP) `mapM` lastMaybe ctxt
     openParenDP <- lookupAnn (G AnnOpenP) `mapM` headMaybe ctxt
-#endif
     ctxt' <- fixParens
-#if !MIN_VERSION_ghc(9,2,0)
                 (join openParenDP) (join closeParenDP)
-#endif
                 (L l' ctxt)
-
-#if !MIN_VERSION_ghc(9,2,0)
     addTrailingCommaT (last ctxt')
     return $ L l $ it{hst_ctxt = L l' $ ctxt' ++ [constraint]}
 #else
-    return $ L l $ it{hst_ctxt = Just $ L l' $ ctxt' ++ [constraint]}
+    constraint <- pure $ setEntryDP constraint (SameLine 1)
+    let l'' = (fmap.fmap) (addParensToCtxt close_dp) l'
+    -- For singleton constraints, the close Paren DP is attached to an HsPar wrapping the constraint
+    -- we have to reposition it manually into the AnnContext
+        close_dp = case ctxt of
+            [L _ (HsParTy EpAnn{anns=AnnParen{ap_close}} _)] -> Just ap_close
+            _ -> Nothing
+        ctxt' = over _last (first addComma) $ map dropHsParTy ctxt
+    return $ L l $ it{hst_ctxt = Just $ L l'' $ ctxt' ++ [constraint]}
 #endif
   go (L _ HsForAllTy{hst_body}) = go hst_body
   go (L _ (HsParTy _ ty)) = go ty
-  go (L l other) = Rewrite (locA l) $ \df -> do
+  go ast@(L l _) = Rewrite (locA l) $ \df -> do
     -- there isn't a context, so we must create one
     constraint <- liftParseAST df constraintT
     lContext <- uniqueSrcSpanT
     lTop <- uniqueSrcSpanT
 #if !MIN_VERSION_ghc(9,2,0)
     let context = L lContext [constraint]
-    addSimpleAnnT context (DP (0, 0)) $
+    addSimpleAnnT context dp00 $
       (G AnnDarrow, DP (0, 1)) :
       concat
         [ [ (G AnnOpenP, dp00)
@@ -252,24 +276,22 @@ appendConstraint constraintT = go
         | hsTypeNeedsParens sigPrec $ unLoc constraint
         ]
 #else
-    let context = Just $ reLocA $ L lContext [constraint]
+    let context = Just $ reAnnL annCtxt emptyComments $ L lContext [resetEntryDP constraint]
+        annCtxt = AnnContext (Just (NormalSyntax, epl 1)) [epl 0 | needsParens] [epl 0 | needsParens]
+        needsParens = hsTypeNeedsParens sigPrec $ unLoc constraint
+    ast <- pure $ setEntryDP ast (SameLine 1)
 #endif
 
-    return $ reLocA $ L lTop $ HsQualTy noExtField context (L l other)
+    return $ reLocA $ L lTop $ HsQualTy noExtField context ast
 
-liftParseAST :: forall ast l. (ASTElement l ast
-                              )
-             => DynFlags -> String
-#if MIN_VERSION_ghc(9,2,0)
-             -> TransformT (Either String) (GenLocated (SrcAnn l) ast)
-#else
-             -> TransformT (Either String) (Located ast)
-#endif
+liftParseAST
+    :: forall ast l.  (ASTElement l ast, ExactPrint (LocatedAn l ast))
+    => DynFlags -> String -> TransformT (Either String) (LocatedAn l ast)
 liftParseAST df s = case parseAST df "" s of
 #if !MIN_VERSION_ghc(9,2,0)
   Right (anns, x) -> modifyAnnsT (anns <>) $> x
 #else
-  Right x ->  pure x
+  Right x ->  pure (makeDeltaAst x)
 #endif
   Left _          -> lift $ Left $ "No parse: " <> s
 
@@ -314,7 +336,7 @@ extendImport mparent identifier lDecl@(L l _) =
       Just parent -> extendImportViaParent df parent identifier lDecl
       _           -> extendImportTopLevel identifier lDecl
 
--- | Add an identifier or a data type to import list
+-- | Add an identifier or a data type to import list. Expects a Delta AST
 --
 -- extendImportTopLevel "foo" AST:
 --
@@ -332,7 +354,6 @@ extendImportTopLevel thing (L l it@ImportDecl{..})
     src <- uniqueSrcSpanT
     top <- uniqueSrcSpanT
     let rdr = reLocA $ L src $ mkRdrUnqual $ mkVarOcc thing
-
     let alreadyImported =
           showNameWithoutUniques (occName (unLoc rdr))
             `elem` map (showNameWithoutUniques @OccName) (listify (const True) lies)
@@ -341,6 +362,7 @@ extendImportTopLevel thing (L l it@ImportDecl{..})
 
     let lie = reLocA $ L src $ IEName rdr
         x = reLocA $ L top $ IEVar noExtField lie
+
     if x `elem` lies
       then lift (Left $ thing <> " already imported")
       else do
@@ -353,8 +375,15 @@ extendImportTopLevel thing (L l it@ImportDecl{..})
         -- we need change the ann key from `[]` to `:` to keep parens and other anns.
         unless hasSibling $
           transferAnn (L l' lies) (L l' [x]) id
-#endif
         return $ L l it{ideclHiding = Just (hide, L l' $ lies ++ [x])}
+#else
+
+        x <- pure $ setEntryDP x (SameLine $ if hasSibling then 1 else 0)
+
+        let fixLast = if hasSibling then first addComma else id
+            lies' = over _last fixLast lies ++ [x]
+        return $ L l it{ideclHiding = Just (hide, L l' lies')}
+#endif
 extendImportTopLevel _ _ = lift $ Left "Unable to extend the import list"
 
 -- | Add an identifier with its parent to import list
@@ -392,21 +421,23 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
       transferAnn lAbs x $ \old -> old{annsDP = annsDP old ++ [(G AnnOpenP, DP (0, 1)), (G AnnCloseP, dp00)]}
       addSimpleAnnT childRdr dp00 [(G AnnVal, dp00)]
 #else
-          x :: LIE GhcPs = L ll' $ IEThingWith mempty absIE NoIEWildcard [childLIE]
+          x :: LIE GhcPs = L ll' $ IEThingWith (addAnns mempty [AddEpAnn AnnOpenP (EpaDelta (SameLine 1) []), AddEpAnn AnnCloseP def] emptyComments) absIE NoIEWildcard [childLIE]
 #endif
       return $ L l it{ideclHiding = Just (hide, L l' $ reverse pre ++ [x] ++ xs)}
 #if !MIN_VERSION_ghc(9,2,0)
   go hide l' pre ((L l'' (IEThingWith _ twIE@(L _ ie) _ lies' _)) : xs)
 #else
-  go hide l' pre ((L l'' (IEThingWith _ twIE@(L _ ie) _ lies')) : xs)
+  go hide l' pre ((L l'' (IEThingWith l''' twIE@(L _ ie) _ lies')) : xs)
 #endif
     -- ThingWith ie lies' => ThingWith ie (lies' ++ [child])
     | parent == unIEWrappedName ie
-      , hasSibling <- not $ null lies' =
+    , hasSibling <- not $ null lies' =
       do
         srcChild <- uniqueSrcSpanT
         let childRdr = reLocA $ L srcChild $ mkRdrUnqual $ mkVarOcc child
-
+#if MIN_VERSION_ghc(9,2,0)
+        childRdr <- pure $ setEntryDP childRdr $ SameLine $ if hasSibling then 1 else 0
+#endif
         let alreadyImported =
               showNameWithoutUniques (occName (unLoc childRdr))
                 `elem` map (showNameWithoutUniques @OccName) (listify (const True) lies')
@@ -420,7 +451,13 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
         addSimpleAnnT childRdr (DP (0, if hasSibling then 1 else 0)) [(G AnnVal, dp00)]
         return $ L l it{ideclHiding = Just (hide, L l' $ reverse pre ++ [L l'' (IEThingWith noExtField twIE NoIEWildcard (lies' ++ [childLIE]) [])] ++ xs)}
 #else
-        return $ L l it{ideclHiding = Just (hide, L l' $ reverse pre ++ [L l'' (IEThingWith mempty twIE NoIEWildcard (lies' ++ [childLIE]))] ++ xs)}
+        let it' = it{ideclHiding = Just (hide, lies)}
+            lies = L l' $ reverse pre ++
+                [L l'' (IEThingWith l''' twIE NoIEWildcard (over _last fixLast lies' ++ [childLIE]))] ++ xs
+            fixLast = if hasSibling then first addComma else id
+        return $ if hasSibling
+            then L l it'
+            else L l it'
 #endif
   go hide l' pre (x : xs) = go hide l' (x : pre) xs
   go hide l' pre []
@@ -438,7 +475,10 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
       let parentLIE = L srcParent (if isParentOperator then IEType parentRdr else IEName parentRdr)
           childLIE = reLocA $ L srcChild $ IEName childRdr
 #else
-      let parentLIE = reLocA $ L srcParent $ (if isParentOperator then IEType mempty parentRdr else IEName parentRdr)
+      let parentLIE = reLocA $ L srcParent $ (if isParentOperator then IEType (epl 0) parentRdr' else IEName parentRdr')
+          parentRdr' = modifyAnns parentRdr $ \case
+              it@NameAnn{nann_adornment = NameParens} -> it{nann_open = epl 1}
+              other -> other
           childLIE = reLocA $ L srcChild $ IEName childRdr
 #endif
 #if !MIN_VERSION_ghc(9,2,0)
@@ -454,7 +494,8 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
       unless hasSibling $
         transferAnn (L l' $ reverse pre) (L l' [x]) id
 #else
-          x :: LIE GhcPs = reLocA $ L l'' $ IEThingWith mempty parentLIE NoIEWildcard [childLIE]
+          x :: LIE GhcPs = reLocA $ L l'' $ IEThingWith listAnn parentLIE NoIEWildcard [childLIE]
+          listAnn = epAnn srcParent [AddEpAnn AnnOpenP (epl 1), AddEpAnn AnnCloseP (epl 0)]
 #endif
       return $ L l it{ideclHiding = Just (hide, L l' $ reverse pre ++ [x])}
 extendImportViaParent _ _ _ _ = lift $ Left "Unable to extend the import list via parent"
@@ -533,10 +574,13 @@ extendHiding symbol (L l idecls) mlies df = do
         addTrailingCommaT (head lies) -- Why we need this?
     else forM_ mlies $ \lies0 -> do
       transferAnn lies0 singleHide id
+#else
+--   let l'' = flip first l $ fmap.fmap $ (AnnHiding :)
 #endif
   return $ L l idecls{ideclHiding = Just (True, L l' $ x : lies)}
  where
   isOperator = not . all isAlphaNum . occNameString . rdrNameOcc
+
 
 deleteFromImport ::
   String ->

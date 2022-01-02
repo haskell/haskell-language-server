@@ -1,5 +1,5 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE CPP #-}
 
 module Development.IDE.Plugin.CodeAction.Args
   ( CodeActionTitle,
@@ -216,6 +216,7 @@ toCodeAction2 get f = ReaderT $ \caa ->
 toCodeAction3 :: (ToCodeAction r) => (CodeActionArgs -> IO a) -> (a -> r) -> GhcideCodeAction
 toCodeAction3 get f = ReaderT $ \caa -> get caa >>= flip runReaderT caa . toCodeAction . f
 
+-- | this instance returns a delta AST, useful for exactprint transforms
 instance ToCodeAction r => ToCodeAction (ParsedSource -> r) where
   toCodeAction f = ReaderT $ \caa@CodeActionArgs {caaAnnSource = x} ->
     x >>= \case
@@ -260,6 +261,7 @@ instance ToCodeAction r => ToCodeAction (Maybe (Annotated ParsedSource) -> r) wh
 instance ToCodeAction r => ToCodeAction (Annotated ParsedSource -> r) where
   toCodeAction = toCodeAction2 caaAnnSource
 #else
+-- | this instance returns a delta AST, useful for exactprint transforms
 instance ToCodeAction r => ToCodeAction (Maybe ParsedSource -> r) where
   toCodeAction = toCodeAction1 caaAnnSource
 #endif

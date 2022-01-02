@@ -9,6 +9,9 @@
 --   Note that the 'NFData' instances may not be law abiding.
 module Development.IDE.GHC.Orphans() where
 
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC.Parser.Annotation
+#endif
 #if MIN_VERSION_ghc(9,0,0)
 import           GHC.Data.Bag
 import           GHC.Data.FastString
@@ -102,6 +105,8 @@ instance NFData (SrcSpanAnn' a) where
 
 instance Bifunctor (GenLocated) where
     bimap f g (L l x) = L (f l) (g x)
+
+deriving instance Functor SrcSpanAnn'
 #endif
 
 instance NFData ParsedModule where

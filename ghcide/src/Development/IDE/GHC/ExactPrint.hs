@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP                    #-}
 {-# LANGUAGE DerivingVia            #-}
+{-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GADTs                  #-}
 {-# LANGUAGE RankNTypes             #-}
@@ -20,8 +21,20 @@ module Development.IDE.GHC.ExactPrint
       graftSmallestDeclsWithM,
       transform,
       transformM,
+      ExactPrint(..),
 #if !MIN_VERSION_ghc(9,2,0)
       useAnnotatedSource,
+      Anns,
+      Annotate,
+      setPrecedingLinesT,
+#else
+      addParensToCtxt,
+      modifyAnns,
+      removeComma,
+      -- * Helper function
+      eqSrcSpan,
+      epl,
+      epAnn,
 #endif
       annotateParsedSource,
       getAnnotatedParsedSourceRule,
@@ -30,24 +43,18 @@ module Development.IDE.GHC.ExactPrint
       ExceptStringT (..),
       Annotated(..),
       TransformT,
-#if !MIN_VERSION_ghc(9,2,0)
-      Anns,
-      Annotate,
-      setPrecedingLinesT,
-#endif
-      -- * Helper function
-      eqSrcSpan,
     )
 where
 
 import           Control.Applicative                     (Alternative)
-import           Control.Arrow
+import           Control.Arrow                           ((***))
 import           Control.Monad
 import qualified Control.Monad.Fail                      as Fail
 import           Control.Monad.IO.Class                  (MonadIO)
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Except
 import           Control.Monad.Zip
+import           Data.Bifunctor
 import           Data.Bool                               (bool)
 import qualified Data.DList                              as DL
 import           Data.Either.Extra                       (mapLeft)
@@ -70,7 +77,6 @@ import qualified GHC.Generics                            as GHC
 import           Generics.SYB
 import           Generics.SYB.GHC
 import           Ide.PluginUtils
-import           Language.Haskell.GHC.ExactPrint
 import           Language.Haskell.GHC.ExactPrint.Parsers
 import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities         (ClientCapabilities)
@@ -78,7 +84,17 @@ import           Retrie.ExactPrint                       hiding (parseDecl,
                                                           parseExpr,
                                                           parsePattern,
                                                           parseType)
-
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC                                     (EpAnn (..),
+                                                          SrcSpanAnn' (SrcSpanAnn),
+                                                          SrcSpanAnnA,
+                                                          TrailingAnn (AddCommaAnn),
+                                                          emptyComments,
+                                                          spanAsAnchor)
+import           GHC.Parser.Annotation                   (AnnContext (..),
+                                                          DeltaPos (SameLine),
+                                                          EpaLocation (EpaDelta))
+#endif
 
 ------------------------------------------------------------------------------
 
@@ -101,7 +117,8 @@ getAnnotatedParsedSourceRule = define $ \GetAnnotatedParsedSource nfp -> do
 
 #if MIN_VERSION_ghc(9,2,0)
 annotateParsedSource :: ParsedModule -> ParsedSource
-annotateParsedSource (ParsedModule _ ps _ _) = ps
+annotateParsedSource (ParsedModule _ ps _ _) = makeDeltaAst ps
+
 #else
 annotateParsedSource :: ParsedModule -> Annotated ParsedSource
 annotateParsedSource = fixAnns
@@ -601,4 +618,34 @@ eqSrcSpanA l r = leftmost_smallest (locA l) (locA r) == EQ
 #else
 eqSrcSpanA :: SrcSpan -> SrcSpan -> Bool
 eqSrcSpanA l r = leftmost_smallest l r == EQ
+#endif
+
+#if MIN_VERSION_ghc(9,2,0)
+addParensToCtxt :: Maybe EpaLocation -> AnnContext -> AnnContext
+addParensToCtxt close_dp = addOpen . addClose
+  where
+      addOpen it@AnnContext{ac_open = []} = it{ac_open = [epl 0]}
+      addOpen other                       = other
+      addClose it
+        | Just c <- close_dp = it{ac_close = [c]}
+        | AnnContext{ac_close = []} <- it = it{ac_close = [epl 0]}
+        | otherwise = it
+
+epl :: Int -> EpaLocation
+epl n = EpaDelta (SameLine n) []
+
+epAnn :: SrcSpan -> ann -> EpAnn ann
+epAnn srcSpan anns = EpAnn (spanAsAnchor srcSpan) anns emptyComments
+
+modifyAnns :: LocatedAn a ast -> (a -> a) -> LocatedAn a ast
+modifyAnns x f = first ((fmap.fmap) f) x
+
+removeComma :: SrcSpanAnnA -> SrcSpanAnnA
+removeComma it@(SrcSpanAnn EpAnnNotUsed _) = it
+removeComma (SrcSpanAnn (EpAnn anc (AnnListItem as) cs) l)
+  = (SrcSpanAnn (EpAnn anc (AnnListItem (filter (not . isCommaAnn) as)) cs) l)
+  where
+      isCommaAnn AddCommaAnn{} = True
+      isCommaAnn _             = False
+
 #endif
