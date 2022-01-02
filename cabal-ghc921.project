@@ -29,6 +29,11 @@ packages:
 
 source-repository-package
   type: git
+  location: https://github.com/pepeiborra/retrie
+  tag: 5d45dd1d101b6a026281892fe2145b911237824f
+
+source-repository-package
+  type: git
   location: https://github.com/pepeiborra/ghc-exactprint
   tag: 2fe891ae15a89cfb6f1b687abf3af0e3b512c751
   -- https://github.com/alanz/ghc-exactprint/pull/110
