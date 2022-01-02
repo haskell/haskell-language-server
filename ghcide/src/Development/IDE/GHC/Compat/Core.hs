@@ -196,10 +196,11 @@ module Development.IDE.GHC.Compat.Core (
     LocatedAn,
 #if MIN_VERSION_ghc(9,2,0)
     GHC.AnnListItem(..),
+    GHC.NameAnn(..),
 #else
     AnnListItem,
-#endif
     NameAnn,
+#endif
     SrcLoc.RealLocated,
     SrcLoc.GenLocated(..),
     SrcLoc.SrcSpan(SrcLoc.UnhelpfulSpan),
@@ -1019,9 +1020,7 @@ getLocA x = GHC.getLoc x
 type AnnListItem = SrcLoc.SrcSpan
 #endif
 
-#if MIN_VERSION_ghc(9,2,0)
-type NameAnn = GHC.NameAnn
-#else
+#if !MIN_VERSION_ghc(9,2,0)
 type NameAnn = SrcLoc.SrcSpan
 #endif
 

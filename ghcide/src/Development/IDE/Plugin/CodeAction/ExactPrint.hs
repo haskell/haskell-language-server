@@ -55,7 +55,7 @@ import           GHC (AddEpAnn (..), AnnContext (..), AnnParen (..),
 import           Language.LSP.Types
 import Development.IDE.GHC.Util
 import Data.Bifunctor (first)
-import Control.Lens (_last, over)
+import Control.Lens (_head, _last, over)
 import GHC.Stack (HasCallStack)
 
 ------------------------------------------------------------------------------
@@ -563,6 +563,10 @@ extendHiding symbol (L l idecls) mlies df = do
 #endif
   let lie = reLocA $ L src $ IEName rdr
       x = reLocA $ L top $ IEVar noExtField lie
+#if MIN_VERSION_ghc(9,2,0)
+  x <- pure $ if hasSibling then first addComma x else x
+  lies <- pure $ over _head (`setEntryDP` SameLine 1) lies
+#endif
 #if !MIN_VERSION_ghc(9,2,0)
       singleHide = L l' [x]
   when (isNothing mlies) $ do
@@ -576,7 +580,7 @@ extendHiding symbol (L l idecls) mlies df = do
   addSimpleAnnT x (DP (0, 0)) []
   addSimpleAnnT rdr dp00 $ unqalDP 0 $ isOperator $ unLoc rdr
   if hasSibling
-    then when hasSibling $ do
+    then do
       addTrailingCommaT x
       addSimpleAnnT (head lies) (DP (0, 1)) []
       unless (null $ tail lies) $

@@ -91,7 +91,7 @@ import           GHC                                     (EpAnn (..),
                                                           SrcSpanAnnA,
                                                           TrailingAnn (AddCommaAnn),
                                                           emptyComments,
-                                                          spanAsAnchor)
+                                                          spanAsAnchor, NameAnn(..), NameAdornment (NameParens))
 import           GHC.Parser.Annotation                   (AnnContext (..),
                                                           DeltaPos (SameLine),
                                                           EpaLocation (EpaDelta))
