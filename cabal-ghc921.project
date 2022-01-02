@@ -29,6 +29,12 @@ packages:
 
 source-repository-package
   type: git
+  location: https://github.com/pepeiborra/ghc-exactprint
+  tag: 2fe891ae15a89cfb6f1b687abf3af0e3b512c751
+  -- https://github.com/alanz/ghc-exactprint/pull/110
+
+source-repository-package
+  type: git
   location: https://github.com/Bodigrim/th-extras
   tag: f00ebca78f474d271fd7989cae0a0a47559b2efd
   -- https://github.com/mokus0/th-extras/pull/14
