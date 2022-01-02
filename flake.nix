@@ -97,6 +97,12 @@
                   url = "https://hackage.haskell.org/package/implicit-hie-cradle-0.3.0.5/implicit-hie-cradle-0.3.0.5.tar.gz";
                   sha256 = "15a7g9x6cjk2b92hb2wilxx4550msxp1pmk5a2shiva821qaxnfq";
                 }) { };
+
+              # https://github.com/NixOS/nixpkgs/issues/140774
+              ormolu =
+                if final.system == "aarch64-darwin"
+                then overrideCabal hsuper.ormolu (_: { enableSeparateBinOutput = false; })
+                else hsuper.ormolu;
             };
 
           hlsSources =
@@ -135,7 +141,7 @@
               chmod +x $dest
             '';
         };
-    } // (flake-utils.lib.eachSystem [ "x86_64-linux" "x86_64-darwin" ])
+    } // (flake-utils.lib.eachSystem [ "x86_64-linux" "x86_64-darwin" "aarch64-darwin" ])
     (system:
       let
         pkgs = import nixpkgs {
