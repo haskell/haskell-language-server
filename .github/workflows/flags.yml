@@ -99,6 +99,8 @@ jobs:
           echo "" || \
           echo 'WARNING: Could not produce the `freeze`.'
           echo ::set-output name=value::${{ hashFiles('cabal.project.freeze') }}
+          # Removing freeze file as it breaks builds with alternative flags
+          rm -rf cabal.project.freeze
 
       - name: Hackage sources cache
         uses: actions/cache@v2
