@@ -15,8 +15,8 @@
 module Main (main) where
 
 import           Control.Applicative.Combinators
-import           Control.Concurrent.Extra                 as Concurrent
-import           Control.Exception                        (bracket_, catch)
+import           Control.Concurrent
+import           Control.Exception                        (bracket_, catch, finally)
 import qualified Control.Lens                             as Lens
 import           Control.Monad
 import           Control.Monad.IO.Class                   (MonadIO, liftIO)
@@ -6011,7 +6011,7 @@ copyTestDataFiles dir prefix = do
     copyFile ("test/data" </> prefix </> f) (dir </> f)
 
 run' :: (FilePath -> Session a) -> IO a
-run' s = withTempDir $ \dir -> runInDir dir (s dir)
+run' s = withTempDir $ \dir -> testIde' dir IDE.testing $ s dir
 
 runInDir :: FilePath -> Session a -> IO a
 runInDir dir = runInDir' dir "." "." []
@@ -6237,9 +6237,13 @@ findResolution_us delay_us = withTempFile $ \f -> withTempFile $ \f' -> do
     if t /= t' then return delay_us else findResolution_us (delay_us * 10)
 
 
-testIde :: IDE.Arguments -> Session () -> IO ()
-testIde arguments session = do
+testIde :: IDE.Arguments -> Session a -> IO a
+testIde = testIde' "."
+
+testIde' :: FilePath -> IDE.Arguments -> Session a -> IO a
+testIde' projDir arguments session = do
     config <- getConfigFromEnv
+    cwd <- getCurrentDirectory
     (hInRead, hInWrite) <- createPipe
     (hOutRead, hOutWrite) <- createPipe
     let server = IDE.defaultMain arguments
@@ -6247,8 +6251,10 @@ testIde arguments session = do
             , IDE.argsHandleOut = pure hOutWrite
             }
 
-    withAsync server $ \_ ->
-        runSessionWithHandles hInWrite hOutRead config lspTestCaps "." session
+    flip finally (setCurrentDirectory cwd) $ withAsync server $ \_ ->
+        runSessionWithHandles hInWrite hOutRead config lspTestCaps projDir session
+
+
 
 positionMappingTests :: TestTree
 positionMappingTests =
