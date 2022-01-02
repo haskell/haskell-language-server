@@ -49,10 +49,8 @@ import Data.Default
 import           GHC (AddEpAnn (..), AnnContext (..), AnnParen (..),
                       DeltaPos (SameLine), EpAnn (..), EpaLocation (EpaDelta),
                       IsUnicodeSyntax (NormalSyntax),
-                      NameAdornment (NameParens), NameAnn (..),
-                      SrcSpanAnn' (SrcSpanAnn), SrcSpanAnnA,
-                      TrailingAnn (AddCommaAnn), addAnns, ann, emptyComments,
-                      reAnnL)
+                      NameAdornment (NameParens), NameAnn (..), addAnns, ann, emptyComments,
+                      reAnnL, AnnList (..))
 #endif
 import           Language.LSP.Types
 import Development.IDE.GHC.Util
@@ -545,17 +543,28 @@ extendHiding symbol (L l idecls) mlies df = do
 #if !MIN_VERSION_ghc(9,2,0)
     Nothing -> flip L [] <$> uniqueSrcSpanT
 #else
-    Nothing -> flip L [] . noAnnSrcSpanDP0 <$> uniqueSrcSpanT
+    Nothing -> do
+        src <- uniqueSrcSpanT
+        let ann = noAnnSrcSpanDP0 src
+            ann' = flip (fmap.fmap) ann $ \x -> x
+                {al_rest = [AddEpAnn AnnHiding (epl 1)]
+                ,al_open = Just $ AddEpAnn AnnOpenP (epl 1)
+                ,al_close = Just $ AddEpAnn AnnCloseP (epl 0)
+                }
+        return $ L ann' []
 #endif
     Just pr -> pure pr
   let hasSibling = not $ null lies
   src <- uniqueSrcSpanT
   top <- uniqueSrcSpanT
   rdr <- liftParseAST df symbol
+#if MIN_VERSION_ghc(9,2,0)
+  rdr <- pure $ modifyAnns rdr $ addParens (isOperator $ unLoc rdr)
+#endif
   let lie = reLocA $ L src $ IEName rdr
       x = reLocA $ L top $ IEVar noExtField lie
-      singleHide = L l' [x]
 #if !MIN_VERSION_ghc(9,2,0)
+      singleHide = L l' [x]
   when (isNothing mlies) $ do
     addSimpleAnnT
       singleHide
@@ -574,13 +583,21 @@ extendHiding symbol (L l idecls) mlies df = do
         addTrailingCommaT (head lies) -- Why we need this?
     else forM_ mlies $ \lies0 -> do
       transferAnn lies0 singleHide id
-#else
---   let l'' = flip first l $ fmap.fmap $ (AnnHiding :)
 #endif
   return $ L l idecls{ideclHiding = Just (True, L l' $ x : lies)}
  where
   isOperator = not . all isAlphaNum . occNameString . rdrNameOcc
 
+addParens :: Bool -> GHC.NameAnn -> GHC.NameAnn
+addParens True it@NameAnn{} =
+        it{nann_adornment = NameParens, nann_open = epl 0, nann_close = epl 0 }
+addParens True it@NameAnnCommas{} =
+        it{nann_adornment = NameParens, nann_open = epl 0, nann_close = epl 0 }
+addParens True it@NameAnnOnly{} =
+        it{nann_adornment = NameParens, nann_open = epl 0, nann_close = epl 0 }
+addParens True NameAnnTrailing{..} =
+        NameAnn{nann_adornment = NameParens, nann_open = epl 0, nann_close = epl 0, nann_name = epl 0, ..}
+addParens _ it = it
 
 deleteFromImport ::
   String ->
