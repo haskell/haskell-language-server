@@ -15,9 +15,7 @@ license-file:       LICENSE
 build-type:         Simple
 extra-source-files:
   README.md
-  test/golden/*.cabal
   test/golden/*.hs
-  test/golden/*.yaml
 
 flag pedantic
   description: Enable -Werror
