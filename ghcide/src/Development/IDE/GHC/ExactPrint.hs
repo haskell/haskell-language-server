@@ -47,7 +47,7 @@ module Development.IDE.GHC.ExactPrint
 where
 
 import           Control.Applicative                     (Alternative)
-import           Control.Arrow                           ((***))
+import           Control.Arrow                           (right, (***))
 import           Control.Monad
 import qualified Control.Monad.Fail                      as Fail
 import           Control.Monad.IO.Class                  (MonadIO)

@@ -2,18 +2,23 @@
 module Development.IDE.GHC.Dump(showAstDataHtml) where
 import           Data.Data                       hiding (Fixity)
 import           Development.IDE.GHC.Compat      hiding (NameAnn)
+#if MIN_VERSION_ghc(8,10,1)
 import           GHC.Hs.Dump
-import           Prelude                         hiding ((<>))
+#else
+import           HsDumpAst
+#endif
 #if MIN_VERSION_ghc(9,2,1)
 import qualified Data.ByteString                 as B
-import           Development.IDE.GHC.Compat.Util (Bag, bagToList)
+import           Development.IDE.GHC.Compat.Util
 import           GHC.Hs
 import           Generics.SYB                    (ext1Q, ext2Q, extQ)
-#elif MIN_VERSION_ghc(9,0,1)
+#endif
+#if MIN_VERSION_ghc(9,0,1)
 import           GHC.Plugins
 #else
 import           GhcPlugins
 #endif
+import           Prelude                         hiding ((<>))
 
 -- | Show a GHC syntax tree in HTML.
 #if MIN_VERSION_ghc(9,2,1)
