@@ -588,17 +588,6 @@ extendHiding symbol (L l idecls) mlies df = do
  where
   isOperator = not . all isAlphaNum . occNameString . rdrNameOcc
 
-addParens :: Bool -> GHC.NameAnn -> GHC.NameAnn
-addParens True it@NameAnn{} =
-        it{nann_adornment = NameParens, nann_open = epl 0, nann_close = epl 0 }
-addParens True it@NameAnnCommas{} =
-        it{nann_adornment = NameParens, nann_open = epl 0, nann_close = epl 0 }
-addParens True it@NameAnnOnly{} =
-        it{nann_adornment = NameParens, nann_open = epl 0, nann_close = epl 0 }
-addParens True NameAnnTrailing{..} =
-        NameAnn{nann_adornment = NameParens, nann_open = epl 0, nann_close = epl 0, nann_name = epl 0, ..}
-addParens _ it = it
-
 deleteFromImport ::
   String ->
   LImportDecl GhcPs ->

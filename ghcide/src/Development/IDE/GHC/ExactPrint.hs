@@ -28,6 +28,7 @@ module Development.IDE.GHC.ExactPrint
       Annotate,
       setPrecedingLinesT,
 #else
+      addParens,
       addParensToCtxt,
       modifyAnns,
       removeComma,
@@ -648,4 +649,14 @@ removeComma (SrcSpanAnn (EpAnn anc (AnnListItem as) cs) l)
       isCommaAnn AddCommaAnn{} = True
       isCommaAnn _             = False
 
+addParens :: Bool -> GHC.NameAnn -> GHC.NameAnn
+addParens True it@NameAnn{} =
+        it{nann_adornment = NameParens, nann_open = epl 0, nann_close = epl 0 }
+addParens True it@NameAnnCommas{} =
+        it{nann_adornment = NameParens, nann_open = epl 0, nann_close = epl 0 }
+addParens True it@NameAnnOnly{} =
+        it{nann_adornment = NameParens, nann_open = epl 0, nann_close = epl 0 }
+addParens True NameAnnTrailing{..} =
+        NameAnn{nann_adornment = NameParens, nann_open = epl 0, nann_close = epl 0, nann_name = epl 0, ..}
+addParens _ it = it
 #endif
