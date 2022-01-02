@@ -153,12 +153,12 @@ findSigOfDecl pred decls =
         any (pred . unLoc) idsSig
     ]
 
-findSigOfDeclRanged :: Range -> [LHsDecl GhcPs] -> Maybe (Sig GhcPs)
+findSigOfDeclRanged :: forall p p0 . p ~ GhcPass p0 => Range -> [LHsDecl p] -> Maybe (Sig p)
 findSigOfDeclRanged range decls = do
   dec <- findDeclContainingLoc (_start range) decls
   case dec of
      L _ (SigD _ sig@TypeSig {})     -> Just sig
-     L _ (ValD _ (bind :: HsBind p)) -> findSigOfBind range (traceAst "bind" bind)
+     L _ (ValD _ (bind :: HsBind p)) -> findSigOfBind range bind
      _                               -> Nothing
 
 findSigOfBind :: forall p p0. p ~ GhcPass p0 => Range -> HsBind p -> Maybe (Sig p)
