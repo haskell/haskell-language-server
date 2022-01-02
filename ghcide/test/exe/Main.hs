@@ -6011,7 +6011,7 @@ copyTestDataFiles dir prefix = do
     copyFile ("test/data" </> prefix </> f) (dir </> f)
 
 run' :: (FilePath -> Session a) -> IO a
-run' s = withTempDir $ \dir -> testIde' dir IDE.testing $ s dir
+run' s = withTempDir $ \dir -> runInDir dir (s dir)
 
 runInDir :: FilePath -> Session a -> IO a
 runInDir dir = runInDir' dir "." "." []
