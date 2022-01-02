@@ -75,8 +75,7 @@ constraints:
     -retrie
     -splice
     -stylishhaskell
-    -tactic
-    -importLens,
+    -tactic,
   ghc-lib-parser ^>= 9.2,
   attoparsec ^>= 0.14.3,
   ghc-exactprint >= 1.3,
