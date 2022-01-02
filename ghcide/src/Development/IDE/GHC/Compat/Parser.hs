@@ -134,6 +134,7 @@ pattern ParsedModule
              , pm_parsed_source = parsed
              , pm_extra_src_files = extra_src_files
              }
+{-# COMPLETE ParsedModule :: GHC.ParsedModule #-}
 #endif
 
 mkApiAnns :: PState -> ApiAnns
