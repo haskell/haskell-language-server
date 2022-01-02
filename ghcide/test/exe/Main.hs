@@ -3369,7 +3369,7 @@ exportUnusedTests = testGroup "export unused actions"
         "Export ‘bar’"
         (Just $ T.unlines
               [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "module A (foo,bar) where"
+              , "module A (foo, bar) where"
               , "foo = id"
               , "bar = foo"])
     , testSession "multi line explicit exports" $ template
@@ -3386,7 +3386,7 @@ exportUnusedTests = testGroup "export unused actions"
               [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
               , "module A"
               , "  ("
-              , "    foo,bar) where"
+              , "    foo, bar) where"
               , "foo = id"
               , "bar = foo"])
     , testSession "export list ends in comma" $ template

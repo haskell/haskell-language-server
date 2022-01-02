@@ -55,9 +55,9 @@ import           HieDb
 import           Language.LSP.Types                (DiagnosticTag (..))
 
 #if MIN_VERSION_ghc(8,10,0)
-import           Control.DeepSeq                   (force, rnf)
+import           Control.DeepSeq                   (force, liftRnf, rnf, rwhnf)
 #else
-import           Control.DeepSeq                   (rnf)
+import           Control.DeepSeq                   (liftRnf, rnf, rwhnf)
 import           ErrUtils
 #endif
 
@@ -82,9 +82,9 @@ import           Data.Bifunctor                    (first, second)
 import qualified Data.ByteString                   as BS
 import qualified Data.DList                        as DL
 import           Data.IORef
+import qualified Data.IntMap.Strict                as IntMap
 import           Data.List.Extra
 import qualified Data.Map.Strict                   as Map
-import qualified Data.IntMap.Strict                as IntMap
 import           Data.Maybe
 import qualified Data.Text                         as T
 import           Data.Time                         (UTCTime, getCurrentTime)
@@ -106,8 +106,8 @@ import           Data.Binary
 import           Data.Coerce
 import           Data.Functor
 import qualified Data.HashMap.Strict               as HashMap
-import           Data.Map                          (Map)
 import           Data.IntMap                       (IntMap)
+import           Data.Map                          (Map)
 import           Data.Tuple.Extra                  (dupe)
 import           Data.Unique                       as Unique
 import           Development.IDE.Core.Tracing      (withTrace)
@@ -461,7 +461,7 @@ atomicFileWrite targetPath write = do
 
 generateHieAsts :: HscEnv -> TcModuleResult -> IO ([FileDiagnostic], Maybe (HieASTs Type))
 generateHieAsts hscEnv tcm =
-  handleGenerationErrors' dflags "extended interface generation" $ runHsc hscEnv $
+  handleGenerationErrors' dflags "extended interface generation" $ runHsc hscEnv $ do
     -- These varBinds use unitDataConId but it could be anything as the id name is not used
     -- during the hie file generation process. It's a workaround for the fact that the hie modules
     -- don't export an interface which allows for additional information to be added to hie files.
@@ -472,16 +472,19 @@ generateHieAsts hscEnv tcm =
         top_ev_binds = tcg_ev_binds ts :: Util.Bag EvBind
         insts = tcg_insts ts :: [ClsInst]
         tcs = tcg_tcs ts :: [TyCon]
-    in
-#if MIN_VERSION_ghc(9,2,0)
-    fmap (join . snd) $ liftIO $ initDs hscEnv ts $
-#endif
+    run ts $
       Just <$> GHC.enrichHie (fake_splice_binds `Util.unionBags` real_binds) (tmrRenamed tcm) top_ev_binds insts tcs
 #else
-    in Just <$> GHC.enrichHie (fake_splice_binds `Util.unionBags` real_binds) (tmrRenamed tcm)
+    Just <$> GHC.enrichHie (fake_splice_binds `Util.unionBags` real_binds) (tmrRenamed tcm)
 #endif
   where
     dflags = hsc_dflags hscEnv
+    run ts =
+#if MIN_VERSION_ghc(9,2,0)
+        fmap (join . snd) . liftIO . initDs hscEnv ts
+#else
+        id
+#endif
 
 spliceExpresions :: Splices -> [LHsExpr GhcTc]
 spliceExpresions Splices{..} =
@@ -678,7 +681,8 @@ loadModulesHome
     -> HscEnv
     -> HscEnv
 loadModulesHome mod_infos e =
-    e { hsc_HPT = addListToHpt (hsc_HPT e) [(mod_name x, x) | x <- mod_infos]
+  let !new_modules = addListToHpt (hsc_HPT e) [(mod_name x, x) | x <- mod_infos]
+  in e { hsc_HPT = new_modules
       , hsc_type_env_var = Nothing }
     where
       mod_name = moduleName . mi_module . hm_iface
@@ -689,11 +693,14 @@ mergeEnvs env extraModSummaries extraMods envs = do
     prevFinderCache <- concatFC <$> mapM (readIORef . hsc_FC) envs
     let ims  = map (\ms -> Compat.installedModule (toUnitId $ moduleUnit $ ms_mod ms)  (moduleName (ms_mod ms))) extraModSummaries
         ifrs = zipWith (\ms -> InstalledFound (ms_location ms)) extraModSummaries ims
+        -- Very important to force this as otherwise the hsc_mod_graph field is not
+        -- forced and ends up retaining a reference to all the old hsc_envs we have merged to get
+        -- this new one, which in turn leads to the EPS referencing the HPT.
+        module_graph_nodes =
+#if MIN_VERSION_ghc(9,2,0)
         -- We don't do any instantiation for backpack at this point of time, so it is OK to use
         -- 'extendModSummaryNoDeps'.
         -- This may have to change in the future.
-        module_graph_nodes =
-#if MIN_VERSION_ghc(9,2,0)
           map extendModSummaryNoDeps $
 #endif
           extraModSummaries ++ nubOrdOn ms_mod (concatMap (mgModSummaries . hsc_mod_graph) envs)
@@ -702,11 +709,11 @@ mergeEnvs env extraModSummaries extraMods envs = do
             foldl'
                 (\fc (im, ifr) -> Compat.extendInstalledModuleEnv fc im ifr) prevFinderCache
                 $ zip ims ifrs
-    return $ loadModulesHome extraMods $ env{
+    liftRnf rwhnf module_graph_nodes `seq` (return $ loadModulesHome extraMods $ env{
         hsc_HPT = foldMapBy mergeUDFM emptyUDFM hsc_HPT envs,
         hsc_FC = newFinderCache,
         hsc_mod_graph = mkModuleGraph module_graph_nodes
-    }
+    })
     where
         mergeUDFM = plusUDFM_C combineModules
         combineModules a b

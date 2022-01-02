@@ -31,6 +31,21 @@
         "type": "github"
       }
     },
+    "flake-utils_2": {
+      "locked": {
+        "lastModified": 1638122382,
+        "narHash": "sha256-sQzZzAbvKEqN9s0bzWuYmRaA03v40gaJ4+iL1LXjaeI=",
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "rev": "74f7e4319258e287b0f9cb95426c9853b282730b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "type": "github"
+      }
+    },
     "gitignore": {
       "flake": false,
       "locked": {
@@ -45,6 +60,42 @@
         "owner": "hercules-ci",
         "repo": "gitignore.nix",
         "type": "github"
+      }
+    },
+    "lsp-source": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-OcyNHNRh9j5nbJ8SjaNAWIEKuixAJlA7+vTimFY0c2c=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/lsp-1.4.0.0/lsp-1.4.0.0.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/lsp-1.4.0.0/lsp-1.4.0.0.tar.gz"
+      }
+    },
+    "lsp-test-source": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-IOmbQH6tKdu9kAyirvLx6xFS2N+/tbs6vZn0mNGm3No=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/lsp-test-0.14.0.2/lsp-test-0.14.0.2.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/lsp-test-0.14.0.2/lsp-test-0.14.0.2.tar.gz"
+      }
+    },
+    "lsp-types-source": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-K1CeV6o5mmrXubATCh19iFatJ1RtPwpY5lxD8rf/SIw=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/lsp-types-1.4.0.0/lsp-types-1.4.0.0.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/lsp-types-1.4.0.0/lsp-types-1.4.0.0.tar.gz"
       }
     },
     "nixpkgs": {
@@ -63,14 +114,24 @@
         "type": "github"
       }
     },
+    "nixpkgs_2": {
+      "locked": {
+        "lastModified": 1641016545,
+        "narHash": "sha256-JMNwvnBzG0RjGG3eH27Y5/GlJ9ryeCdGJfqGbqxnmZY=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "6f05cfdb1e78d36c0337516df674560e4b51c79b",
+        "type": "github"
+      },
+      "original": {
+        "id": "nixpkgs",
+        "type": "indirect"
+      }
+    },
     "pre-commit-hooks": {
       "inputs": {
-        "flake-utils": [
-          "flake-utils"
-        ],
-        "nixpkgs": [
-          "nixpkgs"
-        ]
+        "flake-utils": "flake-utils_2",
+        "nixpkgs": "nixpkgs_2"
       },
       "locked": {
         "lastModified": 1624971177,
@@ -91,6 +152,9 @@
         "flake-compat": "flake-compat",
         "flake-utils": "flake-utils",
         "gitignore": "gitignore",
+        "lsp-source": "lsp-source",
+        "lsp-test-source": "lsp-test-source",
+        "lsp-types-source": "lsp-types-source",
         "nixpkgs": "nixpkgs",
         "pre-commit-hooks": "pre-commit-hooks"
       }

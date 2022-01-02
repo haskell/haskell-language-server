@@ -2,8 +2,8 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 {-# LANGUAGE CPP                   #-}
-{-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE GADTs                 #-}
 
 -- | Go to the definition of a variable.
 
@@ -23,7 +23,8 @@ import           Control.Applicative                               ((<|>))
 import           Control.Arrow                                     (second,
                                                                     (>>>))
 import           Control.Concurrent.STM.Stats                      (atomically)
-import           Control.Monad                                     (guard, join, msum)
+import           Control.Monad                                     (guard, join,
+                                                                    msum)
 import           Control.Monad.IO.Class
 import           Data.Char
 import qualified Data.DList                                        as DL
@@ -46,9 +47,11 @@ import           Development.IDE.Core.Service
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error
+import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.GHC.Util                          (prettyPrint,
                                                                     printRdrName,
-                                                                    unsafePrintSDoc, traceAst)
+                                                                    traceAst,
+                                                                    unsafePrintSDoc)
 import           Development.IDE.Plugin.CodeAction.Args
 import           Development.IDE.Plugin.CodeAction.ExactPrint
 import           Development.IDE.Plugin.CodeAction.PositionIndexed
@@ -79,7 +82,6 @@ import           Language.LSP.Types                                (CodeAction (
 import           Language.LSP.VFS
 import           Text.Regex.TDFA                                   (mrAfter,
                                                                     (=~), (=~~))
-import Development.IDE.GHC.ExactPrint
 
 -------------------------------------------------------------------------------------------------
 
@@ -196,7 +198,7 @@ findSigOfBind range bind =
           stmtlr <- unLoc <$> findDeclContainingLoc (_start range) (unLoc stmts)
           case stmtlr of
             LetStmt _ lhsLocalBindsLR -> findSigOfBinds range lhsLocalBindsLR
-            _ -> Nothing
+            _                         -> Nothing
         go _ = Nothing
 
 findSigOfBinds :: p ~ GhcPass p0 => Range -> HsLocalBinds p -> Maybe (Sig p)
@@ -213,14 +215,17 @@ findSigOfBinds range = go
 findInstanceHead :: (Outputable (HsType p), p ~ GhcPass p0) => DynFlags -> String -> [LHsDecl p] -> Maybe (LHsType p)
 findInstanceHead df instanceHead decls =
   listToMaybe
-    [ hsib_body
 #if !MIN_VERSION_ghc(9,2,0)
+    [ hsib_body
       | L _ (InstD _ (ClsInstD _ ClsInstDecl {cid_poly_ty = HsIB {hsib_body}})) <- decls,
-#else
-      | L _ (InstD _ (ClsInstD _ ClsInstDecl {cid_poly_ty = (unLoc -> HsSig {sig_body = hsib_body})})) <- decls,
-#endif
         showSDoc df (ppr hsib_body) == instanceHead
     ]
+#else
+    [ hsib_body
+      | L _ (InstD _ (ClsInstD _ ClsInstDecl {cid_poly_ty = (unLoc -> HsSig {sig_body = hsib_body})})) <- decls,
+        showSDoc df (ppr hsib_body) == instanceHead
+    ]
+#endif
 
 -- findDeclContainingLoc :: Position -> [GenLocated (SrcSpanAnn' a) e] -> Maybe (GenLocated (SrcSpanAnn' a) e)
 findDeclContainingLoc loc = find (\(L l _) -> loc `isInsideSrcSpan` locA l)
@@ -499,16 +504,19 @@ suggestDeleteUnusedBinding
         indexedContent
         name
         (L _ Match{m_grhss=GRHSs{grhssLocalBinds}}) = do
-        case grhssLocalBinds of
+        let go bag lsigs =
+                if isEmptyBag bag
+                then []
+                else concatMap (findRelatedSpanForHsBind indexedContent name lsigs) bag
 #if !MIN_VERSION_ghc(9,2,0)
-          (L _ (HsValBinds _ (ValBinds _ bag lsigs))) ->
+        case grhssLocalBinds of
+          (L _ (HsValBinds _ (ValBinds _ bag lsigs))) -> go bag lsigs
+          _                                           -> []
 #else
-          (HsValBinds _ (ValBinds _ bag lsigs)) ->
+        case grhssLocalBinds of
+          (HsValBinds _ (ValBinds _ bag lsigs)) -> go bag lsigs
+          _                                     -> []
 #endif
-            if isEmptyBag bag
-            then []
-            else concatMap (findRelatedSpanForHsBind indexedContent name lsigs) bag
-          _ -> []
       findRelatedSpanForMatch _ _ _ = []
 
       findRelatedSpanForHsBind
@@ -558,7 +566,7 @@ suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModul
                             $ hsmodDecls
   , Just pos <- (fmap _end . getLocatedRange) . reLoc =<< hsmodExports
   , Just needComma <- needsComma source <$> fmap reLoc hsmodExports
-  , let exportName = (if needComma then "," else "") <> printExport exportType name
+  , let exportName = (if needComma then ", " else "") <> printExport exportType name
         insertPos = pos {_character = pred $ _character pos}
   = [("Export ‘" <> name <> "’", TextEdit (Range insertPos insertPos) exportName)]
   | otherwise = []
@@ -742,7 +750,7 @@ suggestModuleTypo Diagnostic{_range=_range,..}
   where
     extractModule line = case T.words line of
         [modul, "(from", _] -> Just modul
-        _ -> Nothing
+        _                   -> Nothing
 
 
 suggestFillHole :: Diagnostic -> [(T.Text, TextEdit)]
@@ -1599,14 +1607,15 @@ smallerRangesForBindingExport lies b =
     b' = wrapOperatorInParens . unqualify $ b
 #if !MIN_VERSION_ghc(9,2,0)
     ranges' (L _ (IEThingWith _ thing _  inners labels))
-#else
-    ranges' (L _ (IEThingWith _ thing _  inners))
-#endif
       | showSDocUnsafe (ppr thing) == b' = []
       | otherwise =
           [ locA l' | L l' x <- inners, showSDocUnsafe (ppr x) == b']
-#if !MIN_VERSION_ghc(9,2,0)
           ++ [ l' | L l' x <- labels, showSDocUnsafe (ppr x) == b']
+#else
+    ranges' (L _ (IEThingWith _ thing _  inners))
+      | showSDocUnsafe (ppr thing) == b' = []
+      | otherwise =
+          [ locA l' | L l' x <- inners, showSDocUnsafe (ppr x) == b']
 #endif
     ranges' _ = []
 
