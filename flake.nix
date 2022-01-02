@@ -21,9 +21,22 @@
       url = "github:hercules-ci/gitignore.nix";
       flake = false;
     };
+
+    lsp-source = {
+      url = "https://hackage.haskell.org/package/lsp-1.4.0.0/lsp-1.4.0.0.tar.gz";
+      flake = false;
+    };
+    lsp-types-source = {
+      url = "https://hackage.haskell.org/package/lsp-types-1.4.0.0/lsp-types-1.4.0.0.tar.gz";
+      flake = false;
+    };
+    lsp-test-source = {
+      url = "https://hackage.haskell.org/package/lsp-test-0.14.0.2/lsp-test-0.14.0.2.tar.gz";
+      flake = false;
+    };
   };
   outputs =
-    { self, nixpkgs, flake-compat, flake-utils, pre-commit-hooks, gitignore }:
+    { self, nixpkgs, flake-compat, flake-utils, pre-commit-hooks, gitignore, lsp-source, lsp-types-source, lsp-test-source }:
     {
       overlay = final: prev:
         with prev;
@@ -74,6 +87,10 @@
               hie-bios = hself.hie-bios_0_8_0;
               # We need an older version
               hiedb = hself.hiedb_0_4_1_0;
+
+              lsp = hsuper.callCabal2nix "lsp" lsp-source {};
+              lsp-types = hsuper.callCabal2nix "lsp-types" lsp-types-source {};
+              lsp-test = hsuper.callCabal2nix "lsp-test" lsp-test-source {};
 
               implicit-hie-cradle = hself.callCabal2nix "implicit-hie-cradle"
                 (builtins.fetchTarball {
