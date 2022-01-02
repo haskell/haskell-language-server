@@ -156,8 +156,6 @@ jobs:
           echo '' || \
           echo 'WARNING: Could not produce the `freeze`.'
           echo ::set-output name=value::${{ hashFiles('cabal.project.freeze') }}
-          # Removing freeze file as it can break builds using allow-newer
-          rm -f cabal.project.freeze
 
       # 2021-12-02: NOTE: Cabal Hackage source tree storage does not depend on OS or GHC really,
       # but can depend on `base`.
