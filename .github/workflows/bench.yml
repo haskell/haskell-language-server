@@ -85,6 +85,9 @@ jobs:
         INDEX_STATE1=$(echo "$INDEX_STATE_ENTRY" | cut -d' ' -f2 | tr ':' '-')
         echo "INDEX_STATE=$INDEX_STATE1" >> $GITHUB_ENV
 
+    # To ensure we get the lastest hackage index and not relying on haskell action logic
+    - run: cabal update
+
     - name: Form the package list ('cabal.project.freeze')
       id: compute-cache-key
       run: |
@@ -96,8 +99,6 @@ jobs:
         echo '' || \
         echo 'WARNING: Could not produce the `freeze`.'
         echo ::set-output name=value::${{ hashFiles('cabal.project.freeze') }}
-        # Removing freeze file as it can break builds using allow-newer
-        rm -f cabal.project.freeze
 
     - name: Hackage sources cache
       uses: actions/cache@v2
@@ -120,9 +121,6 @@ jobs:
               ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-
               ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
               ${{ env.cache-name }}-${{ runner.os }}-
-
-    # To ensure we get the lastest hackage index and not relying on haskell action logic
-    - run: cabal update
 
     # max-backjumps is increased as a temporary solution
     # for dependency resolution failure
