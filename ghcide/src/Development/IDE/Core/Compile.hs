@@ -149,21 +149,25 @@ typecheckModule :: IdeDefer
 typecheckModule (IdeDefer defer) hsc keep_lbls pm = do
         let modSummary = pm_mod_summary pm
             dflags = ms_hspp_opts modSummary
-        modSummary' <- initPlugins hsc modSummary
-        (warnings, etcm) <- withWarnings "typecheck" $ \tweak ->
-            let
-              session = tweak (hscSetFlags dflags hsc)
-               -- TODO: maybe settings ms_hspp_opts is unnecessary?
-              mod_summary'' = modSummary' { ms_hspp_opts = hsc_dflags session}
-            in
-              catchSrcErrors (hsc_dflags hsc) "typecheck" $ do
-                tcRnModule session keep_lbls $ demoteIfDefer pm{pm_mod_summary = mod_summary''}
-        let errorPipeline = unDefer . hideDiag dflags . tagDiag
-            diags = map errorPipeline warnings
-            deferedError = any fst diags
-        case etcm of
-          Left errs -> return ((map snd diags) ++ errs, Nothing)
-          Right tcm -> return (map snd diags, Just $ tcm{tmrDeferedError = deferedError})
+        mmodSummary' <- catchSrcErrors (hsc_dflags hsc) "typecheck (initialize plugins)"
+                                      (initPlugins hsc modSummary)
+        case mmodSummary' of
+          Left errs -> return (errs, Nothing)
+          Right modSummary' -> do
+            (warnings, etcm) <- withWarnings "typecheck" $ \tweak ->
+                let
+                  session = tweak (hscSetFlags dflags hsc)
+                   -- TODO: maybe settings ms_hspp_opts is unnecessary?
+                  mod_summary'' = modSummary' { ms_hspp_opts = hsc_dflags session}
+                in
+                  catchSrcErrors (hsc_dflags hsc) "typecheck" $ do
+                    tcRnModule session keep_lbls $ demoteIfDefer pm{pm_mod_summary = mod_summary''}
+            let errorPipeline = unDefer . hideDiag dflags . tagDiag
+                diags = map errorPipeline warnings
+                deferedError = any fst diags
+            case etcm of
+              Left errs -> return ((map snd diags) ++ errs, Nothing)
+              Right tcm -> return (map snd diags, Just $ tcm{tmrDeferedError = deferedError})
     where
         demoteIfDefer = if defer then demoteTypeErrorsToWarnings else id
 
