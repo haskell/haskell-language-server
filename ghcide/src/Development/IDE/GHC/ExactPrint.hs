@@ -36,6 +36,7 @@ module Development.IDE.GHC.ExactPrint
       eqSrcSpan,
       epl,
       epAnn,
+      removeTrailingComma,
 #endif
       annotateParsedSource,
       getAnnotatedParsedSourceRule,
@@ -87,11 +88,13 @@ import           Retrie.ExactPrint                       hiding (parseDecl,
                                                           parseType)
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC                                     (EpAnn (..),
+                                                          NameAdornment (NameParens),
+                                                          NameAnn (..),
                                                           SrcSpanAnn' (SrcSpanAnn),
                                                           SrcSpanAnnA,
                                                           TrailingAnn (AddCommaAnn),
                                                           emptyComments,
-                                                          spanAsAnchor, NameAnn(..), NameAdornment (NameParens))
+                                                          spanAsAnchor)
 import           GHC.Parser.Annotation                   (AnnContext (..),
                                                           DeltaPos (SameLine),
                                                           EpaLocation (EpaDelta))
@@ -659,4 +662,11 @@ addParens True it@NameAnnOnly{} =
 addParens True NameAnnTrailing{..} =
         NameAnn{nann_adornment = NameParens, nann_open = epl 0, nann_close = epl 0, nann_name = epl 0, ..}
 addParens _ it = it
+
+removeTrailingComma :: GenLocated SrcSpanAnnA ast -> GenLocated SrcSpanAnnA ast
+removeTrailingComma = flip modifyAnns $ \(AnnListItem l) -> AnnListItem $ filter (not . isCommaAnn) l
+
+isCommaAnn :: TrailingAnn -> Bool
+isCommaAnn AddCommaAnn{} = True
+isCommaAnn _             = False
 #endif

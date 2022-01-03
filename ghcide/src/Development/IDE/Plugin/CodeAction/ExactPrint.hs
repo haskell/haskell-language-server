@@ -624,6 +624,9 @@ deleteFromImport (T.pack -> symbol) (L l idecl) llies@(L lieLoc lies) _ = do
   pure lidecl'
  where
   deletedLies =
+#if MIN_VERSION_ghc(9,2,0)
+    over _last removeTrailingComma $
+#endif
     mapMaybe killLie lies
   killLie :: LIE GhcPs -> Maybe (LIE GhcPs)
   killLie v@(L _ (IEVar _ (L _ (unqualIEWrapName -> nam))))
