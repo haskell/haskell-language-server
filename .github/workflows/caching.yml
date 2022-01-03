@@ -142,7 +142,24 @@ jobs:
           INDEX_STATE1=$(echo "$INDEX_STATE_ENTRY" | cut -d' ' -f2 | tr ':' '-')
           echo "INDEX_STATE=$INDEX_STATE1" >> $GITHUB_ENV
 
+      # 2021-12-02: NOTE: Cabal Hackage source tree storage does not depend on OS or GHC really,
+      # but can depend on `base`.
+      # But this caching is happens only inside `master` for `master` purposes of compiling the deps
+      # so having a shared pool here that depends only on Hackage pin & does not depend on `base` is "good enough"
+      # & used such because it preserves 10% of a global cache storage pool.
+      # We have to restore package sources before `cabal update`
+      # cause it overwrites the hackage index with the cached one
+      - name: Hackage sources cache
+        uses: actions/cache@v2
+        env:
+          cache-name: hackage-sources
+        with:
+          path:  ${{ env.CABAL_PKGS_DIR }}
+          key:   ${{ env.cache-name }}-${{ env.INDEX_STATE }}
+          restore-keys: ${{ env.cache-name }}-
+
       # To ensure we get the lastest hackage index and not relying on haskell action logic
+      # It has to be done before `cabal freeze` to make it aware of the new index
       - run: cabal update
 
       - name: Form the package list ('cabal.project.freeze')
@@ -156,20 +173,6 @@ jobs:
           echo '' || \
           echo 'WARNING: Could not produce the `freeze`.'
           echo ::set-output name=value::${{ hashFiles('cabal.project.freeze') }}
-
-      # 2021-12-02: NOTE: Cabal Hackage source tree storage does not depend on OS or GHC really,
-      # but can depend on `base`.
-      # But this caching is happens only inside `master` for `master` purposes of compiling the deps
-      # so having a shared pool here that depends only on Hackage pin & does not depend on `base` is "good enough"
-      # & used such because it preserves 10% of a global cache storage pool.
-      - name: Hackage sources cache
-        uses: actions/cache@v2
-        env:
-          cache-name: hackage-sources
-        with:
-          path:  ${{ env.CABAL_PKGS_DIR }}
-          key:   ${{ env.cache-name }}-${{ env.INDEX_STATE }}
-          restore-keys: ${{ env.cache-name }}-
 
       - name: Compiled deps cache
         id: compiled-deps
