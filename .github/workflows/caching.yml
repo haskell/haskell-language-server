@@ -149,6 +149,9 @@ jobs:
           INDEX_STATE1=$(echo "$INDEX_STATE_ENTRY" | cut -d' ' -f2 | tr ':' '-')
           echo "INDEX_STATE=$INDEX_STATE1" >> $GITHUB_ENV
 
+      # To ensure we get the lastest hackage index and not relying on haskell action logic
+      - run: cabal update
+
       - name: Form the package list ('cabal.project.freeze')
         id: compute-cache-key
         run: |
@@ -160,8 +163,6 @@ jobs:
           echo '' || \
           echo 'WARNING: Could not produce the `freeze`.'
           echo ::set-output name=value::${{ hashFiles('cabal.project.freeze') }}
-          # Removing freeze file as it can break builds using allow-newer
-          rm -f cabal.project.freeze
 
       # 2021-12-02: NOTE: Cabal Hackage source tree storage does not depend on OS or GHC really,
       # but can depend on `base`.
@@ -189,10 +190,6 @@ jobs:
                 ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-
                 ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
                 ${{ env.cache-name }}-${{ runner.os }}-
-
-      # To ensure we get the lastest hackage index and not relying on haskell action logic
-      - if: steps.compiled-deps.outputs.cache-hit != 'true'
-        run: cabal update
 
       - if: steps.compiled-deps.outputs.cache-hit != 'true' && runner.os == 'Linux' && matrix.ghc == '8.10.7'
         name: Download sources for bench
