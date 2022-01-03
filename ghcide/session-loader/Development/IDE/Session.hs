@@ -432,7 +432,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
               newHscEnv <-
                 -- Add the options for the current component to the HscEnv
                 evalGhcEnv hscEnv $ do
-                  _ <- setSessionDynFlags df
+                  _ <- setSessionDynFlags $ setHomeUnitId_ fakeUid df
                   getSession
 
               -- Modify the map so the hieYaml now maps to the newly created

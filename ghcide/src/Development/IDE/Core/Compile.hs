@@ -147,24 +147,23 @@ typecheckModule :: IdeDefer
                 -> ParsedModule
                 -> IO (IdeResult TcModuleResult)
 typecheckModule (IdeDefer defer) hsc keep_lbls pm = do
-    fmap (either (,Nothing) id) $
-      catchSrcErrors (hsc_dflags hsc) "typecheck" $ do
-
         let modSummary = pm_mod_summary pm
             dflags = ms_hspp_opts modSummary
-
         modSummary' <- initPlugins hsc modSummary
-        (warnings, tcm) <- withWarnings "typecheck" $ \tweak ->
+        (warnings, etcm) <- withWarnings "typecheck" $ \tweak ->
             let
               session = tweak (hscSetFlags dflags hsc)
                -- TODO: maybe settings ms_hspp_opts is unnecessary?
               mod_summary'' = modSummary' { ms_hspp_opts = hsc_dflags session}
             in
-              tcRnModule session keep_lbls $ demoteIfDefer pm{pm_mod_summary = mod_summary''}
+              catchSrcErrors (hsc_dflags hsc) "typecheck" $ do
+                tcRnModule session keep_lbls $ demoteIfDefer pm{pm_mod_summary = mod_summary''}
         let errorPipeline = unDefer . hideDiag dflags . tagDiag
             diags = map errorPipeline warnings
             deferedError = any fst diags
-        return (map snd diags, Just $ tcm{tmrDeferedError = deferedError})
+        case etcm of
+          Left errs -> return ((map snd diags) ++ errs, Nothing)
+          Right tcm -> return (map snd diags, Just $ tcm{tmrDeferedError = deferedError})
     where
         demoteIfDefer = if defer then demoteTypeErrorsToWarnings else id
 
@@ -213,7 +212,7 @@ tcRnModule hsc_env keep_lbls pmod = do
   unload hsc_env_tmp keep_lbls
 
   ((tc_gbl_env, mrn_info), splices)
-      <- liftIO $ captureSplices (hscSetFlags (ms_hspp_opts ms) hsc_env) $ \hsc_env_tmp ->
+      <- liftIO $ captureSplices hsc_env_tmp $ \hsc_env_tmp ->
              do  hscTypecheckRename hsc_env_tmp ms $
                           HsParsedModule { hpm_module = parsedSource pmod,
                                            hpm_src_files = pm_extra_src_files pmod,
