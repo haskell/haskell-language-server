@@ -2119,20 +2119,15 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
     ]
   ]
   where
-    hidingDir = "test/data/hiding"
     compareTwo original locs cmd expected =
         withTarget original locs $ \doc actions -> do
-            expected <- liftIO $
-                readFileUtf8 (hidingDir </> expected)
+            expected <- liftIO $ readFileUtf8 expected
             action <- liftIO $ pickActionWithTitle cmd actions
             executeCodeAction action
             contentAfterAction <- documentContents doc
             liftIO $ T.replace "\r\n" "\n" expected @=? contentAfterAction
     compareHideFunctionTo = compareTwo "HideFunction.hs"
-    auxFiles = ["AVec.hs", "BVec.hs", "CVec.hs", "DVec.hs", "EVec.hs", "FVec.hs"]
-    withTarget file locs k = withTempDir $ \dir -> runInDir dir $ do
-        liftIO $ mapM_ (\fp -> copyFile (hidingDir </> fp) $ dir </> fp)
-            $ file : auxFiles
+    withTarget file locs k = runWithExtraFiles "hiding" $ \dir -> do
         doc <- openDoc file "haskell"
         waitForProgressDone
         void $ expectDiagnostics [(file, [(DsError, loc, "Ambiguous occurrence") | loc <- locs])]
