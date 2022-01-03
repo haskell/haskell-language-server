@@ -4045,7 +4045,7 @@ findDefinitionAndHoverTests = let
   , test  no     skip   cccL17     docLink       "Haddock html links"
   , testM yes    yes    imported   importedSig   "Imported symbol"
   , testM yes    yes    reexported reexportedSig "Imported symbol (reexported)"
-  , if ghcVersion == GHC90 && isWindows then
+  , if ghcVersion == GHC90 && isWindows || ghcVersion == GHC92 then
         test  no     broken    thLocL57   thLoc         "TH Splice Hover"
     else
         test  no     yes       thLocL57   thLoc         "TH Splice Hover"
