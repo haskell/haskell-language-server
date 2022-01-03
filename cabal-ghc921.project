@@ -29,17 +29,6 @@ packages:
 
 source-repository-package
   type: git
-  location: https://github.com/pepeiborra/retrie
-  tag: 5d45dd1d101b6a026281892fe2145b911237824f
-
-source-repository-package
-  type: git
-  location: https://github.com/pepeiborra/ghc-exactprint
-  tag: 2fe891ae15a89cfb6f1b687abf3af0e3b512c751
-  -- https://github.com/alanz/ghc-exactprint/pull/110
-
-source-repository-package
-  type: git
   location: https://github.com/tfausak/unix-compat
   tag: 154c3a63f154cb49c51d5f9d13488e8119631d8a
   -- To fix windows build
@@ -71,7 +60,7 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2021-12-29T12:30:08Z
+index-state: 2022-01-03T18:45:00Z
 
 constraints:
   -- These plugins doesn't work on GHC92 yet
