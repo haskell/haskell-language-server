@@ -146,24 +146,28 @@ jobs:
           INDEX_STATE1=$(echo "$INDEX_STATE_ENTRY" | cut -d' ' -f2 | tr ':' '-')
           echo "INDEX_STATE=$INDEX_STATE1" >> $GITHUB_ENV
 
-      - name: Form the package list ('cabal.project.freeze')
-        continue-on-error: true
+      # To ensure we get the lastest hackage index and not relying on haskell action logic
+      - run: cabal update
+
+      - name: Compute the cache key
+        id: compute-cache-key
         run: |
           cabal v2-freeze && \
-          echo '' && \
+          echo "" && \
           echo 'Output:' && \
-          echo '' && \
+          echo "" && \
           cat 'cabal.project.freeze' && \
           echo '' || \
-          echo 'WARNING: Could not produce the `freeze`.
+          echo 'WARNING: Could not produce the `freeze`.'
+          echo ::set-output name=value::${{ hashFiles('cabal.project.freeze') }}
 
       - name: Hackage sources cache
         uses: actions/cache@v2
         env:
           cache-name: hackage-sources
         with:
-          path: ${{ env.CABAL_PKGS_DIR }}
-          key:          ${{ env.cache-name }}-${{ env.INDEX_STATE }}
+          path:  ${{ env.CABAL_PKGS_DIR }}
+          key:   ${{ env.cache-name }}-${{ env.INDEX_STATE }}
           restore-keys: ${{ env.cache-name }}-
 
       - name: Compiled deps cache
@@ -173,15 +177,11 @@ jobs:
           cache-name: compiled-deps
         with:
           path: ${{ steps.HaskEnvSetup.outputs.cabal-store }}
-          key:  ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project.freeze') }}
+          key:  ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-${{ steps.compute-cache-key.outputs.value }}
           restore-keys: |
                 ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-
                 ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
                 ${{ env.cache-name }}-${{ runner.os }}-
-
-      # To ensure we get the lastest hackage index and not relying on haskell action logic
-      - if: steps.compiled-deps.outputs.cache-hit != 'true'
-        run: cabal update
 
       # repeating builds to workaround segfaults in windows and ghc-8.8.4
       - name: Build
