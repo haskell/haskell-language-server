@@ -124,12 +124,12 @@ import           Text.Printf                           (printf)
 
 data Command
     = Check [FilePath]  -- ^ Typecheck some paths and print diagnostics. Exit code is the number of failures
-    | Db {projectRoot :: FilePath, hieOptions ::  HieDb.Options, hieCommand :: HieDb.Command}
+    | Db {hieOptions ::  HieDb.Options, hieCommand :: HieDb.Command}
      -- ^ Run a command in the hiedb
     | LSP   -- ^ Run the LSP server
     | PrintExtensionSchema
     | PrintDefaultConfig
-    | Custom {projectRoot :: FilePath, ideCommand :: IdeCommand IdeState} -- ^ User defined
+    | Custom {ideCommand :: IdeCommand IdeState} -- ^ User defined
     deriving Show
 
 
@@ -144,7 +144,7 @@ isLSP _   = False
 commandP :: IdePlugins IdeState -> Parser Command
 commandP plugins =
     hsubparser(command "typecheck" (info (Check <$> fileCmd) fileInfo)
-            <> command "hiedb" (info (Db "." <$> HieDb.optParser "" True <*> HieDb.cmdParser <**> helper) hieInfo)
+            <> command "hiedb" (info (Db <$> HieDb.optParser "" True <*> HieDb.cmdParser <**> helper) hieInfo)
             <> command "lsp" (info (pure LSP <**> helper) lspInfo)
             <> command "vscode-extension-schema" extensionSchemaCommand
             <> command "generate-default-config" generateDefaultConfigCommand
@@ -163,13 +163,14 @@ commandP plugins =
              (fullDesc <> progDesc "Print config supported by the server with default values")
 
     pluginCommands = mconcat
-        [ command (T.unpack pId) (Custom "." <$> p)
+        [ command (T.unpack pId) (Custom <$> p)
         | (PluginId pId, PluginDescriptor{pluginCli = Just p}) <- ipMap plugins
         ]
 
 
 data Arguments = Arguments
-    { argsOTMemoryProfiling     :: Bool
+    { argsProjectRoot           :: Maybe FilePath
+    , argsOTMemoryProfiling     :: Bool
     , argCommand                :: Command
     , argsLogger                :: IO Logger
     , argsRules                 :: Rules ()
@@ -191,7 +192,8 @@ instance Default Arguments where
 
 defaultArguments :: Priority -> Arguments
 defaultArguments priority = Arguments
-        { argsOTMemoryProfiling = False
+        { argsProjectRoot = Nothing
+        , argsOTMemoryProfiling = False
         , argCommand = LSP
         , argsLogger = stderrLogger priority
         , argsRules = mainRule def >> action kick
@@ -319,7 +321,7 @@ defaultMain Arguments{..} = flip withHeapStats fun =<< argsLogger
                     hieChan
             dumpSTMStats
         Check argFiles -> do
-          dir <- IO.getCurrentDirectory
+          dir <- maybe IO.getCurrentDirectory return argsProjectRoot
           dbLoc <- getHieDbLoc dir
           runWithDb logger dbLoc $ \hiedb hieChan -> do
             -- GHC produces messages with UTF8 in them, so make sure the terminal doesn't error
@@ -382,17 +384,19 @@ defaultMain Arguments{..} = flip withHeapStats fun =<< argsLogger
                 measureMemory logger [keys] consoleObserver values
 
             unless (null failed) (exitWith $ ExitFailure (length failed))
-        Db dir opts cmd -> do
-            dbLoc <- getHieDbLoc dir
+        Db opts cmd -> do
+            root <-  maybe IO.getCurrentDirectory return argsProjectRoot
+            dbLoc <- getHieDbLoc root
             hPutStrLn stderr $ "Using hiedb at: " ++ dbLoc
-            mlibdir <- setInitialDynFlags logger dir def
+            mlibdir <- setInitialDynFlags logger root def
             rng <- newStdGen
             case mlibdir of
                 Nothing     -> exitWith $ ExitFailure 1
                 Just libdir -> retryOnSqliteBusy logger rng (HieDb.runCommand libdir opts{HieDb.database = dbLoc} cmd)
 
-        Custom projectRoot (IdeCommand c) -> do
-          dbLoc <- getHieDbLoc projectRoot
+        Custom (IdeCommand c) -> do
+          root <-  maybe IO.getCurrentDirectory return argsProjectRoot
+          dbLoc <- getHieDbLoc root
           runWithDb logger dbLoc $ \hiedb hieChan -> do
             vfs <- makeVFSHandle
             sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions "."

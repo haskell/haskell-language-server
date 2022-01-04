@@ -7,7 +7,7 @@ module Main(main) where
 
 import           Arguments                         (Arguments (..),
                                                     getArguments)
-import           Control.Monad.Extra               (unless, whenJust)
+import           Control.Monad.Extra               (unless)
 import           Data.Default                      (def)
 import           Data.Version                      (showVersion)
 import           Development.GitRev                (gitHash)
@@ -50,13 +50,17 @@ main = withTelemetryLogger $ \telemetryLogger -> do
     if argsVersion then ghcideVersion >>= putStrLn >> exitSuccess
     else hPutStrLn stderr {- see WARNING above -} =<< ghcideVersion
 
-    whenJust argsCwd IO.setCurrentDirectory
+    -- if user uses --cwd option we need to make this path absolute (and set the current directory to it)
+    argsCwd <- case argsCwd of
+      Nothing   -> IO.getCurrentDirectory
+      Just root -> IO.setCurrentDirectory root >> IO.getCurrentDirectory
 
     let logPriority = if argsVerbose then Debug else Info
         arguments = if argsTesting then Main.testing else Main.defaultArguments logPriority
 
     Main.defaultMain arguments
-        {Main.argCommand = argsCommand
+        { Main.argsProjectRoot = Just argsCwd
+        , Main.argCommand = argsCommand
         ,Main.argsLogger = Main.argsLogger arguments <> pure telemetryLogger
 
         ,Main.argsRules = do
