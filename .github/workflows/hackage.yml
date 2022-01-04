@@ -86,8 +86,7 @@ jobs:
       - name: "Ensure we will use hackage head"
         run: cabal update
 
-      - name: Compute the cache key
-        id: compute-cache-key
+      - name: Form the package list ('cabal.project.freeze')
         run: |
           cabal v2-freeze && \
           echo "" && \
@@ -96,15 +95,15 @@ jobs:
           cat 'cabal.project.freeze' && \
           echo '' || \
           echo 'WARNING: Could not produce the `freeze`.'
-          echo ::set-output name=value::${{ hashFiles('cabal.project.freeze') }}
 
       - name: Compiled deps cache
+        id: compiled-deps
         uses: actions/cache@v2
         env:
           cache-name: compiled-deps
         with:
           path: ${{ steps.HaskEnvSetup.outputs.cabal-store }}
-          key:  ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-${{ steps.compute-cache-key.outputs.value }}
+          key:  ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project.freeze') }}
           restore-keys: |
                 ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-
                 ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
