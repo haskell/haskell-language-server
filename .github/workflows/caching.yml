@@ -90,7 +90,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - uses: .github/actions/setup-build
+      - uses: ./.github/actions/setup-build
         with:
           ghc: ${{ matrix.ghc }}
           os:  ${{ runner.os }}

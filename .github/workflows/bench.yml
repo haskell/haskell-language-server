@@ -56,7 +56,7 @@ jobs:
 
     - run: git fetch origin master # check the master branch for benchmarking
 
-    - uses: .github/actions/setup-build
+    - uses: ./.github/actions/setup-build
       with:
         ghc: ${{ matrix.ghc }}
         os:  ${{ runner.os }}
