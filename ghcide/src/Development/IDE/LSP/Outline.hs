@@ -29,6 +29,9 @@ import           Language.LSP.Types             (DocumentSymbol (..),
                                                  SymbolKind (SkConstructor, SkField, SkFile, SkFunction, SkInterface, SkMethod, SkModule, SkObject, SkStruct, SkTypeParameter, SkUnknown),
                                                  TextDocumentIdentifier (TextDocumentIdentifier),
                                                  type (|?) (InL), uriToFilePath)
+#if MIN_VERSION_ghc(9,2,0)
+import Data.List.NonEmpty (nonEmpty, toList)
+#endif
 
 moduleOutline
   :: IdeState -> DocumentSymbolParams -> LspM c (Either ResponseError (List DocumentSymbol |? List SymbolInformation))
@@ -106,12 +109,15 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ DataDecl { tcdLNam
             , _kind           = SkConstructor
             , _selectionRange = realSrcSpanToRange l'
 #if MIN_VERSION_ghc(9,2,0)
-            , _children       = Just $ List $ childs
+            , _children       = List . toList <$> nonEmpty childs
             }
         | con <- dd_cons
         , let (cs, flds) = hsConDeclsBinders con
         , let childs = mapMaybe cvtFld flds
-        , L (RealSrcSpan l' _) n <- cs
+        , L (locA -> RealSrcSpan l' _) n <- cs
+        , let l = case con of
+                L (locA -> RealSrcSpan l _) _ -> l
+                _ -> l'
         ]
     }
   where
@@ -261,7 +267,7 @@ getConNames' (XConDecl x)                    = noExtCon x
 #endif
 #else
 hsConDeclsBinders :: LConDecl GhcPs
-                  -> ([Located (IdP GhcPs)], [LFieldOcc GhcPs])
+                  -> ([LIdP GhcPs], [LFieldOcc GhcPs])
    -- See hsLTyClDeclBinders for what this does
    -- The function is boringly complicated because of the records
    -- And since we only have equality, we have to be a little careful
@@ -269,21 +275,20 @@ hsConDeclsBinders cons
   = go cons
   where
     go :: LConDecl GhcPs
-       -> ([Located (IdP GhcPs)], [LFieldOcc GhcPs])
+       -> ([LIdP GhcPs], [LFieldOcc GhcPs])
     go r
       -- Don't re-mangle the location of field names, because we don't
       -- have a record of the full location of the field declaration anyway
-      = let loc = getLoc (reLoc r)
-        in case unLoc r of
+      = case unLoc r of
            -- remove only the first occurrence of any seen field in order to
            -- avoid circumventing detection of duplicate fields (#9156)
            ConDeclGADT { con_names = names, con_g_args = args }
-             -> (map (L loc . unLoc) names, flds)
+             -> (names, flds)
              where
-                (flds) = get_flds_gadt args
+                flds = get_flds_gadt args
 
            ConDeclH98 { con_name = name, con_args = args }
-             -> ([L loc (unLoc name)], flds)
+             -> ([name], flds)
              where
                 flds = get_flds_h98 args
 

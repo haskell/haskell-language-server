@@ -5122,7 +5122,7 @@ outlineTests = testGroup
     let source = T.unlines ["data A = B {", "  x :: Int", "  , y :: Int}"]
     docId   <- createDoc "A.hs" "haskell" source
     symbols <- getDocumentSymbols docId
-    liftIO $ symbols @=? Left
+    liftIO $ symbols @?= Left
       [ docSymbolWithChildren "A" SkStruct (R 0 0 2 13)
           [ docSymbolWithChildren' "B" SkConstructor (R 0 9 2 13) (R 0 9 0 10)
             [ docSymbol "x" SkField (R 1 2 1 3)
