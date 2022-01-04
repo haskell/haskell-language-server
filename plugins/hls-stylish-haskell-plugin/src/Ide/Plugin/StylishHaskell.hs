@@ -1,7 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Ide.Plugin.StylishHaskell
-  (
-    descriptor
+  ( descriptor
   , provider
   )
 where
@@ -10,15 +9,13 @@ import           Control.Monad.IO.Class
 import           Data.Text                   (Text)
 import qualified Data.Text                   as T
 import           Development.IDE             hiding (pluginHandlers)
-import           Development.IDE.GHC.Compat  (ModSummary (ms_hspp_opts))
-import qualified DynFlags                    as D
-import qualified EnumSet                     as ES
+import           Development.IDE.GHC.Compat  (ModSummary (ms_hspp_opts), extensionFlags)
+import qualified Development.IDE.GHC.Compat.Util as Util
 import           GHC.LanguageExtensions.Type
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.Haskell.Stylish
 import           Language.LSP.Types          as J
-
 import           System.Directory
 import           System.FilePath
 
@@ -54,7 +51,7 @@ provider ide typ contents fp _opts = do
       | otherwise
       = pure config
 
-    getExtensions = map showExtension . ES.toList . D.extensionFlags
+    getExtensions = map showExtension . Util.toList . extensionFlags
 
     showExtension Cpp   = "CPP"
     showExtension other = show other

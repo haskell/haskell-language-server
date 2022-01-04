@@ -1,0 +1,16 @@
+cradle:
+  direct:
+    arguments:
+      - "-DFLAG"
+      - "-Wno-unrecognised-pragmas"
+      - "Base"
+      - "Comments"
+      - "CppCond"
+      - "Generalise"
+      - "IgnoreAnn"
+      - "IgnoreAnnHlint"
+      - "LambdaCase"
+      - "TwoHints"
+      - "PatternKeyword"
+      - "StrictData"
+      - "TwoHintsAndComment"

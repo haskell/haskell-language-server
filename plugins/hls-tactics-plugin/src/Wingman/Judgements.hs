@@ -1,6 +1,5 @@
 module Wingman.Judgements where
 
-import           ConLike (ConLike)
 import           Control.Arrow
 import           Control.Lens hiding (Context)
 import           Data.Bool
@@ -12,18 +11,18 @@ import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Set (Set)
 import qualified Data.Set as S
+import           Development.IDE.Core.UseStale (Tracked, unTrack)
+import           Development.IDE.GHC.Compat hiding (isTopLevel)
 import           Development.IDE.Spans.LocalBindings
-import           OccName
-import           SrcLoc
-import           Type
-import           Wingman.GHC (algebraicTyCon)
+import           Wingman.GHC (algebraicTyCon, normalizeType)
+import           Wingman.Judgements.Theta
 import           Wingman.Types
 
 
 ------------------------------------------------------------------------------
 -- | Given a 'SrcSpan' and a 'Bindings', create a hypothesis.
-hypothesisFromBindings :: RealSrcSpan -> Bindings -> Hypothesis CType
-hypothesisFromBindings span bs = buildHypothesis $ getLocalScope bs span
+hypothesisFromBindings :: Tracked age RealSrcSpan -> Tracked age Bindings -> Hypothesis CType
+hypothesisFromBindings (unTrack -> span) (unTrack -> bs) = buildHypothesis $ getLocalScope bs span
 
 
 ------------------------------------------------------------------------------
@@ -37,6 +36,13 @@ buildHypothesis
       | Just ty <- t
       , isAlpha . head . occNameString $ occ = Just $ HyInfo occ UserPrv $ CType ty
       | otherwise = Nothing
+
+
+------------------------------------------------------------------------------
+-- | Build a trivial hypothesis containing only a single name. The corresponding
+-- HyInfo has no provenance or type.
+hySingleton :: OccName -> Hypothesis ()
+hySingleton n = Hypothesis . pure $ HyInfo n UserPrv ()
 
 
 blacklistingDestruct :: Judgement -> Judgement
@@ -61,11 +67,28 @@ withNewGoal :: a -> Judgement' a -> Judgement' a
 withNewGoal t = field @"_jGoal" .~ t
 
 
-introduce :: Hypothesis a -> Judgement' a -> Judgement' a
+------------------------------------------------------------------------------
+-- | Add some new type equalities to the local judgement.
+withNewCoercions :: [(CType, CType)] -> Judgement -> Judgement
+withNewCoercions ev j =
+  let subst = allEvidenceToSubst mempty $ coerce ev
+   in fmap (CType . substTyAddInScope subst . unCType) j
+      & field @"j_coercion" %~ unionTCvSubst subst
+
+
+normalizeHypothesis :: Functor f => Context -> f CType -> f CType
+normalizeHypothesis = fmap . coerce . normalizeType
+
+normalizeJudgement :: Functor f => Context -> f CType -> f CType
+normalizeJudgement = normalizeHypothesis
+
+
+introduce :: Context -> Hypothesis CType -> Judgement' CType -> Judgement' CType
 -- NOTE(sandy): It's important that we put the new hypothesis terms first,
 -- since 'jAcceptableDestructTargets' will never destruct a pattern that occurs
 -- after a previously-destructed term.
-introduce hy = field @"_jHypothesis" %~ mappend hy
+introduce ctx hy =
+  field @"_jHypothesis" %~ mappend (normalizeHypothesis ctx hy)
 
 
 ------------------------------------------------------------------------------
@@ -100,6 +123,12 @@ recursiveHypothesis = introduceHypothesis $ const $ const RecursivePrv
 
 
 ------------------------------------------------------------------------------
+-- | Introduce a binding in a recursive context.
+userHypothesis :: [(OccName, a)] -> Hypothesis a
+userHypothesis = introduceHypothesis $ const $ const UserPrv
+
+
+------------------------------------------------------------------------------
 -- | Check whether any of the given occnames are an ancestor of the term.
 hasPositionalAncestry
     :: Foldable t
@@ -111,7 +140,7 @@ hasPositionalAncestry
                    -- otherwise nothing
 hasPositionalAncestry ancestors jdg name
   | not $ null ancestors
-  = case any (== name) ancestors of
+  = case name `elem` ancestors of
       True  -> Just True
       False ->
         case M.lookup name $ jAncestryMap jdg of
@@ -130,11 +159,10 @@ filterAncestry
     -> Judgement
     -> Judgement
 filterAncestry ancestry reason jdg =
-    disallowing reason (M.keys $ M.filterWithKey go $ hyByName $ jHypothesis jdg) jdg
+    disallowing reason (M.keysSet $ M.filterWithKey go $ hyByName $ jHypothesis jdg) jdg
   where
     go name _
-      = not
-      . isJust
+      = isNothing
       $ hasPositionalAncestry ancestry jdg name
 
 
@@ -197,21 +225,19 @@ filterSameTypeFromOtherPositions dcon pos jdg =
       to_remove =
         M.filter (flip S.member tys . hi_type) (hyByName $ jHypothesis jdg)
           M.\\ hy
-   in disallowing Shadowed (M.keys to_remove) jdg
+   in disallowing Shadowed (M.keysSet to_remove) jdg
 
 
 ------------------------------------------------------------------------------
 -- | Return the ancestry of a 'PatVal', or 'mempty' otherwise.
 getAncestry :: Judgement' a -> OccName -> Set OccName
 getAncestry jdg name =
-  case M.lookup name $ jPatHypothesis jdg of
-    Just pv -> pv_ancestry pv
-    Nothing -> mempty
+  maybe mempty pv_ancestry . M.lookup name $ jPatHypothesis jdg
 
 
 jAncestryMap :: Judgement' a -> Map OccName (Set OccName)
 jAncestryMap jdg =
-  flip M.map (jPatHypothesis jdg) pv_ancestry
+  M.map pv_ancestry (jPatHypothesis jdg)
 
 
 provAncestryOf :: Provenance -> Set OccName
@@ -221,6 +247,7 @@ provAncestryOf (PatternMatchPrv (PatVal mo so _ _)) =
 provAncestryOf (ClassMethodPrv _) = mempty
 provAncestryOf UserPrv = mempty
 provAncestryOf RecursivePrv = mempty
+provAncestryOf ImportPrv = mempty
 provAncestryOf (DisallowedPrv _ p2) = provAncestryOf p2
 
 
@@ -257,8 +284,8 @@ patternHypothesis scrutinee dc jdg
 ------------------------------------------------------------------------------
 -- | Prevent some occnames from being used in the hypothesis. This will hide
 -- them from 'jHypothesis', but not from 'jEntireHypothesis'.
-disallowing :: DisallowReason -> [OccName] -> Judgement' a -> Judgement' a
-disallowing reason (S.fromList -> ns) =
+disallowing :: DisallowReason -> S.Set OccName -> Judgement' a -> Judgement' a
+disallowing reason ns =
   field @"_jHypothesis" %~ (\z -> Hypothesis . flip fmap (unHypothesis z) $ \hi ->
     case S.member (hi_name hi) ns of
       True  -> overProvenance (DisallowedPrv reason) hi
@@ -291,6 +318,12 @@ jLocalHypothesis
   . filter (isLocalHypothesis . hi_provenance)
   . unHypothesis
   . jHypothesis
+
+
+------------------------------------------------------------------------------
+-- | Filter elements from the hypothesis
+hyFilter :: (HyInfo a -> Bool) -> Hypothesis a -> Hypothesis a
+hyFilter f  = Hypothesis . filter f . unHypothesis
 
 
 ------------------------------------------------------------------------------
@@ -329,11 +362,13 @@ hyNamesInScope = M.keysSet . hyByName
 -- | Are there any top-level function argument bindings in this judgement?
 jHasBoundArgs :: Judgement' a -> Bool
 jHasBoundArgs
-  = not
-  . null
-  . filter (isTopLevel . hi_provenance)
+  = any (isTopLevel . hi_provenance)
   . unHypothesis
   . jLocalHypothesis
+
+
+jNeedsToBindArgs :: Judgement' CType -> Bool
+jNeedsToBindArgs = isFunTy . unCType . jGoal
 
 
 ------------------------------------------------------------------------------
@@ -372,17 +407,21 @@ substJdg subst = fmap $ coerce . substTy subst . coerce
 
 
 mkFirstJudgement
-    :: Hypothesis CType
+    :: Context
+    -> Hypothesis CType
     -> Bool  -- ^ are we in the top level rhs hole?
     -> Type
     -> Judgement' CType
-mkFirstJudgement hy top goal = Judgement
-  { _jHypothesis        = hy
-  , _jBlacklistDestruct = False
-  , _jWhitelistSplit    = True
-  , _jIsTopHole         = top
-  , _jGoal              = CType goal
-  }
+mkFirstJudgement ctx hy top goal =
+  normalizeJudgement ctx $
+    Judgement
+      { _jHypothesis        = hy
+      , _jBlacklistDestruct = False
+      , _jWhitelistSplit    = True
+      , _jIsTopHole         = top
+      , _jGoal              = CType goal
+      , j_coercion          = emptyTCvSubst
+      }
 
 
 ------------------------------------------------------------------------------

@@ -1,4 +1,0 @@
-cradle:
-  direct:
-    arguments:
-      - "ApplyRefact"

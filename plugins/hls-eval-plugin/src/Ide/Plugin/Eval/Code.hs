@@ -1,28 +1,26 @@
 {-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE ViewPatterns        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wwarn -fno-warn-orphans #-}
 
 -- | Expression execution
-module Ide.Plugin.Eval.Code (Statement, testRanges, resultRange, evalExtensions, evalSetup, propSetup, testCheck, asStatements,myExecStmt) where
+module Ide.Plugin.Eval.Code (Statement, testRanges, resultRange, evalSetup, propSetup, testCheck, asStatements,myExecStmt) where
 
 import           Control.Lens                   ((^.))
+import           Control.Monad.IO.Class
 import           Data.Algorithm.Diff            (Diff, PolyDiff (..), getDiff)
 import qualified Data.List.NonEmpty             as NE
 import           Data.String                    (IsString)
 import qualified Data.Text                      as T
+import           Development.IDE.GHC.Compat
 import           Development.IDE.Types.Location (Position (..), Range (..))
 import           GHC                            (ExecOptions, ExecResult (..),
                                                  execStmt)
-import           GHC.LanguageExtensions.Type    (Extension (..))
-import           GhcMonad                       (Ghc, liftIO, modifySession)
-import           HscTypes
 import           Ide.Plugin.Eval.Types          (Language (Plain), Loc,
                                                  Located (..),
                                                  Section (sectionLanguage),
                                                  Test (..), Txt, locate,
                                                  locate0)
-import           InteractiveEval                (getContext, parseImportDecl,
-                                                 runDecls, setContext)
 import           Language.LSP.Types.Lens        (line, start)
 import           System.IO.Extra                (newTempFile, readFile')
 
@@ -30,7 +28,7 @@ import           System.IO.Extra                (newTempFile, readFile')
 testRanges :: Test -> (Range, Range)
 testRanges tst =
     let startLine = testRange tst ^. start.line
-        (exprLines, resultLines) = testLenghts tst
+        (fromIntegral -> exprLines, fromIntegral -> resultLines) = testLengths tst
         resLine = startLine + exprLines
      in ( Range
             (Position startLine 0)
@@ -66,30 +64,21 @@ testCheck (section, test) out
     | null (testOutput test) || sectionLanguage section == Plain = out
     | otherwise = showDiffs $ getDiff (map T.pack $ testOutput test) out
 
-testLenghts :: Test -> (Int, Int)
-testLenghts (Example e r _)  = (NE.length e, length r)
-testLenghts (Property _ r _) = (1, length r)
+testLengths :: Test -> (Int, Int)
+testLengths (Example e r _)  = (NE.length e, length r)
+testLengths (Property _ r _) = (1, length r)
 
 -- |A one-line Haskell statement
 type Statement = Loc String
 
 asStatements :: Test -> [Statement]
-asStatements lt = locate $ Located (testRange lt ^. start.line) (asStmts lt)
+asStatements lt = locate $ Located (fromIntegral $ testRange lt ^. start.line) (asStmts lt)
 
 asStmts :: Test -> [Txt]
 asStmts (Example e _ _) = NE.toList e
 asStmts (Property t _ _) =
     ["prop11 = " ++ t, "(propEvaluation prop11 :: IO String)"]
 
--- |GHC extensions required for expression evaluation
-evalExtensions :: [Extension]
-evalExtensions =
-    [ OverlappingInstances
-    , UndecidableInstances
-    , FlexibleInstances
-    , IncoherentInstances
-    , TupleSections
-    ]
 
 -- |GHC declarations required for expression evaluation
 evalSetup :: Ghc ()

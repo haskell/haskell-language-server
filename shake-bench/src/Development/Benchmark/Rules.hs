@@ -170,8 +170,8 @@ phonyRules prefix executableName prof buildFolder examples = do
     phony (prefix <> "all") $ do
         exampleTargets <- forM examples $ \ex ->
             allTargetsForExample prof buildFolder ex
-        need $ [ buildFolder </> profilingPath prof </> "results.csv" ]
-             ++ concat exampleTargets
+        need $ (buildFolder </> profilingPath prof </> "results.csv")
+             : concat exampleTargets
     phony (prefix <> "all-binaries") $ need =<< allBinaries buildFolder executableName
 --------------------------------------------------------------------------------
 type OutputFolder = FilePath
@@ -307,7 +307,7 @@ benchRules build MkBenchRules{..} = do
         let exePath    = build </> "binaries" </> ver </> executableName
             exeExtraArgs =
                 [ "+RTS"
-                , "-l-au"
+                , "-l"
                 , "-S" <> outGc]
              ++ concat
                 [[ "-h"

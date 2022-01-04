@@ -1,7 +1,7 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE OverloadedLabels #-}
-{-# LANGUAGE TupleSections    #-}
-{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE OverloadedLabels  #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TupleSections     #-}
 
 module Wingman.CodeGen
   ( module Wingman.CodeGen
@@ -9,26 +9,24 @@ module Wingman.CodeGen
   ) where
 
 
-import           ConLike
 import           Control.Lens ((%~), (<>~), (&))
 import           Control.Monad.Except
+import           Control.Monad.Reader (ask)
 import           Control.Monad.State
+import           Data.Bifunctor (second)
 import           Data.Bool (bool)
+import           Data.Functor ((<&>))
 import           Data.Generics.Labels ()
 import           Data.List
-import           Data.Maybe (mapMaybe)
-import           Data.Monoid (Endo(..))
 import qualified Data.Set as S
 import           Data.Traversable
-import           DataCon
 import           Development.IDE.GHC.Compat
 import           GHC.Exts
+import           GHC.SourceGen (occNameToStr)
 import           GHC.SourceGen.Binds
 import           GHC.SourceGen.Expr
 import           GHC.SourceGen.Overloaded
 import           GHC.SourceGen.Pat
-import           PatSyn
-import           Type hiding (Var)
 import           Wingman.CodeGen.Utils
 import           Wingman.GHC
 import           Wingman.Judgements
@@ -39,7 +37,8 @@ import           Wingman.Types
 
 
 destructMatches
-    :: (ConLike -> Judgement -> Rule)
+    :: Bool
+    -> (ConLike -> Judgement -> Rule)
        -- ^ How to construct each match
     -> Maybe OccName
        -- ^ Scrutinee
@@ -47,49 +46,103 @@ destructMatches
        -- ^ Type being destructed
     -> Judgement
     -> RuleM (Synthesized [RawMatch])
-destructMatches f scrut t jdg = do
+-- TODO(sandy): In an ideal world, this would be the same codepath as
+-- 'destructionFor'. Make sure to change that if you ever change this.
+destructMatches use_field_puns f scrut t jdg = do
   let hy = jEntireHypothesis jdg
       g  = jGoal jdg
-  case splitTyConApp_maybe $ unCType t of
-    Nothing -> throwError $ GoalMismatch "destruct" g
-    Just (tc, apps) -> do
-      let dcs = tyConDataCons tc
-      case dcs of
-        [] -> throwError $ GoalMismatch "destruct" g
-        _ -> fmap unzipTrace $ for dcs $ \dc -> do
-          let con = RealDataCon dc
-              ev = mapMaybe mkEvidence $ dataConInstArgTys dc apps
-              -- We explicitly do not need to add the method hypothesis to
-              -- #syn_scoped
-              method_hy = foldMap evidenceToHypothesis ev
-              args = conLikeInstOrigArgTys' con apps
-          modify $ appEndo $ foldMap (Endo . evidenceToSubst) ev
-          subst <- gets ts_unifier
-          names <- mkManyGoodNames (hyNamesInScope hy) args
-          let hy' = patternHypothesis scrut con jdg
-                  $ zip names
-                  $ coerce args
-              j = fmap (CType . substTyAddInScope subst . unCType)
-                $ introduce hy'
-                $ introduce method_hy
-                $ withNewGoal g jdg
-          ext <- f con j
-          pure $ ext
-            & #syn_trace %~ rose ("match " <> show dc <> " {" <> intercalate ", " (fmap show names) <> "}")
-                          . pure
-            & #syn_scoped <>~ hy'
-            & #syn_val     %~ match [mkDestructPat con names] . unLoc
+  case tacticsGetDataCons $ unCType t of
+    Nothing -> cut -- throwError $ GoalMismatch "destruct" g
+    Just (dcs, apps) ->
+      fmap unzipTrace $ for dcs $ \dc -> do
+        let con = RealDataCon dc
+            ev = concatMap mkEvidence $ dataConInstArgTys dc apps
+            -- We explicitly do not need to add the method hypothesis to
+            -- #syn_scoped
+            method_hy = foldMap evidenceToHypothesis ev
+            args = conLikeInstOrigArgTys' con apps
+        ctx <- ask
+
+        let names_in_scope = hyNamesInScope hy
+            names = mkManyGoodNames (hyNamesInScope hy) args
+            (names', destructed) =
+              mkDestructPat (bool Nothing (Just names_in_scope) use_field_puns) con names
+
+        let hy' = patternHypothesis scrut con jdg
+                $ zip names'
+                $ coerce args
+            j = withNewCoercions (evidenceToCoercions ev)
+              $ introduce ctx hy'
+              $ introduce ctx method_hy
+              $ withNewGoal g jdg
+        ext <- f con j
+        pure $ ext
+          & #syn_trace %~ rose ("match " <> show dc <> " {" <> intercalate ", " (fmap show names') <> "}")
+                        . pure
+          & #syn_scoped <>~ hy'
+          & #syn_val %~ match [destructed] . unLoc
+
+
+------------------------------------------------------------------------------
+-- | Generate just the 'Match'es for a case split on a specific type.
+destructionFor :: Hypothesis a -> Type -> Maybe [LMatch GhcPs (LHsExpr GhcPs)]
+-- TODO(sandy): In an ideal world, this would be the same codepath as
+-- 'destructMatches'. Make sure to change that if you ever change this.
+destructionFor hy t = do
+  case tacticsGetDataCons t of
+    Nothing -> Nothing
+    Just ([], _) -> Nothing
+    Just (dcs, apps) -> do
+      for dcs $ \dc -> do
+        let con   = RealDataCon dc
+            args  = conLikeInstOrigArgTys' con apps
+            names = mkManyGoodNames (hyNamesInScope hy) args
+        pure
+          . noLoc
+          . Match
+              noExtField
+              CaseAlt
+              [toPatCompat $ snd $ mkDestructPat Nothing con names]
+          . GRHSs noExtField (pure $ noLoc $ GRHS noExtField [] $ noLoc $ var "_")
+          . noLoc
+          $ EmptyLocalBinds noExtField
+
 
 
 ------------------------------------------------------------------------------
 -- | Produces a pattern for a data con and the names of its fields.
-mkDestructPat :: ConLike -> [OccName] -> Pat GhcPs
-mkDestructPat con names
+mkDestructPat :: Maybe (S.Set OccName) -> ConLike -> [OccName] -> ([OccName], Pat GhcPs)
+mkDestructPat already_in_scope con names
   | RealDataCon dcon <- con
   , isTupleDataCon dcon =
-      tuple pat_args
+      (names, tuple pat_args)
+  | fields@(_:_) <- zip (conLikeFieldLabels con) names
+  , Just in_scope <- already_in_scope =
+      let (names', rec_fields) =
+            unzip $ fields <&> \(label, name) -> do
+              let label_occ = mkVarOccFS $ flLabel label
+              case S.member label_occ in_scope of
+                -- We have a shadow, so use the generated name instead
+                True ->
+                  (name,) $ noLoc $
+                    HsRecField
+                      (noLoc $ mkFieldOcc $ noLoc $ Unqual label_occ)
+                      (noLoc $ bvar' name)
+                      False
+                -- No shadow, safe to use a pun
+                False ->
+                  (label_occ,) $ noLoc $
+                    HsRecField
+                      (noLoc $ mkFieldOcc $ noLoc $ Unqual label_occ)
+                      (noLoc $ bvar' label_occ)
+                      True
+
+        in (names', )
+         $ ConPatIn (noLoc $ Unqual $ occName $ conLikeName con)
+         $ RecCon
+         $ HsRecFields rec_fields Nothing
   | otherwise =
-      infixifyPatIfNecessary con $
+      (names, ) $ infixifyPatIfNecessary con $
         conP
           (coerceName $ conLikeName con)
           pat_args
@@ -140,7 +193,7 @@ conLikeInstOrigArgTys' con uniTys =
 
 
 conLikeExTys :: ConLike -> [TyCoVar]
-conLikeExTys (RealDataCon d) = dataConExTys d
+conLikeExTys (RealDataCon d) = dataConExTyCoVars d
 conLikeExTys (PatSynCon p) = patSynExTys p
 
 patSynExTys :: PatSyn -> [TyCoVar]
@@ -151,34 +204,34 @@ patSynExTys ps = patSynExTyVars ps
 -- | Combinator for performing case splitting, and running sub-rules on the
 -- resulting matches.
 
-destruct' :: (ConLike -> Judgement -> Rule) -> HyInfo CType -> Judgement -> Rule
-destruct' f hi jdg = do
-  when (isDestructBlacklisted jdg) $ throwError NoApplicableTactic
+destruct' :: Bool -> (ConLike -> Judgement -> Rule) -> HyInfo CType -> Judgement -> Rule
+destruct' use_field_puns f hi jdg = do
+  when (isDestructBlacklisted jdg) cut -- throwError NoApplicableTactic
   let term = hi_name hi
   ext
       <- destructMatches
+           use_field_puns
            f
            (Just term)
            (hi_type hi)
-           $ disallowing AlreadyDestructed [term] jdg
+           $ disallowing AlreadyDestructed (S.singleton term) jdg
   pure $ ext
     & #syn_trace     %~ rose ("destruct " <> show term) . pure
-    & #syn_used_vals %~ S.insert term
     & #syn_val       %~ noLoc . case' (var' term)
 
 
 ------------------------------------------------------------------------------
 -- | Combinator for performign case splitting, and running sub-rules on the
 -- resulting matches.
-destructLambdaCase' :: (ConLike -> Judgement -> Rule) -> Judgement -> Rule
-destructLambdaCase' f jdg = do
-  when (isDestructBlacklisted jdg) $ throwError NoApplicableTactic
+destructLambdaCase' :: Bool -> (ConLike -> Judgement -> Rule) -> Judgement -> Rule
+destructLambdaCase' use_field_puns f jdg = do
+  when (isDestructBlacklisted jdg) cut -- throwError NoApplicableTactic
   let g  = jGoal jdg
   case splitFunTy_maybe (unCType g) of
     Just (arg, _) | isAlgType arg ->
       fmap (fmap noLoc lambdaCase) <$>
-        destructMatches f Nothing (CType arg) jdg
-    _ -> throwError $ GoalMismatch "destructLambdaCase'" g
+        destructMatches use_field_puns f Nothing (CType arg) jdg
+    _ -> cut -- throwError $ GoalMismatch "destructLambdaCase'" g
 
 
 ------------------------------------------------------------------------------
@@ -190,7 +243,22 @@ buildDataCon
     -> [Type]             -- ^ Type arguments for the data con
     -> RuleM (Synthesized (LHsExpr GhcPs))
 buildDataCon should_blacklist jdg dc tyapps = do
-  let args = conLikeInstOrigArgTys' dc tyapps
+  args <- case dc of
+    RealDataCon dc' -> do
+      let (skolems', theta, args) = dataConInstSig dc' tyapps
+      modify $ \ts ->
+        evidenceToSubst (foldMap mkEvidence theta) ts
+          & #ts_skolems <>~ S.fromList skolems'
+      pure args
+    _ ->
+      -- If we have a 'PatSyn', we can't continue, since there is no
+      -- 'dataConInstSig' equivalent for 'PatSyn's. I don't think this is
+      -- a fundamental problem, but I don't know enough about the GHC internals
+      -- to implement it myself.
+      --
+      -- Fortunately, this isn't an issue in practice, since 'PatSyn's are
+      -- never in the hypothesis.
+      cut -- throwError $ TacticPanic "Can't build Pattern constructors yet"
   ext
       <- fmap unzipTrace
        $ traverse ( \(arg, n) ->
@@ -203,4 +271,58 @@ buildDataCon should_blacklist jdg dc tyapps = do
   pure $ ext
     & #syn_trace %~ rose (show dc) . pure
     & #syn_val   %~ mkCon dc tyapps
+
+
+------------------------------------------------------------------------------
+-- | Make a function application, correctly handling the infix case.
+mkApply :: OccName -> [HsExpr GhcPs] -> LHsExpr GhcPs
+mkApply occ (lhs : rhs : more)
+  | isSymOcc occ
+  = noLoc $ foldl' (@@) (op lhs (coerceName occ) rhs) more
+mkApply occ args = noLoc $ foldl' (@@) (var' occ) args
+
+
+------------------------------------------------------------------------------
+-- | Run a tactic over each term in the given 'Hypothesis', binding the results
+-- of each in a let expression.
+letForEach
+    :: (OccName -> OccName)           -- ^ How to name bound variables
+    -> (HyInfo CType -> TacticsM ())  -- ^ The tactic to run
+    -> Hypothesis CType               -- ^ Terms to generate bindings for
+    -> Judgement                      -- ^ The goal of original hole
+    -> RuleM (Synthesized (LHsExpr GhcPs))
+letForEach rename solve (unHypothesis -> hy) jdg = do
+  case hy of
+    [] -> newSubgoal jdg
+    _ -> do
+      ctx <- ask
+      let g = jGoal jdg
+      terms <- fmap sequenceA $ for hy $ \hi -> do
+        let name = rename $ hi_name hi
+        let generalized_let_ty = CType alphaTy
+        res <- tacticToRule (withNewGoal generalized_let_ty jdg) $ solve hi
+        pure $ fmap ((name,) . unLoc) res
+      let hy' = fmap (g <$) $ syn_val terms
+          matches = fmap (fmap (\(occ, expr) -> valBind (occNameToStr occ) expr)) terms
+      g <- fmap (fmap unLoc) $ newSubgoal $ introduce ctx (userHypothesis hy') jdg
+      pure $ fmap noLoc $ let' <$> matches <*> g
+
+
+------------------------------------------------------------------------------
+-- | Let-bind the given occname judgement pairs.
+nonrecLet
+    :: [(OccName, Judgement)]
+    -> Judgement
+    -> RuleM (Synthesized (LHsExpr GhcPs))
+nonrecLet occjdgs jdg = do
+  occexts <- traverse newSubgoal $ fmap snd occjdgs
+  ctx     <- ask
+  ext     <- newSubgoal
+           $ introduce ctx (userHypothesis $ fmap (second jGoal) occjdgs) jdg
+  pure $ fmap noLoc $
+    let'
+      <$> traverse
+            (\(occ, ext) -> valBind (occNameToStr occ) <$> fmap unLoc ext)
+            (zip (fmap fst occjdgs) occexts)
+      <*> fmap unLoc ext
 

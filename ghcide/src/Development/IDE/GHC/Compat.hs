@@ -1,134 +1,125 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE CPP               #-}
+{-# LANGUAGE ConstraintKinds   #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE PatternSynonyms #-}
-{-# OPTIONS -Wno-dodgy-imports -Wno-incomplete-uni-patterns #-}
-#include "ghc-api-version.h"
+{-# OPTIONS -Wno-incomplete-uni-patterns -Wno-dodgy-imports #-}
 
 -- | Attempt at hiding the GHC version differences we can.
 module Development.IDE.GHC.Compat(
+    NameCacheUpdater(..),
+    hPutStringBuffer,
+    addIncludePathsQuote,
+    getModuleHash,
+    setUpTypedHoles,
+    upNameCache,
+    disableWarningsAsErrors,
+
+#if !MIN_VERSION_ghc(9,0,1)
+    RefMap,
+#endif
+
+    nodeInfo',
+    getNodeIds,
+
+    isQualifiedImport,
+    GhcVersion(..),
+    ghcVersion,
+    ghcVersionStr,
+    -- * HIE Compat
     HieFileResult(..),
     HieFile(..),
-    NameCacheUpdater(..),
     hieExportNames,
-    mkHieFile,
     mkHieFile',
     enrichHie,
-    RefMap,
     writeHieFile,
     readHieFile,
     supportsHieFiles,
     setHieDir,
     dontWriteHieFiles,
-#if !MIN_GHC_API_VERSION(8,8,0)
-    ml_hie_file,
-    addBootSuffixLocnOut,
-#endif
-    hPutStringBuffer,
-    addIncludePathsQuote,
-    getModuleHash,
-    getPackageName,
-    setUpTypedHoles,
-    GHC.ModLocation,
-    Module.addBootSuffix,
-    pattern ModLocation,
-    pattern ExposePackage,
-    HasSrcSpan,
-    getLoc,
-    upNameCache,
-    disableWarningsAsErrors,
-    AvailInfo,
-    tcg_exports,
-    pattern FunTy,
-
-#if MIN_GHC_API_VERSION(8,10,0)
-    module GHC.Hs.Extension,
-    module LinkerTypes,
-#else
-    module HsExtension,
-    noExtField,
-    linkableTime,
-#endif
-
-    module GHC,
-    module DynFlags,
-    initializePlugins,
-    applyPluginsParsedResultAction,
     module Compat.HieTypes,
     module Compat.HieUtils,
-    dropForAll
-    ,isQualifiedImport) where
+    -- * Compat modules
+    module Development.IDE.GHC.Compat.Core,
+    module Development.IDE.GHC.Compat.Env,
+    module Development.IDE.GHC.Compat.Iface,
+    module Development.IDE.GHC.Compat.Logger,
+    module Development.IDE.GHC.Compat.Outputable,
+    module Development.IDE.GHC.Compat.Parser,
+    module Development.IDE.GHC.Compat.Plugins,
+    module Development.IDE.GHC.Compat.Units,
+    -- * Extras that rely on compat modules
+    -- * SysTools
+    Option (..),
+    runUnlit,
+    runPp,
+    ) where
 
-#if MIN_GHC_API_VERSION(8,10,0)
-import LinkerTypes
-#endif
+import           GHC                    hiding (HasSrcSpan, ModLocation, getLoc,
+                                         lookupName, RealSrcSpan)
+import Development.IDE.GHC.Compat.Core
+import Development.IDE.GHC.Compat.Env
+import Development.IDE.GHC.Compat.Iface
+import Development.IDE.GHC.Compat.Logger
+import Development.IDE.GHC.Compat.Outputable
+import Development.IDE.GHC.Compat.Parser
+import Development.IDE.GHC.Compat.Plugins
+import Development.IDE.GHC.Compat.Units
+import Development.IDE.GHC.Compat.Util
 
-import StringBuffer
-import qualified DynFlags
-import DynFlags hiding (ExposePackage)
-import Fingerprint (Fingerprint)
-import qualified Module
-import Packages
-import Data.IORef
-import HscTypes
-import NameCache
-import qualified Data.ByteString as BS
-import MkIface
-import TcRnTypes
-import Compat.HieAst (mkHieFile,enrichHie)
-import Compat.HieBin
-import Compat.HieTypes
-import Compat.HieUtils
-
-#if MIN_GHC_API_VERSION(8,10,0)
-import GHC.Hs.Extension
+#if MIN_VERSION_ghc(9,0,0)
+import           GHC.Data.StringBuffer
+import           GHC.Driver.Session    hiding (ExposePackage)
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC.Driver.Env as Env
+import           GHC.Unit.Module.ModIface
 #else
-import HsExtension
+import           GHC.Driver.Types
 #endif
-
-import qualified GHC
-import qualified TyCoRep
-import GHC hiding (
-      ModLocation,
-      HasSrcSpan,
-      lookupName,
-      getLoc
-    )
-import Avail
-#if MIN_GHC_API_VERSION(8,8,0)
-import Data.List (foldl')
+import           GHC.Iface.Env
+import           GHC.Iface.Make           (mkIfaceExports)
+import qualified GHC.SysTools.Tasks       as SysTools
+import qualified GHC.Types.Avail          as Avail
 #else
-import Data.List (foldl', isSuffixOf)
+import           DynFlags               hiding (ExposePackage)
+import           HscTypes
+import           MkIface hiding (writeIfaceFile)
+import qualified Avail
+
+#if MIN_VERSION_ghc(8,8,0)
+import           StringBuffer           (hPutStringBuffer)
 #endif
+import qualified SysTools
 
-import DynamicLoading
-import Plugins (Plugin(parsedResultAction), withPlugins)
-import Data.Map.Strict (Map)
-
-#if !MIN_GHC_API_VERSION(8,8,0)
-import System.FilePath ((-<.>))
-#endif
-
-#if !MIN_GHC_API_VERSION(8,8,0)
+#if !MIN_VERSION_ghc(8,8,0)
+import           SrcLoc                 (RealLocated)
 import qualified EnumSet
 
-import System.IO
-import Foreign.ForeignPtr
+import           Foreign.ForeignPtr
+import           System.IO
+#endif
+#endif
 
+import           Compat.HieAst          (enrichHie)
+import           Compat.HieBin
+import           Compat.HieTypes
+import           Compat.HieUtils
+import qualified Data.ByteString        as BS
+import           Data.IORef
 
+import qualified Data.Map               as Map
+import           Data.List              (foldl')
+
+#if MIN_VERSION_ghc(9,0,0)
+import qualified Data.Set               as S
+#endif
+
+#if !MIN_VERSION_ghc(8,8,0)
 hPutStringBuffer :: Handle -> StringBuffer -> IO ()
 hPutStringBuffer hdl (StringBuffer buf len cur)
     = withForeignPtr (plusForeignPtr buf cur) $ \ptr ->
              hPutBuf hdl ptr len
-
-#endif
-
-#if !MIN_GHC_API_VERSION(8,10,0)
-noExtField :: NoExt
-noExtField = noExt
 #endif
 
 supportsHieFiles :: Bool
@@ -137,26 +128,20 @@ supportsHieFiles = True
 hieExportNames :: HieFile -> [(SrcSpan, Name)]
 hieExportNames = nameListFromAvails . hie_exports
 
-#if !MIN_GHC_API_VERSION(8,8,0)
-ml_hie_file :: GHC.ModLocation -> FilePath
-ml_hie_file ml
-  | "boot" `isSuffixOf ` ml_hi_file ml = ml_hi_file ml -<.> ".hie-boot"
-  | otherwise  = ml_hi_file ml -<.> ".hie"
-#endif
-
 upNameCache :: IORef NameCache -> (NameCache -> (NameCache, c)) -> IO c
-#if !MIN_GHC_API_VERSION(8,8,0)
+#if MIN_VERSION_ghc(8,8,0)
+upNameCache = updNameCache
+#else
 upNameCache ref upd_fn
   = atomicModifyIORef' ref upd_fn
-#else
-upNameCache = updNameCache
 #endif
 
-
-type RefMap a = Map Identifier [(Span, IdentifierDetails a)]
+#if !MIN_VERSION_ghc(9,0,1)
+type RefMap a = Map.Map Identifier [(Span, IdentifierDetails a)]
+#endif
 
 mkHieFile' :: ModSummary
-           -> [AvailInfo]
+           -> [Avail.AvailInfo]
            -> HieASTs Type
            -> BS.ByteString
            -> Hsc HieFile
@@ -177,17 +162,9 @@ addIncludePathsQuote :: FilePath -> DynFlags -> DynFlags
 addIncludePathsQuote path x = x{includePaths = f $ includePaths x}
     where f i = i{includePathsQuote = path : includePathsQuote i}
 
-pattern ModLocation :: Maybe FilePath -> FilePath -> FilePath -> GHC.ModLocation
-pattern ModLocation a b c <-
-#if MIN_GHC_API_VERSION(8,8,0)
-    GHC.ModLocation a b c _ where ModLocation a b c = GHC.ModLocation a b c ""
-#else
-    GHC.ModLocation a b c where ModLocation a b c = GHC.ModLocation a b c
-#endif
-
 setHieDir :: FilePath -> DynFlags -> DynFlags
 setHieDir _f d =
-#if MIN_GHC_API_VERSION(8,8,0)
+#if MIN_VERSION_ghc(8,8,0)
     d { hieDir     = Just _f}
 #else
     d
@@ -195,7 +172,7 @@ setHieDir _f d =
 
 dontWriteHieFiles :: DynFlags -> DynFlags
 dontWriteHieFiles d =
-#if MIN_GHC_API_VERSION(8,8,0)
+#if MIN_VERSION_ghc(8,8,0)
     gopt_unset d Opt_WriteHie
 #else
     d
@@ -204,7 +181,7 @@ dontWriteHieFiles d =
 setUpTypedHoles ::DynFlags -> DynFlags
 setUpTypedHoles df
   = flip gopt_unset Opt_AbstractRefHoleFits    -- too spammy
-#if MIN_GHC_API_VERSION(8,8,0)
+#if MIN_VERSION_ghc(8,8,0)
   $ flip gopt_unset Opt_ShowDocsOfHoleFits     -- not used
 #endif
   $ flip gopt_unset Opt_ShowMatchesOfHoleFits  -- nice but broken (forgets module qualifiers)
@@ -222,90 +199,117 @@ setUpTypedHoles df
   }
 
 
-nameListFromAvails :: [AvailInfo] -> [(SrcSpan, Name)]
+nameListFromAvails :: [Avail.AvailInfo] -> [(SrcSpan, Name)]
 nameListFromAvails as =
-  map (\n -> (nameSrcSpan n, n)) (concatMap availNames as)
+  map (\n -> (nameSrcSpan n, n)) (concatMap Avail.availNames as)
 
-#if MIN_GHC_API_VERSION(8,8,0)
-
-type HasSrcSpan = GHC.HasSrcSpan
-getLoc :: HasSrcSpan a => a -> SrcSpan
-getLoc = GHC.getLoc
-
-#else
-
-class HasSrcSpan a where
-    getLoc :: a -> SrcSpan
-instance HasSrcSpan Name where
-    getLoc = nameSrcSpan
-instance HasSrcSpan (GenLocated SrcSpan a) where
-    getLoc = GHC.getLoc
-
--- | Add the @-boot@ suffix to all output file paths associated with the
--- module, not including the input file itself
-addBootSuffixLocnOut :: GHC.ModLocation -> GHC.ModLocation
-addBootSuffixLocnOut locn
-  = locn { ml_hi_file  = Module.addBootSuffix (ml_hi_file locn)
-         , ml_obj_file = Module.addBootSuffix (ml_obj_file locn)
-         }
-#endif
 
 getModuleHash :: ModIface -> Fingerprint
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
 getModuleHash = mi_mod_hash . mi_final_exts
 #else
 getModuleHash = mi_mod_hash
 #endif
 
-getPackageName :: DynFlags -> Module.InstalledUnitId -> Maybe PackageName
-getPackageName dfs i = packageName <$> lookupPackage dfs (Module.DefiniteUnitId (Module.DefUnitId i))
 
 disableWarningsAsErrors :: DynFlags -> DynFlags
 disableWarningsAsErrors df =
     flip gopt_unset Opt_WarnIsError $ foldl' wopt_unset_fatal df [toEnum 0 ..]
 
-#if !MIN_GHC_API_VERSION(8,8,0)
+#if !MIN_VERSION_ghc(8,8,0)
 wopt_unset_fatal :: DynFlags -> WarningFlag -> DynFlags
 wopt_unset_fatal dfs f
     = dfs { fatalWarningFlags = EnumSet.delete f (fatalWarningFlags dfs) }
 #endif
 
-applyPluginsParsedResultAction :: HscEnv -> DynFlags -> ModSummary -> ApiAnns -> ParsedSource -> IO ParsedSource
-applyPluginsParsedResultAction env dflags ms hpm_annotations parsed = do
-  -- Apply parsedResultAction of plugins
-  let applyPluginAction p opts = parsedResultAction p opts ms
-  fmap hpm_module $
-    runHsc env $ withPlugins dflags applyPluginAction
-      (HsParsedModule parsed [] hpm_annotations)
-
-pattern ExposePackage :: String -> PackageArg -> ModRenaming -> PackageFlag
--- https://github.com/facebook/fbghc
-#ifdef __FACEBOOK_HASKELL__
-pattern ExposePackage s a mr <- DynFlags.ExposePackage s a _ mr
-#else
-pattern ExposePackage s a mr = DynFlags.ExposePackage s a mr
-#endif
-
--- | Take AST representation of type signature and drop `forall` part from it (if any), returning just type's body
-dropForAll :: LHsType pass -> LHsType pass
-#if MIN_GHC_API_VERSION(8,10,0)
-dropForAll = snd . GHC.splitLHsForAllTyInvis
-#else
-dropForAll = snd . GHC.splitLHsForAllTy
-#endif
-
-pattern FunTy :: Type -> Type -> Type
-#if MIN_GHC_API_VERSION(8, 10, 0)
-pattern FunTy arg res <- TyCoRep.FunTy {ft_arg = arg, ft_res = res}
-#else
-pattern FunTy arg res <- TyCoRep.FunTy arg res
-#endif
-
 isQualifiedImport :: ImportDecl a -> Bool
-#if MIN_GHC_API_VERSION(8,10,0)
+#if MIN_VERSION_ghc(8,10,0)
 isQualifiedImport ImportDecl{ideclQualified = NotQualified} = False
-isQualifiedImport ImportDecl{} = True
+isQualifiedImport ImportDecl{}                              = True
 #else
-isQualifiedImport ImportDecl{ideclQualified} = ideclQualified
+isQualifiedImport ImportDecl{ideclQualified}                = ideclQualified
 #endif
-isQualifiedImport _ = False
+isQualifiedImport _                                         = False
+
+
+
+#if MIN_VERSION_ghc(9,0,0)
+getNodeIds :: HieAST a -> Map.Map Identifier (IdentifierDetails a)
+getNodeIds = Map.foldl' combineNodeIds Map.empty . getSourcedNodeInfo . sourcedNodeInfo
+
+combineNodeIds :: Map.Map Identifier (IdentifierDetails a)
+                        -> NodeInfo a -> Map.Map Identifier (IdentifierDetails a)
+ad `combineNodeIds` (NodeInfo _ _ bd) = Map.unionWith (<>) ad bd
+
+--  Copied from GHC and adjusted to accept TypeIndex instead of Type
+-- nodeInfo' :: Ord a => HieAST a -> NodeInfo a
+nodeInfo' :: HieAST TypeIndex -> NodeInfo TypeIndex
+nodeInfo' = Map.foldl' combineNodeInfo' emptyNodeInfo . getSourcedNodeInfo . sourcedNodeInfo
+
+combineNodeInfo' :: Ord a => NodeInfo a -> NodeInfo a -> NodeInfo a
+(NodeInfo as ai ad) `combineNodeInfo'` (NodeInfo bs bi bd) =
+  NodeInfo (S.union as bs) (mergeSorted ai bi) (Map.unionWith (<>) ad bd)
+  where
+    mergeSorted :: Ord a => [a] -> [a] -> [a]
+    mergeSorted la@(a:as) lb@(b:bs) = case compare a b of
+                                        LT -> a : mergeSorted as lb
+                                        EQ -> a : mergeSorted as bs
+                                        GT -> b : mergeSorted la bs
+    mergeSorted as [] = as
+    mergeSorted [] bs = bs
+
+#else
+
+getNodeIds :: HieAST a -> NodeIdentifiers a
+getNodeIds = nodeIdentifiers . nodeInfo
+-- import qualified FastString as FS
+
+-- nodeInfo' :: HieAST TypeIndex -> NodeInfo TypeIndex
+nodeInfo' :: Ord a => HieAST a -> NodeInfo a
+nodeInfo' = nodeInfo
+-- type Unit = UnitId
+-- moduleUnit :: Module -> Unit
+-- moduleUnit = moduleUnitId
+-- unhelpfulSpanFS :: FS.FastString -> FS.FastString
+-- unhelpfulSpanFS = id
+#endif
+
+data GhcVersion
+  = GHC86
+  | GHC88
+  | GHC810
+  | GHC90
+  | GHC92
+  deriving (Eq, Ord, Show)
+
+ghcVersionStr :: String
+ghcVersionStr = VERSION_ghc
+
+ghcVersion :: GhcVersion
+#if MIN_VERSION_GLASGOW_HASKELL(9,2,0,0)
+ghcVersion = GHC92
+#elif MIN_VERSION_GLASGOW_HASKELL(9,0,0,0)
+ghcVersion = GHC90
+#elif MIN_VERSION_GLASGOW_HASKELL(8,10,0,0)
+ghcVersion = GHC810
+#elif MIN_VERSION_GLASGOW_HASKELL(8,8,0,0)
+ghcVersion = GHC88
+#elif MIN_VERSION_GLASGOW_HASKELL(8,6,0,0)
+ghcVersion = GHC86
+#endif
+
+runUnlit :: Logger -> DynFlags -> [Option] -> IO ()
+runUnlit =
+#if MIN_VERSION_ghc(9,2,0)
+    SysTools.runUnlit
+#else
+    const SysTools.runUnlit
+#endif
+
+runPp :: Logger -> DynFlags -> [Option] -> IO ()
+runPp =
+#if MIN_VERSION_ghc(9,2,0)
+    SysTools.runPp
+#else
+    const SysTools.runPp
+#endif

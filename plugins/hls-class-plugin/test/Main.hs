@@ -1,15 +1,15 @@
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeOperators       #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeOperators     #-}
+
+{-# OPTIONS_GHC -Wall #-}
 module Main
   ( main
-  )
-where
+  ) where
 
-import           Control.Lens            hiding ((<.>))
-import qualified Data.ByteString.Lazy    as BS
-import qualified Data.Text.Encoding      as T
+import           Control.Lens            (Prism', prism', (^..), (^?))
+import           Control.Monad           (void)
+import qualified Ide.Plugin.Class        as Class
 import qualified Language.LSP.Types.Lens as J
 import           System.FilePath
 import           Test.Hls
@@ -17,11 +17,14 @@ import           Test.Hls
 main :: IO ()
 main = defaultTestRunner tests
 
+classPlugin :: PluginDescriptor IdeState
+classPlugin = Class.descriptor "class"
+
 tests :: TestTree
 tests = testGroup
   "class"
   [ testCase "Produces addMinimalMethodPlaceholders code actions for one instance" $ do
-      runSession testCommand fullCaps classPath $ do
+      runSessionWithServer classPlugin testDataDir $ do
         doc <- openDoc "T1.hs" "haskell"
         _ <- waitForDiagnosticsFromSource doc "typecheck"
         caResults <- getAllCodeActions doc
@@ -30,23 +33,17 @@ tests = testGroup
           [ Just "Add placeholders for '=='"
           , Just "Add placeholders for '/='"
           ]
-  , glodenTest "Creates a placeholder for '=='" "T1" "eq"
-    $ \(eqAction:_) -> do
+  , goldenWithClass "Creates a placeholder for '=='" "T1" "eq" $ \(eqAction:_) -> do
       executeCodeAction eqAction
-  , glodenTest "Creates a placeholder for '/='" "T1" "ne"
-    $ \(_:neAction:_) -> do
+  , goldenWithClass "Creates a placeholder for '/='" "T1" "ne" $ \(_:neAction:_) -> do
       executeCodeAction neAction
-  , glodenTest "Creates a placeholder for 'fmap'" "T2" "fmap"
-    $ \(_:_:fmapAction:_) -> do
+  , goldenWithClass "Creates a placeholder for 'fmap'" "T2" "fmap" $ \(_:_:fmapAction:_) -> do
       executeCodeAction fmapAction
-  , glodenTest "Creates a placeholder for multiple methods 1" "T3" "1"
-    $ \(mmAction:_) -> do
+  , goldenWithClass "Creates a placeholder for multiple methods 1" "T3" "1" $ \(mmAction:_) -> do
       executeCodeAction mmAction
-  , glodenTest "Creates a placeholder for multiple methods 2" "T3" "2"
-    $ \(_:mmAction:_) -> do
+  , goldenWithClass "Creates a placeholder for multiple methods 2" "T3" "2" $ \(_:mmAction:_) -> do
       executeCodeAction mmAction
-  , glodenTest "Creates a placeholder for a method starting with '_'" "T4" ""
-    $ \(_fAction:_) -> do
+  , goldenWithClass "Creates a placeholder for a method starting with '_'" "T4" "" $ \(_fAction:_) -> do
       executeCodeAction _fAction
   ]
 
@@ -55,20 +52,13 @@ _CACodeAction = prism' InR $ \case
   InR action -> Just action
   _          -> Nothing
 
-classPath :: FilePath
-classPath = "test" </> "testdata"
+goldenWithClass :: TestName -> FilePath -> FilePath -> ([CodeAction] -> Session ()) -> TestTree
+goldenWithClass title path desc act =
+  goldenWithHaskellDoc classPlugin title testDataDir path (desc <.> "expected") "hs" $ \doc -> do
+    _ <- waitForDiagnosticsFromSource doc "typecheck"
+    actions <- concatMap (^.. _CACodeAction) <$> getAllCodeActions doc
+    act actions
+    void $ skipManyTill anyMessage (getDocumentEdit doc)
 
-glodenTest :: String -> FilePath -> FilePath -> ([CodeAction] -> Session ()) -> TestTree
-glodenTest name fp deco execute
-  = goldenGitDiff name (classPath </> fpWithDeco <.> "expected" <.> "hs")
-    $ runSession testCommand fullCaps classPath
-    $ do
-      doc <- openDoc (fp <.> "hs") "haskell"
-      _ <- waitForDiagnosticsFromSource doc "typecheck"
-      actions <- concatMap (^.. _CACodeAction) <$> getAllCodeActions doc
-      execute actions
-      BS.fromStrict . T.encodeUtf8 <$> skipManyTill anyMessage (getDocumentEdit doc)
-  where
-    fpWithDeco
-      | deco == "" = fp
-      | otherwise  = fp <.> deco
+testDataDir :: FilePath
+testDataDir = "test" </> "testdata"

@@ -1,13 +1,14 @@
-resolver: lts-14.27 # Last 8.6.5 
+# keep synced with ../stack.yaml to minimise rebuilding
+resolver: lts-18.18
 
 packages:
   - .
 
-extra-deps:
-  - cabal-install-parsers-0.3.0.1
-  - Cabal-3.2.0.0
-  - binary-instances-1.0.0.1
-  - lukko-0.1.1.2
+# extra-deps:
+#   - cabal-install-parsers-0.3.0.1
+#   - Cabal-3.2.0.0
+#   - binary-instances-1.0.0.1
+#   - lukko-0.1.1.2
 
 flags:
   hls-install:

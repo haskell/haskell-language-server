@@ -36,8 +36,9 @@ import           Data.Void                                (Void)
 import           Development.IDE                          (Position,
                                                            Range (Range))
 import           Development.IDE.Types.Location           (Position (..))
-import           GHC.Generics
+import           GHC.Generics hiding (to, UInt)
 import           Ide.Plugin.Eval.Types
+import           Language.LSP.Types                       (UInt)
 import           Language.LSP.Types.Lens                  (character, end, line,
                                                            start)
 import           Text.Megaparsec
@@ -322,20 +323,20 @@ resultBlockP :: BlockCommentParser [String]
 resultBlockP = do
     BlockEnv {..} <- ask
     many $
-        fmap fst . nonEmptyNormalLineP isLhs $
+        fmap fst $ nonEmptyNormalLineP isLhs $
             Block blockRange
 
 positionToSourcePos :: Position -> SourcePos
 positionToSourcePos pos =
     P.SourcePos
         { sourceName = "<block comment>"
-        , sourceLine = P.mkPos $ 1 + pos ^. line
-        , sourceColumn = P.mkPos $ 1 + pos ^. character
+        , sourceLine = P.mkPos $ fromIntegral $ 1 + pos ^. line
+        , sourceColumn = P.mkPos $ fromIntegral $ 1 + pos ^. character
         }
 
 sourcePosToPosition :: SourcePos -> Position
 sourcePosToPosition SourcePos {..} =
-    Position (unPos sourceLine - 1) (unPos sourceColumn - 1)
+    Position (fromIntegral $ unPos sourceLine - 1) (fromIntegral $ unPos sourceColumn - 1)
 
 -- * Line Group Parser
 
@@ -550,7 +551,7 @@ Two adjacent tokens are considered to be contiguous if
 >>> contiguousGroupOn id [(1,2),(2,2),(3,4),(4,4),(5,4),(7,0),(8,0)]
 [(1,2) :| [(2,2)],(3,4) :| [(4,4),(5,4)],(7,0) :| [(8,0)]]
 -}
-contiguousGroupOn :: (a -> (Int, Int)) -> [a] -> [NonEmpty a]
+contiguousGroupOn :: (a -> (UInt, UInt)) -> [a] -> [NonEmpty a]
 contiguousGroupOn toLineCol = foldr step []
     where
         step a [] = [pure a]

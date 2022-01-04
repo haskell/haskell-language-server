@@ -1,0 +1,11 @@
+module Test
+( SomeData(..)
+) where
+import Data.Monoid
+
+newtype Something = S { foo :: Int }
+
+-- | a comment
+class Semigroup a => SomeData a
+
+instance SomeData All

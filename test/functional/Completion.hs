@@ -46,10 +46,10 @@ tests = testGroup "completions" [
              resolved ^. insertTextFormat @?= Just Snippet
              resolved ^. insertText @?= Just "putStrLn ${1:String}"
 
-     , testCase "completes imports" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
+     , testCase "completes imports" $ runSession (hlsCommand <> " --test") fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
 
-         _ <- waitForDiagnostics
+         waitForKickDone
 
          let te = TextEdit (Range (Position 1 17) (Position 1 26)) "Data.M"
          _ <- applyEdit doc te
@@ -61,10 +61,10 @@ tests = testGroup "completions" [
              item ^. detail @?= Just "Data.Maybe"
              item ^. kind @?= Just CiModule
 
-     , testCase "completes qualified imports" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
+     , testCase "completes qualified imports" $ runSession (hlsCommand <> " --test") fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
 
-         _ <- waitForDiagnostics
+         _ <- waitForKickDone
 
          let te = TextEdit (Range (Position 2 17) (Position 2 25)) "Data.L"
          _ <- applyEdit doc te
@@ -75,108 +75,6 @@ tests = testGroup "completions" [
              item ^. label @?= "List"
              item ^. detail @?= Just "Data.List"
              item ^. kind @?= Just CiModule
-
-     , testCase "completes language extensions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
-         doc <- openDoc "Completion.hs" "haskell"
-
-         _ <- waitForDiagnostics
-
-         let te = TextEdit (Range (Position 0 24) (Position 0 31)) ""
-         _ <- applyEdit doc te
-
-         compls <- getCompletions doc (Position 0 24)
-         let item = head $ filter ((== "OverloadedStrings") . (^. label)) compls
-         liftIO $ do
-             item ^. label @?= "OverloadedStrings"
-             item ^. kind @?= Just CiKeyword
-
-     , testCase "completes the Strict language extension" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
-         doc <- openDoc "Completion.hs" "haskell"
-
-         _ <- waitForDiagnostics
-
-         let te = TextEdit (Range (Position 0 13) (Position 0 31)) "Str"
-         _ <- applyEdit doc te
-
-         compls <- getCompletions doc (Position 0 16)
-         let item = head $ filter ((== "Strict") . (^. label)) compls
-         liftIO $ do
-             item ^. label @?= "Strict"
-             item ^. kind @?= Just CiKeyword
-
-     , testCase "completes No- language extensions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
-         doc <- openDoc "Completion.hs" "haskell"
-
-         _ <- waitForDiagnostics
-
-         let te = TextEdit (Range (Position 0 13) (Position 0 31)) "NoOverload"
-         _ <- applyEdit doc te
-
-         compls <- getCompletions doc (Position 0 23)
-         let item = head $ filter ((== "NoOverloadedStrings") . (^. label)) compls
-         liftIO $ do
-             item ^. label @?= "NoOverloadedStrings"
-             item ^. kind @?= Just CiKeyword
-
-     , testCase "completes pragmas" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
-         doc <- openDoc "Completion.hs" "haskell"
-
-         _ <- waitForDiagnostics
-
-         let te = TextEdit (Range (Position 0 4) (Position 0 34)) ""
-         _ <- applyEdit doc te
-
-         compls <- getCompletions doc (Position 0 4)
-         let item = head $ filter ((== "LANGUAGE") . (^. label)) compls
-         liftIO $ do
-             item ^. label @?= "LANGUAGE"
-             item ^. kind @?= Just CiKeyword
-             item ^. insertTextFormat @?= Just Snippet
-             item ^. insertText @?= Just "LANGUAGE ${1:extension} #-}"
-
-     , testCase "completes pragmas no close" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
-         doc <- openDoc "Completion.hs" "haskell"
-
-         let te = TextEdit (Range (Position 0 4) (Position 0 24)) ""
-         _ <- applyEdit doc te
-
-         compls <- getCompletions doc (Position 0 4)
-         let item = head $ filter ((== "LANGUAGE") . (^. label)) compls
-         liftIO $ do
-             item ^. label @?= "LANGUAGE"
-             item ^. kind @?= Just CiKeyword
-             item ^. insertTextFormat @?= Just Snippet
-             item ^. insertText @?= Just "LANGUAGE ${1:extension}"
-
-     , testCase "completes options pragma" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
-         doc <- openDoc "Completion.hs" "haskell"
-
-         _ <- waitForDiagnostics
-
-         let te = TextEdit (Range (Position 0 4) (Position 0 34)) "OPTIONS"
-         _ <- applyEdit doc te
-
-         compls <- getCompletions doc (Position 0 4)
-         let item = head $ filter ((== "OPTIONS_GHC") . (^. label)) compls
-         liftIO $ do
-             item ^. label @?= "OPTIONS_GHC"
-             item ^. kind @?= Just CiKeyword
-             item ^. insertTextFormat @?= Just Snippet
-             item ^. insertText @?= Just "OPTIONS_GHC -${1:option} #-}"
-
-     , testCase "completes ghc options pragma values" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
-         doc <- openDoc "Completion.hs" "haskell"
-
-         let te = TextEdit (Range (Position 0 0) (Position 0 0)) "{-# OPTIONS_GHC -Wno-red  #-}\n"
-         _ <- applyEdit doc te
-
-         compls <- getCompletions doc (Position 0 24)
-         let item = head $ filter ((== "Wno-redundant-constraints") . (^. label)) compls
-         liftIO $ do
-             item ^. label @?= "Wno-redundant-constraints"
-             item ^. kind @?= Just CiKeyword
-             item ^. insertTextFormat @?= Nothing
-             item ^. insertText @?= Nothing
 
      , testCase "completes with no prefix" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
@@ -196,7 +94,6 @@ tests = testGroup "completions" [
          liftIO $ do
              item ^. label @?= "accessor"
              item ^. kind @?= Just CiFunction
-
      , testCase "have implicit foralls on basic polymorphic types" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
 
@@ -223,6 +120,31 @@ tests = testGroup "completions" [
          compls <- getCompletions doc (Position 5 7)
          liftIO $ length compls @?= maxCompletions def
 
+     , testCase "import function completions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
+         doc <- openDoc "FunctionCompletions.hs" "haskell"
+
+         let te = TextEdit (Range (Position 0 30) (Position 0 41)) "A"
+         _ <- applyEdit doc te
+
+         compls <- getCompletions doc (Position 0 31)
+         let item = head $ filter ((== "Alternative") . (^. label)) compls
+         liftIO $ do
+             item ^. label @?= "Alternative"
+             item ^. kind @?= Just CiFunction
+             item ^. detail @?= Just "Control.Applicative"
+
+    , testCase "import second function completion" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
+         doc <- openDoc "FunctionCompletions.hs" "haskell"
+
+         let te = TextEdit (Range (Position 0 41) (Position 0 42)) ", l"
+         _ <- applyEdit doc te
+
+         compls <- getCompletions doc (Position 0 41)
+         let item = head $ filter ((== "liftA") . (^. label)) compls
+         liftIO $ do
+             item ^. label @?= "liftA"
+             item ^. kind @?= Just CiFunction
+             item ^. detail @?= Just "Control.Applicative"
      , contextTests
      , snippetTests
     ]
@@ -253,7 +175,7 @@ snippetTests = testGroup "snippets" [
             item ^. label @?= "foldl"
             item ^. kind @?= Just CiFunction
             item ^. insertTextFormat @?= Just Snippet
-            item ^. insertText @?= Just "foldl ${1:b -> a -> b} ${2:b} ${3:t a}"
+            item ^. insertText @?= Just "foldl ${1:(b -> a -> b)} ${2:b} ${3:(t a)}"
 
     , testCase "work for complex types" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
         doc <- openDoc "Completion.hs" "haskell"
@@ -267,7 +189,7 @@ snippetTests = testGroup "snippets" [
             item ^. label @?= "mapM"
             item ^. kind @?= Just CiFunction
             item ^. insertTextFormat @?= Just Snippet
-            item ^. insertText @?= Just "mapM ${1:a -> m b} ${2:t a}"
+            item ^. insertText @?= Just "mapM ${1:(a -> m b)} ${2:(t a)}"
 
     , testCase "work for infix functions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
         doc <- openDoc "Completion.hs" "haskell"
@@ -330,8 +252,7 @@ snippetTests = testGroup "snippets" [
 
         let config = object ["haskell" .= object ["plugin" .= object ["ghcide-completions" .= object ["config" .= object ["snippetsOn" .= False]]]]]
 
-        sendNotification SWorkspaceDidChangeConfiguration
-                        (DidChangeConfigurationParams config)
+        sendConfigurationChanged config
 
         checkNoSnippets doc
 
@@ -339,6 +260,17 @@ snippetTests = testGroup "snippets" [
         doc <- openDoc "Completion.hs" "haskell"
 
         checkNoSnippets doc
+    , testCase "works for record fields sharing the single signature" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
+         doc <- openDoc "FieldsSharingSignature.hs" "haskell"
+
+         let te = TextEdit (Range (Position 1 0) (Position 1 2)) "MkF"
+         _ <- applyEdit doc te
+
+         compls <- getCompletions doc (Position 1 6)
+         let item = head $ filter (\c -> (c ^. label == "MkFoo") && maybe False ("MkFoo {" `T.isPrefixOf`) (c ^. insertText)) compls
+         liftIO $ do
+            item ^. insertTextFormat @?= Just Snippet
+            item ^. insertText @?= Just "MkFoo {arg1=${1:_arg1}, arg2=${2:_arg2}, arg3=${3:_arg3}, arg4=${4:_arg4}, arg5=${5:_arg5}}"
     ]
     where
         checkNoSnippets doc = do
