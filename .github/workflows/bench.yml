@@ -85,21 +85,8 @@ jobs:
         INDEX_STATE1=$(echo "$INDEX_STATE_ENTRY" | cut -d' ' -f2 | tr ':' '-')
         echo "INDEX_STATE=$INDEX_STATE1" >> $GITHUB_ENV
 
-    # To ensure we get the lastest hackage index and not relying on haskell action logic
-    - run: cabal update
-
-    - name: Form the package list ('cabal.project.freeze')
-      id: compute-cache-key
-      run: |
-        cabal v2-freeze && \
-        echo "" && \
-        echo 'Output:' && \
-        echo "" && \
-        cat 'cabal.project.freeze' && \
-        echo '' || \
-        echo 'WARNING: Could not produce the `freeze`.'
-        echo ::set-output name=value::${{ hashFiles('cabal.project.freeze') }}
-
+      # We have to restore package sources before `cabal update`
+      # cause it overwrites the hackage index with the cached one
     - name: Hackage sources cache
       uses: actions/cache@v2
       env:
@@ -109,6 +96,20 @@ jobs:
         key:   ${{ env.cache-name }}-${{ env.INDEX_STATE }}
         restore-keys: ${{ env.cache-name }}-
 
+    # To ensure we get the lastest hackage index and not relying on haskell action logic
+    # It has to be done before `cabal freeze` to make it aware of the new index
+    - run: cabal update
+
+    - name: Form the package list ('cabal.project.freeze')
+      run: |
+        cabal v2-freeze && \
+        echo "" && \
+        echo 'Output:' && \
+        echo "" && \
+        cat 'cabal.project.freeze' && \
+        echo '' || \
+        echo 'WARNING: Could not produce the `freeze`.'
+
     - name: Compiled deps cache
       id: compiled-deps
       uses: actions/cache@v2
@@ -116,7 +117,7 @@ jobs:
         cache-name: compiled-deps
       with:
         path: ${{ steps.HaskEnvSetup.outputs.cabal-store }}
-        key:  ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-${{ steps.compute-cache-key.outputs.value }}
+        key:  ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project.freeze') }}
         restore-keys: |
               ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-
               ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
