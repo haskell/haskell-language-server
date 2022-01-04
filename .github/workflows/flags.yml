@@ -47,85 +47,14 @@ jobs:
              ]
         os: [ "ubuntu-latest"
             ]
-        cabal: ['3.6']
 
     steps:
       - uses: actions/checkout@v2
 
-      - uses: haskell/actions/setup@v1
-        id: HaskEnvSetup
+      - uses: .github/actions/setup-build
         with:
-          ghc-version  : ${{ matrix.ghc   }}
-          cabal-version: ${{ matrix.cabal }}
-          enable-stack: false
-
-      - if: runner.os == 'Windows'
-        name: (Windows) Platform config
-        run: |
-          echo "CABAL_PKGS_DIR=C:\\cabal\\packages" >> $GITHUB_ENV
-      - if: ( runner.os == 'Linux' ) || ( runner.os == 'macOS' )
-        name: (Linux,macOS) Platform config
-        run: |
-          echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
-
-      # All workflows which distinquishes cache on `cabal.project` needs this.
-      - name: Workaround shorten binary names
-        run: |
-          sed -i.bak -e 's/haskell-language-server/hls/g' \
-                     -e 's/haskell_language_server/hls/g' \
-                     haskell-language-server.cabal cabal.project
-          sed -i.bak -e 's/Paths_haskell_language_server/Paths_hls/g' \
-                     src/**/*.hs exe/*.hs
-
-      - name: Retrieving `cabal.project` Hackage timestamp
-        run: |
-          # Form: index-state: 2021-11-29T08:11:08Z
-          INDEX_STATE_ENTRY=$(grep index-state cabal.project)
-          # Form: 2021-11-29T08-11-08Z
-          INDEX_STATE1=$(echo "$INDEX_STATE_ENTRY" | cut -d' ' -f2 | tr ':' '-')
-          echo "INDEX_STATE=$INDEX_STATE1" >> $GITHUB_ENV
-
-      # We have to restore package sources before `cabal update`
-      # cause it overwrites the hackage index with the cached one
-      - name: Hackage sources cache
-        uses: actions/cache@v2
-        env:
-          cache-name: hackage-sources
-        with:
-          path: ${{ env.CABAL_PKGS_DIR }}
-          key:          ${{ env.cache-name }}-${{ env.INDEX_STATE }}
-          restore-keys: ${{ env.cache-name }}-
-
-      # To ensure we get the lastest hackage index and not relying on haskell action logic
-      # It has to be done before `cabal freeze` to make it aware of the new index
-      - run: cabal update
-
-      - name: Form the package list ('cabal.project.freeze')
-        run: |
-          cabal v2-freeze && \
-          echo "" && \
-          echo 'Output:' && \
-          echo "" && \
-          cat 'cabal.project.freeze' && \
-          echo '' || \
-          echo 'WARNING: Could not produce the `freeze`.'
-
-      - name: Compiled deps cache
-        id: compiled-deps
-        uses: actions/cache@v2
-        env:
-          cache-name: compiled-deps
-        with:
-          path: ${{ steps.HaskEnvSetup.outputs.cabal-store }}
-          key:  ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project.freeze') }}
-          restore-keys: |
-                ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-
-                ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
-                ${{ env.cache-name }}-${{ runner.os }}-
-
-      # Removing freeze file cause it breaks builds with alternative flags
-      - name: Remove freeze file
-        run: rm -f cabal.project.freeze
+          ghc: ${{ matrix.ghc }}
+          os:  ${{ runner.os }}
 
       - name: Build `hls-graph` with flags
         run: cabal v2-build hls-graph --flags="pedantic embed-files stm-stats"
