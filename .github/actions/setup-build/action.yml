@@ -25,10 +25,8 @@ runs:
       name: (Windows) Platform config
       run: |
         echo "CABAL_PKGS_DIR=C:\\cabal\\packages" >> $GITHUB_ENV
-<<<<<<< HEAD
       shell: bash
-=======
->>>>>>> ce57b1dc (Extract out ci build setup)
+
     - if: ( inputs.os == 'Linux' ) || ( inputs.os == 'macOS' )
       name: (Linux,macOS) Platform config
       run: |
