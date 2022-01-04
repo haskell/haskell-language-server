@@ -65,7 +65,6 @@ jobs:
         os: [ "ubuntu-latest"
             , "macOS-latest"
             ]
-        cabal: ['3.6']
         include:
           # only test supported ghc major versions
           - os: ubuntu-latest
