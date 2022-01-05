@@ -100,9 +100,7 @@ runs:
         echo "" && \
         echo 'Output:' && \
         echo "" && \
-        cat 'cabal.project.freeze' && \
-        echo "" || \
-        echo 'WARNING: Could not produce the `freeze`.'
+        cat 'cabal.project.freeze'
       shell: bash
 
     - name: Compiled deps cache
