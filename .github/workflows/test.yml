@@ -69,7 +69,7 @@ jobs:
         include:
           # only test supported ghc major versions
           - os: ubuntu-latest
-            ghc: '9.0.1'
+            ghc: '9.0.2'
             test: true
           - os: ubuntu-latest
             ghc: '8.10.7'
@@ -81,7 +81,7 @@ jobs:
             ghc: '8.6.5'
             test: true
           - os: windows-latest
-            ghc: '9.0.1'
+            ghc: '9.0.2'
             test: true
           - os: windows-latest
             ghc: '8.10.7'
@@ -90,6 +90,8 @@ jobs:
             ghc: '8.6.5'
             test: true
           # only build rest of supported ghc versions for windows
+          - os: windows-latest
+            ghc: '9.0.1'
           - os: windows-latest
             ghc: '8.10.6'
           - os: windows-latest
