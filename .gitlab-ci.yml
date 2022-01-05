@@ -18,6 +18,8 @@ variables:
       CABAL_PROJECT: cabal.project
     - GHC_VERSION: 9.0.1
       CABAL_PROJECT: cabal-ghc901.project
+    - GHC_VERSION: 9.0.2
+      CABAL_PROJECT: cabal-ghc902.project
 
 .m1_matrix: &m1_matrix
   matrix:

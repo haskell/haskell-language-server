@@ -589,7 +589,7 @@ diagnosticTests = testGroup "diagnostics"
             ]
       _ <- createDoc "Foo.hs" "haskell" fooContent
       if ghcVersion >= GHC90 then
-          -- Haddock parse errors are ignored on ghc-9.0.1
+          -- Haddock parse errors are ignored on ghc-9.0
             pure ()
       else
         expectDiagnostics

@@ -34,18 +34,19 @@ jobs:
                   "hls-call-hierarchy-plugin", "hls-alternate-number-format-plugin",
                   "hls-qualify-imported-names-plugin",
                   "haskell-language-server"]
-        ghc: [ "9.0.1",
-              "8.10.7",
-              "8.8.4",
-              "8.6.5"]
+        ghc: [ "9.0.2"
+             , "8.10.7"
+             , "8.8.4"
+             , "8.6.5"
+             ]
         exclude:
-        - ghc: "9.0.1"
+        - ghc: "9.0.2"
           package: "hls-brittany-plugin"
-        - ghc: "9.0.1"
+        - ghc: "9.0.2"
           package: "hls-stylish-haskell-plugin"
-        - ghc: "9.0.1"
+        - ghc: "9.0.2"
           package: "hls-class-plugin"
-        - ghc: "9.0.1"
+        - ghc: "9.0.2"
           package: "hls-tactics-plugin"
 
     steps:
@@ -111,7 +112,7 @@ jobs:
           echo "allow-newer: Chart-diagrams:diagrams-core, SVGFonts:diagrams-core," >> cabal.project
 
       - name: "Add temporary needed allow-newer for ghc-9.0"
-        if: steps.get-hackage-version.outputs.exists != 'true' && matrix.ghc == '9.0.1'
+        if: steps.get-hackage-version.outputs.exists != 'true' && (matrix.ghc == '9.0.1' || matrix.ghc == '9.0.2')
         run: |
           # TODO: remove when not needed
           cd $(ls -d ./incoming/${{ matrix.package }}-*)

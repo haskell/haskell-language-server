@@ -36,7 +36,7 @@ flag hlint33
   manual:      False
   description:
     Hlint-3.3 doesn't support versions ghc-lib < 9.0.1 nor ghc <= 8.6, so we can use hlint-3.2 for backwards compat
-    This flag can be removed when all dependencies support ghc-lib-9.0.1 and we drop support for ghc-8.6
+    This flag can be removed when all dependencies support ghc-lib-9.0.* and we drop support for ghc-8.6
 
 library
   exposed-modules:    Ide.Plugin.Hlint

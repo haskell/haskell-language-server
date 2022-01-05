@@ -1,4 +1,5 @@
 resolver: nightly-2022-01-04
+compiler: ghc-9.0.2
 
 packages:
 - .
@@ -51,6 +52,13 @@ extra-deps:
 - diagrams-postscript-1.5
 - statestack-0.3
 - operational-0.2.4.1
+
+# boot libraries
+- Cabal-3.6.2.0
+- directory-1.3.7.0
+- ghc-boot-9.2.1
+- process-1.6.13.2
+- time-1.12.1
 
 # currently needed for ghcide>extra, etc.
 allow-newer: true
