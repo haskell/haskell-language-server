@@ -284,6 +284,10 @@ instance PluginMethod TextDocumentRangeFormatting where
 instance PluginMethod TextDocumentPrepareCallHierarchy where
   pluginEnabled _ = pluginEnabledConfig plcCallHierarchyOn
 
+instance PluginMethod TextDocumentSelectionRange where
+  pluginEnabled _ = pluginEnabledConfig plcSelectionRangeOn
+  combineResponses _ _ _ _ (x :| _) = x
+
 instance PluginMethod CallHierarchyIncomingCalls where
   pluginEnabled _ = pluginEnabledConfig plcCallHierarchyOn
 

@@ -32,7 +32,7 @@ jobs:
                   "hls-refine-imports-plugin", "hls-retrie-plugin",
                   "hls-splice-plugin", "hls-tactics-plugin",
                   "hls-call-hierarchy-plugin", "hls-alternate-number-format-plugin",
-                  "hls-qualify-imported-names-plugin",
+                  "hls-qualify-imported-names-plugin", "hls-selection-range-plugin",
                   "haskell-language-server"]
         ghc: [ "9.0.1",
               "8.10.7",
