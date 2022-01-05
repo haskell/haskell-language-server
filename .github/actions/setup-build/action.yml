@@ -114,7 +114,7 @@ runs:
               ${{ env.cache-name }}-${{ inputs.os }}-${{ inputs.ghc }}-
               ${{ env.cache-name }}-${{ inputs.os }}-
 
-    # We remove the freeze file cause it could interfere the build
+    # We remove the freeze file because it could interfere with the build
     - name: "Remove freeze file"
       run: rm -f cabal.project.freeze
       shell: bash
