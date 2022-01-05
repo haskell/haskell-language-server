@@ -75,7 +75,7 @@ runs:
       shell: bash
 
     # We have to restore package sources before `cabal update`
-    # cause it overwrites the hackage index with the cached one
+    # because it overwrites the hackage index with the cached one
     - name: Hackage sources cache
       uses: actions/cache@v2
       env:
