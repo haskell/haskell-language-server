@@ -8,7 +8,7 @@ module Ide.Plugin.ConfigUtils where
 import           Control.Lens          ((&), (?~), ix, at)
 import qualified Data.Aeson            as A
 import qualified Data.Aeson.Types      as A
-import           Data.Aeson.Lens (_Object)
+import           Data.Aeson.Lens      (_Object)
 import           Data.Default          (def)
 import qualified Data.Dependent.Map    as DMap
 import qualified Data.Dependent.Sum    as DSum
