@@ -1,6 +1,5 @@
 {-# LANGUAGE DeriveAnyClass   #-}
 {-# LANGUAGE OverloadedLabels #-}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE TypeFamilies     #-}
 
 -- | An HLS plugin to provide code lenses for type signatures
@@ -68,9 +67,6 @@ import           Language.LSP.Types                  (ApplyWorkspaceEditParams (
                                                       TextEdit (TextEdit),
                                                       WorkspaceEdit (WorkspaceEdit))
 import           Text.Regex.TDFA                     ((=~), (=~~))
-#if MIN_VERSION_ghc(9,2,0)
-import GHC.Utils.Outputable (SDocContext(..), updSDocContext)
-#endif
 
 typeLensCommandId :: T.Text
 typeLensCommandId = "typesignature.add"
@@ -220,9 +216,6 @@ instance A.FromJSON Mode where
 
 showDocRdrEnv :: HscEnv -> GlobalRdrEnv -> SDoc -> String
 showDocRdrEnv env rdrEnv = showSDocForUser' env (mkPrintUnqualifiedDefault env rdrEnv)
-#if MIN_VERSION_ghc(9,2,0)
-                         . updSDocContext (\ctx -> ctx { sdocPrintExplicitKinds = False })
-#endif
 
 data GetGlobalBindingTypeSigs = GetGlobalBindingTypeSigs
   deriving (Generic, Show, Eq, Ord, Hashable, NFData)

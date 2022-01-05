@@ -3828,7 +3828,7 @@ addSigLensesTests =
         , ("rank2Test (k :: forall a . a -> a) = (k 233 :: Int, k \"QAQ\")", "rank2Test :: (forall a. a -> a) -> (Int, " <> listOfChar <> ")")
         , ("symbolKindTest = Proxy @\"qwq\"", "symbolKindTest :: Proxy \"qwq\"")
         , ("promotedKindTest = Proxy @Nothing", "promotedKindTest :: Proxy 'Nothing")
-        , ("typeOperatorTest = Refl", "typeOperatorTest :: a :~: a")
+        , ("typeOperatorTest = Refl", if ghcVersion >= GHC92 then "typeOperatorTest :: forall {k} {a :: k}. a :~: a" else "typeOperatorTest :: a :~: a")
         , ("notInScopeTest = mkCharType", "notInScopeTest :: String -> Data.Data.DataType")
         ]
    in testGroup
