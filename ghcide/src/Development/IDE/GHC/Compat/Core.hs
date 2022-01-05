@@ -472,6 +472,7 @@ import           GHC.Core.FamInstEnv          hiding (pprFamInst)
 import           GHC.Core.InstEnv
 import           GHC.Types.Unique.FM
 #if MIN_VERSION_ghc(9,2,0)
+import           GHC.Data.Bag
 import           GHC.Core.Multiplicity        (scaledThing)
 #else
 import           GHC.Core.Ppr.TyThing         hiding (pprFamInst)
@@ -821,7 +822,9 @@ instance HasSrcSpan (SrcSpanAnn' ann) where
 instance HasSrcSpan (SrcLoc.GenLocated (SrcSpanAnn' ann) a) where
   getLoc (L l _) = l
 
+pattern L :: HasSrcSpan a => SrcSpan -> e -> SrcLoc.GenLocated a e
 pattern L l a <- GHC.L (getLoc -> l) a
+{-# COMPLETE L #-}
 #endif
 
 #elif MIN_VERSION_ghc(8,8,0)
@@ -1004,12 +1007,14 @@ type LocatedAn a = GHC.Located
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
+locA :: SrcSpanAnn' a -> SrcSpan
 locA = GHC.locA
 #else
 locA = id
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
+getLocA :: SrcLoc.GenLocated (SrcSpanAnn' a) e -> SrcSpan
 getLocA = GHC.getLocA
 #else
 -- getLocA :: HasSrcSpan a => a -> SrcSpan
@@ -1035,6 +1040,7 @@ pattern GRE{gre_name, gre_par, gre_lcl, gre_imp} = RdrName.GRE{..}
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
+collectHsBindsBinders :: CollectPass p => Bag (XRec p (HsBindLR p idR)) -> [IdP p]
 collectHsBindsBinders x = GHC.collectHsBindsBinders CollNoDictBinders x
 #endif
 

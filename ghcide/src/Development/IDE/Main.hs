@@ -80,7 +80,7 @@ import           Development.IDE.Types.Options         (IdeGhcSession,
                                                         defaultIdeOptions,
                                                         optModifyDynFlags,
                                                         optTesting)
-import           Development.IDE.Types.Shake           (Key (Key), fromKeyType)
+import           Development.IDE.Types.Shake           (fromKeyType)
 import           GHC.Conc                              (getNumProcessors)
 import           GHC.IO.Encoding                       (setLocaleEncoding)
 import           GHC.IO.Handle                         (hDuplicate)

@@ -28,7 +28,7 @@ showAstDataHtml :: (Data a, Outputable a) => a -> SDoc
 #endif
 showAstDataHtml a0 = html $
     header $$
-    body (tag' [("id",text (show "myUL"))] "ul" $ vcat
+    body (tag' [("id",text (show @String "myUL"))] "ul" $ vcat
         [
 #if MIN_VERSION_ghc(9,2,1)
             li (pre $ text (exactPrint a0)),
@@ -44,7 +44,7 @@ showAstDataHtml a0 = html $
         angleBrackets (text t <+> hcat [text a<>char '=' <>v | (a,v) <- attrs])
         <> cont
         <> angleBrackets (char '/' <> text t)
-    ul = tag' [("class", text (show "nested"))] "ul"
+    ul = tag' [("class", text (show @String "nested"))] "ul"
     li = tag "li"
     caret x = tag' [("class", text "caret")] "span" "" <+> x
     nested foo cts

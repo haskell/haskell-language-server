@@ -2527,9 +2527,9 @@ deleteUnusedDefinitionTests = testGroup "delete unused definition action"
       return (action, actionTitle)
 
 addTypeAnnotationsToLiteralsTest :: TestTree
-addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals to satisfy contraints"
+addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals to satisfy constraints"
   [
-    testSession "add default type to satisfy one contraint" $
+    testSession "add default type to satisfy one constraint" $
     testFor
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "module A (f) where"
@@ -2544,7 +2544,7 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , "f = (1 :: Integer)"
                ])
 
-  , testSession "add default type to satisfy one contraint in nested expressions" $
+  , testSession "add default type to satisfy one constraint in nested expressions" $
     testFor
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "module A where"
@@ -2562,7 +2562,7 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , "    let x = (3 :: Integer)"
                , "    in x"
                ])
-  , testSession "add default type to satisfy one contraint in more nested expressions" $
+  , testSession "add default type to satisfy one constraint in more nested expressions" $
     testFor
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "module A where"
@@ -2580,7 +2580,7 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , "    let x = let y = (5 :: Integer) in y"
                , "    in x"
                ])
-  , testSession "add default type to satisfy one contraint with duplicate literals" $
+  , testSession "add default type to satisfy one constraint with duplicate literals" $
     testFor
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "{-# LANGUAGE OverloadedStrings #-}"
@@ -2602,7 +2602,8 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , ""
                , "f = seq (\"debug\" :: " <> listOfChar <> ") traceShow \"debug\""
                ])
-  , testSession "add default type to satisfy two contraints" $
+  , knownBrokenForGhcVersions [GHC92] "GHC 9.2 only has 'traceShow' in error span" $
+    testSession "add default type to satisfy two constraints" $
     testFor
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "{-# LANGUAGE OverloadedStrings #-}"
@@ -2622,7 +2623,8 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , ""
                , "f a = traceShow (\"debug\" :: " <> listOfChar <> ") a"
                ])
-  , testSession "add default type to satisfy two contraints with duplicate literals" $
+  , knownBrokenForGhcVersions [GHC92] "GHC 9.2 only has 'traceShow' in error span" $
+    testSession "add default type to satisfy two constraints with duplicate literals" $
     testFor
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "{-# LANGUAGE OverloadedStrings #-}"
@@ -3301,7 +3303,7 @@ addSigActionTests = let
     , "pattern Point{x, y} <- (x, y)\n  where Point x y = (x, y)" >:: "pattern Point :: a -> b -> (a, b)"
     , "pattern MkT1' b = MkT1 42 b" >:: "pattern MkT1' :: (Eq a, Num a) => Show b => b -> T1 a"
     , "pattern MkT1' b <- MkT1 42 b" >:: "pattern MkT1' :: (Eq a, Num a) => Show b => b -> T1 a"
-    , "pattern MkT1' b <- MkT1 42 b\n  where MkT1' b = T1 42 b" >:: "pattern MkT1' :: (Eq a, Num a) => Show b => b -> T1 a"
+    , "pattern MkT1' b <- MkT1 42 b\n  where MkT1' b = MkT1 42 b" >:: "pattern MkT1' :: (Eq a, Num a) => Show b => b -> T1 a"
     ]
 
 exportUnusedTests :: TestTree
@@ -3820,13 +3822,13 @@ addSigLensesTests =
         , ("pattern Point{x, y} <- (x, y)\n  where Point x y = (x, y)", "pattern Point :: a -> b -> (a, b)")
         , ("pattern MkT1' b = MkT1 42 b", "pattern MkT1' :: (Eq a, Num a) => Show b => b -> T1 a")
         , ("pattern MkT1' b <- MkT1 42 b", "pattern MkT1' :: (Eq a, Num a) => Show b => b -> T1 a")
-        , ("pattern MkT1' b <- MkT1 42 b\n  where MkT1' b = T1 42 b", "pattern MkT1' :: (Eq a, Num a) => Show b => b -> T1 a")
+        , ("pattern MkT1' b <- MkT1 42 b\n  where MkT1' b = MkT1 42 b", "pattern MkT1' :: (Eq a, Num a) => Show b => b -> T1 a")
         , ("qualifiedSigTest= C.realPart", "qualifiedSigTest :: C.Complex a -> a")
         , ("head = 233", "head :: Integer")
         , ("rank2Test (k :: forall a . a -> a) = (k 233 :: Int, k \"QAQ\")", "rank2Test :: (forall a. a -> a) -> (Int, " <> listOfChar <> ")")
         , ("symbolKindTest = Proxy @\"qwq\"", "symbolKindTest :: Proxy \"qwq\"")
         , ("promotedKindTest = Proxy @Nothing", "promotedKindTest :: Proxy 'Nothing")
-        , ("typeOperatorTest = Refl", "typeOperatorTest :: a :~: a")
+        , ("typeOperatorTest = Refl", if ghcVersion >= GHC92 then "typeOperatorTest :: forall {k} {a :: k}. a :~: a" else "typeOperatorTest :: a :~: a")
         , ("notInScopeTest = mkCharType", "notInScopeTest :: String -> Data.Data.DataType")
         ]
    in testGroup
@@ -4045,7 +4047,7 @@ findDefinitionAndHoverTests = let
   , test  no     skip   cccL17     docLink       "Haddock html links"
   , testM yes    yes    imported   importedSig   "Imported symbol"
   , testM yes    yes    reexported reexportedSig "Imported symbol (reexported)"
-  , if ghcVersion == GHC90 && isWindows || ghcVersion == GHC92 then
+  , if ghcVersion == GHC90 && isWindows then
         test  no     broken    thLocL57   thLoc         "TH Splice Hover"
     else
         test  no     yes       thLocL57   thLoc         "TH Splice Hover"
@@ -5388,7 +5390,7 @@ dependentFileTest = testGroup "addDependentFile"
         expectDiagnostics $
             if ghcVersion >= GHC90
                 -- String vs [Char] causes this change in error message
-                then [("Foo.hs", [(DsError, (4, 6), "Couldn't match type")])]
+                then [("Foo.hs", [(DsError, if ghcVersion >= GHC92 then (4,11) else (4, 6), "Couldn't match type")])]
                 else [("Foo.hs", [(DsError, (4, 6), "Couldn't match expected type")])]
         -- Now modify the dependent file
         liftIO $ writeFile depFilePath "B"

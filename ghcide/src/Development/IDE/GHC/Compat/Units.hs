@@ -279,8 +279,11 @@ unitHaddockInterfaces =
 -- ------------------------------------------------------------------
 
 #if MIN_VERSION_ghc(9,2,0)
+definiteUnitId :: Definite uid -> GenUnit uid
 definiteUnitId         = RealUnit
+defUnitId :: unit -> Definite unit
 defUnitId              = Definite
+installedModule :: unit -> ModuleName -> GenModule unit
 installedModule        = Module
 
 #elif MIN_VERSION_ghc(9,0,0)

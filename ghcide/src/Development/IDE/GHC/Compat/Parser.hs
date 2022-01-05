@@ -57,7 +57,6 @@ import           GHC                             (pm_extra_src_files,
 import qualified GHC
 import qualified GHC.Driver.Config               as Config
 import           GHC.Hs                          (hpm_module, hpm_src_files)
-import qualified GHC.Hs                          as GHC
 import           GHC.Parser.Lexer                hiding (initParserState)
 #endif
 #else
