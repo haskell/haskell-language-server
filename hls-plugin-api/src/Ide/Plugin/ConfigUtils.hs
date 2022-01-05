@@ -5,15 +5,16 @@
 
 module Ide.Plugin.ConfigUtils where
 
+import           Control.Lens          ((&), (?~), ix, at)
 import qualified Data.Aeson            as A
 import qualified Data.Aeson.Types      as A
+import           Data.Aeson.Lens      (_Object)
 import           Data.Default          (def)
 import qualified Data.Dependent.Map    as DMap
 import qualified Data.Dependent.Sum    as DSum
 import           Data.List             (nub)
 import           Data.String           (IsString (fromString))
 import qualified Data.Text             as T
-import           Ide.Compat            (adjustJson)
 import           Ide.Plugin.Config
 import           Ide.Plugin.Properties (toDefaultJSON, toVSCodeExtensionSchema)
 import           Ide.Types
@@ -27,17 +28,12 @@ import           Language.LSP.Types
 -- | Generates a default 'Config', but remains only effective items
 pluginsToDefaultConfig :: IdePlugins a -> A.Value
 pluginsToDefaultConfig IdePlugins {..} =
-  A.Object $
-    adjustJson
-      ( \ (unsafeValueToObject -> obj) ->
-        A.Object $ obj <> unsafeValueToObject (A.object ["plugin" A..= elems]) -- inplace the "plugin" section with our 'elems', leaving others unchanged
-      )
-      "haskell"
-      (unsafeValueToObject (A.toJSON defaultConfig))
+  -- Use 'ix' to look at all the "haskell" keys in the outer value (since we're not
+  -- setting it if missing), then we use '_Object' and 'at' to get at the "plugin" key
+  -- and actually set it.
+  A.toJSON defaultConfig & ix "haskell" . _Object . at "plugin" ?~ elems
   where
     defaultConfig@Config {} = def
-    unsafeValueToObject (A.Object o) = o
-    unsafeValueToObject _            = error "impossible"
     elems = A.object $ mconcat $ singlePlugin <$> map snd ipMap
     -- Splice genericDefaultConfig and dedicatedDefaultConfig
     -- Example:
