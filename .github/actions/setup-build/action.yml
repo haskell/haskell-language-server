@@ -85,7 +85,7 @@ runs:
         key:   ${{ env.cache-name }}-${{ env.INDEX_STATE }}
         restore-keys: ${{ env.cache-name }}-
 
-    # To ensure we get the lastest hackage index without telying in the haskell action logic
+    # To ensure we get the latest hackage index without relying on the haskell action logic
     # It has to be done before `cabal freeze` to make it aware of the new index
     - run: cabal update
       shell: bash
