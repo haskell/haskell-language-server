@@ -32,9 +32,10 @@ runs:
         echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
       shell: bash
 
+    # This copy an alternative cabal-ghc${GHCVER}.project (for example cabal-ghc921.project)
+    # as main cabal-project, for not fully supported ghc versions
     # Needs to be before the caching step so that the cache can detect changes to the modified cabal.project file
-    - if: inputs.ghc == '9.0.1' || inputs.ghc == '9.2.1'
-      name: (GHC 9.0/9.2) Use modified `cabal.project`
+    - name: Use possible modified `cabal.project`
       env:
         GHCVER: ${{ inputs.ghc }}
       run: |
@@ -42,7 +43,10 @@ runs:
         # (most probably sticky bit is set on $HOME)
         # `&&` insures `rm -f` return is positive.
         # Many platforms aslo have `alias cp='cp -i'`.
-        rm -f -v cabal.project && cp -v cabal-ghc${GHCVER//./}.project cabal.project
+        ALT_PROJECT_FILE=cabal-ghc${GHCVER//./}.project
+        if [[ -f "$ALT_PROJECT_FILE" ]]; then
+          rm -f -v cabal.project && cp -v "$ALT_PROJECT_FILE" cabal.project
+        fi
       shell: bash
 
     - if: inputs.os == 'Windows' && inputs.ghc == '8.8.4'
