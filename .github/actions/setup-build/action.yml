@@ -32,7 +32,7 @@ runs:
         echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
       shell: bash
 
-    # Needs to be before Cache Cabal so the cache can detect changes to the modified cabal.project file
+    # Needs to be before the caching step so that the cache can detect changes to the modified cabal.project file
     - if: inputs.ghc == '9.0.1' || inputs.ghc == '9.2.1'
       name: (GHC 9.0/9.2) Use modified `cabal.project`
       env:
