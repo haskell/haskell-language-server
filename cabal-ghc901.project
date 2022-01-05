@@ -47,6 +47,7 @@ constraints:
 -- although we are not building all plugins cabal solver phase is run for all packages
 -- this way we track explicitly all transitive dependencies which need support for ghc-9
 allow-newer:
+    *:ghc-bignum,
     brittany:base,
     brittany:ghc,
     brittany:ghc-boot-th,

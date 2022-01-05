@@ -11,7 +11,9 @@ module Development.IDE.GHC.Compat.ExactPrint
     ) where
 
 import           Language.Haskell.GHC.ExactPrint
+#if !MIN_VERSION_ghc(9,2,0)
 import           Retrie.ExactPrint               (Annotated (..))
+#endif
 
 #if !MIN_VERSION_ghc(9,2,0)
 class ExactPrint ast where

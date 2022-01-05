@@ -43,7 +43,6 @@ import           GHC.Types.SourceError
 import           GHC.Types.SrcLoc
 import           GHC.Unit.State
 import           GHC.Utils.Error                 hiding (mkWarnMsg)
-import           GHC.Utils.Logger
 import           GHC.Utils.Outputable
 import           GHC.Utils.Panic
 #elif MIN_VERSION_ghc(9,0,0)
@@ -138,7 +137,15 @@ pprError =
 formatErrorWithQual :: DynFlags -> MsgEnvelope DecoratedSDoc -> String
 formatErrorWithQual dflags e =
 #if MIN_VERSION_ghc(9,2,0)
-  showSDoc dflags (pprLocMsgEnvelope e)
+  showSDoc dflags (pprNoLocMsgEnvelope e)
+
+pprNoLocMsgEnvelope :: Error.RenderableDiagnostic e => MsgEnvelope e -> SDoc
+pprNoLocMsgEnvelope (MsgEnvelope { errMsgDiagnostic = e
+                                 , errMsgContext   = unqual })
+  = sdocWithContext $ \ctx ->
+    withErrStyle unqual $
+      (formatBulleted ctx $ Error.renderDiagnostic e)
+
 #else
   Out.showSDoc dflags
   $ Out.withPprStyle (oldMkErrStyle dflags $ errMsgContext e)
