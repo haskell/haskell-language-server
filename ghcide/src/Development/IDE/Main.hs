@@ -65,6 +65,7 @@ import           Development.IDE.Main.HeapStats        (withHeapStats)
 import qualified Development.IDE.Main.HeapStats        as HeapStats
 import           Development.IDE.Plugin                (Plugin (pluginHandlers, pluginModifyDynflags, pluginRules))
 import           Development.IDE.Plugin.HLS            (asGhcIdePlugin)
+import qualified Development.IDE.Plugin.HLS            as PluginHLS
 import qualified Development.IDE.Plugin.HLS.GhcIde     as Ghcide
 import qualified Development.IDE.Plugin.Test           as Test
 import           Development.IDE.Session               (SessionLoadingOptions,
@@ -273,6 +274,7 @@ data Log
   | LogGhcide Ghcide.Log
   | LogLanguageServer LanguageServer.Log
   | LogSession Session.Log
+  | LogPluginHLS PluginHLS.Log
   deriving Show
 
 defaultMain :: Recorder Log -> Arguments -> IO ()
@@ -287,7 +289,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmap LogHeapStats recorder) 
     logger <- argsLogger
     hSetBuffering stderr LineBuffering
 
-    let hlsPlugin = asGhcIdePlugin argsHlsPlugins
+    let hlsPlugin = asGhcIdePlugin (cmap LogPluginHLS recorder) argsHlsPlugins
         hlsCommands = allLspCmdIds' pid argsHlsPlugins
         plugins = hlsPlugin <> argsGhcidePlugin
         options = argsLspOptions { LSP.executeCommandCommands = LSP.executeCommandCommands argsLspOptions <> Just hlsCommands }

@@ -27,6 +27,7 @@ import           Development.IDE.Core.FileStore        (registerFileWatches,
                                                         resetFileStore,
                                                         setFileModified,
                                                         setSomethingModified)
+import qualified Development.IDE.Core.FileStore        as FileStore
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.OfInterest
 import           Development.IDE.Core.RuleTypes        (GetClientSettings (..))
@@ -40,6 +41,7 @@ import           Ide.Types
 
 data Log
   = LogShake Shake.Log
+  | LogFileStore FileStore.Log
   deriving Show
 
 whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
@@ -54,7 +56,7 @@ descriptor recorder plId = (defaultPluginDescriptor plId) { pluginNotificationHa
           -- We don't know if the file actually exists, or if the contents match those on disk
           -- For example, vscode restores previously unsaved contents on open
           addFileOfInterest ide file Modified{firstOpen=True}
-          setFileModified ide False file
+          setFileModified (cmap LogFileStore recorder) ide False file
           logDebug (ideLogger ide) $ "Opened text document: " <> getUri _uri
 
   , mkPluginNotificationHandler LSP.STextDocumentDidChange $
@@ -62,14 +64,14 @@ descriptor recorder plId = (defaultPluginDescriptor plId) { pluginNotificationHa
         atomically $ updatePositionMapping ide identifier changes
         whenUriFile _uri $ \file -> do
           addFileOfInterest ide file Modified{firstOpen=False}
-          setFileModified ide False file
+          setFileModified (cmap LogFileStore recorder) ide False file
         logDebug (ideLogger ide) $ "Modified text document: " <> getUri _uri
 
   , mkPluginNotificationHandler LSP.STextDocumentDidSave $
       \ide _ (DidSaveTextDocumentParams TextDocumentIdentifier{_uri} _) -> liftIO $ do
         whenUriFile _uri $ \file -> do
             addFileOfInterest ide file OnDisk
-            setFileModified ide True file
+            setFileModified (cmap LogFileStore recorder) ide True file
         logDebug (ideLogger ide) $ "Saved text document: " <> getUri _uri
 
   , mkPluginNotificationHandler LSP.STextDocumentDidClose $

@@ -32,7 +32,7 @@ import           UnliftIO.Concurrent
 import           UnliftIO.Directory
 import           UnliftIO.Exception
 
-import           Development.IDE.Core.FileStore
+import           Development.IDE.Core.FileStore        hiding (Log)
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.Shake            hiding (Log)
 import           Development.IDE.Core.Tracing
@@ -187,8 +187,6 @@ runLanguageServer recorder options inH outH getHieDbLoc defaultConfig onConfigur
                 exceptionInHandler e = do
                     log $ LogExceptionInHandler e
                     sendErrorMessage e
-
-                logger = ideLogger ide
 
                 checkCancelled _id act k =
                     flip finally (clearReqId _id) $

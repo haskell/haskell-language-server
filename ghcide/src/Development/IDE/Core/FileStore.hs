@@ -21,7 +21,8 @@ module Development.IDE.Core.FileStore(
     getFileContentsImpl,
     getModTime,
     isWatchSupported,
-    registerFileWatches
+    registerFileWatches,
+    Log
     ) where
 
 import           Control.Concurrent.STM.Stats                 (STM, atomically,
@@ -40,7 +41,7 @@ import qualified Data.Text                                    as T
 import           Data.Time
 import           Data.Time.Clock.POSIX
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Shake
+import           Development.IDE.Core.Shake                   hiding (Log)
 import           Development.IDE.GHC.Orphans                  ()
 import           Development.IDE.Graph
 import           Development.IDE.Import.DependencyInformation
@@ -67,6 +68,8 @@ import qualified Data.HashSet                                 as HSet
 import           Data.List                                    (foldl')
 import qualified Data.Text                                    as Text
 import           Development.IDE.Core.IdeConfiguration        (isWorkspaceFile)
+import           Development.IDE.Types.Logger                 (Recorder,
+                                                               logWith)
 import           Language.LSP.Server                          hiding
                                                               (getVirtualFile)
 import qualified Language.LSP.Server                          as LSP
@@ -79,6 +82,15 @@ import qualified Language.LSP.Types                           as LSP
 import qualified Language.LSP.Types.Capabilities              as LSP
 import           Language.LSP.VFS
 import           System.FilePath
+
+data Log
+  = LogCouldNotIdentifyReverseDeps !NormalizedFilePath
+  -- log = L.logInfo logger . T.pack
+  -- liftIO $ log $ "Could not identify reverse dependencies for " ++ show nfp
+  | LogTypeCheckingReverseDeps !NormalizedFilePath !(Maybe [NormalizedFilePath])
+  -- liftIO $ (log $ "Typechecking reverse dependencies for " ++ show nfp ++ ": " ++ show revs)
+  --   `catch` \(e :: SomeException) -> log (show e)
+  deriving Show
 
 makeVFSHandle :: IO VFSHandle
 makeVFSHandle = do
@@ -249,11 +261,12 @@ fileStoreRules vfs isWatched = do
 
 -- | Note that some buffer for a specific file has been modified but not
 -- with what changes.
-setFileModified :: IdeState
+setFileModified :: Recorder Log
+                -> IdeState
                 -> Bool -- ^ Was the file saved?
                 -> NormalizedFilePath
                 -> IO ()
-setFileModified state saved nfp = do
+setFileModified recorder state saved nfp = do
     ideOptions <- getIdeOptionsIO $ shakeExtras state
     doCheckParents <- optCheckParents ideOptions
     let checkParents = case doCheckParents of
@@ -266,22 +279,20 @@ setFileModified state saved nfp = do
     join $ atomically $ recordDirtyKeys (shakeExtras state) GetModificationTime [nfp]
     restartShakeSession (shakeExtras state) (fromNormalizedFilePath nfp ++ " (modified)") []
     when checkParents $
-      typecheckParents state nfp
+      typecheckParents recorder state nfp
 
-typecheckParents :: IdeState -> NormalizedFilePath -> IO ()
-typecheckParents state nfp = void $ shakeEnqueue (shakeExtras state) parents
-  where parents = mkDelayedAction "ParentTC" L.Debug (typecheckParentsAction nfp)
+typecheckParents :: Recorder Log -> IdeState -> NormalizedFilePath -> IO ()
+typecheckParents recorder state nfp = void $ shakeEnqueue (shakeExtras state) parents
+  where parents = mkDelayedAction "ParentTC" L.Debug (typecheckParentsAction recorder nfp)
 
-typecheckParentsAction :: NormalizedFilePath -> Action ()
-typecheckParentsAction nfp = do
+typecheckParentsAction :: Recorder Log -> NormalizedFilePath -> Action ()
+typecheckParentsAction recorder nfp = do
     revs <- transitiveReverseDependencies nfp <$> useNoFile_ GetModuleGraph
-    logger <- logger <$> getShakeExtras
-    let log = L.logInfo logger . T.pack
+    let log = logWith recorder
     case revs of
-      Nothing -> liftIO $ log $ "Could not identify reverse dependencies for " ++ show nfp
+      Nothing -> log $ LogCouldNotIdentifyReverseDeps nfp
       Just rs -> do
-        liftIO $ (log $ "Typechecking reverse dependencies for " ++ show nfp ++ ": " ++ show revs)
-          `catch` \(e :: SomeException) -> log (show e)
+        log $ LogTypeCheckingReverseDeps nfp revs
         void $ uses GetModIface rs
 
 -- | Note that some keys have been modified and restart the session
