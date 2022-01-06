@@ -60,6 +60,7 @@ import qualified Development.IDE.Core.Shake            as Shake
 import           Development.IDE.Core.Tracing          (measureMemory)
 import           Development.IDE.Graph                 (action)
 import           Development.IDE.LSP.LanguageServer    (runLanguageServer)
+import qualified Development.IDE.LSP.LanguageServer    as LanguageServer
 import           Development.IDE.Main.HeapStats        (withHeapStats)
 import qualified Development.IDE.Main.HeapStats        as HeapStats
 import           Development.IDE.Plugin                (Plugin (pluginHandlers, pluginModifyDynflags, pluginRules))
@@ -72,13 +73,11 @@ import           Development.IDE.Session               (SessionLoadingOptions,
                                                         retryOnSqliteBusy,
                                                         runWithDb,
                                                         setInitialDynFlags)
+import qualified Development.IDE.Session               as Session
 import           Development.IDE.Types.Location        (NormalizedUri,
                                                         toNormalizedFilePath')
 import           Development.IDE.Types.Logger          (Logger (Logger),
-                                                        Priority (Info),
-                                                        Recorder (Recorder),
-                                                        cmap, logDebug, logInfo,
-                                                        logWith)
+                                                        Recorder, cmap, logWith)
 import           Development.IDE.Types.Options         (IdeGhcSession,
                                                         IdeOptions (optCheckParents, optCheckProject, optReportProgress, optRunSubset),
                                                         IdeTesting (IdeTesting),
@@ -272,6 +271,8 @@ data Log
   | LogService Service.Log
   | LogShake Shake.Log
   | LogGhcide Ghcide.Log
+  | LogLanguageServer LanguageServer.Log
+  | LogSession Session.Log
   deriving Show
 
 defaultMain :: Recorder Log -> Arguments -> IO ()
@@ -308,7 +309,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmap LogHeapStats recorder) 
             t <- offsetTime
             log LogLspStart
 
-            runLanguageServer options inH outH argsGetHieDbLoc argsDefaultHlsConfig argsOnConfigChange (pluginHandlers plugins) $ \env vfs rootPath withHieDb hieChan -> do
+            runLanguageServer (cmap LogLanguageServer recorder) options inH outH argsGetHieDbLoc argsDefaultHlsConfig argsOnConfigChange (pluginHandlers plugins) $ \env vfs rootPath withHieDb hieChan -> do
                 traverse_ IO.setCurrentDirectory rootPath
                 t <- t
                 log $ LogLspStartDuration t
@@ -318,11 +319,11 @@ defaultMain recorder Arguments{..} = withHeapStats (cmap LogHeapStats recorder) 
                 -- We want to set the global DynFlags right now, so that we can use
                 -- `unsafeGlobalDynFlags` even before the project is configured
                 _mlibdir <-
-                    setInitialDynFlags logger dir argsSessionLoadingOptions
+                    setInitialDynFlags (cmap LogSession recorder) dir argsSessionLoadingOptions
                         -- TODO: should probably catch/log/rethrow at top level instead
                         `catchAny` (\e -> log (LogSetInitialDynFlagsException e) >> pure Nothing)
 
-                sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions dir
+                sessionLoader <- loadSessionWithOptions (cmap LogSession recorder) argsSessionLoadingOptions dir
                 config <- LSP.runLspT env LSP.getConfig
                 let def_options = argsIdeOptions config sessionLoader
 
@@ -354,7 +355,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmap LogHeapStats recorder) 
         Check argFiles -> do
           dir <- maybe IO.getCurrentDirectory return argsProjectRoot
           dbLoc <- getHieDbLoc dir
-          runWithDb logger dbLoc $ \hiedb hieChan -> do
+          runWithDb (cmap LogSession recorder) dbLoc $ \hiedb hieChan -> do
             -- GHC produces messages with UTF8 in them, so make sure the terminal doesn't error
             hSetEncoding stdout utf8
             hSetEncoding stderr utf8
@@ -376,7 +377,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmap LogHeapStats recorder) 
             when (n > 0) $ putStrLn $ "  (" ++ intercalate ", " (catMaybes ucradles) ++ ")"
             putStrLn "\nStep 3/4: Initializing the IDE"
             vfs <- makeVFSHandle
-            sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions dir
+            sessionLoader <- loadSessionWithOptions (cmap LogSession recorder) argsSessionLoadingOptions dir
             let def_options = argsIdeOptions argsDefaultHlsConfig sessionLoader
                 options = def_options
                         { optCheckParents = pure NeverCheck
@@ -419,18 +420,18 @@ defaultMain recorder Arguments{..} = withHeapStats (cmap LogHeapStats recorder) 
             root <-  maybe IO.getCurrentDirectory return argsProjectRoot
             dbLoc <- getHieDbLoc root
             hPutStrLn stderr $ "Using hiedb at: " ++ dbLoc
-            mlibdir <- setInitialDynFlags logger root def
+            mlibdir <- setInitialDynFlags (cmap LogSession recorder) root def
             rng <- newStdGen
             case mlibdir of
                 Nothing     -> exitWith $ ExitFailure 1
-                Just libdir -> retryOnSqliteBusy logger rng (HieDb.runCommand libdir opts{HieDb.database = dbLoc} cmd)
+                Just libdir -> retryOnSqliteBusy (cmap LogSession recorder) rng (HieDb.runCommand libdir opts{HieDb.database = dbLoc} cmd)
 
         Custom (IdeCommand c) -> do
           root <-  maybe IO.getCurrentDirectory return argsProjectRoot
           dbLoc <- getHieDbLoc root
-          runWithDb logger dbLoc $ \hiedb hieChan -> do
+          runWithDb (cmap LogSession recorder) dbLoc $ \hiedb hieChan -> do
             vfs <- makeVFSHandle
-            sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions "."
+            sessionLoader <- loadSessionWithOptions (cmap LogSession recorder) argsSessionLoadingOptions "."
             let def_options = argsIdeOptions argsDefaultHlsConfig sessionLoader
                 options = def_options
                     { optCheckParents = pure NeverCheck
