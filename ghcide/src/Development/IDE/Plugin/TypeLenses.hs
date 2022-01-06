@@ -10,6 +10,7 @@ module Development.IDE.Plugin.TypeLenses (
   GlobalBindingTypeSig (..),
   GetGlobalBindingTypeSigs (..),
   GlobalBindingTypeSigsResult (..),
+  Log
 ) where
 
 import           Control.Concurrent.STM.Stats        (atomically)
@@ -33,6 +34,7 @@ import           Development.IDE.Core.RuleTypes      (GetBindings (GetBindings),
 import           Development.IDE.Core.Rules          (IdeState, runAction)
 import           Development.IDE.Core.Service        (getDiagnostics)
 import           Development.IDE.Core.Shake          (getHiddenDiagnostics, use)
+import qualified Development.IDE.Core.Shake          as Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Util            (printName)
 import           Development.IDE.Graph.Classes
@@ -41,6 +43,7 @@ import           Development.IDE.Types.Location      (Position (Position, _chara
                                                       Range (Range, _end, _start),
                                                       toNormalizedFilePath',
                                                       uriToFilePath')
+import           Development.IDE.Types.Logger        (Recorder, cmap)
 import           GHC.Generics                        (Generic)
 import           Ide.Plugin.Config                   (Config)
 import           Ide.Plugin.Properties
@@ -68,15 +71,17 @@ import           Language.LSP.Types                  (ApplyWorkspaceEditParams (
                                                       WorkspaceEdit (WorkspaceEdit))
 import           Text.Regex.TDFA                     ((=~), (=~~))
 
+data Log = LogShake Shake.Log deriving Show
+
 typeLensCommandId :: T.Text
 typeLensCommandId = "typesignature.add"
 
-descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId =
+descriptor :: Recorder Log -> PluginId -> PluginDescriptor IdeState
+descriptor recorder plId =
   (defaultPluginDescriptor plId)
     { pluginHandlers = mkPluginHandler STextDocumentCodeLens codeLensProvider
     , pluginCommands = [PluginCommand (CommandId typeLensCommandId) "adds a signature" commandHandler]
-    , pluginRules = rules
+    , pluginRules = rules recorder
     , pluginConfigDescriptor = defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
     }
 
@@ -237,9 +242,9 @@ instance NFData GlobalBindingTypeSigsResult where
 
 type instance RuleResult GetGlobalBindingTypeSigs = GlobalBindingTypeSigsResult
 
-rules :: Rules ()
-rules = do
-  define $ \GetGlobalBindingTypeSigs nfp -> do
+rules :: Recorder Log -> Rules ()
+rules recorder = do
+  define (cmap LogShake recorder) $ \GetGlobalBindingTypeSigs nfp -> do
     tmr <- use TypeCheck nfp
     -- we need session here for tidying types
     hsc <- use GhcSession nfp

@@ -36,7 +36,7 @@ import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.Compat hiding (empty)
 import qualified Development.IDE.GHC.Compat.Util as FastString
 import           Development.IDE.GHC.Error (realSrcSpanToRange)
-import           Development.IDE.GHC.ExactPrint
+import           Development.IDE.GHC.ExactPrint hiding (Log)
 import           Development.IDE.Graph (Action, RuleResult, Rules, action)
 import           Development.IDE.Graph.Classes (Hashable, NFData)
 import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindings)
@@ -63,7 +63,13 @@ import           Wingman.Judgements.Theta
 import           Wingman.Range
 import           Wingman.StaticPlugin (pattern WingmanMetaprogram, pattern MetaprogramSyntax)
 import           Wingman.Types
+import Development.IDE.Types.Logger (Recorder, cmap)
+import qualified Development.IDE.Core.Shake as Shake
 
+
+newtype Log 
+  = LogShake Shake.Log
+  deriving Show
 
 tacticDesc :: T.Text -> T.Text
 tacticDesc name = "fill the hole using the " <> name <> " tactic"
@@ -546,9 +552,9 @@ instance NFData   GetMetaprograms
 
 type instance RuleResult GetMetaprograms = [(Tracked 'Current RealSrcSpan, T.Text)]
 
-wingmanRules :: PluginId -> Rules ()
-wingmanRules plId = do
-  define $ \WriteDiagnostics nfp ->
+wingmanRules :: Recorder Log -> PluginId -> Rules ()
+wingmanRules recorder plId = do
+  define (cmap LogShake recorder) $ \WriteDiagnostics nfp ->
     usePropertyAction #hole_severity plId properties >>= \case
       Nothing -> pure (mempty, Just ())
       Just severity ->
@@ -577,7 +583,7 @@ wingmanRules plId = do
               , Just ()
               )
 
-  defineNoDiagnostics $ \GetMetaprograms nfp -> do
+  defineNoDiagnostics (cmap LogShake recorder) $ \GetMetaprograms nfp -> do
     TrackedStale tcg tcg_map <- fmap tmrTypechecked <$> useWithStale_ TypeCheck nfp
     let scrutinees = traverse (metaprogramQ . tcg_binds) tcg
     return $ Just $ flip mapMaybe scrutinees $ \aged@(unTrack -> (ss, program)) -> do

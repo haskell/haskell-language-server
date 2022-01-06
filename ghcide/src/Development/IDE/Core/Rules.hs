@@ -57,6 +57,7 @@ module Development.IDE.Core.Rules(
     getParsedModuleDefinition,
     typeCheckRuleDefinition,
     GhcSessionDepsConfig(..),
+    Log
     ) where
 
 #if !MIN_VERSION_ghc(8,8,0)
@@ -96,16 +97,16 @@ import qualified Data.Text.Encoding                           as T
 import           Data.Time                                    (UTCTime (..))
 import           Data.Tuple.Extra
 import           Development.IDE.Core.Compile
-import           Development.IDE.Core.FileExists
+import           Development.IDE.Core.FileExists hiding (Log)
 import           Development.IDE.Core.FileStore               (getFileContents,
                                                                modificationTime,
                                                                resetInterfaceStore)
 import           Development.IDE.Core.IdeConfiguration
-import           Development.IDE.Core.OfInterest
+import           Development.IDE.Core.OfInterest hiding (Log)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Service
-import           Development.IDE.Core.Shake
+import           Development.IDE.Core.Service hiding (Log)
+import           Development.IDE.Core.Shake hiding (Log)
 import           Development.IDE.GHC.Compat.Env
 import           Development.IDE.GHC.Compat.Core              hiding
                                                               (parseModule,
@@ -115,7 +116,7 @@ import           Development.IDE.GHC.Compat.Core              hiding
 import qualified Development.IDE.GHC.Compat                   as Compat
 import qualified Development.IDE.GHC.Compat.Util              as Util
 import           Development.IDE.GHC.Error
-import           Development.IDE.GHC.ExactPrint
+import           Development.IDE.GHC.ExactPrint hiding (Log)
 import           Development.IDE.GHC.Util                     hiding
                                                               (modifyDynFlags)
 import           Development.IDE.Graph
@@ -128,7 +129,6 @@ import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Diagnostics            as Diag
 import           Development.IDE.Types.HscEnvEq
 import           Development.IDE.Types.Location
-import qualified Development.IDE.Types.Logger                 as L
 import           Development.IDE.Types.Options
 import           GHC.Generics                                 (Generic)
 import           GHC.IO.Encoding
@@ -152,6 +152,24 @@ import Control.Concurrent.STM.Stats (atomically)
 import Language.LSP.Server (LspT)
 import System.Info.Extra (isMac)
 import HIE.Bios.Ghc.Gap (hostIsDynamic)
+import Development.IDE.Types.Logger (Recorder, cmap, logWith)
+import qualified Development.IDE.Core.Shake as Shake
+import qualified Development.IDE.GHC.ExactPrint as ExactPrint
+
+data Log 
+  = LogShake Shake.Log
+  | LogReindexingHieFile !NormalizedFilePath
+  -- L.logDebug (logger se) $ "Re-indexing hie file for" <> T.pack (fromNormalizedFilePath f)
+  | LogLoadingHieFile !NormalizedFilePath
+  -- log <- asks $ L.logDebug . logger
+  -- liftIO $ log $ "LOADING HIE FILE :" <> T.pack (show file)
+  | LogLoadingHieFileFail !FilePath !SomeException
+  | LogLoadingHieFileSuccess !FilePath
+  -- liftIO . log $ either (const $ "FAILED LOADING HIE FILE FOR:" <> T.pack (show hie_loc))
+  --                       (const $ "SUCCEEDED LOADING HIE FILE FOR:" <> T.pack (show hie_loc))
+  --                       res
+  | LogExactPrint ExactPrint.Log
+  deriving Show
 
 templateHaskellInstructions :: T.Text
 templateHaskellInstructions = "https://haskell-language-server.readthedocs.io/en/latest/troubleshooting.html#support-for-template-haskell"
@@ -209,10 +227,10 @@ priorityFilesOfInterest = Priority (-2)
 -- See https://github.com/haskell/ghcide/pull/350#discussion_r370878197
 -- and https://github.com/mpickering/ghcide/pull/22#issuecomment-625070490
 -- GHC wiki about: https://gitlab.haskell.org/ghc/ghc/-/wikis/api-annotations
-getParsedModuleRule :: Rules ()
-getParsedModuleRule =
+getParsedModuleRule :: Recorder Log -> Rules ()
+getParsedModuleRule recorder =
   -- this rule does not have early cutoff since all its dependencies already have it
-  define $ \GetParsedModule file -> do
+  define (cmap LogShake recorder) $ \GetParsedModule file -> do
     ModSummaryResult{msrModSummary = ms'} <- use_ GetModSummary file
     sess <- use_ GhcSession file
     let hsc = hscEnv sess
@@ -282,11 +300,11 @@ mergeParseErrorsHaddock normal haddock = normal ++
 -- | This rule provides a ParsedModule preserving all annotations,
 -- including keywords, punctuation and comments.
 -- So it is suitable for use cases where you need a perfect edit.
-getParsedModuleWithCommentsRule :: Rules ()
-getParsedModuleWithCommentsRule =
+getParsedModuleWithCommentsRule :: Recorder Log -> Rules ()
+getParsedModuleWithCommentsRule recorder =
   -- The parse diagnostics are owned by the GetParsedModule rule
   -- For this reason, this rule does not produce any diagnostics
-  defineNoDiagnostics $ \GetParsedModuleWithComments file -> do
+  defineNoDiagnostics (cmap LogShake recorder) $ \GetParsedModuleWithComments file -> do
     ModSummaryResult{msrModSummary = ms} <- use_ GetModSummary file
     sess <- use_ GhcSession file
     opt <- getIdeOptions
@@ -317,9 +335,9 @@ getParsedModuleDefinition packageState opt file ms = do
         Nothing   -> pure (diag, Nothing)
         Just modu -> pure (diag, Just modu)
 
-getLocatedImportsRule :: Rules ()
-getLocatedImportsRule =
-    define $ \GetLocatedImports file -> do
+getLocatedImportsRule :: Recorder Log -> Rules ()
+getLocatedImportsRule recorder =
+    define (cmap LogShake recorder) $ \GetLocatedImports file -> do
         ModSummaryResult{msrModSummary = ms} <- use_ GetModSummaryWithoutTimestamps file
         targets <- useNoFile_ GetKnownTargets
         let targetsMap = HM.mapWithKey const targets
@@ -476,15 +494,15 @@ rawDependencyInformation fs = do
     dropBootSuffix :: FilePath -> FilePath
     dropBootSuffix hs_src = reverse . drop (length @[] "-boot") . reverse $ hs_src
 
-getDependencyInformationRule :: Rules ()
-getDependencyInformationRule =
-    define $ \GetDependencyInformation file -> do
+getDependencyInformationRule :: Recorder Log -> Rules ()
+getDependencyInformationRule recorder =
+    define (cmap LogShake recorder) $ \GetDependencyInformation file -> do
        rawDepInfo <- rawDependencyInformation [file]
        pure ([], Just $ processDependencyInformation rawDepInfo)
 
-reportImportCyclesRule :: Rules ()
-reportImportCyclesRule =
-    define $ \ReportImportCycles file -> fmap (\errs -> if null errs then ([], Just ()) else (errs, Nothing)) $ do
+reportImportCyclesRule :: Recorder Log -> Rules ()
+reportImportCyclesRule recorder =
+    define (cmap LogShake recorder) $ \ReportImportCycles file -> fmap (\errs -> if null errs then ([], Just ()) else (errs, Nothing)) $ do
         DependencyInformation{..} <- use_ GetDependencyInformation file
         let fileId = pathToId depPathIdMap file
         case IntMap.lookup (getFilePathId fileId) depErrorNodes of
@@ -516,16 +534,16 @@ reportImportCyclesRule =
            pure (moduleNameString . moduleName . ms_mod $ ms)
           showCycle mods  = T.intercalate ", " (map T.pack mods)
 
-getHieAstsRule :: Rules ()
-getHieAstsRule =
-    define $ \GetHieAst f -> do
+getHieAstsRule :: Recorder Log -> Rules ()
+getHieAstsRule recorder =
+    define (cmap LogShake recorder) $ \GetHieAst f -> do
       tmr <- use_ TypeCheck f
       hsc <- hscEnv <$> use_ GhcSession f
       getHieAstRuleDefinition f hsc tmr
 
-persistentHieFileRule :: Rules ()
-persistentHieFileRule = addPersistentRule GetHieAst $ \file -> runMaybeT $ do
-  res <- readHieFileForSrcFromDisk file
+persistentHieFileRule :: Recorder Log -> Rules ()
+persistentHieFileRule recorder = addPersistentRule GetHieAst $ \file -> runMaybeT $ do
+  res <- readHieFileForSrcFromDisk recorder file
   vfs <- asks vfs
   encoding <- liftIO getLocaleEncoding
   (currentSource,ver) <- liftIO $ do
@@ -560,8 +578,8 @@ getHieAstRuleDefinition f hsc tmr = do
       typemap = AtPoint.computeTypeReferences . Compat.getAsts <$> masts
   pure (diags <> diagsWrite, HAR (ms_mod $ tmrModSummary tmr) <$> masts <*> refmap <*> typemap <*> pure HieFresh)
 
-getImportMapRule :: Rules ()
-getImportMapRule = define $ \GetImportMap f -> do
+getImportMapRule :: Recorder Log -> Rules ()
+getImportMapRule recorder = define (cmap LogShake recorder) $ \GetImportMap f -> do
   im <- use GetLocatedImports f
   let mkImports fileImports = M.fromList $ mapMaybe (\(m, mfp) -> (unLoc m,) . artifactFilePath <$> mfp) fileImports
   pure ([], ImportMap . mkImports <$> im)
@@ -570,17 +588,17 @@ getImportMapRule = define $ \GetImportMap f -> do
 persistentImportMapRule :: Rules ()
 persistentImportMapRule = addPersistentRule GetImportMap $ \_ -> pure $ Just (ImportMap mempty, idDelta, Nothing)
 
-getBindingsRule :: Rules ()
-getBindingsRule =
-  define $ \GetBindings f -> do
+getBindingsRule :: Recorder Log -> Rules ()
+getBindingsRule recorder =
+  define (cmap LogShake recorder) $ \GetBindings f -> do
     HAR{hieKind=kind, refMap=rm} <- use_ GetHieAst f
     case kind of
       HieFresh      -> pure ([], Just $ bindings rm)
       HieFromDisk _ -> pure ([], Nothing)
 
-getDocMapRule :: Rules ()
-getDocMapRule =
-    define $ \GetDocMap file -> do
+getDocMapRule :: Recorder Log -> Rules ()
+getDocMapRule recorder =
+    define (cmap LogShake recorder) $ \GetDocMap file -> do
       -- Stale data for the scenario where a broken module has previously typechecked
       -- but we never generated a DocMap for it
       (tmrTypechecked -> tc, _) <- useWithStale_ TypeCheck file
@@ -594,40 +612,39 @@ getDocMapRule =
 persistentDocMapRule :: Rules ()
 persistentDocMapRule = addPersistentRule GetDocMap $ \_ -> pure $ Just (DKMap mempty mempty, idDelta, Nothing)
 
-readHieFileForSrcFromDisk :: NormalizedFilePath -> MaybeT IdeAction Compat.HieFile
-readHieFileForSrcFromDisk file = do
+readHieFileForSrcFromDisk :: Recorder Log -> NormalizedFilePath -> MaybeT IdeAction Compat.HieFile
+readHieFileForSrcFromDisk recorder file = do
   ShakeExtras{withHieDb} <- ask
-  log <- asks $ L.logDebug . logger
   row <- MaybeT $ liftIO $ withHieDb (\hieDb -> HieDb.lookupHieFileFromSource hieDb $ fromNormalizedFilePath file)
   let hie_loc = HieDb.hieModuleHieFile row
-  liftIO $ log $ "LOADING HIE FILE :" <> T.pack (show file)
-  exceptToMaybeT $ readHieFileFromDisk hie_loc
+  logWith recorder $ LogLoadingHieFile file
+  exceptToMaybeT $ readHieFileFromDisk recorder hie_loc
 
-readHieFileFromDisk :: FilePath -> ExceptT SomeException IdeAction Compat.HieFile
-readHieFileFromDisk hie_loc = do
+readHieFileFromDisk :: Recorder Log -> FilePath -> ExceptT SomeException IdeAction Compat.HieFile
+readHieFileFromDisk recorder hie_loc = do
   nc <- asks ideNc
-  log <- asks $ L.logDebug . logger
   res <- liftIO $ tryAny $ loadHieFile (mkUpdater nc) hie_loc
-  liftIO . log $ either (const $ "FAILED LOADING HIE FILE FOR:" <> T.pack (show hie_loc))
-                        (const $ "SUCCEEDED LOADING HIE FILE FOR:" <> T.pack (show hie_loc))
-                        res
+  let log = logWith recorder
+  case res of
+    Left e -> log $ LogLoadingHieFileFail hie_loc e
+    Right _ -> log $ LogLoadingHieFileSuccess hie_loc
   except res
 
 -- | Typechecks a module.
-typeCheckRule :: Rules ()
-typeCheckRule = define $ \TypeCheck file -> do
+typeCheckRule :: Recorder Log -> Rules ()
+typeCheckRule recorder = define (cmap LogShake recorder) $ \TypeCheck file -> do
     pm <- use_ GetParsedModule file
     hsc  <- hscEnv <$> use_ GhcSessionDeps file
     typeCheckRuleDefinition hsc pm
 
-knownFilesRule :: Rules ()
-knownFilesRule = defineEarlyCutOffNoFile $ \GetKnownTargets -> do
+knownFilesRule :: Recorder Log -> Rules ()
+knownFilesRule recorder = defineEarlyCutOffNoFile (cmap LogShake recorder) $ \GetKnownTargets -> do
   alwaysRerun
   fs <- knownTargets
   pure (LBS.toStrict $ B.encode $ hash fs, unhashed fs)
 
-getModuleGraphRule :: Rules ()
-getModuleGraphRule = defineNoFile $ \GetModuleGraph -> do
+getModuleGraphRule :: Recorder Log -> Rules ()
+getModuleGraphRule recorder = defineNoFile (cmap LogShake recorder) $ \GetModuleGraph -> do
   fs <- toKnownFiles <$> useNoFile_ GetKnownTargets
   rawDepInfo <- rawDependencyInformation (HashSet.toList fs)
   pure $ processDependencyInformation rawDepInfo
@@ -666,11 +683,11 @@ currentLinkables = do
   where
     go (mod, time) = LM time mod []
 
-loadGhcSession :: GhcSessionDepsConfig -> Rules ()
-loadGhcSession ghcSessionDepsConfig = do
+loadGhcSession :: Recorder Log -> GhcSessionDepsConfig -> Rules ()
+loadGhcSession recorder ghcSessionDepsConfig = do
     -- This function should always be rerun because it tracks changes
     -- to the version of the collection of HscEnv's.
-    defineEarlyCutOffNoFile $ \GhcSessionIO -> do
+    defineEarlyCutOffNoFile (cmap LogShake recorder) $ \GhcSessionIO -> do
         alwaysRerun
         opts <- getIdeOptions
         res <- optGhcSession opts
@@ -678,7 +695,7 @@ loadGhcSession ghcSessionDepsConfig = do
         let fingerprint = LBS.toStrict $ B.encode $ hash (sessionVersion res)
         return (fingerprint, res)
 
-    defineEarlyCutoff $ Rule $ \GhcSession file -> do
+    defineEarlyCutoff (cmap LogShake recorder) $ Rule $ \GhcSession file -> do
         IdeGhcSession{loadSessionFun} <- useNoFile_ GhcSessionIO
         (val,deps) <- liftIO $ loadSessionFun $ fromNormalizedFilePath file
 
@@ -703,7 +720,7 @@ loadGhcSession ghcSessionDepsConfig = do
                 Nothing -> LBS.toStrict $ B.encode (hash (snd val))
         return (Just cutoffHash, val)
 
-    defineNoDiagnostics $ \(GhcSessionDeps_ fullModSummary) file -> do
+    defineNoDiagnostics (cmap LogShake recorder) $ \(GhcSessionDeps_ fullModSummary) file -> do
         env <- use_ GhcSession file
         ghcSessionDepsDefinition fullModSummary ghcSessionDepsConfig env file
 
@@ -741,8 +758,8 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
 
 -- | Load a iface from disk, or generate it if there isn't one or it is out of date
 -- This rule also ensures that the `.hie` and `.o` (if needed) files are written out.
-getModIfaceFromDiskRule :: Rules ()
-getModIfaceFromDiskRule = defineEarlyCutoff $ Rule $ \GetModIfaceFromDisk f -> do
+getModIfaceFromDiskRule :: Recorder Log -> Rules ()
+getModIfaceFromDiskRule recorder = defineEarlyCutoff (cmap LogShake recorder) $ Rule $ \GetModIfaceFromDisk f -> do
   ms <- msrModSummary <$> use_ GetModSummary f
   mb_session <- use GhcSessionDeps f
   case mb_session of
@@ -765,10 +782,10 @@ getModIfaceFromDiskRule = defineEarlyCutoff $ Rule $ \GetModIfaceFromDisk f -> d
 -- `.hie` file. There should be an up2date `.hie` file on
 -- disk since we are careful to write out the `.hie` file before writing the
 -- `.hi` file
-getModIfaceFromDiskAndIndexRule :: Rules ()
-getModIfaceFromDiskAndIndexRule =
+getModIfaceFromDiskAndIndexRule :: Recorder Log -> Rules ()
+getModIfaceFromDiskAndIndexRule recorder =
   -- doesn't need early cutoff since all its dependencies already have it
-  defineNoDiagnostics $ \GetModIfaceFromDiskAndIndex f -> do
+  defineNoDiagnostics (cmap LogShake recorder) $ \GetModIfaceFromDiskAndIndex f -> do
   x <- use_ GetModIfaceFromDisk f
   se@ShakeExtras{withHieDb} <- getShakeExtras
 
@@ -790,19 +807,19 @@ getModIfaceFromDiskAndIndexRule =
     -- Not in db, must re-index
     _ -> do
       ehf <- liftIO $ runIdeAction "GetModIfaceFromDiskAndIndex" se $ runExceptT $
-        readHieFileFromDisk hie_loc
+        readHieFileFromDisk recorder hie_loc
       case ehf of
         -- Uh oh, we failed to read the file for some reason, need to regenerate it
         Left err -> fail $ "failed to read .hie file " ++ show hie_loc ++ ": " ++ displayException err
         -- can just re-index the file we read from disk
         Right hf -> liftIO $ do
-          L.logDebug (logger se) $ "Re-indexing hie file for" <> T.pack (fromNormalizedFilePath f)
+          logWith recorder $ LogReindexingHieFile f
           indexHieFile se ms f hash hf
 
   return (Just x)
 
-isHiFileStableRule :: Rules ()
-isHiFileStableRule = defineEarlyCutoff $ RuleNoDiagnostics $ \IsHiFileStable f -> do
+isHiFileStableRule :: Recorder Log -> Rules ()
+isHiFileStableRule recorder = defineEarlyCutoff (cmap LogShake recorder) $ RuleNoDiagnostics $ \IsHiFileStable f -> do
     ms <- msrModSummary <$> use_ GetModSummaryWithoutTimestamps f
     let hiFile = toNormalizedFilePath'
                 $ Compat.ml_hi_file $ ms_location ms
@@ -840,13 +857,13 @@ displayTHWarning
 newtype DisplayTHWarning = DisplayTHWarning (IO ())
 instance IsIdeGlobal DisplayTHWarning
 
-getModSummaryRule :: Rules ()
-getModSummaryRule = do
+getModSummaryRule :: Recorder Log -> Rules ()
+getModSummaryRule recorder = do
     env <- lspEnv <$> getShakeExtrasRules
     displayItOnce <- liftIO $ once $ LSP.runLspT (fromJust env) displayTHWarning
     addIdeGlobal (DisplayTHWarning displayItOnce)
 
-    defineEarlyCutoff $ Rule $ \GetModSummary f -> do
+    defineEarlyCutoff (cmap LogShake recorder) $ Rule $ \GetModSummary f -> do
         session' <- hscEnv <$> use_ GhcSession f
         modify_dflags <- getModifyDynFlags dynFlagsModifyGlobal
         let session = hscSetFlags (modify_dflags $ hsc_dflags session') session'
@@ -867,7 +884,7 @@ getModSummaryRule = do
                 return ( Just (fingerprintToBS fingerPrint) , ([], Just res))
             Left diags -> return (Nothing, (diags, Nothing))
 
-    defineEarlyCutoff $ RuleNoDiagnostics $ \GetModSummaryWithoutTimestamps f -> do
+    defineEarlyCutoff (cmap LogShake recorder) $ RuleNoDiagnostics $ \GetModSummaryWithoutTimestamps f -> do
         ms <- use GetModSummary f
         case ms of
             Just res@ModSummaryResult{..} -> do
@@ -886,12 +903,12 @@ generateCore runSimplifier file = do
     setPriority priorityGenerateCore
     liftIO $ compileModule runSimplifier packageState (tmrModSummary tm) (tmrTypechecked tm)
 
-generateCoreRule :: Rules ()
-generateCoreRule =
-    define $ \GenerateCore -> generateCore (RunSimplifier True)
+generateCoreRule :: Recorder Log -> Rules ()
+generateCoreRule recorder =
+    define (cmap LogShake recorder) $ \GenerateCore -> generateCore (RunSimplifier True)
 
-getModIfaceRule :: Rules ()
-getModIfaceRule = defineEarlyCutoff $ Rule $ \GetModIface f -> do
+getModIfaceRule :: Recorder Log -> Rules ()
+getModIfaceRule recorder = defineEarlyCutoff (cmap LogShake recorder) $ Rule $ \GetModIface f -> do
   fileOfInterest <- use_ IsFileOfInterest f
   res@(_,(_,mhmi)) <- case fileOfInterest of
     IsFOI status -> do
@@ -994,8 +1011,8 @@ compileToObjCodeIfNeeded hsc (Just linkableType) getGuts tmr = do
       (diags', !res) <- liftIO $ mkHiFileResultCompile hsc tmr guts linkableType
       pure (diags++diags', res)
 
-getClientSettingsRule :: Rules ()
-getClientSettingsRule = defineEarlyCutOffNoFile $ \GetClientSettings -> do
+getClientSettingsRule :: Recorder Log -> Rules ()
+getClientSettingsRule recorder = defineEarlyCutOffNoFile (cmap LogShake recorder) $ \GetClientSettings -> do
   alwaysRerun
   settings <- clientSettings <$> getIdeConfiguration
   return (LBS.toStrict $ B.encode $ hash settings, settings)
@@ -1105,28 +1122,28 @@ data RulesConfig = RulesConfig
 instance Default RulesConfig where def = RulesConfig True True
 
 -- | A rule that wires per-file rules together
-mainRule :: RulesConfig -> Rules ()
-mainRule RulesConfig{..} = do
+mainRule :: Recorder Log -> RulesConfig -> Rules ()
+mainRule recorder RulesConfig{..} = do
     linkables <- liftIO $ newVar emptyModuleEnv
     addIdeGlobal $ CompiledLinkables linkables
-    getParsedModuleRule
-    getParsedModuleWithCommentsRule
-    getLocatedImportsRule
-    getDependencyInformationRule
-    reportImportCyclesRule
-    typeCheckRule
-    getDocMapRule
-    loadGhcSession def{checkForImportCycles}
-    getModIfaceFromDiskRule
-    getModIfaceFromDiskAndIndexRule
-    getModIfaceRule
-    getModSummaryRule
-    isHiFileStableRule
-    getModuleGraphRule
-    knownFilesRule
-    getClientSettingsRule
-    getHieAstsRule
-    getBindingsRule
+    getParsedModuleRule recorder
+    getParsedModuleWithCommentsRule recorder
+    getLocatedImportsRule recorder
+    getDependencyInformationRule recorder
+    reportImportCyclesRule recorder
+    typeCheckRule recorder
+    getDocMapRule recorder
+    loadGhcSession recorder def{checkForImportCycles}
+    getModIfaceFromDiskRule recorder
+    getModIfaceFromDiskAndIndexRule recorder
+    getModIfaceRule recorder
+    getModSummaryRule recorder
+    isHiFileStableRule recorder
+    getModuleGraphRule recorder
+    knownFilesRule recorder
+    getClientSettingsRule recorder
+    getHieAstsRule recorder
+    getBindingsRule recorder
     -- This rule uses a custom newness check that relies on the encoding
     --  produced by 'encodeLinkable'. This works as follows:
     --   * <previous> -> <new>
@@ -1134,13 +1151,13 @@ mainRule RulesConfig{..} = do
     --   * Object/BCO -> NoLinkable      : the prev linkable can be ignored, signal "no change"
     --   * otherwise                     : the prev linkable cannot be reused, signal "value has changed"
     if enableTemplateHaskell
-      then defineEarlyCutoff $ RuleWithCustomNewnessCheck (<=) $ \NeedsCompilation file ->
+      then defineEarlyCutoff (cmap LogShake recorder) $ RuleWithCustomNewnessCheck (<=) $ \NeedsCompilation file ->
                 needsCompilationRule file
-      else defineNoDiagnostics $ \NeedsCompilation _ -> return $ Just Nothing
-    generateCoreRule
-    getImportMapRule
-    getAnnotatedParsedSourceRule
-    persistentHieFileRule
+      else defineNoDiagnostics (cmap LogShake recorder) $ \NeedsCompilation _ -> return $ Just Nothing
+    generateCoreRule recorder
+    getImportMapRule recorder
+    getAnnotatedParsedSourceRule (cmap LogExactPrint recorder)
+    persistentHieFileRule recorder
     persistentDocMapRule
     persistentImportMapRule
 

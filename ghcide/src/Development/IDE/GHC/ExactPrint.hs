@@ -31,6 +31,7 @@ module Development.IDE.GHC.ExactPrint
       setPrecedingLinesT,
       -- * Helper function
       eqSrcSpan,
+      Log
     )
 where
 
@@ -53,13 +54,15 @@ import qualified Data.Text                               as T
 import           Data.Traversable                        (for)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service            (runAction)
-import           Development.IDE.Core.Shake
+import           Development.IDE.Core.Shake              hiding (Log)
+import qualified Development.IDE.Core.Shake              as Shake
 import           Development.IDE.GHC.Compat              hiding (parseImport,
                                                           parsePattern,
                                                           parseType)
 import           Development.IDE.Graph                   (RuleResult, Rules)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Types.Location
+import           Development.IDE.Types.Logger            (Recorder, cmap)
 import qualified GHC.Generics                            as GHC
 import           Generics.SYB
 import           Generics.SYB.GHC
@@ -76,6 +79,8 @@ import           Retrie.ExactPrint                       hiding (parseDecl,
 
 ------------------------------------------------------------------------------
 
+data Log = LogShake Shake.Log deriving Show
+
 data GetAnnotatedParsedSource = GetAnnotatedParsedSource
   deriving (Eq, Show, Typeable, GHC.Generic)
 
@@ -84,8 +89,8 @@ instance NFData GetAnnotatedParsedSource
 type instance RuleResult GetAnnotatedParsedSource = Annotated ParsedSource
 
 -- | Get the latest version of the annotated parse source with comments.
-getAnnotatedParsedSourceRule :: Rules ()
-getAnnotatedParsedSourceRule = define $ \GetAnnotatedParsedSource nfp -> do
+getAnnotatedParsedSourceRule :: Recorder Log -> Rules ()
+getAnnotatedParsedSourceRule recorder = define (cmap LogShake recorder) $ \GetAnnotatedParsedSource nfp -> do
   pm <- use GetParsedModuleWithComments nfp
   return ([], fmap annotateParsedSource pm)
 

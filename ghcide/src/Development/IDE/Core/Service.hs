@@ -21,7 +21,7 @@ module Development.IDE.Core.Service(
 import           Control.Applicative             ((<|>))
 import           Development.IDE.Core.Debouncer
 import           Development.IDE.Core.FileExists (fileExistsRules)
-import           Development.IDE.Core.OfInterest
+import           Development.IDE.Core.OfInterest hiding (Log)
 import           Development.IDE.Graph
 import           Development.IDE.Types.Logger    as Logger
 import           Development.IDE.Types.Options   (IdeOptions (..))
@@ -30,6 +30,8 @@ import qualified Language.LSP.Server             as LSP
 import qualified Language.LSP.Types              as LSP
 
 import           Control.Monad
+import qualified Development.IDE.Core.FileExists as FileExists
+import qualified Development.IDE.Core.OfInterest as OfInterest
 import           Development.IDE.Core.Shake      hiding (Log)
 import qualified Development.IDE.Core.Shake      as Shake
 import           Development.IDE.Types.Shake     (WithHieDb)
@@ -38,6 +40,8 @@ import           System.Environment              (lookupEnv)
 
 data Log
   = LogShake Shake.Log
+  | LogOfInterest OfInterest.Log
+  | LogFileExists FileExists.Log
   deriving Show
 
 ------------------------------------------------------------
@@ -75,8 +79,8 @@ initialise recorder defaultConfig mainRule lspEnv logger debouncer options vfs w
         (optShakeOptions options)
           $ do
             addIdeGlobal $ GlobalIdeOptions options
-            ofInterestRules
-            fileExistsRules lspEnv vfs
+            ofInterestRules (cmap LogOfInterest recorder)
+            fileExistsRules (cmap LogFileExists recorder) lspEnv vfs
             mainRule
 
 -- | Shutdown the Compiler Service.

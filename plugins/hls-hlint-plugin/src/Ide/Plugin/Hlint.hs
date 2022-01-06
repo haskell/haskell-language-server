@@ -26,6 +26,7 @@
 module Ide.Plugin.Hlint
   (
     descriptor
+  , Log
   ) where
 import           Control.Arrow                                      ((&&&))
 import           Control.Concurrent.STM
@@ -109,6 +110,7 @@ import           GHC.Generics                                       (Associativi
                                                                      Generic)
 import           Text.Regex.TDFA.Text                               ()
 
+import qualified Development.IDE.Core.Shake                         as Shake
 import           Development.IDE.GHC.Compat.Core                    (WarningFlag (Opt_WarnUnrecognisedPragmas),
                                                                      wopt)
 import           Development.IDE.Spans.Pragmas                      (LineSplitTextEdits (LineSplitTextEdits),
@@ -122,6 +124,10 @@ import           System.Environment                                 (setEnv,
                                                                      unsetEnv)
 -- ---------------------------------------------------------------------
 
+newtype Log
+  = LogShake Shake.Log
+  deriving Show
+
 #ifdef HLINT_ON_GHC_LIB
 -- Reimplementing this, since the one in Development.IDE.GHC.Compat isn't for ghc-lib
 pattern RealSrcSpan :: GHC.RealSrcSpan -> Maybe BufSpan -> GHC.SrcSpan
@@ -133,9 +139,9 @@ pattern RealSrcSpan x y <- ((,Nothing) -> (GHC.RealSrcSpan x, y))
 {-# COMPLETE RealSrcSpan, UnhelpfulSpan #-}
 #endif
 
-descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId = (defaultPluginDescriptor plId)
-  { pluginRules = rules plId
+descriptor :: Recorder Log -> PluginId -> PluginDescriptor IdeState
+descriptor recorder plId = (defaultPluginDescriptor plId)
+  { pluginRules = rules recorder plId
   , pluginCommands =
       [ PluginCommand "applyOne" "Apply a single hint" applyOneCmd
       , PluginCommand "applyAll" "Apply all hints to the file" applyAllCmd
@@ -163,15 +169,15 @@ type instance RuleResult GetHlintDiagnostics = ()
 -- |    - `getIdeas` -> `getFileContents` if the hls ghc does not match the hlint default ghc
 -- | - The client settings have changed, to honour the `hlintOn` setting, via `getClientConfigAction`
 -- | - The hlint specific settings have changed, via `getHlintSettingsRule`
-rules :: PluginId -> Rules ()
-rules plugin = do
-  define $ \GetHlintDiagnostics file -> do
+rules :: Recorder Log -> PluginId -> Rules ()
+rules recorder plugin = do
+  define (cmap LogShake recorder) $ \GetHlintDiagnostics file -> do
     config <- getClientConfigAction def
     let hlintOn = pluginEnabledConfig plcDiagnosticsOn plugin config
     ideas <- if hlintOn then getIdeas file else return (Right [])
     return (diagnostics file ideas, Just ())
 
-  defineNoFile $ \GetHlintSettings -> do
+  defineNoFile (cmap LogShake recorder) $ \GetHlintSettings -> do
     (Config flags) <- getHlintConfig plugin
     liftIO $ argsSettings flags
 

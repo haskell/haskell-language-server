@@ -7,7 +7,7 @@
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE TypeFamilies          #-}
 
-module Ide.Plugin.RefineImports (descriptor) where
+module Ide.Plugin.RefineImports (descriptor, Log) where
 
 import           Control.Arrow                        (Arrow (second))
 import           Control.DeepSeq                      (rwhnf)
@@ -37,6 +37,7 @@ import           Development.IDE.GHC.Compat
                                                        RealSrcSpan(..),
                                                        getLoc, ieName, noLoc,
                                                        tcg_exports, unLoc) -}
+import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.Graph.Classes
 import           GHC.Generics                         (Generic)
 import           Ide.Plugin.ExplicitImports           (extractMinimalImports,
@@ -46,11 +47,13 @@ import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
 
+newtype Log = LogShake Shake.Log deriving Show
+
 -- | plugin declaration
-descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId = (defaultPluginDescriptor plId)
+descriptor :: Recorder Log -> PluginId -> PluginDescriptor IdeState
+descriptor recorder plId = (defaultPluginDescriptor plId)
   { pluginCommands = [refineImportCommand]
-  , pluginRules = refineImportsRule
+  , pluginRules = refineImportsRule recorder
   , pluginHandlers = mconcat
       [ -- This plugin provides code lenses
         mkPluginHandler STextDocumentCodeLens lensProvider
@@ -163,8 +166,8 @@ newtype RefineImportsResult = RefineImportsResult
 instance Show RefineImportsResult where show _ = "<refineImportsResult>"
 instance NFData RefineImportsResult where rnf = rwhnf
 
-refineImportsRule :: Rules ()
-refineImportsRule = define $ \RefineImports nfp -> do
+refineImportsRule :: Recorder Log -> Rules ()
+refineImportsRule recorder = define (cmap LogShake recorder) $ \RefineImports nfp -> do
   -- Get the typechecking artifacts from the module
   tmr <- use TypeCheck nfp
   -- We also need a GHC session with all the dependencies

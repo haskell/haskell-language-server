@@ -22,6 +22,8 @@ import           Text.Regex.TDFA.Text                ()
 
 data Log
   = LogNotifications Notifications.Log
+  | LogCompletions Completions.Log
+  | LogTypeLenses TypeLenses.Log
   deriving Show
 
 descriptors :: Recorder Log -> [PluginDescriptor IdeState]
@@ -31,8 +33,8 @@ descriptors recorder =
     CodeAction.typeSigsPluginDescriptor "ghcide-code-actions-type-signatures",
     CodeAction.bindingsPluginDescriptor "ghcide-code-actions-bindings",
     CodeAction.fillHolePluginDescriptor "ghcide-code-actions-fill-holes",
-    Completions.descriptor "ghcide-completions",
-    TypeLenses.descriptor "ghcide-type-lenses",
+    Completions.descriptor (cmap LogCompletions recorder) "ghcide-completions",
+    TypeLenses.descriptor (cmap LogTypeLenses recorder) "ghcide-type-lenses",
     Notifications.descriptor (cmap LogNotifications recorder) "ghcide-core"
   ]
 

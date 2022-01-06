@@ -29,7 +29,7 @@ import           Development.IDE.Core.FileStore        (registerFileWatches,
                                                         setSomethingModified)
 import qualified Development.IDE.Core.FileStore        as FileStore
 import           Development.IDE.Core.IdeConfiguration
-import           Development.IDE.Core.OfInterest
+import           Development.IDE.Core.OfInterest       hiding (Log)
 import           Development.IDE.Core.RuleTypes        (GetClientSettings (..))
 import           Development.IDE.Core.Service          hiding (Log)
 import           Development.IDE.Core.Shake            hiding (Log)

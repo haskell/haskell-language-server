@@ -68,7 +68,8 @@ import qualified Data.HashSet                                 as HSet
 import           Data.List                                    (foldl')
 import qualified Data.Text                                    as Text
 import           Development.IDE.Core.IdeConfiguration        (isWorkspaceFile)
-import           Development.IDE.Types.Logger                 (Recorder,
+import qualified Development.IDE.Core.Shake                   as Shake
+import           Development.IDE.Types.Logger                 (Recorder, cmap,
                                                                logWith)
 import           Language.LSP.Server                          hiding
                                                               (getVirtualFile)
@@ -90,6 +91,7 @@ data Log
   | LogTypeCheckingReverseDeps !NormalizedFilePath !(Maybe [NormalizedFilePath])
   -- liftIO $ (log $ "Typechecking reverse dependencies for " ++ show nfp ++ ": " ++ show revs)
   --   `catch` \(e :: SomeException) -> log (show e)
+  | LogShake Shake.Log
   deriving Show
 
 makeVFSHandle :: IO VFSHandle
@@ -113,8 +115,8 @@ makeLSPVFSHandle lspEnv = VFSHandle
     , setVirtualFileContents = Nothing
    }
 
-addWatchedFileRule :: (NormalizedFilePath -> Action Bool) -> Rules ()
-addWatchedFileRule isWatched = defineNoDiagnostics $ \AddWatchedFile f -> do
+addWatchedFileRule :: Recorder Log -> (NormalizedFilePath -> Action Bool) -> Rules ()
+addWatchedFileRule recorder isWatched = defineNoDiagnostics (cmap LogShake recorder) $ \AddWatchedFile f -> do
   isAlreadyWatched <- isWatched f
   isWp <- isWorkspaceFile f
   if isAlreadyWatched then pure (Just True) else
@@ -126,8 +128,8 @@ addWatchedFileRule isWatched = defineNoDiagnostics $ \AddWatchedFile f -> do
             Nothing -> pure $ Just False
 
 
-getModificationTimeRule :: VFSHandle -> Rules ()
-getModificationTimeRule vfs = defineEarlyCutoff $ Rule $ \(GetModificationTime_ missingFileDiags) file ->
+getModificationTimeRule :: Recorder Log -> VFSHandle -> Rules ()
+getModificationTimeRule recorder vfs = defineEarlyCutoff (cmap LogShake recorder) $ Rule $ \(GetModificationTime_ missingFileDiags) file ->
     getModificationTimeImpl vfs missingFileDiags file
 
 getModificationTimeImpl :: VFSHandle
@@ -213,8 +215,8 @@ modificationTime :: FileVersion -> Maybe UTCTime
 modificationTime VFSVersion{}             = Nothing
 modificationTime (ModificationTime posix) = Just $ posixSecondsToUTCTime posix
 
-getFileContentsRule :: VFSHandle -> Rules ()
-getFileContentsRule vfs = define $ \GetFileContents file -> getFileContentsImpl vfs file
+getFileContentsRule :: Recorder Log -> VFSHandle -> Rules ()
+getFileContentsRule recorder vfs = define (cmap LogShake recorder) $ \GetFileContents file -> getFileContentsImpl vfs file
 
 getFileContentsImpl
     :: VFSHandle
@@ -252,12 +254,12 @@ getFileContents f = do
             pure $ posixSecondsToUTCTime posix
     return (modTime, txt)
 
-fileStoreRules :: VFSHandle -> (NormalizedFilePath -> Action Bool) -> Rules ()
-fileStoreRules vfs isWatched = do
+fileStoreRules :: Recorder Log -> VFSHandle -> (NormalizedFilePath -> Action Bool) -> Rules ()
+fileStoreRules recorder vfs isWatched = do
     addIdeGlobal vfs
-    getModificationTimeRule vfs
-    getFileContentsRule vfs
-    addWatchedFileRule isWatched
+    getModificationTimeRule recorder vfs
+    getFileContentsRule recorder vfs
+    addWatchedFileRule recorder isWatched
 
 -- | Note that some buffer for a specific file has been modified but not
 -- with what changes.

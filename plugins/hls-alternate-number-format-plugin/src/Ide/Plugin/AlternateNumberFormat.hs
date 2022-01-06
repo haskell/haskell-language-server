@@ -2,7 +2,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TypeFamilies  #-}
 {-# LANGUAGE TypeOperators #-}
-module Ide.Plugin.AlternateNumberFormat (descriptor) where
+module Ide.Plugin.AlternateNumberFormat (descriptor, Log) where
 
 import           Control.Lens                    ((^.))
 import           Control.Monad.Except            (ExceptT, MonadIO, liftIO)
@@ -14,6 +14,7 @@ import           Development.IDE                 (GetParsedModule (GetParsedModu
                                                   define, ideLogger,
                                                   realSrcSpanToRange, runAction,
                                                   use)
+import qualified Development.IDE.Core.Shake      as Shake
 import           Development.IDE.GHC.Compat      hiding (getSrcSpan)
 import           Development.IDE.GHC.Compat.Util (toList)
 import           Development.IDE.Graph.Classes   (Hashable, NFData)
@@ -29,10 +30,12 @@ import           Ide.Types
 import           Language.LSP.Types
 import           Language.LSP.Types.Lens         (uri)
 
-descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId = (defaultPluginDescriptor plId)
+data Log = LogShake Shake.Log deriving Show
+
+descriptor :: Recorder Log -> PluginId -> PluginDescriptor IdeState
+descriptor recorder plId = (defaultPluginDescriptor plId)
     { pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionHandler
-    , pluginRules = collectLiteralsRule
+    , pluginRules = collectLiteralsRule recorder
     }
 
 data CollectLiterals = CollectLiterals
@@ -53,8 +56,8 @@ instance Show CollectLiteralsResult where
 
 instance NFData CollectLiteralsResult
 
-collectLiteralsRule :: Rules ()
-collectLiteralsRule = define $ \CollectLiterals nfp -> do
+collectLiteralsRule :: Recorder Log -> Rules ()
+collectLiteralsRule recorder = define (cmap LogShake recorder) $ \CollectLiterals nfp -> do
     pm <- use GetParsedModule nfp
     -- get the current extensions active and transform them into FormatTypes
     let fmts = getFormatTypes <$> pm

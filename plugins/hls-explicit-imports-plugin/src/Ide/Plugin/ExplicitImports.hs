@@ -13,6 +13,7 @@ module Ide.Plugin.ExplicitImports
   , descriptorForModules
   , extractMinimalImports
   , within
+  , Log
   ) where
 
 import           Control.DeepSeq
@@ -29,6 +30,7 @@ import qualified Data.Text                            as T
 import           Development.IDE                      hiding (pluginHandlers,
                                                        pluginRules)
 import           Development.IDE.Core.PositionMapping
+import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Graph.Classes
 import           GHC.Generics                         (Generic)
@@ -40,22 +42,27 @@ import           Language.LSP.Types
 importCommandId :: CommandId
 importCommandId = "ImportLensCommand"
 
+data Log
+  = LogShake Shake.Log
+  deriving Show
+
 -- | The "main" function of a plugin
-descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor = descriptorForModules (/= moduleName pRELUDE)
+descriptor :: Recorder Log -> PluginId -> PluginDescriptor IdeState
+descriptor recorder = descriptorForModules recorder (/= moduleName pRELUDE)
 
 descriptorForModules
-    :: (ModuleName -> Bool)
+    :: Recorder Log
+    -> (ModuleName -> Bool)
       -- ^ Predicate to select modules that will be annotated
     -> PluginId
     -> PluginDescriptor IdeState
-descriptorForModules pred plId =
+descriptorForModules recorder pred plId =
   (defaultPluginDescriptor plId)
     {
       -- This plugin provides a command handler
       pluginCommands = [importLensCommand],
       -- This plugin defines a new rule
-      pluginRules = minimalImportsRule,
+      pluginRules = minimalImportsRule recorder,
       pluginHandlers = mconcat
         [ -- This plugin provides code lenses
           mkPluginHandler STextDocumentCodeLens $ lensProvider pred
@@ -183,8 +190,8 @@ exportedModuleStrings ParsedModule{pm_parsed_source = L _ HsModule{..}}
     = map show exports
 exportedModuleStrings _ = []
 
-minimalImportsRule :: Rules ()
-minimalImportsRule = define $ \MinimalImports nfp -> do
+minimalImportsRule :: Recorder Log -> Rules ()
+minimalImportsRule recorder = define (cmap LogShake recorder) $ \MinimalImports nfp -> do
   -- Get the typechecking artifacts from the module
   tmr <- use TypeCheck nfp
   -- We also need a GHC session with all the dependencies

@@ -15,7 +15,7 @@ import qualified Data.ByteString.Lazy.Char8    as LBS
 import           Data.Default
 import           Data.List                     (sort)
 import qualified Data.Text                     as T
-import           Development.IDE.Core.Rules
+import           Development.IDE.Core.Rules    hiding (Log)
 import           Development.IDE.Core.Tracing  (withTelemetryLogger)
 import           Development.IDE.Graph         (ShakeOptions (shakeThreads))
 import           Development.IDE.Main          (isLSP)

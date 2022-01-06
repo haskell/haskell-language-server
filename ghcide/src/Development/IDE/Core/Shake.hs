@@ -180,6 +180,12 @@ data Log
   | LogBuildSessionRestart !String ![DelayedActionInternal] !(HashSet Key) !Seconds !(Maybe FilePath)
   | LogDelayedAction !(DelayedAction ()) !Seconds
   | LogBuildSessionFinish !(Maybe SomeException)
+  | LogDiagsDiffButNoLspEnv ![FileDiagnostic]
+  -- logInfo logger $ showDiagnosticsColored $ map (fp,ShowDiag,) newDiags
+  | LogDefineEarlyCutoffRuleNoDiagDiags ![FileDiagnostic]
+  -- RuleNoDiagnostics mapM_ (\d -> liftIO $ logWarning logger $ showDiagnosticsColored [d]) diags
+  | LogDefineEarlyCutoffRuleCustomNewnessDiags ![FileDiagnostic]
+  -- RuleWithCustomNewnessCheck mapM_ (\d -> liftIO $ logWarning logger $ showDiagnosticsColored [d]) diags
   deriving Show
 
 -- | We need to serialize writes to the database, so we send any function that
@@ -870,13 +876,13 @@ preservedKeys checkParents = HSet.fromList $
 -- | Define a new Rule without early cutoff
 define
     :: IdeRule k v
-    => (k -> NormalizedFilePath -> Action (IdeResult v)) -> Rules ()
-define op = defineEarlyCutoff $ Rule $ \k v -> (Nothing,) <$> op k v
+    => Recorder Log -> (k -> NormalizedFilePath -> Action (IdeResult v)) -> Rules ()
+define recorder op = defineEarlyCutoff recorder $ Rule $ \k v -> (Nothing,) <$> op k v
 
 defineNoDiagnostics
     :: IdeRule k v
-    => (k -> NormalizedFilePath -> Action (Maybe v)) -> Rules ()
-defineNoDiagnostics op = defineEarlyCutoff $ RuleNoDiagnostics $ \k v -> (Nothing,) <$> op k v
+    => Recorder Log -> (k -> NormalizedFilePath -> Action (Maybe v)) -> Rules ()
+defineNoDiagnostics recorder op = defineEarlyCutoff recorder $ RuleNoDiagnostics $ \k v -> (Nothing,) <$> op k v
 
 -- | Request a Rule result if available
 use :: IdeRule k v
@@ -998,37 +1004,36 @@ data RuleBody k v
 -- | Define a new Rule with early cutoff
 defineEarlyCutoff
     :: IdeRule k v
-    => RuleBody k v
+    => Recorder Log
+    -> RuleBody k v
     -> Rules ()
-defineEarlyCutoff (Rule op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ \traceDiagnostics -> do
+defineEarlyCutoff recorder (Rule op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ \traceDiagnostics -> do
     extras <- getShakeExtras
     let diagnostics diags = do
             traceDiagnostics diags
-            updateFileDiagnostics file (Key key) extras . map (\(_,y,z) -> (y,z)) $ diags
+            updateFileDiagnostics recorder file (Key key) extras . map (\(_,y,z) -> (y,z)) $ diags
     defineEarlyCutoff' diagnostics (==) key file old mode $ op key file
-defineEarlyCutoff (RuleNoDiagnostics op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ \traceDiagnostics -> do
-    ShakeExtras{logger} <- getShakeExtras
+defineEarlyCutoff recorder (RuleNoDiagnostics op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ \traceDiagnostics -> do
     let diagnostics diags = do
             traceDiagnostics diags
-            mapM_ (\d -> liftIO $ logWarning logger $ showDiagnosticsColored [d]) diags
+            logWith recorder $ LogDefineEarlyCutoffRuleNoDiagDiags diags
     defineEarlyCutoff' diagnostics (==) key file old mode $ second (mempty,) <$> op key file
-defineEarlyCutoff RuleWithCustomNewnessCheck{..} =
+defineEarlyCutoff recorder RuleWithCustomNewnessCheck{..} =
     addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode ->
         otTracedAction key file mode traceA $ \ traceDiagnostics -> do
-            ShakeExtras{logger} <- getShakeExtras
             let diagnostics diags = do
-                    mapM_ (\d -> liftIO $ logWarning logger $ showDiagnosticsColored [d]) diags
+                    logWith recorder $ LogDefineEarlyCutoffRuleCustomNewnessDiags diags
                     traceDiagnostics diags
             defineEarlyCutoff' diagnostics newnessCheck key file old mode $
                 second (mempty,) <$> build key file
 
-defineNoFile :: IdeRule k v => (k -> Action v) -> Rules ()
-defineNoFile f = defineNoDiagnostics $ \k file -> do
+defineNoFile :: IdeRule k v => Recorder Log -> (k -> Action v) -> Rules ()
+defineNoFile recorder f = defineNoDiagnostics recorder $ \k file -> do
     if file == emptyFilePath then do res <- f k; return (Just res) else
         fail $ "Rule " ++ show k ++ " should always be called with the empty string for a file"
 
-defineEarlyCutOffNoFile :: IdeRule k v => (k -> Action (BS.ByteString, v)) -> Rules ()
-defineEarlyCutOffNoFile f = defineEarlyCutoff $ RuleNoDiagnostics $ \k file -> do
+defineEarlyCutOffNoFile :: IdeRule k v => Recorder Log -> (k -> Action (BS.ByteString, v)) -> Rules ()
+defineEarlyCutOffNoFile recorder f = defineEarlyCutoff recorder $ RuleNoDiagnostics $ \k file -> do
     if file == emptyFilePath then do (hash, res) <- f k; return (Just hash, Just res) else
         fail $ "Rule " ++ show k ++ " should always be called with the empty string for a file"
 
@@ -1134,9 +1139,10 @@ data OnDiskRule = OnDiskRule
 -- the internals of this module that we do not want to expose.
 defineOnDisk
   :: (Shake.ShakeValue k, RuleResult k ~ ())
-  => (k -> NormalizedFilePath -> OnDiskRule)
+  => Recorder Log
+  -> (k -> NormalizedFilePath -> OnDiskRule)
   -> Rules ()
-defineOnDisk act = addRule $
+defineOnDisk recorder act = addRule $
   \(QDisk key file) (mbOld :: Maybe BS.ByteString) mode -> do
       extras <- getShakeExtras
       let OnDiskRule{..} = act key file
@@ -1148,7 +1154,7 @@ defineOnDisk act = addRule $
       case mbOld of
           Nothing -> do
               (diags, mbHash) <- runAct
-              updateFileDiagnostics file (Key key) extras $ map (\(_,y,z) -> (y,z)) diags
+              updateFileDiagnostics recorder file (Key key) extras $ map (\(_,y,z) -> (y,z)) diags
               pure $ RunResult ChangedRecomputeDiff (fromMaybe "" mbHash) (isJust mbHash)
           Just old -> do
               current <- validateHash <$> (actionCatch getHash $ \(_ :: SomeException) -> pure "")
@@ -1159,7 +1165,7 @@ defineOnDisk act = addRule $
                     pure $ RunResult ChangedNothing (fromMaybe "" current) (isJust current)
                   else do
                     (diags, mbHash) <- runAct
-                    updateFileDiagnostics file (Key key) extras $ map (\(_,y,z) -> (y,z)) diags
+                    updateFileDiagnostics recorder file (Key key) extras $ map (\(_,y,z) -> (y,z)) diags
                     let change
                           | mbHash == Just old = ChangedRecomputeSame
                           | otherwise = ChangedRecomputeDiff
@@ -1176,12 +1182,13 @@ needOnDisks k files = do
     liftIO $ unless (and successfulls) $ throwIO $ BadDependency (show k)
 
 updateFileDiagnostics :: MonadIO m
-  => NormalizedFilePath
+  => Recorder Log
+  -> NormalizedFilePath
   -> Key
   -> ShakeExtras
   -> [(ShowDiagnostic,Diagnostic)] -- ^ current results
   -> m ()
-updateFileDiagnostics fp k ShakeExtras{logger, diagnostics, hiddenDiagnostics, publishedDiagnostics, state, debouncer, lspEnv} current = liftIO $ do
+updateFileDiagnostics recorder fp k ShakeExtras{diagnostics, hiddenDiagnostics, publishedDiagnostics, state, debouncer, lspEnv} current = liftIO $ do
     modTime <- (currentValue . fst =<<) <$> atomicallyNamed "diagnostics - read" (getValues state GetModificationTime fp)
     let (currentShown, currentHidden) = partition ((== ShowDiag) . fst) current
         uri = filePathToUri' fp
@@ -1201,7 +1208,7 @@ updateFileDiagnostics fp k ShakeExtras{logger, diagnostics, hiddenDiagnostics, p
                  lastPublish <- atomicallyNamed "diagnostics - publish" $ STM.focus (Focus.lookupWithDefault [] <* Focus.insert newDiags) uri publishedDiagnostics
                  let action = when (lastPublish /= newDiags) $ case lspEnv of
                         Nothing -> -- Print an LSP event.
-                            logInfo logger $ showDiagnosticsColored $ map (fp,ShowDiag,) newDiags
+                            logWith recorder $ LogDiagsDiffButNoLspEnv (map (fp, ShowDiag,) newDiags)
                         Just env -> LSP.runLspT env $
                             LSP.sendNotification LSP.STextDocumentPublishDiagnostics $
                             LSP.PublishDiagnosticsParams (fromNormalizedUri uri) (fmap fromIntegral ver) (List newDiags)

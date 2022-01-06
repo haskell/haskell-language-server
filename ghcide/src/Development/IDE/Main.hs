@@ -51,6 +51,7 @@ import           Development.IDE.Core.RuleTypes        (GenerateCore (GenerateCo
                                                         TypeCheck (TypeCheck))
 import           Development.IDE.Core.Rules            (GhcSessionIO (GhcSessionIO),
                                                         mainRule)
+import qualified Development.IDE.Core.Rules            as Rules
 import           Development.IDE.Core.Service          (initialise, runAction)
 import qualified Development.IDE.Core.Service          as Service
 import           Development.IDE.Core.Shake            (IdeState (shakeExtras),
@@ -202,7 +203,7 @@ defaultArguments recorder priority = Arguments
         , argsOTMemoryProfiling = False
         , argCommand = LSP
         , argsLogger = stderrLogger priority
-        , argsRules = mainRule def >> action kick
+        , argsRules = mainRule (cmap LogRules recorder) def >> action kick
         , argsGhcidePlugin = mempty
         , argsHlsPlugins = pluginDescToIdePlugins (Ghcide.descriptors (cmap LogGhcide recorder))
         , argsSessionLoadingOptions = def
@@ -275,6 +276,7 @@ data Log
   | LogLanguageServer LanguageServer.Log
   | LogSession Session.Log
   | LogPluginHLS PluginHLS.Log
+  | LogRules Rules.Log
   deriving Show
 
 defaultMain :: Recorder Log -> Arguments -> IO ()

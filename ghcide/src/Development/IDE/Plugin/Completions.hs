@@ -3,6 +3,7 @@
 
 module Development.IDE.Plugin.Completions
     ( descriptor
+    , Log
     ) where
 
 import           Control.Concurrent.Async                     (concurrently)
@@ -18,8 +19,9 @@ import           Data.Maybe
 import qualified Data.Text                                    as T
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Service
-import           Development.IDE.Core.Shake
+import           Development.IDE.Core.Service                 hiding (Log)
+import           Development.IDE.Core.Shake                   hiding (Log)
+import qualified Development.IDE.Core.Shake                   as Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error                    (rangeToSrcSpan)
 import           Development.IDE.GHC.ExactPrint               (Annotated (annsA),
@@ -37,6 +39,7 @@ import           Development.IDE.Types.HscEnvEq               (HscEnvEq (envPack
                                                                hscEnv)
 import qualified Development.IDE.Types.KnownTargets           as KT
 import           Development.IDE.Types.Location
+import           Development.IDE.Types.Logger                 (Recorder, cmap)
 import           GHC.Exts                                     (fromList, toList)
 import           Ide.Plugin.Config                            (Config)
 import           Ide.Types
@@ -45,17 +48,19 @@ import           Language.LSP.Types
 import qualified Language.LSP.VFS                             as VFS
 import           Text.Fuzzy.Parallel                          (Scored (..))
 
-descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId = (defaultPluginDescriptor plId)
-  { pluginRules = produceCompletions
+data Log = LogShake Shake.Log deriving Show
+
+descriptor :: Recorder Log -> PluginId -> PluginDescriptor IdeState
+descriptor recorder plId = (defaultPluginDescriptor plId)
+  { pluginRules = produceCompletions recorder
   , pluginHandlers = mkPluginHandler STextDocumentCompletion getCompletionsLSP
   , pluginCommands = [extendImportCommand]
   , pluginConfigDescriptor = defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
   }
 
-produceCompletions :: Rules ()
-produceCompletions = do
-    define $ \LocalCompletions file -> do
+produceCompletions :: Recorder Log -> Rules ()
+produceCompletions recorder = do
+    define (cmap LogShake recorder) $ \LocalCompletions file -> do
         let uri = fromNormalizedUri $ normalizedFilePathToUri file
         pm <- useWithStale GetParsedModule file
         case pm of
@@ -63,7 +68,7 @@ produceCompletions = do
                 let cdata = localCompletionsForParsedModule uri pm
                 return ([], Just cdata)
             _ -> return ([], Nothing)
-    define $ \NonLocalCompletions file -> do
+    define (cmap LogShake recorder) $ \NonLocalCompletions file -> do
         -- For non local completions we avoid depending on the parsed module,
         -- synthetizing a fake module with an empty body from the buffer
         -- in the ModSummary, which preserves all the imports
