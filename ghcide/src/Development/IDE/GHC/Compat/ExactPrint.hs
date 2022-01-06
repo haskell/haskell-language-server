@@ -1,6 +1,9 @@
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE FlexibleInstances #-}
 
+-- | This module contains compatibility constructs to write type signatures across
+--   multiple ghc-exactprint versions, accepting that anything more ambitious is
+--   pretty much impossible with the GHC 9.2 redesign of ghc-exactprint
 module Development.IDE.GHC.Compat.ExactPrint
     ( ExactPrint
     , exactPrint

@@ -163,19 +163,24 @@ getMessages' pst dflags =
                    dflags
 #endif
 
--- pattern PFailedWithErrorMessages :: (DynFlags -> ErrorMessages) -> ParseResult a
-pattern PFailedWithErrorMessages msgs
 #if MIN_VERSION_ghc(9,2,0)
+pattern PFailedWithErrorMessages :: forall a b. (b -> Bag (MsgEnvelope DecoratedSDoc)) -> ParseResult a
+pattern PFailedWithErrorMessages msgs
      <- PFailed (const . fmap pprError . getErrorMessages -> msgs)
 #elif MIN_VERSION_ghc(8,10,0)
+pattern PFailedWithErrorMessages :: (DynFlags -> ErrorMessages) -> ParseResult a
+pattern PFailedWithErrorMessages msgs
      <- PFailed (getErrorMessages -> msgs)
 #else
+pattern PFailedWithErrorMessages :: (DynFlags -> ErrorMessages) -> ParseResult a
+pattern PFailedWithErrorMessages msgs
      <- ((fmap.fmap) unitBag . mkPlainErrMsgIfPFailed -> Just msgs)
-{-# COMPLETE PFailedWithErrorMessages #-}
 
 mkPlainErrMsgIfPFailed (PFailed _ pst err) = Just (\dflags -> mkPlainErrMsg dflags pst err)
 mkPlainErrMsgIfPFailed _ = Nothing
 #endif
+{-# COMPLETE PFailedWithErrorMessages #-}
+
 supportsHieFiles :: Bool
 supportsHieFiles = True
 
