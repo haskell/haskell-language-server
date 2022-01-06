@@ -34,12 +34,6 @@ source-repository-package
   -- To fix windows build
   -- https://github.com/jacobstanley/unix-compat/pull/47
 
-source-repository-package
-  type: git
-  location: https://github.com/Bodigrim/th-extras
-  tag: f00ebca78f474d271fd7989cae0a0a47559b2efd
-  -- https://github.com/mokus0/th-extras/pull/14
-
 repository head.hackage.ghc.haskell.org
    url: https://ghc.gitlab.haskell.org/head.hackage/
    secure: True
