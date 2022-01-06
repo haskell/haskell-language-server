@@ -65,7 +65,6 @@ jobs:
         os: [ "ubuntu-latest"
             , "macOS-latest"
             ]
-        cabal: ['3.6']
         include:
           # only test supported ghc major versions
           - os: ubuntu-latest
@@ -98,91 +97,10 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - uses: haskell/actions/setup@v1
-        id: HaskEnvSetup
+      - uses: ./.github/actions/setup-build
         with:
-          ghc-version  : ${{ matrix.ghc   }}
-          cabal-version: ${{ matrix.cabal }}
-          enable-stack: false
-
-      - if: runner.os == 'Windows'
-        name: (Windows) Platform config
-        run: |
-          echo "CABAL_PKGS_DIR=C:\\cabal\\packages" >> $GITHUB_ENV
-      - if: ( runner.os == 'Linux' ) || ( runner.os == 'macOS' )
-        name: (Linux,macOS) Platform config
-        run: |
-          echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
-
-      # Needs to be before Cache Cabal so the cache can detect changes to the modified cabal.project file
-      - if: matrix.ghc == '9.0.1'
-        name: (GHC 9.0) Use modified `cabal.project`
-        run: |
-          # File has some protections preventing regular `rm`.
-          # (most probably sticky bit is set on $HOME)
-          # `&&` insures `rm -f` return is positive.
-          # Many platforms aslo have `alias cp='cp -i'`.
-          rm -f -v cabal.project && cp -v cabal-ghc901.project cabal.project
-      - if: runner.os == 'Windows' && matrix.ghc == '8.8.4'
-        name: (Windows,GHC 8.8) Modify `cabal.project` to workaround segfaults
-        run: |
-          echo "package floskell" >> cabal.project
-          echo "  ghc-options: -O0" >> cabal.project
-
-      # All workflows which distinquishes cache on `cabal.project` needs this.
-      - name: Workaround shorten binary names
-        run: |
-          sed -i.bak -e 's/haskell-language-server/hls/g' \
-                     -e 's/haskell_language_server/hls/g' \
-                     haskell-language-server.cabal cabal.project
-          sed -i.bak -e 's/Paths_haskell_language_server/Paths_hls/g' \
-                     src/**/*.hs exe/*.hs
-
-      - name: Retrieving `cabal.project` Hackage timestamp
-        run: |
-          # Form: index-state: 2021-11-29T08:11:08Z
-          INDEX_STATE_ENTRY=$(grep index-state cabal.project)
-          # Form: 2021-11-29T08-11-08Z
-          INDEX_STATE1=$(echo "$INDEX_STATE_ENTRY" | cut -d' ' -f2 | tr ':' '-')
-          echo "INDEX_STATE=$INDEX_STATE1" >> $GITHUB_ENV
-
-      # We have to restore package sources before `cabal update`
-      # cause it overwrites the hackage index with the cached one
-      - name: Hackage sources cache
-        uses: actions/cache@v2
-        env:
-          cache-name: hackage-sources
-        with:
-          path:  ${{ env.CABAL_PKGS_DIR }}
-          key:   ${{ env.cache-name }}-${{ env.INDEX_STATE }}
-          restore-keys: ${{ env.cache-name }}-
-
-      # To ensure we get the lastest hackage index and not relying on haskell action logic
-      # It has to be done before `cabal freeze` to make it aware of the new index
-      - run: cabal update
-
-      - name: Form the package list ('cabal.project.freeze')
-        run: |
-          cabal v2-freeze && \
-          echo "" && \
-          echo 'Output:' && \
-          echo "" && \
-          cat 'cabal.project.freeze' && \
-          echo '' || \
-          echo 'WARNING: Could not produce the `freeze`.'
-
-      - name: Compiled deps cache
-        id: compiled-deps
-        uses: actions/cache@v2
-        env:
-          cache-name: compiled-deps
-        with:
-          path: ${{ steps.HaskEnvSetup.outputs.cabal-store }}
-          key:  ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project.freeze') }}
-          restore-keys: |
-                ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-${{ env.INDEX_STATE }}-
-                ${{ env.cache-name }}-${{ runner.os }}-${{ matrix.ghc }}-
-                ${{ env.cache-name }}-${{ runner.os }}-
+          ghc: ${{ matrix.ghc }}
+          os:  ${{ runner.os }}
 
       # repeating builds to workaround segfaults in windows and ghc-8.8.4
       - name: Build
