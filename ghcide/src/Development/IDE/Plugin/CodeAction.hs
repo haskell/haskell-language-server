@@ -227,7 +227,11 @@ findInstanceHead df instanceHead decls =
     ]
 #endif
 
--- findDeclContainingLoc :: Position -> [GenLocated (SrcSpanAnn' a) e] -> Maybe (GenLocated (SrcSpanAnn' a) e)
+#if MIN_VERSION_ghc(9,2,0)
+findDeclContainingLoc :: Foldable t => Position -> t (GenLocated (SrcSpanAnn' a) e) -> Maybe (GenLocated (SrcSpanAnn' a) e)
+#else
+-- TODO populate this type signature for GHC versions <9.2
+#endif
 findDeclContainingLoc loc = find (\(L l _) -> loc `isInsideSrcSpan` locA l)
 
 -- Single:
@@ -889,12 +893,10 @@ data HidingMode
         Bool
         -- ^ Parenthesised?
         ModuleName
-    -- deriving (Show)
 
 data ModuleTarget
     = ExistingImp (NonEmpty (LImportDecl GhcPs))
     | ImplicitPrelude [LImportDecl GhcPs]
-    -- deriving (Show)
 
 targetImports :: ModuleTarget -> [LImportDecl GhcPs]
 targetImports (ExistingImp ne)     = NE.toList ne

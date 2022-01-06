@@ -7,6 +7,7 @@
 {-# LANGUAGE TypeFamilies           #-}
 {-# LANGUAGE TypeSynonymInstances   #-}
 
+-- | This module hosts various abstractions and utility functions to work with ghc-exactprint.
 module Development.IDE.GHC.ExactPrint
     ( Graft(..),
       graftDecls,
@@ -584,10 +585,7 @@ annotateDecl dflags ast = do
     uniq <- show <$> uniqueSrcSpanT
     let rendered = render dflags ast
 #if MIN_VERSION_ghc(9,2,0)
-    expr' <- lift $ mapLeft show $ parseDecl dflags uniq rendered
-    -- let anns' = setPrecedingLines expr' 1 0 anns
-    -- modifyAnnsT $ mappend anns'
-    pure expr'
+    lift $ mapLeft show $ parseDecl dflags uniq rendered
 #else
     (anns, expr') <- lift $ mapLeft show $ parseDecl dflags uniq rendered
     let anns' = setPrecedingLines expr' 1 0 anns
