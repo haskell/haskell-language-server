@@ -4,17 +4,17 @@
 
 module FunctionalCodeAction (tests) where
 
-import           Control.Lens                    hiding (List)
+import           Control.Lens            hiding (List)
 import           Control.Monad
 import           Data.Aeson
-import qualified Data.HashMap.Strict             as HM
+import qualified Data.HashMap.Strict     as HM
 import           Data.List
-import qualified Data.Map                        as M
+import qualified Data.Map                as M
 import           Data.Maybe
-import qualified Data.Text                       as T
+import qualified Data.Text               as T
 import           Ide.Plugin.Config
-import           Language.LSP.Test               as Test
-import qualified Language.LSP.Types.Lens         as L
+import           Language.LSP.Test       as Test
+import qualified Language.LSP.Types.Lens as L
 import           Test.Hls
 import           Test.Hspec.Expectations
 
@@ -358,6 +358,7 @@ expectFailIfGhc9 :: String -> TestTree -> TestTree
 expectFailIfGhc9 reason =
   case ghcVersion of
     GHC90 -> expectFailBecause reason
+    GHC92 -> expectFailBecause reason
     _     -> id
 
 disableWingman :: Session ()
