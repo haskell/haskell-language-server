@@ -77,6 +77,7 @@ module Development.IDE.Core.Shake(
     addPersistentRule,
     garbageCollectDirtyKeys,
     garbageCollectDirtyKeysOlderThan,
+    Log
     ) where
 
 import           Control.Concurrent.Async
@@ -149,6 +150,7 @@ import           Language.LSP.Types.Capabilities
 import           OpenTelemetry.Eventlog
 
 import           Control.Concurrent.STM.Stats           (atomicallyNamed)
+import           Control.Exception.Base                 (SomeException (SomeException))
 import           Control.Exception.Extra                hiding (bracket_)
 import           Data.Aeson                             (toJSON)
 import qualified Data.ByteString.Char8                  as BS8
@@ -160,6 +162,7 @@ import qualified Data.HashSet                           as HSet
 import           Data.String                            (fromString)
 import           Data.Text                              (pack)
 import           Debug.Trace.Flags                      (userTracingEnabled)
+import           Development.IDE.Types.Action           (DelayedActionInternal)
 import qualified Development.IDE.Types.Exports          as ExportsMap
 import qualified Focus
 import           HieDb.Types
@@ -168,6 +171,16 @@ import qualified Ide.PluginUtils                        as HLS
 import           Ide.Types                              (PluginId)
 import qualified "list-t" ListT
 import qualified StmContainers.Map                      as STM
+
+data Log
+  = LogCreateHieDbExportsMapStart
+  -- logDebug logger "Initializing exports map from hiedb"
+  | LogCreateHieDbExportsMapFinish !Int
+  -- logDebug logger $ "Done initializing exports map from hiedb (" <> pack(show (ExportsMap.size em)) <> ")"
+  | LogBuildSessionRestart !String ![DelayedActionInternal] !(HashSet Key) !Seconds !(Maybe FilePath)
+  | LogDelayedAction !(DelayedAction ()) !Seconds
+  | LogBuildSessionFinish !(Maybe SomeException)
+  deriving Show
 
 -- | We need to serialize writes to the database, so we send any function that
 -- needs to write to the database over the channel, where it will be picked up by
@@ -494,7 +507,8 @@ seqValue val = case val of
     Failed _        -> val
 
 -- | Open a 'IdeState', should be shut using 'shakeShut'.
-shakeOpen :: Maybe (LSP.LanguageContextEnv Config)
+shakeOpen :: Recorder Log
+          -> Maybe (LSP.LanguageContextEnv Config)
           -> Config
           -> Logger
           -> Debouncer NormalizedUri
@@ -507,8 +521,10 @@ shakeOpen :: Maybe (LSP.LanguageContextEnv Config)
           -> ShakeOptions
           -> Rules ()
           -> IO IdeState
-shakeOpen lspEnv defaultConfig logger debouncer
+shakeOpen recorder lspEnv defaultConfig logger debouncer
   shakeProfileDir (IdeReportProgress reportProgress) ideTesting@(IdeTesting testing) withHieDb indexQueue vfs opts rules = mdo
+    let log :: Log -> IO ()
+        log = logWith recorder
 
     us <- mkSplitUniqSupply 'r'
     ideNc <- newIORef (initNameCache us knownKeyNames)
@@ -520,7 +536,7 @@ shakeOpen lspEnv defaultConfig logger debouncer
         publishedDiagnostics <- STM.newIO
         positionMapping <- STM.newIO
         knownTargetsVar <- newTVarIO $ hashed HMap.empty
-        let restartShakeSession = shakeRestart ideState
+        let restartShakeSession = shakeRestart recorder ideState
         persistentKeys <- newTVarIO HMap.empty
         indexPending <- newTVarIO HMap.empty
         indexCompleted <- newTVarIO 0
@@ -528,11 +544,12 @@ shakeOpen lspEnv defaultConfig logger debouncer
         let hiedbWriter = HieDbWriter{..}
         exportsMap <- newTVarIO mempty
         -- lazily initialize the exports map with the contents of the hiedb
+        -- TODO: exceptions can be swallowed here?
         _ <- async $ do
-            logDebug logger "Initializing exports map from hiedb"
+            log LogCreateHieDbExportsMapStart
             em <- createExportsMapHieDb withHieDb
             atomically $ modifyTVar' exportsMap (<> em)
-            logDebug logger $ "Done initializing exports map from hiedb (" <> pack(show (ExportsMap.size em)) <> ")"
+            log $ LogCreateHieDbExportsMapFinish (ExportsMap.size em)
 
         progress <- do
             let (before, after) = if testing then (0,0.1) else (0.1,0.1)
@@ -584,9 +601,9 @@ startTelemetry db extras@ShakeExtras{..}
 
 
 -- | Must be called in the 'Initialized' handler and only once
-shakeSessionInit :: IdeState -> IO ()
-shakeSessionInit ide@IdeState{..} = do
-    initSession <- newSession shakeExtras shakeDb [] "shakeSessionInit"
+shakeSessionInit :: Recorder Log -> IdeState -> IO ()
+shakeSessionInit recorder ide@IdeState{..} = do
+    initSession <- newSession recorder shakeExtras shakeDb [] "shakeSessionInit"
     putMVar shakeSession initSession
     logDebug (ideLogger ide) "Shake session initialized"
 
@@ -626,15 +643,19 @@ delayedAction a = do
 -- | Restart the current 'ShakeSession' with the given system actions.
 --   Any actions running in the current session will be aborted,
 --   but actions added via 'shakeEnqueue' will be requeued.
-shakeRestart :: IdeState -> String -> [DelayedAction ()] -> IO ()
-shakeRestart IdeState{..} reason acts =
+shakeRestart :: Recorder Log -> IdeState -> String -> [DelayedAction ()] -> IO ()
+shakeRestart recorder IdeState{..} reason acts =
     withMVar'
         shakeSession
         (\runner -> do
+              let log = logWith recorder
               (stopTime,()) <- duration (cancelShakeSession runner)
               res <- shakeDatabaseProfile shakeDb
               backlog <- readTVarIO $ dirtyKeys shakeExtras
               queue <- atomicallyNamed "actionQueue - peek" $ peekInProgress $ actionQueue shakeExtras
+
+              log $ LogBuildSessionRestart reason queue backlog stopTime res
+
               let profile = case res of
                       Just fp -> ", profile saved at " <> fp
                       _       -> ""
@@ -643,14 +664,13 @@ shakeRestart IdeState{..} reason acts =
                   queueMsg = " with queue " ++ show (map actionName queue)
                   keysMsg = " for keys " ++ show (HSet.toList backlog) ++ " "
                   abortMsg = "(aborting the previous one took " ++ showDuration stopTime ++ profile ++ ")"
-              logDebug (logger shakeExtras) msg
               notifyTestingLogMessage shakeExtras msg
         )
         -- It is crucial to be masked here, otherwise we can get killed
         -- between spawning the new thread and updating shakeSession.
         -- See https://github.com/haskell/ghcide/issues/79
         (\() -> do
-          (,()) <$> newSession shakeExtras shakeDb acts reason)
+          (,()) <$> newSession recorder shakeExtras shakeDb acts reason)
 
 notifyTestingLogMessage :: ShakeExtras -> T.Text -> IO ()
 notifyTestingLogMessage extras msg = do
@@ -684,12 +704,13 @@ shakeEnqueue ShakeExtras{actionQueue, logger} act = do
 -- | Set up a new 'ShakeSession' with a set of initial actions
 --   Will crash if there is an existing 'ShakeSession' running.
 newSession
-    :: ShakeExtras
+    :: Recorder Log
+    -> ShakeExtras
     -> ShakeDatabase
     -> [DelayedActionInternal]
     -> String
     -> IO ShakeSession
-newSession extras@ShakeExtras{..} shakeDb acts reason = do
+newSession recorder extras@ShakeExtras{..} shakeDb acts reason = do
     IdeOptions{optRunSubset} <- getIdeOptionsIO extras
     reenqueued <- atomicallyNamed "actionQueue - peek" $ peekInProgress actionQueue
     allPendingKeys <-
@@ -712,7 +733,7 @@ newSession extras@ShakeExtras{..} shakeDb acts reason = do
             let msg = T.pack $ "finish: " ++ actionName d
                             ++ " (took " ++ showDuration runTime ++ ")"
             liftIO $ do
-                logPriority logger (actionPriority d) msg
+                logWith recorder $ LogDelayedAction d runTime
                 notifyTestingLogMessage extras msg
 
         -- The inferred type signature doesn't work in ghc >= 9.0.1
@@ -729,7 +750,11 @@ newSession extras@ShakeExtras{..} shakeDb acts reason = do
                       Right _ -> "completed"
           let msg = T.pack $ "Finishing build session(" ++ res' ++ ")"
           return $ do
-              logDebug logger msg
+              let exception =
+                    case res of
+                      Left e -> Just e
+                      _      -> Nothing
+              logWith recorder $ LogBuildSessionFinish exception
               notifyTestingLogMessage extras msg
 
     -- Do the work in a background thread
@@ -737,6 +762,7 @@ newSession extras@ShakeExtras{..} shakeDb acts reason = do
 
     -- run the wrap up in a separate thread since it contains interruptible
     -- commands (and we are not using uninterruptible mask)
+    -- TODO: can possibly swallow exceptions?
     _ <- async $ join $ wait workThread
 
     --  Cancelling is required to flush the Shake database when either

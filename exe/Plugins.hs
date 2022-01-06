@@ -7,7 +7,7 @@ import           Ide.Types                         (IdePlugins)
 
 -- fixed plugins
 import           Development.IDE                   (IdeState)
-import           Development.IDE.Plugin.HLS.GhcIde as GhcIde
+import           Development.IDE.Plugin.HLS.GhcIde as GhcIde hiding (Log)
 import           Ide.Plugin.Example                as Example
 import           Ide.Plugin.Example2               as Example2
 
@@ -91,8 +91,14 @@ import           Ide.Plugin.StylishHaskell         as StylishHaskell
 #endif
 
 #if brittany
+import qualified Development.IDE.Plugin.HLS.GhcIde as Ghcide
+import           Development.IDE.Types.Logger      (Recorder, cmap)
 import           Ide.Plugin.Brittany               as Brittany
 #endif
+
+data Log
+  = LogGhcide Ghcide.Log
+  deriving Show
 
 -- ---------------------------------------------------------------------
 
@@ -101,8 +107,8 @@ import           Ide.Plugin.Brittany               as Brittany
 -- These can be freely added or removed to tailor the available
 -- features of the server.
 
-idePlugins :: Bool -> IdePlugins IdeState
-idePlugins includeExamples = pluginDescToIdePlugins allPlugins
+idePlugins :: Recorder Log -> Bool -> IdePlugins IdeState
+idePlugins recorder includeExamples = pluginDescToIdePlugins allPlugins
   where
     allPlugins = if includeExamples
                    then basePlugins ++ examplePlugins
@@ -170,7 +176,7 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
 #endif
     -- The ghcide descriptors should come last so that the notification handlers
     -- (which restart the Shake build) run after everything else
-      GhcIde.descriptors
+      GhcIde.descriptors (cmap LogGhcide recorder)
     examplePlugins =
       [Example.descriptor  "eg"
       ,Example2.descriptor "eg2"

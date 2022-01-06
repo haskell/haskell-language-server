@@ -7,7 +7,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies        #-}
 
-module Ide.Main(defaultMain, runLspMode) where
+module Ide.Main(defaultMain, runLspMode, Log) where
 
 import           Control.Monad.Extra
 import qualified Data.Aeson.Encode.Pretty      as A
@@ -19,7 +19,7 @@ import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Tracing  (withTelemetryLogger)
 import           Development.IDE.Graph         (ShakeOptions (shakeThreads))
 import           Development.IDE.Main          (isLSP)
-import qualified Development.IDE.Main          as Main
+import qualified Development.IDE.Main          as IDEMain
 import qualified Development.IDE.Session       as Session
 import           Development.IDE.Types.Logger  as G
 import qualified Development.IDE.Types.Options as Ghcide
@@ -35,8 +35,19 @@ import qualified System.Directory.Extra        as IO
 import           System.IO
 import qualified System.Log.Logger             as L
 
-defaultMain :: Arguments -> IdePlugins IdeState -> IO ()
-defaultMain args idePlugins = do
+data Log
+  = LogVersion !String
+  | LogDirectory !FilePath
+  | LogLsp !GhcideArguments ![PluginId]
+  -- hPutStrLn stderr "Starting (haskell-language-server)LSP server..."
+  -- hPutStrLn stderr $ "  with arguments: " <> show ghcideArgs
+  -- hPutStrLn stderr $ "  with plugins: " <> show (map fst $ ipMap idePlugins)
+  -- hPutStrLn stderr $ "  in directory: " <> dir
+  | LogIDEMain IDEMain.Log
+  deriving Show
+
+defaultMain :: Recorder Log -> Arguments -> IdePlugins IdeState -> IO ()
+defaultMain recorder args idePlugins = do
     -- WARNING: If you write to stdout before runLanguageServer
     --          then the language server will not work
 
@@ -68,8 +79,8 @@ defaultMain args idePlugins = do
 
         Ghcide ghcideArgs -> do
             {- see WARNING above -}
-            hPutStrLn stderr hlsVer
-            runLspMode ghcideArgs idePlugins
+            logWith recorder $ LogVersion hlsVer
+            runLspMode recorder ghcideArgs idePlugins
 
         VSCodeExtensionSchemaMode -> do
           LBS.putStrLn $ A.encodePretty $ pluginsToVSCodeExtensionSchema idePlugins
@@ -90,25 +101,24 @@ hlsLogger = G.Logger $ \pri txt ->
 
 -- ---------------------------------------------------------------------
 
-runLspMode :: GhcideArguments -> IdePlugins IdeState -> IO ()
-runLspMode ghcideArgs@GhcideArguments{..} idePlugins = withTelemetryLogger $ \telemetryLogger -> do
+runLspMode :: Recorder Log -> GhcideArguments -> IdePlugins IdeState -> IO ()
+runLspMode recorder ghcideArgs@GhcideArguments{..} idePlugins = withTelemetryLogger $ \telemetryLogger -> do
+    let log = logWith recorder
     whenJust argsCwd IO.setCurrentDirectory
     dir <- IO.getCurrentDirectory
+    log $ LogDirectory dir
     LSP.setupLogger argsLogFile ["hls", "hie-bios"]
       $ if argsDebugOn then L.DEBUG else L.INFO
 
     when (isLSP argsCommand) $ do
-        hPutStrLn stderr "Starting (haskell-language-server)LSP server..."
-        hPutStrLn stderr $ "  with arguments: " <> show ghcideArgs
-        hPutStrLn stderr $ "  with plugins: " <> show (map fst $ ipMap idePlugins)
-        hPutStrLn stderr $ "  in directory: " <> dir
+        log $ LogLsp ghcideArgs (map fst $ ipMap idePlugins)
 
-    Main.defaultMain def
-      { Main.argCommand = argsCommand
-      , Main.argsHlsPlugins = idePlugins
-      , Main.argsLogger = pure hlsLogger <> pure telemetryLogger
-      , Main.argsThreads = if argsThreads == 0 then Nothing else Just $ fromIntegral argsThreads
-      , Main.argsIdeOptions = \_config sessionLoader ->
+    IDEMain.defaultMain (cmap LogIDEMain recorder) (IDEMain.defaultArguments (cmap LogIDEMain recorder) Info)
+      { IDEMain.argCommand = argsCommand
+      , IDEMain.argsHlsPlugins = idePlugins
+      , IDEMain.argsLogger = pure hlsLogger <> pure telemetryLogger
+      , IDEMain.argsThreads = if argsThreads == 0 then Nothing else Just $ fromIntegral argsThreads
+      , IDEMain.argsIdeOptions = \_config sessionLoader ->
         let defOptions = Ghcide.defaultIdeOptions sessionLoader
         in defOptions
             { Ghcide.optShakeProfiling = argsShakeProfiling

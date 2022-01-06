@@ -15,6 +15,7 @@ module Development.IDE.Core.Service(
     getDiagnostics,
     ideLogger,
     updatePositionMapping,
+    Log
     ) where
 
 import           Control.Applicative             ((<|>))
@@ -29,16 +30,22 @@ import qualified Language.LSP.Server             as LSP
 import qualified Language.LSP.Types              as LSP
 
 import           Control.Monad
-import           Development.IDE.Core.Shake
+import           Development.IDE.Core.Shake      hiding (Log)
+import qualified Development.IDE.Core.Shake      as Shake
 import           Development.IDE.Types.Shake     (WithHieDb)
 import           System.Environment              (lookupEnv)
 
+
+data Log
+  = LogShake Shake.Log
+  deriving Show
 
 ------------------------------------------------------------
 -- Exposed API
 
 -- | Initialise the Compiler Service.
-initialise :: Config
+initialise :: Recorder Log
+           -> Config
            -> Rules ()
            -> Maybe (LSP.LanguageContextEnv Config)
            -> Logger
@@ -48,12 +55,13 @@ initialise :: Config
            -> WithHieDb
            -> IndexQueue
            -> IO IdeState
-initialise defaultConfig mainRule lspEnv logger debouncer options vfs withHieDb hiedbChan = do
+initialise recorder defaultConfig mainRule lspEnv logger debouncer options vfs withHieDb hiedbChan = do
     shakeProfiling <- do
         let fromConf = optShakeProfiling options
         fromEnv <- lookupEnv "GHCIDE_BUILD_PROFILING"
         return $ fromConf <|> fromEnv
     shakeOpen
+        (cmap LogShake recorder)
         lspEnv
         defaultConfig
         logger

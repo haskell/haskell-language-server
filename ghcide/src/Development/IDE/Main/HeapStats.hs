@@ -1,22 +1,37 @@
 {-# LANGUAGE NumericUnderscores #-}
 -- | Logging utilities for reporting heap statistics
-module Development.IDE.Main.HeapStats ( withHeapStats ) where
+module Development.IDE.Main.HeapStats ( withHeapStats, Log ) where
 
-import           GHC.Stats
-import           Development.IDE.Types.Logger       (Logger, logInfo)
-import           Control.Concurrent.Async
-import qualified Data.Text as T
-import           Data.Word
-import           Control.Monad
 import           Control.Concurrent
-import           Text.Printf                        (printf)
+import           Control.Concurrent.Async
+import           Control.Monad
+import qualified Data.Text                    as T
+import           Data.Word
+import           Development.IDE.Types.Logger (Logger, Recorder, logInfo,
+                                               logWith)
+import           GHC.Stats
+import           Text.Printf                  (printf)
+
+data Log
+  = LogHeapStatsPeriod !Int
+  -- logInfo l ("Logging heap statistics every "
+  --             <> T.pack (printf "%.2fs" (fromIntegral @Int @Double heapStatsInterval / 1e6)))
+  | LogHeapStatsDisabled
+  -- logInfo l "Heap statistics are not enabled (RTS option -T is needed)"
+  | LogHeapStats !Word64 !Word64
+    -- format :: Word64 -> T.Text
+    -- format m = T.pack (printf "%.2fMB" (fromIntegral @Word64 @Double m / 1e6))
+    -- message = "Live bytes: " <> format live_bytes  <> " " <>
+    --           "Heap size: " <> format heap_size
+  -- logInfo l message
+  deriving Show
 
 -- | Interval at which to report the latest heap statistics.
 heapStatsInterval :: Int
 heapStatsInterval = 60_000_000 -- 60s
 
 -- | Report the live bytes and heap size at the last major collection.
-logHeapStats :: Logger -> IO ()
+logHeapStats :: Recorder Log -> IO ()
 logHeapStats l = do
   stats <- getRTSStats
   -- live_bytes is the total amount of live memory in a program
@@ -25,14 +40,10 @@ logHeapStats l = do
   -- heap_size is the total amount of memory the RTS is using
   -- this corresponds closer to OS memory usage
       heap_size  = gcdetails_mem_in_use_bytes (gc stats)
-      format :: Word64 -> T.Text
-      format m = T.pack (printf "%.2fMB" (fromIntegral @Word64 @Double m / 1e6))
-      message = "Live bytes: " <> format live_bytes  <> " " <>
-                "Heap size: " <> format heap_size
-  logInfo l message
+  logWith l $ LogHeapStats live_bytes heap_size
 
 -- | An action which logs heap statistics at the 'heapStatsInterval'
-heapStatsThread :: Logger -> IO r
+heapStatsThread :: Recorder Log -> IO r
 heapStatsThread l = forever $ do
   threadDelay heapStatsInterval
   logHeapStats l
@@ -40,14 +51,13 @@ heapStatsThread l = forever $ do
 -- | A helper function which lauches the 'heapStatsThread' and kills it
 -- appropiately when the inner action finishes. It also checks to see
 -- if `-T` is enabled.
-withHeapStats :: Logger -> IO r -> IO r
+withHeapStats :: Recorder Log -> IO r -> IO r
 withHeapStats l k = do
   enabled <- getRTSStatsEnabled
   if enabled
     then do
-      logInfo l ("Logging heap statistics every "
-                  <> T.pack (printf "%.2fs" (fromIntegral @Int @Double heapStatsInterval / 1e6)))
+      logWith l $ LogHeapStatsPeriod heapStatsInterval
       withAsync (heapStatsThread l) (const k)
     else do
-      logInfo l "Heap statistics are not enabled (RTS option -T is needed)"
+      logWith l LogHeapStatsDisabled
       k

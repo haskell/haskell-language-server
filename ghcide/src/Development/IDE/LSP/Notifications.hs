@@ -9,6 +9,7 @@
 module Development.IDE.LSP.Notifications
     ( whenUriFile
     , descriptor
+    , Log
     ) where
 
 import           Language.LSP.Types
@@ -29,18 +30,23 @@ import           Development.IDE.Core.FileStore        (registerFileWatches,
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.OfInterest
 import           Development.IDE.Core.RuleTypes        (GetClientSettings (..))
-import           Development.IDE.Core.Service
-import           Development.IDE.Core.Shake
+import           Development.IDE.Core.Service          hiding (Log)
+import           Development.IDE.Core.Shake            hiding (Log)
+import qualified Development.IDE.Core.Shake            as Shake
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger
 import           Development.IDE.Types.Shake           (toKey)
 import           Ide.Types
 
+data Log
+  = LogShake Shake.Log
+  deriving Show
+
 whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
 whenUriFile uri act = whenJust (LSP.uriToFilePath uri) $ act . toNormalizedFilePath'
 
-descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId = (defaultPluginDescriptor plId) { pluginNotificationHandlers = mconcat
+descriptor :: Recorder Log -> PluginId -> PluginDescriptor IdeState
+descriptor recorder plId = (defaultPluginDescriptor plId) { pluginNotificationHandlers = mconcat
   [ mkPluginNotificationHandler LSP.STextDocumentDidOpen $
       \ide _ (DidOpenTextDocumentParams TextDocumentItem{_uri,_version}) -> liftIO $ do
       atomically $ updatePositionMapping ide (VersionedTextDocumentIdentifier _uri (Just _version)) (List [])
@@ -112,7 +118,7 @@ descriptor plId = (defaultPluginDescriptor plId) { pluginNotificationHandlers = 
 
   , mkPluginNotificationHandler LSP.SInitialized $ \ide _ _ -> do
       --------- Initialize Shake session --------------------------------------------------------------------
-      liftIO $ shakeSessionInit ide
+      liftIO $ shakeSessionInit (cmap LogShake recorder) ide
 
       --------- Set up file watchers ------------------------------------------------------------------------
       opts <- liftIO $ getIdeOptionsIO $ shakeExtras ide
