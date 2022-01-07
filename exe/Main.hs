@@ -9,15 +9,15 @@ import           Data.Text                    (Text)
 import qualified Data.Text                    as Text
 import           Development.IDE.Types.Logger (Priority (Debug, Info),
                                                WithPriority (WithPriority, priority),
-                                               cfilter, cmap,
-                                               withDefaultTextWithPriorityRecorder)
+                                               cfilter, cmap, setupHsLogger,
+                                               withDefaultTextWithPriorityRecorderAndHandle)
 import           Ide.Arguments                (Arguments (..),
                                                GhcideArguments (..),
                                                getArguments)
 import           Ide.Main                     (defaultMain)
 import qualified Ide.Main                     as IdeMain
 import qualified Plugins
-
+import qualified System.Log                   as HsLogger
 
 data Log
   = LogIdeMain IdeMain.Log
@@ -31,14 +31,17 @@ main :: IO ()
 main = do
     args <- getArguments "haskell-language-server" (Plugins.idePlugins undefined False)
 
-    let (minPriority, logFilePath, includeExamplePlugins) =
+    let (hsLoggerMinLogLevel, minPriority, logFilePath, includeExamplePlugins) =
           case args of
             Ghcide GhcideArguments{ argsTesting, argsDebugOn, argsLogFile, argsExamplePlugin } ->
-              let minPriority = if argsDebugOn || argsTesting then Debug else Info
-              in (minPriority, argsLogFile, argsExamplePlugin)
-            _ -> (Info, Nothing, False)
+              let (minHsLoggerLogLevel, minPriority) =
+                    if argsDebugOn || argsTesting then (HsLogger.DEBUG, Debug) else (HsLogger.INFO, Info)
+              in (minHsLoggerLogLevel, minPriority, argsLogFile, argsExamplePlugin)
+            _ -> (HsLogger.INFO, Info, Nothing, False)
 
-    withDefaultTextWithPriorityRecorder (Just "/home/jon/bls.log") $ \textWithPriorityRecorder -> do
+    withDefaultTextWithPriorityRecorderAndHandle logFilePath $ \textWithPriorityRecorder handle -> do
+      -- until the contravariant logging system is fully in place
+      setupHsLogger (Just handle) ["hls", "hie-bios"] hsLoggerMinLogLevel
       let recorder =
             textWithPriorityRecorder
             & cfilter (\WithPriority{ priority } -> priority >= minPriority)

@@ -1,8 +1,8 @@
-{-# LANGUAGE GADTs             #-}
-{-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE NamedFieldPuns    #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE DisambiguateRecordFields #-}
+{-# LANGUAGE GADTs                    #-}
+{-# LANGUAGE LambdaCase               #-}
+{-# LANGUAGE NamedFieldPuns           #-}
+{-# LANGUAGE OverloadedStrings        #-}
 module Test.Hls
   ( module Test.Tasty.HUnit,
     module Test.Tasty,
@@ -47,15 +47,23 @@ import qualified Data.Aeson                      as A
 import           Data.ByteString.Lazy            (ByteString)
 import           Data.Default                    (def)
 import           Data.Maybe                      (fromMaybe)
+import           Data.Text                       (Text)
 import qualified Data.Text                       as T
+import qualified Data.Text                       as Text
 import qualified Data.Text.Lazy                  as TL
 import qualified Data.Text.Lazy.Encoding         as TL
 import           Development.IDE                 (IdeState, noLogging)
 import           Development.IDE.Graph           (ShakeOptions (shakeThreads))
-import           Development.IDE.Main
-import qualified Development.IDE.Main            as Ghcide
+import           Development.IDE.Main            hiding (Log)
+import qualified Development.IDE.Main            as Ghcide hiding (Log)
+import qualified Development.IDE.Main            as IDEMain
 import           Development.IDE.Plugin.Test     (TestRequest (GetBuildKeysBuilt, WaitForIdeRule, WaitForShakeQueue),
                                                   WaitForIdeRuleResult (ideResultSuccess))
+import qualified Development.IDE.Plugin.Test     as Test
+import           Development.IDE.Types.Logger    (Priority (Debug), Recorder,
+                                                  WithPriority (WithPriority),
+                                                  cmap,
+                                                  makeDefaultTextWithPriorityStderrRecorder)
 import           Development.IDE.Types.Options
 import           GHC.IO.Handle
 import           Ide.Plugin.Config               (Config, formattingProvider)
@@ -81,6 +89,8 @@ import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.Golden
 import           Test.Tasty.HUnit
 import           Test.Tasty.Ingredients.Rerun
+
+newtype Log = LogIDEMain IDEMain.Log deriving Show
 
 -- | Run 'defaultMainWithRerun', limiting each single test case running at most 10 minutes
 defaultTestRunner :: TestTree -> IO ()
@@ -151,6 +161,9 @@ keepCurrentDirectory = bracket getCurrentDirectory setCurrentDirectory . const
 lock :: Lock
 lock = unsafePerformIO newLock
 
+logToTextWithPriority :: Log -> WithPriority Text
+logToTextWithPriority = WithPriority Debug . Text.pack . show
+
 -- | Host a server, and run a test session on it
 -- Note: cwd will be shifted into @root@ in @Session a@
 runSessionWithServer' ::
@@ -164,31 +177,42 @@ runSessionWithServer' ::
   FilePath ->
   Session a ->
   IO a
-runSessionWithServer' plugin conf sconf caps root s = withLock lock $ keepCurrentDirectory $ do
+runSessionWithServer' plugins conf sconf caps root s = withLock lock $ keepCurrentDirectory $ do
   (inR, inW) <- createPipe
   (outR, outW) <- createPipe
-  let logger = do
-        logStdErr <- fromMaybe "0" <$> lookupEnv "LSP_TEST_LOG_STDERR"
-        if logStdErr == "0"
-            then return noLogging
-            else argsLogger testing
+
+  textWithPriorityRecorder <- makeDefaultTextWithPriorityStderrRecorder
+
+  let
+    recorder = cmap logToTextWithPriority textWithPriorityRecorder
+    arguments@Arguments{ argsHlsPlugins, argsIdeOptions, argsLogger } = defaultArguments mempty Debug
+    hlsPlugins =
+      idePluginsToPluginDesc argsHlsPlugins
+      ++ [Test.blockCommandDescriptor "block-command", Test.plugin]
+      ++ plugins
+    ideOptions = \config ghcSession ->
+      let defIdeOptions@IdeOptions{ optShakeOptions } = argsIdeOptions config ghcSession
+      in defIdeOptions
+           { optTesting = IdeTesting True
+           , optCheckProject = pure False
+           , optShakeOptions = optShakeOptions{ shakeThreads = 2 }
+           }
+    logger = do
+      logStdErr <- fromMaybe "0" <$> lookupEnv "LSP_TEST_LOG_STDERR"
+      if logStdErr == "0" then return noLogging else argsLogger
 
   server <-
     async $
       Ghcide.defaultMain
-        testing
-          { argsHandleIn = pure inR,
-            argsHandleOut = pure outW,
-            argsDefaultHlsConfig = conf,
-            argsLogger = logger,
-            argsIdeOptions = \config sessionLoader ->
-              let ideOptions = (argsIdeOptions def config sessionLoader)
-                    {optTesting = IdeTesting True
-                    ,optCheckProject = pure False
-                    }
-               in ideOptions {optShakeOptions = (optShakeOptions ideOptions) {shakeThreads = 2}},
-            argsHlsPlugins = pluginDescToIdePlugins $ plugin ++ idePluginsToPluginDesc (argsHlsPlugins testing)
-          }
+        (cmap LogIDEMain recorder)
+        arguments
+          { argsHandleIn = pure inR
+          , argsHandleOut = pure outW
+          , argsDefaultHlsConfig = conf
+          , argsLogger = logger
+          , argsIdeOptions = ideOptions
+          , argsHlsPlugins = pluginDescToIdePlugins hlsPlugins }
+
   x <- runSessionWithHandles inW outR sconf caps root s
   hClose inW
   timeout 3 (wait server) >>= \case

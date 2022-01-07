@@ -8,7 +8,7 @@ module Development.IDE.Main
 ,isLSP
 ,commandP
 ,defaultMain
-,testing
+-- ,testing
 ,Log) where
 import           Control.Concurrent.Extra              (newLock, withLock,
                                                         withNumCapabilities)
@@ -68,7 +68,7 @@ import           Development.IDE.Plugin                (Plugin (pluginHandlers, 
 import           Development.IDE.Plugin.HLS            (asGhcIdePlugin)
 import qualified Development.IDE.Plugin.HLS            as PluginHLS
 import qualified Development.IDE.Plugin.HLS.GhcIde     as Ghcide
-import qualified Development.IDE.Plugin.Test           as Test
+-- import qualified Development.IDE.Plugin.Test           as Test
 import           Development.IDE.Session               (SessionLoadingOptions,
                                                         getHieDbLoc,
                                                         loadSessionWithOptions,
@@ -233,20 +233,6 @@ defaultArguments recorder priority = Arguments
                 return newStdout
         }
 
-testing :: Recorder Log -> Arguments
-testing recorder =
-  let arguments = defaultArguments recorder Debug
-  in
-    arguments {
-      argsHlsPlugins = pluginDescToIdePlugins $
-          idePluginsToPluginDesc (argsHlsPlugins arguments)
-          ++ [Test.blockCommandDescriptor "block-command", Test.plugin],
-      argsIdeOptions = \config sessionLoader ->
-              let defOptions = argsIdeOptions arguments config sessionLoader
-              in defOptions {
-                  optTesting = IdeTesting True
-              }
-    }
 
 -- | Cheap stderr logger that relies on LineBuffering
 stderrLogger :: Priority -> IO Logger

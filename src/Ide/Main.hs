@@ -107,8 +107,6 @@ runLspMode recorder ghcideArgs@GhcideArguments{..} idePlugins = withTelemetryLog
     whenJust argsCwd IO.setCurrentDirectory
     dir <- IO.getCurrentDirectory
     log $ LogDirectory dir
-    LSP.setupLogger argsLogFile ["hls", "hie-bios"]
-      $ if argsDebugOn then L.DEBUG else L.INFO
 
     when (isLSP argsCommand) $ do
         log $ LogLsp ghcideArgs (map fst $ ipMap idePlugins)

@@ -12,13 +12,14 @@ module Development.IDE.Types.Logger
   , logError, logWarning, logInfo, logDebug, logTelemetry
   , noLogging
   , WithPriority(..)
-  , logWith, cmap, cmapIO, cfilter, withDefaultTextWithPriorityRecorder) where
+  , logWith, cmap, cmapIO, cfilter, withDefaultTextWithPriorityRecorder, makeDefaultTextWithPriorityStderrRecorder, setupHsLogger, withDefaultTextWithPriorityRecorderAndHandle) where
 
 import           Control.Concurrent         (myThreadId)
 import           Control.Concurrent.Extra   (newLock, withLock)
-import           Control.Monad              (when, (>=>))
+import           Control.Monad              (forM_, when, (>=>))
 import           Control.Monad.IO.Class     (MonadIO (liftIO))
 import           Data.Functor.Contravariant (Contravariant (contramap))
+import           Data.Maybe                 (fromMaybe)
 import           Data.Text                  (Text)
 import qualified Data.Text                  as T
 import qualified Data.Text                  as Text
@@ -29,8 +30,44 @@ import           GHC.Stack                  (HasCallStack,
                                              SrcLoc (SrcLoc, srcLocModule, srcLocStartLine),
                                              getCallStack, withFrozenCallStack)
 import           System.IO                  (Handle, IOMode (AppendMode),
-                                             hFlush, stderr)
+                                             hClose, hFlush, hSetEncoding,
+                                             stderr, utf8)
+import qualified System.Log.Formatter       as HSL
+import qualified System.Log.Handler         as HSL
+import qualified System.Log.Handler.Simple  as HSL
+import qualified System.Log.Logger          as HSLogger
 import           UnliftIO                   (MonadUnliftIO, withFile)
+
+-- taken from LSP.setupLogger
+-- used until contravariant logging system is fully in place
+setupHsLogger :: Maybe Handle -> [String] -> HSLogger.Priority -> IO ()
+setupHsLogger handle extraLogNames level = do
+  let logStream = fromMaybe stderr handle
+
+  hSetEncoding logStream utf8
+
+  logH <- HSL.streamHandler logStream level
+
+  let logHandle  = logH {HSL.closeFunc = hClose}
+      logFormatter  = HSL.tfLogFormatter logDateFormat logFormat
+      logHandler = HSL.setFormatter logHandle logFormatter
+
+  HSLogger.updateGlobalLogger HSLogger.rootLoggerName $ HSLogger.setHandlers ([] :: [HSL.GenericHandler Handle])
+  HSLogger.updateGlobalLogger "haskell-lsp" $ HSLogger.setHandlers [logHandler]
+  HSLogger.updateGlobalLogger "haskell-lsp" $ HSLogger.setLevel level
+
+  -- Also route the additional log names to the same log
+  forM_ extraLogNames $ \logName -> do
+    HSLogger.updateGlobalLogger logName $ HSLogger.setHandlers [logHandler]
+    HSLogger.updateGlobalLogger logName $ HSLogger.setLevel level
+  where
+    logFormat = "$time [$tid] $prio $loggername:\t$msg"
+    logDateFormat = "%Y-%m-%d %H:%M:%S%Q"
+
+    -- handleIOException :: FilePath -> IOException ->  IO Handle
+    -- handleIOException logFile _ = do
+    --   hPutStr stderr $ "Couldn't open log file " ++ logFile ++ "; falling back to stderr logging"
+    --   return stderr
 
 
 data Priority
@@ -142,11 +179,17 @@ threadSafeTextStderrRecorder = do
 makeThreadSafeTextStderrRecorder :: MonadIO m => m (Recorder Text)
 makeThreadSafeTextStderrRecorder = liftIO threadSafeTextStderrRecorder
 
+makeDefaultTextWithPriorityStderrRecorder :: MonadIO m => m (Recorder (WithPriority Text))
+makeDefaultTextWithPriorityStderrRecorder = do
+  textStderrRecorder <- makeThreadSafeTextStderrRecorder
+  pure $ cmapIO textWithPriorityToText textStderrRecorder
+
 withTextFileRecorder :: MonadUnliftIO m => FilePath -> (Recorder Text -> m a) -> m a
-withTextFileRecorder path action = withFile path AppendMode $ \handle ->
+withTextFileRecorder path action = withFile path AppendMode $ \handle -> do
   action (textHandleRecorder handle)
 
 -- | if no file path given use stderr, else use stderr and file
+-- TODO: doesn't handle case where opening file fails
 withDefaultTextRecorder :: MonadUnliftIO m => Maybe FilePath -> (Recorder Text -> m a) -> m a
 withDefaultTextRecorder path action = do
   textStderrRecorder <- makeThreadSafeTextStderrRecorder
@@ -159,6 +202,20 @@ withDefaultTextWithPriorityRecorder :: MonadUnliftIO m => Maybe FilePath -> (Rec
 withDefaultTextWithPriorityRecorder path action = do
   withDefaultTextRecorder path $ \textRecorder ->
     action (cmapIO textWithPriorityToText textRecorder)
+
+-- temporary until contravariant logging is a thing
+withDefaultTextWithPriorityRecorderAndHandle :: MonadUnliftIO m
+                                             => Maybe FilePath
+                                             -> (Recorder (WithPriority Text) -> Handle -> m a)
+                                             -> m a
+withDefaultTextWithPriorityRecorderAndHandle path action = do
+  textStderrRecorder <- makeThreadSafeTextStderrRecorder
+  let textWithPriorityStderrRecorder = cmapIO textWithPriorityToText textStderrRecorder
+  case path of
+    Nothing -> action textWithPriorityStderrRecorder stderr
+    Just path -> withFile path AppendMode $ \handle -> do
+      let textWithPriorityHandleRecorder = cmapIO textWithPriorityToText (textHandleRecorder handle)
+      action (textWithPriorityStderrRecorder <> textWithPriorityHandleRecorder) handle
 
 textWithPriorityToText :: WithPriority Text -> IO Text
 textWithPriorityToText = \case
