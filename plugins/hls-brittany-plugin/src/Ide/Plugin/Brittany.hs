@@ -19,8 +19,7 @@ import           Development.IDE                                 hiding
                                                                  (pluginHandlers)
 import qualified Development.IDE.GHC.Compat                      as GHC hiding
                                                                         (Cpp)
-import qualified DynFlags                                        as D
-import qualified EnumSet                                         as S
+import qualified Development.IDE.GHC.Compat.Util                 as GHC
 import           GHC.LanguageExtensions.Type
 import           Ide.PluginUtils
 import           Ide.Types
@@ -39,7 +38,6 @@ import           Data.CZipWith
 import qualified Data.List                                       as List
 import qualified Data.Text                                       as Text
 import qualified Data.Text.Lazy                                  as TextL
-import qualified GHC
 import qualified GHC.LanguageExtensions.Type                     as GHC
 import           Language.Haskell.Brittany.Internal
 import           Language.Haskell.Brittany.Internal.Config
@@ -79,7 +77,7 @@ provider ide typ contents nfp opts = liftIO $ do
 -- Errors may be presented to the user.
 formatText
   :: MonadIO m
-  => D.DynFlags
+  => GHC.DynFlags
   -> Maybe FilePath -- ^ Path to configs. If Nothing, default configs will be used.
   -> FormattingOptions -- ^ Options for the formatter such as indentation.
   -> Text -- ^ Text to format
@@ -101,27 +99,31 @@ getConfFile = findLocalConfigPath . takeDirectory . fromNormalizedFilePath
 -- Returns either a list of Brittany Errors or the reformatted text.
 -- May not throw an exception.
 runBrittany :: Int              -- ^ tab  size
-            -> D.DynFlags
+            -> GHC.DynFlags
             -> Maybe FilePath   -- ^ local config file
             -> Text             -- ^ text to format
             -> IO (Either [BrittanyError] Text)
 runBrittany tabSize df confPath text = do
-  let cfg = mempty
-              { _conf_layout =
-                  mempty { _lconfig_indentAmount = opt (Last tabSize)
-                         }
-              , _conf_forward =
-                  (mempty :: CForwardOptions Option)
-                    { _options_ghc = opt (getExtensions df)
-                    }
-              }
-
-  config <- fromMaybeT (pure staticDefaultConfig) (readConfigsWithUserConfig cfg (maybeToList confPath))
+  let cfg = userConfig tabSize df
+  config <- fromMaybeT (pure staticDefaultConfig)
+                       (readConfigsWithUserConfig cfg (maybeToList confPath))
   (errsAndWarnings, resultText) <- pPrintText config text
   if any isError errsAndWarnings then
     return $ Left errsAndWarnings
   else
     return $ Right resultText
+
+userConfig :: Int -> GHC.DynFlags -> CConfig Option
+userConfig tabSize df =
+  mempty
+    { _conf_layout =
+        mempty { _lconfig_indentAmount = opt (Last tabSize)
+                }
+    , _conf_forward =
+        (mempty :: CForwardOptions Option)
+          { _options_ghc = opt (getExtensions df)
+          }
+    }
 
 fromMaybeT :: Monad m => m a -> MaybeT m a -> m a
 fromMaybeT def act = runMaybeT act >>= maybe def return
@@ -145,8 +147,8 @@ showExtension DatatypeContexts = Nothing
 showExtension RecordPuns       = Just "-XNamedFieldPuns"
 showExtension other            = Just $ "-X" ++ show other
 
-getExtensions :: D.DynFlags -> [String]
-getExtensions = mapMaybe showExtension . S.toList . D.extensionFlags
+getExtensions :: GHC.DynFlags -> [String]
+getExtensions = mapMaybe showExtension . GHC.toList . GHC.extensionFlags
 
 
 -- | This is a temporary fix that allows us to format the text if brittany
