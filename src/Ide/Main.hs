@@ -30,10 +30,7 @@ import           Ide.Plugin.ConfigUtils        (pluginsToDefaultConfig,
 import           Ide.Types                     (IdePlugins, PluginId (PluginId),
                                                 ipMap)
 import           Ide.Version
-import qualified Language.LSP.Server           as LSP
 import qualified System.Directory.Extra        as IO
-import           System.IO
-import qualified System.Log.Logger             as L
 
 data Log
   = LogVersion !String
