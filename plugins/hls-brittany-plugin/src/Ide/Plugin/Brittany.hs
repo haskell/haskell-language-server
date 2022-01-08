@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP          #-}
 {-# LANGUAGE LambdaCase   #-}
 {-# LANGUAGE MultiWayIf   #-}
 {-# LANGUAGE PolyKinds    #-}
@@ -104,7 +105,15 @@ runBrittany :: Int              -- ^ tab  size
             -> Text             -- ^ text to format
             -> IO (Either [BrittanyError] Text)
 runBrittany tabSize df confPath text = do
-  let cfg = userConfig tabSize df
+  let cfg = mempty
+              { _conf_layout =
+                  mempty { _lconfig_indentAmount = opt (Last tabSize)
+                         }
+              , _conf_forward =
+                  (mempty :: CForwardOptions CMaybe)
+                    { _options_ghc = opt (getExtensions df)
+                    }
+              }
   config <- fromMaybeT (pure staticDefaultConfig)
                        (readConfigsWithUserConfig cfg (maybeToList confPath))
   (errsAndWarnings, resultText) <- pPrintText config text
@@ -113,23 +122,18 @@ runBrittany tabSize df confPath text = do
   else
     return $ Right resultText
 
-userConfig :: Int -> GHC.DynFlags -> CConfig Option
-userConfig tabSize df =
-  mempty
-    { _conf_layout =
-        mempty { _lconfig_indentAmount = opt (Last tabSize)
-                }
-    , _conf_forward =
-        (mempty :: CForwardOptions Option)
-          { _options_ghc = opt (getExtensions df)
-          }
-    }
+#if MIN_VERSION_brittany(0,14,0)
+type CMaybe = Maybe
+opt :: a -> Maybe a
+opt = Just
+#else
+type CMaybe = Option
+opt :: a -> Option a
+opt = Option . Just
+#endif
 
 fromMaybeT :: Monad m => m a -> MaybeT m a -> m a
 fromMaybeT def act = runMaybeT act >>= maybe def return
-
-opt :: a -> Option a
-opt = Option . Just
 
 showErr :: BrittanyError -> String
 showErr (ErrorInput s)          = s
