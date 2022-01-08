@@ -183,8 +183,10 @@ runSessionWithServer' plugins conf sconf caps root s = withLock lock $ keepCurre
 
   textWithPriorityRecorder <- makeDefaultTextWithPriorityStderrRecorder
 
+  logStdErr <- fromMaybe "0" <$> lookupEnv "LSP_TEST_LOG_STDERR"
+
   let
-    recorder = cmap logToTextWithPriority textWithPriorityRecorder
+    recorder = if logStdErr == "0" then mempty else cmap logToTextWithPriority textWithPriorityRecorder
     arguments@Arguments{ argsHlsPlugins, argsIdeOptions, argsLogger } = defaultArguments mempty Debug
     hlsPlugins =
       idePluginsToPluginDesc argsHlsPlugins
@@ -198,7 +200,6 @@ runSessionWithServer' plugins conf sconf caps root s = withLock lock $ keepCurre
            , optShakeOptions = optShakeOptions{ shakeThreads = 2 }
            }
     logger = do
-      logStdErr <- fromMaybe "0" <$> lookupEnv "LSP_TEST_LOG_STDERR"
       if logStdErr == "0" then return noLogging else argsLogger
 
   server <-
