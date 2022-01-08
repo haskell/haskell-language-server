@@ -3,8 +3,6 @@
 
 module Development.IDE.Plugin.Completions
     ( descriptor
-    , LocalCompletions(..)
-    , NonLocalCompletions(..)
     ) where
 
 import           Control.Concurrent.Async                     (concurrently)
@@ -29,7 +27,6 @@ import           Development.IDE.GHC.ExactPrint               (Annotated (annsA)
                                                                astA)
 import           Development.IDE.GHC.Util                     (prettyPrint)
 import           Development.IDE.Graph
-import           Development.IDE.Graph.Classes
 import           Development.IDE.Plugin.CodeAction            (newImport,
                                                                newImportToEdit)
 import           Development.IDE.Plugin.CodeAction.ExactPrint
@@ -41,7 +38,6 @@ import           Development.IDE.Types.HscEnvEq               (HscEnvEq (envPack
 import qualified Development.IDE.Types.KnownTargets           as KT
 import           Development.IDE.Types.Location
 import           GHC.Exts                                     (fromList, toList)
-import           GHC.Generics
 import           Ide.Plugin.Config                            (Config)
 import           Ide.Types
 import qualified Language.LSP.Server                          as LSP
@@ -97,20 +93,6 @@ dropListFromImportDecl iDecl = let
         _               -> d
     f x = x
     in f <$> iDecl
-
--- | Produce completions info for a file
-type instance RuleResult LocalCompletions = CachedCompletions
-type instance RuleResult NonLocalCompletions = CachedCompletions
-
-data LocalCompletions = LocalCompletions
-    deriving (Eq, Show, Typeable, Generic)
-instance Hashable LocalCompletions
-instance NFData   LocalCompletions
-
-data NonLocalCompletions = NonLocalCompletions
-    deriving (Eq, Show, Typeable, Generic)
-instance Hashable NonLocalCompletions
-instance NFData   NonLocalCompletions
 
 -- | Generate code actions.
 getCompletionsLSP

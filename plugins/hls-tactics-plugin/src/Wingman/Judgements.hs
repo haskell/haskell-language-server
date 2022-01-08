@@ -140,7 +140,7 @@ hasPositionalAncestry
                    -- otherwise nothing
 hasPositionalAncestry ancestors jdg name
   | not $ null ancestors
-  = case any (== name) ancestors of
+  = case name `elem` ancestors of
       True  -> Just True
       False ->
         case M.lookup name $ jAncestryMap jdg of
@@ -162,8 +162,7 @@ filterAncestry ancestry reason jdg =
     disallowing reason (M.keysSet $ M.filterWithKey go $ hyByName $ jHypothesis jdg) jdg
   where
     go name _
-      = not
-      . isJust
+      = isNothing
       $ hasPositionalAncestry ancestry jdg name
 
 
@@ -233,14 +232,12 @@ filterSameTypeFromOtherPositions dcon pos jdg =
 -- | Return the ancestry of a 'PatVal', or 'mempty' otherwise.
 getAncestry :: Judgement' a -> OccName -> Set OccName
 getAncestry jdg name =
-  case M.lookup name $ jPatHypothesis jdg of
-    Just pv -> pv_ancestry pv
-    Nothing -> mempty
+  maybe mempty pv_ancestry . M.lookup name $ jPatHypothesis jdg
 
 
 jAncestryMap :: Judgement' a -> Map OccName (Set OccName)
 jAncestryMap jdg =
-  flip M.map (jPatHypothesis jdg) pv_ancestry
+  M.map pv_ancestry (jPatHypothesis jdg)
 
 
 provAncestryOf :: Provenance -> Set OccName
@@ -365,9 +362,7 @@ hyNamesInScope = M.keysSet . hyByName
 -- | Are there any top-level function argument bindings in this judgement?
 jHasBoundArgs :: Judgement' a -> Bool
 jHasBoundArgs
-  = not
-  . null
-  . filter (isTopLevel . hi_provenance)
+  = any (isTopLevel . hi_provenance)
   . unHypothesis
   . jLocalHypothesis
 

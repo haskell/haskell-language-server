@@ -24,12 +24,20 @@ jobs:
         uses: fkirc/skip-duplicate-actions@v3.4.1
         with:
           cancel_others: false
-          paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", ".circleci/**", "install/**", "**/README.md", "FUNDING.yml", "**/stack*.yaml"]'
+          paths_ignore: '[ "**/docs/**"
+                         , "**.md"
+                         , "**/LICENSE"
+                         , ".circleci/**"
+                         , "install/**"
+                         , "**/README.md"
+                         , "FUNDING.yml"
+                         , "**/stack*.yaml"
+                         ]'
       - id: skip_check_no_nix
         uses: fkirc/skip-duplicate-actions@v3.4.1
         with:
           cancel_others: false
-          paths: '["**.nix"]'
+          paths: '[ "**.nix" ]'
 
   # Enter the development shell and run `cabal build`
   develop:

@@ -71,6 +71,7 @@ import           Language.LSP.Types                                (CodeAction (
                                                                     SMethod (STextDocumentCodeAction),
                                                                     TextDocumentIdentifier (TextDocumentIdentifier),
                                                                     TextEdit (TextEdit),
+                                                                    UInt,
                                                                     WorkspaceEdit (WorkspaceEdit, _changeAnnotations, _changes, _documentChanges),
                                                                     type (|?) (InR),
                                                                     uriToFilePath)
@@ -540,7 +541,7 @@ suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModul
                             $ hsmodDecls
   , Just pos <- fmap _end . getLocatedRange =<< hsmodExports
   , Just needComma <- needsComma source <$> hsmodExports
-  , let exportName = (if needComma then "," else "") <> printExport exportType name
+  , let exportName = (if needComma then ", " else "") <> printExport exportType name
         insertPos = pos {_character = pred $ _character pos}
   = [("Export ‘" <> name <> "’", TextEdit (Range insertPos insertPos) exportName)]
   | otherwise = []
@@ -700,17 +701,32 @@ suggestFillTypeWildcard Diagnostic{_range=_range,..}
         =  [("Use type signature: ‘" <> typeSignature <> "’", TextEdit _range typeSignature)]
     | otherwise = []
 
+{- Handles two variants with different formatting
+
+1. Could not find module ‘Data.Cha’
+   Perhaps you meant Data.Char (from base-4.12.0.0)
+
+2. Could not find module ‘Data.I’
+   Perhaps you meant
+      Data.Ix (from base-4.14.3.0)
+      Data.Eq (from base-4.14.3.0)
+      Data.Int (from base-4.14.3.0)
+-}
 suggestModuleTypo :: Diagnostic -> [(T.Text, TextEdit)]
 suggestModuleTypo Diagnostic{_range=_range,..}
--- src/Development/IDE/Core/Compile.hs:58:1: error:
---     Could not find module ‘Data.Cha’
---     Perhaps you meant Data.Char (from base-4.12.0.0)
-    | "Could not find module" `T.isInfixOf` _message
-    , "Perhaps you meant"     `T.isInfixOf` _message = let
-      findSuggestedModules = map (head . T.words) . drop 2 . T.lines
-      proposeModule mod = ("replace with " <> mod, TextEdit _range mod)
-      in map proposeModule $ nubOrd $ findSuggestedModules _message
+    | "Could not find module" `T.isInfixOf` _message =
+      case T.splitOn "Perhaps you meant" _message of
+          [_, stuff] ->
+              [ ("replace with " <> modul, TextEdit _range modul)
+              | modul <- mapMaybe extractModule (T.lines stuff)
+              ]
+          _ -> []
     | otherwise = []
+  where
+    extractModule line = case T.words line of
+        [modul, "(from", _] -> Just modul
+        _ -> Nothing
+    
 
 suggestFillHole :: Diagnostic -> [(T.Text, TextEdit)]
 suggestFillHole Diagnostic{_range=_range,..}
@@ -1080,8 +1096,8 @@ suggestInstanceConstraint df (L _ HsModule {hsmodDecls}) Diagnostic {..} missing
         | otherwise
         = Nothing
 
-      readPositionNumber :: T.Text -> Int
-      readPositionNumber = T.unpack >>> read
+      readPositionNumber :: T.Text -> UInt
+      readPositionNumber = T.unpack >>> read @Integer >>> fromIntegral
 
       actionTitle :: T.Text -> T.Text
       actionTitle constraint = "Add `" <> constraint
@@ -1290,9 +1306,10 @@ newImportToEdit (unNewImport -> imp) ps fileContents
 -- * otherwise inserted one line after the last file-header pragma
 newImportInsertRange :: ParsedSource -> T.Text -> Maybe (Range, Int)
 newImportInsertRange (L _ HsModule {..}) fileContents
-  |  Just (uncurry Position -> insertPos, col) <- case hsmodImports of
+  |  Just ((l, c), col) <- case hsmodImports of
       [] -> findPositionNoImports hsmodName hsmodExports fileContents
       _  -> findPositionFromImportsOrModuleDecl hsmodImports last True
+  , let insertPos = Position (fromIntegral l) (fromIntegral c)
     = Just (Range insertPos insertPos, col)
   | otherwise = Nothing
 
@@ -1490,7 +1507,7 @@ extendToWholeLineIfPossible contents range@Range{..} =
     in if extend then Range _start (Position (_line _end + 1) 0) else range
 
 splitTextAtPosition :: Position -> T.Text -> (T.Text, T.Text)
-splitTextAtPosition (Position row col) x
+splitTextAtPosition (Position (fromIntegral -> row) (fromIntegral -> col)) x
     | (preRow, mid:postRow) <- splitAt row $ T.splitOn "\n" x
     , (preCol, postCol) <- T.splitAt col mid
         = (T.intercalate "\n" $ preRow ++ [preCol], T.intercalate "\n" $ postCol : postRow)
@@ -1498,7 +1515,7 @@ splitTextAtPosition (Position row col) x
 
 -- | Returns [start .. end[
 textInRange :: Range -> T.Text -> T.Text
-textInRange (Range (Position startRow startCol) (Position endRow endCol)) text =
+textInRange (Range (Position (fromIntegral -> startRow) (fromIntegral -> startCol)) (Position (fromIntegral -> endRow) (fromIntegral -> endCol))) text =
     case compare startRow endRow of
       LT ->
         let (linesInRangeBeforeEndLine, endLineAndFurtherLines) = splitAt (endRow - startRow) linesBeginningWithStartLine

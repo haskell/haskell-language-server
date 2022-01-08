@@ -65,8 +65,8 @@ library
         lens,
         list-t,
         hiedb == 0.4.1.*,
-        lsp-types >= 1.3.0.1 && < 1.4,
-        lsp == 1.2.*,
+        lsp-types ^>= 1.4.0.0,
+        lsp ^>= 1.4.0.0 ,
         monoid-subclasses,
         mtl,
         network-uri,
@@ -74,6 +74,7 @@ library
         parallel,
         prettyprinter-ansi-terminal,
         prettyprinter,
+        random,
         regex-tdfa >= 1.3.1.0,
         retrie,
         rope-utf16-splay,
@@ -146,6 +147,7 @@ library
         Development.IDE
         Development.IDE.Main
         Development.IDE.Core.Actions
+        Development.IDE.Main.HeapStats
         Development.IDE.Core.Debouncer
         Development.IDE.Core.FileStore
         Development.IDE.Core.IdeConfiguration
@@ -300,7 +302,8 @@ executable ghcide
                 -rtsopts
                 -- disable idle GC
                 -- increase nursery size
-                "-with-rtsopts=-I0 -A128M"
+                -- Enable collection of heap statistics
+                "-with-rtsopts=-I0 -A128M -T"
     main-is: Main.hs
     build-depends:
         hiedb,
@@ -390,11 +393,13 @@ test-suite ghcide-tests
         process,
         QuickCheck,
         quickcheck-instances,
+        random,
         rope-utf16-splay,
         regex-tdfa ^>= 1.3.1,
         safe,
         safe-exceptions,
         shake,
+        sqlite-simple,
         stm,
         stm-containers,
         hls-graph,
@@ -419,6 +424,7 @@ test-suite ghcide-tests
         Experiments
         Experiments.Types
         Progress
+        HieDbRetry
     default-extensions:
         BangPatterns
         DeriveFunctor

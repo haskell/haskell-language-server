@@ -1,0 +1,84 @@
+name: Flags
+
+defaults:
+  run:
+    shell: bash
+
+# See: https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#concurrency.
+concurrency:
+  group: ${{ github.head_ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+    branches:
+      - '**'
+
+jobs:
+  pre_job:
+    runs-on: ubuntu-latest
+    outputs:
+      should_skip: ${{ steps.skip_check.outputs.should_skip }}
+    steps:
+      - id: skip_check
+        uses: fkirc/skip-duplicate-actions@v3.4.1
+        with:
+          cancel_others: false
+          paths_ignore: '[ "**/docs/**"
+                         , "**.md"
+                         , "**/LICENSE"
+                         , "install/**"
+                         , "**.nix"
+                         , "flake.lock"
+                         , "**/README.md"
+                         , "FUNDING.yml"
+                         , ".circleci/**"
+                         , "**/stack*.yaml"
+                         ]'
+
+  flags:
+    if: needs.pre_job.outputs.should_skip != 'true'
+    needs: pre_job
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        ghc: [ "8.10.7"
+             ]
+        os: [ "ubuntu-latest"
+            ]
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: ./.github/actions/setup-build
+        with:
+          ghc: ${{ matrix.ghc }}
+          os:  ${{ runner.os }}
+
+      - name: Build `hls-graph` with flags
+        run: cabal v2-build hls-graph --flags="pedantic embed-files stm-stats"
+
+      - name: Build `hie-compat` with flags
+        run: cabal v2-build hie-compat --flags="ghc-lib"
+
+      - name: Build `hls-plugin-api` with flags
+        run: cabal v2-build hls-plugin-api --flags="pedantic"
+
+      - name: Build `hls-test-utils` with flags
+        run: cabal v2-build hls-test-utils --flags="pedantic"
+
+      - name: Build
+        run: cabal v2-build ghcide --flags="ghc-patched-unboxed-bytecode test-exe executable bench-exe"
+
+  flags_post_job:
+    if: always()
+    runs-on: ubuntu-latest
+    needs: [pre_job, flags]
+    steps:
+      - run: |
+          echo "jobs info: ${{ toJSON(needs) }}"
+      - if: contains(needs.*.result, 'failure')
+        run: exit 1
+      - if: contains(needs.*.result, 'cancelled') && needs.pre_job.outputs.should_skip != 'true'
+        run: exit 1

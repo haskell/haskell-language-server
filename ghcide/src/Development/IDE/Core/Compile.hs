@@ -56,9 +56,9 @@ import           HieDb
 import           Language.LSP.Types                (DiagnosticTag (..))
 
 #if MIN_VERSION_ghc(8,10,0)
-import           Control.DeepSeq                   (force, rnf)
+import           Control.DeepSeq                   (force, rnf, liftRnf, rwhnf)
 #else
-import           Control.DeepSeq                   (rnf)
+import           Control.DeepSeq                   (rnf, liftRnf, rwhnf)
 import           ErrUtils
 #endif
 
@@ -521,7 +521,7 @@ indexHieFile se mod_summary srcPath !hash hf = do
       -- hiedb doesn't use the Haskell src, so we clear it to avoid unnecessarily keeping it around
       let !hf' = hf{hie_hs_src = mempty}
       modifyTVar' indexPending $ HashMap.insert srcPath hash
-      writeTQueue indexQueue $ \db -> do
+      writeTQueue indexQueue $ \withHieDb -> do
         -- We are now in the worker thread
         -- Check if a newer index of this file has been scheduled, and if so skip this one
         newerScheduled <- atomically $ do
@@ -532,7 +532,7 @@ indexHieFile se mod_summary srcPath !hash hf = do
             Just pendingHash -> pendingHash /= hash
         unless newerScheduled $ do
           pre optProgressStyle
-          addRefsFromLoaded db targetPath (RealFile $ fromNormalizedFilePath srcPath) hash hf'
+          withHieDb (\db -> HieDb.addRefsFromLoaded db targetPath (HieDb.RealFile $ fromNormalizedFilePath srcPath) hash hf')
           post
   where
     mod_location    = ms_location mod_summary
@@ -564,6 +564,11 @@ indexHieFile se mod_summary srcPath !hash hf = do
         done <- readTVar indexCompleted
         remaining <- HashMap.size <$> readTVar indexPending
         pure (done, remaining)
+      let
+        progressFrac :: Double
+        progressFrac = fromIntegral done / fromIntegral (done + remaining)
+        progressPct :: LSP.UInt
+        progressPct = floor $ 100 * progressFrac
 
       whenJust (lspEnv se) $ \env -> whenJust tok $ \tok -> LSP.runLspT env $
         LSP.sendNotification LSP.SProgress $ LSP.ProgressParams tok $
@@ -572,7 +577,7 @@ indexHieFile se mod_summary srcPath !hash hf = do
                 Percentage -> LSP.WorkDoneProgressReportParams
                     { _cancellable = Nothing
                     , _message = Nothing
-                    , _percentage = Just (100 * fromIntegral done / fromIntegral (done + remaining) )
+                    , _percentage = Just progressPct
                     }
                 Explicit -> LSP.WorkDoneProgressReportParams
                     { _cancellable = Nothing
@@ -686,7 +691,8 @@ loadModulesHome
     -> HscEnv
     -> HscEnv
 loadModulesHome mod_infos e =
-    e { hsc_HPT = addListToHpt (hsc_HPT e) [(mod_name x, x) | x <- mod_infos]
+  let !new_modules = addListToHpt (hsc_HPT e) [(mod_name x, x) | x <- mod_infos]
+  in e { hsc_HPT = new_modules
       , hsc_type_env_var = Nothing }
     where
       mod_name = moduleName . mi_module . hm_iface
@@ -697,15 +703,21 @@ mergeEnvs env extraModSummaries extraMods envs = do
     prevFinderCache <- concatFC <$> mapM (readIORef . hsc_FC) envs
     let ims  = map (Compat.installedModule (homeUnitId_ $ hsc_dflags env) . moduleName . ms_mod) extraModSummaries
         ifrs = zipWith (\ms -> InstalledFound (ms_location ms)) extraModSummaries ims
+        -- Very important to force this as otherwise the hsc_mod_graph field is not
+        -- forced and ends up retaining a reference to all the old hsc_envs we have merged to get
+        -- this new one, which in turn leads to the EPS referencing the HPT.
+        module_graph_nodes =
+          extraModSummaries ++ nubOrdOn ms_mod (concatMap (mgModSummaries . hsc_mod_graph) envs)
+
     newFinderCache <- newIORef $
             foldl'
                 (\fc (im, ifr) -> Compat.extendInstalledModuleEnv fc im ifr) prevFinderCache
                 $ zip ims ifrs
-    return $ loadModulesHome extraMods $ env{
+    liftRnf rwhnf module_graph_nodes `seq` (return $ loadModulesHome extraMods $ env{
         hsc_HPT = foldMapBy mergeUDFM emptyUDFM hsc_HPT envs,
         hsc_FC = newFinderCache,
-        hsc_mod_graph = mkModuleGraph $ extraModSummaries ++ nubOrdOn ms_mod (concatMap (mgModSummaries . hsc_mod_graph) envs)
-    }
+        hsc_mod_graph = mkModuleGraph module_graph_nodes
+    })
     where
         mergeUDFM = plusUDFM_C combineModules
         combineModules a b

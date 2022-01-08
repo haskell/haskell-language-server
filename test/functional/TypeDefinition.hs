@@ -37,7 +37,7 @@ getTypeDefinitionTest (symbolFile, symbolLine, symbolCol) definitionLocations =
         InL defs <- getTypeDefinitions doc $ Position symbolLine symbolCol
         liftIO $ defs `expectSameLocations` map (first3 (definitionsPath </>)) definitionLocations
 
-getTypeDefinitionTest' :: Int -> Int -> Int -> Int -> Assertion
+getTypeDefinitionTest' :: UInt -> UInt -> UInt -> UInt -> Assertion
 getTypeDefinitionTest' symbolLine symbolCol definitionLine definitionCol =
     getTypeDefinitionTest ("src/Lib.hs", symbolLine, symbolCol)
                           [("src/Lib.hs", definitionLine, definitionCol)]

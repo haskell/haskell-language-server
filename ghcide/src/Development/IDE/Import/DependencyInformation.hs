@@ -166,7 +166,7 @@ data ModuleParseError = ModuleParseError
 instance NFData ModuleParseError
 
 -- | Error when trying to locate a module.
-data LocateError = LocateError [Diagnostic]
+newtype LocateError = LocateError [Diagnostic]
   deriving (Eq, Show, Generic)
 
 instance NFData LocateError
@@ -316,7 +316,7 @@ transitiveReverseDependencies file DependencyInformation{..} = do
   where
     go :: Int -> IntSet -> IntSet
     go k i =
-      let outwards = fromMaybe IntSet.empty (IntMap.lookup k depReverseModuleDeps)
+      let outwards = IntMap.findWithDefault IntSet.empty k depReverseModuleDeps
           res = IntSet.union i outwards
           new = IntSet.difference i outwards
       in IntSet.foldr go res new

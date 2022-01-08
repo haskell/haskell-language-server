@@ -79,7 +79,7 @@ realSrcSpanToRange real =
 
 realSrcLocToPosition :: RealSrcLoc -> Position
 realSrcLocToPosition real =
-  Position (srcLocLine real - 1) (srcLocCol real - 1)
+  Position (fromIntegral $ srcLocLine real - 1) (fromIntegral $ srcLocCol real - 1)
 
 -- | Extract a file name from a GHC SrcSpan (use message for unhelpful ones)
 -- FIXME This may not be an _absolute_ file name, needs fixing.
@@ -111,7 +111,7 @@ rangeToRealSrcSpan nfp =
 
 positionToRealSrcLoc :: NormalizedFilePath -> Position -> RealSrcLoc
 positionToRealSrcLoc nfp (Position l c)=
-    Compat.mkRealSrcLoc (fromString $ fromNormalizedFilePath nfp) (l + 1) (c + 1)
+    Compat.mkRealSrcLoc (fromString $ fromNormalizedFilePath nfp) (fromIntegral $ l + 1) (fromIntegral $ c + 1)
 
 isInsideSrcSpan :: Position -> SrcSpan -> Bool
 p `isInsideSrcSpan` r = case srcSpanToRange r of

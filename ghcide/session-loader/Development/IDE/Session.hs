@@ -1,3 +1,4 @@
+{-# LANGUAGE RankNTypes   #-}
 {-# LANGUAGE TypeFamilies #-}
 
 {-|
@@ -11,6 +12,8 @@ module Development.IDE.Session
   ,setInitialDynFlags
   ,getHieDbLoc
   ,runWithDb
+  ,retryOnSqliteBusy
+  ,retryOnException
   ) where
 
 -- Unfortunately, we cannot use loadSession with ghc-lib since hie-bios uses
@@ -41,7 +44,7 @@ import qualified Data.Text                            as T
 import           Data.Time.Clock
 import           Data.Version
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Shake
+import           Development.IDE.Core.Shake           hiding (withHieDb)
 import qualified Development.IDE.GHC.Compat           as Compat
 import           Development.IDE.GHC.Compat.Core      hiding (Target,
                                                        TargetFile, TargetModule,
@@ -82,9 +85,12 @@ import           Data.Foldable                        (for_)
 import qualified Data.HashSet                         as Set
 import           Database.SQLite.Simple
 import           Development.IDE.Core.Tracing         (withTrace)
+import           Development.IDE.Types.Shake          (WithHieDb)
 import           HieDb.Create
 import           HieDb.Types
 import           HieDb.Utils
+import           System.Random                        (RandomGen)
+import qualified System.Random                        as Random
 
 -- | Bump this version number when making changes to the format of the data stored in hiedb
 hiedbDataVersion :: String
@@ -165,28 +171,118 @@ setInitialDynFlags logger rootDir SessionLoadingOptions{..} = do
   mapM_ setUnsafeGlobalDynFlags dynFlags
   pure libdir
 
+-- | If the action throws exception that satisfies predicate then we sleep for
+-- a duration determined by the random exponential backoff formula,
+-- `uniformRandom(0, min (maxDelay, (baseDelay * 2) ^ retryAttempt))`, and try
+-- the action again for a maximum of `maxRetryCount` times.
+-- `MonadIO`, `MonadCatch` are used as constraints because there are a few
+-- HieDb functions that don't return IO values.
+retryOnException
+  :: (MonadIO m, MonadCatch m, RandomGen g, Exception e)
+  => (e -> Maybe e) -- ^ only retry on exception if this predicate returns Just
+  -> Logger
+  -> Int -- ^ maximum backoff delay in microseconds
+  -> Int -- ^ base backoff delay in microseconds
+  -> Int -- ^ maximum number of times to retry
+  -> g -- ^ random number generator
+  -> m a -- ^ action that may throw exception
+  -> m a
+retryOnException exceptionPred logger maxDelay !baseDelay !maxRetryCount rng action = do
+  result <- tryJust exceptionPred action
+  case result of
+    Left e
+      | maxRetryCount > 0 -> do
+        -- multiply by 2 because baseDelay is midpoint of uniform range
+        let newBaseDelay = min maxDelay (baseDelay * 2)
+        let (delay, newRng) = Random.randomR (0, newBaseDelay) rng
+        let newMaxRetryCount = maxRetryCount - 1
+        liftIO $ do
+          logWarning logger $ "Retrying - " <> makeLogMsgComponentsText (Right delay) newMaxRetryCount e
+          threadDelay delay
+        retryOnException exceptionPred logger maxDelay newBaseDelay newMaxRetryCount newRng action
+
+      | otherwise -> do
+        liftIO $ do
+          logWarning logger $ "Retries exhausted - " <> makeLogMsgComponentsText (Left baseDelay) maxRetryCount e
+          throwIO e
+
+    Right b -> pure b
+  where
+    -- e.g. delay: 1010102, maximumDelay: 12010, maxRetryCount: 9, exception: SQLError { ... }
+    makeLogMsgComponentsText delay newMaxRetryCount e =
+      let
+        logMsgComponents =
+          [ either
+              (("base delay: " <>) . T.pack . show)
+              (("delay: " <>) . T.pack . show)
+              delay
+          , "maximumDelay: " <> T.pack (show maxDelay)
+          , "maxRetryCount: " <> T.pack (show newMaxRetryCount)
+          , "exception: " <> T.pack (show e)]
+      in
+        T.intercalate ", " logMsgComponents
+
+-- | in microseconds
+oneSecond :: Int
+oneSecond = 1000000
+
+-- | in microseconds
+oneMillisecond :: Int
+oneMillisecond = 1000
+
+-- | default maximum number of times to retry hiedb call
+maxRetryCount :: Int
+maxRetryCount = 10
+
+retryOnSqliteBusy :: (MonadIO m, MonadCatch m, RandomGen g)
+                  => Logger -> g -> m a -> m a
+retryOnSqliteBusy logger rng action =
+  let isErrorBusy e
+        | SQLError{ sqlError = ErrorBusy } <- e = Just e
+        | otherwise = Nothing
+  in
+    retryOnException isErrorBusy logger oneSecond oneMillisecond maxRetryCount rng action
+
+makeWithHieDbRetryable :: RandomGen g => Logger -> g -> HieDb -> WithHieDb
+makeWithHieDbRetryable logger rng hieDb f =
+  retryOnSqliteBusy logger rng (f hieDb)
+
 -- | Wraps `withHieDb` to provide a database connection for reading, and a `HieWriterChan` for
 -- writing. Actions are picked off one by one from the `HieWriterChan` and executed in serial
 -- by a worker thread using a dedicated database connection.
 -- This is done in order to serialize writes to the database, or else SQLite becomes unhappy
-runWithDb :: Logger -> FilePath -> (HieDb -> IndexQueue -> IO ()) -> IO ()
+runWithDb :: Logger -> FilePath -> (WithHieDb -> IndexQueue -> IO ()) -> IO ()
 runWithDb logger fp k = do
+  -- use non-deterministic seed because maybe multiple HLS start at same time
+  -- and send bursts of requests
+  rng <- Random.newStdGen
   -- Delete the database if it has an incompatible schema version
-  withHieDb fp (const $ pure ())
-    `Safe.catch` \IncompatibleSchemaVersion{} -> removeFile fp
+  retryOnSqliteBusy
+    logger
+    rng
+    (withHieDb fp (const $ pure ()) `Safe.catch` \IncompatibleSchemaVersion{} -> removeFile fp)
+
   withHieDb fp $ \writedb -> do
-    initConn writedb
+    -- the type signature is necessary to avoid concretizing the tyvar
+    -- e.g. `withWriteDbRetrable initConn` without type signature will
+    -- instantiate tyvar `a` to `()`
+    let withWriteDbRetryable :: WithHieDb
+        withWriteDbRetryable = makeWithHieDbRetryable logger rng writedb
+    withWriteDbRetryable initConn
+
     chan <- newTQueueIO
-    withAsync (writerThread writedb chan) $ \_ -> do
-      withHieDb fp (flip k chan)
+
+    withAsync (writerThread withWriteDbRetryable chan) $ \_ -> do
+      withHieDb fp (\readDb -> k (makeWithHieDbRetryable logger rng readDb) chan)
   where
-    writerThread db chan = do
+    writerThread :: WithHieDb -> IndexQueue -> IO ()
+    writerThread withHieDbRetryable chan = do
       -- Clear the index of any files that might have been deleted since the last run
-      deleteMissingRealFiles db
-      _ <- garbageCollectTypeNames db
+      _ <- withHieDbRetryable deleteMissingRealFiles
+      _ <- withHieDbRetryable garbageCollectTypeNames
       forever $ do
         k <- atomically $ readTQueue chan
-        k db
+        k withHieDbRetryable
           `Safe.catch` \e@SQLError{} -> do
             logDebug logger $ T.pack $ "SQLite error in worker, ignoring: " ++ show e
           `Safe.catchAny` \e -> do
@@ -467,7 +563,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
     let sessionOpts :: (Maybe FilePath, FilePath)
                     -> IO (IdeResult HscEnvEq, [FilePath])
         sessionOpts (hieYaml, file) = do
-          v <- fromMaybe HM.empty . Map.lookup hieYaml <$> readVar fileToFlags
+          v <- Map.findWithDefault HM.empty hieYaml <$> readVar fileToFlags
           cfp <- makeAbsolute file
           case HM.lookup (toNormalizedFilePath' cfp) v of
             Just (opts, old_di) -> do

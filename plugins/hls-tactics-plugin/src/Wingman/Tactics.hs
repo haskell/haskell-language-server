@@ -8,8 +8,7 @@ module Wingman.Tactics
 
 import           Control.Applicative (Alternative(empty), (<|>))
 import           Control.Lens ((&), (%~), (<>~))
-import           Control.Monad (filterM)
-import           Control.Monad (unless)
+import           Control.Monad (filterM, unless)
 import           Control.Monad.Extra (anyM)
 import           Control.Monad.Reader.Class (MonadReader (ask))
 import           Control.Monad.State.Strict (StateT(..), runStateT)
@@ -95,7 +94,7 @@ recursion = requireConcreteHole $ tracing "recursion" $ do
         -- Make sure that the recursive call contains at least one already-bound
         -- pattern value. This ensures it is structurally smaller, and thus
         -- suggests termination.
-        case (any (flip M.member pat_vals) $ syn_used_vals ext) of
+        case any (flip M.member pat_vals) $ syn_used_vals ext of
           True -> Nothing
           False -> Just UnhelpfulRecursion
 
@@ -233,7 +232,7 @@ homo hi = requireConcreteHole . tracing "homo" $ do
 
   -- Ensure that every data constructor in the domain type is covered in the
   -- codomain; otherwise 'homo' will produce an ill-typed program.
-  case (uncoveredDataCons (coerce $ hi_type hi) (coerce g)) of
+  case uncoveredDataCons (coerce $ hi_type hi) (coerce g) of
     Just uncovered_dcs ->
       unless (S.null uncovered_dcs) $
         failure  $ TacticPanic "Can't cover every datacon in domain"
@@ -243,7 +242,7 @@ homo hi = requireConcreteHole . tracing "homo" $ do
     $ destruct'
         False
         (\dc jdg -> buildDataCon False jdg dc $ snd $ splitAppTys $ unCType $ jGoal jdg)
-    $ hi
+        hi
 
 
 ------------------------------------------------------------------------------
@@ -266,7 +265,7 @@ homoLambdaCase =
         $ jGoal jdg
 
 
-data Saturation = Unsaturated Int
+newtype Saturation = Unsaturated Int
   deriving (Eq, Ord, Show)
 
 pattern Saturated :: Saturation
@@ -443,7 +442,7 @@ matching f = TacticT $ StateT $ \s -> runStateT (unTacticT $ f s) s
 
 
 attemptOn :: (Judgement -> [a]) -> (a -> TacticsM ()) -> TacticsM ()
-attemptOn getNames tac = matching (choice . fmap (\s -> tac s) . getNames)
+attemptOn getNames tac = matching (choice . fmap tac . getNames)
 
 
 localTactic :: TacticsM a -> (Judgement -> Judgement) -> TacticsM a
@@ -501,7 +500,7 @@ applyMethod cls df method_name = do
 applyByName :: OccName -> TacticsM ()
 applyByName name = do
   g <- goal
-  choice $ (unHypothesis (jHypothesis g)) <&> \hi ->
+  choice $ unHypothesis (jHypothesis g) <&> \hi ->
     case hi_name hi == name of
       True  -> apply Saturated hi
       False -> empty
@@ -582,8 +581,7 @@ letBind occs = do
            $ \occ
           -> fmap (occ, )
            $ fmap (<$ jdg)
-           $ fmap CType
-           $ newUnivar
+           $ fmap CType newUnivar
   rule $ nonrecLet occ_tys
 
 

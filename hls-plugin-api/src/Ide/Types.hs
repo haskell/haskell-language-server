@@ -178,7 +178,7 @@ class HasTracing (MessageParams m) => PluginMethod m where
 
 instance PluginMethod TextDocumentCodeAction where
   pluginEnabled _ = pluginEnabledConfig plcCodeActionsOn
-  combineResponses _method _config (ClientCapabilities _ textDocCaps _ _) (CodeActionParams _ _ _ _ context) resps =
+  combineResponses _method _config (ClientCapabilities _ textDocCaps _ _ _) (CodeActionParams _ _ _ _ context) resps =
       fmap compat $ List $ filter wasRequested $ (\(List x) -> x) $ sconcat resps
     where
 
@@ -224,7 +224,7 @@ instance PluginMethod TextDocumentHover where
 
 instance PluginMethod TextDocumentDocumentSymbol where
   pluginEnabled _ = pluginEnabledConfig plcSymbolsOn
-  combineResponses _ _ (ClientCapabilities _ tdc _ _) params xs = res
+  combineResponses _ _ (ClientCapabilities _ tdc _ _ _) params xs = res
     where
       uri' = params ^. textDocument . uri
       supportsHierarchy = Just True == (tdc >>= _documentSymbol >>= _hierarchicalDocumentSymbolSupport)
@@ -249,7 +249,7 @@ instance PluginMethod TextDocumentCompletion where
   combineResponses _ conf _ _ (toList -> xs) = snd $ consumeCompletionResponse limit $ combine xs
       where
         limit = maxCompletions conf
-        combine :: [List CompletionItem |? CompletionList] -> ((List CompletionItem) |? CompletionList)
+        combine :: [List CompletionItem |? CompletionList] -> (List CompletionItem |? CompletionList)
         combine cs = go True mempty cs
 
         go !comp acc [] =

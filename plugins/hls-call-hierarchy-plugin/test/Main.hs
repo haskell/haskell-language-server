@@ -528,7 +528,7 @@ testDataDir :: FilePath
 testDataDir = "test" </> "testdata"
 
 mkPrepareCallHierarchyParam :: TextDocumentIdentifier -> Int -> Int -> CallHierarchyPrepareParams
-mkPrepareCallHierarchyParam doc x y = CallHierarchyPrepareParams doc (Position x y) Nothing
+mkPrepareCallHierarchyParam doc x y = CallHierarchyPrepareParams doc (Position (fromIntegral x) (fromIntegral y)) Nothing
 
 mkIncomingCallsParam :: CallHierarchyItem -> CallHierarchyIncomingCallsParams
 mkIncomingCallsParam = CallHierarchyIncomingCallsParams Nothing Nothing

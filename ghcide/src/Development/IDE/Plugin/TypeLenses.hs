@@ -174,7 +174,7 @@ suggestLocalSignature isQuickFix mTmr mBindings Diagnostic{_message, _range = _r
     , startOfLine <- Position (_line _start) startCharacter
     , beforeLine <- Range startOfLine startOfLine
     , title <- if isQuickFix then "add signature: " <> signature else signature
-    , action <- TextEdit beforeLine $ signature <> "\n" <> T.replicate startCharacter " " =
+    , action <- TextEdit beforeLine $ signature <> "\n" <> T.replicate (fromIntegral startCharacter) " " =
     [(title, [action])]
   | otherwise = []
 

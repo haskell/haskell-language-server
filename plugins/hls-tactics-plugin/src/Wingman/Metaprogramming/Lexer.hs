@@ -1,7 +1,5 @@
 {-# LANGUAGE DataKinds         #-}
-{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeApplications  #-}
 
 module Wingman.Metaprogramming.Lexer where
 

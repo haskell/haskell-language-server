@@ -1,6 +1,7 @@
 name: Builds
 
 on:
+  workflow_dispatch:
   release:
     types: [created]
   push:
@@ -17,8 +18,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ['9.0.1', '8.10.7', '8.10.6', '8.8.4', '8.6.5']
-        os: [ubuntu-18.04, macOS-latest, windows-latest]
+        ghc:
+          [ "9.0.1"
+          , '8.10.7'
+          , "8.10.6"
+          , "8.8.4"
+          , "8.6.5"
+          ]
+        os: [ "ubuntu-18.04"
+            , "macOS-latest"
+            , "windows-latest"
+            ]
         cabal: ['3.6']
 
     steps:
@@ -43,7 +53,7 @@ jobs:
           echo -e 'package blaze-textual\n    flags: +integer-simple' >> cabal.project.local
         fi
 
-    - name: Use modified cabal.project for ghc9
+    - name: (GHC 9.0) Use modified cabal.project for GHC 9.0
       if: ${{ matrix.ghc == '9.0.1' }}
       run: cp cabal-ghc901.project cabal.project
 
@@ -55,7 +65,7 @@ jobs:
         sed -i.bak -e 's/Paths_haskell_language_server/Paths_hls/g' \
                    src/**/*.hs exe/*.hs
 
-    - name: Set some window specific things
+    - name: (Windows) Platform specifics
       if: matrix.os == 'windows-latest'
       env:
         GHC_VER: ${{ matrix.ghc }}
@@ -63,7 +73,7 @@ jobs:
         echo "EXE_EXT=.exe" >> $GITHUB_ENV
         echo "GHC_VERSION=$GHC_VER" >> $GITHUB_ENV
 
-    - name: Set some linux specific things
+    - name: (Linux) Platform specifics
       if: matrix.os == 'ubuntu-18.04'
       env:
         GHC_VER: ${{ matrix.ghc }}
@@ -71,20 +81,20 @@ jobs:
         echo "LINUX_CABAL_ARGS=--enable-executable-static --ghc-options=-split-sections" >> $GITHUB_ENV
         echo "GHC_VERSION=$GHC_VER" >> $GITHUB_ENV
 
-    - name: Set some macOs specific things
+    - name: (macOS) Platform specifics
       if: matrix.os == 'macOS-latest'
       env:
         GHC_VER: ${{ matrix.ghc }}
       run: |
         echo "GHC_VERSION=$GHC_VER" >> $GITHUB_ENV
 
-    - name: Modify cabal.project to workaround segfaults for ghc-8.8.4 and windows
+    - name: (Windows, GHC 8.8.4) Workaround segfaults
       if: matrix.ghc == '8.8.4' && matrix.os == 'windows-latest'
       run: |
           echo "package floskell" >> cabal.project
           echo "  ghc-options: -O0" >> cabal.project
 
-    - name: Build server
+    - name: Build the server
       # Try building it twice in case of flakey builds on Windows
       run: |
         cabal build --disable-tests exe:hls -O2 $LINUX_CABAL_ARGS || \
@@ -108,7 +118,7 @@ jobs:
           echo ::set-output name=extension::gz
         fi
 
-    - name: Upload server to release
+    - name: (not check) Upload server to release
       if: ${{ !contains(github.ref_name, 'check') }}
       uses: actions/upload-release-asset@v1.0.2
       env:
@@ -125,11 +135,11 @@ jobs:
         name: haskell-language-server-${{ runner.OS }}-${{ matrix.ghc }}${{env.EXE_EXT}}.${{ steps.compress_server_binary.outputs.extension }}
         path: ${{ steps.compress_server_binary.outputs.path }}
 
-    - name: Build wrapper
+    - name: (GHC 8.10) Build the wrapper
       if: matrix.ghc == '8.10.7'
       run: cabal build --disable-tests exe:hls-wrapper -O2 $LINUX_CABAL_ARGS
 
-    - name: Compress wrapper binary
+    - name: (GHC 8.10) Compress wrapper binary
       if: matrix.ghc == '8.10.7'
       id: compress_wrapper_binary
       run: |
@@ -148,7 +158,7 @@ jobs:
           echo ::set-output name=extension::gz
         fi
 
-    - name: Upload wrapper to the release
+    - name: (GHC 8.10, not check) Upload wrapper to the release
       if: ${{ matrix.ghc == '8.10.7' && !contains(github.ref_name, 'check') }}
       uses: actions/upload-release-asset@v1.0.2
       env:
@@ -159,7 +169,7 @@ jobs:
         asset_name: haskell-language-server-wrapper-${{ runner.OS }}${{env.EXE_EXT}}.${{ steps.compress_wrapper_binary.outputs.extension }}
         asset_content_type: ${{ steps.compress_wrapper_binary.outputs.content_type}}
 
-    - name: Upload wrapper to workflow artifacts
+    - name: (GHC 8.10) Upload wrapper to workflow artifacts
       uses: actions/upload-artifact@v2
       if: matrix.ghc == '8.10.7'
       with:
@@ -182,7 +192,7 @@ jobs:
                       -o src-dist/haskell-language-server.tar.gz \
                       HEAD
 
-      - name: Upload source tarball to the release
+      - name: (not check) Upload source tarball to the release
         if: ${{ !contains(github.ref_name, 'check') }}
         uses: actions/upload-release-asset@v1.0.2
         env:
@@ -206,7 +216,10 @@ jobs:
     runs-on: ubuntu-18.04
     strategy:
       matrix:
-        os: [Linux, macOS, Windows]
+        os: [ "Linux"
+            , "macOS"
+            , "Windows"
+            ]
     steps:
       - uses: actions/download-artifact@v2
 
@@ -226,7 +239,7 @@ jobs:
           fi
           tar -czpf haskell-language-server.tar.gz *
 
-      - name: Upload binaries tarball to the release
+      - name: (not check) Upload binaries tarball to the release
         if: ${{ !contains(github.ref_name, 'check') }}
         uses: actions/upload-release-asset@v1.0.2
         env:
@@ -255,7 +268,7 @@ jobs:
           # we clean up tags to match the release file names
           sed -i 's/\/.*)/)/g' SHA256SUMS
 
-      - name: Upload sha256sums to the release
+      - name: (not check) Upload sha256sums to the release
         if: ${{ !contains(github.ref_name, 'check') }}
         uses: actions/upload-release-asset@v1.0.2
         env:

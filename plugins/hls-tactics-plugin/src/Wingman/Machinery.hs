@@ -1,4 +1,3 @@
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections   #-}
 {-# LANGUAGE RankNTypes #-}
 
@@ -18,7 +17,7 @@ import           Data.Generics (everything, gcount, mkQ)
 import           Data.Generics.Product (field')
 import           Data.List (sortBy)
 import qualified Data.Map as M
-import           Data.Maybe (mapMaybe, isJust)
+import           Data.Maybe (mapMaybe, isNothing)
 import           Data.Monoid (getSum)
 import           Data.Ord (Down (..), comparing)
 import qualified Data.Set as S
@@ -69,14 +68,14 @@ newSubgoal j = do
 
 
 tacticToRule :: Judgement -> TacticsM () -> Rule
-tacticToRule jdg (TacticT tt) = RuleT $ flip execStateT jdg tt >>= flip Subgoal Axiom
+tacticToRule jdg (TacticT tt) = RuleT $ execStateT tt jdg >>= flip Subgoal Axiom
 
 
 consumeChan :: OutChan (Maybe a) -> IO [a]
 consumeChan chan = do
   tryReadChan chan >>= tryRead >>= \case
     Nothing -> pure []
-    Just (Just a) -> (:) <$> pure a <*> consumeChan chan
+    Just (Just a) -> (a:) <$> consumeChan chan
     Just Nothing -> pure []
 
 
@@ -107,7 +106,7 @@ runTactic duration ctx jdg t = do
     (in_proofs, out_proofs) <- newChan
     (in_errs, out_errs) <- newChan
     timed_out <-
-      fmap (not. isJust) $ timeout duration $ consume stream $ \case
+      fmap isNothing $ timeout duration $ consume stream $ \case
         Left err -> writeChan in_errs $ Just err
         Right proof -> writeChan in_proofs $ Just proof
     writeChan in_proofs Nothing
@@ -342,7 +341,7 @@ lookupNameInContext name = do
 getDefiningType
     :: TacticsM CType
 getDefiningType = do
-  calling_fun_name <- fst . head <$> asks ctxDefiningFuncs
+  calling_fun_name <- asks (fst . head . ctxDefiningFuncs)
   maybe
     (failure $ NotInScope calling_fun_name)
     pure
