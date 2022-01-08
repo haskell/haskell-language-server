@@ -2,6 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Plugins where
 
+import           Development.IDE.Types.Logger      (Recorder, cmap)
 import           Ide.PluginUtils                   (pluginDescToIdePlugins)
 import           Ide.Types                         (IdePlugins)
 
@@ -91,13 +92,11 @@ import qualified Ide.Plugin.StylishHaskell         as StylishHaskell
 #endif
 
 #if brittany
-import qualified Development.IDE.Plugin.HLS.GhcIde as Ghcide
-import           Development.IDE.Types.Logger      (Recorder, cmap)
 import qualified Ide.Plugin.Brittany               as Brittany
 #endif
 
 data Log
-  = LogGhcide Ghcide.Log
+  = LogGhcIde GhcIde.Log
   | LogExample Example.Log
   | LogExample2 Example2.Log
   | LogTactic Tactic.Log
@@ -184,7 +183,7 @@ idePlugins recorder includeExamples = pluginDescToIdePlugins allPlugins
 #endif
     -- The ghcide descriptors should come last so that the notification handlers
     -- (which restart the Shake build) run after everything else
-      GhcIde.descriptors (cmap LogGhcide recorder)
+      GhcIde.descriptors (cmap LogGhcIde recorder)
     examplePlugins =
       [Example.descriptor  (cmap LogExample recorder) "eg"
       ,Example2.descriptor (cmap LogExample2 recorder) "eg2"
