@@ -60,7 +60,7 @@ import qualified Development.IDE.Main            as IDEMain
 import           Development.IDE.Plugin.Test     (TestRequest (GetBuildKeysBuilt, WaitForIdeRule, WaitForShakeQueue),
                                                   WaitForIdeRuleResult (ideResultSuccess))
 import qualified Development.IDE.Plugin.Test     as Test
-import           Development.IDE.Types.Logger    (Priority (Debug), Recorder,
+import           Development.IDE.Types.Logger    (Priority (Debug),
                                                   WithPriority (WithPriority),
                                                   cmap,
                                                   makeDefaultTextWithPriorityStderrRecorder)
