@@ -99,7 +99,9 @@ data Log
   = LogGhcIde GhcIde.Log
   | LogExample Example.Log
   | LogExample2 Example2.Log
+#if tactic
   | LogTactic Tactic.Log
+#endif
   | LogEval Eval.Log
   | LogExplicitImports ExplicitImports.Log
   | LogRefineImports RefineImports.Log
