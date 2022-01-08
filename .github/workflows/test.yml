@@ -154,7 +154,7 @@ jobs:
         name: Test hls-floskell-plugin
         run: cabal test hls-floskell-plugin --test-options="$TEST_OPTS" || cabal test hls-floskell-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-floskell-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test
+      - if: matrix.test && matrix.ghc != '9.2.1'
         name: Test hls-class-plugin
         run: cabal test hls-class-plugin --test-options="$TEST_OPTS" || cabal test hls-class-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-class-plugin --test-options="$TEST_OPTS"
 
