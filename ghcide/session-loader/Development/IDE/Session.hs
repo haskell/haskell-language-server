@@ -15,7 +15,7 @@ module Development.IDE.Session
   ,runWithDb
   ,retryOnSqliteBusy
   ,retryOnException
-  ,Log
+  ,Log(..)
   ) where
 
 -- Unfortunately, we cannot use loadSession with ghc-lib since hie-bios uses

@@ -9,7 +9,7 @@ module Development.IDE.Main
 ,commandP
 ,defaultMain
 -- ,testing
-,Log) where
+,Log, testing) where
 import           Control.Concurrent.Extra              (newLock, withLock,
                                                         withNumCapabilities)
 import           Control.Concurrent.STM.Stats          (atomically,
@@ -69,6 +69,7 @@ import           Development.IDE.Plugin.HLS            (asGhcIdePlugin)
 import qualified Development.IDE.Plugin.HLS            as PluginHLS
 import qualified Development.IDE.Plugin.HLS.GhcIde     as Ghcide
 -- import qualified Development.IDE.Plugin.Test           as Test
+import qualified Development.IDE.Plugin.Test           as Test
 import           Development.IDE.Session               (SessionLoadingOptions,
                                                         getHieDbLoc,
                                                         loadSessionWithOptions,
@@ -240,6 +241,24 @@ stderrLogger logLevel = do
     lock <- newLock
     return $ Logger $ \p m -> when (p >= logLevel) $ withLock lock $
         T.hPutStrLn stderr $ "[" <> T.pack (show p) <> "] " <> m
+
+testing :: Recorder Log -> Arguments
+testing recorder =
+  let
+    arguments@Arguments{ argsHlsPlugins, argsIdeOptions } = defaultArguments recorder Debug
+    hlsPlugins = pluginDescToIdePlugins $
+      idePluginsToPluginDesc argsHlsPlugins
+      ++ [Test.blockCommandDescriptor "block-command", Test.plugin]
+    ideOptions = \config sessionLoader ->
+      let
+        defOptions = argsIdeOptions config sessionLoader
+      in
+        defOptions{ optTesting = IdeTesting True }
+  in
+    arguments
+      { argsHlsPlugins = hlsPlugins
+      , argsIdeOptions = ideOptions
+      }
 
 data Log
   = LogHeapStats !HeapStats.Log

@@ -115,6 +115,15 @@ import           Test.Tasty.QuickCheck
 import           Text.Printf                              (printf)
 import           Text.Regex.TDFA                          ((=~))
 import qualified HieDbRetry
+import Development.IDE.Types.Logger (WithPriority(WithPriority), makeDefaultTextWithPriorityStderrRecorder, Priority (Info), cmap, Recorder)
+import Data.Function ((&))
+import qualified Data.Text as Text
+import Data.Text (Text)
+
+data Log 
+  = LogGhcIde Ghcide.Log 
+  | LogIDEMain IDE.Log
+  deriving Show
 
 -- | Wait for the next progress begin step
 waitForProgressBegin :: Session ()
@@ -142,8 +151,17 @@ waitForAllProgressDone = loop
       done <- null <$> getIncompleteProgressSessions
       unless done loop
 
+-- TODO: change so all messages aren't Info
+logToTextWithPriority :: Log -> WithPriority Text
+logToTextWithPriority = WithPriority Info . Text.pack . show
+
 main :: IO ()
 main = do
+  textWithPriorityStderrRecorder <- makeDefaultTextWithPriorityStderrRecorder
+
+  let recorder = textWithPriorityStderrRecorder
+               & cmap logToTextWithPriority
+
   -- We mess with env vars so run single-threaded.
   defaultMainWithRerun $ testGroup "ghcide"
     [ testSession "open close" $ do
@@ -167,7 +185,7 @@ main = do
     , thTests
     , symlinkTests
     , safeTests
-    , unitTests
+    , unitTests recorder
     , haddockTests
     , positionMappingTests
     , watchedFilesTests
@@ -6088,8 +6106,8 @@ findCodeActions' op errMsg doc range expectedTitles = do
 findCodeAction :: TextDocumentIdentifier -> Range -> T.Text -> Session CodeAction
 findCodeAction doc range t = head <$> findCodeActions doc range [t]
 
-unitTests :: TestTree
-unitTests = do
+unitTests :: Recorder Log -> TestTree
+unitTests recorder = do
   testGroup "Unit"
      [ testCase "empty file path does NOT work with the empty String literal" $
          uriToFilePath' (fromNormalizedUri $ filePathToUri' "") @?= Just "."
@@ -6129,9 +6147,9 @@ unitTests = do
                         ]
                     }
                     | i <- [(1::Int)..20]
-                ] ++ Ghcide.descriptors
+                ] ++ Ghcide.descriptors (cmap LogGhcIde recorder)
 
-        testIde IDE.testing{IDE.argsHlsPlugins = plugins} $ do
+        testIde recorder (IDE.testing (cmap LogIDEMain recorder)){IDE.argsHlsPlugins = plugins} $ do
             _ <- createDoc "haskell" "A.hs" "module A where"
             waitForProgressDone
             actualOrder <- liftIO $ readIORef orderRef
@@ -6229,12 +6247,12 @@ findResolution_us delay_us = withTempFile $ \f -> withTempFile $ \f' -> do
     if t /= t' then return delay_us else findResolution_us (delay_us * 10)
 
 
-testIde :: IDE.Arguments -> Session () -> IO ()
-testIde arguments session = do
+testIde :: Recorder Log -> IDE.Arguments -> Session () -> IO ()
+testIde recorder arguments session = do
     config <- getConfigFromEnv
     (hInRead, hInWrite) <- createPipe
     (hOutRead, hOutWrite) <- createPipe
-    let server = IDE.defaultMain arguments
+    let server = IDE.defaultMain (cmap LogIDEMain recorder) arguments
             { IDE.argsHandleIn = pure hInRead
             , IDE.argsHandleOut = pure hOutWrite
             }
