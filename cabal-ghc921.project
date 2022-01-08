@@ -26,7 +26,6 @@ packages:
         -- ./plugins/hls-ormolu-plugin
          ./plugins/hls-call-hierarchy-plugin
         -- ./plugins/hls-alternate-number-format-plugin
-        ../lsp/lsp-test
 
 source-repository-package
   type: git
