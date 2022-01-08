@@ -25,7 +25,7 @@ main :: IO ()
 main = defaultTestRunner tests
 
 evalPlugin :: PluginDescriptor IdeState
-evalPlugin = Eval.descriptor "eval"
+evalPlugin = Eval.descriptor mempty "eval"
 
 tests :: TestTree
 tests =

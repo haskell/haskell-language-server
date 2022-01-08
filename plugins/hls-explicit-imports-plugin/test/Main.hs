@@ -16,7 +16,7 @@ import           System.FilePath            ((<.>), (</>))
 import           Test.Hls
 
 explicitImportsPlugin :: PluginDescriptor IdeState
-explicitImportsPlugin = ExplicitImports.descriptor "explicitImports"
+explicitImportsPlugin = ExplicitImports.descriptor mempty "explicitImports"
 
 
 main :: IO ()
