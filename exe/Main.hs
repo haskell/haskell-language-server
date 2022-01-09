@@ -29,7 +29,7 @@ logToTextWithPriority = WithPriority Info . Text.pack . show
 
 main :: IO ()
 main = do
-    args <- getArguments "haskell-language-server" (Plugins.idePlugins undefined False)
+    args <- getArguments "haskell-language-server" (Plugins.idePlugins mempty False)
 
     let (hsLoggerMinLogLevel, minPriority, logFilePath, includeExamplePlugins) =
           case args of

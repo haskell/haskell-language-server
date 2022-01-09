@@ -14,8 +14,7 @@ import           Control.Concurrent.Extra              (newLock, withLock,
                                                         withNumCapabilities)
 import           Control.Concurrent.STM.Stats          (atomically,
                                                         dumpSTMStats)
-import           Control.Exception.Safe                (Exception (displayException),
-                                                        SomeException, catchAny)
+import           Control.Exception.Safe                (SomeException, catchAny)
 import           Control.Monad.Extra                   (concatMapM, unless,
                                                         when)
 import qualified Data.Aeson.Encode.Pretty              as A
@@ -67,7 +66,7 @@ import qualified Development.IDE.Main.HeapStats        as HeapStats
 import           Development.IDE.Plugin                (Plugin (pluginHandlers, pluginModifyDynflags, pluginRules))
 import           Development.IDE.Plugin.HLS            (asGhcIdePlugin)
 import qualified Development.IDE.Plugin.HLS            as PluginHLS
-import qualified Development.IDE.Plugin.HLS.GhcIde     as Ghcide
+import qualified Development.IDE.Plugin.HLS.GhcIde     as GhcIde
 -- import qualified Development.IDE.Plugin.Test           as Test
 import qualified Development.IDE.Plugin.Test           as Test
 import           Development.IDE.Session               (SessionLoadingOptions,
@@ -126,8 +125,7 @@ import           System.IO                             (BufferMode (LineBufferin
                                                         hSetEncoding, stderr,
                                                         stdin, stdout, utf8)
 import           System.Random                         (newStdGen)
-import           System.Time.Extra                     (Seconds, offsetTime,
-                                                        showDuration)
+import           System.Time.Extra                     (Seconds, offsetTime)
 import           Text.Printf                           (printf)
 
 data Command
@@ -206,7 +204,7 @@ defaultArguments recorder priority = Arguments
         , argsLogger = stderrLogger priority
         , argsRules = mainRule (cmap LogRules recorder) def >> action kick
         , argsGhcidePlugin = mempty
-        , argsHlsPlugins = pluginDescToIdePlugins (Ghcide.descriptors (cmap LogGhcide recorder))
+        , argsHlsPlugins = pluginDescToIdePlugins (GhcIde.descriptors (cmap LogGhcIde recorder))
         , argsSessionLoadingOptions = def
         , argsIdeOptions = \config ghcSession -> (defaultIdeOptions ghcSession)
             { optCheckProject = pure $ checkProject config
@@ -277,7 +275,7 @@ data Log
   -- (logDebug logger $ T.pack $ "setInitialDynFlags: " ++ displayException e)
   | LogService Service.Log
   | LogShake Shake.Log
-  | LogGhcide Ghcide.Log
+  | LogGhcIde GhcIde.Log
   | LogLanguageServer LanguageServer.Log
   | LogSession Session.Log
   | LogPluginHLS PluginHLS.Log

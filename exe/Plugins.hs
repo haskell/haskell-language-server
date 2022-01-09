@@ -102,11 +102,21 @@ data Log
 #if tactic
   | LogTactic Tactic.Log
 #endif
+#if eval
   | LogEval Eval.Log
+#endif
+#if importLens
   | LogExplicitImports ExplicitImports.Log
+#endif
+#if refineImports
   | LogRefineImports RefineImports.Log
+#endif
+#if hlint
   | LogHlint Hlint.Log
+#endif
+#if alternateNumberFormat
   | LogAlternateNumberFormat AlternateNumberFormat.Log
+#endif
   deriving Show
 
 -- ---------------------------------------------------------------------
