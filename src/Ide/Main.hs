@@ -30,18 +30,32 @@ import           Ide.Plugin.ConfigUtils        (pluginsToDefaultConfig,
 import           Ide.Types                     (IdePlugins, PluginId (PluginId),
                                                 ipMap)
 import           Ide.Version
+import           Prettyprinter                 (Pretty, pretty, (<+>))
+import qualified Prettyprinter
 import qualified System.Directory.Extra        as IO
 
 data Log
   = LogVersion !String
   | LogDirectory !FilePath
-  | LogLsp !GhcideArguments ![PluginId]
+  | LogLspStart !GhcideArguments ![PluginId]
   -- hPutStrLn stderr "Starting (haskell-language-server)LSP server..."
   -- hPutStrLn stderr $ "  with arguments: " <> show ghcideArgs
   -- hPutStrLn stderr $ "  with plugins: " <> show (map fst $ ipMap idePlugins)
   -- hPutStrLn stderr $ "  in directory: " <> dir
   | LogIDEMain IDEMain.Log
   deriving Show
+
+instance Pretty Log where
+  pretty log = case log of
+    LogVersion version -> pretty version
+    LogDirectory path -> "Directory:" <+> pretty path
+    LogLspStart ghcideArgs pluginIds ->
+      Prettyprinter.nest 2 $
+        Prettyprinter.vsep
+          [ "Starting (haskell-language-server) LSP server..."
+          , pretty ghcideArgs
+          , "PluginIds:" <+> pretty pluginIds ]
+    LogIDEMain iDEMainLog -> pretty iDEMainLog
 
 defaultMain :: Recorder Log -> Arguments -> IdePlugins IdeState -> IO ()
 defaultMain recorder args idePlugins = do
@@ -106,7 +120,7 @@ runLspMode recorder ghcideArgs@GhcideArguments{..} idePlugins = withTelemetryLog
     log $ LogDirectory dir
 
     when (isLSP argsCommand) $ do
-        log $ LogLsp ghcideArgs (map fst $ ipMap idePlugins)
+        log $ LogLspStart ghcideArgs (map fst $ ipMap idePlugins)
 
     IDEMain.defaultMain (cmap LogIDEMain recorder) (IDEMain.defaultArguments (cmap LogIDEMain recorder) Info)
       { IDEMain.argCommand = argsCommand

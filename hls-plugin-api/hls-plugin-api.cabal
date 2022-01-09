@@ -57,6 +57,7 @@ library
     , text
     , transformers
     , unordered-containers
+    , prettyprinter
 
   if os(windows)
     build-depends: Win32

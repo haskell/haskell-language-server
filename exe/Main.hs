@@ -17,6 +17,9 @@ import           Ide.Arguments                (Arguments (..),
 import           Ide.Main                     (defaultMain)
 import qualified Ide.Main                     as IdeMain
 import qualified Plugins
+import           Prettyprinter                (Pretty (pretty))
+import qualified Prettyprinter
+import qualified Prettyprinter.Render.Text    as Prettyprinter
 import qualified System.Log                   as HsLogger
 
 data Log
@@ -24,8 +27,17 @@ data Log
   | LogPlugins Plugins.Log
   deriving Show
 
+instance Pretty Log where
+  pretty log = case log of
+    LogIdeMain ideMainLog -> pretty ideMainLog
+    LogPlugins log'       -> mempty
+
 logToTextWithPriority :: Log -> WithPriority Text
-logToTextWithPriority = WithPriority Info . Text.pack . show
+logToTextWithPriority =
+  WithPriority Info
+  . Prettyprinter.renderStrict
+  . Prettyprinter.layoutPretty Prettyprinter.defaultLayoutOptions
+  . pretty
 
 main :: IO ()
 main = do

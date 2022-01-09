@@ -35,6 +35,7 @@ import qualified Development.IDE.Core.OfInterest as OfInterest
 import           Development.IDE.Core.Shake      hiding (Log)
 import qualified Development.IDE.Core.Shake      as Shake
 import           Development.IDE.Types.Shake     (WithHieDb)
+import           Prettyprinter                   (Pretty (pretty))
 import           System.Environment              (lookupEnv)
 
 
@@ -43,6 +44,13 @@ data Log
   | LogOfInterest OfInterest.Log
   | LogFileExists FileExists.Log
   deriving Show
+
+instance Pretty Log where
+  pretty log = case log of
+    LogShake log      -> pretty log
+    LogOfInterest log -> mempty
+    LogFileExists log -> mempty
+
 
 ------------------------------------------------------------
 -- Exposed API

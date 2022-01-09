@@ -1,10 +1,12 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
-{-# LANGUAGE CPP             #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TupleSections   #-}
+{-# LANGUAGE CPP                #-}
+{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE TemplateHaskell    #-}
+{-# LANGUAGE TupleSections      #-}
 {-# OPTIONS_GHC -Wno-dodgy-imports #-} -- GHC no longer exports def in GHC 8.6 and above
+{-# LANGUAGE DeriveAnyClass     #-}
+{-# LANGUAGE DerivingStrategies #-}
 
 module Ide.Arguments
   ( Arguments(..)
@@ -23,6 +25,7 @@ import           Development.IDE.Main          (Command (..), commandP)
 import           Ide.Types                     (IdePlugins)
 import           Options.Applicative
 import           Paths_haskell_language_server
+import           Prettyprinter                 (Pretty (pretty))
 import           System.Environment
 
 -- ---------------------------------------------------------------------
@@ -48,7 +51,9 @@ data GhcideArguments = GhcideArguments
     , argsLogFile           :: Maybe String
     , argsThreads           :: Int
     , argsProjectGhcVersion :: Bool
-    } deriving Show
+    }
+    deriving Show
+    deriving anyclass Pretty
 
 data PrintVersion
   = PrintVersion

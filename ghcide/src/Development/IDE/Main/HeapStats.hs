@@ -5,11 +5,11 @@ module Development.IDE.Main.HeapStats ( withHeapStats, Log ) where
 import           Control.Concurrent
 import           Control.Concurrent.Async
 import           Control.Monad
-import qualified Data.Text                    as T
 import           Data.Word
-import           Development.IDE.Types.Logger (Logger, Recorder, logInfo,
-                                               logWith)
+import           Development.IDE.Types.Logger (Recorder, logWith)
 import           GHC.Stats
+import           Prettyprinter                (Pretty (pretty), (<+>))
+import qualified Prettyprinter
 import           Text.Printf                  (printf)
 
 data Log
@@ -25,6 +25,26 @@ data Log
     --           "Heap size: " <> format heap_size
   -- logInfo l message
   deriving Show
+
+instance Pretty Log where
+  pretty log = case log of
+    LogHeapStatsPeriod period ->
+      "Logging heap statistics every" <+> pretty (toFormattedSeconds period)
+    LogHeapStatsDisabled ->
+      "Heap statistics are not enabled (RTS option -T is needed)"
+    LogHeapStats liveBytes heapSize ->
+      Prettyprinter.hsep
+        [ "Live bytes:"
+        , pretty (toFormattedMegabytes liveBytes)
+        , "Heap size:"
+        , pretty (toFormattedMegabytes heapSize) ]
+    where
+      toFormattedSeconds :: Int -> String
+      toFormattedSeconds s = printf "%.2fs" (fromIntegral @Int @Double s / 1e6)
+
+      toFormattedMegabytes :: Word64 -> String
+      toFormattedMegabytes b = printf "%.2fMB" (fromIntegral @Word64 @Double b / 1e6)
+
 
 -- | Interval at which to report the latest heap statistics.
 heapStatsInterval :: Int

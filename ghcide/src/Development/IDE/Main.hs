@@ -14,7 +14,8 @@ import           Control.Concurrent.Extra              (newLock, withLock,
                                                         withNumCapabilities)
 import           Control.Concurrent.STM.Stats          (atomically,
                                                         dumpSTMStats)
-import           Control.Exception.Safe                (SomeException, catchAny)
+import           Control.Exception.Safe                (SomeException, catchAny,
+                                                        displayException)
 import           Control.Monad.Extra                   (concatMapM, unless,
                                                         when)
 import qualified Data.Aeson.Encode.Pretty              as A
@@ -112,6 +113,8 @@ import qualified Language.LSP.Server                   as LSP
 import qualified "list-t" ListT
 import           Numeric.Natural                       (Natural)
 import           Options.Applicative                   hiding (action)
+import           Prettyprinter                         (Pretty (pretty), (<+>))
+import qualified Prettyprinter
 import qualified StmContainers.Map                     as STM
 import qualified System.Directory.Extra                as IO
 import           System.Exit                           (ExitCode (ExitFailure),
@@ -125,7 +128,8 @@ import           System.IO                             (BufferMode (LineBufferin
                                                         hSetEncoding, stderr,
                                                         stdin, stdout, utf8)
 import           System.Random                         (newStdGen)
-import           System.Time.Extra                     (Seconds, offsetTime)
+import           System.Time.Extra                     (Seconds, offsetTime,
+                                                        showDuration)
 import           Text.Printf                           (printf)
 
 data Command
@@ -137,7 +141,6 @@ data Command
     | PrintDefaultConfig
     | Custom {ideCommand :: IdeCommand IdeState} -- ^ User defined
     deriving Show
-
 
 -- TODO move these to hiedb
 deriving instance Show HieDb.Command
@@ -281,6 +284,29 @@ data Log
   | LogPluginHLS PluginHLS.Log
   | LogRules Rules.Log
   deriving Show
+
+instance Pretty Log where
+  pretty log = case log of
+    LogHeapStats heapStatsLog -> pretty heapStatsLog
+    LogLspStart ->
+      Prettyprinter.vsep
+        [ "Staring LSP server..."
+        , "If you are seeing this in a terminal, you probably should have run WITHOUT the --lsp option!"]
+    LogLspStartDuration duration ->
+      "Started LSP server in" <+> pretty (showDuration duration)
+    LogShouldRunSubset shouldRunSubset ->
+      "shouldRunSubset:" <+> pretty shouldRunSubset
+    LogOnlyPartialGhc9Support ->
+      "Currently, HLS supports GHC 9 only partially. See [issue #297](https://github.com/haskell/haskell-language-server/issues/297) for more detail."
+    LogSetInitialDynFlagsException e ->
+      "setInitialDynFlags:" <+> pretty (displayException e)
+    LogService serviceLog -> pretty serviceLog
+    LogShake log' -> mempty
+    LogGhcIde log' -> mempty
+    LogLanguageServer log' -> mempty
+    LogSession log' -> mempty
+    LogPluginHLS log' -> mempty
+    LogRules log' -> mempty
 
 defaultMain :: Recorder Log -> Arguments -> IO ()
 defaultMain recorder Arguments{..} = withHeapStats (cmap LogHeapStats recorder) fun

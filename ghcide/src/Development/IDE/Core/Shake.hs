@@ -150,7 +150,6 @@ import           Language.LSP.Types.Capabilities
 import           OpenTelemetry.Eventlog
 
 import           Control.Concurrent.STM.Stats           (atomicallyNamed)
-import           Control.Exception.Base                 (SomeException (SomeException))
 import           Control.Exception.Extra                hiding (bracket_)
 import           Data.Aeson                             (toJSON)
 import qualified Data.ByteString.Char8                  as BS8
@@ -160,9 +159,7 @@ import           Data.Foldable                          (for_, toList)
 import           Data.HashSet                           (HashSet)
 import qualified Data.HashSet                           as HSet
 import           Data.String                            (fromString)
-import           Data.Text                              (pack)
 import           Debug.Trace.Flags                      (userTracingEnabled)
-import           Development.IDE.Types.Action           (DelayedActionInternal)
 import qualified Development.IDE.Types.Exports          as ExportsMap
 import qualified Focus
 import           HieDb.Types
@@ -170,6 +167,8 @@ import           Ide.Plugin.Config
 import qualified Ide.PluginUtils                        as HLS
 import           Ide.Types                              (PluginId)
 import qualified "list-t" ListT
+import           Prettyprinter                          (Pretty (pretty), (<+>))
+import qualified Prettyprinter
 import qualified StmContainers.Map                      as STM
 
 data Log
@@ -178,8 +177,24 @@ data Log
   | LogCreateHieDbExportsMapFinish !Int
   -- logDebug logger $ "Done initializing exports map from hiedb (" <> pack(show (ExportsMap.size em)) <> ")"
   | LogBuildSessionRestart !String ![DelayedActionInternal] !(HashSet Key) !Seconds !(Maybe FilePath)
+  -- let profile = case res of
+  --         Just fp -> ", profile saved at " <> fp
+  --         _       -> ""
+  -- log $ LogBuildSessionRestart reason queue backlog stopTime res
+  -- -- TODO: should eventually replace with logging using a logger that sends lsp message
+  -- let msg = T.pack $ "Restarting build session " ++ reason' ++ queueMsg ++ keysMsg ++ abortMsg
+  --     reason' = "due to " ++ reason
+  --     queueMsg = " with queue " ++ show (map actionName queue)
+  --     keysMsg = " for keys " ++ show (HSet.toList backlog) ++ " "
+  --     abortMsg = "(aborting the previous one took " ++ showDuration stopTime ++ profile ++ ")"
   | LogDelayedAction !(DelayedAction ()) !Seconds
+  -- let msg = T.pack $ "finish: " ++ actionName d
+  --                 ++ " (took " ++ showDuration runTime ++ ")"
   | LogBuildSessionFinish !(Maybe SomeException)
+  -- let res' = case res of
+  --             Left e  -> "exception: " <> displayException e
+  --             Right _ -> "completed"
+  -- let msg = T.pack $ "Finishing build session(" ++ res' ++ ")"
   | LogDiagsDiffButNoLspEnv ![FileDiagnostic]
   -- logInfo logger $ showDiagnosticsColored $ map (fp,ShowDiag,) newDiags
   | LogDefineEarlyCutoffRuleNoDiagDiags ![FileDiagnostic]
@@ -187,6 +202,37 @@ data Log
   | LogDefineEarlyCutoffRuleCustomNewnessDiags ![FileDiagnostic]
   -- RuleWithCustomNewnessCheck mapM_ (\d -> liftIO $ logWarning logger $ showDiagnosticsColored [d]) diags
   deriving Show
+
+instance Pretty Log where
+  pretty log = case log of
+    LogCreateHieDbExportsMapStart ->
+      "Initializing exports map from hiedb"
+    LogCreateHieDbExportsMapFinish exportsMapSize ->
+      "Done initializing exports map from hiedb. Size:" <+> pretty exportsMapSize
+    LogBuildSessionRestart reason actionQueue keyBackLog abortDuration shakeProfilePath ->
+      Prettyprinter.vcat
+        [ "Restarting build session due to" <+> pretty reason
+        , "Action Queue:" <+> pretty (map actionName actionQueue)
+        , "Keys:" <+> pretty (map show $ HSet.toList keyBackLog)
+        , "Aborting previous build session took" <+> pretty (showDuration abortDuration) <+> pretty shakeProfilePath ]
+    LogDelayedAction delayedAction duration ->
+      Prettyprinter.hsep
+        [ "Finished:" <+> pretty (actionName delayedAction)
+        , "Took:" <+> pretty (showDuration duration) ]
+    LogBuildSessionFinish e ->
+      Prettyprinter.vcat
+        [ "Finished build session"
+        , pretty (fmap displayException e) ]
+    LogDiagsDiffButNoLspEnv fileDiagnostics ->
+      "updateFileDiagnostics published different from new diagnostics - file diagnostics:"
+      <+> pretty (showDiagnosticsColored fileDiagnostics)
+    LogDefineEarlyCutoffRuleNoDiagDiags fileDiagnostics ->
+      "defineEarlyCutoff RuleNoDiagnostics - file diagnostics:"
+      <+> pretty (showDiagnosticsColored fileDiagnostics)
+    LogDefineEarlyCutoffRuleCustomNewnessDiags fileDiagnostics ->
+      "defineEarlyCutoff RuleWithCustomNewnessCheck - file diagnostics:"
+      <+> pretty (showDiagnosticsColored fileDiagnostics)
+
 
 -- | We need to serialize writes to the database, so we send any function that
 -- needs to write to the database over the channel, where it will be picked up by
@@ -665,6 +711,7 @@ shakeRestart recorder IdeState{..} reason acts =
               let profile = case res of
                       Just fp -> ", profile saved at " <> fp
                       _       -> ""
+              -- TODO: should replace with logging using a logger that sends lsp message
               let msg = T.pack $ "Restarting build session " ++ reason' ++ queueMsg ++ keysMsg ++ abortMsg
                   reason' = "due to " ++ reason
                   queueMsg = " with queue " ++ show (map actionName queue)
