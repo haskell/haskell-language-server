@@ -7,6 +7,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE ImplicitParams        #-}
+{-# LANGUAGE MultiWayIf            #-}
 {-# LANGUAGE PatternSynonyms       #-}
 {-# LANGUAGE PolyKinds             #-}
 {-# LANGUAGE TypeOperators         #-}
@@ -81,7 +82,7 @@ import           System.Exit                              (ExitCode (ExitSuccess
 import           System.FilePath
 import           System.IO.Extra                          hiding (withTempDir)
 import qualified System.IO.Extra
-import           System.Info.Extra                        (isWindows)
+import           System.Info.Extra                        (isWindows, isMac)
 import           System.Mem                               (performGC)
 import           System.Process.Extra                     (CreateProcess (cwd),
                                                            createPipe, proc,
@@ -4047,9 +4048,13 @@ findDefinitionAndHoverTests = let
   , test  no     skip   cccL17     docLink       "Haddock html links"
   , testM yes    yes    imported   importedSig   "Imported symbol"
   , testM yes    yes    reexported reexportedSig "Imported symbol (reexported)"
-  , if ghcVersion == GHC90 && isWindows then
+  , if | ghcVersion == GHC90 && isWindows ->
         test  no     broken    thLocL57   thLoc         "TH Splice Hover"
-    else
+       | ghcVersion == GHC92 && (isWindows || isMac) ->
+           -- Some GHC 9.2 distributions ship without .hi docs
+           -- https://gitlab.haskell.org/ghc/ghc/-/issues/20903
+        test  no     broken   thLocL57   thLoc         "TH Splice Hover"
+       | otherwise ->
         test  no     yes       thLocL57   thLoc         "TH Splice Hover"
   ]
   where yes, broken :: (TestTree -> Maybe TestTree)
