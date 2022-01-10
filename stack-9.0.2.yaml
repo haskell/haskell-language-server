@@ -59,6 +59,7 @@ extra-deps:
 - ghc-boot-9.2.1
 - process-1.6.13.2
 - time-1.12.1
+- unix-2.7.2.2
 
 # currently needed for ghcide>extra, etc.
 allow-newer: true
