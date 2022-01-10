@@ -5,10 +5,10 @@
 
 module Ide.Plugin.ConfigUtils where
 
-import           Control.Lens          ((&), (?~), ix, at)
+import           Control.Lens          (at, (&), (?~))
 import qualified Data.Aeson            as A
+import           Data.Aeson.Lens       (_Object, key)
 import qualified Data.Aeson.Types      as A
-import           Data.Aeson.Lens      (_Object)
 import           Data.Default          (def)
 import qualified Data.Dependent.Map    as DMap
 import qualified Data.Dependent.Sum    as DSum
@@ -31,7 +31,7 @@ pluginsToDefaultConfig IdePlugins {..} =
   -- Use 'ix' to look at all the "haskell" keys in the outer value (since we're not
   -- setting it if missing), then we use '_Object' and 'at' to get at the "plugin" key
   -- and actually set it.
-  A.toJSON defaultConfig & ix "haskell" . _Object . at "plugin" ?~ elems
+  A.toJSON defaultConfig & key "haskell" . _Object . at "plugin" ?~ elems
   where
     defaultConfig@Config {} = def
     elems = A.object $ mconcat $ singlePlugin <$> map snd ipMap
