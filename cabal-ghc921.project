@@ -57,7 +57,7 @@ write-ghc-environment-files: never
 index-state: 2022-01-03T18:45:00Z
 
 constraints:
-  -- These plugins doesn't work on GHC92 yet
+  -- These plugins don't build/work on GHC92 yet
   haskell-language-server
     +ignore-plugins-ghc-bounds
     -alternateNumberFormat
@@ -76,7 +76,9 @@ constraints:
     -retrie
     -splice
     -stylishhaskell
-    -tactic,
+    -tactic
+  -- the rename plugin builds, but doesn't work
+    -rename,
   ghc-lib-parser ^>= 9.2,
   attoparsec ^>= 0.14.3,
   ghc-exactprint >= 1.3,
