@@ -433,6 +433,7 @@ test-suite func-test
     , data-default
     , hspec-expectations
     , lens
+    , lens-aeson
     , ghcide
     , hls-test-utils ^>= 1.1.0.0
     , lsp-types
