@@ -6,7 +6,6 @@ module Main(main) where
 
 import           Data.Function                ((&))
 import           Data.Text                    (Text)
-import qualified Data.Text                    as Text
 import           Development.IDE.Types.Logger (Priority (Debug, Info),
                                                WithPriority (WithPriority, priority),
                                                cfilter, cmap, setupHsLogger,

@@ -132,6 +132,53 @@ import           System.Time.Extra                     (Seconds, offsetTime,
                                                         showDuration)
 import           Text.Printf                           (printf)
 
+data Log
+  = LogHeapStats !HeapStats.Log
+  | LogLspStart
+  -- logInfo logger "Starting LSP server..."
+  -- logInfo logger "If you are seeing this in a terminal, you probably should have run WITHOUT the --lsp option!"
+  | LogLspStartDuration !Seconds
+  -- logInfo logger $ T.pack $ "Started LSP server in " ++ showDuration t
+  | LogShouldRunSubset !Bool
+  -- logDebug logger $ T.pack $ "runSubset: " <> show runSubset
+  | LogOnlyPartialGhc9Support
+  -- hPutStrLn stderr $
+  --     "Currently, HLS supports GHC 9 only partially. "
+  --     <> "See [issue #297](https://github.com/haskell/haskell-language-server/issues/297) for more detail."
+  | LogSetInitialDynFlagsException !SomeException
+  -- (logDebug logger $ T.pack $ "setInitialDynFlags: " ++ displayException e)
+  | LogService Service.Log
+  | LogShake Shake.Log
+  | LogGhcIde GhcIde.Log
+  | LogLanguageServer LanguageServer.Log
+  | LogSession Session.Log
+  | LogPluginHLS PluginHLS.Log
+  | LogRules Rules.Log
+  deriving Show
+
+instance Pretty Log where
+  pretty log = case log of
+    LogHeapStats heapStatsLog -> pretty heapStatsLog
+    LogLspStart ->
+      Prettyprinter.vsep
+        [ "Staring LSP server..."
+        , "If you are seeing this in a terminal, you probably should have run WITHOUT the --lsp option!"]
+    LogLspStartDuration duration ->
+      "Started LSP server in" <+> pretty (showDuration duration)
+    LogShouldRunSubset shouldRunSubset ->
+      "shouldRunSubset:" <+> pretty shouldRunSubset
+    LogOnlyPartialGhc9Support ->
+      "Currently, HLS supports GHC 9 only partially. See [issue #297](https://github.com/haskell/haskell-language-server/issues/297) for more detail."
+    LogSetInitialDynFlagsException e ->
+      "setInitialDynFlags:" <+> pretty (displayException e)
+    LogService serviceLog -> pretty serviceLog
+    LogShake shakeLog -> pretty shakeLog
+    LogGhcIde ghcIdeLog -> pretty ghcIdeLog
+    LogLanguageServer languageServerLog -> pretty languageServerLog
+    LogSession log' -> mempty
+    LogPluginHLS log' -> mempty
+    LogRules log' -> mempty
+
 data Command
     = Check [FilePath]  -- ^ Typecheck some paths and print diagnostics. Exit code is the number of failures
     | Db {hieOptions ::  HieDb.Options, hieCommand :: HieDb.Command}
@@ -261,52 +308,6 @@ testing recorder =
       , argsIdeOptions = ideOptions
       }
 
-data Log
-  = LogHeapStats !HeapStats.Log
-  | LogLspStart
-  -- logInfo logger "Starting LSP server..."
-  -- logInfo logger "If you are seeing this in a terminal, you probably should have run WITHOUT the --lsp option!"
-  | LogLspStartDuration !Seconds
-  -- logInfo logger $ T.pack $ "Started LSP server in " ++ showDuration t
-  | LogShouldRunSubset !Bool
-  -- logDebug logger $ T.pack $ "runSubset: " <> show runSubset
-  | LogOnlyPartialGhc9Support
-  -- hPutStrLn stderr $
-  --     "Currently, HLS supports GHC 9 only partially. "
-  --     <> "See [issue #297](https://github.com/haskell/haskell-language-server/issues/297) for more detail."
-  | LogSetInitialDynFlagsException !SomeException
-  -- (logDebug logger $ T.pack $ "setInitialDynFlags: " ++ displayException e)
-  | LogService Service.Log
-  | LogShake Shake.Log
-  | LogGhcIde GhcIde.Log
-  | LogLanguageServer LanguageServer.Log
-  | LogSession Session.Log
-  | LogPluginHLS PluginHLS.Log
-  | LogRules Rules.Log
-  deriving Show
-
-instance Pretty Log where
-  pretty log = case log of
-    LogHeapStats heapStatsLog -> pretty heapStatsLog
-    LogLspStart ->
-      Prettyprinter.vsep
-        [ "Staring LSP server..."
-        , "If you are seeing this in a terminal, you probably should have run WITHOUT the --lsp option!"]
-    LogLspStartDuration duration ->
-      "Started LSP server in" <+> pretty (showDuration duration)
-    LogShouldRunSubset shouldRunSubset ->
-      "shouldRunSubset:" <+> pretty shouldRunSubset
-    LogOnlyPartialGhc9Support ->
-      "Currently, HLS supports GHC 9 only partially. See [issue #297](https://github.com/haskell/haskell-language-server/issues/297) for more detail."
-    LogSetInitialDynFlagsException e ->
-      "setInitialDynFlags:" <+> pretty (displayException e)
-    LogService serviceLog -> pretty serviceLog
-    LogShake log' -> mempty
-    LogGhcIde log' -> mempty
-    LogLanguageServer log' -> mempty
-    LogSession log' -> mempty
-    LogPluginHLS log' -> mempty
-    LogRules log' -> mempty
 
 defaultMain :: Recorder Log -> Arguments -> IO ()
 defaultMain recorder Arguments{..} = withHeapStats (cmap LogHeapStats recorder) fun

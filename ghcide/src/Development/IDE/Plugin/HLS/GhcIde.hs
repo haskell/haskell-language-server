@@ -18,6 +18,7 @@ import qualified Development.IDE.Plugin.TypeLenses   as TypeLenses
 import           Ide.Types
 import           Language.LSP.Server                 (LspM)
 import           Language.LSP.Types
+import           Prettyprinter                       (Pretty (pretty))
 import           Text.Regex.TDFA.Text                ()
 
 data Log
@@ -25,6 +26,12 @@ data Log
   | LogCompletions Completions.Log
   | LogTypeLenses TypeLenses.Log
   deriving Show
+
+instance Pretty Log where
+  pretty = \case
+    LogNotifications notificationsLog -> pretty notificationsLog
+    LogCompletions completionsLog     -> mempty
+    LogTypeLenses typeLensesLog       -> mempty
 
 descriptors :: Recorder Log -> [PluginDescriptor IdeState]
 descriptors recorder =

@@ -38,11 +38,17 @@ import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger
 import           Development.IDE.Types.Shake           (toKey)
 import           Ide.Types
+import           Prettyprinter                         (Pretty (pretty))
 
 data Log
   = LogShake Shake.Log
   | LogFileStore FileStore.Log
   deriving Show
+
+instance Pretty Log where
+  pretty = \case
+    LogShake shakeLog         -> pretty shakeLog
+    LogFileStore fileStoreLog -> pretty fileStoreLog
 
 whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
 whenUriFile uri act = whenJust (LSP.uriToFilePath uri) $ act . toNormalizedFilePath'

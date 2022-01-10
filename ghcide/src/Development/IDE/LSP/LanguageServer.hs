@@ -42,14 +42,16 @@ import           Development.IDE.Types.Logger
 import           Control.Monad.IO.Unlift               (MonadUnliftIO)
 import qualified Development.IDE.Session               as Session
 import           Development.IDE.Types.Shake           (WithHieDb)
+import           Prettyprinter                         (Pretty (pretty), (<+>))
+import qualified Prettyprinter
 import           System.IO.Unsafe                      (unsafeInterleaveIO)
 
 data Log
-  = LogRegisterIdeConfig !IdeConfiguration
+  = LogRegisteringIdeConfig !IdeConfiguration
   -- logInfo (ideLogger ide) $ T.pack $ "Registering ide configuration: " <> show initConfig
-  | LogHandleServerException !SomeException
+  | LogReactorThreadException !SomeException
   -- logError logger $ T.pack $ "Fatal error in server thread: " <> show e
-  | LogExceptionInHandler !SomeException
+  | LogReactorMessageActionException !SomeException
   -- logError logger $ T.pack $
   --     "Unexpected exception, please report!\n" ++
   --     "Exception: " ++ show e
@@ -59,6 +61,24 @@ data Log
   -- logDebug (ideLogger ide) $ T.pack $ "Cancelled request " <> show _id
   | LogSession Session.Log
   deriving Show
+
+instance Pretty Log where
+  pretty = \case
+    LogRegisteringIdeConfig ideConfig ->
+      "Registering IDE configuration:" <+> Prettyprinter.viaShow ideConfig
+    LogReactorThreadException e ->
+      Prettyprinter.vcat
+        [ "ReactorThreadException"
+        , pretty $ displayException e ]
+    LogReactorMessageActionException e ->
+      Prettyprinter.vcat
+        [ "ReactorMessageActionException"
+        , pretty $ displayException e ]
+    LogReactorThreadStopped ->
+      "Reactor thread stopped"
+    (LogCancelledRequest requestId) ->
+      "Cancelled request" <+> Prettyprinter.viaShow requestId
+    (LogSession sessionLog) -> pretty sessionLog
 
 issueTrackerUrl :: T.Text
 issueTrackerUrl = "https://github.com/haskell/haskell-language-server/issues"
@@ -168,11 +188,11 @@ runLanguageServer recorder options inH outH getHieDbLoc defaultConfig onConfigur
 
             let initConfig = parseConfiguration params
 
-            log $ LogRegisterIdeConfig initConfig
+            log $ LogRegisteringIdeConfig initConfig
             registerIdeConfiguration (shakeExtras ide) initConfig
 
             let handleServerException (Left e) = do
-                    log $ LogHandleServerException e
+                    log $ LogReactorThreadException e
                     sendErrorMessage e
                     exitClientMsg
                 handleServerException (Right _) = pure ()
@@ -185,7 +205,7 @@ runLanguageServer recorder options inH outH getHieDbLoc defaultConfig onConfigur
                         ]
 
                 exceptionInHandler e = do
-                    log $ LogExceptionInHandler e
+                    log $ LogReactorMessageActionException e
                     sendErrorMessage e
 
                 checkCancelled _id act k =

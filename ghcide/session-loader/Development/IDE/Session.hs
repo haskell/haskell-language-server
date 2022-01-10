@@ -75,7 +75,6 @@ import           Language.LSP.Types
 import           System.Directory
 import qualified System.Directory.Extra               as IO
 import           System.FilePath
-import           System.IO
 import           System.Info
 
 import           Control.Applicative                  (Alternative ((<|>)))
@@ -94,11 +93,13 @@ import           Development.IDE.Types.Shake          (WithHieDb)
 import           HieDb.Create
 import           HieDb.Types
 import           HieDb.Utils
+import           Prettyprinter                        (Pretty (pretty), (<+>))
+import qualified Prettyprinter
 import           System.Random                        (RandomGen)
 import qualified System.Random                        as Random
 
 data Log
-  = LogSetInitialDynFlags !(Cradle Void)
+  = LogSettingInitialDynFlags -- seems like wrong location so I changed it
   -- logDebug logger $ T.pack $ "setInitialDynFlags cradle: " ++ show cradle
   | LogGetInitialGhcLibDirDefaultCradleFail !CradleError !FilePath !(Maybe FilePath) !(Cradle Void)
   -- hPutStrLn stderr $ "Couldn't load cradle for libdir: " ++ show (err,rootDir,hieYaml,cradle)
@@ -121,32 +122,103 @@ data Log
   --       , "exception: " <> T.pack (show e)]
   --   in
   --     T.intercalate ", " logMsgComponents
-  | LogWorkerSQLiteError !SQLError
+  | LogHieDbWriterThreadSQLiteError !SQLError
   -- logDebug logger $ T.pack $ "SQLite error in worker, ignoring: " ++ show e
-  | LogWorkerException !SomeException
+  | LogHieDbWriterThreadException !SomeException
   -- logDebug logger $ T.pack $ "Uncaught error in database worker, ignoring: " ++ show e
   | LogInterfaceFilesCacheDir !FilePath
   -- liftIO $ logInfo logger $ "Using interface files cache dir: " <> T.pack (fromMaybe cacheDir hiCacheDir)
-  | LogKnownFilesUpdated !(HashMap Target (HashSet FilePath))
+  | LogKnownFilesUpdated !(HashMap Target (HashSet NormalizedFilePath))
   -- logDebug logger $ "Known files updated: " <>
   --     T.pack(show $ (HM.map . Set.map) fromNormalizedFilePath x)
-  | LogUnitIdsBeforeNewHscEnv ![UnitId]
+  | LogMakingNewHscEnv ![UnitId]
   -- logInfo logger (T.pack ("Making new HscEnv" ++ show inplace))
   | LogDLLLoadError !String
   -- logDebug logger $ T.pack $
   --   "Error dynamically loading libm.so.6:\n" <> err
-  | LogConsultCradlePath !FilePath
+  | LogCradlePath !FilePath
   -- logInfo logger $ T.pack ("Consulting the cradle for " <> show lfp)
   | LogCradleNotFound !FilePath
   -- logWarning logger $ implicitCradleWarning lfp
+  -- implicitCradleWarning :: FilePath -> T.Text
+  -- implicitCradleWarning fp =
+  --   "No [cradle](https://github.com/mpickering/hie-bios#hie-bios) found for "
+  --   <> T.pack fp <>
+  --   ".\n Proceeding with [implicit cradle](https://hackage.haskell.org/package/implicit-hie).\n"<>
+  --   "You should ignore this message, unless you see a 'Multi Cradle: No prefixes matched' error."
   | LogSessionLoadingResult !(Either [CradleError] (ComponentOptions, FilePath))
   -- logDebug logger $ T.pack ("Session loading result: " <> show eopts)
   | forall a. Show a => LogCradle !(Cradle a)
   -- logDebug logger $ T.pack $ "Output from setting up the cradle " <> show cradle
   | LogNewComponentCache !(([FileDiagnostic], Maybe HscEnvEq), DependencyInfo)
     -- logDebug logger ("New Component Cache HscEnvEq: " <> T.pack (show res))
-
 deriving instance Show Log
+
+instance Pretty Log where
+  pretty = \case
+    LogSettingInitialDynFlags ->
+      "Setting initial dynflags..."
+    LogGetInitialGhcLibDirDefaultCradleFail cradleError rootDirPath hieYamlPath cradle ->
+      Prettyprinter.nest 2 $
+        Prettyprinter.vcat
+          [ "Couldn't load cradle for ghc libdir."
+          , "Cradle error:" <+> Prettyprinter.viaShow cradleError
+          , "Root dir path:" <+> pretty rootDirPath
+          , "hie.yaml path:" <+> pretty hieYamlPath
+          , "Cradle:" <+> Prettyprinter.viaShow cradle ]
+    LogGetInitialGhcLibDirDefaultCradleNone ->
+      "Couldn't load cradle. Cradle not found."
+    LogHieDbRetry delay maxDelay maxRetryCount e ->
+      Prettyprinter.nest 2 $
+        Prettyprinter.vcat
+          [ "Retrying hiedb action..."
+          , "delay:" <+> pretty delay
+          , "maximum delay:" <+> pretty maxDelay
+          , "retries remaining:" <+> pretty maxRetryCount
+          , "SQLite error:" <+> pretty (displayException e) ]
+    LogHieDbRetriesExhausted baseDelay maxDelay maxRetryCount e ->
+      Prettyprinter.nest 2 $
+        Prettyprinter.vcat
+          [ "Retries exhausted for hiedb action."
+          , "base delay:" <+> pretty baseDelay
+          , "maximum delay:" <+> pretty maxDelay
+          , "retries remaining:" <+> pretty maxRetryCount
+          , "Exception:" <+> pretty (displayException e) ]
+    LogHieDbWriterThreadSQLiteError e ->
+      Prettyprinter.nest 2 $
+        Prettyprinter.vcat
+          [ "HieDb writer thread SQLite error:"
+          , pretty (displayException e) ]
+    LogHieDbWriterThreadException e ->
+      Prettyprinter.nest 2 $
+        Prettyprinter.vcat
+          [ "HieDb writer thread exception:"
+          , pretty (displayException e) ]
+    LogInterfaceFilesCacheDir path ->
+      "Interface files cache directory:" <+> pretty path
+    LogKnownFilesUpdated targetToPathsMap ->
+      Prettyprinter.nest 2 $
+        Prettyprinter.vcat
+          [ "Known files updated:"
+          , Prettyprinter.viaShow $ (HM.map . Set.map) fromNormalizedFilePath targetToPathsMap
+          ]
+    LogMakingNewHscEnv inPlaceUnitIds ->
+      "Making new HscEnv. In-place unit ids:" <+> pretty (map show inPlaceUnitIds)
+    LogDLLLoadError errorString ->
+      "Error dynamically loading libm.so.6:" <+> pretty errorString
+    LogCradlePath path ->
+      "Cradle path:" <+> pretty path
+    LogCradleNotFound path ->
+      Prettyprinter.vcat
+        [ "No [cradle](https://github.com/mpickering/hie-bios#hie-bios) found for" <+> pretty path <> "."
+        , "Proceeding with [implicit cradle](https://hackage.haskell.org/package/implicit-hie)."
+        , "You should ignore this message, unless you see a 'Multi Cradle: No prefixes matched' error." ]
+    LogSessionLoadingResult e ->
+      "Session loading result:" <+> Prettyprinter.viaShow e
+    LogCradle cradle ->
+      "Cradle:" <+> Prettyprinter.viaShow cradle
+    LogNewComponentCache componentCache ->
+      "New component cache HscEnvEq:" <+> Prettyprinter.viaShow componentCache
 
 -- | Bump this version number when making changes to the format of the data stored in hiedb
 hiedbDataVersion :: String
@@ -209,7 +281,6 @@ getInitialGhcLibDirDefault recorder rootDir = do
   let log = logWith recorder
   hieYaml <- findCradle def rootDir
   cradle <- loadCradle def hieYaml rootDir
-  log $ LogSetInitialDynFlags cradle
   libDirRes <- getRuntimeGhcLibDir cradle
   case libDirRes of
       CradleSuccess libdir -> pure $ Just $ LibDir libdir
@@ -225,6 +296,7 @@ setInitialDynFlags :: Recorder Log -> FilePath -> SessionLoadingOptions -> IO (M
 setInitialDynFlags recorder rootDir SessionLoadingOptions{..} = do
   libdir <- getInitialGhcLibDir recorder rootDir
   dynFlags <- mapM dynFlagsForPrinting libdir
+  logWith recorder LogSettingInitialDynFlags
   mapM_ setUnsafeGlobalDynFlags dynFlags
   pure libdir
 
@@ -332,9 +404,9 @@ runWithDb recorder fp k = do
         -- TODO: probably should let exceptions be caught/logged/handled by top level handler
         k withHieDbRetryable
           `Safe.catch` \e@SQLError{} -> do
-            log $ LogWorkerSQLiteError e
+            log $ LogHieDbWriterThreadSQLiteError e
           `Safe.catchAny` \e -> do
-            log $ LogWorkerException e
+            log $ LogHieDbWriterThreadException e
 
 
 getHieDbLoc :: FilePath -> IO FilePath
@@ -388,7 +460,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
   runningCradle <- newVar dummyAs :: IO (Var (Async (IdeResult HscEnvEq,[FilePath])))
 
   return $ do
-    extras@ShakeExtras{logger, restartShakeSession, ideNc, knownTargetsVar, lspEnv
+    extras@ShakeExtras{restartShakeSession, ideNc, knownTargetsVar, lspEnv
                       } <- getShakeExtras
     let invalidateShakeCache :: IO ()
         invalidateShakeCache = do
@@ -419,7 +491,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
             logDirtyKeys <- recordDirtyKeys extras GetKnownTargets [emptyFilePath]
             return (logDirtyKeys >> pure hasUpdate)
           for_ hasUpdate $ \x ->
-            logWith recorder $ LogKnownFilesUpdated ((HM.map . Set.map) fromNormalizedFilePath x)
+            logWith recorder $ LogKnownFilesUpdated x
 
     -- Create a new HscEnv from a hieYaml root and a set of options
     -- If the hieYaml file already has an HscEnv, the new component is
@@ -474,7 +546,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
               -- scratch again (for now)
               -- It's important to keep the same NameCache though for reasons
               -- that I do not fully understand
-              log $ LogUnitIdsBeforeNewHscEnv inplace
+              log $ LogMakingNewHscEnv inplace
               hscEnv <- emptyHscEnv ideNc libDir
               newHscEnv <-
                 -- Add the options for the current component to the HscEnv
@@ -560,7 +632,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
     let consultCradle :: Maybe FilePath -> FilePath -> IO (IdeResult HscEnvEq, [FilePath])
         consultCradle hieYaml cfp = do
            lfp <- flip makeRelative cfp <$> getCurrentDirectory
-           log $ LogConsultCradlePath lfp
+           log $ LogCradlePath lfp
 
            when (isNothing hieYaml) $
              log $ LogCradleNotFound lfp
@@ -650,7 +722,6 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
 -- | Run the specific cradle on a specific FilePath via hie-bios.
 -- This then builds dependencies or whatever based on the cradle, gets the
 -- GHC options/dynflags needed for the session and the GHC library directory
-
 cradleToOptsAndLibDir :: Show a => Recorder Log -> Cradle a -> FilePath
                       -> IO (Either [CradleError] (ComponentOptions, FilePath))
 cradleToOptsAndLibDir recorder cradle file = do
@@ -981,12 +1052,6 @@ getCacheDirsDefault prefix opts = do
 cacheDir :: String
 cacheDir = "ghcide"
 
-implicitCradleWarning :: FilePath -> T.Text
-implicitCradleWarning fp =
-  "No [cradle](https://github.com/mpickering/hie-bios#hie-bios) found for "
-  <> T.pack fp <>
-  ".\n Proceeding with [implicit cradle](https://hackage.haskell.org/package/implicit-hie).\n"<>
-  "You should ignore this message, unless you see a 'Multi Cradle: No prefixes matched' error."
 ----------------------------------------------------------------------------------------------------
 
 data PackageSetupException

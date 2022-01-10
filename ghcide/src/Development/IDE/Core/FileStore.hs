@@ -82,6 +82,9 @@ import           Language.LSP.Types                           (DidChangeWatchedF
 import qualified Language.LSP.Types                           as LSP
 import qualified Language.LSP.Types.Capabilities              as LSP
 import           Language.LSP.VFS
+import           Prettyprinter                                (Pretty (pretty),
+                                                               (<+>))
+import qualified Prettyprinter
 import           System.FilePath
 
 data Log
@@ -93,6 +96,17 @@ data Log
   --   `catch` \(e :: SomeException) -> log (show e)
   | LogShake Shake.Log
   deriving Show
+
+instance Pretty Log where
+  pretty = \case
+    LogCouldNotIdentifyReverseDeps path ->
+      "Could not identify reverse dependencies for" <+> Prettyprinter.viaShow path
+    (LogTypeCheckingReverseDeps path reverseDepPaths) ->
+      "Typechecking reverse dependecies for"
+      <+> Prettyprinter.viaShow path
+      <> ":"
+      <+> pretty (fmap (fmap show) reverseDepPaths)
+    LogShake shakeLog -> pretty shakeLog
 
 makeVFSHandle :: IO VFSHandle
 makeVFSHandle = do
