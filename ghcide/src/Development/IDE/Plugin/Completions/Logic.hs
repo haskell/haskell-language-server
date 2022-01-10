@@ -445,7 +445,7 @@ localCompletionsForParsedModule uri pm@ParsedModule{pm_parsed_source = L _ HsMod
                 | L _ (ClassOpSig _ _ ids typ) <- tcdSigs
                 , id <- ids]
             TyClD _ x ->
-                let generalCompls = [mkComp id cl (Just $ ppr $ tcdLName x)
+                let generalCompls = [mkComp id cl (Just $ ppr $ tyClDeclLName x)
                         | id <- listify (\(_ :: Located(IdP GhcPs)) -> True) x
                         , let cl = occNameToComKind Nothing (rdrNameOcc $ unLoc id)]
                     -- here we only have to look at the outermost type
