@@ -38,8 +38,13 @@ import qualified Development.IDE.GHC.Compat.Util      as FastString
 import           Development.IDE.Graph                (alwaysRerun)
 import           Development.IDE.Types.Logger         (Recorder, cmap)
 import           Ide.Plugin.Eval.Types
+import           Prettyprinter                        (Pretty (pretty))
 
-data Log = LogShake Shake.Log deriving Show
+newtype Log = LogShake Shake.Log deriving Show
+
+instance Pretty Log where
+  pretty = \case
+    LogShake shakeLog -> pretty shakeLog
 
 rules :: Recorder Log -> Rules ()
 rules recorder = do

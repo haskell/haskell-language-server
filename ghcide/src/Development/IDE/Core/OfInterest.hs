@@ -42,11 +42,17 @@ import           Development.IDE.Types.Logger
 import           Development.IDE.Types.Options            (IdeTesting (..))
 import qualified Language.LSP.Server                      as LSP
 import qualified Language.LSP.Types                       as LSP
+import           Prettyprinter                            (Pretty (pretty))
 
 data Log = LogShake Shake.Log
   deriving Show
 
+instance Pretty Log where
+  pretty = \case
+    LogShake shakeLog -> pretty shakeLog
+
 newtype OfInterestVar = OfInterestVar (Var (HashMap NormalizedFilePath FileOfInterestStatus))
+
 instance IsIdeGlobal OfInterestVar
 
 -- | The rule that initialises the files of interest state.

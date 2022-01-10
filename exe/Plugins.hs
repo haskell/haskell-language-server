@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP               #-}
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Plugins where
 
@@ -93,6 +94,7 @@ import qualified Ide.Plugin.StylishHaskell         as StylishHaskell
 
 #if brittany
 import qualified Ide.Plugin.Brittany               as Brittany
+import           Prettyprinter                     (Pretty (pretty))
 #endif
 
 data Log
@@ -118,6 +120,30 @@ data Log
   | LogAlternateNumberFormat AlternateNumberFormat.Log
 #endif
   deriving Show
+
+instance Pretty Log where
+  pretty = \case
+    LogGhcIde ghcIdeLog -> pretty ghcIdeLog
+    LogExample exampleLog -> pretty exampleLog
+    LogExample2 example2Log -> pretty example2Log
+#if tactic
+    LogTactic tacticLog -> pretty tacticLog
+#endif
+#if eval
+    LogEval evalLog -> pretty evalLog
+#endif
+#if importLens
+    LogExplicitImports explicitImportsLog -> pretty explicitImportsLog
+#endif
+#if refineImports
+    LogRefineImports refineImportsLog -> pretty refineImportsLog
+#endif
+#if hlint
+    LogHlint hlintLog -> pretty hlintLog
+#endif
+#if alternateNumberFormat
+    LogAlternateNumberFormat alternateNumberFormatLog -> pretty alternateNumberFormatLog
+#endif
 
 -- ---------------------------------------------------------------------
 

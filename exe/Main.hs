@@ -29,7 +29,7 @@ data Log
 instance Pretty Log where
   pretty log = case log of
     LogIdeMain ideMainLog -> pretty ideMainLog
-    LogPlugins log'       -> mempty
+    LogPlugins pluginsLog -> pretty pluginsLog
 
 logToTextWithPriority :: Log -> WithPriority Text
 logToTextWithPriority =

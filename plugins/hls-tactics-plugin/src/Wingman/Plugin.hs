@@ -14,10 +14,16 @@ import qualified Wingman.LanguageServer as WingmanLanguageServer
 import           Wingman.LanguageServer.Metaprogram (hoverProvider)
 import           Wingman.StaticPlugin
 import Development.IDE.Types.Logger (Recorder, cmap)
+import Prettyprinter (Pretty (pretty))
 
-data Log
-  = LogLanguageServer WingmanLanguageServer.Log 
+newtype Log
+  = LogWingmanLanguageServer WingmanLanguageServer.Log 
   deriving Show
+
+instance Pretty Log where
+  pretty = \case
+    LogWingmanLanguageServer wingmanLanguageServerLog -> pretty wingmanLanguageServerLog
+  
 
 descriptor :: Recorder Log -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId
@@ -27,7 +33,7 @@ descriptor recorder plId
       )
   $ (defaultPluginDescriptor plId)
       { pluginHandlers = mkPluginHandler STextDocumentHover hoverProvider
-      , pluginRules = wingmanRules (cmap LogLanguageServer recorder) plId
+      , pluginRules = wingmanRules (cmap LogWingmanLanguageServer recorder) plId
       , pluginConfigDescriptor =
           defaultConfigDescriptor
             { configCustomConfig = mkCustomConfig properties

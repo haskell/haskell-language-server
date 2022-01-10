@@ -29,8 +29,13 @@ import           Ide.PluginUtils                 (handleMaybe, handleMaybeM,
 import           Ide.Types
 import           Language.LSP.Types
 import           Language.LSP.Types.Lens         (uri)
+import           Prettyprinter                   (Pretty (pretty))
 
-data Log = LogShake Shake.Log deriving Show
+newtype Log = LogShake Shake.Log deriving Show
+
+instance Pretty Log where
+  pretty = \case
+    LogShake shakeLog -> pretty shakeLog
 
 descriptor :: Recorder Log -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId)

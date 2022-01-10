@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE LambdaCase         #-}
 {-# LANGUAGE NamedFieldPuns     #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RecordWildCards    #-}
@@ -38,13 +39,18 @@ import           Ide.PluginUtils                      (mkLspCommand)
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
+import           Prettyprinter                        (Pretty (pretty))
 
 importCommandId :: CommandId
 importCommandId = "ImportLensCommand"
 
-data Log
+newtype Log
   = LogShake Shake.Log
   deriving Show
+
+instance Pretty Log where
+  pretty = \case
+    LogShake shakeLog -> pretty shakeLog
 
 -- | The "main" function of a plugin
 descriptor :: Recorder Log -> PluginId -> PluginDescriptor IdeState

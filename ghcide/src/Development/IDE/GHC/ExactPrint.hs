@@ -71,6 +71,7 @@ import           Language.Haskell.GHC.ExactPrint
 import           Language.Haskell.GHC.ExactPrint.Parsers
 import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities         (ClientCapabilities)
+import           Prettyprinter                           (Pretty (pretty))
 import           Retrie.ExactPrint                       hiding (parseDecl,
                                                           parseExpr,
                                                           parsePattern,
@@ -80,6 +81,10 @@ import           Retrie.ExactPrint                       hiding (parseDecl,
 ------------------------------------------------------------------------------
 
 data Log = LogShake Shake.Log deriving Show
+
+instance Pretty Log where
+  pretty = \case
+    LogShake shakeLog -> pretty shakeLog
 
 data GetAnnotatedParsedSource = GetAnnotatedParsedSource
   deriving (Eq, Show, Typeable, GHC.Generic)

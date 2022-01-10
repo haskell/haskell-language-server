@@ -33,6 +33,7 @@ import qualified Focus
 import           Ide.Plugin.Config                     (Config)
 import           Language.LSP.Server                   hiding (getVirtualFile)
 import           Language.LSP.Types
+import           Prettyprinter                         (Pretty (pretty))
 import qualified StmContainers.Map                     as STM
 import qualified System.Directory                      as Dir
 import qualified System.FilePath.Glob                  as Glob
@@ -90,6 +91,11 @@ data Log
   = LogFileStore FileStore.Log
   | LogShake Shake.Log
   deriving Show
+
+instance Pretty Log where
+  pretty = \case
+    LogFileStore fileStoreLog -> pretty fileStoreLog
+    LogShake shakeLog         -> pretty shakeLog
 
 -- | Grab the current global value of 'FileExistsMap' without acquiring a dependency
 getFileExistsMapUntracked :: Action FileExistsMap

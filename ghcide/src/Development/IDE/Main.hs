@@ -175,9 +175,9 @@ instance Pretty Log where
     LogShake shakeLog -> pretty shakeLog
     LogGhcIde ghcIdeLog -> pretty ghcIdeLog
     LogLanguageServer languageServerLog -> pretty languageServerLog
-    LogSession log' -> mempty
-    LogPluginHLS log' -> mempty
-    LogRules log' -> mempty
+    LogSession sessionLog -> pretty sessionLog
+    LogPluginHLS pluginHLSLog -> pretty pluginHLSLog
+    LogRules rulesLog -> pretty rulesLog
 
 data Command
     = Check [FilePath]  -- ^ Typecheck some paths and print diagnostics. Exit code is the number of failures

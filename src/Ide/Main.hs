@@ -53,7 +53,7 @@ instance Pretty Log where
       Prettyprinter.nest 2 $
         Prettyprinter.vsep
           [ "Starting (haskell-language-server) LSP server..."
-          , pretty ghcideArgs
+          , Prettyprinter.viaShow ghcideArgs
           , "PluginIds:" <+> pretty pluginIds ]
     LogIDEMain iDEMainLog -> pretty iDEMainLog
 

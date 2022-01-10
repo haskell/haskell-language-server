@@ -75,6 +75,7 @@ library
     , megaparsec            >=9.0
     , mtl
     , parser-combinators
+    , prettyprinter
     , pretty-simple
     , QuickCheck
     , safe-exceptions

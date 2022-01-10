@@ -1,6 +1,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# OPTIONS_GHC -Wwarn #-}
+{-# LANGUAGE LambdaCase            #-}
 
 {- |
 Eval Plugin entry point.
@@ -19,8 +20,13 @@ import           Ide.Types                    (PluginDescriptor (..), PluginId,
                                                defaultPluginDescriptor,
                                                mkPluginHandler)
 import           Language.LSP.Types
+import           Prettyprinter                (Pretty (pretty))
 
-data Log = LogEvalRules EvalRules.Log deriving Show
+newtype Log = LogEvalRules EvalRules.Log deriving Show
+
+instance Pretty Log where
+  pretty = \case
+    LogEvalRules evalRulesLog -> pretty evalRulesLog
 
 -- |Plugin descriptor
 descriptor :: Recorder Log -> PluginId -> PluginDescriptor IdeState

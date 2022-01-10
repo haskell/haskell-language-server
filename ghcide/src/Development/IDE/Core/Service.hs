@@ -47,9 +47,9 @@ data Log
 
 instance Pretty Log where
   pretty log = case log of
-    LogShake log      -> pretty log
-    LogOfInterest log -> mempty
-    LogFileExists log -> mempty
+    LogShake shakeLog           -> pretty shakeLog
+    LogOfInterest ofInterestLog -> pretty ofInterestLog
+    LogFileExists fileExistsLog -> pretty fileExistsLog
 
 
 ------------------------------------------------------------

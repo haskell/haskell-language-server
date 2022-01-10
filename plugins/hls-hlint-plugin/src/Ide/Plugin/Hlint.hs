@@ -13,6 +13,7 @@
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE ViewPatterns          #-}
 {-# OPTIONS_GHC -Wno-orphans   #-}
+{-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiWayIf            #-}
 {-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE RecordWildCards       #-}
@@ -120,6 +121,7 @@ import           Development.IDE.Spans.Pragmas                      (LineSplitTe
                                                                      lineSplitInsertTextEdit,
                                                                      lineSplitTextEdits,
                                                                      nextPragmaLine)
+import           Prettyprinter                                      (Pretty (pretty))
 import           System.Environment                                 (setEnv,
                                                                      unsetEnv)
 -- ---------------------------------------------------------------------
@@ -127,6 +129,10 @@ import           System.Environment                                 (setEnv,
 newtype Log
   = LogShake Shake.Log
   deriving Show
+
+instance Pretty Log where
+  pretty = \case
+    LogShake shakeLog -> pretty shakeLog
 
 #ifdef HLINT_ON_GHC_LIB
 -- Reimplementing this, since the one in Development.IDE.GHC.Compat isn't for ghc-lib

@@ -46,9 +46,14 @@ import           Ide.Types
 import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.Types
 import qualified Language.LSP.VFS                             as VFS
+import           Prettyprinter                                (Pretty (pretty))
 import           Text.Fuzzy.Parallel                          (Scored (..))
 
 data Log = LogShake Shake.Log deriving Show
+
+instance Pretty Log where
+  pretty = \case
+    LogShake shakeLog -> pretty shakeLog
 
 descriptor :: Recorder Log -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId)

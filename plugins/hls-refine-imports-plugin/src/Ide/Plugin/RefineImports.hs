@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE RecordWildCards       #-}
@@ -46,8 +47,13 @@ import           Ide.PluginUtils                      (mkLspCommand)
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
+import           Prettyprinter                        (Pretty (pretty))
 
 newtype Log = LogShake Shake.Log deriving Show
+
+instance Pretty Log where
+  pretty = \case
+    LogShake shakeLog -> pretty shakeLog
 
 -- | plugin declaration
 descriptor :: Recorder Log -> PluginId -> PluginDescriptor IdeState

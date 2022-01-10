@@ -25,7 +25,6 @@ import           Development.IDE.Main          (Command (..), commandP)
 import           Ide.Types                     (IdePlugins)
 import           Options.Applicative
 import           Paths_haskell_language_server
-import           Prettyprinter                 (Pretty (pretty))
 import           System.Environment
 
 -- ---------------------------------------------------------------------
@@ -53,7 +52,6 @@ data GhcideArguments = GhcideArguments
     , argsProjectGhcVersion :: Bool
     }
     deriving Show
-    deriving anyclass Pretty
 
 data PrintVersion
   = PrintVersion

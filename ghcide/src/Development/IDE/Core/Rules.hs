@@ -155,6 +155,8 @@ import HIE.Bios.Ghc.Gap (hostIsDynamic)
 import Development.IDE.Types.Logger (Recorder, cmap, logWith)
 import qualified Development.IDE.Core.Shake as Shake
 import qualified Development.IDE.GHC.ExactPrint as ExactPrint
+import Prettyprinter (Pretty (pretty), (<+>))
+import qualified Prettyprinter
 
 data Log 
   = LogShake Shake.Log
@@ -170,6 +172,22 @@ data Log
   --                       res
   | LogExactPrint ExactPrint.Log
   deriving Show
+
+instance Pretty Log where
+  pretty = \case
+    LogShake shakeLog -> pretty shakeLog
+    LogReindexingHieFile path ->
+      "Re-indexing hie file for" <+> pretty (fromNormalizedFilePath path)
+    LogLoadingHieFile path ->
+      "LOADING HIE FILE FOR" <+> pretty (fromNormalizedFilePath path)
+    LogLoadingHieFileFail path e ->
+      Prettyprinter.nest 2 $
+        Prettyprinter.vcat
+          [ "FAILED LOADING HIE FILE FOR" <+> pretty path
+          , pretty (displayException e) ]
+    LogLoadingHieFileSuccess path ->
+      "SUCCEEDED LOADING HIE FILE FOR" <+> pretty path
+    LogExactPrint exactPrintLog -> pretty exactPrintLog
 
 templateHaskellInstructions :: T.Text
 templateHaskellInstructions = "https://haskell-language-server.readthedocs.io/en/latest/troubleshooting.html#support-for-template-haskell"

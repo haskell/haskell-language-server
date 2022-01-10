@@ -11,7 +11,6 @@ module Development.IDE.Plugin.HLS
 
 import           Control.Exception            (SomeException)
 import           Control.Monad
-import           Control.Monad.IO.Class
 import qualified Data.Aeson                   as J
 import           Data.Bifunctor
 import           Data.Dependent.Map           (DMap)
@@ -36,6 +35,7 @@ import           Ide.Types                    as HLS
 import qualified Language.LSP.Server          as LSP
 import           Language.LSP.Types
 import qualified Language.LSP.Types           as J
+import           Prettyprinter                (Pretty (pretty))
 import           Text.Regex.TDFA.Text         ()
 import           UnliftIO                     (MonadUnliftIO)
 import           UnliftIO.Async               (forConcurrently)
@@ -48,6 +48,11 @@ data Log
   = LogNoEnabledPlugins
   -- liftIO $ logInfo (ideLogger ide) "extensibleNotificationPlugins no enabled plugins"
   deriving Show
+
+instance Pretty Log where
+  pretty = \case
+    LogNoEnabledPlugins ->
+      "extensibleNotificationPlugins no enabled plugins"
 
 -- | Map a set of plugins to the underlying ghcide engine.
 asGhcIdePlugin :: Recorder Log -> IdePlugins IdeState -> Plugin Config

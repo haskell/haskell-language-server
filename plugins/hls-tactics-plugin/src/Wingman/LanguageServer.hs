@@ -65,11 +65,16 @@ import           Wingman.StaticPlugin (pattern WingmanMetaprogram, pattern Metap
 import           Wingman.Types
 import Development.IDE.Types.Logger (Recorder, cmap)
 import qualified Development.IDE.Core.Shake as Shake
+import Prettyprinter (Pretty (pretty))
 
 
 newtype Log 
   = LogShake Shake.Log
   deriving Show
+
+instance Pretty Log where
+  pretty = \case 
+    LogShake shakeLog -> pretty shakeLog
 
 tacticDesc :: T.Text -> T.Text
 tacticDesc name = "fill the hole using the " <> name <> " tactic"

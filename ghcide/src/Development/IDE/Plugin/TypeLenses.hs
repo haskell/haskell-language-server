@@ -69,9 +69,14 @@ import           Language.LSP.Types                  (ApplyWorkspaceEditParams (
                                                       TextDocumentIdentifier (TextDocumentIdentifier),
                                                       TextEdit (TextEdit),
                                                       WorkspaceEdit (WorkspaceEdit))
+import           Prettyprinter                       (Pretty (pretty))
 import           Text.Regex.TDFA                     ((=~), (=~~))
 
 data Log = LogShake Shake.Log deriving Show
+
+instance Pretty Log where
+  pretty = \case
+    LogShake shakeLog -> pretty shakeLog
 
 typeLensCommandId :: T.Text
 typeLensCommandId = "typesignature.add"

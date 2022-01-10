@@ -30,8 +30,8 @@ data Log
 instance Pretty Log where
   pretty = \case
     LogNotifications notificationsLog -> pretty notificationsLog
-    LogCompletions completionsLog     -> mempty
-    LogTypeLenses typeLensesLog       -> mempty
+    LogCompletions completionsLog     -> pretty completionsLog
+    LogTypeLenses typeLensesLog       -> pretty typeLensesLog
 
 descriptors :: Recorder Log -> [PluginDescriptor IdeState]
 descriptors recorder =
