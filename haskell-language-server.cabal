@@ -288,7 +288,7 @@ common floskell
     cpp-options: -Dfloskell
 
 common fourmolu
-  if flag(fourmolu) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(fourmolu) && flag(ignore-plugins-ghc-bounds)
     build-depends: hls-fourmolu-plugin ^>=1.0.0.0
     cpp-options: -Dfourmolu
 
@@ -474,7 +474,7 @@ test-suite func-test
 -- formatters
   if flag(floskell) && (impl(ghc < 9.0.1) || flag(ignore-plugins-ghc-bounds))
     cpp-options: -Dfloskell
-  if flag(fourmolu) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(fourmolu) && flag(ignore-plugins-ghc-bounds)
     cpp-options: -Dfourmolu
   if flag(ormolu)
     cpp-options: -Dormolu
