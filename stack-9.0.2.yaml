@@ -61,6 +61,10 @@ extra-deps:
 - time-1.12.1
 - unix-2.7.2.2
 
+# primitive-unlifted is not buildable with ghc-9.0.2
+# see https://gitlab.haskell.org/ghc/ghc/-/issues/20908
+- primitive-unlifted-0.1.3.1
+
 # currently needed for ghcide>extra, etc.
 allow-newer: true
 
