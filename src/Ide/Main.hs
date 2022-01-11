@@ -6,6 +6,7 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE TypeFamilies        #-}
 
 module Ide.Main(defaultMain, runLspMode, Log(..), logToPriority) where
@@ -13,8 +14,10 @@ module Ide.Main(defaultMain, runLspMode, Log(..), logToPriority) where
 import           Control.Monad.Extra
 import qualified Data.Aeson.Encode.Pretty      as A
 import qualified Data.ByteString.Lazy.Char8    as LBS
+import           Data.Coerce                   (coerce)
 import           Data.Default
 import           Data.List                     (sort)
+import           Data.Text                     (Text)
 import qualified Data.Text                     as T
 import           Development.IDE.Core.Rules    hiding (Log, logToPriority)
 import           Development.IDE.Core.Tracing  (withTelemetryLogger)
@@ -52,7 +55,7 @@ instance Pretty Log where
         Prettyprinter.vsep
           [ "Starting (haskell-language-server) LSP server..."
           , Prettyprinter.viaShow ghcideArgs
-          , "PluginIds:" <+> pretty pluginIds ]
+          , "PluginIds:" <+> pretty (coerce @_ @[Text] pluginIds) ]
     LogIDEMain iDEMainLog -> pretty iDEMainLog
 
 logToPriority :: Log -> Logger.Priority

@@ -194,7 +194,7 @@ setupHsLogger lock handle extraLogNames level = do
 textWithPriorityToText :: WithPriority Text -> IO Text
 textWithPriorityToText = \case
   WithPriority{ priority, payload } -> do
-    threadId <- myThreadId
+    -- threadId <- myThreadId
     utcTime <- getCurrentTime
     pure $ Text.intercalate " | "
       [ utcTimeToText utcTime
@@ -205,19 +205,19 @@ textWithPriorityToText = \case
     where
       utcTimeToText utcTime = Text.pack $ formatTime defaultTimeLocale "%Y-%m-%dT%H:%M:%S%6QZ" utcTime
 
-      threadIdToText :: Int -> Text
-      threadIdToText = Text.pack . show
+      -- threadIdToText :: Int -> Text
+      -- threadIdToText = Text.pack . show
 
-      callStackToLocationText callStack = srcLocText
-        where
-          srcLocText =
-            case getCallStack callStack of
-              []                                 -> "unknown"
-              [(_name, srcLoc)]                  -> srcLocToText srcLoc
-              (_, srcLoc) : (_callerName, _) : _ -> srcLocToText srcLoc
+      -- callStackToLocationText callStack = srcLocText
+      --   where
+      --     srcLocText =
+      --       case getCallStack callStack of
+      --         []                                 -> "unknown"
+      --         [(_name, srcLoc)]                  -> srcLocToText srcLoc
+      --         (_, srcLoc) : (_callerName, _) : _ -> srcLocToText srcLoc
 
-      srcLocToText SrcLoc{srcLocModule, srcLocStartLine} =
-        Text.pack srcLocModule <> ":" <> Text.pack (show srcLocStartLine)
+      -- srcLocToText SrcLoc{srcLocModule, srcLocStartLine} =
+      --   Text.pack srcLocModule <> ":" <> Text.pack (show srcLocStartLine)
 
       priorityToText :: Priority -> Text
       priorityToText = Text.pack . show

@@ -69,7 +69,6 @@ import           Language.LSP.Types.Lens         as J (HasChildren (children),
 import           Language.LSP.VFS
 import           OpenTelemetry.Eventlog
 import           Options.Applicative             (ParserInfo)
-import           Prettyprinter                   (Pretty)
 import           System.IO.Unsafe
 import           Text.Regex.TDFA.Text            ()
 
@@ -397,7 +396,6 @@ type CommandFunction ideState a
 
 newtype PluginId = PluginId T.Text
   deriving (Show, Read, Eq, Ord)
-  deriving newtype Pretty
 
 instance IsString PluginId where
   fromString = PluginId . T.pack
