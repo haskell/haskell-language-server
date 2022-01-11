@@ -23,7 +23,7 @@ newtype Log
 
 instance Pretty Log where
   pretty = \case
-    LogWingmanLanguageServer wingmanLanguageServerLog -> pretty wingmanLanguageServerLog
+    LogWingmanLanguageServer log -> pretty log
   
 logToPriority :: Log -> Logger.Priority
 logToPriority = \case 

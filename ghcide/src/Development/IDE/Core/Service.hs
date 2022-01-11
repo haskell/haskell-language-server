@@ -15,13 +15,14 @@ module Development.IDE.Core.Service(
     getDiagnostics,
     ideLogger,
     updatePositionMapping,
-    Log
-    , logToPriority) where
+    Log(..),
+    logToPriority) where
 
 import           Control.Applicative             ((<|>))
 import           Development.IDE.Core.Debouncer
 import           Development.IDE.Core.FileExists (fileExistsRules)
-import           Development.IDE.Core.OfInterest hiding (Log, logToPriority)
+import           Development.IDE.Core.OfInterest hiding (Log, LogShake,
+                                                  logToPriority)
 import           Development.IDE.Graph
 import           Development.IDE.Types.Logger    as Logger
 import           Development.IDE.Types.Options   (IdeOptions (..))
@@ -46,10 +47,10 @@ data Log
   deriving Show
 
 instance Pretty Log where
-  pretty log = case log of
-    LogShake shakeLog           -> pretty shakeLog
-    LogOfInterest ofInterestLog -> pretty ofInterestLog
-    LogFileExists fileExistsLog -> pretty fileExistsLog
+  pretty = \case
+    LogShake log      -> pretty log
+    LogOfInterest log -> pretty log
+    LogFileExists log -> pretty log
 
 logToPriority :: Log -> Logger.Priority
 logToPriority = \case

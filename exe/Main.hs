@@ -6,7 +6,6 @@
 module Main(main) where
 
 import           Data.Function                ((&))
-import           Data.Text                    (Text)
 import           Development.IDE.Types.Logger (Priority (Debug, Info),
                                                WithPriority (WithPriority, priority),
                                                cfilter, cmap,
@@ -18,9 +17,7 @@ import           Ide.Arguments                (Arguments (..),
 import           Ide.Main                     (defaultMain)
 import qualified Ide.Main                     as IdeMain
 import qualified Plugins
-import           Prettyprinter                (Pretty (pretty))
-import qualified Prettyprinter
-import qualified Prettyprinter.Render.Text    as Prettyprinter
+import           Prettyprinter                (Doc, Pretty (pretty))
 import qualified System.Log                   as HsLogger
 
 data Log
@@ -38,17 +35,13 @@ logToPriority = \case
   LogIdeMain log -> IdeMain.logToPriority log
   LogPlugins log -> Plugins.logToPriority log
 
-logToTextWithPriority :: Log -> WithPriority Text
-logToTextWithPriority log = WithPriority priority text
-  where
-    priority = logToPriority log
-    text = log
-         & pretty
-         & Prettyprinter.layoutPretty Prettyprinter.defaultLayoutOptions
-         & Prettyprinter.renderStrict
+logToDocWithPriority :: Log -> WithPriority (Doc a)
+logToDocWithPriority log = WithPriority (logToPriority log) (pretty log)
 
 main :: IO ()
 main = do
+    -- passing mempty for recorder to idePlugins means that any custom cli
+    -- command provided by a plugin will not have logging powers
     args <- getArguments "haskell-language-server" (Plugins.idePlugins mempty False)
 
     let (hsLoggerMinPriority, minPriority, logFilePath, includeExamplePlugins) =
@@ -63,6 +56,6 @@ main = do
       let recorder =
             textWithPriorityRecorder
             & cfilter (\WithPriority{ priority } -> priority >= minPriority)
-            & cmap logToTextWithPriority
+            & cmap logToDocWithPriority
 
       defaultMain (cmap LogIdeMain recorder) args (Plugins.idePlugins (cmap LogPlugins recorder) includeExamplePlugins)

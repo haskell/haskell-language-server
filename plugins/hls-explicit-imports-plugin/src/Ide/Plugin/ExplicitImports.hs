@@ -14,7 +14,7 @@ module Ide.Plugin.ExplicitImports
   , descriptorForModules
   , extractMinimalImports
   , within
-  , Log
+  , Log(..)
   , logToPriority
   ) where
 
@@ -52,7 +52,7 @@ newtype Log
 
 instance Pretty Log where
   pretty = \case
-    LogShake shakeLog -> pretty shakeLog
+    LogShake log -> pretty log
 
 logToPriority :: Log -> Logger.Priority
 logToPriority = \case

@@ -77,8 +77,8 @@ module Development.IDE.Core.Shake(
     addPersistentRule,
     garbageCollectDirtyKeys,
     garbageCollectDirtyKeysOlderThan,
-    Log
-    , logToPriority) where
+    Log(..),
+    logToPriority) where
 
 import           Control.Concurrent.Async
 import           Control.Concurrent.STM
@@ -173,38 +173,17 @@ import qualified StmContainers.Map                      as STM
 
 data Log
   = LogCreateHieDbExportsMapStart
-  -- logDebug logger "Initializing exports map from hiedb"
   | LogCreateHieDbExportsMapFinish !Int
-  -- logDebug logger $ "Done initializing exports map from hiedb (" <> pack(show (ExportsMap.size em)) <> ")"
   | LogBuildSessionRestart !String ![DelayedActionInternal] !(HashSet Key) !Seconds !(Maybe FilePath)
-  -- let profile = case res of
-  --         Just fp -> ", profile saved at " <> fp
-  --         _       -> ""
-  -- log $ LogBuildSessionRestart reason queue backlog stopTime res
-  -- -- TODO: should eventually replace with logging using a logger that sends lsp message
-  -- let msg = T.pack $ "Restarting build session " ++ reason' ++ queueMsg ++ keysMsg ++ abortMsg
-  --     reason' = "due to " ++ reason
-  --     queueMsg = " with queue " ++ show (map actionName queue)
-  --     keysMsg = " for keys " ++ show (HSet.toList backlog) ++ " "
-  --     abortMsg = "(aborting the previous one took " ++ showDuration stopTime ++ profile ++ ")"
   | LogDelayedAction !(DelayedAction ()) !Seconds
-  -- let msg = T.pack $ "finish: " ++ actionName d
-  --                 ++ " (took " ++ showDuration runTime ++ ")"
   | LogBuildSessionFinish !(Maybe SomeException)
-  -- let res' = case res of
-  --             Left e  -> "exception: " <> displayException e
-  --             Right _ -> "completed"
-  -- let msg = T.pack $ "Finishing build session(" ++ res' ++ ")"
   | LogDiagsDiffButNoLspEnv ![FileDiagnostic]
-  -- logInfo logger $ showDiagnosticsColored $ map (fp,ShowDiag,) newDiags
   | LogDefineEarlyCutoffRuleNoDiagDiags ![FileDiagnostic]
-  -- RuleNoDiagnostics mapM_ (\d -> liftIO $ logWarning logger $ showDiagnosticsColored [d]) diags
   | LogDefineEarlyCutoffRuleCustomNewnessDiags ![FileDiagnostic]
-  -- RuleWithCustomNewnessCheck mapM_ (\d -> liftIO $ logWarning logger $ showDiagnosticsColored [d]) diags
   deriving Show
 
 instance Pretty Log where
-  pretty log = case log of
+  pretty = \case
     LogCreateHieDbExportsMapStart ->
       "Initializing exports map from hiedb"
     LogCreateHieDbExportsMapFinish exportsMapSize ->

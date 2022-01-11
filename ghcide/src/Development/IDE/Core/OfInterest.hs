@@ -16,7 +16,8 @@ module Development.IDE.Core.OfInterest(
     kick, FileOfInterestStatus(..),
     OfInterestVar(..),
     scheduleGarbageCollection,
-    Log, logToPriority) where
+    Log(..),
+    logToPriority) where
 
 import           Control.Concurrent.Strict
 import           Control.Monad
@@ -51,7 +52,7 @@ data Log = LogShake Shake.Log
 
 instance Pretty Log where
   pretty = \case
-    LogShake shakeLog -> pretty shakeLog
+    LogShake log -> pretty log
 
 logToPriority :: Log -> Logger.Priority
 logToPriority = \case

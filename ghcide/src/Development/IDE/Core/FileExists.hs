@@ -7,7 +7,7 @@ module Development.IDE.Core.FileExists
   , getFileExists
   , watchedGlobs
   , GetFileExists(..)
-  , Log
+  , Log(..)
   , logToPriority)
 where
 
@@ -19,7 +19,7 @@ import           Control.Monad.IO.Class
 import qualified Data.ByteString                       as BS
 import           Data.List                             (partition)
 import           Data.Maybe
-import           Development.IDE.Core.FileStore        hiding (Log,
+import           Development.IDE.Core.FileStore        hiding (Log, LogShake,
                                                         logToPriority)
 import qualified Development.IDE.Core.FileStore        as FileStore
 import           Development.IDE.Core.IdeConfiguration
@@ -97,8 +97,8 @@ data Log
 
 instance Pretty Log where
   pretty = \case
-    LogFileStore fileStoreLog -> pretty fileStoreLog
-    LogShake shakeLog         -> pretty shakeLog
+    LogFileStore log -> pretty log
+    LogShake log     -> pretty log
 
 logToPriority :: Log -> Logger.Priority
 logToPriority = \case

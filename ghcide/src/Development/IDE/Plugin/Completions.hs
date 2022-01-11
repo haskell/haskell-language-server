@@ -3,7 +3,7 @@
 
 module Development.IDE.Plugin.Completions
     ( descriptor
-    , Log
+    , Log(..)
     , logToPriority) where
 
 import           Control.Concurrent.Async                     (concurrently)
@@ -20,6 +20,7 @@ import qualified Data.Text                                    as T
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service                 hiding (Log,
+                                                               LogShake,
                                                                logToPriority)
 import           Development.IDE.Core.Shake                   hiding (Log,
                                                                logToPriority)
@@ -56,11 +57,11 @@ data Log = LogShake Shake.Log deriving Show
 
 instance Pretty Log where
   pretty = \case
-    LogShake shakeLog -> pretty shakeLog
+    LogShake log -> pretty log
 
 logToPriority :: Log -> Logger.Priority
 logToPriority = \case
-  LogShake shakeLog -> Shake.logToPriority shakeLog
+  LogShake log -> Shake.logToPriority log
 
 descriptor :: Recorder Log -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId)

@@ -146,6 +146,7 @@ library
         Generics.SYB.GHC
         Development.IDE
         Development.IDE.Main
+        Development.IDE.Core.Log
         Development.IDE.Core.Actions
         Development.IDE.Main.HeapStats
         Development.IDE.Core.Debouncer
@@ -329,6 +330,7 @@ executable ghcide
         hls-graph,
         text,
         unordered-containers,
+        prettyprinter
     other-modules:
         Arguments
         Paths_ghcide
@@ -392,6 +394,7 @@ test-suite ghcide-tests
         list-t,
         lsp-test ^>= 0.14,
         optparse-applicative,
+        prettyprinter,
         process,
         QuickCheck,
         quickcheck-instances,

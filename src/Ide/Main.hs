@@ -8,7 +8,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies        #-}
 
-module Ide.Main(defaultMain, runLspMode, Log, logToPriority) where
+module Ide.Main(defaultMain, runLspMode, Log(..), logToPriority) where
 
 import           Control.Monad.Extra
 import qualified Data.Aeson.Encode.Pretty      as A
@@ -40,10 +40,6 @@ data Log
   = LogVersion !String
   | LogDirectory !FilePath
   | LogLspStart !GhcideArguments ![PluginId]
-  -- hPutStrLn stderr "Starting (haskell-language-server)LSP server..."
-  -- hPutStrLn stderr $ "  with arguments: " <> show ghcideArgs
-  -- hPutStrLn stderr $ "  with plugins: " <> show (map fst $ ipMap idePlugins)
-  -- hPutStrLn stderr $ "  in directory: " <> dir
   | LogIDEMain IDEMain.Log
   deriving Show
 

@@ -47,22 +47,20 @@ import qualified Data.Aeson                      as A
 import           Data.ByteString.Lazy            (ByteString)
 import           Data.Default                    (def)
 import           Data.Maybe                      (fromMaybe)
-import           Data.Text                       (Text)
 import qualified Data.Text                       as T
-import qualified Data.Text                       as Text
 import qualified Data.Text.Lazy                  as TL
 import qualified Data.Text.Lazy.Encoding         as TL
 import           Development.IDE                 (IdeState, noLogging)
 import           Development.IDE.Graph           (ShakeOptions (shakeThreads))
-import           Development.IDE.Main            hiding (Log)
-import qualified Development.IDE.Main            as Ghcide hiding (Log)
+import           Development.IDE.Main            hiding (Log, logToPriority)
+import qualified Development.IDE.Main            as Ghcide
 import qualified Development.IDE.Main            as IDEMain
 import           Development.IDE.Plugin.Test     (TestRequest (GetBuildKeysBuilt, WaitForIdeRule, WaitForShakeQueue),
                                                   WaitForIdeRuleResult (ideResultSuccess))
 import qualified Development.IDE.Plugin.Test     as Test
 import           Development.IDE.Types.Logger    (Priority (Debug),
-                                                  WithPriority (WithPriority),
-                                                  cmap,
+                                                  WithPriority (WithPriority, priority),
+                                                  cfilter, cmap,
                                                   makeDefaultStderrRecorder)
 import           Development.IDE.Types.Options
 import           GHC.IO.Handle
@@ -76,6 +74,8 @@ import           Language.LSP.Types              hiding
                                                   SemanticTokenRelative (length),
                                                   SemanticTokensEdit (_start))
 import           Language.LSP.Types.Capabilities (ClientCapabilities)
+import           Prelude                         hiding (log)
+import           Prettyprinter                   (Doc, Pretty (pretty))
 import           System.Directory                (getCurrentDirectory,
                                                   setCurrentDirectory)
 import           System.Environment              (lookupEnv)
@@ -92,6 +92,17 @@ import           Test.Tasty.HUnit
 import           Test.Tasty.Ingredients.Rerun
 
 newtype Log = LogIDEMain IDEMain.Log deriving Show
+
+instance Pretty Log where
+  pretty = \case
+    LogIDEMain log -> pretty log
+
+logToPriority :: Log -> Priority
+logToPriority = \case
+  LogIDEMain log -> IDEMain.logToPriority log
+
+logToDocWithPriority :: Log -> WithPriority (Doc a)
+logToDocWithPriority log = WithPriority (logToPriority log) (pretty log)
 
 -- | Run 'defaultMainWithRerun', limiting each single test case running at most 10 minutes
 defaultTestRunner :: TestTree -> IO ()
@@ -162,8 +173,6 @@ keepCurrentDirectory = bracket getCurrentDirectory setCurrentDirectory . const
 lock :: Lock
 lock = unsafePerformIO newLock
 
-logToTextWithPriority :: Log -> WithPriority Text
-logToTextWithPriority = WithPriority Debug . Text.pack . show
 
 -- | Host a server, and run a test session on it
 -- Note: cwd will be shifted into @root@ in @Session a@
@@ -182,12 +191,18 @@ runSessionWithServer' plugins conf sconf caps root s = withLock lock $ keepCurre
   (inR, inW) <- createPipe
   (outR, outW) <- createPipe
 
-  textWithPriorityRecorder <- makeDefaultStderrRecorder HsLogger.DEBUG
+  -- this recorder may be different than the recorder in the passed in plugin
+  -- if you want to modify ghcide specific logging during tests then this one
+  -- should be modified
+  -- otherwise modify the recorder passed to the plugin descriptor
+  defaultRecorder <- makeDefaultStderrRecorder HsLogger.DEBUG
 
   logStdErr <- fromMaybe "0" <$> lookupEnv "LSP_TEST_LOG_STDERR"
 
   let
-    recorder = if logStdErr == "0" then mempty else cmap logToTextWithPriority textWithPriorityRecorder
+    recorder = if logStdErr == "0"
+               then mempty
+               else (cmap logToDocWithPriority . cfilter (\WithPriority{ priority } -> priority >= Debug)) defaultRecorder
     arguments@Arguments{ argsHlsPlugins, argsIdeOptions, argsLogger } = defaultArguments mempty Debug
     hlsPlugins =
       idePluginsToPluginDesc argsHlsPlugins

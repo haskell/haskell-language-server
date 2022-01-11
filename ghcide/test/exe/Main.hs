@@ -115,16 +115,28 @@ import           Test.Tasty.QuickCheck
 import           Text.Printf                              (printf)
 import           Text.Regex.TDFA                          ((=~))
 import qualified HieDbRetry
-import Development.IDE.Types.Logger (WithPriority(WithPriority), Priority (Info), cmap, Recorder, makeDefaultStderrRecorder)
+import Development.IDE.Types.Logger (WithPriority(WithPriority, priority), Priority (Debug), cmap, Recorder, makeDefaultStderrRecorder, cfilter)
 import Data.Function ((&))
-import qualified Data.Text as Text
-import Data.Text (Text)
 import qualified System.Log as HsLogger
+import Prettyprinter (Doc, Pretty (pretty))
 
 data Log 
   = LogGhcIde Ghcide.Log 
   | LogIDEMain IDE.Log
   deriving Show
+
+instance Pretty Log where
+  pretty = \case
+    LogGhcIde log -> pretty log
+    LogIDEMain log -> pretty log
+
+logToPriority :: Log -> Priority
+logToPriority = \case
+  LogGhcIde log -> Ghcide.logToPriority log
+  LogIDEMain log -> IDE.logToPriority log
+
+logToDocWithPriority :: Log -> WithPriority (Doc a)
+logToDocWithPriority log = WithPriority (logToPriority log) (pretty log)
 
 -- | Wait for the next progress begin step
 waitForProgressBegin :: Session ()
@@ -152,16 +164,13 @@ waitForAllProgressDone = loop
       done <- null <$> getIncompleteProgressSessions
       unless done loop
 
--- TODO: change so all messages aren't Info
-logToTextWithPriority :: Log -> WithPriority Text
-logToTextWithPriority = WithPriority Info . Text.pack . show
-
 main :: IO ()
 main = do
-  textWithPriorityStderrRecorder <- makeDefaultStderrRecorder HsLogger.DEBUG
+  defaultRecorder <- makeDefaultStderrRecorder HsLogger.DEBUG
 
-  let recorder = textWithPriorityStderrRecorder
-               & cmap logToTextWithPriority
+  let recorder = defaultRecorder
+               & cfilter (\WithPriority{ priority } -> priority >= Debug)
+               & cmap logToDocWithPriority
 
   -- We mess with env vars so run single-threaded.
   defaultMainWithRerun $ testGroup "ghcide"

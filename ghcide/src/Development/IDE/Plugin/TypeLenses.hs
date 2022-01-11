@@ -10,7 +10,7 @@ module Development.IDE.Plugin.TypeLenses (
   GlobalBindingTypeSig (..),
   GetGlobalBindingTypeSigs (..),
   GlobalBindingTypeSigsResult (..),
-  Log
+  Log(..)
 , logToPriority) where
 
 import           Control.Concurrent.STM.Stats        (atomically)
@@ -77,7 +77,7 @@ data Log = LogShake Shake.Log deriving Show
 
 instance Pretty Log where
   pretty = \case
-    LogShake shakeLog -> pretty shakeLog
+    LogShake log -> pretty log
 
 logToPriority :: Log -> Logger.Priority
 logToPriority = \case

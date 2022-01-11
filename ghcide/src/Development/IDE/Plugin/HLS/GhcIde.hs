@@ -5,7 +5,7 @@
 module Development.IDE.Plugin.HLS.GhcIde
   (
     descriptors
-  , Log
+  , Log(..)
   , logToPriority) where
 import           Control.Monad.IO.Class
 import           Development.IDE
@@ -30,9 +30,9 @@ data Log
 
 instance Pretty Log where
   pretty = \case
-    LogNotifications notificationsLog -> pretty notificationsLog
-    LogCompletions completionsLog     -> pretty completionsLog
-    LogTypeLenses typeLensesLog       -> pretty typeLensesLog
+    LogNotifications log -> pretty log
+    LogCompletions log   -> pretty log
+    LogTypeLenses log    -> pretty log
 
 logToPriority :: Log -> Logger.Priority
 logToPriority = \case

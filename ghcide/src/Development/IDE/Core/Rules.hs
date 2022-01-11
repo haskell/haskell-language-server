@@ -57,8 +57,8 @@ module Development.IDE.Core.Rules(
     getParsedModuleDefinition,
     typeCheckRuleDefinition,
     GhcSessionDepsConfig(..),
-    Log
-    , logToPriority) where
+    Log(..),
+    logToPriority) where
 
 #if !MIN_VERSION_ghc(8,8,0)
 import           Control.Applicative                          (liftA2)
@@ -97,15 +97,15 @@ import qualified Data.Text.Encoding                           as T
 import           Data.Time                                    (UTCTime (..))
 import           Data.Tuple.Extra
 import           Development.IDE.Core.Compile
-import           Development.IDE.Core.FileExists hiding (logToPriority, Log)
+import           Development.IDE.Core.FileExists hiding (LogShake, logToPriority, Log)
 import           Development.IDE.Core.FileStore               (getFileContents,
                                                                modificationTime,
                                                                resetInterfaceStore)
 import           Development.IDE.Core.IdeConfiguration
-import           Development.IDE.Core.OfInterest hiding (logToPriority, Log)
+import           Development.IDE.Core.OfInterest hiding (LogShake, logToPriority, Log)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Service hiding (logToPriority, Log)
+import           Development.IDE.Core.Service hiding (LogShake, logToPriority, Log)
 import           Development.IDE.Core.Shake hiding (logToPriority, Log)
 import           Development.IDE.GHC.Compat.Env
 import           Development.IDE.GHC.Compat.Core              hiding
@@ -162,21 +162,15 @@ import qualified Prettyprinter
 data Log 
   = LogShake Shake.Log
   | LogReindexingHieFile !NormalizedFilePath
-  -- L.logDebug (logger se) $ "Re-indexing hie file for" <> T.pack (fromNormalizedFilePath f)
   | LogLoadingHieFile !NormalizedFilePath
-  -- log <- asks $ L.logDebug . logger
-  -- liftIO $ log $ "LOADING HIE FILE :" <> T.pack (show file)
   | LogLoadingHieFileFail !FilePath !SomeException
   | LogLoadingHieFileSuccess !FilePath
-  -- liftIO . log $ either (const $ "FAILED LOADING HIE FILE FOR:" <> T.pack (show hie_loc))
-  --                       (const $ "SUCCEEDED LOADING HIE FILE FOR:" <> T.pack (show hie_loc))
-  --                       res
   | LogExactPrint ExactPrint.Log
   deriving Show
 
 instance Pretty Log where
   pretty = \case
-    LogShake shakeLog -> pretty shakeLog
+    LogShake log -> pretty log
     LogReindexingHieFile path ->
       "Re-indexing hie file for" <+> pretty (fromNormalizedFilePath path)
     LogLoadingHieFile path ->
@@ -188,7 +182,7 @@ instance Pretty Log where
           , pretty (displayException e) ]
     LogLoadingHieFileSuccess path ->
       "SUCCEEDED LOADING HIE FILE FOR" <+> pretty path
-    LogExactPrint exactPrintLog -> pretty exactPrintLog
+    LogExactPrint log -> pretty log
 
 logToPriority :: Log -> Logger.Priority
 logToPriority = \case

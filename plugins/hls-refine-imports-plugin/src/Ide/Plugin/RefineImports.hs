@@ -8,7 +8,7 @@
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE TypeFamilies          #-}
 
-module Ide.Plugin.RefineImports (descriptor, Log, logToPriority) where
+module Ide.Plugin.RefineImports (descriptor, Log(..), logToPriority) where
 
 import           Control.Arrow                        (Arrow (second))
 import           Control.DeepSeq                      (rwhnf)
@@ -54,7 +54,7 @@ newtype Log = LogShake Shake.Log deriving Show
 
 instance Pretty Log where
   pretty = \case
-    LogShake shakeLog -> pretty shakeLog
+    LogShake log -> pretty log
 
 logToPriority :: Log -> Logger.Priority
 logToPriority = \case

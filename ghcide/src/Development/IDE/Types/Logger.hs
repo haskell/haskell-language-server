@@ -29,6 +29,10 @@ import           Data.Time                  (defaultTimeLocale, formatTime,
 import           GHC.Stack                  (HasCallStack,
                                              SrcLoc (SrcLoc, srcLocModule, srcLocStartLine),
                                              getCallStack, withFrozenCallStack)
+import           Prettyprinter              (Doc, Pretty (pretty),
+                                             defaultLayoutOptions, layoutPretty,
+                                             (<+>))
+import           Prettyprinter.Render.Text  (renderStrict)
 import           System.IO                  (Handle, IOMode (AppendMode),
                                              hClose, hFlush, hSetEncoding,
                                              openFile, stderr, utf8)
@@ -125,7 +129,7 @@ textHandleRecorder handle =
   Recorder
     { logger_ = \text -> liftIO $ Text.hPutStrLn handle text *> hFlush handle }
 
-makeDefaultStderrRecorder :: MonadIO m => HsLogger.Priority -> m (Recorder (WithPriority Text))
+makeDefaultStderrRecorder :: MonadIO m => HsLogger.Priority -> m (Recorder (WithPriority (Doc a)))
 makeDefaultStderrRecorder hsLoggerMinPriority = do
   lock <- liftIO newLock
   makeDefaultHandleRecorder hsLoggerMinPriority lock stderr
@@ -137,7 +141,7 @@ withDefaultRecorder
   :: MonadUnliftIO m
   => Maybe FilePath
   -> HsLogger.Priority
-  -> (Recorder (WithPriority Text) -> m a)
+  -> (Recorder (WithPriority (Doc d)) -> m a)
   -> m a
 withDefaultRecorder path hsLoggerMinPriority action = do
   lock <- liftIO newLock
@@ -148,17 +152,19 @@ withDefaultRecorder path hsLoggerMinPriority action = do
       handle :: Either IOException Handle <- liftIO $ try (openFile path AppendMode)
       case handle of
         Left _ -> makeHandleRecorder stderr >>= \recorder ->
-          logWith recorder (WithPriority Error $ "Couldn't open log file " <> Text.pack path <> "; falling back to stderr.")
+          logWith recorder (WithPriority Error $ "Couldn't open log file" <+> pretty path <> "; falling back to stderr.")
           >> action recorder
         Right handle -> finally (makeHandleRecorder handle >>= action) (liftIO $ hClose handle)
 
-makeDefaultHandleRecorder :: MonadIO m => HsLogger.Priority -> Lock -> Handle -> m (Recorder (WithPriority Text))
+makeDefaultHandleRecorder :: MonadIO m => HsLogger.Priority -> Lock -> Handle -> m (Recorder (WithPriority (Doc a)))
 makeDefaultHandleRecorder hsLoggerMinPriority lock handle = do
   let Recorder{ logger_ } = textHandleRecorder handle
   let threadSafeRecorder = Recorder { logger_ = \msg -> liftIO $ withLock lock (logger_ msg) }
   let textWithPriorityRecorder = cmapIO textWithPriorityToText threadSafeRecorder
   liftIO $ setupHsLogger lock handle ["hls", "hie-bios"] hsLoggerMinPriority
-  pure textWithPriorityRecorder
+  pure (cmap docToText textWithPriorityRecorder)
+  where
+    docToText = fmap (renderStrict . layoutPretty defaultLayoutOptions)
 
 -- taken from LSP.setupLogger
 -- used until contravariant logging system is fully in place

@@ -8,8 +8,9 @@ module Development.IDE.Main
 ,isLSP
 ,commandP
 ,defaultMain
--- ,testing
-,Log, testing, logToPriority) where
+,testing
+,Log(..)
+,logToPriority) where
 import           Control.Concurrent.Extra              (newLock, withLock,
                                                         withNumCapabilities)
 import           Control.Concurrent.STM.Stats          (atomically,
@@ -68,7 +69,6 @@ import           Development.IDE.Plugin                (Plugin (pluginHandlers, 
 import           Development.IDE.Plugin.HLS            (asGhcIdePlugin)
 import qualified Development.IDE.Plugin.HLS            as PluginHLS
 import qualified Development.IDE.Plugin.HLS.GhcIde     as GhcIde
--- import qualified Development.IDE.Plugin.Test           as Test
 import qualified Development.IDE.Plugin.Test           as Test
 import           Development.IDE.Session               (SessionLoadingOptions,
                                                         getHieDbLoc,
@@ -136,18 +136,10 @@ import           Text.Printf                           (printf)
 data Log
   = LogHeapStats !HeapStats.Log
   | LogLspStart
-  -- logInfo logger "Starting LSP server..."
-  -- logInfo logger "If you are seeing this in a terminal, you probably should have run WITHOUT the --lsp option!"
   | LogLspStartDuration !Seconds
-  -- logInfo logger $ T.pack $ "Started LSP server in " ++ showDuration t
   | LogShouldRunSubset !Bool
-  -- logDebug logger $ T.pack $ "runSubset: " <> show runSubset
   | LogOnlyPartialGhc9Support
-  -- hPutStrLn stderr $
-  --     "Currently, HLS supports GHC 9 only partially. "
-  --     <> "See [issue #297](https://github.com/haskell/haskell-language-server/issues/297) for more detail."
   | LogSetInitialDynFlagsException !SomeException
-  -- (logDebug logger $ T.pack $ "setInitialDynFlags: " ++ displayException e)
   | LogService Service.Log
   | LogShake Shake.Log
   | LogGhcIde GhcIde.Log
@@ -158,8 +150,8 @@ data Log
   deriving Show
 
 instance Pretty Log where
-  pretty log = case log of
-    LogHeapStats heapStatsLog -> pretty heapStatsLog
+  pretty = \case
+    LogHeapStats log -> pretty log
     LogLspStart ->
       Prettyprinter.vsep
         [ "Staring LSP server..."
@@ -172,13 +164,13 @@ instance Pretty Log where
       "Currently, HLS supports GHC 9 only partially. See [issue #297](https://github.com/haskell/haskell-language-server/issues/297) for more detail."
     LogSetInitialDynFlagsException e ->
       "setInitialDynFlags:" <+> pretty (displayException e)
-    LogService serviceLog -> pretty serviceLog
-    LogShake shakeLog -> pretty shakeLog
-    LogGhcIde ghcIdeLog -> pretty ghcIdeLog
-    LogLanguageServer languageServerLog -> pretty languageServerLog
-    LogSession sessionLog -> pretty sessionLog
-    LogPluginHLS pluginHLSLog -> pretty pluginHLSLog
-    LogRules rulesLog -> pretty rulesLog
+    LogService log -> pretty log
+    LogShake log -> pretty log
+    LogGhcIde log -> pretty log
+    LogLanguageServer log -> pretty log
+    LogSession log -> pretty log
+    LogPluginHLS log -> pretty log
+    LogRules log -> pretty log
 
 logToPriority :: Log -> Logger.Priority
 logToPriority = \case

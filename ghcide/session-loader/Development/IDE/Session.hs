@@ -100,59 +100,22 @@ import           System.Random                        (RandomGen)
 import qualified System.Random                        as Random
 
 data Log
-  = LogSettingInitialDynFlags -- seems like wrong location so I changed it
-  -- logDebug logger $ T.pack $ "setInitialDynFlags cradle: " ++ show cradle
+  = LogSettingInitialDynFlags
   | LogGetInitialGhcLibDirDefaultCradleFail !CradleError !FilePath !(Maybe FilePath) !(Cradle Void)
-  -- hPutStrLn stderr $ "Couldn't load cradle for libdir: " ++ show (err,rootDir,hieYaml,cradle)
   | LogGetInitialGhcLibDirDefaultCradleNone
-  -- hPutStrLn stderr "Couldn't load cradle (CradleNone)"
   | LogHieDbRetry !Int !Int !Int !SomeException
-  -- logWarning logger $ "Retrying - " <> makeLogMsgComponentsText (Right delay) newMaxRetryCount e
   | LogHieDbRetriesExhausted !Int !Int !Int !SomeException
-  -- logWarning logger $ "Retries exhausted - " <> makeLogMsgComponentsText (Left baseDelay) maxRetryCount e
-  -- -- e.g. delay: 1010102, maximumDelay: 12010, maxRetryCount: 9, exception: SQLError { ... }
-  -- makeLogMsgComponentsText delay newMaxRetryCount e =
-  --   let
-  --     logMsgComponents =
-  --       [ either
-  --           (("base delay: " <>) . T.pack . show)
-  --           (("delay: " <>) . T.pack . show)
-  --           delay
-  --       , "maximumDelay: " <> T.pack (show maxDelay)
-  --       , "maxRetryCount: " <> T.pack (show newMaxRetryCount)
-  --       , "exception: " <> T.pack (show e)]
-  --   in
-  --     T.intercalate ", " logMsgComponents
   | LogHieDbWriterThreadSQLiteError !SQLError
-  -- logDebug logger $ T.pack $ "SQLite error in worker, ignoring: " ++ show e
   | LogHieDbWriterThreadException !SomeException
-  -- logDebug logger $ T.pack $ "Uncaught error in database worker, ignoring: " ++ show e
   | LogInterfaceFilesCacheDir !FilePath
-  -- liftIO $ logInfo logger $ "Using interface files cache dir: " <> T.pack (fromMaybe cacheDir hiCacheDir)
   | LogKnownFilesUpdated !(HashMap Target (HashSet NormalizedFilePath))
-  -- logDebug logger $ "Known files updated: " <>
-  --     T.pack(show $ (HM.map . Set.map) fromNormalizedFilePath x)
   | LogMakingNewHscEnv ![UnitId]
-  -- logInfo logger (T.pack ("Making new HscEnv" ++ show inplace))
   | LogDLLLoadError !String
-  -- logDebug logger $ T.pack $
-  --   "Error dynamically loading libm.so.6:\n" <> err
   | LogCradlePath !FilePath
-  -- logInfo logger $ T.pack ("Consulting the cradle for " <> show lfp)
   | LogCradleNotFound !FilePath
-  -- logWarning logger $ implicitCradleWarning lfp
-  -- implicitCradleWarning :: FilePath -> T.Text
-  -- implicitCradleWarning fp =
-  --   "No [cradle](https://github.com/mpickering/hie-bios#hie-bios) found for "
-  --   <> T.pack fp <>
-  --   ".\n Proceeding with [implicit cradle](https://hackage.haskell.org/package/implicit-hie).\n"<>
-  --   "You should ignore this message, unless you see a 'Multi Cradle: No prefixes matched' error."
   | LogSessionLoadingResult !(Either [CradleError] (ComponentOptions, FilePath))
-  -- logDebug logger $ T.pack ("Session loading result: " <> show eopts)
   | forall a. Show a => LogCradle !(Cradle a)
-  -- logDebug logger $ T.pack $ "Output from setting up the cradle " <> show cradle
   | LogNewComponentCache !(([FileDiagnostic], Maybe HscEnvEq), DependencyInfo)
-    -- logDebug logger ("New Component Cache HscEnvEq: " <> T.pack (show res))
 deriving instance Show Log
 
 instance Pretty Log where

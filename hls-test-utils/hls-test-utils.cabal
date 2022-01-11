@@ -51,6 +51,7 @@ library
     , lsp                     ^>=1.4
     , lsp-test                ^>=0.14
     , lsp-types               ^>=1.4
+    , prettyprinter
     , tasty
     , tasty-expected-failure
     , tasty-golden

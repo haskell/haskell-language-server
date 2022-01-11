@@ -13,7 +13,7 @@
 module Ide.Plugin.Example
   (
     descriptor
-  , Log
+  , Log(..)
   , logToPriority) where
 
 import           Control.Concurrent.STM
@@ -47,7 +47,7 @@ newtype Log = LogShake Shake.Log deriving Show
 
 instance Pretty Log where
   pretty = \case
-    LogShake shakeLog -> pretty shakeLog
+    LogShake log -> pretty log
 
 logToPriority :: Log -> Logger.Priority
 logToPriority = \case

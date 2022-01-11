@@ -1,6 +1,6 @@
 {-# LANGUAGE NumericUnderscores #-}
 -- | Logging utilities for reporting heap statistics
-module Development.IDE.Main.HeapStats ( withHeapStats, Log , logToPriority) where
+module Development.IDE.Main.HeapStats ( withHeapStats, Log(..), logToPriority ) where
 
 import           Control.Concurrent
 import           Control.Concurrent.Async
@@ -15,16 +15,8 @@ import           Text.Printf                  (printf)
 
 data Log
   = LogHeapStatsPeriod !Int
-  -- logInfo l ("Logging heap statistics every "
-  --             <> T.pack (printf "%.2fs" (fromIntegral @Int @Double heapStatsInterval / 1e6)))
   | LogHeapStatsDisabled
-  -- logInfo l "Heap statistics are not enabled (RTS option -T is needed)"
   | LogHeapStats !Word64 !Word64
-    -- format :: Word64 -> T.Text
-    -- format m = T.pack (printf "%.2fMB" (fromIntegral @Word64 @Double m / 1e6))
-    -- message = "Live bytes: " <> format live_bytes  <> " " <>
-    --           "Heap size: " <> format heap_size
-  -- logInfo l message
   deriving Show
 
 instance Pretty Log where

@@ -22,7 +22,7 @@ module Development.IDE.Core.FileStore(
     getModTime,
     isWatchSupported,
     registerFileWatches,
-    Log
+    Log(..)
     , logToPriority) where
 
 import           Control.Concurrent.STM.Stats                 (STM, atomically,
@@ -91,13 +91,7 @@ import           System.FilePath
 
 data Log
   = LogCouldNotIdentifyReverseDeps !NormalizedFilePath
-  -- log = L.logInfo logger . T.pack
-  -- liftIO $ log $ "Could not identify reverse dependencies for " ++ show nfp
   | LogTypeCheckingReverseDeps !NormalizedFilePath !(Maybe [NormalizedFilePath])
-  -- the catch around previous logging statement is weird
-  -- does forcing nfp, or revs trigger than exception?
-  -- liftIO $ (log $ "Typechecking reverse dependencies for " ++ show nfp ++ ": " ++ show revs)
-  --   `catch` \(e :: SomeException) -> log (show e)
   | LogShake Shake.Log
   deriving Show
 
@@ -110,13 +104,13 @@ instance Pretty Log where
       <+> Prettyprinter.viaShow path
       <> ":"
       <+> pretty (fmap (fmap show) reverseDepPaths)
-    LogShake shakeLog -> pretty shakeLog
+    LogShake log -> pretty log
 
 logToPriority :: Log -> Logger.Priority
 logToPriority = \case
   LogCouldNotIdentifyReverseDeps{} -> Logger.Info
   LogTypeCheckingReverseDeps{}     -> Logger.Info
-  LogShake shakeLog                -> Shake.logToPriority shakeLog
+  LogShake log                     -> Shake.logToPriority log
 
 makeVFSHandle :: IO VFSHandle
 makeVFSHandle = do

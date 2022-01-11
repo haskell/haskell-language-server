@@ -9,7 +9,7 @@
 module Development.IDE.LSP.Notifications
     ( whenUriFile
     , descriptor
-    , Log
+    , Log(..)
     , logToPriority) where
 
 import           Language.LSP.Types
@@ -29,10 +29,10 @@ import           Development.IDE.Core.FileStore        (registerFileWatches,
                                                         setSomethingModified)
 import qualified Development.IDE.Core.FileStore        as FileStore
 import           Development.IDE.Core.IdeConfiguration
-import           Development.IDE.Core.OfInterest       hiding (Log,
+import           Development.IDE.Core.OfInterest       hiding (Log, LogShake,
                                                         logToPriority)
 import           Development.IDE.Core.RuleTypes        (GetClientSettings (..))
-import           Development.IDE.Core.Service          hiding (Log,
+import           Development.IDE.Core.Service          hiding (Log, LogShake,
                                                         logToPriority)
 import           Development.IDE.Core.Shake            hiding (Log, Priority,
                                                         logToPriority)
@@ -50,13 +50,13 @@ data Log
 
 instance Pretty Log where
   pretty = \case
-    LogShake shakeLog         -> pretty shakeLog
-    LogFileStore fileStoreLog -> pretty fileStoreLog
+    LogShake log     -> pretty log
+    LogFileStore log -> pretty log
 
 logToPriority :: Log -> Priority
 logToPriority = \case
-  LogShake shakeLog         -> Shake.logToPriority shakeLog
-  LogFileStore fileStoreLog -> FileStore.logToPriority fileStoreLog
+  LogShake log     -> Shake.logToPriority log
+  LogFileStore log -> FileStore.logToPriority log
 
 whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
 whenUriFile uri act = whenJust (LSP.uriToFilePath uri) $ act . toNormalizedFilePath'

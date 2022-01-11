@@ -10,7 +10,7 @@
 -- This version removes the daml: handling
 module Development.IDE.LSP.LanguageServer
     ( runLanguageServer
-    , Log
+    , Log(..)
     , logToPriority) where
 
 import           Control.Concurrent.STM
@@ -51,17 +51,10 @@ import           System.IO.Unsafe                      (unsafeInterleaveIO)
 
 data Log
   = LogRegisteringIdeConfig !IdeConfiguration
-  -- logInfo (ideLogger ide) $ T.pack $ "Registering ide configuration: " <> show initConfig
   | LogReactorThreadException !SomeException
-  -- logError logger $ T.pack $ "Fatal error in server thread: " <> show e
   | LogReactorMessageActionException !SomeException
-  -- logError logger $ T.pack $
-  --     "Unexpected exception, please report!\n" ++
-  --     "Exception: " ++ show e
   | LogReactorThreadStopped
-  -- logInfo logger "Reactor thread stopped"
   | LogCancelledRequest !SomeLspId
-  -- logDebug (ideLogger ide) $ T.pack $ "Cancelled request " <> show _id
   | LogSession Session.Log
   deriving Show
 
@@ -79,9 +72,9 @@ instance Pretty Log where
         , pretty $ displayException e ]
     LogReactorThreadStopped ->
       "Reactor thread stopped"
-    (LogCancelledRequest requestId) ->
+    LogCancelledRequest requestId ->
       "Cancelled request" <+> Prettyprinter.viaShow requestId
-    (LogSession sessionLog) -> pretty sessionLog
+    LogSession log -> pretty log
 
 logToPriority :: Log -> Logger.Priority
 logToPriority = \case

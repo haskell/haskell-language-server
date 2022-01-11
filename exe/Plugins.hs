@@ -124,26 +124,26 @@ data Log
 
 instance Pretty Log where
   pretty = \case
-    LogGhcIde ghcIdeLog -> pretty ghcIdeLog
-    LogExample exampleLog -> pretty exampleLog
-    LogExample2 example2Log -> pretty example2Log
+    LogGhcIde log                -> pretty log
+    LogExample log               -> pretty log
+    LogExample2 log              -> pretty log
 #if tactic
-    LogTactic tacticLog -> pretty tacticLog
+    LogTactic log                -> pretty log
 #endif
 #if eval
-    LogEval evalLog -> pretty evalLog
+    LogEval log                  -> pretty log
 #endif
 #if importLens
-    LogExplicitImports explicitImportsLog -> pretty explicitImportsLog
+    LogExplicitImports log       -> pretty log
 #endif
 #if refineImports
-    LogRefineImports refineImportsLog -> pretty refineImportsLog
+    LogRefineImports log         -> pretty log
 #endif
 #if hlint
-    LogHlint hlintLog -> pretty hlintLog
+    LogHlint log                 -> pretty log
 #endif
 #if alternateNumberFormat
-    LogAlternateNumberFormat alternateNumberFormatLog -> pretty alternateNumberFormatLog
+    LogAlternateNumberFormat log -> pretty log
 #endif
 
 logToPriority :: Log -> Logger.Priority

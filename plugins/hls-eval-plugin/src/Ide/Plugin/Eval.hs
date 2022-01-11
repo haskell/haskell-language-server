@@ -8,8 +8,8 @@ Eval Plugin entry point.
 -}
 module Ide.Plugin.Eval (
     descriptor,
-    Log
-, logToPriority) where
+    Log(..),
+    logToPriority) where
 
 import           Development.IDE              (IdeState)
 import           Development.IDE.Types.Logger (Recorder, cmap)
@@ -27,7 +27,7 @@ newtype Log = LogEvalRules EvalRules.Log deriving Show
 
 instance Pretty Log where
   pretty = \case
-    LogEvalRules evalRulesLog -> pretty evalRulesLog
+    LogEvalRules log -> pretty log
 
 logToPriority :: Log -> Logger.Priority
 logToPriority = \case

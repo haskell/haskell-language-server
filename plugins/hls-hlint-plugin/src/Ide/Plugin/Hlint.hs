@@ -27,7 +27,7 @@
 module Ide.Plugin.Hlint
   (
     descriptor
-  , Log
+  , Log(..)
   , logToPriority) where
 import           Control.Arrow                                      ((&&&))
 import           Control.Concurrent.STM
@@ -133,7 +133,7 @@ newtype Log
 
 instance Pretty Log where
   pretty = \case
-    LogShake shakeLog -> pretty shakeLog
+    LogShake log -> pretty log
 
 logToPriority :: Log -> Logger.Priority
 logToPriority = \case

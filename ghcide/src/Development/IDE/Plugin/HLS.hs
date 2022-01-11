@@ -6,7 +6,7 @@
 module Development.IDE.Plugin.HLS
     (
       asGhcIdePlugin
-    , Log
+    , Log(..)
     , logToPriority) where
 
 import           Control.Exception            (SomeException)
@@ -47,7 +47,6 @@ import           UnliftIO.Exception           (catchAny)
 
 data Log
   = LogNoEnabledPlugins
-  -- liftIO $ logInfo (ideLogger ide) "extensibleNotificationPlugins no enabled plugins"
   deriving Show
 
 instance Pretty Log where

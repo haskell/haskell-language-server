@@ -10,8 +10,6 @@ import           Arguments                         (Arguments (..),
 import           Control.Monad.Extra               (unless)
 import           Data.Default                      (def)
 import           Data.Function                     ((&))
-import           Data.Text                         (Text)
-import qualified Data.Text                         as Text
 import           Data.Version                      (showVersion)
 import           Development.GitRev                (gitHash)
 import           Development.IDE                   (Priority (Debug, Info),
@@ -26,10 +24,12 @@ import qualified Development.IDE.Plugin.HLS.GhcIde as GhcIde
 import           Development.IDE.Types.Logger      (WithPriority (WithPriority, priority),
                                                     cfilter, cmap,
                                                     makeDefaultStderrRecorder)
+import qualified Development.IDE.Types.Logger      as Logger
 import           Development.IDE.Types.Options
 import           Ide.Plugin.Config                 (Config (checkParents, checkProject))
 import           Ide.PluginUtils                   (pluginDescToIdePlugins)
 import           Paths_ghcide                      (version)
+import           Prettyprinter                     (Doc, Pretty (pretty))
 import qualified System.Directory.Extra            as IO
 import           System.Environment                (getExecutablePath)
 import           System.Exit                       (exitSuccess)
@@ -42,6 +42,19 @@ data Log
   | LogRules Rules.Log
   deriving Show
 
+instance Pretty Log where
+  pretty = \case
+    LogIDEMain log -> pretty log
+    LogRules log   -> pretty log
+
+logToPriority :: Log -> Logger.Priority
+logToPriority = \case
+  LogIDEMain log -> IDEMain.logToPriority log
+  LogRules log   -> Rules.logToPriority log
+
+logToDocWithPriority :: Log -> WithPriority (Doc a)
+logToDocWithPriority log = WithPriority (logToPriority log) (pretty log)
+
 ghcideVersion :: IO String
 ghcideVersion = do
   path <- getExecutablePath
@@ -52,9 +65,6 @@ ghcideVersion = do
              <> " (GHC: " <> showVersion compilerVersion
              <> ") (PATH: " <> path <> ")"
              <> gitHashSection
-
-logToTextWithPriority :: Log -> WithPriority Text
-logToTextWithPriority = WithPriority Info . Text.pack . show
 
 main :: IO ()
 main = withTelemetryLogger $ \telemetryLogger -> do
@@ -73,11 +83,11 @@ main = withTelemetryLogger $ \telemetryLogger -> do
 
     let (hsLoggerMinPriority, minPriority) = if argsVerbose then (HsLogger.DEBUG, Debug) else (HsLogger.INFO, Info)
 
-    textWithPriorityStderrRecorder <- makeDefaultStderrRecorder hsLoggerMinPriority
+    defaultRecorder <- makeDefaultStderrRecorder hsLoggerMinPriority
 
-    let recorder = textWithPriorityStderrRecorder
+    let recorder = defaultRecorder
                  & cfilter (\WithPriority{ priority } -> priority >= minPriority)
-                 & cmap logToTextWithPriority
+                 & cmap logToDocWithPriority
 
     let arguments =
           if argsTesting
