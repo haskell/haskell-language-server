@@ -30,14 +30,13 @@ import           GHC.Stack                  (HasCallStack,
                                              SrcLoc (SrcLoc, srcLocModule, srcLocStartLine),
                                              getCallStack, withFrozenCallStack)
 import           System.IO                  (Handle, IOMode (AppendMode),
-                                             hFlush, hSetEncoding, stderr, utf8)
+                                             hClose, hFlush, hSetEncoding,
+                                             openFile, stderr, utf8)
 import qualified System.Log.Formatter       as HSL
 import qualified System.Log.Handler         as HSL
 import qualified System.Log.Handler.Simple  as HSL
 import qualified System.Log.Logger          as HsLogger
-import           UnliftIO                   (MonadUnliftIO, finally, hClose,
-                                             openFile)
-
+import           UnliftIO                   (MonadUnliftIO, finally)
 
 data Priority
 -- Don't change the ordering of this type or you will mess up the Ord
@@ -151,7 +150,7 @@ withDefaultRecorder path hsLoggerMinPriority action = do
         Left _ -> makeHandleRecorder stderr >>= \recorder ->
           logWith recorder (WithPriority Error $ "Couldn't open log file " <> Text.pack path <> "; falling back to stderr.")
           >> action recorder
-        Right handle -> finally (makeHandleRecorder handle >>= action) (hClose handle)
+        Right handle -> finally (makeHandleRecorder handle >>= action) (liftIO $ hClose handle)
 
 makeDefaultHandleRecorder :: MonadIO m => HsLogger.Priority -> Lock -> Handle -> m (Recorder (WithPriority Text))
 makeDefaultHandleRecorder hsLoggerMinPriority lock handle = do
