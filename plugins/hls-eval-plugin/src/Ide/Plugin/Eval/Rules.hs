@@ -3,7 +3,7 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module Ide.Plugin.Eval.Rules (GetEvalComments(..), rules,queueForEvaluation, Log) where
+module Ide.Plugin.Eval.Rules (GetEvalComments(..), rules,queueForEvaluation, Log, logToPriority) where
 
 import           Control.Monad.IO.Class               (MonadIO (liftIO))
 import           Data.HashSet                         (HashSet)
@@ -37,6 +37,7 @@ import qualified Development.IDE.GHC.Compat           as SrcLoc
 import qualified Development.IDE.GHC.Compat.Util      as FastString
 import           Development.IDE.Graph                (alwaysRerun)
 import           Development.IDE.Types.Logger         (Recorder, cmap)
+import qualified Development.IDE.Types.Logger         as Logger
 import           Ide.Plugin.Eval.Types
 import           Prettyprinter                        (Pretty (pretty))
 
@@ -45,6 +46,10 @@ newtype Log = LogShake Shake.Log deriving Show
 instance Pretty Log where
   pretty = \case
     LogShake shakeLog -> pretty shakeLog
+
+logToPriority :: Log -> Logger.Priority
+logToPriority = \case
+  LogShake log -> Shake.logToPriority log
 
 rules :: Recorder Log -> Rules ()
 rules recorder = do

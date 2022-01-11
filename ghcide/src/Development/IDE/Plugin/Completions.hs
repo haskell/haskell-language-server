@@ -4,7 +4,7 @@
 module Development.IDE.Plugin.Completions
     ( descriptor
     , Log
-    ) where
+    , logToPriority) where
 
 import           Control.Concurrent.Async                     (concurrently)
 import           Control.Concurrent.STM.Stats                 (readTVarIO)
@@ -19,8 +19,10 @@ import           Data.Maybe
 import qualified Data.Text                                    as T
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Service                 hiding (Log)
-import           Development.IDE.Core.Shake                   hiding (Log)
+import           Development.IDE.Core.Service                 hiding (Log,
+                                                               logToPriority)
+import           Development.IDE.Core.Shake                   hiding (Log,
+                                                               logToPriority)
 import qualified Development.IDE.Core.Shake                   as Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error                    (rangeToSrcSpan)
@@ -40,6 +42,7 @@ import           Development.IDE.Types.HscEnvEq               (HscEnvEq (envPack
 import qualified Development.IDE.Types.KnownTargets           as KT
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger                 (Recorder, cmap)
+import qualified Development.IDE.Types.Logger                 as Logger
 import           GHC.Exts                                     (fromList, toList)
 import           Ide.Plugin.Config                            (Config)
 import           Ide.Types
@@ -54,6 +57,10 @@ data Log = LogShake Shake.Log deriving Show
 instance Pretty Log where
   pretty = \case
     LogShake shakeLog -> pretty shakeLog
+
+logToPriority :: Log -> Logger.Priority
+logToPriority = \case
+  LogShake shakeLog -> Shake.logToPriority shakeLog
 
 descriptor :: Recorder Log -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId)

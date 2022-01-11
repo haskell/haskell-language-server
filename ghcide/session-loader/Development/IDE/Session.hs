@@ -16,7 +16,7 @@ module Development.IDE.Session
   ,retryOnSqliteBusy
   ,retryOnException
   ,Log(..)
-  ) where
+  , logToPriority) where
 
 -- Unfortunately, we cannot use loadSession with ghc-lib since hie-bios uses
 -- the real GHC library and the types are incompatible. Furthermore, when
@@ -29,7 +29,7 @@ import           Control.Monad
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import qualified Crypto.Hash.SHA1                     as H
-import           Data.Aeson
+import           Data.Aeson                           hiding (Error)
 import           Data.Bifunctor
 import qualified Data.ByteString.Base16               as B16
 import qualified Data.ByteString.Char8                as B
@@ -46,12 +46,13 @@ import qualified Data.Text                            as T
 import           Data.Time.Clock
 import           Data.Version
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Shake           hiding (Log, withHieDb)
+import           Development.IDE.Core.Shake           hiding (Log, Priority,
+                                                       logToPriority, withHieDb)
 import qualified Development.IDE.GHC.Compat           as Compat
 import           Development.IDE.GHC.Compat.Core      hiding (Target,
                                                        TargetFile, TargetModule,
-                                                       Var)
-import qualified Development.IDE.GHC.Compat.Core      as GHC
+                                                       Var, Warning)
+import qualified Development.IDE.GHC.Compat.Core      as GHC hiding (Warning)
 import           Development.IDE.GHC.Compat.Env       hiding (Logger)
 import           Development.IDE.GHC.Compat.Units     (UnitId)
 import           Development.IDE.GHC.Util
@@ -62,7 +63,7 @@ import           Development.IDE.Types.Exports
 import           Development.IDE.Types.HscEnvEq       (HscEnvEq, newHscEnvEq,
                                                        newHscEnvEqPreserveImportPaths)
 import           Development.IDE.Types.Location
-import           Development.IDE.Types.Logger         (Priority (Debug),
+import           Development.IDE.Types.Logger         (Priority (Debug, Error, Info, Warning),
                                                        Recorder, logWith)
 import           Development.IDE.Types.Options
 import           GHC.Check
@@ -219,6 +220,25 @@ instance Pretty Log where
       "Cradle:" <+> Prettyprinter.viaShow cradle
     LogNewComponentCache componentCache ->
       "New component cache HscEnvEq:" <+> Prettyprinter.viaShow componentCache
+
+logToPriority :: Log -> Priority
+logToPriority = \case
+  LogSettingInitialDynFlags                 -> Debug
+  LogGetInitialGhcLibDirDefaultCradleFail{} -> Warning
+  LogGetInitialGhcLibDirDefaultCradleNone   -> Warning
+  LogHieDbRetry{}                           -> Warning
+  LogHieDbRetriesExhausted{}                -> Warning
+  LogHieDbWriterThreadSQLiteError{}         -> Error
+  LogHieDbWriterThreadException{}           -> Error
+  LogInterfaceFilesCacheDir{}               -> Info
+  LogKnownFilesUpdated{}                    -> Debug
+  LogMakingNewHscEnv{}                      -> Info
+  LogDLLLoadError{}                         -> Error
+  LogCradlePath{}                           -> Info
+  LogCradleNotFound{}                       -> Warning
+  LogSessionLoadingResult{}                 -> Debug
+  LogCradle{}                               -> Debug
+  LogNewComponentCache{}                    -> Debug
 
 -- | Bump this version number when making changes to the format of the data stored in hiedb
 hiedbDataVersion :: String

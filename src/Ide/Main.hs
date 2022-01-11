@@ -2,12 +2,13 @@
 -- SPDX-License-Identifier: Apache-2.0
 {-# LANGUAGE CPP                 #-}
 {-# OPTIONS_GHC -Wno-dodgy-imports #-} -- GHC no longer exports def in GHC 8.6 and above
+{-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies        #-}
 
-module Ide.Main(defaultMain, runLspMode, Log) where
+module Ide.Main(defaultMain, runLspMode, Log, logToPriority) where
 
 import           Control.Monad.Extra
 import qualified Data.Aeson.Encode.Pretty      as A
@@ -15,13 +16,14 @@ import qualified Data.ByteString.Lazy.Char8    as LBS
 import           Data.Default
 import           Data.List                     (sort)
 import qualified Data.Text                     as T
-import           Development.IDE.Core.Rules    hiding (Log)
+import           Development.IDE.Core.Rules    hiding (Log, logToPriority)
 import           Development.IDE.Core.Tracing  (withTelemetryLogger)
 import           Development.IDE.Graph         (ShakeOptions (shakeThreads))
 import           Development.IDE.Main          (isLSP)
 import qualified Development.IDE.Main          as IDEMain
 import qualified Development.IDE.Session       as Session
 import           Development.IDE.Types.Logger  as G
+import qualified Development.IDE.Types.Logger  as Logger
 import qualified Development.IDE.Types.Options as Ghcide
 import           Ide.Arguments
 import           Ide.Logger
@@ -56,6 +58,13 @@ instance Pretty Log where
           , Prettyprinter.viaShow ghcideArgs
           , "PluginIds:" <+> pretty pluginIds ]
     LogIDEMain iDEMainLog -> pretty iDEMainLog
+
+logToPriority :: Log -> Logger.Priority
+logToPriority = \case
+  LogVersion{}   -> Logger.Info
+  LogDirectory{} -> Logger.Info
+  LogLspStart{}  -> Logger.Info
+  LogIDEMain log -> IDEMain.logToPriority log
 
 defaultMain :: Recorder Log -> Arguments -> IdePlugins IdeState -> IO ()
 defaultMain recorder args idePlugins = do

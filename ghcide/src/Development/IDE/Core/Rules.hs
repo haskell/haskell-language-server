@@ -58,7 +58,7 @@ module Development.IDE.Core.Rules(
     typeCheckRuleDefinition,
     GhcSessionDepsConfig(..),
     Log
-    ) where
+    , logToPriority) where
 
 #if !MIN_VERSION_ghc(8,8,0)
 import           Control.Applicative                          (liftA2)
@@ -97,16 +97,16 @@ import qualified Data.Text.Encoding                           as T
 import           Data.Time                                    (UTCTime (..))
 import           Data.Tuple.Extra
 import           Development.IDE.Core.Compile
-import           Development.IDE.Core.FileExists hiding (Log)
+import           Development.IDE.Core.FileExists hiding (logToPriority, Log)
 import           Development.IDE.Core.FileStore               (getFileContents,
                                                                modificationTime,
                                                                resetInterfaceStore)
 import           Development.IDE.Core.IdeConfiguration
-import           Development.IDE.Core.OfInterest hiding (Log)
+import           Development.IDE.Core.OfInterest hiding (logToPriority, Log)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Service hiding (Log)
-import           Development.IDE.Core.Shake hiding (Log)
+import           Development.IDE.Core.Service hiding (logToPriority, Log)
+import           Development.IDE.Core.Shake hiding (logToPriority, Log)
 import           Development.IDE.GHC.Compat.Env
 import           Development.IDE.GHC.Compat.Core              hiding
                                                               (parseModule,
@@ -116,7 +116,7 @@ import           Development.IDE.GHC.Compat.Core              hiding
 import qualified Development.IDE.GHC.Compat                   as Compat
 import qualified Development.IDE.GHC.Compat.Util              as Util
 import           Development.IDE.GHC.Error
-import           Development.IDE.GHC.ExactPrint hiding (Log)
+import           Development.IDE.GHC.ExactPrint hiding (logToPriority, Log)
 import           Development.IDE.GHC.Util                     hiding
                                                               (modifyDynFlags)
 import           Development.IDE.Graph
@@ -153,6 +153,7 @@ import Language.LSP.Server (LspT)
 import System.Info.Extra (isMac)
 import HIE.Bios.Ghc.Gap (hostIsDynamic)
 import Development.IDE.Types.Logger (Recorder, cmap, logWith)
+import qualified Development.IDE.Types.Logger as Logger
 import qualified Development.IDE.Core.Shake as Shake
 import qualified Development.IDE.GHC.ExactPrint as ExactPrint
 import Prettyprinter (Pretty (pretty), (<+>))
@@ -188,6 +189,15 @@ instance Pretty Log where
     LogLoadingHieFileSuccess path ->
       "SUCCEEDED LOADING HIE FILE FOR" <+> pretty path
     LogExactPrint exactPrintLog -> pretty exactPrintLog
+
+logToPriority :: Log -> Logger.Priority
+logToPriority = \case
+  LogShake log -> Shake.logToPriority log
+  LogReindexingHieFile{} -> Logger.Debug
+  LogLoadingHieFile{} -> Logger.Debug
+  LogLoadingHieFileFail{} -> Logger.Debug
+  LogLoadingHieFileSuccess{} -> Logger.Debug
+  LogExactPrint log -> ExactPrint.logToPriority log
 
 templateHaskellInstructions :: T.Text
 templateHaskellInstructions = "https://haskell-language-server.readthedocs.io/en/latest/troubleshooting.html#support-for-template-haskell"

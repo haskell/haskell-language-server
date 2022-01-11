@@ -9,7 +9,7 @@ module Development.IDE.Main
 ,commandP
 ,defaultMain
 -- ,testing
-,Log, testing) where
+,Log, testing, logToPriority) where
 import           Control.Concurrent.Extra              (newLock, withLock,
                                                         withNumCapabilities)
 import           Control.Concurrent.STM.Stats          (atomically,
@@ -81,6 +81,7 @@ import           Development.IDE.Types.Location        (NormalizedUri,
                                                         toNormalizedFilePath')
 import           Development.IDE.Types.Logger          (Logger (Logger),
                                                         Recorder, cmap, logWith)
+import qualified Development.IDE.Types.Logger          as Logger
 import           Development.IDE.Types.Options         (IdeGhcSession,
                                                         IdeOptions (optCheckParents, optCheckProject, optReportProgress, optRunSubset),
                                                         IdeTesting (IdeTesting),
@@ -178,6 +179,22 @@ instance Pretty Log where
     LogSession sessionLog -> pretty sessionLog
     LogPluginHLS pluginHLSLog -> pretty pluginHLSLog
     LogRules rulesLog -> pretty rulesLog
+
+logToPriority :: Log -> Logger.Priority
+logToPriority = \case
+  LogHeapStats log                 -> HeapStats.logToPriority log
+  LogLspStart                      -> Logger.Info
+  LogLspStartDuration{}            -> Logger.Info
+  LogShouldRunSubset{}             -> Logger.Debug
+  LogOnlyPartialGhc9Support        -> Logger.Warning
+  LogSetInitialDynFlagsException{} -> Logger.Debug
+  LogService log                   -> Service.logToPriority log
+  LogShake log                     -> Shake.logToPriority log
+  LogGhcIde log                    -> GhcIde.logToPriority log
+  LogLanguageServer log            -> LanguageServer.logToPriority log
+  LogSession log                   -> Session.logToPriority log
+  LogPluginHLS log                 -> PluginHLS.logToPriority log
+  LogRules log                     -> Rules.logToPriority log
 
 data Command
     = Check [FilePath]  -- ^ Typecheck some paths and print diagnostics. Exit code is the number of failures

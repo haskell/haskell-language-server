@@ -32,7 +32,7 @@ module Development.IDE.GHC.ExactPrint
       -- * Helper function
       eqSrcSpan,
       Log
-    )
+    , logToPriority)
 where
 
 import           Control.Applicative                     (Alternative)
@@ -54,7 +54,8 @@ import qualified Data.Text                               as T
 import           Data.Traversable                        (for)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service            (runAction)
-import           Development.IDE.Core.Shake              hiding (Log)
+import           Development.IDE.Core.Shake              hiding (Log,
+                                                          logToPriority)
 import qualified Development.IDE.Core.Shake              as Shake
 import           Development.IDE.GHC.Compat              hiding (parseImport,
                                                           parsePattern,
@@ -63,6 +64,7 @@ import           Development.IDE.Graph                   (RuleResult, Rules)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger            (Recorder, cmap)
+import qualified Development.IDE.Types.Logger            as Logger
 import qualified GHC.Generics                            as GHC
 import           Generics.SYB
 import           Generics.SYB.GHC
@@ -85,6 +87,10 @@ data Log = LogShake Shake.Log deriving Show
 instance Pretty Log where
   pretty = \case
     LogShake shakeLog -> pretty shakeLog
+
+logToPriority :: Log -> Logger.Priority
+logToPriority = \case
+  LogShake log -> Shake.logToPriority log
 
 data GetAnnotatedParsedSource = GetAnnotatedParsedSource
   deriving (Eq, Show, Typeable, GHC.Generic)

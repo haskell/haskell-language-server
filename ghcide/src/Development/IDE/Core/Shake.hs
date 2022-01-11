@@ -78,7 +78,7 @@ module Development.IDE.Core.Shake(
     garbageCollectDirtyKeys,
     garbageCollectDirtyKeysOlderThan,
     Log
-    ) where
+    , logToPriority) where
 
 import           Control.Concurrent.Async
 import           Control.Concurrent.STM
@@ -233,6 +233,16 @@ instance Pretty Log where
       "defineEarlyCutoff RuleWithCustomNewnessCheck - file diagnostics:"
       <+> pretty (showDiagnosticsColored fileDiagnostics)
 
+logToPriority :: Log -> Logger.Priority
+logToPriority = \case
+  LogCreateHieDbExportsMapStart                -> Logger.Debug
+  LogCreateHieDbExportsMapFinish{}             -> Logger.Debug
+  LogBuildSessionRestart{}                     -> Logger.Debug
+  LogDelayedAction delayedAction _             -> actionPriority delayedAction
+  LogBuildSessionFinish{}                      -> Logger.Debug
+  LogDiagsDiffButNoLspEnv{}                    -> Logger.Info
+  LogDefineEarlyCutoffRuleNoDiagDiags{}        -> Logger.Warning
+  LogDefineEarlyCutoffRuleCustomNewnessDiags{} -> Logger.Warning
 
 -- | We need to serialize writes to the database, so we send any function that
 -- needs to write to the database over the channel, where it will be picked up by

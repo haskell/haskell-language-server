@@ -14,31 +14,32 @@ module Ide.Plugin.Example
   (
     descriptor
   , Log
-  ) where
+  , logToPriority) where
 
 import           Control.Concurrent.STM
-import           Control.DeepSeq            (NFData)
+import           Control.DeepSeq              (NFData)
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
 import           Data.Functor
-import qualified Data.HashMap.Strict        as Map
+import qualified Data.HashMap.Strict          as Map
 import           Data.Hashable
-import qualified Data.Text                  as T
+import qualified Data.Text                    as T
 import           Data.Typeable
-import           Development.IDE            as D
-import           Development.IDE.Core.Shake (getDiagnostics,
-                                             getHiddenDiagnostics)
-import qualified Development.IDE.Core.Shake as Shake
-import           Development.IDE.GHC.Compat (ParsedModule (ParsedModule))
+import           Development.IDE              as D
+import           Development.IDE.Core.Shake   (getDiagnostics,
+                                               getHiddenDiagnostics)
+import qualified Development.IDE.Core.Shake   as Shake
+import           Development.IDE.GHC.Compat   (ParsedModule (ParsedModule))
+import qualified Development.IDE.Types.Logger as Logger
 import           GHC.Generics
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
-import           Options.Applicative        (ParserInfo, info)
-import           Prettyprinter              (Pretty (pretty))
-import           Text.Regex.TDFA.Text       ()
+import           Options.Applicative          (ParserInfo, info)
+import           Prettyprinter                (Pretty (pretty))
+import           Text.Regex.TDFA.Text         ()
 
 -- ---------------------------------------------------------------------
 
@@ -47,6 +48,10 @@ newtype Log = LogShake Shake.Log deriving Show
 instance Pretty Log where
   pretty = \case
     LogShake shakeLog -> pretty shakeLog
+
+logToPriority :: Log -> Logger.Priority
+logToPriority = \case
+  LogShake log -> Shake.logToPriority log
 
 descriptor :: Recorder Log -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId)

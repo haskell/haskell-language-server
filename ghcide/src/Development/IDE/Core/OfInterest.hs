@@ -16,7 +16,7 @@ module Development.IDE.Core.OfInterest(
     kick, FileOfInterestStatus(..),
     OfInterestVar(..),
     scheduleGarbageCollection,
-    Log) where
+    Log, logToPriority) where
 
 import           Control.Concurrent.Strict
 import           Control.Monad
@@ -33,12 +33,14 @@ import qualified Data.ByteString                          as BS
 import           Data.Maybe                               (catMaybes)
 import           Development.IDE.Core.ProgressReporting
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Shake               hiding (Log)
+import           Development.IDE.Core.Shake               hiding (Log,
+                                                           logToPriority)
 import qualified Development.IDE.Core.Shake               as Shake
 import           Development.IDE.Plugin.Completions.Types
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger
+import qualified Development.IDE.Types.Logger             as Logger
 import           Development.IDE.Types.Options            (IdeTesting (..))
 import qualified Language.LSP.Server                      as LSP
 import qualified Language.LSP.Types                       as LSP
@@ -50,6 +52,10 @@ data Log = LogShake Shake.Log
 instance Pretty Log where
   pretty = \case
     LogShake shakeLog -> pretty shakeLog
+
+logToPriority :: Log -> Logger.Priority
+logToPriority = \case
+  LogShake log -> Shake.logToPriority log
 
 newtype OfInterestVar = OfInterestVar (Var (HashMap NormalizedFilePath FileOfInterestStatus))
 

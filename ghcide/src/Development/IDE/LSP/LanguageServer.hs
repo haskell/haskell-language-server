@@ -11,7 +11,7 @@
 module Development.IDE.LSP.LanguageServer
     ( runLanguageServer
     , Log
-    ) where
+    , logToPriority) where
 
 import           Control.Concurrent.STM
 import           Control.Monad.Extra
@@ -32,15 +32,18 @@ import           UnliftIO.Concurrent
 import           UnliftIO.Directory
 import           UnliftIO.Exception
 
-import           Development.IDE.Core.FileStore        hiding (Log)
+import           Development.IDE.Core.FileStore        hiding (Log,
+                                                        logToPriority)
 import           Development.IDE.Core.IdeConfiguration
-import           Development.IDE.Core.Shake            hiding (Log)
+import           Development.IDE.Core.Shake            hiding (Log,
+                                                        logToPriority)
 import           Development.IDE.Core.Tracing
 import           Development.IDE.LSP.HoverDefinition
 import           Development.IDE.Types.Logger
 
 import           Control.Monad.IO.Unlift               (MonadUnliftIO)
 import qualified Development.IDE.Session               as Session
+import qualified Development.IDE.Types.Logger          as Logger
 import           Development.IDE.Types.Shake           (WithHieDb)
 import           Prettyprinter                         (Pretty (pretty), (<+>))
 import qualified Prettyprinter
@@ -79,6 +82,15 @@ instance Pretty Log where
     (LogCancelledRequest requestId) ->
       "Cancelled request" <+> Prettyprinter.viaShow requestId
     (LogSession sessionLog) -> pretty sessionLog
+
+logToPriority :: Log -> Logger.Priority
+logToPriority = \case
+  LogRegisteringIdeConfig{}          -> Logger.Info
+  LogReactorThreadException{}        -> Logger.Error
+  LogReactorMessageActionException{} -> Logger.Error
+  LogReactorThreadStopped            -> Logger.Info
+  LogCancelledRequest{}              -> Logger.Debug
+  LogSession log                     -> Session.logToPriority log
 
 issueTrackerUrl :: T.Text
 issueTrackerUrl = "https://github.com/haskell/haskell-language-server/issues"

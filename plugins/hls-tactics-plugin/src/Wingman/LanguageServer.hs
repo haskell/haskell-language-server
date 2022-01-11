@@ -66,6 +66,7 @@ import           Wingman.Types
 import Development.IDE.Types.Logger (Recorder, cmap)
 import qualified Development.IDE.Core.Shake as Shake
 import Prettyprinter (Pretty (pretty))
+import qualified Development.IDE.Types.Logger as Logger
 
 
 newtype Log 
@@ -75,6 +76,10 @@ newtype Log
 instance Pretty Log where
   pretty = \case 
     LogShake shakeLog -> pretty shakeLog
+
+logToPriority :: Log -> Logger.Priority
+logToPriority = \case
+  LogShake log -> Shake.logToPriority log
 
 tacticDesc :: T.Text -> T.Text
 tacticDesc name = "fill the hole using the " <> name <> " tactic"

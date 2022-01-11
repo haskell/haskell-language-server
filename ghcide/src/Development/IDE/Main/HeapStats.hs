@@ -1,12 +1,13 @@
 {-# LANGUAGE NumericUnderscores #-}
 -- | Logging utilities for reporting heap statistics
-module Development.IDE.Main.HeapStats ( withHeapStats, Log ) where
+module Development.IDE.Main.HeapStats ( withHeapStats, Log , logToPriority) where
 
 import           Control.Concurrent
 import           Control.Concurrent.Async
 import           Control.Monad
 import           Data.Word
 import           Development.IDE.Types.Logger (Recorder, logWith)
+import qualified Development.IDE.Types.Logger as Logger
 import           GHC.Stats
 import           Prettyprinter                (Pretty (pretty), (<+>))
 import qualified Prettyprinter
@@ -45,6 +46,11 @@ instance Pretty Log where
       toFormattedMegabytes :: Word64 -> String
       toFormattedMegabytes b = printf "%.2fMB" (fromIntegral @Word64 @Double b / 1e6)
 
+logToPriority :: Log -> Logger.Priority
+logToPriority = \case
+  LogHeapStatsPeriod{} -> Logger.Info
+  LogHeapStatsDisabled -> Logger.Info
+  LogHeapStats{}       -> Logger.Info
 
 -- | Interval at which to report the latest heap statistics.
 heapStatsInterval :: Int

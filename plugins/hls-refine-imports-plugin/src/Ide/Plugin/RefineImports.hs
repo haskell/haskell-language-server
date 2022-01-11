@@ -8,7 +8,7 @@
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE TypeFamilies          #-}
 
-module Ide.Plugin.RefineImports (descriptor, Log) where
+module Ide.Plugin.RefineImports (descriptor, Log, logToPriority) where
 
 import           Control.Arrow                        (Arrow (second))
 import           Control.DeepSeq                      (rwhnf)
@@ -40,6 +40,7 @@ import           Development.IDE.GHC.Compat
                                                        tcg_exports, unLoc) -}
 import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.Graph.Classes
+import qualified Development.IDE.Types.Logger         as Logger
 import           GHC.Generics                         (Generic)
 import           Ide.Plugin.ExplicitImports           (extractMinimalImports,
                                                        within)
@@ -54,6 +55,10 @@ newtype Log = LogShake Shake.Log deriving Show
 instance Pretty Log where
   pretty = \case
     LogShake shakeLog -> pretty shakeLog
+
+logToPriority :: Log -> Logger.Priority
+logToPriority = \case
+  LogShake log -> Shake.logToPriority log
 
 -- | plugin declaration
 descriptor :: Recorder Log -> PluginId -> PluginDescriptor IdeState

@@ -8,7 +8,7 @@ module Development.IDE.Core.FileExists
   , watchedGlobs
   , GetFileExists(..)
   , Log
-  )
+  , logToPriority)
 where
 
 import           Control.Concurrent.STM.Stats          (atomically,
@@ -19,15 +19,18 @@ import           Control.Monad.IO.Class
 import qualified Data.ByteString                       as BS
 import           Data.List                             (partition)
 import           Data.Maybe
-import           Development.IDE.Core.FileStore        hiding (Log)
+import           Development.IDE.Core.FileStore        hiding (Log,
+                                                        logToPriority)
 import qualified Development.IDE.Core.FileStore        as FileStore
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Shake            hiding (Log)
+import           Development.IDE.Core.Shake            hiding (Log,
+                                                        logToPriority)
 import qualified Development.IDE.Core.Shake            as Shake
 import           Development.IDE.Graph
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger          (Recorder, cmap)
+import qualified Development.IDE.Types.Logger          as Logger
 import           Development.IDE.Types.Options
 import qualified Focus
 import           Ide.Plugin.Config                     (Config)
@@ -96,6 +99,11 @@ instance Pretty Log where
   pretty = \case
     LogFileStore fileStoreLog -> pretty fileStoreLog
     LogShake shakeLog         -> pretty shakeLog
+
+logToPriority :: Log -> Logger.Priority
+logToPriority = \case
+  LogFileStore log -> FileStore.logToPriority log
+  LogShake log     -> Shake.logToPriority log
 
 -- | Grab the current global value of 'FileExistsMap' without acquiring a dependency
 getFileExistsMapUntracked :: Action FileExistsMap

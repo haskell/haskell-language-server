@@ -28,7 +28,7 @@ module Ide.Plugin.Hlint
   (
     descriptor
   , Log
-  ) where
+  , logToPriority) where
 import           Control.Arrow                                      ((&&&))
 import           Control.Concurrent.STM
 import           Control.DeepSeq
@@ -121,6 +121,7 @@ import           Development.IDE.Spans.Pragmas                      (LineSplitTe
                                                                      lineSplitInsertTextEdit,
                                                                      lineSplitTextEdits,
                                                                      nextPragmaLine)
+import qualified Development.IDE.Types.Logger                       as Logger
 import           Prettyprinter                                      (Pretty (pretty))
 import           System.Environment                                 (setEnv,
                                                                      unsetEnv)
@@ -133,6 +134,10 @@ newtype Log
 instance Pretty Log where
   pretty = \case
     LogShake shakeLog -> pretty shakeLog
+
+logToPriority :: Log -> Logger.Priority
+logToPriority = \case
+  LogShake log -> Shake.logToPriority log
 
 #ifdef HLINT_ON_GHC_LIB
 -- Reimplementing this, since the one in Development.IDE.GHC.Compat isn't for ghc-lib

@@ -225,12 +225,13 @@ textWithPriorityToText = \case
     pure $ Text.intercalate " | "
       [ utcTimeToText utcTime
       -- , callStackToLocationText callStack
-      , threadIdToText threadId
-      -- , priorityToText priority
+      -- , threadIdToText threadId
+      , priorityToText priority
       , payload ]
     where
       utcTimeToText utcTime = Text.pack $ formatTime defaultTimeLocale "%Y-%m-%dT%H:%M:%S%6QZ" utcTime
 
+      threadIdToText :: Int -> Text
       threadIdToText = Text.pack . show
 
       callStackToLocationText callStack = srcLocText

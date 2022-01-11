@@ -6,7 +6,7 @@ module Development.IDE.Plugin.HLS.GhcIde
   (
     descriptors
   , Log
-  ) where
+  , logToPriority) where
 import           Control.Monad.IO.Class
 import           Development.IDE
 import           Development.IDE.LSP.HoverDefinition
@@ -15,6 +15,7 @@ import           Development.IDE.LSP.Outline
 import qualified Development.IDE.Plugin.CodeAction   as CodeAction
 import qualified Development.IDE.Plugin.Completions  as Completions
 import qualified Development.IDE.Plugin.TypeLenses   as TypeLenses
+import qualified Development.IDE.Types.Logger        as Logger
 import           Ide.Types
 import           Language.LSP.Server                 (LspM)
 import           Language.LSP.Types
@@ -32,6 +33,12 @@ instance Pretty Log where
     LogNotifications notificationsLog -> pretty notificationsLog
     LogCompletions completionsLog     -> pretty completionsLog
     LogTypeLenses typeLensesLog       -> pretty typeLensesLog
+
+logToPriority :: Log -> Logger.Priority
+logToPriority = \case
+  LogNotifications log -> Notifications.logToPriority log
+  LogCompletions log   -> Completions.logToPriority log
+  LogTypeLenses log    -> TypeLenses.logToPriority log
 
 descriptors :: Recorder Log -> [PluginDescriptor IdeState]
 descriptors recorder =

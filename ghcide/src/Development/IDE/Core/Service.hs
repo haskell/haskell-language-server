@@ -16,12 +16,12 @@ module Development.IDE.Core.Service(
     ideLogger,
     updatePositionMapping,
     Log
-    ) where
+    , logToPriority) where
 
 import           Control.Applicative             ((<|>))
 import           Development.IDE.Core.Debouncer
 import           Development.IDE.Core.FileExists (fileExistsRules)
-import           Development.IDE.Core.OfInterest hiding (Log)
+import           Development.IDE.Core.OfInterest hiding (Log, logToPriority)
 import           Development.IDE.Graph
 import           Development.IDE.Types.Logger    as Logger
 import           Development.IDE.Types.Options   (IdeOptions (..))
@@ -32,7 +32,7 @@ import qualified Language.LSP.Types              as LSP
 import           Control.Monad
 import qualified Development.IDE.Core.FileExists as FileExists
 import qualified Development.IDE.Core.OfInterest as OfInterest
-import           Development.IDE.Core.Shake      hiding (Log)
+import           Development.IDE.Core.Shake      hiding (Log, logToPriority)
 import qualified Development.IDE.Core.Shake      as Shake
 import           Development.IDE.Types.Shake     (WithHieDb)
 import           Prettyprinter                   (Pretty (pretty))
@@ -51,6 +51,11 @@ instance Pretty Log where
     LogOfInterest ofInterestLog -> pretty ofInterestLog
     LogFileExists fileExistsLog -> pretty fileExistsLog
 
+logToPriority :: Log -> Logger.Priority
+logToPriority = \case
+  LogShake log      -> Shake.logToPriority log
+  LogOfInterest log -> OfInterest.logToPriority log
+  LogFileExists log -> FileExists.logToPriority log
 
 ------------------------------------------------------------
 -- Exposed API

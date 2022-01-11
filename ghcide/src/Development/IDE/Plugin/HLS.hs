@@ -7,7 +7,7 @@ module Development.IDE.Plugin.HLS
     (
       asGhcIdePlugin
     , Log
-    ) where
+    , logToPriority) where
 
 import           Control.Exception            (SomeException)
 import           Control.Monad
@@ -22,13 +22,14 @@ import           Data.List.NonEmpty           (NonEmpty, nonEmpty, toList)
 import qualified Data.Map                     as Map
 import           Data.String
 import qualified Data.Text                    as T
-import           Development.IDE.Core.Shake   hiding (Log)
+import           Development.IDE.Core.Shake   hiding (Log, logToPriority)
 import           Development.IDE.Core.Tracing
 import           Development.IDE.Graph        (Rules)
 import           Development.IDE.LSP.Server
 import           Development.IDE.Plugin
 import qualified Development.IDE.Plugin       as P
 import           Development.IDE.Types.Logger
+import qualified Development.IDE.Types.Logger as Logger
 import           Ide.Plugin.Config
 import           Ide.PluginUtils              (getClientConfig)
 import           Ide.Types                    as HLS
@@ -53,6 +54,10 @@ instance Pretty Log where
   pretty = \case
     LogNoEnabledPlugins ->
       "extensibleNotificationPlugins no enabled plugins"
+
+logToPriority :: Log -> Logger.Priority
+logToPriority = \case
+  LogNoEnabledPlugins -> Logger.Info
 
 -- | Map a set of plugins to the underlying ghcide engine.
 asGhcIdePlugin :: Recorder Log -> IdePlugins IdeState -> Plugin Config

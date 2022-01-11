@@ -4,8 +4,10 @@
 module Plugins where
 
 import           Development.IDE.Types.Logger      (Recorder, cmap)
+import qualified Development.IDE.Types.Logger      as Logger
 import           Ide.PluginUtils                   (pluginDescToIdePlugins)
 import           Ide.Types                         (IdePlugins)
+import           Prettyprinter                     (Pretty (pretty))
 
 -- fixed plugins
 import           Development.IDE                   (IdeState)
@@ -94,7 +96,6 @@ import qualified Ide.Plugin.StylishHaskell         as StylishHaskell
 
 #if brittany
 import qualified Ide.Plugin.Brittany               as Brittany
-import           Prettyprinter                     (Pretty (pretty))
 #endif
 
 data Log
@@ -143,6 +144,30 @@ instance Pretty Log where
 #endif
 #if alternateNumberFormat
     LogAlternateNumberFormat alternateNumberFormatLog -> pretty alternateNumberFormatLog
+#endif
+
+logToPriority :: Log -> Logger.Priority
+logToPriority = \case
+  LogGhcIde log                -> GhcIde.logToPriority log
+  LogExample log               -> Example.logToPriority log
+  LogExample2 log              -> Example2.logToPriority log
+#if tactic
+  LogTactic log                -> Tactic.logToPriority log
+#endif
+#if eval
+  LogEval log                  -> Eval.logToPriority log
+#endif
+#if importLens
+  LogExplicitImports log       -> ExplicitImports.logToPriority log
+#endif
+#if refineImports
+  LogRefineImports log         -> RefineImports.logToPriority log
+#endif
+#if hlint
+  LogHlint log                 -> Hlint.logToPriority log
+#endif
+#if alternateNumberFormat
+  LogAlternateNumberFormat log -> AlternateNumberFormat.logToPriority log
 #endif
 
 -- ---------------------------------------------------------------------

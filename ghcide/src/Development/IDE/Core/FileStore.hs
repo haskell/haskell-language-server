@@ -23,7 +23,7 @@ module Development.IDE.Core.FileStore(
     isWatchSupported,
     registerFileWatches,
     Log
-    ) where
+    , logToPriority) where
 
 import           Control.Concurrent.STM.Stats                 (STM, atomically,
                                                                modifyTVar')
@@ -41,7 +41,8 @@ import qualified Data.Text                                    as T
 import           Data.Time
 import           Data.Time.Clock.POSIX
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Shake                   hiding (Log)
+import           Development.IDE.Core.Shake                   hiding (Log,
+                                                               logToPriority)
 import           Development.IDE.GHC.Orphans                  ()
 import           Development.IDE.Graph
 import           Development.IDE.Import.DependencyInformation
@@ -71,6 +72,7 @@ import           Development.IDE.Core.IdeConfiguration        (isWorkspaceFile)
 import qualified Development.IDE.Core.Shake                   as Shake
 import           Development.IDE.Types.Logger                 (Recorder, cmap,
                                                                logWith)
+import qualified Development.IDE.Types.Logger                 as Logger
 import           Language.LSP.Server                          hiding
                                                               (getVirtualFile)
 import qualified Language.LSP.Server                          as LSP
@@ -92,6 +94,8 @@ data Log
   -- log = L.logInfo logger . T.pack
   -- liftIO $ log $ "Could not identify reverse dependencies for " ++ show nfp
   | LogTypeCheckingReverseDeps !NormalizedFilePath !(Maybe [NormalizedFilePath])
+  -- the catch around previous logging statement is weird
+  -- does forcing nfp, or revs trigger than exception?
   -- liftIO $ (log $ "Typechecking reverse dependencies for " ++ show nfp ++ ": " ++ show revs)
   --   `catch` \(e :: SomeException) -> log (show e)
   | LogShake Shake.Log
@@ -107,6 +111,12 @@ instance Pretty Log where
       <> ":"
       <+> pretty (fmap (fmap show) reverseDepPaths)
     LogShake shakeLog -> pretty shakeLog
+
+logToPriority :: Log -> Logger.Priority
+logToPriority = \case
+  LogCouldNotIdentifyReverseDeps{} -> Logger.Info
+  LogTypeCheckingReverseDeps{}     -> Logger.Info
+  LogShake shakeLog                -> Shake.logToPriority shakeLog
 
 makeVFSHandle :: IO VFSHandle
 makeVFSHandle = do

@@ -15,6 +15,7 @@ module Ide.Plugin.ExplicitImports
   , extractMinimalImports
   , within
   , Log
+  , logToPriority
   ) where
 
 import           Control.DeepSeq
@@ -34,6 +35,7 @@ import           Development.IDE.Core.PositionMapping
 import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Graph.Classes
+import qualified Development.IDE.Types.Logger         as Logger
 import           GHC.Generics                         (Generic)
 import           Ide.PluginUtils                      (mkLspCommand)
 import           Ide.Types
@@ -51,6 +53,10 @@ newtype Log
 instance Pretty Log where
   pretty = \case
     LogShake shakeLog -> pretty shakeLog
+
+logToPriority :: Log -> Logger.Priority
+logToPriority = \case
+  LogShake log -> Shake.logToPriority log
 
 -- | The "main" function of a plugin
 descriptor :: Recorder Log -> PluginId -> PluginDescriptor IdeState

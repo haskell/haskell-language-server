@@ -1,5 +1,6 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Main(main) where
@@ -10,6 +11,7 @@ import           Development.IDE.Types.Logger (Priority (Debug, Info),
                                                WithPriority (WithPriority, priority),
                                                cfilter, cmap, setupHsLogger,
                                                withDefaultTextWithPriorityRecorderAndHandle)
+import qualified Development.IDE.Types.Logger as Logger
 import           Ide.Arguments                (Arguments (..),
                                                GhcideArguments (..),
                                                getArguments)
@@ -31,12 +33,19 @@ instance Pretty Log where
     LogIdeMain ideMainLog -> pretty ideMainLog
     LogPlugins pluginsLog -> pretty pluginsLog
 
+logToPriority :: Log -> Logger.Priority
+logToPriority = \case
+  LogIdeMain log -> IdeMain.logToPriority log
+  LogPlugins log -> Plugins.logToPriority log
+
 logToTextWithPriority :: Log -> WithPriority Text
-logToTextWithPriority =
-  WithPriority Info
-  . Prettyprinter.renderStrict
-  . Prettyprinter.layoutPretty Prettyprinter.defaultLayoutOptions
-  . pretty
+logToTextWithPriority log = WithPriority priority text
+  where
+    priority = logToPriority log
+    text = log
+         & pretty
+         & Prettyprinter.layoutPretty Prettyprinter.defaultLayoutOptions
+         & Prettyprinter.renderStrict
 
 main :: IO ()
 main = do
@@ -46,7 +55,7 @@ main = do
           case args of
             Ghcide GhcideArguments{ argsTesting, argsDebugOn, argsLogFile, argsExamplePlugin } ->
               let (minHsLoggerLogLevel, minPriority) =
-                    if argsDebugOn || argsTesting then (HsLogger.DEBUG, Debug) else (HsLogger.INFO, Info)
+                    if argsDebugOn || argsTesting then (HsLogger.DEBUG, Info) else (HsLogger.INFO, Info)
               in (minHsLoggerLogLevel, minPriority, argsLogFile, argsExamplePlugin)
             _ -> (HsLogger.INFO, Info, Nothing, False)
 

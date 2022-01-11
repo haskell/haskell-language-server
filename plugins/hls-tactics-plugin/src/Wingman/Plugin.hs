@@ -15,6 +15,7 @@ import           Wingman.LanguageServer.Metaprogram (hoverProvider)
 import           Wingman.StaticPlugin
 import Development.IDE.Types.Logger (Recorder, cmap)
 import Prettyprinter (Pretty (pretty))
+import qualified Development.IDE.Types.Logger as Logger
 
 newtype Log
   = LogWingmanLanguageServer WingmanLanguageServer.Log 
@@ -24,6 +25,9 @@ instance Pretty Log where
   pretty = \case
     LogWingmanLanguageServer wingmanLanguageServerLog -> pretty wingmanLanguageServerLog
   
+logToPriority :: Log -> Logger.Priority
+logToPriority = \case 
+  LogWingmanLanguageServer log -> WingmanLanguageServer.logToPriority log
 
 descriptor :: Recorder Log -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId

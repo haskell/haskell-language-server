@@ -11,7 +11,7 @@ module Development.IDE.Plugin.TypeLenses (
   GetGlobalBindingTypeSigs (..),
   GlobalBindingTypeSigsResult (..),
   Log
-) where
+, logToPriority) where
 
 import           Control.Concurrent.STM.Stats        (atomically)
 import           Control.DeepSeq                     (rwhnf)
@@ -44,6 +44,7 @@ import           Development.IDE.Types.Location      (Position (Position, _chara
                                                       toNormalizedFilePath',
                                                       uriToFilePath')
 import           Development.IDE.Types.Logger        (Recorder, cmap)
+import qualified Development.IDE.Types.Logger        as Logger
 import           GHC.Generics                        (Generic)
 import           Ide.Plugin.Config                   (Config)
 import           Ide.Plugin.Properties
@@ -77,6 +78,10 @@ data Log = LogShake Shake.Log deriving Show
 instance Pretty Log where
   pretty = \case
     LogShake shakeLog -> pretty shakeLog
+
+logToPriority :: Log -> Logger.Priority
+logToPriority = \case
+  LogShake log -> Shake.logToPriority log
 
 typeLensCommandId :: T.Text
 typeLensCommandId = "typesignature.add"
