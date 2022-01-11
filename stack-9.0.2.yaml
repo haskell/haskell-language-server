@@ -52,12 +52,27 @@ extra-deps:
 - statestack-0.3
 - operational-0.2.4.1
 
-# primitive-unlifted is not buildable with ghc-9.0.2
+# hls-graph dependencies
+- stm-containers-1.2
+- stm-hamt-1.2.0.7
+
+# primitive-unlifted-1.0.0 is not buildable with ghc-9.0.2
 # see https://gitlab.haskell.org/ghc/ghc/-/issues/20908
 - primitive-unlifted-0.1.3.1
+- primitive-extras-0.10.1.4
 
-# needed for hls-graph
-- stm-containers-1.2
+# To fix windows build for ghc >= 9.0.2
+# https://github.com/jacobstanley/unix-compat/pull/47
+- git: https://github.com/tfausak/unix-compat
+  commit: 154c3a63f154cb49c51d5f9d13488e8119631d8a
+
+# boot libraries
+- Cabal-3.6.2.0
+- directory-1.3.7.0
+- ghc-boot-9.2.1
+- process-1.6.13.2
+- time-1.12.1
+- unix-2.7.2.2
 
 # currently needed for ghcide>extra, etc.
 allow-newer: true
