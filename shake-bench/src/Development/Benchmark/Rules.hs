@@ -503,11 +503,11 @@ instance FromJSON GitCommit where
   parseJSON o@(Object _) = do
     let keymap = o ^. _Object
     case toList keymap of 
-      [(name, String gitName)] -> pure $ GitCommit gitName (Just (fromString $ show name)) Nothing True
+      [(name, String gitName)] -> pure $ GitCommit gitName (Just name) Nothing True
       [(name, Object props)] ->
         GitCommit
           <$> props .:? "git"  .!= name
-          <*> pure (Just (fromString $ show name))
+          <*> pure (Just name)
           <*> props .:? "parent"
           <*> props .:? "include" .!= True
       _ -> empty
