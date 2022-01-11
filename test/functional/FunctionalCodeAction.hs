@@ -7,7 +7,7 @@ module FunctionalCodeAction (tests) where
 import           Control.Lens            hiding (List)
 import           Control.Monad
 import           Data.Aeson
-import           Data.Aeson.Lens         (_Object, key)
+import           Data.Aeson.Lens         (_Object)
 import           Data.List
 import qualified Data.Map                as M
 import           Data.Maybe
@@ -57,7 +57,7 @@ renameTests = testGroup "rename suggestions" [
             cars <- getAllCodeActions doc
             cmd <- liftIO $ inspectCommand cars ["Replace with", "putStrLn"]
             let Just (List [args]) = cmd ^. L.arguments
-                editParams = args ^. key "fallbackWorkspaceEdit" . _Object
+                editParams = args ^. ix "fallbackWorkspaceEdit" . _Object
             liftIO $ do
                 (editParams & has (ix "changes"))  @? "Contains changes"
                 not (editParams & has (ix "documentChanges")) @? "Doesn't contain documentChanges"
