@@ -306,6 +306,7 @@ executable ghcide
                 "-with-rtsopts=-I0 -A128M -T"
     main-is: Main.hs
     build-depends:
+        hslogger,
         hiedb,
         aeson,
         base == 4.*,
@@ -385,6 +386,7 @@ test-suite ghcide-tests
         lsp,
         lsp-types,
         hls-plugin-api,
+        hslogger,
         network-uri,
         lens,
         list-t,
