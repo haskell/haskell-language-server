@@ -115,10 +115,11 @@ import           Test.Tasty.QuickCheck
 import           Text.Printf                              (printf)
 import           Text.Regex.TDFA                          ((=~))
 import qualified HieDbRetry
-import Development.IDE.Types.Logger (WithPriority(WithPriority), makeDefaultTextWithPriorityStderrRecorder, Priority (Info), cmap, Recorder)
+import Development.IDE.Types.Logger (WithPriority(WithPriority), Priority (Info), cmap, Recorder, makeDefaultStderrRecorder)
 import Data.Function ((&))
 import qualified Data.Text as Text
 import Data.Text (Text)
+import qualified System.Log as HsLogger
 
 data Log 
   = LogGhcIde Ghcide.Log 
@@ -157,7 +158,7 @@ logToTextWithPriority = WithPriority Info . Text.pack . show
 
 main :: IO ()
 main = do
-  textWithPriorityStderrRecorder <- makeDefaultTextWithPriorityStderrRecorder
+  textWithPriorityStderrRecorder <- makeDefaultStderrRecorder HsLogger.DEBUG
 
   let recorder = textWithPriorityStderrRecorder
                & cmap logToTextWithPriority

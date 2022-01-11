@@ -15,8 +15,7 @@ import qualified Data.Text                         as Text
 import           Data.Version                      (showVersion)
 import           Development.GitRev                (gitHash)
 import           Development.IDE                   (Priority (Debug, Info),
-                                                    action,
-                                                    makeDefaultTextWithPriorityStderrRecorder)
+                                                    action)
 import           Development.IDE.Core.OfInterest   (kick)
 import           Development.IDE.Core.Rules        (mainRule)
 import qualified Development.IDE.Core.Rules        as Rules
@@ -25,7 +24,8 @@ import           Development.IDE.Graph             (ShakeOptions (shakeThreads))
 import qualified Development.IDE.Main              as IDEMain
 import qualified Development.IDE.Plugin.HLS.GhcIde as GhcIde
 import           Development.IDE.Types.Logger      (WithPriority (WithPriority, priority),
-                                                    cfilter, cmap)
+                                                    cfilter, cmap,
+                                                    makeDefaultStderrRecorder)
 import           Development.IDE.Types.Options
 import           Ide.Plugin.Config                 (Config (checkParents, checkProject))
 import           Ide.PluginUtils                   (pluginDescToIdePlugins)
@@ -35,6 +35,7 @@ import           System.Environment                (getExecutablePath)
 import           System.Exit                       (exitSuccess)
 import           System.IO                         (hPutStrLn, stderr)
 import           System.Info                       (compilerVersion)
+import qualified System.Log                        as HsLogger
 
 data Log
   = LogIDEMain IDEMain.Log
@@ -70,9 +71,9 @@ main = withTelemetryLogger $ \telemetryLogger -> do
       Nothing   -> IO.getCurrentDirectory
       Just root -> IO.setCurrentDirectory root >> IO.getCurrentDirectory
 
-    let minPriority = if argsVerbose then Debug else Info
+    let (hsLoggerMinPriority, minPriority) = if argsVerbose then (HsLogger.DEBUG, Debug) else (HsLogger.INFO, Info)
 
-    textWithPriorityStderrRecorder <- makeDefaultTextWithPriorityStderrRecorder
+    textWithPriorityStderrRecorder <- makeDefaultStderrRecorder hsLoggerMinPriority
 
     let recorder = textWithPriorityStderrRecorder
                  & cfilter (\WithPriority{ priority } -> priority >= minPriority)

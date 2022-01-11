@@ -9,8 +9,8 @@ import           Data.Function                ((&))
 import           Data.Text                    (Text)
 import           Development.IDE.Types.Logger (Priority (Debug, Info),
                                                WithPriority (WithPriority, priority),
-                                               cfilter, cmap, setupHsLogger,
-                                               withDefaultTextWithPriorityRecorderAndHandle)
+                                               cfilter, cmap,
+                                               withDefaultRecorder)
 import qualified Development.IDE.Types.Logger as Logger
 import           Ide.Arguments                (Arguments (..),
                                                GhcideArguments (..),
@@ -51,17 +51,15 @@ main :: IO ()
 main = do
     args <- getArguments "haskell-language-server" (Plugins.idePlugins mempty False)
 
-    let (hsLoggerMinLogLevel, minPriority, logFilePath, includeExamplePlugins) =
+    let (hsLoggerMinPriority, minPriority, logFilePath, includeExamplePlugins) =
           case args of
             Ghcide GhcideArguments{ argsTesting, argsDebugOn, argsLogFile, argsExamplePlugin } ->
-              let (minHsLoggerLogLevel, minPriority) =
-                    if argsDebugOn || argsTesting then (HsLogger.DEBUG, Info) else (HsLogger.INFO, Info)
-              in (minHsLoggerLogLevel, minPriority, argsLogFile, argsExamplePlugin)
+              let (minHsLoggerPriority, minPriority) =
+                    if argsDebugOn || argsTesting then (HsLogger.DEBUG, Debug) else (HsLogger.INFO, Info)
+              in (minHsLoggerPriority, minPriority, argsLogFile, argsExamplePlugin)
             _ -> (HsLogger.INFO, Info, Nothing, False)
 
-    withDefaultTextWithPriorityRecorderAndHandle logFilePath $ \textWithPriorityRecorder handle -> do
-      -- until the contravariant logging system is fully in place
-      setupHsLogger (Just handle) ["hls", "hie-bios"] hsLoggerMinLogLevel
+    withDefaultRecorder logFilePath hsLoggerMinPriority $ \textWithPriorityRecorder -> do
       let recorder =
             textWithPriorityRecorder
             & cfilter (\WithPriority{ priority } -> priority >= minPriority)

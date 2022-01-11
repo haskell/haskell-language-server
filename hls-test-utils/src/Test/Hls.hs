@@ -63,7 +63,7 @@ import qualified Development.IDE.Plugin.Test     as Test
 import           Development.IDE.Types.Logger    (Priority (Debug),
                                                   WithPriority (WithPriority),
                                                   cmap,
-                                                  makeDefaultTextWithPriorityStderrRecorder)
+                                                  makeDefaultStderrRecorder)
 import           Development.IDE.Types.Options
 import           GHC.IO.Handle
 import           Ide.Plugin.Config               (Config, formattingProvider)
@@ -81,6 +81,7 @@ import           System.Directory                (getCurrentDirectory,
 import           System.Environment              (lookupEnv)
 import           System.FilePath
 import           System.IO.Unsafe                (unsafePerformIO)
+import qualified System.Log                      as HsLogger
 import           System.Process.Extra            (createPipe)
 import           System.Time.Extra
 import           Test.Hls.Util
@@ -181,7 +182,7 @@ runSessionWithServer' plugins conf sconf caps root s = withLock lock $ keepCurre
   (inR, inW) <- createPipe
   (outR, outW) <- createPipe
 
-  textWithPriorityRecorder <- makeDefaultTextWithPriorityStderrRecorder
+  textWithPriorityRecorder <- makeDefaultStderrRecorder HsLogger.DEBUG
 
   logStdErr <- fromMaybe "0" <$> lookupEnv "LSP_TEST_LOG_STDERR"
 
