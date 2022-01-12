@@ -66,7 +66,10 @@ module Development.IDE.GHC.Compat.Core (
     -- slightly unsafe
     setUnsafeGlobalDynFlags,
     -- * Linear Haskell
+#if !MIN_VERSION_ghc(9,0,0)
     Scaled,
+    unrestricted,
+#endif
     scaledThing,
     -- * Interface Files
     IfaceExport,
@@ -121,9 +124,12 @@ module Development.IDE.GHC.Compat.Core (
       TyCoRep.CoercionTy
       ),
     pattern FunTy,
+    pattern ConPatIn,
     Development.IDE.GHC.Compat.Core.splitForAllTyCoVars,
+#if !MIN_VERSION_ghc(9,0,0)
     Development.IDE.GHC.Compat.Core.mkVisFunTys,
     Development.IDE.GHC.Compat.Core.mkInfForAllTys,
+#endif
     -- * Specs
     ImpDeclSpec(..),
     ImportSpec(..),
@@ -338,6 +344,7 @@ module Development.IDE.GHC.Compat.Core (
     module GHC.Types.Var,
     module GHC.Unit.Module,
     module GHC.Utils.Error,
+    module TcType,
 #else
     module BasicTypes,
     module Class,
@@ -788,7 +795,9 @@ dataConExTyCoVars = DataCon.dataConExTyVars
 type Scaled a = a
 scaledThing :: Scaled a -> a
 scaledThing = id
-#endif
+
+unrestricted :: a -> Scaled a
+unrestricted = id
 
 mkVisFunTys :: [Scaled Type] -> Type -> Type
 mkVisFunTys =
@@ -800,10 +809,7 @@ mkVisFunTys =
 
 mkInfForAllTys :: [TyVar] -> Type -> Type
 mkInfForAllTys =
-#if MIN_VERSION_ghc(9,0,0)
-  TcType.mkInfForAllTys
-#else
-  mkInvForAllTys
+  mkInfForAllTys
 #endif
 
 splitForAllTyCoVars :: Type -> ([TyCoVar], Type)
@@ -865,3 +871,10 @@ type PlainGhcException = Plain.PlainGhcException
 #else
 type PlainGhcException = Plain.GhcException
 #endif
+
+#if MIN_VERSION_ghc(9,0,0)
+-- This is from the old api, but it still simplifies
+pattern ConPatIn :: SrcLoc.Located (ConLikeP GhcPs) -> HsConPatDetails GhcPs -> Pat GhcPs
+pattern ConPatIn con args = ConPat NoExtField con args
+#endif
+

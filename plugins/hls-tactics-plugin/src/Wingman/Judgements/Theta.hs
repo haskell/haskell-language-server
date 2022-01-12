@@ -180,7 +180,11 @@ absBinds _ _ = []
 ------------------------------------------------------------------------------
 -- | Extract evidence from 'HsWrapper's in scope
 wrapperBinds ::  SrcSpan -> LHsExpr GhcTc -> [PredType]
+#if __GLASGOW_HASKELL__ >= 900
+wrapperBinds dst (L src (XExpr (WrapExpr (HsWrap h _))))
+#else
 wrapperBinds dst (L src (HsWrap _ h _))
+#endif
   | dst `isSubspanOf` src = wrapper h
 wrapperBinds _ _ = []
 
@@ -196,7 +200,11 @@ matchBinds _ _ = []
 ------------------------------------------------------------------------------
 -- | Extract evidence from a 'ConPatOut'.
 patBinds ::  Pat GhcTc -> [PredType]
-patBinds ConPatOut{ pat_dicts = dicts }
+#if __GLASGOW_HASKELL__ >= 900
+patBinds (ConPat{ pat_con_ext = ConPatTc { cpt_dicts = dicts }})
+#else
+patBinds (ConPatOut { pat_dicts = dicts })
+#endif
   = fmap idType dicts
 patBinds _ = []
 

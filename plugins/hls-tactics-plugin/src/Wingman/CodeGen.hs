@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE OverloadedLabels  #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -56,7 +57,7 @@ destructMatches use_field_puns f scrut t jdg = do
     Just (dcs, apps) ->
       fmap unzipTrace $ for dcs $ \dc -> do
         let con = RealDataCon dc
-            ev = concatMap mkEvidence $ dataConInstArgTys dc apps
+            ev = concatMap (mkEvidence . scaledThing) $ dataConInstArgTys dc apps
             -- We explicitly do not need to add the method hypothesis to
             -- #syn_scoped
             method_hy = foldMap evidenceToHypothesis ev
@@ -139,6 +140,7 @@ mkDestructPat already_in_scope con names
 
         in (names', )
          $ ConPatIn (noLoc $ Unqual $ occName $ conLikeName con)
+        --  $ ConPat NoExtField (noLoc $ Unqual $ occName $ conLikeName con)
          $ RecCon
          $ HsRecFields rec_fields Nothing
   | otherwise =
@@ -184,7 +186,7 @@ conLikeInstOrigArgTys'
       -- ^ Types of arguments to the ConLike with returned type is instantiated with the second argument.
 conLikeInstOrigArgTys' con uniTys =
   let exvars = conLikeExTys con
-   in conLikeInstOrigArgTys con $
+   in map scaledThing $ conLikeInstOrigArgTys con $
         uniTys ++ fmap mkTyVarTy exvars
       -- Rationale: At least in GHC <= 8.10, 'dataConInstOrigArgTys'
       -- unifies the second argument with DataCon's universals followed by existentials.
@@ -228,7 +230,11 @@ destructLambdaCase' use_field_puns f jdg = do
   when (isDestructBlacklisted jdg) cut -- throwError NoApplicableTactic
   let g  = jGoal jdg
   case splitFunTy_maybe (unCType g) of
+#if __GLASGOW_HASKELL__ >= 900
+    Just (_multiplicity, arg, _) | isAlgType arg ->
+#else
     Just (arg, _) | isAlgType arg ->
+#endif
       fmap (fmap noLoc lambdaCase) <$>
         destructMatches use_field_puns f Nothing (CType arg) jdg
     _ -> cut -- throwError $ GoalMismatch "destructLambdaCase'" g

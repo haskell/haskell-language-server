@@ -12,13 +12,13 @@ import           Data.Maybe (mapMaybe)
 import qualified Data.Set as S
 import           Data.Traversable
 import           Data.Tuple (swap)
-import           TcType (substTy, tcGetTyVar_maybe)
+import           Development.IDE.GHC.Compat.Core (substTy, tcGetTyVar_maybe, mkBoxedTupleTy)
 import           Test.Hspec
 import           Test.QuickCheck
-import           TysWiredIn (mkBoxedTupleTy)
 import           Wingman.GHC
 import           Wingman.Machinery (newUnivar)
 import           Wingman.Types
+-- import GHC.Tc.Utils.TcType (tcGetTyVar_maybe)
 
 
 spec :: Spec

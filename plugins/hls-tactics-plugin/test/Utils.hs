@@ -23,6 +23,7 @@ import qualified Data.Text.IO as T
 import           Ide.Plugin.Tactic as Tactic
 import           Language.LSP.Types
 import           Language.LSP.Types.Lens hiding (actions, applyEdit, capabilities, executeCommand, id, line, message, name, rename, title)
+import qualified Language.LSP.Types.Lens as J
 import           System.Directory (doesFileExist)
 import           System.FilePath
 import           Test.Hls
@@ -117,6 +118,7 @@ mkGoldenTest eq tc occ line col input =
       -- use stale data will get uptodate stuff
       void $ waitForTypecheck doc
       actions <- getCodeActions doc $ pointRange line col
+-- <<<<<<< HEAD
       case find ((== Just (tacticTitle tc occ)) . codeActionTitle) actions of
         Just (InR CodeAction {_command = Just c}) -> do
             executeCommand c
@@ -129,6 +131,23 @@ mkGoldenTest eq tc occ line col input =
             expected <- liftIO $ T.readFile expected_name
             liftIO $ edited `eq` expected
         _ -> error $ show actions
+-- =======
+--       Just (InR CodeAction {_command = Just c})
+--         <- pure $ find ((== Just (tacticTitle tc occ)) . codeActionTitle) actions
+--       executeCommand c
+--       resp <- skipManyTill anyMessage (Right <$> message SWorkspaceApplyEdit <|> Left <$> message SWindowShowMessage)
+--       case resp of
+--         Left nm -> liftIO $ expectationFailure $ "Expected WorkspaceApplyEdit.\nInstead got message:\n    " ++ show (nm ^. params . J.message)
+--         Right _ -> pure ()
+--       edited <- documentContents doc
+--       let expected_name = input <.> "expected" <.> "hs"
+--       -- Write golden tests if they don't already exist
+--       liftIO $ (doesFileExist expected_name >>=) $ flip unless $ do
+--         T.writeFile expected_name edited
+--       expected <- liftIO $ T.readFile expected_name
+--       liftIO $ edited `eq` expected
+
+-- >>>>>>> 75a7d853084c8e83a3f8ea4d92799b5ade8ede3f
 
 mkCodeLensTest
     :: FilePath

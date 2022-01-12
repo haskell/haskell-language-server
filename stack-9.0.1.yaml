@@ -19,7 +19,7 @@ packages:
 - ./plugins/hls-rename-plugin
 - ./plugins/hls-retrie-plugin
 - ./plugins/hls-splice-plugin
-# - ./plugins/hls-tactics-plugin
+- ./plugins/hls-tactics-plugin
 - ./plugins/hls-brittany-plugin
 # - ./plugins/hls-stylish-haskell-plugin
 - ./plugins/hls-floskell-plugin
@@ -53,6 +53,7 @@ extra-deps:
 - lsp-1.4.0.0
 - lsp-test-0.14.0.2
 - lsp-types-1.4.0.0
+- refinery-0.4.0.0
 
 # shake-bench dependencies
 - Chart-1.9.3
@@ -81,7 +82,6 @@ flags:
     pedantic: true
 
     ignore-plugins-ghc-bounds: true
-    tactic: false # Dependencies fail
     stylishHaskell: false
 
   retrie:
@@ -93,6 +93,6 @@ flags:
     embed: true
 
 nix:
-  packages: [ icu libcxx zlib ]
+  packages: [ icu libcxx zlib darwin.apple_sdk.frameworks.CoreServices darwin.apple_sdk.frameworks.Cocoa ]
 
 concurrent-tests: false

@@ -17,6 +17,7 @@ import           Data.Traversable
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
 import           GHC.SourceGen (lambda)
+-- import           GHC.Tc.Utils.TcType (tcSplitSigmaTy, tcSplitNestedSigmaTys, tcSplitFunTys, tyCoVarsOfTypeList)
 import           Generics.SYB (Data, everything, everywhere, listify, mkQ, mkT)
 import           Wingman.StaticPlugin (pattern MetaprogramSyntax)
 import           Wingman.Types
@@ -57,7 +58,7 @@ isFunction _                                    = True
 ------------------------------------------------------------------------------
 -- | Split a function, also splitting out its quantified variables and theta
 -- context.
-tacticsSplitFunTy :: Type -> ([TyVar], ThetaType, [Type], Type)
+tacticsSplitFunTy :: Type -> ([TyVar], ThetaType, [Scaled Type], Type)
 tacticsSplitFunTy t
   = let (vars, theta, t') = tcSplitNestedSigmaTys t
         (args, res) = tcSplitFunTys t'
@@ -179,7 +180,11 @@ allOccNames = everything (<>) $ mkQ mempty $ \case
 
 ------------------------------------------------------------------------------
 -- | Unpack the relevant parts of a 'Match'
+#if __GLASGOW_HASKELL__ >= 900
+pattern AMatch :: HsMatchContext (NoGhcTc GhcPs) -> [Pat GhcPs] -> HsExpr GhcPs -> Match GhcPs (LHsExpr GhcPs)
+#else
 pattern AMatch :: HsMatchContext (NameOrRdrName (IdP GhcPs)) -> [Pat GhcPs] -> HsExpr GhcPs -> Match GhcPs (LHsExpr GhcPs)
+#endif
 pattern AMatch ctx pats body <-
   Match { m_ctxt = ctx
         , m_pats = fmap fromPatCompat -> pats
@@ -192,7 +197,8 @@ pattern SingleLet bind pats val expr <-
   HsLet _
     (L _ (HsValBinds _
       (ValBinds _ (bagToList ->
-        [L _ (FunBind _ (L _ bind) (MG _ (L _ [L _ (AMatch _ pats val)]) _) _ _)]) _)))
+        -- [L _ (FunBind _ (L _ bind) (MG _ (L _ [L _ (AMatch _ pats val)]) _) _ _)]) _)))
+        [L _ (FunBind {fun_id = (L _ bind), fun_matches = (MG _ (L _ [L _ (AMatch _ pats val)]) _)})]) _)))
     (L _ expr)
 
 
@@ -255,7 +261,11 @@ pattern LamCase matches <-
 --         @Just False@ if it can't be homomorphic
 --         @Just True@ if it can
 lambdaCaseable :: Type -> Maybe Bool
+#if __GLASGOW_HASKELL__ >= 900
+lambdaCaseable (splitFunTy_maybe -> Just (_multiplicity, arg, res))
+#else
 lambdaCaseable (splitFunTy_maybe -> Just (arg, res))
+#endif
   | isJust (algebraicTyCon arg)
   = Just $ isJust $ algebraicTyCon res
 lambdaCaseable _ = Nothing
