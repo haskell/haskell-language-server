@@ -87,7 +87,7 @@ scrutinzedType :: EmptyCaseSort Type -> Maybe Type
 scrutinzedType (EmptyCase ty) = pure  ty
 scrutinzedType (EmptyLamCase ty) =
   case tacticsSplitFunTy ty of
-    (_, _, tys, _) -> listToMaybe $ map scaledThing tys
+    (_, _, tys, _) -> listToMaybe $ fmap scaledThing tys
 
 
 ------------------------------------------------------------------------------

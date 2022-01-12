@@ -140,7 +140,6 @@ mkDestructPat already_in_scope con names
 
         in (names', )
          $ ConPatIn (noLoc $ Unqual $ occName $ conLikeName con)
-        --  $ ConPat NoExtField (noLoc $ Unqual $ occName $ conLikeName con)
          $ RecCon
          $ HsRecFields rec_fields Nothing
   | otherwise =
@@ -186,7 +185,7 @@ conLikeInstOrigArgTys'
       -- ^ Types of arguments to the ConLike with returned type is instantiated with the second argument.
 conLikeInstOrigArgTys' con uniTys =
   let exvars = conLikeExTys con
-   in map scaledThing $ conLikeInstOrigArgTys con $
+   in fmap scaledThing $ conLikeInstOrigArgTys con $
         uniTys ++ fmap mkTyVarTy exvars
       -- Rationale: At least in GHC <= 8.10, 'dataConInstOrigArgTys'
       -- unifies the second argument with DataCon's universals followed by existentials.

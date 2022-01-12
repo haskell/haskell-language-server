@@ -93,6 +93,6 @@ flags:
     embed: true
 
 nix:
-  packages: [ icu libcxx zlib darwin.apple_sdk.frameworks.CoreServices darwin.apple_sdk.frameworks.Cocoa ]
+  packages: [ icu libcxx zlib ]
 
 concurrent-tests: false

@@ -18,7 +18,6 @@ import           Test.QuickCheck
 import           Wingman.GHC
 import           Wingman.Machinery (newUnivar)
 import           Wingman.Types
--- import GHC.Tc.Utils.TcType (tcGetTyVar_maybe)
 
 
 spec :: Spec

@@ -131,7 +131,7 @@ intros' params = rule $ \jdg -> do
   case tacticsSplitFunTy $ unCType g of
     (_, _, [], _) -> cut -- failure $ GoalMismatch "intros" g
     (_, _, scaledArgs, res) -> do
-      let args = map scaledThing scaledArgs
+      let args = fmap scaledThing scaledArgs
       ctx <- ask
       let gen_names = mkManyGoodNames (hyNamesInScope $ jEntireHypothesis jdg) args
           occs = case params of

@@ -17,7 +17,6 @@ import           Data.Traversable
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
 import           GHC.SourceGen (lambda)
--- import           GHC.Tc.Utils.TcType (tcSplitSigmaTy, tcSplitNestedSigmaTys, tcSplitFunTys, tyCoVarsOfTypeList)
 import           Generics.SYB (Data, everything, everywhere, listify, mkQ, mkT)
 import           Wingman.StaticPlugin (pattern MetaprogramSyntax)
 import           Wingman.Types
@@ -197,7 +196,6 @@ pattern SingleLet bind pats val expr <-
   HsLet _
     (L _ (HsValBinds _
       (ValBinds _ (bagToList ->
-        -- [L _ (FunBind _ (L _ bind) (MG _ (L _ [L _ (AMatch _ pats val)]) _) _ _)]) _)))
         [L _ (FunBind {fun_id = (L _ bind), fun_matches = (MG _ (L _ [L _ (AMatch _ pats val)]) _)})]) _)))
     (L _ expr)
 
