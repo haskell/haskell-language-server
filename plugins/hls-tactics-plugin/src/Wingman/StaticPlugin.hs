@@ -3,6 +3,7 @@
 module Wingman.StaticPlugin
   ( staticPlugin
   , metaprogramHoleName
+  , enableQuasiQuotes
   , pattern WingmanMetaprogram
   , pattern MetaprogramSyntax
   ) where
