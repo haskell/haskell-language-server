@@ -43,7 +43,6 @@ module Development.IDE.GHC.ExactPrint
       GetAnnotatedParsedSource(..),
       ASTElement (..),
       ExceptStringT (..),
-      Annotated(..),
       TransformT,
     )
 where
@@ -82,8 +81,8 @@ import           Ide.PluginUtils
 import           Language.Haskell.GHC.ExactPrint.Parsers
 import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities         (ClientCapabilities)
-import           Retrie.ExactPrint                       hiding (parseDecl,
-                                                          parseExpr,
+import           Retrie.ExactPrint                       hiding (Annotated (..),
+                                                          parseDecl, parseExpr,
                                                           parsePattern,
                                                           parseType)
 #if MIN_VERSION_ghc(9,2,0)
@@ -107,11 +106,7 @@ data GetAnnotatedParsedSource = GetAnnotatedParsedSource
 
 instance Hashable GetAnnotatedParsedSource
 instance NFData GetAnnotatedParsedSource
-#if MIN_VERSION_ghc(9,2,0)
-type instance RuleResult GetAnnotatedParsedSource = ParsedSource
-#else
 type instance RuleResult GetAnnotatedParsedSource = Annotated ParsedSource
-#endif
 
 -- | Get the latest version of the annotated parse source with comments.
 getAnnotatedParsedSourceRule :: Rules ()
@@ -120,9 +115,8 @@ getAnnotatedParsedSourceRule = define $ \GetAnnotatedParsedSource nfp -> do
   return ([], fmap annotateParsedSource pm)
 
 #if MIN_VERSION_ghc(9,2,0)
-annotateParsedSource :: ParsedModule -> ParsedSource
-annotateParsedSource (ParsedModule _ ps _ _) = makeDeltaAst ps
-
+annotateParsedSource :: ParsedModule -> Annotated ParsedSource
+annotateParsedSource (ParsedModule _ ps _ _) = unsafeMkA (makeDeltaAst ps) 0
 #else
 annotateParsedSource :: ParsedModule -> Annotated ParsedSource
 annotateParsedSource = fixAnns
