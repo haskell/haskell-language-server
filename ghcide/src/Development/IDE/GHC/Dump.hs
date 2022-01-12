@@ -51,7 +51,7 @@ showAstDataHtml a0 = html $
 #if MIN_VERSION_ghc(9,2,1)
       | cts == empty = foo
 #endif
-      | otherwise = foo $$ (caret $ ul cts)
+      = foo $$ (caret $ ul cts)
     body cts = tag "body" $ cts $$ tag "script" (text js)
     header = tag "head" $ tag "style" $ text css
     html = tag "html"

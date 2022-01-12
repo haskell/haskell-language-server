@@ -166,7 +166,7 @@ typecheckModule (IdeDefer defer) hsc keep_lbls pm = do
                 diags = map errorPipeline warnings
                 deferedError = any fst diags
             case etcm of
-              Left errs -> return ((map snd diags) ++ errs, Nothing)
+              Left errs -> return (map snd diags ++ errs, Nothing)
               Right tcm -> return (map snd diags, Just $ tcm{tmrDeferedError = deferedError})
     where
         demoteIfDefer = if defer then demoteTypeErrorsToWarnings else id
