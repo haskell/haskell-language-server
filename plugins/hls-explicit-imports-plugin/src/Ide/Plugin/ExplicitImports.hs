@@ -6,7 +6,7 @@
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE TypeFamilies       #-}
-
+{-# LANGUAGE ViewPatterns       #-}
 
 module Ide.Plugin.ExplicitImports
   ( descriptor
@@ -42,7 +42,9 @@ importCommandId = "ImportLensCommand"
 
 -- | The "main" function of a plugin
 descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor = descriptorForModules (/= moduleName pRELUDE)
+descriptor =
+    -- (almost) no one wants to see an explicit import list for Prelude
+    descriptorForModules (/= moduleName pRELUDE)
 
 descriptorForModules
     :: (ModuleName -> Bool)
@@ -180,7 +182,7 @@ exportedModuleStrings :: ParsedModule -> [String]
 exportedModuleStrings ParsedModule{pm_parsed_source = L _ HsModule{..}}
   | Just export <- hsmodExports,
     exports <- unLoc export
-    = map show exports
+    = map prettyPrint exports
 exportedModuleStrings _ = []
 
 minimalImportsRule :: Rules ()
@@ -194,7 +196,7 @@ minimalImportsRule = define $ \MinimalImports nfp -> do
   let importsMap =
         Map.fromList
           [ (realSrcSpanStart l, T.pack (prettyPrint i))
-            | L (RealSrcSpan l _) i <- fromMaybe [] mbMinImports
+            | L (locA -> RealSrcSpan l _) i <- fromMaybe [] mbMinImports
           ]
       res =
         [ (i, Map.lookup (realSrcSpanStart l) importsMap)
@@ -240,15 +242,14 @@ extractMinimalImports (Just hsc) (Just TcModuleResult {..}) = do
       notExported _ _ = False
 extractMinimalImports _ _ = return ([], Nothing)
 
-mkExplicitEdit :: (ModuleName -> Bool) -> PositionMapping -> LImportDecl pass -> T.Text -> Maybe TextEdit
-mkExplicitEdit pred posMapping (L src imp) explicit
+mkExplicitEdit :: (ModuleName -> Bool) -> PositionMapping -> LImportDecl GhcRn -> T.Text -> Maybe TextEdit
+mkExplicitEdit pred posMapping (L (locA -> src) imp) explicit
   -- Explicit import list case
   | ImportDecl {ideclHiding = Just (False, _)} <- imp =
     Nothing
   | not (isQualifiedImport imp),
     RealSrcSpan l _ <- src,
     L _ mn <- ideclName imp,
-    -- (almost) no one wants to see an explicit import list for Prelude
     pred mn,
     Just rng <- toCurrentRange posMapping $ realSrcSpanToRange l =
     Just $ TextEdit rng explicit

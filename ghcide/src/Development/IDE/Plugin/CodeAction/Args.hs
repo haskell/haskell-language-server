@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE FlexibleInstances #-}
 
 module Development.IDE.Plugin.CodeAction.Args
@@ -54,9 +55,10 @@ runGhcideCodeAction :: LSP.MonadLsp Config m => IdeState -> MessageParams TextDo
 runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext {_diagnostics = List diags}) codeAction = do
   let mbFile = toNormalizedFilePath' <$> uriToFilePath uri
       runRule key = runAction ("GhcideCodeActions." <> show key) state $ runMaybeT $ MaybeT (pure mbFile) >>= MaybeT . use key
+  caaGhcSession <- onceIO $ runRule GhcSession
   caaExportsMap <-
     onceIO $
-      runRule GhcSession >>= \case
+      caaGhcSession >>= \case
         Just env -> do
           pkgExports <- envPackageExports env
           localExports <- readTVarIO (exportsMap $ shakeExtras state)
@@ -117,8 +119,12 @@ instance ToTextEdit Rewrite where
   toTextEdit CodeActionArgs {..} rw = fmap (fromMaybe []) $
     runMaybeT $ do
       df <- MaybeT caaDf
+#if !MIN_VERSION_ghc(9,2,0)
       ps <- MaybeT caaAnnSource
       let r = rewriteToEdit df (annsA ps) rw
+#else
+      let r = rewriteToEdit df rw
+#endif
       pure $ fromRight [] r
 
 instance ToTextEdit a => ToTextEdit [a] where
@@ -134,11 +140,16 @@ instance (ToTextEdit a, ToTextEdit b) => ToTextEdit (Either a b) where
 
 data CodeActionArgs = CodeActionArgs
   { caaExportsMap   :: IO ExportsMap,
+    caaGhcSession   :: IO (Maybe HscEnvEq),
     caaIdeOptions   :: IO IdeOptions,
     caaParsedModule :: IO (Maybe ParsedModule),
     caaContents     :: IO (Maybe T.Text),
     caaDf           :: IO (Maybe DynFlags),
+#if !MIN_VERSION_ghc(9,2,0)
     caaAnnSource    :: IO (Maybe (Annotated ParsedSource)),
+#else
+    caaAnnSource    :: IO (Maybe ParsedSource),
+#endif
     caaTmr          :: IO (Maybe TcModuleResult),
     caaHar          :: IO (Maybe HieAstResult),
     caaBindings     :: IO (Maybe Bindings),
@@ -205,10 +216,15 @@ toCodeAction2 get f = ReaderT $ \caa ->
 toCodeAction3 :: (ToCodeAction r) => (CodeActionArgs -> IO a) -> (a -> r) -> GhcideCodeAction
 toCodeAction3 get f = ReaderT $ \caa -> get caa >>= flip runReaderT caa . toCodeAction . f
 
+-- | this instance returns a delta AST, useful for exactprint transforms
 instance ToCodeAction r => ToCodeAction (ParsedSource -> r) where
   toCodeAction f = ReaderT $ \caa@CodeActionArgs {caaAnnSource = x} ->
     x >>= \case
+#if !MIN_VERSION_ghc(9,2,0)
       Just s -> flip runReaderT caa . toCodeAction . f . astA $ s
+#else
+      Just s -> flip runReaderT caa . toCodeAction . f $ s
+#endif
       _      -> pure []
 
 instance ToCodeAction r => ToCodeAction (ExportsMap -> r) where
@@ -238,11 +254,17 @@ instance ToCodeAction r => ToCodeAction (Maybe DynFlags -> r) where
 instance ToCodeAction r => ToCodeAction (DynFlags -> r) where
   toCodeAction = toCodeAction2 caaDf
 
+#if !MIN_VERSION_ghc(9,2,0)
 instance ToCodeAction r => ToCodeAction (Maybe (Annotated ParsedSource) -> r) where
   toCodeAction = toCodeAction1 caaAnnSource
 
 instance ToCodeAction r => ToCodeAction (Annotated ParsedSource -> r) where
   toCodeAction = toCodeAction2 caaAnnSource
+#else
+-- | this instance returns a delta AST, useful for exactprint transforms
+instance ToCodeAction r => ToCodeAction (Maybe ParsedSource -> r) where
+  toCodeAction = toCodeAction1 caaAnnSource
+#endif
 
 instance ToCodeAction r => ToCodeAction (Maybe TcModuleResult -> r) where
   toCodeAction = toCodeAction1 caaTmr
@@ -267,3 +289,9 @@ instance ToCodeAction r => ToCodeAction (Maybe GlobalBindingTypeSigsResult -> r)
 
 instance ToCodeAction r => ToCodeAction (GlobalBindingTypeSigsResult -> r) where
   toCodeAction = toCodeAction2 caaGblSigs
+
+instance ToCodeAction r => ToCodeAction (Maybe HscEnvEq -> r) where
+  toCodeAction = toCodeAction1 caaGhcSession
+
+instance ToCodeAction r => ToCodeAction (Maybe HscEnv -> r) where
+  toCodeAction = toCodeAction1 ((fmap.fmap.fmap) hscEnv caaGhcSession)
