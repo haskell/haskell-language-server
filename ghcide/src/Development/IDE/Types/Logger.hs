@@ -14,33 +14,37 @@ module Development.IDE.Types.Logger
   , WithPriority(..)
   , logWith, cmap, cmapIO, cfilter, withDefaultRecorder, makeDefaultStderrRecorder) where
 
-import           Control.Concurrent         (myThreadId)
-import           Control.Concurrent.Extra   (Lock, newLock, withLock)
-import           Control.Exception          (IOException, try)
-import           Control.Monad              (forM_, when, (>=>))
-import           Control.Monad.IO.Class     (MonadIO (liftIO))
-import           Data.Functor.Contravariant (Contravariant (contramap))
-import           Data.Text                  (Text)
-import qualified Data.Text                  as T
-import qualified Data.Text                  as Text
-import qualified Data.Text.IO               as Text
-import           Data.Time                  (defaultTimeLocale, formatTime,
-                                             getCurrentTime)
-import           GHC.Stack                  (HasCallStack,
-                                             SrcLoc (SrcLoc, srcLocModule, srcLocStartLine),
-                                             getCallStack, withFrozenCallStack)
-import           Prettyprinter              (Doc, Pretty (pretty),
-                                             defaultLayoutOptions, layoutPretty,
-                                             (<+>))
-import           Prettyprinter.Render.Text  (renderStrict)
-import           System.IO                  (Handle, IOMode (AppendMode),
-                                             hClose, hFlush, hSetEncoding,
-                                             openFile, stderr, utf8)
-import qualified System.Log.Formatter       as HSL
-import qualified System.Log.Handler         as HSL
-import qualified System.Log.Handler.Simple  as HSL
-import qualified System.Log.Logger          as HsLogger
-import           UnliftIO                   (MonadUnliftIO, finally)
+import           Control.Concurrent                    (myThreadId)
+import           Control.Concurrent.Extra              (Lock, newLock, withLock)
+import           Control.Exception                     (IOException, try)
+import           Control.Monad                         (forM_, when, (>=>))
+import           Control.Monad.IO.Class                (MonadIO (liftIO))
+import           Data.Functor.Contravariant            (Contravariant (contramap))
+import           Data.Text                             (Text)
+import qualified Data.Text                             as T
+import qualified Data.Text                             as Text
+import qualified Data.Text.IO                          as Text
+import           Data.Text.Prettyprint.Doc             (Doc, Pretty (pretty),
+                                                        defaultLayoutOptions,
+                                                        layoutPretty, (<+>))
+import           Data.Text.Prettyprint.Doc.Render.Text (renderStrict)
+import           Data.Time                             (defaultTimeLocale,
+                                                        formatTime,
+                                                        getCurrentTime)
+import           GHC.Stack                             (HasCallStack,
+                                                        SrcLoc (SrcLoc, srcLocModule, srcLocStartLine),
+                                                        getCallStack,
+                                                        withFrozenCallStack)
+import           System.IO                             (Handle,
+                                                        IOMode (AppendMode),
+                                                        hClose, hFlush,
+                                                        hSetEncoding, openFile,
+                                                        stderr, utf8)
+import qualified System.Log.Formatter                  as HSL
+import qualified System.Log.Handler                    as HSL
+import qualified System.Log.Handler.Simple             as HSL
+import qualified System.Log.Logger                     as HsLogger
+import           UnliftIO                              (MonadUnliftIO, finally)
 
 data Priority
 -- Don't change the ordering of this type or you will mess up the Ord
