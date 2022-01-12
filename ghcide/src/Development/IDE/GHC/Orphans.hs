@@ -9,6 +9,9 @@
 --   Note that the 'NFData' instances may not be law abiding.
 module Development.IDE.GHC.Orphans() where
 
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC.Parser.Annotation
+#endif
 #if MIN_VERSION_ghc(9,0,0)
 import           GHC.Data.Bag
 import           GHC.Data.FastString
@@ -25,7 +28,6 @@ import qualified StringBuffer               as SB
 import           Unique                     (getKey)
 #endif
 
-import           GHC
 
 import           Retrie.ExactPrint          (Annotated)
 
@@ -34,9 +36,9 @@ import           Development.IDE.GHC.Util
 
 import           Control.DeepSeq
 import           Data.Aeson
+import           Data.Bifunctor             (Bifunctor (..))
 import           Data.Hashable
 import           Data.String                (IsString (fromString))
-import           Data.Text                  (Text)
 
 -- Orphan instances for types from the GHC API.
 instance Show CoreModule where show = prettyPrint
@@ -93,6 +95,19 @@ instance NFData FastString where
     rnf = rwhnf
 #endif
 
+#if MIN_VERSION_ghc(9,2,0)
+instance Ord FastString where
+    compare a b = if a == b then EQ else compare (fs_sbs a) (fs_sbs b)
+
+instance NFData (SrcSpanAnn' a) where
+    rnf = rwhnf
+
+instance Bifunctor (GenLocated) where
+    bimap f g (L l x) = L (f l) (g x)
+
+deriving instance Functor SrcSpanAnn'
+#endif
+
 instance NFData ParsedModule where
     rnf = rwhnf
 
@@ -122,7 +137,7 @@ instance NFData RealSrcSpan where
     rnf = rwhnf
 
 srcSpanFileTag, srcSpanStartLineTag, srcSpanStartColTag,
-    srcSpanEndLineTag, srcSpanEndColTag :: Text
+    srcSpanEndLineTag, srcSpanEndColTag :: String
 srcSpanFileTag = "srcSpanFile"
 srcSpanStartLineTag = "srcSpanStartLine"
 srcSpanStartColTag = "srcSpanStartCol"
@@ -132,24 +147,24 @@ srcSpanEndColTag = "srcSpanEndCol"
 instance ToJSON RealSrcSpan where
   toJSON spn =
       object
-        [ srcSpanFileTag .= unpackFS (srcSpanFile spn)
-        , srcSpanStartLineTag .= srcSpanStartLine spn
-        , srcSpanStartColTag .= srcSpanStartCol spn
-        , srcSpanEndLineTag .= srcSpanEndLine spn
-        , srcSpanEndColTag .= srcSpanEndCol spn
+        [ fromString srcSpanFileTag .= unpackFS (srcSpanFile spn)
+        , fromString srcSpanStartLineTag .= srcSpanStartLine spn
+        , fromString srcSpanStartColTag .= srcSpanStartCol spn
+        , fromString srcSpanEndLineTag .= srcSpanEndLine spn
+        , fromString srcSpanEndColTag .= srcSpanEndCol spn
         ]
 
 instance FromJSON RealSrcSpan where
   parseJSON = withObject "object" $ \obj -> do
-      file <- fromString <$> (obj .: srcSpanFileTag)
+      file <- fromString <$> (obj .: fromString srcSpanFileTag)
       mkRealSrcSpan
         <$> (mkRealSrcLoc file
-                <$> obj .: srcSpanStartLineTag
-                <*> obj .: srcSpanStartColTag
+                <$> obj .: fromString srcSpanStartLineTag
+                <*> obj .: fromString srcSpanStartColTag
             )
         <*> (mkRealSrcLoc file
-                <$> obj .: srcSpanEndLineTag
-                <*> obj .: srcSpanEndColTag
+                <$> obj .: fromString srcSpanEndLineTag
+                <*> obj .: fromString srcSpanEndColTag
             )
 
 instance NFData Type where

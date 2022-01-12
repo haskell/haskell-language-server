@@ -106,8 +106,7 @@ import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
 import           Development.IDE.Core.Shake
-import           Development.IDE.GHC.Compat.Env
-import           Development.IDE.GHC.Compat.Core              hiding
+import           Development.IDE.GHC.Compat                   hiding
                                                               (parseModule,
                                                                TargetId(..),
                                                                loadInterface,
@@ -520,7 +519,7 @@ getHieAstsRule :: Rules ()
 getHieAstsRule =
     define $ \GetHieAst f -> do
       tmr <- use_ TypeCheck f
-      hsc <- hscEnv <$> use_ GhcSession f
+      hsc <- hscEnv <$> use_ GhcSessionDeps f
       getHieAstRuleDefinition f hsc tmr
 
 persistentHieFileRule :: Rules ()

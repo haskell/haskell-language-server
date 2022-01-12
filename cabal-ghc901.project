@@ -41,22 +41,25 @@ index-state: 2022-01-10T17:57:05Z
 
 constraints:
   -- These plugins don't work on GHC9 yet
-  haskell-language-server +ignore-plugins-ghc-bounds -brittany -stylishhaskell -tactic,
+  -- Add a plugin needs remove the -flag but also update ghc bounds in hls.cabal
+  haskell-language-server +ignore-plugins-ghc-bounds -stylishhaskell -tactic,
   ghc-lib-parser ^>= 9.0
 
 -- although we are not building all plugins cabal solver phase is run for all packages
 -- this way we track explicitly all transitive dependencies which need support for ghc-9
 allow-newer:
-    brittany:base,
-    brittany:ghc,
-    brittany:ghc-boot-th,
-    -- for brittany
-    butcher:base,
+
+    -- brittany: update ghc bounds in hls.cabal when those are removed
+    -- https://github.com/lspitzner/multistate/pull/8
     multistate:base,
+    -- https://github.com/lspitzner/data-tree-print/pull/3
     data-tree-print:base,
+    -- https://github.com/lspitzner/butcher/pull/8
+    butcher:base,
 
     stylish-haskell:Cabal,
     stylish-haskell:ghc-lib-parser,
+    stylish-haskell:aeson,
 
     floskell:base,
     floskell:ghc-prim,

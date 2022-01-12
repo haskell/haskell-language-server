@@ -4,17 +4,17 @@
 
 module FunctionalCodeAction (tests) where
 
-import           Control.Lens                    hiding (List)
+import           Control.Lens            hiding (List)
 import           Control.Monad
 import           Data.Aeson
-import qualified Data.HashMap.Strict             as HM
+import           Data.Aeson.Lens         (_Object)
 import           Data.List
-import qualified Data.Map                        as M
+import qualified Data.Map                as M
 import           Data.Maybe
-import qualified Data.Text                       as T
+import qualified Data.Text               as T
 import           Ide.Plugin.Config
-import           Language.LSP.Test               as Test
-import qualified Language.LSP.Types.Lens         as L
+import           Language.LSP.Test       as Test
+import qualified Language.LSP.Types.Lens as L
 import           Test.Hls
 import           Test.Hspec.Expectations
 
@@ -56,11 +56,11 @@ renameTests = testGroup "rename suggestions" [
 
             cars <- getAllCodeActions doc
             cmd <- liftIO $ inspectCommand cars ["Replace with", "putStrLn"]
-            let Just (List [Object args]) = cmd ^. L.arguments
-                Object editParams = args HM.! "fallbackWorkspaceEdit"
+            let Just (List [args]) = cmd ^. L.arguments
+                editParams = args ^. ix "fallbackWorkspaceEdit" . _Object
             liftIO $ do
-                "changes" `HM.member` editParams @? "Contains changes"
-                not ("documentChanges" `HM.member` editParams) @? "Doesn't contain documentChanges"
+                (editParams & has (ix "changes"))  @? "Contains changes"
+                not (editParams & has (ix "documentChanges")) @? "Doesn't contain documentChanges"
 
             executeCommand cmd
             _ <- anyRequest
@@ -344,20 +344,22 @@ unusedTermTests = testGroup "unused term code actions" [
         liftIO $ do
             let cas = map fromAction res
                 kinds = map (^. L.kind) cas
-            nub kinds @?= [Just CodeActionRefactorInline, Just CodeActionRefactorExtract, Just CodeActionQuickFix]
+            assertBool "Test precondition failed" $ Just CodeActionQuickFix `elem` kinds
         -- Verify that that when we set the only parameter, we only get actions
         -- of the right kind.
         ResponseMessage _ _ (Right (List res)) <- request STextDocumentCodeAction params
         liftIO $ do
             let cas = map fromAction res
                 kinds = map (^. L.kind) cas
-            nub kinds @?= nub [Just CodeActionRefactorInline, Just CodeActionRefactorExtract]
+            assertBool "Quick fixes should have been filtered out"
+              $ Just CodeActionQuickFix `notElem` kinds
     ]
 
 expectFailIfGhc9 :: String -> TestTree -> TestTree
 expectFailIfGhc9 reason =
   case ghcVersion of
     GHC90 -> expectFailBecause reason
+    GHC92 -> expectFailBecause reason
     _     -> id
 
 disableWingman :: Session ()

@@ -1,6 +1,7 @@
 cradle:
   direct:
     arguments:
+      - "-Wmissing-signatures"
       - "CodeActionImport"
       - "CodeActionOnly"
       - "CodeActionRename"

@@ -35,7 +35,8 @@ import           Data.Ord                                 (Down (Down))
 import qualified Data.Set                                 as Set
 import           Development.IDE.Core.Compile
 import           Development.IDE.Core.PositionMapping
-import           Development.IDE.GHC.Compat               as GHC hiding (ppr)
+import           Development.IDE.GHC.Compat               hiding (ppr)
+import qualified Development.IDE.GHC.Compat               as GHC
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Util
@@ -46,6 +47,15 @@ import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.HscEnvEq
 import           Development.IDE.Types.Options
+
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC.Plugins                              (Depth (AllTheWay),
+                                                           defaultSDocContext,
+                                                           mkUserStyle,
+                                                           neverQualify,
+                                                           renderWithContext,
+                                                           sdocStyle)
+#endif
 import           Ide.PluginUtils                          (mkLspCommand)
 import           Ide.Types                                (CommandId (..),
                                                            PluginId)
@@ -79,11 +89,11 @@ data Context = TypeContext
 -- i.e. where are the value decls and the type decls
 getCContext :: Position -> ParsedModule -> Maybe Context
 getCContext pos pm
-  | Just (L r modName) <- moduleHeader
+  | Just (L (locA -> r) modName) <- moduleHeader
   , pos `isInsideSrcSpan` r
   = Just (ModuleContext (moduleNameString modName))
 
-  | Just (L r _) <- exportList
+  | Just (L (locA -> r) _) <- exportList
   , pos `isInsideSrcSpan` r
   = Just ExportContext
 
@@ -102,23 +112,23 @@ getCContext pos pm
         imports = hsmodImports $ unLoc $ pm_parsed_source pm
 
         go :: LHsDecl GhcPs -> Maybe Context
-        go (L r SigD {})
+        go (L (locA -> r) SigD {})
           | pos `isInsideSrcSpan` r = Just TypeContext
           | otherwise = Nothing
-        go (L r GHC.ValD {})
+        go (L (locA -> r) GHC.ValD {})
           | pos `isInsideSrcSpan` r = Just ValueContext
           | otherwise = Nothing
         go _ = Nothing
 
         goInline :: GHC.LHsType GhcPs -> Maybe Context
-        goInline (GHC.L r _)
+        goInline (GHC.L (locA -> r) _)
           | pos `isInsideSrcSpan` r = Just TypeContext
         goInline _ = Nothing
 
         importGo :: GHC.LImportDecl GhcPs -> Maybe Context
-        importGo (L r impDecl)
+        importGo (L (locA -> r) impDecl)
           | pos `isInsideSrcSpan` r
-          = importInline importModuleName (ideclHiding impDecl)
+          = importInline importModuleName (fmap (fmap reLoc) $ ideclHiding impDecl)
           <|> Just (ImportContext importModuleName)
 
           | otherwise = Nothing
@@ -254,9 +264,9 @@ mkNameCompItem doc thingParent origName provenance thingType isInfix docs !imp =
             (TyVarTy _)     -> noParensSnippet
             (LitTy _)       -> noParensSnippet
             (TyConApp _ []) -> noParensSnippet
-            _               -> snippetText i ("(" <> showGhc t <> ")")
+            _               -> snippetText i ("(" <> showForSnippet t <> ")")
             where
-                noParensSnippet = snippetText i (showGhc t)
+                noParensSnippet = snippetText i (showForSnippet t)
                 snippetText i t = "${" <> T.pack (show i) <> ":" <> t <> "}"
         getArgs :: Type -> [Type]
         getArgs t
@@ -276,6 +286,16 @@ mkNameCompItem doc thingParent origName provenance thingType isInfix docs !imp =
           | isCoercionTy t = maybe [] (getArgs . snd) (splitCoercionType_maybe t)
 #endif
           | otherwise = []
+
+
+showForSnippet :: Outputable a => a -> T.Text
+#if MIN_VERSION_ghc(9,2,0)
+showForSnippet x = T.pack $ renderWithContext ctxt $ GHC.ppr x -- FIXme
+    where
+        ctxt = defaultSDocContext{sdocStyle = mkUserStyle neverQualify AllTheWay}
+#else
+showForSnippet x = showGhc x
+#endif
 
 mkModCompl :: T.Text -> CompletionItem
 mkModCompl label =
@@ -331,12 +351,12 @@ cacheDataProducer uri env curMod globalEnv inScopeEnv limports = do
       curModName = moduleName curMod
       curModNameText = ppr curModName
 
-      importMap = Map.fromList [ (l, imp) | imp@(L (RealSrcSpan l _) _) <- limports ]
+      importMap = Map.fromList [ (l, imp) | imp@(L (locA -> (RealSrcSpan l _)) _) <- limports ]
 
-      iDeclToModName :: ImportDecl name -> ModuleName
+      iDeclToModName :: ImportDecl GhcPs -> ModuleName
       iDeclToModName = unLoc . ideclName
 
-      asNamespace :: ImportDecl name -> ModuleName
+      asNamespace :: ImportDecl GhcPs -> ModuleName
       asNamespace imp = maybe (iDeclToModName imp) GHC.unLoc (ideclAs imp)
       -- Full canonical names of imported modules
       importDeclerations = map unLoc limports
@@ -382,7 +402,9 @@ cacheDataProducer uri env curMod globalEnv inScopeEnv limports = do
         let (mbParent, originName) = case par of
                             NoParent -> (Nothing, nameOccName n)
                             ParentIs n' -> (Just . T.pack $ printName n', nameOccName n)
+#if !MIN_VERSION_ghc(9,2,0)
                             FldParent n' lbl -> (Just . T.pack $ printName n', maybe (nameOccName n) mkVarOccFS lbl)
+#endif
         tys <- catchSrcErrors (hsc_dflags packageState) "completion" $ do
                 name' <- lookupName packageState m n
                 return ( name' >>= safeTyThingType
@@ -431,7 +453,7 @@ localCompletionsForParsedModule uri pm@ParsedModule{pm_parsed_source = L _ HsMod
     compls = concat
         [ case decl of
             SigD _ (TypeSig _ ids typ) ->
-                [mkComp id CiFunction (Just $ ppr typ) | id <- ids]
+                [mkComp id CiFunction (Just $ showForSnippet typ) | id <- ids]
             ValD _ FunBind{fun_id} ->
                 [ mkComp fun_id CiFunction Nothing
                 | not (hasTypeSig fun_id)
@@ -440,13 +462,13 @@ localCompletionsForParsedModule uri pm@ParsedModule{pm_parsed_source = L _ HsMod
                 [mkComp id CiVariable Nothing
                 | VarPat _ id <- listify (\(_ :: Pat GhcPs) -> True) pat_lhs]
             TyClD _ ClassDecl{tcdLName, tcdSigs} ->
-                mkComp tcdLName CiInterface (Just $ ppr tcdLName) :
-                [ mkComp id CiFunction (Just $ ppr typ)
+                mkComp tcdLName CiInterface (Just $ showForSnippet tcdLName) :
+                [ mkComp id CiFunction (Just $ showForSnippet typ)
                 | L _ (ClassOpSig _ _ ids typ) <- tcdSigs
                 , id <- ids]
             TyClD _ x ->
-                let generalCompls = [mkComp id cl (Just $ ppr $ tyClDeclLName x)
-                        | id <- listify (\(_ :: Located(IdP GhcPs)) -> True) x
+                let generalCompls = [mkComp id cl (Just $ showForSnippet $ tyClDeclLName x)
+                        | id <- listify (\(_ :: LIdP GhcPs) -> True) x
                         , let cl = occNameToComKind Nothing (rdrNameOcc $ unLoc id)]
                     -- here we only have to look at the outermost type
                     recordCompls = findRecordCompl uri pm (Local pos) x
@@ -454,11 +476,11 @@ localCompletionsForParsedModule uri pm@ParsedModule{pm_parsed_source = L _ HsMod
                    -- the constructors and snippets will be duplicated here giving the user 2 choices.
                    generalCompls ++ recordCompls
             ForD _ ForeignImport{fd_name,fd_sig_ty} ->
-                [mkComp fd_name CiVariable (Just $ ppr fd_sig_ty)]
+                [mkComp fd_name CiVariable (Just $ showForSnippet fd_sig_ty)]
             ForD _ ForeignExport{fd_name,fd_sig_ty} ->
-                [mkComp fd_name CiVariable (Just $ ppr fd_sig_ty)]
+                [mkComp fd_name CiVariable (Just $ showForSnippet fd_sig_ty)]
             _ -> []
-            | L pos decl <- hsmodDecls,
+            | L (locA -> pos) decl <- hsmodDecls,
             let mkComp = mkLocalComp pos
         ]
 
@@ -469,8 +491,8 @@ localCompletionsForParsedModule uri pm@ParsedModule{pm_parsed_source = L _ HsMod
         -- to tell local completions and global completions apart
         -- instead of using the empty string here, we should probably introduce a new field...
         ensureTypeText = Just $ fromMaybe "" ty
-        pn = ppr n
-        doc = SpanDocText (getDocumentation [pm] n) (SpanDocUris Nothing Nothing)
+        pn = showForSnippet n
+        doc = SpanDocText (getDocumentation [pm] $ reLoc n) (SpanDocUris Nothing Nothing)
 
 findRecordCompl :: Uri -> ParsedModule -> Provenance -> TyClDecl GhcPs -> [CompItem]
 findRecordCompl uri pmod mn DataDecl {tcdLName, tcdDataDefn} = result
@@ -480,15 +502,14 @@ findRecordCompl uri pmod mn DataDecl {tcdLName, tcdDataDefn} = result
                  | ConDeclH98{..} <- unLoc <$> dd_cons tcdDataDefn
                  , Just  con_details <- [getFlds con_args]
                  , let field_names = concatMap extract con_details
-                 , let field_labels = showGhc . unLoc <$> field_names
+                 , let field_labels = showGhc <$> field_names
                  , (not . List.null) field_labels
                  ]
-        doc = SpanDocText (getDocumentation [pmod] tcdLName) (SpanDocUris Nothing Nothing)
+        doc = SpanDocText (getDocumentation [pmod] $ reLoc tcdLName) (SpanDocUris Nothing Nothing)
 
-        getFlds :: HsConDetails arg (Located [LConDeclField GhcPs]) -> Maybe [ConDeclField GhcPs]
         getFlds conArg = case conArg of
                              RecCon rec  -> Just $ unLoc <$> unLoc rec
-                             PrefixCon _ -> Just []
+                             PrefixCon{} -> Just []
                              _           -> Nothing
 
         extract ConDeclField{..}
@@ -602,8 +623,8 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
             where
               occ = nameOccName name
               ctyp = occNameToComKind Nothing occ
-              pn = ppr name
-              ty = ppr <$> typ
+              pn = showForSnippet name
+              ty = showForSnippet <$> typ
               thisModName = Local $ nameSrcSpan name
 
           compls = if T.null prefixModule
