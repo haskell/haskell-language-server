@@ -27,13 +27,6 @@ packages:
          ./plugins/hls-call-hierarchy-plugin
          ./plugins/hls-alternate-number-format-plugin
 
-source-repository-package
-  type: git
-  location: https://github.com/tfausak/unix-compat
-  tag: 154c3a63f154cb49c51d5f9d13488e8119631d8a
-  -- To fix windows build for ghc >= 9.0.2
-  -- https://github.com/jacobstanley/unix-compat/pull/47
-
 tests: true
 
 package *
@@ -42,7 +35,7 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2022-01-07T07:52:31Z
+index-state: 2022-01-11T22:05:45Z
 
 constraints:
   -- These plugins don't work on GHC9 yet
