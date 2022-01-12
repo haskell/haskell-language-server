@@ -173,6 +173,9 @@ excludeForbiddenMethods = filter (not . flip S.member forbiddenMethods . hi_name
 -- | Extract evidence from 'AbsBinds' in scope.
 absBinds ::  SrcSpan -> LHsBindLR GhcTc GhcTc -> [PredType]
 #if __GLASGOW_HASKELL__ >= 900
+absBinds dst (L src (FunBind w _ _ _))
+  | dst `isSubspanOf` src
+  = wrapper w
 absBinds dst (L src (AbsBinds _ _ h _ _ z _))
 #else
 absBinds dst (L src (AbsBinds _ _ h _ _ _ _))
@@ -180,7 +183,7 @@ absBinds dst (L src (AbsBinds _ _ h _ _ _ _))
   | dst `isSubspanOf` src
   = fmap idType h
 #if __GLASGOW_HASKELL__ >= 900
-    <> everything (<>) (mkQ mempty wrapper) z
+    <> foldMap (absBinds dst) z
 #endif
 absBinds _ _ = []
 
