@@ -196,11 +196,7 @@ pattern SingleLet bind pats val expr <-
   HsLet _
     (HsValBinds _
       (ValBinds _ (bagToList ->
-<<<<<<< HEAD
-        [L _ (FunBind {fun_id = (L _ bind), fun_matches = (MG _ (L _ [L _ (AMatch _ pats val)]) _)})]) _)))
-=======
-        [(L _ (FunBind _ (L _ bind) (MG _ (L _ [L _ (AMatch _ pats val)]) _) _ _))]) _))
->>>>>>> master
+        [L _ (FunBind {fun_id = (L _ bind), fun_matches = (MG _ (L _ [L _ (AMatch _ pats val)]) _)})]) _))
     (L _ expr)
 
 

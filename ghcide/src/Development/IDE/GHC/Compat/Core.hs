@@ -131,9 +131,8 @@ module Development.IDE.GHC.Compat.Core (
       ),
     pattern FunTy,
     pattern ConPatIn,
-#if !MIN_VERSION_ghc(9,2,0)
     Development.IDE.GHC.Compat.Core.splitForAllTyCoVars,
-#endif
+#if !MIN_VERSION_ghc(9,0,0)
     Development.IDE.GHC.Compat.Core.mkVisFunTys,
     Development.IDE.GHC.Compat.Core.mkInfForAllTys,
 #endif
@@ -385,7 +384,7 @@ module Development.IDE.GHC.Compat.Core (
     module GHC.Types.Var,
     module GHC.Unit.Module,
     module GHC.Utils.Error,
-    module TcType,
+    module TcType
 #else
     module BasicTypes,
     module Class,
@@ -885,6 +884,7 @@ scaledThing = id
 
 unrestricted :: a -> Scaled a
 unrestricted = id
+#endif
 
 mkVisFunTys :: [Scaled Type] -> Type -> Type
 mkVisFunTys =
@@ -896,6 +896,9 @@ mkVisFunTys =
 
 mkInfForAllTys :: [TyVar] -> Type -> Type
 mkInfForAllTys =
+#if MIN_VERSION_ghc(9,0,0)
+  TcType.mkInfForAllTys
+#else
   mkInfForAllTys
 #endif
 
@@ -957,14 +960,12 @@ type PlainGhcException = Plain.PlainGhcException
 type PlainGhcException = Plain.GhcException
 #endif
 
-<<<<<<< HEAD
 #if MIN_VERSION_ghc(9,0,0)
 -- This is from the old api, but it still simplifies
 pattern ConPatIn :: SrcLoc.Located (ConLikeP GhcPs) -> HsConPatDetails GhcPs -> Pat GhcPs
 pattern ConPatIn con args = ConPat NoExtField con args
 #endif
 
-=======
 initDynLinker, initObjLinker :: HscEnv -> IO ()
 initDynLinker =
 #if !MIN_VERSION_ghc(9,0,0)
@@ -1061,4 +1062,3 @@ collectHsBindsBinders x = GHC.collectHsBindsBinders CollNoDictBinders x
 pattern HsLet xlet localBinds expr <- GHC.HsLet xlet (SrcLoc.unLoc -> localBinds) expr
 pattern LetStmt xlet localBinds <- GHC.LetStmt xlet (SrcLoc.unLoc -> localBinds)
 #endif
->>>>>>> master
