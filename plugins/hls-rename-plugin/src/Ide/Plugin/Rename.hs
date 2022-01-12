@@ -25,6 +25,7 @@ import           GHC.Types.Name
 #else
 import           Name
 #endif
+import           Development.IDE.GHC.ExactPrint       (GetAnnotatedParsedSource (GetAnnotatedParsedSource))
 import           HieDb.Query
 import           Ide.Plugin.Config
 import           Ide.PluginUtils
@@ -67,14 +68,14 @@ getSrcEdits ::
 getSrcEdits state updateMod uri = do
     ccs <- lift getClientCapabilities
     nfp <- safeUriToNfp uri
-    ~ParsedModule{pm_parsed_source = ps, pm_annotations = apiAnns} <-
+    annotatedAst <-
         handleMaybeM "Error: could not get parsed source" $ liftIO $ runAction
             "Rename.GetParsedModuleWithComments"
             state
-            (use GetParsedModuleWithComments nfp)
+            (use GetAnnotatedParsedSource nfp)
+    let (ps, apiAnns) = (astA annotatedAst, annsA annotatedAst)
 #if !MIN_VERSION_ghc(9,2,1)
-    let anns = relativiseApiAnns ps apiAnns
-        src = T.pack $ exactPrint ps anns
+    let src = T.pack $ exactPrint ps anns
         res = T.pack $ exactPrint (updateMod <$> ps) anns
 #else
     let src = T.pack $ exactPrint ps
