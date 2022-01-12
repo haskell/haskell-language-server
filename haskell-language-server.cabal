@@ -283,7 +283,7 @@ common qualifyImportedNames
 -- formatters
 
 common floskell
-  if flag(floskell) && (impl(ghc < 9.0.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(floskell) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-floskell-plugin ^>=1.0.0.0
     cpp-options: -Dfloskell
 
@@ -433,6 +433,7 @@ test-suite func-test
     , data-default
     , hspec-expectations
     , lens
+    , lens-aeson
     , ghcide
     , hls-test-utils ^>= 1.1.0.0
     , lsp-types
@@ -472,7 +473,7 @@ test-suite func-test
   if flag(eval)
     cpp-options: -Deval
 -- formatters
-  if flag(floskell) && (impl(ghc < 9.0.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(floskell) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
     cpp-options: -Dfloskell
   if flag(fourmolu) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
     cpp-options: -Dfourmolu

@@ -49,6 +49,7 @@ library
     , hls-graph             >=1.4 && < 1.6
     , hslogger
     , lens
+    , lens-aeson
     , lsp                   ^>=1.4.0.0
     , opentelemetry
     , optparse-applicative

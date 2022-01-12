@@ -4539,6 +4539,15 @@ localCompletionTests = [
         ,("abcdefghi", CiFunction, "abcdefghi", True, False, Nothing)
         ],
     completionTest
+        "type family"
+        ["{-# LANGUAGE DataKinds, TypeFamilies #-}"
+        ,"type family Bar a"
+        ,"a :: Ba"
+        ]
+        (Position 2 7)
+        [("Bar", CiStruct, "Bar", True, False, Nothing)
+        ],
+    completionTest
         "class method"
         [
           "class Test a where"
