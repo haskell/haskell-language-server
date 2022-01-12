@@ -82,10 +82,10 @@ fromOverLit OverLit{..} sSpan = case ol_val of
 fromOverLit _ _ = Nothing
 
 fromIntegralLit :: RealSrcSpan -> IntegralLit -> Maybe Literal
-fromIntegralLit s (IL txt _ val) = fmap (\txt' -> IntLiteral s txt' val) (fromSourceText txt)
+fromIntegralLit s IL{..} = fmap (\txt' -> IntLiteral s txt' il_value) (fromSourceText il_text)
 
 fromFractionalLit  :: RealSrcSpan -> FractionalLit -> Maybe Literal
-fromFractionalLit s (FL txt _ val) = fmap (\txt' -> FracLiteral s txt' val) (fromSourceText txt)
+fromFractionalLit s FL{..} = fmap (\txt' -> FracLiteral s txt' fl_value) (fromSourceText fl_text)
 
 fromSourceText :: SourceText -> Maybe Text
 fromSourceText = \case
@@ -115,6 +115,6 @@ literalToString = \case
 
 overLitToString :: OverLitVal -> String
 overLitToString = \case
-     HsIntegral int -> case int of { IL _ _ val -> "IntegralOverLit: " <> show val }
-     HsFractional frac -> case frac of { FL _ _ val -> "RationalOverLit: " <> show val }
+     HsIntegral int -> case int of { IL{il_value} -> "IntegralOverLit: " <> show il_value}
+     HsFractional frac -> case frac of { FL{fl_value} -> "RationalOverLit: " <> show fl_value}
      HsIsString _ str -> "HIsString: " <> show str

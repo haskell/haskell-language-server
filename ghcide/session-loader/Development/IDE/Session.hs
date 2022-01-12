@@ -432,7 +432,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
               newHscEnv <-
                 -- Add the options for the current component to the HscEnv
                 evalGhcEnv hscEnv $ do
-                  _ <- setSessionDynFlags df
+                  _ <- setSessionDynFlags $ setHomeUnitId_ fakeUid df
                   getSession
 
               -- Modify the map so the hieYaml now maps to the newly created
@@ -628,10 +628,7 @@ cradleToOptsAndLibDir logger cradle file = do
 emptyHscEnv :: IORef NameCache -> FilePath -> IO HscEnv
 emptyHscEnv nc libDir = do
     env <- runGhc (Just libDir) getSession
-    when (Compat.ghcVersion < Compat.GHC90) $
-        -- This causes ghc9 to crash with the error:
-        -- Couldn't find a target code interpreter. Try with -fexternal-interpreter
-        initDynLinker env
+    initDynLinker env
     pure $ setNameCache nc (hscSetFlags ((hsc_dflags env){useUnicode = True }) env)
 
 data TargetDetails = TargetDetails

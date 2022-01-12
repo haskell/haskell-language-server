@@ -1,6 +1,7 @@
 {-# LANGUAGE MultiWayIf        #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms   #-}
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE ViewPatterns      #-}
 
@@ -28,25 +29,27 @@ import           Development.IDE.Core.RuleTypes    (GetFileContents (GetFileCont
 import           Development.IDE.Core.Service      (runAction)
 import           Development.IDE.Core.Shake        (IdeState, use)
 import           Development.IDE.GHC.Compat        (ContextInfo (Use),
+                                                    GenLocated (..), GhcPs,
+                                                    GlobalRdrElt, GlobalRdrEnv,
+                                                    HsModule (hsmodImports),
                                                     Identifier,
                                                     IdentifierDetails (IdentifierDetails, identInfo),
-                                                    RefMap, Span)
-import           Development.IDE.GHC.Compat.Core   (GenLocated (L), GhcPs,
-                                                    GlobalRdrElt (GRE, gre_imp, gre_name),
-                                                    GlobalRdrEnv,
-                                                    HsModule (hsmodImports),
                                                     ImpDeclSpec (ImpDeclSpec, is_as, is_dloc, is_qual),
                                                     ImportSpec (ImpSpec),
                                                     LImportDecl, ModuleName,
                                                     Name, NameEnv, OccName,
-                                                    ParsedModule (ParsedModule, pm_parsed_source),
+                                                    ParsedModule, RefMap, Span,
                                                     SrcSpan,
                                                     TcGblEnv (tcg_rdr_env),
                                                     emptyUFM, globalRdrEnvElts,
+                                                    gre_imp, gre_name,
                                                     lookupNameEnv,
                                                     moduleNameString,
                                                     nameOccName, occNameString,
-                                                    plusUFM_C, srcSpanEndCol,
+                                                    pattern GRE,
+                                                    pattern ParsedModule,
+                                                    plusUFM_C, pm_parsed_source,
+                                                    srcSpanEndCol,
                                                     srcSpanEndLine,
                                                     srcSpanStartCol,
                                                     srcSpanStartLine, unitUFM)

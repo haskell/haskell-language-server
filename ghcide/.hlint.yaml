@@ -114,6 +114,8 @@
     - Development.IDE.Spans.AtPoint
     - Development.IDE.Spans.Pragmas
     - Development.IDE.Plugin.CodeAction
+    - Development.IDE.Plugin.CodeAction.Args
+    - Development.IDE.Plugin.CodeAction.ExactPrint
     - Development.IDE.Plugin.Completions
     - Development.IDE.Plugin.Completions.Logic
     - Development.IDE.Types.Location

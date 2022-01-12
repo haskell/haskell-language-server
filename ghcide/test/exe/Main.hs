@@ -7,6 +7,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE ImplicitParams        #-}
+{-# LANGUAGE MultiWayIf            #-}
 {-# LANGUAGE PatternSynonyms       #-}
 {-# LANGUAGE PolyKinds             #-}
 {-# LANGUAGE TypeOperators         #-}
@@ -15,8 +16,8 @@
 module Main (main) where
 
 import           Control.Applicative.Combinators
-import           Control.Concurrent.Extra                 as Concurrent
-import           Control.Exception                        (bracket_, catch)
+import           Control.Concurrent
+import           Control.Exception                        (bracket_, catch, finally)
 import qualified Control.Lens                             as Lens
 import           Control.Monad
 import           Control.Monad.IO.Class                   (MonadIO, liftIO)
@@ -81,7 +82,7 @@ import           System.Exit                              (ExitCode (ExitSuccess
 import           System.FilePath
 import           System.IO.Extra                          hiding (withTempDir)
 import qualified System.IO.Extra
-import           System.Info.Extra                        (isWindows)
+import           System.Info.Extra                        (isWindows, isMac)
 import           System.Mem                               (performGC)
 import           System.Process.Extra                     (CreateProcess (cwd),
                                                            createPipe, proc,
@@ -1737,7 +1738,8 @@ extendImportTests = testGroup "extend import actions"
                     , "import A (pattern Some)"
                     , "k (Some x) = x"
                     ])
-        , testSession "type constructor name same as data constructor name" $ template
+        , ignoreForGHC92 "Diagnostic message has no suggestions" $
+          testSession "type constructor name same as data constructor name" $ template
             [("ModuleA.hs", T.unlines
                     [ "module ModuleA where"
                     , "newtype Foo = Foo Int"
@@ -2526,9 +2528,9 @@ deleteUnusedDefinitionTests = testGroup "delete unused definition action"
       return (action, actionTitle)
 
 addTypeAnnotationsToLiteralsTest :: TestTree
-addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals to satisfy contraints"
+addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals to satisfy constraints"
   [
-    testSession "add default type to satisfy one contraint" $
+    testSession "add default type to satisfy one constraint" $
     testFor
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "module A (f) where"
@@ -2543,7 +2545,7 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , "f = (1 :: Integer)"
                ])
 
-  , testSession "add default type to satisfy one contraint in nested expressions" $
+  , testSession "add default type to satisfy one constraint in nested expressions" $
     testFor
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "module A where"
@@ -2561,7 +2563,7 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , "    let x = (3 :: Integer)"
                , "    in x"
                ])
-  , testSession "add default type to satisfy one contraint in more nested expressions" $
+  , testSession "add default type to satisfy one constraint in more nested expressions" $
     testFor
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "module A where"
@@ -2579,7 +2581,7 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , "    let x = let y = (5 :: Integer) in y"
                , "    in x"
                ])
-  , testSession "add default type to satisfy one contraint with duplicate literals" $
+  , testSession "add default type to satisfy one constraint with duplicate literals" $
     testFor
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "{-# LANGUAGE OverloadedStrings #-}"
@@ -2601,7 +2603,8 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , ""
                , "f = seq (\"debug\" :: " <> listOfChar <> ") traceShow \"debug\""
                ])
-  , testSession "add default type to satisfy two contraints" $
+  , knownBrokenForGhcVersions [GHC92] "GHC 9.2 only has 'traceShow' in error span" $
+    testSession "add default type to satisfy two constraints" $
     testFor
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "{-# LANGUAGE OverloadedStrings #-}"
@@ -2621,7 +2624,8 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , ""
                , "f a = traceShow (\"debug\" :: " <> listOfChar <> ") a"
                ])
-  , testSession "add default type to satisfy two contraints with duplicate literals" $
+  , knownBrokenForGhcVersions [GHC92] "GHC 9.2 only has 'traceShow' in error span" $
+    testSession "add default type to satisfy two constraints with duplicate literals" $
     testFor
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "{-# LANGUAGE OverloadedStrings #-}"
@@ -3300,7 +3304,7 @@ addSigActionTests = let
     , "pattern Point{x, y} <- (x, y)\n  where Point x y = (x, y)" >:: "pattern Point :: a -> b -> (a, b)"
     , "pattern MkT1' b = MkT1 42 b" >:: "pattern MkT1' :: (Eq a, Num a) => Show b => b -> T1 a"
     , "pattern MkT1' b <- MkT1 42 b" >:: "pattern MkT1' :: (Eq a, Num a) => Show b => b -> T1 a"
-    , "pattern MkT1' b <- MkT1 42 b\n  where MkT1' b = T1 42 b" >:: "pattern MkT1' :: (Eq a, Num a) => Show b => b -> T1 a"
+    , "pattern MkT1' b <- MkT1 42 b\n  where MkT1' b = MkT1 42 b" >:: "pattern MkT1' :: (Eq a, Num a) => Show b => b -> T1 a"
     ]
 
 exportUnusedTests :: TestTree
@@ -3326,7 +3330,8 @@ exportUnusedTests = testGroup "export unused actions"
         (R 2 0 2 11)
         "Export ‘bar’"
         Nothing
-    , testSession "type is exported but not the constructor of same name" $ template
+    , ignoreForGHC92 "Diagnostic message has no suggestions" $
+      testSession "type is exported but not the constructor of same name" $ template
         (T.unlines
               [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
               , "module A (Foo) where"
@@ -3818,13 +3823,13 @@ addSigLensesTests =
         , ("pattern Point{x, y} <- (x, y)\n  where Point x y = (x, y)", "pattern Point :: a -> b -> (a, b)")
         , ("pattern MkT1' b = MkT1 42 b", "pattern MkT1' :: (Eq a, Num a) => Show b => b -> T1 a")
         , ("pattern MkT1' b <- MkT1 42 b", "pattern MkT1' :: (Eq a, Num a) => Show b => b -> T1 a")
-        , ("pattern MkT1' b <- MkT1 42 b\n  where MkT1' b = T1 42 b", "pattern MkT1' :: (Eq a, Num a) => Show b => b -> T1 a")
+        , ("pattern MkT1' b <- MkT1 42 b\n  where MkT1' b = MkT1 42 b", "pattern MkT1' :: (Eq a, Num a) => Show b => b -> T1 a")
         , ("qualifiedSigTest= C.realPart", "qualifiedSigTest :: C.Complex a -> a")
         , ("head = 233", "head :: Integer")
         , ("rank2Test (k :: forall a . a -> a) = (k 233 :: Int, k \"QAQ\")", "rank2Test :: (forall a. a -> a) -> (Int, " <> listOfChar <> ")")
         , ("symbolKindTest = Proxy @\"qwq\"", "symbolKindTest :: Proxy \"qwq\"")
         , ("promotedKindTest = Proxy @Nothing", "promotedKindTest :: Proxy 'Nothing")
-        , ("typeOperatorTest = Refl", "typeOperatorTest :: a :~: a")
+        , ("typeOperatorTest = Refl", if ghcVersion >= GHC92 then "typeOperatorTest :: forall {k} {a :: k}. a :~: a" else "typeOperatorTest :: a :~: a")
         , ("notInScopeTest = mkCharType", "notInScopeTest :: String -> Data.Data.DataType")
         ]
    in testGroup
@@ -3976,8 +3981,8 @@ findDefinitionAndHoverTests = let
   spaceL37 = Position 41  24 ; space = [ExpectNoDefinitions, ExpectHoverText [":: Char"]]
   docL41 = Position 45  1  ;  doc    = [ExpectHoverText ["Recognizable docs: kpqz"]]
                            ;  constr = [ExpectHoverText ["Monad m"]]
-  eitL40 = Position 44 28  ;  kindE  = [ExpectHoverText [":: * -> * -> *\n"]]
-  intL40 = Position 44 34  ;  kindI  = [ExpectHoverText [":: *\n"]]
+  eitL40 = Position 44 28  ;  kindE  = [ExpectHoverText [if ghcVersion >= GHC92 then ":: Type -> Type -> Type\n" else ":: * -> * -> *\n"]]
+  intL40 = Position 44 34  ;  kindI  = [ExpectHoverText [if ghcVersion >= GHC92 then ":: Type\n" else ":: *\n"]]
   tvrL40 = Position 44 37  ;  kindV  = [ExpectHoverText [":: * -> *\n"]]
   intL41 = Position 45 20  ;  litI   = [ExpectHoverText ["7518"]]
   chrL36 = Position 41 24  ;  litC   = [ExpectHoverText ["'f'"]]
@@ -4043,9 +4048,13 @@ findDefinitionAndHoverTests = let
   , test  no     skip   cccL17     docLink       "Haddock html links"
   , testM yes    yes    imported   importedSig   "Imported symbol"
   , testM yes    yes    reexported reexportedSig "Imported symbol (reexported)"
-  , if ghcVersion == GHC90 && isWindows then
+  , if | ghcVersion == GHC90 && isWindows ->
         test  no     broken    thLocL57   thLoc         "TH Splice Hover"
-    else
+       | ghcVersion == GHC92 && (isWindows || isMac) ->
+           -- Some GHC 9.2 distributions ship without .hi docs
+           -- https://gitlab.haskell.org/ghc/ghc/-/issues/20903
+        test  no     broken   thLocL57   thLoc         "TH Splice Hover"
+       | otherwise ->
         test  no     yes       thLocL57   thLoc         "TH Splice Hover"
   ]
   where yes, broken :: (TestTree -> Maybe TestTree)
@@ -4063,6 +4072,7 @@ checkFileCompiles fp diag =
 pluginSimpleTests :: TestTree
 pluginSimpleTests =
   ignoreInWindowsForGHC88And810 $
+  ignoreForGHC92 "blocked on ghc-typelits-natnormalise" $
   testSessionWithExtraFiles "plugin-knownnat" "simple plugin" $ \dir -> do
     _ <- openDoc (dir </> "KnownNat.hs") "haskell"
     liftIO $ writeFile (dir</>"hie.yaml")
@@ -4077,6 +4087,7 @@ pluginSimpleTests =
 pluginParsedResultTests :: TestTree
 pluginParsedResultTests =
   ignoreInWindowsForGHC88And810 $
+  ignoreForGHC92 "No need for this plugin anymore!" $
   testSessionWithExtraFiles "plugin-recorddot" "parsedResultAction plugin" $ \dir -> do
     _ <- openDoc (dir</> "RecordDot.hs") "haskell"
     expectNoMoreDiagnostics 2
@@ -4991,7 +5002,7 @@ highlightTests = testGroup "highlight"
             , DocumentHighlight (R 6 10 6 13) (Just HkRead)
             , DocumentHighlight (R 7 12 7 15) (Just HkRead)
             ]
-  , knownBrokenForGhcVersions [GHC90] "Ghc9 highlights the constructor and not just this field" $
+  , knownBrokenForGhcVersions [GHC90, GHC92] "Ghc9 highlights the constructor and not just this field" $
         testSessionWait "record" $ do
         doc <- createDoc "A.hs" "haskell" recsource
         _ <- waitForDiagnostics
@@ -5132,7 +5143,7 @@ outlineTests = testGroup
     let source = T.unlines ["data A = B {", "  x :: Int", "  , y :: Int}"]
     docId   <- createDoc "A.hs" "haskell" source
     symbols <- getDocumentSymbols docId
-    liftIO $ symbols @=? Left
+    liftIO $ symbols @?= Left
       [ docSymbolWithChildren "A" SkStruct (R 0 0 2 13)
           [ docSymbolWithChildren' "B" SkConstructor (R 0 9 2 13) (R 0 9 0 10)
             [ docSymbol "x" SkField (R 1 2 1 3)
@@ -5223,6 +5234,11 @@ ignoreInWindowsForGHC88And810 :: TestTree -> TestTree
 ignoreInWindowsForGHC88And810
     | ghcVersion `elem` [GHC88, GHC810] =
         ignoreInWindowsBecause "tests are unreliable in windows for ghc 8.8 and 8.10"
+    | otherwise = id
+
+ignoreForGHC92 :: String -> TestTree -> TestTree
+ignoreForGHC92 msg
+    | ghcVersion == GHC92 = ignoreTestBecause msg
     | otherwise = id
 
 ignoreInWindowsForGHC88 :: TestTree -> TestTree
@@ -5388,7 +5404,7 @@ dependentFileTest = testGroup "addDependentFile"
         expectDiagnostics $
             if ghcVersion >= GHC90
                 -- String vs [Char] causes this change in error message
-                then [("Foo.hs", [(DsError, (4, 6), "Couldn't match type")])]
+                then [("Foo.hs", [(DsError, if ghcVersion >= GHC92 then (4,11) else (4, 6), "Couldn't match type")])]
                 else [("Foo.hs", [(DsError, (4, 6), "Couldn't match expected type")])]
         -- Now modify the dependent file
         liftIO $ writeFile depFilePath "B"
@@ -6238,9 +6254,13 @@ findResolution_us delay_us = withTempFile $ \f -> withTempFile $ \f' -> do
     if t /= t' then return delay_us else findResolution_us (delay_us * 10)
 
 
-testIde :: IDE.Arguments -> Session () -> IO ()
-testIde arguments session = do
+testIde :: IDE.Arguments -> Session a -> IO a
+testIde = testIde' "."
+
+testIde' :: FilePath -> IDE.Arguments -> Session a -> IO a
+testIde' projDir arguments session = do
     config <- getConfigFromEnv
+    cwd <- getCurrentDirectory
     (hInRead, hInWrite) <- createPipe
     (hOutRead, hOutWrite) <- createPipe
     let server = IDE.defaultMain arguments
@@ -6248,8 +6268,10 @@ testIde arguments session = do
             , IDE.argsHandleOut = pure hOutWrite
             }
 
-    withAsync server $ \_ ->
-        runSessionWithHandles hInWrite hOutRead config lspTestCaps "." session
+    flip finally (setCurrentDirectory cwd) $ withAsync server $ \_ ->
+        runSessionWithHandles hInWrite hOutRead config lspTestCaps projDir session
+
+
 
 positionMappingTests :: TestTree
 positionMappingTests =

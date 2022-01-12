@@ -342,14 +342,15 @@ unusedTermTests = testGroup "unused term code actions" [
         liftIO $ do
             let cas = map fromAction res
                 kinds = map (^. L.kind) cas
-            nub kinds @?= [Just CodeActionRefactorInline, Just CodeActionRefactorExtract, Just CodeActionQuickFix]
+            assertBool "Test precondition failed" $ Just CodeActionQuickFix `elem` kinds
         -- Verify that that when we set the only parameter, we only get actions
         -- of the right kind.
         ResponseMessage _ _ (Right (List res)) <- request STextDocumentCodeAction params
         liftIO $ do
             let cas = map fromAction res
                 kinds = map (^. L.kind) cas
-            nub kinds @?= nub [Just CodeActionRefactorInline, Just CodeActionRefactorExtract]
+            assertBool "Quick fixes should have been filtered out"
+              $ Just CodeActionQuickFix `notElem` kinds
     ]
 
 disableWingman :: Session ()

@@ -34,6 +34,7 @@ module Development.IDE.GHC.Compat.Core (
     refLevelHoleFits,
     maxRefHoleFits,
     maxValidHoleFits,
+    setOutputFile,
 #if MIN_VERSION_ghc(8,8,0)
     CommandLineOption,
 #if !MIN_VERSION_ghc(9,2,0)
@@ -110,6 +111,11 @@ module Development.IDE.GHC.Compat.Core (
     CgGuts(..),
     -- * ModDetails
     ModDetails(..),
+    -- * HsExpr,
+#if !MIN_VERSION_ghc(9,2,0)
+    pattern HsLet,
+    pattern LetStmt,
+#endif
     -- * Var
     Type (
       TyCoRep.TyVarTy,
@@ -125,8 +131,9 @@ module Development.IDE.GHC.Compat.Core (
       ),
     pattern FunTy,
     pattern ConPatIn,
+#if !MIN_VERSION_ghc(9,2,0)
     Development.IDE.GHC.Compat.Core.splitForAllTyCoVars,
-#if !MIN_VERSION_ghc(9,0,0)
+#endif
     Development.IDE.GHC.Compat.Core.mkVisFunTys,
     Development.IDE.GHC.Compat.Core.mkInfForAllTys,
 #endif
@@ -153,8 +160,7 @@ module Development.IDE.GHC.Compat.Core (
     -- * TcGblEnv
     TcGblEnv(..),
     -- * Parsing and LExer types
-    HsParsedModule(..),
-    GHC.ParsedModule(..),
+    HsModule(..),
     GHC.ParsedSource,
     GHC.RenamedSource,
     -- * Compilation Main
@@ -190,6 +196,16 @@ module Development.IDE.GHC.Compat.Core (
     SrcLoc.Located,
     SrcLoc.unLoc,
     getLoc,
+    getLocA,
+    locA,
+    LocatedAn,
+#if MIN_VERSION_ghc(9,2,0)
+    GHC.AnnListItem(..),
+    GHC.NameAnn(..),
+#else
+    AnnListItem,
+    NameAnn,
+#endif
     SrcLoc.RealLocated,
     SrcLoc.GenLocated(..),
     SrcLoc.SrcSpan(SrcLoc.UnhelpfulSpan),
@@ -199,6 +215,10 @@ module Development.IDE.GHC.Compat.Core (
     pattern RealSrcLoc,
     SrcLoc.SrcLoc(SrcLoc.UnhelpfulLoc),
     BufSpan,
+#if MIN_VERSION_ghc(9,2,0)
+    SrcSpanAnn',
+    GHC.SrcAnn,
+#endif
     SrcLoc.leftmost_smallest,
     SrcLoc.containsSpan,
     SrcLoc.mkGeneralSrcSpan,
@@ -208,6 +228,7 @@ module Development.IDE.GHC.Compat.Core (
     SrcLoc.realSrcLocSpan,
     SrcLoc.realSrcSpanStart,
     SrcLoc.realSrcSpanEnd,
+    isSubspanOfA,
     SrcLoc.isSubspanOf,
     SrcLoc.wiredInSrcSpan,
     SrcLoc.mkSrcSpan,
@@ -281,6 +302,17 @@ module Development.IDE.GHC.Compat.Core (
     -- * Panic
     PlainGhcException,
     panic,
+    -- * Other
+    GHC.CoreModule(..),
+    GHC.SafeHaskellMode(..),
+    pattern GRE,
+    gre_name,
+    gre_imp,
+    gre_lcl,
+    gre_par,
+#if MIN_VERSION_ghc(9,2,0)
+    collectHsBindsBinders,
+#endif
     -- * Util Module re-exports
 #if MIN_VERSION_ghc(9,0,0)
     module GHC.Builtin.Names,
@@ -313,7 +345,15 @@ module Development.IDE.GHC.Compat.Core (
     module GHC.Iface.Syntax,
 
 #if MIN_VERSION_ghc(9,2,0)
-    module Language.Haskell.Syntax.Expr,
+    module GHC.Hs.Decls,
+    module GHC.Hs.Expr,
+    module GHC.Hs.Doc,
+    module GHC.Hs.Extension,
+    module GHC.Hs.ImpExp,
+    module GHC.Hs.Pat,
+    module GHC.Hs.Type,
+    module GHC.Hs.Utils,
+    module Language.Haskell.Syntax,
 #endif
 
     module GHC.Rename.Names,
@@ -335,6 +375,7 @@ module Development.IDE.GHC.Compat.Core (
     module GHC.Types.Name.Env,
     module GHC.Types.Name.Reader,
 #if MIN_VERSION_ghc(9,2,0)
+    module GHC.Types.Avail,
     module GHC.Types.SourceFile,
     module GHC.Types.SourceText,
     module GHC.Types.TyThing,
@@ -424,32 +465,35 @@ module Development.IDE.GHC.Compat.Core (
 import qualified GHC
 
 #if MIN_VERSION_ghc(9,0,0)
-import           GHC.Builtin.Names          hiding (Unique, printName)
+import           GHC.Builtin.Names            hiding (Unique, printName)
 import           GHC.Builtin.Types
 import           GHC.Builtin.Types.Prim
 import           GHC.Builtin.Utils
 import           GHC.Core.Class
 import           GHC.Core.Coercion
 import           GHC.Core.ConLike
-import           GHC.Core.DataCon           hiding (dataConExTyCoVars)
-import qualified GHC.Core.DataCon           as DataCon
-import           GHC.Core.FamInstEnv
+import           GHC.Core.DataCon             hiding (dataConExTyCoVars)
+import qualified GHC.Core.DataCon             as DataCon
+import           GHC.Core.FamInstEnv          hiding (pprFamInst)
 import           GHC.Core.InstEnv
 import           GHC.Types.Unique.FM
 #if MIN_VERSION_ghc(9,2,0)
-import           GHC.Core.Multiplicity      (scaledThing)
+import           GHC.Data.Bag
+import           GHC.Core.Multiplicity        (scaledThing)
 #else
-import           GHC.Core.Ppr.TyThing       hiding (pprFamInst)
-import           GHC.Core.TyCo.Rep          (scaledThing)
+import           GHC.Core.Ppr.TyThing         hiding (pprFamInst)
+import           GHC.Core.TyCo.Rep            (scaledThing)
 #endif
 import           GHC.Core.PatSyn
 import           GHC.Core.Predicate
 import           GHC.Core.TyCo.Ppr
-import qualified GHC.Core.TyCo.Rep          as TyCoRep
+import qualified GHC.Core.TyCo.Rep            as TyCoRep
 import           GHC.Core.TyCon
-import           GHC.Core.Type              hiding (mkInfForAllTys, mkVisFunTys)
+import           GHC.Core.Type                hiding (mkInfForAllTys,
+                                               mkVisFunTys)
 import           GHC.Core.Unify
 import           GHC.Core.Utils
+
 
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Driver.Env
@@ -458,122 +502,146 @@ import           GHC.Driver.Finder
 import           GHC.Driver.Types
 import           GHC.Driver.Ways
 #endif
-import           GHC.Driver.CmdLine         (Warn (..))
+import           GHC.Driver.CmdLine           (Warn (..))
 import           GHC.Driver.Hooks
 import           GHC.Driver.Main
 import           GHC.Driver.Monad
 import           GHC.Driver.Phases
 import           GHC.Driver.Pipeline
 import           GHC.Driver.Plugins
-import           GHC.Driver.Session         hiding (ExposePackage)
-import qualified GHC.Driver.Session         as DynFlags
+import           GHC.Driver.Session           hiding (ExposePackage)
+import qualified GHC.Driver.Session           as DynFlags
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC.Hs                       (HsModule (..), SrcSpanAnn')
+import           GHC.Hs.Decls                 hiding (FunDep)
+import           GHC.Hs.Doc
+import           GHC.Hs.Expr
+import           GHC.Hs.Extension
+import           GHC.Hs.ImpExp
+import           GHC.Hs.Pat
+import           GHC.Hs.Type
+import           GHC.Hs.Utils                 hiding (collectHsBindsBinders)
+import qualified GHC.Hs.Utils                 as GHC
+#endif
 #if !MIN_VERSION_ghc(9,2,0)
-import           GHC.Hs
+import           GHC.Hs                       hiding (HsLet, LetStmt)
 #endif
 import           GHC.HsToCore.Docs
 import           GHC.HsToCore.Expr
 import           GHC.HsToCore.Monad
 import           GHC.Iface.Load
-import           GHC.Iface.Make             (mkFullIface, mkIfaceTc,
-                                             mkPartialIface)
+import           GHC.Iface.Make               (mkFullIface, mkIfaceTc,
+                                               mkPartialIface)
 import           GHC.Iface.Recomp
 import           GHC.Iface.Syntax
 import           GHC.Iface.Tidy
 import           GHC.IfaceToCore
 import           GHC.Parser
-import           GHC.Parser.Header          hiding (getImports)
-import           GHC.Parser.Lexer
+import           GHC.Parser.Header            hiding (getImports)
 #if MIN_VERSION_ghc(9,2,0)
-import           GHC.Linker.Loader
+import qualified GHC.Linker.Loader            as Linker
 import           GHC.Linker.Types
+import           GHC.Parser.Lexer             hiding (initParserState)
 import           GHC.Platform.Ways
+import           GHC.Runtime.Context          (InteractiveImport (..))
 #else
-import           GHC.Runtime.Linker
+import           GHC.Parser.Lexer
+import qualified GHC.Runtime.Linker           as Linker
 #endif
 import           GHC.Rename.Names
 import           GHC.Rename.Splice
-import           GHC.Runtime.Interpreter
+import qualified GHC.Runtime.Interpreter      as GHCi
 import           GHC.Tc.Instance.Family
 import           GHC.Tc.Module
 import           GHC.Tc.Types
-import           GHC.Tc.Types.Evidence      hiding ((<.>))
+import           GHC.Tc.Types.Evidence        hiding ((<.>))
 import           GHC.Tc.Utils.Env
-import           GHC.Tc.Utils.Monad         hiding (Applicative (..), IORef,
-                                             MonadFix (..), MonadIO (..), allM,
-                                             anyM, concatMapM, mapMaybeM, (<$>))
-import           GHC.Tc.Utils.TcType        as TcType
-import qualified GHC.Types.Avail            as Avail
+import           GHC.Tc.Utils.Monad           hiding (Applicative (..), IORef,
+                                               MonadFix (..), MonadIO (..),
+                                               allM, anyM, concatMapM,
+                                               mapMaybeM, (<$>))
+import           GHC.Tc.Utils.TcType          as TcType
+import qualified GHC.Types.Avail              as Avail
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC.Types.Avail              (greNamePrintableName)
+import           GHC.Types.Fixity             (LexicalFixity (..))
+#endif
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Types.Meta
 #endif
 import           GHC.Types.Basic
 import           GHC.Types.Id
-import           GHC.Types.Name             hiding (varName)
+import           GHC.Types.Name               hiding (varName)
 import           GHC.Types.Name.Cache
 import           GHC.Types.Name.Env
-import           GHC.Types.Name.Reader
+import           GHC.Types.Name.Reader        hiding (GRE, gre_name, gre_imp, gre_lcl, gre_par)
+import qualified GHC.Types.Name.Reader        as RdrName
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Types.Name.Set
-import           GHC.Types.SourceFile       (HscSource (..),
-                                             SourceModified (..))
+import           GHC.Types.SourceFile         (HscSource (..),
+                                               SourceModified (..))
 import           GHC.Types.SourceText
+import           GHC.Types.Target             (Target (..), TargetId (..))
 import           GHC.Types.TyThing
 import           GHC.Types.TyThing.Ppr
 #else
 import           GHC.Types.Name.Set
 #endif
-import           GHC.Types.SrcLoc           (BufPos, BufSpan,
-                                             SrcLoc (UnhelpfulLoc),
-                                             SrcSpan (UnhelpfulSpan))
-import qualified GHC.Types.SrcLoc           as SrcLoc
+import           GHC.Types.SrcLoc             (BufPos, BufSpan,
+                                               SrcLoc (UnhelpfulLoc),
+                                               SrcSpan (UnhelpfulSpan))
+import qualified GHC.Types.SrcLoc             as SrcLoc
 import           GHC.Types.Unique.Supply
-import           GHC.Types.Var              (Var (varName), setTyVarUnique,
-                                             setVarUnique)
+import           GHC.Types.Var                (Var (varName), setTyVarUnique,
+                                               setVarUnique)
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Unit.Finder
 import           GHC.Unit.Home.ModInfo
 #endif
-import           GHC.Unit.Info              (PackageName (..))
-import           GHC.Unit.Module            hiding (ModLocation (..), UnitId,
-                                             addBootSuffixLocnOut, moduleUnit,
-                                             toUnitId)
-import qualified GHC.Unit.Module            as Module
+import           GHC.Unit.Info                (PackageName (..))
+import           GHC.Unit.Module              hiding (ModLocation (..), UnitId,
+                                               addBootSuffixLocnOut, moduleUnit,
+                                               toUnitId)
+import qualified GHC.Unit.Module              as Module
 #if MIN_VERSION_ghc(9,2,0)
+import           GHC.Unit.Module.Graph        (mkModuleGraph)
 import           GHC.Unit.Module.Imported
 import           GHC.Unit.Module.ModDetails
 import           GHC.Unit.Module.ModGuts
-import           GHC.Unit.Module.ModIface   (IfaceExport)
+import           GHC.Unit.Module.ModIface     (IfaceExport, ModIface (..),
+                                               ModIface_ (..))
+import           GHC.Unit.Module.ModSummary   (ModSummary (..))
 #endif
-import           GHC.Unit.State             (ModuleOrigin (..))
-import           GHC.Utils.Error            (Severity (..))
-import           GHC.Utils.Panic            hiding (try)
-import qualified GHC.Utils.Panic.Plain      as Plain
+import           GHC.Unit.State               (ModuleOrigin (..))
+import           GHC.Utils.Error              (Severity (..))
+import           GHC.Utils.Panic              hiding (try)
+import qualified GHC.Utils.Panic.Plain        as Plain
 #else
 import qualified Avail
-import           BasicTypes                 hiding (Version)
+import           BasicTypes                   hiding (Version)
 import           Class
-import           CmdLineParser              (Warn (..))
+import           CmdLineParser                (Warn (..))
 import           ConLike
 import           CoreUtils
-import           DataCon                    hiding (dataConExTyCoVars)
+import           DataCon                      hiding (dataConExTyCoVars)
 import qualified DataCon
 import           DriverPhases
 import           DriverPipeline
 import           DsExpr
-import           DsMonad                    hiding (foldrM)
-import           DynFlags                   hiding (ExposePackage)
+import           DsMonad                      hiding (foldrM)
+import           DynFlags                     hiding (ExposePackage)
 import qualified DynFlags
-import           ErrUtils                   hiding (logInfo, mkWarnMsg)
+import           ErrUtils                     hiding (logInfo, mkWarnMsg)
 import           ExtractDocs
 import           FamInst
 import           FamInstEnv
 import           Finder
 #if MIN_VERSION_ghc(8,10,0)
-import           GHC.Hs
+import           GHC.Hs                       hiding (HsLet, LetStmt)
 #endif
-import           GHCi
+import qualified GHCi
 import           GhcMonad
-import           HeaderInfo                 hiding (getImports)
+import           HeaderInfo                   hiding (getImports)
 import           Hooks
 import           HscMain
 import           HscTypes
@@ -582,87 +650,95 @@ import           HscTypes
 import           HsBinds
 import           HsDecls
 import           HsDoc
-import           HsExpr
+import           HsExpr                       hiding (HsLet, LetStmt)
 import           HsExtension
 import           HsImpExp
 import           HsLit
 import           HsPat
-import           HsSyn                      hiding (wildCardName)
-import           HsTypes                    hiding (wildCardName)
+import           HsSyn                        hiding (wildCardName, HsLet, LetStmt)
+import           HsTypes                      hiding (wildCardName)
 import           HsUtils
 #endif
 import           Id
 import           IfaceSyn
 import           InstEnv
-import           Lexer                      hiding (getSrcLoc)
-import           Linker
+import           Lexer                        hiding (getSrcLoc)
+import qualified Linker
 import           LoadIface
 import           MkIface
-import           Module                     hiding (ModLocation (..), UnitId,
-                                             addBootSuffixLocnOut, moduleUnitId)
+import           Module                       hiding (ModLocation (..), UnitId,
+                                               addBootSuffixLocnOut,
+                                               moduleUnitId)
 import qualified Module
-import           Name                       hiding (varName)
+import           Name                         hiding (varName)
 import           NameCache
 import           NameEnv
 import           NameSet
 import           Packages
 #if MIN_VERSION_ghc(8,8,0)
-import           Panic                      hiding (try)
-import qualified PlainPanic                 as Plain
+import           Panic                        hiding (try)
+import qualified PlainPanic                   as Plain
 #else
-import           Panic                      hiding (GhcException, try)
-import qualified Panic                      as Plain
+import           Panic                        hiding (GhcException, try)
+import qualified Panic                        as Plain
 #endif
 import           Parser
 import           PatSyn
 #if MIN_VERSION_ghc(8,8,0)
 import           Plugins
 #endif
-import           PprTyThing                 hiding (pprFamInst)
+import           PprTyThing                   hiding (pprFamInst)
 import           PrelInfo
-import           PrelNames                  hiding (Unique, printName)
-import           RdrName
+import           PrelNames                    hiding (Unique, printName)
+import           RdrName                      hiding (GRE, gre_name, gre_imp, gre_lcl, gre_par)
+import qualified RdrName
 import           RnNames
 import           RnSplice
 import qualified SrcLoc
 import           TcEnv
-import           TcEvidence                 hiding ((<.>))
+import           TcEvidence                   hiding ((<.>))
 import           TcIface
 import           TcRnDriver
-import           TcRnMonad                  hiding (Applicative (..), IORef,
-                                             MonadFix (..), MonadIO (..), allM,
-                                             anyM, concatMapM, foldrM,
-                                             mapMaybeM, (<$>))
+import           TcRnMonad                    hiding (Applicative (..), IORef,
+                                               MonadFix (..), MonadIO (..),
+                                               allM, anyM, concatMapM, foldrM,
+                                               mapMaybeM, (<$>))
 import           TcRnTypes
-import           TcType                     hiding (mkVisFunTys)
+import           TcType                       hiding (mkVisFunTys)
 import qualified TcType
 import           TidyPgm
 import qualified TyCoRep
 import           TyCon
-import           Type                       hiding (mkVisFunTys)
+import           Type                         hiding (mkVisFunTys)
 import           TysPrim
 import           TysWiredIn
 import           Unify
 import           UniqFM
 import           UniqSupply
-import           Var                        (Var (varName), setTyVarUnique,
-                                             setVarUnique, varType)
+import           Var                          (Var (varName), setTyVarUnique,
+                                               setVarUnique, varType)
 
 #if MIN_VERSION_ghc(8,10,0)
-import           Coercion                   (coercionKind)
+import           Coercion                     (coercionKind)
 import           Predicate
-import           SrcLoc                     (SrcLoc (UnhelpfulLoc),
-                                             SrcSpan (UnhelpfulSpan))
+import           SrcLoc                       (Located, SrcLoc (UnhelpfulLoc),
+                                               SrcSpan (UnhelpfulSpan))
 #else
-import           SrcLoc                     (RealLocated, SrcLoc (UnhelpfulLoc),
-                                             SrcSpan (UnhelpfulSpan))
+import           SrcLoc                       (RealLocated,
+                                               SrcLoc (UnhelpfulLoc),
+                                               SrcSpan (UnhelpfulSpan))
 #endif
 #endif
 
 
 #if !MIN_VERSION_ghc(8,8,0)
-import           Data.List                  (isSuffixOf)
+import           Data.List                    (isSuffixOf)
 import           System.FilePath
+#endif
+
+
+#if MIN_VERSION_ghc(9,2,0)
+import           Language.Haskell.Syntax hiding (FunDep)
 #endif
 
 #if !MIN_VERSION_ghc(9,0,0)
@@ -740,11 +816,22 @@ pattern FunTy arg res <- TyCoRep.FunTy arg res
 class HasSrcSpan a where
   getLoc :: a -> SrcSpan
 
+instance HasSrcSpan SrcSpan where
+  getLoc = id
+
 instance HasSrcSpan (SrcLoc.GenLocated SrcSpan a) where
   getLoc = GHC.getLoc
 
--- getLoc :: GenLocated l a -> l
--- getLoc = GHC.getLoc
+#if MIN_VERSION_ghc(9,2,0)
+instance HasSrcSpan (SrcSpanAnn' ann) where
+  getLoc = locA
+instance HasSrcSpan (SrcLoc.GenLocated (SrcSpanAnn' ann) a) where
+  getLoc (L l _) = l
+
+pattern L :: HasSrcSpan a => SrcSpan -> e -> SrcLoc.GenLocated a e
+pattern L l a <- GHC.L (getLoc -> l) a
+{-# COMPLETE L #-}
+#endif
 
 #elif MIN_VERSION_ghc(8,8,0)
 type HasSrcSpan = SrcLoc.HasSrcSpan
@@ -812,11 +899,9 @@ mkInfForAllTys =
   mkInfForAllTys
 #endif
 
+#if !MIN_VERSION_ghc(9,2,0)
 splitForAllTyCoVars :: Type -> ([TyCoVar], Type)
 splitForAllTyCoVars =
-#if MIN_VERSION_ghc(9,2,0)
-  TcType.splitForAllTyCoVars
-#else
   splitForAllTys
 #endif
 
@@ -872,9 +957,108 @@ type PlainGhcException = Plain.PlainGhcException
 type PlainGhcException = Plain.GhcException
 #endif
 
+<<<<<<< HEAD
 #if MIN_VERSION_ghc(9,0,0)
 -- This is from the old api, but it still simplifies
 pattern ConPatIn :: SrcLoc.Located (ConLikeP GhcPs) -> HsConPatDetails GhcPs -> Pat GhcPs
 pattern ConPatIn con args = ConPat NoExtField con args
 #endif
 
+=======
+initDynLinker, initObjLinker :: HscEnv -> IO ()
+initDynLinker =
+#if !MIN_VERSION_ghc(9,0,0)
+    Linker.initDynLinker
+#else
+    -- It errors out in GHC 9.0 and doesn't exist in 9.2
+    const $ return ()
+#endif
+
+initObjLinker env =
+#if !MIN_VERSION_ghc(9,2,0)
+    GHCi.initObjLinker env
+#else
+    GHCi.initObjLinker (GHCi.hscInterp env)
+#endif
+
+loadDLL :: HscEnv -> String -> IO (Maybe String)
+loadDLL env =
+#if !MIN_VERSION_ghc(9,2,0)
+    GHCi.loadDLL env
+#else
+    GHCi.loadDLL (GHCi.hscInterp env)
+#endif
+
+unload :: HscEnv -> [Linkable] -> IO ()
+unload hsc_env linkables =
+  Linker.unload
+#if MIN_VERSION_ghc(9,2,0)
+    (GHCi.hscInterp hsc_env)
+#endif
+    hsc_env linkables
+
+setOutputFile :: FilePath -> DynFlags -> DynFlags
+setOutputFile f d = d {
+#if MIN_VERSION_ghc(9,2,0)
+  outputFile_    = Just f
+#else
+  outputFile     = Just f
+#endif
+  }
+
+isSubspanOfA :: LocatedAn la a -> LocatedAn lb b -> Bool
+#if MIN_VERSION_ghc(9,2,0)
+isSubspanOfA a b = SrcLoc.isSubspanOf (GHC.getLocA a) (GHC.getLocA b)
+#else
+isSubspanOfA a b = SrcLoc.isSubspanOf (GHC.getLoc a) (GHC.getLoc b)
+#endif
+
+#if MIN_VERSION_ghc(9,2,0)
+type LocatedAn a = GHC.LocatedAn a
+#else
+type LocatedAn a = GHC.Located
+#endif
+
+#if MIN_VERSION_ghc(9,2,0)
+locA :: SrcSpanAnn' a -> SrcSpan
+locA = GHC.locA
+#else
+locA = id
+#endif
+
+#if MIN_VERSION_ghc(9,2,0)
+getLocA :: SrcLoc.GenLocated (SrcSpanAnn' a) e -> SrcSpan
+getLocA = GHC.getLocA
+#else
+-- getLocA :: HasSrcSpan a => a -> SrcSpan
+getLocA x = GHC.getLoc x
+#endif
+
+#if !MIN_VERSION_ghc(9,2,0)
+type AnnListItem = SrcLoc.SrcSpan
+#endif
+
+#if !MIN_VERSION_ghc(9,2,0)
+type NameAnn = SrcLoc.SrcSpan
+#endif
+
+pattern GRE :: Name -> Parent -> Bool -> [ImportSpec] -> RdrName.GlobalRdrElt
+{-# COMPLETE GRE #-}
+#if MIN_VERSION_ghc(9,2,0)
+pattern GRE{gre_name, gre_par, gre_lcl, gre_imp} <- RdrName.GRE
+    {gre_name = (greNamePrintableName -> gre_name)
+    ,gre_par, gre_lcl, gre_imp}
+#else
+pattern GRE{gre_name, gre_par, gre_lcl, gre_imp} = RdrName.GRE{..}
+#endif
+
+#if MIN_VERSION_ghc(9,2,0)
+collectHsBindsBinders :: CollectPass p => Bag (XRec p (HsBindLR p idR)) -> [IdP p]
+collectHsBindsBinders x = GHC.collectHsBindsBinders CollNoDictBinders x
+#endif
+
+#if !MIN_VERSION_ghc(9,2,0)
+pattern HsLet xlet localBinds expr <- GHC.HsLet xlet (SrcLoc.unLoc -> localBinds) expr
+pattern LetStmt xlet localBinds <- GHC.LetStmt xlet (SrcLoc.unLoc -> localBinds)
+#endif
+>>>>>>> master

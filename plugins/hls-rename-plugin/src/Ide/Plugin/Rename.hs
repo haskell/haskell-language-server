@@ -67,15 +67,19 @@ getSrcEdits ::
 getSrcEdits state updateMod uri = do
     ccs <- lift getClientCapabilities
     nfp <- safeUriToNfp uri
-    ParsedModule{pm_parsed_source = ps, pm_annotations = apiAnns} <-
+    ~ParsedModule{pm_parsed_source = ps, pm_annotations = apiAnns} <-
         handleMaybeM "Error: could not get parsed source" $ liftIO $ runAction
             "Rename.GetParsedModuleWithComments"
             state
             (use GetParsedModuleWithComments nfp)
-
+#if !MIN_VERSION_ghc(9,2,1)
     let anns = relativiseApiAnns ps apiAnns
         src = T.pack $ exactPrint ps anns
         res = T.pack $ exactPrint (updateMod <$> ps) anns
+#else
+    let src = T.pack $ exactPrint ps
+        res = T.pack $ exactPrint (updateMod <$> ps)
+#endif
 
     pure $ diffText ccs (uri, src) res IncludeDeletions
 
