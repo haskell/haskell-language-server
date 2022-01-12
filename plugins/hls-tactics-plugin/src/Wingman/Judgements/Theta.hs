@@ -172,8 +172,16 @@ excludeForbiddenMethods = filter (not . flip S.member forbiddenMethods . hi_name
 ------------------------------------------------------------------------------
 -- | Extract evidence from 'AbsBinds' in scope.
 absBinds ::  SrcSpan -> LHsBindLR GhcTc GhcTc -> [PredType]
+#if __GLASGOW_HASKELL__ >= 900
+absBinds dst (L src (AbsBinds _ _ h _ _ z _))
+#else
 absBinds dst (L src (AbsBinds _ _ h _ _ _ _))
-  | dst `isSubspanOf` src = fmap idType h
+#endif
+  | dst `isSubspanOf` src
+  = fmap idType h
+#if __GLASGOW_HASKELL__ >= 900
+    <> everything (<>) (mkQ mempty wrapper) z
+#endif
 absBinds _ _ = []
 
 
@@ -185,7 +193,8 @@ wrapperBinds dst (L src (XExpr (WrapExpr (HsWrap h _))))
 #else
 wrapperBinds dst (L src (HsWrap _ h _))
 #endif
-  | dst `isSubspanOf` src = wrapper h
+  | dst `isSubspanOf` src
+  = wrapper h
 wrapperBinds _ _ = []
 
 
@@ -193,7 +202,8 @@ wrapperBinds _ _ = []
 -- | Extract evidence from the 'ConPatOut's bound in this 'Match'.
 matchBinds :: SrcSpan -> LMatch GhcTc (LHsExpr GhcTc) -> [PredType]
 matchBinds dst (L src (Match _ _ pats _))
-  | dst `isSubspanOf` src = everything (<>) (mkQ mempty patBinds) pats
+  | dst `isSubspanOf` src
+  = everything (<>) (mkQ mempty patBinds) pats
 matchBinds _ _ = []
 
 
