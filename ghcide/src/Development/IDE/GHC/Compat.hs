@@ -4,6 +4,7 @@
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE ConstraintKinds   #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE PatternSynonyms   #-}
 {-# OPTIONS -Wno-incomplete-uni-patterns -Wno-dodgy-imports #-}
 
 -- | Attempt at hiding the GHC version differences we can.
@@ -15,9 +16,18 @@ module Development.IDE.GHC.Compat(
     setUpTypedHoles,
     upNameCache,
     disableWarningsAsErrors,
+    reLoc,
+    reLocA,
+    getMessages',
+    pattern PFailedWithErrorMessages,
 
 #if !MIN_VERSION_ghc(9,0,1)
     RefMap,
+#endif
+
+#if MIN_VERSION_ghc(9,2,0)
+    extendModSummaryNoDeps,
+    emsModSummary,
 #endif
 
     nodeInfo',
@@ -43,6 +53,7 @@ module Development.IDE.GHC.Compat(
     -- * Compat modules
     module Development.IDE.GHC.Compat.Core,
     module Development.IDE.GHC.Compat.Env,
+    module Development.IDE.GHC.Compat.ExactPrint,
     module Development.IDE.GHC.Compat.Iface,
     module Development.IDE.GHC.Compat.Logger,
     module Development.IDE.GHC.Compat.Outputable,
@@ -60,6 +71,7 @@ import           GHC                    hiding (HasSrcSpan, ModLocation, getLoc,
                                          lookupName, RealSrcSpan)
 import Development.IDE.GHC.Compat.Core
 import Development.IDE.GHC.Compat.Env
+import Development.IDE.GHC.Compat.ExactPrint
 import Development.IDE.GHC.Compat.Iface
 import Development.IDE.GHC.Compat.Logger
 import Development.IDE.GHC.Compat.Outputable
@@ -71,7 +83,10 @@ import Development.IDE.GHC.Compat.Util
 #if MIN_VERSION_ghc(9,0,0)
 import           GHC.Data.StringBuffer
 import           GHC.Driver.Session    hiding (ExposePackage)
+import           GHC.Utils.Error
 #if MIN_VERSION_ghc(9,2,0)
+import           Data.Bifunctor
+import           GHC.Unit.Module.ModSummary
 import           GHC.Driver.Env as Env
 import           GHC.Unit.Module.ModIface
 #else
@@ -115,6 +130,18 @@ import           Data.List              (foldl')
 import qualified Data.Set               as S
 #endif
 
+#if !MIN_VERSION_ghc(8,10,0)
+import Bag (unitBag)
+#endif
+
+#if !MIN_VERSION_ghc(9,2,0)
+reLoc :: Located a -> Located a
+reLoc = id
+
+reLocA :: Located a -> Located a
+reLocA = id
+#endif
+
 #if !MIN_VERSION_ghc(8,8,0)
 hPutStringBuffer :: Handle -> StringBuffer -> IO ()
 hPutStringBuffer hdl (StringBuffer buf len cur)
@@ -122,11 +149,44 @@ hPutStringBuffer hdl (StringBuffer buf len cur)
              hPutBuf hdl ptr len
 #endif
 
+#if MIN_VERSION_ghc(9,2,0)
+type ErrMsg  = MsgEnvelope DecoratedSDoc
+#endif
+
+getMessages' :: PState -> DynFlags -> (Bag WarnMsg, Bag ErrMsg)
+getMessages' pst dflags =
+#if MIN_VERSION_ghc(9,2,0)
+                 bimap (fmap pprWarning) (fmap pprError) $
+#endif
+                 getMessages pst
+#if !MIN_VERSION_ghc(9,2,0)
+                   dflags
+#endif
+
+#if MIN_VERSION_ghc(9,2,0)
+pattern PFailedWithErrorMessages :: forall a b. (b -> Bag (MsgEnvelope DecoratedSDoc)) -> ParseResult a
+pattern PFailedWithErrorMessages msgs
+     <- PFailed (const . fmap pprError . getErrorMessages -> msgs)
+#elif MIN_VERSION_ghc(8,10,0)
+pattern PFailedWithErrorMessages :: (DynFlags -> ErrorMessages) -> ParseResult a
+pattern PFailedWithErrorMessages msgs
+     <- PFailed (getErrorMessages -> msgs)
+#else
+pattern PFailedWithErrorMessages :: (DynFlags -> ErrorMessages) -> ParseResult a
+pattern PFailedWithErrorMessages msgs
+     <- ((fmap.fmap) unitBag . mkPlainErrMsgIfPFailed -> Just msgs)
+
+mkPlainErrMsgIfPFailed (PFailed _ pst err) = Just (\dflags -> mkPlainErrMsg dflags pst err)
+mkPlainErrMsgIfPFailed _ = Nothing
+#endif
+{-# COMPLETE PFailedWithErrorMessages #-}
+
 supportsHieFiles :: Bool
 supportsHieFiles = True
 
 hieExportNames :: HieFile -> [(SrcSpan, Name)]
 hieExportNames = nameListFromAvails . hie_exports
+
 
 upNameCache :: IORef NameCache -> (NameCache -> (NameCache, c)) -> IO c
 #if MIN_VERSION_ghc(8,8,0)

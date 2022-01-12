@@ -27,7 +27,7 @@ import           Data.Typeable
 import           Development.IDE            as D
 import           Development.IDE.Core.Shake (getDiagnostics,
                                              getHiddenDiagnostics)
-import           Development.IDE.GHC.Compat (ParsedModule (ParsedModule))
+import           Development.IDE.GHC.Compat
 import           GHC.Generics
 import           Ide.PluginUtils
 import           Ide.Types

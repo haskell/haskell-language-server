@@ -97,6 +97,7 @@ codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentif
   mode <- usePropertyLsp #mode pId properties
   fmap (Right . List) $ case uriToFilePath' uri of
     Just (toNormalizedFilePath' -> filePath) -> liftIO $ do
+      env <- fmap hscEnv <$> runAction "codeLens.GhcSession" ideState (use GhcSession filePath)
       tmr <- runAction "codeLens.TypeCheck" ideState (use TypeCheck filePath)
       bindings <- runAction "codeLens.GetBindings" ideState (use GetBindings filePath)
       gblSigs <- runAction "codeLens.GetGlobalBindingTypeSigs" ideState (use GetGlobalBindingTypeSigs filePath)
@@ -123,9 +124,9 @@ codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentif
       case mode of
         Always ->
           pure (catMaybes $ generateLensForGlobal <$> gblSigs')
-            <> generateLensFromDiags (suggestLocalSignature False tmr bindings) -- we still need diagnostics for local bindings
+            <> generateLensFromDiags (suggestLocalSignature False env tmr bindings) -- we still need diagnostics for local bindings
         Exported -> pure $ catMaybes $ generateLensForGlobal <$> filter gbExported gblSigs'
-        Diagnostics -> generateLensFromDiags $ suggestSignature False gblSigs tmr bindings
+        Diagnostics -> generateLensFromDiags $ suggestSignature False env gblSigs tmr bindings
     Nothing -> pure []
 
 generateLens :: PluginId -> Range -> T.Text -> WorkspaceEdit -> CodeLens
@@ -140,9 +141,9 @@ commandHandler _ideState wedit = do
 
 --------------------------------------------------------------------------------
 
-suggestSignature :: Bool -> Maybe GlobalBindingTypeSigsResult -> Maybe TcModuleResult -> Maybe Bindings -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestSignature isQuickFix mGblSigs mTmr mBindings diag =
-  suggestGlobalSignature isQuickFix mGblSigs diag <> suggestLocalSignature isQuickFix mTmr mBindings diag
+suggestSignature :: Bool -> Maybe HscEnv -> Maybe GlobalBindingTypeSigsResult -> Maybe TcModuleResult -> Maybe Bindings -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestSignature isQuickFix env mGblSigs mTmr mBindings diag =
+  suggestGlobalSignature isQuickFix mGblSigs diag <> suggestLocalSignature isQuickFix env mTmr mBindings diag
 
 suggestGlobalSignature :: Bool -> Maybe GlobalBindingTypeSigsResult -> Diagnostic -> [(T.Text, [TextEdit])]
 suggestGlobalSignature isQuickFix mGblSigs Diagnostic{_message, _range}
@@ -156,19 +157,20 @@ suggestGlobalSignature isQuickFix mGblSigs Diagnostic{_message, _range}
     [(title, [action])]
   | otherwise = []
 
-suggestLocalSignature :: Bool -> Maybe TcModuleResult -> Maybe Bindings -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestLocalSignature isQuickFix mTmr mBindings Diagnostic{_message, _range = _range@Range{..}}
+suggestLocalSignature :: Bool -> Maybe HscEnv -> Maybe TcModuleResult -> Maybe Bindings -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestLocalSignature isQuickFix mEnv mTmr mBindings Diagnostic{_message, _range = _range@Range{..}}
   | Just (_ :: T.Text, _ :: T.Text, _ :: T.Text, [identifier]) <-
       (T.unwords . T.words $ _message)
         =~~ ("Polymorphic local binding with no type signature: (.*) ::" :: T.Text)
     , Just bindings <- mBindings
+    , Just env <- mEnv
     , localScope <- getFuzzyScope bindings _start _end
     , -- we can't use srcspan to lookup scoped bindings, because the error message reported by GHC includes the entire binding, instead of simply the name
       Just (name, ty) <- find (\(x, _) -> printName x == T.unpack identifier) localScope >>= \(name, mTy) -> (name,) <$> mTy
     , Just TcModuleResult{tmrTypechecked = TcGblEnv{tcg_rdr_env, tcg_sigs}} <- mTmr
     , -- not a top-level thing, to avoid duplication
       not $ name `elemNameSet` tcg_sigs
-    , tyMsg <- printSDocQualifiedUnsafe (mkPrintUnqualifiedDefault tcg_rdr_env) $ pprSigmaType ty
+    , tyMsg <- printSDocQualifiedUnsafe (mkPrintUnqualifiedDefault env tcg_rdr_env) $ pprSigmaType ty
     , signature <- T.pack $ printName name <> " :: " <> tyMsg
     , startCharacter <- _character _start
     , startOfLine <- Position (_line _start) startCharacter
@@ -213,7 +215,7 @@ instance A.FromJSON Mode where
 --------------------------------------------------------------------------------
 
 showDocRdrEnv :: HscEnv -> GlobalRdrEnv -> SDoc -> String
-showDocRdrEnv env rdrEnv = showSDocForUser (hsc_dflags env) (mkPrintUnqualified (hsc_dflags env) rdrEnv)
+showDocRdrEnv env rdrEnv = showSDocForUser' env (mkPrintUnqualifiedDefault env rdrEnv)
 
 data GetGlobalBindingTypeSigs = GetGlobalBindingTypeSigs
   deriving (Generic, Show, Eq, Ord, Hashable, NFData)

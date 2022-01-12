@@ -9,6 +9,9 @@
 --   Note that the 'NFData' instances may not be law abiding.
 module Development.IDE.GHC.Orphans() where
 
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC.Parser.Annotation
+#endif
 #if MIN_VERSION_ghc(9,0,0)
 import           GHC.Data.Bag
 import           GHC.Data.FastString
@@ -25,7 +28,6 @@ import qualified StringBuffer               as SB
 import           Unique                     (getKey)
 #endif
 
-import           GHC
 
 import           Retrie.ExactPrint          (Annotated)
 
@@ -34,6 +36,7 @@ import           Development.IDE.GHC.Util
 
 import           Control.DeepSeq
 import           Data.Aeson
+import           Data.Bifunctor             (Bifunctor (..))
 import           Data.Hashable
 import           Data.String                (IsString (fromString))
 
@@ -90,6 +93,19 @@ instance NFData ModSummary where
 #if !MIN_VERSION_ghc(8,10,0)
 instance NFData FastString where
     rnf = rwhnf
+#endif
+
+#if MIN_VERSION_ghc(9,2,0)
+instance Ord FastString where
+    compare a b = if a == b then EQ else compare (fs_sbs a) (fs_sbs b)
+
+instance NFData (SrcSpanAnn' a) where
+    rnf = rwhnf
+
+instance Bifunctor (GenLocated) where
+    bimap f g (L l x) = L (f l) (g x)
+
+deriving instance Functor SrcSpanAnn'
 #endif
 
 instance NFData ParsedModule where

@@ -163,6 +163,7 @@ library
         Development.IDE.GHC.Compat
         Development.IDE.GHC.Compat.Core
         Development.IDE.GHC.Compat.Env
+        Development.IDE.GHC.Compat.ExactPrint
         Development.IDE.GHC.Compat.Iface
         Development.IDE.GHC.Compat.Logger
         Development.IDE.GHC.Compat.Outputable
@@ -171,6 +172,7 @@ library
         Development.IDE.GHC.Compat.Units
         Development.IDE.GHC.Compat.Util
         Development.IDE.Core.Compile
+        Development.IDE.GHC.Dump
         Development.IDE.GHC.Error
         Development.IDE.GHC.ExactPrint
         Development.IDE.GHC.Orphans
@@ -409,7 +411,7 @@ test-suite ghcide-tests
         tasty-rerun,
         text,
         unordered-containers,
-    if (impl(ghc >= 8.6))
+    if (impl(ghc >= 8.6) && impl(ghc < 9.2))
       build-depends:
           record-dot-preprocessor,
           record-hasfield

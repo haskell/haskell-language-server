@@ -3,6 +3,7 @@
 {-# LANGUAGE GADTs                     #-}
 {-# LANGUAGE ImplicitParams            #-}
 {-# LANGUAGE ImpredicativeTypes        #-}
+{-# LANGUAGE PolyKinds                 #-}
 {-# OPTIONS_GHC -Wno-deprecations -Wno-unticked-promoted-constructors #-}
 
 module Experiments
@@ -251,7 +252,7 @@ configP =
     <*> option auto (long "timeout" <> value 60 <> help "timeout for waiting for a ghcide response")
     <*> ( Example "name"
                <$> (Right <$> packageP)
-               <*> (some moduleOption <|> pure ["Distribution/Simple.hs"])
+               <*> (some moduleOption <|> pure ["src/Distribution/Simple.hs"])
                <*> pure []
          <|>
           Example "name"
@@ -263,7 +264,7 @@ configP =
 
       packageP = ExamplePackage
             <$> strOption (long "example-package-name" <> value "Cabal")
-            <*> option versionP (long "example-package-version" <> value (makeVersion [3,4,0,0]))
+            <*> option versionP (long "example-package-version" <> value (makeVersion [3,6,0,0]))
       pathP = strOption (long "example-path")
 
 versionP :: ReadM Version
