@@ -111,7 +111,11 @@ allow-newer:
   SVGFonts:diagrams-core,
 
   -- for head.hackage
-  primitive-unlifted:base
+  primitive-unlifted:base,
+  
+  ormolu:ghc-lib-parser,
+
+  fourmolu:ghc-lib-parser
 
 allow-older:
   primitive-extras:primitive-unlifted
