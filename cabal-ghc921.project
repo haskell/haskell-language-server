@@ -23,7 +23,7 @@ packages:
         -- ./plugins/hls-floskell-plugin
          ./plugins/hls-pragmas-plugin
          ./plugins/hls-module-name-plugin
-        -- ./plugins/hls-ormolu-plugin
+         ./plugins/hls-ormolu-plugin
          ./plugins/hls-call-hierarchy-plugin
         -- ./plugins/hls-alternate-number-format-plugin
 
@@ -112,10 +112,6 @@ allow-newer:
 
   -- for head.hackage
   primitive-unlifted:base,
-  
-  ormolu:ghc-lib-parser,
-
-  fourmolu:ghc-lib-parser
 
 allow-older:
   primitive-extras:primitive-unlifted
