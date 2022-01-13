@@ -50,13 +50,14 @@ emptyCaseInteraction = Interaction $
   Continuation @EmptyCaseT @EmptyCaseT @WorkspaceEdit EmptyCaseT
     (SynthesizeCodeLens $ \LspEnv{..} _ -> do
       let FileContext{..} = le_fileContext
+      nfp <- getNfp fc_uri
 
-      let stale a = runStaleIde "codeLensProvider" le_ideState fc_nfp a
+      let stale a = runStaleIde "codeLensProvider" le_ideState nfp a
 
       ccs <- lift getClientCapabilities
       TrackedStale pm _ <- mapMaybeT liftIO $ stale GetAnnotatedParsedSource
       TrackedStale binds bind_map <- mapMaybeT liftIO $ stale GetBindings
-      holes <- mapMaybeT liftIO $ emptyCaseScrutinees le_ideState fc_nfp
+      holes <- mapMaybeT liftIO $ emptyCaseScrutinees le_ideState nfp
 
       for holes $ \(ss, ty) -> do
         binds_ss <- liftMaybe $ mapAgeFrom bind_map ss
