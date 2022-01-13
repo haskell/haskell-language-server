@@ -1,6 +1,7 @@
 cradle:
   direct:
     arguments:
+      - "-XHaskell2010"
       - "NeedsPragmas"
       - "TypeApplications"
       - "NamedFieldPuns"

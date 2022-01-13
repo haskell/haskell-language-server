@@ -39,7 +39,12 @@ mkDocMap
   -> TcGblEnv
   -> IO DocAndKindMap
 mkDocMap env rm this_mod =
-  do let (_ , DeclDocMap this_docs, _) = extractDocs this_mod
+  do
+#if MIN_VERSION_ghc(9,2,0)
+     (_ , DeclDocMap this_docs, _) <- extractDocs this_mod
+#else
+     let (_ , DeclDocMap this_docs, _) = extractDocs this_mod
+#endif
      d <- foldrM getDocs (mkNameEnv $ M.toList $ fmap (`SpanDocString` SpanDocUris Nothing Nothing) this_docs) names
      k <- foldrM getType (tcg_type_env this_mod) names
      pure $ DKMap d k
@@ -108,7 +113,12 @@ getDocumentation
 -- may be edge cases where it is very wrong).
 -- TODO : Build a version of GHC exactprint to extract this information
 -- more accurately.
+-- TODO : Implement this for GHC 9.2 with in-tree annotations
+--        (alternatively, just remove it and rely soley on GHC's parsing)
 getDocumentation sources targetName = fromMaybe [] $ do
+#if MIN_VERSION_ghc(9,2,0)
+  Nothing
+#else
   -- Find the module the target is defined in.
   targetNameSpan <- realSpan $ getLoc targetName
   tc <-
@@ -170,6 +180,7 @@ docHeaders = mapMaybe (\(L _ x) -> wrk x)
                             then Just $ T.pack s
                             else Nothing
     _ -> Nothing
+#endif
 
 -- These are taken from haskell-ide-engine's Haddock plugin
 

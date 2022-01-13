@@ -24,11 +24,11 @@ module Ide.Types
 #ifdef mingw32_HOST_OS
 import qualified System.Win32.Process            as P (getCurrentProcessId)
 #else
+import           Control.Monad                   (void)
 import qualified System.Posix.Process            as P (getProcessID)
 import           System.Posix.Signals
 #endif
 import           Control.Lens                    ((^.))
-import           Control.Monad
 import           Data.Aeson                      hiding (defaultOptions)
 import qualified Data.DList                      as DList
 import qualified Data.Default

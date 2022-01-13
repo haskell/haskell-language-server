@@ -76,7 +76,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: [ "9.0.2"
+        ghc: [ "9.2.1"
+             , "9.0.2"
              , "9.0.1"
              , "8.10.7"
              , "8.10.6"
@@ -110,20 +111,10 @@ jobs:
 
       # repeating builds to workaround segfaults in windows and ghc-8.8.4
       # This build agenda in not to have successful code,
-      # but to cache what can be cached, so step is fault tolerant & would always succeed.
-      # 2021-12-11: NOTE: Need to building all targets (build the project also), since
-      # current Cabal does not allow `all --enable-tests --enable-benchmarks --only-dependencies` combination
-
-      - if: steps.compiled-deps.outputs.cache-hit != 'true' && runner.os == 'Linux' && matrix.ghc == '8.10.7'
-        name: (For Bench workflow) Build benchmark targets
-        continue-on-error: true
-        #  Downloaded separately, to match the tested work/PR workflow guarantees
-        run: |
-          cabal $cabalBuild --enable-benchmarks || cabal $cabalBuild --enable-benchmarks || cabal $cabalBuild --enable-benchmarks
-
+      # but to cache what can be cached, so step is fault tolerant & would always succseed.
+      # 2021-12-11: NOTE: Building all targets, since
+      # current Cabal does not allow `all --enable-tests --enable-benchmarks --only-dependencies`
       - if: steps.compiled-deps.outputs.cache-hit != 'true'
-        name: Build targets; try 3 times
-        continue-on-error: true
-        # Done separately, matching the tested work/PR workflow guarantees
+        name: Build all targets; try 3 times
         run: |
-          cabal $cabalBuild --enable-test || cabal $cabalBuild --enable-test || cabal $cabalBuild --enable-test
+          cabal $cabalBuild || cabal $cabalBuild || cabal $cabalBuild
