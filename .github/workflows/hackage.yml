@@ -111,7 +111,7 @@ jobs:
           cd $(ls -d ./incoming/${{ matrix.package }}-*)
           # For brittany
           echo " butcher:base, multistate:base, data-tree-print:base," >> cabal.project
-          # For floskell and stylish-haskell
+          # For stylish-haskell
           echo " stylish-haskell:Cabal,stylish-haskell:ghc-lib-parser,stylish-haskell:aeson" >> cabal.project
 
       - name: "Build main package components in isolation"
