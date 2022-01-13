@@ -59,9 +59,6 @@ allow-newer:
   stylish-haskell:ghc-lib-parser,
   stylish-haskell:aeson,
 
-  floskell:base,
-  floskell:ghc-prim,
-
   -- ghc-9.0.2 specific
   -- for ghcide:test via ghc-typelits-knownnat
   ghc-typelits-natnormalise:ghc-bignum
