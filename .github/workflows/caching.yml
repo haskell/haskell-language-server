@@ -45,7 +45,7 @@ on:
     - cron: "25 2/8 * * *"
 
 env:
-  cabalBuild: "v2-build all --keep-going"
+  cabalBuild: "v2-build --keep-going"
 
 jobs:
 
