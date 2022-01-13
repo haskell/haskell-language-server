@@ -384,7 +384,7 @@ module Development.IDE.GHC.Compat.Core (
     module GHC.Types.Var,
     module GHC.Unit.Module,
     module GHC.Utils.Error,
-    module TcType
+    module TcType,
 #else
     module BasicTypes,
     module Class,
