@@ -94,7 +94,8 @@ runContinuation plId cont state (fc, b) = do
               , _xdata =  Nothing
               } ) $ do
       env@LspEnv{..} <- buildEnv state plId fc
-      let stale a = runStaleIde "runContinuation" state (fc_nfp le_fileContext) a
+      nfp <- getNfp $ fc_uri le_fileContext
+      let stale a = runStaleIde "runContinuation" state nfp a
       args <- fetchTargetArgs @a env
       res <- c_runCommand cont env args fc b
 
@@ -152,7 +153,8 @@ buildEnv
     -> MaybeT (LspM Plugin.Config) LspEnv
 buildEnv state plId fc = do
   cfg <- lift $ getTacticConfig plId
-  dflags <- mapMaybeT liftIO $ getIdeDynflags state $ fc_nfp fc
+  nfp <- getNfp $ fc_uri fc
+  dflags <- mapMaybeT liftIO $ getIdeDynflags state nfp
   pure $ LspEnv
     { le_ideState = state
     , le_pluginId = plId
@@ -174,22 +176,19 @@ codeActionProvider
        )
     -> PluginMethodHandler IdeState TextDocumentCodeAction
 codeActionProvider sort k state plId
-                   (CodeActionParams _ _ (TextDocumentIdentifier uri) range _)
-  | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
-      fromMaybeT (Right $ List []) $ do
-        let fc = FileContext
-                   { fc_uri   = uri
-                   , fc_nfp   = nfp
-                   , fc_range = Just $ unsafeMkCurrent range
-                   }
-        env <- buildEnv state plId fc
-        args <- fetchTargetArgs @target env
-        actions <- k env args
-        pure
-          $ Right
-          $ List
-          $ fmap (InR . uncurry (makeCodeAction plId fc sort)) actions
-codeActionProvider _ _ _ _ _ = pure $ Right $ List []
+                   (CodeActionParams _ _ (TextDocumentIdentifier uri) range _) = do
+  fromMaybeT (Right $ List []) $ do
+    let fc = FileContext
+                { fc_uri   = uri
+                , fc_range = Just $ unsafeMkCurrent range
+                }
+    env <- buildEnv state plId fc
+    args <- fetchTargetArgs @target env
+    actions <- k env args
+    pure
+      $ Right
+      $ List
+      $ fmap (InR . uncurry (makeCodeAction plId fc sort)) actions
 
 
 ------------------------------------------------------------------------------
@@ -204,12 +203,10 @@ codeLensProvider
       )
     -> PluginMethodHandler IdeState TextDocumentCodeLens
 codeLensProvider sort k state plId
-                 (CodeLensParams _ _ (TextDocumentIdentifier uri))
-  | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
+                 (CodeLensParams _ _ (TextDocumentIdentifier uri)) = do
       fromMaybeT (Right $ List []) $ do
         let fc = FileContext
                    { fc_uri   = uri
-                   , fc_nfp   = nfp
                    , fc_range = Nothing
                    }
         env <- buildEnv state plId fc
@@ -219,7 +216,6 @@ codeLensProvider sort k state plId
           $ Right
           $ List
           $ fmap (uncurry3 $ makeCodeLens plId sort fc) actions
-codeLensProvider _ _ _ _ _ = pure $ Right $ List []
 
 
 ------------------------------------------------------------------------------
