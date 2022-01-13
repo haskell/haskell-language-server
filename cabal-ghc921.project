@@ -6,9 +6,15 @@ packages:
          ./ghcide
          ./hls-plugin-api
          ./hls-test-utils
+<<<<<<< HEAD
          ./plugins/hls-tactics-plugin
          ./plugins/hls-brittany-plugin
          ./plugins/hls-stylish-haskell-plugin
+=======
+        --  ./plugins/hls-tactics-plugin
+        --  ./plugins/hls-brittany-plugin
+        --  ./plugins/hls-stylish-haskell-plugin
+>>>>>>> master
          ./plugins/hls-fourmolu-plugin
          ./plugins/hls-class-plugin
          ./plugins/hls-eval-plugin
@@ -58,11 +64,9 @@ constraints:
     -callhierarchy
     -class
     -eval
-    -fourmolu
     -haddockComments
     -hlint
     -moduleName
-    -ormolu
     -qualifyImportedNames
     -refineImports
     -retrie
