@@ -475,7 +475,7 @@ test-suite func-test
 -- formatters
   if flag(floskell) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
     cpp-options: -Dfloskell
-  if flag(fourmolu) && flag(ignore-plugins-ghc-bounds)
+  if flag(fourmolu)
     cpp-options: -Dfourmolu
   if flag(ormolu)
     cpp-options: -Dormolu
