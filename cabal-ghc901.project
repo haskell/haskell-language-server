@@ -63,7 +63,3 @@ allow-newer:
 
     floskell:base,
     floskell:ghc-prim,
-
-    -- for shake-bench
-    Chart-diagrams:diagrams-core,
-    SVGFonts:diagrams-core

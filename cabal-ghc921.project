@@ -81,44 +81,56 @@ constraints:
   primitive-unlifted ==0.1.3.1
 
 allow-newer:
-  Cabal,
-  base,
-  binary,
-  bytestring,
-  ghc,
-  ghc-bignum,
-  ghc-prim,
-  integer-gmp,
-  template-haskell,
-  text,
-  time,
+  -- base,
 
-  diagrams-postscript:lens,
-  diagrams-postscript:diagrams-core,
-  diagrams-postscript:monoid-extras,
-  dependent-sum:some,
-  dependent-sum:constraints,
-  diagrams:diagrams-core,
-  Chart-diagrams:diagrams-core,
-  SVGFonts:diagrams-core,
+  -- for shake-bench
+  Chart:lens,
+  Chart-diagrams:lens,
 
   -- for head.hackage
   primitive-unlifted:base,
 
+  brittany:ghc-boot,
   brittany:ghc-boot-th,
+  brittany:ghc,
   brittany:ghc-exactprint,
+  brittany:bytestring,
+  brittany:base,
+  -- https://github.com/lspitzner/multistate/pull/8
+  multistate:base,
+  -- https://github.com/lspitzner/data-tree-print/pull/3
+  data-tree-print:base,
+  -- https://github.com/lspitzner/butcher/pull/8
+  butcher:base,
 
   stylish-haskell:ghc-lib-parser,
+  stylish-haskell:Cabal,
+  stylish-haskell:bytestring,
+  stylish-haskell:aeson,
 
   ormolu:ghc-lib-parser,
 
   fourmolu:ghc-lib-parser,
+  fourmolu:Cabal,
 
   hls-hlint-plugin:ghc-lib,
   hls-hlint-plugin:ghc-lib-parser,
   hls-hlint-plugin:ghc-lib-parser-ex,
   hlint:ghc-lib-parser,
-  hlint:ghc-lib-parser-ex
+  hlint:ghc-lib-parser-ex,
+  -- See https://github.com/mpickering/apply-refact/pull/116
+  apply-refact:base,
+
+  implicit-hie-cradle:bytestring,
+  implicit-hie-cradle:time,
+
+  -- For tactics
+  ghc-source-gen:ghc,
+
+  -- for ghcide:test via ghc-typelits-knownnat
+  ghc-typelits-natnormalise:ghc-bignum,
+
+  hiedb:base
 
 allow-older:
   primitive-extras:primitive-unlifted
