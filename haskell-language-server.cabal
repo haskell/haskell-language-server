@@ -283,7 +283,7 @@ common qualifyImportedNames
 -- formatters
 
 common floskell
-  if flag(floskell) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(floskell) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-floskell-plugin ^>=1.0.0.0
     cpp-options: -Dfloskell
 
@@ -293,7 +293,7 @@ common fourmolu
     cpp-options: -Dfourmolu
 
 common ormolu
-  if flag(ormolu)
+  if flag(ormolu) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-ormolu-plugin ^>=1.0.0.0
     cpp-options: -Dormolu
 

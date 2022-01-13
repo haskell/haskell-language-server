@@ -58,7 +58,6 @@ constraints:
     -callhierarchy
     -class
     -eval
-    -floskell
     -fourmolu
     -haddockComments
     -hlint
