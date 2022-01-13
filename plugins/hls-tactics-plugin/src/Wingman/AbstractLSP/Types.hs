@@ -121,18 +121,12 @@ data Continuation sort target payload = Continuation
 -- | What file are we looking at, and what bit of it?
 data FileContext = FileContext
   { fc_uri      :: Uri
-  , fc_nfp      :: NormalizedFilePath
   , fc_range    :: Maybe (Tracked 'Current Range)
     -- ^ For code actions, this is 'Just'. For code lenses, you'll get
     -- a 'Nothing' in the request, and a 'Just' in the response.
   }
   deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (A.ToJSON, A.FromJSON)
-
-deriving anyclass instance A.ToJSON NormalizedFilePath
-deriving anyclass instance A.ToJSON NormalizedUri
-deriving anyclass instance A.FromJSON NormalizedFilePath
-deriving anyclass instance A.FromJSON NormalizedUri
 
 
 ------------------------------------------------------------------------------
@@ -162,10 +156,14 @@ class IsTarget t where
 data HoleTarget = HoleTarget
   deriving stock (Eq, Ord, Show, Enum, Bounded)
 
+getNfp :: Applicative m => Uri -> MaybeT m NormalizedFilePath
+getNfp = MaybeT . pure . uriToNormalizedFilePath . toNormalizedUri
+
 instance IsTarget HoleTarget where
   type TargetArgs HoleTarget = HoleJudgment
   fetchTargetArgs LspEnv{..} = do
     let FileContext{..} = le_fileContext
     range <- MaybeT $ pure fc_range
-    mapMaybeT liftIO $ judgementForHole le_ideState fc_nfp range le_config
+    nfp <- getNfp fc_uri
+    mapMaybeT liftIO $ judgementForHole le_ideState nfp range le_config
 

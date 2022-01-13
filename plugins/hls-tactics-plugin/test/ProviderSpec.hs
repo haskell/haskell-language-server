@@ -20,3 +20,9 @@ spec = do
     "T2" 8 8
     [ (not, Intros, "")
     ]
+
+  goldenTestMany "SubsequentTactics"
+    [ InvokeTactic Intros   ""   4  5
+    , InvokeTactic Destruct "du" 4  8
+    , InvokeTactic Auto     ""   4 15
+    ]
