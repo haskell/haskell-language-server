@@ -59,6 +59,7 @@ constraints:
     -eval
     -haddockComments
     -hlint
+    -moduleName
     -qualifyImportedNames
     -refineImports
     -retrie
