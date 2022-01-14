@@ -211,7 +211,7 @@ common class
     cpp-options: -Dclass
 
 common callHierarchy
-  if flag(callHierarchy) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(callHierarchy)
     build-depends: hls-call-hierarchy-plugin ^>=1.0.0.0
     cpp-options: -DcallHierarchy
 
@@ -256,7 +256,7 @@ common hlint
     cpp-options: -Dhlint
 
 common moduleName
-  if flag(moduleName)
+  if flag(moduleName) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-module-name-plugin ^>=1.0.0.0
     cpp-options: -DmoduleName
 
@@ -283,7 +283,7 @@ common qualifyImportedNames
 -- formatters
 
 common floskell
-  if flag(floskell) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(floskell)
     build-depends: hls-floskell-plugin ^>=1.0.0.0
     cpp-options: -Dfloskell
 

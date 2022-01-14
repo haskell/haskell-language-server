@@ -69,6 +69,7 @@ extra-deps:
 - process-1.6.13.2
 - time-1.12.1
 - unix-2.7.2.2
+- Win32-2.12.0.1
 
 # currently needed for ghcide>extra, etc.
 allow-newer: true
