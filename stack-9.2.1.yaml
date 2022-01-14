@@ -1,4 +1,4 @@
-resolver: nightly-2022-01-10
+resolver: nightly-2022-01-14
 compiler: ghc-9.2.1
 
 packages:
