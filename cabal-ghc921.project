@@ -55,7 +55,6 @@ constraints:
     +ignore-plugins-ghc-bounds
     -alternateNumberFormat
     -brittany
-    -callhierarchy
     -class
     -eval
     -haddockComments

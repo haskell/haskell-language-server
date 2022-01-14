@@ -211,7 +211,7 @@ common class
     cpp-options: -Dclass
 
 common callHierarchy
-  if flag(callHierarchy) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(callHierarchy)
     build-depends: hls-call-hierarchy-plugin ^>=1.0.0.0
     cpp-options: -DcallHierarchy
 
