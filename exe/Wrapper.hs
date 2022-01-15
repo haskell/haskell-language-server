@@ -1,15 +1,22 @@
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 -- | This module is based on the hie-wrapper.sh script in
 -- https://github.com/alanz/vscode-hie-server
 module Main where
 
 import           Control.Monad.Extra
+import           Control.Monad.IO.Class
+import           Control.Monad.Trans.Except
 import           Data.Default
 import           Data.Foldable
 import           Data.List
+import           Data.Maybe
+import qualified Data.Text                  as T
+import qualified Data.Text.IO               as T
 import           Data.Void
-import qualified Development.IDE.Session as Session
-import qualified HIE.Bios.Environment    as HieBios
+import qualified Development.IDE.Session    as Session
+import qualified HIE.Bios.Environment       as HieBios
 import           HIE.Bios.Types
 import           Ide.Arguments
 import           Ide.Version
@@ -20,6 +27,7 @@ import           System.FilePath
 import           System.IO
 import           System.Info
 import           System.Process
+import           WrapperLspMain
 
 -- ---------------------------------------------------------------------
 
@@ -46,9 +54,17 @@ main = do
       BiosMode PrintCradleType ->
           print =<< findProjectCradle
 
-      _ -> launchHaskellLanguageServer args
+      _ -> launchHaskellLanguageServer args >>= \case
+        Right () -> pure ()
+        Left err -> do
+          T.hPutStrLn stderr "*** Startup ERROR"
+          T.hPutStrLn stderr (prettyError err NoShorten)
+          case args of
+            Ghcide ghcideArguments -> lspMain ghcideArguments (prettyError err Shorten)
+            _ -> pure ()
 
-launchHaskellLanguageServer :: Arguments -> IO ()
+
+launchHaskellLanguageServer :: Arguments -> IO (Either WrapperSetupError ())
 launchHaskellLanguageServer parsedArgs = do
   case parsedArgs of
     Ghcide GhcideArguments{..} -> whenJust argsCwd setCurrentDirectory
@@ -64,7 +80,10 @@ launchHaskellLanguageServer parsedArgs = do
 
   case parsedArgs of
     Ghcide GhcideArguments{..} ->
-      when argsProjectGhcVersion $ getRuntimeGhcVersion' cradle >>= putStrLn >> exitSuccess
+      when argsProjectGhcVersion $ do
+        runExceptT (getRuntimeGhcVersion' cradle) >>= \case
+          Right ghcVersion -> putStrLn ghcVersion >> exitSuccess
+          Left err -> T.putStrLn (prettyError err NoShorten) >> exitFailure
     _ -> pure ()
 
   progName <- getProgName
@@ -83,51 +102,53 @@ launchHaskellLanguageServer parsedArgs = do
   hPutStrLn stderr ""
   -- Get the ghc version -- this might fail!
   hPutStrLn stderr "Consulting the cradle to get project GHC version..."
-  ghcVersion <- getRuntimeGhcVersion' cradle
-  hPutStrLn stderr $ "Project GHC version: " ++ ghcVersion
+  runExceptT (getRuntimeGhcVersion' cradle) >>= \case
+    Left err -> pure $ Left err
+    Right ghcVersion -> do
+      hPutStrLn stderr $ "Project GHC version: " ++ ghcVersion
 
-  let
-    hlsBin = "haskell-language-server-" ++ ghcVersion
-    candidates' = [hlsBin, "haskell-language-server"]
-    candidates = map (++ exeExtension) candidates'
+      let
+        hlsBin = "haskell-language-server-" ++ ghcVersion
+        candidates' = [hlsBin, "haskell-language-server"]
+        candidates = map (++ exeExtension) candidates'
 
-  hPutStrLn stderr $ "haskell-language-server exe candidates: " ++ show candidates
+      hPutStrLn stderr $ "haskell-language-server exe candidates: " ++ show candidates
 
-  mexes <- traverse findExecutable candidates
+      mexes <- traverse findExecutable candidates
 
-  case asum mexes of
-    Nothing -> hPutStrLn stderr $ "Cannot find any haskell-language-server exe, looked for: " ++ intercalate ", " candidates
-    Just e -> do
-      hPutStrLn stderr $ "Launching haskell-language-server exe at:" ++ e
-      callProcess e args
+      case asum mexes of
+        Nothing -> pure $ Left $ NoLanguageServer ghcVersion candidates
+        Just e -> do
+          hPutStrLn stderr $ "Launching haskell-language-server exe at:" ++ e
+          callProcess e args
+          pure $ Right ()
 
--- | Version of 'getRuntimeGhcVersion' that dies if we can't get it, and also
--- checks to see if the tool is missing if it is one of
-getRuntimeGhcVersion' :: Show a => Cradle a -> IO String
+-- | Version of 'getRuntimeGhcVersion' that throws a 'WrapperSetupError' if we
+-- can't get it, and also checks if run-time tool dependencies are missing.
+getRuntimeGhcVersion' :: Cradle Void -> ExceptT WrapperSetupError IO String
 getRuntimeGhcVersion' cradle = do
 
+  let cradleName = actionName (cradleOptsProg cradle)
   -- See if the tool is installed
-  case actionName (cradleOptsProg cradle) of
+  case cradleName of
     Stack   -> checkToolExists "stack"
     Cabal   -> checkToolExists "cabal"
     Default -> checkToolExists "ghc"
     Direct  -> checkToolExists "ghc"
     _       -> pure ()
 
-  ghcVersionRes <- HieBios.getRuntimeGhcVersion cradle
+  ghcVersionRes <- liftIO $ HieBios.getRuntimeGhcVersion cradle
   case ghcVersionRes of
     CradleSuccess ver -> do
       return ver
-    CradleFail error -> die $ "Failed to get project GHC version:" ++ show error
-    CradleNone -> die "Failed get project GHC version, since we have a none cradle"
+    CradleFail error -> throwE $ FailedToObtainGhcVersion cradleName error
+    CradleNone -> throwE $ NoneCradleGhcVersion cradleName
   where
     checkToolExists exe = do
-      exists <- findExecutable exe
+      exists <- liftIO $ findExecutable exe
       case exists of
         Just _ -> pure ()
-        Nothing ->
-          die $ "Cradle requires " ++ exe ++ " but couldn't find it" ++ "\n"
-           ++ show cradle
+        Nothing -> throwE $ ToolRequirementMissing exe (actionName (cradleOptsProg cradle))
 
 findProjectCradle :: IO (Cradle Void)
 findProjectCradle = do
@@ -142,3 +163,35 @@ findProjectCradle = do
     Nothing -> hPutStrLn stderr "No 'hie.yaml' found. Try to discover the project type!"
 
   Session.loadCradle def hieYaml d
+
+data WrapperSetupError
+    = FailedToObtainGhcVersion (ActionName Void) CradleError
+    | NoneCradleGhcVersion (ActionName Void)
+    | NoLanguageServer String [FilePath]
+    | ToolRequirementMissing String (ActionName Void)
+    deriving (Show)
+
+data Shorten = Shorten | NoShorten
+
+-- | Pretty error message displayable to the future.
+-- Extra argument 'Shorten' can be used to shorten error message.
+-- Reduces usefulness, but allows us to show the error message via LSP
+-- as LSP doesn't allow any newlines and makes it really hard to read
+-- the message otherwise.
+prettyError :: WrapperSetupError -> Shorten ->  T.Text
+prettyError (FailedToObtainGhcVersion name crdlError) shorten =
+  "Failed to find the GHC version of this " <> T.pack (show name) <> " project." <>
+  case shorten of
+    Shorten ->
+      "\n" <> T.pack (fromMaybe "" . listToMaybe $ cradleErrorStderr crdlError)
+    NoShorten ->
+      "\n" <> T.pack (intercalate "\n" (cradleErrorStderr crdlError))
+prettyError (NoneCradleGhcVersion name) _ =
+  "Failed to get the GHC version of the " <> T.pack (show name) <>
+  " project, since we have a none cradle"
+prettyError (NoLanguageServer ghcVersion candidates) _ =
+  "Failed to find a HLS version for GHC " <> T.pack ghcVersion <>
+  "\nExecutable names we failed to find: " <> T.pack (intercalate "," candidates)
+prettyError (ToolRequirementMissing toolExe name) _ =
+  "This is a " <> T.pack (show name) <> " Project, but we failed to find \"" <>
+  T.pack toolExe <> "\" on the $PATH"
