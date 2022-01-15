@@ -102,26 +102,22 @@ progressMessage =
       _ -> Nothing)
 
 interestingMessage :: Session a -> Session (InterestingMessage a)
-interestingMessage interestingMessage =
-  fmap InterestingMessage interestingMessage <|> fmap ProgressMessage progressMessage
+interestingMessage theMessage =
+  fmap InterestingMessage theMessage <|> fmap ProgressMessage progressMessage
 
-expectProgressMessagesTill :: Show a => Session a -> [Text] -> [ProgressToken] -> Session (a, [ProgressToken])
+expectProgressMessagesTill :: Session a -> [Text] -> [ProgressToken] -> Session (a, [ProgressToken])
 expectProgressMessagesTill stopMessage expectedTitles activeProgressTokens = do
   message <- skipManyTill anyMessage (interestingMessage stopMessage)
   case message of
     InterestingMessage a -> do
+      liftIO $ null expectedTitles @? "Expected titles not empty " <> show expectedTitles
       pure (a, activeProgressTokens)
-    ProgressMessage (ProgressCreate params) -> do
-      expectProgressMessagesTill stopMessage expectedTitles (getToken params : activeProgressTokens)
-    ProgressMessage (ProgressBegin params) -> do
-      liftIO $ getToken params `expectedIn` activeProgressTokens
-      expectProgressMessagesTill stopMessage (delete (getTitle params) expectedTitles) activeProgressTokens
-    ProgressMessage (ProgressReport params) -> do
-      liftIO $ getToken params `expectedIn` activeProgressTokens
-      expectProgressMessagesTill stopMessage expectedTitles activeProgressTokens
-    ProgressMessage (ProgressEnd params) -> do
-      liftIO $ getToken params `expectedIn` activeProgressTokens
-      expectProgressMessagesTill stopMessage expectedTitles (delete (getToken params) activeProgressTokens)
+    ProgressMessage progressMessage ->
+      updateExpectProgressStateAndRecurseWith
+        (expectProgressMessagesTill stopMessage)
+        progressMessage
+        expectedTitles
+        activeProgressTokens
 
 {- | Test that the server is correctly producing a sequence of progress related
  messages. Each create must be pair with a corresponding begin and end,
@@ -133,18 +129,26 @@ expectProgressMessages :: [Text] -> [ProgressToken] -> Session ()
 expectProgressMessages [] [] = pure ()
 expectProgressMessages expectedTitles activeProgressTokens = do
   message <- skipManyTill anyMessage progressMessage
-  case message of
+  updateExpectProgressStateAndRecurseWith expectProgressMessages message expectedTitles activeProgressTokens
+
+updateExpectProgressStateAndRecurseWith :: ([Text] -> [ProgressToken] -> Session a)
+                                        -> ProgressMessage
+                                        -> [Text]
+                                        -> [ProgressToken]
+                                        -> Session a
+updateExpectProgressStateAndRecurseWith f progressMessage expectedTitles activeProgressTokens = do
+  case progressMessage of
     ProgressCreate params -> do
-      expectProgressMessages expectedTitles (getToken params : activeProgressTokens)
+      f expectedTitles (getToken params : activeProgressTokens)
     ProgressBegin params -> do
       liftIO $ getToken params `expectedIn` activeProgressTokens
-      expectProgressMessages (delete (getTitle params) expectedTitles) activeProgressTokens
+      f (delete (getTitle params) expectedTitles) activeProgressTokens
     ProgressReport params -> do
       liftIO $ getToken params `expectedIn` activeProgressTokens
-      expectProgressMessages expectedTitles activeProgressTokens
+      f expectedTitles activeProgressTokens
     ProgressEnd params -> do
       liftIO $ getToken params `expectedIn` activeProgressTokens
-      expectProgressMessages expectedTitles (delete (getToken params) activeProgressTokens)
+      f expectedTitles (delete (getToken params) activeProgressTokens)
 
 getTitle :: (L.HasValue s a1, L.HasTitle a1 a2) => s -> a2
 getTitle msg = msg ^. L.value . L.title
