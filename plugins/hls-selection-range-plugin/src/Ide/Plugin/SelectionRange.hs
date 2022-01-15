@@ -4,42 +4,49 @@
 
 module Ide.Plugin.SelectionRange (descriptor) where
 
-import           Control.Monad.IO.Class               (liftIO)
-import           Control.Monad.Trans.Maybe            (MaybeT (MaybeT),
-                                                       runMaybeT)
-import           Data.Foldable                        (find)
-import qualified Data.Map.Strict                      as Map
-import           Data.Maybe                           (fromMaybe, mapMaybe)
-import           Development.IDE                      (GetHieAst (GetHieAst),
-                                                       HieAstResult (HAR, hieAst),
-                                                       IdeAction,
-                                                       IdeState (shakeExtras),
-                                                       Range (Range),
-                                                       fromNormalizedFilePath,
-                                                       realSrcSpanToRange,
-                                                       runIdeAction,
-                                                       toNormalizedFilePath',
-                                                       uriToFilePath')
-import           Development.IDE.Core.Actions         (useE)
-import           Development.IDE.Core.PositionMapping (PositionMapping,
-                                                       fromCurrentPosition,
-                                                       toCurrentRange)
-import           Development.IDE.GHC.Compat           (HieAST (Node), Span,
-                                                       getAsts)
-import           Development.IDE.GHC.Compat.Util      (mkFastString)
-import           Ide.Types                            (PluginDescriptor (pluginHandlers),
-                                                       PluginId,
-                                                       defaultPluginDescriptor,
-                                                       mkPluginHandler)
-import           Language.LSP.Server                  (LspM)
-import           Language.LSP.Types                   (List (List),
-                                                       NormalizedFilePath,
-                                                       Position, ResponseError,
-                                                       SMethod (STextDocumentSelectionRange),
-                                                       SelectionRange (..),
-                                                       SelectionRangeParams (..),
-                                                       TextDocumentIdentifier (TextDocumentIdentifier))
-import           Prelude                              hiding (span)
+import           Control.Monad.IO.Class                  (liftIO)
+import           Control.Monad.Reader                    (MonadReader (ask))
+import           Control.Monad.Trans.Maybe               (MaybeT (MaybeT),
+                                                          runMaybeT)
+import           Data.Foldable                           (find)
+import qualified Data.Map.Strict                         as Map
+import           Data.Maybe                              (fromMaybe, mapMaybe)
+import qualified Data.Text                               as T
+import           Development.IDE                         (GetHieAst (GetHieAst),
+                                                          HieAstResult (HAR, hieAst),
+                                                          IdeAction,
+                                                          IdeState (shakeExtras),
+                                                          Range (Range),
+                                                          fromNormalizedFilePath,
+                                                          logDebug,
+                                                          realSrcSpanToRange,
+                                                          runIdeAction,
+                                                          toNormalizedFilePath',
+                                                          uriToFilePath')
+import           Development.IDE.Core.Actions            (useE)
+import           Development.IDE.Core.PositionMapping    (PositionMapping,
+                                                          fromCurrentPosition,
+                                                          toCurrentRange)
+import           Development.IDE.Core.Shake              (ShakeExtras (ShakeExtras, logger))
+import           Development.IDE.GHC.Compat              (HieAST (Node, nodeChildren, nodeInfo),
+                                                          NodeInfo (nodeAnnotations),
+                                                          Span, getAsts)
+import           Development.IDE.GHC.Compat.Util         (mkFastString)
+import           Ide.Plugin.SelectionRange.ASTPreProcess (preProcessAST)
+import           Ide.Types                               (PluginDescriptor (pluginHandlers),
+                                                          PluginId,
+                                                          defaultPluginDescriptor,
+                                                          mkPluginHandler)
+import           Language.LSP.Server                     (LspM)
+import           Language.LSP.Types                      (List (List),
+                                                          NormalizedFilePath,
+                                                          Position,
+                                                          ResponseError,
+                                                          SMethod (STextDocumentSelectionRange),
+                                                          SelectionRange (..),
+                                                          SelectionRangeParams (..),
+                                                          TextDocumentIdentifier (TextDocumentIdentifier))
+import           Prelude                                 hiding (span)
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
@@ -62,8 +69,15 @@ getSelectionRanges file positions = fmap (fromMaybe []) <$> runMaybeT $ do
     (HAR{hieAst}, positionMapping) <- useE GetHieAst file
     positions' <- MaybeT . pure $ traverse (fromCurrentPosition positionMapping) positions
     ast <- MaybeT . pure $ getAsts hieAst Map.!? (mkFastString . fromNormalizedFilePath) file
+
+    -- FIXME: remove the debug logs when it's done
+    ShakeExtras{logger} <- ask
+    let children = nodeAnnotations . nodeInfo <$> nodeChildren ast
+    liftIO $ logDebug logger $ "children: " <> T.pack (show children)
+
+    let ast' = preProcessAST ast
     MaybeT . pure . traverse (toCurrentSelectionRange positionMapping) $
-        findSelectionRangesByPositions (astPathsLeafToRoot ast) positions'
+        findSelectionRangesByPositions (astPathsLeafToRoot ast') positions'
 
 -- | Like 'toCurrentPosition', but works on 'SelectionRange'
 toCurrentSelectionRange :: PositionMapping -> SelectionRange -> Maybe SelectionRange

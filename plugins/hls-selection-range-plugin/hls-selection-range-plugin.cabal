@@ -23,6 +23,8 @@ extra-source-files:
 library
   exposed-modules:
     Ide.Plugin.SelectionRange
+  other-modules:
+    Ide.Plugin.SelectionRange.ASTPreProcess
 
   ghc-options: -Wall
   hs-source-dirs: src
