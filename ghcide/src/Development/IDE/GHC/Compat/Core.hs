@@ -964,13 +964,13 @@ type PlainGhcException = Plain.GhcException
 #if MIN_VERSION_ghc(9,0,0)
 -- This is from the old api, but it still simplifies
 pattern ConPatIn :: SrcLoc.Located (ConLikeP GhcPs) -> HsConPatDetails GhcPs -> Pat GhcPs
-pattern ConPatIn con args = ConPat
 #if MIN_VERSION_ghc(9,2,0)
-    EpAnnNotUsed
+pattern ConPatIn con args <- ConPat EpAnnNotUsed (L _ (noLoc -> e)) con args
+  where
+    ConPatIn con args = ConPat EpAnnNotUsed (noLocA $ unLoc con)
 #else
-    NoExtField
+pattern ConPatIn con args = ConPat NoExtField con args
 #endif
-    con args
 #endif
 
 initDynLinker, initObjLinker :: HscEnv -> IO ()
