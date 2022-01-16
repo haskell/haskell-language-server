@@ -32,7 +32,6 @@ import           GHC.Types.Name
 #else
 import           Name
 #endif
-import           Debug.Trace
 import           Development.IDE.GHC.ExactPrint       (GetAnnotatedParsedSource (GetAnnotatedParsedSource))
 import           HieDb.Query
 import           Ide.Plugin.Config
@@ -52,16 +51,10 @@ renameProvider state pluginId (RenameParams (TextDocumentIdentifier uri) pos _pr
     response $ do
         nfp <- safeUriToNfp uri
         oldName <- getNameAtPos state nfp pos
-        traceM $ "oldName: " <> prettyPrint oldName
         workspaceRefs <- refsAtName state nfp oldName
-        traceM $ "workspaceRefs: " <> show workspaceRefs
         let filesRefs = groupOn locToUri workspaceRefs
             getFileEdits = ap (getSrcEdits state . renameModRefs newNameText) (locToUri . head)
-
-        traceM $ "\nfilesRefs: " <> show filesRefs
-
         fileEdits <- mapM getFileEdits filesRefs
-        traceM $ "\nfileEdits: " <> show fileEdits
         pure $ foldl' (<>) mempty fileEdits
 
 -------------------------------------------------------------------------------
