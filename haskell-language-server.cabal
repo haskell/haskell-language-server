@@ -259,7 +259,7 @@ common hlint
     cpp-options: -Dhlint
 
 common moduleName
-  if flag(moduleName) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(moduleName)
     build-depends: hls-module-name-plugin ^>=1.0.0.0
     cpp-options: -DmoduleName
 
