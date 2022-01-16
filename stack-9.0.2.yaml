@@ -108,7 +108,6 @@ flags:
   # Stack doesn't support automatic flags.
   hls-hlint-plugin:
     hlint33: true
-    ghc-lib: false
   hyphenation:
     embed: true
 
