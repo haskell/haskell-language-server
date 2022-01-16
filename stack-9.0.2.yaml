@@ -76,6 +76,9 @@ extra-deps:
 - unix-2.7.2.2
 - Win32-2.12.0.1
 
+# for ghcide test suite
+- ghc-typelits-knownnat-0.7.6
+
 # currently needed for ghcide>extra, etc.
 allow-newer: true
 
