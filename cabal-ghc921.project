@@ -26,6 +26,7 @@ packages:
          ./plugins/hls-ormolu-plugin
          ./plugins/hls-call-hierarchy-plugin
          ./plugins/hls-alternate-number-format-plugin
+         ./plugins/hls-selection-range-plugin
 
 repository head.hackage.ghc.haskell.org
    url: https://ghc.gitlab.haskell.org/head.hackage/
