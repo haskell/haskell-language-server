@@ -102,7 +102,7 @@ flags:
     importLens: false
     moduleName: true
     ormolu: false
-    qualifyImportedNames: false
+    qualifyImportedNames: true
     refineImports: false
     retrie: false
     splice: false
