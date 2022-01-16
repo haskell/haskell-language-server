@@ -44,8 +44,8 @@ on:
     #   & so it gets shared across all PRs.
     - cron: "25 2/8 * * *"
 
-# We build the main haskell-language-server which make build the rest of
-# subpackages *libs* (but shake-bench)
+# Not using a explicit target to build the top level haskell-language-server package
+# which make build the rest of subpackages *libs* (but shake-bench)
 env:
   cabalBuild: "v2-build --keep-going"
 
@@ -99,8 +99,8 @@ jobs:
           ghc: ${{ matrix.ghc }}
           os:  ${{ runner.os }}
 
-      # Download sources for feed build sources cache
-      # Fetching from github cache is faster than do it from hackage
+      # Download sources for feeding build sources cache
+      # Fetching from github cache is faster than doing it from hackage
       # Sources does not change per ghc and ghc version son only doing it
       # for one matrix job (it is arbitrary)
       - if: steps.compiled-deps.outputs.cache-hit != 'true' && runner.os == 'Linux' && matrix.ghc == '8.10.7'
@@ -108,14 +108,14 @@ jobs:
         run: |
           cabal $cabalBuild --only-download --enable-benchmarks --enable-tests
 
-      # This build agenda in not to have successful code but cache as much as possible
+      # This build agenda is not to have successful code but produce cache as much as possible
       - if: steps.compiled-deps.outputs.cache-hit != 'true'
         name: Build haskell-language-server
         run: |
           # repeating builds to workaround segfaults in windows and ghc-8.8.4
           cabal $cabalBuild || cabal $cabalBuild || cabal $cabalBuild
 
-      # We build ghcide with benchs and test enabled to include its dependencies in cache
+      # We build ghcide with benchs and test enabled to include its dependencies in the cache
       # (including shake-bench)
       # Only for the same ghc and os used in the bench workflow, so we save cache space
       - if: steps.compiled-deps.outputs.cache-hit != 'true' && runner.os == 'Linux' && matrix.ghc == '8.10.7'
