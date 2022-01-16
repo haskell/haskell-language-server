@@ -1,7 +1,10 @@
-{-# LANGUAGE CPP            #-}
-{-# LANGUAGE DataKinds      #-}
-{-# LANGUAGE GADTs          #-}
-{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE CPP                 #-}
+{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE GADTs               #-}
+{-# LANGUAGE NamedFieldPuns      #-}
+{-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications    #-}
 
 module Ide.Plugin.Rename (descriptor) where
 
@@ -11,7 +14,7 @@ import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Except
 import           Data.Containers.ListUtils
 import           Data.Generics
-import           Data.List.Extra                      hiding (nubOrd)
+import           Data.List.Extra                      hiding (nubOrd, replace)
 import qualified Data.Map                             as M
 import           Data.Maybe
 import qualified Data.Text                            as T
@@ -20,11 +23,16 @@ import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Spans.AtPoint
+#if MIN_VERSION_ghc(9,2,1)
+import           GHC.Parser.Annotation                (AnnContext, AnnList,
+                                                       AnnParen, AnnPragma)
+#endif
 #if MIN_VERSION_ghc(9,0,1)
 import           GHC.Types.Name
 #else
 import           Name
 #endif
+import           Development.IDE.GHC.ExactPrint       (GetAnnotatedParsedSource (GetAnnotatedParsedSource))
 import           HieDb.Query
 import           Ide.Plugin.Config
 import           Ide.PluginUtils
@@ -46,7 +54,6 @@ renameProvider state pluginId (RenameParams (TextDocumentIdentifier uri) pos _pr
         workspaceRefs <- refsAtName state nfp oldName
         let filesRefs = groupOn locToUri workspaceRefs
             getFileEdits = ap (getSrcEdits state . renameModRefs newNameText) (locToUri . head)
-
         fileEdits <- mapM getFileEdits filesRefs
         pure $ foldl' (<>) mempty fileEdits
 
@@ -67,14 +74,14 @@ getSrcEdits ::
 getSrcEdits state updateMod uri = do
     ccs <- lift getClientCapabilities
     nfp <- safeUriToNfp uri
-    ~ParsedModule{pm_parsed_source = ps, pm_annotations = apiAnns} <-
+    annotatedAst <-
         handleMaybeM "Error: could not get parsed source" $ liftIO $ runAction
             "Rename.GetParsedModuleWithComments"
             state
-            (use GetParsedModuleWithComments nfp)
+            (use GetAnnotatedParsedSource nfp)
+    let (ps, anns) = (astA annotatedAst, annsA annotatedAst)
 #if !MIN_VERSION_ghc(9,2,1)
-    let anns = relativiseApiAnns ps apiAnns
-        src = T.pack $ exactPrint ps anns
+    let src = T.pack $ exactPrint ps anns
         res = T.pack $ exactPrint (updateMod <$> ps) anns
 #else
     let src = T.pack $ exactPrint ps
@@ -94,12 +101,32 @@ renameModRefs ::
     HsModule GhcPs
     -> HsModule GhcPs
 #endif
+#if MIN_VERSION_ghc(9,2,1)
+renameModRefs newNameText refs = everywhere $
+    -- there has to be a better way...
+    mkT (replace @AnnListItem) `extT`
+    -- replace @AnnList `extT` -- not needed
+    -- replace @AnnParen `extT`   -- not needed
+    -- replace @AnnPragma `extT` -- not needed
+    -- replace @AnnContext `extT` -- not needed
+    -- replace @NoEpAnns `extT` -- not needed
+    replace @NameAnn
+    where
+        replace :: forall an. Typeable an => LocatedAn an RdrName -> LocatedAn an RdrName
+        replace (L srcSpan oldRdrName)
+            | isRef (locA srcSpan) = L srcSpan $ newRdrName oldRdrName
+        replace lOldRdrName = lOldRdrName
+#else
 renameModRefs newNameText refs = everywhere $ mkT replace
     where
         replace :: Located RdrName -> Located RdrName
         replace (L srcSpan oldRdrName)
             | isRef srcSpan = L srcSpan $ newRdrName oldRdrName
         replace lOldRdrName = lOldRdrName
+#endif
+
+        isRef :: SrcSpan -> Bool
+        isRef = (`elem` refs) . fromJust . srcSpanToLocation
 
         newRdrName :: RdrName -> RdrName
         newRdrName oldRdrName = case oldRdrName of
@@ -108,9 +135,8 @@ renameModRefs newNameText refs = everywhere $ mkT replace
 
         newOccName = mkTcOcc $ T.unpack newNameText
 
-        isRef :: SrcSpan -> Bool
-        isRef = (`elem` refs) . fromJust . srcSpanToLocation
-
+newRdrName :: RdrName -> RdrName
+newRdrName = error "not implemented"
 -------------------------------------------------------------------------------
 -- Reference finding
 
