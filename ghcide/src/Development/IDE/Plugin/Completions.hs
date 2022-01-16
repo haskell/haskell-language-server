@@ -239,11 +239,7 @@ extendImportHandler' ideState ExtendImport {..}
                   Just p  -> p <> "(" <> newThing <> ")"
             t <- liftMaybe $ snd <$> newImportToEdit
                 n
-#if !MIN_VERSION_ghc(9,2,0)
                 (astA ps)
-#else
-                ps
-#endif
                 (fromMaybe "" contents)
             return (nfp, WorkspaceEdit {_changes=Just (fromList [(doc,List [t])]), _documentChanges=Nothing, _changeAnnotations=Nothing})
   | otherwise =
