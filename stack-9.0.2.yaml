@@ -68,6 +68,10 @@ extra-deps:
 - primitive-unlifted-0.1.3.1
 - primitive-extras-0.10.1.4
 
+# for ghcide test suite
+- ghc-typelits-knownnat-0.7.6
+- ghc-typelits-natnormalise-0.7.6
+
 # boot libraries
 - Cabal-3.4.1.0
 - directory-1.3.6.2
@@ -75,10 +79,6 @@ extra-deps:
 - time-1.9.3
 - unix-2.7.2.2
 - Win32-2.12.0.1
-
-# for ghcide test suite
-- ghc-typelits-knownnat-0.7.6
-- ghc-typelits-natnormalise-0.7.6
 
 # currently needed for ghcide>extra, etc.
 allow-newer: true
