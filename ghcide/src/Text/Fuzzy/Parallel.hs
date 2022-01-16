@@ -132,7 +132,7 @@ parVectorChunk chunkSize st v =
 chunkVector :: Int -> Vector a -> [Vector a]
 chunkVector chunkSize v = do
     let indices = chunkIndices chunkSize (0,V.length v)
-    [V.slice l (h-l) v | (l,h) <- indices]
+    [V.slice l (h-l+1) v | (l,h) <- indices]
 
 -- >>> chunkIndices 3 (0,9)
 -- >>> chunkIndices 3 (0,10)
