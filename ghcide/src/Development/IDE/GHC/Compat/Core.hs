@@ -541,6 +541,7 @@ import           GHC.Parser.Header            hiding (getImports)
 import qualified GHC.Linker.Loader            as Linker
 import           GHC.Linker.Types
 import           GHC.Parser.Lexer             hiding (initParserState)
+import           GHC.Parser.Annotation        (EpAnn (..))
 import           GHC.Platform.Ways
 import           GHC.Runtime.Context          (InteractiveImport (..))
 #else
@@ -963,7 +964,13 @@ type PlainGhcException = Plain.GhcException
 #if MIN_VERSION_ghc(9,0,0)
 -- This is from the old api, but it still simplifies
 pattern ConPatIn :: SrcLoc.Located (ConLikeP GhcPs) -> HsConPatDetails GhcPs -> Pat GhcPs
-pattern ConPatIn con args = ConPat NoExtField con args
+pattern ConPatIn con args = ConPat
+#if MIN_VERSION_ghc(9,0,2)
+    EpAnnNotUsed
+#else
+    NoExtField
+#endif
+    con args
 #endif
 
 initDynLinker, initObjLinker :: HscEnv -> IO ()
