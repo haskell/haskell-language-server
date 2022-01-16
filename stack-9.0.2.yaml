@@ -78,6 +78,7 @@ extra-deps:
 
 # for ghcide test suite
 - ghc-typelits-knownnat-0.7.6
+- ghc-typelits-natnormalise-0.7.6
 
 # currently needed for ghcide>extra, etc.
 allow-newer: true
