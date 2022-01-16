@@ -965,7 +965,7 @@ type PlainGhcException = Plain.GhcException
 -- This is from the old api, but it still simplifies
 pattern ConPatIn :: SrcLoc.Located (ConLikeP GhcPs) -> HsConPatDetails GhcPs -> Pat GhcPs
 #if MIN_VERSION_ghc(9,2,0)
-pattern ConPatIn con args <- ConPat EpAnnNotUsed (L _ (noLoc -> e)) con args
+pattern ConPatIn con args <- ConPat EpAnnNotUsed (L _ (noLoc -> con)) args
   where
     ConPatIn con args = ConPat EpAnnNotUsed (noLocA $ unLoc con)
 #else
