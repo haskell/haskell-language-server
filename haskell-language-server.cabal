@@ -14,7 +14,7 @@ copyright:          The Haskell IDE Team
 license:            Apache-2.0
 license-file:       LICENSE
 build-type:         Simple
-tested-with:        GHC == 8.6.5 || == 8.8.4 || == 8.10.6 || == 8.10.7 || == 9.0.1
+tested-with:        GHC == 8.6.5 || == 8.8.4 || == 8.10.6 || == 8.10.7 || == 9.0.1 || == 9.0.2 || == 9.2.1
 extra-source-files:
   README.md
   ChangeLog.md
@@ -93,6 +93,9 @@ library
 -- - Bulk flags should be default:False
 -- - Individual flags should be default:True
 
+-- The intent of this flag is being able to keep the ghc condition for hackage
+-- but skip it via flags in cabal.project as plugins for new ghcs usually
+-- are buildable using cabal.project tweaks
 flag ignore-plugins-ghc-bounds
   description: Force the inclusion of plugins even if they are not buildable by default with a specific ghc version
   default:     False
@@ -211,7 +214,7 @@ common class
     cpp-options: -Dclass
 
 common callHierarchy
-  if flag(callHierarchy) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(callHierarchy)
     build-depends: hls-call-hierarchy-plugin ^>=1.0.0.0
     cpp-options: -DcallHierarchy
 
@@ -283,12 +286,12 @@ common qualifyImportedNames
 -- formatters
 
 common floskell
-  if flag(floskell) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(floskell)
     build-depends: hls-floskell-plugin ^>=1.0.0.0
     cpp-options: -Dfloskell
 
 common fourmolu
-  if flag(fourmolu) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(fourmolu)
     build-depends: hls-fourmolu-plugin ^>=1.0.0.0
     cpp-options: -Dfourmolu
 
@@ -475,7 +478,7 @@ test-suite func-test
 -- formatters
   if flag(floskell) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
     cpp-options: -Dfloskell
-  if flag(fourmolu) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(fourmolu)
     cpp-options: -Dfourmolu
   if flag(ormolu)
     cpp-options: -Dormolu

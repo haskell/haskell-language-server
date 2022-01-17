@@ -16,8 +16,8 @@ variables:
       CABAL_PROJECT: cabal.project
     - GHC_VERSION: 8.10.7
       CABAL_PROJECT: cabal.project
-    - GHC_VERSION: 9.0.1
-      CABAL_PROJECT: cabal-ghc901.project
+    - GHC_VERSION: 9.0.2
+      CABAL_PROJECT: cabal-ghc90.project
 
 .m1_matrix: &m1_matrix
   matrix:
@@ -284,4 +284,3 @@ tar-x86_64-windows:
   variables:
     TARBALL_ARCHIVE_SUFFIX: x86_64-windows
     TARBALL_EXT: zip
-

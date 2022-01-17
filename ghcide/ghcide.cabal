@@ -13,7 +13,7 @@ description:
     A library for building Haskell IDE's on top of the GHC API.
 homepage:           https://github.com/haskell/haskell-language-server/tree/master/ghcide#readme
 bug-reports:        https://github.com/haskell/haskell-language-server/issues
-tested-with:        GHC == 8.6.5 || == 8.8.4 || == 8.10.6 || == 8.10.7 || == 9.0.1
+tested-with:        GHC == 8.6.5 || == 8.8.4 || == 8.10.6 || == 8.10.7 || == 9.0.1 || == 9.0.2 || == 9.2.1
 extra-source-files: README.md CHANGELOG.md
                     test/data/**/*.project
                     test/data/**/*.cabal
@@ -107,7 +107,7 @@ library
         ghc-paths,
         cryptohash-sha1 >=0.11.100 && <0.12,
         hie-bios >= 0.8 && < 0.9.0,
-        implicit-hie-cradle >= 0.3.0.5 && < 0.4,
+        implicit-hie-cradle ^>= 0.3.0.5 || ^>= 0.5,
         base16-bytestring >=0.1.1 && <1.1
     if os(windows)
       build-depends:
