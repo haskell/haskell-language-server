@@ -27,8 +27,6 @@ packages:
          ./plugins/hls-call-hierarchy-plugin
          ./plugins/hls-alternate-number-format-plugin
 
-with-compiler: ghc-9.0.1
-
 tests: true
 
 package *
@@ -37,7 +35,7 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2022-01-10T17:57:05Z
+index-state: 2022-01-11T22:05:45Z
 
 constraints:
   -- These plugins don't work on GHC9 yet
@@ -49,17 +47,18 @@ constraints:
 -- this way we track explicitly all transitive dependencies which need support for ghc-9
 allow-newer:
 
-    -- brittany: update ghc bounds in hls.cabal when those are removed
-    -- https://github.com/lspitzner/multistate/pull/8
-    multistate:base,
-    -- https://github.com/lspitzner/data-tree-print/pull/3
-    data-tree-print:base,
-    -- https://github.com/lspitzner/butcher/pull/8
-    butcher:base,
+  -- brittany: update ghc bounds in hls.cabal when those are removed
+  -- https://github.com/lspitzner/multistate/pull/8
+  multistate:base,
+  -- https://github.com/lspitzner/data-tree-print/pull/3
+  data-tree-print:base,
+  -- https://github.com/lspitzner/butcher/pull/8
+  butcher:base,
 
-    stylish-haskell:Cabal,
-    stylish-haskell:ghc-lib-parser,
-    stylish-haskell:aeson,
+  stylish-haskell:Cabal,
+  stylish-haskell:ghc-lib-parser,
+  stylish-haskell:aeson,
 
-    floskell:base,
-    floskell:ghc-prim,
+  -- ghc-9.0.2 specific
+  -- for ghcide:test via ghc-typelits-knownnat
+  ghc-typelits-natnormalise:ghc-bignum

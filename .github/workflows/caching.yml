@@ -44,8 +44,10 @@ on:
     #   & so it gets shared across all PRs.
     - cron: "25 2/8 * * *"
 
+# Not using a explicit target to build the top level haskell-language-server package
+# which make build the rest of subpackages *libs* (but shake-bench)
 env:
-  cabalBuild: "v2-build all --keep-going"
+  cabalBuild: "v2-build --keep-going"
 
 jobs:
 
@@ -77,6 +79,7 @@ jobs:
       fail-fast: false
       matrix:
         ghc: [ "9.2.1"
+             , "9.0.2"
              , "9.0.1"
              , "8.10.7"
              , "8.10.6"
@@ -96,24 +99,26 @@ jobs:
           ghc: ${{ matrix.ghc }}
           os:  ${{ runner.os }}
 
+      # Download sources for feeding build sources cache
+      # Fetching from github cache is faster than doing it from hackage
+      # Sources does not change per ghc and ghc version son only doing it
+      # for one matrix job (it is arbitrary)
       - if: steps.compiled-deps.outputs.cache-hit != 'true' && runner.os == 'Linux' && matrix.ghc == '8.10.7'
-        name: Download sources for bench
-        #  Downloaded separately, to match the tested work/PR workflow guarantees
+        name: Download sources
         run: |
-          cabal $cabalBuild --only-download --enable-benchmarks
+          cabal $cabalBuild --only-download --enable-benchmarks --enable-tests
 
+      # This build agenda is not to have successful code but produce cache as much as possible
       - if: steps.compiled-deps.outputs.cache-hit != 'true'
-        name: Download the rest of the sources
-        #  Downloaded separately, to match the tested work/PR workflow guarantees
+        name: Build haskell-language-server
         run: |
-          cabal $cabalBuild --only-download --enable-tests
-
-      # repeating builds to workaround segfaults in windows and ghc-8.8.4
-      # This build agenda in not to have successful code,
-      # but to cache what can be cached, so step is fault tolerant & would always succseed.
-      # 2021-12-11: NOTE: Building all targets, since
-      # current Cabal does not allow `all --enable-tests --enable-benchmarks --only-dependencies`
-      - if: steps.compiled-deps.outputs.cache-hit != 'true'
-        name: Build all targets; try 3 times
-        run: |
+          # repeating builds to workaround segfaults in windows and ghc-8.8.4
           cabal $cabalBuild || cabal $cabalBuild || cabal $cabalBuild
+
+      # We build ghcide with benchs and test enabled to include its dependencies in the cache
+      # (including shake-bench)
+      # Only for the same ghc and os used in the bench workflow, so we save cache space
+      - if: steps.compiled-deps.outputs.cache-hit != 'true' && runner.os == 'Linux' && matrix.ghc == '8.10.7'
+        name: Build ghcide benchmark
+        run: |
+          cabal $cabalBuild ghcide --enable-benchmarks --enable-tests
