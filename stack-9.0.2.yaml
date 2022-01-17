@@ -20,7 +20,7 @@ packages:
 - ./plugins/hls-retrie-plugin
 - ./plugins/hls-splice-plugin
 # - ./plugins/hls-tactics-plugin
-# - ./plugins/hls-brittany-plugin
+- ./plugins/hls-brittany-plugin
 # - ./plugins/hls-stylish-haskell-plugin
 - ./plugins/hls-floskell-plugin
 - ./plugins/hls-fourmolu-plugin
@@ -101,7 +101,6 @@ flags:
     ignore-plugins-ghc-bounds: true
     tactic: false # Dependencies fail
     stylishHaskell: false
-    brittany: false
 
   retrie:
     BuildExecutable: false
