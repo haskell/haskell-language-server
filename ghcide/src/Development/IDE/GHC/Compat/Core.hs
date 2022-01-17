@@ -379,8 +379,6 @@ module Development.IDE.GHC.Compat.Core (
     module GHC.Types.SourceText,
     module GHC.Types.TyThing,
     module GHC.Types.TyThing.Ppr,
-#else
-    module TcType,
 #endif
     module GHC.Types.Unique.Supply,
     module GHC.Types.Var,
