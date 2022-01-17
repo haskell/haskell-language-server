@@ -42,7 +42,7 @@ import           Development.IDE.GHC.Compat        (ContextInfo (Use),
                                                     SrcSpan,
                                                     TcGblEnv (tcg_rdr_env),
                                                     emptyUFM, globalRdrEnvElts,
-                                                    gre_imp, gre_name,
+                                                    gre_imp, gre_name, locA,
                                                     lookupNameEnv,
                                                     moduleNameString,
                                                     nameOccName, occNameString,
@@ -96,8 +96,7 @@ findLImportDeclAt range parsedModule
   | ParsedModule {..} <- parsedModule
   , L _ hsModule <- pm_parsed_source
   , locatedImportDecls <- hsmodImports hsModule =
-      find (\ (L srcSpan _) -> isRangeWithinSrcSpan range srcSpan) locatedImportDecls
-  | otherwise = Nothing
+      find (\ (L (locA -> srcSpan) _) -> isRangeWithinSrcSpan range srcSpan) locatedImportDecls
 
 makeCodeActions :: Uri -> [TextEdit] -> [a |? CodeAction]
 makeCodeActions uri textEdits = [InR CodeAction {..} | not (null textEdits)]
