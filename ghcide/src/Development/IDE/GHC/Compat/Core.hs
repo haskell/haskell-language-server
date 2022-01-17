@@ -131,8 +131,8 @@ module Development.IDE.GHC.Compat.Core (
       ),
     pattern FunTy,
     pattern ConPatIn,
-    Development.IDE.GHC.Compat.Core.splitForAllTyCoVars,
 #if !MIN_VERSION_ghc(9,0,0)
+    Development.IDE.GHC.Compat.Core.splitForAllTyCoVars,
     Development.IDE.GHC.Compat.Core.mkVisFunTys,
     Development.IDE.GHC.Compat.Core.mkInfForAllTys,
 #endif
@@ -379,12 +379,13 @@ module Development.IDE.GHC.Compat.Core (
     module GHC.Types.SourceText,
     module GHC.Types.TyThing,
     module GHC.Types.TyThing.Ppr,
+#else
+    module TcType,
 #endif
     module GHC.Types.Unique.Supply,
     module GHC.Types.Var,
     module GHC.Unit.Module,
     module GHC.Utils.Error,
-    module TcType,
 #else
     module BasicTypes,
     module Class,
