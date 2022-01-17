@@ -131,8 +131,10 @@ module Development.IDE.GHC.Compat.Core (
       ),
     pattern FunTy,
     pattern ConPatIn,
-#if !MIN_VERSION_ghc(9,0,0)
+#if !MIN_VERSION_ghc(9,2,0)
     Development.IDE.GHC.Compat.Core.splitForAllTyCoVars,
+#endif
+#if !MIN_VERSION_ghc(9,0,0)
     Development.IDE.GHC.Compat.Core.mkVisFunTys,
     Development.IDE.GHC.Compat.Core.mkInfForAllTys,
 #endif
