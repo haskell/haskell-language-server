@@ -42,6 +42,7 @@ extra-deps:
 - dependent-sum-0.7.1.0
 - extra-1.7.10
 - fourmolu-0.5.0.0
+- ghc-exactprint-1.4.1
 - ghc-lib-9.2.1.20220109
 - ghc-lib-parser-9.2.1.20220109
 - ghc-lib-parser-ex-9.2.0.1
