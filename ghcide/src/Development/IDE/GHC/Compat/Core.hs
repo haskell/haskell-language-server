@@ -134,10 +134,8 @@ module Development.IDE.GHC.Compat.Core (
 #if !MIN_VERSION_ghc(9,2,0)
     Development.IDE.GHC.Compat.Core.splitForAllTyCoVars,
 #endif
-#if !MIN_VERSION_ghc(9,0,0)
     Development.IDE.GHC.Compat.Core.mkVisFunTys,
     Development.IDE.GHC.Compat.Core.mkInfForAllTys,
-#endif
     -- * Specs
     ImpDeclSpec(..),
     ImportSpec(..),
@@ -903,7 +901,7 @@ mkInfForAllTys =
 #if MIN_VERSION_ghc(9,0,0)
   TcType.mkInfForAllTys
 #else
-  mkInfForAllTys
+  mkInvForAllTys
 #endif
 
 #if !MIN_VERSION_ghc(9,2,0)
