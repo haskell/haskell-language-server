@@ -49,6 +49,7 @@ extra-deps:
 - monad-dijkstra-0.1.1.3
 - multistate-0.8.0.3
 - retrie-1.1.0.0
+- refinery-0.4.0.0
 
 # shake-bench dependencies
 - Chart-1.9.3
