@@ -187,7 +187,7 @@ If you don't want to use [nix](https://nixos.org/guides/install-nix.html), you c
       "hooks": [
         {
           "entry": "stylish-haskell --inplace",
-          "exclude": "(^Setup.hs$|test/testdata/.*$|test/data/.*$|test/manual/lhs/.*$|^hie-compat/.*$|^plugins/hls-tactics-plugin/.*$|^ghcide/src/Development/IDE/GHC/Compat.hs$|^plugins/hls-splice-plugin/src/Ide/Plugin/Splice.hs$|^ghcide/test/exe/Main.hs$|ghcide/src/Development/IDE/Core/Rules.hs|^hls-test-utils/src/Test/Hls/Util.hs$)"
+          "exclude": "(^Setup.hs$|test/testdata/.*$|test/data/.*$|test/manual/lhs/.*$|^hie-compat/.*$|^plugins/hls-tactics-plugin/.*$|^ghcide/src/Development/IDE/GHC/Compat.hs$|^plugins/hls-splice-plugin/src/Ide/Plugin/Splice.hs$|^ghcide/test/exe/Main.hs$|ghcide/src/Development/IDE/Core/Rules.hs|^hls-test-utils/src/Test/Hls/Util.hs$)",
           "files": "\\.l?hs$",
           "id": "stylish-haskell",
           "language": "system",
