@@ -84,7 +84,7 @@ newHscEnvEqWithImportPaths envImportPaths hscEnv deps = do
                         -- When module is re-exported from another package,
                         -- the origin module is represented by value in Just
                         Just otherPkgMod -> otherPkgMod
-                        Nothing -> mkModule (unitInfoId pkg) modName
+                        Nothing          -> mkModule (unitInfoId pkg) modName
                 ]
 
             doOne m = do

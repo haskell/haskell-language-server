@@ -2,7 +2,7 @@
 
 module Paths_hls_graph(getDataDir, version) where
 
-import Data.Version.Extra
+import           Data.Version.Extra
 
 -- If hls_graph can't find files in the data directory it tries relative to the executable
 getDataDir :: IO FilePath
