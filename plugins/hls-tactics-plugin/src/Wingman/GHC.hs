@@ -21,6 +21,10 @@ import           Generics.SYB (Data, everything, everywhere, listify, mkQ, mkT)
 import           Wingman.StaticPlugin (pattern MetaprogramSyntax)
 import           Wingman.Types
 
+#if __GLASGOW_HASKELL__ >= 900
+import GHC.Tc.Utils.TcType
+#endif
+
 
 tcTyVar_maybe :: Type -> Maybe Var
 tcTyVar_maybe ty | Just ty' <- tcView ty = tcTyVar_maybe ty'

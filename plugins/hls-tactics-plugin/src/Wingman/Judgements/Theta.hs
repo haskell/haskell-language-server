@@ -26,6 +26,10 @@ import           GHC.Generics
 import           Wingman.GHC
 import           Wingman.Types
 
+#if __GLASGOW_HASKELL__ >= 900
+import GHC.Tc.Utils.TcType
+#endif
+
 
 ------------------------------------------------------------------------------
 -- | Something we've learned about the type environment.
