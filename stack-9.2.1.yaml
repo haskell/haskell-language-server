@@ -100,9 +100,7 @@ flags:
     haddockComments: false
     hlint: false
     importLens: false
-    moduleName: true
     ormolu: false
-    qualifyImportedNames: true
     refineImports: false
     retrie: false
     splice: false
