@@ -42,6 +42,9 @@ extra-deps:
 - dependent-sum-0.7.1.0
 - extra-1.7.10
 - fourmolu-0.5.0.0
+- ghc-lib-9.2.1.20220109
+- ghc-lib-parser-9.2.1.20220109
+- ghc-lib-parser-ex-9.2.0.1
 - hspec-2.7.10       # for hls-test-utils
 - hspec-core-2.7.10  # for hls-test-utils
 - some-1.0.2         # for dependent-sum, https://github.com/obsidiansystems/dependent-sum/issues/66
