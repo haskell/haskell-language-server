@@ -134,9 +134,6 @@ renameModRefs newNameText refs = everywhere $ mkT replace
             _              -> Unqual newOccName
 
         newOccName = mkTcOcc $ T.unpack newNameText
-
-newRdrName :: RdrName -> RdrName
-newRdrName = error "not implemented"
 -------------------------------------------------------------------------------
 -- Reference finding
 
