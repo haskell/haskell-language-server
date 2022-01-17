@@ -17,7 +17,7 @@ packages:
 - ./plugins/hls-qualify-imported-names-plugin
 # - ./plugins/hls-refine-imports-plugin
 # - ./plugins/hls-hlint-plugin
-# - ./plugins/hls-rename-plugin
+- ./plugins/hls-rename-plugin
 # - ./plugins/hls-retrie-plugin
 # - ./plugins/hls-splice-plugin
 # - ./plugins/hls-tactics-plugin
