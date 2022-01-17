@@ -1,4 +1,4 @@
-resolver: nightly-2021-12-26
+resolver: nightly-2022-01-04
 
 packages:
 - .
@@ -30,7 +30,7 @@ packages:
 - ./plugins/hls-alternate-number-format-plugin
 
 extra-deps:
-- aeson-2.0.2.0
+- aeson-2.0.3.0
 - brittany-0.14.0.0
 - butcher-1.3.3.2
 - bytestring-encoding-0.1.1.0
@@ -41,7 +41,6 @@ extra-deps:
 - hspec-2.7.10       # for hls-test-utils
 - hspec-core-2.7.10  # for hls-test-utils
 - some-1.0.2         # for dependent-sum, https://github.com/obsidiansystems/dependent-sum/issues/66
-- dependent-sum-template-0.1.1.1
 - floskell-0.10.6
 - heapsize-0.3.0.1
 - hiedb-0.4.1.0
@@ -50,10 +49,6 @@ extra-deps:
 - monad-dijkstra-0.1.1.3
 - multistate-0.8.0.3
 - retrie-1.1.0.0
-- lsp-1.4.0.0
-- lsp-test-0.14.0.2
-- lsp-types-1.4.0.0
-- refinery-0.4.0.0
 
 # shake-bench dependencies
 - Chart-1.9.3
