@@ -18,6 +18,8 @@ You can watch demos for some of these features [below](#demos).
 - [Call hierarchy support](#call-hierarchy)
 - [Qualify names from an import declaration](#qualify-imported-names) in your code
 - [Suggest alternate numeric formats](#alternate-number-formatting)
+- [Renaming](#renaming) definitions automatically across modules of *the same component* (library, executable, test suite, benchmark).
+  - Full renaming support for the entire project is being tracked in [this issue](https://github.com/haskell/haskell-language-server/issues/2193)
 
 ## Demos
 
@@ -56,3 +58,7 @@ You can watch demos for some of these features [below](#demos).
 ### Alternate Number Formatting
 
 ![Alternate Number Format Demo](../plugins/hls-alternate-number-format-plugin/HLSAll.gif)
+
+### Renaming
+
+![Rename Demo](https://user-images.githubusercontent.com/30090176/133072143-d7d03ec7-3db1-474e-ad5e-6f40d75ff7ab.gif)
