@@ -29,6 +29,8 @@ packages:
 
 tests: true
 
+flags: +pedantic
+
 package *
   ghc-options: -haddock
   test-show-details: direct
