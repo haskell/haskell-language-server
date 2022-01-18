@@ -22,7 +22,6 @@ import           GHC.Conc                      (TVar, atomically)
 #endif
 #if __GLASGOW_HASKELL__ < 880
 import           Control.Monad.Fail
-import           Prelude                       hiding (MonadFail)
 #endif
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Reader
