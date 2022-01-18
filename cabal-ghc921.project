@@ -31,8 +31,6 @@ with-compiler: ghc-9.2.1
 
 tests: true
 
-flags: +pedantic
-
 package *
   ghc-options: -haddock
   test-show-details: direct
