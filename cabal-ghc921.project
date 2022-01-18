@@ -59,7 +59,6 @@ constraints:
     -eval
     -haddockComments
     -hlint
-    -refineImports
     -retrie
     -splice
     -stylishhaskell
