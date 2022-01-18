@@ -57,16 +57,10 @@ jobs:
           os:  ${{ runner.os }}
 
       - name: Build `hls-graph` with flags
-        run: cabal v2-build hls-graph --flags="pedantic embed-files stm-stats"
+        run: cabal v2-build hls-graph --flags="embed-files stm-stats"
 
       - name: Build `hie-compat` with flags
         run: cabal v2-build hie-compat --flags="ghc-lib"
-
-      - name: Build `hls-plugin-api` with flags
-        run: cabal v2-build hls-plugin-api --flags="pedantic"
-
-      - name: Build `hls-test-utils` with flags
-        run: cabal v2-build hls-test-utils --flags="pedantic"
 
       - name: Build
         run: cabal v2-build ghcide --flags="ghc-patched-unboxed-bytecode test-exe executable bench-exe"
