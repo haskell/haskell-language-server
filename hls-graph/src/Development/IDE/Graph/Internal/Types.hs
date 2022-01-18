@@ -14,14 +14,13 @@ module Development.IDE.Graph.Internal.Types where
 
 import           Control.Applicative
 import           Control.Monad.Catch
-#if __GLASGOW_HASKELL__ < 870
+#if __GLASGOW_HASKELL__ < 808
 -- Needed in GHC 8.6.5
 import           Control.Concurrent.STM.Stats  (TVar, atomically)
+import           Control.Monad.Fail
+import           Prelude                       hiding (MonadFail)
 #else
 import           GHC.Conc                      (TVar, atomically)
-#endif
-#if __GLASGOW_HASKELL__ < 880
-import           Control.Monad.Fail
 #endif
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Reader
