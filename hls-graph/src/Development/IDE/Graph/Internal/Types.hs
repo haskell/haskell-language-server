@@ -18,7 +18,6 @@ import           Control.Monad.Catch
 -- Needed in GHC 8.6.5
 import           Control.Concurrent.STM.Stats  (TVar, atomically)
 import           Control.Monad.Fail
-import           Prelude                       hiding (MonadFail)
 #else
 import           GHC.Conc                      (TVar, atomically)
 #endif
