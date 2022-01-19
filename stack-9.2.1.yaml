@@ -20,7 +20,7 @@ packages:
 - ./plugins/hls-rename-plugin
 # - ./plugins/hls-retrie-plugin
 # - ./plugins/hls-splice-plugin
-# - ./plugins/hls-tactics-plugin
+- ./plugins/hls-tactics-plugin
 # - ./plugins/hls-brittany-plugin
 # - ./plugins/hls-stylish-haskell-plugin
 - ./plugins/hls-floskell-plugin
@@ -119,7 +119,6 @@ flags:
     retrie: false
     splice: false
     stylishhaskell: false
-    tactic: false
 
   retrie:
     BuildExecutable: false
