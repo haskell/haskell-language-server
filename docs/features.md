@@ -138,6 +138,7 @@ Code action kind: `quickfix`
 Rewrites imported names to be qualified.
 
 ![Qualify Imported Names Demo](../plugins/hls-qualify-imported-names-plugin/qualify-imported-names-demo.gif)
+
 For usage see the ![readme](plugins/hls-qualify-imported-names-plugin/README.md).
 
 ### Refine import
