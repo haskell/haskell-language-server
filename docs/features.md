@@ -141,8 +141,6 @@ Rewrites imported names to be qualified.
  
 For usage see the ![readme](plugins/hls-qualify-imported-names-plugin/README.md).
 
-For usage see the ![readme](plugins/hls-qualify-imported-names-plugin/README.md).
-
 ### Refine import
 Provided by: `hls-refine-imports-plugin`
 
