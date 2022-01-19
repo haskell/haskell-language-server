@@ -29,6 +29,7 @@ import           Language.LSP.Types hiding (CodeLens, CodeAction)
 import           Wingman.AbstractLSP.Types
 import           Wingman.EmptyCase (fromMaybeT)
 import           Wingman.LanguageServer (getTacticConfig, getIdeDynflags, mkWorkspaceEdits, runStaleIde, showLspMessage, mkShowMessageParams)
+import           Wingman.StaticPlugin (enableQuasiQuotes)
 import           Wingman.Types
 
 
@@ -110,7 +111,7 @@ runContinuation plId cont state (fc, b) = do
           GraftEdit gr -> do
             ccs <- lift getClientCapabilities
             TrackedStale pm _ <- mapMaybeT liftIO $ stale GetAnnotatedParsedSource
-            case mkWorkspaceEdits le_dflags ccs (fc_uri le_fileContext) (unTrack pm) gr of
+            case mkWorkspaceEdits (enableQuasiQuotes le_dflags) ccs (fc_uri le_fileContext) (unTrack pm) gr of
               Left errs ->
                 pure $ Just $ ResponseError
                   { _code    = InternalError
