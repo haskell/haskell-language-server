@@ -544,6 +544,30 @@ running  `split` will produce:
 Right (_ :: b)
 ```
 
+## stringify
+
+arguments: tactic.  
+deterministic.
+
+> Pretty print the result of a tactic as a string literal.
+
+
+### Example
+
+> The tactic parameter is run in the same environment as `stringify`, except its goal is a fresh type variable. 
+
+Given:
+
+```haskell
+_ :: String
+```
+
+running  `stringify (ctor False)` will produce:
+
+```haskell
+"False"
+```
+
 ## try
 
 arguments: tactic.  

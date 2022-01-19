@@ -24,6 +24,7 @@ spec = do
 #endif
 
   describe "golden" $ do
+    metaTest  2  9 "MetaStringify"
     metaTest  6 11 "MetaMaybeAp"
     metaTest  2 32 "MetaBindOne"
     metaTest  2 32 "MetaBindAll"

@@ -208,6 +208,17 @@ commands =
           "Right (_ :: b)"
       ]
 
+  , command "stringify" Deterministic Tactic
+      "Pretty print the result of a tactic as a string literal."
+      (pure . stringify)
+      [ Example
+          (Just "The tactic parameter is run in the same environment as `stringify`, except its goal is a fresh type variable. ")
+          ["(ctor False)"]
+          []
+          (Just "String")
+          (T.pack $ show @String "False")
+      ]
+
   , command "ctor" Deterministic (Ref One)
       "Use the given data cosntructor."
       (pure . userSplit)
@@ -415,7 +426,7 @@ oneTactic =
 
 
 tactic :: Parser (TacticsM ())
-tactic = P.makeExprParser oneTactic operators 
+tactic = P.makeExprParser oneTactic operators
 
 operators :: [[P.Operator Parser (TacticsM ())]]
 operators =

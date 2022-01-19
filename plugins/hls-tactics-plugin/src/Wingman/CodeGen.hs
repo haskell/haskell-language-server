@@ -23,7 +23,7 @@ import qualified Data.Set as S
 import           Data.Traversable
 import           Development.IDE.GHC.Compat
 import           GHC.Exts
-import           GHC.SourceGen (occNameToStr)
+import           GHC.SourceGen (occNameToStr, string)
 import           GHC.SourceGen.Binds
 import           GHC.SourceGen.Expr
 import           GHC.SourceGen.Overloaded
@@ -330,4 +330,8 @@ nonrecLet occjdgs jdg = do
             (\(occ, ext) -> valBind (occNameToStr occ) <$> fmap unLoc ext)
             (zip (fmap fst occjdgs) occexts)
       <*> fmap unLoc ext
+
+
+mkString :: String -> LHsExpr GhcPs
+mkString str = noLoc $ string @HsExpr' str
 

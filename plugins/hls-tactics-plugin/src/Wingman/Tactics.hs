@@ -11,7 +11,7 @@ import           Control.Lens ((&), (%~), (<>~))
 import           Control.Monad (filterM, unless)
 import           Control.Monad.Extra (anyM)
 import           Control.Monad.Reader.Class (MonadReader (ask))
-import           Control.Monad.State.Strict (StateT(..), runStateT)
+import           Control.Monad.State.Strict (StateT(..), runStateT, execStateT)
 import           Data.Bool (bool)
 import           Data.Foldable
 import           Data.Functor ((<&>))
@@ -619,6 +619,16 @@ collapse = do
     [hi] -> assume $ hi_name hi
     _    -> nary (length terms) <@> fmap (assume . hi_name) terms
 
+stringify :: TacticsM () -> TacticsM ()
+stringify m = do
+  rule $ \jdg -> do
+    case jGoal jdg == CType stringTy of
+      True -> do
+        fresh_ty <- newUnivar
+        res <- subgoalWith (withNewGoal (CType fresh_ty) jdg) m
+        pure $ pure $ mkString $ unsafeRender $ syn_val res
+      False -> unsolvable $ GoalMismatch "stringify" $ jGoal jdg
+
 
 with_arg :: TacticsM ()
 with_arg = rule $ \jdg -> do
@@ -639,4 +649,8 @@ hyDiff m = do
   m
   g' <- unHypothesis . jEntireHypothesis <$> goal
   pure $ Hypothesis $ take (length g' - g_len) g'
+
+
+subgoalWith :: Judgement -> TacticsM () -> RuleM (Synthesized (LHsExpr GhcPs))
+subgoalWith jdg t = RuleT $ flip execStateT jdg $ unTacticT t
 
