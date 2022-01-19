@@ -310,6 +310,30 @@ case e of
   Right b -> Right (_ :: y)
 ```
 
+## idiom
+
+arguments: tactic.  
+deterministic.
+
+> Lift a tactic into idiom brackets.
+
+
+### Example
+
+Given:
+
+```haskell
+f :: a -> b -> Int
+
+_ :: Maybe Int
+```
+
+running  `idiom (apply f)` will produce:
+
+```haskell
+f <$> (_ :: Maybe a) <*> (_ :: Maybe b)
+```
+
 ## intro
 
 arguments: single binding.  
