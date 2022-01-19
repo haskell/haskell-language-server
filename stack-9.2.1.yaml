@@ -47,6 +47,8 @@ extra-deps:
 - ghc-lib-9.2.1.20220109
 - ghc-lib-parser-9.2.1.20220109
 - ghc-lib-parser-ex-9.2.0.1
+- github: google/ghc-source-gen
+  commit: f6b9130d8f384be0ef7a02b371870d532090ccb6
 - heapsize-0.3.0.1
 - hiedb-0.4.1.0
 - hspec-2.7.10       # for hls-test-utils
