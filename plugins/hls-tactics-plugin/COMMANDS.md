@@ -524,6 +524,46 @@ running  `recursion` will produce:
 foo (_ :: Int) (_ :: b)
 ```
 
+## selector
+
+arguments: none.  
+deterministic.
+
+> Use the currently-being-built field selector.
+
+
+### Example
+
+> In the context of `f = Blah { bar = _ }`.
+
+Given:
+
+```haskell
+_ 
+```
+
+running  `selector` will produce:
+
+```haskell
+bar
+```
+
+### Example
+
+> In the context of `f = Blah { bar = Foo { foo = _ } }`.
+
+Given:
+
+```haskell
+_ 
+```
+
+running  `selector` will produce:
+
+```haskell
+foo
+```
+
 ## sorry
 
 arguments: none.  

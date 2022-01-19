@@ -272,6 +272,9 @@ newtype Saturation = Unsaturated Int
 pattern Saturated :: Saturation
 pattern Saturated = Unsaturated 0
 
+pattern CompletelyUnsaturated :: Saturation
+pattern CompletelyUnsaturated = Unsaturated 9999
+
 
 apply :: Saturation -> HyInfo CType -> TacticsM ()
 apply (Unsaturated n) hi = tracing ("apply' " <> show (hi_name hi)) $ do
@@ -638,6 +641,15 @@ with_arg = rule $ \jdg -> do
   a <- newSubgoal $ withNewGoal (CType fresh_ty) jdg
   f <- newSubgoal $ withNewGoal (coerce mkVisFunTys [unrestricted fresh_ty] g) jdg
   pure $ fmap noLoc $ (@@) <$> fmap unLoc f <*> fmap unLoc a
+
+
+use_selector :: TacticsM ()
+use_selector = do
+  msel <- getTopSelector <$> goal
+  case msel of
+    Nothing -> failure NoTopSelector
+    Just (Selector occ ty) ->
+      apply CompletelyUnsaturated $ HyInfo occ SelectorPrv ty
 
 
 ------------------------------------------------------------------------------

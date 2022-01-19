@@ -40,6 +40,7 @@ spec = do
     metaTest  4 28 "MetaUseSymbol"
     metaTest  7 53 "MetaDeepOf"
     metaTest  2 34 "MetaWithArg"
+    metaTest  4  9 "MetaSelector"
     metaTest  2 18 "MetaLetSimple"
     metaTest  5  9 "MetaIdiom"
     metaTest  7  9 "MetaIdiomRecord"

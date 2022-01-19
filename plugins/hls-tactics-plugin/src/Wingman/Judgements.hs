@@ -63,6 +63,13 @@ isSplitWhitelisted :: Judgement -> Bool
 isSplitWhitelisted = _jWhitelistSplit
 
 
+withNewSelector :: Selector -> Judgement' a -> Judgement' a
+withNewSelector sel = field  @"j_selector_stack" %~ (sel :)
+
+getTopSelector :: Judgement' a -> Maybe Selector
+getTopSelector = preview $ field  @"j_selector_stack" . _head
+
+
 withNewGoal :: a -> Judgement' a -> Judgement' a
 withNewGoal t = field @"_jGoal" .~ t
 
@@ -254,6 +261,7 @@ provAncestryOf (ClassMethodPrv _) = mempty
 provAncestryOf UserPrv = mempty
 provAncestryOf RecursivePrv = mempty
 provAncestryOf ImportPrv = mempty
+provAncestryOf SelectorPrv = mempty
 provAncestryOf (DisallowedPrv _ p2) = provAncestryOf p2
 
 
@@ -427,6 +435,7 @@ mkFirstJudgement ctx hy top goal =
       , _jIsTopHole         = top
       , _jGoal              = CType goal
       , j_coercion          = emptyTCvSubst
+      , j_selector_stack    = []
       }
 
 

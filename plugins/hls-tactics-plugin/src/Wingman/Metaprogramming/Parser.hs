@@ -154,6 +154,23 @@ commands =
             ]
       ]
 
+  , command "selector" Deterministic Nullary
+     "Use the currently-being-built field selector."
+     (pure use_selector)
+     [ Example
+        (Just "In the context of `f = Blah { bar = _ }`.")
+        []
+        []
+        Nothing
+        "bar"
+     , Example
+        (Just "In the context of `f = Blah { bar = Foo { foo = _ } }`.")
+        []
+        []
+        Nothing
+        "foo"
+     ]
+
   , command "homo" Deterministic (Ref One)
       ( mconcat
         [ "Pattern match on the argument, and fill the resulting hole in with "

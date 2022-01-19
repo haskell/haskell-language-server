@@ -35,7 +35,7 @@ import           Development.IDE.GHC.Compat hiding (Node)
 import qualified Development.IDE.GHC.Compat.Util as Util
 import           Development.IDE.GHC.Orphans ()
 import           GHC.Exts (fromString)
-import           GHC.Generics
+import           GHC.Generics hiding (Selector)
 import           GHC.SourceGen (var)
 import           Refinery.ProofState
 import           Refinery.Tactic
@@ -217,6 +217,8 @@ data Provenance
       (Uniquely Class)     -- ^ Class
     -- | A binding explicitly written by the user.
   | UserPrv
+    -- | A binding explicitly written by the user.
+  | SelectorPrv
     -- | A binding explicitly imported by the user.
   | ImportPrv
     -- | The recursive hypothesis. Present only in the context of the recursion
@@ -296,6 +298,12 @@ overProvenance :: (Provenance -> Provenance) -> HyInfo a -> HyInfo a
 overProvenance f (HyInfo name prv ty) = HyInfo name (f prv) ty
 
 
+data Selector = Selector
+  { sel_name :: OccName
+  , sel_type :: CType
+  }
+  deriving stock (Generic, Show)
+
 ------------------------------------------------------------------------------
 -- | The current bindings and goal for a hole to be filled by refinery.
 data Judgement' a = Judgement
@@ -305,6 +313,7 @@ data Judgement' a = Judgement
   , _jIsTopHole         :: !Bool
   , _jGoal              :: !a
   , j_coercion          :: TCvSubst
+  , j_selector_stack    :: [Selector]
   }
   deriving stock (Generic, Functor, Show)
 
@@ -365,6 +374,7 @@ data TacticError
   | TooPolymorphic
   | NotInScope OccName
   | TacticPanic String
+  | NoTopSelector
   deriving (Eq)
 
 instance Show TacticError where
@@ -390,6 +400,8 @@ instance Show TacticError where
       "Tried to do something with the out of scope name " <> show name
     show (TacticPanic err) =
       "Tactic panic: " <> err
+    show NoTopSelector =
+      "No selectors are in scope"
 
 
 ------------------------------------------------------------------------------

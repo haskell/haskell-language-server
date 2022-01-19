@@ -264,15 +264,17 @@ buildDataCon should_blacklist jdg dc tyapps = do
       -- Fortunately, this isn't an issue in practice, since 'PatSyn's are
       -- never in the hypothesis.
       cut -- throwError $ TacticPanic "Can't build Pattern constructors yet"
+  let fields = maybe (repeat Nothing) (fmap Just) $ getRecordFields dc
   ext
       <- fmap unzipTrace
-       $ traverse ( \(arg, n) ->
+       $ traverse ( \(arg, fld, n) ->
                     newSubgoal
                   . filterSameTypeFromOtherPositions dc n
                   . bool id blacklistingDestruct should_blacklist
+                  . maybe id (withNewSelector . uncurry Selector) fld
                   . flip withNewGoal jdg
                   $ CType arg
-                  ) $ zip args [0..]
+                  ) $ zip3 args fields [0..]
   pure $ ext
     & #syn_trace %~ rose (show dc) . pure
     & #syn_val   %~ mkCon dc tyapps
