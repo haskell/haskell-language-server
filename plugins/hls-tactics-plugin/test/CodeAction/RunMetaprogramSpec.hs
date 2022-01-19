@@ -41,6 +41,7 @@ spec = do
     metaTest  2 34 "MetaWithArg"
     metaTest  2 18 "MetaLetSimple"
     metaTest  5  9 "MetaIdiom"
+    metaTest  7  9 "MetaIdiomRecord"
 
     metaTest  2 12 "IntrosTooMany"
 

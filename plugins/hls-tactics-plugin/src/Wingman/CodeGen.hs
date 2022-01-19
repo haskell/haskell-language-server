@@ -340,6 +340,7 @@ idiomize x = noLoc $ case unLoc x of
     op (bvar' $ occName x) "<$>" (unLoc gshgp3)
   HsApp _ gsigp gshgp3 ->
     op (unLoc $ idiomize gsigp) "<*>" (unLoc gshgp3)
-  RecordCon ext con flds -> error "TODO sandy -- allow updates"
+  RecordCon _ con flds ->
+    unLoc $ idiomize $ noLoc $ foldl' (@@) (HsVar NoExtField con) $ fmap unLoc flds
   y -> y
 

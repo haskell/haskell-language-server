@@ -679,7 +679,8 @@ idiom m = do
           rule $ \jdg -> do
             expr <- subgoalWith (withNewGoal (CType ty) jdg) m
             case unLoc $ syn_val expr of
-              HsApp{} -> pure $ fmap idiomize expr
+              HsApp{}     -> pure $ fmap idiomize expr
+              RecordCon{} -> pure $ fmap idiomize expr
               _       -> unsolvable $ GoalMismatch "idiom" $ jGoal jdg
           rule $ newSubgoal . withModifiedGoal (CType . mkAppTy applic . unCType)
     Nothing ->
