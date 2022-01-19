@@ -10,14 +10,13 @@ module Wingman.StaticPlugin
 
 import Development.IDE.GHC.Compat
 import Development.IDE.GHC.Compat.Util
-import GHC.LanguageExtensions.Type (Extension(EmptyCase))
+import GHC.LanguageExtensions.Type (Extension(EmptyCase, QuasiQuotes))
 
 import Ide.Types
 
 #if __GLASGOW_HASKELL__ >= 808
 import Data.Data
 import Generics.SYB
-import GHC.LanguageExtensions.Type (Extension(QuasiQuotes))
 #if __GLASGOW_HASKELL__ >= 900
 import GHC.Driver.Plugins (purePlugin)
 #else
@@ -44,8 +43,10 @@ staticPlugin = mempty
 #endif
   }
 
+
 pattern MetaprogramSourceText :: SourceText
 pattern MetaprogramSourceText = SourceText "wingman-meta-program"
+
 
 pattern WingmanMetaprogram :: FastString -> HsExpr p
 pattern WingmanMetaprogram mp <-
@@ -57,6 +58,11 @@ pattern WingmanMetaprogram mp <-
       (L _ ( HsVar _ _))
 #endif
 
+
+enableQuasiQuotes :: DynFlags -> DynFlags
+enableQuasiQuotes = flip xopt_set QuasiQuotes
+
+
 -- | Wingman wants to support destructing of empty cases, but these are a parse
 -- error by default. So we want to enable 'EmptyCase', but then that leads to
 -- silent errors without 'Opt_WarnIncompletePatterns'.
@@ -66,9 +72,6 @@ allowEmptyCaseButWithWarning =
 
 
 #if __GLASGOW_HASKELL__ >= 808
-enableQuasiQuotes :: DynFlags -> DynFlags
-enableQuasiQuotes = flip xopt_set QuasiQuotes
-
 metaprogrammingPlugin :: StaticPlugin
 metaprogrammingPlugin =
     StaticPlugin $ PluginWithArgs pluginDefinition  []
