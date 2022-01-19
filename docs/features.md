@@ -3,21 +3,21 @@
 This table gives a summary of the features that HLS supports.
 Many of these are standard LSP features, but a lot of special features are provided as [code actions](#code-actions) and [code lenses](#code-lenses).
 
-| Feature                                             | Status                          | [LSP method](./what-is-hls.md#lsp-terminology)                                                    |
-|-----------------------------------------------------|---------------------------------|---------------------------------------------------------------------------------------------------|
-| [Diagnostics](#diagnostics)                         | Limited on some versions of GHC | `textDocument/publishDiagnostics`                                                                 |
-| [Hovers](#hovers)                                   | Working                         | `textDocument/hover`                                                                              |
-| [Jump to definition](#jump-to-definition)           | Working                         | `textDocument/definition`                                                                         |
-| [Jump to type definition](#jump-to-type-definition) | Working                         | `textDocument/typeDefinition`                                                                     |
-| [Find references](#find-references)                 | Working                         | `textDocument/references`                                                                         |
-| [Completions](#completions)                         | Working                         | `textDocument/completion`                                                                         |
-| [Formatting](#formatting)                           | Limited on some versions of GHC | `textDocument/formatting`, `textDocument/rangeFormatting`                                         |
-| [Document symbols](#document-symbols)               | Working                         | `textDocument/documentSymbol`                                                                     |
-| [Workspace symbols](#workspace-symbols)             | Working                         | `workspace/symbol`                                                                                |
-| [Call hierarchy](#call-hierarchy)                   | Working                         | `textDocument/prepareCallHierarchy`, `callHierarchy/incomingCalls`, `callHierarchy/outgoingCalls` |
-| [Highlight references](#highlight-references)       | Working                         | `textDocument/documentHighlight`                                                                  |
-| [Code actions](#code-actions)                       | Limited on some versions of GHC | `textDocument/codeAction`                                                                         |
-| [Code lenses](#code-lenses)                         | Limited on some versions of GHC | `textDocument/codeLens`                                                                           |
+| Feature                                             | [LSP method](./what-is-hls.md#lsp-terminology)                                                    |
+|-----------------------------------------------------|---------------------------------------------------------------------------------------------------|
+| [Diagnostics](#diagnostics)                         | `textDocument/publishDiagnostics`                                                                 |
+| [Hovers](#hovers)                                   | `textDocument/hover`                                                                              |
+| [Jump to definition](#jump-to-definition)           | `textDocument/definition`                                                                         |
+| [Jump to type definition](#jump-to-type-definition) | `textDocument/typeDefinition`                                                                     |
+| [Find references](#find-references)                 | `textDocument/references`                                                                         |
+| [Completions](#completions)                         | `textDocument/completion`                                                                         |
+| [Formatting](#formatting)                           | `textDocument/formatting`, `textDocument/rangeFormatting`                                         |
+| [Document symbols](#document-symbols)               | `textDocument/documentSymbol`                                                                     |
+| [Workspace symbols](#workspace-symbols)             | `workspace/symbol`                                                                                |
+| [Call hierarchy](#call-hierarchy)                   | `textDocument/prepareCallHierarchy`, `callHierarchy/incomingCalls`, `callHierarchy/outgoingCalls` |
+| [Highlight references](#highlight-references)       | `textDocument/documentHighlight`                                                                  |
+| [Code actions](#code-actions)                       | `textDocument/codeAction`                                                                         |
+| [Code lenses](#code-lenses)                         | `textDocument/codeLens`                                                                           |
 
 The individual sections below also identify which [HLS plugin](./what-is-hls.md#hls-plugins) is responsible for providing the given functionality, which is useful if you want to raise an issue report or contribute!
 Additionally, not all plugins are supported on all versions of GHC, see the [GHC version support page](supported-versions.md) for details.
