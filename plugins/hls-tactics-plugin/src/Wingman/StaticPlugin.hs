@@ -62,6 +62,9 @@ allowEmptyCaseButWithWarning =
 
 
 #if __GLASGOW_HASKELL__ >= 808
+enableQuasiQuotes :: DynFlags -> DynFlags
+enableQuasiQuotes = flip xopt_set QuasiQuotes
+
 metaprogrammingPlugin :: StaticPlugin
 metaprogrammingPlugin =
     StaticPlugin $ PluginWithArgs pluginDefinition  []
