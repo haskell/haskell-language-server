@@ -505,7 +505,7 @@ foo (_ :: Int) (_ :: b)
 arguments: none.  
 deterministic.
 
-> Use the most recently built constructor.
+> Use the currently-being-built field selector.
 
 
 ### Example
@@ -522,6 +522,22 @@ running  `selector` will produce:
 
 ```haskell
 bar
+```
+
+### Example
+
+> In the context of `f = Blah { bar = Foo { foo = _ } }`.
+
+Given:
+
+```haskell
+_ 
+```
+
+running  `selector` will produce:
+
+```haskell
+foo
 ```
 
 ## sorry

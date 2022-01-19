@@ -144,7 +144,7 @@ commands =
       ]
 
   , command "selector" Deterministic Nullary
-     "Use the most recently built constructor."
+     "Use the currently-being-built field selector."
      (pure use_selector)
      [ Example
         (Just "In the context of `f = Blah { bar = _ }`.")
@@ -152,6 +152,12 @@ commands =
         []
         Nothing
         "bar"
+     , Example
+        (Just "In the context of `f = Blah { bar = Foo { foo = _ } }`.")
+        []
+        []
+        Nothing
+        "foo"
      ]
 
   , command "homo" Deterministic (Ref One)
