@@ -215,8 +215,8 @@ refineImportsRule = define $ \RefineImports nfp -> do
         i@(L lim id@ImportDecl
                   {ideclName = L _ mn, ideclHiding = Just (hiding, L _ names)})
         (newModuleName, avails) = L lim id
-          { ideclName = noLoc newModuleName
-          , ideclHiding = Just (hiding, noLoc newNames)
+          { ideclName = noLocA newModuleName
+          , ideclHiding = Just (hiding, noLocA newNames)
           }
           where newNames = filter (\n -> any (n `containsAvail`) avails) names
       constructImport lim _ = lim
@@ -247,9 +247,9 @@ refineImportsRule = define $ \RefineImports nfp -> do
 
 --------------------------------------------------------------------------------
 
-mkExplicitEdit :: PositionMapping -> LImportDecl pass -> T.Text -> Maybe TextEdit
+mkExplicitEdit :: PositionMapping -> LImportDecl GhcRn -> T.Text -> Maybe TextEdit
 mkExplicitEdit posMapping (L src imp) explicit
-  | RealSrcSpan l _ <- src,
+  | RealSrcSpan l _ <- locA src,
     L _ mn <- ideclName imp,
     -- (almost) no one wants to see an refine import list for Prelude
     mn /= moduleName pRELUDE,

@@ -101,7 +101,6 @@ flags:
     hlint: false
     importLens: false
     ormolu: false
-    refineImports: false
     retrie: false
     splice: false
     stylishhaskell: false

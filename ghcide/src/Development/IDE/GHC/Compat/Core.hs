@@ -197,6 +197,7 @@ module Development.IDE.GHC.Compat.Core (
     getLoc,
     getLocA,
     locA,
+    noLocA,
     LocatedAn,
 #if MIN_VERSION_ghc(9,2,0)
     GHC.AnnListItem(..),
@@ -1039,6 +1040,13 @@ getLocA = GHC.getLocA
 #else
 -- getLocA :: HasSrcSpan a => a -> SrcSpan
 getLocA x = GHC.getLoc x
+#endif
+
+noLocA :: a -> LocatedAn an a
+#if MIN_VERSION_ghc(9,2,0)
+noLocA = GHC.noLocA
+#else
+noLocA = GHC.noLoc
 #endif
 
 #if !MIN_VERSION_ghc(9,2,0)
