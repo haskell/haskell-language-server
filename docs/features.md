@@ -20,6 +20,7 @@ Many of these are standard LSP features, but a lot of special features are provi
 | [Code lenses](#code-lenses)                         | Limited on some versions of GHC | `textDocument/codeLens`                                                                           |
 
 The individual sections below also identify which [HLS plugin](./what-is-hls.md#hls-plugins) is responsible for providing the given functionality, which is useful if you want to raise an issue report or contribute!
+Additionally, not all plugins are supported on all versions of GHC, see the [GHC version support page](supported-versions.md) for details.
 
 ## Diagnostics
 
@@ -29,8 +30,6 @@ Provided by: `ghcide`
 Provides errors and warnings from GHC as diagnostics.
 
 ### Hlint hints
-Status: Not supported on GHC 9.2
-
 Provided by: `hls-hlint-plugin`
 
 Provides hlint hints as diagnostics.
@@ -75,13 +74,13 @@ Completions for language pragmas.
 ## Formatting
 Format your code with various Haskell code formatters.
 
-| Formatter       | Status                          | Provided by                  |
-|-----------------|---------------------------------|------------------------------|
-| Brittany        | Not supported on GHC 9.2        | `hls-brittany-plugin`        |
-| Floskell        | Working                         | `hls-floskell-plugin`        |
-| Fourmolu        | Working                         | `hls-fourmolu-plugin`        |
-| Ormolu          | Working                         | `hls-ormolu-plugin`          |
-| Stylish Haskell | Not supported on GHC 9.0 or 9.2 | `hls-stylish-haskell-plugin` |
+| Formatter       | Provided by                  |
+|-----------------|------------------------------|
+| Brittany        | `hls-brittany-plugin`        |
+| Floskell        | `hls-floskell-plugin`        |
+| Fourmolu        | `hls-fourmolu-plugin`        |
+| Ormolu          | `hls-ormolu-plugin`          |
+| Stylish Haskell | `hls-stylish-haskell-plugin` |
 
 ## Document symbols
 Provided by: `ghcide`
@@ -115,8 +114,6 @@ Code action kind: `quickfix`
 Inserts missing pragmas needed by GHC.
 
 ### Apply Hlint fixes
-Status: Not supported on GHC 9.2
-
 Provided by: `hls-hlint-plugin`
 
 Code action kind: `quickfix`
@@ -150,8 +147,6 @@ Code action kind: `quickfix.import.refine`
 Refines imports to more specific modules when names are re-exported (same as the code lens).
 
 ### Add missing class methods
-Status: Not supported on GHC 9.2
-
 Provided by: `hls-class-plugin`
 
 Code action kind: `quickfix`
@@ -159,8 +154,6 @@ Code action kind: `quickfix`
 Adds placeholders for missing class methods in a class instance definition.
 
 ### Unfold definition
-Status: Not supported on GHC 9.2
-
 Provided by: `hls-retrie-plugin`
 
 Code action kind: `refactor.extract`
@@ -168,8 +161,6 @@ Code action kind: `refactor.extract`
 Extracts a definition from the code.
 
 ### Fold definition
-Status: Not supported on GHC 9.2
-
 Provided by: `hls-retrie-plugin`
 
 Code action kind: `refactor.inline`
@@ -179,8 +170,6 @@ Inlines a definition from the code.
 ![Retrie Demo](https://i.imgur.com/Ev7B87k.gif)
 
 ### Insert contents of Template Haskell splice
-Status: Not supported on GHC 9.2
-
 Provided by: `hls-splice-plugin`
 
 Code action kind: `refactor.rewrite`
@@ -188,8 +177,6 @@ Code action kind: `refactor.rewrite`
 Evaluates a Template Haskell splice and inserts the resulting code in its place.
 
 ### Convert numbers to alternative formats
-Status: Not supported on GHC 9.2
-
 Provided by: `hls-alternate-number-format-plugin`
 
 Code action kind: `quickfix.literals.style`
@@ -199,8 +186,6 @@ Converts numeric literals to different formats.
 ![Alternate Number Format Demo](../plugins/hls-alternate-number-format-plugin/HLSAll.gif)
 
 ### Add Haddock comments
-Status: Not supported on GHC 9.2
-
 Provided by: `hls-haddock-comments-plugin`
 
 Code action kind: `quickfix`
@@ -224,8 +209,6 @@ Provided by: `ghcide`
 Shows the type signature for bindings without type signatures, and adds it with a click.
 
 ### Evaluation code snippets in comments
-Status: Not supported on GHC 9.2
-
 Provided by: `hls-eval-plugin`
 
 Evaluates code blocks in comments with a click. [Tutorial](https://github.com/haskell/haskell-language-server/blob/master/plugins/hls-eval-plugin/README.md).
