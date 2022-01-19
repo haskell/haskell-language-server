@@ -62,8 +62,11 @@ jobs:
       - name: Build `hie-compat` with flags
         run: cabal v2-build hie-compat --flags="ghc-lib"
 
-      - name: Build
+      - name: Build `ghcide` with flags
         run: cabal v2-build ghcide --flags="ghc-patched-unboxed-bytecode test-exe executable bench-exe"
+
+      - name: Build with pedantic (-WError)
+        run: cabal v2-build --flags="pedantic"
 
   flags_post_job:
     if: always()
