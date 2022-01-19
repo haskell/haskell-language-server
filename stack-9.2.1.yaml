@@ -116,12 +116,8 @@ flags:
     eval: false
     haddockComments: false
     hlint: false
-<<<<<<< HEAD
     importLens: false
     ormolu: false
-=======
-    refineImports: false
->>>>>>> 46fcf65f (Enable brittany for ghc-9.0.2)
     retrie: false
     splice: false
     stylishhaskell: false

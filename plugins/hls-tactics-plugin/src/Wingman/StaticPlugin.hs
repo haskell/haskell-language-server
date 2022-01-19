@@ -14,9 +14,10 @@ import Development.IDE.GHC.Compat.Util
 import GHC.LanguageExtensions.Type (Extension(EmptyCase, QuasiQuotes))
 import Generics.SYB
 import Ide.Types
+
 #if __GLASGOW_HASKELL__ >= 900
 import GHC.Driver.Plugins (purePlugin)
-#else
+#elsif __GLASGOW_HASKELL__ >= 808
 import Plugins (purePlugin)
 #endif
 
@@ -39,11 +40,8 @@ staticPlugin = mempty
 #endif
   }
 
-
 pattern MetaprogramSourceText :: SourceText
 pattern MetaprogramSourceText = SourceText "wingman-meta-program"
-
-
 
 pattern WingmanMetaprogram :: FastString -> HsExpr p
 pattern WingmanMetaprogram mp <-
@@ -54,12 +52,6 @@ pattern WingmanMetaprogram mp <-
   HsSCC _ MetaprogramSourceText (StringLiteral NoSourceText mp)
       (L _ ( HsVar _ _))
 #endif
-
-
-
-enableQuasiQuotes :: DynFlags -> DynFlags
-enableQuasiQuotes = flip xopt_set QuasiQuotes
-
 
 -- | Wingman wants to support destructing of empty cases, but these are a parse
 -- error by default. So we want to enable 'EmptyCase', but then that leads to
@@ -80,11 +72,6 @@ metaprogrammingPlugin =
         }
     worker :: Monad m => [CommandLineOption] -> ModSummary -> HsParsedModule -> m HsParsedModule
     worker _ _ pm = pure $ pm { hpm_module = addMetaprogrammingSyntax $ hpm_module pm }
-#endif
-
-metaprogramHoleName :: OccName
-metaprogramHoleName = mkVarOcc "_$metaprogram"
-
 
 mkMetaprogram :: SrcSpan -> FastString -> HsExpr GhcPs
 mkMetaprogram ss mp =
@@ -98,14 +85,16 @@ mkMetaprogram ss mp =
     $ L ss
     $ mkRdrUnqual metaprogramHoleName
 
-
 addMetaprogrammingSyntax :: Data a => a -> a
 addMetaprogrammingSyntax =
   everywhere $ mkT $ \case
     L ss (MetaprogramSyntax mp) ->
       L ss $ mkMetaprogram ss mp
     (x :: LHsExpr GhcPs) -> x
+#endif
 
+metaprogramHoleName :: OccName
+metaprogramHoleName = mkVarOcc "_$metaprogram"
 
 pattern MetaprogramSyntax :: FastString -> HsExpr GhcPs
 pattern MetaprogramSyntax mp <-
@@ -119,4 +108,3 @@ pattern MetaprogramSyntax mp <-
           (mkRdrUnqual $ mkVarOcc "wingman")
           noSrcSpan
           mp
-
