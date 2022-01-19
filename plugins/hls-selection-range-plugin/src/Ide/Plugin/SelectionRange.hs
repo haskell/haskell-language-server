@@ -5,20 +5,18 @@
 module Ide.Plugin.SelectionRange (descriptor) where
 
 import           Control.Monad.IO.Class                  (liftIO)
-import           Control.Monad.Reader                    (MonadReader (ask))
+import           Control.Monad.Reader                    (runReader)
 import           Control.Monad.Trans.Maybe               (MaybeT (MaybeT),
                                                           runMaybeT)
 import           Data.Foldable                           (find)
 import qualified Data.Map.Strict                         as Map
 import           Data.Maybe                              (fromMaybe, mapMaybe)
-import qualified Data.Text                               as T
 import           Development.IDE                         (GetHieAst (GetHieAst),
-                                                          HieAstResult (HAR, hieAst),
+                                                          HieAstResult (HAR, hieAst, refMap),
                                                           IdeAction,
                                                           IdeState (shakeExtras),
                                                           Range (Range),
                                                           fromNormalizedFilePath,
-                                                          logDebug,
                                                           realSrcSpanToRange,
                                                           runIdeAction,
                                                           toNormalizedFilePath',
@@ -27,12 +25,11 @@ import           Development.IDE.Core.Actions            (useE)
 import           Development.IDE.Core.PositionMapping    (PositionMapping,
                                                           fromCurrentPosition,
                                                           toCurrentRange)
-import           Development.IDE.Core.Shake              (ShakeExtras (ShakeExtras, logger))
-import           Development.IDE.GHC.Compat              (HieAST (Node, nodeChildren, nodeInfo),
-                                                          NodeInfo (nodeAnnotations),
-                                                          Span, getAsts)
+import           Development.IDE.GHC.Compat              (HieAST (Node), Span,
+                                                          getAsts)
 import           Development.IDE.GHC.Compat.Util         (mkFastString)
-import           Ide.Plugin.SelectionRange.ASTPreProcess (preProcessAST)
+import           Ide.Plugin.SelectionRange.ASTPreProcess (PreProcessEnv (PreProcessEnv),
+                                                          preProcessAST)
 import           Ide.Types                               (PluginDescriptor (pluginHandlers),
                                                           PluginId,
                                                           defaultPluginDescriptor,
@@ -66,16 +63,11 @@ selectionRangeHandler ide _ SelectionRangeParams{..} = do
 
 getSelectionRanges :: NormalizedFilePath -> [Position] -> IdeAction [SelectionRange]
 getSelectionRanges file positions = fmap (fromMaybe []) <$> runMaybeT $ do
-    (HAR{hieAst}, positionMapping) <- useE GetHieAst file
+    (HAR{hieAst, refMap}, positionMapping) <- useE GetHieAst file
     positions' <- MaybeT . pure $ traverse (fromCurrentPosition positionMapping) positions
     ast <- MaybeT . pure $ getAsts hieAst Map.!? (mkFastString . fromNormalizedFilePath) file
 
-    -- FIXME: remove the debug logs when it's done
-    ShakeExtras{logger} <- ask
-    let children = nodeAnnotations . nodeInfo <$> nodeChildren ast
-    liftIO $ logDebug logger $ "children: " <> T.pack (show children)
-
-    let ast' = preProcessAST ast
+    let ast' = runReader (preProcessAST ast) (PreProcessEnv refMap)
     MaybeT . pure . traverse (toCurrentSelectionRange positionMapping) $
         findSelectionRangesByPositions (astPathsLeafToRoot ast') positions'
 
@@ -90,7 +82,7 @@ toCurrentSelectionRange positionMapping SelectionRange{..} = do
 
 -- | Build all paths from ast leaf to root
 astPathsLeafToRoot :: HieAST a -> [SelectionRange]
-astPathsLeafToRoot = mapMaybe spansToSelectionRange . go [[]]
+astPathsLeafToRoot = mapMaybe (spansToSelectionRange . simplifySpans) . go [[]]
   where
     go acc (Node _ span [])       = fmap (span:) acc
     go acc (Node _ span children) = concatMap (go (fmap (span:) acc)) children
@@ -99,6 +91,12 @@ spansToSelectionRange :: [Span] -> Maybe SelectionRange
 spansToSelectionRange [] = Nothing
 spansToSelectionRange (span:spans) = Just $
     SelectionRange {_range = realSrcSpanToRange span, _parent = spansToSelectionRange spans}
+
+simplifySpans :: [Span] -> [Span]
+simplifySpans = foldr go []
+  where
+    go x []     = [x]
+    go x (y:ys) = if x == y then y:ys else x:y:ys
 
 findSelectionRangesByPositions :: [SelectionRange] -> [Position] -> [SelectionRange]
 findSelectionRangesByPositions selectionRanges = fmap findByPosition

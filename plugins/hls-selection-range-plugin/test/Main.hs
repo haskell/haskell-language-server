@@ -17,7 +17,8 @@ plugin = descriptor "selectionRange"
 main :: IO ()
 main = defaultTestRunner $
     testGroup "Selection Range"
-        [ goldenTest "MultiPositions" [(4, 36), (8, 10), (1, 8)]
+        [ goldenTest "Import" [(4, 36), (1, 8)]
+        , goldenTest "Function" [(5, 19), (5, 12), (4, 4), (3, 5)]
         ]
 
 -- | build a golden test for
