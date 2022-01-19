@@ -26,6 +26,7 @@ runs:
       run: |
         echo "CABAL_PKGS_DIR=C:\\cabal\\packages" >> $GITHUB_ENV
       shell: bash
+
     - if: ( inputs.os == 'Linux' ) || ( inputs.os == 'macOS' )
       name: (Linux,macOS) Platform config
       run: |
@@ -43,9 +44,13 @@ runs:
         # (most probably sticky bit is set on $HOME)
         # `&&` insures `rm -f` return is positive.
         # Many platforms aslo have `alias cp='cp -i'`.
-        ALT_PROJECT_FILE=cabal-ghc${GHCVER//./}.project
-        if [[ -f "$ALT_PROJECT_FILE" ]]; then
-          rm -f -v cabal.project && cp -v "$ALT_PROJECT_FILE" cabal.project
+        GHCVER2=${GHCVER//./}
+        ALT_PROJECT_FILE_MINOR=cabal-ghc${GHCVER2}.project
+        ALT_PROJECT_FILE_MAJOR=cabal-ghc${GHCVER2:0:2}.project
+        if [[ -f "$ALT_PROJECT_FILE_MINOR" ]]; then
+          rm -f -v cabal.project && cp -v "$ALT_PROJECT_FILE_MINOR" cabal.project
+        elif [[ -f "$ALT_PROJECT_FILE_MAJOR" ]]; then
+          rm -f -v cabal.project && cp -v "$ALT_PROJECT_FILE_MAJOR" cabal.project
         fi
       shell: bash
 

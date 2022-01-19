@@ -60,15 +60,10 @@ constraints:
     -eval
     -haddockComments
     -hlint
-    -moduleName
-    -qualifyImportedNames
-    -refineImports
     -retrie
     -splice
     -stylishhaskell
-    -tactic
-  -- the rename plugin builds, but doesn't work
-    -rename,
+    -tactic,
   ghc-lib-parser ^>= 9.2,
   attoparsec ^>= 0.14.3,
   ghc-exactprint >= 1.3,

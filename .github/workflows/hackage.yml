@@ -34,18 +34,15 @@ jobs:
                   "hls-call-hierarchy-plugin", "hls-alternate-number-format-plugin",
                   "hls-qualify-imported-names-plugin", "hls-selection-range-plugin",
                   "haskell-language-server"]
-        ghc: [ "9.0.1",
-              "8.10.7",
-              "8.8.4",
-              "8.6.5"]
+        ghc: [ "9.0.2"
+             , "8.10.7"
+             , "8.8.4"
+             , "8.6.5"
+             ]
         exclude:
-        - ghc: "9.0.1"
-          package: "hls-brittany-plugin"
-        - ghc: "9.0.1"
+        - ghc: "9.0.2"
           package: "hls-stylish-haskell-plugin"
-        - ghc: "9.0.1"
-          package: "hls-class-plugin"
-        - ghc: "9.0.1"
+        - ghc: "9.0.2"
           package: "hls-tactics-plugin"
 
     steps:
@@ -103,22 +100,18 @@ jobs:
           cd $(ls -d ./incoming/${{ matrix.package }}-*)
           echo "packages: . ../../* ../../plugins/*" > cabal.project
 
-      - name: "Add temporary needed allow-newer"
-        if: steps.get-hackage-version.outputs.exists != 'true'
-        run: |
-          # TODO: remove when not needed
-          cd $(ls -d ./incoming/${{ matrix.package }}-*)
-          echo "allow-newer: Chart-diagrams:diagrams-core, SVGFonts:diagrams-core," >> cabal.project
-
+      # These tweaks are already in cabal-901.project but we dont want to use the entire file,
+      # Only the tricks needed by the solver which we know will not make the hackage build fail.
+      # The solver takes in account all project packages, even if they are not gonna be effectively built
+      # (like brittany or stylish-haskell for ghc-9.0)
       - name: "Add temporary needed allow-newer for ghc-9.0"
-        if: steps.get-hackage-version.outputs.exists != 'true' && matrix.ghc == '9.0.1'
+        if: steps.get-hackage-version.outputs.exists != 'true' && matrix.ghc == '9.0.2'
         run: |
-          # TODO: remove when not needed
           cd $(ls -d ./incoming/${{ matrix.package }}-*)
           # For brittany
-          echo " brittany:base, brittany:ghc, brittany:ghc-boot-th, butcher:base, multistate:base, data-tree-print:base," >> cabal.project
-          # For floskell and stylish-haskell
-          echo " floskell:base, floskell:ghc-prim, stylish-haskell:Cabal,stylish-haskell:ghc-lib-parser," >> cabal.project
+          echo " butcher:base, multistate:base, data-tree-print:base," >> cabal.project
+          # For stylish-haskell
+          echo " stylish-haskell:Cabal,stylish-haskell:ghc-lib-parser,stylish-haskell:aeson" >> cabal.project
 
       - name: "Build main package components in isolation"
         if: steps.get-hackage-version.outputs.exists != 'true'
@@ -130,8 +123,7 @@ jobs:
         if: steps.get-hackage-version.outputs.exists != 'true'
         run: |
           cd $(ls -d ./incoming/${{ matrix.package }}-*)
-          # cabal-3.4.0.0 run out of backjumps with tests and benchs enabled
-          cabal build --enable-tests --enable-benchmarks --max-backjumps 8000
+          cabal build --enable-tests --enable-benchmarks
 
       - name: "Generate haddock for hackage"
         if: steps.get-hackage-version.outputs.exists != 'true'

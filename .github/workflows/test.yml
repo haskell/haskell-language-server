@@ -57,6 +57,7 @@ jobs:
       fail-fast: true
       matrix:
         ghc: [ "9.2.1"
+             , "9.0.2"
              , "9.0.1"
              , "8.10.7"
              , "8.10.6"
@@ -72,7 +73,7 @@ jobs:
              ghc: '9.2.1'
              test: true
            - os: ubuntu-latest
-             ghc: '9.0.1'
+             ghc: '9.0.2'
              test: true
            - os: ubuntu-latest
              ghc: '8.10.7'
@@ -87,7 +88,7 @@ jobs:
              ghc: '9.2.1'
              test: true
            - os: windows-latest
-             ghc: '9.0.1'
+             ghc: '9.0.2'
              test: true
            - os: windows-latest
              ghc: '8.10.7'
@@ -95,6 +96,13 @@ jobs:
            - os: windows-latest
              ghc: '8.6.5'
              test: true
+           # only build rest of supported ghc versions for windows
+           - os: windows-latest
+             ghc: '9.0.1'
+           - os: windows-latest
+             ghc: '8.10.6'
+           - os: windows-latest
+             ghc: '8.8.4'
 
     steps:
       - uses: actions/checkout@v2
@@ -174,7 +182,7 @@ jobs:
         name: Test hls-splice-plugin
         run: cabal test hls-splice-plugin --test-options="$TEST_OPTS" || cabal test hls-splice-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-splice-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.0.1' && matrix.ghc != '9.2.1'
+      - if: matrix.test && matrix.ghc != '9.0.1'  && matrix.ghc != '9.0.2' && matrix.ghc != '9.2.1'
         name: Test hls-stylish-haskell-plugin
         run: cabal test hls-stylish-haskell-plugin --test-options="$TEST_OPTS" || cabal test hls-stylish-haskell-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-stylish-haskell-plugin --test-options="$TEST_OPTS"
 
@@ -186,11 +194,11 @@ jobs:
         name: Test hls-fourmolu-plugin
         run: cabal test hls-fourmolu-plugin --test-options="$TEST_OPTS" || cabal test hls-fourmolu-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-fourmolu-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.0.1' && matrix.ghc != '9.2.1' && !(matrix.os == 'ubuntu-latest' && matrix.ghc == '8.6.5')
+      - if: matrix.test && matrix.ghc != '9.0.1' && matrix.ghc != '9.0.2' && matrix.ghc != '9.2.1' && !(matrix.os == 'ubuntu-latest' && matrix.ghc == '8.6.5')
         name: Test hls-tactics-plugin test suite
         run: cabal test hls-tactics-plugin --test-options="$TEST_OPTS" || cabal test hls-tactics-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-tactics-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.2.1'
+      - if: matrix.test
         name: Test hls-refine-imports-plugin test suite
         run: cabal test hls-refine-imports-plugin --test-options="$TEST_OPTS" || cabal test hls-refine-imports-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-refine-imports-plugin --test-options="$TEST_OPTS"
 
@@ -202,7 +210,7 @@ jobs:
         name: Test hls-call-hierarchy-plugin test suite
         run: cabal test hls-call-hierarchy-plugin --test-options="$TEST_OPTS" || cabal test hls-call-hierarchy-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-call-hierarchy-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.2.1'
+      - if: matrix.test
         name: Test hls-rename-plugin test suite
         run: cabal test hls-rename-plugin --test-options="$TEST_OPTS" || cabal test hls-rename-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-rename-plugin --test-options="$TEST_OPTS"
 
@@ -210,7 +218,7 @@ jobs:
         name: Test hls-hlint-plugin test suite
         run: cabal test hls-hlint-plugin --test-options="$TEST_OPTS" || cabal test hls-hlint-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-hlint-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.2.1'
+      - if: matrix.test
         name: Test hls-module-name-plugin test suite
         run: cabal test hls-module-name-plugin --test-options="$TEST_OPTS" || cabal test hls-module-name-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-module-name-plugin --test-options="$TEST_OPTS"
 
@@ -218,7 +226,7 @@ jobs:
         name: Test hls-alternate-number-format-plugin test suite
         run: cabal test hls-alternate-number-format-plugin --test-options="$TEST_OPTS" || cabal test hls-alternate-number-format-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-alternate-number-format-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.2.1'
+      - if: matrix.test
         name: Test hls-qualify-imported-names-plugin test suite
         run: cabal test hls-qualify-imported-names-plugin --test-options="$TEST_OPTS" || cabal test hls-qualify-imported-names-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-qualify-imported-names-plugin --test-options="$TEST_OPTS"
 
