@@ -43,10 +43,16 @@ Type information and documentation on hover, [including from local definitions](
 ## Jump to definition
 Provided by: `ghcide`
 
-Jump to definition, [for now only for local code definitions](https://github.com/haskell/haskell-language-server/issues/708).
+Jump to the definition of a name.
+
+Known limitations:
+- Only works for [local definitions](https://github.com/haskell/haskell-language-server/issues/708).
 
 ## Jump to type definition
 Provided by: `ghcide`
+
+Known limitations:
+- Only works for [local definitions](https://github.com/haskell/haskell-language-server/issues/708).
 
 ## Find references
 Provided by: `ghcide`
