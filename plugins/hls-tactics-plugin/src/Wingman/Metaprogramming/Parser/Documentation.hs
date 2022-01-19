@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Wingman.Metaprogramming.Parser.Documentation where
@@ -6,8 +7,15 @@ import           Data.Functor ((<&>))
 import           Data.List (sortOn)
 import           Data.String (IsString)
 import           Data.Text (Text)
+
+#if MIN_VERSION_prettyprinter(1,7,0)
 import           Prettyprinter hiding (parens)
 import           Prettyprinter.Render.String (renderString)
+#else
+import           Data.Text.Prettyprint.Doc hiding (parens)
+import           Data.Text.Prettyprint.Doc.Render.String (renderString)
+#endif
+
 import           Development.IDE.GHC.Compat (OccName)
 import qualified Text.Megaparsec as P
 import           Wingman.Metaprogramming.Lexer (Parser, identifier, variable, parens)

@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -6,8 +7,13 @@ module Wingman.Metaprogramming.ProofState where
 import           Data.Bool (bool)
 import           Data.Functor ((<&>))
 import qualified Data.Text as T
+#if MIN_VERSION_prettyprinter(1,7,0)
 import           Prettyprinter
 import           Prettyprinter.Render.Util.Panic
+#else
+import           Data.Text.Prettyprint.Doc
+import           Data.Text.Prettyprint.Doc.Render.Util.Panic
+#endif
 import           Language.LSP.Types (sectionSeparator)
 import           Wingman.Judgements (jHypothesis)
 import           Wingman.Types
