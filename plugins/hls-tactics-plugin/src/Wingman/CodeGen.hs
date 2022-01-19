@@ -331,3 +331,15 @@ nonrecLet occjdgs jdg = do
             (zip (fmap fst occjdgs) occexts)
       <*> fmap unLoc ext
 
+
+------------------------------------------------------------------------------
+-- | Converts a function application into applicative form
+idiomize :: LHsExpr GhcPs -> LHsExpr GhcPs
+idiomize x = noLoc $ case unLoc x of
+  HsApp _ (L _ (HsVar _ (L _ x))) gshgp3 ->
+    op (bvar' $ occName x) "<$>" (unLoc gshgp3)
+  HsApp _ gsigp gshgp3 ->
+    op (unLoc $ idiomize gsigp) "<*>" (unLoc gshgp3)
+  RecordCon ext con flds -> error "TODO sandy -- allow updates"
+  y -> y
+
