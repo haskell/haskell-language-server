@@ -143,6 +143,17 @@ commands =
             ]
       ]
 
+  , command "selector" Deterministic Nullary
+     "Use the most recently built constructor."
+     (pure use_selector)
+     [ Example
+        (Just "In the context of `f = Blah { bar = _ }`.")
+        []
+        []
+        Nothing
+        "bar"
+     ]
+
   , command "homo" Deterministic (Ref One)
       ( mconcat
         [ "Pattern match on the argument, and fill the resulting hole in with "
@@ -415,7 +426,7 @@ oneTactic =
 
 
 tactic :: Parser (TacticsM ())
-tactic = P.makeExprParser oneTactic operators 
+tactic = P.makeExprParser oneTactic operators
 
 operators :: [[P.Operator Parser (TacticsM ())]]
 operators =

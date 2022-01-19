@@ -500,6 +500,30 @@ running  `recursion` will produce:
 foo (_ :: Int) (_ :: b)
 ```
 
+## selector
+
+arguments: none.  
+deterministic.
+
+> Use the most recently built constructor.
+
+
+### Example
+
+> In the context of `f = Blah { bar = _ }`.
+
+Given:
+
+```haskell
+_ 
+```
+
+running  `selector` will produce:
+
+```haskell
+bar
+```
+
 ## sorry
 
 arguments: none.  
