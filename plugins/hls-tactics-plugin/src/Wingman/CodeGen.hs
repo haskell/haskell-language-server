@@ -341,6 +341,6 @@ idiomize x = noLoc $ case unLoc x of
   HsApp _ gsigp gshgp3 ->
     op (unLoc $ idiomize gsigp) "<*>" (unLoc gshgp3)
   RecordCon _ con flds ->
-    unLoc $ idiomize $ noLoc $ foldl' (@@) (HsVar NoExtField con) $ fmap unLoc flds
+    unLoc $ idiomize $ noLoc $ foldl' (@@) (HsVar noExtField con) $ fmap unLoc flds
   y -> y
 
