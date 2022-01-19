@@ -1,5 +1,3 @@
-
-
 {-# LANGUAGE CPP                        #-}
 {-# LANGUAGE DeriveAnyClass             #-}
 {-# LANGUAGE DeriveFunctor              #-}

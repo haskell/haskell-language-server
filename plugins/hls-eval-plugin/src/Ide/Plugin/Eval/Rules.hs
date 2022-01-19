@@ -3,7 +3,7 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
 -- To avoid warning "Pattern match has inaccessible right hand side"
-{-# OPTIONS_GHC -fno-warn-overlapping-patterns #-}
+{-# OPTIONS_GHC -Wno-overlapping-patterns #-}
 module Ide.Plugin.Eval.Rules (GetEvalComments(..), rules,queueForEvaluation) where
 
 import           Control.Monad.IO.Class               (MonadIO (liftIO))
