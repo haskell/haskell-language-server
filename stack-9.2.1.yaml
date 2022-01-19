@@ -57,6 +57,7 @@ extra-deps:
 - monad-dijkstra-0.1.1.3
 - multistate-0.8.0.3
 - ormolu-0.4.0.0
+- refinery-0.4.0.0
 - retrie-1.2.0.1
 - some-1.0.2         # for dependent-sum, https://github.com/obsidiansystems/dependent-sum/issues/66
 - unix-compat-0.5.4
