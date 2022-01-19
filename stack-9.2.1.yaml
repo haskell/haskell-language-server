@@ -15,7 +15,7 @@ packages:
 # - ./plugins/hls-eval-plugin
 - ./plugins/hls-explicit-imports-plugin
 - ./plugins/hls-qualify-imported-names-plugin
-# - ./plugins/hls-refine-imports-plugin
+- ./plugins/hls-refine-imports-plugin
 # - ./plugins/hls-hlint-plugin
 - ./plugins/hls-rename-plugin
 # - ./plugins/hls-retrie-plugin
@@ -116,8 +116,6 @@ flags:
     eval: false
     haddockComments: false
     hlint: false
-    importLens: false
-    ormolu: false
     retrie: false
     splice: false
     stylishhaskell: false
