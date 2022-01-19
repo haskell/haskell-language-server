@@ -356,7 +356,7 @@ unusedTermTests = testGroup "unused term code actions" [
     ]
 
 expectFailIfGhc92 :: String -> TestTree -> TestTree
-expectFailIfGhc92 _ = knownBrokenForGhcVersions [GHC92]
+expectFailIfGhc92 = knownBrokenForGhcVersions [GHC92]
 
 disableWingman :: Session ()
 disableWingman =
