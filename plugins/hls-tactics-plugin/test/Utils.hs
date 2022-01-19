@@ -65,7 +65,7 @@ runSessionForTactics =
   runSessionWithServer'
     [plugin]
     def
-    (def { messageTimeout = 8 } )
+    (def { messageTimeout = 20 } )
     fullCaps
     tacticPath
 
