@@ -98,7 +98,7 @@ jobs:
         fi
 
     - name: (not check) Upload server to release
-      if: ${{ !contains(github.ref_name, 'check') }}
+      if: ${{ !contains(github.ref_name, 'check') && github.event.release.upload_url != ''}}
       uses: actions/upload-release-asset@v1.0.2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -138,7 +138,7 @@ jobs:
         fi
 
     - name: (GHC 8.10, not check) Upload wrapper to the release
-      if: ${{ matrix.ghc == '8.10.7' && !contains(github.ref_name, 'check') }}
+      if: ${{ matrix.ghc == '8.10.7' && !contains(github.ref_name, 'check') && github.event.release.upload_url != '' }}
       uses: actions/upload-release-asset@v1.0.2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -172,7 +172,7 @@ jobs:
                       HEAD
 
       - name: (not check) Upload source tarball to the release
-        if: ${{ !contains(github.ref_name, 'check') }}
+        if: ${{ !contains(github.ref_name, 'check')  && github.event.release.upload_url != '' }}
         uses: actions/upload-release-asset@v1.0.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -219,7 +219,7 @@ jobs:
           tar -czpf haskell-language-server.tar.gz *
 
       - name: (not check) Upload binaries tarball to the release
-        if: ${{ !contains(github.ref_name, 'check') }}
+        if: ${{ !contains(github.ref_name, 'check')  && github.event.release.upload_url != '' }}
         uses: actions/upload-release-asset@v1.0.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -248,7 +248,7 @@ jobs:
           sed -i 's/\/.*)/)/g' SHA256SUMS
 
       - name: (not check) Upload sha256sums to the release
-        if: ${{ !contains(github.ref_name, 'check') }}
+        if: ${{ !contains(github.ref_name, 'check')  && github.event.release.upload_url != '' }}
         uses: actions/upload-release-asset@v1.0.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
