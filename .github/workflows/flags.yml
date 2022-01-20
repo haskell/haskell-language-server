@@ -43,7 +43,11 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        ghc: [ "8.10.7"
+        ghc: [ "9.2.1"
+             , "9.0.2"
+             , "8.10.7"
+             , "8.8.4"
+             , "8.6.5"
              ]
         os: [ "ubuntu-latest"
             ]
@@ -65,7 +69,9 @@ jobs:
       - name: Build `ghcide` with flags
         run: cabal v2-build ghcide --flags="ghc-patched-unboxed-bytecode test-exe executable bench-exe"
 
-      - name: Build with pedantic (-WError)
+      # we have to clean up warnings for 9.0 and 9.2 before enable -WAll
+      - if: matrix.ghc != '9.0.2' && matrix.ghc != '9.2.1'
+        name: Build with pedantic (-WError)
         run: cabal v2-build --flags="pedantic"
 
   flags_post_job:
