@@ -120,6 +120,7 @@ flags:
     retrie: false
     splice: false
     stylishhaskell: false
+    tactic:false
 
   retrie:
     BuildExecutable: false
