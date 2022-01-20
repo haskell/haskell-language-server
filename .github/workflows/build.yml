@@ -46,14 +46,6 @@ jobs:
         ghc: ${{ matrix.ghc }}
         os:  ${{ runner.os }}
 
-    # some alpines come with integer-simple instead of integer-gmp
-    - name: Force integer-simple
-      if: matrix.os == 'ubuntu-18.04'
-      run: |
-        if ghc --info | grep -q integer-simple ; then
-          echo -e 'package blaze-textual\n    flags: +integer-simple' >> cabal.project.local
-        fi
-
     - name: (Windows) Platform specifics
       if: matrix.os == 'windows-latest'
       env:
