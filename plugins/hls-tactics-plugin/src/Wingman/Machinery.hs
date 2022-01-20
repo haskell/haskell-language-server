@@ -1,5 +1,6 @@
-{-# LANGUAGE TupleSections   #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE CPP           #-}
+{-# LANGUAGE RankNTypes    #-}
+{-# LANGUAGE TupleSections #-}
 
 module Wingman.Machinery where
 
@@ -34,8 +35,14 @@ import           Wingman.GHC (tryUnifyUnivarsButNotSkolems, updateSubst, tactics
 import           Wingman.Judgements
 import           Wingman.Simplify (simplify)
 import           Wingman.Types
+
+#if __GLASGOW_HASKELL__ < 900
 import FunDeps (fd_eqs, improveFromInstEnv)
-import Pair
+import Pair (unPair)
+#else
+import GHC.Tc.Instance.FunDeps (fd_eqs, improveFromInstEnv)
+import GHC.Data.Pair (unPair)
+#endif
 
 
 substCTy :: TCvSubst -> CType -> CType
