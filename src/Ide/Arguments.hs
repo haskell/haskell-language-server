@@ -95,7 +95,7 @@ probeToolsParser exeName =
 listPluginsParser :: Parser Arguments
 listPluginsParser =
   flag' ListPluginsMode
-    (long "list-plugins" <> help "List all avaliable plugins")
+    (long "list-plugins" <> help "List all available plugins")
 
 arguments :: IdePlugins IdeState -> Parser GhcideArguments
 arguments plugins = GhcideArguments
