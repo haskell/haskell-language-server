@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                 #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -15,12 +16,18 @@ import qualified Data.Set                        as Set
 import           Development.IDE.GHC.Compat      (ContextInfo (MatchBind, TyDecl, ValBind),
                                                   HieAST (..), Identifier,
                                                   IdentifierDetails (identInfo),
-                                                  NodeInfo (NodeInfo, nodeAnnotations, nodeIdentifiers),
+                                                  NodeInfo (NodeInfo, nodeIdentifiers),
                                                   RefMap, Span, flattenAst,
-                                                  mkRealSrcSpan, realSrcSpanEnd,
+                                                  isAnnotationInNodeInfo,
+                                                  mkRealSrcSpan,
+                                                  nodeInfoFromSource,
+                                                  realSrcSpanEnd,
                                                   realSrcSpanStart)
 import           Development.IDE.GHC.Compat.Util (FastString)
 import           Prelude                         hiding (span)
+#if MIN_VERSION_GLASGOW_HASKELL(9,2,0,0)
+import           Development.IDE.GHC.Compat      (SourcedNodeInfo (..))
+#endif
 
 newtype PreProcessEnv a = PreProcessEnv
     { preProcessEnvRefMap :: RefMap a
@@ -42,10 +49,17 @@ mergeImports node = pure $ node { nodeChildren = children }
     merge xs  = Just (createVirtualNode xs)
 
 nodeIsImport :: HieAST a -> Bool
-nodeIsImport = pairInNodeAnnotations ("ImportDecl", "ImportDecl")
+nodeIsImport = isAnnotationInAstNode ("ImportDecl", "ImportDecl")
+
+createNodeWithEmptyInfo :: Span -> [HieAST a] -> HieAST a
+#if MIN_VERSION_GLASGOW_HASKELL(9,2,0,0)
+createNodeWithEmptyInfo = Node (SourcedNodeInfo mempty)
+#else
+createNodeWithEmptyInfo = Node (NodeInfo mempty mempty mempty)
+#endif
 
 createVirtualNode :: [HieAST a] -> HieAST a
-createVirtualNode nodes = Node (NodeInfo mempty mempty mempty) span' nodes
+createVirtualNode nodes = createNodeWithEmptyInfo span' nodes
   where
     span' = mkRealSrcSpan (minimum locations) (maximum locations)
     locations = (\s -> [realSrcSpanStart s, realSrcSpanEnd s]) . nodeSpan =<< nodes
@@ -65,7 +79,7 @@ mergeSignatureWithDefinition node = do
 
 mergeNearbySigDef :: RefMap a -> (HieAST a, HieAST a) -> Maybe (HieAST a)
 mergeNearbySigDef refMap (n1, n2) = do
-    if not (("TypeSig", "Sig") `pairInNodeAnnotations` n1 && ("FunBind", "HsBindLR") `pairInNodeAnnotations` n2)
+    if not (("TypeSig", "Sig") `isAnnotationInAstNode` n1 && ("FunBind", "HsBindLR") `isAnnotationInAstNode` n2)
     then Nothing
     else do
         typeSigId <- identifierForTypeSig n1
@@ -74,15 +88,18 @@ mergeNearbySigDef refMap (n1, n2) = do
         then pure $ createVirtualNode [n1, n2]
         else Nothing
 
-identifierForTypeSig :: HieAST a -> Maybe Identifier
+identifierForTypeSig :: forall a. HieAST a -> Maybe Identifier
 identifierForTypeSig node =
     case mapMaybe extractIdentifier nodes of
       []        -> Nothing
       (ident:_) -> Just ident
   where
     nodes = flattenAst node
-    extractIdentifier = fmap fst . find (\(_, detail) -> TyDecl `Set.member` identInfo detail)
-        . Map.toList . nodeIdentifiers . nodeInfo
+
+    extractIdentifier :: HieAST a -> Maybe Identifier
+    extractIdentifier node' = nodeInfoFromSource node' >>=
+        (fmap fst . find (\(_, detail) -> TyDecl `Set.member` identInfo detail)
+        . Map.toList . nodeIdentifiers)
 
 -- | is the given occurence of an identifier is a function/variable definition in the outer span
 isIdentADef :: Span -> (Span, IdentifierDetails a) -> Bool
@@ -96,5 +113,5 @@ isIdentADef outerSpan (span, detail) =
     isContextInfoDef MatchBind = True
     isContextInfoDef _         = False
 
-pairInNodeAnnotations :: (FastString, FastString) -> HieAST a -> Bool
-pairInNodeAnnotations p node = p `Set.member` (nodeAnnotations . nodeInfo $ node)
+isAnnotationInAstNode :: (FastString, FastString) -> HieAST a -> Bool
+isAnnotationInAstNode p = maybe False (isAnnotationInNodeInfo p) . nodeInfoFromSource

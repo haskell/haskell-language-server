@@ -34,6 +34,24 @@ package *
   ghc-options: -haddock
   test-show-details: direct
 
+source-repository-package
+    type: git
+    location: https://github.com/haskell/lsp.git
+    tag: bad3d45854e5ca4eaf53985e9cee42d25840d18a
+    subdir: lsp-types
+
+source-repository-package
+    type: git
+    location: https://github.com/haskell/lsp.git
+    tag: bad3d45854e5ca4eaf53985e9cee42d25840d18a
+    subdir: lsp
+
+source-repository-package
+    type: git
+    location: https://github.com/haskell/lsp.git
+    tag: bad3d45854e5ca4eaf53985e9cee42d25840d18a
+    subdir: lsp-test
+
 write-ghc-environment-files: never
 
 index-state: 2022-01-11T22:05:45Z

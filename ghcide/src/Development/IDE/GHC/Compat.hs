@@ -32,6 +32,8 @@ module Development.IDE.GHC.Compat(
 
     nodeInfo',
     getNodeIds,
+    nodeInfoFromSource,
+    isAnnotationInNodeInfo,
 
     isQualifiedImport,
     GhcVersion(..),
@@ -67,71 +69,74 @@ module Development.IDE.GHC.Compat(
     runPp,
     ) where
 
-import           GHC                    hiding (HasSrcSpan, ModLocation, getLoc,
-                                         lookupName, RealSrcSpan)
-import Development.IDE.GHC.Compat.Core
-import Development.IDE.GHC.Compat.Env
-import Development.IDE.GHC.Compat.ExactPrint
-import Development.IDE.GHC.Compat.Iface
-import Development.IDE.GHC.Compat.Logger
-import Development.IDE.GHC.Compat.Outputable
-import Development.IDE.GHC.Compat.Parser
-import Development.IDE.GHC.Compat.Plugins
-import Development.IDE.GHC.Compat.Units
-import Development.IDE.GHC.Compat.Util
+import           Development.IDE.GHC.Compat.Core
+import           Development.IDE.GHC.Compat.Env
+import           Development.IDE.GHC.Compat.ExactPrint
+import           Development.IDE.GHC.Compat.Iface
+import           Development.IDE.GHC.Compat.Logger
+import           Development.IDE.GHC.Compat.Outputable
+import           Development.IDE.GHC.Compat.Parser
+import           Development.IDE.GHC.Compat.Plugins
+import           Development.IDE.GHC.Compat.Units
+import           Development.IDE.GHC.Compat.Util
+import           GHC                                   hiding (HasSrcSpan,
+                                                        ModLocation,
+                                                        RealSrcSpan, getLoc,
+                                                        lookupName)
 
 #if MIN_VERSION_ghc(9,0,0)
 import           GHC.Data.StringBuffer
-import           GHC.Driver.Session    hiding (ExposePackage)
+import           GHC.Driver.Session                    hiding (ExposePackage)
 import           GHC.Utils.Error
 #if MIN_VERSION_ghc(9,2,0)
 import           Data.Bifunctor
-import           GHC.Unit.Module.ModSummary
-import           GHC.Driver.Env as Env
+import           GHC.Driver.Env                        as Env
 import           GHC.Unit.Module.ModIface
+import           GHC.Unit.Module.ModSummary
 #else
 import           GHC.Driver.Types
 #endif
 import           GHC.Iface.Env
-import           GHC.Iface.Make           (mkIfaceExports)
-import qualified GHC.SysTools.Tasks       as SysTools
-import qualified GHC.Types.Avail          as Avail
+import           GHC.Iface.Make                        (mkIfaceExports)
+import qualified GHC.SysTools.Tasks                    as SysTools
+import qualified GHC.Types.Avail                       as Avail
 #else
-import           DynFlags               hiding (ExposePackage)
-import           HscTypes
-import           MkIface hiding (writeIfaceFile)
 import qualified Avail
+import           DynFlags                              hiding (ExposePackage)
+import           HscTypes
+import           MkIface                               hiding (writeIfaceFile)
 
 #if MIN_VERSION_ghc(8,8,0)
-import           StringBuffer           (hPutStringBuffer)
+import           StringBuffer                          (hPutStringBuffer)
 #endif
 import qualified SysTools
 
 #if !MIN_VERSION_ghc(8,8,0)
-import           SrcLoc                 (RealLocated)
 import qualified EnumSet
+import           SrcLoc                                (RealLocated)
 
 import           Foreign.ForeignPtr
 import           System.IO
 #endif
 #endif
 
-import           Compat.HieAst          (enrichHie)
+import           Compat.HieAst                         (enrichHie)
 import           Compat.HieBin
 import           Compat.HieTypes
 import           Compat.HieUtils
-import qualified Data.ByteString        as BS
+import qualified Data.ByteString                       as BS
 import           Data.IORef
 
-import qualified Data.Map               as Map
-import           Data.List              (foldl')
+import           Data.List                             (foldl')
+import qualified Data.Map                              as Map
+import qualified Data.Set                              as Set
 
 #if MIN_VERSION_ghc(9,0,0)
-import qualified Data.Set               as S
+import qualified Data.Set                              as S
 #endif
 
 #if !MIN_VERSION_ghc(8,10,0)
-import Bag (unitBag)
+import           Bag                                   (unitBag)
 #endif
 
 #if !MIN_VERSION_ghc(9,2,0)
@@ -334,6 +339,13 @@ nodeInfo' = nodeInfo
 -- unhelpfulSpanFS = id
 #endif
 
+nodeInfoFromSource :: HieAST a -> Maybe (NodeInfo a)
+#if MIN_VERSION_ghc(9,0,0)
+nodeInfoFromSource = Map.lookup SourceInfo . getSourcedNodeInfo . sourcedNodeInfo
+#else
+nodeInfoFromSource = Just . nodeInfo
+#endif
+
 data GhcVersion
   = GHC86
   | GHC88
@@ -372,4 +384,11 @@ runPp =
     SysTools.runPp
 #else
     const SysTools.runPp
+#endif
+
+isAnnotationInNodeInfo :: (FastString, FastString) -> NodeInfo a -> Bool
+#if MIN_VERSION_ghc(9,0,0)
+isAnnotationInNodeInfo (ctor, typ) = Set.member (NodeAnnotation ctor typ) . nodeAnnotations
+#else
+isAnnotationInNodeInfo p = Set.member p . nodeAnnotations
 #endif

@@ -8,6 +8,7 @@ import           Control.Monad.IO.Class                  (liftIO)
 import           Control.Monad.Reader                    (runReader)
 import           Control.Monad.Trans.Maybe               (MaybeT (MaybeT),
                                                           runMaybeT)
+import           Data.Coerce                             (coerce)
 import           Data.Foldable                           (find)
 import qualified Data.Map.Strict                         as Map
 import           Data.Maybe                              (fromMaybe, mapMaybe)
@@ -27,7 +28,7 @@ import           Development.IDE.Core.PositionMapping    (PositionMapping,
                                                           toCurrentRange)
 import           Development.IDE.GHC.Compat              (HieAST (Node), Span,
                                                           getAsts)
-import           Development.IDE.GHC.Compat.Util         (mkFastString)
+import           Development.IDE.GHC.Compat.Util
 import           Ide.Plugin.SelectionRange.ASTPreProcess (PreProcessEnv (PreProcessEnv),
                                                           preProcessAST)
 import           Ide.Types                               (PluginDescriptor (pluginHandlers),
@@ -65,8 +66,7 @@ getSelectionRanges :: NormalizedFilePath -> [Position] -> IdeAction [SelectionRa
 getSelectionRanges file positions = fmap (fromMaybe []) <$> runMaybeT $ do
     (HAR{hieAst, refMap}, positionMapping) <- useE GetHieAst file
     positions' <- MaybeT . pure $ traverse (fromCurrentPosition positionMapping) positions
-    ast <- MaybeT . pure $ getAsts hieAst Map.!? (mkFastString . fromNormalizedFilePath) file
-
+    ast <- MaybeT . pure $ getAsts hieAst Map.!? (coerce. mkFastString . fromNormalizedFilePath) file
     let ast' = runReader (preProcessAST ast) (PreProcessEnv refMap)
     MaybeT . pure . traverse (toCurrentSelectionRange positionMapping) $
         findSelectionRangesByPositions (astPathsLeafToRoot ast') positions'
