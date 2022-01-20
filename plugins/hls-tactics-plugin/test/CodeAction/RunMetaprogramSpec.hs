@@ -41,5 +41,7 @@ spec = do
     metaTest  2 34 "MetaWithArg"
     metaTest  2 18 "MetaLetSimple"
 
+    metaTest 14 10 "MetaFundeps"
+
     metaTest  2 12 "IntrosTooMany"
 

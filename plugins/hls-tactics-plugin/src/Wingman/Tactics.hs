@@ -279,11 +279,12 @@ apply (Unsaturated n) hi = tracing ("apply' " <> show (hi_name hi)) $ do
       ty = unCType $ hi_type hi
       func = hi_name hi
   ty' <- freshTyvars ty
-  let (_, _, all_args, ret) = tacticsSplitFunTy ty'
+  let (_, theta, all_args, ret) = tacticsSplitFunTy ty'
       saturated_args = dropEnd n all_args
       unsaturated_args = takeEnd n all_args
   rule $ \jdg -> do
     unify g (CType $ mkVisFunTys unsaturated_args ret)
+    learnFromFundeps theta
     ext
         <- fmap unzipTrace
         $ traverse ( newSubgoal

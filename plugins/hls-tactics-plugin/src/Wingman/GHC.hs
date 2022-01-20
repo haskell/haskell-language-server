@@ -366,6 +366,17 @@ tryUnifyUnivarsButNotSkolems skolems goal inst =
     Unifiable subst -> pure subst
     _               -> Nothing
 
+------------------------------------------------------------------------------
+-- | Like 'tryUnifyUnivarsButNotSkolems', but takes a list
+-- of pairs of types to unify.
+-- TODO(sandy): can the other one be implemented in terms of this?
+tryUnifyUnivarsButNotSkolemsMany :: Set TyVar -> [(Type, Type)] -> Maybe TCvSubst
+tryUnifyUnivarsButNotSkolemsMany skolems (unzip -> (goal, inst)) =
+  tcUnifyTys
+    (bool BindMe Skolem . flip S.member skolems)
+    inst
+    goal
+
 
 updateSubst :: TCvSubst -> TacticState -> TacticState
 updateSubst subst s = s { ts_unifier = unionTCvSubst subst (ts_unifier s) }

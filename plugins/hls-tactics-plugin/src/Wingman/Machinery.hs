@@ -30,10 +30,12 @@ import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           System.Timeout (timeout)
 import           Wingman.Context (getInstance)
-import           Wingman.GHC (tryUnifyUnivarsButNotSkolems, updateSubst, tacticsGetDataCons, freshTyvars)
+import           Wingman.GHC (tryUnifyUnivarsButNotSkolems, updateSubst, tacticsGetDataCons, freshTyvars, tryUnifyUnivarsButNotSkolemsMany)
 import           Wingman.Judgements
 import           Wingman.Simplify (simplify)
 import           Wingman.Types
+import FunDeps (fd_eqs, improveFromInstEnv)
+import Pair
 
 
 substCTy :: TCvSubst -> CType -> CType
@@ -244,6 +246,23 @@ unify goal inst = do
     Just subst ->
       modify $ updateSubst subst
     Nothing -> cut
+
+------------------------------------------------------------------------------
+-- | Get a substition out of a theta's fundeps
+learnFromFundeps
+    :: ThetaType
+    -> RuleM ()
+learnFromFundeps theta = do
+  inst_envs <- asks ctxInstEnvs
+  skolems <- gets ts_skolems
+  subst <- gets ts_unifier
+  let theta' = substTheta subst theta
+      fundeps = foldMap (foldMap fd_eqs . improveFromInstEnv inst_envs (\_ _ -> ())) theta'
+  case tryUnifyUnivarsButNotSkolemsMany skolems $ fmap unPair fundeps of
+    Just subst ->
+      modify $ updateSubst subst
+    Nothing -> cut
+
 
 cut :: RuleT jdg ext err s m a
 cut = RuleT Empty
