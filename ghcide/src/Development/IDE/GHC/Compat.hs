@@ -34,6 +34,7 @@ module Development.IDE.GHC.Compat(
     getNodeIds,
     nodeInfoFromSource,
     isAnnotationInNodeInfo,
+    mkAstNode,
 
     isQualifiedImport,
     GhcVersion(..),
@@ -387,8 +388,15 @@ runPp =
 #endif
 
 isAnnotationInNodeInfo :: (FastString, FastString) -> NodeInfo a -> Bool
-#if MIN_VERSION_ghc(9,0,0)
+#if MIN_VERSION_ghc(9,2,0)
 isAnnotationInNodeInfo (ctor, typ) = Set.member (NodeAnnotation ctor typ) . nodeAnnotations
 #else
 isAnnotationInNodeInfo p = Set.member p . nodeAnnotations
+#endif
+
+mkAstNode :: NodeInfo a -> Span -> [HieAST a] -> HieAST a
+#if MIN_VERSION_ghc(9,0,0)
+mkAstNode n = Node (SourcedNodeInfo $ Map.singleton GeneratedInfo n)
+#else
+mkAstNode = Node
 #endif

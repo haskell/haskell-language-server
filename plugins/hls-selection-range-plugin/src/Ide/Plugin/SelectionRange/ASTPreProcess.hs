@@ -19,7 +19,7 @@ import           Development.IDE.GHC.Compat      (ContextInfo (MatchBind, TyDecl
                                                   NodeInfo (NodeInfo, nodeIdentifiers),
                                                   RefMap, Span, flattenAst,
                                                   isAnnotationInNodeInfo,
-                                                  mkRealSrcSpan,
+                                                  mkAstNode, mkRealSrcSpan,
                                                   nodeInfoFromSource,
                                                   realSrcSpanEnd,
                                                   realSrcSpanStart)
@@ -51,15 +51,8 @@ mergeImports node = pure $ node { nodeChildren = children }
 nodeIsImport :: HieAST a -> Bool
 nodeIsImport = isAnnotationInAstNode ("ImportDecl", "ImportDecl")
 
-createNodeWithEmptyInfo :: Span -> [HieAST a] -> HieAST a
-#if MIN_VERSION_GLASGOW_HASKELL(9,2,0,0)
-createNodeWithEmptyInfo = Node (SourcedNodeInfo mempty)
-#else
-createNodeWithEmptyInfo = Node (NodeInfo mempty mempty mempty)
-#endif
-
 createVirtualNode :: [HieAST a] -> HieAST a
-createVirtualNode nodes = createNodeWithEmptyInfo span' nodes
+createVirtualNode nodes = mkAstNode (NodeInfo mempty mempty mempty) span' nodes
   where
     span' = mkRealSrcSpan (minimum locations) (maximum locations)
     locations = (\s -> [realSrcSpanStart s, realSrcSpanEnd s]) . nodeSpan =<< nodes
