@@ -9,9 +9,10 @@ module Wingman.Tactics
 import           Control.Applicative (Alternative(empty), (<|>))
 import           Control.Lens ((&), (%~), (<>~))
 import           Control.Monad (filterM, unless)
+import           Control.Monad (when)
 import           Control.Monad.Extra (anyM)
 import           Control.Monad.Reader.Class (MonadReader (ask))
-import           Control.Monad.State.Strict (StateT(..), runStateT)
+import           Control.Monad.State.Strict (StateT(..), runStateT, execStateT)
 import           Data.Bool (bool)
 import           Data.Foldable
 import           Data.Functor ((<&>))
@@ -279,11 +280,12 @@ apply (Unsaturated n) hi = tracing ("apply' " <> show (hi_name hi)) $ do
       ty = unCType $ hi_type hi
       func = hi_name hi
   ty' <- freshTyvars ty
-  let (_, _, all_args, ret) = tacticsSplitFunTy ty'
+  let (_, theta, all_args, ret) = tacticsSplitFunTy ty'
       saturated_args = dropEnd n all_args
       unsaturated_args = takeEnd n all_args
   rule $ \jdg -> do
     unify g (CType $ mkVisFunTys unsaturated_args ret)
+    learnFromFundeps theta
     ext
         <- fmap unzipTrace
         $ traverse ( newSubgoal
@@ -639,4 +641,52 @@ hyDiff m = do
   m
   g' <- unHypothesis . jEntireHypothesis <$> goal
   pure $ Hypothesis $ take (length g' - g_len) g'
+
+
+------------------------------------------------------------------------------
+-- | Attempt to run the given tactic in "idiom bracket" mode. For example, if
+-- the current goal is
+--
+--    (_ :: [r])
+--
+-- then @idiom apply@ will remove the applicative context, resulting in a hole:
+--
+--    (_ :: r)
+--
+-- and then use @apply@ to solve it. Let's say this results in:
+--
+--    (f (_ :: a) (_ :: b))
+--
+-- Finally, @idiom@ lifts this back into the original applicative:
+--
+--    (f <$> (_ :: [a]) <*> (_ :: [b]))
+--
+-- Idiom will fail fast if the current goal doesn't have an applicative
+-- instance.
+idiom :: TacticsM () -> TacticsM ()
+idiom m = do
+  jdg <- goal
+  let hole = unCType $ jGoal jdg
+  when (isFunction hole) $
+    failure $ GoalMismatch "idiom" $ jGoal jdg
+  case splitAppTy_maybe hole of
+    Just (applic, ty) -> do
+      minst <- getKnownInstance (mkClsOcc "Applicative")
+            . pure
+            $ applic
+      case minst of
+        Nothing -> failure $ GoalMismatch "idiom" $ CType applic
+        Just (_, _) -> do
+          rule $ \jdg -> do
+            expr <- subgoalWith (withNewGoal (CType ty) jdg) m
+            case unLoc $ syn_val expr of
+              HsApp{}     -> pure $ fmap idiomize expr
+              RecordCon{} -> pure $ fmap idiomize expr
+              _       -> unsolvable $ GoalMismatch "idiom" $ jGoal jdg
+          rule $ newSubgoal . withModifiedGoal (CType . mkAppTy applic . unCType)
+    Nothing ->
+      failure $ GoalMismatch "idiom" $ jGoal jdg
+
+subgoalWith :: Judgement -> TacticsM () -> RuleM (Synthesized (LHsExpr GhcPs))
+subgoalWith jdg t = RuleT $ flip execStateT jdg $ unTacticT t
 
