@@ -12,7 +12,7 @@ import           Control.Monad (filterM, unless)
 import           Control.Monad (when)
 import           Control.Monad.Extra (anyM)
 import           Control.Monad.Reader.Class (MonadReader (ask))
-import           Control.Monad.State.Strict (StateT(..), runStateT, execStateT)
+import           Control.Monad.State.Strict (StateT(..), runStateT, execStateT, gets, modify)
 import           Data.Bool (bool)
 import           Data.Foldable
 import           Data.Functor ((<&>))
@@ -37,6 +37,8 @@ import           Wingman.Machinery
 import           Wingman.Naming
 import           Wingman.StaticPlugin (pattern MetaprogramSyntax)
 import           Wingman.Types
+import FunDeps (improveFromInstEnv, fd_eqs)
+import Pair (toPair, unPair)
 
 
 ------------------------------------------------------------------------------
@@ -283,11 +285,19 @@ apply (Unsaturated n) hi = tracing ("apply' " <> show (hi_name hi)) $ do
       ty = unCType $ hi_type hi
       func = hi_name hi
   ty' <- freshTyvars ty
-  let (_, _, all_args, ret) = tacticsSplitFunTy ty'
+  let (_, theta, all_args, ret) = tacticsSplitFunTy ty'
       saturated_args = dropEnd n all_args
       unsaturated_args = takeEnd n all_args
+  ctx <- ask
+  skolems <- gets ts_skolems
   rule $ \jdg -> do
     unify g (CType $ mkVisFunTys unsaturated_args ret)
+    subst <- gets ts_unifier
+    let theta' = substTheta subst theta
+    let fundeps = foldMap (foldMap fd_eqs . improveFromInstEnv (ctxInstEnvs ctx) (\_ _ -> ())) theta'
+        unified = tryUnifyUnivarsButNotSkolemsMany skolems fundeps
+    modify $ updateSubst $ maybe emptyTCvSubst id unified
+
     ext
         <- fmap unzipTrace
         $ traverse ( newSubgoal
@@ -626,12 +636,12 @@ collapse = do
 stringify :: TacticsM () -> TacticsM ()
 stringify m = do
   rule $ \jdg -> do
-    case jGoal jdg == CType stringTy of
-      True -> do
+    -- case jGoal jdg == CType stringTy of
+    --   True -> do
         fresh_ty <- newUnivar
         res <- subgoalWith (withNewGoal (CType fresh_ty) jdg) m
         pure $ pure $ mkString $ unsafeRender $ syn_val res
-      False -> unsolvable $ GoalMismatch "stringify" $ jGoal jdg
+      -- False -> unsolvable $ GoalMismatch "stringify" $ jGoal jdg
 
 
 with_arg :: TacticsM ()
@@ -690,23 +700,25 @@ idiom m = do
   let hole = unCType $ jGoal jdg
   when (isFunction hole) $
     failure $ GoalMismatch "idiom" $ jGoal jdg
+  traceMX "hole goal" hole
   case splitAppTy_maybe hole of
     Just (applic, ty) -> do
+      traceMX "applic goal" applic
       minst <- getKnownInstance (mkClsOcc "Applicative")
             . pure
             $ applic
       case minst of
-        Nothing -> failure $ GoalMismatch "idiom" $ CType applic
+        Nothing -> failure $ GoalMismatch "no applicative" $ CType applic
         Just (_, _) -> do
           rule $ \jdg -> do
             expr <- subgoalWith (withNewGoal (CType ty) jdg) m
             case unLoc $ syn_val expr of
               HsApp{}     -> pure $ fmap idiomize expr
               RecordCon{} -> pure $ fmap idiomize expr
-              _       -> unsolvable $ GoalMismatch "idiom" $ jGoal jdg
+              _       -> unsolvable $ GoalMismatch "wrong shape" $ jGoal jdg
           rule $ newSubgoal . withModifiedGoal (CType . mkAppTy applic . unCType)
     Nothing ->
-      failure $ GoalMismatch "idiom" $ jGoal jdg
+      failure $ GoalMismatch "cant split" $ jGoal jdg
 
 subgoalWith :: Judgement -> TacticsM () -> RuleM (Synthesized (LHsExpr GhcPs))
 subgoalWith jdg t = RuleT $ flip execStateT jdg $ unTacticT t

@@ -82,18 +82,25 @@ getFunBindId _ = []
 -- dictionary.
 getInstance :: MonadReader Context m => Class -> [Type] -> m (Maybe (Class, PredType))
 getInstance cls tys = do
+  traceMX "getting instance for" (cls, tys)
   env <- asks ctxInstEnvs
   let (mres, _, _) = lookupInstEnv False env cls tys
   case mres of
     ((inst, mapps) : _) -> do
+      traceMX "found" mapps
       -- Get the instantiated type of the dictionary
       let df = piResultTys (idType $ is_dfun inst) $ zipWith fromMaybe alphaTys mapps
       -- pull off its resulting arguments
       let (theta, df') = tcSplitPhiTy df
+      traceMX "with theta" theta
       allM hasClassInstance theta >>= \case
         True -> pure $ Just (cls, df')
-        False -> pure Nothing
-    _ -> pure Nothing
+        False -> do
+          traceMX "missing a class instance somewhere" theta
+          pure Nothing
+    _ -> do
+      traceMX "couldnt even find one" (cls, tys)
+      pure Nothing
 
 
 ------------------------------------------------------------------------------

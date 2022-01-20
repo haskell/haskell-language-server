@@ -52,12 +52,7 @@ traceFX str f a = trace (mappend ("!!!" <> str <> ": ") $ f a) a
 traceM :: Applicative f => String -> f ()
 trace :: String -> a -> a
 traceShowId :: Show a => a -> a
-#ifdef DEBUG
+
 traceM = Debug.Trace.traceM
 trace = Debug.Trace.trace
 traceShowId = Debug.Trace.traceShowId
-#else
-traceM _ = pure ()
-trace _ = id
-traceShowId = id
-#endif

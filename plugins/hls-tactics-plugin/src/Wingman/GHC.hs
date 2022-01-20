@@ -20,6 +20,7 @@ import           GHC.SourceGen (lambda)
 import           Generics.SYB (Data, everything, everywhere, listify, mkQ, mkT)
 import           Wingman.StaticPlugin (pattern MetaprogramSyntax)
 import           Wingman.Types
+import Pair (unPair)
 
 #if __GLASGOW_HASKELL__ >= 900
 import GHC.Tc.Utils.TcType
@@ -365,6 +366,15 @@ tryUnifyUnivarsButNotSkolems skolems goal inst =
          [unCType goal] of
     Unifiable subst -> pure subst
     _               -> Nothing
+
+------------------------------------------------------------------------------
+-- | Like 'tcUnifyTy', but takes a list of skolems to prevent unification of.
+tryUnifyUnivarsButNotSkolemsMany :: Set TyVar -> [Pair Type] -> Maybe TCvSubst
+tryUnifyUnivarsButNotSkolemsMany skolems (unzip . fmap unPair -> (goal, inst)) =
+  tcUnifyTys
+    (bool BindMe Skolem . flip S.member skolems)
+    inst
+    goal
 
 
 updateSubst :: TCvSubst -> TacticState -> TacticState

@@ -247,37 +247,36 @@ buildDataCon
     -> ConLike            -- ^ The data con to build
     -> [Type]             -- ^ Type arguments for the data con
     -> RuleM (Synthesized (LHsExpr GhcPs))
-buildDataCon should_blacklist jdg dc tyapps = do
-  args <- case dc of
-    RealDataCon dc' -> do
-      let (skolems', theta, args) = dataConInstSig dc' tyapps
+buildDataCon should_blacklist jdg cl@(RealDataCon dc) tyapps = do
+  args <-
+    do
+      let (skolems', theta, args) = dataConInstSig dc tyapps
       modify $ \ts ->
         evidenceToSubst (foldMap mkEvidence theta) ts
           & #ts_skolems <>~ S.fromList skolems'
       pure args
-    _ ->
-      -- If we have a 'PatSyn', we can't continue, since there is no
-      -- 'dataConInstSig' equivalent for 'PatSyn's. I don't think this is
-      -- a fundamental problem, but I don't know enough about the GHC internals
-      -- to implement it myself.
-      --
-      -- Fortunately, this isn't an issue in practice, since 'PatSyn's are
-      -- never in the hypothesis.
-      cut -- throwError $ TacticPanic "Can't build Pattern constructors yet"
-  let fields = maybe (repeat Nothing) (fmap Just) $ getRecordFields dc
+  let fields = maybe (repeat Nothing) (fmap Just) $ getRecordFields cl
   ext
       <- fmap unzipTrace
        $ traverse ( \(arg, fld, n) ->
                     newSubgoal
-                  . filterSameTypeFromOtherPositions dc n
+                  . filterSameTypeFromOtherPositions cl n
                   . bool id blacklistingDestruct should_blacklist
-                  . maybe id (withNewSelector . uncurry Selector) fld
+                  . maybe id (withNewSelector . uncurry Selector . second (CType . mkVisFunTy (mkTyConTy $ dataConTyCon dc) . unCType)) fld
                   . flip withNewGoal jdg
                   $ CType arg
                   ) $ zip3 args fields [0..]
   pure $ ext
     & #syn_trace %~ rose (show dc) . pure
-    & #syn_val   %~ mkCon dc tyapps
+    & #syn_val   %~ mkCon cl tyapps
+-- If we have a 'PatSyn', we can't continue, since there is no
+-- 'dataConInstSig' equivalent for 'PatSyn's. I don't think this is
+-- a fundamental problem, but I don't know enough about the GHC internals
+-- to implement it myself.
+--
+-- Fortunately, this isn't an issue in practice, since 'PatSyn's are
+-- never in the hypothesis.
+buildDataCon _ _ _ _ = cut
 
 
 ------------------------------------------------------------------------------
