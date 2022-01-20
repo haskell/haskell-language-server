@@ -3,6 +3,7 @@
 module Wingman.StaticPlugin
   ( staticPlugin
   , metaprogramHoleName
+  , enableQuasiQuotes
   , pattern WingmanMetaprogram
   , pattern MetaprogramSyntax
   ) where
@@ -13,7 +14,11 @@ import Development.IDE.GHC.Compat.Util
 import GHC.LanguageExtensions.Type (Extension(EmptyCase, QuasiQuotes))
 import Generics.SYB
 import Ide.Types
+#if __GLASGOW_HASKELL__ >= 900
+import GHC.Driver.Plugins (purePlugin)
+#else
 import Plugins (purePlugin)
+#endif
 
 staticPlugin :: DynFlagsModifications
 staticPlugin = mempty
