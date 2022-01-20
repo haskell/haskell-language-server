@@ -54,15 +54,6 @@ runs:
         fi
       shell: bash
 
-    # some alpines come with integer-simple instead of integer-gmp
-    - if: inputs.os == 'Linux'
-      name: Force integer-simple
-      run: |
-        if ghc --info | grep -q integer-simple ; then
-          echo -e 'package blaze-textual\n    flags: +integer-simple' >> cabal.project.local
-        fi
-      shell: bash
-
     - if: inputs.os == 'Windows' && inputs.ghc == '8.8.4'
       name: (Windows,GHC 8.8) Modify `cabal.project` to workaround segfaults
       run: |
