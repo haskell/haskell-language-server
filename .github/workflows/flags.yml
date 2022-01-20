@@ -63,7 +63,8 @@ jobs:
       - name: Build `hls-graph` with flags
         run: cabal v2-build hls-graph --flags="embed-files stm-stats"
 
-      - name: Build `hie-compat` with flags
+      - if: matrix.ghc != '8.6.5'
+        name: Build `hie-compat` with flags
         run: cabal v2-build hie-compat --flags="ghc-lib"
 
       - name: Build `ghcide` with flags
