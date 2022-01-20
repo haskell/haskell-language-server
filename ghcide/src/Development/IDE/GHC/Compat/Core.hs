@@ -67,7 +67,10 @@ module Development.IDE.GHC.Compat.Core (
     -- slightly unsafe
     setUnsafeGlobalDynFlags,
     -- * Linear Haskell
+#if !MIN_VERSION_ghc(9,0,0)
     Scaled,
+    unrestricted,
+#endif
     scaledThing,
     -- * Interface Files
     IfaceExport,
@@ -127,6 +130,7 @@ module Development.IDE.GHC.Compat.Core (
       TyCoRep.CoercionTy
       ),
     pattern FunTy,
+    pattern ConPatIn,
 #if !MIN_VERSION_ghc(9,2,0)
     Development.IDE.GHC.Compat.Core.splitForAllTyCoVars,
 #endif
@@ -537,6 +541,7 @@ import           GHC.Parser.Header            hiding (getImports)
 import qualified GHC.Linker.Loader            as Linker
 import           GHC.Linker.Types
 import           GHC.Parser.Lexer             hiding (initParserState)
+import           GHC.Parser.Annotation        (EpAnn (..))
 import           GHC.Platform.Ways
 import           GHC.Runtime.Context          (InteractiveImport (..))
 #else
@@ -877,6 +882,9 @@ dataConExTyCoVars = DataCon.dataConExTyVars
 type Scaled a = a
 scaledThing :: Scaled a -> a
 scaledThing = id
+
+unrestricted :: a -> Scaled a
+unrestricted = id
 #endif
 
 mkVisFunTys :: [Scaled Type] -> Type -> Type
@@ -951,6 +959,18 @@ pattern IsBoot = True
 type PlainGhcException = Plain.PlainGhcException
 #else
 type PlainGhcException = Plain.GhcException
+#endif
+
+#if MIN_VERSION_ghc(9,0,0)
+-- This is from the old api, but it still simplifies
+pattern ConPatIn :: SrcLoc.Located (ConLikeP GhcPs) -> HsConPatDetails GhcPs -> Pat GhcPs
+#if MIN_VERSION_ghc(9,2,0)
+pattern ConPatIn con args <- ConPat EpAnnNotUsed (L _ (SrcLoc.noLoc -> con)) args
+  where
+    ConPatIn con args = ConPat EpAnnNotUsed (GHC.noLocA $ SrcLoc.unLoc con) args
+#else
+pattern ConPatIn con args = ConPat NoExtField con args
+#endif
 #endif
 
 initDynLinker, initObjLinker :: HscEnv -> IO ()

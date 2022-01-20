@@ -19,7 +19,7 @@ packages:
 - ./plugins/hls-rename-plugin
 - ./plugins/hls-retrie-plugin
 - ./plugins/hls-splice-plugin
-# - ./plugins/hls-tactics-plugin
+- ./plugins/hls-tactics-plugin
 - ./plugins/hls-brittany-plugin
 # - ./plugins/hls-stylish-haskell-plugin
 - ./plugins/hls-floskell-plugin
@@ -56,6 +56,7 @@ extra-deps:
     - lsp
     - lsp-types
     - lsp-test
+- refinery-0.4.0.0
 
 # shake-bench dependencies
 - Chart-1.9.3
@@ -84,7 +85,6 @@ flags:
     pedantic: true
 
     ignore-plugins-ghc-bounds: true
-    tactic: false # Dependencies fail
     stylishHaskell: false
 
   retrie:

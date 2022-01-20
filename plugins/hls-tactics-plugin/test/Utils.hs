@@ -24,6 +24,7 @@ import qualified Data.Text.IO as T
 import           Ide.Plugin.Tactic as Tactic
 import           Language.LSP.Types
 import           Language.LSP.Types.Lens hiding (actions, applyEdit, capabilities, executeCommand, id, line, message, name, rename, title)
+import qualified Language.LSP.Types.Lens as J
 import           System.Directory (doesFileExist)
 import           System.FilePath
 import           Test.Hls
@@ -64,7 +65,7 @@ runSessionForTactics =
   runSessionWithServer'
     [plugin]
     def
-    (def { messageTimeout = 5 } )
+    (def { messageTimeout = 20 } )
     fullCaps
     tacticPath
 
@@ -136,6 +137,7 @@ mkGoldenTest eq invocations input =
           T.writeFile expected_name edited
       expected <- liftIO $ T.readFile expected_name
       liftIO $ edited `eq` expected
+
 
 mkCodeLensTest
     :: FilePath

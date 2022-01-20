@@ -59,7 +59,7 @@ index-state: 2022-01-11T22:05:45Z
 constraints:
   -- These plugins don't work on GHC9 yet
   -- Add a plugin needs remove the -flag but also update ghc bounds in hls.cabal
-  haskell-language-server +ignore-plugins-ghc-bounds -stylishhaskell -tactic,
+  haskell-language-server +ignore-plugins-ghc-bounds -stylishhaskell,
   ghc-lib-parser ^>= 9.0
 
 -- although we are not building all plugins cabal solver phase is run for all packages
