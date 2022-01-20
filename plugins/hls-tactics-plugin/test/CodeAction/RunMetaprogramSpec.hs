@@ -43,5 +43,7 @@ spec = do
     metaTest  5  9 "MetaIdiom"
     metaTest  7  9 "MetaIdiomRecord"
 
+    metaTest 14 10 "MetaFundeps"
+
     metaTest  2 12 "IntrosTooMany"
 
