@@ -25,9 +25,6 @@ import           Development.IDE.GHC.Compat      (ContextInfo (MatchBind, TyDecl
                                                   realSrcSpanStart)
 import           Development.IDE.GHC.Compat.Util (FastString)
 import           Prelude                         hiding (span)
-#if MIN_VERSION_GLASGOW_HASKELL(9,2,0,0)
-import           Development.IDE.GHC.Compat      (SourcedNodeInfo (..))
-#endif
 
 newtype PreProcessEnv a = PreProcessEnv
     { preProcessEnvRefMap :: RefMap a
