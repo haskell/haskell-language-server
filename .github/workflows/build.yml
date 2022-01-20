@@ -43,8 +43,8 @@ jobs:
 
     - name: Disable tests and bechmarks
       run: |
-        echo -e 'tests: false' >> cabal.project.local
-        echo -e 'benchmarks: false' >> cabal.project.local
+        echo "tests: false" >> cabal.project.local
+        echo "benchmarks: false" >> cabal.project.local
 
     - uses: ./.github/actions/setup-build
       with:
