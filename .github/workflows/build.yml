@@ -41,6 +41,11 @@ jobs:
         apk add --no-cache zlib zlib-dev zlib-static gmp gmp-dev ncurses-static
     - uses: actions/checkout@v2
 
+    - name: Disable tests and bechmarks
+      run: |
+        echo -e 'tests: false' >> cabal.project.local
+        echo -e 'benchmarks: false' >> cabal.project.local
+
     - uses: ./.github/actions/setup-build
       with:
         ghc: ${{ matrix.ghc }}
@@ -72,8 +77,7 @@ jobs:
     - name: Build the server
       # Try building it twice in case of flakey builds on Windows
       run: |
-        cabal build --disable-tests exe:hls -O2 $LINUX_CABAL_ARGS || \
-        cabal build --disable-tests exe:hls -O2 $LINUX_CABAL_ARGS -j1
+        cabal build exe:hls -O2 $LINUX_CABAL_ARGS || cabal build exe:hls -O2 $LINUX_CABAL_ARGS -j1
 
     - name: Compress server binary
       id: compress_server_binary
@@ -112,7 +116,7 @@ jobs:
 
     - name: (GHC 8.10) Build the wrapper
       if: matrix.ghc == '8.10.7'
-      run: cabal build --disable-tests exe:hls-wrapper -O2 $LINUX_CABAL_ARGS
+      run: cabal build exe:hls-wrapper -O2 $LINUX_CABAL_ARGS
 
     - name: (GHC 8.10) Compress wrapper binary
       if: matrix.ghc == '8.10.7'

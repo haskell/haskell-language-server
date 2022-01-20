@@ -66,8 +66,8 @@ runs:
     - if: inputs.os == 'Windows' && inputs.ghc == '8.8.4'
       name: (Windows,GHC 8.8) Modify `cabal.project` to workaround segfaults
       run: |
-        echo "package floskell" >> cabal.project
-        echo "  ghc-options: -O0" >> cabal.project
+        echo -e 'package floskell' >> cabal.project.local
+        echo -e '  ghc-options: -O0' >> cabal.project.local
       shell: bash
 
     # Shorten binary names as a workaround for filepath length limits in Windows,
