@@ -11,10 +11,10 @@ on:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
-    container: ${{ (runner.os == 'Linux' && 'alpine:3.12') || '' }}
+    container: ${{ (startsWith(matrix.os,'ubuntu') && 'alpine:3.12') || '' }}
     defaults:
       run:
-        shell: ${{ (runner.os == 'Windows' && 'bash') || 'sh' }}
+        shell: ${{ (startsWith(matrix.os,'windows') && 'bash') || 'sh' }}
     strategy:
       fail-fast: false
       matrix:
