@@ -22,25 +22,16 @@
       flake = false;
     };
 
-    lsp-source = {
-      url = "https://hackage.haskell.org/package/lsp-1.4.0.0/lsp-1.4.0.0.tar.gz";
-      flake = false;
-    };
-    lsp-types-source = {
-      url = "https://hackage.haskell.org/package/lsp-types-1.4.0.0/lsp-types-1.4.0.0.tar.gz";
-      flake = false;
-    };
-    lsp-test-source = {
-      url = "https://hackage.haskell.org/package/lsp-test-0.14.0.2/lsp-test-0.14.0.2.tar.gz";
-      flake = false;
-    };
+    hackage-sources.url = "path:./flake_hackage";
   };
   outputs =
-    { self, nixpkgs, flake-compat, flake-utils, pre-commit-hooks, gitignore, lsp-source, lsp-types-source, lsp-test-source }:
+    { self, nixpkgs, flake-compat, flake-utils, pre-commit-hooks, gitignore, hackage-sources }:
     {
       overlay = final: prev:
         with prev;
         let
+          hackage = hackage-sources.inputs;
+
           haskellOverrides = hself: hsuper: {
             # we override mkDerivation here to apply the following
             # tweak to each haskell package:
@@ -88,9 +79,9 @@
               # We need an older version
               hiedb = hself.hiedb_0_4_1_0;
 
-              lsp = hsuper.callCabal2nix "lsp" lsp-source {};
-              lsp-types = hsuper.callCabal2nix "lsp-types" lsp-types-source {};
-              lsp-test = hsuper.callCabal2nix "lsp-test" lsp-test-source {};
+              lsp = hsuper.callCabal2nix "lsp" hackage.lsp {};
+              lsp-types = hsuper.callCabal2nix "lsp-types" hackage.lsp-types {};
+              lsp-test = hsuper.callCabal2nix "lsp-test" hackage.lsp-test {};
 
               implicit-hie-cradle = hself.callCabal2nix "implicit-hie-cradle"
                 (builtins.fetchTarball {

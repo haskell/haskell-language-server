@@ -62,7 +62,23 @@
         "type": "github"
       }
     },
-    "lsp-source": {
+    "hackage-sources": {
+      "inputs": {
+        "lsp": "lsp",
+        "lsp-test": "lsp-test",
+        "lsp-types": "lsp-types"
+      },
+      "locked": {
+        "narHash": "sha256-p6aOFA/SahtoQC2FLWxltQ3Fy9pXElKq0FGCgNsehSc=",
+        "path": "./flake_hackage",
+        "type": "path"
+      },
+      "original": {
+        "path": "./flake_hackage",
+        "type": "path"
+      }
+    },
+    "lsp": {
       "flake": false,
       "locked": {
         "narHash": "sha256-OcyNHNRh9j5nbJ8SjaNAWIEKuixAJlA7+vTimFY0c2c=",
@@ -74,7 +90,7 @@
         "url": "https://hackage.haskell.org/package/lsp-1.4.0.0/lsp-1.4.0.0.tar.gz"
       }
     },
-    "lsp-test-source": {
+    "lsp-test": {
       "flake": false,
       "locked": {
         "narHash": "sha256-IOmbQH6tKdu9kAyirvLx6xFS2N+/tbs6vZn0mNGm3No=",
@@ -86,7 +102,7 @@
         "url": "https://hackage.haskell.org/package/lsp-test-0.14.0.2/lsp-test-0.14.0.2.tar.gz"
       }
     },
-    "lsp-types-source": {
+    "lsp-types": {
       "flake": false,
       "locked": {
         "narHash": "sha256-K1CeV6o5mmrXubATCh19iFatJ1RtPwpY5lxD8rf/SIw=",
@@ -152,9 +168,7 @@
         "flake-compat": "flake-compat",
         "flake-utils": "flake-utils",
         "gitignore": "gitignore",
-        "lsp-source": "lsp-source",
-        "lsp-test-source": "lsp-test-source",
-        "lsp-types-source": "lsp-types-source",
+        "hackage-sources": "hackage-sources",
         "nixpkgs": "nixpkgs",
         "pre-commit-hooks": "pre-commit-hooks"
       }
