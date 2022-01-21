@@ -216,8 +216,8 @@ data Provenance
       (Uniquely Class)     -- ^ Class
     -- | A binding explicitly written by the user.
   | UserPrv
-    -- | A binding explicitly written by the user.
-  | MetaStackPrv
+    -- | A selector introduced by a meta program.
+  | SelectorPrv
     -- | A binding explicitly imported by the user.
   | ImportPrv
     -- | The recursive hypothesis. Present only in the context of the recursion
@@ -296,12 +296,6 @@ data HyInfo a = HyInfo
 overProvenance :: (Provenance -> Provenance) -> HyInfo a -> HyInfo a
 overProvenance f (HyInfo name prv ty) = HyInfo name (f prv) ty
 
-data Constructor = Constructor
-  { con_name :: OccName
-  , con_type :: CType
-  }
-  deriving stock (Generic, Show)
-
 data Selector = Selector
   { sel_name :: OccName
   , sel_type :: CType
@@ -317,7 +311,6 @@ data Judgement' a = Judgement
   , _jIsTopHole         :: !Bool
   , _jGoal              :: !a
   , j_coercion          :: TCvSubst
-  , j_constructor_stack :: [Constructor]
   , j_selector_stack    :: [Selector]
   }
   deriving stock (Generic, Functor, Show)
@@ -379,7 +372,7 @@ data TacticError
   | TooPolymorphic
   | NotInScope OccName
   | TacticPanic String
-  | NoTop
+  | NoTopSelector
   deriving (Eq)
 
 instance Show TacticError where
@@ -405,8 +398,8 @@ instance Show TacticError where
       "Tried to do something with the out of scope name " <> show name
     show (TacticPanic err) =
       "Tactic panic: " <> err
-    show NoTop =
-      "No constructor or selector are in scope"
+    show NoTopSelector =
+      "No top selector is in scope"
 
 
 ------------------------------------------------------------------------------

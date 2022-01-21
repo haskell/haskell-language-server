@@ -635,25 +635,14 @@ with_arg = rule $ \jdg -> do
 
 
 ------------------------------------------------------------------------------
--- | Get the most recently used data constructor.
-use_dcon :: TacticsM ()
-use_dcon = do
-  mdc <- getTopConstructor <$> goal
-  case mdc of
-    Nothing -> failure NoTop
-    Just (Constructor occ ty) ->
-      apply CompletelyUnsaturated $ HyInfo occ MetaStackPrv ty
-
-
-------------------------------------------------------------------------------
 -- | Get the most recently used selector.
 use_selector :: TacticsM ()
 use_selector = do
   msel <- getTopSelector <$> goal
   case msel of
-    Nothing -> failure NoTop
+    Nothing -> failure NoTopSelector
     Just (Selector occ ty) ->
-      apply CompletelyUnsaturated $ HyInfo occ MetaStackPrv ty
+      apply CompletelyUnsaturated $ HyInfo occ SelectorPrv ty
 
 
 ------------------------------------------------------------------------------

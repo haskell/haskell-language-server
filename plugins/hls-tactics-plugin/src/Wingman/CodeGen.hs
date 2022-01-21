@@ -266,11 +266,6 @@ buildDataCon should_blacklist jdg dc@(RealDataCon dc') tyapps = do
                              . uncurry Selector
                              . second (coerce $ mkVisFunTy record)
                              ) fld
-                  . withNewConstructor
-                      ( Constructor (occName $ dataConName dc')
-                      . CType
-                      $ mkVisFunTys (fmap unrestricted args) record
-                      )
                   . flip withNewGoal jdg
                   $ CType arg
                   ) $ zip3 args fields [0..]
