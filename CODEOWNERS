@@ -1,6 +1,10 @@
 # Core
 /ghcide @pepeiborra
+/ghcide/session-loader @pepeiborra @fendor
 /hls-graph @pepeiborra
+/hls-plugin-api @jneira @berberman
+/hls-test-utils @jneira
+/hie-compat @wz1000
 
 # Plugins
 /plugins/hls-alternate-number-format-plugin @drsooch
@@ -27,10 +31,14 @@
 # Benchmarking
 /shake-bench @pepeiborra
 
+# Docs
+/docs @michaelpj @jneira
+
 # CI
 /.circleci @jneira @Anton-Latukha
 /.githhub @jneira @Anton-Latukha
 /.gitlab @jneira @hasufell
 
-# Other
-/hie-compat @wz1000
+# Build
+*.nix @berberman @michaelpj
+*.project @jneira
