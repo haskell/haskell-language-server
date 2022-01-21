@@ -11,7 +11,7 @@
 /plugins/hls-brittany-plugin @fendor
 /plugins/hls-call-hierarchy-plugin @July541
 /plugins/hls-class-plugin @Ailrun
-/plugins/hls-eval-plugin @pepeiborra
+/plugins/hls-eval-plugin @tittoassini
 /plugins/hls-explicit-imports-plugin @pepeiborra
 /plugins/hls-floskell-plugin @alanz @Ailrun
 /plugins/hls-fourmolu-plugin @georgefst
