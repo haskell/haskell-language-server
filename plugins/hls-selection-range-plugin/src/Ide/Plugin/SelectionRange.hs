@@ -9,6 +9,7 @@ import           Control.Monad.Reader                    (runReader)
 import           Control.Monad.Trans.Maybe               (MaybeT (MaybeT),
                                                           runMaybeT)
 import           Data.Coerce                             (coerce)
+import           Data.Containers.ListUtils               (nubOrd)
 import           Data.Foldable                           (find)
 import qualified Data.Map.Strict                         as Map
 import           Data.Maybe                              (fromMaybe, mapMaybe)
@@ -54,6 +55,7 @@ descriptor plId = (defaultPluginDescriptor plId)
 selectionRangeHandler :: IdeState -> PluginId -> SelectionRangeParams -> LspM c (Either ResponseError (List SelectionRange))
 selectionRangeHandler ide _ SelectionRangeParams{..} = do
     let (TextDocumentIdentifier uri) = _textDocument
+    -- TODO improve error reporting (both here and in 'getSelectionRanges')
     let filePathMaybe = toNormalizedFilePath' <$> uriToFilePath' uri
     case filePathMaybe of
         Nothing -> pure . Right . List $ []
@@ -65,13 +67,17 @@ selectionRangeHandler ide _ SelectionRangeParams{..} = do
 getSelectionRanges :: NormalizedFilePath -> [Position] -> IdeAction [SelectionRange]
 getSelectionRanges file positions = fmap (fromMaybe []) <$> runMaybeT $ do
     (HAR{hieAst, refMap}, positionMapping) <- useE GetHieAst file
+    -- 'positionMapping' should be applied to the input positions before using them
     positions' <- MaybeT . pure $ traverse (fromCurrentPosition positionMapping) positions
+
     ast <- MaybeT . pure $ getAsts hieAst Map.!? (coerce. mkFastString . fromNormalizedFilePath) file
     let ast' = runReader (preProcessAST ast) (PreProcessEnv refMap)
-    MaybeT . pure . traverse (toCurrentSelectionRange positionMapping) $
-        findSelectionRangesByPositions (astPathsLeafToRoot ast') positions'
+    let selectionRanges = findSelectionRangesByPositions (astPathsLeafToRoot ast') positions'
 
--- | Like 'toCurrentPosition', but works on 'SelectionRange'
+    -- 'positionMapping' should be applied to the output ranges before returning them
+    MaybeT . pure . traverse (toCurrentSelectionRange positionMapping) $ selectionRanges
+
+-- | Likes 'toCurrentPosition', but works on 'SelectionRange'
 toCurrentSelectionRange :: PositionMapping -> SelectionRange -> Maybe SelectionRange
 toCurrentSelectionRange positionMapping SelectionRange{..} = do
     newRange <- toCurrentRange positionMapping _range
@@ -82,8 +88,9 @@ toCurrentSelectionRange positionMapping SelectionRange{..} = do
 
 -- | Build all paths from ast leaf to root
 astPathsLeafToRoot :: HieAST a -> [SelectionRange]
-astPathsLeafToRoot = mapMaybe (spansToSelectionRange . simplifySpans) . go [[]]
+astPathsLeafToRoot = mapMaybe (spansToSelectionRange . nubOrd) . go [[]]
   where
+    go :: [[Span]] -> HieAST a -> [[Span]]
     go acc (Node _ span [])       = fmap (span:) acc
     go acc (Node _ span children) = concatMap (go (fmap (span:) acc)) children
 
@@ -92,16 +99,16 @@ spansToSelectionRange [] = Nothing
 spansToSelectionRange (span:spans) = Just $
     SelectionRange {_range = realSrcSpanToRange span, _parent = spansToSelectionRange spans}
 
-simplifySpans :: [Span] -> [Span]
-simplifySpans = foldr go []
-  where
-    go x []     = [x]
-    go x (y:ys) = if x == y then y:ys else x:y:ys
-
-findSelectionRangesByPositions :: [SelectionRange] -> [Position] -> [SelectionRange]
+-- | Filters the selection ranges containing at least one of the given positions.
+findSelectionRangesByPositions :: [SelectionRange] -- ^ all possible selection ranges
+                               -> [Position] -- ^ requested positions
+                               -> [SelectionRange]
 findSelectionRangesByPositions selectionRanges = fmap findByPosition
   where
+    findByPosition :: Position -> SelectionRange
     findByPosition p = fromMaybe SelectionRange{_range = Range p p, _parent = Nothing} $
         find (isPositionInSelectionRange p) selectionRanges
+
+    isPositionInSelectionRange :: Position -> SelectionRange -> Bool
     isPositionInSelectionRange p SelectionRange{_range} =
         let Range sp ep = _range in sp <= p && p <= ep

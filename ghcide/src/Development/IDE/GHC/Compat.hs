@@ -35,6 +35,7 @@ module Development.IDE.GHC.Compat(
     nodeInfoFromSource,
     isAnnotationInNodeInfo,
     mkAstNode,
+    combineRealSrcSpans',
 
     isQualifiedImport,
     GhcVersion(..),
@@ -399,4 +400,13 @@ mkAstNode :: NodeInfo a -> Span -> [HieAST a] -> HieAST a
 mkAstNode n = Node (SourcedNodeInfo $ Map.singleton GeneratedInfo n)
 #else
 mkAstNode = Node
+#endif
+
+combineRealSrcSpans' :: RealSrcSpan -> RealSrcSpan -> RealSrcSpan
+#if MIN_VERSION_ghc(9,2,0)
+combineRealSrcSpans' = combineRealSrcSpans
+#else
+combineRealSrcSpans' s1 s2 = mkRealSrcSpan
+    (min (realSrcSpanStart s1) (realSrcSpanEnd s2))
+    (max (realSrcSpanStart s1) (realSrcSpanEnd s2))
 #endif
