@@ -11,10 +11,10 @@ on:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
-    container: ${{ (matrix.os == 'ubuntu-18.04' && 'alpine:3.12') || '' }}
+    container: ${{ (runner.os == 'Linux' && 'alpine:3.12') || '' }}
     defaults:
       run:
-        shell: ${{ (matrix.os == 'windows-latest' && 'bash') || 'sh' }}
+        shell: ${{ (runner.os == 'Windows' && 'bash') || 'sh' }}
     strategy:
       fail-fast: false
       matrix:
@@ -35,7 +35,7 @@ jobs:
 
     steps:
     - name: Install system dependencies
-      if: matrix.os == 'ubuntu-18.04'
+      if: runner.os == 'Linux'
       run: |
         apk add --no-cache curl gcc g++ gmp-dev ncurses-dev libffi-dev make xz gzip tar perl git bash sudo binutils-gold
         apk add --no-cache zlib zlib-dev zlib-static gmp gmp-dev ncurses-static
@@ -50,9 +50,10 @@ jobs:
       with:
         ghc: ${{ matrix.ghc }}
         os:  ${{ runner.os }}
+        cache-prefix: ${{ github.workflow }}
 
     - name: (Windows) Platform specifics
-      if: matrix.os == 'windows-latest'
+      if: runner.os == 'Windows'
       env:
         GHC_VER: ${{ matrix.ghc }}
       run: |
@@ -60,7 +61,7 @@ jobs:
         echo "GHC_VERSION=$GHC_VER" >> $GITHUB_ENV
 
     - name: (Linux) Platform specifics
-      if: matrix.os == 'ubuntu-18.04'
+      if: runner.os == 'Linux'
       env:
         GHC_VER: ${{ matrix.ghc }}
       run: |
@@ -68,7 +69,7 @@ jobs:
         echo "GHC_VERSION=$GHC_VER" >> $GITHUB_ENV
 
     - name: (macOS) Platform specifics
-      if: matrix.os == 'macOS-latest'
+      if: runner.os == 'macOS'
       env:
         GHC_VER: ${{ matrix.ghc }}
       run: |
@@ -77,7 +78,6 @@ jobs:
     - name: Build the server
       # Try building it twice in case of flakey builds on Windows
       run: |
-        echo "Path: $PATH"
         cabal build exe:hls -O2 $LINUX_CABAL_ARGS || cabal build exe:hls -O2 $LINUX_CABAL_ARGS -j1
 
     - name: Compress server binary
@@ -106,13 +106,13 @@ jobs:
       with:
         upload_url: ${{ github.event.release.upload_url }}
         asset_path: ${{ steps.compress_server_binary.outputs.path }}
-        asset_name: haskell-language-server-${{ runner.OS }}-${{ env.GHC_VERSION }}${{env.EXE_EXT}}.${{ steps.compress_server_binary.outputs.extension }}
+        asset_name: haskell-language-server-${{ runner.os }}-${{ env.GHC_VERSION }}${{env.EXE_EXT}}.${{ steps.compress_server_binary.outputs.extension }}
         asset_content_type: ${{ steps.compress_server_binary.outputs.content_type }}
 
     - name: Upload server to workflow artifacts
       uses: actions/upload-artifact@v2
       with:
-        name: haskell-language-server-${{ runner.OS }}-${{ matrix.ghc }}${{env.EXE_EXT}}.${{ steps.compress_server_binary.outputs.extension }}
+        name: haskell-language-server-${{ runner.os }}-${{ matrix.ghc }}${{env.EXE_EXT}}.${{ steps.compress_server_binary.outputs.extension }}
         path: ${{ steps.compress_server_binary.outputs.path }}
 
     - name: (GHC 8.10) Build the wrapper
@@ -146,14 +146,14 @@ jobs:
       with:
         upload_url: ${{ github.event.release.upload_url }}
         asset_path: ${{ steps.compress_wrapper_binary.outputs.path }}
-        asset_name: haskell-language-server-wrapper-${{ runner.OS }}${{env.EXE_EXT}}.${{ steps.compress_wrapper_binary.outputs.extension }}
+        asset_name: haskell-language-server-wrapper-${{ runner.os }}${{env.EXE_EXT}}.${{ steps.compress_wrapper_binary.outputs.extension }}
         asset_content_type: ${{ steps.compress_wrapper_binary.outputs.content_type}}
 
     - name: (GHC 8.10) Upload wrapper to workflow artifacts
       uses: actions/upload-artifact@v2
       if: matrix.ghc == '8.10.7'
       with:
-        name: haskell-language-server-wrapper-${{ runner.OS }}${{env.EXE_EXT}}.${{ steps.compress_wrapper_binary.outputs.extension }}
+        name: haskell-language-server-wrapper-${{ runner.os }}${{env.EXE_EXT}}.${{ steps.compress_wrapper_binary.outputs.extension }}
         path: ${{ steps.compress_wrapper_binary.outputs.path }}
 
   # generates a custom tarball with sources, used by `ghcup compile hls`
@@ -196,10 +196,10 @@ jobs:
     runs-on: ubuntu-18.04
     strategy:
       matrix:
-        os: [ "Linux"
-            , "macOS"
-            , "Windows"
-            ]
+        target-os: [ "Linux"
+                   , "macOS"
+                   , "Windows"
+                   ]
     steps:
       - uses: actions/download-artifact@v2
 
@@ -207,11 +207,11 @@ jobs:
         run: |
           # move the binaries for the specific platform into bin/
           mkdir bin
-          mv haskell-language-server-${{ matrix.os }}-*/* bin
-          mv haskell-language-server-wrapper-${{ matrix.os }}.*/* bin
+          mv haskell-language-server-${{ matrix.target-os }}-*/* bin
+          mv haskell-language-server-wrapper-${{ matrix.target-os }}.*/* bin
           # decompress them
           cd bin
-          if [[ "${{ matrix.os }}" == "Windows" ]]; then
+          if [[ "${{ matrix.target-os }}" == "Windows" ]]; then
             7z x "*.zip"
             rm *.zip
           else
@@ -227,13 +227,13 @@ jobs:
         with:
           upload_url: ${{ github.event.release.upload_url }}
           asset_path: bin/haskell-language-server.tar.gz
-          asset_name: haskell-language-server-${{ matrix.os }}-${{ github.event.release.tag_name }}.tar.gz
+          asset_name: haskell-language-server-${{ matrix.target-os }}-${{ github.event.release.tag_name }}.tar.gz
           asset_content_type: application/gzip
 
       - name: Upload binaries tarball to workflow artifacts
         uses: actions/upload-artifact@v2
         with:
-          name: haskell-language-server-${{ matrix.os }}-${{ github.event.release.tag_name }}.tar.gz
+          name: haskell-language-server-${{ matrix.target-os }}-${{ github.event.release.tag_name }}.tar.gz
           path: bin/haskell-language-server.tar.gz
 
   sha256sum:
