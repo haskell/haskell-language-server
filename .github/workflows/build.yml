@@ -11,7 +11,7 @@ on:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
-    container: ${{ (startsWith(matrix.os,'ubuntu') && 'alpine:3.12') || '' }}
+    container: ${{ (startsWith(matrix.os,'ubuntu') && matrix.ghc != '9.2.1' && 'alpine:3.12') || '' }}
     defaults:
       run:
         shell: ${{ (startsWith(matrix.os,'windows') && 'bash') || 'sh' }}
@@ -35,7 +35,7 @@ jobs:
 
     steps:
     - name: Install system dependencies
-      if: runner.os == 'Linux'
+      if: runner.os == 'Linux' && matrix.ghc != '9.2.1'
       run: |
         apk add --no-cache curl gcc g++ gmp-dev ncurses-dev libffi-dev make xz gzip tar perl git bash sudo binutils-gold
         apk add --no-cache zlib zlib-dev zlib-static gmp gmp-dev ncurses-static
