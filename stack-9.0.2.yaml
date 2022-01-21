@@ -50,6 +50,9 @@ extra-deps:
 - monad-dijkstra-0.1.1.3
 - multistate-0.8.0.3
 - retrie-1.1.0.0
+- lsp-1.4.0.0
+- lsp-types-1.4.0.1
+- lsp-test-0.14.0.2
 - unix-compat-0.5.4
 
 # shake-bench dependencies

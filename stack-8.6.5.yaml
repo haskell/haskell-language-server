@@ -105,12 +105,9 @@ extra-deps:
   - some-1.0.1@sha256:26e5bab7276f48b25ea8660d3fd1166c0f20fd497dac879a40f408e23211f93e,2055
   - unliftio-core-0.2.0.1@sha256:9b3e44ea9aacacbfc35b3b54015af450091916ac3618a41868ebf6546977659a,1082
   - resourcet-1.2.3
-  - git: https://github.com/haskell/lsp.git
-    commit: bad3d45854e5ca4eaf53985e9cee42d25840d18a
-    subdirs:
-      - lsp
-      - lsp-types
-      - lsp-test
+  - lsp-1.4.0.0
+  - lsp-types-1.4.0.1
+  - lsp-test-0.14.0.2
   - mod-0.1.2.2
   - semirings-0.6
   - stm-containers-1.1.0.4

@@ -50,12 +50,9 @@ extra-deps:
 - monad-dijkstra-0.1.1.3
 - multistate-0.8.0.3
 - retrie-1.1.0.0
-- git: https://github.com/haskell/lsp.git
-  commit: bad3d45854e5ca4eaf53985e9cee42d25840d18a
-  subdirs:
-    - lsp
-    - lsp-types
-    - lsp-test
+- lsp-1.4.0.0
+- lsp-types-1.4.0.1
+- lsp-test-0.14.0.2
 - refinery-0.4.0.0
 
 # shake-bench dependencies
