@@ -17,7 +17,7 @@ module Ide.Arguments
   ) where
 
 import           Data.Version
-import           GitHash                       (tGitInfoCwd, giHash)
+import           GitHash                       (tGitInfoCwdTry, giHash)
 import           Development.IDE               (IdeState)
 import           Development.IDE.Main          (Command (..), commandP)
 import           Ide.Types                     (IdePlugins)
@@ -141,8 +141,10 @@ haskellLanguageServerNumericVersion = showVersion version
 haskellLanguageServerVersion :: IO String
 haskellLanguageServerVersion = do
   path <- getExecutablePath
-  let gi = $$tGitInfoCwd
-      gitHashSection = " (GIT hash: " <> giHash gi <> ")"
+  let gi = $$tGitInfoCwdTry
+      gitHashSection = case gi of
+        Right gi -> " (GIT hash: " <> giHash gi <> ")"
+        Left _   -> ""
   return $ "haskell-language-server version: " <> haskellLanguageServerNumericVersion
              <> " (GHC: " <> VERSION_ghc
              <> ") (PATH: " <> path <> ")"
