@@ -1,0 +1,36 @@
+# Core
+/ghcide @pepeiborra
+/hls-graph @pepeiborra
+
+# Plugins
+/plugins/hls-alternate-number-format-plugin @drsooch
+/plugins/hls-brittany-plugin @fendor
+/plugins/hls-call-hierarchy-plugin @July541
+/plugins/hls-class-plugin @Ailrun
+/plugins/hls-eval-plugin @pepeiborra
+/plugins/hls-explicit-imports-plugin @pepeiborra
+/plugins/hls-floskell-plugin @alanz @Ailrun
+/plugins/hls-fourmolu-plugin @georgefst
+/plugins/hls-haddock-comments-plugin @berberman
+/plugins/hls-hlint-plugin @jneira
+/plugins/hls-module-name-plugin @tittoassini
+/plugins/hls-ormolu-plugin @alanz
+/plugins/hls-pragmas-plugin @berberman @Ailrun
+/plugins/hls-qualify-imported-names-plugin @eddiemundo 
+/plugins/hls-refine-imports-plugin @rayshih 
+/plugins/hls-rename-plugin @OliverMadine
+/plugins/hls-retrie-plugin @pepeiborra
+/plugins/hls-splice-plugin @konn
+/plugins/hls-stylish-haskell-plugin @Ailrun
+/plugins/hls-tactics-plugin @isovector
+
+# Benchmarking
+/shake-bench @pepeiborra
+
+# CI
+/.circleci @jneira @Anton-Latukha
+/.githhub @jneira @Anton-Latukha
+/.gitlab @jneira @hasufell
+
+# Other
+/hie-compat @wz1000
