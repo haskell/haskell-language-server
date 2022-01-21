@@ -50,7 +50,6 @@ jobs:
       with:
         ghc: ${{ matrix.ghc }}
         os:  ${{ runner.os }}
-        cache-prefix: ${{ github.workflow }}
 
     - name: (Windows) Platform specifics
       if: runner.os == 'Windows'
