@@ -264,7 +264,7 @@ buildDataCon should_blacklist jdg dc@(RealDataCon dc') tyapps = do
                   . bool id blacklistingDestruct should_blacklist
                   . maybe id ( withNewSelector
                              . uncurry Selector
-                             . second (coerce $ mkVisFunTy record)
+                             . second (coerce $ mkVisFunTys [record])
                              ) fld
                   . flip withNewGoal jdg
                   $ CType arg
