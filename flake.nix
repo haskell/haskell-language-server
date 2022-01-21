@@ -135,6 +135,7 @@
     } // (flake-utils.lib.eachSystem [ "x86_64-linux" "x86_64-darwin" "aarch64-darwin" ])
     (system:
       let
+        hackage = hackage-sources.inputs;
         pkgs = import nixpkgs {
           inherit system;
           overlays = [ self.overlay ];
@@ -169,6 +170,7 @@
         };
 
         ghc901Config = (import ./configuration-ghc-901.nix) { inherit pkgs; };
+        ghc921Config = (import ./configuration-ghc-921.nix) { inherit pkgs hackage; };
 
         # GHC versions
         ghcDefault = pkgs.hlsHpkgs ("ghc"
@@ -177,6 +179,7 @@
         ghc884 = pkgs.hlsHpkgs "ghc884";
         ghc8107 = pkgs.hlsHpkgs "ghc8107";
         ghc901 = ghc901Config.tweakHpkgs (pkgs.hlsHpkgs "ghc901");
+        ghc921 = ghc921Config.tweakHpkgs (pkgs.hlsHpkgs "ghc921");
 
         # For markdown support
         myst-parser = pkgs.python3Packages.callPackage ./myst-parser.nix {};
@@ -211,6 +214,8 @@
               map (name: p.${name}) (attrNames
                 (if hpkgs.ghc.version == "9.0.1" then
                   removeAttrs hlsSources ghc901Config.disabledPlugins
+                else if hpkgs.ghc.version == "9.2.1" then
+                  removeAttrs hlsSources ghc921Config.disabledPlugins
                 else
                   hlsSources));
             buildInputs = [ gmp zlib ncurses capstone tracy (gen-hls-changelogs hpkgs) pythonWithPackages ]
@@ -253,12 +258,14 @@
           haskell-language-server-884-dev = mkDevShell ghc884;
           haskell-language-server-8107-dev = mkDevShell ghc8107;
           haskell-language-server-901-dev = mkDevShell ghc901;
+          haskell-language-server-921-dev = mkDevShell ghc921;
 
           # hls package
           haskell-language-server = mkExe ghcDefault;
           haskell-language-server-884 = mkExe ghc884;
           haskell-language-server-8107 = mkExe ghc8107;
           haskell-language-server-901 = mkExe ghc901;
+          haskell-language-server-921 = mkExe ghc921;
 
           # docs
           docs = docs;
