@@ -17,9 +17,12 @@ tests = testGroup "hie-bios" [
         runSession hlsCommand fullCaps "test/testdata/hieBiosMainIs" $ do
             doc <- openDoc "Main.hs" "haskell"
             Just mainHoverText <- getHover doc (Position 3 1)
-            let (HoverContents (MarkupContent _ x)) = mainHoverText ^. L.contents
-            liftIO $ "main :: IO ()" `T.isInfixOf` x
-                     @? "found hover text for main"
+            let hoverContents = mainHoverText ^. L.contents
+            case hoverContents of
+                 (HoverContents (MarkupContent _ x)) -> do
+                    liftIO $ "main :: IO ()" `T.isInfixOf` x
+                            @? "found hover text for main"
+                 _ -> error $ "Unexpected hover contents: " ++ show hoverContents
 
     , testCase "reports errors in hie.yaml" $ do
         writeFile (hieBiosErrorPath </> "hie.yaml") ""

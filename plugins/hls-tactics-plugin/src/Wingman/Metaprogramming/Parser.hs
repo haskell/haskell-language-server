@@ -98,6 +98,17 @@ commands =
           "\\x y z -> (_ :: d)"
       ]
 
+  , command "idiom" Deterministic Tactic
+      "Lift a tactic into idiom brackets."
+      (pure . idiom)
+      [ Example
+          Nothing
+          ["(apply f)"]
+          [EHI "f" "a -> b -> Int"]
+          (Just "Maybe Int")
+          "f <$> (_ :: Maybe a) <*> (_ :: Maybe b)"
+      ]
+
   , command "intro" Deterministic (Bind One)
       "Construct a lambda expression, binding an argument with the given name."
       (pure . intros' . IntroduceOnlyNamed . pure)

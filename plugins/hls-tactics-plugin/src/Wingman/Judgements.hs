@@ -79,6 +79,12 @@ getTopConstructor = preview $ field  @"j_constructor_stack" . _head
 withNewGoal :: a -> Judgement' a -> Judgement' a
 withNewGoal t = field @"_jGoal" .~ t
 
+------------------------------------------------------------------------------
+-- | Like 'withNewGoal' but allows you to modify the goal rather than replacing
+-- it.
+withModifiedGoal :: (a -> a) -> Judgement' a -> Judgement' a
+withModifiedGoal f = field @"_jGoal" %~ f
+
 
 ------------------------------------------------------------------------------
 -- | Add some new type equalities to the local judgement.

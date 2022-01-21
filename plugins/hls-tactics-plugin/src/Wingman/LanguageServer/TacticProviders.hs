@@ -160,10 +160,11 @@ commandProvider RunMetaprogram =
 
 
 requireGHC88OrHigher :: TacticProvider -> TacticProvider
-requireGHC88OrHigher tp tpd =
 #if __GLASGOW_HASKELL__ >= 808
+requireGHC88OrHigher tp tpd =
   tp tpd
 #else
+requireGHC88OrHigher _ _=
   mempty
 #endif
 
