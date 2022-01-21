@@ -6,6 +6,7 @@ module Wingman.GHC where
 import           Control.Monad.State
 import           Control.Monad.Trans.Maybe (MaybeT(..))
 import           Data.Bool (bool)
+import           Data.Coerce (coerce)
 import           Data.Function (on)
 import           Data.Functor ((<&>))
 import           Data.List (isPrefixOf)
@@ -360,17 +361,13 @@ expandTyFam ctx = snd . normaliseType  (ctxFamInstEnvs ctx) Nominal
 -- | Like 'tcUnifyTy', but takes a list of skolems to prevent unification of.
 tryUnifyUnivarsButNotSkolems :: Set TyVar -> CType -> CType -> Maybe TCvSubst
 tryUnifyUnivarsButNotSkolems skolems goal inst =
-  case tcUnifyTysFG
-         (bool BindMe Skolem . flip S.member skolems)
-         [unCType inst]
-         [unCType goal] of
-    Unifiable subst -> pure subst
-    _               -> Nothing
+  tryUnifyUnivarsButNotSkolemsMany skolems $ coerce [(goal, inst)]
 
 ------------------------------------------------------------------------------
--- | Like 'tcUnifyTy', but takes a list of skolems to prevent unification of.
-tryUnifyUnivarsButNotSkolemsMany :: Set TyVar -> [Pair Type] -> Maybe TCvSubst
-tryUnifyUnivarsButNotSkolemsMany skolems (unzip . fmap unPair -> (goal, inst)) =
+-- | Like 'tryUnifyUnivarsButNotSkolems', but takes a list
+-- of pairs of types to unify.
+tryUnifyUnivarsButNotSkolemsMany :: Set TyVar -> [(Type, Type)] -> Maybe TCvSubst
+tryUnifyUnivarsButNotSkolemsMany skolems (unzip -> (goal, inst)) =
   tcUnifyTys
     (bool BindMe Skolem . flip S.member skolems)
     inst

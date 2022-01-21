@@ -12,7 +12,7 @@ import           Control.Monad (filterM, unless)
 import           Control.Monad (when)
 import           Control.Monad.Extra (anyM)
 import           Control.Monad.Reader.Class (MonadReader (ask))
-import           Control.Monad.State.Strict (StateT(..), runStateT, execStateT, gets, modify)
+import           Control.Monad.State.Strict (StateT(..), runStateT, execStateT)
 import           Data.Bool (bool)
 import           Data.Foldable
 import           Data.Functor ((<&>))
@@ -292,12 +292,7 @@ apply (Unsaturated n) hi = tracing ("apply' " <> show (hi_name hi)) $ do
   skolems <- gets ts_skolems
   rule $ \jdg -> do
     unify g (CType $ mkVisFunTys unsaturated_args ret)
-    subst <- gets ts_unifier
-    let theta' = substTheta subst theta
-    let fundeps = foldMap (foldMap fd_eqs . improveFromInstEnv (ctxInstEnvs ctx) (\_ _ -> ())) theta'
-        unified = tryUnifyUnivarsButNotSkolemsMany skolems fundeps
-    modify $ updateSubst $ maybe emptyTCvSubst id unified
-
+    learnFromFundeps theta
     ext
         <- fmap unzipTrace
         $ traverse ( newSubgoal
@@ -653,13 +648,26 @@ with_arg = rule $ \jdg -> do
   pure $ fmap noLoc $ (@@) <$> fmap unLoc f <*> fmap unLoc a
 
 
+------------------------------------------------------------------------------
+-- | Get the most recently used data constructor.
+use_dcon :: TacticsM ()
+use_dcon = do
+  mdc <- getTopConstructor <$> goal
+  case mdc of
+    Nothing -> failure NoTop
+    Just (Constructor occ ty) ->
+      apply CompletelyUnsaturated $ HyInfo occ MetaStackPrv ty
+
+
+------------------------------------------------------------------------------
+-- | Get the most recently used selector.
 use_selector :: TacticsM ()
 use_selector = do
   msel <- getTopSelector <$> goal
   case msel of
-    Nothing -> failure NoTopSelector
+    Nothing -> failure NoTop
     Just (Selector occ ty) ->
-      apply CompletelyUnsaturated $ HyInfo occ SelectorPrv ty
+      apply CompletelyUnsaturated $ HyInfo occ MetaStackPrv ty
 
 
 ------------------------------------------------------------------------------
@@ -708,17 +716,17 @@ idiom m = do
             . pure
             $ applic
       case minst of
-        Nothing -> failure $ GoalMismatch "no applicative" $ CType applic
+        Nothing -> failure $ GoalMismatch "idiom" $ CType applic
         Just (_, _) -> do
           rule $ \jdg -> do
             expr <- subgoalWith (withNewGoal (CType ty) jdg) m
             case unLoc $ syn_val expr of
               HsApp{}     -> pure $ fmap idiomize expr
               RecordCon{} -> pure $ fmap idiomize expr
-              _       -> unsolvable $ GoalMismatch "wrong shape" $ jGoal jdg
+              _       -> unsolvable $ GoalMismatch "idiom" $ jGoal jdg
           rule $ newSubgoal . withModifiedGoal (CType . mkAppTy applic . unCType)
     Nothing ->
-      failure $ GoalMismatch "cant split" $ jGoal jdg
+      failure $ GoalMismatch "idiom" $ jGoal jdg
 
 subgoalWith :: Judgement -> TacticsM () -> RuleM (Synthesized (LHsExpr GhcPs))
 subgoalWith jdg t = RuleT $ flip execStateT jdg $ unTacticT t

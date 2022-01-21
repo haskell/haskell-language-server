@@ -37,14 +37,15 @@ tests = testGroup "completions" [
          compls <- getCompletions doc (Position 5 9)
          let item = head $ filter ((== "putStrLn") . (^. label)) compls
          resolvedRes <- request SCompletionItemResolve item
-         let Right resolved = resolvedRes ^. result
-         liftIO $ print resolved
-         liftIO $ do
-             resolved ^. label @?= "putStrLn"
-             resolved ^. kind @?= Just CiFunction
-             resolved ^. detail @?= Just "String -> IO ()\nPrelude"
-             resolved ^. insertTextFormat @?= Just Snippet
-             resolved ^. insertText @?= Just "putStrLn ${1:String}"
+         let eResolved = resolvedRes ^. result
+         case eResolved of
+             Right resolved -> liftIO $ do
+                 resolved ^. label @?= "putStrLn"
+                 resolved ^. kind @?= Just CiFunction
+                 resolved ^. detail @?= Just "String -> IO ()\nPrelude"
+                 resolved ^. insertTextFormat @?= Just Snippet
+                 resolved ^. insertText @?= Just "putStrLn ${1:String}"
+             _ -> error $ "Unexpected resolved value: " ++ show eResolved
 
      , testCase "completes imports" $ runSession (hlsCommand <> " --test") fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
