@@ -35,7 +35,7 @@ module Development.IDE.GHC.Compat(
     nodeInfoFromSource,
     isAnnotationInNodeInfo,
     mkAstNode,
-    combineRealSrcSpans',
+    combineRealSrcSpans,
 
     isQualifiedImport,
     GhcVersion(..),
@@ -89,6 +89,7 @@ import           GHC                                   hiding (HasSrcSpan,
 #if MIN_VERSION_ghc(9,0,0)
 import           GHC.Data.StringBuffer
 import           GHC.Driver.Session                    hiding (ExposePackage)
+import qualified GHC.Types.SrcLoc                      as SrcLoc
 import           GHC.Utils.Error
 #if MIN_VERSION_ghc(9,2,0)
 import           Data.Bifunctor
@@ -402,11 +403,16 @@ mkAstNode n = Node (SourcedNodeInfo $ Map.singleton GeneratedInfo n)
 mkAstNode = Node
 #endif
 
-combineRealSrcSpans' :: RealSrcSpan -> RealSrcSpan -> RealSrcSpan
+combineRealSrcSpans :: RealSrcSpan -> RealSrcSpan -> RealSrcSpan
 #if MIN_VERSION_ghc(9,2,0)
-combineRealSrcSpans' = combineRealSrcSpans
+combineRealSrcSpans = SrcLoc.combineRealSrcSpans
 #else
-combineRealSrcSpans' s1 s2 = mkRealSrcSpan
-    (min (realSrcSpanStart s1) (realSrcSpanEnd s2))
-    (max (realSrcSpanStart s1) (realSrcSpanEnd s2))
+combineRealSrcSpans span1 span2
+  = mkRealSrcSpan (mkRealSrcLoc file line_start col_start) (mkRealSrcLoc file line_end col_end)
+  where
+    (line_start, col_start) = min (srcSpanStartLine span1, srcSpanStartCol span1)
+                                  (srcSpanStartLine span2, srcSpanStartCol span2)
+    (line_end, col_end)     = max (srcSpanEndLine span1, srcSpanEndCol span1)
+                                  (srcSpanEndLine span2, srcSpanEndCol span2)
+    file = srcSpanFile span1
 #endif

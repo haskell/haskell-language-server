@@ -17,7 +17,7 @@ import           Development.IDE.GHC.Compat      (ContextInfo (MatchBind, TyDecl
                                                   IdentifierDetails (identInfo),
                                                   NodeInfo (NodeInfo, nodeIdentifiers),
                                                   RealSrcSpan, RefMap, Span,
-                                                  combineRealSrcSpans',
+                                                  combineRealSrcSpans,
                                                   flattenAst,
                                                   isAnnotationInNodeInfo,
                                                   mkAstNode, nodeInfoFromSource,
@@ -73,7 +73,7 @@ createVirtualNode [] = Nothing
 createVirtualNode children = Just $ mkAstNode (NodeInfo mempty mempty mempty) span' children
   where
     span' :: RealSrcSpan
-    span' = foldl1' combineRealSrcSpans' . fmap nodeSpan $ children
+    span' = foldl1' combineRealSrcSpans . fmap nodeSpan $ children
 
 {-|
 Combine type signature with variable definition under a new parent node, if the signature is placed right before the
@@ -82,11 +82,11 @@ definition. This allows the user to have a step selecting both type signature an
 mergeSignatureWithDefinition :: HieAST a -> Reader (PreProcessEnv a) (HieAST a)
 mergeSignatureWithDefinition node = do
     refMap <- asks preProcessEnvRefMap
-    -- do this recursively for children, so that non top level functions can be handled.
+    -- Do this recursively for children, so that non top level functions can be handled.
     children' <- traverse mergeSignatureWithDefinition (nodeChildren node)
     pure $ node { nodeChildren = reverse $ foldl' (go refMap) [] children' }
   where
-    -- for every two adjacent nodes, we try to combine them into one
+    -- For every two adjacent nodes, we try to combine them into one.
     go :: RefMap a -> [HieAST a] -> HieAST a -> [HieAST a]
     go _ [] node' = [node']
     go refMap (prev:others) node' =
@@ -146,7 +146,7 @@ isIdentADef outerSpan (span, detail) =
     isDef :: Bool
     isDef = any isContextInfoDef . Set.toList . identInfo $ detail
 
-    -- does the 'ContextInfo' represents a variable/function definition?
+    -- Does the 'ContextInfo' represents a variable/function definition?
     isContextInfoDef :: ContextInfo -> Bool
     isContextInfoDef ValBind{} = True
     isContextInfoDef MatchBind = True

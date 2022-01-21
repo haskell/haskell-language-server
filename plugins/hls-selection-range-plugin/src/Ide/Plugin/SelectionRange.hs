@@ -4,21 +4,26 @@
 
 module Ide.Plugin.SelectionRange (descriptor) where
 
+import           Control.Monad.Except                    (ExceptT (ExceptT),
+                                                          runExceptT)
 import           Control.Monad.IO.Class                  (liftIO)
 import           Control.Monad.Reader                    (runReader)
 import           Control.Monad.Trans.Maybe               (MaybeT (MaybeT),
-                                                          runMaybeT)
+                                                          maybeToExceptT)
 import           Data.Coerce                             (coerce)
 import           Data.Containers.ListUtils               (nubOrd)
+import           Data.Either.Extra                       (maybeToEither)
 import           Data.Foldable                           (find)
 import qualified Data.Map.Strict                         as Map
 import           Data.Maybe                              (fromMaybe, mapMaybe)
+import qualified Data.Text                               as T
 import           Development.IDE                         (GetHieAst (GetHieAst),
                                                           HieAstResult (HAR, hieAst, refMap),
                                                           IdeAction,
                                                           IdeState (shakeExtras),
                                                           Range (Range),
                                                           fromNormalizedFilePath,
+                                                          ideLogger, logInfo,
                                                           realSrcSpanToRange,
                                                           runIdeAction,
                                                           toNormalizedFilePath',
@@ -32,6 +37,7 @@ import           Development.IDE.GHC.Compat              (HieAST (Node), Span,
 import           Development.IDE.GHC.Compat.Util
 import           Ide.Plugin.SelectionRange.ASTPreProcess (PreProcessEnv (PreProcessEnv),
                                                           preProcessAST)
+import           Ide.PluginUtils                         (response)
 import           Ide.Types                               (PluginDescriptor (pluginHandlers),
                                                           PluginId,
                                                           defaultPluginDescriptor,
@@ -44,7 +50,8 @@ import           Language.LSP.Types                      (List (List),
                                                           SMethod (STextDocumentSelectionRange),
                                                           SelectionRange (..),
                                                           SelectionRangeParams (..),
-                                                          TextDocumentIdentifier (TextDocumentIdentifier))
+                                                          TextDocumentIdentifier (TextDocumentIdentifier),
+                                                          Uri)
 import           Prelude                                 hiding (span)
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -54,28 +61,40 @@ descriptor plId = (defaultPluginDescriptor plId)
 
 selectionRangeHandler :: IdeState -> PluginId -> SelectionRangeParams -> LspM c (Either ResponseError (List SelectionRange))
 selectionRangeHandler ide _ SelectionRangeParams{..} = do
-    let (TextDocumentIdentifier uri) = _textDocument
-    -- TODO improve error reporting (both here and in 'getSelectionRanges')
-    let filePathMaybe = toNormalizedFilePath' <$> uriToFilePath' uri
-    case filePathMaybe of
-        Nothing -> pure . Right . List $ []
-        Just filePath -> liftIO $ do
-            let (List positions) = _positions
-            selectionRanges <- runIdeAction "SelectionRange" (shakeExtras ide) $ getSelectionRanges filePath positions
-            pure . Right . List $ selectionRanges
+    liftIO $ logInfo logger $ "requesting selection range for file: " <> T.pack (show uri)
+    response $ do
+        filePath <- ExceptT . pure . maybeToEither "fail to convert uri to file path" $
+                toNormalizedFilePath' <$> uriToFilePath' uri
+        selectionRanges <- ExceptT . liftIO . runIdeAction "SelectionRange" (shakeExtras ide) . runExceptT $
+            getSelectionRanges filePath positions
+        pure . List $ selectionRanges
+  where
+    uri :: Uri
+    TextDocumentIdentifier uri = _textDocument
 
-getSelectionRanges :: NormalizedFilePath -> [Position] -> IdeAction [SelectionRange]
-getSelectionRanges file positions = fmap (fromMaybe []) <$> runMaybeT $ do
-    (HAR{hieAst, refMap}, positionMapping) <- useE GetHieAst file
+    positions :: [Position]
+    List positions = _positions
+
+    logger = ideLogger ide
+
+getSelectionRanges :: NormalizedFilePath -> [Position] -> ExceptT String IdeAction [SelectionRange]
+getSelectionRanges file positions = do
+    (HAR{hieAst, refMap}, positionMapping) <- maybeToExceptT "fail to get hie ast" $ useE GetHieAst file
     -- 'positionMapping' should be applied to the input positions before using them
-    positions' <- MaybeT . pure $ traverse (fromCurrentPosition positionMapping) positions
+    positions' <- maybeToExceptT "fail to apply position mapping to input positions" . MaybeT . pure $
+        traverse (fromCurrentPosition positionMapping) positions
 
-    ast <- MaybeT . pure $ getAsts hieAst Map.!? (coerce. mkFastString . fromNormalizedFilePath) file
+    ast <- maybeToExceptT "fail to get ast for current file" . MaybeT . pure $
+        -- in GHC 9, the 'FastString' in 'HieASTs' is replaced by a newtype wrapper around 'LexicalFastString'
+        -- so we use 'coerce' to make it work in both GHC 8 and 9
+        getAsts hieAst Map.!? (coerce . mkFastString . fromNormalizedFilePath) file
+
     let ast' = runReader (preProcessAST ast) (PreProcessEnv refMap)
     let selectionRanges = findSelectionRangesByPositions (astPathsLeafToRoot ast') positions'
 
     -- 'positionMapping' should be applied to the output ranges before returning them
-    MaybeT . pure . traverse (toCurrentSelectionRange positionMapping) $ selectionRanges
+    maybeToExceptT "fail to apply position mapping to output positions" . MaybeT . pure $
+         traverse (toCurrentSelectionRange positionMapping) selectionRanges
 
 -- | Likes 'toCurrentPosition', but works on 'SelectionRange'
 toCurrentSelectionRange :: PositionMapping -> SelectionRange -> Maybe SelectionRange
@@ -99,7 +118,10 @@ spansToSelectionRange [] = Nothing
 spansToSelectionRange (span:spans) = Just $
     SelectionRange {_range = realSrcSpanToRange span, _parent = spansToSelectionRange spans}
 
--- | Filters the selection ranges containing at least one of the given positions.
+{-|
+Filters the selection ranges containing at least one of the given positions, without taking each selection range's
+parent into account.
+-}
 findSelectionRangesByPositions :: [SelectionRange] -- ^ all possible selection ranges
                                -> [Position] -- ^ requested positions
                                -> [SelectionRange]
