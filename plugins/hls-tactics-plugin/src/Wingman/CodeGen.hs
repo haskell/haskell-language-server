@@ -254,30 +254,37 @@ buildDataCon should_blacklist jdg dc@(RealDataCon dc') tyapps = do
         evidenceToSubst (foldMap mkEvidence theta) ts
           & #ts_skolems <>~ S.fromList skolems'
       pure args
-  let fields = maybe (repeat Nothing) (fmap Just) $ getRecordFields dc
+  let record = unCType $ jGoal jdg
+      fields = maybe (repeat Nothing) (fmap Just) $ getRecordFields dc
   ext
       <- fmap unzipTrace
        $ traverse ( \(arg, fld, n) ->
                     newSubgoal
                   . filterSameTypeFromOtherPositions dc n
                   . bool id blacklistingDestruct should_blacklist
-                  . maybe id (withNewSelector . uncurry Selector) fld
-                  . withNewConstructor dc'
+                  . maybe id ( withNewSelector
+                             . uncurry Selector
+                             . second (coerce $ mkVisFunTy record)
+                             ) fld
+                  . withNewConstructor
+                      ( Constructor (occName $ dataConName dc')
+                      . CType
+                      $ mkVisFunTys (fmap unrestricted args) record
+                      )
                   . flip withNewGoal jdg
                   $ CType arg
                   ) $ zip3 args fields [0..]
   pure $ ext
     & #syn_trace %~ rose (show dc) . pure
     & #syn_val   %~ mkCon dc tyapps
-buildDataCon _ _ PatSynCon{} _ = do
-  -- If we have a 'PatSyn', we can't continue, since there is no
-  -- 'dataConInstSig' equivalent for 'PatSyn's. I don't think this is
-  -- a fundamental problem, but I don't know enough about the GHC internals
-  -- to implement it myself.
-  --
-  -- Fortunately, this isn't an issue in practice, since 'PatSyn's are
-  -- never in the hypothesis.
-  cut
+-- If we have a 'PatSynCon', we can't continue, since there is no
+-- 'dataConInstSig' equivalent for 'PatSyn's. I don't think this is
+-- a fundamental problem, but I don't know enough about the GHC internals
+-- to implement it myself.
+--
+-- Fortunately, this isn't an issue in practice, since 'PatSyn's are
+-- never in the hypothesis.
+buildDataCon _ _ PatSynCon{} _ = cut
 
 
 ------------------------------------------------------------------------------

@@ -143,6 +143,17 @@ commands =
             ]
       ]
 
+  , command "datacon" Deterministic Nullary
+     "Use the currently-being-built data constructor."
+     (pure use_dcon)
+     [ Example
+        (Just "In the context of `f = Blah { bar = _ }`.")
+        []
+        []
+        Nothing
+        "Blah"
+     ]
+
   , command "selector" Deterministic Nullary
      "Use the currently-being-built field selector."
      (pure use_selector)

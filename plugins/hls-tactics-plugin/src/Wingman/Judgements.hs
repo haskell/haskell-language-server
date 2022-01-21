@@ -69,10 +69,10 @@ withNewSelector sel = field  @"j_selector_stack" %~ (sel :)
 getTopSelector :: Judgement' a -> Maybe Selector
 getTopSelector = preview $ field  @"j_selector_stack" . _head
 
-withNewConstructor :: DataCon -> Judgement' a -> Judgement' a
+withNewConstructor :: Constructor -> Judgement' a -> Judgement' a
 withNewConstructor dc = field  @"j_constructor_stack" %~ (dc :)
 
-getTopConstructor :: Judgement' a -> Maybe DataCon
+getTopConstructor :: Judgement' a -> Maybe Constructor
 getTopConstructor = preview $ field  @"j_constructor_stack" . _head
 
 
@@ -261,7 +261,7 @@ provAncestryOf (ClassMethodPrv _) = mempty
 provAncestryOf UserPrv = mempty
 provAncestryOf RecursivePrv = mempty
 provAncestryOf ImportPrv = mempty
-provAncestryOf SelectorPrv = mempty
+provAncestryOf MetaStackPrv = mempty
 provAncestryOf (DisallowedPrv _ p2) = provAncestryOf p2
 
 
