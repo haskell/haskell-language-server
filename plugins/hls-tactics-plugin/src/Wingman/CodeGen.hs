@@ -242,28 +242,18 @@ destructLambdaCase' use_field_puns f jdg = do
 ------------------------------------------------------------------------------
 -- | Construct a data con with subgoals for each field.
 buildDataCon
-    :: Bool       -- Should we blacklist destruct?
+    :: Bool     -- ^ Should we blacklist destruct?
     -> Judgement
-    -> ConLike            -- ^ The data con to build
-    -> [Type]             -- ^ Type arguments for the data con
+    -> ConLike  -- ^ The data con to build
+    -> [Type]   -- ^ Type arguments for the data con
     -> RuleM (Synthesized (LHsExpr GhcPs))
-buildDataCon should_blacklist jdg dc tyapps = do
-  args <- case dc of
-    RealDataCon dc' -> do
+buildDataCon should_blacklist jdg dc@(RealDataCon dc') tyapps = do
+  args <- do
       let (skolems', theta, args) = dataConInstSig dc' tyapps
       modify $ \ts ->
         evidenceToSubst (foldMap mkEvidence theta) ts
           & #ts_skolems <>~ S.fromList skolems'
       pure args
-    _ ->
-      -- If we have a 'PatSyn', we can't continue, since there is no
-      -- 'dataConInstSig' equivalent for 'PatSyn's. I don't think this is
-      -- a fundamental problem, but I don't know enough about the GHC internals
-      -- to implement it myself.
-      --
-      -- Fortunately, this isn't an issue in practice, since 'PatSyn's are
-      -- never in the hypothesis.
-      cut -- throwError $ TacticPanic "Can't build Pattern constructors yet"
   let fields = maybe (repeat Nothing) (fmap Just) $ getRecordFields dc
   ext
       <- fmap unzipTrace
@@ -272,12 +262,22 @@ buildDataCon should_blacklist jdg dc tyapps = do
                   . filterSameTypeFromOtherPositions dc n
                   . bool id blacklistingDestruct should_blacklist
                   . maybe id (withNewSelector . uncurry Selector) fld
+                  . withNewConstructor dc'
                   . flip withNewGoal jdg
                   $ CType arg
                   ) $ zip3 args fields [0..]
   pure $ ext
     & #syn_trace %~ rose (show dc) . pure
     & #syn_val   %~ mkCon dc tyapps
+buildDataCon _ _ PatSynCon{} _ = do
+  -- If we have a 'PatSyn', we can't continue, since there is no
+  -- 'dataConInstSig' equivalent for 'PatSyn's. I don't think this is
+  -- a fundamental problem, but I don't know enough about the GHC internals
+  -- to implement it myself.
+  --
+  -- Fortunately, this isn't an issue in practice, since 'PatSyn's are
+  -- never in the hypothesis.
+  cut
 
 
 ------------------------------------------------------------------------------

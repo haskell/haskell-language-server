@@ -313,6 +313,7 @@ data Judgement' a = Judgement
   , _jIsTopHole         :: !Bool
   , _jGoal              :: !a
   , j_coercion          :: TCvSubst
+  , j_constructor_stack :: [DataCon]
   , j_selector_stack    :: [Selector]
   }
   deriving stock (Generic, Functor, Show)

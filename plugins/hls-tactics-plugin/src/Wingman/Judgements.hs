@@ -69,6 +69,12 @@ withNewSelector sel = field  @"j_selector_stack" %~ (sel :)
 getTopSelector :: Judgement' a -> Maybe Selector
 getTopSelector = preview $ field  @"j_selector_stack" . _head
 
+withNewConstructor :: DataCon -> Judgement' a -> Judgement' a
+withNewConstructor dc = field  @"j_constructor_stack" %~ (dc :)
+
+getTopConstructor :: Judgement' a -> Maybe DataCon
+getTopConstructor = preview $ field  @"j_constructor_stack" . _head
+
 
 withNewGoal :: a -> Judgement' a -> Judgement' a
 withNewGoal t = field @"_jGoal" .~ t
@@ -429,6 +435,7 @@ mkFirstJudgement ctx hy top goal =
       , _jIsTopHole         = top
       , _jGoal              = CType goal
       , j_coercion          = emptyTCvSubst
+      , j_constructor_stack = []
       , j_selector_stack    = []
       }
 
