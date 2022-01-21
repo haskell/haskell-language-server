@@ -123,6 +123,9 @@ Uses [apply-refact](https://github.com/mpickering/apply-refact).
 
 ![Hlint Demo](https://user-images.githubusercontent.com/54035/110860028-8f9fa900-82bc-11eb-9fe5-6483d8bb95e6.gif)
 
+Known limitations:
+- May have strange behaviour in files with CPP, since `apply-refact` does not support CPP.
+
 ### Make import lists fully explicit
 Provided by: `hls-explicit-imports-plugin`
 
