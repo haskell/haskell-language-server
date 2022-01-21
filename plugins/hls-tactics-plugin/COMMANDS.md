@@ -223,6 +223,30 @@ running  `ctor Just` will produce:
 Just (_ :: a)
 ```
 
+## datacon
+
+arguments: none.  
+deterministic.
+
+> Use the currently-being-built data constructor.
+
+
+### Example
+
+> In the context of `f = Blah { bar = _ }`.
+
+Given:
+
+```haskell
+_ 
+```
+
+running  `datacon` will produce:
+
+```haskell
+Blah
+```
+
 ## destruct
 
 arguments: single reference.  
