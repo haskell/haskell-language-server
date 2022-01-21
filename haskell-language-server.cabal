@@ -209,7 +209,7 @@ common example-plugins
                  Ide.Plugin.Example2
 
 common class
-  if flag(class) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(class)
     build-depends: hls-class-plugin ^>=1.0.0.1
     cpp-options: -Dclass
 

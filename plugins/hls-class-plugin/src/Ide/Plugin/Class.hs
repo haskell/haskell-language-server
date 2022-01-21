@@ -25,9 +25,14 @@ import           Development.IDE                         hiding (pluginHandlers)
 import           Development.IDE.Core.PositionMapping    (fromCurrentRange,
                                                           toCurrentRange)
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Compat.Util
+import           Development.IDE.GHC.Compat.Util         (BooleanFormula (..),
+                                                          fsLit, listToBag)
 import           Development.IDE.Spans.AtPoint
 import qualified GHC.Generics                            as Generics
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC.Parser.Annotation                   hiding (locA)
+#endif
+import           Data.Either                             (fromRight)
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.Haskell.GHC.ExactPrint
@@ -65,14 +70,25 @@ addMethodPlaceholders state AddMinimalMethodsParams{..} = do
     pm <- MaybeT . runAction "classplugin" state $ use GetParsedModule docPath
     let
       ps = pm_parsed_source pm
+#if MIN_VERSION_ghc(9,2,0)
+      old = T.pack $ exactPrint (makeDeltaAst ps)
+#else
       anns = relativiseApiAnns ps (pm_annotations pm)
       old = T.pack $ exactPrint ps anns
+#endif
 
     (hsc_dflags . hscEnv -> df) <- MaybeT . runAction "classplugin" state $ use GhcSessionDeps docPath
+#if MIN_VERSION_ghc(9,2,0)
+    List (unzip -> (mBinds, mDecls)) <- MaybeT . pure $ traverse (makeMethodDecl df) methodGroup
+    let
+      (ps', _, _) = runTransform (addMethodDecls (makeDeltaAst ps) mBinds mDecls)
+      new = T.pack $ exactPrint ps'
+#else
     List (unzip -> (mAnns, mDecls)) <- MaybeT . pure $ traverse (makeMethodDecl df) methodGroup
     let
       (ps', (anns', _), _) = runTransform (mergeAnns (mergeAnnList mAnns) anns) (addMethodDecls ps mDecls)
       new = T.pack $ exactPrint ps' anns'
+#endif
 
     pure (workspaceEdit caps old new)
   forM_ medit $ \edit ->
@@ -84,9 +100,36 @@ addMethodPlaceholders state AddMinimalMethodsParams{..} = do
 
     makeMethodDecl df mName =
       case parseDecl df (T.unpack mName) . T.unpack $ toMethodName mName <> " = _" of
-        Right (ann, d) -> Just (setPrecedingLines d 1 indent ann, d)
+#if MIN_VERSION_ghc(9,2,0)
+        Right d@(L ld (ValD _ b)) -> Just (setEntryDP (makeDeltaAst (L ld b)) (DifferentLine 1 (indent + 1)), d)
+        _                       -> Nothing
+#else
+        Right (ann, d) -> Just (setEntryDP d (DP (1, indent)) ann, d)
         Left _         -> Nothing
+#endif
 
+#if MIN_VERSION_ghc(9,2,0)
+    insertAfter' (getLoc -> k) = insertAt findAfter
+      where
+        findAfter x xs =
+          case span (\(L l _) -> locA l /= k) xs of
+            ([],[])    -> [x]
+            (fs,[])    -> fs++[x]
+            (fs, b:bs) -> fs ++ (b : x : bs)
+
+    addMethodDecls ps mBinds mDecls = do
+      d <- findInstDecl ps
+      newSpan <- uniqueSrcSpanT
+      let
+        ancWhere = Anchor (rs newSpan) (MovedAnchor (DifferentLine 1 30))
+        ancMethod = Anchor (rs newSpan) (MovedAnchor (DifferentLine 1 (indent + 1)))
+        ann = EpAnn ancWhere (AnnList (Just ancMethod) Nothing Nothing [AddEpAnn AnnWhere (EpaDelta (DifferentLine 1 50) [])] []) emptyComments
+        mBinds' = makeDeltaAst (HsValBinds ann (ValBinds (captureOrder mDecls) (listToBag mBinds) []))
+      mDecls' <- hsDeclsValBinds mBinds'
+      mBinds'' <- replaceDeclsValbinds WithWhere mBinds' mDecls'
+      mDecls'' <- hsDeclsValBinds mBinds''
+      foldM (insertAfter' d) ps (reverse mDecls'')
+#else
     addMethodDecls ps mDecls = do
       d <- findInstDecl ps
       newSpan <- uniqueSrcSpanT
@@ -109,6 +152,7 @@ addMethodPlaceholders state AddMinimalMethodsParams{..} = do
       modifyAnnsT addWhere
       modifyAnnsT (captureOrderAnnKey newAnnKey mDecls)
       foldM (insertAfter d) ps (reverse mDecls)
+#endif
 
     findInstDecl :: ParsedSource -> Transform (LHsDecl GhcPs)
     findInstDecl ps = head . filter (containRange range . getLoc) <$> hsDecls ps
@@ -142,7 +186,8 @@ codeAction state plId (CodeActionParams _ _ docId _ context) = liftIO $ fmap (fr
     mkActions docPath diag = do
       ident <- findClassIdentifier docPath range
       cls <- findClassFromIdentifier docPath ident
-      lift . traverse mkAction . minDefToMethodGroups . classMinimalDef $ cls
+      x <- lift . traverse mkAction . minDefToMethodGroups . classMinimalDef $ cls
+      pure x
       where
         range = diag ^. J.range
 
@@ -166,9 +211,14 @@ codeAction state plId (CodeActionParams _ _ docId _ context) = liftIO $ fmap (fr
       (hieAstResult, pmap) <- MaybeT . runAction "classplugin" state $ useWithStale GetHieAst docPath
       case hieAstResult of
         HAR {hieAst = hf} ->
-          pure
-            $ head . head
-            $ pointCommand hf (fromJust (fromCurrentRange pmap range) ^. J.start & J.character -~ 1)
+          let
+#if !MIN_VERSION_ghc(9,2,0)
+            classIdentOf = head . head
+#else
+            classIdentOf = last . head
+#endif
+            instIdents =
+              pointCommand hf (fromJust (fromCurrentRange pmap range) ^. J.start & J.character -~ 1)
 #if !MIN_VERSION_ghc(9,0,0)
               ( (Map.keys . Map.filter isClassNodeIdentifier . nodeIdentifiers . nodeInfo)
                 <=< nodeChildren
@@ -178,6 +228,8 @@ codeAction state plId (CodeActionParams _ _ docId _ context) = liftIO $ fmap (fr
                 <=< nodeChildren
               )
 #endif
+          in do
+            pure $ classIdentOf instIdents
 
     findClassFromIdentifier docPath (Right name) = do
       (hscEnv -> hscenv, _) <- MaybeT . runAction "classplugin" state $ useWithStale GhcSessionDeps docPath
@@ -201,6 +253,7 @@ isClassNodeIdentifier = isNothing . identType
 
 isClassMethodWarning :: T.Text -> Bool
 isClassMethodWarning = T.isPrefixOf "• No explicit implementation for"
+--                                  "• No explicit implementation for"
 
 minDefToMethodGroups :: BooleanFormula Name -> [[T.Text]]
 minDefToMethodGroups = go
