@@ -41,40 +41,15 @@ jobs:
         apk add --no-cache zlib zlib-dev zlib-static gmp gmp-dev ncurses-static
     - uses: actions/checkout@v2
 
-    - uses: haskell/actions/setup@v1
+    - name: Disable tests and bechmarks
+      run: |
+        echo -e 'tests: false' >> cabal.project.local
+        echo -e 'benchmarks: false' >> cabal.project.local
+
+    - uses: ./.github/actions/setup-build
       with:
-        ghc-version  : ${{ matrix.ghc   }}
-        cabal-version: ${{ matrix.cabal }}
-        enable-stack: false
-
-    # some alpines come with integer-simple instead of integer-gmp
-    - name: Force integer-simple
-      if: matrix.os == 'ubuntu-18.04'
-      run: |
-        if ghc --info | grep -q integer-simple ; then
-          echo -e 'package blaze-textual\n    flags: +integer-simple' >> cabal.project.local
-        fi
-
-    - name: Use modified cabal.project
-      env:
-        GHCVER: ${{ matrix.ghc }}
-      run: |
-        GHCVER2=${GHCVER//./}
-        ALT_PROJECT_FILE_MINOR=cabal-ghc${GHCVER2}.project
-        ALT_PROJECT_FILE_MAJOR=cabal-ghc${GHCVER2:0:2}.project
-        if [[ -f "$ALT_PROJECT_FILE_MINOR" ]]; then
-          rm -f -v cabal.project && cp -v "$ALT_PROJECT_FILE_MINOR" cabal.project
-        elif [[ -f "$ALT_PROJECT_FILE_MAJOR" ]]; then
-          rm -f -v cabal.project && cp -v "$ALT_PROJECT_FILE_MAJOR" cabal.project
-        fi
-
-    - name: Shorten binary names
-      run: |
-        sed -i.bak -e 's/haskell-language-server/hls/g' \
-                   -e 's/haskell_language_server/hls/g' \
-                   haskell-language-server.cabal cabal.project
-        sed -i.bak -e 's/Paths_haskell_language_server/Paths_hls/g' \
-                   src/**/*.hs exe/*.hs
+        ghc: ${{ matrix.ghc }}
+        os:  ${{ runner.os }}
 
     - name: (Windows) Platform specifics
       if: matrix.os == 'windows-latest'
@@ -99,17 +74,10 @@ jobs:
       run: |
         echo "GHC_VERSION=$GHC_VER" >> $GITHUB_ENV
 
-    - name: (Windows, GHC 8.8.4) Workaround segfaults
-      if: matrix.ghc == '8.8.4' && matrix.os == 'windows-latest'
-      run: |
-          echo "package floskell" >> cabal.project
-          echo "  ghc-options: -O0" >> cabal.project
-
     - name: Build the server
       # Try building it twice in case of flakey builds on Windows
       run: |
-        cabal build --disable-tests exe:hls -O2 $LINUX_CABAL_ARGS || \
-        cabal build --disable-tests exe:hls -O2 $LINUX_CABAL_ARGS -j1
+        cabal build exe:hls -O2 $LINUX_CABAL_ARGS || cabal build exe:hls -O2 $LINUX_CABAL_ARGS -j1
 
     - name: Compress server binary
       id: compress_server_binary
@@ -148,7 +116,7 @@ jobs:
 
     - name: (GHC 8.10) Build the wrapper
       if: matrix.ghc == '8.10.7'
-      run: cabal build --disable-tests exe:hls-wrapper -O2 $LINUX_CABAL_ARGS
+      run: cabal build exe:hls-wrapper -O2 $LINUX_CABAL_ARGS
 
     - name: (GHC 8.10) Compress wrapper binary
       if: matrix.ghc == '8.10.7'

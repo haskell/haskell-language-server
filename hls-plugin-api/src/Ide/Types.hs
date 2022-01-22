@@ -202,11 +202,7 @@ instance PluginMethod TextDocumentCodeAction where
         -- should check whether the requested kind is a *prefix* of the action kind.
         -- That means, for example, we will return actions with kinds `quickfix.import` and
         -- `quickfix.somethingElse` if the requested kind is `quickfix`.
-        -- TODO: add helpers in `lsp` for handling code action hierarchies
-        -- For now we abuse the fact that the JSON representation gives us the hierarchical string.
-        , Just caKind <- ca ^. kind
-        , String caKindStr <- toJSON caKind =
-                any (\k -> k `T.isPrefixOf` caKindStr) [kstr | k <- allowed, let String kstr = toJSON k ]
+        , Just caKind <- ca ^. kind = any (\k -> k `codeActionKindSubsumes` caKind) allowed
         | otherwise = False
 
 instance PluginMethod TextDocumentCodeLens where
