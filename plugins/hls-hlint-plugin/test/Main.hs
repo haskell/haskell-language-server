@@ -39,7 +39,7 @@ getIgnoreHintText :: T.Text -> T.Text
 getIgnoreHintText name = "Ignore hint \"" <> name <> "\" in this module"
 
 getApplyHintText :: T.Text -> T.Text
-getApplyHintText name = "Apply hint \"Avoid reverse\""  -- "Apply hint \"" <> name <> "\""
+getApplyHintText name = "Apply hint \"" <> name <> "\""
 
 ignoreHintTests :: TestTree
 ignoreHintTests = testGroup "hlint ignore hint tests"
