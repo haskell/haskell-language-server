@@ -119,13 +119,21 @@ spansToSelectionRange (span:spans) = Just $
     SelectionRange {_range = realSrcSpanToRange span, _parent = spansToSelectionRange spans}
 
 {-|
-Filters the selection ranges containing at least one of the given positions, without taking each selection range's
-parent into account.
+For each position, find the selection range that contains it, without taking each selection range's
+parent into account. These selection ranges are un-divisible, representing the leaf nodes in original AST, so they
+won't overlap.
 -}
 findSelectionRangesByPositions :: [SelectionRange] -- ^ all possible selection ranges
                                -> [Position] -- ^ requested positions
                                -> [SelectionRange]
 findSelectionRangesByPositions selectionRanges = fmap findByPosition
+    {-
+        Performance Tips:
+        Doing a linear search from the first selection range for each position is not optimal.
+        If it becomes too slow for a large file and many positions, you may optimize the implementation.
+        At least we don't need to search from the very beginning for each position, if the are sorted firstly.
+        Or maybe we could apply some techniques like binary search?
+    -}
   where
     findByPosition :: Position -> SelectionRange
     findByPosition p = fromMaybe SelectionRange{_range = Range p p, _parent = Nothing} $
