@@ -16,10 +16,10 @@
 /plugins/hls-floskell-plugin @alanz @Ailrun
 /plugins/hls-fourmolu-plugin @georgefst
 /plugins/hls-haddock-comments-plugin @berberman
-/plugins/hls-hlint-plugin @jneira
+/plugins/hls-hlint-plugin @jneira @eddiemundo
 /plugins/hls-module-name-plugin @tittoassini
 /plugins/hls-ormolu-plugin @alanz
-/plugins/hls-pragmas-plugin @berberman @Ailrun
+/plugins/hls-pragmas-plugin @berberman @Ailrun @eddiemundo
 /plugins/hls-qualify-imported-names-plugin @eddiemundo 
 /plugins/hls-refine-imports-plugin @rayshih 
 /plugins/hls-rename-plugin @OliverMadine
@@ -36,7 +36,7 @@
 
 # CI
 /.circleci @jneira @Anton-Latukha
-/.githhub @jneira @Anton-Latukha
+/.github @jneira @Anton-Latukha @Ailrun
 /.gitlab @jneira @hasufell
 
 # Build
