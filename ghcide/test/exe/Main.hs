@@ -5227,7 +5227,7 @@ xfail = flip expectFailBecause
 
 ignoreInWindowsBecause :: String -> TestTree -> TestTree
 ignoreInWindowsBecause
-    | isWindows = ignoreTestBecause
+    | isWindows = \_ x -> x
     | otherwise = \_ x -> x
 
 ignoreInWindowsForGHC88And810 :: TestTree -> TestTree
