@@ -52,7 +52,6 @@ import           Development.IDE.Core.Rules                         (defineNoFil
                                                                      usePropertyAction)
 import           Development.IDE.Core.Shake                         (getDiagnostics)
 import qualified Refact.Apply                                       as Refact
-import qualified Refact.Fixity                                      as Refact
 
 #ifdef HLINT_ON_GHC_LIB
 import           Data.List                                          (nub)
@@ -89,6 +88,7 @@ import           Language.Haskell.GHC.ExactPrint.Delta              (deltaOption
 import           Language.Haskell.GHC.ExactPrint.Parsers            (postParseTransform)
 import           Language.Haskell.GHC.ExactPrint.Types              (Rigidity (..))
 import           Language.Haskell.GhclibParserEx.Fixity             as GhclibParserEx (applyFixities)
+import qualified Refact.Fixity                                      as Refact
 #endif
 
 import           Ide.Logger
