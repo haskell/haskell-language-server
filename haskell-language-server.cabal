@@ -71,7 +71,7 @@ library
     , data-default
     , ghc
     , ghcide                ^>=1.4 || ^>=1.5
-    , gitrev
+    , githash
     , lsp
     , hie-bios
     , hiedb
