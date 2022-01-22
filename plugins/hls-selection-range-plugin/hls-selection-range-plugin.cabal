@@ -9,11 +9,8 @@ description:
 
 license:            Apache-2.0
 license-file:       LICENSE
-author:
-  https://github.com/haskell/haskell-language-server/contributors
-
-maintainer:
-  https://github.com/haskell/haskell-language-server/contributors
+author: kokobd
+maintainer: kokobd
 
 category:           Development
 build-type:         Simple
