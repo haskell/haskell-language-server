@@ -45,6 +45,7 @@ library
   other-modules:
     Ide.Plugin.Eval.Code
     Ide.Plugin.Eval.CodeLens
+    Ide.Plugin.Eval.Config
     Ide.Plugin.Eval.GHC
     Ide.Plugin.Eval.Parse.Comments
     Ide.Plugin.Eval.Parse.Option
