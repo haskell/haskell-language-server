@@ -90,4 +90,5 @@ test-suite tests
     , hls-plugin-api
     , tasty
     , tasty-hunit
+    , tasty-rerun
     , lsp-types
