@@ -52,6 +52,7 @@ import           Development.IDE.Core.Rules                         (defineNoFil
                                                                      usePropertyAction)
 import           Development.IDE.Core.Shake                         (getDiagnostics)
 import           Refact.Apply
+import qualified Refact.Fixity                                      as Refact
 
 #ifdef HLINT_ON_GHC_LIB
 import           Data.List                                          (nub)
@@ -555,7 +556,8 @@ applyHint ide nfp mhint =
                 -- apply-refact uses RigidLayout
                 let rigidLayout = deltaOptions RigidLayout
                 (anns', modu') <-
-                    ExceptT $ return $ postParseTransform (Right (anns, [], dflags, modu)) rigidLayout
+                    ExceptT $ mapM (uncurry Refact.applyFixities)
+                            $ postParseTransform (Right (anns, [], dflags, modu)) rigidLayout
                 liftIO $ (Right <$> withRuntimeLibdir (applyRefactorings' position commands anns' modu'))
                             `catches` errorHandlers
 #endif
