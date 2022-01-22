@@ -7,6 +7,7 @@ module Main
   ) where
 
 import           Control.Lens            ((^.))
+import           Control.Monad           (when)
 import           Data.Aeson              (Value (..), object, toJSON, (.=))
 import           Data.Functor            (void)
 import           Data.List               (find)
@@ -398,7 +399,7 @@ ignoreHintGoldenTest testCaseName goldenFilename point hintName =
   goldenTest testCaseName goldenFilename point (getIgnoreHintText hintName)
 
 applyHintGoldenTest :: TestName -> FilePath -> Point -> T.Text -> TestTree
-applyHintGoldenTest testCaseName goldenFilename point hintName =
+applyHintGoldenTest testCaseName goldenFilename point hintName = do
   goldenTest testCaseName goldenFilename point (getApplyHintText hintName)
 
 goldenTest :: TestName -> FilePath -> Point -> T.Text -> TestTree
@@ -409,7 +410,8 @@ goldenTest testCaseName goldenFilename point hintText =
     case find ((== Just hintText) . getCodeActionTitle) actions of
       Just (InR codeAction) -> do
         executeCodeAction codeAction
-        void $ skipManyTill anyMessage $ getDocumentEdit document
+        when (isJust (codeAction ^. L.command)) $
+          void $ skipManyTill anyMessage $ getDocumentEdit document
       _ -> liftIO $ assertFailure $ makeCodeActionNotFoundAtString point
 
 setupGoldenHlintTest :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
