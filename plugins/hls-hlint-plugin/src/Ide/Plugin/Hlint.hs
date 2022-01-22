@@ -60,7 +60,9 @@ import           Development.IDE.GHC.Compat                         (BufSpan,
                                                                      DynFlags,
                                                                      extensionFlags,
                                                                      ms_hspp_opts,
-                                                                     topDir)
+                                                                     topDir,
+                                                                     WarningFlag(Opt_WarnUnrecognisedPragmas),
+                                                                     wopt)
 import qualified Development.IDE.GHC.Compat.Util                    as EnumSet
 import           "ghc-lib" GHC                                      hiding
                                                                     (DynFlags (..),
@@ -86,6 +88,7 @@ import           Language.Haskell.GHC.ExactPrint.Delta              (deltaOption
 import           Language.Haskell.GHC.ExactPrint.Parsers            (postParseTransform)
 import           Language.Haskell.GHC.ExactPrint.Types              (Rigidity (..))
 import           Language.Haskell.GhclibParserEx.Fixity             as GhclibParserEx (applyFixities)
+import           GHC.Generics                                       (Associativity (LeftAssociative, NotAssociative, RightAssociative))
 #endif
 
 import           Ide.Logger
@@ -106,12 +109,6 @@ import           Language.LSP.Types                                 hiding
 import qualified Language.LSP.Types                                 as LSP
 import qualified Language.LSP.Types.Lens                            as LSP
 
-import           GHC.Generics                                       (Associativity (LeftAssociative, NotAssociative, RightAssociative),
-                                                                     Generic)
-import           Text.Regex.TDFA.Text                               ()
-
-import           Development.IDE.GHC.Compat                         (WarningFlag (Opt_WarnUnrecognisedPragmas),
-                                                                     wopt)
 import           Development.IDE.Spans.Pragmas                      (LineSplitTextEdits (LineSplitTextEdits),
                                                                      NextPragmaInfo (NextPragmaInfo),
                                                                      getNextPragmaInfo,
@@ -119,8 +116,10 @@ import           Development.IDE.Spans.Pragmas                      (LineSplitTe
                                                                      lineSplitInsertTextEdit,
                                                                      lineSplitTextEdits,
                                                                      nextPragmaLine)
+import           GHC.Generics                                       (Generic)
 import           System.Environment                                 (setEnv,
                                                                      unsetEnv)
+import           Text.Regex.TDFA.Text                               ()
 -- ---------------------------------------------------------------------
 
 #ifdef HLINT_ON_GHC_LIB

@@ -27,16 +27,6 @@ packages:
          ./plugins/hls-call-hierarchy-plugin
          ./plugins/hls-alternate-number-format-plugin
 
-repository head.hackage.ghc.haskell.org
-   url: https://ghc.gitlab.haskell.org/head.hackage/
-   secure: True
-   key-threshold: 3
-   root-keys:
-       f76d08be13e9a61a377a85e2fb63f4c5435d40f8feb3e12eb05905edb8cdea89
-       26021a13b401500c8eb2761ca95c61f2d625bfef951b939a8124ed12ecf07329
-       7541f32a4ccca4f97aea3b22f5e593ba2c0267546016b992dfadcd2fe944e55d
-
-
 with-compiler: ghc-9.2.1
 
 tests: true
@@ -59,22 +49,12 @@ constraints:
     -eval
     -haddockComments
     -hlint
-    -refineImports
     -retrie
     -splice
     -stylishhaskell
     -tactic,
-  ghc-lib-parser ^>= 9.2,
-  attoparsec ^>= 0.14.3,
-  ghc-exactprint >= 1.3,
-  retrie >= 1.2,
-  direct-sqlite == 2.3.26,
-  lens >= 5.0.1,
-  primitive-unlifted ==0.1.3.1
 
 allow-newer:
-  -- base,
-
   -- for shake-bench
   Chart:lens,
   Chart-diagrams:lens,

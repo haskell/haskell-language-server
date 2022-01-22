@@ -234,7 +234,7 @@ common importLens
     cpp-options: -DimportLens
 
 common refineImports
-  if flag(refineImports) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(refineImports)
     build-depends: hls-refine-imports-plugin ^>=1.0.0.0
     cpp-options: -DrefineImports
 
