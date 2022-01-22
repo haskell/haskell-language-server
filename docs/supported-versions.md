@@ -50,6 +50,7 @@ As such, the functionality provided by those plugins is not available in HLS whe
 | `hls-splice-plugin`                 | 9.2                      |
 | `hls-stylish-haskell-plugin`        | 9.0, 9.2                 |
 | `hls-tactics-plugin`                | 9.2                      |
+| `hls-selection-range-plugin`        |                          |
 
 ### Using deprecated GHC versions
 
