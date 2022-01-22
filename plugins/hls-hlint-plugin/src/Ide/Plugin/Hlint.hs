@@ -540,7 +540,7 @@ applyHint ide nfp mhint =
             (pflags, _, _) <- runAction' $ useNoFile_ GetHlintSettings
             exts <- runAction' $ getExtensions pflags nfp
             -- We have to reparse extensions to remove the invalid ones
-            let (enabled, disabled, _invalid) = parseExtensions $ map show exts
+            let (enabled, disabled, _invalid) = Refact.parseExtensions $ map show exts
             let refactExts = map show $ enabled ++ disabled
             (Right <$> withRuntimeLibdir (Refact.applyRefactorings position commands temp refactExts))
                 `catches` errorHandlers
