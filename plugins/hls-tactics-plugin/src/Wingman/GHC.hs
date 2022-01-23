@@ -6,6 +6,7 @@ module Wingman.GHC where
 import           Control.Monad.State
 import           Control.Monad.Trans.Maybe (MaybeT(..))
 import           Data.Bool (bool)
+import           Data.Coerce (coerce)
 import           Data.Function (on)
 import           Data.Functor ((<&>))
 import           Data.List (isPrefixOf)
@@ -20,6 +21,10 @@ import           GHC.SourceGen (lambda)
 import           Generics.SYB (Data, everything, everywhere, listify, mkQ, mkT)
 import           Wingman.StaticPlugin (pattern MetaprogramSyntax)
 import           Wingman.Types
+
+#if __GLASGOW_HASKELL__ >= 900
+import GHC.Tc.Utils.TcType
+#endif
 
 
 tcTyVar_maybe :: Type -> Maybe Var
@@ -57,7 +62,7 @@ isFunction _                                    = True
 ------------------------------------------------------------------------------
 -- | Split a function, also splitting out its quantified variables and theta
 -- context.
-tacticsSplitFunTy :: Type -> ([TyVar], ThetaType, [Type], Type)
+tacticsSplitFunTy :: Type -> ([TyVar], ThetaType, [Scaled Type], Type)
 tacticsSplitFunTy t
   = let (vars, theta, t') = tcSplitNestedSigmaTys t
         (args, res) = tcSplitFunTys t'
@@ -179,7 +184,11 @@ allOccNames = everything (<>) $ mkQ mempty $ \case
 
 ------------------------------------------------------------------------------
 -- | Unpack the relevant parts of a 'Match'
+#if __GLASGOW_HASKELL__ >= 900
+pattern AMatch :: HsMatchContext (NoGhcTc GhcPs) -> [Pat GhcPs] -> HsExpr GhcPs -> Match GhcPs (LHsExpr GhcPs)
+#else
 pattern AMatch :: HsMatchContext (NameOrRdrName (IdP GhcPs)) -> [Pat GhcPs] -> HsExpr GhcPs -> Match GhcPs (LHsExpr GhcPs)
+#endif
 pattern AMatch ctx pats body <-
   Match { m_ctxt = ctx
         , m_pats = fmap fromPatCompat -> pats
@@ -192,7 +201,7 @@ pattern SingleLet bind pats val expr <-
   HsLet _
     (HsValBinds _
       (ValBinds _ (bagToList ->
-        [(L _ (FunBind _ (L _ bind) (MG _ (L _ [L _ (AMatch _ pats val)]) _) _ _))]) _))
+        [L _ (FunBind {fun_id = (L _ bind), fun_matches = (MG _ (L _ [L _ (AMatch _ pats val)]) _)})]) _))
     (L _ expr)
 
 
@@ -255,7 +264,11 @@ pattern LamCase matches <-
 --         @Just False@ if it can't be homomorphic
 --         @Just True@ if it can
 lambdaCaseable :: Type -> Maybe Bool
+#if __GLASGOW_HASKELL__ >= 900
+lambdaCaseable (splitFunTy_maybe -> Just (_multiplicity, arg, res))
+#else
 lambdaCaseable (splitFunTy_maybe -> Just (arg, res))
+#endif
   | isJust (algebraicTyCon arg)
   = Just $ isJust $ algebraicTyCon res
 lambdaCaseable _ = Nothing
@@ -347,12 +360,17 @@ expandTyFam ctx = snd . normaliseType  (ctxFamInstEnvs ctx) Nominal
 -- | Like 'tcUnifyTy', but takes a list of skolems to prevent unification of.
 tryUnifyUnivarsButNotSkolems :: Set TyVar -> CType -> CType -> Maybe TCvSubst
 tryUnifyUnivarsButNotSkolems skolems goal inst =
-  case tcUnifyTysFG
-         (bool BindMe Skolem . flip S.member skolems)
-         [unCType inst]
-         [unCType goal] of
-    Unifiable subst -> pure subst
-    _               -> Nothing
+  tryUnifyUnivarsButNotSkolemsMany skolems $ coerce [(goal, inst)]
+
+------------------------------------------------------------------------------
+-- | Like 'tryUnifyUnivarsButNotSkolems', but takes a list
+-- of pairs of types to unify.
+tryUnifyUnivarsButNotSkolemsMany :: Set TyVar -> [(Type, Type)] -> Maybe TCvSubst
+tryUnifyUnivarsButNotSkolemsMany skolems (unzip -> (goal, inst)) =
+  tcUnifyTys
+    (bool BindMe Skolem . flip S.member skolems)
+    inst
+    goal
 
 
 updateSubst :: TCvSubst -> TacticState -> TacticState

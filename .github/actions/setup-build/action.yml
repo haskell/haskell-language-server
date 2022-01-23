@@ -11,6 +11,10 @@ inputs:
   os:
     description: "Operating system: Linux, Windows or macOS"
     required: true
+  cache-prefix:
+    description: "To allow make unique the cache key"
+    required: false
+    default: ""
 runs:
   using: "composite"
   steps:
@@ -57,8 +61,7 @@ runs:
     - if: inputs.os == 'Windows' && inputs.ghc == '8.8.4'
       name: (Windows,GHC 8.8) Modify `cabal.project` to workaround segfaults
       run: |
-        echo "package floskell" >> cabal.project
-        echo "  ghc-options: -O0" >> cabal.project
+        echo -e 'package floskell\n    ghc-options: -O0' >> cabal.project.local
       shell: bash
 
     # Shorten binary names as a workaround for filepath length limits in Windows,
@@ -115,11 +118,11 @@ runs:
         cache-name: compiled-deps
       with:
         path: ${{ steps.HaskEnvSetup.outputs.cabal-store }}
-        key:  ${{ env.cache-name }}-${{ inputs.os }}-${{ inputs.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project.freeze') }}
+        key:  ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-${{ inputs.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project.freeze') }}
         restore-keys: |
-              ${{ env.cache-name }}-${{ inputs.os }}-${{ inputs.ghc }}-${{ env.INDEX_STATE }}-
-              ${{ env.cache-name }}-${{ inputs.os }}-${{ inputs.ghc }}-
-              ${{ env.cache-name }}-${{ inputs.os }}-
+              ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-${{ inputs.ghc }}-${{ env.INDEX_STATE }}-
+              ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-${{ inputs.ghc }}-
+              ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-
 
     # We remove the freeze file because it could interfere with the build
     - name: "Remove freeze file"

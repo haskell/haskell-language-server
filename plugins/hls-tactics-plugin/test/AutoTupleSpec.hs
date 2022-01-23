@@ -7,11 +7,10 @@ module AutoTupleSpec where
 import Control.Monad (replicateM)
 import Control.Monad.State (evalState)
 import Data.Either (isRight)
-import OccName (mkVarOcc)
+import Development.IDE.GHC.Compat.Core ( mkVarOcc, mkBoxedTupleTy )
 import System.IO.Unsafe
 import Test.Hspec
 import Test.QuickCheck
-import TysWiredIn (mkBoxedTupleTy)
 import Wingman.Judgements (mkFirstJudgement)
 import Wingman.Machinery
 import Wingman.Tactics (auto')

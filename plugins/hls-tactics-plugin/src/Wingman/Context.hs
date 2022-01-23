@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+
 module Wingman.Context where
 
 import           Control.Arrow
@@ -11,6 +13,10 @@ import           Development.IDE.GHC.Compat.Util
 import           Wingman.GHC (normalizeType)
 import           Wingman.Judgements.Theta
 import           Wingman.Types
+
+#if __GLASGOW_HASKELL__ >= 900
+import GHC.Tc.Utils.TcType
+#endif
 
 
 mkContext

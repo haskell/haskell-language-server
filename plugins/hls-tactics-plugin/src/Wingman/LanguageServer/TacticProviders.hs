@@ -160,10 +160,11 @@ commandProvider RunMetaprogram =
 
 
 requireGHC88OrHigher :: TacticProvider -> TacticProvider
-requireGHC88OrHigher tp tpd =
 #if __GLASGOW_HASKELL__ >= 808
+requireGHC88OrHigher tp tpd =
   tp tpd
 #else
+requireGHC88OrHigher _ _=
   mempty
 #endif
 
@@ -294,7 +295,7 @@ homoFilter codomain domain =
 liftLambdaCase :: r -> (Type -> Type -> r) -> Type -> r
 liftLambdaCase nil f t =
   case tacticsSplitFunTy t of
-    (_, _, arg : _, res) -> f res arg
+    (_, _, arg : _, res) -> f res $ scaledThing arg
     _ -> nil
 
 

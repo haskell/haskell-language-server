@@ -44,16 +44,19 @@ tests =
                 []
 
               -- this is a test so exceptions result in fails
-              let LSP.List [evalLens] = getResponseResult codeLensResponse
-              let command = evalLens ^?! L.command . _Just
+              let response = getResponseResult codeLensResponse
+              case response of
+                  LSP.List [evalLens] -> do
+                      let command = evalLens ^?! L.command . _Just
 
-              _ <- sendRequest SWorkspaceExecuteCommand $
-                ExecuteCommandParams
-                  Nothing
-                  (command ^. L.command)
-                  (decode $ encode $ fromJust $ command ^. L.arguments)
+                      _ <- sendRequest SWorkspaceExecuteCommand $
+                          ExecuteCommandParams
+                          Nothing
+                          (command ^. L.command)
+                          (decode $ encode $ fromJust $ command ^. L.arguments)
 
-              expectProgressMessages ["Evaluating"] activeProgressTokens
+                      expectProgressMessages ["Evaluating"] activeProgressTokens
+                  _ -> error $ "Unexpected response result: " ++ show response
         , requiresOrmoluPlugin $ testCase "ormolu plugin sends progress notifications" $ do
             runSession hlsCommand progressCaps "test/testdata/format" $ do
                 sendConfigurationChanged (formatLspConfig "ormolu")
