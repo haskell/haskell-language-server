@@ -23,7 +23,7 @@ import           Development.IDE                         (GetHieAst (GetHieAst),
                                                           IdeState (shakeExtras),
                                                           Range (Range),
                                                           fromNormalizedFilePath,
-                                                          ideLogger, logInfo,
+                                                          ideLogger, logDebug,
                                                           realSrcSpanToRange,
                                                           runIdeAction,
                                                           toNormalizedFilePath',
@@ -61,7 +61,7 @@ descriptor plId = (defaultPluginDescriptor plId)
 
 selectionRangeHandler :: IdeState -> PluginId -> SelectionRangeParams -> LspM c (Either ResponseError (List SelectionRange))
 selectionRangeHandler ide _ SelectionRangeParams{..} = do
-    liftIO $ logInfo logger $ "requesting selection range for file: " <> T.pack (show uri)
+    liftIO $ logDebug logger $ "requesting selection range for file: " <> T.pack (show uri)
     response $ do
         filePath <- ExceptT . pure . maybeToEither "fail to convert uri to file path" $
                 toNormalizedFilePath' <$> uriToFilePath' uri
@@ -131,8 +131,9 @@ findSelectionRangesByPositions selectionRanges = fmap findByPosition
         Performance Tips:
         Doing a linear search from the first selection range for each position is not optimal.
         If it becomes too slow for a large file and many positions, you may optimize the implementation.
-        At least we don't need to search from the very beginning for each position, if the are sorted firstly.
-        Or maybe we could apply some techniques like binary search?
+        Assume the number of selection range is n, then the following techniques may be applied:
+            1. For each position, we may treat HieAST as a position indexed tree to search it in O(log(n)).
+            2. For all positions, a searched position will narrow the search range for other positions.
     -}
   where
     findByPosition :: Position -> SelectionRange
