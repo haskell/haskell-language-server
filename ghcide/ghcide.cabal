@@ -95,7 +95,6 @@ library
         hslogger,
         Diff ^>=0.4.0,
         vector,
-        bytestring-encoding,
         opentelemetry >=0.6.1,
         heapsize ==0.3.*,
         unliftio,
