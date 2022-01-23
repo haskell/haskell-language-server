@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings, TemplateHaskell #-}
 {- HLINT ignore -}
 module GotoHover ( module GotoHover) where
-import Data.Text (Text, pack)
+import Data.Text (Text, pack, foldl')
 import Foo (Bar, foo)
 
 
@@ -61,3 +61,6 @@ aa2 = $(id [| True |])
 
 hole :: Int
 hole = _
+
+externalFuncWithPrime :: Char
+externalFuncWithPrime = foldl' max 'a' "word"
