@@ -7,12 +7,14 @@ module Ide.Plugin.SelectionRange.ASTPreProcess
     ) where
 
 import           Control.Monad.Reader            (Reader, asks)
-import           Data.Foldable                   (find, foldl', foldl1)
+import           Data.Foldable                   (find, foldl')
+import           Data.Functor.Identity           (Identity (Identity, runIdentity))
 import           Data.List                       (groupBy)
 import           Data.List.NonEmpty              (NonEmpty)
 import qualified Data.List.NonEmpty              as NonEmpty
 import qualified Data.Map.Strict                 as Map
 import           Data.Maybe                      (mapMaybe)
+import           Data.Semigroup.Foldable         (foldlM1)
 import qualified Data.Set                        as Set
 import           Development.IDE.GHC.Compat      (ContextInfo (MatchBind, TyDecl, ValBind),
                                                   HieAST (..), Identifier,
@@ -74,7 +76,7 @@ createVirtualNode :: NonEmpty (HieAST a) -> HieAST a
 createVirtualNode children = mkAstNode (NodeInfo mempty mempty mempty) span' (NonEmpty.toList children)
   where
     span' :: RealSrcSpan
-    span' = foldl1 combineRealSrcSpans . fmap nodeSpan $ children
+    span' = runIdentity . foldlM1 (\x y -> Identity (combineRealSrcSpans x y)) . fmap nodeSpan $ children
 
 {-|
 Combine type signature with variable definition under a new parent node, if the signature is placed right before the

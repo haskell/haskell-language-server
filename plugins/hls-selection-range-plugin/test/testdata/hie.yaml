@@ -1,4 +1,5 @@
 cradle:
   direct:
     arguments:
-      - "A"
+      - "Import"
+      - "Function"

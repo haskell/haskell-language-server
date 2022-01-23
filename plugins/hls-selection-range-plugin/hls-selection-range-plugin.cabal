@@ -36,6 +36,7 @@ library
     , mtl
     , text
     , extra
+    , semigroupoids
 
 test-suite tests
   type:             exitcode-stdio-1.0
