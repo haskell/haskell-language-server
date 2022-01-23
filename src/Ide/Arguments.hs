@@ -17,9 +17,9 @@ module Ide.Arguments
   ) where
 
 import           Data.Version
-import           GitHash                       (tGitInfoCwdTry, giHash)
 import           Development.IDE               (IdeState)
 import           Development.IDE.Main          (Command (..), commandP)
+import           GitHash                       (giHash, tGitInfoCwdTry)
 import           Ide.Types                     (IdePlugins)
 import           Options.Applicative
 import           Paths_haskell_language_server
