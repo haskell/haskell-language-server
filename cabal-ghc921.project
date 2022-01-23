@@ -59,7 +59,6 @@ constraints:
     -eval
     -haddockComments
     -hlint
-    -qualifyImportedNames
     -refineImports
     -retrie
     -splice
