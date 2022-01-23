@@ -51,16 +51,16 @@ import           Development.IDE.Core.Rules                         (defineNoFil
                                                                      getParsedModuleWithComments,
                                                                      usePropertyAction)
 import           Development.IDE.Core.Shake                         (getDiagnostics)
-import           Refact.Apply
+import qualified Refact.Apply                                       as Refact
 
 #ifdef HLINT_ON_GHC_LIB
 import           Data.List                                          (nub)
 import           Development.IDE.GHC.Compat                         (BufSpan,
                                                                      DynFlags,
+                                                                     WarningFlag (Opt_WarnUnrecognisedPragmas),
                                                                      extensionFlags,
                                                                      ms_hspp_opts,
                                                                      topDir,
-                                                                     WarningFlag(Opt_WarnUnrecognisedPragmas),
                                                                      wopt)
 import qualified Development.IDE.GHC.Compat.Util                    as EnumSet
 import           "ghc-lib" GHC                                      hiding
@@ -83,11 +83,12 @@ import           System.IO.Temp
 #else
 import           Development.IDE.GHC.Compat                         hiding
                                                                     (setEnv)
+import           GHC.Generics                                       (Associativity (LeftAssociative, NotAssociative, RightAssociative))
 import           Language.Haskell.GHC.ExactPrint.Delta              (deltaOptions)
 import           Language.Haskell.GHC.ExactPrint.Parsers            (postParseTransform)
 import           Language.Haskell.GHC.ExactPrint.Types              (Rigidity (..))
 import           Language.Haskell.GhclibParserEx.Fixity             as GhclibParserEx (applyFixities)
-import           GHC.Generics                                       (Associativity (LeftAssociative, NotAssociative, RightAssociative))
+import qualified Refact.Fixity                                      as Refact
 #endif
 
 import           Ide.Logger
@@ -539,9 +540,9 @@ applyHint ide nfp mhint =
             (pflags, _, _) <- runAction' $ useNoFile_ GetHlintSettings
             exts <- runAction' $ getExtensions pflags nfp
             -- We have to reparse extensions to remove the invalid ones
-            let (enabled, disabled, _invalid) = parseExtensions $ map show exts
+            let (enabled, disabled, _invalid) = Refact.parseExtensions $ map show exts
             let refactExts = map show $ enabled ++ disabled
-            (Right <$> withRuntimeLibdir (applyRefactorings position commands temp refactExts))
+            (Right <$> withRuntimeLibdir (Refact.applyRefactorings position commands temp refactExts))
                 `catches` errorHandlers
 #else
     mbParsedModule <- liftIO $ runAction' $ getParsedModuleWithComments nfp
@@ -554,8 +555,9 @@ applyHint ide nfp mhint =
                 -- apply-refact uses RigidLayout
                 let rigidLayout = deltaOptions RigidLayout
                 (anns', modu') <-
-                    ExceptT $ return $ postParseTransform (Right (anns, [], dflags, modu)) rigidLayout
-                liftIO $ (Right <$> withRuntimeLibdir (applyRefactorings' position commands anns' modu'))
+                    ExceptT $ mapM (uncurry Refact.applyFixities)
+                            $ postParseTransform (Right (anns, [], dflags, modu)) rigidLayout
+                liftIO $ (Right <$> withRuntimeLibdir (Refact.applyRefactorings' position commands anns' modu'))
                             `catches` errorHandlers
 #endif
     case res of
