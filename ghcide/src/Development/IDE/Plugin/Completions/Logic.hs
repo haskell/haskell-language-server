@@ -732,7 +732,7 @@ isUsedAsInfix line prefixMod prefixText pos
 
 openingBacktick :: T.Text -> T.Text -> T.Text -> Position -> Bool
 openingBacktick line prefixModule prefixText Position { _character=(fromIntegral -> c) }
-  | backtickIndex < 0 || backtickIndex > T.length line = False
+  | backtickIndex < 0 || backtickIndex >= T.length line = False
   | otherwise = (line `T.index` backtickIndex) == '`'
     where
     backtickIndex :: Int

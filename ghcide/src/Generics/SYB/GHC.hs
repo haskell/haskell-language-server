@@ -102,7 +102,7 @@ largestM q f = go
       case q x of
         Just (True, a)  -> f a x
         Just (False, _) -> pure x
-        Nothing    -> gmapM go x
+        Nothing         -> gmapM go x
 
 newtype MonadicQuery r m a = MonadicQuery
   { runMonadicQuery :: m (r, a)
