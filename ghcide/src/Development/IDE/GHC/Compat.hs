@@ -105,6 +105,11 @@ import qualified Avail
 #if MIN_VERSION_ghc(8,8,0)
 import           StringBuffer           (hPutStringBuffer)
 #endif
+
+import qualified Data.Map               as M
+import           DynamicLoading
+import           Plugins                (Plugin (parsedResultAction),
+                                         withPlugins)
 import qualified SysTools
 
 #if !MIN_VERSION_ghc(8,8,0)
@@ -125,6 +130,7 @@ import           Data.IORef
 
 import qualified Data.Map               as Map
 import           Data.List              (foldl')
+import           Control.Applicative    ((<|>))
 
 #if MIN_VERSION_ghc(9,0,0)
 import qualified Data.Set               as S
@@ -253,9 +259,9 @@ setUpTypedHoles df
   $ flip gopt_unset Opt_SortValidHoleFits
   $ flip gopt_unset Opt_UnclutterValidHoleFits
   $ df
-  { refLevelHoleFits = Just 1   -- becomes slow at higher levels
-  , maxRefHoleFits   = Just 10  -- quantity does not impact speed
-  , maxValidHoleFits = Nothing  -- quantity does not impact speed
+  { refLevelHoleFits = refLevelHoleFits df <|> Just 1   -- becomes slow at higher levels
+  , maxRefHoleFits   = maxRefHoleFits df <|> Just 10  -- quantity does not impact speed
+  , maxValidHoleFits = maxValidHoleFits df <|> Just 10  -- quantity does not impact speed
   }
 
 
