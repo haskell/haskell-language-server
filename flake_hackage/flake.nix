@@ -7,7 +7,7 @@
       flake = false;
     };
     lsp-types = {
-      url = "https://hackage.haskell.org/package/lsp-types-1.4.0.0/lsp-types-1.4.0.0.tar.gz";
+      url = "https://hackage.haskell.org/package/lsp-types-1.4.0.1/lsp-types-1.4.0.1.tar.gz";
       flake = false;
     };
     lsp-test = {

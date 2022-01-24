@@ -110,7 +110,7 @@
         "retrie": "retrie"
       },
       "locked": {
-        "narHash": "sha256-gVzFEW0y/uPHJaGJ6w7VZc3QDhH6latvmYHJuzaXDa0=",
+        "narHash": "sha256-/F3itZJSZDnaxRGpkTffHDkxC7PloYqxVTW//bP3i20=",
         "path": "./flake_hackage",
         "type": "path"
       },
@@ -158,13 +158,13 @@
     "lsp-types": {
       "flake": false,
       "locked": {
-        "narHash": "sha256-K1CeV6o5mmrXubATCh19iFatJ1RtPwpY5lxD8rf/SIw=",
+        "narHash": "sha256-HGg4upgirM6/px+vflY5S0Y79gAIDpl32Ad9mbbzTdU=",
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/lsp-types-1.4.0.0/lsp-types-1.4.0.0.tar.gz"
+        "url": "https://hackage.haskell.org/package/lsp-types-1.4.0.1/lsp-types-1.4.0.1.tar.gz"
       },
       "original": {
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/lsp-types-1.4.0.0/lsp-types-1.4.0.0.tar.gz"
+        "url": "https://hackage.haskell.org/package/lsp-types-1.4.0.1/lsp-types-1.4.0.1.tar.gz"
       }
     },
     "nixpkgs": {

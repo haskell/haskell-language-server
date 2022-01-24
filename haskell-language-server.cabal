@@ -176,6 +176,11 @@ flag qualifyImportedNames
   default:     True
   manual:      True
 
+flag selectionRange
+  description: Enable selectionRange plugin
+  default:     True
+  manual:      True
+
 -- formatters
 
 flag floskell
@@ -283,6 +288,11 @@ common qualifyImportedNames
     build-depends: hls-qualify-imported-names-plugin ^>=1.0.0.0
     cpp-options: -DqualifyImportedNames
 
+common selectionRange
+  if flag(selectionRange)
+    build-depends: hls-selection-range-plugin ^>=1.0.0.0
+    cpp-options: -DselectionRange
+
 -- formatters
 
 common floskell
@@ -332,6 +342,7 @@ executable haskell-language-server
                     , splice
                     , alternateNumberFormat
                     , qualifyImportedNames
+                    , selectionRange
                     , floskell
                     , fourmolu
                     , ormolu
