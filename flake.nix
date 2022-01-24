@@ -161,6 +161,10 @@
               # Temporarily ignored files
               # Stylish-haskell (and other formatters) does not work well with some CPP usages in these files
               "^ghcide/src/Development/IDE/GHC/Compat.hs$"
+              "^ghcide/src/Development/IDE/Plugin/CodeAction/ExactPrint.hs$"
+              "^ghcide/src/Development/IDE/GHC/Compat/Core.hs$"
+              "^ghcide/src/Development/IDE/Spans/Pragmas.hs$"
+              "^ghcide/src/Development/IDE/LSP/Outline.hs$"
               "^plugins/hls-splice-plugin/src/Ide/Plugin/Splice.hs$"
               "^ghcide/test/exe/Main.hs$"
               "ghcide/src/Development/IDE/Core/Rules.hs"
