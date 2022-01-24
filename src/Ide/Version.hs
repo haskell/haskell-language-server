@@ -9,7 +9,7 @@ module Ide.Version where
 
 import           Data.Maybe                    (listToMaybe)
 import           Data.Version
-import           GitHash                       (tGitInfoCwdTry, giCommitCount)
+import           GitHash                       (giCommitCount, tGitInfoCwdTry)
 import           Options.Applicative.Simple    (simpleVersion)
 import qualified Paths_haskell_language_server as Meta
 import           System.Directory

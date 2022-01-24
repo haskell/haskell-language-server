@@ -7,7 +7,7 @@ module InfoUtil
   )
 where
 
-import Prelude (Eq, Ord)
+import           Prelude (Eq, Ord)
 
 data Foo = Foo1 | Foo2
   deriving (Eq, Ord)
