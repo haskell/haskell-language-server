@@ -41,5 +41,5 @@
 /.gitlab @jneira @hasufell
 
 # Build
-*.nix @berberman @michaelpj
+*.nix @berberman @michaelpj @guibou
 *.project @jneira
