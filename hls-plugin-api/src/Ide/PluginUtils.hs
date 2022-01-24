@@ -25,6 +25,7 @@ module Ide.PluginUtils
     allLspCmdIds',
     installSigUsr1Handler,
     subRange,
+    positionInRange,
     usePropertyLsp,
     response,
     handleMaybe,
@@ -107,15 +108,15 @@ diffTextEdit fText f2Text withDeletions = J.List r
     -}
     diffOperationToTextEdit (Deletion (LineRange (sl, el) _) _) = J.TextEdit range ""
       where
-        range = J.Range (J.Position (sl - 1) 0)
-                        (J.Position el 0)
+        range = J.Range (J.Position (fromIntegral $ sl - 1) 0)
+                        (J.Position (fromIntegral el) 0)
 
     diffOperationToTextEdit (Addition fm l) = J.TextEdit range nt
     -- fm has a range wrt to the changed file, which starts in the current file at l + 1
     -- So the range has to be shifted to start at l + 1
       where
-        range = J.Range (J.Position l 0)
-                        (J.Position l 0)
+        range = J.Range (J.Position (fromIntegral l) 0)
+                        (J.Position (fromIntegral l) 0)
         nt = T.pack $ unlines $ lrContents fm
 
 
@@ -123,10 +124,10 @@ diffTextEdit fText f2Text withDeletions = J.List r
       where
         sl = fst $ lrNumbers fm
         sc = 0
-        s = J.Position (sl - 1) sc -- Note: zero-based lines
+        s = J.Position (fromIntegral $ sl - 1) sc -- Note: zero-based lines
         el = snd $ lrNumbers fm
-        ec = length $ last $ lrContents fm
-        e = J.Position (el - 1) ec  -- Note: zero-based lines
+        ec = fromIntegral $ length $ last $ lrContents fm
+        e = J.Position (fromIntegral $ el - 1) ec  -- Note: zero-based lines
 
 
 -- | A pure version of 'diffText' for testing
@@ -145,7 +146,7 @@ diffText' supports (f,fText) f2Text withDeletions  =
 
 clientSupportsDocumentChanges :: ClientCapabilities -> Bool
 clientSupportsDocumentChanges caps =
-  let ClientCapabilities mwCaps _ _ _ = caps
+  let ClientCapabilities mwCaps _ _ _ _ = caps
       supports = do
         wCaps <- mwCaps
         WorkspaceEditClientCapabilities mDc _ _ _ _ <- _workspaceEdit wCaps
@@ -178,7 +179,7 @@ getClientConfig = getConfig
 getPluginConfig :: MonadLsp Config m => PluginId -> m PluginConfig
 getPluginConfig plugin = do
     config <- getClientConfig
-    return $ flip configForPlugin plugin config
+    return $ configForPlugin config plugin
 
 -- ---------------------------------------------------------------------
 
@@ -197,7 +198,7 @@ usePropertyLsp kn pId p = do
 
 extractRange :: Range -> T.Text -> T.Text
 extractRange (Range (Position sl _) (Position el _)) s = newS
-  where focusLines = take (el-sl+1) $ drop sl $ T.lines s
+  where focusLines = take (fromIntegral $ el-sl+1) $ drop (fromIntegral sl) $ T.lines s
         newS = T.unlines focusLines
 
 -- | Gets the range that covers the entire text
@@ -212,7 +213,7 @@ fullRange s = Range startPos endPos
         the line ending character(s) then use an end position denoting
         the start of the next line"
         -}
-        lastLine = length $ T.lines s
+        lastLine = fromIntegral $ length $ T.lines s
 
 subRange :: Range -> Range -> Bool
 subRange smallRange range =
@@ -220,11 +221,7 @@ subRange smallRange range =
   && positionInRange (_end smallRange) range
 
 positionInRange :: Position -> Range -> Bool
-positionInRange (Position pl po) (Range (Position sl so) (Position el eo)) =
-     pl >  sl && pl <  el
-  || pl == sl && pl == el && po >= so && po <= eo
-  || pl == sl && po >= so
-  || pl == el && po <= eo
+positionInRange p (Range sp ep) = sp <= p && p <= ep
 
 -- ---------------------------------------------------------------------
 

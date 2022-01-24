@@ -1,0 +1,130 @@
+name: "Cached build"
+description: "Setup the build using cache"
+inputs:
+  ghc:
+    description: "Ghc version"
+    required: true
+  cabal:
+    description: "Cabal version"
+    required: false
+    default: "3.6"
+  os:
+    description: "Operating system: Linux, Windows or macOS"
+    required: true
+  cache-prefix:
+    description: "To allow make unique the cache key"
+    required: false
+    default: ""
+runs:
+  using: "composite"
+  steps:
+    - uses: haskell/actions/setup@v1
+      id: HaskEnvSetup
+      with:
+        ghc-version  : ${{ inputs.ghc   }}
+        cabal-version: ${{ inputs.cabal }}
+        enable-stack: false
+
+    - if: inputs.os == 'Windows'
+      name: (Windows) Platform config
+      run: |
+        echo "CABAL_PKGS_DIR=C:\\cabal\\packages" >> $GITHUB_ENV
+      shell: bash
+
+    - if: ( inputs.os == 'Linux' ) || ( inputs.os == 'macOS' )
+      name: (Linux,macOS) Platform config
+      run: |
+        echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
+      shell: bash
+
+    # This copy an alternative cabal-ghc${GHCVER}.project (for example cabal-ghc921.project)
+    # as main cabal-project, for not fully supported ghc versions
+    # Needs to be before the caching step so that the cache can detect changes to the modified cabal.project file
+    - name: Use possible modified `cabal.project`
+      env:
+        GHCVER: ${{ inputs.ghc }}
+      run: |
+        # File has some protections preventing regular `rm`.
+        # (most probably sticky bit is set on $HOME)
+        # `&&` insures `rm -f` return is positive.
+        # Many platforms aslo have `alias cp='cp -i'`.
+        GHCVER2=${GHCVER//./}
+        ALT_PROJECT_FILE_MINOR=cabal-ghc${GHCVER2}.project
+        ALT_PROJECT_FILE_MAJOR=cabal-ghc${GHCVER2:0:2}.project
+        if [[ -f "$ALT_PROJECT_FILE_MINOR" ]]; then
+          rm -f -v cabal.project && cp -v "$ALT_PROJECT_FILE_MINOR" cabal.project
+        elif [[ -f "$ALT_PROJECT_FILE_MAJOR" ]]; then
+          rm -f -v cabal.project && cp -v "$ALT_PROJECT_FILE_MAJOR" cabal.project
+        fi
+      shell: bash
+
+    - if: inputs.os == 'Windows' && inputs.ghc == '8.8.4'
+      name: (Windows,GHC 8.8) Modify `cabal.project` to workaround segfaults
+      run: |
+        echo -e 'package floskell\n    ghc-options: -O0' >> cabal.project.local
+      shell: bash
+
+    # Shorten binary names as a workaround for filepath length limits in Windows,
+    # but since tests are hardcoded on this workaround -
+    # all platforms (in 2021-12-07) need it.
+    # All workflows which distinquishes cache on `cabal.project` needs this.
+    - name: Workaround shorten binary names
+      run: |
+        sed -i.bak -e 's/haskell-language-server/hls/g' \
+                    -e 's/haskell_language_server/hls/g' \
+                    haskell-language-server.cabal cabal.project
+        sed -i.bak -e 's/Paths_haskell_language_server/Paths_hls/g' \
+                    src/**/*.hs exe/*.hs
+      shell: bash
+
+    - name: Retrieving `cabal.project` Hackage timestamp
+      run: |
+        # Form: index-state: 2021-11-29T08:11:08Z
+        INDEX_STATE_ENTRY=$(grep index-state cabal.project)
+        # Form: 2021-11-29T08-11-08Z
+        INDEX_STATE1=$(echo "$INDEX_STATE_ENTRY" | cut -d' ' -f2 | tr ':' '-')
+        echo "INDEX_STATE=$INDEX_STATE1" >> $GITHUB_ENV
+      shell: bash
+
+    # We have to restore package sources before `cabal update`
+    # because it overwrites the hackage index with the cached one
+    - name: Hackage sources cache
+      uses: actions/cache@v2
+      env:
+        cache-name: hackage-sources
+      with:
+        path:  ${{ env.CABAL_PKGS_DIR }}
+        key:   ${{ env.cache-name }}-${{ env.INDEX_STATE }}
+        restore-keys: ${{ env.cache-name }}-
+
+    # To ensure we get the latest hackage index without relying on the haskell action logic
+    # It has to be done before `cabal freeze` to make it aware of the new index
+    - run: cabal update
+      shell: bash
+
+    - name: Form the package list ('cabal.project.freeze')
+      run: |
+        cabal v2-freeze && \
+        echo "" && \
+        echo 'Output:' && \
+        echo "" && \
+        cat 'cabal.project.freeze'
+      shell: bash
+
+    - name: Compiled deps cache
+      id: compiled-deps
+      uses: actions/cache@v2
+      env:
+        cache-name: compiled-deps
+      with:
+        path: ${{ steps.HaskEnvSetup.outputs.cabal-store }}
+        key:  ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-${{ inputs.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project.freeze') }}
+        restore-keys: |
+              ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-${{ inputs.ghc }}-${{ env.INDEX_STATE }}-
+              ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-${{ inputs.ghc }}-
+              ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-
+
+    # We remove the freeze file because it could interfere with the build
+    - name: "Remove freeze file"
+      run: rm -f cabal.project.freeze
+      shell: bash

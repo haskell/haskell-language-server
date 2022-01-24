@@ -7,6 +7,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE ImplicitParams        #-}
+{-# LANGUAGE MultiWayIf            #-}
 {-# LANGUAGE PatternSynonyms       #-}
 {-# LANGUAGE PolyKinds             #-}
 {-# LANGUAGE TypeOperators         #-}
@@ -15,7 +16,8 @@
 module Main (main) where
 
 import           Control.Applicative.Combinators
-import           Control.Exception                        (bracket_, catch)
+import           Control.Concurrent
+import           Control.Exception                        (bracket_, catch, finally)
 import qualified Control.Lens                             as Lens
 import           Control.Monad
 import           Control.Monad.IO.Class                   (MonadIO, liftIO)
@@ -80,16 +82,15 @@ import           System.Exit                              (ExitCode (ExitSuccess
 import           System.FilePath
 import           System.IO.Extra                          hiding (withTempDir)
 import qualified System.IO.Extra
-import           System.Info.Extra                        (isWindows)
+import           System.Info.Extra                        (isWindows, isMac)
 import           System.Mem                               (performGC)
 import           System.Process.Extra                     (CreateProcess (cwd),
                                                            createPipe, proc,
                                                            readCreateProcessWithExitCode)
 import           Test.QuickCheck
 -- import Test.QuickCheck.Instances ()
-import           Control.Concurrent                       (threadDelay)
 import           Control.Concurrent.Async
-import           Control.Lens                             ((^.))
+import           Control.Lens                             ((^.), to)
 import           Control.Monad.Extra                      (whenJust)
 import           Data.IORef
 import           Data.IORef.Extra                         (atomicModifyIORef_)
@@ -114,6 +115,7 @@ import           Test.Tasty.Ingredients.Rerun
 import           Test.Tasty.QuickCheck
 import           Text.Printf                              (printf)
 import           Text.Regex.TDFA                          ((=~))
+import qualified HieDbRetry
 
 -- | Wait for the next progress begin step
 waitForProgressBegin :: Session ()
@@ -182,6 +184,7 @@ main = do
     , codeActionHelperFunctionTests
     , referenceTests
     , garbageCollectionTests
+    , HieDbRetry.tests
     ]
 
 initializeResponseTests :: TestTree
@@ -587,7 +590,7 @@ diagnosticTests = testGroup "diagnostics"
             ]
       _ <- createDoc "Foo.hs" "haskell" fooContent
       if ghcVersion >= GHC90 then
-          -- Haddock parse errors are ignored on ghc-9.0.1
+          -- Haddock parse errors are ignored on ghc-9.0
             pure ()
       else
         expectDiagnostics
@@ -778,6 +781,7 @@ codeActionTests = testGroup "code actions"
   , suggestHideShadowTests
   , suggestImportDisambiguationTests
   , fixConstructorImportTests
+  , fixModuleImportTypoTests
   , importRenameActionTests
   , fillTypedHoleTests
   , addSigActionTests
@@ -1734,7 +1738,8 @@ extendImportTests = testGroup "extend import actions"
                     , "import A (pattern Some)"
                     , "k (Some x) = x"
                     ])
-        , testSession "type constructor name same as data constructor name" $ template
+        , ignoreForGHC92 "Diagnostic message has no suggestions" $
+          testSession "type constructor name same as data constructor name" $ template
             [("ModuleA.hs", T.unlines
                     [ "module ModuleA where"
                     , "newtype Foo = Foo Int"
@@ -1803,6 +1808,31 @@ extendImportTests = testGroup "extend import actions"
             executeCodeAction action
             contentAfterAction <- documentContents docB
             liftIO $ expectedContentB @=? contentAfterAction
+
+fixModuleImportTypoTests :: TestTree
+fixModuleImportTypoTests = testGroup "fix module import typo"
+    [ testSession "works when single module suggested" $ do
+        doc <- createDoc "A.hs" "haskell" "import Data.Cha"
+        _ <- waitForDiagnostics
+        InR action@CodeAction { _title = actionTitle } : _  <- getCodeActions doc (R 0 0 0 10)
+        liftIO $ actionTitle @?= "replace with Data.Char"
+        executeCodeAction action
+        contentAfterAction <- documentContents doc
+        liftIO $ contentAfterAction @?= "import Data.Char"
+    , testSession "works when multiple modules suggested" $ do
+        doc <- createDoc "A.hs" "haskell" "import Data.I"
+        _ <- waitForDiagnostics
+        actions <- sortOn (\(InR CodeAction{_title=x}) -> x) <$> getCodeActions doc (R 0 0 0 10)
+        let actionTitles = [ title | InR CodeAction{_title=title} <- actions ]
+        liftIO $ actionTitles @?= [ "replace with Data.Eq"
+                                  , "replace with Data.Int"
+                                  , "replace with Data.Ix"
+                                  ]
+        let InR replaceWithDataEq : _ = actions
+        executeCodeAction replaceWithDataEq
+        contentAfterAction <- documentContents doc
+        liftIO $ contentAfterAction @?= "import Data.Eq"
+    ]
 
 extendImportTestsRegEx :: TestTree
 extendImportTestsRegEx = testGroup "regex parsing"
@@ -1965,8 +1995,8 @@ suggestImportTests = testGroup "suggest import actions"
       _diags <- waitForDiagnostics
       -- there isn't a good way to wait until the whole project is checked atm
       when waitForCheckProject $ liftIO $ sleep 0.5
-      let defLine = length imps + 1
-          range = Range (Position defLine 0) (Position defLine maxBoundUinteger)
+      let defLine = fromIntegral $ length imps + 1
+          range = Range (Position defLine 0) (Position defLine maxBound)
       actions <- getCodeActions doc range
       if wanted
          then do
@@ -2279,7 +2309,7 @@ suggestHideShadowTests =
     doc <- createDoc "A.hs" "haskell" $ T.unlines (header <> origin)
     void waitForDiagnostics
     waitForProgressDone
-    cas <- getCodeActions doc (Range (Position (line1 + length header) col1) (Position (line2 + length header) col2))
+    cas <- getCodeActions doc (Range (Position (fromIntegral $ line1 + length header) col1) (Position (fromIntegral $ line2 + length header) col2))
     void $ k [x | x@(InR ca) <- cas, "Hide" `T.isPrefixOf` (ca ^. L.title)]
     contentAfter <- documentContents doc
     liftIO $ contentAfter @?= T.unlines (header <> expected)
@@ -2498,9 +2528,9 @@ deleteUnusedDefinitionTests = testGroup "delete unused definition action"
       return (action, actionTitle)
 
 addTypeAnnotationsToLiteralsTest :: TestTree
-addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals to satisfy contraints"
+addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals to satisfy constraints"
   [
-    testSession "add default type to satisfy one contraint" $
+    testSession "add default type to satisfy one constraint" $
     testFor
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "module A (f) where"
@@ -2515,7 +2545,7 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , "f = (1 :: Integer)"
                ])
 
-  , testSession "add default type to satisfy one contraint in nested expressions" $
+  , testSession "add default type to satisfy one constraint in nested expressions" $
     testFor
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "module A where"
@@ -2533,7 +2563,7 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , "    let x = (3 :: Integer)"
                , "    in x"
                ])
-  , testSession "add default type to satisfy one contraint in more nested expressions" $
+  , testSession "add default type to satisfy one constraint in more nested expressions" $
     testFor
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "module A where"
@@ -2551,7 +2581,7 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , "    let x = let y = (5 :: Integer) in y"
                , "    in x"
                ])
-  , testSession "add default type to satisfy one contraint with duplicate literals" $
+  , testSession "add default type to satisfy one constraint with duplicate literals" $
     testFor
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "{-# LANGUAGE OverloadedStrings #-}"
@@ -2573,7 +2603,8 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , ""
                , "f = seq (\"debug\" :: " <> listOfChar <> ") traceShow \"debug\""
                ])
-  , testSession "add default type to satisfy two contraints" $
+  , knownBrokenForGhcVersions [GHC92] "GHC 9.2 only has 'traceShow' in error span" $
+    testSession "add default type to satisfy two constraints" $
     testFor
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "{-# LANGUAGE OverloadedStrings #-}"
@@ -2593,7 +2624,8 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , ""
                , "f a = traceShow (\"debug\" :: " <> listOfChar <> ") a"
                ])
-  , testSession "add default type to satisfy two contraints with duplicate literals" $
+  , knownBrokenForGhcVersions [GHC92] "GHC 9.2 only has 'traceShow' in error span" $
+    testSession "add default type to satisfy two constraints with duplicate literals" $
     testFor
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "{-# LANGUAGE OverloadedStrings #-}"
@@ -2714,7 +2746,7 @@ fillTypedHoleTests = let
     let expectedCode = sourceCode newA newB newC
     doc <- createDoc "Testing.hs" "haskell" originalCode
     _ <- waitForDiagnostics
-    actionsOrCommands <- getCodeActions doc (Range (Position 9 0) (Position 9 maxBoundUinteger))
+    actionsOrCommands <- getCodeActions doc (Range (Position 9 0) (Position 9 maxBound))
     chosenAction <- liftIO $ pickActionWithTitle actionTitle actionsOrCommands
     executeCodeAction chosenAction
     modifiedCode <- documentContents doc
@@ -2755,7 +2787,7 @@ fillTypedHoleTests = let
             , "ioToSome = " <> x ]
       doc <- createDoc "Test.hs" "haskell" $ mkDoc "_toException"
       _ <- waitForDiagnostics
-      actions <- getCodeActions doc (Range (Position 3 0) (Position 3 maxBoundUinteger))
+      actions <- getCodeActions doc (Range (Position 3 0) (Position 3 maxBound))
       chosen <- liftIO $ pickActionWithTitle "replace _toException with E.toException" actions
       executeCodeAction chosen
       modifiedCode <- documentContents doc
@@ -3250,7 +3282,7 @@ addSigActionTests = let
     let expectedCode = after' def sig
     doc <- createDoc "Sigs.hs" "haskell" originalCode
     _ <- waitForDiagnostics
-    actionsOrCommands <- getCodeActions doc (Range (Position 5 1) (Position 5 maxBoundUinteger))
+    actionsOrCommands <- getCodeActions doc (Range (Position 5 1) (Position 5 maxBound))
     chosenAction <- liftIO $ pickActionWithTitle ("add signature: " <> sig) actionsOrCommands
     executeCodeAction chosenAction
     modifiedCode <- documentContents doc
@@ -3272,7 +3304,7 @@ addSigActionTests = let
     , "pattern Point{x, y} <- (x, y)\n  where Point x y = (x, y)" >:: "pattern Point :: a -> b -> (a, b)"
     , "pattern MkT1' b = MkT1 42 b" >:: "pattern MkT1' :: (Eq a, Num a) => Show b => b -> T1 a"
     , "pattern MkT1' b <- MkT1 42 b" >:: "pattern MkT1' :: (Eq a, Num a) => Show b => b -> T1 a"
-    , "pattern MkT1' b <- MkT1 42 b\n  where MkT1' b = T1 42 b" >:: "pattern MkT1' :: (Eq a, Num a) => Show b => b -> T1 a"
+    , "pattern MkT1' b <- MkT1 42 b\n  where MkT1' b = MkT1 42 b" >:: "pattern MkT1' :: (Eq a, Num a) => Show b => b -> T1 a"
     ]
 
 exportUnusedTests :: TestTree
@@ -3298,7 +3330,8 @@ exportUnusedTests = testGroup "export unused actions"
         (R 2 0 2 11)
         "Export ‘bar’"
         Nothing
-    , testSession "type is exported but not the constructor of same name" $ template
+    , ignoreForGHC92 "Diagnostic message has no suggestions" $
+      testSession "type is exported but not the constructor of same name" $ template
         (T.unlines
               [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
               , "module A (Foo) where"
@@ -3339,7 +3372,7 @@ exportUnusedTests = testGroup "export unused actions"
         "Export ‘bar’"
         (Just $ T.unlines
               [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
-              , "module A (foo,bar) where"
+              , "module A (foo, bar) where"
               , "foo = id"
               , "bar = foo"])
     , testSession "multi line explicit exports" $ template
@@ -3356,7 +3389,7 @@ exportUnusedTests = testGroup "export unused actions"
               [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
               , "module A"
               , "  ("
-              , "    foo,bar) where"
+              , "    foo, bar) where"
               , "foo = id"
               , "bar = foo"])
     , testSession "export list ends in comma" $ template
@@ -3790,13 +3823,13 @@ addSigLensesTests =
         , ("pattern Point{x, y} <- (x, y)\n  where Point x y = (x, y)", "pattern Point :: a -> b -> (a, b)")
         , ("pattern MkT1' b = MkT1 42 b", "pattern MkT1' :: (Eq a, Num a) => Show b => b -> T1 a")
         , ("pattern MkT1' b <- MkT1 42 b", "pattern MkT1' :: (Eq a, Num a) => Show b => b -> T1 a")
-        , ("pattern MkT1' b <- MkT1 42 b\n  where MkT1' b = T1 42 b", "pattern MkT1' :: (Eq a, Num a) => Show b => b -> T1 a")
+        , ("pattern MkT1' b <- MkT1 42 b\n  where MkT1' b = MkT1 42 b", "pattern MkT1' :: (Eq a, Num a) => Show b => b -> T1 a")
         , ("qualifiedSigTest= C.realPart", "qualifiedSigTest :: C.Complex a -> a")
         , ("head = 233", "head :: Integer")
         , ("rank2Test (k :: forall a . a -> a) = (k 233 :: Int, k \"QAQ\")", "rank2Test :: (forall a. a -> a) -> (Int, " <> listOfChar <> ")")
         , ("symbolKindTest = Proxy @\"qwq\"", "symbolKindTest :: Proxy \"qwq\"")
         , ("promotedKindTest = Proxy @Nothing", "promotedKindTest :: Proxy 'Nothing")
-        , ("typeOperatorTest = Refl", "typeOperatorTest :: a :~: a")
+        , ("typeOperatorTest = Refl", if ghcVersion >= GHC92 then "typeOperatorTest :: forall {k} {a :: k}. a :~: a" else "typeOperatorTest :: a :~: a")
         , ("notInScopeTest = mkCharType", "notInScopeTest :: String -> Data.Data.DataType")
         ]
    in testGroup
@@ -3948,8 +3981,8 @@ findDefinitionAndHoverTests = let
   spaceL37 = Position 41  24 ; space = [ExpectNoDefinitions, ExpectHoverText [":: Char"]]
   docL41 = Position 45  1  ;  doc    = [ExpectHoverText ["Recognizable docs: kpqz"]]
                            ;  constr = [ExpectHoverText ["Monad m"]]
-  eitL40 = Position 44 28  ;  kindE  = [ExpectHoverText [":: * -> * -> *\n"]]
-  intL40 = Position 44 34  ;  kindI  = [ExpectHoverText [":: *\n"]]
+  eitL40 = Position 44 28  ;  kindE  = [ExpectHoverText [if ghcVersion >= GHC92 then ":: Type -> Type -> Type\n" else ":: * -> * -> *\n"]]
+  intL40 = Position 44 34  ;  kindI  = [ExpectHoverText [if ghcVersion >= GHC92 then ":: Type\n" else ":: *\n"]]
   tvrL40 = Position 44 37  ;  kindV  = [ExpectHoverText [":: * -> *\n"]]
   intL41 = Position 45 20  ;  litI   = [ExpectHoverText ["7518"]]
   chrL36 = Position 41 24  ;  litC   = [ExpectHoverText ["'f'"]]
@@ -4015,9 +4048,13 @@ findDefinitionAndHoverTests = let
   , test  no     skip   cccL17     docLink       "Haddock html links"
   , testM yes    yes    imported   importedSig   "Imported symbol"
   , testM yes    yes    reexported reexportedSig "Imported symbol (reexported)"
-  , if ghcVersion == GHC90 && isWindows then
+  , if | ghcVersion == GHC90 && isWindows ->
         test  no     broken    thLocL57   thLoc         "TH Splice Hover"
-    else
+       | ghcVersion == GHC92 && (isWindows || isMac) ->
+           -- Some GHC 9.2 distributions ship without .hi docs
+           -- https://gitlab.haskell.org/ghc/ghc/-/issues/20903
+        test  no     broken   thLocL57   thLoc         "TH Splice Hover"
+       | otherwise ->
         test  no     yes       thLocL57   thLoc         "TH Splice Hover"
   ]
   where yes, broken :: (TestTree -> Maybe TestTree)
@@ -4035,6 +4072,7 @@ checkFileCompiles fp diag =
 pluginSimpleTests :: TestTree
 pluginSimpleTests =
   ignoreInWindowsForGHC88And810 $
+  ignoreForGHC92 "blocked on ghc-typelits-natnormalise" $
   testSessionWithExtraFiles "plugin-knownnat" "simple plugin" $ \dir -> do
     _ <- openDoc (dir </> "KnownNat.hs") "haskell"
     liftIO $ writeFile (dir</>"hie.yaml")
@@ -4049,6 +4087,7 @@ pluginSimpleTests =
 pluginParsedResultTests :: TestTree
 pluginParsedResultTests =
   ignoreInWindowsForGHC88And810 $
+  ignoreForGHC92 "No need for this plugin anymore!" $
   testSessionWithExtraFiles "plugin-recorddot" "parsedResultAction plugin" $ \dir -> do
     _ <- openDoc (dir</> "RecordDot.hs") "haskell"
     expectNoMoreDiagnostics 2
@@ -4065,9 +4104,9 @@ cppTests =
                   "foo = 42"
                 ]
         -- The error locations differ depending on which C-preprocessor is used.
-        -- Some give the column number and others don't (hence -1). Assert either
+        -- Some give the column number and others don't (hence maxBound == -1 unsigned). Assert either
         -- of them.
-        (run $ expectError content (2, -1))
+        (run $ expectError content (2, maxBound))
           `catch` ( \e -> do
                       let _ = e :: HUnitFailure
                       run $ expectError content (2, 1)
@@ -4498,6 +4537,15 @@ localCompletionTests = [
         ,("abcdefg", CiFunction, "abcdefg", True, False, Nothing)
         ,("abcdefgh", CiFunction, "abcdefgh", True, False, Nothing)
         ,("abcdefghi", CiFunction, "abcdefghi", True, False, Nothing)
+        ],
+    completionTest
+        "type family"
+        ["{-# LANGUAGE DataKinds, TypeFamilies #-}"
+        ,"type family Bar a"
+        ,"a :: Ba"
+        ]
+        (Position 2 7)
+        [("Bar", CiStruct, "Bar", True, False, Nothing)
         ],
     completionTest
         "class method"
@@ -4954,7 +5002,7 @@ highlightTests = testGroup "highlight"
             , DocumentHighlight (R 6 10 6 13) (Just HkRead)
             , DocumentHighlight (R 7 12 7 15) (Just HkRead)
             ]
-  , knownBrokenForGhcVersions [GHC90] "Ghc9 highlights the constructor and not just this field" $
+  , knownBrokenForGhcVersions [GHC90, GHC92] "Ghc9 highlights the constructor and not just this field" $
         testSessionWait "record" $ do
         doc <- createDoc "A.hs" "haskell" recsource
         _ <- waitForDiagnostics
@@ -5095,7 +5143,7 @@ outlineTests = testGroup
     let source = T.unlines ["data A = B {", "  x :: Int", "  , y :: Int}"]
     docId   <- createDoc "A.hs" "haskell" source
     symbols <- getDocumentSymbols docId
-    liftIO $ symbols @=? Left
+    liftIO $ symbols @?= Left
       [ docSymbolWithChildren "A" SkStruct (R 0 0 2 13)
           [ docSymbolWithChildren' "B" SkConstructor (R 0 9 2 13) (R 0 9 0 10)
             [ docSymbol "x" SkField (R 1 2 1 3)
@@ -5159,7 +5207,7 @@ outlineTests = testGroup
                                             SkFile
                                             Nothing
                                             Nothing
-                                            (R 0 0 maxBoundUinteger 0)
+                                            (R 0 0 maxBound 0)
                                             loc
                                             (Just $ List cc)
   classSymbol name loc cc = DocumentSymbol name
@@ -5171,7 +5219,7 @@ outlineTests = testGroup
                                            loc
                                            (Just $ List cc)
 
-pattern R :: Int -> Int -> Int -> Int -> Range
+pattern R :: UInt -> UInt -> UInt -> UInt -> Range
 pattern R x y x' y' = Range (Position x y) (Position x' y')
 
 xfail :: TestTree -> String -> TestTree
@@ -5186,6 +5234,11 @@ ignoreInWindowsForGHC88And810 :: TestTree -> TestTree
 ignoreInWindowsForGHC88And810
     | ghcVersion `elem` [GHC88, GHC810] =
         ignoreInWindowsBecause "tests are unreliable in windows for ghc 8.8 and 8.10"
+    | otherwise = id
+
+ignoreForGHC92 :: String -> TestTree -> TestTree
+ignoreForGHC92 msg
+    | ghcVersion == GHC92 = ignoreTestBecause msg
     | otherwise = id
 
 ignoreInWindowsForGHC88 :: TestTree -> TestTree
@@ -5212,10 +5265,10 @@ data Expect
 --  | ExpectExtern -- TODO: as above, but expected to succeed: need some more info in here, once we have some working examples
   deriving Eq
 
-mkR :: Int -> Int -> Int -> Int -> Expect
+mkR :: UInt -> UInt -> UInt -> UInt -> Expect
 mkR startLine startColumn endLine endColumn = ExpectRange $ mkRange startLine startColumn endLine endColumn
 
-mkL :: Uri -> Int -> Int -> Int -> Int -> Expect
+mkL :: Uri -> UInt -> UInt -> UInt -> UInt -> Expect
 mkL uri startLine startColumn endLine endColumn = ExpectLocation $ Location uri $ mkRange startLine startColumn endLine endColumn
 
 haddockTests :: TestTree
@@ -5351,7 +5404,7 @@ dependentFileTest = testGroup "addDependentFile"
         expectDiagnostics $
             if ghcVersion >= GHC90
                 -- String vs [Char] causes this change in error message
-                then [("Foo.hs", [(DsError, (4, 6), "Couldn't match type")])]
+                then [("Foo.hs", [(DsError, if ghcVersion >= GHC92 then (4,11) else (4, 6), "Couldn't match type")])]
                 else [("Foo.hs", [(DsError, (4, 6), "Couldn't match expected type")])]
         -- Now modify the dependent file
         liftIO $ writeFile depFilePath "B"
@@ -5902,14 +5955,14 @@ referenceTest name loc includeDeclaration expected =
   where
     docs = map fst3 expected
 
-type SymbolLocation = (FilePath, Int, Int)
+type SymbolLocation = (FilePath, UInt, UInt)
 
 expectSameLocations :: [Location] -> [SymbolLocation] -> Assertion
 expectSameLocations actual expected = do
     let actual' =
             Set.map (\location -> (location ^. L.uri
-                                   , location ^. L.range . L.start . L.line
-                                   , location ^. L.range . L.start . L.character))
+                                   , location ^. L.range . L.start . L.line . to fromIntegral
+                                   , location ^. L.range . L.start . L.character . to fromIntegral))
             $ Set.fromList actual
     expected' <- Set.fromList <$>
         (forM expected $ \(file, l, c) -> do
@@ -5955,7 +6008,7 @@ pickActionWithTitle title actions = do
         , title == actionTitle
         ]
 
-mkRange :: Int -> Int -> Int -> Int -> Range
+mkRange :: UInt -> UInt -> UInt -> UInt -> Range
 mkRange a b c d = Range (Position a b) (Position c d)
 
 run :: Session a -> IO a
@@ -6024,7 +6077,7 @@ getConfigFromEnv = do
     convertVal _   = True
 
 lspTestCaps :: ClientCapabilities
-lspTestCaps = fullCaps { _window = Just $ WindowClientCapabilities $ Just True }
+lspTestCaps = fullCaps { _window = Just $ WindowClientCapabilities (Just True) Nothing Nothing }
 
 openTestDataDoc :: FilePath -> Session TextDocumentIdentifier
 openTestDataDoc path = do
@@ -6201,9 +6254,13 @@ findResolution_us delay_us = withTempFile $ \f -> withTempFile $ \f' -> do
     if t /= t' then return delay_us else findResolution_us (delay_us * 10)
 
 
-testIde :: IDE.Arguments -> Session () -> IO ()
-testIde arguments session = do
+testIde :: IDE.Arguments -> Session a -> IO a
+testIde = testIde' "."
+
+testIde' :: FilePath -> IDE.Arguments -> Session a -> IO a
+testIde' projDir arguments session = do
     config <- getConfigFromEnv
+    cwd <- getCurrentDirectory
     (hInRead, hInWrite) <- createPipe
     (hOutRead, hOutWrite) <- createPipe
     let server = IDE.defaultMain arguments
@@ -6211,8 +6268,10 @@ testIde arguments session = do
             , IDE.argsHandleOut = pure hOutWrite
             }
 
-    withAsync server $ \_ ->
-        runSessionWithHandles hInWrite hOutRead config lspTestCaps "." session
+    flip finally (setCurrentDirectory cwd) $ withAsync server $ \_ ->
+        runSessionWithHandles hInWrite hOutRead config lspTestCaps projDir session
+
+
 
 positionMappingTests :: TestTree
 positionMappingTests =
@@ -6356,24 +6415,28 @@ genRope = Rope.fromText . getPrintableText <$> arbitrary
 
 genPosition :: Rope -> Gen Position
 genPosition r = do
-    row <- choose (0, max 0 $ rows - 1)
+    let rows = Rope.rows r
+    row <- choose (0, max 0 $ rows - 1) `suchThat` inBounds @UInt
     let columns = Rope.columns (nthLine row r)
-    column <- choose (0, max 0 $ columns - 1)
-    pure $ Position row column
-    where rows = Rope.rows r
+    column <- choose (0, max 0 $ columns - 1) `suchThat` inBounds @UInt
+    pure $ Position (fromIntegral row) (fromIntegral column)
 
 genRange :: Rope -> Gen Range
 genRange r = do
+    let rows = Rope.rows r
     startPos@(Position startLine startColumn) <- genPosition r
-    let maxLineDiff = max 0 $ rows - 1 - startLine
-    endLine <- choose (startLine, startLine + maxLineDiff)
-    let columns = Rope.columns (nthLine endLine r)
+    let maxLineDiff = max 0 $ rows - 1 - fromIntegral startLine
+    endLine <- choose (fromIntegral startLine, fromIntegral startLine + maxLineDiff) `suchThat` inBounds @UInt
+    let columns = Rope.columns (nthLine (fromIntegral endLine) r)
     endColumn <-
-        if startLine == endLine
-            then choose (startColumn, columns)
+        if fromIntegral startLine == endLine
+            then choose (fromIntegral startColumn, columns)
             else choose (0, max 0 $ columns - 1)
-    pure $ Range startPos (Position endLine endColumn)
-    where rows = Rope.rows r
+        `suchThat` inBounds @UInt
+    pure $ Range startPos (Position (fromIntegral endLine) (fromIntegral endColumn))
+
+inBounds :: forall b a . (Integral a, Integral b, Bounded b) => a -> Bool
+inBounds a = let i = toInteger a in i <= toInteger (maxBound @b) && i >= toInteger (minBound @b)
 
 -- | Get the ith line of a rope, starting from 0. Trailing newline not included.
 nthLine :: Int -> Rope -> Rope
@@ -6412,11 +6475,6 @@ listOfChar | ghcVersion >= GHC90 = "String"
            | otherwise = "[Char]"
 
 -- | Ghc 9 doesn't include the $-sign in TH warnings like earlier versions did
-thDollarIdx :: Int
+thDollarIdx :: UInt
 thDollarIdx | ghcVersion >= GHC90 = 1
             | otherwise = 0
-
--- | We don't have a uinteger type yet. So hardcode the maxBound of uinteger, 2 ^ 31 - 1
--- as a constant.
-maxBoundUinteger :: Int
-maxBoundUinteger = 2147483647

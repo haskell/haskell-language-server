@@ -51,15 +51,17 @@ import           Development.IDE.Core.Rules                         (defineNoFil
                                                                      getParsedModuleWithComments,
                                                                      usePropertyAction)
 import           Development.IDE.Core.Shake                         (getDiagnostics)
-import           Refact.Apply
+import qualified Refact.Apply                                       as Refact
 
 #ifdef HLINT_ON_GHC_LIB
 import           Data.List                                          (nub)
-import           Development.IDE.GHC.Compat.Core                    (BufSpan,
+import           Development.IDE.GHC.Compat                         (BufSpan,
                                                                      DynFlags,
+                                                                     WarningFlag (Opt_WarnUnrecognisedPragmas),
                                                                      extensionFlags,
                                                                      ms_hspp_opts,
-                                                                     topDir)
+                                                                     topDir,
+                                                                     wopt)
 import qualified Development.IDE.GHC.Compat.Util                    as EnumSet
 import           "ghc-lib" GHC                                      hiding
                                                                     (DynFlags (..),
@@ -79,12 +81,14 @@ import           System.IO                                          (IOMode (Wri
                                                                      withFile)
 import           System.IO.Temp
 #else
-import           Development.IDE.GHC.Compat.Core                    hiding
+import           Development.IDE.GHC.Compat                         hiding
                                                                     (setEnv)
+import           GHC.Generics                                       (Associativity (LeftAssociative, NotAssociative, RightAssociative))
 import           Language.Haskell.GHC.ExactPrint.Delta              (deltaOptions)
 import           Language.Haskell.GHC.ExactPrint.Parsers            (postParseTransform)
 import           Language.Haskell.GHC.ExactPrint.Types              (Rigidity (..))
 import           Language.Haskell.GhclibParserEx.Fixity             as GhclibParserEx (applyFixities)
+import qualified Refact.Fixity                                      as Refact
 #endif
 
 import           Ide.Logger
@@ -105,12 +109,6 @@ import           Language.LSP.Types                                 hiding
 import qualified Language.LSP.Types                                 as LSP
 import qualified Language.LSP.Types.Lens                            as LSP
 
-import           GHC.Generics                                       (Associativity (LeftAssociative, NotAssociative, RightAssociative),
-                                                                     Generic)
-import           Text.Regex.TDFA.Text                               ()
-
-import           Development.IDE.GHC.Compat.Core                    (WarningFlag (Opt_WarnUnrecognisedPragmas),
-                                                                     wopt)
 import           Development.IDE.Spans.Pragmas                      (LineSplitTextEdits (LineSplitTextEdits),
                                                                      NextPragmaInfo (NextPragmaInfo),
                                                                      getNextPragmaInfo,
@@ -118,8 +116,10 @@ import           Development.IDE.Spans.Pragmas                      (LineSplitTe
                                                                      lineSplitInsertTextEdit,
                                                                      lineSplitTextEdits,
                                                                      nextPragmaLine)
+import           GHC.Generics                                       (Generic)
 import           System.Environment                                 (setEnv,
                                                                      unsetEnv)
+import           Text.Regex.TDFA.Text                               ()
 -- ---------------------------------------------------------------------
 
 #ifdef HLINT_ON_GHC_LIB
@@ -228,11 +228,11 @@ rules plugin = do
       srcSpanToRange :: SrcSpan -> LSP.Range
       srcSpanToRange (RealSrcSpan span _) = Range {
           _start = LSP.Position {
-                _line = srcSpanStartLine span - 1
-              , _character  = srcSpanStartCol span - 1}
+                _line = fromIntegral $ srcSpanStartLine span - 1
+              , _character  = fromIntegral $ srcSpanStartCol span - 1}
         , _end   = LSP.Position {
-                _line = srcSpanEndLine span - 1
-             , _character = srcSpanEndCol span - 1}
+                _line = fromIntegral $ srcSpanEndLine span - 1
+             , _character = fromIntegral $ srcSpanEndCol span - 1}
         }
       srcSpanToRange (UnhelpfulSpan _) = noRange
 
@@ -431,7 +431,7 @@ mkSuppressHintTextEdits :: DynFlags -> T.Text -> T.Text -> [LSP.TextEdit]
 mkSuppressHintTextEdits dynFlags fileContents hint =
   let
     NextPragmaInfo{ nextPragmaLine, lineSplitTextEdits } = getNextPragmaInfo dynFlags (Just fileContents)
-    nextPragmaLinePosition = Position nextPragmaLine 0
+    nextPragmaLinePosition = Position (fromIntegral nextPragmaLine) 0
     nextPragmaRange = Range nextPragmaLinePosition nextPragmaLinePosition
     wnoUnrecognisedPragmasText =
       if wopt Opt_WarnUnrecognisedPragmas dynFlags
@@ -540,9 +540,9 @@ applyHint ide nfp mhint =
             (pflags, _, _) <- runAction' $ useNoFile_ GetHlintSettings
             exts <- runAction' $ getExtensions pflags nfp
             -- We have to reparse extensions to remove the invalid ones
-            let (enabled, disabled, _invalid) = parseExtensions $ map show exts
+            let (enabled, disabled, _invalid) = Refact.parseExtensions $ map show exts
             let refactExts = map show $ enabled ++ disabled
-            (Right <$> withRuntimeLibdir (applyRefactorings position commands temp refactExts))
+            (Right <$> withRuntimeLibdir (Refact.applyRefactorings position commands temp refactExts))
                 `catches` errorHandlers
 #else
     mbParsedModule <- liftIO $ runAction' $ getParsedModuleWithComments nfp
@@ -555,8 +555,9 @@ applyHint ide nfp mhint =
                 -- apply-refact uses RigidLayout
                 let rigidLayout = deltaOptions RigidLayout
                 (anns', modu') <-
-                    ExceptT $ return $ postParseTransform (Right (anns, [], dflags, modu)) rigidLayout
-                liftIO $ (Right <$> withRuntimeLibdir (applyRefactorings' position commands anns' modu'))
+                    ExceptT $ mapM (uncurry Refact.applyFixities)
+                            $ postParseTransform (Right (anns, [], dflags, modu)) rigidLayout
+                liftIO $ (Right <$> withRuntimeLibdir (Refact.applyRefactorings' position commands anns' modu'))
                             `catches` errorHandlers
 #endif
     case res of
@@ -574,7 +575,7 @@ applyHint ide nfp mhint =
           filterIdeas (OneHint (Position l c) title) ideas =
             let title' = T.unpack title
                 ideaPos = (srcSpanStartLine &&& srcSpanStartCol) . toRealSrcSpan . ideaSpan
-            in filter (\i -> ideaHint i == title' && ideaPos i == (l+1, c+1)) ideas
+            in filter (\i -> ideaHint i == title' && ideaPos i == (fromIntegral $ l+1, fromIntegral $ c+1)) ideas
 
           toRealSrcSpan (RealSrcSpan real _) = real
           toRealSrcSpan (UnhelpfulSpan x) = error $ "No real source span: " ++ show x

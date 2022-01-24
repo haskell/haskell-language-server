@@ -27,8 +27,6 @@ packages:
          ./plugins/hls-call-hierarchy-plugin
          ./plugins/hls-alternate-number-format-plugin
 
-with-compiler: ghc-9.0.1
-
 tests: true
 
 package *
@@ -37,30 +35,30 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2021-11-29T12:30:07Z
+index-state: 2022-01-11T22:05:45Z
 
 constraints:
   -- These plugins don't work on GHC9 yet
-  haskell-language-server +ignore-plugins-ghc-bounds -brittany -stylishhaskell -tactic,
+  -- Add a plugin needs remove the -flag but also update ghc bounds in hls.cabal
+  haskell-language-server +ignore-plugins-ghc-bounds -stylishhaskell,
   ghc-lib-parser ^>= 9.0
 
 -- although we are not building all plugins cabal solver phase is run for all packages
 -- this way we track explicitly all transitive dependencies which need support for ghc-9
 allow-newer:
-    brittany:base,
-    brittany:ghc,
-    brittany:ghc-boot-th,
-    -- for brittany
-    butcher:base,
-    multistate:base,
-    data-tree-print:base,
 
-    stylish-haskell:Cabal,
-    stylish-haskell:ghc-lib-parser,
+  -- brittany: update ghc bounds in hls.cabal when those are removed
+  -- https://github.com/lspitzner/multistate/pull/8
+  multistate:base,
+  -- https://github.com/lspitzner/data-tree-print/pull/3
+  data-tree-print:base,
+  -- https://github.com/lspitzner/butcher/pull/8
+  butcher:base,
 
-    floskell:base,
-    floskell:ghc-prim,
+  stylish-haskell:Cabal,
+  stylish-haskell:ghc-lib-parser,
+  stylish-haskell:aeson,
 
-    -- for shake-bench
-    Chart-diagrams:diagrams-core,
-    SVGFonts:diagrams-core
+  -- ghc-9.0.2 specific
+  -- for ghcide:test via ghc-typelits-knownnat
+  ghc-typelits-natnormalise:ghc-bignum

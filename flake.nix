@@ -21,9 +21,22 @@
       url = "github:hercules-ci/gitignore.nix";
       flake = false;
     };
+
+    lsp-source = {
+      url = "https://hackage.haskell.org/package/lsp-1.4.0.0/lsp-1.4.0.0.tar.gz";
+      flake = false;
+    };
+    lsp-types-source = {
+      url = "https://hackage.haskell.org/package/lsp-types-1.4.0.0/lsp-types-1.4.0.0.tar.gz";
+      flake = false;
+    };
+    lsp-test-source = {
+      url = "https://hackage.haskell.org/package/lsp-test-0.14.0.2/lsp-test-0.14.0.2.tar.gz";
+      flake = false;
+    };
   };
   outputs =
-    { self, nixpkgs, flake-compat, flake-utils, pre-commit-hooks, gitignore }:
+    { self, nixpkgs, flake-compat, flake-utils, pre-commit-hooks, gitignore, lsp-source, lsp-types-source, lsp-test-source }:
     {
       overlay = final: prev:
         with prev;
@@ -75,11 +88,21 @@
               # We need an older version
               hiedb = hself.hiedb_0_4_1_0;
 
+              lsp = hsuper.callCabal2nix "lsp" lsp-source {};
+              lsp-types = hsuper.callCabal2nix "lsp-types" lsp-types-source {};
+              lsp-test = hsuper.callCabal2nix "lsp-test" lsp-test-source {};
+
               implicit-hie-cradle = hself.callCabal2nix "implicit-hie-cradle"
                 (builtins.fetchTarball {
                   url = "https://hackage.haskell.org/package/implicit-hie-cradle-0.3.0.5/implicit-hie-cradle-0.3.0.5.tar.gz";
                   sha256 = "15a7g9x6cjk2b92hb2wilxx4550msxp1pmk5a2shiva821qaxnfq";
                 }) { };
+
+              # https://github.com/NixOS/nixpkgs/issues/140774
+              ormolu =
+                if final.system == "aarch64-darwin"
+                then overrideCabal hsuper.ormolu (_: { enableSeparateBinOutput = false; })
+                else hsuper.ormolu;
             };
 
           hlsSources =
@@ -118,7 +141,7 @@
               chmod +x $dest
             '';
         };
-    } // (flake-utils.lib.eachSystem [ "x86_64-linux" "x86_64-darwin" ])
+    } // (flake-utils.lib.eachSystem [ "x86_64-linux" "x86_64-darwin" "aarch64-darwin" ])
     (system:
       let
         pkgs = import nixpkgs {
@@ -146,6 +169,10 @@
               # Temporarily ignored files
               # Stylish-haskell (and other formatters) does not work well with some CPP usages in these files
               "^ghcide/src/Development/IDE/GHC/Compat.hs$"
+              "^ghcide/src/Development/IDE/Plugin/CodeAction/ExactPrint.hs$"
+              "^ghcide/src/Development/IDE/GHC/Compat/Core.hs$"
+              "^ghcide/src/Development/IDE/Spans/Pragmas.hs$"
+              "^ghcide/src/Development/IDE/LSP/Outline.hs$"
               "^plugins/hls-splice-plugin/src/Ide/Plugin/Splice.hs$"
               "^ghcide/test/exe/Main.hs$"
               "ghcide/src/Development/IDE/Core/Rules.hs"
@@ -179,10 +206,10 @@
 
         docs = pkgs.stdenv.mkDerivation {
           name = "hls-docs";
-          src = pkgs.lib.sourceFilesBySuffices ./docs [ ".py" ".rst" ".md" ".png" ".gif" ".svg" ];
+          src = pkgs.lib.sourceFilesBySuffices ./. [ ".py" ".rst" ".md" ".png" ".gif" ".svg" ".cabal" ];
           buildInputs = [ pythonWithPackages ];
           # -n gives warnings on missing link targets, -W makes warnings into errors
-          buildPhase = ''sphinx-build -n -W . $out'';
+          buildPhase = ''cd docs; sphinx-build -n -W . $out'';
           dontInstall = true;
         };
 

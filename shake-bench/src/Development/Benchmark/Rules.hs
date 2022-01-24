@@ -67,17 +67,20 @@ module Development.Benchmark.Rules
   ) where
 
 import           Control.Applicative
+import           Control.Lens                              ((^.))
 import           Control.Monad
 import           Data.Aeson                                (FromJSON (..),
                                                             ToJSON (..),
-                                                            Value (..), (.!=),
-                                                            (.:?))
+                                                            Value (..), object,
+                                                            (.!=), (.:?), (.=))
+import           Data.Aeson.Lens                           (_Object)
 import           Data.Char                                 (isDigit)
 import           Data.List                                 (find, isInfixOf,
                                                             stripPrefix,
                                                             transpose)
 import           Data.List.Extra                           (lower)
 import           Data.Maybe                                (fromMaybe)
+import           Data.String                               (fromString)
 import           Data.Text                                 (Text)
 import qualified Data.Text                                 as T
 import           Development.Shake
@@ -88,7 +91,6 @@ import           GHC.Exts                                  (IsList (toList),
 import           GHC.Generics                              (Generic)
 import           GHC.Stack                                 (HasCallStack)
 import qualified Graphics.Rendering.Chart.Backend.Diagrams as E
-import           Graphics.Rendering.Chart.Easy             ((.=))
 import qualified Graphics.Rendering.Chart.Easy             as E
 import           System.Directory                          (createDirectoryIfMissing,
                                                             findExecutable,
@@ -170,8 +172,8 @@ phonyRules prefix executableName prof buildFolder examples = do
     phony (prefix <> "all") $ do
         exampleTargets <- forM examples $ \ex ->
             allTargetsForExample prof buildFolder ex
-        need $ [ buildFolder </> profilingPath prof </> "results.csv" ]
-             ++ concat exampleTargets
+        need $ (buildFolder </> profilingPath prof </> "results.csv")
+             : concat exampleTargets
     phony (prefix <> "all-binaries") $ need =<< allBinaries buildFolder executableName
 --------------------------------------------------------------------------------
 type OutputFolder = FilePath
@@ -498,21 +500,24 @@ data GitCommit = GitCommit
 
 instance FromJSON GitCommit where
   parseJSON (String s) = pure $ GitCommit s Nothing Nothing True
-  parseJSON (Object (toList -> [(name, String gitName)])) =
-    pure $ GitCommit gitName (Just name) Nothing True
-  parseJSON (Object (toList -> [(name, Object props)])) =
-    GitCommit
-      <$> props .:? "git"  .!= name
-      <*> pure (Just name)
-      <*> props .:? "parent"
-      <*> props .:? "include" .!= True
+  parseJSON o@(Object _) = do
+    let keymap = o ^. _Object
+    case toList keymap of
+      [(name, String gitName)] -> pure $ GitCommit gitName (Just name) Nothing True
+      [(name, Object props)] ->
+        GitCommit
+          <$> props .:? "git"  .!= name
+          <*> pure (Just name)
+          <*> props .:? "parent"
+          <*> props .:? "include" .!= True
+      _ -> empty
   parseJSON _ = empty
 
 instance ToJSON GitCommit where
   toJSON GitCommit {..} =
     case name of
       Nothing -> String gitName
-      Just n  -> Object $ fromList [(n, String gitName)]
+      Just n  -> object [fromString (T.unpack n) .= String gitName]
 
 humanName :: GitCommit -> Text
 humanName GitCommit {..} = fromMaybe gitName name
@@ -607,7 +612,7 @@ plotDiagram :: Bool -> Diagram -> FilePath -> Action ()
 plotDiagram includeFailed t@Diagram {traceMetric, runLogs} out = do
   let extract = frameMetric traceMetric
   liftIO $ E.toFile E.def out $ do
-    E.layout_title .= title t
+    E.layout_title E..= title t
     E.setColors myColors
     forM_ runLogs $ \rl ->
       when (includeFailed || runSuccess rl) $ E.plot $ do

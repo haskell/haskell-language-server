@@ -8,11 +8,11 @@ module Wingman.Tactics
 
 import           Control.Applicative (Alternative(empty), (<|>))
 import           Control.Lens ((&), (%~), (<>~))
-import           Control.Monad (filterM)
-import           Control.Monad (unless)
+import           Control.Monad (filterM, unless)
+import           Control.Monad (when)
 import           Control.Monad.Extra (anyM)
 import           Control.Monad.Reader.Class (MonadReader (ask))
-import           Control.Monad.State.Strict (StateT(..), runStateT)
+import           Control.Monad.State.Strict (StateT(..), runStateT, execStateT)
 import           Data.Bool (bool)
 import           Data.Foldable
 import           Data.Functor ((<&>))
@@ -24,7 +24,6 @@ import           Data.Maybe
 import           Data.Set (Set)
 import qualified Data.Set as S
 import           Data.Traversable (for)
-import           DataCon
 import           Development.IDE.GHC.Compat hiding (empty)
 import           GHC.Exts
 import           GHC.SourceGen ((@@))
@@ -95,7 +94,7 @@ recursion = requireConcreteHole $ tracing "recursion" $ do
         -- Make sure that the recursive call contains at least one already-bound
         -- pattern value. This ensures it is structurally smaller, and thus
         -- suggests termination.
-        case (any (flip M.member pat_vals) $ syn_used_vals ext) of
+        case any (flip M.member pat_vals) $ syn_used_vals ext of
           True -> Nothing
           False -> Just UnhelpfulRecursion
 
@@ -132,7 +131,8 @@ intros' params = rule $ \jdg -> do
   let g  = jGoal jdg
   case tacticsSplitFunTy $ unCType g of
     (_, _, [], _) -> cut -- failure $ GoalMismatch "intros" g
-    (_, _, args, res) -> do
+    (_, _, scaledArgs, res) -> do
+      let args = fmap scaledThing scaledArgs
       ctx <- ask
       let gen_names = mkManyGoodNames (hyNamesInScope $ jEntireHypothesis jdg) args
           occs = case params of
@@ -145,7 +145,7 @@ intros' params = rule $ \jdg -> do
           bound_occs = fmap fst bindings
           hy' = lambdaHypothesis top_hole bindings
           jdg' = introduce ctx hy'
-               $ withNewGoal (CType $ mkVisFunTys (drop num_occs args) res) jdg
+               $ withNewGoal (CType $ mkVisFunTys (drop num_occs scaledArgs) res) jdg
       ext <- newSubgoal jdg'
       pure $
         ext
@@ -233,7 +233,7 @@ homo hi = requireConcreteHole . tracing "homo" $ do
 
   -- Ensure that every data constructor in the domain type is covered in the
   -- codomain; otherwise 'homo' will produce an ill-typed program.
-  case (uncoveredDataCons (coerce $ hi_type hi) (coerce g)) of
+  case uncoveredDataCons (coerce $ hi_type hi) (coerce g) of
     Just uncovered_dcs ->
       unless (S.null uncovered_dcs) $
         failure  $ TacticPanic "Can't cover every datacon in domain"
@@ -243,7 +243,7 @@ homo hi = requireConcreteHole . tracing "homo" $ do
     $ destruct'
         False
         (\dc jdg -> buildDataCon False jdg dc $ snd $ splitAppTys $ unCType $ jGoal jdg)
-    $ hi
+        hi
 
 
 ------------------------------------------------------------------------------
@@ -266,7 +266,7 @@ homoLambdaCase =
         $ jGoal jdg
 
 
-data Saturation = Unsaturated Int
+newtype Saturation = Unsaturated Int
   deriving (Eq, Ord, Show)
 
 pattern Saturated :: Saturation
@@ -280,17 +280,19 @@ apply (Unsaturated n) hi = tracing ("apply' " <> show (hi_name hi)) $ do
       ty = unCType $ hi_type hi
       func = hi_name hi
   ty' <- freshTyvars ty
-  let (_, _, all_args, ret) = tacticsSplitFunTy ty'
+  let (_, theta, all_args, ret) = tacticsSplitFunTy ty'
       saturated_args = dropEnd n all_args
       unsaturated_args = takeEnd n all_args
   rule $ \jdg -> do
     unify g (CType $ mkVisFunTys unsaturated_args ret)
+    learnFromFundeps theta
     ext
         <- fmap unzipTrace
         $ traverse ( newSubgoal
                     . blacklistingDestruct
                     . flip withNewGoal jdg
                     . CType
+                    . scaledThing
                     ) saturated_args
     pure $
       ext
@@ -443,7 +445,7 @@ matching f = TacticT $ StateT $ \s -> runStateT (unTacticT $ f s) s
 
 
 attemptOn :: (Judgement -> [a]) -> (a -> TacticsM ()) -> TacticsM ()
-attemptOn getNames tac = matching (choice . fmap (\s -> tac s) . getNames)
+attemptOn getNames tac = matching (choice . fmap tac . getNames)
 
 
 localTactic :: TacticsM a -> (Judgement -> Judgement) -> TacticsM a
@@ -501,7 +503,7 @@ applyMethod cls df method_name = do
 applyByName :: OccName -> TacticsM ()
 applyByName name = do
   g <- goal
-  choice $ (unHypothesis (jHypothesis g)) <&> \hi ->
+  choice $ unHypothesis (jHypothesis g) <&> \hi ->
     case hi_name hi == name of
       True  -> apply Saturated hi
       False -> empty
@@ -524,6 +526,7 @@ applyByType ty = tracing ("applyByType " <> show ty) $ do
                     . blacklistingDestruct
                     . flip withNewGoal jdg
                     . CType
+                    . scaledThing
                     ) args
     app <- newSubgoal . blacklistingDestruct $ withNewGoal (CType ty) jdg
     pure $
@@ -540,7 +543,7 @@ nary :: Int -> TacticsM ()
 nary n = do
   a <- newUnivar
   b <- newUnivar
-  applyByType $ mkVisFunTys (replicate n a) b
+  applyByType $ mkVisFunTys (replicate n $ unrestricted a) b
 
 
 self :: TacticsM ()
@@ -558,7 +561,7 @@ cata :: HyInfo CType -> TacticsM ()
 cata hi = do
   (_, _, calling_args, _)
       <- tacticsSplitFunTy . unCType <$> getDefiningType
-  freshened_args <- traverse freshTyvars calling_args
+  freshened_args <- traverse (freshTyvars . scaledThing) calling_args
   diff <- hyDiff $ destruct hi
 
   -- For for every destructed term, check to see if it can unify with any of
@@ -582,8 +585,7 @@ letBind occs = do
            $ \occ
           -> fmap (occ, )
            $ fmap (<$ jdg)
-           $ fmap CType
-           $ newUnivar
+           $ fmap CType newUnivar
   rule $ nonrecLet occ_tys
 
 
@@ -625,7 +627,7 @@ with_arg = rule $ \jdg -> do
   let g = jGoal jdg
   fresh_ty <- newUnivar
   a <- newSubgoal $ withNewGoal (CType fresh_ty) jdg
-  f <- newSubgoal $ withNewGoal (coerce mkVisFunTys [fresh_ty] g) jdg
+  f <- newSubgoal $ withNewGoal (coerce mkVisFunTys [unrestricted fresh_ty] g) jdg
   pure $ fmap noLoc $ (@@) <$> fmap unLoc f <*> fmap unLoc a
 
 
@@ -639,4 +641,52 @@ hyDiff m = do
   m
   g' <- unHypothesis . jEntireHypothesis <$> goal
   pure $ Hypothesis $ take (length g' - g_len) g'
+
+
+------------------------------------------------------------------------------
+-- | Attempt to run the given tactic in "idiom bracket" mode. For example, if
+-- the current goal is
+--
+--    (_ :: [r])
+--
+-- then @idiom apply@ will remove the applicative context, resulting in a hole:
+--
+--    (_ :: r)
+--
+-- and then use @apply@ to solve it. Let's say this results in:
+--
+--    (f (_ :: a) (_ :: b))
+--
+-- Finally, @idiom@ lifts this back into the original applicative:
+--
+--    (f <$> (_ :: [a]) <*> (_ :: [b]))
+--
+-- Idiom will fail fast if the current goal doesn't have an applicative
+-- instance.
+idiom :: TacticsM () -> TacticsM ()
+idiom m = do
+  jdg <- goal
+  let hole = unCType $ jGoal jdg
+  when (isFunction hole) $
+    failure $ GoalMismatch "idiom" $ jGoal jdg
+  case splitAppTy_maybe hole of
+    Just (applic, ty) -> do
+      minst <- getKnownInstance (mkClsOcc "Applicative")
+            . pure
+            $ applic
+      case minst of
+        Nothing -> failure $ GoalMismatch "idiom" $ CType applic
+        Just (_, _) -> do
+          rule $ \jdg -> do
+            expr <- subgoalWith (withNewGoal (CType ty) jdg) m
+            case unLoc $ syn_val expr of
+              HsApp{}     -> pure $ fmap idiomize expr
+              RecordCon{} -> pure $ fmap idiomize expr
+              _       -> unsolvable $ GoalMismatch "idiom" $ jGoal jdg
+          rule $ newSubgoal . withModifiedGoal (CType . mkAppTy applic . unCType)
+    Nothing ->
+      failure $ GoalMismatch "idiom" $ jGoal jdg
+
+subgoalWith :: Judgement -> TacticsM () -> RuleM (Synthesized (LHsExpr GhcPs))
+subgoalWith jdg t = RuleT $ flip execStateT jdg $ unTacticT t
 

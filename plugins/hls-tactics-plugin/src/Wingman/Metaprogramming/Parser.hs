@@ -1,12 +1,12 @@
 {-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications  #-}
 
 module Wingman.Metaprogramming.Parser where
 
 import qualified Control.Monad.Combinators.Expr as P
+import           Data.Either (fromRight)
 import           Data.Functor
 import           Data.Maybe (listToMaybe)
 import qualified Data.Text as T
@@ -96,6 +96,17 @@ commands =
           []
           (Just "a -> b -> c -> d")
           "\\x y z -> (_ :: d)"
+      ]
+
+  , command "idiom" Deterministic Tactic
+      "Lift a tactic into idiom brackets."
+      (pure . idiom)
+      [ Example
+          Nothing
+          ["(apply f)"]
+          [EHI "f" "a -> b -> Int"]
+          (Just "Maybe Int")
+          "f <$> (_ :: Maybe a) <*> (_ :: Maybe b)"
       ]
 
   , command "intro" Deterministic (Bind One)
@@ -415,7 +426,7 @@ oneTactic =
 
 
 tactic :: Parser (TacticsM ())
-tactic = flip P.makeExprParser operators oneTactic
+tactic = P.makeExprParser oneTactic operators
 
 operators :: [[P.Operator Parser (TacticsM ())]]
 operators =
@@ -473,7 +484,7 @@ attempt_it rsl ctx jdg program =
 
 parseMetaprogram :: T.Text -> TacticsM ()
 parseMetaprogram
-    = either (const $ pure ()) id
+    = fromRight (pure ())
     . P.runParser tacticProgram "<splice>"
 
 

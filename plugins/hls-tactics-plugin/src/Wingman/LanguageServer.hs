@@ -1,7 +1,6 @@
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes        #-}
-{-# LANGUAGE TupleSections     #-}
 {-# LANGUAGE TypeFamilies      #-}
 
 {-# LANGUAGE NoMonoLocalBinds  #-}
@@ -230,7 +229,7 @@ judgementForHole state nfp range cfg = do
 
       -- KnownThings is just the instances in scope. There are no ranges
       -- involved, so it's not crucial to track ages.
-      let henv = untrackedStaleValue $ hscenv
+      let henv = untrackedStaleValue hscenv
       eps <- liftIO $ readIORef $ hsc_EPS $ hscEnv henv
 
       (jdg, ctx) <- liftMaybe $ mkJudgementAndContext cfg g binds new_rss tcg (hscEnv henv) eps
@@ -279,7 +278,7 @@ mkJudgementAndContext cfg g (TrackedStale binds bmap) rss (TrackedStale tcg tcgm
       evidence = getEvidenceAtHole (fmap (`RealSrcSpan` Nothing) tcg_rss) tcs
       cls_hy = foldMap evidenceToHypothesis evidence
       subst = ts_unifier $ evidenceToSubst evidence defaultTacticState
-  pure $
+  pure
     ( disallowing AlreadyDestructed already_destructed
     $ fmap (CType . substTyAddInScope subst . unCType) $
         mkFirstJudgement
@@ -309,8 +308,8 @@ getAlreadyDestructed (unTrack -> span) (unTrack -> binds) =
 
 getSpanAndTypeAtHole
     :: Tracked age Range
-    -> Tracked age (HieASTs b)
-    -> Maybe (Tracked age RealSrcSpan, b)
+    -> Tracked age (HieASTs Type)
+    -> Maybe (Tracked age RealSrcSpan, Type)
 getSpanAndTypeAtHole r@(unTrack -> range) (unTrack -> hf) = do
   join $ listToMaybe $ M.elems $ flip M.mapWithKey (getAsts hf) $ \fs ast ->
     case selectSmallestContaining (rangeToRealSrcSpan (FastString.unpackFS fs) range) ast of
@@ -403,7 +402,11 @@ buildPatHy prov (fromPatCompat -> p0) =
         (RealDataCon $ tupleDataCon boxity $ length pats)
         tys
           $ zip [0.. ] pats
-    ConPatOut (L _ con) args _ _ _ f _ ->
+#if __GLASGOW_HASKELL__ >= 900
+    ConPat {pat_con = (L _ con), pat_con_ext = ConPatTc {cpt_arg_tys = args}, pat_args = f} ->
+#else
+    ConPatOut {pat_con = (L _ con), pat_arg_tys = args, pat_args = f} ->
+#endif
       case f of
         PrefixCon l_pgt ->
           mkDerivedConHypothesis prov con args $ zip [0..] l_pgt
@@ -564,7 +567,11 @@ wingmanRules plId = do
                       L span (HsVar _ (L _ name))
                         | isHole (occName name) ->
                             maybeToList $ srcSpanToRange span
+#if __GLASGOW_HASKELL__ >= 900
+                      L span (HsUnboundVar _ occ)
+#else
                       L span (HsUnboundVar _ (TrueExprHole occ))
+#endif
                         | isHole occ ->
                             maybeToList $ srcSpanToRange span
 #if __GLASGOW_HASKELL__ <= 808

@@ -1,6 +1,6 @@
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TupleSections   #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE CPP           #-}
+{-# LANGUAGE RankNTypes    #-}
+{-# LANGUAGE TupleSections #-}
 
 module Wingman.Machinery where
 
@@ -18,7 +18,7 @@ import           Data.Generics (everything, gcount, mkQ)
 import           Data.Generics.Product (field')
 import           Data.List (sortBy)
 import qualified Data.Map as M
-import           Data.Maybe (mapMaybe, isJust)
+import           Data.Maybe (mapMaybe, isNothing)
 import           Data.Monoid (getSum)
 import           Data.Ord (Down (..), comparing)
 import qualified Data.Set as S
@@ -31,10 +31,18 @@ import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           System.Timeout (timeout)
 import           Wingman.Context (getInstance)
-import           Wingman.GHC (tryUnifyUnivarsButNotSkolems, updateSubst, tacticsGetDataCons, freshTyvars)
+import           Wingman.GHC (tryUnifyUnivarsButNotSkolems, updateSubst, tacticsGetDataCons, freshTyvars, tryUnifyUnivarsButNotSkolemsMany)
 import           Wingman.Judgements
 import           Wingman.Simplify (simplify)
 import           Wingman.Types
+
+#if __GLASGOW_HASKELL__ < 900
+import FunDeps (fd_eqs, improveFromInstEnv)
+import Pair (unPair)
+#else
+import GHC.Tc.Instance.FunDeps (fd_eqs, improveFromInstEnv)
+import GHC.Data.Pair (unPair)
+#endif
 
 
 substCTy :: TCvSubst -> CType -> CType
@@ -69,14 +77,14 @@ newSubgoal j = do
 
 
 tacticToRule :: Judgement -> TacticsM () -> Rule
-tacticToRule jdg (TacticT tt) = RuleT $ flip execStateT jdg tt >>= flip Subgoal Axiom
+tacticToRule jdg (TacticT tt) = RuleT $ execStateT tt jdg >>= flip Subgoal Axiom
 
 
 consumeChan :: OutChan (Maybe a) -> IO [a]
 consumeChan chan = do
   tryReadChan chan >>= tryRead >>= \case
     Nothing -> pure []
-    Just (Just a) -> (:) <$> pure a <*> consumeChan chan
+    Just (Just a) -> (a:) <$> consumeChan chan
     Just Nothing -> pure []
 
 
@@ -107,7 +115,7 @@ runTactic duration ctx jdg t = do
     (in_proofs, out_proofs) <- newChan
     (in_errs, out_errs) <- newChan
     timed_out <-
-      fmap (not. isJust) $ timeout duration $ consume stream $ \case
+      fmap isNothing $ timeout duration $ consume stream $ \case
         Left err -> writeChan in_errs $ Just err
         Right proof -> writeChan in_proofs $ Just proof
     writeChan in_proofs Nothing
@@ -246,6 +254,23 @@ unify goal inst = do
       modify $ updateSubst subst
     Nothing -> cut
 
+------------------------------------------------------------------------------
+-- | Get a substition out of a theta's fundeps
+learnFromFundeps
+    :: ThetaType
+    -> RuleM ()
+learnFromFundeps theta = do
+  inst_envs <- asks ctxInstEnvs
+  skolems <- gets ts_skolems
+  subst <- gets ts_unifier
+  let theta' = substTheta subst theta
+      fundeps = foldMap (foldMap fd_eqs . improveFromInstEnv inst_envs (\_ _ -> ())) theta'
+  case tryUnifyUnivarsButNotSkolemsMany skolems $ fmap unPair fundeps of
+    Just subst ->
+      modify $ updateSubst subst
+    Nothing -> cut
+
+
 cut :: RuleT jdg ext err s m a
 cut = RuleT Empty
 
@@ -342,7 +367,7 @@ lookupNameInContext name = do
 getDefiningType
     :: TacticsM CType
 getDefiningType = do
-  calling_fun_name <- fst . head <$> asks ctxDefiningFuncs
+  calling_fun_name <- asks (fst . head . ctxDefiningFuncs)
   maybe
     (failure $ NotInScope calling_fun_name)
     pure

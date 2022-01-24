@@ -24,11 +24,11 @@ module Ide.Types
 #ifdef mingw32_HOST_OS
 import qualified System.Win32.Process            as P (getCurrentProcessId)
 #else
+import           Control.Monad                   (void)
 import qualified System.Posix.Process            as P (getProcessID)
 import           System.Posix.Signals
 #endif
 import           Control.Lens                    ((^.))
-import           Control.Monad
 import           Data.Aeson                      hiding (defaultOptions)
 import qualified Data.DList                      as DList
 import qualified Data.Default
@@ -178,7 +178,7 @@ class HasTracing (MessageParams m) => PluginMethod m where
 
 instance PluginMethod TextDocumentCodeAction where
   pluginEnabled _ = pluginEnabledConfig plcCodeActionsOn
-  combineResponses _method _config (ClientCapabilities _ textDocCaps _ _) (CodeActionParams _ _ _ _ context) resps =
+  combineResponses _method _config (ClientCapabilities _ textDocCaps _ _ _) (CodeActionParams _ _ _ _ context) resps =
       fmap compat $ List $ filter wasRequested $ (\(List x) -> x) $ sconcat resps
     where
 
@@ -202,11 +202,7 @@ instance PluginMethod TextDocumentCodeAction where
         -- should check whether the requested kind is a *prefix* of the action kind.
         -- That means, for example, we will return actions with kinds `quickfix.import` and
         -- `quickfix.somethingElse` if the requested kind is `quickfix`.
-        -- TODO: add helpers in `lsp` for handling code action hierarchies
-        -- For now we abuse the fact that the JSON representation gives us the hierarchical string.
-        , Just caKind <- ca ^. kind
-        , String caKindStr <- toJSON caKind =
-                any (\k -> k `T.isPrefixOf` caKindStr) [kstr | k <- allowed, let String kstr = toJSON k ]
+        , Just caKind <- ca ^. kind = any (\k -> k `codeActionKindSubsumes` caKind) allowed
         | otherwise = False
 
 instance PluginMethod TextDocumentCodeLens where
@@ -224,7 +220,7 @@ instance PluginMethod TextDocumentHover where
 
 instance PluginMethod TextDocumentDocumentSymbol where
   pluginEnabled _ = pluginEnabledConfig plcSymbolsOn
-  combineResponses _ _ (ClientCapabilities _ tdc _ _) params xs = res
+  combineResponses _ _ (ClientCapabilities _ tdc _ _ _) params xs = res
     where
       uri' = params ^. textDocument . uri
       supportsHierarchy = Just True == (tdc >>= _documentSymbol >>= _hierarchicalDocumentSymbolSupport)
@@ -249,7 +245,7 @@ instance PluginMethod TextDocumentCompletion where
   combineResponses _ conf _ _ (toList -> xs) = snd $ consumeCompletionResponse limit $ combine xs
       where
         limit = maxCompletions conf
-        combine :: [List CompletionItem |? CompletionList] -> ((List CompletionItem) |? CompletionList)
+        combine :: [List CompletionItem |? CompletionList] -> (List CompletionItem |? CompletionList)
         combine cs = go True mempty cs
 
         go !comp acc [] =

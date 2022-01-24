@@ -1,6 +1,5 @@
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Wingman.LanguageServer.TacticProviders
@@ -139,8 +138,7 @@ commandProvider UseDataCon =
   withConfig $ \cfg ->
     filterTypeProjection
         ( guardLength (<= cfg_max_use_ctor_actions cfg)
-        . fromMaybe []
-        . fmap fst
+        . maybe [] fst
         . tacticsGetDataCons
         ) $ \dcon ->
       provide UseDataCon
@@ -162,10 +160,11 @@ commandProvider RunMetaprogram =
 
 
 requireGHC88OrHigher :: TacticProvider -> TacticProvider
-requireGHC88OrHigher tp tpd =
 #if __GLASGOW_HASKELL__ >= 808
+requireGHC88OrHigher tp tpd =
   tp tpd
 #else
+requireGHC88OrHigher _ _=
   mempty
 #endif
 
@@ -272,7 +271,7 @@ withConfig tp tpd = tp (le_config $ tpd_lspEnv tpd) tpd
 -- given by 'provide' are always available.
 provide :: TacticCommand -> T.Text -> TacticProvider
 provide tc name _ =
-  pure $ (Metadata (tacticTitle tc name) (mkTacticKind tc) (tacticPreferred tc), name)
+  pure (Metadata (tacticTitle tc name) (mkTacticKind tc) (tacticPreferred tc), name)
 
 
 ------------------------------------------------------------------------------
@@ -296,7 +295,7 @@ homoFilter codomain domain =
 liftLambdaCase :: r -> (Type -> Type -> r) -> Type -> r
 liftLambdaCase nil f t =
   case tacticsSplitFunTy t of
-    (_, _, arg : _, res) -> f res arg
+    (_, _, arg : _, res) -> f res $ scaledThing arg
     _ -> nil
 
 
@@ -314,7 +313,7 @@ destructFilter _ _ = False
 -- usual algebraic types, and when any of their data constructors are records.
 destructPunFilter :: Type -> Type -> Bool
 destructPunFilter _ (algebraicTyCon -> Just tc) =
-  any (not . null . dataConFieldLabels) $ tyConDataCons tc
+  not . all (null . dataConFieldLabels) $ tyConDataCons tc
 destructPunFilter _ _ = False
 
 

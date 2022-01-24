@@ -1,1 +1,4 @@
 packages: .
+
+-- Needed for ghc >= 9.0.2 and ghc-typelits-natnormalise == 0.7.6
+allow-newer: ghc-typelits-natnormalise:ghc-bignum

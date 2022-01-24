@@ -3,17 +3,14 @@
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE GADTs                 #-}
-{-# LANGUAGE KindSignatures        #-}
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedLabels      #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE UndecidableInstances  #-}
-{-# LANGUAGE ViewPatterns          #-}
 -- See Note [Constraints]
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
 
@@ -49,6 +46,7 @@ import           Data.Function        ((&))
 import           Data.Kind            (Constraint, Type)
 import qualified Data.Map.Strict      as Map
 import           Data.Proxy           (Proxy (..))
+import           Data.String          (IsString (fromString))
 import qualified Data.Text            as T
 import           GHC.OverloadedLabels (IsLabel (..))
 import           GHC.TypeLits
@@ -164,6 +162,7 @@ type HasProperty s k t r = (k ~ 'PropertyKey s t, Elem s r, FindByKeyName s r ~ 
 --      "Description of exampleNumber"
 --      233
 -- @
+
 emptyProperties :: Properties '[]
 emptyProperties = Properties Map.empty
 
@@ -237,7 +236,7 @@ parseProperty kn k x = case k of
   (SEnum _, EnumMetaData {..}) ->
     A.parseEither
       ( \o -> do
-          txt <- o A..: keyName
+          txt <- o A..: key
           if txt `elem` enumValues
             then pure txt
             else
@@ -249,9 +248,9 @@ parseProperty kn k x = case k of
       )
       x
   where
-    keyName = T.pack $ symbolVal kn
+    key = fromString $ symbolVal kn
     parseEither :: forall a. A.FromJSON a => Either String a
-    parseEither = A.parseEither (A..: keyName) x
+    parseEither = A.parseEither (A..: key) x
 
 -- ---------------------------------------------------------------------
 
@@ -354,26 +353,26 @@ toDefaultJSON :: Properties r -> [A.Pair]
 toDefaultJSON (Properties p) = [toEntry s v | (s, v) <- Map.toList p]
   where
     toEntry :: String -> SomePropertyKeyWithMetaData -> A.Pair
-    toEntry (T.pack -> s) = \case
+    toEntry s = \case
       (SomePropertyKeyWithMetaData SNumber MetaData {..}) ->
-        s A..= defaultValue
+        fromString s A..= defaultValue
       (SomePropertyKeyWithMetaData SInteger MetaData {..}) ->
-        s A..= defaultValue
+        fromString s A..= defaultValue
       (SomePropertyKeyWithMetaData SString MetaData {..}) ->
-        s A..= defaultValue
+        fromString s A..= defaultValue
       (SomePropertyKeyWithMetaData SBoolean MetaData {..}) ->
-        s A..= defaultValue
+        fromString s A..= defaultValue
       (SomePropertyKeyWithMetaData (SObject _) MetaData {..}) ->
-        s A..= defaultValue
+        fromString s A..= defaultValue
       (SomePropertyKeyWithMetaData (SArray _) MetaData {..}) ->
-        s A..= defaultValue
+        fromString s A..= defaultValue
       (SomePropertyKeyWithMetaData (SEnum _) EnumMetaData {..}) ->
-        s A..= defaultValue
+        fromString s A..= defaultValue
 
 -- | Converts a properties definition into kv pairs as vscode schema
 toVSCodeExtensionSchema :: T.Text -> Properties r -> [A.Pair]
 toVSCodeExtensionSchema prefix (Properties p) =
-  [(prefix <> T.pack k) A..= toEntry v | (k, v) <- Map.toList p]
+  [fromString (T.unpack prefix <> k) A..= toEntry v | (k, v) <- Map.toList p]
   where
     toEntry :: SomePropertyKeyWithMetaData -> A.Value
     toEntry = \case

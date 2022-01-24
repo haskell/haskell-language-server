@@ -1,48 +1,53 @@
+{-# LANGUAGE CPP          #-}
+{-# LANGUAGE LambdaCase   #-}
+{-# LANGUAGE MultiWayIf   #-}
 {-# LANGUAGE PolyKinds    #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE MultiWayIf   #-}
-{-# LANGUAGE LambdaCase   #-}
 module Ide.Plugin.Brittany where
 
-import           Control.Exception           (bracket_)
+import           Control.Exception                               (bracket_)
 import           Control.Lens
 import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Maybe   (MaybeT, runMaybeT)
-import           Data.Maybe                  (mapMaybe, maybeToList, fromMaybe)
+import           Control.Monad.Trans.Maybe                       (MaybeT,
+                                                                  runMaybeT)
+import           Data.Maybe                                      (fromMaybe,
+                                                                  mapMaybe,
+                                                                  maybeToList)
 import           Data.Semigroup
-import           Data.Text                   (Text)
-import qualified Data.Text                   as T
-import           Development.IDE             hiding (pluginHandlers)
-import qualified Development.IDE.GHC.Compat  as GHC hiding (Cpp)
-import qualified DynFlags                    as D
-import qualified EnumSet                     as S
+import           Data.Text                                       (Text)
+import qualified Data.Text                                       as T
+import           Development.IDE                                 hiding
+                                                                 (pluginHandlers)
+import qualified Development.IDE.GHC.Compat                      as GHC hiding
+                                                                        (Cpp)
+import qualified Development.IDE.GHC.Compat.Util                 as GHC
 import           GHC.LanguageExtensions.Type
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.Haskell.Brittany
-import           Language.LSP.Types          as J
-import qualified Language.LSP.Types.Lens     as J
-import           System.Environment          (setEnv, unsetEnv)
+import           Language.LSP.Types                              as J
+import qualified Language.LSP.Types.Lens                         as J
+import           System.Environment                              (setEnv,
+                                                                  unsetEnv)
 import           System.FilePath
 
 -- These imports are for the temporary pPrintText & can be removed when
 -- issue #2005 is resolved
-import           Language.Haskell.Brittany.Internal.Config.Types
+import           Control.Monad.Trans.Class                       (lift)
+import qualified Control.Monad.Trans.Except                      as ExceptT
+import           Data.CZipWith
+import qualified Data.List                                       as List
+import qualified Data.Text                                       as Text
+import qualified Data.Text.Lazy                                  as TextL
+import qualified GHC.LanguageExtensions.Type                     as GHC
 import           Language.Haskell.Brittany.Internal
+import           Language.Haskell.Brittany.Internal.Config
+import           Language.Haskell.Brittany.Internal.Config.Types
+import           Language.Haskell.Brittany.Internal.Obfuscation
 import           Language.Haskell.Brittany.Internal.Types
 import           Language.Haskell.Brittany.Internal.Utils
-import           Language.Haskell.Brittany.Internal.Obfuscation
-import           Language.Haskell.Brittany.Internal.Config
-import           Data.CZipWith
-import           Control.Monad.Trans.Class (lift)
-import qualified Control.Monad.Trans.Except as ExceptT
-import qualified Data.List as List
-import qualified Data.Text as Text
-import qualified Language.Haskell.GHC.ExactPrint as ExactPrint
-import qualified Language.Haskell.GHC.ExactPrint.Types as ExactPrint
-import qualified Data.Text.Lazy as TextL
-import qualified GHC
-import qualified GHC.LanguageExtensions.Type as GHC
+import qualified Language.Haskell.GHC.ExactPrint                 as ExactPrint
+import qualified Language.Haskell.GHC.ExactPrint.Types           as ExactPrint
 
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -73,14 +78,14 @@ provider ide typ contents nfp opts = liftIO $ do
 -- Errors may be presented to the user.
 formatText
   :: MonadIO m
-  => D.DynFlags
+  => GHC.DynFlags
   -> Maybe FilePath -- ^ Path to configs. If Nothing, default configs will be used.
   -> FormattingOptions -- ^ Options for the formatter such as indentation.
   -> Text -- ^ Text to format
   -> m (Either [BrittanyError] Text) -- ^ Either formatted Text or a error from Brittany.
 formatText df confFile opts text =
   liftIO $ runBrittany tabSize df confFile text
-  where tabSize = opts ^. J.tabSize
+  where tabSize = fromIntegral $ opts ^. J.tabSize
 
 -- | Recursively search in every directory of the given filepath for brittany.yaml.
 -- If no such file has been found, return Nothing.
@@ -95,7 +100,7 @@ getConfFile = findLocalConfigPath . takeDirectory . fromNormalizedFilePath
 -- Returns either a list of Brittany Errors or the reformatted text.
 -- May not throw an exception.
 runBrittany :: Int              -- ^ tab  size
-            -> D.DynFlags
+            -> GHC.DynFlags
             -> Maybe FilePath   -- ^ local config file
             -> Text             -- ^ text to format
             -> IO (Either [BrittanyError] Text)
@@ -105,23 +110,30 @@ runBrittany tabSize df confPath text = do
                   mempty { _lconfig_indentAmount = opt (Last tabSize)
                          }
               , _conf_forward =
-                  (mempty :: CForwardOptions Option)
+                  (mempty :: CForwardOptions CMaybe)
                     { _options_ghc = opt (getExtensions df)
                     }
               }
-
-  config <- fromMaybeT (pure staticDefaultConfig) (readConfigsWithUserConfig cfg (maybeToList confPath))
+  config <- fromMaybeT (pure staticDefaultConfig)
+                       (readConfigsWithUserConfig cfg (maybeToList confPath))
   (errsAndWarnings, resultText) <- pPrintText config text
   if any isError errsAndWarnings then
     return $ Left errsAndWarnings
   else
     return $ Right resultText
 
-fromMaybeT :: Monad m => m a -> MaybeT m a -> m a
-fromMaybeT def act = runMaybeT act >>= maybe def return
-
+#if MIN_VERSION_brittany(0,14,0)
+type CMaybe = Maybe
+opt :: a -> Maybe a
+opt = Just
+#else
+type CMaybe = Option
 opt :: a -> Option a
 opt = Option . Just
+#endif
+
+fromMaybeT :: Monad m => m a -> MaybeT m a -> m a
+fromMaybeT def act = runMaybeT act >>= maybe def return
 
 showErr :: BrittanyError -> String
 showErr (ErrorInput s)          = s
@@ -139,8 +151,8 @@ showExtension DatatypeContexts = Nothing
 showExtension RecordPuns       = Just "-XNamedFieldPuns"
 showExtension other            = Just $ "-X" ++ show other
 
-getExtensions :: D.DynFlags -> [String]
-getExtensions = mapMaybe showExtension . S.toList . D.extensionFlags
+getExtensions :: GHC.DynFlags -> [String]
+getExtensions = mapMaybe showExtension . GHC.toList . GHC.extensionFlags
 
 
 -- | This is a temporary fix that allows us to format the text if brittany
@@ -261,6 +273,6 @@ pPrintText config text =
 
 isError :: BrittanyError -> Bool
 isError = \case
-    LayoutWarning{} -> False
+    LayoutWarning{}    -> False
     ErrorUnknownNode{} -> False
-    _ -> True
+    _                  -> True

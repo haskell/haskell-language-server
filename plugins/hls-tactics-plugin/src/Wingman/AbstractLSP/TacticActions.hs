@@ -45,9 +45,10 @@ makeTacticInteraction cmd =
               }
     )
     $ \LspEnv{..} HoleJudgment{..} FileContext{..} var_name -> do
-        let stale a = runStaleIde "tacticCmd" le_ideState fc_nfp a
+        nfp <- getNfp fc_uri
+        let stale a = runStaleIde "tacticCmd" le_ideState nfp a
 
-        let span = fmap (rangeToRealSrcSpan (fromNormalizedFilePath fc_nfp)) hj_range
+        let span = fmap (rangeToRealSrcSpan (fromNormalizedFilePath nfp)) hj_range
         TrackedStale _ pmmap <- mapMaybeT liftIO $ stale GetAnnotatedParsedSource
         pm_span <- liftMaybe $ mapAgeFrom pmmap span
         IdeOptions{optTesting = IdeTesting isTesting} <-
@@ -161,8 +162,8 @@ graftDecl dflags dst ix make_decl (L src (AMatch (FunRhs (L _ name) _ _) pats _)
   | dst `isSubspanOf` src = do
       L _ dec <- annotateDecl dflags $ make_decl name pats
       case dec of
-        ValD _ (FunBind { fun_matches = MG { mg_alts = L _ alts@(first_match : _)}
-                  }) -> do
+        ValD _ FunBind{ fun_matches = MG { mg_alts = L _ alts@(first_match : _)}
+                      } -> do
           -- For whatever reason, ExactPrint annotates newlines to the ends of
           -- case matches and type signatures, but only allows us to insert
           -- them at the beginning of those things. Thus, we need want to

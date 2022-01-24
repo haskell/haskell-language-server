@@ -1,6 +1,6 @@
 cabal-version:      2.2
 name:               hls-qualify-imported-names-plugin
-version:            1.0.0.0
+version:            1.0.0.1
 synopsis:           A Haskell Language Server plugin that qualifies imported names
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>

@@ -4,17 +4,17 @@
 
 module FunctionalCodeAction (tests) where
 
-import           Control.Lens                    hiding (List)
+import           Control.Lens            hiding (List)
 import           Control.Monad
 import           Data.Aeson
-import qualified Data.HashMap.Strict             as HM
+import           Data.Aeson.Lens         (_Object)
 import           Data.List
-import qualified Data.Map                        as M
+import qualified Data.Map                as M
 import           Data.Maybe
-import qualified Data.Text                       as T
+import qualified Data.Text               as T
 import           Ide.Plugin.Config
-import           Language.LSP.Test               as Test
-import qualified Language.LSP.Types.Lens         as L
+import           Language.LSP.Test       as Test
+import qualified Language.LSP.Types.Lens as L
 import           Test.Hls
 import           Test.Hspec.Expectations
 
@@ -56,11 +56,13 @@ renameTests = testGroup "rename suggestions" [
 
             cars <- getAllCodeActions doc
             cmd <- liftIO $ inspectCommand cars ["Replace with", "putStrLn"]
-            let Just (List [Object args]) = cmd ^. L.arguments
-                Object editParams = args HM.! "fallbackWorkspaceEdit"
-            liftIO $ do
-                "changes" `HM.member` editParams @? "Contains changes"
-                not ("documentChanges" `HM.member` editParams) @? "Doesn't contain documentChanges"
+            let mbArgs = cmd ^. L.arguments
+            case mbArgs of
+                Just (List [args]) -> liftIO $ do
+                    let editParams = args ^. ix "fallbackWorkspaceEdit" . _Object
+                    (editParams & has (ix "changes"))  @? "Contains changes"
+                    not (editParams & has (ix "documentChanges")) @? "Doesn't contain documentChanges"
+                _ -> error $ "Unexpected arguments: " ++ show mbArgs
 
             executeCommand cmd
             _ <- anyRequest
@@ -115,14 +117,16 @@ packageTests = testGroup "add package suggestions" [
                 in liftIO $ any (`T.isPrefixOf` (diag ^. L.message)) prefixes @? "Contains prefix"
 
             acts <- getAllCodeActions doc
-            let (InR action:_) = acts
+            case acts of
+                (InR action:_) -> do
+                    liftIO $ do
+                        action ^. L.title @?= "Add text as a dependency"
+                        action ^. L.kind @?= Just CodeActionQuickFix
+                        "package:add" `T.isSuffixOf` (action ^. L.command . _Just . L.command) @? "Command contains package:add"
 
-            liftIO $ do
-                action ^. L.title @?= "Add text as a dependency"
-                action ^. L.kind @?= Just CodeActionQuickFix
-                "package:add" `T.isSuffixOf` (action ^. L.command . _Just . L.command) @? "Command contains package:add"
+                    executeCodeAction action
 
-            executeCodeAction action
+                _ -> error $ "Unexpected code actions: " ++ show acts
 
             contents <- skipManyTill anyMessage $ getDocumentEdit . TextDocumentIdentifier =<< getDocUri "add-package-test.cabal"
             liftIO $
@@ -175,14 +179,18 @@ redundantImportTests = testGroup "redundant import code actions" [
 
             liftIO $ actionTitles `shouldContain` ["Remove import", "Remove all redundant imports"]
 
-            let Just removeAction = find (\x -> x ^. L.title == "Remove import") allActions
+            let mbRemoveAction = find (\x -> x ^. L.title == "Remove import") allActions
 
-            liftIO $ do
-                forM_ allActions $ \a -> a ^. L.kind @?= Just CodeActionQuickFix
-                forM_ allActions $ \a -> a ^. L.command @?= Nothing
-                forM_ allActions $ \a -> isJust (a ^. L.edit) @? "Has edit"
+            case mbRemoveAction of
+                Just removeAction -> do
+                    liftIO $ do
+                        forM_ allActions $ \a -> a ^. L.kind @?= Just CodeActionQuickFix
+                        forM_ allActions $ \a -> a ^. L.command @?= Nothing
+                        forM_ allActions $ \a -> isJust (a ^. L.edit) @? "Has edit"
 
-            executeCodeAction removeAction
+                    executeCodeAction removeAction
+
+                Nothing -> error $ "Unexpected code actions: " ++ show allActions
 
             -- No command/applyworkspaceedit should be here, since action
             -- provides workspace edit property which skips round trip to
@@ -231,7 +239,7 @@ typedHoleTests = testGroup "typed hole code actions" [
                     , "foo x = maxBound"
                     ]
 
-      , expectFailIfGhc9 "The wingman plugin doesn't yet compile in GHC9" $
+      , expectFailIfGhc92 "The wingman plugin doesn't yet compile in GHC92" $
         testCase "doesn't work when wingman is active" $
         runSession hlsCommand fullCaps "test/testdata" $ do
             doc <- openDoc "TypedHoles.hs" "haskell"
@@ -266,8 +274,8 @@ typedHoleTests = testGroup "typed hole code actions" [
                         , "    stuff (A a) = A (a + 1)"
                         ]
 
-      , expectFailIfGhc9 "The wingman plugin doesn't yet compile in GHC9" $
-        testCase "doesnt show more suggestions when wingman is active" $
+      , expectFailIfGhc92 "The wingman plugin doesn't yet compile in GHC92" $
+          testCase "doesnt show more suggestions when wingman is active" $
             runSession hlsCommand fullCaps "test/testdata" $ do
                 doc <- openDoc "TypedHoles2.hs" "haskell"
                 _ <- waitForDiagnosticsFromSource doc "typecheck"
@@ -344,21 +352,19 @@ unusedTermTests = testGroup "unused term code actions" [
         liftIO $ do
             let cas = map fromAction res
                 kinds = map (^. L.kind) cas
-            nub kinds @?= [Just CodeActionRefactorInline, Just CodeActionRefactorExtract, Just CodeActionQuickFix]
+            assertBool "Test precondition failed" $ Just CodeActionQuickFix `elem` kinds
         -- Verify that that when we set the only parameter, we only get actions
         -- of the right kind.
         ResponseMessage _ _ (Right (List res)) <- request STextDocumentCodeAction params
         liftIO $ do
             let cas = map fromAction res
                 kinds = map (^. L.kind) cas
-            nub kinds @?= nub [Just CodeActionRefactorInline, Just CodeActionRefactorExtract]
+            assertBool "Quick fixes should have been filtered out"
+              $ Just CodeActionQuickFix `notElem` kinds
     ]
 
-expectFailIfGhc9 :: String -> TestTree -> TestTree
-expectFailIfGhc9 reason =
-  case ghcVersion of
-    GHC90 -> expectFailBecause reason
-    _     -> id
+expectFailIfGhc92 :: String -> TestTree -> TestTree
+expectFailIfGhc92 = knownBrokenForGhcVersions [GHC92]
 
 disableWingman :: Session ()
 disableWingman =

@@ -17,8 +17,7 @@ import           Data.Maybe
 import           Data.Monoid
 import qualified Data.Text as T
 import           Data.Traversable
-import           Development.IDE (hscEnv)
-import           Development.IDE (realSrcSpanToRange)
+import           Development.IDE (hscEnv, realSrcSpanToRange)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake (IdeState (..))
 import           Development.IDE.Core.UseStale
@@ -51,13 +50,14 @@ emptyCaseInteraction = Interaction $
   Continuation @EmptyCaseT @EmptyCaseT @WorkspaceEdit EmptyCaseT
     (SynthesizeCodeLens $ \LspEnv{..} _ -> do
       let FileContext{..} = le_fileContext
+      nfp <- getNfp fc_uri
 
-      let stale a = runStaleIde "codeLensProvider" le_ideState fc_nfp a
+      let stale a = runStaleIde "codeLensProvider" le_ideState nfp a
 
       ccs <- lift getClientCapabilities
       TrackedStale pm _ <- mapMaybeT liftIO $ stale GetAnnotatedParsedSource
       TrackedStale binds bind_map <- mapMaybeT liftIO $ stale GetBindings
-      holes <- mapMaybeT liftIO $ emptyCaseScrutinees le_ideState fc_nfp
+      holes <- mapMaybeT liftIO $ emptyCaseScrutinees le_ideState nfp
 
       for holes $ \(ss, ty) -> do
         binds_ss <- liftMaybe $ mapAgeFrom bind_map ss
@@ -81,14 +81,14 @@ emptyCaseInteraction = Interaction $
           , edits
           )
     )
-  $ (\ _ _ _ we -> pure $ pure $ RawEdit we)
+    (\ _ _ _ we -> pure $ pure $ RawEdit we)
 
 
 scrutinzedType :: EmptyCaseSort Type -> Maybe Type
 scrutinzedType (EmptyCase ty) = pure  ty
 scrutinzedType (EmptyLamCase ty) =
   case tacticsSplitFunTy ty of
-    (_, _, tys, _) -> listToMaybe  tys
+    (_, _, tys, _) -> listToMaybe $ fmap scaledThing tys
 
 
 ------------------------------------------------------------------------------
@@ -115,9 +115,9 @@ graftMatchGroup
     -> Graft (Either String) ParsedSource
 graftMatchGroup ss l =
   hoistGraft (runExcept . runExceptString) $ graftExprWithM ss $ \case
-    L span (HsCase ext scrut mg@_) -> do
+    L span (HsCase ext scrut mg) -> do
       pure $ Just $ L span $ HsCase ext scrut $ mg { mg_alts = l }
-    L span (HsLamCase ext mg@_) -> do
+    L span (HsLamCase ext mg) -> do
       pure $ Just $ L span $ HsLamCase ext $ mg { mg_alts = l }
     (_ :: LHsExpr GhcPs) -> pure Nothing
 
@@ -165,6 +165,6 @@ data EmptyCaseSort a
 emptyCaseQ :: GenericQ [(SrcSpan, EmptyCaseSort (HsExpr GhcTc))]
 emptyCaseQ = everything (<>) $ mkQ mempty $ \case
   L new_span (Case scrutinee []) -> pure (new_span, EmptyCase scrutinee)
-  L new_span (expr@(LamCase [])) -> pure (new_span, EmptyLamCase expr)
+  L new_span expr@(LamCase []) -> pure (new_span, EmptyLamCase expr)
   (_ :: LHsExpr GhcTc) -> mempty
 

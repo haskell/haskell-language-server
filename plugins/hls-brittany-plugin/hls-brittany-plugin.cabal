@@ -21,9 +21,9 @@ library
   hs-source-dirs:   src
   build-depends:
     , base            >=4.12     && <5
-    , brittany        >=0.13.1.0
+    -- see https://github.com/lspitzner/brittany/issues/364
+    , brittany        >=0.13.1.0 && < 0.14.0.1 || > 0.14.0.1
     , filepath
-    , ghc
     , ghc-boot-th
     , ghcide          >=1.2      && <1.6
     , hls-plugin-api  >=1.1      && <1.3

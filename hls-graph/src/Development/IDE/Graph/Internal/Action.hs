@@ -1,7 +1,6 @@
-{-# LANGUAGE ConstraintKinds            #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE ScopedTypeVariables        #-}
-{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE ConstraintKinds     #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies        #-}
 
 module Development.IDE.Graph.Internal.Action
 ( ShakeValue

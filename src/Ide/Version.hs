@@ -9,7 +9,7 @@ module Ide.Version where
 
 import           Data.Maybe                    (listToMaybe)
 import           Data.Version
-import           Development.GitRev            (gitCommitCount)
+import           GitHash                       (giCommitCount, tGitInfoCwdTry)
 import           Options.Applicative.Simple    (simpleVersion)
 import qualified Paths_haskell_language_server as Meta
 import           System.Directory
@@ -21,7 +21,10 @@ import           Text.ParserCombinators.ReadP
 -- >>> hlsVersion
 hlsVersion :: String
 hlsVersion =
-  let commitCount = $gitCommitCount
+  let gi = $$tGitInfoCwdTry
+      commitCount = case gi of
+        Right gi -> show $ giCommitCount gi
+        Left _   -> "UNKNOWN"
   in concat $ concat
     [ [$(simpleVersion Meta.version)]
       -- Leave out number of commits for --depth=1 clone

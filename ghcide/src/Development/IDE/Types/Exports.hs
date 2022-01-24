@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE RankNTypes         #-}
 module Development.IDE.Types.Exports
 (
     IdentInfo(..),
@@ -26,6 +27,7 @@ import           Data.Text                   (Text, pack)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Orphans ()
 import           Development.IDE.GHC.Util
+import           Development.IDE.Types.Shake (WithHieDb)
 import           GHC.Generics                (Generic)
 import           HieDb
 
@@ -154,13 +156,13 @@ createExportsMapTc modIface = do
 nonInternalModules :: ModuleName -> Bool
 nonInternalModules = not . (".Internal" `isSuffixOf`) . moduleNameString
 
-createExportsMapHieDb :: HieDb -> IO ExportsMap
-createExportsMapHieDb hiedb = do
-    mods <- getAllIndexedMods hiedb
+createExportsMapHieDb :: WithHieDb -> IO ExportsMap
+createExportsMapHieDb withHieDb = do
+    mods <- withHieDb getAllIndexedMods
     idents <- forM (filter (nonInternalModules . modInfoName . hieModInfo) mods) $ \m -> do
         let mn = modInfoName $ hieModInfo m
             mText = pack $ moduleNameString mn
-        fmap (wrap . unwrap mText) <$> getExportsForModule hiedb mn
+        fmap (wrap . unwrap mText) <$> withHieDb (\hieDb -> getExportsForModule hieDb mn)
     let exportsMap = Map.fromListWith (<>) (concat idents)
     return $ ExportsMap exportsMap $ buildModuleExportMap (concat idents)
   where

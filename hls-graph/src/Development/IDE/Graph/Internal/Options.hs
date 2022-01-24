@@ -1,5 +1,3 @@
-{-# LANGUAGE RecordWildCards #-}
-
 module Development.IDE.Graph.Internal.Options where
 
 import           Control.Monad.Trans.Reader

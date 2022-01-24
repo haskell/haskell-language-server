@@ -35,7 +35,7 @@ tests =
       expectedNothing "StaleRecord" Record 3 12
     ]
 
-goldenWithHaddockComments :: FilePath -> GenCommentsType -> Int -> Int -> TestTree
+goldenWithHaddockComments :: FilePath -> GenCommentsType -> UInt -> UInt -> TestTree
 goldenWithHaddockComments fp (toTitle -> expectedTitle) l c =
   goldenWithHaskellDoc haddockCommentsPlugin (fp <> " (golden)") testDataDir fp "expected" "hs" $ \doc -> do
     actions <- getCodeActions doc (Range (Position l c) (Position l $ succ c))
@@ -43,7 +43,7 @@ goldenWithHaddockComments fp (toTitle -> expectedTitle) l c =
       Just (InR x) -> executeCodeAction x
       _            -> liftIO $ assertFailure "Unable to find CodeAction"
 
-expectedNothing :: FilePath -> GenCommentsType -> Int -> Int -> TestTree
+expectedNothing :: FilePath -> GenCommentsType -> UInt -> UInt -> TestTree
 expectedNothing fp (toTitle -> expectedTitle) l c = testCase fp $
   runSessionWithServer haddockCommentsPlugin testDataDir $ do
     doc <- openDoc (fp <.> "hs") "haskell"

@@ -7,7 +7,9 @@ module Main
   ) where
 
 import           Control.Lens            ((^.))
+import           Control.Monad           (when)
 import           Data.Aeson              (Value (..), object, toJSON, (.=))
+import           Data.Functor            (void)
 import           Data.List               (find)
 import qualified Data.Map                as Map
 import           Data.Maybe              (fromJust, isJust)
@@ -30,24 +32,38 @@ tests = testGroup "hlint" [
       suggestionsTests
     , configTests
     , ignoreHintTests
+    , applyHintTests
     ]
 
 getIgnoreHintText :: T.Text -> T.Text
 getIgnoreHintText name = "Ignore hint \"" <> name <> "\" in this module"
 
+getApplyHintText :: T.Text -> T.Text
+getApplyHintText name = "Apply hint \"" <> name <> "\""
+
 ignoreHintTests :: TestTree
 ignoreHintTests = testGroup "hlint ignore hint tests"
   [
-    ignoreGoldenTest
+    ignoreHintGoldenTest
       "Ignore hint in this module inserts -Wno-unrecognised-pragmas and hlint ignore pragma if warn unrecognized pragmas is off"
       "UnrecognizedPragmasOff"
       (Point 3 8)
       "Eta reduce"
-  , ignoreGoldenTest
+  , ignoreHintGoldenTest
       "Ignore hint in this module inserts only hlint ignore pragma if warn unrecognized pragmas is on"
       "UnrecognizedPragmasOn"
       (Point 3 9)
       "Eta reduce"
+  ]
+
+applyHintTests :: TestTree
+applyHintTests = testGroup "hlint apply hint tests"
+  [
+    applyHintGoldenTest
+      "[#2612] Apply hint works when operator fixities go right-to-left"
+      "RightToLeftFixities"
+      (Point 6 13)
+      "Avoid reverse"
   ]
 
 suggestionsTests :: TestTree
@@ -361,8 +377,8 @@ makePoint line column
 
 pointToRange :: Point -> Range
 pointToRange Point {..}
-  | line <- subtract 1 line
-  , column <- subtract 1 column =
+  | line <- fromIntegral $ subtract 1 line
+  , column <- fromIntegral $ subtract 1 column =
       Range (Position line column) (Position line $ column + 1)
 
 getCodeActionTitle :: (Command |? CodeAction) -> Maybe T.Text
@@ -378,13 +394,24 @@ makeCodeActionFoundAtString :: Point -> String
 makeCodeActionFoundAtString Point {..} =
   "CodeAction found at line: " <> show line <> ", column: " <> show column
 
-ignoreGoldenTest :: TestName -> FilePath -> Point -> T.Text -> TestTree
-ignoreGoldenTest testCaseName goldenFilename point hintName =
+ignoreHintGoldenTest :: TestName -> FilePath -> Point -> T.Text -> TestTree
+ignoreHintGoldenTest testCaseName goldenFilename point hintName =
+  goldenTest testCaseName goldenFilename point (getIgnoreHintText hintName)
+
+applyHintGoldenTest :: TestName -> FilePath -> Point -> T.Text -> TestTree
+applyHintGoldenTest testCaseName goldenFilename point hintName = do
+  goldenTest testCaseName goldenFilename point (getApplyHintText hintName)
+
+goldenTest :: TestName -> FilePath -> Point -> T.Text -> TestTree
+goldenTest testCaseName goldenFilename point hintText =
   setupGoldenHlintTest testCaseName goldenFilename $ \document -> do
     waitForDiagnosticsFromSource document "hlint"
     actions <- getCodeActions document $ pointToRange point
-    case find ((== Just (getIgnoreHintText hintName)) . getCodeActionTitle) actions of
-      Just (InR codeAction) -> executeCodeAction codeAction
+    case find ((== Just hintText) . getCodeActionTitle) actions of
+      Just (InR codeAction) -> do
+        executeCodeAction codeAction
+        when (isJust (codeAction ^. L.command)) $
+          void $ skipManyTill anyMessage $ getDocumentEdit document
       _ -> liftIO $ assertFailure $ makeCodeActionNotFoundAtString point
 
 setupGoldenHlintTest :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree

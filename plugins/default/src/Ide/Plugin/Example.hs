@@ -27,7 +27,7 @@ import           Data.Typeable
 import           Development.IDE            as D
 import           Development.IDE.Core.Shake (getDiagnostics,
                                              getHiddenDiagnostics)
-import           Development.IDE.GHC.Compat (ParsedModule (ParsedModule))
+import           Development.IDE.GHC.Compat
 import           GHC.Generics
 import           Ide.PluginUtils
 import           Ide.Types
@@ -109,15 +109,18 @@ mkDiag file diagSource sev loc msg = (file, D.ShowDiag,)
 -- | Generate code actions.
 codeAction :: PluginMethodHandler IdeState TextDocumentCodeAction
 codeAction state _pid (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List _xs}) = liftIO $ do
-    let Just nfp = uriToNormalizedFilePath $ toNormalizedUri uri
-    Just (ParsedModule{},_) <- runIdeAction "example" (shakeExtras state) $ useWithStaleFast GetParsedModule nfp
-    let
-      title = "Add TODO Item 1"
-      tedit = [TextEdit (Range (Position 2 0) (Position 2 0))
-               "-- TODO1 added by Example Plugin directly\n"]
-      edit  = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing Nothing
-    pure $ Right $ List
-        [ InR $ CodeAction title (Just CodeActionQuickFix) (Just $ List []) Nothing Nothing (Just edit) Nothing Nothing]
+    let mbnfp = uriToNormalizedFilePath $ toNormalizedUri uri
+    case mbnfp of
+      Just nfp -> do
+        Just (ParsedModule{},_) <- runIdeAction "example" (shakeExtras state) $ useWithStaleFast GetParsedModule nfp
+        let
+          title = "Add TODO Item 1"
+          tedit = [TextEdit (Range (Position 2 0) (Position 2 0))
+                  "-- TODO1 added by Example Plugin directly\n"]
+          edit  = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing Nothing
+        pure $ Right $ List
+            [ InR $ CodeAction title (Just CodeActionQuickFix) (Just $ List []) Nothing Nothing (Just edit) Nothing Nothing]
+      Nothing -> error $ "Unable to get a normalized file path from the uri: " ++ show uri
 
 -- ---------------------------------------------------------------------
 

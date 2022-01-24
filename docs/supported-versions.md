@@ -6,7 +6,8 @@ The current support for different GHC versions is given in the following table.
 
 | GHC version | Last supporting HLS version                                                                                                                              | Deprecation status                       |
 | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| 9.2.0       | [not supported](https://github.com/haskell/haskell-language-server/issues/2179) yet                                                                                                                                        |                                          |
+| 9.2.0       | incoming [partial](https://github.com/haskell/haskell-language-server/issues/2179)                                                                       |                                          |
+| 9.0.2       | [current](https://github.com/haskell/haskell-language-server/releases/latest) ([partial](https://github.com/haskell/haskell-language-server/issues/297)) |                                          |
 | 9.0.1       | [current](https://github.com/haskell/haskell-language-server/releases/latest) ([partial](https://github.com/haskell/haskell-language-server/issues/297)) |                                          |
 | 8.10.7      | [current](https://github.com/haskell/haskell-language-server/releases/latest)                                                                            |                                          |
 | 8.10.6      | [current](https://github.com/haskell/haskell-language-server/releases/latest)                                                                            | will be deprecated after LTS and HLS full support for ghc-9.0 |
@@ -24,6 +25,31 @@ The current support for different GHC versions is given in the following table.
 GHC versions not in the list have never been supported by HLS, or are not planned. LTS stands for [Stackage](https://www.stackage.org/) Long Term Support.
 
 The policy for when we deprecate support for versions of GHC is given below. The table reflects that, but we may decide to deviate from it for good reasons.
+
+Additionally, some plugins do not have support for some GHC versions, as shown in the following table.
+As such, the functionality provided by those plugins is not available in HLS when using a GHC version which they do not support.
+
+| Plugin                              | Unsupported GHC versions |
+|-------------------------------------|--------------------------|
+| `hls-alternate-number-plugin`       | 9.2                      |
+| `hls-brittany-plugin`               | 9.2                      |
+| `hls-call-hierarchy-plugin`         |                          |
+| `hls-class-plugin`                  | 9.2                      |
+| `hls-eval-plugin`                   | 9.2                      |
+| `hls-explicit-imports-plugin`       |                          |
+| `hls-floskell-plugin`               |                          |
+| `hls-fourmolu-plugin`               |                          |
+| `hls-haddock-comments-plugin`       | 9.2                      |
+| `hls-hlint-plugin`                  | 9.2                      |
+| `hls-module-name-plugin`            |                          |
+| `hls-ormolu-plugin`                 |                          |
+| `hls-pragmas-plugin`                |                          |
+| `hls-qualify-imported-names-plugin` |                          |
+| `hls-refine-imports-plugin`         |                          |
+| `hls-retrie-plugin`                 | 9.2                      |
+| `hls-splice-plugin`                 | 9.2                      |
+| `hls-stylish-haskell-plugin`        | 9.0, 9.2                 |
+| `hls-tactics-plugin`                | 9.2                      |
 
 ### Using deprecated GHC versions
 

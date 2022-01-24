@@ -1,0 +1,88 @@
+name: Flags
+
+defaults:
+  run:
+    shell: bash
+
+# See: https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#concurrency.
+concurrency:
+  group: ${{ github.head_ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+    branches:
+      - '**'
+
+jobs:
+  pre_job:
+    runs-on: ubuntu-latest
+    outputs:
+      should_skip: ${{ steps.skip_check.outputs.should_skip }}
+    steps:
+      - id: skip_check
+        uses: fkirc/skip-duplicate-actions@v3.4.1
+        with:
+          cancel_others: false
+          paths_ignore: '[ "**/docs/**"
+                         , "**.md"
+                         , "**/LICENSE"
+                         , "install/**"
+                         , "**.nix"
+                         , "flake.lock"
+                         , "**/README.md"
+                         , "FUNDING.yml"
+                         , ".circleci/**"
+                         , "**/stack*.yaml"
+                         ]'
+
+  flags:
+    if: needs.pre_job.outputs.should_skip != 'true'
+    needs: pre_job
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        ghc: [ "9.2.1"
+             , "9.0.2"
+             , "8.10.7"
+             , "8.8.4"
+             , "8.6.5"
+             ]
+        os: [ "ubuntu-latest"
+            ]
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: ./.github/actions/setup-build
+        with:
+          ghc: ${{ matrix.ghc }}
+          os:  ${{ runner.os }}
+
+      - name: Build `hls-graph` with flags
+        run: cabal v2-build hls-graph --flags="embed-files stm-stats"
+
+      - if: matrix.ghc != '8.6.5' && matrix.ghc != '8.8.4'
+        name: Build `hie-compat` with flags
+        run: cabal v2-build hie-compat --flags="ghc-lib"
+
+      - name: Build `ghcide` with flags
+        run: cabal v2-build ghcide --flags="ghc-patched-unboxed-bytecode test-exe executable bench-exe"
+
+      # we have to clean up warnings for 9.0 and 9.2 before enable -WAll
+      - if: matrix.ghc != '9.0.2' && matrix.ghc != '9.2.1'
+        name: Build with pedantic (-WError)
+        run: cabal v2-build --flags="pedantic"
+
+  flags_post_job:
+    if: always()
+    runs-on: ubuntu-latest
+    needs: [pre_job, flags]
+    steps:
+      - run: |
+          echo "jobs info: ${{ toJSON(needs) }}"
+      - if: contains(needs.*.result, 'failure')
+        run: exit 1
+      - if: contains(needs.*.result, 'cancelled') && needs.pre_job.outputs.should_skip != 'true'
+        run: exit 1

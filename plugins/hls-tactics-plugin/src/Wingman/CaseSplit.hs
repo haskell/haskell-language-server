@@ -105,5 +105,5 @@ splitToDecl fixity name ams = do
 iterateSplit :: AgdaMatch -> [AgdaMatch]
 iterateSplit am =
   let iterated = iterate (agdaSplit =<<) $ pure am
-   in fmap wildify . head . drop 5 $ iterated
+   in fmap wildify . (!! 5) $ iterated
 

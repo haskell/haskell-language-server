@@ -85,7 +85,7 @@ updateLineSplitTextEdits tokenRange tokenString prevLineSplitTextEdits
   , let currInsertRange = prevInsertRange
   , let currInsertText =
           Text.init prevInsertText
-          <> Text.replicate (startCol - prevDeleteEndCol) " "
+          <> Text.replicate (fromIntegral $ startCol - prevDeleteEndCol) " "
           <> Text.pack (List.take newLineCol tokenString)
           <> "\n"
   , let currInsertTextEdit = LSP.TextEdit currInsertRange currInsertText
@@ -96,7 +96,7 @@ updateLineSplitTextEdits tokenRange tokenString prevLineSplitTextEdits
   = LineSplitTextEdits currInsertTextEdit currDeleteTextEdit
   | otherwise
   , let LSP.Range startPos _ = tokenRange
-  , let deleteTextEdit = LSP.TextEdit (LSP.Range startPos startPos{ LSP._character = startCol + newLineCol }) ""
+  , let deleteTextEdit = LSP.TextEdit (LSP.Range startPos startPos{ LSP._character = startCol + fromIntegral newLineCol }) ""
   , let insertPosition = LSP.Position (startLine + 1) 0
   , let insertRange = LSP.Range insertPosition insertPosition
   , let insertText = Text.pack (List.take newLineCol tokenString) <> "\n"
@@ -117,18 +117,26 @@ updateParserState token range prevParserState
       , lastPragmaLine
       } <- prevParserState
   , let defaultParserState = prevParserState { isLastTokenHash = False }
-  , let LSP.Range (LSP.Position startLine _) (LSP.Position endLine _) = range
+  , let LSP.Range (LSP.Position (fromIntegral -> startLine) _) (LSP.Position (fromIntegral -> endLine) _) = range
   = case prevMode of
       ModeInitial ->
         case token of
           ITvarsym "#" -> defaultParserState{ isLastTokenHash = True }
+#if !MIN_VERSION_ghc(9,2,0)
           ITlineComment s
+#else
+          ITlineComment s _
+#endif
             | isDownwardLineHaddock s -> defaultParserState{ mode = ModeHaddock }
             | otherwise ->
                 defaultParserState
                   { nextPragma = NextPragmaInfo (endLine + 1) Nothing
                   , mode = ModeComment }
+#if !MIN_VERSION_ghc(9,2,0)
           ITblockComment s
+#else
+          ITblockComment s _
+#endif
             | isPragma s ->
                 defaultParserState
                   { nextPragma = NextPragmaInfo (endLine + 1) Nothing
@@ -144,7 +152,11 @@ updateParserState token range prevParserState
       ModeComment ->
         case token of
           ITvarsym "#" -> defaultParserState{ isLastTokenHash = True }
+#if !MIN_VERSION_ghc(9,2,0)
           ITlineComment s
+#else
+          ITlineComment s _
+#endif
             | hasDeleteStartedOnSameLine startLine prevLineSplitTextEdits
             , let currLineSplitTextEdits = updateLineSplitTextEdits range s prevLineSplitTextEdits ->
                 defaultParserState{ nextPragma = prevNextPragma{ lineSplitTextEdits = Just currLineSplitTextEdits } }
@@ -156,7 +168,11 @@ updateParserState token range prevParserState
                   , mode = ModeHaddock }
             | otherwise ->
                 defaultParserState { nextPragma = NextPragmaInfo (endLine + 1) Nothing }
+#if !MIN_VERSION_ghc(9,2,0)
           ITblockComment s
+#else
+          ITblockComment s _
+#endif
             | isPragma s ->
                 defaultParserState
                   { nextPragma = NextPragmaInfo (endLine + 1) Nothing
@@ -180,13 +196,21 @@ updateParserState token range prevParserState
         case token of
           ITvarsym "#" ->
             defaultParserState{ isLastTokenHash = True }
+#if !MIN_VERSION_ghc(9,2,0)
           ITlineComment s
+#else
+          ITlineComment s _
+#endif
             | hasDeleteStartedOnSameLine startLine prevLineSplitTextEdits
             , let currLineSplitTextEdits = updateLineSplitTextEdits range s prevLineSplitTextEdits ->
                 defaultParserState{ nextPragma = prevNextPragma{ lineSplitTextEdits = Just currLineSplitTextEdits } }
             | otherwise ->
                 defaultParserState
+#if !MIN_VERSION_ghc(9,2,0)
           ITblockComment s
+#else
+          ITblockComment s _
+#endif
             | isPragma s ->
                 defaultParserState{
                   nextPragma = NextPragmaInfo (endLine + 1) Nothing,
@@ -200,7 +224,11 @@ updateParserState token range prevParserState
       ModePragma ->
         case token of
           ITvarsym "#" -> defaultParserState{ isLastTokenHash = True }
+#if !MIN_VERSION_ghc(9,2,0)
           ITlineComment s
+#else
+          ITlineComment s _
+#endif
             | hasDeleteStartedOnSameLine startLine prevLineSplitTextEdits
             , let currLineSplitTextEdits = updateLineSplitTextEdits range s prevLineSplitTextEdits ->
                 defaultParserState{ nextPragma = prevNextPragma{ lineSplitTextEdits = Just currLineSplitTextEdits } }
@@ -210,7 +238,11 @@ updateParserState token range prevParserState
                 defaultParserState{ nextPragma = prevNextPragma{ lineSplitTextEdits = Just currLineSplitTextEdits } }
             | otherwise ->
                 defaultParserState
+#if !MIN_VERSION_ghc(9,2,0)
           ITblockComment s
+#else
+          ITblockComment s _
+#endif
             | isPragma s ->
                 defaultParserState{ nextPragma = NextPragmaInfo (endLine + 1) Nothing, lastPragmaLine = endLine }
             | hasDeleteStartedOnSameLine startLine prevLineSplitTextEdits
@@ -235,7 +267,7 @@ updateParserState token range prevParserState
       , let LSP.TextEdit deleteRange _ = lineSplitDeleteTextEdit
       , let LSP.Range _ deleteEndPosition = deleteRange
       , let LSP.Position deleteEndLine _ = deleteEndPosition
-      = deleteEndLine == line
+      = fromIntegral deleteEndLine == line
       | otherwise = False
 
 lexUntilNextLineIncl :: P (Located Token)
@@ -390,7 +422,7 @@ mkLexerPState dynFlags stringBuffer =
       <*> const False
     finalPState = mkPStatePure (mkLexerParserFlags finalDynFlags) stringBuffer startRealSrcLoc
 #else
-    pState = mkPState finalDynFlags stringBuffer startRealSrcLoc
+    pState = initParserState (initParserOpts finalDynFlags) stringBuffer startRealSrcLoc
     PState{ options = pStateOptions } = pState
     finalExtBitsMap = setBit (pExtsBitmap pStateOptions) (fromEnum UsePosPragsBit)
     finalPStateOptions = pStateOptions{ pExtsBitmap = finalExtBitsMap }

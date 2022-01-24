@@ -2,6 +2,7 @@
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PolyKinds         #-}
 {-# LANGUAGE RecordWildCards   #-}
 module Test.Hls
   ( module Test.Tasty.HUnit,
@@ -28,16 +29,21 @@ module Test.Hls
     waitForTypecheck,
     waitForAction,
     sendConfigurationChanged,
-    getLastBuildKeys)
+    getLastBuildKeys,
+    waitForKickDone,
+    waitForKickStart,
+    )
 where
 
 import           Control.Applicative.Combinators
 import           Control.Concurrent.Async        (async, cancel, wait)
 import           Control.Concurrent.Extra
 import           Control.Exception.Base
-import           Control.Monad                   (unless, void)
+import           Control.Monad                   (guard, unless, void)
 import           Control.Monad.IO.Class
-import           Data.Aeson                      (Value (Null), toJSON)
+import           Data.Aeson                      (Result (Success),
+                                                  Value (Null), fromJSON,
+                                                  toJSON)
 import qualified Data.Aeson                      as A
 import           Data.ByteString.Lazy            (ByteString)
 import           Data.Default                    (def)
@@ -247,3 +253,22 @@ getLastBuildKeys = callTestPlugin GetBuildKeysBuilt
 sendConfigurationChanged :: Value -> Session ()
 sendConfigurationChanged config =
   sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams config)
+
+waitForKickDone :: Session ()
+waitForKickDone = void $ skipManyTill anyMessage nonTrivialKickDone
+
+waitForKickStart :: Session ()
+waitForKickStart = void $ skipManyTill anyMessage nonTrivialKickStart
+
+nonTrivialKickDone :: Session ()
+nonTrivialKickDone = kick "done" >>= guard . not . null
+
+nonTrivialKickStart :: Session ()
+nonTrivialKickStart = kick "start" >>= guard . not . null
+
+kick :: T.Text -> Session [FilePath]
+kick msg = do
+  NotMess NotificationMessage{_params} <- customNotification $ "kick/" <> msg
+  case fromJSON _params of
+    Success x -> return x
+    other     -> error $ "Failed to parse kick/done details: " <> show other

@@ -39,10 +39,14 @@ import           Development.IDE.LSP.HoverDefinition
 import           Development.IDE.Types.Logger
 
 import           Control.Monad.IO.Unlift               (MonadUnliftIO)
+import           Development.IDE.Types.Shake           (WithHieDb)
 import           System.IO.Unsafe                      (unsafeInterleaveIO)
 
 issueTrackerUrl :: T.Text
 issueTrackerUrl = "https://github.com/haskell/haskell-language-server/issues"
+
+-- used to smuggle RankNType WithHieDb through dbMVar
+newtype WithHieDbShield = WithHieDbShield WithHieDb
 
 runLanguageServer
     :: forall config. (Show config)
@@ -53,7 +57,7 @@ runLanguageServer
     -> config
     -> (config -> Value -> Either T.Text config)
     -> LSP.Handlers (ServerM config)
-    -> (LSP.LanguageContextEnv config -> VFSHandle -> Maybe FilePath -> HieDb -> IndexQueue -> IO IdeState)
+    -> (LSP.LanguageContextEnv config -> VFSHandle -> Maybe FilePath -> WithHieDb -> IndexQueue -> IO IdeState)
     -> IO ()
 runLanguageServer options inH outH getHieDbLoc defaultConfig onConfigurationChange userHandlers getIdeState = do
 
@@ -136,9 +140,9 @@ runLanguageServer options inH outH getHieDbLoc defaultConfig onConfigurationChan
             -- The database needs to be open for the duration of the reactor thread, but we need to pass in a reference
             -- to 'getIdeState', so we use this dirty trick
             dbMVar <- newEmptyMVar
-            ~(hiedb,hieChan) <- unsafeInterleaveIO $ takeMVar dbMVar
+            ~(WithHieDbShield withHieDb,hieChan) <- unsafeInterleaveIO $ takeMVar dbMVar
 
-            ide <- getIdeState env (makeLSPVFSHandle env) root hiedb hieChan
+            ide <- getIdeState env (makeLSPVFSHandle env) root withHieDb hieChan
 
             let initConfig = parseConfiguration params
             logInfo (ideLogger ide) $ T.pack $ "Registering ide configuration: " <> show initConfig
@@ -182,15 +186,17 @@ runLanguageServer options inH outH getHieDbLoc defaultConfig onConfigurationChan
                         ) $ \(e :: SomeException) -> do
                             exceptionInHandler e
                             k $ ResponseError InternalError (T.pack $ show e) Nothing
-            _ <- flip forkFinally handleServerException $ untilMVar lifetime $ runWithDb logger dbLoc $ \hiedb hieChan -> do
-              putMVar dbMVar (hiedb,hieChan)
-              forever $ do
-                msg <- readChan clientMsgChan
-                -- We dispatch notifications synchronously and requests asynchronously
-                -- This is to ensure that all file edits and config changes are applied before a request is handled
-                case msg of
-                    ReactorNotification act -> handle exceptionInHandler act
-                    ReactorRequest _id act k -> void $ async $ checkCancelled _id act k
+            _ <- flip forkFinally handleServerException $ do
+                untilMVar lifetime $ runWithDb logger dbLoc $ \withHieDb hieChan -> do
+                    putMVar dbMVar (WithHieDbShield withHieDb,hieChan)
+                    forever $ do
+                        msg <- readChan clientMsgChan
+                        -- We dispatch notifications synchronously and requests asynchronously
+                        -- This is to ensure that all file edits and config changes are applied before a request is handled
+                        case msg of
+                            ReactorNotification act -> handle exceptionInHandler act
+                            ReactorRequest _id act k -> void $ async $ checkCancelled _id act k
+                logInfo logger "Reactor thread stopped"
             pure $ Right (env,ide)
 
 

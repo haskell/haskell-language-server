@@ -113,7 +113,7 @@ streamProofs s p = ListT $ go s [] pure p
          -- This would happen when we had a handler that wasn't followed by an error call.
          --     pair >> goal >>= \g -> (handler_ $ \_ -> traceM $ "Handling " <> show g) <|> failure "Error"
          -- We would see the "Handling a" message when solving for b.
-         (go s' (goals ++ [(meta, goal)]) pure $ k h)
+         go s' (goals ++ [(meta, goal)]) pure $ k h
       go s goals handlers (Effect m) = m >>= go s goals handlers
       go s goals handlers (Stateful f) =
           let (s', p) = f s
@@ -121,10 +121,10 @@ streamProofs s p = ListT $ go s [] pure p
       go s goals handlers (Alt p1 p2) =
           unListT $ ListT (go s goals handlers p1) <|> ListT (go s goals handlers p2)
       go s goals handlers (Interleave p1 p2) =
-          interleaveT <$> (go s goals handlers p1) <*> (go s goals handlers p2)
+          interleaveT <$> go s goals handlers p1 <*> go s goals handlers p2
       go s goals handlers (Commit p1 p2) = do
           solns <- force =<< go s goals handlers p1
-          if (any isRight solns) then pure $ ofList solns else go s goals handlers p2
+          if any isRight solns then pure $ ofList solns else go s goals handlers p2
       go _ _ _ Empty = pure Done
       go _ _ handlers (Failure err _) = do
           annErr <- handlers err

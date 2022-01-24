@@ -31,17 +31,18 @@ module Development.IDE.GHC.Compat.Outputable (
 
 
 #if MIN_VERSION_ghc(9,2,0)
+import           GHC.Driver.Env
 import           GHC.Driver.Ppr
 import           GHC.Driver.Session
 import           GHC.Parser.Errors
 import qualified GHC.Parser.Errors.Ppr           as Ppr
 import qualified GHC.Types.Error                 as Error
 import           GHC.Types.Name.Ppr
+import           GHC.Types.Name.Reader
 import           GHC.Types.SourceError
 import           GHC.Types.SrcLoc
 import           GHC.Unit.State
 import           GHC.Utils.Error                 hiding (mkWarnMsg)
-import           GHC.Utils.Logger
 import           GHC.Utils.Outputable
 import           GHC.Utils.Panic
 #elif MIN_VERSION_ghc(9,0,0)
@@ -136,7 +137,15 @@ pprError =
 formatErrorWithQual :: DynFlags -> MsgEnvelope DecoratedSDoc -> String
 formatErrorWithQual dflags e =
 #if MIN_VERSION_ghc(9,2,0)
-  showSDoc dflags (pprLocMsgEnvelope e)
+  showSDoc dflags (pprNoLocMsgEnvelope e)
+
+pprNoLocMsgEnvelope :: Error.RenderableDiagnostic e => MsgEnvelope e -> SDoc
+pprNoLocMsgEnvelope (MsgEnvelope { errMsgDiagnostic = e
+                                 , errMsgContext   = unqual })
+  = sdocWithContext $ \ctx ->
+    withErrStyle unqual $
+      (formatBulleted ctx $ Error.renderDiagnostic e)
+
 #else
   Out.showSDoc dflags
   $ Out.withPprStyle (oldMkErrStyle dflags $ errMsgContext e)
@@ -152,9 +161,15 @@ type PsWarning = ErrMsg
 type PsError = ErrMsg
 #endif
 
-mkPrintUnqualifiedDefault :: GlobalRdrEnv -> PrintUnqualified
-mkPrintUnqualifiedDefault =
-  HscTypes.mkPrintUnqualified unsafeGlobalDynFlags
+mkPrintUnqualifiedDefault :: HscEnv -> GlobalRdrEnv -> PrintUnqualified
+mkPrintUnqualifiedDefault env =
+#if MIN_VERSION_ghc(9,2,0)
+  -- GHC 9.2.1 version
+  -- mkPrintUnqualified :: UnitEnv -> GlobalRdrEnv -> PrintUnqualified
+  mkPrintUnqualified (hsc_unit_env env)
+#else
+  HscTypes.mkPrintUnqualified (hsc_dflags env)
+#endif
 
 mkWarnMsg :: DynFlags -> SrcSpan -> PrintUnqualified -> SDoc -> MsgEnvelope DecoratedSDoc
 mkWarnMsg =

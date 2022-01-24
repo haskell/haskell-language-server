@@ -37,19 +37,20 @@ tests = testGroup "completions" [
          compls <- getCompletions doc (Position 5 9)
          let item = head $ filter ((== "putStrLn") . (^. label)) compls
          resolvedRes <- request SCompletionItemResolve item
-         let Right resolved = resolvedRes ^. result
-         liftIO $ print resolved
-         liftIO $ do
-             resolved ^. label @?= "putStrLn"
-             resolved ^. kind @?= Just CiFunction
-             resolved ^. detail @?= Just "String -> IO ()\nPrelude"
-             resolved ^. insertTextFormat @?= Just Snippet
-             resolved ^. insertText @?= Just "putStrLn ${1:String}"
+         let eResolved = resolvedRes ^. result
+         case eResolved of
+             Right resolved -> liftIO $ do
+                 resolved ^. label @?= "putStrLn"
+                 resolved ^. kind @?= Just CiFunction
+                 resolved ^. detail @?= Just "String -> IO ()\nPrelude"
+                 resolved ^. insertTextFormat @?= Just Snippet
+                 resolved ^. insertText @?= Just "putStrLn ${1:String}"
+             _ -> error $ "Unexpected resolved value: " ++ show eResolved
 
-     , testCase "completes imports" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
+     , testCase "completes imports" $ runSession (hlsCommand <> " --test") fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
 
-         _ <- waitForDiagnostics
+         waitForKickDone
 
          let te = TextEdit (Range (Position 1 17) (Position 1 26)) "Data.M"
          _ <- applyEdit doc te
@@ -61,10 +62,10 @@ tests = testGroup "completions" [
              item ^. detail @?= Just "Data.Maybe"
              item ^. kind @?= Just CiModule
 
-     , testCase "completes qualified imports" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
+     , testCase "completes qualified imports" $ runSession (hlsCommand <> " --test") fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
 
-         _ <- waitForDiagnostics
+         _ <- waitForKickDone
 
          let te = TextEdit (Range (Position 2 17) (Position 2 25)) "Data.L"
          _ <- applyEdit doc te

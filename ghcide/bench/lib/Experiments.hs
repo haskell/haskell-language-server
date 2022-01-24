@@ -3,6 +3,7 @@
 {-# LANGUAGE GADTs                     #-}
 {-# LANGUAGE ImplicitParams            #-}
 {-# LANGUAGE ImpredicativeTypes        #-}
+{-# LANGUAGE PolyKinds                 #-}
 {-# OPTIONS_GHC -Wno-deprecations -Wno-unticked-promoted-constructors #-}
 
 module Experiments
@@ -194,7 +195,7 @@ experiments =
             let edit :: TextDocumentContentChangeEvent =TextDocumentContentChangeEvent
                   { _range = Just Range {_start = bottom, _end = bottom}
                   , _rangeLength = Nothing, _text = t}
-                bottom = Position maxBoundUinteger 0
+                bottom = Position maxBound 0
                 t = T.unlines
                     [""
                     ,"holef :: [Int] -> [Int]"
@@ -213,7 +214,7 @@ experiments =
             flip allM docs $ \DocumentPositions{..} -> do
                 bottom <- pred . length . T.lines <$> documentContents doc
                 diags <- getCurrentDiagnostics doc
-                case requireDiagnostic diags (DsError, (bottom, 8), "Found hole", Nothing) of
+                case requireDiagnostic diags (DsError, (fromIntegral bottom, 8), "Found hole", Nothing) of
                     Nothing   -> pure True
                     Just _err -> pure False
         )
@@ -251,7 +252,7 @@ configP =
     <*> option auto (long "timeout" <> value 60 <> help "timeout for waiting for a ghcide response")
     <*> ( Example "name"
                <$> (Right <$> packageP)
-               <*> (some moduleOption <|> pure ["Distribution/Simple.hs"])
+               <*> (some moduleOption <|> pure ["src/Distribution/Simple.hs"])
                <*> pure []
          <|>
           Example "name"
@@ -263,7 +264,7 @@ configP =
 
       packageP = ExamplePackage
             <$> strOption (long "example-package-name" <> value "Cabal")
-            <*> option versionP (long "example-package-version" <> value (makeVersion [3,4,0,0]))
+            <*> option versionP (long "example-package-version" <> value (makeVersion [3,6,0,0]))
       pathP = strOption (long "example-path")
 
 versionP :: ReadM Version
@@ -404,7 +405,7 @@ runBenchmarksFun dir allBenchmarks = do
           ++ ["--verbose" | verbose ?config]
           ++ ["--ot-memory-profiling" | Just _ <- [otMemoryProfiling ?config]]
     lspTestCaps =
-      fullCaps {_window = Just $ WindowClientCapabilities $ Just True}
+      fullCaps {_window = Just $ WindowClientCapabilities (Just True) Nothing Nothing }
     conf =
       defaultConfig
         { logStdErr = verbose ?config,
@@ -585,7 +586,7 @@ setupDocumentContents config =
         doc <- openDoc m "haskell"
 
         -- Setup the special positions used by the experiments
-        lastLine <- length . T.lines <$> documentContents doc
+        lastLine <- fromIntegral . length . T.lines <$> documentContents doc
         changeDoc doc [TextDocumentContentChangeEvent
             { _range = Just (Range (Position lastLine 0) (Position lastLine 0))
             , _rangeLength = Nothing
@@ -638,9 +639,9 @@ searchSymbol doc@TextDocumentIdentifier{_uri} fileContents pos = do
             return res
   where
       loop pos
-        | _line pos >= lll =
+        | (fromIntegral $ _line pos) >= lll =
             return Nothing
-        | _character pos >= lengthOfLine (_line pos) =
+        | (fromIntegral $ _character pos) >= lengthOfLine (fromIntegral $ _line pos) =
             loop (nextLine pos)
         | otherwise = do
                 checks <- checkDefinitions pos &&^ checkCompletions pos
@@ -663,7 +664,3 @@ searchSymbol doc@TextDocumentIdentifier{_uri} fileContents pos = do
       checkCompletions pos =
         not . null <$> getCompletions doc pos
 
--- | We don't have a uinteger type yet. So hardcode the maxBound of uinteger, 2 ^ 31 - 1
--- as a constant.
-maxBoundUinteger :: Int
-maxBoundUinteger = 2147483647

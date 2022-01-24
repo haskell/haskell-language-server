@@ -31,7 +31,8 @@ import           Data.List
 import qualified Data.Text           as T
 import qualified Data.Vector.Unboxed as V
 import           Language.LSP.Types  (Position (Position), Range (Range),
-                                      TextDocumentContentChangeEvent (TextDocumentContentChangeEvent))
+                                      TextDocumentContentChangeEvent (TextDocumentContentChangeEvent),
+                                      UInt)
 
 -- | Either an exact position, or the range of text that was substituted
 data PositionResult a
@@ -140,14 +141,17 @@ toCurrent (Range start@(Position startLine startColumn) end@(Position endLine en
     where
         lineDiff = linesNew - linesOld
         linesNew = T.count "\n" t
-        linesOld = endLine - startLine
+        linesOld = fromIntegral endLine - fromIntegral startLine
+        newEndColumn :: UInt
         newEndColumn
-          | linesNew == 0 = startColumn + T.length t
-          | otherwise = T.length $ T.takeWhileEnd (/= '\n') t
+          | linesNew == 0 = fromIntegral $ fromIntegral startColumn + T.length t
+          | otherwise = fromIntegral $ T.length $ T.takeWhileEnd (/= '\n') t
+        newColumn :: UInt
         newColumn
-          | line == endLine = column + newEndColumn - endColumn
+          | line == endLine = fromIntegral $ (fromIntegral column + newEndColumn) - fromIntegral endColumn
           | otherwise = column
-        newLine = line + lineDiff
+        newLine :: UInt
+        newLine = fromIntegral $ fromIntegral line + lineDiff
 
 fromCurrent :: Range -> T.Text -> Position -> PositionResult Position
 fromCurrent (Range start@(Position startLine startColumn) end@(Position endLine endColumn)) t (Position line column)
@@ -163,19 +167,23 @@ fromCurrent (Range start@(Position startLine startColumn) end@(Position endLine 
     where
         lineDiff = linesNew - linesOld
         linesNew = T.count "\n" t
-        linesOld = endLine - startLine
-        newEndLine = endLine + lineDiff
+        linesOld = fromIntegral endLine - fromIntegral startLine
+        newEndLine :: UInt
+        newEndLine = fromIntegral $ fromIntegral endLine + lineDiff
+        newEndColumn :: UInt
         newEndColumn
-          | linesNew == 0 = startColumn + T.length t
-          | otherwise = T.length $ T.takeWhileEnd (/= '\n') t
+          | linesNew == 0 = fromIntegral $ fromIntegral startColumn + T.length t
+          | otherwise = fromIntegral $ T.length $ T.takeWhileEnd (/= '\n') t
+        newColumn :: UInt
         newColumn
-          | line == newEndLine = column - (newEndColumn - endColumn)
+          | line == newEndLine = fromIntegral $ (fromIntegral column + fromIntegral endColumn) - newEndColumn
           | otherwise = column
-        newLine = line - lineDiff
+        newLine :: UInt
+        newLine = fromIntegral $ fromIntegral line - lineDiff
 
 deltaFromDiff :: T.Text -> T.Text -> PositionDelta
 deltaFromDiff (T.lines -> old) (T.lines -> new) =
-    PositionDelta (lookupPos lnew o2nPrevs o2nNexts old2new) (lookupPos lold n2oPrevs n2oNexts new2old)
+    PositionDelta (lookupPos (fromIntegral lnew) o2nPrevs o2nNexts old2new) (lookupPos (fromIntegral lold) n2oPrevs n2oNexts new2old)
   where
     !lnew = length new
     !lold = length old
@@ -194,17 +202,16 @@ deltaFromDiff (T.lines -> old) (T.lines -> new) =
     f :: Int -> Int -> Int
     f !a !b = if b == -1 then a else b
 
-    lookupPos :: Int -> V.Vector Int -> V.Vector Int -> V.Vector Int -> Position -> PositionResult Position
+    lookupPos :: UInt -> V.Vector Int -> V.Vector Int -> V.Vector Int -> Position -> PositionResult Position
     lookupPos end prevs nexts xs (Position line col)
-      | line < 0            = PositionRange (Position 0   0) (Position 0   0)
-      | line >= V.length xs = PositionRange (Position end 0) (Position end 0)
-      | otherwise           = case V.unsafeIndex xs line of
+      | line >= fromIntegral (V.length xs) = PositionRange (Position end 0) (Position end 0)
+      | otherwise           = case V.unsafeIndex xs (fromIntegral line) of
           -1 ->
             -- look for the previous and next lines that mapped successfully
-            let !prev = 1 + V.unsafeIndex prevs line
-                !next = V.unsafeIndex nexts line
-              in PositionRange (Position prev 0) (Position next 0)
-          line' -> PositionExact (Position line' col)
+            let !prev = 1 + V.unsafeIndex prevs (fromIntegral line)
+                !next = V.unsafeIndex nexts (fromIntegral line)
+              in PositionRange (Position (fromIntegral prev) 0) (Position (fromIntegral next) 0)
+          line' -> PositionExact (Position (fromIntegral line') col)
 
     -- Construct a mapping between lines in the diff
     -- -1 for unsucessful mapping

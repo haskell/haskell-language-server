@@ -31,7 +31,7 @@ data Priority
 -- | Note that this is logging actions _of the program_, not of the user.
 --   You shouldn't call warning/error if the user has caused an error, only
 --   if our code has gone wrong and is itself erroneous (e.g. we threw an exception).
-data Logger = Logger {logPriority :: Priority -> T.Text -> IO ()}
+newtype Logger = Logger {logPriority :: Priority -> T.Text -> IO ()}
 
 instance Semigroup Logger where
     l1 <> l2 = Logger $ \p t -> logPriority l1 p t >> logPriority l2 p t

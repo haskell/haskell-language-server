@@ -17,6 +17,7 @@ module Wingman.Debug
 
 import           Control.DeepSeq
 import           Control.Exception
+import           Data.Either (fromRight)
 import qualified Debug.Trace
 import           Development.IDE.GHC.Compat (PlainGhcException, Outputable(..), SDoc, showSDocUnsafe)
 import           System.IO.Unsafe  (unsafePerformIO)
@@ -33,7 +34,7 @@ unsafeRender' sdoc = unsafePerformIO $ do
   -- We might not have unsafeGlobalDynFlags (like during testing), in which
   -- case GHC panics. Instead of crashing, let's just fail to print.
   !res <- try @PlainGhcException $ evaluate $ deepseq z z
-  pure $ either (const "<unsafeRender'>") id res
+  pure $ fromRight "<unsafeRender'>" res
 {-# NOINLINE unsafeRender' #-}
 
 traceMX :: (Monad m, Show a) => String -> a -> m ()

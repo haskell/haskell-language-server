@@ -1,8 +1,8 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE OverloadedLabels  #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections     #-}
-{-# LANGUAGE TypeApplications  #-}
 
 module Wingman.CodeGen
   ( module Wingman.CodeGen
@@ -57,7 +57,7 @@ destructMatches use_field_puns f scrut t jdg = do
     Just (dcs, apps) ->
       fmap unzipTrace $ for dcs $ \dc -> do
         let con = RealDataCon dc
-            ev = concatMap mkEvidence $ dataConInstArgTys dc apps
+            ev = concatMap (mkEvidence . scaledThing) $ dataConInstArgTys dc apps
             -- We explicitly do not need to add the method hypothesis to
             -- #syn_scoped
             method_hy = foldMap evidenceToHypothesis ev
@@ -141,8 +141,7 @@ mkDestructPat already_in_scope con names
         in (names', )
          $ ConPatIn (noLoc $ Unqual $ occName $ conLikeName con)
          $ RecCon
-         $ HsRecFields rec_fields
-         $ Nothing
+         $ HsRecFields rec_fields Nothing
   | otherwise =
       (names, ) $ infixifyPatIfNecessary con $
         conP
@@ -186,7 +185,7 @@ conLikeInstOrigArgTys'
       -- ^ Types of arguments to the ConLike with returned type is instantiated with the second argument.
 conLikeInstOrigArgTys' con uniTys =
   let exvars = conLikeExTys con
-   in conLikeInstOrigArgTys con $
+   in fmap scaledThing $ conLikeInstOrigArgTys con $
         uniTys ++ fmap mkTyVarTy exvars
       -- Rationale: At least in GHC <= 8.10, 'dataConInstOrigArgTys'
       -- unifies the second argument with DataCon's universals followed by existentials.
@@ -208,7 +207,7 @@ patSynExTys ps = patSynExTyVars ps
 
 destruct' :: Bool -> (ConLike -> Judgement -> Rule) -> HyInfo CType -> Judgement -> Rule
 destruct' use_field_puns f hi jdg = do
-  when (isDestructBlacklisted jdg) $ cut -- throwError NoApplicableTactic
+  when (isDestructBlacklisted jdg) cut -- throwError NoApplicableTactic
   let term = hi_name hi
   ext
       <- destructMatches
@@ -227,10 +226,14 @@ destruct' use_field_puns f hi jdg = do
 -- resulting matches.
 destructLambdaCase' :: Bool -> (ConLike -> Judgement -> Rule) -> Judgement -> Rule
 destructLambdaCase' use_field_puns f jdg = do
-  when (isDestructBlacklisted jdg) $ cut -- throwError NoApplicableTactic
+  when (isDestructBlacklisted jdg) cut -- throwError NoApplicableTactic
   let g  = jGoal jdg
   case splitFunTy_maybe (unCType g) of
+#if __GLASGOW_HASKELL__ >= 900
+    Just (_multiplicity, arg, _) | isAlgType arg ->
+#else
     Just (arg, _) | isAlgType arg ->
+#endif
       fmap (fmap noLoc lambdaCase) <$>
         destructMatches use_field_puns f Nothing (CType arg) jdg
     _ -> cut -- throwError $ GoalMismatch "destructLambdaCase'" g
@@ -320,12 +323,24 @@ nonrecLet occjdgs jdg = do
   occexts <- traverse newSubgoal $ fmap snd occjdgs
   ctx     <- ask
   ext     <- newSubgoal
-           $ introduce ctx (userHypothesis $ fmap (second jGoal) occjdgs)
-           $ jdg
+           $ introduce ctx (userHypothesis $ fmap (second jGoal) occjdgs) jdg
   pure $ fmap noLoc $
     let'
       <$> traverse
             (\(occ, ext) -> valBind (occNameToStr occ) <$> fmap unLoc ext)
             (zip (fmap fst occjdgs) occexts)
       <*> fmap unLoc ext
+
+
+------------------------------------------------------------------------------
+-- | Converts a function application into applicative form
+idiomize :: LHsExpr GhcPs -> LHsExpr GhcPs
+idiomize x = noLoc $ case unLoc x of
+  HsApp _ (L _ (HsVar _ (L _ x))) gshgp3 ->
+    op (bvar' $ occName x) "<$>" (unLoc gshgp3)
+  HsApp _ gsigp gshgp3 ->
+    op (unLoc $ idiomize gsigp) "<*>" (unLoc gshgp3)
+  RecordCon _ con flds ->
+    unLoc $ idiomize $ noLoc $ foldl' (@@) (HsVar noExtField con) $ fmap unLoc flds
+  y -> y
 

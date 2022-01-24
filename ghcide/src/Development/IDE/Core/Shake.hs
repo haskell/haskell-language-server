@@ -154,7 +154,7 @@ import           Data.Aeson                             (toJSON)
 import qualified Data.ByteString.Char8                  as BS8
 import           Data.Coerce                            (coerce)
 import           Data.Default
-import           Data.Foldable                          (toList)
+import           Data.Foldable                          (for_, toList)
 import           Data.HashSet                           (HashSet)
 import qualified Data.HashSet                           as HSet
 import           Data.String                            (fromString)
@@ -182,7 +182,9 @@ data HieDbWriter
   }
 
 -- | Actions to queue up on the index worker thread
-type IndexQueue = TQueue (HieDb -> IO ())
+-- The inner `(HieDb -> IO ()) -> IO ()` wraps `HieDb -> IO ()`
+-- with (currently) retry functionality
+type IndexQueue = TQueue (((HieDb -> IO ()) -> IO ()) -> IO ())
 
 -- information we stash inside the shakeExtra field
 data ShakeExtras = ShakeExtras
@@ -219,7 +221,7 @@ data ShakeExtras = ShakeExtras
     -- | A work queue for actions added via 'runInShakeSession'
     ,actionQueue :: ActionQueue
     ,clientCapabilities :: ClientCapabilities
-    , hiedb :: HieDb -- ^ Use only to read.
+    , withHieDb :: WithHieDb -- ^ Use only to read.
     , hiedbWriter :: HieDbWriter -- ^ use to write
     , persistentKeys :: TVar (HMap.HashMap Key GetStalePersistent)
       -- ^ Registery for functions that compute/get "stale" results for the rule
@@ -455,7 +457,7 @@ recordDirtyKeys
 recordDirtyKeys ShakeExtras{dirtyKeys} key file = do
     modifyTVar' dirtyKeys $ \x -> foldl' (flip HSet.insert) x (toKey key <$> file)
     return $ withEventTrace "recordDirtyKeys" $ \addEvent -> do
-        addEvent (fromString $ "dirty " <> show key) (fromString $ unlines $ map fromNormalizedFilePath file)
+        addEvent (fromString $ unlines $ "dirty " <> show key : map fromNormalizedFilePath file)
 
 -- | We return Nothing if the rule has not run and Just Failed if it has failed to produce a value.
 getValues ::
@@ -499,14 +501,14 @@ shakeOpen :: Maybe (LSP.LanguageContextEnv Config)
           -> Maybe FilePath
           -> IdeReportProgress
           -> IdeTesting
-          -> HieDb
+          -> WithHieDb
           -> IndexQueue
           -> VFSHandle
           -> ShakeOptions
           -> Rules ()
           -> IO IdeState
 shakeOpen lspEnv defaultConfig logger debouncer
-  shakeProfileDir (IdeReportProgress reportProgress) ideTesting@(IdeTesting testing) hiedb indexQueue vfs opts rules = mdo
+  shakeProfileDir (IdeReportProgress reportProgress) ideTesting@(IdeTesting testing) withHieDb indexQueue vfs opts rules = mdo
 
     us <- mkSplitUniqSupply 'r'
     ideNc <- newIORef (initNameCache us knownKeyNames)
@@ -528,7 +530,7 @@ shakeOpen lspEnv defaultConfig logger debouncer
         -- lazily initialize the exports map with the contents of the hiedb
         _ <- async $ do
             logDebug logger "Initializing exports map from hiedb"
-            em <- createExportsMapHieDb hiedb
+            em <- createExportsMapHieDb withHieDb
             atomically $ modifyTVar' exportsMap (<> em)
             logDebug logger $ "Done initializing exports map from hiedb (" <> pack(show (ExportsMap.size em)) <> ")"
 
@@ -583,15 +585,17 @@ startTelemetry db extras@ShakeExtras{..}
 
 -- | Must be called in the 'Initialized' handler and only once
 shakeSessionInit :: IdeState -> IO ()
-shakeSessionInit IdeState{..} = do
+shakeSessionInit ide@IdeState{..} = do
     initSession <- newSession shakeExtras shakeDb [] "shakeSessionInit"
     putMVar shakeSession initSession
+    logDebug (ideLogger ide) "Shake session initialized"
 
 shakeShut :: IdeState -> IO ()
-shakeShut IdeState{..} = withMVar shakeSession $ \runner -> do
+shakeShut IdeState{..} = do
+    runner <- tryReadMVar shakeSession
     -- Shake gets unhappy if you try to close when there is a running
     -- request so we first abort that.
-    void $ cancelShakeSession runner
+    for_ runner cancelShakeSession
     void $ shakeDatabaseProfile shakeDb
     shakeClose
     progressStop $ progress shakeExtras
@@ -709,7 +713,6 @@ newSession extras@ShakeExtras{..} shakeDb acts reason = do
                             ++ " (took " ++ showDuration runTime ++ ")"
             liftIO $ do
                 logPriority logger (actionPriority d) msg
-                notifyTestingLogMessage extras msg
 
         -- The inferred type signature doesn't work in ghc >= 9.0.1
         workRun :: (forall b. IO b -> IO b) -> IO (IO ())
@@ -1174,7 +1177,7 @@ updateFileDiagnostics fp k ShakeExtras{logger, diagnostics, hiddenDiagnostics, p
                             logInfo logger $ showDiagnosticsColored $ map (fp,ShowDiag,) newDiags
                         Just env -> LSP.runLspT env $
                             LSP.sendNotification LSP.STextDocumentPublishDiagnostics $
-                            LSP.PublishDiagnosticsParams (fromNormalizedUri uri) ver (List newDiags)
+                            LSP.PublishDiagnosticsParams (fromNormalizedUri uri) (fmap fromIntegral ver) (List newDiags)
                  return action
 
 newtype Priority = Priority Double

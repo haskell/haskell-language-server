@@ -1,5 +1,3 @@
-{-# LANGUAGE PatternSynonyms #-}
-
 module Development.IDE.Graph(
     shakeOptions,
     Rules,

@@ -5,13 +5,16 @@
 
 module Ide.Plugin.ConfigUtils where
 
+import           Control.Lens          (at, ix, (&), (?~))
 import qualified Data.Aeson            as A
+import           Data.Aeson.Lens       (_Object)
 import qualified Data.Aeson.Types      as A
 import           Data.Default          (def)
 import qualified Data.Dependent.Map    as DMap
 import qualified Data.Dependent.Sum    as DSum
-import qualified Data.HashMap.Lazy     as HMap
 import           Data.List             (nub)
+import           Data.String           (IsString (fromString))
+import qualified Data.Text             as T
 import           Ide.Plugin.Config
 import           Ide.Plugin.Properties (toDefaultJSON, toVSCodeExtensionSchema)
 import           Ide.Types
@@ -25,17 +28,12 @@ import           Language.LSP.Types
 -- | Generates a default 'Config', but remains only effective items
 pluginsToDefaultConfig :: IdePlugins a -> A.Value
 pluginsToDefaultConfig IdePlugins {..} =
-  A.Object $
-    HMap.adjust
-      ( \(unsafeValueToObject -> o) ->
-          A.Object $ HMap.insert "plugin" elems o -- inplace the "plugin" section with our 'elems', leaving others unchanged
-      )
-      "haskell"
-      (unsafeValueToObject (A.toJSON defaultConfig))
+  -- Use 'ix' to look at all the "haskell" keys in the outer value (since we're not
+  -- setting it if missing), then we use '_Object' and 'at' to get at the "plugin" key
+  -- and actually set it.
+  A.toJSON defaultConfig & ix "haskell" . _Object . at "plugin" ?~ elems
   where
     defaultConfig@Config {} = def
-    unsafeValueToObject (A.Object o) = o
-    unsafeValueToObject _            = error "impossible"
     elems = A.object $ mconcat $ singlePlugin <$> map snd ipMap
     -- Splice genericDefaultConfig and dedicatedDefaultConfig
     -- Example:
@@ -52,7 +50,7 @@ pluginsToDefaultConfig IdePlugins {..} =
     -- }
     singlePlugin PluginDescriptor {pluginConfigDescriptor = ConfigDescriptor {..}, ..} =
       let x = genericDefaultConfig <> dedicatedDefaultConfig
-       in [pId A..= A.object x | not $ null x]
+       in [fromString (T.unpack pId) A..= A.object x | not $ null x]
       where
         (PluginHandlers (DMap.toList -> handlers)) = pluginHandlers
         customConfigToDedicatedDefaultConfig (CustomConfig p) = toDefaultJSON p
@@ -107,22 +105,22 @@ pluginsToVSCodeExtensionSchema IdePlugins {..} = A.object $ mconcat $ singlePlug
         (PluginId pId) = pluginId
         genericSchema =
           let x =
-                [withIdPrefix "diagnosticsOn" A..= schemaEntry "diagnostics" | configHasDiagnostics]
+                [toKey' "diagnosticsOn" A..= schemaEntry "diagnostics" | configHasDiagnostics]
                   <> nub (mconcat (handlersToGenericSchema <$> handlers))
            in case x of
                 -- If the plugin has only one capability, we produce globalOn instead of the specific one;
                 -- otherwise we don't produce globalOn at all
-                [_] -> [withIdPrefix "globalOn" A..= schemaEntry "plugin"]
+                [_] -> [toKey' "globalOn" A..= schemaEntry "plugin"]
                 _   -> x
         dedicatedSchema = customConfigToDedicatedSchema configCustomConfig
         handlersToGenericSchema (IdeMethod m DSum.:=> _) = case m of
-          STextDocumentCodeAction -> [withIdPrefix "codeActionsOn" A..= schemaEntry "code actions"]
-          STextDocumentCodeLens -> [withIdPrefix "codeLensOn" A..= schemaEntry "code lenses"]
-          STextDocumentRename -> [withIdPrefix "renameOn" A..= schemaEntry "rename"]
-          STextDocumentHover -> [withIdPrefix "hoverOn" A..= schemaEntry "hover"]
-          STextDocumentDocumentSymbol -> [withIdPrefix "symbolsOn" A..= schemaEntry "symbols"]
-          STextDocumentCompletion -> [withIdPrefix "completionOn" A..= schemaEntry "completions"]
-          STextDocumentPrepareCallHierarchy -> [withIdPrefix "callHierarchyOn" A..= schemaEntry "call hierarchy"]
+          STextDocumentCodeAction -> [toKey' "codeActionsOn" A..= schemaEntry "code actions"]
+          STextDocumentCodeLens -> [toKey' "codeLensOn" A..= schemaEntry "code lenses"]
+          STextDocumentRename -> [toKey' "renameOn" A..= schemaEntry "rename"]
+          STextDocumentHover -> [toKey' "hoverOn" A..= schemaEntry "hover"]
+          STextDocumentDocumentSymbol -> [toKey' "symbolsOn" A..= schemaEntry "symbols"]
+          STextDocumentCompletion -> [toKey' "completionOn" A..= schemaEntry "completions"]
+          STextDocumentPrepareCallHierarchy -> [toKey' "callHierarchyOn" A..= schemaEntry "call hierarchy"]
           _ -> []
         schemaEntry desc =
           A.object
@@ -132,3 +130,4 @@ pluginsToVSCodeExtensionSchema IdePlugins {..} = A.object $ mconcat $ singlePlug
               "description" A..= A.String ("Enables " <> pId <> " " <> desc)
             ]
         withIdPrefix x = "haskell.plugin." <> pId <> "." <> x
+        toKey' = fromString . T.unpack . withIdPrefix

@@ -2,6 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms   #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE ViewPatterns      #-}
 {-# OPTIONS_GHC -Wall -Wwarn -fno-warn-type-defaults #-}
 
 {- | Keep the module name in sync with its file path.
@@ -22,6 +23,7 @@ import           Data.Aeson                 (Value (Null), toJSON)
 import           Data.Char                  (isLower)
 import qualified Data.HashMap.Strict        as HashMap
 import           Data.List                  (intercalate, isPrefixOf, minimumBy)
+import qualified Data.List.NonEmpty         as NE
 import           Data.Maybe                 (maybeToList)
 import           Data.Ord                   (comparing)
 import           Data.String                (IsString)
@@ -32,7 +34,7 @@ import           Development.IDE            (GetParsedModule (GetParsedModule),
                                              realSrcSpanToRange, runAction,
                                              uriToFilePath', use, use_)
 import           Development.IDE.GHC.Compat (GenLocated (L), getSessionDynFlags,
-                                             hsmodName, importPaths,
+                                             hsmodName, importPaths, locA,
                                              pattern RealSrcSpan,
                                              pm_parsed_source, unLoc)
 import           Ide.Types
@@ -99,7 +101,7 @@ action state uri =
     let emptyModule = maybe True (T.null . T.strip . virtualFileText) contents
 
     correctNames <- liftIO $ traceAs "correctNames" <$> pathModuleNames state nfp fp
-    let bestName = minimumBy (comparing T.length) correctNames
+    bestName <- minimumBy (comparing T.length) <$> (MaybeT . pure $ NE.nonEmpty correctNames)
 
     statedNameMaybe <- liftIO $ traceAs "statedName" <$> codeModuleName state nfp
     case statedNameMaybe of
@@ -137,7 +139,7 @@ pathModuleNames state normFilePath filePath
 codeModuleName :: IdeState -> NormalizedFilePath -> IO (Maybe (Range, T.Text))
 codeModuleName state nfp = runMaybeT $ do
   pm <- MaybeT . runAction "ModuleName.GetParsedModule" state $ use GetParsedModule nfp
-  L (RealSrcSpan l _) m <- MaybeT . pure . hsmodName . unLoc $ pm_parsed_source pm
+  L (locA -> (RealSrcSpan l _)) m <- MaybeT . pure . hsmodName . unLoc $ pm_parsed_source pm
   pure (realSrcSpanToRange l, T.pack $ show m)
 
 -- traceAs :: Show a => String -> a -> a

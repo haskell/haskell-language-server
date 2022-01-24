@@ -76,7 +76,6 @@ import           Data.Aeson                                   (Result (Success),
 import qualified Data.Aeson.Types                             as A
 import qualified Data.Binary                                  as B
 import qualified Data.ByteString                              as BS
-import           Data.ByteString.Encoding                     as T
 import qualified Data.ByteString.Lazy                         as LBS
 import           Data.Coerce
 import           Data.Foldable
@@ -92,6 +91,7 @@ import           Data.Maybe
 import qualified Data.Rope.UTF16                              as Rope
 import qualified Data.Set                                     as Set
 import qualified Data.Text                                    as T
+import qualified Data.Text.IO                                 as T
 import qualified Data.Text.Encoding                           as T
 import           Data.Time                                    (UTCTime (..))
 import           Data.Tuple.Extra
@@ -106,8 +106,7 @@ import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
 import           Development.IDE.Core.Shake
-import           Development.IDE.GHC.Compat.Env
-import           Development.IDE.GHC.Compat.Core              hiding
+import           Development.IDE.GHC.Compat                   hiding
                                                               (parseModule,
                                                                TargetId(..),
                                                                loadInterface,
@@ -131,7 +130,6 @@ import           Development.IDE.Types.Location
 import qualified Development.IDE.Types.Logger                 as L
 import           Development.IDE.Types.Options
 import           GHC.Generics                                 (Generic)
-import           GHC.IO.Encoding
 import qualified GHC.LanguageExtensions                       as LangExt
 import qualified HieDb
 import           Ide.Plugin.Config
@@ -520,21 +518,20 @@ getHieAstsRule :: Rules ()
 getHieAstsRule =
     define $ \GetHieAst f -> do
       tmr <- use_ TypeCheck f
-      hsc <- hscEnv <$> use_ GhcSession f
+      hsc <- hscEnv <$> use_ GhcSessionDeps f
       getHieAstRuleDefinition f hsc tmr
 
 persistentHieFileRule :: Rules ()
 persistentHieFileRule = addPersistentRule GetHieAst $ \file -> runMaybeT $ do
   res <- readHieFileForSrcFromDisk file
   vfs <- asks vfs
-  encoding <- liftIO getLocaleEncoding
   (currentSource,ver) <- liftIO $ do
     mvf <- getVirtualFile vfs $ filePathToUri' file
     case mvf of
-      Nothing -> (,Nothing) . T.decode encoding <$> BS.readFile (fromNormalizedFilePath file)
+      Nothing -> (,Nothing) <$> T.readFile (fromNormalizedFilePath file)
       Just vf -> pure (Rope.toText $ _text vf, Just $ _lsp_version vf)
   let refmap = Compat.generateReferencesMap . Compat.getAsts . Compat.hie_asts $ res
-      del = deltaFromDiff (T.decode encoding $ Compat.hie_hs_src res) currentSource
+      del = deltaFromDiff (T.decodeUtf8 $ Compat.hie_hs_src res) currentSource
   pure (HAR (Compat.hie_module res) (Compat.hie_asts res) refmap mempty (HieFromDisk res),del,ver)
 
 getHieAstRuleDefinition :: NormalizedFilePath -> HscEnv -> TcModuleResult -> Action (IdeResult HieAstResult)
@@ -596,9 +593,9 @@ persistentDocMapRule = addPersistentRule GetDocMap $ \_ -> pure $ Just (DKMap me
 
 readHieFileForSrcFromDisk :: NormalizedFilePath -> MaybeT IdeAction Compat.HieFile
 readHieFileForSrcFromDisk file = do
-  db <- asks hiedb
+  ShakeExtras{withHieDb} <- ask
   log <- asks $ L.logDebug . logger
-  row <- MaybeT $ liftIO $ HieDb.lookupHieFileFromSource db $ fromNormalizedFilePath file
+  row <- MaybeT $ liftIO $ withHieDb (\hieDb -> HieDb.lookupHieFileFromSource hieDb $ fromNormalizedFilePath file)
   let hie_loc = HieDb.hieModuleHieFile row
   liftIO $ log $ "LOADING HIE FILE :" <> T.pack (show file)
   exceptToMaybeT $ readHieFileFromDisk hie_loc
@@ -770,13 +767,13 @@ getModIfaceFromDiskAndIndexRule =
   -- doesn't need early cutoff since all its dependencies already have it
   defineNoDiagnostics $ \GetModIfaceFromDiskAndIndex f -> do
   x <- use_ GetModIfaceFromDisk f
-  se@ShakeExtras{hiedb} <- getShakeExtras
+  se@ShakeExtras{withHieDb} <- getShakeExtras
 
   -- GetModIfaceFromDisk should have written a `.hie` file, must check if it matches version in db
   let ms = hirModSummary x
       hie_loc = Compat.ml_hie_file $ ms_location ms
   hash <- liftIO $ Util.getFileHash hie_loc
-  mrow <- liftIO $ HieDb.lookupHieFileFromSource hiedb (fromNormalizedFilePath f)
+  mrow <- liftIO $ withHieDb (\hieDb -> HieDb.lookupHieFileFromSource hieDb (fromNormalizedFilePath f))
   hie_loc' <- liftIO $ traverse (makeAbsolute . HieDb.hieModuleHieFile) mrow
   case mrow of
     Just row
