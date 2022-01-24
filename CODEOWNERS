@@ -24,6 +24,7 @@
 /plugins/hls-refine-imports-plugin @rayshih 
 /plugins/hls-rename-plugin @OliverMadine
 /plugins/hls-retrie-plugin @pepeiborra
+/plugins/hls-selection-range-plugin @kokobd
 /plugins/hls-splice-plugin @konn
 /plugins/hls-stylish-haskell-plugin @Ailrun
 /plugins/hls-tactics-plugin @isovector
