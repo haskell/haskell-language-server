@@ -106,10 +106,12 @@ test-suite tests
   build-depends:
     , aeson
     , base
+    , containers
     , directory
     , extra
     , filepath
     , hls-eval-plugin
+    , hls-plugin-api
     , hls-test-utils   ^>=1.1
     , lens
     , lsp-types
