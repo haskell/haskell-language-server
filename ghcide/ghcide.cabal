@@ -50,7 +50,6 @@ library
         dlist,
         exceptions,
         extra >= 1.7.4,
-        fuzzy,
         filepath,
         fingertree,
         focus,
