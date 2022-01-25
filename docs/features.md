@@ -18,6 +18,7 @@ Many of these are standard LSP features, but a lot of special features are provi
 | [Highlight references](#highlight-references)       | `textDocument/documentHighlight`                                                                  |
 | [Code actions](#code-actions)                       | `textDocument/codeAction`                                                                         |
 | [Code lenses](#code-lenses)                         | `textDocument/codeLens`                                                                           |
+| [Selection range](#selection-range)                 | `textDocument/selectionRange` |
 
 The individual sections below also identify which [HLS plugin](./what-is-hls.md#hls-plugins) is responsible for providing the given functionality, which is useful if you want to raise an issue report or contribute!
 Additionally, not all plugins are supported on all versions of GHC, see the [GHC version support page](supported-versions.md) for details.
@@ -141,7 +142,7 @@ Code action kind: `quickfix`
 Rewrites imported names to be qualified.
 
 ![Qualify Imported Names Demo](../plugins/hls-qualify-imported-names-plugin/qualify-imported-names-demo.gif)
- 
+
 For usage see the ![readme](../plugins/hls-qualify-imported-names-plugin/README.md).
 
 ### Refine import
@@ -239,6 +240,13 @@ Shows module name matching file path, and applies it with a click.
 
 ![Module Name Demo](https://user-images.githubusercontent.com/54035/110860755-78ad8680-82bd-11eb-9845-9ea4b1cc1f76.gif)
 
+## Selection range
+Provided by: `hls-selection-range-plugin`
+
+Provides haskell specific
+[shrink/expand selection](https://code.visualstudio.com/docs/editor/codebasics#shrinkexpand-selection)
+support.
+
 ## Missing features
 
 The following features are supported by the LSP specification but not implemented in HLS.
@@ -251,7 +259,6 @@ Contributions welcome!
 | Jump to implementation | Unclear if useful                                                                        | `textDocument/implementation`                       |
 | Renaming               | [Parital implementation](https://github.com/haskell/haskell-language-server/issues/2193) | `textDocument/rename`, `textDocument/prepareRename` |
 | Folding                | Unimplemented                                                                            | `textDocument/foldingRange`                         |
-| Selection range        | Unimplemented                                                                            | `textDocument/selectionRange`                       |
 | Semantic tokens        | Unimplemented                                                                            | `textDocument/semanticTokens`                       |
 | Linked editing         | Unimplemented                                                                            | `textDocument/linkedEditingRange`                   |
 | Document links         | Unimplemented                                                                            | `textDocument/documentLink`                         |

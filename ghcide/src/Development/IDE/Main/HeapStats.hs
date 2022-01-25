@@ -2,14 +2,14 @@
 -- | Logging utilities for reporting heap statistics
 module Development.IDE.Main.HeapStats ( withHeapStats ) where
 
-import           GHC.Stats
-import           Development.IDE.Types.Logger       (Logger, logInfo)
-import           Control.Concurrent.Async
-import qualified Data.Text as T
-import           Data.Word
-import           Control.Monad
 import           Control.Concurrent
-import           Text.Printf                        (printf)
+import           Control.Concurrent.Async
+import           Control.Monad
+import qualified Data.Text                    as T
+import           Data.Word
+import           Development.IDE.Types.Logger (Logger, logInfo)
+import           GHC.Stats
+import           Text.Printf                  (printf)
 
 -- | Interval at which to report the latest heap statistics.
 heapStatsInterval :: Int

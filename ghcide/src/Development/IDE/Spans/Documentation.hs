@@ -13,15 +13,15 @@ module Development.IDE.Spans.Documentation (
   ) where
 
 import           Control.Monad
+import           Control.Monad.Extra             (findM)
 import           Control.Monad.IO.Class
-import           Control.Monad.Extra            (findM)
 import           Data.Either
 import           Data.Foldable
 import           Data.List.Extra
-import qualified Data.Map                       as M
+import qualified Data.Map                        as M
 import           Data.Maybe
-import qualified Data.Set                       as S
-import qualified Data.Text                      as T
+import qualified Data.Set                        as S
+import qualified Data.Text                       as T
 import           Development.IDE.Core.Compile
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.GHC.Compat
@@ -31,7 +31,7 @@ import           Development.IDE.Spans.Common
 import           System.Directory
 import           System.FilePath
 
-import           Language.LSP.Types             (filePathToUri, getUri)
+import           Language.LSP.Types              (filePathToUri, getUri)
 
 mkDocMap
   :: HscEnv
