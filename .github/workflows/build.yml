@@ -2,6 +2,11 @@ name: Builds
 
 on:
   workflow_dispatch:
+    inputs:
+      alpine:
+        description: 'Use alpine to build a fully static executable for linux'
+        required: false
+        default: 'true'
   release:
     types: [created]
   push:
@@ -11,7 +16,7 @@ on:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
-    container: ${{ (startsWith(matrix.os,'ubuntu') && 'alpine:3.12') || '' }}
+    container: ${{ (github.event.inputs.alpine == 'true' && startsWith(matrix.os,'ubuntu') && 'alpine:3.12') || '' }}
     defaults:
       run:
         shell: ${{ (startsWith(matrix.os,'windows') && 'bash') || 'sh' }}
@@ -35,8 +40,8 @@ jobs:
         cabal: ['3.6']
 
     steps:
-    - name: Install system dependencies for alpine linux
-      if: runner.os == 'Linux'
+    - name: Install system dependencies
+      if: github.event.inputs.alpine == 'true' && runner.os == 'Linux'
       run: |
         apk add --no-cache curl gcc g++ gmp-dev ncurses-dev libffi-dev make xz gzip tar perl git bash sudo binutils-gold
         apk add --no-cache zlib zlib-dev zlib-static gmp gmp-dev ncurses-static
