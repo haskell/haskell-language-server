@@ -71,7 +71,7 @@ library
     , data-default
     , ghc
     , ghcide                ^>=1.4 || ^>=1.5
-    , gitrev
+    , githash
     , lsp
     , hie-bios
     , hiedb
@@ -176,6 +176,11 @@ flag qualifyImportedNames
   default:     True
   manual:      True
 
+flag selectionRange
+  description: Enable selectionRange plugin
+  default:     True
+  manual:      True
+
 -- formatters
 
 flag floskell
@@ -254,7 +259,7 @@ common tactic
     cpp-options: -Dtactic
 
 common hlint
-  if flag(hlint)
+  if flag(hlint) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-hlint-plugin ^>=1.0.0.2
     cpp-options: -Dhlint
 
@@ -282,6 +287,11 @@ common qualifyImportedNames
   if flag(qualifyImportedNames)
     build-depends: hls-qualify-imported-names-plugin ^>=1.0.0.0
     cpp-options: -DqualifyImportedNames
+
+common selectionRange
+  if flag(selectionRange)
+    build-depends: hls-selection-range-plugin ^>=1.0.0.0
+    cpp-options: -DselectionRange
 
 -- formatters
 
@@ -332,6 +342,7 @@ executable haskell-language-server
                     , splice
                     , alternateNumberFormat
                     , qualifyImportedNames
+                    , selectionRange
                     , floskell
                     , fourmolu
                     , ormolu

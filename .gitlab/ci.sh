@@ -53,7 +53,7 @@ fi
 # Shorten binary names
 sed -i.bak -e 's/haskell-language-server/hls/g' \
 	   -e 's/haskell_language_server/hls/g' \
-	   haskell-language-server.cabal cabal.project
+	   haskell-language-server.cabal $CABAL_PROJECT
 sed -i.bak -e 's/Paths_haskell_language_server/Paths_hls/g' \
 	   src/**/*.hs exe/*.hs
 
@@ -77,4 +77,3 @@ cp "$(cabal list-bin ${args[@]} exe:hls-wrapper)" "$CI_PROJECT_DIR/out/haskell-l
 cp dist-newstyle/cache/plan.json "$CI_PROJECT_DIR/out/plan.json"
 
 cd "$CI_PROJECT_DIR/out/"
-

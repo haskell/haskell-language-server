@@ -11,6 +11,10 @@ inputs:
   os:
     description: "Operating system: Linux, Windows or macOS"
     required: true
+  cache-prefix:
+    description: "To allow make unique the cache key"
+    required: false
+    default: ""
 runs:
   using: "composite"
   steps:
@@ -51,15 +55,6 @@ runs:
           rm -f -v cabal.project && cp -v "$ALT_PROJECT_FILE_MINOR" cabal.project
         elif [[ -f "$ALT_PROJECT_FILE_MAJOR" ]]; then
           rm -f -v cabal.project && cp -v "$ALT_PROJECT_FILE_MAJOR" cabal.project
-        fi
-      shell: bash
-
-    # some alpines come with integer-simple instead of integer-gmp
-    - if: inputs.os == 'Linux'
-      name: Force integer-simple
-      run: |
-        if ghc --info | grep -q integer-simple ; then
-          echo -e 'package blaze-textual\n    flags: +integer-simple' >> cabal.project.local
         fi
       shell: bash
 
@@ -123,11 +118,11 @@ runs:
         cache-name: compiled-deps
       with:
         path: ${{ steps.HaskEnvSetup.outputs.cabal-store }}
-        key:  ${{ env.cache-name }}-${{ inputs.os }}-${{ inputs.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project.freeze') }}
+        key:  ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-${{ inputs.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project.freeze') }}
         restore-keys: |
-              ${{ env.cache-name }}-${{ inputs.os }}-${{ inputs.ghc }}-${{ env.INDEX_STATE }}-
-              ${{ env.cache-name }}-${{ inputs.os }}-${{ inputs.ghc }}-
-              ${{ env.cache-name }}-${{ inputs.os }}-
+              ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-${{ inputs.ghc }}-${{ env.INDEX_STATE }}-
+              ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-${{ inputs.ghc }}-
+              ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-
 
     # We remove the freeze file because it could interfere with the build
     - name: "Remove freeze file"

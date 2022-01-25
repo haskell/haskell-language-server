@@ -134,6 +134,10 @@ jobs:
         run: cabal test ghcide --test-options="$TEST_OPTS" || cabal test ghcide --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test ghcide --test-options="$TEST_OPTS"
 
       - if: matrix.test
+        name: Test hls-plugin-api
+        run: cabal test hls-plugin-api --test-options="$TEST_OPTS" || cabal test hls-plugin-api --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-plugin-api --test-options="$TEST_OPTS"
+
+      - if: matrix.test
         name: Test func-test suite
         env:
           HLS_TEST_EXE: hls
@@ -229,6 +233,10 @@ jobs:
       - if: matrix.test
         name: Test hls-qualify-imported-names-plugin test suite
         run: cabal test hls-qualify-imported-names-plugin --test-options="$TEST_OPTS" || cabal test hls-qualify-imported-names-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-qualify-imported-names-plugin --test-options="$TEST_OPTS"
+
+      - if: matrix.test
+        name: Test hls-selection-range-plugin test suite
+        run: cabal test hls-selection-range-plugin --test-options="$TEST_OPTS" || cabal test hls-selection-range-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-selection-range-plugin --test-options="$TEST_OPTS"
 
   test_post_job:
     if: always()

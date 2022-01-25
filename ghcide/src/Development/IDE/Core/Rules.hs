@@ -76,7 +76,6 @@ import           Data.Aeson                                   (Result (Success),
 import qualified Data.Aeson.Types                             as A
 import qualified Data.Binary                                  as B
 import qualified Data.ByteString                              as BS
-import           Data.ByteString.Encoding                     as T
 import qualified Data.ByteString.Lazy                         as LBS
 import           Data.Coerce
 import           Data.Foldable
@@ -92,6 +91,7 @@ import           Data.Maybe
 import qualified Data.Rope.UTF16                              as Rope
 import qualified Data.Set                                     as Set
 import qualified Data.Text                                    as T
+import qualified Data.Text.IO                                 as T
 import qualified Data.Text.Encoding                           as T
 import           Data.Time                                    (UTCTime (..))
 import           Data.Tuple.Extra
@@ -130,7 +130,6 @@ import           Development.IDE.Types.Location
 import qualified Development.IDE.Types.Logger                 as L
 import           Development.IDE.Types.Options
 import           GHC.Generics                                 (Generic)
-import           GHC.IO.Encoding
 import qualified GHC.LanguageExtensions                       as LangExt
 import qualified HieDb
 import           Ide.Plugin.Config
@@ -526,14 +525,13 @@ persistentHieFileRule :: Rules ()
 persistentHieFileRule = addPersistentRule GetHieAst $ \file -> runMaybeT $ do
   res <- readHieFileForSrcFromDisk file
   vfs <- asks vfs
-  encoding <- liftIO getLocaleEncoding
   (currentSource,ver) <- liftIO $ do
     mvf <- getVirtualFile vfs $ filePathToUri' file
     case mvf of
-      Nothing -> (,Nothing) . T.decode encoding <$> BS.readFile (fromNormalizedFilePath file)
+      Nothing -> (,Nothing) <$> T.readFile (fromNormalizedFilePath file)
       Just vf -> pure (Rope.toText $ _text vf, Just $ _lsp_version vf)
   let refmap = Compat.generateReferencesMap . Compat.getAsts . Compat.hie_asts $ res
-      del = deltaFromDiff (T.decode encoding $ Compat.hie_hs_src res) currentSource
+      del = deltaFromDiff (T.decodeUtf8 $ Compat.hie_hs_src res) currentSource
   pure (HAR (Compat.hie_module res) (Compat.hie_asts res) refmap mempty (HieFromDisk res),del,ver)
 
 getHieAstRuleDefinition :: NormalizedFilePath -> HscEnv -> TcModuleResult -> Action (IdeResult HieAstResult)
