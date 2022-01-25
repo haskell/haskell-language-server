@@ -176,7 +176,7 @@ build-x86_64-freebsd13:
     - sudo pkg install --yes compat12x-amd64
     - sudo ln -s libncurses.so.6 /usr/local/lib/libncurses.so.6.2
   variables:
-    ADD_CABAL_ARGS: "--enable-split-sections"
+    ADD_CABAL_ARGS: "--enable-split-sections -j1"
 
 tar-x86_64-freebsd13:
   extends: .artifacts
