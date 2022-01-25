@@ -38,12 +38,13 @@ import           Control.Monad.Trans.Except
 import           Data.Aeson.Types                                   (FromJSON (..),
                                                                      ToJSON (..),
                                                                      Value (..))
+import qualified Data.ByteString                                    as BS
 import           Data.Default
 import qualified Data.HashMap.Strict                                as Map
 import           Data.Hashable
 import           Data.Maybe
 import qualified Data.Text                                          as T
-import qualified Data.Text.IO                                       as T
+import qualified Data.Text.Encoding                                 as T
 import           Data.Typeable
 import           Development.IDE                                    hiding
                                                                     (Error)
@@ -509,7 +510,7 @@ applyHint ide nfp mhint =
     liftIO $ logm $ "applyHint:apply=" ++ show commands
     let fp = fromNormalizedFilePath nfp
     (_, mbOldContent) <- liftIO $ runAction' $ getFileContents nfp
-    oldContent <- maybe (liftIO $ T.readFile fp) return mbOldContent
+    oldContent <- maybe (liftIO $ fmap T.decodeUtf8 $ BS.readFile fp) return mbOldContent
     modsum <- liftIO $ runAction' $ use_ GetModSummary nfp
     let dflags = ms_hspp_opts $ msrModSummary modsum
     -- Setting a environment variable with the libdir used by ghc-exactprint.
