@@ -20,7 +20,7 @@ jobs:
   check-and-upload-tarballs:
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: ${{ !contains(github.ref_name, 'check') && github.event.inputs.upload-candidates != 'true' }}
+      fail-fast: ${{ github.event.inputs.upload-candidates != 'true' }}
       matrix:
         package: ["hie-compat", "hls-graph", "shake-bench",
                   "hls-plugin-api", "ghcide", "hls-test-utils",
@@ -139,7 +139,7 @@ jobs:
           path: ${{ steps.generate-dist-tarball.outputs.path }}
 
   upload-candidate:
-    if: ${{ !contains(github.ref_name, 'check') || github.event.inputs.name == 'true' }}
+    if: github.event.inputs.upload-candidates == 'true'
     needs: check-and-upload-tarballs
     runs-on: ubuntu-latest
     steps:
