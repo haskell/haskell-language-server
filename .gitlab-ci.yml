@@ -21,6 +21,16 @@ variables:
     - GHC_VERSION: 9.2.1
       CABAL_PROJECT: cabal-ghc921.project
 
+# ghc-9.2.1 is broken for bsd
+.freebsd_matrix: &freebsd_matrix
+  matrix:
+    - GHC_VERSION: 8.8.4
+      CABAL_PROJECT: cabal.project
+    - GHC_VERSION: 8.10.7
+      CABAL_PROJECT: cabal.project
+    - GHC_VERSION: 9.0.2
+      CABAL_PROJECT: cabal-ghc90.project
+
 .m1_matrix: &m1_matrix
   matrix:
     - GHC_VERSION: 8.10.7
@@ -150,7 +160,7 @@ build-x86_64-freebsd12:
   extends: .build
   tags:
     - x86_64-freebsd12
-  parallel: *default_matrix
+  parallel: *freebsd_matrix
   variables:
     ADD_CABAL_ARGS: "--enable-split-sections -j1"
 
@@ -170,7 +180,7 @@ build-x86_64-freebsd13:
   extends: .build
   tags:
     - x86_64-freebsd13
-  parallel: *default_matrix
+  parallel: *freebsd_matrix
   before_script:
     - sudo pkg update
     - sudo pkg install --yes compat12x-amd64
