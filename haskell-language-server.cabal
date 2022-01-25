@@ -259,7 +259,7 @@ common tactic
     cpp-options: -Dtactic
 
 common hlint
-  if flag(hlint)
+  if flag(hlint) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-hlint-plugin ^>=1.0.0.2
     cpp-options: -Dhlint
 
