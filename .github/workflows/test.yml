@@ -53,6 +53,11 @@ jobs:
     if: needs.pre_job.outputs.should_skip != 'true'
     needs: pre_job
     runs-on: ${{ matrix.os }}
+    container: ${{ (startsWith(matrix.os,'ubuntu') && 'alpine:3.12') || '' }}
+    defaults:
+      run:
+        shell: ${{ (startsWith(matrix.os,'windows') && 'bash') || 'sh' }}
+
     strategy:
       fail-fast: true
       matrix:
@@ -105,6 +110,12 @@ jobs:
              ghc: '8.8.4'
 
     steps:
+      - name: Install system dependencies for alpine linux
+        if: runner.os == 'Linux'
+        run: |
+          apk add --no-cache curl gcc g++ gmp-dev ncurses-dev libffi-dev make xz gzip tar perl git bash sudo binutils-gold
+          apk add --no-cache zlib zlib-dev zlib-static gmp gmp-dev ncurses-static
+
       - uses: actions/checkout@v2
 
       - uses: ./.github/actions/setup-build

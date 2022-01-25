@@ -15,6 +15,7 @@ jobs:
     defaults:
       run:
         shell: ${{ (startsWith(matrix.os,'windows') && 'bash') || 'sh' }}
+
     strategy:
       fail-fast: false
       matrix:
@@ -34,11 +35,12 @@ jobs:
         cabal: ['3.6']
 
     steps:
-    - name: Install system dependencies
+    - name: Install system dependencies for alpine linux
       if: runner.os == 'Linux'
       run: |
         apk add --no-cache curl gcc g++ gmp-dev ncurses-dev libffi-dev make xz gzip tar perl git bash sudo binutils-gold
         apk add --no-cache zlib zlib-dev zlib-static gmp gmp-dev ncurses-static
+
     - uses: actions/checkout@v2
 
     - name: Disable tests and bechmarks
