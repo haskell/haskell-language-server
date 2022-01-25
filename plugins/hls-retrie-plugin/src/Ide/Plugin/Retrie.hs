@@ -32,6 +32,7 @@ import           Data.Aeson                           (FromJSON (..),
                                                        Value (Null),
                                                        genericParseJSON)
 import qualified Data.Aeson                           as Aeson
+import qualified Data.ByteString                      as BS
 import           Data.Bifunctor                       (Bifunctor (first),
                                                        second)
 import           Data.Coerce
@@ -44,7 +45,7 @@ import           Data.IORef.Extra                     (atomicModifyIORef'_,
 import           Data.List.Extra                      (find, nubOrdOn)
 import           Data.String                          (IsString (fromString))
 import qualified Data.Text                            as T
-import qualified Data.Text.IO                         as T
+import qualified Data.Text.Encoding                   as T
 import           Data.Typeable                        (Typeable)
 import           Development.IDE                      hiding (pluginHandlers)
 import           Development.IDE.Core.PositionMapping
@@ -385,7 +386,7 @@ callRetrie state session rewrites origin restrictToOriginatingFile = do
             runAction "Retrie.GetFileContents" state $ getFileContents nt
           case mbContentsVFS of
             Just contents -> return contents
-            Nothing       -> T.readFile (fromNormalizedFilePath nt)
+            Nothing       -> T.decodeUtf8 <$> BS.readFile (fromNormalizedFilePath nt)
         if any (T.isPrefixOf "#if" . T.toLower) (T.lines contents)
           then do
             fixitiesRef <- newIORef mempty
