@@ -152,7 +152,7 @@ build-x86_64-freebsd12:
     - x86_64-freebsd12
   parallel: *default_matrix
   variables:
-    ADD_CABAL_ARGS: "--enable-split-sections"
+    ADD_CABAL_ARGS: "--enable-split-sections -j1"
 
 tar-x86_64-freebsd12:
   extends: .artifacts
