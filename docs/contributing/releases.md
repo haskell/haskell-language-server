@@ -18,9 +18,10 @@ and it is being used in nix environments.
 
 ### prerelease sanity checks
 
-- [ ] create a branch named `${version}-check-hackage`: it will trigger the hackage workflow *without* uploading the packages
-- [ ] trigger the build workflow pushing a branch named `${version}-check-build`
+- [ ] [trigger manually](https://docs.github.com/es/actions/managing-workflow-runs/manually-running-a-workflow) the hackage workflow *without* uploading the packages
+- [ ] trigger manually the build workflow
 - [ ] create a prerelease tag `${version}-check-gitlab` and push it to the [project repo in gitlab](https://gitlab.haskell.org/haskell/haskell-language-server) to check the build is fine
+
 ### github release
 
 - [ ] generate the list of pull requests finished since the last release using the [haskell script](https://github.com/haskell/haskell-language-server/blob/master/GenChangelogs.hs) in the project root.
@@ -28,7 +29,8 @@ and it is being used in nix environments.
 - [ ] add that list to the actual [Changelog](https://github.com/haskell/haskell-language-server/blob/master/ChangeLog.md) with a description of the release.
 - [ ] bump up versions of changed packages. All are optional but [haskell-language-server itself](https://github.com/haskell/haskell-language-server/blob/master/haskell-language-server.cabal).
 - [ ] create the tag and make an initial prerelease to trigger the ci workflow (see details below)
-- [ ] contact ghcup team (#haskell-ghcup irc channel or via its [repo](https://gitlab.haskell.org/haskell/ghcup-hs/-/issues)) to try to sync our release and its inclusion in ghcup
+- [ ] contact ghcup team (#haskell-ghcup irc channel or via its [repo](https://github.com/haskell/ghcup-metadata)) to try to sync our release and its inclusion in ghcup
+  - The inclusion of the new hls release is done by a pull request like [this one](https://github.com/haskell/ghcup-metadata/pull/11).
 - [ ] in the github release edit page, check the attached binaries and the release description (usually the changelog entry) and uncheck the prerelease box
 - [ ] make public the release in the usual social channels (not required but useful to spread the word :slightly_smiling_face:):
   - [ ] irc
@@ -37,6 +39,7 @@ and it is being used in nix environments.
   - [ ] discord
   - [ ] discourse
   - [ ] reddit
+
 ### hackage release
 
 - [ ] bump up package versions following the [pvp specification](https://pvp.haskell.org/) if they are not already updated. You could use [policeman](https://github.com/kowainik/policeman) to help with this step.
@@ -46,8 +49,9 @@ and it is being used in nix environments.
 
 ### ghcup release
 
-* [ ] push the release tag to the [haskell-language-server gitlab repo](https://gitlab.haskell.org/haskell/haskell-language-server) to trigger the build of ghcup specific artifacts
-* [ ] change ghcup metadata to include the new release in https://github.com/haskell/ghcup-metadata
+- [ ] push the release tag to the [haskell-language-server gitlab repo](https://gitlab.haskell.org/haskell/haskell-language-server) to trigger the build of ghcup specific artifacts
+- [ ] change ghcup metadata to include the new release in <https://github.com/haskell/ghcup-metadata>
+  - example pull request [here](https://github.com/haskell/ghcup-metadata/pull/11)
 
 ## Making a new release of haskell-language-server in github
 
@@ -143,12 +147,12 @@ its secure distribution using their hashes. We should only add new ones.*
 
 To manually upload a new binary we should:
 
-* Add the new tar/zip following the name conventions of existing ones
-  * `haskell-language-server-${os}-${ghcVersion}.gz` for `Linux` and `macOS` and `haskell-language-server-Windows-${ghcVersion}.exe.zip` for `Windows`
-  * the binary inside the gz file is named `haskell-language-server-${ghcVersion}` (with the `.exe` extension for `Windows`). Note that the binary name does not contain the `${os}` part.
-* Add the executable to the existing tar `haskell-language-server-${os}-${ghcVersion}.tar.gz` *locally* and upload it under a new name `haskell-language-server-${os}-${ghcVersion}-rev${n}.tar.gz` following the same schema for the binary as the previous one.
-  * `-rev${n}` is the next revision number of the tarball, starting at 1.
-  * we should contact users of the tarball (particularly ghcup) to notify the change
+- Add the new tar/zip following the name conventions of existing ones
+  - `haskell-language-server-${os}-${ghcVersion}.gz` for `Linux` and `macOS` and `haskell-language-server-Windows-${ghcVersion}.exe.zip` for `Windows`
+  - the binary inside the gz file is named `haskell-language-server-${ghcVersion}` (with the `.exe` extension for `Windows`). Note that the binary name does not contain the `${os}` part.
+- Add the executable to the existing tar `haskell-language-server-${os}-${ghcVersion}.tar.gz` *locally* and upload it under a new name `haskell-language-server-${os}-${ghcVersion}-rev${n}.tar.gz` following the same schema for the binary as the previous one.
+  - `-rev${n}` is the next revision number of the tarball, starting at 1.
+  - we should contact users of the tarball (particularly ghcup) to notify the change
 
 ## Hackage release workflow
 
@@ -160,15 +164,15 @@ against hackage head if the package version in the branch is different from hack
 If the package in the branch has the same version as the released one, it will check
 the relevant files have not changed and will throw an error otherwise.
 
-You can trigger a build which only does the above step by pushing a branch named `${version}-check-hackage`.
+You can trigger the build manually.
 
 The script will upload the tarballs as candidates, maintainers will have to check and publish them definitely.
 
 ## haskell gitlab release pipeline
 
-The project is present in the haskell gitlab server: https://gitlab.haskell.org/haskell/haskell-language-server
+The project is present in the haskell gitlab server: <https://gitlab.haskell.org/haskell/haskell-language-server>
 The main motivation is to leverage the ci infrastructure which includes architectures not included in the github ci.
 The specific architectures only available through gitlab are: `armv7-linux`, `x86_64-freebsd`, `aarch64-darwin`, `aarch64-linux`
 The gitlab pipeline uses the configuration file [.gitlab-ci.yml](https://github.com/haskell/haskell-language-server/blob/master/.gitlab-ci.yml)
-and the sh/nix scripts in [.gitlab](https://github.com/haskell/haskell-language-server/tree/master/.gitlab)
+and the sh scripts in [.gitlab](https://github.com/haskell/haskell-language-server/tree/master/.gitlab)
 It is triggered by pushing a tag to the gitlab repo.
