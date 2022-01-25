@@ -6,7 +6,7 @@ The current support for different GHC versions is given in the following table.
 
 | GHC version | Last supporting HLS version                                                                                                                              | Deprecation status                       |
 | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| 9.2.0       | incoming [partial](https://github.com/haskell/haskell-language-server/issues/2179)                                                                       |                                          |
+| 9.2.1       | [current](https://github.com/haskell/haskell-language-server/releases/latest) [partial](https://github.com/haskell/haskell-language-server/issues/2179)                                                                       |                                          |
 | 9.0.2       | [current](https://github.com/haskell/haskell-language-server/releases/latest) ([partial](https://github.com/haskell/haskell-language-server/issues/297)) |                                          |
 | 9.0.1       | [current](https://github.com/haskell/haskell-language-server/releases/latest) ([partial](https://github.com/haskell/haskell-language-server/issues/297)) |                                          |
 | 8.10.7      | [current](https://github.com/haskell/haskell-language-server/releases/latest)                                                                            |                                          |
