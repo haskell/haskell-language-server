@@ -30,7 +30,6 @@ and it is being used in nix environments.
 - [ ] bump up versions of changed packages. All are optional but [haskell-language-server itself](https://github.com/haskell/haskell-language-server/blob/master/haskell-language-server.cabal).
 - [ ] create the tag and make an initial prerelease to trigger the ci workflow (see details below)
 - [ ] contact ghcup team (#haskell-ghcup irc channel or via its [repo](https://github.com/haskell/ghcup-metadata)) to try to sync our release and its inclusion in ghcup
-  - The inclusion of the new hls release is done by a pull request like [this one](https://github.com/haskell/ghcup-metadata/pull/11).
 - [ ] in the github release edit page, check the attached binaries and the release description (usually the changelog entry) and uncheck the prerelease box
 - [ ] make public the release in the usual social channels (not required but useful to spread the word :slightly_smiling_face:):
   - [ ] irc
