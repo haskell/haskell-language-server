@@ -16,7 +16,7 @@ inputs:
     required: false
     default: ""
   shorten-hls:
-    description: "Wether we have to apply shorten hls name"
+    description: "Whether we have to shorten haskell language server to hls"
     required: false
     default: "true"
 
