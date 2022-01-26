@@ -3466,7 +3466,7 @@ exportUnusedTests = testGroup "export unused actions"
         (Just $ T.unlines
               [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
               , "{-# LANGUAGE TypeFamilies #-}"
-              , "module A (Foo(..)) where"
+              , "module A (Foo) where"
               , "type family Foo p"])
     , testSession "unused typeclass" $ template
         (T.unlines

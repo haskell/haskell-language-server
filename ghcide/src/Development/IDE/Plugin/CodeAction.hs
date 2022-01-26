@@ -613,7 +613,7 @@ suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModul
     exportsAs (TyClD _ SynDecl{tcdLName})      = Just (ExportName, reLoc tcdLName)
     exportsAs (TyClD _ DataDecl{tcdLName})     = Just (ExportAll, reLoc tcdLName)
     exportsAs (TyClD _ ClassDecl{tcdLName})    = Just (ExportAll, reLoc tcdLName)
-    exportsAs (TyClD _ FamDecl{tcdFam})        = Just (ExportAll, reLoc $ fdLName tcdFam)
+    exportsAs (TyClD _ FamDecl{tcdFam})        = Just (ExportName, reLoc $ fdLName tcdFam)
     exportsAs _                                = Nothing
 
 suggestAddTypeAnnotationToSatisfyContraints :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
