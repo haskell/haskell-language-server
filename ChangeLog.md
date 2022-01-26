@@ -18,12 +18,12 @@ Time for a new and exciting hls release:
 ### Deprecation notice for 1.6.0
 
 - As we noted in the previous release we have dropped support for ghc versions 8.10.5 and 8.8.3 in *this release*
-  - The advise is upgrade ghc to the last minor version: 8.8.4 or 8.10.7
+  - We recommend upgrading ghc to the last minor version: 8.8.4 or 8.10.7
   - You can read more about ghc deprecation policy and schedule [here](https://haskell-language-server.readthedocs.io/en/latest/supported-versions.html)
 - *After this release*:
   - [We will remove all project stack.yaml's](https://github.com/haskell/haskell-language-server/issues/2533) but two: one for last lts and other for nightly. Temporary we could keep one more stack yaml when nightly upgrades the ghc version, to help in the transition
   - [We will remove the install script](https://github.com/haskell/haskell-language-server/issues/2491) which lives [here](https://github.com/haskell/haskell-language-server/tree/master/install)
-    - The advise is install hls from source using `ghcup`. Download it and run `ghcup compile hls --help` to get moreinfo about.
+    - If you want to install hls from source we recommend using `ghcup`. Download it and run `ghcup compile hls --help` to get more info about.
     - Alternatively users could install hls manually following [these instructions](https://haskell-language-server.readthedocs.io/en/latest/installation.html#installation-from-source)
 
 ### Pull requests merged for 1.6.0
