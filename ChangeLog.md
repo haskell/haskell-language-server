@@ -12,7 +12,8 @@ Time for a new and exciting hls release:
   - Including core features and [many plugins](https://haskell-language-server.readthedocs.io/en/latest/supported-versions.html#plugins-support-by-ghc-version))
   - Thanks to a great collective effort coordinated by @pepeiborra and with the help of @wz100, @mpickering and @alanz among others
 - Hls now also [supports *ghc 9.0.2*](https://github.com/haskell/haskell-language-server/issues/297) with support for all plugins but the stylish-haskell formatter
-- And many many fixes and performance improvement
+  - Including the [wingman plugin](https://github.com/haskell/haskell-language-server/tree/master/plugins/hls-tactics-plugin) thanks to @isovector and @anka-213
+- And many many fixes and performance improvements, thanks to all contributors!
 
 ### Deprecation notice for 1.6.0
 
