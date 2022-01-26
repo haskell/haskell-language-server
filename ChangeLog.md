@@ -29,6 +29,10 @@ Time for a new and exciting hls release:
 
 - Disable alpine build by default
 ([#2638](https://github.com/haskell/haskell-language-server/pull/2638)) by @jneira
+- Use T.decodeUtf8 + BS.readFile instead of T.readFile
+([#2637](https://github.com/haskell/haskell-language-server/pull/2637)) by @Bodigrim
+- Add ghc 9.2.1 to gitlab ci
+([#2636](https://github.com/haskell/haskell-language-server/pull/2636)) by @jneira
 - Specialize ghcide indent style to .hs
 ([#2631](https://github.com/haskell/haskell-language-server/pull/2631)) by @mrgutkun
 - Fix off by one indexing error in openingBacktick
