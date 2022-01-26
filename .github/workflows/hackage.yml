@@ -51,6 +51,7 @@ jobs:
         with:
           ghc: ${{ matrix.ghc }}
           os:  ${{ runner.os }}
+          shorten-hls: 'false'
 
       - name: "Run cabal check"
         run: |
