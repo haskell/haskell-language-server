@@ -30,6 +30,8 @@ Additionally, some plugins do not have support for some GHC versions, as shown i
 As such, the functionality provided by those plugins is not available in HLS when using a GHC version which they do not support.
 Sometimes a plugin can be supported in prebuilt binaries but no in a hls binary installed from hackage.
 
+### Plugins support by ghc version
+
 | Plugin                              | Unsupported GHC versions |
 |-------------------------------------|--------------------------|
 | `hls-alternate-number-plugin`       | 9.2                      |
