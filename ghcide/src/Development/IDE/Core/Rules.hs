@@ -147,11 +147,11 @@ import           Ide.Types                                    (DynFlagsModificat
                                                                PluginId)
 import Control.Concurrent.STM.Stats (atomically)
 import Language.LSP.Server (LspT)
-import System.Info.Extra (isMac)
+import System.Info.Extra (isWindows)
 import HIE.Bios.Ghc.Gap (hostIsDynamic)
 
 templateHaskellInstructions :: T.Text
-templateHaskellInstructions = "https://haskell-language-server.readthedocs.io/en/latest/troubleshooting.html#support-for-template-haskell"
+templateHaskellInstructions = "https://haskell-language-server.readthedocs.io/en/latest/troubleshooting.html#static-binaries"
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
@@ -824,12 +824,12 @@ isHiFileStableRule = defineEarlyCutoff $ RuleNoDiagnostics $ \IsHiFileStable f -
 
 displayTHWarning :: LspT c IO ()
 displayTHWarning
-  | isMac && not hostIsDynamic = do
+  | not isWindows && not hostIsDynamic = do
       LSP.sendNotification SWindowShowMessage $
         ShowMessageParams MtInfo $ T.unwords
-          [ "This HLS binary does not support Template Haskell."
+          [ "This HLS binary might not support Template Haskell."
           , "Follow the [instructions](" <> templateHaskellInstructions <> ")"
-          , "to build an HLS binary with support for Template Haskell."
+          , "to build an HLS binary with reliable support for Template Haskell."
           ]
   | otherwise = return ()
 
