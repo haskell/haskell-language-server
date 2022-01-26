@@ -28,11 +28,12 @@ The policy for when we deprecate support for versions of GHC is given below. The
 
 Additionally, some plugins do not have support for some GHC versions, as shown in the following table.
 As such, the functionality provided by those plugins is not available in HLS when using a GHC version which they do not support.
+Sometimes a plugin can be supported in prebuilt binaries but no in a hls binary installed from hackage.
 
 | Plugin                              | Unsupported GHC versions |
 |-------------------------------------|--------------------------|
 | `hls-alternate-number-plugin`       | 9.2                      |
-| `hls-brittany-plugin`               | 9.2                      |
+| `hls-brittany-plugin`               | 9.0.2(hackage), 9.2      |
 | `hls-call-hierarchy-plugin`         |                          |
 | `hls-class-plugin`                  | 9.2                      |
 | `hls-eval-plugin`                   | 9.2                      |
