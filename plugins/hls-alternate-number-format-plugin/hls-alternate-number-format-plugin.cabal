@@ -25,10 +25,10 @@ library
       aeson
     , base                 >=4.12 && < 5
     , containers
-    , ghcide               ^>=1.5 || ^>=1.6
+    , ghcide               ^>=1.6
     , ghc-boot-th
     , hls-graph
-    , hls-plugin-api       ^>= 1.2 || ^>= 1.3
+    , hls-plugin-api       ^>=1.3
     , hie-compat
     , lens
     , lsp
@@ -56,7 +56,7 @@ test-suite tests
     , base                 >=4.12 && < 5
     , filepath
     , hls-alternate-number-format-plugin
-    , hls-test-utils       ^>=1.1 || ^>=1.2
+    , hls-test-utils       ^>=1.2
     , lsp
     , QuickCheck
     , regex-tdfa

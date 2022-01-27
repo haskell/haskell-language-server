@@ -26,9 +26,9 @@ library
     , containers
     , deepseq
     , ghc
-    , ghcide                ^>=1.5 || ^>= 1.6
+    , ghcide                ^>=1.6
     , hls-graph
-    , hls-plugin-api        ^>=1.2 || ^>=1.3
+    , hls-plugin-api        ^>=1.3
     , lsp
     , text
     , unordered-containers
@@ -51,4 +51,4 @@ test-suite tests
     , text
     , filepath
     , hls-qualify-imported-names-plugin
-    , hls-test-utils             ^>=1.1 || ^>=1.2
+    , hls-test-utils             ^>=1.2

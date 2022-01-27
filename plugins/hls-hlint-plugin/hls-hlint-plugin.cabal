@@ -55,10 +55,10 @@ library
     , extra
     , filepath
     , ghc-exactprint        >=0.6.3.4
-    , ghcide                ^>=1.5 || ^>=1.6
+    , ghcide                ^>=1.6
     , hashable
     , hlint
-    , hls-plugin-api        ^>=1.2 || ^>=1.3
+    , hls-plugin-api        ^>=1.3
     , hslogger
     , lens
     , lsp
@@ -127,7 +127,7 @@ test-suite tests
     , filepath
     , hls-hlint-plugin
     , hls-plugin-api
-    , hls-test-utils      ^>=1.1 || ^>=1.2
+    , hls-test-utils      ^>=1.2
     , lens
     , lsp-types
     , text

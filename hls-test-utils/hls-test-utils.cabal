@@ -41,9 +41,9 @@ library
     , directory
     , extra
     , filepath
-    , ghcide                  ^>=1.5 || ^>=1.6
+    , ghcide                  ^>=1.6
     , hls-graph
-    , hls-plugin-api          ^>=1.2 || ^>=1.3
+    , hls-plugin-api          ^>=1.3
     , hspec                   <2.8
     , hspec-core
     , lens

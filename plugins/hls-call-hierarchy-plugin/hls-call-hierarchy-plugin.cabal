@@ -30,7 +30,7 @@ library
     , containers
     , extra
     , ghc
-    , ghcide                ^>= 1.5 || ^>= 1.6
+    , ghcide                ^>=1.6
     , hiedb
     , hls-plugin-api        ^>=1.2 || ^>= 1.3
     , lens
@@ -55,7 +55,7 @@ test-suite tests
     , extra
     , filepath
     , hls-call-hierarchy-plugin
-    , hls-test-utils              ^>=1.1 || ^>=1.2
+    , hls-test-utils              ^>=1.2
     , lens
     , lsp
     , lsp-test
