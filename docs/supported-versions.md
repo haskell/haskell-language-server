@@ -30,7 +30,7 @@ Additionally, some plugins do not have support for some GHC versions, as shown i
 As such, the functionality provided by those plugins is not available in HLS when using a GHC version which they do not support.
 Sometimes a plugin will be supported in the prebuilt binaries but not in a HLS binary installed from Hackage.
 
-### Plugins support by ghc version
+### Plugins support by GHC version
 
 | Plugin                              | Unsupported GHC versions |
 |-------------------------------------|--------------------------|
