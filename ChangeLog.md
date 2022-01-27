@@ -27,6 +27,8 @@ Time for a new and exciting hls release:
 
 ### Pull requests merged for 1.6.0
 
+- Change Type Family Export pattern
+([#2643](https://github.com/haskell/haskell-language-server/pull/2643)) by @drsooch
 - Disable alpine build by default
 ([#2638](https://github.com/haskell/haskell-language-server/pull/2638)) by @jneira
 - Use T.decodeUtf8 + BS.readFile instead of T.readFile
