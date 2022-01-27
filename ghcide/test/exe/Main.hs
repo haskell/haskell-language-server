@@ -17,7 +17,8 @@ module Main (main) where
 
 import           Control.Applicative.Combinators
 import           Control.Concurrent
-import           Control.Exception                        (bracket_, catch, finally)
+import           Control.Exception                        (bracket_, catch,
+                                                           finally)
 import qualified Control.Lens                             as Lens
 import           Control.Monad
 import           Control.Monad.IO.Class                   (MonadIO, liftIO)
@@ -44,6 +45,7 @@ import           Development.IDE.Plugin.TypeLenses        (typeLensCommandId)
 import           Development.IDE.Spans.Common
 import           Development.IDE.Test                     (Cursor,
                                                            canonicalizeUri,
+                                                           configureCheckProject,
                                                            diagnostic,
                                                            expectCurrentDiagnostics,
                                                            expectDiagnostics,
@@ -51,15 +53,15 @@ import           Development.IDE.Test                     (Cursor,
                                                            expectMessages,
                                                            expectNoMoreDiagnostics,
                                                            flushMessages,
-                                                           standardizeQuotes,
                                                            getInterfaceFilesDir,
-                                                           waitForAction,
                                                            getStoredKeys,
-                                                           waitForTypecheck, waitForGC, configureCheckProject)
+                                                           standardizeQuotes,
+                                                           waitForAction,
+                                                           waitForGC,
+                                                           waitForTypecheck)
 import           Development.IDE.Test.Runfiles
 import qualified Development.IDE.Types.Diagnostics        as Diagnostics
 import           Development.IDE.Types.Location
-import qualified Language.LSP.Types.Lens                  as Lens (label)
 import           Development.Shake                        (getDirectoryFilesIO)
 import qualified Experiments                              as Bench
 import           Ide.Plugin.Config
@@ -70,6 +72,7 @@ import           Language.LSP.Types                       hiding
                                                            SemanticTokensEdit (_start),
                                                            mkRange)
 import           Language.LSP.Types.Capabilities
+import qualified Language.LSP.Types.Lens                  as Lens (label)
 import qualified Language.LSP.Types.Lens                  as Lsp (diagnostics,
                                                                   message,
                                                                   params)
@@ -82,7 +85,7 @@ import           System.Exit                              (ExitCode (ExitSuccess
 import           System.FilePath
 import           System.IO.Extra                          hiding (withTempDir)
 import qualified System.IO.Extra
-import           System.Info.Extra                        (isWindows, isMac)
+import           System.Info.Extra                        (isMac, isWindows)
 import           System.Mem                               (performGC)
 import           System.Process.Extra                     (CreateProcess (cwd),
                                                            createPipe, proc,
@@ -90,7 +93,7 @@ import           System.Process.Extra                     (CreateProcess (cwd),
 import           Test.QuickCheck
 -- import Test.QuickCheck.Instances ()
 import           Control.Concurrent.Async
-import           Control.Lens                             ((^.), to)
+import           Control.Lens                             (to, (^.))
 import           Control.Monad.Extra                      (whenJust)
 import           Data.IORef
 import           Data.IORef.Extra                         (atomicModifyIORef_)
@@ -102,6 +105,7 @@ import qualified Development.IDE.Plugin.HLS.GhcIde        as Ghcide
 import           Development.IDE.Plugin.Test              (TestRequest (BlockSeconds),
                                                            WaitForIdeRuleResult (..),
                                                            blockCommandId)
+import qualified HieDbRetry
 import           Ide.PluginUtils                          (pluginDescToIdePlugins)
 import           Ide.Types
 import qualified Language.LSP.Types                       as LSP
@@ -115,7 +119,6 @@ import           Test.Tasty.Ingredients.Rerun
 import           Test.Tasty.QuickCheck
 import           Text.Printf                              (printf)
 import           Text.Regex.TDFA                          ((=~))
-import qualified HieDbRetry
 
 -- | Wait for the next progress begin step
 waitForProgressBegin :: Session ()
@@ -3540,7 +3543,7 @@ exportUnusedTests = testGroup "export unused actions"
         (Just $ T.unlines
               [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
               , "{-# LANGUAGE TypeOperators #-}"
-              , "module A (type (:<)(..)) where"
+              , "module A (type (:<)) where"
               , "class (:<) a"])
     , testSession "newtype operator" $ template
         (T.unlines
