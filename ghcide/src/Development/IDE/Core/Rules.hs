@@ -827,8 +827,8 @@ displayTHWarning
   | not isWindows && not hostIsDynamic = do
       LSP.sendNotification SWindowShowMessage $
         ShowMessageParams MtInfo $ T.unwords
-          [ "This HLS binary could not support Template Haskell."
-          , "Follow this [instructions](" <> templateHaskellInstructions <> ")"
+          [ "This HLS binary does not support Template Haskell."
+          , "Follow the [instructions](" <> templateHaskellInstructions <> ")"
           , "to build an HLS binary with support for Template Haskell."
           ]
   | otherwise = return ()
