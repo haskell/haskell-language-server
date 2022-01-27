@@ -28,7 +28,7 @@ The policy for when we deprecate support for versions of GHC is given below. The
 
 Additionally, some plugins do not have support for some GHC versions, as shown in the following table.
 As such, the functionality provided by those plugins is not available in HLS when using a GHC version which they do not support.
-Sometimes a plugin can be supported in prebuilt binaries but not in a hls binary installed from hackage.
+Sometimes a plugin will be supported in the prebuilt binaries but not in a HLS binary installed from Hackage.
 
 ### Plugins support by ghc version
 
