@@ -3530,7 +3530,7 @@ exportUnusedTests = testGroup "export unused actions"
               [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
               , "{-# LANGUAGE TypeFamilies #-}"
               , "{-# LANGUAGE TypeOperators #-}"
-              , "module A (type (:<)(..)) where"
+              , "module A (type (:<)) where"
               , "type family (:<)"])
     , testSession "typeclass operator" $ template
         (T.unlines
@@ -3543,7 +3543,7 @@ exportUnusedTests = testGroup "export unused actions"
         (Just $ T.unlines
               [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
               , "{-# LANGUAGE TypeOperators #-}"
-              , "module A (type (:<)) where"
+              , "module A (type (:<)(..)) where"
               , "class (:<) a"])
     , testSession "newtype operator" $ template
         (T.unlines
