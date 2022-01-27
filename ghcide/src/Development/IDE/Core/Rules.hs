@@ -829,7 +829,7 @@ displayTHWarning
         ShowMessageParams MtInfo $ T.unwords
           [ "This HLS binary could not support Template Haskell."
           , "Follow this [instructions](" <> templateHaskellInstructions <> ")"
-          , "to build an HLS binary with reliable support for Template Haskell."
+          , "to build an HLS binary with support for Template Haskell."
           ]
   | otherwise = return ()
 
