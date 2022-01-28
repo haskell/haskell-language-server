@@ -6,7 +6,7 @@ The current support for different GHC versions is given in the following table.
 
 | GHC version | Last supporting HLS version                                                                                                                              | Deprecation status                       |
 | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| 9.2.0       | incoming [partial](https://github.com/haskell/haskell-language-server/issues/2179)                                                                       |                                          |
+| 9.2.1       | [current](https://github.com/haskell/haskell-language-server/releases/latest) [partial](https://github.com/haskell/haskell-language-server/issues/2179)                                                                       |                                          |
 | 9.0.2       | [current](https://github.com/haskell/haskell-language-server/releases/latest) ([partial](https://github.com/haskell/haskell-language-server/issues/297)) |                                          |
 | 9.0.1       | [current](https://github.com/haskell/haskell-language-server/releases/latest) ([partial](https://github.com/haskell/haskell-language-server/issues/297)) |                                          |
 | 8.10.7      | [current](https://github.com/haskell/haskell-language-server/releases/latest)                                                                            |                                          |
@@ -28,11 +28,14 @@ The policy for when we deprecate support for versions of GHC is given below. The
 
 Additionally, some plugins do not have support for some GHC versions, as shown in the following table.
 As such, the functionality provided by those plugins is not available in HLS when using a GHC version which they do not support.
+Sometimes a plugin will be supported in the prebuilt binaries but not in a HLS binary installed from Hackage.
+
+### Plugins support by GHC version
 
 | Plugin                              | Unsupported GHC versions |
 |-------------------------------------|--------------------------|
 | `hls-alternate-number-plugin`       | 9.2                      |
-| `hls-brittany-plugin`               | 9.2                      |
+| `hls-brittany-plugin`               | 9.0.2(hackage), 9.2      |
 | `hls-call-hierarchy-plugin`         |                          |
 | `hls-class-plugin`                  | 9.2                      |
 | `hls-eval-plugin`                   | 9.2                      |

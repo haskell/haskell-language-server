@@ -29,14 +29,17 @@ That will also require you to figure out is whether you are looking at an issue 
 This can be tricky to work out: if in doubt, open an issue and we'll help you figure it out.
 
 Typical examples of client issues:
+
 - The wrong server binary is being launched
 - Diagnostics are being shown in the wrong place
 
 Typical examples of server issues:
+
 - The server crashes on certain files
 - A code action doesn't work the way it's supposed to
 
 Unclear examples:
+
 - Hover documentation looks wrong (the client might be rendering it wrong, or the server might be sending the wrong thing)
 - Missing functionality (the client might not support it, or the server might not support it)
 
@@ -120,6 +123,7 @@ The most important thing to do is to consult the client's documentation.
 Usually this will provide some information about troubleshooting.
 
 For example:
+
 - `lsp-mode` has a [troubleshooting page](https://emacs-lsp.github.io/lsp-mode/page/troubleshooting/)
 - The VSCode Haskell extension has a [troubleshooting section](https://github.com/haskell/vscode-haskell#investigating-and-reporting-problems)
 
@@ -181,10 +185,11 @@ Example with `tasty-discover`:
 {-# OPTIONS_GHC -F -pgmF tasty-discover #-}
 ```
 
-This returns an error in HLS if `tasty-discover`` is not in the path: `could not execute: tasty-discover`.
+This returns an error in HLS if `tasty-discover` is not in the path: `could not execute: tasty-discover`.
 
 ### Problems with multi component support using stack
 
 Due to some limitations in the interaction between HLS and `stack`, there are [issues](https://github.com/haskell/haskell-language-server/issues/366) in projects with multiple components (i.e. a main library and executables, test suites or benchmarks):
+
 - The project has to be built succesfully *before* loading it with HLS to get components other than the library work.
 - Changes in the library are not automatically propagated to other components, especially in the presence of errors in the library. So you have to restart HLS in order for those components to be loaded correctly. The usual symptom is the editor showing errors like `Could not load module ...` or `Cannot satisfy -package ...`.
