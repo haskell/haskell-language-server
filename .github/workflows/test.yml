@@ -117,6 +117,9 @@ jobs:
         run: cabal build || cabal build || cabal build
 
       - name: Set test options
+        # run the tests without parallelism, otherwise tasty will attempt to run
+        # all functional test cases simultaneously which causes way too many hls
+        # instances to be spun up for the poor github actions runner to handle
         run: |
           echo "TEST_OPTS=-j1 --rerun-update --rerun-filter failures,exceptions" >> $GITHUB_ENV
 
@@ -142,9 +145,6 @@ jobs:
         env:
           HLS_TEST_EXE: hls
           HLS_WRAPPER_TEST_EXE: hls-wrapper
-        # run the tests without parallelism, otherwise tasty will attempt to run
-        # all functional test cases simultaneously which causes way too many hls
-        # instances to be spun up for the poor github actions runner to handle
         run: cabal test func-test --test-options="$TEST_OPTS" || cabal test func-test --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test func-test --test-options="$TEST_OPTS"
 
       - if: matrix.test
@@ -152,10 +152,6 @@ jobs:
         env:
           HLS_TEST_EXE: hls
           HLS_WRAPPER_TEST_EXE: hls-wrapper
-        # run the tests without parallelism, otherwise tasty will attempt to run
-        # all functional test cases simultaneously which causes way too many hls
-        # instances to be spun up for the poor github actions runner to handle
-
         run: cabal test wrapper-test --test-options="$TEST_OPTS --rerun-log-file .tasty-rerun-log-wrapper" || cabal test wrapper-test --test-options="$TEST_OPTS  --rerun-log-file .tasty-rerun-log-wrapper" || cabal test wrapper-test --test-options="$TEST_OPTS  --rerun-log-file .tasty-rerun-log-wrapper"
 
       - if: matrix.test && matrix.ghc != '9.2.1'

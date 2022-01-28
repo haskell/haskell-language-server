@@ -1,7 +1,7 @@
 cabal-version:      2.4
 category:           Development
 name:               haskell-language-server
-version:            1.5.1.0
+version:            1.6.0.0
 synopsis:           LSP server for GHC
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -70,12 +70,12 @@ library
     , cryptohash-sha1
     , data-default
     , ghc
-    , ghcide                ^>=1.4 || ^>=1.5
+    , ghcide                ^>=1.6
     , githash
     , lsp
     , hie-bios
     , hiedb
-    , hls-plugin-api        ^>=1.2
+    , hls-plugin-api        ^>=1.3
     , hslogger
     , optparse-applicative
     , optparse-simple
@@ -255,7 +255,7 @@ common retrie
 
 common tactic
   if flag(tactic) && (impl(ghc < 9.0.1) || flag(ignore-plugins-ghc-bounds))
-    build-depends: hls-tactics-plugin >=1.2.0.0 && <1.6
+    build-depends: hls-tactics-plugin >=1.2.0.0 && <1.7
     cpp-options: -Dtactic
 
 common hlint
@@ -316,7 +316,7 @@ common stylishHaskell
     cpp-options: -DstylishHaskell
 
 common brittany
-  if flag(brittany) && (impl(ghc < 9.0.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(brittany) && (impl(ghc < 9.0.2) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-brittany-plugin ^>=1.0.0.1
     cpp-options: -Dbrittany
 
@@ -449,7 +449,7 @@ test-suite func-test
     , lens
     , lens-aeson
     , ghcide
-    , hls-test-utils ^>= 1.1.0.0
+    , hls-test-utils ^>=1.2
     , lsp-types
     , aeson
     , hls-plugin-api

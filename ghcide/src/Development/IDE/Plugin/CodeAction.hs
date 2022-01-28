@@ -548,7 +548,7 @@ suggestDeleteUnusedBinding
       isSameName :: IdP GhcPs -> String -> Bool
       isSameName x name = showSDocUnsafe (ppr x) == name
 
-data ExportsAs = ExportName | ExportPattern | ExportAll
+data ExportsAs = ExportName | ExportPattern | ExportFamily | ExportAll
   deriving (Eq)
 
 getLocatedRange :: Located a -> Maybe Range
@@ -602,6 +602,7 @@ suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModul
     printExport :: ExportsAs -> T.Text -> T.Text
     printExport ExportName x    = parenthesizeIfNeeds False x
     printExport ExportPattern x = "pattern " <> x
+    printExport ExportFamily x  = parenthesizeIfNeeds True x
     printExport ExportAll x     = parenthesizeIfNeeds True x <> "(..)"
 
     isTopLevel :: Range -> Bool
@@ -613,7 +614,7 @@ suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModul
     exportsAs (TyClD _ SynDecl{tcdLName})      = Just (ExportName, reLoc tcdLName)
     exportsAs (TyClD _ DataDecl{tcdLName})     = Just (ExportAll, reLoc tcdLName)
     exportsAs (TyClD _ ClassDecl{tcdLName})    = Just (ExportAll, reLoc tcdLName)
-    exportsAs (TyClD _ FamDecl{tcdFam})        = Just (ExportAll, reLoc $ fdLName tcdFam)
+    exportsAs (TyClD _ FamDecl{tcdFam})        = Just (ExportFamily, reLoc $ fdLName tcdFam)
     exportsAs _                                = Nothing
 
 suggestAddTypeAnnotationToSatisfyContraints :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
