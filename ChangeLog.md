@@ -27,6 +27,8 @@ Time for a new and exciting hls release:
 
 ### Pull requests merged for 1.6.0
 
+- Implement stripPrefix via T.stripPrefix
+([#2645](https://github.com/haskell/haskell-language-server/pull/2645)) by @Bodigrim
 - Change Type Family Export pattern
 ([#2643](https://github.com/haskell/haskell-language-server/pull/2643)) by @drsooch
 - Disable alpine build by default
