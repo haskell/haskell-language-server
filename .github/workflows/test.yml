@@ -35,6 +35,8 @@ jobs:
                          , "FUNDING.yml"
                          , ".circleci/**"
                          , "**/stack*.yaml"
+                         , ".gitlab-ci.yaml"
+                         , ".gitlab/**"
                          ]'
       # If we only change ghcide downstream packages we have not test ghcide itself
       - id: skip_ghcide_check
