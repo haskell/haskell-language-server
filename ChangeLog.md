@@ -9,7 +9,7 @@ Time for a new and exciting hls release:
   - [Qualify imported names](https://haskell-language-server.readthedocs.io/en/latest/features.html#qualify-imported-names) thanks to @eddiemundo
   - New plugin to support [selection range](https://haskell-language-server.readthedocs.io/en/latest/features.html#selection-range) (aka double click text selection) thanks to @kokobd
 - Finally hls [supports *ghc 9.2.1*](https://github.com/haskell/haskell-language-server/issues/2179)
-  - Including core features and [many plugins](https://haskell-language-server.readthedocs.io/en/latest/supported-versions.html#plugins-support-by-ghc-version))
+  - Including core features and [many plugins](https://haskell-language-server.readthedocs.io/en/latest/supported-versions.html#plugins-support-by-ghc-version)
   - Thanks to a great collective effort coordinated by @pepeiborra and with the help of @wz1000, @mpickering and @alanz among others
 - Hls now also [supports *ghc 9.0.2*](https://github.com/haskell/haskell-language-server/issues/297) with all plugins but the stylish-haskell formatter
   - Including the [wingman plugin](https://github.com/haskell/haskell-language-server/tree/master/plugins/hls-tactics-plugin) thanks to @isovector and @anka-213
