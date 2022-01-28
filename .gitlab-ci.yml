@@ -278,7 +278,6 @@ build-x86_64-windows:
     - new-x86_64-windows
   parallel: *default_matrix
   script:
-    - bash '-lc' 'pacman --noconfirm -S zip'
     - $env:CHERE_INVOKING = "yes"
     - bash '-lc' "ADD_CABAL_ARGS=$env:ADD_CABAL_ARGS GHC_VERSION=$env:GHC_VERSION CABAL_INSTALL_VERSION=$CABAL_INSTALL_VERSION .gitlab/ci.sh"
   variables:
