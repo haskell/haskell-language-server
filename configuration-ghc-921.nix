@@ -24,7 +24,10 @@ let
       ghc-exactprint = hself.callCabal2nix "ghc-exactprint" inputs.ghc-exactprint {};
       constraints-extras = hself.callCabal2nix "constraints-extras" inputs.constraints-extras {};
       retrie = hself.callCabal2nix "retrie" inputs.retrie {};
+
+      # Hlint is still broken
       hlint = doJailbreak (hself.callCabal2nix "hlint" inputs.hlint {});
+      hiedb = hself.hiedb_0_4_1_0;
 
       # Re-generate HLS drv excluding some plugins
       haskell-language-server =
