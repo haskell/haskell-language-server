@@ -5,6 +5,7 @@
 -- | An HLS plugin to provide code lenses for type signatures
 module Development.IDE.Plugin.NewCodeAction
   ( descriptor,
+    matchExpectedAndActual',
     suggestSignature,
     codeActionCommandId,
     NewCodeActionTypeSig (..),
@@ -21,13 +22,14 @@ import           Control.Monad.IO.Class              (MonadIO (liftIO))
 import           Data.Aeson.Types                    (Value (..), toJSON)
 import qualified Data.Aeson.Types                    as A
 import qualified Data.HashMap.Strict                 as Map
+import           Data.HashSet                        (toList)
 import           Data.List                           (find)
-import           Data.Maybe                          (catMaybes, isJust)
+import           Data.Maybe                          (catMaybes)
+import           Data.Text                           (Text)
 import qualified Data.Text                           as T
 import           Development.IDE                     (GhcSession (..),
                                                       HscEnvEq (hscEnv),
                                                       RuleResult, Rules, define,
-                                                      srcSpanToRange,
                                                       unsafePrintSDoc)
 import           Development.IDE.Core.Compile        (TcModuleResult (..))
 import           Development.IDE.Core.RuleTypes      (GetBindings (GetBindings),
@@ -49,8 +51,7 @@ import qualified Development.IDE.Types.Logger        as Logger
 import           GHC.Generics                        (Generic)
 import           Ide.Plugin.Config                   (Config)
 import           Ide.Plugin.Properties
-import           Ide.PluginUtils                     (mkLspCommand, subRange,
-                                                      usePropertyLsp)
+import           Ide.PluginUtils                     (subRange, usePropertyLsp)
 import           Ide.Types                           (CommandFunction,
                                                       CommandId (CommandId),
                                                       PluginCommand (PluginCommand),
@@ -66,20 +67,16 @@ import           Language.LSP.Types                  (ApplyWorkspaceEditParams (
                                                       CodeAction (..),
                                                       CodeActionKind (CodeActionQuickFix),
                                                       CodeActionParams (CodeActionParams, _range, _textDocument),
-                                                      CodeLens (CodeLens),
-                                                      CodeLensParams (CodeLensParams, _textDocument),
                                                       Command, Diagnostic (..),
-                                                      List (..), ResponseError,
-                                                      SMethod (..),
+                                                      List (..), SMethod (..),
                                                       TextDocumentIdentifier (TextDocumentIdentifier),
                                                       TextEdit (TextEdit),
                                                       WorkspaceEdit (WorkspaceEdit),
                                                       type (|?) (InR))
-import           Language.LSP.Types.Lens             (HasCodeActionProvider)
 import           System.IO
 import           Text.Regex.TDFA                     ((=~), (=~~))
 
-codeActionCommandId :: T.Text
+codeActionCommandId :: Text
 codeActionCommandId = "typesignature.change"
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -110,6 +107,7 @@ codeActionProvider :: LSP.MonadLsp Config m => IdeState
 codeActionProvider ideState pId CodeActionParams {_textDocument = TextDocumentIdentifier uri, _range = currRange} = do
   mode <- usePropertyLsp #mode pId properties
   fmap (Right . List) $ case uriToFilePath' uri of
+    Nothing -> pure []
     Just (toNormalizedFilePath' -> filePath) -> liftIO $ do
       env <- fmap hscEnv <$> runAction "codeLens.GhcSession" ideState (use GhcSession filePath)
       tmr <- runAction "codeLens.TypeCheck" ideState (use TypeCheck filePath)
@@ -118,13 +116,15 @@ codeActionProvider ideState pId CodeActionParams {_textDocument = TextDocumentId
 
       diag <- atomically $ getDiagnostics ideState
       hDiag <- atomically $ getHiddenDiagnostics ideState
-      -- liftIO $ Logger.logError (ideLogger ideState) $ T.pack $ show diag
+      liftIO $ Logger.logError (ideLogger ideState) $ T.pack $ "Prematched Diags:" <> show diag
       -- liftIO $ Logger.logError (ideLogger ideState) $ T.pack $ show hDiag
 
       let toWorkSpaceEdit tedit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing Nothing
-          matchDiags = filter (\(_, _, d) -> cantMatchType d && currRange `contains` d) (diag <> hDiag)
-      liftIO $ Logger.logError (ideLogger ideState) $ T.pack $ show matchDiags
-      hPrint stderr matchDiags
+          -- generate a list of diagnostics in current range AND has the expected message
+          matchedDiags = catMaybes [ matchExpectedAndActual d | (_, _, d) <- diag <> hDiag]
+
+      liftIO $ Logger.logError (ideLogger ideState) $ T.pack $ "Matched Diags:" <> show matchedDiags
+      -- hPrint stderr matchedDiags
           -- generateActionForGlobal sig@NewCodeActionTypeSig {..} = do
           --   range <- srcSpanToRange $ gbSrcSpan sig
           --   tedit <- gblBindingTypeSigToEdit sig
@@ -139,7 +139,7 @@ codeActionProvider ideState pId CodeActionParams {_textDocument = TextDocumentId
           --         (title, tedit) <- f dDiag,
           --         let edit = toWorkSpaceEdit tedit
           --     ]
-      --pure (catMaybes $ generateActionForGlobal <$> gblSigs')
+
       pure []
     --   case mode of
     --     Always ->
@@ -149,7 +149,7 @@ codeActionProvider ideState pId CodeActionParams {_textDocument = TextDocumentId
     --     Diagnostics -> generateActionFromDiags $ suggestSignature False env gblSigs tmr bindings
     -- Nothing -> pure []
 
-generateAction :: p1 -> p2 -> T.Text -> WorkspaceEdit -> a |? CodeAction
+generateAction :: p1 -> p2 -> Text -> WorkspaceEdit -> a |? CodeAction
 generateAction _ _ title edit = InR CodeAction {
         _title = title,
         _kind = Just CodeActionQuickFix,
@@ -166,25 +166,32 @@ commandHandler _ideState wedit = do
   _ <- LSP.sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
   return $ Right Null
 
-test :: Int -> Int
-test x = length x
-
 --------------------------------------------------------------------------------
+-- test :: Int -> Int
+-- test = head . toList
 
-suggestSignature :: Bool -> Maybe HscEnv -> Maybe NewCodeActionTypeSigsResult -> Maybe TcModuleResult -> Maybe Bindings -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestSignature :: Bool -> Maybe HscEnv -> Maybe NewCodeActionTypeSigsResult -> Maybe TcModuleResult -> Maybe Bindings -> Diagnostic -> [(Text, [TextEdit])]
 suggestSignature isQuickFix env mGblSigs mTmr mBindings diag =
   suggestGlobalSignature isQuickFix mGblSigs diag <> suggestLocalSignature isQuickFix env mTmr mBindings diag
 
-cantMatchType :: Diagnostic -> Bool
-cantMatchType Diagnostic {_message} = _message =~ ("Couldn't match expected type" :: T.Text)
+matchExpectedAndActual :: Diagnostic -> Maybe (Text, Text, Text)
+matchExpectedAndActual Diagnostic{_message}= matchExpectedAndActual' _message
+
+matchExpectedAndActual' :: Text -> Maybe (Text, Text, Text)
+matchExpectedAndActual' message = unwrapMatch $ message =~ ("Expected type: (.+)\n +Actual type: (.+)\n.*\n +In an equation for ‘(.+)’" :: Text)
+    where
+        unwrapMatch :: (Text, Text, Text, [Text]) -> Maybe (Text, Text, Text)
+        unwrapMatch (_, _, _, [exp, act, funcName]) = Just (exp, act, funcName)
+        unwrapMatch _                               = Nothing
+
 
 contains :: Range -> Diagnostic -> Bool
 contains range Diagnostic {_range} = subRange range _range
 
-suggestGlobalSignature :: Bool -> Maybe NewCodeActionTypeSigsResult -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestGlobalSignature :: Bool -> Maybe NewCodeActionTypeSigsResult -> Diagnostic -> [(Text, [TextEdit])]
 suggestGlobalSignature isQuickFix mGblSigs Diagnostic {_message, _range}
   | _message
-      =~ ("Couldn't match expected type" :: T.Text),
+      =~ ("Couldn't match expected type" :: Text),
     Just (NewCodeActionTypeSigsResult sigs) <- mGblSigs,
     Just sig <- find (\x -> sameThing (gbSrcSpan x) _range) sigs,
     signature <- T.pack $ gbRendered sig,
@@ -193,11 +200,11 @@ suggestGlobalSignature isQuickFix mGblSigs Diagnostic {_message, _range}
     [(title, [action])]
   | otherwise = []
 
-suggestLocalSignature :: Bool -> Maybe HscEnv -> Maybe TcModuleResult -> Maybe Bindings -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestLocalSignature :: Bool -> Maybe HscEnv -> Maybe TcModuleResult -> Maybe Bindings -> Diagnostic -> [(Text, [TextEdit])]
 suggestLocalSignature isQuickFix mEnv mTmr mBindings Diagnostic {_message, _range = _range@Range {..}}
-  | Just (_ :: T.Text, _ :: T.Text, _ :: T.Text, [identifier]) <-
+  | Just (_ :: Text, _ :: Text, _ :: Text, [identifier]) <-
       (T.unwords . T.words $ _message)
-        =~~ ("Polymorphic local binding with no type signature: (.*) ::" :: T.Text),
+        =~~ ("Polymorphic local binding with no type signature: (.*) ::" :: Text),
     Just bindings <- mBindings,
     Just env <- mEnv,
     localScope <- getFuzzyScope bindings _start _end,
