@@ -35,6 +35,8 @@ jobs:
                          , "**/README.md"
                          , "FUNDING.yml"
                          , "**/stack*.yaml"
+                         , ".gitlab-ci.yaml"
+                         , ".gitlab/**"
                          ]'
 
   bench_init:
