@@ -168,19 +168,31 @@ Dynamically linked binaries (including`ghci`) use the system linker instead of t
 The easiest way to obtain a dynamically linked HLS binary is to build it locally. With `cabal` this can be done as follows:
 
 ```bash
-cabal update && cabal install haskell-language-server --enable-executable-dynamic
+cabal update && cabal install pkg:haskell-language-server --ghc-options="-dynamic"
+```
+
+If you are compiling with a ghc version with a specific `cabal-ghc${ghcVersion}.project` in the repo you will have to use it with. For example for ghc-9.0.x:
+
+```bash
+cabal update && cabal install pkg:haskell-language-server --project-file=cabal-ghc90.project --ghc-options="-dynamic"
 ```
 
 With `stack` you need to manually add the ghc option `-dynamic`.
 
 ```bash
-stack install haskell-language-server --ghc-options="-dynamic"
+stack install haskell-language-server --stack-yaml=stack-${ghcVersion}.yaml --ghc-options="-dynamic"
 ```
 
 You also can also leverage `ghcup compile hls`:
 
 ```bash
-ghcup compile hls -g master --ghc 8.10.7 -- --enable-executable-dynamic
+ghcup compile hls -g master --ghc 8.10.7 -- --ghc-options="-dynamic"
+```
+
+as it uses cabal underneath you would need to use a specific cabal.project for some ghc versions:
+
+```bash
+ghcup compile hls -g master --ghc 9.0.2 --project-file cabal-ghc90.project -- --ghc-options="-dynamic"
 ```
 
 ### Preprocessors
