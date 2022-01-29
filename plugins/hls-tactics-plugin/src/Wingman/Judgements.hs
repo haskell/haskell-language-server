@@ -34,7 +34,7 @@ buildHypothesis
   where
     go (occName -> occ, t)
       | Just ty <- t
-      , isAlpha . head . occNameString $ occ = Just $ HyInfo occ UserPrv $ CType ty
+      , maybe False isAlpha . listToMaybe . occNameString $ occ = Just $ HyInfo occ UserPrv $ CType ty
       | otherwise = Nothing
 
 
