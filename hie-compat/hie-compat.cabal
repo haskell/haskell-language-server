@@ -1,6 +1,6 @@
 cabal-version:       1.22
 name:                hie-compat
-version:             0.2.1.0
+version:             0.2.1.1
 synopsis:            HIE files for GHC 8.6 and other HIE file backports
 license:             Apache-2.0
 description:

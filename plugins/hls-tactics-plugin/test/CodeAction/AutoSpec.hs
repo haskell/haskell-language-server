@@ -72,6 +72,7 @@ spec = do
 
   describe "known" $ do
     autoTest 25 13 "GoldenArbitrary"
+    autoTest  6 13 "GoldenArbitrarySingleConstructor"
     autoTestNoWhitespace
               6 10 "KnownBigSemigroup"
     autoTest  4 10 "KnownThetaSemigroup"

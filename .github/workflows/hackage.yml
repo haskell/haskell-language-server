@@ -20,7 +20,7 @@ jobs:
   check-and-upload-tarballs:
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: ${{ !contains(github.ref_name, 'check') && github.event.inputs.upload-candidates != 'true' }}
+      fail-fast: ${{ github.event.inputs.upload-candidates == 'true' }}
       matrix:
         package: ["hie-compat", "hls-graph", "shake-bench",
                   "hls-plugin-api", "ghcide", "hls-test-utils",
@@ -42,8 +42,6 @@ jobs:
         exclude:
         - ghc: "9.0.2"
           package: "hls-stylish-haskell-plugin"
-        - ghc: "9.0.2"
-          package: "hls-tactics-plugin"
 
     steps:
 
@@ -53,6 +51,7 @@ jobs:
         with:
           ghc: ${{ matrix.ghc }}
           os:  ${{ runner.os }}
+          shorten-hls: 'false'
 
       - name: "Run cabal check"
         run: |
@@ -109,6 +108,7 @@ jobs:
         run: |
           cd $(ls -d ./incoming/${{ matrix.package }}-*)
           # For brittany
+          echo "allow-newer:" >> cabal.project
           echo " butcher:base, multistate:base, data-tree-print:base," >> cabal.project
           # For stylish-haskell
           echo " stylish-haskell:Cabal,stylish-haskell:ghc-lib-parser,stylish-haskell:aeson" >> cabal.project
@@ -139,7 +139,7 @@ jobs:
           path: ${{ steps.generate-dist-tarball.outputs.path }}
 
   upload-candidate:
-    if: ${{ !contains(github.ref_name, 'check') || github.event.inputs.name == 'true' }}
+    if: github.event.inputs.upload-candidates == 'true'
     needs: check-and-upload-tarballs
     runs-on: ubuntu-latest
     steps:

@@ -26,35 +26,43 @@ Additionally, not all plugins are supported on all versions of GHC, see the [GHC
 ## Diagnostics
 
 ### GHC compiler errors and warnings
+
 Provided by: `ghcide`
 
 Provides errors and warnings from GHC as diagnostics.
 
 ### Hlint hints
+
 Provided by: `hls-hlint-plugin`
 
 Provides hlint hints as diagnostics.
 
 ## Hovers
+
 Provided by: `ghcide`
 
 Type information and documentation on hover, [including from local definitions](./configuration.md#how-to-show-local-documentation-on-hover).
 
 ## Jump to definition
+
 Provided by: `ghcide`
 
 Jump to the definition of a name.
 
 Known limitations:
+
 - Only works for [local definitions](https://github.com/haskell/haskell-language-server/issues/708).
 
 ## Jump to type definition
+
 Provided by: `ghcide`
 
 Known limitations:
+
 - Only works for [local definitions](https://github.com/haskell/haskell-language-server/issues/708).
 
 ## Find references
+
 Provided by: `ghcide`
 
 Find references to a name within the project.
@@ -62,17 +70,20 @@ Find references to a name within the project.
 ## Completions
 
 ### Code completions
+
 Provided by: `ghcide`
 
 - Completion of names from qualified imports.
 - Completion of names from non-imported modules.
 
 ### Pragma completions
+
 Provided by: `hls-pragmas-plugin`
 
 Completions for language pragmas.
 
 ## Formatting
+
 Format your code with various Haskell code formatters.
 
 | Formatter       | Provided by                  |
@@ -84,16 +95,19 @@ Format your code with various Haskell code formatters.
 | Stylish Haskell | `hls-stylish-haskell-plugin` |
 
 ## Document symbols
+
 Provided by: `ghcide`
 
 Provides listing of the symbols defined in a module, used to power outline displays.
 
 ## Workspace symbols
+
 Provided by: `ghcide`
 
 Provides listing of the symbols defined in the project, used to power searches.
 
 ## Call hierarchy
+
 Provided by: `hls-call-hierarchy-plugin`
 
 Shows ingoing and outgoing calls for a function.
@@ -101,6 +115,7 @@ Shows ingoing and outgoing calls for a function.
 ![Call Hierarchy in VSCode](https://github.com/haskell/haskell-language-server/raw/2857eeece0398e1cd4b2ffb6069b05c4d2308b39/plugins/hls-call-hierarchy-plugin/call-hierarchy-in-vscode.gif)
 
 ## Highlight references
+
 Provided by: `ghcide`
 
 Highlights references to a name in a document.
@@ -108,6 +123,7 @@ Highlights references to a name in a document.
 ## Code actions
 
 ### Insert missing pragmas
+
 Provided by: `hls-pragma-plugin`
 
 Code action kind: `quickfix`
@@ -115,6 +131,7 @@ Code action kind: `quickfix`
 Inserts missing pragmas needed by GHC.
 
 ### Apply Hlint fixes
+
 Provided by: `hls-hlint-plugin`
 
 Code action kind: `quickfix`
@@ -125,9 +142,11 @@ Uses [apply-refact](https://github.com/mpickering/apply-refact).
 ![Hlint Demo](https://user-images.githubusercontent.com/54035/110860028-8f9fa900-82bc-11eb-9fe5-6483d8bb95e6.gif)
 
 Known limitations:
+
 - May have strange behaviour in files with CPP, since `apply-refact` does not support CPP.
 
 ### Make import lists fully explicit
+
 Provided by: `hls-explicit-imports-plugin`
 
 Code action kind: `quickfix.literals.style`
@@ -135,6 +154,7 @@ Code action kind: `quickfix.literals.style`
 Make import lists fully explicit (same as the code lens).
 
 ### Qualify imported names
+
 Provided by: `hls-qualify-imported-names-plugin`
 
 Code action kind: `quickfix`
@@ -146,6 +166,7 @@ Rewrites imported names to be qualified.
 For usage see the ![readme](../plugins/hls-qualify-imported-names-plugin/README.md).
 
 ### Refine import
+
 Provided by: `hls-refine-imports-plugin`
 
 Code action kind: `quickfix.import.refine`
@@ -153,6 +174,7 @@ Code action kind: `quickfix.import.refine`
 Refines imports to more specific modules when names are re-exported (same as the code lens).
 
 ### Add missing class methods
+
 Provided by: `hls-class-plugin`
 
 Code action kind: `quickfix`
@@ -160,6 +182,7 @@ Code action kind: `quickfix`
 Adds placeholders for missing class methods in a class instance definition.
 
 ### Unfold definition
+
 Provided by: `hls-retrie-plugin`
 
 Code action kind: `refactor.extract`
@@ -167,6 +190,7 @@ Code action kind: `refactor.extract`
 Extracts a definition from the code.
 
 ### Fold definition
+
 Provided by: `hls-retrie-plugin`
 
 Code action kind: `refactor.inline`
@@ -176,6 +200,7 @@ Inlines a definition from the code.
 ![Retrie Demo](https://i.imgur.com/Ev7B87k.gif)
 
 ### Insert contents of Template Haskell splice
+
 Provided by: `hls-splice-plugin`
 
 Code action kind: `refactor.rewrite`
@@ -183,6 +208,7 @@ Code action kind: `refactor.rewrite`
 Evaluates a Template Haskell splice and inserts the resulting code in its place.
 
 ### Convert numbers to alternative formats
+
 Provided by: `hls-alternate-number-format-plugin`
 
 Code action kind: `quickfix.literals.style`
@@ -192,6 +218,7 @@ Converts numeric literals to different formats.
 ![Alternate Number Format Demo](../plugins/hls-alternate-number-format-plugin/HLSAll.gif)
 
 ### Add Haddock comments
+
 Provided by: `hls-haddock-comments-plugin`
 
 Code action kind: `quickfix`
@@ -199,41 +226,47 @@ Code action kind: `quickfix`
 Adds Haddock comments for function arguments.
 
 ### Wingman
+
 Status: Not supported on GHC 9.2
 
 Provided by: `hls-tactics-plugin`
 
-Provides a variety of code actions for interactive code development, see https://haskellwingman.dev/ for more details.
+Provides a variety of code actions for interactive code development, see <https://haskellwingman.dev/> for more details.
 
 ![Wingman Demo](https://user-images.githubusercontent.com/307223/92657198-3d4be400-f2a9-11ea-8ad3-f541c8eea891.gif)
 
 ## Code lenses
 
 ### Add type signature
+
 Provided by: `ghcide`
 
 Shows the type signature for bindings without type signatures, and adds it with a click.
 
 ### Evaluation code snippets in comments
+
 Provided by: `hls-eval-plugin`
 
 Evaluates code blocks in comments with a click. [Tutorial](https://github.com/haskell/haskell-language-server/blob/master/plugins/hls-eval-plugin/README.md).
 
 ![Eval Demo](https://raw.githubusercontent.com/haskell/haskell-language-server/master/plugins/hls-eval-plugin/demo.gif)
 
-### Make import lists fully explicit
+### Make import lists fully explicit code lens
+
 Provided by: `hls-explicit-imports-plugin`
 
 Shows fully explicit import lists and rewrites them with a click (same as the code action).
 
 ![Imports code lens Demo](https://imgur.com/pX9kvY4.gif)
 
-### Refine import
+### Refine import code lens
+
 Provided by: `hls-refine-imports-plugin`
 
 Shows refined imports and applies them with a click (same as the code action).
 
 ### Fix module names
+
 Provided by: `hls-module-name-plugin`
 
 Shows module name matching file path, and applies it with a click.
@@ -241,11 +274,14 @@ Shows module name matching file path, and applies it with a click.
 ![Module Name Demo](https://user-images.githubusercontent.com/54035/110860755-78ad8680-82bd-11eb-9845-9ea4b1cc1f76.gif)
 
 ## Selection range
+
 Provided by: `hls-selection-range-plugin`
 
 Provides haskell specific
 [shrink/expand selection](https://code.visualstudio.com/docs/editor/codebasics#shrinkexpand-selection)
 support.
+
+![Selection range demo](https://user-images.githubusercontent.com/16440269/150301502-4c002605-9f8d-43f5-86d3-28846942c4ff.mov)
 
 ## Missing features
 

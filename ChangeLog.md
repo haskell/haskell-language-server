@@ -1,5 +1,293 @@
 # Changelog for haskell-language-server
 
+## 1.6.0
+
+Time for a new and exciting hls release:
+
+- It includes *three* brand new plugins:
+  - [Alternate number literals](https://haskell-language-server.readthedocs.io/en/latest/features.html#convert-numbers-to-alternative-formats) thanks to @drsooch
+  - [Qualify imported names](https://haskell-language-server.readthedocs.io/en/latest/features.html#qualify-imported-names) thanks to @eddiemundo
+  - New plugin to support [selection range](https://haskell-language-server.readthedocs.io/en/latest/features.html#selection-range) (aka double click text selection) thanks to @kokobd
+- Finally hls [supports *ghc 9.2.1*](https://github.com/haskell/haskell-language-server/issues/2179)
+  - Including core features and [many plugins](https://haskell-language-server.readthedocs.io/en/latest/supported-versions.html#plugins-support-by-ghc-version))
+  - Thanks to a great collective effort coordinated by @pepeiborra and with the help of @wz1000, @mpickering and @alanz among others
+- Hls now also [supports *ghc 9.0.2*](https://github.com/haskell/haskell-language-server/issues/297) with all plugins but the stylish-haskell formatter
+  - Including the [wingman plugin](https://github.com/haskell/haskell-language-server/tree/master/plugins/hls-tactics-plugin) thanks to @isovector and @anka-213
+- And many many fixes and performance improvements, thanks to all contributors!
+
+### Deprecation notice for 1.6.0
+
+- As we noted in the previous release we have dropped support for ghc versions 8.10.5 and 8.8.3 in *this release*
+  - We recommend upgrading ghc to the last minor version: 8.8.4 or 8.10.7
+  - You can read more about ghc deprecation policy and schedule [here](https://haskell-language-server.readthedocs.io/en/latest/supported-versions.html)
+- *After this release*:
+  - [We will remove all project stack.yaml's](https://github.com/haskell/haskell-language-server/issues/2533) but two: one for last lts and other for nightly. Temporary we could keep one more stack yaml when nightly upgrades the ghc version, to help in the transition
+  - [We will remove the install script](https://github.com/haskell/haskell-language-server/issues/2491) which lives [here](https://github.com/haskell/haskell-language-server/tree/master/install)
+    - If you want to install hls from source we recommend using `ghcup`. Download it and run `ghcup compile hls --help` to get more info about.
+
+### Pull requests merged for 1.6.0
+
+- Implement stripPrefix via T.stripPrefix
+([#2645](https://github.com/haskell/haskell-language-server/pull/2645)) by @Bodigrim
+- Change Type Family Export pattern
+([#2643](https://github.com/haskell/haskell-language-server/pull/2643)) by @drsooch
+- Disable alpine build by default
+([#2638](https://github.com/haskell/haskell-language-server/pull/2638)) by @jneira
+- Use T.decodeUtf8 + BS.readFile instead of T.readFile
+([#2637](https://github.com/haskell/haskell-language-server/pull/2637)) by @Bodigrim
+- Add ghc 9.2.1 to gitlab ci
+([#2636](https://github.com/haskell/haskell-language-server/pull/2636)) by @jneira
+- Specialize ghcide indent style to .hs
+([#2631](https://github.com/haskell/haskell-language-server/pull/2631)) by @mrgutkun
+- Fix off by one indexing error in openingBacktick
+([#2629](https://github.com/haskell/haskell-language-server/pull/2629)) by @pepeiborra
+- Drop bytestring-encoding
+([#2628](https://github.com/haskell/haskell-language-server/pull/2628)) by @pepeiborra
+- fix positionInRange
+([#2625](https://github.com/haskell/haskell-language-server/pull/2625)) by @kokobd
+- Fix #2612 - hlint plugin - Apply fixities to parsed source before sending to apply-refact
+([#2624](https://github.com/haskell/haskell-language-server/pull/2624)) by @eddiemundo
+- Flake ghc 92
+([#2621](https://github.com/haskell/haskell-language-server/pull/2621)) by @guibou
+- Use ghc+integer-gmp for alpine linux build release
+([#2615](https://github.com/haskell/haskell-language-server/pull/2615)) by @jneira
+- Use helpers from lsp to do code action prefixing
+([#2614](https://github.com/haskell/haskell-language-server/pull/2614)) by @michaelpj
+- Wingman: Fix fundeps
+([#2611](https://github.com/haskell/haskell-language-server/pull/2611)) by @isovector
+- Wingman idioms
+([#2607](https://github.com/haskell/haskell-language-server/pull/2607)) by @isovector
+- Make work stack-9.2.1.yaml and enable `pedantic` (`-WError`) for cabal
+([#2606](https://github.com/haskell/haskell-language-server/pull/2606)) by @jneira
+- Improve qualified import plugin readme
+([#2605](https://github.com/haskell/haskell-language-server/pull/2605)) by @eddiemundo
+- Correct typo in Ide.Arguments:listPluginsParser
+([#2604](https://github.com/haskell/haskell-language-server/pull/2604)) by @tombusby
+- Rework features documentation
+([#2603](https://github.com/haskell/haskell-language-server/pull/2603)) by @michaelpj
+- [ghc-9.2] Fix refine-imports plugin
+([#2601](https://github.com/haskell/haskell-language-server/pull/2601)) by @mrgutkun
+- [ghc-9.2] Fix qualify-imported-names plugin
+([#2600](https://github.com/haskell/haskell-language-server/pull/2600)) by @mrgutkun
+- Correct issues with pre-commit hook
+([#2597](https://github.com/haskell/haskell-language-server/pull/2597)) by @bradrn
+- Fix some import module completions being dropped (and fix flaky test too)
+([#2595](https://github.com/haskell/haskell-language-server/pull/2595)) by @eddiemundo
+- Fix module-name plugin on ghc-9.2.1
+([#2594](https://github.com/haskell/haskell-language-server/pull/2594)) by @mrgutkun
+- [ghc-9.2] Fix rename plugin
+([#2593](https://github.com/haskell/haskell-language-server/pull/2593)) by @pepeiborra
+- Fix progress eval test randomly failing
+([#2590](https://github.com/haskell/haskell-language-server/pull/2590)) by @eddiemundo
+- More work around next ghc-9.2.1 support
+([#2587](https://github.com/haskell/haskell-language-server/pull/2587)) by @jneira
+- Post ghc-9.2.1 config cleanup
+([#2582](https://github.com/haskell/haskell-language-server/pull/2582)) by @jneira
+- GHC-9.0 support for hls-tactics-plugin
+([#2581](https://github.com/haskell/haskell-language-server/pull/2581)) by @isovector
+- Wingman: Fix TODO(sandy) when performing subsequent actions
+([#2580](https://github.com/haskell/haskell-language-server/pull/2580)) by @isovector
+- Bump Ormolu and Fourmolu to GHC-9.2-compatible versions
+([#2579](https://github.com/haskell/haskell-language-server/pull/2579)) by @georgefst
+- test: Add regression tests for #2403
+([#2576](https://github.com/haskell/haskell-language-server/pull/2576)) by @guibou
+- Fix crash on completion with type family
+([#2569](https://github.com/haskell/haskell-language-server/pull/2569)) by @guibou
+- Add support for ghc 9.0.2
+([#2567](https://github.com/haskell/haskell-language-server/pull/2567)) by @jneira
+- support selection range lsp feature
+([#2565](https://github.com/haskell/haskell-language-server/pull/2565)) by @kokobd
+- Reuse build setup using a dedicated github action
+([#2563](https://github.com/haskell/haskell-language-server/pull/2563)) by @jneira
+- Fix ci update hackage index
+([#2562](https://github.com/haskell/haskell-language-server/pull/2562)) by @jneira
+- Enable `aarch64-darwin` in `flake.nix`
+([#2561](https://github.com/haskell/haskell-language-server/pull/2561)) by @Gabriel439
+- Fix freeze cache key correctly
+([#2560](https://github.com/haskell/haskell-language-server/pull/2560)) by @jneira
+- Fix nix flake by explicit version for `lsp-xxx` packages
+([#2557](https://github.com/haskell/haskell-language-server/pull/2557)) by @guibou
+- Apply missing update for stack-9.0.1.yaml
+([#2556](https://github.com/haskell/haskell-language-server/pull/2556)) by @Ailrun
+- doc: Enable relative links with anchors
+([#2555](https://github.com/haskell/haskell-language-server/pull/2555)) by @sir4ur0n
+- Fix space leak where EPS retained HPTs from old HscEnv
+([#2553](https://github.com/haskell/haskell-language-server/pull/2553)) by @mpickering
+- Remove cabal.project.freeze files in workflows after computing the cache key
+([#2552](https://github.com/haskell/haskell-language-server/pull/2552)) by @jneira
+- Add support for brittany (needs aeson-2) and floskell with ghc-9.0.1
+([#2551](https://github.com/haskell/haskell-language-server/pull/2551)) by @jneira
+- Restore TemplateHaskell pragma in hls-graph
+([#2549](https://github.com/haskell/haskell-language-server/pull/2549)) by @pepeiborra
+- Add space after comma when exporting a name
+([#2547](https://github.com/haskell/haskell-language-server/pull/2547)) by @sergv
+- Set an unique name for Hlint job
+([#2544](https://github.com/haskell/haskell-language-server/pull/2544)) by @jneira
+- Fix ghcide handling project root
+([#2543](https://github.com/haskell/haskell-language-server/pull/2543)) by @drsooch
+- CI: linting
+([#2538](https://github.com/haskell/haskell-language-server/pull/2538)) by @Anton-Latukha
+- CI: add hlint workflow
+([#2537](https://github.com/haskell/haskell-language-server/pull/2537)) by @Anton-Latukha
+- CI: caching: closer match work/CI guarantees
+([#2536](https://github.com/haskell/haskell-language-server/pull/2536)) by @Anton-Latukha
+- CI: caching: keep-going
+([#2535](https://github.com/haskell/haskell-language-server/pull/2535)) by @Anton-Latukha
+- CI: {caching,test,bench}: mk cache aware of package dep versions
+([#2532](https://github.com/haskell/haskell-language-server/pull/2532)) by @Anton-Latukha
+- Test hls-pragmas-plugin in ci
+([#2530](https://github.com/haskell/haskell-language-server/pull/2530)) by @jneira
+- Enable manual run for caching, hackage and build workflows
+([#2528](https://github.com/haskell/haskell-language-server/pull/2528)) by @jneira
+- Fix random SQLite busy database is locked errors
+([#2527](https://github.com/haskell/haskell-language-server/pull/2527)) by @eddiemundo
+- Fix some hlint warnings
+([#2523](https://github.com/haskell/haskell-language-server/pull/2523)) by @jhrcek
+- Improve action for fixing import typo
+([#2522](https://github.com/haskell/haskell-language-server/pull/2522)) by @jhrcek
+- CI: caching: fix early termination expression check & cabal.project replacement
+([#2520](https://github.com/haskell/haskell-language-server/pull/2520)) by @Anton-Latukha
+- Solve crash with module name plugin under certain circumstances
+([#2518](https://github.com/haskell/haskell-language-server/pull/2518)) by @ttylec
+- Rework troubleshooting section, add basic explainer
+([#2517](https://github.com/haskell/haskell-language-server/pull/2517)) by @michaelpj
+- Refactor collectLiterals in AlternateNumberFormat.
+([#2516](https://github.com/haskell/haskell-language-server/pull/2516)) by @drsooch
+- cabal-*.project: index-state +1s
+([#2515](https://github.com/haskell/haskell-language-server/pull/2515)) by @Anton-Latukha
+- Bump up retrie
+([#2513](https://github.com/haskell/haskell-language-server/pull/2513)) by @jneira
+- Sort out some compatibility issues
+([#2511](https://github.com/haskell/haskell-language-server/pull/2511)) by @alanz
+- Fix ci cache for windows
+([#2507](https://github.com/haskell/haskell-language-server/pull/2507)) by @jneira
+- CI: caching: add early termination & run check on schedule
+([#2506](https://github.com/haskell/haskell-language-server/pull/2506)) by @Anton-Latukha
+- Fix tracing of recordDirtyKeys
+([#2505](https://github.com/haskell/haskell-language-server/pull/2505)) by @pepeiborra
+- Unhandled exceptions fixed
+([#2504](https://github.com/haskell/haskell-language-server/pull/2504)) by @pepeiborra
+- Build with GHC 9.2
+([#2503](https://github.com/haskell/haskell-language-server/pull/2503)) by @pepeiborra
+- Ignore stack.yamls in test cabal workflow
+([#2502](https://github.com/haskell/haskell-language-server/pull/2502)) by @jneira
+- small stack yaml updates to ease maintenance
+([#2501](https://github.com/haskell/haskell-language-server/pull/2501)) by @simonmichael
+- Automatically read in the doc version from the cabal file
+([#2500](https://github.com/haskell/haskell-language-server/pull/2500)) by @michaelpj
+- Disable alternate numbers format plugin temporary
+([#2498](https://github.com/haskell/haskell-language-server/pull/2498)) by @jneira
+- Revert "Send unhandled exceptions to the user (#2484)"
+([#2497](https://github.com/haskell/haskell-language-server/pull/2497)) by @jneira
+- Upgrade to new version of lsp libraries
+([#2494](https://github.com/haskell/haskell-language-server/pull/2494)) by @michaelpj
+- Fail if main or pre jobs are cancelled
+([#2493](https://github.com/haskell/haskell-language-server/pull/2493)) by @jneira
+- stack-9.0.1: update/cleanup
+([#2489](https://github.com/haskell/haskell-language-server/pull/2489)) by @simonmichael
+- Correctly handle LSP shutdown/exit
+([#2486](https://github.com/haskell/haskell-language-server/pull/2486)) by @pepeiborra
+- Fix hls-graph ide build with embed-files
+([#2485](https://github.com/haskell/haskell-language-server/pull/2485)) by @pepeiborra
+- Send unhandled exceptions to the user
+([#2484](https://github.com/haskell/haskell-language-server/pull/2484)) by @pepeiborra
+- Fix redundant import actions for names starting with _
+([#2483](https://github.com/haskell/haskell-language-server/pull/2483)) by @Ailrun
+- Update flake to use fourmolu plugin in GHC 9
+([#2482](https://github.com/haskell/haskell-language-server/pull/2482)) by @Ailrun
+- Delete some dead or deprecated settings
+([#2481](https://github.com/haskell/haskell-language-server/pull/2481)) by @michaelpj
+- Class plugin bump up
+([#2475](https://github.com/haskell/haskell-language-server/pull/2475)) by @Ailrun
+- Fix some pragma completion cases
+([#2474](https://github.com/haskell/haskell-language-server/pull/2474)) by @Ailrun
+- Minor org to contribution doc
+([#2472](https://github.com/haskell/haskell-language-server/pull/2472)) by @Anton-Latukha
+- Warn if TH and Mac and static binary
+([#2470](https://github.com/haskell/haskell-language-server/pull/2470)) by @pepeiborra
+- Lock-less debouncer (minimal change)
+([#2469](https://github.com/haskell/haskell-language-server/pull/2469)) by @pepeiborra
+- Handle re-exported modules when constructing ExportsMap
+([#2468](https://github.com/haskell/haskell-language-server/pull/2468)) by @jhrcek
+- Caching process update
+([#2467](https://github.com/haskell/haskell-language-server/pull/2467)) by @Anton-Latukha
+- #2418 Also use .hlint.yaml fixity rules when HLINT_ON_LIB_GHC not defined
+([#2464](https://github.com/haskell/haskell-language-server/pull/2464)) by @eddiemundo
+- Build linux binaries in alpine container
+([#2463](https://github.com/haskell/haskell-language-server/pull/2463)) by @pepeiborra
+- Lockless iorefs
+([#2460](https://github.com/haskell/haskell-language-server/pull/2460)) by @pepeiborra
+- Join nested IO actions of the form `IO (IO ())`
+([#2459](https://github.com/haskell/haskell-language-server/pull/2459)) by @fendor
+- #600 Code action to ignore hlint hints module wide
+([#2458](https://github.com/haskell/haskell-language-server/pull/2458)) by @eddiemundo
+- lock-less progress-reporting
+([#2453](https://github.com/haskell/haskell-language-server/pull/2453)) by @pepeiborra
+- Fix the nix build
+([#2452](https://github.com/haskell/haskell-language-server/pull/2452)) by @michaelpj
+- Fix rerun log cache handling
+([#2450](https://github.com/haskell/haskell-language-server/pull/2450)) by @jneira
+- Make heavy use of common sections
+([#2447](https://github.com/haskell/haskell-language-server/pull/2447)) by @fendor
+- CI: organizing bootstraping
+([#2446](https://github.com/haskell/haskell-language-server/pull/2446)) by @Anton-Latukha
+- Describe hls installed binaries
+([#2445](https://github.com/haskell/haskell-language-server/pull/2445)) by @jneira
+- Remove support for ghc 8.8.3/8.10.5
+([#2444](https://github.com/haskell/haskell-language-server/pull/2444)) by @jneira
+- CI: cabal 3.6 use & clean-up 8.10.5 builds
+([#2443](https://github.com/haskell/haskell-language-server/pull/2443)) by @Anton-Latukha
+- Lockless FileExistsMap and position mapping
+([#2442](https://github.com/haskell/haskell-language-server/pull/2442)) by @pepeiborra
+- Fix regression in Eval plugin and add test
+([#2441](https://github.com/haskell/haskell-language-server/pull/2441)) by @pepeiborra
+- Makes local record field completion respects the fields sharing one single type signature
+([#2439](https://github.com/haskell/haskell-language-server/pull/2439)) by @konn
+- Enable top-level hover signature test
+([#2435](https://github.com/haskell/haskell-language-server/pull/2435)) by @jneira
+- Lockless diagnostics
+([#2434](https://github.com/haskell/haskell-language-server/pull/2434)) by @pepeiborra
+- Move Common Plugin Functions into PluginUtils
+([#2433](https://github.com/haskell/haskell-language-server/pull/2433)) by @drsooch
+- lock-less Values state
+([#2429](https://github.com/haskell/haskell-language-server/pull/2429)) by @pepeiborra
+- Extract the pre-decl pragma parsing to its own module
+([#2428](https://github.com/haskell/haskell-language-server/pull/2428)) by @eddiemundo
+- CI: cache-deps: rm pull request hook
+([#2426](https://github.com/haskell/haskell-language-server/pull/2426)) by @Anton-Latukha
+- Add known broken tests for import placement
+([#2425](https://github.com/haskell/haskell-language-server/pull/2425)) by @nini-faroux
+- Use stm-stats to reduce contention in hls-graph
+([#2421](https://github.com/haskell/haskell-language-server/pull/2421)) by @pepeiborra
+- Build on FreeBSD12 only
+([#2420](https://github.com/haskell/haskell-language-server/pull/2420)) by @hasufell
+- Centralized caching workflow
+([#2419](https://github.com/haskell/haskell-language-server/pull/2419)) by @Anton-Latukha
+- Configuration docs: Typo
+([#2417](https://github.com/haskell/haskell-language-server/pull/2417)) by @andys8
+- Use dependent-sum from hackage
+([#2412](https://github.com/haskell/haskell-language-server/pull/2412)) by @jneira
+- Lock-less hls-graph
+([#2411](https://github.com/haskell/haskell-language-server/pull/2411)) by @pepeiborra
+- hls-graph.cabal: link to actual readme
+([#2404](https://github.com/haskell/haskell-language-server/pull/2404)) by @juhp
+- Disable check project in the ghcide test suite
+([#2397](https://github.com/haskell/haskell-language-server/pull/2397)) by @pepeiborra
+- Add modern issue templates
+([#2394](https://github.com/haskell/haskell-language-server/pull/2394)) by @jneira
+- Fix extension pragma inserted below ghc options pragma #2364
+([#2392](https://github.com/haskell/haskell-language-server/pull/2392)) by @eddiemundo
+- Avoid unnecessary Target canonicalisation in Session setup
+([#2359](https://github.com/haskell/haskell-language-server/pull/2359)) by @fendor
+- Decrease contention in Progress reporting
+([#2357](https://github.com/haskell/haskell-language-server/pull/2357)) by @pepeiborra
+- Qualify imported names plugin
+([#2355](https://github.com/haskell/haskell-language-server/pull/2355)) by @eddiemundo
+- HLS Plugin to provide Alternate Literal Formats.
+([#2350](https://github.com/haskell/haskell-language-server/pull/2350)) by @drsooch
+- Log live_bytes and heap_size as reported by GHC.Stats
+([#1508](https://github.com/haskell/haskell-language-server/pull/1508)) by @mpickering
+
 ## 1.5.1
 
 This is a bug fix release for two regressions found after releasing 1.5.0:
