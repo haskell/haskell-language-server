@@ -5,6 +5,11 @@ let
   disabledPlugins = [
     "hls-brittany-plugin"
     "hls-stylish-haskell-plugin"
+    "hls-hlint-plugin"
+    "hls-haddock-comments-plugin"
+    "hls-alternate-number-format-plugin"
+    "hls-eval-plugin"
+    "hls-tactics-plugin"
   ];
 
   hpkgsOverride = hself: hsuper:
@@ -22,11 +27,12 @@ let
         hself.callCabal2nixWithOptions "haskell-language-server" ./.
         (pkgs.lib.concatStringsSep " " [
           "-f-brittany"
-          "-f-stylishhaskell"
+          "-f-stylishHaskell"
           "-f-hlint"
           "-f-haddockComments"
           "-f-alternateNumberFormat"
           "-f-eval"
+          "-f-tactics"
         ]) { };
 
       # YOLO
