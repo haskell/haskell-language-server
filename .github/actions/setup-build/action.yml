@@ -15,6 +15,11 @@ inputs:
     description: "To allow make unique the cache key"
     required: false
     default: ""
+  shorten-hls:
+    description: "Whether we have to shorten haskell language server to hls"
+    required: false
+    default: "true"
+
 runs:
   using: "composite"
   steps:
@@ -47,7 +52,7 @@ runs:
         # File has some protections preventing regular `rm`.
         # (most probably sticky bit is set on $HOME)
         # `&&` insures `rm -f` return is positive.
-        # Many platforms aslo have `alias cp='cp -i'`.
+        # Many platforms also have `alias cp='cp -i'`.
         GHCVER2=${GHCVER//./}
         ALT_PROJECT_FILE_MINOR=cabal-ghc${GHCVER2}.project
         ALT_PROJECT_FILE_MAJOR=cabal-ghc${GHCVER2:0:2}.project
@@ -65,10 +70,11 @@ runs:
       shell: bash
 
     # Shorten binary names as a workaround for filepath length limits in Windows,
-    # but since tests are hardcoded on this workaround -
-    # all platforms (in 2021-12-07) need it.
-    # All workflows which distinquishes cache on `cabal.project` needs this.
-    - name: Workaround shorten binary names
+    # but since tests are hardcoded on this workaround all platforms need it.
+    # All workflows which distinguishes cache on `cabal.project` needs this.
+    # Except hackage one, which needs the original name
+    - if: inputs.shorten-hls == 'true'
+      name: Workaround shorten binary names
       run: |
         sed -i.bak -e 's/haskell-language-server/hls/g' \
                     -e 's/haskell_language_server/hls/g' \

@@ -22,16 +22,46 @@
       flake = false;
     };
 
-    hackage-sources.url = "path:./flake_hackage";
+    # List of hackage dependencies
+    lsp = {
+      url = "https://hackage.haskell.org/package/lsp-1.4.0.0/lsp-1.4.0.0.tar.gz";
+      flake = false;
+    };
+    lsp-types = {
+      url = "https://hackage.haskell.org/package/lsp-types-1.4.0.1/lsp-types-1.4.0.1.tar.gz";
+      flake = false;
+    };
+    lsp-test = {
+      url = "https://hackage.haskell.org/package/lsp-test-0.14.0.2/lsp-test-0.14.0.2.tar.gz";
+      flake = false;
+    };
+    ghc-exactprint = {
+      url = "https://hackage.haskell.org/package/ghc-exactprint-1.4.1/ghc-exactprint-1.4.1.tar.gz";
+      flake = false;
+    };
+    constraints-extras = {
+      url = "https://hackage.haskell.org/package/constraints-extras-0.3.2.1/constraints-extras-0.3.2.1.tar.gz";
+      flake = false;
+    };
+    retrie = {
+      url = "https://hackage.haskell.org/package/retrie-1.2.0.1/retrie-1.2.0.1.tar.gz";
+      flake = false;
+    };
+    fourmolu = {
+      url = "https://hackage.haskell.org/package/fourmolu-0.5.0.1/fourmolu-0.5.0.1.tar.gz";
+      flake = false;
+    };
+    hlint = {
+      url = "https://hackage.haskell.org/package/hlint-3.3.6/hlint-3.3.6.tar.gz";
+      flake = false;
+    };
   };
   outputs =
-    { self, nixpkgs, flake-compat, flake-utils, pre-commit-hooks, gitignore, hackage-sources }:
+    inputs@{ self, nixpkgs, flake-compat, flake-utils, pre-commit-hooks, gitignore, ... }:
     {
       overlay = final: prev:
         with prev;
         let
-          hackage = hackage-sources.inputs;
-
           haskellOverrides = hself: hsuper: {
             # we override mkDerivation here to apply the following
             # tweak to each haskell package:
@@ -79,9 +109,9 @@
               # We need an older version
               hiedb = hself.hiedb_0_4_1_0;
 
-              lsp = hsuper.callCabal2nix "lsp" hackage.lsp {};
-              lsp-types = hsuper.callCabal2nix "lsp-types" hackage.lsp-types {};
-              lsp-test = hsuper.callCabal2nix "lsp-test" hackage.lsp-test {};
+              lsp = hsuper.callCabal2nix "lsp" inputs.lsp {};
+              lsp-types = hsuper.callCabal2nix "lsp-types" inputs.lsp-types {};
+              lsp-test = hsuper.callCabal2nix "lsp-test" inputs.lsp-test {};
 
               implicit-hie-cradle = hself.callCabal2nix "implicit-hie-cradle"
                 (builtins.fetchTarball {
@@ -135,7 +165,6 @@
     } // (flake-utils.lib.eachSystem [ "x86_64-linux" "x86_64-darwin" "aarch64-darwin" ])
     (system:
       let
-        hackage = hackage-sources.inputs;
         pkgs = import nixpkgs {
           inherit system;
           overlays = [ self.overlay ];
@@ -174,7 +203,7 @@
         };
 
         ghc901Config = (import ./configuration-ghc-901.nix) { inherit pkgs; };
-        ghc921Config = (import ./configuration-ghc-921.nix) { inherit pkgs hackage; };
+        ghc921Config = (import ./configuration-ghc-921.nix) { inherit pkgs inputs; };
 
         # GHC versions
         ghcDefault = pkgs.hlsHpkgs ("ghc"
