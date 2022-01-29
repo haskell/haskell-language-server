@@ -20,7 +20,7 @@ tests = testGroup "completions" [
          _ <- applyEdit doc te
 
          compls <- getCompletions doc (Position 5 9)
-         item <- getCopletionByLabel "putStrLn" compls
+         item <- getCompletionByLabel "putStrLn" compls
          liftIO $ do
              item ^. label @?= "putStrLn"
              item ^. kind @?= Just CiFunction
@@ -36,7 +36,7 @@ tests = testGroup "completions" [
          _ <- applyEdit doc te
 
          compls <- getCompletions doc (Position 5 9)
-         item <- getCopletionByLabel "putStrLn" compls
+         item <- getCompletionByLabel "putStrLn" compls
          resolvedRes <- request SCompletionItemResolve item
          let eResolved = resolvedRes ^. result
          case eResolved of
@@ -57,7 +57,7 @@ tests = testGroup "completions" [
          _ <- applyEdit doc te
 
          compls <- getCompletions doc (Position 1 23)
-         item <- getCopletionByLabel "Maybe" compls
+         item <- getCompletionByLabel "Maybe" compls
          liftIO $ do
              item ^. label @?= "Maybe"
              item ^. detail @?= Just "Data.Maybe"
@@ -72,7 +72,7 @@ tests = testGroup "completions" [
          _ <- applyEdit doc te
 
          compls <- getCompletions doc (Position 2 24)
-         item <- getCopletionByLabel "List" compls
+         item <- getCompletionByLabel "List" compls
          liftIO $ do
              item ^. label @?= "List"
              item ^. detail @?= Just "Data.List"
@@ -92,7 +92,7 @@ tests = testGroup "completions" [
          _ <- applyEdit doc te
 
          compls <- getCompletions doc (Position 5 4)
-         item <- getCopletionByLabel "accessor" compls
+         item <- getCompletionByLabel "accessor" compls
          liftIO $ do
              item ^. label @?= "accessor"
              item ^. kind @?= Just CiFunction
@@ -102,7 +102,7 @@ tests = testGroup "completions" [
          let te = TextEdit (Range (Position 5 7) (Position 5 9)) "id"
          _ <- applyEdit doc te
          compls <- getCompletions doc (Position 5 9)
-         item <- getCopletionByLabel "id" compls
+         item <- getCompletionByLabel "id" compls
          liftIO $ do
              item ^. detail @?= Just ":: a -> a"
 
@@ -112,7 +112,7 @@ tests = testGroup "completions" [
          let te = TextEdit (Range (Position 5 7) (Position 5 24)) "flip"
          _ <- applyEdit doc te
          compls <- getCompletions doc (Position 5 11)
-         item <- getCopletionByLabel "flip" compls
+         item <- getCompletionByLabel "flip" compls
          liftIO $
              item ^. detail @?= Just ":: (a -> b -> c) -> b -> a -> c"
 
@@ -129,7 +129,7 @@ tests = testGroup "completions" [
          _ <- applyEdit doc te
 
          compls <- getCompletions doc (Position 0 31)
-         item <- getCopletionByLabel "Alternative" compls
+         item <- getCompletionByLabel "Alternative" compls
          liftIO $ do
              item ^. label @?= "Alternative"
              item ^. kind @?= Just CiFunction
@@ -142,7 +142,7 @@ tests = testGroup "completions" [
          _ <- applyEdit doc te
 
          compls <- getCompletions doc (Position 0 41)
-         item <- getCopletionByLabel "liftA" compls
+         item <- getCompletionByLabel "liftA" compls
          liftIO $ do
              item ^. label @?= "liftA"
              item ^. kind @?= Just CiFunction
@@ -160,7 +160,7 @@ snippetTests = testGroup "snippets" [
       _ <- applyEdit doc te
 
       compls <- getCompletions doc (Position 5 14)
-      item <- getCopletionByLabel "Nothing" compls
+      item <- getCompletionByLabel "Nothing" compls
       liftIO $ do
           item ^. insertTextFormat @?= Just Snippet
           item ^. insertText @?= Just "Nothing "
@@ -172,7 +172,7 @@ snippetTests = testGroup "snippets" [
         _ <- applyEdit doc te
 
         compls <- getCompletions doc (Position 5 11)
-        item <- getCopletionByLabel "foldl" compls
+        item <- getCompletionByLabel "foldl" compls
         liftIO $ do
             item ^. label @?= "foldl"
             item ^. kind @?= Just CiFunction
@@ -186,7 +186,7 @@ snippetTests = testGroup "snippets" [
         _ <- applyEdit doc te
 
         compls <- getCompletions doc (Position 5 11)
-        item <- getCopletionByLabel "mapM" compls
+        item <- getCompletionByLabel "mapM" compls
         liftIO $ do
             item ^. label @?= "mapM"
             item ^. kind @?= Just CiFunction
@@ -200,7 +200,7 @@ snippetTests = testGroup "snippets" [
         _ <- applyEdit doc te
 
         compls <- getCompletions doc (Position 5 18)
-        item <- getCopletionByLabel "filter" compls
+        item <- getCompletionByLabel "filter" compls
         liftIO $ do
             item ^. label @?= "filter"
             item ^. kind @?= Just CiFunction
@@ -214,7 +214,7 @@ snippetTests = testGroup "snippets" [
         _ <- applyEdit doc te
 
         compls <- getCompletions doc (Position 5 18)
-        item <- getCopletionByLabel "filter" compls
+        item <- getCompletionByLabel "filter" compls
         liftIO $ do
             item ^. label @?= "filter"
             item ^. kind @?= Just CiFunction
@@ -228,7 +228,7 @@ snippetTests = testGroup "snippets" [
         _ <- applyEdit doc te
 
         compls <- getCompletions doc (Position 5 29)
-        item <- getCopletionByLabel "intersperse" compls
+        item <- getCompletionByLabel "intersperse" compls
         liftIO $ do
             item ^. label @?= "intersperse"
             item ^. kind @?= Just CiFunction
@@ -242,7 +242,7 @@ snippetTests = testGroup "snippets" [
         _ <- applyEdit doc te
 
         compls <- getCompletions doc (Position 5 29)
-        item <- getCopletionByLabel "intersperse" compls
+        item <- getCompletionByLabel "intersperse" compls
         liftIO $ do
             item ^. label @?= "intersperse"
             item ^. kind @?= Just CiFunction
@@ -282,7 +282,7 @@ snippetTests = testGroup "snippets" [
             _      <- applyEdit doc te
 
             compls <- getCompletions doc (Position 5 11)
-            item <- getCopletionByLabel "foldl" compls
+            item <- getCompletionByLabel "foldl" compls
             liftIO $ do
                 item ^. label @?= "foldl"
                 item ^. kind @?= Just CiFunction
@@ -339,8 +339,8 @@ compls `shouldNotContainCompl` lbl =
     all ((/= lbl) . (^. label)) compls
     @? "Should not contain completion: " ++ show lbl
 
-getCopletionByLabel :: T.Text -> [CompletionItem] -> Session CompletionItem
-getCopletionByLabel lbl compls =
+getCompletionByLabel :: T.Text -> [CompletionItem] -> Session CompletionItem
+getCompletionByLabel lbl compls =
     case find (\c -> c ^. label == lbl) compls of
         Just c -> pure c
         Nothing ->
