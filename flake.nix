@@ -238,7 +238,7 @@
 
         # Create a development shell of hls project
         # See https://github.com/NixOS/nixpkgs/blob/5d4a430472cafada97888cc80672fab255231f57/pkgs/development/haskell-modules/make-package-set.nix#L319
-        mkDevShell = hpkgs:
+        mkDevShell = hpkgs: cabalProject:
           with pkgs;
           hpkgs.shellFor {
             doBenchmark = true;
@@ -277,6 +277,8 @@
               export DYLD_LIBRARY_PATH=${gmp}/lib:${zlib}/lib:${ncurses}/lib:${capstone}/lib
               export PATH=$PATH:$HOME/.local/bin
               ${(pre-commit-check ghcDefault).shellHook}
+
+              alias cabal='cabal --project-file=${cabalProject}'
             '';
           };
         # Create a hls executable
@@ -295,15 +297,15 @@
             }));
       in with pkgs; rec {
 
-        packages = {
-          # dev shell
-          haskell-language-server-dev = mkDevShell ghcDefault;
-          haskell-language-server-884-dev = mkDevShell ghc884;
-          haskell-language-server-8107-dev = mkDevShell ghc8107;
-          haskell-language-server-901-dev = mkDevShell ghc901;
-          haskell-language-server-921-dev = mkDevShell ghc921;
+        devShells = {
+          haskell-language-server-dev = mkDevShell ghcDefault "cabal.project";
+          haskell-language-server-884-dev = mkDevShell ghc884 "cabal.project";
+          haskell-language-server-8107-dev = mkDevShell ghc8107 "cabal.project";
+          haskell-language-server-901-dev = mkDevShell ghc901 "cabal-ghc90.project";
+          haskell-language-server-921-dev = mkDevShell ghc921 "cabal-ghc921.project";
+        };
 
-          # hls package
+        packages = {
           haskell-language-server = mkExe ghcDefault;
           haskell-language-server-884 = mkExe ghc884;
           haskell-language-server-8107 = mkExe ghc8107;
@@ -316,6 +318,6 @@
 
         defaultPackage = packages.haskell-language-server;
 
-        devShell = packages.haskell-language-server-dev;
+        devShell = devShells.haskell-language-server-dev;
       });
 }
