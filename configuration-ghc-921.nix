@@ -10,6 +10,10 @@ let
     "hls-alternate-number-format-plugin"
     "hls-eval-plugin"
     "hls-tactics-plugin"
+    # That one is not technically a plugin, but by putting it in this list, we
+    # get it removed from the top level list of requirement and it is not pull
+    # in the nix shell.
+    "shake-bench"
   ];
 
   hpkgsOverride = hself: hsuper:
