@@ -251,22 +251,32 @@
                   removeAttrs hlsSources ghc921Config.disabledPlugins
                 else
                   hlsSources));
-            buildInputs = [ gmp zlib ncurses capstone tracy (gen-hls-changelogs hpkgs) pythonWithPackages ]
-              ++ (with hpkgs; [
-                cabal-install
-                hie-bios
+            # For theses tools packages, we use ghcDefault
+            # This removes a rebuild with a different GHC version
+            # Theses programs are tools, used as binary, independently of the
+            # version of GHC.
+            # The drawback of this approach is that our shell may pull two GHC
+            # version in scope (the `ghcDefault` one, and the one defined in
+            # `hpkgs`.)
+            # The advantage is that we won't have to rebuild theses tools (and
+            # dependencies) with a recent GHC which may not be supported by
+            # them.
+            buildInputs = [ gmp zlib ncurses capstone tracy (gen-hls-changelogs ghcDefault) pythonWithPackages ]
+              ++ [
+                pkgs.cabal-install
+                ghcDefault.hie-bios
                 hlint
                 # ormolu
                 # stylish-haskell
-                opentelemetry-extra
-              ]);
+                ghcDefault.opentelemetry-extra
+              ];
 
             src = null;
             shellHook = ''
               export LD_LIBRARY_PATH=${gmp}/lib:${zlib}/lib:${ncurses}/lib:${capstone}/lib
               export DYLD_LIBRARY_PATH=${gmp}/lib:${zlib}/lib:${ncurses}/lib:${capstone}/lib
               export PATH=$PATH:$HOME/.local/bin
-              ${if hpkgs.ghc.version != "9.0.1" then (pre-commit-check hpkgs).shellHook else ""}
+              ${(pre-commit-check ghcDefault).shellHook}
             '';
           };
         # Create a hls executable
