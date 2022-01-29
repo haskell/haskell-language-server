@@ -10,6 +10,8 @@ let
   hpkgsOverride = hself: hsuper:
     with pkgs.haskell.lib;
     {
+      hlsDisabledPlugins = disabledPlugins;
+
       fourmolu = hself.fourmolu_0_4_0_0;
       primitive-extras = hself.primitive-extras_0_10_1_2;
 

@@ -245,12 +245,8 @@
             packages = p:
               with builtins;
               map (name: p.${name}) (attrNames
-                (if hpkgs.ghc.version == "9.0.1" then
-                  removeAttrs hlsSources ghc901Config.disabledPlugins
-                else if hpkgs.ghc.version == "9.2.1" then
-                  removeAttrs hlsSources ghc921Config.disabledPlugins
-                else
-                  hlsSources));
+              # Disable dependencies should not be part of the shell.
+              (removeAttrs hlsSources (hpkgs.hlsDisabledPlugins or [])));
             # For theses tools packages, we use ghcDefault
             # This removes a rebuild with a different GHC version
             # Theses programs are tools, used as binary, independently of the

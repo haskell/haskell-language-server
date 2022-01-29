@@ -19,6 +19,8 @@ let
   hpkgsOverride = hself: hsuper:
     with pkgs.haskell.lib;
     {
+      hlsDisabledPlugins = disabledPlugins;
+
       fourmolu = hself.callCabal2nix "fourmolu" inputs.fourmolu {};
       primitive-extras = hself.primitive-extras_0_10_1_2;
       ghc-exactprint = hself.callCabal2nix "ghc-exactprint" inputs.ghc-exactprint {};
