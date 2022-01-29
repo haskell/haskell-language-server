@@ -55,6 +55,10 @@
       url = "https://hackage.haskell.org/package/hlint-3.3.6/hlint-3.3.6.tar.gz";
       flake = false;
     };
+    implicit-hie-cradle = {
+      url = "https://hackage.haskell.org/package/implicit-hie-cradle-0.3.0.5/implicit-hie-cradle-0.3.0.5.tar.gz";
+      flake = false;
+    };
   };
   outputs =
     inputs@{ self, nixpkgs, flake-compat, flake-utils, pre-commit-hooks, gitignore, ... }:
@@ -113,11 +117,7 @@
               lsp-types = hsuper.callCabal2nix "lsp-types" inputs.lsp-types {};
               lsp-test = hsuper.callCabal2nix "lsp-test" inputs.lsp-test {};
 
-              implicit-hie-cradle = hself.callCabal2nix "implicit-hie-cradle"
-                (builtins.fetchTarball {
-                  url = "https://hackage.haskell.org/package/implicit-hie-cradle-0.3.0.5/implicit-hie-cradle-0.3.0.5.tar.gz";
-                  sha256 = "15a7g9x6cjk2b92hb2wilxx4550msxp1pmk5a2shiva821qaxnfq";
-                }) { };
+              implicit-hie-cradle = hself.callCabal2nix "implicit-hie-cradle" inputs.implicit-hie-cradle {};
 
               # https://github.com/NixOS/nixpkgs/issues/140774
               ormolu =
