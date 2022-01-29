@@ -76,7 +76,6 @@ import           Data.Aeson                                   (Result (Success),
 import qualified Data.Aeson.Types                             as A
 import qualified Data.Binary                                  as B
 import qualified Data.ByteString                              as BS
-import           Data.ByteString.Encoding                     as T
 import qualified Data.ByteString.Lazy                         as LBS
 import           Data.Coerce
 import           Data.Foldable
@@ -130,7 +129,6 @@ import           Development.IDE.Types.Location
 import qualified Development.IDE.Types.Logger                 as L
 import           Development.IDE.Types.Options
 import           GHC.Generics                                 (Generic)
-import           GHC.IO.Encoding
 import qualified GHC.LanguageExtensions                       as LangExt
 import qualified HieDb
 import           Ide.Plugin.Config
@@ -149,11 +147,11 @@ import           Ide.Types                                    (DynFlagsModificat
                                                                PluginId)
 import Control.Concurrent.STM.Stats (atomically)
 import Language.LSP.Server (LspT)
-import System.Info.Extra (isMac)
+import System.Info.Extra (isWindows)
 import HIE.Bios.Ghc.Gap (hostIsDynamic)
 
 templateHaskellInstructions :: T.Text
-templateHaskellInstructions = "https://haskell-language-server.readthedocs.io/en/latest/troubleshooting.html#support-for-template-haskell"
+templateHaskellInstructions = "https://haskell-language-server.readthedocs.io/en/latest/troubleshooting.html#static-binaries"
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
@@ -526,14 +524,13 @@ persistentHieFileRule :: Rules ()
 persistentHieFileRule = addPersistentRule GetHieAst $ \file -> runMaybeT $ do
   res <- readHieFileForSrcFromDisk file
   vfs <- asks vfs
-  encoding <- liftIO getLocaleEncoding
   (currentSource,ver) <- liftIO $ do
     mvf <- getVirtualFile vfs $ filePathToUri' file
     case mvf of
-      Nothing -> (,Nothing) . T.decode encoding <$> BS.readFile (fromNormalizedFilePath file)
+      Nothing -> (,Nothing) . T.decodeUtf8 <$> BS.readFile (fromNormalizedFilePath file)
       Just vf -> pure (Rope.toText $ _text vf, Just $ _lsp_version vf)
   let refmap = Compat.generateReferencesMap . Compat.getAsts . Compat.hie_asts $ res
-      del = deltaFromDiff (T.decode encoding $ Compat.hie_hs_src res) currentSource
+      del = deltaFromDiff (T.decodeUtf8 $ Compat.hie_hs_src res) currentSource
   pure (HAR (Compat.hie_module res) (Compat.hie_asts res) refmap mempty (HieFromDisk res),del,ver)
 
 getHieAstRuleDefinition :: NormalizedFilePath -> HscEnv -> TcModuleResult -> Action (IdeResult HieAstResult)
@@ -827,7 +824,7 @@ isHiFileStableRule = defineEarlyCutoff $ RuleNoDiagnostics $ \IsHiFileStable f -
 
 displayTHWarning :: LspT c IO ()
 displayTHWarning
-  | isMac && not hostIsDynamic = do
+  | not isWindows && not hostIsDynamic = do
       LSP.sendNotification SWindowShowMessage $
         ShowMessageParams MtInfo $ T.unwords
           [ "This HLS binary does not support Template Haskell."

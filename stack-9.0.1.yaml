@@ -28,6 +28,7 @@ packages:
 - ./plugins/hls-module-name-plugin
 - ./plugins/hls-ormolu-plugin
 - ./plugins/hls-alternate-number-format-plugin
+- ./plugins/hls-selection-range-plugin
 
 extra-deps:
 - aeson-2.0.3.0
@@ -49,6 +50,9 @@ extra-deps:
 - monad-dijkstra-0.1.1.3
 - multistate-0.8.0.3
 - retrie-1.1.0.0
+- lsp-1.4.0.0
+- lsp-types-1.4.0.1
+- lsp-test-0.14.0.2
 - refinery-0.4.0.0
 
 # shake-bench dependencies

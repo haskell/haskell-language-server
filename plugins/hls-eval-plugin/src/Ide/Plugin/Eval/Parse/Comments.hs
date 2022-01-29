@@ -36,7 +36,7 @@ import           Data.Void                                (Void)
 import           Development.IDE                          (Position,
                                                            Range (Range))
 import           Development.IDE.Types.Location           (Position (..))
-import           GHC.Generics hiding (to, UInt)
+import           GHC.Generics                             hiding (UInt, to)
 import           Ide.Plugin.Eval.Types
 import           Language.LSP.Types                       (UInt)
 import           Language.LSP.Types.Lens                  (character, end, line,

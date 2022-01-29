@@ -11,6 +11,15 @@ inputs:
   os:
     description: "Operating system: Linux, Windows or macOS"
     required: true
+  cache-prefix:
+    description: "To allow make unique the cache key"
+    required: false
+    default: ""
+  shorten-hls:
+    description: "Whether we have to shorten haskell language server to hls"
+    required: false
+    default: "true"
+
 runs:
   using: "composite"
   steps:
@@ -43,7 +52,7 @@ runs:
         # File has some protections preventing regular `rm`.
         # (most probably sticky bit is set on $HOME)
         # `&&` insures `rm -f` return is positive.
-        # Many platforms aslo have `alias cp='cp -i'`.
+        # Many platforms also have `alias cp='cp -i'`.
         GHCVER2=${GHCVER//./}
         ALT_PROJECT_FILE_MINOR=cabal-ghc${GHCVER2}.project
         ALT_PROJECT_FILE_MAJOR=cabal-ghc${GHCVER2:0:2}.project
@@ -57,15 +66,15 @@ runs:
     - if: inputs.os == 'Windows' && inputs.ghc == '8.8.4'
       name: (Windows,GHC 8.8) Modify `cabal.project` to workaround segfaults
       run: |
-        echo "package floskell" >> cabal.project
-        echo "  ghc-options: -O0" >> cabal.project
+        echo -e 'package floskell\n    ghc-options: -O0' >> cabal.project.local
       shell: bash
 
     # Shorten binary names as a workaround for filepath length limits in Windows,
-    # but since tests are hardcoded on this workaround -
-    # all platforms (in 2021-12-07) need it.
-    # All workflows which distinquishes cache on `cabal.project` needs this.
-    - name: Workaround shorten binary names
+    # but since tests are hardcoded on this workaround all platforms need it.
+    # All workflows which distinguishes cache on `cabal.project` needs this.
+    # Except hackage one, which needs the original name
+    - if: inputs.shorten-hls == 'true'
+      name: Workaround shorten binary names
       run: |
         sed -i.bak -e 's/haskell-language-server/hls/g' \
                     -e 's/haskell_language_server/hls/g' \
@@ -115,11 +124,11 @@ runs:
         cache-name: compiled-deps
       with:
         path: ${{ steps.HaskEnvSetup.outputs.cabal-store }}
-        key:  ${{ env.cache-name }}-${{ inputs.os }}-${{ inputs.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project.freeze') }}
+        key:  ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-${{ inputs.ghc }}-${{ env.INDEX_STATE }}-${{ hashFiles('cabal.project.freeze') }}
         restore-keys: |
-              ${{ env.cache-name }}-${{ inputs.os }}-${{ inputs.ghc }}-${{ env.INDEX_STATE }}-
-              ${{ env.cache-name }}-${{ inputs.os }}-${{ inputs.ghc }}-
-              ${{ env.cache-name }}-${{ inputs.os }}-
+              ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-${{ inputs.ghc }}-${{ env.INDEX_STATE }}-
+              ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-${{ inputs.ghc }}-
+              ${{ inputs.cache-prefix }}${{ env.cache-name }}-${{ inputs.os }}-
 
     # We remove the freeze file because it could interfere with the build
     - name: "Remove freeze file"

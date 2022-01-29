@@ -26,6 +26,7 @@ packages:
          ./plugins/hls-ormolu-plugin
          ./plugins/hls-call-hierarchy-plugin
          ./plugins/hls-alternate-number-format-plugin
+         ./plugins/hls-selection-range-plugin
 
 tests: true
 
@@ -35,7 +36,7 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2022-01-11T22:05:45Z
+index-state: 2022-01-24T21:03:03Z
 
 constraints:
   -- These plugins don't work on GHC9 yet

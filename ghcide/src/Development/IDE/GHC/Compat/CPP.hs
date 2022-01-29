@@ -25,17 +25,17 @@ import           LlvmCodeGen                (llvmVersionList)
 #elif MIN_VERSION_ghc(8,8,0)
 import           LlvmCodeGen                (LlvmVersion (..))
 #endif
-import           DynFlags
-import           Module                     (toInstalledUnitId, rtsUnitId)
 import           Control.Monad
 import           Data.List                  (intercalate)
 import           Data.Maybe
 import           Data.Version
+import           DynFlags
+import           Module                     (rtsUnitId, toInstalledUnitId)
 import           System.Directory
 import           System.FilePath
 import           System.Info
 
-import           Development.IDE.GHC.Compat       as Compat
+import           Development.IDE.GHC.Compat as Compat
 
 doCpp :: DynFlags -> Bool -> FilePath -> FilePath -> IO ()
 doCpp dflags raw input_fn output_fn = do

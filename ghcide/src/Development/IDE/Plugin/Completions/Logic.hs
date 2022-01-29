@@ -31,6 +31,7 @@ import           Data.Function                            (on)
 import           Data.Functor
 import qualified Data.HashMap.Strict                      as HM
 import qualified Data.HashSet                             as HashSet
+import           Data.Monoid                              (First(..))
 import           Data.Ord                                 (Down (Down))
 import qualified Data.Set                                 as Set
 import           Development.IDE.Core.Compile
@@ -732,7 +733,7 @@ isUsedAsInfix line prefixMod prefixText pos
 
 openingBacktick :: T.Text -> T.Text -> T.Text -> Position -> Bool
 openingBacktick line prefixModule prefixText Position { _character=(fromIntegral -> c) }
-  | backtickIndex < 0 || backtickIndex > T.length line = False
+  | backtickIndex < 0 || backtickIndex >= T.length line = False
   | otherwise = (line `T.index` backtickIndex) == '`'
     where
     backtickIndex :: Int
@@ -757,12 +758,8 @@ openingBacktick line prefixModule prefixText Position { _character=(fromIntegral
     -}
 -- TODO: Turn this into an alex lexer that discards prefixes as if they were whitespace.
 stripPrefix :: T.Text -> T.Text
-stripPrefix name = T.takeWhile (/=':') $ go prefixes
-  where
-    go [] = name
-    go (p:ps)
-      | T.isPrefixOf p name = T.drop (T.length p) name
-      | otherwise = go ps
+stripPrefix name = T.takeWhile (/=':') $ fromMaybe name $
+  getFirst $ foldMap (First . (`T.stripPrefix` name)) prefixes
 
 -- | Prefixes that can occur in a GHC OccName
 prefixes :: [T.Text]

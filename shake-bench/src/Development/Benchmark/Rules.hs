@@ -67,12 +67,12 @@ module Development.Benchmark.Rules
   ) where
 
 import           Control.Applicative
+import           Control.Lens                              ((^.))
 import           Control.Monad
-import           Control.Lens ((^.))
 import           Data.Aeson                                (FromJSON (..),
                                                             ToJSON (..),
-                                                            Value (..), object, (.!=),
-                                                            (.:?), (.=))
+                                                            Value (..), object,
+                                                            (.!=), (.:?), (.=))
 import           Data.Aeson.Lens                           (_Object)
 import           Data.Char                                 (isDigit)
 import           Data.List                                 (find, isInfixOf,
@@ -502,7 +502,7 @@ instance FromJSON GitCommit where
   parseJSON (String s) = pure $ GitCommit s Nothing Nothing True
   parseJSON o@(Object _) = do
     let keymap = o ^. _Object
-    case toList keymap of 
+    case toList keymap of
       [(name, String gitName)] -> pure $ GitCommit gitName (Just name) Nothing True
       [(name, Object props)] ->
         GitCommit

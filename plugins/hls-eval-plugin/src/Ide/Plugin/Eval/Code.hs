@@ -1,6 +1,6 @@
 {-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE ViewPatterns        #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ViewPatterns      #-}
 {-# OPTIONS_GHC -Wwarn -fno-warn-orphans #-}
 
 -- | Expression execution

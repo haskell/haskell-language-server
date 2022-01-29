@@ -56,11 +56,13 @@ renameTests = testGroup "rename suggestions" [
 
             cars <- getAllCodeActions doc
             cmd <- liftIO $ inspectCommand cars ["Replace with", "putStrLn"]
-            let Just (List [args]) = cmd ^. L.arguments
-                editParams = args ^. ix "fallbackWorkspaceEdit" . _Object
-            liftIO $ do
-                (editParams & has (ix "changes"))  @? "Contains changes"
-                not (editParams & has (ix "documentChanges")) @? "Doesn't contain documentChanges"
+            let mbArgs = cmd ^. L.arguments
+            case mbArgs of
+                Just (List [args]) -> liftIO $ do
+                    let editParams = args ^. ix "fallbackWorkspaceEdit" . _Object
+                    (editParams & has (ix "changes"))  @? "Contains changes"
+                    not (editParams & has (ix "documentChanges")) @? "Doesn't contain documentChanges"
+                _ -> error $ "Unexpected arguments: " ++ show mbArgs
 
             executeCommand cmd
             _ <- anyRequest
@@ -115,14 +117,16 @@ packageTests = testGroup "add package suggestions" [
                 in liftIO $ any (`T.isPrefixOf` (diag ^. L.message)) prefixes @? "Contains prefix"
 
             acts <- getAllCodeActions doc
-            let (InR action:_) = acts
+            case acts of
+                (InR action:_) -> do
+                    liftIO $ do
+                        action ^. L.title @?= "Add text as a dependency"
+                        action ^. L.kind @?= Just CodeActionQuickFix
+                        "package:add" `T.isSuffixOf` (action ^. L.command . _Just . L.command) @? "Command contains package:add"
 
-            liftIO $ do
-                action ^. L.title @?= "Add text as a dependency"
-                action ^. L.kind @?= Just CodeActionQuickFix
-                "package:add" `T.isSuffixOf` (action ^. L.command . _Just . L.command) @? "Command contains package:add"
+                    executeCodeAction action
 
-            executeCodeAction action
+                _ -> error $ "Unexpected code actions: " ++ show acts
 
             contents <- skipManyTill anyMessage $ getDocumentEdit . TextDocumentIdentifier =<< getDocUri "add-package-test.cabal"
             liftIO $
@@ -175,14 +179,18 @@ redundantImportTests = testGroup "redundant import code actions" [
 
             liftIO $ actionTitles `shouldContain` ["Remove import", "Remove all redundant imports"]
 
-            let Just removeAction = find (\x -> x ^. L.title == "Remove import") allActions
+            let mbRemoveAction = find (\x -> x ^. L.title == "Remove import") allActions
 
-            liftIO $ do
-                forM_ allActions $ \a -> a ^. L.kind @?= Just CodeActionQuickFix
-                forM_ allActions $ \a -> a ^. L.command @?= Nothing
-                forM_ allActions $ \a -> isJust (a ^. L.edit) @? "Has edit"
+            case mbRemoveAction of
+                Just removeAction -> do
+                    liftIO $ do
+                        forM_ allActions $ \a -> a ^. L.kind @?= Just CodeActionQuickFix
+                        forM_ allActions $ \a -> a ^. L.command @?= Nothing
+                        forM_ allActions $ \a -> isJust (a ^. L.edit) @? "Has edit"
 
-            executeCodeAction removeAction
+                    executeCodeAction removeAction
+
+                Nothing -> error $ "Unexpected code actions: " ++ show allActions
 
             -- No command/applyworkspaceedit should be here, since action
             -- provides workspace edit property which skips round trip to
