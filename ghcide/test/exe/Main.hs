@@ -4937,8 +4937,7 @@ projectCompletionTests =
               "import ALocal"
             ]
         compls <- getCompletions doc (Position 1 13)
-        --
-        item <- getCompletionByLabel "ALocalModule" compls
+        let item = head $ filter ((== "ALocalModule") . (^. Lens.label)) compls
         liftIO $ do
           item ^. Lens.label @?= "ALocalModule",
       testSession' "auto complete functions from qualified imports without alias" $ \dir-> do
