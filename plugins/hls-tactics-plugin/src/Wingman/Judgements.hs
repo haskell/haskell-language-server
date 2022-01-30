@@ -32,8 +32,9 @@ buildHypothesis
   = Hypothesis
   . mapMaybe go
   where
-    go (occName -> occ, Just ty)
-      | (h:_) <- occNameString occ
+    go (occName -> occ, t)
+      | Just ty <- t
+      , (h:_) <- occNameString occ
       , isAlpha h = Just $ HyInfo occ UserPrv $ CType ty
       | otherwise = Nothing
 
