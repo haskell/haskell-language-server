@@ -6,10 +6,13 @@ This is a bug fix release to restore a fully statically linked haskell-language-
 
 - It has been reported [here](https://github.com/haskell/haskell-language-server/issues/2650)
   - Thanks all reporters for the fast feedback
-- And the bug has been traced [here](https://github.com/haskell/haskell-language-server/pull/2615#discussion_r795059782)
+- The bug has been traced [here](https://github.com/haskell/haskell-language-server/pull/2615#discussion_r795059782)
+- And the fix is in [this pr](https://github.com/haskell/haskell-language-server/pull/2647)
 
 ### Pull requests merged for 1.6.0
 
+- Post 1.6.0.0 fixes and prepare 1.6.1.0 bug fix release
+([#2647](https://github.com/haskell/haskell-language-server/pull/2647)) by @jneira
 - Move hackage back to flake.nix
 ([#2652](https://github.com/haskell/haskell-language-server/pull/2652)) by @guibou
 - Wingman: Fix #1879
