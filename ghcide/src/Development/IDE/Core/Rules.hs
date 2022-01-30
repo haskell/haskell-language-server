@@ -91,7 +91,6 @@ import           Data.Maybe
 import qualified Data.Rope.UTF16                              as Rope
 import qualified Data.Set                                     as Set
 import qualified Data.Text                                    as T
-import qualified Data.Text.IO                                 as T
 import qualified Data.Text.Encoding                           as T
 import           Data.Time                                    (UTCTime (..))
 import           Data.Tuple.Extra
@@ -148,11 +147,11 @@ import           Ide.Types                                    (DynFlagsModificat
                                                                PluginId)
 import Control.Concurrent.STM.Stats (atomically)
 import Language.LSP.Server (LspT)
-import System.Info.Extra (isMac)
+import System.Info.Extra (isWindows)
 import HIE.Bios.Ghc.Gap (hostIsDynamic)
 
 templateHaskellInstructions :: T.Text
-templateHaskellInstructions = "https://haskell-language-server.readthedocs.io/en/latest/troubleshooting.html#support-for-template-haskell"
+templateHaskellInstructions = "https://haskell-language-server.readthedocs.io/en/latest/troubleshooting.html#static-binaries"
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
@@ -528,7 +527,7 @@ persistentHieFileRule = addPersistentRule GetHieAst $ \file -> runMaybeT $ do
   (currentSource,ver) <- liftIO $ do
     mvf <- getVirtualFile vfs $ filePathToUri' file
     case mvf of
-      Nothing -> (,Nothing) <$> T.readFile (fromNormalizedFilePath file)
+      Nothing -> (,Nothing) . T.decodeUtf8 <$> BS.readFile (fromNormalizedFilePath file)
       Just vf -> pure (Rope.toText $ _text vf, Just $ _lsp_version vf)
   let refmap = Compat.generateReferencesMap . Compat.getAsts . Compat.hie_asts $ res
       del = deltaFromDiff (T.decodeUtf8 $ Compat.hie_hs_src res) currentSource
@@ -825,7 +824,7 @@ isHiFileStableRule = defineEarlyCutoff $ RuleNoDiagnostics $ \IsHiFileStable f -
 
 displayTHWarning :: LspT c IO ()
 displayTHWarning
-  | isMac && not hostIsDynamic = do
+  | not isWindows && not hostIsDynamic = do
       LSP.sendNotification SWindowShowMessage $
         ShowMessageParams MtInfo $ T.unwords
           [ "This HLS binary does not support Template Haskell."
