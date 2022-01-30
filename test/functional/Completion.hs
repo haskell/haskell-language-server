@@ -338,13 +338,3 @@ shouldNotContainCompl :: [CompletionItem] -> T.Text -> Assertion
 compls `shouldNotContainCompl` lbl =
     all ((/= lbl) . (^. label)) compls
     @? "Should not contain completion: " ++ show lbl
-
-getCompletionByLabel :: T.Text -> [CompletionItem] -> Session CompletionItem
-getCompletionByLabel lbl compls =
-    case find (\c -> c ^. label == lbl) compls of
-        Just c -> pure c
-        Nothing ->
-            let knownLabels = compls ^.. traversed . label
-            in liftIO . assertFailure $
-                "Completion with label " <> show lbl
-                <> " not found in " <> show knownLabels

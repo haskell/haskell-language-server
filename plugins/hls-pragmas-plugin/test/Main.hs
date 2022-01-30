@@ -124,11 +124,7 @@ completionTest testComment fileName te' label textFormat insertText detail [a, b
     let te = TextEdit (Range (Position a b) (Position c d)) te'
     _ <- applyEdit doc te
     compls <- getCompletions doc (Position x y)
-    item <- case find (\c -> c ^. L.label == label) compls of
-      Just c -> pure c
-      Nothing -> liftIO . assertFailure $
-          "Completion with label " <> show label
-          <> " not found in " <> show (compls ^.. traversed . L.label)
+    item <- getCompletionByLabel label compls
     liftIO $ do
       item ^. L.label @?= label
       item ^. L.kind @?= Just CiKeyword
