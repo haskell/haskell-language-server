@@ -1,6 +1,7 @@
 # Installation
 
 A typical haskell-language-server installation consists of:
+
 - One binary file for each supported ghc version: `haskell-language-server-${ghcVersion}`
 - Another binary named `haskell-language-version-wrapper` which analyzes the project or file in the current working dir
   and calls the appropiate `haskell-language-server-${ghcVersion}` variant.
@@ -15,6 +16,7 @@ A typical haskell-language-server installation consists of:
 ## ghcup
 
 If you are using [`ghcup`](https://www.haskell.org/ghcup/) to manage your installations, you can install `haskell-language-server` with
+
 ```bash
 ghcup install hls
 ```
@@ -22,6 +24,7 @@ ghcup install hls
 You can check if HLS is available for your platorm via ghcup here: <https://haskell.org/ghcup/install/#supported-platforms>.
 
 You can also install HLS from source without checking out the code manually:
+
 ```bash
 ghcup compile hls -v 1.4.0 8.10.7
 ```
@@ -31,6 +34,7 @@ Check `ghcup compile hls --help` for a full list of compilation options.
 ## chocolatey
 
 If you are using [`chocolatey`](https://chocolatey.org/) to manage your installations in windows, [you can install `haskell-language-server`](https://community.chocolatey.org/packages/haskell-language-server) with
+
 ```bash
 choco install haskell-language-server
 ````
@@ -78,8 +82,6 @@ pkg install hs-haskell-language-server
 
 to install it. At the moment, HLS installed this way only supports the same GHC
 version as the ports one.
-
-
 
 ## Installation from source
 

@@ -3,7 +3,8 @@ module Main
   ( main
   ) where
 
-import           Control.Lens            ((^.))
+import           Control.Lens            ((^.), (^..), traversed)
+import           Data.Foldable           (find)
 import qualified Data.Text               as T
 import qualified Ide.Plugin.Pragmas      as Pragmas
 import qualified Language.LSP.Types.Lens as L
@@ -74,7 +75,10 @@ codeActionTest testComment fp actions =
     _ <- waitForDiagnosticsFrom doc
     cas <- map fromAction <$> getAllCodeActions doc
     mapM_ (\(action, contains) -> go action contains cas) actions
-    executeCodeAction $ head cas
+    action <- case cas of
+      (a:_) -> pure a
+      [] -> liftIO $ assertFailure "Expected non-empty list of code actions"
+    executeCodeAction action
     where
       go action contains cas = liftIO $ action `elem` map (^. L.title) cas @? contains
 
@@ -85,8 +89,9 @@ codeActionTests' =
     goldenWithPragmas "no duplication" "NamedFieldPuns" $ \doc -> do
       _ <- waitForDiagnosticsFrom doc
       cas <- map fromAction <$> getCodeActions doc (Range (Position 8 9) (Position 8 9))
-      liftIO $ length cas == 1 @? "Expected one code action, but got: " <> show cas
-      let ca = head cas
+      ca <- liftIO $ case cas of
+        [ca] -> pure ca
+        _ -> assertFailure $ "Expected one code action, but got: " <> show cas
       liftIO $ (ca ^. L.title == "Add \"NamedFieldPuns\"") @? "NamedFieldPuns code action"
       executeCodeAction ca
   , goldenWithPragmas "doesn't suggest disabling type errors" "DeferredTypeErrors" $ \doc -> do
@@ -119,7 +124,7 @@ completionTest testComment fileName te' label textFormat insertText detail [a, b
     let te = TextEdit (Range (Position a b) (Position c d)) te'
     _ <- applyEdit doc te
     compls <- getCompletions doc (Position x y)
-    let item = head $ filter ((== label) . (^. L.label)) compls
+    item <- getCompletionByLabel label compls
     liftIO $ do
       item ^. L.label @?= label
       item ^. L.kind @?= Just CiKeyword

@@ -34,7 +34,8 @@ buildHypothesis
   where
     go (occName -> occ, t)
       | Just ty <- t
-      , isAlpha . head . occNameString $ occ = Just $ HyInfo occ UserPrv $ CType ty
+      , (h:_) <- occNameString occ
+      , isAlpha h = Just $ HyInfo occ UserPrv $ CType ty
       | otherwise = Nothing
 
 
