@@ -236,46 +236,78 @@
           dontInstall = true;
         };
 
+        mkDevShell = hpkgs: cabalProject: with pkgs; mkShell {
+          # For theses tools packages, we use ghcDefault
+          # This removes a rebuild with a different GHC version
+          # Theses programs are tools, used as binary, independently of the
+          # version of GHC.
+          # The drawback of this approach is that our shell may pull two GHC
+          # version in scope (the default one, and the one defined in
+          # `hpkgs`.)
+          # The advantage is that we won't have to rebuild theses tools (and
+          # dependencies) with a recent GHC which may not be supported by
+          # them.
+          buildInputs = [
+            # our compiling toolchain
+            hpkgs.ghc
+            pkgs.cabal-install
+            # @guibou: I'm not sure hie-bios is needed
+            ghcDefault.hie-bios
+            # Dependencies needed to build some parts of hackage
+            gmp zlib ncurses
+            # Changelog tooling
+            (gen-hls-changelogs ghcDefault)
+            # For the documentation
+            pythonWithPackages
+            # @guibou: I'm not sure this is needed.
+            hlint
+            ghcDefault.opentelemetry-extra
+            capstone tracy
+            # ormolu
+            # stylish-haskell
+            ];
+
+
+          shellHook = ''
+            # @guibou: I'm not sure theses lines are needed
+            export LD_LIBRARY_PATH=${gmp}/lib:${zlib}/lib:${ncurses}/lib:${capstone}/lib
+            export DYLD_LIBRARY_PATH=${gmp}/lib:${zlib}/lib:${ncurses}/lib:${capstone}/lib
+            export PATH=$PATH:$HOME/.local/bin
+
+            # Enable the shell hooks
+            ${(pre-commit-check ghcDefault).shellHook}
+
+            # If the cabal project file is not the default one.
+            # Print a warning and generate an alias.
+            if [ ${cabalProject} != "cabal.project" ]
+            then
+              echo "Cabal won't be able to build your project without using the project file "${cabalProject}", such as:"
+              echo "    cabal --project-file=${cabalProject}"
+              echo "An alias "cabal_project" is available. Use it like:"
+              echo "    cabal_project build"
+
+              alias cabal_project='cabal --project-file=${cabalProject}'
+            fi
+          '';
+        };
+
         # Create a development shell of hls project
         # See https://github.com/NixOS/nixpkgs/blob/5d4a430472cafada97888cc80672fab255231f57/pkgs/development/haskell-modules/make-package-set.nix#L319
-        mkDevShell = hpkgs: cabalProject:
+        mkDevShellWithNixDeps = hpkgs: cabalProject:
           with pkgs;
+          let simpleShell = mkDevShell hpkgs cabalProject;
+          in
           hpkgs.shellFor {
+            inherit (simpleShell) shellHook buildInputs;
+
             doBenchmark = true;
             packages = p:
               with builtins;
               map (name: p.${name}) (attrNames
               # Disable dependencies should not be part of the shell.
               (removeAttrs hlsSources (hpkgs.hlsDisabledPlugins or [])));
-            # For theses tools packages, we use ghcDefault
-            # This removes a rebuild with a different GHC version
-            # Theses programs are tools, used as binary, independently of the
-            # version of GHC.
-            # The drawback of this approach is that our shell may pull two GHC
-            # version in scope (the `ghcDefault` one, and the one defined in
-            # `hpkgs`.)
-            # The advantage is that we won't have to rebuild theses tools (and
-            # dependencies) with a recent GHC which may not be supported by
-            # them.
-            buildInputs = [ gmp zlib ncurses capstone tracy (gen-hls-changelogs ghcDefault) pythonWithPackages ]
-              ++ [
-                pkgs.cabal-install
-                ghcDefault.hie-bios
-                hlint
-                # ormolu
-                # stylish-haskell
-                ghcDefault.opentelemetry-extra
-              ];
 
             src = null;
-            shellHook = ''
-              export LD_LIBRARY_PATH=${gmp}/lib:${zlib}/lib:${ncurses}/lib:${capstone}/lib
-              export DYLD_LIBRARY_PATH=${gmp}/lib:${zlib}/lib:${ncurses}/lib:${capstone}/lib
-              export PATH=$PATH:$HOME/.local/bin
-              ${(pre-commit-check ghcDefault).shellHook}
-
-              alias cabal='cabal --project-file=${cabalProject}'
-            '';
           };
         # Create a hls executable
         # Copied from https://github.com/NixOS/nixpkgs/blob/210784b7c8f3d926b7db73bdad085f4dc5d79418/pkgs/development/tools/haskell/haskell-language-server/withWrapper.nix#L16
@@ -299,6 +331,12 @@
           haskell-language-server-8107-dev = mkDevShell ghc8107 "cabal.project";
           haskell-language-server-901-dev = mkDevShell ghc901 "cabal-ghc90.project";
           haskell-language-server-921-dev = mkDevShell ghc921 "cabal-ghc921.project";
+
+          haskell-language-server-dev-nix = mkDevShellWithNixDeps ghcDefault "cabal.project";
+          haskell-language-server-884-dev-nix = mkDevShellWithNixDeps ghc884 "cabal.project";
+          haskell-language-server-8107-dev-nix = mkDevShellWithNixDeps ghc8107 "cabal.project";
+          haskell-language-server-901-dev-nix = mkDevShellWithNixDeps ghc901 "cabal-ghc90.project";
+          haskell-language-server-921-dev-nix = mkDevShellWithNixDeps ghc921 "cabal-ghc921.project";
         };
 
         packages = {
