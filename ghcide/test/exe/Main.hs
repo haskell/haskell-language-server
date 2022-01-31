@@ -1520,7 +1520,7 @@ extendImportTests = testGroup "extend import actions"
                     , "import ModuleA as A (stuffB, (.*))"
                     , "main = print (stuffB .* stuffB)"
                     ])
-        , ignoreForGHC92 "missing comma. #2662" $ testSession "extend single line import with infix constructor" $ template
+        , knownBrokenForGhcVersions [GHC92] "missing comma. #2662" $ testSession "extend single line import with infix constructor" $ template
             []
             ("ModuleB.hs", T.unlines
                     [ "module ModuleB where"
@@ -1534,7 +1534,7 @@ extendImportTests = testGroup "extend import actions"
                     , "import Data.List.NonEmpty (fromList, NonEmpty ((:|)))"
                     , "main = case (fromList []) of _ :| _ -> pure ()"
                     ])
-        , ignoreForGHC92 "missing comma. #2662" $ testSession "extend single line import with prefix constructor" $ template
+        , knownBrokenForGhcVersions [GHC92] "missing comma. #2662" $ testSession "extend single line import with prefix constructor" $ template
             []
             ("ModuleB.hs", T.unlines
                     [ "module ModuleB where"
