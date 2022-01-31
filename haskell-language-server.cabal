@@ -208,6 +208,11 @@ flag brittany
   default:     True
   manual:      True
 
+flag dynamic
+  description: Build with the dyn rts
+  default:     True
+  manual:      True
+
 common example-plugins
   hs-source-dirs: plugins/default/src
   other-modules: Ide.Plugin.Example,
@@ -354,7 +359,6 @@ executable haskell-language-server
   other-modules:    Plugins
 
   ghc-options:
-    -dynamic
     -threaded
     -- allow user RTS overrides
     -rtsopts
@@ -365,6 +369,8 @@ executable haskell-language-server
     -Wno-unticked-promoted-constructors
   if flag(pedantic)
     ghc-options: -Werror
+  if flag(dynamic)
+    ghc-options: -dynamic
 
   build-depends:
     , aeson
