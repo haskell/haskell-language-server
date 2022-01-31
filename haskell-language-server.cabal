@@ -354,6 +354,7 @@ executable haskell-language-server
   other-modules:    Plugins
 
   ghc-options:
+    -dynamic
     -threaded
     -- allow user RTS overrides
     -rtsopts
