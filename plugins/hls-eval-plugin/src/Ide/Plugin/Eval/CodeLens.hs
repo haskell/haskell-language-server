@@ -73,13 +73,21 @@ import           GHC                             (ClsInst,
                                                   getInteractiveDynFlags,
                                                   isImport, isStmt, load,
                                                   parseName, pprFamInst,
-                                                  pprInstance, setLogAction,
-                                                  setTargets, typeKind)
+                                                  pprInstance, setTargets,
+                                                  typeKind)
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC                             (Fixity, pushLogHookM)
+#else
+import           GHC                             (setLogAction)
+#endif
 import qualified GHC.LanguageExtensions.Type     as LangExt (Extension (..))
 
 import           Development.IDE.Core.FileStore  (setSomethingModified)
 import           Development.IDE.Types.Shake     (toKey)
 import           Ide.Plugin.Config               (Config)
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC.Types.SrcLoc                (UnhelpfulSpanReason (UnhelpfulInteractive))
+#endif
 import           Ide.Plugin.Eval.Code            (Statement, asStatements,
                                                   evalSetup, myExecStmt,
                                                   propSetup, resultRange,
@@ -106,7 +114,8 @@ import           System.FilePath                 (takeFileName)
 import           System.IO                       (hClose)
 import           UnliftIO.Temporary              (withSystemTempFile)
 
-#if MIN_VERSION_ghc(9,0,0)
+#if MIN_VERSION_ghc(9,2,0)
+#elif MIN_VERSION_ghc(9,0,0)
 import           GHC.Driver.Session              (unitDatabases, unitState)
 import           GHC.Types.SrcLoc                (UnhelpfulSpanReason (UnhelpfulInteractive))
 #else
@@ -247,13 +256,8 @@ runEvalCmd plId st EvalParams{..} =
                         $ idflags
                 setInteractiveDynFlags $ df'
 #if MIN_VERSION_ghc(9,0,0)
-                        { unitState =
-                            unitState
-                                df
-                        , unitDatabases =
-                            unitDatabases
-                                df
-                        , packageFlags =
+                        {
+                        packageFlags =
                             packageFlags
                                 df
                         , useColor = Never
@@ -275,7 +279,19 @@ runEvalCmd plId st EvalParams{..} =
 #endif
 
                 -- set up a custom log action
-#if MIN_VERSION_ghc(9,0,0)
+#if MIN_VERSION_ghc(9,2,0)
+                -- NOTE: I removed that, it was breaking the eval plugin, sometimes
+                -- I don't know why, I don't even understand what is the purpose of theses lines.
+                -- I just copied them from the previous version and tried to
+                -- adapt them to the new GHC 9.2 API.
+                --
+                -- But tests are fine without this.
+                -- So, what have I missed?
+                --
+                -- pushLogHookM . const $ \_df _wr _sev _span _doc ->
+                --    defaultLogActionHPutStrDoc _df False logHandle _doc
+                    -- TODO: check the True
+#elif MIN_VERSION_ghc(9,0,0)
                 setLogAction $ \_df _wr _sev _span _doc ->
                     defaultLogActionHPutStrDoc _df logHandle _doc
 #else
@@ -687,7 +703,9 @@ doTypeCmd dflags arg = do
 
 parseExprMode :: Text -> (TcRnExprMode, T.Text)
 parseExprMode rawArg = case T.break isSpace rawArg of
+#if !MIN_VERSION_ghc(9,0,0)
     ("+v", rest) -> (TM_NoInst, T.strip rest)
+#endif
     ("+d", rest) -> (TM_Default, T.strip rest)
     _            -> (TM_Inst, rawArg)
 

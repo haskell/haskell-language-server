@@ -51,12 +51,18 @@ import qualified GHC.Parser.Annotation           as Anno
 import qualified GHC.Parser.Lexer                as Lexer
 import           GHC.Types.SrcLoc                (PsSpan (..))
 #if MIN_VERSION_ghc(9,2,0)
-import           GHC                             (pm_extra_src_files,
+import           GHC                             (Anchor (anchor),
+                                                  EpAnnComments (priorComments),
+                                                  EpaComment (EpaComment),
+                                                  EpaCommentTok (..),
+                                                  epAnnComments,
+                                                  pm_extra_src_files,
                                                   pm_mod_summary,
                                                   pm_parsed_source)
 import qualified GHC
 import qualified GHC.Driver.Config               as Config
-import           GHC.Hs                          (hpm_module, hpm_src_files)
+import           GHC.Hs                          (LEpaComment, hpm_module,
+                                                  hpm_src_files)
 import           GHC.Parser.Lexer                hiding (initParserState)
 #endif
 #else
@@ -100,6 +106,8 @@ initParserState =
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
+-- GHC 9.2 does not have ApiAnns anymore packaged in ParsedModule. Now the
+-- annotations are found in the ast.
 type ApiAnns = ()
 #else
 type ApiAnns = Anno.ApiAnns
