@@ -105,7 +105,7 @@ jobs:
 
     - name: Build the wrapper
       if: matrix.ghc == '8.10.7'
-      run: cabal build exe:hls-wrapper -O2 $LINUX_CABAL_ARGS
+      run: cabal build exe:hls-wrapper -O2 $CABAL_ARGS
 
     - name: Compress wrapper binary
       if: matrix.ghc == '8.10.7'

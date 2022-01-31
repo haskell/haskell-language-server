@@ -236,29 +236,24 @@ Configuration is done via the "Haskell" section of "Settings".
 
 ### Sublime Text
 
-- Install [LSP](https://packagecontrol.io/packages/LSP) using [Package Control](https://packagecontrol.io/)
-- From Sublime Text, go to Preferences and search for LSP Settings
-- Paste in these settings. Make sure to change the command path to your `haskell-language-server-wrapper`
+Install [LSP](https://packagecontrol.io/packages/LSP) using [Package Control](https://packagecontrol.io/).
+
+Open `Preferences > Package Settings > LSP > Settings` and add the following "haskell-language-server" client configuration to the "clients" key:
 
 ```json
 {
-  "clients": {
-    "haskell-language-server": {
-      "command": ["haskell-language-server-wrapper", "--lsp"],
-      "scopes": ["source.haskell"],
-      "syntaxes": ["Packages/Haskell/Haskell.sublime-syntax"],
-      "languageId": "haskell"
+    "clients": {
+        "haskell-language-server": {
+            "enabled": true,
+            "command": ["haskell-language-server-wrapper", "--lsp"],
+            "selector": "source.haskell"
+        }
     }
-  }
 }
+
 ```
 
-Now open a Haskell project with Sublime Text and enable Language Server in the project.
-You should have these features available:
-
-1. Errors are underlined in red
-2. LSP: Show Diagnostics will show a list of hints and errors
-3. LSP: Format Document will prettify the file
+See [the Sublime Text LSP documentation](https://lsp.sublimetext.io) for information on configuring the client. In particular, you can add a "settings" key to the "haskell-language-server" setting to configure specific HLS plugins as described elsewhere in these docs.
 
 ### Vim or Neovim
 
