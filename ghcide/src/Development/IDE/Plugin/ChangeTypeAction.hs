@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP             #-}
 {-# LANGUAGE ConstraintKinds #-}
 -- | An HLS plugin to provide code actions to change type signatures
 module Development.IDE.Plugin.ChangeTypeAction (descriptor) where
@@ -86,7 +87,7 @@ matchingDiagnostic uri diag@Diagnostic{_message} = unwrapMatch $ _message =~ ("E
 findSigLocOfStringDecl :: SigName p => [LHsDecl (GhcPass p)] -> String -> Maybe SrcSpan
 findSigLocOfStringDecl decls declName =
   listToMaybe
-    [ srcSpan
+    [ locA srcSpan
       | L srcSpan (SigD _ (TypeSig _ idsSig _)) <- decls,
         any ((==) declName . occNameString . occName . unLoc) idsSig
     ]
