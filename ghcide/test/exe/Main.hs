@@ -1520,6 +1520,36 @@ extendImportTests = testGroup "extend import actions"
                     , "import ModuleA as A (stuffB, (.*))"
                     , "main = print (stuffB .* stuffB)"
                     ])
+        , knownBrokenForGhcVersions [GHC92] "missing comma. #2662" $ testSession "extend single line import with infix constructor" $ template
+            []
+            ("ModuleB.hs", T.unlines
+                    [ "module ModuleB where"
+                    , "import Data.List.NonEmpty (fromList)"
+                    , "main = case (fromList []) of _ :| _ -> pure ()"
+                    ])
+            (Range (Position 2 5) (Position 2 6))
+            ["Add NonEmpty((:|)) to the import list of Data.List.NonEmpty"]
+            (T.unlines
+                    [ "module ModuleB where"
+                    , "import Data.List.NonEmpty (fromList, NonEmpty ((:|)))"
+                    , "main = case (fromList []) of _ :| _ -> pure ()"
+                    ])
+        , knownBrokenForGhcVersions [GHC92] "missing comma. #2662" $ testSession "extend single line import with prefix constructor" $ template
+            []
+            ("ModuleB.hs", T.unlines
+                    [ "module ModuleB where"
+                    , "import Prelude hiding (Maybe(..))"
+                    , "import Data.Maybe (catMaybes)"
+                    , "x = Just 10"
+                    ])
+            (Range (Position 3 5) (Position 2 6))
+            ["Add Maybe(Just) to the import list of Data.Maybe"]
+            (T.unlines
+                    [ "module ModuleB where"
+                    , "import Prelude hiding (Maybe(..))"
+                    , "import Data.Maybe (catMaybes, Maybe (Just))"
+                    , "x = Just 10"
+                    ])
         , testSession "extend single line import with type" $ template
             [("ModuleA.hs", T.unlines
                     [ "module ModuleA where"
