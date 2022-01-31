@@ -205,7 +205,7 @@ library
         Development.IDE.Plugin.HLS.GhcIde
         Development.IDE.Plugin.Test
         Development.IDE.Plugin.TypeLenses
-        Development.IDE.Plugin.NewCodeAction
+        Development.IDE.Plugin.ChangeTypeAction
 
     other-modules:
         Development.IDE.Core.FileExists

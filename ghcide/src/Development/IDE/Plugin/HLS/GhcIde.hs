@@ -9,16 +9,16 @@ module Development.IDE.Plugin.HLS.GhcIde
 import           Control.Monad.IO.Class
 import           Development.IDE
 import           Development.IDE.LSP.HoverDefinition
-import qualified Development.IDE.LSP.Notifications    as Notifications
+import qualified Development.IDE.LSP.Notifications       as Notifications
 import           Development.IDE.LSP.Outline
-import qualified Development.IDE.Plugin.CodeAction    as CodeAction
-import qualified Development.IDE.Plugin.Completions   as Completions
-import qualified Development.IDE.Plugin.NewCodeAction as NewCodeAction
-import qualified Development.IDE.Plugin.TypeLenses    as TypeLenses
+import qualified Development.IDE.Plugin.ChangeTypeAction as ChangeTypeAction
+import qualified Development.IDE.Plugin.CodeAction       as CodeAction
+import qualified Development.IDE.Plugin.Completions      as Completions
+import qualified Development.IDE.Plugin.TypeLenses       as TypeLenses
 import           Ide.Types
-import           Language.LSP.Server                  (LspM)
+import           Language.LSP.Server                     (LspM)
 import           Language.LSP.Types
-import           Text.Regex.TDFA.Text                 ()
+import           Text.Regex.TDFA.Text                    ()
 
 descriptors :: [PluginDescriptor IdeState]
 descriptors =
@@ -29,7 +29,7 @@ descriptors =
     CodeAction.fillHolePluginDescriptor "ghcide-code-actions-fill-holes",
     Completions.descriptor "ghcide-completions",
     TypeLenses.descriptor "ghcide-type-lenses",
-    NewCodeAction.descriptor "NEW-ACTION",
+    ChangeTypeAction.descriptor "ghcide-change-type",
     Notifications.descriptor "ghcide-core"
   ]
 
