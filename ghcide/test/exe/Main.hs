@@ -1520,6 +1520,20 @@ extendImportTests = testGroup "extend import actions"
                     , "import ModuleA as A (stuffB, (.*))"
                     , "main = print (stuffB .* stuffB)"
                     ])
+        , testSession "extend single line import with infix constructor" $ template
+            []
+            ("ModuleB.hs", T.unlines
+                    [ "module ModuleB where"
+                    , "import Data.List.NonEmpty (fromList)"
+                    , "main = case (fromList []) of _ :| _ -> pure ()"
+                    ])
+            (Range (Position 2 5) (Position 2 6))
+            ["Add NonEmpty((:|)) to the import list of Data.List.NonEmpty"]
+            (T.unlines
+                    [ "module ModuleB where"
+                    , "import Data.List.NonEmpty (fromList, NonEmpty ((:|)))"
+                    , "main = case (fromList []) of _ :| _ -> pure ()"
+                    ])
         , testSession "extend single line import with type" $ template
             [("ModuleA.hs", T.unlines
                     [ "module ModuleA where"
