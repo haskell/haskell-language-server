@@ -9,7 +9,7 @@ This is a bug fix release to restore a fully statically linked haskell-language-
 - The bug has been traced [here](https://github.com/haskell/haskell-language-server/pull/2615#discussion_r795059782)
 - And the fix is in [this pr](https://github.com/haskell/haskell-language-server/pull/2647)
 
-### Pull requests merged for 1.6.0
+### Pull requests merged for 1.6.1.0
 
 - Post 1.6.0.0 fixes and prepare 1.6.1.0 bug fix release
 ([#2647](https://github.com/haskell/haskell-language-server/pull/2647)) by @jneira
