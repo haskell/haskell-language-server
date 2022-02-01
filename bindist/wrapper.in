@@ -4,9 +4,16 @@ exedir="@@EXE_DIR@@"
 executablename="@@EXE_NAME@@"
 GHC_VERSION="@@GHC_VERSION@@"
 
+# try GHC_LIBDIR from the environment (e.g. user set it)
 if [ -n "${GHC_LIBDIR}" ] ; then
 	:
-else
+# try ghcup, if available
+elif command -v ghcup >/dev/null ; then
+	GHC_LIBDIR="$(ghcup whereis -d ghc ${GHC_VERSION})/../lib/ghc-${GHC_VERSION}/" || unset GHC_LIBDIR
+fi
+
+# if above failed, try to examine ghc in PATH
+if [ -z "${GHC_LIBDIR}" ] ; then
 	if [ -n "${GHC_BIN}" ] && command -v "${GHC_BIN}" >/dev/null ; then
 		ghc_bin=${GHC_BIN}
 	elif command -v ghc-${GHC_VERSION} >/dev/null ; then
@@ -25,6 +32,11 @@ else
 		echo >&2 "Need GHC version ${GHC_VERSION}, got ${ghc_ver}... trying anyway"
 	fi
 	unset ghc_ver ghc_bin
+fi
+
+if [ -z "${GHC_LIBDIR}" ] ; then
+	echo >&2 "Failed to find GHC libdir!"
+	exit 42
 fi
 
 if [ -n "$LD_LIBRARY_PATH" ] ; then
