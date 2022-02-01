@@ -288,12 +288,22 @@ getIdeas nfp = do
           debugm $ "hlint:getIdeas:setExtensions:" ++ show hlintExts
           return $ flags { enabledExtensions = hlintExts }
 
+-- Gets extensions from ModSummary dynflags for the file.
+-- Previously this would concatenate extensions from both hlint's parsedFlags
+-- and the ModSummary dynflags. However using the parsedFlags extensions
+-- can sometimes interfere with the hlint parsing of the file.
+-- See https://github.com/haskell/haskell-language-server/issues/1279
+--
+-- Note: this is used when HLINT_ON_GHC_LIB is not defined. We seem to need
+-- these extensions to construct dynflags to parse the file again. Therefore
+-- using hlint default extensions doesn't seem to be a problem when
+-- HLINT_ON_GHC_LIB is not defined because we don't parse the file again.
 getExtensions :: NormalizedFilePath -> Action [Extension]
 getExtensions nfp = do
     dflags <- getFlags
     let hscExts = EnumSet.toList (extensionFlags dflags)
     let hscExts' = mapMaybe (GhclibParserEx.readExtension . show) hscExts
-    let hlintExts = nub hscExts'
+    let hlintExts = hscExts'
     return hlintExts
   where getFlags :: Action DynFlags
         getFlags = do
