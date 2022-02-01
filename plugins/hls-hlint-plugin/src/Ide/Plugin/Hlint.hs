@@ -55,7 +55,6 @@ import           Development.IDE.Core.Shake                         (getDiagnost
 import qualified Refact.Apply                                       as Refact
 
 #ifdef HLINT_ON_GHC_LIB
-import           Data.List                                          (nub)
 import           Development.IDE.GHC.Compat                         (BufSpan,
                                                                      DynFlags,
                                                                      WarningFlag (Opt_WarnUnrecognisedPragmas),
