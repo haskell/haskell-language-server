@@ -1,0 +1,38 @@
+#!/bin/sh
+
+exedir="@@EXE_DIR@@"
+executablename="@@EXE_NAME@@"
+GHC_VERSION="@@GHC_VERSION@@"
+
+if [ -n "${GHC_LIBDIR}" ] ; then
+	:
+else
+	if [ -n "${GHC_BIN}" ] && command -v "${GHC_BIN}" >/dev/null ; then
+		ghc_bin=${GHC_BIN}
+	elif command -v ghc-${GHC_VERSION} >/dev/null ; then
+		ghc_bin=ghc-${GHC_VERSION}
+	elif command -v ghc >/dev/null ; then
+		ghc_bin=ghc
+	else
+		echo >&2 "Could not find a GHC installation!"
+		echo >&2 "Consider setting GHC_LIBDIR to the top-level directory of GHC shipped libraries (version ${GHC_VERSION})"
+		exit 42
+	fi
+
+	GHC_LIBDIR=$(${ghc_bin} --print-libdir)
+	ghc_ver="$(${ghc_bin} --numeric-version)"
+	if [ "${GHC_VERSION}" != "${ghc_ver}" ] ; then
+		echo >&2 "Need GHC version ${GHC_VERSION}, got ${ghc_ver}... trying anyway"
+	fi
+	unset ghc_ver ghc_bin
+fi
+
+if [ -n "$LD_LIBRARY_PATH" ] ; then
+	LD_LIBRARY_PATH="$(for i in "${GHC_LIBDIR}"/* ; do [ -d "$i" ] && printf "%s" "$i:" ; done)$LD_LIBRARY_PATH"
+	export LD_LIBRARY_PATH
+else
+	LD_LIBRARY_PATH="$(for i in "${GHC_LIBDIR}"/* ; do [ -d "$i" ] && printf "%s" "$i:" ; done | sed 's/:$//')"
+	export LD_LIBRARY_PATH
+fi
+
+exec "${exedir}/${executablename}" ${1+"$@"}
