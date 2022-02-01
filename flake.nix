@@ -22,21 +22,42 @@
       flake = false;
     };
 
-    lsp-source = {
+    # List of hackage dependencies
+    lsp = {
       url = "https://hackage.haskell.org/package/lsp-1.4.0.0/lsp-1.4.0.0.tar.gz";
       flake = false;
     };
-    lsp-types-source = {
-      url = "https://hackage.haskell.org/package/lsp-types-1.4.0.0/lsp-types-1.4.0.0.tar.gz";
+    lsp-types = {
+      url = "https://hackage.haskell.org/package/lsp-types-1.4.0.1/lsp-types-1.4.0.1.tar.gz";
       flake = false;
     };
-    lsp-test-source = {
+    lsp-test = {
       url = "https://hackage.haskell.org/package/lsp-test-0.14.0.2/lsp-test-0.14.0.2.tar.gz";
+      flake = false;
+    };
+    ghc-exactprint = {
+      url = "https://hackage.haskell.org/package/ghc-exactprint-1.4.1/ghc-exactprint-1.4.1.tar.gz";
+      flake = false;
+    };
+    constraints-extras = {
+      url = "https://hackage.haskell.org/package/constraints-extras-0.3.2.1/constraints-extras-0.3.2.1.tar.gz";
+      flake = false;
+    };
+    retrie = {
+      url = "https://hackage.haskell.org/package/retrie-1.2.0.1/retrie-1.2.0.1.tar.gz";
+      flake = false;
+    };
+    fourmolu = {
+      url = "https://hackage.haskell.org/package/fourmolu-0.5.0.1/fourmolu-0.5.0.1.tar.gz";
+      flake = false;
+    };
+    hlint = {
+      url = "https://hackage.haskell.org/package/hlint-3.3.6/hlint-3.3.6.tar.gz";
       flake = false;
     };
   };
   outputs =
-    { self, nixpkgs, flake-compat, flake-utils, pre-commit-hooks, gitignore, lsp-source, lsp-types-source, lsp-test-source }:
+    inputs@{ self, nixpkgs, flake-compat, flake-utils, pre-commit-hooks, gitignore, ... }:
     {
       overlay = final: prev:
         with prev;
@@ -88,9 +109,9 @@
               # We need an older version
               hiedb = hself.hiedb_0_4_1_0;
 
-              lsp = hsuper.callCabal2nix "lsp" lsp-source {};
-              lsp-types = hsuper.callCabal2nix "lsp-types" lsp-types-source {};
-              lsp-test = hsuper.callCabal2nix "lsp-test" lsp-test-source {};
+              lsp = hsuper.callCabal2nix "lsp" inputs.lsp {};
+              lsp-types = hsuper.callCabal2nix "lsp-types" inputs.lsp-types {};
+              lsp-test = hsuper.callCabal2nix "lsp-test" inputs.lsp-test {};
 
               implicit-hie-cradle = hself.callCabal2nix "implicit-hie-cradle"
                 (builtins.fetchTarball {
@@ -169,6 +190,10 @@
               # Temporarily ignored files
               # Stylish-haskell (and other formatters) does not work well with some CPP usages in these files
               "^ghcide/src/Development/IDE/GHC/Compat.hs$"
+              "^ghcide/src/Development/IDE/Plugin/CodeAction/ExactPrint.hs$"
+              "^ghcide/src/Development/IDE/GHC/Compat/Core.hs$"
+              "^ghcide/src/Development/IDE/Spans/Pragmas.hs$"
+              "^ghcide/src/Development/IDE/LSP/Outline.hs$"
               "^plugins/hls-splice-plugin/src/Ide/Plugin/Splice.hs$"
               "^ghcide/test/exe/Main.hs$"
               "ghcide/src/Development/IDE/Core/Rules.hs"
@@ -178,6 +203,7 @@
         };
 
         ghc901Config = (import ./configuration-ghc-901.nix) { inherit pkgs; };
+        ghc921Config = (import ./configuration-ghc-921.nix) { inherit pkgs inputs; };
 
         # GHC versions
         ghcDefault = pkgs.hlsHpkgs ("ghc"
@@ -186,6 +212,7 @@
         ghc884 = pkgs.hlsHpkgs "ghc884";
         ghc8107 = pkgs.hlsHpkgs "ghc8107";
         ghc901 = ghc901Config.tweakHpkgs (pkgs.hlsHpkgs "ghc901");
+        ghc921 = ghc921Config.tweakHpkgs (pkgs.hlsHpkgs "ghc921");
 
         # For markdown support
         myst-parser = pkgs.python3Packages.callPackage ./myst-parser.nix {};
@@ -220,6 +247,8 @@
               map (name: p.${name}) (attrNames
                 (if hpkgs.ghc.version == "9.0.1" then
                   removeAttrs hlsSources ghc901Config.disabledPlugins
+                else if hpkgs.ghc.version == "9.2.1" then
+                  removeAttrs hlsSources ghc921Config.disabledPlugins
                 else
                   hlsSources));
             buildInputs = [ gmp zlib ncurses capstone tracy (gen-hls-changelogs hpkgs) pythonWithPackages ]
@@ -262,12 +291,14 @@
           haskell-language-server-884-dev = mkDevShell ghc884;
           haskell-language-server-8107-dev = mkDevShell ghc8107;
           haskell-language-server-901-dev = mkDevShell ghc901;
+          haskell-language-server-921-dev = mkDevShell ghc921;
 
           # hls package
           haskell-language-server = mkExe ghcDefault;
           haskell-language-server-884 = mkExe ghc884;
           haskell-language-server-8107 = mkExe ghc8107;
           haskell-language-server-901 = mkExe ghc901;
+          haskell-language-server-921 = mkExe ghc921;
 
           # docs
           docs = docs;

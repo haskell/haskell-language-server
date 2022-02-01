@@ -3,7 +3,6 @@
 
 let
   disabledPlugins = [
-    "hls-tactics-plugin"
     "hls-brittany-plugin"
     "hls-stylish-haskell-plugin"
   ];
@@ -20,7 +19,6 @@ let
         (pkgs.lib.concatStringsSep " " [
           "-f-brittany"
           "-f-stylishhaskell"
-          "-f-tactic"
         ]) { };
 
       # YOLO

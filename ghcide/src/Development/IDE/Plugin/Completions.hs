@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP          #-}
 {-# LANGUAGE RankNTypes   #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -27,9 +28,7 @@ import           Development.IDE.Core.Shake                   hiding (Log,
 import qualified Development.IDE.Core.Shake                   as Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error                    (rangeToSrcSpan)
-import           Development.IDE.GHC.ExactPrint               (Annotated (annsA),
-                                                               GetAnnotatedParsedSource (GetAnnotatedParsedSource),
-                                                               astA)
+import           Development.IDE.GHC.ExactPrint               (GetAnnotatedParsedSource (GetAnnotatedParsedSource))
 import           Development.IDE.GHC.Util                     (prettyPrint)
 import           Development.IDE.Graph
 import           Development.IDE.Plugin.CodeAction            (newImport,
@@ -103,7 +102,7 @@ produceCompletions recorder = do
             _ -> return ([], Nothing)
 
 -- Drop any explicit imports in ImportDecl if not hidden
-dropListFromImportDecl :: GenLocated SrcSpan (ImportDecl GhcPs) -> GenLocated SrcSpan (ImportDecl GhcPs)
+dropListFromImportDecl :: LImportDecl GhcPs -> LImportDecl GhcPs
 dropListFromImportDecl iDecl = let
     f d@ImportDecl {ideclHiding} = case ideclHiding of
         Just (False, _) -> d {ideclHiding=Nothing}
@@ -244,24 +243,31 @@ extendImportHandler' ideState ExtendImport {..}
       case existingImport of
         Just imp -> do
             fmap (nfp,) $ liftEither $
-              rewriteToWEdit df doc (annsA ps) $
-                extendImport (T.unpack <$> thingParent) (T.unpack newThing) imp
+              rewriteToWEdit df doc
+#if !MIN_VERSION_ghc(9,2,0)
+                (annsA ps)
+#endif
+                $
+                  extendImport (T.unpack <$> thingParent) (T.unpack newThing) (makeDeltaAst imp)
         Nothing -> do
             let n = newImport importName sym importQual False
                 sym = if isNothing importQual then Just it else Nothing
                 it = case thingParent of
                   Nothing -> newThing
                   Just p  -> p <> "(" <> newThing <> ")"
-            t <- liftMaybe $ snd <$> newImportToEdit n (astA ps) (fromMaybe "" contents)
+            t <- liftMaybe $ snd <$> newImportToEdit
+                n
+                (astA ps)
+                (fromMaybe "" contents)
             return (nfp, WorkspaceEdit {_changes=Just (fromList [(doc,List [t])]), _documentChanges=Nothing, _changeAnnotations=Nothing})
   | otherwise =
     mzero
 
-isWantedModule :: ModuleName -> Maybe ModuleName -> GenLocated l (ImportDecl pass) -> Bool
+isWantedModule :: ModuleName -> Maybe ModuleName -> GenLocated l (ImportDecl GhcPs) -> Bool
 isWantedModule wantedModule Nothing (L _ it@ImportDecl{ideclName, ideclHiding = Just (False, _)}) =
     not (isQualifiedImport it) && unLoc ideclName == wantedModule
 isWantedModule wantedModule (Just qual) (L _ ImportDecl{ideclAs, ideclName, ideclHiding = Just (False, _)}) =
-    unLoc ideclName == wantedModule && (wantedModule == qual || (unLoc <$> ideclAs) == Just qual)
+    unLoc ideclName == wantedModule && (wantedModule == qual || (unLoc . reLoc <$> ideclAs) == Just qual)
 isWantedModule _ _ _ = False
 
 liftMaybe :: Monad m => Maybe a -> MaybeT m a

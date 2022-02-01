@@ -81,7 +81,9 @@ import           Module
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
+#if !MIN_VERSION_ghc(9,2,0)
 import qualified Data.Set             as Set
+#endif
 #endif
 #if !MIN_VERSION_ghc(9,2,0)
 import           Data.IORef
@@ -103,12 +105,7 @@ setHomeUnitId_ uid df = df { thisInstalledUnitId = toInstalledUnitId uid }
 #endif
 
 hscSetFlags :: DynFlags -> HscEnv -> HscEnv
-hscSetFlags df env =
-#if MIN_VERSION_ghc(9,2,0)
-  hscSetFlags df env
-#else
-  env { Env.hsc_dflags = df }
-#endif
+hscSetFlags df env = env { Env.hsc_dflags = df }
 
 initTempFs :: HscEnv -> IO HscEnv
 initTempFs env = do

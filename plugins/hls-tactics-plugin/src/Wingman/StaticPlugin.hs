@@ -3,17 +3,26 @@
 module Wingman.StaticPlugin
   ( staticPlugin
   , metaprogramHoleName
+  , enableQuasiQuotes
   , pattern WingmanMetaprogram
   , pattern MetaprogramSyntax
   ) where
 
-import Data.Data
 import Development.IDE.GHC.Compat
 import Development.IDE.GHC.Compat.Util
 import GHC.LanguageExtensions.Type (Extension(EmptyCase, QuasiQuotes))
-import Generics.SYB
+
 import Ide.Types
+
+#if __GLASGOW_HASKELL__ >= 808
+import Data.Data
+import Generics.SYB
+#if __GLASGOW_HASKELL__ >= 900
+import GHC.Driver.Plugins (purePlugin)
+#else
 import Plugins (purePlugin)
+#endif
+#endif
 
 staticPlugin :: DynFlagsModifications
 staticPlugin = mempty
@@ -39,7 +48,6 @@ pattern MetaprogramSourceText :: SourceText
 pattern MetaprogramSourceText = SourceText "wingman-meta-program"
 
 
-
 pattern WingmanMetaprogram :: FastString -> HsExpr p
 pattern WingmanMetaprogram mp <-
 #if __GLASGOW_HASKELL__ >= 900
@@ -49,7 +57,6 @@ pattern WingmanMetaprogram mp <-
   HsSCC _ MetaprogramSourceText (StringLiteral NoSourceText mp)
       (L _ ( HsVar _ _))
 #endif
-
 
 
 enableQuasiQuotes :: DynFlags -> DynFlags
@@ -75,11 +82,6 @@ metaprogrammingPlugin =
         }
     worker :: Monad m => [CommandLineOption] -> ModSummary -> HsParsedModule -> m HsParsedModule
     worker _ _ pm = pure $ pm { hpm_module = addMetaprogrammingSyntax $ hpm_module pm }
-#endif
-
-metaprogramHoleName :: OccName
-metaprogramHoleName = mkVarOcc "_$metaprogram"
-
 
 mkMetaprogram :: SrcSpan -> FastString -> HsExpr GhcPs
 mkMetaprogram ss mp =
@@ -93,14 +95,16 @@ mkMetaprogram ss mp =
     $ L ss
     $ mkRdrUnqual metaprogramHoleName
 
-
 addMetaprogrammingSyntax :: Data a => a -> a
 addMetaprogrammingSyntax =
   everywhere $ mkT $ \case
     L ss (MetaprogramSyntax mp) ->
       L ss $ mkMetaprogram ss mp
     (x :: LHsExpr GhcPs) -> x
+#endif
 
+metaprogramHoleName :: OccName
+metaprogramHoleName = mkVarOcc "_$metaprogram"
 
 pattern MetaprogramSyntax :: FastString -> HsExpr GhcPs
 pattern MetaprogramSyntax mp <-
@@ -114,4 +118,3 @@ pattern MetaprogramSyntax mp <-
           (mkRdrUnqual $ mkVarOcc "wingman")
           noSrcSpan
           mp
-

@@ -774,9 +774,7 @@ newSession recorder extras@ShakeExtras{..} shakeDb acts reason = do
             runTime <- liftIO start
             let msg = T.pack $ "finish: " ++ actionName d
                             ++ " (took " ++ showDuration runTime ++ ")"
-            liftIO $ do
-                logWith recorder $ LogDelayedAction d runTime
-                notifyTestingLogMessage extras msg
+            liftIO $ logWith recorder $ LogDelayedAction d runTime
 
         -- The inferred type signature doesn't work in ghc >= 9.0.1
         workRun :: (forall b. IO b -> IO b) -> IO (IO ())

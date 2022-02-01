@@ -15,8 +15,7 @@ import qualified Data.Map                              as Map
 import qualified Data.Text                             as T
 import           Development.IDE                       hiding (pluginHandlers)
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.ExactPrint        (GetAnnotatedParsedSource (..),
-                                                        annsA, astA)
+import           Development.IDE.GHC.ExactPrint        (GetAnnotatedParsedSource (..))
 import           Ide.Types
 import           Language.Haskell.GHC.ExactPrint
 import           Language.Haskell.GHC.ExactPrint.Types hiding (GhcPs)

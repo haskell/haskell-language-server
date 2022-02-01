@@ -4,6 +4,7 @@
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE ConstraintKinds   #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE PatternSynonyms   #-}
 {-# OPTIONS -Wno-incomplete-uni-patterns -Wno-dodgy-imports #-}
 
 -- | Attempt at hiding the GHC version differences we can.
@@ -15,13 +16,26 @@ module Development.IDE.GHC.Compat(
     setUpTypedHoles,
     upNameCache,
     disableWarningsAsErrors,
+    reLoc,
+    reLocA,
+    getMessages',
+    pattern PFailedWithErrorMessages,
 
 #if !MIN_VERSION_ghc(9,0,1)
     RefMap,
 #endif
 
+#if MIN_VERSION_ghc(9,2,0)
+    extendModSummaryNoDeps,
+    emsModSummary,
+#endif
+
     nodeInfo',
     getNodeIds,
+    nodeInfoFromSource,
+    isAnnotationInNodeInfo,
+    mkAstNode,
+    combineRealSrcSpans,
 
     isQualifiedImport,
     GhcVersion(..),
@@ -43,6 +57,7 @@ module Development.IDE.GHC.Compat(
     -- * Compat modules
     module Development.IDE.GHC.Compat.Core,
     module Development.IDE.GHC.Compat.Env,
+    module Development.IDE.GHC.Compat.ExactPrint,
     module Development.IDE.GHC.Compat.Iface,
     module Development.IDE.GHC.Compat.Logger,
     module Development.IDE.GHC.Compat.Outputable,
@@ -56,63 +71,83 @@ module Development.IDE.GHC.Compat(
     runPp,
     ) where
 
-import           GHC                    hiding (HasSrcSpan, ModLocation, getLoc,
-                                         lookupName, RealSrcSpan)
-import Development.IDE.GHC.Compat.Core
-import Development.IDE.GHC.Compat.Env
-import Development.IDE.GHC.Compat.Iface
-import Development.IDE.GHC.Compat.Logger
-import Development.IDE.GHC.Compat.Outputable
-import Development.IDE.GHC.Compat.Parser
-import Development.IDE.GHC.Compat.Plugins
-import Development.IDE.GHC.Compat.Units
-import Development.IDE.GHC.Compat.Util
+import           Development.IDE.GHC.Compat.Core
+import           Development.IDE.GHC.Compat.Env
+import           Development.IDE.GHC.Compat.ExactPrint
+import           Development.IDE.GHC.Compat.Iface
+import           Development.IDE.GHC.Compat.Logger
+import           Development.IDE.GHC.Compat.Outputable
+import           Development.IDE.GHC.Compat.Parser
+import           Development.IDE.GHC.Compat.Plugins
+import           Development.IDE.GHC.Compat.Units
+import           Development.IDE.GHC.Compat.Util
+import           GHC                                   hiding (HasSrcSpan,
+                                                        ModLocation,
+                                                        RealSrcSpan, getLoc,
+                                                        lookupName)
 
 #if MIN_VERSION_ghc(9,0,0)
 import           GHC.Data.StringBuffer
-import           GHC.Driver.Session    hiding (ExposePackage)
+import           GHC.Driver.Session                    hiding (ExposePackage)
+import qualified GHC.Types.SrcLoc                      as SrcLoc
+import           GHC.Utils.Error
 #if MIN_VERSION_ghc(9,2,0)
-import           GHC.Driver.Env as Env
+import           Data.Bifunctor
+import           GHC.Driver.Env                        as Env
 import           GHC.Unit.Module.ModIface
+import           GHC.Unit.Module.ModSummary
 #else
 import           GHC.Driver.Types
 #endif
 import           GHC.Iface.Env
-import           GHC.Iface.Make           (mkIfaceExports)
-import qualified GHC.SysTools.Tasks       as SysTools
-import qualified GHC.Types.Avail          as Avail
+import           GHC.Iface.Make                        (mkIfaceExports)
+import qualified GHC.SysTools.Tasks                    as SysTools
+import qualified GHC.Types.Avail                       as Avail
 #else
-import           DynFlags               hiding (ExposePackage)
-import           HscTypes
-import           MkIface hiding (writeIfaceFile)
 import qualified Avail
+import           DynFlags                              hiding (ExposePackage)
+import           HscTypes
+import           MkIface                               hiding (writeIfaceFile)
 
 #if MIN_VERSION_ghc(8,8,0)
-import           StringBuffer           (hPutStringBuffer)
+import           StringBuffer                          (hPutStringBuffer)
 #endif
 import qualified SysTools
 
 #if !MIN_VERSION_ghc(8,8,0)
-import           SrcLoc                 (RealLocated)
 import qualified EnumSet
+import           SrcLoc                                (RealLocated)
 
 import           Foreign.ForeignPtr
 import           System.IO
 #endif
 #endif
 
-import           Compat.HieAst          (enrichHie)
+import           Compat.HieAst                         (enrichHie)
 import           Compat.HieBin
 import           Compat.HieTypes
 import           Compat.HieUtils
-import qualified Data.ByteString        as BS
+import qualified Data.ByteString                       as BS
 import           Data.IORef
 
-import qualified Data.Map               as Map
-import           Data.List              (foldl')
+import           Data.List                             (foldl')
+import qualified Data.Map                              as Map
+import qualified Data.Set                              as Set
 
 #if MIN_VERSION_ghc(9,0,0)
-import qualified Data.Set               as S
+import qualified Data.Set                              as S
+#endif
+
+#if !MIN_VERSION_ghc(8,10,0)
+import           Bag                                   (unitBag)
+#endif
+
+#if !MIN_VERSION_ghc(9,2,0)
+reLoc :: Located a -> Located a
+reLoc = id
+
+reLocA :: Located a -> Located a
+reLocA = id
 #endif
 
 #if !MIN_VERSION_ghc(8,8,0)
@@ -122,11 +157,44 @@ hPutStringBuffer hdl (StringBuffer buf len cur)
              hPutBuf hdl ptr len
 #endif
 
+#if MIN_VERSION_ghc(9,2,0)
+type ErrMsg  = MsgEnvelope DecoratedSDoc
+#endif
+
+getMessages' :: PState -> DynFlags -> (Bag WarnMsg, Bag ErrMsg)
+getMessages' pst dflags =
+#if MIN_VERSION_ghc(9,2,0)
+                 bimap (fmap pprWarning) (fmap pprError) $
+#endif
+                 getMessages pst
+#if !MIN_VERSION_ghc(9,2,0)
+                   dflags
+#endif
+
+#if MIN_VERSION_ghc(9,2,0)
+pattern PFailedWithErrorMessages :: forall a b. (b -> Bag (MsgEnvelope DecoratedSDoc)) -> ParseResult a
+pattern PFailedWithErrorMessages msgs
+     <- PFailed (const . fmap pprError . getErrorMessages -> msgs)
+#elif MIN_VERSION_ghc(8,10,0)
+pattern PFailedWithErrorMessages :: (DynFlags -> ErrorMessages) -> ParseResult a
+pattern PFailedWithErrorMessages msgs
+     <- PFailed (getErrorMessages -> msgs)
+#else
+pattern PFailedWithErrorMessages :: (DynFlags -> ErrorMessages) -> ParseResult a
+pattern PFailedWithErrorMessages msgs
+     <- ((fmap.fmap) unitBag . mkPlainErrMsgIfPFailed -> Just msgs)
+
+mkPlainErrMsgIfPFailed (PFailed _ pst err) = Just (\dflags -> mkPlainErrMsg dflags pst err)
+mkPlainErrMsgIfPFailed _ = Nothing
+#endif
+{-# COMPLETE PFailedWithErrorMessages #-}
+
 supportsHieFiles :: Bool
 supportsHieFiles = True
 
 hieExportNames :: HieFile -> [(SrcSpan, Name)]
 hieExportNames = nameListFromAvails . hie_exports
+
 
 upNameCache :: IORef NameCache -> (NameCache -> (NameCache, c)) -> IO c
 #if MIN_VERSION_ghc(8,8,0)
@@ -274,6 +342,13 @@ nodeInfo' = nodeInfo
 -- unhelpfulSpanFS = id
 #endif
 
+nodeInfoFromSource :: HieAST a -> Maybe (NodeInfo a)
+#if MIN_VERSION_ghc(9,0,0)
+nodeInfoFromSource = Map.lookup SourceInfo . getSourcedNodeInfo . sourcedNodeInfo
+#else
+nodeInfoFromSource = Just . nodeInfo
+#endif
+
 data GhcVersion
   = GHC86
   | GHC88
@@ -312,4 +387,32 @@ runPp =
     SysTools.runPp
 #else
     const SysTools.runPp
+#endif
+
+isAnnotationInNodeInfo :: (FastString, FastString) -> NodeInfo a -> Bool
+#if MIN_VERSION_ghc(9,2,0)
+isAnnotationInNodeInfo (ctor, typ) = Set.member (NodeAnnotation ctor typ) . nodeAnnotations
+#else
+isAnnotationInNodeInfo p = Set.member p . nodeAnnotations
+#endif
+
+mkAstNode :: NodeInfo a -> Span -> [HieAST a] -> HieAST a
+#if MIN_VERSION_ghc(9,0,0)
+mkAstNode n = Node (SourcedNodeInfo $ Map.singleton GeneratedInfo n)
+#else
+mkAstNode = Node
+#endif
+
+combineRealSrcSpans :: RealSrcSpan -> RealSrcSpan -> RealSrcSpan
+#if MIN_VERSION_ghc(9,2,0)
+combineRealSrcSpans = SrcLoc.combineRealSrcSpans
+#else
+combineRealSrcSpans span1 span2
+  = mkRealSrcSpan (mkRealSrcLoc file line_start col_start) (mkRealSrcLoc file line_end col_end)
+  where
+    (line_start, col_start) = min (srcSpanStartLine span1, srcSpanStartCol span1)
+                                  (srcSpanStartLine span2, srcSpanStartCol span2)
+    (line_end, col_end)     = max (srcSpanEndLine span1, srcSpanEndCol span1)
+                                  (srcSpanEndLine span2, srcSpanEndCol span2)
+    file = srcSpanFile span1
 #endif

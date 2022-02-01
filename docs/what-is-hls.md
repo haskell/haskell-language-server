@@ -33,6 +33,7 @@ Here are a few pieces of jargon that you may come across in the HLS docs or when
 - *Completion item*: An item that can be inserted into the text, including its metadata.
 - *Diagnostic*: Any information about the project that is shown in the editor, including errors, warnings, and hints from tools such as hlint.
 - *Semantic highlighting*: Special syntax highlighting performed by the server.
+- *Method*: A LSP method is a function in the LSP protocol that the client can invoke to perform some action, e.g. ask for completions at a point.
 
 ## haskell-language-server
 

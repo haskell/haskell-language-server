@@ -25,9 +25,9 @@ library
     , extra
     , ghc
     , ghc-exactprint
-    , ghcide                >=1.4     && <1.6
+    , ghcide                ^>=1.6
     , hiedb
-    , hls-plugin-api        ^>=1.2
+    , hls-plugin-api        ^>=1.3
     , lsp
     , lsp-types
     , syb
@@ -46,4 +46,4 @@ test-suite tests
     , base
     , filepath
     , hls-rename-plugin
-    , hls-test-utils             >=1.0 && <1.2
+    , hls-test-utils             ^>=1.2

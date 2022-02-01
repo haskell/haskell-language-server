@@ -25,6 +25,7 @@ module Ide.PluginUtils
     allLspCmdIds',
     installSigUsr1Handler,
     subRange,
+    positionInRange,
     usePropertyLsp,
     response,
     handleMaybe,
@@ -178,7 +179,7 @@ getClientConfig = getConfig
 getPluginConfig :: MonadLsp Config m => PluginId -> m PluginConfig
 getPluginConfig plugin = do
     config <- getClientConfig
-    return $ configForPlugin config plugin 
+    return $ configForPlugin config plugin
 
 -- ---------------------------------------------------------------------
 
@@ -220,11 +221,7 @@ subRange smallRange range =
   && positionInRange (_end smallRange) range
 
 positionInRange :: Position -> Range -> Bool
-positionInRange (Position pl po) (Range (Position sl so) (Position el eo)) =
-     pl >  sl && pl <  el
-  || pl == sl && pl == el && po >= so && po <= eo
-  || pl == sl && po >= so
-  || pl == el && po <= eo
+positionInRange p (Range sp ep) = sp <= p && p <= ep
 
 -- ---------------------------------------------------------------------
 

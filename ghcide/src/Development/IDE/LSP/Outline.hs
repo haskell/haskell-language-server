@@ -29,6 +29,9 @@ import           Language.LSP.Types             (DocumentSymbol (..),
                                                  SymbolKind (SkConstructor, SkField, SkFile, SkFunction, SkInterface, SkMethod, SkModule, SkObject, SkStruct, SkTypeParameter, SkUnknown),
                                                  TextDocumentIdentifier (TextDocumentIdentifier),
                                                  type (|?) (InL), uriToFilePath)
+#if MIN_VERSION_ghc(9,2,0)
+import Data.List.NonEmpty (nonEmpty, toList)
+#endif
 
 moduleOutline
   :: IdeState -> DocumentSymbolParams -> LspM c (Either ResponseError (List DocumentSymbol |? List SymbolInformation))
@@ -42,7 +45,7 @@ moduleOutline ideState DocumentSymbolParams{ _textDocument = TextDocumentIdentif
           -> let
                declSymbols  = mapMaybe documentSymbolForDecl hsmodDecls
                moduleSymbol = hsmodName >>= \case
-                 (L (RealSrcSpan l _) m) -> Just $
+                 (L (locA -> (RealSrcSpan l _)) m) -> Just $
                    (defDocumentSymbol l :: DocumentSymbol)
                      { _name  = pprText m
                      , _kind  = SkFile
@@ -64,8 +67,8 @@ moduleOutline ideState DocumentSymbolParams{ _textDocument = TextDocumentIdentif
 
     Nothing -> pure $ Right $ InL (List [])
 
-documentSymbolForDecl :: Located (HsDecl GhcPs) -> Maybe DocumentSymbol
-documentSymbolForDecl (L (RealSrcSpan l _) (TyClD _ FamDecl { tcdFam = FamilyDecl { fdLName = L _ n, fdInfo, fdTyVars } }))
+documentSymbolForDecl :: LHsDecl GhcPs -> Maybe DocumentSymbol
+documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ FamDecl { tcdFam = FamilyDecl { fdLName = L _ n, fdInfo, fdTyVars } }))
   = Just (defDocumentSymbol l :: DocumentSymbol)
     { _name   = showRdrName n
                   <> (case pprText fdTyVars of
@@ -75,7 +78,7 @@ documentSymbolForDecl (L (RealSrcSpan l _) (TyClD _ FamDecl { tcdFam = FamilyDec
     , _detail = Just $ pprText fdInfo
     , _kind   = SkFunction
     }
-documentSymbolForDecl (L (RealSrcSpan l _) (TyClD _ ClassDecl { tcdLName = L _ name, tcdSigs, tcdTyVars }))
+documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ ClassDecl { tcdLName = L _ name, tcdSigs, tcdTyVars }))
   = Just (defDocumentSymbol l :: DocumentSymbol)
     { _name     = showRdrName name
                     <> (case pprText tcdTyVars of
@@ -91,11 +94,11 @@ documentSymbolForDecl (L (RealSrcSpan l _) (TyClD _ ClassDecl { tcdLName = L _ n
             , _kind           = SkMethod
             , _selectionRange = realSrcSpanToRange l'
             }
-        | L (RealSrcSpan l _)  (ClassOpSig _ False names _) <- tcdSigs
-        , L (RealSrcSpan l' _) n                            <- names
+        | L (locA -> (RealSrcSpan l _))  (ClassOpSig _ False names _) <- tcdSigs
+        , L (locA -> (RealSrcSpan l' _)) n                            <- names
         ]
     }
-documentSymbolForDecl (L (RealSrcSpan l _) (TyClD _ DataDecl { tcdLName = L _ name, tcdDataDefn = HsDataDefn { dd_cons } }))
+documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ DataDecl { tcdLName = L _ name, tcdDataDefn = HsDataDefn { dd_cons } }))
   = Just (defDocumentSymbol l :: DocumentSymbol)
     { _name     = showRdrName name
     , _kind     = SkStruct
@@ -105,10 +108,30 @@ documentSymbolForDecl (L (RealSrcSpan l _) (TyClD _ DataDecl { tcdLName = L _ na
             { _name           = showRdrName n
             , _kind           = SkConstructor
             , _selectionRange = realSrcSpanToRange l'
-            , _children       = conArgRecordFields (con_args x)
+#if MIN_VERSION_ghc(9,2,0)
+            , _children       = List . toList <$> nonEmpty childs
             }
-        | L (RealSrcSpan l _ ) x <- dd_cons
-        , L (RealSrcSpan l' _) n <- getConNames' x
+        | con <- dd_cons
+        , let (cs, flds) = hsConDeclsBinders con
+        , let childs = mapMaybe cvtFld flds
+        , L (locA -> RealSrcSpan l' _) n <- cs
+        , let l = case con of
+                L (locA -> RealSrcSpan l _) _ -> l
+                _ -> l'
+        ]
+    }
+  where
+    cvtFld :: LFieldOcc GhcPs -> Maybe DocumentSymbol
+    cvtFld (L (RealSrcSpan l _) n) = Just $ (defDocumentSymbol l :: DocumentSymbol)
+                { _name = showRdrName (unLoc (rdrNameFieldOcc n))
+                , _kind = SkField
+                }
+    cvtFld _  = Nothing
+#else
+           , _children       = conArgRecordFields (con_args x)
+            }
+        | L (locA -> (RealSrcSpan l _ )) x <- dd_cons
+        , L (locA -> (RealSrcSpan l' _)) n <- getConNames' x
         ]
     }
   where
@@ -119,48 +142,57 @@ documentSymbolForDecl (L (RealSrcSpan l _) (TyClD _ DataDecl { tcdLName = L _ na
           , _kind = SkField
           }
       | L _ cdf <- lcdfs
-      , L (RealSrcSpan l _) n <- rdrNameFieldOcc . unLoc <$> cd_fld_names cdf
+      , L (locA -> (RealSrcSpan l _)) n <- rdrNameFieldOcc . unLoc <$> cd_fld_names cdf
       ]
     conArgRecordFields _ = Nothing
-documentSymbolForDecl (L (RealSrcSpan l _) (TyClD _ SynDecl { tcdLName = L (RealSrcSpan l' _) n })) = Just
+#endif
+documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ SynDecl { tcdLName = L (locA -> (RealSrcSpan l' _)) n })) = Just
   (defDocumentSymbol l :: DocumentSymbol) { _name           = showRdrName n
                                           , _kind           = SkTypeParameter
                                           , _selectionRange = realSrcSpanToRange l'
                                           }
-documentSymbolForDecl (L (RealSrcSpan l _) (InstD _ ClsInstD { cid_inst = ClsInstDecl { cid_poly_ty } }))
+documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (InstD _ ClsInstD { cid_inst = ClsInstDecl { cid_poly_ty } }))
   = Just (defDocumentSymbol l :: DocumentSymbol) { _name = pprText cid_poly_ty
                                                  , _kind = SkInterface
                                                  }
+#if MIN_VERSION_ghc(9,2,0)
+documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (InstD _ DataFamInstD { dfid_inst = DataFamInstDecl FamEqn { feqn_tycon, feqn_pats } }))
+#else
 documentSymbolForDecl (L (RealSrcSpan l _) (InstD _ DataFamInstD { dfid_inst = DataFamInstDecl HsIB { hsib_body = FamEqn { feqn_tycon, feqn_pats } } }))
+#endif
   = Just (defDocumentSymbol l :: DocumentSymbol)
     { _name = showRdrName (unLoc feqn_tycon) <> " " <> T.unwords
                 (map pprText feqn_pats)
     , _kind = SkInterface
     }
+#if MIN_VERSION_ghc(9,2,0)
+documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (InstD _ TyFamInstD { tfid_inst = TyFamInstDecl _ FamEqn { feqn_tycon, feqn_pats } }))
+#else
 documentSymbolForDecl (L (RealSrcSpan l _) (InstD _ TyFamInstD { tfid_inst = TyFamInstDecl HsIB { hsib_body = FamEqn { feqn_tycon, feqn_pats } } }))
+#endif
   = Just (defDocumentSymbol l :: DocumentSymbol)
     { _name = showRdrName (unLoc feqn_tycon) <> " " <> T.unwords
                 (map pprText feqn_pats)
     , _kind = SkInterface
     }
-documentSymbolForDecl (L (RealSrcSpan l _) (DerivD _ DerivDecl { deriv_type })) =
+documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (DerivD _ DerivDecl { deriv_type })) =
   gfindtype deriv_type <&> \(L (_ :: SrcSpan) name) ->
     (defDocumentSymbol l :: DocumentSymbol) { _name = pprText @(HsType GhcPs)
                                               name
                                             , _kind = SkInterface
                                             }
-documentSymbolForDecl (L (RealSrcSpan l _) (ValD _ FunBind{fun_id = L _ name})) = Just
+documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (ValD _ FunBind{fun_id = L _ name})) = Just
     (defDocumentSymbol l :: DocumentSymbol)
       { _name   = showRdrName name
       , _kind   = SkFunction
       }
-documentSymbolForDecl (L (RealSrcSpan l _) (ValD _ PatBind{pat_lhs})) = Just
+documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (ValD _ PatBind{pat_lhs})) = Just
     (defDocumentSymbol l :: DocumentSymbol)
       { _name   = pprText pat_lhs
       , _kind   = SkFunction
       }
 
-documentSymbolForDecl (L (RealSrcSpan l _) (ForD _ x)) = Just
+documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (ForD _ x)) = Just
   (defDocumentSymbol l :: DocumentSymbol)
     { _name   = case x of
                   ForeignImport{} -> name
@@ -193,8 +225,8 @@ documentSymbolForImportSummary importSymbols =
           , _children = Just (List importSymbols)
           }
 
-documentSymbolForImport :: Located (ImportDecl GhcPs) -> Maybe DocumentSymbol
-documentSymbolForImport (L (RealSrcSpan l _) ImportDecl { ideclName, ideclQualified }) = Just
+documentSymbolForImport :: LImportDecl GhcPs -> Maybe DocumentSymbol
+documentSymbolForImport (L (locA -> (RealSrcSpan l _)) ImportDecl { ideclName, ideclQualified }) = Just
   (defDocumentSymbol l :: DocumentSymbol)
     { _name   = "import " <> pprText ideclName
     , _kind   = SkModule
@@ -224,6 +256,7 @@ pprText :: Outputable a => a -> Text
 pprText = pack . showSDocUnsafe . ppr
 
 -- the version of getConNames for ghc9 is restricted to only the renaming phase
+#if !MIN_VERSION_ghc(9,2,0)
 getConNames' :: ConDecl GhcPs -> [Located (IdP GhcPs)]
 getConNames' ConDeclH98  {con_name  = name}  = [name]
 getConNames' ConDeclGADT {con_names = names} = names
@@ -231,4 +264,45 @@ getConNames' ConDeclGADT {con_names = names} = names
 getConNames' (XConDecl NoExt)                = []
 #elif !MIN_VERSION_ghc(9,0,0)
 getConNames' (XConDecl x)                    = noExtCon x
+#endif
+#else
+hsConDeclsBinders :: LConDecl GhcPs
+                  -> ([LIdP GhcPs], [LFieldOcc GhcPs])
+   -- See hsLTyClDeclBinders for what this does
+   -- The function is boringly complicated because of the records
+   -- And since we only have equality, we have to be a little careful
+hsConDeclsBinders cons
+  = go cons
+  where
+    go :: LConDecl GhcPs
+       -> ([LIdP GhcPs], [LFieldOcc GhcPs])
+    go r
+      -- Don't re-mangle the location of field names, because we don't
+      -- have a record of the full location of the field declaration anyway
+      = case unLoc r of
+           -- remove only the first occurrence of any seen field in order to
+           -- avoid circumventing detection of duplicate fields (#9156)
+           ConDeclGADT { con_names = names, con_g_args = args }
+             -> (names, flds)
+             where
+                flds = get_flds_gadt args
+
+           ConDeclH98 { con_name = name, con_args = args }
+             -> ([name], flds)
+             where
+                flds = get_flds_h98 args
+
+    get_flds_h98 :: HsConDeclH98Details GhcPs
+                 -> [LFieldOcc GhcPs]
+    get_flds_h98 (RecCon flds) = get_flds (reLoc flds)
+    get_flds_h98 _ = []
+
+    get_flds_gadt :: HsConDeclGADTDetails GhcPs
+                  -> ([LFieldOcc GhcPs])
+    get_flds_gadt (RecConGADT flds) = get_flds (reLoc flds)
+    get_flds_gadt _ = []
+
+    get_flds :: Located [LConDeclField GhcPs]
+             -> ([LFieldOcc GhcPs])
+    get_flds flds = concatMap (cd_fld_names . unLoc) (unLoc flds)
 #endif

@@ -1,0 +1,60 @@
+cabal-version:      2.4
+name:               hls-selection-range-plugin
+version:            1.0.0.0
+synopsis:
+  HLS Plugin to support smart selection range
+
+description:
+  Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
+
+license:            Apache-2.0
+license-file:       LICENSE
+author: kokobd
+maintainer: kokobd
+
+category:           Development
+build-type:         Simple
+extra-source-files:
+  LICENSE
+  test/testdata/*.hs
+  test/testdata/*.yaml
+  test/testdata/*.txt
+
+library
+  exposed-modules:
+    Ide.Plugin.SelectionRange
+  other-modules:
+    Ide.Plugin.SelectionRange.ASTPreProcess
+  ghc-options: -Wall
+  hs-source-dirs: src
+  default-language:   Haskell2010
+  build-depends:
+    , aeson
+    , base             >=4.12 && <5
+    , containers
+    , ghcide           ^>=1.6
+    , hls-plugin-api   ^>=1.3
+    , lsp
+    , transformers
+    , mtl
+    , text
+    , extra
+    , semigroupoids
+
+test-suite tests
+  type:             exitcode-stdio-1.0
+  default-language: Haskell2010
+  hs-source-dirs:   test
+  main-is:          Main.hs
+  ghc-options:      -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+    , base
+    , containers
+    , filepath
+    , hls-selection-range-plugin
+    , hls-test-utils             ^>=1.2
+    , lsp
+    , lsp-test
+    , text
+    , bytestring
+    , lens

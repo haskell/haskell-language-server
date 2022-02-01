@@ -19,9 +19,9 @@ module Ide.Arguments
   ) where
 
 import           Data.Version
-import           Development.GitRev
 import           Development.IDE               (IdeState)
 import           Development.IDE.Main          (Command (..), commandP)
+import           GitHash                       (giHash, tGitInfoCwdTry)
 import           Ide.Types                     (IdePlugins)
 import           Options.Applicative
 import           Paths_haskell_language_server
@@ -50,8 +50,7 @@ data GhcideArguments = GhcideArguments
     , argsLogFile           :: Maybe String
     , argsThreads           :: Int
     , argsProjectGhcVersion :: Bool
-    }
-    deriving Show
+    } deriving Show
 
 data PrintVersion
   = PrintVersion
@@ -98,7 +97,7 @@ probeToolsParser exeName =
 listPluginsParser :: Parser Arguments
 listPluginsParser =
   flag' ListPluginsMode
-    (long "list-plugins" <> help "List all avaliable plugins")
+    (long "list-plugins" <> help "List all available plugins")
 
 arguments :: IdePlugins IdeState -> Parser GhcideArguments
 arguments plugins = GhcideArguments
@@ -144,9 +143,10 @@ haskellLanguageServerNumericVersion = showVersion version
 haskellLanguageServerVersion :: IO String
 haskellLanguageServerVersion = do
   path <- getExecutablePath
-  let gitHashSection = case $(gitHash) of
-        x | x == "UNKNOWN" -> ""
-        x                  -> " (GIT hash: " <> x <> ")"
+  let gi = $$tGitInfoCwdTry
+      gitHashSection = case gi of
+        Right gi -> " (GIT hash: " <> giHash gi <> ")"
+        Left _   -> ""
   return $ "haskell-language-server version: " <> haskellLanguageServerNumericVersion
              <> " (GHC: " <> VERSION_ghc
              <> ") (PATH: " <> path <> ")"

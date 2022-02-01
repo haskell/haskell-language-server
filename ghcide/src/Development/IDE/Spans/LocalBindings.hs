@@ -17,13 +17,13 @@ import qualified Data.IntervalMap.FingerTree    as IM
 import qualified Data.List                      as L
 import qualified Data.Map                       as M
 import qualified Data.Set                       as S
-import           Development.IDE.GHC.Compat     (Name, RefMap, Scope (..), Type,
+import           Development.IDE.GHC.Compat     (Name, NameEnv, RealSrcSpan,
+                                                 RefMap, Scope (..), Type,
                                                  getBindSiteFromContext,
                                                  getScopeFromContext, identInfo,
-                                                 identType, NameEnv, nameEnvElts,
-                                                 unitNameEnv, isSystemName,
-                                                 RealSrcSpan, realSrcSpanStart,
-                                                 realSrcSpanEnd)
+                                                 identType, isSystemName,
+                                                 nameEnvElts, realSrcSpanEnd,
+                                                 realSrcSpanStart, unitNameEnv)
 
 import           Development.IDE.GHC.Error
 import           Development.IDE.Types.Location

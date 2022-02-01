@@ -45,22 +45,17 @@ case "$(uname -s)" in
 		;;
 esac
 
-# some alpines need workaround
-if ghc --info | grep -q integer-simple ; then
-	echo -e 'package blaze-textual\n    flags: +integer-simple' >> cabal.project.local
-fi
-
 # Shorten binary names
 sed -i.bak -e 's/haskell-language-server/hls/g' \
 	   -e 's/haskell_language_server/hls/g' \
-	   haskell-language-server.cabal cabal.project
+	   haskell-language-server.cabal $CABAL_PROJECT
 sed -i.bak -e 's/Paths_haskell_language_server/Paths_hls/g' \
 	   src/**/*.hs exe/*.hs
 
 args=(
-	-O2
+    -O2
     -w "ghc-$GHC_VERSION"
-	--project-file "$CABAL_PROJECT"
+    --project-file "$CABAL_PROJECT"
     --disable-profiling
     --disable-tests
     --enable-executable-stripping
@@ -77,4 +72,3 @@ cp "$(cabal list-bin ${args[@]} exe:hls-wrapper)" "$CI_PROJECT_DIR/out/haskell-l
 cp dist-newstyle/cache/plan.json "$CI_PROJECT_DIR/out/plan.json"
 
 cd "$CI_PROJECT_DIR/out/"
-

@@ -15,20 +15,20 @@
 module Development.IDE.GHC.CPP(doCpp, addOptP)
 where
 
+import           Development.IDE.GHC.Compat      as Compat
 import           GHC
-import           Development.IDE.GHC.Compat as Compat
 #if !MIN_VERSION_ghc(8,10,0)
-import qualified Development.IDE.GHC.Compat.CPP as CPP
+import qualified Development.IDE.GHC.Compat.CPP  as CPP
 #else
 import           Development.IDE.GHC.Compat.Util
 #endif
 
 #if MIN_VERSION_ghc(9,0,0)
-import qualified GHC.Driver.Pipeline as Pipeline
+import qualified GHC.Driver.Pipeline             as Pipeline
 import           GHC.Settings
 #else
 #if MIN_VERSION_ghc (8,10,0)
-import qualified DriverPipeline as Pipeline
+import qualified DriverPipeline                  as Pipeline
 import           ToolSettings
 #else
 import           DynFlags

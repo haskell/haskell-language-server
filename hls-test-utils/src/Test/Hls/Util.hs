@@ -18,6 +18,7 @@ module Test.Hls.Util
     , flushStackEnvironment
     , fromAction
     , fromCommand
+    , getCompletionByLabel
     , getHspecFormattedConfig
     , ghcVersion, GhcVersion(..)
     , hostOS, OS(..)
@@ -447,3 +448,12 @@ actual `expectSameLocations` expected = do
                               fp <- canonicalizePath file
                               return (filePathToUri fp, l, c))
     actual' @?= expected'
+
+-- ---------------------------------------------------------------------
+getCompletionByLabel :: MonadIO m => T.Text -> [CompletionItem] -> m CompletionItem
+getCompletionByLabel desiredLabel compls = 
+    case find (\c -> c ^. L.label == desiredLabel) compls of
+        Just c -> pure c
+        Nothing -> liftIO . assertFailure $
+            "Completion with label " <> show desiredLabel
+            <> " not found in " <> show (fmap (^. L.label) compls)

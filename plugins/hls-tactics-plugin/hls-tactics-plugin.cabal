@@ -1,7 +1,7 @@
 cabal-version:      2.4
 category:           Development
 name:               hls-tactics-plugin
-version:            1.5.0.1
+version:            1.6.1.0
 synopsis:           Wingman plugin for Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -82,9 +82,9 @@ library
     , ghc-boot-th
     , ghc-exactprint
     , ghc-source-gen        ^>=0.4.1
-    , ghcide                ^>=1.5.0
+    , ghcide                ^>=1.6
     , hls-graph
-    , hls-plugin-api        >=1.1     && <1.3
+    , hls-plugin-api        ^>=1.3
     , hyphenation
     , lens
     , lsp
@@ -160,7 +160,7 @@ test-suite tests
     , ghcide
     , hls-plugin-api
     , hls-tactics-plugin
-    , hls-test-utils      >=1.0 && <1.2
+    , hls-test-utils      ^>=1.2
     , hspec
     , hspec-expectations
     , lens

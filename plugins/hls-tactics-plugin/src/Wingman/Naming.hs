@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+
 module Wingman.Naming where
 
 import           Control.Arrow
@@ -17,6 +19,10 @@ import           Data.Traversable
 import           Development.IDE.GHC.Compat.Core hiding (IsFunction)
 import           Text.Hyphenation (hyphenate, english_US)
 import           Wingman.GHC (tcTyVar_maybe)
+
+#if __GLASGOW_HASKELL__ >= 900
+import GHC.Tc.Utils.TcType
+#endif
 
 
 ------------------------------------------------------------------------------
@@ -38,11 +44,11 @@ data Purpose
 
 pattern IsPredicate :: Type
 pattern IsPredicate <-
-  (tcSplitFunTys -> ([isFunTy -> False], isBoolTy -> True))
+  (tcSplitFunTys -> ([isFunTy . scaledThing -> False], isBoolTy -> True))
 
 pattern IsFunction :: [Type] -> Type -> Type
 pattern IsFunction args res <-
-  (tcSplitFunTys -> (args@(_:_), res))
+  (first (map scaledThing) . tcSplitFunTys -> (args@(_:_), res))
 
 pattern IsString :: Type
 pattern IsString <-

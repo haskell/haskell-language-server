@@ -17,7 +17,6 @@ module Development.IDE.GHC.Compat.Plugins (
 #endif
     ) where
 
-import           GHC
 #if MIN_VERSION_ghc(9,0,0)
 #if MIN_VERSION_ghc(9,2,0)
 import qualified GHC.Driver.Env                    as Env
@@ -51,7 +50,7 @@ applyPluginsParsedResultAction env dflags ms hpm_annotations parsed = do
       dflags
 #endif
       applyPluginAction
-      (mkHsParsedModule parsed [] hpm_annotations)
+      (HsParsedModule parsed [] hpm_annotations)
 
 initializePlugins :: HscEnv -> IO HscEnv
 initializePlugins env = do

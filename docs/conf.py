@@ -86,4 +86,9 @@ html_static_path = ['_static']
 
 # Enable linking to an anchor of a relative page
 # See https://github.com/executablebooks/MyST-Parser/issues/443
-myst_heading_anchors = 2
+myst_heading_anchors = 3
+
+# -- Custom Document processing ----------------------------------------------
+
+def setup(app):
+    app.add_css_file("theme_overrides.css")

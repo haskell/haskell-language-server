@@ -1,0 +1,6 @@
+/* Fix table wrapping https://github.com/readthedocs/sphinx_rtd_theme/issues/117 */
+@media screen and (min-width: 768px) {
+	.wy-table-responsive table td, .wy-table-responsive table th {
+	  white-space: normal !important;
+	}
+}

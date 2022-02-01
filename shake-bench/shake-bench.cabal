@@ -1,6 +1,6 @@
 cabal-version: 2.2
 name:          shake-bench
-version:       0.1.0.2
+version:       0.1.0.3
 synopsis:      Build rules for historical benchmarking
 license:       Apache-2.0
 license-file:  LICENSE
@@ -27,6 +27,8 @@ library
         directory,
         extra >= 1.7.2,
         filepath,
+        lens,
+        lens-aeson,
         shake,
         text
   default-language: Haskell2010

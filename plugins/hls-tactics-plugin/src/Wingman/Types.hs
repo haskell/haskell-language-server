@@ -38,7 +38,6 @@ import           GHC.Exts (fromString)
 import           GHC.Generics
 import           GHC.SourceGen (var)
 import           Refinery.ProofState
-import           Refinery.Tactic
 import           Refinery.Tactic.Internal (TacticT(TacticT), RuleT (RuleT))
 import           System.IO.Unsafe (unsafePerformIO)
 import           Wingman.Debug

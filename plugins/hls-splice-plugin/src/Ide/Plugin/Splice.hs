@@ -15,6 +15,8 @@
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE ViewPatterns          #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module Ide.Plugin.Splice
     ( descriptor,
@@ -134,7 +136,7 @@ expandTHSplice _eStyle ideState params@ExpandSpliceParams {..} = do
 
                 graftSpliceWith ::
                     forall ast.
-                    HasSplice ast =>
+                    HasSplice AnnListItem ast =>
                     Maybe (SrcSpan, Located (ast GhcPs)) ->
                     Maybe (Either String WorkspaceEdit)
                 graftSpliceWith expandeds =
@@ -273,27 +275,27 @@ findSubSpansDesc srcSpan =
             )
 
 data SpliceClass where
-    OneToOneAST :: HasSplice ast => Proxy# ast -> SpliceClass
+    OneToOneAST :: HasSplice AnnListItem ast => Proxy# ast -> SpliceClass
     IsHsDecl :: SpliceClass
 
-class (Outputable (ast GhcRn), ASTElement (ast GhcPs)) => HasSplice ast where
+class (Outputable (ast GhcRn), ASTElement l (ast GhcPs)) => HasSplice l ast where
     type SpliceOf ast :: Kinds.Type -> Kinds.Type
     type SpliceOf ast = HsSplice
     matchSplice :: Proxy# ast -> ast GhcPs -> Maybe (SpliceOf ast GhcPs)
     expandSplice :: Proxy# ast -> SpliceOf ast GhcPs -> RnM (Either (ast GhcPs) (ast GhcRn), FreeVars)
 
-instance HasSplice HsExpr where
+instance HasSplice AnnListItem HsExpr where
     matchSplice _ (HsSpliceE _ spl) = Just spl
     matchSplice _ _                 = Nothing
     expandSplice _ = fmap (first Right) . rnSpliceExpr
 
-instance HasSplice Pat where
+instance HasSplice AnnListItem Pat where
     matchSplice _ (SplicePat _ spl) = Just spl
     matchSplice _ _                 = Nothing
     expandSplice _ = rnSplicePat
 
 
-instance HasSplice HsType where
+instance HasSplice AnnListItem HsType where
     matchSplice _ (HsSpliceTy _ spl) = Just spl
     matchSplice _ _                  = Nothing
     expandSplice _ = fmap (first Right) . rnSpliceType
@@ -366,8 +368,8 @@ manualCalcEdit clientCapabilities reportEditor ran ps hscEnv typechkd srcSpan _e
 
 -- | FIXME:  Is thereAny "clever" way to do this exploiting TTG?
 unRenamedE ::
-    forall ast m.
-    (Fail.MonadFail m, HasSplice ast) =>
+    forall ast m l.
+    (Fail.MonadFail m, HasSplice l ast) =>
     DynFlags ->
     ast GhcRn ->
     TransformT m (Located (ast GhcPs))
@@ -375,7 +377,7 @@ unRenamedE dflags expr = do
     uniq <- show <$> uniqueSrcSpanT
     (anns, expr') <-
         either (fail . show) pure $
-            parseAST @(ast GhcPs) dflags uniq $
+            parseAST @_ @(ast GhcPs) dflags uniq $
                 showSDoc dflags $ ppr expr
     let _anns' = setPrecedingLines expr' 0 1 anns
     pure expr'

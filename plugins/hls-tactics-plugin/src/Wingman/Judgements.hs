@@ -34,7 +34,8 @@ buildHypothesis
   where
     go (occName -> occ, t)
       | Just ty <- t
-      , isAlpha . head . occNameString $ occ = Just $ HyInfo occ UserPrv $ CType ty
+      , (h:_) <- occNameString occ
+      , isAlpha h = Just $ HyInfo occ UserPrv $ CType ty
       | otherwise = Nothing
 
 
@@ -65,6 +66,12 @@ isSplitWhitelisted = _jWhitelistSplit
 
 withNewGoal :: a -> Judgement' a -> Judgement' a
 withNewGoal t = field @"_jGoal" .~ t
+
+------------------------------------------------------------------------------
+-- | Like 'withNewGoal' but allows you to modify the goal rather than replacing
+-- it.
+withModifiedGoal :: (a -> a) -> Judgement' a -> Judgement' a
+withModifiedGoal f = field @"_jGoal" %~ f
 
 
 ------------------------------------------------------------------------------

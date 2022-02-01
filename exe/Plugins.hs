@@ -76,6 +76,10 @@ import qualified Ide.Plugin.Splice                 as Splice
 import qualified Ide.Plugin.AlternateNumberFormat  as AlternateNumberFormat
 #endif
 
+#if selectionRange
+import           Ide.Plugin.SelectionRange         as SelectionRange
+#endif
+
 -- formatters
 
 #if floskell
@@ -243,6 +247,9 @@ idePlugins recorder includeExamples = pluginDescToIdePlugins allPlugins
 #endif
 #if alternateNumberFormat
       AlternateNumberFormat.descriptor (cmap LogAlternateNumberFormat recorder) "alternateNumberFormat" :
+#endif
+#if selectionRange
+      SelectionRange.descriptor "selectionRange" :
 #endif
     -- The ghcide descriptors should come last so that the notification handlers
     -- (which restart the Shake build) run after everything else

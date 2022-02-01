@@ -77,7 +77,6 @@ import           Data.Aeson                                   (Result (Success),
 import qualified Data.Aeson.Types                             as A
 import qualified Data.Binary                                  as B
 import qualified Data.ByteString                              as BS
-import           Data.ByteString.Encoding                     as T
 import qualified Data.ByteString.Lazy                         as LBS
 import           Data.Coerce
 import           Data.Foldable
@@ -108,11 +107,12 @@ import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service hiding (LogShake, logToPriority, Log)
 import           Development.IDE.Core.Shake hiding (logToPriority, Log)
 import           Development.IDE.GHC.Compat.Env
-import           Development.IDE.GHC.Compat.Core              hiding
+import           Development.IDE.GHC.Compat                   hiding
                                                               (parseModule,
                                                                TargetId(..),
                                                                loadInterface,
-                                                               Var)
+                                                               Var,
+                                                               (<+>))
 import qualified Development.IDE.GHC.Compat                   as Compat
 import qualified Development.IDE.GHC.Compat.Util              as Util
 import           Development.IDE.GHC.Error
@@ -131,7 +131,6 @@ import           Development.IDE.Types.HscEnvEq
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 import           GHC.Generics                                 (Generic)
-import           GHC.IO.Encoding
 import qualified GHC.LanguageExtensions                       as LangExt
 import qualified HieDb
 import           Ide.Plugin.Config
@@ -150,7 +149,7 @@ import           Ide.Types                                    (DynFlagsModificat
                                                                PluginId)
 import Control.Concurrent.STM.Stats (atomically)
 import Language.LSP.Server (LspT)
-import System.Info.Extra (isMac)
+import System.Info.Extra (isWindows)
 import HIE.Bios.Ghc.Gap (hostIsDynamic)
 import Development.IDE.Types.Logger (Recorder, cmap, logWith)
 import qualified Development.IDE.Types.Logger as Logger
@@ -194,7 +193,7 @@ logToPriority = \case
   LogExactPrint log -> ExactPrint.logToPriority log
 
 templateHaskellInstructions :: T.Text
-templateHaskellInstructions = "https://haskell-language-server.readthedocs.io/en/latest/troubleshooting.html#support-for-template-haskell"
+templateHaskellInstructions = "https://haskell-language-server.readthedocs.io/en/latest/troubleshooting.html#static-binaries"
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
@@ -560,21 +559,20 @@ getHieAstsRule :: Recorder Log -> Rules ()
 getHieAstsRule recorder =
     define (cmap LogShake recorder) $ \GetHieAst f -> do
       tmr <- use_ TypeCheck f
-      hsc <- hscEnv <$> use_ GhcSession f
+      hsc <- hscEnv <$> use_ GhcSessionDeps f
       getHieAstRuleDefinition f hsc tmr
 
 persistentHieFileRule :: Recorder Log -> Rules ()
 persistentHieFileRule recorder = addPersistentRule GetHieAst $ \file -> runMaybeT $ do
   res <- readHieFileForSrcFromDisk recorder file
   vfs <- asks vfs
-  encoding <- liftIO getLocaleEncoding
   (currentSource,ver) <- liftIO $ do
     mvf <- getVirtualFile vfs $ filePathToUri' file
     case mvf of
-      Nothing -> (,Nothing) . T.decode encoding <$> BS.readFile (fromNormalizedFilePath file)
+      Nothing -> (,Nothing) . T.decodeUtf8 <$> BS.readFile (fromNormalizedFilePath file)
       Just vf -> pure (Rope.toText $ _text vf, Just $ _lsp_version vf)
   let refmap = Compat.generateReferencesMap . Compat.getAsts . Compat.hie_asts $ res
-      del = deltaFromDiff (T.decode encoding $ Compat.hie_hs_src res) currentSource
+      del = deltaFromDiff (T.decodeUtf8 $ Compat.hie_hs_src res) currentSource
   pure (HAR (Compat.hie_module res) (Compat.hie_asts res) refmap mempty (HieFromDisk res),del,ver)
 
 getHieAstRuleDefinition :: NormalizedFilePath -> HscEnv -> TcModuleResult -> Action (IdeResult HieAstResult)
@@ -867,7 +865,7 @@ isHiFileStableRule recorder = defineEarlyCutoff (cmap LogShake recorder) $ RuleN
 
 displayTHWarning :: LspT c IO ()
 displayTHWarning
-  | isMac && not hostIsDynamic = do
+  | not isWindows && not hostIsDynamic = do
       LSP.sendNotification SWindowShowMessage $
         ShowMessageParams MtInfo $ T.unwords
           [ "This HLS binary does not support Template Haskell."

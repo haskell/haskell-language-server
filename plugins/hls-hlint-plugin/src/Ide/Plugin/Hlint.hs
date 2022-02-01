@@ -40,12 +40,13 @@ import           Control.Monad.Trans.Except
 import           Data.Aeson.Types                                   (FromJSON (..),
                                                                      ToJSON (..),
                                                                      Value (..))
+import qualified Data.ByteString                                    as BS
 import           Data.Default
 import qualified Data.HashMap.Strict                                as Map
 import           Data.Hashable
 import           Data.Maybe
 import qualified Data.Text                                          as T
-import qualified Data.Text.IO                                       as T
+import qualified Data.Text.Encoding                                 as T
 import           Data.Typeable
 import           Development.IDE                                    hiding
                                                                     (Error)
@@ -53,15 +54,17 @@ import           Development.IDE.Core.Rules                         (defineNoFil
                                                                      getParsedModuleWithComments,
                                                                      usePropertyAction)
 import           Development.IDE.Core.Shake                         (getDiagnostics)
-import           Refact.Apply
+import qualified Refact.Apply                                       as Refact
 
 #ifdef HLINT_ON_GHC_LIB
 import           Data.List                                          (nub)
-import           Development.IDE.GHC.Compat.Core                    (BufSpan,
+import           Development.IDE.GHC.Compat                         (BufSpan,
                                                                      DynFlags,
+                                                                     WarningFlag (Opt_WarnUnrecognisedPragmas),
                                                                      extensionFlags,
                                                                      ms_hspp_opts,
-                                                                     topDir)
+                                                                     topDir,
+                                                                     wopt)
 import qualified Development.IDE.GHC.Compat.Util                    as EnumSet
 import           "ghc-lib" GHC                                      hiding
                                                                     (DynFlags (..),
@@ -81,12 +84,14 @@ import           System.IO                                          (IOMode (Wri
                                                                      withFile)
 import           System.IO.Temp
 #else
-import           Development.IDE.GHC.Compat.Core                    hiding
+import           Development.IDE.GHC.Compat                         hiding
                                                                     (setEnv)
+import           GHC.Generics                                       (Associativity (LeftAssociative, NotAssociative, RightAssociative))
 import           Language.Haskell.GHC.ExactPrint.Delta              (deltaOptions)
 import           Language.Haskell.GHC.ExactPrint.Parsers            (postParseTransform)
 import           Language.Haskell.GHC.ExactPrint.Types              (Rigidity (..))
 import           Language.Haskell.GhclibParserEx.Fixity             as GhclibParserEx (applyFixities)
+import qualified Refact.Fixity                                      as Refact
 #endif
 
 import           Ide.Logger
@@ -107,13 +112,7 @@ import           Language.LSP.Types                                 hiding
 import qualified Language.LSP.Types                                 as LSP
 import qualified Language.LSP.Types.Lens                            as LSP
 
-import           GHC.Generics                                       (Associativity (LeftAssociative, NotAssociative, RightAssociative),
-                                                                     Generic)
-import           Text.Regex.TDFA.Text                               ()
-
 import qualified Development.IDE.Core.Shake                         as Shake
-import           Development.IDE.GHC.Compat.Core                    (WarningFlag (Opt_WarnUnrecognisedPragmas),
-                                                                     wopt)
 import           Development.IDE.Spans.Pragmas                      (LineSplitTextEdits (LineSplitTextEdits),
                                                                      NextPragmaInfo (NextPragmaInfo),
                                                                      getNextPragmaInfo,
@@ -122,9 +121,11 @@ import           Development.IDE.Spans.Pragmas                      (LineSplitTe
                                                                      lineSplitTextEdits,
                                                                      nextPragmaLine)
 import qualified Development.IDE.Types.Logger                       as Logger
+import           GHC.Generics                                       (Generic)
 import           Prettyprinter                                      (Pretty (pretty))
 import           System.Environment                                 (setEnv,
                                                                      unsetEnv)
+import           Text.Regex.TDFA.Text                               ()
 -- ---------------------------------------------------------------------
 
 newtype Log
@@ -526,7 +527,7 @@ applyHint ide nfp mhint =
     liftIO $ logm $ "applyHint:apply=" ++ show commands
     let fp = fromNormalizedFilePath nfp
     (_, mbOldContent) <- liftIO $ runAction' $ getFileContents nfp
-    oldContent <- maybe (liftIO $ T.readFile fp) return mbOldContent
+    oldContent <- maybe (liftIO $ fmap T.decodeUtf8 $ BS.readFile fp) return mbOldContent
     modsum <- liftIO $ runAction' $ use_ GetModSummary nfp
     let dflags = ms_hspp_opts $ msrModSummary modsum
     -- Setting a environment variable with the libdir used by ghc-exactprint.
@@ -557,9 +558,9 @@ applyHint ide nfp mhint =
             (pflags, _, _) <- runAction' $ useNoFile_ GetHlintSettings
             exts <- runAction' $ getExtensions pflags nfp
             -- We have to reparse extensions to remove the invalid ones
-            let (enabled, disabled, _invalid) = parseExtensions $ map show exts
+            let (enabled, disabled, _invalid) = Refact.parseExtensions $ map show exts
             let refactExts = map show $ enabled ++ disabled
-            (Right <$> withRuntimeLibdir (applyRefactorings position commands temp refactExts))
+            (Right <$> withRuntimeLibdir (Refact.applyRefactorings position commands temp refactExts))
                 `catches` errorHandlers
 #else
     mbParsedModule <- liftIO $ runAction' $ getParsedModuleWithComments nfp
@@ -572,8 +573,9 @@ applyHint ide nfp mhint =
                 -- apply-refact uses RigidLayout
                 let rigidLayout = deltaOptions RigidLayout
                 (anns', modu') <-
-                    ExceptT $ return $ postParseTransform (Right (anns, [], dflags, modu)) rigidLayout
-                liftIO $ (Right <$> withRuntimeLibdir (applyRefactorings' position commands anns' modu'))
+                    ExceptT $ mapM (uncurry Refact.applyFixities)
+                            $ postParseTransform (Right (anns, [], dflags, modu)) rigidLayout
+                liftIO $ (Right <$> withRuntimeLibdir (Refact.applyRefactorings' position commands anns' modu'))
                             `catches` errorHandlers
 #endif
     case res of

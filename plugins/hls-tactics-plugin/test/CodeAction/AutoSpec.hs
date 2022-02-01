@@ -59,7 +59,7 @@ spec = do
 
   describe "theta" $ do
     autoTest 12 10 "AutoThetaFix"
-    autoTest  7 20 "AutoThetaRankN"
+    autoTest  7 27 "AutoThetaRankN"
     autoTest  6 10 "AutoThetaGADT"
     autoTest  6  8 "AutoThetaGADTDestruct"
     autoTest  4  8 "AutoThetaEqCtx"
@@ -72,6 +72,7 @@ spec = do
 
   describe "known" $ do
     autoTest 25 13 "GoldenArbitrary"
+    autoTest  6 13 "GoldenArbitrarySingleConstructor"
     autoTestNoWhitespace
               6 10 "KnownBigSemigroup"
     autoTest  4 10 "KnownThetaSemigroup"

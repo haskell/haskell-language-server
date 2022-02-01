@@ -7,7 +7,7 @@
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE TypeFamilies       #-}
-
+{-# LANGUAGE ViewPatterns       #-}
 
 module Ide.Plugin.ExplicitImports
   ( descriptor
@@ -60,7 +60,9 @@ logToPriority = \case
 
 -- | The "main" function of a plugin
 descriptor :: Recorder Log -> PluginId -> PluginDescriptor IdeState
-descriptor recorder = descriptorForModules recorder (/= moduleName pRELUDE)
+descriptor recorder =
+    -- (almost) no one wants to see an explicit import list for Prelude
+    descriptorForModules recorder (/= moduleName pRELUDE)
 
 descriptorForModules
     :: Recorder Log
@@ -199,7 +201,7 @@ exportedModuleStrings :: ParsedModule -> [String]
 exportedModuleStrings ParsedModule{pm_parsed_source = L _ HsModule{..}}
   | Just export <- hsmodExports,
     exports <- unLoc export
-    = map show exports
+    = map prettyPrint exports
 exportedModuleStrings _ = []
 
 minimalImportsRule :: Recorder Log -> Rules ()
@@ -213,7 +215,7 @@ minimalImportsRule recorder = define (cmap LogShake recorder) $ \MinimalImports 
   let importsMap =
         Map.fromList
           [ (realSrcSpanStart l, T.pack (prettyPrint i))
-            | L (RealSrcSpan l _) i <- fromMaybe [] mbMinImports
+            | L (locA -> RealSrcSpan l _) i <- fromMaybe [] mbMinImports
           ]
       res =
         [ (i, Map.lookup (realSrcSpanStart l) importsMap)
@@ -259,15 +261,14 @@ extractMinimalImports (Just hsc) (Just TcModuleResult {..}) = do
       notExported _ _ = False
 extractMinimalImports _ _ = return ([], Nothing)
 
-mkExplicitEdit :: (ModuleName -> Bool) -> PositionMapping -> LImportDecl pass -> T.Text -> Maybe TextEdit
-mkExplicitEdit pred posMapping (L src imp) explicit
+mkExplicitEdit :: (ModuleName -> Bool) -> PositionMapping -> LImportDecl GhcRn -> T.Text -> Maybe TextEdit
+mkExplicitEdit pred posMapping (L (locA -> src) imp) explicit
   -- Explicit import list case
   | ImportDecl {ideclHiding = Just (False, _)} <- imp =
     Nothing
   | not (isQualifiedImport imp),
     RealSrcSpan l _ <- src,
     L _ mn <- ideclName imp,
-    -- (almost) no one wants to see an explicit import list for Prelude
     pred mn,
     Just rng <- toCurrentRange posMapping $ realSrcSpanToRange l =
     Just $ TextEdit rng explicit

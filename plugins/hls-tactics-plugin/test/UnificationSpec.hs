@@ -1,4 +1,6 @@
+{-# LANGUAGE CPP          #-}
 {-# LANGUAGE ViewPatterns #-}
+
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module UnificationSpec where
@@ -12,13 +14,18 @@ import           Data.Maybe (mapMaybe)
 import qualified Data.Set as S
 import           Data.Traversable
 import           Data.Tuple (swap)
-import           TcType (substTy, tcGetTyVar_maybe)
+import           Development.IDE.GHC.Compat.Core (substTy, mkBoxedTupleTy)
 import           Test.Hspec
 import           Test.QuickCheck
-import           TysWiredIn (mkBoxedTupleTy)
 import           Wingman.GHC
 import           Wingman.Machinery (newUnivar)
 import           Wingman.Types
+
+#if __GLASGOW_HASKELL__ >= 900
+import GHC.Tc.Utils.TcType (tcGetTyVar_maybe)
+#else
+import TcType  (tcGetTyVar_maybe)
+#endif
 
 
 spec :: Spec

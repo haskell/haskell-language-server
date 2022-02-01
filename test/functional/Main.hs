@@ -27,7 +27,7 @@ main = defaultTestRunner
             , ignoreInEnv [HostOS Windows, GhcVer GHC90] "Tests gets stuck in ci" $ Deferred.tests
             , Definition.tests
             , Diagnostic.tests
-            , ignoreInEnv [HostOS Windows, GhcVer GHC90] "Tests gets stuck in ci" $ Format.tests
+            , ignoreInEnv [HostOS Windows, GhcVer GHC90, GhcVer GHC92] "Tests gets stuck in ci" $ Format.tests
             , FunctionalBadProject.tests
             , FunctionalCodeAction.tests
             , HieBios.tests

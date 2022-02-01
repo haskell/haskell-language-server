@@ -43,8 +43,9 @@ deriveArbitrary = do
               mempty
               mempty
               mempty
-          $ noLoc $
-              let' [valBind (fromString "terminal") $ list $ fmap genExpr terminal] $
+          $ noLoc $ case terminal of
+            [onlyCon] -> genExpr onlyCon -- See #1879
+            _ -> let' [valBind (fromString "terminal") $ list $ fmap genExpr terminal] $
                 appDollar (mkFunc "sized") $ lambda [bvar' (mkVarOcc "n")] $
                   case' (infixCall "<=" (mkVal "n") (int 1))
                     [ match [conP (fromString "True") []] $

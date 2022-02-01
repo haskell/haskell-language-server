@@ -1,13 +1,25 @@
 {
   "nodes": {
+    "constraints-extras": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-WGDSpT37RrHwpQtExGkL5eEmBk/s9b0rxtT9DYqSGg4=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/constraints-extras-0.3.2.1/constraints-extras-0.3.2.1.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/constraints-extras-0.3.2.1/constraints-extras-0.3.2.1.tar.gz"
+      }
+    },
     "flake-compat": {
       "flake": false,
       "locked": {
-        "lastModified": 1627913399,
-        "narHash": "sha256-hY8g6H2KFL8ownSiFeMOjwPC8P0ueXpCVEbxgda3pko=",
+        "lastModified": 1641205782,
+        "narHash": "sha256-4jY7RCWUoZ9cKD8co0/4tFARpWB+57+r1bLLvXNJliY=",
         "owner": "edolstra",
         "repo": "flake-compat",
-        "rev": "12c64ca55c1014cdc1b16ed5a804aa8576601ff2",
+        "rev": "b7547d3eed6f32d06102ead8991ec52ab0a4f1a7",
         "type": "github"
       },
       "original": {
@@ -46,6 +58,30 @@
         "type": "github"
       }
     },
+    "fourmolu": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-uo5UE2SzrimnZl+JjJ30Hlg/nIw1OXJTPFIgkQopaI0=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/fourmolu-0.5.0.1/fourmolu-0.5.0.1.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/fourmolu-0.5.0.1/fourmolu-0.5.0.1.tar.gz"
+      }
+    },
+    "ghc-exactprint": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-8OWLBQj0WYi1f91EE3d5Pq+lTjY+FQei37NEedDtKeo=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/ghc-exactprint-1.4.1/ghc-exactprint-1.4.1.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/ghc-exactprint-1.4.1/ghc-exactprint-1.4.1.tar.gz"
+      }
+    },
     "gitignore": {
       "flake": false,
       "locked": {
@@ -62,7 +98,19 @@
         "type": "github"
       }
     },
-    "lsp-source": {
+    "hlint": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-Kz6adx97kY7ojoDlw3y0R6LQ0h/EtXGR5+N07/b6uGk=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/hlint-3.3.6/hlint-3.3.6.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/hlint-3.3.6/hlint-3.3.6.tar.gz"
+      }
+    },
+    "lsp": {
       "flake": false,
       "locked": {
         "narHash": "sha256-OcyNHNRh9j5nbJ8SjaNAWIEKuixAJlA7+vTimFY0c2c=",
@@ -74,7 +122,7 @@
         "url": "https://hackage.haskell.org/package/lsp-1.4.0.0/lsp-1.4.0.0.tar.gz"
       }
     },
-    "lsp-test-source": {
+    "lsp-test": {
       "flake": false,
       "locked": {
         "narHash": "sha256-IOmbQH6tKdu9kAyirvLx6xFS2N+/tbs6vZn0mNGm3No=",
@@ -86,16 +134,16 @@
         "url": "https://hackage.haskell.org/package/lsp-test-0.14.0.2/lsp-test-0.14.0.2.tar.gz"
       }
     },
-    "lsp-types-source": {
+    "lsp-types": {
       "flake": false,
       "locked": {
-        "narHash": "sha256-K1CeV6o5mmrXubATCh19iFatJ1RtPwpY5lxD8rf/SIw=",
+        "narHash": "sha256-HGg4upgirM6/px+vflY5S0Y79gAIDpl32Ad9mbbzTdU=",
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/lsp-types-1.4.0.0/lsp-types-1.4.0.0.tar.gz"
+        "url": "https://hackage.haskell.org/package/lsp-types-1.4.0.1/lsp-types-1.4.0.1.tar.gz"
       },
       "original": {
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/lsp-types-1.4.0.0/lsp-types-1.4.0.0.tar.gz"
+        "url": "https://hackage.haskell.org/package/lsp-types-1.4.0.1/lsp-types-1.4.0.1.tar.gz"
       }
     },
     "nixpkgs": {
@@ -147,16 +195,33 @@
         "type": "github"
       }
     },
+    "retrie": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-SrUyFea9Qr2SYeNVDJfWZfCguJV2rHK2mO/FO4xLFaY=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/retrie-1.2.0.1/retrie-1.2.0.1.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/retrie-1.2.0.1/retrie-1.2.0.1.tar.gz"
+      }
+    },
     "root": {
       "inputs": {
+        "constraints-extras": "constraints-extras",
         "flake-compat": "flake-compat",
         "flake-utils": "flake-utils",
+        "fourmolu": "fourmolu",
+        "ghc-exactprint": "ghc-exactprint",
         "gitignore": "gitignore",
-        "lsp-source": "lsp-source",
-        "lsp-test-source": "lsp-test-source",
-        "lsp-types-source": "lsp-types-source",
+        "hlint": "hlint",
+        "lsp": "lsp",
+        "lsp-test": "lsp-test",
+        "lsp-types": "lsp-types",
         "nixpkgs": "nixpkgs",
-        "pre-commit-hooks": "pre-commit-hooks"
+        "pre-commit-hooks": "pre-commit-hooks",
+        "retrie": "retrie"
       }
     }
   },

@@ -3,6 +3,8 @@
 {-# LANGUAGE LambdaCase               #-}
 {-# LANGUAGE NamedFieldPuns           #-}
 {-# LANGUAGE OverloadedStrings        #-}
+{-# LANGUAGE PolyKinds                #-}
+{-# LANGUAGE RecordWildCards          #-}
 module Test.Hls
   ( module Test.Tasty.HUnit,
     module Test.Tasty,

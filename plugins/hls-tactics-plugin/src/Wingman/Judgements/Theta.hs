@@ -26,6 +26,10 @@ import           GHC.Generics
 import           Wingman.GHC
 import           Wingman.Types
 
+#if __GLASGOW_HASKELL__ >= 900
+import GHC.Tc.Utils.TcType
+#endif
+
 
 ------------------------------------------------------------------------------
 -- | Something we've learned about the type environment.
@@ -172,16 +176,32 @@ excludeForbiddenMethods = filter (not . flip S.member forbiddenMethods . hi_name
 ------------------------------------------------------------------------------
 -- | Extract evidence from 'AbsBinds' in scope.
 absBinds ::  SrcSpan -> LHsBindLR GhcTc GhcTc -> [PredType]
+#if __GLASGOW_HASKELL__ >= 900
+absBinds dst (L src (FunBind w _ _ _))
+  | dst `isSubspanOf` src
+  = wrapper w
+absBinds dst (L src (AbsBinds _ _ h _ _ z _))
+#else
 absBinds dst (L src (AbsBinds _ _ h _ _ _ _))
-  | dst `isSubspanOf` src = fmap idType h
+#endif
+  | dst `isSubspanOf` src
+  = fmap idType h
+#if __GLASGOW_HASKELL__ >= 900
+    <> foldMap (absBinds dst) z
+#endif
 absBinds _ _ = []
 
 
 ------------------------------------------------------------------------------
 -- | Extract evidence from 'HsWrapper's in scope
 wrapperBinds ::  SrcSpan -> LHsExpr GhcTc -> [PredType]
+#if __GLASGOW_HASKELL__ >= 900
+wrapperBinds dst (L src (XExpr (WrapExpr (HsWrap h _))))
+#else
 wrapperBinds dst (L src (HsWrap _ h _))
-  | dst `isSubspanOf` src = wrapper h
+#endif
+  | dst `isSubspanOf` src
+  = wrapper h
 wrapperBinds _ _ = []
 
 
@@ -189,14 +209,19 @@ wrapperBinds _ _ = []
 -- | Extract evidence from the 'ConPatOut's bound in this 'Match'.
 matchBinds :: SrcSpan -> LMatch GhcTc (LHsExpr GhcTc) -> [PredType]
 matchBinds dst (L src (Match _ _ pats _))
-  | dst `isSubspanOf` src = everything (<>) (mkQ mempty patBinds) pats
+  | dst `isSubspanOf` src
+  = everything (<>) (mkQ mempty patBinds) pats
 matchBinds _ _ = []
 
 
 ------------------------------------------------------------------------------
 -- | Extract evidence from a 'ConPatOut'.
 patBinds ::  Pat GhcTc -> [PredType]
-patBinds ConPatOut{ pat_dicts = dicts }
+#if __GLASGOW_HASKELL__ >= 900
+patBinds (ConPat{ pat_con_ext = ConPatTc { cpt_dicts = dicts }})
+#else
+patBinds (ConPatOut { pat_dicts = dicts })
+#endif
   = fmap idType dicts
 patBinds _ = []
 
