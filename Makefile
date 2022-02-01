@@ -22,7 +22,7 @@ BINDIST_BASE_DIR := out/bindist
 BINDIST_OUT_DIR  := $(BINDIST_BASE_DIR)/haskell-language-server-$(HLS_VERSION)
 
 CABAL_ARGS         ?= --store-dir=$(ROOT_DIR)/$(STORE_DIR)
-CABAL_INSTALL_ARGS ?= --overwrite-policy=always --install-method=copy --installdir=$(ROOT_DIR)/out
+CABAL_INSTALL_ARGS ?= --overwrite-policy=always --install-method=copy
 
 hls: bindist/ghcs
 	for ghc in $(shell cat bindist/ghcs) ; do \
@@ -32,11 +32,11 @@ hls: bindist/ghcs
 hls-ghc:
 	@if test -z "$(GHC_VERSION)" ; then echo >&2 "GHC_VERSION is not set" ; false ; fi
 	@if test -z "$(PROJECT_FILE)" ; then echo >&2 "PROJECT_FILE is not set" ; false ; fi
-	$(CABAL) $(CABAL_ARGS) v2-install --project-file=$(PROJECT_FILE) -w ghc-$(GHC_VERSION) $(CABAL_INSTALL_ARGS)
+	$(CABAL) $(CABAL_ARGS) v2-install --project-file=$(PROJECT_FILE) -w ghc-$(GHC_VERSION) $(CABAL_INSTALL_ARGS) --installdir=$(ROOT_DIR)/out/$(GHC_VERSION)
 
 bindist:
 	for ghc in $(shell cat bindist/ghcs) ; do \
-		$(MAKE) GHC_VERSION=$$ghc bindist-ghc ; \
+		$(MAKE) GHC_VERSION=`echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` bindist-ghc ; \
 	done
 	$(SED) -e "s/@@HLS_VERSION@@/$(HLS_VERSION)/" \
 		bindist/Makefile.in > $(BINDIST_OUT_DIR)/Makefile
@@ -52,11 +52,11 @@ bindist-ghc:
 		bindist/wrapper.in > $(BINDIST_OUT_DIR)/haskell-language-server-wrapper
 	$(CHMOD) 755 $(BINDIST_OUT_DIR)/haskell-language-server-$(GHC_VERSION)
 	$(CHMOD) 755 $(BINDIST_OUT_DIR)/haskell-language-server-wrapper
-	$(INSTALL) -vDm 755 out/haskell-language-server $(BINDIST_OUT_DIR)/bin/haskell-language-server-$(GHC_VERSION)
+	$(INSTALL) -vDm 755 out/$(GHC_VERSION)/haskell-language-server $(BINDIST_OUT_DIR)/bin/haskell-language-server-$(GHC_VERSION)
 	$(PATCHELF) --set-rpath \$$ORIGIN/../lib/$(GHC_VERSION) $(BINDIST_OUT_DIR)/bin/haskell-language-server-$(GHC_VERSION)
-	$(INSTALL) -vDm 755 out/haskell-language-server-wrapper $(BINDIST_OUT_DIR)/bin/haskell-language-server-wrapper
+	$(INSTALL) -vDm 755 out/$(GHC_VERSION)/haskell-language-server-wrapper $(BINDIST_OUT_DIR)/bin/haskell-language-server-wrapper
 	$(PATCHELF) --set-rpath \$$ORIGIN/../lib/$(GHC_VERSION) $(BINDIST_OUT_DIR)/bin/haskell-language-server-wrapper
-	$(FIND) $(STORE_DIR) -type f -name '*.so' -execdir install -vDm 755 {} $(ROOT_DIR)/$(BINDIST_OUT_DIR)/lib/$(GHC_VERSION)/{} \;
+	$(FIND) $(STORE_DIR)/ghc-$(GHC_VERSION) -type f -name "*.so" -execdir install -vDm 755 {} $(ROOT_DIR)/$(BINDIST_OUT_DIR)/lib/$(GHC_VERSION)/{} \;
 	$(FIND) $(ROOT_DIR)/$(BINDIST_OUT_DIR)/lib/$(GHC_VERSION) -type f -name '*.so' -execdir $(PATCHELF) --set-rpath \$$ORIGIN {} \;
 
 
