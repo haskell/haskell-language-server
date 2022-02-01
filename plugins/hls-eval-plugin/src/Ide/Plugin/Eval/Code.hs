@@ -59,9 +59,9 @@ showDiff (First w)  = "WAS " <> w
 showDiff (Second w) = "NOW " <> w
 showDiff (Both w _) = w
 
-testCheck :: (Section, Test) -> [T.Text] -> [T.Text]
-testCheck (section, test) out
-    | null (testOutput test) || sectionLanguage section == Plain = out
+testCheck :: Bool -> (Section, Test) -> [T.Text] -> [T.Text]
+testCheck diff (section, test) out
+    | not diff || null (testOutput test) || sectionLanguage section == Plain = out
     | otherwise = showDiffs $ getDiff (map T.pack $ testOutput test) out
 
 testLengths :: Test -> (Int, Int)
