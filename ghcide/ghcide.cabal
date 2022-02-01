@@ -329,7 +329,7 @@ executable ghcide
         hls-graph,
         text,
         unordered-containers,
-        prettyprinter >= 1.7
+        prettyprinter
     other-modules:
         Arguments
         Paths_ghcide
