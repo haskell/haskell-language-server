@@ -11,10 +11,13 @@ module Ide.Plugin.Eval (
 
 import           Development.IDE          (IdeState)
 import qualified Ide.Plugin.Eval.CodeLens as CL
+import           Ide.Plugin.Eval.Config
 import           Ide.Plugin.Eval.Rules    (rules)
-import           Ide.Types                (PluginDescriptor (..), PluginId,
+import           Ide.Types                (ConfigDescriptor (..),
+                                           PluginDescriptor (..), PluginId,
+                                           defaultConfigDescriptor,
                                            defaultPluginDescriptor,
-                                           mkPluginHandler)
+                                           mkCustomConfig, mkPluginHandler)
 import           Language.LSP.Types
 
 -- |Plugin descriptor
@@ -22,6 +25,9 @@ descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
     (defaultPluginDescriptor plId)
         { pluginHandlers = mkPluginHandler STextDocumentCodeLens CL.codeLens
-        , pluginCommands = [CL.evalCommand]
+        , pluginCommands = [CL.evalCommand plId]
         , pluginRules = rules
+        , pluginConfigDescriptor = defaultConfigDescriptor
+                                   { configCustomConfig = mkCustomConfig properties
+                                   }
         }
