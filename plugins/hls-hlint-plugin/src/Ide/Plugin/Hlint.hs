@@ -284,16 +284,16 @@ getIdeas nfp = do
                      Just <$> liftIO (parseModuleEx flags' fp contents')
 
         setExtensions flags = do
-          hlintExts <- getExtensions flags nfp
+          hlintExts <- getExtensions nfp
           debugm $ "hlint:getIdeas:setExtensions:" ++ show hlintExts
           return $ flags { enabledExtensions = hlintExts }
 
-getExtensions :: ParseFlags -> NormalizedFilePath -> Action [Extension]
-getExtensions pflags nfp = do
+getExtensions :: NormalizedFilePath -> Action [Extension]
+getExtensions nfp = do
     dflags <- getFlags
     let hscExts = EnumSet.toList (extensionFlags dflags)
     let hscExts' = mapMaybe (GhclibParserEx.readExtension . show) hscExts
-    let hlintExts = nub $ enabledExtensions pflags ++ hscExts'
+    let hlintExts = nub hscExts'
     return hlintExts
   where getFlags :: Action DynFlags
         getFlags = do
@@ -538,8 +538,7 @@ applyHint ide nfp mhint =
         liftIO $ withSystemTempFile (takeFileName fp) $ \temp h -> do
             hClose h
             writeFileUTF8NoNewLineTranslation temp oldContent
-            (pflags, _, _) <- runAction' $ useNoFile_ GetHlintSettings
-            exts <- runAction' $ getExtensions pflags nfp
+            exts <- runAction' $ getExtensions nfp
             -- We have to reparse extensions to remove the invalid ones
             let (enabled, disabled, _invalid) = Refact.parseExtensions $ map show exts
             let refactExts = map show $ enabled ++ disabled
