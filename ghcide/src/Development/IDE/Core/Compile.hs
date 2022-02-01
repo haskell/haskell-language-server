@@ -672,6 +672,30 @@ handleGenerationErrors' dflags source action =
     . (("Error during " ++ T.unpack source) ++) . show @SomeException
     ]
 
+-- | Initialise the finder cache, dependencies should be topologically
+-- sorted.
+setupFinderCache :: [ModSummary] -> HscEnv -> IO HscEnv
+setupFinderCache mss session = do
+
+    -- Make modules available for others that import them,
+    -- by putting them in the finder cache.
+    let ims  = map (installedModule (homeUnitId_ $ hsc_dflags session) . moduleName . ms_mod) mss
+        ifrs = zipWith (InstalledFound . ms_location) mss ims
+    -- set the target and module graph in the session
+        graph = mkModuleGraph mss
+
+    -- We have to create a new IORef here instead of modifying the existing IORef as
+    -- it is shared between concurrent compilations.
+    prevFinderCache <- readIORef $ hsc_FC session
+    let newFinderCache =
+            foldl'
+                (\fc (im, ifr) -> GHC.extendInstalledModuleEnv fc im ifr) prevFinderCache
+                $ zip ims ifrs
+    newFinderCacheVar <- newIORef $! newFinderCache
+
+    pure $ session { hsc_FC = newFinderCacheVar, hsc_mod_graph = graph }
+
+
 -- | Load modules, quickly. Input doesn't need to be desugared.
 -- A module must be loaded before dependent modules can be typechecked.
 -- This variant of loadModuleHome will *never* cause recompilation, it just
@@ -1003,21 +1027,7 @@ getDocsBatch
   -> [Name]
   -> IO [Either String (Maybe HsDocString, IntMap HsDocString)]
 getDocsBatch hsc_env _mod _names = do
-    (msgs, res) <- initTc hsc_env HsSrcFile False _mod fakeSpan $ forM _names $ \name ->
-        case nameModule_maybe name of
-            Nothing -> return (Left $ NameHasNoModule name)
-            Just mod -> do
-             ModIface { mi_doc_hdr = mb_doc_hdr
-                      , mi_decl_docs = DeclDocMap dmap
-                      , mi_arg_docs = ArgDocMap amap
-                      } <- loadModuleInterface "getModuleInterface" mod
-             if isNothing mb_doc_hdr && Map.null dmap && null amap
-               then pure (Left (NoDocsInIface mod $ compiled name))
-               else pure (Right ( Map.lookup name dmap ,
-#if !MIN_VERSION_ghc(9,2,0)
-                                  IntMap.fromAscList $ Map.toAscList $
-#endif
-                                  Map.findWithDefault mempty name amap))
+    ((_warns,errs), res) <- initTc hsc_env HsSrcFile False _mod fakeSpan $ traverse findNameInfo _names
     case res of
         Just x  -> return $ map (first $ T.unpack . showGhc) x
         Nothing -> throwErrors
@@ -1028,6 +1038,16 @@ getDocsBatch hsc_env _mod _names = do
 #endif
   where
     throwErrors = liftIO . throwIO . mkSrcErr
+
+    findNameInfo :: Name -> IOEnv (Env TcGblEnv TcLclEnv) (Either GetDocsFailure (Maybe HsDocString, Map.Map Int HsDocString))
+    findNameInfo name =
+        case nameModule_maybe name of
+            Nothing -> return (Left $ NameHasNoModule name)
+            Just mod -> do
+             ModIface { mi_doc_hdr = mb_doc_hdr
+                      , mi_decl_docs = DeclDocMap dmap
+                      , mi_arg_docs = ArgDocMap amap
+                      } <- loadModuleInterface "getModuleInterface" mod
     compiled n =
       -- TODO: Find a more direct indicator.
       case nameSrcLoc n of
