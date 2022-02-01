@@ -220,8 +220,15 @@ logToPriority = \case
   LogDelayedAction delayedAction _             -> actionPriority delayedAction
   LogBuildSessionFinish{}                      -> Logger.Debug
   LogDiagsDiffButNoLspEnv{}                    -> Logger.Info
-  LogDefineEarlyCutoffRuleNoDiagDiags{}        -> Logger.Warning
-  LogDefineEarlyCutoffRuleCustomNewnessDiags{} -> Logger.Warning
+  LogDefineEarlyCutoffRuleNoDiagDiags diags
+    -- it may be worth having a priority below debug because
+    -- originally these were only logged if diags was nonempty
+    -- either that or mapM_ log diags like the original
+    | null diags -> Logger.Debug
+    | otherwise -> Logger.Warning
+  LogDefineEarlyCutoffRuleCustomNewnessDiags diags
+    | null diags -> Logger.Debug
+    | otherwise -> Logger.Warning
 
 -- | We need to serialize writes to the database, so we send any function that
 -- needs to write to the database over the channel, where it will be picked up by
