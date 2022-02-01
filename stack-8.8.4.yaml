@@ -64,6 +64,7 @@ extra-deps:
   - monad-dijkstra-0.1.1.2
   - opentelemetry-0.6.1
   - opentelemetry-extra-0.6.1
+  - prettyprinter-1.7.1
   - refinery-0.4.0.0
   - retrie-1.1.0.0
   - semigroups-0.18.5
