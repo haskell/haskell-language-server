@@ -208,6 +208,11 @@ flag brittany
   default:     True
   manual:      True
 
+flag dynamic
+  description: Build with the dyn rts
+  default:     True
+  manual:      True
+
 common example-plugins
   hs-source-dirs: plugins/default/src
   other-modules: Ide.Plugin.Example,
@@ -364,6 +369,15 @@ executable haskell-language-server
     -Wno-unticked-promoted-constructors
   if flag(pedantic)
     ghc-options: -Werror
+  if !os(windows) && flag(dynamic)
+  -- We want to link against the dyn rts just like official GHC binaries do;
+  --   the linked rts determines how external libs are loaded dynamically by TH.
+  -- The standard way of doing this is via the --enable-dynamic-executables Cabal option
+  -- Unfortunately it doesnt' work, see https://github.com/haskell/haskell-language-server/issues/2659
+  -- One can use --ghc-options=-dynamic but this gets applied to the dependencies as well,
+  -- which results in massive rebuilds and incompatibilities with profiling.
+  -- So instead we set the -dynamic flag diretly here.
+    ghc-options: -dynamic
 
   build-depends:
     , aeson

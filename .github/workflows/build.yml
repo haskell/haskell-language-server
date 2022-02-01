@@ -48,6 +48,11 @@ jobs:
         echo "tests: false" >> cabal.project.local
         echo "benchmarks: false" >> cabal.project.local
 
+    - name: Disable -dynamic
+      run: |
+        echo "package haskell-language-server" >> cabal.project.local
+        echo "  flags: -dynamic" >> cabal.project.local
+
     - uses: ./.github/actions/setup-build
       with:
         ghc: ${{ matrix.ghc }}

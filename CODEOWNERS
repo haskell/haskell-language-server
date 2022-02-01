@@ -18,7 +18,7 @@
 /plugins/hls-haddock-comments-plugin @berberman
 /plugins/hls-hlint-plugin @jneira @eddiemundo
 /plugins/hls-module-name-plugin 
-/plugins/hls-ormolu-plugin 
+/plugins/hls-ormolu-plugin @georgefst
 /plugins/hls-pragmas-plugin @berberman @Ailrun @eddiemundo
 /plugins/hls-qualify-imported-names-plugin @eddiemundo 
 /plugins/hls-refine-imports-plugin 
