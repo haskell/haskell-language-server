@@ -12,11 +12,11 @@ module Development.IDE.Types.Logger
   , logError, logWarning, logInfo, logDebug, logTelemetry
   , noLogging
   , WithPriority(..)
-  , logWith, cmap, cmapIO, cfilter, withDefaultRecorder, makeDefaultStderrRecorder) where
+  , logWith, cmap, cmapIO, cfilter, withDefaultRecorder, makeDefaultStderrRecorder, priorityToHsLoggerPriority) where
 
 import           Control.Concurrent                    (myThreadId)
 import           Control.Concurrent.Extra              (Lock, newLock, withLock)
-import           Control.Exception                     (IOException, try)
+import           Control.Exception                     (IOException)
 import           Control.Monad                         (forM_, when, (>=>))
 import           Control.Monad.IO.Class                (MonadIO (liftIO))
 import           Data.Functor.Contravariant            (Contravariant (contramap))
@@ -44,7 +44,8 @@ import qualified System.Log.Formatter                  as HSL
 import qualified System.Log.Handler                    as HSL
 import qualified System.Log.Handler.Simple             as HSL
 import qualified System.Log.Logger                     as HsLogger
-import           UnliftIO                              (MonadUnliftIO, finally)
+import           UnliftIO                              (MonadUnliftIO, finally,
+                                                        try)
 
 data Priority
 -- Don't change the ordering of this type or you will mess up the Ord
@@ -170,6 +171,14 @@ makeDefaultHandleRecorder hsLoggerMinPriority lock handle = do
   where
     docToText = fmap (renderStrict . layoutPretty defaultLayoutOptions)
 
+priorityToHsLoggerPriority :: Priority -> HsLogger.Priority
+priorityToHsLoggerPriority = \case
+  Telemetry -> HsLogger.INFO
+  Debug     -> HsLogger.DEBUG
+  Info      -> HsLogger.INFO
+  Warning   -> HsLogger.WARNING
+  Error     -> HsLogger.ERROR
+
 -- taken from LSP.setupLogger
 -- used until contravariant logging system is fully in place
 setupHsLogger :: Lock -> Handle -> [String] -> HsLogger.Priority -> IO ()
@@ -198,30 +207,13 @@ setupHsLogger lock handle extraLogNames level = do
 textWithPriorityToText :: WithPriority Text -> IO Text
 textWithPriorityToText = \case
   WithPriority{ priority, payload } -> do
-    -- threadId <- myThreadId
     utcTime <- getCurrentTime
     pure $ Text.intercalate " | "
       [ utcTimeToText utcTime
-      -- , callStackToLocationText callStack
-      -- , threadIdToText threadId
       , priorityToText priority
       , payload ]
     where
       utcTimeToText utcTime = Text.pack $ formatTime defaultTimeLocale "%Y-%m-%dT%H:%M:%S%6QZ" utcTime
-
-      -- threadIdToText :: Int -> Text
-      -- threadIdToText = Text.pack . show
-
-      -- callStackToLocationText callStack = srcLocText
-      --   where
-      --     srcLocText =
-      --       case getCallStack callStack of
-      --         []                                 -> "unknown"
-      --         [(_name, srcLoc)]                  -> srcLocToText srcLoc
-      --         (_, srcLoc) : (_callerName, _) : _ -> srcLocToText srcLoc
-
-      -- srcLocToText SrcLoc{srcLocModule, srcLocStartLine} =
-      --   Text.pack srcLocModule <> ":" <> Text.pack (show srcLocStartLine)
 
       priorityToText :: Priority -> Text
       priorityToText = Text.pack . show
