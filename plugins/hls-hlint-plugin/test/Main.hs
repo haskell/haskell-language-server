@@ -134,8 +134,7 @@ suggestionsTests =
         changeDoc doc [change']
         testHlintDiagnostics doc
 
-    , knownBrokenForHlintOnGhcLib "hlint doesn't take in account cpp flag as ghc -D argument" $
-      testCase "[#554] hlint diagnostics works with CPP via ghc -XCPP argument" $ runHlintSession "cpp" $ do
+    , testCase "[#554] hlint diagnostics works with CPP via ghc -XCPP argument" $ runHlintSession "cpp" $ do
         doc <- openDoc "CppCond.hs" "haskell"
         testHlintDiagnostics doc
 
