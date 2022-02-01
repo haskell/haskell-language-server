@@ -25,4 +25,7 @@ install:
 		$(CHMOD) 755 $(BINDIR)/$$h ; \
 	done
 
+version:
+	@echo $(HLS_VERSION)
+
 .PHONY: install
