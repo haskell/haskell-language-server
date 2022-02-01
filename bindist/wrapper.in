@@ -4,6 +4,14 @@ exedir="@@EXE_DIR@@"
 executablename="@@EXE_NAME@@"
 GHC_VERSION="@@GHC_VERSION@@"
 
+fail_libdir() {
+	echo >&2 "Could not find a GHC installation!"
+	echo >&2 "Consider setting GHC_LIBDIR env variable to the top-level directory of GHC shipped libraries (version ${GHC_VERSION})."
+	echo >&2 "This is needed to find dynamic libraries."
+	echo >&2 "exiting..."
+	exit 42
+}
+
 # try GHC_LIBDIR from the environment (e.g. user set it)
 if [ -n "${GHC_LIBDIR}" ] ; then
 	:
@@ -21,9 +29,7 @@ if [ -z "${GHC_LIBDIR}" ] ; then
 	elif command -v ghc >/dev/null ; then
 		ghc_bin=ghc
 	else
-		echo >&2 "Could not find a GHC installation!"
-		echo >&2 "Consider setting GHC_LIBDIR to the top-level directory of GHC shipped libraries (version ${GHC_VERSION})"
-		exit 42
+		fail_libdir
 	fi
 
 	GHC_LIBDIR=$(${ghc_bin} --print-libdir)
@@ -35,8 +41,7 @@ if [ -z "${GHC_LIBDIR}" ] ; then
 fi
 
 if [ -z "${GHC_LIBDIR}" ] ; then
-	echo >&2 "Failed to find GHC libdir!"
-	exit 42
+	fail_libdir
 fi
 
 if [ -n "$LD_LIBRARY_PATH" ] ; then
