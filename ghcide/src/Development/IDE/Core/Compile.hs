@@ -1025,17 +1025,12 @@ getDocsBatch
   :: HscEnv
   -> Module  -- ^ a moudle where the names are in scope
   -> [Name]
-  -> IO (Map.Map Name (Either T.Text (Maybe HsDocString, Map.Map Int HsDocString)))
+  -> IO (Either ErrorMessages (Map.Map Name (Either T.Text (Maybe HsDocString, Map.Map Int HsDocString))))
 getDocsBatch hsc_env _mod _names = do
     ((_warns,errs), res) <- initTc hsc_env HsSrcFile False _mod fakeSpan $ Map.fromList <$> traverse findNameInfo _names
     case res of
-        Just x  -> return $ fun x
-        Nothing -> throwErrors errs
-#if MIN_VERSION_ghc(9,2,0)
-                     $ Error.getErrorMessages msgs
-#else
-                     $ snd msgs
-#endif
+        Just x  -> pure $ pure $ fun x
+        Nothing -> pure $ Left errs
   where
     fun :: Map.Map Name (Either GetDocsFailure c) -> Map.Map Name (Either T.Text c)
     fun =
@@ -1043,8 +1038,6 @@ getDocsBatch hsc_env _mod _names = do
      where
       fun1 :: Either GetDocsFailure c -> Either T.Text c
       fun1 = first showGhc
-
-    throwErrors = liftIO . throwIO . mkSrcErr
 
     findNameInfo :: Name -> IOEnv (Env TcGblEnv TcLclEnv) (Name, Either GetDocsFailure (Maybe HsDocString, Map.Map Int HsDocString))
     findNameInfo name =
