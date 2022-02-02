@@ -134,8 +134,7 @@ suggestionsTests =
         changeDoc doc [change']
         testHlintDiagnostics doc
 
-    , knownBrokenForHlintOnGhcLib "hlint doesn't take in account cpp flag as ghc -D argument" $
-      testCase "[#554] hlint diagnostics works with CPP via ghc -XCPP argument" $ runHlintSession "cpp" $ do
+    , testCase "[#554] hlint diagnostics works with CPP via ghc -XCPP argument" $ runHlintSession "cpp" $ do
         doc <- openDoc "CppCond.hs" "haskell"
         testHlintDiagnostics doc
 
@@ -212,8 +211,7 @@ suggestionsTests =
             length diags @?= 1
             unusedExt ^. L.code @?= Just (InR "refact:Unused LANGUAGE pragma")
 
-    , knownBrokenForHlintOnGhcLib "[#1279] hlint uses a fixed set of extensions" $
-      testCase "hlint should not activate extensions like PatternSynonyms" $ runHlintSession "" $ do
+    , testCase "[#1279] hlint should not activate extensions like PatternSynonyms" $ runHlintSession "" $ do
         doc <- openDoc "PatternKeyword.hs" "haskell"
 
         waitForAllProgressDone
