@@ -47,3 +47,12 @@ function run() {
   info "Running $*..."
   "$@" || ( error "$* failed"; return 1; )
 }
+
+emake() {
+	if command -v gmake >/dev/null 2>&1 ; then
+		gmake "$@"
+	else
+		make "$@"
+	fi
+}
+

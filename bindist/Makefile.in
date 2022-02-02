@@ -15,10 +15,12 @@ install:
 	$(INSTALL) -d $(LIBDIR)/haskell-language-server-$(HLS_VERSION)/lib
 	$(INSTALL) -d $(LIBDIR)/haskell-language-server-$(HLS_VERSION)/bin
 	for f in $(wildcard lib/*/*) ; do \
-		$(INSTALL) -vDm 755 $$f $(LIBDIR)/haskell-language-server-$(HLS_VERSION)/$$f ; \
+		$(INSTALL) -d $(LIBDIR)/haskell-language-server-$(HLS_VERSION)/ ; \
+		$(INSTALL) -vm 755 $$f $(LIBDIR)/haskell-language-server-$(HLS_VERSION)/$$f ; \
 	done
 	for b in $(wildcard bin/*) ; do \
-		$(INSTALL) -vDm 755 $$b $(LIBDIR)/haskell-language-server-$(HLS_VERSION)/$$b ; \
+		$(INSTALL) -d $(LIBDIR)/haskell-language-server-$(HLS_VERSION)/ ; \
+		$(INSTALL) -vm 755 $$b $(LIBDIR)/haskell-language-server-$(HLS_VERSION)/$$b ; \
 	done
 	for h in $(wildcard haskell-language-server-*) ; do \
 		$(SED) -e "s#@@EXE_DIR@@#$(LIBDIR)/haskell-language-server-$(HLS_VERSION)/bin/#" \
