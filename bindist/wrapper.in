@@ -36,7 +36,7 @@ fail_abi() {
 if [ -n "${GHC_LIBDIR}" ] ; then
 	:
 # try hls-wrapper --print-libdir
-elif command -v "${exedir}"/haskell-language-server-wrapper >/dev/null ; then
+elif "${exedir}"/haskell-language-server-wrapper --version >/dev/null 2>/dev/null ; then
 	GHC_LIBDIR="$("${exedir}"/haskell-language-server-wrapper --print-libdir)" || unset GHC_LIBDIR
 fi
 

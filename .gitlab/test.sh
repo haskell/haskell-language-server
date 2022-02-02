@@ -48,10 +48,12 @@ esac
 cd "$CI_PROJECT_DIR/out/"
 
 tar xf *.tar.xz
+rm *.tar.xz
 cd haskell-language-server-*
 emake PREFIX=$HOME/.local
 export PATH="$HOME/.local/bin:$PATH"
-cd "$CI_PROJECT_DIR"
+tmp_dir=$(mktempdir)
+cd "$tmp_dir"
 cabal unpack bytestring-0.11.2.0
 cd bytestring-0.11.2.0
 echo "cradle:" > hie.yaml

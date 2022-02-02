@@ -72,6 +72,7 @@ case "$(uname)" in
 		cp "$(cabal list-bin ${args[@]} exe:hls-wrapper)" "$CI_PROJECT_DIR/out/haskell-language-server-wrapper"
         ;;
 	*)
+		emake --version
 		emake install-ghcs
 		emake hls
 		emake bindist

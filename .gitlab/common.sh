@@ -56,3 +56,13 @@ emake() {
 	fi
 }
 
+mktempdir() {
+	case "$(uname -s)" in
+		"Darwin"|"darwin")
+			mktemp -d -t hls_ci.XXXXXXX
+			;;
+		*)
+			mktemp -d
+			;;
+	esac
+}

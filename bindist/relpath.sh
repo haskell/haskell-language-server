@@ -9,8 +9,60 @@
 ##        and they WONT be normalized/escaped
 ## Result in "$return_value"# both $1 and $2 are absolute paths beginning with /
 
-src="$(realpath $1)"
-target="$(realpath $2)"
+# @FUNCTION: die
+# @USAGE: [msg]
+# @DESCRIPTION:
+# Exits the shell script with status code 2
+# and prints the given message in red to STDERR, if any.
+die() {
+    (>&2 echo "$1")
+    exit 2
+}
+
+# @FUNCTION: posix_realpath
+# @USAGE: <file>
+# @DESCRIPTION:
+# Portably gets the realpath and prints it to stdout.
+# This was initially inspired by
+#   https://gist.github.com/tvlooy/cbfbdb111a4ebad8b93e
+#   and
+#   https://stackoverflow.com/a/246128
+#
+# If the file does not exist, just prints it appended to the current directory.
+# @STDOUT: realpath of the given file
+posix_realpath() {
+    [ -z "$1" ] && die "Internal error: no argument given to posix_realpath"
+    current_loop=0
+    max_loops=50
+    mysource=$1
+
+    while [ -h "${mysource}" ]; do
+        current_loop=$((current_loop+1))
+        mydir="$( cd -P "$( dirname "${mysource}" )" > /dev/null 2>&1 && pwd )"
+        mysource="$(readlink "${mysource}")"
+        [ "${mysource%${mysource#?}}"x != '/x' ] && mysource="${mydir}/${mysource}"
+
+        if [ ${current_loop} -gt ${max_loops} ] ; then
+            (>&2 echo "${1}: Too many levels of symbolic links")
+			exit 1
+        fi
+    done
+    mydir="$( cd -P "$( dirname "${mysource}" )" > /dev/null 2>&1 && pwd )"
+
+    # TODO: better distinguish between "does not exist" and "permission denied"
+    if [ -z "${mydir}" ] ; then
+        (>&2 echo "${1}: Permission denied")
+		echo "$(pwd)/$1"
+    else
+        echo "${mydir%/}/$(basename "${mysource}")"
+    fi
+
+    unset current_loop max_loops mysource mydir
+}
+
+
+src="$(posix_realpath $1)" || exit 1
+target="$(posix_realpath $2)" || exit 1
 
 common_part="$src"
 result=""
