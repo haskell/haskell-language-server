@@ -1,5 +1,16 @@
 # Changelog for haskell-language-server
 
+## 1.6.1.1 (*only hackage release*)
+
+- Release to update haskell-language-server.cabal in hackage, setting the build for the executable component as dynamically linked
+  - The motivation is build by default a hls executable which works for Template Haskell
+  - This doesn't need a full release cause it does not affect release executables which continue being fully static
+
+### Pull requests merged for 1.6.1.1
+
+- Add the -dynamic flag and update build instructions
+([#2668](https://github.com/haskell/haskell-language-server/pull/2668)) by @pepeiborra
+
 ## 1.6.1.0
 
 This is a bug fix release to restore a fully statically linked haskell-language-server-wrapper executable.
