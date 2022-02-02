@@ -63,10 +63,15 @@ runs:
         fi
       shell: bash
 
+    - name: Disable -dynamic
+      run: |
+        echo "package haskell-language-server\n  flags: -dynamic" >> cabal.project.local
+      shell: bash
+
     - if: inputs.os == 'Windows' && inputs.ghc == '8.8.4'
       name: (Windows,GHC 8.8) Modify `cabal.project` to workaround segfaults
       run: |
-        echo -e 'package floskell\n    ghc-options: -O0' >> cabal.project.local
+        echo -e 'package floskell\n  ghc-options: -O0' >> cabal.project.local
       shell: bash
 
     # Shorten binary names as a workaround for filepath length limits in Windows,
