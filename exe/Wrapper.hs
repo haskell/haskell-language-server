@@ -5,6 +5,7 @@
 module Main where
 
 import           Control.Monad.Extra
+import           Data.Char  (isSpace)
 import           Data.Default
 import           Data.Foldable
 import           Data.List
@@ -55,7 +56,6 @@ main = do
           cradle <- findProjectCradle' False
           (CradleSuccess libdir) <- HieBios.getRuntimeGhcLibDir cradle
           putStr libdir
-
       _ -> launchHaskellLanguageServer args
 
 launchHaskellLanguageServer :: Arguments -> IO ()
@@ -164,5 +164,7 @@ findProjectCradle' log = do
 
   Session.loadCradle def hieYaml d
 
-
-
+trim :: String -> String
+trim s = case lines s of
+  [] -> s
+  ls -> dropWhileEnd isSpace $ last ls

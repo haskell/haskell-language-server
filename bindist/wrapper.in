@@ -3,11 +3,31 @@
 exedir="@@EXE_DIR@@"
 executablename="@@EXE_NAME@@"
 GHC_VERSION="@@GHC_VERSION@@"
+ABI_HASHES="@@ABI_HASHES@@"
+
+fail_ghc_pkg() {
+	echo >&2 "Could not find a ghc-pkg binary (found: $1)!"
+	echo >&2 "Your GHC installation may be borked."
+	echo >&2 "Consider installing GHC via ghcup or compile HLS from source."
+	echo >&2 "exiting..."
+	exit 42
+}
 
 fail_libdir() {
 	echo >&2 "Could not find a GHC installation!"
 	echo >&2 "Consider setting GHC_LIBDIR env variable to the top-level directory of GHC shipped libraries (version ${GHC_VERSION})."
 	echo >&2 "This is needed to find dynamic libraries."
+	echo >&2 "exiting..."
+	exit 42
+}
+
+fail_abi() {
+	echo >&2 "GHC ABIs don't match!"
+	echo >&2 "This means you're running an incompatible GHC and HLS won't work correctly."
+	echo >&2 "Consider installing GHC via ghcup or compile HLS from source."
+	echo >&2 ""
+	echo >&2 "Expected: ${ABI_HASHES}"
+	echo >&2 "Got:      $1"
 	echo >&2 "exiting..."
 	exit 42
 }
@@ -50,6 +70,18 @@ fi
 if [ -z "${GHC_LIBDIR}" ] ; then
 	fail_libdir
 fi
+
+# check abi
+GHC_PKG="${GHC_LIBDIR}"/bin/ghc-pkg
+if "${GHC_PKG}" --version >/dev/null ; then
+	:
+else
+	fail_ghc_pkg "${GHC_PKG}"
+fi
+PKGCONF="${GHC_LIBDIR}/package.conf.d"
+MY_ABI_HASHES="$(for dep in ghc $("${GHC_PKG}" --global-package-db "$PKGCONF" field ghc depends --simple-output) ; do "${GHC_PKG}" --global-package-db "$PKGCONF" field "${dep}" abi --simple-output ; done | tr '\n' ' ' | xargs)"
+[ "${ABI_HASHES}" = "${MY_ABI_HASHES}" ] || fail_abi "${MY_ABI_HASHES}"
+unset PKGCONF
 
 if [ -n "$LD_LIBRARY_PATH" ] ; then
 	LD_LIBRARY_PATH="$(for i in "${GHC_LIBDIR}"/* ; do [ -d "$i" ] && printf "%s" "$i:" ; done)$LD_LIBRARY_PATH"

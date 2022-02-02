@@ -66,7 +66,10 @@ ifeq ($(UNAME), Darwin)
 else
 	$(PATCHELF) --set-rpath \$$ORIGIN/../lib/$(GHC_VERSION) $(BINDIST_OUT_DIR)/bin/haskell-language-server-$(GHC_VERSION)
 endif
-	$(SED) -e "s/@@EXE_NAME@@/haskell-language-server-$(GHC_VERSION)/" -e "s/@@GHC_VERSION@@/$(GHC_VERSION)/" \
+	$(SED) \
+		-e "s/@@EXE_NAME@@/haskell-language-server-$(GHC_VERSION)/" \
+		-e "s/@@GHC_VERSION@@/$(GHC_VERSION)/" \
+		-e "s/@@ABI_HASHES@@/$(shell for dep in ghc `ghc-pkg-$(GHC_VERSION) field ghc depends --simple-output` ; do ghc-pkg-$(GHC_VERSION) field $$dep abi --simple-output ; done | tr '\n' ' ' | xargs)/" \
 		bindist/wrapper.in > $(BINDIST_OUT_DIR)/haskell-language-server-$(GHC_VERSION)
 	$(CHMOD) 755 $(BINDIST_OUT_DIR)/haskell-language-server-$(GHC_VERSION)
 	$(INSTALL) -d $(BINDIST_OUT_DIR)/bin/
