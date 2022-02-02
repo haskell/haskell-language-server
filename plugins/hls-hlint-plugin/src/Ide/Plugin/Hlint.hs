@@ -288,12 +288,12 @@ getIdeas nfp = do
           return $ flags { enabledExtensions = hlintExts }
 
 -- Gets extensions from ModSummary dynflags for the file.
--- Previously this would concatenate extensions from both hlint's parsedFlags
+-- Previously this would union extensions from both hlint's parsedFlags
 -- and the ModSummary dynflags. However using the parsedFlags extensions
 -- can sometimes interfere with the hlint parsing of the file.
 -- See https://github.com/haskell/haskell-language-server/issues/1279
 --
--- Note: this is used when HLINT_ON_GHC_LIB is not defined. We seem to need
+-- Note: this is used when HLINT_ON_GHC_LIB is defined. We seem to need
 -- these extensions to construct dynflags to parse the file again. Therefore
 -- using hlint default extensions doesn't seem to be a problem when
 -- HLINT_ON_GHC_LIB is not defined because we don't parse the file again.
