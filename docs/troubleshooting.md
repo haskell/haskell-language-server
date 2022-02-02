@@ -165,34 +165,34 @@ Using an explicit `hie.yaml` to configure the cradle can resolve the problem, se
 Static binaries use the GHC linker for dynamically loading dependencies when typechecking TH code, and this can run into issues when loading shared objects linked against mismatching system libraries, or into GHC linker  bugs (mainly the Mach linker used in Mac OS, but also potentially the ELF linker).
 Dynamically linked binaries (including`ghci`) use the system linker instead of the GHC linker and avoid both issues.
 
-The easiest way to obtain a dynamically linked HLS binary is to build it locally. With `cabal` this can be done as follows:
+The easiest way to obtain a dynamically linked HLS binary is to build HLS locally. With `cabal` this can be done as follows:
 
 ```bash
-cabal update && cabal install pkg:haskell-language-server --ghc-options="-dynamic"
+cabal update && cabal install pkg:haskell-language-server"
 ```
 
 If you are compiling with a ghc version with a specific `cabal-ghc${ghcVersion}.project` in the repo you will have to use it. For example for ghc-9.0.x:
 
 ```bash
-cabal update && cabal install pkg:haskell-language-server --project-file=cabal-ghc90.project --ghc-options="-dynamic"
+cabal update && cabal install pkg:haskell-language-server --project-file=cabal-ghc90.project"
 ```
 
-With `stack` you also need add the ghc option `-dynamic`.
+Or with `stack`:
 
 ```bash
-stack install haskell-language-server --stack-yaml=stack-${ghcVersion}.yaml --ghc-options="-dynamic"
+stack install haskell-language-server --stack-yaml=stack-${ghcVersion}.yaml"
 ```
 
 You also can leverage `ghcup compile hls`:
 
 ```bash
-ghcup compile hls -g master --ghc 8.10.7 -- --ghc-options="-dynamic"
+ghcup compile hls -v 1.6.1.0 --ghc 8.10.7
 ```
 
 as it uses cabal underneath you might need to use a specific cabal.project for some ghc versions:
 
 ```bash
-ghcup compile hls -g master --ghc 9.0.2 --project-file cabal-ghc90.project -- --ghc-options="-dynamic"
+ghcup compile hls -v 1.6.1.0 --ghc 9.0.2 --cabal-project cabal-ghc90.project
 ```
 
 ### Preprocessors
