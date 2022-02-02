@@ -16,7 +16,7 @@ case "${TARBALL_EXT}" in
 		find . -type f ! -name '*.zip' -delete
         ;;
     tar.xz)
-		emake bindist-tar
+		emake TARBALL="${TARBALL_PREFIX}-${TARBALL_ARCHIVE_SUFFIX}-${HLS_VERSION}.tar.xz" bindist-tar
 		rm -rf out/bindist
         ;;
     *)

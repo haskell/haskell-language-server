@@ -4,6 +4,7 @@ ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 GHC_VERSION  ?=
 
 HLS_VERSION := $(shell grep '^version:' haskell-language-server.cabal | awk '{ print $$2 }')
+TARBALL     ?= haskell-language-server-$(HLS_VERSION).tar.xz
 
 CHMOD    := chmod
 INSTALL  := install
@@ -53,7 +54,7 @@ bindist:
 	$(INSTALL) -vm 755 bindist/relpath.sh $(BINDIST_OUT_DIR)/scripts/relpath.sh
 
 bindist-tar:
-	cd $(BINDIST_BASE_DIR) ; $(TAR) caf $(ROOT_DIR)/out/haskell-language-server-$(HLS_VERSION).tar.xz haskell-language-server-$(HLS_VERSION)
+	cd $(BINDIST_BASE_DIR) ; $(TAR) caf $(ROOT_DIR)/out/$(TARBALL) haskell-language-server-$(HLS_VERSION)
 
 bindist-ghc:
 	if test -z "$(GHC_VERSION)" ; then echo >&2 "GHC_VERSION is not set" ; false ; fi

@@ -1,6 +1,7 @@
 stages:
   - build
   - tar
+  - test
 
 # Used for ci setup in the gitlab mirror of the project:
 # https://gitlab.haskell.org/haskell/haskell-language-server/-/pipelines
@@ -45,6 +46,17 @@ workflow:
   script:
     - bash .gitlab/ci.sh
 
+.test:
+  extends: .artifacts:short
+  stage: test
+  script:
+    - bash .gitlab/test.sh
+
+
+######################
+# aarch64 linux deb10
+######################
+
 build-aarch64-linux-deb10:
   extends: .build
   before_script:
@@ -68,6 +80,18 @@ tar-aarch64-linux-deb10:
   variables:
     TARBALL_ARCHIVE_SUFFIX: Linux-aarch64
     TARBALL_EXT: tar.xz
+
+test-aarch64-linux-deb10:
+  extends: .test
+  needs: ["tar-aarch64-linux-deb10"]
+  tags:
+    - aarch64-linux
+  image: "registry.gitlab.haskell.org/ghc/ci-images/aarch64-linux-deb10:$DOCKER_REV"
+
+
+######################
+# armv7 linux deb10
+######################
 
 build-armv7-linux-deb10:
   extends: .build
@@ -93,6 +117,18 @@ tar-armv7-linux-deb10:
     TARBALL_ARCHIVE_SUFFIX: Linux-armv7
     TARBALL_EXT: tar.xz
 
+test-armv7-linux-deb10:
+  extends: .test
+  needs: ["tar-armv7-linux-deb10"]
+  tags:
+    - armv7-linux
+  image: "registry.gitlab.haskell.org/ghc/ci-images/armv7-linux-deb10:$DOCKER_REV"
+
+
+######################
+# x86_64 linux deb10
+######################
+
 build-x86_64-linux:
   extends: .build
   before_script:
@@ -117,6 +153,18 @@ tar-x86_64-linux:
     TARBALL_ARCHIVE_SUFFIX: Linux-x86_64
     TARBALL_EXT: tar.xz
 
+test-x86_64-linux:
+  extends: .test
+  needs: ["tar-x86_64-linux"]
+  tags:
+    - x86_64-linux
+  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-deb10:$DOCKER_REV"
+
+
+######################
+# x86_64 linux alpine
+######################
+
 build-x86_64-linux-alpine:
   extends: .build
   tags:
@@ -140,6 +188,20 @@ tar-x86_64-linux-alpine:
     TARBALL_ARCHIVE_SUFFIX: Linux-alpine-x86_64
     TARBALL_EXT: tar.xz
 
+tar-x86_64-linux-alpine:
+  extends: .test
+  needs: ["tar-x86_64-linux-alpine"]
+  tags:
+    - x86_64-linux
+  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-alpine3_12:$DOCKER_REV"
+  before_script:
+    - sudo apk add --no-cache zlib zlib-dev zlib-static bzip2 bzip2-dev bzip2-static gmp gmp-dev xz xz-dev ncurses-static
+
+
+######################
+# x86_64 freebsd 12
+######################
+
 build-x86_64-freebsd12:
   extends: .build
   before_script:
@@ -160,6 +222,19 @@ tar-x86_64-freebsd12:
   variables:
     TARBALL_ARCHIVE_SUFFIX: FreeBSD12-x86_64
     TARBALL_EXT: tar.xz
+
+test-x86_64-freebsd12:
+  extends: .test
+  needs: ["tar-x86_64-freebsd12"]
+  tags:
+    - x86_64-freebsd12
+  before_script:
+    - sudo pkg install --yes patchelf gmake
+
+
+######################
+# x86_64 freebsd 13
+######################
 
 build-x86_64-freebsd13:
   extends: .build
@@ -184,6 +259,21 @@ tar-x86_64-freebsd13:
     TARBALL_ARCHIVE_SUFFIX: FreeBSD13-x86_64
     TARBALL_EXT: tar.xz
 
+test-x86_64-freebsd13:
+  extends: .test
+  needs: ["tar-x86_64-freebsd13"]
+  tags:
+    - x86_64-freebsd13
+  before_script:
+    - sudo pkg update
+    - sudo pkg install --yes compat12x-amd64 gmake
+    - sudo ln -s libncurses.so.6 /usr/local/lib/libncurses.so.6.2
+
+
+######################
+# x86_64 darwin
+######################
+
 build-x86_64-darwin:
   extends: .build
   tags:
@@ -202,6 +292,17 @@ tar-x86_64-darwin:
   variables:
     TARBALL_ARCHIVE_SUFFIX: macOS-x86_64
     TARBALL_EXT: tar.xz
+
+test-x86_64-darwin:
+  extends: .test
+  needs: ["tar-x86_64-darwin"]
+  tags:
+    - x86_64-darwin
+
+
+######################
+# aarch64 darwin
+######################
 
 build-aarch64-darwin:
   extends: .artifacts:short
@@ -253,6 +354,47 @@ tar-aarch64-darwin:
   variables:
     TARBALL_ARCHIVE_SUFFIX: macOS-aarch64
     TARBALL_EXT: tar.xz
+
+test-aarch64-darwin:
+  extends: .test
+  needs: ["tar-aarch64-darwin"]
+  tags:
+    - aarch64-darwin-m1
+  before_script:
+    # Install brew locally in the project dir. Packages will also be installed here.
+    - '[ -e "$CI_PROJECT_DIR/.brew" ] || git clone --depth=1 https://github.com/Homebrew/brew $CI_PROJECT_DIR/.brew'
+    - export PATH="$CI_PROJECT_DIR/.brew/bin:$CI_PROJECT_DIR/.brew/sbin:$PATH"
+
+    # otherwise we seem to get intel binaries
+    - export HOMEBREW_CHANGE_ARCH_TO_ARM=1
+
+    # make sure to not pollute the machine with temp files etc
+    - mkdir -p $CI_PROJECT_DIR/.brew_cache
+    - export HOMEBREW_CACHE=$CI_PROJECT_DIR/.brew_cache
+    - mkdir -p $CI_PROJECT_DIR/.brew_logs
+    - export HOMEBREW_LOGS=$CI_PROJECT_DIR/.brew_logs
+    - mkdir -p /private/tmp/.brew_tmp
+    - export HOMEBREW_TEMP=/private/tmp/.brew_tmp
+
+    # update and install packages
+    - brew update
+    - brew install llvm
+    - brew install autoconf automake coreutils
+  script: |
+    export PATH="$CI_PROJECT_DIR/.brew/opt/llvm/bin:$CI_PROJECT_DIR/.brew/bin:$CI_PROJECT_DIR/.brew/sbin:$PATH"
+    export CC=$CI_PROJECT_DIR/.brew/opt/llvm/bin/clang
+    export CXX=$CI_PROJECT_DIR/.brew/opt/llvm/bin/clang++
+    export LD=ld
+    export AR=$CI_PROJECT_DIR/.brew/opt/llvm/bin/llvm-ar
+    export RANLIB=$CI_PROJECT_DIR/.brew/opt/llvm/bin/llvm-ranlib
+    arch -arm64 /bin/bash ./.gitlab/test.sh
+  after_script:
+    - rm -Rf /private/tmp/.brew_tmp
+
+
+######################
+# x86_64 windows
+######################
 
 build-x86_64-windows:
   extends: .build
