@@ -206,9 +206,9 @@ If you don't want to use [nix](https://nixos.org/guides/install-nix.html), you c
        "hooks": [
           {
             "id": "mixed-line-ending",
-            "args": ["--fix", "lf"]
+            "args": ["--fix", "lf"],
+            "exclude": "test/testdata/.*CRLF*.hs$"
           }
-
        ]
     }
   ]
