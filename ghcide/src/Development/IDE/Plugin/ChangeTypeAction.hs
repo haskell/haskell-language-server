@@ -76,8 +76,9 @@ diagnosticToChangeSig uri decls diag = addSrcSpan decls <$> matchingDiagnostic u
 
 -- | If a diagnostic has the proper message create a ChangeSignature from it
 matchingDiagnostic :: Uri -> Diagnostic -> Maybe ChangeSignature
-matchingDiagnostic uri diag@Diagnostic{_message} = unwrapMatch $ _message =~ ("Expected type: (.+)\n +Actual type: (.+)\n.*\n +In an equation for ‘(.+)’" :: Text)
+matchingDiagnostic uri diag@Diagnostic{_message} = unwrapMatch $ _message =~ expectedMessage
     where
+        expectedMessage = "Expected type: (.+)\n +Actual type: (.+)\n.*\n +In an equation for ‘(.+)’" :: Text
         unwrapMatch :: (Text, Text, Text, [Text]) -> Maybe ChangeSignature
         unwrapMatch (_, _, _, [exp, act, name]) = Just $ ChangeSignature exp act name Nothing diag uri
         unwrapMatch _                           = Nothing
