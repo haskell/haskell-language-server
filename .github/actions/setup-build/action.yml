@@ -65,7 +65,7 @@ runs:
 
     - name: Disable -dynamic
       run: |
-        echo "package haskell-language-server\n  flags: -dynamic" >> cabal.project.local
+        echo -e "package haskell-language-server\n  flags: -dynamic" >> cabal.project.local
       shell: bash
 
     - if: inputs.os == 'Windows' && inputs.ghc == '8.8.4'
