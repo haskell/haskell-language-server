@@ -8,6 +8,8 @@
 
 ### Pull requests merged for 1.6.1.1
 
+- Prepare 1.6.1.1 (only hackage release)
+([#2681](https://github.com/haskell/haskell-language-server/pull/2681)) by @jneira
 - Add the -dynamic flag and update build instructions
 ([#2668](https://github.com/haskell/haskell-language-server/pull/2668)) by @pepeiborra
 
