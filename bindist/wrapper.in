@@ -15,9 +15,16 @@ fail_libdir() {
 # try GHC_LIBDIR from the environment (e.g. user set it)
 if [ -n "${GHC_LIBDIR}" ] ; then
 	:
+# try hls-wrapper --print-libdir
+elif command -v "${exedir}"/haskell-language-server-wrapper >/dev/null ; then
+	GHC_LIBDIR="$("${exedir}"/haskell-language-server-wrapper --print-libdir)" || unset GHC_LIBDIR
+fi
+
+if [ -z "${GHC_LIBDIR}" ] ; then
 # try ghcup, if available
-elif command -v ghcup >/dev/null ; then
-	GHC_LIBDIR="$(ghcup whereis -d ghc ${GHC_VERSION})/../lib/ghc-${GHC_VERSION}/" || unset GHC_LIBDIR
+	if command -v ghcup >/dev/null ; then
+		GHC_LIBDIR="$(ghcup whereis -d ghc ${GHC_VERSION})/../lib/ghc-${GHC_VERSION}/" || unset GHC_LIBDIR
+	fi
 fi
 
 # if above failed, try to examine ghc in PATH

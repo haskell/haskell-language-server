@@ -76,6 +76,7 @@ defaultMain args idePlugins = do
 
         DefaultConfigurationMode -> do
           LBS.putStrLn $ A.encodePretty $ pluginsToDefaultConfig idePlugins
+        _ -> pure ()
 
 -- ---------------------------------------------------------------------
 

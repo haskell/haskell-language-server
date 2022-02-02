@@ -8,6 +8,7 @@ HLS_VERSION := @@HLS_VERSION@@
 INSTALL := install
 SED     := sed
 CHMOD   := chmod
+LN      := ln
 
 install:
 	$(INSTALL) -d $(BINDIR)
@@ -24,6 +25,8 @@ install:
 			$$h > $(BINDIR)/$$h ; \
 		$(CHMOD) 755 $(BINDIR)/$$h ; \
 	done
+	$(LN) -s `scripts/relpath.sh "\`realpath $(BINDIR)\`" "\`realpath $(LIBDIR)/haskell-language-server-$(HLS_VERSION)/bin/haskell-language-server-wrapper\`"` \
+		$(BINDIR)/haskell-language-server-wrapper
 
 version:
 	@echo $(HLS_VERSION)

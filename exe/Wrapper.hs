@@ -1,4 +1,5 @@
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE CPP #-}
 -- | This module is based on the hie-wrapper.sh script in
 -- https://github.com/alanz/vscode-hie-server
 module Main where
@@ -19,7 +20,12 @@ import           System.Exit
 import           System.FilePath
 import           System.IO
 import           System.Info
+#ifndef mingw32_HOST_OS
+import           System.Posix.Process (executeFile)
+import qualified Data.Map.Strict as Map
+#else
 import           System.Process
+#endif
 
 -- ---------------------------------------------------------------------
 
@@ -45,6 +51,10 @@ main = do
 
       BiosMode PrintCradleType ->
           print =<< findProjectCradle
+      PrintLibDir -> do
+          cradle <- findProjectCradle' False
+          (CradleSuccess libdir) <- HieBios.getRuntimeGhcLibDir cradle
+          putStr libdir
 
       _ -> launchHaskellLanguageServer args
 
@@ -99,7 +109,14 @@ launchHaskellLanguageServer parsedArgs = do
     Nothing -> hPutStrLn stderr $ "Cannot find any haskell-language-server exe, looked for: " ++ intercalate ", " candidates
     Just e -> do
       hPutStrLn stderr $ "Launching haskell-language-server exe at:" ++ e
+#ifdef mingw32_HOST_OS
       callProcess e args
+#else
+      (CradleSuccess libdir) <- HieBios.getRuntimeGhcLibDir cradle
+      env <- Map.fromList <$> getEnvironment
+      let newEnv = Map.insert "GHC_LIBDIR" libdir env
+      executeFile e True args (Just (Map.toList newEnv))
+#endif
 
 -- | Version of 'getRuntimeGhcVersion' that dies if we can't get it, and also
 -- checks to see if the tool is missing if it is one of
@@ -130,15 +147,22 @@ getRuntimeGhcVersion' cradle = do
            ++ show cradle
 
 findProjectCradle :: IO (Cradle Void)
-findProjectCradle = do
+findProjectCradle = findProjectCradle' True
+
+findProjectCradle' :: Bool -> IO (Cradle Void)
+findProjectCradle' log = do
   d <- getCurrentDirectory
 
   let initialFp = d </> "a"
   hieYaml <- Session.findCradle def initialFp
 
   -- Some log messages
-  case hieYaml of
-    Just yaml -> hPutStrLn stderr $ "Found \"" ++ yaml ++ "\" for \"" ++ initialFp ++ "\""
-    Nothing -> hPutStrLn stderr "No 'hie.yaml' found. Try to discover the project type!"
+  when log $
+      case hieYaml of
+        Just yaml -> hPutStrLn stderr $ "Found \"" ++ yaml ++ "\" for \"" ++ initialFp ++ "\""
+        Nothing -> hPutStrLn stderr "No 'hie.yaml' found. Try to discover the project type!"
 
   Session.loadCradle def hieYaml d
+
+
+
