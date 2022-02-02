@@ -9,11 +9,15 @@ module Main
 
 import           Control.Lens            (_Just, folded, preview, toListOf,
                                           view, (^..))
-import           Data.Aeson              (fromJSON)
+import           Data.Aeson              (Value (Object), fromJSON, object,
+                                          toJSON, (.=))
 import           Data.Aeson.Types        (Result (Success))
 import           Data.List               (isInfixOf)
 import           Data.List.Extra         (nubOrdOn)
+import qualified Data.Map                as Map
 import qualified Data.Text               as T
+import           Ide.Plugin.Config       (Config)
+import qualified Ide.Plugin.Config       as Plugin
 import qualified Ide.Plugin.Eval         as Eval
 import           Ide.Plugin.Eval.Types   (EvalParams (..), Section (..),
                                           testOutput)
@@ -139,6 +143,11 @@ tests =
   , goldenWithEval "Works with NoImplicitPrelude" "TNoImplicitPrelude" "hs"
   , goldenWithEval "Variable 'it' works" "TIt" "hs"
 
+  , goldenWithHaskellDoc evalPlugin "Give 'WAS' by default" testDataDir "TDiff" "expected.default" "hs" executeLensesBackwards
+  , goldenWithHaskellDoc evalPlugin "Give the result only if diff is off" testDataDir "TDiff" "expected.no-diff" "hs" $ \doc -> do
+      sendConfigurationChanged (toJSON diffOffConfig)
+      executeLensesBackwards doc
+
   , testGroup ":info command"
     [ testCase ":info reports type, constructors and instances" $ do
         [output] <- map (unlines . codeLensTestOutput) <$> evalLenses "TInfo.hs"
@@ -241,6 +250,16 @@ codeLensTestOutput codeLens = do
 
 testDataDir :: FilePath
 testDataDir = "test" </> "testdata"
+
+diffOffConfig :: Config
+diffOffConfig =
+  def
+    { Plugin.plugins = Map.fromList [("eval",
+        def { Plugin.plcGlobalOn = True, Plugin.plcConfig = unObject $ object ["diff" .= False] }
+    )] }
+  where
+    unObject (Object obj) = obj
+    unObject _            = undefined
 
 evalInFile :: FilePath -> T.Text -> T.Text -> IO ()
 evalInFile fp e expected = runSessionWithServer evalPlugin testDataDir $ do

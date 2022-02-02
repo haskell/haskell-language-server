@@ -43,12 +43,15 @@ and it is being used in nix environments.
 
 - [ ] bump up package versions following the [pvp specification](https://pvp.haskell.org/) if they are not already updated. You could use [policeman](https://github.com/kowainik/policeman) to help with this step.
 - [ ] create ${version}-hackage branch to trigger the hackage github workflow which will upload all changed packages to hackage as candidates
+- [ ] for new plugins or packages, update hackage uploaders to add the author of the plugin/package and some hls maintainer(s) other than the owner of the hackage api key used to upload them (it has to be done by the owner of the api key, actually @pepeiborra)
 - [ ] check manually candidates in hackage
 - [ ] publish them definitely
 
 ### ghcup release
 
 - [ ] push the release tag to the [haskell-language-server gitlab repo](https://gitlab.haskell.org/haskell/haskell-language-server) to trigger the build of ghcup specific artifacts
+- [ ] download specific artifacts [only available in the gitlab build](#haskell-gitlab-release-pipeline) and compute their sha256sum
+- [ ] upload them to the github release and complete the SHA256SUMS file
 - [ ] change ghcup metadata to include the new release in <https://github.com/haskell/ghcup-metadata>
   - example pull request [here](https://github.com/haskell/ghcup-metadata/pull/11)
 
@@ -124,20 +127,10 @@ It just kicks off a matrix of jobs varying across GHC versions and OSs, building
 the binaries with Cabal and extracting them from the dist-newstyle directory.
 The binaries are built with -O2.
 
-One caveat is that we need to rename the binaries from
-haskell-language-server/haskell-language-server-wrapper to hls/hls-wrapper due to
-path length limitations on windows. But whenever we upload them to the release,
-we make sure to upload them as their full name variant.
-
 ### Failing workflow
 
-If the workflow fail and all of some binaries has not been uploaded,
-the prerelease and the tag itself has to be recreated to start it again.
-If only some of the artefacts are missing, an alternative could be make
-the release in a fork and upload manually them.
-
-If they are missing due to ci specific problems we can build the executable locally
-and add it to the existing release.
+If the workflow fail and some binaries has been already uploaded,
+those artifacts must be removed and the build should be re-ran (the build tries to upload themm all and it fails if there is an existing artifact with the same name)
 
 ### Updating release artifacts
 
@@ -171,7 +164,7 @@ The script will upload the tarballs as candidates, maintainers will have to chec
 
 The project is present in the haskell gitlab server: <https://gitlab.haskell.org/haskell/haskell-language-server>
 The main motivation is to leverage the ci infrastructure which includes architectures not included in the github ci.
-The specific architectures only available through gitlab are: `armv7-linux`, `x86_64-freebsd`, `aarch64-darwin`, `aarch64-linux`
+The specific architectures only available through gitlab are: `aarch64-darwin`, `aarch64-linux`, `armv7-linux`, `x86_64-freebsd12`, `x86_64-freebsd13`, `x86_64-linux-alpine`
 The gitlab pipeline uses the configuration file [.gitlab-ci.yml](https://github.com/haskell/haskell-language-server/blob/master/.gitlab-ci.yml)
 and the sh scripts in [.gitlab](https://github.com/haskell/haskell-language-server/tree/master/.gitlab)
 It is triggered by pushing a tag to the gitlab repo.

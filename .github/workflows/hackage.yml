@@ -11,7 +11,7 @@ on:
       upload-candidates:
         description: 'Whether packages should be uploaded'
         required: true
-        default: 'true'
+        default: 'false'
   push:
     branches:
       - '*-hackage'
@@ -20,7 +20,7 @@ jobs:
   check-and-upload-tarballs:
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: ${{ github.event.inputs.upload-candidates == 'true' }}
+      fail-fast: ${{ github.event.inputs.upload-candidates != 'false' }}
       matrix:
         package: ["hie-compat", "hls-graph", "shake-bench",
                   "hls-plugin-api", "ghcide", "hls-test-utils",
@@ -139,7 +139,7 @@ jobs:
           path: ${{ steps.generate-dist-tarball.outputs.path }}
 
   upload-candidate:
-    if: github.event.inputs.upload-candidates == 'true'
+    if: github.event.inputs.upload-candidates != 'false'
     needs: check-and-upload-tarballs
     runs-on: ubuntu-latest
     steps:
