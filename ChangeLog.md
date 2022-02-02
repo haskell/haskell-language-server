@@ -1,7 +1,5 @@
 # Changelog for haskell-language-server
 
-<<<<<<< HEAD
-=======
 ## 1.6.1.1 (*only hackage release*)
 
 - Release to update haskell-language-server.cabal in hackage, setting the build for the executable component as dynamically linked
@@ -34,7 +32,6 @@ This is a bug fix release to restore a fully statically linked haskell-language-
 ([#2644](https://github.com/haskell/haskell-language-server/pull/2644)) by @MorrowM
 
 
->>>>>>> 9d75cc56 (Prepare 1.6.1.1 (only hackage release) (#2681))
 ## 1.6.0.0
 
 Time for a new and exciting hls release:
