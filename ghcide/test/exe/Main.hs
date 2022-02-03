@@ -5493,12 +5493,10 @@ simpleMultiTest :: TestTree
 simpleMultiTest = testCase "simple-multi-test" $ withLongTimeout $ runWithExtraFiles "multi" $ \dir -> do
     let aPath = dir </> "a/A.hs"
         bPath = dir </> "b/B.hs"
-    aSource <- liftIO $ readFileUtf8 aPath
-    adoc <- createDoc aPath "haskell" aSource
+    adoc <- openDoc aPath "haskell"
+    bdoc <- openDoc bPath "haskell"
     WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" adoc
     liftIO $ assertBool "A should typecheck" ideResultSuccess
-    bSource <- liftIO $ readFileUtf8 bPath
-    bdoc <- createDoc bPath "haskell" bSource
     WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" bdoc
     liftIO $ assertBool "B should typecheck" ideResultSuccess
     locs <- getDefinitions bdoc (Position 2 7)
@@ -5511,15 +5509,14 @@ simpleMultiTest2 :: TestTree
 simpleMultiTest2 = testCase "simple-multi-test2" $ runWithExtraFiles "multi" $ \dir -> do
     let aPath = dir </> "a/A.hs"
         bPath = dir </> "b/B.hs"
-    bSource <- liftIO $ readFileUtf8 bPath
-    bdoc <- createDoc bPath "haskell" bSource
-    expectNoMoreDiagnostics 10
-    aSource <- liftIO $ readFileUtf8 aPath
-    (TextDocumentIdentifier adoc) <- createDoc aPath "haskell" aSource
-    -- Need to have some delay here or the test fails
-    expectNoMoreDiagnostics 10
+    bdoc <- openDoc bPath "haskell"
+    WaitForIdeRuleResult {} <- waitForAction "TypeCheck" bdoc
+    adoc@(TextDocumentIdentifier auri) <- openDoc aPath "haskell"
+    WaitForIdeRuleResult {} <- waitForAction "TypeCheck" adoc
     locs <- getDefinitions bdoc (Position 2 7)
-    let fooL = mkL adoc 2 0 2 3
+    let fooL = mkL auri 2 0 2 3
+    checkDefs locs (pure [fooL])
+    expectNoMoreDiagnostics 0.5
     checkDefs locs (pure [fooL])
     expectNoMoreDiagnostics 0.5
 
