@@ -5555,15 +5555,15 @@ bootTests = testGroup "boot"
             cDoc <- createDoc cPath "haskell" cSource
             let hoverParams = HoverParams cDoc (Position 4 3) Nothing
             hoverRequestId <- sendRequest STextDocumentHover hoverParams
-            inBetweenMsgs <- manyTill anyMessage (responseForId STextDocumentHover hoverRequestId)
-            let isReadyMsg = \case
-                  FromServerMess (SCustomMethod "ghcide/reference/ready") (NotMess NotificationMessage{_params = params}) ->
-                    case fromJSON params of
-                      A.Success fp | equalFilePath fp cPath -> Just ()
-                      _ -> Nothing
-                  _ -> Nothing
-            when (not (any (isJust . isReadyMsg) inBetweenMsgs)) $
-              skipManyTill anyMessage $ satisfyMaybe isReadyMsg
+            let parseReadyMessage = satisfy $ \case
+                  FromServerMess (SCustomMethod "ghcide/reference/ready") (NotMess NotificationMessage{_params = params})
+                    | A.Success fp <- fromJSON params -> equalFilePath fp cPath
+                  _ -> False
+            let parseHoverResponse = responseForId STextDocumentHover hoverRequestId
+            hoverResponseOrReadyMessage <- skipManyTill anyMessage ((Left <$> parseHoverResponse) <|> (Right <$> parseReadyMessage))
+            case hoverResponseOrReadyMessage of
+              Left _ -> void $ skipManyTill anyMessage parseReadyMessage
+              Right _ -> void $ skipManyTill anyMessage parseHoverResponse 
             closeDoc cDoc
         cdoc <- createDoc cPath "haskell" cSource
         locs <- getDefinitions cdoc (Position 7 4)
