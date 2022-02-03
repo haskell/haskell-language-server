@@ -130,7 +130,7 @@ runLspMode recorder ghcideArgs@GhcideArguments{..} idePlugins = withTelemetryLog
     when (isLSP argsCommand) $ do
         log $ LogLspStart ghcideArgs (map fst $ ipMap idePlugins)
 
-    IDEMain.defaultMain (cmap LogIDEMain recorder) (IDEMain.defaultArguments (cmap LogIDEMain recorder) Info)
+    IDEMain.defaultMain (cmap LogIDEMain recorder) (IDEMain.defaultArguments (cmap LogIDEMain recorder) hlsLogger)
       { IDEMain.argCommand = argsCommand
       , IDEMain.argsHlsPlugins = idePlugins
       , IDEMain.argsLogger = pure hlsLogger <> pure telemetryLogger

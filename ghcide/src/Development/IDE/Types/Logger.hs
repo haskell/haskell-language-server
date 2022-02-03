@@ -12,7 +12,14 @@ module Development.IDE.Types.Logger
   , logError, logWarning, logInfo, logDebug, logTelemetry
   , noLogging
   , WithPriority(..)
-  , logWith, cmap, cmapIO, cfilter, withDefaultRecorder, makeDefaultStderrRecorder, priorityToHsLoggerPriority) where
+  , logWith
+  , cmap
+  , cmapIO
+  , cfilter
+  , withDefaultRecorder
+  , makeDefaultStderrRecorder
+  , priorityToHsLoggerPriority
+  , LoggingColumn(..)) where
 
 import           Control.Concurrent                    (myThreadId)
 import           Control.Concurrent.Extra              (Lock, newLock, withLock)
@@ -20,20 +27,20 @@ import           Control.Exception                     (IOException)
 import           Control.Monad                         (forM_, when, (>=>))
 import           Control.Monad.IO.Class                (MonadIO (liftIO))
 import           Data.Functor.Contravariant            (Contravariant (contramap))
+import           Data.Maybe                            (fromMaybe)
 import           Data.Text                             (Text)
 import qualified Data.Text                             as T
 import qualified Data.Text                             as Text
 import qualified Data.Text.IO                          as Text
 import           Data.Text.Prettyprint.Doc             (Doc, Pretty (pretty),
                                                         defaultLayoutOptions,
-                                                        layoutPretty, (<+>))
+                                                        layoutPretty, vcat,
+                                                        (<+>))
 import           Data.Text.Prettyprint.Doc.Render.Text (renderStrict)
 import           Data.Time                             (defaultTimeLocale,
                                                         formatTime,
                                                         getCurrentTime)
 import           GHC.Stack                             (HasCallStack,
-                                                        SrcLoc (SrcLoc, srcLocModule, srcLocStartLine),
-                                                        getCallStack,
                                                         withFrozenCallStack)
 import           System.IO                             (Handle,
                                                         IOMode (AppendMode),
@@ -44,8 +51,9 @@ import qualified System.Log.Formatter                  as HSL
 import qualified System.Log.Handler                    as HSL
 import qualified System.Log.Handler.Simple             as HSL
 import qualified System.Log.Logger                     as HsLogger
-import           UnliftIO                              (MonadUnliftIO, finally,
-                                                        try)
+import           UnliftIO                              (MonadUnliftIO,
+                                                        displayException,
+                                                        finally, try)
 
 data Priority
 -- Don't change the ordering of this type or you will mess up the Ord
@@ -134,10 +142,10 @@ textHandleRecorder handle =
   Recorder
     { logger_ = \text -> liftIO $ Text.hPutStrLn handle text *> hFlush handle }
 
-makeDefaultStderrRecorder :: MonadIO m => HsLogger.Priority -> m (Recorder (WithPriority (Doc a)))
-makeDefaultStderrRecorder hsLoggerMinPriority = do
+makeDefaultStderrRecorder :: MonadIO m => Maybe [LoggingColumn] -> HsLogger.Priority -> m (Recorder (WithPriority (Doc a)))
+makeDefaultStderrRecorder columns hsLoggerMinPriority = do
   lock <- liftIO newLock
-  makeDefaultHandleRecorder hsLoggerMinPriority lock stderr
+  makeDefaultHandleRecorder columns hsLoggerMinPriority lock stderr
 
 -- | If no path given then use stderr, otherwise use file.
 -- kinda complicated because we are logging with both hslogger and our own
@@ -145,27 +153,42 @@ makeDefaultStderrRecorder hsLoggerMinPriority = do
 withDefaultRecorder
   :: MonadUnliftIO m
   => Maybe FilePath
+  -> Maybe [LoggingColumn]
   -> HsLogger.Priority
   -> (Recorder (WithPriority (Doc d)) -> m a)
   -> m a
-withDefaultRecorder path hsLoggerMinPriority action = do
+withDefaultRecorder path columns hsLoggerMinPriority action = do
   lock <- liftIO newLock
-  let makeHandleRecorder = makeDefaultHandleRecorder hsLoggerMinPriority lock
+  let makeHandleRecorder = makeDefaultHandleRecorder columns hsLoggerMinPriority lock
   case path of
-    Nothing -> makeHandleRecorder stderr >>= action
+    Nothing -> do
+      recorder <- makeHandleRecorder stderr
+      let message = "No log file specified; using stderr."
+      logWith recorder (WithPriority Info message)
+      action recorder
     Just path -> do
-      handle :: Either IOException Handle <- liftIO $ try (openFile path AppendMode)
-      case handle of
-        Left _ -> makeHandleRecorder stderr >>= \recorder ->
-          logWith recorder (WithPriority Error $ "Couldn't open log file" <+> pretty path <> "; falling back to stderr.")
-          >> action recorder
-        Right handle -> finally (makeHandleRecorder handle >>= action) (liftIO $ hClose handle)
+      fileHandle :: Either IOException Handle <- liftIO $ try (openFile path AppendMode)
+      case fileHandle of
+        Left e -> do
+          recorder <- makeHandleRecorder stderr
+          let exceptionMessage = pretty $ displayException e
+          let message = vcat [exceptionMessage, "Couldn't open log file" <+> pretty path <> "; falling back to stderr."]
+          logWith recorder (WithPriority Warning message)
+          action recorder
+        Right fileHandle -> finally (makeHandleRecorder fileHandle >>= action) (liftIO $ hClose fileHandle)
 
-makeDefaultHandleRecorder :: MonadIO m => HsLogger.Priority -> Lock -> Handle -> m (Recorder (WithPriority (Doc a)))
-makeDefaultHandleRecorder hsLoggerMinPriority lock handle = do
+makeDefaultHandleRecorder
+  :: MonadIO m
+  => Maybe [LoggingColumn]
+  -> HsLogger.Priority
+  -> Lock
+  -> Handle
+  -> m (Recorder (WithPriority (Doc a)))
+makeDefaultHandleRecorder columns hsLoggerMinPriority lock handle = do
   let Recorder{ logger_ } = textHandleRecorder handle
   let threadSafeRecorder = Recorder { logger_ = \msg -> liftIO $ withLock lock (logger_ msg) }
-  let textWithPriorityRecorder = cmapIO textWithPriorityToText threadSafeRecorder
+  let loggingColumns = fromMaybe defaultLoggingColumns columns
+  let textWithPriorityRecorder = cmapIO (textWithPriorityToText loggingColumns) threadSafeRecorder
   liftIO $ setupHsLogger lock handle ["hls", "hie-bios"] hsLoggerMinPriority
   pure (cmap docToText textWithPriorityRecorder)
   where
@@ -204,18 +227,38 @@ setupHsLogger lock handle extraLogNames level = do
     logFormat = "$time [$tid] $prio $loggername:\t$msg"
     logDateFormat = "%Y-%m-%d %H:%M:%S%Q"
 
-textWithPriorityToText :: WithPriority Text -> IO Text
-textWithPriorityToText = \case
-  WithPriority{ priority, payload } -> do
-    utcTime <- getCurrentTime
-    pure $ Text.intercalate " | "
-      [ utcTimeToText utcTime
-      , priorityToText priority
-      , payload ]
+data LoggingColumn
+  = TimeColumn
+  | ThreadIdColumn
+  | PriorityColumn
+  | DataColumn
+
+defaultLoggingColumns :: [LoggingColumn]
+defaultLoggingColumns = [TimeColumn, PriorityColumn, DataColumn]
+
+textWithPriorityToText :: [LoggingColumn] -> WithPriority Text -> IO Text
+textWithPriorityToText columns WithPriority{ priority, payload } = do
+    textColumns <- mapM loggingColumnToText columns
+    pure $ Text.intercalate " | " textColumns
     where
       utcTimeToText utcTime = Text.pack $ formatTime defaultTimeLocale "%Y-%m-%dT%H:%M:%S%6QZ" utcTime
 
       priorityToText :: Priority -> Text
       priorityToText = Text.pack . show
+
+      threadIdToText = Text.pack . show
+
+      loggingColumnToText :: LoggingColumn -> IO Text
+      loggingColumnToText = \case
+        TimeColumn -> do
+          utcTime <- getCurrentTime
+          pure (utcTimeToText utcTime)
+        ThreadIdColumn -> do
+          threadId <- myThreadId
+          pure (threadIdToText threadId)
+        PriorityColumn -> pure (priorityToText priority)
+        DataColumn -> pure payload
+
+
 
 

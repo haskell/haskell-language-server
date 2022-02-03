@@ -252,15 +252,13 @@ data Arguments = Arguments
     , argsThreads               :: Maybe Natural
     }
 
--- instance Default Arguments where
---     def = defaultArguments Info
 
-defaultArguments :: Recorder Log -> Priority -> Arguments
-defaultArguments recorder priority = Arguments
+defaultArguments :: Recorder Log -> Logger -> Arguments
+defaultArguments recorder logger = Arguments
         { argsProjectRoot = Nothing
         , argsOTMemoryProfiling = False
         , argCommand = LSP
-        , argsLogger = stderrLogger priority
+        , argsLogger = pure logger
         , argsRules = mainRule (cmap LogRules recorder) def >> action kick
         , argsGhcidePlugin = mempty
         , argsHlsPlugins = pluginDescToIdePlugins (GhcIde.descriptors (cmap LogGhcIde recorder))
@@ -292,17 +290,10 @@ defaultArguments recorder priority = Arguments
         }
 
 
--- | Cheap stderr logger that relies on LineBuffering
-stderrLogger :: Priority -> IO Logger
-stderrLogger logLevel = do
-    lock <- newLock
-    return $ Logger $ \p m -> when (p >= logLevel) $ withLock lock $
-        T.hPutStrLn stderr $ "[" <> T.pack (show p) <> "] " <> m
-
-testing :: Recorder Log -> Arguments
-testing recorder =
+testing :: Recorder Log -> Logger -> Arguments
+testing recorder logger =
   let
-    arguments@Arguments{ argsHlsPlugins, argsIdeOptions } = defaultArguments recorder Debug
+    arguments@Arguments{ argsHlsPlugins, argsIdeOptions } = defaultArguments recorder logger
     hlsPlugins = pluginDescToIdePlugins $
       idePluginsToPluginDesc argsHlsPlugins
       ++ [Test.blockCommandDescriptor "block-command", Test.plugin]

@@ -4,7 +4,6 @@
 {-# LANGUAGE NamedFieldPuns           #-}
 {-# LANGUAGE OverloadedStrings        #-}
 {-# LANGUAGE PolyKinds                #-}
-{-# LANGUAGE RecordWildCards          #-}
 module Test.Hls
   ( module Test.Tasty.HUnit,
     module Test.Tasty,
@@ -52,7 +51,7 @@ import           Data.Maybe                      (fromMaybe)
 import qualified Data.Text                       as T
 import qualified Data.Text.Lazy                  as TL
 import qualified Data.Text.Lazy.Encoding         as TL
-import           Development.IDE                 (IdeState, noLogging)
+import           Development.IDE                 (IdeState)
 import           Development.IDE.Graph           (ShakeOptions (shakeThreads))
 import           Development.IDE.Main            hiding (Log, logToPriority)
 import qualified Development.IDE.Main            as Ghcide
@@ -60,7 +59,9 @@ import qualified Development.IDE.Main            as IDEMain
 import           Development.IDE.Plugin.Test     (TestRequest (GetBuildKeysBuilt, WaitForIdeRule, WaitForShakeQueue),
                                                   WaitForIdeRuleResult (ideResultSuccess))
 import qualified Development.IDE.Plugin.Test     as Test
-import           Development.IDE.Types.Logger    (Priority (Debug),
+import           Development.IDE.Types.Logger    (Logger (Logger),
+                                                  Priority (Debug),
+                                                  Recorder (Recorder, logger_),
                                                   WithPriority (WithPriority, priority),
                                                   cfilter, cmap,
                                                   makeDefaultStderrRecorder)
@@ -193,19 +194,21 @@ runSessionWithServer' plugins conf sconf caps root s = withLock lock $ keepCurre
   (inR, inW) <- createPipe
   (outR, outW) <- createPipe
 
-  -- this recorder may be different than the recorder in the passed in plugin
-  -- if you want to modify ghcide specific logging during tests then this one
-  -- should be modified
-  -- otherwise modify the recorder passed to the plugin descriptor
-  defaultRecorder <- makeDefaultStderrRecorder HsLogger.DEBUG
+  docWithPriorityRecorder <- makeDefaultStderrRecorder Nothing HsLogger.DEBUG
 
   logStdErr <- fromMaybe "0" <$> lookupEnv "LSP_TEST_LOG_STDERR"
 
   let
-    recorder = if logStdErr == "0"
-               then mempty
-               else (cmap logToDocWithPriority . cfilter (\WithPriority{ priority } -> priority >= Debug)) defaultRecorder
-    arguments@Arguments{ argsHlsPlugins, argsIdeOptions, argsLogger } = defaultArguments mempty Debug
+    docWithFilteredPriorityRecorder@Recorder{ logger_ } =
+      if logStdErr == "0" then mempty
+      else cfilter (\WithPriority{ priority } -> priority >= Debug) docWithPriorityRecorder
+
+    logger = Logger $ \p m -> logger_ (WithPriority p (pretty m))
+
+    recorder = cmap logToDocWithPriority docWithFilteredPriorityRecorder
+
+    arguments@Arguments{ argsHlsPlugins, argsIdeOptions, argsLogger } = defaultArguments (cmap LogIDEMain recorder) logger
+
     hlsPlugins =
       idePluginsToPluginDesc argsHlsPlugins
       ++ [Test.blockCommandDescriptor "block-command", Test.plugin]
@@ -217,8 +220,6 @@ runSessionWithServer' plugins conf sconf caps root s = withLock lock $ keepCurre
            , optCheckProject = pure False
            , optShakeOptions = optShakeOptions{ shakeThreads = 2 }
            }
-    logger = do
-      if logStdErr == "0" then return noLogging else argsLogger
 
   server <-
     async $
@@ -228,7 +229,7 @@ runSessionWithServer' plugins conf sconf caps root s = withLock lock $ keepCurre
           { argsHandleIn = pure inR
           , argsHandleOut = pure outW
           , argsDefaultHlsConfig = conf
-          , argsLogger = logger
+          , argsLogger = argsLogger
           , argsIdeOptions = ideOptions
           , argsHlsPlugins = pluginDescToIdePlugins hlsPlugins }
 

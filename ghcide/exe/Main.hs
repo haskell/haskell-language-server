@@ -21,9 +21,13 @@ import           Development.IDE.Core.Tracing      (withTelemetryLogger)
 import           Development.IDE.Graph             (ShakeOptions (shakeThreads))
 import qualified Development.IDE.Main              as IDEMain
 import qualified Development.IDE.Plugin.HLS.GhcIde as GhcIde
-import           Development.IDE.Types.Logger      (WithPriority (WithPriority, priority),
+import           Development.IDE.Types.Logger      (Logger (Logger),
+                                                    LoggingColumn (DataColumn, PriorityColumn),
+                                                    Recorder (Recorder),
+                                                    WithPriority (WithPriority, priority),
                                                     cfilter, cmap,
-                                                    makeDefaultStderrRecorder)
+                                                    makeDefaultStderrRecorder,
+                                                    priorityToHsLoggerPriority)
 import qualified Development.IDE.Types.Logger      as Logger
 import           Development.IDE.Types.Options
 import           Ide.Plugin.Config                 (Config (checkParents, checkProject))
@@ -35,22 +39,24 @@ import           System.Environment                (getExecutablePath)
 import           System.Exit                       (exitSuccess)
 import           System.IO                         (hPutStrLn, stderr)
 import           System.Info                       (compilerVersion)
-import qualified System.Log                        as HsLogger
 
 data Log
   = LogIDEMain IDEMain.Log
   | LogRules Rules.Log
+  | LogGhcIde GhcIde.Log
   deriving Show
 
 instance Pretty Log where
   pretty = \case
     LogIDEMain log -> pretty log
     LogRules log   -> pretty log
+    LogGhcIde log  -> pretty log
 
 logToPriority :: Log -> Logger.Priority
 logToPriority = \case
   LogIDEMain log -> IDEMain.logToPriority log
   LogRules log   -> Rules.logToPriority log
+  LogGhcIde log  -> GhcIde.logToPriority log
 
 logToDocWithPriority :: Log -> WithPriority (Doc a)
 logToDocWithPriority log = WithPriority (logToPriority log) (pretty log)
@@ -68,7 +74,12 @@ ghcideVersion = do
 
 main :: IO ()
 main = withTelemetryLogger $ \telemetryLogger -> do
-    let hlsPlugins = pluginDescToIdePlugins (GhcIde.descriptors mempty)
+    -- stderr recorder just for plugin cli commands
+    pluginCliRecorder <-
+      cmap logToDocWithPriority
+      <$> makeDefaultStderrRecorder (Just [PriorityColumn, DataColumn]) (priorityToHsLoggerPriority Info)
+
+    let hlsPlugins = pluginDescToIdePlugins (GhcIde.descriptors (cmap LogGhcIde pluginCliRecorder))
     -- WARNING: If you write to stdout before runLanguageServer
     --          then the language server will not work
     Arguments{..} <- getArguments hlsPlugins
@@ -81,18 +92,24 @@ main = withTelemetryLogger $ \telemetryLogger -> do
       Nothing   -> IO.getCurrentDirectory
       Just root -> IO.setCurrentDirectory root >> IO.getCurrentDirectory
 
-    let (hsLoggerMinPriority, minPriority) = if argsVerbose then (HsLogger.DEBUG, Debug) else (HsLogger.INFO, Info)
+    let minPriority = if argsVerbose then Debug else Info
 
-    defaultRecorder <- makeDefaultStderrRecorder hsLoggerMinPriority
+    docWithPriorityRecorder <- makeDefaultStderrRecorder (Just [PriorityColumn, DataColumn]) (priorityToHsLoggerPriority minPriority)
 
-    let recorder = defaultRecorder
-                 & cfilter (\WithPriority{ priority } -> priority >= minPriority)
+    let docWithFilteredPriorityRecorder@Recorder{ logger_ } =
+          docWithPriorityRecorder
+          & cfilter (\WithPriority{ priority } -> priority >= minPriority)
+
+    -- hack so old-school logging still works
+    let logger = Logger $ \p m -> logger_ (WithPriority p (pretty m))
+
+    let recorder = docWithFilteredPriorityRecorder
                  & cmap logToDocWithPriority
 
     let arguments =
           if argsTesting
-          then IDEMain.testing (cmap LogIDEMain recorder)
-          else IDEMain.defaultArguments (cmap LogIDEMain recorder) minPriority
+          then IDEMain.testing (cmap LogIDEMain recorder) logger
+          else IDEMain.defaultArguments (cmap LogIDEMain recorder) logger
 
     IDEMain.defaultMain (cmap LogIDEMain recorder) arguments
         { IDEMain.argsProjectRoot = Just argsCwd
