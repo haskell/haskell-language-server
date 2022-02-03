@@ -404,6 +404,8 @@ build-x86_64-darwin:
   script: |
     export PATH="$CI_PROJECT_DIR/.brew/bin:$CI_PROJECT_DIR/.brew/sbin:$PATH"
     /bin/bash ./.gitlab/ci.sh
+  after_script:
+    - rm -Rf /private/tmp/.brew_tmp
 
 tar-x86_64-darwin:
   extends: .artifacts
@@ -430,6 +432,8 @@ tar-x86_64-darwin:
   script: |
     export PATH="$CI_PROJECT_DIR/.brew/bin:$CI_PROJECT_DIR/.brew/sbin:$PATH"
     /bin/bash ./.gitlab/tar.sh
+  after_script:
+    - rm -Rf /private/tmp/.brew_tmp
   variables:
     TARBALL_ARCHIVE_SUFFIX: x86_64-apple-darwin
     TARBALL_EXT: tar.xz
