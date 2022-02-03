@@ -178,8 +178,8 @@ data Log
   | LogDelayedAction !(DelayedAction ()) !Seconds
   | LogBuildSessionFinish !(Maybe SomeException)
   | LogDiagsDiffButNoLspEnv ![FileDiagnostic]
-  | LogDefineEarlyCutoffRuleNoDiagDiags ![FileDiagnostic]
-  | LogDefineEarlyCutoffRuleCustomNewnessDiags ![FileDiagnostic]
+  | LogDefineEarlyCutoffRuleNoDiagHasDiag !FileDiagnostic
+  | LogDefineEarlyCutoffRuleCustomNewnessHasDiag !FileDiagnostic
   deriving Show
 
 instance Pretty Log where
@@ -205,30 +205,23 @@ instance Pretty Log where
     LogDiagsDiffButNoLspEnv fileDiagnostics ->
       "updateFileDiagnostics published different from new diagnostics - file diagnostics:"
       <+> pretty (showDiagnosticsColored fileDiagnostics)
-    LogDefineEarlyCutoffRuleNoDiagDiags fileDiagnostics ->
-      "defineEarlyCutoff RuleNoDiagnostics - file diagnostics:"
-      <+> pretty (showDiagnosticsColored fileDiagnostics)
-    LogDefineEarlyCutoffRuleCustomNewnessDiags fileDiagnostics ->
-      "defineEarlyCutoff RuleWithCustomNewnessCheck - file diagnostics:"
-      <+> pretty (showDiagnosticsColored fileDiagnostics)
+    LogDefineEarlyCutoffRuleNoDiagHasDiag fileDiagnostic ->
+      "defineEarlyCutoff RuleNoDiagnostics - file diagnostic:"
+      <+> pretty (showDiagnosticsColored [fileDiagnostic])
+    LogDefineEarlyCutoffRuleCustomNewnessHasDiag fileDiagnostic ->
+      "defineEarlyCutoff RuleWithCustomNewnessCheck - file diagnostic:"
+      <+> pretty (showDiagnosticsColored [fileDiagnostic])
 
 logToPriority :: Log -> Logger.Priority
 logToPriority = \case
-  LogCreateHieDbExportsMapStart                -> Logger.Debug
-  LogCreateHieDbExportsMapFinish{}             -> Logger.Debug
-  LogBuildSessionRestart{}                     -> Logger.Debug
-  LogDelayedAction delayedAction _             -> actionPriority delayedAction
-  LogBuildSessionFinish{}                      -> Logger.Debug
-  LogDiagsDiffButNoLspEnv{}                    -> Logger.Info
-  LogDefineEarlyCutoffRuleNoDiagDiags diags
-    -- it may be worth having a priority below debug because
-    -- originally these were only logged if diags was nonempty
-    -- either that or mapM_ log diags like the original
-    | null diags -> Logger.Debug
-    | otherwise -> Logger.Warning
-  LogDefineEarlyCutoffRuleCustomNewnessDiags diags
-    | null diags -> Logger.Debug
-    | otherwise -> Logger.Warning
+  LogCreateHieDbExportsMapStart                  -> Logger.Debug
+  LogCreateHieDbExportsMapFinish{}               -> Logger.Debug
+  LogBuildSessionRestart{}                       -> Logger.Debug
+  LogDelayedAction delayedAction _               -> actionPriority delayedAction
+  LogBuildSessionFinish{}                        -> Logger.Debug
+  LogDiagsDiffButNoLspEnv{}                      -> Logger.Info
+  LogDefineEarlyCutoffRuleNoDiagHasDiag{}        -> Logger.Warning
+  LogDefineEarlyCutoffRuleCustomNewnessHasDiag{} -> Logger.Warning
 
 -- | We need to serialize writes to the database, so we send any function that
 -- needs to write to the database over the channel, where it will be picked up by
@@ -1057,14 +1050,14 @@ defineEarlyCutoff recorder (Rule op) = addRule $ \(Q (key, file)) (old :: Maybe 
 defineEarlyCutoff recorder (RuleNoDiagnostics op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ \traceDiagnostics -> do
     let diagnostics diags = do
             traceDiagnostics diags
-            logWith recorder $ LogDefineEarlyCutoffRuleNoDiagDiags diags
+            mapM_ (logWith recorder . LogDefineEarlyCutoffRuleNoDiagHasDiag) diags
     defineEarlyCutoff' diagnostics (==) key file old mode $ second (mempty,) <$> op key file
 defineEarlyCutoff recorder RuleWithCustomNewnessCheck{..} =
     addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode ->
         otTracedAction key file mode traceA $ \ traceDiagnostics -> do
             let diagnostics diags = do
-                    logWith recorder $ LogDefineEarlyCutoffRuleCustomNewnessDiags diags
                     traceDiagnostics diags
+                    mapM_ (logWith recorder . LogDefineEarlyCutoffRuleCustomNewnessHasDiag) diags
             defineEarlyCutoff' diagnostics newnessCheck key file old mode $
                 second (mempty,) <$> build key file
 
