@@ -5553,7 +5553,17 @@ bootTests = testGroup "boot"
         -- Dirty the cache
         liftIO $ runInDir dir $ do
             cDoc <- createDoc cPath "haskell" cSource
-            _ <- getHover cDoc $ Position 4 3
+            let hoverParams = HoverParams cDoc (Position 4 3) Nothing
+            hoverRequestId <- sendRequest STextDocumentHover hoverParams
+            inBetweenMsgs <- manyTill anyMessage (responseForId STextDocumentHover hoverRequestId)
+            let isReadyMsg = \case
+                  FromServerMess (SCustomMethod "ghcide/reference/ready") (NotMess NotificationMessage{_params = params}) ->
+                    case fromJSON params of
+                      A.Success fp | equalFilePath fp cPath -> Just ()
+                      _ -> Nothing
+                  _ -> Nothing
+            when (not (any (isJust . isReadyMsg) inBetweenMsgs)) $
+              skipManyTill anyMessage $ satisfyMaybe isReadyMsg
             closeDoc cDoc
         cdoc <- createDoc cPath "haskell" cSource
         locs <- getDefinitions cdoc (Position 7 4)
