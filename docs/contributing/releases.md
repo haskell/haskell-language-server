@@ -45,7 +45,7 @@ and it is being used in nix environments.
 - [ ] create ${version}-hackage branch to trigger the hackage github workflow which will upload all changed packages to hackage as candidates
 - [ ] for new plugins or packages, update hackage uploaders to add the author of the plugin/package and some hls maintainer(s) other than the owner of the hackage api key used to upload them (it has to be done by the owner of the api key, actually @pepeiborra)
 - [ ] check manually candidates in hackage
-- [ ] publish them definitely
+- [ ] publish them definitely triggering a manual run of the hackage workflow setting the upload and publish inputs to `true`
 
 ### ghcup release
 

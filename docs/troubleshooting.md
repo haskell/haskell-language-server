@@ -160,9 +160,9 @@ The server log will show which cradle is being chosen.
 
 Using an explicit `hie.yaml` to configure the cradle can resolve the problem, see the [configuration page](./configuration.md#configuring-your-project-build).
 
-### Static binaries and template haskell support
+### Static binaries
 
-Static binaries use the GHC linker for dynamically loading dependencies when typechecking TH code, and this can run into issues when loading shared objects linked against mismatching system libraries, or into GHC linker  bugs (mainly the Mach linker used in Mac OS, but also potentially the ELF linker).
+Static binaries use the GHC linker for dynamically loading dependencies when typechecking Template Haskell code, and this can run into issues when loading shared objects linked against mismatching system libraries, or into GHC linker  bugs (mainly the Mach linker used in Mac OS, but also potentially the ELF linker).
 Dynamically linked binaries (including`ghci`) use the system linker instead of the GHC linker and avoid both issues.
 
 The easiest way to obtain a dynamically linked HLS binary is to build HLS locally. With `cabal` this can be done as follows:
