@@ -5553,6 +5553,13 @@ bootTests = testGroup "boot"
         -- Dirty the cache
         liftIO $ runInDir dir $ do
             cDoc <- createDoc cPath "haskell" cSource
+            -- We send a hover request then wait for either the hover response or
+            -- `ghcide/reference/ready` notification.
+            -- Once we receive one of the above, we wait for the other that we
+            -- haven't received yet.
+            -- If we don't wait for the `ready` notification it is possible 
+            -- that the `getDefinitions` request/response in the outer ghcide 
+            -- session will find no definitions.
             let hoverParams = HoverParams cDoc (Position 4 3) Nothing
             hoverRequestId <- sendRequest STextDocumentHover hoverParams
             let parseReadyMessage = satisfy $ \case
