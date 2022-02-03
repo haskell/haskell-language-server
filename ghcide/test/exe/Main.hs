@@ -5373,7 +5373,7 @@ cradleTests = testGroup "cradle"
     [testGroup "dependencies" [sessionDepsArePickedUp]
     ,testGroup "ignore-fatal" [ignoreFatalWarning]
     ,testGroup "loading" [loadCradleOnlyonce, retryFailedCradle]
-    ,testGroup "multi"   [simpleMultiTest, simpleMultiTest2, simpleMultiDefTest]
+    ,testGroup "multi"   [simpleMultiTest, simpleMultiTest2, simpleMultiTest3, simpleMultiDefTest]
     ,testGroup "sub-directory"   [simpleSubDirectoryTest]
     ]
 
@@ -5517,6 +5517,21 @@ simpleMultiTest2 = testCase "simple-multi-test2" $ runWithExtraFiles "multi" $ \
     let fooL = mkL auri 2 0 2 3
     checkDefs locs (pure [fooL])
     expectNoMoreDiagnostics 0.5
+
+-- Now with 3 components
+simpleMultiTest3 :: TestTree
+simpleMultiTest3 = testCase "simple-multi-test3" $ runWithExtraFiles "multi" $ \dir -> do
+    let aPath = dir </> "a/A.hs"
+        bPath = dir </> "b/B.hs"
+        cPath = dir </> "c/C.hs"
+    bdoc <- openDoc bPath "haskell"
+    WaitForIdeRuleResult {} <- waitForAction "TypeCheck" bdoc
+    adoc@(TextDocumentIdentifier auri) <- openDoc aPath "haskell"
+    WaitForIdeRuleResult {} <- waitForAction "TypeCheck" adoc
+    cdoc <- openDoc cPath "haskell"
+    WaitForIdeRuleResult {} <- waitForAction "TypeCheck" cdoc
+    locs <- getDefinitions cdoc (Position 2 7)
+    let fooL = mkL auri 2 0 2 3
     checkDefs locs (pure [fooL])
     expectNoMoreDiagnostics 0.5
 

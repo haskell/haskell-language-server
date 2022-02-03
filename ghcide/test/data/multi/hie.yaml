@@ -4,3 +4,5 @@ cradle:
       component: "lib:a"
     - path: "./b"
       component: "lib:b"
+    - path: "./c"
+      component: "lib:c"
