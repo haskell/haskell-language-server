@@ -106,7 +106,7 @@ launchHaskellLanguageServer parsedArgs = do
   mexes <- traverse findExecutable candidates
 
   case asum mexes of
-    Nothing -> hPutStrLn stderr $ "Cannot find any haskell-language-server exe, looked for: " ++ intercalate ", " candidates
+    Nothing -> die $ "Cannot find any haskell-language-server exe, looked for: " ++ intercalate ", " candidates
     Just e -> do
       hPutStrLn stderr $ "Launching haskell-language-server exe at:" ++ e
 #ifdef mingw32_HOST_OS
