@@ -79,7 +79,7 @@ else
 	fail_ghc_pkg "${GHC_PKG}"
 fi
 PKGCONF="${GHC_LIBDIR}/package.conf.d"
-MY_ABI_HASHES="$(for dep in ghc $("${GHC_PKG}" --global --global-package-db "$PKGCONF" field ghc depends --simple-output) ; do "${GHC_PKG}" --global --global-package-db "$PKGCONF" field "${dep}" abi --simple-output ; done | tr '\n' ' ' | xargs)"
+MY_ABI_HASHES="$(for dep in $("${GHC_PKG}" --global --global-package-db "$PKGCONF" list --simple-output) ; do "${GHC_PKG}" --global --global-package-db "$PKGCONF" field "${dep}" abi --simple-output ; done | tr '\n' ' ' | xargs)"
 [ "${ABI_HASHES}" = "${MY_ABI_HASHES}" ] || fail_abi "${MY_ABI_HASHES}"
 unset PKGCONF
 
