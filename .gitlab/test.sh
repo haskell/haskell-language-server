@@ -54,8 +54,8 @@ emake PREFIX=$HOME/.local
 export PATH="$HOME/.local/bin:$PATH"
 tmp_dir=$(mktempdir)
 cd "$tmp_dir"
-cabal unpack bytestring-0.11.2.0
-cd bytestring-0.11.2.0
+cabal unpack bytestring-0.11.1.0
+cd bytestring-0.11.1.0
 echo "cradle:" > hie.yaml
 echo "  cabal:" >> hie.yaml
 haskell-language-server-wrapper typecheck Data/ByteString.hs
