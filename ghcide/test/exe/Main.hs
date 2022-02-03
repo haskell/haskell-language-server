@@ -5561,9 +5561,10 @@ bootTests = testGroup "boot"
                   _ -> False
             let parseHoverResponse = responseForId STextDocumentHover hoverRequestId
             hoverResponseOrReadyMessage <- skipManyTill anyMessage ((Left <$> parseHoverResponse) <|> (Right <$> parseReadyMessage))
-            case hoverResponseOrReadyMessage of
-              Left _ -> void $ skipManyTill anyMessage parseReadyMessage
-              Right _ -> void $ skipManyTill anyMessage parseHoverResponse 
+            _ <- skipManyTill anyMessage $ 
+              case hoverResponseOrReadyMessage of
+                Left _ -> void parseReadyMessage
+                Right _ -> void parseHoverResponse
             closeDoc cDoc
         cdoc <- createDoc cPath "haskell" cSource
         locs <- getDefinitions cdoc (Position 7 4)
