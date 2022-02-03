@@ -30,6 +30,7 @@ import qualified Control.Exception               as E
 import           Control.Lens                    (_1, _3, (%~), (<&>), (^.))
 import           Control.Monad                   (guard, join, void, when)
 import           Control.Monad.IO.Class          (MonadIO (liftIO))
+import           Control.Monad.Trans             (lift)
 import           Control.Monad.Trans.Except      (ExceptT (..))
 import           Data.Aeson                      (toJSON)
 import           Data.Char                       (isSpace)
@@ -78,10 +79,12 @@ import qualified GHC.LanguageExtensions.Type     as LangExt (Extension (..))
 
 import           Development.IDE.Core.FileStore  (setSomethingModified)
 import           Development.IDE.Types.Shake     (toKey)
+import           Ide.Plugin.Config               (Config)
 import           Ide.Plugin.Eval.Code            (Statement, asStatements,
                                                   evalSetup, myExecStmt,
                                                   propSetup, resultRange,
                                                   testCheck, testRanges)
+import           Ide.Plugin.Eval.Config          (getDiffProperty)
 import           Ide.Plugin.Eval.GHC             (addImport, addPackages,
                                                   hasPackage, showDynFlags)
 import           Ide.Plugin.Eval.Parse.Comments  (commentsToSections)
@@ -176,16 +179,16 @@ codeLens st plId CodeLensParams{_textDocument} =
 evalCommandName :: CommandId
 evalCommandName = "evalCommand"
 
-evalCommand :: PluginCommand IdeState
-evalCommand = PluginCommand evalCommandName "evaluate" runEvalCmd
+evalCommand :: PluginId -> PluginCommand IdeState
+evalCommand plId = PluginCommand evalCommandName "evaluate" (runEvalCmd plId)
 
 type EvalId = Int
 
-runEvalCmd :: CommandFunction IdeState EvalParams
-runEvalCmd st EvalParams{..} =
+runEvalCmd :: PluginId -> CommandFunction IdeState EvalParams
+runEvalCmd plId st EvalParams{..} =
     let dbg = logWith st
         perf = timed dbg
-        cmd :: ExceptT String (LspM c) WorkspaceEdit
+        cmd :: ExceptT String (LspM Config) WorkspaceEdit
         cmd = do
             let tests = map (\(a,_,b) -> (a,b)) $ testsBySection sections
 
@@ -300,12 +303,13 @@ runEvalCmd st EvalParams{..} =
                         -- Evaluation takes place 'inside' the module
                         setContext [Compat.IIModule modName]
                         Right <$> getSession
-
+            diff <- lift $ getDiffProperty plId
             edits <-
                 perf "edits" $
                     liftIO $
                         evalGhcEnv hscEnv' $
                             runTests
+                                diff
                                 (st, fp)
                                 tests
 
@@ -347,8 +351,8 @@ testsBySection sections =
 
 type TEnv = (IdeState, String)
 
-runTests :: TEnv -> [(Section, Test)] -> Ghc [TextEdit]
-runTests e@(_st, _) tests = do
+runTests :: Bool -> TEnv -> [(Section, Test)] -> Ghc [TextEdit]
+runTests diff e@(_st, _) tests = do
     df <- getInteractiveDynFlags
     evalSetup
     when (hasQuickCheck df && needsQuickCheck tests) $ void $ evals e df propSetup
@@ -363,7 +367,7 @@ runTests e@(_st, _) tests = do
         rs <- runTest e df test
         dbg "TEST RESULTS" rs
 
-        let checkedResult = testCheck (section, test) rs
+        let checkedResult = testCheck diff (section, test) rs
 
         let edit = asEdit (sectionFormat section) test (map pad checkedResult)
         dbg "TEST EDIT" edit
