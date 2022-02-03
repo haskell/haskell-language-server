@@ -1,18 +1,16 @@
 {-# LANGUAGE NumericUnderscores #-}
--- for the sake of compiling ghc 8.6.5 prettyprinter
-{-# OPTIONS_GHC -Wno-deprecations #-}
 -- | Logging utilities for reporting heap statistics
 module Development.IDE.Main.HeapStats ( withHeapStats, Log(..), logToPriority ) where
 
 import           Control.Concurrent
 import           Control.Concurrent.Async
 import           Control.Monad
-import           Data.Text.Prettyprint.Doc    (Pretty (pretty), (<+>))
-import qualified Data.Text.Prettyprint.Doc    as Prettyprinter
 import           Data.Word
 import           Development.IDE.Types.Logger (Recorder, logWith)
 import qualified Development.IDE.Types.Logger as Logger
 import           GHC.Stats
+import           Prettyprinter                (Pretty (pretty), (<+>))
+import qualified Prettyprinter
 import           Text.Printf                  (printf)
 
 data Log
