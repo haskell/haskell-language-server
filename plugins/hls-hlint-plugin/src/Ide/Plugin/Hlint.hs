@@ -57,7 +57,6 @@ import           Development.IDE.Core.Shake                         (getDiagnost
 import qualified Refact.Apply                                       as Refact
 
 #ifdef HLINT_ON_GHC_LIB
-import           Data.List                                          (nub)
 import           Development.IDE.GHC.Compat                         (BufSpan,
                                                                      DynFlags,
                                                                      WarningFlag (Opt_WarnUnrecognisedPragmas),
@@ -301,16 +300,26 @@ getIdeas nfp = do
                      Just <$> liftIO (parseModuleEx flags' fp contents')
 
         setExtensions flags = do
-          hlintExts <- getExtensions flags nfp
+          hlintExts <- getExtensions nfp
           debugm $ "hlint:getIdeas:setExtensions:" ++ show hlintExts
           return $ flags { enabledExtensions = hlintExts }
 
-getExtensions :: ParseFlags -> NormalizedFilePath -> Action [Extension]
-getExtensions pflags nfp = do
+-- Gets extensions from ModSummary dynflags for the file.
+-- Previously this would union extensions from both hlint's parsedFlags
+-- and the ModSummary dynflags. However using the parsedFlags extensions
+-- can sometimes interfere with the hlint parsing of the file.
+-- See https://github.com/haskell/haskell-language-server/issues/1279
+--
+-- Note: this is used when HLINT_ON_GHC_LIB is defined. We seem to need
+-- these extensions to construct dynflags to parse the file again. Therefore
+-- using hlint default extensions doesn't seem to be a problem when
+-- HLINT_ON_GHC_LIB is not defined because we don't parse the file again.
+getExtensions :: NormalizedFilePath -> Action [Extension]
+getExtensions nfp = do
     dflags <- getFlags
     let hscExts = EnumSet.toList (extensionFlags dflags)
     let hscExts' = mapMaybe (GhclibParserEx.readExtension . show) hscExts
-    let hlintExts = nub $ enabledExtensions pflags ++ hscExts'
+    let hlintExts = hscExts'
     return hlintExts
   where getFlags :: Action DynFlags
         getFlags = do
@@ -555,8 +564,7 @@ applyHint ide nfp mhint =
         liftIO $ withSystemTempFile (takeFileName fp) $ \temp h -> do
             hClose h
             writeFileUTF8NoNewLineTranslation temp oldContent
-            (pflags, _, _) <- runAction' $ useNoFile_ GetHlintSettings
-            exts <- runAction' $ getExtensions pflags nfp
+            exts <- runAction' $ getExtensions nfp
             -- We have to reparse extensions to remove the invalid ones
             let (enabled, disabled, _invalid) = Refact.parseExtensions $ map show exts
             let refactExts = map show $ enabled ++ disabled
