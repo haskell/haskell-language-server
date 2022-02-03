@@ -67,9 +67,11 @@ runs:
     # to get a executable which works for Template Haskell
     # However we continue providing full static executables in releases so we have to disable it
     # *for all workflows*, including test, flags and release builds
+    # It has to be in cabal.project to include `-dynamic` in the cabal.project.freeze
+    # used to compute the cache key
     - name: Disable -dynamic
       run: |
-        echo -e "package haskell-language-server\n  flags: -dynamic" >> cabal.project.local
+        echo -e "package haskell-language-server\n  flags: -dynamic" >> cabal.project
       shell: bash
 
     - if: inputs.os == 'Windows' && inputs.ghc == '8.8.4'
