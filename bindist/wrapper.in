@@ -134,7 +134,7 @@ then
 	:
 # try stack
 elif command -v stack >/dev/null &&
-	GHC_BIN="$(cd "$(mktemp -d)" && stack --install-ghc --resolver "ghc-${GHC_VERSION}" exec sh -- -c 'command -v ghc')" &&
+	GHC_BIN="$(cd "$(mktemp -d)" && stack --no-system-ghc --no-install-ghc --resolver "ghc-${GHC_VERSION}" exec sh -- -c 'command -v ghc')" &&
 	GHC_LIBDIR="$("${GHC_BIN}" --print-libdir)" &&
 	check_ghc "${GHC_LIBDIR}" "${GHC_BIN}" "$(infer_ghc_pkg "${GHC_BIN}")" "stack"
 then
