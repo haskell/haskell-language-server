@@ -5562,12 +5562,25 @@ bootTests = testGroup "boot"
         -- Dirty the cache
         liftIO $ runInDir dir $ do
             cDoc <- createDoc cPath "haskell" cSource
-            _ <- getHover cDoc $ Position 4 3
-            ~() <- skipManyTill anyMessage $ satisfyMaybe $ \case
-                FromServerMess (SCustomMethod "ghcide/reference/ready") (NotMess NotificationMessage{_params = fp}) -> do
-                    A.Success fp' <- pure $ fromJSON fp
-                    if equalFilePath fp' cPath then pure () else Nothing
-                _ -> Nothing
+            -- We send a hover request then wait for either the hover response or
+            -- `ghcide/reference/ready` notification.
+            -- Once we receive one of the above, we wait for the other that we
+            -- haven't received yet.
+            -- If we don't wait for the `ready` notification it is possible 
+            -- that the `getDefinitions` request/response in the outer ghcide 
+            -- session will find no definitions.
+            let hoverParams = HoverParams cDoc (Position 4 3) Nothing
+            hoverRequestId <- sendRequest STextDocumentHover hoverParams
+            let parseReadyMessage = satisfy $ \case
+                  FromServerMess (SCustomMethod "ghcide/reference/ready") (NotMess NotificationMessage{_params = params})
+                    | A.Success fp <- fromJSON params -> equalFilePath fp cPath
+                  _ -> False
+            let parseHoverResponse = responseForId STextDocumentHover hoverRequestId
+            hoverResponseOrReadyMessage <- skipManyTill anyMessage ((Left <$> parseHoverResponse) <|> (Right <$> parseReadyMessage))
+            _ <- skipManyTill anyMessage $ 
+              case hoverResponseOrReadyMessage of
+                Left _ -> void parseReadyMessage
+                Right _ -> void parseHoverResponse
             closeDoc cDoc
         cdoc <- createDoc cPath "haskell" cSource
         locs <- getDefinitions cdoc (Position 7 4)
