@@ -60,7 +60,7 @@ build-aarch64-linux-deb10:
   extends: .build
   before_script:
     - sudo apt update
-    - sudo apt install -y patchelf
+    - sudo apt install -y patchelf tree
   tags:
     - aarch64-linux
   image: "registry.gitlab.haskell.org/ghc/ci-images/aarch64-linux-deb10:$DOCKER_REV"
@@ -86,6 +86,9 @@ test-aarch64-linux-deb10:
   tags:
     - aarch64-linux
   image: "registry.gitlab.haskell.org/ghc/ci-images/aarch64-linux-deb10:$DOCKER_REV"
+  before_script:
+    - sudo apt update
+    - sudo apt install -y tree
 
 
 ######################
@@ -96,7 +99,7 @@ build-armv7-linux-deb10:
   extends: .build
   before_script:
     - sudo apt update
-    - sudo apt install -y patchelf
+    - sudo apt install -y patchelf tree
   tags:
     - armv7-linux
   image: "registry.gitlab.haskell.org/ghc/ci-images/armv7-linux-deb10:$DOCKER_REV"
@@ -122,6 +125,9 @@ test-armv7-linux-deb10:
   tags:
     - armv7-linux
   image: "registry.gitlab.haskell.org/ghc/ci-images/armv7-linux-deb10:$DOCKER_REV"
+  before_script:
+    - sudo apt update
+    - sudo apt install -y tree
 
 
 ######################
@@ -132,7 +138,7 @@ build-x86_64-linux-deb10:
   extends: .build
   before_script:
     - sudo apt update
-    - sudo apt install -y patchelf
+    - sudo apt install -y patchelf tree
   tags:
     - x86_64-linux
   image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-deb10:$DOCKER_REV"
@@ -158,6 +164,9 @@ test-x86_64-linux-deb10:
   tags:
     - x86_64-linux
   image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-deb10:$DOCKER_REV"
+  before_script:
+    - sudo apt update
+    - sudo apt install -y tree
 
 ######################
 # x86_64 linux deb9
@@ -167,7 +176,7 @@ build-x86_64-linux-deb9:
   extends: .build
   before_script:
     - sudo apt update
-    - sudo apt install -y patchelf
+    - sudo apt install -y patchelf tree
   tags:
     - x86_64-linux
   image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-deb9:$DOCKER_REV"
@@ -193,6 +202,9 @@ test-x86_64-linux-deb9:
   tags:
     - x86_64-linux
   image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-deb9:$DOCKER_REV"
+  before_script:
+    - sudo apt update
+    - sudo apt install -y tree
 
 ######################
 # x86_64 linux centos7
@@ -202,7 +214,7 @@ build-x86_64-linux-centos7:
   extends: .build
   before_script:
     - sudo yum install -y epel-release
-    - sudo yum install -y patchelf
+    - sudo yum install -y patchelf tree
   tags:
     - x86_64-linux
   image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-centos7:$DOCKER_REV"
@@ -228,6 +240,8 @@ test-x86_64-linux-centos7:
   tags:
     - x86_64-linux
   image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-centos7:$DOCKER_REV"
+  before_script:
+    - sudo yum install -y tree
 
 ######################
 # x86_64 linux fedora27
@@ -236,7 +250,7 @@ test-x86_64-linux-centos7:
 build-x86_64-linux-fedora27:
   extends: .build
   before_script:
-    - sudo dnf install -y patchelf
+    - sudo dnf install -y patchelf tree
   tags:
     - x86_64-linux
   image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-fedora27:$DOCKER_REV"
@@ -262,6 +276,8 @@ test-x86_64-linux-fedora27:
   tags:
     - x86_64-linux
   image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-fedora27:$DOCKER_REV"
+  before_script:
+    - sudo dnf install -y tree
 
 
 ######################
@@ -274,7 +290,7 @@ build-x86_64-linux-alpine:
     - x86_64-linux
   image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-alpine3_12:$DOCKER_REV"
   before_script:
-    - sudo apk add --no-cache tar zlib zlib-dev zlib-static bzip2 bzip2-dev bzip2-static gmp gmp-dev xz xz-dev ncurses-static patchelf findutils
+    - sudo apk add --no-cache tar zlib zlib-dev zlib-static bzip2 bzip2-dev bzip2-static gmp gmp-dev xz xz-dev ncurses-static patchelf findutils tree
   variables:
     ADD_CABAL_ARGS: "--enable-split-sections --enable-executable-static"
 
@@ -300,7 +316,7 @@ test-x86_64-linux-alpine:
     - x86_64-linux
   image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-alpine3_12:$DOCKER_REV"
   before_script:
-    - sudo apk add --no-cache tar zlib zlib-dev zlib-static bzip2 bzip2-dev bzip2-static gmp gmp-dev xz xz-dev ncurses-static
+    - sudo apk add --no-cache tar zlib zlib-dev zlib-static bzip2 bzip2-dev bzip2-static gmp gmp-dev xz xz-dev ncurses-static tree
 
 
 ######################
@@ -310,7 +326,8 @@ test-x86_64-linux-alpine:
 build-x86_64-freebsd12:
   extends: .build
   before_script:
-    - sudo pkg install --yes patchelf gmake
+    - sudo pkg update
+    - sudo pkg install --yes patchelf gmake tree binutils
   tags:
     - x86_64-freebsd12
   variables:
@@ -334,7 +351,8 @@ test-x86_64-freebsd12:
   tags:
     - x86_64-freebsd12
   before_script:
-    - sudo pkg install --yes patchelf gmake
+    - sudo pkg update
+    - sudo pkg install --yes patchelf gmake tree binutils
 
 
 ######################
@@ -347,7 +365,7 @@ build-x86_64-freebsd13:
     - x86_64-freebsd13
   before_script:
     - sudo pkg update
-    - sudo pkg install --yes compat12x-amd64 patchelf gmake
+    - sudo pkg install --yes compat12x-amd64 patchelf gmake tree binutils
     - sudo ln -s libncurses.so.6 /usr/local/lib/libncurses.so.6.2
   variables:
     ADD_CABAL_ARGS: "--enable-split-sections -j1"
@@ -371,7 +389,7 @@ test-x86_64-freebsd13:
     - x86_64-freebsd13
   before_script:
     - sudo pkg update
-    - sudo pkg install --yes compat12x-amd64 gmake
+    - sudo pkg install --yes compat12x-amd64 gmake tree binutils
     - sudo ln -s libncurses.so.6 /usr/local/lib/libncurses.so.6.2
 
 
@@ -386,21 +404,7 @@ build-x86_64-darwin:
   variables:
     ADD_CABAL_ARGS: ""
   before_script:
-    # Install brew locally in the project dir. Packages will also be installed here.
-    - '[ -e "$CI_PROJECT_DIR/.brew" ] || git clone --depth=1 https://github.com/Homebrew/brew $CI_PROJECT_DIR/.brew'
-    - export PATH="$CI_PROJECT_DIR/.brew/bin:$CI_PROJECT_DIR/.brew/sbin:$PATH"
-
-    # make sure to not pollute the machine with temp files etc
-    - mkdir -p $CI_PROJECT_DIR/.brew_cache
-    - export HOMEBREW_CACHE=$CI_PROJECT_DIR/.brew_cache
-    - mkdir -p $CI_PROJECT_DIR/.brew_logs
-    - export HOMEBREW_LOGS=$CI_PROJECT_DIR/.brew_logs
-    - mkdir -p /private/tmp/.brew_tmp
-    - export HOMEBREW_TEMP=/private/tmp/.brew_tmp
-
-    # update and install packages
-    - brew update
-    - brew install autoconf automake coreutils make
+    - /bin/bash ./.gitlab/brew.sh autoconf automake coreutils make tree
   script: |
     export PATH="$CI_PROJECT_DIR/.brew/bin:$CI_PROJECT_DIR/.brew/sbin:$PATH"
     /bin/bash ./.gitlab/ci.sh
@@ -414,21 +418,7 @@ tar-x86_64-darwin:
   tags:
     - x86_64-darwin
   before_script:
-    # Install brew locally in the project dir. Packages will also be installed here.
-    - '[ -e "$CI_PROJECT_DIR/.brew" ] || git clone --depth=1 https://github.com/Homebrew/brew $CI_PROJECT_DIR/.brew'
-    - export PATH="$CI_PROJECT_DIR/.brew/bin:$CI_PROJECT_DIR/.brew/sbin:$PATH"
-
-    # make sure to not pollute the machine with temp files etc
-    - mkdir -p $CI_PROJECT_DIR/.brew_cache
-    - export HOMEBREW_CACHE=$CI_PROJECT_DIR/.brew_cache
-    - mkdir -p $CI_PROJECT_DIR/.brew_logs
-    - export HOMEBREW_LOGS=$CI_PROJECT_DIR/.brew_logs
-    - mkdir -p /private/tmp/.brew_tmp
-    - export HOMEBREW_TEMP=/private/tmp/.brew_tmp
-
-    # update and install packages
-    - brew update
-    - brew install autoconf automake coreutils make
+    - /bin/bash ./.gitlab/brew.sh autoconf automake coreutils make tree
   script: |
     export PATH="$CI_PROJECT_DIR/.brew/bin:$CI_PROJECT_DIR/.brew/sbin:$PATH"
     /bin/bash ./.gitlab/tar.sh
@@ -443,6 +433,13 @@ test-x86_64-darwin:
   needs: ["tar-x86_64-darwin"]
   tags:
     - x86_64-darwin
+  before_script:
+    - /bin/bash ./.gitlab/brew.sh make tree
+  script: |
+    export PATH="$CI_PROJECT_DIR/.brew/bin:$CI_PROJECT_DIR/.brew/sbin:$PATH"
+    /bin/bash .gitlab/test.sh
+  after_script:
+    - rm -Rf /private/tmp/.brew_tmp
 
 
 ######################
@@ -455,25 +452,8 @@ build-aarch64-darwin:
   tags:
     - aarch64-darwin-m1
   before_script:
-    # Install brew locally in the project dir. Packages will also be installed here.
-    - '[ -e "$CI_PROJECT_DIR/.brew" ] || git clone --depth=1 https://github.com/Homebrew/brew $CI_PROJECT_DIR/.brew'
-    - export PATH="$CI_PROJECT_DIR/.brew/bin:$CI_PROJECT_DIR/.brew/sbin:$PATH"
-
-    # otherwise we seem to get intel binaries
     - export HOMEBREW_CHANGE_ARCH_TO_ARM=1
-
-    # make sure to not pollute the machine with temp files etc
-    - mkdir -p $CI_PROJECT_DIR/.brew_cache
-    - export HOMEBREW_CACHE=$CI_PROJECT_DIR/.brew_cache
-    - mkdir -p $CI_PROJECT_DIR/.brew_logs
-    - export HOMEBREW_LOGS=$CI_PROJECT_DIR/.brew_logs
-    - mkdir -p /private/tmp/.brew_tmp
-    - export HOMEBREW_TEMP=/private/tmp/.brew_tmp
-
-    # update and install packages
-    - brew update
-    - brew install llvm
-    - brew install autoconf automake coreutils make
+    - arch -arm64 /bin/bash ./.gitlab/brew.sh llvm autoconf automake coreutils make tree
   script: |
     export PATH="$CI_PROJECT_DIR/.brew/opt/llvm/bin:$CI_PROJECT_DIR/.brew/bin:$CI_PROJECT_DIR/.brew/sbin:$PATH"
     export CC=$CI_PROJECT_DIR/.brew/opt/llvm/bin/clang
@@ -506,32 +486,10 @@ test-aarch64-darwin:
   tags:
     - aarch64-darwin-m1
   before_script:
-    # Install brew locally in the project dir. Packages will also be installed here.
-    - '[ -e "$CI_PROJECT_DIR/.brew" ] || git clone --depth=1 https://github.com/Homebrew/brew $CI_PROJECT_DIR/.brew'
-    - export PATH="$CI_PROJECT_DIR/.brew/bin:$CI_PROJECT_DIR/.brew/sbin:$PATH"
-
-    # otherwise we seem to get intel binaries
     - export HOMEBREW_CHANGE_ARCH_TO_ARM=1
-
-    # make sure to not pollute the machine with temp files etc
-    - mkdir -p $CI_PROJECT_DIR/.brew_cache
-    - export HOMEBREW_CACHE=$CI_PROJECT_DIR/.brew_cache
-    - mkdir -p $CI_PROJECT_DIR/.brew_logs
-    - export HOMEBREW_LOGS=$CI_PROJECT_DIR/.brew_logs
-    - mkdir -p /private/tmp/.brew_tmp
-    - export HOMEBREW_TEMP=/private/tmp/.brew_tmp
-
-    # update and install packages
-    - brew update
-    - brew install llvm
-    - brew install autoconf automake coreutils
+    - arch -arm64 /bin/bash ./.gitlab/brew.sh make tree
   script: |
     export PATH="$CI_PROJECT_DIR/.brew/opt/llvm/bin:$CI_PROJECT_DIR/.brew/bin:$CI_PROJECT_DIR/.brew/sbin:$PATH"
-    export CC=$CI_PROJECT_DIR/.brew/opt/llvm/bin/clang
-    export CXX=$CI_PROJECT_DIR/.brew/opt/llvm/bin/clang++
-    export LD=ld
-    export AR=$CI_PROJECT_DIR/.brew/opt/llvm/bin/llvm-ar
-    export RANLIB=$CI_PROJECT_DIR/.brew/opt/llvm/bin/llvm-ranlib
     arch -arm64 /bin/bash ./.gitlab/test.sh
   after_script:
     - rm -Rf /private/tmp/.brew_tmp

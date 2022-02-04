@@ -56,7 +56,7 @@ check_ghc() {
 			return 1
 		fi
 		PKGCONF="${check_ghc_libdir}/package.conf.d"
-		MY_ABI_HASHES="$(for dep in $("${GHC_PKG}" --global --global-package-db "$PKGCONF" list --simple-output) ; do "${GHC_PKG}" --global --global-package-db "$PKGCONF" field "${dep}" abi --simple-output ; done | tr '\n' ' ' | xargs)"
+		MY_ABI_HASHES="$(for dep in $("${GHC_PKG}" --global --global-package-db "$PKGCONF" list --simple-output) ; do printf "%s:" "${dep}" && "${GHC_PKG}" --global --global-package-db "$PKGCONF" field "${dep}" abi --simple-output ; done | tr '\n' ' ' | xargs)"
 		if [ "${ABI_HASHES}" != "${MY_ABI_HASHES}" ] ; then
 			err_abi "${MY_ABI_HASHES}"
 			return 3

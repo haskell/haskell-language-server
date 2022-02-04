@@ -45,13 +45,34 @@ case "$(uname -s)" in
 		;;
 esac
 
-cd "$CI_PROJECT_DIR/out/"
+# make sure out/ dir is gone, so build host rpaths don't
+# kick in (TODO: we should probably remove those)
+mv "$CI_PROJECT_DIR/out"/*.tar.xz .
+rm -rf "$CI_PROJECT_DIR/out/"
 
+# cleanup from previous dirty runs
+rm -rf "$HOME"/.local/lib/haskell-language-server-* || true
+
+# install
 tar xf *.tar.xz
 rm *.tar.xz
 cd haskell-language-server-*
-emake PREFIX=$HOME/.local
-export PATH="$HOME/.local/bin:$PATH"
+INSTALL_DIR=$(dirname "${GHCUP_BINDIR}") || exit 1
+[ -d "$INSTALL_DIR" ] || exit 1
+emake PREFIX="${INSTALL_DIR}" install
+
+# print rpaths and libdirs
+case "$(uname -s)" in
+	"Darwin"|"darwin")
+		otool -l "$INSTALL_DIR"/lib/haskell-language-server-*/bin/haskell-language-server-*
+		;;
+	*)
+		objdump -x "$INSTALL_DIR"/lib/haskell-language-server-*/bin/haskell-language-server-*
+		;;
+esac
+tree "$INSTALL_DIR"/lib/haskell-language-server-*
+tree "$INSTALL_DIR"/bin
+
 tmp_dir=$(mktempdir)
 cd "$tmp_dir"
 cabal unpack bytestring-0.11.1.0
