@@ -4653,6 +4653,15 @@ nonLocalCompletionTests =
        ]
        (Position 3 6)
        [],
+    testGroup "ordering"
+      [completionTest "qualified has priority"
+        ["module A where"
+        ,"import qualified Data.ByteString as BS"
+        ,"f = BS.read"
+        ]
+        (Position 2 10)
+        [("readFile", CiFunction, "readFile ${1:FilePath}", True, True, Nothing)]
+        ],
     testGroup "auto import snippets"
       [ completionCommandTest
         "show imports not in list - simple"
