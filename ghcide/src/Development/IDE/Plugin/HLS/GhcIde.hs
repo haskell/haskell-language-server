@@ -6,7 +6,7 @@ module Development.IDE.Plugin.HLS.GhcIde
   (
     descriptors
   , Log(..)
-  , logToPriority) where
+  ) where
 import           Control.Monad.IO.Class
 import           Development.IDE
 import           Development.IDE.LSP.HoverDefinition
@@ -15,7 +15,6 @@ import           Development.IDE.LSP.Outline
 import qualified Development.IDE.Plugin.CodeAction   as CodeAction
 import qualified Development.IDE.Plugin.Completions  as Completions
 import qualified Development.IDE.Plugin.TypeLenses   as TypeLenses
-import qualified Development.IDE.Types.Logger        as Logger
 import           Ide.Types
 import           Language.LSP.Server                 (LspM)
 import           Language.LSP.Types
@@ -34,22 +33,16 @@ instance Pretty Log where
     LogCompletions log   -> pretty log
     LogTypeLenses log    -> pretty log
 
-logToPriority :: Log -> Logger.Priority
-logToPriority = \case
-  LogNotifications log -> Notifications.logToPriority log
-  LogCompletions log   -> Completions.logToPriority log
-  LogTypeLenses log    -> TypeLenses.logToPriority log
-
-descriptors :: Recorder Log -> [PluginDescriptor IdeState]
+descriptors :: Recorder (WithPriority Log) -> [PluginDescriptor IdeState]
 descriptors recorder =
   [ descriptor "ghcide-hover-and-symbols",
     CodeAction.iePluginDescriptor "ghcide-code-actions-imports-exports",
     CodeAction.typeSigsPluginDescriptor "ghcide-code-actions-type-signatures",
     CodeAction.bindingsPluginDescriptor "ghcide-code-actions-bindings",
     CodeAction.fillHolePluginDescriptor "ghcide-code-actions-fill-holes",
-    Completions.descriptor (cmap LogCompletions recorder) "ghcide-completions",
-    TypeLenses.descriptor (cmap LogTypeLenses recorder) "ghcide-type-lenses",
-    Notifications.descriptor (cmap LogNotifications recorder) "ghcide-core"
+    Completions.descriptor (cmapWithPrio LogCompletions recorder) "ghcide-completions",
+    TypeLenses.descriptor (cmapWithPrio LogTypeLenses recorder) "ghcide-type-lenses",
+    Notifications.descriptor (cmapWithPrio LogNotifications recorder) "ghcide-core"
   ]
 
 -- ---------------------------------------------------------------------

@@ -8,7 +8,7 @@ module Development.IDE.Core.FileExists
   , watchedGlobs
   , GetFileExists(..)
   , Log(..)
-  , logToPriority)
+  )
 where
 
 import           Control.Concurrent.STM.Stats          (atomically,
@@ -19,18 +19,16 @@ import           Control.Monad.IO.Class
 import qualified Data.ByteString                       as BS
 import           Data.List                             (partition)
 import           Data.Maybe
-import           Development.IDE.Core.FileStore        hiding (Log, LogShake,
-                                                        logToPriority)
+import           Development.IDE.Core.FileStore        hiding (Log, LogShake)
 import qualified Development.IDE.Core.FileStore        as FileStore
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Shake            hiding (Log,
-                                                        logToPriority)
+import           Development.IDE.Core.Shake            hiding (Log)
 import qualified Development.IDE.Core.Shake            as Shake
 import           Development.IDE.Graph
 import           Development.IDE.Types.Location
-import           Development.IDE.Types.Logger          (Recorder, cmap)
-import qualified Development.IDE.Types.Logger          as Logger
+import           Development.IDE.Types.Logger          (Recorder, WithPriority,
+                                                        cmapWithPrio)
 import           Development.IDE.Types.Options
 import qualified Focus
 import           Ide.Plugin.Config                     (Config)
@@ -99,11 +97,6 @@ instance Pretty Log where
   pretty = \case
     LogFileStore log -> pretty log
     LogShake log     -> pretty log
-
-logToPriority :: Log -> Logger.Priority
-logToPriority = \case
-  LogFileStore log -> FileStore.logToPriority log
-  LogShake log     -> Shake.logToPriority log
 
 -- | Grab the current global value of 'FileExistsMap' without acquiring a dependency
 getFileExistsMapUntracked :: Action FileExistsMap
@@ -180,7 +173,7 @@ allExtensions opts = [extIncBoot | ext <- optExtensions opts, extIncBoot <- [ext
 -- | Installs the 'getFileExists' rules.
 --   Provides a fast implementation if client supports dynamic watched files.
 --   Creates a global state as a side effect in that case.
-fileExistsRules :: Recorder Log -> Maybe (LanguageContextEnv Config) -> VFSHandle -> Rules ()
+fileExistsRules :: Recorder (WithPriority Log) -> Maybe (LanguageContextEnv Config) -> VFSHandle -> Rules ()
 fileExistsRules recorder lspEnv vfs = do
   supportsWatchedFiles <- case lspEnv of
     Nothing      -> pure False
@@ -205,12 +198,12 @@ fileExistsRules recorder lspEnv vfs = do
     then fileExistsRulesFast recorder isWatched vfs
     else fileExistsRulesSlow recorder vfs
 
-  fileStoreRules (cmap LogFileStore recorder) vfs isWatched
+  fileStoreRules (cmapWithPrio LogFileStore recorder) vfs isWatched
 
 -- Requires an lsp client that provides WatchedFiles notifications, but assumes that this has already been checked.
-fileExistsRulesFast :: Recorder Log -> (NormalizedFilePath -> Action Bool) -> VFSHandle -> Rules ()
+fileExistsRulesFast :: Recorder (WithPriority Log) -> (NormalizedFilePath -> Action Bool) -> VFSHandle -> Rules ()
 fileExistsRulesFast recorder isWatched vfs =
-    defineEarlyCutoff (cmap LogShake recorder) $ RuleNoDiagnostics $ \GetFileExists file -> do
+    defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \GetFileExists file -> do
         isWF <- isWatched file
         if isWF
             then fileExistsFast vfs file
@@ -248,9 +241,9 @@ fileExistsFast vfs file = do
 summarizeExists :: Bool -> Maybe BS.ByteString
 summarizeExists x = Just $ if x then BS.singleton 1 else BS.empty
 
-fileExistsRulesSlow :: Recorder Log -> VFSHandle -> Rules ()
+fileExistsRulesSlow :: Recorder (WithPriority Log) -> VFSHandle -> Rules ()
 fileExistsRulesSlow recorder vfs =
-  defineEarlyCutoff (cmap LogShake recorder) $ RuleNoDiagnostics $ \GetFileExists file -> fileExistsSlow vfs file
+  defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \GetFileExists file -> fileExistsSlow vfs file
 
 fileExistsSlow :: VFSHandle -> NormalizedFilePath -> Action (Maybe BS.ByteString, Maybe Bool)
 fileExistsSlow vfs file = do

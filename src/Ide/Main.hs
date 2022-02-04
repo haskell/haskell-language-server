@@ -2,14 +2,13 @@
 -- SPDX-License-Identifier: Apache-2.0
 {-# LANGUAGE CPP                 #-}
 {-# OPTIONS_GHC -Wno-dodgy-imports #-} -- GHC no longer exports def in GHC 8.6 and above
-{-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE TypeFamilies        #-}
 
-module Ide.Main(defaultMain, runLspMode, Log(..), logToPriority) where
+module Ide.Main(defaultMain, runLspMode, Log(..)) where
 
 import           Control.Monad.Extra
 import qualified Data.Aeson.Encode.Pretty      as A
@@ -26,7 +25,6 @@ import           Development.IDE.Main          (isLSP)
 import qualified Development.IDE.Main          as IDEMain
 import qualified Development.IDE.Session       as Session
 import           Development.IDE.Types.Logger  as G
-import qualified Development.IDE.Types.Logger  as Logger
 import qualified Development.IDE.Types.Options as Ghcide
 import           Ide.Arguments
 import           Ide.Logger
@@ -58,14 +56,7 @@ instance Pretty Log where
           , "PluginIds:" <+> pretty (coerce @_ @[Text] pluginIds) ]
     LogIDEMain iDEMainLog -> pretty iDEMainLog
 
-logToPriority :: Log -> Logger.Priority
-logToPriority = \case
-  LogVersion{}   -> Logger.Info
-  LogDirectory{} -> Logger.Info
-  LogLspStart{}  -> Logger.Info
-  LogIDEMain log -> IDEMain.logToPriority log
-
-defaultMain :: Recorder Log -> Arguments -> IdePlugins IdeState -> IO ()
+defaultMain :: Recorder (WithPriority Log) -> Arguments -> IdePlugins IdeState -> IO ()
 defaultMain recorder args idePlugins = do
     -- WARNING: If you write to stdout before runLanguageServer
     --          then the language server will not work
@@ -98,7 +89,7 @@ defaultMain recorder args idePlugins = do
 
         Ghcide ghcideArgs -> do
             {- see WARNING above -}
-            logWith recorder $ LogVersion hlsVer
+            logWith recorder Info $ LogVersion hlsVer
             runLspMode recorder ghcideArgs idePlugins
 
         VSCodeExtensionSchemaMode -> do
@@ -120,17 +111,17 @@ hlsLogger = G.Logger $ \pri txt ->
 
 -- ---------------------------------------------------------------------
 
-runLspMode :: Recorder Log -> GhcideArguments -> IdePlugins IdeState -> IO ()
+runLspMode :: Recorder (WithPriority Log) -> GhcideArguments -> IdePlugins IdeState -> IO ()
 runLspMode recorder ghcideArgs@GhcideArguments{..} idePlugins = withTelemetryLogger $ \telemetryLogger -> do
     let log = logWith recorder
     whenJust argsCwd IO.setCurrentDirectory
     dir <- IO.getCurrentDirectory
-    log $ LogDirectory dir
+    log Info $ LogDirectory dir
 
     when (isLSP argsCommand) $ do
-        log $ LogLspStart ghcideArgs (map fst $ ipMap idePlugins)
+        log Info $ LogLspStart ghcideArgs (map fst $ ipMap idePlugins)
 
-    IDEMain.defaultMain (cmap LogIDEMain recorder) (IDEMain.defaultArguments (cmap LogIDEMain recorder) hlsLogger)
+    IDEMain.defaultMain (cmapWithPrio LogIDEMain recorder) (IDEMain.defaultArguments (cmapWithPrio LogIDEMain recorder) hlsLogger)
       { IDEMain.argCommand = argsCommand
       , IDEMain.argsHlsPlugins = idePlugins
       , IDEMain.argsLogger = pure hlsLogger <> pure telemetryLogger

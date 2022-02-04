@@ -16,7 +16,7 @@ module Development.IDE.Session
   ,retryOnSqliteBusy
   ,retryOnException
   ,Log(..)
-  , logToPriority) where
+  ) where
 
 -- Unfortunately, we cannot use loadSession with ghc-lib since hie-bios uses
 -- the real GHC library and the types are incompatible. Furthermore, when
@@ -47,7 +47,7 @@ import           Data.Time.Clock
 import           Data.Version
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake           hiding (Log, Priority,
-                                                       logToPriority, withHieDb)
+                                                       withHieDb)
 import qualified Development.IDE.GHC.Compat           as Compat
 import           Development.IDE.GHC.Compat.Core      hiding (Target,
                                                        TargetFile, TargetModule,
@@ -64,7 +64,8 @@ import           Development.IDE.Types.HscEnvEq       (HscEnvEq, newHscEnvEq,
                                                        newHscEnvEqPreserveImportPaths)
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger         (Priority (Debug, Error, Info, Warning),
-                                                       Recorder, logWith)
+                                                       Recorder, WithPriority,
+                                                       logWith)
 import           Development.IDE.Types.Options
 import           GHC.Check
 import qualified HIE.Bios                             as HieBios
@@ -184,25 +185,6 @@ instance Pretty Log where
     LogNewComponentCache componentCache ->
       "New component cache HscEnvEq:" <+> Prettyprinter.viaShow componentCache
 
-logToPriority :: Log -> Priority
-logToPriority = \case
-  LogSettingInitialDynFlags                 -> Debug
-  LogGetInitialGhcLibDirDefaultCradleFail{} -> Warning
-  LogGetInitialGhcLibDirDefaultCradleNone   -> Warning
-  LogHieDbRetry{}                           -> Warning
-  LogHieDbRetriesExhausted{}                -> Warning
-  LogHieDbWriterThreadSQLiteError{}         -> Error
-  LogHieDbWriterThreadException{}           -> Error
-  LogInterfaceFilesCacheDir{}               -> Info
-  LogKnownFilesUpdated{}                    -> Debug
-  LogMakingNewHscEnv{}                      -> Info
-  LogDLLLoadError{}                         -> Error
-  LogCradlePath{}                           -> Info
-  LogCradleNotFound{}                       -> Warning
-  LogSessionLoadingResult{}                 -> Debug
-  LogCradle{}                               -> Debug
-  LogNewComponentCache{}                    -> Debug
-
 -- | Bump this version number when making changes to the format of the data stored in hiedb
 hiedbDataVersion :: String
 hiedbDataVersion = "1"
@@ -221,7 +203,7 @@ data SessionLoadingOptions = SessionLoadingOptions
   --   or 'Nothing' to respect the cradle setting
   , getCacheDirs           :: String -> [String] -> IO CacheDirs
   -- | Return the GHC lib dir to use for the 'unsafeGlobalDynFlags'
-  , getInitialGhcLibDir    :: Recorder Log -> FilePath -> IO (Maybe LibDir)
+  , getInitialGhcLibDir    :: Recorder (WithPriority Log) -> FilePath -> IO (Maybe LibDir)
   , fakeUid                :: UnitId
     -- ^ unit id used to tag the internal component built by ghcide
     --   To reuse external interface files the unit ids must match,
@@ -259,7 +241,7 @@ loadWithImplicitCradle mHieYaml rootDir = do
     Just yaml -> HieBios.loadCradle yaml
     Nothing   -> loadImplicitHieCradle $ addTrailingPathSeparator rootDir
 
-getInitialGhcLibDirDefault :: Recorder Log -> FilePath -> IO (Maybe LibDir)
+getInitialGhcLibDirDefault :: Recorder (WithPriority Log) -> FilePath -> IO (Maybe LibDir)
 getInitialGhcLibDirDefault recorder rootDir = do
   let log = logWith recorder
   hieYaml <- findCradle def rootDir
@@ -268,18 +250,18 @@ getInitialGhcLibDirDefault recorder rootDir = do
   case libDirRes of
       CradleSuccess libdir -> pure $ Just $ LibDir libdir
       CradleFail err -> do
-        log $ LogGetInitialGhcLibDirDefaultCradleFail err rootDir hieYaml cradle
+        log Warning $ LogGetInitialGhcLibDirDefaultCradleFail err rootDir hieYaml cradle
         pure Nothing
       CradleNone -> do
-        log LogGetInitialGhcLibDirDefaultCradleNone
+        log Warning LogGetInitialGhcLibDirDefaultCradleNone
         pure Nothing
 
 -- | Sets `unsafeGlobalDynFlags` on using the hie-bios cradle and returns the GHC libdir
-setInitialDynFlags :: Recorder Log -> FilePath -> SessionLoadingOptions -> IO (Maybe LibDir)
+setInitialDynFlags :: Recorder (WithPriority Log) -> FilePath -> SessionLoadingOptions -> IO (Maybe LibDir)
 setInitialDynFlags recorder rootDir SessionLoadingOptions{..} = do
   libdir <- getInitialGhcLibDir recorder rootDir
   dynFlags <- mapM dynFlagsForPrinting libdir
-  logWith recorder LogSettingInitialDynFlags
+  logWith recorder Debug LogSettingInitialDynFlags
   mapM_ setUnsafeGlobalDynFlags dynFlags
   pure libdir
 
@@ -292,7 +274,7 @@ setInitialDynFlags recorder rootDir SessionLoadingOptions{..} = do
 retryOnException
   :: (MonadIO m, MonadCatch m, RandomGen g, Exception e)
   => (e -> Maybe e) -- ^ only retry on exception if this predicate returns Just
-  -> Recorder Log
+  -> Recorder (WithPriority Log)
   -> Int -- ^ maximum backoff delay in microseconds
   -> Int -- ^ base backoff delay in microseconds
   -> Int -- ^ maximum number of times to retry
@@ -309,13 +291,13 @@ retryOnException exceptionPred recorder maxDelay !baseDelay !maxRetryCount rng a
         let (delay, newRng) = Random.randomR (0, newBaseDelay) rng
         let newMaxRetryCount = maxRetryCount - 1
         liftIO $ do
-          log $ LogHieDbRetry delay maxDelay newMaxRetryCount (toException e)
+          log Warning $ LogHieDbRetry delay maxDelay newMaxRetryCount (toException e)
           threadDelay delay
         retryOnException exceptionPred recorder maxDelay newBaseDelay newMaxRetryCount newRng action
 
       | otherwise -> do
         liftIO $ do
-          log $ LogHieDbRetriesExhausted baseDelay maxDelay maxRetryCount (toException e)
+          log Warning $ LogHieDbRetriesExhausted baseDelay maxDelay maxRetryCount (toException e)
           throwIO e
 
     Right b -> pure b
@@ -335,7 +317,7 @@ maxRetryCount :: Int
 maxRetryCount = 10
 
 retryOnSqliteBusy :: (MonadIO m, MonadCatch m, RandomGen g)
-                  => Recorder Log -> g -> m a -> m a
+                  => Recorder (WithPriority Log) -> g -> m a -> m a
 retryOnSqliteBusy recorder rng action =
   let isErrorBusy e
         | SQLError{ sqlError = ErrorBusy } <- e = Just e
@@ -343,7 +325,7 @@ retryOnSqliteBusy recorder rng action =
   in
     retryOnException isErrorBusy recorder oneSecond oneMillisecond maxRetryCount rng action
 
-makeWithHieDbRetryable :: RandomGen g => Recorder Log -> g -> HieDb -> WithHieDb
+makeWithHieDbRetryable :: RandomGen g => Recorder (WithPriority Log) -> g -> HieDb -> WithHieDb
 makeWithHieDbRetryable recorder rng hieDb f =
   retryOnSqliteBusy recorder rng (f hieDb)
 
@@ -351,7 +333,7 @@ makeWithHieDbRetryable recorder rng hieDb f =
 -- writing. Actions are picked off one by one from the `HieWriterChan` and executed in serial
 -- by a worker thread using a dedicated database connection.
 -- This is done in order to serialize writes to the database, or else SQLite becomes unhappy
-runWithDb :: Recorder Log -> FilePath -> (WithHieDb -> IndexQueue -> IO ()) -> IO ()
+runWithDb :: Recorder (WithPriority Log) -> FilePath -> (WithHieDb -> IndexQueue -> IO ()) -> IO ()
 runWithDb recorder fp k = do
   -- use non-deterministic seed because maybe multiple HLS start at same time
   -- and send bursts of requests
@@ -387,9 +369,9 @@ runWithDb recorder fp k = do
         -- TODO: probably should let exceptions be caught/logged/handled by top level handler
         k withHieDbRetryable
           `Safe.catch` \e@SQLError{} -> do
-            log $ LogHieDbWriterThreadSQLiteError e
+            log Error $ LogHieDbWriterThreadSQLiteError e
           `Safe.catchAny` \e -> do
-            log $ LogHieDbWriterThreadException e
+            log Error $ LogHieDbWriterThreadException e
 
 
 getHieDbLoc :: FilePath -> IO FilePath
@@ -413,10 +395,10 @@ getHieDbLoc dir = do
 -- This is the key function which implements multi-component support. All
 -- components mapping to the same hie.yaml file are mapped to the same
 -- HscEnv which is updated as new components are discovered.
-loadSession :: Recorder Log -> FilePath -> IO (Action IdeGhcSession)
+loadSession :: Recorder (WithPriority Log) -> FilePath -> IO (Action IdeGhcSession)
 loadSession recorder = loadSessionWithOptions recorder def
 
-loadSessionWithOptions :: Recorder Log -> SessionLoadingOptions -> FilePath -> IO (Action IdeGhcSession)
+loadSessionWithOptions :: Recorder (WithPriority Log) -> SessionLoadingOptions -> FilePath -> IO (Action IdeGhcSession)
 loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
   -- Mapping from hie.yaml file to HscEnv, one per hie.yaml file
   hscEnvs <- newVar Map.empty :: IO (Var HieMap)
@@ -474,7 +456,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
             logDirtyKeys <- recordDirtyKeys extras GetKnownTargets [emptyFilePath]
             return (logDirtyKeys >> pure hasUpdate)
           for_ hasUpdate $ \x ->
-            logWith recorder $ LogKnownFilesUpdated x
+            logWith recorder Debug $ LogKnownFilesUpdated x
 
     -- Create a new HscEnv from a hieYaml root and a set of options
     -- If the hieYaml file already has an HscEnv, the new component is
@@ -529,7 +511,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
               -- scratch again (for now)
               -- It's important to keep the same NameCache though for reasons
               -- that I do not fully understand
-              log $ LogMakingNewHscEnv inplace
+              log Info $ LogMakingNewHscEnv inplace
               hscEnv <- emptyHscEnv ideNc libDir
               newHscEnv <-
                 -- Add the options for the current component to the HscEnv
@@ -566,7 +548,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
             res <- loadDLL hscEnv "libm.so.6"
             case res of
               Nothing  -> pure ()
-              Just err -> log $ LogDLLLoadError err
+              Just err -> log Error $ LogDLLLoadError err
 
 
           -- Make a map from unit-id to DynFlags, this is used when trying to
@@ -615,10 +597,10 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
     let consultCradle :: Maybe FilePath -> FilePath -> IO (IdeResult HscEnvEq, [FilePath])
         consultCradle hieYaml cfp = do
            lfp <- flip makeRelative cfp <$> getCurrentDirectory
-           log $ LogCradlePath lfp
+           log Info $ LogCradlePath lfp
 
            when (isNothing hieYaml) $
-             log $ LogCradleNotFound lfp
+             log Warning $ LogCradleNotFound lfp
 
            cradle <- loadCradle hieYaml dir
            lfp <- flip makeRelative cfp <$> getCurrentDirectory
@@ -636,7 +618,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
                   addTag "result" (show res)
                   return res
 
-           log $ LogSessionLoadingResult eopts
+           log Debug $ LogSessionLoadingResult eopts
            case eopts of
              -- The cradle gave us some options so get to work turning them
              -- into and HscEnv.
@@ -705,11 +687,11 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
 -- | Run the specific cradle on a specific FilePath via hie-bios.
 -- This then builds dependencies or whatever based on the cradle, gets the
 -- GHC options/dynflags needed for the session and the GHC library directory
-cradleToOptsAndLibDir :: Show a => Recorder Log -> Cradle a -> FilePath
+cradleToOptsAndLibDir :: Show a => Recorder (WithPriority Log) -> Cradle a -> FilePath
                       -> IO (Either [CradleError] (ComponentOptions, FilePath))
 cradleToOptsAndLibDir recorder cradle file = do
     -- Start off by getting the session options
-    logWith recorder $ LogCradle cradle
+    logWith recorder Debug $ LogCradle cradle
     cradleRes <- HieBios.getCompilerOptions file cradle
     case cradleRes of
         CradleSuccess r -> do
@@ -771,7 +753,7 @@ setNameCache nc hsc = hsc { hsc_NC = nc }
 
 -- | Create a mapping from FilePaths to HscEnvEqs
 newComponentCache
-         :: Recorder Log
+         :: Recorder (WithPriority Log)
          -> [String]       -- File extensions to consider
          -> Maybe FilePath -- Path to cradle
          -> NormalizedFilePath -- Path to file that caused the creation of this component
@@ -789,7 +771,7 @@ newComponentCache recorder exts cradlePath cfp hsc_env uids ci = do
     let targetEnv = ([], Just henv)
         targetDepends = componentDependencyInfo ci
         res = (targetEnv, targetDepends)
-    logWith recorder $ LogNewComponentCache res
+    logWith recorder Debug $ LogNewComponentCache res
 
     let mk t = fromTargetId (importPaths df) exts (targetId t) targetEnv targetDepends
     ctargets <- concatMapM mk (componentTargets ci)
@@ -857,9 +839,9 @@ should be filtered out, such that we dont have to re-compile everything.
 -- | Set the cache-directory based on the ComponentOptions and a list of
 -- internal packages.
 -- For the exact reason, see Note [Avoiding bad interface files].
-setCacheDirs :: MonadIO m => Recorder Log -> CacheDirs -> DynFlags -> m DynFlags
+setCacheDirs :: MonadIO m => Recorder (WithPriority Log) -> CacheDirs -> DynFlags -> m DynFlags
 setCacheDirs recorder CacheDirs{..} dflags = do
-    logWith recorder $ LogInterfaceFilesCacheDir (fromMaybe cacheDir hiCacheDir)
+    logWith recorder Info $ LogInterfaceFilesCacheDir (fromMaybe cacheDir hiCacheDir)
     pure $ dflags
           & maybe id setHiDir hiCacheDir
           & maybe id setHieDir hieCacheDir

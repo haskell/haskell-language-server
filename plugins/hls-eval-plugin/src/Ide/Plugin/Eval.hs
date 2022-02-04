@@ -8,12 +8,12 @@ Eval Plugin entry point.
 -}
 module Ide.Plugin.Eval (
     descriptor,
-    Log(..),
-    logToPriority) where
+    Log(..)
+    ) where
 
 import           Development.IDE              (IdeState)
-import           Development.IDE.Types.Logger (Recorder, cmap)
-import qualified Development.IDE.Types.Logger as Logger
+import           Development.IDE.Types.Logger (Recorder, WithPriority,
+                                               cmapWithPrio)
 import qualified Ide.Plugin.Eval.CodeLens     as CL
 import           Ide.Plugin.Eval.Config
 import           Ide.Plugin.Eval.Rules        (rules)
@@ -32,17 +32,13 @@ instance Pretty Log where
   pretty = \case
     LogEvalRules log -> pretty log
 
-logToPriority :: Log -> Logger.Priority
-logToPriority = \case
-  LogEvalRules log -> EvalRules.logToPriority log
-
 -- |Plugin descriptor
-descriptor :: Recorder Log -> PluginId -> PluginDescriptor IdeState
+descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId =
     (defaultPluginDescriptor plId)
         { pluginHandlers = mkPluginHandler STextDocumentCodeLens CL.codeLens
         , pluginCommands = [CL.evalCommand plId]
-        , pluginRules = rules (cmap LogEvalRules recorder)
+        , pluginRules = rules (cmapWithPrio LogEvalRules recorder)
         , pluginConfigDescriptor = defaultConfigDescriptor
                                    { configCustomConfig = mkCustomConfig properties
                                    }

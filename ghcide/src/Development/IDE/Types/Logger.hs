@@ -19,41 +19,37 @@ module Development.IDE.Types.Logger
   , withDefaultRecorder
   , makeDefaultStderrRecorder
   , priorityToHsLoggerPriority
-  , LoggingColumn(..)) where
+  , LoggingColumn(..)
+  , cmapWithPrio
+  ) where
 
-import           Control.Concurrent                    (myThreadId)
-import           Control.Concurrent.Extra              (Lock, newLock, withLock)
-import           Control.Exception                     (IOException)
-import           Control.Monad                         (forM_, when, (>=>))
-import           Control.Monad.IO.Class                (MonadIO (liftIO))
-import           Data.Functor.Contravariant            (Contravariant (contramap))
-import           Data.Maybe                            (fromMaybe)
-import           Data.Text                             (Text)
-import qualified Data.Text                             as T
-import qualified Data.Text                             as Text
-import qualified Data.Text.IO                          as Text
-import           Data.Text.Prettyprint.Doc             (Doc, Pretty (pretty),
-                                                        defaultLayoutOptions,
-                                                        layoutPretty, vcat,
-                                                        (<+>))
-import           Data.Text.Prettyprint.Doc.Render.Text (renderStrict)
-import           Data.Time                             (defaultTimeLocale,
-                                                        formatTime,
-                                                        getCurrentTime)
-import           GHC.Stack                             (HasCallStack,
-                                                        withFrozenCallStack)
-import           System.IO                             (Handle,
-                                                        IOMode (AppendMode),
-                                                        hClose, hFlush,
-                                                        hSetEncoding, openFile,
-                                                        stderr, utf8)
-import qualified System.Log.Formatter                  as HSL
-import qualified System.Log.Handler                    as HSL
-import qualified System.Log.Handler.Simple             as HSL
-import qualified System.Log.Logger                     as HsLogger
-import           UnliftIO                              (MonadUnliftIO,
-                                                        displayException,
-                                                        finally, try)
+import           Control.Concurrent         (myThreadId)
+import           Control.Concurrent.Extra   (Lock, newLock, withLock)
+import           Control.Exception          (IOException)
+import           Control.Monad              (forM_, when, (>=>))
+import           Control.Monad.IO.Class     (MonadIO (liftIO))
+import           Data.Functor.Contravariant (Contravariant (contramap))
+import           Data.Maybe                 (fromMaybe)
+import           Data.Text                  (Text)
+import qualified Data.Text                  as T
+import qualified Data.Text                  as Text
+import qualified Data.Text.IO               as Text
+import           Data.Time                  (defaultTimeLocale, formatTime,
+                                             getCurrentTime)
+import           GHC.Stack                  (HasCallStack, withFrozenCallStack)
+import           Prettyprinter              (Doc, Pretty (pretty),
+                                             defaultLayoutOptions, layoutPretty,
+                                             vcat, (<+>))
+import           Prettyprinter.Render.Text  (renderStrict)
+import           System.IO                  (Handle, IOMode (AppendMode),
+                                             hClose, hFlush, hSetEncoding,
+                                             openFile, stderr, utf8)
+import qualified System.Log.Formatter       as HSL
+import qualified System.Log.Handler         as HSL
+import qualified System.Log.Handler.Simple  as HSL
+import qualified System.Log.Logger          as HsLogger
+import           UnliftIO                   (MonadUnliftIO, displayException,
+                                             finally, try)
 
 data Priority
 -- Don't change the ordering of this type or you will mess up the Ord
@@ -106,8 +102,8 @@ data WithPriority a = WithPriority { priority :: Priority, payload :: a } derivi
 data Recorder msg = Recorder
   { logger_ :: forall m. (HasCallStack, MonadIO m) => msg -> m () }
 
-logWith :: (HasCallStack, MonadIO m) => Recorder msg -> msg -> m ()
-logWith recorder msg = withFrozenCallStack $ logger_ recorder msg
+logWith :: (HasCallStack, MonadIO m) => Recorder (WithPriority msg) -> Priority -> msg -> m ()
+logWith recorder priority msg = withFrozenCallStack $ logger_ recorder (WithPriority priority msg)
 
 instance Semigroup (Recorder msg) where
   (<>) Recorder{ logger_ = logger_1 } Recorder{ logger_ = logger_2 } =
@@ -126,6 +122,9 @@ instance Contravariant Recorder where
 
 cmap :: (a -> b) -> Recorder b -> Recorder a
 cmap = contramap
+
+cmapWithPrio :: (a -> b) -> Recorder (WithPriority b) -> Recorder (WithPriority a)
+cmapWithPrio f = cmap (fmap f)
 
 cmapIO :: (a -> IO b) -> Recorder b -> Recorder a
 cmapIO f Recorder{ logger_ } =
@@ -164,7 +163,7 @@ withDefaultRecorder path columns hsLoggerMinPriority action = do
     Nothing -> do
       recorder <- makeHandleRecorder stderr
       let message = "No log file specified; using stderr."
-      logWith recorder (WithPriority Info message)
+      logWith recorder Info message
       action recorder
     Just path -> do
       fileHandle :: Either IOException Handle <- liftIO $ try (openFile path AppendMode)
@@ -173,7 +172,7 @@ withDefaultRecorder path columns hsLoggerMinPriority action = do
           recorder <- makeHandleRecorder stderr
           let exceptionMessage = pretty $ displayException e
           let message = vcat [exceptionMessage, "Couldn't open log file" <+> pretty path <> "; falling back to stderr."]
-          logWith recorder (WithPriority Warning message)
+          logWith recorder Warning message
           action recorder
         Right fileHandle -> finally (makeHandleRecorder fileHandle >>= action) (liftIO $ hClose fileHandle)
 

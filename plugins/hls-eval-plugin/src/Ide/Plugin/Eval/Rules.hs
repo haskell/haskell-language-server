@@ -5,7 +5,7 @@
 
 -- To avoid warning "Pattern match has inaccessible right hand side"
 {-# OPTIONS_GHC -Wno-overlapping-patterns #-}
-module Ide.Plugin.Eval.Rules (GetEvalComments(..), rules,queueForEvaluation, Log, logToPriority) where
+module Ide.Plugin.Eval.Rules (GetEvalComments(..), rules,queueForEvaluation, Log) where
 
 import           Control.Monad.IO.Class               (MonadIO (liftIO))
 import           Data.HashSet                         (HashSet)
@@ -38,8 +38,8 @@ import           Development.IDE.GHC.Compat
 import qualified Development.IDE.GHC.Compat           as SrcLoc
 import qualified Development.IDE.GHC.Compat.Util      as FastString
 import           Development.IDE.Graph                (alwaysRerun)
-import           Development.IDE.Types.Logger         (Recorder, cmap)
-import qualified Development.IDE.Types.Logger         as Logger
+import           Development.IDE.Types.Logger         (Recorder, WithPriority,
+                                                       cmapWithPrio)
 import           Ide.Plugin.Eval.Types
 import           Prettyprinter                        (Pretty (pretty))
 
@@ -49,11 +49,7 @@ instance Pretty Log where
   pretty = \case
     LogShake shakeLog -> pretty shakeLog
 
-logToPriority :: Log -> Logger.Priority
-logToPriority = \case
-  LogShake log -> Shake.logToPriority log
-
-rules :: Recorder Log -> Rules ()
+rules :: Recorder (WithPriority Log) -> Rules ()
 rules recorder = do
     evalParsedModuleRule recorder
     redefinedNeedsCompilation recorder
@@ -80,8 +76,8 @@ pattern RealSrcSpanAlready :: SrcLoc.RealSrcSpan -> SrcSpan
 pattern RealSrcSpanAlready x = SrcLoc.RealSrcSpan x Nothing
 #endif
 
-evalParsedModuleRule :: Recorder Log -> Rules ()
-evalParsedModuleRule recorder = defineEarlyCutoff (cmap LogShake recorder) $ RuleNoDiagnostics $ \GetEvalComments nfp -> do
+evalParsedModuleRule :: Recorder (WithPriority Log) -> Rules ()
+evalParsedModuleRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \GetEvalComments nfp -> do
     (ParsedModule{..}, posMap) <- useWithStale_ GetParsedModuleWithComments nfp
     let comments = foldMap (\case
                 L (RealSrcSpanAlready real) bdy
@@ -112,8 +108,8 @@ evalParsedModuleRule recorder = defineEarlyCutoff (cmap LogShake recorder) $ Rul
 -- This will ensure that the modules are loaded with linkables
 -- and the interactive session won't try to compile them on the fly,
 -- leading to much better performance of the evaluate code lens
-redefinedNeedsCompilation :: Recorder Log -> Rules ()
-redefinedNeedsCompilation recorder = defineEarlyCutoff (cmap LogShake recorder) $ RuleWithCustomNewnessCheck (<=) $ \NeedsCompilation f -> do
+redefinedNeedsCompilation :: Recorder (WithPriority Log) -> Rules ()
+redefinedNeedsCompilation recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleWithCustomNewnessCheck (<=) $ \NeedsCompilation f -> do
     alwaysRerun
 
     EvaluatingVar var <- getIdeGlobalAction

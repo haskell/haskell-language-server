@@ -13,9 +13,8 @@ import           Wingman.LanguageServer hiding (Log)
 import qualified Wingman.LanguageServer as WingmanLanguageServer
 import           Wingman.LanguageServer.Metaprogram (hoverProvider)
 import           Wingman.StaticPlugin
-import Development.IDE.Types.Logger (Recorder, cmap)
+import Development.IDE.Types.Logger (Recorder, cmapWithPrio, WithPriority)
 import Prettyprinter (Pretty (pretty))
-import qualified Development.IDE.Types.Logger as Logger
 
 newtype Log
   = LogWingmanLanguageServer WingmanLanguageServer.Log 
@@ -24,12 +23,8 @@ newtype Log
 instance Pretty Log where
   pretty = \case
     LogWingmanLanguageServer log -> pretty log
-  
-logToPriority :: Log -> Logger.Priority
-logToPriority = \case 
-  LogWingmanLanguageServer log -> WingmanLanguageServer.logToPriority log
 
-descriptor :: Recorder Log -> PluginId -> PluginDescriptor IdeState
+descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId
   = installInteractions
       ( emptyCaseInteraction
@@ -37,7 +32,7 @@ descriptor recorder plId
       )
   $ (defaultPluginDescriptor plId)
       { pluginHandlers = mkPluginHandler STextDocumentHover hoverProvider
-      , pluginRules = wingmanRules (cmap LogWingmanLanguageServer recorder) plId
+      , pluginRules = wingmanRules (cmapWithPrio LogWingmanLanguageServer recorder) plId
       , pluginConfigDescriptor =
           defaultConfigDescriptor
             { configCustomConfig = mkCustomConfig properties

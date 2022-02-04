@@ -14,32 +14,31 @@ module Ide.Plugin.Example
   (
     descriptor
   , Log(..)
-  , logToPriority) where
+  ) where
 
 import           Control.Concurrent.STM
-import           Control.DeepSeq              (NFData)
+import           Control.DeepSeq            (NFData)
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
 import           Data.Functor
-import qualified Data.HashMap.Strict          as Map
+import qualified Data.HashMap.Strict        as Map
 import           Data.Hashable
-import qualified Data.Text                    as T
+import qualified Data.Text                  as T
 import           Data.Typeable
-import           Development.IDE              as D
-import           Development.IDE.Core.Shake   (getDiagnostics,
-                                               getHiddenDiagnostics)
-import qualified Development.IDE.Core.Shake   as Shake
+import           Development.IDE            as D
+import           Development.IDE.Core.Shake (getDiagnostics,
+                                             getHiddenDiagnostics)
+import qualified Development.IDE.Core.Shake as Shake
 import           Development.IDE.GHC.Compat
-import qualified Development.IDE.Types.Logger as Logger
 import           GHC.Generics
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
-import           Options.Applicative          (ParserInfo, info)
-import           Prettyprinter                (Pretty (pretty))
-import           Text.Regex.TDFA.Text         ()
+import           Options.Applicative        (ParserInfo, info)
+import           Prettyprinter              (Pretty (pretty))
+import           Text.Regex.TDFA.Text       ()
 
 -- ---------------------------------------------------------------------
 
@@ -49,11 +48,7 @@ instance Pretty Log where
   pretty = \case
     LogShake log -> pretty log
 
-logToPriority :: Log -> Logger.Priority
-logToPriority = \case
-  LogShake log -> Shake.logToPriority log
-
-descriptor :: Recorder Log -> PluginId -> PluginDescriptor IdeState
+descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId)
   { pluginRules = exampleRules recorder
   , pluginCommands = [PluginCommand "codelens.todo" "example adding" addTodoCmd]
@@ -89,9 +84,9 @@ instance NFData   Example
 
 type instance RuleResult Example = ()
 
-exampleRules :: Recorder Log -> Rules ()
+exampleRules :: Recorder (WithPriority Log) -> Rules ()
 exampleRules recorder = do
-  define (cmap LogShake recorder) $ \Example file -> do
+  define (cmapWithPrio LogShake recorder) $ \Example file -> do
     _pm <- getParsedModule file
     let diag = mkDiag file "example" DsError (Range (Position 0 0) (Position 1 0)) "example diagnostic, hello world"
     return ([diag], Just ())

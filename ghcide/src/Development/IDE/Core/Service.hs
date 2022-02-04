@@ -16,13 +16,12 @@ module Development.IDE.Core.Service(
     ideLogger,
     updatePositionMapping,
     Log(..),
-    logToPriority) where
+    ) where
 
 import           Control.Applicative             ((<|>))
 import           Development.IDE.Core.Debouncer
 import           Development.IDE.Core.FileExists (fileExistsRules)
-import           Development.IDE.Core.OfInterest hiding (Log, LogShake,
-                                                  logToPriority)
+import           Development.IDE.Core.OfInterest hiding (Log, LogShake)
 import           Development.IDE.Graph
 import           Development.IDE.Types.Logger    as Logger
 import           Development.IDE.Types.Options   (IdeOptions (..))
@@ -33,7 +32,7 @@ import qualified Language.LSP.Types              as LSP
 import           Control.Monad
 import qualified Development.IDE.Core.FileExists as FileExists
 import qualified Development.IDE.Core.OfInterest as OfInterest
-import           Development.IDE.Core.Shake      hiding (Log, logToPriority)
+import           Development.IDE.Core.Shake      hiding (Log)
 import qualified Development.IDE.Core.Shake      as Shake
 import           Development.IDE.Types.Shake     (WithHieDb)
 import           Prettyprinter                   (Pretty (pretty))
@@ -52,17 +51,11 @@ instance Pretty Log where
     LogOfInterest log -> pretty log
     LogFileExists log -> pretty log
 
-logToPriority :: Log -> Logger.Priority
-logToPriority = \case
-  LogShake log      -> Shake.logToPriority log
-  LogOfInterest log -> OfInterest.logToPriority log
-  LogFileExists log -> FileExists.logToPriority log
-
 ------------------------------------------------------------
 -- Exposed API
 
 -- | Initialise the Compiler Service.
-initialise :: Recorder Log
+initialise :: Recorder (WithPriority Log)
            -> Config
            -> Rules ()
            -> Maybe (LSP.LanguageContextEnv Config)
@@ -79,7 +72,7 @@ initialise recorder defaultConfig mainRule lspEnv logger debouncer options vfs w
         fromEnv <- lookupEnv "GHCIDE_BUILD_PROFILING"
         return $ fromConf <|> fromEnv
     shakeOpen
-        (cmap LogShake recorder)
+        (cmapWithPrio LogShake recorder)
         lspEnv
         defaultConfig
         logger
@@ -93,8 +86,8 @@ initialise recorder defaultConfig mainRule lspEnv logger debouncer options vfs w
         (optShakeOptions options)
           $ do
             addIdeGlobal $ GlobalIdeOptions options
-            ofInterestRules (cmap LogOfInterest recorder)
-            fileExistsRules (cmap LogFileExists recorder) lspEnv vfs
+            ofInterestRules (cmapWithPrio LogOfInterest recorder)
+            fileExistsRules (cmapWithPrio LogFileExists recorder) lspEnv vfs
             mainRule
 
 -- | Shutdown the Compiler Service.

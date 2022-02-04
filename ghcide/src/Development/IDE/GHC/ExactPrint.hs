@@ -44,8 +44,7 @@ module Development.IDE.GHC.ExactPrint
       ASTElement (..),
       ExceptStringT (..),
       TransformT,
-      Log,
-      logToPriority
+      Log(..),
     )
 where
 
@@ -69,8 +68,7 @@ import qualified Data.Text                               as T
 import           Data.Traversable                        (for)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service            (runAction)
-import           Development.IDE.Core.Shake              hiding (Log,
-                                                          logToPriority)
+import           Development.IDE.Core.Shake              hiding (Log)
 import qualified Development.IDE.Core.Shake              as Shake
 import           Development.IDE.GHC.Compat              hiding (parseImport,
                                                           parsePattern,
@@ -78,8 +76,9 @@ import           Development.IDE.GHC.Compat              hiding (parseImport,
 import           Development.IDE.Graph                   (RuleResult, Rules)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Types.Location
-import           Development.IDE.Types.Logger            (Recorder, cmap)
-import qualified Development.IDE.Types.Logger            as Logger
+import           Development.IDE.Types.Logger            (Recorder,
+                                                          WithPriority,
+                                                          cmapWithPrio)
 import qualified GHC.Generics                            as GHC
 import           Generics.SYB
 import           Generics.SYB.GHC
@@ -114,10 +113,6 @@ instance Pretty Log where
   pretty = \case
     LogShake shakeLog -> pretty shakeLog
 
-logToPriority :: Log -> Logger.Priority
-logToPriority = \case
-  LogShake log -> Shake.logToPriority log
-
 data GetAnnotatedParsedSource = GetAnnotatedParsedSource
   deriving (Eq, Show, Typeable, GHC.Generic)
 
@@ -126,8 +121,8 @@ instance NFData GetAnnotatedParsedSource
 type instance RuleResult GetAnnotatedParsedSource = Annotated ParsedSource
 
 -- | Get the latest version of the annotated parse source with comments.
-getAnnotatedParsedSourceRule :: Recorder Log -> Rules ()
-getAnnotatedParsedSourceRule recorder = define (cmap LogShake recorder) $ \GetAnnotatedParsedSource nfp -> do
+getAnnotatedParsedSourceRule :: Recorder (WithPriority Log) -> Rules ()
+getAnnotatedParsedSourceRule recorder = define (cmapWithPrio LogShake recorder) $ \GetAnnotatedParsedSource nfp -> do
   pm <- use GetParsedModuleWithComments nfp
   return ([], fmap annotateParsedSource pm)
 

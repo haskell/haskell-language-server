@@ -77,8 +77,8 @@ module Development.IDE.Core.Shake(
     addPersistentRule,
     garbageCollectDirtyKeys,
     garbageCollectDirtyKeysOlderThan,
-    Log(..),
-    logToPriority) where
+    Log(..)
+    ) where
 
 import           Control.Concurrent.Async
 import           Control.Concurrent.STM
@@ -211,17 +211,6 @@ instance Pretty Log where
     LogDefineEarlyCutoffRuleCustomNewnessHasDiag fileDiagnostic ->
       "defineEarlyCutoff RuleWithCustomNewnessCheck - file diagnostic:"
       <+> pretty (showDiagnosticsColored [fileDiagnostic])
-
-logToPriority :: Log -> Logger.Priority
-logToPriority = \case
-  LogCreateHieDbExportsMapStart                  -> Logger.Debug
-  LogCreateHieDbExportsMapFinish{}               -> Logger.Debug
-  LogBuildSessionRestart{}                       -> Logger.Debug
-  LogDelayedAction delayedAction _               -> actionPriority delayedAction
-  LogBuildSessionFinish{}                        -> Logger.Debug
-  LogDiagsDiffButNoLspEnv{}                      -> Logger.Info
-  LogDefineEarlyCutoffRuleNoDiagHasDiag{}        -> Logger.Warning
-  LogDefineEarlyCutoffRuleCustomNewnessHasDiag{} -> Logger.Warning
 
 -- | We need to serialize writes to the database, so we send any function that
 -- needs to write to the database over the channel, where it will be picked up by
@@ -548,7 +537,7 @@ seqValue val = case val of
     Failed _        -> val
 
 -- | Open a 'IdeState', should be shut using 'shakeShut'.
-shakeOpen :: Recorder Log
+shakeOpen :: Recorder (WithPriority Log)
           -> Maybe (LSP.LanguageContextEnv Config)
           -> Config
           -> Logger
@@ -564,7 +553,7 @@ shakeOpen :: Recorder Log
           -> IO IdeState
 shakeOpen recorder lspEnv defaultConfig logger debouncer
   shakeProfileDir (IdeReportProgress reportProgress) ideTesting@(IdeTesting testing) withHieDb indexQueue vfs opts rules = mdo
-    let log :: Log -> IO ()
+    let log :: Logger.Priority -> Log -> IO ()
         log = logWith recorder
 
     us <- mkSplitUniqSupply 'r'
@@ -587,10 +576,10 @@ shakeOpen recorder lspEnv defaultConfig logger debouncer
         -- lazily initialize the exports map with the contents of the hiedb
         -- TODO: exceptions can be swallowed here?
         _ <- async $ do
-            log LogCreateHieDbExportsMapStart
+            log Debug LogCreateHieDbExportsMapStart
             em <- createExportsMapHieDb withHieDb
             atomically $ modifyTVar' exportsMap (<> em)
-            log $ LogCreateHieDbExportsMapFinish (ExportsMap.size em)
+            log Debug $ LogCreateHieDbExportsMapFinish (ExportsMap.size em)
 
         progress <- do
             let (before, after) = if testing then (0,0.1) else (0.1,0.1)
@@ -642,7 +631,7 @@ startTelemetry db extras@ShakeExtras{..}
 
 
 -- | Must be called in the 'Initialized' handler and only once
-shakeSessionInit :: Recorder Log -> IdeState -> IO ()
+shakeSessionInit :: Recorder (WithPriority Log) -> IdeState -> IO ()
 shakeSessionInit recorder ide@IdeState{..} = do
     initSession <- newSession recorder shakeExtras shakeDb [] "shakeSessionInit"
     putMVar shakeSession initSession
@@ -684,7 +673,7 @@ delayedAction a = do
 -- | Restart the current 'ShakeSession' with the given system actions.
 --   Any actions running in the current session will be aborted,
 --   but actions added via 'shakeEnqueue' will be requeued.
-shakeRestart :: Recorder Log -> IdeState -> String -> [DelayedAction ()] -> IO ()
+shakeRestart :: Recorder (WithPriority Log) -> IdeState -> String -> [DelayedAction ()] -> IO ()
 shakeRestart recorder IdeState{..} reason acts =
     withMVar'
         shakeSession
@@ -695,7 +684,7 @@ shakeRestart recorder IdeState{..} reason acts =
               backlog <- readTVarIO $ dirtyKeys shakeExtras
               queue <- atomicallyNamed "actionQueue - peek" $ peekInProgress $ actionQueue shakeExtras
 
-              log $ LogBuildSessionRestart reason queue backlog stopTime res
+              log Debug $ LogBuildSessionRestart reason queue backlog stopTime res
 
               let profile = case res of
                       Just fp -> ", profile saved at " <> fp
@@ -746,7 +735,7 @@ shakeEnqueue ShakeExtras{actionQueue, logger} act = do
 -- | Set up a new 'ShakeSession' with a set of initial actions
 --   Will crash if there is an existing 'ShakeSession' running.
 newSession
-    :: Recorder Log
+    :: Recorder (WithPriority Log)
     -> ShakeExtras
     -> ShakeDatabase
     -> [DelayedActionInternal]
@@ -772,9 +761,7 @@ newSession recorder extras@ShakeExtras{..} shakeDb acts reason = do
             getAction d
             liftIO $ atomicallyNamed "actionQueue - done" $ doneQueue d actionQueue
             runTime <- liftIO start
-            let msg = T.pack $ "finish: " ++ actionName d
-                            ++ " (took " ++ showDuration runTime ++ ")"
-            liftIO $ logWith recorder $ LogDelayedAction d runTime
+            logWith recorder (actionPriority d) $ LogDelayedAction d runTime
 
         -- The inferred type signature doesn't work in ghc >= 9.0.1
         workRun :: (forall b. IO b -> IO b) -> IO (IO ())
@@ -794,7 +781,7 @@ newSession recorder extras@ShakeExtras{..} shakeDb acts reason = do
                     case res of
                       Left e -> Just e
                       _      -> Nothing
-              logWith recorder $ LogBuildSessionFinish exception
+              logWith recorder Debug $ LogBuildSessionFinish exception
               notifyTestingLogMessage extras msg
 
     -- Do the work in a background thread
@@ -910,12 +897,12 @@ preservedKeys checkParents = HSet.fromList $
 -- | Define a new Rule without early cutoff
 define
     :: IdeRule k v
-    => Recorder Log -> (k -> NormalizedFilePath -> Action (IdeResult v)) -> Rules ()
+    => Recorder (WithPriority Log) -> (k -> NormalizedFilePath -> Action (IdeResult v)) -> Rules ()
 define recorder op = defineEarlyCutoff recorder $ Rule $ \k v -> (Nothing,) <$> op k v
 
 defineNoDiagnostics
     :: IdeRule k v
-    => Recorder Log -> (k -> NormalizedFilePath -> Action (Maybe v)) -> Rules ()
+    => Recorder (WithPriority Log) -> (k -> NormalizedFilePath -> Action (Maybe v)) -> Rules ()
 defineNoDiagnostics recorder op = defineEarlyCutoff recorder $ RuleNoDiagnostics $ \k v -> (Nothing,) <$> op k v
 
 -- | Request a Rule result if available
@@ -1038,7 +1025,7 @@ data RuleBody k v
 -- | Define a new Rule with early cutoff
 defineEarlyCutoff
     :: IdeRule k v
-    => Recorder Log
+    => Recorder (WithPriority Log)
     -> RuleBody k v
     -> Rules ()
 defineEarlyCutoff recorder (Rule op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ \traceDiagnostics -> do
@@ -1050,23 +1037,23 @@ defineEarlyCutoff recorder (Rule op) = addRule $ \(Q (key, file)) (old :: Maybe 
 defineEarlyCutoff recorder (RuleNoDiagnostics op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ \traceDiagnostics -> do
     let diagnostics diags = do
             traceDiagnostics diags
-            mapM_ (logWith recorder . LogDefineEarlyCutoffRuleNoDiagHasDiag) diags
+            mapM_ (logWith recorder Warning . LogDefineEarlyCutoffRuleNoDiagHasDiag) diags
     defineEarlyCutoff' diagnostics (==) key file old mode $ second (mempty,) <$> op key file
 defineEarlyCutoff recorder RuleWithCustomNewnessCheck{..} =
     addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode ->
         otTracedAction key file mode traceA $ \ traceDiagnostics -> do
             let diagnostics diags = do
                     traceDiagnostics diags
-                    mapM_ (logWith recorder . LogDefineEarlyCutoffRuleCustomNewnessHasDiag) diags
+                    mapM_ (logWith recorder Warning . LogDefineEarlyCutoffRuleCustomNewnessHasDiag) diags
             defineEarlyCutoff' diagnostics newnessCheck key file old mode $
                 second (mempty,) <$> build key file
 
-defineNoFile :: IdeRule k v => Recorder Log -> (k -> Action v) -> Rules ()
+defineNoFile :: IdeRule k v => Recorder (WithPriority Log) -> (k -> Action v) -> Rules ()
 defineNoFile recorder f = defineNoDiagnostics recorder $ \k file -> do
     if file == emptyFilePath then do res <- f k; return (Just res) else
         fail $ "Rule " ++ show k ++ " should always be called with the empty string for a file"
 
-defineEarlyCutOffNoFile :: IdeRule k v => Recorder Log -> (k -> Action (BS.ByteString, v)) -> Rules ()
+defineEarlyCutOffNoFile :: IdeRule k v => Recorder (WithPriority Log) -> (k -> Action (BS.ByteString, v)) -> Rules ()
 defineEarlyCutOffNoFile recorder f = defineEarlyCutoff recorder $ RuleNoDiagnostics $ \k file -> do
     if file == emptyFilePath then do (hash, res) <- f k; return (Just hash, Just res) else
         fail $ "Rule " ++ show k ++ " should always be called with the empty string for a file"
@@ -1173,7 +1160,7 @@ data OnDiskRule = OnDiskRule
 -- the internals of this module that we do not want to expose.
 defineOnDisk
   :: (Shake.ShakeValue k, RuleResult k ~ ())
-  => Recorder Log
+  => Recorder (WithPriority Log)
   -> (k -> NormalizedFilePath -> OnDiskRule)
   -> Rules ()
 defineOnDisk recorder act = addRule $
@@ -1216,7 +1203,7 @@ needOnDisks k files = do
     liftIO $ unless (and successfulls) $ throwIO $ BadDependency (show k)
 
 updateFileDiagnostics :: MonadIO m
-  => Recorder Log
+  => Recorder (WithPriority Log)
   -> NormalizedFilePath
   -> Key
   -> ShakeExtras
@@ -1242,7 +1229,7 @@ updateFileDiagnostics recorder fp k ShakeExtras{diagnostics, hiddenDiagnostics, 
                  lastPublish <- atomicallyNamed "diagnostics - publish" $ STM.focus (Focus.lookupWithDefault [] <* Focus.insert newDiags) uri publishedDiagnostics
                  let action = when (lastPublish /= newDiags) $ case lspEnv of
                         Nothing -> -- Print an LSP event.
-                            logWith recorder $ LogDiagsDiffButNoLspEnv (map (fp, ShowDiag,) newDiags)
+                            logWith recorder Info $ LogDiagsDiffButNoLspEnv (map (fp, ShowDiag,) newDiags)
                         Just env -> LSP.runLspT env $
                             LSP.sendNotification LSP.STextDocumentPublishDiagnostics $
                             LSP.PublishDiagnosticsParams (fromNormalizedUri uri) (fmap fromIntegral ver) (List newDiags)

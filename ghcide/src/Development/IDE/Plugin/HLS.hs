@@ -7,7 +7,7 @@ module Development.IDE.Plugin.HLS
     (
       asGhcIdePlugin
     , Log(..)
-    , logToPriority) where
+    ) where
 
 import           Control.Exception            (SomeException)
 import           Control.Monad
@@ -22,14 +22,13 @@ import           Data.List.NonEmpty           (NonEmpty, nonEmpty, toList)
 import qualified Data.Map                     as Map
 import           Data.String
 import qualified Data.Text                    as T
-import           Development.IDE.Core.Shake   hiding (Log, logToPriority)
+import           Development.IDE.Core.Shake   hiding (Log)
 import           Development.IDE.Core.Tracing
 import           Development.IDE.Graph        (Rules)
 import           Development.IDE.LSP.Server
 import           Development.IDE.Plugin
 import qualified Development.IDE.Plugin       as P
 import           Development.IDE.Types.Logger
-import qualified Development.IDE.Types.Logger as Logger
 import           Ide.Plugin.Config
 import           Ide.PluginUtils              (getClientConfig)
 import           Ide.Types                    as HLS
@@ -54,12 +53,8 @@ instance Pretty Log where
     LogNoEnabledPlugins ->
       "extensibleNotificationPlugins no enabled plugins"
 
-logToPriority :: Log -> Logger.Priority
-logToPriority = \case
-  LogNoEnabledPlugins -> Logger.Info
-
 -- | Map a set of plugins to the underlying ghcide engine.
-asGhcIdePlugin :: Recorder Log -> IdePlugins IdeState -> Plugin Config
+asGhcIdePlugin :: Recorder (WithPriority Log) -> IdePlugins IdeState -> Plugin Config
 asGhcIdePlugin recorder (IdePlugins ls) =
     mkPlugin rulesPlugins HLS.pluginRules <>
     mkPlugin executeCommandPlugins HLS.pluginCommands <>
@@ -186,7 +181,7 @@ extensiblePlugins xs = mempty { P.pluginHandlers = handlers }
                 pure $ Right $ combineResponses m config caps params xs
 -- ---------------------------------------------------------------------
 
-extensibleNotificationPlugins :: Recorder Log -> [(PluginId, PluginNotificationHandlers IdeState)] -> Plugin Config
+extensibleNotificationPlugins :: Recorder (WithPriority Log) -> [(PluginId, PluginNotificationHandlers IdeState)] -> Plugin Config
 extensibleNotificationPlugins recorder xs = mempty { P.pluginHandlers = handlers }
   where
     IdeNotificationHandlers handlers' = foldMap bakePluginId xs
@@ -201,7 +196,7 @@ extensibleNotificationPlugins recorder xs = mempty { P.pluginHandlers = handlers
         let fs = filter (\(pid,_) -> plcGlobalOn $ configForPlugin config pid) fs'
         case nonEmpty fs of
           Nothing -> do
-              logWith recorder LogNoEnabledPlugins
+              logWith recorder Info LogNoEnabledPlugins
               pure ()
           Just fs -> do
             -- We run the notifications in order, so the core ghcide provider

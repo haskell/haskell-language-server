@@ -5,7 +5,7 @@
 module Development.IDE.Plugin.Completions
     ( descriptor
     , Log(..)
-    , logToPriority) where
+    ) where
 
 import           Control.Concurrent.Async                     (concurrently)
 import           Control.Concurrent.STM.Stats                 (readTVarIO)
@@ -21,10 +21,8 @@ import qualified Data.Text                                    as T
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service                 hiding (Log,
-                                                               LogShake,
-                                                               logToPriority)
-import           Development.IDE.Core.Shake                   hiding (Log,
-                                                               logToPriority)
+                                                               LogShake)
+import           Development.IDE.Core.Shake                   hiding (Log)
 import qualified Development.IDE.Core.Shake                   as Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error                    (rangeToSrcSpan)
@@ -41,8 +39,9 @@ import           Development.IDE.Types.HscEnvEq               (HscEnvEq (envPack
                                                                hscEnv)
 import qualified Development.IDE.Types.KnownTargets           as KT
 import           Development.IDE.Types.Location
-import           Development.IDE.Types.Logger                 (Recorder, cmap)
-import qualified Development.IDE.Types.Logger                 as Logger
+import           Development.IDE.Types.Logger                 (Recorder,
+                                                               WithPriority,
+                                                               cmapWithPrio)
 import           GHC.Exts                                     (fromList, toList)
 import           Ide.Plugin.Config                            (Config)
 import           Ide.Types
@@ -58,11 +57,7 @@ instance Pretty Log where
   pretty = \case
     LogShake log -> pretty log
 
-logToPriority :: Log -> Logger.Priority
-logToPriority = \case
-  LogShake log -> Shake.logToPriority log
-
-descriptor :: Recorder Log -> PluginId -> PluginDescriptor IdeState
+descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId)
   { pluginRules = produceCompletions recorder
   , pluginHandlers = mkPluginHandler STextDocumentCompletion getCompletionsLSP
@@ -70,9 +65,9 @@ descriptor recorder plId = (defaultPluginDescriptor plId)
   , pluginConfigDescriptor = defaultConfigDescriptor {configCustomConfig = mkCustomConfig properties}
   }
 
-produceCompletions :: Recorder Log -> Rules ()
+produceCompletions :: Recorder (WithPriority Log) -> Rules ()
 produceCompletions recorder = do
-    define (cmap LogShake recorder) $ \LocalCompletions file -> do
+    define (cmapWithPrio LogShake recorder) $ \LocalCompletions file -> do
         let uri = fromNormalizedUri $ normalizedFilePathToUri file
         pm <- useWithStale GetParsedModule file
         case pm of
@@ -80,7 +75,7 @@ produceCompletions recorder = do
                 let cdata = localCompletionsForParsedModule uri pm
                 return ([], Just cdata)
             _ -> return ([], Nothing)
-    define (cmap LogShake recorder) $ \NonLocalCompletions file -> do
+    define (cmapWithPrio LogShake recorder) $ \NonLocalCompletions file -> do
         -- For non local completions we avoid depending on the parsed module,
         -- synthetizing a fake module with an empty body from the buffer
         -- in the ModSummary, which preserves all the imports

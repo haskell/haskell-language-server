@@ -3,8 +3,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Plugins where
 
-import           Development.IDE.Types.Logger      (Recorder, cmap)
-import qualified Development.IDE.Types.Logger      as Logger
+import           Development.IDE.Types.Logger      (Recorder, WithPriority,
+                                                    cmapWithPrio)
 import           Ide.PluginUtils                   (pluginDescToIdePlugins)
 import           Ide.Types                         (IdePlugins)
 import           Prettyprinter                     (Pretty (pretty))
@@ -150,30 +150,6 @@ instance Pretty Log where
     LogAlternateNumberFormat log -> pretty log
 #endif
 
-logToPriority :: Log -> Logger.Priority
-logToPriority = \case
-  LogGhcIde log                -> GhcIde.logToPriority log
-  LogExample log               -> Example.logToPriority log
-  LogExample2 log              -> Example2.logToPriority log
-#if tactic
-  LogTactic log                -> Tactic.logToPriority log
-#endif
-#if eval
-  LogEval log                  -> Eval.logToPriority log
-#endif
-#if importLens
-  LogExplicitImports log       -> ExplicitImports.logToPriority log
-#endif
-#if refineImports
-  LogRefineImports log         -> RefineImports.logToPriority log
-#endif
-#if hlint
-  LogHlint log                 -> Hlint.logToPriority log
-#endif
-#if alternateNumberFormat
-  LogAlternateNumberFormat log -> AlternateNumberFormat.logToPriority log
-#endif
-
 -- ---------------------------------------------------------------------
 
 -- | The plugins configured for use in this instance of the language
@@ -181,7 +157,7 @@ logToPriority = \case
 -- These can be freely added or removed to tailor the available
 -- features of the server.
 
-idePlugins :: Recorder Log -> Bool -> IdePlugins IdeState
+idePlugins :: Recorder (WithPriority Log) -> Bool -> IdePlugins IdeState
 idePlugins recorder includeExamples = pluginDescToIdePlugins allPlugins
   where
     allPlugins = if includeExamples
@@ -198,7 +174,7 @@ idePlugins recorder includeExamples = pluginDescToIdePlugins allPlugins
       Fourmolu.descriptor "fourmolu" :
 #endif
 #if tactic
-      Tactic.descriptor (cmap LogTactic recorder) "tactics" :
+      Tactic.descriptor (cmapWithPrio LogTactic recorder) "tactics" :
 #endif
 #if ormolu
       Ormolu.descriptor   "ormolu" :
@@ -225,36 +201,36 @@ idePlugins recorder includeExamples = pluginDescToIdePlugins allPlugins
       HaddockComments.descriptor "haddockComments" :
 #endif
 #if eval
-      Eval.descriptor (cmap LogEval recorder) "eval" :
+      Eval.descriptor (cmapWithPrio LogEval recorder) "eval" :
 #endif
 #if importLens
-      ExplicitImports.descriptor (cmap LogExplicitImports recorder) "importLens" :
+      ExplicitImports.descriptor (cmapWithPrio LogExplicitImports recorder) "importLens" :
 #endif
 #if qualifyImportedNames
       QualifyImportedNames.descriptor "qualifyImportedNames" :
 #endif
 #if refineImports
-      RefineImports.descriptor (cmap LogRefineImports recorder) "refineImports" :
+      RefineImports.descriptor (cmapWithPrio LogRefineImports recorder) "refineImports" :
 #endif
 #if moduleName
       ModuleName.descriptor "moduleName" :
 #endif
 #if hlint
-      Hlint.descriptor (cmap LogHlint recorder) "hlint" :
+      Hlint.descriptor (cmapWithPrio LogHlint recorder) "hlint" :
 #endif
 #if splice
       Splice.descriptor "splice" :
 #endif
 #if alternateNumberFormat
-      AlternateNumberFormat.descriptor (cmap LogAlternateNumberFormat recorder) "alternateNumberFormat" :
+      AlternateNumberFormat.descriptor (cmapWithPrio LogAlternateNumberFormat recorder) "alternateNumberFormat" :
 #endif
 #if selectionRange
       SelectionRange.descriptor "selectionRange" :
 #endif
     -- The ghcide descriptors should come last so that the notification handlers
     -- (which restart the Shake build) run after everything else
-      GhcIde.descriptors (cmap LogGhcIde recorder)
+      GhcIde.descriptors (cmapWithPrio LogGhcIde recorder)
     examplePlugins =
-      [Example.descriptor  (cmap LogExample recorder) "eg"
-      ,Example2.descriptor (cmap LogExample2 recorder) "eg2"
+      [Example.descriptor  (cmapWithPrio LogExample recorder) "eg"
+      ,Example2.descriptor (cmapWithPrio LogExample2 recorder) "eg2"
       ]

@@ -1,6 +1,5 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
-{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Main(main) where
@@ -8,7 +7,7 @@ module Main(main) where
 import           Data.Function                ((&))
 import           Development.IDE.Types.Logger (Priority (Debug, Info),
                                                WithPriority (WithPriority, priority),
-                                               cfilter, cmap,
+                                               cfilter, cmapWithPrio,
                                                makeDefaultStderrRecorder,
                                                priorityToHsLoggerPriority,
                                                withDefaultRecorder)
@@ -30,20 +29,15 @@ instance Pretty Log where
     LogIdeMain ideMainLog -> pretty ideMainLog
     LogPlugins pluginsLog -> pretty pluginsLog
 
-logToPriority :: Log -> Priority
-logToPriority = \case
-  LogIdeMain log -> IdeMain.logToPriority log
-  LogPlugins log -> Plugins.logToPriority log
-
-logToDocWithPriority :: Log -> WithPriority (Doc a)
-logToDocWithPriority log = WithPriority (logToPriority log) (pretty log)
+logToDoc :: Log -> Doc a
+logToDoc = pretty
 
 main :: IO ()
 main = do
     -- plugin cli commands use stderr logger for now unless we change the args
     -- parser to get logging arguments first or do more complicated things
-    pluginCliRecorder <- cmap logToDocWithPriority <$> makeDefaultStderrRecorder Nothing (priorityToHsLoggerPriority Info)
-    args <- getArguments "haskell-language-server" (Plugins.idePlugins (cmap LogPlugins pluginCliRecorder) False)
+    pluginCliRecorder <- cmapWithPrio logToDoc <$> makeDefaultStderrRecorder Nothing (priorityToHsLoggerPriority Info)
+    args <- getArguments "haskell-language-server" (Plugins.idePlugins (cmapWithPrio LogPlugins pluginCliRecorder) False)
 
     let (minPriority, logFilePath, includeExamplePlugins) =
           case args of
@@ -57,6 +51,6 @@ main = do
       let recorder =
             textWithPriorityRecorder
             & cfilter (\WithPriority{ priority } -> priority >= minPriority)
-            & cmap logToDocWithPriority
+            & cmapWithPrio logToDoc
 
-      defaultMain (cmap LogIdeMain recorder) args (Plugins.idePlugins (cmap LogPlugins recorder) includeExamplePlugins)
+      defaultMain (cmapWithPrio LogIdeMain recorder) args (Plugins.idePlugins (cmapWithPrio LogPlugins recorder) includeExamplePlugins)

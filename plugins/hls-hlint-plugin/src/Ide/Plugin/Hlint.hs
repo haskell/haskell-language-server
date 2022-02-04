@@ -28,7 +28,7 @@ module Ide.Plugin.Hlint
   (
     descriptor
   , Log(..)
-  , logToPriority) where
+  ) where
 import           Control.Arrow                                      ((&&&))
 import           Control.Concurrent.STM
 import           Control.DeepSeq
@@ -119,7 +119,6 @@ import           Development.IDE.Spans.Pragmas                      (LineSplitTe
                                                                      lineSplitInsertTextEdit,
                                                                      lineSplitTextEdits,
                                                                      nextPragmaLine)
-import qualified Development.IDE.Types.Logger                       as Logger
 import           GHC.Generics                                       (Generic)
 import           Prettyprinter                                      (Pretty (pretty))
 import           System.Environment                                 (setEnv,
@@ -135,10 +134,6 @@ instance Pretty Log where
   pretty = \case
     LogShake log -> pretty log
 
-logToPriority :: Log -> Logger.Priority
-logToPriority = \case
-  LogShake log -> Shake.logToPriority log
-
 #ifdef HLINT_ON_GHC_LIB
 -- Reimplementing this, since the one in Development.IDE.GHC.Compat isn't for ghc-lib
 pattern RealSrcSpan :: GHC.RealSrcSpan -> Maybe BufSpan -> GHC.SrcSpan
@@ -150,7 +145,7 @@ pattern RealSrcSpan x y <- ((,Nothing) -> (GHC.RealSrcSpan x, y))
 {-# COMPLETE RealSrcSpan, UnhelpfulSpan #-}
 #endif
 
-descriptor :: Recorder Log -> PluginId -> PluginDescriptor IdeState
+descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId)
   { pluginRules = rules recorder plId
   , pluginCommands =
@@ -180,15 +175,15 @@ type instance RuleResult GetHlintDiagnostics = ()
 -- |    - `getIdeas` -> `getFileContents` if the hls ghc does not match the hlint default ghc
 -- | - The client settings have changed, to honour the `hlintOn` setting, via `getClientConfigAction`
 -- | - The hlint specific settings have changed, via `getHlintSettingsRule`
-rules :: Recorder Log -> PluginId -> Rules ()
+rules :: Recorder (WithPriority Log) -> PluginId -> Rules ()
 rules recorder plugin = do
-  define (cmap LogShake recorder) $ \GetHlintDiagnostics file -> do
+  define (cmapWithPrio LogShake recorder) $ \GetHlintDiagnostics file -> do
     config <- getClientConfigAction def
     let hlintOn = pluginEnabledConfig plcDiagnosticsOn plugin config
     ideas <- if hlintOn then getIdeas file else return (Right [])
     return (diagnostics file ideas, Just ())
 
-  defineNoFile (cmap LogShake recorder) $ \GetHlintSettings -> do
+  defineNoFile (cmapWithPrio LogShake recorder) $ \GetHlintSettings -> do
     (Config flags) <- getHlintConfig plugin
     liftIO $ argsSettings flags
 
@@ -536,7 +531,7 @@ applyHint ide nfp mhint =
     liftIO $ logm $ "applyHint:apply=" ++ show commands
     let fp = fromNormalizedFilePath nfp
     (_, mbOldContent) <- liftIO $ runAction' $ getFileContents nfp
-    oldContent <- maybe (liftIO $ fmap T.decodeUtf8 $ BS.readFile fp) return mbOldContent
+    oldContent <- maybe (liftIO $ fmap T.decodeUtf8 (BS.readFile fp)) return mbOldContent
     modsum <- liftIO $ runAction' $ use_ GetModSummary nfp
     let dflags = ms_hspp_opts $ msrModSummary modsum
     -- Setting a environment variable with the libdir used by ghc-exactprint.

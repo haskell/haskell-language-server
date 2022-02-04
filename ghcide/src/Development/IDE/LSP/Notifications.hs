@@ -10,7 +10,7 @@ module Development.IDE.LSP.Notifications
     ( whenUriFile
     , descriptor
     , Log(..)
-    , logToPriority) where
+    ) where
 
 import           Language.LSP.Types
 import qualified Language.LSP.Types                    as LSP
@@ -29,13 +29,10 @@ import           Development.IDE.Core.FileStore        (registerFileWatches,
                                                         setSomethingModified)
 import qualified Development.IDE.Core.FileStore        as FileStore
 import           Development.IDE.Core.IdeConfiguration
-import           Development.IDE.Core.OfInterest       hiding (Log, LogShake,
-                                                        logToPriority)
+import           Development.IDE.Core.OfInterest       hiding (Log, LogShake)
 import           Development.IDE.Core.RuleTypes        (GetClientSettings (..))
-import           Development.IDE.Core.Service          hiding (Log, LogShake,
-                                                        logToPriority)
-import           Development.IDE.Core.Shake            hiding (Log, Priority,
-                                                        logToPriority)
+import           Development.IDE.Core.Service          hiding (Log, LogShake)
+import           Development.IDE.Core.Shake            hiding (Log, Priority)
 import qualified Development.IDE.Core.Shake            as Shake
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger
@@ -53,15 +50,10 @@ instance Pretty Log where
     LogShake log     -> pretty log
     LogFileStore log -> pretty log
 
-logToPriority :: Log -> Priority
-logToPriority = \case
-  LogShake log     -> Shake.logToPriority log
-  LogFileStore log -> FileStore.logToPriority log
-
 whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
 whenUriFile uri act = whenJust (LSP.uriToFilePath uri) $ act . toNormalizedFilePath'
 
-descriptor :: Recorder Log -> PluginId -> PluginDescriptor IdeState
+descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId) { pluginNotificationHandlers = mconcat
   [ mkPluginNotificationHandler LSP.STextDocumentDidOpen $
       \ide _ (DidOpenTextDocumentParams TextDocumentItem{_uri,_version}) -> liftIO $ do
@@ -70,7 +62,7 @@ descriptor recorder plId = (defaultPluginDescriptor plId) { pluginNotificationHa
           -- We don't know if the file actually exists, or if the contents match those on disk
           -- For example, vscode restores previously unsaved contents on open
           addFileOfInterest ide file Modified{firstOpen=True}
-          setFileModified (cmap LogFileStore recorder) ide False file
+          setFileModified (cmapWithPrio LogFileStore recorder) ide False file
           logDebug (ideLogger ide) $ "Opened text document: " <> getUri _uri
 
   , mkPluginNotificationHandler LSP.STextDocumentDidChange $
@@ -78,14 +70,14 @@ descriptor recorder plId = (defaultPluginDescriptor plId) { pluginNotificationHa
         atomically $ updatePositionMapping ide identifier changes
         whenUriFile _uri $ \file -> do
           addFileOfInterest ide file Modified{firstOpen=False}
-          setFileModified (cmap LogFileStore recorder) ide False file
+          setFileModified (cmapWithPrio LogFileStore recorder) ide False file
         logDebug (ideLogger ide) $ "Modified text document: " <> getUri _uri
 
   , mkPluginNotificationHandler LSP.STextDocumentDidSave $
       \ide _ (DidSaveTextDocumentParams TextDocumentIdentifier{_uri} _) -> liftIO $ do
         whenUriFile _uri $ \file -> do
             addFileOfInterest ide file OnDisk
-            setFileModified (cmap LogFileStore recorder) ide True file
+            setFileModified (cmapWithPrio LogFileStore recorder) ide True file
         logDebug (ideLogger ide) $ "Saved text document: " <> getUri _uri
 
   , mkPluginNotificationHandler LSP.STextDocumentDidClose $
@@ -134,7 +126,7 @@ descriptor recorder plId = (defaultPluginDescriptor plId) { pluginNotificationHa
 
   , mkPluginNotificationHandler LSP.SInitialized $ \ide _ _ -> do
       --------- Initialize Shake session --------------------------------------------------------------------
-      liftIO $ shakeSessionInit (cmap LogShake recorder) ide
+      liftIO $ shakeSessionInit (cmapWithPrio LogShake recorder) ide
 
       --------- Set up file watchers ------------------------------------------------------------------------
       opts <- liftIO $ getIdeOptionsIO $ shakeExtras ide

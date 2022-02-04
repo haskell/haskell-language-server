@@ -8,7 +8,7 @@
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE TypeFamilies          #-}
 
-module Ide.Plugin.RefineImports (descriptor, Log(..), logToPriority) where
+module Ide.Plugin.RefineImports (descriptor, Log(..)) where
 
 import           Control.Arrow                        (Arrow (second))
 import           Control.DeepSeq                      (rwhnf)
@@ -56,12 +56,8 @@ instance Pretty Log where
   pretty = \case
     LogShake log -> pretty log
 
-logToPriority :: Log -> Logger.Priority
-logToPriority = \case
-  LogShake log -> Shake.logToPriority log
-
 -- | plugin declaration
-descriptor :: Recorder Log -> PluginId -> PluginDescriptor IdeState
+descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId)
   { pluginCommands = [refineImportCommand]
   , pluginRules = refineImportsRule recorder
@@ -177,8 +173,8 @@ newtype RefineImportsResult = RefineImportsResult
 instance Show RefineImportsResult where show _ = "<refineImportsResult>"
 instance NFData RefineImportsResult where rnf = rwhnf
 
-refineImportsRule :: Recorder Log -> Rules ()
-refineImportsRule recorder = define (cmap LogShake recorder) $ \RefineImports nfp -> do
+refineImportsRule :: Recorder (WithPriority Log) -> Rules ()
+refineImportsRule recorder = define (cmapWithPrio LogShake recorder) $ \RefineImports nfp -> do
   -- Get the typechecking artifacts from the module
   tmr <- use TypeCheck nfp
   -- We also need a GHC session with all the dependencies

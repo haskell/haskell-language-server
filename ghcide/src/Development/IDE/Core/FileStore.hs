@@ -23,7 +23,7 @@ module Development.IDE.Core.FileStore(
     isWatchSupported,
     registerFileWatches,
     Log(..)
-    , logToPriority) where
+    ) where
 
 import           Control.Concurrent.STM.Stats                 (STM, atomically,
                                                                modifyTVar')
@@ -41,8 +41,7 @@ import qualified Data.Text                                    as T
 import           Data.Time
 import           Data.Time.Clock.POSIX
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Shake                   hiding (Log,
-                                                               logToPriority)
+import           Development.IDE.Core.Shake                   hiding (Log)
 import           Development.IDE.GHC.Orphans                  ()
 import           Development.IDE.Graph
 import           Development.IDE.Import.DependencyInformation
@@ -70,9 +69,11 @@ import           Data.List                                    (foldl')
 import qualified Data.Text                                    as Text
 import           Development.IDE.Core.IdeConfiguration        (isWorkspaceFile)
 import qualified Development.IDE.Core.Shake                   as Shake
-import           Development.IDE.Types.Logger                 (Recorder, cmap,
+import           Development.IDE.Types.Logger                 (Priority (Info),
+                                                               Recorder,
+                                                               WithPriority,
+                                                               cmapWithPrio,
                                                                logWith)
-import qualified Development.IDE.Types.Logger                 as Logger
 import           Language.LSP.Server                          hiding
                                                               (getVirtualFile)
 import qualified Language.LSP.Server                          as LSP
@@ -106,12 +107,6 @@ instance Pretty Log where
       <+> pretty (fmap (fmap show) reverseDepPaths)
     LogShake log -> pretty log
 
-logToPriority :: Log -> Logger.Priority
-logToPriority = \case
-  LogCouldNotIdentifyReverseDeps{} -> Logger.Info
-  LogTypeCheckingReverseDeps{}     -> Logger.Info
-  LogShake log                     -> Shake.logToPriority log
-
 makeVFSHandle :: IO VFSHandle
 makeVFSHandle = do
     vfsVar <- newVar (1, Map.empty)
@@ -133,8 +128,8 @@ makeLSPVFSHandle lspEnv = VFSHandle
     , setVirtualFileContents = Nothing
    }
 
-addWatchedFileRule :: Recorder Log -> (NormalizedFilePath -> Action Bool) -> Rules ()
-addWatchedFileRule recorder isWatched = defineNoDiagnostics (cmap LogShake recorder) $ \AddWatchedFile f -> do
+addWatchedFileRule :: Recorder (WithPriority Log) -> (NormalizedFilePath -> Action Bool) -> Rules ()
+addWatchedFileRule recorder isWatched = defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \AddWatchedFile f -> do
   isAlreadyWatched <- isWatched f
   isWp <- isWorkspaceFile f
   if isAlreadyWatched then pure (Just True) else
@@ -146,8 +141,8 @@ addWatchedFileRule recorder isWatched = defineNoDiagnostics (cmap LogShake recor
             Nothing -> pure $ Just False
 
 
-getModificationTimeRule :: Recorder Log -> VFSHandle -> Rules ()
-getModificationTimeRule recorder vfs = defineEarlyCutoff (cmap LogShake recorder) $ Rule $ \(GetModificationTime_ missingFileDiags) file ->
+getModificationTimeRule :: Recorder (WithPriority Log) -> VFSHandle -> Rules ()
+getModificationTimeRule recorder vfs = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \(GetModificationTime_ missingFileDiags) file ->
     getModificationTimeImpl vfs missingFileDiags file
 
 getModificationTimeImpl :: VFSHandle
@@ -233,8 +228,8 @@ modificationTime :: FileVersion -> Maybe UTCTime
 modificationTime VFSVersion{}             = Nothing
 modificationTime (ModificationTime posix) = Just $ posixSecondsToUTCTime posix
 
-getFileContentsRule :: Recorder Log -> VFSHandle -> Rules ()
-getFileContentsRule recorder vfs = define (cmap LogShake recorder) $ \GetFileContents file -> getFileContentsImpl vfs file
+getFileContentsRule :: Recorder (WithPriority Log) -> VFSHandle -> Rules ()
+getFileContentsRule recorder vfs = define (cmapWithPrio LogShake recorder) $ \GetFileContents file -> getFileContentsImpl vfs file
 
 getFileContentsImpl
     :: VFSHandle
@@ -272,7 +267,7 @@ getFileContents f = do
             pure $ posixSecondsToUTCTime posix
     return (modTime, txt)
 
-fileStoreRules :: Recorder Log -> VFSHandle -> (NormalizedFilePath -> Action Bool) -> Rules ()
+fileStoreRules :: Recorder (WithPriority Log) -> VFSHandle -> (NormalizedFilePath -> Action Bool) -> Rules ()
 fileStoreRules recorder vfs isWatched = do
     addIdeGlobal vfs
     getModificationTimeRule recorder vfs
@@ -281,7 +276,7 @@ fileStoreRules recorder vfs isWatched = do
 
 -- | Note that some buffer for a specific file has been modified but not
 -- with what changes.
-setFileModified :: Recorder Log
+setFileModified :: Recorder (WithPriority Log)
                 -> IdeState
                 -> Bool -- ^ Was the file saved?
                 -> NormalizedFilePath
@@ -301,18 +296,18 @@ setFileModified recorder state saved nfp = do
     when checkParents $
       typecheckParents recorder state nfp
 
-typecheckParents :: Recorder Log -> IdeState -> NormalizedFilePath -> IO ()
+typecheckParents :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> IO ()
 typecheckParents recorder state nfp = void $ shakeEnqueue (shakeExtras state) parents
   where parents = mkDelayedAction "ParentTC" L.Debug (typecheckParentsAction recorder nfp)
 
-typecheckParentsAction :: Recorder Log -> NormalizedFilePath -> Action ()
+typecheckParentsAction :: Recorder (WithPriority Log) -> NormalizedFilePath -> Action ()
 typecheckParentsAction recorder nfp = do
     revs <- transitiveReverseDependencies nfp <$> useNoFile_ GetModuleGraph
     let log = logWith recorder
     case revs of
-      Nothing -> log $ LogCouldNotIdentifyReverseDeps nfp
+      Nothing -> log Info $ LogCouldNotIdentifyReverseDeps nfp
       Just rs -> do
-        log $ LogTypeCheckingReverseDeps nfp revs
+        log Info $ LogTypeCheckingReverseDeps nfp revs
         void $ uses GetModIface rs
 
 -- | Note that some keys have been modified and restart the session

@@ -25,7 +25,7 @@ import           Development.IDE.Types.Logger      (Logger (Logger),
                                                     LoggingColumn (DataColumn, PriorityColumn),
                                                     Recorder (Recorder),
                                                     WithPriority (WithPriority, priority),
-                                                    cfilter, cmap,
+                                                    cfilter, cmapWithPrio,
                                                     makeDefaultStderrRecorder,
                                                     priorityToHsLoggerPriority)
 import qualified Development.IDE.Types.Logger      as Logger
@@ -52,14 +52,8 @@ instance Pretty Log where
     LogRules log   -> pretty log
     LogGhcIde log  -> pretty log
 
-logToPriority :: Log -> Logger.Priority
-logToPriority = \case
-  LogIDEMain log -> IDEMain.logToPriority log
-  LogRules log   -> Rules.logToPriority log
-  LogGhcIde log  -> GhcIde.logToPriority log
-
-logToDocWithPriority :: Log -> WithPriority (Doc a)
-logToDocWithPriority log = WithPriority (logToPriority log) (pretty log)
+logToDoc :: Log -> Doc a
+logToDoc = pretty
 
 ghcideVersion :: IO String
 ghcideVersion = do
@@ -76,10 +70,10 @@ main :: IO ()
 main = withTelemetryLogger $ \telemetryLogger -> do
     -- stderr recorder just for plugin cli commands
     pluginCliRecorder <-
-      cmap logToDocWithPriority
+      cmapWithPrio logToDoc
       <$> makeDefaultStderrRecorder (Just [PriorityColumn, DataColumn]) (priorityToHsLoggerPriority Info)
 
-    let hlsPlugins = pluginDescToIdePlugins (GhcIde.descriptors (cmap LogGhcIde pluginCliRecorder))
+    let hlsPlugins = pluginDescToIdePlugins (GhcIde.descriptors (cmapWithPrio LogGhcIde pluginCliRecorder))
     -- WARNING: If you write to stdout before runLanguageServer
     --          then the language server will not work
     Arguments{..} <- getArguments hlsPlugins
@@ -104,21 +98,21 @@ main = withTelemetryLogger $ \telemetryLogger -> do
     let logger = Logger $ \p m -> logger_ (WithPriority p (pretty m))
 
     let recorder = docWithFilteredPriorityRecorder
-                 & cmap logToDocWithPriority
+                 & cmapWithPrio logToDoc
 
     let arguments =
           if argsTesting
-          then IDEMain.testing (cmap LogIDEMain recorder) logger
-          else IDEMain.defaultArguments (cmap LogIDEMain recorder) logger
+          then IDEMain.testing (cmapWithPrio LogIDEMain recorder) logger
+          else IDEMain.defaultArguments (cmapWithPrio LogIDEMain recorder) logger
 
-    IDEMain.defaultMain (cmap LogIDEMain recorder) arguments
+    IDEMain.defaultMain (cmapWithPrio LogIDEMain recorder) arguments
         { IDEMain.argsProjectRoot = Just argsCwd
         , IDEMain.argCommand = argsCommand
         , IDEMain.argsLogger = IDEMain.argsLogger arguments <> pure telemetryLogger
 
         , IDEMain.argsRules = do
             -- install the main and ghcide-plugin rules
-            mainRule (cmap LogRules recorder) def
+            mainRule (cmapWithPrio LogRules recorder) def
             -- install the kick action, which triggers a typecheck on every
             -- Shake database restart, i.e. on every user edit.
             unless argsDisableKick $

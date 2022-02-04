@@ -53,7 +53,7 @@ import qualified Data.Text.Lazy                  as TL
 import qualified Data.Text.Lazy.Encoding         as TL
 import           Development.IDE                 (IdeState)
 import           Development.IDE.Graph           (ShakeOptions (shakeThreads))
-import           Development.IDE.Main            hiding (Log, logToPriority)
+import           Development.IDE.Main            hiding (Log)
 import qualified Development.IDE.Main            as Ghcide
 import qualified Development.IDE.Main            as IDEMain
 import           Development.IDE.Plugin.Test     (TestRequest (GetBuildKeysBuilt, WaitForIdeRule, WaitForShakeQueue),
@@ -63,7 +63,7 @@ import           Development.IDE.Types.Logger    (Logger (Logger),
                                                   Priority (Debug),
                                                   Recorder (Recorder, logger_),
                                                   WithPriority (WithPriority, priority),
-                                                  cfilter, cmap,
+                                                  cfilter, cmapWithPrio,
                                                   makeDefaultStderrRecorder)
 import           Development.IDE.Types.Options
 import           GHC.IO.Handle
@@ -100,12 +100,8 @@ instance Pretty Log where
   pretty = \case
     LogIDEMain log -> pretty log
 
-logToPriority :: Log -> Priority
-logToPriority = \case
-  LogIDEMain log -> IDEMain.logToPriority log
-
-logToDocWithPriority :: Log -> WithPriority (Doc a)
-logToDocWithPriority log = WithPriority (logToPriority log) (pretty log)
+logToDoc :: Log -> Doc a
+logToDoc = pretty
 
 -- | Run 'defaultMainWithRerun', limiting each single test case running at most 10 minutes
 defaultTestRunner :: TestTree -> IO ()
@@ -205,9 +201,9 @@ runSessionWithServer' plugins conf sconf caps root s = withLock lock $ keepCurre
 
     logger = Logger $ \p m -> logger_ (WithPriority p (pretty m))
 
-    recorder = cmap logToDocWithPriority docWithFilteredPriorityRecorder
+    recorder = cmapWithPrio logToDoc docWithFilteredPriorityRecorder
 
-    arguments@Arguments{ argsHlsPlugins, argsIdeOptions, argsLogger } = defaultArguments (cmap LogIDEMain recorder) logger
+    arguments@Arguments{ argsHlsPlugins, argsIdeOptions, argsLogger } = defaultArguments (cmapWithPrio LogIDEMain recorder) logger
 
     hlsPlugins =
       idePluginsToPluginDesc argsHlsPlugins
@@ -224,7 +220,7 @@ runSessionWithServer' plugins conf sconf caps root s = withLock lock $ keepCurre
   server <-
     async $
       Ghcide.defaultMain
-        (cmap LogIDEMain recorder)
+        (cmapWithPrio LogIDEMain recorder)
         arguments
           { argsHandleIn = pure inR
           , argsHandleOut = pure outW

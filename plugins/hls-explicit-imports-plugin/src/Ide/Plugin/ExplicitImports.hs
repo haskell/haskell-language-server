@@ -15,7 +15,6 @@ module Ide.Plugin.ExplicitImports
   , extractMinimalImports
   , within
   , Log(..)
-  , logToPriority
   ) where
 
 import           Control.DeepSeq
@@ -54,18 +53,14 @@ instance Pretty Log where
   pretty = \case
     LogShake log -> pretty log
 
-logToPriority :: Log -> Logger.Priority
-logToPriority = \case
-  LogShake log -> Shake.logToPriority log
-
 -- | The "main" function of a plugin
-descriptor :: Recorder Log -> PluginId -> PluginDescriptor IdeState
+descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder =
     -- (almost) no one wants to see an explicit import list for Prelude
     descriptorForModules recorder (/= moduleName pRELUDE)
 
 descriptorForModules
-    :: Recorder Log
+    :: Recorder (WithPriority Log)
     -> (ModuleName -> Bool)
       -- ^ Predicate to select modules that will be annotated
     -> PluginId
@@ -204,8 +199,8 @@ exportedModuleStrings ParsedModule{pm_parsed_source = L _ HsModule{..}}
     = map prettyPrint exports
 exportedModuleStrings _ = []
 
-minimalImportsRule :: Recorder Log -> Rules ()
-minimalImportsRule recorder = define (cmap LogShake recorder) $ \MinimalImports nfp -> do
+minimalImportsRule :: Recorder (WithPriority Log) -> Rules ()
+minimalImportsRule recorder = define (cmapWithPrio LogShake recorder) $ \MinimalImports nfp -> do
   -- Get the typechecking artifacts from the module
   tmr <- use TypeCheck nfp
   -- We also need a GHC session with all the dependencies

@@ -11,7 +11,7 @@ module Development.IDE.Plugin.TypeLenses (
   GetGlobalBindingTypeSigs (..),
   GlobalBindingTypeSigsResult (..),
   Log(..)
-, logToPriority) where
+  ) where
 
 import           Control.Concurrent.STM.Stats        (atomically)
 import           Control.DeepSeq                     (rwhnf)
@@ -43,8 +43,8 @@ import           Development.IDE.Types.Location      (Position (Position, _chara
                                                       Range (Range, _end, _start),
                                                       toNormalizedFilePath',
                                                       uriToFilePath')
-import           Development.IDE.Types.Logger        (Recorder, cmap)
-import qualified Development.IDE.Types.Logger        as Logger
+import           Development.IDE.Types.Logger        (Recorder, WithPriority,
+                                                      cmapWithPrio)
 import           GHC.Generics                        (Generic)
 import           Ide.Plugin.Config                   (Config)
 import           Ide.Plugin.Properties
@@ -79,14 +79,10 @@ instance Pretty Log where
   pretty = \case
     LogShake log -> pretty log
 
-logToPriority :: Log -> Logger.Priority
-logToPriority = \case
-  LogShake log -> Shake.logToPriority log
-
 typeLensCommandId :: T.Text
 typeLensCommandId = "typesignature.add"
 
-descriptor :: Recorder Log -> PluginId -> PluginDescriptor IdeState
+descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId =
   (defaultPluginDescriptor plId)
     { pluginHandlers = mkPluginHandler STextDocumentCodeLens codeLensProvider
@@ -254,9 +250,9 @@ instance NFData GlobalBindingTypeSigsResult where
 
 type instance RuleResult GetGlobalBindingTypeSigs = GlobalBindingTypeSigsResult
 
-rules :: Recorder Log -> Rules ()
+rules :: Recorder (WithPriority Log) -> Rules ()
 rules recorder = do
-  define (cmap LogShake recorder) $ \GetGlobalBindingTypeSigs nfp -> do
+  define (cmapWithPrio LogShake recorder) $ \GetGlobalBindingTypeSigs nfp -> do
     tmr <- use TypeCheck nfp
     -- we need session here for tidying types
     hsc <- use GhcSession nfp

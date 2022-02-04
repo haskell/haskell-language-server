@@ -2,7 +2,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TypeFamilies  #-}
 {-# LANGUAGE TypeOperators #-}
-module Ide.Plugin.AlternateNumberFormat (descriptor, Log(..), logToPriority) where
+module Ide.Plugin.AlternateNumberFormat (descriptor, Log(..)) where
 
 import           Control.Lens                    ((^.))
 import           Control.Monad.Except            (ExceptT, MonadIO, liftIO)
@@ -37,11 +37,7 @@ instance Pretty Log where
   pretty = \case
     LogShake log -> pretty log
 
-logToPriority :: Log -> Logger.Priority
-logToPriority = \case
-  LogShake log -> Shake.logToPriority log
-
-descriptor :: Recorder Log -> PluginId -> PluginDescriptor IdeState
+descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId)
     { pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionHandler
     , pluginRules = collectLiteralsRule recorder
@@ -65,8 +61,8 @@ instance Show CollectLiteralsResult where
 
 instance NFData CollectLiteralsResult
 
-collectLiteralsRule :: Recorder Log -> Rules ()
-collectLiteralsRule recorder = define (cmap LogShake recorder) $ \CollectLiterals nfp -> do
+collectLiteralsRule :: Recorder (WithPriority Log) -> Rules ()
+collectLiteralsRule recorder = define (cmapWithPrio LogShake recorder) $ \CollectLiterals nfp -> do
     pm <- use GetParsedModule nfp
     -- get the current extensions active and transform them into FormatTypes
     let fmts = getFormatTypes <$> pm

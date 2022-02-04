@@ -11,7 +11,7 @@
 module Development.IDE.LSP.LanguageServer
     ( runLanguageServer
     , Log(..)
-    , logToPriority) where
+    ) where
 
 import           Control.Concurrent.STM
 import           Control.Monad.Extra
@@ -32,11 +32,9 @@ import           UnliftIO.Concurrent
 import           UnliftIO.Directory
 import           UnliftIO.Exception
 
-import           Development.IDE.Core.FileStore        hiding (Log,
-                                                        logToPriority)
+import           Development.IDE.Core.FileStore        hiding (Log)
 import           Development.IDE.Core.IdeConfiguration
-import           Development.IDE.Core.Shake            hiding (Log,
-                                                        logToPriority)
+import           Development.IDE.Core.Shake            hiding (Log)
 import           Development.IDE.Core.Tracing
 import           Development.IDE.LSP.HoverDefinition
 import           Development.IDE.Types.Logger
@@ -76,15 +74,6 @@ instance Pretty Log where
       "Cancelled request" <+> Prettyprinter.viaShow requestId
     LogSession log -> pretty log
 
-logToPriority :: Log -> Logger.Priority
-logToPriority = \case
-  LogRegisteringIdeConfig{}          -> Logger.Info
-  LogReactorThreadException{}        -> Logger.Error
-  LogReactorMessageActionException{} -> Logger.Error
-  LogReactorThreadStopped            -> Logger.Info
-  LogCancelledRequest{}              -> Logger.Debug
-  LogSession log                     -> Session.logToPriority log
-
 issueTrackerUrl :: T.Text
 issueTrackerUrl = "https://github.com/haskell/haskell-language-server/issues"
 
@@ -93,7 +82,7 @@ newtype WithHieDbShield = WithHieDbShield WithHieDb
 
 runLanguageServer
     :: forall config. (Show config)
-    => Recorder Log
+    => Recorder (WithPriority Log)
     -> LSP.Options
     -> Handle -- input
     -> Handle -- output
@@ -172,7 +161,7 @@ runLanguageServer recorder options inH outH getHieDbLoc defaultConfig onConfigur
             serverDefinition
 
     where
-        log :: Log -> IO ()
+        log :: Logger.Priority -> Log -> IO ()
         log = logWith recorder
 
         handleInit
@@ -193,11 +182,11 @@ runLanguageServer recorder options inH outH getHieDbLoc defaultConfig onConfigur
 
             let initConfig = parseConfiguration params
 
-            log $ LogRegisteringIdeConfig initConfig
+            log Info $ LogRegisteringIdeConfig initConfig
             registerIdeConfiguration (shakeExtras ide) initConfig
 
             let handleServerException (Left e) = do
-                    log $ LogReactorThreadException e
+                    log Error $ LogReactorThreadException e
                     sendErrorMessage e
                     exitClientMsg
                 handleServerException (Right _) = pure ()
@@ -210,7 +199,7 @@ runLanguageServer recorder options inH outH getHieDbLoc defaultConfig onConfigur
                         ]
 
                 exceptionInHandler e = do
-                    log $ LogReactorMessageActionException e
+                    log Error $ LogReactorMessageActionException e
                     sendErrorMessage e
 
                 checkCancelled _id act k =
@@ -223,14 +212,14 @@ runLanguageServer recorder options inH outH getHieDbLoc defaultConfig onConfigur
                             cancelOrRes <- race (waitForCancel _id) act
                             case cancelOrRes of
                                 Left () -> do
-                                    log $ LogCancelledRequest _id
+                                    log Debug $ LogCancelledRequest _id
                                     k $ ResponseError RequestCancelled "" Nothing
                                 Right res -> pure res
                         ) $ \(e :: SomeException) -> do
                             exceptionInHandler e
                             k $ ResponseError InternalError (T.pack $ show e) Nothing
             _ <- flip forkFinally handleServerException $ do
-                untilMVar lifetime $ runWithDb (cmap LogSession recorder) dbLoc $ \withHieDb hieChan -> do
+                untilMVar lifetime $ runWithDb (cmapWithPrio LogSession recorder) dbLoc $ \withHieDb hieChan -> do
                     putMVar dbMVar (WithHieDbShield withHieDb,hieChan)
                     forever $ do
                         msg <- readChan clientMsgChan
@@ -239,7 +228,7 @@ runLanguageServer recorder options inH outH getHieDbLoc defaultConfig onConfigur
                         case msg of
                             ReactorNotification act -> handle exceptionInHandler act
                             ReactorRequest _id act k -> void $ async $ checkCancelled _id act k
-                log LogReactorThreadStopped
+                log Info LogReactorThreadStopped
             pure $ Right (env,ide)
 
 

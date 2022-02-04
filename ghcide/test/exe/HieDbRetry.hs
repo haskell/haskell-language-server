@@ -12,7 +12,8 @@ import           Development.IDE.Session      (retryOnException,
                                                retryOnSqliteBusy)
 import qualified Development.IDE.Session      as Session
 import           Development.IDE.Types.Logger (Recorder (Recorder, logger_),
-                                               cmap)
+                                               WithPriority (WithPriority, payload),
+                                               cmapWithPrio)
 import qualified System.Random                as Random
 import           Test.Tasty                   (TestTree, testGroup)
 import           Test.Tasty.HUnit             (assertFailure, testCase, (@?=))
@@ -21,17 +22,17 @@ data Log
   = LogSession Session.Log
   deriving Show
 
-makeLogger :: Var [Log] -> Recorder Log
+makeLogger :: Var [Log] -> Recorder (WithPriority Log)
 makeLogger msgsVar =
   Recorder {
-    logger_ = \msg -> liftIO $ modifyVar msgsVar (\msgs -> pure (msg : msgs, ()))
+    logger_ = \WithPriority{ payload = msg } -> liftIO $ modifyVar msgsVar (\msgs -> pure (msg : msgs, ()))
   }
 
 rng :: Random.StdGen
 rng = Random.mkStdGen 0
 
-retryOnSqliteBusyForTest :: Recorder Log -> Int -> IO a -> IO a
-retryOnSqliteBusyForTest recorder maxRetryCount = retryOnException isErrorBusy (cmap LogSession recorder) 1 1 maxRetryCount rng
+retryOnSqliteBusyForTest :: Recorder (WithPriority Log) -> Int -> IO a -> IO a
+retryOnSqliteBusyForTest recorder maxRetryCount = retryOnException isErrorBusy (cmapWithPrio LogSession recorder) 1 1 maxRetryCount rng
 
 isErrorBusy :: SQLite.SQLError -> Maybe SQLite.SQLError
 isErrorBusy e
@@ -122,7 +123,7 @@ tests = testGroup "RetryHieDb"
        let maxRetryCount = 6
        let logger = makeLogger logMsgsVar
 
-       result <- tryJust isErrorBusy (retryOnException isErrorBusy (cmap LogSession logger) maxDelay baseDelay maxRetryCount rng (throwIO errorBusy))
+       result <- tryJust isErrorBusy (retryOnException isErrorBusy (cmapWithPrio LogSession logger) maxDelay baseDelay maxRetryCount rng (throwIO errorBusy))
 
        case result of
          Left _ -> do
