@@ -51,29 +51,62 @@ workflow:
   script:
     - bash .gitlab/test.sh
 
+.aarch64-linux:
+  tags:
+    - aarch64-linux
+  image: "registry.gitlab.haskell.org/ghc/ci-images/aarch64-linux-deb10:$DOCKER_REV"
+
+.armv7-linux:
+  tags:
+    - armv7-linux
+  image: "registry.gitlab.haskell.org/ghc/ci-images/armv7-linux-deb10:$DOCKER_REV"
+
+.x86_64-linux-deb10:
+  tags:
+    - x86_64-linux
+  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-deb10:$DOCKER_REV"
+
+.x86_64-linux-deb9:
+  tags:
+    - x86_64-linux
+  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-deb9:$DOCKER_REV"
+
+.x86_64-linux-centos7:
+  tags:
+    - x86_64-linux
+  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-centos7:$DOCKER_REV"
+
+.x86_64-linux-fedora27:
+  tags:
+    - x86_64-linux
+  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-fedora27:$DOCKER_REV"
+
+.x86_64-linux-alpine:
+  tags:
+    - x86_64-linux
+  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-alpine3_12:$DOCKER_REV"
+
 
 ######################
 # aarch64 linux deb10
 ######################
 
 build-aarch64-linux-deb10:
-  extends: .build
+  extends:
+    - .build
+    - .aarch64-linux
   before_script:
     - sudo apt update
     - sudo apt install -y patchelf tree
-  tags:
-    - aarch64-linux
-  image: "registry.gitlab.haskell.org/ghc/ci-images/aarch64-linux-deb10:$DOCKER_REV"
   variables:
     ADD_CABAL_ARGS: ""
 
 tar-aarch64-linux-deb10:
-  extends: .artifacts
+  extends:
+    - .artifacts
+    - .aarch64-linux
   stage: tar
   needs: ["build-aarch64-linux-deb10"]
-  tags:
-    - aarch64-linux
-  image: "registry.gitlab.haskell.org/ghc/ci-images/aarch64-linux-deb10:$DOCKER_REV"
   script:
     - ./.gitlab/tar.sh
   variables:
@@ -81,11 +114,10 @@ tar-aarch64-linux-deb10:
     TARBALL_EXT: tar.xz
 
 test-aarch64-linux-deb10:
-  extends: .test
+  extends:
+    - .test
+    - .aarch64-linux
   needs: ["tar-aarch64-linux-deb10"]
-  tags:
-    - aarch64-linux
-  image: "registry.gitlab.haskell.org/ghc/ci-images/aarch64-linux-deb10:$DOCKER_REV"
   before_script:
     - sudo apt update
     - sudo apt install -y tree
@@ -96,23 +128,21 @@ test-aarch64-linux-deb10:
 ######################
 
 build-armv7-linux-deb10:
-  extends: .build
+  extends:
+    - .build
+    - .armv7-linux
   before_script:
     - sudo apt update
     - sudo apt install -y patchelf tree
-  tags:
-    - armv7-linux
-  image: "registry.gitlab.haskell.org/ghc/ci-images/armv7-linux-deb10:$DOCKER_REV"
   variables:
     ADD_CABAL_ARGS: ""
 
 tar-armv7-linux-deb10:
-  extends: .artifacts
+  extends:
+    - .artifacts
+    - .armv7-linux
   stage: tar
   needs: ["build-armv7-linux-deb10"]
-  tags:
-    - armv7-linux
-  image: "registry.gitlab.haskell.org/ghc/ci-images/armv7-linux-deb10:$DOCKER_REV"
   script:
     - ./.gitlab/tar.sh
   variables:
@@ -120,11 +150,10 @@ tar-armv7-linux-deb10:
     TARBALL_EXT: tar.xz
 
 test-armv7-linux-deb10:
-  extends: .test
+  extends:
+    - .test
+    - .armv7-linux
   needs: ["tar-armv7-linux-deb10"]
-  tags:
-    - armv7-linux
-  image: "registry.gitlab.haskell.org/ghc/ci-images/armv7-linux-deb10:$DOCKER_REV"
   before_script:
     - sudo apt update
     - sudo apt install -y tree
@@ -135,23 +164,21 @@ test-armv7-linux-deb10:
 ######################
 
 build-x86_64-linux-deb10:
-  extends: .build
+  extends:
+    - .build
+    - .x86_64-linux-deb10
   before_script:
     - sudo apt update
     - sudo apt install -y patchelf tree
-  tags:
-    - x86_64-linux
-  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-deb10:$DOCKER_REV"
   variables:
     ADD_CABAL_ARGS: "--enable-split-sections"
 
 tar-x86_64-linux-deb10:
-  extends: .artifacts
+  extends:
+    - .artifacts
+    - .x86_64-linux-deb10
   stage: tar
   needs: ["build-x86_64-linux-deb10"]
-  tags:
-    - x86_64-linux
-  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-deb10:$DOCKER_REV"
   script:
     - ./.gitlab/tar.sh
   variables:
@@ -159,11 +186,10 @@ tar-x86_64-linux-deb10:
     TARBALL_EXT: tar.xz
 
 test-x86_64-linux-deb10:
-  extends: .test
+  extends:
+    - .test
+    - .x86_64-linux-deb10
   needs: ["tar-x86_64-linux-deb10"]
-  tags:
-    - x86_64-linux
-  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-deb10:$DOCKER_REV"
   before_script:
     - sudo apt update
     - sudo apt install -y tree
@@ -173,23 +199,21 @@ test-x86_64-linux-deb10:
 ######################
 
 build-x86_64-linux-deb9:
-  extends: .build
+  extends:
+    - .build
+    - .x86_64-linux-deb9
   before_script:
     - sudo apt update
     - sudo apt install -y patchelf tree
-  tags:
-    - x86_64-linux
-  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-deb9:$DOCKER_REV"
   variables:
     ADD_CABAL_ARGS: "--enable-split-sections"
 
 tar-x86_64-linux-deb9:
-  extends: .artifacts
+  extends:
+    - .artifacts
+    - .x86_64-linux-deb9
   stage: tar
   needs: ["build-x86_64-linux-deb9"]
-  tags:
-    - x86_64-linux
-  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-deb9:$DOCKER_REV"
   script:
     - ./.gitlab/tar.sh
   variables:
@@ -197,11 +221,10 @@ tar-x86_64-linux-deb9:
     TARBALL_EXT: tar.xz
 
 test-x86_64-linux-deb9:
-  extends: .test
+  extends:
+    - .test
+    - .x86_64-linux-deb9
   needs: ["tar-x86_64-linux-deb9"]
-  tags:
-    - x86_64-linux
-  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-deb9:$DOCKER_REV"
   before_script:
     - sudo apt update
     - sudo apt install -y tree
@@ -211,23 +234,21 @@ test-x86_64-linux-deb9:
 ######################
 
 build-x86_64-linux-centos7:
-  extends: .build
+  extends:
+    - .build
+    - .x86_64-linux-centos7
   before_script:
     - sudo yum install -y epel-release
     - sudo yum install -y patchelf tree
-  tags:
-    - x86_64-linux
-  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-centos7:$DOCKER_REV"
   variables:
     ADD_CABAL_ARGS: "--enable-split-sections"
 
 tar-x86_64-linux-centos7:
-  extends: .artifacts
+  extends:
+    - .artifacts
+    - .x86_64-linux-centos7
   stage: tar
   needs: ["build-x86_64-linux-centos7"]
-  tags:
-    - x86_64-linux
-  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-centos7:$DOCKER_REV"
   script:
     - ./.gitlab/tar.sh
   variables:
@@ -235,11 +256,10 @@ tar-x86_64-linux-centos7:
     TARBALL_EXT: tar.xz
 
 test-x86_64-linux-centos7:
-  extends: .test
+  extends:
+    - .test
+    - .x86_64-linux-centos7
   needs: ["tar-x86_64-linux-centos7"]
-  tags:
-    - x86_64-linux
-  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-centos7:$DOCKER_REV"
   before_script:
     - sudo yum install -y tree
 
@@ -248,22 +268,20 @@ test-x86_64-linux-centos7:
 ######################
 
 build-x86_64-linux-fedora27:
-  extends: .build
+  extends:
+    - .build
+    - .x86_64-linux-fedora27
   before_script:
     - sudo dnf install -y patchelf tree
-  tags:
-    - x86_64-linux
-  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-fedora27:$DOCKER_REV"
   variables:
     ADD_CABAL_ARGS: "--enable-split-sections"
 
 tar-x86_64-linux-fedora27:
-  extends: .artifacts
+  extends:
+    - .artifacts
+    - .x86_64-linux-fedora27
   stage: tar
   needs: ["build-x86_64-linux-fedora27"]
-  tags:
-    - x86_64-linux
-  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-fedora27:$DOCKER_REV"
   script:
     - ./.gitlab/tar.sh
   variables:
@@ -271,11 +289,10 @@ tar-x86_64-linux-fedora27:
     TARBALL_EXT: tar.xz
 
 test-x86_64-linux-fedora27:
-  extends: .test
+  extends:
+    - .test
+    - .x86_64-linux-fedora27
   needs: ["tar-x86_64-linux-fedora27"]
-  tags:
-    - x86_64-linux
-  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-fedora27:$DOCKER_REV"
   before_script:
     - sudo dnf install -y tree
 
@@ -285,22 +302,20 @@ test-x86_64-linux-fedora27:
 ######################
 
 build-x86_64-linux-alpine:
-  extends: .build
-  tags:
-    - x86_64-linux
-  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-alpine3_12:$DOCKER_REV"
+  extends:
+    - .build
+    - .x86_64-linux-alpine
   before_script:
     - sudo apk add --no-cache tar zlib zlib-dev zlib-static bzip2 bzip2-dev bzip2-static gmp gmp-dev xz xz-dev ncurses-static patchelf findutils tree
   variables:
     ADD_CABAL_ARGS: "--enable-split-sections --enable-executable-static"
 
 tar-x86_64-linux-alpine:
-  extends: .artifacts
+  extends:
+    - .artifacts
+    - .x86_64-linux-alpine
   stage: tar
   needs: ["build-x86_64-linux-alpine"]
-  tags:
-    - x86_64-linux
-  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-alpine3_12:$DOCKER_REV"
   before_script:
     - sudo apk add --no-cache tar zlib zlib-dev zlib-static bzip2 bzip2-dev bzip2-static gmp gmp-dev xz xz-dev ncurses-static
   script:
@@ -310,11 +325,10 @@ tar-x86_64-linux-alpine:
     TARBALL_EXT: tar.xz
 
 test-x86_64-linux-alpine:
-  extends: .test
+  extends:
+    - .test
+    - .x86_64-linux-alpine
   needs: ["tar-x86_64-linux-alpine"]
-  tags:
-    - x86_64-linux
-  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-alpine3_12:$DOCKER_REV"
   before_script:
     - sudo apk add --no-cache tar zlib zlib-dev zlib-static bzip2 bzip2-dev bzip2-static gmp gmp-dev xz xz-dev ncurses-static tree
 
