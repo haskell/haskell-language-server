@@ -31,7 +31,8 @@ import           Development.IDE.Spans.Common
 import           System.Directory
 import           System.FilePath
 
-import           Language.LSP.Types              (filePathToUri, getUri)
+import           Language.LSP.Types             (filePathToUri, getUri)
+import qualified Data.Map                       as Map
 
 mkDocMap
   :: HscEnv
@@ -72,7 +73,7 @@ getDocumentationTryGhc env mod n = head <$> getDocumentationsTryGhc env mod [n]
 
 getDocumentationsTryGhc :: HscEnv -> Module -> [Name] -> IO [SpanDoc]
 getDocumentationsTryGhc env mod names = do
-  res <- catchSrcErrors (hsc_dflags env) "docs" $ (fmap . fmap) snd $ getDocsBatch env mod names
+  res <- catchSrcErrors (hsc_dflags env) "docs" $ (fmap . fmap) snd $ fmap Map.toList $ getDocsBatch env mod names
   case res of
       Left _    -> return []
       Right res -> zipWithM unwrap res names
