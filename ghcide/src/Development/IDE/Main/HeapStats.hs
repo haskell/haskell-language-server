@@ -73,3 +73,4 @@ withHeapStats l k = do
     else do
       logWith l Info LogHeapStatsDisabled
       k
+
