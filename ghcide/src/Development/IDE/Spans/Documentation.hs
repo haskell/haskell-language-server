@@ -18,7 +18,8 @@ import           Data.Bool                      (bool)
 import           Data.Either
 import           Data.Foldable
 import           Data.List.Extra
-import qualified Data.Map                        as M
+import qualified Data.Map                       as ML
+import qualified Data.Map.Strict                as MS
 import           Data.Maybe
 import qualified Data.Set                        as S
 import qualified Data.Text                       as T
@@ -60,7 +61,7 @@ mkDocMap env rm this_mod =
         pure $ maybe mapToTyThing (extendNameEnv mapToTyThing n) kind
       | otherwise = pure mapToTyThing
     names = rights $ S.toList idents
-    idents = M.keysSet rm
+    idents = ML.keysSet rm
     mod = tcg_mod this_mod
 
 lookupKind :: HscEnv -> Module -> Name -> IO (Maybe TyThing)
@@ -104,12 +105,12 @@ getDocumentationTryGhc env mod name = do
       Left _    -> pure emptySpanDoc
       Right res -> uncurry (intoSpanDoc env) res
 
-getDocumentationsTryGhc :: HscEnv -> Module -> [Name] -> IO (M.Map Name SpanDoc)
+getDocumentationsTryGhc :: HscEnv -> Module -> [Name] -> IO (MS.Map Name SpanDoc)
 getDocumentationsTryGhc env mod names = do
   res <- getDocsBatch env mod names
   case res of
     Left _    -> return mempty
-    Right res -> sequenceA $ M.mapWithKey (intoSpanDoc env) res
+    Right res -> sequenceA $ MS.mapWithKey (intoSpanDoc env) res
 
 getDocumentation
  :: HasSrcSpan name

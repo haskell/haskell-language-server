@@ -84,7 +84,7 @@ import qualified Data.DList                        as DL
 import           Data.IORef
 import qualified Data.IntMap.Strict                as IntMap
 import           Data.List.Extra
-import qualified Data.Map.Strict                   as Map
+import qualified Data.Map.Strict                   as MS
 import           Data.Maybe
 import qualified Data.Text                         as T
 import           Data.Time                         (UTCTime, getCurrentTime)
@@ -93,7 +93,6 @@ import           System.Directory
 import           System.FilePath
 import           System.IO.Extra                   (fixIO, newTempFileWithin)
 
--- GHC API imports
 -- GHC API imports
 import           GHC                               (GetDocsFailure (..),
                                                     mgModSummaries,
@@ -108,6 +107,7 @@ import           Data.Functor
 import qualified Data.HashMap.Strict               as HashMap
 import           Data.IntMap                       (IntMap)
 import           Data.Map                          (Map)
+import qualified Data.Map                          as ML
 import           Data.Tuple.Extra                  (dupe)
 import           Data.Either.Extra                 (maybeToEither)
 import           Data.Unique                       as Unique
@@ -751,7 +751,7 @@ mergeEnvs env extraModSummaries extraMods envs = do
     -- To work around this, we coerce to the underlying type
     -- To remove this, I plan to upstream the missing Monoid instance
         concatFC :: [FinderCache] -> FinderCache
-        concatFC = unsafeCoerce (mconcat @(Map InstalledModule InstalledFindResult))
+        concatFC = unsafeCoerce (mconcat @(ML.Map InstalledModule InstalledFindResult))
 
 withBootSuffix :: HscSource -> ModLocation -> ModLocation
 withBootSuffix HsBootFile = addBootSuffixLocnOut
@@ -1033,7 +1033,7 @@ getDocsNonInteractive'
         (Env TcGblEnv TcLclEnv)
         (Name,
         Either
-            GetDocsFailure (Maybe HsDocString, Maybe (Map.Map Int HsDocString)))
+            GetDocsFailure (Maybe HsDocString, Maybe (MS.Map Int HsDocString)))
 getDocsNonInteractive' name =
     case nameModule_maybe name of
         Nothing -> return (name, Left $ NameHasNoModule name)
@@ -1051,12 +1051,12 @@ getDocsNonInteractive' name =
                         RealSrcLoc {}   -> False
                         UnhelpfulLoc {} -> True
             pure . (name,) $
-                if isNothing mb_doc_hdr && Map.null dmap && Map.null amap
+                if isNothing mb_doc_hdr && MS.null dmap && MS.null amap
                     then Left $ NoDocsInIface mod isNameCompiled
-                    else Right (Map.lookup name dmap, Map.lookup name amap)
+                    else Right (MS.lookup name dmap, MS.lookup name amap)
 
 -- | Non-interactive modification of 'GHC.Runtime.Eval.getDocs'.
-getDocsNonInteractive :: HscEnv -> Module -> Name -> IO (Either GHC.ErrorMessages (Name, Either GetDocsFailure (Maybe HsDocString, Maybe (Map.Map Int HsDocString))))
+getDocsNonInteractive :: HscEnv -> Module -> Name -> IO (Either GHC.ErrorMessages (Name, Either GetDocsFailure (Maybe HsDocString, Maybe (MS.Map Int HsDocString))))
 getDocsNonInteractive hsc_env mod name = do
     ((_warns,errs), res) <- initTypecheckEnv hsc_env mod $ getDocsNonInteractive' name
     pure $ maybeToEither errs res
@@ -1068,10 +1068,10 @@ getDocsBatch
   -> Module  -- ^ a moudle where the names are in scope
   -> [Name]
   --  2021-11-18: NOTE: Map Int would become IntMap if next GHCs.
-  -> IO (Either GHC.ErrorMessages (Map.Map Name (Either GetDocsFailure (Maybe HsDocString, Maybe (Map.Map Int HsDocString)))))
+  -> IO (Either GHC.ErrorMessages (MS.Map Name (Either GetDocsFailure (Maybe HsDocString, Maybe (MS.Map Int HsDocString)))))
   -- ^ Return a 'Map' of 'Name's to 'Either' (no docs messages) (general doc body & arg docs)
 getDocsBatch hsc_env mod names = do
-    ((_warns,errs), res) <- initTypecheckEnv hsc_env mod $ Map.fromList <$> traverse getDocsNonInteractive' names
+    ((_warns,errs), res) <- initTypecheckEnv hsc_env mod $ MS.fromList <$> traverse getDocsNonInteractive' names
     pure $ maybeToEither errs res
 
 -- | Non-interactive, batch version of 'InteractiveEval.lookupNames'.
