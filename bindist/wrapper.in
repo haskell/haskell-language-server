@@ -5,90 +5,168 @@ executablename="@@EXE_NAME@@"
 GHC_VERSION="@@GHC_VERSION@@"
 ABI_HASHES="@@ABI_HASHES@@"
 
-fail_ghc_pkg() {
-	echo >&2 "Could not find a ghc-pkg binary (found: $1)!"
-	echo >&2 "Your GHC installation may be borked."
-	echo >&2 "Consider installing GHC via ghcup or compile HLS from source."
-	echo >&2 "exiting..."
-	exit 42
+debug_msg() {
+	if [ -n "$HLS_WRAPPER_DEBUG" ] ; then
+		echo >&2 "$1"
+	fi
 }
 
-fail_libdir() {
-	echo >&2 "Could not find a GHC installation!"
-	echo >&2 "Consider setting GHC_LIBDIR env variable to the top-level directory of GHC shipped libraries (version ${GHC_VERSION})."
-	echo >&2 "This is needed to find dynamic libraries."
-	echo >&2 "exiting..."
-	exit 42
+err_ghc_pkg() {
+	debug_msg >&2 "Could not find a ghc-pkg binary (found: $1)!"
+	debug_msg >&2 "Trying other methods..."
 }
 
-fail_abi() {
-	echo >&2 "GHC ABIs don't match!"
-	echo >&2 "This means you're running an incompatible GHC and HLS won't work correctly."
-	echo >&2 "Consider installing GHC via ghcup or compile HLS from source."
-	echo >&2 ""
-	echo >&2 "Expected: ${ABI_HASHES}"
-	echo >&2 "Got:      $1"
-	echo >&2 "exiting..."
-	exit 42
+err_abi() {
+	debug_msg >&2 "GHC ABIs don't match!"
+	debug_msg >&2 ""
+	debug_msg >&2 "Expected: ${ABI_HASHES}"
+	debug_msg >&2 "Got:      $1"
+	debug_msg >&2 "Trying other methods..."
+}
+
+err_ver() {
+	debug_msg >&2 "GHC versions don't match!"
+	debug_msg >&2 ""
+	debug_msg >&2 "Expected: ${GHC_VERSION}"
+	debug_msg >&2 "Got:      $1"
+	debug_msg >&2 "Trying other methods..."
+}
+
+# Check the version of GHC and the ABI.
+check_ghc() {
+	{ [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ] || [ -z "$4" ] ;} && debug_msg "internal error: not enough arguments to check_ghc: 1:$1,2:$2,3:$3,4:$4" && return 4
+
+	debug_msg >&2 "Trying method $4"
+
+	check_ghc_libdir=$1
+	check_ghc_bin=$2
+	GHC_PKG=$3
+	check_ghc_ver="$("${check_ghc_bin}" --numeric-version 2>/dev/null)"
+
+	# check version
+	if [ "${check_ghc_ver}" = "${GHC_VERSION}" ] ; then
+		# check ABI
+		if "${GHC_PKG}" --version >/dev/null ; then
+			:
+		elif "${GHC_PKG}-${GHC_VERSION}" --version >/dev/null ; then
+			GHC_PKG=${GHC_PKG}-${GHC_VERSION}
+		else
+			err_ghc_pkg "${GHC_PKG}"
+			unset GHC_LIBDIR
+			return 1
+		fi
+		PKGCONF="${check_ghc_libdir}/package.conf.d"
+		MY_ABI_HASHES="$(for dep in $("${GHC_PKG}" --global --global-package-db "$PKGCONF" list --simple-output) ; do "${GHC_PKG}" --global --global-package-db "$PKGCONF" field "${dep}" abi --simple-output ; done | tr '\n' ' ' | xargs)"
+		if [ "${ABI_HASHES}" != "${MY_ABI_HASHES}" ] ; then
+			err_abi "${MY_ABI_HASHES}"
+			return 3
+		fi
+		unset PKGCONF
+	else
+		err_ver "${check_ghc_ver}"
+		unset GHC_LIBDIR
+		return 2
+	fi
+
+	unset check_ghc_libdir check_ghc_bindir GHC_PKG check_ghc_ver
+}
+
+# Infer ghc-pkg from the given ghc path. Doesn't check for existence of any
+# components.
+infer_ghc_pkg() {
+	infer_ghc_path=$1
+	infer_ghc_bin=${infer_ghc_path##**/}
+	infer_ghc_ver_suffix=${infer_ghc_bin#ghc}
+	path_prefix="$(dirname "${infer_ghc_path}")"
+
+	if [ "${path_prefix}" = "." ] ; then
+		echo "ghc-pkg${infer_ghc_ver_suffix}"
+	elif [ "${path_prefix}" = "/" ] ; then
+		echo "${path_prefix}ghc-pkg${infer_ghc_ver_suffix}"
+	else
+		echo "${path_prefix}/ghc-pkg${infer_ghc_ver_suffix}"
+	fi
+	unset infer_ghc_path infer_ghc_bin infer_ghc_ver_suffix path_prefix
+}
+
+# Get the bin dir from GHCs internal libdir. This is wobbly.
+ghc_bin_from_libdir() {
+	if [ -e "$1"/bin/ghc ] ; then
+		echo "$1"/bin/ghc
+	elif [ -e "$1"/bin/ghc-${GHC_VERSION} ] ; then
+		echo "$1"/bin/ghc-${GHC_VERSION}
+	elif [ -e "$1"/../bin/ghc ] ; then
+		echo "$1"/../bin/ghc
+	elif [ -e "$1"/../bin/ghc-${GHC_VERSION} ] ; then
+		echo "$1"/../bin/ghc-${GHC_VERSION}
+	fi
 }
 
 # try GHC_LIBDIR from the environment (e.g. user set it)
-if [ -n "${GHC_LIBDIR}" ] ; then
+if [ -n "${GHC_LIBDIR}" ] &&
+	check_ghc "${GHC_LIBDIR}" "$(ghc_bin_from_libdir "${GHC_LIBDIR}")" "$(infer_ghc_pkg "$(ghc_bin_from_libdir "${GHC_LIBDIR}")")" "GHC_LIBDIR"
+then
 	:
-# try hls-wrapper --print-libdir
-elif "${exedir}"/haskell-language-server-wrapper --version >/dev/null 2>/dev/null ; then
-	GHC_LIBDIR="$("${exedir}"/haskell-language-server-wrapper --print-libdir)" || unset GHC_LIBDIR
-fi
-
-if [ -z "${GHC_LIBDIR}" ] ; then
-# try ghcup, if available
-	if command -v ghcup >/dev/null ; then
-		GHC_LIBDIR="$(ghcup whereis -d ghc ${GHC_VERSION})/../lib/ghc-${GHC_VERSION}/" || unset GHC_LIBDIR
-	fi
-fi
-
-# if above failed, try to examine ghc in PATH
-if [ -z "${GHC_LIBDIR}" ] ; then
-	if [ -n "${GHC_BIN}" ] && command -v "${GHC_BIN}" >/dev/null ; then
-		ghc_bin=${GHC_BIN}
-	elif command -v ghc-${GHC_VERSION} >/dev/null ; then
-		ghc_bin=ghc-${GHC_VERSION}
-	elif command -v ghc >/dev/null ; then
-		ghc_bin=ghc
-	else
-		fail_libdir
-	fi
-
-	GHC_LIBDIR=$(${ghc_bin} --print-libdir)
-	ghc_ver="$(${ghc_bin} --numeric-version)"
-	if [ "${GHC_VERSION}" != "${ghc_ver}" ] ; then
-		echo >&2 "Need GHC version ${GHC_VERSION}, got ${ghc_ver}... trying anyway"
-	fi
-	unset ghc_ver ghc_bin
-fi
-
-if [ -z "${GHC_LIBDIR}" ] ; then
-	fail_libdir
-fi
-
-# check abi
-GHC_PKG="${GHC_LIBDIR}"/bin/ghc-pkg
-if "${GHC_PKG}" --version >/dev/null ; then
+# try GHC_BIN from the environment (e.g. user set it)
+elif [ -n "${GHC_BIN}" ] &&
+	GHC_LIBDIR="$("${GHC_BIN}" --print-libdir)" &&
+	check_ghc "${GHC_LIBDIR}" "${GHC_BIN}" "$(infer_ghc_pkg "${GHC_BIN}")" "GHC_BIN"
+then
+	:
+# try ghcup
+elif command -v ghcup >/dev/null &&
+	GHC_BIN="$(ghcup whereis ghc "${GHC_VERSION}")" &&
+	GHC_LIBDIR="$("${GHC_BIN}" --print-libdir)" &&
+	check_ghc "${GHC_LIBDIR}" "${GHC_BIN}" "$(infer_ghc_pkg "${GHC_BIN}")" "ghcup"
+then
+	:
+# try ghc-${GHC_VERSION}
+elif command -v ghc-${GHC_VERSION} >/dev/null &&
+	GHC_LIBDIR="$("ghc-${GHC_VERSION}" --print-libdir)" &&
+	check_ghc "${GHC_LIBDIR}" "ghc-${GHC_VERSION}" "$(infer_ghc_pkg "ghc-${GHC_VERSION}")" "ghc-<ver>"
+then
+	:
+# try ghc
+elif command -v ghc >/dev/null &&
+	GHC_LIBDIR="$(ghc --print-libdir)" &&
+	check_ghc "${GHC_LIBDIR}" "ghc" "$(infer_ghc_pkg "ghc")" "ghc"
+then
+	:
+# try stack
+elif command -v stack >/dev/null &&
+	GHC_BIN="$(cd "$(mktemp -d)" && stack --install-ghc --resolver "ghc-${GHC_VERSION}" exec sh -- -c 'command -v ghc')" &&
+	GHC_LIBDIR="$("${GHC_BIN}" --print-libdir)" &&
+	check_ghc "${GHC_LIBDIR}" "${GHC_BIN}" "$(infer_ghc_pkg "${GHC_BIN}")" "stack"
+then
 	:
 else
-	fail_ghc_pkg "${GHC_PKG}"
+	echo >&2 "All methods exhausted!"
+	echo >&2 "Couldn't find a working/matching GHC installation"
+	echo >&2 "exiting..."
+	exit 42
 fi
-PKGCONF="${GHC_LIBDIR}/package.conf.d"
-MY_ABI_HASHES="$(for dep in $("${GHC_PKG}" --global --global-package-db "$PKGCONF" list --simple-output) ; do "${GHC_PKG}" --global --global-package-db "$PKGCONF" field "${dep}" abi --simple-output ; done | tr '\n' ' ' | xargs)"
-[ "${ABI_HASHES}" = "${MY_ABI_HASHES}" ] || fail_abi "${MY_ABI_HASHES}"
-unset PKGCONF
 
-if [ -n "$LD_LIBRARY_PATH" ] ; then
-	LD_LIBRARY_PATH="$(for i in "${GHC_LIBDIR}"/* ; do [ -d "$i" ] && printf "%s" "$i:" ; done)$LD_LIBRARY_PATH"
-	export LD_LIBRARY_PATH
-else
-	LD_LIBRARY_PATH="$(for i in "${GHC_LIBDIR}"/* ; do [ -d "$i" ] && printf "%s" "$i:" ; done | sed 's/:$//')"
-	export LD_LIBRARY_PATH
-fi
+debug_msg "Found GHC libdir at: ${GHC_LIBDIR}"
+
+case "$(uname -s)" in
+	"Darwin"|"darwin")
+		if [ -n "$DYLD_LIBRARY_PATH" ] ; then
+			DYLD_LIBRARY_PATH="$(for i in "${GHC_LIBDIR}"/* ; do [ -d "$i" ] && printf "%s" "$i:" ; done)$DYLD_LIBRARY_PATH"
+			export DYLD_LIBRARY_PATH
+		else
+			DYLD_LIBRARY_PATH="$(for i in "${GHC_LIBDIR}"/* ; do [ -d "$i" ] && printf "%s" "$i:" ; done | sed 's/:$//')"
+			export DYLD_LIBRARY_PATH
+		fi
+		;;
+	*)
+		if [ -n "$LD_LIBRARY_PATH" ] ; then
+			LD_LIBRARY_PATH="$(for i in "${GHC_LIBDIR}"/* ; do [ -d "$i" ] && printf "%s" "$i:" ; done)$LD_LIBRARY_PATH"
+			export LD_LIBRARY_PATH
+		else
+			LD_LIBRARY_PATH="$(for i in "${GHC_LIBDIR}"/* ; do [ -d "$i" ] && printf "%s" "$i:" ; done | sed 's/:$//')"
+			export LD_LIBRARY_PATH
+		fi
+		;;
+esac
 
 exec "${exedir}/${executablename}" ${1+"$@"}
