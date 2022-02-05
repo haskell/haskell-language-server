@@ -46,7 +46,7 @@ mkDocMap env rm this_mod =
 #else
      let (_ , DeclDocMap this_docs, _) = extractDocs this_mod
 #endif
-     d <- foldrM getDocs (mkNameEnv $ M.toList $ fmap (`SpanDocString` SpanDocUris Nothing Nothing) this_docs) names
+     d <- foldrM getDocs (mkNameEnv $ MS.toList $ fmap (`SpanDocString` SpanDocUris Nothing Nothing) this_docs) names
      k <- foldrM getType (tcg_type_env this_mod) names
      pure $ DKMap d k
   where
