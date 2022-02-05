@@ -83,6 +83,7 @@ import qualified Data.ByteString                   as BS
 import qualified Data.DList                        as DL
 import           Data.IORef
 import qualified Data.IntMap.Strict                as IntMap
+import           Data.IntMap.Strict                (IntMap)
 import           Data.List.Extra
 import qualified Data.Map.Strict                   as MS
 import           Data.Maybe
@@ -105,7 +106,6 @@ import           Data.Binary
 import           Data.Coerce
 import           Data.Functor
 import qualified Data.HashMap.Strict               as HashMap
-import           Data.IntMap                       (IntMap)
 import           Data.Map                          (Map)
 import qualified Data.Map                          as ML
 import           Data.Tuple.Extra                  (dupe)
@@ -694,7 +694,7 @@ mergeEnvs :: HscEnv -> [ModSummary] -> [HomeModInfo] -> [HscEnv] -> IO HscEnv
 mergeEnvs env extraModSummaries extraMods envs = do
     prevFinderCache <- concatFC <$> mapM (readIORef . hsc_FC) envs
     let ims  = map (\ms -> Compat.installedModule (toUnitId $ moduleUnit $ ms_mod ms)  (moduleName (ms_mod ms))) extraModSummaries
-        ifrs = zipWith (\ms -> InstalledFound (ms_location ms)) extraModSummaries ims
+        ifrs = zipWith (InstalledFound . ms_location) extraModSummaries ims
         -- Very important to force this as otherwise the hsc_mod_graph field is not
         -- forced and ends up retaining a reference to all the old hsc_envs we have merged to get
         -- this new one, which in turn leads to the EPS referencing the HPT.
@@ -711,7 +711,7 @@ mergeEnvs env extraModSummaries extraMods envs = do
             foldl'
                 (\fc (im, ifr) -> Compat.extendInstalledModuleEnv fc im ifr) prevFinderCache
                 $ zip ims ifrs
-    liftRnf rwhnf module_graph_nodes `seq` (return $ loadModulesHome extraMods $ env{
+    liftRnf rwhnf module_graph_nodes `seq` return (loadModulesHome extraMods $ env{
         hsc_HPT = foldMapBy mergeUDFM emptyUDFM hsc_HPT envs,
         hsc_FC = newFinderCache,
         hsc_mod_graph = mkModuleGraph module_graph_nodes
@@ -828,7 +828,7 @@ parseHeader
        -> FilePath  -- ^ the filename (for source locations)
        -> Util.StringBuffer -- ^ Haskell module source text (full Unicode is supported)
 #if MIN_VERSION_ghc(9,0,1)
-       -> ExceptT [FileDiagnostic] m ([FileDiagnostic], Located(HsModule))
+       -> ExceptT [FileDiagnostic] m ([FileDiagnostic], Located HsModule)
 #else
        -> ExceptT [FileDiagnostic] m ([FileDiagnostic], Located(HsModule GhcPs))
 #endif
@@ -1009,7 +1009,7 @@ getDocsNonInteractive'
         (Env TcGblEnv TcLclEnv)
         (Name,
         Either
-            GetDocsFailure (Maybe HsDocString, Maybe (MS.Map Int HsDocString)))
+            GetDocsFailure (Maybe HsDocString, Maybe (IntMap HsDocString)))
 getDocsNonInteractive' name =
     case nameModule_maybe name of
         Nothing -> return (name, Left $ NameHasNoModule name)
@@ -1026,13 +1026,19 @@ getDocsNonInteractive' name =
                     case nameSrcLoc name of
                         RealSrcLoc {}   -> False
                         UnhelpfulLoc {} -> True
+#if MIN_VERSION_ghc(9,2,1)
+                amap' = amap
+#else
+                amap' = MS.map (IntMap.fromAscList . MS.toAscList) amap
+#endif
+
             pure . (name,) $
-                if isNothing mb_doc_hdr && MS.null dmap && MS.null amap
+                if isNothing mb_doc_hdr && MS.null dmap && MS.null amap'
                     then Left $ NoDocsInIface mod isNameCompiled
-                    else Right (MS.lookup name dmap, MS.lookup name amap)
+                    else Right (MS.lookup name dmap, MS.lookup name amap')
 
 -- | Non-interactive modification of 'GHC.Runtime.Eval.getDocs'.
-getDocsNonInteractive :: HscEnv -> Module -> Name -> IO (Either GHC.ErrorMessages (Name, Either GetDocsFailure (Maybe HsDocString, Maybe (MS.Map Int HsDocString))))
+getDocsNonInteractive :: HscEnv -> Module -> Name -> IO (Either GHC.ErrorMessages (Name, Either GetDocsFailure (Maybe HsDocString, Maybe (IntMap HsDocString))))
 getDocsNonInteractive hsc_env mod name = do
     ((_warns,errs), res) <- initTypecheckEnv hsc_env mod $ getDocsNonInteractive' name
     pure $ maybeToEither errs res
@@ -1044,7 +1050,7 @@ getDocsBatch
   -> Module  -- ^ a moudle where the names are in scope
   -> [Name]
   --  2021-11-18: NOTE: Map Int would become IntMap if next GHCs.
-  -> IO (Either GHC.ErrorMessages (MS.Map Name (Either GetDocsFailure (Maybe HsDocString, Maybe (MS.Map Int HsDocString)))))
+  -> IO (Either GHC.ErrorMessages (MS.Map Name (Either GetDocsFailure (Maybe HsDocString, Maybe (IntMap HsDocString)))))
   -- ^ Return a 'Map' of 'Name's to 'Either' (no docs messages) (general doc body & arg docs)
 getDocsBatch hsc_env mod names = do
     ((_warns,errs), res) <- initTypecheckEnv hsc_env mod $ MS.fromList <$> traverse getDocsNonInteractive' names
