@@ -58,7 +58,9 @@ import           Development.IDE.Test                     (Cursor,
                                                            standardizeQuotes,
                                                            waitForAction,
                                                            waitForGC,
-                                                           waitForTypecheck)
+                                                           waitForTypecheck,
+                                                           isReferenceReady,
+                                                           referenceReady)
 import           Development.IDE.Test.Runfiles
 import qualified Development.IDE.Types.Diagnostics        as Diagnostics
 import           Development.IDE.Types.Location
@@ -5543,11 +5545,7 @@ simpleMultiDefTest = testCase "simple-multi-def-test" $ runWithExtraFiles "multi
     adoc <- liftIO $ runInDir dir $ do
       aSource <- liftIO $ readFileUtf8 aPath
       adoc <- createDoc aPath "haskell" aSource
-      ~() <- skipManyTill anyMessage $ satisfyMaybe $ \case
-        FromServerMess (SCustomMethod "ghcide/reference/ready") (NotMess NotificationMessage{_params = fp}) -> do
-          A.Success fp' <- pure $ fromJSON fp
-          if equalFilePath fp' aPath then pure () else Nothing
-        _ -> Nothing
+      skipManyTill anyMessage $ isReferenceReady aPath
       closeDoc adoc
       pure adoc
     bSource <- liftIO $ readFileUtf8 bPath
@@ -5578,18 +5576,15 @@ bootTests = testGroup "boot"
             -- `ghcide/reference/ready` notification.
             -- Once we receive one of the above, we wait for the other that we
             -- haven't received yet.
-            -- If we don't wait for the `ready` notification it is possible 
-            -- that the `getDefinitions` request/response in the outer ghcide 
+            -- If we don't wait for the `ready` notification it is possible
+            -- that the `getDefinitions` request/response in the outer ghcide
             -- session will find no definitions.
             let hoverParams = HoverParams cDoc (Position 4 3) Nothing
             hoverRequestId <- sendRequest STextDocumentHover hoverParams
-            let parseReadyMessage = satisfy $ \case
-                  FromServerMess (SCustomMethod "ghcide/reference/ready") (NotMess NotificationMessage{_params = params})
-                    | A.Success fp <- fromJSON params -> equalFilePath fp cPath
-                  _ -> False
+            let parseReadyMessage = isReferenceReady cPath
             let parseHoverResponse = responseForId STextDocumentHover hoverRequestId
             hoverResponseOrReadyMessage <- skipManyTill anyMessage ((Left <$> parseHoverResponse) <|> (Right <$> parseReadyMessage))
-            _ <- skipManyTill anyMessage $ 
+            _ <- skipManyTill anyMessage $
               case hoverResponseOrReadyMessage of
                 Left _ -> void parseReadyMessage
                 Right _ -> void parseHoverResponse
@@ -6002,11 +5997,7 @@ referenceTestSession name thisDoc docs' f = testSessionWithExtraFiles "reference
     loop :: [FilePath] -> Session ()
     loop [] = pure ()
     loop docs = do
-      doc <- skipManyTill anyMessage $ satisfyMaybe $ \case
-          FromServerMess (SCustomMethod "ghcide/reference/ready") (NotMess NotificationMessage{_params = fp}) -> do
-            A.Success fp' <- pure $ fromJSON fp
-            find (fp' ==) docs
-          _ -> Nothing
+      doc <- skipManyTill anyMessage $ referenceReady (`elem` docs)
       loop (delete doc docs)
   loop docs
   f dir
