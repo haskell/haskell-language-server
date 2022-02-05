@@ -115,7 +115,7 @@ data Log
   | LogCradlePath !FilePath
   | LogCradleNotFound !FilePath
   | LogSessionLoadingResult !(Either [CradleError] (ComponentOptions, FilePath))
-  | forall a. Show a => LogCradle !(Cradle a)
+  | LogCradle !(Cradle Void)
   | LogNewComponentCache !(([FileDiagnostic], Maybe HscEnvEq), DependencyInfo)
 deriving instance Show Log
 
@@ -687,7 +687,7 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
 -- | Run the specific cradle on a specific FilePath via hie-bios.
 -- This then builds dependencies or whatever based on the cradle, gets the
 -- GHC options/dynflags needed for the session and the GHC library directory
-cradleToOptsAndLibDir :: Show a => Recorder (WithPriority Log) -> Cradle a -> FilePath
+cradleToOptsAndLibDir :: Recorder (WithPriority Log) -> Cradle Void -> FilePath
                       -> IO (Either [CradleError] (ComponentOptions, FilePath))
 cradleToOptsAndLibDir recorder cradle file = do
     -- Start off by getting the session options
