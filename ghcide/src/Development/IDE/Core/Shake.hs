@@ -167,8 +167,6 @@ import           Ide.Plugin.Config
 import qualified Ide.PluginUtils                        as HLS
 import           Ide.Types                              (PluginId)
 import qualified "list-t" ListT
-import           Prettyprinter                          (Pretty (pretty), (<+>))
-import qualified Prettyprinter
 import qualified StmContainers.Map                      as STM
 
 data Log
@@ -189,17 +187,17 @@ instance Pretty Log where
     LogCreateHieDbExportsMapFinish exportsMapSize ->
       "Done initializing exports map from hiedb. Size:" <+> pretty exportsMapSize
     LogBuildSessionRestart reason actionQueue keyBackLog abortDuration shakeProfilePath ->
-      Prettyprinter.vcat
+      vcat
         [ "Restarting build session due to" <+> pretty reason
         , "Action Queue:" <+> pretty (map actionName actionQueue)
         , "Keys:" <+> pretty (map show $ HSet.toList keyBackLog)
         , "Aborting previous build session took" <+> pretty (showDuration abortDuration) <+> pretty shakeProfilePath ]
     LogDelayedAction delayedAction duration ->
-      Prettyprinter.hsep
+      hsep
         [ "Finished:" <+> pretty (actionName delayedAction)
         , "Took:" <+> pretty (showDuration duration) ]
     LogBuildSessionFinish e ->
-      Prettyprinter.vcat
+      vcat
         [ "Finished build session"
         , pretty (fmap displayException e) ]
     LogDiagsDiffButNoLspEnv fileDiagnostics ->

@@ -9,7 +9,6 @@ import           Development.IDE.Types.Logger (Priority (Debug, Info),
                                                WithPriority (WithPriority, priority),
                                                cfilter, cmapWithPrio,
                                                makeDefaultStderrRecorder,
-                                               priorityToHsLoggerPriority,
                                                withDefaultRecorder)
 import           Ide.Arguments                (Arguments (..),
                                                GhcideArguments (..),
@@ -36,7 +35,7 @@ main :: IO ()
 main = do
     -- plugin cli commands use stderr logger for now unless we change the args
     -- parser to get logging arguments first or do more complicated things
-    pluginCliRecorder <- cmapWithPrio logToDoc <$> makeDefaultStderrRecorder Nothing (priorityToHsLoggerPriority Info)
+    pluginCliRecorder <- cmapWithPrio logToDoc <$> makeDefaultStderrRecorder Nothing Info
     args <- getArguments "haskell-language-server" (Plugins.idePlugins (cmapWithPrio LogPlugins pluginCliRecorder) False)
 
     let (minPriority, logFilePath, includeExamplePlugins) =
@@ -45,9 +44,8 @@ main = do
               let minPriority = if argsDebugOn || argsTesting then Debug else Info
               in (minPriority, argsLogFile, argsExamplePlugin)
             _ -> (Info, Nothing, False)
-    let hsLoggerMinPriority = priorityToHsLoggerPriority minPriority
 
-    withDefaultRecorder logFilePath Nothing hsLoggerMinPriority $ \textWithPriorityRecorder -> do
+    withDefaultRecorder logFilePath Nothing minPriority $ \textWithPriorityRecorder -> do
       let recorder =
             textWithPriorityRecorder
             & cfilter (\WithPriority{ priority } -> priority >= minPriority)

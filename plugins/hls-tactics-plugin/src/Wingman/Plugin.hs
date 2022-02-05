@@ -13,8 +13,7 @@ import           Wingman.LanguageServer hiding (Log)
 import qualified Wingman.LanguageServer as WingmanLanguageServer
 import           Wingman.LanguageServer.Metaprogram (hoverProvider)
 import           Wingman.StaticPlugin
-import Development.IDE.Types.Logger (Recorder, cmapWithPrio, WithPriority)
-import Prettyprinter (Pretty (pretty))
+import Development.IDE.Types.Logger (Recorder, cmapWithPrio, WithPriority, Pretty (pretty))
 
 newtype Log
   = LogWingmanLanguageServer WingmanLanguageServer.Log 

@@ -3,11 +3,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Plugins where
 
-import           Development.IDE.Types.Logger      (Recorder, WithPriority,
-                                                    cmapWithPrio)
+import           Development.IDE.Types.Logger      (Pretty (pretty), Recorder,
+                                                    WithPriority, cmapWithPrio)
 import           Ide.PluginUtils                   (pluginDescToIdePlugins)
 import           Ide.Types                         (IdePlugins)
-import           Prettyprinter                     (Pretty (pretty))
 
 -- fixed plugins
 import           Development.IDE                   (IdeState)

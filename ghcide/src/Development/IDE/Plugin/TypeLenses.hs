@@ -43,7 +43,8 @@ import           Development.IDE.Types.Location      (Position (Position, _chara
                                                       Range (Range, _end, _start),
                                                       toNormalizedFilePath',
                                                       uriToFilePath')
-import           Development.IDE.Types.Logger        (Recorder, WithPriority,
+import           Development.IDE.Types.Logger        (Pretty (pretty), Recorder,
+                                                      WithPriority,
                                                       cmapWithPrio)
 import           GHC.Generics                        (Generic)
 import           Ide.Plugin.Config                   (Config)
@@ -70,7 +71,6 @@ import           Language.LSP.Types                  (ApplyWorkspaceEditParams (
                                                       TextDocumentIdentifier (TextDocumentIdentifier),
                                                       TextEdit (TextEdit),
                                                       WorkspaceEdit (WorkspaceEdit))
-import           Prettyprinter                       (Pretty (pretty))
 import           Text.Regex.TDFA                     ((=~), (=~~))
 
 data Log = LogShake Shake.Log deriving Show

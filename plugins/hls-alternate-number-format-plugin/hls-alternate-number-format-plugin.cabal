@@ -37,7 +37,6 @@ library
     , syb
     , text
     , unordered-containers
-    , prettyprinter
 
   default-language: Haskell2010
   default-extensions:

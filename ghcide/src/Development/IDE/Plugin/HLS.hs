@@ -35,7 +35,6 @@ import           Ide.Types                    as HLS
 import qualified Language.LSP.Server          as LSP
 import           Language.LSP.Types
 import qualified Language.LSP.Types           as J
-import           Prettyprinter                (Pretty (pretty))
 import           Text.Regex.TDFA.Text         ()
 import           UnliftIO                     (MonadUnliftIO)
 import           UnliftIO.Async               (forConcurrently)

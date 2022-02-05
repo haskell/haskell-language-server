@@ -59,7 +59,8 @@ import qualified Development.IDE.Main            as IDEMain
 import           Development.IDE.Plugin.Test     (TestRequest (GetBuildKeysBuilt, WaitForIdeRule, WaitForShakeQueue),
                                                   WaitForIdeRuleResult (ideResultSuccess))
 import qualified Development.IDE.Plugin.Test     as Test
-import           Development.IDE.Types.Logger    (Logger (Logger),
+import           Development.IDE.Types.Logger    (Doc, Logger (Logger),
+                                                  Pretty (pretty),
                                                   Priority (Debug),
                                                   Recorder (Recorder, logger_),
                                                   WithPriority (WithPriority, priority),
@@ -78,13 +79,11 @@ import           Language.LSP.Types              hiding
                                                   SemanticTokensEdit (_start))
 import           Language.LSP.Types.Capabilities (ClientCapabilities)
 import           Prelude                         hiding (log)
-import           Prettyprinter                   (Doc, Pretty (pretty))
 import           System.Directory                (getCurrentDirectory,
                                                   setCurrentDirectory)
 import           System.Environment              (lookupEnv)
 import           System.FilePath
 import           System.IO.Unsafe                (unsafePerformIO)
-import qualified System.Log                      as HsLogger
 import           System.Process.Extra            (createPipe)
 import           System.Time.Extra
 import           Test.Hls.Util
@@ -190,7 +189,7 @@ runSessionWithServer' plugins conf sconf caps root s = withLock lock $ keepCurre
   (inR, inW) <- createPipe
   (outR, outW) <- createPipe
 
-  docWithPriorityRecorder <- makeDefaultStderrRecorder Nothing HsLogger.DEBUG
+  docWithPriorityRecorder <- makeDefaultStderrRecorder Nothing Debug
 
   logStdErr <- fromMaybe "0" <$> lookupEnv "LSP_TEST_LOG_STDERR"
 

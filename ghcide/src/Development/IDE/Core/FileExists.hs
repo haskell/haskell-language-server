@@ -27,14 +27,14 @@ import           Development.IDE.Core.Shake            hiding (Log)
 import qualified Development.IDE.Core.Shake            as Shake
 import           Development.IDE.Graph
 import           Development.IDE.Types.Location
-import           Development.IDE.Types.Logger          (Recorder, WithPriority,
+import           Development.IDE.Types.Logger          (Pretty (pretty),
+                                                        Recorder, WithPriority,
                                                         cmapWithPrio)
 import           Development.IDE.Types.Options
 import qualified Focus
 import           Ide.Plugin.Config                     (Config)
 import           Language.LSP.Server                   hiding (getVirtualFile)
 import           Language.LSP.Types
-import           Prettyprinter                         (Pretty (pretty))
 import qualified StmContainers.Map                     as STM
 import qualified System.Directory                      as Dir
 import qualified System.FilePath.Glob                  as Glob

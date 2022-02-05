@@ -23,7 +23,12 @@ import           Development.IDE.Core.Debouncer
 import           Development.IDE.Core.FileExists (fileExistsRules)
 import           Development.IDE.Core.OfInterest hiding (Log, LogShake)
 import           Development.IDE.Graph
-import           Development.IDE.Types.Logger    as Logger
+import           Development.IDE.Types.Logger    as Logger (Logger,
+                                                            Pretty (pretty),
+                                                            Priority (Info),
+                                                            Recorder,
+                                                            WithPriority,
+                                                            cmapWithPrio)
 import           Development.IDE.Types.Options   (IdeOptions (..))
 import           Ide.Plugin.Config
 import qualified Language.LSP.Server             as LSP
@@ -35,7 +40,6 @@ import qualified Development.IDE.Core.OfInterest as OfInterest
 import           Development.IDE.Core.Shake      hiding (Log)
 import qualified Development.IDE.Core.Shake      as Shake
 import           Development.IDE.Types.Shake     (WithHieDb)
-import           Prettyprinter                   (Pretty (pretty))
 import           System.Environment              (lookupEnv)
 
 

@@ -29,7 +29,6 @@ import           Ide.PluginUtils                 (handleMaybe, handleMaybeM,
 import           Ide.Types
 import           Language.LSP.Types
 import           Language.LSP.Types.Lens         (uri)
-import           Prettyprinter                   (Pretty (pretty))
 
 newtype Log = LogShake Shake.Log deriving Show
 

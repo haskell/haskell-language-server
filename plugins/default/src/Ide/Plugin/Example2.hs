@@ -34,7 +34,6 @@ import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
-import           Prettyprinter              (Pretty (pretty))
 import           Text.Regex.TDFA.Text       ()
 
 -- ---------------------------------------------------------------------

@@ -48,7 +48,6 @@ import           Ide.PluginUtils                      (mkLspCommand)
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
-import           Prettyprinter                        (Pretty (pretty))
 
 newtype Log = LogShake Shake.Log deriving Show
 

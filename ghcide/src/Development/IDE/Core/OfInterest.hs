@@ -39,11 +39,14 @@ import qualified Development.IDE.Core.Shake               as Shake
 import           Development.IDE.Plugin.Completions.Types
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Location
-import           Development.IDE.Types.Logger
+import           Development.IDE.Types.Logger             (Pretty (pretty),
+                                                           Recorder,
+                                                           WithPriority,
+                                                           cmapWithPrio,
+                                                           logDebug)
 import           Development.IDE.Types.Options            (IdeTesting (..))
 import qualified Language.LSP.Server                      as LSP
 import qualified Language.LSP.Types                       as LSP
-import           Prettyprinter                            (Pretty (pretty))
 
 data Log = LogShake Shake.Log
   deriving Show

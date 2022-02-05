@@ -77,10 +77,11 @@ import           Development.IDE.Session               (SessionLoadingOptions,
 import qualified Development.IDE.Session               as Session
 import           Development.IDE.Types.Location        (NormalizedUri,
                                                         toNormalizedFilePath')
-import           Development.IDE.Types.Logger          (Logger,
+import           Development.IDE.Types.Logger          (Logger, Pretty (pretty),
                                                         Priority (Info, Warning),
                                                         Recorder, WithPriority,
-                                                        cmapWithPrio, logWith)
+                                                        cmapWithPrio, logWith,
+                                                        vsep, (<+>))
 import           Development.IDE.Types.Options         (IdeGhcSession,
                                                         IdeOptions (optCheckParents, optCheckProject, optReportProgress, optRunSubset),
                                                         IdeTesting (IdeTesting),
@@ -113,8 +114,6 @@ import qualified Language.LSP.Server                   as LSP
 import qualified "list-t" ListT
 import           Numeric.Natural                       (Natural)
 import           Options.Applicative                   hiding (action)
-import           Prettyprinter                         (Pretty (pretty), (<+>))
-import qualified Prettyprinter
 import qualified StmContainers.Map                     as STM
 import qualified System.Directory.Extra                as IO
 import           System.Exit                           (ExitCode (ExitFailure),
@@ -152,7 +151,7 @@ instance Pretty Log where
   pretty = \case
     LogHeapStats log -> pretty log
     LogLspStart ->
-      Prettyprinter.vsep
+      vsep
         [ "Staring LSP server..."
         , "If you are seeing this in a terminal, you probably should have run WITHOUT the --lsp option!"]
     LogLspStartDuration duration ->

@@ -39,7 +39,8 @@ import           Development.IDE.Types.HscEnvEq               (HscEnvEq (envPack
                                                                hscEnv)
 import qualified Development.IDE.Types.KnownTargets           as KT
 import           Development.IDE.Types.Location
-import           Development.IDE.Types.Logger                 (Recorder,
+import           Development.IDE.Types.Logger                 (Pretty (pretty),
+                                                               Recorder,
                                                                WithPriority,
                                                                cmapWithPrio)
 import           GHC.Exts                                     (fromList, toList)
@@ -48,7 +49,6 @@ import           Ide.Types
 import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.Types
 import qualified Language.LSP.VFS                             as VFS
-import           Prettyprinter                                (Pretty (pretty))
 import           Text.Fuzzy.Parallel                          (Scored (..))
 
 data Log = LogShake Shake.Log deriving Show

@@ -12,8 +12,8 @@ module Ide.Plugin.Eval (
     ) where
 
 import           Development.IDE              (IdeState)
-import           Development.IDE.Types.Logger (Recorder, WithPriority,
-                                               cmapWithPrio)
+import           Development.IDE.Types.Logger (Pretty (pretty), Recorder,
+                                               WithPriority, cmapWithPrio)
 import qualified Ide.Plugin.Eval.CodeLens     as CL
 import           Ide.Plugin.Eval.Config
 import           Ide.Plugin.Eval.Rules        (rules)
@@ -24,7 +24,6 @@ import           Ide.Types                    (ConfigDescriptor (..),
                                                defaultPluginDescriptor,
                                                mkCustomConfig, mkPluginHandler)
 import           Language.LSP.Types
-import           Prettyprinter                (Pretty (pretty))
 
 newtype Log = LogEvalRules EvalRules.Log deriving Show
 

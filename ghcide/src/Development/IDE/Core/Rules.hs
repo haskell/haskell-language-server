@@ -108,12 +108,12 @@ import           Development.IDE.Core.Service hiding (LogShake, Log)
 import           Development.IDE.Core.Shake hiding (Log)
 import           Development.IDE.GHC.Compat.Env
 import           Development.IDE.GHC.Compat                   hiding
-                                                              (parseModule,
+                                                              (vcat, nest, parseModule,
                                                                TargetId(..),
                                                                loadInterface,
                                                                Var,
                                                                (<+>))
-import qualified Development.IDE.GHC.Compat                   as Compat
+import qualified Development.IDE.GHC.Compat                   as Compat hiding (vcat, nest)
 import qualified Development.IDE.GHC.Compat.Util              as Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint hiding (LogShake, Log)
@@ -151,11 +151,9 @@ import Control.Concurrent.STM.Stats (atomically)
 import Language.LSP.Server (LspT)
 import System.Info.Extra (isWindows)
 import HIE.Bios.Ghc.Gap (hostIsDynamic)
-import Development.IDE.Types.Logger (Recorder, logWith, cmapWithPrio, WithPriority)
+import Development.IDE.Types.Logger (Recorder, logWith, cmapWithPrio, WithPriority, Pretty (pretty), (<+>), nest, vcat)
 import qualified Development.IDE.Core.Shake as Shake
 import qualified Development.IDE.GHC.ExactPrint as ExactPrint hiding (LogShake)
-import Prettyprinter (Pretty (pretty), (<+>))
-import qualified Prettyprinter
 import qualified Development.IDE.Types.Logger as Logger
 
 data Log 
@@ -175,8 +173,8 @@ instance Pretty Log where
     LogLoadingHieFile path ->
       "LOADING HIE FILE FOR" <+> pretty (fromNormalizedFilePath path)
     LogLoadingHieFileFail path e ->
-      Prettyprinter.nest 2 $
-        Prettyprinter.vcat
+      nest 2 $
+        vcat
           [ "FAILED LOADING HIE FILE FOR" <+> pretty path
           , pretty (displayException e) ]
     LogLoadingHieFileSuccess path ->

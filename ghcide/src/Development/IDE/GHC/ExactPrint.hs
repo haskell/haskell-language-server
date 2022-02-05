@@ -76,7 +76,8 @@ import           Development.IDE.GHC.Compat              hiding (parseImport,
 import           Development.IDE.Graph                   (RuleResult, Rules)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Types.Location
-import           Development.IDE.Types.Logger            (Recorder,
+import           Development.IDE.Types.Logger            (Pretty (pretty),
+                                                          Recorder,
                                                           WithPriority,
                                                           cmapWithPrio)
 import qualified GHC.Generics                            as GHC
@@ -86,7 +87,6 @@ import           Ide.PluginUtils
 import           Language.Haskell.GHC.ExactPrint.Parsers
 import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities         (ClientCapabilities)
-import           Prettyprinter                           (Pretty (pretty))
 import           Retrie.ExactPrint                       hiding (Annotated (..),
                                                           parseDecl, parseExpr,
                                                           parsePattern,

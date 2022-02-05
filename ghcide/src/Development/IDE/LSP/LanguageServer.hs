@@ -43,8 +43,6 @@ import           Control.Monad.IO.Unlift               (MonadUnliftIO)
 import qualified Development.IDE.Session               as Session
 import qualified Development.IDE.Types.Logger          as Logger
 import           Development.IDE.Types.Shake           (WithHieDb)
-import           Prettyprinter                         (Pretty (pretty), (<+>))
-import qualified Prettyprinter
 import           System.IO.Unsafe                      (unsafeInterleaveIO)
 
 data Log
@@ -59,19 +57,19 @@ data Log
 instance Pretty Log where
   pretty = \case
     LogRegisteringIdeConfig ideConfig ->
-      "Registering IDE configuration:" <+> Prettyprinter.viaShow ideConfig
+      "Registering IDE configuration:" <+> viaShow ideConfig
     LogReactorThreadException e ->
-      Prettyprinter.vcat
+      vcat
         [ "ReactorThreadException"
         , pretty $ displayException e ]
     LogReactorMessageActionException e ->
-      Prettyprinter.vcat
+      vcat
         [ "ReactorMessageActionException"
         , pretty $ displayException e ]
     LogReactorThreadStopped ->
       "Reactor thread stopped"
     LogCancelledRequest requestId ->
-      "Cancelled request" <+> Prettyprinter.viaShow requestId
+      "Cancelled request" <+> viaShow requestId
     LogSession log -> pretty log
 
 issueTrackerUrl :: T.Text

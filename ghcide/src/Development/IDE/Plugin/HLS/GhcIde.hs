@@ -18,7 +18,6 @@ import qualified Development.IDE.Plugin.TypeLenses   as TypeLenses
 import           Ide.Types
 import           Language.LSP.Server                 (LspM)
 import           Language.LSP.Types
-import           Prettyprinter                       (Pretty (pretty))
 import           Text.Regex.TDFA.Text                ()
 
 data Log

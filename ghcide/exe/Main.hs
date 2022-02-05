@@ -12,8 +12,7 @@ import           Data.Default                      (def)
 import           Data.Function                     ((&))
 import           Data.Version                      (showVersion)
 import           Development.GitRev                (gitHash)
-import           Development.IDE                   (Priority (Debug, Info),
-                                                    action)
+import           Development.IDE                   (action)
 import           Development.IDE.Core.OfInterest   (kick)
 import           Development.IDE.Core.Rules        (mainRule)
 import qualified Development.IDE.Core.Rules        as Rules
@@ -21,19 +20,19 @@ import           Development.IDE.Core.Tracing      (withTelemetryLogger)
 import           Development.IDE.Graph             (ShakeOptions (shakeThreads))
 import qualified Development.IDE.Main              as IDEMain
 import qualified Development.IDE.Plugin.HLS.GhcIde as GhcIde
-import           Development.IDE.Types.Logger      (Logger (Logger),
+import           Development.IDE.Types.Logger      (Doc, Logger (Logger),
                                                     LoggingColumn (DataColumn, PriorityColumn),
+                                                    Pretty (pretty),
+                                                    Priority (Debug, Info),
                                                     Recorder (Recorder),
                                                     WithPriority (WithPriority, priority),
                                                     cfilter, cmapWithPrio,
-                                                    makeDefaultStderrRecorder,
-                                                    priorityToHsLoggerPriority)
+                                                    makeDefaultStderrRecorder)
 import qualified Development.IDE.Types.Logger      as Logger
 import           Development.IDE.Types.Options
 import           Ide.Plugin.Config                 (Config (checkParents, checkProject))
 import           Ide.PluginUtils                   (pluginDescToIdePlugins)
 import           Paths_ghcide                      (version)
-import           Prettyprinter                     (Doc, Pretty (pretty))
 import qualified System.Directory.Extra            as IO
 import           System.Environment                (getExecutablePath)
 import           System.Exit                       (exitSuccess)
@@ -71,7 +70,7 @@ main = withTelemetryLogger $ \telemetryLogger -> do
     -- stderr recorder just for plugin cli commands
     pluginCliRecorder <-
       cmapWithPrio logToDoc
-      <$> makeDefaultStderrRecorder (Just [PriorityColumn, DataColumn]) (priorityToHsLoggerPriority Info)
+      <$> makeDefaultStderrRecorder (Just [PriorityColumn, DataColumn]) Info
 
     let hlsPlugins = pluginDescToIdePlugins (GhcIde.descriptors (cmapWithPrio LogGhcIde pluginCliRecorder))
     -- WARNING: If you write to stdout before runLanguageServer
@@ -88,7 +87,7 @@ main = withTelemetryLogger $ \telemetryLogger -> do
 
     let minPriority = if argsVerbose then Debug else Info
 
-    docWithPriorityRecorder <- makeDefaultStderrRecorder (Just [PriorityColumn, DataColumn]) (priorityToHsLoggerPriority minPriority)
+    docWithPriorityRecorder <- makeDefaultStderrRecorder (Just [PriorityColumn, DataColumn]) minPriority
 
     let docWithFilteredPriorityRecorder@Recorder{ logger_ } =
           docWithPriorityRecorder

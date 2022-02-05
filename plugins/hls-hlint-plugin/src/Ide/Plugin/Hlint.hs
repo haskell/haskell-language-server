@@ -120,7 +120,6 @@ import           Development.IDE.Spans.Pragmas                      (LineSplitTe
                                                                      lineSplitTextEdits,
                                                                      nextPragmaLine)
 import           GHC.Generics                                       (Generic)
-import           Prettyprinter                                      (Pretty (pretty))
 import           System.Environment                                 (setEnv,
                                                                      unsetEnv)
 import           Text.Regex.TDFA.Text                               ()

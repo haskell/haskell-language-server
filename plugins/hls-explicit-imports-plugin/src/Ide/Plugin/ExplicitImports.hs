@@ -34,13 +34,12 @@ import           Development.IDE.Core.PositionMapping
 import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Graph.Classes
-import qualified Development.IDE.Types.Logger         as Logger
+import           Development.IDE.Types.Logger         as Logger (Pretty (pretty))
 import           GHC.Generics                         (Generic)
 import           Ide.PluginUtils                      (mkLspCommand)
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
-import           Prettyprinter                        (Pretty (pretty))
 
 importCommandId :: CommandId
 importCommandId = "ImportLensCommand"

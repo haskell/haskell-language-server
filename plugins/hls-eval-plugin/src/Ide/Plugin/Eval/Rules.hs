@@ -38,10 +38,10 @@ import           Development.IDE.GHC.Compat
 import qualified Development.IDE.GHC.Compat           as SrcLoc
 import qualified Development.IDE.GHC.Compat.Util      as FastString
 import           Development.IDE.Graph                (alwaysRerun)
-import           Development.IDE.Types.Logger         (Recorder, WithPriority,
+import           Development.IDE.Types.Logger         (Pretty (pretty),
+                                                       Recorder, WithPriority,
                                                        cmapWithPrio)
 import           Ide.Plugin.Eval.Types
-import           Prettyprinter                        (Pretty (pretty))
 
 newtype Log = LogShake Shake.Log deriving Show
 

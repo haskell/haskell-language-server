@@ -33,8 +33,6 @@ import           Ide.Plugin.ConfigUtils        (pluginsToDefaultConfig,
 import           Ide.Types                     (IdePlugins, PluginId (PluginId),
                                                 ipMap)
 import           Ide.Version
-import           Prettyprinter                 (Pretty, pretty, (<+>))
-import qualified Prettyprinter
 import qualified System.Directory.Extra        as IO
 
 data Log
@@ -49,10 +47,10 @@ instance Pretty Log where
     LogVersion version -> pretty version
     LogDirectory path -> "Directory:" <+> pretty path
     LogLspStart ghcideArgs pluginIds ->
-      Prettyprinter.nest 2 $
-        Prettyprinter.vsep
+      nest 2 $
+        vsep
           [ "Starting (haskell-language-server) LSP server..."
-          , Prettyprinter.viaShow ghcideArgs
+          , viaShow ghcideArgs
           , "PluginIds:" <+> pretty (coerce @_ @[Text] pluginIds) ]
     LogIDEMain iDEMainLog -> pretty iDEMainLog
 

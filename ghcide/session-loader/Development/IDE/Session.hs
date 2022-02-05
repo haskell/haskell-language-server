@@ -63,9 +63,11 @@ import           Development.IDE.Types.Exports
 import           Development.IDE.Types.HscEnvEq       (HscEnvEq, newHscEnvEq,
                                                        newHscEnvEqPreserveImportPaths)
 import           Development.IDE.Types.Location
-import           Development.IDE.Types.Logger         (Priority (Debug, Error, Info, Warning),
+import           Development.IDE.Types.Logger         (Pretty (pretty),
+                                                       Priority (Debug, Error, Info, Warning),
                                                        Recorder, WithPriority,
-                                                       logWith)
+                                                       logWith, nest, vcat,
+                                                       viaShow, (<+>))
 import           Development.IDE.Types.Options
 import           GHC.Check
 import qualified HIE.Bios                             as HieBios
@@ -95,8 +97,6 @@ import           Development.IDE.Types.Shake          (WithHieDb)
 import           HieDb.Create
 import           HieDb.Types
 import           HieDb.Utils
-import           Prettyprinter                        (Pretty (pretty), (<+>))
-import qualified Prettyprinter
 import           System.Random                        (RandomGen)
 import qualified System.Random                        as Random
 
@@ -124,48 +124,48 @@ instance Pretty Log where
     LogSettingInitialDynFlags ->
       "Setting initial dynflags..."
     LogGetInitialGhcLibDirDefaultCradleFail cradleError rootDirPath hieYamlPath cradle ->
-      Prettyprinter.nest 2 $
-        Prettyprinter.vcat
+      nest 2 $
+        vcat
           [ "Couldn't load cradle for ghc libdir."
-          , "Cradle error:" <+> Prettyprinter.viaShow cradleError
+          , "Cradle error:" <+> viaShow cradleError
           , "Root dir path:" <+> pretty rootDirPath
           , "hie.yaml path:" <+> pretty hieYamlPath
-          , "Cradle:" <+> Prettyprinter.viaShow cradle ]
+          , "Cradle:" <+> viaShow cradle ]
     LogGetInitialGhcLibDirDefaultCradleNone ->
       "Couldn't load cradle. Cradle not found."
     LogHieDbRetry delay maxDelay maxRetryCount e ->
-      Prettyprinter.nest 2 $
-        Prettyprinter.vcat
+      nest 2 $
+        vcat
           [ "Retrying hiedb action..."
           , "delay:" <+> pretty delay
           , "maximum delay:" <+> pretty maxDelay
           , "retries remaining:" <+> pretty maxRetryCount
           , "SQLite error:" <+> pretty (displayException e) ]
     LogHieDbRetriesExhausted baseDelay maxDelay maxRetryCount e ->
-      Prettyprinter.nest 2 $
-        Prettyprinter.vcat
+      nest 2 $
+        vcat
           [ "Retries exhausted for hiedb action."
           , "base delay:" <+> pretty baseDelay
           , "maximum delay:" <+> pretty maxDelay
           , "retries remaining:" <+> pretty maxRetryCount
           , "Exception:" <+> pretty (displayException e) ]
     LogHieDbWriterThreadSQLiteError e ->
-      Prettyprinter.nest 2 $
-        Prettyprinter.vcat
+      nest 2 $
+        vcat
           [ "HieDb writer thread SQLite error:"
           , pretty (displayException e) ]
     LogHieDbWriterThreadException e ->
-      Prettyprinter.nest 2 $
-        Prettyprinter.vcat
+      nest 2 $
+        vcat
           [ "HieDb writer thread exception:"
           , pretty (displayException e) ]
     LogInterfaceFilesCacheDir path ->
       "Interface files cache directory:" <+> pretty path
     LogKnownFilesUpdated targetToPathsMap ->
-      Prettyprinter.nest 2 $
-        Prettyprinter.vcat
+      nest 2 $
+        vcat
           [ "Known files updated:"
-          , Prettyprinter.viaShow $ (HM.map . Set.map) fromNormalizedFilePath targetToPathsMap
+          , viaShow $ (HM.map . Set.map) fromNormalizedFilePath targetToPathsMap
           ]
     LogMakingNewHscEnv inPlaceUnitIds ->
       "Making new HscEnv. In-place unit ids:" <+> pretty (map show inPlaceUnitIds)
@@ -174,16 +174,16 @@ instance Pretty Log where
     LogCradlePath path ->
       "Cradle path:" <+> pretty path
     LogCradleNotFound path ->
-      Prettyprinter.vcat
+      vcat
         [ "No [cradle](https://github.com/mpickering/hie-bios#hie-bios) found for" <+> pretty path <> "."
         , "Proceeding with [implicit cradle](https://hackage.haskell.org/package/implicit-hie)."
         , "You should ignore this message, unless you see a 'Multi Cradle: No prefixes matched' error." ]
     LogSessionLoadingResult e ->
-      "Session loading result:" <+> Prettyprinter.viaShow e
+      "Session loading result:" <+> viaShow e
     LogCradle cradle ->
-      "Cradle:" <+> Prettyprinter.viaShow cradle
+      "Cradle:" <+> viaShow cradle
     LogNewComponentCache componentCache ->
-      "New component cache HscEnvEq:" <+> Prettyprinter.viaShow componentCache
+      "New component cache HscEnvEq:" <+> viaShow componentCache
 
 -- | Bump this version number when making changes to the format of the data stored in hiedb
 hiedbDataVersion :: String

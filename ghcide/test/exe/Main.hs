@@ -119,10 +119,8 @@ import           Test.Tasty.QuickCheck
 import           Text.Printf                              (printf)
 import           Text.Regex.TDFA                          ((=~))
 import qualified HieDbRetry
-import Development.IDE.Types.Logger (WithPriority(WithPriority, priority), Priority (Debug), cmapWithPrio, Recorder (Recorder, logger_), makeDefaultStderrRecorder, cfilter, LoggingColumn (PriorityColumn, DataColumn), Logger (Logger))
+import Development.IDE.Types.Logger (WithPriority(WithPriority, priority), Priority (Debug), cmapWithPrio, Recorder (Recorder, logger_), makeDefaultStderrRecorder, cfilter, LoggingColumn (PriorityColumn, DataColumn), Logger (Logger), Pretty (pretty), Doc)
 import Data.Function ((&))
-import qualified System.Log as HsLogger
-import Prettyprinter (Doc, Pretty (pretty))
 
 data Log 
   = LogGhcIde Ghcide.Log 
@@ -165,7 +163,7 @@ waitForAllProgressDone = loop
 
 main :: IO ()
 main = do
-  docWithPriorityRecorder <- makeDefaultStderrRecorder (Just [PriorityColumn, DataColumn]) HsLogger.DEBUG
+  docWithPriorityRecorder <- makeDefaultStderrRecorder (Just [PriorityColumn, DataColumn]) Debug
 
   let docWithFilteredPriorityRecorder@Recorder{ logger_ } =
         docWithPriorityRecorder

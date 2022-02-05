@@ -21,6 +21,7 @@ module Development.IDE.Types.Logger
   , priorityToHsLoggerPriority
   , LoggingColumn(..)
   , cmapWithPrio
+  , module PrettyPrinterModule
   ) where
 
 import           Control.Concurrent         (myThreadId)
@@ -37,9 +38,7 @@ import qualified Data.Text.IO               as Text
 import           Data.Time                  (defaultTimeLocale, formatTime,
                                              getCurrentTime)
 import           GHC.Stack                  (HasCallStack, withFrozenCallStack)
-import           Prettyprinter              (Doc, Pretty (pretty),
-                                             defaultLayoutOptions, layoutPretty,
-                                             vcat, (<+>))
+import           Prettyprinter              as PrettyPrinterModule
 import           Prettyprinter.Render.Text  (renderStrict)
 import           System.IO                  (Handle, IOMode (AppendMode),
                                              hClose, hFlush, hSetEncoding,
@@ -62,7 +61,6 @@ data Priority
       -- should be investigated.
     | Error -- ^ Such log messages must never occur in expected usage.
     deriving (Eq, Show, Ord, Enum, Bounded)
-
 
 -- | Note that this is logging actions _of the program_, not of the user.
 --   You shouldn't call warning/error if the user has caused an error, only
@@ -141,10 +139,11 @@ textHandleRecorder handle =
   Recorder
     { logger_ = \text -> liftIO $ Text.hPutStrLn handle text *> hFlush handle }
 
-makeDefaultStderrRecorder :: MonadIO m => Maybe [LoggingColumn] -> HsLogger.Priority -> m (Recorder (WithPriority (Doc a)))
-makeDefaultStderrRecorder columns hsLoggerMinPriority = do
+-- | Priority is actually for hslogger compatibility
+makeDefaultStderrRecorder :: MonadIO m => Maybe [LoggingColumn] -> Priority -> m (Recorder (WithPriority (Doc a)))
+makeDefaultStderrRecorder columns minPriority = do
   lock <- liftIO newLock
-  makeDefaultHandleRecorder columns hsLoggerMinPriority lock stderr
+  makeDefaultHandleRecorder columns minPriority lock stderr
 
 -- | If no path given then use stderr, otherwise use file.
 -- kinda complicated because we are logging with both hslogger and our own
@@ -155,14 +154,14 @@ withDefaultRecorder
   -- ^ log file path
   -> Maybe [LoggingColumn]
   -- ^ logging columns to display
-  -> HsLogger.Priority
+  -> Priority
   -- ^ min priority for hslogger
   -> (Recorder (WithPriority (Doc d)) -> m a)
   -- ^ action given a recorder
   -> m a
-withDefaultRecorder path columns hsLoggerMinPriority action = do
+withDefaultRecorder path columns minPriority action = do
   lock <- liftIO newLock
-  let makeHandleRecorder = makeDefaultHandleRecorder columns hsLoggerMinPriority lock
+  let makeHandleRecorder = makeDefaultHandleRecorder columns minPriority lock
   case path of
     Nothing -> do
       recorder <- makeHandleRecorder stderr
@@ -184,19 +183,19 @@ makeDefaultHandleRecorder
   :: MonadIO m
   => Maybe [LoggingColumn]
   -- ^ built-in logging columns to display
-  -> HsLogger.Priority
-  -- ^ min priority for hslogger
+  -> Priority
+  -- ^ min priority for hslogger compatibility
   -> Lock
   -- ^ lock to take when outputting to handle
   -> Handle
   -- ^ handle to output to
   -> m (Recorder (WithPriority (Doc a)))
-makeDefaultHandleRecorder columns hsLoggerMinPriority lock handle = do
+makeDefaultHandleRecorder columns minPriority lock handle = do
   let Recorder{ logger_ } = textHandleRecorder handle
   let threadSafeRecorder = Recorder { logger_ = \msg -> liftIO $ withLock lock (logger_ msg) }
   let loggingColumns = fromMaybe defaultLoggingColumns columns
   let textWithPriorityRecorder = cmapIO (textWithPriorityToText loggingColumns) threadSafeRecorder
-  liftIO $ setupHsLogger lock handle ["hls", "hie-bios"] hsLoggerMinPriority
+  liftIO $ setupHsLogger lock handle ["hls", "hie-bios"] (priorityToHsLoggerPriority minPriority)
   pure (cmap docToText textWithPriorityRecorder)
   where
     docToText = fmap (renderStrict . layoutPretty defaultLayoutOptions)

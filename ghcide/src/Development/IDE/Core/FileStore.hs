@@ -69,11 +69,13 @@ import           Data.List                                    (foldl')
 import qualified Data.Text                                    as Text
 import           Development.IDE.Core.IdeConfiguration        (isWorkspaceFile)
 import qualified Development.IDE.Core.Shake                   as Shake
-import           Development.IDE.Types.Logger                 (Priority (Info),
+import           Development.IDE.Types.Logger                 (Pretty (pretty),
+                                                               Priority (Info),
                                                                Recorder,
                                                                WithPriority,
                                                                cmapWithPrio,
-                                                               logWith)
+                                                               logWith, viaShow,
+                                                               (<+>))
 import           Language.LSP.Server                          hiding
                                                               (getVirtualFile)
 import qualified Language.LSP.Server                          as LSP
@@ -85,9 +87,6 @@ import           Language.LSP.Types                           (DidChangeWatchedF
 import qualified Language.LSP.Types                           as LSP
 import qualified Language.LSP.Types.Capabilities              as LSP
 import           Language.LSP.VFS
-import           Prettyprinter                                (Pretty (pretty),
-                                                               (<+>))
-import qualified Prettyprinter
 import           System.FilePath
 
 data Log
@@ -99,10 +98,10 @@ data Log
 instance Pretty Log where
   pretty = \case
     LogCouldNotIdentifyReverseDeps path ->
-      "Could not identify reverse dependencies for" <+> Prettyprinter.viaShow path
+      "Could not identify reverse dependencies for" <+> viaShow path
     (LogTypeCheckingReverseDeps path reverseDepPaths) ->
       "Typechecking reverse dependecies for"
-      <+> Prettyprinter.viaShow path
+      <+> viaShow path
       <> ":"
       <+> pretty (fmap (fmap show) reverseDepPaths)
     LogShake log -> pretty log

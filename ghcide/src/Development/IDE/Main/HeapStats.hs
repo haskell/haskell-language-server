@@ -6,11 +6,10 @@ import           Control.Concurrent
 import           Control.Concurrent.Async
 import           Control.Monad
 import           Data.Word
-import           Development.IDE.Types.Logger (Priority (Info), Recorder,
-                                               WithPriority, logWith)
+import           Development.IDE.Types.Logger (Pretty (pretty), Priority (Info),
+                                               Recorder, WithPriority, hsep,
+                                               logWith, (<+>))
 import           GHC.Stats
-import           Prettyprinter                (Pretty (pretty), (<+>))
-import qualified Prettyprinter
 import           Text.Printf                  (printf)
 
 data Log
@@ -26,7 +25,7 @@ instance Pretty Log where
     LogHeapStatsDisabled ->
       "Heap statistics are not enabled (RTS option -T is needed)"
     LogHeapStats liveBytes heapSize ->
-      Prettyprinter.hsep
+      hsep
         [ "Live bytes:"
         , pretty (toFormattedMegabytes liveBytes)
         , "Heap size:"
