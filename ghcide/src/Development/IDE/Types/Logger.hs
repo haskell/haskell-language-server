@@ -152,9 +152,13 @@ makeDefaultStderrRecorder columns hsLoggerMinPriority = do
 withDefaultRecorder
   :: MonadUnliftIO m
   => Maybe FilePath
+  -- ^ log file path
   -> Maybe [LoggingColumn]
+  -- ^ logging columns to display
   -> HsLogger.Priority
+  -- ^ min priority for hslogger
   -> (Recorder (WithPriority (Doc d)) -> m a)
+  -- ^ action given a recorder
   -> m a
 withDefaultRecorder path columns hsLoggerMinPriority action = do
   lock <- liftIO newLock
@@ -179,9 +183,13 @@ withDefaultRecorder path columns hsLoggerMinPriority action = do
 makeDefaultHandleRecorder
   :: MonadIO m
   => Maybe [LoggingColumn]
+  -- ^ built-in logging columns to display
   -> HsLogger.Priority
+  -- ^ min priority for hslogger
   -> Lock
+  -- ^ lock to take when outputting to handle
   -> Handle
+  -- ^ handle to output to
   -> m (Recorder (WithPriority (Doc a)))
 makeDefaultHandleRecorder columns hsLoggerMinPriority lock handle = do
   let Recorder{ logger_ } = textHandleRecorder handle

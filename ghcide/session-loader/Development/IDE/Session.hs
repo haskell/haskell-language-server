@@ -52,7 +52,7 @@ import qualified Development.IDE.GHC.Compat           as Compat
 import           Development.IDE.GHC.Compat.Core      hiding (Target,
                                                        TargetFile, TargetModule,
                                                        Var, Warning)
-import qualified Development.IDE.GHC.Compat.Core      as GHC hiding (Warning)
+import qualified Development.IDE.GHC.Compat.Core      as GHC
 import           Development.IDE.GHC.Compat.Env       hiding (Logger)
 import           Development.IDE.GHC.Compat.Units     (UnitId)
 import           Development.IDE.GHC.Util
