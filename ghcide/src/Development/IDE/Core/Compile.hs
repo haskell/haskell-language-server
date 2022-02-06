@@ -1052,17 +1052,7 @@ getDocsNonInteractive
     :: HscEnv
     -> Module
     -> Name
-    -> IO
-      ( Either
-          GHC.ErrorMessages
-          ( Name
-          , Either
-            GetDocsFailure
-            ( Maybe HsDocString
-            , Maybe (IntMap HsDocString)
-            )
-          )
-      )
+    -> IO (Either GHC.ErrorMessages (Name, Either GetDocsFailure (Maybe HsDocString, Maybe (IntMap HsDocString))))
 getDocsNonInteractive hsc_env mod name =
     do
         let
@@ -1077,10 +1067,10 @@ getDocsNonInteractive hsc_env mod name =
 
 -- | Non-interactive, batch version of 'GHC.Runtime.Eval.getDocs'.
 getDocsBatch
-  :: HscEnv
-  -> Module  -- ^ a moudle where the names are in scope
-  -> [Name]
-  -> IO(Either GHC.ErrorMessages (MS.Map Name (Either GetDocsFailure (Maybe HsDocString, Maybe (IntMap HsDocString)))))
+    :: HscEnv
+    -> Module  -- ^ a moudle where the names are in scope
+    -> [Name]
+    -> IO (Either GHC.ErrorMessages (MS.Map Name (Either GetDocsFailure (Maybe HsDocString, Maybe (IntMap HsDocString)))))
   -- ^ Return a 'Map' of 'Name's to 'Either' (no docs messages) (general doc body & arg docs)
 getDocsBatch hsc_env mod names =
     do
