@@ -106,7 +106,6 @@ import           Data.Binary
 import           Data.Coerce
 import           Data.Functor
 import qualified Data.HashMap.Strict               as HashMap
-import           Data.Map                          (Map)
 import qualified Data.Map                          as ML
 import           Data.Tuple.Extra                  (dupe)
 import           Data.Either.Extra                 (maybeToEither)
@@ -993,7 +992,17 @@ mkDetailsFromIface session iface linkable = do
     initIfaceLoad hsc' (typecheckIface iface)
   return (HomeModInfo iface details linkable)
 
-initTypecheckEnv :: HscEnv -> Module -> TcRn r -> IO (Messages, Maybe r)
+initTypecheckEnv
+    :: HscEnv
+    -> Module
+    -> TcRn r
+    -> IO
+      ( Messages
+#if MIN_VERSION_ghc(9,2,1)
+            DecoratedSDoc
+#endif
+      , Maybe r
+      )
 initTypecheckEnv hsc_env mod = initTc hsc_env HsSrcFile False mod fakeSpan
   where
     fakeSpan :: RealSrcSpan
@@ -1038,10 +1047,31 @@ getDocsNonInteractive' name =
                     else Right (MS.lookup name dmap, MS.lookup name amap')
 
 -- | Non-interactive modification of 'GHC.Runtime.Eval.getDocs'.
-getDocsNonInteractive :: HscEnv -> Module -> Name -> IO (Either GHC.ErrorMessages (Name, Either GetDocsFailure (Maybe HsDocString, Maybe (IntMap HsDocString))))
-getDocsNonInteractive hsc_env mod name = do
-    ((_warns,errs), res) <- initTypecheckEnv hsc_env mod $ getDocsNonInteractive' name
-    pure $ maybeToEither errs res
+getDocsNonInteractive
+    :: HscEnv
+    -> Module
+    -> Name
+    -> IO
+      ( Either
+          GHC.ErrorMessages
+          ( Name
+          , Either
+            GetDocsFailure
+            ( Maybe HsDocString
+            , Maybe (IntMap HsDocString)
+            )
+          )
+      )
+getDocsNonInteractive hsc_env mod name =
+    do
+        let
+            init = initTypecheckEnv hsc_env mod $ getDocsNonInteractive' name
+#if MIN_VERSION_ghc (9,2,1)
+        (Error.getErrorMessages -> errs, res) <- init
+#else
+        ((_warns,errs), res) <- init
+#endif
+        pure $ maybeToEither errs res
 
 
 -- | Non-interactive, batch version of 'GHC.Runtime.Eval.getDocs'.
@@ -1049,12 +1079,18 @@ getDocsBatch
   :: HscEnv
   -> Module  -- ^ a moudle where the names are in scope
   -> [Name]
-  --  2021-11-18: NOTE: Map Int would become IntMap if next GHCs.
-  -> IO (Either GHC.ErrorMessages (MS.Map Name (Either GetDocsFailure (Maybe HsDocString, Maybe (IntMap HsDocString)))))
+  -> IO(Either GHC.ErrorMessages (MS.Map Name (Either GetDocsFailure (Maybe HsDocString, Maybe (IntMap HsDocString)))))
   -- ^ Return a 'Map' of 'Name's to 'Either' (no docs messages) (general doc body & arg docs)
-getDocsBatch hsc_env mod names = do
-    ((_warns,errs), res) <- initTypecheckEnv hsc_env mod $ MS.fromList <$> traverse getDocsNonInteractive' names
-    pure $ maybeToEither errs res
+getDocsBatch hsc_env mod names =
+    do
+        let
+            init = initTypecheckEnv hsc_env mod $ MS.fromList <$> traverse getDocsNonInteractive' names
+#if MIN_VERSION_ghc (9,2,1)
+        (Error.getErrorMessages -> errs, res) <- init
+#else
+        ((_warns,errs), res) <- init
+#endif
+        pure $ maybeToEither errs res
 
 -- | Non-interactive, batch version of 'InteractiveEval.lookupNames'.
 --   The interactive paths create problems in ghc-lib builds
