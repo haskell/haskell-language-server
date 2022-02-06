@@ -82,9 +82,11 @@ import           Data.Bifunctor                    (second)
 import qualified Data.ByteString                   as BS
 import qualified Data.DList                        as DL
 import           Data.IORef
+#if !MIN_VERSION_ghc(9,2,1)
 import qualified Data.IntMap.Strict                as IntMap
+#endif
 import           Data.IntMap.Strict                (IntMap)
-import           Data.List.Extra
+import Data.List.Extra
 import qualified Data.Map.Strict                   as MS
 import           Data.Maybe
 import qualified Data.Text                         as T
@@ -106,7 +108,6 @@ import           Data.Binary
 import           Data.Coerce
 import           Data.Functor
 import qualified Data.HashMap.Strict               as HashMap
-import qualified Data.Map                          as ML
 import           Data.Tuple.Extra                  (dupe)
 import           Data.Either.Extra                 (maybeToEither)
 import           Data.Unique                       as Unique
@@ -726,7 +727,7 @@ mergeEnvs env extraModSummaries extraMods envs = do
     -- To work around this, we coerce to the underlying type
     -- To remove this, I plan to upstream the missing Monoid instance
         concatFC :: [FinderCache] -> FinderCache
-        concatFC = unsafeCoerce (mconcat @(ML.Map InstalledModule InstalledFindResult))
+        concatFC = unsafeCoerce (mconcat @(MS.Map InstalledModule InstalledFindResult))
 
 withBootSuffix :: HscSource -> ModLocation -> ModLocation
 withBootSuffix HsBootFile = addBootSuffixLocnOut

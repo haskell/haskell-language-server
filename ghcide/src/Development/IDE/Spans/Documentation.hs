@@ -18,7 +18,6 @@ import           Data.Bool                      (bool)
 import           Data.Either
 import           Data.Foldable
 import           Data.List.Extra
-import qualified Data.Map                       as ML
 import qualified Data.Map.Strict                as MS
 import           Data.Maybe
 import qualified Data.Set                        as S
@@ -61,7 +60,7 @@ mkDocMap env rm this_mod =
         pure $ maybe mapToTyThing (extendNameEnv mapToTyThing n) kind
       | otherwise = pure mapToTyThing
     names = rights $ S.toList idents
-    idents = ML.keysSet rm
+    idents = MS.keysSet rm
     mod = tcg_mod this_mod
 
 lookupKind :: HscEnv -> Module -> Name -> IO (Maybe TyThing)
