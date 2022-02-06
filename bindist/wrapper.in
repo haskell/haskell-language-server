@@ -89,28 +89,16 @@ infer_ghc_pkg() {
 	unset infer_ghc_path infer_ghc_bin infer_ghc_ver_suffix path_prefix
 }
 
-# Get the bin dir from GHCs internal libdir. This is wobbly.
-ghc_bin_from_libdir() {
-	if [ -e "$1"/bin/ghc ] ; then
-		echo "$1"/bin/ghc
-	elif [ -e "$1"/bin/ghc-${GHC_VERSION} ] ; then
-		echo "$1"/bin/ghc-${GHC_VERSION}
-	elif [ -e "$1"/../bin/ghc ] ; then
-		echo "$1"/../bin/ghc
-	elif [ -e "$1"/../bin/ghc-${GHC_VERSION} ] ; then
-		echo "$1"/../bin/ghc-${GHC_VERSION}
-	fi
-}
-
-# try GHC_LIBDIR from the environment (e.g. user set it)
+# try GHC_LIBDIR from the environment (e.g. user set it, or haskell-language-server-wrapper)
 if [ -n "${GHC_LIBDIR}" ] &&
-	check_ghc "${GHC_LIBDIR}" "$(ghc_bin_from_libdir "${GHC_LIBDIR}")" "$(infer_ghc_pkg "$(ghc_bin_from_libdir "${GHC_LIBDIR}")")" "GHC_LIBDIR"
+	[ -n "${GHC_BIN}" ] &&
+	check_ghc "${GHC_LIBDIR}" "${GHC_BIN}" "$(infer_ghc_pkg "${GHC_BIN}")" "GHC_LIBDIR and GHC_BIN from env"
 then
 	:
 # try GHC_BIN from the environment (e.g. user set it)
 elif [ -n "${GHC_BIN}" ] &&
 	GHC_LIBDIR="$("${GHC_BIN}" --print-libdir)" &&
-	check_ghc "${GHC_LIBDIR}" "${GHC_BIN}" "$(infer_ghc_pkg "${GHC_BIN}")" "GHC_BIN"
+	check_ghc "${GHC_LIBDIR}" "${GHC_BIN}" "$(infer_ghc_pkg "${GHC_BIN}")" "GHC_BIN from env"
 then
 	:
 # try ghcup
@@ -123,13 +111,13 @@ then
 # try ghc-${GHC_VERSION}
 elif command -v ghc-${GHC_VERSION} >/dev/null &&
 	GHC_LIBDIR="$("ghc-${GHC_VERSION}" --print-libdir)" &&
-	check_ghc "${GHC_LIBDIR}" "ghc-${GHC_VERSION}" "$(infer_ghc_pkg "ghc-${GHC_VERSION}")" "ghc-<ver>"
+	check_ghc "${GHC_LIBDIR}" "ghc-${GHC_VERSION}" "$(infer_ghc_pkg "ghc-${GHC_VERSION}")" "ghc-${GHC_VERSION} in PATH"
 then
 	:
 # try ghc
 elif command -v ghc >/dev/null &&
 	GHC_LIBDIR="$(ghc --print-libdir)" &&
-	check_ghc "${GHC_LIBDIR}" "ghc" "$(infer_ghc_pkg "ghc")" "ghc"
+	check_ghc "${GHC_LIBDIR}" "ghc" "$(infer_ghc_pkg "ghc")" "ghc in PATH"
 then
 	:
 # try stack

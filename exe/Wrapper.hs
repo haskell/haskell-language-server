@@ -1,4 +1,5 @@
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE CPP #-}
 -- | This module is based on the hie-wrapper.sh script in
 -- https://github.com/alanz/vscode-hie-server
@@ -112,9 +113,11 @@ launchHaskellLanguageServer parsedArgs = do
 #ifdef mingw32_HOST_OS
       callProcess e args
 #else
+      let Cradle { cradleOptsProg = CradleAction { runGhcCmd } } = cradle
+      (CradleSuccess ghcBinary) <- fmap trim <$> runGhcCmd ["-v0", "-package-env=-", "-e", "putStr =<< System.Environment.getExecutablePath"]
       (CradleSuccess libdir) <- HieBios.getRuntimeGhcLibDir cradle
       env <- Map.fromList <$> getEnvironment
-      let newEnv = Map.insert "GHC_LIBDIR" libdir env
+      let newEnv = Map.insert "GHC_BIN" ghcBinary $ Map.insert "GHC_LIBDIR" libdir env
       executeFile e True args (Just (Map.toList newEnv))
 #endif
 
