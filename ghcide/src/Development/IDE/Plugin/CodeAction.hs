@@ -53,7 +53,8 @@ import           Development.IDE.GHC.Util                          (prettyPrint,
                                                                     traceAst,
                                                                     unsafePrintSDoc)
 import           Development.IDE.Plugin.CodeAction.Args
-import           Development.IDE.Plugin.CodeAction.ExactPrint
+import           Development.IDE.Plugin.CodeAction.ExactPrint      hiding
+                                                                   (newImport)
 import           Development.IDE.Plugin.CodeAction.PositionIndexed
 import           Development.IDE.Plugin.TypeLenses                 (suggestSignature)
 import           Development.IDE.Spans.Common

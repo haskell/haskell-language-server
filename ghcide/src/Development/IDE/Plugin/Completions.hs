@@ -26,8 +26,6 @@ import           Development.IDE.GHC.Error                    (rangeToSrcSpan)
 import           Development.IDE.GHC.ExactPrint               (GetAnnotatedParsedSource (GetAnnotatedParsedSource))
 import           Development.IDE.GHC.Util                     (prettyPrint)
 import           Development.IDE.Graph
-import           Development.IDE.Plugin.CodeAction            (newImport,
-                                                               newImportToEdit)
 import           Development.IDE.Plugin.CodeAction.ExactPrint
 import           Development.IDE.Plugin.Completions.Logic
 import           Development.IDE.Plugin.Completions.Types
@@ -36,6 +34,8 @@ import           Development.IDE.Types.HscEnvEq               (HscEnvEq (envPack
                                                                hscEnv)
 import qualified Development.IDE.Types.KnownTargets           as KT
 import           Development.IDE.Types.Location
+import           Development.IDE.Types.Logger                 (logDebug,
+                                                               logError)
 import           GHC.Exts                                     (fromList, toList)
 import           Ide.Plugin.Config                            (Config)
 import           Ide.Types
@@ -217,7 +217,7 @@ extendImportHandler' ideState ExtendImport {..}
             msr <- MaybeT $ use GetModSummaryWithoutTimestamps nfp
             ps <- MaybeT $ use GetAnnotatedParsedSource nfp
             (_, contents) <- MaybeT $ use GetFileContents nfp
-            return (msr, ps, contents)
+            return (msr, ps, fromMaybe "" contents)
       let df = ms_hspp_opts msrModSummary
           wantedModule = mkModuleName (T.unpack importName)
           wantedQual = mkModuleName . T.unpack <$> importQual
@@ -232,16 +232,19 @@ extendImportHandler' ideState ExtendImport {..}
                 $
                   extendImport (T.unpack <$> thingParent) (T.unpack newThing) (makeDeltaAst imp)
         Nothing -> do
-            let n = newImport importName sym importQual False
-                sym = if isNothing importQual then Just it else Nothing
-                it = case thingParent of
-                  Nothing -> newThing
-                  Just p  -> p <> "(" <> newThing <> ")"
-            t <- liftMaybe $ snd <$> newImportToEdit
-                n
-                (astA ps)
-                (fromMaybe "" contents)
-            return (nfp, WorkspaceEdit {_changes=Just (fromList [(doc,List [t])]), _documentChanges=Nothing, _changeAnnotations=Nothing})
+            let rewrite = newImport contents
+                    (T.unpack importName)
+                    (T.unpack <$> thingParent)
+                    (T.unpack newThing)
+                    (astA ps)
+            let workspaceEditE = rewriteToWEdit df doc (annsA ps) rewrite
+            case workspaceEditE of
+                Left errMsg -> do
+                    liftIO $ logError (ideLogger ideState) $ "[extendImport] error: " <> T.pack errMsg
+                    mzero
+                Right workspaceEdit -> do
+                    liftIO $ logDebug (ideLogger ideState) $ "[extendImport] workspace edit: " <> T.pack (show workspaceEdit)
+                    pure (nfp, workspaceEdit)
   | otherwise =
     mzero
 

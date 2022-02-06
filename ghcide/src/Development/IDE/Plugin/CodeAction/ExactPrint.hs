@@ -16,11 +16,13 @@ module Development.IDE.Plugin.CodeAction.ExactPrint (
   -- * Utilities
   appendConstraint,
   removeConstraint,
+  newImport,
   extendImport,
   hideSymbol,
   liftParseAST,
 ) where
 
+import Debug.Trace
 import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.Extra                   (whenJust)
@@ -31,7 +33,7 @@ import           Data.Functor
 import           Data.Generics                         (listify)
 import qualified Data.Map.Strict                       as Map
 import           Data.Maybe                            (fromJust, isNothing,
-                                                        mapMaybe)
+                                                        mapMaybe, fromMaybe)
 import qualified Data.Text                             as T
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error
@@ -311,6 +313,12 @@ transferAnn la lb f = do
   oldValue <- liftMaybe "Unable to find ann" $ Map.lookup oldKey anns
   putAnnsT $ Map.delete oldKey $ Map.insert newKey (f oldValue) anns
 
+checkAnn :: Data a => String -> Located a -> TransformT (Either String) ()
+checkAnn msg l = do
+    anns <- getAnnsT
+    let key = mkAnnKey l
+    void $ liftMaybe ("Unable to find ann, extra msg: " ++ msg) $ Map.lookup key anns
+
 #endif
 
 headMaybe :: [a] -> Maybe a
@@ -326,9 +334,58 @@ liftMaybe _ (Just x) = return x
 liftMaybe s _        = lift $ Left s
 
 ------------------------------------------------------------------------------
+newImport :: T.Text
+          -> String -- ^ module name
+          -> Maybe String -- ^ the symbol
+          -> String -- ^ identifier
+          -> Located (HsModule GhcPs)
+          -> Rewrite
+newImport contents moduleName mparent identifier lMod@(L _ mod) =
+    -- The 'SrcSpan' attached to 'lMod' is just a single point at line 1, column 1.
+    -- So we need to use file contents to calculate an correct range for 'Rewrite'.
+    Rewrite (fixModuleSpan lMod) $ \df -> do
+        moduleNameSrcSpan <- uniqueSrcSpanT
+        srcSpan <- uniqueSrcSpanT
+        itemsSrcSpan <- uniqueSrcSpanT
+        let lModuleName :: Located ModuleName = L moduleNameSrcSpan (mkModuleName moduleName)
+            lItems :: Located [LIE GhcPs] = L itemsSrcSpan [] :: Located [LIE GhcPs]
+            lDecl :: LImportDecl GhcPs = L srcSpan $
+                ImportDecl {
+                    ideclExt = NoExtField,
+                    ideclSourceSrc = NoSourceText,
+                    ideclName = lModuleName,
+                    ideclPkgQual = Nothing,
+                    ideclSource = False,
+                    ideclSafe = False,
+                    ideclQualified = NotQualified,
+                    ideclImplicit = False,
+                    ideclAs = Nothing,
+                    ideclHiding = Just (False, lItems)
+                }
+            precedingLines :: Int = if null (hsmodImports mod) then 2 else 1
+        addSimpleAnnT lDecl (DP (precedingLines, 0)) [(G AnnImport, DP (0, 0))]
+        addSimpleAnnT lModuleName (DP (0, 1)) [(G AnnVal, DP (0, 0))]
+        addSimpleAnnT lItems (DP (0, 1)) [(G AnnOpenP, DP (0, 0)), (G AnnCloseP, DP (0, 0))]
+        lDecl' <- extendImport' df mparent identifier lDecl
+        pure $ fmap (\mod -> mod {hsmodImports = hsmodImports mod ++ [lDecl']}) lMod
+  where
+    -- Use file contents to derive an 'SrcSpan'. See usage site for more detail.
+    fixModuleSpan :: Located (HsModule GhcPs) -> SrcSpan
+    fixModuleSpan (L (RealSrcSpan l buf) _) =
+        let lines = T.lines contents
+            file = srcSpanFile l
+            lastCol = maybe 1 ((+1) . T.length) (lastMaybe lines)
+            endLoc = mkRealSrcLoc file (Prelude.length lines + 1) lastCol
+         in RealSrcSpan (mkRealSrcSpan (mkRealSrcLoc file 1 1) endLoc) buf
+    fixModuleSpan (L l _) = locA l
+
+------------------------------------------------------------------------------
 extendImport :: Maybe String -> String -> LImportDecl GhcPs -> Rewrite
 extendImport mparent identifier lDecl@(L l _) =
-  Rewrite (locA l) $ \df -> do
+  Rewrite (locA l) $ \df -> extendImport' df mparent identifier lDecl
+
+extendImport' :: DynFlags -> Maybe String -> String -> LImportDecl GhcPs -> TransformT (Either String) (LImportDecl GhcPs)
+extendImport' df mparent identifier lDecl =
     case mparent of
       Just parent -> extendImportViaParent df parent identifier lDecl
       _           -> extendImportTopLevel identifier lDecl
