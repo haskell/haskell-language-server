@@ -125,7 +125,6 @@ import Data.Function ((&))
 data Log 
   = LogGhcIde Ghcide.Log 
   | LogIDEMain IDE.Log
-  deriving Show
 
 instance Pretty Log where
   pretty = \case

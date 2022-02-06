@@ -1,6 +1,6 @@
-{-# LANGUAGE CPP               #-}
-{-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE CPP                       #-}
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE OverloadedStrings         #-}
 module Plugins where
 
 import           Development.IDE.Types.Logger      (Pretty (pretty), Recorder,
@@ -101,53 +101,10 @@ import qualified Ide.Plugin.StylishHaskell         as StylishHaskell
 import qualified Ide.Plugin.Brittany               as Brittany
 #endif
 
-data Log
-  = LogGhcIde GhcIde.Log
-  | LogExample Example.Log
-  | LogExample2 Example2.Log
-#if tactic
-  | LogTactic Tactic.Log
-#endif
-#if eval
-  | LogEval Eval.Log
-#endif
-#if importLens
-  | LogExplicitImports ExplicitImports.Log
-#endif
-#if refineImports
-  | LogRefineImports RefineImports.Log
-#endif
-#if hlint
-  | LogHlint Hlint.Log
-#endif
-#if alternateNumberFormat
-  | LogAlternateNumberFormat AlternateNumberFormat.Log
-#endif
-  deriving Show
+data Log = forall a. (Pretty a) => Log a
 
 instance Pretty Log where
-  pretty = \case
-    LogGhcIde log                -> pretty log
-    LogExample log               -> pretty log
-    LogExample2 log              -> pretty log
-#if tactic
-    LogTactic log                -> pretty log
-#endif
-#if eval
-    LogEval log                  -> pretty log
-#endif
-#if importLens
-    LogExplicitImports log       -> pretty log
-#endif
-#if refineImports
-    LogRefineImports log         -> pretty log
-#endif
-#if hlint
-    LogHlint log                 -> pretty log
-#endif
-#if alternateNumberFormat
-    LogAlternateNumberFormat log -> pretty log
-#endif
+  pretty (Log a) = pretty a
 
 -- ---------------------------------------------------------------------
 
@@ -159,6 +116,8 @@ instance Pretty Log where
 idePlugins :: Recorder (WithPriority Log) -> Bool -> IdePlugins IdeState
 idePlugins recorder includeExamples = pluginDescToIdePlugins allPlugins
   where
+    pluginRecorder :: forall log. (Pretty log) => Recorder (WithPriority log)
+    pluginRecorder = cmapWithPrio Log recorder
     allPlugins = if includeExamples
                    then basePlugins ++ examplePlugins
                    else basePlugins
@@ -173,7 +132,7 @@ idePlugins recorder includeExamples = pluginDescToIdePlugins allPlugins
       Fourmolu.descriptor "fourmolu" :
 #endif
 #if tactic
-      Tactic.descriptor (cmapWithPrio LogTactic recorder) "tactics" :
+      Tactic.descriptor pluginRecorder "tactics" :
 #endif
 #if ormolu
       Ormolu.descriptor   "ormolu" :
@@ -200,36 +159,36 @@ idePlugins recorder includeExamples = pluginDescToIdePlugins allPlugins
       HaddockComments.descriptor "haddockComments" :
 #endif
 #if eval
-      Eval.descriptor (cmapWithPrio LogEval recorder) "eval" :
+      Eval.descriptor pluginRecorder "eval" :
 #endif
 #if importLens
-      ExplicitImports.descriptor (cmapWithPrio LogExplicitImports recorder) "importLens" :
+      ExplicitImports.descriptor pluginRecorder "importLens" :
 #endif
 #if qualifyImportedNames
       QualifyImportedNames.descriptor "qualifyImportedNames" :
 #endif
 #if refineImports
-      RefineImports.descriptor (cmapWithPrio LogRefineImports recorder) "refineImports" :
+      RefineImports.descriptor pluginRecorder "refineImports" :
 #endif
 #if moduleName
       ModuleName.descriptor "moduleName" :
 #endif
 #if hlint
-      Hlint.descriptor (cmapWithPrio LogHlint recorder) "hlint" :
+      Hlint.descriptor pluginRecorder "hlint" :
 #endif
 #if splice
       Splice.descriptor "splice" :
 #endif
 #if alternateNumberFormat
-      AlternateNumberFormat.descriptor (cmapWithPrio LogAlternateNumberFormat recorder) "alternateNumberFormat" :
+      AlternateNumberFormat.descriptor pluginRecorder "alternateNumberFormat" :
 #endif
 #if selectionRange
       SelectionRange.descriptor "selectionRange" :
 #endif
     -- The ghcide descriptors should come last so that the notification handlers
     -- (which restart the Shake build) run after everything else
-      GhcIde.descriptors (cmapWithPrio LogGhcIde recorder)
+      GhcIde.descriptors pluginRecorder
     examplePlugins =
-      [Example.descriptor  (cmapWithPrio LogExample recorder) "eg"
-      ,Example2.descriptor (cmapWithPrio LogExample2 recorder) "eg2"
+      [Example.descriptor  pluginRecorder "eg"
+      ,Example2.descriptor pluginRecorder "eg2"
       ]

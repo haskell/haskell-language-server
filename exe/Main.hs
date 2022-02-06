@@ -21,7 +21,6 @@ import           Prettyprinter                (Doc, Pretty (pretty))
 data Log
   = LogIdeMain IdeMain.Log
   | LogPlugins Plugins.Log
-  deriving Show
 
 instance Pretty Log where
   pretty log = case log of

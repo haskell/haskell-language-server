@@ -93,7 +93,7 @@ import           Test.Tasty.Golden
 import           Test.Tasty.HUnit
 import           Test.Tasty.Ingredients.Rerun
 
-newtype Log = LogIDEMain IDEMain.Log deriving Show
+newtype Log = LogIDEMain IDEMain.Log
 
 instance Pretty Log where
   pretty = \case

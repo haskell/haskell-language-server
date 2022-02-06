@@ -43,7 +43,6 @@ data Log
   = LogIDEMain IDEMain.Log
   | LogRules Rules.Log
   | LogGhcIde GhcIde.Log
-  deriving Show
 
 instance Pretty Log where
   pretty = \case
