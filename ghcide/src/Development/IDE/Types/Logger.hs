@@ -37,7 +37,10 @@ import qualified Data.Text                  as Text
 import qualified Data.Text.IO               as Text
 import           Data.Time                  (defaultTimeLocale, formatTime,
                                              getCurrentTime)
-import           GHC.Stack                  (HasCallStack, withFrozenCallStack)
+import           GHC.Stack                  (CallStack, HasCallStack,
+                                             SrcLoc (SrcLoc, srcLocModule, srcLocStartCol, srcLocStartLine),
+                                             callStack, getCallStack,
+                                             withFrozenCallStack)
 import           Prettyprinter              as PrettyPrinterModule
 import           Prettyprinter.Render.Text  (renderStrict)
 import           System.IO                  (Handle, IOMode (AppendMode),
@@ -92,16 +95,16 @@ logTelemetry x = logPriority x Telemetry
 noLogging :: Logger
 noLogging = Logger $ \_ _ -> return ()
 
-data WithPriority a = WithPriority { priority :: Priority, payload :: a } deriving Functor
+data WithPriority a = WithPriority { priority :: Priority, callStack_ :: CallStack, payload :: a } deriving Functor
 
 -- | Note that this is logging actions _of the program_, not of the user.
 --   You shouldn't call warning/error if the user has caused an error, only
 --   if our code has gone wrong and is itself erroneous (e.g. we threw an exception).
 data Recorder msg = Recorder
-  { logger_ :: forall m. (HasCallStack, MonadIO m) => msg -> m () }
+  { logger_ :: forall m. (MonadIO m) => msg -> m () }
 
 logWith :: (HasCallStack, MonadIO m) => Recorder (WithPriority msg) -> Priority -> msg -> m ()
-logWith recorder priority msg = withFrozenCallStack $ logger_ recorder (WithPriority priority msg)
+logWith recorder priority msg = withFrozenCallStack $ logger_ recorder (WithPriority priority callStack msg)
 
 instance Semigroup (Recorder msg) where
   (<>) Recorder{ logger_ = logger_1 } Recorder{ logger_ = logger_2 } =
@@ -146,16 +149,18 @@ makeDefaultStderrRecorder columns minPriority = do
   makeDefaultHandleRecorder columns minPriority lock stderr
 
 -- | If no path given then use stderr, otherwise use file.
--- kinda complicated because we are logging with both hslogger and our own
--- logger simultaneously
+-- Kinda complicated because we also need to setup `hslogger` for
+-- `hie-bios` log compatibility reasons. If `hie-bios` can be set to use our
+-- logger instead or if `hie-bios` doesn't use `hslogger` then `hslogger` can
+-- be removed completely. See `setupHsLogger` comment.
 withDefaultRecorder
   :: MonadUnliftIO m
   => Maybe FilePath
-  -- ^ log file path
+  -- ^ Log file path. `Nothing` uses stderr
   -> Maybe [LoggingColumn]
-  -- ^ logging columns to display
+  -- ^ logging columns to display. `Nothing` uses `defaultLoggingColumns`
   -> Priority
-  -- ^ min priority for hslogger
+  -- ^ min priority for hslogger compatibility
   -> (Recorder (WithPriority (Doc d)) -> m a)
   -- ^ action given a recorder
   -> m a
@@ -182,7 +187,7 @@ withDefaultRecorder path columns minPriority action = do
 makeDefaultHandleRecorder
   :: MonadIO m
   => Maybe [LoggingColumn]
-  -- ^ built-in logging columns to display
+  -- ^ built-in logging columns to display. Nothing uses the default
   -> Priority
   -- ^ min priority for hslogger compatibility
   -> Lock
@@ -195,6 +200,7 @@ makeDefaultHandleRecorder columns minPriority lock handle = do
   let threadSafeRecorder = Recorder { logger_ = \msg -> liftIO $ withLock lock (logger_ msg) }
   let loggingColumns = fromMaybe defaultLoggingColumns columns
   let textWithPriorityRecorder = cmapIO (textWithPriorityToText loggingColumns) threadSafeRecorder
+  -- see `setupHsLogger` comment
   liftIO $ setupHsLogger lock handle ["hls", "hie-bios"] (priorityToHsLoggerPriority minPriority)
   pure (cmap docToText textWithPriorityRecorder)
   where
@@ -208,8 +214,17 @@ priorityToHsLoggerPriority = \case
   Warning   -> HsLogger.WARNING
   Error     -> HsLogger.ERROR
 
--- taken from LSP.setupLogger
--- used until contravariant logging system is fully in place
+-- | The purpose of setting up `hslogger` at all is that `hie-bios` uses
+-- `hslogger` to output compilation logs. The easiest way to merge these logs
+-- with our log output is to setup an `hslogger` that uses the same handle
+-- and same lock as our loggers. That way the output from our loggers and
+-- `hie-bios` don't interleave strangely.
+-- It may be possible to have `hie-bios` use our logger by decorating the
+-- `Cradle.cradleOptsProg.runCradle` we get in the Cradle from
+-- `HieBios.findCradle`, but I remember trying that and something not good
+-- happened. I'd have to try it again to remember if that was a real issue.
+-- Once that is figured out or `hie-bios` doesn't use `hslogger`, then all
+-- references to `hslogger` can be removed entirely.
 setupHsLogger :: Lock -> Handle -> [String] -> HsLogger.Priority -> IO ()
 setupHsLogger lock handle extraLogNames level = do
   hSetEncoding handle utf8
@@ -238,27 +253,43 @@ data LoggingColumn
   | ThreadIdColumn
   | PriorityColumn
   | DataColumn
+  | SourceLocColumn
 
 defaultLoggingColumns :: [LoggingColumn]
 defaultLoggingColumns = [TimeColumn, PriorityColumn, DataColumn]
 
 textWithPriorityToText :: [LoggingColumn] -> WithPriority Text -> IO Text
-textWithPriorityToText columns WithPriority{ priority, payload } = do
+textWithPriorityToText columns WithPriority{ priority, callStack_, payload } = do
     textColumns <- mapM loggingColumnToText columns
     pure $ Text.intercalate " | " textColumns
     where
+      showAsText :: Show a => a -> Text
+      showAsText = Text.pack . show
+
       utcTimeToText utcTime = Text.pack $ formatTime defaultTimeLocale "%Y-%m-%dT%H:%M:%S%6QZ" utcTime
 
       priorityToText :: Priority -> Text
-      priorityToText = Text.pack . show
+      priorityToText = showAsText
 
-      threadIdToText = Text.pack . show
+      threadIdToText = showAsText
+
+      callStackToSrcLoc :: CallStack -> Maybe SrcLoc
+      callStackToSrcLoc callStack =
+        case getCallStack callStack of
+          (_, srcLoc) : _ -> Just srcLoc
+          _               -> Nothing
+
+      srcLocToText = \case
+          Nothing -> "<unknown>"
+          Just SrcLoc{ srcLocModule, srcLocStartLine, srcLocStartCol } ->
+            Text.pack srcLocModule <> "#" <> showAsText srcLocStartLine <> ":" <> showAsText srcLocStartCol
 
       loggingColumnToText :: LoggingColumn -> IO Text
       loggingColumnToText = \case
         TimeColumn -> do
           utcTime <- getCurrentTime
           pure (utcTimeToText utcTime)
+        SourceLocColumn -> pure $ (srcLocToText . callStackToSrcLoc) callStack_
         ThreadIdColumn -> do
           threadId <- myThreadId
           pure (threadIdToText threadId)

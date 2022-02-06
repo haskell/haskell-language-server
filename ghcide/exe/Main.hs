@@ -20,7 +20,7 @@ import           Development.IDE.Core.Tracing      (withTelemetryLogger)
 import           Development.IDE.Graph             (ShakeOptions (shakeThreads))
 import qualified Development.IDE.Main              as IDEMain
 import qualified Development.IDE.Plugin.HLS.GhcIde as GhcIde
-import           Development.IDE.Types.Logger      (Doc, Logger (Logger),
+import           Development.IDE.Types.Logger      (Logger (Logger),
                                                     LoggingColumn (DataColumn, PriorityColumn),
                                                     Pretty (pretty),
                                                     Priority (Debug, Info),
@@ -30,6 +30,7 @@ import           Development.IDE.Types.Logger      (Doc, Logger (Logger),
                                                     makeDefaultStderrRecorder)
 import qualified Development.IDE.Types.Logger      as Logger
 import           Development.IDE.Types.Options
+import           GHC.Stack                         (emptyCallStack)
 import           Ide.Plugin.Config                 (Config (checkParents, checkProject))
 import           Ide.PluginUtils                   (pluginDescToIdePlugins)
 import           Paths_ghcide                      (version)
@@ -50,9 +51,6 @@ instance Pretty Log where
     LogRules log   -> pretty log
     LogGhcIde log  -> pretty log
 
-logToDoc :: Log -> Doc a
-logToDoc = pretty
-
 ghcideVersion :: IO String
 ghcideVersion = do
   path <- getExecutablePath
@@ -68,7 +66,7 @@ main :: IO ()
 main = withTelemetryLogger $ \telemetryLogger -> do
     -- stderr recorder just for plugin cli commands
     pluginCliRecorder <-
-      cmapWithPrio logToDoc
+      cmapWithPrio pretty
       <$> makeDefaultStderrRecorder (Just [PriorityColumn, DataColumn]) Info
 
     let hlsPlugins = pluginDescToIdePlugins (GhcIde.descriptors (cmapWithPrio LogGhcIde pluginCliRecorder))
@@ -92,11 +90,11 @@ main = withTelemetryLogger $ \telemetryLogger -> do
           docWithPriorityRecorder
           & cfilter (\WithPriority{ priority } -> priority >= minPriority)
 
-    -- hack so old-school logging still works
-    let logger = Logger $ \p m -> logger_ (WithPriority p (pretty m))
+    -- exists so old-style logging works. intended to be phased out
+    let logger = Logger $ \p m -> logger_ (WithPriority p emptyCallStack (pretty m))
 
     let recorder = docWithFilteredPriorityRecorder
-                 & cmapWithPrio logToDoc
+                 & cmapWithPrio pretty
 
     let arguments =
           if argsTesting

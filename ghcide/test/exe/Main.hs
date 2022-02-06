@@ -119,8 +119,9 @@ import           Test.Tasty.QuickCheck
 import           Text.Printf                              (printf)
 import           Text.Regex.TDFA                          ((=~))
 import qualified HieDbRetry
-import Development.IDE.Types.Logger (WithPriority(WithPriority, priority), Priority (Debug), cmapWithPrio, Recorder (Recorder, logger_), makeDefaultStderrRecorder, cfilter, LoggingColumn (PriorityColumn, DataColumn), Logger (Logger), Pretty (pretty), Doc)
+import Development.IDE.Types.Logger (WithPriority(WithPriority, priority), Priority (Debug), cmapWithPrio, Recorder (Recorder, logger_), makeDefaultStderrRecorder, cfilter, LoggingColumn (PriorityColumn, DataColumn), Logger (Logger), Pretty (pretty))
 import Data.Function ((&))
+import GHC.Stack (emptyCallStack)
 
 data Log 
   = LogGhcIde Ghcide.Log 
@@ -130,9 +131,6 @@ instance Pretty Log where
   pretty = \case
     LogGhcIde log -> pretty log
     LogIDEMain log -> pretty log
-
-logToDoc :: Log -> Doc a
-logToDoc = pretty
 
 -- | Wait for the next progress begin step
 waitForProgressBegin :: Session ()
@@ -168,11 +166,11 @@ main = do
         docWithPriorityRecorder
         & cfilter (\WithPriority{ priority } -> priority >= Debug)
 
-  -- hack so old school logging still works
-  let logger = Logger $ \p m -> logger_ (WithPriority p (pretty m))
+  -- exists so old-style logging works. intended to be phased out
+  let logger = Logger $ \p m -> logger_ (WithPriority p emptyCallStack (pretty m))
 
   let recorder = docWithFilteredPriorityRecorder
-               & cmapWithPrio logToDoc
+               & cmapWithPrio pretty
 
   -- We mess with env vars so run single-threaded.
   defaultMainWithRerun $ testGroup "ghcide"

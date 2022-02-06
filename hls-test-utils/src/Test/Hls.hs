@@ -59,7 +59,7 @@ import qualified Development.IDE.Main            as IDEMain
 import           Development.IDE.Plugin.Test     (TestRequest (GetBuildKeysBuilt, WaitForIdeRule, WaitForShakeQueue),
                                                   WaitForIdeRuleResult (ideResultSuccess))
 import qualified Development.IDE.Plugin.Test     as Test
-import           Development.IDE.Types.Logger    (Doc, Logger (Logger),
+import           Development.IDE.Types.Logger    (Logger (Logger),
                                                   Pretty (pretty),
                                                   Priority (Debug),
                                                   Recorder (Recorder, logger_),
@@ -68,6 +68,7 @@ import           Development.IDE.Types.Logger    (Doc, Logger (Logger),
                                                   makeDefaultStderrRecorder)
 import           Development.IDE.Types.Options
 import           GHC.IO.Handle
+import           GHC.Stack                       (emptyCallStack)
 import           Ide.Plugin.Config               (Config, formattingProvider)
 import           Ide.PluginUtils                 (idePluginsToPluginDesc,
                                                   pluginDescToIdePlugins)
@@ -98,9 +99,6 @@ newtype Log = LogIDEMain IDEMain.Log
 instance Pretty Log where
   pretty = \case
     LogIDEMain log -> pretty log
-
-logToDoc :: Log -> Doc a
-logToDoc = pretty
 
 -- | Run 'defaultMainWithRerun', limiting each single test case running at most 10 minutes
 defaultTestRunner :: TestTree -> IO ()
@@ -198,9 +196,10 @@ runSessionWithServer' plugins conf sconf caps root s = withLock lock $ keepCurre
       if logStdErr == "0" then mempty
       else cfilter (\WithPriority{ priority } -> priority >= Debug) docWithPriorityRecorder
 
-    logger = Logger $ \p m -> logger_ (WithPriority p (pretty m))
+    -- exists until old logging style is phased out
+    logger = Logger $ \p m -> logger_ (WithPriority p emptyCallStack (pretty m))
 
-    recorder = cmapWithPrio logToDoc docWithFilteredPriorityRecorder
+    recorder = cmapWithPrio pretty docWithFilteredPriorityRecorder
 
     arguments@Arguments{ argsHlsPlugins, argsIdeOptions, argsLogger } = defaultArguments (cmapWithPrio LogIDEMain recorder) logger
 
