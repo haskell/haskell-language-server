@@ -237,6 +237,7 @@
         };
 
         mkDevShell = hpkgs: cabalProject: with pkgs; mkShell {
+          name = "haskell-language-server-dev-ghc${hpkgs.ghc.version}";
           # For theses tools packages, we use ghcDefault
           # This removes a rebuild with a different GHC version
           # Theses programs are tools, used as binary, independently of the
@@ -298,6 +299,7 @@
           let simpleShell = mkDevShell hpkgs cabalProject;
           in
           hpkgs.shellFor {
+            name = "haskell-language-server-dev-nix-ghc${hpkgs.ghc.version}";
             inherit (simpleShell) shellHook buildInputs;
 
             doBenchmark = true;
@@ -313,7 +315,7 @@
         # Copied from https://github.com/NixOS/nixpkgs/blob/210784b7c8f3d926b7db73bdad085f4dc5d79418/pkgs/development/tools/haskell/haskell-language-server/withWrapper.nix#L16
         mkExe = hpkgs:
           with pkgs.haskell.lib;
-          justStaticExecutables (overrideCabal hpkgs.haskell-language-server
+          (justStaticExecutables (overrideCabal hpkgs.haskell-language-server
             (_: {
               postInstall = ''
                 remove-references-to -t ${hpkgs.ghc} $out/bin/haskell-language-server
@@ -322,7 +324,9 @@
                 remove-references-to -t ${hpkgs.js-dgtable.data} $out/bin/haskell-language-server
                 remove-references-to -t ${hpkgs.js-flot.data} $out/bin/haskell-language-server
               '';
-            }));
+            }))).overrideAttrs(old: {
+              pname = old.pname + "-ghc${hpkgs.ghc.version}";
+            });
       in with pkgs; rec {
 
         devShells = {
@@ -339,14 +343,26 @@
           haskell-language-server-921-dev-nix = mkDevShellWithNixDeps ghc921 "cabal-ghc921.project";
         };
 
-        packages = {
+        allPackages = {
           haskell-language-server = mkExe ghcDefault;
           haskell-language-server-884 = mkExe ghc884;
           haskell-language-server-8107 = mkExe ghc8107;
           haskell-language-server-901 = mkExe ghc901;
           haskell-language-server-921 = mkExe ghc921;
+        };
 
-          # docs
+        packages = allPackages // {
+          # See https://github.com/NixOS/nix/issues/5591
+          # nix flake cannot build a list/set of derivation in one command.
+          # Using a linkFarmFromDrvs, I'm creating a unique entry point to
+          # build all HLS versions.
+          # This is used in CI to test and populate cache for packages
+          # distributed using nix.
+          all-haskell-language-server = linkFarmFromDrvs "all-haskell-language-server" (lib.unique (builtins.attrValues allPackages));
+
+          # Same for all shells 
+          all-dev-shells = linkFarmFromDrvs "all-dev-shells" (builtins.map (shell: shell.inputDerivation) (lib.unique (builtins.attrValues devShells)));
+
           docs = docs;
         };
 
