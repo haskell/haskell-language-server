@@ -19,6 +19,7 @@ MKDIR_P   := $(MKDIR) -p
 TAR       := tar
 TAR_MK    := $(TAR) caf
 CABAL     := cabal
+GHCUP     ?= echo
 AWK       := awk
 STRIP     := strip
 ifeq ($(UNAME), Darwin)
@@ -59,12 +60,15 @@ hls: bindist/ghcs
 	done
 
 hls-ghc:
+	$(GHCUP) install ghc "$(GHC_VERSION)"
+	$(GHCUP) gc -p -s -c
 	$(MKDIR_P) out/
 	@if test -z "$(GHC_VERSION)" ; then echo >&2 "GHC_VERSION is not set" ; false ; fi
 	@if test -z "$(PROJECT_FILE)" ; then echo >&2 "PROJECT_FILE is not set" ; false ; fi
 	$(CABAL_INSTALL) --project-file="$(PROJECT_FILE)" -w "ghc-$(GHC_VERSION)" $(CABAL_INSTALL_ARGS) --installdir="$(ROOT_DIR)/out/$(GHC_VERSION)" exe:haskell-language-server exe:haskell-language-server-wrapper
 	$(STRIP_S) "$(ROOT_DIR)/out/$(GHC_VERSION)/haskell-language-server"
 	$(STRIP_S) "$(ROOT_DIR)/out/$(GHC_VERSION)/haskell-language-server-wrapper"
+	$(GHCUP) rm ghc "$(GHC_VERSION)"
 
 bindist:
 	for ghc in $(shell cat bindist/ghcs) ; do \
@@ -96,13 +100,6 @@ bindist-ghc:
 	$(INSTALL_D) "$(ROOT_DIR)/$(BINDIST_OUT_DIR)/lib/$(GHC_VERSION)"
 	$(FIND) "$(STORE_DIR)/ghc-$(GHC_VERSION)" -type f -name "$(DLL)" -execdir $(INSTALL_X) "{}" "$(ROOT_DIR)/$(BINDIST_OUT_DIR)/lib/$(GHC_VERSION)/{}" \;
 	$(FIND) "$(ROOT_DIR)/$(BINDIST_OUT_DIR)/lib/$(GHC_VERSION)" -type f -name '$(DLL)' -execdir $(call set_rpath,,{}) \;
-
-install-ghcs:
-	ghcup install ghc recommended
-	ghcup set ghc recommended
-	for ghc in $(shell cat bindist/ghcs) ; do \
-		ghcup install ghc `echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` ; \
-	done
 
 version:
 	@echo "$(HLS_VERSION)"

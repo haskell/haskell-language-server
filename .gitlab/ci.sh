@@ -73,8 +73,7 @@ case "$(uname)" in
         ;;
 	*)
 		emake --version
-		emake install-ghcs
-		emake hls
+		emake GHCUP=ghcup hls
 		emake bindist
 		rm -rf out/*.*.*
         ;;
