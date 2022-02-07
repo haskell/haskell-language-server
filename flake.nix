@@ -315,10 +315,9 @@
         # Copied from https://github.com/NixOS/nixpkgs/blob/210784b7c8f3d926b7db73bdad085f4dc5d79418/pkgs/development/tools/haskell/haskell-language-server/withWrapper.nix#L16
         mkExe = hpkgs:
           with pkgs.haskell.lib;
-          (justStaticExecutables (overrideCabal hpkgs.haskell-language-server
+          (enableSharedExecutables (overrideCabal hpkgs.haskell-language-server
             (_: {
               postInstall = ''
-                remove-references-to -t ${hpkgs.ghc} $out/bin/haskell-language-server
                 remove-references-to -t ${hpkgs.shake.data} $out/bin/haskell-language-server
                 remove-references-to -t ${hpkgs.js-jquery.data} $out/bin/haskell-language-server
                 remove-references-to -t ${hpkgs.js-dgtable.data} $out/bin/haskell-language-server
