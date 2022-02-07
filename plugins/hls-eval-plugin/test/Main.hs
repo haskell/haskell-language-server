@@ -261,7 +261,7 @@ diffOffConfig =
     unObject (Object obj) = obj
     unObject _            = undefined
 
-evalInFile :: FilePath -> T.Text -> T.Text -> IO ()
+evalInFile :: HasCallStack => FilePath -> T.Text -> T.Text -> IO ()
 evalInFile fp e expected = runSessionWithServer evalPlugin testDataDir $ do
   doc <- openDoc fp "haskell"
   origin <- documentContents doc
