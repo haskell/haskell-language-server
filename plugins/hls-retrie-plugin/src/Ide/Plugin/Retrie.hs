@@ -32,9 +32,9 @@ import           Data.Aeson                           (FromJSON (..),
                                                        Value (Null),
                                                        genericParseJSON)
 import qualified Data.Aeson                           as Aeson
-import qualified Data.ByteString                      as BS
 import           Data.Bifunctor                       (Bifunctor (first),
                                                        second)
+import qualified Data.ByteString                      as BS
 import           Data.Coerce
 import           Data.Either                          (partitionEithers)
 import qualified Data.HashMap.Strict                  as HM
