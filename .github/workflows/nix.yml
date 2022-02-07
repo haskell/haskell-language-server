@@ -111,7 +111,7 @@ jobs:
     - name: Build binaries
       run: nix build --print-build-logs
     - name: Build all binaries
-      run: nix build --print-build-logs all-haskell-language-server
+      run: nix build --print-build-logs .#all-haskell-language-server
     - name: Push binaries
       if: ${{ env.HAS_TOKEN == 'true' }}
       run: nix path-info --json | jq -r '.[].path' | cachix push haskell-language-server
