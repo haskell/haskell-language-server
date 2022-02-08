@@ -77,8 +77,6 @@ import           GHC                             (ClsInst,
                                                   typeKind)
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC                             (Fixity)
-#else
-import           GHC                             (setLogAction)
 #endif
 import qualified GHC.LanguageExtensions.Type     as LangExt (Extension (..))
 
