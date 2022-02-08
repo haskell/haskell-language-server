@@ -76,6 +76,9 @@ import           Ide.Plugin.AlternateNumberFormat  as AlternateNumberFormat
 import           Ide.Plugin.SelectionRange         as SelectionRange
 #endif
 
+#if changeTypeSignature
+import           Ide.Plugin.ChangeTypeSignature    as ChangeTypeSignature
+#endif
 -- formatters
 
 #if floskell
@@ -174,6 +177,9 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
 #endif
 #if selectionRange
       SelectionRange.descriptor "selectionRange" :
+#endif
+#if changeTypeSignature
+      ChangeTypeSignature.descriptor "changeTypeSignature" :
 #endif
     -- The ghcide descriptors should come last so that the notification handlers
     -- (which restart the Shake build) run after everything else

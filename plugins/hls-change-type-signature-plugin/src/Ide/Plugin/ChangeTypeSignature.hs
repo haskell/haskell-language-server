@@ -1,7 +1,5 @@
-{-# LANGUAGE CPP             #-}
-{-# LANGUAGE ConstraintKinds #-}
 -- | An HLS plugin to provide code actions to change type signatures
-module Development.IDE.Plugin.ChangeTypeAction (descriptor) where
+module Ide.Plugin.ChangeTypeSignature (descriptor) where
 
 import           Control.Monad.IO.Class         (MonadIO (liftIO))
 import           Control.Monad.Trans.Except     (ExceptT)
@@ -41,7 +39,7 @@ codeActionHandler :: PluginMethodHandler IdeState 'TextDocumentCodeAction
 codeActionHandler ideState plId CodeActionParams {_textDocument = TextDocumentIdentifier uri, _context = CodeActionContext (List diags) _} = response $ do
       nfp <- getNormalizedFilePath plId (TextDocumentIdentifier uri)
       decls <- getDecls ideState nfp
-      let actions = generateActions uri decls diags
+      let actions = mapMaybe (generateAction uri decls) diags
       pure $ List actions
 
 getDecls :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m [LHsDecl GhcPs]
@@ -51,20 +49,23 @@ getDecls state = handleMaybeM "Error: Could not get Parsed Module"
     . runAction "changeSignature.GetParsedModule" state
     . use GetParsedModule
 
+-- | DataType that encodes the necessary information for changing a type signature:
+-- `expectedType` - The Expected Type
+-- `actualType`   - The Actual Type
+-- `declName`     - The Declaration Name that we are going to change
+-- `declSrcSpan`  - The Source Span where the signature is located
+-- `diagnostic`   - The Error Diagnostic we aim to solve
+-- `uri`          - The URI the declaration is located in
 data ChangeSignature = ChangeSignature { expectedType :: Text
                                        , actualType   :: Text
                                        , declName     :: Text
-                                       , declSrcSpan  :: Maybe SrcSpan
+                                       , declSrcSpan  :: Maybe RealSrcSpan
                                        , diagnostic   :: Diagnostic
                                        , uri          :: Uri
                                        }
 
--- Needed to trackdown OccNames in signatures
+-- | Constraint needed to trackdown OccNames in signatures
 type SigName p = (HasOccName (IdP (GhcPass p)))
-
--- | Generate CodeActions from a list of Diagnostics
-generateActions :: SigName p => Uri -> [LHsDecl (GhcPass p)] -> [Diagnostic] -> [Command |? CodeAction]
-generateActions uri = mapMaybe . generateAction uri
 
 -- | Create a CodeAction from a Diagnostic
 generateAction :: SigName p => Uri -> [LHsDecl (GhcPass p)] -> Diagnostic -> Maybe (Command |? CodeAction)
@@ -85,11 +86,13 @@ matchingDiagnostic uri diag@Diagnostic{_message} = unwrapMatch $ _message =~ exp
 
 -- | Given a String with the name of a declaration, find that declarations type signature location
 -- This is a modified version of functions found in Development.IDE.Plugin.CodeAction
-findSigLocOfStringDecl :: SigName p => [LHsDecl (GhcPass p)] -> String -> Maybe SrcSpan
+-- This function returns the actual location of the signature rather than the actual signature
+-- We also don't have access to `fun_id` or other actual `id` so we must use string compare instead
+findSigLocOfStringDecl :: SigName p => [LHsDecl (GhcPass p)] -> String -> Maybe RealSrcSpan
 findSigLocOfStringDecl decls declName =
   listToMaybe
-    [ locA srcSpan
-      | L srcSpan (SigD _ (TypeSig _ idsSig _)) <- decls,
+    [ locA rss
+      | L (RealSrcSpan rss _) (SigD _ (TypeSig _ idsSig _)) <- decls,
         any ((==) declName . occNameString . occName . unLoc) idsSig
     ]
 
@@ -100,25 +103,25 @@ addSrcSpan decls chgSig@ChangeSignature{..} = chgSig { declSrcSpan = findSigLocO
 
 changeSigToCodeAction :: ChangeSignature -> Maybe (Command |? CodeAction)
 -- Does not generate a Code action if declSrcSpan is Nothing
-changeSigToCodeAction ChangeSignature{..} = declSrcSpan *> Just (InR CodeAction { _title       = mkChangeSigTitle declName actualType
-                                                                                , _kind        = Just CodeActionQuickFix
-                                                                                , _diagnostics = Just $ List [diagnostic]
-                                                                                , _isPreferred = Nothing
-                                                                                , _disabled    = Nothing
-                                                                                -- This CAN but probably never will be Nothing
-                                                                                , _edit        = mkChangeSigEdit uri declSrcSpan (mkNewSignature declName actualType)
-                                                                                , _command     = Nothing
-                                                                                , _xdata       = Nothing
-                                                                                })
+changeSigToCodeAction ChangeSignature{..} = do
+    realSrcSpan <- declSrcSpan
+    pure (InR CodeAction { _title       = mkChangeSigTitle declName actualType
+                         , _kind        = Just CodeActionQuickFix
+                         , _diagnostics = Just $ List [diagnostic]
+                         , _isPreferred = Nothing
+                         , _disabled    = Nothing
+                         , _edit        = Just $ mkChangeSigEdit uri realSrcSpan (mkNewSignature declName actualType)
+                         , _command     = Nothing
+                         , _xdata       = Nothing
+                         })
 mkChangeSigTitle :: Text -> Text -> Text
 mkChangeSigTitle declName actualType = "change signature for ‘" <> declName <> "’ to: " <> actualType
 
-mkChangeSigEdit :: Uri -> Maybe SrcSpan -> Text -> Maybe WorkspaceEdit
-mkChangeSigEdit uri (Just (RealSrcSpan ss _)) replacement =
+mkChangeSigEdit :: Uri -> RealSrcSpan -> Text -> WorkspaceEdit
+mkChangeSigEdit uri ss replacement =
         let txtEdit = TextEdit (realSrcSpanToRange ss) replacement
             changes = Just $ Map.singleton uri (List [txtEdit])
-        in Just $ WorkspaceEdit changes Nothing Nothing
-mkChangeSigEdit _ _ _                                   = Nothing
+        in WorkspaceEdit changes Nothing Nothing
 
 mkNewSignature :: Text -> Text -> Text
 mkNewSignature declName actualType = declName <> " :: " <> actualType

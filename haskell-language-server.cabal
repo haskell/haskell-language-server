@@ -181,6 +181,11 @@ flag selectionRange
   default:     True
   manual:      True
 
+flag changeTypeSignature
+  description: Enable changeTypeSignature plugin
+  default:     True
+  manual:      True
+
 -- formatters
 
 flag floskell
@@ -298,6 +303,11 @@ common selectionRange
     build-depends: hls-selection-range-plugin ^>=1.0.0.0
     cpp-options: -DselectionRange
 
+common changeTypeSignature
+  if flag(changeTypeSignature)
+    build-depends: hls-change-type-signature-plugin ^>=1.0.0.0
+    cpp-options: -DchangeTypeSignature
+
 -- formatters
 
 common floskell
@@ -333,6 +343,7 @@ executable haskell-language-server
                     -- plugins
                     , example-plugins
                     , callHierarchy
+                    , changeTypeSignature
                     , class
                     , haddockComments
                     , eval
