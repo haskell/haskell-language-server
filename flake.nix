@@ -55,6 +55,22 @@
       url = "https://hackage.haskell.org/package/hlint-3.3.6/hlint-3.3.6.tar.gz";
       flake = false;
     };
+    implicit-hie-cradle = {
+      url = "https://hackage.haskell.org/package/implicit-hie-cradle-0.3.0.5/implicit-hie-cradle-0.3.0.5.tar.gz";
+      flake = false;
+    };
+    Cabal = {
+      url = "https://hackage.haskell.org/package/Cabal-3.6.2.0/Cabal-3.6.2.0.tar.gz";
+      flake = false;
+    };
+    ghc-lib-parser = {
+      url = "https://hackage.haskell.org/package/ghc-lib-parser-9.2.1.20220109/ghc-lib-parser-9.2.1.20220109.tar.gz";
+      flake = false;
+    };
+    # ghc-lib-parser-old = {
+    #   url = "https://hackage.haskell.org/package/ghc-lib-parser-8.10.7.20210828/ghc-lib-parser-8.10.7.20210828.tar.gz";
+    #   flake = false;
+    # };
   };
   outputs =
     inputs@{ self, nixpkgs, flake-compat, flake-utils, pre-commit-hooks, gitignore, ... }:
@@ -108,6 +124,10 @@
               hie-bios = hself.hie-bios_0_8_0;
               # We need an older version
               hiedb = hself.hiedb_0_4_1_0;
+
+              fourmolu = hsuper.callCabal2nix "fourmolu" inputs.fourmolu {};
+              Cabal = hsuper.callCabal2nix "Cabal" inputs.Cabal {};
+              ghc-lib-parser = hsuper.callCabal2nix "ghc-lib-parser" inputs.ghc-lib-parser {};
 
               lsp = hsuper.callCabal2nix "lsp" inputs.lsp {};
               lsp-types = hsuper.callCabal2nix "lsp-types" inputs.lsp-types {};

@@ -45,6 +45,7 @@ index-state: 2022-01-24T21:03:03Z
 
 constraints:
     hyphenation +embed
+    haskell-language-server -stylishhaskell
 
 allow-newer:
     -- for shake-bench

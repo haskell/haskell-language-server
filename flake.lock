@@ -1,5 +1,17 @@
 {
   "nodes": {
+    "Cabal": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-sz2geYpfAaxaoem10NPE+RTB+uYt2PO+W8m8GZ5F9VA=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/Cabal-3.6.2.0/Cabal-3.6.2.0.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/Cabal-3.6.2.0/Cabal-3.6.2.0.tar.gz"
+      }
+    },
     "constraints-extras": {
       "flake": false,
       "locked": {
@@ -82,6 +94,18 @@
         "url": "https://hackage.haskell.org/package/ghc-exactprint-1.4.1/ghc-exactprint-1.4.1.tar.gz"
       }
     },
+    "ghc-lib-parser": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-JnHoUkR1HRcgi2OoY0d5xgZMg3vnWe66+p6jZFzc0LM=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/ghc-lib-parser-9.2.1.20220109/ghc-lib-parser-9.2.1.20220109.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/ghc-lib-parser-9.2.1.20220109/ghc-lib-parser-9.2.1.20220109.tar.gz"
+      }
+    },
     "gitignore": {
       "flake": false,
       "locked": {
@@ -108,6 +132,18 @@
       "original": {
         "type": "tarball",
         "url": "https://hackage.haskell.org/package/hlint-3.3.6/hlint-3.3.6.tar.gz"
+      }
+    },
+    "implicit-hie-cradle": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-2NmucBBI7Qi1UGXWG27XFZRCeqeRiwVFWmJKZnp6R5U=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/implicit-hie-cradle-0.3.0.5/implicit-hie-cradle-0.3.0.5.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/implicit-hie-cradle-0.3.0.5/implicit-hie-cradle-0.3.0.5.tar.gz"
       }
     },
     "lsp": {
@@ -209,13 +245,16 @@
     },
     "root": {
       "inputs": {
+        "Cabal": "Cabal",
         "constraints-extras": "constraints-extras",
         "flake-compat": "flake-compat",
         "flake-utils": "flake-utils",
         "fourmolu": "fourmolu",
         "ghc-exactprint": "ghc-exactprint",
+        "ghc-lib-parser": "ghc-lib-parser",
         "gitignore": "gitignore",
         "hlint": "hlint",
+        "implicit-hie-cradle": "implicit-hie-cradle",
         "lsp": "lsp",
         "lsp-test": "lsp-test",
         "lsp-types": "lsp-types",
