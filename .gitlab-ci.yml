@@ -468,6 +468,7 @@ build-aarch64-darwin:
   before_script:
     - export HOMEBREW_CHANGE_ARCH_TO_ARM=1
     - arch -arm64 /bin/bash ./.gitlab/brew.sh llvm autoconf automake coreutils make tree
+  # C_INCLUDE_PATH: https://gitlab.haskell.org/ghc/ghc/-/issues/20592
   script: |
     export PATH="$CI_PROJECT_DIR/.brew/opt/llvm/bin:$CI_PROJECT_DIR/.brew/bin:$CI_PROJECT_DIR/.brew/sbin:$PATH"
     export CC=$CI_PROJECT_DIR/.brew/opt/llvm/bin/clang
@@ -475,6 +476,7 @@ build-aarch64-darwin:
     export LD=ld
     export AR=$CI_PROJECT_DIR/.brew/opt/llvm/bin/llvm-ar
     export RANLIB=$CI_PROJECT_DIR/.brew/opt/llvm/bin/llvm-ranlib
+    export C_INCLUDE_PATH="`xcrun --show-sdk-path`/usr/include/ffi"
     arch -arm64 /bin/bash ./.gitlab/ci.sh
   after_script:
     - rm -Rf /private/tmp/.brew_tmp
@@ -502,8 +504,10 @@ test-aarch64-darwin:
   before_script:
     - export HOMEBREW_CHANGE_ARCH_TO_ARM=1
     - arch -arm64 /bin/bash ./.gitlab/brew.sh make tree
+  # C_INCLUDE_PATH: https://gitlab.haskell.org/ghc/ghc/-/issues/20592
   script: |
     export PATH="$CI_PROJECT_DIR/.brew/opt/llvm/bin:$CI_PROJECT_DIR/.brew/bin:$CI_PROJECT_DIR/.brew/sbin:$PATH"
+    export C_INCLUDE_PATH="`xcrun --show-sdk-path`/usr/include/ffi"
     arch -arm64 /bin/bash ./.gitlab/test.sh
   after_script:
     - rm -Rf /private/tmp/.brew_tmp
