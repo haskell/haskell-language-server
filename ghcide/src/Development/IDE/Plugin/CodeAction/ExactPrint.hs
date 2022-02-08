@@ -49,7 +49,7 @@ import           GHC (AddEpAnn (..), AnnContext (..), AnnParen (..),
                       DeltaPos (SameLine), EpAnn (..), EpaLocation (EpaDelta),
                       IsUnicodeSyntax (NormalSyntax),
                       NameAdornment (NameParens), NameAnn (..), addAnns, ann, emptyComments,
-                      reAnnL, AnnList (..))
+                      reAnnL, AnnList (..), TrailingAnn (AddCommaAnn), addTrailingAnnToA)
 #endif
 import           Language.LSP.Types
 import Development.IDE.GHC.Util
@@ -490,11 +490,22 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
       -- we need change the ann key from `[]` to `:` to keep parens and other anns.
       unless hasSibling $
         transferAnn (L l' $ reverse pre) (L l' [x]) id
+
+      let lies' = reverse pre ++ [x]
 #else
-          x :: LIE GhcPs = reLocA $ L l'' $ IEThingWith listAnn parentLIE NoIEWildcard [childLIE]
           listAnn = epAnn srcParent [AddEpAnn AnnOpenP (epl 1), AddEpAnn AnnCloseP (epl 0)]
+          x :: LIE GhcPs = reLocA $ L l'' $ IEThingWith listAnn parentLIE NoIEWildcard [childLIE]
+
+      x <- pure $ setEntryDP x (SameLine $ if (not (null pre)) then 1 else 0)
+
+      let
+
+          fixLast = if not (null pre) then first addComma else id
+          lies' = over _last fixLast lies ++ [x]
+          lies = reverse pre
+      
 #endif
-      return $ L l it{ideclHiding = Just (hide, L l' $ reverse pre ++ [x])}
+      return $ L l it{ideclHiding = Just (hide, L l' lies')}
 extendImportViaParent _ _ _ _ = lift $ Left "Unable to extend the import list via parent"
 
 unIEWrappedName :: IEWrappedName (IdP GhcPs) -> String
