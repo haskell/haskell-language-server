@@ -496,11 +496,12 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
           listAnn = epAnn srcParent [AddEpAnn AnnOpenP (epl 1), AddEpAnn AnnCloseP (epl 0)]
           x :: LIE GhcPs = reLocA $ L l'' $ IEThingWith listAnn parentLIE NoIEWildcard [childLIE]
 
-      x <- pure $ setEntryDP x (SameLine $ if (not (null pre)) then 1 else 0)
+      let hasSibling = not (null pre)
+      x <- pure $ setEntryDP x (SameLine $ if hasSibling then 1 else 0)
 
       let
 
-          fixLast = if not (null pre) then first addComma else id
+          fixLast = if hasSibling then first addComma else id
           lies' = over _last fixLast lies ++ [x]
           lies = reverse pre
       
