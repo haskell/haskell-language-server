@@ -881,12 +881,7 @@ parseFileContents env customPreprocessor filename ms = do
      PFailedWithErrorMessages msgs -> throwE $ diagFromErrMsgs "parser" dflags $ msgs dflags
      POk pst rdr_module ->
          let
-#if MIN_VERSION_ghc(9,2,1)
-             -- TODO: we need to export the annotations here 
-             hpm_annotations = ()
-#else
              hpm_annotations = mkApiAnns pst
-#endif
              (warns, errs) = getMessages' pst dflags
          in
            do

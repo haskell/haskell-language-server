@@ -41,6 +41,8 @@ module Development.IDE.GHC.Compat.Parser (
 #if !MIN_VERSION_ghc(9,2,0)
     Anno.AnnotationComment(..),
 #endif
+    pattern EpaLineComment,
+    pattern EpaBlockComment
     ) where
 
 #if MIN_VERSION_ghc(9,0,0)
@@ -162,4 +164,9 @@ mkApiAnns pst =
      Map.fromList ((SrcLoc.noSrcSpan,comment_q pst)
                   :annotations_comments pst))
 #endif
+#endif
+
+#if !MIN_VERSION_ghc(9,2,0)
+pattern EpaLineComment a = Anno.AnnLineComment a
+pattern EpaBlockComment a = Anno.AnnBlockComment a
 #endif

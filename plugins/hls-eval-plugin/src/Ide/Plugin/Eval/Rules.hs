@@ -104,21 +104,12 @@ evalParsedModuleRule = defineEarlyCutoff $ RuleNoDiagnostics $ \GetEvalComments 
 
                         -- since Haddock parsing is unset explicitly in 'getParsedModuleWithComments',
                         -- we can concentrate on these two
-#if MIN_VERSION_ghc(9,2,0)
                         case bdy of
                             EpaLineComment cmt ->
                                 mempty { lineComments = Map.singleton curRan (RawLineComment cmt) }
                             EpaBlockComment cmt ->
                                 mempty { blockComments = Map.singleton curRan $ RawBlockComment cmt }
                             _ -> mempty
-#else
-                        case bdy of
-                            AnnLineComment cmt ->
-                                mempty { lineComments = Map.singleton curRan (RawLineComment cmt) }
-                            AnnBlockComment cmt ->
-                                mempty { blockComments = Map.singleton curRan $ RawBlockComment cmt }
-                            _ -> mempty
-#endif
                 _ -> mempty
             )
             $ apiAnnComments' pm
