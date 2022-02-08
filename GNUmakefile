@@ -1,3 +1,12 @@
+####################################################
+# This makefile's main purpose is to build
+# dynamically linked HLS executables on gitlab CI
+# and produce appropriate bindists. This can also
+# be executed locally on dev machines.
+#
+# It is not meant to be run by users.
+# ##################################################
+
 UNAME := $(shell uname)
 ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 
