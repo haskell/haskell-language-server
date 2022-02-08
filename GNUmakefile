@@ -82,7 +82,7 @@ hls-ghc:
 	$(GHCUP) -v rm ghc "$(GHC_VERSION)"
 
 bindist:
-	for ghc in $(shell cat bindist/ghcs) ; do \
+	for ghc in $(shell [ -e "bindist/ghcs-`uname`" ] && cat "bindist/ghcs-`uname`" || cat "bindist/ghcs") ; do \
 		$(MAKE) GHC_VERSION=`echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` bindist-ghc ; \
 	done
 	$(SED) -e "s/@@HLS_VERSION@@/$(HLS_VERSION)/" \
