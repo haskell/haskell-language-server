@@ -374,11 +374,7 @@ extendImportTopLevel thing (L l it@ImportDecl{..})
           transferAnn (L l' lies) (L l' [x]) id
         return $ L l it{ideclHiding = Just (hide, L l' $ lies ++ [x])}
 #else
-
-        x <- pure $ setEntryDP x (SameLine $ if hasSibling then 1 else 0)
-
-        let fixLast = if hasSibling then first addComma else id
-            lies' = over _last fixLast lies ++ [x]
+        lies' <- addCommaInImportList lies x
         return $ L l it{ideclHiding = Just (hide, L l' lies')}
 #endif
 extendImportTopLevel _ _ = lift $ Left "Unable to extend the import list"
@@ -497,17 +493,31 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
           x :: LIE GhcPs = reLocA $ L l'' $ IEThingWith listAnn parentLIE NoIEWildcard [childLIE]
 
       let hasSibling = not (null pre)
-      x <- pure $ setEntryDP x (SameLine $ if hasSibling then 1 else 0)
-
-      let
-
-          fixLast = if hasSibling then first addComma else id
-          lies' = over _last fixLast lies ++ [x]
-          lies = reverse pre
-      
+      lies' <- addCommaInImportList (reverse pre) x
 #endif
       return $ L l it{ideclHiding = Just (hide, L l' lies')}
 extendImportViaParent _ _ _ _ = lift $ Left "Unable to extend the import list via parent"
+
+#if MIN_VERSION_ghc(9,2,0)
+-- Add an item in an import list, taking care of adding comma if needed.
+addCommaInImportList :: Monad m =>
+  -- | Initial list
+  [LocatedAn AnnListItem a]
+  -- | Additionnal item
+  -> LocatedAn AnnListItem a
+  -> m [LocatedAn AnnListItem a]
+addCommaInImportList lies x = do
+  let hasSibling = not (null lies)
+  -- Add the space before the comma
+  x <- pure $ setEntryDP x (SameLine $ if hasSibling then 1 else 0)
+
+  -- Add the comma (if needed)
+  let
+    fixLast = if hasSibling then first addComma else id
+    lies' = over _last fixLast lies ++ [x]
+
+  pure lies'
+#endif
 
 unIEWrappedName :: IEWrappedName (IdP GhcPs) -> String
 unIEWrappedName (occName -> occ) = showSDocUnsafe $ parenSymOcc occ (ppr occ)
