@@ -76,7 +76,7 @@ import           GHC                             (ClsInst,
                                                   pprInstance, setTargets,
                                                   typeKind)
 #if MIN_VERSION_ghc(9,2,0)
-import           GHC                             (Fixity, pushLogHookM)
+import           GHC                             (Fixity)
 #else
 import           GHC                             (setLogAction)
 #endif
@@ -110,9 +110,6 @@ import           Language.LSP.Types              hiding
                                                   SemanticTokenRelative (length))
 import           Language.LSP.Types.Lens         (end, line)
 import           Language.LSP.VFS                (virtualFileText)
-import           System.FilePath                 (takeFileName)
-import           System.IO                       (hClose)
-import           UnliftIO.Temporary              (withSystemTempFile)
 
 #if MIN_VERSION_ghc(9,2,0)
 #elif MIN_VERSION_ghc(9,0,0)
@@ -227,7 +224,7 @@ runEvalCmd plId st EvalParams{..} =
                         (Just (textToStringBuffer mdlText, now))
 
             -- Setup environment for evaluation
-            hscEnv' <- ExceptT $ fmap join $ withSystemTempFile (takeFileName fp) $ \logFilename logHandle -> liftIO . gStrictTry . evalGhcEnv session $ do
+            hscEnv' <- ExceptT $ fmap join $ liftIO . gStrictTry . evalGhcEnv session $ do
                 env <- getSession
 
                 -- Install the module pragmas and options
@@ -278,27 +275,6 @@ runEvalCmd plId st EvalParams{..} =
                         }
 #endif
 
-                -- set up a custom log action
-#if MIN_VERSION_ghc(9,2,0)
-                -- NOTE: I removed that, it was breaking the eval plugin, sometimes
-                -- I don't know why, I don't even understand what is the purpose of theses lines.
-                -- I just copied them from the previous version and tried to
-                -- adapt them to the new GHC 9.2 API.
-                --
-                -- But tests are fine without this.
-                -- So, what have I missed?
-                --
-                -- pushLogHookM . const $ \_df _wr _sev _span _doc ->
-                --    defaultLogActionHPutStrDoc _df False logHandle _doc
-                    -- TODO: check the True
-#elif MIN_VERSION_ghc(9,0,0)
-                setLogAction $ \_df _wr _sev _span _doc ->
-                    defaultLogActionHPutStrDoc _df logHandle _doc
-#else
-                setLogAction $ \_df _wr _sev _span _style _doc ->
-                    defaultLogActionHPutStrDoc _df logHandle _doc _style
-#endif
-
                 -- Load the module with its current content (as the saved module might not be up to date)
                 -- BUG: this fails for files that requires preprocessors (e.g. CPP) for ghc < 8.8
                 -- see https://gitlab.haskell.org/ghc/ghc/-/issues/17066
@@ -311,8 +287,7 @@ runEvalCmd plId st EvalParams{..} =
                 dbg "LOAD RESULT" $ asS loadResult
                 case loadResult of
                     Failed -> liftIO $ do
-                        hClose logHandle
-                        err <- readFile logFilename
+                        let err = ""
                         dbg "load ERR" err
                         return $ Left err
                     Succeeded -> do
