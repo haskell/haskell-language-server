@@ -67,9 +67,9 @@ endef
 
 hls: bindist/ghcs
 	for ghc in $(shell [ -e "bindist/ghcs-`uname`" ] && cat "bindist/ghcs-`uname`" || cat "bindist/ghcs") ; do \
-		$(GHCUP) -v install ghc `echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` ; \
-		$(GHCUP) -v gc -p -s -c ; \
-		$(MAKE) GHC_VERSION=`echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` PROJECT_FILE=`echo $$ghc | $(AWK) -F ',' '{ print $$2 }'` hls-ghc ; \
+		$(GHCUP) -v install ghc `echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` && \
+		$(GHCUP) -v gc -p -s -c && \
+		$(MAKE) GHC_VERSION=`echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` PROJECT_FILE=`echo $$ghc | $(AWK) -F ',' '{ print $$2 }'` hls-ghc && \
 		$(GHCUP) -v rm ghc `echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` ; \
 	done
 
@@ -83,9 +83,9 @@ hls-ghc:
 
 bindist:
 	for ghc in $(shell [ -e "bindist/ghcs-`uname`" ] && cat "bindist/ghcs-`uname`" || cat "bindist/ghcs") ; do \
-		$(GHCUP) -v install ghc `echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` ; \
-		$(GHCUP) -v gc -p -s -c ; \
-		$(MAKE) GHC_VERSION=`echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` bindist-ghc ; \
+		$(GHCUP) -v install ghc `echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` && \
+		$(GHCUP) -v gc -p -s -c && \
+		$(MAKE) GHC_VERSION=`echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` bindist-ghc && \
 		$(GHCUP) -v rm ghc `echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` ; \
 	done
 	$(SED) -e "s/@@HLS_VERSION@@/$(HLS_VERSION)/" \
