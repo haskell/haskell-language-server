@@ -67,23 +67,26 @@ endef
 
 hls: bindist/ghcs
 	for ghc in $(shell [ -e "bindist/ghcs-`uname`" ] && cat "bindist/ghcs-`uname`" || cat "bindist/ghcs") ; do \
+		$(GHCUP) -v install ghc `echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` ; \
+		$(GHCUP) -v gc -p -s -c ; \
 		$(MAKE) GHC_VERSION=`echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` PROJECT_FILE=`echo $$ghc | $(AWK) -F ',' '{ print $$2 }'` hls-ghc ; \
+		$(GHCUP) -v rm ghc `echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` ; \
 	done
 
 hls-ghc:
-	$(GHCUP) -v install ghc "$(GHC_VERSION)"
-	$(GHCUP) -v gc -p -s -c
 	$(MKDIR_P) out/
 	@if test -z "$(GHC_VERSION)" ; then echo >&2 "GHC_VERSION is not set" ; false ; fi
 	@if test -z "$(PROJECT_FILE)" ; then echo >&2 "PROJECT_FILE is not set" ; false ; fi
 	$(CABAL_INSTALL) --project-file="$(PROJECT_FILE)" -w "ghc-$(GHC_VERSION)" $(CABAL_INSTALL_ARGS) --installdir="$(ROOT_DIR)/out/$(GHC_VERSION)" exe:haskell-language-server exe:haskell-language-server-wrapper
 	$(STRIP_S) "$(ROOT_DIR)/out/$(GHC_VERSION)/haskell-language-server"
 	$(STRIP_S) "$(ROOT_DIR)/out/$(GHC_VERSION)/haskell-language-server-wrapper"
-	$(GHCUP) -v rm ghc "$(GHC_VERSION)"
 
 bindist:
 	for ghc in $(shell [ -e "bindist/ghcs-`uname`" ] && cat "bindist/ghcs-`uname`" || cat "bindist/ghcs") ; do \
+		$(GHCUP) -v install ghc `echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` ; \
+		$(GHCUP) -v gc -p -s -c ; \
 		$(MAKE) GHC_VERSION=`echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` bindist-ghc ; \
+		$(GHCUP) -v rm ghc `echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` ; \
 	done
 	$(SED) -e "s/@@HLS_VERSION@@/$(HLS_VERSION)/" \
 		bindist/GNUmakefile.in > "$(BINDIST_OUT_DIR)/GNUmakefile"
@@ -94,8 +97,6 @@ bindist-tar:
 	$(CD) "$(BINDIST_BASE_DIR)" ; $(TAR_MK) "$(ROOT_DIR)/out/$(TARBALL)" "haskell-language-server-$(HLS_VERSION)"
 
 bindist-ghc:
-	$(GHCUP) -v install ghc "$(GHC_VERSION)"
-	$(GHCUP) -v gc -p -s -c
 	if test -z "$(GHC_VERSION)" ; then echo >&2 "GHC_VERSION is not set" ; false ; fi
 	$(MKDIR_P) "$(BINDIST_OUT_DIR)/bin"
 	$(MKDIR_P) "$(BINDIST_OUT_DIR)/lib/$(GHC_VERSION)"
@@ -113,7 +114,6 @@ bindist-ghc:
 	$(INSTALL_D) "$(ROOT_DIR)/$(BINDIST_OUT_DIR)/lib/$(GHC_VERSION)"
 	$(FIND) "$(STORE_DIR)/ghc-$(GHC_VERSION)" -type f -name "$(DLL)" -execdir $(INSTALL_X) "{}" "$(ROOT_DIR)/$(BINDIST_OUT_DIR)/lib/$(GHC_VERSION)/{}" \;
 	$(FIND) "$(ROOT_DIR)/$(BINDIST_OUT_DIR)/lib/$(GHC_VERSION)" -type f -name '$(DLL)' -execdir $(call set_rpath,,{}) \;
-	$(GHCUP) -v rm ghc "$(GHC_VERSION)"
 
 version:
 	@echo "$(HLS_VERSION)"
