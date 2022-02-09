@@ -676,7 +676,7 @@ doTypeCmd dflags arg = do
 
 parseExprMode :: Text -> (TcRnExprMode, T.Text)
 parseExprMode rawArg = case T.break isSpace rawArg of
-#if !MIN_VERSION_ghc(9,0,0)
+#if !MIN_VERSION_ghc(9,2,0)
     ("+v", rest) -> (TM_NoInst, T.strip rest)
 #endif
     ("+d", rest) -> (TM_Default, T.strip rest)
