@@ -606,6 +606,8 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
 cradleToOptsAndLibDir :: Show a => Logger -> Cradle a -> FilePath
                       -> IO (Either [CradleError] (ComponentOptions, FilePath))
 cradleToOptsAndLibDir logger cradle file = do
+    let noneCradleFoundMessage :: FilePath -> T.Text
+        noneCradleFoundMessage f = T.pack $ "none cradle found for " <> f <> ", ignoring the file"
     -- Start off by getting the session options
     logDebug logger $ T.pack $ "Output from setting up the cradle " <> show cradle
     cradleRes <- HieBios.getCompilerOptions file cradle
@@ -617,13 +619,14 @@ cradleToOptsAndLibDir logger cradle file = do
                 -- This is the successful path
                 CradleSuccess libDir -> pure (Right (r, libDir))
                 CradleFail err       -> return (Left [err])
-                -- For the None cradle perhaps we still want to report an Info
-                -- message about the fact that the file is being ignored.
-                CradleNone           -> return (Left [])
+                CradleNone           -> do
+                    logInfo logger $ noneCradleFoundMessage file
+                    return (Left [])
 
         CradleFail err -> return (Left [err])
-        -- Same here
-        CradleNone -> return (Left [])
+        CradleNone -> do
+            logInfo logger $ noneCradleFoundMessage file
+            return (Left [])
 
 emptyHscEnv :: IORef NameCache -> FilePath -> IO HscEnv
 emptyHscEnv nc libDir = do
