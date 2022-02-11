@@ -79,6 +79,7 @@ module Development.IDE.GHC.Compat(
     tidyExpr,
     emptyTidyEnv,
     corePrepExpr,
+    corePrepPgm,
     lintInteractiveExpr,
     icInteractiveModule,
     HomePackageTable,
@@ -93,6 +94,12 @@ module Development.IDE.GHC.Compat(
     module UniqSet,
     module UniqDFM,
     getDependentMods,
+    diffBinds,
+    flattenBinds,
+    mkRnEnv2,
+    emptyInScopeSet,
+    Unfolding(..),
+    noUnfolding,
 #if MIN_VERSION_ghc(9,2,0)
     loadExpr,
     byteCodeGen,
@@ -122,11 +129,12 @@ import           GHC                                   hiding (HasSrcSpan,
                                                         lookupName, exprType)
 #if MIN_VERSION_ghc(9,0,0)
 import GHC.Driver.Hooks (hscCompileCoreExprHook)
-import GHC.Core (CoreExpr, CoreProgram)
+import GHC.Core (CoreExpr, CoreProgram, Unfolding(..), noUnfolding, flattenBinds)
 import qualified GHC.Core.Opt.Pipeline as GHC
 import GHC.Core.Tidy (tidyExpr)
-import GHC.Types.Var.Env (emptyTidyEnv)
+import GHC.Types.Var.Env (emptyTidyEnv, mkRnEnv2, emptyInScopeSet)
 import qualified GHC.CoreToStg.Prep as GHC
+import GHC.CoreToStg.Prep (corePrepPgm)
 import GHC.Core.Lint (lintInteractiveExpr)
 #if MIN_VERSION_ghc(9,2,0)
 import GHC.Unit.Home.ModInfo (lookupHpt, HomePackageTable)
@@ -146,11 +154,11 @@ import GHC.Types.Unique.Set as UniqSet
 import GHC.Types.Unique.DFM  as UniqDFM
 #else
 import Hooks (hscCompileCoreExprHook)
-import CoreSyn (CoreExpr)
+import CoreSyn (CoreExpr, flattenBinds, Unfolding(..), noUnfolding)
 import qualified SimplCore as GHC
 import CoreTidy (tidyExpr)
-import VarEnv (emptyTidyEnv)
-import CorePrep (corePrepExpr)
+import VarEnv (emptyTidyEnv, mkRnEnv2, emptyInScopeSet)
+import CorePrep (corePrepExpr, corePrepPgm)
 import CoreLint (lintInteractiveExpr)
 import ByteCodeGen (coreExprToBCOs)
 import HscTypes (icInteractiveModule, HomePackageTable, lookupHpt, Dependencies(dep_mods))
@@ -234,6 +242,8 @@ import GHC.ByteCode.Types
 import GHC.Linker.Loader (loadDecls)
 import GHC.Data.Maybe
 import GHC.CoreToStg
+import GHC.Core.Utils
+import GHC.Types.Var.Env
 #endif
 
 type ModIfaceAnnotation = Annotation

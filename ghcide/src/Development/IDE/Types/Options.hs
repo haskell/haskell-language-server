@@ -83,6 +83,8 @@ data IdeOptions = IdeOptions
   , optProgressStyle      :: ProgressReportingStyle
   , optRunSubset          :: Bool
       -- ^ Experimental feature to re-run only the subset of the Shake graph that has changed
+  , optVerifyCoreFile     :: Bool
+    -- ^ Verify core files after serialization
   }
 
 data OptHaddockParse = HaddockParse | NoHaddockParse
@@ -135,6 +137,7 @@ defaultIdeOptions session = IdeOptions
     ,optSkipProgress = defaultSkipProgress
     ,optProgressStyle = Explicit
     ,optRunSubset = True
+    ,optVerifyCoreFile = False
     ,optMaxDirtyAge = 100
     }
 
