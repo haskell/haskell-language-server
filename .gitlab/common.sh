@@ -47,3 +47,22 @@ function run() {
   info "Running $*..."
   "$@" || ( error "$* failed"; return 1; )
 }
+
+emake() {
+	if command -v gmake >/dev/null 2>&1 ; then
+		gmake "$@"
+	else
+		make "$@"
+	fi
+}
+
+mktempdir() {
+	case "$(uname -s)" in
+		"Darwin"|"darwin")
+			mktemp -d -t hls_ci.XXXXXXX
+			;;
+		*)
+			mktemp -d
+			;;
+	esac
+}
