@@ -768,6 +768,7 @@ getModIfaceFromDiskRule recorder = defineEarlyCutoff (cmapWithPrio LogShake reco
     Just session -> do
       linkableType <- getLinkableType f
       ver <- use_ GetModificationTime f
+      ShakeExtras{ideNc} <- getShakeExtras
       let m_old = case old of
             Shake.Succeeded (Just old_version) v -> Just (v, old_version)
             Shake.Stale _   (Just old_version) v -> Just (v, old_version)

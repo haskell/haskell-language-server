@@ -35,10 +35,10 @@ module Development.IDE.Core.Compile
 
 import           Control.Concurrent.Extra
 import           Control.Concurrent.STM.Stats      hiding (orElse)
-import           Control.DeepSeq                   (force, liftRnf, rnf, rwhnf)
+import           Control.DeepSeq                   (force, liftRnf, rnf, rwhnf, NFData(..))
 import           Control.Exception                 (evaluate)
 import           Control.Exception.Safe
-import           Control.Lens                      hiding (List)
+import           Control.Lens                      hiding (List, (<.>))
 import           Control.Monad.Except
 import           Control.Monad.Extra
 import           Control.Monad.Trans.Except
@@ -62,7 +62,7 @@ import           Data.Maybe
 import qualified Data.Text                         as T
 import           Data.Time                         (UTCTime (..),
                                                     getCurrentTime)
-import           Data.Time.Clock.POSIX             (posixSecondsToUTCTime)
+import           Data.Time.Clock.POSIX             (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
 import           Data.Tuple.Extra                  (dupe)
 import           Data.Unique                       as Unique
 import           Debug.Trace
@@ -84,6 +84,7 @@ import           Development.IDE.Spans.Common
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
+import           Development.IDE.GHC.CoreFile
 import           GHC                               (ForeignHValue,
                                                     GetDocsFailure (..),
                                                     mgModSummaries,
@@ -105,13 +106,23 @@ import           ErrUtils
 
 #if MIN_VERSION_ghc(9,0,1)
 import           GHC.Tc.Gen.Splice
+
+#if MIN_VERSION_ghc(9,2,1)
+import           GHC.Types.HpcInfo
+import           GHC.Types.ForeignStubs
+import           GHC.Types.TypeEnv
 #else
-import           TcSplice
+import           GHC.Driver.Types
 #endif
 
-#if MIN_VERSION_ghc(9,2,0)
+#else
+import           TcSplice
+import           HscTypes
+#endif
+
 import           Development.IDE.GHC.Compat.Util   (emptyUDFM, fsLit,
                                                     plusUDFM_C)
+#if MIN_VERSION_ghc(9,2,0)
 import           GHC                               (Anchor (anchor),
                                                     EpaComment (EpaComment),
                                                     EpaCommentTok (EpaBlockComment, EpaLineComment),
@@ -381,7 +392,7 @@ mkHiFileResultCompile session' tcm simplified_guts ltype = catchErrs $ do
 
   let genLinkable = case ltype of
         ObjectLinkable -> generateObjectCode
-        BCOLinkable    -> generateByteCode
+        BCOLinkable    -> generateByteCode WriteCoreFile
 
   (linkable, details, diags) <-
     if mg_hsc_src simplified_guts == HsBootFile
@@ -483,8 +494,10 @@ generateObjectCode session summary guts = do
 
               pure (map snd warnings, linkable)
 
-generateByteCode :: HscEnv -> ModSummary -> CgGuts -> IO (IdeResult Linkable)
-generateByteCode hscEnv summary guts = do
+data WriteCoreFile = WriteCoreFile | CoreFileExists !UTCTime
+
+generateByteCode :: WriteCoreFile -> HscEnv -> ModSummary -> CgGuts -> IO (IdeResult Linkable)
+generateByteCode write_core hscEnv summary guts = do
     fmap (either (, Nothing) (second Just)) $
           catchSrcErrors (hsc_dflags hscEnv) "bytecode" $ do
               (warnings, (_, bytecode, sptEntries)) <-
@@ -499,7 +512,14 @@ generateByteCode hscEnv summary guts = do
                                 summary'
 #endif
               let unlinked = BCOs bytecode sptEntries
-              time <- liftIO getCurrentTime
+              time <- case write_core of
+                CoreFileExists time -> pure time
+                WriteCoreFile -> liftIO $ do
+                  let core_fp = ml_core_file $ ms_location summary
+                      core_file = codeGutsToCoreFile guts
+                  atomicFileWrite core_fp $ \fp ->
+                    writeBinCoreFile fp core_file
+                  getModificationTime core_fp
               let linkable = LM time (ms_mod summary) [unlinked]
 
               pure (map snd warnings, linkable)
@@ -1124,6 +1144,17 @@ data RecompilationInfo m
   , regenerate  :: Maybe LinkableType -> m ([FileDiagnostic], Maybe HiFileResult) -- ^ Action to regenerate an interface
   }
 
+-- | Either a regular GHC linkable or a core file that
+-- can be later turned into a proper linkable
+data IdeLinkable = GhcLinkable !Linkable | CoreLinkable !UTCTime !CoreFile
+
+instance NFData IdeLinkable where
+  rnf (GhcLinkable lb) = rnf lb
+  rnf (CoreLinkable time _) = rnf time
+
+ml_core_file :: ModLocation -> FilePath
+ml_core_file ml = ml_hi_file ml <.> "core"
+
 -- | Retuns an up-to-date module interface, regenerating if needed.
 --   Assumes file exists.
 --   Requires the 'HscEnv' to be set up with dependencies
@@ -1141,14 +1172,22 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
         mb_old_version = snd <$> old_value
 
         obj_file = ml_obj_file (ms_location ms)
+        core_file = ml_core_file (ms_location ms)
+        iface_file = ml_hi_file (ms_location ms)
 
         !mod = ms_mod ms
 
     mb_dest_version <- case mb_old_version of
       Just ver -> pure $ Just ver
-      Nothing ->  get_file_version $ toNormalizedFilePath' $ case linkableNeeded of
-          Just ObjectLinkable -> ml_obj_file (ms_location ms)
-          _                   -> ml_hi_file (ms_location ms)
+      Nothing ->  liftIO $ do
+        let file = case linkableNeeded of
+              Just ObjectLinkable -> obj_file
+              Just BCOLinkable    -> core_file
+              Nothing             -> iface_file
+        exists <- doesFileExist file
+        if exists
+        then Just . ModificationTime . utcTimeToPOSIXSeconds <$> getModificationTime file
+        else pure Nothing
 
     -- The source is modified if it is newer than the destination
     let sourceMod = case mb_dest_version of
@@ -1162,42 +1201,46 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
       <- liftIO $ checkOldIface sessionWithMsDynFlags ms sourceMod mb_old_iface
 
 
-    let
-      (recomp_obj_reqd, mb_linkable) = case linkableNeeded of
-        Nothing -> (UpToDate, Nothing)
-        Just linkableType -> case old_value of
-          -- We don't have an old result
-          Nothing -> recompMaybeBecause "missing"
-          -- We have an old result
-          Just (old_hir, old_file_version) ->
-            case hm_linkable $ hirHomeMod old_hir of
-              Nothing -> recompMaybeBecause "missing [not needed before]"
-              Just old_lb
-                | Just True <- mi_used_th <$> mb_checked_iface -- No need to recompile if TH wasn't used
-                , old_file_version /= source_version -> recompMaybeBecause "out of date"
+    (recomp_obj_reqd, mb_linkable) <- case linkableNeeded of
+      Nothing -> pure (UpToDate, Nothing)
+      Just linkableType -> case old_value of
+        -- We don't have an old result
+        Nothing -> recompMaybeBecause "missing"
+        -- We have an old result
+        Just (old_hir, old_file_version) ->
+          case hm_linkable $ hirHomeMod old_hir of
+            Nothing -> recompMaybeBecause "missing [not needed before]"
+            Just old_lb
+              | Just True <- mi_used_th <$> mb_checked_iface -- No need to recompile if TH wasn't used
+              , old_file_version /= source_version -> recompMaybeBecause "out of date"
 
-                -- Check if it is the correct type
-                -- Ideally we could use object-code in case we already have
-                -- it when we are generating bytecode, but this is difficult because something
-                -- below us may be bytecode, and object code can't depend on bytecode
-                | ObjectLinkable <- linkableType, isObjectLinkable old_lb
-                -> (UpToDate, Just old_lb)
+              -- Check if it is the correct type
+              -- Ideally we could use object-code in case we already have
+              -- it when we are generating bytecode, but this is difficult because something
+              -- below us may be bytecode, and object code can't depend on bytecode
+              | ObjectLinkable <- linkableType, isObjectLinkable old_lb
+              -> pure (UpToDate, Just $ GhcLinkable old_lb)
 
-                | BCOLinkable    <- linkableType , not (isObjectLinkable old_lb)
-                -> (UpToDate, Just old_lb)
+              | BCOLinkable    <- linkableType , not (isObjectLinkable old_lb)
+              -> pure (UpToDate, Just $ GhcLinkable old_lb)
 
-                | otherwise -> recompMaybeBecause "missing [wrong type]"
-          where
-            recompMaybeBecause msg = case linkableType of
-              BCOLinkable -> (RecompBecause ("bytecode "++ msg), Nothing)
-              ObjectLinkable -> case mb_dest_version of -- The destination file should be the object code
-                Nothing -> (RecompBecause ("object code "++ msg), Nothing)
-                Just disk_obj_version@(ModificationTime t) ->
-                  -- If we make it this far, assume that the object code on disk is up to date
-                  -- This assertion works because of the sourceMod check
-                  assert (disk_obj_version >= source_version)
-                         (UpToDate, Just $ LM (posixSecondsToUTCTime t) mod [DotO obj_file])
-                Just (VFSVersion _) -> error "object code in vfs"
+        where
+          recompMaybeBecause msg =
+            case mb_dest_version of -- The destination file should be the object code or the core file
+              Nothing -> pure (RecompBecause msg', Nothing)
+              Just disk_obj_version@(ModificationTime t) ->
+                if (disk_obj_version >= source_version)
+                then case linkableType of
+                  ObjectLinkable -> pure (UpToDate, Just $ GhcLinkable $ LM (posixSecondsToUTCTime t) mod [DotO obj_file])
+                  BCOLinkable -> liftIO $ do
+                    core <- readBinCoreFile (mkUpdater $ hsc_NC session)  core_file
+                    pure (UpToDate, Just $ CoreLinkable (posixSecondsToUTCTime t) core)
+                else pure (RecompBecause msg', Nothing)
+              Just (VFSVersion _) -> pure (RecompBecause msg', Nothing)
+           where
+             msg' = case linkableType of
+               BCOLinkable -> "bytecode " ++ msg
+               ObjectLinkable -> "Object code " ++ msg
 
     let do_regenerate _reason = withTrace "regenerate interface" $ \setTag -> do
           setTag "Module" $ moduleNameString $ moduleName mod
@@ -1217,12 +1260,12 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
              -> do_regenerate msg
              | otherwise -> return ([], Just old_hir)
            Nothing -> do
-             hmi <- liftIO $ mkDetailsFromIface sessionWithMsDynFlags iface lb
+             (warns, hmi) <- liftIO $ mkDetailsFromIface sessionWithMsDynFlags ms iface lb
              -- parse the runtime dependencies from the annotations
              let runtime_deps
                    | not (mi_used_th iface) = emptyModuleEnv
                    | otherwise = parseRuntimeDeps (md_anns (hm_details hmi))
-             return ([], Just $ mkHiFileResult ms hmi runtime_deps)
+             return (warns, Just $ mkHiFileResult ms hmi runtime_deps)
       (_, _reason) -> do_regenerate _reason
 
 -- | ModDepTime is stored as an annotation in the iface to
@@ -1269,12 +1312,34 @@ showReason UpToDate          = "UpToDate"
 showReason MustCompile       = "MustCompile"
 showReason (RecompBecause s) = s
 
-mkDetailsFromIface :: HscEnv -> ModIface -> Maybe Linkable -> IO HomeModInfo
-mkDetailsFromIface session iface linkable = do
+mkDetailsFromIface :: HscEnv -> ModSummary -> ModIface -> Maybe IdeLinkable -> IO ([FileDiagnostic], HomeModInfo)
+mkDetailsFromIface session ms iface ide_linkable = do
   details <- liftIO $ fixIO $ \details -> do
-    let hsc' = session { hsc_HPT = addToHpt (hsc_HPT session) (moduleName $ mi_module iface) (HomeModInfo iface details linkable) }
+    let hsc' = session { hsc_HPT = addToHpt (hsc_HPT session) (moduleName $ mi_module iface) (HomeModInfo iface details Nothing) }
     initIfaceLoad hsc' (typecheckIface iface)
-  return (HomeModInfo iface details linkable)
+  (warns, linkable) <- liftIO $ case ide_linkable of
+    Nothing -> pure ([], Nothing)
+    Just (GhcLinkable lb) -> pure ([], Just lb)
+    Just (CoreLinkable t core_file) -> do
+      cgi_guts <- coreFileToCgGuts session iface details core_file
+      generateByteCode (CoreFileExists t) session ms cgi_guts
+
+  return (warns, HomeModInfo iface details linkable)
+
+coreFileToCgGuts :: HscEnv -> ModIface -> ModDetails -> CoreFile -> IO CgGuts
+coreFileToCgGuts session iface details core_file = do
+  let act hpt = addToHpt hpt (moduleName this_mod)
+                             (HomeModInfo iface details Nothing)
+      this_mod = mi_module iface
+  types_var <- newIORef (md_types details)
+  let kv = Just (this_mod, types_var)
+      hsc_env' = session { hsc_HPT = act (hsc_HPT session)
+                         , hsc_type_env_var = kv }
+  core_binds <- initIfaceCheck (text "l") hsc_env' $ typecheckCoreFile this_mod types_var core_file
+      -- Implicit binds aren't saved, so we need to regenerate them ourselves.
+  let implicit_binds = concatMap getImplicitBinds tyCons
+      tyCons = typeEnvTyCons (md_types details)
+  pure $ CgGuts this_mod tyCons (implicit_binds ++ core_binds) NoStubs [] [] (emptyHpcInfo False) Nothing []
 
 -- | Non-interactive, batch version of 'InteractiveEval.getDocs'.
 --   The interactive paths create problems in ghc-lib builds
