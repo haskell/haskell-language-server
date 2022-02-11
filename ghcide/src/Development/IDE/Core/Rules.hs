@@ -776,6 +776,7 @@ getModIfaceFromDiskRule recorder = defineEarlyCutoff (cmapWithPrio LogShake reco
     Just session -> do
       linkableType <- getLinkableType f
       ver <- use_ GetModificationTime f
+      ShakeExtras{ideNc} <- getShakeExtras
       let m_old = case old of
             Shake.Succeeded (Just old_version) v -> Just (v, old_version)
             Shake.Stale _   (Just old_version) v -> Just (v, old_version)
@@ -785,6 +786,7 @@ getModIfaceFromDiskRule recorder = defineEarlyCutoff (cmapWithPrio LogShake reco
             , old_value = m_old
             , get_file_version = use GetModificationTime_{missingFileDiagnostics = False}
             , regenerate = regenerateHiFile session f ms
+            , namecache_updater = mkUpdater ideNc
             }
       r <- loadInterface (hscEnv session) ms linkableType recompInfo
       case r of

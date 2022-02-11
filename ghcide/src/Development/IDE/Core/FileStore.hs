@@ -29,7 +29,6 @@ import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import qualified Data.ByteString                              as BS
 import           Data.Either.Extra
-import qualified Data.Rope.UTF16                              as Rope
 import qualified Data.Text                                    as T
 import           Data.Time
 import           Data.Time.Clock.POSIX
