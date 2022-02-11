@@ -1,6 +1,7 @@
 stages:
   - build
   - tar
+  - test
 
 # Used for ci setup in the gitlab mirror of the project:
 # https://gitlab.haskell.org/haskell/haskell-language-server/-/pipelines
@@ -10,7 +11,7 @@ variables:
 
   CABAL_INSTALL_VERSION: 3.6.2.0
 
-.default_matrix: &default_matrix
+.windows_matrix: &windows_matrix
   matrix:
     - GHC_VERSION: 8.8.4
       CABAL_PROJECT: cabal.project
@@ -20,27 +21,6 @@ variables:
       CABAL_PROJECT: cabal-ghc90.project
     - GHC_VERSION: 9.2.1
       CABAL_PROJECT: cabal-ghc921.project
-
-# ghc-9.2.1 is broken for bsd
-.freebsd_matrix: &freebsd_matrix
-  matrix:
-    - GHC_VERSION: 8.8.4
-      CABAL_PROJECT: cabal.project
-    - GHC_VERSION: 8.10.7
-      CABAL_PROJECT: cabal.project
-    - GHC_VERSION: 9.0.2
-      CABAL_PROJECT: cabal-ghc90.project
-
-.m1_matrix: &m1_matrix
-  matrix:
-    - GHC_VERSION: 8.10.7
-      CABAL_PROJECT: cabal.project
-
-.arm_matrix: &arm_matrix
-  matrix:
-    - GHC_VERSION: 8.10.7
-      CABAL_PROJECT: cabal.project
-
 
 workflow:
   rules:
@@ -66,101 +46,304 @@ workflow:
   script:
     - bash .gitlab/ci.sh
 
-build-aarch64-linux-deb10:
-  extends: .build
+.test:
+  stage: test
+  script:
+    - bash .gitlab/test.sh
+
+.aarch64-linux:
   tags:
     - aarch64-linux
   image: "registry.gitlab.haskell.org/ghc/ci-images/aarch64-linux-deb10:$DOCKER_REV"
-  parallel: *arm_matrix
+
+.armv7-linux:
+  tags:
+    - armv7-linux
+  image: "registry.gitlab.haskell.org/ghc/ci-images/armv7-linux-deb10:$DOCKER_REV"
+
+.x86_64-linux-deb10:
+  tags:
+    - x86_64-linux
+  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-deb10:$DOCKER_REV"
+
+.x86_64-linux-deb9:
+  tags:
+    - x86_64-linux
+  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-deb9:$DOCKER_REV"
+
+.x86_64-linux-centos7:
+  tags:
+    - x86_64-linux
+  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-centos7:$DOCKER_REV"
+
+.x86_64-linux-fedora27:
+  tags:
+    - x86_64-linux
+  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-fedora27:$DOCKER_REV"
+
+.x86_64-linux-alpine:
+  tags:
+    - x86_64-linux
+  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-alpine3_12:$DOCKER_REV"
+
+
+######################
+# aarch64 linux deb10
+######################
+
+build-aarch64-linux-deb10:
+  extends:
+    - .build
+    - .aarch64-linux
+  before_script:
+    - sudo apt update
+    - sudo apt install -y patchelf tree
   variables:
     ADD_CABAL_ARGS: ""
 
 tar-aarch64-linux-deb10:
-  extends: .artifacts
+  extends:
+    - .artifacts
+    - .aarch64-linux
   stage: tar
   needs: ["build-aarch64-linux-deb10"]
-  tags:
-    - aarch64-linux
-  image: "registry.gitlab.haskell.org/ghc/ci-images/aarch64-linux-deb10:$DOCKER_REV"
   script:
     - ./.gitlab/tar.sh
   variables:
-    TARBALL_ARCHIVE_SUFFIX: Linux-aarch64
+    TARBALL_ARCHIVE_SUFFIX: aarch64-deb10-linux
     TARBALL_EXT: tar.xz
 
+test-aarch64-linux-deb10:
+  extends:
+    - .test
+    - .aarch64-linux
+  needs: ["tar-aarch64-linux-deb10"]
+  before_script:
+    - sudo apt update
+    - sudo apt install -y tree
+
+
+######################
+# armv7 linux deb10
+######################
+
 build-armv7-linux-deb10:
-  extends: .build
-  tags:
-    - armv7-linux
-  image: "registry.gitlab.haskell.org/ghc/ci-images/armv7-linux-deb10:$DOCKER_REV"
-  parallel: *arm_matrix
+  extends:
+    - .build
+    - .armv7-linux
+  before_script:
+    - sudo apt update
+    - sudo apt install -y patchelf tree
   variables:
     ADD_CABAL_ARGS: ""
 
 tar-armv7-linux-deb10:
-  extends: .artifacts
+  extends:
+    - .artifacts
+    - .armv7-linux
   stage: tar
   needs: ["build-armv7-linux-deb10"]
-  tags:
-    - armv7-linux
-  image: "registry.gitlab.haskell.org/ghc/ci-images/armv7-linux-deb10:$DOCKER_REV"
   script:
     - ./.gitlab/tar.sh
   variables:
-    TARBALL_ARCHIVE_SUFFIX: Linux-armv7
+    TARBALL_ARCHIVE_SUFFIX: armv7-deb10-linux
     TARBALL_EXT: tar.xz
 
-build-x86_64-linux:
-  extends: .build
-  tags:
-    - x86_64-linux
-  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-deb10:$DOCKER_REV"
-  parallel: *default_matrix
+test-armv7-linux-deb10:
+  extends:
+    - .test
+    - .armv7-linux
+  needs: ["tar-armv7-linux-deb10"]
+  before_script:
+    - sudo apt update
+    - sudo apt install -y tree
+
+
+######################
+# x86_64 linux deb10
+######################
+
+build-x86_64-linux-deb10:
+  extends:
+    - .build
+    - .x86_64-linux-deb10
+  before_script:
+    - sudo apt update
+    - sudo apt install -y patchelf tree
   variables:
     ADD_CABAL_ARGS: "--enable-split-sections"
 
-tar-x86_64-linux:
-  extends: .artifacts
+tar-x86_64-linux-deb10:
+  extends:
+    - .artifacts
+    - .x86_64-linux-deb10
   stage: tar
-  needs: ["build-x86_64-linux"]
-  tags:
-    - x86_64-linux
-  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-deb10:$DOCKER_REV"
+  needs: ["build-x86_64-linux-deb10"]
   script:
     - ./.gitlab/tar.sh
   variables:
-    TARBALL_ARCHIVE_SUFFIX: Linux-x86_64
+    TARBALL_ARCHIVE_SUFFIX: x86_64-deb10-linux
     TARBALL_EXT: tar.xz
 
-build-x86_64-linux-alpine:
-  extends: .build
-  tags:
-    - x86_64-linux
-  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-alpine3_12:$DOCKER_REV"
+test-x86_64-linux-deb10:
+  extends:
+    - .test
+    - .x86_64-linux-deb10
+  needs: ["tar-x86_64-linux-deb10"]
   before_script:
-    - sudo apk add --no-cache zlib zlib-dev zlib-static bzip2 bzip2-dev bzip2-static gmp gmp-dev xz xz-dev ncurses-static
-  parallel: *default_matrix
+    - sudo apt update
+    - sudo apt install -y tree
+
+######################
+# x86_64 linux deb9
+######################
+
+build-x86_64-linux-deb9:
+  extends:
+    - .build
+    - .x86_64-linux-deb9
+  before_script:
+    - sudo apt update
+    - sudo apt install -y patchelf tree
+  variables:
+    ADD_CABAL_ARGS: "--enable-split-sections"
+
+tar-x86_64-linux-deb9:
+  extends:
+    - .artifacts
+    - .x86_64-linux-deb9
+  stage: tar
+  needs: ["build-x86_64-linux-deb9"]
+  script:
+    - ./.gitlab/tar.sh
+  variables:
+    TARBALL_ARCHIVE_SUFFIX: x86_64-deb9-linux
+    TARBALL_EXT: tar.xz
+
+test-x86_64-linux-deb9:
+  extends:
+    - .test
+    - .x86_64-linux-deb9
+  needs: ["tar-x86_64-linux-deb9"]
+  before_script:
+    - sudo apt update
+    - sudo apt install -y tree
+
+######################
+# x86_64 linux centos7
+######################
+
+build-x86_64-linux-centos7:
+  extends:
+    - .build
+    - .x86_64-linux-centos7
+  before_script:
+    - sudo yum install -y epel-release
+    - sudo yum install -y patchelf tree
+  variables:
+    ADD_CABAL_ARGS: "--enable-split-sections"
+
+tar-x86_64-linux-centos7:
+  extends:
+    - .artifacts
+    - .x86_64-linux-centos7
+  stage: tar
+  needs: ["build-x86_64-linux-centos7"]
+  script:
+    - ./.gitlab/tar.sh
+  variables:
+    TARBALL_ARCHIVE_SUFFIX: x86_64-centos7-linux
+    TARBALL_EXT: tar.xz
+
+test-x86_64-linux-centos7:
+  extends:
+    - .test
+    - .x86_64-linux-centos7
+  needs: ["tar-x86_64-linux-centos7"]
+  before_script:
+    - sudo yum install -y tree
+
+######################
+# x86_64 linux fedora27
+######################
+
+build-x86_64-linux-fedora27:
+  extends:
+    - .build
+    - .x86_64-linux-fedora27
+  before_script:
+    - sudo dnf install -y patchelf tree
+  variables:
+    ADD_CABAL_ARGS: "--enable-split-sections"
+
+tar-x86_64-linux-fedora27:
+  extends:
+    - .artifacts
+    - .x86_64-linux-fedora27
+  stage: tar
+  needs: ["build-x86_64-linux-fedora27"]
+  script:
+    - ./.gitlab/tar.sh
+  variables:
+    TARBALL_ARCHIVE_SUFFIX: x86_64-fedora27-linux
+    TARBALL_EXT: tar.xz
+
+test-x86_64-linux-fedora27:
+  extends:
+    - .test
+    - .x86_64-linux-fedora27
+  needs: ["tar-x86_64-linux-fedora27"]
+  before_script:
+    - sudo dnf install -y tree
+
+
+######################
+# x86_64 linux alpine
+######################
+
+build-x86_64-linux-alpine:
+  extends:
+    - .build
+    - .x86_64-linux-alpine
+  before_script:
+    - sudo apk add --no-cache tar zlib zlib-dev zlib-static bzip2 bzip2-dev bzip2-static gmp gmp-dev xz xz-dev ncurses-static patchelf findutils tree
   variables:
     ADD_CABAL_ARGS: "--enable-split-sections --enable-executable-static"
 
 tar-x86_64-linux-alpine:
-  extends: .artifacts
+  extends:
+    - .artifacts
+    - .x86_64-linux-alpine
   stage: tar
   needs: ["build-x86_64-linux-alpine"]
-  tags:
-    - x86_64-linux
-  image: "registry.gitlab.haskell.org/ghc/ci-images/x86_64-linux-alpine3_12:$DOCKER_REV"
+  before_script:
+    - sudo apk add --no-cache tar zlib zlib-dev zlib-static bzip2 bzip2-dev bzip2-static gmp gmp-dev xz xz-dev ncurses-static
   script:
     - ./.gitlab/tar.sh
   variables:
-    TARBALL_ARCHIVE_SUFFIX: Linux-alpine-x86_64
+    TARBALL_ARCHIVE_SUFFIX: x86_64-alpine3.12-linux
     TARBALL_EXT: tar.xz
+
+test-x86_64-linux-alpine:
+  extends:
+    - .test
+    - .x86_64-linux-alpine
+  needs: ["tar-x86_64-linux-alpine"]
+  before_script:
+    - sudo apk add --no-cache tar zlib zlib-dev zlib-static bzip2 bzip2-dev bzip2-static gmp gmp-dev xz xz-dev ncurses-static tree
+
+
+######################
+# x86_64 freebsd 12
+######################
 
 build-x86_64-freebsd12:
   extends: .build
+  before_script:
+    - sudo pkg update
+    - sudo pkg install --yes patchelf gmake tree binutils
   tags:
     - x86_64-freebsd12
-  parallel: *freebsd_matrix
   variables:
     ADD_CABAL_ARGS: "--enable-split-sections -j1"
 
@@ -173,17 +356,30 @@ tar-x86_64-freebsd12:
   script:
     - ./.gitlab/tar.sh
   variables:
-    TARBALL_ARCHIVE_SUFFIX: FreeBSD12-x86_64
+    TARBALL_ARCHIVE_SUFFIX: x86_64-unknown-freebsd12
     TARBALL_EXT: tar.xz
+
+test-x86_64-freebsd12:
+  extends: .test
+  needs: ["tar-x86_64-freebsd12"]
+  tags:
+    - x86_64-freebsd12
+  before_script:
+    - sudo pkg update
+    - sudo pkg install --yes patchelf gmake tree binutils
+
+
+######################
+# x86_64 freebsd 13
+######################
 
 build-x86_64-freebsd13:
   extends: .build
   tags:
     - x86_64-freebsd13
-  parallel: *freebsd_matrix
   before_script:
     - sudo pkg update
-    - sudo pkg install --yes compat12x-amd64
+    - sudo pkg install --yes compat12x-amd64 patchelf gmake tree binutils
     - sudo ln -s libncurses.so.6 /usr/local/lib/libncurses.so.6.2
   variables:
     ADD_CABAL_ARGS: "--enable-split-sections -j1"
@@ -197,16 +393,37 @@ tar-x86_64-freebsd13:
   script:
     - ./.gitlab/tar.sh
   variables:
-    TARBALL_ARCHIVE_SUFFIX: FreeBSD13-x86_64
+    TARBALL_ARCHIVE_SUFFIX: x86_64-unknown-freebsd13
     TARBALL_EXT: tar.xz
+
+test-x86_64-freebsd13:
+  extends: .test
+  needs: ["tar-x86_64-freebsd13"]
+  tags:
+    - x86_64-freebsd13
+  before_script:
+    - sudo pkg update
+    - sudo pkg install --yes compat12x-amd64 gmake tree binutils
+    - sudo ln -s libncurses.so.6 /usr/local/lib/libncurses.so.6.2
+
+
+######################
+# x86_64 darwin
+######################
 
 build-x86_64-darwin:
   extends: .build
   tags:
     - x86_64-darwin
-  parallel: *default_matrix
   variables:
     ADD_CABAL_ARGS: ""
+  before_script:
+    - /bin/bash ./.gitlab/brew.sh autoconf automake coreutils make tree
+  script: |
+    export PATH="$CI_PROJECT_DIR/.brew/bin:$CI_PROJECT_DIR/.brew/sbin:$PATH"
+    /bin/bash ./.gitlab/ci.sh
+  after_script:
+    - rm -Rf /private/tmp/.brew_tmp
 
 tar-x86_64-darwin:
   extends: .artifacts
@@ -214,11 +431,34 @@ tar-x86_64-darwin:
   needs: ["build-x86_64-darwin"]
   tags:
     - x86_64-darwin
-  script:
-    - ./.gitlab/tar.sh
+  before_script:
+    - /bin/bash ./.gitlab/brew.sh autoconf automake coreutils make tree
+  script: |
+    export PATH="$CI_PROJECT_DIR/.brew/bin:$CI_PROJECT_DIR/.brew/sbin:$PATH"
+    /bin/bash ./.gitlab/tar.sh
+  after_script:
+    - rm -Rf /private/tmp/.brew_tmp
   variables:
-    TARBALL_ARCHIVE_SUFFIX: macOS-x86_64
+    TARBALL_ARCHIVE_SUFFIX: x86_64-apple-darwin
     TARBALL_EXT: tar.xz
+
+test-x86_64-darwin:
+  extends: .test
+  needs: ["tar-x86_64-darwin"]
+  tags:
+    - x86_64-darwin
+  before_script:
+    - /bin/bash ./.gitlab/brew.sh make tree
+  script: |
+    export PATH="$CI_PROJECT_DIR/.brew/bin:$CI_PROJECT_DIR/.brew/sbin:$PATH"
+    /bin/bash .gitlab/test.sh
+  after_script:
+    - rm -Rf /private/tmp/.brew_tmp
+
+
+######################
+# aarch64 darwin
+######################
 
 build-aarch64-darwin:
   extends: .artifacts:short
@@ -226,25 +466,9 @@ build-aarch64-darwin:
   tags:
     - aarch64-darwin-m1
   before_script:
-    # Install brew locally in the project dir. Packages will also be installed here.
-    - '[ -e "$CI_PROJECT_DIR/.brew" ] || git clone --depth=1 https://github.com/Homebrew/brew $CI_PROJECT_DIR/.brew'
-    - export PATH="$CI_PROJECT_DIR/.brew/bin:$CI_PROJECT_DIR/.brew/sbin:$PATH"
-
-    # otherwise we seem to get intel binaries
     - export HOMEBREW_CHANGE_ARCH_TO_ARM=1
-
-    # make sure to not pollute the machine with temp files etc
-    - mkdir -p $CI_PROJECT_DIR/.brew_cache
-    - export HOMEBREW_CACHE=$CI_PROJECT_DIR/.brew_cache
-    - mkdir -p $CI_PROJECT_DIR/.brew_logs
-    - export HOMEBREW_LOGS=$CI_PROJECT_DIR/.brew_logs
-    - mkdir -p /private/tmp/.brew_tmp
-    - export HOMEBREW_TEMP=/private/tmp/.brew_tmp
-
-    # update and install packages
-    - brew update
-    - brew install llvm
-    - brew install autoconf automake coreutils
+    - arch -arm64 /bin/bash ./.gitlab/brew.sh llvm autoconf automake coreutils make tree
+  # C_INCLUDE_PATH: https://gitlab.haskell.org/ghc/ghc/-/issues/20592
   script: |
     export PATH="$CI_PROJECT_DIR/.brew/opt/llvm/bin:$CI_PROJECT_DIR/.brew/bin:$CI_PROJECT_DIR/.brew/sbin:$PATH"
     export CC=$CI_PROJECT_DIR/.brew/opt/llvm/bin/clang
@@ -252,13 +476,13 @@ build-aarch64-darwin:
     export LD=ld
     export AR=$CI_PROJECT_DIR/.brew/opt/llvm/bin/llvm-ar
     export RANLIB=$CI_PROJECT_DIR/.brew/opt/llvm/bin/llvm-ranlib
+    export C_INCLUDE_PATH="`xcrun --show-sdk-path`/usr/include/ffi"
     arch -arm64 /bin/bash ./.gitlab/ci.sh
   after_script:
     - rm -Rf /private/tmp/.brew_tmp
   variables:
     MACOSX_DEPLOYMENT_TARGET: "10.7"
     ADD_CABAL_ARGS: ""
-  parallel: *m1_matrix
 
 tar-aarch64-darwin:
   extends: .artifacts
@@ -269,14 +493,35 @@ tar-aarch64-darwin:
   script:
     - arch -arm64 /bin/bash ./.gitlab/tar.sh
   variables:
-    TARBALL_ARCHIVE_SUFFIX: macOS-aarch64
+    TARBALL_ARCHIVE_SUFFIX: aarch64-apple-darwin
     TARBALL_EXT: tar.xz
+
+test-aarch64-darwin:
+  extends: .test
+  needs: ["tar-aarch64-darwin"]
+  tags:
+    - aarch64-darwin-m1
+  before_script:
+    - export HOMEBREW_CHANGE_ARCH_TO_ARM=1
+    - arch -arm64 /bin/bash ./.gitlab/brew.sh make tree
+  # C_INCLUDE_PATH: https://gitlab.haskell.org/ghc/ghc/-/issues/20592
+  script: |
+    export PATH="$CI_PROJECT_DIR/.brew/opt/llvm/bin:$CI_PROJECT_DIR/.brew/bin:$CI_PROJECT_DIR/.brew/sbin:$PATH"
+    export C_INCLUDE_PATH="`xcrun --show-sdk-path`/usr/include/ffi"
+    arch -arm64 /bin/bash ./.gitlab/test.sh
+  after_script:
+    - rm -Rf /private/tmp/.brew_tmp
+
+
+######################
+# x86_64 windows
+######################
 
 build-x86_64-windows:
   extends: .build
   tags:
     - new-x86_64-windows
-  parallel: *default_matrix
+  parallel: *windows_matrix
   script:
     - $env:CHERE_INVOKING = "yes"
     - bash '-lc' "ADD_CABAL_ARGS=$env:ADD_CABAL_ARGS GHC_VERSION=$env:GHC_VERSION CABAL_INSTALL_VERSION=$CABAL_INSTALL_VERSION .gitlab/ci.sh"
@@ -293,5 +538,5 @@ tar-x86_64-windows:
     - $env:CHERE_INVOKING = "yes"
     - bash '-lc' "TARBALL_ARCHIVE_SUFFIX=$env:TARBALL_ARCHIVE_SUFFIX TARBALL_EXT=$env:TARBALL_EXT .gitlab/tar.sh"
   variables:
-    TARBALL_ARCHIVE_SUFFIX: Windows-x86_64
+    TARBALL_ARCHIVE_SUFFIX: x86_64-unknown-mingw32
     TARBALL_EXT: zip
