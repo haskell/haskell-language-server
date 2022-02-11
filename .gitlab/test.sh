@@ -45,40 +45,38 @@ case "$(uname -s)" in
 		;;
 esac
 
-case "$(uname)" in
-    MSYS_*|MINGW*)
-		# Shorten binary names
-		sed -i.bak -e 's/haskell-language-server/hls/g' \
-			   -e 's/haskell_language_server/hls/g' \
-			   haskell-language-server.cabal $CABAL_PROJECT
-		sed -i.bak -e 's/Paths_haskell_language_server/Paths_hls/g' \
-			   src/**/*.hs exe/*.hs
+# make sure out/ dir is gone, so build host rpaths don't
+# kick in (TODO: we should probably remove those)
+mv "$CI_PROJECT_DIR/out"/*.tar.xz .
+rm -rf "$CI_PROJECT_DIR/out/"
 
-		args=(
-			-O2
-			-w "ghc-$GHC_VERSION"
-			--project-file "$CABAL_PROJECT"
-			--disable-profiling
-			--disable-tests
-			--enable-executable-stripping
-			${ADD_CABAL_ARGS}
-		)
+# cleanup from previous dirty runs
+rm -rf "$HOME"/.local/lib/haskell-language-server-* || true
 
-		run cabal v2-build ${args[@]} exe:hls exe:hls-wrapper
+# install
+tar xf *.tar.xz
+rm *.tar.xz
+cd haskell-language-server-*
+INSTALL_DIR=$(dirname "${GHCUP_BINDIR}") || exit 1
+[ -d "$INSTALL_DIR" ] || exit 1
+emake PREFIX="${INSTALL_DIR}" install
 
-		mkdir "$CI_PROJECT_DIR/out"
-
-		cp "$(cabal list-bin ${args[@]} exe:hls)" "$CI_PROJECT_DIR/out/haskell-language-server-${GHC_VERSION}"
-		cp "$(cabal list-bin ${args[@]} exe:hls-wrapper)" "$CI_PROJECT_DIR/out/haskell-language-server-wrapper"
-        ;;
+# print rpaths and libdirs
+case "$(uname -s)" in
+	"Darwin"|"darwin")
+		otool -l "$INSTALL_DIR"/lib/haskell-language-server-*/bin/haskell-language-server-*
+		;;
 	*)
-		emake --version
-		emake GHCUP=ghcup hls
-		emake GHCUP=ghcup bindist
-		rm -rf out/*.*.*
-        ;;
+		objdump -x "$INSTALL_DIR"/lib/haskell-language-server-*/bin/haskell-language-server-*
+		;;
 esac
+tree "$INSTALL_DIR"/lib/haskell-language-server-*
+tree "$INSTALL_DIR"/bin
 
-cp dist-newstyle/cache/plan.json "$CI_PROJECT_DIR/out/plan.json"
-
-cd "$CI_PROJECT_DIR/out/"
+tmp_dir=$(mktempdir)
+cd "$tmp_dir"
+cabal unpack bytestring-0.11.1.0
+cd bytestring-0.11.1.0
+echo "cradle:" > hie.yaml
+echo "  cabal:" >> hie.yaml
+haskell-language-server-wrapper typecheck Data/ByteString.hs

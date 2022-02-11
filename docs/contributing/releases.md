@@ -18,6 +18,7 @@ and it is being used in nix environments.
 
 ### prerelease sanity checks
 
+- [ ] set the supported GHC versions and their corresponding cabal project-files in `bindist/ghcs` according to the [GHC version deprecation policy](../supported-versions.md#ghc-version-deprecation-policy)
 - [ ] [trigger manually](https://docs.github.com/es/actions/managing-workflow-runs/manually-running-a-workflow) the hackage workflow *without* uploading the packages
 - [ ] trigger manually the build workflow
 - [ ] create a prerelease tag `${version}-check-gitlab` and push it to the [project repo in gitlab](https://gitlab.haskell.org/haskell/haskell-language-server) to check the build is fine
