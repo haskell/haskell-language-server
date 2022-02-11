@@ -27,6 +27,7 @@ module Development.IDE.Core.Compile
   , loadHieFile
   , loadInterface
   , loadModulesHome
+  , getDocsNonInteractive
   , getDocsBatch
   , lookupName
   ,mergeEnvs) where
@@ -38,7 +39,6 @@ import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Orphans       ()
 import           Development.IDE.GHC.Util
 import           Development.IDE.GHC.Warnings
-import           Development.IDE.Spans.Common
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
@@ -78,13 +78,16 @@ import           Control.Lens                      hiding (List)
 import           Control.Monad.Except
 import           Control.Monad.Extra
 import           Control.Monad.Trans.Except
-import           Data.Bifunctor                    (first, second)
+import           Data.Bifunctor                    (second)
 import qualified Data.ByteString                   as BS
 import qualified Data.DList                        as DL
 import           Data.IORef
+#if !MIN_VERSION_ghc(9,2,1)
 import qualified Data.IntMap.Strict                as IntMap
-import           Data.List.Extra
-import qualified Data.Map.Strict                   as Map
+#endif
+import           Data.IntMap.Strict                (IntMap)
+import Data.List.Extra
+import qualified Data.Map.Strict                   as MS
 import           Data.Maybe
 import qualified Data.Text                         as T
 import           Data.Time                         (UTCTime, getCurrentTime)
@@ -93,7 +96,6 @@ import           System.Directory
 import           System.FilePath
 import           System.IO.Extra                   (fixIO, newTempFileWithin)
 
--- GHC API imports
 -- GHC API imports
 import           GHC                               (GetDocsFailure (..),
                                                     mgModSummaries,
@@ -106,9 +108,8 @@ import           Data.Binary
 import           Data.Coerce
 import           Data.Functor
 import qualified Data.HashMap.Strict               as HashMap
-import           Data.IntMap                       (IntMap)
-import           Data.Map                          (Map)
 import           Data.Tuple.Extra                  (dupe)
+import           Data.Either.Extra                 (maybeToEither)
 import           Data.Unique                       as Unique
 import           Development.IDE.Core.Tracing      (withTrace)
 import           Development.IDE.GHC.Compat.Util   (emptyUDFM, plusUDFM_C)
@@ -221,9 +222,7 @@ tcRnModule hsc_env keep_lbls pmod = do
                           HsParsedModule { hpm_module = parsedSource pmod,
                                            hpm_src_files = pm_extra_src_files pmod,
                                            hpm_annotations = pm_annotations pmod }
-  let rn_info = case mrn_info of
-        Just x  -> x
-        Nothing -> error "no renamed info tcRnModule"
+  let rn_info = fromMaybe (error "no renamed info tcRnModule") mrn_info
   pure (TcModuleResult pmod rn_info tc_gbl_env splices False)
 
 mkHiFileResultNoCompile :: HscEnv -> TcModuleResult -> IO HiFileResult
@@ -695,7 +694,7 @@ mergeEnvs :: HscEnv -> [ModSummary] -> [HomeModInfo] -> [HscEnv] -> IO HscEnv
 mergeEnvs env extraModSummaries extraMods envs = do
     prevFinderCache <- concatFC <$> mapM (readIORef . hsc_FC) envs
     let ims  = map (\ms -> Compat.installedModule (toUnitId $ moduleUnit $ ms_mod ms)  (moduleName (ms_mod ms))) extraModSummaries
-        ifrs = zipWith (\ms -> InstalledFound (ms_location ms)) extraModSummaries ims
+        ifrs = zipWith (InstalledFound . ms_location) extraModSummaries ims
         -- Very important to force this as otherwise the hsc_mod_graph field is not
         -- forced and ends up retaining a reference to all the old hsc_envs we have merged to get
         -- this new one, which in turn leads to the EPS referencing the HPT.
@@ -712,7 +711,7 @@ mergeEnvs env extraModSummaries extraMods envs = do
             foldl'
                 (\fc (im, ifr) -> Compat.extendInstalledModuleEnv fc im ifr) prevFinderCache
                 $ zip ims ifrs
-    liftRnf rwhnf module_graph_nodes `seq` (return $ loadModulesHome extraMods $ env{
+    liftRnf rwhnf module_graph_nodes `seq` return (loadModulesHome extraMods $ env{
         hsc_HPT = foldMapBy mergeUDFM emptyUDFM hsc_HPT envs,
         hsc_FC = newFinderCache,
         hsc_mod_graph = mkModuleGraph module_graph_nodes
@@ -728,7 +727,7 @@ mergeEnvs env extraModSummaries extraMods envs = do
     -- To work around this, we coerce to the underlying type
     -- To remove this, I plan to upstream the missing Monoid instance
         concatFC :: [FinderCache] -> FinderCache
-        concatFC = unsafeCoerce (mconcat @(Map InstalledModule InstalledFindResult))
+        concatFC = unsafeCoerce (mconcat @(MS.Map InstalledModule InstalledFindResult))
 
 withBootSuffix :: HscSource -> ModLocation -> ModLocation
 withBootSuffix HsBootFile = addBootSuffixLocnOut
@@ -829,7 +828,7 @@ parseHeader
        -> FilePath  -- ^ the filename (for source locations)
        -> Util.StringBuffer -- ^ Haskell module source text (full Unicode is supported)
 #if MIN_VERSION_ghc(9,0,1)
-       -> ExceptT [FileDiagnostic] m ([FileDiagnostic], Located(HsModule))
+       -> ExceptT [FileDiagnostic] m ([FileDiagnostic], Located HsModule)
 #else
        -> ExceptT [FileDiagnostic] m ([FileDiagnostic], Located(HsModule GhcPs))
 #endif
@@ -994,48 +993,95 @@ mkDetailsFromIface session iface linkable = do
     initIfaceLoad hsc' (typecheckIface iface)
   return (HomeModInfo iface details linkable)
 
--- | Non-interactive, batch version of 'InteractiveEval.getDocs'.
---   The interactive paths create problems in ghc-lib builds
---- and leads to fun errors like "Cannot continue after interface file error".
-getDocsBatch
-  :: HscEnv
-  -> Module  -- ^ a moudle where the names are in scope
-  -> [Name]
-  -> IO [Either String (Maybe HsDocString, IntMap HsDocString)]
-getDocsBatch hsc_env _mod _names = do
-    (msgs, res) <- initTc hsc_env HsSrcFile False _mod fakeSpan $ forM _names $ \name ->
-        case nameModule_maybe name of
-            Nothing -> return (Left $ NameHasNoModule name)
-            Just mod -> do
-             ModIface { mi_doc_hdr = mb_doc_hdr
-                      , mi_decl_docs = DeclDocMap dmap
-                      , mi_arg_docs = ArgDocMap amap
-                      } <- loadModuleInterface "getModuleInterface" mod
-             if isNothing mb_doc_hdr && Map.null dmap && null amap
-               then pure (Left (NoDocsInIface mod $ compiled name))
-               else pure (Right ( Map.lookup name dmap ,
-#if !MIN_VERSION_ghc(9,2,0)
-                                  IntMap.fromAscList $ Map.toAscList $
+initTypecheckEnv
+    :: HscEnv
+    -> Module
+    -> TcRn r
+    -> IO
+      ( Messages
+#if MIN_VERSION_ghc(9,2,1)
+            DecoratedSDoc
 #endif
-                                  Map.findWithDefault mempty name amap))
-    case res of
-        Just x  -> return $ map (first $ T.unpack . showGhc) x
-        Nothing -> throwErrors
-#if MIN_VERSION_ghc(9,2,0)
-                     $ Error.getErrorMessages msgs
-#else
-                     $ snd msgs
-#endif
+      , Maybe r
+      )
+initTypecheckEnv hsc_env mod = initTc hsc_env HsSrcFile False mod fakeSpan
   where
-    throwErrors = liftIO . throwIO . mkSrcErr
-    compiled n =
-      -- TODO: Find a more direct indicator.
-      case nameSrcLoc n of
-        RealSrcLoc {}   -> False
-        UnhelpfulLoc {} -> True
+    fakeSpan :: RealSrcSpan
+    fakeSpan = realSrcLocSpan $ mkRealSrcLoc (Util.fsLit "<ghcide>") 1 1
 
-fakeSpan :: RealSrcSpan
-fakeSpan = realSrcLocSpan $ mkRealSrcLoc (Util.fsLit "<ghcide>") 1 1
+-- | Non-interactive handling of the module interface.
+--   A non-interactive modification of code from the 'GHC.Runtime.Eval.getDocs'.
+--   The interactive paths create problems in ghc-lib builds
+---  and lead to fun errors like "Cannot continue after interface file error".
+getDocsNonInteractive'
+    :: Name
+    -> IOEnv
+        (Env TcGblEnv TcLclEnv)
+        (Name,
+        Either
+            GetDocsFailure (Maybe HsDocString, Maybe (IntMap HsDocString)))
+getDocsNonInteractive' name =
+    case nameModule_maybe name of
+        Nothing -> return (name, Left $ NameHasNoModule name)
+        Just mod -> do -- in GHC here was an interactive check & handling.
+            ModIface
+                { mi_doc_hdr = mb_doc_hdr
+                , mi_decl_docs = DeclDocMap dmap
+                , mi_arg_docs = ArgDocMap amap
+                }
+                <- loadModuleInterface "getModuleInterface" mod
+            let
+                isNameCompiled =
+                    -- comment from GHC: Find a more direct indicator.
+                    case nameSrcLoc name of
+                        RealSrcLoc {}   -> False
+                        UnhelpfulLoc {} -> True
+#if MIN_VERSION_ghc(9,2,1)
+                amap' = amap
+#else
+                amap' = MS.map (IntMap.fromAscList . MS.toAscList) amap
+#endif
+
+            pure . (name,) $
+                if isNothing mb_doc_hdr && MS.null dmap && MS.null amap'
+                    then Left $ NoDocsInIface mod isNameCompiled
+                    else Right (MS.lookup name dmap, MS.lookup name amap')
+
+-- | Non-interactive modification of 'GHC.Runtime.Eval.getDocs'.
+getDocsNonInteractive
+    :: HscEnv
+    -> Module
+    -> Name
+    -> IO (Either GHC.ErrorMessages (Name, Either GetDocsFailure (Maybe HsDocString, Maybe (IntMap HsDocString))))
+getDocsNonInteractive hsc_env mod name =
+    do
+        let
+            init = initTypecheckEnv hsc_env mod $ getDocsNonInteractive' name
+#if MIN_VERSION_ghc (9,2,1)
+        (Error.getErrorMessages -> errs, res) <- init
+#else
+        ((_warns,errs), res) <- init
+#endif
+        pure $ maybeToEither errs res
+
+
+-- | Non-interactive, batch version of 'GHC.Runtime.Eval.getDocs'.
+getDocsBatch
+    :: HscEnv
+    -> Module  -- ^ a moudle where the names are in scope
+    -> [Name]
+    -> IO (Either GHC.ErrorMessages (MS.Map Name (Either GetDocsFailure (Maybe HsDocString, Maybe (IntMap HsDocString)))))
+  -- ^ Return a 'Map' of 'Name's to 'Either' (no docs messages) (general doc body & arg docs)
+getDocsBatch hsc_env mod names =
+    do
+        let
+            init = initTypecheckEnv hsc_env mod $ MS.fromList <$> traverse getDocsNonInteractive' names
+#if MIN_VERSION_ghc (9,2,1)
+        (Error.getErrorMessages -> errs, res) <- init
+#else
+        ((_warns,errs), res) <- init
+#endif
+        pure $ maybeToEither errs res
 
 -- | Non-interactive, batch version of 'InteractiveEval.lookupNames'.
 --   The interactive paths create problems in ghc-lib builds
@@ -1045,11 +1091,11 @@ lookupName :: HscEnv
            -> Name
            -> IO (Maybe TyThing)
 lookupName hsc_env mod name = do
-    (_messages, res) <- initTc hsc_env HsSrcFile False mod fakeSpan $ do
+    (_messages, res) <- initTypecheckEnv hsc_env mod $ do
         tcthing <- tcLookup name
         case tcthing of
             AGlobal thing    -> return thing
-            ATcId{tct_id=id} -> return (AnId id)
+            ATcId{tct_id=id} -> return $ AnId id
             _                -> panic "tcRnLookupName'"
     return res
 

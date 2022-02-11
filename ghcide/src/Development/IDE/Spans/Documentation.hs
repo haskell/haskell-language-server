@@ -12,13 +12,13 @@ module Development.IDE.Spans.Documentation (
   , mkDocMap
   ) where
 
-import           Control.Monad
-import           Control.Monad.Extra             (findM)
 import           Control.Monad.IO.Class
+import           Control.Monad.Extra            (findM)
+import           Data.Bool                      (bool)
 import           Data.Either
 import           Data.Foldable
 import           Data.List.Extra
-import qualified Data.Map                        as M
+import qualified Data.Map.Strict                as MS
 import           Data.Maybe
 import qualified Data.Set                        as S
 import qualified Data.Text                       as T
@@ -31,7 +31,7 @@ import           Development.IDE.Spans.Common
 import           System.Directory
 import           System.FilePath
 
-import           Language.LSP.Types              (filePathToUri, getUri)
+import           Language.LSP.Types             (filePathToUri, getUri)
 
 mkDocMap
   :: HscEnv
@@ -45,61 +45,71 @@ mkDocMap env rm this_mod =
 #else
      let (_ , DeclDocMap this_docs, _) = extractDocs this_mod
 #endif
-     d <- foldrM getDocs (mkNameEnv $ M.toList $ fmap (`SpanDocString` SpanDocUris Nothing Nothing) this_docs) names
+     d <- foldrM getDocs (mkNameEnv $ MS.toList $ fmap (`SpanDocString` SpanDocUris Nothing Nothing) this_docs) names
      k <- foldrM getType (tcg_type_env this_mod) names
      pure $ DKMap d k
   where
-    getDocs n map
-      | maybe True (mod ==) $ nameModule_maybe n = pure map -- we already have the docs in this_docs, or they do not exist
+    getDocs n mapToSpanDoc
+      | maybe True (mod ==) $ nameModule_maybe n = pure mapToSpanDoc -- we already have the docs in this_docs, or they do not exist
       | otherwise = do
       doc <- getDocumentationTryGhc env mod n
-      pure $ extendNameEnv map n doc
-    getType n map
+      pure $ extendNameEnv mapToSpanDoc n doc
+    getType n mapToTyThing
       | isTcOcc $ occName n = do
         kind <- lookupKind env mod n
-        pure $ maybe map (extendNameEnv map n) kind
-      | otherwise = pure map
+        pure $ maybe mapToTyThing (extendNameEnv mapToTyThing n) kind
+      | otherwise = pure mapToTyThing
     names = rights $ S.toList idents
-    idents = M.keysSet rm
+    idents = MS.keysSet rm
     mod = tcg_mod this_mod
 
 lookupKind :: HscEnv -> Module -> Name -> IO (Maybe TyThing)
 lookupKind env mod =
     fmap (fromRight Nothing) . catchSrcErrors (hsc_dflags env) "span" . lookupName env mod
 
-getDocumentationTryGhc :: HscEnv -> Module -> Name -> IO SpanDoc
-getDocumentationTryGhc env mod n = head <$> getDocumentationsTryGhc env mod [n]
-
-getDocumentationsTryGhc :: HscEnv -> Module -> [Name] -> IO [SpanDoc]
-getDocumentationsTryGhc env mod names = do
-  res <- catchSrcErrors (hsc_dflags env) "docs" $ getDocsBatch env mod names
-  case res of
-      Left _    -> return []
-      Right res -> zipWithM unwrap res names
+intoSpanDoc :: HscEnv -> Name -> Either a (Maybe HsDocString, b) -> IO SpanDoc
+intoSpanDoc env name a = extractDocString a <$> getSpanDocUris name
   where
-    unwrap (Right (Just docs, _)) n = SpanDocString docs <$> getUris n
-    unwrap _ n                      = mkSpanDocText n
+    extractDocString :: Either b1 (Maybe HsDocString, b2) -> SpanDocUris -> SpanDoc
+    --  2021-11-17: FIXME: ArgDocs get dropped here - instead propagate them.
+    extractDocString (Right (Just docs, _)) = SpanDocString docs
+    extractDocString _ = SpanDocText mempty
 
-    mkSpanDocText name =
-      SpanDocText [] <$> getUris name
+    -- | Get the uris to the documentation and source html pages if they exist
+    getSpanDocUris :: Name -> IO SpanDocUris
+    getSpanDocUris name = do
+        (docFu, srcFu) <-
+            case nameModule_maybe name of
+            Just mod -> liftIO $ do
+                let
+                    toUriFileText :: (HscEnv -> Module -> IO (Maybe FilePath)) -> IO (Maybe T.Text)
+                    toUriFileText f = (fmap . fmap) (getUri . filePathToUri) $ f env mod
+                doc <- toUriFileText lookupDocHtmlForModule
+                src <- toUriFileText lookupSrcHtmlForModule
+                return (doc, src)
+            Nothing -> pure mempty
+        let
+            embelishUri :: Functor f => T.Text -> f T.Text -> f T.Text
+            embelishUri f = fmap (<> "#" <> f <> showNameWithoutUniques name)
 
-    -- Get the uris to the documentation and source html pages if they exist
-    getUris name = do
-      (docFu, srcFu) <-
-        case nameModule_maybe name of
-          Just mod -> liftIO $ do
-            doc <- toFileUriText $ lookupDocHtmlForModule env mod
-            src <- toFileUriText $ lookupSrcHtmlForModule env mod
-            return (doc, src)
-          Nothing -> pure (Nothing, Nothing)
-      let docUri = (<> "#" <> selector <> showNameWithoutUniques name) <$> docFu
-          srcUri = (<> "#" <> showNameWithoutUniques name) <$> srcFu
-          selector
-            | isValName name = "v:"
-            | otherwise = "t:"
-      return $ SpanDocUris docUri srcUri
+            docUri = embelishUri (bool "t:" "v:" $ isValName name) docFu
+            srcUri = embelishUri mempty srcFu
 
-    toFileUriText = (fmap . fmap) (getUri . filePathToUri)
+        return $ SpanDocUris docUri srcUri
+
+getDocumentationTryGhc :: HscEnv -> Module -> Name -> IO SpanDoc
+getDocumentationTryGhc env mod name = do
+  res <- getDocsNonInteractive env mod name
+  case res of
+      Left _    -> pure emptySpanDoc
+      Right res -> uncurry (intoSpanDoc env) res
+
+getDocumentationsTryGhc :: HscEnv -> Module -> [Name] -> IO (MS.Map Name SpanDoc)
+getDocumentationsTryGhc env mod names = do
+  res <- getDocsBatch env mod names
+  case res of
+    Left _    -> return mempty
+    Right res -> sequenceA $ MS.mapWithKey (intoSpanDoc env) res
 
 getDocumentation
  :: HasSrcSpan name
@@ -171,7 +181,7 @@ getDocumentation sources targetName = fromMaybe [] $ do
 docHeaders :: [RealLocated AnnotationComment]
            -> [T.Text]
 docHeaders = mapMaybe (\(L _ x) -> wrk x)
-  where
+ where
   wrk = \case
     -- When `Opt_Haddock` is enabled.
     AnnDocCommentNext s -> Just $ T.pack s
