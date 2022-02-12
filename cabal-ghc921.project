@@ -46,7 +46,6 @@ constraints:
     +ignore-plugins-ghc-bounds
     -brittany
     -class
-    -eval
     -haddockComments
     -hlint
     -retrie

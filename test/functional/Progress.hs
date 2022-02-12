@@ -33,7 +33,7 @@ tests =
                 let path = "diagnostics" </> "Foo.hs"
                 _ <- openDoc path "haskell"
                 expectProgressMessages [pack ("Setting up testdata (for " ++ path ++ ")"), "Processing", "Indexing"] []
-        , requiresEvalPlugin $ testCase "eval plugin sends progress reports" $
+        ,  knownBrokenForGhcVersions [GHC92] "No evaluation status with GHC 9.2" $ requiresEvalPlugin $ testCase "eval plugin sends progress reports" $
             runSession hlsCommand progressCaps "plugins/hls-eval-plugin/test/testdata" $ do
               doc <- openDoc "T1.hs" "haskell"
               lspId <- sendRequest STextDocumentCodeLens (CodeLensParams Nothing Nothing doc)
