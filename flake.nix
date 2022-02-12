@@ -327,14 +327,17 @@
               pname = old.pname + "-ghc${hpkgs.ghc.version}";
             });
       in with pkgs; rec {
-
-        devShells = {
+        # Developement shell with only compiler
+        simpleDevShells = {
           haskell-language-server-dev = mkDevShell ghcDefault "cabal.project";
           haskell-language-server-884-dev = mkDevShell ghc884 "cabal.project";
           haskell-language-server-8107-dev = mkDevShell ghc8107 "cabal.project";
           haskell-language-server-901-dev = mkDevShell ghc901 "cabal-ghc90.project";
           haskell-language-server-921-dev = mkDevShell ghc921 "cabal-ghc921.project";
+        };
 
+        # Developement shell, haskell packages are also provided by nix
+        nixDevShells = {
           haskell-language-server-dev-nix = mkDevShellWithNixDeps ghcDefault "cabal.project";
           haskell-language-server-884-dev-nix = mkDevShellWithNixDeps ghc884 "cabal.project";
           haskell-language-server-8107-dev-nix = mkDevShellWithNixDeps ghc8107 "cabal.project";
@@ -350,6 +353,8 @@
           haskell-language-server-921 = mkExe ghc921;
         };
 
+        devShells = simpleDevShells // nixDevShells;
+
         packages = allPackages // {
           # See https://github.com/NixOS/nix/issues/5591
           # nix flake cannot build a list/set of derivation in one command.
@@ -362,6 +367,7 @@
           # Same for all shells 
           all-dev-shells = linkFarmFromDrvs "all-dev-shells" (builtins.map (shell: shell.inputDerivation) (lib.unique (builtins.attrValues devShells)));
 
+          all-simple-dev-shells = linkFarmFromDrvs "all-dev-shells" (builtins.map (shell: shell.inputDerivation) (lib.unique (builtins.attrValues simpleDevShells)));
           docs = docs;
         };
 
