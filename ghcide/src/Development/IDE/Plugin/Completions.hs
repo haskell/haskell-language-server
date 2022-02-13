@@ -36,7 +36,7 @@ import qualified Development.IDE.Types.KnownTargets           as KT
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger                 (logDebug,
                                                                logError)
-import           GHC.Exts                                     (fromList, toList)
+import           GHC.Exts                                     (toList)
 import           Ide.Plugin.Config                            (Config)
 import           Ide.Types
 import qualified Language.LSP.Server                          as LSP
@@ -222,6 +222,9 @@ extendImportHandler' ideState ExtendImport {..}
           wantedModule = mkModuleName (T.unpack importName)
           wantedQual = mkModuleName . T.unpack <$> importQual
           existingImport = find (isWantedModule wantedModule wantedQual) msrImports
+          thingParent' = T.unpack <$> thingParent
+          newThing' = T.unpack newThing
+          importQual' = T.unpack <$> importQual
       case existingImport of
         Just imp -> do
             fmap (nfp,) $ liftEither $
@@ -230,14 +233,12 @@ extendImportHandler' ideState ExtendImport {..}
                 (annsA ps)
 #endif
                 $
-                  extendImport (T.unpack <$> thingParent) (T.unpack newThing) (makeDeltaAst imp)
+                  extendImport thingParent' newThing' (makeDeltaAst imp)
         Nothing -> do
-            let rewrite = newImport contents
-                    (T.unpack importName)
-                    (T.unpack <$> thingParent)
-                    (T.unpack newThing)
-                    (astA ps)
-            let workspaceEditE = rewriteToWEdit df doc (annsA ps) rewrite
+            let newImport = maybe (NewUnqualifiedImportForIdentifier thingParent' newThing' False)
+                    NewQualifiedImport importQual'
+                rewrite = newImportToRewrite contents (astA ps) (T.unpack importName) newImport
+                workspaceEditE = rewriteToWEdit df doc (annsA ps) rewrite
             case workspaceEditE of
                 Left errMsg -> do
                     liftIO $ logError (ideLogger ideState) $ "[extendImport] error: " <> T.pack errMsg
@@ -254,9 +255,6 @@ isWantedModule wantedModule Nothing (L _ it@ImportDecl{ideclName, ideclHiding = 
 isWantedModule wantedModule (Just qual) (L _ ImportDecl{ideclAs, ideclName, ideclHiding = Just (False, _)}) =
     unLoc ideclName == wantedModule && (wantedModule == qual || (unLoc . reLoc <$> ideclAs) == Just qual)
 isWantedModule _ _ _ = False
-
-liftMaybe :: Monad m => Maybe a -> MaybeT m a
-liftMaybe a = MaybeT $ pure a
 
 liftEither :: Monad m => Either e a -> MaybeT m a
 liftEither (Left _)  = mzero

@@ -16,13 +16,14 @@ module Development.IDE.Plugin.CodeAction.ExactPrint (
   -- * Utilities
   appendConstraint,
   removeConstraint,
-  newImport,
+  NewImport(..),
+  newImportToRewrite,
+  newImportToEdit,
   extendImport,
   hideSymbol,
   liftParseAST,
 ) where
 
-import Debug.Trace
 import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.Extra                   (whenJust)
@@ -33,7 +34,7 @@ import           Data.Functor
 import           Data.Generics                         (listify)
 import qualified Data.Map.Strict                       as Map
 import           Data.Maybe                            (fromJust, isNothing,
-                                                        mapMaybe, fromMaybe)
+                                                        mapMaybe)
 import qualified Data.Text                             as T
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error
@@ -55,9 +56,9 @@ import           GHC (AddEpAnn (..), AnnContext (..), AnnParen (..),
 #endif
 import           Language.LSP.Types
 import Development.IDE.GHC.Util
-import Data.Bifunctor (first)
-import Control.Lens (_head, _last, over)
 import GHC.Stack (HasCallStack)
+import Ide.PluginUtils (fullRange, makeDiffTextEdit)
+import Development.IDE.GHC.Compat.Util (unpackFS)
 
 ------------------------------------------------------------------------------
 
@@ -98,7 +99,7 @@ rewriteToEdit :: HasCallStack =>
   Anns ->
 #endif
   Rewrite ->
-  Either String [TextEdit]
+  Either String TextEdit
 rewriteToEdit dflags
 #if !MIN_VERSION_ghc(9,2,0)
               anns
@@ -115,14 +116,13 @@ rewriteToEdit dflags
 #else
     pure $ traceAst "REWRITE_result" $ resetEntryDP ast
 #endif
-  let editMap =
-        [ TextEdit (fromJust $ srcSpanToRange dst) $
+  let edit =
+        TextEdit (fromJust $ srcSpanToRange dst) $
             T.pack $ exactPrint ast
 #if !MIN_VERSION_ghc(9,2,0)
                        (fst anns)
 #endif
-        ]
-  pure editMap
+  pure edit
 
 -- | Convert a 'Rewrite' into a 'WorkspaceEdit'
 rewriteToWEdit :: DynFlags
@@ -137,14 +137,14 @@ rewriteToWEdit dflags uri
                anns
 #endif
                r = do
-  edits <- rewriteToEdit dflags
+  edit <- rewriteToEdit dflags
 #if !MIN_VERSION_ghc(9,2,0)
                          anns
 #endif
                          r
   return $
     WorkspaceEdit
-      { _changes = Just (fromList [(uri, List edits)])
+      { _changes = Just (fromList [(uri, List [edit])])
       , _documentChanges = Nothing
       , _changeAnnotations = Nothing
       }
@@ -312,13 +312,6 @@ transferAnn la lb f = do
       newKey = mkAnnKey lb
   oldValue <- liftMaybe "Unable to find ann" $ Map.lookup oldKey anns
   putAnnsT $ Map.delete oldKey $ Map.insert newKey (f oldValue) anns
-
-checkAnn :: Data a => String -> Located a -> TransformT (Either String) ()
-checkAnn msg l = do
-    anns <- getAnnsT
-    let key = mkAnnKey l
-    void $ liftMaybe ("Unable to find ann, extra msg: " ++ msg) $ Map.lookup key anns
-
 #endif
 
 headMaybe :: [a] -> Maybe a
@@ -334,20 +327,48 @@ liftMaybe _ (Just x) = return x
 liftMaybe s _        = lift $ Left s
 
 ------------------------------------------------------------------------------
-newImport :: T.Text
-          -> String -- ^ module name
-          -> Maybe String -- ^ the symbol
-          -> String -- ^ identifier
-          -> Located (HsModule GhcPs)
-          -> Rewrite
-newImport contents moduleName mparent identifier lMod@(L _ mod) =
+data NewImport
+  = NewQualifiedImport
+      { newImportQualifiedModuleName :: !String
+      }
+  | NewUnqualifiedImportForIdentifier
+      { newImportParent :: !(Maybe String),
+        newImportIdentifier :: !String,
+        newImportHidden :: !Bool
+      }
+  | NewUnqualifiedImportForAll
+
+newImportToEdit :: T.Text -- ^ file contents
+                -> Annotated ParsedSource
+                -> DynFlags
+                -> String -- ^ module name
+                -> NewImport
+                -> Either String TextEdit
+newImportToEdit fileContents parsedSource dynFlags moduleName newImport = do
+    let rewrite = newImportToRewrite fileContents (astA parsedSource) moduleName newImport
+    TextEdit{_newText = newText} <- rewriteToEdit dynFlags (annsA parsedSource) rewrite
+    let List diffTextEdit = makeDiffTextEdit fileContents newText
+    case diffTextEdit of
+        [edit] -> pure edit
+        edits -> Left $ "when adding new import, there should be exactly 1 TextEdit, but got: " <> show edits
+
+newImportToRewrite :: T.Text -- ^ file contents
+                   -> ParsedSource
+                   -> String -- ^ module name
+                   -> NewImport
+                   -> Rewrite
+newImportToRewrite fileContents lMod@(L _ mod) moduleName newImport =
     -- The 'SrcSpan' attached to 'lMod' is just a single point at line 1, column 1.
     -- So we need to use file contents to calculate an correct range for 'Rewrite'.
     Rewrite (fixModuleSpan lMod) $ \df -> do
         moduleNameSrcSpan <- uniqueSrcSpanT
         srcSpan <- uniqueSrcSpanT
+        qualifiedModuleNameSrcSpan <- uniqueSrcSpanT
         itemsSrcSpan <- uniqueSrcSpanT
+
         let lModuleName :: Located ModuleName = L moduleNameSrcSpan (mkModuleName moduleName)
+            lQualifiedModuleName :: Maybe (Located ModuleName) =
+                fmap (L qualifiedModuleNameSrcSpan . mkModuleName) qualifiedModuleName
             lItems :: Located [LIE GhcPs] = L itemsSrcSpan [] :: Located [LIE GhcPs]
             lDecl :: LImportDecl GhcPs = L srcSpan $
                 ImportDecl {
@@ -359,24 +380,37 @@ newImport contents moduleName mparent identifier lMod@(L _ mod) =
                     ideclSafe = False,
                     ideclQualified = NotQualified,
                     ideclImplicit = False,
-                    ideclAs = Nothing,
-                    ideclHiding = Just (False, lItems)
+                    ideclAs = lQualifiedModuleName,
+                    ideclHiding = fmap (const (hidden, lItems)) identifier
                 }
             precedingLines :: Int = if null (hsmodImports mod) then 2 else 1
-        addSimpleAnnT lDecl (DP (precedingLines, 0)) [(G AnnImport, DP (0, 0))]
+            qualifiedImportKeywords :: [(KeywordId, DeltaPos)]=
+                maybe [] (const [(G AnnQualified, DP (0, 1)), (G AnnAs, DP (0,  1))]) lQualifiedModuleName
+
+        addSimpleAnnT lDecl (DP (precedingLines, 0)) ((G AnnImport, DP (0, 0)) : qualifiedImportKeywords)
         addSimpleAnnT lModuleName (DP (0, 1)) [(G AnnVal, DP (0, 0))]
-        addSimpleAnnT lItems (DP (0, 1)) [(G AnnOpenP, DP (0, 0)), (G AnnCloseP, DP (0, 0))]
-        lDecl' <- extendImport' df mparent identifier lDecl
+        maybe (pure ()) (\n -> addSimpleAnnT n (DP (0, 1)) [(G AnnVal, DP (0, 0))]) lQualifiedModuleName
+        maybe (pure ())
+            (const $ addSimpleAnnT lItems (DP (0, 1)) [(G AnnOpenP, DP (0, 0)), (G AnnCloseP, DP (0, 0))])
+            identifier
+
+        lDecl' <- maybe (pure lDecl) (\identifier' -> extendImport' df parent identifier' lDecl) identifier
         pure $ fmap (\mod -> mod {hsmodImports = hsmodImports mod ++ [lDecl']}) lMod
   where
-    -- Use file contents to derive an 'SrcSpan'. See usage site for more detail.
+    qualifiedModuleName :: Maybe String
+    parent :: Maybe String
+    identifier :: Maybe String
+    hidden :: Bool
+    (qualifiedModuleName, parent, identifier, hidden) =
+        case newImport of
+            NewQualifiedImport qm -> (Just qm, Nothing, Nothing, False)
+            NewUnqualifiedImportForIdentifier parent identifier hidden -> (Nothing, parent, Just identifier, hidden)
+            NewUnqualifiedImportForAll -> (Nothing, Nothing, Nothing, False)
+
     fixModuleSpan :: Located (HsModule GhcPs) -> SrcSpan
-    fixModuleSpan (L (RealSrcSpan l buf) _) =
-        let lines = T.lines contents
-            file = srcSpanFile l
-            lastCol = maybe 1 ((+1) . T.length) (lastMaybe lines)
-            endLoc = mkRealSrcLoc file (Prelude.length lines + 1) lastCol
-         in RealSrcSpan (mkRealSrcSpan (mkRealSrcLoc file 1 1) endLoc) buf
+    fixModuleSpan (L (RealSrcSpan l _) _) = rangeToSrcSpan nfp (fullRange fileContents)
+      where
+        nfp = toNormalizedFilePath . unpackFS $ srcSpanFile l
     fixModuleSpan (L l _) = locA l
 
 ------------------------------------------------------------------------------

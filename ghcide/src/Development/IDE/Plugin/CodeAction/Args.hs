@@ -77,6 +77,7 @@ runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) _ra
   caaHar <- onceIO $ runRule GetHieAst
   caaBindings <- onceIO $ runRule GetBindings
   caaGblSigs <- onceIO $ runRule GetGlobalBindingTypeSigs
+  let caaIdeState = state
   liftIO $
     concat
       <$> sequence
@@ -121,7 +122,7 @@ instance ToTextEdit Rewrite where
       df <- MaybeT caaDf
 #if !MIN_VERSION_ghc(9,2,0)
       ps <- MaybeT caaAnnSource
-      let r = rewriteToEdit df (annsA ps) rw
+      let r = (:[]) <$> rewriteToEdit df (annsA ps) rw
 #else
       let r = rewriteToEdit df rw
 #endif
@@ -150,7 +151,8 @@ data CodeActionArgs = CodeActionArgs
     caaHar          :: IO (Maybe HieAstResult),
     caaBindings     :: IO (Maybe Bindings),
     caaGblSigs      :: IO (Maybe GlobalBindingTypeSigsResult),
-    caaDiagnostic   :: Diagnostic
+    caaDiagnostic   :: Diagnostic,
+    caaIdeState     :: IdeState
   }
 
 -- | There's no concurrency in each provider,
@@ -185,6 +187,9 @@ instance ToCodeAction a => ToCodeAction [a] where
 
 instance ToCodeAction a => ToCodeAction (Maybe a) where
   toCodeAction = maybe (pure []) toCodeAction
+
+instance ToCodeAction a => ToCodeAction (IO a) where
+  toCodeAction action = liftIO action >>= toCodeAction
 
 instance ToTextEdit a => ToCodeAction (CodeActionTitle, a) where
   toCodeAction (title, te) = ReaderT $ \caa -> pure . (title,Just CodeActionQuickFix,Nothing,) <$> toTextEdit caa te
@@ -281,3 +286,6 @@ instance ToCodeAction r => ToCodeAction (Maybe HscEnvEq -> r) where
 
 instance ToCodeAction r => ToCodeAction (Maybe HscEnv -> r) where
   toCodeAction = toCodeAction1 ((fmap.fmap.fmap) hscEnv caaGhcSession)
+
+instance ToCodeAction r => ToCodeAction (IdeState -> r) where
+  toCodeAction = toCodeAction3 (pure . caaIdeState)
