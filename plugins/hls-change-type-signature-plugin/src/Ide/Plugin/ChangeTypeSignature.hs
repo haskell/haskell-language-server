@@ -1,17 +1,23 @@
 -- | An HLS plugin to provide code actions to change type signatures
-module Ide.Plugin.ChangeTypeSignature (descriptor) where
+module Ide.Plugin.ChangeTypeSignature (descriptor, errorMessageRegexes) where
 
+import           Control.Monad                  (join)
 import           Control.Monad.IO.Class         (MonadIO (liftIO))
 import           Control.Monad.Trans.Except     (ExceptT)
 import qualified Data.HashMap.Strict            as Map
-import           Data.Maybe                     (listToMaybe, mapMaybe)
+import           Data.List                      (find)
+import qualified Data.List.NonEmpty             as NE
+import           Data.Maybe                     (isJust, isNothing, listToMaybe,
+                                                 mapMaybe)
 import           Data.Text                      (Text)
 import qualified Data.Text                      as T
+import           Data.Traversable               (forM)
 import           Development.IDE.Core.RuleTypes (GetParsedModule (GetParsedModule))
-import           Development.IDE.Core.Service   (IdeState, runAction)
+import           Development.IDE.Core.Service   (IdeState, ideLogger, runAction)
 import           Development.IDE.Core.Shake     (use)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error      (realSrcSpanToRange)
+import           Development.IDE.Types.Logger   (logDebug)
 import           Ide.PluginUtils                (getNormalizedFilePath,
                                                  handleMaybeM, response)
 import           Ide.Types                      (PluginDescriptor (..),
@@ -30,7 +36,8 @@ import           Language.LSP.Types             (CodeAction (..),
                                                  TextEdit (TextEdit), Uri,
                                                  WorkspaceEdit (WorkspaceEdit),
                                                  type (|?) (InR))
-import           Text.Regex.TDFA                ((=~))
+import           Text.Regex.TDFA                (AllTextMatches (getAllTextMatches),
+                                                 (=~))
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId) { pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionHandler }
@@ -40,6 +47,8 @@ codeActionHandler ideState plId CodeActionParams {_textDocument = TextDocumentId
       nfp <- getNormalizedFilePath plId (TextDocumentIdentifier uri)
       decls <- getDecls ideState nfp
       let actions = mapMaybe (generateAction uri decls) diags
+      liftIO $ logDebug (ideLogger ideState) $ T.pack $ "CTS Diags: " <> show diags
+      liftIO $ logDebug (ideLogger ideState) $ T.pack $ "CTS Actions: " <> show actions
       pure $ List actions
 
 getDecls :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m [LHsDecl GhcPs]
@@ -49,19 +58,25 @@ getDecls state = handleMaybeM "Error: Could not get Parsed Module"
     . runAction "changeSignature.GetParsedModule" state
     . use GetParsedModule
 
--- | DataType that encodes the necessary information for changing a type signature:
--- `expectedType` - The Expected Type
--- `actualType`   - The Actual Type
--- `declName`     - The Declaration Name that we are going to change
--- `declSrcSpan`  - The Source Span where the signature is located
--- `diagnostic`   - The Error Diagnostic we aim to solve
--- `uri`          - The URI the declaration is located in
-data ChangeSignature = ChangeSignature { expectedType :: Text
-                                       , actualType   :: Text
-                                       , declName     :: Text
-                                       , declSrcSpan  :: Maybe RealSrcSpan
-                                       , diagnostic   :: Diagnostic
-                                       , uri          :: Uri
+-- | DataType that encodes the necessary information for changing a type signature
+data ChangeSignature = ChangeSignature {
+                         -- | The expected type based on Signature
+                         expectedType :: Text
+                                       ,
+                         -- | the Actual Type based on definition
+                         actualType   :: Text
+                                       ,
+                         -- | the declaration name to be updated
+                         declName     :: Text
+                                       ,
+                         -- | the location of the declaration signature
+                         declSrcSpan  :: Maybe RealSrcSpan
+                                       ,
+                         -- | the diagnostic to solve
+                         diagnostic   :: Diagnostic
+                                       ,
+                         -- | the URI the declaration is in
+                         uri          :: Uri
                                        }
 
 -- | Constraint needed to trackdown OccNames in signatures
@@ -77,12 +92,23 @@ diagnosticToChangeSig uri decls diag = addSrcSpan decls <$> matchingDiagnostic u
 
 -- | If a diagnostic has the proper message create a ChangeSignature from it
 matchingDiagnostic :: Uri -> Diagnostic -> Maybe ChangeSignature
-matchingDiagnostic uri diag@Diagnostic{_message} = unwrapMatch $ _message =~ expectedMessage
+matchingDiagnostic uri diag@Diagnostic{_message} = case map (unwrapMatch . (=~) _message) errorMessageRegexes of
+                                                       []  -> Nothing
+                                                       css -> join $ find isJust css
     where
-        expectedMessage = "Expected type: (.+)\n +Actual type: (.+)\n.*\n +In an equation for ‘(.+)’" :: Text
         unwrapMatch :: (Text, Text, Text, [Text]) -> Maybe ChangeSignature
-        unwrapMatch (_, _, _, [exp, act, name]) = Just $ ChangeSignature exp act name Nothing diag uri
+        -- due to using (.|\n) in regex we have to drop the erroneous, but necessary ("." doesn't match newlines), match
+        unwrapMatch (_, _, _, [exp, act, _, name]) = Just $ ChangeSignature exp act name Nothing diag uri
         unwrapMatch _                           = Nothing
+
+-- | List of regexes that match various Error Messages
+errorMessageRegexes :: [Text]
+errorMessageRegexes = [
+    "Expected type: (" <> typeSigRegex <> ")\n +Actual type: (" <> typeSigRegex <> ")\n(.|\n)+In an equation for ‘(.+)’"
+    , "Couldn't match expected type ‘(" <> typeSigRegex <> ")’ with actual type ‘(" <> typeSigRegex <> ")’\n(.|\n)+In an equation for ‘(.+)’"
+    ]
+    where
+        typeSigRegex = "[a-zA-Z0-9 ->\\(\\)]+"
 
 -- | Given a String with the name of a declaration, find that declarations type signature location
 -- This is a modified version of functions found in Development.IDE.Plugin.CodeAction
@@ -114,6 +140,7 @@ changeSigToCodeAction ChangeSignature{..} = do
                          , _command     = Nothing
                          , _xdata       = Nothing
                          })
+
 mkChangeSigTitle :: Text -> Text -> Text
 mkChangeSigTitle declName actualType = "change signature for ‘" <> declName <> "’ to: " <> actualType
 
@@ -124,10 +151,28 @@ mkChangeSigEdit uri ss replacement =
         in WorkspaceEdit changes Nothing Nothing
 
 mkNewSignature :: Text -> Text -> Text
-mkNewSignature declName actualType = declName <> " :: " <> actualType
+mkNewSignature declName actualType = declName <> " :: " <> tidyActualType actualType
+
+-- | Cleans up type signatures with oddly-named type variables (t0, m0 ...)
+tidyActualType :: Text -> Text
+tidyActualType actualType = snd $ replaceAllTyVars $ findAllUniqueTyVars actualType
+    where
+        findAllUniqueTyVars at = getAllTextMatches (at =~ ("[a-z0-9]+" :: Text))  :: [Text]
+        findAllMTyVars at = getAllTextMatches (at =~ ("[m0-9]+" :: Text))  :: [Text]
+        findAllTTyVars at = getAllTextMatches (at =~ ("[t0-9]+" :: Text))  :: [Text]
+        findAllFTyVars at = getAllTextMatches (at =~ ("[f0-9]+" :: Text))  :: [Text]
+        replaceAllTyVars = foldl replaceWithFreshVar (freshVars, actualType)
+        freshVars = map (T.pack . flip (:) []) ['a'.. 'z'] <> [ a <> b | a <- freshVars, b <- freshVars]
+
+replaceWithFreshVar :: ([Text], Text) -> Text -> ([Text], Text)
+replaceWithFreshVar (replacement:rest, haystack) needle= (rest, T.replace needle replacement haystack)
+replaceWithFreshVar _ _ = error "How do I handle this..., the pattern match for infinite list shouldn't fail"
 
 --------------------------------------------------------------------------------
--- test :: Set.Set Int -> Int
--- test = go
+-- test :: Ord a => a -> Int
+-- test = go . head . reverse
 --     where
---         go = head . Set.toList
+--         go = head . reverse
+
+test :: a b -> (b -> d e) -> d (a e)
+test = forM
