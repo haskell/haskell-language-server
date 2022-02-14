@@ -114,12 +114,21 @@ launchHaskellLanguageServer parsedArgs = do
       callProcess e args
 #else
       let Cradle { cradleOptsProg = CradleAction { runGhcCmd } } = cradle
-      (CradleSuccess ghcBinary) <- fmap trim <$> runGhcCmd ["-v0", "-package-env=-", "-e", "putStr =<< System.Environment.getExecutablePath"]
-      (CradleSuccess libdir) <- HieBios.getRuntimeGhcLibDir cradle
+      -- we need to be compatible with NoImplicitPrelude
+      ghcBinary <- (fmap trim <$> runGhcCmd ["-v0", "-package-env=-", "-e", "do e <- System.Environment.getExecutablePath ; System.IO.putStr e"])
+        >>= cradleResult "Failed to get project GHC executable path"
+      libdir <- HieBios.getRuntimeGhcLibDir cradle
+        >>= cradleResult "Failed to get project GHC libdir path"
       env <- Map.fromList <$> getEnvironment
       let newEnv = Map.insert "GHC_BIN" ghcBinary $ Map.insert "GHC_LIBDIR" libdir env
       executeFile e True args (Just (Map.toList newEnv))
 #endif
+
+
+cradleResult :: String -> CradleLoadResult a -> IO a
+cradleResult _ (CradleSuccess a) = pure a
+cradleResult str (CradleFail e) = die $ str ++ ": " ++ show e
+cradleResult str CradleNone = die $ str ++ ": no cradle"
 
 -- | Version of 'getRuntimeGhcVersion' that dies if we can't get it, and also
 -- checks to see if the tool is missing if it is one of
@@ -134,12 +143,7 @@ getRuntimeGhcVersion' cradle = do
     Direct  -> checkToolExists "ghc"
     _       -> pure ()
 
-  ghcVersionRes <- HieBios.getRuntimeGhcVersion cradle
-  case ghcVersionRes of
-    CradleSuccess ver -> do
-      return ver
-    CradleFail error -> die $ "Failed to get project GHC version:" ++ show error
-    CradleNone -> die "Failed get project GHC version, since we have a none cradle"
+  HieBios.getRuntimeGhcVersion cradle >>= cradleResult "Failed to get project GHC version"
   where
     checkToolExists exe = do
       exists <- findExecutable exe
