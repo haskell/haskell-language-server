@@ -144,8 +144,8 @@ isLSP _   = False
 commandP :: IdePlugins IdeState -> Parser Command
 commandP plugins =
     hsubparser(command "typecheck" (info (Check <$> fileCmd) fileInfo)
-            <> command "hiedb" (info (Db <$> HieDb.optParser "" True <*> HieDb.cmdParser <**> helper) hieInfo)
-            <> command "lsp" (info (pure LSP <**> helper) lspInfo)
+            <> command "hiedb" (info (Db <$> HieDb.optParser "" True <*> HieDb.cmdParser) hieInfo)
+            <> command "lsp" (info (pure LSP) lspInfo)
             <> command "vscode-extension-schema" extensionSchemaCommand
             <> command "generate-default-config" generateDefaultConfigCommand
             <> pluginCommands

@@ -4,24 +4,24 @@
 /hls-graph @pepeiborra
 /hls-plugin-api @jneira @berberman
 /hls-test-utils @jneira
-/hie-compat 
+/hie-compat
 
 # Plugins
 /plugins/hls-alternate-number-format-plugin @drsooch
 /plugins/hls-brittany-plugin @fendor
-/plugins/hls-call-hierarchy-plugin 
+/plugins/hls-call-hierarchy-plugin @July541
 /plugins/hls-class-plugin @Ailrun
-/plugins/hls-eval-plugin 
+/plugins/hls-eval-plugin
 /plugins/hls-explicit-imports-plugin @pepeiborra
 /plugins/hls-floskell-plugin @Ailrun
 /plugins/hls-fourmolu-plugin @georgefst
 /plugins/hls-haddock-comments-plugin @berberman
 /plugins/hls-hlint-plugin @jneira @eddiemundo
-/plugins/hls-module-name-plugin 
+/plugins/hls-module-name-plugin
 /plugins/hls-ormolu-plugin @georgefst
 /plugins/hls-pragmas-plugin @berberman @Ailrun @eddiemundo
-/plugins/hls-qualify-imported-names-plugin @eddiemundo 
-/plugins/hls-refine-imports-plugin 
+/plugins/hls-qualify-imported-names-plugin @eddiemundo
+/plugins/hls-refine-imports-plugin
 /plugins/hls-rename-plugin @OliverMadine
 /plugins/hls-retrie-plugin @pepeiborra
 /plugins/hls-selection-range-plugin @kokobd

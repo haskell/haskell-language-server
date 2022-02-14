@@ -57,6 +57,7 @@ module Development.IDE.Core.Rules(
     getParsedModuleDefinition,
     typeCheckRuleDefinition,
     GhcSessionDepsConfig(..),
+    DisplayTHWarning(..),
     ) where
 
 #if !MIN_VERSION_ghc(8,8,0)
