@@ -1,5 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE CPP #-}
 -- | This module is based on the hie-wrapper.sh script in
 -- https://github.com/alanz/vscode-hie-server
@@ -114,8 +115,18 @@ launchHaskellLanguageServer parsedArgs = do
       callProcess e args
 #else
       let Cradle { cradleOptsProg = CradleAction { runGhcCmd } } = cradle
-      (CradleSuccess ghcBinary) <- fmap trim <$> runGhcCmd ["-v0", "-package-env=-", "-e", "putStr =<< System.Environment.getExecutablePath"]
-      (CradleSuccess libdir) <- HieBios.getRuntimeGhcLibDir cradle
+      ghcBinary <- (fmap trim <$> runGhcCmd ["-v0", "-package-env=-", "-e", "putStr =<< System.Environment.getExecutablePath"])
+        >>= \case
+          CradleSuccess ghc -> do
+            return ghc
+          CradleFail error -> die $ "Failed to get project GHC executable path:" ++ show error
+          CradleNone -> die "Failed get project GHC executable path, since we have a none cradle"
+      libdir <- HieBios.getRuntimeGhcLibDir cradle
+        >>= \case
+          CradleSuccess lib -> do
+            return lib
+          CradleFail error -> die $ "Failed to get project GHC libdir path:" ++ show error
+          CradleNone -> die "Failed get project GHC libdir path, since we have a none cradle"
       env <- Map.fromList <$> getEnvironment
       let newEnv = Map.insert "GHC_BIN" ghcBinary $ Map.insert "GHC_LIBDIR" libdir env
       executeFile e True args (Just (Map.toList newEnv))
