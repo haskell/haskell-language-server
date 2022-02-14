@@ -1,6 +1,5 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE CPP #-}
 -- | This module is based on the hie-wrapper.sh script in
 -- https://github.com/alanz/vscode-hie-server
@@ -116,21 +115,19 @@ launchHaskellLanguageServer parsedArgs = do
 #else
       let Cradle { cradleOptsProg = CradleAction { runGhcCmd } } = cradle
       ghcBinary <- (fmap trim <$> runGhcCmd ["-v0", "-package-env=-", "-e", "putStr =<< System.Environment.getExecutablePath"])
-        >>= \case
-          CradleSuccess ghc -> do
-            return ghc
-          CradleFail error -> die $ "Failed to get project GHC executable path:" ++ show error
-          CradleNone -> die "Failed get project GHC executable path, since we have a none cradle"
+        >>= cradleResult "Failed to get project GHC executable path"
       libdir <- HieBios.getRuntimeGhcLibDir cradle
-        >>= \case
-          CradleSuccess lib -> do
-            return lib
-          CradleFail error -> die $ "Failed to get project GHC libdir path:" ++ show error
-          CradleNone -> die "Failed get project GHC libdir path, since we have a none cradle"
+        >>= cradleResult "Failed to get project GHC libdir path"
       env <- Map.fromList <$> getEnvironment
       let newEnv = Map.insert "GHC_BIN" ghcBinary $ Map.insert "GHC_LIBDIR" libdir env
       executeFile e True args (Just (Map.toList newEnv))
 #endif
+
+
+cradleResult :: String -> CradleLoadResult a -> IO a
+cradleResult _ (CradleSuccess a) = pure a
+cradleResult str (CradleFail e) = die $ str ++ ": " ++ show e
+cradleResult str CradleNone = die $ str ++ ": no cradle"
 
 -- | Version of 'getRuntimeGhcVersion' that dies if we can't get it, and also
 -- checks to see if the tool is missing if it is one of
@@ -145,12 +142,7 @@ getRuntimeGhcVersion' cradle = do
     Direct  -> checkToolExists "ghc"
     _       -> pure ()
 
-  ghcVersionRes <- HieBios.getRuntimeGhcVersion cradle
-  case ghcVersionRes of
-    CradleSuccess ver -> do
-      return ver
-    CradleFail error -> die $ "Failed to get project GHC version:" ++ show error
-    CradleNone -> die "Failed get project GHC version, since we have a none cradle"
+  HieBios.getRuntimeGhcVersion cradle >>= cradleResult "Failed to get project GHC version"
   where
     checkToolExists exe = do
       exists <- findExecutable exe
