@@ -23,10 +23,13 @@ instruction_msg() {
 	(>&2 printf "\\033[0;35m%s\\033[0m\\n" "$1")
 }
 
-err_fix() {
-	instruction_msg ""
-	instruction_msg "Consider installing ghc-${GHC_VERSION} via ghcup"
-	instruction_msg "or build HLS from source."
+err_exit() {
+	msg="Couldn't find a working/matching GHC installation. Consider installing ghc-${GHC_VERSION} via ghcup or build HLS from source."
+	json="{\"jsonrpc\":\"2.0\", \"method\":\"window/showMessage\", \"params\": {\"type\": 1, \"message\": \"${msg}\"}}"
+	printf "%s\r\n" "Content-Length: $(printf "%s" "${json}" | wc -c)"
+	printf "%s\r\n"
+	printf "%s" "${json}"
+	unset msg json
 }
 
 err_ghc_pkg() {
@@ -105,13 +108,13 @@ infer_ghc_pkg() {
 # try GHC_LIBDIR from the environment (e.g. user set it, or haskell-language-server-wrapper)
 if [ -n "${GHC_LIBDIR}" ] &&
 	[ -n "${GHC_BIN}" ] &&
-	{ debug_msg "Trying method: GHC_LIBDIR and GHC_BIN from env" ; HLS_WRAPPER_VERBOSE=1 ; check_ghc "${GHC_LIBDIR}" "${GHC_BIN}" "$(infer_ghc_pkg "${GHC_BIN}")" || { err_fix ; exit 1 ; } ; }
+	{ debug_msg "Trying method: GHC_LIBDIR and GHC_BIN from env" ; HLS_WRAPPER_VERBOSE=1 ; check_ghc "${GHC_LIBDIR}" "${GHC_BIN}" "$(infer_ghc_pkg "${GHC_BIN}")" || { err_exit ; exit 1 ; } ; }
 then
 	:
 # try GHC_BIN from the environment (e.g. user set it)
 elif [ -n "${GHC_BIN}" ] &&
 	GHC_LIBDIR="$("${GHC_BIN}" --print-libdir)" &&
-	{ debug_msg "Trying method: GHC_BIN from env" ; HLS_WRAPPER_VERBOSE=1 ; check_ghc "${GHC_LIBDIR}" "${GHC_BIN}" "$(infer_ghc_pkg "${GHC_BIN}")" || { err_fix ; exit 2 ; } ; }
+	{ debug_msg "Trying method: GHC_BIN from env" ; HLS_WRAPPER_VERBOSE=1 ; check_ghc "${GHC_LIBDIR}" "${GHC_BIN}" "$(infer_ghc_pkg "${GHC_BIN}")" || { err_exit ; exit 2 ; } ; }
 then
 	:
 # try ghcup
@@ -143,8 +146,7 @@ then
 else
 	HLS_WRAPPER_VERBOSE=1
 	err_msg "All methods exhausted!"
-	err_msg "Couldn't find a working/matching GHC installation"
-	err_fix
+	err_exit
 	err_msg "exiting..."
 	exit 42
 fi
