@@ -25,8 +25,9 @@ instruction_msg() {
 
 err_exit() {
 	msg="Couldn't find a working/matching GHC installation. Consider installing ghc-${GHC_VERSION} via ghcup or build HLS from source."
+	# adjust Content-Length when changing json
 	json="{\"jsonrpc\":\"2.0\", \"method\":\"window/showMessage\", \"params\": {\"type\": 1, \"message\": \"${msg}\"}}"
-	printf "%s\r\n" "Content-Length: $(printf "%s" "${json}" | wc -c)"
+	printf "%s\r\n" "Content-Length: 203"
 	printf "%s\r\n"
 	printf "%s" "${json}"
 	unset msg json
