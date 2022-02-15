@@ -69,7 +69,7 @@ getArguments exeName plugins = execParser opts
       <|> listPluginsParser
       <|> BiosMode <$> biosParser
       <|> Ghcide <$> arguments plugins
-      <|> flag' PrintLibDir (long "print-libdir" <> help ("Print project GHCs libdir"))
+      <|> flag' PrintLibDir (long "print-libdir" <> help "Print project GHCs libdir")
       )
       <**> helper)
       ( fullDesc
