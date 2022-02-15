@@ -365,7 +365,7 @@
           all-haskell-language-server = linkFarmFromDrvs "all-haskell-language-server" (lib.unique (builtins.attrValues allPackages));
 
           # Same for all shells 
-          all-dev-shells = linkFarmFromDrvs "all-dev-shells" (builtins.map (shell: shell.inputDerivation) (lib.unique (builtins.attrValues devShells)));
+          all-nix-dev-shells = linkFarmFromDrvs "all-dev-shells" (builtins.map (shell: shell.inputDerivation) (lib.unique (builtins.attrValues [nixDevShells.haskell-language-server-dev-nix])));
 
           all-simple-dev-shells = linkFarmFromDrvs "all-dev-shells" (builtins.map (shell: shell.inputDerivation) (lib.unique (builtins.attrValues simpleDevShells)));
           docs = docs;
