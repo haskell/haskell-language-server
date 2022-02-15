@@ -7,8 +7,6 @@ let
     "hls-stylish-haskell-plugin"
     "hls-hlint-plugin"
     "hls-haddock-comments-plugin"
-    "hls-alternate-number-format-plugin"
-    "hls-eval-plugin"
     "hls-tactics-plugin"
     # That one is not technically a plugin, but by putting it in this list, we
     # get it removed from the top level list of requirement and it is not pull
@@ -39,8 +37,6 @@ let
           "-f-stylishHaskell"
           "-f-hlint"
           "-f-haddockComments"
-          "-f-alternateNumberFormat"
-          "-f-eval"
           "-f-tactics"
         ]) { };
 
