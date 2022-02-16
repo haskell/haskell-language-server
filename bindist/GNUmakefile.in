@@ -1,0 +1,40 @@
+DESTDIR ?=
+PREFIX  ?= /usr/local
+LIBDIR  ?= $(PREFIX)/lib
+BINDIR  ?= $(PREFIX)/bin
+
+HLS_VERSION := @@HLS_VERSION@@
+
+INSTALL   := install
+INSTALL_D := $(INSTALL) -d
+INSTALL_X := $(INSTALL) -vm 755
+SED       := sed
+CHMOD     := chmod
+CHMOD_X   := $(CHMOD) 755
+LN        := ln
+LN_S      := $(LN) -sf
+
+install:
+	$(INSTALL_D) "$(DESTDIR)$(BINDIR)"
+	$(INSTALL_D) "$(DESTDIR)$(LIBDIR)/haskell-language-server-$(HLS_VERSION)/lib"
+	$(INSTALL_D) "$(DESTDIR)$(LIBDIR)/haskell-language-server-$(HLS_VERSION)/bin"
+	for f in $(wildcard lib/*/*) ; do \
+		$(INSTALL_D) "$(DESTDIR)$(LIBDIR)/haskell-language-server-$(HLS_VERSION)/`dirname $$f`" && \
+		$(INSTALL_X) "$$f" "$(DESTDIR)$(LIBDIR)/haskell-language-server-$(HLS_VERSION)/$$f" ; \
+	done
+	for b in $(wildcard bin/*) ; do \
+		$(INSTALL_D) "$(DESTDIR)$(LIBDIR)/haskell-language-server-$(HLS_VERSION)/" && \
+		$(INSTALL_X) "$$b" "$(DESTDIR)$(LIBDIR)/haskell-language-server-$(HLS_VERSION)/$$b" ; \
+	done
+	for h in $(wildcard haskell-language-server-*.in) ; do \
+		$(SED) -e "s#@@EXE_DIR@@#$(LIBDIR)/haskell-language-server-$(HLS_VERSION)/bin/#" \
+			"$$h" > "$(DESTDIR)$(BINDIR)/$${h%.in}" && \
+		$(CHMOD_X) "$(DESTDIR)$(BINDIR)/$${h%.in}" ; \
+	done
+	$(LN_S) "`scripts/relpath.sh "$(BINDIR)" "$(LIBDIR)/haskell-language-server-$(HLS_VERSION)/bin/haskell-language-server-wrapper"`" \
+		"$(DESTDIR)$(BINDIR)/haskell-language-server-wrapper"
+
+version:
+	@echo "$(HLS_VERSION)"
+
+.PHONY: install

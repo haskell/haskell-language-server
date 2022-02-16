@@ -45,3 +45,6 @@ test/testdata/**/hie.yaml
 # nix
 result
 result-doc
+
+out/
+store/
