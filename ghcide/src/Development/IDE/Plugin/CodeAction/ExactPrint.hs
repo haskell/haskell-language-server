@@ -16,8 +16,8 @@ module Development.IDE.Plugin.CodeAction.ExactPrint (
   -- * Utilities
   appendConstraint,
   removeConstraint,
+  NewImportContext(..),
   NewImport(..),
-  newImportToRewrite,
   newImportToEdit,
   extendImport,
   hideSymbol,
@@ -338,13 +338,17 @@ data NewImport
       }
   | NewUnqualifiedImportForAll
 
-newImportToEdit :: T.Text -- ^ file contents
-                -> Annotated ParsedSource
-                -> DynFlags
-                -> String -- ^ module name
+data NewImportContext = NewImportContext
+    { nicFileContents :: T.Text
+    , nicParsedSource :: Annotated ParsedSource
+    , nicDynFlags :: DynFlags
+    , nicModuleName :: String
+    }
+
+newImportToEdit :: NewImportContext
                 -> NewImport
                 -> Either String TextEdit
-newImportToEdit fileContents parsedSource dynFlags moduleName newImport = do
+newImportToEdit (NewImportContext fileContents parsedSource dynFlags moduleName) newImport = do
     let rewrite = newImportToRewrite fileContents (astA parsedSource) moduleName newImport
     TextEdit{_newText = newText} <- rewriteToEdit dynFlags (annsA parsedSource) rewrite
     let List diffTextEdit = makeDiffTextEdit fileContents newText

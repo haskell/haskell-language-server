@@ -46,7 +46,8 @@ import           Data.Tuple.Extra                                  (fst3)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Service
-import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat                        hiding
+                                                                   (Logger)
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Util                          (prettyPrint,
@@ -59,7 +60,9 @@ import           Development.IDE.Plugin.TypeLenses                 (suggestSigna
 import           Development.IDE.Spans.Common
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Location
-import           Development.IDE.Types.Logger                      (logError)
+import           Development.IDE.Types.Logger                      (Logger,
+                                                                    logError,
+                                                                    logWarning)
 import           Development.IDE.Types.Options
 import qualified GHC.LanguageExtensions                            as Lang
 import           Ide.PluginUtils                                   (subRange)
@@ -1269,8 +1272,13 @@ removeRedundantConstraints df (L _ HsModule {hsmodDecls}) Diagnostic{..}
 
 -------------------------------------------------------------------------------------------------
 
-suggestNewOrExtendImportForClassMethod :: ExportsMap -> ParsedSource -> T.Text -> Diagnostic -> [(T.Text, CodeActionKind, [Either TextEdit Rewrite])]
-suggestNewOrExtendImportForClassMethod packageExportsMap ps fileContents Diagnostic {_message}
+suggestNewOrExtendImportForClassMethod :: ExportsMap
+                                       -> Annotated ParsedSource
+                                       -> T.Text -- ^ file contents
+                                       -> Diagnostic
+                                       -> DynFlags -> IdeState
+                                       -> IO [(T.Text, CodeActionKind, [Either TextEdit Rewrite])]
+suggestNewOrExtendImportForClassMethod packageExportsMap ps fileContents Diagnostic {_message} dynFlags ideState
   | Just [methodName, className] <-
       matchRegexUnifySpaces
         _message
@@ -1278,36 +1286,44 @@ suggestNewOrExtendImportForClassMethod packageExportsMap ps fileContents Diagnos
     idents <-
       maybe [] (Set.toList . Set.filter (\x -> parent x == Just className)) $
         Map.lookup methodName $ getExportsMap packageExportsMap =
-    mconcat $ suggest <$> idents
-  | otherwise = []
+    mconcat <$> traverse suggest idents
+  | otherwise = pure []
   where
+    suggest :: IdentInfo -> IO [(T.Text, CodeActionKind, [Either TextEdit Rewrite])]
     suggest identInfo@IdentInfo {moduleNameText}
       | importStyle <- NE.toList $ importStyles identInfo,
-        mImportDecl <- findImportDeclByModuleName (hsmodImports $ unLoc ps) (T.unpack moduleNameText) =
+        mImportDecl <- findImportDeclByModuleName (hsmodImports $ unLoc (astA ps)) (T.unpack moduleNameText) =
         case mImportDecl of
           -- extend
           Just decl ->
-            [ ( "Add " <> renderImportStyle style <> " to the import list of " <> moduleNameText,
+            pure $ [ ( "Add " <> renderImportStyle style <> " to the import list of " <> moduleNameText,
                 quickFixImportKind' "extend" style,
                 [Right $ uncurry extendImport (unImportStyle style) decl]
               )
               | style <- importStyle
             ]
           -- new
-          _ -> undefined
-            --  | Just (range, indent) <- newImportInsertRange ps fileContents
-            --  ->
-            --   (\(kind, unNewImport -> x) -> (x, kind, [Left $ TextEdit range (x <> "\n" <> T.replicate indent " ")])) <$>
-            --  [ (quickFixImportKind' "new" style, newUnqualImport moduleNameText rendered False)
-            --    | style <- importStyle,
-            --      let rendered = renderImportStyle style
-            --  ]
-            --    <> [(quickFixImportKind "new.all", newImportAll moduleNameText)]
-            --  | otherwise -> []
+          _ ->
+            let ctx = NewImportContext {
+                        nicFileContents = fileContents,
+                        nicParsedSource = ps,
+                        nicDynFlags = dynFlags,
+                        nicModuleName = T.unpack moduleNameText
+                      }
+                suggestions = constructNewImportSuggestions' ctx importStyle Nothing
+                wrapTextEdit :: ImportSuggestion -> (CodeActionTitle, CodeActionKind, [Either TextEdit Rewrite])
+                wrapTextEdit (title, kind, edit) = (title, kind, [Left edit])
+                in fmap wrapTextEdit <$> checkImportSuggestions (ideLogger ideState) suggestions
 
-suggestNewImport :: ExportsMap -> Annotated ParsedSource -> DynFlags -> T.Text -> Diagnostic
+type ImportSuggestion = (CodeActionTitle, CodeActionKind, TextEdit)
+
+suggestNewImport :: ExportsMap
+                 -> Annotated ParsedSource
+                 -> DynFlags
+                 -> T.Text
+                 -> Diagnostic
                  -> IdeState
-                 -> IO [(CodeActionTitle, CodeActionKind, TextEdit)]
+                 -> IO [ImportSuggestion]
 suggestNewImport packageExportsMap parsedSource dynFlags fileContents Diagnostic{_message} ideState
   | msg <- unifySpaces _message
   , Just thingMissing <- extractNotInScopeName msg
@@ -1320,12 +1336,15 @@ suggestNewImport packageExportsMap parsedSource dynFlags fileContents Diagnostic
         <&> T.pack . moduleNameString . unLoc
   , extendImportSuggestions <- matchRegexUnifySpaces msg
     "Perhaps you want to add ‘[^’]*’ to the import list in the import of ‘([^’]*)’"
-  = do
-    let (errs, suggestions) = constructNewImportSuggestions packageExportsMap parsedSource dynFlags fileContents
+  = checkImportSuggestions (ideLogger ideState) $
+        constructNewImportSuggestions packageExportsMap parsedSource dynFlags fileContents
             (qual <|> qual', thingMissing) extendImportSuggestions
-    forM_ errs $ \err -> logError (ideLogger ideState) ("[suggestNewImport] " <> T.pack err)
-    pure . sortOn fst3 $ suggestions
 suggestNewImport _ _ _ _ _ _ = pure []
+
+checkImportSuggestions :: Logger -> [Either String ImportSuggestion] -> IO [ImportSuggestion]
+checkImportSuggestions logger suggestionsEither = do
+    forM_ (lefts suggestionsEither) $ \err -> logWarning logger ("[suggestNewImport] " <> T.pack err)
+    pure . sortOn fst3 . rights $ suggestionsEither
 
 constructNewImportSuggestions :: ExportsMap
                               -> Annotated ParsedSource
@@ -1333,46 +1352,49 @@ constructNewImportSuggestions :: ExportsMap
                               -> T.Text
                               -> (Maybe T.Text, NotInScope)
                               -> Maybe [T.Text]
-                              -> ([String], [(CodeActionTitle, CodeActionKind, TextEdit)])
+                              -> [Either String ImportSuggestion]
 constructNewImportSuggestions exportsMap parsedSource dynFlags fileContents (qual, thingMissing) notTheseModules =
-    (lefts suggestions, rights suggestions)
+    [ suggestion
+    | Just name <- [T.stripPrefix (maybe "" (<> ".") qual) $ notInScope thingMissing]
+    , identInfo <- maybe [] Set.toList $ Map.lookup name (getExportsMap exportsMap)
+    , canUseIdent thingMissing identInfo
+    , moduleNameText identInfo `notElem` fromMaybe [] notTheseModules
+    , suggestion <- let newImportContext =
+                            NewImportContext
+                                { nicFileContents = fileContents,
+                                  nicParsedSource = parsedSource,
+                                  nicDynFlags = dynFlags,
+                                  nicModuleName = T.unpack (moduleNameText identInfo)
+                                }
+                     in constructNewImportSuggestions' newImportContext (NE.toList (importStyles identInfo)) qual
+    ]
+
+constructNewImportSuggestions' :: NewImportContext
+                               -> [ImportStyle]
+                               -> Maybe T.Text -- ^ qualified name
+                               -> [Either String (CodeActionTitle, CodeActionKind, TextEdit)]
+constructNewImportSuggestions' ctx styles qual =
+    fmap (toEdit >=> buildSuggestionText) $ case qual of
+        Just q -> [(quickFixImportKind "new.qualified", NewQualifiedImport (T.unpack q))]
+        Nothing ->
+            [(quickFixImportKind' "new" importStyle, newImportByStyle importStyle)
+                | importStyle <- styles] ++
+            [(quickFixImportKind "new.all", NewUnqualifiedImportForAll)]
   where
-    suggestions =
-        [ suggestion
-        | Just name <- [T.stripPrefix (maybe "" (<> ".") qual) $ notInScope thingMissing]
-        , identInfo <- maybe [] Set.toList $ Map.lookup name (getExportsMap exportsMap)
-        , canUseIdent thingMissing identInfo
-        , moduleNameText identInfo `notElem` fromMaybe [] notTheseModules
-        , suggestion <- renderNewImport identInfo
-        ]
+    toEdit :: (CodeActionKind, NewImport) -> Either String (CodeActionKind, TextEdit)
+    toEdit = traverse (newImportToEdit ctx)
 
-    renderNewImport :: IdentInfo -> [Either String (T.Text, CodeActionKind, TextEdit)]
-    renderNewImport identInfo = fmap (toEdit >=> buildSuggestionText) (makeNewImport identInfo)
-      where
-        moduleName = T.unpack (moduleNameText identInfo)
-
-        toEdit :: (CodeActionKind, NewImport) -> Either String (CodeActionKind, TextEdit)
-        toEdit = traverse (newImportToEdit fileContents parsedSource dynFlags moduleName)
-
-        buildSuggestionText :: (CodeActionKind, TextEdit) -> Either String (T.Text, CodeActionKind, TextEdit)
-        buildSuggestionText (codeActionKind, edit) = do
-            let TextEdit{_newText = newText} = edit
-                suggestionText = T.strip newText
-            if "import" `T.isPrefixOf` suggestionText
-            then pure (suggestionText, codeActionKind, edit)
-            else Left "new import code action should begin with 'import'"
-
-    makeNewImport :: IdentInfo -> [(CodeActionKind, NewImport)]
-    makeNewImport identInfo
-      | Just q <- qual = [(quickFixImportKind "new.qualified", NewQualifiedImport (T.unpack q))]
-      | otherwise =
-        [(quickFixImportKind' "new" importStyle, newImportByStyle importStyle)
-            | importStyle <- NE.toList $ importStyles identInfo] ++
-        [(quickFixImportKind "new.all", NewUnqualifiedImportForAll)]
+    buildSuggestionText :: (CodeActionKind, TextEdit) -> Either String ImportSuggestion
+    buildSuggestionText (codeActionKind, edit) = do
+        let TextEdit{_newText = newText} = edit
+            suggestionText = T.strip newText
+        if "import" `T.isPrefixOf` suggestionText
+        then pure (suggestionText, codeActionKind, edit)
+        else Left "new import code action should begin with 'import'"
 
 newImportByStyle :: ImportStyle -> NewImport
 newImportByStyle (ImportTopLevel identifier) = NewUnqualifiedImportForIdentifier Nothing (T.unpack identifier) False
-newImportByStyle (ImportViaParent parent identifier) =
+newImportByStyle (ImportViaParent identifier parent) =
     NewUnqualifiedImportForIdentifier (Just . T.unpack $ parent) (T.unpack identifier) False
 
 canUseIdent :: NotInScope -> IdentInfo -> Bool

@@ -36,7 +36,8 @@ import qualified Development.IDE.Types.KnownTargets           as KT
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger                 (logDebug,
                                                                logError)
-import           GHC.Exts                                     (toList)
+import           GHC.Exts                                     (IsList (fromList),
+                                                               toList)
 import           Ide.Plugin.Config                            (Config)
 import           Ide.Types
 import qualified Language.LSP.Server                          as LSP
@@ -237,13 +238,22 @@ extendImportHandler' ideState ExtendImport {..}
         Nothing -> do
             let newImport = maybe (NewUnqualifiedImportForIdentifier thingParent' newThing' False)
                     NewQualifiedImport importQual'
-                rewrite = newImportToRewrite contents (astA ps) (T.unpack importName) newImport
-                workspaceEditE = rewriteToWEdit df doc (annsA ps) rewrite
-            case workspaceEditE of
+                editE = newImportToEdit NewImportContext
+                    { nicFileContents = contents,
+                      nicParsedSource = ps,
+                      nicDynFlags = df,
+                      nicModuleName = T.unpack importName
+                    } newImport
+            case editE of
                 Left errMsg -> do
                     liftIO $ logError (ideLogger ideState) $ "[extendImport] error: " <> T.pack errMsg
                     mzero
-                Right workspaceEdit -> do
+                Right edit -> do
+                    let workspaceEdit = WorkspaceEdit
+                            { _changes = Just (fromList [(doc, List[edit])]),
+                              _documentChanges = Nothing,
+                              _changeAnnotations = Nothing
+                            }
                     liftIO $ logDebug (ideLogger ideState) $ "[extendImport] workspace edit: " <> T.pack (show workspaceEdit)
                     pure (nfp, workspaceEdit)
   | otherwise =
