@@ -8,10 +8,14 @@ concurrency:
 on:
   workflow_dispatch:
     inputs:
-      upload-candidates:
+      upload:
         description: 'Whether packages should be uploaded'
         required: true
-        default: 'true'
+        default: 'false'
+      publish:
+        description: 'Wheter packages should be published as definitive'
+        required: true
+        default: 'false'
   push:
     branches:
       - '*-hackage'
@@ -20,7 +24,7 @@ jobs:
   check-and-upload-tarballs:
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: ${{ github.event.inputs.upload-candidates == 'true' }}
+      fail-fast: ${{ github.event.inputs.upload != 'false' }}
       matrix:
         package: ["hie-compat", "hls-graph", "shake-bench",
                   "hls-plugin-api", "ghcide", "hls-test-utils",
@@ -138,8 +142,10 @@ jobs:
           name: ${{ matrix.package }}
           path: ${{ steps.generate-dist-tarball.outputs.path }}
 
-  upload-candidate:
-    if: github.event.inputs.upload-candidates == 'true'
+  upload-package:
+    # Runs triggered by *-hackage branches will upload packages
+    # cause inputs are blank when the workflow is not triggered manually
+    if: github.event.inputs.upload != 'false'
     needs: check-and-upload-tarballs
     runs-on: ubuntu-latest
     steps:
@@ -156,4 +162,5 @@ jobs:
         with:
           hackageToken: ${{ secrets.HACKAGE_AUTH_TOKEN }}
           packagesPath: packages
-          publish: false
+          # runs triggered by *-hackage branches will not publish packages definitely
+          publish: {{ github.event.inputs.publish == 'true' }}

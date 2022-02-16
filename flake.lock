@@ -110,6 +110,18 @@
         "url": "https://hackage.haskell.org/package/hlint-3.3.6/hlint-3.3.6.tar.gz"
       }
     },
+    "implicit-hie-cradle": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-2NmucBBI7Qi1UGXWG27XFZRCeqeRiwVFWmJKZnp6R5U=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/implicit-hie-cradle-0.3.0.5/implicit-hie-cradle-0.3.0.5.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/implicit-hie-cradle-0.3.0.5/implicit-hie-cradle-0.3.0.5.tar.gz"
+      }
+    },
     "lsp": {
       "flake": false,
       "locked": {
@@ -216,6 +228,7 @@
         "ghc-exactprint": "ghc-exactprint",
         "gitignore": "gitignore",
         "hlint": "hlint",
+        "implicit-hie-cradle": "implicit-hie-cradle",
         "lsp": "lsp",
         "lsp-test": "lsp-test",
         "lsp-types": "lsp-types",

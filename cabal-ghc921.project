@@ -44,10 +44,8 @@ constraints:
   -- These plugins don't build/work on GHC92 yet
   haskell-language-server
     +ignore-plugins-ghc-bounds
-    -alternateNumberFormat
     -brittany
     -class
-    -eval
     -haddockComments
     -hlint
     -retrie

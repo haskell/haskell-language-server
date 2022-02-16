@@ -31,7 +31,7 @@ import           Data.Function                            (on)
 import           Data.Functor
 import qualified Data.HashMap.Strict                      as HM
 import qualified Data.HashSet                             as HashSet
-import           Data.Monoid                              (First(..))
+import           Data.Monoid                              (First (..))
 import           Data.Ord                                 (Down (Down))
 import qualified Data.Set                                 as Set
 import           Development.IDE.Core.Compile

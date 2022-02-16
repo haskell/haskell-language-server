@@ -1,6 +1,38 @@
 # Changelog for haskell-language-server
 
-## 1.6.0
+## 1.6.1.1 (*only hackage release*)
+
+- Release to update haskell-language-server.cabal in hackage, setting the build for the executable component as dynamically linked
+  - The motivation is build by default a hls executable which works for Template Haskell
+  - This doesn't need a full release cause it does not affect release executables which continue being fully static
+
+### Pull requests merged for 1.6.1.1
+
+- Prepare 1.6.1.1 (only hackage release)
+([#2681](https://github.com/haskell/haskell-language-server/pull/2681)) by @jneira
+- Add the -dynamic flag and update build instructions
+([#2668](https://github.com/haskell/haskell-language-server/pull/2668)) by @pepeiborra
+
+## 1.6.1.0
+
+This is a bug fix release to restore a fully statically linked haskell-language-server-wrapper executable.
+
+- It has been reported [here](https://github.com/haskell/haskell-language-server/issues/2650)
+  - Thanks all reporters for the fast feedback
+- The bug has been traced [here](https://github.com/haskell/haskell-language-server/pull/2615#discussion_r795059782)
+- And the fix is in [this pr](https://github.com/haskell/haskell-language-server/pull/2647)
+
+### Pull requests merged for 1.6.1.0
+
+- Post 1.6.0.0 fixes and prepare 1.6.1.0 bug fix release
+([#2647](https://github.com/haskell/haskell-language-server/pull/2647)) by @jneira
+- Move hackage back to flake.nix
+([#2652](https://github.com/haskell/haskell-language-server/pull/2652)) by @guibou
+- Wingman: Fix #1879
+([#2644](https://github.com/haskell/haskell-language-server/pull/2644)) by @MorrowM
+
+
+## 1.6.0.0
 
 Time for a new and exciting hls release:
 
@@ -9,7 +41,7 @@ Time for a new and exciting hls release:
   - [Qualify imported names](https://haskell-language-server.readthedocs.io/en/latest/features.html#qualify-imported-names) thanks to @eddiemundo
   - New plugin to support [selection range](https://haskell-language-server.readthedocs.io/en/latest/features.html#selection-range) (aka double click text selection) thanks to @kokobd
 - Finally hls [supports *ghc 9.2.1*](https://github.com/haskell/haskell-language-server/issues/2179)
-  - Including core features and [many plugins](https://haskell-language-server.readthedocs.io/en/latest/supported-versions.html#plugins-support-by-ghc-version))
+  - Including core features and [many plugins](https://haskell-language-server.readthedocs.io/en/latest/supported-versions.html#plugins-support-by-ghc-version)
   - Thanks to a great collective effort coordinated by @pepeiborra and with the help of @wz1000, @mpickering and @alanz among others
 - Hls now also [supports *ghc 9.0.2*](https://github.com/haskell/haskell-language-server/issues/297) with all plugins but the stylish-haskell formatter
   - Including the [wingman plugin](https://github.com/haskell/haskell-language-server/tree/master/plugins/hls-tactics-plugin) thanks to @isovector and @anka-213
@@ -27,6 +59,8 @@ Time for a new and exciting hls release:
 
 ### Pull requests merged for 1.6.0
 
+- Prepare 1.6.0 release
+([#2642](https://github.com/haskell/haskell-language-server/pull/2642)) by @jneira
 - Implement stripPrefix via T.stripPrefix
 ([#2645](https://github.com/haskell/haskell-language-server/pull/2645)) by @Bodigrim
 - Change Type Family Export pattern

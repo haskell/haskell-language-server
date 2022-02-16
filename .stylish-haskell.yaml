@@ -53,7 +53,7 @@ steps:
 
 columns: 80
 
-newline: native
+newline: lf
 
 language_extensions:
   - BangPatterns

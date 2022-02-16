@@ -45,6 +45,7 @@ library
   other-modules:
     Ide.Plugin.Eval.Code
     Ide.Plugin.Eval.CodeLens
+    Ide.Plugin.Eval.Config
     Ide.Plugin.Eval.GHC
     Ide.Plugin.Eval.Parse.Comments
     Ide.Plugin.Eval.Parse.Option
@@ -78,7 +79,6 @@ library
     , pretty-simple
     , QuickCheck
     , safe-exceptions
-    , temporary
     , text
     , time
     , transformers
@@ -105,10 +105,12 @@ test-suite tests
   build-depends:
     , aeson
     , base
+    , containers
     , directory
     , extra
     , filepath
     , hls-eval-plugin
+    , hls-plugin-api
     , hls-test-utils   ^>=1.2
     , lens
     , lsp-types

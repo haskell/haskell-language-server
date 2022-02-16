@@ -30,6 +30,7 @@ import qualified Control.Exception               as E
 import           Control.Lens                    (_1, _3, (%~), (<&>), (^.))
 import           Control.Monad                   (guard, join, void, when)
 import           Control.Monad.IO.Class          (MonadIO (liftIO))
+import           Control.Monad.Trans             (lift)
 import           Control.Monad.Trans.Except      (ExceptT (..))
 import           Data.Aeson                      (toJSON)
 import           Data.Char                       (isSpace)
@@ -72,16 +73,24 @@ import           GHC                             (ClsInst,
                                                   getInteractiveDynFlags,
                                                   isImport, isStmt, load,
                                                   parseName, pprFamInst,
-                                                  pprInstance, setLogAction,
-                                                  setTargets, typeKind)
+                                                  pprInstance, setTargets,
+                                                  typeKind)
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC                             (Fixity)
+#endif
 import qualified GHC.LanguageExtensions.Type     as LangExt (Extension (..))
 
 import           Development.IDE.Core.FileStore  (setSomethingModified)
 import           Development.IDE.Types.Shake     (toKey)
+import           Ide.Plugin.Config               (Config)
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC.Types.SrcLoc                (UnhelpfulSpanReason (UnhelpfulInteractive))
+#endif
 import           Ide.Plugin.Eval.Code            (Statement, asStatements,
                                                   evalSetup, myExecStmt,
                                                   propSetup, resultRange,
                                                   testCheck, testRanges)
+import           Ide.Plugin.Eval.Config          (getDiffProperty)
 import           Ide.Plugin.Eval.GHC             (addImport, addPackages,
                                                   hasPackage, showDynFlags)
 import           Ide.Plugin.Eval.Parse.Comments  (commentsToSections)
@@ -99,11 +108,9 @@ import           Language.LSP.Types              hiding
                                                   SemanticTokenRelative (length))
 import           Language.LSP.Types.Lens         (end, line)
 import           Language.LSP.VFS                (virtualFileText)
-import           System.FilePath                 (takeFileName)
-import           System.IO                       (hClose)
-import           UnliftIO.Temporary              (withSystemTempFile)
 
-#if MIN_VERSION_ghc(9,0,0)
+#if MIN_VERSION_ghc(9,2,0)
+#elif MIN_VERSION_ghc(9,0,0)
 import           GHC.Driver.Session              (unitDatabases, unitState)
 import           GHC.Types.SrcLoc                (UnhelpfulSpanReason (UnhelpfulInteractive))
 #else
@@ -176,16 +183,16 @@ codeLens st plId CodeLensParams{_textDocument} =
 evalCommandName :: CommandId
 evalCommandName = "evalCommand"
 
-evalCommand :: PluginCommand IdeState
-evalCommand = PluginCommand evalCommandName "evaluate" runEvalCmd
+evalCommand :: PluginId -> PluginCommand IdeState
+evalCommand plId = PluginCommand evalCommandName "evaluate" (runEvalCmd plId)
 
 type EvalId = Int
 
-runEvalCmd :: CommandFunction IdeState EvalParams
-runEvalCmd st EvalParams{..} =
+runEvalCmd :: PluginId -> CommandFunction IdeState EvalParams
+runEvalCmd plId st EvalParams{..} =
     let dbg = logWith st
         perf = timed dbg
-        cmd :: ExceptT String (LspM c) WorkspaceEdit
+        cmd :: ExceptT String (LspM Config) WorkspaceEdit
         cmd = do
             let tests = map (\(a,_,b) -> (a,b)) $ testsBySection sections
 
@@ -215,7 +222,7 @@ runEvalCmd st EvalParams{..} =
                         (Just (textToStringBuffer mdlText, now))
 
             -- Setup environment for evaluation
-            hscEnv' <- ExceptT $ fmap join $ withSystemTempFile (takeFileName fp) $ \logFilename logHandle -> liftIO . gStrictTry . evalGhcEnv session $ do
+            hscEnv' <- ExceptT $ fmap join $ liftIO . gStrictTry . evalGhcEnv session $ do
                 env <- getSession
 
                 -- Install the module pragmas and options
@@ -244,13 +251,8 @@ runEvalCmd st EvalParams{..} =
                         $ idflags
                 setInteractiveDynFlags $ df'
 #if MIN_VERSION_ghc(9,0,0)
-                        { unitState =
-                            unitState
-                                df
-                        , unitDatabases =
-                            unitDatabases
-                                df
-                        , packageFlags =
+                        {
+                        packageFlags =
                             packageFlags
                                 df
                         , useColor = Never
@@ -271,15 +273,6 @@ runEvalCmd st EvalParams{..} =
                         }
 #endif
 
-                -- set up a custom log action
-#if MIN_VERSION_ghc(9,0,0)
-                setLogAction $ \_df _wr _sev _span _doc ->
-                    defaultLogActionHPutStrDoc _df logHandle _doc
-#else
-                setLogAction $ \_df _wr _sev _span _style _doc ->
-                    defaultLogActionHPutStrDoc _df logHandle _doc _style
-#endif
-
                 -- Load the module with its current content (as the saved module might not be up to date)
                 -- BUG: this fails for files that requires preprocessors (e.g. CPP) for ghc < 8.8
                 -- see https://gitlab.haskell.org/ghc/ghc/-/issues/17066
@@ -292,20 +285,20 @@ runEvalCmd st EvalParams{..} =
                 dbg "LOAD RESULT" $ asS loadResult
                 case loadResult of
                     Failed -> liftIO $ do
-                        hClose logHandle
-                        err <- readFile logFilename
+                        let err = ""
                         dbg "load ERR" err
                         return $ Left err
                     Succeeded -> do
                         -- Evaluation takes place 'inside' the module
                         setContext [Compat.IIModule modName]
                         Right <$> getSession
-
+            diff <- lift $ getDiffProperty plId
             edits <-
                 perf "edits" $
                     liftIO $
                         evalGhcEnv hscEnv' $
                             runTests
+                                diff
                                 (st, fp)
                                 tests
 
@@ -347,8 +340,8 @@ testsBySection sections =
 
 type TEnv = (IdeState, String)
 
-runTests :: TEnv -> [(Section, Test)] -> Ghc [TextEdit]
-runTests e@(_st, _) tests = do
+runTests :: Bool -> TEnv -> [(Section, Test)] -> Ghc [TextEdit]
+runTests diff e@(_st, _) tests = do
     df <- getInteractiveDynFlags
     evalSetup
     when (hasQuickCheck df && needsQuickCheck tests) $ void $ evals e df propSetup
@@ -363,7 +356,7 @@ runTests e@(_st, _) tests = do
         rs <- runTest e df test
         dbg "TEST RESULTS" rs
 
-        let checkedResult = testCheck (section, test) rs
+        let checkedResult = testCheck diff (section, test) rs
 
         let edit = asEdit (sectionFormat section) test (map pad checkedResult)
         dbg "TEST EDIT" edit
@@ -683,7 +676,9 @@ doTypeCmd dflags arg = do
 
 parseExprMode :: Text -> (TcRnExprMode, T.Text)
 parseExprMode rawArg = case T.break isSpace rawArg of
+#if !MIN_VERSION_ghc(9,2,0)
     ("+v", rest) -> (TM_NoInst, T.strip rest)
+#endif
     ("+d", rest) -> (TM_Default, T.strip rest)
     _            -> (TM_Inst, rawArg)
 
