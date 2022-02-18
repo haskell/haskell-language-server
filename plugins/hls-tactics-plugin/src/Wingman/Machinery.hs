@@ -384,19 +384,24 @@ createImportedHyInfo on ty = HyInfo
   }
 
 
+getTyThingByName
+    :: Name
+    -> TacticsM (Maybe TyThing)
+getTyThingByName name = do
+  ctx <- ask
+  mvar <- lift
+        $ ExtractM
+        $ lift
+        $ lookupName (ctx_hscEnv ctx) (ctx_module ctx) name
+  pure mvar
+
 getTyThing
     :: OccName
     -> TacticsM (Maybe TyThing)
 getTyThing occ = do
   ctx <- ask
   case lookupOccEnv (ctx_occEnv ctx) occ of
-    Just (elt : _) -> do
-      mvar <- lift
-            $ ExtractM
-            $ lift
-            $ lookupName (ctx_hscEnv ctx) (ctx_module ctx)
-            $ gre_name elt
-      pure mvar
+    Just (elt : _) -> getTyThingByName $ gre_name elt
     _ -> pure Nothing
 
 
@@ -428,6 +433,20 @@ getOccNameType occ = do
   getTyThing occ >>= \case
     Just (AnId v) -> pure $ varType v
     _ -> failure $ NotInScope occ
+
+
+getConLikeThing
+    :: Name
+    -> TacticsM ConLike
+getConLikeThing nm = do
+  getTyThingByName nm >>= \case
+    Just (AConLike v) -> pure v
+    _ -> failure $ NotInScope $ occName nm
+
+
+getCompleteDestructors :: CompleteMatch -> TacticsM [ConLike]
+getCompleteDestructors (CompleteMatch nas _) =
+  traverse getConLikeThing nas
 
 
 getCurrentDefinitions :: TacticsM [(OccName, CType)]

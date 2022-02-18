@@ -109,7 +109,7 @@ commandProvider Destruct =
   requireHoleSort (== Hole) $
   filterBindingType destructFilter $ \occ ty ->
     filterCompletes ty $ \cm ->
-      provide Destruct $ T.pack $ occNameString occ <> unsafeRender cm
+      provide Destruct $ T.pack $ occNameString occ
 commandProvider DestructPun =
   requireHoleSort (== Hole) $
     filterBindingType destructPunFilter $ \occ _ ->
