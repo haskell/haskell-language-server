@@ -839,9 +839,10 @@ instance IsIdeGlobal DisplayTHWarning
 
 getModSummaryRule :: Rules ()
 getModSummaryRule = do
-    env <- lspEnv <$> getShakeExtrasRules
-    displayItOnce <- liftIO $ once $ LSP.runLspT (fromJust env) displayTHWarning
-    addIdeGlobal (DisplayTHWarning displayItOnce)
+    menv <- lspEnv <$> getShakeExtrasRules
+    forM_ menv $ \env -> do
+        displayItOnce <- liftIO $ once $ LSP.runLspT env displayTHWarning
+        addIdeGlobal (DisplayTHWarning displayItOnce)
 
     defineEarlyCutoff $ Rule $ \GetModSummary f -> do
         session' <- hscEnv <$> use_ GhcSession f
