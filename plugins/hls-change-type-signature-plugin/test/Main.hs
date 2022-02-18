@@ -41,6 +41,7 @@ test :: TestTree
 test = testGroup "changeTypeSignature" [
     codeActionTest "TExpectedActual" 4 11,
     codeActionTest "TRigidType" 4 14,
+    codeActionTest "TPrettyPrint" 5 13,
     codeActionProperties "TErrorGivenPartialSignature" [(4, 13)] $ \actions -> liftIO $ length actions @?= 0,
     testRegexes ]
 

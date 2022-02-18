@@ -54,9 +54,6 @@ codeActionHandler ideState plId CodeActionParams {_textDocument = TextDocumentId
       decls <- getDecls ideState nfp
       let sigs = [ sigToText ts | L (RealSrcSpan rss _) (SigD _ ts@(TypeSig _ idsSig _)) <- decls]
       let actions = mapMaybe (generateAction uri decls) diags
-      liftIO $ logDebug (ideLogger ideState) $ T.pack $ "CTS Diags: " <> show diags
-      liftIO $ logDebug (ideLogger ideState) $ T.pack $ "CTS Actions: " <> show actions
-      liftIO $ logDebug (ideLogger ideState) $ T.pack $ "CTS Sigs: " <> show sigs
       pure $ List actions
 
 getDecls :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m [LHsDecl GhcPs]
