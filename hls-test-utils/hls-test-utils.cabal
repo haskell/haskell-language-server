@@ -44,7 +44,7 @@ library
     , ghcide                  ^>=1.6
     , hls-graph
     , hls-plugin-api          ^>=1.3
-    , hspec                   <2.8
+    , hspec                   <2.10
     , hspec-core
     , lens
     , lsp                     ^>=1.4
