@@ -157,6 +157,12 @@ containsHsVar name x = not $ null $ listify (
   ) x
 
 
+lookupCompleteMatch :: CompleteMatchMap -> Type -> Maybe [CompleteMatch]
+lookupCompleteMatch cm t = case tcSplitTyConApp_maybe t of
+  Nothing -> Nothing
+  Just (tc, _) -> lookupUFM cm $ getName tc
+
+
 ------------------------------------------------------------------------------
 -- | Does this thing contain any holes?
 containsHole :: Data a => a -> Bool

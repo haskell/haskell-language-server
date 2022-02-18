@@ -459,6 +459,7 @@ data Context = Context
   , ctx_hscEnv       :: HscEnv
   , ctx_occEnv       :: OccEnv [GlobalRdrElt]
   , ctx_module       :: Module
+  , ctx_completes    :: CompleteMatchMap
   }
 
 instance Show Context where
@@ -485,6 +486,7 @@ emptyContext
       , ctx_hscEnv = error "empty hsc env from emptyContext"
       , ctx_occEnv = emptyOccEnv
       , ctx_module = error "empty module from emptyContext"
+      , ctx_completes = mempty
       }
 
 

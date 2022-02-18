@@ -48,10 +48,7 @@ import           Ide.PluginUtils (usePropertyLsp)
 import           Ide.Types (PluginId)
 import           Language.Haskell.GHC.ExactPrint (Transform, modifyAnnsT, addAnnotationsForPretty)
 import           Language.LSP.Server (MonadLsp, sendNotification)
-import           Language.LSP.Types              hiding
-                                                 (SemanticTokenAbsolute (length, line),
-                                                  SemanticTokenRelative (length),
-                                                  SemanticTokensEdit (_start))
+import           Language.LSP.Types hiding (SemanticTokenAbsolute (length, line), SemanticTokenRelative (length), SemanticTokensEdit (_start))
 import           Language.LSP.Types.Capabilities
 import           Prelude hiding (span)
 import           Retrie (transformA)

@@ -50,6 +50,9 @@ mkContext cfg locals tcg hscenv eps ev = fix $ \ctx ->
     , ctx_hscEnv = hscenv
     , ctx_occEnv = tcg_rdr_env tcg
     , ctx_module = extractModule tcg
+    , ctx_completes =
+        extendCompleteMatchMap (eps_complete_matches eps) $ tcg_complete_matches tcg
+
     }
 
 

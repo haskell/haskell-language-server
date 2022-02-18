@@ -42,6 +42,7 @@ makeTacticInteraction cmd =
               { tpd_lspEnv    = env
               , tpd_jdg       = hj_jdg hj
               , tpd_hole_sort = hj_hole_sort hj
+              , tpd_completes = ctx_completes $ hj_ctx hj
               }
     )
     $ \LspEnv{..} HoleJudgment{..} FileContext{..} var_name -> do

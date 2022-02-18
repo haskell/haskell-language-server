@@ -107,8 +107,9 @@ commandProvider IntroAndDestruct =
     provide IntroAndDestruct ""
 commandProvider Destruct =
   requireHoleSort (== Hole) $
-  filterBindingType destructFilter $ \occ _ ->
-    provide Destruct $ T.pack $ occNameString occ
+  filterBindingType destructFilter $ \occ ty ->
+    filterCompletes ty $ \cm ->
+      provide Destruct $ T.pack $ occNameString occ <> unsafeRender cm
 commandProvider DestructPun =
   requireHoleSort (== Hole) $
     filterBindingType destructPunFilter $ \occ _ ->
@@ -187,6 +188,7 @@ data TacticProviderData = TacticProviderData
   { tpd_lspEnv :: LspEnv
   , tpd_jdg    :: Judgement
   , tpd_hole_sort :: HoleSort
+  , tpd_completes :: CompleteMatchMap
   }
 
 
@@ -246,6 +248,21 @@ filterBindingType p tp tpd =
          in case p (unCType g) ty of
               True  -> tp (hi_name hi) ty tpd
               False -> []
+
+
+------------------------------------------------------------------------------
+-- | Multiply a 'TacticProvider' for every 'CompleteMatch' in scope that
+-- matches
+filterCompletes
+    :: Type
+    -> (Maybe CompleteMatch -> TacticProvider)
+    -> TacticProvider
+filterCompletes ty tp tpd =
+  let cm = tpd_completes tpd
+   in tp Nothing tpd <>
+        case lookupCompleteMatch cm ty of
+          Just cm' -> cm' >>= flip tp tpd . Just
+          Nothing -> []
 
 
 ------------------------------------------------------------------------------

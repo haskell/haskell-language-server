@@ -95,8 +95,8 @@ mkTest name fp line col ts = it name $ do
     let titles = mapMaybe codeActionTitle actions
     for_ ts $ \(f, tc, var) -> do
       let title = tacticTitle tc var
-      liftIO $
-        (title `elem` titles) `shouldSatisfy` f
+      liftIO $ titles `shouldBe` []
+        -- (title `elem` titles) `shouldSatisfy` f
 
 data InvokeTactic = InvokeTactic
   { it_command :: TacticCommand
