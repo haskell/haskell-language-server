@@ -3,5 +3,7 @@ cradle:
     arguments:
       - -i
       - -i.
-      - TExpectedActualFullSignature
+      - TExpectedActual
+      - TRigidType
+      - TErrorGivenPartialSignature
       - -Wall

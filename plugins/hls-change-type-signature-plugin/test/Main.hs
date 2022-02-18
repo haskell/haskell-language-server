@@ -1,6 +1,7 @@
 module Main where
 
 import           Control.Monad                  (forM)
+import           Data.Either                    (rights)
 import           Data.Maybe                     (mapMaybe)
 import           Data.Text                      (Text)
 import qualified Data.Text                      as T
@@ -8,21 +9,25 @@ import qualified Data.Text.IO                   as TIO
 import           Ide.Plugin.ChangeTypeSignature (errorMessageRegexes)
 import qualified Ide.Plugin.ChangeTypeSignature as ChangeTypeSignature
 import           System.FilePath                ((<.>), (</>))
-import           Test.Hls                       (CodeAction (..), Command,
-                                                 IdeState, PluginDescriptor,
+import           Test.Hls                       (CodeAction (..),
+                                                 CodeActionKind (CodeActionQuickFix),
+                                                 Command, IdeState,
+                                                 PluginDescriptor,
                                                  Position (Position),
                                                  Range (Range), Session,
-                                                 TestTree,
+                                                 TestName, TestTree,
                                                  TextDocumentIdentifier,
                                                  assertBool, assertFailure,
                                                  defaultTestRunner,
                                                  executeCodeAction,
                                                  getCodeActions,
                                                  goldenWithHaskellDoc, liftIO,
-                                                 testCase, testGroup,
+                                                 openDoc, runSessionWithServer,
+                                                 testCase, testGroup, toEither,
                                                  type (|?) (InR),
                                                  waitForDiagnostics,
-                                                 waitForProgressDone)
+                                                 waitForProgressDone, (@=?),
+                                                 (@?=))
 import           Test.Hls.Util                  (inspectCodeAction)
 import           Text.Regex.TDFA                ((=~))
 
@@ -33,7 +38,11 @@ changeTypeSignaturePlugin :: PluginDescriptor IdeState
 changeTypeSignaturePlugin = ChangeTypeSignature.descriptor "changeTypeSignature"
 
 test :: TestTree
-test = testGroup "changeTypeSignature" [ codeActionTest "TExpectedActualFullSignature" 4 11 , testRegexes ]
+test = testGroup "changeTypeSignature" [
+    codeActionTest "TExpectedActual" 4 11,
+    codeActionTest "TRigidType" 4 14,
+    codeActionProperties "TErrorGivenPartialSignature" [(4, 13)] $ \actions -> liftIO $ length actions @?= 0,
+    testRegexes ]
 
 testRegexes :: TestTree
 testRegexes = testGroup "Regex Testing" [
@@ -77,6 +86,22 @@ codeActionTest fp line col = goldenChangeSignature fp $ \doc -> do
     foundAction <- liftIO $ inspectCodeAction actions ["change signature"]
     executeCodeAction foundAction
 
+codeActionProperties :: TestName -> [(Int, Int)] -> ([CodeAction] -> Session ()) -> TestTree
+codeActionProperties fp locs assertions = testCase fp $ do
+    runSessionWithServer changeTypeSignaturePlugin testDataDir $ do
+        openDoc (fp <.> ".hs") "haskell" >>= codeActionsFromLocs >>= findChangeTypeActions >>= assertions
+    where
+        codeActionsFromLocs doc = concat <$> mapM (getCodeActions doc . uncurry pointRange) locs
+
+findChangeTypeActions :: [Command |? CodeAction] -> Session [CodeAction]
+findChangeTypeActions = pure . filter isChangeTypeAction . rights . map toEither
+    where
+        isChangeTypeAction CodeAction{_kind} = case _kind of
+          Nothing -> False
+          Just kind -> case kind of
+            CodeActionQuickFix -> True
+            _                  -> False
+
 
 regexTest :: FilePath -> Text -> Bool -> TestTree
 regexTest fp regex shouldPass = testCase fp $ do
@@ -93,6 +118,3 @@ pointRange
   (subtract 1 -> fromIntegral -> line)
   (subtract 1 -> fromIntegral -> col) =
     Range (Position line col) (Position line $ col + 1)
-
--- fn :: Int -> Int
--- fn = forM

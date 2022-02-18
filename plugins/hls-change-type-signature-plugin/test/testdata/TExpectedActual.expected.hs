@@ -1,4 +1,4 @@
-module TExpectedActualFullSignature where
+module TExpectedActual where
 
 fullSig :: [Int] -> Int
 fullSig = go
