@@ -18,7 +18,7 @@ import           Data.Generics (everything, gcount, mkQ)
 import           Data.Generics.Product (field')
 import           Data.List (sortBy)
 import qualified Data.Map as M
-import           Data.Maybe (mapMaybe, isNothing)
+import           Data.Maybe (mapMaybe, isNothing, catMaybes)
 import           Data.Monoid (getSum)
 import           Data.Ord (Down (..), comparing)
 import qualified Data.Set as S
@@ -384,16 +384,16 @@ createImportedHyInfo on ty = HyInfo
   }
 
 
-getTyThingByName
-    :: Name
-    -> TacticsM (Maybe TyThing)
+-- getTyThingByName
+--     :: Name
+    -- -> TacticsM (Maybe TyThing)
+getTyThingByName :: (MonadReader Context (t ExtractM), MonadTrans t) => Name -> t ExtractM (Maybe TyThing)
 getTyThingByName name = do
   ctx <- ask
-  mvar <- lift
-        $ ExtractM
-        $ lift
-        $ lookupName (ctx_hscEnv ctx) (ctx_module ctx) name
-  pure mvar
+  lift
+    $ ExtractM
+    $ lift
+    $ lookupName (ctx_hscEnv ctx) (ctx_module ctx) name
 
 getTyThing
     :: OccName
@@ -435,18 +435,18 @@ getOccNameType occ = do
     _ -> failure $ NotInScope occ
 
 
-getConLikeThing
-    :: Name
-    -> TacticsM ConLike
+getConLikeThing :: (MonadReader Context (t ExtractM), MonadTrans t) => Name -> t ExtractM (Maybe ConLike)
 getConLikeThing nm = do
   getTyThingByName nm >>= \case
-    Just (AConLike v) -> pure v
-    _ -> failure $ NotInScope $ occName nm
+    Just (AConLike v) -> pure (Just v)
+    z -> do
+      traceMX "hm" $ unsafeRender z
+      pure Nothing
 
 
-getCompleteDestructors :: CompleteMatch -> TacticsM [ConLike]
+getCompleteDestructors :: (MonadReader Context (t ExtractM), MonadTrans t) => CompleteMatch -> t ExtractM [ConLike]
 getCompleteDestructors (CompleteMatch nas _) =
-  traverse getConLikeThing nas
+  fmap catMaybes $ traverse getConLikeThing nas
 
 
 getCurrentDefinitions :: TacticsM [(OccName, CType)]

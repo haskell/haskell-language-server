@@ -113,13 +113,14 @@ spec = do
       , (id, DestructLambdaCase, "")
       ]
 
-    focus $ mkTest
-      "ok"
-      "DestructComplete" 14 10
-      [ (id, Destruct, "fog")
-      ]
+--     mkTest
+--       "ok"
+--       "DestructComplete" 14 10
+--       [ (id, Destruct, "fog")
+--       ]
 
     -- test layouts that maintain user-written fixities
     destructTest "b"  3 13 "LayoutInfixKeep"
     destructTest "b"  2 12 "LayoutPrefixKeep"
+    focus $ destructTest "t"  14 10 "DestructComplete"
 

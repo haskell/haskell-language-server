@@ -3,6 +3,7 @@
 {-# LANGUAGE OverloadedLabels  #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections     #-}
+{-# LANGUAGE BangPatterns #-}
 
 module Wingman.CodeGen
   ( module Wingman.CodeGen
@@ -12,7 +13,7 @@ module Wingman.CodeGen
 
 import           Control.Lens ((%~), (<>~), (&))
 import           Control.Monad.Except
-import           Control.Monad.Reader (ask)
+import           Control.Monad.Reader (ask, asks)
 import           Control.Monad.State
 import           Data.Bifunctor (second)
 import           Data.Bool (bool)
@@ -35,6 +36,7 @@ import           Wingman.Judgements.Theta
 import           Wingman.Machinery
 import           Wingman.Naming
 import           Wingman.Types
+import Data.Maybe (fromJust)
 
 
 destructMatches
@@ -54,10 +56,14 @@ destructMatches use_field_puns f scrut t jdg = do
       g  = jGoal jdg
   case tacticsGetDataCons $ unCType t of
     Nothing -> cut -- throwError $ GoalMismatch "destruct" g
-    Just (dcs, apps) ->
-      fmap unzipTrace $ for dcs $ \dc -> do
-        let con = RealDataCon dc
-            ev = concatMap (mkEvidence . scaledThing) $ dataConInstArgTys dc apps
+    Just (dcs, apps) -> do
+      cms <- asks $ ctx_completes
+      let cm = fromJust $ lookupCompleteMatch cms $ unCType t
+
+      dcs <- getCompleteDestructors $ head cm
+      !_ <- error $ unsafeRender (cm, dcs)
+      fmap unzipTrace $ for dcs $ \con -> do
+        let ev = concatMap (mkEvidence . scaledThing) $ conLikeInstOrigArgTys' con apps
             -- We explicitly do not need to add the method hypothesis to
             -- #syn_scoped
             method_hy = foldMap evidenceToHypothesis ev
@@ -78,7 +84,7 @@ destructMatches use_field_puns f scrut t jdg = do
               $ withNewGoal g jdg
         ext <- f con j
         pure $ ext
-          & #syn_trace %~ rose ("match " <> show dc <> " {" <> intercalate ", " (fmap show names') <> "}")
+          & #syn_trace %~ rose ("match " <> show con <> " {" <> intercalate ", " (fmap show names') <> "}")
                         . pure
           & #syn_scoped <>~ hy'
           & #syn_val %~ match [destructed] . unLoc
