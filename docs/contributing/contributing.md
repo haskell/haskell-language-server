@@ -199,6 +199,17 @@ If you don't want to use [nix](https://nixos.org/guides/install-nix.html), you c
         }
       ],
       "repo": "local"
+    },
+    {
+       "repo": "https://github.com/pre-commit/pre-commit-hooks",
+       "rev": "v4.1.0",
+       "hooks": [
+          {
+            "id": "mixed-line-ending",
+            "args": ["--fix", "lf"],
+            "exclude": "test/testdata/.*CRLF*.hs$"
+          }
+       ]
     }
   ]
 }

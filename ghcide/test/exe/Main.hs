@@ -1520,7 +1520,7 @@ extendImportTests = testGroup "extend import actions"
                     , "import ModuleA as A (stuffB, (.*))"
                     , "main = print (stuffB .* stuffB)"
                     ])
-        , knownBrokenForGhcVersions [GHC92] "missing comma. #2662" $ testSession "extend single line import with infix constructor" $ template
+        , testSession "extend single line import with infix constructor" $ template
             []
             ("ModuleB.hs", T.unlines
                     [ "module ModuleB where"
@@ -1534,7 +1534,7 @@ extendImportTests = testGroup "extend import actions"
                     , "import Data.List.NonEmpty (fromList, NonEmpty ((:|)))"
                     , "main = case (fromList []) of _ :| _ -> pure ()"
                     ])
-        , knownBrokenForGhcVersions [GHC92] "missing comma. #2662" $ testSession "extend single line import with prefix constructor" $ template
+        , testSession "extend single line import with prefix constructor" $ template
             []
             ("ModuleB.hs", T.unlines
                     [ "module ModuleB where"
@@ -4653,6 +4653,15 @@ nonLocalCompletionTests =
        ]
        (Position 3 6)
        [],
+    testGroup "ordering"
+      [completionTest "qualified has priority"
+        ["module A where"
+        ,"import qualified Data.ByteString as BS"
+        ,"f = BS.read"
+        ]
+        (Position 2 10)
+        [("readFile", CiFunction, "readFile ${1:FilePath}", True, True, Nothing)]
+        ],
     testGroup "auto import snippets"
       [ completionCommandTest
         "show imports not in list - simple"
@@ -5553,12 +5562,25 @@ bootTests = testGroup "boot"
         -- Dirty the cache
         liftIO $ runInDir dir $ do
             cDoc <- createDoc cPath "haskell" cSource
-            _ <- getHover cDoc $ Position 4 3
-            ~() <- skipManyTill anyMessage $ satisfyMaybe $ \case
-                FromServerMess (SCustomMethod "ghcide/reference/ready") (NotMess NotificationMessage{_params = fp}) -> do
-                    A.Success fp' <- pure $ fromJSON fp
-                    if equalFilePath fp' cPath then pure () else Nothing
-                _ -> Nothing
+            -- We send a hover request then wait for either the hover response or
+            -- `ghcide/reference/ready` notification.
+            -- Once we receive one of the above, we wait for the other that we
+            -- haven't received yet.
+            -- If we don't wait for the `ready` notification it is possible 
+            -- that the `getDefinitions` request/response in the outer ghcide 
+            -- session will find no definitions.
+            let hoverParams = HoverParams cDoc (Position 4 3) Nothing
+            hoverRequestId <- sendRequest STextDocumentHover hoverParams
+            let parseReadyMessage = satisfy $ \case
+                  FromServerMess (SCustomMethod "ghcide/reference/ready") (NotMess NotificationMessage{_params = params})
+                    | A.Success fp <- fromJSON params -> equalFilePath fp cPath
+                  _ -> False
+            let parseHoverResponse = responseForId STextDocumentHover hoverRequestId
+            hoverResponseOrReadyMessage <- skipManyTill anyMessage ((Left <$> parseHoverResponse) <|> (Right <$> parseReadyMessage))
+            _ <- skipManyTill anyMessage $ 
+              case hoverResponseOrReadyMessage of
+                Left _ -> void parseReadyMessage
+                Right _ -> void parseHoverResponse
             closeDoc cDoc
         cdoc <- createDoc cPath "haskell" cSource
         locs <- getDefinitions cdoc (Position 7 4)

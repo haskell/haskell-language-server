@@ -95,6 +95,14 @@ import           System.IO.Extra                   (fixIO, newTempFileWithin)
 
 -- GHC API imports
 -- GHC API imports
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC                               (Anchor (anchor),
+                                                    EpaComment (EpaComment),
+                                                    EpaCommentTok (EpaBlockComment, EpaLineComment),
+                                                    epAnnComments,
+                                                    priorComments)
+import           GHC.Hs                            (LEpaComment)
+#endif
 import           GHC                               (GetDocsFailure (..),
                                                     mgModSummaries,
                                                     parsedSource)

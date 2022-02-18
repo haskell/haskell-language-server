@@ -18,6 +18,7 @@ and it is being used in nix environments.
 
 ### prerelease sanity checks
 
+- [ ] set the supported GHC versions and their corresponding cabal project-files in `bindist/ghcs` according to the [GHC version deprecation policy](../supported-versions.md#ghc-version-deprecation-policy)
 - [ ] [trigger manually](https://docs.github.com/es/actions/managing-workflow-runs/manually-running-a-workflow) the hackage workflow *without* uploading the packages
 - [ ] trigger manually the build workflow
 - [ ] create a prerelease tag `${version}-check-gitlab` and push it to the [project repo in gitlab](https://gitlab.haskell.org/haskell/haskell-language-server) to check the build is fine
@@ -45,7 +46,7 @@ and it is being used in nix environments.
 - [ ] create ${version}-hackage branch to trigger the hackage github workflow which will upload all changed packages to hackage as candidates
 - [ ] for new plugins or packages, update hackage uploaders to add the author of the plugin/package and some hls maintainer(s) other than the owner of the hackage api key used to upload them (it has to be done by the owner of the api key, actually @pepeiborra)
 - [ ] check manually candidates in hackage
-- [ ] publish them definitely
+- [ ] publish them definitely triggering a manual run of the hackage workflow setting the upload and publish inputs to `true`
 
 ### ghcup release
 

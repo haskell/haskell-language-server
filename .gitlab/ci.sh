@@ -22,7 +22,7 @@ mkdir -p "$GHCUP_BINDIR"
 export PATH="$GHCUP_BINDIR:$PATH"
 
 export BOOTSTRAP_HASKELL_NONINTERACTIVE=1
-export BOOTSTRAP_HASKELL_GHC_VERSION="$GHC_VERSION"
+export BOOTSTRAP_HASKELL_GHC_VERSION="${GHC_VERSION:-recommended}"
 export BOOTSTRAP_HASKELL_CABAL_VERSION="$CABAL_INSTALL_VERSION"
 export BOOTSTRAP_HASKELL_VERBOSE=1
 export BOOTSTRAP_HASKELL_ADJUST_CABAL_CONFIG=yes
@@ -45,29 +45,39 @@ case "$(uname -s)" in
 		;;
 esac
 
-# Shorten binary names
-sed -i.bak -e 's/haskell-language-server/hls/g' \
-	   -e 's/haskell_language_server/hls/g' \
-	   haskell-language-server.cabal $CABAL_PROJECT
-sed -i.bak -e 's/Paths_haskell_language_server/Paths_hls/g' \
-	   src/**/*.hs exe/*.hs
+case "$(uname)" in
+    MSYS_*|MINGW*)
+		# Shorten binary names
+		sed -i.bak -e 's/haskell-language-server/hls/g' \
+			   -e 's/haskell_language_server/hls/g' \
+			   haskell-language-server.cabal $CABAL_PROJECT
+		sed -i.bak -e 's/Paths_haskell_language_server/Paths_hls/g' \
+			   src/**/*.hs exe/*.hs
 
-args=(
-    -O2
-    -w "ghc-$GHC_VERSION"
-    --project-file "$CABAL_PROJECT"
-    --disable-profiling
-    --disable-tests
-    --enable-executable-stripping
-    ${ADD_CABAL_ARGS}
-)
+		args=(
+			-O2
+			-w "ghc-$GHC_VERSION"
+			--project-file "$CABAL_PROJECT"
+			--disable-profiling
+			--disable-tests
+			--enable-executable-stripping
+			${ADD_CABAL_ARGS}
+		)
 
-run cabal v2-build ${args[@]} exe:hls exe:hls-wrapper
+		run cabal v2-build ${args[@]} exe:hls exe:hls-wrapper
 
-mkdir "$CI_PROJECT_DIR/out"
+		mkdir "$CI_PROJECT_DIR/out"
 
-cp "$(cabal list-bin ${args[@]} exe:hls)" "$CI_PROJECT_DIR/out/haskell-language-server-${GHC_VERSION}"
-cp "$(cabal list-bin ${args[@]} exe:hls-wrapper)" "$CI_PROJECT_DIR/out/haskell-language-server-wrapper"
+		cp "$(cabal list-bin ${args[@]} exe:hls)" "$CI_PROJECT_DIR/out/haskell-language-server-${GHC_VERSION}"
+		cp "$(cabal list-bin ${args[@]} exe:hls-wrapper)" "$CI_PROJECT_DIR/out/haskell-language-server-wrapper"
+        ;;
+	*)
+		emake --version
+		emake GHCUP=ghcup hls
+		emake GHCUP=ghcup bindist
+		rm -rf out/*.*.*
+        ;;
+esac
 
 cp dist-newstyle/cache/plan.json "$CI_PROJECT_DIR/out/plan.json"
 
