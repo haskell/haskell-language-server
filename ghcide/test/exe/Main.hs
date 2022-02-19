@@ -121,6 +121,7 @@ import           Test.Tasty.Ingredients.Rerun
 import           Test.Tasty.QuickCheck
 import           Text.Printf                              (printf)
 import           Text.Regex.TDFA                          ((=~))
+import qualified FuzzySearch
 
 -- | Wait for the next progress begin step
 waitForProgressBegin :: Session ()
@@ -6228,6 +6229,7 @@ unitTests = do
            let msg = printf "Timestamps do not have millisecond resolution: %dus" resolution_us
            assertBool msg (resolution_us <= 1000)
      , Progress.tests
+     , FuzzySearch.tests
      ]
 
 garbageCollectionTests :: TestTree
