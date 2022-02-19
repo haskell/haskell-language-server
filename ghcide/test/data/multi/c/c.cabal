@@ -1,9 +1,9 @@
-name: a
+name: c
 version: 1.0.0
 build-type: Simple
 cabal-version: >= 1.2
 
 library
-  build-depends: base, async
-  exposed-modules: A
+  build-depends: base, a
+  exposed-modules: C
   hs-source-dirs: .
