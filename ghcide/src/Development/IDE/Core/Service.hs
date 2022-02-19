@@ -80,4 +80,4 @@ shutdown = shakeShut
 -- e.g., the ofInterestRule.
 runAction :: String -> IdeState -> Action a -> IO a
 runAction herald ide act =
-  join $ shakeEnqueue (shakeExtras ide) (mkDelayedAction herald Logger.Info act)
+  join $ shakeEnqueue (shakeExtras ide) (mkDelayedAction herald Logger.Debug act)
