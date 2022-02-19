@@ -55,12 +55,12 @@ import           Development.IDE.Test                     (Cursor,
                                                            flushMessages,
                                                            getInterfaceFilesDir,
                                                            getStoredKeys,
+                                                           isReferenceReady,
+                                                           referenceReady,
                                                            standardizeQuotes,
                                                            waitForAction,
                                                            waitForGC,
-                                                           waitForTypecheck,
-                                                           isReferenceReady,
-                                                           referenceReady)
+                                                           waitForTypecheck)
 import           Development.IDE.Test.Runfiles
 import qualified Development.IDE.Types.Diagnostics        as Diagnostics
 import           Development.IDE.Types.Location
@@ -1809,6 +1809,29 @@ extendImportTests = testGroup "extend import actions"
             (T.unlines
                     [ "module ModuleB where"
                     , "import ModuleA(Foo)"
+                    , "f :: Foo"
+                    , "f = undefined"
+                    ])
+        , testSession "shebang inside import declaration" $ template
+            [("ModuleA.hs", T.unlines
+                    [ "module ModuleA where"
+                    , "data Foo = Foo"
+                    ])]
+            ("ModuleB.hs", T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA"
+                    , "#! a shebang line"
+                    , "  ()"
+                    , "f :: Foo"
+                    , "f = undefined"
+                    ])
+            (Range (Position 4 4) (Position 4 6))
+            ["Add Foo to the import list of ModuleA"]
+            (T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA"
+                    , "#! a shebang line"
+                    , "  (Foo)"
                     , "f :: Foo"
                     , "f = undefined"
                     ])
@@ -5587,7 +5610,7 @@ bootTests = testGroup "boot"
             hoverResponseOrReadyMessage <- skipManyTill anyMessage ((Left <$> parseHoverResponse) <|> (Right <$> parseReadyMessage))
             _ <- skipManyTill anyMessage $
               case hoverResponseOrReadyMessage of
-                Left _ -> void parseReadyMessage
+                Left _  -> void parseReadyMessage
                 Right _ -> void parseHoverResponse
             closeDoc cDoc
         cdoc <- createDoc cPath "haskell" cSource
