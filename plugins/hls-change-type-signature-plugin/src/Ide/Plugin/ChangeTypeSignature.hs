@@ -53,7 +53,6 @@ codeActionHandler :: PluginMethodHandler IdeState TextDocumentCodeAction
 codeActionHandler ideState plId CodeActionParams {_textDocument = TextDocumentIdentifier uri, _context = CodeActionContext (List diags) _} = response $ do
       nfp <- getNormalizedFilePath plId (TextDocumentIdentifier uri)
       decls <- getDecls ideState nfp
-      let sigs = [ sigToText ts | L (RealSrcSpan rss _) (SigD _ ts@(TypeSig _ idsSig _)) <- decls]
       let actions = mapMaybe (generateAction uri decls) diags
       pure $ List actions
 
@@ -147,8 +146,8 @@ errorMessageRegexes = [ -- be sure to add new Error Messages Regexes at the bott
 findSigLocOfStringDecl :: SigName => [LHsDecl GhcPs] -> String -> Maybe (RealSrcSpan, DefinedSig)
 findSigLocOfStringDecl decls declName = do
     -- can we simplify this logic? Just want to make sure ghcSig is a Just value
-    (rss, Just ghcSig) <- listToMaybe [ (rss, sigToText ts)
-                                        | L (RealSrcSpan rss _) (SigD _ ts@(TypeSig _ idsSig _)) <- decls,
+    (RealSrcSpan rss _, Just ghcSig) <- listToMaybe [ (locA ss, sigToText ts)
+                                        | L ss (SigD _ ts@(TypeSig _ idsSig _)) <- decls,
                                         any ((==) declName . occNameString . occName . unLoc) idsSig
                                       ]
     pure (rss, ghcSig)
