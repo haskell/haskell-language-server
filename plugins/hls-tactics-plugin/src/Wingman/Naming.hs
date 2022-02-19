@@ -220,7 +220,29 @@ mkGoodName in_scope (mkTyName -> tn)
   . foldMap (\n -> bool (pure n) mempty $ check n)
   $ tn <> fmap (<> "'") tn
   where
-    check n = S.member (mkVarOcc n) in_scope
+    check n = S.member (mkVarOcc n) $ illegalNames <> in_scope
+
+
+illegalNames :: Set OccName
+illegalNames = S.fromList $ fmap mkVarOcc
+  [ "case"
+  , "of"
+  , "class"
+  , "data"
+  , "do"
+  , "type"
+  , "if"
+  , "then"
+  , "else"
+  , "let"
+  , "in"
+  , "mdo"
+  , "newtype"
+  , "proc"
+  , "rec"
+  , "where"
+  ]
+
 
 
 ------------------------------------------------------------------------------
