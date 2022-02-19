@@ -6,7 +6,8 @@ import           Data.Maybe                     (mapMaybe)
 import           Data.Text                      (Text)
 import qualified Data.Text                      as T
 import qualified Data.Text.IO                   as TIO
-import           Ide.Plugin.ChangeTypeSignature (errorMessageRegexes)
+import           Ide.Plugin.ChangeTypeSignature (errorMessageRegexes,
+                                                 tidyTypeSignature)
 import qualified Ide.Plugin.ChangeTypeSignature as ChangeTypeSignature
 import           System.FilePath                ((<.>), (</>))
 import           Test.Hls                       (CodeAction (..),
@@ -39,11 +40,12 @@ changeTypeSignaturePlugin = ChangeTypeSignature.descriptor "changeTypeSignature"
 
 test :: TestTree
 test = testGroup "changeTypeSignature" [
-    codeActionTest "TExpectedActual" 4 11,
-    codeActionTest "TRigidType" 4 14,
-    codeActionTest "TPrettyPrint" 5 13,
-    codeActionProperties "TErrorGivenPartialSignature" [(4, 13)] $ \actions -> liftIO $ length actions @?= 0,
-    testRegexes ]
+        codeActionTest "TExpectedActual" 4 11
+        , codeActionTest "TRigidType" 4 14
+        , codeActionProperties "TErrorGivenPartialSignature" [(4, 13)] $ \actions -> liftIO $ length actions @?= 0
+        , testRegexes
+        , testTidyType
+    ]
 
 testRegexes :: TestTree
 testRegexes = testGroup "Regex Testing" [
@@ -53,6 +55,18 @@ testRegexes = testGroup "Regex Testing" [
     where
         regex1 = errorMessageRegexes !! 0
         regex2 = errorMessageRegexes !! 1
+
+testTidyType :: TestTree
+testTidyType = testGroup "Tidy Type Signature" [
+        tidyTypeSignatureTest "a -> a -> a" "a -> a -> a"
+        , tidyTypeSignatureTest "Int -> Double -> String" "Int -> Double -> String"
+        , tidyTypeSignatureTest "t1 a -> t2 c0 -> g7" "t a -> t0 b -> c"
+        , tidyTypeSignatureTest "t0 d -> t c" "t0 d -> t c"
+        , tidyTypeSignatureTest "a0 -> a1 -> a2" "a -> b -> c"
+        , tidyTypeSignatureTest "(a -> c1) -> c1" "(a -> b) -> b"
+        , tidyTypeSignatureTest "[a1] -> [b1] -> z" "[a] -> [b] -> z"
+        , tidyTypeSignatureTest "t0 a0 -> (a0 -> m0 b0) -> m0 (t0 b0)" "t a -> (a -> m b) -> m (t b)"
+    ]
 
 testRegexOne :: TestTree
 testRegexOne = testGroup "Regex One" [
@@ -113,9 +127,12 @@ regexTest fp regex shouldPass = testCase fp $ do
         (_, True) -> assertFailure $ "Failed to match: " <> fp <> " with " <> T.unpack regex
         (_, False) -> pure ()
 
+tidyTypeSignatureTest :: Text -> Text -> TestTree
+tidyTypeSignatureTest toTidy expected =  testCase (T.unpack toTidy) $ tidyTypeSignature toTidy @?= expected
 
 pointRange :: Int -> Int -> Range
 pointRange
   (subtract 1 -> fromIntegral -> line)
   (subtract 1 -> fromIntegral -> col) =
     Range (Position line col) (Position line $ col + 1)
+

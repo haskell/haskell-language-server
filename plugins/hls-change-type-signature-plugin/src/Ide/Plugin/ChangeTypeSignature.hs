@@ -1,14 +1,15 @@
 {-# LANGUAGE LambdaCase #-}
-{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 -- | An HLS plugin to provide code actions to change type signatures
 module Ide.Plugin.ChangeTypeSignature (descriptor
                                       -- * For Unit Tests
                                       , errorMessageRegexes
-                                      , tidyActualType) where
+                                      , tidyTypeSignature) where
 
 import           Control.Monad                  (join)
 import           Control.Monad.IO.Class         (MonadIO (liftIO))
 import           Control.Monad.Trans.Except     (ExceptT)
+import           Data.Char                      (isAlpha, isAlphaNum, isNumber,
+                                                 isPunctuation)
 import qualified Data.HashMap.Strict            as Map
 import           Data.List                      (find, nub)
 import qualified Data.List.NonEmpty             as NE
@@ -88,9 +89,6 @@ data ChangeSignature = ChangeSignature {
                                        ,
                          -- | the diagnostic to solve
                          diagnostic   :: Diagnostic
-                                       ,
-                         -- | the URI the declaration is in
-                         uri          :: Uri
                                        }
 
 -- | Constraint needed to trackdown OccNames in signatures
@@ -99,13 +97,14 @@ type SigName = (HasOccName (IdP GhcPs))
 
 -- | Create a CodeAction from a Diagnostic
 generateAction :: SigName => Uri -> [LHsDecl GhcPs] -> Diagnostic -> Maybe (Command |? CodeAction)
-generateAction uri decls diag = changeSigToCodeAction <$> diagnosticToChangeSig uri decls diag
+generateAction uri decls diag = changeSigToCodeAction uri <$> diagnosticToChangeSig decls diag
 
 -- | Convert a diagnostic into a ChangeSignature and add the proper SrcSpan
-diagnosticToChangeSig :: SigName => Uri -> [LHsDecl GhcPs] -> Diagnostic -> Maybe ChangeSignature
-diagnosticToChangeSig uri decls diagnostic = do
+diagnosticToChangeSig :: SigName => [LHsDecl GhcPs] -> Diagnostic -> Maybe ChangeSignature
+diagnosticToChangeSig decls diagnostic = do
     -- regex match on the GHC Error Message
-    (expectedType, actualType, declName) <- matchingDiagnostic diagnostic
+    (expectedType, actualType', declName) <- matchingDiagnostic diagnostic
+    let actualType = tidyTypeSignature actualType'
     -- Find the definition and it's location
     (declSrcSpan, ghcSig) <- findSigLocOfStringDecl decls (T.unpack declName)
     -- Make sure the given "Actual Type" is a full signature
@@ -173,16 +172,16 @@ stripSignature sig = case T.filter (/= '\n') sig =~ sigRegex :: (Text, Text, Tex
         sigRegex = ".* :: (.*=>)?(.*)" :: Text
 
 
-changeSigToCodeAction :: ChangeSignature -> Command |? CodeAction
-changeSigToCodeAction ChangeSignature{..} = InR CodeAction { _title       = mkChangeSigTitle declName actualType
-                                                           , _kind        = Just CodeActionQuickFix
-                                                           , _diagnostics = Just $ List [diagnostic]
-                                                           , _isPreferred = Nothing
-                                                           , _disabled    = Nothing
-                                                           , _edit        = Just $ mkChangeSigEdit uri declSrcSpan (mkNewSignature declName actualType)
-                                                           , _command     = Nothing
-                                                           , _xdata       = Nothing
-                                                           }
+changeSigToCodeAction :: Uri -> ChangeSignature -> Command |? CodeAction
+changeSigToCodeAction uri ChangeSignature{..} = InR CodeAction { _title       = mkChangeSigTitle declName actualType
+                                                               , _kind        = Just CodeActionQuickFix
+                                                               , _diagnostics = Just $ List [diagnostic]
+                                                               , _isPreferred = Nothing
+                                                               , _disabled    = Nothing
+                                                               , _edit        = Just $ mkChangeSigEdit uri declSrcSpan (mkNewSignature declName actualType)
+                                                               , _command     = Nothing
+                                                               , _xdata       = Nothing
+                                                               }
 
 mkChangeSigTitle :: Text -> Text -> Text
 mkChangeSigTitle declName actualType = "change signature for ‘" <> declName <> "’ to: " <> actualType
@@ -194,41 +193,56 @@ mkChangeSigEdit uri ss replacement =
         in WorkspaceEdit changes Nothing Nothing
 
 mkNewSignature :: Text -> Text -> Text
-mkNewSignature declName actualType = declName <> " :: " <> tidyActualType actualType
+mkNewSignature declName actualType = declName <> " :: " <> actualType
 
 -- | Cleans up type signatures with oddly-named type variables (a0, m0 ...)
-tidyActualType :: Text -> Text
-tidyActualType actualType =
+tidyTypeSignature :: Text -> Text
+tidyTypeSignature actualType =
     replaceAllFTyVars
     $ replaceAllMTyVars
     $ replaceAllTTyVars
-    $ replaceAllUniqueTyVars uniqueTyVars actualType
+    $ replaceAllUniqueTyVars actualType
     where
-        findAllTyVars :: Text -> [Text]
-        findAllTyVars regex = getAllTextMatches (actualType =~ regex)  :: [Text]
-        uniqueTyVars = nub $ findAllTyVars "[abcdeghijklnopqrsuvwxyz][0-9]"
-        -- specialize searching on any `f`, `m` or `t` tyVars
-        fTyVars = findAllTyVars "f[0-9]"
-        mTyVars = findAllTyVars "m[0-9]"
-        tTyVars = findAllTyVars "t[0-9]"
-        -- | From a list of type variables replace all instances with the list of freshVars provided
+        -- split on whitespace and remove any non-alphaNum chars
+        words' = filter (not . T.null) $ map (T.filter isAlphaNum) $ T.words actualType
+        -- words' = T.words actualType
+        -- find the tyVars which are just alphaChars (a, b, thing ...)
+        tidyTyVars = nub $ filter (T.all isAlpha) words'
+        -- find tyVars with numbers (a0, b1, c5 ...)
+        untidyTyVars = nub $ filter (T.any isNumber) words'
+
+        freshTcVars' = freshTcVars tidyTyVars
+        (fTyVars, mTyVars, tTyVars, uniqueTyVars)  = untidyTyVarsToGroup untidyTyVars
+
+        --  From a list of type variables replace all instances with the list of freshVars provided
         replaceAllTyVars :: [Text] -> Text -> [Text] -> Text
-        replaceAllTyVars freshVars sig = snd . foldl replaceWithFreshVar (freshVars, sig)
-        replaceAllUniqueTyVars replace sig = replaceAllTyVars freshUniqueVars sig replace
-        replaceAllFTyVars sig = replaceAllTyVars (freshVars "f") sig fTyVars
-        replaceAllMTyVars sig = replaceAllTyVars (freshVars "m") sig mTyVars
-        replaceAllTTyVars sig = replaceAllTyVars (freshVars "t") sig tTyVars
+        replaceAllTyVars freshVars sig untidy = snd $ foldl replaceWithFreshVar (freshVars, sig) untidy
 
-
-freshVars :: Text -> [Text]
-freshVars var = var : [var <> T.pack (show i) | i <- [0..]]
-
-freshUniqueVars :: [Text]
-freshUniqueVars = map T.singleton validVars <> [ a <> b | a <- freshUniqueVars, b <- freshUniqueVars ]
-    where
-        validVars = filter (`notElem` ['f', 'm', 't']) ['a'..'z']
-
+        -- we must reverse the untidy vars as they are "backwards" when lookint at type sig from Left to Right
+        replaceAllUniqueTyVars sig = replaceAllTyVars (filter (`notElem` tidyTyVars) freshUniqueVars) sig (reverse uniqueTyVars)
+        replaceAllFTyVars sig = replaceAllTyVars (freshTcVars' "f") sig (reverse fTyVars)
+        replaceAllMTyVars sig = replaceAllTyVars (freshTcVars' "m") sig (reverse mTyVars)
+        replaceAllTTyVars sig = replaceAllTyVars (freshTcVars' "t") sig (reverse tTyVars)
 
 replaceWithFreshVar :: ([Text], Text) -> Text -> ([Text], Text)
 replaceWithFreshVar (replacement:rest, haystack) needle = (rest, T.replace needle replacement haystack)
 replaceWithFreshVar _ _ = error "How do I handle this..., the pattern match for infinite list shouldn't fail"
+
+freshTcVars :: [Text] -> Text -> [Text]
+freshTcVars used var = filter (`notElem` used) $ var : [var <> T.pack (show i) | i <- [0 .. ]]
+
+freshUniqueVars ::  [Text]
+freshUniqueVars = map T.singleton validVars <> [ a <> b | a <- freshUniqueVars, b <- freshUniqueVars ]
+    where
+        validVars = filter (`notElem` ['f', 'm', 't']) ['a'..'z']
+
+-- | divvy up UntidyTyVars into their tyVar category
+untidyTyVarsToGroup :: [Text] -> ([Text], [Text], [Text], [Text])
+untidyTyVarsToGroup untidy = foldl dispatchVar ([], [], [], []) untidy
+    where
+        dispatchVar acc@(fVars, mVars, tVars, uVars) var = case T.uncons var of
+            Just ('f', rest) -> (var:fVars, mVars, tVars, uVars)
+            Just ('m', rest) -> (fVars, var:mVars, tVars, uVars)
+            Just ('t', rest) -> (fVars, mVars, var:tVars, uVars)
+            Just _           -> (fVars, mVars, tVars, var:uVars)
+            _                -> acc
