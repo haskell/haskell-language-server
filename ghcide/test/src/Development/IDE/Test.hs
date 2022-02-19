@@ -29,7 +29,13 @@ module Development.IDE.Test
   , getStoredKeys
   , waitForCustomMessage
   , waitForGC
-  ,getBuildKeysBuilt,getBuildKeysVisited,getBuildKeysChanged,getBuildEdgesCount,configureCheckProject) where
+  , getBuildKeysBuilt
+  , getBuildKeysVisited
+  , getBuildKeysChanged
+  , getBuildEdgesCount
+  , configureCheckProject
+  , isReferenceReady
+  , referenceReady) where
 
 import           Control.Applicative.Combinators
 import           Control.Lens                    hiding (List)
@@ -58,6 +64,7 @@ import           Language.LSP.Types.Lens         as Lsp
 import           System.Directory                (canonicalizePath)
 import           System.Time.Extra
 import           Test.Tasty.HUnit
+import System.FilePath (equalFilePath)
 
 requireDiagnosticM
     :: (Foldable f, Show (f Diagnostic), HasCallStack)
@@ -254,3 +261,16 @@ configureCheckProject overrideCheckProject =
     sendNotification SWorkspaceDidChangeConfiguration
         (DidChangeConfigurationParams $ toJSON
             def{checkProject = overrideCheckProject})
+
+-- | Pattern match a message from ghcide indicating that a file has been indexed
+isReferenceReady :: FilePath -> Session ()
+isReferenceReady p = void $ referenceReady (equalFilePath p)
+
+referenceReady :: (FilePath -> Bool) -> Session FilePath
+referenceReady pred = satisfyMaybe $ \case
+  FromServerMess (SCustomMethod "ghcide/reference/ready") (NotMess NotificationMessage{_params})
+    | A.Success fp <- A.fromJSON _params
+    , pred fp
+    -> Just fp
+  _ -> Nothing
+
