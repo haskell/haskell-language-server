@@ -147,7 +147,7 @@ errorMessageRegexes = [ -- be sure to add new Error Messages Regexes at the bott
 findSigLocOfStringDecl :: SigName => [LHsDecl GhcPs] -> String -> Maybe (RealSrcSpan, DefinedSig)
 findSigLocOfStringDecl decls declName = do
     -- can we simplify this logic? Just want to make sure ghcSig is a Just value
-    (rss, Just ghcSig) <- listToMaybe [ (locA rss, sigToText ts)
+    (rss, Just ghcSig) <- listToMaybe [ (rss, sigToText ts)
                                         | L (RealSrcSpan rss _) (SigD _ ts@(TypeSig _ idsSig _)) <- decls,
                                         any ((==) declName . occNameString . occName . unLoc) idsSig
                                       ]
