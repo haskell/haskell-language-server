@@ -355,6 +355,7 @@ newImportToEdit (NewImportContext fileContents parsedSource dynFlags moduleName)
     case diffTextEdit of
         [edit] -> pure edit
         edits -> Left $ "when adding new import, there should be exactly 1 TextEdit, but got: " <> show edits
+            <> "\nnew text edit: " <> T.unpack newText
 
 newImportToRewrite :: T.Text -- ^ file contents
                    -> ParsedSource
