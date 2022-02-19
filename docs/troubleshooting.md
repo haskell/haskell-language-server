@@ -144,7 +144,7 @@ If you see an error about HLS being compiled with the wrong version of GHC, then
 HLS does not support every GHC version - there are a lot of them!
 Please see the [supported versions page](./supported-versions.md) for more information.
 
-In particular, support for GHC 9.0 and 9.2 is only partial; some features are unavailable with GHC >= 9.0.1, and HLS is not available at all for GHC 9.2.
+In particular, support for GHC 9.0 and 9.2 is only partial; some features are unavailable with GHC >= 9.0.1.
 
 ### Missing server or build tools
 
