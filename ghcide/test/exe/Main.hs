@@ -119,6 +119,7 @@ import           Test.Tasty.Ingredients.Rerun
 import           Test.Tasty.QuickCheck
 import           Text.Printf                              (printf)
 import           Text.Regex.TDFA                          ((=~))
+import qualified FuzzySearch
 
 -- | Wait for the next progress begin step
 waitForProgressBegin :: Session ()
@@ -5566,8 +5567,8 @@ bootTests = testGroup "boot"
             -- `ghcide/reference/ready` notification.
             -- Once we receive one of the above, we wait for the other that we
             -- haven't received yet.
-            -- If we don't wait for the `ready` notification it is possible 
-            -- that the `getDefinitions` request/response in the outer ghcide 
+            -- If we don't wait for the `ready` notification it is possible
+            -- that the `getDefinitions` request/response in the outer ghcide
             -- session will find no definitions.
             let hoverParams = HoverParams cDoc (Position 4 3) Nothing
             hoverRequestId <- sendRequest STextDocumentHover hoverParams
@@ -5577,7 +5578,7 @@ bootTests = testGroup "boot"
                   _ -> False
             let parseHoverResponse = responseForId STextDocumentHover hoverRequestId
             hoverResponseOrReadyMessage <- skipManyTill anyMessage ((Left <$> parseHoverResponse) <|> (Right <$> parseReadyMessage))
-            _ <- skipManyTill anyMessage $ 
+            _ <- skipManyTill anyMessage $
               case hoverResponseOrReadyMessage of
                 Left _ -> void parseReadyMessage
                 Right _ -> void parseHoverResponse
@@ -6223,6 +6224,7 @@ unitTests = do
            let msg = printf "Timestamps do not have millisecond resolution: %dus" resolution_us
            assertBool msg (resolution_us <= 1000)
      , Progress.tests
+     , FuzzySearch.tests
      ]
 
 garbageCollectionTests :: TestTree

@@ -3,6 +3,7 @@
 module Text.Fuzzy.Parallel
 (   filter,
     simpleFilter,
+    match,
     Scored(..)
 ) where
 
