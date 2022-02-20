@@ -9,17 +9,28 @@ import           Arguments                         (Arguments (..),
                                                     getArguments)
 import           Control.Monad.Extra               (unless)
 import           Data.Default                      (def)
+import           Data.Function                     ((&))
 import           Data.Version                      (showVersion)
 import           Development.GitRev                (gitHash)
-import           Development.IDE                   (Priority (Debug, Info),
-                                                    action)
+import           Development.IDE                   (action)
 import           Development.IDE.Core.OfInterest   (kick)
 import           Development.IDE.Core.Rules        (mainRule)
+import qualified Development.IDE.Core.Rules        as Rules
 import           Development.IDE.Core.Tracing      (withTelemetryLogger)
 import           Development.IDE.Graph             (ShakeOptions (shakeThreads))
-import qualified Development.IDE.Main              as Main
+import qualified Development.IDE.Main              as IDEMain
 import qualified Development.IDE.Plugin.HLS.GhcIde as GhcIde
+import           Development.IDE.Types.Logger      (Logger (Logger),
+                                                    LoggingColumn (DataColumn, PriorityColumn),
+                                                    Pretty (pretty),
+                                                    Priority (Debug, Info),
+                                                    Recorder (Recorder),
+                                                    WithPriority (WithPriority, priority),
+                                                    cfilter, cmapWithPrio,
+                                                    makeDefaultStderrRecorder)
+import qualified Development.IDE.Types.Logger      as Logger
 import           Development.IDE.Types.Options
+import           GHC.Stack                         (emptyCallStack)
 import           Ide.Plugin.Config                 (Config (checkParents, checkProject))
 import           Ide.PluginUtils                   (pluginDescToIdePlugins)
 import           Paths_ghcide                      (version)
@@ -28,6 +39,17 @@ import           System.Environment                (getExecutablePath)
 import           System.Exit                       (exitSuccess)
 import           System.IO                         (hPutStrLn, stderr)
 import           System.Info                       (compilerVersion)
+
+data Log
+  = LogIDEMain IDEMain.Log
+  | LogRules Rules.Log
+  | LogGhcIde GhcIde.Log
+
+instance Pretty Log where
+  pretty = \case
+    LogIDEMain log -> pretty log
+    LogRules log   -> pretty log
+    LogGhcIde log  -> pretty log
 
 ghcideVersion :: IO String
 ghcideVersion = do
@@ -42,7 +64,12 @@ ghcideVersion = do
 
 main :: IO ()
 main = withTelemetryLogger $ \telemetryLogger -> do
-    let hlsPlugins = pluginDescToIdePlugins GhcIde.descriptors
+    -- stderr recorder just for plugin cli commands
+    pluginCliRecorder <-
+      cmapWithPrio pretty
+      <$> makeDefaultStderrRecorder (Just [PriorityColumn, DataColumn]) Info
+
+    let hlsPlugins = pluginDescToIdePlugins (GhcIde.descriptors (cmapWithPrio LogGhcIde pluginCliRecorder))
     -- WARNING: If you write to stdout before runLanguageServer
     --          then the language server will not work
     Arguments{..} <- getArguments hlsPlugins
@@ -55,26 +82,42 @@ main = withTelemetryLogger $ \telemetryLogger -> do
       Nothing   -> IO.getCurrentDirectory
       Just root -> IO.setCurrentDirectory root >> IO.getCurrentDirectory
 
-    let logPriority = if argsVerbose then Debug else Info
-        arguments = if argsTesting then Main.testing else Main.defaultArguments logPriority
+    let minPriority = if argsVerbose then Debug else Info
 
-    Main.defaultMain arguments
-        { Main.argsProjectRoot = Just argsCwd
-        , Main.argCommand = argsCommand
-        ,Main.argsLogger = Main.argsLogger arguments <> pure telemetryLogger
+    docWithPriorityRecorder <- makeDefaultStderrRecorder (Just [PriorityColumn, DataColumn]) minPriority
 
-        ,Main.argsRules = do
+    let docWithFilteredPriorityRecorder@Recorder{ logger_ } =
+          docWithPriorityRecorder
+          & cfilter (\WithPriority{ priority } -> priority >= minPriority)
+
+    -- exists so old-style logging works. intended to be phased out
+    let logger = Logger $ \p m -> logger_ (WithPriority p emptyCallStack (pretty m))
+
+    let recorder = docWithFilteredPriorityRecorder
+                 & cmapWithPrio pretty
+
+    let arguments =
+          if argsTesting
+          then IDEMain.testing (cmapWithPrio LogIDEMain recorder) logger
+          else IDEMain.defaultArguments (cmapWithPrio LogIDEMain recorder) logger
+
+    IDEMain.defaultMain (cmapWithPrio LogIDEMain recorder) arguments
+        { IDEMain.argsProjectRoot = Just argsCwd
+        , IDEMain.argCommand = argsCommand
+        , IDEMain.argsLogger = IDEMain.argsLogger arguments <> pure telemetryLogger
+
+        , IDEMain.argsRules = do
             -- install the main and ghcide-plugin rules
-            mainRule def
+            mainRule (cmapWithPrio LogRules recorder) def
             -- install the kick action, which triggers a typecheck on every
             -- Shake database restart, i.e. on every user edit.
             unless argsDisableKick $
                 action kick
 
-        ,Main.argsThreads = case argsThreads of 0 -> Nothing ; i -> Just (fromIntegral i)
+        , IDEMain.argsThreads = case argsThreads of 0 -> Nothing ; i -> Just (fromIntegral i)
 
-        ,Main.argsIdeOptions = \config sessionLoader ->
-            let defOptions = Main.argsIdeOptions arguments config sessionLoader
+        , IDEMain.argsIdeOptions = \config sessionLoader ->
+            let defOptions = IDEMain.argsIdeOptions arguments config sessionLoader
             in defOptions
                 { optShakeProfiling = argsShakeProfiling
                 , optOTMemoryProfiling = IdeOTMemoryProfiling argsOTMemoryProfiling

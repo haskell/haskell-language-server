@@ -21,7 +21,7 @@ main :: IO ()
 main = defaultTestRunner test
 
 alternateNumberFormatPlugin :: PluginDescriptor IdeState
-alternateNumberFormatPlugin = AlternateNumberFormat.descriptor "alternateNumberFormat"
+alternateNumberFormatPlugin = AlternateNumberFormat.descriptor mempty "alternateNumberFormat"
 
 
 -- NOTE: For whatever reason, this plugin does not play nice with creating Code Actions on time.

@@ -79,6 +79,7 @@ extra-deps:
   - optparse-applicative-0.15.1.0
   - ormolu-0.1.4.1
   - parser-combinators-1.2.1
+  - prettyprinter-1.7.1 
   - primitive-0.7.1.0
   - refinery-0.4.0.0
   - regex-base-0.94.0.0

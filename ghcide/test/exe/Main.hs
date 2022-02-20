@@ -107,7 +107,6 @@ import qualified Development.IDE.Plugin.HLS.GhcIde        as Ghcide
 import           Development.IDE.Plugin.Test              (TestRequest (BlockSeconds),
                                                            WaitForIdeRuleResult (..),
                                                            blockCommandId)
-import qualified HieDbRetry
 import           Ide.PluginUtils                          (pluginDescToIdePlugins)
 import           Ide.Types
 import qualified Language.LSP.Types                       as LSP
@@ -121,7 +120,20 @@ import           Test.Tasty.Ingredients.Rerun
 import           Test.Tasty.QuickCheck
 import           Text.Printf                              (printf)
 import           Text.Regex.TDFA                          ((=~))
+import qualified HieDbRetry
+import Development.IDE.Types.Logger (WithPriority(WithPriority, priority), Priority (Debug), cmapWithPrio, Recorder (Recorder, logger_), makeDefaultStderrRecorder, cfilter, LoggingColumn (PriorityColumn, DataColumn), Logger (Logger), Pretty (pretty))
+import Data.Function ((&))
+import GHC.Stack (emptyCallStack)
 import qualified FuzzySearch
+
+data Log 
+  = LogGhcIde Ghcide.Log 
+  | LogIDEMain IDE.Log
+
+instance Pretty Log where
+  pretty = \case
+    LogGhcIde log -> pretty log
+    LogIDEMain log -> pretty log
 
 -- | Wait for the next progress begin step
 waitForProgressBegin :: Session ()
@@ -151,6 +163,18 @@ waitForAllProgressDone = loop
 
 main :: IO ()
 main = do
+  docWithPriorityRecorder <- makeDefaultStderrRecorder (Just [PriorityColumn, DataColumn]) Debug
+
+  let docWithFilteredPriorityRecorder@Recorder{ logger_ } =
+        docWithPriorityRecorder
+        & cfilter (\WithPriority{ priority } -> priority >= Debug)
+
+  -- exists so old-style logging works. intended to be phased out
+  let logger = Logger $ \p m -> logger_ (WithPriority p emptyCallStack (pretty m))
+
+  let recorder = docWithFilteredPriorityRecorder
+               & cmapWithPrio pretty
+
   -- We mess with env vars so run single-threaded.
   defaultMainWithRerun $ testGroup "ghcide"
     [ testSession "open close" $ do
@@ -174,7 +198,7 @@ main = do
     , thTests
     , symlinkTests
     , safeTests
-    , unitTests
+    , unitTests recorder logger
     , haddockTests
     , positionMappingTests
     , watchedFilesTests
@@ -6174,8 +6198,8 @@ findCodeActions' op errMsg doc range expectedTitles = do
 findCodeAction :: TextDocumentIdentifier -> Range -> T.Text -> Session CodeAction
 findCodeAction doc range t = head <$> findCodeActions doc range [t]
 
-unitTests :: TestTree
-unitTests = do
+unitTests :: Recorder (WithPriority Log) -> Logger -> TestTree
+unitTests recorder logger = do
   testGroup "Unit"
      [ testCase "empty file path does NOT work with the empty String literal" $
          uriToFilePath' (fromNormalizedUri $ filePathToUri' "") @?= Just "."
@@ -6215,9 +6239,9 @@ unitTests = do
                         ]
                     }
                     | i <- [(1::Int)..20]
-                ] ++ Ghcide.descriptors
+                ] ++ Ghcide.descriptors (cmapWithPrio LogGhcIde recorder)
 
-        testIde IDE.testing{IDE.argsHlsPlugins = plugins} $ do
+        testIde recorder (IDE.testing (cmapWithPrio LogIDEMain recorder) logger){IDE.argsHlsPlugins = plugins} $ do
             _ <- createDoc "haskell" "A.hs" "module A where"
             waitForProgressDone
             actualOrder <- liftIO $ readIORef orderRef
@@ -6316,16 +6340,14 @@ findResolution_us delay_us = withTempFile $ \f -> withTempFile $ \f' -> do
     if t /= t' then return delay_us else findResolution_us (delay_us * 10)
 
 
-testIde :: IDE.Arguments -> Session a -> IO a
-testIde = testIde' "."
-
-testIde' :: FilePath -> IDE.Arguments -> Session a -> IO a
-testIde' projDir arguments session = do
+testIde :: Recorder (WithPriority Log) -> IDE.Arguments -> Session () -> IO ()
+testIde recorder arguments session = do
     config <- getConfigFromEnv
     cwd <- getCurrentDirectory
     (hInRead, hInWrite) <- createPipe
     (hOutRead, hOutWrite) <- createPipe
-    let server = IDE.defaultMain arguments
+    let projDir = "."
+    let server = IDE.defaultMain (cmapWithPrio LogIDEMain recorder) arguments
             { IDE.argsHandleIn = pure hInRead
             , IDE.argsHandleOut = pure hOutWrite
             }

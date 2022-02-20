@@ -1,75 +1,78 @@
-{-# LANGUAGE CPP               #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE CPP                       #-}
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE OverloadedStrings         #-}
 module Plugins where
 
+import           Development.IDE.Types.Logger      (Pretty (pretty), Recorder,
+                                                    WithPriority, cmapWithPrio)
 import           Ide.PluginUtils                   (pluginDescToIdePlugins)
 import           Ide.Types                         (IdePlugins)
 
 -- fixed plugins
 import           Development.IDE                   (IdeState)
-import           Development.IDE.Plugin.HLS.GhcIde as GhcIde
-import           Ide.Plugin.Example                as Example
-import           Ide.Plugin.Example2               as Example2
+import qualified Development.IDE.Plugin.HLS.GhcIde as GhcIde
+import qualified Ide.Plugin.Example                as Example
+import qualified Ide.Plugin.Example2               as Example2
 
 -- haskell-language-server optional plugins
 #if qualifyImportedNames
-import           Ide.Plugin.QualifyImportedNames   as QualifyImportedNames
+import qualified Ide.Plugin.QualifyImportedNames   as QualifyImportedNames
 #endif
 
 #if callHierarchy
-import           Ide.Plugin.CallHierarchy          as CallHierarchy
+import qualified Ide.Plugin.CallHierarchy          as CallHierarchy
 #endif
 
 #if class
-import           Ide.Plugin.Class                  as Class
+import qualified Ide.Plugin.Class                  as Class
 #endif
 
 #if haddockComments
-import           Ide.Plugin.HaddockComments        as HaddockComments
+import qualified Ide.Plugin.HaddockComments        as HaddockComments
 #endif
 
 #if eval
-import           Ide.Plugin.Eval                   as Eval
+import qualified Ide.Plugin.Eval                   as Eval
 #endif
 
 #if importLens
-import           Ide.Plugin.ExplicitImports        as ExplicitImports
+import qualified Ide.Plugin.ExplicitImports        as ExplicitImports
 #endif
 
 #if refineImports
-import           Ide.Plugin.RefineImports          as RefineImports
+import qualified Ide.Plugin.RefineImports          as RefineImports
 #endif
 
 #if rename
-import           Ide.Plugin.Rename                 as Rename
+import qualified Ide.Plugin.Rename                 as Rename
 #endif
 
 #if retrie
-import           Ide.Plugin.Retrie                 as Retrie
+import qualified Ide.Plugin.Retrie                 as Retrie
 #endif
 
 #if tactic
-import           Ide.Plugin.Tactic                 as Tactic
+import qualified Ide.Plugin.Tactic                 as Tactic
 #endif
 
 #if hlint
-import           Ide.Plugin.Hlint                  as Hlint
+import qualified Ide.Plugin.Hlint                  as Hlint
 #endif
 
 #if moduleName
-import           Ide.Plugin.ModuleName             as ModuleName
+import qualified Ide.Plugin.ModuleName             as ModuleName
 #endif
 
 #if pragmas
-import           Ide.Plugin.Pragmas                as Pragmas
+import qualified Ide.Plugin.Pragmas                as Pragmas
 #endif
 
 #if splice
-import           Ide.Plugin.Splice                 as Splice
+import qualified Ide.Plugin.Splice                 as Splice
 #endif
 
 #if alternateNumberFormat
-import           Ide.Plugin.AlternateNumberFormat  as AlternateNumberFormat
+import qualified Ide.Plugin.AlternateNumberFormat  as AlternateNumberFormat
 #endif
 
 #if selectionRange
@@ -79,24 +82,29 @@ import           Ide.Plugin.SelectionRange         as SelectionRange
 -- formatters
 
 #if floskell
-import           Ide.Plugin.Floskell               as Floskell
+import qualified Ide.Plugin.Floskell               as Floskell
 #endif
 
 #if fourmolu
-import           Ide.Plugin.Fourmolu               as Fourmolu
+import qualified Ide.Plugin.Fourmolu               as Fourmolu
 #endif
 
 #if ormolu
-import           Ide.Plugin.Ormolu                 as Ormolu
+import qualified Ide.Plugin.Ormolu                 as Ormolu
 #endif
 
 #if stylishHaskell
-import           Ide.Plugin.StylishHaskell         as StylishHaskell
+import qualified Ide.Plugin.StylishHaskell         as StylishHaskell
 #endif
 
 #if brittany
-import           Ide.Plugin.Brittany               as Brittany
+import qualified Ide.Plugin.Brittany               as Brittany
 #endif
+
+data Log = forall a. (Pretty a) => Log a
+
+instance Pretty Log where
+  pretty (Log a) = pretty a
 
 -- ---------------------------------------------------------------------
 
@@ -105,9 +113,11 @@ import           Ide.Plugin.Brittany               as Brittany
 -- These can be freely added or removed to tailor the available
 -- features of the server.
 
-idePlugins :: Bool -> IdePlugins IdeState
-idePlugins includeExamples = pluginDescToIdePlugins allPlugins
+idePlugins :: Recorder (WithPriority Log) -> Bool -> IdePlugins IdeState
+idePlugins recorder includeExamples = pluginDescToIdePlugins allPlugins
   where
+    pluginRecorder :: forall log. (Pretty log) => Recorder (WithPriority log)
+    pluginRecorder = cmapWithPrio Log recorder
     allPlugins = if includeExamples
                    then basePlugins ++ examplePlugins
                    else basePlugins
@@ -122,7 +132,7 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
       Fourmolu.descriptor "fourmolu" :
 #endif
 #if tactic
-      Tactic.descriptor "tactics" :
+      Tactic.descriptor pluginRecorder "tactics" :
 #endif
 #if ormolu
       Ormolu.descriptor   "ormolu" :
@@ -149,36 +159,36 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
       HaddockComments.descriptor "haddockComments" :
 #endif
 #if eval
-      Eval.descriptor "eval" :
+      Eval.descriptor pluginRecorder "eval" :
 #endif
 #if importLens
-      ExplicitImports.descriptor "importLens" :
+      ExplicitImports.descriptor pluginRecorder "importLens" :
 #endif
 #if qualifyImportedNames
       QualifyImportedNames.descriptor "qualifyImportedNames" :
 #endif
 #if refineImports
-      RefineImports.descriptor "refineImports" :
+      RefineImports.descriptor pluginRecorder "refineImports" :
 #endif
 #if moduleName
       ModuleName.descriptor "moduleName" :
 #endif
 #if hlint
-      Hlint.descriptor "hlint" :
+      Hlint.descriptor pluginRecorder "hlint" :
 #endif
 #if splice
       Splice.descriptor "splice" :
 #endif
 #if alternateNumberFormat
-      AlternateNumberFormat.descriptor "alternateNumberFormat" :
+      AlternateNumberFormat.descriptor pluginRecorder "alternateNumberFormat" :
 #endif
 #if selectionRange
       SelectionRange.descriptor "selectionRange" :
 #endif
     -- The ghcide descriptors should come last so that the notification handlers
     -- (which restart the Shake build) run after everything else
-      GhcIde.descriptors
+      GhcIde.descriptors pluginRecorder
     examplePlugins =
-      [Example.descriptor  "eg"
-      ,Example2.descriptor "eg2"
+      [Example.descriptor  pluginRecorder "eg"
+      ,Example2.descriptor pluginRecorder "eg2"
       ]

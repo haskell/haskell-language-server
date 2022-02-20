@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE LambdaCase         #-}
 {-# LANGUAGE NamedFieldPuns     #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RecordWildCards    #-}
@@ -13,6 +14,7 @@ module Ide.Plugin.ExplicitImports
   , descriptorForModules
   , extractMinimalImports
   , within
+  , Log(..)
   ) where
 
 import           Control.DeepSeq
@@ -29,8 +31,10 @@ import qualified Data.Text                            as T
 import           Development.IDE                      hiding (pluginHandlers,
                                                        pluginRules)
 import           Development.IDE.Core.PositionMapping
+import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Graph.Classes
+import           Development.IDE.Types.Logger         as Logger (Pretty (pretty))
 import           GHC.Generics                         (Generic)
 import           Ide.PluginUtils                      (mkLspCommand)
 import           Ide.Types
@@ -40,24 +44,33 @@ import           Language.LSP.Types
 importCommandId :: CommandId
 importCommandId = "ImportLensCommand"
 
+newtype Log
+  = LogShake Shake.Log
+  deriving Show
+
+instance Pretty Log where
+  pretty = \case
+    LogShake log -> pretty log
+
 -- | The "main" function of a plugin
-descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor =
+descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
+descriptor recorder =
     -- (almost) no one wants to see an explicit import list for Prelude
-    descriptorForModules (/= moduleName pRELUDE)
+    descriptorForModules recorder (/= moduleName pRELUDE)
 
 descriptorForModules
-    :: (ModuleName -> Bool)
+    :: Recorder (WithPriority Log)
+    -> (ModuleName -> Bool)
       -- ^ Predicate to select modules that will be annotated
     -> PluginId
     -> PluginDescriptor IdeState
-descriptorForModules pred plId =
+descriptorForModules recorder pred plId =
   (defaultPluginDescriptor plId)
     {
       -- This plugin provides a command handler
       pluginCommands = [importLensCommand],
       -- This plugin defines a new rule
-      pluginRules = minimalImportsRule,
+      pluginRules = minimalImportsRule recorder,
       pluginHandlers = mconcat
         [ -- This plugin provides code lenses
           mkPluginHandler STextDocumentCodeLens $ lensProvider pred
@@ -185,8 +198,8 @@ exportedModuleStrings ParsedModule{pm_parsed_source = L _ HsModule{..}}
     = map prettyPrint exports
 exportedModuleStrings _ = []
 
-minimalImportsRule :: Rules ()
-minimalImportsRule = define $ \MinimalImports nfp -> do
+minimalImportsRule :: Recorder (WithPriority Log) -> Rules ()
+minimalImportsRule recorder = define (cmapWithPrio LogShake recorder) $ \MinimalImports nfp -> do
   -- Get the typechecking artifacts from the module
   tmr <- use TypeCheck nfp
   -- We also need a GHC session with all the dependencies

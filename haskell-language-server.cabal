@@ -39,6 +39,7 @@ common common-deps
     , extra
     , filepath
     , text
+    , prettyprinter
 
 -- Default warnings in HLS
 common warnings

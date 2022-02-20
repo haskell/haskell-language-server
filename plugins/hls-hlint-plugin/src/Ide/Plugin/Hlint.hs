@@ -13,6 +13,7 @@
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE ViewPatterns          #-}
 {-# OPTIONS_GHC -Wno-orphans   #-}
+{-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiWayIf            #-}
 {-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE RecordWildCards       #-}
@@ -26,6 +27,7 @@
 module Ide.Plugin.Hlint
   (
     descriptor
+  , Log(..)
   ) where
 import           Control.Arrow                                      ((&&&))
 import           Control.Concurrent.STM
@@ -109,6 +111,7 @@ import           Language.LSP.Types                                 hiding
 import qualified Language.LSP.Types                                 as LSP
 import qualified Language.LSP.Types.Lens                            as LSP
 
+import qualified Development.IDE.Core.Shake                         as Shake
 import           Development.IDE.Spans.Pragmas                      (LineSplitTextEdits (LineSplitTextEdits),
                                                                      NextPragmaInfo (NextPragmaInfo),
                                                                      getNextPragmaInfo,
@@ -122,6 +125,14 @@ import           System.Environment                                 (setEnv,
 import           Text.Regex.TDFA.Text                               ()
 -- ---------------------------------------------------------------------
 
+newtype Log
+  = LogShake Shake.Log
+  deriving Show
+
+instance Pretty Log where
+  pretty = \case
+    LogShake log -> pretty log
+
 #ifdef HLINT_ON_GHC_LIB
 -- Reimplementing this, since the one in Development.IDE.GHC.Compat isn't for ghc-lib
 pattern RealSrcSpan :: GHC.RealSrcSpan -> Maybe BufSpan -> GHC.SrcSpan
@@ -133,9 +144,9 @@ pattern RealSrcSpan x y <- ((,Nothing) -> (GHC.RealSrcSpan x, y))
 {-# COMPLETE RealSrcSpan, UnhelpfulSpan #-}
 #endif
 
-descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId = (defaultPluginDescriptor plId)
-  { pluginRules = rules plId
+descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
+descriptor recorder plId = (defaultPluginDescriptor plId)
+  { pluginRules = rules recorder plId
   , pluginCommands =
       [ PluginCommand "applyOne" "Apply a single hint" applyOneCmd
       , PluginCommand "applyAll" "Apply all hints to the file" applyAllCmd
@@ -163,15 +174,15 @@ type instance RuleResult GetHlintDiagnostics = ()
 -- |    - `getIdeas` -> `getFileContents` if the hls ghc does not match the hlint default ghc
 -- | - The client settings have changed, to honour the `hlintOn` setting, via `getClientConfigAction`
 -- | - The hlint specific settings have changed, via `getHlintSettingsRule`
-rules :: PluginId -> Rules ()
-rules plugin = do
-  define $ \GetHlintDiagnostics file -> do
+rules :: Recorder (WithPriority Log) -> PluginId -> Rules ()
+rules recorder plugin = do
+  define (cmapWithPrio LogShake recorder) $ \GetHlintDiagnostics file -> do
     config <- getClientConfigAction def
     let hlintOn = pluginEnabledConfig plcDiagnosticsOn plugin config
     ideas <- if hlintOn then getIdeas file else return (Right [])
     return (diagnostics file ideas, Just ())
 
-  defineNoFile $ \GetHlintSettings -> do
+  defineNoFile (cmapWithPrio LogShake recorder) $ \GetHlintSettings -> do
     (Config flags) <- getHlintConfig plugin
     liftIO $ argsSettings flags
 
@@ -519,7 +530,7 @@ applyHint ide nfp mhint =
     liftIO $ logm $ "applyHint:apply=" ++ show commands
     let fp = fromNormalizedFilePath nfp
     (_, mbOldContent) <- liftIO $ runAction' $ getFileContents nfp
-    oldContent <- maybe (liftIO $ fmap T.decodeUtf8 $ BS.readFile fp) return mbOldContent
+    oldContent <- maybe (liftIO $ fmap T.decodeUtf8 (BS.readFile fp)) return mbOldContent
     modsum <- liftIO $ runAction' $ use_ GetModSummary nfp
     let dflags = ms_hspp_opts $ msrModSummary modsum
     -- Setting a environment variable with the libdir used by ghc-exactprint.
