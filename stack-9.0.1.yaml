@@ -29,6 +29,7 @@ packages:
 - ./plugins/hls-ormolu-plugin
 - ./plugins/hls-alternate-number-format-plugin
 - ./plugins/hls-selection-range-plugin
+- ./plugins/hls-change-type-signature-plugin
 
 extra-deps:
 - aeson-2.0.3.0
