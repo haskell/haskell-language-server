@@ -41,6 +41,9 @@ import           Development.IDE.Graph                (alwaysRerun)
 import           Development.IDE.Types.Logger         (Pretty (pretty),
                                                        Recorder, WithPriority,
                                                        cmapWithPrio)
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC.Parser.Annotation
+#endif
 import           Ide.Plugin.Eval.Types
 
 newtype Log = LogShake Shake.Log deriving Show
@@ -63,14 +66,36 @@ queueForEvaluation ide nfp = do
     EvaluatingVar var <- getIdeGlobalState ide
     modifyIORef var (Set.insert nfp)
 
-#if MIN_VERSION_ghc(9,0,0)
+#if MIN_VERSION_ghc(9,2,0)
+getAnnotations :: Development.IDE.GHC.Compat.Located HsModule -> [LEpaComment]
+getAnnotations (L _ m@(HsModule { hsmodAnn = anns'})) =
+    priorComments annComments <> getFollowingComments annComments
+     <> concatMap getCommentsForDecl (hsmodImports m)
+     <> concatMap getCommentsForDecl (hsmodDecls m)
+       where
+         annComments = epAnnComments anns'
+
+getCommentsForDecl :: GenLocated (SrcSpanAnn' (EpAnn ann)) e
+                            -> [LEpaComment]
+getCommentsForDecl (L (SrcSpanAnn (EpAnn _ _ cs) _) _) = priorComments cs <> getFollowingComments cs
+getCommentsForDecl (L (SrcSpanAnn (EpAnnNotUsed) _) _) = []
+
+apiAnnComments' :: ParsedModule -> [SrcLoc.RealLocated EpaCommentTok]
+apiAnnComments' pm = do
+  L span (EpaComment c _) <- getAnnotations $ pm_parsed_source pm
+  pure (L (anchor span) c)
+
 pattern RealSrcSpanAlready :: SrcLoc.RealSrcSpan -> SrcLoc.RealSrcSpan
 pattern RealSrcSpanAlready x = x
-apiAnnComments' :: SrcLoc.ApiAnns -> [SrcLoc.RealLocated AnnotationComment]
-apiAnnComments' = apiAnnRogueComments
+#elif MIN_VERSION_ghc(9,0,0)
+apiAnnComments' :: ParsedModule -> [SrcLoc.RealLocated AnnotationComment]
+apiAnnComments' = apiAnnRogueComments . pm_annotations
+
+pattern RealSrcSpanAlready :: SrcLoc.RealSrcSpan -> SrcLoc.RealSrcSpan
+pattern RealSrcSpanAlready x = x
 #else
-apiAnnComments' :: SrcLoc.ApiAnns -> [SrcLoc.Located AnnotationComment]
-apiAnnComments' = concat . Map.elems . snd
+apiAnnComments' :: ParsedModule -> [SrcLoc.Located AnnotationComment]
+apiAnnComments' = concat . Map.elems . snd . pm_annotations
 
 pattern RealSrcSpanAlready :: SrcLoc.RealSrcSpan -> SrcSpan
 pattern RealSrcSpanAlready x = SrcLoc.RealSrcSpan x Nothing
@@ -78,7 +103,7 @@ pattern RealSrcSpanAlready x = SrcLoc.RealSrcSpan x Nothing
 
 evalParsedModuleRule :: Recorder (WithPriority Log) -> Rules ()
 evalParsedModuleRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \GetEvalComments nfp -> do
-    (ParsedModule{..}, posMap) <- useWithStale_ GetParsedModuleWithComments nfp
+    (pm, posMap) <- useWithStale_ GetParsedModuleWithComments nfp
     let comments = foldMap (\case
                 L (RealSrcSpanAlready real) bdy
                     | FastString.unpackFS (srcSpanFile real) ==
@@ -90,14 +115,14 @@ evalParsedModuleRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorde
                         -- since Haddock parsing is unset explicitly in 'getParsedModuleWithComments',
                         -- we can concentrate on these two
                         case bdy of
-                            AnnLineComment cmt ->
+                            EpaLineComment cmt ->
                                 mempty { lineComments = Map.singleton curRan (RawLineComment cmt) }
-                            AnnBlockComment cmt ->
+                            EpaBlockComment cmt ->
                                 mempty { blockComments = Map.singleton curRan $ RawBlockComment cmt }
                             _ -> mempty
                 _ -> mempty
             )
-            $ apiAnnComments' pm_annotations
+            $ apiAnnComments' pm
         -- we only care about whether the comments are null
         -- this is valid because the only dependent is NeedsCompilation
         fingerPrint = fromString $ if nullComments comments then "" else "1"

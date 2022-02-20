@@ -73,13 +73,19 @@ import           GHC                             (ClsInst,
                                                   getInteractiveDynFlags,
                                                   isImport, isStmt, load,
                                                   parseName, pprFamInst,
-                                                  pprInstance, setLogAction,
-                                                  setTargets, typeKind)
+                                                  pprInstance, setTargets,
+                                                  typeKind)
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC                             (Fixity)
+#endif
 import qualified GHC.LanguageExtensions.Type     as LangExt (Extension (..))
 
 import           Development.IDE.Core.FileStore  (setSomethingModified)
 import           Development.IDE.Types.Shake     (toKey)
 import           Ide.Plugin.Config               (Config)
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC.Types.SrcLoc                (UnhelpfulSpanReason (UnhelpfulInteractive))
+#endif
 import           Ide.Plugin.Eval.Code            (Statement, asStatements,
                                                   evalSetup, myExecStmt,
                                                   propSetup, resultRange,
@@ -102,11 +108,9 @@ import           Language.LSP.Types              hiding
                                                   SemanticTokenRelative (length))
 import           Language.LSP.Types.Lens         (end, line)
 import           Language.LSP.VFS                (virtualFileText)
-import           System.FilePath                 (takeFileName)
-import           System.IO                       (hClose)
-import           UnliftIO.Temporary              (withSystemTempFile)
 
-#if MIN_VERSION_ghc(9,0,0)
+#if MIN_VERSION_ghc(9,2,0)
+#elif MIN_VERSION_ghc(9,0,0)
 import           GHC.Driver.Session              (unitDatabases, unitState)
 import           GHC.Types.SrcLoc                (UnhelpfulSpanReason (UnhelpfulInteractive))
 #else
@@ -218,7 +222,7 @@ runEvalCmd plId st EvalParams{..} =
                         (Just (textToStringBuffer mdlText, now))
 
             -- Setup environment for evaluation
-            hscEnv' <- ExceptT $ fmap join $ withSystemTempFile (takeFileName fp) $ \logFilename logHandle -> liftIO . gStrictTry . evalGhcEnv session $ do
+            hscEnv' <- ExceptT $ fmap join $ liftIO . gStrictTry . evalGhcEnv session $ do
                 env <- getSession
 
                 -- Install the module pragmas and options
@@ -247,13 +251,8 @@ runEvalCmd plId st EvalParams{..} =
                         $ idflags
                 setInteractiveDynFlags $ df'
 #if MIN_VERSION_ghc(9,0,0)
-                        { unitState =
-                            unitState
-                                df
-                        , unitDatabases =
-                            unitDatabases
-                                df
-                        , packageFlags =
+                        {
+                        packageFlags =
                             packageFlags
                                 df
                         , useColor = Never
@@ -274,15 +273,6 @@ runEvalCmd plId st EvalParams{..} =
                         }
 #endif
 
-                -- set up a custom log action
-#if MIN_VERSION_ghc(9,0,0)
-                setLogAction $ \_df _wr _sev _span _doc ->
-                    defaultLogActionHPutStrDoc _df logHandle _doc
-#else
-                setLogAction $ \_df _wr _sev _span _style _doc ->
-                    defaultLogActionHPutStrDoc _df logHandle _doc _style
-#endif
-
                 -- Load the module with its current content (as the saved module might not be up to date)
                 -- BUG: this fails for files that requires preprocessors (e.g. CPP) for ghc < 8.8
                 -- see https://gitlab.haskell.org/ghc/ghc/-/issues/17066
@@ -295,8 +285,7 @@ runEvalCmd plId st EvalParams{..} =
                 dbg "LOAD RESULT" $ asS loadResult
                 case loadResult of
                     Failed -> liftIO $ do
-                        hClose logHandle
-                        err <- readFile logFilename
+                        let err = ""
                         dbg "load ERR" err
                         return $ Left err
                     Succeeded -> do
@@ -687,7 +676,9 @@ doTypeCmd dflags arg = do
 
 parseExprMode :: Text -> (TcRnExprMode, T.Text)
 parseExprMode rawArg = case T.break isSpace rawArg of
+#if !MIN_VERSION_ghc(9,2,0)
     ("+v", rest) -> (TM_NoInst, T.strip rest)
+#endif
     ("+d", rest) -> (TM_Default, T.strip rest)
     _            -> (TM_Inst, rawArg)
 

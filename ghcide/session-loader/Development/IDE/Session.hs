@@ -116,11 +116,14 @@ data Log
   | LogCradleNotFound !FilePath
   | LogSessionLoadingResult !(Either [CradleError] (ComponentOptions, FilePath))
   | LogCradle !(Cradle Void)
+  | LogNoneCradleFound FilePath
   | LogNewComponentCache !(([FileDiagnostic], Maybe HscEnvEq), DependencyInfo)
 deriving instance Show Log
 
 instance Pretty Log where
   pretty = \case
+    LogNoneCradleFound path ->
+      "None cradle found for" <+> pretty path <+> ", ignoring the file"
     LogSettingInitialDynFlags ->
       "Setting initial dynflags..."
     LogGetInitialGhcLibDirDefaultCradleFail cradleError rootDirPath hieYamlPath cradle ->
@@ -690,6 +693,8 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
 cradleToOptsAndLibDir :: Recorder (WithPriority Log) -> Cradle Void -> FilePath
                       -> IO (Either [CradleError] (ComponentOptions, FilePath))
 cradleToOptsAndLibDir recorder cradle file = do
+    -- let noneCradleFoundMessage :: FilePath -> T.Text
+    --     noneCradleFoundMessage f = T.pack $ "none cradle found for " <> f <> ", ignoring the file"
     -- Start off by getting the session options
     logWith recorder Debug $ LogCradle cradle
     cradleRes <- HieBios.getCompilerOptions file cradle
@@ -701,13 +706,14 @@ cradleToOptsAndLibDir recorder cradle file = do
                 -- This is the successful path
                 CradleSuccess libDir -> pure (Right (r, libDir))
                 CradleFail err       -> return (Left [err])
-                -- For the None cradle perhaps we still want to report an Info
-                -- message about the fact that the file is being ignored.
-                CradleNone           -> return (Left [])
+                CradleNone           -> do
+                    logWith recorder Info $ LogNoneCradleFound file
+                    return (Left [])
 
         CradleFail err -> return (Left [err])
-        -- Same here
-        CradleNone -> return (Left [])
+        CradleNone -> do
+            logWith recorder Info $ LogNoneCradleFound file
+            return (Left [])
 
 emptyHscEnv :: IORef NameCache -> FilePath -> IO HscEnv
 emptyHscEnv nc libDir = do

@@ -26,6 +26,8 @@ import qualified Development.IDE.Main          as IDEMain
 import qualified Development.IDE.Session       as Session
 import           Development.IDE.Types.Logger  as G
 import qualified Development.IDE.Types.Options as Ghcide
+import qualified HIE.Bios.Environment          as HieBios
+import           HIE.Bios.Types
 import           Ide.Arguments
 import           Ide.Logger
 import           Ide.Plugin.ConfigUtils        (pluginsToDefaultConfig,
@@ -33,7 +35,12 @@ import           Ide.Plugin.ConfigUtils        (pluginsToDefaultConfig,
 import           Ide.Types                     (IdePlugins, PluginId (PluginId),
                                                 ipMap)
 import           Ide.Version
+import qualified Language.LSP.Server           as LSP
+import           System.Directory
 import qualified System.Directory.Extra        as IO
+import           System.FilePath
+import           System.IO
+import qualified System.Log.Logger             as L
 
 data Log
   = LogVersion !String
@@ -95,6 +102,13 @@ defaultMain recorder args idePlugins = do
 
         DefaultConfigurationMode -> do
           LBS.putStrLn $ A.encodePretty $ pluginsToDefaultConfig idePlugins
+        PrintLibDir -> do
+          d <- getCurrentDirectory
+          let initialFp = d </> "a"
+          hieYaml <- Session.findCradle def initialFp
+          cradle <- Session.loadCradle def hieYaml d
+          (CradleSuccess libdir) <- HieBios.getRuntimeGhcLibDir cradle
+          putStr libdir
 
 -- ---------------------------------------------------------------------
 

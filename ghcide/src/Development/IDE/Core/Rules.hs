@@ -57,7 +57,8 @@ module Development.IDE.Core.Rules(
     getParsedModuleDefinition,
     typeCheckRuleDefinition,
     GhcSessionDepsConfig(..),
-    Log(..)
+    Log(..),
+    DisplayTHWarning(..),
     ) where
 
 #if !MIN_VERSION_ghc(8,8,0)
@@ -868,9 +869,10 @@ instance IsIdeGlobal DisplayTHWarning
 
 getModSummaryRule :: Recorder (WithPriority Log) -> Rules ()
 getModSummaryRule recorder = do
-    env <- lspEnv <$> getShakeExtrasRules
-    displayItOnce <- liftIO $ once $ LSP.runLspT (fromJust env) displayTHWarning
-    addIdeGlobal (DisplayTHWarning displayItOnce)
+    menv <- lspEnv <$> getShakeExtrasRules
+    forM_ menv $ \env -> do
+        displayItOnce <- liftIO $ once $ LSP.runLspT env displayTHWarning
+        addIdeGlobal (DisplayTHWarning displayItOnce)
 
     defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GetModSummary f -> do
         session' <- hscEnv <$> use_ GhcSession f

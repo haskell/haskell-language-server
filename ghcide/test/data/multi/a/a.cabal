@@ -4,6 +4,6 @@ build-type: Simple
 cabal-version: >= 1.2
 
 library
-  build-depends: base
+  build-depends: base, async
   exposed-modules: A
   hs-source-dirs: .

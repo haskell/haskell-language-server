@@ -58,7 +58,9 @@ import           Development.IDE.Test                     (Cursor,
                                                            standardizeQuotes,
                                                            waitForAction,
                                                            waitForGC,
-                                                           waitForTypecheck)
+                                                           waitForTypecheck,
+                                                           isReferenceReady,
+                                                           referenceReady)
 import           Development.IDE.Test.Runfiles
 import qualified Development.IDE.Types.Diagnostics        as Diagnostics
 import           Development.IDE.Types.Location
@@ -122,6 +124,7 @@ import qualified HieDbRetry
 import Development.IDE.Types.Logger (WithPriority(WithPriority, priority), Priority (Debug), cmapWithPrio, Recorder (Recorder, logger_), makeDefaultStderrRecorder, cfilter, LoggingColumn (PriorityColumn, DataColumn), Logger (Logger), Pretty (pretty))
 import Data.Function ((&))
 import GHC.Stack (emptyCallStack)
+import qualified FuzzySearch
 
 data Log 
   = LogGhcIde Ghcide.Log 
@@ -1544,7 +1547,7 @@ extendImportTests = testGroup "extend import actions"
                     , "import ModuleA as A (stuffB, (.*))"
                     , "main = print (stuffB .* stuffB)"
                     ])
-        , knownBrokenForGhcVersions [GHC92] "missing comma. #2662" $ testSession "extend single line import with infix constructor" $ template
+        , testSession "extend single line import with infix constructor" $ template
             []
             ("ModuleB.hs", T.unlines
                     [ "module ModuleB where"
@@ -1558,7 +1561,7 @@ extendImportTests = testGroup "extend import actions"
                     , "import Data.List.NonEmpty (fromList, NonEmpty ((:|)))"
                     , "main = case (fromList []) of _ :| _ -> pure ()"
                     ])
-        , knownBrokenForGhcVersions [GHC92] "missing comma. #2662" $ testSession "extend single line import with prefix constructor" $ template
+        , testSession "extend single line import with prefix constructor" $ template
             []
             ("ModuleB.hs", T.unlines
                     [ "module ModuleB where"
@@ -5397,7 +5400,7 @@ cradleTests = testGroup "cradle"
     [testGroup "dependencies" [sessionDepsArePickedUp]
     ,testGroup "ignore-fatal" [ignoreFatalWarning]
     ,testGroup "loading" [loadCradleOnlyonce, retryFailedCradle]
-    ,testGroup "multi"   [simpleMultiTest, simpleMultiTest2, simpleMultiDefTest]
+    ,testGroup "multi"   [simpleMultiTest, simpleMultiTest2, simpleMultiTest3, simpleMultiDefTest]
     ,testGroup "sub-directory"   [simpleSubDirectoryTest]
     ]
 
@@ -5514,15 +5517,14 @@ simpleSubDirectoryTest =
     expectNoMoreDiagnostics 0.5
 
 simpleMultiTest :: TestTree
-simpleMultiTest = testCase "simple-multi-test" $ withLongTimeout $ runWithExtraFiles "multi" $ \dir -> do
+simpleMultiTest =  knownBrokenForGhcVersions [GHC92] "#2693" $
+  testCase "simple-multi-test" $ withLongTimeout $ runWithExtraFiles "multi" $ \dir -> do
     let aPath = dir </> "a/A.hs"
         bPath = dir </> "b/B.hs"
-    aSource <- liftIO $ readFileUtf8 aPath
-    adoc <- createDoc aPath "haskell" aSource
+    adoc <- openDoc aPath "haskell"
+    bdoc <- openDoc bPath "haskell"
     WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" adoc
     liftIO $ assertBool "A should typecheck" ideResultSuccess
-    bSource <- liftIO $ readFileUtf8 bPath
-    bdoc <- createDoc bPath "haskell" bSource
     WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" bdoc
     liftIO $ assertBool "B should typecheck" ideResultSuccess
     locs <- getDefinitions bdoc (Position 2 7)
@@ -5535,15 +5537,30 @@ simpleMultiTest2 :: TestTree
 simpleMultiTest2 = testCase "simple-multi-test2" $ runWithExtraFiles "multi" $ \dir -> do
     let aPath = dir </> "a/A.hs"
         bPath = dir </> "b/B.hs"
-    bSource <- liftIO $ readFileUtf8 bPath
-    bdoc <- createDoc bPath "haskell" bSource
-    expectNoMoreDiagnostics 10
-    aSource <- liftIO $ readFileUtf8 aPath
-    (TextDocumentIdentifier adoc) <- createDoc aPath "haskell" aSource
-    -- Need to have some delay here or the test fails
-    expectNoMoreDiagnostics 10
+    bdoc <- openDoc bPath "haskell"
+    WaitForIdeRuleResult {} <- waitForAction "TypeCheck" bdoc
+    TextDocumentIdentifier auri <- openDoc aPath "haskell"
+    skipManyTill anyMessage $ isReferenceReady aPath
     locs <- getDefinitions bdoc (Position 2 7)
-    let fooL = mkL adoc 2 0 2 3
+    let fooL = mkL auri 2 0 2 3
+    checkDefs locs (pure [fooL])
+    expectNoMoreDiagnostics 0.5
+
+-- Now with 3 components
+simpleMultiTest3 :: TestTree
+simpleMultiTest3 = knownBrokenForGhcVersions [GHC92] "#2693" $
+  testCase "simple-multi-test3" $ runWithExtraFiles "multi" $ \dir -> do
+    let aPath = dir </> "a/A.hs"
+        bPath = dir </> "b/B.hs"
+        cPath = dir </> "c/C.hs"
+    bdoc <- openDoc bPath "haskell"
+    WaitForIdeRuleResult {} <- waitForAction "TypeCheck" bdoc
+    TextDocumentIdentifier auri <- openDoc aPath "haskell"
+    skipManyTill anyMessage $ isReferenceReady aPath
+    cdoc <- openDoc cPath "haskell"
+    WaitForIdeRuleResult {} <- waitForAction "TypeCheck" cdoc
+    locs <- getDefinitions cdoc (Position 2 7)
+    let fooL = mkL auri 2 0 2 3
     checkDefs locs (pure [fooL])
     expectNoMoreDiagnostics 0.5
 
@@ -5555,11 +5572,7 @@ simpleMultiDefTest = testCase "simple-multi-def-test" $ runWithExtraFiles "multi
     adoc <- liftIO $ runInDir dir $ do
       aSource <- liftIO $ readFileUtf8 aPath
       adoc <- createDoc aPath "haskell" aSource
-      ~() <- skipManyTill anyMessage $ satisfyMaybe $ \case
-        FromServerMess (SCustomMethod "ghcide/reference/ready") (NotMess NotificationMessage{_params = fp}) -> do
-          A.Success fp' <- pure $ fromJSON fp
-          if equalFilePath fp' aPath then pure () else Nothing
-        _ -> Nothing
+      skipManyTill anyMessage $ isReferenceReady aPath
       closeDoc adoc
       pure adoc
     bSource <- liftIO $ readFileUtf8 bPath
@@ -5590,18 +5603,15 @@ bootTests = testGroup "boot"
             -- `ghcide/reference/ready` notification.
             -- Once we receive one of the above, we wait for the other that we
             -- haven't received yet.
-            -- If we don't wait for the `ready` notification it is possible 
-            -- that the `getDefinitions` request/response in the outer ghcide 
+            -- If we don't wait for the `ready` notification it is possible
+            -- that the `getDefinitions` request/response in the outer ghcide
             -- session will find no definitions.
             let hoverParams = HoverParams cDoc (Position 4 3) Nothing
             hoverRequestId <- sendRequest STextDocumentHover hoverParams
-            let parseReadyMessage = satisfy $ \case
-                  FromServerMess (SCustomMethod "ghcide/reference/ready") (NotMess NotificationMessage{_params = params})
-                    | A.Success fp <- fromJSON params -> equalFilePath fp cPath
-                  _ -> False
+            let parseReadyMessage = isReferenceReady cPath
             let parseHoverResponse = responseForId STextDocumentHover hoverRequestId
             hoverResponseOrReadyMessage <- skipManyTill anyMessage ((Left <$> parseHoverResponse) <|> (Right <$> parseReadyMessage))
-            _ <- skipManyTill anyMessage $ 
+            _ <- skipManyTill anyMessage $
               case hoverResponseOrReadyMessage of
                 Left _ -> void parseReadyMessage
                 Right _ -> void parseHoverResponse
@@ -6014,11 +6024,7 @@ referenceTestSession name thisDoc docs' f = testSessionWithExtraFiles "reference
     loop :: [FilePath] -> Session ()
     loop [] = pure ()
     loop docs = do
-      doc <- skipManyTill anyMessage $ satisfyMaybe $ \case
-          FromServerMess (SCustomMethod "ghcide/reference/ready") (NotMess NotificationMessage{_params = fp}) -> do
-            A.Success fp' <- pure $ fromJSON fp
-            find (fp' ==) docs
-          _ -> Nothing
+      doc <- skipManyTill anyMessage $ referenceReady (`elem` docs)
       loop (delete doc docs)
   loop docs
   f dir
@@ -6247,6 +6253,7 @@ unitTests recorder logger = do
            let msg = printf "Timestamps do not have millisecond resolution: %dus" resolution_us
            assertBool msg (resolution_us <= 1000)
      , Progress.tests
+     , FuzzySearch.tests
      ]
 
 garbageCollectionTests :: TestTree

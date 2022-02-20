@@ -25,7 +25,7 @@ import           Development.IDE.Core.OfInterest hiding (Log, LogShake)
 import           Development.IDE.Graph
 import           Development.IDE.Types.Logger    as Logger (Logger,
                                                             Pretty (pretty),
-                                                            Priority (Info),
+                                                            Priority (Debug),
                                                             Recorder,
                                                             WithPriority,
                                                             cmapWithPrio)
@@ -103,4 +103,4 @@ shutdown = shakeShut
 -- e.g., the ofInterestRule.
 runAction :: String -> IdeState -> Action a -> IO a
 runAction herald ide act =
-  join $ shakeEnqueue (shakeExtras ide) (mkDelayedAction herald Logger.Info act)
+  join $ shakeEnqueue (shakeExtras ide) (mkDelayedAction herald Debug act)

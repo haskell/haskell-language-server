@@ -1,152 +1,27 @@
-name: Builds
+name: Release
 
 on:
   workflow_dispatch:
     inputs:
-      alpine:
-        description: 'Use alpine to build a fully static executable for linux'
+      version:
+        description: 'HLS version'
+        required: true
+        type: string
+      tag:
+        description: 'HLS tag'
         required: false
-        default: 'false'
+        type: string
+      project:
+        description: 'Gitlab project number'
+        type: number
+        required: false
+        default: 1180
   release:
     types: [created]
 
 jobs:
-  build:
-    runs-on: ${{ matrix.os }}
-    container: ${{ (github.event.inputs.alpine == 'true' && startsWith(matrix.os,'ubuntu') && 'alpine:3.12') || '' }}
-    defaults:
-      run:
-        shell: ${{ (startsWith(matrix.os,'windows') && 'bash') || 'sh' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        ghc:
-          [ "9.2.1"
-          , "9.0.2"
-          , "9.0.1"
-          , "8.10.7"
-          , "8.10.6"
-          , "8.8.4"
-          , "8.6.5"
-          ]
-        os: [ "ubuntu-18.04"
-            , "macOS-latest"
-            , "windows-latest"
-            ]
-        cabal: ['3.6']
-
-    steps:
-    - name: Install system dependencies
-      if: github.event.inputs.alpine == 'true' && runner.os == 'Linux'
-      run: |
-        apk add --no-cache curl gcc g++ gmp-dev ncurses-dev libffi-dev make xz gzip tar perl git bash sudo binutils-gold
-        apk add --no-cache zlib zlib-dev zlib-static gmp gmp-dev ncurses-static
-    - uses: actions/checkout@v2
-
-    - name: Disable tests and bechmarks
-      run: |
-        echo "tests: false" >> cabal.project.local
-        echo "benchmarks: false" >> cabal.project.local
-
-    - uses: ./.github/actions/setup-build
-      with:
-        ghc: ${{ matrix.ghc }}
-        os:  ${{ runner.os }}
-
-    - name: (Windows) Platform specifics
-      if: runner.os == 'Windows'
-      run: |
-        echo "EXE_EXT=.exe" >> $GITHUB_ENV
-
-    - name: (Linux) Platform specifics
-      if: runner.os == 'Linux'
-      run: |
-        echo "CABAL_ARGS=--enable-executable-static --ghc-options=-split-sections" >> $GITHUB_ENV
-
-    - name: Build the server
-      # Try building it twice in case of flakey builds on Windows
-      run: |
-        cabal build exe:hls -O2 $CABAL_ARGS || cabal build exe:hls -O2 $CABAL_ARGS -j1
-
-    - name: Compress server binary
-      id: compress_server_binary
-      run: |
-        HLS_BUILD=$(find dist-newstyle \( -name 'hls' -o -name 'hls.exe' \) -type f)
-        HLS=haskell-language-server-${{ matrix.ghc }}
-        mv $HLS_BUILD $HLS${{ env.EXE_EXT }}
-        if [[ "${{ runner.os }}" == "Windows" ]]; then
-          7z a $HLS.zip $HLS${{ env.EXE_EXT }}
-          echo ::set-output name=path::$HLS.zip
-          echo ::set-output name=content_type::application/zip
-          echo ::set-output name=extension::zip
-        else
-          gzip --best $HLS
-          echo ::set-output name=path::$HLS.gz
-          echo ::set-output name=content_type::application/gzip
-          echo ::set-output name=extension::gz
-        fi
-
-    - name: Upload server to release
-      if: ${{ github.event.release.upload_url != ''}}
-      uses: actions/upload-release-asset@v1.0.2
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ${{ steps.compress_server_binary.outputs.path }}
-        asset_name: haskell-language-server-${{ runner.os }}-${{ matrix.ghc  }}${{env.EXE_EXT}}.${{ steps.compress_server_binary.outputs.extension }}
-        asset_content_type: ${{ steps.compress_server_binary.outputs.content_type }}
-
-    - name: Upload server to workflow artifacts
-      uses: actions/upload-artifact@v2
-      with:
-        name: haskell-language-server-${{ runner.os }}-${{ matrix.ghc }}${{ env.EXE_EXT }}.${{ steps.compress_server_binary.outputs.extension }}
-        path: ${{ steps.compress_server_binary.outputs.path }}
-
-    - name: Build the wrapper
-      if: matrix.ghc == '8.10.7'
-      run: cabal build exe:hls-wrapper -O2 $CABAL_ARGS
-
-    - name: Compress wrapper binary
-      if: matrix.ghc == '8.10.7'
-      id: compress_wrapper_binary
-      run: |
-        HLS_WRAPPER_BUILD=$(find dist-newstyle \( -name 'hls-wrapper' -o -name 'hls-wrapper.exe' \) -type f)
-        HLS_WRAPPER=haskell-language-server-wrapper
-        mv $HLS_WRAPPER_BUILD $HLS_WRAPPER${{ env.EXE_EXT }}
-        if [[ "${{ runner.os }}" == "Windows" ]]; then
-          7z a $HLS_WRAPPER.zip $HLS_WRAPPER${{ env.EXE_EXT }}
-          echo ::set-output name=path::$HLS_WRAPPER.zip
-          echo ::set-output name=content_type::application/zip
-          echo ::set-output name=extension::zip
-        else
-          gzip --best $HLS_WRAPPER
-          echo ::set-output name=path::$HLS_WRAPPER.gz
-          echo ::set-output name=content_type::application/gzip
-          echo ::set-output name=extension::gz
-        fi
-
-    - name: Upload wrapper to the release
-      if: ${{ matrix.ghc == '8.10.7' && github.event.release.upload_url != '' }}
-      uses: actions/upload-release-asset@v1.0.2
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ${{ steps.compress_wrapper_binary.outputs.path }}
-        asset_name: haskell-language-server-wrapper-${{ runner.os }}${{ env.EXE_EXT }}.${{ steps.compress_wrapper_binary.outputs.extension }}
-        asset_content_type: ${{ steps.compress_wrapper_binary.outputs.content_type}}
-
-    - name: Upload wrapper to workflow artifacts
-      uses: actions/upload-artifact@v2
-      if: matrix.ghc == '8.10.7'
-      with:
-        name: haskell-language-server-wrapper-${{ runner.os }}${{ env.EXE_EXT }}.${{ steps.compress_wrapper_binary.outputs.extension }}
-        path: ${{ steps.compress_wrapper_binary.outputs.path }}
-
   # generates a custom tarball with sources, used by `ghcup compile hls`
   src-tar:
-    needs: build
     runs-on: ubuntu-18.04
 
     steps:
@@ -189,58 +64,85 @@ jobs:
   # this generates .gz tarfiles containing binaries for all GHC versions and OS's
   # used by `ghcup install hls`
   tar:
-    needs: build
-    runs-on: ubuntu-18.04
-    strategy:
-      matrix:
-        target-os: [ "Linux"
-                   , "macOS"
-                   , "Windows"
-                   ]
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v2
-
-      - name: Generate tarball with all binaries
+      - name: Download tarballs from gitlab
         run: |
-          # move the binaries for the specific platform into bin/
-          mkdir bin
-          mv haskell-language-server-${{ matrix.target-os }}-*/* bin
-          mv haskell-language-server-wrapper-${{ matrix.target-os }}.*/* bin
-          # decompress them
-          cd bin
-          if [[ "${{ matrix.target-os }}" == "Windows" ]]; then
-            7z x "*.zip"
-            rm *.zip
-          else
-            gzip -d *.gz
-          fi
-          tar -czpf haskell-language-server.tar.gz *
+          set -eux
 
+          if [ -n "${{ github.event.inputs.project }}" ] ; then
+            proj=${{ github.event.inputs.project }}
+          else
+            proj=1180
+          fi
+
+          if [ -n "${{ github.event.release.tag_name }}" ] ; then
+            tag=${{ github.event.release.tag_name }}
+            ver=${tag#v}
+          elif [ -n "${{ github.event.inputs.version }}" ] ; then
+            ver=${{ github.event.inputs.version }}
+            if [ -n "${{ github.event.inputs.tag }}" ] ; then
+                tag=${{ github.event.inputs.tag }}
+            else
+                tag=v${ver}
+            fi
+          fi
+
+          base_url="https://gitlab.haskell.org/api/v4/projects/${proj}/jobs/artifacts/${tag}/raw"
+
+          # unix like platforms
+          for plat in aarch64-apple-darwin \
+              aarch64-deb10-linux \
+              armv7-deb10-linux \
+              x86_64-apple-darwin \
+              x86_64-unknown-freebsd12 \
+              x86_64-unknown-freebsd13 \
+              x86_64-alpine3.12-linux \
+              x86_64-centos7-linux \
+              x86_64-deb9-linux \
+              x86_64-deb10-linux \
+              x86_64-fedora27-linux ; do
+              url="${base_url}/out/haskell-language-server-${ver}-${plat}.tar.xz?job=tar-$(echo "${plat/alpine3.12/alpine}" | awk -F '-' '{ print ($3 == "darwin" || $2 == "unknown") ? $1 "-" $3 : $1 "-" $3 "-" $2 }')"
+              curl -f -o "haskell-language-server-${ver}-${plat}.tar.xz" "${url}"
+          done
+          unset plat url
+
+          # windows
+          curl -f -o "haskell-language-server-${ver}-x86_64-unknown-mingw32.zip" \
+              "${base_url}/out/haskell-language-server-${ver}-x86_64-unknown-mingw32.zip?job=tar-x86_64-windows"
+
+          pwd
+          ls -lah
+
+      # from https://github.com/actions/upload-release-asset/issues/47#issuecomment-659071145
       - name: Upload binaries tarball to the release
         if: ${{ github.event.release.upload_url != '' }}
-        uses: actions/upload-release-asset@v1.0.2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: actions/github-script@v2
         with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: bin/haskell-language-server.tar.gz
-          asset_name: haskell-language-server-${{ matrix.target-os }}-${{ github.event.release.tag_name }}.tar.gz
-          asset_content_type: application/gzip
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            console.log('environment', process.versions);
 
-      - name: Set hls release version
-        run: |
-          HLS_VER="${{ github.event.release.tag_name }}"
-          if [[ -z $HLS_VER ]]; then
-            HLS_VER=${{ github.sha }}
-            HLS_VER=${HLS_VER:0:5}
-          fi
-          echo "HLS_VER=$HLS_VER" >> $GITHUB_ENV
+            const fs = require('fs').promises;
+
+            const { repo: { owner, repo }, sha } = context;
+            console.log({ owner, repo, sha });
+
+            for (let file of await fs.readdir('.')) {
+              console.log('uploading', file);
+
+              await github.repos.uploadReleaseAsset({
+                owner, repo,
+                release_id: ${{ github.event.release.id }},
+                name: file,
+                data: await fs.readFile(`./${file}`)
+              });
+            }
 
       - name: Upload binaries tarball to workflow artifacts
         uses: actions/upload-artifact@v2
         with:
-          name: haskell-language-server-${{ matrix.target-os }}-${{ env.HLS_VER }}.tar.gz
-          path: bin/haskell-language-server.tar.gz
+          path: ${{ github.workspace }}/*
 
   sha256sum:
     needs: [tar, src-tar]

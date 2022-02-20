@@ -79,7 +79,6 @@ library
     , pretty-simple
     , QuickCheck
     , safe-exceptions
-    , temporary
     , text
     , time
     , transformers

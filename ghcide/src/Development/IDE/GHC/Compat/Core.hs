@@ -141,6 +141,9 @@ module Development.IDE.GHC.Compat.Core (
     ImportSpec(..),
     -- * SourceText
     SourceText(..),
+#if !MIN_VERSION_ghc(9,2,0)
+    rationalFromFractionalLit,
+#endif
     -- * Name
     tyThingParent_maybe,
     -- * Ways
@@ -1075,4 +1078,9 @@ collectHsBindsBinders x = GHC.collectHsBindsBinders CollNoDictBinders x
 #if !MIN_VERSION_ghc(9,2,0)
 pattern HsLet xlet localBinds expr <- GHC.HsLet xlet (SrcLoc.unLoc -> localBinds) expr
 pattern LetStmt xlet localBinds <- GHC.LetStmt xlet (SrcLoc.unLoc -> localBinds)
+#endif
+
+#if !MIN_VERSION_ghc(9,2,0)
+rationalFromFractionalLit :: FractionalLit -> Rational
+rationalFromFractionalLit = fl_value
 #endif

@@ -20,6 +20,7 @@ spec = do
     destructTest "b"     7 10 "DestructTyFam"
     destructTest "b"     7 10 "DestructDataFam"
     destructTest "b"    17 10 "DestructTyToDataFam"
+    destructTest "t"     6 10 "DestructInt"
 
   describe "layout" $ do
     destructTest "b"  4  3 "LayoutBind"
