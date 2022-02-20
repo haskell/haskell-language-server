@@ -23,7 +23,6 @@ module Development.IDE.GHC.ExactPrint
       transformM,
       ExactPrint(..),
 #if !MIN_VERSION_ghc(9,2,0)
-      useAnnotatedSource,
       Anns,
       Annotate,
       setPrecedingLinesT,
@@ -120,16 +119,6 @@ annotateParsedSource (ParsedModule _ ps _ _) = unsafeMkA (makeDeltaAst ps) 0
 #else
 annotateParsedSource :: ParsedModule -> Annotated ParsedSource
 annotateParsedSource = fixAnns
-#endif
-
-#if !MIN_VERSION_ghc(9,2,0)
-useAnnotatedSource ::
-  String ->
-  IdeState ->
-  NormalizedFilePath ->
-  IO (Maybe (Annotated ParsedSource))
-useAnnotatedSource herald state nfp =
-    runAction herald state (use GetAnnotatedParsedSource nfp)
 #endif
 
 ------------------------------------------------------------------------------

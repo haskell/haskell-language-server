@@ -63,7 +63,7 @@ import           Ide.Types                                (CommandId (..),
 import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities
 import qualified Language.LSP.VFS                         as VFS
-import           Text.Fuzzy.Parallel                      (Scored (score_),
+import           Text.Fuzzy.Parallel                      (Scored (score),
                                                            original)
 
 -- Chunk size used for parallelizing fuzzy matching
@@ -590,7 +590,7 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
           $ (if T.null enteredQual then id else mapMaybe (T.stripPrefix enteredQual))
             allModNamesAsNS
 
-      filtCompls = Fuzzy.filter chunkSize maxC prefixText ctxCompls "" "" (label . snd)
+      filtCompls = Fuzzy.filter chunkSize maxC prefixText ctxCompls (label . snd)
         where
 
           mcc = case maybe_parsed of
@@ -668,7 +668,7 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
         return $
           (fmap.fmap) snd $
           sortBy (compare `on` lexicographicOrdering) $
-          mergeListsBy (flip compare `on` score_)
+          mergeListsBy (flip compare `on` score)
             [ (fmap.fmap) (notQual,) filtModNameCompls
             , (fmap.fmap) (notQual,) filtKeywordCompls
             , (fmap.fmap.fmap) (toggleSnippets caps config) compls
@@ -681,11 +681,11 @@ getCompletions plId ideOpts CC {allModNamesAsNS, anyQualCompls, unqualCompls, qu
         --  3. In-scope completions rank next
         --  4. label alphabetical ordering next
         --  4. detail alphabetical ordering (proxy for module)
-        lexicographicOrdering Fuzzy.Scored{score_, original} =
+        lexicographicOrdering Fuzzy.Scored{score, original} =
           case original of
             (isQual, CompletionItem{_label,_detail}) -> do
               let isLocal = maybe False (":" `T.isPrefixOf`) _detail
-              (Down isQual, Down score_, Down isLocal, _label, _detail)
+              (Down isQual, Down score, Down isLocal, _label, _detail)
 
 
 
