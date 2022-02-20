@@ -25,7 +25,7 @@ main :: IO ()
 main = defaultTestRunner tests
 
 hlintPlugin :: PluginDescriptor IdeState
-hlintPlugin = HLint.descriptor "hlint"
+hlintPlugin = HLint.descriptor mempty "hlint"
 
 tests :: TestTree
 tests = testGroup "hlint" [

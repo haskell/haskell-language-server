@@ -7,6 +7,7 @@ module Development.IDE.Core.FileExists
   , getFileExists
   , watchedGlobs
   , GetFileExists(..)
+  , Log(..)
   )
 where
 
@@ -18,12 +19,17 @@ import           Control.Monad.IO.Class
 import qualified Data.ByteString                       as BS
 import           Data.List                             (partition)
 import           Data.Maybe
-import           Development.IDE.Core.FileStore
+import           Development.IDE.Core.FileStore        hiding (Log, LogShake)
+import qualified Development.IDE.Core.FileStore        as FileStore
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Shake
+import           Development.IDE.Core.Shake            hiding (Log)
+import qualified Development.IDE.Core.Shake            as Shake
 import           Development.IDE.Graph
 import           Development.IDE.Types.Location
+import           Development.IDE.Types.Logger          (Pretty (pretty),
+                                                        Recorder, WithPriority,
+                                                        cmapWithPrio)
 import           Development.IDE.Types.Options
 import qualified Focus
 import           Ide.Plugin.Config                     (Config)
@@ -81,6 +87,16 @@ type FileExistsMap = STM.Map NormalizedFilePath Bool
 newtype FileExistsMapVar = FileExistsMapVar FileExistsMap
 
 instance IsIdeGlobal FileExistsMapVar
+
+data Log
+  = LogFileStore FileStore.Log
+  | LogShake Shake.Log
+  deriving Show
+
+instance Pretty Log where
+  pretty = \case
+    LogFileStore log -> pretty log
+    LogShake log     -> pretty log
 
 -- | Grab the current global value of 'FileExistsMap' without acquiring a dependency
 getFileExistsMapUntracked :: Action FileExistsMap
@@ -157,8 +173,8 @@ allExtensions opts = [extIncBoot | ext <- optExtensions opts, extIncBoot <- [ext
 -- | Installs the 'getFileExists' rules.
 --   Provides a fast implementation if client supports dynamic watched files.
 --   Creates a global state as a side effect in that case.
-fileExistsRules :: Maybe (LanguageContextEnv Config) -> VFSHandle -> Rules ()
-fileExistsRules lspEnv vfs = do
+fileExistsRules :: Recorder (WithPriority Log) -> Maybe (LanguageContextEnv Config) -> VFSHandle -> Rules ()
+fileExistsRules recorder lspEnv vfs = do
   supportsWatchedFiles <- case lspEnv of
     Nothing      -> pure False
     Just lspEnv' -> liftIO $  runLspT lspEnv' isWatchSupported
@@ -179,15 +195,15 @@ fileExistsRules lspEnv vfs = do
         else const $ pure False
 
   if supportsWatchedFiles
-    then fileExistsRulesFast isWatched vfs
-    else fileExistsRulesSlow vfs
+    then fileExistsRulesFast recorder isWatched vfs
+    else fileExistsRulesSlow recorder vfs
 
-  fileStoreRules vfs isWatched
+  fileStoreRules (cmapWithPrio LogFileStore recorder) vfs isWatched
 
 -- Requires an lsp client that provides WatchedFiles notifications, but assumes that this has already been checked.
-fileExistsRulesFast :: (NormalizedFilePath -> Action Bool) -> VFSHandle -> Rules ()
-fileExistsRulesFast isWatched vfs =
-    defineEarlyCutoff $ RuleNoDiagnostics $ \GetFileExists file -> do
+fileExistsRulesFast :: Recorder (WithPriority Log) -> (NormalizedFilePath -> Action Bool) -> VFSHandle -> Rules ()
+fileExistsRulesFast recorder isWatched vfs =
+    defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \GetFileExists file -> do
         isWF <- isWatched file
         if isWF
             then fileExistsFast vfs file
@@ -225,9 +241,9 @@ fileExistsFast vfs file = do
 summarizeExists :: Bool -> Maybe BS.ByteString
 summarizeExists x = Just $ if x then BS.singleton 1 else BS.empty
 
-fileExistsRulesSlow :: VFSHandle -> Rules ()
-fileExistsRulesSlow vfs =
-  defineEarlyCutoff $ RuleNoDiagnostics $ \GetFileExists file -> fileExistsSlow vfs file
+fileExistsRulesSlow :: Recorder (WithPriority Log) -> VFSHandle -> Rules ()
+fileExistsRulesSlow recorder vfs =
+  defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \GetFileExists file -> fileExistsSlow vfs file
 
 fileExistsSlow :: VFSHandle -> NormalizedFilePath -> Action (Maybe BS.ByteString, Maybe Bool)
 fileExistsSlow vfs file = do

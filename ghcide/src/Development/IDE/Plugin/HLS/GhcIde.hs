@@ -5,6 +5,7 @@
 module Development.IDE.Plugin.HLS.GhcIde
   (
     descriptors
+  , Log(..)
   ) where
 import           Control.Monad.IO.Class
 import           Development.IDE
@@ -19,16 +20,28 @@ import           Language.LSP.Server                 (LspM)
 import           Language.LSP.Types
 import           Text.Regex.TDFA.Text                ()
 
-descriptors :: [PluginDescriptor IdeState]
-descriptors =
+data Log
+  = LogNotifications Notifications.Log
+  | LogCompletions Completions.Log
+  | LogTypeLenses TypeLenses.Log
+  deriving Show
+
+instance Pretty Log where
+  pretty = \case
+    LogNotifications log -> pretty log
+    LogCompletions log   -> pretty log
+    LogTypeLenses log    -> pretty log
+
+descriptors :: Recorder (WithPriority Log) -> [PluginDescriptor IdeState]
+descriptors recorder =
   [ descriptor "ghcide-hover-and-symbols",
     CodeAction.iePluginDescriptor "ghcide-code-actions-imports-exports",
     CodeAction.typeSigsPluginDescriptor "ghcide-code-actions-type-signatures",
     CodeAction.bindingsPluginDescriptor "ghcide-code-actions-bindings",
     CodeAction.fillHolePluginDescriptor "ghcide-code-actions-fill-holes",
-    Completions.descriptor "ghcide-completions",
-    TypeLenses.descriptor "ghcide-type-lenses",
-    Notifications.descriptor "ghcide-core"
+    Completions.descriptor (cmapWithPrio LogCompletions recorder) "ghcide-completions",
+    TypeLenses.descriptor (cmapWithPrio LogTypeLenses recorder) "ghcide-type-lenses",
+    Notifications.descriptor (cmapWithPrio LogNotifications recorder) "ghcide-core"
   ]
 
 -- ---------------------------------------------------------------------
