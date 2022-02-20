@@ -18,7 +18,7 @@ Many of these are standard LSP features, but a lot of special features are provi
 | [Highlight references](#highlight-references)       | `textDocument/documentHighlight`                                                                  |
 | [Code actions](#code-actions)                       | `textDocument/codeAction`                                                                         |
 | [Code lenses](#code-lenses)                         | `textDocument/codeLens`                                                                           |
-| [Selection range](#selection-range)                 | `textDocument/selectionRange` |
+| [Selection range](#selection-range)                 | `textDocument/selectionRange`                                                                     |
 
 The individual sections below also identify which [HLS plugin](./what-is-hls.md#hls-plugins) is responsible for providing the given functionality, which is useful if you want to raise an issue report or contribute!
 Additionally, not all plugins are supported on all versions of GHC, see the [GHC version support page](supported-versions.md) for details.
@@ -236,6 +236,22 @@ Provided by: `hls-tactics-plugin`
 Provides a variety of code actions for interactive code development, see <https://haskellwingman.dev/> for more details.
 
 ![Wingman Demo](https://user-images.githubusercontent.com/307223/92657198-3d4be400-f2a9-11ea-8ad3-f541c8eea891.gif)
+
+### Change Type Signature
+
+Provided by: `hls-change-type-signature-plugin`
+
+Code action kind: `quickfix`
+
+Change/Update a type signature to match implementation.
+
+Status: Until GHC 9.4, the implementation is ad-hoc and relies on GHC error messages to create a new signature. Not all GHC error messages are supported.
+
+![Change Type Signature Demo](../plugins/hls-change-type-signature-plugin/change1.gif)
+
+![Change Type Signature Demo](../plugins/hls-change-type-signature-plugin/change2.gif)
+
+[Link to Docs](../plugins/hls-change-type-signature/README.md)
 
 ## Code lenses
 
