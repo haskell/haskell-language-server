@@ -9,7 +9,7 @@ module Development.IDE.Types.Logger
   ( Priority(..)
   , Logger(..)
   , Recorder(..)
-  , logError, logWarning, logInfo, logDebug, logTelemetry
+  , logError, logWarning, logInfo, logDebug
   , noLogging
   , WithPriority(..)
   , logWith
@@ -56,8 +56,7 @@ import           UnliftIO                   (MonadUnliftIO, displayException,
 data Priority
 -- Don't change the ordering of this type or you will mess up the Ord
 -- instance
-    = Telemetry -- ^ Events that are useful for gathering user metrics.
-    | Debug -- ^ Verbose debug logging.
+    = Debug -- ^ Verbose debug logging.
     | Info  -- ^ Useful information in case an error has to be understood.
     | Warning
       -- ^ These error messages should not occur in a expected usage, and
@@ -87,10 +86,6 @@ logInfo x = logPriority x Info
 
 logDebug :: Logger -> T.Text -> IO ()
 logDebug x = logPriority x Debug
-
-logTelemetry :: Logger -> T.Text -> IO ()
-logTelemetry x = logPriority x Telemetry
-
 
 noLogging :: Logger
 noLogging = Logger $ \_ _ -> return ()
@@ -208,7 +203,6 @@ makeDefaultHandleRecorder columns minPriority lock handle = do
 
 priorityToHsLoggerPriority :: Priority -> HsLogger.Priority
 priorityToHsLoggerPriority = \case
-  Telemetry -> HsLogger.INFO
   Debug     -> HsLogger.DEBUG
   Info      -> HsLogger.INFO
   Warning   -> HsLogger.WARNING
