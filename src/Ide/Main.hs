@@ -112,7 +112,6 @@ defaultMain recorder args idePlugins = do
 hlsLogger :: G.Logger
 hlsLogger = G.Logger $ \pri txt ->
     case pri of
-      G.Telemetry -> logm     (T.unpack txt)
       G.Debug     -> debugm   (T.unpack txt)
       G.Info      -> logm     (T.unpack txt)
       G.Warning   -> warningm (T.unpack txt)
