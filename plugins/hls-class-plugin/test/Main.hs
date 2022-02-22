@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeOperators     #-}
@@ -33,6 +34,7 @@ tests = testGroup
           [ Just "Add placeholders for '=='"
           , Just "Add placeholders for '/='"
           ]
+#if !MIN_VERSION_ghc(9,2,0)
   , goldenWithClass "Creates a placeholder for '=='" "T1" "eq" $ \(eqAction:_) -> do
       executeCodeAction eqAction
   , goldenWithClass "Creates a placeholder for '/='" "T1" "ne" $ \(_:neAction:_) -> do
@@ -45,6 +47,7 @@ tests = testGroup
       executeCodeAction mmAction
   , goldenWithClass "Creates a placeholder for a method starting with '_'" "T4" "" $ \(_fAction:_) -> do
       executeCodeAction _fAction
+#endif
   ]
 
 _CACodeAction :: Prism' (Command |? CodeAction) CodeAction

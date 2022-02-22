@@ -24,7 +24,7 @@ import qualified Data.Text                               as T
 import           Development.IDE                         hiding (pluginHandlers)
 import           Development.IDE.Core.PositionMapping    (fromCurrentRange,
                                                           toCurrentRange)
-import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat              as Compat
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.Spans.AtPoint
 import qualified GHC.Generics                            as Generics
@@ -58,6 +58,9 @@ data AddMinimalMethodsParams = AddMinimalMethodsParams
   deriving (Show, Eq, Generics.Generic, ToJSON, FromJSON)
 
 addMethodPlaceholders :: CommandFunction IdeState AddMinimalMethodsParams
+#if MIN_VERSION_ghc(9,2,0)
+addMethodPlaceholders = undefined
+#else
 addMethodPlaceholders state AddMinimalMethodsParams{..} = do
   caps <- getClientCapabilities
   medit <- liftIO $ runMaybeT $ do
@@ -122,6 +125,7 @@ addMethodPlaceholders state AddMinimalMethodsParams{..} = do
       = "(" <> n <> ")"
       | otherwise
       = n
+#endif
 
 -- |
 -- This implementation is ad-hoc in a sense that the diagnostic detection mechanism is
@@ -168,15 +172,14 @@ codeAction state plId (CodeActionParams _ _ docId _ context) = liftIO $ fmap (fr
         HAR {hieAst = hf} ->
           pure
             $ head . head
-            $ pointCommand hf (fromJust (fromCurrentRange pmap range) ^. J.start & J.character -~ 1)
 #if !MIN_VERSION_ghc(9,0,0)
+            $ pointCommand hf (fromJust (fromCurrentRange pmap range) ^. J.start & J.character -~ 1)
               ( (Map.keys . Map.filter isClassNodeIdentifier . nodeIdentifiers . nodeInfo)
                 <=< nodeChildren
               )
 #else
-              ( (Map.keys . Map.filter isClassNodeIdentifier . sourcedNodeIdents . sourcedNodeInfo)
-                <=< nodeChildren
-              )
+            $ pointCommand hf (fromJust (fromCurrentRange pmap range) ^. J.start & J.character +~ 1)
+              (Map.keys . Map.filter isClassNodeIdentifier . Compat.getNodeIds)
 #endif
 
     findClassFromIdentifier docPath (Right name) = do
@@ -185,8 +188,12 @@ codeAction state plId (CodeActionParams _ _ docId _ context) = liftIO $ fmap (fr
       MaybeT . fmap snd . initTcWithGbl hscenv thisMod ghostSpan $ do
         tcthing <- tcLookup name
         case tcthing of
+#if !MIN_VERSION_ghc(9,2,0)
           AGlobal (AConLike (RealDataCon con))
             | Just cls <- tyConClass_maybe (dataConOrigTyCon con) -> pure cls
+#else
+          AGlobal (ATyCon tycon) | Just cls <- tyConClass_maybe tycon -> pure cls
+#endif
           _ -> panic "Ide.Plugin.Class.findClassFromIdentifier"
     findClassFromIdentifier _ (Left _) = panic "Ide.Plugin.Class.findClassIdentifier"
 
