@@ -50,7 +50,7 @@ library
     , hslogger
     , lens
     , lens-aeson
-    , lsp                   ^>=1.4.0.0
+    , lsp                   >=1.4.0.0 && < 1.6
     , opentelemetry
     , optparse-applicative
     , process

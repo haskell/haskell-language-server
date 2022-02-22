@@ -38,14 +38,15 @@ import           Type.Reflection                      (SomeTypeRep (SomeTypeRep)
                                                        typeOf, typeRep,
                                                        typeRepTyCon)
 import           Unsafe.Coerce                        (unsafeCoerce)
+import Development.IDE.Core.RuleTypes (FileVersion)
 
 -- | Intended to represent HieDb calls wrapped with (currently) retry
 -- functionality
 type WithHieDb = forall a. (HieDb -> IO a) -> IO a
 
 data Value v
-    = Succeeded TextDocumentVersion v
-    | Stale (Maybe PositionDelta) TextDocumentVersion v
+    = Succeeded (Maybe FileVersion) v
+    | Stale (Maybe PositionDelta) (Maybe FileVersion) v
     | Failed Bool -- True if we already tried the persistent rule
     deriving (Functor, Generic, Show)
 

@@ -290,10 +290,12 @@ pattern GetModificationTime = GetModificationTime_ {missingFileDiagnostics=True}
 -- | Get the modification time of a file.
 type instance RuleResult GetModificationTime = FileVersion
 
+-- | Either athe mtime from disk or an LSP version
+-- LSP versions always compare as greater than on disk versions
 data FileVersion
-    = VFSVersion !Int32
-    | ModificationTime !POSIXTime
-    deriving (Show, Generic)
+    = ModificationTime !POSIXTime
+    | VFSVersion !Int32
+    deriving (Show, Generic, Eq, Ord)
 
 instance NFData FileVersion
 
