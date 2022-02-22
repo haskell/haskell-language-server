@@ -77,6 +77,7 @@ module Development.IDE.Core.Shake(
     addPersistentRule,
     garbageCollectDirtyKeys,
     garbageCollectDirtyKeysOlderThan,
+    Log(..)
     ) where
 
 import           Control.Concurrent.Async
@@ -158,7 +159,6 @@ import           Data.Foldable                          (for_, toList)
 import           Data.HashSet                           (HashSet)
 import qualified Data.HashSet                           as HSet
 import           Data.String                            (fromString)
-import           Data.Text                              (pack)
 import           Debug.Trace.Flags                      (userTracingEnabled)
 import qualified Development.IDE.Types.Exports          as ExportsMap
 import qualified Focus
@@ -168,6 +168,47 @@ import qualified Ide.PluginUtils                        as HLS
 import           Ide.Types                              (PluginId)
 import qualified "list-t" ListT
 import qualified StmContainers.Map                      as STM
+
+data Log
+  = LogCreateHieDbExportsMapStart
+  | LogCreateHieDbExportsMapFinish !Int
+  | LogBuildSessionRestart !String ![DelayedActionInternal] !(HashSet Key) !Seconds !(Maybe FilePath)
+  | LogDelayedAction !(DelayedAction ()) !Seconds
+  | LogBuildSessionFinish !(Maybe SomeException)
+  | LogDiagsDiffButNoLspEnv ![FileDiagnostic]
+  | LogDefineEarlyCutoffRuleNoDiagHasDiag !FileDiagnostic
+  | LogDefineEarlyCutoffRuleCustomNewnessHasDiag !FileDiagnostic
+  deriving Show
+
+instance Pretty Log where
+  pretty = \case
+    LogCreateHieDbExportsMapStart ->
+      "Initializing exports map from hiedb"
+    LogCreateHieDbExportsMapFinish exportsMapSize ->
+      "Done initializing exports map from hiedb. Size:" <+> pretty exportsMapSize
+    LogBuildSessionRestart reason actionQueue keyBackLog abortDuration shakeProfilePath ->
+      vcat
+        [ "Restarting build session due to" <+> pretty reason
+        , "Action Queue:" <+> pretty (map actionName actionQueue)
+        , "Keys:" <+> pretty (map show $ HSet.toList keyBackLog)
+        , "Aborting previous build session took" <+> pretty (showDuration abortDuration) <+> pretty shakeProfilePath ]
+    LogDelayedAction delayedAction duration ->
+      hsep
+        [ "Finished:" <+> pretty (actionName delayedAction)
+        , "Took:" <+> pretty (showDuration duration) ]
+    LogBuildSessionFinish e ->
+      vcat
+        [ "Finished build session"
+        , pretty (fmap displayException e) ]
+    LogDiagsDiffButNoLspEnv fileDiagnostics ->
+      "updateFileDiagnostics published different from new diagnostics - file diagnostics:"
+      <+> pretty (showDiagnosticsColored fileDiagnostics)
+    LogDefineEarlyCutoffRuleNoDiagHasDiag fileDiagnostic ->
+      "defineEarlyCutoff RuleNoDiagnostics - file diagnostic:"
+      <+> pretty (showDiagnosticsColored [fileDiagnostic])
+    LogDefineEarlyCutoffRuleCustomNewnessHasDiag fileDiagnostic ->
+      "defineEarlyCutoff RuleWithCustomNewnessCheck - file diagnostic:"
+      <+> pretty (showDiagnosticsColored [fileDiagnostic])
 
 -- | We need to serialize writes to the database, so we send any function that
 -- needs to write to the database over the channel, where it will be picked up by
@@ -494,7 +535,8 @@ seqValue val = case val of
     Failed _        -> val
 
 -- | Open a 'IdeState', should be shut using 'shakeShut'.
-shakeOpen :: Maybe (LSP.LanguageContextEnv Config)
+shakeOpen :: Recorder (WithPriority Log)
+          -> Maybe (LSP.LanguageContextEnv Config)
           -> Config
           -> Logger
           -> Debouncer NormalizedUri
@@ -507,8 +549,10 @@ shakeOpen :: Maybe (LSP.LanguageContextEnv Config)
           -> ShakeOptions
           -> Rules ()
           -> IO IdeState
-shakeOpen lspEnv defaultConfig logger debouncer
+shakeOpen recorder lspEnv defaultConfig logger debouncer
   shakeProfileDir (IdeReportProgress reportProgress) ideTesting@(IdeTesting testing) withHieDb indexQueue vfs opts rules = mdo
+    let log :: Logger.Priority -> Log -> IO ()
+        log = logWith recorder
 
     us <- mkSplitUniqSupply 'r'
     ideNc <- newIORef (initNameCache us knownKeyNames)
@@ -520,7 +564,7 @@ shakeOpen lspEnv defaultConfig logger debouncer
         publishedDiagnostics <- STM.newIO
         positionMapping <- STM.newIO
         knownTargetsVar <- newTVarIO $ hashed HMap.empty
-        let restartShakeSession = shakeRestart ideState
+        let restartShakeSession = shakeRestart recorder ideState
         persistentKeys <- newTVarIO HMap.empty
         indexPending <- newTVarIO HMap.empty
         indexCompleted <- newTVarIO 0
@@ -528,11 +572,12 @@ shakeOpen lspEnv defaultConfig logger debouncer
         let hiedbWriter = HieDbWriter{..}
         exportsMap <- newTVarIO mempty
         -- lazily initialize the exports map with the contents of the hiedb
+        -- TODO: exceptions can be swallowed here?
         _ <- async $ do
-            logDebug logger "Initializing exports map from hiedb"
+            log Debug LogCreateHieDbExportsMapStart
             em <- createExportsMapHieDb withHieDb
             atomically $ modifyTVar' exportsMap (<> em)
-            logDebug logger $ "Done initializing exports map from hiedb (" <> pack(show (ExportsMap.size em)) <> ")"
+            log Debug $ LogCreateHieDbExportsMapFinish (ExportsMap.size em)
 
         progress <- do
             let (before, after) = if testing then (0,0.1) else (0.1,0.1)
@@ -584,9 +629,9 @@ startTelemetry db extras@ShakeExtras{..}
 
 
 -- | Must be called in the 'Initialized' handler and only once
-shakeSessionInit :: IdeState -> IO ()
-shakeSessionInit ide@IdeState{..} = do
-    initSession <- newSession shakeExtras shakeDb [] "shakeSessionInit"
+shakeSessionInit :: Recorder (WithPriority Log) -> IdeState -> IO ()
+shakeSessionInit recorder ide@IdeState{..} = do
+    initSession <- newSession recorder shakeExtras shakeDb [] "shakeSessionInit"
     putMVar shakeSession initSession
     logDebug (ideLogger ide) "Shake session initialized"
 
@@ -626,31 +671,35 @@ delayedAction a = do
 -- | Restart the current 'ShakeSession' with the given system actions.
 --   Any actions running in the current session will be aborted,
 --   but actions added via 'shakeEnqueue' will be requeued.
-shakeRestart :: IdeState -> String -> [DelayedAction ()] -> IO ()
-shakeRestart IdeState{..} reason acts =
+shakeRestart :: Recorder (WithPriority Log) -> IdeState -> String -> [DelayedAction ()] -> IO ()
+shakeRestart recorder IdeState{..} reason acts =
     withMVar'
         shakeSession
         (\runner -> do
+              let log = logWith recorder
               (stopTime,()) <- duration (cancelShakeSession runner)
               res <- shakeDatabaseProfile shakeDb
               backlog <- readTVarIO $ dirtyKeys shakeExtras
               queue <- atomicallyNamed "actionQueue - peek" $ peekInProgress $ actionQueue shakeExtras
+
+              log Debug $ LogBuildSessionRestart reason queue backlog stopTime res
+
               let profile = case res of
                       Just fp -> ", profile saved at " <> fp
                       _       -> ""
+              -- TODO: should replace with logging using a logger that sends lsp message
               let msg = T.pack $ "Restarting build session " ++ reason' ++ queueMsg ++ keysMsg ++ abortMsg
                   reason' = "due to " ++ reason
                   queueMsg = " with queue " ++ show (map actionName queue)
                   keysMsg = " for keys " ++ show (HSet.toList backlog) ++ " "
                   abortMsg = "(aborting the previous one took " ++ showDuration stopTime ++ profile ++ ")"
-              logDebug (logger shakeExtras) msg
               notifyTestingLogMessage shakeExtras msg
         )
         -- It is crucial to be masked here, otherwise we can get killed
         -- between spawning the new thread and updating shakeSession.
         -- See https://github.com/haskell/ghcide/issues/79
         (\() -> do
-          (,()) <$> newSession shakeExtras shakeDb acts reason)
+          (,()) <$> newSession recorder shakeExtras shakeDb acts reason)
 
 notifyTestingLogMessage :: ShakeExtras -> T.Text -> IO ()
 notifyTestingLogMessage extras msg = do
@@ -684,12 +733,13 @@ shakeEnqueue ShakeExtras{actionQueue, logger} act = do
 -- | Set up a new 'ShakeSession' with a set of initial actions
 --   Will crash if there is an existing 'ShakeSession' running.
 newSession
-    :: ShakeExtras
+    :: Recorder (WithPriority Log)
+    -> ShakeExtras
     -> ShakeDatabase
     -> [DelayedActionInternal]
     -> String
     -> IO ShakeSession
-newSession extras@ShakeExtras{..} shakeDb acts reason = do
+newSession recorder extras@ShakeExtras{..} shakeDb acts reason = do
     IdeOptions{optRunSubset} <- getIdeOptionsIO extras
     reenqueued <- atomicallyNamed "actionQueue - peek" $ peekInProgress actionQueue
     allPendingKeys <-
@@ -709,10 +759,7 @@ newSession extras@ShakeExtras{..} shakeDb acts reason = do
             getAction d
             liftIO $ atomicallyNamed "actionQueue - done" $ doneQueue d actionQueue
             runTime <- liftIO start
-            let msg = T.pack $ "finish: " ++ actionName d
-                            ++ " (took " ++ showDuration runTime ++ ")"
-            liftIO $ do
-                logPriority logger (actionPriority d) msg
+            logWith recorder (actionPriority d) $ LogDelayedAction d runTime
 
         -- The inferred type signature doesn't work in ghc >= 9.0.1
         workRun :: (forall b. IO b -> IO b) -> IO (IO ())
@@ -728,7 +775,11 @@ newSession extras@ShakeExtras{..} shakeDb acts reason = do
                       Right _ -> "completed"
           let msg = T.pack $ "Finishing build session(" ++ res' ++ ")"
           return $ do
-              logDebug logger msg
+              let exception =
+                    case res of
+                      Left e -> Just e
+                      _      -> Nothing
+              logWith recorder Debug $ LogBuildSessionFinish exception
               notifyTestingLogMessage extras msg
 
     -- Do the work in a background thread
@@ -736,6 +787,7 @@ newSession extras@ShakeExtras{..} shakeDb acts reason = do
 
     -- run the wrap up in a separate thread since it contains interruptible
     -- commands (and we are not using uninterruptible mask)
+    -- TODO: can possibly swallow exceptions?
     _ <- async $ join $ wait workThread
 
     --  Cancelling is required to flush the Shake database when either
@@ -843,13 +895,13 @@ preservedKeys checkParents = HSet.fromList $
 -- | Define a new Rule without early cutoff
 define
     :: IdeRule k v
-    => (k -> NormalizedFilePath -> Action (IdeResult v)) -> Rules ()
-define op = defineEarlyCutoff $ Rule $ \k v -> (Nothing,) <$> op k v
+    => Recorder (WithPriority Log) -> (k -> NormalizedFilePath -> Action (IdeResult v)) -> Rules ()
+define recorder op = defineEarlyCutoff recorder $ Rule $ \k v -> (Nothing,) <$> op k v
 
 defineNoDiagnostics
     :: IdeRule k v
-    => (k -> NormalizedFilePath -> Action (Maybe v)) -> Rules ()
-defineNoDiagnostics op = defineEarlyCutoff $ RuleNoDiagnostics $ \k v -> (Nothing,) <$> op k v
+    => Recorder (WithPriority Log) -> (k -> NormalizedFilePath -> Action (Maybe v)) -> Rules ()
+defineNoDiagnostics recorder op = defineEarlyCutoff recorder $ RuleNoDiagnostics $ \k v -> (Nothing,) <$> op k v
 
 -- | Request a Rule result if available
 use :: IdeRule k v
@@ -971,37 +1023,36 @@ data RuleBody k v
 -- | Define a new Rule with early cutoff
 defineEarlyCutoff
     :: IdeRule k v
-    => RuleBody k v
+    => Recorder (WithPriority Log)
+    -> RuleBody k v
     -> Rules ()
-defineEarlyCutoff (Rule op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ \traceDiagnostics -> do
+defineEarlyCutoff recorder (Rule op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ \traceDiagnostics -> do
     extras <- getShakeExtras
     let diagnostics diags = do
             traceDiagnostics diags
-            updateFileDiagnostics file (Key key) extras . map (\(_,y,z) -> (y,z)) $ diags
+            updateFileDiagnostics recorder file (Key key) extras . map (\(_,y,z) -> (y,z)) $ diags
     defineEarlyCutoff' diagnostics (==) key file old mode $ op key file
-defineEarlyCutoff (RuleNoDiagnostics op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ \traceDiagnostics -> do
-    ShakeExtras{logger} <- getShakeExtras
+defineEarlyCutoff recorder (RuleNoDiagnostics op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ \traceDiagnostics -> do
     let diagnostics diags = do
             traceDiagnostics diags
-            mapM_ (\d -> liftIO $ logWarning logger $ showDiagnosticsColored [d]) diags
+            mapM_ (logWith recorder Warning . LogDefineEarlyCutoffRuleNoDiagHasDiag) diags
     defineEarlyCutoff' diagnostics (==) key file old mode $ second (mempty,) <$> op key file
-defineEarlyCutoff RuleWithCustomNewnessCheck{..} =
+defineEarlyCutoff recorder RuleWithCustomNewnessCheck{..} =
     addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode ->
         otTracedAction key file mode traceA $ \ traceDiagnostics -> do
-            ShakeExtras{logger} <- getShakeExtras
             let diagnostics diags = do
-                    mapM_ (\d -> liftIO $ logWarning logger $ showDiagnosticsColored [d]) diags
                     traceDiagnostics diags
+                    mapM_ (logWith recorder Warning . LogDefineEarlyCutoffRuleCustomNewnessHasDiag) diags
             defineEarlyCutoff' diagnostics newnessCheck key file old mode $
                 second (mempty,) <$> build key file
 
-defineNoFile :: IdeRule k v => (k -> Action v) -> Rules ()
-defineNoFile f = defineNoDiagnostics $ \k file -> do
+defineNoFile :: IdeRule k v => Recorder (WithPriority Log) -> (k -> Action v) -> Rules ()
+defineNoFile recorder f = defineNoDiagnostics recorder $ \k file -> do
     if file == emptyFilePath then do res <- f k; return (Just res) else
         fail $ "Rule " ++ show k ++ " should always be called with the empty string for a file"
 
-defineEarlyCutOffNoFile :: IdeRule k v => (k -> Action (BS.ByteString, v)) -> Rules ()
-defineEarlyCutOffNoFile f = defineEarlyCutoff $ RuleNoDiagnostics $ \k file -> do
+defineEarlyCutOffNoFile :: IdeRule k v => Recorder (WithPriority Log) -> (k -> Action (BS.ByteString, v)) -> Rules ()
+defineEarlyCutOffNoFile recorder f = defineEarlyCutoff recorder $ RuleNoDiagnostics $ \k file -> do
     if file == emptyFilePath then do (hash, res) <- f k; return (Just hash, Just res) else
         fail $ "Rule " ++ show k ++ " should always be called with the empty string for a file"
 
@@ -1107,9 +1158,10 @@ data OnDiskRule = OnDiskRule
 -- the internals of this module that we do not want to expose.
 defineOnDisk
   :: (Shake.ShakeValue k, RuleResult k ~ ())
-  => (k -> NormalizedFilePath -> OnDiskRule)
+  => Recorder (WithPriority Log)
+  -> (k -> NormalizedFilePath -> OnDiskRule)
   -> Rules ()
-defineOnDisk act = addRule $
+defineOnDisk recorder act = addRule $
   \(QDisk key file) (mbOld :: Maybe BS.ByteString) mode -> do
       extras <- getShakeExtras
       let OnDiskRule{..} = act key file
@@ -1121,7 +1173,7 @@ defineOnDisk act = addRule $
       case mbOld of
           Nothing -> do
               (diags, mbHash) <- runAct
-              updateFileDiagnostics file (Key key) extras $ map (\(_,y,z) -> (y,z)) diags
+              updateFileDiagnostics recorder file (Key key) extras $ map (\(_,y,z) -> (y,z)) diags
               pure $ RunResult ChangedRecomputeDiff (fromMaybe "" mbHash) (isJust mbHash)
           Just old -> do
               current <- validateHash <$> (actionCatch getHash $ \(_ :: SomeException) -> pure "")
@@ -1132,7 +1184,7 @@ defineOnDisk act = addRule $
                     pure $ RunResult ChangedNothing (fromMaybe "" current) (isJust current)
                   else do
                     (diags, mbHash) <- runAct
-                    updateFileDiagnostics file (Key key) extras $ map (\(_,y,z) -> (y,z)) diags
+                    updateFileDiagnostics recorder file (Key key) extras $ map (\(_,y,z) -> (y,z)) diags
                     let change
                           | mbHash == Just old = ChangedRecomputeSame
                           | otherwise = ChangedRecomputeDiff
@@ -1149,12 +1201,13 @@ needOnDisks k files = do
     liftIO $ unless (and successfulls) $ throwIO $ BadDependency (show k)
 
 updateFileDiagnostics :: MonadIO m
-  => NormalizedFilePath
+  => Recorder (WithPriority Log)
+  -> NormalizedFilePath
   -> Key
   -> ShakeExtras
   -> [(ShowDiagnostic,Diagnostic)] -- ^ current results
   -> m ()
-updateFileDiagnostics fp k ShakeExtras{logger, diagnostics, hiddenDiagnostics, publishedDiagnostics, state, debouncer, lspEnv} current = liftIO $ do
+updateFileDiagnostics recorder fp k ShakeExtras{diagnostics, hiddenDiagnostics, publishedDiagnostics, state, debouncer, lspEnv} current = liftIO $ do
     modTime <- (currentValue . fst =<<) <$> atomicallyNamed "diagnostics - read" (getValues state GetModificationTime fp)
     let (currentShown, currentHidden) = partition ((== ShowDiag) . fst) current
         uri = filePathToUri' fp
@@ -1174,7 +1227,7 @@ updateFileDiagnostics fp k ShakeExtras{logger, diagnostics, hiddenDiagnostics, p
                  lastPublish <- atomicallyNamed "diagnostics - publish" $ STM.focus (Focus.lookupWithDefault [] <* Focus.insert newDiags) uri publishedDiagnostics
                  let action = when (lastPublish /= newDiags) $ case lspEnv of
                         Nothing -> -- Print an LSP event.
-                            logInfo logger $ showDiagnosticsColored $ map (fp,ShowDiag,) newDiags
+                            logWith recorder Info $ LogDiagsDiffButNoLspEnv (map (fp, ShowDiag,) newDiags)
                         Just env -> LSP.runLspT env $
                             LSP.sendNotification LSP.STextDocumentPublishDiagnostics $
                             LSP.PublishDiagnosticsParams (fromNormalizedUri uri) (fmap fromIntegral ver) (List newDiags)

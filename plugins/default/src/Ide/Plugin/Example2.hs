@@ -3,6 +3,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE TupleSections         #-}
@@ -12,6 +13,7 @@
 module Ide.Plugin.Example2
   (
     descriptor
+  , Log(..)
   ) where
 
 import           Control.Concurrent.STM
@@ -25,7 +27,8 @@ import           Data.Hashable
 import qualified Data.Text                  as T
 import           Data.Typeable
 import           Development.IDE            as D
-import           Development.IDE.Core.Shake
+import           Development.IDE.Core.Shake hiding (Log)
+import qualified Development.IDE.Core.Shake as Shake
 import           GHC.Generics
 import           Ide.PluginUtils
 import           Ide.Types
@@ -35,9 +38,15 @@ import           Text.Regex.TDFA.Text       ()
 
 -- ---------------------------------------------------------------------
 
-descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId = (defaultPluginDescriptor plId)
-  { pluginRules = exampleRules
+newtype Log = LogShake Shake.Log deriving Show
+
+instance Pretty Log where
+  pretty = \case
+    LogShake log -> pretty log
+
+descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
+descriptor recorder plId = (defaultPluginDescriptor plId)
+  { pluginRules = exampleRules recorder
   , pluginCommands = [PluginCommand "codelens.todo" "example adding" addTodoCmd]
   , pluginHandlers = mkPluginHandler STextDocumentCodeAction     codeAction
                   <> mkPluginHandler STextDocumentCodeLens       codeLens
@@ -66,9 +75,9 @@ instance NFData   Example2
 
 type instance RuleResult Example2 = ()
 
-exampleRules :: Rules ()
-exampleRules = do
-  define $ \Example2 file -> do
+exampleRules :: Recorder (WithPriority Log) -> Rules ()
+exampleRules recorder = do
+  define (cmapWithPrio LogShake recorder) $ \Example2 file -> do
     _pm <- getParsedModule file
     let diag = mkDiag file "example2" DsError (Range (Position 0 0) (Position 1 0)) "example2 diagnostic, hello world"
     return ([diag], Just ())

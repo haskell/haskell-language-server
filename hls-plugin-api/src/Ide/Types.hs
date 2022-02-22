@@ -396,6 +396,7 @@ type CommandFunction ideState a
 
 newtype PluginId = PluginId T.Text
   deriving (Show, Read, Eq, Ord)
+
 instance IsString PluginId where
   fromString = PluginId . T.pack
 

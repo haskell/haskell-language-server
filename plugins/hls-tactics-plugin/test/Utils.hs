@@ -35,7 +35,7 @@ import           Wingman.Types
 
 
 plugin :: PluginDescriptor IdeState
-plugin = Tactic.descriptor "tactics"
+plugin = Tactic.descriptor mempty "tactics"
 
 ------------------------------------------------------------------------------
 -- | Get a range at the given line and column corresponding to having nothing

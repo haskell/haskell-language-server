@@ -14,8 +14,10 @@ module Development.IDE.Core.OfInterest(
     deleteFileOfInterest,
     setFilesOfInterest,
     kick, FileOfInterestStatus(..),
-    OfInterestVar(..)
-    ,scheduleGarbageCollection) where
+    OfInterestVar(..),
+    scheduleGarbageCollection,
+    Log(..)
+    ) where
 
 import           Control.Concurrent.Strict
 import           Control.Monad
@@ -32,24 +34,37 @@ import qualified Data.ByteString                          as BS
 import           Data.Maybe                               (catMaybes)
 import           Development.IDE.Core.ProgressReporting
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Shake
+import           Development.IDE.Core.Shake               hiding (Log)
+import qualified Development.IDE.Core.Shake               as Shake
 import           Development.IDE.Plugin.Completions.Types
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Location
-import           Development.IDE.Types.Logger
+import           Development.IDE.Types.Logger             (Pretty (pretty),
+                                                           Recorder,
+                                                           WithPriority,
+                                                           cmapWithPrio,
+                                                           logDebug)
 import           Development.IDE.Types.Options            (IdeTesting (..))
 import qualified Language.LSP.Server                      as LSP
 import qualified Language.LSP.Types                       as LSP
 
+data Log = LogShake Shake.Log
+  deriving Show
+
+instance Pretty Log where
+  pretty = \case
+    LogShake log -> pretty log
+
 newtype OfInterestVar = OfInterestVar (Var (HashMap NormalizedFilePath FileOfInterestStatus))
+
 instance IsIdeGlobal OfInterestVar
 
 -- | The rule that initialises the files of interest state.
-ofInterestRules :: Rules ()
-ofInterestRules = do
+ofInterestRules :: Recorder (WithPriority Log) -> Rules ()
+ofInterestRules recorder = do
     addIdeGlobal . OfInterestVar =<< liftIO (newVar HashMap.empty)
     addIdeGlobal . GarbageCollectVar =<< liftIO (newVar False)
-    defineEarlyCutoff $ RuleNoDiagnostics $ \IsFileOfInterest f -> do
+    defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \IsFileOfInterest f -> do
         alwaysRerun
         filesOfInterest <- getFilesOfInterestUntracked
         let foi = maybe NotFOI IsFOI $ f `HashMap.lookup` filesOfInterest

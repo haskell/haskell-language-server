@@ -151,3 +151,4 @@ haskellLanguageServerVersion = do
              <> " (GHC: " <> VERSION_ghc
              <> ") (PATH: " <> path <> ")"
              <> gitHashSection
+

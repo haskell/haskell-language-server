@@ -21,7 +21,8 @@ module Development.IDE.Core.FileStore(
     getFileContentsImpl,
     getModTime,
     isWatchSupported,
-    registerFileWatches
+    registerFileWatches,
+    Log(..)
     ) where
 
 import           Control.Concurrent.STM.Stats                 (STM, atomically,
@@ -40,7 +41,7 @@ import qualified Data.Text                                    as T
 import           Data.Time
 import           Data.Time.Clock.POSIX
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Shake
+import           Development.IDE.Core.Shake                   hiding (Log)
 import           Development.IDE.GHC.Orphans                  ()
 import           Development.IDE.Graph
 import           Development.IDE.Import.DependencyInformation
@@ -67,6 +68,14 @@ import qualified Data.HashSet                                 as HSet
 import           Data.List                                    (foldl')
 import qualified Data.Text                                    as Text
 import           Development.IDE.Core.IdeConfiguration        (isWorkspaceFile)
+import qualified Development.IDE.Core.Shake                   as Shake
+import           Development.IDE.Types.Logger                 (Pretty (pretty),
+                                                               Priority (Info),
+                                                               Recorder,
+                                                               WithPriority,
+                                                               cmapWithPrio,
+                                                               logWith, viaShow,
+                                                               (<+>))
 import           Language.LSP.Server                          hiding
                                                               (getVirtualFile)
 import qualified Language.LSP.Server                          as LSP
@@ -79,6 +88,23 @@ import qualified Language.LSP.Types                           as LSP
 import qualified Language.LSP.Types.Capabilities              as LSP
 import           Language.LSP.VFS
 import           System.FilePath
+
+data Log
+  = LogCouldNotIdentifyReverseDeps !NormalizedFilePath
+  | LogTypeCheckingReverseDeps !NormalizedFilePath !(Maybe [NormalizedFilePath])
+  | LogShake Shake.Log
+  deriving Show
+
+instance Pretty Log where
+  pretty = \case
+    LogCouldNotIdentifyReverseDeps path ->
+      "Could not identify reverse dependencies for" <+> viaShow path
+    (LogTypeCheckingReverseDeps path reverseDepPaths) ->
+      "Typechecking reverse dependecies for"
+      <+> viaShow path
+      <> ":"
+      <+> pretty (fmap (fmap show) reverseDepPaths)
+    LogShake log -> pretty log
 
 makeVFSHandle :: IO VFSHandle
 makeVFSHandle = do
@@ -101,8 +127,8 @@ makeLSPVFSHandle lspEnv = VFSHandle
     , setVirtualFileContents = Nothing
    }
 
-addWatchedFileRule :: (NormalizedFilePath -> Action Bool) -> Rules ()
-addWatchedFileRule isWatched = defineNoDiagnostics $ \AddWatchedFile f -> do
+addWatchedFileRule :: Recorder (WithPriority Log) -> (NormalizedFilePath -> Action Bool) -> Rules ()
+addWatchedFileRule recorder isWatched = defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \AddWatchedFile f -> do
   isAlreadyWatched <- isWatched f
   isWp <- isWorkspaceFile f
   if isAlreadyWatched then pure (Just True) else
@@ -114,8 +140,8 @@ addWatchedFileRule isWatched = defineNoDiagnostics $ \AddWatchedFile f -> do
             Nothing -> pure $ Just False
 
 
-getModificationTimeRule :: VFSHandle -> Rules ()
-getModificationTimeRule vfs = defineEarlyCutoff $ Rule $ \(GetModificationTime_ missingFileDiags) file ->
+getModificationTimeRule :: Recorder (WithPriority Log) -> VFSHandle -> Rules ()
+getModificationTimeRule recorder vfs = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \(GetModificationTime_ missingFileDiags) file ->
     getModificationTimeImpl vfs missingFileDiags file
 
 getModificationTimeImpl :: VFSHandle
@@ -201,8 +227,8 @@ modificationTime :: FileVersion -> Maybe UTCTime
 modificationTime VFSVersion{}             = Nothing
 modificationTime (ModificationTime posix) = Just $ posixSecondsToUTCTime posix
 
-getFileContentsRule :: VFSHandle -> Rules ()
-getFileContentsRule vfs = define $ \GetFileContents file -> getFileContentsImpl vfs file
+getFileContentsRule :: Recorder (WithPriority Log) -> VFSHandle -> Rules ()
+getFileContentsRule recorder vfs = define (cmapWithPrio LogShake recorder) $ \GetFileContents file -> getFileContentsImpl vfs file
 
 getFileContentsImpl
     :: VFSHandle
@@ -240,20 +266,21 @@ getFileContents f = do
             pure $ posixSecondsToUTCTime posix
     return (modTime, txt)
 
-fileStoreRules :: VFSHandle -> (NormalizedFilePath -> Action Bool) -> Rules ()
-fileStoreRules vfs isWatched = do
+fileStoreRules :: Recorder (WithPriority Log) -> VFSHandle -> (NormalizedFilePath -> Action Bool) -> Rules ()
+fileStoreRules recorder vfs isWatched = do
     addIdeGlobal vfs
-    getModificationTimeRule vfs
-    getFileContentsRule vfs
-    addWatchedFileRule isWatched
+    getModificationTimeRule recorder vfs
+    getFileContentsRule recorder vfs
+    addWatchedFileRule recorder isWatched
 
 -- | Note that some buffer for a specific file has been modified but not
 -- with what changes.
-setFileModified :: IdeState
+setFileModified :: Recorder (WithPriority Log)
+                -> IdeState
                 -> Bool -- ^ Was the file saved?
                 -> NormalizedFilePath
                 -> IO ()
-setFileModified state saved nfp = do
+setFileModified recorder state saved nfp = do
     ideOptions <- getIdeOptionsIO $ shakeExtras state
     doCheckParents <- optCheckParents ideOptions
     let checkParents = case doCheckParents of
@@ -266,22 +293,20 @@ setFileModified state saved nfp = do
     join $ atomically $ recordDirtyKeys (shakeExtras state) GetModificationTime [nfp]
     restartShakeSession (shakeExtras state) (fromNormalizedFilePath nfp ++ " (modified)") []
     when checkParents $
-      typecheckParents state nfp
+      typecheckParents recorder state nfp
 
-typecheckParents :: IdeState -> NormalizedFilePath -> IO ()
-typecheckParents state nfp = void $ shakeEnqueue (shakeExtras state) parents
-  where parents = mkDelayedAction "ParentTC" L.Debug (typecheckParentsAction nfp)
+typecheckParents :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> IO ()
+typecheckParents recorder state nfp = void $ shakeEnqueue (shakeExtras state) parents
+  where parents = mkDelayedAction "ParentTC" L.Debug (typecheckParentsAction recorder nfp)
 
-typecheckParentsAction :: NormalizedFilePath -> Action ()
-typecheckParentsAction nfp = do
+typecheckParentsAction :: Recorder (WithPriority Log) -> NormalizedFilePath -> Action ()
+typecheckParentsAction recorder nfp = do
     revs <- transitiveReverseDependencies nfp <$> useNoFile_ GetModuleGraph
-    logger <- logger <$> getShakeExtras
-    let log = L.logInfo logger . T.pack
+    let log = logWith recorder
     case revs of
-      Nothing -> liftIO $ log $ "Could not identify reverse dependencies for " ++ show nfp
+      Nothing -> log Info $ LogCouldNotIdentifyReverseDeps nfp
       Just rs -> do
-        liftIO $ (log $ "Typechecking reverse dependencies for " ++ show nfp ++ ": " ++ show revs)
-          `catch` \(e :: SomeException) -> log (show e)
+        log Info $ LogTypeCheckingReverseDeps nfp revs
         void $ uses GetModIface rs
 
 -- | Note that some keys have been modified and restart the session

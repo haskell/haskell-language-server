@@ -9,20 +9,29 @@ import           Prelude hiding (span)
 import           Wingman.AbstractLSP
 import           Wingman.AbstractLSP.TacticActions (makeTacticInteraction)
 import           Wingman.EmptyCase
-import           Wingman.LanguageServer
+import           Wingman.LanguageServer hiding (Log)
+import qualified Wingman.LanguageServer as WingmanLanguageServer
 import           Wingman.LanguageServer.Metaprogram (hoverProvider)
 import           Wingman.StaticPlugin
+import Development.IDE.Types.Logger (Recorder, cmapWithPrio, WithPriority, Pretty (pretty))
 
+newtype Log
+  = LogWingmanLanguageServer WingmanLanguageServer.Log 
+  deriving Show
 
-descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId
+instance Pretty Log where
+  pretty = \case
+    LogWingmanLanguageServer log -> pretty log
+
+descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
+descriptor recorder plId
   = installInteractions
       ( emptyCaseInteraction
       : fmap makeTacticInteraction [minBound .. maxBound]
       )
   $ (defaultPluginDescriptor plId)
       { pluginHandlers = mkPluginHandler STextDocumentHover hoverProvider
-      , pluginRules = wingmanRules plId
+      , pluginRules = wingmanRules (cmapWithPrio LogWingmanLanguageServer recorder) plId
       , pluginConfigDescriptor =
           defaultConfigDescriptor
             { configCustomConfig = mkCustomConfig properties
