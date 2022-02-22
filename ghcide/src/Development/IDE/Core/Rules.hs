@@ -407,7 +407,7 @@ type RawDepM a = StateT (RawDependencyInformation, IntMap ArtifactsLocation) Act
 execRawDepM :: Monad m => StateT (RawDependencyInformation, IntMap a1) m a2 -> m (RawDependencyInformation, IntMap a1)
 execRawDepM act =
     execStateT act
-        ( RawDependencyInformation IntMap.empty emptyPathIdMap IntMap.empty
+        ( RawDependencyInformation IntMap.empty emptyPathIdMap IntMap.empty IntMap.empty
         , IntMap.empty
         )
 
@@ -434,6 +434,11 @@ rawDependencyInformation fs = do
           let al = modSummaryToArtifactsLocation f msum
           -- Get a fresh FilePathId for the new file
           fId <- getFreshFid al
+          -- Record this module and its location
+          whenJust msum $ \ms ->
+            modifyRawDepInfo (\rd -> rd { rawModuleNameMap = IntMap.insert (coerce fId)
+                                                                           (coerce (moduleName $ ms_mod ms))
+                                                                           (rawModuleNameMap rd)})
           -- Adding an edge to the bootmap so we can make sure to
           -- insert boot nodes before the real files.
           addBootMap al fId
