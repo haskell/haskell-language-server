@@ -6,60 +6,34 @@ module Ide.Plugin.ChangeTypeSignature (descriptor
                                       , errorMessageRegexes
                                       ) where
 
-import           Control.Monad                       (forM, guard, join)
-import           Control.Monad.IO.Class              (MonadIO (liftIO))
-import           Control.Monad.Trans.Except          (ExceptT)
-import           Data.Char                           (isAlpha, isAlphaNum,
-                                                      isNumber, isPunctuation)
-import           Data.Foldable                       (asum, traverse_)
-import qualified Data.HashMap.Strict                 as Map
-import           Data.List                           (find, nub)
-import qualified Data.List.NonEmpty                  as NE
-import           Data.Maybe                          (isJust, isNothing,
-                                                      listToMaybe, mapMaybe)
-import           Data.Text                           (Text)
-import qualified Data.Text                           as T
-import           Development.IDE.Core.RuleTypes      (GetBindings (GetBindings),
-                                                      GetParsedModule (GetParsedModule))
-import           Development.IDE.Core.Service        (IdeState, ideLogger,
-                                                      runAction)
-import           Development.IDE.Core.Shake          (use)
+import           Control.Monad                  (guard)
+import           Control.Monad.IO.Class         (MonadIO (liftIO))
+import           Control.Monad.Trans.Except     (ExceptT)
+import           Data.Foldable                  (asum)
+import qualified Data.HashMap.Strict            as Map
+import           Data.Maybe                     (mapMaybe)
+import           Data.Text                      (Text)
+import qualified Data.Text                      as T
+import           Development.IDE                (realSrcSpanToRange)
+import           Development.IDE.Core.RuleTypes (GetParsedModule (GetParsedModule))
+import           Development.IDE.Core.Service   (IdeState, runAction)
+import           Development.IDE.Core.Shake     (use)
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Error           (realSrcSpanToRange)
-import           Development.IDE.GHC.Util            (prettyPrint,
-                                                      unsafePrintSDoc)
-import           Development.IDE.Spans.LocalBindings (Bindings, getFuzzyScope)
-import           Development.IDE.Types.Location      (Range (Range))
-import           Development.IDE.Types.Logger        (logDebug, logInfo)
-import           Generics.SYB                        (extQ, mkQ, something,
-                                                      somewhere)
-import           Ide.PluginUtils                     (getNormalizedFilePath,
-                                                      handleMaybeM, response)
-import           Ide.Types                           (PluginDescriptor (..),
-                                                      PluginId,
-                                                      PluginMethodHandler,
-                                                      defaultPluginDescriptor,
-                                                      mkPluginHandler)
-import           Language.LSP.Types                  (CodeAction (..),
-                                                      CodeActionContext (CodeActionContext),
-                                                      CodeActionKind (CodeActionQuickFix, CodeActionUnknown),
-                                                      CodeActionParams (..),
-                                                      Command, Diagnostic (..),
-                                                      List (..),
-                                                      Method (TextDocumentCodeAction),
-                                                      NormalizedFilePath,
-                                                      SMethod (..),
-                                                      TextDocumentIdentifier (TextDocumentIdentifier),
-                                                      TextEdit (TextEdit), Uri,
-                                                      WorkspaceEdit (WorkspaceEdit),
-                                                      type (|?) (InR))
-import           Text.Regex.TDFA                     (AllTextMatches (getAllTextMatches),
-                                                      (=~))
+import           Development.IDE.GHC.Util       (prettyPrint)
+import           Generics.SYB                   (extQ, something)
+import           Ide.PluginUtils                (getNormalizedFilePath,
+                                                 handleMaybeM, response)
+import           Ide.Types                      (PluginDescriptor (..),
+                                                 PluginId, PluginMethodHandler,
+                                                 defaultPluginDescriptor,
+                                                 mkPluginHandler)
+import           Language.LSP.Types
+import           Text.Regex.TDFA                ((=~))
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId) { pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionHandler }
 
-codeActionHandler :: PluginMethodHandler IdeState TextDocumentCodeAction
+codeActionHandler :: PluginMethodHandler IdeState 'TextDocumentCodeAction
 codeActionHandler ideState plId CodeActionParams {_textDocument = TextDocumentIdentifier uri, _context = CodeActionContext (List diags) _, _range} = response $ do
       nfp <- getNormalizedFilePath plId (TextDocumentIdentifier uri)
       -- for changing top-level bindings signatures
@@ -83,8 +57,6 @@ type DeclName = Text
 type ExpectedSig = Text
 -- | The signature provided by GHC Error Message (Actual type)
 type ActualSig = Text
--- | The signature defined by the user
-type DefinedSig = Text
 
 -- | DataType that encodes the necessary information for changing a type signature
 data ChangeSignature = ChangeSignature {
@@ -119,11 +91,11 @@ diagnosticToChangeSig decls diagnostic = do
 
 -- | If a diagnostic has the proper message create a ChangeSignature from it
 matchingDiagnostic :: Diagnostic -> Maybe (ExpectedSig, ActualSig, DeclName)
-matchingDiagnostic diag@Diagnostic{_message} = asum $ map (unwrapMatch . (=~) _message) errorMessageRegexes
+matchingDiagnostic Diagnostic{_message} = asum $ map (unwrapMatch . (=~) _message) errorMessageRegexes
     where
         unwrapMatch :: (Text, Text, Text, [Text]) -> Maybe (ExpectedSig, ActualSig, DeclName)
         -- due to using (.|\n) in regex we have to drop the erroneous, but necessary ("." doesn't match newlines), match
-        unwrapMatch (_, _, _, [exp, act, _, name]) = Just (exp, act, name)
+        unwrapMatch (_, _, _, [expect, actual, _, name]) = Just (expect, actual, name)
         unwrapMatch _                              = Nothing
 
 -- | List of regexes that match various Error Messages
@@ -139,7 +111,7 @@ findSigLocOfStringDecl :: SigName => [LHsDecl GhcPs] -> ExpectedSig -> String ->
 findSigLocOfStringDecl decls expectedType declName = something (const Nothing `extQ` findSig `extQ` findLocalSig) decls
     where
         -- search for Top Level Signatures
-        findSig :: GenLocated SrcSpan (HsDecl GhcPs) -> Maybe RealSrcSpan
+        findSig :: LHsDecl GhcPs -> Maybe RealSrcSpan
         findSig = \case
             L (locA -> (RealSrcSpan rss _)) (SigD _ sig) -> case sig of
               ts@(TypeSig _ idsSig _) -> isMatch ts idsSig >> pure rss
@@ -147,7 +119,7 @@ findSigLocOfStringDecl decls expectedType declName = something (const Nothing `e
             _ -> Nothing
 
         -- search for Local Signatures
-        findLocalSig :: GenLocated SrcSpan (Sig GhcPs) -> Maybe RealSrcSpan
+        findLocalSig :: LSig GhcPs -> Maybe RealSrcSpan
         findLocalSig = \case
           (L (locA -> (RealSrcSpan rss _)) ts@(TypeSig _ idsSig _)) -> isMatch ts idsSig >> pure rss
           _          -> Nothing
