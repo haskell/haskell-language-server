@@ -56,7 +56,7 @@ import           HieDb
 
 import           Language.LSP.Types                (DiagnosticTag (..))
 
-import           Control.DeepSeq                   (force, liftRnf, rnf, rwhnf)
+import           Control.DeepSeq
 
 #if !MIN_VERSION_ghc(8,10,0)
 import           ErrUtils
@@ -1267,10 +1267,13 @@ mkDetailsFromIface session ms iface ide_linkable = do
           hsc_env' = session { hsc_HPT = act (hsc_HPT session)
                              , hsc_type_env_var = kv }
       core_binds <- initIfaceCheck (text "l") hsc_env' $ typecheckCoreFile this_mod types_var core_file
-      let cgi_guts = CgGuts this_mod (typeEnvTyCons (md_types details)) core_binds NoStubs [] [] (emptyHpcInfo False) Nothing []
+      let implicit_binds = concatMap getImplicitBinds tyCons
+          tyCons = typeEnvTyCons (md_types details)
+      let cgi_guts = CgGuts this_mod tyCons (implicit_binds ++ core_binds) NoStubs [] [] (emptyHpcInfo False) Nothing []
       generateByteCode (CoreFileExists t) session ms cgi_guts
 
   return (warns, HomeModInfo iface details linkable)
+
 
 -- | Non-interactive, batch version of 'InteractiveEval.getDocs'.
 --   The interactive paths create problems in ghc-lib builds

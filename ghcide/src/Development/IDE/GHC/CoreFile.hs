@@ -11,6 +11,7 @@ import Data.Foldable
 import Data.List (isPrefixOf)
 import Control.Monad.IO.Class
 import Control.Monad
+import Data.Maybe
 
 import Development.IDE.GHC.Compat
 
@@ -36,6 +37,10 @@ import TcIface
 import IfaceEnv
 import BinIface
 import HscTypes
+import IdInfo
+import Var
+import Unique
+import MkId
 #endif
 
 -- | Initial ram buffer to allocate for writing interface files
@@ -101,7 +106,34 @@ writeBinCoreFile core_path fat_iface = do
     writeBinMem bh core_path
 
 codeGutsToCoreFile :: CgGuts -> CoreFile
-codeGutsToCoreFile CgGuts{..} = CoreFile (map (toIfaceTopBind cg_module) cg_binds)
+codeGutsToCoreFile CgGuts{..} = CoreFile (map (toIfaceTopBind cg_module) $ filter isNotImplictBind cg_binds)
+
+-- | Implicit binds can be generated from the interface and are not tidied,
+-- so we must filter them out
+isNotImplictBind :: CoreBind -> Bool
+isNotImplictBind bind = any (not . isImplicitId) $ bindBindings bind
+
+bindBindings :: CoreBind -> [Var]
+bindBindings (NonRec b _) = [b]
+bindBindings (Rec bnds) = map fst bnds
+
+getImplicitBinds :: TyCon -> [CoreBind]
+getImplicitBinds tc = cls_binds ++ getTyConImplicitBinds tc
+  where
+    cls_binds = maybe [] getClassImplicitBinds (tyConClass_maybe tc)
+
+getTyConImplicitBinds :: TyCon -> [CoreBind]
+getTyConImplicitBinds tc
+  | isNewTyCon tc = []  -- See Note [Compulsory newtype unfolding] in MkId
+  | otherwise     = map get_defn (mapMaybe dataConWrapId_maybe (tyConDataCons tc))
+
+getClassImplicitBinds :: Class -> [CoreBind]
+getClassImplicitBinds cls
+  = [ NonRec op (mkDictSelRhs cls val_index)
+    | (op, val_index) <- classAllSelIds cls `zip` [0..] ]
+
+get_defn :: Id -> CoreBind
+get_defn id = NonRec id (unfoldingTemplate (realIdUnfolding id))
 
 toIfaceTopBndr :: Module -> Id -> IfaceId
 toIfaceTopBndr mod id
