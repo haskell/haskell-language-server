@@ -30,7 +30,6 @@ module Development.IDE.Core.Rules(
     usePropertyAction,
     -- * Rules
     CompiledLinkables(..),
-    IsHiFileStable(..),
     getParsedModuleRule,
     getParsedModuleWithCommentsRule,
     getLocatedImportsRule,
@@ -42,7 +41,6 @@ module Development.IDE.Core.Rules(
     getModIfaceFromDiskRule,
     getModIfaceRule,
     getModSummaryRule,
-    isHiFileStableRule,
     getModuleGraphRule,
     knownFilesRule,
     getClientSettingsRule,
@@ -121,7 +119,6 @@ import           Development.IDE.GHC.ExactPrint hiding (LogShake, Log)
 import           Development.IDE.GHC.Util                     hiding
                                                               (modifyDynFlags)
 import           Development.IDE.Graph
-import           Development.IDE.Graph.Classes
 import           Development.IDE.Import.DependencyInformation
 import           Development.IDE.Import.FindImports
 import qualified Development.IDE.Spans.AtPoint                as AtPoint
@@ -131,7 +128,6 @@ import           Development.IDE.Types.Diagnostics            as Diag
 import           Development.IDE.Types.HscEnvEq
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
-import           GHC.Generics                                 (Generic)
 import qualified GHC.LanguageExtensions                       as LangExt
 import qualified HieDb
 import           Ide.Plugin.Config
@@ -156,6 +152,7 @@ import Development.IDE.Types.Logger (Recorder, logWith, cmapWithPrio, WithPriori
 import qualified Development.IDE.Core.Shake as Shake
 import qualified Development.IDE.GHC.ExactPrint as ExactPrint hiding (LogShake)
 import qualified Development.IDE.Types.Logger as Logger
+import qualified Development.IDE.Types.Shake as Shake
 
 data Log 
   = LogShake Shake.Log
@@ -773,14 +770,18 @@ ghcSessionDepsDefinition fullModSummary GhcSessionDepsConfig{..} env file = do
 -- | Load a iface from disk, or generate it if there isn't one or it is out of date
 -- This rule also ensures that the `.hie` and `.o` (if needed) files are written out.
 getModIfaceFromDiskRule :: Recorder (WithPriority Log) -> Rules ()
-getModIfaceFromDiskRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GetModIfaceFromDisk f -> do
+getModIfaceFromDiskRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleWithOldValue $ \GetModIfaceFromDisk f old -> do
   ms <- msrModSummary <$> use_ GetModSummary f
   mb_session <- use GhcSessionDeps f
   case mb_session of
     Nothing -> return (Nothing, ([], Nothing))
     Just session -> do
-      sourceModified <- use_ IsHiFileStable f
       linkableType <- getLinkableType f
+      ver <- use_ GetModificationTime f
+      let sourceModified = case old of
+            Shake.Succeeded (Just old_version) _ | old_version == ver -> SourceUnmodified
+            Shake.Stale _   (Just old_version) _ | old_version == ver -> SourceUnmodified
+            _ -> SourceModified
       r <- loadInterface (hscEnv session) ms sourceModified linkableType (regenerateHiFile session f ms)
       case r of
         (diags, Nothing) -> return (Nothing, (diags, Nothing))
@@ -831,31 +832,6 @@ getModIfaceFromDiskAndIndexRule recorder =
           indexHieFile se ms f hash hf
 
   return (Just x)
-
-isHiFileStableRule :: Recorder (WithPriority Log) -> Rules ()
-isHiFileStableRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \IsHiFileStable f -> do
-    ms <- msrModSummary <$> use_ GetModSummaryWithoutTimestamps f
-    let hiFile = toNormalizedFilePath'
-                $ Compat.ml_hi_file $ ms_location ms
-    mbHiVersion <- use  GetModificationTime_{missingFileDiagnostics=False} hiFile
-    modVersion  <- use_ GetModificationTime f
-    sourceModified <- case mbHiVersion of
-        Nothing -> pure SourceModified
-        Just x ->
-            if modificationTime x < modificationTime modVersion
-                then pure SourceModified
-                else do
-                    fileImports <- use_ GetLocatedImports f
-                    let imports = fmap artifactFilePath . snd <$> fileImports
-                    deps <- uses_ IsHiFileStable (catMaybes imports)
-                    pure $ if all (== SourceUnmodifiedAndStable) deps
-                           then SourceUnmodifiedAndStable
-                           else SourceUnmodified
-    return (Just (summarize sourceModified), Just sourceModified)
-  where
-      summarize SourceModified            = BS.singleton 1
-      summarize SourceUnmodified          = BS.singleton 2
-      summarize SourceUnmodifiedAndStable = BS.singleton 3
 
 displayTHWarning :: LspT c IO ()
 displayTHWarning
@@ -1153,7 +1129,6 @@ mainRule recorder RulesConfig{..} = do
     getModIfaceFromDiskAndIndexRule recorder
     getModIfaceRule recorder
     getModSummaryRule recorder
-    isHiFileStableRule recorder
     getModuleGraphRule recorder
     knownFilesRule recorder
     getClientSettingsRule recorder
@@ -1175,13 +1150,3 @@ mainRule recorder RulesConfig{..} = do
     persistentHieFileRule recorder
     persistentDocMapRule
     persistentImportMapRule
-
--- | Given the path to a module src file, this rule returns True if the
--- corresponding `.hi` file is stable, that is, if it is newer
---   than the src file, and all its dependencies are stable too.
-data IsHiFileStable = IsHiFileStable
-    deriving (Eq, Show, Typeable, Generic)
-instance Hashable IsHiFileStable
-instance NFData   IsHiFileStable
-
-type instance RuleResult IsHiFileStable = SourceModified
