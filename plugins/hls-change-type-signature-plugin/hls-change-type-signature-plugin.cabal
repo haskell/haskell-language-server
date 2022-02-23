@@ -25,9 +25,10 @@ library
     , ghcide          ^>=1.6
     , hls-plugin-api  ^>=1.3
     , lsp-types       
-    , transformers
-    , regex-tdfa     
+    , regex-tdfa
+    , syb
     , text
+    , transformers
     , unordered-containers
 
   default-language: Haskell2010

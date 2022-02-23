@@ -247,6 +247,10 @@ Change/Update a type signature to match implementation.
 
 Status: Until GHC 9.4, the implementation is ad-hoc and relies on GHC error messages to create a new signature. Not all GHC error messages are supported.
 
+Known Limitations:
+- Not all GHC error messages are supported
+- Top-level and Function-local bindings with the same names can cause issues, such as incorrect signature changes or no code actions available.
+
 ![Change Type Signature Demo](../plugins/hls-change-type-signature-plugin/change1.gif)
 
 ![Change Type Signature Demo](../plugins/hls-change-type-signature-plugin/change2.gif)

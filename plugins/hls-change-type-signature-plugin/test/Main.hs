@@ -1,6 +1,5 @@
 module Main where
 
-import           Control.Monad                  (forM)
 import           Data.Either                    (rights)
 import           Data.Maybe                     (mapMaybe)
 import           Data.Text                      (Text)
@@ -28,7 +27,6 @@ import           Test.Hls                       (CodeAction (..),
                                                  waitForDiagnostics,
                                                  waitForProgressDone, (@=?),
                                                  (@?=))
-import           Test.Hls.Util                  (inspectCodeAction)
 import           Text.Regex.TDFA                ((=~))
 
 main :: IO ()
@@ -41,6 +39,9 @@ test :: TestTree
 test = testGroup "changeTypeSignature" [
         codeActionTest "TExpectedActual" 4 11
         , codeActionTest "TRigidType" 4 14
+        , codeActionTest "TLocalBinding" 6 21
+        , codeActionTest "TLocalBindingShadow1" 10 7
+        , codeActionTest "TLocalBindingShadow2" 6 21
         , codeActionProperties "TErrorGivenPartialSignature" [(4, 13)] $ \actions -> liftIO $ length actions @?= 0
         , testRegexes
     ]
@@ -60,6 +61,7 @@ testRegexOne = testGroup "Regex One" [
         , regexTest "error2.txt" regex True
         , regexTest "error3.txt" regex False
         , regexTest "error4.txt" regex True
+        , regexTest "error5.txt" regex True
     ]
     where
         regex = errorMessageRegexes !! 0
@@ -70,6 +72,7 @@ testRegexTwo = testGroup "Regex Two" [
         , regexTest "error2.txt" regex False
         , regexTest "error3.txt" regex True
         , regexTest "error4.txt" regex False
+        , regexTest "error5.txt" regex False
     ]
     where
         regex = errorMessageRegexes !! 1
@@ -84,8 +87,9 @@ codeActionTest :: FilePath -> Int -> Int -> TestTree
 codeActionTest fp line col = goldenChangeSignature fp $ \doc -> do
     waitForDiagnostics  -- code actions are triggered from Diagnostics
     actions <- getCodeActions doc (pointRange line col)
-    foundAction <- liftIO $ inspectCodeAction actions ["Change signature"]
-    executeCodeAction foundAction
+    foundActions <- findChangeTypeActions actions
+    liftIO $ length foundActions @?= 1
+    executeCodeAction (head foundActions)
 
 codeActionProperties :: TestName -> [(Int, Int)] -> ([CodeAction] -> Session ()) -> TestTree
 codeActionProperties fp locs assertions = testCase fp $ do
