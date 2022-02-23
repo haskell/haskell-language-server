@@ -686,13 +686,11 @@ typeCheckRuleDefinition hsc pm = do
 
 -- | Get all the linkables stored in the graph, i.e. the ones we *do not* need to unload.
 -- Doesn't actually contain the code, since we don't need it to unload
-currentLinkables :: Action [Linkable]
+currentLinkables :: Action (ModuleEnv UTCTime)
 currentLinkables = do
     compiledLinkables <- getCompiledLinkables <$> getIdeGlobalAction
     hm <- liftIO $ readVar compiledLinkables
-    pure $ map go $ moduleEnvToList hm
-  where
-    go (mod, time) = LM time mod []
+    pure hm
 
 loadGhcSession :: Recorder (WithPriority Log) -> GhcSessionDepsConfig -> Rules ()
 loadGhcSession recorder ghcSessionDepsConfig = do
@@ -778,11 +776,17 @@ getModIfaceFromDiskRule recorder = defineEarlyCutoff (cmapWithPrio LogShake reco
     Just session -> do
       linkableType <- getLinkableType f
       ver <- use_ GetModificationTime f
-      let sourceModified = case old of
-            Shake.Succeeded (Just old_version) _ | old_version == ver -> SourceUnmodified
-            Shake.Stale _   (Just old_version) _ | old_version == ver -> SourceUnmodified
-            _ -> SourceModified
-      r <- loadInterface (hscEnv session) ms sourceModified linkableType (regenerateHiFile session f ms)
+      let m_old = case old of
+            Shake.Succeeded (Just old_version) v -> Just (v, old_version)
+            Shake.Stale _   (Just old_version) v -> Just (v, old_version)
+            _ -> Nothing
+          recompInfo = RecompilationInfo
+            { source_version = ver
+            , old_value = m_old
+            , get_file_version = use GetModificationTime_{missingFileDiagnostics = False}
+            , regenerate = regenerateHiFile session f ms
+            }
+      r <- loadInterface (hscEnv session) ms linkableType recompInfo
       case r of
         (diags, Nothing) -> return (Nothing, (diags, Nothing))
         (diags, Just x) -> do
