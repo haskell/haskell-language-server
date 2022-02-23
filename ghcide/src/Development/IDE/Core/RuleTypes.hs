@@ -138,6 +138,9 @@ data TcModuleResult = TcModuleResult
     -- ^ Typechecked splice information
     , tmrDeferedError    :: !Bool
     -- ^ Did we defer any type errors for this module?
+    , tmrRuntimeModules  :: !(ModuleEnv UTCTime)
+        -- ^ Which modules did we need at runtime while compiling this file?
+        -- Used for recompilation checking in the presence of TH
     }
 instance Show TcModuleResult where
     show = show . pm_mod_summary . tmrParsed
@@ -158,13 +161,15 @@ data HiFileResult = HiFileResult
     -- ^ Fingerprint for the ModIface
     , hirLinkableFp :: ByteString
     -- ^ Fingerprint for the Linkable
+    , hirRuntimeModules :: !(ModuleEnv UTCTime)
+    -- ^ same as tmrRuntimeModules
     }
 
 hiFileFingerPrint :: HiFileResult -> ByteString
 hiFileFingerPrint HiFileResult{..} = hirIfaceFp <> hirLinkableFp
 
-mkHiFileResult :: ModSummary -> HomeModInfo -> HiFileResult
-mkHiFileResult hirModSummary hirHomeMod = HiFileResult{..}
+mkHiFileResult :: ModSummary -> HomeModInfo -> ModuleEnv UTCTime -> HiFileResult
+mkHiFileResult hirModSummary hirHomeMod hirRuntimeModules = HiFileResult{..}
   where
     hirIfaceFp = fingerprintToBS . getModuleHash . hm_iface $ hirHomeMod -- will always be two bytes
     hirLinkableFp = case hm_linkable hirHomeMod of

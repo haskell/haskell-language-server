@@ -20,6 +20,7 @@ module Development.IDE.GHC.Compat(
     reLocA,
     getMessages',
     pattern PFailedWithErrorMessages,
+    isObjectLinkable,
 
 #if !MIN_VERSION_ghc(9,0,1)
     RefMap,
@@ -28,6 +29,7 @@ module Development.IDE.GHC.Compat(
 #if MIN_VERSION_ghc(9,2,0)
     extendModSummaryNoDeps,
     emsModSummary,
+    myCoreToStgExpr,
 #endif
 
     nodeInfo',
@@ -69,6 +71,39 @@ module Development.IDE.GHC.Compat(
     Option (..),
     runUnlit,
     runPp,
+
+    -- * Recompilation avoidance
+    hscCompileCoreExprHook,
+    CoreExpr,
+    simplifyExpr,
+    tidyExpr,
+    emptyTidyEnv,
+    corePrepExpr,
+    lintInteractiveExpr,
+    icInteractiveModule,
+    HomePackageTable,
+    lookupHpt,
+    Dependencies(dep_mods),
+    bcoFreeNames,
+    ModIfaceAnnotation,
+    pattern Annotation,
+    AnnTarget(ModuleTarget),
+    extendAnnEnvList,
+    module UniqDSet,
+    module UniqSet,
+    module UniqDFM,
+    getDependentMods,
+#if MIN_VERSION_ghc(9,2,0)
+    loadExpr,
+    byteCodeGen,
+    bc_bcos,
+    loadDecls,
+    hscInterp,
+    expectJust,
+#else
+    coreExprToBCOs,
+    linkExpr,
+#endif
     ) where
 
 import           Development.IDE.GHC.Compat.Core
@@ -84,7 +119,48 @@ import           Development.IDE.GHC.Compat.Util
 import           GHC                                   hiding (HasSrcSpan,
                                                         ModLocation,
                                                         RealSrcSpan, getLoc,
-                                                        lookupName)
+                                                        lookupName, exprType)
+#if MIN_VERSION_ghc(9,0,0)
+import GHC.Driver.Hooks (hscCompileCoreExprHook)
+import GHC.Core (CoreExpr, CoreProgram)
+import qualified GHC.Core.Opt.Pipeline as GHC
+import GHC.Core.Tidy (tidyExpr)
+import GHC.Types.Var.Env (emptyTidyEnv)
+import qualified GHC.CoreToStg.Prep as GHC
+import GHC.Core.Lint (lintInteractiveExpr)
+#if MIN_VERSION_ghc(9,2,0)
+import GHC.Unit.Home.ModInfo (lookupHpt, HomePackageTable)
+import GHC.Runtime.Context (icInteractiveModule)
+import GHC.Unit.Module.Deps (Dependencies(dep_mods))
+import GHC.Linker.Types (isObjectLinkable)
+import GHC.Linker.Loader (loadExpr)
+#else
+import GHC.CoreToByteCode (coreExprToBCOs)
+import GHC.Driver.Types (Dependencies(dep_mods), icInteractiveModule, lookupHpt, HomePackageTable)
+import GHC.Runtime.Linker (linkExpr)
+#endif
+import GHC.ByteCode.Asm (bcoFreeNames)
+import GHC.Types.Annotations (Annotation(..), AnnTarget(ModuleTarget), extendAnnEnvList)
+import GHC.Types.Unique.DSet as UniqDSet
+import GHC.Types.Unique.Set as UniqSet
+import GHC.Types.Unique.DFM  as UniqDFM
+#else
+import Hooks (hscCompileCoreExprHook)
+import CoreSyn (CoreExpr)
+import qualified SimplCore as GHC
+import CoreTidy (tidyExpr)
+import VarEnv (emptyTidyEnv)
+import CorePrep (corePrepExpr)
+import CoreLint (lintInteractiveExpr)
+import ByteCodeGen (coreExprToBCOs)
+import HscTypes (icInteractiveModule, HomePackageTable, lookupHpt, Dependencies(dep_mods))
+import Linker (linkExpr)
+import ByteCodeAsm (bcoFreeNames)
+import Annotations (Annotation(..), AnnTarget(ModuleTarget), extendAnnEnvList)
+import UniqDSet
+import UniqSet
+import UniqDFM
+#endif
 
 #if MIN_VERSION_ghc(9,0,0)
 import           GHC.Data.StringBuffer
@@ -142,12 +218,90 @@ import qualified Data.Set                              as S
 import           Bag                                   (unitBag)
 #endif
 
+#if MIN_VERSION_ghc(9,2,0)
+import GHC.Types.CostCentre
+import GHC.Stg.Syntax
+import GHC.Types.IPE
+import GHC.Stg.Syntax
+import GHC.Types.IPE
+import GHC.Types.CostCentre
+import GHC.Core
+import GHC.Builtin.Uniques
+import GHC.Runtime.Interpreter
+import GHC.StgToByteCode
+import GHC.Stg.Pipeline
+import GHC.ByteCode.Types
+import GHC.Linker.Loader (loadDecls)
+import GHC.Data.Maybe
+import GHC.CoreToStg
+#endif
+
+type ModIfaceAnnotation = Annotation
+
+#if MIN_VERSION_ghc(9,2,0)
+myCoreToStgExpr :: Logger -> DynFlags -> InteractiveContext
+                -> Module -> ModLocation -> CoreExpr
+                -> IO ( Id
+                      , [StgTopBinding]
+                      , InfoTableProvMap
+                      , CollectedCCs )
+myCoreToStgExpr logger dflags ictxt this_mod ml prepd_expr = do
+    {- Create a temporary binding (just because myCoreToStg needs a
+       binding for the stg2stg step) -}
+    let bco_tmp_id = mkSysLocal (fsLit "BCO_toplevel")
+                                (mkPseudoUniqueE 0)
+                                Many
+                                (exprType prepd_expr)
+    (stg_binds, prov_map, collected_ccs) <-
+       myCoreToStg logger
+                   dflags
+                   ictxt
+                   this_mod
+                   ml
+                   [NonRec bco_tmp_id prepd_expr]
+    return (bco_tmp_id, stg_binds, prov_map, collected_ccs)
+
+myCoreToStg :: Logger -> DynFlags -> InteractiveContext
+            -> Module -> ModLocation -> CoreProgram
+            -> IO ( [StgTopBinding] -- output program
+                  , InfoTableProvMap
+                  , CollectedCCs )  -- CAF cost centre info (declared and used)
+myCoreToStg logger dflags ictxt this_mod ml prepd_binds = do
+    let (stg_binds, denv, cost_centre_info)
+         = {-# SCC "Core2Stg" #-}
+           coreToStg dflags this_mod ml prepd_binds
+
+    stg_binds2
+        <- {-# SCC "Stg2Stg" #-}
+           stg2stg logger dflags ictxt this_mod stg_binds
+
+    return (stg_binds2, denv, cost_centre_info)
+#endif
+
+
 #if !MIN_VERSION_ghc(9,2,0)
 reLoc :: Located a -> Located a
 reLoc = id
 
 reLocA :: Located a -> Located a
 reLocA = id
+#endif
+
+getDependentMods :: ModIface -> [ModuleName]
+#if MIN_VERSION_ghc(9,0,0)
+getDependentMods = map gwib_mod . dep_mods . mi_deps
+#else
+getDependentMods = map fst . dep_mods . mi_deps
+#endif
+
+simplifyExpr :: DynFlags -> HscEnv -> CoreExpr -> IO CoreExpr
+#if MIN_VERSION_ghc(9,0,0)
+simplifyExpr _ = GHC.simplifyExpr
+
+corePrepExpr :: DynFlags -> HscEnv -> CoreExpr -> IO CoreExpr
+corePrepExpr _ = GHC.corePrepExpr
+#else
+simplifyExpr df _ = GHC.simplifyExpr df
 #endif
 
 #if !MIN_VERSION_ghc(8,8,0)
