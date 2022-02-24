@@ -34,14 +34,10 @@ descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId) { pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionHandler }
 
 codeActionHandler :: PluginMethodHandler IdeState 'TextDocumentCodeAction
-codeActionHandler ideState plId CodeActionParams {_textDocument = TextDocumentIdentifier uri, _context = CodeActionContext (List diags) _, _range} = response $ do
+codeActionHandler ideState plId CodeActionParams {_textDocument = TextDocumentIdentifier uri, _context = CodeActionContext (List diags) _} = response $ do
       nfp <- getNormalizedFilePath plId (TextDocumentIdentifier uri)
-      -- for changing top-level bindings signatures
       decls <- getDecls ideState nfp
-
       let actions = mapMaybe (generateAction uri decls) diags
-
-      -- liftIO $ logInfo (ideLogger ideState) $ T.pack $ show binds
       pure $ List actions
 
 getDecls :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m [LHsDecl GhcPs]
