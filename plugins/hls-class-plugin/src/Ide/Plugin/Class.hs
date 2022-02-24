@@ -172,7 +172,7 @@ codeAction state plId (CodeActionParams _ _ docId _ context) = liftIO $ fmap (fr
         HAR {hieAst = hf} ->
           pure
             $ head . head
-#if !MIN_VERSION_ghc(9,0,0)
+#if !MIN_VERSION_ghc(9,2,0)
             $ pointCommand hf (fromJust (fromCurrentRange pmap range) ^. J.start & J.character -~ 1)
               ( (Map.keys . Map.filter isClassNodeIdentifier . nodeIdentifiers . nodeInfo)
                 <=< nodeChildren
