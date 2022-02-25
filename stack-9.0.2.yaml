@@ -45,6 +45,8 @@ extra-deps:
 - floskell-0.10.6
 - heapsize-0.3.0.1
 - hiedb-0.4.1.0
+- github: haskell/hie-bios
+  commit: 2e4161151980f65676de3eae2a71ec2bbb5006be
 - implicit-hie-0.1.2.6
 - implicit-hie-cradle-0.3.0.5
 - monad-dijkstra-0.1.1.3

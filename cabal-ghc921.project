@@ -105,3 +105,8 @@ allow-newer:
 
 allow-older:
   primitive-extras:primitive-unlifted
+
+source-repository-package
+    type: git
+    location: https://github.com/haskell/hie-bios.git
+    tag: 2e4161151980f65676de3eae2a71ec2bbb5006be

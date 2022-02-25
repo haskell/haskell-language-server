@@ -63,3 +63,8 @@ allow-newer:
   -- ghc-9.0.2 specific
   -- for ghcide:test via ghc-typelits-knownnat
   ghc-typelits-natnormalise:ghc-bignum
+
+source-repository-package
+    type: git
+    location: https://github.com/haskell/hie-bios.git
+    tag: 2e4161151980f65676de3eae2a71ec2bbb5006be
