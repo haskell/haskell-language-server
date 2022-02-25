@@ -38,7 +38,7 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2022-01-24T21:03:03Z
+index-state: 2022-02-25T21:47:10Z
 
 constraints:
   -- These plugins don't build/work on GHC92 yet
@@ -105,8 +105,3 @@ allow-newer:
 
 allow-older:
   primitive-extras:primitive-unlifted
-
-source-repository-package
-    type: git
-    location: https://github.com/haskell/hie-bios.git
-    tag: 2e4161151980f65676de3eae2a71ec2bbb5006be
