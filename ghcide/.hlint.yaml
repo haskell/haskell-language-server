@@ -105,6 +105,7 @@
     - Development.IDE.GHC.Compat.Units
     - Development.IDE.GHC.Compat.Util
     - Development.IDE.GHC.CPP
+    - Development.IDE.GHC.Dump
     - Development.IDE.GHC.ExactPrint
     - Development.IDE.GHC.Orphans
     - Development.IDE.GHC.Util
