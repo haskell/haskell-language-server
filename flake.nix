@@ -112,8 +112,8 @@
             with haskell.lib; {
               # Patches don't apply
               github = overrideCabal hsuper.github (drv: { patches = []; });
-              # GHCIDE requires hie-bios >=0.8 && <0.9.0
-              hie-bios = hself.hie-bios_0_8_0;
+              # GHCIDE requires hie-bios ^>=0.9.0
+              hie-bios = hself.hie-bios_0_9_0;
               # We need an older version
               hiedb = hself.hiedb_0_4_1_0;
 
