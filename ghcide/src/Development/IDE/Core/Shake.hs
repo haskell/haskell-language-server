@@ -154,11 +154,15 @@ import           Data.Aeson                             (toJSON)
 import qualified Data.ByteString.Char8                  as BS8
 import           Data.Coerce                            (coerce)
 import           Data.Default
+import           Data.EnumMap.Strict                    (EnumMap)
+import qualified Data.EnumMap.Strict                    as EM
 import           Data.Foldable                          (for_, toList)
+import           Data.Functor                           ((<&>))
 import           Data.HashSet                           (HashSet)
 import qualified Data.HashSet                           as HSet
 import           Data.String                            (fromString)
 import           Debug.Trace.Flags                      (userTracingEnabled)
+import           Development.IDE.Core.FileUtils         (getModTime)
 import qualified Development.IDE.Types.Exports          as ExportsMap
 import qualified Focus
 import           HieDb.Types
@@ -167,10 +171,6 @@ import qualified Ide.PluginUtils                        as HLS
 import           Ide.Types                              (PluginId)
 import qualified "list-t" ListT
 import qualified StmContainers.Map                      as STM
-import Data.Functor ((<&>))
-import Development.IDE.Core.FileUtils (getModTime)
-import Data.EnumMap.Strict (EnumMap)
-import qualified Data.EnumMap.Strict as EM
 
 data Log
   = LogCreateHieDbExportsMapStart
@@ -324,7 +324,7 @@ getVirtualFile nf = do
 
 -- Take a snapshot of the current LSP VFS
 vfsSnapshot :: Maybe (LSP.LanguageContextEnv a) -> IO VFS
-vfsSnapshot Nothing = pure $ VFS mempty ""
+vfsSnapshot Nothing       = pure $ VFS mempty ""
 vfsSnapshot (Just lspEnv) = LSP.runLspT lspEnv $ LSP.getVirtualFiles
 
 
@@ -1106,7 +1106,7 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
             Just res -> return res
             Nothing -> do
                 staleV <- liftIO $ atomicallyNamed "define -read 3" $ getValues state key file <&> \case
-                  Nothing -> Failed False
+                  Nothing                   -> Failed False
                   Just (Succeeded ver v, _) -> Stale Nothing ver v
                   Just (Stale d ver v, _)   -> Stale d ver v
                   Just (Failed b, _)        -> Failed b
@@ -1316,4 +1316,4 @@ updatePositionMapping IdeState{shakeExtras = ShakeExtras{positionMapping}} Versi
         shared_change = mkDelta changes
         actual_version = case _version of
           Nothing -> error "Nothing version from server" -- This is a violation of the spec
-          Just v -> v
+          Just v  -> v
