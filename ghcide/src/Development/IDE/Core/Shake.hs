@@ -1103,12 +1103,6 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
         res <- case val of
             Just res -> return res
             Nothing -> do
-                staleV <- liftIO $ atomicallyNamed "define -read 3" $ getValues state key file <&> \case
-                  Nothing                   -> Failed False
-                  Just (Succeeded ver v, _) -> Stale Nothing ver v
-                  Just (Stale d ver v, _)   -> Stale d ver v
-                  Just (Failed b, _)        -> Failed b
-
                 (bs, (diags, res)) <- actionCatch
                     (do v <- action; liftIO $ evaluate $ force v) $
                     \(e :: SomeException) -> do
@@ -1121,7 +1115,13 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
                     | otherwise -> liftIO $ (currentValue . fst =<<) <$> atomicallyNamed "define - read 2" (getValues state GetModificationTime file)
 
                 (bs, res) <- case res of
-                    Nothing -> pure (toShakeValue ShakeStale bs, staleV)
+                    Nothing -> do
+                        staleV <- liftIO $ atomicallyNamed "define -read 3" $ getValues state key file <&> \case
+                            Nothing                   -> Failed False
+                            Just (Succeeded ver v, _) -> Stale Nothing ver v
+                            Just (Stale d ver v, _)   -> Stale d ver v
+                            Just (Failed b, _)        -> Failed b
+                        pure (toShakeValue ShakeStale bs, staleV)
                     Just v -> pure (maybe ShakeNoCutoff ShakeResult bs, Succeeded modTime v)
                 liftIO $ atomicallyNamed "define - write" $ setValues state key file res (Vector.fromList diags)
                 doDiagnostics diags
