@@ -98,7 +98,7 @@ import           Data.Tuple.Extra
 import           Development.IDE.Core.Compile
 import           Development.IDE.Core.FileExists hiding (LogShake, Log)
 import           Development.IDE.Core.FileStore               (getFileContents,
-                                                               resetInterfaceStore, modificationTime)
+                                                               resetInterfaceStore)
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.OfInterest hiding (LogShake, Log)
 import           Development.IDE.Core.PositionMapping
@@ -154,7 +154,7 @@ import qualified Development.IDE.GHC.ExactPrint as ExactPrint hiding (LogShake)
 import qualified Development.IDE.Types.Logger as Logger
 import qualified Development.IDE.Types.Shake as Shake
 
-data Log 
+data Log
   = LogShake Shake.Log
   | LogReindexingHieFile !NormalizedFilePath
   | LogLoadingHieFile !NormalizedFilePath
@@ -433,8 +433,8 @@ rawDependencyInformation fs = do
           fId <- getFreshFid al
           -- Record this module and its location
           whenJust msum $ \ms ->
-            modifyRawDepInfo (\rd -> rd { rawModuleNameMap = IntMap.insert (coerce fId)
-                                                                           (coerce (moduleName $ ms_mod ms))
+            modifyRawDepInfo (\rd -> rd { rawModuleNameMap = IntMap.insert (getFilePathId fId)
+                                                                           (ShowableModuleName (moduleName $ ms_mod ms))
                                                                            (rawModuleNameMap rd)})
           -- Adding an edge to the bootmap so we can make sure to
           -- insert boot nodes before the real files.
@@ -689,8 +689,7 @@ typeCheckRuleDefinition hsc pm = do
 currentLinkables :: Action (ModuleEnv UTCTime)
 currentLinkables = do
     compiledLinkables <- getCompiledLinkables <$> getIdeGlobalAction
-    hm <- liftIO $ readVar compiledLinkables
-    pure hm
+    liftIO $ readVar compiledLinkables
 
 loadGhcSession :: Recorder (WithPriority Log) -> GhcSessionDepsConfig -> Rules ()
 loadGhcSession recorder ghcSessionDepsConfig = do

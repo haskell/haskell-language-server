@@ -129,7 +129,7 @@ data RawDependencyInformation = RawDependencyInformation
     -- need to add edges between .hs-boot and .hs so that the .hs files
     -- appear later in the sort.
     , rawBootMap   :: !BootIdMap
-    , rawModuleNameMap :: (FilePathIdMap ShowableModuleName)
+    , rawModuleNameMap :: !(FilePathIdMap ShowableModuleName)
     } deriving Show
 
 data DependencyInformation =
