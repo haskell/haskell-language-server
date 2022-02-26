@@ -27,7 +27,6 @@ import           Data.Text                   (Text, pack)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Orphans ()
 import           Development.IDE.GHC.Util
-import           Development.IDE.Types.Shake (WithHieDb)
 import           GHC.Generics                (Generic)
 import           HieDb
 
@@ -155,6 +154,8 @@ createExportsMapTc modIface = do
 
 nonInternalModules :: ModuleName -> Bool
 nonInternalModules = not . (".Internal" `isSuffixOf`) . moduleNameString
+
+type WithHieDb = forall a. (HieDb -> IO a) -> IO a
 
 createExportsMapHieDb :: WithHieDb -> IO ExportsMap
 createExportsMapHieDb withHieDb = do

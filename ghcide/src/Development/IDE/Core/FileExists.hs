@@ -173,8 +173,8 @@ allExtensions opts = [extIncBoot | ext <- optExtensions opts, extIncBoot <- [ext
 -- | Installs the 'getFileExists' rules.
 --   Provides a fast implementation if client supports dynamic watched files.
 --   Creates a global state as a side effect in that case.
-fileExistsRules :: Recorder (WithPriority Log) -> Maybe (LanguageContextEnv Config) -> VFSHandle -> Rules ()
-fileExistsRules recorder lspEnv vfs = do
+fileExistsRules :: Recorder (WithPriority Log) -> Maybe (LanguageContextEnv Config) -> Rules ()
+fileExistsRules recorder lspEnv = do
   supportsWatchedFiles <- case lspEnv of
     Nothing      -> pure False
     Just lspEnv' -> liftIO $  runLspT lspEnv' isWatchSupported
@@ -195,19 +195,19 @@ fileExistsRules recorder lspEnv vfs = do
         else const $ pure False
 
   if supportsWatchedFiles
-    then fileExistsRulesFast recorder isWatched vfs
-    else fileExistsRulesSlow recorder vfs
+    then fileExistsRulesFast recorder isWatched
+    else fileExistsRulesSlow recorder
 
-  fileStoreRules (cmapWithPrio LogFileStore recorder) vfs isWatched
+  fileStoreRules (cmapWithPrio LogFileStore recorder) isWatched
 
 -- Requires an lsp client that provides WatchedFiles notifications, but assumes that this has already been checked.
-fileExistsRulesFast :: Recorder (WithPriority Log) -> (NormalizedFilePath -> Action Bool) -> VFSHandle -> Rules ()
-fileExistsRulesFast recorder isWatched vfs =
+fileExistsRulesFast :: Recorder (WithPriority Log) -> (NormalizedFilePath -> Action Bool) -> Rules ()
+fileExistsRulesFast recorder isWatched =
     defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \GetFileExists file -> do
         isWF <- isWatched file
         if isWF
-            then fileExistsFast vfs file
-            else fileExistsSlow vfs file
+            then fileExistsFast file
+            else fileExistsSlow file
 
 {- Note [Invalidating file existence results]
 We have two mechanisms for getting file existence information:
@@ -225,8 +225,8 @@ For the VFS lookup, however, we won't get prompted to flush the result, so inste
 we use 'alwaysRerun'.
 -}
 
-fileExistsFast :: VFSHandle -> NormalizedFilePath -> Action (Maybe BS.ByteString, Maybe Bool)
-fileExistsFast vfs file = do
+fileExistsFast :: NormalizedFilePath -> Action (Maybe BS.ByteString, Maybe Bool)
+fileExistsFast file = do
     -- Could in principle use 'alwaysRerun' here, but it's too slwo, See Note [Invalidating file existence results]
     mp <- getFileExistsMapUntracked
 
@@ -235,28 +235,27 @@ fileExistsFast vfs file = do
       Just exist -> pure exist
       -- We don't know about it: use the slow route.
       -- Note that we do *not* call 'fileExistsSlow', as that would trigger 'alwaysRerun'.
-      Nothing    -> liftIO $ getFileExistsVFS vfs file
+      Nothing    -> getFileExistsVFS file
     pure (summarizeExists exist, Just exist)
 
 summarizeExists :: Bool -> Maybe BS.ByteString
 summarizeExists x = Just $ if x then BS.singleton 1 else BS.empty
 
-fileExistsRulesSlow :: Recorder (WithPriority Log) -> VFSHandle -> Rules ()
-fileExistsRulesSlow recorder vfs =
-  defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \GetFileExists file -> fileExistsSlow vfs file
+fileExistsRulesSlow :: Recorder (WithPriority Log) -> Rules ()
+fileExistsRulesSlow recorder =
+  defineEarlyCutoff (cmapWithPrio LogShake recorder) $ RuleNoDiagnostics $ \GetFileExists file -> fileExistsSlow file
 
-fileExistsSlow :: VFSHandle -> NormalizedFilePath -> Action (Maybe BS.ByteString, Maybe Bool)
-fileExistsSlow vfs file = do
+fileExistsSlow :: NormalizedFilePath -> Action (Maybe BS.ByteString, Maybe Bool)
+fileExistsSlow file = do
     -- See Note [Invalidating file existence results]
     alwaysRerun
-    exist <- liftIO $ getFileExistsVFS vfs file
+    exist <- getFileExistsVFS file
     pure (summarizeExists exist, Just exist)
 
-getFileExistsVFS :: VFSHandle -> NormalizedFilePath -> IO Bool
-getFileExistsVFS vfs file = do
-    -- we deliberately and intentionally wrap the file as an FilePath WITHOUT mkAbsolute
-    -- so that if the file doesn't exist, is on a shared drive that is unmounted etc we get a properly
-    -- cached 'No' rather than an exception in the wrong place
-    handle (\(_ :: IOException) -> return False) $
-        (isJust <$> getVirtualFile vfs (filePathToUri' file)) ||^
-        Dir.doesFileExist (fromNormalizedFilePath file)
+getFileExistsVFS :: NormalizedFilePath -> Action Bool
+getFileExistsVFS file = do
+  vf <- getVirtualFile file
+  if isJust vf
+  then pure True
+  else liftIO $ handle (\(_ :: IOException) -> return False) $
+         Dir.doesFileExist (fromNormalizedFilePath file)
