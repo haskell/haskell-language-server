@@ -30,11 +30,52 @@ module Development.IDE.Core.Compile
   , loadModulesHome
   , getDocsBatch
   , lookupName
-  ,mergeEnvs) where
+  , mergeEnvs
+  ) where
 
+import           Control.Concurrent.Extra
+import           Control.Concurrent.STM.Stats      hiding (orElse)
+import           Control.DeepSeq                   (force, liftRnf, rnf, rwhnf)
+import           Control.Exception                 (evaluate)
+import           Control.Exception.Safe
+import           Control.Lens                      hiding (List)
+import           Control.Monad.Except
+import           Control.Monad.Extra
+import           Control.Monad.Trans.Except
+import           Data.Aeson                        (toJSON)
+import           Data.Bifunctor                    (first, second)
+import           Data.Binary
+import qualified Data.Binary                       as B
+import qualified Data.ByteString                   as BS
+import qualified Data.ByteString.Lazy              as LBS
+import           Data.Coerce
+import qualified Data.DList                        as DL
+import           Data.Functor
+import qualified Data.HashMap.Strict               as HashMap
+import           Data.IORef
+import           Data.IntMap                       (IntMap)
+import qualified Data.IntMap.Strict                as IntMap
+import           Data.List.Extra
+import           Data.Map                          (Map)
+import qualified Data.Map.Strict                   as Map
+import           Data.Maybe
+import qualified Data.Text                         as T
+import           Data.Time                         (UTCTime (..),
+                                                    getCurrentTime)
+import           Data.Time.Clock.POSIX             (posixSecondsToUTCTime)
+import           Data.Tuple.Extra                  (dupe)
+import           Data.Unique                       as Unique
+import           Debug.Trace
 import           Development.IDE.Core.Preprocessor
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
+import           Development.IDE.Core.Tracing      (withTrace)
+import           Development.IDE.GHC.Compat        hiding (loadInterface,
+                                                    parseHeader, parseModule,
+                                                    tcRnModule, writeHieFile)
+import qualified Development.IDE.GHC.Compat        as Compat
+import qualified Development.IDE.GHC.Compat        as GHC
+import qualified Development.IDE.GHC.Compat.Util   as Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Orphans       ()
 import           Development.IDE.GHC.Util
@@ -43,24 +84,24 @@ import           Development.IDE.Spans.Common
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
-
-import           Development.IDE.GHC.Compat        hiding (loadInterface,
-                                                    parseHeader, parseModule,
-                                                    tcRnModule, writeHieFile)
-import qualified Development.IDE.GHC.Compat        as Compat
-import qualified Development.IDE.GHC.Compat        as GHC
-import qualified Development.IDE.GHC.Compat.Util   as Util
-
+import           GHC                               (ForeignHValue,
+                                                    GetDocsFailure (..),
+                                                    mgModSummaries,
+                                                    parsedSource)
+import qualified GHC.LanguageExtensions            as LangExt
+import           GHC.Serialized
 import           HieDb
-
+import qualified Language.LSP.Server               as LSP
 import           Language.LSP.Types                (DiagnosticTag (..))
-
-import           Control.DeepSeq                   (force, liftRnf, rnf, rwhnf)
+import qualified Language.LSP.Types                as LSP
+import           System.Directory
+import           System.FilePath
+import           System.IO.Extra                   (fixIO, newTempFileWithin)
+import           Unsafe.Coerce
 
 #if !MIN_VERSION_ghc(8,10,0)
 import           ErrUtils
 #endif
-
 
 #if MIN_VERSION_ghc(9,0,1)
 import           GHC.Tc.Gen.Splice
@@ -69,68 +110,17 @@ import           TcSplice
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
-import qualified GHC.Types.Error                   as Error
-import qualified GHC as G
-#endif
-
-import           Control.Exception                 (evaluate)
-import           Control.Exception.Safe
-import           Control.Lens                      hiding (List)
-import           Control.Monad.Except
-import           Control.Monad.Extra
-import           Control.Monad.Trans.Except
-import           Data.Bifunctor                    (first, second)
-import qualified Data.ByteString                   as BS
-import qualified Data.DList                        as DL
-import           Data.IORef
-import qualified Data.IntMap.Strict                as IntMap
-import           Data.List.Extra
-import qualified Data.Map.Strict                   as Map
-import           Data.Maybe
-import qualified Data.Text                         as T
-import           Data.Time                         (UTCTime(..), getCurrentTime)
-import qualified GHC.LanguageExtensions            as LangExt
-import           System.Directory
-import           System.FilePath
-import           System.IO.Extra                   (fixIO, newTempFileWithin)
-
--- GHC API imports
--- GHC API imports
-#if MIN_VERSION_ghc(9,2,0)
+import           Development.IDE.GHC.Compat.Util   (emptyUDFM, fsLit,
+                                                    plusUDFM_C)
 import           GHC                               (Anchor (anchor),
                                                     EpaComment (EpaComment),
                                                     EpaCommentTok (EpaBlockComment, EpaLineComment),
                                                     epAnnComments,
                                                     priorComments)
+import qualified GHC                               as G
 import           GHC.Hs                            (LEpaComment)
+import qualified GHC.Types.Error                   as Error
 #endif
-import           GHC                               (GetDocsFailure (..),
-                                                    mgModSummaries,
-                                                    parsedSource, ForeignHValue)
-
-import           Control.Concurrent.Extra
-import           Control.Concurrent.STM.Stats      hiding (orElse)
-import           Data.Aeson                        (toJSON)
-import           Data.Binary
-import           Data.Coerce
-import           Data.Functor
-import qualified Data.HashMap.Strict               as HashMap
-import           Data.IntMap                       (IntMap)
-import           Data.Map                          (Map)
-import           Data.Tuple.Extra                  (dupe)
-import           Data.Unique                       as Unique
-import           Development.IDE.Core.Tracing      (withTrace)
-import           Development.IDE.GHC.Compat.Util   (emptyUDFM, plusUDFM_C, fsLit)
-import qualified Language.LSP.Server               as LSP
-import qualified Language.LSP.Types                as LSP
-import           Unsafe.Coerce
-import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
-import Debug.Trace
-
-import GHC.Serialized
-import qualified Data.Binary                                  as B
-import           Data.ByteString                              (ByteString)
-import qualified Data.ByteString.Lazy                         as LBS
 
 -- | Given a string buffer, return the string (after preprocessing) and the 'ParsedModule'.
 parseModule
@@ -159,7 +149,7 @@ computePackageDeps env pkg = do
 
 typecheckModule :: IdeDefer
                 -> HscEnv
-                -> (ModuleEnv UTCTime) -- ^ linkables not to unload
+                -> ModuleEnv UTCTime -- ^ linkables not to unload
                 -> ParsedModule
                 -> IO (IdeResult TcModuleResult)
 typecheckModule (IdeDefer defer) hsc keep_lbls pm = do
@@ -310,7 +300,11 @@ captureSplicesAndDeps env k = do
             pure $ f aw'
 
 
-tcRnModule :: HscEnv -> ModuleEnv UTCTime -> ParsedModule -> IO TcModuleResult
+tcRnModule
+  :: HscEnv
+  -> ModuleEnv UTCTime -- ^ Program linkables not to unload
+  -> ParsedModule
+  -> IO TcModuleResult
 tcRnModule hsc_env keep_lbls pmod = do
   let ms = pm_mod_summary pmod
       hsc_env_tmp = hscSetFlags (ms_hspp_opts ms) hsc_env
@@ -341,6 +335,7 @@ tcRnModule hsc_env keep_lbls pmod = do
                                              | mod_info <- eltsUDFM $ udfmIntersectUFM hpt (getUniqSet new)]
 
       -- The linkables we depend on at runtime are the transitive closure of 'mods'
+      -- restricted to the home package
       mod_env = filterModuleEnv (\m _ -> elementOfUniqSet (moduleName m) mods_transitive) keep_lbls -- Could use restrictKeys if the constructors were exported
 
       -- Serialize mod_env so we can read it from the interface
@@ -1086,7 +1081,7 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
       Just ver -> pure $ Just ver
       Nothing ->  get_file_version $ toNormalizedFilePath' $ case linkableNeeded of
           Just ObjectLinkable -> ml_obj_file (ms_location ms)
-          _ -> ml_hi_file (ms_location ms)
+          _                   -> ml_hi_file (ms_location ms)
 
     -- The source is modified if it is newer than the destination
     let sourceMod = case mb_dest_version of
@@ -1133,15 +1128,14 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
                 Just disk_obj_version@(ModificationTime t) ->
                   -- If we make it this far, assume that the object code on disk is up to date
                   -- This assertion works because of the sourceMod check
-                  assert (disk_obj_version >= source_version) 
+                  assert (disk_obj_version >= source_version)
                          (UpToDate, Just $ LM (posixSecondsToUTCTime t) mod [DotO obj_file])
                 Just (VFSVersion _) -> error "object code in vfs"
 
     let do_regenerate _reason = withTrace "regenerate interface" $ \setTag -> do
-          setTag "Module" $ moduleNameString $ moduleName $ mod
+          setTag "Module" $ moduleNameString $ moduleName mod
           setTag "Reason" $ showReason _reason
           liftIO $ traceMarkerIO $ "regenerate interface " ++ show (moduleNameString $ moduleName mod, showReason _reason)
-          liftIO $ traceIO $ "regenerate interface " ++ show (moduleNameString $ moduleName mod, showReason _reason)
           regenerate linkableNeeded
 
     case (mb_checked_iface, recomp_iface_reqd <> recomp_obj_reqd) of
