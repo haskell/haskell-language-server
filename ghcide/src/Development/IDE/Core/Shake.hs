@@ -82,21 +82,35 @@ module Development.IDE.Core.Shake(
 
 import           Control.Concurrent.Async
 import           Control.Concurrent.STM
+import           Control.Concurrent.STM.Stats           (atomicallyNamed)
 import           Control.Concurrent.Strict
 import           Control.DeepSeq
+import           Control.Exception.Extra                hiding (bracket_)
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader
 import           Control.Monad.Trans.Maybe
+import           Data.Aeson                             (toJSON)
 import qualified Data.ByteString.Char8                  as BS
+import qualified Data.ByteString.Char8                  as BS8
+import           Data.Coerce                            (coerce)
+import           Data.Default
 import           Data.Dynamic
+import           Data.EnumMap.Strict                    (EnumMap)
+import qualified Data.EnumMap.Strict                    as EM
+import           Data.Foldable                          (for_, toList)
+import           Data.Functor                           ((<&>))
 import qualified Data.HashMap.Strict                    as HMap
+import           Data.HashSet                           (HashSet)
+import qualified Data.HashSet                           as HSet
 import           Data.Hashable
+import           Data.IORef
 import           Data.List.Extra                        (foldl', partition,
                                                          takeEnd)
 import qualified Data.Map.Strict                        as Map
 import           Data.Maybe
 import qualified Data.SortedList                        as SL
+import           Data.String                            (fromString)
 import qualified Data.Text                              as T
 import           Data.Time
 import           Data.Traversable
@@ -105,7 +119,9 @@ import           Data.Typeable
 import           Data.Unique
 import           Data.Vector                            (Vector)
 import qualified Data.Vector                            as Vector
+import           Debug.Trace.Flags                      (userTracingEnabled)
 import           Development.IDE.Core.Debouncer
+import           Development.IDE.Core.FileUtils         (getModTime)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.ProgressReporting
 import           Development.IDE.Core.RuleTypes
@@ -128,49 +144,31 @@ import           Development.IDE.Graph.Rule
 import           Development.IDE.Types.Action
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Exports
+import qualified Development.IDE.Types.Exports          as ExportsMap
 import           Development.IDE.Types.KnownTargets
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger           hiding (Priority)
 import qualified Development.IDE.Types.Logger           as Logger
 import           Development.IDE.Types.Options
 import           Development.IDE.Types.Shake
-import           GHC.Generics
-import           Language.LSP.Diagnostics
-import qualified Language.LSP.Server                    as LSP
-import           Language.LSP.Types
-import qualified Language.LSP.Types                     as LSP
-import           Language.LSP.VFS
-import           System.FilePath                        hiding (makeRelative)
-import           System.Time.Extra
-
-import           Data.IORef
-import           GHC.Fingerprint
-import           Language.LSP.Types.Capabilities
-import           OpenTelemetry.Eventlog
-
-import           Control.Concurrent.STM.Stats           (atomicallyNamed)
-import           Control.Exception.Extra                hiding (bracket_)
-import           Data.Aeson                             (toJSON)
-import qualified Data.ByteString.Char8                  as BS8
-import           Data.Coerce                            (coerce)
-import           Data.Default
-import           Data.EnumMap.Strict                    (EnumMap)
-import qualified Data.EnumMap.Strict                    as EM
-import           Data.Foldable                          (for_, toList)
-import           Data.Functor                           ((<&>))
-import           Data.HashSet                           (HashSet)
-import qualified Data.HashSet                           as HSet
-import           Data.String                            (fromString)
-import           Debug.Trace.Flags                      (userTracingEnabled)
-import           Development.IDE.Core.FileUtils         (getModTime)
-import qualified Development.IDE.Types.Exports          as ExportsMap
 import qualified Focus
+import           GHC.Fingerprint
+import           GHC.Generics
 import           HieDb.Types
 import           Ide.Plugin.Config
 import qualified Ide.PluginUtils                        as HLS
 import           Ide.Types                              (PluginId)
+import           Language.LSP.Diagnostics
+import qualified Language.LSP.Server                    as LSP
+import           Language.LSP.Types
+import qualified Language.LSP.Types                     as LSP
+import           Language.LSP.Types.Capabilities
+import           Language.LSP.VFS
 import qualified "list-t" ListT
+import           OpenTelemetry.Eventlog
 import qualified StmContainers.Map                      as STM
+import           System.FilePath                        hiding (makeRelative)
+import           System.Time.Extra
 
 data Log
   = LogCreateHieDbExportsMapStart
