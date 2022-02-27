@@ -711,14 +711,13 @@ newDefinitionAction IdeOptions{..} parsedModule Range{_start} name typ
       , _start `isInsideSrcSpan` l]
     , nextLineP <- Position{ _line = _line lastLineP + 1, _character = 0}
     = [ ("Define " <> sig
-        , [TextEdit (Range nextLineP nextLineP) (T.unlines ["", sig, name <> " = error \"not implemented\""])]
+        , [TextEdit (Range nextLineP nextLineP) (T.unlines ["", sig, name <> " = _"])]
         )]
     | otherwise = []
   where
     colon = if optNewColonConvention then " : " else " :: "
     sig = name <> colon <> T.dropWhileEnd isSpace typ
     ParsedModule{pm_parsed_source = L _ HsModule{hsmodDecls}} = parsedModule
-
 
 suggestFillTypeWildcard :: Diagnostic -> [(T.Text, TextEdit)]
 suggestFillTypeWildcard Diagnostic{_range=_range,..}
