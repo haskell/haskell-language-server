@@ -4,6 +4,7 @@
 {-# LANGUAGE TypeOperators     #-}
 
 {-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 module Main
   ( main
   ) where
@@ -34,7 +35,6 @@ tests = testGroup
           [ Just "Add placeholders for '=='"
           , Just "Add placeholders for '/='"
           ]
-#if !MIN_VERSION_ghc(9,2,0)
   , goldenWithClass "Creates a placeholder for '=='" "T1" "eq" $ \(eqAction:_) -> do
       executeCodeAction eqAction
   , goldenWithClass "Creates a placeholder for '/='" "T1" "ne" $ \(_:neAction:_) -> do
@@ -47,7 +47,8 @@ tests = testGroup
       executeCodeAction mmAction
   , goldenWithClass "Creates a placeholder for a method starting with '_'" "T4" "" $ \(_fAction:_) -> do
       executeCodeAction _fAction
-#endif
+  , goldenWithClass "Creates a placeholder for '==' with extra lines" "T5" "" $ \(eqAction:_) -> do
+      executeCodeAction eqAction
   ]
 
 _CACodeAction :: Prism' (Command |? CodeAction) CodeAction

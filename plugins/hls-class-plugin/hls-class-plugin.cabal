@@ -56,5 +56,3 @@ test-suite tests
     , hls-test-utils     ^>=1.2
     , lens
     , lsp-types
-    -- Remove the below line when compiled succeed on 9.2.
-    , ghc
