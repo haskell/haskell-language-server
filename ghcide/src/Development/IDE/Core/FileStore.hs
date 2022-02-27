@@ -5,15 +5,11 @@
 
 module Development.IDE.Core.FileStore(
     getFileContents,
-    getVirtualFile,
     setFileModified,
     setSomethingModified,
     fileStoreRules,
     modificationTime,
     typecheckParents,
-    VFSHandle,
-    makeVFSHandle,
-    makeLSPVFSHandle,
     resetFileStore,
     resetInterfaceStore,
     getModificationTimeImpl,
@@ -28,20 +24,18 @@ module Development.IDE.Core.FileStore(
 import           Control.Concurrent.STM.Stats                 (STM, atomically,
                                                                modifyTVar')
 import           Control.Concurrent.STM.TQueue                (writeTQueue)
-import           Control.Concurrent.Strict
 import           Control.Exception
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import qualified Data.ByteString                              as BS
 import           Data.Either.Extra
-import qualified Data.Map.Strict                              as Map
-import           Data.Maybe
 import qualified Data.Rope.UTF16                              as Rope
 import qualified Data.Text                                    as T
 import           Data.Time
 import           Data.Time.Clock.POSIX
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake                   hiding (Log)
+import           Development.IDE.Core.FileUtils
 import           Development.IDE.GHC.Orphans                  ()
 import           Development.IDE.Graph
 import           Development.IDE.Import.DependencyInformation
@@ -56,8 +50,6 @@ import           System.IO.Error
 #ifdef mingw32_HOST_OS
 import qualified System.Directory                             as Dir
 #else
-import           System.Posix.Files                           (getFileStatus,
-                                                               modificationTimeHiRes)
 #endif
 
 import qualified Development.IDE.Types.Logger                 as L
@@ -76,8 +68,6 @@ import           Development.IDE.Types.Logger                 (Pretty (pretty),
                                                                cmapWithPrio,
                                                                logWith, viaShow,
                                                                (<+>))
-import           Language.LSP.Server                          hiding
-                                                              (getVirtualFile)
 import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.Types                           (DidChangeWatchedFilesRegistrationOptions (DidChangeWatchedFilesRegistrationOptions),
                                                                FileChangeType (FcChanged),
@@ -106,27 +96,6 @@ instance Pretty Log where
       <+> pretty (fmap (fmap show) reverseDepPaths)
     LogShake log -> pretty log
 
-makeVFSHandle :: IO VFSHandle
-makeVFSHandle = do
-    vfsVar <- newVar (1, Map.empty)
-    pure VFSHandle
-        { getVirtualFile = \uri -> do
-              (_nextVersion, vfs) <- readVar vfsVar
-              pure $ Map.lookup uri vfs
-        , setVirtualFileContents = Just $ \uri content ->
-              void $ modifyVar' vfsVar $ \(nextVersion, vfs) -> (nextVersion + 1, ) $
-                  case content of
-                    Nothing -> Map.delete uri vfs
-                    -- The second version number is only used in persistFileVFS which we do not use so we set it to 0.
-                    Just content -> Map.insert uri (VirtualFile nextVersion 0 (Rope.fromText content)) vfs
-        }
-
-makeLSPVFSHandle :: LanguageContextEnv c -> VFSHandle
-makeLSPVFSHandle lspEnv = VFSHandle
-    { getVirtualFile = runLspT lspEnv . LSP.getVirtualFile
-    , setVirtualFileContents = Nothing
-   }
-
 addWatchedFileRule :: Recorder (WithPriority Log) -> (NormalizedFilePath -> Action Bool) -> Rules ()
 addWatchedFileRule recorder isWatched = defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \AddWatchedFile f -> do
   isAlreadyWatched <- isWatched f
@@ -140,20 +109,19 @@ addWatchedFileRule recorder isWatched = defineNoDiagnostics (cmapWithPrio LogSha
             Nothing -> pure $ Just False
 
 
-getModificationTimeRule :: Recorder (WithPriority Log) -> VFSHandle -> Rules ()
-getModificationTimeRule recorder vfs = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \(GetModificationTime_ missingFileDiags) file ->
-    getModificationTimeImpl vfs missingFileDiags file
+getModificationTimeRule :: Recorder (WithPriority Log) -> Rules ()
+getModificationTimeRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \(GetModificationTime_ missingFileDiags) file ->
+    getModificationTimeImpl missingFileDiags file
 
-getModificationTimeImpl :: VFSHandle
-    -> Bool
-    -> NormalizedFilePath
-    -> Action
-        (Maybe BS.ByteString, ([FileDiagnostic], Maybe FileVersion))
-getModificationTimeImpl vfs missingFileDiags file = do
+getModificationTimeImpl
+  :: Bool
+  -> NormalizedFilePath
+  -> Action (Maybe BS.ByteString, ([FileDiagnostic], Maybe FileVersion))
+getModificationTimeImpl missingFileDiags file = do
     let file' = fromNormalizedFilePath file
     let wrap time = (Just $ LBS.toStrict $ B.encode $ toRational time, ([], Just $ ModificationTime time))
-    mbVirtual <- liftIO $ getVirtualFile vfs $ filePathToUri' file
-    case mbVirtual of
+    mbVf <- getVirtualFile file
+    case mbVf of
         Just (virtualFileVersion -> ver) -> do
             alwaysRerun
             pure (Just $ LBS.toStrict $ B.encode ver, ([], Just $ VFSVersion ver))
@@ -206,43 +174,23 @@ resetFileStore ideState changes = mask $ \_ -> do
             _ -> pure ()
 
 
--- Dir.getModificationTime is surprisingly slow since it performs
--- a ton of conversions. Since we do not actually care about
--- the format of the time, we can get away with something cheaper.
--- For now, we only try to do this on Unix systems where it seems to get the
--- time spent checking file modifications (which happens on every change)
--- from > 0.5s to ~0.15s.
--- We might also want to try speeding this up on Windows at some point.
--- TODO leverage DidChangeWatchedFile lsp notifications on clients that
--- support them, as done for GetFileExists
-getModTime :: FilePath -> IO POSIXTime
-getModTime f =
-#ifdef mingw32_HOST_OS
-    utcTimeToPOSIXSeconds <$> Dir.getModificationTime f
-#else
-    modificationTimeHiRes <$> getFileStatus f
-#endif
-
 modificationTime :: FileVersion -> Maybe UTCTime
 modificationTime VFSVersion{}             = Nothing
 modificationTime (ModificationTime posix) = Just $ posixSecondsToUTCTime posix
 
-getFileContentsRule :: Recorder (WithPriority Log) -> VFSHandle -> Rules ()
-getFileContentsRule recorder vfs = define (cmapWithPrio LogShake recorder) $ \GetFileContents file -> getFileContentsImpl vfs file
+getFileContentsRule :: Recorder (WithPriority Log) -> Rules ()
+getFileContentsRule recorder = define (cmapWithPrio LogShake recorder) $ \GetFileContents file -> getFileContentsImpl file
 
 getFileContentsImpl
-    :: VFSHandle
-    -> NormalizedFilePath
+    :: NormalizedFilePath
     -> Action ([FileDiagnostic], Maybe (FileVersion, Maybe T.Text))
-getFileContentsImpl vfs file = do
+getFileContentsImpl file = do
     -- need to depend on modification time to introduce a dependency with Cutoff
     time <- use_ GetModificationTime file
-    res <- liftIO $ ideTryIOException file $ do
-        mbVirtual <- getVirtualFile vfs $ filePathToUri' file
+    res <- do
+        mbVirtual <- getVirtualFile file
         pure $ Rope.toText . _text <$> mbVirtual
-    case res of
-        Left err       -> return ([err], Nothing)
-        Right contents -> return ([], Just (time, contents))
+    pure ([], Just (time, res))
 
 ideTryIOException :: NormalizedFilePath -> IO a -> IO (Either FileDiagnostic a)
 ideTryIOException fp act =
@@ -266,11 +214,10 @@ getFileContents f = do
             pure $ posixSecondsToUTCTime posix
     return (modTime, txt)
 
-fileStoreRules :: Recorder (WithPriority Log) -> VFSHandle -> (NormalizedFilePath -> Action Bool) -> Rules ()
-fileStoreRules recorder vfs isWatched = do
-    addIdeGlobal vfs
-    getModificationTimeRule recorder vfs
-    getFileContentsRule recorder vfs
+fileStoreRules :: Recorder (WithPriority Log) -> (NormalizedFilePath -> Action Bool) -> Rules ()
+fileStoreRules recorder isWatched = do
+    getModificationTimeRule recorder
+    getFileContentsRule recorder
     addWatchedFileRule recorder isWatched
 
 -- | Note that some buffer for a specific file has been modified but not
@@ -287,9 +234,6 @@ setFileModified recorder state saved nfp = do
           AlwaysCheck -> True
           CheckOnSave -> saved
           _           -> False
-    VFSHandle{..} <- getIdeGlobalState state
-    when (isJust setVirtualFileContents) $
-        fail "setFileModified can't be called on this type of VFSHandle"
     join $ atomically $ recordDirtyKeys (shakeExtras state) GetModificationTime [nfp]
     restartShakeSession (shakeExtras state) (fromNormalizedFilePath nfp ++ " (modified)") []
     when checkParents $
@@ -314,9 +258,6 @@ typecheckParentsAction recorder nfp = do
 --   independently tracks which files are modified.
 setSomethingModified :: IdeState -> [Key] -> String -> IO ()
 setSomethingModified state keys reason = do
-    VFSHandle{..} <- getIdeGlobalState state
-    when (isJust setVirtualFileContents) $
-        fail "setSomethingModified can't be called on this type of VFSHandle"
     -- Update database to remove any files that might have been renamed/deleted
     atomically $ do
         writeTQueue (indexQueue $ hiedbWriter $ shakeExtras state) (\withHieDb -> withHieDb deleteMissingRealFiles)
