@@ -50,6 +50,7 @@ extra-deps:
 - ghc-lib-parser-ex-9.2.0.1
 - heapsize-0.3.0.1
 - hiedb-0.4.1.0
+- hie-bios-0.9.0
 - hspec-2.7.10       # for hls-test-utils
 - hspec-core-2.7.10  # for hls-test-utils
 - implicit-hie-0.1.2.6

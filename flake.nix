@@ -59,6 +59,10 @@
       url = "https://hackage.haskell.org/package/implicit-hie-cradle-0.3.0.5/implicit-hie-cradle-0.3.0.5.tar.gz";
       flake = false;
     };
+    hie-bios = {
+      url = "https://hackage.haskell.org/package/hie-bios-0.9.0/hie-bios-0.9.0.tar.gz";
+      flake = false;
+    };
   };
   outputs =
     inputs@{ self, nixpkgs, flake-compat, flake-utils, pre-commit-hooks, gitignore, ... }:
@@ -108,8 +112,8 @@
             with haskell.lib; {
               # Patches don't apply
               github = overrideCabal hsuper.github (drv: { patches = []; });
-              # GHCIDE requires hie-bios >=0.8 && <0.9.0
-              hie-bios = hself.hie-bios_0_8_0;
+              # GHCIDE requires hie-bios ^>=0.9.0
+              hie-bios = hself.callCabal2nix "hie-bios" inputs.hie-bios {};
               # We need an older version
               hiedb = hself.hiedb_0_4_1_0;
 
@@ -364,7 +368,7 @@
           # distributed using nix.
           all-haskell-language-server = linkFarmFromDrvs "all-haskell-language-server" (lib.unique (builtins.attrValues allPackages));
 
-          # Same for all shells 
+          # Same for all shells
           # We try to build as much as possible, but not much shells are
           # working (especially on darwing), so this list is limited.
           all-nix-dev-shells = linkFarmFromDrvs "all-dev-shells" (builtins.map (shell: shell.inputDerivation) (lib.unique [nixDevShells.haskell-language-server-dev-nix]));
