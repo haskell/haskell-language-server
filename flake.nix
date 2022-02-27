@@ -113,7 +113,7 @@
               # Patches don't apply
               github = overrideCabal hsuper.github (drv: { patches = []; });
               # GHCIDE requires hie-bios ^>=0.9.0
-              hie-bios = hself.hie-bios_0_9_0;
+              hie-bios = hself.callCabal2nix "hie-bios" inputs.hie-bios {};
               # We need an older version
               hiedb = hself.hiedb_0_4_1_0;
 
