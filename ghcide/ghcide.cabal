@@ -50,6 +50,7 @@ library
         dlist,
         exceptions,
         extra >= 1.7.4,
+        enummapset,
         filepath,
         fingertree,
         focus,
@@ -147,6 +148,7 @@ library
         Development.IDE.Main.HeapStats
         Development.IDE.Core.Debouncer
         Development.IDE.Core.FileStore
+        Development.IDE.Core.FileUtils
         Development.IDE.Core.IdeConfiguration
         Development.IDE.Core.OfInterest
         Development.IDE.Core.PositionMapping

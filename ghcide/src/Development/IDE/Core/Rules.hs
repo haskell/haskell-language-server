@@ -85,6 +85,7 @@ import qualified Data.HashMap.Strict                          as HM
 import qualified Data.HashSet                                 as HashSet
 import           Data.Hashable
 import           Data.IORef
+import           Control.Concurrent.STM.TVar
 import           Data.IntMap.Strict                           (IntMap)
 import qualified Data.IntMap.Strict                           as IntMap
 import           Data.List
@@ -99,8 +100,7 @@ import           Data.Tuple.Extra
 import           Development.IDE.Core.Compile
 import           Development.IDE.Core.FileExists hiding (LogShake, Log)
 import           Development.IDE.Core.FileStore               (getFileContents,
-                                                               modificationTime,
-                                                               resetInterfaceStore)
+                                                               resetInterfaceStore, modificationTime)
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.OfInterest hiding (LogShake, Log)
 import           Development.IDE.Core.PositionMapping
@@ -555,12 +555,11 @@ getHieAstsRule recorder =
 persistentHieFileRule :: Recorder (WithPriority Log) -> Rules ()
 persistentHieFileRule recorder = addPersistentRule GetHieAst $ \file -> runMaybeT $ do
   res <- readHieFileForSrcFromDisk recorder file
-  vfs <- asks vfs
-  (currentSource,ver) <- liftIO $ do
-    mvf <- getVirtualFile vfs $ filePathToUri' file
-    case mvf of
-      Nothing -> (,Nothing) . T.decodeUtf8 <$> BS.readFile (fromNormalizedFilePath file)
-      Just vf -> pure (Rope.toText $ _text vf, Just $ _lsp_version vf)
+  vfsRef <- asks vfs
+  vfsData <- liftIO $ vfsMap <$> readTVarIO vfsRef
+  (currentSource, ver) <- liftIO $ case M.lookup (filePathToUri' file) vfsData of
+    Nothing -> (,Nothing) . T.decodeUtf8 <$> BS.readFile (fromNormalizedFilePath file)
+    Just vf -> pure (Rope.toText $ _text vf, Just $ _lsp_version vf)
   let refmap = Compat.generateReferencesMap . Compat.getAsts . Compat.hie_asts $ res
       del = deltaFromDiff (T.decodeUtf8 $ Compat.hie_hs_src res) currentSource
   pure (HAR (Compat.hie_module res) (Compat.hie_asts res) refmap mempty (HieFromDisk res),del,ver)
