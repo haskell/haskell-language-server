@@ -32,7 +32,6 @@ import           UnliftIO.Concurrent
 import           UnliftIO.Directory
 import           UnliftIO.Exception
 
-import           Development.IDE.Core.FileStore        hiding (Log)
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.Shake            hiding (Log)
 import           Development.IDE.Core.Tracing
@@ -88,7 +87,7 @@ runLanguageServer
     -> config
     -> (config -> Value -> Either T.Text config)
     -> LSP.Handlers (ServerM config)
-    -> (LSP.LanguageContextEnv config -> VFSHandle -> Maybe FilePath -> WithHieDb -> IndexQueue -> IO IdeState)
+    -> (LSP.LanguageContextEnv config -> Maybe FilePath -> WithHieDb -> IndexQueue -> IO IdeState)
     -> IO ()
 runLanguageServer recorder options inH outH getHieDbLoc defaultConfig onConfigurationChange userHandlers getIdeState = do
 
@@ -176,7 +175,7 @@ runLanguageServer recorder options inH outH getHieDbLoc defaultConfig onConfigur
             dbMVar <- newEmptyMVar
             ~(WithHieDbShield withHieDb,hieChan) <- unsafeInterleaveIO $ takeMVar dbMVar
 
-            ide <- getIdeState env (makeLSPVFSHandle env) root withHieDb hieChan
+            ide <- getIdeState env root withHieDb hieChan
 
             let initConfig = parseConfiguration params
 
