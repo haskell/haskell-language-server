@@ -64,8 +64,6 @@ import qualified GHC.LanguageExtensions                            as Lang
 import           Ide.PluginUtils                                   (subRange)
 import           Ide.Types
 import qualified Language.LSP.Server                               as LSP
-
-
 import           Language.LSP.Types                                (CodeAction (..),
                                                                     CodeActionContext (CodeActionContext, _diagnostics),
                                                                     CodeActionKind (CodeActionQuickFix, CodeActionUnknown),
