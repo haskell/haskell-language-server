@@ -39,7 +39,6 @@ import           Language.LSP.Types
 import qualified Language.LSP.Types.Lens                 as J
 
 #if MIN_VERSION_ghc(9,2,0)
-import           GHC.Data.Maybe (rightToMaybe)
 import           GHC.Hs                                  (AnnsModule(AnnsModule))
 import           GHC.Parser.Annotation
 #endif
@@ -99,7 +98,7 @@ addMethodPlaceholders state AddMinimalMethodsParams{..} = do
       pure (old, new)
 
     makeMethodDecl df mName =
-        rightToMaybe . parseDecl df (T.unpack mName) . T.unpack
+        either (const Nothing) Just . parseDecl df (T.unpack mName) . T.unpack
             $ toMethodName mName <> " = _"
 
     addMethodDecls ps mDecls = do
@@ -107,6 +106,15 @@ addMethodPlaceholders state AddMinimalMethodsParams{..} = do
       let (before, ((L l inst): after)) = break (containRange range . getLoc) allDecls
       replaceDecls ps (before ++ (L l (addWhere inst)): (map newLine mDecls ++ after))
       where
+        -- Add `where` keyword for `instance X where` if `where` is missing.
+        --
+        -- The `where` in ghc-9.2 is now stored in the instance declaration
+        --   directly. More precisely, giving an `HsDecl GhcPs`, we have:
+        --   InstD --> ClsInstD --> ClsInstDecl --> XCClsInstDecl --> (EpAnn [AddEpAnn], AnnSortKey),
+        --   here `AnnEpAnn` keeps the track of Anns.
+        --
+        -- See the link for the original definition:
+        --   https://hackage.haskell.org/package/ghc-9.2.1/docs/Language-Haskell-Syntax-Extension.html#t:XCClsInstDecl
         addWhere (InstD xInstD (ClsInstD ext decl@ClsInstDecl{..})) =
           let ((EpAnn entry anns comments), key) = cid_ext
           in InstD xInstD (ClsInstD ext decl {
