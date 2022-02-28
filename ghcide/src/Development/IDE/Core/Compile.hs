@@ -192,7 +192,15 @@ captureSplicesAndDeps env k = do
 
     -- We want to record exactly which linkables/modules the typechecker needed at runtime
     -- This is useful for recompilation checking.
-    -- From hscCompileCoreExpr'
+    -- See Note [Recompilation avoidance in the presence of TH]
+    --
+    -- From hscCompileCoreExpr' in GHC
+    -- To update, copy hscCompileCoreExpr' (the implementation of
+    -- hscCompileCoreExprHook) verbatim, and add code to extract all the free
+    -- names in the compiled bytecode, recording the modules that those names
+    -- come from in the IORef,, as these are the modules on whose implementation
+    -- we depend.
+    --
     -- Only compute direct dependencies instead of transitive dependencies.
     -- It is much cheaper to store the direct dependencies, we can compute
     -- the transitive ones when required.
@@ -336,6 +344,7 @@ tcRnModule hsc_env keep_lbls pmod = do
 
       -- The linkables we depend on at runtime are the transitive closure of 'mods'
       -- restricted to the home package
+      -- See Note [Recompilation avoidance in the presence of TH]
       mod_env = filterModuleEnv (\m _ -> elementOfUniqSet (moduleName m) mods_transitive) keep_lbls -- Could use restrictKeys if the constructors were exported
 
       -- Serialize mod_env so we can read it from the interface
@@ -1050,6 +1059,63 @@ loadHieFile :: Compat.NameCacheUpdater -> FilePath -> IO GHC.HieFile
 loadHieFile ncu f = do
   GHC.hie_file_result <$> GHC.readHieFile ncu f
 
+
+{- Note [Recompilation avoidance in the presence of TH]
+
+Most versions of GHC we currently support don't have a working implementation of
+code unloading for object code, and no version of GHC supports this on certain
+platforms like Windows. This makes it completely infeasible for interactive use,
+as symbols from previous compiles will shadow over all future compiles.
+
+This means that we need to use bytecode when generating code for Template
+Haskell. Unfortunately, we can't serialize bytecode, so we will always need
+to recompile when the IDE starts. However, we can put in place a much tighter
+recompilation avoidance scheme for subsequent compiles:
+
+1. If the source file changes, then we always need to recompile
+   a. For files of interest, we will get explicit `textDocument/change` events
+   that will let us invalidate our build products
+   b. For files we read from disk, we can detect source file changes by
+   comparing the `mtime` of the source file with the build product (.hi/.o) file
+   on disk.
+2. If GHC's recompilation avoidance scheme based on interface file hashes says
+   that we need to recompile, the we need to recompile.
+3. If the file in question requires code generation then, we need to recompile
+   if we don't have the appropriate kind of build products.
+   a. If we already have the build products in memory, and the conditions 1 and
+   2 above hold, then we don't need to recompile
+   b. If we are generating object code, then we can also search for it on
+   disk and ensure it is up to date. Notably, we did _not_ previously re-use
+   old bytecode from memory when `hls-graph`/`shake` decided to rebuild the
+   `HiFileResult` for some reason
+
+4. If the file in question used Template Haskell on the previous compile, then
+  we need to recompile if any `Linkable` in its transitive closure changed. This
+  sounds bad, but it is possible to make some improvements.
+  In particular, we only need to recompile if any of the `Linkable`s actually used during the previous compile change.
+
+How can we tell if a `Linkable` was actually used while running some TH?
+
+GHC provides a `hscCompileCoreExprHook` which lets us intercept bytecode as
+it is being compiled and linked. We can inspect the bytecode to see which
+`Linkable` dependencies it requires, and record this for use in
+recompilation checking.
+We record all the home package modules of the free names that occur in the
+bytecode. The `Linkable`s required are then the transitive closure of these
+modules in the home-package environment. This is the same scheme as used by
+GHC to find the correct things to link in before running bytecode.
+
+This works fine if we already have previous build products in memory, but
+what if we are reading an interface from disk? Well, we can smuggle in the
+necessary information (linkable `Module`s required as well as the time they
+were generated) using `Annotation`s, which provide a somewhat general purpose
+way to serialise arbitrary information along with interface files.
+
+Then when deciding whether to recompile, we need to check that the versions
+of the linkables used during a previous compile match whatever is currently
+in the HPT.
+-}
+
 data RecompilationInfo m
   = RecompilationInfo
   { source_version :: FileVersion
@@ -1061,6 +1127,7 @@ data RecompilationInfo m
 -- | Retuns an up-to-date module interface, regenerating if needed.
 --   Assumes file exists.
 --   Requires the 'HscEnv' to be set up with dependencies
+-- See Note [Recompilation avoidance in the presence of TH]
 loadInterface
   :: (MonadIO m, MonadMask m)
   => HscEnv
@@ -1183,6 +1250,7 @@ parseRuntimeDeps anns = mkModuleEnv $ mapMaybe go anns
 -- | checkLinkableDependencies compares the linkables in the home package to
 -- the runtime dependencies of the module, to check if any of them are out of date
 -- Hopefully 'runtime_deps' will be empty if the module didn't actually use TH
+-- See Note [Recompilation avoidance in the presence of TH]
 checkLinkableDependencies :: HomePackageTable -> ModuleEnv UTCTime -> Maybe RecompileRequired
 checkLinkableDependencies hpt runtime_deps
   | isEmptyModuleEnv out_of_date = Nothing -- Nothing out of date, so don't recompile
