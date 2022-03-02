@@ -98,6 +98,18 @@
         "type": "github"
       }
     },
+    "hie-bios": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-nd+FfUQVZNxJfKZkAWA3dF0JwRgXntL+1gGvyNHDbKc=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/hie-bios-0.9.0/hie-bios-0.9.0.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/hie-bios-0.9.0/hie-bios-0.9.0.tar.gz"
+      }
+    },
     "hlint": {
       "flake": false,
       "locked": {
@@ -227,6 +239,7 @@
         "fourmolu": "fourmolu",
         "ghc-exactprint": "ghc-exactprint",
         "gitignore": "gitignore",
+        "hie-bios": "hie-bios",
         "hlint": "hlint",
         "implicit-hie-cradle": "implicit-hie-cradle",
         "lsp": "lsp",
