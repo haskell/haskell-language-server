@@ -99,7 +99,7 @@ main = withTelemetryLogger $ \telemetryLogger -> do
               liftIO $ (cb1 <> cb2) env
           }
 
-    let docWithFilteredPriorityRecorder@Recorder{ logger_ } =
+    let docWithFilteredPriorityRecorder =
           (docWithPriorityRecorder & cfilter (\WithPriority{ priority } -> priority >= minPriority)) <>
           (lspLogRecorder & cmapWithPrio (renderStrict . layoutPretty defaultLayoutOptions)
                           & cfilter (\WithPriority{ priority } -> priority >= minPriority)) <>
@@ -107,7 +107,7 @@ main = withTelemetryLogger $ \telemetryLogger -> do
                               & cfilter (\WithPriority{ priority } -> priority >= Error))
 
     -- exists so old-style logging works. intended to be phased out
-    let logger = Logger $ \p m -> logger_ (WithPriority p emptyCallStack (pretty m))
+    let logger = Logger $ \p m -> Logger.logger_ docWithFilteredPriorityRecorder (WithPriority p emptyCallStack (pretty m))
 
     let recorder = docWithFilteredPriorityRecorder
                  & cmapWithPrio pretty

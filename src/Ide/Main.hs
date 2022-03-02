@@ -25,10 +25,10 @@ import qualified Development.IDE.Main          as IDEMain
 import qualified Development.IDE.Session       as Session
 import           Development.IDE.Types.Logger  as G
 import qualified Development.IDE.Types.Options as Ghcide
+import           GHC.Stack                     (emptyCallStack)
 import qualified HIE.Bios.Environment          as HieBios
 import           HIE.Bios.Types
 import           Ide.Arguments
-import           Ide.Logger
 import           Ide.Plugin.ConfigUtils        (pluginsToDefaultConfig,
                                                 pluginsToVSCodeExtensionSchema)
 import           Ide.Types                     (IdePlugins, PluginId (PluginId),
@@ -43,6 +43,7 @@ data Log
   | LogDirectory !FilePath
   | LogLspStart !GhcideArguments ![PluginId]
   | LogIDEMain IDEMain.Log
+  | LogOther T.Text
   deriving Show
 
 instance Pretty Log where
@@ -56,6 +57,7 @@ instance Pretty Log where
           , viaShow ghcideArgs
           , "PluginIds:" <+> pretty (coerce @_ @[Text] pluginIds) ]
     LogIDEMain iDEMainLog -> pretty iDEMainLog
+    LogOther t -> pretty t
 
 defaultMain :: Recorder (WithPriority Log) -> Arguments -> IdePlugins IdeState -> IO ()
 defaultMain recorder args idePlugins = do
@@ -108,16 +110,6 @@ defaultMain recorder args idePlugins = do
 
 -- ---------------------------------------------------------------------
 
-hlsLogger :: G.Logger
-hlsLogger = G.Logger $ \pri txt ->
-    case pri of
-      G.Debug     -> debugm   (T.unpack txt)
-      G.Info      -> logm     (T.unpack txt)
-      G.Warning   -> warningm (T.unpack txt)
-      G.Error     -> errorm   (T.unpack txt)
-
--- ---------------------------------------------------------------------
-
 runLspMode :: Recorder (WithPriority Log) -> GhcideArguments -> IdePlugins IdeState -> IO ()
 runLspMode recorder ghcideArgs@GhcideArguments{..} idePlugins = withTelemetryLogger $ \telemetryLogger -> do
     let log = logWith recorder
@@ -128,10 +120,13 @@ runLspMode recorder ghcideArgs@GhcideArguments{..} idePlugins = withTelemetryLog
     when (isLSP argsCommand) $ do
         log Info $ LogLspStart ghcideArgs (map fst $ ipMap idePlugins)
 
-    IDEMain.defaultMain (cmapWithPrio LogIDEMain recorder) (IDEMain.defaultArguments (cmapWithPrio LogIDEMain recorder) hlsLogger)
+    -- exists so old-style logging works. intended to be phased out
+    let logger = Logger $ \p m -> logger_ recorder (WithPriority p emptyCallStack $ LogOther m)
+
+    IDEMain.defaultMain (cmapWithPrio LogIDEMain recorder) (IDEMain.defaultArguments (cmapWithPrio LogIDEMain recorder) logger)
       { IDEMain.argCommand = argsCommand
       , IDEMain.argsHlsPlugins = idePlugins
-      , IDEMain.argsLogger = pure hlsLogger <> pure telemetryLogger
+      , IDEMain.argsLogger = pure logger <> pure telemetryLogger
       , IDEMain.argsThreads = if argsThreads == 0 then Nothing else Just $ fromIntegral argsThreads
       , IDEMain.argsIdeOptions = \_config sessionLoader ->
         let defOptions = Ghcide.defaultIdeOptions sessionLoader
