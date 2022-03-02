@@ -222,12 +222,12 @@ codeAction state plId (CodeActionParams _ _ docId _ context) = liftIO $ fmap (fr
               (Map.keys . Map.filter isClassNodeIdentifier . Compat.getNodeIds)
 #elif MIN_VERSION_ghc(9,0,0)
             $ pointCommand hf (fromJust (fromCurrentRange pmap range) ^. J.start & J.character -~ 1)
-              ( (Map.keys . Map.filter isClassNodeIdentifier . sourcedNodeIdents . sourcedNodeInfo)
+              ( (Map.keys . Map.filter isClassNodeIdentifier . Compat.getNodeIds)
                 <=< nodeChildren
               )
 #else
             $ pointCommand hf (fromJust (fromCurrentRange pmap range) ^. J.start & J.character -~ 1)
-              ( (Map.keys . Map.filter isClassNodeIdentifier . nodeIdentifiers . nodeInfo)
+              ( (Map.keys . Map.filter isClassNodeIdentifier . Compat.getNodeIds)
                 <=< nodeChildren
               )
 #endif
