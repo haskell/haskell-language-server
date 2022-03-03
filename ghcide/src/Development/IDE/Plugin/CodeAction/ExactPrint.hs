@@ -33,7 +33,7 @@ import qualified Data.Map.Strict                       as Map
 import           Data.Maybe                            (fromJust, isNothing,
                                                         mapMaybe)
 import qualified Data.Text                             as T
-import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat hiding (Annotation)
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.Spans.Common

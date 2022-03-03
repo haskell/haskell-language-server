@@ -55,12 +55,12 @@ import           Development.IDE.Test                     (Cursor,
                                                            flushMessages,
                                                            getInterfaceFilesDir,
                                                            getStoredKeys,
+                                                           isReferenceReady,
+                                                           referenceReady,
                                                            standardizeQuotes,
                                                            waitForAction,
                                                            waitForGC,
-                                                           waitForTypecheck,
-                                                           isReferenceReady,
-                                                           referenceReady)
+                                                           waitForTypecheck)
 import           Development.IDE.Test.Runfiles
 import qualified Development.IDE.Types.Diagnostics        as Diagnostics
 import           Development.IDE.Types.Location
@@ -97,6 +97,7 @@ import           Test.QuickCheck
 import           Control.Concurrent.Async
 import           Control.Lens                             (to, (^.))
 import           Control.Monad.Extra                      (whenJust)
+import           Data.Function                            ((&))
 import           Data.IORef
 import           Data.IORef.Extra                         (atomicModifyIORef_)
 import           Data.String                              (IsString (fromString))
@@ -107,6 +108,18 @@ import qualified Development.IDE.Plugin.HLS.GhcIde        as Ghcide
 import           Development.IDE.Plugin.Test              (TestRequest (BlockSeconds),
                                                            WaitForIdeRuleResult (..),
                                                            blockCommandId)
+import           Development.IDE.Types.Logger             (Logger (Logger),
+                                                           LoggingColumn (DataColumn, PriorityColumn),
+                                                           Pretty (pretty),
+                                                           Priority (Debug),
+                                                           Recorder (Recorder, logger_),
+                                                           WithPriority (WithPriority, priority),
+                                                           cfilter,
+                                                           cmapWithPrio,
+                                                           makeDefaultStderrRecorder)
+import qualified FuzzySearch
+import           GHC.Stack                                (emptyCallStack)
+import qualified HieDbRetry
 import           Ide.PluginUtils                          (pluginDescToIdePlugins)
 import           Ide.Types
 import qualified Language.LSP.Types                       as LSP
@@ -120,19 +133,14 @@ import           Test.Tasty.Ingredients.Rerun
 import           Test.Tasty.QuickCheck
 import           Text.Printf                              (printf)
 import           Text.Regex.TDFA                          ((=~))
-import qualified HieDbRetry
-import Development.IDE.Types.Logger (WithPriority(WithPriority, priority), Priority (Debug), cmapWithPrio, Recorder (Recorder, logger_), makeDefaultStderrRecorder, cfilter, LoggingColumn (PriorityColumn, DataColumn), Logger (Logger), Pretty (pretty))
-import Data.Function ((&))
-import GHC.Stack (emptyCallStack)
-import qualified FuzzySearch
 
-data Log 
-  = LogGhcIde Ghcide.Log 
+data Log
+  = LogGhcIde Ghcide.Log
   | LogIDEMain IDE.Log
 
 instance Pretty Log where
   pretty = \case
-    LogGhcIde log -> pretty log
+    LogGhcIde log  -> pretty log
     LogIDEMain log -> pretty log
 
 -- | Wait for the next progress begin step
@@ -2411,7 +2419,7 @@ insertNewDefinitionTests = testGroup "insert new definition actions"
       liftIO $ contentAfterAction @?= T.unlines (txtB ++
         [ ""
         , "select :: [Bool] -> Bool"
-        , "select = error \"not implemented\""
+        , "select = _"
         ]
         ++ txtB')
   , testSession "define a hole" $ do
@@ -2438,9 +2446,61 @@ insertNewDefinitionTests = testGroup "insert new definition actions"
         ,"foo False = False"
         , ""
         , "select :: [Bool] -> Bool"
-        , "select = error \"not implemented\""
+        , "select = _"
         ]
         ++ txtB')
+  , testSession "insert new function definition - Haddock comments" $ do
+    let start =  ["foo :: Int -> Bool"
+                 , "foo x = select (x + 1)"
+                 , ""
+                 , "-- | This is a haddock comment"
+                 , "haddock :: Int -> Int"
+                 , "haddock = undefined"
+                 ]
+    let expected =  ["foo :: Int -> Bool"
+             , "foo x = select (x + 1)"
+             , ""
+             , "select :: Int -> Bool"
+             , "select = _"
+             , ""
+             , "-- | This is a haddock comment"
+             , "haddock :: Int -> Int"
+             , "haddock = undefined"]
+    docB <- createDoc "ModuleB.hs" "haskell" (T.unlines start)
+    _ <- waitForDiagnostics
+    InR action@CodeAction { _title = actionTitle } : _
+                <- sortOn (\(InR CodeAction{_title=x}) -> x) <$>
+                    getCodeActions docB (R 1 0 0 50)
+    liftIO $ actionTitle @?= "Define select :: Int -> Bool"
+    executeCodeAction action
+    contentAfterAction <- documentContents docB
+    liftIO $ contentAfterAction @?= T.unlines expected
+  , testSession "insert new function definition - normal comments" $ do
+    let start =  ["foo :: Int -> Bool"
+                 , "foo x = select (x + 1)"
+                 , ""
+                 , "-- This is a normal comment"
+                 , "normal :: Int -> Int"
+                 , "normal = undefined"
+                 ]
+    let expected =  ["foo :: Int -> Bool"
+             , "foo x = select (x + 1)"
+             , ""
+             , "select :: Int -> Bool"
+             , "select = _"
+             , ""
+             , "-- This is a normal comment"
+             , "normal :: Int -> Int"
+             , "normal = undefined"]
+    docB <- createDoc "ModuleB.hs" "haskell" (T.unlines start)
+    _ <- waitForDiagnostics
+    InR action@CodeAction { _title = actionTitle } : _
+                <- sortOn (\(InR CodeAction{_title=x}) -> x) <$>
+                    getCodeActions docB (R 1 0 0 50)
+    liftIO $ actionTitle @?= "Define select :: Int -> Bool"
+    executeCodeAction action
+    contentAfterAction <- documentContents docB
+    liftIO $ contentAfterAction @?= T.unlines expected
   ]
 
 
@@ -5613,7 +5673,7 @@ bootTests = testGroup "boot"
             hoverResponseOrReadyMessage <- skipManyTill anyMessage ((Left <$> parseHoverResponse) <|> (Right <$> parseReadyMessage))
             _ <- skipManyTill anyMessage $
               case hoverResponseOrReadyMessage of
-                Left _ -> void parseReadyMessage
+                Left _  -> void parseReadyMessage
                 Right _ -> void parseHoverResponse
             closeDoc cDoc
         cdoc <- createDoc cPath "haskell" cSource

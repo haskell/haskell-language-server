@@ -26,14 +26,56 @@ module Development.IDE.Core.Compile
   , getModSummaryFromImports
   , loadHieFile
   , loadInterface
+  , RecompilationInfo(..)
   , loadModulesHome
   , getDocsBatch
   , lookupName
-  ,mergeEnvs) where
+  , mergeEnvs
+  ) where
 
+import           Control.Concurrent.Extra
+import           Control.Concurrent.STM.Stats      hiding (orElse)
+import           Control.DeepSeq                   (force, liftRnf, rnf, rwhnf)
+import           Control.Exception                 (evaluate)
+import           Control.Exception.Safe
+import           Control.Lens                      hiding (List)
+import           Control.Monad.Except
+import           Control.Monad.Extra
+import           Control.Monad.Trans.Except
+import           Data.Aeson                        (toJSON)
+import           Data.Bifunctor                    (first, second)
+import           Data.Binary
+import qualified Data.Binary                       as B
+import qualified Data.ByteString                   as BS
+import qualified Data.ByteString.Lazy              as LBS
+import           Data.Coerce
+import qualified Data.DList                        as DL
+import           Data.Functor
+import qualified Data.HashMap.Strict               as HashMap
+import           Data.IORef
+import           Data.IntMap                       (IntMap)
+import qualified Data.IntMap.Strict                as IntMap
+import           Data.List.Extra
+import           Data.Map                          (Map)
+import qualified Data.Map.Strict                   as Map
+import           Data.Maybe
+import qualified Data.Text                         as T
+import           Data.Time                         (UTCTime (..),
+                                                    getCurrentTime)
+import           Data.Time.Clock.POSIX             (posixSecondsToUTCTime)
+import           Data.Tuple.Extra                  (dupe)
+import           Data.Unique                       as Unique
+import           Debug.Trace
 import           Development.IDE.Core.Preprocessor
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
+import           Development.IDE.Core.Tracing      (withTrace)
+import           Development.IDE.GHC.Compat        hiding (loadInterface,
+                                                    parseHeader, parseModule,
+                                                    tcRnModule, writeHieFile)
+import qualified Development.IDE.GHC.Compat        as Compat
+import qualified Development.IDE.GHC.Compat        as GHC
+import qualified Development.IDE.GHC.Compat.Util   as Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Orphans       ()
 import           Development.IDE.GHC.Util
@@ -42,25 +84,24 @@ import           Development.IDE.Spans.Common
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
-
-import           Development.IDE.GHC.Compat        hiding (loadInterface,
-                                                    parseHeader, parseModule,
-                                                    tcRnModule, writeHieFile)
-import qualified Development.IDE.GHC.Compat        as Compat
-import qualified Development.IDE.GHC.Compat        as GHC
-import qualified Development.IDE.GHC.Compat.Util   as Util
-
+import           GHC                               (ForeignHValue,
+                                                    GetDocsFailure (..),
+                                                    mgModSummaries,
+                                                    parsedSource)
+import qualified GHC.LanguageExtensions            as LangExt
+import           GHC.Serialized
 import           HieDb
-
+import qualified Language.LSP.Server               as LSP
 import           Language.LSP.Types                (DiagnosticTag (..))
+import qualified Language.LSP.Types                as LSP
+import           System.Directory
+import           System.FilePath
+import           System.IO.Extra                   (fixIO, newTempFileWithin)
+import           Unsafe.Coerce
 
-#if MIN_VERSION_ghc(8,10,0)
-import           Control.DeepSeq                   (force, liftRnf, rnf, rwhnf)
-#else
-import           Control.DeepSeq                   (liftRnf, rnf, rwhnf)
+#if !MIN_VERSION_ghc(8,10,0)
 import           ErrUtils
 #endif
-
 
 #if MIN_VERSION_ghc(9,0,1)
 import           GHC.Tc.Gen.Splice
@@ -69,60 +110,17 @@ import           TcSplice
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
-import qualified GHC.Types.Error                   as Error
-#endif
-
-import           Control.Exception                 (evaluate)
-import           Control.Exception.Safe
-import           Control.Lens                      hiding (List)
-import           Control.Monad.Except
-import           Control.Monad.Extra
-import           Control.Monad.Trans.Except
-import           Data.Bifunctor                    (first, second)
-import qualified Data.ByteString                   as BS
-import qualified Data.DList                        as DL
-import           Data.IORef
-import qualified Data.IntMap.Strict                as IntMap
-import           Data.List.Extra
-import qualified Data.Map.Strict                   as Map
-import           Data.Maybe
-import qualified Data.Text                         as T
-import           Data.Time                         (UTCTime, getCurrentTime)
-import qualified GHC.LanguageExtensions            as LangExt
-import           System.Directory
-import           System.FilePath
-import           System.IO.Extra                   (fixIO, newTempFileWithin)
-
--- GHC API imports
--- GHC API imports
-#if MIN_VERSION_ghc(9,2,0)
+import           Development.IDE.GHC.Compat.Util   (emptyUDFM, fsLit,
+                                                    plusUDFM_C)
 import           GHC                               (Anchor (anchor),
                                                     EpaComment (EpaComment),
                                                     EpaCommentTok (EpaBlockComment, EpaLineComment),
                                                     epAnnComments,
                                                     priorComments)
+import qualified GHC                               as G
 import           GHC.Hs                            (LEpaComment)
+import qualified GHC.Types.Error                   as Error
 #endif
-import           GHC                               (GetDocsFailure (..),
-                                                    mgModSummaries,
-                                                    parsedSource)
-
-import           Control.Concurrent.Extra
-import           Control.Concurrent.STM.Stats      hiding (orElse)
-import           Data.Aeson                        (toJSON)
-import           Data.Binary
-import           Data.Coerce
-import           Data.Functor
-import qualified Data.HashMap.Strict               as HashMap
-import           Data.IntMap                       (IntMap)
-import           Data.Map                          (Map)
-import           Data.Tuple.Extra                  (dupe)
-import           Data.Unique                       as Unique
-import           Development.IDE.Core.Tracing      (withTrace)
-import           Development.IDE.GHC.Compat.Util   (emptyUDFM, plusUDFM_C)
-import qualified Language.LSP.Server               as LSP
-import qualified Language.LSP.Types                as LSP
-import           Unsafe.Coerce
 
 -- | Given a string buffer, return the string (after preprocessing) and the 'ParsedModule'.
 parseModule
@@ -151,7 +149,7 @@ computePackageDeps env pkg = do
 
 typecheckModule :: IdeDefer
                 -> HscEnv
-                -> [Linkable] -- ^ linkables not to unload
+                -> ModuleEnv UTCTime -- ^ linkables not to unload
                 -> ParsedModule
                 -> IO (IdeResult TcModuleResult)
 typecheckModule (IdeDefer defer) hsc keep_lbls pm = do
@@ -179,16 +177,110 @@ typecheckModule (IdeDefer defer) hsc keep_lbls pm = do
     where
         demoteIfDefer = if defer then demoteTypeErrorsToWarnings else id
 
--- | Add a Hook to the DynFlags which captures and returns the
--- typechecked splices before they are run. This information
--- is used for hover.
-captureSplices :: HscEnv -> (HscEnv -> IO a) -> IO (a, Splices)
-captureSplices env k = do
+-- | Install hooks to capture the splices as well as the runtime module dependencies
+captureSplicesAndDeps :: HscEnv -> (HscEnv -> IO a) -> IO (a, Splices, UniqSet ModuleName)
+captureSplicesAndDeps env k = do
   splice_ref <- newIORef mempty
-  res <- k (hscSetHooks (addSpliceHook splice_ref (hsc_hooks env)) env)
+  dep_ref <- newIORef emptyUniqSet
+  res <- k (hscSetHooks (addSpliceHook splice_ref . addLinkableDepHook dep_ref $ hsc_hooks env) env)
   splices <- readIORef splice_ref
-  return (res, splices)
+  needed_mods <- readIORef dep_ref
+  return (res, splices, needed_mods)
   where
+    addLinkableDepHook :: IORef (UniqSet ModuleName) -> Hooks -> Hooks
+    addLinkableDepHook var h = h { hscCompileCoreExprHook = Just (compile_bco_hook var) }
+
+    -- We want to record exactly which linkables/modules the typechecker needed at runtime
+    -- This is useful for recompilation checking.
+    -- See Note [Recompilation avoidance in the presence of TH]
+    --
+    -- From hscCompileCoreExpr' in GHC
+    -- To update, copy hscCompileCoreExpr' (the implementation of
+    -- hscCompileCoreExprHook) verbatim, and add code to extract all the free
+    -- names in the compiled bytecode, recording the modules that those names
+    -- come from in the IORef,, as these are the modules on whose implementation
+    -- we depend.
+    --
+    -- Only compute direct dependencies instead of transitive dependencies.
+    -- It is much cheaper to store the direct dependencies, we can compute
+    -- the transitive ones when required.
+    -- Also only record dependencies from the home package
+    compile_bco_hook :: IORef (UniqSet ModuleName) -> HscEnv -> SrcSpan -> CoreExpr -> IO ForeignHValue
+    compile_bco_hook var hsc_env srcspan ds_expr
+      = do { let dflags = hsc_dflags hsc_env
+
+             {- Simplify it -}
+           ; simpl_expr <- simplifyExpr dflags hsc_env ds_expr
+
+             {- Tidy it (temporary, until coreSat does cloning) -}
+           ; let tidy_expr = tidyExpr emptyTidyEnv simpl_expr
+
+             {- Prepare for codegen -}
+           ; prepd_expr <- corePrepExpr dflags hsc_env tidy_expr
+
+             {- Lint if necessary -}
+           ; lintInteractiveExpr "hscCompileExpr" hsc_env prepd_expr
+
+
+#if MIN_VERSION_ghc(9,2,0)
+           ; let iNTERACTIVELoc = G.ModLocation{ ml_hs_file   = Nothing,
+                                        ml_hi_file   = panic "hscCompileCoreExpr':ml_hi_file",
+                                        ml_obj_file  = panic "hscCompileCoreExpr':ml_obj_file",
+                                        ml_hie_file  = panic "hscCompileCoreExpr':ml_hie_file" }
+           ; let ictxt = hsc_IC hsc_env
+
+           ; (binding_id, stg_expr, _, _) <-
+               myCoreToStgExpr (hsc_logger hsc_env)
+                               (hsc_dflags hsc_env)
+                               ictxt
+                               (icInteractiveModule ictxt)
+                               iNTERACTIVELoc
+                               prepd_expr
+
+             {- Convert to BCOs -}
+           ; bcos <- byteCodeGen hsc_env
+                       (icInteractiveModule ictxt)
+                       stg_expr
+                       [] Nothing
+           ; let needed_mods = mkUniqSet [ moduleName mod | n <- concatMap (uniqDSetToList . bcoFreeNames) $ bc_bcos bcos
+                                         , Just mod <- [nameModule_maybe n] -- Names from other modules
+                                         , not (isWiredInName n) -- Exclude wired-in names
+                                         , moduleUnitId mod == homeUnitId_ dflags -- Only care about stuff from the home package
+                                         ]
+            -- Exclude wired-in names because we may not have read
+            -- their interface files, so getLinkDeps will fail
+            -- All wired-in names are in the base package, which we link
+            -- by default, so we can safely ignore them here.
+
+             {- load it -}
+           ; fv_hvs <- loadDecls (hscInterp hsc_env) hsc_env srcspan bcos
+           ; let hval = (expectJust "hscCompileCoreExpr'" $ lookup (idName binding_id) fv_hvs)
+#else
+             {- Convert to BCOs -}
+           ; bcos <- coreExprToBCOs hsc_env
+                       (icInteractiveModule (hsc_IC hsc_env)) prepd_expr
+
+           ; let needed_mods = mkUniqSet [ moduleName mod | n <- uniqDSetToList (bcoFreeNames bcos)
+                                         , Just mod <- [nameModule_maybe n] -- Names from other modules
+                                         , not (isWiredInName n) -- Exclude wired-in names
+                                         , moduleUnitId mod == homeUnitId_ dflags -- Only care about stuff from the home package
+                                         ]
+            -- Exclude wired-in names because we may not have read
+            -- their interface files, so getLinkDeps will fail
+            -- All wired-in names are in the base package, which we link
+            -- by default, so we can safely ignore them here.
+
+             {- link it -}
+           ; hval <- linkExpr hsc_env srcspan bcos
+#endif
+
+           ; modifyIORef' var (unionUniqSets needed_mods)
+           ; return hval }
+
+
+    -- | Add a Hook to the DynFlags which captures and returns the
+    -- typechecked splices before they are run. This information
+    -- is used for hover.
     addSpliceHook :: IORef Splices -> Hooks -> Hooks
     addSpliceHook var h = h { runMetaHook = Just (splice_hook (runMetaHook h) var) }
 
@@ -216,15 +308,20 @@ captureSplices env k = do
             pure $ f aw'
 
 
-tcRnModule :: HscEnv -> [Linkable] -> ParsedModule -> IO TcModuleResult
+tcRnModule
+  :: HscEnv
+  -> ModuleEnv UTCTime -- ^ Program linkables not to unload
+  -> ParsedModule
+  -> IO TcModuleResult
 tcRnModule hsc_env keep_lbls pmod = do
   let ms = pm_mod_summary pmod
       hsc_env_tmp = hscSetFlags (ms_hspp_opts ms) hsc_env
+      hpt = hsc_HPT hsc_env
 
-  unload hsc_env_tmp keep_lbls
+  unload hsc_env_tmp $ map (\(mod, time) -> LM time mod []) $ moduleEnvToList keep_lbls
 
-  ((tc_gbl_env, mrn_info), splices)
-      <- liftIO $ captureSplices hsc_env_tmp $ \hsc_env_tmp ->
+  ((tc_gbl_env', mrn_info), splices, mods)
+      <- captureSplicesAndDeps hsc_env_tmp $ \hsc_env_tmp ->
              do  hscTypecheckRename hsc_env_tmp ms $
                           HsParsedModule { hpm_module = parsedSource pmod,
                                            hpm_src_files = pm_extra_src_files pmod,
@@ -232,7 +329,29 @@ tcRnModule hsc_env keep_lbls pmod = do
   let rn_info = case mrn_info of
         Just x  -> x
         Nothing -> error "no renamed info tcRnModule"
-  pure (TcModuleResult pmod rn_info tc_gbl_env splices False)
+
+      -- Compute the transitive set of linkables required
+      mods_transitive = go emptyUniqSet mods
+        where
+          go seen new
+            | isEmptyUniqSet new = seen
+            | otherwise = go seen' new'
+              where
+                seen' = seen `unionUniqSets` new
+                new'  = new_deps `minusUniqSet` seen'
+                new_deps = unionManyUniqSets [ mkUniqSet $ getDependentMods $ hm_iface mod_info
+                                             | mod_info <- eltsUDFM $ udfmIntersectUFM hpt (getUniqSet new)]
+
+      -- The linkables we depend on at runtime are the transitive closure of 'mods'
+      -- restricted to the home package
+      -- See Note [Recompilation avoidance in the presence of TH]
+      mod_env = filterModuleEnv (\m _ -> elementOfUniqSet (moduleName m) mods_transitive) keep_lbls -- Could use restrictKeys if the constructors were exported
+
+      -- Serialize mod_env so we can read it from the interface
+      mod_env_anns = map (\(mod, time) -> Annotation (ModuleTarget mod) $ toSerialized serializeModDepTime (ModDepTime time))
+                         (moduleEnvToList mod_env)
+      tc_gbl_env = tc_gbl_env' { tcg_ann_env = extendAnnEnvList (tcg_ann_env tc_gbl_env') mod_env_anns }
+  pure (TcModuleResult pmod rn_info tc_gbl_env splices False mod_env)
 
 mkHiFileResultNoCompile :: HscEnv -> TcModuleResult -> IO HiFileResult
 mkHiFileResultNoCompile session tcm = do
@@ -247,7 +366,7 @@ mkHiFileResultNoCompile session tcm = do
   (iface, _) <- mkIfaceTc hsc_env_tmp Nothing sf details tcGblEnv
 #endif
   let mod_info = HomeModInfo iface details Nothing
-  pure $! mkHiFileResult ms mod_info
+  pure $! mkHiFileResult ms mod_info (tmrRuntimeModules tcm)
 
 mkHiFileResultCompile
     :: HscEnv
@@ -285,7 +404,7 @@ mkHiFileResultCompile session' tcm simplified_guts ltype = catchErrs $ do
   (final_iface,_) <- mkIface session Nothing details simplified_guts
 #endif
   let mod_info = HomeModInfo final_iface details linkable
-  pure (diags, Just $! mkHiFileResult ms mod_info)
+  pure (diags, Just $! mkHiFileResult ms mod_info (tmrRuntimeModules tcm))
 
   where
     dflags = hsc_dflags session'
@@ -940,55 +1059,210 @@ loadHieFile :: Compat.NameCacheUpdater -> FilePath -> IO GHC.HieFile
 loadHieFile ncu f = do
   GHC.hie_file_result <$> GHC.readHieFile ncu f
 
+
+{- Note [Recompilation avoidance in the presence of TH]
+
+Most versions of GHC we currently support don't have a working implementation of
+code unloading for object code, and no version of GHC supports this on certain
+platforms like Windows. This makes it completely infeasible for interactive use,
+as symbols from previous compiles will shadow over all future compiles.
+
+This means that we need to use bytecode when generating code for Template
+Haskell. Unfortunately, we can't serialize bytecode, so we will always need
+to recompile when the IDE starts. However, we can put in place a much tighter
+recompilation avoidance scheme for subsequent compiles:
+
+1. If the source file changes, then we always need to recompile
+   a. For files of interest, we will get explicit `textDocument/change` events
+   that will let us invalidate our build products
+   b. For files we read from disk, we can detect source file changes by
+   comparing the `mtime` of the source file with the build product (.hi/.o) file
+   on disk.
+2. If GHC's recompilation avoidance scheme based on interface file hashes says
+   that we need to recompile, the we need to recompile.
+3. If the file in question requires code generation then, we need to recompile
+   if we don't have the appropriate kind of build products.
+   a. If we already have the build products in memory, and the conditions 1 and
+   2 above hold, then we don't need to recompile
+   b. If we are generating object code, then we can also search for it on
+   disk and ensure it is up to date. Notably, we did _not_ previously re-use
+   old bytecode from memory when `hls-graph`/`shake` decided to rebuild the
+   `HiFileResult` for some reason
+
+4. If the file in question used Template Haskell on the previous compile, then
+  we need to recompile if any `Linkable` in its transitive closure changed. This
+  sounds bad, but it is possible to make some improvements.
+  In particular, we only need to recompile if any of the `Linkable`s actually used during the previous compile change.
+
+How can we tell if a `Linkable` was actually used while running some TH?
+
+GHC provides a `hscCompileCoreExprHook` which lets us intercept bytecode as
+it is being compiled and linked. We can inspect the bytecode to see which
+`Linkable` dependencies it requires, and record this for use in
+recompilation checking.
+We record all the home package modules of the free names that occur in the
+bytecode. The `Linkable`s required are then the transitive closure of these
+modules in the home-package environment. This is the same scheme as used by
+GHC to find the correct things to link in before running bytecode.
+
+This works fine if we already have previous build products in memory, but
+what if we are reading an interface from disk? Well, we can smuggle in the
+necessary information (linkable `Module`s required as well as the time they
+were generated) using `Annotation`s, which provide a somewhat general purpose
+way to serialise arbitrary information along with interface files.
+
+Then when deciding whether to recompile, we need to check that the versions
+of the linkables used during a previous compile match whatever is currently
+in the HPT.
+-}
+
+data RecompilationInfo m
+  = RecompilationInfo
+  { source_version :: FileVersion
+  , old_value   :: Maybe (HiFileResult, FileVersion)
+  , get_file_version :: NormalizedFilePath -> m (Maybe FileVersion)
+  , regenerate  :: Maybe LinkableType -> m ([FileDiagnostic], Maybe HiFileResult) -- ^ Action to regenerate an interface
+  }
+
 -- | Retuns an up-to-date module interface, regenerating if needed.
 --   Assumes file exists.
 --   Requires the 'HscEnv' to be set up with dependencies
+-- See Note [Recompilation avoidance in the presence of TH]
 loadInterface
   :: (MonadIO m, MonadMask m)
   => HscEnv
   -> ModSummary
-  -> SourceModified
   -> Maybe LinkableType
-  -> (Maybe LinkableType -> m ([FileDiagnostic], Maybe HiFileResult)) -- ^ Action to regenerate an interface
+  -> RecompilationInfo m
   -> m ([FileDiagnostic], Maybe HiFileResult)
-loadInterface session ms sourceMod linkableNeeded regen = do
+loadInterface session ms linkableNeeded RecompilationInfo{..} = do
     let sessionWithMsDynFlags = hscSetFlags (ms_hspp_opts ms) session
-    res <- liftIO $ checkOldIface sessionWithMsDynFlags ms sourceMod Nothing
-    case res of
-          (UpToDate, Just iface)
-            -- If the module used TH splices when it was last
-            -- compiled, then the recompilation check is not
-            -- accurate enough (https://gitlab.haskell.org/ghc/ghc/-/issues/481)
-            -- and we must ignore
-            -- it.  However, if the module is stable (none of
-            -- the modules it depends on, directly or
-            -- indirectly, changed), then we *can* skip
-            -- recompilation. This is why the SourceModified
-            -- type contains SourceUnmodifiedAndStable, and
-            -- it's pretty important: otherwise ghc --make
-            -- would always recompile TH modules, even if
-            -- nothing at all has changed. Stability is just
-            -- the same check that make is doing for us in
-            -- one-shot mode.
-            | not (mi_used_th iface) || SourceUnmodifiedAndStable == sourceMod
-            -> do
-             linkable <- case linkableNeeded of
-               Just ObjectLinkable -> liftIO $ findObjectLinkableMaybe (ms_mod ms) (ms_location ms)
-               _ -> pure Nothing
+        mb_old_iface = hm_iface    . hirHomeMod . fst <$> old_value
+        mb_old_version = snd <$> old_value
 
-             -- We don't need to regenerate if the object is up do date, or we don't need one
-             let objUpToDate = isNothing linkableNeeded || case linkable of
-                   Nothing                -> False
-                   Just (LM obj_time _ _) -> obj_time > ms_hs_date ms
-             if objUpToDate
-             then do
-               hmi <- liftIO $ mkDetailsFromIface sessionWithMsDynFlags iface linkable
-               return ([], Just $ mkHiFileResult ms hmi)
-             else regen linkableNeeded
-          (_reason, _) -> withTrace "regenerate interface" $ \setTag -> do
-                 setTag "Module" $ moduleNameString $ moduleName $ ms_mod ms
-                 setTag "Reason" $ showReason _reason
-                 regen linkableNeeded
+        obj_file = ml_obj_file (ms_location ms)
+
+        !mod = ms_mod ms
+
+    mb_dest_version <- case mb_old_version of
+      Just ver -> pure $ Just ver
+      Nothing ->  get_file_version $ toNormalizedFilePath' $ case linkableNeeded of
+          Just ObjectLinkable -> ml_obj_file (ms_location ms)
+          _                   -> ml_hi_file (ms_location ms)
+
+    -- The source is modified if it is newer than the destination
+    let sourceMod = case mb_dest_version of
+          Nothing -> SourceModified -- desitination file doesn't exist, assume modified source
+          Just dest_version
+            | source_version <= dest_version -> SourceUnmodified
+            | otherwise -> SourceModified
+
+    -- If mb_old_iface is nothing then checkOldIface will load it for us
+    (recomp_iface_reqd, mb_checked_iface)
+      <- liftIO $ checkOldIface sessionWithMsDynFlags ms sourceMod mb_old_iface
+
+
+    let
+      (recomp_obj_reqd, mb_linkable) = case linkableNeeded of
+        Nothing -> (UpToDate, Nothing)
+        Just linkableType -> case old_value of
+          -- We don't have an old result
+          Nothing -> recompMaybeBecause "missing"
+          -- We have an old result
+          Just (old_hir, old_file_version) ->
+            case hm_linkable $ hirHomeMod old_hir of
+              Nothing -> recompMaybeBecause "missing [not needed before]"
+              Just old_lb
+                | Just True <- mi_used_th <$> mb_checked_iface -- No need to recompile if TH wasn't used
+                , old_file_version /= source_version -> recompMaybeBecause "out of date"
+
+                -- Check if it is the correct type
+                -- Ideally we could use object-code in case we already have
+                -- it when we are generating bytecode, but this is difficult because something
+                -- below us may be bytecode, and object code can't depend on bytecode
+                | ObjectLinkable <- linkableType, isObjectLinkable old_lb
+                -> (UpToDate, Just old_lb)
+
+                | BCOLinkable    <- linkableType , not (isObjectLinkable old_lb)
+                -> (UpToDate, Just old_lb)
+
+                | otherwise -> recompMaybeBecause "missing [wrong type]"
+          where
+            recompMaybeBecause msg = case linkableType of
+              BCOLinkable -> (RecompBecause ("bytecode "++ msg), Nothing)
+              ObjectLinkable -> case mb_dest_version of -- The destination file should be the object code
+                Nothing -> (RecompBecause ("object code "++ msg), Nothing)
+                Just disk_obj_version@(ModificationTime t) ->
+                  -- If we make it this far, assume that the object code on disk is up to date
+                  -- This assertion works because of the sourceMod check
+                  assert (disk_obj_version >= source_version)
+                         (UpToDate, Just $ LM (posixSecondsToUTCTime t) mod [DotO obj_file])
+                Just (VFSVersion _) -> error "object code in vfs"
+
+    let do_regenerate _reason = withTrace "regenerate interface" $ \setTag -> do
+          setTag "Module" $ moduleNameString $ moduleName mod
+          setTag "Reason" $ showReason _reason
+          liftIO $ traceMarkerIO $ "regenerate interface " ++ show (moduleNameString $ moduleName mod, showReason _reason)
+          regenerate linkableNeeded
+
+    case (mb_checked_iface, recomp_iface_reqd <> recomp_obj_reqd) of
+      (Just iface, UpToDate) -> do
+         -- Force it because we don't want to retain old modsummaries or linkables
+         lb <- liftIO $ evaluate $ force mb_linkable
+
+         -- If we have an old value, just return it
+         case old_value of
+           Just (old_hir, _)
+             | Just msg <- checkLinkableDependencies (hsc_HPT sessionWithMsDynFlags) (hirRuntimeModules old_hir)
+             -> do_regenerate msg
+             | otherwise -> return ([], Just old_hir)
+           Nothing -> do
+             hmi <- liftIO $ mkDetailsFromIface sessionWithMsDynFlags iface lb
+             -- parse the runtime dependencies from the annotations
+             let runtime_deps
+                   | not (mi_used_th iface) = emptyModuleEnv
+                   | otherwise = parseRuntimeDeps (md_anns (hm_details hmi))
+             return ([], Just $ mkHiFileResult ms hmi runtime_deps)
+      (_, _reason) -> do_regenerate _reason
+
+-- | ModDepTime is stored as an annotation in the iface to
+-- keep track of runtime dependencies
+newtype ModDepTime = ModDepTime UTCTime
+
+deserializeModDepTime :: [Word8] -> ModDepTime
+deserializeModDepTime xs = ModDepTime $ case decode (LBS.pack xs) of
+  (a,b) -> UTCTime (toEnum a) (toEnum b)
+
+serializeModDepTime :: ModDepTime -> [Word8]
+serializeModDepTime (ModDepTime l) = LBS.unpack $
+  B.encode (fromEnum $ utctDay l, fromEnum $ utctDayTime l)
+
+-- | Find the runtime dependencies by looking at the annotations
+-- serialized in the iface
+parseRuntimeDeps :: [ModIfaceAnnotation] -> ModuleEnv UTCTime
+parseRuntimeDeps anns = mkModuleEnv $ mapMaybe go anns
+  where
+    go (Annotation (ModuleTarget mod) payload)
+      | Just (ModDepTime t) <- fromSerialized deserializeModDepTime payload
+      = Just (mod, t)
+    go _ = Nothing
+
+-- | checkLinkableDependencies compares the linkables in the home package to
+-- the runtime dependencies of the module, to check if any of them are out of date
+-- Hopefully 'runtime_deps' will be empty if the module didn't actually use TH
+-- See Note [Recompilation avoidance in the presence of TH]
+checkLinkableDependencies :: HomePackageTable -> ModuleEnv UTCTime -> Maybe RecompileRequired
+checkLinkableDependencies hpt runtime_deps
+  | isEmptyModuleEnv out_of_date = Nothing -- Nothing out of date, so don't recompile
+  | otherwise = Just $
+      RecompBecause $ "out of date runtime dependencies: " ++ intercalate ", " (map show (moduleEnvKeys out_of_date))
+  where
+    out_of_date = filterModuleEnv (\mod time -> case lookupHpt hpt (moduleName mod) of
+                                                  Nothing -> False
+                                                  Just hm -> case hm_linkable hm of
+                                                    Nothing -> False
+                                                    Just lm -> linkableTime lm /= time)
+                                  runtime_deps
 
 showReason :: RecompileRequired -> String
 showReason UpToDate          = "UpToDate"
