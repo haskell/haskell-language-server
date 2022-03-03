@@ -29,7 +29,7 @@ install:
 			"$$h" > "$(DESTDIR)$(BINDIR)/$${h%.in}" && \
 		$(CHMOD_X) "$(DESTDIR)$(BINDIR)/$${h%.in}" ; \
 	done
-	$(LN_S) "`scripts/relpath.sh "$(BINDIR)" "$(LIBDIR)/haskell-language-server-$(HLS_VERSION)/bin/haskell-language-server-wrapper"`" \
+	$(LN_S) "`scripts/relpath.sh "$(DESTDIR)$(BINDIR)" "$(DESTDIR)$(LIBDIR)/haskell-language-server-$(HLS_VERSION)/bin/haskell-language-server-wrapper"`" \
 		"$(DESTDIR)$(BINDIR)/haskell-language-server-wrapper"
 
 version:
