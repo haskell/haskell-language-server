@@ -129,6 +129,7 @@ data RawDependencyInformation = RawDependencyInformation
     -- need to add edges between .hs-boot and .hs so that the .hs files
     -- appear later in the sort.
     , rawBootMap   :: !BootIdMap
+    , rawModuleNameMap :: !(FilePathIdMap ShowableModuleName)
     } deriving Show
 
 data DependencyInformation =
@@ -220,15 +221,12 @@ processDependencyInformation RawDependencyInformation{..} =
     { depErrorNodes = IntMap.fromList errorNodes
     , depModuleDeps = moduleDeps
     , depReverseModuleDeps = reverseModuleDeps
-    , depModuleNames = IntMap.fromList $ coerce moduleNames
+    , depModuleNames = rawModuleNameMap
     , depPathIdMap = rawPathIdMap
     , depBootMap = rawBootMap
     }
   where resultGraph = buildResultGraph rawImports
         (errorNodes, successNodes) = partitionNodeResults $ IntMap.toList resultGraph
-        moduleNames :: [(FilePathId, ModuleName)]
-        moduleNames =
-          [ (fId, modName) | (_, imports) <- successNodes, (L _ modName, fId) <- imports]
         successEdges :: [(FilePathId, [FilePathId])]
         successEdges =
             map

@@ -31,7 +31,6 @@ import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           GHC.Generics
 import           HieDb.Types                          (HieDb)
-import           Language.LSP.Types
 import qualified StmContainers.Map                    as STM
 import           Type.Reflection                      (SomeTypeRep (SomeTypeRep),
                                                        pattern App, pattern Con,
