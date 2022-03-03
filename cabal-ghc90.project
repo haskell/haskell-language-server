@@ -27,6 +27,7 @@ packages:
          ./plugins/hls-call-hierarchy-plugin
          ./plugins/hls-alternate-number-format-plugin
          ./plugins/hls-selection-range-plugin
+         ./plugins/hls-change-type-signature-plugin
 
 tests: true
 
