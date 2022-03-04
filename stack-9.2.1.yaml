@@ -116,7 +116,6 @@ flags:
     ignore-plugins-ghc-bounds: true
     alternateNumberFormat: false
     brittany: false
-    class: false
     eval: false
     haddockComments: false
     hlint: false
