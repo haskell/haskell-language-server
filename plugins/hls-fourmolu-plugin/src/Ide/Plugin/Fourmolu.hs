@@ -41,41 +41,40 @@ provider ideState typ contents fp fo = withIndefiniteProgress title Cancellable 
     fileOpts <- case hsc_dflags . hscEnv <$> ghc of
         Nothing -> return []
         Just df -> liftIO $ convertDynFlags df
-
-    let format printerOpts =
-            first (mkError . show)
-                <$> try @OrmoluException (makeDiffTextEdit contents <$> ormolu config fp' (T.unpack contents))
-          where
-            config =
-                defaultConfig
-                    { cfgDynOptions = map DynOption fileOpts
-                    , cfgRegion = region
-                    , cfgDebug = True
-                    , cfgPrinterOpts =
-                        fillMissingPrinterOpts
-                            (printerOpts <> lspPrinterOpts)
-                            defaultPrinterOpts
-                    }
-
-    liftIO (loadConfigFile fp') >>= \case
-        ConfigLoaded file opts -> liftIO $ do
-            putStrLn $ "Loaded Fourmolu config from: " <> file
-            format opts
-        ConfigNotFound searchDirs -> liftIO $ do
-            putStrLn
-                . unlines
-                $ ("No " ++ show configFileName ++ " found in any of:") :
-                map ("  " ++) searchDirs
-            format mempty
-        ConfigParseError f (_, err) -> do
-            sendNotification SWindowShowMessage $
-                ShowMessageParams
-                    { _xtype = MtError
-                    , _message = errorMessage
-                    }
-            return . Left $ responseError errorMessage
-          where
-            errorMessage = "Failed to load " <> T.pack f <> ": " <> T.pack err
+    do
+            let format printerOpts =
+                    first (mkError . show)
+                        <$> try @OrmoluException (makeDiffTextEdit contents <$> ormolu config fp' (T.unpack contents))
+                  where
+                    config =
+                        defaultConfig
+                            { cfgDynOptions = map DynOption fileOpts
+                            , cfgRegion = region
+                            , cfgDebug = True
+                            , cfgPrinterOpts =
+                                fillMissingPrinterOpts
+                                    (printerOpts <> lspPrinterOpts)
+                                    defaultPrinterOpts
+                            }
+             in liftIO (loadConfigFile fp') >>= \case
+                    ConfigLoaded file opts -> liftIO $ do
+                        putStrLn $ "Loaded Fourmolu config from: " <> file
+                        format opts
+                    ConfigNotFound searchDirs -> liftIO $ do
+                        putStrLn
+                            . unlines
+                            $ ("No " ++ show configFileName ++ " found in any of:") :
+                            map ("  " ++) searchDirs
+                        format mempty
+                    ConfigParseError f (_, err) -> do
+                        sendNotification SWindowShowMessage $
+                            ShowMessageParams
+                                { _xtype = MtError
+                                , _message = errorMessage
+                                }
+                        return . Left $ responseError errorMessage
+                      where
+                        errorMessage = "Failed to load " <> T.pack f <> ": " <> T.pack err
   where
     fp' = fromNormalizedFilePath fp
     title = "Formatting " <> T.pack (takeFileName fp')
