@@ -1034,6 +1034,7 @@ data RuleBody k v
     { newnessCheck :: BS.ByteString -> BS.ByteString -> Bool
     , build :: k -> NormalizedFilePath -> Action (Maybe BS.ByteString, Maybe v)
     }
+  | RuleWithOldValue (k -> NormalizedFilePath -> Value v -> Action (Maybe BS.ByteString, IdeResult v))
 
 -- | Define a new Rule with early cutoff
 defineEarlyCutoff
@@ -1046,12 +1047,12 @@ defineEarlyCutoff recorder (Rule op) = addRule $ \(Q (key, file)) (old :: Maybe 
     let diagnostics diags = do
             traceDiagnostics diags
             updateFileDiagnostics recorder file (Key key) extras . map (\(_,y,z) -> (y,z)) $ diags
-    defineEarlyCutoff' diagnostics (==) key file old mode $ op key file
+    defineEarlyCutoff' diagnostics (==) key file old mode $ const $ op key file
 defineEarlyCutoff recorder (RuleNoDiagnostics op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ \traceDiagnostics -> do
     let diagnostics diags = do
             traceDiagnostics diags
             mapM_ (logWith recorder Warning . LogDefineEarlyCutoffRuleNoDiagHasDiag) diags
-    defineEarlyCutoff' diagnostics (==) key file old mode $ second (mempty,) <$> op key file
+    defineEarlyCutoff' diagnostics (==) key file old mode $ const $ second (mempty,) <$> op key file
 defineEarlyCutoff recorder RuleWithCustomNewnessCheck{..} =
     addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode ->
         otTracedAction key file mode traceA $ \ traceDiagnostics -> do
@@ -1059,7 +1060,13 @@ defineEarlyCutoff recorder RuleWithCustomNewnessCheck{..} =
                     traceDiagnostics diags
                     mapM_ (logWith recorder Warning . LogDefineEarlyCutoffRuleCustomNewnessHasDiag) diags
             defineEarlyCutoff' diagnostics newnessCheck key file old mode $
-                second (mempty,) <$> build key file
+                const $ second (mempty,) <$> build key file
+defineEarlyCutoff recorder (RuleWithOldValue op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ \traceDiagnostics -> do
+    extras <- getShakeExtras
+    let diagnostics diags = do
+            traceDiagnostics diags
+            updateFileDiagnostics recorder file (Key key) extras . map (\(_,y,z) -> (y,z)) $ diags
+    defineEarlyCutoff' diagnostics (==) key file old mode $ op key file
 
 defineNoFile :: IdeRule k v => Recorder (WithPriority Log) -> (k -> Action v) -> Rules ()
 defineNoFile recorder f = defineNoDiagnostics recorder $ \k file -> do
@@ -1080,7 +1087,7 @@ defineEarlyCutoff'
     -> NormalizedFilePath
     -> Maybe BS.ByteString
     -> RunMode
-    -> Action (Maybe BS.ByteString, IdeResult v)
+    -> (Value v -> Action (Maybe BS.ByteString, IdeResult v))
     -> Action (RunResult (A (RuleResult k)))
 defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
     ShakeExtras{state, progress, dirtyKeys} <- getShakeExtras
@@ -1103,8 +1110,13 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
         res <- case val of
             Just res -> return res
             Nothing -> do
+                staleV <- liftIO $ atomicallyNamed "define -read 3" $ getValues state key file <&> \case
+                    Nothing                   -> Failed False
+                    Just (Succeeded ver v, _) -> Stale Nothing ver v
+                    Just (Stale d ver v, _)   -> Stale d ver v
+                    Just (Failed b, _)        -> Failed b
                 (bs, (diags, res)) <- actionCatch
-                    (do v <- action; liftIO $ evaluate $ force v) $
+                    (do v <- action staleV; liftIO $ evaluate $ force v) $
                     \(e :: SomeException) -> do
                         pure (Nothing, ([ideErrorText file $ T.pack $ show e | not $ isBadDependency e],Nothing))
 
@@ -1116,11 +1128,6 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
 
                 (bs, res) <- case res of
                     Nothing -> do
-                        staleV <- liftIO $ atomicallyNamed "define -read 3" $ getValues state key file <&> \case
-                            Nothing                   -> Failed False
-                            Just (Succeeded ver v, _) -> Stale Nothing ver v
-                            Just (Stale d ver v, _)   -> Stale d ver v
-                            Just (Failed b, _)        -> Failed b
                         pure (toShakeValue ShakeStale bs, staleV)
                     Just v -> pure (maybe ShakeNoCutoff ShakeResult bs, Succeeded modTime v)
                 liftIO $ atomicallyNamed "define - write" $ setValues state key file res (Vector.fromList diags)

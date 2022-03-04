@@ -5,6 +5,7 @@ BINDIR  ?= $(PREFIX)/bin
 
 HLS_VERSION := @@HLS_VERSION@@
 
+FIND      := find
 INSTALL   := install
 INSTALL_D := $(INSTALL) -d
 INSTALL_X := $(INSTALL) -vm 755
@@ -18,10 +19,7 @@ install:
 	$(INSTALL_D) "$(DESTDIR)$(BINDIR)"
 	$(INSTALL_D) "$(DESTDIR)$(LIBDIR)/haskell-language-server-$(HLS_VERSION)/lib"
 	$(INSTALL_D) "$(DESTDIR)$(LIBDIR)/haskell-language-server-$(HLS_VERSION)/bin"
-	for f in $(wildcard lib/*/*) ; do \
-		$(INSTALL_D) "$(DESTDIR)$(LIBDIR)/haskell-language-server-$(HLS_VERSION)/`dirname $$f`" && \
-		$(INSTALL_X) "$$f" "$(DESTDIR)$(LIBDIR)/haskell-language-server-$(HLS_VERSION)/$$f" ; \
-	done
+	$(FIND) lib -mindepth 2 -type f -exec sh -c '$(INSTALL_D) "$(DESTDIR)$(LIBDIR)/haskell-language-server-$(HLS_VERSION)/`dirname $$1`" && $(INSTALL_X) "$$1" "$(DESTDIR)$(LIBDIR)/haskell-language-server-$(HLS_VERSION)/$$1"' - '{}' \;
 	for b in $(wildcard bin/*) ; do \
 		$(INSTALL_D) "$(DESTDIR)$(LIBDIR)/haskell-language-server-$(HLS_VERSION)/" && \
 		$(INSTALL_X) "$$b" "$(DESTDIR)$(LIBDIR)/haskell-language-server-$(HLS_VERSION)/$$b" ; \
@@ -31,7 +29,7 @@ install:
 			"$$h" > "$(DESTDIR)$(BINDIR)/$${h%.in}" && \
 		$(CHMOD_X) "$(DESTDIR)$(BINDIR)/$${h%.in}" ; \
 	done
-	$(LN_S) "`scripts/relpath.sh "$(BINDIR)" "$(LIBDIR)/haskell-language-server-$(HLS_VERSION)/bin/haskell-language-server-wrapper"`" \
+	$(LN_S) "`scripts/relpath.sh "$(DESTDIR)$(BINDIR)" "$(DESTDIR)$(LIBDIR)/haskell-language-server-$(HLS_VERSION)/bin/haskell-language-server-wrapper"`" \
 		"$(DESTDIR)$(BINDIR)/haskell-language-server-wrapper"
 
 version:
