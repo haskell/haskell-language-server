@@ -19,7 +19,7 @@ install:
 	$(INSTALL_D) "$(DESTDIR)$(BINDIR)"
 	$(INSTALL_D) "$(DESTDIR)$(LIBDIR)/haskell-language-server-$(HLS_VERSION)/lib"
 	$(INSTALL_D) "$(DESTDIR)$(LIBDIR)/haskell-language-server-$(HLS_VERSION)/bin"
-	$(FIND) lib -mindepth 2 -type f -exec sh -c '$(INSTALL_D) "$(DESTDIR)$(LIBDIR)/haskell-language-server-$(HLS_VERSION)/`dirname $$1`" && $(INSTALL_X) "$$1" "$(DESTDIR)$(LIBDIR)/haskell-language-server-$(HLS_VERSION)/$$1"' - '{}' \;
+	$(FIND) lib -mindepth 2 -type f -exec sh -c '$(INSTALL_D) "$(DESTDIR)$(LIBDIR)/haskell-language-server-$(HLS_VERSION)/`dirname $$1`" && $(INSTALL_X) "$$1" "$(DESTDIR)$(LIBDIR)/haskell-language-server-$(HLS_VERSION)/$$1"' sh '{}' \;
 	for b in $(wildcard bin/*) ; do \
 		$(INSTALL_D) "$(DESTDIR)$(LIBDIR)/haskell-language-server-$(HLS_VERSION)/" && \
 		$(INSTALL_X) "$$b" "$(DESTDIR)$(LIBDIR)/haskell-language-server-$(HLS_VERSION)/$$b" ; \
