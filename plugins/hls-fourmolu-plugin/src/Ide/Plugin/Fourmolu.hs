@@ -43,12 +43,12 @@ provider ideState typ contents fp fo = withIndefiniteProgress title Cancellable 
         Just df -> liftIO $ convertDynFlags df
 
     let format printerOpts =
-            first (responseError . ("Fourmolu: " <>) . T.pack . show)
+            first (mkError . show)
                 <$> try @OrmoluException (makeDiffTextEdit contents <$> ormolu config fp' (T.unpack contents))
           where
             config =
                 defaultConfig
-                    { cfgDynOptions = fileOpts
+                    { cfgDynOptions = map DynOption fileOpts
                     , cfgRegion = region
                     , cfgDebug = True
                     , cfgPrinterOpts =
@@ -79,6 +79,7 @@ provider ideState typ contents fp fo = withIndefiniteProgress title Cancellable 
   where
     fp' = fromNormalizedFilePath fp
     title = "Formatting " <> T.pack (takeFileName fp')
+    mkError = responseError . ("Fourmolu: " <>) . T.pack
     lspPrinterOpts = mempty{poIndentation = Just $ fromIntegral $ fo ^. tabSize}
     region = case typ of
         FormatText ->
@@ -86,7 +87,7 @@ provider ideState typ contents fp fo = withIndefiniteProgress title Cancellable 
         FormatRange (Range (Position sl _) (Position el _)) ->
             RegionIndices (Just $ fromIntegral $ sl + 1) (Just $ fromIntegral $ el + 1)
 
-convertDynFlags :: DynFlags -> IO [DynOption]
+convertDynFlags :: Monad m => DynFlags -> m [String]
 convertDynFlags df =
     let pp = ["-pgmF=" <> p | not (null p)]
         p = sPgm_F $ Compat.settings df
@@ -95,4 +96,4 @@ convertDynFlags df =
         showExtension = \case
             Cpp -> "-XCPP"
             x   -> "-X" ++ show x
-     in return $ map DynOption $ pp <> pm <> ex
+     in return $ pp <> pm <> ex
