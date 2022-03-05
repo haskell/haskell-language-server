@@ -10,9 +10,9 @@ module Ide.Plugin.Fourmolu (
 
 import           Control.Exception               (IOException, try)
 import           Control.Lens                    ((^.))
+import           Control.Monad
 import           Control.Monad.IO.Class
-import           Data.Bifunctor                  (bimap, first)
-import           Data.Functor
+import           Data.Bifunctor                  (first)
 import           Data.Maybe
 import qualified Data.Text                       as T
 import           Development.IDE                 hiding (pluginHandlers)
@@ -26,7 +26,9 @@ import           Language.LSP.Server             hiding (defaultConfig)
 import           Language.LSP.Types
 import           Language.LSP.Types.Lens         (HasTabSize (tabSize))
 import           Ormolu
+import           System.Exit
 import           System.FilePath
+import           System.IO                       (stderr, hPutStrLn)
 import           System.Process
 
 -- ---------------------------------------------------------------------
@@ -47,11 +49,12 @@ provider ideState typ contents fp fo = withIndefiniteProgress title Cancellable 
         Just df -> liftIO $ convertDynFlags df
     useCLI <- formattingCli <$> getConfig
     if useCLI
-        then
-            ( liftIO
-                . try @IOException
-                $ readCreateProcess
-                    ( proc
+        then liftIO
+            . fmap (join . first (mkError . show))
+            . try @IOException
+            $ do
+                (exitCode, out, err) <-
+                    readProcessWithExitCode
                         "fourmolu"
                         ( ["-d"]
                             <> catMaybes
@@ -60,10 +63,13 @@ provider ideState typ contents fp fo = withIndefiniteProgress title Cancellable 
                                 ]
                             <> map ("-o" <>) fileOpts
                         )
-                    )
-                    (T.unpack contents)
-            )
-                <&> bimap (mkError . show) (makeDiffTextEdit contents . T.pack)
+                        (T.unpack contents)
+                hPutStrLn stderr err
+                case exitCode of
+                    ExitSuccess ->
+                        pure . Right $ makeDiffTextEdit contents $ T.pack out
+                    ExitFailure n ->
+                        pure . Left . responseError $ "Fourmolu failed with exit code " <> T.pack (show n)
         else do
             let format printerOpts =
                     first (mkError . show)
