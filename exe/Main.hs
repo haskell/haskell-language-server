@@ -16,7 +16,7 @@ import           Ide.Arguments                (Arguments (..),
 import           Ide.Main                     (defaultMain)
 import qualified Ide.Main                     as IdeMain
 import qualified Plugins
-import           Prettyprinter                (Pretty (pretty))
+import           Prettyprinter                (Pretty (pretty), vcat)
 import Development.IDE.Plugin.LSPWindowShowMessageRecorder (makeLspShowMessageRecorder)
 import Data.Text (Text)
 import Ide.PluginUtils (pluginDescToIdePlugins)
@@ -59,4 +59,10 @@ main = do
       defaultMain (cmapWithPrio LogIdeMain recorder) args (pluginDescToIdePlugins [lspRecorderPlugin] <> plugins)
 
 renderDoc :: Doc a -> Text
-renderDoc = renderStrict . layoutPretty defaultLayoutOptions
+renderDoc d = renderStrict $ layoutPretty defaultLayoutOptions $ vcat
+    ["Unhandled exception, please check your setup and/or the [issue tracker](" <> issueTrackerUrl <> "): "
+    ,d
+    ]
+
+issueTrackerUrl :: Doc a
+issueTrackerUrl = "https://github.com/haskell/haskell-language-server/issues"
