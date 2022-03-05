@@ -1159,19 +1159,14 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
         | fp == emptyFilePath = pure Nothing
         | Just Refl <- eqT @k @GetModificationTime = pure v
         -- GetModificationTime depends on these rules, so avoid creating a cycle
-        | Just Refl <- eqT @k @AddWatchedFile = liftIO getFromStoreUnsafely
-        | Just Refl <- eqT @k @IsFileOfInterest = liftIO getFromStoreUnsafely
+        | Just Refl <- eqT @k @AddWatchedFile = pure Nothing
+        | Just Refl <- eqT @k @IsFileOfInterest = pure Nothing
         -- GetFileExists gets called for missing files
-        | Just Refl <- eqT @k @GetFileExists = liftIO getFromStoreUnsafely
+        | Just Refl <- eqT @k @GetFileExists = pure Nothing
         -- For all other rules - compute the version properly without:
         --  * creating a dependency: If everything depends on GetModificationTime, we lose early cutoff
         --  * creating bogus "file does not exists" diagnostics
         | otherwise = useWithoutDependency (GetModificationTime_ False) fp
-        where
-            getFromStoreUnsafely =
-                (currentValue . fst =<<) <$>
-                    atomicallyNamed "estimateFileVersionUnsafely" (getValues state GetModificationTime fp)
-
 
 traceA :: A v -> String
 traceA (A Failed{})    = "Failed"
