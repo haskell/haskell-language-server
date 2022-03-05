@@ -81,6 +81,7 @@ library
     , stm-containers
     , time
     , transformers
+    , unliftio
     , unordered-containers
 
   if flag(embed-files)

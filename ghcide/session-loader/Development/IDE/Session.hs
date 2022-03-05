@@ -99,6 +99,7 @@ import           HieDb.Types
 import           HieDb.Utils
 import           System.Random                        (RandomGen)
 import qualified System.Random                        as Random
+import Control.Monad.IO.Unlift (MonadUnliftIO)
 
 data Log
   = LogSettingInitialDynFlags
@@ -845,7 +846,7 @@ should be filtered out, such that we dont have to re-compile everything.
 -- | Set the cache-directory based on the ComponentOptions and a list of
 -- internal packages.
 -- For the exact reason, see Note [Avoiding bad interface files].
-setCacheDirs :: MonadIO m => Recorder (WithPriority Log) -> CacheDirs -> DynFlags -> m DynFlags
+setCacheDirs :: MonadUnliftIO m => Recorder (WithPriority Log) -> CacheDirs -> DynFlags -> m DynFlags
 setCacheDirs recorder CacheDirs{..} dflags = do
     logWith recorder Info $ LogInterfaceFilesCacheDir (fromMaybe cacheDir hiCacheDir)
     pure $ dflags

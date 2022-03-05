@@ -5,11 +5,11 @@
 module Main(main) where
 
 import           Data.Function                ((&))
-import           Development.IDE.Types.Logger (Priority (Debug, Info),
+import           Development.IDE.Types.Logger (Priority (Debug, Info, Error),
                                                WithPriority (WithPriority, priority),
                                                cfilter, cmapWithPrio,
                                                makeDefaultStderrRecorder,
-                                               withDefaultRecorder)
+                                               withDefaultRecorder, renderStrict, layoutPretty, defaultLayoutOptions, Doc)
 import           Ide.Arguments                (Arguments (..),
                                                GhcideArguments (..),
                                                getArguments)
@@ -17,6 +17,9 @@ import           Ide.Main                     (defaultMain)
 import qualified Ide.Main                     as IdeMain
 import qualified Plugins
 import           Prettyprinter                (Pretty (pretty))
+import Development.IDE.Plugin.LSPWindowShowMessageRecorder (makeLspShowMessageRecorder)
+import Data.Text (Text)
+import Ide.PluginUtils (pluginDescToIdePlugins)
 
 data Log
   = LogIdeMain IdeMain.Log
@@ -33,6 +36,7 @@ main = do
     -- parser to get logging arguments first or do more complicated things
     pluginCliRecorder <- cmapWithPrio pretty <$> makeDefaultStderrRecorder Nothing Info
     args <- getArguments "haskell-language-server" (Plugins.idePlugins (cmapWithPrio LogPlugins pluginCliRecorder) False)
+    (lspRecorder, lspRecorderPlugin) <- makeLspShowMessageRecorder
 
     let (minPriority, logFilePath, includeExamplePlugins) =
           case args of
@@ -42,9 +46,17 @@ main = do
             _ -> (Info, Nothing, False)
 
     withDefaultRecorder logFilePath Nothing minPriority $ \textWithPriorityRecorder -> do
-      let recorder =
-            textWithPriorityRecorder
-            & cfilter (\WithPriority{ priority } -> priority >= minPriority)
-            & cmapWithPrio pretty
+      let
+        recorder = cmapWithPrio pretty $ mconcat
+            [textWithPriorityRecorder
+                & cfilter (\WithPriority{ priority } -> priority >= minPriority)
+            , lspRecorder
+                & cfilter (\WithPriority{ priority } -> priority >= Error)
+                & cmapWithPrio renderDoc
+            ]
+        plugins = Plugins.idePlugins (cmapWithPrio LogPlugins recorder) includeExamplePlugins
 
-      defaultMain (cmapWithPrio LogIdeMain recorder) args (Plugins.idePlugins (cmapWithPrio LogPlugins recorder) includeExamplePlugins)
+      defaultMain (cmapWithPrio LogIdeMain recorder) args (pluginDescToIdePlugins [lspRecorderPlugin] <> plugins)
+
+renderDoc :: Doc a -> Text
+renderDoc = renderStrict . layoutPretty defaultLayoutOptions
