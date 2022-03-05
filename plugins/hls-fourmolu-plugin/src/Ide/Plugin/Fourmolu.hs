@@ -8,15 +8,17 @@ module Ide.Plugin.Fourmolu (
     provider,
 ) where
 
-import           Control.Exception               (try)
+import           Control.Exception               (IOException, try)
 import           Control.Lens                    ((^.))
 import           Control.Monad.IO.Class
-import           Data.Bifunctor                  (first)
+import           Data.Bifunctor                  (bimap, first)
+import           Data.Functor
 import qualified Data.Text                       as T
 import           Development.IDE                 hiding (pluginHandlers)
 import           Development.IDE.GHC.Compat      as Compat hiding (Cpp)
 import qualified Development.IDE.GHC.Compat.Util as S
 import           GHC.LanguageExtensions.Type     (Extension (Cpp))
+import           Ide.Plugin.Config               (formattingCli)
 import           Ide.PluginUtils                 (makeDiffTextEdit)
 import           Ide.Types
 import           Language.LSP.Server             hiding (defaultConfig)
@@ -24,6 +26,7 @@ import           Language.LSP.Types
 import           Language.LSP.Types.Lens         (HasTabSize (tabSize))
 import           Ormolu
 import           System.FilePath
+import           System.Process
 
 -- ---------------------------------------------------------------------
 
@@ -41,7 +44,24 @@ provider ideState typ contents fp fo = withIndefiniteProgress title Cancellable 
     fileOpts <- case hsc_dflags . hscEnv <$> ghc of
         Nothing -> return []
         Just df -> liftIO $ convertDynFlags df
-    do
+    useCLI <- formattingCli <$> getConfig
+    if useCLI
+        then
+            ( liftIO
+                . try @IOException
+                $ readCreateProcess
+                    ( proc
+                        "fourmolu"
+                        ( ["-d"]
+                            <> foldMap (pure . ("--start-line=" <>) . show) (regionStartLine region)
+                            <> foldMap (pure . ("--end-line=" <>) . show) (regionEndLine region)
+                            <> map ("-o" <>) fileOpts
+                        )
+                    )
+                    (T.unpack contents)
+            )
+                <&> bimap (mkError . show) (makeDiffTextEdit contents . T.pack)
+        else do
             let format printerOpts =
                     first (mkError . show)
                         <$> try @OrmoluException (makeDiffTextEdit contents <$> ormolu config fp' (T.unpack contents))
