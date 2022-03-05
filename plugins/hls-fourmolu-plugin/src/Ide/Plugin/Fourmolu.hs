@@ -12,8 +12,8 @@ import           Control.Exception               (IOException, try)
 import           Control.Lens                    ((^.))
 import           Control.Monad.IO.Class
 import           Data.Bifunctor                  (bimap, first)
-import           Data.Foldable
 import           Data.Functor
+import           Data.Maybe
 import qualified Data.Text                       as T
 import           Development.IDE                 hiding (pluginHandlers)
 import           Development.IDE.GHC.Compat      as Compat hiding (Cpp)
@@ -54,8 +54,10 @@ provider ideState typ contents fp fo = withIndefiniteProgress title Cancellable 
                     ( proc
                         "fourmolu"
                         ( ["-d"]
-                            <> toList (("--start-line=" <>) . show <$> regionStartLine region)
-                            <> toList (("--end-line=" <>) . show <$> regionEndLine region)
+                            <> catMaybes
+                                [ ("--start-line=" <>) . show <$> regionStartLine region
+                                , ("--end-line=" <>) . show <$> regionEndLine region
+                                ]
                             <> map ("-o" <>) fileOpts
                         )
                     )
