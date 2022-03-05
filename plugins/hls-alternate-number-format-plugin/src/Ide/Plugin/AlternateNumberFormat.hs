@@ -126,13 +126,6 @@ requestLiterals state = handleMaybeM "Error: Could not Collect Literals"
                 . runAction "AlternateNumberFormat.CollectLiterals" state
                 . use CollectLiterals
 
-getPm :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m ParsedModule
-getPm state = handleMaybeM "Error: Could not pm"
-                . liftIO
-                . runAction "AlternateNumberFormat.pm" state
-                . use GetParsedModule
-
-
 logIO :: (MonadIO m, Show a) => IdeState -> a -> m ()
 logIO state = liftIO . Logger.logError (ideLogger state) . T.pack . show
 
