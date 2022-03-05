@@ -15,6 +15,7 @@ import           Control.Monad.IO.Class
 import           Data.Bifunctor                  (first)
 import           Data.Maybe
 import qualified Data.Text                       as T
+import qualified Data.Text.IO                    as T
 import           Development.IDE                 hiding (pluginHandlers)
 import           Development.IDE.GHC.Compat      as Compat hiding (Cpp)
 import qualified Development.IDE.GHC.Compat.Util as S
@@ -28,8 +29,8 @@ import           Language.LSP.Types.Lens         (HasTabSize (tabSize))
 import           Ormolu
 import           System.Exit
 import           System.FilePath
-import           System.IO                       (stderr, hPutStrLn)
-import           System.Process
+import           System.IO                       (stderr)
+import           System.Process.Text             (readProcessWithExitCode)
 
 -- ---------------------------------------------------------------------
 
@@ -63,11 +64,11 @@ provider ideState typ contents fp fo = withIndefiniteProgress title Cancellable 
                                 ]
                             <> map ("-o" <>) fileOpts
                         )
-                        (T.unpack contents)
-                hPutStrLn stderr err
+                        contents
+                T.hPutStrLn stderr err
                 case exitCode of
                     ExitSuccess ->
-                        pure . Right $ makeDiffTextEdit contents $ T.pack out
+                        pure . Right $ makeDiffTextEdit contents out
                     ExitFailure n ->
                         pure . Left . responseError $ "Fourmolu failed with exit code " <> T.pack (show n)
         else do
