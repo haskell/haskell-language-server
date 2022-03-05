@@ -71,9 +71,6 @@ instance Pretty Log where
       "Cancelled request" <+> viaShow requestId
     LogSession log -> pretty log
 
-issueTrackerUrl :: T.Text
-issueTrackerUrl = "https://github.com/haskell/haskell-language-server/issues"
-
 -- used to smuggle RankNType WithHieDb through dbMVar
 newtype WithHieDbShield = WithHieDbShield WithHieDb
 
@@ -184,20 +181,11 @@ runLanguageServer recorder options inH outH getHieDbLoc defaultConfig onConfigur
 
             let handleServerException (Left e) = do
                     log Error $ LogReactorThreadException e
-                    sendErrorMessage e
                     exitClientMsg
                 handleServerException (Right _) = pure ()
 
-                sendErrorMessage (e :: SomeException) = do
-                    LSP.runLspT env $ LSP.sendNotification SWindowShowMessage $
-                        ShowMessageParams MtError $ T.unlines
-                        [ "Unhandled exception, please [report](" <> issueTrackerUrl <> "): "
-                        , T.pack(show e)
-                        ]
-
                 exceptionInHandler e = do
                     log Error $ LogReactorMessageActionException e
-                    sendErrorMessage e
 
                 checkCancelled _id act k =
                     flip finally (clearReqId _id) $
