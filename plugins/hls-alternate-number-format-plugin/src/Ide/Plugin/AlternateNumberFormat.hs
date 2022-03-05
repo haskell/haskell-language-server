@@ -127,5 +127,5 @@ requestLiterals state = handleMaybeM "Error: Could not Collect Literals"
                 . use CollectLiterals
 
 logIO :: (MonadIO m, Show a) => IdeState -> a -> m ()
-logIO state = liftIO . Logger.logError (ideLogger state) . T.pack . show
+logIO state = liftIO . Logger.logDebug (ideLogger state) . T.pack . show
 
