@@ -254,7 +254,7 @@ getInitialGhcLibDirDefault recorder rootDir = do
   case libDirRes of
       CradleSuccess libdir -> pure $ Just $ LibDir libdir
       CradleFail err -> do
-        log Warning $ LogGetInitialGhcLibDirDefaultCradleFail err rootDir hieYaml cradle
+        log Error $ LogGetInitialGhcLibDirDefaultCradleFail err rootDir hieYaml cradle
         pure Nothing
       CradleNone -> do
         log Warning LogGetInitialGhcLibDirDefaultCradleNone
