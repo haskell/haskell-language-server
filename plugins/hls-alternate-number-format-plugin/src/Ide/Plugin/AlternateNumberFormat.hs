@@ -7,6 +7,7 @@ module Ide.Plugin.AlternateNumberFormat (descriptor, Log(..)) where
 import           Control.Lens                    ((^.))
 import           Control.Monad.Except            (ExceptT, MonadIO, liftIO)
 import qualified Data.HashMap.Strict             as HashMap
+import           Data.List                       (intercalate)
 import           Data.Text                       (Text)
 import qualified Data.Text                       as T
 import           Development.IDE                 (GetParsedModule (GetParsedModule),
@@ -22,8 +23,7 @@ import           Development.IDE.Types.Logger    as Logger
 import           GHC.Generics                    (Generic)
 import           Ide.Plugin.Conversion           (FormatType, alternateFormat,
                                                   toFormatTypes)
-import           Ide.Plugin.Literals             (Literal (..), collectLiterals,
-                                                  getSrcSpan, getSrcText)
+import           Ide.Plugin.Literals
 import           Ide.PluginUtils                 (handleMaybe, handleMaybeM,
                                                   response)
 import           Ide.Types
@@ -126,7 +126,13 @@ requestLiterals state = handleMaybeM "Error: Could not Collect Literals"
                 . runAction "AlternateNumberFormat.CollectLiterals" state
                 . use CollectLiterals
 
+getPm :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m ParsedModule
+getPm state = handleMaybeM "Error: Could not pm"
+                . liftIO
+                . runAction "AlternateNumberFormat.pm" state
+                . use GetParsedModule
+
 
 logIO :: (MonadIO m, Show a) => IdeState -> a -> m ()
-logIO state = liftIO . Logger.logDebug (ideLogger state) . T.pack . show
+logIO state = liftIO . Logger.logError (ideLogger state) . T.pack . show
 

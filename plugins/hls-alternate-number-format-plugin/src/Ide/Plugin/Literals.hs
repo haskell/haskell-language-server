@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE FlexibleInstances  #-}
 {-# LANGUAGE RankNTypes         #-}
+{-# LANGUAGE ViewPatterns       #-}
 module Ide.Plugin.Literals (
     collectLiterals
     , Literal(..)
@@ -13,7 +14,7 @@ import           Data.Maybe                    (maybeToList)
 import           Data.Text                     (Text)
 import qualified Data.Text                     as T
 import           Development.IDE.GHC.Compat    hiding (getSrcSpan)
-import           Development.IDE.GHC.Util      (unsafePrintSDoc)
+import           Development.IDE.GHC.Util      (prettyPrint, unsafePrintSDoc)
 import           Development.IDE.Graph.Classes (NFData (rnf))
 import qualified GHC.Generics                  as GHC
 import           Generics.SYB                  (Data, Typeable, everything,
@@ -48,25 +49,27 @@ getSrcSpan = \case
 collectLiterals :: (Data ast, Typeable ast) => ast -> [Literal]
 collectLiterals = everything (<>) (maybeToList . (const Nothing `extQ` getLiteral `extQ` getPattern))
 
+
 -- | Translate from HsLit and HsOverLit Types to our Literal Type
-getLiteral :: GenLocated SrcSpan (HsExpr GhcPs) -> Maybe Literal
-getLiteral (L (UnhelpfulSpan _) _) = Nothing
-getLiteral (L (RealSrcSpan sSpan _ ) expr) = case expr of
+getLiteral :: (LHsExpr GhcPs) -> Maybe Literal
+getLiteral (L (locA -> (RealSrcSpan sSpan _)) expr) = case expr of
     HsLit _ lit         -> fromLit lit sSpan
     HsOverLit _ overLit -> fromOverLit overLit sSpan
     _                   -> Nothing
+getLiteral _ = Nothing
 
 -- | Destructure Patterns to unwrap any Literals
-getPattern :: GenLocated SrcSpan (Pat GhcPs) -> Maybe Literal
-getPattern (L (UnhelpfulSpan _) _)       = Nothing
-getPattern (L (RealSrcSpan patSpan _) pat) = case pat of
+getPattern :: (LPat GhcPs) -> Maybe Literal
+getPattern (L (locA -> (RealSrcSpan patSpan _)) pat) = case pat of
     LitPat _ lit -> case lit of
         HsInt _ val   -> fromIntegralLit patSpan val
         HsRat _ val _ -> fromFractionalLit patSpan val
         _             -> Nothing
+    -- a located HsOverLit is (GenLocated SrcSpan HsOverLit) NOT (GenLocated SrcSpanAnn' a HsOverLit)
     NPat _ (L (RealSrcSpan sSpan _) overLit) _ _ -> fromOverLit overLit sSpan
     NPlusKPat _ _ (L (RealSrcSpan sSpan _) overLit1) _ _ _ -> fromOverLit overLit1 sSpan
     _ -> Nothing
+getPattern _ = Nothing
 
 fromLit :: HsLit p -> RealSrcSpan -> Maybe Literal
 fromLit lit sSpan = case lit of
