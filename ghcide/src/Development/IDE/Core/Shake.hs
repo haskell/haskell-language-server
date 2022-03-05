@@ -166,6 +166,7 @@ import qualified "list-t" ListT
 import           OpenTelemetry.Eventlog
 import qualified StmContainers.Map                      as STM
 import           System.FilePath                        hiding (makeRelative)
+import           System.IO.Unsafe (unsafePerformIO)
 import           System.Time.Extra
 
 data Log
@@ -1179,34 +1180,41 @@ traceA (A Succeeded{}) = "Success"
 updateFileDiagnostics :: MonadIO m
   => Recorder (WithPriority Log)
   -> NormalizedFilePath
+  -> TextDocumentVersion
   -> Key
   -> ShakeExtras
   -> [(ShowDiagnostic,Diagnostic)] -- ^ current results
   -> m ()
-updateFileDiagnostics recorder fp k ShakeExtras{diagnostics, hiddenDiagnostics, publishedDiagnostics, state, debouncer, lspEnv} current = liftIO $ do
-    modTime <- (currentValue . fst =<<) <$> atomicallyNamed "diagnostics - read" (getValues state GetModificationTime fp)
+updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnostics, publishedDiagnostics, debouncer, lspEnv} current =
+  liftIO $ withTrace ("update diagnostics " <> fromString(fromNormalizedFilePath fp)) $ \ addTag -> do
+    addTag "key" (show k)
     let (currentShown, currentHidden) = partition ((== ShowDiag) . fst) current
         uri = filePathToUri' fp
-        ver = vfsVersion =<< modTime
-        update new store = setStageDiagnostics uri ver (T.pack $ show k) new store
+        addTagUnsafe :: String -> String -> String -> a -> a
+        addTagUnsafe msg t x v = unsafePerformIO(addTag (msg <> t) x) `seq` v
+        update :: (forall a. String -> String -> a -> a) -> [Diagnostic] -> STMDiagnosticStore -> STM [Diagnostic]
+        update addTagUnsafe new store = addTagUnsafe "count" (show $ Prelude.length new) $ setStageDiagnostics addTagUnsafe uri ver (T.pack $ show k) new store
+    addTag "version" (show ver)
     mask_ $ do
         -- Mask async exceptions to ensure that updated diagnostics are always
         -- published. Otherwise, we might never publish certain diagnostics if
         -- an exception strikes between modifyVar but before
         -- publishDiagnosticsNotification.
-        newDiags <- liftIO $ atomicallyNamed "diagnostics - update" $ update (map snd currentShown) diagnostics
-        _ <- liftIO $ atomicallyNamed "diagnostics - hidden" $ update (map snd currentHidden) hiddenDiagnostics
+        newDiags <- liftIO $ atomicallyNamed "diagnostics - update" $ update (addTagUnsafe "shown ") (map snd currentShown) diagnostics
+        _ <- liftIO $ atomicallyNamed "diagnostics - hidden" $ update (addTagUnsafe "hidden ") (map snd currentHidden) hiddenDiagnostics
         let uri = filePathToUri' fp
         let delay = if null newDiags then 0.1 else 0
-        registerEvent debouncer delay uri $ do
+        registerEvent debouncer delay uri $ withTrace ("report diagnostics " <> fromString (fromNormalizedFilePath fp)) $ \tag -> do
              join $ mask_ $ do
                  lastPublish <- atomicallyNamed "diagnostics - publish" $ STM.focus (Focus.lookupWithDefault [] <* Focus.insert newDiags) uri publishedDiagnostics
                  let action = when (lastPublish /= newDiags) $ case lspEnv of
                         Nothing -> -- Print an LSP event.
                             logWith recorder Info $ LogDiagsDiffButNoLspEnv (map (fp, ShowDiag,) newDiags)
-                        Just env -> LSP.runLspT env $
+                        Just env -> LSP.runLspT env $ do
+                            liftIO $ tag "count" (show $ Prelude.length newDiags)
+                            liftIO $ tag "key" (show k)
                             LSP.sendNotification LSP.STextDocumentPublishDiagnostics $
-                            LSP.PublishDiagnosticsParams (fromNormalizedUri uri) (fmap fromIntegral ver) (List newDiags)
+                                LSP.PublishDiagnosticsParams (fromNormalizedUri uri) (fmap fromIntegral ver) (List newDiags)
                  return action
 
 newtype Priority = Priority Double
@@ -1228,26 +1236,33 @@ type STMDiagnosticStore = STM.Map NormalizedUri StoreItem
 getDiagnosticsFromStore :: StoreItem -> [Diagnostic]
 getDiagnosticsFromStore (StoreItem _ diags) = concatMap SL.fromSortedList $ Map.elems diags
 
-updateSTMDiagnostics :: STMDiagnosticStore
-                  -> NormalizedUri -> TextDocumentVersion -> DiagnosticsBySource
-                  -> STM [LSP.Diagnostic]
-updateSTMDiagnostics store uri mv newDiagsBySource =
+updateSTMDiagnostics ::
+  (forall a. String -> String -> a -> a) ->
+  STMDiagnosticStore ->
+  NormalizedUri ->
+  TextDocumentVersion ->
+  DiagnosticsBySource ->
+  STM [LSP.Diagnostic]
+updateSTMDiagnostics addTag store uri mv newDiagsBySource =
     getDiagnosticsFromStore . fromJust <$> STM.focus (Focus.alter update *> Focus.lookup) uri store
   where
     update (Just(StoreItem mvs dbs))
+      | addTag "previous version" (show mvs) $
+        addTag "previous count" (show $ Prelude.length $ filter (not.null) $ Map.elems dbs) False = undefined
       | mvs == mv = Just (StoreItem mv (newDiagsBySource <> dbs))
     update _ = Just (StoreItem mv newDiagsBySource)
 
 -- | Sets the diagnostics for a file and compilation step
 --   if you want to clear the diagnostics call this with an empty list
 setStageDiagnostics
-    :: NormalizedUri
+    :: (forall a. String -> String -> a -> a)
+    -> NormalizedUri
     -> TextDocumentVersion -- ^ the time that the file these diagnostics originate from was last edited
     -> T.Text
     -> [LSP.Diagnostic]
     -> STMDiagnosticStore
     -> STM [LSP.Diagnostic]
-setStageDiagnostics uri ver stage diags ds = updateSTMDiagnostics ds uri ver updatedDiags
+setStageDiagnostics addTag uri ver stage diags ds = updateSTMDiagnostics addTag ds uri ver updatedDiags
   where
     !updatedDiags = Map.singleton (Just stage) $! SL.toSortedList diags
 
