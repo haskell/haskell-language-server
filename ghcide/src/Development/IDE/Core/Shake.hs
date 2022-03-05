@@ -1024,6 +1024,10 @@ usesWithStale key files = do
     -- whether the rule succeeded or not.
     mapM (lastValue key) files
 
+useWithoutDependency :: IdeRule k v
+    => k -> NormalizedFilePath -> Action (Maybe v)
+useWithoutDependency key file =
+    (\[A value] -> currentValue value) <$> applyWithoutDependency [Q (key, file)]
 
 data RuleBody k v
   = Rule (k -> NormalizedFilePath -> Action (Maybe BS.ByteString, IdeResult v))
@@ -1042,28 +1046,28 @@ defineEarlyCutoff
     -> Rules ()
 defineEarlyCutoff recorder (Rule op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ \traceDiagnostics -> do
     extras <- getShakeExtras
-    let diagnostics diags = do
+    let diagnostics ver diags = do
             traceDiagnostics diags
-            updateFileDiagnostics recorder file (Key key) extras . map (\(_,y,z) -> (y,z)) $ diags
+            updateFileDiagnostics recorder file ver (Key key) extras . map (\(_,y,z) -> (y,z)) $ diags
     defineEarlyCutoff' diagnostics (==) key file old mode $ const $ op key file
 defineEarlyCutoff recorder (RuleNoDiagnostics op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ \traceDiagnostics -> do
-    let diagnostics diags = do
+    let diagnostics _ver diags = do
             traceDiagnostics diags
             mapM_ (logWith recorder Warning . LogDefineEarlyCutoffRuleNoDiagHasDiag) diags
     defineEarlyCutoff' diagnostics (==) key file old mode $ const $ second (mempty,) <$> op key file
 defineEarlyCutoff recorder RuleWithCustomNewnessCheck{..} =
     addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode ->
         otTracedAction key file mode traceA $ \ traceDiagnostics -> do
-            let diagnostics diags = do
+            let diagnostics _ver diags = do
                     traceDiagnostics diags
                     mapM_ (logWith recorder Warning . LogDefineEarlyCutoffRuleCustomNewnessHasDiag) diags
             defineEarlyCutoff' diagnostics newnessCheck key file old mode $
                 const $ second (mempty,) <$> build key file
 defineEarlyCutoff recorder (RuleWithOldValue op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ \traceDiagnostics -> do
     extras <- getShakeExtras
-    let diagnostics diags = do
+    let diagnostics ver diags = do
             traceDiagnostics diags
-            updateFileDiagnostics recorder file (Key key) extras . map (\(_,y,z) -> (y,z)) $ diags
+            updateFileDiagnostics recorder file ver (Key key) extras . map (\(_,y,z) -> (y,z)) $ diags
     defineEarlyCutoff' diagnostics (==) key file old mode $ op key file
 
 defineNoFile :: IdeRule k v => Recorder (WithPriority Log) -> (k -> Action v) -> Rules ()
@@ -1078,7 +1082,7 @@ defineEarlyCutOffNoFile recorder f = defineEarlyCutoff recorder $ RuleNoDiagnost
 
 defineEarlyCutoff'
     :: forall k v. IdeRule k v
-    => ([FileDiagnostic] -> Action ()) -- ^ update diagnostics
+    => (TextDocumentVersion -> [FileDiagnostic] -> Action ()) -- ^ update diagnostics
     -- | compare current and previous for freshness
     -> (BS.ByteString -> BS.ByteString -> Bool)
     -> k
@@ -1097,8 +1101,9 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
                 case v of
                     -- No changes in the dependencies and we have
                     -- an existing successful result.
-                    Just (v@Succeeded{}, diags) -> do
-                        doDiagnostics $ Vector.toList diags
+                    Just (v@(Succeeded _ x), diags) -> do
+                        ver <- estimateFileVersionUnsafely state key (Just x) file
+                        doDiagnostics (vfsVersion =<< ver) $ Vector.toList diags
                         return $ Just $ RunResult ChangedNothing old $ A v
                     _ -> return Nothing
             _ ->
@@ -1118,18 +1123,13 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
                     \(e :: SomeException) -> do
                         pure (Nothing, ([ideErrorText file $ T.pack $ show e | not $ isBadDependency e],Nothing))
 
-                modTime <- case eqT @k @GetModificationTime of
-                  Just Refl -> pure res
-                  Nothing
-                    | file == emptyFilePath -> pure Nothing
-                    | otherwise -> liftIO $ (currentValue . fst =<<) <$> atomicallyNamed "define - read 2" (getValues state GetModificationTime file)
-
+                ver <- estimateFileVersionUnsafely state key res file
                 (bs, res) <- case res of
                     Nothing -> do
                         pure (toShakeValue ShakeStale bs, staleV)
-                    Just v -> pure (maybe ShakeNoCutoff ShakeResult bs, Succeeded modTime v)
+                    Just v -> pure (maybe ShakeNoCutoff ShakeResult bs, Succeeded ver v)
                 liftIO $ atomicallyNamed "define - write" $ setValues state key file res (Vector.fromList diags)
-                doDiagnostics diags
+                doDiagnostics (vfsVersion =<< ver) diags
                 let eq = case (bs, fmap decodeShakeValue old) of
                         (ShakeResult a, Just (ShakeResult b)) -> cmp a b
                         (ShakeStale a, Just (ShakeStale b))   -> cmp a b
@@ -1142,6 +1142,34 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
                     A res
         liftIO $ atomicallyNamed "define - dirtyKeys" $ modifyTVar' dirtyKeys (HSet.delete $ toKey key file)
         return res
+  where
+    -- Highly unsafe helper to compute the version of a file
+    -- without creating a dependency on the GetModificationTime rule
+    -- (and without creating cycles in the build graph).
+    estimateFileVersionUnsafely
+        :: forall k v
+         . IdeRule k v
+        => Values
+        -> k
+        -> Maybe v
+        -> NormalizedFilePath
+        -> Action (Maybe FileVersion)
+    estimateFileVersionUnsafely state _k v fp
+        | Just Refl <- eqT @k @GetModificationTime = pure v
+        -- GetModificationTime depends on these rules, so avoid creating a cycle
+        | Just Refl <- eqT @k @AddWatchedFile = liftIO getFromStoreUnsafely
+        | Just Refl <- eqT @k @IsFileOfInterest = liftIO getFromStoreUnsafely
+        -- GetFileExists gets called for missing files
+        | Just Refl <- eqT @k @GetFileExists = liftIO getFromStoreUnsafely
+        -- For all other rules - compute the version properly without:
+        --  * creating a dependency: If everything depends on GetModificationTime, we lose early cutoff
+        --  * creating bogus "file does not exists" diagnostics
+        | otherwise = useWithoutDependency (GetModificationTime_ False) fp
+        where
+            getFromStoreUnsafely =
+                (currentValue . fst =<<) <$>
+                    atomicallyNamed "estimateFileVersionUnsafely" (getValues state GetModificationTime fp)
+
 
 traceA :: A v -> String
 traceA (A Failed{})    = "Failed"
