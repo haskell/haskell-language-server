@@ -1156,6 +1156,7 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
         -> NormalizedFilePath
         -> Action (Maybe FileVersion)
     estimateFileVersionUnsafely state _k v fp
+        | fp == emptyFilePath = pure Nothing
         | Just Refl <- eqT @k @GetModificationTime = pure v
         -- GetModificationTime depends on these rules, so avoid creating a cycle
         | Just Refl <- eqT @k @AddWatchedFile = liftIO getFromStoreUnsafely
