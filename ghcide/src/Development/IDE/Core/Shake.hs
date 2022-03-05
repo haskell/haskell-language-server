@@ -42,7 +42,6 @@ module Development.IDE.Core.Shake(
     RuleBody(..),
     define, defineNoDiagnostics,
     defineEarlyCutoff,
-    defineOnDisk, needOnDisk, needOnDisks,
     defineNoFile, defineEarlyCutOffNoFile,
     getDiagnostics,
     mRunLspT, mRunLspTCallback,
@@ -63,7 +62,6 @@ module Development.IDE.Core.Shake(
     Priority(..),
     updatePositionMapping,
     deleteValue, recordDirtyKeys,
-    OnDiskRule(..),
     WithProgressFunc, WithIndefiniteProgressFunc,
     ProgressEvent(..),
     DelayedAction, mkDelayedAction,
@@ -1149,80 +1147,6 @@ traceA :: A v -> String
 traceA (A Failed{})    = "Failed"
 traceA (A Stale{})     = "Stale"
 traceA (A Succeeded{}) = "Success"
-
--- | Rule type, input file
-data QDisk k = QDisk k NormalizedFilePath
-  deriving (Eq, Generic)
-
-instance Hashable k => Hashable (QDisk k)
-
-instance NFData k => NFData (QDisk k)
-
-instance Show k => Show (QDisk k) where
-    show (QDisk k file) =
-        show k ++ "; " ++ fromNormalizedFilePath file
-
-type instance RuleResult (QDisk k) = Bool
-
-data OnDiskRule = OnDiskRule
-  { getHash :: Action BS.ByteString
-  -- This is used to figure out if the state on disk corresponds to the state in the Shake
-  -- database and we can therefore avoid rerunning. Often this can just be the file hash but
-  -- in some cases we can be more aggressive, e.g., for GHC interface files this can be the ABI hash which
-  -- is more stable than the hash of the interface file.
-  -- An empty bytestring indicates that the state on disk is invalid, e.g., files are missing.
-  -- We do not use a Maybe since we have to deal with encoding things into a ByteString anyway in the Shake DB.
-  , runRule :: Action (IdeResult BS.ByteString)
-  -- The actual rule code which produces the new hash (or Nothing if the rule failed) and the diagnostics.
-  }
-
--- This is used by the DAML compiler for incremental builds. Right now this is not used by
--- ghcide itself but that might change in the future.
--- The reason why this code lives in ghcide and in particular in this module is that it depends quite heavily on
--- the internals of this module that we do not want to expose.
-defineOnDisk
-  :: (Shake.ShakeValue k, RuleResult k ~ ())
-  => Recorder (WithPriority Log)
-  -> (k -> NormalizedFilePath -> OnDiskRule)
-  -> Rules ()
-defineOnDisk recorder act = addRule $
-  \(QDisk key file) (mbOld :: Maybe BS.ByteString) mode -> do
-      extras <- getShakeExtras
-      let OnDiskRule{..} = act key file
-      let validateHash h
-              | BS.null h = Nothing
-              | otherwise = Just h
-      let runAct = actionCatch runRule $
-              \(e :: SomeException) -> pure ([ideErrorText file $ T.pack $ displayException e | not $ isBadDependency e], Nothing)
-      case mbOld of
-          Nothing -> do
-              (diags, mbHash) <- runAct
-              updateFileDiagnostics recorder file (Key key) extras $ map (\(_,y,z) -> (y,z)) diags
-              pure $ RunResult ChangedRecomputeDiff (fromMaybe "" mbHash) (isJust mbHash)
-          Just old -> do
-              current <- validateHash <$> (actionCatch getHash $ \(_ :: SomeException) -> pure "")
-              if mode == RunDependenciesSame && Just old == current && not (BS.null old)
-                  then
-                    -- None of our dependencies changed, we’ve had a successful run before and
-                    -- the state on disk matches the state in the Shake database.
-                    pure $ RunResult ChangedNothing (fromMaybe "" current) (isJust current)
-                  else do
-                    (diags, mbHash) <- runAct
-                    updateFileDiagnostics recorder file (Key key) extras $ map (\(_,y,z) -> (y,z)) diags
-                    let change
-                          | mbHash == Just old = ChangedRecomputeSame
-                          | otherwise = ChangedRecomputeDiff
-                    pure $ RunResult change (fromMaybe "" mbHash) (isJust mbHash)
-
-needOnDisk :: (Shake.ShakeValue k, RuleResult k ~ ()) => k -> NormalizedFilePath -> Action ()
-needOnDisk k file = do
-    successfull <- apply1 (QDisk k file)
-    liftIO $ unless successfull $ throwIO $ BadDependency (show k)
-
-needOnDisks :: (Shake.ShakeValue k, RuleResult k ~ ()) => k -> [NormalizedFilePath] -> Action ()
-needOnDisks k files = do
-    successfulls <- apply $ map (QDisk k) files
-    liftIO $ unless (and successfulls) $ throwIO $ BadDependency (show k)
 
 updateFileDiagnostics :: MonadIO m
   => Recorder (WithPriority Log)
