@@ -8,22 +8,28 @@ module Ide.Plugin.Fourmolu (
     provider,
 ) where
 
-import           Control.Exception               (try)
+import           Control.Exception               (IOException, try)
 import           Control.Lens                    ((^.))
+import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.Bifunctor                  (first)
+import           Data.Maybe
 import qualified Data.Text                       as T
 import           Development.IDE                 hiding (pluginHandlers)
 import           Development.IDE.GHC.Compat      as Compat hiding (Cpp)
 import qualified Development.IDE.GHC.Compat.Util as S
 import           GHC.LanguageExtensions.Type     (Extension (Cpp))
+import           Ide.Plugin.Config               (formattingCLI)
 import           Ide.PluginUtils                 (makeDiffTextEdit)
 import           Ide.Types
 import           Language.LSP.Server             hiding (defaultConfig)
 import           Language.LSP.Types
 import           Language.LSP.Types.Lens         (HasTabSize (tabSize))
 import           Ormolu
+import           System.Exit
 import           System.FilePath
+import           System.IO                       (stderr, hPutStrLn)
+import           System.Process
 
 -- ---------------------------------------------------------------------
 
@@ -41,7 +47,30 @@ provider ideState typ contents fp fo = withIndefiniteProgress title Cancellable 
     fileOpts <- case hsc_dflags . hscEnv <$> ghc of
         Nothing -> return []
         Just df -> liftIO $ convertDynFlags df
-    do
+    useCLI <- formattingCLI <$> getConfig
+    if useCLI
+        then liftIO
+            . fmap (join . first (mkError . show))
+            . try @IOException
+            $ do
+                (exitCode, out, err) <-
+                    readProcessWithExitCode
+                        "fourmolu"
+                        ( ["-d"]
+                            <> catMaybes
+                                [ ("--start-line=" <>) . show <$> regionStartLine region
+                                , ("--end-line=" <>) . show <$> regionEndLine region
+                                ]
+                            <> map ("-o" <>) fileOpts
+                        )
+                        (T.unpack contents)
+                hPutStrLn stderr err
+                case exitCode of
+                    ExitSuccess ->
+                        pure . Right $ makeDiffTextEdit contents $ T.pack out
+                    ExitFailure n ->
+                        pure . Left . responseError $ "Fourmolu failed with exit code " <> T.pack (show n)
+        else do
             let format printerOpts =
                     first (mkError . show)
                         <$> try @OrmoluException (makeDiffTextEdit contents <$> ormolu config fp' (T.unpack contents))
