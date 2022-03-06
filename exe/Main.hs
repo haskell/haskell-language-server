@@ -59,8 +59,8 @@ main = do
       defaultMain (cmapWithPrio LogIdeMain recorder) args (pluginDescToIdePlugins [lspRecorderPlugin] <> plugins)
 
 renderDoc :: Doc a -> Text
-renderDoc d = renderStrict $ layoutPretty defaultLayoutOptions $ vcat
-    ["Unhandled exception, please check your setup and/or the [issue tracker](" <> issueTrackerUrl <> "): "
+renderDoc d = renderStrict $ layoutPretty defaultLayoutOptions $ vsep
+    ["Error condition, please check your setup and/or the [issue tracker](" <> issueTrackerUrl <> "): "
     ,d
     ]
 
