@@ -51,4 +51,4 @@ allow-newer:
   -- brittany: update ghc bounds in hls.cabal when those are removed
   stylish-haskell:Cabal,
   stylish-haskell:ghc-lib-parser,
-  stylish-haskell:aeson,
+  stylish-haskell:aeson
