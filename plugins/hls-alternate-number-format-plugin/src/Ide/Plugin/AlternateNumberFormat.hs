@@ -7,7 +7,6 @@ module Ide.Plugin.AlternateNumberFormat (descriptor, Log(..)) where
 import           Control.Lens                    ((^.))
 import           Control.Monad.Except            (ExceptT, MonadIO, liftIO)
 import qualified Data.HashMap.Strict             as HashMap
-import           Data.List                       (intercalate)
 import           Data.Text                       (Text)
 import qualified Data.Text                       as T
 import           Development.IDE                 (GetParsedModule (GetParsedModule),

@@ -14,7 +14,7 @@ import           Data.Maybe                    (maybeToList)
 import           Data.Text                     (Text)
 import qualified Data.Text                     as T
 import           Development.IDE.GHC.Compat    hiding (getSrcSpan)
-import           Development.IDE.GHC.Util      (prettyPrint, unsafePrintSDoc)
+import           Development.IDE.GHC.Util      (unsafePrintSDoc)
 import           Development.IDE.Graph.Classes (NFData (rnf))
 import qualified GHC.Generics                  as GHC
 import           Generics.SYB                  (Data, Typeable, everything,
@@ -94,30 +94,3 @@ fromSourceText :: SourceText -> Maybe Text
 fromSourceText = \case
   SourceText s -> Just $ T.pack s
   NoSourceText -> Nothing
-
--- mostly for debugging purposes
-literalToString :: HsLit p -> String
-literalToString = \case
-  HsChar _ c        -> "Char: " <> show c
-  HsCharPrim _ c    -> "CharPrim: " <> show c
-  HsString _ fs     -> "String: " <> show fs
-  HsStringPrim _ bs -> "StringPrim: " <> show bs
-  HsInt _ il        -> "Int: " <> show il
-  HsIntPrim _ n     -> "IntPrim: " <> show n
-  HsWordPrim _ n    -> "WordPrim: " <> show n
-  HsInt64Prim _ n   -> "Int64Prim: " <> show n
-  HsWord64Prim _ n  -> "Word64Prim: " <> show n
-  HsInteger _ n ty  -> "Integer: " <> show n <> " Type: " <> tyToLiteral ty
-  HsRat _ fl ty     -> "Rat: " <> show fl <> " Type: " <> tyToLiteral ty
-  HsFloatPrim _ fl  -> "FloatPrim: " <> show fl
-  HsDoublePrim _ fl -> "DoublePrim: " <>  show fl
-  _                 -> "XHsLit"
-  where
-    tyToLiteral :: Type -> String
-    tyToLiteral = unsafePrintSDoc .  ppr
-
-overLitToString :: OverLitVal -> String
-overLitToString = \case
-     HsIntegral int -> case int of { IL{il_value} -> "IntegralOverLit: " <> show il_value}
-     HsFractional frac -> case frac of { fl -> "RationalOverLit: " <> show (rationalFromFractionalLit fl)}
-     HsIsString _ str -> "HIsString: " <> show str

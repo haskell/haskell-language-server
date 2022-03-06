@@ -21,6 +21,7 @@ library
   exposed-modules:  Ide.Plugin.AlternateNumberFormat, Ide.Plugin.Conversion
   other-modules:    Ide.Plugin.Literals
   hs-source-dirs:   src
+  ghc-options:      -Wall
   build-depends:
       aeson
     , base                 >=4.12 && < 5
