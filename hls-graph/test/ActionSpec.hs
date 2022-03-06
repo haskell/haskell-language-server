@@ -2,6 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module ActionSpec where
 
@@ -14,6 +15,7 @@ import Development.IDE.Graph.Rule
 import Example
 import qualified StmContainers.Map as STM
 import Test.Hspec
+import System.Time.Extra (timeout)
 
 spec :: Spec
 spec = do
@@ -53,3 +55,16 @@ spec = do
       res `shouldBe` [True]
       Just KeyDetails {..} <- atomically $ STM.lookup (Key (Rule @())) databaseValues
       keyReverseDeps `shouldBe` [Key theKey]
+    it "rethrows exceptions" $ do
+      db <- shakeNewDatabase shakeOptions $ do
+        addRule $ \(Rule :: Rule ()) old mode -> error "boom"
+      let res = shakeRunDatabase db $ pure $ apply1 (Rule @())
+      res `shouldThrow` anyErrorCall
+    it "detects cycles" $ do
+      db <- shakeNewDatabase shakeOptions $ do
+        ruleBool
+        addRule $ \Rule old mode -> do
+          True <- apply1 (Rule @Bool)
+          return $ RunResult ChangedRecomputeDiff "" ()
+      let res = shakeRunDatabase db $ pure $ apply1 (Rule @())
+      timeout 1 res `shouldThrow` \StackException{} -> True
