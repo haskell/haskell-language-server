@@ -54,4 +54,4 @@ constraints:
 allow-newer:
   stylish-haskell:Cabal,
   stylish-haskell:ghc-lib-parser,
-  stylish-haskell:aeson,
+  stylish-haskell:aeson
