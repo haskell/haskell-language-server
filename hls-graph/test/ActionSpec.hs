@@ -60,11 +60,15 @@ spec = do
         addRule $ \(Rule :: Rule ()) old mode -> error "boom"
       let res = shakeRunDatabase db $ pure $ apply1 (Rule @())
       res `shouldThrow` anyErrorCall
-    it "detects cycles" $ do
-      db <- shakeNewDatabase shakeOptions $ do
+  describe "applyWithoutDependency" $ do
+    it "does not track dependencies" $ do
+      db@(ShakeDatabase _ _ theDb) <- shakeNewDatabase shakeOptions $ do
+        ruleUnit
         ruleBool
-        addRule $ \Rule old mode -> do
-          True <- apply1 (Rule @Bool)
-          return $ RunResult ChangedRecomputeDiff "" ()
-      let res = shakeRunDatabase db $ pure $ apply1 (Rule @())
-      timeout 1 res `shouldThrow` \StackException{} -> True
+      let theKey = Rule @Bool
+      res <- shakeRunDatabase db $
+        pure $ do
+          applyWithoutDependency [theKey]
+      res `shouldBe` [[True]]
+      Just (Clean res) <- lookup (Key theKey) <$> getDatabaseValues theDb
+      resultDeps res `shouldBe` ResultDeps []
