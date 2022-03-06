@@ -5,6 +5,8 @@
 module Main(main) where
 
 import           Data.Function                ((&))
+import           Data.Text (Text)
+import           Development.IDE.Plugin.LSPWindowShowMessageRecorder (makeLspShowMessageRecorder)
 import           Development.IDE.Types.Logger (Priority (Debug, Info, Error),
                                                WithPriority (WithPriority, priority),
                                                cfilter, cmapWithPrio,
@@ -15,11 +17,9 @@ import           Ide.Arguments                (Arguments (..),
                                                getArguments)
 import           Ide.Main                     (defaultMain)
 import qualified Ide.Main                     as IdeMain
+import           Ide.PluginUtils (pluginDescToIdePlugins)
 import qualified Plugins
-import           Prettyprinter                (Pretty (pretty), vcat)
-import Development.IDE.Plugin.LSPWindowShowMessageRecorder (makeLspShowMessageRecorder)
-import Data.Text (Text)
-import Ide.PluginUtils (pluginDescToIdePlugins)
+import           Prettyprinter                (Pretty (pretty), vsep)
 
 data Log
   = LogIdeMain IdeMain.Log
@@ -59,8 +59,8 @@ main = do
       defaultMain (cmapWithPrio LogIdeMain recorder) args (pluginDescToIdePlugins [lspRecorderPlugin] <> plugins)
 
 renderDoc :: Doc a -> Text
-renderDoc d = renderStrict $ layoutPretty defaultLayoutOptions $ vcat
-    ["Unhandled exception, please check your setup and/or the [issue tracker](" <> issueTrackerUrl <> "): "
+renderDoc d = renderStrict $ layoutPretty defaultLayoutOptions $ vsep
+    ["Error condition, please check your setup and/or the [issue tracker](" <> issueTrackerUrl <> "): "
     ,d
     ]
 
