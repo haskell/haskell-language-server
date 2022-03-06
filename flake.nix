@@ -336,7 +336,7 @@
           haskell-language-server-dev = mkDevShell ghcDefault "cabal.project";
           haskell-language-server-884-dev = mkDevShell ghc884 "cabal.project";
           haskell-language-server-8107-dev = mkDevShell ghc8107 "cabal.project";
-          haskell-language-server-901-dev = mkDevShell ghc901 "cabal-ghc90.project";
+          haskell-language-server-901-dev = mkDevShell ghc901 "cabal.project";
           haskell-language-server-921-dev = mkDevShell ghc921 "cabal-ghc92.project";
         };
 
@@ -345,7 +345,7 @@
           haskell-language-server-dev-nix = mkDevShellWithNixDeps ghcDefault "cabal.project";
           haskell-language-server-884-dev-nix = mkDevShellWithNixDeps ghc884 "cabal.project";
           haskell-language-server-8107-dev-nix = mkDevShellWithNixDeps ghc8107 "cabal.project";
-          haskell-language-server-901-dev-nix = mkDevShellWithNixDeps ghc901 "cabal-ghc90.project";
+          haskell-language-server-901-dev-nix = mkDevShellWithNixDeps ghc901 "cabal.project";
           haskell-language-server-921-dev-nix = mkDevShellWithNixDeps ghc921 "cabal-ghc92.project";
         };
 

@@ -52,6 +52,6 @@ constraints:
     hlint +ghc-lib
 
 allow-newer:
-    -- for shake-bench
-    Chart-diagrams:diagrams-core,
-    SVGFonts:diagrams-core
+  stylish-haskell:Cabal,
+  stylish-haskell:ghc-lib-parser,
+  stylish-haskell:aeson,
