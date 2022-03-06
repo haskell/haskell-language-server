@@ -3,7 +3,6 @@
 module Development.IDE.Plugin.LSPWindowShowMessageRecorder (makeLspShowMessageRecorder) where
 
 import Control.Monad.IO.Class
-import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Data.Foldable (for_)
 import Data.IORef
 import Data.IORef.Extra (atomicModifyIORef'_)
@@ -24,8 +23,8 @@ makeLspShowMessageRecorder = do
   backLogRef <- newIORef []
   let recorder = Recorder $ \it -> do
         mbenv <- liftIO $ readIORef envRef
-        case mbenv of
-          Nothing -> liftIO $ atomicModifyIORef'_ backLogRef (it :)
+        liftIO $ case mbenv of
+          Nothing -> atomicModifyIORef'_ backLogRef (it :)
           Just env -> sendMsg env it
       -- the plugin captures the language context, so it can be used to send messages
       plugin =
@@ -35,11 +34,11 @@ makeLspShowMessageRecorder = do
               liftIO $ writeIORef envRef $ Just env
               -- flush the backlog
               backLog <- liftIO $ atomicModifyIORef' backLogRef ([],)
-              for_ (reverse backLog) $ sendMsg env
+              liftIO $ for_ (reverse backLog) $ sendMsg env
           }
   return (recorder, plugin)
 
-sendMsg :: MonadUnliftIO m => LanguageContextEnv config -> WithPriority Text -> m ()
+sendMsg :: LanguageContextEnv config -> WithPriority Text -> IO ()
 sendMsg env WithPriority {..} =
   LSP.runLspT env $
     LSP.sendNotification
