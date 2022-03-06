@@ -64,11 +64,14 @@ spec = do
     it "does not track dependencies" $ do
       db@(ShakeDatabase _ _ theDb) <- shakeNewDatabase shakeOptions $ do
         ruleUnit
-        ruleBool
+        addRule $ \Rule old mode -> do
+            [()] <- applyWithoutDependency [Rule]
+            return $ RunResult ChangedRecomputeDiff "" True
+
       let theKey = Rule @Bool
       res <- shakeRunDatabase db $
         pure $ do
           applyWithoutDependency [theKey]
       res `shouldBe` [[True]]
       Just (Clean res) <- lookup (Key theKey) <$> getDatabaseValues theDb
-      resultDeps res `shouldBe` ResultDeps []
+      resultDeps res `shouldBe` UnknownDeps
