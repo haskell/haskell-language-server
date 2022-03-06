@@ -21,6 +21,7 @@ import           Data.List
 import qualified Data.Map.Strict                         as Map
 import           Data.Maybe
 import qualified Data.Text                               as T
+import qualified Data.Set                                as Set
 import           Development.IDE                         hiding (pluginHandlers)
 import           Development.IDE.Core.PositionMapping    (fromCurrentRange,
                                                           toCurrentRange)
@@ -217,20 +218,10 @@ codeAction state plId (CodeActionParams _ _ docId _ context) = liftIO $ fmap (fr
         HAR {hieAst = hf} ->
           pure
             $ head . head
-#if MIN_VERSION_ghc(9,2,0)
-            $ pointCommand hf (fromJust (fromCurrentRange pmap range) ^. J.start & J.character +~ 1)
-              (Map.keys . Map.filter isClassNodeIdentifier . Compat.getNodeIds)
-#elif MIN_VERSION_ghc(9,0,0)
             $ pointCommand hf (fromJust (fromCurrentRange pmap range) ^. J.start & J.character -~ 1)
               ( (Map.keys . Map.filter isClassNodeIdentifier . Compat.getNodeIds)
                 <=< nodeChildren
               )
-#else
-            $ pointCommand hf (fromJust (fromCurrentRange pmap range) ^. J.start & J.character -~ 1)
-              ( (Map.keys . Map.filter isClassNodeIdentifier . Compat.getNodeIds)
-                <=< nodeChildren
-              )
-#endif
 
     findClassFromIdentifier docPath (Right name) = do
       (hscEnv -> hscenv, _) <- MaybeT . runAction "classplugin" state $ useWithStale GhcSessionDeps docPath
@@ -238,12 +229,8 @@ codeAction state plId (CodeActionParams _ _ docId _ context) = liftIO $ fmap (fr
       MaybeT . fmap snd . initTcWithGbl hscenv thisMod ghostSpan $ do
         tcthing <- tcLookup name
         case tcthing of
-#if !MIN_VERSION_ghc(9,2,0)
           AGlobal (AConLike (RealDataCon con))
             | Just cls <- tyConClass_maybe (dataConOrigTyCon con) -> pure cls
-#else
-          AGlobal (ATyCon tycon) | Just cls <- tyConClass_maybe tycon -> pure cls
-#endif
           _ -> panic "Ide.Plugin.Class.findClassFromIdentifier"
     findClassFromIdentifier _ (Left _) = panic "Ide.Plugin.Class.findClassIdentifier"
 
@@ -254,7 +241,7 @@ containRange :: Range -> SrcSpan -> Bool
 containRange range x = isInsideSrcSpan (range ^. J.start) x || isInsideSrcSpan (range ^. J.end) x
 
 isClassNodeIdentifier :: IdentifierDetails a -> Bool
-isClassNodeIdentifier = isNothing . identType
+isClassNodeIdentifier ident = (isNothing . identType) ident && Use `Set.member` (identInfo ident)
 
 isClassMethodWarning :: T.Text -> Bool
 isClassMethodWarning = T.isPrefixOf "• No explicit implementation for"
