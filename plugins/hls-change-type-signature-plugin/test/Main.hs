@@ -1,5 +1,6 @@
 module Main where
 
+import           Control.Monad                  (void)
 import           Data.Either                    (rights)
 import           Data.Text                      (Text)
 import qualified Data.Text                      as T
@@ -50,9 +51,6 @@ testRegexes = testGroup "Regex Testing" [
         testRegexOne
         , testRegexTwo
     ]
-    where
-        regex1 = errorMessageRegexes !! 0
-        regex2 = errorMessageRegexes !! 1
 
 testRegexOne :: TestTree
 testRegexOne = testGroup "Regex One" [
@@ -84,7 +82,7 @@ goldenChangeSignature fp = goldenWithHaskellDoc changeTypeSignaturePlugin (fp <>
 
 codeActionTest :: FilePath -> Int -> Int -> TestTree
 codeActionTest fp line col = goldenChangeSignature fp $ \doc -> do
-    waitForDiagnostics  -- code actions are triggered from Diagnostics
+    void $ waitForDiagnostics  -- code actions are triggered from Diagnostics
     actions <- getCodeActions doc (pointRange line col)
     foundActions <- findChangeTypeActions actions
     liftIO $ length foundActions @?= 1
