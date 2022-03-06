@@ -25,7 +25,7 @@ library
   build-depends:
      base < 4.17, array, bytestring, containers, directory, filepath, transformers
   if flag(ghc-lib)
-    build-depends: ghc-lib
+    build-depends: ghc-lib < 9.0
   else
     build-depends: ghc, ghc-boot
   if (impl(ghc >= 9.0) && impl(ghc < 9.1))
