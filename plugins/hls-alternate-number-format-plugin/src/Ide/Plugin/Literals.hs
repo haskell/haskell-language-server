@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE FlexibleInstances  #-}
@@ -14,7 +15,6 @@ import           Data.Maybe                    (maybeToList)
 import           Data.Text                     (Text)
 import qualified Data.Text                     as T
 import           Development.IDE.GHC.Compat    hiding (getSrcSpan)
-import           Development.IDE.GHC.Util      (unsafePrintSDoc)
 import           Development.IDE.Graph.Classes (NFData (rnf))
 import qualified GHC.Generics                  as GHC
 import           Generics.SYB                  (Data, Typeable, everything,
@@ -58,8 +58,17 @@ getLiteral (L (locA -> (RealSrcSpan sSpan _)) expr) = case expr of
     _                   -> Nothing
 getLiteral _ = Nothing
 
+
+
+-- GHC 8.8 typedefs LPat = Pat
+#if __GLASGOW_HASKELL__ == 808
+type LocPat a = GenLocated SrcSpan (Pat a)
+#else
+type LocPat a = LPat a
+#endif
+
 -- | Destructure Patterns to unwrap any Literals
-getPattern :: (LPat GhcPs) -> Maybe Literal
+getPattern :: (LocPat GhcPs) -> Maybe Literal
 getPattern (L (locA -> (RealSrcSpan patSpan _)) pat) = case pat of
     LitPat _ lit -> case lit of
         HsInt _ val   -> fromIntegralLit patSpan val
