@@ -18,7 +18,7 @@ variables:
     - GHC_VERSION: 8.10.7
       CABAL_PROJECT: cabal.project
     - GHC_VERSION: 9.0.2
-      CABAL_PROJECT: cabal-ghc90.project
+      CABAL_PROJECT: cabal.project
     - GHC_VERSION: 9.2.1
       CABAL_PROJECT: cabal-ghc921.project
 

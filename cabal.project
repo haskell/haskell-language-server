@@ -48,6 +48,7 @@ constraints:
     hyphenation +embed
 
 allow-newer:
-    -- for shake-bench
-    Chart-diagrams:diagrams-core,
-    SVGFonts:diagrams-core
+  -- brittany: update ghc bounds in hls.cabal when those are removed
+  stylish-haskell:Cabal,
+  stylish-haskell:ghc-lib-parser,
+  stylish-haskell:aeson,
