@@ -4,7 +4,7 @@
 module Development.IDE.Graph.Database(
     ShakeDatabase,
     ShakeValue,
-    shakeOpenDatabase,
+    shakeNewDatabase,
     shakeRunDatabase,
     shakeRunDatabaseForKeys,
     shakeProfileDatabase,
@@ -28,9 +28,6 @@ data ShakeDatabase = ShakeDatabase !Int [Action ()] Database
 -- Placeholder to be the 'extra' if the user doesn't set it
 data NonExportedType = NonExportedType
 
-shakeOpenDatabase :: ShakeOptions -> Rules () -> IO (IO ShakeDatabase, IO ())
-shakeOpenDatabase opts rules = pure (shakeNewDatabase opts rules, pure ())
-
 shakeNewDatabase :: ShakeOptions -> Rules () -> IO ShakeDatabase
 shakeNewDatabase opts rules = do
     let extra = fromMaybe (toDyn NonExportedType) $ shakeExtra opts
@@ -38,7 +35,7 @@ shakeNewDatabase opts rules = do
     db <- newDatabase extra theRules
     pure $ ShakeDatabase (length actions) actions db
 
-shakeRunDatabase :: ShakeDatabase -> [Action a] -> IO ([a], [IO ()])
+shakeRunDatabase :: ShakeDatabase -> [Action a] -> IO [a]
 shakeRunDatabase = shakeRunDatabaseForKeys Nothing
 
 -- | Returns the set of dirty keys annotated with their age (in # of builds)
@@ -62,11 +59,10 @@ shakeRunDatabaseForKeys
       -- ^ Set of keys changed since last run. 'Nothing' means everything has changed
     -> ShakeDatabase
     -> [Action a]
-    -> IO ([a], [IO ()])
+    -> IO [a]
 shakeRunDatabaseForKeys keysChanged (ShakeDatabase lenAs1 as1 db) as2 = do
     incDatabase db keysChanged
-    as <- fmap (drop lenAs1) $ runActions db $ map unvoid as1 ++ as2
-    return (as, [])
+    fmap (drop lenAs1) $ runActions db $ map unvoid as1 ++ as2
 
 -- | Given a 'ShakeDatabase', write an HTML profile to the given file about the latest run.
 shakeProfileDatabase :: ShakeDatabase -> FilePath -> IO ()

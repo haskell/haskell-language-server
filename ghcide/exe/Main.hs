@@ -17,7 +17,6 @@ import           Development.IDE.Core.OfInterest   (kick)
 import           Development.IDE.Core.Rules        (mainRule)
 import qualified Development.IDE.Core.Rules        as Rules
 import           Development.IDE.Core.Tracing      (withTelemetryLogger)
-import           Development.IDE.Graph             (ShakeOptions (shakeThreads))
 import qualified Development.IDE.Main              as IDEMain
 import qualified Development.IDE.Plugin.HLS.GhcIde as GhcIde
 import           Development.IDE.Types.Logger      (Logger (Logger),
@@ -128,7 +127,6 @@ main = withTelemetryLogger $ \telemetryLogger -> do
             in defOptions
                 { optShakeProfiling = argsShakeProfiling
                 , optOTMemoryProfiling = IdeOTMemoryProfiling argsOTMemoryProfiling
-                , optShakeOptions = (optShakeOptions defOptions){shakeThreads = argsThreads}
                 , optCheckParents = pure $ checkParents config
                 , optCheckProject = pure $ checkProject config
                 , optRunSubset = not argsConservativeChangeTracking

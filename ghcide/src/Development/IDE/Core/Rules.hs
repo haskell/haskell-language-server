@@ -717,15 +717,7 @@ loadGhcSession recorder ghcSessionDepsConfig = do
                   use_ GetModificationTime nfp
         mapM_ addDependency deps
 
-        opts <- getIdeOptions
-        let cutoffHash =
-              case optShakeFiles opts of
-                -- optShakeFiles is only set in the DAML case.
-                -- https://github.com/haskell/ghcide/pull/522#discussion_r428622915
-                Just {} -> ""
-                -- Hash the HscEnvEq returned so cutoff if it didn't change
-                -- from last time
-                Nothing -> LBS.toStrict $ B.encode (hash (snd val))
+        let cutoffHash = LBS.toStrict $ B.encode (hash (snd val))
         return (Just cutoffHash, val)
 
     defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \(GhcSessionDeps_ fullModSummary) file -> do
