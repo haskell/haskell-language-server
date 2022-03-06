@@ -42,7 +42,6 @@ module Development.IDE.Core.Shake(
     RuleBody(..),
     define, defineNoDiagnostics,
     defineEarlyCutoff,
-    defineOnDisk, needOnDisk, needOnDisks,
     defineNoFile, defineEarlyCutOffNoFile,
     getDiagnostics,
     mRunLspT, mRunLspTCallback,
@@ -63,7 +62,6 @@ module Development.IDE.Core.Shake(
     Priority(..),
     updatePositionMapping,
     deleteValue, recordDirtyKeys,
-    OnDiskRule(..),
     WithProgressFunc, WithIndefiniteProgressFunc,
     ProgressEvent(..),
     DelayedAction, mkDelayedAction,
@@ -168,6 +166,7 @@ import qualified "list-t" ListT
 import           OpenTelemetry.Eventlog
 import qualified StmContainers.Map                      as STM
 import           System.FilePath                        hiding (makeRelative)
+import           System.IO.Unsafe (unsafePerformIO)
 import           System.Time.Extra
 
 data Log
@@ -1026,6 +1025,10 @@ usesWithStale key files = do
     -- whether the rule succeeded or not.
     mapM (lastValue key) files
 
+useWithoutDependency :: IdeRule k v
+    => k -> NormalizedFilePath -> Action (Maybe v)
+useWithoutDependency key file =
+    (\[A value] -> currentValue value) <$> applyWithoutDependency [Q (key, file)]
 
 data RuleBody k v
   = Rule (k -> NormalizedFilePath -> Action (Maybe BS.ByteString, IdeResult v))
@@ -1044,28 +1047,28 @@ defineEarlyCutoff
     -> Rules ()
 defineEarlyCutoff recorder (Rule op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ \traceDiagnostics -> do
     extras <- getShakeExtras
-    let diagnostics diags = do
+    let diagnostics ver diags = do
             traceDiagnostics diags
-            updateFileDiagnostics recorder file (Key key) extras . map (\(_,y,z) -> (y,z)) $ diags
+            updateFileDiagnostics recorder file ver (Key key) extras . map (\(_,y,z) -> (y,z)) $ diags
     defineEarlyCutoff' diagnostics (==) key file old mode $ const $ op key file
 defineEarlyCutoff recorder (RuleNoDiagnostics op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ \traceDiagnostics -> do
-    let diagnostics diags = do
+    let diagnostics _ver diags = do
             traceDiagnostics diags
             mapM_ (logWith recorder Warning . LogDefineEarlyCutoffRuleNoDiagHasDiag) diags
     defineEarlyCutoff' diagnostics (==) key file old mode $ const $ second (mempty,) <$> op key file
 defineEarlyCutoff recorder RuleWithCustomNewnessCheck{..} =
     addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode ->
         otTracedAction key file mode traceA $ \ traceDiagnostics -> do
-            let diagnostics diags = do
+            let diagnostics _ver diags = do
                     traceDiagnostics diags
                     mapM_ (logWith recorder Warning . LogDefineEarlyCutoffRuleCustomNewnessHasDiag) diags
             defineEarlyCutoff' diagnostics newnessCheck key file old mode $
                 const $ second (mempty,) <$> build key file
 defineEarlyCutoff recorder (RuleWithOldValue op) = addRule $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file mode traceA $ \traceDiagnostics -> do
     extras <- getShakeExtras
-    let diagnostics diags = do
+    let diagnostics ver diags = do
             traceDiagnostics diags
-            updateFileDiagnostics recorder file (Key key) extras . map (\(_,y,z) -> (y,z)) $ diags
+            updateFileDiagnostics recorder file ver (Key key) extras . map (\(_,y,z) -> (y,z)) $ diags
     defineEarlyCutoff' diagnostics (==) key file old mode $ op key file
 
 defineNoFile :: IdeRule k v => Recorder (WithPriority Log) -> (k -> Action v) -> Rules ()
@@ -1080,7 +1083,7 @@ defineEarlyCutOffNoFile recorder f = defineEarlyCutoff recorder $ RuleNoDiagnost
 
 defineEarlyCutoff'
     :: forall k v. IdeRule k v
-    => ([FileDiagnostic] -> Action ()) -- ^ update diagnostics
+    => (TextDocumentVersion -> [FileDiagnostic] -> Action ()) -- ^ update diagnostics
     -- | compare current and previous for freshness
     -> (BS.ByteString -> BS.ByteString -> Bool)
     -> k
@@ -1099,8 +1102,9 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
                 case v of
                     -- No changes in the dependencies and we have
                     -- an existing successful result.
-                    Just (v@Succeeded{}, diags) -> do
-                        doDiagnostics $ Vector.toList diags
+                    Just (v@(Succeeded _ x), diags) -> do
+                        ver <- estimateFileVersionUnsafely state key (Just x) file
+                        doDiagnostics (vfsVersion =<< ver) $ Vector.toList diags
                         return $ Just $ RunResult ChangedNothing old $ A v
                     _ -> return Nothing
             _ ->
@@ -1120,18 +1124,13 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
                     \(e :: SomeException) -> do
                         pure (Nothing, ([ideErrorText file $ T.pack $ show e | not $ isBadDependency e],Nothing))
 
-                modTime <- case eqT @k @GetModificationTime of
-                  Just Refl -> pure res
-                  Nothing
-                    | file == emptyFilePath -> pure Nothing
-                    | otherwise -> liftIO $ (currentValue . fst =<<) <$> atomicallyNamed "define - read 2" (getValues state GetModificationTime file)
-
+                ver <- estimateFileVersionUnsafely state key res file
                 (bs, res) <- case res of
                     Nothing -> do
                         pure (toShakeValue ShakeStale bs, staleV)
-                    Just v -> pure (maybe ShakeNoCutoff ShakeResult bs, Succeeded modTime v)
+                    Just v -> pure (maybe ShakeNoCutoff ShakeResult bs, Succeeded ver v)
                 liftIO $ atomicallyNamed "define - write" $ setValues state key file res (Vector.fromList diags)
-                doDiagnostics diags
+                doDiagnostics (vfsVersion =<< ver) diags
                 let eq = case (bs, fmap decodeShakeValue old) of
                         (ShakeResult a, Just (ShakeResult b)) -> cmp a b
                         (ShakeStale a, Just (ShakeStale b))   -> cmp a b
@@ -1144,117 +1143,74 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
                     A res
         liftIO $ atomicallyNamed "define - dirtyKeys" $ modifyTVar' dirtyKeys (HSet.delete $ toKey key file)
         return res
+  where
+    -- Highly unsafe helper to compute the version of a file
+    -- without creating a dependency on the GetModificationTime rule
+    -- (and without creating cycles in the build graph).
+    estimateFileVersionUnsafely
+        :: forall k v
+         . IdeRule k v
+        => Values
+        -> k
+        -> Maybe v
+        -> NormalizedFilePath
+        -> Action (Maybe FileVersion)
+    estimateFileVersionUnsafely state _k v fp
+        | fp == emptyFilePath = pure Nothing
+        | Just Refl <- eqT @k @GetModificationTime = pure v
+        -- GetModificationTime depends on these rules, so avoid creating a cycle
+        | Just Refl <- eqT @k @AddWatchedFile = pure Nothing
+        | Just Refl <- eqT @k @IsFileOfInterest = pure Nothing
+        -- GetFileExists gets called for missing files
+        | Just Refl <- eqT @k @GetFileExists = pure Nothing
+        -- For all other rules - compute the version properly without:
+        --  * creating a dependency: If everything depends on GetModificationTime, we lose early cutoff
+        --  * creating bogus "file does not exists" diagnostics
+        | otherwise = useWithoutDependency (GetModificationTime_ False) fp
 
 traceA :: A v -> String
 traceA (A Failed{})    = "Failed"
 traceA (A Stale{})     = "Stale"
 traceA (A Succeeded{}) = "Success"
 
--- | Rule type, input file
-data QDisk k = QDisk k NormalizedFilePath
-  deriving (Eq, Generic)
-
-instance Hashable k => Hashable (QDisk k)
-
-instance NFData k => NFData (QDisk k)
-
-instance Show k => Show (QDisk k) where
-    show (QDisk k file) =
-        show k ++ "; " ++ fromNormalizedFilePath file
-
-type instance RuleResult (QDisk k) = Bool
-
-data OnDiskRule = OnDiskRule
-  { getHash :: Action BS.ByteString
-  -- This is used to figure out if the state on disk corresponds to the state in the Shake
-  -- database and we can therefore avoid rerunning. Often this can just be the file hash but
-  -- in some cases we can be more aggressive, e.g., for GHC interface files this can be the ABI hash which
-  -- is more stable than the hash of the interface file.
-  -- An empty bytestring indicates that the state on disk is invalid, e.g., files are missing.
-  -- We do not use a Maybe since we have to deal with encoding things into a ByteString anyway in the Shake DB.
-  , runRule :: Action (IdeResult BS.ByteString)
-  -- The actual rule code which produces the new hash (or Nothing if the rule failed) and the diagnostics.
-  }
-
--- This is used by the DAML compiler for incremental builds. Right now this is not used by
--- ghcide itself but that might change in the future.
--- The reason why this code lives in ghcide and in particular in this module is that it depends quite heavily on
--- the internals of this module that we do not want to expose.
-defineOnDisk
-  :: (Shake.ShakeValue k, RuleResult k ~ ())
-  => Recorder (WithPriority Log)
-  -> (k -> NormalizedFilePath -> OnDiskRule)
-  -> Rules ()
-defineOnDisk recorder act = addRule $
-  \(QDisk key file) (mbOld :: Maybe BS.ByteString) mode -> do
-      extras <- getShakeExtras
-      let OnDiskRule{..} = act key file
-      let validateHash h
-              | BS.null h = Nothing
-              | otherwise = Just h
-      let runAct = actionCatch runRule $
-              \(e :: SomeException) -> pure ([ideErrorText file $ T.pack $ displayException e | not $ isBadDependency e], Nothing)
-      case mbOld of
-          Nothing -> do
-              (diags, mbHash) <- runAct
-              updateFileDiagnostics recorder file (Key key) extras $ map (\(_,y,z) -> (y,z)) diags
-              pure $ RunResult ChangedRecomputeDiff (fromMaybe "" mbHash) (isJust mbHash)
-          Just old -> do
-              current <- validateHash <$> (actionCatch getHash $ \(_ :: SomeException) -> pure "")
-              if mode == RunDependenciesSame && Just old == current && not (BS.null old)
-                  then
-                    -- None of our dependencies changed, we’ve had a successful run before and
-                    -- the state on disk matches the state in the Shake database.
-                    pure $ RunResult ChangedNothing (fromMaybe "" current) (isJust current)
-                  else do
-                    (diags, mbHash) <- runAct
-                    updateFileDiagnostics recorder file (Key key) extras $ map (\(_,y,z) -> (y,z)) diags
-                    let change
-                          | mbHash == Just old = ChangedRecomputeSame
-                          | otherwise = ChangedRecomputeDiff
-                    pure $ RunResult change (fromMaybe "" mbHash) (isJust mbHash)
-
-needOnDisk :: (Shake.ShakeValue k, RuleResult k ~ ()) => k -> NormalizedFilePath -> Action ()
-needOnDisk k file = do
-    successfull <- apply1 (QDisk k file)
-    liftIO $ unless successfull $ throwIO $ BadDependency (show k)
-
-needOnDisks :: (Shake.ShakeValue k, RuleResult k ~ ()) => k -> [NormalizedFilePath] -> Action ()
-needOnDisks k files = do
-    successfulls <- apply $ map (QDisk k) files
-    liftIO $ unless (and successfulls) $ throwIO $ BadDependency (show k)
-
 updateFileDiagnostics :: MonadIO m
   => Recorder (WithPriority Log)
   -> NormalizedFilePath
+  -> TextDocumentVersion
   -> Key
   -> ShakeExtras
   -> [(ShowDiagnostic,Diagnostic)] -- ^ current results
   -> m ()
-updateFileDiagnostics recorder fp k ShakeExtras{diagnostics, hiddenDiagnostics, publishedDiagnostics, state, debouncer, lspEnv} current = liftIO $ do
-    modTime <- (currentValue . fst =<<) <$> atomicallyNamed "diagnostics - read" (getValues state GetModificationTime fp)
+updateFileDiagnostics recorder fp ver k ShakeExtras{diagnostics, hiddenDiagnostics, publishedDiagnostics, debouncer, lspEnv} current =
+  liftIO $ withTrace ("update diagnostics " <> fromString(fromNormalizedFilePath fp)) $ \ addTag -> do
+    addTag "key" (show k)
     let (currentShown, currentHidden) = partition ((== ShowDiag) . fst) current
         uri = filePathToUri' fp
-        ver = vfsVersion =<< modTime
-        update new store = setStageDiagnostics uri ver (T.pack $ show k) new store
+        addTagUnsafe :: String -> String -> String -> a -> a
+        addTagUnsafe msg t x v = unsafePerformIO(addTag (msg <> t) x) `seq` v
+        update :: (forall a. String -> String -> a -> a) -> [Diagnostic] -> STMDiagnosticStore -> STM [Diagnostic]
+        update addTagUnsafe new store = addTagUnsafe "count" (show $ Prelude.length new) $ setStageDiagnostics addTagUnsafe uri ver (T.pack $ show k) new store
+    addTag "version" (show ver)
     mask_ $ do
         -- Mask async exceptions to ensure that updated diagnostics are always
         -- published. Otherwise, we might never publish certain diagnostics if
         -- an exception strikes between modifyVar but before
         -- publishDiagnosticsNotification.
-        newDiags <- liftIO $ atomicallyNamed "diagnostics - update" $ update (map snd currentShown) diagnostics
-        _ <- liftIO $ atomicallyNamed "diagnostics - hidden" $ update (map snd currentHidden) hiddenDiagnostics
+        newDiags <- liftIO $ atomicallyNamed "diagnostics - update" $ update (addTagUnsafe "shown ") (map snd currentShown) diagnostics
+        _ <- liftIO $ atomicallyNamed "diagnostics - hidden" $ update (addTagUnsafe "hidden ") (map snd currentHidden) hiddenDiagnostics
         let uri = filePathToUri' fp
         let delay = if null newDiags then 0.1 else 0
-        registerEvent debouncer delay uri $ do
+        registerEvent debouncer delay uri $ withTrace ("report diagnostics " <> fromString (fromNormalizedFilePath fp)) $ \tag -> do
              join $ mask_ $ do
                  lastPublish <- atomicallyNamed "diagnostics - publish" $ STM.focus (Focus.lookupWithDefault [] <* Focus.insert newDiags) uri publishedDiagnostics
                  let action = when (lastPublish /= newDiags) $ case lspEnv of
                         Nothing -> -- Print an LSP event.
                             logWith recorder Info $ LogDiagsDiffButNoLspEnv (map (fp, ShowDiag,) newDiags)
-                        Just env -> LSP.runLspT env $
+                        Just env -> LSP.runLspT env $ do
+                            liftIO $ tag "count" (show $ Prelude.length newDiags)
+                            liftIO $ tag "key" (show k)
                             LSP.sendNotification LSP.STextDocumentPublishDiagnostics $
-                            LSP.PublishDiagnosticsParams (fromNormalizedUri uri) (fmap fromIntegral ver) (List newDiags)
+                                LSP.PublishDiagnosticsParams (fromNormalizedUri uri) (fmap fromIntegral ver) (List newDiags)
                  return action
 
 newtype Priority = Priority Double
@@ -1276,26 +1232,33 @@ type STMDiagnosticStore = STM.Map NormalizedUri StoreItem
 getDiagnosticsFromStore :: StoreItem -> [Diagnostic]
 getDiagnosticsFromStore (StoreItem _ diags) = concatMap SL.fromSortedList $ Map.elems diags
 
-updateSTMDiagnostics :: STMDiagnosticStore
-                  -> NormalizedUri -> TextDocumentVersion -> DiagnosticsBySource
-                  -> STM [LSP.Diagnostic]
-updateSTMDiagnostics store uri mv newDiagsBySource =
+updateSTMDiagnostics ::
+  (forall a. String -> String -> a -> a) ->
+  STMDiagnosticStore ->
+  NormalizedUri ->
+  TextDocumentVersion ->
+  DiagnosticsBySource ->
+  STM [LSP.Diagnostic]
+updateSTMDiagnostics addTag store uri mv newDiagsBySource =
     getDiagnosticsFromStore . fromJust <$> STM.focus (Focus.alter update *> Focus.lookup) uri store
   where
     update (Just(StoreItem mvs dbs))
+      | addTag "previous version" (show mvs) $
+        addTag "previous count" (show $ Prelude.length $ filter (not.null) $ Map.elems dbs) False = undefined
       | mvs == mv = Just (StoreItem mv (newDiagsBySource <> dbs))
     update _ = Just (StoreItem mv newDiagsBySource)
 
 -- | Sets the diagnostics for a file and compilation step
 --   if you want to clear the diagnostics call this with an empty list
 setStageDiagnostics
-    :: NormalizedUri
+    :: (forall a. String -> String -> a -> a)
+    -> NormalizedUri
     -> TextDocumentVersion -- ^ the time that the file these diagnostics originate from was last edited
     -> T.Text
     -> [LSP.Diagnostic]
     -> STMDiagnosticStore
     -> STM [LSP.Diagnostic]
-setStageDiagnostics uri ver stage diags ds = updateSTMDiagnostics ds uri ver updatedDiags
+setStageDiagnostics addTag uri ver stage diags ds = updateSTMDiagnostics addTag ds uri ver updatedDiags
   where
     !updatedDiags = Map.singleton (Just stage) $! SL.toSortedList diags
 
