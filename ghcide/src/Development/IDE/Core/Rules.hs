@@ -628,14 +628,14 @@ readHieFileForSrcFromDisk recorder file = do
   ShakeExtras{withHieDb} <- ask
   row <- MaybeT $ liftIO $ withHieDb (\hieDb -> HieDb.lookupHieFileFromSource hieDb $ fromNormalizedFilePath file)
   let hie_loc = HieDb.hieModuleHieFile row
-  logWith recorder Logger.Debug $ LogLoadingHieFile file
+  liftIO $ logWith recorder Logger.Debug $ LogLoadingHieFile file
   exceptToMaybeT $ readHieFileFromDisk recorder hie_loc
 
 readHieFileFromDisk :: Recorder (WithPriority Log) -> FilePath -> ExceptT SomeException IdeAction Compat.HieFile
 readHieFileFromDisk recorder hie_loc = do
   nc <- asks ideNc
   res <- liftIO $ tryAny $ loadHieFile (mkUpdater nc) hie_loc
-  let log = logWith recorder
+  let log = (liftIO .) . logWith recorder
   case res of
     Left e -> log Logger.Debug $ LogLoadingHieFileFail hie_loc e
     Right _ -> log Logger.Debug $ LogLoadingHieFileSuccess hie_loc
