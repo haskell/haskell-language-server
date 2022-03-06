@@ -23,7 +23,6 @@ import           Development.IDE.Graph.Internal.Profile  (writeProfile)
 import           Development.IDE.Graph.Internal.Rules
 import           Development.IDE.Graph.Internal.Types
 
-data ShakeDatabase = ShakeDatabase !Int [Action ()] Database
 
 -- Placeholder to be the 'extra' if the user doesn't set it
 data NonExportedType = NonExportedType

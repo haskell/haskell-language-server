@@ -75,6 +75,8 @@ getDatabase = Action $ asks actionDatabase
 ---------------------------------------------------------------------
 -- DATABASE
 
+data ShakeDatabase = ShakeDatabase !Int [Action ()] Database
+
 newtype Step = Step Int
     deriving newtype (Eq,Ord,Hashable)
 
@@ -144,6 +146,7 @@ data Result = Result {
     }
 
 data ResultDeps = UnknownDeps | AlwaysRerunDeps ![Key] | ResultDeps ![Key]
+  deriving (Eq, Show)
 
 getResultDepsDefault :: [Key] -> ResultDeps -> [Key]
 getResultDepsDefault _ (ResultDeps ids)      = ids

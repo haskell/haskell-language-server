@@ -165,7 +165,7 @@ compute db@Database{..} key mode result = do
         deps | not(null deps)
             && runChanged /= ChangedNothing
                     -> do
-            void $ forkIO $
+            void $
                 updateReverseDeps key db
                     (getResultDepsDefault [] previousDeps)
                     (HSet.fromList deps)
