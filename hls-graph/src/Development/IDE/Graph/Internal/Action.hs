@@ -11,6 +11,7 @@ module Development.IDE.Graph.Internal.Action
 , alwaysRerun
 , apply1
 , apply
+, applyWithoutDependency
 , parallel
 , reschedule
 , runActions
@@ -118,6 +119,13 @@ apply ks = do
     (is, vs) <- liftIO $ build db ks
     ref <- Action $ asks actionDeps
     liftIO $ modifyIORef ref (ResultDeps is <>)
+    pure vs
+
+-- | Evaluate a list of keys without recording any dependencies.
+applyWithoutDependency :: (RuleResult key ~ value, ShakeValue key, Typeable value) => [key] -> Action [value]
+applyWithoutDependency ks = do
+    db <- Action $ asks actionDatabase
+    (_, vs) <- liftIO $ build db ks
     pure vs
 
 runActions :: Database -> [Action a] -> IO [a]
