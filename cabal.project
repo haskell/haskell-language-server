@@ -42,12 +42,12 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2022-03-08T10:53:01Z
+index-state: 2022-04-27T09:22:49Z
 
 constraints:
     hyphenation +embed
 
 allow-newer:
-    -- for shake-bench
-    Chart-diagrams:diagrams-core,
-    SVGFonts:diagrams-core
+  stylish-haskell:Cabal,
+  stylish-haskell:ghc-lib-parser,
+  stylish-haskell:aeson,

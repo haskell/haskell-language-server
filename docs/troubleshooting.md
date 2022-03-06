@@ -174,7 +174,7 @@ cabal update && cabal install :pkg:haskell-language-server
 If you are compiling with a ghc version with a specific `cabal-ghc${ghcVersion}.project` in the repo you will have to use it. For example for ghc-9.0.x:
 
 ```bash
-cabal update && cabal install :pkg:haskell-language-server --project-file=cabal-ghc90.project
+cabal update && cabal install pkg:haskell-language-server
 ```
 
 Or with `stack`:
@@ -192,7 +192,7 @@ ghcup compile hls -v 1.6.1.0 --ghc 8.10.7
 as it uses cabal underneath you might need to use a specific cabal.project for some ghc versions:
 
 ```bash
-ghcup compile hls -v 1.6.1.0 --ghc 9.0.2 --cabal-project cabal-ghc90.project
+ghcup compile hls -v 1.6.1.0 --ghc 9.0.2
 ```
 
 ### Preprocessors
