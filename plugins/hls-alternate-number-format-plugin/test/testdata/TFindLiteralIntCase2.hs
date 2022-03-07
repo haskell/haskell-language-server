@@ -1,3 +1,4 @@
+{-# LANGUAGE NoBinaryLiterals #-}
 module TFindLiteralIntCase where
 
 caseExpression x = case x of

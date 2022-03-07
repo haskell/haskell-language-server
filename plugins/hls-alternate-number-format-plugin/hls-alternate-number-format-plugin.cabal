@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-alternate-number-format-plugin
-version:            1.0.1.1
+version:            1.0.2.0
 synopsis:           Provide Alternate Number Formats plugin for Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -21,6 +21,7 @@ library
   exposed-modules:  Ide.Plugin.AlternateNumberFormat, Ide.Plugin.Conversion
   other-modules:    Ide.Plugin.Literals
   hs-source-dirs:   src
+  ghc-options:      -Wall
   build-depends:
       aeson
     , base                 >=4.12 && < 5
