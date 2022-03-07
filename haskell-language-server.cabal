@@ -305,7 +305,7 @@ common selectionRange
     cpp-options: -DselectionRange
 
 common changeTypeSignature
-  if flag(changeTypeSignature)
+  if flag(changeTypeSignature) && impl(ghc < 9.2.1)
     build-depends: hls-change-type-signature-plugin ^>=1.0.0.0
     cpp-options: -DchangeTypeSignature
 
