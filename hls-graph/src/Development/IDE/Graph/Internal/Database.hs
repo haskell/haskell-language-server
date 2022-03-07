@@ -8,6 +8,7 @@
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE NumericUnderscores #-}
 
 module Development.IDE.Graph.Internal.Database (newDatabase, incDatabase, build, getDirtySet, getKeysAndVisitAge) where
 
@@ -16,7 +17,7 @@ import           Control.Concurrent.Extra
 import           Control.Concurrent.STM.Stats         (STM, atomically,
                                                        atomicallyNamed,
                                                        modifyTVar', newTVarIO,
-                                                       readTVarIO)
+                                                       readTVarIO, registerDelay, check, readTVar, orElse)
 import           Control.Exception
 import           Control.Monad
 import           Control.Monad.IO.Class               (MonadIO (liftIO))
@@ -40,6 +41,7 @@ import qualified ListT
 import qualified StmContainers.Map                    as SMap
 import           System.IO.Unsafe
 import           System.Time.Extra                    (duration)
+import Debug.Trace (traceM)
 
 newDatabase :: Dynamic -> TheRules -> IO Database
 newDatabase databaseExtra databaseRules = do
@@ -224,6 +226,7 @@ updateReverseDeps
     -> [Key] -- ^ Previous direct dependencies of Id
     -> HashSet Key -- ^ Current direct dependencies of Id
     -> IO ()
+-- mask to ensure that all the reverse dependencies are updated
 updateReverseDeps myId db prev new = uninterruptibleMask_ $ do
     forM_ prev $ \d ->
         unless (d `HSet.member` new) $
@@ -266,6 +269,7 @@ asyncWithCleanUp :: AIO a -> AIO (IO a)
 asyncWithCleanUp act = do
     st <- AIO ask
     io <- unliftAIO act
+    -- mask to make sure we keep track of the spawned async
     liftIO $ uninterruptibleMask $ \restore -> do
         a <- async $ restore io
         atomicModifyIORef'_ st (void a :)
@@ -284,10 +288,18 @@ withRunInIO k = do
     k $ RunInIO (\aio -> runReaderT (unAIO aio) st)
 
 cleanupAsync :: IORef [Async a] -> IO ()
+-- mask to make sure we interrupt all the asyncs
 cleanupAsync ref = uninterruptibleMask_ $ do
     asyncs <- readIORef ref
+    -- interrupt all the asyncs without waiting
     mapM_ (\a -> throwTo (asyncThreadId a) AsyncCancelled) asyncs
-    mapM_ waitCatch asyncs
+    -- Wait until all the asyncs are done
+    -- But if it takes more than 10 seconds, log to stderr
+    let loop unmask = unmask $ forever $ do
+            threadDelay 10_000_000
+            traceM "cleanupAsync: waiting for asyncs to finish"
+    withAsyncWithUnmask loop $ \_ ->
+        mapM_ waitCatch asyncs
 
 data Wait a
     = Wait {justWait :: !a}
@@ -303,6 +315,7 @@ mapConcurrentlyAIO_ _ [] = pure ()
 mapConcurrentlyAIO_ f [one] = liftIO $ justWait $ fmap f one
 mapConcurrentlyAIO_ f many = do
     ref <- AIO ask
+    -- mask to make sure we keep track of all the asyncs
     waits <- liftIO $ uninterruptibleMask $ \restore -> do
         waits <- liftIO $ traverse (waitOrSpawn . fmap (restore . f)) many
         let asyncs = rights waits

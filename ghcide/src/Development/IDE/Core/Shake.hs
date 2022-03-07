@@ -173,6 +173,7 @@ data Log
   = LogCreateHieDbExportsMapStart
   | LogCreateHieDbExportsMapFinish !Int
   | LogBuildSessionRestart !String ![DelayedActionInternal] !(HashSet Key) !Seconds !(Maybe FilePath)
+  | LogBuildSessionRestartTakingTooLong !Seconds
   | LogDelayedAction !(DelayedAction ()) !Seconds
   | LogBuildSessionFinish !(Maybe SomeException)
   | LogDiagsDiffButNoLspEnv ![FileDiagnostic]
@@ -192,6 +193,8 @@ instance Pretty Log where
         , "Action Queue:" <+> pretty (map actionName actionQueue)
         , "Keys:" <+> pretty (map show $ HSet.toList keyBackLog)
         , "Aborting previous build session took" <+> pretty (showDuration abortDuration) <+> pretty shakeProfilePath ]
+    LogBuildSessionRestartTakingTooLong seconds ->
+        "Build restart is taking too long (" <> pretty seconds <> " seconds)"
     LogDelayedAction delayedAction duration ->
       hsep
         [ "Finished:" <+> pretty (actionName delayedAction)
@@ -683,7 +686,7 @@ shakeRestart recorder IdeState{..} reason acts =
         shakeSession
         (\runner -> do
               let log = logWith recorder
-              (stopTime,()) <- duration (cancelShakeSession runner)
+              (stopTime,()) <- duration $ errorAfter 10 recorder $ cancelShakeSession runner
               res <- shakeDatabaseProfile shakeDb
               backlog <- readTVarIO $ dirtyKeys shakeExtras
               queue <- atomicallyNamed "actionQueue - peek" $ peekInProgress $ actionQueue shakeExtras
@@ -706,6 +709,11 @@ shakeRestart recorder IdeState{..} reason acts =
         -- See https://github.com/haskell/ghcide/issues/79
         (\() -> do
           (,()) <$> newSession recorder shakeExtras shakeDb acts reason)
+    where
+        errorAfter :: Seconds -> Recorder (WithPriority Log) -> IO () -> IO ()
+        errorAfter seconds recorder action = flip withAsync (const action) $ forever $ do
+            sleep seconds
+            logWith recorder Error (LogBuildSessionRestartTakingTooLong seconds)
 
 notifyTestingLogMessage :: ShakeExtras -> T.Text -> IO ()
 notifyTestingLogMessage extras msg = do
