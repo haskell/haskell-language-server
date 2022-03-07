@@ -31,7 +31,7 @@ import           Data.Text.Lazy.Encoding               (decodeUtf8)
 import qualified Data.Text.Lazy.IO                     as LT
 import           Data.Typeable                         (typeOf)
 import           Development.IDE                       (Action, GhcVersion (..),
-                                                        Priority (Debug), Rules,
+                                                        Priority (Debug, Error), Rules,
                                                         ghcVersion,
                                                         hDuplicateTo')
 import           Development.IDE.Core.Debouncer        (Debouncer,
@@ -336,7 +336,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                 _mlibdir <-
                     setInitialDynFlags (cmapWithPrio LogSession recorder) dir argsSessionLoadingOptions
                         -- TODO: should probably catch/log/rethrow at top level instead
-                        `catchAny` (\e -> log Debug (LogSetInitialDynFlagsException e) >> pure Nothing)
+                        `catchAny` (\e -> log Error (LogSetInitialDynFlagsException e) >> pure Nothing)
 
                 sessionLoader <- loadSessionWithOptions (cmapWithPrio LogSession recorder) argsSessionLoadingOptions dir
                 config <- LSP.runLspT env LSP.getConfig

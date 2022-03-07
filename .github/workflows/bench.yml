@@ -54,7 +54,7 @@ jobs:
     # change of the strategy may require changing the bootstrapping/run code
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
 
     - run: git fetch origin master # check the master branch for benchmarking
 

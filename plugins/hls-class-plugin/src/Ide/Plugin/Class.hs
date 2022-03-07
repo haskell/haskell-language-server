@@ -21,10 +21,11 @@ import           Data.List
 import qualified Data.Map.Strict                         as Map
 import           Data.Maybe
 import qualified Data.Text                               as T
+import qualified Data.Set                                as Set
 import           Development.IDE                         hiding (pluginHandlers)
 import           Development.IDE.Core.PositionMapping    (fromCurrentRange,
                                                           toCurrentRange)
-import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat              as Compat hiding (locA)
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.Spans.AtPoint
 import qualified GHC.Generics                            as Generics
@@ -37,6 +38,11 @@ import           Language.Haskell.GHC.ExactPrint.Utils   (rs)
 import           Language.LSP.Server
 import           Language.LSP.Types
 import qualified Language.LSP.Types.Lens                 as J
+
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC.Hs                                  (AnnsModule(AnnsModule))
+import           GHC.Parser.Annotation
+#endif
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
@@ -63,24 +69,77 @@ addMethodPlaceholders state AddMinimalMethodsParams{..} = do
   medit <- liftIO $ runMaybeT $ do
     docPath <- MaybeT . pure . uriToNormalizedFilePath $ toNormalizedUri uri
     pm <- MaybeT . runAction "classplugin" state $ use GetParsedModule docPath
-    let
-      ps = pm_parsed_source pm
-      anns = relativiseApiAnns ps (pm_annotations pm)
-      old = T.pack $ exactPrint ps anns
-
     (hsc_dflags . hscEnv -> df) <- MaybeT . runAction "classplugin" state $ use GhcSessionDeps docPath
-    List (unzip -> (mAnns, mDecls)) <- MaybeT . pure $ traverse (makeMethodDecl df) methodGroup
-    let
-      (ps', (anns', _), _) = runTransform (mergeAnns (mergeAnnList mAnns) anns) (addMethodDecls ps mDecls)
-      new = T.pack $ exactPrint ps' anns'
-
+    (old, new) <- makeEditText pm df
     pure (workspaceEdit caps old new)
+
   forM_ medit $ \edit ->
     sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
   pure (Right Null)
   where
-
     indent = 2
+
+    workspaceEdit caps old new
+      = diffText caps (uri, old) new IncludeDeletions
+
+    toMethodName n
+      | Just (h, _) <- T.uncons n
+      , not (isAlpha h || h == '_')
+      = "(" <> n <> ")"
+      | otherwise
+      = n
+
+#if MIN_VERSION_ghc(9,2,0)
+    makeEditText pm df = do
+      List mDecls <- MaybeT . pure $ traverse (makeMethodDecl df) methodGroup
+      let ps = makeDeltaAst $ pm_parsed_source pm
+          old = T.pack $ exactPrint ps
+          (ps', _, _) = runTransform (addMethodDecls ps mDecls)
+          new = T.pack $ exactPrint ps'
+      pure (old, new)
+
+    makeMethodDecl df mName =
+        either (const Nothing) Just . parseDecl df (T.unpack mName) . T.unpack
+            $ toMethodName mName <> " = _"
+
+    addMethodDecls ps mDecls = do
+      allDecls <- hsDecls ps
+      let (before, ((L l inst): after)) = break (containRange range . getLoc) allDecls
+      replaceDecls ps (before ++ (L l (addWhere inst)): (map newLine mDecls ++ after))
+      where
+        -- Add `where` keyword for `instance X where` if `where` is missing.
+        --
+        -- The `where` in ghc-9.2 is now stored in the instance declaration
+        --   directly. More precisely, giving an `HsDecl GhcPs`, we have:
+        --   InstD --> ClsInstD --> ClsInstDecl --> XCClsInstDecl --> (EpAnn [AddEpAnn], AnnSortKey),
+        --   here `AnnEpAnn` keeps the track of Anns.
+        --
+        -- See the link for the original definition:
+        --   https://hackage.haskell.org/package/ghc-9.2.1/docs/Language-Haskell-Syntax-Extension.html#t:XCClsInstDecl
+        addWhere (InstD xInstD (ClsInstD ext decl@ClsInstDecl{..})) =
+          let ((EpAnn entry anns comments), key) = cid_ext
+          in InstD xInstD (ClsInstD ext decl {
+            cid_ext = (EpAnn
+                        entry
+                        (AddEpAnn AnnWhere (EpaDelta (SameLine 1) []) : anns)
+                        comments
+                      , key)
+          })
+        addWhere decl = decl
+
+        newLine (L l e) =
+          let dp = deltaPos 1 (indent + 1) -- Not sure why there need one more space
+          in L (noAnnSrcSpanDP (locA l) dp <> l) e
+
+#else
+    makeEditText pm df = do
+      List (unzip -> (mAnns, mDecls)) <- MaybeT . pure $ traverse (makeMethodDecl df) methodGroup
+      let ps = pm_parsed_source pm
+          anns = relativiseApiAnns ps (pm_annotations pm)
+          old = T.pack $ exactPrint ps anns
+          (ps', (anns', _), _) = runTransform (mergeAnns (mergeAnnList mAnns) anns) (addMethodDecls ps mDecls)
+          new = T.pack $ exactPrint ps' anns'
+      pure (old, new)
 
     makeMethodDecl df mName =
       case parseDecl df (T.unpack mName) . T.unpack $ toMethodName mName <> " = _" of
@@ -112,16 +171,7 @@ addMethodPlaceholders state AddMinimalMethodsParams{..} = do
 
     findInstDecl :: ParsedSource -> Transform (LHsDecl GhcPs)
     findInstDecl ps = head . filter (containRange range . getLoc) <$> hsDecls ps
-
-    workspaceEdit caps old new
-      = diffText caps (uri, old) new IncludeDeletions
-
-    toMethodName n
-      | Just (h, _) <- T.uncons n
-      , not (isAlpha h || h == '_')
-      = "(" <> n <> ")"
-      | otherwise
-      = n
+#endif
 
 -- |
 -- This implementation is ad-hoc in a sense that the diagnostic detection mechanism is
@@ -169,15 +219,9 @@ codeAction state plId (CodeActionParams _ _ docId _ context) = liftIO $ fmap (fr
           pure
             $ head . head
             $ pointCommand hf (fromJust (fromCurrentRange pmap range) ^. J.start & J.character -~ 1)
-#if !MIN_VERSION_ghc(9,0,0)
-              ( (Map.keys . Map.filter isClassNodeIdentifier . nodeIdentifiers . nodeInfo)
+              ( (Map.keys . Map.filter isClassNodeIdentifier . Compat.getNodeIds)
                 <=< nodeChildren
               )
-#else
-              ( (Map.keys . Map.filter isClassNodeIdentifier . sourcedNodeIdents . sourcedNodeInfo)
-                <=< nodeChildren
-              )
-#endif
 
     findClassFromIdentifier docPath (Right name) = do
       (hscEnv -> hscenv, _) <- MaybeT . runAction "classplugin" state $ useWithStale GhcSessionDeps docPath
@@ -197,7 +241,7 @@ containRange :: Range -> SrcSpan -> Bool
 containRange range x = isInsideSrcSpan (range ^. J.start) x || isInsideSrcSpan (range ^. J.end) x
 
 isClassNodeIdentifier :: IdentifierDetails a -> Bool
-isClassNodeIdentifier = isNothing . identType
+isClassNodeIdentifier ident = (isNothing . identType) ident && Use `Set.member` (identInfo ident)
 
 isClassMethodWarning :: T.Text -> Bool
 isClassMethodWarning = T.isPrefixOf "• No explicit implementation for"
