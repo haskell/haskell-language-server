@@ -27,6 +27,7 @@ packages:
          ./plugins/hls-call-hierarchy-plugin
          ./plugins/hls-alternate-number-format-plugin
          ./plugins/hls-selection-range-plugin
+         ./plugins/hls-change-type-signature-plugin
 
 with-compiler: ghc-9.2.1
 
@@ -45,7 +46,6 @@ constraints:
   haskell-language-server
     +ignore-plugins-ghc-bounds
     -brittany
-    -class
     -haddockComments
     -hlint
     -retrie
