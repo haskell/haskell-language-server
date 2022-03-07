@@ -20,7 +20,7 @@ import           Development.IDE                 hiding (pluginHandlers)
 import           Development.IDE.GHC.Compat      as Compat hiding (Cpp)
 import qualified Development.IDE.GHC.Compat.Util as S
 import           GHC.LanguageExtensions.Type     (Extension (Cpp))
-import           Ide.Plugin.Config               (formattingCli)
+import           Ide.Plugin.Config               (formattingCLI)
 import           Ide.PluginUtils                 (makeDiffTextEdit)
 import           Ide.Types
 import           Language.LSP.Server             hiding (defaultConfig)
@@ -48,7 +48,7 @@ provider ideState typ contents fp fo = withIndefiniteProgress title Cancellable 
     fileOpts <- case hsc_dflags . hscEnv <$> ghc of
         Nothing -> return []
         Just df -> liftIO $ convertDynFlags df
-    useCLI <- formattingCli <$> getConfig
+    useCLI <- formattingCLI <$> getConfig
     if useCLI
         then liftIO
             . fmap (join . first (mkError . show))

@@ -50,7 +50,7 @@ data Config =
     { checkParents       :: CheckParents
     , checkProject       :: !Bool
     , formattingProvider :: !T.Text
-    , formattingCli      :: !Bool
+    , formattingCLI      :: !Bool
     , maxCompletions     :: !Int
     , plugins            :: !(Map.Map T.Text PluginConfig)
     } deriving (Show,Eq)
@@ -63,7 +63,7 @@ instance Default Config where
     , formattingProvider          = "ormolu"
     -- , formattingProvider          = "floskell"
     -- , formattingProvider          = "stylish-haskell"
-    , formattingCli               = False
+    , formattingCLI               = False
     , maxCompletions              = 40
     , plugins                     = Map.empty
     }
@@ -80,7 +80,7 @@ parseConfig defValue = A.withObject "Config" $ \v -> do
         <$> (o .:? "checkParents" <|> v .:? "checkParents") .!= checkParents defValue
         <*> (o .:? "checkProject" <|> v .:? "checkProject") .!= checkProject defValue
         <*> o .:? "formattingProvider"                      .!= formattingProvider defValue
-        <*> o .:? "formattingCli"                           .!= formattingCli defValue
+        <*> o .:? "formattingCLI"                           .!= formattingCLI defValue
         <*> o .:? "maxCompletions"                          .!= maxCompletions defValue
         <*> o .:? "plugin"                                  .!= plugins defValue
 
