@@ -11,16 +11,16 @@ import           Control.Monad.IO.Class         (MonadIO (liftIO))
 import           Control.Monad.Trans.Except     (ExceptT)
 import           Data.Foldable                  (asum)
 import qualified Data.HashMap.Strict            as Map
-import           Data.Maybe                     (isJust, mapMaybe)
+import           Data.Maybe                     (mapMaybe)
 import           Data.Text                      (Text)
 import qualified Data.Text                      as T
-import           Development.IDE                (ideLogger, realSrcSpanToRange)
+import           Development.IDE                (realSrcSpanToRange)
 import           Development.IDE.Core.RuleTypes (GetParsedModule (GetParsedModule))
 import           Development.IDE.Core.Service   (IdeState, runAction)
-import           Development.IDE.Core.Shake     (logger, use)
+import           Development.IDE.Core.Shake     (use)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Util       (prettyPrint)
-import           Generics.SYB                   (everything, extQ, something)
+import           Generics.SYB                   (extQ, something)
 import           Ide.PluginUtils                (getNormalizedFilePath,
                                                  handleMaybeM, response)
 import           Ide.Types                      (PluginDescriptor (..),
