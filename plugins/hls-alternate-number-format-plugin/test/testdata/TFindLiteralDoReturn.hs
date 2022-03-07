@@ -1,3 +1,4 @@
+{-# LANGUAGE NoBinaryLiterals #-}
 module TFindLiteralDoReturn where
 
 doReturn :: IO Integer
