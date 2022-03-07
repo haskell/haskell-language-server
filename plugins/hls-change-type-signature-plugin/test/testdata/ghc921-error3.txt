@@ -1,0 +1,9 @@
+    • Couldn't match type ‘[Int]’ with ‘Int’
+      Expected: Int -> [Int]
+        Actual: [Int] -> [Int]
+    • In the second argument of ‘(.)’, namely ‘reverse’
+      In the expression: head . reverse
+      In an equation for ‘test’: test = head . reverse
+   |
+84 |               test = head . reverse
+   |

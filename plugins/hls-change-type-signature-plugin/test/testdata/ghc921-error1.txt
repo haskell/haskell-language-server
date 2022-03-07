@@ -1,0 +1,9 @@
+    • Couldn't match type ‘Data.Set.Internal.Set Int’ with ‘Int’
+      Expected: Int -> [Int]
+        Actual: Data.Set.Internal.Set Int -> [Int]
+    • In the second argument of ‘(.)’, namely ‘toList’
+      In the expression: head . toList
+      In an equation for ‘test’: test = head . toList
+   |
+83 | test = head . toList
+   |               ^^^^^^
