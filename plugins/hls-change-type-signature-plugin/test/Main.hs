@@ -1,5 +1,6 @@
 module Main where
 
+import           Control.Monad                  (void)
 import           Data.Either                    (rights)
 import           Data.Text                      (Text)
 import qualified Data.Text                      as T
@@ -7,25 +8,24 @@ import qualified Data.Text.IO                   as TIO
 import           Ide.Plugin.ChangeTypeSignature (errorMessageRegexes)
 import qualified Ide.Plugin.ChangeTypeSignature as ChangeTypeSignature
 import           System.FilePath                ((<.>), (</>))
-import           Test.Hls                       (CodeAction (..),
-                                                 CodeActionKind (CodeActionQuickFix),
-                                                 Command, IdeState,
+import           Test.Hls                       (CodeAction (..), Command,
+                                                 GhcVersion (GHC92), IdeState,
                                                  PluginDescriptor,
                                                  Position (Position),
                                                  Range (Range), Session,
                                                  TestName, TestTree,
                                                  TextDocumentIdentifier,
-                                                 assertBool, assertFailure,
+                                                 assertFailure,
                                                  defaultTestRunner,
                                                  executeCodeAction,
                                                  getCodeActions,
-                                                 goldenWithHaskellDoc, liftIO,
-                                                 openDoc, runSessionWithServer,
-                                                 testCase, testGroup, toEither,
-                                                 type (|?) (InR),
-                                                 waitForDiagnostics,
-                                                 waitForProgressDone, (@=?),
-                                                 (@?=))
+                                                 goldenWithHaskellDoc,
+                                                 knownBrokenForGhcVersions,
+                                                 liftIO, openDoc,
+                                                 runSessionWithServer, testCase,
+                                                 testGroup, toEither, type (|?),
+                                                 waitForAllProgressDone,
+                                                 waitForDiagnostics, (@?=))
 import           Text.Regex.TDFA                ((=~))
 
 main :: IO ()
@@ -36,23 +36,21 @@ changeTypeSignaturePlugin = ChangeTypeSignature.descriptor "changeTypeSignature"
 
 test :: TestTree
 test = testGroup "changeTypeSignature" [
-        codeActionTest "TExpectedActual" 4 11
-        , codeActionTest "TRigidType" 4 14
-        , codeActionTest "TLocalBinding" 6 21
-        , codeActionTest "TLocalBindingShadow1" 10 7
-        , codeActionTest "TLocalBindingShadow2" 6 21
+        testRegexes
+        , codeActionTest "TExpectedActual" 4 11
+        , knownBrokenForGhcVersions [GHC92] "Error Message in 9.2 does not provide enough info" $ codeActionTest "TRigidType" 4 14
+        , codeActionTest "TLocalBinding" 7 22
+        , codeActionTest "TLocalBindingShadow1" 11 8
+        , codeActionTest "TLocalBindingShadow2" 7 22
         , codeActionProperties "TErrorGivenPartialSignature" [(4, 13)] $ \actions -> liftIO $ length actions @?= 0
-        , testRegexes
     ]
 
 testRegexes :: TestTree
 testRegexes = testGroup "Regex Testing" [
         testRegexOne
         , testRegexTwo
+        , testRegex921One
     ]
-    where
-        regex1 = errorMessageRegexes !! 0
-        regex2 = errorMessageRegexes !! 1
 
 testRegexOne :: TestTree
 testRegexOne = testGroup "Regex One" [
@@ -76,6 +74,16 @@ testRegexTwo = testGroup "Regex Two" [
     where
         regex = errorMessageRegexes !! 1
 
+-- test ghc-9.2.1 error message regex
+testRegex921One :: TestTree
+testRegex921One = testGroup "Regex One" [
+        regexTest "ghc921-error1.txt" regex True
+        , regexTest "ghc921-error2.txt" regex True
+        , regexTest "ghc921-error3.txt" regex True
+    ]
+    where
+        regex = errorMessageRegexes !! 2
+
 testDataDir :: FilePath
 testDataDir = "test" </> "testdata"
 
@@ -84,7 +92,8 @@ goldenChangeSignature fp = goldenWithHaskellDoc changeTypeSignaturePlugin (fp <>
 
 codeActionTest :: FilePath -> Int -> Int -> TestTree
 codeActionTest fp line col = goldenChangeSignature fp $ \doc -> do
-    waitForDiagnostics  -- code actions are triggered from Diagnostics
+    void $ waitForDiagnostics  -- code actions are triggered from Diagnostics
+    void $ waitForAllProgressDone  -- apparently some tests need this to get the CodeAction to show up
     actions <- getCodeActions doc (pointRange line col)
     foundActions <- findChangeTypeActions actions
     liftIO $ length foundActions @?= 1
