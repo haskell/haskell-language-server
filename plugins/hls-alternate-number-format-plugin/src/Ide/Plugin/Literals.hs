@@ -1,7 +1,9 @@
+{-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE FlexibleInstances  #-}
 {-# LANGUAGE RankNTypes         #-}
+{-# LANGUAGE ViewPatterns       #-}
 module Ide.Plugin.Literals (
     collectLiterals
     , Literal(..)
@@ -13,7 +15,6 @@ import           Data.Maybe                    (maybeToList)
 import           Data.Text                     (Text)
 import qualified Data.Text                     as T
 import           Development.IDE.GHC.Compat    hiding (getSrcSpan)
-import           Development.IDE.GHC.Util      (unsafePrintSDoc)
 import           Development.IDE.Graph.Classes (NFData (rnf))
 import qualified GHC.Generics                  as GHC
 import           Generics.SYB                  (Data, Typeable, everything,
@@ -48,25 +49,36 @@ getSrcSpan = \case
 collectLiterals :: (Data ast, Typeable ast) => ast -> [Literal]
 collectLiterals = everything (<>) (maybeToList . (const Nothing `extQ` getLiteral `extQ` getPattern))
 
+
 -- | Translate from HsLit and HsOverLit Types to our Literal Type
-getLiteral :: GenLocated SrcSpan (HsExpr GhcPs) -> Maybe Literal
-getLiteral (L (UnhelpfulSpan _) _) = Nothing
-getLiteral (L (RealSrcSpan sSpan _ ) expr) = case expr of
+getLiteral :: (LHsExpr GhcPs) -> Maybe Literal
+getLiteral (L (locA -> (RealSrcSpan sSpan _)) expr) = case expr of
     HsLit _ lit         -> fromLit lit sSpan
     HsOverLit _ overLit -> fromOverLit overLit sSpan
     _                   -> Nothing
+getLiteral _ = Nothing
+
+
+
+-- GHC 8.8 typedefs LPat = Pat
+#if __GLASGOW_HASKELL__ == 808
+type LocPat a = GenLocated SrcSpan (Pat a)
+#else
+type LocPat a = LPat a
+#endif
 
 -- | Destructure Patterns to unwrap any Literals
-getPattern :: GenLocated SrcSpan (Pat GhcPs) -> Maybe Literal
-getPattern (L (UnhelpfulSpan _) _)       = Nothing
-getPattern (L (RealSrcSpan patSpan _) pat) = case pat of
+getPattern :: (LocPat GhcPs) -> Maybe Literal
+getPattern (L (locA -> (RealSrcSpan patSpan _)) pat) = case pat of
     LitPat _ lit -> case lit of
         HsInt _ val   -> fromIntegralLit patSpan val
         HsRat _ val _ -> fromFractionalLit patSpan val
         _             -> Nothing
+    -- a located HsOverLit is (GenLocated SrcSpan HsOverLit) NOT (GenLocated SrcSpanAnn' a HsOverLit)
     NPat _ (L (RealSrcSpan sSpan _) overLit) _ _ -> fromOverLit overLit sSpan
     NPlusKPat _ _ (L (RealSrcSpan sSpan _) overLit1) _ _ _ -> fromOverLit overLit1 sSpan
     _ -> Nothing
+getPattern _ = Nothing
 
 fromLit :: HsLit p -> RealSrcSpan -> Maybe Literal
 fromLit lit sSpan = case lit of
@@ -91,30 +103,3 @@ fromSourceText :: SourceText -> Maybe Text
 fromSourceText = \case
   SourceText s -> Just $ T.pack s
   NoSourceText -> Nothing
-
--- mostly for debugging purposes
-literalToString :: HsLit p -> String
-literalToString = \case
-  HsChar _ c        -> "Char: " <> show c
-  HsCharPrim _ c    -> "CharPrim: " <> show c
-  HsString _ fs     -> "String: " <> show fs
-  HsStringPrim _ bs -> "StringPrim: " <> show bs
-  HsInt _ il        -> "Int: " <> show il
-  HsIntPrim _ n     -> "IntPrim: " <> show n
-  HsWordPrim _ n    -> "WordPrim: " <> show n
-  HsInt64Prim _ n   -> "Int64Prim: " <> show n
-  HsWord64Prim _ n  -> "Word64Prim: " <> show n
-  HsInteger _ n ty  -> "Integer: " <> show n <> " Type: " <> tyToLiteral ty
-  HsRat _ fl ty     -> "Rat: " <> show fl <> " Type: " <> tyToLiteral ty
-  HsFloatPrim _ fl  -> "FloatPrim: " <> show fl
-  HsDoublePrim _ fl -> "DoublePrim: " <>  show fl
-  _                 -> "XHsLit"
-  where
-    tyToLiteral :: Type -> String
-    tyToLiteral = unsafePrintSDoc .  ppr
-
-overLitToString :: OverLitVal -> String
-overLitToString = \case
-     HsIntegral int -> case int of { IL{il_value} -> "IntegralOverLit: " <> show il_value}
-     HsFractional frac -> case frac of { fl -> "RationalOverLit: " <> show (rationalFromFractionalLit fl)}
-     HsIsString _ str -> "HIsString: " <> show str
