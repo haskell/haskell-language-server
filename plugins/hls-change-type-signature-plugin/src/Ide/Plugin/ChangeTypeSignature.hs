@@ -66,7 +66,7 @@ data ChangeSignature = ChangeSignature {
                          , declSrcSpan :: RealSrcSpan
                          -- | the diagnostic to solve
                          , diagnostic  :: Diagnostic
-                                       }
+                         }
 
 -- | Constraint needed to trackdown OccNames in signatures
 type SigName = (HasOccName (IdP GhcPs))
@@ -99,6 +99,8 @@ errorMessageRegexes :: [Text]
 errorMessageRegexes = [ -- be sure to add new Error Messages Regexes at the bottom to not fail any existing tests
     "Expected type: (.+)\n +Actual type: (.+)\n(.|\n)+In an equation for ‘(.+)’"
     , "Couldn't match expected type ‘(.+)’ with actual type ‘(.+)’\n(.|\n)+In an equation for ‘(.+)’"
+    -- GHC >9.2 version of the first error regex
+    , "Expected: (.+)\n +Actual: (.+)\n(.|\n)+In an equation for ‘(.+)’"
     ]
 
 -- | Given a String with the name of a declaration, GHC's "Expected Type", find the declaration that matches
@@ -129,25 +131,18 @@ findSigLocOfStringDecl decls expectedType declName = something (const Nothing `e
         compareId (L _ id') = declName == occNameString (occName id')
 
 
-
 -- | Pretty Print the Type Signature (to validate GHC Error Message)
 sigToText :: Sig GhcPs -> Maybe Text
 sigToText = \case
-  ts@TypeSig {} -> stripSignature $ T.pack $ prettyPrint ts
+  ts@TypeSig {} -> Just $ stripSignature $ T.pack $ prettyPrint ts
   _             -> Nothing
 
-stripSignature :: Text -> Maybe Text
+stripSignature :: Text -> Text
 -- for whatever reason incoming signatures MAY have new lines after "::" or "=>"
-stripSignature sig = case T.filter (/= '\n') sig =~ sigRegex :: (Text, Text, Text, [Text]) of
-                        -- No constraints (Monad m =>)
-                         (_, _, _, [sig'])    -> Just $ T.strip sig'
-                        -- Ignore constraints (Monad m =>)
-                         (_, _, _, [_, sig']) -> Just $ T.strip sig'
-                         _                    -> Nothing
-    where
-        -- we want to test everthing after the constraints (GHC never gives us the constraint in the expected signature)
-        sigRegex = ".* :: (.*=>)?(.*)" :: Text
-
+stripSignature (T.filter (/= '\n') -> sig) = if T.isInfixOf " => " sig
+                                                -- remove constraints
+                                                then T.strip $ snd $ T.breakOnEnd " => " sig
+                                                else T.strip $ snd $ T.breakOnEnd " :: " sig
 
 changeSigToCodeAction :: Uri -> ChangeSignature -> Command |? CodeAction
 changeSigToCodeAction uri ChangeSignature{..} = InR CodeAction { _title       = mkChangeSigTitle declName actualType

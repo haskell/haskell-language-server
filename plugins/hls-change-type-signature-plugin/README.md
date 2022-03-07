@@ -14,3 +14,8 @@ If the plugin receives enough information it can correctly change the signature.
 ## Changelog
 ### 1.0.0.0
 - First Release
+
+### 1.0.1.0
+- Fix 9.2 Test failures (`waitForProgressDone`)
+- Add extra test scenarios for error message diffs in 9.2
+- Remove regex parsing for simple `Text` manipulation
