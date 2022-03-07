@@ -1,3 +1,4 @@
+{-# LANGUAGE NoBinaryLiterals #-}
 module TFindLiteralDoLet where
 
 doLet :: IO ()

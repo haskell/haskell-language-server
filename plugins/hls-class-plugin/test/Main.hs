@@ -3,6 +3,7 @@
 {-# LANGUAGE TypeOperators     #-}
 
 {-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 module Main
   ( main
   ) where
@@ -45,6 +46,8 @@ tests = testGroup
       executeCodeAction mmAction
   , goldenWithClass "Creates a placeholder for a method starting with '_'" "T4" "" $ \(_fAction:_) -> do
       executeCodeAction _fAction
+  , goldenWithClass "Creates a placeholder for '==' with extra lines" "T5" "" $ \(eqAction:_) -> do
+      executeCodeAction eqAction
   ]
 
 _CACodeAction :: Prism' (Command |? CodeAction) CodeAction

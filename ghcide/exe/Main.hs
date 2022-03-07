@@ -23,11 +23,11 @@ import qualified Development.IDE.Plugin.HLS.GhcIde as GhcIde
 import           Development.IDE.Types.Logger      (Logger (Logger),
                                                     LoggingColumn (DataColumn, PriorityColumn),
                                                     Pretty (pretty),
-                                                    Priority (Debug, Info),
+                                                    Priority (Debug, Info, Error),
                                                     Recorder (Recorder),
                                                     WithPriority (WithPriority, priority),
                                                     cfilter, cmapWithPrio,
-                                                    makeDefaultStderrRecorder)
+                                                    makeDefaultStderrRecorder, layoutPretty, renderStrict, payload, defaultLayoutOptions)
 import qualified Development.IDE.Types.Logger      as Logger
 import           Development.IDE.Types.Options
 import           GHC.Stack                         (emptyCallStack)
@@ -39,6 +39,8 @@ import           System.Environment                (getExecutablePath)
 import           System.Exit                       (exitSuccess)
 import           System.IO                         (hPutStrLn, stderr)
 import           System.Info                       (compilerVersion)
+import Development.IDE.Plugin.LSPWindowShowMessageRecorder (makeLspShowMessageRecorder)
+import Control.Lens (Contravariant(contramap))
 
 data Log
   = LogIDEMain IDEMain.Log
@@ -86,9 +88,13 @@ main = withTelemetryLogger $ \telemetryLogger -> do
 
     docWithPriorityRecorder <- makeDefaultStderrRecorder (Just [PriorityColumn, DataColumn]) minPriority
 
+    (lspRecorder, lspRecorderPlugin) <- makeLspShowMessageRecorder
+
     let docWithFilteredPriorityRecorder@Recorder{ logger_ } =
-          docWithPriorityRecorder
-          & cfilter (\WithPriority{ priority } -> priority >= minPriority)
+          (docWithPriorityRecorder & cfilter (\WithPriority{ priority } -> priority >= minPriority)) <>
+          (lspRecorder & cmapWithPrio (renderStrict . layoutPretty defaultLayoutOptions)
+                       & cfilter (\WithPriority{ priority } -> priority >= Error)
+          )
 
     -- exists so old-style logging works. intended to be phased out
     let logger = Logger $ \p m -> logger_ (WithPriority p emptyCallStack (pretty m))
@@ -105,6 +111,7 @@ main = withTelemetryLogger $ \telemetryLogger -> do
         { IDEMain.argsProjectRoot = Just argsCwd
         , IDEMain.argCommand = argsCommand
         , IDEMain.argsLogger = IDEMain.argsLogger arguments <> pure telemetryLogger
+        , IDEMain.argsHlsPlugins = pluginDescToIdePlugins [lspRecorderPlugin] <> IDEMain.argsHlsPlugins arguments
 
         , IDEMain.argsRules = do
             -- install the main and ghcide-plugin rules
