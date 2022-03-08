@@ -52,7 +52,6 @@ import qualified Data.Text                       as T
 import qualified Data.Text.Lazy                  as TL
 import qualified Data.Text.Lazy.Encoding         as TL
 import           Development.IDE                 (IdeState)
-import           Development.IDE.Graph           (ShakeOptions (shakeThreads))
 import           Development.IDE.Main            hiding (Log)
 import qualified Development.IDE.Main            as Ghcide
 import qualified Development.IDE.Main            as IDEMain
@@ -208,11 +207,10 @@ runSessionWithServer' plugins conf sconf caps root s = withLock lock $ keepCurre
       ++ [Test.blockCommandDescriptor "block-command", Test.plugin]
       ++ plugins
     ideOptions = \config ghcSession ->
-      let defIdeOptions@IdeOptions{ optShakeOptions } = argsIdeOptions config ghcSession
+      let defIdeOptions = argsIdeOptions config ghcSession
       in defIdeOptions
            { optTesting = IdeTesting True
            , optCheckProject = pure False
-           , optShakeOptions = optShakeOptions{ shakeThreads = 2 }
            }
 
   server <-

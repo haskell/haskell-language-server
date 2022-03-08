@@ -133,6 +133,10 @@ jobs:
           path: "**/.tasty-rerun-log*"
           key: v1-${{ runner.os }}-${{ matrix.ghc }}-test-log-${{ github.sha }}
 
+      - if: matrix.test
+        name: Test hls-graph
+        run: cabal test hls-graph --test-options="$TEST_OPTS"
+
       - if: needs.pre_job.outputs.should_skip_ghcide != 'true' && matrix.test
         name: Test ghcide
         # run the tests without parallelism to avoid running out of memory

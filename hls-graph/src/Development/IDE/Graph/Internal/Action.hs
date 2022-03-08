@@ -116,7 +116,8 @@ apply1 k = head <$> apply [k]
 apply :: (RuleResult key ~ value, ShakeValue key, Typeable value) => [key] -> Action [value]
 apply ks = do
     db <- Action $ asks actionDatabase
-    (is, vs) <- liftIO $ build db ks
+    stack <- Action $ asks actionStack
+    (is, vs) <- liftIO $ build db stack ks
     ref <- Action $ asks actionDeps
     liftIO $ modifyIORef ref (ResultDeps is <>)
     pure vs
@@ -125,13 +126,14 @@ apply ks = do
 applyWithoutDependency :: (RuleResult key ~ value, ShakeValue key, Typeable value) => [key] -> Action [value]
 applyWithoutDependency ks = do
     db <- Action $ asks actionDatabase
-    (_, vs) <- liftIO $ build db ks
+    stack <- Action $ asks actionStack
+    (_, vs) <- liftIO $ build db stack ks
     pure vs
 
 runActions :: Database -> [Action a] -> IO [a]
 runActions db xs = do
     deps <- newIORef mempty
-    runReaderT (fromAction $ parallel xs) $ SAction db deps
+    runReaderT (fromAction $ parallel xs) $ SAction db deps emptyStack
 
 -- | Returns the set of dirty keys annotated with their age (in # of builds)
 getDirtySet  :: Action [(Key, Int)]
