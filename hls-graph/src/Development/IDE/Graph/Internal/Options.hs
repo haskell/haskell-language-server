@@ -5,16 +5,13 @@ import           Data.Dynamic
 import           Development.IDE.Graph.Internal.Types
 
 data ShakeOptions = ShakeOptions {
-    -- | Has no effect, kept only for api compatibility with Shake
-    shakeThreads            :: Int,
-    shakeFiles              :: FilePath,
     shakeExtra              :: Maybe Dynamic,
     shakeAllowRedefineRules :: Bool,
     shakeTimings            :: Bool
     }
 
 shakeOptions :: ShakeOptions
-shakeOptions = ShakeOptions 0 ".shake" Nothing False False
+shakeOptions = ShakeOptions Nothing False False
 
 getShakeExtra :: Typeable a => Action (Maybe a)
 getShakeExtra = do

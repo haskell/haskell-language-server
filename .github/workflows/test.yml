@@ -107,7 +107,7 @@ jobs:
              ghc: '8.8.4'
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       - uses: ./.github/actions/setup-build
         with:
@@ -132,6 +132,10 @@ jobs:
         with:
           path: "**/.tasty-rerun-log*"
           key: v1-${{ runner.os }}-${{ matrix.ghc }}-test-log-${{ github.sha }}
+
+      - if: matrix.test
+        name: Test hls-graph
+        run: cabal test hls-graph --test-options="$TEST_OPTS"
 
       - if: needs.pre_job.outputs.should_skip_ghcide != 'true' && matrix.test
         name: Test ghcide
@@ -224,7 +228,7 @@ jobs:
         name: Test hls-module-name-plugin test suite
         run: cabal test hls-module-name-plugin --test-options="$TEST_OPTS" || cabal test hls-module-name-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-module-name-plugin --test-options="$TEST_OPTS"
 
-      - if: matrix.test && matrix.ghc != '9.2.1'
+      - if: matrix.test
         name: Test hls-alternate-number-format-plugin test suite
         run: cabal test hls-alternate-number-format-plugin --test-options="$TEST_OPTS" || cabal test hls-alternate-number-format-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-alternate-number-format-plugin --test-options="$TEST_OPTS"
 
@@ -235,6 +239,10 @@ jobs:
       - if: matrix.test
         name: Test hls-selection-range-plugin test suite
         run: cabal test hls-selection-range-plugin --test-options="$TEST_OPTS" || cabal test hls-selection-range-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-selection-range-plugin --test-options="$TEST_OPTS"
+
+      - if: matrix.test
+        name: Test hls-change-type-signature test suite
+        run: cabal test hls-change-type-signature-plugin --test-options="$TEST_OPTS" || cabal test hls-change-type-signature-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-change-type-signature-plugin --test-options="$TEST_OPTS"
 
   test_post_job:
     if: always()

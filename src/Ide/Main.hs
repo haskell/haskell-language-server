@@ -20,7 +20,6 @@ import           Data.Text                     (Text)
 import qualified Data.Text                     as T
 import           Development.IDE.Core.Rules    hiding (Log, logToPriority)
 import           Development.IDE.Core.Tracing  (withTelemetryLogger)
-import           Development.IDE.Graph         (ShakeOptions (shakeThreads))
 import           Development.IDE.Main          (isLSP)
 import qualified Development.IDE.Main          as IDEMain
 import qualified Development.IDE.Session       as Session
@@ -139,7 +138,5 @@ runLspMode recorder ghcideArgs@GhcideArguments{..} idePlugins = withTelemetryLog
         in defOptions
             { Ghcide.optShakeProfiling = argsShakeProfiling
             , Ghcide.optTesting = Ghcide.IdeTesting argsTesting
-            , Ghcide.optShakeOptions = (Ghcide.optShakeOptions defOptions)
-                {shakeThreads = argsThreads}
             }
       }
