@@ -8,7 +8,6 @@
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE TypeFamilies               #-}
-{-# LANGUAGE NumericUnderscores #-}
 
 module Development.IDE.Graph.Internal.Database (newDatabase, incDatabase, build, getDirtySet, getKeysAndVisitAge) where
 
@@ -33,15 +32,15 @@ import           Data.IORef.Extra
 import           Data.Maybe
 import           Data.Traversable                     (for)
 import           Data.Tuple.Extra
+import           Debug.Trace (traceM)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Graph.Internal.Rules
 import           Development.IDE.Graph.Internal.Types
 import qualified Focus
 import qualified ListT
 import qualified StmContainers.Map                    as SMap
+import           System.Time.Extra                    (duration, sleep)
 import           System.IO.Unsafe
-import           System.Time.Extra                    (duration)
-import Debug.Trace (traceM)
 
 newDatabase :: Dynamic -> TheRules -> IO Database
 newDatabase databaseExtra databaseRules = do
@@ -296,7 +295,7 @@ cleanupAsync ref = uninterruptibleMask_ $ do
     -- Wait until all the asyncs are done
     -- But if it takes more than 10 seconds, log to stderr
     let loop unmask = unmask $ forever $ do
-            threadDelay 10_000_000
+            sleep 10
             traceM "cleanupAsync: waiting for asyncs to finish"
     withAsyncWithUnmask loop $ \_ ->
         mapM_ waitCatch asyncs
