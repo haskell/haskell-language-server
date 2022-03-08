@@ -711,7 +711,7 @@ shakeRestart recorder IdeState{..} reason acts =
           (,()) <$> newSession recorder shakeExtras shakeDb acts reason)
     where
         errorAfter :: Seconds -> Recorder (WithPriority Log) -> IO () -> IO ()
-        errorAfter seconds recorder action = flip withAsync (const action) $ forever $ do
+        errorAfter seconds recorder action = flip withAsync (const action) $ do
             sleep seconds
             logWith recorder Error (LogBuildSessionRestartTakingTooLong seconds)
 
