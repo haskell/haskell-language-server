@@ -44,10 +44,9 @@ descriptor plId =
 
 provider :: FormattingHandler IdeState
 provider ideState typ contents fp fo = withIndefiniteProgress title Cancellable $ do
-    ghc <- liftIO $ runAction "Fourmolu" ideState $ use GhcSession fp
-    fileOpts <- case hsc_dflags . hscEnv <$> ghc of
-        Nothing -> return []
-        Just df -> liftIO $ convertDynFlags df
+    fileOpts <-
+        maybe [] (convertDynFlags . hsc_dflags . hscEnv)
+            <$> liftIO (runAction "Fourmolu" ideState $ use GhcSession fp)
     useCLI <- formattingCLI <$> getConfig
     if useCLI
         then liftIO
@@ -116,7 +115,7 @@ provider ideState typ contents fp fo = withIndefiniteProgress title Cancellable 
         FormatRange (Range (Position sl _) (Position el _)) ->
             RegionIndices (Just $ fromIntegral $ sl + 1) (Just $ fromIntegral $ el + 1)
 
-convertDynFlags :: Monad m => DynFlags -> m [String]
+convertDynFlags :: DynFlags -> [String]
 convertDynFlags df =
     let pp = ["-pgmF=" <> p | not (null p)]
         p = sPgm_F $ Compat.settings df
@@ -125,4 +124,4 @@ convertDynFlags df =
         showExtension = \case
             Cpp -> "-XCPP"
             x   -> "-X" ++ show x
-     in return $ pp <> pm <> ex
+     in pp <> pm <> ex
