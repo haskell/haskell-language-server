@@ -135,7 +135,7 @@ import           Development.IDE.Graph                  hiding (ShakeValue)
 import qualified Development.IDE.Graph                  as Shake
 import           Development.IDE.Graph.Database         (ShakeDatabase,
                                                          shakeGetBuildStep,
-                                                         shakeOpenDatabase,
+                                                         shakeNewDatabase,
                                                          shakeProfileDatabase,
                                                          shakeRunDatabaseForKeys)
 import           Development.IDE.Graph.Rule
@@ -456,7 +456,6 @@ newtype ShakeSession = ShakeSession
 data IdeState = IdeState
     {shakeDb              :: ShakeDatabase
     ,shakeSession         :: MVar ShakeSession
-    ,shakeClose           :: IO ()
     ,shakeExtras          :: ShakeExtras
     ,shakeDatabaseProfile :: ShakeDatabase -> IO (Maybe FilePath)
     }
@@ -599,11 +598,10 @@ shakeOpen recorder lspEnv defaultConfig logger debouncer
         -- Take one VFS snapshot at the start
         vfs <- atomically . newTVar =<< vfsSnapshot lspEnv
         pure ShakeExtras{..}
-    (shakeDbM, shakeClose) <-
-        shakeOpenDatabase
+    shakeDb  <-
+        shakeNewDatabase
             opts { shakeExtra = newShakeExtra shakeExtras }
             rules
-    shakeDb <- shakeDbM
     shakeSession <- newEmptyMVar
     shakeDatabaseProfile <- shakeDatabaseProfileIO shakeProfileDir
     let ideState = IdeState{..}
@@ -651,7 +649,6 @@ shakeShut IdeState{..} = do
     -- request so we first abort that.
     for_ runner cancelShakeSession
     void $ shakeDatabaseProfile shakeDb
-    shakeClose
     progressStop $ progress shakeExtras
 
 
