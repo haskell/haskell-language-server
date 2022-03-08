@@ -202,7 +202,6 @@ library
         Development.IDE.Plugin.Completions.Types
         Development.IDE.Plugin.CodeAction
         Development.IDE.Plugin.CodeAction.ExactPrint
-        Development.IDE.Plugin.LSPWindowShowMessageRecorder
         Development.IDE.Plugin.HLS
         Development.IDE.Plugin.HLS.GhcIde
         Development.IDE.Plugin.Test
