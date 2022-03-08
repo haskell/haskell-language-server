@@ -16,7 +16,7 @@ import           Control.Concurrent.Extra
 import           Control.Concurrent.STM.Stats         (STM, atomically,
                                                        atomicallyNamed,
                                                        modifyTVar', newTVarIO,
-                                                       readTVarIO, registerDelay, check, readTVar, orElse)
+                                                       readTVarIO)
 import           Control.Exception
 import           Control.Monad
 import           Control.Monad.IO.Class               (MonadIO (liftIO))
