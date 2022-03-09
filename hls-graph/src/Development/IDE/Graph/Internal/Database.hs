@@ -121,7 +121,7 @@ builder db@Database{..} stack keys = withRunInIO $ \(RunInIO run) -> do
             pure (id, val)
 
     toForceList <- liftIO $ readTVarIO toForce
-    let waitAll = run $ mapConcurrentlyAIO_ id toForceList
+    let waitAll = run $ mapConcurrentlyAIO_ toForceList
     case toForceList of
         [] -> return $ Left results
         _ -> return $ Right $ do
@@ -300,23 +300,22 @@ cleanupAsync ref = uninterruptibleMask_ $ do
     withAsyncWithUnmask (\unmask -> unmask loop) $ \_ ->
         mapM_ waitCatch asyncs
 
-data Wait a
-    = Wait {justWait :: !a}
-    | Spawn {justWait :: !a}
-    deriving Functor
+data Wait
+    = Wait {justWait :: !(IO ())}
+    | Spawn {justWait :: !(IO ())}
 
-waitOrSpawn :: Wait (IO a) -> IO (Either (IO a) (Async a))
+waitOrSpawn :: Wait -> IO (Either (IO ()) (Async ()))
 waitOrSpawn (Wait io)  = pure $ Left io
-waitOrSpawn (Spawn io) = Right <$> async io
+waitOrSpawn (Spawn io) = Right <$> asyncWithUnmask (\unmask -> unmask io)
 
-mapConcurrentlyAIO_ :: (a -> IO ()) -> [Wait a] -> AIO ()
-mapConcurrentlyAIO_ _ [] = pure ()
-mapConcurrentlyAIO_ f [one] = liftIO $ justWait $ fmap f one
-mapConcurrentlyAIO_ f many = do
+mapConcurrentlyAIO_ :: [Wait] -> AIO ()
+mapConcurrentlyAIO_ [] = pure ()
+mapConcurrentlyAIO_ [one] = liftIO $ justWait one
+mapConcurrentlyAIO_ many = do
     ref <- AIO ask
     -- mask to make sure we keep track of all the asyncs
-    waits <- liftIO $ uninterruptibleMask $ \restore -> do
-        waits <- liftIO $ traverse (waitOrSpawn . fmap (restore . f)) many
+    waits <- liftIO $ uninterruptibleMask_ $ do
+        waits <- liftIO $ traverse waitOrSpawn many
         let asyncs = rights waits
         liftIO $ atomicModifyIORef'_ ref (asyncs ++)
         return waits
