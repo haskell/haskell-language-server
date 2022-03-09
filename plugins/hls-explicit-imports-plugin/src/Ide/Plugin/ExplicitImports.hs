@@ -28,6 +28,7 @@ import qualified Data.Map.Strict                      as Map
 import           Data.Maybe                           (catMaybes, fromMaybe,
                                                        isJust)
 import qualified Data.Text                            as T
+import           Data.String                          (fromString)
 import           Development.IDE                      hiding (pluginHandlers,
                                                        pluginRules)
 import           Development.IDE.Core.PositionMapping
@@ -269,12 +270,41 @@ mkExplicitEdit pred posMapping (L (locA -> src) imp) explicit
   | otherwise =
     Nothing
 
+-- This number is somewhat arbitrarily chosen. Ideally the protocol would tell us these things,
+-- but at the moment I don't believe we know it.
+-- 80 columns is traditional, but Haskellers tend to use longer lines (citation needed) and it's
+-- probably not too bad if the lens is a *bit* longer than normal lines.
+maxColumns :: Int
+maxColumns = 120
+
 -- | Given an import declaration, generate a code lens unless it has an
 -- explicit import list or it's qualified
 generateLens :: PluginId -> Uri -> TextEdit -> IO (Maybe CodeLens)
 generateLens pId uri importEdit@TextEdit {_range, _newText} = do
-  -- The title of the command is just the minimal explicit import decl
-  let title = _newText
+  let
+      -- The title of the command is ideally the minimal explicit import decl, but
+      -- we don't want to create a really massive code lens (and the decl can be extremely large!).
+      -- So we abbreviate it to fit a max column size, and indicate how many more items are in the list
+      -- after the abbreviation
+
+      -- For starters, we only want one line in the title
+      oneLineText = T.unwords $ T.lines _newText
+      -- Now, split at the max columns, leaving space for the suffix text we're going to add
+      -- (conservatively assuming we won't need to print a number larger than 100)
+      (prefix, suffix) = T.splitAt (maxColumns - (T.length (suffixText 100))) oneLineText
+      -- We also want to truncate the last item so we get a "clean" break, rather than half way through
+      -- something. The conditional here is just because 'breakOnEnd' doesn't give us quite the right thing
+      -- if there are actually no commas.
+      (actualPrefix, extraSuffix) = if T.count "," prefix > 0 then T.breakOnEnd "," prefix else (prefix, "")
+      actualSuffix = extraSuffix <> suffix
+
+      -- The number of additional items is the number of commas+1
+      numAdditionalItems = T.count "," actualSuffix + 1
+      -- We want to make text like this: import Foo (AImport, BImport, ... (30 more items))
+      -- Trailing paren is to match the opening paren from the import list
+      suffixText n = " ... (" <> fromString (show n) <> " more items) )"
+      title = if T.length oneLineText <= maxColumns then oneLineText else actualPrefix <> suffixText numAdditionalItems
+
       -- the code lens has no extra data
       _xdata = Nothing
       -- an edit that replaces the whole declaration with the explicit one

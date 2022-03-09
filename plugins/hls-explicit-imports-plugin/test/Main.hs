@@ -22,7 +22,7 @@ explicitImportsPlugin = ExplicitImports.descriptor mempty "explicitImports"
 main :: IO ()
 main = defaultTestRunner $
   testGroup
-    "Refine Imports"
+    "Make imports explicit"
     [ codeActionGoldenTest "UsualCase" 3 0
     , codeLensGoldenTest "UsualCase" 0
     , testCase "No CodeAction when exported" $
