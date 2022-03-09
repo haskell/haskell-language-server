@@ -2,6 +2,8 @@
 {-# LANGUAGE LambdaCase               #-}
 {-# LANGUAGE OverloadedStrings        #-}
 {-# LANGUAGE TypeApplications         #-}
+{-# LANGUAGE DataKinds                #-}
+{-# LANGUAGE OverloadedLabels         #-}
 
 module Ide.Plugin.Fourmolu (
     descriptor,
@@ -20,8 +22,8 @@ import           Development.IDE                 hiding (pluginHandlers)
 import           Development.IDE.GHC.Compat      as Compat hiding (Cpp)
 import qualified Development.IDE.GHC.Compat.Util as S
 import           GHC.LanguageExtensions.Type     (Extension (Cpp))
-import           Ide.Plugin.Config               (formattingCLI)
-import           Ide.PluginUtils                 (makeDiffTextEdit)
+import           Ide.Plugin.Properties
+import           Ide.PluginUtils                 (makeDiffTextEdit, usePropertyLsp)
 import           Ide.Types
 import           Language.LSP.Server             hiding (defaultConfig)
 import           Language.LSP.Types
@@ -32,22 +34,26 @@ import           System.FilePath
 import           System.IO                       (stderr)
 import           System.Process.Text             (readProcessWithExitCode)
 
--- ---------------------------------------------------------------------
-
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
     (defaultPluginDescriptor plId)
-        { pluginHandlers = mkFormattingHandlers provider
+        { pluginHandlers = mkFormattingHandlers $ provider plId
         }
 
--- ---------------------------------------------------------------------
+properties :: Properties '[ 'PropertyKey "cli" 'TBoolean]
+properties =
+    emptyProperties
+        & defineBooleanProperty
+            #cli
+            "Call out to \"fourmolu\" executable, rather than using the bundled library"
+            False
 
-provider :: FormattingHandler IdeState
-provider ideState typ contents fp fo = withIndefiniteProgress title Cancellable $ do
+provider :: PluginId -> FormattingHandler IdeState
+provider plId ideState typ contents fp fo = withIndefiniteProgress title Cancellable $ do
     fileOpts <-
         maybe [] (convertDynFlags . hsc_dflags . hscEnv)
             <$> liftIO (runAction "Fourmolu" ideState $ use GhcSession fp)
-    useCLI <- formattingCLI <$> getConfig
+    useCLI <- usePropertyLsp #cli plId properties
     if useCLI
         then liftIO
             . fmap (join . first (mkError . show))
