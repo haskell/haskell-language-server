@@ -297,7 +297,7 @@ cleanupAsync ref = uninterruptibleMask_ $ do
     let loop = forever $ do
             sleep 10
             traceM "cleanupAsync: waiting for asyncs to finish"
-    withAsyncWithUnmask ($ loop) $ \_ ->
+    withAsyncWithUnmask (\unmask -> unmask loop) $ \_ ->
         mapM_ waitCatch asyncs
 
 data Wait a
