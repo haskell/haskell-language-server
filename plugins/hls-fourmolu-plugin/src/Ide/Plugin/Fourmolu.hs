@@ -32,7 +32,8 @@ import           Ormolu
 import           System.Exit
 import           System.FilePath
 import           System.IO                       (stderr)
-import           System.Process.Text             (readProcessWithExitCode)
+import           System.Process.Run              (proc, cwd)
+import           System.Process.Text             (readCreateProcessWithExitCode)
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
@@ -60,15 +61,15 @@ provider plId ideState typ contents fp fo = withIndefiniteProgress title Cancell
             . try @IOException
             $ do
                 (exitCode, out, err) <-
-                    readProcessWithExitCode
-                        "fourmolu"
-                        ( ["-d"]
-                            <> catMaybes
-                                [ ("--start-line=" <>) . show <$> regionStartLine region
-                                , ("--end-line=" <>) . show <$> regionEndLine region
-                                ]
-                            <> map ("-o" <>) fileOpts
-                        )
+                    readCreateProcessWithExitCode
+                        ( proc "fourmolu" $
+                            ["-d"]
+                                <> catMaybes
+                                    [ ("--start-line=" <>) . show <$> regionStartLine region
+                                    , ("--end-line=" <>) . show <$> regionEndLine region
+                                    ]
+                                <> map ("-o" <>) fileOpts
+                        ){cwd = Just fp'}
                         contents
                 T.hPutStrLn stderr err
                 case exitCode of
