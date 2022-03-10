@@ -122,7 +122,7 @@ builder db@Database{..} stack keys = withRunInIO $ \(RunInIO run) -> do
             pure (id, val)
 
     toForceList <- liftIO $ readTVarIO toForce
-    let waitAll = run $ mapConcurrentlyAIO_ toForceList
+    let waitAll = run $ waitConcurrently_ toForceList
     case toForceList of
         [] -> return $ Left results
         _ -> return $ Right $ do
@@ -172,6 +172,10 @@ compute db@Database{..} stack key mode result = do
         deps | not(null deps)
             && runChanged /= ChangedNothing
                     -> do
+            -- IMPORTANT: record the reverse deps **before** marking the key Clean.
+            -- If an async exception strikes before the deps have been recorded,
+            -- we won't be able to accurately propagate dirtiness for this key
+            -- on the next build.
             void $
                 updateReverseDeps key db
                     (getResultDepsDefault [] previousDeps)
@@ -227,7 +231,7 @@ updateReverseDeps
     -> HashSet Key -- ^ Current direct dependencies of Id
     -> IO ()
 -- mask to ensure that all the reverse dependencies are updated
-updateReverseDeps myId db prev new = uninterruptibleMask_ $ do
+updateReverseDeps myId db prev new = do
     forM_ prev $ \d ->
         unless (d `HSet.member` new) $
             doOne (HSet.delete myId) d
@@ -255,16 +259,22 @@ transitiveDirtySet database = flip State.execStateT HSet.empty . traverse_ loop
             next <- lift $ atomically $ getReverseDependencies database x
             traverse_ loop (maybe mempty HSet.toList next)
 
--- | IO extended to track created asyncs to clean them up when the thread is killed,
---   generalizing 'withAsync'
+--------------------------------------------------------------------------------
+-- Asynchronous computations with cancellation
+
+-- | A simple monad to implement cancellation on top of 'Async',
+--   generalizing 'withAsync' to monadic scopes.
 newtype AIO a = AIO { unAIO :: ReaderT (IORef [Async ()]) IO a }
   deriving newtype (Applicative, Functor, Monad, MonadIO)
 
+-- | Run the monadic computation, cancelling all the spawned asyncs if an exception arises
 runAIO :: AIO a -> IO a
 runAIO (AIO act) = do
     asyncs <- newIORef []
     runReaderT act asyncs `onException` cleanupAsync asyncs
 
+-- | Like 'async' but with built-in cancellation.
+--   Returns an IO action to wait on the result.
 asyncWithCleanUp :: AIO a -> AIO (IO a)
 asyncWithCleanUp act = do
     st <- AIO ask
@@ -289,35 +299,39 @@ withRunInIO k = do
 
 cleanupAsync :: IORef [Async a] -> IO ()
 -- mask to make sure we interrupt all the asyncs
-cleanupAsync ref = uninterruptibleMask_ $ do
+cleanupAsync ref = uninterruptibleMask $ \unmask -> do
     asyncs <- atomicModifyIORef' ref ([],)
     -- interrupt all the asyncs without waiting
     mapM_ (\a -> throwTo (asyncThreadId a) AsyncCancelled) asyncs
     -- Wait until all the asyncs are done
     -- But if it takes more than 10 seconds, log to stderr
     unless (null asyncs) $ do
-        let loop = forever $ do
+        let warnIfTakingTooLong = unmask $ forever $ do
                 sleep 10
                 traceM "cleanupAsync: waiting for asyncs to finish"
-        withAsyncWithUnmask (\unmask -> unmask loop) $ \_ ->
+        withAsync warnIfTakingTooLong $ \_ ->
             mapM_ waitCatch asyncs
 
 data Wait
     = Wait {justWait :: !(IO ())}
     | Spawn {justWait :: !(IO ())}
 
+fmapWait :: (IO () -> IO ()) -> Wait -> Wait
+fmapWait f (Wait io) = Wait (f io)
+fmapWait f (Spawn io) = Spawn (f io)
+
 waitOrSpawn :: Wait -> IO (Either (IO ()) (Async ()))
 waitOrSpawn (Wait io)  = pure $ Left io
-waitOrSpawn (Spawn io) = Right <$> asyncWithUnmask (\unmask -> unmask io)
+waitOrSpawn (Spawn io) = Right <$> async io
 
-mapConcurrentlyAIO_ :: [Wait] -> AIO ()
-mapConcurrentlyAIO_ [] = pure ()
-mapConcurrentlyAIO_ [one] = liftIO $ justWait one
-mapConcurrentlyAIO_ many = do
+waitConcurrently_ :: [Wait] -> AIO ()
+waitConcurrently_ [] = pure ()
+waitConcurrently_ [one] = liftIO $ justWait one
+waitConcurrently_ many = do
     ref <- AIO ask
     -- mask to make sure we keep track of all the asyncs
-    waits <- liftIO $ uninterruptibleMask_ $ do
-        waits <- liftIO $ traverse waitOrSpawn many
+    waits <- liftIO $ uninterruptibleMask $ \unmask -> do
+        waits <- liftIO $ traverse (waitOrSpawn . fmapWait unmask) many
         let asyncs = rights waits
         liftIO $ atomicModifyIORef'_ ref (asyncs ++)
         return waits

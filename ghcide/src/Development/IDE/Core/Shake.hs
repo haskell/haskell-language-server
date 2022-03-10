@@ -685,7 +685,7 @@ shakeRestart recorder IdeState{..} reason acts =
         shakeSession
         (\runner -> do
               let log = logWith recorder
-              (stopTime,()) <- duration $ errorAfter 10 recorder $ cancelShakeSession runner
+              (stopTime,()) <- duration $ logErrorAfter 10 recorder $ cancelShakeSession runner
               res <- shakeDatabaseProfile shakeDb
               backlog <- readTVarIO $ dirtyKeys shakeExtras
               queue <- atomicallyNamed "actionQueue - peek" $ peekInProgress $ actionQueue shakeExtras
@@ -709,8 +709,8 @@ shakeRestart recorder IdeState{..} reason acts =
         (\() -> do
           (,()) <$> newSession recorder shakeExtras shakeDb acts reason)
     where
-        errorAfter :: Seconds -> Recorder (WithPriority Log) -> IO () -> IO ()
-        errorAfter seconds recorder action = flip withAsync (const action) $ do
+        logErrorAfter :: Seconds -> Recorder (WithPriority Log) -> IO () -> IO ()
+        logErrorAfter seconds recorder action = flip withAsync (const action) $ do
             sleep seconds
             logWith recorder Error (LogBuildSessionRestartTakingTooLong seconds)
 
