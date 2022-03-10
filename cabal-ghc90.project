@@ -27,6 +27,7 @@ packages:
          ./plugins/hls-call-hierarchy-plugin
          ./plugins/hls-alternate-number-format-plugin
          ./plugins/hls-selection-range-plugin
+         ./plugins/hls-change-type-signature-plugin
 
 tests: true
 
@@ -36,7 +37,7 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2022-02-25T21:47:10Z
+index-state: 2022-03-08T10:53:01Z
 
 constraints:
   -- These plugins don't work on GHC9 yet

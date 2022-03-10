@@ -21,7 +21,6 @@ import           Development.IDE.Graph.Classes
 import           Development.IDE.Graph.Internal.Types
 
 -- | The type mapping between the @key@ or a rule and the resulting @value@.
---   See 'addBuiltinRule' and 'Development.Shake.Rule.apply'.
 type family RuleResult key -- = value
 
 action :: Action a -> Rules ()

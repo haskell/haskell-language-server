@@ -27,6 +27,7 @@ packages:
          ./plugins/hls-call-hierarchy-plugin
          ./plugins/hls-alternate-number-format-plugin
          ./plugins/hls-selection-range-plugin
+         ./plugins/hls-change-type-signature-plugin
 
 with-compiler: ghc-9.2.1
 
@@ -38,14 +39,13 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2022-02-25T21:47:10Z
+index-state: 2022-03-08T10:53:01Z
 
 constraints:
   -- These plugins don't build/work on GHC92 yet
   haskell-language-server
     +ignore-plugins-ghc-bounds
     -brittany
-    -class
     -haddockComments
     -hlint
     -retrie

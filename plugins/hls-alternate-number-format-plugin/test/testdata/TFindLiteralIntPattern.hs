@@ -1,3 +1,4 @@
+{-# LANGUAGE NoBinaryLiterals #-}
 module TFindLiteralIntPattern where
 
 patternMatchingFunction 1 = "one"

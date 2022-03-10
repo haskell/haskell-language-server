@@ -21,37 +21,50 @@ module Development.IDE.Types.Logger
   , priorityToHsLoggerPriority
   , LoggingColumn(..)
   , cmapWithPrio
+  , withBacklog
+  , lspClientMessageRecorder
+  , lspClientLogRecorder
   , module PrettyPrinterModule
+  , renderStrict
   ) where
 
-import           Control.Concurrent         (myThreadId)
-import           Control.Concurrent.Extra   (Lock, newLock, withLock)
-import           Control.Exception          (IOException)
-import           Control.Monad              (forM_, when, (>=>))
-import           Control.Monad.IO.Class     (MonadIO (liftIO))
-import           Data.Functor.Contravariant (Contravariant (contramap))
-import           Data.Maybe                 (fromMaybe)
-import           Data.Text                  (Text)
-import qualified Data.Text                  as T
-import qualified Data.Text                  as Text
-import qualified Data.Text.IO               as Text
-import           Data.Time                  (defaultTimeLocale, formatTime,
-                                             getCurrentTime)
-import           GHC.Stack                  (CallStack, HasCallStack,
-                                             SrcLoc (SrcLoc, srcLocModule, srcLocStartCol, srcLocStartLine),
-                                             callStack, getCallStack,
-                                             withFrozenCallStack)
-import           Prettyprinter              as PrettyPrinterModule
-import           Prettyprinter.Render.Text  (renderStrict)
-import           System.IO                  (Handle, IOMode (AppendMode),
-                                             hClose, hFlush, hSetEncoding,
-                                             openFile, stderr, utf8)
-import qualified System.Log.Formatter       as HSL
-import qualified System.Log.Handler         as HSL
-import qualified System.Log.Handler.Simple  as HSL
-import qualified System.Log.Logger          as HsLogger
-import           UnliftIO                   (MonadUnliftIO, displayException,
-                                             finally, try)
+import           Control.Concurrent            (myThreadId)
+import           Control.Concurrent.Extra      (Lock, newLock, withLock)
+import           Control.Concurrent.STM        (atomically,
+                                                newTVarIO, writeTVar, readTVarIO, newTBQueueIO, flushTBQueue, writeTBQueue, isFullTBQueue)
+import           Control.Exception             (IOException)
+import           Control.Monad                 (forM_, when, (>=>), unless)
+import           Control.Monad.IO.Class        (MonadIO (liftIO))
+import           Data.Foldable                 (for_)
+import           Data.Functor.Contravariant    (Contravariant (contramap))
+import           Data.Maybe                    (fromMaybe)
+import           Data.Text                     (Text)
+import qualified Data.Text                     as T
+import qualified Data.Text                     as Text
+import qualified Data.Text.IO                  as Text
+import           Data.Time                     (defaultTimeLocale, formatTime,
+                                                getCurrentTime)
+import           GHC.Stack                     (CallStack, HasCallStack,
+                                                SrcLoc (SrcLoc, srcLocModule, srcLocStartCol, srcLocStartLine),
+                                                callStack, getCallStack,
+                                                withFrozenCallStack)
+import           Language.LSP.Server
+import qualified Language.LSP.Server           as LSP
+import           Language.LSP.Types            (LogMessageParams (..),
+                                                MessageType (..),
+                                                SMethod (SWindowLogMessage, SWindowShowMessage),
+                                                ShowMessageParams (..))
+import           Prettyprinter                 as PrettyPrinterModule
+import           Prettyprinter.Render.Text     (renderStrict)
+import           System.IO                     (Handle, IOMode (AppendMode),
+                                                hClose, hFlush, hSetEncoding,
+                                                openFile, stderr, utf8)
+import qualified System.Log.Formatter          as HSL
+import qualified System.Log.Handler            as HSL
+import qualified System.Log.Handler.Simple     as HSL
+import qualified System.Log.Logger             as HsLogger
+import           UnliftIO                      (MonadUnliftIO, displayException,
+                                                finally, try)
 
 data Priority
 -- Don't change the ordering of this type or you will mess up the Ord
@@ -95,7 +108,7 @@ data WithPriority a = WithPriority { priority :: Priority, callStack_ :: CallSta
 -- | Note that this is logging actions _of the program_, not of the user.
 --   You shouldn't call warning/error if the user has caused an error, only
 --   if our code has gone wrong and is itself erroneous (e.g. we threw an exception).
-data Recorder msg = Recorder
+newtype Recorder msg = Recorder
   { logger_ :: forall m. (MonadIO m) => msg -> m () }
 
 logWith :: (HasCallStack, MonadIO m) => Recorder (WithPriority msg) -> Priority -> msg -> m ()
@@ -203,10 +216,10 @@ makeDefaultHandleRecorder columns minPriority lock handle = do
 
 priorityToHsLoggerPriority :: Priority -> HsLogger.Priority
 priorityToHsLoggerPriority = \case
-  Debug     -> HsLogger.DEBUG
-  Info      -> HsLogger.INFO
-  Warning   -> HsLogger.WARNING
-  Error     -> HsLogger.ERROR
+  Debug   -> HsLogger.DEBUG
+  Info    -> HsLogger.INFO
+  Warning -> HsLogger.WARNING
+  Error   -> HsLogger.ERROR
 
 -- | The purpose of setting up `hslogger` at all is that `hie-bios` uses
 -- `hslogger` to output compilation logs. The easiest way to merge these logs
@@ -290,6 +303,60 @@ textWithPriorityToText columns WithPriority{ priority, callStack_, payload } = d
         PriorityColumn -> pure (priorityToText priority)
         DataColumn -> pure payload
 
+-- | Given a 'Recorder' that requires an argument, produces a 'Recorder'
+-- that queues up messages until the argument is provided using the callback, at which
+-- point it sends the backlog and begins functioning normally.
+withBacklog :: (v -> Recorder a) -> IO (Recorder a, v -> IO ())
+withBacklog recFun = do
+  -- Arbitrary backlog capacity
+  backlog <- newTBQueueIO 100
+  let backlogRecorder = Recorder $ \it -> liftIO $ atomically $ do
+          -- If the queue is full just drop the message on the floor. This is most likely
+          -- to happen if the callback is just never going to be called; in which case
+          -- we want neither to build up an unbounded backlog in memory, nor block waiting
+          -- for space!
+          full <- isFullTBQueue backlog
+          unless full $ writeTBQueue backlog it
 
+  -- The variable holding the recorder starts out holding the recorder that writes
+  -- to the backlog.
+  recVar <- newTVarIO backlogRecorder
+  -- The callback atomically swaps out the recorder for the final one, and flushes
+  -- the backlog to it.
+  let cb arg = do
+        let recorder = recFun arg
+        toRecord <- atomically $ writeTVar recVar recorder >> flushTBQueue backlog
+        for_ toRecord (logger_ recorder)
 
+  -- The recorder we actually return looks in the variable and uses whatever is there.
+  let varRecorder = Recorder $ \it -> do
+          r <- liftIO $ readTVarIO recVar
+          logger_ r it
 
+  pure (varRecorder, cb)
+
+-- | Creates a recorder that sends logs to the LSP client via @window/showMessage@ notifications.
+lspClientMessageRecorder :: LanguageContextEnv config -> Recorder (WithPriority Text)
+lspClientMessageRecorder env = Recorder $ \WithPriority {..} ->
+  liftIO $ LSP.runLspT env $ LSP.sendNotification SWindowShowMessage
+      ShowMessageParams
+        { _xtype = priorityToLsp priority,
+          _message = payload
+        }
+
+-- | Creates a recorder that sends logs to the LSP client via @window/logMessage@ notifications.
+lspClientLogRecorder :: LanguageContextEnv config -> Recorder (WithPriority Text)
+lspClientLogRecorder env = Recorder $ \WithPriority {..} ->
+  liftIO $ LSP.runLspT env $ LSP.sendNotification SWindowLogMessage
+      LogMessageParams
+        { _xtype = priorityToLsp priority,
+          _message = payload
+        }
+
+priorityToLsp :: Priority -> MessageType
+priorityToLsp =
+  \case
+    Debug   -> MtLog
+    Info    -> MtInfo
+    Warning -> MtWarning
+    Error   -> MtError
