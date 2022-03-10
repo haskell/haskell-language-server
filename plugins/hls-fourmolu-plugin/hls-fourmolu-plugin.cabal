@@ -43,7 +43,10 @@ test-suite tests
   ghc-options:      -Wall -threaded -rtsopts -with-rtsopts=-N
   build-depends:
     , base
+    , aeson
+    , containers
     , filepath
     , hls-fourmolu-plugin
+    , hls-plugin-api
     , hls-test-utils       ^>=1.2
     , lsp-test

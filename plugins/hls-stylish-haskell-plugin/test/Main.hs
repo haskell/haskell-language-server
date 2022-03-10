@@ -22,7 +22,7 @@ tests = testGroup "stylish-haskell"
   ]
 
 goldenWithStylishHaskell :: TestName -> FilePath -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
-goldenWithStylishHaskell title fp desc = goldenWithHaskellDocFormatter stylishHaskellPlugin "stylishHaskell" title testDataDir fp desc "hs"
+goldenWithStylishHaskell title fp desc = goldenWithHaskellDocFormatter stylishHaskellPlugin "stylishHaskell" def title testDataDir fp desc "hs"
 
 testDataDir :: FilePath
 testDataDir = "test" </> "testdata"
