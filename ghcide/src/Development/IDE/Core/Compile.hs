@@ -132,6 +132,9 @@ import qualified GHC                               as G
 import           GHC.Hs                            (LEpaComment)
 import qualified GHC.Types.Error                   as Error
 #endif
+import qualified Control.Monad.Trans.State.Strict as S
+import Data.Generics.Schemes
+import Data.Generics.Aliases
 
 -- | Given a string buffer, return the string (after preprocessing) and the 'ParsedModule'.
 parseModule
@@ -380,12 +383,13 @@ mkHiFileResultNoCompile session tcm = do
   pure $! mkHiFileResult ms mod_info (tmrRuntimeModules tcm)
 
 mkHiFileResultCompile
-    :: HscEnv
+    :: ShakeExtras
+    -> HscEnv
     -> TcModuleResult
     -> ModGuts
     -> LinkableType -- ^ use object code or byte code?
     -> IO (IdeResult HiFileResult)
-mkHiFileResultCompile session' tcm simplified_guts ltype = catchErrs $ do
+mkHiFileResultCompile se session' tcm simplified_guts ltype = catchErrs $ do
   let session = hscSetFlags (ms_hspp_opts ms) session'
       ms = pm_mod_summary $ tmrParsed tcm
       tcGblEnv = tmrTypechecked tcm
@@ -394,17 +398,17 @@ mkHiFileResultCompile session' tcm simplified_guts ltype = catchErrs $ do
         ObjectLinkable -> generateObjectCode
         BCOLinkable    -> generateByteCode WriteCoreFile
 
-  (linkable, details, diags) <-
+  (linkable, details, mguts, diags) <-
     if mg_hsc_src simplified_guts == HsBootFile
     then do
         -- give variables unique OccNames
         details <- mkBootModDetailsTc session tcGblEnv
-        pure (Nothing, details, [])
+        pure (Nothing, details, Nothing, [])
     else do
         -- give variables unique OccNames
         (guts, details) <- tidyProgram session simplified_guts
         (diags, linkable) <- genLinkable session ms guts
-        pure (linkable, details, diags)
+        pure (linkable, details, Just guts, diags)
 #if MIN_VERSION_ghc(9,0,1)
   let !partial_iface = force (mkPartialIface session details simplified_guts)
   final_iface <- mkFullIface session partial_iface Nothing
@@ -415,6 +419,51 @@ mkHiFileResultCompile session' tcm simplified_guts ltype = catchErrs $ do
   (final_iface,_) <- mkIface session Nothing details simplified_guts
 #endif
   let mod_info = HomeModInfo final_iface details linkable
+
+  -- Verify core file by rountrip testing and comparison
+  IdeOptions{optVerifyCoreFile} <- getIdeOptionsIO se
+  when (maybe False (not . isObjectLinkable) linkable && optVerifyCoreFile) $ do
+    let core_fp = ml_core_file $ ms_location ms
+    traceIO $ "Verifying " ++ core_fp
+    core <- readBinCoreFile (mkUpdater $ hsc_NC session) core_fp
+    let CgGuts{cg_binds = unprep_binds, cg_tycons = tycons } = case mguts of
+          Nothing -> error "invariant optVerifyCoreFile: guts must exist if linkable exists)"
+          Just g -> g
+        mod = ms_mod ms
+        data_tycons = filter isDataTyCon tycons
+    CgGuts{cg_binds = unprep_binds'} <- coreFileToCgGuts session final_iface details core
+
+    -- Run corePrep first as we want to test the final version of the program that will
+    -- get translated to STG/Bytecode
+    (prepd_binds , _) <- corePrepPgm session mod (ms_location ms) unprep_binds data_tycons
+    (prepd_binds', _) <- corePrepPgm session mod (ms_location ms) unprep_binds' data_tycons
+    let binds  = noUnfoldings $ (map flattenBinds . (:[])) $ prepd_binds
+        binds' = noUnfoldings $ (map flattenBinds . (:[])) $ prepd_binds'
+
+        -- diffBinds is unreliable, sometimes it goes down the wrong track.
+        -- This fixes the order of the bindings so that it is less likely to do so.
+        diffs2 = concat $ flip S.evalState (mkRnEnv2 emptyInScopeSet) $ zipWithM go binds binds'
+        -- diffs1 = concat $ flip S.evalState (mkRnEnv2 emptyInScopeSet) $ zipWithM go (map (:[]) $ concat binds) (map (:[]) $ concat binds')
+        -- diffs3  = flip S.evalState (mkRnEnv2 emptyInScopeSet) $ go (concat binds) (concat binds')
+
+        diffs = diffs2
+        go x y = S.state $ \s -> diffBinds True s x y
+
+        -- The roundtrip doesn't preserver OtherUnfolding or occInfo, but neither are of these
+        -- are used for generate core or bytecode, so we can safely ignore them
+        -- SYB is slow but fine given that this is only used for testing
+        noUnfoldings = everywhere $ mkT $ \v -> if isId v
+          then
+            let v' = if isOtherUnfolding (realIdUnfolding v) then (setIdUnfolding v noUnfolding) else v
+              in setIdOccInfo v' noOccInfo
+          else v
+        isOtherUnfolding (OtherCon _) = True
+        isOtherUnfolding _ = False
+
+
+    when (not $ null diffs) $
+      panicDoc "verify core failed!" (vcat $ punctuate (text "\n\n") (diffs )) -- ++ [ppr binds , ppr binds']))
+
   pure (diags, Just $! mkHiFileResult ms mod_info (tmrRuntimeModules tcm))
 
   where

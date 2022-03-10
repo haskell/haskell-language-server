@@ -6567,7 +6567,7 @@ runInDir'' lspCaps dir startExeIn startSessionIn extraOptions s = do
 
   shakeProfiling <- getEnv "SHAKE_PROFILING"
   let cmd = unwords $
-       [ghcideExe, "--lsp", "--test", "--verbose", "-j2", "--cwd", startDir
+       [ghcideExe, "--lsp", "--test", "--verify-core-file", "--verbose", "-j2", "--cwd", startDir
        ] ++ ["--shake-profiling=" <> dir | Just dir <- [shakeProfiling]
        ] ++ extraOptions
   -- HIE calls getXgdDirectory which assumes that HOME is set.

@@ -898,7 +898,8 @@ getModIfaceRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ 
       linkableType <- getLinkableType f
       hsc <- hscEnv <$> use_ GhcSessionDeps f
       let compile = fmap ([],) $ use GenerateCore f
-      (diags, !hiFile) <- compileToObjCodeIfNeeded hsc linkableType compile tmr
+      se <- getShakeExtras
+      (diags, !hiFile) <- compileToObjCodeIfNeeded se hsc linkableType compile tmr
       let fp = hiFileFingerPrint <$> hiFile
       hiDiags <- case hiFile of
         Just hiFile
@@ -962,8 +963,10 @@ regenerateHiFile sess f ms compNeeded = do
                 -- compile writes .o file
                 let compile = liftIO $ compileModule (RunSimplifier True) hsc (pm_mod_summary pm) $ tmrTypechecked tmr
 
+                se <- getShakeExtras
                 -- Bang pattern is important to avoid leaking 'tmr'
-                (diags'', !res) <- compileToObjCodeIfNeeded hsc compNeeded compile tmr
+
+                (diags'', !res) <- liftIO $ compileToObjCodeIfNeeded se hsc compNeeded compile tmr
 
                 -- Write hi file
                 hiDiags <- case res of
@@ -991,18 +994,26 @@ regenerateHiFile sess f ms compNeeded = do
 
 
 -- | HscEnv should have deps included already
-compileToObjCodeIfNeeded :: HscEnv -> Maybe LinkableType -> Action (IdeResult ModGuts) -> TcModuleResult -> Action (IdeResult HiFileResult)
+{- <<<<<<< HEAD -}
+{- compileToObjCodeIfNeeded :: HscEnv -> Maybe LinkableType -> Action (IdeResult ModGuts) -> TcModuleResult -> Action (IdeResult HiFileResult)
 compileToObjCodeIfNeeded hsc Nothing _ tmr = do
   incrementRebuildCount
   res <- liftIO $ mkHiFileResultNoCompile hsc tmr
   pure ([], Just $! res)
 compileToObjCodeIfNeeded hsc (Just linkableType) getGuts tmr = do
-  incrementRebuildCount
+  incrementRebuildCount -}
+{- ======= -}
+compileToObjCodeIfNeeded :: MonadIO m => ShakeExtras -> HscEnv -> Maybe LinkableType -> CompileMod m -> TcModuleResult -> m (IdeResult HiFileResult)
+compileToObjCodeIfNeeded _ hsc Nothing _ tmr = liftIO $ do
+  res <- mkHiFileResultNoCompile hsc tmr
+  pure ([], Just $! res)
+compileToObjCodeIfNeeded se hsc (Just linkableType) getGuts tmr = do
+{- >>>>>>> 72624310 (Add --verify-core-file to do roundtrip testing of core-files) -}
   (diags, mguts) <- getGuts
   case mguts of
     Nothing -> pure (diags, Nothing)
     Just guts -> do
-      (diags', !res) <- liftIO $ mkHiFileResultCompile hsc tmr guts linkableType
+      (diags', !res) <- liftIO $ mkHiFileResultCompile se hsc tmr guts linkableType
       pure (diags++diags', res)
 
 getClientSettingsRule :: Recorder (WithPriority Log) -> Rules ()
