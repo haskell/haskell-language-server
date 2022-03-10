@@ -69,7 +69,7 @@ provider plId ideState typ contents fp fo = withIndefiniteProgress title Cancell
                                     , ("--end-line=" <>) . show <$> regionEndLine region
                                     ]
                                 <> map ("-o" <>) fileOpts
-                        ){cwd = Just fp'}
+                        ){cwd = Just $ takeDirectory fp'}
                         contents
                 T.hPutStrLn stderr err
                 case exitCode of
