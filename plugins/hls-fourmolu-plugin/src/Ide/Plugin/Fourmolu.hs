@@ -46,7 +46,7 @@ properties =
     emptyProperties
         & defineBooleanProperty
             #cli
-            "Call out to \"fourmolu\" executable, rather than using the bundled library"
+            "Call out to a \"fourmolu\" executable, rather than using the bundled library"
             False
 
 provider :: PluginId -> FormattingHandler IdeState
