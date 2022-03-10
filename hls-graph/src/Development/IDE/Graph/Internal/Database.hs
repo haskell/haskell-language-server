@@ -8,6 +8,7 @@
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE TupleSections #-}
 
 module Development.IDE.Graph.Internal.Database (newDatabase, incDatabase, build, getDirtySet, getKeysAndVisitAge) where
 
@@ -289,7 +290,7 @@ withRunInIO k = do
 cleanupAsync :: IORef [Async a] -> IO ()
 -- mask to make sure we interrupt all the asyncs
 cleanupAsync ref = uninterruptibleMask_ $ do
-    asyncs <- readIORef ref
+    asyncs <- atomicModifyIORef' ref ([],)
     -- interrupt all the asyncs without waiting
     mapM_ (\a -> throwTo (asyncThreadId a) AsyncCancelled) asyncs
     -- Wait until all the asyncs are done
