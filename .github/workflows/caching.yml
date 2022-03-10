@@ -63,7 +63,6 @@ jobs:
           paths_ignore: '["**/docs/**"
                          , "**.md"
                          , "**/LICENSE"
-                         , "install/**"
                          , "**.nix"
                          , "flake.lock"
                          , "**/README.md"

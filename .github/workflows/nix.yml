@@ -28,7 +28,6 @@ jobs:
                          , "**.md"
                          , "**/LICENSE"
                          , ".circleci/**"
-                         , "install/**"
                          , "**/README.md"
                          , "FUNDING.yml"
                          , "**/stack*.yaml"
