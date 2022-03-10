@@ -12,11 +12,13 @@
 {-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE ViewPatterns          #-}
-{-# OPTIONS_GHC -Wno-orphans   #-}
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiWayIf            #-}
 {-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE StrictData            #-}
+
+{-# OPTIONS_GHC -Wno-orphans   #-}
 
 #ifdef HLINT_ON_GHC_LIB
 #define MIN_GHC_API_VERSION(x,y,z) MIN_VERSION_ghc_lib(x,y,z)
