@@ -36,7 +36,7 @@ ghcup compile hls -v 1.6.1.0 --ghc 8.10.7 --ghc 8.8.4
 
 Use a different `cabal.project` for a GHC version:
 ```
-ghcup compile hls -v 1.6.1.0 --ghc 9.2.1 --cabal-project https://github.com/haskell/haskell-language-server/blob/master/cabal-ghc921.project
+ghcup compile hls -v 1.6.1.0 --ghc 9.2.1 --cabal-project cabal-ghc921.project
 ```
 
 Check `ghcup compile hls --help` for a full list of compilation options.
