@@ -294,11 +294,12 @@ cleanupAsync ref = uninterruptibleMask_ $ do
     mapM_ (\a -> throwTo (asyncThreadId a) AsyncCancelled) asyncs
     -- Wait until all the asyncs are done
     -- But if it takes more than 10 seconds, log to stderr
-    let loop = forever $ do
-            sleep 10
-            traceM "cleanupAsync: waiting for asyncs to finish"
-    withAsyncWithUnmask (\unmask -> unmask loop) $ \_ ->
-        mapM_ waitCatch asyncs
+    unless (null asyncs) $ do
+        let loop = forever $ do
+                sleep 10
+                traceM "cleanupAsync: waiting for asyncs to finish"
+        withAsyncWithUnmask (\unmask -> unmask loop) $ \_ ->
+            mapM_ waitCatch asyncs
 
 data Wait
     = Wait {justWait :: !(IO ())}
