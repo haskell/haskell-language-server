@@ -115,7 +115,7 @@ launchHaskellLanguageServer parsedArgs = do
 #else
       let Cradle { cradleOptsProg = CradleAction { runGhcCmd } } = cradle
       -- we need to be compatible with NoImplicitPrelude
-      ghcBinary <- (fmap trim <$> runGhcCmd ["-v0", "-package-env=-", "-e", "do e <- System.Environment.getExecutablePath ; System.IO.putStr e"])
+      ghcBinary <- (fmap trim <$> runGhcCmd ["-v0", "-package-env=-", "-ignore-dot-ghci", "-e", "Control.Monad.join (Control.Monad.fmap System.IO.putStr System.Environment.getExecutablePath)"])
         >>= cradleResult "Failed to get project GHC executable path"
       libdir <- HieBios.getRuntimeGhcLibDir cradle
         >>= cradleResult "Failed to get project GHC libdir path"

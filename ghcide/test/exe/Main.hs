@@ -1188,73 +1188,71 @@ renameActionTests = testGroup "rename actions"
 
 typeWildCardActionTests :: TestTree
 typeWildCardActionTests = testGroup "type wildcard actions"
-  [ testSession "global signature" $ do
-      let content = T.unlines
-            [ "module Testing where"
-            , "func :: _"
-            , "func x = x"
-            ]
-      doc <- createDoc "Testing.hs" "haskell" content
-      _ <- waitForDiagnostics
-      actionsOrCommands <- getAllCodeActions doc
-      let [addSignature] = [action | InR action@CodeAction { _title = actionTitle } <- actionsOrCommands
-                                   , "Use type signature" `T.isInfixOf` actionTitle
-                           ]
-      executeCodeAction addSignature
-      contentAfterAction <- documentContents doc
-      let expectedContentAfterAction = T.unlines
-            [ "module Testing where"
-            , "func :: (p -> p)"
-            , "func x = x"
-            ]
-      liftIO $ expectedContentAfterAction @=? contentAfterAction
-  , testSession "multi-line message" $ do
-      let content = T.unlines
-            [ "module Testing where"
-            , "func :: _"
-            , "func x y = x + y"
-            ]
-      doc <- createDoc "Testing.hs" "haskell" content
-      _ <- waitForDiagnostics
-      actionsOrCommands <- getAllCodeActions doc
-      let [addSignature] = [action | InR action@CodeAction { _title = actionTitle } <- actionsOrCommands
-                                    , "Use type signature" `T.isInfixOf` actionTitle
-                              ]
-      executeCodeAction addSignature
-      contentAfterAction <- documentContents doc
-      let expectedContentAfterAction = T.unlines
-            [ "module Testing where"
-            , "func :: (Integer -> Integer -> Integer)"
-            , "func x y = x + y"
-            ]
-      liftIO $ expectedContentAfterAction @=? contentAfterAction
-  , testSession "local signature" $ do
-      let content = T.unlines
-            [ "module Testing where"
-            , "func :: Int -> Int"
-            , "func x ="
-            , "  let y :: _"
-            , "      y = x * 2"
-            , "  in y"
-            ]
-      doc <- createDoc "Testing.hs" "haskell" content
-      _ <- waitForDiagnostics
-      actionsOrCommands <- getAllCodeActions doc
-      let [addSignature] = [action | InR action@CodeAction { _title = actionTitle } <- actionsOrCommands
-                                    , "Use type signature" `T.isInfixOf` actionTitle
-                              ]
-      executeCodeAction addSignature
-      contentAfterAction <- documentContents doc
-      let expectedContentAfterAction = T.unlines
-            [ "module Testing where"
-            , "func :: Int -> Int"
-            , "func x ="
-            , "  let y :: (Int)"
-            , "      y = x * 2"
-            , "  in y"
-            ]
-      liftIO $ expectedContentAfterAction @=? contentAfterAction
+  [ testUseTypeSignature "global signature"
+        [ "func :: _"
+        , "func x = x"
+        ]
+        [ "func :: (p -> p)"
+        , "func x = x"
+        ]
+  , testUseTypeSignature "local signature"
+        [ "func :: Int -> Int"
+        , "func x ="
+        , "  let y :: _"
+        , "      y = x * 2"
+        , "  in y"
+        ]
+        [ "func :: Int -> Int"
+        , "func x ="
+        , "  let y :: Int"
+        , "      y = x * 2"
+        , "  in y"
+        ]
+  , testUseTypeSignature "multi-line message"
+        [ "func :: _"
+        , "func x y = x + y"
+        ]
+        [ "func :: (Integer -> Integer -> Integer)"
+        , "func x y = x + y"
+        ]
+  , testUseTypeSignature "type in parentheses"
+        [ "func :: a -> _"
+        , "func x = (x, const x)"
+        ]
+        [ "func :: a -> (a, b -> a)"
+        , "func x = (x, const x)"
+        ]
+  , testUseTypeSignature "type in brackets"
+        [ "func :: _ -> Maybe a"
+        , "func xs = head xs"
+        ]
+        [ "func :: [Maybe a] -> Maybe a"
+        , "func xs = head xs"
+        ]
+  , testUseTypeSignature "unit type"
+        [ "func :: IO _"
+        , "func = putChar 'H'"
+        ]
+        [ "func :: IO ()"
+        , "func = putChar 'H'"
+        ]
   ]
+  where
+    -- | Test session of given name, checking action "Use type signature..."
+    --   on a test file with given content and comparing to expected result.
+    testUseTypeSignature name textIn textOut = testSession name $ do
+        let fileStart = "module Testing where"
+            content = T.unlines $ fileStart : textIn
+            expectedContentAfterAction = T.unlines $ fileStart : textOut
+        doc <- createDoc "Testing.hs" "haskell" content
+        _ <- waitForDiagnostics
+        actionsOrCommands <- getAllCodeActions doc
+        let [addSignature] = [action | InR action@CodeAction { _title = actionTitle } <- actionsOrCommands
+                                    , "Use type signature" `T.isInfixOf` actionTitle
+                            ]
+        executeCodeAction addSignature
+        contentAfterAction <- documentContents doc
+        liftIO $ expectedContentAfterAction @=? contentAfterAction
 
 {-# HLINT ignore "Use nubOrd" #-}
 removeImportTests :: TestTree
@@ -4059,7 +4057,9 @@ findDefinitionAndHoverTests = let
     , testGroup "hover"      $ mapMaybe snd tests
     , checkFileCompiles sourceFilePath $
         expectDiagnostics
-          [ ( "GotoHover.hs", [(DsError, (62, 7), "Found hole: _")]) ]
+          [ ( "GotoHover.hs", [(DsError, (62, 7), "Found hole: _")]) 
+          , ( "GotoHover.hs", [(DsError, (65, 8), "Found hole: _")]) 
+          ]
     , testGroup "type-definition" typeDefinitionTests ]
 
   typeDefinitionTests = [ tst (getTypeDefinitions, checkDefs) aaaL14 (pure tcData) "Saturated data con"
@@ -4111,6 +4111,7 @@ findDefinitionAndHoverTests = let
   outL45 = Position 49  3  ;  outSig = [ExpectHoverText ["outer", "Bool"], mkR 50 0 50 5]
   innL48 = Position 52  5  ;  innSig = [ExpectHoverText ["inner", "Char"], mkR 49 2 49 7]
   holeL60 = Position 62 7  ;  hleInfo = [ExpectHoverText ["_ ::"]]
+  holeL65 = Position 65 8  ;  hleInfo2 = [ExpectHoverText ["_ :: a -> Maybe a"]]
   cccL17 = Position 17 16  ;  docLink = [ExpectHoverText ["[Documentation](file:///"]]
   imported = Position 56 13 ; importedSig = getDocUri "Foo.hs" >>= \foo -> return [ExpectHoverText ["foo", "Foo", "Haddock"], mkL foo 5 0 5 3]
   reexported = Position 55 14 ; reexportedSig = getDocUri "Bar.hs" >>= \bar -> return [ExpectHoverText ["Bar", "Bar", "Haddock"], mkL bar 3 0 3 14]
@@ -4165,6 +4166,11 @@ findDefinitionAndHoverTests = let
   , test  no     yes    outL45     outSig        "top-level signature              #767"
   , test  broken broken innL48     innSig        "inner     signature              #767"
   , test  no     yes    holeL60    hleInfo       "hole without internal name       #831"
+  , if ghcVersion >= GHC92 then
+        -- Broken on GHC 9.2 and above due to printing of uniques
+        test  no     yes    holeL65    []        "hole with variable"
+    else
+        test  no     yes    holeL65    hleInfo2  "hole with variable"
   , test  no     skip   cccL17     docLink       "Haddock html links"
   , testM yes    yes    imported   importedSig   "Imported symbol"
   , testM yes    yes    reexported reexportedSig "Imported symbol (reexported)"

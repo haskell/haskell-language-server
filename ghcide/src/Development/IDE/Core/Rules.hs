@@ -628,14 +628,14 @@ readHieFileForSrcFromDisk recorder file = do
   ShakeExtras{withHieDb} <- ask
   row <- MaybeT $ liftIO $ withHieDb (\hieDb -> HieDb.lookupHieFileFromSource hieDb $ fromNormalizedFilePath file)
   let hie_loc = HieDb.hieModuleHieFile row
-  logWith recorder Logger.Debug $ LogLoadingHieFile file
+  liftIO $ logWith recorder Logger.Debug $ LogLoadingHieFile file
   exceptToMaybeT $ readHieFileFromDisk recorder hie_loc
 
 readHieFileFromDisk :: Recorder (WithPriority Log) -> FilePath -> ExceptT SomeException IdeAction Compat.HieFile
 readHieFileFromDisk recorder hie_loc = do
   nc <- asks ideNc
   res <- liftIO $ tryAny $ loadHieFile (mkUpdater nc) hie_loc
-  let log = logWith recorder
+  let log = (liftIO .) . logWith recorder
   case res of
     Left e -> log Logger.Debug $ LogLoadingHieFileFail hie_loc e
     Right _ -> log Logger.Debug $ LogLoadingHieFileSuccess hie_loc
@@ -717,15 +717,7 @@ loadGhcSession recorder ghcSessionDepsConfig = do
                   use_ GetModificationTime nfp
         mapM_ addDependency deps
 
-        opts <- getIdeOptions
-        let cutoffHash =
-              case optShakeFiles opts of
-                -- optShakeFiles is only set in the DAML case.
-                -- https://github.com/haskell/ghcide/pull/522#discussion_r428622915
-                Just {} -> ""
-                -- Hash the HscEnvEq returned so cutoff if it didn't change
-                -- from last time
-                Nothing -> LBS.toStrict $ B.encode (hash (snd val))
+        let cutoffHash = LBS.toStrict $ B.encode (hash (snd val))
         return (Just cutoffHash, val)
 
     defineNoDiagnostics (cmapWithPrio LogShake recorder) $ \(GhcSessionDeps_ fullModSummary) file -> do

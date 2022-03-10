@@ -77,10 +77,11 @@ updateDirty = Focus.adjust $ \(KeyDetails status rdeps) ->
 -- | Unwrap and build a list of keys in parallel
 build
     :: forall key value . (RuleResult key ~ value, Typeable key, Show key, Hashable key, Eq key, Typeable value)
-    => Database -> [key] -> IO ([Key], [value])
-build db keys = do
+    => Database -> Stack -> [key] -> IO ([Key], [value])
+-- build _ st k | traceShow ("build", st, k) False = undefined
+build db stack keys = do
     (ids, vs) <- runAIO $ fmap unzip $ either return liftIO =<<
-            builder db (map Key keys)
+            builder db stack (map Key keys)
     pure (ids, map (asV . resultValue) vs)
     where
         asV :: Value -> value
@@ -90,8 +91,9 @@ build db keys = do
 --  If none of the keys are dirty, we can return the results immediately.
 --  Otherwise, a blocking computation is returned *which must be evaluated asynchronously* to avoid deadlock.
 builder
-    :: Database -> [Key] -> AIO (Either [(Key, Result)] (IO [(Key, Result)]))
-builder db@Database{..} keys = withRunInIO $ \(RunInIO run) -> do
+    :: Database -> Stack -> [Key] -> AIO (Either [(Key, Result)] (IO [(Key, Result)]))
+-- builder _ st kk | traceShow ("builder", st,kk) False = undefined
+builder db@Database{..} stack keys = withRunInIO $ \(RunInIO run) -> do
     -- Things that I need to force before my results are ready
     toForce <- liftIO $ newTVarIO []
     current <- liftIO $ readTVarIO databaseStep
@@ -103,11 +105,13 @@ builder db@Database{..} keys = withRunInIO $ \(RunInIO run) -> do
             status <- SMap.lookup id databaseValues
             val <- case viewDirty current $ maybe (Dirty Nothing) keyStatus status of
                 Clean r -> pure r
-                Running _ force val _ -> do
+                Running _ force val _
+                  | memberStack id stack -> throw $ StackException stack
+                  | otherwise -> do
                     modifyTVar' toForce (Wait force :)
                     pure val
                 Dirty s -> do
-                    let act = run (refresh db id s)
+                    let act = run (refresh db stack id s)
                         (force, val) = splitIO (join act)
                     SMap.focus (updateStatus $ Running current force val s) id databaseValues
                     modifyTVar' toForce (Spawn force:)
@@ -127,32 +131,33 @@ builder db@Database{..} keys = withRunInIO $ \(RunInIO run) -> do
 --     * If no dirty dependencies and we have evaluated the key previously, then we refresh it in the current thread.
 --       This assumes that the implementation will be a lookup
 --     * Otherwise, we spawn a new thread to refresh the dirty deps (if any) and the key itself
-refresh :: Database -> Key -> Maybe Result -> AIO (IO Result)
-refresh db key result@(Just me@Result{resultDeps = ResultDeps deps}) = do
-    res <- builder db deps
-    case res of
-      Left res ->
-        if isDirty res
-            then asyncWithCleanUp $ liftIO $ compute db key RunDependenciesChanged result
-            else pure $ compute db key RunDependenciesSame result
-      Right iores -> asyncWithCleanUp $ liftIO $ do
-        res <- iores
-        let mode = if isDirty res then RunDependenciesChanged else RunDependenciesSame
-        compute db key mode result
-    where
-        isDirty = any (\(_,dep) -> resultBuilt me < resultChanged dep)
-
-refresh db key result =
-    asyncWithCleanUp $ liftIO $ compute db key RunDependenciesChanged result
-
+refresh :: Database -> Stack -> Key -> Maybe Result -> AIO (IO Result)
+-- refresh _ st k _ | traceShow ("refresh", st, k) False = undefined
+refresh db stack key result = case (addStack key stack, result) of
+    (Left e, _) -> throw e
+    (Right stack, Just me@Result{resultDeps = ResultDeps deps}) -> do
+        res <- builder db stack deps
+        let isDirty = any (\(_,dep) -> resultBuilt me < resultChanged dep)
+        case res of
+            Left res ->
+                if isDirty res
+                    then asyncWithCleanUp $ liftIO $ compute db stack key RunDependenciesChanged result
+                    else pure $ compute db stack key RunDependenciesSame result
+            Right iores -> asyncWithCleanUp $ liftIO $ do
+                res <- iores
+                let mode = if isDirty res then RunDependenciesChanged else RunDependenciesSame
+                compute db stack key mode result
+    (Right stack, _) ->
+        asyncWithCleanUp $ liftIO $ compute db stack key RunDependenciesChanged result
 
 -- | Compute a key.
-compute :: Database -> Key -> RunMode -> Maybe Result -> IO Result
-compute db@Database{..} key mode result = do
+compute :: Database -> Stack -> Key -> RunMode -> Maybe Result -> IO Result
+-- compute _ st k _ _ | traceShow ("compute", st, k) False = undefined
+compute db@Database{..} stack key mode result = do
     let act = runRule databaseRules key (fmap resultData result) mode
     deps <- newIORef UnknownDeps
     (execution, RunResult{..}) <-
-        duration $ runReaderT (fromAction act) $ SAction db deps
+        duration $ runReaderT (fromAction act) $ SAction db deps stack
     built <- readTVarIO databaseStep
     deps <- readIORef deps
     let changed = if runChanged == ChangedRecomputeDiff then built else maybe built resultChanged result
@@ -165,7 +170,7 @@ compute db@Database{..} key mode result = do
         deps | not(null deps)
             && runChanged /= ChangedNothing
                     -> do
-            void $ forkIO $
+            void $
                 updateReverseDeps key db
                     (getResultDepsDefault [] previousDeps)
                     (HSet.fromList deps)
