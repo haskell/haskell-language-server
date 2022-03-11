@@ -8,6 +8,7 @@
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE TupleSections #-}
 
 module Development.IDE.Graph.Internal.Database (newDatabase, incDatabase, build, getDirtySet, getKeysAndVisitAge) where
 
@@ -32,14 +33,15 @@ import           Data.IORef.Extra
 import           Data.Maybe
 import           Data.Traversable                     (for)
 import           Data.Tuple.Extra
+import           Debug.Trace (traceM)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Graph.Internal.Rules
 import           Development.IDE.Graph.Internal.Types
 import qualified Focus
 import qualified ListT
 import qualified StmContainers.Map                    as SMap
+import           System.Time.Extra                    (duration, sleep)
 import           System.IO.Unsafe
-import           System.Time.Extra                    (duration)
 
 newDatabase :: Dynamic -> TheRules -> IO Database
 newDatabase databaseExtra databaseRules = do
@@ -120,7 +122,7 @@ builder db@Database{..} stack keys = withRunInIO $ \(RunInIO run) -> do
             pure (id, val)
 
     toForceList <- liftIO $ readTVarIO toForce
-    let waitAll = run $ mapConcurrentlyAIO_ id toForceList
+    let waitAll = run $ waitConcurrently_ toForceList
     case toForceList of
         [] -> return $ Left results
         _ -> return $ Right $ do
@@ -170,6 +172,10 @@ compute db@Database{..} stack key mode result = do
         deps | not(null deps)
             && runChanged /= ChangedNothing
                     -> do
+            -- IMPORTANT: record the reverse deps **before** marking the key Clean.
+            -- If an async exception strikes before the deps have been recorded,
+            -- we won't be able to accurately propagate dirtiness for this key
+            -- on the next build.
             void $
                 updateReverseDeps key db
                     (getResultDepsDefault [] previousDeps)
@@ -224,7 +230,8 @@ updateReverseDeps
     -> [Key] -- ^ Previous direct dependencies of Id
     -> HashSet Key -- ^ Current direct dependencies of Id
     -> IO ()
-updateReverseDeps myId db prev new = uninterruptibleMask_ $ do
+-- mask to ensure that all the reverse dependencies are updated
+updateReverseDeps myId db prev new = do
     forM_ prev $ \d ->
         unless (d `HSet.member` new) $
             doOne (HSet.delete myId) d
@@ -252,20 +259,27 @@ transitiveDirtySet database = flip State.execStateT HSet.empty . traverse_ loop
             next <- lift $ atomically $ getReverseDependencies database x
             traverse_ loop (maybe mempty HSet.toList next)
 
--- | IO extended to track created asyncs to clean them up when the thread is killed,
---   generalizing 'withAsync'
+--------------------------------------------------------------------------------
+-- Asynchronous computations with cancellation
+
+-- | A simple monad to implement cancellation on top of 'Async',
+--   generalizing 'withAsync' to monadic scopes.
 newtype AIO a = AIO { unAIO :: ReaderT (IORef [Async ()]) IO a }
   deriving newtype (Applicative, Functor, Monad, MonadIO)
 
+-- | Run the monadic computation, cancelling all the spawned asyncs if an exception arises
 runAIO :: AIO a -> IO a
 runAIO (AIO act) = do
     asyncs <- newIORef []
     runReaderT act asyncs `onException` cleanupAsync asyncs
 
+-- | Like 'async' but with built-in cancellation.
+--   Returns an IO action to wait on the result.
 asyncWithCleanUp :: AIO a -> AIO (IO a)
 asyncWithCleanUp act = do
     st <- AIO ask
     io <- unliftAIO act
+    -- mask to make sure we keep track of the spawned async
     liftIO $ uninterruptibleMask $ \restore -> do
         a <- async $ restore io
         atomicModifyIORef'_ st (void a :)
@@ -284,27 +298,40 @@ withRunInIO k = do
     k $ RunInIO (\aio -> runReaderT (unAIO aio) st)
 
 cleanupAsync :: IORef [Async a] -> IO ()
-cleanupAsync ref = uninterruptibleMask_ $ do
-    asyncs <- readIORef ref
+-- mask to make sure we interrupt all the asyncs
+cleanupAsync ref = uninterruptibleMask $ \unmask -> do
+    asyncs <- atomicModifyIORef' ref ([],)
+    -- interrupt all the asyncs without waiting
     mapM_ (\a -> throwTo (asyncThreadId a) AsyncCancelled) asyncs
-    mapM_ waitCatch asyncs
+    -- Wait until all the asyncs are done
+    -- But if it takes more than 10 seconds, log to stderr
+    unless (null asyncs) $ do
+        let warnIfTakingTooLong = unmask $ forever $ do
+                sleep 10
+                traceM "cleanupAsync: waiting for asyncs to finish"
+        withAsync warnIfTakingTooLong $ \_ ->
+            mapM_ waitCatch asyncs
 
-data Wait a
-    = Wait {justWait :: !a}
-    | Spawn {justWait :: !a}
-    deriving Functor
+data Wait
+    = Wait {justWait :: !(IO ())}
+    | Spawn {justWait :: !(IO ())}
 
-waitOrSpawn :: Wait (IO a) -> IO (Either (IO a) (Async a))
+fmapWait :: (IO () -> IO ()) -> Wait -> Wait
+fmapWait f (Wait io) = Wait (f io)
+fmapWait f (Spawn io) = Spawn (f io)
+
+waitOrSpawn :: Wait -> IO (Either (IO ()) (Async ()))
 waitOrSpawn (Wait io)  = pure $ Left io
 waitOrSpawn (Spawn io) = Right <$> async io
 
-mapConcurrentlyAIO_ :: (a -> IO ()) -> [Wait a] -> AIO ()
-mapConcurrentlyAIO_ _ [] = pure ()
-mapConcurrentlyAIO_ f [one] = liftIO $ justWait $ fmap f one
-mapConcurrentlyAIO_ f many = do
+waitConcurrently_ :: [Wait] -> AIO ()
+waitConcurrently_ [] = pure ()
+waitConcurrently_ [one] = liftIO $ justWait one
+waitConcurrently_ many = do
     ref <- AIO ask
-    waits <- liftIO $ uninterruptibleMask $ \restore -> do
-        waits <- liftIO $ traverse (waitOrSpawn . fmap (restore . f)) many
+    -- mask to make sure we keep track of all the asyncs
+    waits <- liftIO $ uninterruptibleMask $ \unmask -> do
+        waits <- liftIO $ traverse (waitOrSpawn . fmapWait unmask) many
         let asyncs = rights waits
         liftIO $ atomicModifyIORef'_ ref (asyncs ++)
         return waits
