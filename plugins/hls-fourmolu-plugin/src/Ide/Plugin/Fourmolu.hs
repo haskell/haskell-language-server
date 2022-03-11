@@ -41,12 +41,12 @@ descriptor plId =
         { pluginHandlers = mkFormattingHandlers $ provider plId
         }
 
-properties :: Properties '[ 'PropertyKey "cli" 'TBoolean]
+properties :: Properties '[ 'PropertyKey "external" 'TBoolean]
 properties =
     emptyProperties
         & defineBooleanProperty
-            #cli
-            "Call out to a \"fourmolu\" executable, rather than using the bundled library"
+            #external
+            "Call out to an external \"fourmolu\" executable, rather than using the bundled library"
             False
 
 provider :: PluginId -> FormattingHandler IdeState
@@ -54,7 +54,7 @@ provider plId ideState typ contents fp fo = withIndefiniteProgress title Cancell
     fileOpts <-
         maybe [] (convertDynFlags . hsc_dflags . hscEnv)
             <$> liftIO (runAction "Fourmolu" ideState $ use GhcSession fp)
-    useCLI <- usePropertyLsp #cli plId properties
+    useCLI <- usePropertyLsp #external plId properties
     if useCLI
         then liftIO
             . fmap (join . first (mkError . show))

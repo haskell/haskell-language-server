@@ -33,7 +33,7 @@ tests =
 goldenWithFourmolu :: Bool -> TestName -> FilePath -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
 goldenWithFourmolu cli title path desc = goldenWithHaskellDocFormatter fourmoluPlugin "fourmolu" conf title testDataDir path desc "hs"
  where
-  conf = def{plcConfig = (\(Object obj) -> obj) $ object ["cli" .= cli]}
+  conf = def{plcConfig = (\(Object obj) -> obj) $ object ["external" .= cli]}
 
 testDataDir :: FilePath
 testDataDir = "test" </> "testdata"
