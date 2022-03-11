@@ -31,7 +31,7 @@ tests = testGroup "brittany"
   ]
 
 brittanyGolden :: TestName -> FilePath -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
-brittanyGolden title path desc = goldenWithHaskellDocFormatter brittanyPlugin "brittany" title testDataDir path desc "hs"
+brittanyGolden title path desc = goldenWithHaskellDocFormatter brittanyPlugin "brittany" def title testDataDir path desc "hs"
 
 testDataDir :: FilePath
 testDataDir = "test" </> "testdata"
