@@ -26,64 +26,27 @@ You can check if HLS is available for your platorm via ghcup here: <https://hask
 You can also install HLS from source without checking out the code manually:
 
 ```bash
-ghcup compile hls -v 1.4.0 8.10.7
+ghcup compile hls -v 1.6.1.0 --ghc 8.10.7
+```
+
+Install HLS for multiple GHC versions:
+```
+ghcup compile hls -v 1.6.1.0 --ghc 8.10.7 --ghc 8.8.4
+```
+
+Use a different `cabal.project` for a GHC version:
+```
+ghcup compile hls -v 1.6.1.0 --ghc 9.2.1 --cabal-project cabal-ghc921.project
 ```
 
 Check `ghcup compile hls --help` for a full list of compilation options.
 
-## chocolatey
-
-If you are using [`chocolatey`](https://chocolatey.org/) to manage your installations in windows, [you can install `haskell-language-server`](https://community.chocolatey.org/packages/haskell-language-server) with
-
-```bash
-choco install haskell-language-server
-````
-
-## Visual Studio Code
-
-If you are using Visual Studio Code, the [Haskell extension](https://marketplace.visualstudio.com/items?itemName=haskell.haskell) will automatically download and install `haskell-language-server` for you.
-
-If you need to find the binaries, please consult the [documentation](https://github.com/haskell/vscode-haskell#downloaded-binaries) for the extension.
-
-## Pre-built binaries
-
-There are pre-built binaries available from the [releases page](https://github.com/haskell/haskell-language-server/releases) for Linux, Windows and macOS.
-To install, download the `haskell-language-server-wrapper` executable for your platform as well as any `haskell-language-server` executables for the GHC versions you plan on working with, and either put them on your PATH or point your client to them.
-
-## Arch Linux
-
-The preferred method of installation for development purposes is to use the [haskell-language-server-static](https://aur.archlinux.org/packages/haskell-language-server-static) package from AUR.
-This package contains statically linked binaries for each supported GHC version and `haskell-language-server-wrapper` for automatic GHC version selection.
-It is updated regularly, requires no additional dependencies, and is independent of other haskell packages you may have on your system, including GHC.
-Its size is relatively large (approx. 900 MB), but if this is a problem for you, during installation you can disable the GHC versions you will not be using by editing the PKGBUILD file.
-
-Alternatively, if you want to use **dynamically linked** Haskell packages from `pacman`,
-you can install the latest pre-compiled version of `haskell-language-server` from [[community]](https://archlinux.org/packages/community/x86_64/haskell-language-server/):
-
-```bash
-sudo pacman -S haskell-language-server
-```
-
-In this case, `haskell-language-server` is compiled against the GHC distributed to Arch Linux, so you will need maintain a system wide Haskell development environment, and install GHC from `pacman` as well.
-See [ArchWiki](https://wiki.archlinux.org/index.php/Haskell) for the details of Haskell infrastructure on Arch Linux.
-
-## Fedora
-
-Binary packages for Fedora are available from [this Copr repo](https://copr.fedorainfracloud.org/coprs/petersen/haskell-language-server),
-built against the official Fedora ghc package.
-
-## FreeBSD
-
-HLS is available for installation from official binary packages. Use
-
-```bash
-pkg install hs-haskell-language-server
-```
-
-to install it. At the moment, HLS installed this way only supports the same GHC
-version as the ports one.
-
 ## Installation from source
+
+Direct installation from Source, while possible via `cabal install haskell-language-server`
+and `stack install --stack-yaml stack-<GHCVER>.yaml`, is not recommended for most people.
+Said command builds the `haskell-language-server` binary and installs it in the default Cabal binaries folder,
+but the binary will only work with projects that use the same GHC version that built it.
 
 ### Common pre-requirements
 
@@ -142,87 +105,57 @@ git clone https://github.com/haskell/haskell-language-server --recurse-submodule
 cd haskell-language-server
 ```
 
-### Building
+## chocolatey
 
-Note, on first invocation of the build script with stack, a GHC is being installed for execution.
-The GHC used for the `install.hs` can be adjusted in `./install/stack.yaml` by using a different resolver.
-
-Available commands can be seen with:
+If you are using [`chocolatey`](https://chocolatey.org/) to manage your installations in windows, [you can install `haskell-language-server`](https://community.chocolatey.org/packages/haskell-language-server) with
 
 ```bash
-stack ./install.hs help
-```
+choco install haskell-language-server
+````
 
-Remember, this will take time to download a Stackage-LTS and an appropriate GHC for build
-haskell-language-server the first time.
+## Visual Studio Code
 
-### Install via cabal
+If you are using Visual Studio Code, the [Haskell extension](https://marketplace.visualstudio.com/items?itemName=haskell.haskell) will automatically download and install `haskell-language-server` for you.
 
-The install-script can be invoked via `cabal` instead of `stack` with the command
+If you need to find the binaries, please consult the [documentation](https://github.com/haskell/vscode-haskell#downloaded-binaries) for the extension.
 
-```bash
-cabal v2-run ./install.hs --project-file install/shake.project <target>
-```
+## Pre-built binaries
 
-or using the existing alias script
+There are pre-built binaries available from the [releases page](https://github.com/haskell/haskell-language-server/releases) for Linux, Windows and macOS.
+To install, download the `haskell-language-server-wrapper` executable for your platform as well as any `haskell-language-server` executables for the GHC versions you plan on working with, and either put them on your PATH or point your client to them.
 
-```bash
-./cabal-hls-install <target>
-```
+## Arch Linux
 
-Running the script with cabal on windows requires a cabal version greater or equal to `3.0.0.0`.
+The preferred method of installation for development purposes is to use the [haskell-language-server-static](https://aur.archlinux.org/packages/haskell-language-server-static) package from AUR.
+This package contains statically linked binaries for each supported GHC version and `haskell-language-server-wrapper` for automatic GHC version selection.
+It is updated regularly, requires no additional dependencies, and is independent of other haskell packages you may have on your system, including GHC.
+Its size is relatively large (approx. 900 MB), but if this is a problem for you, during installation you can disable the GHC versions you will not be using by editing the PKGBUILD file.
 
-For brevity, only the `stack`-based commands are presented in the following sections.
-
-### Install specific GHC Version
-
-The script will install the executables `haskell-language-server-wrapper` and `haskell-language-server`.
-
-It will copy the latter appending the used ghc version, needed by the wrapper to choose the suitable version
-for the project at hand.
-
-So installing the executables directly with `stack install` or `cabal v2-install` may not be enough
-for it to work properly.
-
-Install haskell-language-server for the latest available and supported GHC version (and hoogle docs):
+Alternatively, if you want to use **dynamically linked** Haskell packages from `pacman`,
+you can install the latest pre-compiled version of `haskell-language-server` from [[community]](https://archlinux.org/packages/community/x86_64/haskell-language-server/):
 
 ```bash
-stack ./install.hs hls
+sudo pacman -S haskell-language-server
 ```
 
-Install haskell-language-server for a specific GHC version (and hoogle docs):
+In this case, `haskell-language-server` is compiled against the GHC distributed to Arch Linux, so you will need maintain a system wide Haskell development environment, and install GHC from `pacman` as well.
+See [ArchWiki](https://wiki.archlinux.org/index.php/Haskell) for the details of Haskell infrastructure on Arch Linux.
+
+## Fedora
+
+Binary packages for Fedora are available from [this Copr repo](https://copr.fedorainfracloud.org/coprs/petersen/haskell-language-server),
+built against the official Fedora ghc package.
+
+## FreeBSD
+
+HLS is available for installation from official binary packages. Use
 
 ```bash
-stack ./install.hs hls-8.10.7
+pkg install hs-haskell-language-server
 ```
 
-`hls-8.10.7` target will build the project and install `haskell-language-server-wrapper`,
-`haskell-language-server` and `haskell-language-server-8.10.7` executables.
-
-The Haskell Language Server can also be built with `cabal v2-build` instead of `stack build`.
-This has the advantage that you can decide how the GHC versions have been installed.
-To see what GHC versions are available, the command `cabal-hls-install ghcs` can be used.
-It will list all *supported* GHC versions that are on the path for build with their respective installation directory.
-If you think, this list is incomplete, you can try to modify the PATH variable, such that the executables can be found.
-Note, that the targets `hls` and `data` depend on the found GHC versions.
-
-An example output is:
-
-```bash
-> ./cabal-hls-install ghcs
-******************************************************************
-Found the following GHC paths:
-ghc-8.6.5: /opt/bin/ghc-8.6.5
-ghc-8.8.4: /opt/bin/ghc-8.8.4
-
-******************************************************************
-```
-
-If your desired ghc has been found, you use it to install haskell-language-server.
-
-```bash
-./cabal-hls-install hls-8.6.5
-```
+to install it. At the moment, HLS installed this way only supports the same GHC
+version as the ports one.
 
 ## Installation from Hackage
 
