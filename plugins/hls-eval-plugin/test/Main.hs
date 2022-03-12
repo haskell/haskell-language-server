@@ -76,7 +76,8 @@ tests =
            | ghcVersion == GHC90 -> "-- No instance for (Num String) arising from a use of ‘+’"
            | otherwise -> "-- No instance for (Num [Char]) arising from a use of ‘+’"
       evalInFile "T8.hs" "-- >>> \"" "-- lexical error in string/character literal at end of input"
-      evalInFile "T8.hs" "-- >>> 3 `div` 0" "-- divide by zero"
+      evalInFile "T8.hs" "-- >>> 3 `div` 0" "-- *** Exception: divide by zero"
+  , goldenWithEval "Evaluates to exception" "TException" "hs"
   , goldenWithEval "Applies file LANGUAGE extensions" "T9" "hs"
   , goldenWithEval' "Evaluate a type with :kind!" "T10" "hs" (if ghcVersion == GHC92 then "ghc92.expected" else "expected")
   , goldenWithEval' "Reports an error for an incorrect type with :kind!" "T11" "hs" (if ghcVersion == GHC92 then "ghc92.expected" else "expected")
@@ -133,6 +134,7 @@ tests =
   , goldenWithEval "The default language extensions for the eval plugin are the same as those for ghci" "TSameDefaultLanguageExtensionsAsGhci" "hs"
   , goldenWithEval "IO expressions are supported, stdout/stderr output is ignored" "TIO" "hs"
   , goldenWithEval "Property checking" "TProperty" "hs"
+  , goldenWithEval "Property checking with exception" "TPropertyError" "hs"
   , goldenWithEval "Prelude has no special treatment, it is imported as stated in the module" "TPrelude" "hs"
   , goldenWithEval "Don't panic on {-# UNPACK #-} pragma" "TUNPACK" "hs"
   , goldenWithEval "Can handle eval inside nested comment properly" "TNested" "hs"

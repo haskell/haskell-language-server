@@ -27,7 +27,7 @@ import           Control.Applicative             (Alternative ((<|>)))
 import           Control.Arrow                   (second, (>>>))
 import           Control.Exception               (try)
 import qualified Control.Exception               as E
-import           Control.Lens                    (_1, _3, (%~), (<&>), (^.))
+import           Control.Lens                    (_1, _3, ix, (%~), (<&>), (^.))
 import           Control.Monad                   (guard, join, void, when)
 import           Control.Monad.IO.Class          (MonadIO (liftIO))
 import           Control.Monad.Trans             (lift)
@@ -344,7 +344,7 @@ runTests :: Bool -> TEnv -> [(Section, Test)] -> Ghc [TextEdit]
 runTests diff e@(_st, _) tests = do
     df <- getInteractiveDynFlags
     evalSetup
-    when (hasQuickCheck df && needsQuickCheck tests) $ void $ evals e df propSetup
+    when (hasQuickCheck df && needsQuickCheck tests) $ void $ evals True e df propSetup
 
     mapM (processTest e df) tests
   where
@@ -368,7 +368,7 @@ runTests diff e@(_st, _) tests = do
             return $
                 singleLine
                     "Add QuickCheck to your cabal dependencies to run this test."
-    runTest e df test = evals e df (asStatements test)
+    runTest e df test = evals (isProperty test) e df (asStatements test)
 
 asEdit :: Format -> Test -> [Text] -> TextEdit
 asEdit (MultiLine commRange) test resultLines
@@ -429,10 +429,10 @@ Data constructor not in scope: C
 lexical error in string/character literal at end of input
 
 >>> 3 `div` 0
-divide by zero
+*** Exception: divide by zero
 
 >>> error "Something went wrong\nbad times" :: E.SomeException
-Something went wrong
+*** Exception: Something went wrong
 bad times
 
 Or for a value that does not have a Show instance and can therefore not be displayed:
@@ -440,8 +440,8 @@ Or for a value that does not have a Show instance and can therefore not be displ
 >>> V
 No instance for (Show V)
 -}
-evals :: TEnv -> DynFlags -> [Statement] -> Ghc [Text]
-evals (st, fp) df stmts = do
+evals :: Bool -> TEnv -> DynFlags -> [Statement] -> Ghc [Text]
+evals property (st, fp) df stmts = do
     er <- gStrictTry $ mapM eval stmts
     return $ case er of
         Left err -> errorLines err
@@ -488,9 +488,9 @@ evals (st, fp) df stmts = do
             do
                 dbg "{STMT " stmt
                 res <- exec stmt l
-                r <- case res of
-                    Left err -> return . Just . errorLines $ err
-                    Right x  -> return $ singleLine <$> x
+                let r = case res of
+                        Left err -> Just . (if property then errorLines else exceptionLines) $ err
+                        Right x  -> singleLine <$> x
                 dbg "STMT} -> " r
                 return r
         | -- An import
@@ -555,6 +555,15 @@ errorLines =
         . takeWhile (not . ("CallStack" `T.isPrefixOf`))
         . T.lines
         . T.pack
+
+{- |
+ Convert exception messages to a list of text lines
+ Remove unnecessary information and mark it as exception.
+ We use '*** Exception:' to make it identical to doctest
+ output, see #2353.
+-}
+exceptionLines :: String -> [Text]
+exceptionLines = (ix 0 %~ ("*** Exception: " <>)) . errorLines
 
 {- |
 >>> map (pad_ (T.pack "--")) (map T.pack ["2+2",""])
