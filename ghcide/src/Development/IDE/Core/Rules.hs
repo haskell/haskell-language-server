@@ -150,6 +150,7 @@ import Control.Concurrent.STM.Stats (atomically)
 import Language.LSP.Server (LspT)
 import System.Info.Extra (isWindows)
 import HIE.Bios.Ghc.Gap (hostIsDynamic)
+import Language.Haskell.GHC.ExactPrint (Comment)
 
 templateHaskellInstructions :: T.Text
 templateHaskellInstructions = "https://haskell-language-server.readthedocs.io/en/latest/troubleshooting.html#static-binaries"
@@ -281,20 +282,27 @@ mergeParseErrorsHaddock normal haddock = normal ++
 -- including keywords, punctuation and comments.
 -- So it is suitable for use cases where you need a perfect edit.
 getParsedModuleWithCommentsRule :: Rules ()
-getParsedModuleWithCommentsRule =
+getParsedModuleWithCommentsRule = do
   -- The parse diagnostics are owned by the GetParsedModule rule
   -- For this reason, this rule does not produce any diagnostics
-  defineNoDiagnostics $ \GetParsedModuleWithComments file -> do
-    ModSummaryResult{msrModSummary = ms} <- use_ GetModSummary file
-    sess <- use_ GhcSession file
-    opt <- getIdeOptions
+    defineNoDiagnostics $ \GetParsedModuleWithExtraComments file -> do
+        ModSummaryResult{msrModSummary = ms} <- use_ GetModSummary file
+        sess <- use_ GhcSession file
+        opt <- getIdeOptions
 
-    let ms' = withoutOption Opt_Haddock $ withOption Opt_KeepRawTokenStream ms
-    modify_dflags <- getModifyDynFlags dynFlagsModifyParser
-    let ms = ms' { ms_hspp_opts = modify_dflags $ ms_hspp_opts ms' }
-        reset_ms pm = pm { pm_mod_summary = ms' }
+        let ms' = withoutOption Opt_Haddock $ withOption Opt_KeepRawTokenStream ms
+        modify_dflags <- getModifyDynFlags dynFlagsModifyParser
+        let ms = ms' { ms_hspp_opts = modify_dflags $ ms_hspp_opts ms' }
+            reset_ms pm = pm { pm_mod_summary = ms' }
 
-    liftIO $ fmap (fmap reset_ms) $ snd <$> getParsedModuleDefinition (hscEnv sess) opt file ms
+        (_, pm) <- liftIO $ getParsedModuleDefinitionWithComments (hscEnv sess) opt file ms
+        pure $ case pm of
+            Nothing -> Nothing
+            Just (ParsedModuleWithExtraComments pm' extraComments) ->
+                Just $ ParsedModuleWithExtraComments (reset_ms pm') extraComments
+
+    defineNoDiagnostics $ \GetParsedModuleWithComments file ->
+        Just . (\(ParsedModuleWithExtraComments pm _) -> pm) <$> use_ GetParsedModuleWithExtraComments file
 
 getModifyDynFlags :: (DynFlagsModifications -> a) -> Action a
 getModifyDynFlags f = do
@@ -303,17 +311,25 @@ getModifyDynFlags f = do
   pure $ f $ optModifyDynFlags opts cfg
 
 
+getParsedModuleDefinitionWithComments
+    :: HscEnv
+    -> IdeOptions
+    -> NormalizedFilePath
+    -> ModSummary
+    -> IO ([FileDiagnostic], Maybe ParsedModuleWithExtraComments)
+getParsedModuleDefinitionWithComments packageState opt file ms = do
+    let fp = fromNormalizedFilePath file
+    parseModule opt packageState fp ms
+
 getParsedModuleDefinition
     :: HscEnv
     -> IdeOptions
     -> NormalizedFilePath
-    -> ModSummary -> IO ([FileDiagnostic], Maybe ParsedModule)
+    -> ModSummary
+    -> IO ([FileDiagnostic], Maybe ParsedModule)
 getParsedModuleDefinition packageState opt file ms = do
-    let fp = fromNormalizedFilePath file
-    (diag, res) <- parseModule opt packageState fp ms
-    case res of
-        Nothing   -> pure (diag, Nothing)
-        Just modu -> pure (diag, Just modu)
+    (diag, pm) <- getParsedModuleDefinitionWithComments packageState opt file ms
+    pure (diag, (\(ParsedModuleWithExtraComments pm _) -> pm) <$> pm)
 
 getLocatedImportsRule :: Rules ()
 getLocatedImportsRule =

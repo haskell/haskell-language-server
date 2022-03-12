@@ -384,7 +384,7 @@ cacheDataProducer uri env curMod globalEnv inScopeEnv limports = do
                 -- we don't want to extend import if it's already in scope
                 guard . null $ lookupGRE_Name inScopeEnv n
                 -- or if it doesn't have a real location
-                loc <- realSpan $ is_dloc spec
+                loc <- realSpan $ is_dloc spec
                 Map.lookup loc importMap
           compItem <- toCompItem par curMod (ppr $ is_mod spec) n originalImportDecl
           let unqual

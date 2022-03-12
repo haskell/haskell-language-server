@@ -35,7 +35,7 @@ import           Development.IDE.Core.Preprocessor
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Error
-import           Development.IDE.GHC.Orphans       ()
+import           Development.IDE.GHC.Orphans                ()
 import           Development.IDE.GHC.Util
 import           Development.IDE.GHC.Warnings
 import           Development.IDE.Spans.Common
@@ -43,21 +43,26 @@ import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 
-import           Development.IDE.GHC.Compat        hiding (loadInterface,
-                                                    parseHeader, parseModule,
-                                                    tcRnModule, writeHieFile)
-import qualified Development.IDE.GHC.Compat        as Compat
-import qualified Development.IDE.GHC.Compat        as GHC
-import qualified Development.IDE.GHC.Compat.Util   as Util
+import           Development.IDE.GHC.Compat                 hiding
+                                                            (loadInterface,
+                                                             parseHeader,
+                                                             parseModule,
+                                                             tcRnModule,
+                                                             writeHieFile)
+import qualified Development.IDE.GHC.Compat                 as Compat
+import qualified Development.IDE.GHC.Compat                 as GHC
+import qualified Development.IDE.GHC.Compat.Util            as Util
 
 import           HieDb
 
-import           Language.LSP.Types                (DiagnosticTag (..))
+import           Language.LSP.Types                         (DiagnosticTag (..))
 
 #if MIN_VERSION_ghc(8,10,0)
-import           Control.DeepSeq                   (force, liftRnf, rnf, rwhnf)
+import           Control.DeepSeq                            (force, liftRnf,
+                                                             rnf, rwhnf)
 #else
-import           Control.DeepSeq                   (liftRnf, rnf, rwhnf)
+import           Control.DeepSeq                            (liftRnf, rnf,
+                                                             rwhnf)
 import           ErrUtils
 #endif
 
@@ -69,59 +74,63 @@ import           TcSplice
 #endif
 
 #if MIN_VERSION_ghc(9,2,0)
-import qualified GHC.Types.Error                   as Error
+import qualified GHC.Types.Error                            as Error
 #endif
 
-import           Control.Exception                 (evaluate)
+import           Control.Exception                          (evaluate)
 import           Control.Exception.Safe
-import           Control.Lens                      hiding (List)
+import           Control.Lens                               hiding (List)
 import           Control.Monad.Except
 import           Control.Monad.Extra
 import           Control.Monad.Trans.Except
-import           Data.Bifunctor                    (first, second)
-import qualified Data.ByteString                   as BS
-import qualified Data.DList                        as DL
+import           Data.Bifunctor                             (first, second)
+import qualified Data.ByteString                            as BS
+import qualified Data.DList                                 as DL
 import           Data.IORef
-import qualified Data.IntMap.Strict                as IntMap
+import qualified Data.IntMap.Strict                         as IntMap
 import           Data.List.Extra
-import qualified Data.Map.Strict                   as Map
+import qualified Data.Map.Strict                            as Map
 import           Data.Maybe
-import qualified Data.Text                         as T
-import           Data.Time                         (UTCTime, getCurrentTime)
-import qualified GHC.LanguageExtensions            as LangExt
+import qualified Data.Text                                  as T
+import           Data.Time                                  (UTCTime,
+                                                             getCurrentTime)
+import qualified GHC.LanguageExtensions                     as LangExt
 import           System.Directory
 import           System.FilePath
-import           System.IO.Extra                   (fixIO, newTempFileWithin)
+import           System.IO.Extra                            (fixIO,
+                                                             newTempFileWithin)
 
--- GHC API imports
 -- GHC API imports
 #if MIN_VERSION_ghc(9,2,0)
-import           GHC                               (Anchor (anchor),
-                                                    EpaComment (EpaComment),
-                                                    EpaCommentTok (EpaBlockComment, EpaLineComment),
-                                                    epAnnComments,
-                                                    priorComments)
-import           GHC.Hs                            (LEpaComment)
+import           GHC                                        (Anchor (anchor),
+                                                             EpaComment (EpaComment),
+                                                             EpaCommentTok (EpaBlockComment, EpaLineComment),
+                                                             epAnnComments,
+                                                             priorComments)
+import           GHC.Hs                                     (LEpaComment)
 #endif
-import           GHC                               (GetDocsFailure (..),
-                                                    mgModSummaries,
-                                                    parsedSource)
+import           GHC                                        (GetDocsFailure (..),
+                                                             mgModSummaries,
+                                                             parsedSource)
 
 import           Control.Concurrent.Extra
-import           Control.Concurrent.STM.Stats      hiding (orElse)
-import           Data.Aeson                        (toJSON)
+import           Control.Concurrent.STM.Stats               hiding (orElse)
+import           Data.Aeson                                 (toJSON)
 import           Data.Binary
 import           Data.Coerce
 import           Data.Functor
-import qualified Data.HashMap.Strict               as HashMap
-import           Data.IntMap                       (IntMap)
-import           Data.Map                          (Map)
-import           Data.Tuple.Extra                  (dupe)
-import           Data.Unique                       as Unique
-import           Development.IDE.Core.Tracing      (withTrace)
-import           Development.IDE.GHC.Compat.Util   (emptyUDFM, plusUDFM_C)
-import qualified Language.LSP.Server               as LSP
-import qualified Language.LSP.Types                as LSP
+import qualified Data.HashMap.Strict                        as HashMap
+import           Data.IntMap                                (IntMap)
+import           Data.Map                                   (Map)
+import           Data.Tuple.Extra                           (dupe)
+import           Data.Unique                                as Unique
+import           Development.IDE.Core.Tracing               (withTrace)
+import           Development.IDE.GHC.Compat.Util            (emptyUDFM,
+                                                             plusUDFM_C,
+                                                             stringToStringBuffer)
+import           Language.Haskell.GHC.ExactPrint.Preprocess (stripLinePragmas)
+import qualified Language.LSP.Server                        as LSP
+import qualified Language.LSP.Types                         as LSP
 import           Unsafe.Coerce
 
 -- | Given a string buffer, return the string (after preprocessing) and the 'ParsedModule'.
@@ -130,7 +139,7 @@ parseModule
     -> HscEnv
     -> FilePath
     -> ModSummary
-    -> IO (IdeResult ParsedModule)
+    -> IO (IdeResult ParsedModuleWithExtraComments)
 parseModule IdeOptions{..} env filename ms =
     fmap (either (, Nothing) id) $
     runExceptT $ do
@@ -423,7 +432,7 @@ hideDiag originalFlags (Reason warning, (nfp, _sh, fd))
   = (Reason warning, (nfp, HideDiag, fd))
 hideDiag _originalFlags t = t
 
--- | Warnings which lead to a diagnostic tag
+-- | Warnings which lead to a diagnostic tag
 unnecessaryDeprecationWarningFlags :: [WarningFlag]
 unnecessaryDeprecationWarningFlags
   = [ Opt_WarnUnusedTopBinds
@@ -872,69 +881,70 @@ parseFileContents
        -> (GHC.ParsedSource -> IdePreprocessedSource)
        -> FilePath  -- ^ the filename (for source locations)
        -> ModSummary
-       -> ExceptT [FileDiagnostic] IO ([FileDiagnostic], ParsedModule)
+       -> ExceptT [FileDiagnostic] IO ([FileDiagnostic], ParsedModuleWithExtraComments)
 parseFileContents env customPreprocessor filename ms = do
-   let loc  = mkRealSrcLoc (Util.mkFastString filename) 1 1
-       dflags = ms_hspp_opts ms
-       contents = fromJust $ ms_hspp_buf ms
-   case unP Compat.parseModule (initParserState (initParserOpts dflags) contents loc) of
-     PFailedWithErrorMessages msgs -> throwE $ diagFromErrMsgs "parser" dflags $ msgs dflags
-     POk pst rdr_module ->
-         let
-             hpm_annotations = mkApiAnns pst
-             (warns, errs) = getMessages' pst dflags
-         in
-           do
-               -- Just because we got a `POk`, it doesn't mean there
-               -- weren't errors! To clarify, the GHC parser
-               -- distinguishes between fatal and non-fatal
-               -- errors. Non-fatal errors are the sort that don't
-               -- prevent parsing from continuing (that is, a parse
-               -- tree can still be produced despite the error so that
-               -- further errors/warnings can be collected). Fatal
-               -- errors are those from which a parse tree just can't
-               -- be produced.
-               unless (null errs) $
-                 throwE $ diagFromErrMsgs "parser" dflags errs
+    let loc  = mkRealSrcLoc (Util.mkFastString filename) 1 1
+        dflags = ms_hspp_opts ms
+        contents = stringBufferToString . fromJust $ ms_hspp_buf ms
+        (contents', extraComments) = stripLinePragmas contents
+    case unP Compat.parseModule (initParserState (initParserOpts dflags) (stringToStringBuffer contents') loc) of
+        PFailedWithErrorMessages msgs -> throwE $ diagFromErrMsgs "parser" dflags $ msgs dflags
+        POk pst rdr_module ->
+            let
+                hpm_annotations = mkApiAnns pst
+                (warns, errs) = getMessages' pst dflags
+            in
+            do
+                -- Just because we got a `POk`, it doesn't mean there
+                -- weren't errors! To clarify, the GHC parser
+                -- distinguishes between fatal and non-fatal
+                -- errors. Non-fatal errors are the sort that don't
+                -- prevent parsing from continuing (that is, a parse
+                -- tree can still be produced despite the error so that
+                -- further errors/warnings can be collected). Fatal
+                -- errors are those from which a parse tree just can't
+                -- be produced.
+                unless (null errs) $
+                    throwE $ diagFromErrMsgs "parser" dflags errs
 
-               -- Ok, we got here. It's safe to continue.
-               let IdePreprocessedSource preproc_warns errs parsed = customPreprocessor rdr_module
+                -- Ok, we got here. It's safe to continue.
+                let IdePreprocessedSource preproc_warns errs parsed = customPreprocessor rdr_module
 
-               unless (null errs) $
-                  throwE $ diagFromStrings "parser" DsError errs
+                unless (null errs) $
+                    throwE $ diagFromStrings "parser" DsError errs
 
-               let preproc_warnings = diagFromStrings "parser" DsWarning preproc_warns
-               parsed' <- liftIO $ applyPluginsParsedResultAction env dflags ms hpm_annotations parsed
+                let preproc_warnings = diagFromStrings "parser" DsWarning preproc_warns
+                parsed' <- liftIO $ applyPluginsParsedResultAction env dflags ms hpm_annotations parsed
 
-               -- To get the list of extra source files, we take the list
-               -- that the parser gave us,
-               --   - eliminate files beginning with '<'.  gcc likes to use
-               --     pseudo-filenames like "<built-in>" and "<command-line>"
-               --   - normalise them (eliminate differences between ./f and f)
-               --   - filter out the preprocessed source file
-               --   - filter out anything beginning with tmpdir
-               --   - remove duplicates
-               --   - filter out the .hs/.lhs source filename if we have one
-               --
-               let n_hspp  = normalise filename
-                   srcs0 = nubOrd $ filter (not . (tmpDir dflags `isPrefixOf`))
-                                  $ filter (/= n_hspp)
-                                  $ map normalise
-                                  $ filter (not . isPrefixOf "<")
-                                  $ map Util.unpackFS
-                                  $ srcfiles pst
-                   srcs1 = case ml_hs_file (ms_location ms) of
-                             Just f  -> filter (/= normalise f) srcs0
-                             Nothing -> srcs0
+                -- To get the list of extra source files, we take the list
+                -- that the parser gave us,
+                --   - eliminate files beginning with '<'.  gcc likes to use
+                --     pseudo-filenames like "<built-in>" and "<command-line>"
+                --   - normalise them (eliminate differences between ./f and f)
+                --   - filter out the preprocessed source file
+                --   - filter out anything beginning with tmpdir
+                --   - remove duplicates
+                --   - filter out the .hs/.lhs source filename if we have one
+                --
+                let n_hspp  = normalise filename
+                    srcs0 = nubOrd $ filter (not . (tmpDir dflags `isPrefixOf`))
+                                    $ filter (/= n_hspp)
+                                    $ map normalise
+                                    $ filter (not . isPrefixOf "<")
+                                    $ map Util.unpackFS
+                                    $ srcfiles pst
+                    srcs1 = case ml_hs_file (ms_location ms) of
+                                Just f  -> filter (/= normalise f) srcs0
+                                Nothing -> srcs0
 
-               -- sometimes we see source files from earlier
-               -- preprocessing stages that cannot be found, so just
-               -- filter them out:
-               srcs2 <- liftIO $ filterM doesFileExist srcs1
+                -- sometimes we see source files from earlier
+                -- preprocessing stages that cannot be found, so just
+                -- filter them out:
+                srcs2 <- liftIO $ filterM doesFileExist srcs1
 
-               let pm = ParsedModule ms parsed' srcs2 hpm_annotations
-                   warnings = diagFromErrMsgs "parser" dflags warns
-               pure (warnings ++ preproc_warnings, pm)
+                let pm = ParsedModule ms parsed' srcs2 hpm_annotations
+                    warnings = diagFromErrMsgs "parser" dflags warns
+                pure (warnings ++ preproc_warnings, ParsedModuleWithExtraComments pm extraComments)
 
 loadHieFile :: Compat.NameCacheUpdater -> FilePath -> IO GHC.HieFile
 loadHieFile ncu f = do

@@ -62,7 +62,7 @@ safeTyThingId _                                = Nothing
 -- Possible documentation for an element in the code
 data SpanDoc
   = SpanDocString HsDocString SpanDocUris
-  | SpanDocText   [T.Text] SpanDocUris
+  | SpanDocText   [T.Text] SpanDocUris
   deriving stock (Eq, Show, Generic)
   deriving anyclass NFData
 

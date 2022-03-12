@@ -47,7 +47,7 @@ module Development.IDE.GHC.ExactPrint
 where
 
 import           Control.Applicative                     (Alternative)
-import           Control.Arrow                           (right, (***))
+import           Control.Arrow                           ((***))
 import           Control.Monad
 import qualified Control.Monad.Fail                      as Fail
 import           Control.Monad.IO.Class                  (MonadIO)
@@ -65,7 +65,6 @@ import           Data.Monoid                             (All (All), getAll)
 import qualified Data.Text                               as T
 import           Data.Traversable                        (for)
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Service            (runAction)
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat              hiding (parseImport,
                                                           parsePattern,
@@ -110,15 +109,16 @@ type instance RuleResult GetAnnotatedParsedSource = Annotated ParsedSource
 -- | Get the latest version of the annotated parse source with comments.
 getAnnotatedParsedSourceRule :: Rules ()
 getAnnotatedParsedSourceRule = define $ \GetAnnotatedParsedSource nfp -> do
-  pm <- use GetParsedModuleWithComments nfp
+  pm <- use GetParsedModuleWithExtraComments nfp
   return ([], fmap annotateParsedSource pm)
 
+annotateParsedSource :: ParsedModuleWithExtraComments -> Annotated ParsedSource
 #if MIN_VERSION_ghc(9,2,0)
-annotateParsedSource :: ParsedModule -> Annotated ParsedSource
-annotateParsedSource (ParsedModule _ ps _ _) = unsafeMkA (makeDeltaAst ps) 0
+annotateParsedSource (ParsedModuleWithExtraComments (ParsedModule _ ps _ _) _) = unsafeMkA (makeDeltaAst ps) 0
 #else
-annotateParsedSource :: ParsedModule -> Annotated ParsedSource
-annotateParsedSource = fixAnns
+annotateParsedSource (ParsedModuleWithExtraComments ParsedModule {..} extraComments) =
+    let ranns = relativiseApiAnnsWithComments extraComments pm_parsed_source pm_annotations
+     in unsafeMkA pm_parsed_source ranns 0
 #endif
 
 ------------------------------------------------------------------------------
@@ -471,13 +471,8 @@ instance p ~ GhcPs => ASTElement AnnListItem (HsExpr p) where
     graft = graftExpr
 
 instance p ~ GhcPs => ASTElement AnnListItem (Pat p) where
-#if __GLASGOW_HASKELL__ == 808
-    parseAST = fmap (fmap $ right $ second dL) . parsePattern
-    maybeParensAST = dL . parenthesizePat appPrec . unLoc
-#else
     parseAST = parsePattern
     maybeParensAST = parenthesizePat appPrec
-#endif
 
 instance p ~ GhcPs => ASTElement AnnListItem (HsType p) where
     parseAST = parseType
@@ -494,16 +489,6 @@ instance p ~ GhcPs => ASTElement AnnListItem (ImportDecl p) where
 instance ASTElement NameAnn RdrName where
     parseAST df fp = parseWith df fp parseIdentifier
     maybeParensAST = id
-
-------------------------------------------------------------------------------
-
-#if !MIN_VERSION_ghc(9,2,0)
--- | Dark magic I stole from retrie. No idea what it does.
-fixAnns :: ParsedModule -> Annotated ParsedSource
-fixAnns ParsedModule {..} =
-    let ranns = relativiseApiAnns pm_parsed_source pm_annotations
-     in unsafeMkA pm_parsed_source ranns 0
-#endif
 
 ------------------------------------------------------------------------------
 

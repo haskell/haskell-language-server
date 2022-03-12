@@ -1,6 +1,7 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
+{-# LANGUAGE CPP                #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleInstances  #-}
 {-# LANGUAGE GADTs              #-}
@@ -45,6 +46,11 @@ import           Development.IDE.Types.Diagnostics
 import           GHC.Serialized                               (Serialized)
 import           Language.LSP.Types                           (Int32,
                                                                NormalizedFilePath)
+#if MIN_VERSION_ghc(9,2,0)
+import           GHC                                          (LEpaComment)
+#else
+import           Language.Haskell.GHC.ExactPrint              (Comment)
+#endif
 
 data LinkableType = ObjectLinkable | BCOLinkable
   deriving (Eq,Ord,Show, Generic)
@@ -69,6 +75,24 @@ type instance RuleResult GetParsedModule = ParsedModule
 -- | The parse tree for the file using GetFileContents,
 -- all comments included using Opt_KeepRawTokenStream
 type instance RuleResult GetParsedModuleWithComments = ParsedModule
+
+type instance RuleResult GetParsedModuleWithExtraComments = ParsedModuleWithExtraComments
+
+data ParsedModuleWithExtraComments = ParsedModuleWithExtraComments !ParsedModule
+#if MIN_VERSION_ghc(9,2,0)
+    ![LEpaComment]
+#else
+    ![Comment]
+    deriving Show
+#endif
+
+#if MIN_VERSION_ghc(9,2,0)
+instance Show ParsedModuleWithExtraComments where
+    show (ParsedModuleWithExtraComments pm _) = show pm
+#endif
+
+instance NFData ParsedModuleWithExtraComments where
+    rnf (ParsedModuleWithExtraComments pm _) = deepseq pm ()
 
 -- | The dependency information produced by following the imports recursively.
 -- This rule will succeed even if there is an error, e.g., a module could not be located,
@@ -355,6 +379,12 @@ data GetParsedModuleWithComments = GetParsedModuleWithComments
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetParsedModuleWithComments
 instance NFData   GetParsedModuleWithComments
+
+data GetParsedModuleWithExtraComments = GetParsedModuleWithExtraComments
+    deriving (Eq, Show, Typeable, Generic)
+
+instance Hashable GetParsedModuleWithExtraComments
+instance NFData GetParsedModuleWithExtraComments
 
 data GetLocatedImports = GetLocatedImports
     deriving (Eq, Show, Typeable, Generic)

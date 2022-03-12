@@ -187,7 +187,7 @@ pattern PFailedWithErrorMessages msgs
 mkPlainErrMsgIfPFailed (PFailed _ pst err) = Just (\dflags -> mkPlainErrMsg dflags pst err)
 mkPlainErrMsgIfPFailed _ = Nothing
 #endif
-{-# COMPLETE PFailedWithErrorMessages #-}
+{-# COMPLETE PFailedWithErrorMessages, POk #-}
 
 supportsHieFiles :: Bool
 supportsHieFiles = True

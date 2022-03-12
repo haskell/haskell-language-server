@@ -14,6 +14,7 @@ module Development.IDE.GHC.Util(
     ParseResult(..), runParser,
     lookupPackageConfig,
     textToStringBuffer,
+    stringBufferToString,
     bytestringToStringBuffer,
     stringBufferToByteString,
     moduleImportPath,
@@ -52,6 +53,7 @@ import           Control.Concurrent
 import           Control.Exception                 as E
 import           Data.Binary.Put                   (Put, runPut)
 import qualified Data.ByteString                   as BS
+import qualified Data.ByteString.Char8             as Char8
 import           Data.ByteString.Internal          (ByteString (..))
 import qualified Data.ByteString.Internal          as BS
 import qualified Data.ByteString.Lazy              as LBS
@@ -115,6 +117,9 @@ lookupPackageConfig unit env =
 --   Currently implemented somewhat inefficiently (if it ever comes up in a profile).
 textToStringBuffer :: T.Text -> StringBuffer
 textToStringBuffer = stringToStringBuffer . T.unpack
+
+stringBufferToString :: StringBuffer -> String
+stringBufferToString = Char8.unpack . stringBufferToByteString
 
 runParser :: DynFlags -> String -> P a -> ParseResult a
 runParser flags str parser = unP parser parseState

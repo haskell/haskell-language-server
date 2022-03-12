@@ -207,7 +207,7 @@ setupHscEnv ideState fp pm = do
         liftIO $
             runAction "expandTHSplice.fallback.ghcSessionDeps" ideState $
                 use_ GhcSessionDeps fp
-    let ps = annotateParsedSource pm
+    let ps = annotateParsedSource (pm, [])
         hscEnv0 = hscEnvWithImportPaths hscEnvEq
         modSum = pm_mod_summary pm
     hscEnv <- liftIO $ setupDynFlagsForGHCiLike hscEnv0 $ ms_hspp_opts modSum

@@ -11,17 +11,17 @@
 
     bench-results
     ├── <git-reference>
-    │   ├── ghc.path                          - path to ghc used to build the binary
-    │   ├── ghcide                            - binary for this version
+    │   ├── ghc.path                          - path to ghc used to build the binary
+    │   ├── ghcide                            - binary for this version
     ├─ <example>
     │   ├── results.csv                           - aggregated results for all the versions
     │   └── <git-reference>
-    │       ├── <experiment>.gcStats.log          - RTS -s output
-    │       ├── <experiment>.csv                  - stats for the experiment
-    │       ├── <experiment>.svg                  - Graph of bytes over elapsed time
-    │       ├── <experiment>.diff.svg             - idem, including the previous version
-    │       ├── <experiment>.log                  - ghcide-bench output
-    │       └── results.csv                       - results of all the experiments for the example
+    │       ├── <experiment>.gcStats.log          - RTS -s output
+    │       ├── <experiment>.csv                  - stats for the experiment
+    │       ├── <experiment>.svg                  - Graph of bytes over elapsed time
+    │       ├── <experiment>.diff.svg             - idem, including the previous version
+    │       ├── <experiment>.log                  - ghcide-bench output
+    │       └── results.csv                       - results of all the experiments for the example
     ├── results.csv        - aggregated results of all the experiments and versions
     └── <experiment>.svg   - graph of bytes over elapsed time, for all the included versions
 
