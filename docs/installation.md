@@ -89,7 +89,7 @@ sudo dnf install libicu-devel ncurses-devel zlib-devel
 
 **Gentoo**
 
-Haskell-language-server is available via the haskell overlay. Follow the instructions [here](https://github.com/gentoo-haskell/gentoo-haskell) to install the overlay, then run:
+Haskell Language Server is available via the Haskell overlay. Follow the instructions [here](https://github.com/gentoo-haskell/gentoo-haskell) to install the overlay, then run:
 
 ```bash
 emerge -av dev-util/haskell-language-server
