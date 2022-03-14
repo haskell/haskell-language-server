@@ -14,6 +14,7 @@ module Ide.Plugin.ExplicitImports
   , descriptorForModules
   , extractMinimalImports
   , within
+  , abbreviateImportTitle
   , Log(..)
   ) where
 
@@ -282,29 +283,7 @@ maxColumns = 120
 generateLens :: PluginId -> Uri -> TextEdit -> IO (Maybe CodeLens)
 generateLens pId uri importEdit@TextEdit {_range, _newText} = do
   let
-      -- The title of the command is ideally the minimal explicit import decl, but
-      -- we don't want to create a really massive code lens (and the decl can be extremely large!).
-      -- So we abbreviate it to fit a max column size, and indicate how many more items are in the list
-      -- after the abbreviation
-
-      -- For starters, we only want one line in the title
-      oneLineText = T.unwords $ T.lines _newText
-      -- Now, split at the max columns, leaving space for the suffix text we're going to add
-      -- (conservatively assuming we won't need to print a number larger than 100)
-      (prefix, suffix) = T.splitAt (maxColumns - (T.length (suffixText 100))) oneLineText
-      -- We also want to truncate the last item so we get a "clean" break, rather than half way through
-      -- something. The conditional here is just because 'breakOnEnd' doesn't give us quite the right thing
-      -- if there are actually no commas.
-      (actualPrefix, extraSuffix) = if T.count "," prefix > 0 then T.breakOnEnd "," prefix else (prefix, "")
-      actualSuffix = extraSuffix <> suffix
-
-      -- The number of additional items is the number of commas+1
-      numAdditionalItems = T.count "," actualSuffix + 1
-      -- We want to make text like this: import Foo (AImport, BImport, ... (30 more items))
-      -- Trailing paren is to match the opening paren from the import list
-      suffixText n = " ... (" <> fromString (show n) <> " more items) )"
-      title = if T.length oneLineText <= maxColumns then oneLineText else actualPrefix <> suffixText numAdditionalItems
-
+      title = abbreviateImportTitle _newText
       -- the code lens has no extra data
       _xdata = Nothing
       -- an edit that replaces the whole declaration with the explicit one
@@ -316,6 +295,38 @@ generateLens pId uri importEdit@TextEdit {_range, _newText} = do
       _command = Just $ mkLspCommand pId importCommandId title _arguments
   -- create and return the code lens
   return $ Just CodeLens {..}
+
+-- | The title of the command is ideally the minimal explicit import decl, but
+-- we don't want to create a really massive code lens (and the decl can be extremely large!).
+-- So we abbreviate it to fit a max column size, and indicate how many more items are in the list
+-- after the abbreviation
+abbreviateImportTitle :: T.Text -> T.Text
+abbreviateImportTitle input =
+  let
+      -- For starters, we only want one line in the title
+      oneLineText = T.unwords $ T.lines input
+      -- Now, split at the max columns, leaving space for the summary text we're going to add
+      -- (conservatively assuming we won't need to print a number larger than 100)
+      (prefix, suffix) = T.splitAt (maxColumns - (T.length (summaryText 100))) oneLineText
+      -- We also want to truncate the last item so we get a "clean" break, rather than half way through
+      -- something. The conditional here is just because 'breakOnEnd' doesn't give us quite the right thing
+      -- if there are actually no commas.
+      (actualPrefix, extraSuffix) = if T.count "," prefix > 0 then T.breakOnEnd "," prefix else (prefix, "")
+      actualSuffix = extraSuffix <> suffix
+
+      -- The number of additional items is the number of commas+1
+      numAdditionalItems = T.count "," actualSuffix + 1
+      -- We want to make text like this: import Foo (AImport, BImport, ... (30 items))
+      -- We also want it to look sensible if we end up splitting in the module name itself,
+      summaryText n = " ... (" <> fromString (show n) <> " items)"
+      -- so we only add a trailing paren if we've split in the export list
+      suffixText = summaryText numAdditionalItems <> if T.count "(" prefix > 0 then ")" else ""
+      title =
+          -- If the original text fits, just use it
+          if T.length oneLineText <= maxColumns
+          then oneLineText
+          else actualPrefix <> suffixText
+  in title
 
 --------------------------------------------------------------------------------
 
