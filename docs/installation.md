@@ -87,6 +87,15 @@ sudo apt install libicu-dev libncurses-dev libgmp-dev zlib1g-dev
 sudo dnf install libicu-devel ncurses-devel zlib-devel
 ```
 
+**Gentoo**
+
+Haskell Language Server is available via the Haskell overlay. Follow the instructions [here](https://github.com/gentoo-haskell/gentoo-haskell) to install the overlay, then run:
+
+```bash
+emerge -av dev-util/haskell-language-server
+```
+Depending on your system setup, you may need to enable the unstable flag for this package before install, and possible also for the dependencies. If you enabled the ~testing versions as explained in the gentoo-haskell overlay instructions, then this won't be necessary.
+
 ### Windows-specific pre-requirements
 
 In order to avoid problems with long paths on Windows you can do either one of the following:

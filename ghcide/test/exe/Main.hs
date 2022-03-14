@@ -5583,8 +5583,7 @@ simpleSubDirectoryTest =
     expectNoMoreDiagnostics 0.5
 
 simpleMultiTest :: TestTree
-simpleMultiTest =  knownBrokenForGhcVersions [GHC92] "#2693" $
-  testCase "simple-multi-test" $ withLongTimeout $ runWithExtraFiles "multi" $ \dir -> do
+simpleMultiTest = testCase "simple-multi-test" $ withLongTimeout $ runWithExtraFiles "multi" $ \dir -> do
     let aPath = dir </> "a/A.hs"
         bPath = dir </> "b/B.hs"
     adoc <- openDoc aPath "haskell"
@@ -5614,7 +5613,7 @@ simpleMultiTest2 = testCase "simple-multi-test2" $ runWithExtraFiles "multi" $ \
 
 -- Now with 3 components
 simpleMultiTest3 :: TestTree
-simpleMultiTest3 = knownBrokenForGhcVersions [GHC92] "#2693" $
+simpleMultiTest3 =
   testCase "simple-multi-test3" $ runWithExtraFiles "multi" $ \dir -> do
     let aPath = dir </> "a/A.hs"
         bPath = dir </> "b/B.hs"
