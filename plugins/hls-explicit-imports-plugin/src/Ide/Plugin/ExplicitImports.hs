@@ -254,7 +254,6 @@ extractMinimalImports (Just hsc) (Just TcModuleResult {..}) = do
       notExported []  _ = True
       notExported exports (L _ ImportDecl{ideclName = L _ name}) =
           not $ any (\e -> ("module " ++ moduleNameString name) == e) exports
-      notExported _ _ = False
 extractMinimalImports _ _ = return ([], Nothing)
 
 mkExplicitEdit :: (ModuleName -> Bool) -> PositionMapping -> LImportDecl GhcRn -> T.Text -> Maybe TextEdit
