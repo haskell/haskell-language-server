@@ -330,6 +330,7 @@ extendImport :: Maybe String -> String -> LImportDecl GhcPs -> Rewrite
 extendImport mparent identifier lDecl@(L l _) =
   Rewrite (locA l) $ \df -> do
     case mparent of
+      -- This will also work for `ImportAllConstructors`
       Just parent -> extendImportViaParent df parent identifier lDecl
       _           -> extendImportTopLevel identifier lDecl
 

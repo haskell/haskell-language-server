@@ -1733,6 +1733,13 @@ data ImportStyle
       --
       -- @P@ and @?@ can be a data type and a constructor, a class and a method,
       -- a class and an associated type/data family, etc.
+
+    | ImportAllConstructors T.Text
+      -- ^ Import all constructors for a specific data type.
+      --
+      -- import M (P(..))
+      --
+      -- @P@ __must__ be a data type.
   deriving Show
 
 importStyles :: IdentInfo -> NonEmpty ImportStyle
@@ -1741,7 +1748,9 @@ importStyles IdentInfo {parent, rendered, isDatacon}
     -- Constructors always have to be imported via their parent data type, but
     -- methods and associated type/data families can also be imported as
     -- top-level exports.
-  = ImportViaParent rendered p :| [ImportTopLevel rendered | not isDatacon]
+  = ImportViaParent rendered p
+      :| [ImportTopLevel rendered | not isDatacon]
+      <> [ImportAllConstructors p | isDatacon]
   | otherwise
   = ImportTopLevel rendered :| []
 
@@ -1750,15 +1759,19 @@ renderImportStyle :: ImportStyle -> T.Text
 renderImportStyle (ImportTopLevel x)   = x
 renderImportStyle (ImportViaParent x p@(T.uncons -> Just ('(', _))) = "type " <> p <> "(" <> x <> ")"
 renderImportStyle (ImportViaParent x p) = p <> "(" <> x <> ")"
+renderImportStyle (ImportAllConstructors p) = p <> "(..)"
 
 -- | Used for extending import lists
 unImportStyle :: ImportStyle -> (Maybe String, String)
 unImportStyle (ImportTopLevel x)    = (Nothing, T.unpack x)
 unImportStyle (ImportViaParent x y) = (Just $ T.unpack y, T.unpack x)
+unImportStyle (ImportAllConstructors x) = (Just $ T.unpack x, "..")
+
 
 quickFixImportKind' :: T.Text -> ImportStyle -> CodeActionKind
 quickFixImportKind' x (ImportTopLevel _) = CodeActionUnknown $ "quickfix.import." <> x <> ".list.topLevel"
 quickFixImportKind' x (ImportViaParent _ _) = CodeActionUnknown $ "quickfix.import." <> x <> ".list.withParent"
+quickFixImportKind' x (ImportAllConstructors _) = CodeActionUnknown $ "quickfix.import." <> x <> ".list.allConstructors"
 
 quickFixImportKind :: T.Text -> CodeActionKind
 quickFixImportKind x = CodeActionUnknown $ "quickfix.import." <> x

@@ -2044,11 +2044,30 @@ suggestImportTests = testGroup "suggest import actions"
       , "qualified Data.Data as T"
       ]                     "f = T.putStrLn"              []                "import qualified Data.Text.IO as T"
     ]
-    , expectFailBecause "importing pattern synonyms is unsupported" $ test True [] "k (Some x) = x" [] "import B (pattern Some)"
+  , expectFailBecause "importing pattern synonyms is unsupported" $ test True [] "k (Some x) = x" [] "import B (pattern Some)"
+  , testGroup "Import with all constructors"
+    [ testCase "new import" $
+        testAllCons
+          []
+          ["import A", "import A (Foo(Foo))", "import A (Foo(..))"]
+    , testCase "extened import" $
+        testAllCons
+          ["import A()"]
+          ["Add Foo(Foo) to the import list of A", "Add Foo(..) to the import list of A"]
+    ]
   ]
   where
     test = test' False
     wantWait = test' True True
+
+    getActions doc defLine waitForCheckProject = do
+      waitForProgressDone
+      _ <- waitForDiagnostics
+      -- there isn't a good way to wait until the whole project is checked atm
+      when waitForCheckProject $ liftIO $ sleep 0.5
+      let range = Range (Position defLine 0) (Position defLine maxBound)
+      getCodeActions doc range
+
     test' waitForCheckProject wanted imps def other newImp = testSessionWithExtraFiles "hover" (T.unpack def) $ \dir -> do
       configureCheckProject waitForCheckProject
       let before = T.unlines $ "module A where" : ["import " <> x | x <- imps] ++ def : other
@@ -2057,13 +2076,7 @@ suggestImportTests = testGroup "suggest import actions"
       liftIO $ writeFileUTF8 (dir </> "hie.yaml") cradle
       liftIO $ writeFileUTF8 (dir </> "B.hs") $ unlines ["{-# LANGUAGE PatternSynonyms #-}", "module B where", "pattern Some x = Just x"]
       doc <- createDoc "Test.hs" "haskell" before
-      waitForProgressDone
-      _diags <- waitForDiagnostics
-      -- there isn't a good way to wait until the whole project is checked atm
-      when waitForCheckProject $ liftIO $ sleep 0.5
-      let defLine = fromIntegral $ length imps + 1
-          range = Range (Position defLine 0) (Position defLine maxBound)
-      actions <- getCodeActions doc range
+      actions <- getActions doc (fromIntegral $ length imps + 1) waitForCheckProject
       if wanted
          then do
              action <- liftIO $ pickActionWithTitle newImp actions
@@ -2072,6 +2085,16 @@ suggestImportTests = testGroup "suggest import actions"
              liftIO $ after @=? contentAfterAction
           else
               liftIO $ [_title | InR CodeAction{_title} <- actions, _title == newImp ] @?= []
+
+    testAllCons imported expected = run' $ \dir -> do
+      configureCheckProject True
+      void $ createDoc (dir </> "A.hs")
+               "haskell"
+               (T.unlines ["module A where", "data Foo = Foo | Bar"])
+      doc <- createDoc (dir </> "Test.hs") "haskell" $ T.unlines (imported ++ ["f = Foo"])
+      actions <- getActions doc (fromIntegral $ length imported) True
+      let titles = [_title | InR CodeAction{_title} <- actions, _title `elem` expected]
+      liftIO $ sort expected @=? sort titles
 
 suggestImportDisambiguationTests :: TestTree
 suggestImportDisambiguationTests = testGroup "suggest import disambiguation actions"
