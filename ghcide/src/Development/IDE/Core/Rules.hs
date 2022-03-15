@@ -1040,6 +1040,7 @@ getLinkableType f = use_ NeedsCompilation f
 
 -- needsCompilationRule :: Rules ()
 needsCompilationRule :: NormalizedFilePath  -> Action (IdeResultNoDiagnosticsEarlyCutoff (Maybe LinkableType))
+needsCompilationRule file | "boot" `isSuffixOf` (fromNormalizedFilePath file) = pure (Just $ encodeLinkableType Nothing, Just Nothing)
 needsCompilationRule file = do
   graph <- useNoFile GetModuleGraph
   res <- case graph of
