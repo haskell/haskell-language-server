@@ -770,8 +770,17 @@ newComponentCache
          -> IO ( [TargetDetails], (IdeResult HscEnvEq, DependencyInfo))
 newComponentCache recorder exts cradlePath cfp hsc_env uids ci = do
     let df = componentDynFlags ci
-    let hscEnv' = hscSetFlags df hsc_env
-                          { hsc_IC = (hsc_IC hsc_env) { ic_dflags = df } }
+    hscEnv' <-
+      -- Add the options for the current component to the HscEnv
+      -- We want to call `setSessionDynFlags` instead of `hscSetFlags`
+      -- because `setSessionDynFlags` also initializes the package database,
+      -- which we need for any changes to the package flags in the dynflags
+      -- to be visible.
+      -- See #2693
+      evalGhcEnv hsc_env $ do
+        _ <- setSessionDynFlags $ df
+        getSession
+
 
     let newFunc = maybe newHscEnvEqPreserveImportPaths newHscEnvEq cradlePath
     henv <- newFunc hscEnv' uids

@@ -117,7 +117,7 @@ jobs:
       # from https://github.com/actions/upload-release-asset/issues/47#issuecomment-659071145
       - name: Upload binaries tarball to the release
         if: ${{ github.event.release.upload_url != '' }}
-        uses: actions/github-script@v2
+        uses: actions/github-script@v6
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |

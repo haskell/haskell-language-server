@@ -12,11 +12,13 @@
 {-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE ViewPatterns          #-}
-{-# OPTIONS_GHC -Wno-orphans   #-}
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiWayIf            #-}
 {-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE StrictData            #-}
+
+{-# OPTIONS_GHC -Wno-orphans   #-}
 
 #ifdef HLINT_ON_GHC_LIB
 #define MIN_GHC_API_VERSION(x,y,z) MIN_VERSION_ghc_lib(x,y,z)
@@ -55,6 +57,7 @@ import           Development.IDE.Core.Rules                         (defineNoFil
                                                                      usePropertyAction)
 import           Development.IDE.Core.Shake                         (getDiagnostics)
 import qualified Refact.Apply                                       as Refact
+import qualified Refact.Types                                       as Refact
 
 #ifdef HLINT_ON_GHC_LIB
 import           Development.IDE.GHC.Compat                         (BufSpan,
@@ -84,7 +87,7 @@ import           System.IO                                          (IOMode (Wri
 import           System.IO.Temp
 #else
 import           Development.IDE.GHC.Compat                         hiding
-                                                                    (setEnv)
+                                                                    (setEnv, (<+>))
 import           GHC.Generics                                       (Associativity (LeftAssociative, NotAssociative, RightAssociative))
 import           Language.Haskell.GHC.ExactPrint.Delta              (deltaOptions)
 import           Language.Haskell.GHC.ExactPrint.Parsers            (postParseTransform)
@@ -93,7 +96,6 @@ import           Language.Haskell.GhclibParserEx.Fixity             as GhclibPar
 import qualified Refact.Fixity                                      as Refact
 #endif
 
-import           Ide.Logger
 import           Ide.Plugin.Config                                  hiding
                                                                     (Config)
 import           Ide.Plugin.Properties
@@ -125,13 +127,21 @@ import           System.Environment                                 (setEnv,
 import           Text.Regex.TDFA.Text                               ()
 -- ---------------------------------------------------------------------
 
-newtype Log
+data Log
   = LogShake Shake.Log
+  | LogApplying NormalizedFilePath (Either String WorkspaceEdit)
+  | LogGeneratedIdeas NormalizedFilePath [[Refact.Refactoring Refact.SrcSpan]]
+  | LogGetIdeas NormalizedFilePath
+  | LogUsingExtensions NormalizedFilePath [String] -- Extension is only imported conditionally, so we just stringify them
   deriving Show
 
 instance Pretty Log where
   pretty = \case
     LogShake log -> pretty log
+    LogApplying fp res -> "Applying hint(s) for" <+> viaShow fp <> ":" <+> viaShow res
+    LogGeneratedIdeas fp ideas -> "Generated hlint ideas for for" <+> viaShow fp <> ":" <+> viaShow ideas
+    LogUsingExtensions fp exts -> "Using extensions for " <+> viaShow fp <> ":" <+> pretty exts
+    LogGetIdeas fp -> "Getting hlint ideas for " <+> viaShow fp 
 
 #ifdef HLINT_ON_GHC_LIB
 -- Reimplementing this, since the one in Development.IDE.GHC.Compat isn't for ghc-lib
@@ -148,8 +158,8 @@ descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeSta
 descriptor recorder plId = (defaultPluginDescriptor plId)
   { pluginRules = rules recorder plId
   , pluginCommands =
-      [ PluginCommand "applyOne" "Apply a single hint" applyOneCmd
-      , PluginCommand "applyAll" "Apply all hints to the file" applyAllCmd
+      [ PluginCommand "applyOne" "Apply a single hint" (applyOneCmd recorder)
+      , PluginCommand "applyAll" "Apply all hints to the file" (applyAllCmd recorder)
       ]
   , pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionProvider
   , pluginConfigDescriptor = defaultConfigDescriptor
@@ -179,7 +189,7 @@ rules recorder plugin = do
   define (cmapWithPrio LogShake recorder) $ \GetHlintDiagnostics file -> do
     config <- getClientConfigAction def
     let hlintOn = pluginEnabledConfig plcDiagnosticsOn plugin config
-    ideas <- if hlintOn then getIdeas file else return (Right [])
+    ideas <- if hlintOn then getIdeas recorder file else return (Right [])
     return (diagnostics file ideas, Just ())
 
   defineNoFile (cmapWithPrio LogShake recorder) $ \GetHlintSettings -> do
@@ -247,9 +257,9 @@ rules recorder plugin = do
         }
       srcSpanToRange (UnhelpfulSpan _) = noRange
 
-getIdeas :: NormalizedFilePath -> Action (Either ParseError [Idea])
-getIdeas nfp = do
-  debugm $ "hlint:getIdeas:file:" ++ show nfp
+getIdeas :: Recorder (WithPriority Log) -> NormalizedFilePath -> Action (Either ParseError [Idea])
+getIdeas recorder nfp = do
+  logWith recorder Debug $ LogGetIdeas nfp
   (flags, classify, hint) <- useNoFile_ GetHlintSettings
 
   let applyHints' (Just (Right modEx)) = Right $ applyHints classify hint [modEx]
@@ -295,7 +305,7 @@ getIdeas nfp = do
 
         setExtensions flags = do
           hlintExts <- getExtensions nfp
-          debugm $ "hlint:getIdeas:setExtensions:" ++ show hlintExts
+          logWith recorder Debug $ LogUsingExtensions nfp (fmap show hlintExts)
           return $ flags { enabledExtensions = hlintExts }
 
 -- Gets extensions from ModSummary dynflags for the file.
@@ -469,15 +479,14 @@ mkSuppressHintTextEdits dynFlags fileContents hint =
     combinedTextEdit : lineSplitTextEditList
 -- ---------------------------------------------------------------------
 
-applyAllCmd :: CommandFunction IdeState Uri
-applyAllCmd ide uri = do
+applyAllCmd :: Recorder (WithPriority Log) -> CommandFunction IdeState Uri
+applyAllCmd recorder ide uri = do
   let file = maybe (error $ show uri ++ " is not a file.")
                     toNormalizedFilePath'
                    (uriToFilePath' uri)
   withIndefiniteProgress "Applying all hints" Cancellable $ do
-    logm $ "hlint:applyAllCmd:file=" ++ show file
-    res <- liftIO $ applyHint ide file Nothing
-    logm $ "hlint:applyAllCmd:res=" ++ show res
+    res <- liftIO $ applyHint recorder ide file Nothing
+    logWith recorder Debug $ LogApplying file res
     case res of
       Left err -> pure $ Left (responseError (T.pack $ "hlint:applyAll: " ++ show err))
       Right fs -> do
@@ -500,34 +509,33 @@ data OneHint = OneHint
   , oneHintTitle :: HintTitle
   } deriving (Eq, Show)
 
-applyOneCmd :: CommandFunction IdeState ApplyOneParams
-applyOneCmd ide (AOP uri pos title) = do
+applyOneCmd :: Recorder (WithPriority Log) -> CommandFunction IdeState ApplyOneParams
+applyOneCmd recorder ide (AOP uri pos title) = do
   let oneHint = OneHint pos title
   let file = maybe (error $ show uri ++ " is not a file.") toNormalizedFilePath'
                    (uriToFilePath' uri)
   let progTitle = "Applying hint: " <> title
   withIndefiniteProgress progTitle Cancellable $ do
-    logm $ "hlint:applyOneCmd:file=" ++ show file
-    res <- liftIO $ applyHint ide file (Just oneHint)
-    logm $ "hlint:applyOneCmd:res=" ++ show res
+    res <- liftIO $ applyHint recorder ide file (Just oneHint)
+    logWith recorder Debug $ LogApplying file res
     case res of
       Left err -> pure $ Left (responseError (T.pack $ "hlint:applyOne: " ++ show err))
       Right fs -> do
         _ <- sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing fs) (\_ -> pure ())
         pure $ Right Null
 
-applyHint :: IdeState -> NormalizedFilePath -> Maybe OneHint -> IO (Either String WorkspaceEdit)
-applyHint ide nfp mhint =
+applyHint :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> Maybe OneHint -> IO (Either String WorkspaceEdit)
+applyHint recorder ide nfp mhint =
   runExceptT $ do
     let runAction' :: Action a -> IO a
         runAction' = runAction "applyHint" ide
     let errorHandlers = [ Handler $ \e -> return (Left (show (e :: IOException)))
                         , Handler $ \e -> return (Left (show (e :: ErrorCall)))
                         ]
-    ideas <- bimapExceptT showParseError id $ ExceptT $ runAction' $ getIdeas nfp
+    ideas <- bimapExceptT showParseError id $ ExceptT $ runAction' $ getIdeas recorder nfp
     let ideas' = maybe ideas (`filterIdeas` ideas) mhint
     let commands = map ideaRefactoring ideas'
-    liftIO $ logm $ "applyHint:apply=" ++ show commands
+    logWith recorder Debug $ LogGeneratedIdeas nfp commands
     let fp = fromNormalizedFilePath nfp
     (_, mbOldContent) <- liftIO $ runAction' $ getFileContents nfp
     oldContent <- maybe (liftIO $ fmap T.decodeUtf8 (BS.readFile fp)) return mbOldContent
@@ -584,7 +592,6 @@ applyHint ide nfp mhint =
       Right appliedFile -> do
         let uri = fromNormalizedUri (filePathToUri' nfp)
         let wsEdit = diffText' True (uri, oldContent) (T.pack appliedFile) IncludeDeletions
-        liftIO $ logm $ "hlint:applyHint:diff=" ++ show wsEdit
         ExceptT $ return (Right wsEdit)
       Left err ->
         throwE err

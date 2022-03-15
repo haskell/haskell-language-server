@@ -48,11 +48,11 @@ import qualified Data.Aeson                      as A
 import           Data.ByteString.Lazy            (ByteString)
 import           Data.Default                    (def)
 import           Data.Maybe                      (fromMaybe)
+import qualified Data.Map                        as M
 import qualified Data.Text                       as T
 import qualified Data.Text.Lazy                  as TL
 import qualified Data.Text.Lazy.Encoding         as TL
 import           Development.IDE                 (IdeState)
-import           Development.IDE.Graph           (ShakeOptions (shakeThreads))
 import           Development.IDE.Main            hiding (Log)
 import qualified Development.IDE.Main            as Ghcide
 import qualified Development.IDE.Main            as IDEMain
@@ -69,7 +69,7 @@ import           Development.IDE.Types.Logger    (Logger (Logger),
 import           Development.IDE.Types.Options
 import           GHC.IO.Handle
 import           GHC.Stack                       (emptyCallStack)
-import           Ide.Plugin.Config               (Config, formattingProvider)
+import           Ide.Plugin.Config               (Config, formattingProvider, PluginConfig, plugins)
 import           Ide.PluginUtils                 (idePluginsToPluginDesc,
                                                   pluginDescToIdePlugins)
 import           Ide.Types
@@ -132,6 +132,7 @@ goldenWithHaskellDoc plugin title testDataDir path desc ext act =
 goldenWithHaskellDocFormatter
   :: PluginDescriptor IdeState
   -> String
+  -> PluginConfig
   -> TestName
   -> FilePath
   -> FilePath
@@ -139,9 +140,9 @@ goldenWithHaskellDocFormatter
   -> FilePath
   -> (TextDocumentIdentifier -> Session ())
   -> TestTree
-goldenWithHaskellDocFormatter plugin formatter title testDataDir path desc ext act =
+goldenWithHaskellDocFormatter plugin formatter conf title testDataDir path desc ext act =
   goldenGitDiff title (testDataDir </> path <.> desc <.> ext)
-  $ runSessionWithServerFormatter plugin formatter testDataDir
+  $ runSessionWithServerFormatter plugin formatter conf testDataDir
   $ TL.encodeUtf8 . TL.fromStrict
   <$> do
     doc <- openDoc (path <.> ext) "haskell"
@@ -152,11 +153,14 @@ goldenWithHaskellDocFormatter plugin formatter title testDataDir path desc ext a
 runSessionWithServer :: PluginDescriptor IdeState -> FilePath -> Session a -> IO a
 runSessionWithServer plugin = runSessionWithServer' [plugin] def def fullCaps
 
-runSessionWithServerFormatter :: PluginDescriptor IdeState -> String -> FilePath -> Session a -> IO a
-runSessionWithServerFormatter plugin formatter =
+runSessionWithServerFormatter :: PluginDescriptor IdeState -> String -> PluginConfig -> FilePath -> Session a -> IO a
+runSessionWithServerFormatter plugin formatter conf =
   runSessionWithServer'
     [plugin]
-    def {formattingProvider = T.pack formatter}
+    def
+      { formattingProvider = T.pack formatter
+      , plugins = M.singleton (T.pack formatter) conf
+      }
     def
     fullCaps
 
@@ -208,11 +212,10 @@ runSessionWithServer' plugins conf sconf caps root s = withLock lock $ keepCurre
       ++ [Test.blockCommandDescriptor "block-command", Test.plugin]
       ++ plugins
     ideOptions = \config ghcSession ->
-      let defIdeOptions@IdeOptions{ optShakeOptions } = argsIdeOptions config ghcSession
+      let defIdeOptions = argsIdeOptions config ghcSession
       in defIdeOptions
            { optTesting = IdeTesting True
            , optCheckProject = pure False
-           , optShakeOptions = optShakeOptions{ shakeThreads = 2 }
            }
 
   server <-

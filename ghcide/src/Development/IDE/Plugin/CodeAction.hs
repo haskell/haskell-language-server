@@ -1529,14 +1529,22 @@ mkRenameEdit contents range name =
       curr <- textInRange range <$> contents
       pure $ "`" `T.isPrefixOf` curr && "`" `T.isSuffixOf` curr
 
+
+-- | Extract the type and surround it in parentheses except in obviously safe cases.
+--
+-- Inferring when parentheses are actually needed around the type signature would
+-- require understanding both the precedence of the context of the hole and of
+-- the signature itself. Inserting them (almost) unconditionally is ugly but safe.
 extractWildCardTypeSignature :: T.Text -> T.Text
-extractWildCardTypeSignature =
-  -- inferring when parens are actually needed around the type signature would
-  -- require understanding both the precedence of the context of the _ and of
-  -- the signature itself. Inserting them unconditionally is ugly but safe.
-  ("(" `T.append`) . (`T.append` ")") .
-  T.takeWhile (/='’') . T.dropWhile (=='‘') . T.dropWhile (/='‘') .
-  snd . T.breakOnEnd "standing for "
+extractWildCardTypeSignature msg = (if enclosed || not application then id else bracket) signature
+  where
+    msgSigPart = snd $ T.breakOnEnd "standing for " msg
+    signature = T.takeWhile (/='’') . T.dropWhile (=='‘') . T.dropWhile (/='‘') $ msgSigPart
+    -- parenthesize type applications, e.g. (Maybe Char)
+    application = any isSpace . T.unpack $ signature
+    -- do not add extra parentheses to lists, tuples and already parenthesized types
+    enclosed = not (T.null signature) && (T.head signature, T.last signature) `elem` [('(',')'), ('[',']')]
+    bracket = ("(" `T.append`) . (`T.append` ")")
 
 extractRenamableTerms :: T.Text -> [T.Text]
 extractRenamableTerms msg

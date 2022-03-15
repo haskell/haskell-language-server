@@ -17,7 +17,7 @@ module Development.IDE.Types.Options
   , IdeGhcSession(..)
   , OptHaddockParse(..)
   , ProgressReportingStyle(..)
-  ,optShakeFiles) where
+  ) where
 
 import qualified Data.Text                         as T
 import           Data.Typeable
@@ -85,13 +85,6 @@ data IdeOptions = IdeOptions
       -- ^ Experimental feature to re-run only the subset of the Shake graph that has changed
   }
 
-optShakeFiles :: IdeOptions -> Maybe FilePath
-optShakeFiles opts
-  | value == defValue = Nothing
-  | otherwise = Just value
-  where
-    value = shakeFiles (optShakeOptions opts)
-    defValue = shakeFiles (optShakeOptions $ defaultIdeOptions undefined)
 data OptHaddockParse = HaddockParse | NoHaddockParse
   deriving (Eq,Ord,Show,Enum)
 
@@ -127,9 +120,6 @@ defaultIdeOptions session = IdeOptions
     ,optExtensions = ["hs", "lhs"]
     ,optPkgLocationOpts = defaultIdePkgLocationOptions
     ,optShakeOptions = shakeOptions
-        {shakeThreads = 0
-        ,shakeFiles = "/dev/null"
-        }
     ,optShakeProfiling = Nothing
     ,optOTMemoryProfiling = IdeOTMemoryProfiling False
     ,optReportProgress = IdeReportProgress False
