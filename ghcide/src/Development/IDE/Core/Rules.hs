@@ -768,7 +768,7 @@ getModIfaceFromDiskRule recorder = defineEarlyCutoff (cmapWithPrio LogShake reco
     Just session -> do
       linkableType <- getLinkableType f
       ver <- use_ GetModificationTime f
-      ShakeExtras{ideNc} <- getShakeExtras
+      se@ShakeExtras{ideNc} <- getShakeExtras
       let m_old = case old of
             Shake.Succeeded (Just old_version) v -> Just (v, old_version)
             Shake.Stale _   (Just old_version) v -> Just (v, old_version)
@@ -779,7 +779,7 @@ getModIfaceFromDiskRule recorder = defineEarlyCutoff (cmapWithPrio LogShake reco
             , get_file_version = use GetModificationTime_{missingFileDiagnostics = False}
             , regenerate = regenerateHiFile session f ms
             }
-      r <- loadInterface (hscEnv session) ms linkableType recompInfo
+      r <- loadInterface se (hscEnv session) ms linkableType recompInfo
       case r of
         (diags, Nothing) -> return (Nothing, (diags, Nothing))
         (diags, Just x) -> do
@@ -904,7 +904,7 @@ getModIfaceRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ 
       hiDiags <- case hiFile of
         Just hiFile
           | OnDisk <- status
-          , not (tmrDeferedError tmr) -> writeHiFileAction hsc hiFile
+          , not (tmrDeferedError tmr) -> liftIO $ writeHiFile se hsc hiFile
         _ -> pure []
       return (fp, (diags++hiDiags, hiFile))
     NotFOI -> do
@@ -964,6 +964,7 @@ regenerateHiFile sess f ms compNeeded = do
                 let compile = liftIO $ compileModule (RunSimplifier True) hsc (pm_mod_summary pm) $ tmrTypechecked tmr
 
                 se <- getShakeExtras
+
                 -- Bang pattern is important to avoid leaking 'tmr'
 
                 (diags'', !res) <- liftIO $ compileToObjCodeIfNeeded se hsc compNeeded compile tmr
@@ -984,7 +985,7 @@ regenerateHiFile sess f ms compNeeded = do
                     -- We don't write the `.hi` file if there are defered errors, since we won't get
                     -- accurate diagnostics next time if we do
                     hiDiags <- if not $ tmrDeferedError tmr
-                               then writeHiFileAction hsc hiFile
+                               then liftIO $ writeHiFile se hsc hiFile
                                else pure []
 
                     pure (hiDiags <> gDiags <> concat wDiags)
@@ -1111,15 +1112,6 @@ computeLinkableTypeForDynFlags d
 -- | Tracks which linkables are current, so we don't need to unload them
 newtype CompiledLinkables = CompiledLinkables { getCompiledLinkables :: Var (ModuleEnv UTCTime) }
 instance IsIdeGlobal CompiledLinkables
-
-
-writeHiFileAction :: HscEnv -> HiFileResult -> Action [FileDiagnostic]
-writeHiFileAction hsc hiFile = do
-    extras <- getShakeExtras
-    let targetPath = Compat.ml_hi_file $ ms_location $ hirModSummary hiFile
-    liftIO $ do
-        atomically $ resetInterfaceStore extras $ toNormalizedFilePath' targetPath
-        writeHiFile hsc hiFile
 
 data RulesConfig = RulesConfig
     { -- | Disable import cycle checking for improved performance in large codebases

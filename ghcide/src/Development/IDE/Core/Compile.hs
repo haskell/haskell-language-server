@@ -66,6 +66,7 @@ import           Data.Time.Clock.POSIX             (posixSecondsToUTCTime, utcTi
 import           Data.Tuple.Extra                  (dupe)
 import           Data.Unique                       as Unique
 import           Debug.Trace
+import           Development.IDE.Core.FileStore    (resetInterfaceStore)
 import           Development.IDE.Core.Preprocessor
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
@@ -396,7 +397,7 @@ mkHiFileResultCompile se session' tcm simplified_guts ltype = catchErrs $ do
 
   let genLinkable = case ltype of
         ObjectLinkable -> generateObjectCode
-        BCOLinkable    -> generateByteCode WriteCoreFile
+        BCOLinkable    -> generateByteCode se WriteCoreFile
 
   (linkable, details, mguts, diags) <-
     if mg_hsc_src simplified_guts == HsBootFile
@@ -545,8 +546,8 @@ generateObjectCode session summary guts = do
 
 data WriteCoreFile = WriteCoreFile | CoreFileExists !UTCTime
 
-generateByteCode :: WriteCoreFile -> HscEnv -> ModSummary -> CgGuts -> IO (IdeResult Linkable)
-generateByteCode write_core hscEnv summary guts = do
+generateByteCode :: ShakeExtras -> WriteCoreFile -> HscEnv -> ModSummary -> CgGuts -> IO (IdeResult Linkable)
+generateByteCode se write_core hscEnv summary guts = do
     fmap (either (, Nothing) (second Just)) $
           catchSrcErrors (hsc_dflags hscEnv) "bytecode" $ do
               (warnings, (_, bytecode, sptEntries)) <-
@@ -566,7 +567,7 @@ generateByteCode write_core hscEnv summary guts = do
                 WriteCoreFile -> liftIO $ do
                   let core_fp = ml_core_file $ ms_location summary
                       core_file = codeGutsToCoreFile guts
-                  atomicFileWrite core_fp $ \fp ->
+                  atomicFileWrite se core_fp $ \fp ->
                     writeBinCoreFile fp core_file
                   getModificationTime core_fp
               let linkable = LM time (ms_mod summary) [unlinked]
@@ -651,12 +652,14 @@ addRelativeImport :: NormalizedFilePath -> ModuleName -> DynFlags -> DynFlags
 addRelativeImport fp modu dflags = dflags
     {importPaths = nubOrd $ maybeToList (moduleImportPath fp modu) ++ importPaths dflags}
 
-atomicFileWrite :: FilePath -> (FilePath -> IO a) -> IO ()
-atomicFileWrite targetPath write = do
+-- | Also resets the interface store
+atomicFileWrite :: ShakeExtras -> FilePath -> (FilePath -> IO a) -> IO ()
+atomicFileWrite se targetPath write = do
   let dir = takeDirectory targetPath
   createDirectoryIfMissing True dir
   (tempFilePath, cleanUp) <- newTempFileWithin dir
-  (write tempFilePath >> renameFile tempFilePath targetPath) `onException` cleanUp
+  (write tempFilePath >> renameFile tempFilePath targetPath >> atomically (resetInterfaceStore se (toNormalizedFilePath' targetPath)))
+    `onException` cleanUp
 
 generateHieAsts :: HscEnv -> TcModuleResult -> IO ([FileDiagnostic], Maybe (HieASTs Type))
 generateHieAsts hscEnv tcm =
@@ -834,7 +837,7 @@ writeAndIndexHieFile hscEnv se mod_summary srcPath exports ast source =
   handleGenerationErrors dflags "extended interface write/compression" $ do
     hf <- runHsc hscEnv $
       GHC.mkHieFile' mod_summary exports ast source
-    atomicFileWrite targetPath $ flip GHC.writeHieFile hf
+    atomicFileWrite se targetPath $ flip GHC.writeHieFile hf
     hash <- Util.getFileHash targetPath
     indexHieFile se mod_summary srcPath hash hf
   where
@@ -842,10 +845,10 @@ writeAndIndexHieFile hscEnv se mod_summary srcPath exports ast source =
     mod_location = ms_location mod_summary
     targetPath   = Compat.ml_hie_file mod_location
 
-writeHiFile :: HscEnv -> HiFileResult -> IO [FileDiagnostic]
-writeHiFile hscEnv tc =
+writeHiFile :: ShakeExtras -> HscEnv -> HiFileResult -> IO [FileDiagnostic]
+writeHiFile se hscEnv tc =
   handleGenerationErrors dflags "interface write" $ do
-    atomicFileWrite targetPath $ \fp ->
+    atomicFileWrite se targetPath $ \fp ->
       writeIfaceFile hscEnv fp modIface
   where
     modIface = hm_iface $ hirHomeMod tc
@@ -1210,12 +1213,13 @@ ml_core_file ml = ml_hi_file ml <.> "core"
 -- See Note [Recompilation avoidance in the presence of TH]
 loadInterface
   :: (MonadIO m, MonadMask m)
-  => HscEnv
+  => ShakeExtras
+  -> HscEnv
   -> ModSummary
   -> Maybe LinkableType
   -> RecompilationInfo m
   -> m ([FileDiagnostic], Maybe HiFileResult)
-loadInterface session ms linkableNeeded RecompilationInfo{..} = do
+loadInterface se session ms linkableNeeded RecompilationInfo{..} = do
     let sessionWithMsDynFlags = hscSetFlags (ms_hspp_opts ms) session
         mb_old_iface = hm_iface    . hirHomeMod . fst <$> old_value
         mb_old_version = snd <$> old_value
@@ -1309,7 +1313,7 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
              -> do_regenerate msg
              | otherwise -> return ([], Just old_hir)
            Nothing -> do
-             (warns, hmi) <- liftIO $ mkDetailsFromIface sessionWithMsDynFlags ms iface lb
+             (warns, hmi) <- liftIO $ mkDetailsFromIface se sessionWithMsDynFlags ms iface lb
              -- parse the runtime dependencies from the annotations
              let runtime_deps
                    | not (mi_used_th iface) = emptyModuleEnv
@@ -1361,8 +1365,8 @@ showReason UpToDate          = "UpToDate"
 showReason MustCompile       = "MustCompile"
 showReason (RecompBecause s) = s
 
-mkDetailsFromIface :: HscEnv -> ModSummary -> ModIface -> Maybe IdeLinkable -> IO ([FileDiagnostic], HomeModInfo)
-mkDetailsFromIface session ms iface ide_linkable = do
+mkDetailsFromIface :: ShakeExtras -> HscEnv -> ModSummary -> ModIface -> Maybe IdeLinkable -> IO ([FileDiagnostic], HomeModInfo)
+mkDetailsFromIface se session ms iface ide_linkable = do
   details <- liftIO $ fixIO $ \details -> do
     let hsc' = session { hsc_HPT = addToHpt (hsc_HPT session) (moduleName $ mi_module iface) (HomeModInfo iface details Nothing) }
     initIfaceLoad hsc' (typecheckIface iface)
@@ -1371,7 +1375,7 @@ mkDetailsFromIface session ms iface ide_linkable = do
     Just (GhcLinkable lb) -> pure ([], Just lb)
     Just (CoreLinkable t core_file) -> do
       cgi_guts <- coreFileToCgGuts session iface details core_file
-      generateByteCode (CoreFileExists t) session ms cgi_guts
+      generateByteCode se (CoreFileExists t) session ms cgi_guts
 
   return (warns, HomeModInfo iface details linkable)
 
