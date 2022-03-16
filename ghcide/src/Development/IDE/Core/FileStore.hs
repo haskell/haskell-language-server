@@ -151,7 +151,7 @@ getModificationTimeImpl missingFileDiags file = do
 --   But interface files are private, in that only HLS writes them.
 --   So we implement watching ourselves, and bypass the need for alwaysRerun.
 isInterface :: NormalizedFilePath -> Bool
-isInterface f = takeExtension (fromNormalizedFilePath f) `elem` [".hi", ".hi-boot"]
+isInterface f = takeExtension (fromNormalizedFilePath f) `elem` [".hi", ".hi-boot", ".hie", ".hie-boot", ".core"]
 
 -- | Reset the GetModificationTime state of interface files
 resetInterfaceStore :: ShakeExtras -> NormalizedFilePath -> STM ()
