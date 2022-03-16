@@ -1030,39 +1030,9 @@ getLinkableType f = use_ NeedsCompilation f
 needsCompilationRule :: NormalizedFilePath  -> Action (IdeResultNoDiagnosticsEarlyCutoff (Maybe LinkableType))
 needsCompilationRule file | "boot" `isSuffixOf` (fromNormalizedFilePath file) = pure (Just $ encodeLinkableType Nothing, Just Nothing)
 needsCompilationRule file = do
-  graph <- useNoFile GetModuleGraph
-  res <- case graph of
-    -- Treat as False if some reverse dependency header fails to parse
-    Nothing -> pure Nothing
-    Just depinfo -> case immediateReverseDependencies file depinfo of
-      -- If we fail to get immediate reverse dependencies, fail with an error message
-      Nothing -> fail $ "Failed to get the immediate reverse dependencies of " ++ show file
-      Just revdeps -> do
-        -- It's important to use stale data here to avoid wasted work.
-        -- if NeedsCompilation fails for a module M its result will be  under-approximated
-        -- to False in its dependencies. However, if M actually used TH, this will
-        -- cause a re-evaluation of GetModIface for all dependencies
-        -- (since we don't need to generate object code anymore).
-        -- Once M is fixed we will discover that we actually needed all the object code
-        -- that we just threw away, and thus have to recompile all dependencies once
-        -- again, this time keeping the object code.
-        -- A file needs to be compiled if any file that depends on it uses TemplateHaskell or needs to be compiled
-        ms <- msrModSummary . fst <$> useWithStale_ GetModSummaryWithoutTimestamps file
-        (modsums,needsComps) <- liftA2
-            (,) (map (fmap (msrModSummary . fst)) <$> usesWithStale GetModSummaryWithoutTimestamps revdeps)
-                (uses NeedsCompilation revdeps)
-        pure $ computeLinkableType ms modsums (map join needsComps)
-
+  ms <- msrModSummary . fst <$> useWithStale_ GetModSummaryWithoutTimestamps file
+  let res = Just (computeLinkableTypeForDynFlags (ms_hspp_opts ms))
   pure (Just $ encodeLinkableType res, Just res)
-  where
-    computeLinkableType :: ModSummary -> [Maybe ModSummary] -> [Maybe LinkableType] -> Maybe LinkableType
-    computeLinkableType this deps xs
-      | Just ObjectLinkable `elem` xs     = Just ObjectLinkable -- If any dependent needs object code, so do we
-      | Just BCOLinkable    `elem` xs     = Just this_type      -- If any dependent needs bytecode, then we need to be compiled
-      | any (maybe False uses_th_qq) deps = Just this_type      -- If any dependent needs TH, then we need to be compiled
-      | otherwise                         = Nothing             -- If none of these conditions are satisfied, we don't need to compile
-      where
-        this_type = computeLinkableTypeForDynFlags (ms_hspp_opts this)
 
 uses_th_qq :: ModSummary -> Bool
 uses_th_qq (ms_hspp_opts -> dflags) =
