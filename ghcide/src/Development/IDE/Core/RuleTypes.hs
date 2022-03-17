@@ -35,9 +35,7 @@ import           GHC.Generics                                 (Generic)
 
 import qualified Data.Binary                                  as B
 import           Data.ByteString                              (ByteString)
-import qualified Data.ByteString.Lazy                         as LBS
 import           Data.Text                                    (Text)
-import           Data.Time
 import           Development.IDE.Import.FindImports           (ArtifactsLocation)
 import           Development.IDE.Spans.Common
 import           Development.IDE.Spans.LocalBindings
@@ -45,6 +43,8 @@ import           Development.IDE.Types.Diagnostics
 import           GHC.Serialized                               (Serialized)
 import           Language.LSP.Types                           (Int32,
                                                                NormalizedFilePath)
+import           Development.IDE.GHC.CoreFile
+import           Control.Exception                            (assert)
 
 data LinkableType = ObjectLinkable | BCOLinkable
   deriving (Eq,Ord,Show, Generic)
@@ -90,6 +90,26 @@ data GenerateCore = GenerateCore
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GenerateCore
 instance NFData   GenerateCore
+
+type instance RuleResult GetLinkable = LinkableResult
+
+data LinkableResult
+  = LinkableResult
+  { linkableHomeMod :: !HomeModInfo
+  , linkableHash    :: !ByteString
+  -- ^ The hash of the core file
+  }
+
+instance Show LinkableResult where
+    show = show . mi_module . hm_iface . linkableHomeMod
+
+instance NFData LinkableResult where
+    rnf = rwhnf
+
+data GetLinkable = GetLinkable
+    deriving (Eq, Show, Typeable, Generic)
+instance Hashable GetLinkable
+instance NFData   GetLinkable
 
 data GetImportMap = GetImportMap
     deriving (Eq, Show, Typeable, Generic)
@@ -138,9 +158,10 @@ data TcModuleResult = TcModuleResult
     -- ^ Typechecked splice information
     , tmrDeferedError    :: !Bool
     -- ^ Did we defer any type errors for this module?
-    , tmrRuntimeModules  :: !(ModuleEnv UTCTime)
+    , tmrRuntimeModules  :: !(ModuleEnv ByteString)
         -- ^ Which modules did we need at runtime while compiling this file?
         -- Used for recompilation checking in the presence of TH
+        -- Stores the hash of their core file
     }
 instance Show TcModuleResult where
     show = show . pm_mod_summary . tmrParsed
@@ -155,30 +176,29 @@ data HiFileResult = HiFileResult
     { hirModSummary :: !ModSummary
     -- Bang patterns here are important to stop the result retaining
     -- a reference to a typechecked module
-    , hirHomeMod    :: !HomeModInfo
-    -- ^ Includes the Linkable iff we need object files
-    , hirIfaceFp    :: ByteString
+    , hirModIface   :: !ModIface
+    , hirModDetails :: ModDetails
+    -- ^ Populated lazily
+    , hirIfaceFp    :: !ByteString
     -- ^ Fingerprint for the ModIface
-    , hirLinkableFp :: ByteString
-    -- ^ Fingerprint for the Linkable
-    , hirRuntimeModules :: !(ModuleEnv UTCTime)
+    , hirRuntimeModules :: !(ModuleEnv ByteString)
     -- ^ same as tmrRuntimeModules
+    , hirCoreFp     :: !(Maybe (CoreFile, ByteString))
+    -- ^ If we wrote a core file for this module, then its contents (lazily deserialised)
+    -- along with its hash
     }
 
 hiFileFingerPrint :: HiFileResult -> ByteString
-hiFileFingerPrint HiFileResult{..} = hirIfaceFp <> hirLinkableFp
+hiFileFingerPrint HiFileResult{..} = hirIfaceFp <> maybe "" snd hirCoreFp
 
-mkHiFileResult :: ModSummary -> HomeModInfo -> ModuleEnv UTCTime -> HiFileResult
-mkHiFileResult hirModSummary hirHomeMod hirRuntimeModules = HiFileResult{..}
+mkHiFileResult :: ModSummary -> ModIface -> ModDetails -> ModuleEnv ByteString -> Maybe (CoreFile, ByteString) -> HiFileResult
+mkHiFileResult hirModSummary hirModIface hirModDetails hirRuntimeModules hirCoreFp =
+    assert (case hirCoreFp of Just (CoreFile{cf_iface_hash}, _)
+                                -> getModuleHash hirModIface == cf_iface_hash
+                              _ -> True)
+    HiFileResult{..}
   where
-    hirIfaceFp = fingerprintToBS . getModuleHash . hm_iface $ hirHomeMod -- will always be two bytes
-    hirLinkableFp = case hm_linkable hirHomeMod of
-      Nothing -> ""
-      Just (linkableTime -> l)  -> LBS.toStrict $
-        B.encode (fromEnum $ utctDay l, fromEnum $ utctDayTime l)
-
-hirModIface :: HiFileResult -> ModIface
-hirModIface = hm_iface . hirHomeMod
+    hirIfaceFp = fingerprintToBS . getModuleHash $ hirModIface -- will always be two bytes
 
 instance NFData HiFileResult where
     rnf = rwhnf

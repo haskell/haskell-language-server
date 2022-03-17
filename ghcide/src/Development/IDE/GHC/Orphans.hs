@@ -210,3 +210,8 @@ instance (NFData (HsModule a)) where
 
 instance Show OccName where show = unpack . printOutputable
 instance Hashable OccName where hashWithSalt s n = hashWithSalt s (getKey $ getUnique n)
+
+instance Show HomeModInfo where show = show . mi_module . hm_iface
+
+instance NFData HomeModInfo where
+  rnf (HomeModInfo iface dets link) = rwhnf iface `seq` rnf dets `seq` rnf link
