@@ -31,6 +31,9 @@ module Development.IDE.Core.Compile
   , getDocsBatch
   , lookupName
   , mergeEnvs
+  , ml_core_file
+  , coreFileToLinkable
+  , TypecheckHelpers(..)
   ) where
 
 import           Control.Concurrent.Extra
@@ -133,6 +136,7 @@ import qualified GHC                               as G
 import           GHC.Hs                            (LEpaComment)
 import qualified GHC.Types.Error                   as Error
 #endif
+import Outputable (pprTraceM, pprTrace)
 
 -- | Given a string buffer, return the string (after preprocessing) and the 'ParsedModule'.
 parseModule
@@ -159,12 +163,18 @@ computePackageDeps env pkg = do
             T.pack $ "unknown package: " ++ show pkg]
         Just pkgInfo -> return $ Right $ unitDepends pkgInfo
 
+data TypecheckHelpers
+  = TypecheckHelpers
+  { getLinkablesToKeep :: !(IO (ModuleEnv UTCTime))
+  , getLinkables :: !([NormalizedFilePath] -> IO [HomeModInfo])
+  }
+
 typecheckModule :: IdeDefer
                 -> HscEnv
-                -> ModuleEnv UTCTime -- ^ linkables not to unload
+                -> TypecheckHelpers
                 -> ParsedModule
                 -> IO (IdeResult TcModuleResult)
-typecheckModule (IdeDefer defer) hsc keep_lbls pm = do
+typecheckModule (IdeDefer defer) hsc tc_helpers pm = do
         let modSummary = pm_mod_summary pm
             dflags = ms_hspp_opts modSummary
         mmodSummary' <- catchSrcErrors (hsc_dflags hsc) "typecheck (initialize plugins)"
@@ -179,7 +189,7 @@ typecheckModule (IdeDefer defer) hsc keep_lbls pm = do
                   mod_summary'' = modSummary' { ms_hspp_opts = hsc_dflags session}
                 in
                   catchSrcErrors (hsc_dflags hsc) "typecheck" $ do
-                    tcRnModule session keep_lbls $ demoteIfDefer pm{pm_mod_summary = mod_summary''}
+                    tcRnModule session tc_helpers $ demoteIfDefer pm{pm_mod_summary = mod_summary''}
             let errorPipeline = unDefer . hideDiag dflags . tagDiag
                 diags = map errorPipeline warnings
                 deferedError = any fst diags
@@ -190,8 +200,8 @@ typecheckModule (IdeDefer defer) hsc keep_lbls pm = do
         demoteIfDefer = if defer then demoteTypeErrorsToWarnings else id
 
 -- | Install hooks to capture the splices as well as the runtime module dependencies
-captureSplicesAndDeps :: HscEnv -> (HscEnv -> IO a) -> IO (a, Splices, UniqSet ModuleName)
-captureSplicesAndDeps env k = do
+captureSplicesAndDeps :: TypecheckHelpers -> HscEnv -> (HscEnv -> IO a) -> IO (a, Splices, UniqSet ModuleName)
+captureSplicesAndDeps TypecheckHelpers{..} env k = do
   splice_ref <- newIORef mempty
   dep_ref <- newIORef emptyUniqSet
   res <- k (hscSetHooks (addSpliceHook splice_ref . addLinkableDepHook dep_ref $ hsc_hooks env) env)
@@ -272,21 +282,50 @@ captureSplicesAndDeps env k = do
            ; bcos <- coreExprToBCOs hsc_env
                        (icInteractiveModule (hsc_IC hsc_env)) prepd_expr
 
-           ; let needed_mods = mkUniqSet [ moduleName mod | n <- uniqDSetToList (bcoFreeNames bcos)
-                                         , Just mod <- [nameModule_maybe n] -- Names from other modules
-                                         , not (isWiredInName n) -- Exclude wired-in names
-                                         , moduleUnitId mod == homeUnitId_ dflags -- Only care about stuff from the home package
-                                         ]
             -- Exclude wired-in names because we may not have read
             -- their interface files, so getLinkDeps will fail
             -- All wired-in names are in the base package, which we link
             -- by default, so we can safely ignore them here.
 
+            -- Find the linkables for the modules we need
+           ; let needed_mods = mkUniqSet [ moduleName mod
+                                         | n <- uniqDSetToList (bcoFreeNames bcos)
+                                         , Just mod <- [nameModule_maybe n] -- Names from other modules
+                                         , not (isWiredInName n) -- Exclude wired-in names
+                                         , moduleUnitId mod == uid -- Only care about stuff from the home package
+                                         ]
+                 hpt = hsc_HPT hsc_env
+                 uid = homeUnitId_ dflags
+                 -- Non det OK as we will put it into maps later anyway
+                 mods_transitive_list = nonDetEltsUniqSet mods_transitive
+                 -- Compute the transitive set of linkables required
+                 mods_transitive = go emptyUniqSet needed_mods
+                   where
+                     go seen new
+                       | isEmptyUniqSet new = seen
+                       | otherwise = go seen' new'
+                         where
+                           seen' = seen `unionUniqSets` new
+                           new'  = new_deps `minusUniqSet` seen'
+                           new_deps = unionManyUniqSets [ mkUniqSet $ getDependentMods $ hm_iface mod_info
+                                                        | mod_info <- eltsUDFM $ udfmIntersectUFM hpt (getUniqSet new)]
+
+           ; lbs <- getLinkables [toNormalizedFilePath' file | mod <- mkModule uid <$> mods_transitive_list
+                                                             , let Just ms = mgLookupModule (hsc_mod_graph hsc_env) mod
+                                                             , let Just file = ml_hs_file $ ms_location ms
+                                                             ]
+           ; let hsc_env' = hsc_env { hsc_HPT = addListToHpt hpt [(mod, hmi) | (mod,hmi) <- zip mods_transitive_list lbs] }
+
+             -- Essential to do this here after we load the linkables
+           ; keep_lbls <- getLinkablesToKeep
+
+           ; unload hsc_env' $ map (\(mod, time) -> LM time mod []) $ moduleEnvToList keep_lbls
+
              {- link it -}
-           ; hval <- linkExpr hsc_env srcspan bcos
+           ; hval <- linkExpr hsc_env' srcspan bcos
 #endif
 
-           ; modifyIORef' var (unionUniqSets needed_mods)
+           ; modifyIORef' var (unionUniqSets mods_transitive)
            ; return hval }
 
 
@@ -322,40 +361,25 @@ captureSplicesAndDeps env k = do
 
 tcRnModule
   :: HscEnv
-  -> ModuleEnv UTCTime -- ^ Program linkables not to unload
+  -> TypecheckHelpers -- ^ Program linkables not to unload
   -> ParsedModule
   -> IO TcModuleResult
-tcRnModule hsc_env keep_lbls pmod = do
+tcRnModule hsc_env tc_helpers@TypecheckHelpers{..} pmod = do
   let ms = pm_mod_summary pmod
       hsc_env_tmp = hscSetFlags (ms_hspp_opts ms) hsc_env
       hpt = hsc_HPT hsc_env
 
-  unload hsc_env_tmp $ map (\(mod, time) -> LM time mod []) $ moduleEnvToList keep_lbls
-
-  ((tc_gbl_env', mrn_info), splices, mods)
-      <- captureSplicesAndDeps hsc_env_tmp $ \hsc_env_tmp ->
+  ((tc_gbl_env', mrn_info), splices, mods_transitive)
+      <- captureSplicesAndDeps tc_helpers hsc_env_tmp $ \hsc_env_tmp ->
              do  hscTypecheckRename hsc_env_tmp ms $
                           HsParsedModule { hpm_module = parsedSource pmod,
                                            hpm_src_files = pm_extra_src_files pmod,
                                            hpm_annotations = pm_annotations pmod }
+  keep_lbls <- getLinkablesToKeep
   let rn_info = case mrn_info of
         Just x  -> x
         Nothing -> error "no renamed info tcRnModule"
 
-      -- Compute the transitive set of linkables required
-      mods_transitive = go emptyUniqSet mods
-        where
-          go seen new
-            | isEmptyUniqSet new = seen
-            | otherwise = go seen' new'
-              where
-                seen' = seen `unionUniqSets` new
-                new'  = new_deps `minusUniqSet` seen'
-                new_deps = unionManyUniqSets [ mkUniqSet $ getDependentMods $ hm_iface mod_info
-                                             | mod_info <- eltsUDFM $ udfmIntersectUFM hpt (getUniqSet new)]
-
-      -- The linkables we depend on at runtime are the transitive closure of 'mods'
-      -- restricted to the home package
       -- See Note [Recompilation avoidance in the presence of TH]
       mod_env = filterModuleEnv (\m _ -> elementOfUniqSet (moduleName m) mods_transitive) keep_lbls -- Could use restrictKeys if the constructors were exported
 
@@ -1144,7 +1168,7 @@ data RecompilationInfo m
   = RecompilationInfo
   { source_version :: FileVersion
   , old_value   :: Maybe (HiFileResult, FileVersion)
-  , get_file_version :: NormalizedFilePath -> m (Maybe FileVersion)
+  , get_file_versions :: [NormalizedFilePath] -> m [Maybe FileVersion]
   , regenerate  :: Maybe LinkableType -> m ([FileDiagnostic], Maybe HiFileResult) -- ^ Action to regenerate an interface
   , namecache_updater :: Compat.NameCacheUpdater
   }
@@ -1185,15 +1209,12 @@ loadInterface se session ms linkableNeeded RecompilationInfo{..} = do
 
     mb_dest_version <- case mb_old_version of
       Just ver -> pure $ Just ver
-      Nothing ->  liftIO $ do
+      Nothing -> do
         let file = case linkableNeeded of
               Just ObjectLinkable -> obj_file
               Just BCOLinkable    -> core_file
               Nothing             -> iface_file
-        exists <- doesFileExist file
-        if exists
-        then Just . ModificationTime . utcTimeToPOSIXSeconds <$> getModificationTime file
-        else pure Nothing
+        head <$> get_file_versions [toNormalizedFilePath' file]
 
     -- The source is modified if it is newer than the destination
     let sourceMod = case mb_dest_version of
@@ -1207,8 +1228,8 @@ loadInterface se session ms linkableNeeded RecompilationInfo{..} = do
       <- liftIO $ checkOldIface sessionWithMsDynFlags ms sourceMod mb_old_iface
 
 
-    (recomp_obj_reqd, mb_linkable) <- case linkableNeeded of
-      Nothing -> pure (UpToDate, Nothing)
+    (recomp_obj_reqd) <- case linkableNeeded of
+      Nothing -> pure UpToDate
       Just linkableType -> case old_value of
         -- We don't have an old result
         Nothing -> recompMaybeBecause "missing"
@@ -1220,29 +1241,17 @@ loadInterface se session ms linkableNeeded RecompilationInfo{..} = do
               | Just True <- mi_used_th <$> mb_checked_iface -- No need to recompile if TH wasn't used
               , old_file_version /= source_version -> recompMaybeBecause "out of date"
 
-              -- Check if it is the correct type
-              -- Ideally we could use object-code in case we already have
-              -- it when we are generating bytecode, but this is difficult because something
-              -- below us may be bytecode, and object code can't depend on bytecode
-              | ObjectLinkable <- linkableType, isObjectLinkable old_lb
-              -> pure (UpToDate, Just $ GhcLinkable old_lb)
-
-              | BCOLinkable    <- linkableType , not (isObjectLinkable old_lb)
-              -> pure (UpToDate, Just $ GhcLinkable old_lb)
+              | otherwise -> pure UpToDate
 
         where
           recompMaybeBecause msg =
             case mb_dest_version of -- The destination file should be the object code or the core file
-              Nothing -> pure (RecompBecause msg', Nothing)
-              Just disk_obj_version@(ModificationTime t) ->
+              Nothing -> pure (RecompBecause msg')
+              Just disk_obj_version@(ModificationTime _) ->
                 if (disk_obj_version >= source_version)
-                then case linkableType of
-                  ObjectLinkable -> pure (UpToDate, Just $ GhcLinkable $ LM (posixSecondsToUTCTime t) mod [DotO obj_file])
-                  BCOLinkable -> liftIO $ do
-                    core <- readBinCoreFile namecache_updater core_file
-                    pure (UpToDate, Just $ CoreLinkable (posixSecondsToUTCTime t) core)
-                else pure (RecompBecause msg', Nothing)
-              Just (VFSVersion _) -> pure (RecompBecause msg', Nothing)
+                then pure UpToDate
+                else pure (RecompBecause msg')
+              Just (VFSVersion _) -> pure (RecompBecause msg')
            where
              msg' = case linkableType of
                BCOLinkable -> "bytecode " ++ msg
@@ -1256,17 +1265,15 @@ loadInterface se session ms linkableNeeded RecompilationInfo{..} = do
 
     case (mb_checked_iface, recomp_iface_reqd <> recomp_obj_reqd) of
       (Just iface, UpToDate) -> do
-         -- Force it because we don't want to retain old modsummaries or linkables
-         lb <- liftIO $ evaluate $ force mb_linkable
-
          -- If we have an old value, just return it
          case old_value of
-           Just (old_hir, _)
-             | Just msg <- checkLinkableDependencies (hsc_HPT sessionWithMsDynFlags) (hirRuntimeModules old_hir)
-             -> do_regenerate msg
-             | otherwise -> return ([], Just old_hir)
+           Just (old_hir, _) -> do
+             maybe_recomp <- checkLinkableDependencies get_file_versions (hsc_mod_graph sessionWithMsDynFlags) (hirRuntimeModules old_hir)
+             case maybe_recomp of
+               Just msg -> do_regenerate msg
+               Nothing -> return ([], Just old_hir)
            Nothing -> do
-             (warns, hmi) <- liftIO $ mkDetailsFromIface se sessionWithMsDynFlags ms iface lb
+             (warns, hmi) <- liftIO $ mkDetailsFromIface sessionWithMsDynFlags ms iface
              -- parse the runtime dependencies from the annotations
              let runtime_deps
                    | not (mi_used_th iface) = emptyModuleEnv
@@ -1300,48 +1307,53 @@ parseRuntimeDeps anns = mkModuleEnv $ mapMaybe go anns
 -- the runtime dependencies of the module, to check if any of them are out of date
 -- Hopefully 'runtime_deps' will be empty if the module didn't actually use TH
 -- See Note [Recompilation avoidance in the presence of TH]
-checkLinkableDependencies :: HomePackageTable -> ModuleEnv UTCTime -> Maybe RecompileRequired
-checkLinkableDependencies hpt runtime_deps
-  | isEmptyModuleEnv out_of_date = Nothing -- Nothing out of date, so don't recompile
-  | otherwise = Just $
-      RecompBecause $ "out of date runtime dependencies: " ++ intercalate ", " (map show (moduleEnvKeys out_of_date))
-  where
-    out_of_date = filterModuleEnv (\mod time -> case lookupHpt hpt (moduleName mod) of
-                                                  Nothing -> False
-                                                  Just hm -> case hm_linkable hm of
-                                                    Nothing -> False
-                                                    Just lm -> linkableTime lm /= time)
-                                  runtime_deps
+checkLinkableDependencies :: MonadIO m => ([NormalizedFilePath] -> m [Maybe FileVersion]) -> ModuleGraph -> ModuleEnv UTCTime -> m (Maybe RecompileRequired)
+checkLinkableDependencies get_file_versions graph runtime_deps = do
+  let core_files = mapM go (moduleEnvToList runtime_deps)
+      go (mod, time) = do
+        ms <- mgLookupModule graph mod
+        let core = ml_core_file $ ms_location ms
+        pure (toNormalizedFilePath' core, time)
+  case core_files of
+    Nothing -> error "invalid module graph"
+    Just fs -> do
+      mts <- sequence <$> get_file_versions (map fst fs)
+      case mts of
+        Nothing -> error $ "some source files don't exist on disk" ++ show fs
+        Just ts -> do
+          let out_of_date = [core_file | ((core_file, expected_time), actual_time) <- zip fs ts, ModificationTime (utcTimeToPOSIXSeconds expected_time) /= actual_time]
+          case out_of_date of
+            [] -> pure Nothing
+            xs -> pure $ Just $
+              RecompBecause $ "out of date runtime dependencies: " ++ intercalate ", " (map show out_of_date)
 
 showReason :: RecompileRequired -> String
 showReason UpToDate          = "UpToDate"
 showReason MustCompile       = "MustCompile"
 showReason (RecompBecause s) = s
 
-mkDetailsFromIface :: ShakeExtras -> HscEnv -> ModSummary -> ModIface -> Maybe IdeLinkable -> IO ([FileDiagnostic], HomeModInfo)
-mkDetailsFromIface se session ms iface ide_linkable = do
-  details <- liftIO $ fixIO $ \details -> do
+mkDetailsFromIface :: HscEnv -> ModSummary -> ModIface -> IO ([FileDiagnostic], HomeModInfo)
+mkDetailsFromIface session ms iface = do
+  details <- fixIO $ \details -> do
     let hsc' = session { hsc_HPT = addToHpt (hsc_HPT session) (moduleName $ mi_module iface) (HomeModInfo iface details Nothing) }
     initIfaceLoad hsc' (typecheckIface iface)
-  (warns, linkable) <- liftIO $ case ide_linkable of
-    Nothing -> pure ([], Nothing)
-    Just (GhcLinkable lb) -> pure ([], Just lb)
-    Just (CoreLinkable t core_file) -> do
-      let act hpt = addToHpt hpt (moduleName this_mod)
-                                 (HomeModInfo iface details Nothing)
-          this_mod = mi_module iface
-      types_var <- newIORef (md_types details)
-      let kv = Just (this_mod, types_var)
-          hsc_env' = session { hsc_HPT = act (hsc_HPT session)
-                             , hsc_type_env_var = kv }
-      core_binds <- initIfaceCheck (text "l") hsc_env' $ typecheckCoreFile this_mod types_var core_file
-      let implicit_binds = concatMap getImplicitBinds tyCons
-          tyCons = typeEnvTyCons (md_types details)
-      let cgi_guts = CgGuts this_mod tyCons (implicit_binds ++ core_binds) NoStubs [] [] (emptyHpcInfo False) Nothing []
-      generateByteCode se (CoreFileExists t) session ms cgi_guts
+  return ([], HomeModInfo iface details Nothing)
 
-  return (warns, HomeModInfo iface details linkable)
-
+coreFileToLinkable :: ShakeExtras -> HscEnv -> ModSummary -> HomeModInfo -> CoreFile -> UTCTime -> IO ([FileDiagnostic], Maybe HomeModInfo)
+coreFileToLinkable se session ms old_hmi@(HomeModInfo iface details _) core_file t = do
+  let act hpt = addToHpt hpt (moduleName this_mod)
+                             old_hmi
+      this_mod = mi_module iface
+  types_var <- newIORef (md_types details)
+  let kv = Just (this_mod, types_var)
+      hsc_env' = session { hsc_HPT = act (hsc_HPT session)
+                         , hsc_type_env_var = kv }
+  core_binds <- initIfaceCheck (text "l") hsc_env' $ typecheckCoreFile this_mod types_var core_file
+  let implicit_binds = concatMap getImplicitBinds tyCons
+      tyCons = typeEnvTyCons (md_types details)
+  let cgi_guts = CgGuts this_mod tyCons (implicit_binds ++ core_binds) NoStubs [] [] (emptyHpcInfo False) Nothing []
+  (warns, lb) <- generateByteCode se (CoreFileExists t) session ms cgi_guts
+  pure (warns, HomeModInfo iface details . Just <$> lb)
 
 -- | Non-interactive, batch version of 'InteractiveEval.getDocs'.
 --   The interactive paths create problems in ghc-lib builds

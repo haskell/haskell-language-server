@@ -153,6 +153,9 @@ import qualified Development.IDE.Core.Shake as Shake
 import qualified Development.IDE.GHC.ExactPrint as ExactPrint hiding (LogShake)
 import qualified Development.IDE.Types.Logger as Logger
 import qualified Development.IDE.Types.Shake as Shake
+import           Development.IDE.GHC.CoreFile
+import           Data.Time.Clock.POSIX             (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
+import Control.Monad.IO.Unlift
 
 data Log
   = LogShake Shake.Log
@@ -672,9 +675,13 @@ typeCheckRuleDefinition hsc pm = do
   setPriority priorityTypeCheck
   IdeOptions { optDefer = defer } <- getIdeOptions
 
-  linkables_to_keep <- currentLinkables
+  unlift <- askUnliftIO
+  let dets = TypecheckHelpers
+           { getLinkablesToKeep = unliftIO unlift $ currentLinkables
+           , getLinkables = unliftIO unlift . uses_ GetLinkable
+           }
   addUsageDependencies $ liftIO $
-    typecheckModule defer hsc linkables_to_keep pm
+    typecheckModule defer hsc dets pm
   where
     addUsageDependencies :: Action (a, Maybe TcModuleResult) -> Action (a, Maybe TcModuleResult)
     addUsageDependencies a = do
@@ -775,7 +782,7 @@ getModIfaceFromDiskRule recorder = defineEarlyCutoff (cmapWithPrio LogShake reco
           recompInfo = RecompilationInfo
             { source_version = ver
             , old_value = m_old
-            , get_file_version = use GetModificationTime_{missingFileDiagnostics = False}
+            , get_file_versions = uses GetModificationTime_{missingFileDiagnostics = False}
             , regenerate = regenerateHiFile session f ms
             , namecache_updater = mkUpdater ideNc
             }
@@ -910,10 +917,6 @@ getModIfaceRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ 
       let fp = hiFileFingerPrint <$> hiFile
       return (fp, ([], hiFile))
 
-  -- Record the linkable so we know not to unload it
-  whenJust (hm_linkable . hirHomeMod =<< mhmi) $ \(LM time mod _) -> do
-      compiledLinkables <- getCompiledLinkables <$> getIdeGlobalAction
-      liftIO $ void $ modifyVar' compiledLinkables $ \old -> extendModuleEnv old mod time
   pure res
 
 -- | Also generates and indexes the `.hie` file, along with the `.o` file if needed
@@ -1022,6 +1025,33 @@ usePropertyAction kn plId p = do
 
 -- ---------------------------------------------------------------------
 
+getLinkableRule :: Recorder (WithPriority Log) -> Rules ()
+getLinkableRule recorder =
+  defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GetLinkable f -> do
+    ModSummaryResult{msrModSummary = ms} <- use_ GetModSummary f
+    HiFileResult{hirHomeMod = old_hmi} <- use_ GetModIface f
+    session <- use_ GhcSessionDeps f
+
+    let core_fp = ml_core_file (ms_location ms)
+    ModificationTime t <- use_ GetModificationTime (toNormalizedFilePath' core_fp)
+
+    se@ShakeExtras{ideNc} <- getShakeExtras
+    let namecache_updater = mkUpdater ideNc
+    bin_core <- liftIO $ readBinCoreFile namecache_updater core_fp
+
+    (warns, hmi) <- liftIO $ coreFileToLinkable se (hscEnv session) ms old_hmi bin_core (posixSecondsToUTCTime t)
+    let fp = case hm_linkable =<< hmi of
+          Nothing -> Nothing
+          Just (linkableTime -> l) -> Just $ LBS.toStrict $
+            B.encode (fromEnum $ utctDay l, fromEnum $ utctDayTime l)
+
+    -- Record the linkable so we know not to unload it
+    whenJust (hm_linkable =<< hmi) $ \(LM time mod _) -> do
+        compiledLinkables <- getCompiledLinkables <$> getIdeGlobalAction
+        liftIO $ void $ modifyVar' compiledLinkables $ \old -> extendModuleEnv old mod time
+
+    return (fp, (warns, hmi))
+
 -- | For now we always use bytecode unless something uses unboxed sums and tuples along with TH
 getLinkableType :: NormalizedFilePath -> Action (Maybe LinkableType)
 getLinkableType f = use_ NeedsCompilation f
@@ -1030,8 +1060,8 @@ getLinkableType f = use_ NeedsCompilation f
 needsCompilationRule :: NormalizedFilePath  -> Action (IdeResultNoDiagnosticsEarlyCutoff (Maybe LinkableType))
 needsCompilationRule file | "boot" `isSuffixOf` (fromNormalizedFilePath file) = pure (Just $ encodeLinkableType Nothing, Just Nothing)
 needsCompilationRule file = do
-  ms <- msrModSummary . fst <$> useWithStale_ GetModSummaryWithoutTimestamps file
-  let res = Just (computeLinkableTypeForDynFlags (ms_hspp_opts ms))
+  -- TODO account for unboxed tuples and sums
+  let res = Just BCOLinkable
   pure (Just $ encodeLinkableType res, Just res)
 
 uses_th_qq :: ModSummary -> Bool
@@ -1118,3 +1148,4 @@ mainRule recorder RulesConfig{..} = do
     persistentHieFileRule recorder
     persistentDocMapRule
     persistentImportMapRule
+    getLinkableRule recorder

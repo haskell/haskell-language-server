@@ -91,6 +91,13 @@ data GenerateCore = GenerateCore
 instance Hashable GenerateCore
 instance NFData   GenerateCore
 
+type instance RuleResult GetLinkable = HomeModInfo
+
+data GetLinkable = GetLinkable
+    deriving (Eq, Show, Typeable, Generic)
+instance Hashable GetLinkable
+instance NFData   GetLinkable
+
 data GetImportMap = GetImportMap
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetImportMap
@@ -156,26 +163,20 @@ data HiFileResult = HiFileResult
     -- Bang patterns here are important to stop the result retaining
     -- a reference to a typechecked module
     , hirHomeMod    :: !HomeModInfo
-    -- ^ Includes the Linkable iff we need object files
+    -- ^ Never includes the Linkable
     , hirIfaceFp    :: ByteString
     -- ^ Fingerprint for the ModIface
-    , hirLinkableFp :: ByteString
-    -- ^ Fingerprint for the Linkable
     , hirRuntimeModules :: !(ModuleEnv UTCTime)
     -- ^ same as tmrRuntimeModules
     }
 
 hiFileFingerPrint :: HiFileResult -> ByteString
-hiFileFingerPrint HiFileResult{..} = hirIfaceFp <> hirLinkableFp
+hiFileFingerPrint HiFileResult{..} = hirIfaceFp
 
 mkHiFileResult :: ModSummary -> HomeModInfo -> ModuleEnv UTCTime -> HiFileResult
 mkHiFileResult hirModSummary hirHomeMod hirRuntimeModules = HiFileResult{..}
   where
     hirIfaceFp = fingerprintToBS . getModuleHash . hm_iface $ hirHomeMod -- will always be two bytes
-    hirLinkableFp = case hm_linkable hirHomeMod of
-      Nothing -> ""
-      Just (linkableTime -> l)  -> LBS.toStrict $
-        B.encode (fromEnum $ utctDay l, fromEnum $ utctDayTime l)
 
 hirModIface :: HiFileResult -> ModIface
 hirModIface = hm_iface . hirHomeMod
