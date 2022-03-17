@@ -31,6 +31,9 @@ module Development.IDE.Core.Compile
   , getDocsBatch
   , lookupName
   , mergeEnvs
+  , ml_core_file
+  , coreFileToLinkable
+  , TypecheckHelpers(..)
   ) where
 
 import           Control.Concurrent.Extra
@@ -45,9 +48,7 @@ import           Control.Monad.Trans.Except
 import           Data.Aeson                        (toJSON)
 import           Data.Bifunctor                    (first, second)
 import           Data.Binary
-import qualified Data.Binary                       as B
 import qualified Data.ByteString                   as BS
-import qualified Data.ByteString.Lazy              as LBS
 import           Data.Coerce
 import qualified Data.DList                        as DL
 import           Data.Functor
@@ -60,9 +61,7 @@ import           Data.Map                          (Map)
 import qualified Data.Map.Strict                   as Map
 import           Data.Maybe
 import qualified Data.Text                         as T
-import           Data.Time                         (UTCTime (..),
-                                                    getCurrentTime)
-import           Data.Time.Clock.POSIX             (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
+import           Data.Time                         (UTCTime (..))
 import           Data.Tuple.Extra                  (dupe)
 import           Data.Unique                       as Unique
 import           Debug.Trace
@@ -81,14 +80,12 @@ import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Orphans       ()
 import           Development.IDE.GHC.Util
 import           Development.IDE.GHC.Warnings
-import           Development.IDE.Spans.Common
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 import           Development.IDE.GHC.CoreFile
 import           GHC                               (ForeignHValue,
                                                     GetDocsFailure (..),
-                                                    mgModSummaries,
                                                     parsedSource)
 import qualified GHC.LanguageExtensions            as LangExt
 import           GHC.Serialized
@@ -121,8 +118,6 @@ import           TcSplice
 import           HscTypes
 #endif
 
-import           Development.IDE.GHC.Compat.Util   (emptyUDFM, fsLit,
-                                                    plusUDFM_C)
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC                               (Anchor (anchor),
                                                     EpaComment (EpaComment),
@@ -133,6 +128,7 @@ import qualified GHC                               as G
 import           GHC.Hs                            (LEpaComment)
 import qualified GHC.Types.Error                   as Error
 #endif
+import GHC (ModuleGraph, mgLookupModule, mgModSummaries)
 import qualified Control.Monad.Trans.State.Strict as S
 import Data.Generics.Schemes
 import Data.Generics.Aliases
@@ -162,12 +158,18 @@ computePackageDeps env pkg = do
             T.pack $ "unknown package: " ++ show pkg]
         Just pkgInfo -> return $ Right $ unitDepends pkgInfo
 
+data TypecheckHelpers
+  = TypecheckHelpers
+  { getLinkablesToKeep :: !(IO (ModuleEnv UTCTime))
+  , getLinkables :: !([NormalizedFilePath] -> IO [LinkableResult])
+  }
+
 typecheckModule :: IdeDefer
                 -> HscEnv
-                -> ModuleEnv UTCTime -- ^ linkables not to unload
+                -> TypecheckHelpers
                 -> ParsedModule
                 -> IO (IdeResult TcModuleResult)
-typecheckModule (IdeDefer defer) hsc keep_lbls pm = do
+typecheckModule (IdeDefer defer) hsc tc_helpers pm = do
         let modSummary = pm_mod_summary pm
             dflags = ms_hspp_opts modSummary
         mmodSummary' <- catchSrcErrors (hsc_dflags hsc) "typecheck (initialize plugins)"
@@ -182,7 +184,7 @@ typecheckModule (IdeDefer defer) hsc keep_lbls pm = do
                   mod_summary'' = modSummary' { ms_hspp_opts = hsc_dflags session}
                 in
                   catchSrcErrors (hsc_dflags hsc) "typecheck" $ do
-                    tcRnModule session keep_lbls $ demoteIfDefer pm{pm_mod_summary = mod_summary''}
+                    tcRnModule session tc_helpers $ demoteIfDefer pm{pm_mod_summary = mod_summary''}
             let errorPipeline = unDefer . hideDiag dflags . tagDiag
                 diags = map errorPipeline warnings
                 deferedError = any fst diags
@@ -193,16 +195,16 @@ typecheckModule (IdeDefer defer) hsc keep_lbls pm = do
         demoteIfDefer = if defer then demoteTypeErrorsToWarnings else id
 
 -- | Install hooks to capture the splices as well as the runtime module dependencies
-captureSplicesAndDeps :: HscEnv -> (HscEnv -> IO a) -> IO (a, Splices, UniqSet ModuleName)
-captureSplicesAndDeps env k = do
+captureSplicesAndDeps :: TypecheckHelpers -> HscEnv -> (HscEnv -> IO a) -> IO (a, Splices, ModuleEnv BS.ByteString)
+captureSplicesAndDeps TypecheckHelpers{..} env k = do
   splice_ref <- newIORef mempty
-  dep_ref <- newIORef emptyUniqSet
+  dep_ref <- newIORef emptyModuleEnv
   res <- k (hscSetHooks (addSpliceHook splice_ref . addLinkableDepHook dep_ref $ hsc_hooks env) env)
   splices <- readIORef splice_ref
   needed_mods <- readIORef dep_ref
   return (res, splices, needed_mods)
   where
-    addLinkableDepHook :: IORef (UniqSet ModuleName) -> Hooks -> Hooks
+    addLinkableDepHook :: IORef (ModuleEnv BS.ByteString) -> Hooks -> Hooks
     addLinkableDepHook var h = h { hscCompileCoreExprHook = Just (compile_bco_hook var) }
 
     -- We want to record exactly which linkables/modules the typechecker needed at runtime
@@ -215,12 +217,7 @@ captureSplicesAndDeps env k = do
     -- names in the compiled bytecode, recording the modules that those names
     -- come from in the IORef,, as these are the modules on whose implementation
     -- we depend.
-    --
-    -- Only compute direct dependencies instead of transitive dependencies.
-    -- It is much cheaper to store the direct dependencies, we can compute
-    -- the transitive ones when required.
-    -- Also only record dependencies from the home package
-    compile_bco_hook :: IORef (UniqSet ModuleName) -> HscEnv -> SrcSpan -> CoreExpr -> IO ForeignHValue
+    compile_bco_hook :: IORef (ModuleEnv BS.ByteString) -> HscEnv -> SrcSpan -> CoreExpr -> IO ForeignHValue
     compile_bco_hook var hsc_env srcspan ds_expr
       = do { let dflags = hsc_dflags hsc_env
 
@@ -257,40 +254,75 @@ captureSplicesAndDeps env k = do
                        (icInteractiveModule ictxt)
                        stg_expr
                        [] Nothing
-           ; let needed_mods = mkUniqSet [ moduleName mod | n <- concatMap (uniqDSetToList . bcoFreeNames) $ bc_bcos bcos
-                                         , Just mod <- [nameModule_maybe n] -- Names from other modules
-                                         , not (isWiredInName n) -- Exclude wired-in names
-                                         , moduleUnitId mod == homeUnitId_ dflags -- Only care about stuff from the home package
-                                         ]
-            -- Exclude wired-in names because we may not have read
-            -- their interface files, so getLinkDeps will fail
-            -- All wired-in names are in the base package, which we link
-            -- by default, so we can safely ignore them here.
-
-             {- load it -}
-           ; fv_hvs <- loadDecls (hscInterp hsc_env) hsc_env srcspan bcos
-           ; let hval = (expectJust "hscCompileCoreExpr'" $ lookup (idName binding_id) fv_hvs)
 #else
              {- Convert to BCOs -}
            ; bcos <- coreExprToBCOs hsc_env
                        (icInteractiveModule (hsc_IC hsc_env)) prepd_expr
+#endif
 
-           ; let needed_mods = mkUniqSet [ moduleName mod | n <- uniqDSetToList (bcoFreeNames bcos)
-                                         , Just mod <- [nameModule_maybe n] -- Names from other modules
-                                         , not (isWiredInName n) -- Exclude wired-in names
-                                         , moduleUnitId mod == homeUnitId_ dflags -- Only care about stuff from the home package
-                                         ]
             -- Exclude wired-in names because we may not have read
             -- their interface files, so getLinkDeps will fail
             -- All wired-in names are in the base package, which we link
             -- by default, so we can safely ignore them here.
 
+            -- Find the linkables for the modules we need
+           ; let needed_mods = mkUniqSet [ moduleName mod
+#if MIN_VERSION_ghc(9,2,0)
+                                         | n <- concatMap (uniqDSetToList . bcoFreeNames) $ bc_bcos bcos
+#else
+                                         | n <- uniqDSetToList (bcoFreeNames bcos)
+#endif
+                                         , Just mod <- [nameModule_maybe n] -- Names from other modules
+                                         , not (isWiredInName n) -- Exclude wired-in names
+                                         , moduleUnitId mod == uid -- Only care about stuff from the home package
+                                         ]
+                 hpt = hsc_HPT hsc_env
+                 uid = homeUnitId_ dflags
+                 mods_transitive = getTransitiveMods hpt needed_mods
+                  -- Non det OK as we will put it into maps later anyway
+                 mods_transitive_list = nonDetEltsUniqSet mods_transitive
+
+           ; lbs <- getLinkables [toNormalizedFilePath' file | mod <- mkHomeModule
+#if MIN_VERSION_ghc(9,0,0)
+                                                                      (hscHomeUnit hsc_env)
+#else
+                                                                      uid
+#endif
+                                                                      <$> mods_transitive_list
+                                                             , let ms   = fromJust $ mgLookupModule (hsc_mod_graph hsc_env) mod
+                                                             , let file = fromJust $ ml_hs_file $ ms_location ms
+                                                             ]
+           ; let hsc_env' = hsc_env { hsc_HPT = addListToHpt hpt [(moduleName $ mi_module $ hm_iface hm, hm) | lb <- lbs, let hm = linkableHomeMod lb] }
+
+             -- Essential to do this here after we load the linkables
+           ; keep_lbls <- getLinkablesToKeep
+
+           ; unload hsc_env' $ map (\(mod, time) -> LM time mod []) $ moduleEnvToList keep_lbls
+
+#if MIN_VERSION_ghc(9,2,0)
+             {- load it -}
+           ; fv_hvs <- loadDecls (hscInterp hsc_env') hsc_env' srcspan bcos
+           ; let hval = (expectJust "hscCompileCoreExpr'" $ lookup (idName binding_id) fv_hvs)
+#else
              {- link it -}
-           ; hval <- linkExpr hsc_env srcspan bcos
+           ; hval <- linkExpr hsc_env' srcspan bcos
 #endif
 
-           ; modifyIORef' var (unionUniqSets needed_mods)
+           ; modifyIORef' var (flip extendModuleEnvList [(mi_module $ hm_iface hm, linkableHash lb) | lb <- lbs, let hm = linkableHomeMod lb])
            ; return hval }
+
+    -- Compute the transitive set of linkables required
+    getTransitiveMods hpt needed_mods = go emptyUniqSet needed_mods
+      where
+        go seen new
+          | isEmptyUniqSet new = seen
+          | otherwise = go seen' new'
+            where
+              seen' = seen `unionUniqSets` new
+              new'  = new_deps `minusUniqSet` seen'
+              new_deps = unionManyUniqSets [ mkUniqSet $ getDependentMods $ hm_iface mod_info
+                                           | mod_info <- eltsUDFM $ udfmIntersectUFM hpt (getUniqSet new)]
+
 
 
     -- | Add a Hook to the DynFlags which captures and returns the
@@ -325,18 +357,15 @@ captureSplicesAndDeps env k = do
 
 tcRnModule
   :: HscEnv
-  -> ModuleEnv UTCTime -- ^ Program linkables not to unload
+  -> TypecheckHelpers -- ^ Program linkables not to unload
   -> ParsedModule
   -> IO TcModuleResult
-tcRnModule hsc_env keep_lbls pmod = do
+tcRnModule hsc_env tc_helpers pmod = do
   let ms = pm_mod_summary pmod
       hsc_env_tmp = hscSetFlags (ms_hspp_opts ms) hsc_env
-      hpt = hsc_HPT hsc_env
 
-  unload hsc_env_tmp $ map (\(mod, time) -> LM time mod []) $ moduleEnvToList keep_lbls
-
-  ((tc_gbl_env', mrn_info), splices, mods)
-      <- captureSplicesAndDeps hsc_env_tmp $ \hsc_env_tmp ->
+  ((tc_gbl_env', mrn_info), splices, mod_env)
+      <- captureSplicesAndDeps tc_helpers hsc_env_tmp $ \hsc_env_tmp ->
              do  hscTypecheckRename hsc_env_tmp ms $
                           HsParsedModule { hpm_module = parsedSource pmod,
                                            hpm_src_files = pm_extra_src_files pmod,
@@ -345,25 +374,8 @@ tcRnModule hsc_env keep_lbls pmod = do
         Just x  -> x
         Nothing -> error "no renamed info tcRnModule"
 
-      -- Compute the transitive set of linkables required
-      mods_transitive = go emptyUniqSet mods
-        where
-          go seen new
-            | isEmptyUniqSet new = seen
-            | otherwise = go seen' new'
-              where
-                seen' = seen `unionUniqSets` new
-                new'  = new_deps `minusUniqSet` seen'
-                new_deps = unionManyUniqSets [ mkUniqSet $ getDependentMods $ hm_iface mod_info
-                                             | mod_info <- eltsUDFM $ udfmIntersectUFM hpt (getUniqSet new)]
-
-      -- The linkables we depend on at runtime are the transitive closure of 'mods'
-      -- restricted to the home package
-      -- See Note [Recompilation avoidance in the presence of TH]
-      mod_env = filterModuleEnv (\m _ -> elementOfUniqSet (moduleName m) mods_transitive) keep_lbls -- Could use restrictKeys if the constructors were exported
-
       -- Serialize mod_env so we can read it from the interface
-      mod_env_anns = map (\(mod, time) -> Annotation (ModuleTarget mod) $ toSerialized serializeModDepTime (ModDepTime time))
+      mod_env_anns = map (\(mod, hash) -> Annotation (ModuleTarget mod) $ toSerialized BS.unpack hash)
                          (moduleEnvToList mod_env)
       tc_gbl_env = tc_gbl_env' { tcg_ann_env = extendAnnEnvList (tcg_ann_env tc_gbl_env') mod_env_anns }
   pure (TcModuleResult pmod rn_info tc_gbl_env splices False mod_env)
@@ -380,36 +392,30 @@ mkHiFileResultNoCompile session tcm = do
 #else
   (iface, _) <- mkIfaceTc hsc_env_tmp Nothing sf details tcGblEnv
 #endif
-  let mod_info = HomeModInfo iface details Nothing
-  pure $! mkHiFileResult ms mod_info (tmrRuntimeModules tcm)
+  pure $! mkHiFileResult ms iface details (tmrRuntimeModules tcm) Nothing
 
 mkHiFileResultCompile
     :: ShakeExtras
     -> HscEnv
     -> TcModuleResult
     -> ModGuts
-    -> LinkableType -- ^ use object code or byte code?
     -> IO (IdeResult HiFileResult)
-mkHiFileResultCompile se session' tcm simplified_guts ltype = catchErrs $ do
+mkHiFileResultCompile se session' tcm simplified_guts = catchErrs $ do
   let session = hscSetFlags (ms_hspp_opts ms) session'
       ms = pm_mod_summary $ tmrParsed tcm
       tcGblEnv = tmrTypechecked tcm
 
-  let genLinkable = case ltype of
-        ObjectLinkable -> generateObjectCode
-        BCOLinkable    -> generateByteCode se WriteCoreFile
-
-  (linkable, details, mguts, diags) <-
+  (details, mguts) <-
     if mg_hsc_src simplified_guts == HsBootFile
     then do
-        -- give variables unique OccNames
         details <- mkBootModDetailsTc session tcGblEnv
-        pure (Nothing, details, Nothing, [])
+        pure (details, Nothing)
     else do
+        -- write core file
         -- give variables unique OccNames
         (guts, details) <- tidyProgram session simplified_guts
-        (diags, linkable) <- genLinkable session ms guts
-        pure (linkable, details, Just guts, diags)
+        pure (details, Just guts)
+
 #if MIN_VERSION_ghc(9,0,1)
   let !partial_iface = force (mkPartialIface session details simplified_guts)
   final_iface <- mkFullIface session partial_iface Nothing
@@ -419,53 +425,73 @@ mkHiFileResultCompile se session' tcm simplified_guts ltype = catchErrs $ do
 #else
   (final_iface,_) <- mkIface session Nothing details simplified_guts
 #endif
-  let mod_info = HomeModInfo final_iface details linkable
+
+  -- Write the core file now
+  core_file <- case mguts of
+    Nothing -> pure Nothing -- no guts, likely boot file
+    Just guts -> do
+        let core_fp  = ml_core_file $ ms_location ms
+            core_file = codeGutsToCoreFile iface_hash guts
+            iface_hash = getModuleHash final_iface
+        core_hash1 <- atomicFileWrite se core_fp $ \fp ->
+          writeBinCoreFile fp core_file
+        -- We want to drop references to guts and read in a serialized, compact version
+        -- of the core file from disk (as it is deserialised lazily)
+        -- This is because we don't want to keep the guts in memeory for every file in
+        -- the project as it becomes prohibitively expensive
+        -- The serialized file however is much more compact and only requires a few
+        -- hundred megabytes of memory total even in a large project with 1000s of
+        -- modules
+        (core_file, !core_hash2) <- readBinCoreFile (mkUpdater $ hsc_NC session) core_fp
+        pure $ assert (core_hash1 == core_hash2)
+             $ Just (core_file, fingerprintToBS core_hash2)
 
   -- Verify core file by rountrip testing and comparison
   IdeOptions{optVerifyCoreFile} <- getIdeOptionsIO se
-  when (maybe False (not . isObjectLinkable) linkable && optVerifyCoreFile) $ do
-    let core_fp = ml_core_file $ ms_location ms
-    traceIO $ "Verifying " ++ core_fp
-    core <- readBinCoreFile (mkUpdater $ hsc_NC session) core_fp
-    let CgGuts{cg_binds = unprep_binds, cg_tycons = tycons } = case mguts of
-          Nothing -> error "invariant optVerifyCoreFile: guts must exist if linkable exists)"
-          Just g -> g
-        mod = ms_mod ms
-        data_tycons = filter isDataTyCon tycons
-    CgGuts{cg_binds = unprep_binds'} <- coreFileToCgGuts session final_iface details core
+  case core_file of
+    Just (core, _) | optVerifyCoreFile -> do
+      let core_fp = ml_core_file $ ms_location ms
+      traceIO $ "Verifying " ++ core_fp
+      let CgGuts{cg_binds = unprep_binds, cg_tycons = tycons } = case mguts of
+            Nothing -> error "invariant optVerifyCoreFile: guts must exist if linkable exists"
+            Just g -> g
+          mod = ms_mod ms
+          data_tycons = filter isDataTyCon tycons
+      CgGuts{cg_binds = unprep_binds'} <- coreFileToCgGuts session final_iface details core
 
-    -- Run corePrep first as we want to test the final version of the program that will
-    -- get translated to STG/Bytecode
-    (prepd_binds , _) <- corePrepPgm session mod (ms_location ms) unprep_binds data_tycons
-    (prepd_binds', _) <- corePrepPgm session mod (ms_location ms) unprep_binds' data_tycons
-    let binds  = noUnfoldings $ (map flattenBinds . (:[])) $ prepd_binds
-        binds' = noUnfoldings $ (map flattenBinds . (:[])) $ prepd_binds'
+      -- Run corePrep first as we want to test the final version of the program that will
+      -- get translated to STG/Bytecode
+      (prepd_binds , _) <- corePrepPgm session mod (ms_location ms) unprep_binds data_tycons
+      (prepd_binds', _) <- corePrepPgm session mod (ms_location ms) unprep_binds' data_tycons
+      let binds  = noUnfoldings $ (map flattenBinds . (:[])) $ prepd_binds
+          binds' = noUnfoldings $ (map flattenBinds . (:[])) $ prepd_binds'
 
-        -- diffBinds is unreliable, sometimes it goes down the wrong track.
-        -- This fixes the order of the bindings so that it is less likely to do so.
-        diffs2 = concat $ flip S.evalState (mkRnEnv2 emptyInScopeSet) $ zipWithM go binds binds'
-        -- diffs1 = concat $ flip S.evalState (mkRnEnv2 emptyInScopeSet) $ zipWithM go (map (:[]) $ concat binds) (map (:[]) $ concat binds')
-        -- diffs3  = flip S.evalState (mkRnEnv2 emptyInScopeSet) $ go (concat binds) (concat binds')
+          -- diffBinds is unreliable, sometimes it goes down the wrong track.
+          -- This fixes the order of the bindings so that it is less likely to do so.
+          diffs2 = concat $ flip S.evalState (mkRnEnv2 emptyInScopeSet) $ zipWithM go binds binds'
+          -- diffs1 = concat $ flip S.evalState (mkRnEnv2 emptyInScopeSet) $ zipWithM go (map (:[]) $ concat binds) (map (:[]) $ concat binds')
+          -- diffs3  = flip S.evalState (mkRnEnv2 emptyInScopeSet) $ go (concat binds) (concat binds')
 
-        diffs = diffs2
-        go x y = S.state $ \s -> diffBinds True s x y
+          diffs = diffs2
+          go x y = S.state $ \s -> diffBinds True s x y
 
-        -- The roundtrip doesn't preserver OtherUnfolding or occInfo, but neither are of these
-        -- are used for generate core or bytecode, so we can safely ignore them
-        -- SYB is slow but fine given that this is only used for testing
-        noUnfoldings = everywhere $ mkT $ \v -> if isId v
-          then
-            let v' = if isOtherUnfolding (realIdUnfolding v) then (setIdUnfolding v noUnfolding) else v
-              in setIdOccInfo v' noOccInfo
-          else v
-        isOtherUnfolding (OtherCon _) = True
-        isOtherUnfolding _ = False
+          -- The roundtrip doesn't preserver OtherUnfolding or occInfo, but neither are of these
+          -- are used for generate core or bytecode, so we can safely ignore them
+          -- SYB is slow but fine given that this is only used for testing
+          noUnfoldings = everywhere $ mkT $ \v -> if isId v
+            then
+              let v' = if isOtherUnfolding (realIdUnfolding v) then (setIdUnfolding v noUnfolding) else v
+                in setIdOccInfo v' noOccInfo
+            else v
+          isOtherUnfolding (OtherCon _) = True
+          isOtherUnfolding _ = False
 
 
-    when (not $ null diffs) $
-      panicDoc "verify core failed!" (vcat $ punctuate (text "\n\n") (diffs )) -- ++ [ppr binds , ppr binds']))
+      when (not $ null diffs) $
+        panicDoc "verify core failed!" (vcat $ punctuate (text "\n\n") (diffs )) -- ++ [ppr binds , ppr binds']))
+    _ -> pure ()
 
-  pure (diags, Just $! mkHiFileResult ms mod_info (tmrRuntimeModules tcm))
+  pure ([], Just $! mkHiFileResult ms final_iface details (tmrRuntimeModules tcm) core_file)
 
   where
     dflags = hsc_dflags session'
@@ -544,10 +570,10 @@ generateObjectCode session summary guts = do
 
               pure (map snd warnings, linkable)
 
-data WriteCoreFile = WriteCoreFile | CoreFileExists !UTCTime
+newtype CoreFileTime = CoreFileTime UTCTime
 
-generateByteCode :: ShakeExtras -> WriteCoreFile -> HscEnv -> ModSummary -> CgGuts -> IO (IdeResult Linkable)
-generateByteCode se write_core hscEnv summary guts = do
+generateByteCode :: CoreFileTime -> HscEnv -> ModSummary -> CgGuts -> IO (IdeResult Linkable)
+generateByteCode (CoreFileTime time) hscEnv summary guts = do
     fmap (either (, Nothing) (second Just)) $
           catchSrcErrors (hsc_dflags hscEnv) "bytecode" $ do
               (warnings, (_, bytecode, sptEntries)) <-
@@ -562,16 +588,7 @@ generateByteCode se write_core hscEnv summary guts = do
                                 summary'
 #endif
               let unlinked = BCOs bytecode sptEntries
-              time <- case write_core of
-                CoreFileExists time -> pure time
-                WriteCoreFile -> liftIO $ do
-                  let core_fp = ml_core_file $ ms_location summary
-                      core_file = codeGutsToCoreFile guts
-                  atomicFileWrite se core_fp $ \fp ->
-                    writeBinCoreFile fp core_file
-                  getModificationTime core_fp
               let linkable = LM time (ms_mod summary) [unlinked]
-
               pure (map snd warnings, linkable)
 
 demoteTypeErrorsToWarnings :: ParsedModule -> ParsedModule
@@ -653,12 +670,12 @@ addRelativeImport fp modu dflags = dflags
     {importPaths = nubOrd $ maybeToList (moduleImportPath fp modu) ++ importPaths dflags}
 
 -- | Also resets the interface store
-atomicFileWrite :: ShakeExtras -> FilePath -> (FilePath -> IO a) -> IO ()
+atomicFileWrite :: ShakeExtras -> FilePath -> (FilePath -> IO a) -> IO a
 atomicFileWrite se targetPath write = do
   let dir = takeDirectory targetPath
   createDirectoryIfMissing True dir
   (tempFilePath, cleanUp) <- newTempFileWithin dir
-  (write tempFilePath >> renameFile tempFilePath targetPath >> atomically (resetInterfaceStore se (toNormalizedFilePath' targetPath)))
+  (write tempFilePath >>= \x -> renameFile tempFilePath targetPath >> atomically (resetInterfaceStore se (toNormalizedFilePath' targetPath)) >> pure x)
     `onException` cleanUp
 
 generateHieAsts :: HscEnv -> TcModuleResult -> IO ([FileDiagnostic], Maybe (HieASTs Type))
@@ -681,11 +698,13 @@ generateHieAsts hscEnv tcm =
 #endif
   where
     dflags = hsc_dflags hscEnv
+#if MIN_VERSION_ghc(9,0,0)
     run ts =
 #if MIN_VERSION_ghc(9,2,0)
         fmap (join . snd) . liftIO . initDs hscEnv ts
 #else
         id
+#endif
 #endif
 
 spliceExpresions :: Splices -> [LHsExpr GhcTc]
@@ -851,7 +870,7 @@ writeHiFile se hscEnv tc =
     atomicFileWrite se targetPath $ \fp ->
       writeIfaceFile hscEnv fp modIface
   where
-    modIface = hm_iface $ hirHomeMod tc
+    modIface = hirModIface tc
     targetPath = ml_hi_file $ ms_location $ hirModSummary tc
     dflags = hsc_dflags hscEnv
 
@@ -1193,6 +1212,7 @@ data RecompilationInfo m
   { source_version :: FileVersion
   , old_value   :: Maybe (HiFileResult, FileVersion)
   , get_file_version :: NormalizedFilePath -> m (Maybe FileVersion)
+  , get_linkable_hashes :: [NormalizedFilePath] -> m [BS.ByteString]
   , regenerate  :: Maybe LinkableType -> m ([FileDiagnostic], Maybe HiFileResult) -- ^ Action to regenerate an interface
   }
 
@@ -1213,18 +1233,16 @@ ml_core_file ml = ml_hi_file ml <.> "core"
 -- See Note [Recompilation avoidance in the presence of TH]
 loadInterface
   :: (MonadIO m, MonadMask m)
-  => ShakeExtras
-  -> HscEnv
+  => HscEnv
   -> ModSummary
   -> Maybe LinkableType
   -> RecompilationInfo m
   -> m ([FileDiagnostic], Maybe HiFileResult)
-loadInterface se session ms linkableNeeded RecompilationInfo{..} = do
+loadInterface session ms linkableNeeded RecompilationInfo{..} = do
     let sessionWithMsDynFlags = hscSetFlags (ms_hspp_opts ms) session
-        mb_old_iface = hm_iface    . hirHomeMod . fst <$> old_value
+        mb_old_iface = hirModIface . fst <$> old_value
         mb_old_version = snd <$> old_value
 
-        obj_file = ml_obj_file (ms_location ms)
         core_file = ml_core_file (ms_location ms)
         iface_file = ml_hi_file (ms_location ms)
 
@@ -1232,14 +1250,10 @@ loadInterface se session ms linkableNeeded RecompilationInfo{..} = do
 
     mb_dest_version <- case mb_old_version of
       Just ver -> pure $ Just ver
-      Nothing ->  do
-        let file = case linkableNeeded of
-              Just ObjectLinkable -> obj_file
-              Just BCOLinkable    -> core_file
-              Nothing             -> iface_file
-        get_file_version (toNormalizedFilePath' file)
+      Nothing -> get_file_version (toNormalizedFilePath' iface_file)
 
-    -- The source is modified if it is newer than the destination
+    -- The source is modified if it is newer than the destination (iface file)
+    -- A more precise check for the core file is performed later
     let sourceMod = case mb_dest_version of
           Nothing -> SourceModified -- desitination file doesn't exist, assume modified source
           Just dest_version
@@ -1247,51 +1261,9 @@ loadInterface se session ms linkableNeeded RecompilationInfo{..} = do
             | otherwise -> SourceModified
 
     -- If mb_old_iface is nothing then checkOldIface will load it for us
+    -- given that the source is unmodified
     (recomp_iface_reqd, mb_checked_iface)
       <- liftIO $ checkOldIface sessionWithMsDynFlags ms sourceMod mb_old_iface
-
-
-    (recomp_obj_reqd, mb_linkable) <- case linkableNeeded of
-      Nothing -> pure (UpToDate, Nothing)
-      Just linkableType -> case old_value of
-        -- We don't have an old result
-        Nothing -> recompMaybeBecause "missing"
-        -- We have an old result
-        Just (old_hir, old_file_version) ->
-          case hm_linkable $ hirHomeMod old_hir of
-            Nothing -> recompMaybeBecause "missing [not needed before]"
-            Just old_lb
-              | Just True <- mi_used_th <$> mb_checked_iface -- No need to recompile if TH wasn't used
-              , old_file_version /= source_version -> recompMaybeBecause "out of date"
-
-              -- Check if it is the correct type
-              -- Ideally we could use object-code in case we already have
-              -- it when we are generating bytecode, but this is difficult because something
-              -- below us may be bytecode, and object code can't depend on bytecode
-              | ObjectLinkable <- linkableType, isObjectLinkable old_lb
-              -> pure (UpToDate, Just $ GhcLinkable old_lb)
-
-              | BCOLinkable    <- linkableType , not (isObjectLinkable old_lb)
-              -> pure (UpToDate, Just $ GhcLinkable old_lb)
-
-              | otherwise -> recompMaybeBecause "missing [wrong type]"
-        where
-          recompMaybeBecause msg =
-            case mb_dest_version of -- The destination file should be the object code or the core file
-              Nothing -> pure (RecompBecause msg', Nothing)
-              Just disk_obj_version@(ModificationTime t) ->
-                if (disk_obj_version >= source_version)
-                then case linkableType of
-                  ObjectLinkable -> pure (UpToDate, Just $ GhcLinkable $ LM (posixSecondsToUTCTime t) mod [DotO obj_file])
-                  BCOLinkable -> liftIO $ do
-                    core <- readBinCoreFile (mkUpdater $ hsc_NC session)  core_file
-                    pure (UpToDate, Just $ CoreLinkable (posixSecondsToUTCTime t) core)
-                else pure (RecompBecause msg', Nothing)
-              Just (VFSVersion _) -> pure (RecompBecause msg', Nothing)
-           where
-             msg' = case linkableType of
-               BCOLinkable -> "bytecode " ++ msg
-               ObjectLinkable -> "Object code " ++ msg
 
     let do_regenerate _reason = withTrace "regenerate interface" $ \setTag -> do
           setTag "Module" $ moduleNameString $ moduleName mod
@@ -1299,83 +1271,79 @@ loadInterface se session ms linkableNeeded RecompilationInfo{..} = do
           liftIO $ traceMarkerIO $ "regenerate interface " ++ show (moduleNameString $ moduleName mod, showReason _reason)
           regenerate linkableNeeded
 
-    case (mb_checked_iface, recomp_iface_reqd <> recomp_obj_reqd) of
+    case (mb_checked_iface, recomp_iface_reqd) of
       (Just iface, UpToDate) -> do
-         -- Force it because we don't want to retain old modsummaries or linkables
-         lb <- liftIO $ evaluate $ force mb_linkable
-
          -- If we have an old value, just return it
          case old_value of
            Just (old_hir, _)
-             | Just msg <- checkLinkableDependencies (hsc_HPT sessionWithMsDynFlags) (hirRuntimeModules old_hir)
-             -> do_regenerate msg
-             | otherwise -> return ([], Just old_hir)
-           Nothing -> do
-             (warns, hmi) <- liftIO $ mkDetailsFromIface se sessionWithMsDynFlags ms iface lb
+             | if isJust linkableNeeded then isJust (hirCoreFp old_hir) else True
+             -> do
+             -- Peform the fine grained recompilation check for TH
+             maybe_recomp <- checkLinkableDependencies get_linkable_hashes (hsc_mod_graph sessionWithMsDynFlags) (hirRuntimeModules old_hir)
+             case maybe_recomp of
+               Just msg -> do_regenerate msg
+               Nothing -> return ([], Just old_hir)
+           -- Otherwise use the value from disk, provided the core file is up to date if required
+           _ -> do
+             details <- liftIO $ mkDetailsFromIface sessionWithMsDynFlags iface
              -- parse the runtime dependencies from the annotations
              let runtime_deps
                    | not (mi_used_th iface) = emptyModuleEnv
-                   | otherwise = parseRuntimeDeps (md_anns (hm_details hmi))
-             return (warns, Just $ mkHiFileResult ms hmi runtime_deps)
+                   | otherwise = parseRuntimeDeps (md_anns details)
+             -- Peform the fine grained recompilation check for TH
+             maybe_recomp <- checkLinkableDependencies get_linkable_hashes (hsc_mod_graph sessionWithMsDynFlags) runtime_deps
+             case maybe_recomp of
+               Just msg -> do_regenerate msg
+               Nothing
+                 | isJust linkableNeeded -> do
+                   (core_file@CoreFile{cf_iface_hash}, core_hash) <- liftIO $ readBinCoreFile (mkUpdater $ hsc_NC session) core_file
+                   if cf_iface_hash == getModuleHash iface
+                   then return ([], Just $ mkHiFileResult ms iface details runtime_deps (Just (core_file, fingerprintToBS core_hash)))
+                   else do_regenerate (RecompBecause "Core file out of date (doesn't match iface hash)")
+                 | otherwise -> return ([], Just $ mkHiFileResult ms iface details runtime_deps Nothing)
       (_, _reason) -> do_regenerate _reason
-
--- | ModDepTime is stored as an annotation in the iface to
--- keep track of runtime dependencies
-newtype ModDepTime = ModDepTime UTCTime
-
-deserializeModDepTime :: [Word8] -> ModDepTime
-deserializeModDepTime xs = ModDepTime $ case decode (LBS.pack xs) of
-  (a,b) -> UTCTime (toEnum a) (toEnum b)
-
-serializeModDepTime :: ModDepTime -> [Word8]
-serializeModDepTime (ModDepTime l) = LBS.unpack $
-  B.encode (fromEnum $ utctDay l, fromEnum $ utctDayTime l)
 
 -- | Find the runtime dependencies by looking at the annotations
 -- serialized in the iface
-parseRuntimeDeps :: [ModIfaceAnnotation] -> ModuleEnv UTCTime
+parseRuntimeDeps :: [ModIfaceAnnotation] -> ModuleEnv BS.ByteString
 parseRuntimeDeps anns = mkModuleEnv $ mapMaybe go anns
   where
     go (Annotation (ModuleTarget mod) payload)
-      | Just (ModDepTime t) <- fromSerialized deserializeModDepTime payload
-      = Just (mod, t)
+      | Just bs <- fromSerialized BS.pack payload
+      = Just (mod, bs)
     go _ = Nothing
 
--- | checkLinkableDependencies compares the linkables in the home package to
+-- | checkLinkableDependencies compares the core files in the shake store to
 -- the runtime dependencies of the module, to check if any of them are out of date
 -- Hopefully 'runtime_deps' will be empty if the module didn't actually use TH
 -- See Note [Recompilation avoidance in the presence of TH]
-checkLinkableDependencies :: HomePackageTable -> ModuleEnv UTCTime -> Maybe RecompileRequired
-checkLinkableDependencies hpt runtime_deps
-  | isEmptyModuleEnv out_of_date = Nothing -- Nothing out of date, so don't recompile
-  | otherwise = Just $
-      RecompBecause $ "out of date runtime dependencies: " ++ intercalate ", " (map show (moduleEnvKeys out_of_date))
-  where
-    out_of_date = filterModuleEnv (\mod time -> case lookupHpt hpt (moduleName mod) of
-                                                  Nothing -> False
-                                                  Just hm -> case hm_linkable hm of
-                                                    Nothing -> False
-                                                    Just lm -> linkableTime lm /= time)
-                                  runtime_deps
+checkLinkableDependencies :: MonadIO m => ([NormalizedFilePath] -> m [BS.ByteString]) -> ModuleGraph -> ModuleEnv BS.ByteString -> m (Maybe RecompileRequired)
+checkLinkableDependencies get_linkable_hashes graph runtime_deps = do
+  let hs_files = mapM go (moduleEnvToList runtime_deps)
+      go (mod, hash) = do
+        ms <- mgLookupModule graph mod
+        let hs = fromJust $ ml_hs_file $ ms_location ms
+        pure (toNormalizedFilePath' hs, hash)
+  case hs_files of
+    Nothing -> error "invalid module graph"
+    Just fs -> do
+      store_hashes <- get_linkable_hashes (map fst fs)
+      let out_of_date = [core_file | ((core_file, expected_hash), actual_hash) <- zip fs store_hashes, expected_hash /= actual_hash]
+      case out_of_date of
+        [] -> pure Nothing
+        _ -> pure $ Just $
+          RecompBecause $ "out of date runtime dependencies: " ++ intercalate ", " (map show out_of_date)
 
 showReason :: RecompileRequired -> String
 showReason UpToDate          = "UpToDate"
 showReason MustCompile       = "MustCompile"
 showReason (RecompBecause s) = s
 
-mkDetailsFromIface :: ShakeExtras -> HscEnv -> ModSummary -> ModIface -> Maybe IdeLinkable -> IO ([FileDiagnostic], HomeModInfo)
-mkDetailsFromIface se session ms iface ide_linkable = do
-  details <- liftIO $ fixIO $ \details -> do
+mkDetailsFromIface :: HscEnv -> ModIface -> IO ModDetails
+mkDetailsFromIface session iface = do
+  fixIO $ \details -> do
     let hsc' = session { hsc_HPT = addToHpt (hsc_HPT session) (moduleName $ mi_module iface) (HomeModInfo iface details Nothing) }
     initIfaceLoad hsc' (typecheckIface iface)
-  (warns, linkable) <- liftIO $ case ide_linkable of
-    Nothing -> pure ([], Nothing)
-    Just (GhcLinkable lb) -> pure ([], Just lb)
-    Just (CoreLinkable t core_file) -> do
-      cgi_guts <- coreFileToCgGuts session iface details core_file
-      generateByteCode se (CoreFileExists t) session ms cgi_guts
-
-  return (warns, HomeModInfo iface details linkable)
 
 coreFileToCgGuts :: HscEnv -> ModIface -> ModDetails -> CoreFile -> IO CgGuts
 coreFileToCgGuts session iface details core_file = do
@@ -1391,6 +1359,24 @@ coreFileToCgGuts session iface details core_file = do
   let implicit_binds = concatMap getImplicitBinds tyCons
       tyCons = typeEnvTyCons (md_types details)
   pure $ CgGuts this_mod tyCons (implicit_binds ++ core_binds) NoStubs [] [] (emptyHpcInfo False) Nothing []
+
+coreFileToLinkable :: LinkableType -> HscEnv -> ModSummary -> ModIface -> ModDetails -> CoreFile -> UTCTime -> IO ([FileDiagnostic], Maybe HomeModInfo)
+coreFileToLinkable linkableType session ms iface details core_file t = do
+  let act hpt = addToHpt hpt (moduleName this_mod)
+                             (HomeModInfo iface details Nothing)
+      this_mod = mi_module iface
+  types_var <- newIORef (md_types details)
+  let kv = Just (this_mod, types_var)
+      hsc_env' = session { hsc_HPT = act (hsc_HPT session)
+                         , hsc_type_env_var = kv }
+  core_binds <- initIfaceCheck (text "l") hsc_env' $ typecheckCoreFile this_mod types_var core_file
+  let implicit_binds = concatMap getImplicitBinds tyCons
+      tyCons = typeEnvTyCons (md_types details)
+  let cgi_guts = CgGuts this_mod tyCons (implicit_binds ++ core_binds) NoStubs [] [] (emptyHpcInfo False) Nothing []
+  (warns, lb) <- case linkableType of
+    BCOLinkable -> generateByteCode (CoreFileTime t) session ms cgi_guts
+    ObjectLinkable -> generateObjectCode session ms cgi_guts
+  pure (warns, HomeModInfo iface details . Just <$> lb)
 
 -- | Non-interactive, batch version of 'InteractiveEval.getDocs'.
 --   The interactive paths create problems in ghc-lib builds

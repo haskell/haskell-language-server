@@ -5,13 +5,14 @@
 -- | CoreFiles let us serialize Core to a file in order to later recover it
 -- without reparsing or retypechecking
 module Development.IDE.GHC.CoreFile
-  ( CoreFile
+  ( CoreFile(..)
   , codeGutsToCoreFile
   , typecheckCoreFile
   , readBinCoreFile
   , writeBinCoreFile
   , getImplicitBinds) where
 
+import GHC.Fingerprint
 import Data.IORef
 import Data.Foldable
 import Data.List (isPrefixOf)
@@ -29,6 +30,7 @@ import GHC.IfaceToCore
 import GHC.Iface.Env
 import GHC.Iface.Binary
 import GHC.Types.Id.Make
+import GHC.Iface.Recomp.Binary ( fingerprintBinMem )
 
 #if MIN_VERSION_ghc(9,2,0)
 import GHC.Types.TypeEnv
@@ -48,13 +50,21 @@ import IdInfo
 import Var
 import Unique
 import MkId
+import BinFingerprint ( fingerprintBinMem )
 #endif
+
+import qualified Development.IDE.GHC.Compat.Util as Util
 
 -- | Initial ram buffer to allocate for writing interface files
 initBinMemSize :: Int
 initBinMemSize = 1024 * 1024
 
-newtype CoreFile = CoreFile { cf_bindings :: [TopIfaceBinding IfaceId] }
+data CoreFile
+  = CoreFile
+  { cf_bindings :: [TopIfaceBinding IfaceId]
+  -- ^ The actual core file bindings, deserialized lazily
+  , cf_iface_hash :: !Fingerprint
+  }
 
 -- | Like IfaceBinding, but lets us serialize internal names as well
 data TopIfaceBinding v
@@ -84,19 +94,21 @@ instance Binary (TopIfaceBinding IfaceId) where
       _ -> error "Binary TopIfaceBinding"
 
 instance Binary CoreFile where
-  put_ bh (CoreFile a) = put_ bh a
-  get bh = CoreFile <$> get bh
+  put_ bh (CoreFile core fp) = lazyPut bh core >> put_ bh fp
+  get bh = CoreFile <$> lazyGet bh <*> get bh
 
 readBinCoreFile
   :: NameCacheUpdater
   -> FilePath
-  -> IO CoreFile
+  -> IO (CoreFile, Fingerprint)
 readBinCoreFile name_cache fat_hi_path = do
     bh <- readBinMem fat_hi_path
-    getWithUserData name_cache bh
+    file <- getWithUserData name_cache bh
+    !fp <- Util.getFileHash fat_hi_path
+    return (file, fp)
 
 -- | Write a core file
-writeBinCoreFile :: FilePath -> CoreFile -> IO ()
+writeBinCoreFile :: FilePath -> CoreFile -> IO Fingerprint
 writeBinCoreFile core_path fat_iface = do
     bh <- openBinMem initBinMemSize
 
@@ -112,11 +124,17 @@ writeBinCoreFile core_path fat_iface = do
     -- And send the result to the file
     writeBinMem bh core_path
 
+    !fp <- fingerprintBinMem bh
+    pure fp
+
 -- Implicit binds aren't tidied, so we can't serialise them.
 -- This isn't a problem however since we can regenerate them from the
 -- original ModIface
-codeGutsToCoreFile :: CgGuts -> CoreFile
-codeGutsToCoreFile CgGuts{..} = CoreFile (map (toIfaceTopBind cg_module) $ filter isNotImplictBind cg_binds)
+codeGutsToCoreFile
+  :: Fingerprint -- ^ Hash of the interface this was generated from
+  -> CgGuts
+  -> CoreFile
+codeGutsToCoreFile hash CgGuts{..} = CoreFile (map (toIfaceTopBind cg_module) $ filter isNotImplictBind cg_binds) hash
 
 -- | Implicit binds can be generated from the interface and are not tidied,
 -- so we must filter them out
@@ -157,7 +175,7 @@ toIfaceTopBind mod (NonRec b r) = TopIfaceNonRec (toIfaceTopBndr mod b) (toIface
 toIfaceTopBind mod (Rec prs)    = TopIfaceRec [(toIfaceTopBndr mod b, toIfaceExpr r) | (b,r) <- prs]
 
 typecheckCoreFile :: Module -> IORef TypeEnv -> CoreFile -> IfG CoreProgram
-typecheckCoreFile this_mod type_var (CoreFile prepd_binding) =
+typecheckCoreFile this_mod type_var (CoreFile prepd_binding _) =
   initIfaceLcl this_mod (text "typecheckCoreFile") NotBoot $ do
     tcTopIfaceBindings type_var prepd_binding
 

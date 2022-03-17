@@ -458,9 +458,9 @@ callRetrie state session rewrites origin restrictToOriginatingFile = do
             let fs = occNameFS n
         ]
     fixFixities f pm = do
-      HiFileResult {hirHomeMod} <-
+      HiFileResult {hirModIface} <-
         useOrFail "GetModIface" NoTypeCheck GetModIface f
-      let fixities = fixityEnvFromModIface $ hm_iface hirHomeMod
+      let fixities = fixityEnvFromModIface hirModIface
       res <- transformA pm (fix fixities)
       return (fixities, res)
     fixAnns ParsedModule {..} =
