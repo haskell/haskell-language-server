@@ -1739,7 +1739,7 @@ data ImportStyle
       --
       -- import M (P(..))
       --
-      -- @P@ __must__ be a data type.
+      -- @P@ can be a data type or a class.
   deriving Show
 
 importStyles :: IdentInfo -> NonEmpty ImportStyle
@@ -1750,7 +1750,7 @@ importStyles IdentInfo {parent, rendered, isDatacon}
     -- top-level exports.
   = ImportViaParent rendered p
       :| [ImportTopLevel rendered | not isDatacon]
-      <> [ImportAllConstructors p | isDatacon]
+      <> [ImportAllConstructors p]
   | otherwise
   = ImportTopLevel rendered :| []
 
@@ -1765,7 +1765,7 @@ renderImportStyle (ImportAllConstructors p) = p <> "(..)"
 unImportStyle :: ImportStyle -> (Maybe String, String)
 unImportStyle (ImportTopLevel x)    = (Nothing, T.unpack x)
 unImportStyle (ImportViaParent x y) = (Just $ T.unpack y, T.unpack x)
-unImportStyle (ImportAllConstructors x) = (Just $ T.unpack x, "..")
+unImportStyle (ImportAllConstructors x) = (Just $ T.unpack x, wildCardSymbol)
 
 
 quickFixImportKind' :: T.Text -> ImportStyle -> CodeActionKind
