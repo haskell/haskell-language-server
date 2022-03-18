@@ -29,7 +29,7 @@ packages:
          ./plugins/hls-selection-range-plugin
          ./plugins/hls-change-type-signature-plugin
 
-with-compiler: ghc-9.2
+with-compiler: ghc-9.2.2
 
 tests: true
 
