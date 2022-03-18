@@ -4057,8 +4057,8 @@ findDefinitionAndHoverTests = let
     , testGroup "hover"      $ mapMaybe snd tests
     , checkFileCompiles sourceFilePath $
         expectDiagnostics
-          [ ( "GotoHover.hs", [(DsError, (62, 7), "Found hole: _")]) 
-          , ( "GotoHover.hs", [(DsError, (65, 8), "Found hole: _")]) 
+          [ ( "GotoHover.hs", [(DsError, (62, 7), "Found hole: _")])
+          , ( "GotoHover.hs", [(DsError, (65, 8), "Found hole: _")])
           ]
     , testGroup "type-definition" typeDefinitionTests ]
 
@@ -4717,13 +4717,13 @@ nonLocalCompletionTests =
       "constructor"
       ["{-# OPTIONS_GHC -Wall #-}", "module A where", "f = True"]
       (Position 2 8)
-      [ ("True", CiConstructor, "True ", True, True, Nothing)
+      [ ("True", CiConstructor, "True", True, True, Nothing)
       ],
     completionTest
       "type"
       ["{-# OPTIONS_GHC -Wall #-}", "module A () where", "f :: Boo", "f = True"]
       (Position 2 8)
-      [ ("Bool", CiStruct, "Bool ", True, True, Nothing)
+      [ ("Bool", CiStruct, "Bool", True, True, Nothing)
       ],
     completionTest
       "qualified"
@@ -4898,7 +4898,7 @@ otherCompletionTests = [
       -- This should be sufficient to detect that we are in a
       -- type context and only show the completion to the type.
       (Position 3 11)
-      [("Integer", CiStruct, "Integer ", True, True, Nothing)],
+      [("Integer", CiStruct, "Integer", True, True, Nothing)],
 
     testSession "duplicate record fields" $ do
       void $
