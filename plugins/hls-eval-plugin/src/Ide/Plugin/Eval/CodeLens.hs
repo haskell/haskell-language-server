@@ -54,7 +54,8 @@ import           Development.IDE                 (GetModSummary (..),
                                                   textToStringBuffer,
                                                   toNormalizedFilePath',
                                                   uriToFilePath', useNoFile_,
-                                                  useWithStale_, use_)
+                                                  useWithStale_, use_,
+                                                  VFSModified(..))
 import           Development.IDE.Core.Rules      (GhcSessionDepsConfig (..),
                                                   ghcSessionDepsDefinition)
 import           Development.IDE.GHC.Compat      hiding (typeKind, unitState)
@@ -203,7 +204,7 @@ runEvalCmd plId st EvalParams{..} =
 
             -- enable codegen
             liftIO $ queueForEvaluation st nfp
-            liftIO $ setSomethingModified st [toKey NeedsCompilation nfp] "Eval"
+            liftIO $ setSomethingModified VFSUnmodified st [toKey NeedsCompilation nfp] "Eval"
 
             session <- runGetSession st nfp
 

@@ -6417,7 +6417,7 @@ unitTests recorder logger = do
         let plugins = pluginDescToIdePlugins $
                 [ (defaultPluginDescriptor $ fromString $ show i)
                     { pluginNotificationHandlers = mconcat
-                        [ mkPluginNotificationHandler LSP.STextDocumentDidOpen $ \_ _ _ ->
+                        [ mkPluginNotificationHandler LSP.STextDocumentDidOpen $ \_ _ _ _ ->
                             liftIO $ atomicModifyIORef_ orderRef (i:)
                         ]
                     }

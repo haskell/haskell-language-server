@@ -55,41 +55,41 @@ whenUriFile uri act = whenJust (LSP.uriToFilePath uri) $ act . toNormalizedFileP
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId) { pluginNotificationHandlers = mconcat
   [ mkPluginNotificationHandler LSP.STextDocumentDidOpen $
-      \ide _ (DidOpenTextDocumentParams TextDocumentItem{_uri,_version}) -> liftIO $ do
+      \ide vfs _ (DidOpenTextDocumentParams TextDocumentItem{_uri,_version}) -> liftIO $ do
       atomically $ updatePositionMapping ide (VersionedTextDocumentIdentifier _uri (Just _version)) (List [])
       whenUriFile _uri $ \file -> do
           -- We don't know if the file actually exists, or if the contents match those on disk
           -- For example, vscode restores previously unsaved contents on open
           addFileOfInterest ide file Modified{firstOpen=True}
-          setFileModified (cmapWithPrio LogFileStore recorder) ide False file
+          setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide False file
           logDebug (ideLogger ide) $ "Opened text document: " <> getUri _uri
 
   , mkPluginNotificationHandler LSP.STextDocumentDidChange $
-      \ide _ (DidChangeTextDocumentParams identifier@VersionedTextDocumentIdentifier{_uri} changes) -> liftIO $ do
+      \ide vfs _ (DidChangeTextDocumentParams identifier@VersionedTextDocumentIdentifier{_uri} changes) -> liftIO $ do
         atomically $ updatePositionMapping ide identifier changes
         whenUriFile _uri $ \file -> do
           addFileOfInterest ide file Modified{firstOpen=False}
-          setFileModified (cmapWithPrio LogFileStore recorder) ide False file
+          setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide False file
         logDebug (ideLogger ide) $ "Modified text document: " <> getUri _uri
 
   , mkPluginNotificationHandler LSP.STextDocumentDidSave $
-      \ide _ (DidSaveTextDocumentParams TextDocumentIdentifier{_uri} _) -> liftIO $ do
+      \ide vfs _ (DidSaveTextDocumentParams TextDocumentIdentifier{_uri} _) -> liftIO $ do
         whenUriFile _uri $ \file -> do
             addFileOfInterest ide file OnDisk
-            setFileModified (cmapWithPrio LogFileStore recorder) ide True file
+            setFileModified (cmapWithPrio LogFileStore recorder) (VFSModified vfs) ide True file
         logDebug (ideLogger ide) $ "Saved text document: " <> getUri _uri
 
   , mkPluginNotificationHandler LSP.STextDocumentDidClose $
-        \ide _ (DidCloseTextDocumentParams TextDocumentIdentifier{_uri}) -> liftIO $ do
+        \ide vfs _ (DidCloseTextDocumentParams TextDocumentIdentifier{_uri}) -> liftIO $ do
           whenUriFile _uri $ \file -> do
               deleteFileOfInterest ide file
               let msg = "Closed text document: " <> getUri _uri
               scheduleGarbageCollection ide
-              setSomethingModified ide [] $ Text.unpack msg
+              setSomethingModified (VFSModified vfs) ide [] $ Text.unpack msg
               logDebug (ideLogger ide) msg
 
   , mkPluginNotificationHandler LSP.SWorkspaceDidChangeWatchedFiles $
-      \ide _ (DidChangeWatchedFilesParams (List fileEvents)) -> liftIO $ do
+      \ide vfs _ (DidChangeWatchedFilesParams (List fileEvents)) -> liftIO $ do
         -- See Note [File existence cache and LSP file watchers] which explains why we get these notifications and
         -- what we do with them
         -- filter out files of interest, since we already know all about those
@@ -106,10 +106,10 @@ descriptor recorder plId = (defaultPluginDescriptor plId) { pluginNotificationHa
             logDebug (ideLogger ide) $ "Watched file events: " <> Text.pack msg
             modifyFileExists ide fileEvents'
             resetFileStore ide fileEvents'
-            setSomethingModified ide [] msg
+            setSomethingModified (VFSModified vfs) ide [] msg
 
   , mkPluginNotificationHandler LSP.SWorkspaceDidChangeWorkspaceFolders $
-      \ide _ (DidChangeWorkspaceFoldersParams events) -> liftIO $ do
+      \ide _ _ (DidChangeWorkspaceFoldersParams events) -> liftIO $ do
         let add       = S.union
             substract = flip S.difference
         modifyWorkspaceFolders ide
@@ -117,13 +117,13 @@ descriptor recorder plId = (defaultPluginDescriptor plId) { pluginNotificationHa
           . substract (foldMap (S.singleton . parseWorkspaceFolder) (_removed events))
 
   , mkPluginNotificationHandler LSP.SWorkspaceDidChangeConfiguration $
-      \ide _ (DidChangeConfigurationParams cfg) -> liftIO $ do
+      \ide vfs _ (DidChangeConfigurationParams cfg) -> liftIO $ do
         let msg = Text.pack $ show cfg
         logDebug (ideLogger ide) $ "Configuration changed: " <> msg
         modifyClientSettings ide (const $ Just cfg)
-        setSomethingModified ide [toKey GetClientSettings emptyFilePath] "config change"
+        setSomethingModified (VFSModified vfs) ide [toKey GetClientSettings emptyFilePath] "config change"
 
-  , mkPluginNotificationHandler LSP.SInitialized $ \ide _ _ -> do
+  , mkPluginNotificationHandler LSP.SInitialized $ \ide _ _ _ -> do
       --------- Initialize Shake session --------------------------------------------------------------------
       liftIO $ shakeSessionInit (cmapWithPrio LogShake recorder) ide
 
