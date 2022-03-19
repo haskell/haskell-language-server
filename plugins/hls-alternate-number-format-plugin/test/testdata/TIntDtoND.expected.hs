@@ -2,4 +2,4 @@
 module TIntDtoND where
 
 convertMe :: Integer
-convertMe = 125.345e3
+convertMe = 1.25345e5

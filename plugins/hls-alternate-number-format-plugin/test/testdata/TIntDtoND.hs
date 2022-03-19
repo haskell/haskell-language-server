@@ -1,4 +1,3 @@
-{-# LANGUAGE NumDecimals #-}
 module TIntDtoND where
 
 convertMe :: Integer
