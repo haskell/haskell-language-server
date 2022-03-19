@@ -828,22 +828,11 @@ getModIfaceFromDiskAndIndexRule recorder =
 
   return (Just x)
 
-displayTHWarning :: LspT c IO ()
-displayTHWarning
-  | not isWindows && not hostIsDynamic = do
-      LSP.sendNotification SWindowShowMessage $
-        ShowMessageParams MtInfo $ T.unwords
-          [ "This HLS binary does not support Template Haskell."
-          , "Follow the [instructions](" <> templateHaskellInstructions <> ")"
-          , "to build an HLS binary with support for Template Haskell."
-          ]
-  | otherwise = return ()
-
-newtype DisplayTHWarning = DisplayTHWarning (IO ())
+newtype DisplayTHWarning = DisplayTHWarning (IO())
 instance IsIdeGlobal DisplayTHWarning
 
-getModSummaryRule :: Recorder (WithPriority Log) -> Rules ()
-getModSummaryRule recorder = do
+getModSummaryRule :: LspT Config IO () -> Recorder (WithPriority Log) -> Rules ()
+getModSummaryRule displayTHWarning recorder = do
     menv <- lspEnv <$> getShakeExtrasRules
     forM_ menv $ \env -> do
         displayItOnce <- liftIO $ once $ LSP.runLspT env displayTHWarning
@@ -1103,9 +1092,23 @@ data RulesConfig = RulesConfig
       checkForImportCycles :: Bool
     -- | Disable TH for improved performance in large codebases
     , enableTemplateHaskell :: Bool
+    -- | Warning to show when TH is not supported by the current HLS binary
+    , templateHaskellWarning :: LspT Config IO ()
     }
 
-instance Default RulesConfig where def = RulesConfig True True
+instance Default RulesConfig where
+    def = RulesConfig True True displayTHWarning
+      where
+        displayTHWarning :: LspT c IO ()
+        displayTHWarning
+            | not isWindows && not hostIsDynamic = do
+                LSP.sendNotification SWindowShowMessage $
+                    ShowMessageParams MtInfo $ T.unwords
+                    [ "This HLS binary does not support Template Haskell."
+                    , "Follow the [instructions](" <> templateHaskellInstructions <> ")"
+                    , "to build an HLS binary with support for Template Haskell."
+                    ]
+            | otherwise = return ()
 
 -- | A rule that wires per-file rules together
 mainRule :: Recorder (WithPriority Log) -> RulesConfig -> Rules ()
@@ -1123,7 +1126,7 @@ mainRule recorder RulesConfig{..} = do
     getModIfaceFromDiskRule recorder
     getModIfaceFromDiskAndIndexRule recorder
     getModIfaceRule recorder
-    getModSummaryRule recorder
+    getModSummaryRule templateHaskellWarning recorder
     getModuleGraphRule recorder
     knownFilesRule recorder
     getClientSettingsRule recorder

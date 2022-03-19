@@ -19,6 +19,8 @@ module Development.IDE.Plugin.CodeAction.ExactPrint (
   extendImport,
   hideSymbol,
   liftParseAST,
+
+  wildCardSymbol
 ) where
 
 import           Control.Applicative
@@ -330,6 +332,7 @@ extendImport :: Maybe String -> String -> LImportDecl GhcPs -> Rewrite
 extendImport mparent identifier lDecl@(L l _) =
   Rewrite (locA l) $ \df -> do
     case mparent of
+      -- This will also work for `ImportAllConstructors`
       Just parent -> extendImportViaParent df parent identifier lDecl
       _           -> extendImportTopLevel identifier lDecl
 
@@ -379,6 +382,9 @@ extendImportTopLevel thing (L l it@ImportDecl{..})
 #endif
 extendImportTopLevel _ _ = lift $ Left "Unable to extend the import list"
 
+wildCardSymbol :: String
+wildCardSymbol = ".."
+
 -- | Add an identifier with its parent to import list
 --
 -- extendImportViaParent "Bar" "Cons" AST:
@@ -389,6 +395,11 @@ extendImportTopLevel _ _ = lift $ Left "Unable to extend the import list"
 -- import A () --> import A (Bar(Cons))
 -- import A (Foo, Bar) --> import A (Foo, Bar(Cons))
 -- import A (Foo, Bar()) --> import A (Foo, Bar(Cons))
+--
+-- extendImportViaParent "Bar" ".." AST:
+-- import A () --> import A (Bar(..))
+-- import A (Foo, Bar) -> import A (Foo, Bar(..))
+-- import A (Foo, Bar()) -> import A (Foo, Bar(..))
 extendImportViaParent ::
   DynFlags ->
   -- | parent (already parenthesized if needs)
@@ -424,6 +435,19 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
 #endif
     -- ThingWith ie lies' => ThingWith ie (lies' ++ [child])
     | parent == unIEWrappedName ie
+    , child == wildCardSymbol = do
+#if MIN_VERSION_ghc(9,2,0)
+        let it' = it{ideclHiding = Just (hide, lies)}
+            thing = IEThingWith newl twIE (IEWildcard 2) []
+            newl = (\ann -> ann ++ [(AddEpAnn AnnDotdot d0)]) <$> l'''
+            lies = L l' $ reverse pre ++ [L l'' thing] ++ xs
+        return $ L l it'
+#else
+        let thing = L l'' (IEThingWith noExtField twIE (IEWildcard 2)  [] [])
+        modifyAnnsT (Map.map (\ann -> ann{annsDP = (G AnnDotdot, dp00) : annsDP ann}))
+        return $ L l it{ideclHiding = Just (hide, L l' $ reverse pre ++ [thing] ++ xs)}
+#endif
+    | parent == unIEWrappedName ie
     , hasSibling <- not $ null lies' =
       do
         srcChild <- uniqueSrcSpanT
@@ -448,9 +472,7 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
             lies = L l' $ reverse pre ++
                 [L l'' (IEThingWith l''' twIE NoIEWildcard (over _last fixLast lies' ++ [childLIE]))] ++ xs
             fixLast = if hasSibling then first addComma else id
-        return $ if hasSibling
-            then L l it'
-            else L l it'
+        return $ L l it'
 #endif
   go hide l' pre (x : xs) = go hide l' (x : pre) xs
   go hide l' pre []
