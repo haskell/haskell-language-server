@@ -90,7 +90,7 @@ import           Ide.Plugin.Eval.Code            (Statement, asStatements,
                                                   evalSetup, myExecStmt,
                                                   propSetup, resultRange,
                                                   testCheck, testRanges)
-import           Ide.Plugin.Eval.Config          (getDiffProperty)
+import           Ide.Plugin.Eval.Config          (getEvalConfig, EvalConfig(..))
 import           Ide.Plugin.Eval.GHC             (addImport, addPackages,
                                                   hasPackage, showDynFlags)
 import           Ide.Plugin.Eval.Parse.Comments  (commentsToSections)
@@ -292,13 +292,13 @@ runEvalCmd plId st EvalParams{..} =
                         -- Evaluation takes place 'inside' the module
                         setContext [Compat.IIModule modName]
                         Right <$> getSession
-            diff <- lift $ getDiffProperty plId
+            evalCfg <- lift $ getEvalConfig plId
             edits <-
                 perf "edits" $
                     liftIO $
                         evalGhcEnv hscEnv' $
                             runTests
-                                diff
+                                evalCfg
                                 (st, fp)
                                 tests
 
@@ -340,8 +340,8 @@ testsBySection sections =
 
 type TEnv = (IdeState, String)
 
-runTests :: Bool -> TEnv -> [(Section, Test)] -> Ghc [TextEdit]
-runTests diff e@(_st, _) tests = do
+runTests :: EvalConfig -> TEnv -> [(Section, Test)] -> Ghc [TextEdit]
+runTests EvalConfig{..} e@(_st, _) tests = do
     df <- getInteractiveDynFlags
     evalSetup
     when (hasQuickCheck df && needsQuickCheck tests) $ void $ evals True e df propSetup
@@ -356,7 +356,7 @@ runTests diff e@(_st, _) tests = do
         rs <- runTest e df test
         dbg "TEST RESULTS" rs
 
-        let checkedResult = testCheck diff (section, test) rs
+        let checkedResult = testCheck eval_cfg_diff (section, test) rs
 
         let edit = asEdit (sectionFormat section) test (map pad checkedResult)
         dbg "TEST EDIT" edit
@@ -368,7 +368,7 @@ runTests diff e@(_st, _) tests = do
             return $
                 singleLine
                     "Add QuickCheck to your cabal dependencies to run this test."
-    runTest e df test = evals (isProperty test) e df (asStatements test)
+    runTest e df test = evals (eval_cfg_exception && not (isProperty test)) e df (asStatements test)
 
 asEdit :: Format -> Test -> [Text] -> TextEdit
 asEdit (MultiLine commRange) test resultLines
@@ -419,29 +419,33 @@ Nothing is returned for an empty line:
 A, possibly multi line, error is returned for a wrong declaration, directive or value or an exception thrown by the evaluated code:
 
 >>>:set -XNonExistent
-Unknown extension: "NonExistent"
+Some flags have not been recognized: -XNonExistent
 
 >>> cls C
-Variable not in scope: cls :: t0 -> ()
+Variable not in scope: cls :: t0 -> t
 Data constructor not in scope: C
 
 >>> "A
 lexical error in string/character literal at end of input
 
+Exceptions are shown as if printed, but it can be configured to include prefix like
+in GHCi or doctest. This allows it to be used as a hack to simulate print until we
+get proper IO support. See #1977
+
 >>> 3 `div` 0
-*** Exception: divide by zero
+divide by zero
 
 >>> error "Something went wrong\nbad times" :: E.SomeException
-*** Exception: Something went wrong
+Something went wrong
 bad times
 
 Or for a value that does not have a Show instance and can therefore not be displayed:
 >>> data V = V
 >>> V
-No instance for (Show V)
+No instance for (Show V) arising from a use of ‘evalPrint’
 -}
 evals :: Bool -> TEnv -> DynFlags -> [Statement] -> Ghc [Text]
-evals property (st, fp) df stmts = do
+evals mark_exception (st, fp) df stmts = do
     er <- gStrictTry $ mapM eval stmts
     return $ case er of
         Left err -> errorLines err
@@ -489,7 +493,7 @@ evals property (st, fp) df stmts = do
                 dbg "{STMT " stmt
                 res <- exec stmt l
                 let r = case res of
-                        Left err -> Just . (if property then errorLines else exceptionLines) $ err
+                        Left err -> Just . (if mark_exception then exceptionLines else errorLines) $ err
                         Right x  -> singleLine <$> x
                 dbg "STMT} -> " r
                 return r
