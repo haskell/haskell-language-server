@@ -1513,7 +1513,108 @@ extendImportTests = testGroup "extend import actions"
   ]
   where
     tests overrideCheckProject =
-        [ testSession "extend single line import with value" $ template
+        [ testSession "extend all constructors for record field" $ template
+            [("ModuleA.hs", T.unlines
+                    [ "module ModuleA where"
+                    , "data A = B { a :: Int }"
+                    ])]
+            ("ModuleB.hs", T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA (A(B))"
+                    , "f = a"
+                    ])
+            (Range (Position 2 4) (Position 2 5))
+            [ "Add A(..) to the import list of ModuleA"
+            , "Add A(a) to the import list of ModuleA"
+            , "Add a to the import list of ModuleA"
+            ]
+            (T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA (A(..))"
+                    , "f = a"
+                    ])
+        , testSession "extend all constructors with sibling" $ template
+            [("ModuleA.hs", T.unlines
+                    [ "module ModuleA where"
+                    , "data Foo"
+                    , "data Bar"
+                    , "data A = B | C"
+                    ])]
+            ("ModuleB.hs", T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA ( Foo,  A (C) , Bar ) "
+                    , "f = B"
+                    ])
+            (Range (Position 2 4) (Position 2 5))
+            [ "Add A(..) to the import list of ModuleA"
+            , "Add A(B) to the import list of ModuleA"
+            ]
+            (T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA ( Foo,  A (..) , Bar ) "
+                    , "f = B"
+                    ])
+        , testSession "extend all constructors with comment" $ template
+            [("ModuleA.hs", T.unlines
+                    [ "module ModuleA where"
+                    , "data Foo"
+                    , "data Bar"
+                    , "data A = B | C"
+                    ])]
+            ("ModuleB.hs", T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA ( Foo,  A (C{-comment--}) , Bar ) "
+                    , "f = B"
+                    ])
+            (Range (Position 2 4) (Position 2 5))
+            [ "Add A(..) to the import list of ModuleA"
+            , "Add A(B) to the import list of ModuleA"
+            ]
+            (T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA ( Foo,  A (..{-comment--}) , Bar ) "
+                    , "f = B"
+                    ])
+        , testSession "extend all constructors for type operator" $ template
+            []
+            ("ModuleA.hs", T.unlines
+                    [ "module ModuleA where"
+                    , "import Data.Type.Equality ((:~:))"
+                    , "x :: (:~:) [] []"
+                    , "x = Refl"
+                    ])
+            (Range (Position 3 17) (Position 3 18))
+            [ "Add (:~:)(..) to the import list of Data.Type.Equality"
+            , "Add type (:~:)(Refl) to the import list of Data.Type.Equality"]
+            (T.unlines
+                    [ "module ModuleA where"
+                    , "import Data.Type.Equality ((:~:) (..))"
+                    , "x :: (:~:) [] []"
+                    , "x = Refl"
+                    ])
+        , testSession "extend all constructors for class" $ template
+            [("ModuleA.hs", T.unlines
+                    [ "module ModuleA where"
+                    , "class C a where"
+                    , "  m1 :: a -> a"
+                    , "  m2 :: a -> a"
+                    ])]
+            ("ModuleB.hs", T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA (C(m1))"
+                    , "b = m2"
+                    ])
+            (Range (Position 2 5) (Position 2 5))
+            [ "Add C(..) to the import list of ModuleA"
+            , "Add C(m2) to the import list of ModuleA"
+            , "Add m2 to the import list of ModuleA"
+            ]
+            (T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA (C(..))"
+                    , "b = m2"
+                    ])
+        , testSession "extend single line import with value" $ template
             [("ModuleA.hs", T.unlines
                     [ "module ModuleA where"
                     , "stuffA :: Double"
@@ -1561,7 +1662,9 @@ extendImportTests = testGroup "extend import actions"
                     , "main = case (fromList []) of _ :| _ -> pure ()"
                     ])
             (Range (Position 2 5) (Position 2 6))
-            ["Add NonEmpty((:|)) to the import list of Data.List.NonEmpty"]
+            [ "Add NonEmpty((:|)) to the import list of Data.List.NonEmpty"
+            , "Add NonEmpty(..) to the import list of Data.List.NonEmpty"
+            ]
             (T.unlines
                     [ "module ModuleB where"
                     , "import Data.List.NonEmpty (fromList, NonEmpty ((:|)))"
@@ -1576,7 +1679,9 @@ extendImportTests = testGroup "extend import actions"
                     , "x = Just 10"
                     ])
             (Range (Position 3 5) (Position 2 6))
-            ["Add Maybe(Just) to the import list of Data.Maybe"]
+            [ "Add Maybe(Just) to the import list of Data.Maybe"
+            , "Add Maybe(..) to the import list of Data.Maybe"
+            ]
             (T.unlines
                     [ "module ModuleB where"
                     , "import Prelude hiding (Maybe(..))"
@@ -1614,7 +1719,9 @@ extendImportTests = testGroup "extend import actions"
                     , "b = Constructor"
                     ])
             (Range (Position 3 5) (Position 3 5))
-            ["Add A(Constructor) to the import list of ModuleA"]
+            [ "Add A(Constructor) to the import list of ModuleA"
+            , "Add A(..) to the import list of ModuleA"
+            ]
             (T.unlines
                     [ "module ModuleB where"
                     , "import ModuleA (A (Constructor))"
@@ -1633,7 +1740,9 @@ extendImportTests = testGroup "extend import actions"
                     , "b = Constructor"
                     ])
             (Range (Position 3 5) (Position 3 5))
-            ["Add A(Constructor) to the import list of ModuleA"]
+            [ "Add A(Constructor) to the import list of ModuleA"
+            , "Add A(..) to the import list of ModuleA"
+            ]
             (T.unlines
                     [ "module ModuleB where"
                     , "import ModuleA (A (Constructor{-Constructor-}))"
@@ -1653,7 +1762,9 @@ extendImportTests = testGroup "extend import actions"
                     , "b = ConstructorFoo"
                     ])
             (Range (Position 3 5) (Position 3 5))
-            ["Add A(ConstructorFoo) to the import list of ModuleA"]
+            [ "Add A(ConstructorFoo) to the import list of ModuleA"
+            , "Add A(..) to the import list of ModuleA"
+            ]
             (T.unlines
                     [ "module ModuleB where"
                     , "import ModuleA (A (ConstructorBar, ConstructorFoo), a)"
@@ -1715,8 +1826,10 @@ extendImportTests = testGroup "extend import actions"
                     , "b = m2"
                     ])
             (Range (Position 2 5) (Position 2 5))
-            ["Add C(m2) to the import list of ModuleA",
-             "Add m2 to the import list of ModuleA"]
+            [ "Add C(m2) to the import list of ModuleA"
+            , "Add m2 to the import list of ModuleA"
+            , "Add C(..) to the import list of ModuleA"
+            ]
             (T.unlines
                     [ "module ModuleB where"
                     , "import ModuleA (C(m1, m2))"
@@ -1735,8 +1848,10 @@ extendImportTests = testGroup "extend import actions"
                     , "b = m2"
                     ])
             (Range (Position 2 5) (Position 2 5))
-            ["Add m2 to the import list of ModuleA",
-             "Add C(m2) to the import list of ModuleA"]
+            [ "Add m2 to the import list of ModuleA"
+            , "Add C(m2) to the import list of ModuleA"
+            , "Add C(..) to the import list of ModuleA"
+            ]
             (T.unlines
                     [ "module ModuleB where"
                     , "import ModuleA (C(m1), m2)"
@@ -1777,7 +1892,8 @@ extendImportTests = testGroup "extend import actions"
                     , "x = Refl"
                     ])
             (Range (Position 3 17) (Position 3 18))
-            ["Add type (:~:)(Refl) to the import list of Data.Type.Equality"]
+            [ "Add type (:~:)(Refl) to the import list of Data.Type.Equality"
+            , "Add (:~:)(..) to the import list of Data.Type.Equality"]
             (T.unlines
                     [ "module ModuleA where"
                     , "import Data.Type.Equality ((:~:) (Refl))"
@@ -1817,7 +1933,7 @@ extendImportTests = testGroup "extend import actions"
                     , "f = Foo 1"
                     ])
             (Range (Position 3 4) (Position 3 6))
-            ["Add Foo(Foo) to the import list of ModuleA"]
+            ["Add Foo(Foo) to the import list of ModuleA", "Add Foo(..) to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
                     , "import ModuleA(Foo (Foo))"
@@ -1997,11 +2113,14 @@ suggestImportTests = testGroup "suggest import actions"
     , test False []         "f ExitSuccess = ()"          []                "import System.Exit (ExitSuccess)"
       -- don't suggest data constructor when we only need the type
     , test False []         "f :: Bar"                    []                "import Bar (Bar(Bar))"
+      -- don't suggest all data constructors for the data type
+    , test False []         "f :: Bar"                    []                "import Bar (Bar(..))"
     ]
   , testGroup "want suggestion"
     [ wantWait  []          "f = foo"                     []                "import Foo (foo)"
     , wantWait  []          "f = Bar"                     []                "import Bar (Bar(Bar))"
     , wantWait  []          "f :: Bar"                    []                "import Bar (Bar)"
+    , wantWait  []          "f = Bar"                     []                "import Bar (Bar(..))"
     , test True []          "f = nonEmpty"                []                "import Data.List.NonEmpty (nonEmpty)"
     , test True []          "f = (:|)"                    []                "import Data.List.NonEmpty (NonEmpty((:|)))"
     , test True []          "f :: Natural"                ["f = undefined"] "import Numeric.Natural (Natural)"
@@ -2043,12 +2162,15 @@ suggestImportTests = testGroup "suggest import actions"
       , "qualified Data.Functor as T"
       , "qualified Data.Data as T"
       ]                     "f = T.putStrLn"              []                "import qualified Data.Text.IO as T"
+    , test True []          "f = (.|.)"                   []                "import Data.Bits (Bits(..))"
+    , test True []          "f = empty"                   []                "import Control.Applicative (Alternative(..))"
     ]
-    , expectFailBecause "importing pattern synonyms is unsupported" $ test True [] "k (Some x) = x" [] "import B (pattern Some)"
+  , expectFailBecause "importing pattern synonyms is unsupported" $ test True [] "k (Some x) = x" [] "import B (pattern Some)"
   ]
   where
     test = test' False
     wantWait = test' True True
+
     test' waitForCheckProject wanted imps def other newImp = testSessionWithExtraFiles "hover" (T.unpack def) $ \dir -> do
       configureCheckProject waitForCheckProject
       let before = T.unlines $ "module A where" : ["import " <> x | x <- imps] ++ def : other
@@ -2058,7 +2180,7 @@ suggestImportTests = testGroup "suggest import actions"
       liftIO $ writeFileUTF8 (dir </> "B.hs") $ unlines ["{-# LANGUAGE PatternSynonyms #-}", "module B where", "pattern Some x = Just x"]
       doc <- createDoc "Test.hs" "haskell" before
       waitForProgressDone
-      _diags <- waitForDiagnostics
+      _ <- waitForDiagnostics
       -- there isn't a good way to wait until the whole project is checked atm
       when waitForCheckProject $ liftIO $ sleep 0.5
       let defLine = fromIntegral $ length imps + 1
