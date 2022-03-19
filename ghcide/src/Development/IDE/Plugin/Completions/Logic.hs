@@ -230,7 +230,7 @@ mkNameCompItem doc thingParent origName provenance thingType isInfix docs !imp =
     insertText = case isInfix of
             Nothing -> case getArgText <$> thingType of
                             Nothing      -> label
-                            Just argText -> label <> " " <> argText
+                            Just argText -> if T.null argText then label else label <> " " <> argText
             Just LeftSide -> label <> "`"
 
             Just Surrounded -> label
