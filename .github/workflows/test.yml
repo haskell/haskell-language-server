@@ -116,6 +116,9 @@ jobs:
       # repeating builds to workaround segfaults in windows and ghc-8.8.4
       - name: Build
         run: cabal build || cabal build || cabal build
+        env:
+          # needed for GHC 9.2.2 https://github.com/digital-asset/ghc-lib/issues/352
+          CPATH:"/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/ffi":$CPATH
 
       - name: Set test options
         # run the tests without parallelism, otherwise tasty will attempt to run
