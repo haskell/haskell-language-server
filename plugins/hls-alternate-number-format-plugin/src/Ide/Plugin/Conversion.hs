@@ -1,4 +1,6 @@
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric    #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE ViewPatterns     #-}
 module Ide.Plugin.Conversion (
     alternateFormat
     , hexRegex
@@ -8,20 +10,19 @@ module Ide.Plugin.Conversion (
     , decimalRegex
     , numDecimalRegex
     , matchLineRegex
-    , toFormatTypes
-    , FormatType
-    , generateNumDecimal
-    , toNumDecimal
-    , toBinary
     , toOctal
+    , toDecimal
+    , toBinary
     , toHex
-    , toHexFloat
     , toFloatDecimal
     , toFloatExpDecimal
+    , toHexFloat
+    , AlternateFormat
+    , ExtensionNeeded(..)
 ) where
 
 import           Data.Char                     (toUpper)
-import           Data.List                     (delete, dropWhileEnd)
+import           Data.List                     (delete)
 import           Data.Maybe                    (mapMaybe)
 import           Data.Ratio                    (denominator, numerator)
 import           Data.Text                     (Text)
@@ -36,59 +37,83 @@ import           Text.Regex.TDFA               ((=~))
 
 data FormatType = IntFormat IntFormatType
                 | FracFormat FracFormatType
-                | AnyFormat AnyFormatType
                 | NoFormat
                 deriving (Show, Eq, Generic)
 
 instance NFData FormatType
 
-data IntFormatType = HexFormat
+data IntFormatType = IntDecimalFormat
+                   | HexFormat
                    | OctalFormat
                    | BinaryFormat
                    | NumDecimalFormat
-                   deriving (Show, Eq, Generic)
+                   deriving (Show, Eq, Generic, Bounded, Enum)
 
 instance NFData IntFormatType
 
-data FracFormatType = HexFloatFormat
+data FracFormatType = FracDecimalFormat
+                    | HexFloatFormat
                     | ExponentFormat
-                    deriving (Show, Eq, Generic)
+                    deriving (Show, Eq, Generic, Bounded, Enum)
 
 instance NFData FracFormatType
 
-data AnyFormatType = DecimalFormat
-                   deriving (Show, Eq, Generic)
+data ExtensionNeeded = NoExtension
+                     | NeedsExtension Extension
 
-instance NFData AnyFormatType
+type AlternateFormat = (Text, ExtensionNeeded)
 
 -- | Generate alternate formats for a single Literal based on FormatType's given.
-alternateFormat :: [FormatType] -> Literal -> [Text]
-alternateFormat fmts lit = case lit of
-  IntLiteral _ _ val  -> concatMap (alternateIntFormat val) (removeCurrentFormat lit fmts)
+alternateFormat :: Literal -> [AlternateFormat]
+alternateFormat lit = case lit of
+  IntLiteral _ _ val   -> map (alternateIntFormat val) (removeCurrentFormatInt lit)
   FracLiteral _ _  val -> if denominator val == 1 -- floats that can be integers we can represent as ints
-      then concatMap (alternateIntFormat (numerator val)) (removeCurrentFormat lit fmts)
-      else concatMap (alternateFracFormat val) (removeCurrentFormat lit fmts)
+      then map (alternateIntFormat (numerator val)) (removeCurrentFormatInt lit)
+      else map (alternateFracFormat val) (removeCurrentFormatFrac lit)
 
-alternateIntFormat :: Integer -> FormatType -> [Text]
-alternateIntFormat val fmt = case fmt of
-  IntFormat ift           -> case ift of
-    HexFormat        -> [T.pack $ toHex val]
-    OctalFormat      -> [T.pack $ toOctal val]
-    BinaryFormat     -> [T.pack $ toBinary val]
-    NumDecimalFormat -> generateNumDecimal val  -- this is the only reason we return List of Text :/
-  AnyFormat DecimalFormat -> [T.pack $ toDecimal val]
-  _                       -> []
+alternateIntFormat :: Integer -> IntFormatType -> AlternateFormat
+alternateIntFormat val = \case
+    IntDecimalFormat -> (T.pack $ toDecimal val, NoExtension)
+    HexFormat        -> (T.pack $ toHex val, NoExtension)
+    OctalFormat      -> (T.pack $ toOctal val, NoExtension)
+    BinaryFormat     -> (T.pack $ toBinary val, NeedsExtension BinaryLiterals)
+    NumDecimalFormat -> (T.pack $ toFloatExpDecimal (fromInteger @Double val), NeedsExtension NumDecimals)
 
-alternateFracFormat :: Rational -> FormatType -> [Text]
-alternateFracFormat val fmt = case fmt of
-  AnyFormat DecimalFormat   -> [T.pack $ toFloatDecimal (fromRational val)]
-  FracFormat ExponentFormat -> [T.pack $ toFloatExpDecimal (fromRational val)]
-  FracFormat HexFloatFormat -> [T.pack $ toHexFloat (fromRational val)]
-  _                         -> []
+alternateFracFormat :: Rational -> FracFormatType -> AlternateFormat
+alternateFracFormat val = \case
+  FracDecimalFormat -> (T.pack $ toFloatDecimal (fromRational @Double val), NoExtension)
+  ExponentFormat    -> (T.pack $ toFloatExpDecimal (fromRational @Double val), NoExtension)
+  HexFloatFormat    -> (T.pack $ toHexFloat (fromRational @Double val), NeedsExtension HexFloatLiterals)
 
-removeCurrentFormat :: Literal -> [FormatType] -> [FormatType]
-removeCurrentFormat lit fmts = let srcText = getSrcText lit
-                                in foldl (flip delete) fmts (sourceToFormatType srcText)
+-- given a Literal compute it's current Format and delete it from the list of available formats
+removeCurrentFormat :: (Foldable t, Eq a) => [a] -> t a -> [a]
+removeCurrentFormat fmts toRemove = foldl (flip delete) fmts toRemove
+
+removeCurrentFormatInt :: Literal -> [IntFormatType]
+removeCurrentFormatInt (getSrcText -> srcText) = removeCurrentFormat intFormats (filterIntFormats $ sourceToFormatType srcText)
+
+removeCurrentFormatFrac :: Literal -> [FracFormatType]
+removeCurrentFormatFrac (getSrcText -> srcText) = removeCurrentFormat fracFormats (filterFracFormats $ sourceToFormatType srcText)
+
+filterIntFormats :: [FormatType] -> [IntFormatType]
+filterIntFormats = mapMaybe getIntFormat
+
+filterFracFormats :: [FormatType] -> [FracFormatType]
+filterFracFormats = mapMaybe getFracFormat
+
+getIntFormat :: FormatType -> Maybe IntFormatType
+getIntFormat (IntFormat f) = Just f
+getIntFormat _             = Nothing
+
+getFracFormat :: FormatType -> Maybe FracFormatType
+getFracFormat (FracFormat f) = Just f
+getFracFormat _              = Nothing
+
+intFormats :: [IntFormatType]
+intFormats = [minBound .. maxBound]
+
+fracFormats :: [FracFormatType]
+fracFormats = [minBound .. maxBound]
 
 -- | Regex to match a Haskell Hex Literal
 hexRegex :: Text
@@ -130,46 +155,7 @@ sourceToFormatType srcText
     -- otherwise we wouldn't need to return a list
     | srcText =~ matchLineRegex numDecimalRegex  = [IntFormat NumDecimalFormat, FracFormat ExponentFormat]
     -- just assume we are in base 10 with no decimals
-    | otherwise = [AnyFormat DecimalFormat]
-
--- | Translate a list of Extensions into Format Types (plus a base set of Formats)
-toFormatTypes :: [Extension] -> [FormatType]
-toFormatTypes =  (<>) baseFormatTypes . mapMaybe (`lookup` numericPairs)
-    where
-        baseFormatTypes = [IntFormat HexFormat, IntFormat OctalFormat, FracFormat ExponentFormat, AnyFormat DecimalFormat]
-
--- current list of Numeric related extensions
--- LexicalNegation --- 9.0.1 > --- superset of NegativeLiterals
-numericPairs :: [(Extension, FormatType)]
-numericPairs = [(NumericUnderscores, NoFormat), (NegativeLiterals, NoFormat)] <> intPairs <> fracPairs
-
-intPairs :: [(Extension, FormatType)]
-intPairs = [(BinaryLiterals, IntFormat BinaryFormat), (NumDecimals, IntFormat NumDecimalFormat)]
-
-fracPairs :: [(Extension, FormatType)]
-fracPairs = [(HexFloatLiterals, FracFormat HexFloatFormat)]
-
--- Generate up to 3 possible choices where:
--- dropWhile (\d -> val `div` d) > 1000) implies we want at MOST 3 digits to left of decimal
--- takeWhile (val >) implies we want to stop once we start to get numbers like: 0.1e[N]
--- take 3 implies we want at most three choices which will center around the format:
---    - 500.123e4
---    - 50.0123e5
---    - 5e.00123e6
--- NOTE: showEFloat would also work, but results in only one option
-generateNumDecimal :: Integer -> [Text]
-generateNumDecimal val = map (toNumDecimal val) $ take 3 $ takeWhile (val >= ) $ dropWhile (\d -> (val `div` d) > 1000) divisors
-    where
-        divisors = 10 : map (*10) divisors
-
-toNumDecimal :: Integer -> Integer -> Text
-toNumDecimal val divisor = let (q, r) = val `quotRem` divisor
-                               numExponent = length $ filter (== '0') $ show divisor
-                               -- remove unnecessary trailing zeroes from output
-                               r' = dropWhileEnd (== '0') $ show r
-                               -- but make sure there are still digits left!!!
-                               r'' = if null r' then "0" else r'
-                               in T.pack $ show q <> "." <> r'' <> "e" <> show numExponent
+    | otherwise = [IntFormat IntDecimalFormat, FracFormat FracDecimalFormat]
 
 toBase :: (Num a, Ord a) => (a -> ShowS) -> String -> a -> String
 toBase conv header n
