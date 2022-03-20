@@ -12,7 +12,7 @@ import           Control.Lens            (_Just, folded, preview, toListOf,
                                           view, (^..))
 import           Data.Aeson              (Value (Object), fromJSON, object,
                                           toJSON, (.=))
-import           Data.Aeson.Types        (Result (Success))
+import           Data.Aeson.Types        (Result (Success), Pair)
 import           Data.List               (isInfixOf)
 import           Data.List.Extra         (nubOrdOn)
 import qualified Data.Map                as Map
@@ -76,7 +76,7 @@ tests =
            | ghcVersion == GHC90 -> "-- No instance for (Num String) arising from a use of ‘+’"
            | otherwise -> "-- No instance for (Num [Char]) arising from a use of ‘+’"
       evalInFile "T8.hs" "-- >>> \"" "-- lexical error in string/character literal at end of input"
-      evalInFile "T8.hs" "-- >>> 3 `div` 0" "-- divide by zero"
+      evalInFile "T8.hs" "-- >>> 3 `div` 0" "-- divide by zero" -- The default for marking exceptions is False
   , goldenWithEval "Applies file LANGUAGE extensions" "T9" "hs"
   , goldenWithEval' "Evaluate a type with :kind!" "T10" "hs" (if ghcVersion == GHC92 then "ghc92.expected" else "expected")
   , goldenWithEval' "Reports an error for an incorrect type with :kind!" "T11" "hs" (if ghcVersion == GHC92 then "ghc92.expected" else "expected")
@@ -133,6 +133,7 @@ tests =
   , goldenWithEval "The default language extensions for the eval plugin are the same as those for ghci" "TSameDefaultLanguageExtensionsAsGhci" "hs"
   , goldenWithEval "IO expressions are supported, stdout/stderr output is ignored" "TIO" "hs"
   , goldenWithEval "Property checking" "TProperty" "hs"
+  , goldenWithEval "Property checking with exception" "TPropertyError" "hs"
   , goldenWithEval "Prelude has no special treatment, it is imported as stated in the module" "TPrelude" "hs"
   , goldenWithEval "Don't panic on {-# UNPACK #-} pragma" "TUNPACK" "hs"
   , goldenWithEval "Can handle eval inside nested comment properly" "TNested" "hs"
@@ -148,12 +149,12 @@ tests =
     ]
   , goldenWithEval "Works with NoImplicitPrelude" "TNoImplicitPrelude" "hs"
   , goldenWithEval "Variable 'it' works" "TIt" "hs"
-
-  , goldenWithHaskellDoc evalPlugin "Give 'WAS' by default" testDataDir "TDiff" "expected.default" "hs" executeLensesBackwards
-  , goldenWithHaskellDoc evalPlugin "Give the result only if diff is off" testDataDir "TDiff" "expected.no-diff" "hs" $ \doc -> do
-      sendConfigurationChanged (toJSON diffOffConfig)
-      executeLensesBackwards doc
-
+  , testGroup "configuration"
+    [ goldenWithEval' "Give 'WAS' by default" "TDiff" "hs" "expected.default"
+    , goldenWithEvalConfig' "Give the result only if diff is off" "TDiff" "hs" "expected.no-diff" diffOffConfig
+    , goldenWithEvalConfig' "Evaluates to exception (not marked)" "TException" "hs" "expected.nomark" (exceptionConfig False)
+    , goldenWithEvalConfig' "Evaluates to exception (with mark)" "TException" "hs" "expected.marked" (exceptionConfig True)
+    ]
   , testGroup ":info command"
     [ testCase ":info reports type, constructors and instances" $ do
         [output] <- map (unlines . codeLensTestOutput) <$> evalLenses "TInfo.hs"
@@ -263,15 +264,27 @@ codeLensTestOutput codeLens = do
 testDataDir :: FilePath
 testDataDir = "test" </> "testdata"
 
-diffOffConfig :: Config
-diffOffConfig =
+changeConfig :: [Pair] -> Config
+changeConfig conf =
   def
     { Plugin.plugins = Map.fromList [("eval",
-        def { Plugin.plcGlobalOn = True, Plugin.plcConfig = unObject $ object ["diff" .= False] }
+        def { Plugin.plcGlobalOn = True, Plugin.plcConfig = unObject $ object conf }
     )] }
   where
     unObject (Object obj) = obj
     unObject _            = undefined
+
+diffOffConfig :: Config
+diffOffConfig = changeConfig ["diff" .= False]
+
+exceptionConfig :: Bool -> Config
+exceptionConfig exCfg = changeConfig ["exception" .= exCfg]
+
+goldenWithEvalConfig' :: TestName -> FilePath -> FilePath -> FilePath -> Config -> TestTree
+goldenWithEvalConfig' title path ext expected cfg =
+    goldenWithHaskellDoc evalPlugin title testDataDir path expected ext $ \doc -> do
+      sendConfigurationChanged (toJSON cfg)
+      executeLensesBackwards doc
 
 evalInFile :: HasCallStack => FilePath -> T.Text -> T.Text -> IO ()
 evalInFile fp e expected = runSessionWithServer evalPlugin testDataDir $ do
