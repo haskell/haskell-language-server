@@ -63,6 +63,9 @@ Plugins have a generic config to control their behaviour. The schema of such con
     - `haskell.plugin.tactics.config.hole_severity`, default empty: The severity to use when showing hole diagnostics. These are noisy, but some editors don't allow jumping to all severities. One of `error`, `warning`, `info`, `hint`, `none`.
     - `haskell.plugin.tactics.config.max_use_ctor_actions`, default 5: Maximum number of `Use constructor <x>` code actions that can appear.
     - `haskell.plugin.tactics.config.proofstate_styling`, default true: Should Wingman emit styling markup when showing metaprogram proof states?
+  - `eval`:
+    - `haskell.plugin.eval.config.diff`, default true: When reloading haddock test results in changes, mark it with WAS/NOW.
+    - `haskell.plugin.eval.config.exception`, default false: When the command results in an exception, mark it with `*** Exception:`.
   - `ghcide-completions`:
     - `haskell.plugin.ghcide-completions.config.snippetsOn`, default true: Inserts snippets when using code completions.
     - `haskell.plugin.ghcide-completions.config.autoExtendOn`, default true: Extends the import list automatically when completing a out-of-scope identifier.

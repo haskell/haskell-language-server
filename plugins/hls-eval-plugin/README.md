@@ -242,6 +242,11 @@ On the contrary, if the test were into a plain comment, the result would simply 
 -}
 ```
 
+If you find this WAS/NOW behaviour does not fit your needs, you can turn it off with toggling the configuration option:
+```json
+"haskell.plugin.eval.config.diff": false
+```
+
 # Multiline Output
 
 By default, the output of every expression is returned as a single line.
@@ -274,6 +279,8 @@ To display it properly, we can exploit the fact that the output of an error is d
 ]
 ```
 
+This assumes you did not turn on exception marking (see [Marking exceptions](#marking-exceptions) below).
+
 # Differences with doctest
 
 Though the Eval plugin functionality is quite similar to that of [doctest](https://hackage.haskell.org/package/doctest), some doctest's features are not supported.
@@ -285,6 +292,24 @@ Only the value of an IO expression is spliced in, not its output:
 ```
 >>> print "foo"
 ()
+```
+
+###  Marking exceptions
+
+When an exception is thrown it is not prefixed:
+
+```
+>>> 1 `div` 0
+divide by zero
+```
+
+If you want to get the doctest/GHCi behaviour, you can toggle the configuration option:
+```json
+"haskell.plugin.eval.config.exception": true
+```
+```
+>>> 1 `div` 0
+*** Exception: divide by zero
 ```
 
 ### Pattern Matching
