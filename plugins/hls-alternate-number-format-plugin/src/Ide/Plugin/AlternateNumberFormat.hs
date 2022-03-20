@@ -95,10 +95,6 @@ codeActionHandler state _ (CodeActionParams _ _ docId currRange _) = response $ 
         -- make a code action for every literal and its' alternates (then flatten the result)
         actions = concatMap (\(lit, alts) -> map (mkCodeAction nfp lit enabledExtensions pragma) alts) literalPairs
 
-    logIO state $ "Literals: " <> show literals
-    logIO state $ "Pragma: " <> show pragma
-    logIO state $ "Extensions: " <> show ( map unExt enabledExtensions)
-
     pure $ List actions
     where
         inCurrentRange :: Literal -> Bool
@@ -166,6 +162,3 @@ requestLiterals state = handleMaybeM "Error: Could not Collect Literals"
                 . liftIO
                 . runAction "AlternateNumberFormat.CollectLiterals" state
                 . use CollectLiterals
-
-logIO :: (MonadIO m, Show a) => IdeState -> a -> m ()
-logIO state = liftIO . Logger.logDebug (ideLogger state) . T.pack . show
