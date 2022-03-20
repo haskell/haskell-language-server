@@ -97,17 +97,15 @@ removeCurrentFormatFrac (getSrcText -> srcText) = removeCurrentFormat fracFormat
 
 filterIntFormats :: [FormatType] -> [IntFormatType]
 filterIntFormats = mapMaybe getIntFormat
+    where
+        getIntFormat (IntFormat f) = Just f
+        getIntFormat _             = Nothing
 
 filterFracFormats :: [FormatType] -> [FracFormatType]
 filterFracFormats = mapMaybe getFracFormat
-
-getIntFormat :: FormatType -> Maybe IntFormatType
-getIntFormat (IntFormat f) = Just f
-getIntFormat _             = Nothing
-
-getFracFormat :: FormatType -> Maybe FracFormatType
-getFracFormat (FracFormat f) = Just f
-getFracFormat _              = Nothing
+    where
+        getFracFormat (FracFormat f) = Just f
+        getFracFormat _              = Nothing
 
 intFormats :: [IntFormatType]
 intFormats = [minBound .. maxBound]
