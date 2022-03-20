@@ -4,9 +4,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main(main) where
 
+import           Control.Monad.IO.Class       (liftIO)
 import           Data.Function                ((&))
 import           Data.Text (Text)
-import           Development.IDE.Plugin.LSPWindowShowMessageRecorder (makeLspShowMessageRecorder)
+import qualified Development.IDE.Types.Logger as Logger
 import           Development.IDE.Types.Logger (Priority (Debug, Info, Error),
                                                WithPriority (WithPriority, priority),
                                                cfilter, cmapWithPrio,
@@ -17,7 +18,10 @@ import           Ide.Arguments                (Arguments (..),
                                                getArguments)
 import           Ide.Main                     (defaultMain)
 import qualified Ide.Main                     as IdeMain
-import           Ide.PluginUtils (pluginDescToIdePlugins)
+import           Ide.PluginUtils              (pluginDescToIdePlugins)
+import           Ide.Types                    (PluginDescriptor (pluginNotificationHandlers), defaultPluginDescriptor, mkPluginNotificationHandler)
+import           Language.LSP.Server          as LSP
+import           Language.LSP.Types           as LSP
 import qualified Plugins
 import           Prettyprinter                (Pretty (pretty), vsep)
 
@@ -36,7 +40,16 @@ main = do
     -- parser to get logging arguments first or do more complicated things
     pluginCliRecorder <- cmapWithPrio pretty <$> makeDefaultStderrRecorder Nothing Info
     args <- getArguments "haskell-language-server" (Plugins.idePlugins (cmapWithPrio LogPlugins pluginCliRecorder) False)
-    (lspRecorder, lspRecorderPlugin) <- makeLspShowMessageRecorder
+
+    (lspLogRecorder, cb1) <- Logger.withBacklog Logger.lspClientLogRecorder
+    (lspMessageRecorder, cb2) <- Logger.withBacklog Logger.lspClientMessageRecorder
+    -- This plugin just installs a handler for the `initialized` notification, which then
+    -- picks up the LSP environment and feeds it to our recorders
+    let lspRecorderPlugin = (defaultPluginDescriptor "LSPRecorderCallback")
+          { pluginNotificationHandlers = mkPluginNotificationHandler LSP.SInitialized $ \_ _ _ -> do
+              env <- LSP.getLspEnv
+              liftIO $ (cb1 <> cb2) env
+          }
 
     let (minPriority, logFilePath, includeExamplePlugins) =
           case args of
@@ -50,13 +63,19 @@ main = do
         recorder = cmapWithPrio pretty $ mconcat
             [textWithPriorityRecorder
                 & cfilter (\WithPriority{ priority } -> priority >= minPriority)
-            , lspRecorder
+            , lspMessageRecorder
                 & cfilter (\WithPriority{ priority } -> priority >= Error)
                 & cmapWithPrio renderDoc
+            , lspLogRecorder
+                & cfilter (\WithPriority{ priority } -> priority >= minPriority)
+                & cmapWithPrio (renderStrict . layoutPretty defaultLayoutOptions)
             ]
-        plugins = Plugins.idePlugins (cmapWithPrio LogPlugins recorder) includeExamplePlugins
+        plugins = (Plugins.idePlugins (cmapWithPrio LogPlugins recorder) includeExamplePlugins)
 
-      defaultMain (cmapWithPrio LogIdeMain recorder) args (pluginDescToIdePlugins [lspRecorderPlugin] <> plugins)
+      defaultMain
+        (cmapWithPrio LogIdeMain recorder)
+        args
+        (plugins <> pluginDescToIdePlugins [lspRecorderPlugin])
 
 renderDoc :: Doc a -> Text
 renderDoc d = renderStrict $ layoutPretty defaultLayoutOptions $ vsep

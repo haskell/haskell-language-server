@@ -28,7 +28,6 @@ jobs:
                          , "**.md"
                          , "**/LICENSE"
                          , ".circleci/**"
-                         , "install/**"
                          , "**.nix"
                          , "**/test/**"
                          , "flake.lock"

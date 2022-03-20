@@ -1529,14 +1529,22 @@ mkRenameEdit contents range name =
       curr <- textInRange range <$> contents
       pure $ "`" `T.isPrefixOf` curr && "`" `T.isSuffixOf` curr
 
+
+-- | Extract the type and surround it in parentheses except in obviously safe cases.
+--
+-- Inferring when parentheses are actually needed around the type signature would
+-- require understanding both the precedence of the context of the hole and of
+-- the signature itself. Inserting them (almost) unconditionally is ugly but safe.
 extractWildCardTypeSignature :: T.Text -> T.Text
-extractWildCardTypeSignature =
-  -- inferring when parens are actually needed around the type signature would
-  -- require understanding both the precedence of the context of the _ and of
-  -- the signature itself. Inserting them unconditionally is ugly but safe.
-  ("(" `T.append`) . (`T.append` ")") .
-  T.takeWhile (/='’') . T.dropWhile (=='‘') . T.dropWhile (/='‘') .
-  snd . T.breakOnEnd "standing for "
+extractWildCardTypeSignature msg = (if enclosed || not application then id else bracket) signature
+  where
+    msgSigPart = snd $ T.breakOnEnd "standing for " msg
+    signature = T.takeWhile (/='’') . T.dropWhile (=='‘') . T.dropWhile (/='‘') $ msgSigPart
+    -- parenthesize type applications, e.g. (Maybe Char)
+    application = any isSpace . T.unpack $ signature
+    -- do not add extra parentheses to lists, tuples and already parenthesized types
+    enclosed = not (T.null signature) && (T.head signature, T.last signature) `elem` [('(',')'), ('[',']')]
+    bracket = ("(" `T.append`) . (`T.append` ")")
 
 extractRenamableTerms :: T.Text -> [T.Text]
 extractRenamableTerms msg
@@ -1725,6 +1733,13 @@ data ImportStyle
       --
       -- @P@ and @?@ can be a data type and a constructor, a class and a method,
       -- a class and an associated type/data family, etc.
+
+    | ImportAllConstructors T.Text
+      -- ^ Import all constructors for a specific data type.
+      --
+      -- import M (P(..))
+      --
+      -- @P@ can be a data type or a class.
   deriving Show
 
 importStyles :: IdentInfo -> NonEmpty ImportStyle
@@ -1733,7 +1748,9 @@ importStyles IdentInfo {parent, rendered, isDatacon}
     -- Constructors always have to be imported via their parent data type, but
     -- methods and associated type/data families can also be imported as
     -- top-level exports.
-  = ImportViaParent rendered p :| [ImportTopLevel rendered | not isDatacon]
+  = ImportViaParent rendered p
+      :| [ImportTopLevel rendered | not isDatacon]
+      <> [ImportAllConstructors p]
   | otherwise
   = ImportTopLevel rendered :| []
 
@@ -1742,15 +1759,19 @@ renderImportStyle :: ImportStyle -> T.Text
 renderImportStyle (ImportTopLevel x)   = x
 renderImportStyle (ImportViaParent x p@(T.uncons -> Just ('(', _))) = "type " <> p <> "(" <> x <> ")"
 renderImportStyle (ImportViaParent x p) = p <> "(" <> x <> ")"
+renderImportStyle (ImportAllConstructors p) = p <> "(..)"
 
 -- | Used for extending import lists
 unImportStyle :: ImportStyle -> (Maybe String, String)
 unImportStyle (ImportTopLevel x)    = (Nothing, T.unpack x)
 unImportStyle (ImportViaParent x y) = (Just $ T.unpack y, T.unpack x)
+unImportStyle (ImportAllConstructors x) = (Just $ T.unpack x, wildCardSymbol)
+
 
 quickFixImportKind' :: T.Text -> ImportStyle -> CodeActionKind
 quickFixImportKind' x (ImportTopLevel _) = CodeActionUnknown $ "quickfix.import." <> x <> ".list.topLevel"
 quickFixImportKind' x (ImportViaParent _ _) = CodeActionUnknown $ "quickfix.import." <> x <> ".list.withParent"
+quickFixImportKind' x (ImportAllConstructors _) = CodeActionUnknown $ "quickfix.import." <> x <> ".list.allConstructors"
 
 quickFixImportKind :: T.Text -> CodeActionKind
 quickFixImportKind x = CodeActionUnknown $ "quickfix.import." <> x

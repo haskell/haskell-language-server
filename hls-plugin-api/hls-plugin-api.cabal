@@ -26,7 +26,6 @@ source-repository head
 
 library
   exposed-modules:
-    Ide.Logger
     Ide.Plugin.Config
     Ide.Plugin.ConfigUtils
     Ide.Plugin.Properties
@@ -47,7 +46,6 @@ library
     , ghc
     , hashable
     , hls-graph             ^>= 1.6
-    , hslogger
     , lens
     , lens-aeson
     , lsp                   >=1.4.0.0 && < 1.6

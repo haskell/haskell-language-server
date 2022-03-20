@@ -60,7 +60,7 @@
       flake = false;
     };
     hie-bios = {
-      url = "https://hackage.haskell.org/package/hie-bios-0.9.0/hie-bios-0.9.0.tar.gz";
+      url = "https://hackage.haskell.org/package/hie-bios-0.9.1/hie-bios-0.9.1.tar.gz";
       flake = false;
     };
   };
@@ -112,7 +112,7 @@
             with haskell.lib; {
               # Patches don't apply
               github = overrideCabal hsuper.github (drv: { patches = []; });
-              # GHCIDE requires hie-bios ^>=0.9.0
+              # GHCIDE requires hie-bios ^>=0.9.1
               hie-bios = hself.callCabal2nix "hie-bios" inputs.hie-bios {};
               # We need an older version
               hiedb = hself.hiedb_0_4_1_0;

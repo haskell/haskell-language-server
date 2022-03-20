@@ -1188,73 +1188,71 @@ renameActionTests = testGroup "rename actions"
 
 typeWildCardActionTests :: TestTree
 typeWildCardActionTests = testGroup "type wildcard actions"
-  [ testSession "global signature" $ do
-      let content = T.unlines
-            [ "module Testing where"
-            , "func :: _"
-            , "func x = x"
-            ]
-      doc <- createDoc "Testing.hs" "haskell" content
-      _ <- waitForDiagnostics
-      actionsOrCommands <- getAllCodeActions doc
-      let [addSignature] = [action | InR action@CodeAction { _title = actionTitle } <- actionsOrCommands
-                                   , "Use type signature" `T.isInfixOf` actionTitle
-                           ]
-      executeCodeAction addSignature
-      contentAfterAction <- documentContents doc
-      let expectedContentAfterAction = T.unlines
-            [ "module Testing where"
-            , "func :: (p -> p)"
-            , "func x = x"
-            ]
-      liftIO $ expectedContentAfterAction @=? contentAfterAction
-  , testSession "multi-line message" $ do
-      let content = T.unlines
-            [ "module Testing where"
-            , "func :: _"
-            , "func x y = x + y"
-            ]
-      doc <- createDoc "Testing.hs" "haskell" content
-      _ <- waitForDiagnostics
-      actionsOrCommands <- getAllCodeActions doc
-      let [addSignature] = [action | InR action@CodeAction { _title = actionTitle } <- actionsOrCommands
-                                    , "Use type signature" `T.isInfixOf` actionTitle
-                              ]
-      executeCodeAction addSignature
-      contentAfterAction <- documentContents doc
-      let expectedContentAfterAction = T.unlines
-            [ "module Testing where"
-            , "func :: (Integer -> Integer -> Integer)"
-            , "func x y = x + y"
-            ]
-      liftIO $ expectedContentAfterAction @=? contentAfterAction
-  , testSession "local signature" $ do
-      let content = T.unlines
-            [ "module Testing where"
-            , "func :: Int -> Int"
-            , "func x ="
-            , "  let y :: _"
-            , "      y = x * 2"
-            , "  in y"
-            ]
-      doc <- createDoc "Testing.hs" "haskell" content
-      _ <- waitForDiagnostics
-      actionsOrCommands <- getAllCodeActions doc
-      let [addSignature] = [action | InR action@CodeAction { _title = actionTitle } <- actionsOrCommands
-                                    , "Use type signature" `T.isInfixOf` actionTitle
-                              ]
-      executeCodeAction addSignature
-      contentAfterAction <- documentContents doc
-      let expectedContentAfterAction = T.unlines
-            [ "module Testing where"
-            , "func :: Int -> Int"
-            , "func x ="
-            , "  let y :: (Int)"
-            , "      y = x * 2"
-            , "  in y"
-            ]
-      liftIO $ expectedContentAfterAction @=? contentAfterAction
+  [ testUseTypeSignature "global signature"
+        [ "func :: _"
+        , "func x = x"
+        ]
+        [ "func :: (p -> p)"
+        , "func x = x"
+        ]
+  , testUseTypeSignature "local signature"
+        [ "func :: Int -> Int"
+        , "func x ="
+        , "  let y :: _"
+        , "      y = x * 2"
+        , "  in y"
+        ]
+        [ "func :: Int -> Int"
+        , "func x ="
+        , "  let y :: Int"
+        , "      y = x * 2"
+        , "  in y"
+        ]
+  , testUseTypeSignature "multi-line message"
+        [ "func :: _"
+        , "func x y = x + y"
+        ]
+        [ "func :: (Integer -> Integer -> Integer)"
+        , "func x y = x + y"
+        ]
+  , testUseTypeSignature "type in parentheses"
+        [ "func :: a -> _"
+        , "func x = (x, const x)"
+        ]
+        [ "func :: a -> (a, b -> a)"
+        , "func x = (x, const x)"
+        ]
+  , testUseTypeSignature "type in brackets"
+        [ "func :: _ -> Maybe a"
+        , "func xs = head xs"
+        ]
+        [ "func :: [Maybe a] -> Maybe a"
+        , "func xs = head xs"
+        ]
+  , testUseTypeSignature "unit type"
+        [ "func :: IO _"
+        , "func = putChar 'H'"
+        ]
+        [ "func :: IO ()"
+        , "func = putChar 'H'"
+        ]
   ]
+  where
+    -- | Test session of given name, checking action "Use type signature..."
+    --   on a test file with given content and comparing to expected result.
+    testUseTypeSignature name textIn textOut = testSession name $ do
+        let fileStart = "module Testing where"
+            content = T.unlines $ fileStart : textIn
+            expectedContentAfterAction = T.unlines $ fileStart : textOut
+        doc <- createDoc "Testing.hs" "haskell" content
+        _ <- waitForDiagnostics
+        actionsOrCommands <- getAllCodeActions doc
+        let [addSignature] = [action | InR action@CodeAction { _title = actionTitle } <- actionsOrCommands
+                                    , "Use type signature" `T.isInfixOf` actionTitle
+                            ]
+        executeCodeAction addSignature
+        contentAfterAction <- documentContents doc
+        liftIO $ expectedContentAfterAction @=? contentAfterAction
 
 {-# HLINT ignore "Use nubOrd" #-}
 removeImportTests :: TestTree
@@ -1515,7 +1513,108 @@ extendImportTests = testGroup "extend import actions"
   ]
   where
     tests overrideCheckProject =
-        [ testSession "extend single line import with value" $ template
+        [ testSession "extend all constructors for record field" $ template
+            [("ModuleA.hs", T.unlines
+                    [ "module ModuleA where"
+                    , "data A = B { a :: Int }"
+                    ])]
+            ("ModuleB.hs", T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA (A(B))"
+                    , "f = a"
+                    ])
+            (Range (Position 2 4) (Position 2 5))
+            [ "Add A(..) to the import list of ModuleA"
+            , "Add A(a) to the import list of ModuleA"
+            , "Add a to the import list of ModuleA"
+            ]
+            (T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA (A(..))"
+                    , "f = a"
+                    ])
+        , testSession "extend all constructors with sibling" $ template
+            [("ModuleA.hs", T.unlines
+                    [ "module ModuleA where"
+                    , "data Foo"
+                    , "data Bar"
+                    , "data A = B | C"
+                    ])]
+            ("ModuleB.hs", T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA ( Foo,  A (C) , Bar ) "
+                    , "f = B"
+                    ])
+            (Range (Position 2 4) (Position 2 5))
+            [ "Add A(..) to the import list of ModuleA"
+            , "Add A(B) to the import list of ModuleA"
+            ]
+            (T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA ( Foo,  A (..) , Bar ) "
+                    , "f = B"
+                    ])
+        , testSession "extend all constructors with comment" $ template
+            [("ModuleA.hs", T.unlines
+                    [ "module ModuleA where"
+                    , "data Foo"
+                    , "data Bar"
+                    , "data A = B | C"
+                    ])]
+            ("ModuleB.hs", T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA ( Foo,  A (C{-comment--}) , Bar ) "
+                    , "f = B"
+                    ])
+            (Range (Position 2 4) (Position 2 5))
+            [ "Add A(..) to the import list of ModuleA"
+            , "Add A(B) to the import list of ModuleA"
+            ]
+            (T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA ( Foo,  A (..{-comment--}) , Bar ) "
+                    , "f = B"
+                    ])
+        , testSession "extend all constructors for type operator" $ template
+            []
+            ("ModuleA.hs", T.unlines
+                    [ "module ModuleA where"
+                    , "import Data.Type.Equality ((:~:))"
+                    , "x :: (:~:) [] []"
+                    , "x = Refl"
+                    ])
+            (Range (Position 3 17) (Position 3 18))
+            [ "Add (:~:)(..) to the import list of Data.Type.Equality"
+            , "Add type (:~:)(Refl) to the import list of Data.Type.Equality"]
+            (T.unlines
+                    [ "module ModuleA where"
+                    , "import Data.Type.Equality ((:~:) (..))"
+                    , "x :: (:~:) [] []"
+                    , "x = Refl"
+                    ])
+        , testSession "extend all constructors for class" $ template
+            [("ModuleA.hs", T.unlines
+                    [ "module ModuleA where"
+                    , "class C a where"
+                    , "  m1 :: a -> a"
+                    , "  m2 :: a -> a"
+                    ])]
+            ("ModuleB.hs", T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA (C(m1))"
+                    , "b = m2"
+                    ])
+            (Range (Position 2 5) (Position 2 5))
+            [ "Add C(..) to the import list of ModuleA"
+            , "Add C(m2) to the import list of ModuleA"
+            , "Add m2 to the import list of ModuleA"
+            ]
+            (T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA (C(..))"
+                    , "b = m2"
+                    ])
+        , testSession "extend single line import with value" $ template
             [("ModuleA.hs", T.unlines
                     [ "module ModuleA where"
                     , "stuffA :: Double"
@@ -1563,7 +1662,9 @@ extendImportTests = testGroup "extend import actions"
                     , "main = case (fromList []) of _ :| _ -> pure ()"
                     ])
             (Range (Position 2 5) (Position 2 6))
-            ["Add NonEmpty((:|)) to the import list of Data.List.NonEmpty"]
+            [ "Add NonEmpty((:|)) to the import list of Data.List.NonEmpty"
+            , "Add NonEmpty(..) to the import list of Data.List.NonEmpty"
+            ]
             (T.unlines
                     [ "module ModuleB where"
                     , "import Data.List.NonEmpty (fromList, NonEmpty ((:|)))"
@@ -1578,7 +1679,9 @@ extendImportTests = testGroup "extend import actions"
                     , "x = Just 10"
                     ])
             (Range (Position 3 5) (Position 2 6))
-            ["Add Maybe(Just) to the import list of Data.Maybe"]
+            [ "Add Maybe(Just) to the import list of Data.Maybe"
+            , "Add Maybe(..) to the import list of Data.Maybe"
+            ]
             (T.unlines
                     [ "module ModuleB where"
                     , "import Prelude hiding (Maybe(..))"
@@ -1616,7 +1719,9 @@ extendImportTests = testGroup "extend import actions"
                     , "b = Constructor"
                     ])
             (Range (Position 3 5) (Position 3 5))
-            ["Add A(Constructor) to the import list of ModuleA"]
+            [ "Add A(Constructor) to the import list of ModuleA"
+            , "Add A(..) to the import list of ModuleA"
+            ]
             (T.unlines
                     [ "module ModuleB where"
                     , "import ModuleA (A (Constructor))"
@@ -1635,7 +1740,9 @@ extendImportTests = testGroup "extend import actions"
                     , "b = Constructor"
                     ])
             (Range (Position 3 5) (Position 3 5))
-            ["Add A(Constructor) to the import list of ModuleA"]
+            [ "Add A(Constructor) to the import list of ModuleA"
+            , "Add A(..) to the import list of ModuleA"
+            ]
             (T.unlines
                     [ "module ModuleB where"
                     , "import ModuleA (A (Constructor{-Constructor-}))"
@@ -1655,7 +1762,9 @@ extendImportTests = testGroup "extend import actions"
                     , "b = ConstructorFoo"
                     ])
             (Range (Position 3 5) (Position 3 5))
-            ["Add A(ConstructorFoo) to the import list of ModuleA"]
+            [ "Add A(ConstructorFoo) to the import list of ModuleA"
+            , "Add A(..) to the import list of ModuleA"
+            ]
             (T.unlines
                     [ "module ModuleB where"
                     , "import ModuleA (A (ConstructorBar, ConstructorFoo), a)"
@@ -1717,8 +1826,10 @@ extendImportTests = testGroup "extend import actions"
                     , "b = m2"
                     ])
             (Range (Position 2 5) (Position 2 5))
-            ["Add C(m2) to the import list of ModuleA",
-             "Add m2 to the import list of ModuleA"]
+            [ "Add C(m2) to the import list of ModuleA"
+            , "Add m2 to the import list of ModuleA"
+            , "Add C(..) to the import list of ModuleA"
+            ]
             (T.unlines
                     [ "module ModuleB where"
                     , "import ModuleA (C(m1, m2))"
@@ -1737,8 +1848,10 @@ extendImportTests = testGroup "extend import actions"
                     , "b = m2"
                     ])
             (Range (Position 2 5) (Position 2 5))
-            ["Add m2 to the import list of ModuleA",
-             "Add C(m2) to the import list of ModuleA"]
+            [ "Add m2 to the import list of ModuleA"
+            , "Add C(m2) to the import list of ModuleA"
+            , "Add C(..) to the import list of ModuleA"
+            ]
             (T.unlines
                     [ "module ModuleB where"
                     , "import ModuleA (C(m1), m2)"
@@ -1779,7 +1892,8 @@ extendImportTests = testGroup "extend import actions"
                     , "x = Refl"
                     ])
             (Range (Position 3 17) (Position 3 18))
-            ["Add type (:~:)(Refl) to the import list of Data.Type.Equality"]
+            [ "Add type (:~:)(Refl) to the import list of Data.Type.Equality"
+            , "Add (:~:)(..) to the import list of Data.Type.Equality"]
             (T.unlines
                     [ "module ModuleA where"
                     , "import Data.Type.Equality ((:~:) (Refl))"
@@ -1819,7 +1933,7 @@ extendImportTests = testGroup "extend import actions"
                     , "f = Foo 1"
                     ])
             (Range (Position 3 4) (Position 3 6))
-            ["Add Foo(Foo) to the import list of ModuleA"]
+            ["Add Foo(Foo) to the import list of ModuleA", "Add Foo(..) to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
                     , "import ModuleA(Foo (Foo))"
@@ -1999,11 +2113,14 @@ suggestImportTests = testGroup "suggest import actions"
     , test False []         "f ExitSuccess = ()"          []                "import System.Exit (ExitSuccess)"
       -- don't suggest data constructor when we only need the type
     , test False []         "f :: Bar"                    []                "import Bar (Bar(Bar))"
+      -- don't suggest all data constructors for the data type
+    , test False []         "f :: Bar"                    []                "import Bar (Bar(..))"
     ]
   , testGroup "want suggestion"
     [ wantWait  []          "f = foo"                     []                "import Foo (foo)"
     , wantWait  []          "f = Bar"                     []                "import Bar (Bar(Bar))"
     , wantWait  []          "f :: Bar"                    []                "import Bar (Bar)"
+    , wantWait  []          "f = Bar"                     []                "import Bar (Bar(..))"
     , test True []          "f = nonEmpty"                []                "import Data.List.NonEmpty (nonEmpty)"
     , test True []          "f = (:|)"                    []                "import Data.List.NonEmpty (NonEmpty((:|)))"
     , test True []          "f :: Natural"                ["f = undefined"] "import Numeric.Natural (Natural)"
@@ -2045,12 +2162,15 @@ suggestImportTests = testGroup "suggest import actions"
       , "qualified Data.Functor as T"
       , "qualified Data.Data as T"
       ]                     "f = T.putStrLn"              []                "import qualified Data.Text.IO as T"
+    , test True []          "f = (.|.)"                   []                "import Data.Bits (Bits(..))"
+    , test True []          "f = empty"                   []                "import Control.Applicative (Alternative(..))"
     ]
-    , expectFailBecause "importing pattern synonyms is unsupported" $ test True [] "k (Some x) = x" [] "import B (pattern Some)"
+  , expectFailBecause "importing pattern synonyms is unsupported" $ test True [] "k (Some x) = x" [] "import B (pattern Some)"
   ]
   where
     test = test' False
     wantWait = test' True True
+
     test' waitForCheckProject wanted imps def other newImp = testSessionWithExtraFiles "hover" (T.unpack def) $ \dir -> do
       configureCheckProject waitForCheckProject
       let before = T.unlines $ "module A where" : ["import " <> x | x <- imps] ++ def : other
@@ -2060,7 +2180,7 @@ suggestImportTests = testGroup "suggest import actions"
       liftIO $ writeFileUTF8 (dir </> "B.hs") $ unlines ["{-# LANGUAGE PatternSynonyms #-}", "module B where", "pattern Some x = Just x"]
       doc <- createDoc "Test.hs" "haskell" before
       waitForProgressDone
-      _diags <- waitForDiagnostics
+      _ <- waitForDiagnostics
       -- there isn't a good way to wait until the whole project is checked atm
       when waitForCheckProject $ liftIO $ sleep 0.5
       let defLine = fromIntegral $ length imps + 1
@@ -4059,7 +4179,9 @@ findDefinitionAndHoverTests = let
     , testGroup "hover"      $ mapMaybe snd tests
     , checkFileCompiles sourceFilePath $
         expectDiagnostics
-          [ ( "GotoHover.hs", [(DsError, (62, 7), "Found hole: _")]) ]
+          [ ( "GotoHover.hs", [(DsError, (62, 7), "Found hole: _")])
+          , ( "GotoHover.hs", [(DsError, (65, 8), "Found hole: _")])
+          ]
     , testGroup "type-definition" typeDefinitionTests ]
 
   typeDefinitionTests = [ tst (getTypeDefinitions, checkDefs) aaaL14 (pure tcData) "Saturated data con"
@@ -4111,6 +4233,7 @@ findDefinitionAndHoverTests = let
   outL45 = Position 49  3  ;  outSig = [ExpectHoverText ["outer", "Bool"], mkR 50 0 50 5]
   innL48 = Position 52  5  ;  innSig = [ExpectHoverText ["inner", "Char"], mkR 49 2 49 7]
   holeL60 = Position 62 7  ;  hleInfo = [ExpectHoverText ["_ ::"]]
+  holeL65 = Position 65 8  ;  hleInfo2 = [ExpectHoverText ["_ :: a -> Maybe a"]]
   cccL17 = Position 17 16  ;  docLink = [ExpectHoverText ["[Documentation](file:///"]]
   imported = Position 56 13 ; importedSig = getDocUri "Foo.hs" >>= \foo -> return [ExpectHoverText ["foo", "Foo", "Haddock"], mkL foo 5 0 5 3]
   reexported = Position 55 14 ; reexportedSig = getDocUri "Bar.hs" >>= \bar -> return [ExpectHoverText ["Bar", "Bar", "Haddock"], mkL bar 3 0 3 14]
@@ -4165,6 +4288,11 @@ findDefinitionAndHoverTests = let
   , test  no     yes    outL45     outSig        "top-level signature              #767"
   , test  broken broken innL48     innSig        "inner     signature              #767"
   , test  no     yes    holeL60    hleInfo       "hole without internal name       #831"
+  , if ghcVersion >= GHC92 then
+        -- Broken on GHC 9.2 and above due to printing of uniques
+        test  no     yes    holeL65    []        "hole with variable"
+    else
+        test  no     yes    holeL65    hleInfo2  "hole with variable"
   , test  no     skip   cccL17     docLink       "Haddock html links"
   , testM yes    yes    imported   importedSig   "Imported symbol"
   , testM yes    yes    reexported reexportedSig "Imported symbol (reexported)"
@@ -4711,13 +4839,13 @@ nonLocalCompletionTests =
       "constructor"
       ["{-# OPTIONS_GHC -Wall #-}", "module A where", "f = True"]
       (Position 2 8)
-      [ ("True", CiConstructor, "True ", True, True, Nothing)
+      [ ("True", CiConstructor, "True", True, True, Nothing)
       ],
     completionTest
       "type"
       ["{-# OPTIONS_GHC -Wall #-}", "module A () where", "f :: Boo", "f = True"]
       (Position 2 8)
-      [ ("Bool", CiStruct, "Bool ", True, True, Nothing)
+      [ ("Bool", CiStruct, "Bool", True, True, Nothing)
       ],
     completionTest
       "qualified"
@@ -4892,7 +5020,7 @@ otherCompletionTests = [
       -- This should be sufficient to detect that we are in a
       -- type context and only show the completion to the type.
       (Position 3 11)
-      [("Integer", CiStruct, "Integer ", True, True, Nothing)],
+      [("Integer", CiStruct, "Integer", True, True, Nothing)],
 
     testSession "duplicate record fields" $ do
       void $
@@ -5577,8 +5705,7 @@ simpleSubDirectoryTest =
     expectNoMoreDiagnostics 0.5
 
 simpleMultiTest :: TestTree
-simpleMultiTest =  knownBrokenForGhcVersions [GHC92] "#2693" $
-  testCase "simple-multi-test" $ withLongTimeout $ runWithExtraFiles "multi" $ \dir -> do
+simpleMultiTest = testCase "simple-multi-test" $ withLongTimeout $ runWithExtraFiles "multi" $ \dir -> do
     let aPath = dir </> "a/A.hs"
         bPath = dir </> "b/B.hs"
     adoc <- openDoc aPath "haskell"
@@ -5608,7 +5735,7 @@ simpleMultiTest2 = testCase "simple-multi-test2" $ runWithExtraFiles "multi" $ \
 
 -- Now with 3 components
 simpleMultiTest3 :: TestTree
-simpleMultiTest3 = knownBrokenForGhcVersions [GHC92] "#2693" $
+simpleMultiTest3 =
   testCase "simple-multi-test3" $ runWithExtraFiles "multi" $ \dir -> do
     let aPath = dir </> "a/A.hs"
         bPath = dir </> "b/B.hs"

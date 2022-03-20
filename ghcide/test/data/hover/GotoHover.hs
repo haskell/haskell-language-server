@@ -61,3 +61,6 @@ aa2 = $(id [| True |])
 
 hole :: Int
 hole = _
+
+hole2 :: a -> Maybe a
+hole2 = _
