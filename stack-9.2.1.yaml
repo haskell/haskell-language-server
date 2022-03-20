@@ -10,7 +10,7 @@ packages:
 - ./hls-test-utils
 - ./shake-bench
 - ./plugins/hls-call-hierarchy-plugin
-# - ./plugins/hls-class-plugin
+- ./plugins/hls-class-plugin
 # - ./plugins/hls-haddock-comments-plugin
 # - ./plugins/hls-eval-plugin
 - ./plugins/hls-explicit-imports-plugin
@@ -28,8 +28,9 @@ packages:
 - ./plugins/hls-pragmas-plugin
 - ./plugins/hls-module-name-plugin
 - ./plugins/hls-ormolu-plugin
-# - ./plugins/hls-alternate-number-format-plugin
+- ./plugins/hls-alternate-number-format-plugin
 - ./plugins/hls-selection-range-plugin
+- ./plugins/hls-change-type-signature-plugin
 
 extra-deps:
 - aeson-2.0.3.0
@@ -50,6 +51,7 @@ extra-deps:
 - ghc-lib-parser-ex-9.2.0.1
 - heapsize-0.3.0.1
 - hiedb-0.4.1.0
+- hie-bios-0.9.1
 - hspec-2.7.10       # for hls-test-utils
 - hspec-core-2.7.10  # for hls-test-utils
 - implicit-hie-0.1.2.6
@@ -114,7 +116,6 @@ flags:
     ignore-plugins-ghc-bounds: true
     alternateNumberFormat: false
     brittany: false
-    class: false
     eval: false
     haddockComments: false
     hlint: false

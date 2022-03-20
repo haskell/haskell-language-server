@@ -65,7 +65,7 @@ runGhcideCodeAction state (CodeActionParams _ _ (TextDocumentIdentifier uri) _ra
           pure $ localExports <> pkgExports
         _ -> pure mempty
   caaIdeOptions <- onceIO $ runAction "GhcideCodeActions.getIdeOptions" state getIdeOptions
-  caaParsedModule <- onceIO $ runRule GetParsedModule
+  caaParsedModule <- onceIO $ runRule GetParsedModuleWithComments
   caaContents <-
     onceIO $
       runRule GetFileContents >>= \case

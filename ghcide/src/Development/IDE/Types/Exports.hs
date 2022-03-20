@@ -22,19 +22,18 @@ import qualified Data.HashMap.Strict         as Map
 import           Data.HashSet                (HashSet)
 import qualified Data.HashSet                as Set
 import           Data.Hashable               (Hashable)
-import           Data.List                   (isSuffixOf)
+import           Data.List                   (isSuffixOf, foldl')
 import           Data.Text                   (Text, pack)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Orphans ()
 import           Development.IDE.GHC.Util
-import           Development.IDE.Types.Shake (WithHieDb)
 import           GHC.Generics                (Generic)
 import           HieDb
 
 
 data ExportsMap = ExportsMap
-    { getExportsMap       :: HashMap IdentifierText (HashSet IdentInfo)
-    , getModuleExportsMap :: HashMap ModuleNameText (HashSet IdentInfo)
+    { getExportsMap       :: !(HashMap IdentifierText (HashSet IdentInfo))
+    , getModuleExportsMap :: !(HashMap ModuleNameText (HashSet IdentInfo))
     }
     deriving (Show)
 
@@ -135,13 +134,11 @@ createExportsMapMg modGuts = do
       concatMap (fmap (second Set.fromList) . unpackAvail getModuleName) (mg_exports mi)
 
 updateExportsMapMg :: [ModGuts] -> ExportsMap -> ExportsMap
-updateExportsMapMg modGuts old =
-    old' <> new
+updateExportsMapMg modGuts old = old' <> new
     where
         new = createExportsMapMg modGuts
         old' = deleteAll old (Map.keys $ getModuleExportsMap new)
-        deleteAll = foldr deleteEntriesForModule
-
+        deleteAll = foldl' (flip deleteEntriesForModule)
 
 createExportsMapTc :: [TcGblEnv] -> ExportsMap
 createExportsMapTc modIface = do
@@ -155,6 +152,8 @@ createExportsMapTc modIface = do
 
 nonInternalModules :: ModuleName -> Bool
 nonInternalModules = not . (".Internal" `isSuffixOf`) . moduleNameString
+
+type WithHieDb = forall a. (HieDb -> IO a) -> IO a
 
 createExportsMapHieDb :: WithHieDb -> IO ExportsMap
 createExportsMapHieDb withHieDb = do

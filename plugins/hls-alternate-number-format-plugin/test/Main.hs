@@ -21,8 +21,7 @@ main :: IO ()
 main = defaultTestRunner test
 
 alternateNumberFormatPlugin :: PluginDescriptor IdeState
-alternateNumberFormatPlugin = AlternateNumberFormat.descriptor "alternateNumberFormat"
-
+alternateNumberFormatPlugin = AlternateNumberFormat.descriptor mempty "alternateNumberFormat"
 
 -- NOTE: For whatever reason, this plugin does not play nice with creating Code Actions on time.
 -- As a result tests will mostly pass if `import Prelude` is added at the top. We (mostly fendor) surmise this has something
@@ -37,36 +36,18 @@ test = testGroup "alternateNumberFormat" [
     , codeActionFloatHex "TFracDtoHF" 4 13
     , codeActionDecimal "TIntHtoD" 3 13
     , codeActionDecimal "TFracHFtoD" 4 13
-    , codeActionProperties "TFindLiteralIntPattern" [(3, 25), (4,25)] $ \actions -> do
+    , codeActionProperties "TFindLiteralIntPattern" [(4, 25), (5,25)] $ \actions -> do
         liftIO $ length actions @?= 4
-    , codeActionProperties "TFindLiteralIntCase" [(3, 29)] $ \actions -> do
+    , codeActionProperties "TFindLiteralIntCase" [(4, 29)] $ \actions -> do
         liftIO $ length actions @?= 2
-    , codeActionProperties "TFindLiteralIntCase2" [(4, 21)] $ \actions -> do
+    , codeActionProperties "TFindLiteralIntCase2" [(5, 21)] $ \actions -> do
         liftIO $ length actions @?= 2
-    , codeActionProperties "TFindLiteralDoReturn" [(5, 10)] $ \actions -> do
+    , codeActionProperties "TFindLiteralDoReturn" [(6, 10)] $ \actions -> do
         liftIO $ length actions @?= 2
-    , codeActionProperties "TFindLiteralDoLet" [(5, 13), (6, 13)] $ \actions -> do
+    , codeActionProperties "TFindLiteralDoLet" [(6, 13), (7, 13)] $ \actions -> do
         liftIO $ length actions @?= 4
-    , codeActionProperties "TFindLiteralList" [(3, 28)] $ \actions -> do
+    , codeActionProperties "TFindLiteralList" [(4, 28)] $ \actions -> do
         liftIO $ length actions @?= 2
-    , codeActionProperties "TExpectNoBinaryFormat" [(3, 12)] $ \actions -> do
-        liftIO $ length actions @?= 2
-        liftIO $ actions `doesNotContain` binaryRegex @? "Contains binary codeAction"
-    , codeActionProperties "TExpectBinaryFormat" [(4, 10)] $ \actions -> do
-        liftIO $ length actions @?= 3
-        liftIO $ actions `contains` binaryRegex @? "Does not contain binary codeAction"
-    , codeActionProperties "TExpectNoHexFloatFormat" [(3, 14)] $ \actions -> do
-        liftIO $ length actions @?= 1
-        liftIO $ actions `doesNotContain` hexFloatRegex @? "Contains hex float codeAction"
-    , codeActionProperties "TExpectHexFloatFormat" [(4, 12)] $ \actions -> do
-        liftIO $ length actions @?= 2
-        liftIO $ actions `contains` hexFloatRegex @? "Does not contain hex float codeAction"
-    , codeActionProperties "TExpectNoNumDecimalFormat" [(3, 16)] $ \actions -> do
-        liftIO $ length actions @?= 2
-        liftIO $ actions `doesNotContain` numDecimalRegex @? "Contains numDecimal codeAction"
-    , codeActionProperties "TExpectNumDecimalFormat" [(4, 14)] $ \actions -> do
-        liftIO $ length actions @?= 5
-        liftIO $ actions `contains` numDecimalRegex @? "Contains numDecimal codeAction"
     , conversions
     ]
 

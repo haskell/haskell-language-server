@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE LambdaCase         #-}
 {-# LANGUAGE NamedFieldPuns     #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RecordWildCards    #-}
@@ -13,6 +14,8 @@ module Ide.Plugin.ExplicitImports
   , descriptorForModules
   , extractMinimalImports
   , within
+  , abbreviateImportTitle
+  , Log(..)
   ) where
 
 import           Control.DeepSeq
@@ -26,11 +29,14 @@ import qualified Data.Map.Strict                      as Map
 import           Data.Maybe                           (catMaybes, fromMaybe,
                                                        isJust)
 import qualified Data.Text                            as T
+import           Data.String                          (fromString)
 import           Development.IDE                      hiding (pluginHandlers,
                                                        pluginRules)
 import           Development.IDE.Core.PositionMapping
+import qualified Development.IDE.Core.Shake           as Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Graph.Classes
+import           Development.IDE.Types.Logger         as Logger (Pretty (pretty))
 import           GHC.Generics                         (Generic)
 import           Ide.PluginUtils                      (mkLspCommand)
 import           Ide.Types
@@ -40,24 +46,33 @@ import           Language.LSP.Types
 importCommandId :: CommandId
 importCommandId = "ImportLensCommand"
 
+newtype Log
+  = LogShake Shake.Log
+  deriving Show
+
+instance Pretty Log where
+  pretty = \case
+    LogShake log -> pretty log
+
 -- | The "main" function of a plugin
-descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor =
+descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
+descriptor recorder =
     -- (almost) no one wants to see an explicit import list for Prelude
-    descriptorForModules (/= moduleName pRELUDE)
+    descriptorForModules recorder (/= moduleName pRELUDE)
 
 descriptorForModules
-    :: (ModuleName -> Bool)
+    :: Recorder (WithPriority Log)
+    -> (ModuleName -> Bool)
       -- ^ Predicate to select modules that will be annotated
     -> PluginId
     -> PluginDescriptor IdeState
-descriptorForModules pred plId =
+descriptorForModules recorder pred plId =
   (defaultPluginDescriptor plId)
     {
       -- This plugin provides a command handler
       pluginCommands = [importLensCommand],
       -- This plugin defines a new rule
-      pluginRules = minimalImportsRule,
+      pluginRules = minimalImportsRule recorder,
       pluginHandlers = mconcat
         [ -- This plugin provides code lenses
           mkPluginHandler STextDocumentCodeLens $ lensProvider pred
@@ -185,8 +200,8 @@ exportedModuleStrings ParsedModule{pm_parsed_source = L _ HsModule{..}}
     = map prettyPrint exports
 exportedModuleStrings _ = []
 
-minimalImportsRule :: Rules ()
-minimalImportsRule = define $ \MinimalImports nfp -> do
+minimalImportsRule :: Recorder (WithPriority Log) -> Rules ()
+minimalImportsRule recorder = define (cmapWithPrio LogShake recorder) $ \MinimalImports nfp -> do
   -- Get the typechecking artifacts from the module
   tmr <- use TypeCheck nfp
   -- We also need a GHC session with all the dependencies
@@ -239,7 +254,6 @@ extractMinimalImports (Just hsc) (Just TcModuleResult {..}) = do
       notExported []  _ = True
       notExported exports (L _ ImportDecl{ideclName = L _ name}) =
           not $ any (\e -> ("module " ++ moduleNameString name) == e) exports
-      notExported _ _ = False
 extractMinimalImports _ _ = return ([], Nothing)
 
 mkExplicitEdit :: (ModuleName -> Bool) -> PositionMapping -> LImportDecl GhcRn -> T.Text -> Maybe TextEdit
@@ -256,12 +270,19 @@ mkExplicitEdit pred posMapping (L (locA -> src) imp) explicit
   | otherwise =
     Nothing
 
+-- This number is somewhat arbitrarily chosen. Ideally the protocol would tell us these things,
+-- but at the moment I don't believe we know it.
+-- 80 columns is traditional, but Haskellers tend to use longer lines (citation needed) and it's
+-- probably not too bad if the lens is a *bit* longer than normal lines.
+maxColumns :: Int
+maxColumns = 120
+
 -- | Given an import declaration, generate a code lens unless it has an
 -- explicit import list or it's qualified
 generateLens :: PluginId -> Uri -> TextEdit -> IO (Maybe CodeLens)
 generateLens pId uri importEdit@TextEdit {_range, _newText} = do
-  -- The title of the command is just the minimal explicit import decl
-  let title = _newText
+  let
+      title = abbreviateImportTitle _newText
       -- the code lens has no extra data
       _xdata = Nothing
       -- an edit that replaces the whole declaration with the explicit one
@@ -273,6 +294,38 @@ generateLens pId uri importEdit@TextEdit {_range, _newText} = do
       _command = Just $ mkLspCommand pId importCommandId title _arguments
   -- create and return the code lens
   return $ Just CodeLens {..}
+
+-- | The title of the command is ideally the minimal explicit import decl, but
+-- we don't want to create a really massive code lens (and the decl can be extremely large!).
+-- So we abbreviate it to fit a max column size, and indicate how many more items are in the list
+-- after the abbreviation
+abbreviateImportTitle :: T.Text -> T.Text
+abbreviateImportTitle input =
+  let
+      -- For starters, we only want one line in the title
+      oneLineText = T.unwords $ T.lines input
+      -- Now, split at the max columns, leaving space for the summary text we're going to add
+      -- (conservatively assuming we won't need to print a number larger than 100)
+      (prefix, suffix) = T.splitAt (maxColumns - (T.length (summaryText 100))) oneLineText
+      -- We also want to truncate the last item so we get a "clean" break, rather than half way through
+      -- something. The conditional here is just because 'breakOnEnd' doesn't give us quite the right thing
+      -- if there are actually no commas.
+      (actualPrefix, extraSuffix) = if T.count "," prefix > 0 then T.breakOnEnd "," prefix else (prefix, "")
+      actualSuffix = extraSuffix <> suffix
+
+      -- The number of additional items is the number of commas+1
+      numAdditionalItems = T.count "," actualSuffix + 1
+      -- We want to make text like this: import Foo (AImport, BImport, ... (30 items))
+      -- We also want it to look sensible if we end up splitting in the module name itself,
+      summaryText n = " ... (" <> fromString (show n) <> " items)"
+      -- so we only add a trailing paren if we've split in the export list
+      suffixText = summaryText numAdditionalItems <> if T.count "(" prefix > 0 then ")" else ""
+      title =
+          -- If the original text fits, just use it
+          if T.length oneLineText <= maxColumns
+          then oneLineText
+          else actualPrefix <> suffixText
+  in title
 
 --------------------------------------------------------------------------------
 

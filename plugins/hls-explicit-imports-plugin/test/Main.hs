@@ -16,13 +16,15 @@ import           System.FilePath            ((<.>), (</>))
 import           Test.Hls
 
 explicitImportsPlugin :: PluginDescriptor IdeState
-explicitImportsPlugin = ExplicitImports.descriptor "explicitImports"
+explicitImportsPlugin = ExplicitImports.descriptor mempty "explicitImports"
 
+longModule :: T.Text
+longModule = "F" <> T.replicate 80 "o"
 
 main :: IO ()
 main = defaultTestRunner $
   testGroup
-    "Refine Imports"
+    "Make imports explicit"
     [ codeActionGoldenTest "UsualCase" 3 0
     , codeLensGoldenTest "UsualCase" 0
     , testCase "No CodeAction when exported" $
@@ -35,6 +37,29 @@ main = defaultTestRunner $
         doc <- openDoc "Exported.hs" "haskell"
         lenses <- getCodeLenses doc
         liftIO $ lenses @?= []
+    , testGroup "Title abbreviation"
+      [ testCase "not abbreviated" $
+          let i = "import " <> T.replicate 70 "F" <> " (Athing, Bthing, Cthing)"
+          in ExplicitImports.abbreviateImportTitle i @?= i
+      , testCase "abbreviated in module name" $
+          let i = "import " <> T.replicate 120 "F" <> " (Athing, Bthing, Cthing)"
+              o = "import " <> T.replicate 97 "F" <> " ... (3 items)"
+          in ExplicitImports.abbreviateImportTitle i @?= o
+      , testCase "abbreviated in import list" $
+          let i = "import " <> T.replicate 78 "F" <> " (Athing, Bthing, Cthing, Dthing, Ething)"
+              o = "import " <> T.replicate 78 "F" <> " (Athing, Bthing, ... (3 items))"
+          in ExplicitImports.abbreviateImportTitle i @?= o
+      -- This one breaks earlier in the same import item, but still splits the list in the same place
+      , testCase "abbreviated in import list (slightly shorter module)" $
+          let i = "import " <> T.replicate 76 "F" <> " (Athing, Bthing, Cthing, Dthing, Ething)"
+              o = "import " <> T.replicate 76 "F" <> " (Athing, Bthing, ... (3 items))"
+          in ExplicitImports.abbreviateImportTitle i @?= o
+      -- This one breaks later in the same import item, but still splits the list in the same place
+      , testCase "abbreviated in import list (slightly longer module)" $
+          let i = "import " <> T.replicate 80 "F" <> " (Athing, Bthing, Cthing, Dthing, Ething)"
+              o = "import " <> T.replicate 80 "F" <> " (Athing, Bthing, ... (3 items))"
+          in ExplicitImports.abbreviateImportTitle i @?= o
+      ]
     ]
 
 -- code action tests

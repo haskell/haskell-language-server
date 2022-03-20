@@ -50,7 +50,7 @@ library
         dlist,
         exceptions,
         extra >= 1.7.4,
-        fuzzy,
+        enummapset,
         filepath,
         fingertree,
         focus,
@@ -105,7 +105,7 @@ library
         ghc-check >=0.5.0.4,
         ghc-paths,
         cryptohash-sha1 >=0.11.100 && <0.12,
-        hie-bios >= 0.8 && < 0.9.0,
+        hie-bios ^>= 0.9.1,
         implicit-hie-cradle ^>= 0.3.0.5 || ^>= 0.5,
         base16-bytestring >=0.1.1 && <1.1
     if os(windows)
@@ -148,6 +148,7 @@ library
         Development.IDE.Main.HeapStats
         Development.IDE.Core.Debouncer
         Development.IDE.Core.FileStore
+        Development.IDE.Core.FileUtils
         Development.IDE.Core.IdeConfiguration
         Development.IDE.Core.OfInterest
         Development.IDE.Core.PositionMapping
@@ -205,6 +206,7 @@ library
         Development.IDE.Plugin.HLS.GhcIde
         Development.IDE.Plugin.Test
         Development.IDE.Plugin.TypeLenses
+        Text.Fuzzy.Parallel
 
     other-modules:
         Development.IDE.Core.FileExists
@@ -216,7 +218,6 @@ library
         Development.IDE.Plugin.Completions.Logic
         Development.IDE.Session.VersionCheck
         Development.IDE.Types.Action
-        Text.Fuzzy.Parallel
 
     ghc-options:
                 -Wall
@@ -371,6 +372,7 @@ test-suite ghcide-tests
         directory,
         extra,
         filepath,
+        fuzzy,
         --------------------------------------------------------------
         -- The MIN_VERSION_ghc macro relies on MIN_VERSION pragmas
         -- which require depending on ghc. So the tests need to depend
@@ -385,11 +387,13 @@ test-suite ghcide-tests
         lsp,
         lsp-types,
         hls-plugin-api,
-        network-uri,
         lens,
         list-t,
         lsp-test ^>= 0.14,
+        monoid-subclasses,
+        network-uri,
         optparse-applicative,
+        parallel,
         process,
         QuickCheck,
         quickcheck-instances,
@@ -410,6 +414,7 @@ test-suite ghcide-tests
         tasty-rerun,
         text,
         unordered-containers,
+        vector,
     if (impl(ghc >= 8.6) && impl(ghc < 9.2))
       build-depends:
           record-dot-preprocessor,
@@ -423,6 +428,7 @@ test-suite ghcide-tests
         Development.IDE.Test.Runfiles
         Experiments
         Experiments.Types
+        FuzzySearch
         Progress
         HieDbRetry
     default-extensions:

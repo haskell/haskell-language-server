@@ -8,13 +8,14 @@ module Development.IDE.Main
 ,isLSP
 ,commandP
 ,defaultMain
-,testing) where
-import           Control.Concurrent.Extra              (newLock, withLock,
-                                                        withNumCapabilities)
+,testing
+,Log(..)
+) where
+import           Control.Concurrent.Extra              (withNumCapabilities)
 import           Control.Concurrent.STM.Stats          (atomically,
                                                         dumpSTMStats)
-import           Control.Exception.Safe                (Exception (displayException),
-                                                        catchAny)
+import           Control.Exception.Safe                (SomeException, catchAny,
+                                                        displayException)
 import           Control.Monad.Extra                   (concatMapM, unless,
                                                         when)
 import qualified Data.Aeson.Encode.Pretty              as A
@@ -26,18 +27,16 @@ import           Data.List.Extra                       (intercalate, isPrefixOf,
                                                         nub, nubOrd, partition)
 import           Data.Maybe                            (catMaybes, isJust)
 import qualified Data.Text                             as T
-import qualified Data.Text.IO                          as T
 import           Data.Text.Lazy.Encoding               (decodeUtf8)
 import qualified Data.Text.Lazy.IO                     as LT
 import           Data.Typeable                         (typeOf)
 import           Development.IDE                       (Action, GhcVersion (..),
-                                                        Priority (Debug), Rules,
+                                                        Priority (Debug, Error), Rules,
                                                         ghcVersion,
                                                         hDuplicateTo')
 import           Development.IDE.Core.Debouncer        (Debouncer,
                                                         newAsyncDebouncer)
-import           Development.IDE.Core.FileStore        (isWatchSupported,
-                                                        makeVFSHandle)
+import           Development.IDE.Core.FileStore        (isWatchSupported)
 import           Development.IDE.Core.IdeConfiguration (IdeConfiguration (..),
                                                         registerIdeConfiguration)
 import           Development.IDE.Core.OfInterest       (FileOfInterestStatus (OnDisk),
@@ -50,17 +49,23 @@ import           Development.IDE.Core.RuleTypes        (GenerateCore (GenerateCo
                                                         TypeCheck (TypeCheck))
 import           Development.IDE.Core.Rules            (GhcSessionIO (GhcSessionIO),
                                                         mainRule)
+import qualified Development.IDE.Core.Rules            as Rules
 import           Development.IDE.Core.Service          (initialise, runAction)
+import qualified Development.IDE.Core.Service          as Service
 import           Development.IDE.Core.Shake            (IdeState (shakeExtras),
                                                         ShakeExtras (state),
                                                         shakeSessionInit, uses)
+import qualified Development.IDE.Core.Shake            as Shake
 import           Development.IDE.Core.Tracing          (measureMemory)
 import           Development.IDE.Graph                 (action)
 import           Development.IDE.LSP.LanguageServer    (runLanguageServer)
+import qualified Development.IDE.LSP.LanguageServer    as LanguageServer
 import           Development.IDE.Main.HeapStats        (withHeapStats)
+import qualified Development.IDE.Main.HeapStats        as HeapStats
 import           Development.IDE.Plugin                (Plugin (pluginHandlers, pluginModifyDynflags, pluginRules))
 import           Development.IDE.Plugin.HLS            (asGhcIdePlugin)
-import qualified Development.IDE.Plugin.HLS.GhcIde     as Ghcide
+import qualified Development.IDE.Plugin.HLS            as PluginHLS
+import qualified Development.IDE.Plugin.HLS.GhcIde     as GhcIde
 import qualified Development.IDE.Plugin.Test           as Test
 import           Development.IDE.Session               (SessionLoadingOptions,
                                                         getHieDbLoc,
@@ -68,11 +73,14 @@ import           Development.IDE.Session               (SessionLoadingOptions,
                                                         retryOnSqliteBusy,
                                                         runWithDb,
                                                         setInitialDynFlags)
+import qualified Development.IDE.Session               as Session
 import           Development.IDE.Types.Location        (NormalizedUri,
                                                         toNormalizedFilePath')
-import           Development.IDE.Types.Logger          (Logger (Logger),
-                                                        Priority (Info),
-                                                        logDebug, logInfo)
+import           Development.IDE.Types.Logger          (Logger, Pretty (pretty),
+                                                        Priority (Info, Warning),
+                                                        Recorder, WithPriority,
+                                                        cmapWithPrio, logWith,
+                                                        vsep, (<+>))
 import           Development.IDE.Types.Options         (IdeGhcSession,
                                                         IdeOptions (optCheckParents, optCheckProject, optReportProgress, optRunSubset),
                                                         IdeTesting (IdeTesting),
@@ -118,9 +126,48 @@ import           System.IO                             (BufferMode (LineBufferin
                                                         hSetEncoding, stderr,
                                                         stdin, stdout, utf8)
 import           System.Random                         (newStdGen)
-import           System.Time.Extra                     (offsetTime,
+import           System.Time.Extra                     (Seconds, offsetTime,
                                                         showDuration)
 import           Text.Printf                           (printf)
+
+data Log
+  = LogHeapStats !HeapStats.Log
+  | LogLspStart
+  | LogLspStartDuration !Seconds
+  | LogShouldRunSubset !Bool
+  | LogOnlyPartialGhc9Support
+  | LogSetInitialDynFlagsException !SomeException
+  | LogService Service.Log
+  | LogShake Shake.Log
+  | LogGhcIde GhcIde.Log
+  | LogLanguageServer LanguageServer.Log
+  | LogSession Session.Log
+  | LogPluginHLS PluginHLS.Log
+  | LogRules Rules.Log
+  deriving Show
+
+instance Pretty Log where
+  pretty = \case
+    LogHeapStats log -> pretty log
+    LogLspStart ->
+      vsep
+        [ "Staring LSP server..."
+        , "If you are seeing this in a terminal, you probably should have run WITHOUT the --lsp option!"]
+    LogLspStartDuration duration ->
+      "Started LSP server in" <+> pretty (showDuration duration)
+    LogShouldRunSubset shouldRunSubset ->
+      "shouldRunSubset:" <+> pretty shouldRunSubset
+    LogOnlyPartialGhc9Support ->
+      "Currently, HLS supports GHC 9 only partially. See [issue #297](https://github.com/haskell/haskell-language-server/issues/297) for more detail."
+    LogSetInitialDynFlagsException e ->
+      "setInitialDynFlags:" <+> pretty (displayException e)
+    LogService log -> pretty log
+    LogShake log -> pretty log
+    LogGhcIde log -> pretty log
+    LogLanguageServer log -> pretty log
+    LogSession log -> pretty log
+    LogPluginHLS log -> pretty log
+    LogRules log -> pretty log
 
 data Command
     = Check [FilePath]  -- ^ Typecheck some paths and print diagnostics. Exit code is the number of failures
@@ -131,7 +178,6 @@ data Command
     | PrintDefaultConfig
     | Custom {ideCommand :: IdeCommand IdeState} -- ^ User defined
     deriving Show
-
 
 -- TODO move these to hiedb
 deriving instance Show HieDb.Command
@@ -187,18 +233,16 @@ data Arguments = Arguments
     , argsThreads               :: Maybe Natural
     }
 
-instance Default Arguments where
-    def = defaultArguments Info
 
-defaultArguments :: Priority -> Arguments
-defaultArguments priority = Arguments
+defaultArguments :: Recorder (WithPriority Log) -> Logger -> Arguments
+defaultArguments recorder logger = Arguments
         { argsProjectRoot = Nothing
         , argsOTMemoryProfiling = False
         , argCommand = LSP
-        , argsLogger = stderrLogger priority
-        , argsRules = mainRule def >> action kick
+        , argsLogger = pure logger
+        , argsRules = mainRule (cmapWithPrio LogRules recorder) def >> action kick
         , argsGhcidePlugin = mempty
-        , argsHlsPlugins = pluginDescToIdePlugins Ghcide.descriptors
+        , argsHlsPlugins = pluginDescToIdePlugins (GhcIde.descriptors (cmapWithPrio LogGhcIde recorder))
         , argsSessionLoadingOptions = def
         , argsIdeOptions = \config ghcSession -> (defaultIdeOptions ghcSession)
             { optCheckProject = pure $ checkProject config
@@ -226,35 +270,39 @@ defaultArguments priority = Arguments
                 return newStdout
         }
 
-testing :: Arguments
-testing = (defaultArguments Debug) {
-    argsHlsPlugins = pluginDescToIdePlugins $
-        idePluginsToPluginDesc (argsHlsPlugins def)
-        ++ [Test.blockCommandDescriptor "block-command", Test.plugin],
-    argsIdeOptions = \config sessionLoader ->
-            let defOptions = argsIdeOptions def config sessionLoader
-            in defOptions {
-                optTesting = IdeTesting True
-            }
-}
 
--- | Cheap stderr logger that relies on LineBuffering
-stderrLogger :: Priority -> IO Logger
-stderrLogger logLevel = do
-    lock <- newLock
-    return $ Logger $ \p m -> when (p >= logLevel) $ withLock lock $
-        T.hPutStrLn stderr $ "[" <> T.pack (show p) <> "] " <> m
+testing :: Recorder (WithPriority Log) -> Logger -> Arguments
+testing recorder logger =
+  let
+    arguments@Arguments{ argsHlsPlugins, argsIdeOptions } = defaultArguments recorder logger
+    hlsPlugins = pluginDescToIdePlugins $
+      idePluginsToPluginDesc argsHlsPlugins
+      ++ [Test.blockCommandDescriptor "block-command", Test.plugin]
+    ideOptions = \config sessionLoader ->
+      let
+        defOptions = argsIdeOptions config sessionLoader
+      in
+        defOptions{ optTesting = IdeTesting True }
+  in
+    arguments
+      { argsHlsPlugins = hlsPlugins
+      , argsIdeOptions = ideOptions
+      }
 
-defaultMain :: Arguments -> IO ()
-defaultMain Arguments{..} = flip withHeapStats fun =<< argsLogger
+
+defaultMain :: Recorder (WithPriority Log) -> Arguments -> IO ()
+defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats recorder) fun
  where
+  log :: Priority -> Log -> IO ()
+  log = logWith recorder
+
   fun = do
     setLocaleEncoding utf8
     pid <- T.pack . show <$> getProcessID
     logger <- argsLogger
     hSetBuffering stderr LineBuffering
 
-    let hlsPlugin = asGhcIdePlugin argsHlsPlugins
+    let hlsPlugin = asGhcIdePlugin (cmapWithPrio LogPluginHLS recorder) argsHlsPlugins
         hlsCommands = allLspCmdIds' pid argsHlsPlugins
         plugins = hlsPlugin <> argsGhcidePlugin
         options = argsLspOptions { LSP.executeCommandCommands = LSP.executeCommandCommands argsLspOptions <> Just hlsCommands }
@@ -274,29 +322,29 @@ defaultMain Arguments{..} = flip withHeapStats fun =<< argsLogger
             LT.putStrLn $ decodeUtf8 $ A.encodePretty $ pluginsToDefaultConfig argsHlsPlugins
         LSP -> withNumCapabilities (maybe (numProcessors `div` 2) fromIntegral argsThreads) $ do
             t <- offsetTime
-            logInfo logger "Starting LSP server..."
-            logInfo logger "If you are seeing this in a terminal, you probably should have run WITHOUT the --lsp option!"
-            runLanguageServer options inH outH argsGetHieDbLoc argsDefaultHlsConfig argsOnConfigChange (pluginHandlers plugins) $ \env vfs rootPath withHieDb hieChan -> do
+            log Info LogLspStart
+
+            runLanguageServer (cmapWithPrio LogLanguageServer recorder) options inH outH argsGetHieDbLoc argsDefaultHlsConfig argsOnConfigChange (pluginHandlers plugins) $ \env rootPath withHieDb hieChan -> do
                 traverse_ IO.setCurrentDirectory rootPath
                 t <- t
-                logInfo logger $ T.pack $ "Started LSP server in " ++ showDuration t
+                log Info $ LogLspStartDuration t
 
                 dir <- maybe IO.getCurrentDirectory return rootPath
 
                 -- We want to set the global DynFlags right now, so that we can use
                 -- `unsafeGlobalDynFlags` even before the project is configured
                 _mlibdir <-
-                    setInitialDynFlags logger dir argsSessionLoadingOptions
-                        `catchAny` (\e -> (logDebug logger $ T.pack $ "setInitialDynFlags: " ++ displayException e) >> pure Nothing)
+                    setInitialDynFlags (cmapWithPrio LogSession recorder) dir argsSessionLoadingOptions
+                        -- TODO: should probably catch/log/rethrow at top level instead
+                        `catchAny` (\e -> log Error (LogSetInitialDynFlagsException e) >> pure Nothing)
 
-
-                sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions dir
+                sessionLoader <- loadSessionWithOptions (cmapWithPrio LogSession recorder) argsSessionLoadingOptions dir
                 config <- LSP.runLspT env LSP.getConfig
                 let def_options = argsIdeOptions config sessionLoader
 
                 -- disable runSubset if the client doesn't support watched files
                 runSubset <- (optRunSubset def_options &&) <$> LSP.runLspT env isWatchSupported
-                logDebug logger $ T.pack $ "runSubset: " <> show runSubset
+                log Debug $ LogShouldRunSubset runSubset
 
                 let options = def_options
                             { optReportProgress = clientSupportsProgress caps
@@ -306,24 +354,22 @@ defaultMain Arguments{..} = flip withHeapStats fun =<< argsLogger
                     caps = LSP.resClientCapabilities env
                 -- FIXME: Remove this after GHC 9 gets fully supported
                 when (ghcVersion == GHC90) $
-                    hPutStrLn stderr $
-                        "Currently, HLS supports GHC 9 only partially. "
-                        <> "See [issue #297](https://github.com/haskell/haskell-language-server/issues/297) for more detail."
+                    log Warning LogOnlyPartialGhc9Support
                 initialise
+                    (cmapWithPrio LogService recorder)
                     argsDefaultHlsConfig
                     rules
                     (Just env)
                     logger
                     debouncer
                     options
-                    vfs
                     withHieDb
                     hieChan
             dumpSTMStats
         Check argFiles -> do
           dir <- maybe IO.getCurrentDirectory return argsProjectRoot
           dbLoc <- getHieDbLoc dir
-          runWithDb logger dbLoc $ \hiedb hieChan -> do
+          runWithDb (cmapWithPrio LogSession recorder) dbLoc $ \hiedb hieChan -> do
             -- GHC produces messages with UTF8 in them, so make sure the terminal doesn't error
             hSetEncoding stdout utf8
             hSetEncoding stderr utf8
@@ -344,16 +390,15 @@ defaultMain Arguments{..} = flip withHeapStats fun =<< argsLogger
             putStrLn $ "Found " ++ show n ++ " cradle" ++ ['s' | n /= 1]
             when (n > 0) $ putStrLn $ "  (" ++ intercalate ", " (catMaybes ucradles) ++ ")"
             putStrLn "\nStep 3/4: Initializing the IDE"
-            vfs <- makeVFSHandle
-            sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions dir
+            sessionLoader <- loadSessionWithOptions (cmapWithPrio LogSession recorder) argsSessionLoadingOptions dir
             let def_options = argsIdeOptions argsDefaultHlsConfig sessionLoader
                 options = def_options
                         { optCheckParents = pure NeverCheck
                         , optCheckProject = pure False
                         , optModifyDynFlags = optModifyDynFlags def_options <> pluginModifyDynflags plugins
                         }
-            ide <- initialise argsDefaultHlsConfig rules Nothing logger debouncer options vfs hiedb hieChan
-            shakeSessionInit ide
+            ide <- initialise (cmapWithPrio LogService recorder) argsDefaultHlsConfig rules Nothing logger debouncer options hiedb hieChan
+            shakeSessionInit (cmapWithPrio LogShake recorder) ide
             registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
 
             putStrLn "\nStep 4/4: Type checking the files"
@@ -388,26 +433,25 @@ defaultMain Arguments{..} = flip withHeapStats fun =<< argsLogger
             root <-  maybe IO.getCurrentDirectory return argsProjectRoot
             dbLoc <- getHieDbLoc root
             hPutStrLn stderr $ "Using hiedb at: " ++ dbLoc
-            mlibdir <- setInitialDynFlags logger root def
+            mlibdir <- setInitialDynFlags (cmapWithPrio LogSession recorder) root def
             rng <- newStdGen
             case mlibdir of
                 Nothing     -> exitWith $ ExitFailure 1
-                Just libdir -> retryOnSqliteBusy logger rng (HieDb.runCommand libdir opts{HieDb.database = dbLoc} cmd)
+                Just libdir -> retryOnSqliteBusy (cmapWithPrio LogSession recorder) rng (HieDb.runCommand libdir opts{HieDb.database = dbLoc} cmd)
 
         Custom (IdeCommand c) -> do
           root <-  maybe IO.getCurrentDirectory return argsProjectRoot
           dbLoc <- getHieDbLoc root
-          runWithDb logger dbLoc $ \hiedb hieChan -> do
-            vfs <- makeVFSHandle
-            sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions "."
+          runWithDb (cmapWithPrio LogSession recorder) dbLoc $ \hiedb hieChan -> do
+            sessionLoader <- loadSessionWithOptions (cmapWithPrio LogSession recorder) argsSessionLoadingOptions "."
             let def_options = argsIdeOptions argsDefaultHlsConfig sessionLoader
                 options = def_options
                     { optCheckParents = pure NeverCheck
                     , optCheckProject = pure False
                     , optModifyDynFlags = optModifyDynFlags def_options <> pluginModifyDynflags plugins
                     }
-            ide <- initialise argsDefaultHlsConfig rules Nothing logger debouncer options vfs hiedb hieChan
-            shakeSessionInit ide
+            ide <- initialise (cmapWithPrio LogService recorder) argsDefaultHlsConfig rules Nothing logger debouncer options hiedb hieChan
+            shakeSessionInit (cmapWithPrio LogShake recorder) ide
             registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
             c ide
 

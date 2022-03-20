@@ -26,7 +26,7 @@ import           Data.Bifunctor                (second)
 import qualified Data.ByteString               as BS
 import           Data.Dynamic
 import qualified Data.HashMap.Strict           as Map
-import           Data.HashSet                  (HashSet)
+import           Data.HashSet                  (HashSet, member)
 import           Data.IORef
 import           Data.Maybe
 import           Data.Typeable
@@ -36,6 +36,8 @@ import qualified ListT
 import           StmContainers.Map             (Map)
 import qualified StmContainers.Map             as SMap
 import           System.Time.Extra             (Seconds)
+import qualified Data.HashSet as Set
+import Data.List (intercalate)
 
 
 unwrapDynamic :: forall a . Typeable a => Dynamic -> a
@@ -66,7 +68,8 @@ newtype Action a = Action {fromAction :: ReaderT SAction IO a}
 
 data SAction = SAction {
     actionDatabase :: !Database,
-    actionDeps     :: !(IORef ResultDeps)
+    actionDeps     :: !(IORef ResultDeps),
+    actionStack    :: !Stack
     }
 
 getDatabase :: Action Database
@@ -74,6 +77,8 @@ getDatabase = Action $ asks actionDatabase
 
 ---------------------------------------------------------------------
 -- DATABASE
+
+data ShakeDatabase = ShakeDatabase !Int [Action ()] Database
 
 newtype Step = Step Int
     deriving newtype (Eq,Ord,Hashable)
@@ -115,12 +120,12 @@ getDatabaseValues = atomically
                   . databaseValues
 
 data Status
-    = Clean Result
+    = Clean !Result
     | Dirty (Maybe Result)
     | Running {
         runningStep   :: !Step,
         runningWait   :: !(IO ()),
-        runningResult :: Result,
+        runningResult :: Result,     -- LAZY
         runningPrev   :: !(Maybe Result)
         }
 
@@ -140,10 +145,11 @@ data Result = Result {
     resultVisited   :: !Step, -- ^ the step when it was last looked up
     resultDeps      :: !ResultDeps,
     resultExecution :: !Seconds, -- ^ How long it took, last time it ran
-    resultData      :: BS.ByteString
+    resultData      :: !BS.ByteString
     }
 
 data ResultDeps = UnknownDeps | AlwaysRerunDeps ![Key] | ResultDeps ![Key]
+  deriving (Eq, Show)
 
 getResultDepsDefault :: [Key] -> ResultDeps -> [Key]
 getResultDepsDefault _ (ResultDeps ids)      = ids
@@ -200,6 +206,54 @@ data RunResult value = RunResult
 instance NFData value => NFData (RunResult value) where
     rnf (RunResult x1 x2 x3) = rnf x1 `seq` x2 `seq` rnf x3
 
+---------------------------------------------------------------------
+-- EXCEPTIONS
+
+data GraphException = forall e. Exception e => GraphException {
+    target :: String, -- ^ The key that was being built
+    stack  :: [String], -- ^ The stack of keys that led to this exception
+    inner  :: e -- ^ The underlying exception
+}
+  deriving (Typeable, Exception)
+
+instance Show GraphException where
+    show GraphException{..} = unlines $
+        ["GraphException: " ++ target] ++
+        stack ++
+        ["Inner exception: " ++ show inner]
+
+fromGraphException :: Typeable b => SomeException -> Maybe b
+fromGraphException x = do
+    GraphException _ _ e <- fromException x
+    cast e
+
+---------------------------------------------------------------------
+-- CALL STACK
+
+data Stack = Stack [Key] !(HashSet Key)
+
+instance Show Stack where
+    show (Stack kk _) = "Stack: " <> intercalate " -> " (map show kk)
+
+newtype StackException = StackException Stack
+  deriving (Typeable, Show)
+
+instance Exception StackException where
+    fromException = fromGraphException
+    toException this@(StackException (Stack stack _)) = toException $
+        GraphException (show$ last stack) (map show stack) this
+
+addStack :: Key -> Stack -> Either StackException Stack
+addStack k (Stack ks is)
+    | k `member` is = Left $ StackException stack2
+    | otherwise = Right stack2
+    where stack2 = Stack (k:ks) (Set.insert k is)
+
+memberStack :: Key -> Stack -> Bool
+memberStack k (Stack _ ks) = k `member` ks
+
+emptyStack :: Stack
+emptyStack = Stack [] mempty
 ---------------------------------------------------------------------
 -- INSTANCES
 

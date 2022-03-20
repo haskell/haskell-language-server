@@ -39,6 +39,7 @@ common common-deps
     , extra
     , filepath
     , text
+    , prettyprinter
 
 -- Default warnings in HLS
 common warnings
@@ -76,7 +77,6 @@ library
     , hie-bios
     , hiedb
     , hls-plugin-api        ^>=1.3
-    , hslogger
     , optparse-applicative
     , optparse-simple
     , process
@@ -178,6 +178,11 @@ flag qualifyImportedNames
 
 flag selectionRange
   description: Enable selectionRange plugin
+  default:     True
+  manual:      True
+
+flag changeTypeSignature
+  description: Enable changeTypeSignature plugin
   default:     True
   manual:      True
 
@@ -298,6 +303,11 @@ common selectionRange
     build-depends: hls-selection-range-plugin ^>=1.0.0.0
     cpp-options: -DselectionRange
 
+common changeTypeSignature
+  if flag(changeTypeSignature)
+    build-depends: hls-change-type-signature-plugin ^>=1.0.0.0
+    cpp-options: -DchangeTypeSignature
+
 -- formatters
 
 common floskell
@@ -333,6 +343,7 @@ executable haskell-language-server
                     -- plugins
                     , example-plugins
                     , callHierarchy
+                    , changeTypeSignature
                     , class
                     , haddockComments
                     , eval
@@ -398,7 +409,6 @@ executable haskell-language-server
     , hiedb
     , lens
     , regex-tdfa
-    , hslogger
     , optparse-applicative
     , hls-plugin-api
     , lens

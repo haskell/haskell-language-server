@@ -24,7 +24,7 @@ main = defaultTestRunner $
     ]
 
 refineImportsPlugin :: PluginDescriptor IdeState
-refineImportsPlugin = RefineImports.descriptor "refineImports"
+refineImportsPlugin = RefineImports.descriptor mempty "refineImports"
 
 -- code action tests
 

@@ -17,8 +17,7 @@ import           Development.IDE.Core.IdeConfiguration as X (IdeConfiguration (.
                                                              isWorkspaceFile)
 import           Development.IDE.Core.OfInterest       as X (getFilesOfInterestUntracked)
 import           Development.IDE.Core.RuleTypes        as X
-import           Development.IDE.Core.Rules            as X (IsHiFileStable (..),
-                                                             getClientConfigAction,
+import           Development.IDE.Core.Rules            as X (getClientConfigAction,
                                                              getParsedModule)
 import           Development.IDE.Core.Service          as X (runAction)
 import           Development.IDE.Core.Shake            as X (FastResult (..),

@@ -63,7 +63,6 @@ jobs:
           paths_ignore: '["**/docs/**"
                          , "**.md"
                          , "**/LICENSE"
-                         , "install/**"
                          , "**.nix"
                          , "flake.lock"
                          , "**/README.md"
@@ -95,7 +94,7 @@ jobs:
             ]
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       - uses: ./.github/actions/setup-build
         with:

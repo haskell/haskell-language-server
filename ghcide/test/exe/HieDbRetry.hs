@@ -5,25 +5,34 @@ import           Control.Concurrent.Extra     (Var, modifyVar, newVar, readVar,
                                                withVar)
 import           Control.Exception            (ErrorCall (ErrorCall), evaluate,
                                                throwIO, tryJust)
-import           Data.Text                    (Text)
+import           Control.Monad.IO.Class       (MonadIO (liftIO))
 import           Data.Tuple.Extra             (dupe)
 import qualified Database.SQLite.Simple       as SQLite
 import           Development.IDE.Session      (retryOnException,
                                                retryOnSqliteBusy)
-import           Development.IDE.Types.Logger (Logger (Logger), Priority,
-                                               noLogging)
+import qualified Development.IDE.Session      as Session
+import           Development.IDE.Types.Logger (Recorder (Recorder, logger_),
+                                               WithPriority (WithPriority, payload),
+                                               cmapWithPrio)
 import qualified System.Random                as Random
 import           Test.Tasty                   (TestTree, testGroup)
 import           Test.Tasty.HUnit             (assertFailure, testCase, (@?=))
 
-makeLogger :: Var [(Priority, Text)] -> Logger
-makeLogger msgsVar = Logger $ \priority msg -> modifyVar msgsVar (\msgs -> pure ((priority, msg) : msgs, ()))
+data Log
+  = LogSession Session.Log
+  deriving Show
+
+makeLogger :: Var [Log] -> Recorder (WithPriority Log)
+makeLogger msgsVar =
+  Recorder {
+    logger_ = \WithPriority{ payload = msg } -> liftIO $ modifyVar msgsVar (\msgs -> pure (msg : msgs, ()))
+  }
 
 rng :: Random.StdGen
 rng = Random.mkStdGen 0
 
-retryOnSqliteBusyForTest :: Logger -> Int -> IO a -> IO a
-retryOnSqliteBusyForTest logger maxRetryCount = retryOnException isErrorBusy logger 1 1 maxRetryCount rng
+retryOnSqliteBusyForTest :: Recorder (WithPriority Log) -> Int -> IO a -> IO a
+retryOnSqliteBusyForTest recorder maxRetryCount = retryOnException isErrorBusy (cmapWithPrio LogSession recorder) 1 1 maxRetryCount rng
 
 isErrorBusy :: SQLite.SQLError -> Maybe SQLite.SQLError
 isErrorBusy e
@@ -60,7 +69,7 @@ tests = testGroup "RetryHieDb"
       let expected = 1 :: Int
       let maxRetryCount = 0
 
-      actual <- retryOnSqliteBusyForTest noLogging maxRetryCount (pure expected)
+      actual <- retryOnSqliteBusyForTest mempty maxRetryCount (pure expected)
 
       actual @?= expected
 
@@ -69,7 +78,7 @@ tests = testGroup "RetryHieDb"
       let maxRetryCount = 3
       let incrementThenThrow = modifyVar countVar (\count -> pure (dupe (count + 1))) >> throwIO errorBusy
 
-      _ <- tryJust isErrorBusy (retryOnSqliteBusyForTest noLogging maxRetryCount incrementThenThrow)
+      _ <- tryJust isErrorBusy (retryOnSqliteBusyForTest mempty maxRetryCount incrementThenThrow)
 
       withVar countVar $ \count ->
         count @?= maxRetryCount + 1
@@ -86,7 +95,7 @@ tests = testGroup "RetryHieDb"
               modifyVar countVar (\count -> pure (dupe (count + 1)))
 
 
-      _ <- tryJust isErrorCall (retryOnSqliteBusyForTest noLogging maxRetryCount throwThenIncrement)
+      _ <- tryJust isErrorCall (retryOnSqliteBusyForTest mempty maxRetryCount throwThenIncrement)
 
       withVar countVar $ \count ->
         count @?= 0
@@ -101,27 +110,29 @@ tests = testGroup "RetryHieDb"
             else
               modifyVar countVar (\count -> pure (dupe (count + 1)))
 
-      _ <- retryOnSqliteBusy noLogging rng incrementThenThrowThenIncrement
+      _ <- retryOnSqliteBusy mempty rng incrementThenThrowThenIncrement
 
       withVar countVar $ \count ->
         count @?= 2
 
     , testCase "retryOnException exponentially backs off" $ do
-       logMsgsVar <- newVar ([] :: [(Priority, Text)])
+       logMsgsVar <- newVar ([] :: [Log])
 
        let maxDelay = 100
        let baseDelay = 1
        let maxRetryCount = 6
        let logger = makeLogger logMsgsVar
 
-       result <- tryJust isErrorBusy (retryOnException isErrorBusy logger maxDelay baseDelay maxRetryCount rng (throwIO errorBusy))
+       result <- tryJust isErrorBusy (retryOnException isErrorBusy (cmapWithPrio LogSession logger) maxDelay baseDelay maxRetryCount rng (throwIO errorBusy))
 
        case result of
          Left _ -> do
            withVar logMsgsVar $ \logMsgs ->
-             if | ((_, lastLogMsg) : _) <- logMsgs ->
-                  -- uses log messages to indirectly check backoff...
-                  lastLogMsg @?= "Retries exhausted - base delay: 64, maximumDelay: 100, maxRetryCount: 0, exception: SQLite3 returned ErrorBusy while attempting to perform : "
+             -- uses log messages to check backoff...
+             if | (LogSession (Session.LogHieDbRetriesExhausted baseDelay maximumDelay maxRetryCount _) : _) <- logMsgs -> do
+                  baseDelay @?= 64
+                  maximumDelay @?= 100
+                  maxRetryCount @?= 0
                 | otherwise -> assertFailure "Expected more than 0 log messages"
          Right _ -> assertFailure "Expected ErrorBusy exception"
   ]

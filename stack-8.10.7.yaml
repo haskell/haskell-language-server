@@ -32,6 +32,7 @@ packages:
   - ./plugins/hls-ormolu-plugin
   - ./plugins/hls-alternate-number-format-plugin
   - ./plugins/hls-selection-range-plugin
+  - ./plugins/hls-change-type-signature-plugin
 
 ghc-options:
   "$everything": -haddock
@@ -43,7 +44,7 @@ extra-deps:
   - extra-1.7.10
   - floskell-0.10.5@sha256:77f0bc1569573d9666b10975a5357fef631d32266c071733739393ccae521dab,3803
   - heapsize-0.3.0.1@sha256:0b69aa97a46d819b700ac7b145f3b5493c3565cf2c5b8298682238d405d0326e,1417
-  - hie-bios-0.8.0
+  - hie-bios-0.9.1
   - hiedb-0.4.1.0
   - hlint-3.2.8
   - implicit-hie-0.1.2.6@sha256:f50a908979a574a881f753c0f9a5224f023f438b30fdefc5b7fa01803b07a280,2998

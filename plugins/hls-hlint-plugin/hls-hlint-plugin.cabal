@@ -62,6 +62,7 @@ library
     , hslogger
     , lens
     , lsp
+    , refact
     , regex-tdfa
     , stm
     , temporary

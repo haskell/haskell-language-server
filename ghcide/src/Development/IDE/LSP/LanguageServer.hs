@@ -10,6 +10,7 @@
 -- This version removes the daml: handling
 module Development.IDE.LSP.LanguageServer
     ( runLanguageServer
+    , Log(..)
     ) where
 
 import           Control.Concurrent.STM
@@ -31,35 +32,61 @@ import           UnliftIO.Concurrent
 import           UnliftIO.Directory
 import           UnliftIO.Exception
 
-import           Development.IDE.Core.FileStore
 import           Development.IDE.Core.IdeConfiguration
-import           Development.IDE.Core.Shake
+import           Development.IDE.Core.Shake            hiding (Log)
 import           Development.IDE.Core.Tracing
 import           Development.IDE.LSP.HoverDefinition
 import           Development.IDE.Types.Logger
 
 import           Control.Monad.IO.Unlift               (MonadUnliftIO)
+import qualified Development.IDE.Session               as Session
+import qualified Development.IDE.Types.Logger          as Logger
 import           Development.IDE.Types.Shake           (WithHieDb)
 import           System.IO.Unsafe                      (unsafeInterleaveIO)
 
-issueTrackerUrl :: T.Text
-issueTrackerUrl = "https://github.com/haskell/haskell-language-server/issues"
+data Log
+  = LogRegisteringIdeConfig !IdeConfiguration
+  | LogReactorThreadException !SomeException
+  | LogReactorMessageActionException !SomeException
+  | LogReactorThreadStopped
+  | LogCancelledRequest !SomeLspId
+  | LogSession Session.Log
+  deriving Show
+
+instance Pretty Log where
+  pretty = \case
+    LogRegisteringIdeConfig ideConfig ->
+      "Registering IDE configuration:" <+> viaShow ideConfig
+    LogReactorThreadException e ->
+      vcat
+        [ "ReactorThreadException"
+        , pretty $ displayException e ]
+    LogReactorMessageActionException e ->
+      vcat
+        [ "ReactorMessageActionException"
+        , pretty $ displayException e ]
+    LogReactorThreadStopped ->
+      "Reactor thread stopped"
+    LogCancelledRequest requestId ->
+      "Cancelled request" <+> viaShow requestId
+    LogSession log -> pretty log
 
 -- used to smuggle RankNType WithHieDb through dbMVar
 newtype WithHieDbShield = WithHieDbShield WithHieDb
 
 runLanguageServer
     :: forall config. (Show config)
-    => LSP.Options
+    => Recorder (WithPriority Log)
+    -> LSP.Options
     -> Handle -- input
     -> Handle -- output
     -> (FilePath -> IO FilePath) -- ^ Map root paths to the location of the hiedb for the project
     -> config
     -> (config -> Value -> Either T.Text config)
     -> LSP.Handlers (ServerM config)
-    -> (LSP.LanguageContextEnv config -> VFSHandle -> Maybe FilePath -> WithHieDb -> IndexQueue -> IO IdeState)
+    -> (LSP.LanguageContextEnv config -> Maybe FilePath -> WithHieDb -> IndexQueue -> IO IdeState)
     -> IO ()
-runLanguageServer options inH outH getHieDbLoc defaultConfig onConfigurationChange userHandlers getIdeState = do
+runLanguageServer recorder options inH outH getHieDbLoc defaultConfig onConfigurationChange userHandlers getIdeState = do
 
     -- This MVar becomes full when the server thread exits or we receive exit message from client.
     -- LSP server will be canceled when it's full.
@@ -128,6 +155,9 @@ runLanguageServer options inH outH getHieDbLoc defaultConfig onConfigurationChan
             serverDefinition
 
     where
+        log :: Logger.Priority -> Log -> IO ()
+        log = logWith recorder
+
         handleInit
           :: MVar () -> IO () -> (SomeLspId -> IO ()) -> (SomeLspId -> IO ()) -> Chan ReactorMessage
           -> LSP.LanguageContextEnv config -> RequestMessage Initialize -> IO (Either err (LSP.LanguageContextEnv config, IdeState))
@@ -142,33 +172,20 @@ runLanguageServer options inH outH getHieDbLoc defaultConfig onConfigurationChan
             dbMVar <- newEmptyMVar
             ~(WithHieDbShield withHieDb,hieChan) <- unsafeInterleaveIO $ takeMVar dbMVar
 
-            ide <- getIdeState env (makeLSPVFSHandle env) root withHieDb hieChan
+            ide <- getIdeState env root withHieDb hieChan
 
             let initConfig = parseConfiguration params
-            logInfo (ideLogger ide) $ T.pack $ "Registering ide configuration: " <> show initConfig
+
+            log Info $ LogRegisteringIdeConfig initConfig
             registerIdeConfiguration (shakeExtras ide) initConfig
 
             let handleServerException (Left e) = do
-                    logError logger $
-                        T.pack $ "Fatal error in server thread: " <> show e
-                    sendErrorMessage e
+                    log Error $ LogReactorThreadException e
                     exitClientMsg
                 handleServerException (Right _) = pure ()
 
-                sendErrorMessage (e :: SomeException) = do
-                    LSP.runLspT env $ LSP.sendNotification SWindowShowMessage $
-                        ShowMessageParams MtError $ T.unlines
-                        [ "Unhandled exception, please [report](" <> issueTrackerUrl <> "): "
-                        , T.pack(show e)
-                        ]
-
                 exceptionInHandler e = do
-                    logError logger $ T.pack $
-                        "Unexpected exception, please report!\n" ++
-                        "Exception: " ++ show e
-                    sendErrorMessage e
-
-                logger = ideLogger ide
+                    log Error $ LogReactorMessageActionException e
 
                 checkCancelled _id act k =
                     flip finally (clearReqId _id) $
@@ -180,14 +197,14 @@ runLanguageServer options inH outH getHieDbLoc defaultConfig onConfigurationChan
                             cancelOrRes <- race (waitForCancel _id) act
                             case cancelOrRes of
                                 Left () -> do
-                                    logDebug (ideLogger ide) $ T.pack $ "Cancelled request " <> show _id
+                                    log Debug $ LogCancelledRequest _id
                                     k $ ResponseError RequestCancelled "" Nothing
                                 Right res -> pure res
                         ) $ \(e :: SomeException) -> do
                             exceptionInHandler e
                             k $ ResponseError InternalError (T.pack $ show e) Nothing
             _ <- flip forkFinally handleServerException $ do
-                untilMVar lifetime $ runWithDb logger dbLoc $ \withHieDb hieChan -> do
+                untilMVar lifetime $ runWithDb (cmapWithPrio LogSession recorder) dbLoc $ \withHieDb hieChan -> do
                     putMVar dbMVar (WithHieDbShield withHieDb,hieChan)
                     forever $ do
                         msg <- readChan clientMsgChan
@@ -196,7 +213,7 @@ runLanguageServer options inH outH getHieDbLoc defaultConfig onConfigurationChan
                         case msg of
                             ReactorNotification act -> handle exceptionInHandler act
                             ReactorRequest _id act k -> void $ async $ checkCancelled _id act k
-                logInfo logger "Reactor thread stopped"
+                log Info LogReactorThreadStopped
             pure $ Right (env,ide)
 
 

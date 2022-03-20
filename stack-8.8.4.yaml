@@ -29,6 +29,7 @@ packages:
   - ./plugins/hls-ormolu-plugin
   - ./plugins/hls-alternate-number-format-plugin
   - ./plugins/hls-selection-range-plugin
+  - ./plugins/hls-change-type-signature-plugin
 
 ghc-options:
   "$everything": -haddock
@@ -52,7 +53,7 @@ extra-deps:
   - ghc-trace-events-0.1.2.1
   - haskell-src-exts-1.21.1
   - heapsize-0.3.0
-  - hie-bios-0.8.0
+  - hie-bios-0.9.1
   - hlint-3.2.8
   - HsYAML-aeson-0.2.0.0@rev:2
   - hoogle-5.0.17.11
@@ -64,6 +65,7 @@ extra-deps:
   - monad-dijkstra-0.1.1.2
   - opentelemetry-0.6.1
   - opentelemetry-extra-0.6.1
+  - prettyprinter-1.7.1
   - refinery-0.4.0.0
   - retrie-1.1.0.0
   - semigroups-0.18.5

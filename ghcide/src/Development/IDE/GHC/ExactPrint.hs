@@ -23,7 +23,6 @@ module Development.IDE.GHC.ExactPrint
       transformM,
       ExactPrint(..),
 #if !MIN_VERSION_ghc(9,2,0)
-      useAnnotatedSource,
       Anns,
       Annotate,
       setPrecedingLinesT,
@@ -44,6 +43,7 @@ module Development.IDE.GHC.ExactPrint
       ASTElement (..),
       ExceptStringT (..),
       TransformT,
+      Log(..),
     )
 where
 
@@ -67,13 +67,18 @@ import qualified Data.Text                               as T
 import           Data.Traversable                        (for)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service            (runAction)
-import           Development.IDE.Core.Shake
+import           Development.IDE.Core.Shake              hiding (Log)
+import qualified Development.IDE.Core.Shake              as Shake
 import           Development.IDE.GHC.Compat              hiding (parseImport,
                                                           parsePattern,
                                                           parseType)
 import           Development.IDE.Graph                   (RuleResult, Rules)
 import           Development.IDE.Graph.Classes
 import           Development.IDE.Types.Location
+import           Development.IDE.Types.Logger            (Pretty (pretty),
+                                                          Recorder,
+                                                          WithPriority,
+                                                          cmapWithPrio)
 import qualified GHC.Generics                            as GHC
 import           Generics.SYB
 import           Generics.SYB.GHC
@@ -101,6 +106,12 @@ import           GHC.Parser.Annotation                   (AnnContext (..),
 
 ------------------------------------------------------------------------------
 
+data Log = LogShake Shake.Log deriving Show
+
+instance Pretty Log where
+  pretty = \case
+    LogShake shakeLog -> pretty shakeLog
+
 data GetAnnotatedParsedSource = GetAnnotatedParsedSource
   deriving (Eq, Show, Typeable, GHC.Generic)
 
@@ -109,8 +120,8 @@ instance NFData GetAnnotatedParsedSource
 type instance RuleResult GetAnnotatedParsedSource = Annotated ParsedSource
 
 -- | Get the latest version of the annotated parse source with comments.
-getAnnotatedParsedSourceRule :: Rules ()
-getAnnotatedParsedSourceRule = define $ \GetAnnotatedParsedSource nfp -> do
+getAnnotatedParsedSourceRule :: Recorder (WithPriority Log) -> Rules ()
+getAnnotatedParsedSourceRule recorder = define (cmapWithPrio LogShake recorder) $ \GetAnnotatedParsedSource nfp -> do
   pm <- use GetParsedModuleWithComments nfp
   return ([], fmap annotateParsedSource pm)
 
@@ -120,16 +131,6 @@ annotateParsedSource (ParsedModule _ ps _ _) = unsafeMkA (makeDeltaAst ps) 0
 #else
 annotateParsedSource :: ParsedModule -> Annotated ParsedSource
 annotateParsedSource = fixAnns
-#endif
-
-#if !MIN_VERSION_ghc(9,2,0)
-useAnnotatedSource ::
-  String ->
-  IdeState ->
-  NormalizedFilePath ->
-  IO (Maybe (Annotated ParsedSource))
-useAnnotatedSource herald state nfp =
-    runAction herald state (use GetAnnotatedParsedSource nfp)
 #endif
 
 ------------------------------------------------------------------------------

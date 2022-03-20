@@ -98,6 +98,18 @@
         "type": "github"
       }
     },
+    "hie-bios": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-nd+FfUQVZNxJfKZkAWA3dF0JwRgXntL+1gGvyNHDbKc=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/hie-bios-0.9.0/hie-bios-0.9.0.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/hie-bios-0.9.0/hie-bios-0.9.0.tar.gz"
+      }
+    },
     "hlint": {
       "flake": false,
       "locked": {
@@ -108,6 +120,18 @@
       "original": {
         "type": "tarball",
         "url": "https://hackage.haskell.org/package/hlint-3.3.6/hlint-3.3.6.tar.gz"
+      }
+    },
+    "implicit-hie-cradle": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-2NmucBBI7Qi1UGXWG27XFZRCeqeRiwVFWmJKZnp6R5U=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/implicit-hie-cradle-0.3.0.5/implicit-hie-cradle-0.3.0.5.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/implicit-hie-cradle-0.3.0.5/implicit-hie-cradle-0.3.0.5.tar.gz"
       }
     },
     "lsp": {
@@ -215,7 +239,9 @@
         "fourmolu": "fourmolu",
         "ghc-exactprint": "ghc-exactprint",
         "gitignore": "gitignore",
+        "hie-bios": "hie-bios",
         "hlint": "hlint",
+        "implicit-hie-cradle": "implicit-hie-cradle",
         "lsp": "lsp",
         "lsp-test": "lsp-test",
         "lsp-types": "lsp-types",

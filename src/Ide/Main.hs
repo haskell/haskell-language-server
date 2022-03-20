@@ -5,42 +5,62 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE TypeFamilies        #-}
 
-module Ide.Main(defaultMain, runLspMode) where
+module Ide.Main(defaultMain, runLspMode, Log(..)) where
 
 import           Control.Monad.Extra
 import qualified Data.Aeson.Encode.Pretty      as A
 import qualified Data.ByteString.Lazy.Char8    as LBS
+import           Data.Coerce                   (coerce)
 import           Data.Default
 import           Data.List                     (sort)
+import           Data.Text                     (Text)
 import qualified Data.Text                     as T
-import           Development.IDE.Core.Rules
+import           Development.IDE.Core.Rules    hiding (Log, logToPriority)
 import           Development.IDE.Core.Tracing  (withTelemetryLogger)
-import           Development.IDE.Graph         (ShakeOptions (shakeThreads))
 import           Development.IDE.Main          (isLSP)
-import qualified Development.IDE.Main          as Main
+import qualified Development.IDE.Main          as IDEMain
 import qualified Development.IDE.Session       as Session
 import           Development.IDE.Types.Logger  as G
 import qualified Development.IDE.Types.Options as Ghcide
+import           GHC.Stack                     (emptyCallStack)
+import qualified HIE.Bios.Environment          as HieBios
 import           HIE.Bios.Types
-import qualified HIE.Bios.Environment    as HieBios
 import           Ide.Arguments
-import           Ide.Logger
 import           Ide.Plugin.ConfigUtils        (pluginsToDefaultConfig,
                                                 pluginsToVSCodeExtensionSchema)
 import           Ide.Types                     (IdePlugins, PluginId (PluginId),
                                                 ipMap)
 import           Ide.Version
-import qualified Language.LSP.Server           as LSP
 import           System.Directory
 import qualified System.Directory.Extra        as IO
 import           System.FilePath
-import           System.IO
-import qualified System.Log.Logger             as L
 
-defaultMain :: Arguments -> IdePlugins IdeState -> IO ()
-defaultMain args idePlugins = do
+data Log
+  = LogVersion !String
+  | LogDirectory !FilePath
+  | LogLspStart !GhcideArguments ![PluginId]
+  | LogIDEMain IDEMain.Log
+  | LogOther T.Text
+  deriving Show
+
+instance Pretty Log where
+  pretty log = case log of
+    LogVersion version -> pretty version
+    LogDirectory path -> "Directory:" <+> pretty path
+    LogLspStart ghcideArgs pluginIds ->
+      nest 2 $
+        vsep
+          [ "Starting (haskell-language-server) LSP server..."
+          , viaShow ghcideArgs
+          , "PluginIds:" <+> pretty (coerce @_ @[Text] pluginIds) ]
+    LogIDEMain iDEMainLog -> pretty iDEMainLog
+    LogOther t -> pretty t
+
+defaultMain :: Recorder (WithPriority Log) -> Arguments -> IdePlugins IdeState -> IO ()
+defaultMain recorder args idePlugins = do
     -- WARNING: If you write to stdout before runLanguageServer
     --          then the language server will not work
 
@@ -72,8 +92,8 @@ defaultMain args idePlugins = do
 
         Ghcide ghcideArgs -> do
             {- see WARNING above -}
-            hPutStrLn stderr hlsVer
-            runLspMode ghcideArgs idePlugins
+            logWith recorder Info $ LogVersion hlsVer
+            runLspMode recorder ghcideArgs idePlugins
 
         VSCodeExtensionSchemaMode -> do
           LBS.putStrLn $ A.encodePretty $ pluginsToVSCodeExtensionSchema idePlugins
@@ -90,41 +110,28 @@ defaultMain args idePlugins = do
 
 -- ---------------------------------------------------------------------
 
-hlsLogger :: G.Logger
-hlsLogger = G.Logger $ \pri txt ->
-    case pri of
-      G.Telemetry -> logm     (T.unpack txt)
-      G.Debug     -> debugm   (T.unpack txt)
-      G.Info      -> logm     (T.unpack txt)
-      G.Warning   -> warningm (T.unpack txt)
-      G.Error     -> errorm   (T.unpack txt)
-
--- ---------------------------------------------------------------------
-
-runLspMode :: GhcideArguments -> IdePlugins IdeState -> IO ()
-runLspMode ghcideArgs@GhcideArguments{..} idePlugins = withTelemetryLogger $ \telemetryLogger -> do
+runLspMode :: Recorder (WithPriority Log) -> GhcideArguments -> IdePlugins IdeState -> IO ()
+runLspMode recorder ghcideArgs@GhcideArguments{..} idePlugins = withTelemetryLogger $ \telemetryLogger -> do
+    let log = logWith recorder
     whenJust argsCwd IO.setCurrentDirectory
     dir <- IO.getCurrentDirectory
-    LSP.setupLogger argsLogFile ["hls", "hie-bios"]
-      $ if argsDebugOn then L.DEBUG else L.INFO
+    log Info $ LogDirectory dir
 
     when (isLSP argsCommand) $ do
-        hPutStrLn stderr "Starting (haskell-language-server)LSP server..."
-        hPutStrLn stderr $ "  with arguments: " <> show ghcideArgs
-        hPutStrLn stderr $ "  with plugins: " <> show (map fst $ ipMap idePlugins)
-        hPutStrLn stderr $ "  in directory: " <> dir
+        log Info $ LogLspStart ghcideArgs (map fst $ ipMap idePlugins)
 
-    Main.defaultMain def
-      { Main.argCommand = argsCommand
-      , Main.argsHlsPlugins = idePlugins
-      , Main.argsLogger = pure hlsLogger <> pure telemetryLogger
-      , Main.argsThreads = if argsThreads == 0 then Nothing else Just $ fromIntegral argsThreads
-      , Main.argsIdeOptions = \_config sessionLoader ->
+    -- exists so old-style logging works. intended to be phased out
+    let logger = Logger $ \p m -> logger_ recorder (WithPriority p emptyCallStack $ LogOther m)
+
+    IDEMain.defaultMain (cmapWithPrio LogIDEMain recorder) (IDEMain.defaultArguments (cmapWithPrio LogIDEMain recorder) logger)
+      { IDEMain.argCommand = argsCommand
+      , IDEMain.argsHlsPlugins = idePlugins
+      , IDEMain.argsLogger = pure logger <> pure telemetryLogger
+      , IDEMain.argsThreads = if argsThreads == 0 then Nothing else Just $ fromIntegral argsThreads
+      , IDEMain.argsIdeOptions = \_config sessionLoader ->
         let defOptions = Ghcide.defaultIdeOptions sessionLoader
         in defOptions
             { Ghcide.optShakeProfiling = argsShakeProfiling
             , Ghcide.optTesting = Ghcide.IdeTesting argsTesting
-            , Ghcide.optShakeOptions = (Ghcide.optShakeOptions defOptions)
-                {shakeThreads = argsThreads}
             }
       }
