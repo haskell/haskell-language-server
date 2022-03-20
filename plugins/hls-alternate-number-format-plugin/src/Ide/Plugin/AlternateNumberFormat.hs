@@ -8,21 +8,20 @@ module Ide.Plugin.AlternateNumberFormat (descriptor, Log(..)) where
 import           Control.Lens                    ((^.))
 import           Control.Monad.Except            (ExceptT, MonadIO, liftIO)
 import qualified Data.HashMap.Strict             as HashMap
-import           Data.Maybe                      (maybeToList)
 import           Data.Text                       (Text)
 import qualified Data.Text                       as T
 import           Development.IDE                 (GetParsedModule (GetParsedModule),
                                                   GhcSession (GhcSession),
                                                   IdeState, RuleResult, Rules,
                                                   define, getFileContents,
-                                                  getParsedModule, hscEnv,
-                                                  ideLogger, realSrcSpanToRange,
-                                                  runAction, use, useWithStale)
+                                                  hscEnv, ideLogger,
+                                                  realSrcSpanToRange, runAction,
+                                                  use, useWithStale)
 import qualified Development.IDE.Core.Shake      as Shake
 import           Development.IDE.GHC.Compat      hiding (getSrcSpan)
 import           Development.IDE.GHC.Compat.Util (toList)
 import           Development.IDE.Graph.Classes   (Hashable, NFData, rnf)
-import           Development.IDE.Spans.Pragmas   (NextPragmaInfo (NextPragmaInfo),
+import           Development.IDE.Spans.Pragmas   (NextPragmaInfo,
                                                   getNextPragmaInfo,
                                                   insertNewPragma)
 import           Development.IDE.Types.Logger    as Logger
