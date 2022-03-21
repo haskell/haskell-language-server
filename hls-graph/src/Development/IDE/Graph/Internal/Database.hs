@@ -116,7 +116,7 @@ builder db@Database{..} stack keys = withRunInIO $ \(RunInIO run) -> do
                     let act = run (refresh db stack id s)
                         (force, val) = splitIO (join act)
                     SMap.focus (updateStatus $ Running current force val s) id databaseValues
-                    modifyTVar' toForce (Spawn force:)
+                    modifyTVar' toForce (Wait force:)
                     pure val
 
             pure (id, val)
