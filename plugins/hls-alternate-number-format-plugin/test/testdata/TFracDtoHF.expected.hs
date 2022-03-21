@@ -1,3 +1,4 @@
+{-# LANGUAGE Haskell2010 #-}
 {-# LANGUAGE HexFloatLiterals #-}
 module TFracDtoHF where
 
