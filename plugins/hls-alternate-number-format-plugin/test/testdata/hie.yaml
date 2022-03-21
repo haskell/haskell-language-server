@@ -9,6 +9,7 @@ cradle:
       - TIntDtoND
       - TFracDtoE
       - TFracDtoHF
+      - TFracDtoHFWithPragma
       - TIntHtoD
       - TFracHFtoD
       - TFindLiteralIntPattern

@@ -30,24 +30,26 @@ test :: TestTree
 test = testGroup "alternateNumberFormat" [
     codeActionHex "TIntDtoH" 3 13
     , codeActionOctal "TIntDtoO" 3 13
-    , codeActionBinary "TIntDtoB" 4 13
+    , codeActionBinary "TIntDtoB" 4 12
     , codeActionNumDecimal "TIntDtoND" 5 13
     , codeActionFracExp "TFracDtoE" 3 13
     , codeActionFloatHex "TFracDtoHF" 4 13
     , codeActionDecimal "TIntHtoD" 3 13
     , codeActionDecimal "TFracHFtoD" 4 13
+    -- to test we don't duplicate pragmas
+    , codeActionFloatHex "TFracDtoHFWithPragma" 4 13
     , codeActionProperties "TFindLiteralIntPattern" [(4, 25), (5,25)] $ \actions -> do
-        liftIO $ length actions @?= 4
+        liftIO $ length actions @?= 8
     , codeActionProperties "TFindLiteralIntCase" [(4, 29)] $ \actions -> do
-        liftIO $ length actions @?= 2
-    , codeActionProperties "TFindLiteralIntCase2" [(5, 21)] $ \actions -> do
-        liftIO $ length actions @?= 2
-    , codeActionProperties "TFindLiteralDoReturn" [(6, 10)] $ \actions -> do
-        liftIO $ length actions @?= 2
-    , codeActionProperties "TFindLiteralDoLet" [(6, 13), (7, 13)] $ \actions -> do
         liftIO $ length actions @?= 4
+    , codeActionProperties "TFindLiteralIntCase2" [(5, 21)] $ \actions -> do
+        liftIO $ length actions @?= 4
+    , codeActionProperties "TFindLiteralDoReturn" [(6, 10)] $ \actions -> do
+        liftIO $ length actions @?= 4
+    , codeActionProperties "TFindLiteralDoLet" [(6, 13), (7, 13)] $ \actions -> do
+        liftIO $ length actions @?= 8
     , codeActionProperties "TFindLiteralList" [(4, 28)] $ \actions -> do
-        liftIO $ length actions @?= 2
+        liftIO $ length actions @?= 4
     , conversions
     ]
 
@@ -124,15 +126,16 @@ acts `contains` regex = any (\action -> codeActionTitle' action =~ regex) acts
 doesNotContain :: [CodeAction] -> Text -> Bool
 acts `doesNotContain` regex = not $ acts `contains` regex
 
-convertPrefix, intoInfix, hexRegex, hexFloatRegex, binaryRegex, octalRegex, numDecimalRegex, decimalRegex :: Text
+convertPrefix, intoInfix, maybeExtension, hexRegex, hexFloatRegex, binaryRegex, octalRegex, numDecimalRegex, decimalRegex :: Text
 convertPrefix = "Convert (" <> T.intercalate "|" [Conversion.hexRegex, Conversion.hexFloatRegex, Conversion.binaryRegex, Conversion.octalRegex, Conversion.numDecimalRegex, Conversion.decimalRegex] <> ")"
 intoInfix = " into "
-hexRegex = intoInfix <> Conversion.hexRegex
-hexFloatRegex = intoInfix <> Conversion.hexFloatRegex
-binaryRegex = intoInfix <> Conversion.binaryRegex
-octalRegex = intoInfix <> Conversion.octalRegex
-numDecimalRegex = intoInfix <> Conversion.numDecimalRegex
-decimalRegex = intoInfix <> Conversion.decimalRegex
+maybeExtension = "( \\(needs extension: .*)?"
+hexRegex = intoInfix <> Conversion.hexRegex <> maybeExtension
+hexFloatRegex = intoInfix <> Conversion.hexFloatRegex <> maybeExtension
+binaryRegex = intoInfix <> Conversion.binaryRegex <> maybeExtension
+octalRegex = intoInfix <> Conversion.octalRegex <> maybeExtension
+numDecimalRegex = intoInfix <> Conversion.numDecimalRegex <> maybeExtension
+decimalRegex = intoInfix <> Conversion.decimalRegex <> maybeExtension
 
 isCodeAction :: Text -> Maybe Text -> Bool
 isCodeAction userRegex (Just txt) = txt =~ Conversion.matchLineRegex (convertPrefix <> userRegex)

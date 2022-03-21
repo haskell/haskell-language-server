@@ -290,7 +290,7 @@ common splice
 
 common alternateNumberFormat
   if flag(alternateNumberFormat)
-    build-depends: hls-alternate-number-format-plugin ^>=1.0.0.0
+    build-depends: hls-alternate-number-format-plugin ^>=1.1.0.0
     cpp-options: -DalternateNumberFormat
 
 common qualifyImportedNames
