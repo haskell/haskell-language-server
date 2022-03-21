@@ -17,7 +17,7 @@ conversions = testGroup "Conversions" $ map (uncurry testProperty) [("Match NumD
     ]
 
 prop_regexMatchesNumDecimal :: Integer -> Bool
-prop_regexMatchesNumDecimal = all (=~ numDecimalRegex) . generateNumDecimal
+prop_regexMatchesNumDecimal = (=~ numDecimalRegex) . toFloatExpDecimal . fromInteger
 
 prop_regexMatchesHex :: (Integral a, Show a) => a -> Bool
 prop_regexMatchesHex = (=~ hexRegex ) . toHex

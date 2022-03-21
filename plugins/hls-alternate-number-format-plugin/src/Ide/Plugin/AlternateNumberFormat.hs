@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TypeFamilies  #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE ViewPatterns  #-}
 module Ide.Plugin.AlternateNumberFormat (descriptor, Log(..)) where
 
 import           Control.Lens                    ((^.))
@@ -10,18 +11,25 @@ import qualified Data.HashMap.Strict             as HashMap
 import           Data.Text                       (Text)
 import qualified Data.Text                       as T
 import           Development.IDE                 (GetParsedModule (GetParsedModule),
+                                                  GhcSession (GhcSession),
                                                   IdeState, RuleResult, Rules,
-                                                  define, ideLogger,
+                                                  define, getFileContents,
+                                                  hscEnv, ideLogger,
                                                   realSrcSpanToRange, runAction,
-                                                  use)
+                                                  use, useWithStale)
 import qualified Development.IDE.Core.Shake      as Shake
 import           Development.IDE.GHC.Compat      hiding (getSrcSpan)
 import           Development.IDE.GHC.Compat.Util (toList)
-import           Development.IDE.Graph.Classes   (Hashable, NFData)
+import           Development.IDE.Graph.Classes   (Hashable, NFData, rnf)
+import           Development.IDE.Spans.Pragmas   (NextPragmaInfo,
+                                                  getNextPragmaInfo,
+                                                  insertNewPragma)
 import           Development.IDE.Types.Logger    as Logger
 import           GHC.Generics                    (Generic)
-import           Ide.Plugin.Conversion           (FormatType, alternateFormat,
-                                                  toFormatTypes)
+import           GHC.LanguageExtensions.Type     (Extension)
+import           Ide.Plugin.Conversion           (AlternateFormat,
+                                                  ExtensionNeeded (NeedsExtension, NoExtension),
+                                                  alternateFormat)
 import           Ide.Plugin.Literals
 import           Ide.PluginUtils                 (handleMaybe, handleMaybeM,
                                                   response)
@@ -50,9 +58,14 @@ instance NFData CollectLiterals
 type instance RuleResult CollectLiterals = CollectLiteralsResult
 
 data CollectLiteralsResult = CLR
-    { literals    :: [Literal]
-    , formatTypes :: [FormatType]
+    { literals          :: [Literal]
+    , enabledExtensions :: [GhcExtension]
     } deriving (Generic)
+
+newtype GhcExtension = GhcExtension { unExt :: Extension }
+
+instance NFData GhcExtension where
+    rnf x = x `seq` ()
 
 instance Show CollectLiteralsResult where
     show _ = "<CollectLiteralResult>"
@@ -63,25 +76,24 @@ collectLiteralsRule :: Recorder (WithPriority Log) -> Rules ()
 collectLiteralsRule recorder = define (cmapWithPrio LogShake recorder) $ \CollectLiterals nfp -> do
     pm <- use GetParsedModule nfp
     -- get the current extensions active and transform them into FormatTypes
-    let fmts = getFormatTypes <$> pm
+    let exts = getExtensions <$> pm
         -- collect all the literals for a file
         lits = collectLiterals . pm_parsed_source <$> pm
-    pure ([], CLR <$> lits <*> fmts)
+    pure ([], CLR <$> lits <*> exts)
     where
-        getFormatTypes = toFormatTypes . toList . extensionFlags . ms_hspp_opts . pm_mod_summary
+        getExtensions = map GhcExtension . toList . extensionFlags . ms_hspp_opts . pm_mod_summary
 
 codeActionHandler :: PluginMethodHandler IdeState 'TextDocumentCodeAction
 codeActionHandler state _ (CodeActionParams _ _ docId currRange _) = response $ do
     nfp <- getNormalizedFilePath docId
     CLR{..} <- requestLiterals state nfp
+    pragma <- getFirstPragma state nfp
         -- remove any invalid literals (see validTarget comment)
     let litsInRange = filter inCurrentRange literals
         -- generate alternateFormats and zip with the literal that generated the alternates
-        literalPairs = map (\lit -> (lit, alternateFormat formatTypes lit)) litsInRange
+        literalPairs = map (\lit -> (lit, alternateFormat lit)) litsInRange
         -- make a code action for every literal and its' alternates (then flatten the result)
-        actions = concatMap (\(lit, alts) -> map (mkCodeAction nfp lit) alts) literalPairs
-
-    logIO state $ "Literals: " <> show literals
+        actions = concatMap (\(lit, alts) -> map (mkCodeAction nfp lit enabledExtensions pragma) alts) literalPairs
 
     pure $ List actions
     where
@@ -89,23 +101,40 @@ codeActionHandler state _ (CodeActionParams _ _ docId currRange _) = response $ 
         inCurrentRange lit = let srcSpan = getSrcSpan lit
                               in currRange `contains` srcSpan
 
-        mkCodeAction :: NormalizedFilePath -> Literal -> Text -> Command |? CodeAction
-        mkCodeAction nfp lit alt = InR CodeAction {
-            _title = "Convert " <> getSrcText lit <> " into " <> alt
+        mkCodeAction :: NormalizedFilePath -> Literal -> [GhcExtension] -> NextPragmaInfo -> AlternateFormat -> Command |? CodeAction
+        mkCodeAction nfp lit enabled npi af@(alt, ext) = InR CodeAction {
+            _title = mkCodeActionTitle lit af enabled
             , _kind = Just $ CodeActionUnknown "quickfix.literals.style"
             , _diagnostics = Nothing
             , _isPreferred = Nothing
             , _disabled = Nothing
-            , _edit = Just $ mkWorkspaceEdit nfp lit alt
+            , _edit = Just $ mkWorkspaceEdit nfp edits
             , _command = Nothing
             , _xdata = Nothing
             }
-
-        mkWorkspaceEdit :: NormalizedFilePath -> Literal -> Text -> WorkspaceEdit
-        mkWorkspaceEdit nfp lit alt = WorkspaceEdit changes Nothing Nothing
             where
-                txtEdit = TextEdit (realSrcSpanToRange $ getSrcSpan lit) alt
-                changes = Just $ HashMap.fromList [( filePathToUri $ fromNormalizedFilePath nfp, List [txtEdit])]
+                edits =  [TextEdit (realSrcSpanToRange $ getSrcSpan lit) alt] <> pragmaEdit
+                pragmaEdit = case ext of
+                    NeedsExtension ext' -> [insertNewPragma npi ext' | needsExtension ext' enabled]
+                    NoExtension         -> []
+
+        mkWorkspaceEdit :: NormalizedFilePath -> [TextEdit] -> WorkspaceEdit
+        mkWorkspaceEdit nfp edits = WorkspaceEdit changes Nothing Nothing
+            where
+                changes = Just $ HashMap.fromList [(filePathToUri $ fromNormalizedFilePath nfp, List edits)]
+
+mkCodeActionTitle :: Literal -> AlternateFormat -> [GhcExtension] -> Text
+mkCodeActionTitle lit (alt, ext) ghcExts
+    | (NeedsExtension ext') <- ext
+    , needsExtension ext' ghcExts = title <> " (needs extension: " <> T.pack (show ext') <> ")"
+    | otherwise = title
+    where
+        title = "Convert " <> getSrcText lit <> " into " <> alt
+
+
+-- | Checks whether the extension given is already enabled
+needsExtension :: Extension -> [GhcExtension] -> Bool
+needsExtension ext ghcExts = ext `notElem` map unExt ghcExts
 
 -- from HaddockComments.hs
 contains :: Range -> RealSrcSpan -> Bool
@@ -113,6 +142,15 @@ contains Range {_start, _end} x = isInsideRealSrcSpan _start x || isInsideRealSr
 
 isInsideRealSrcSpan :: Position -> RealSrcSpan -> Bool
 p `isInsideRealSrcSpan` r = let (Range sp ep) = realSrcSpanToRange r in sp <= p && p <= ep
+
+getFirstPragma :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m NextPragmaInfo
+getFirstPragma state nfp = handleMaybeM "Error: Could not get NextPragmaInfo" $ do
+      ghcSession <- liftIO $ runAction "AlternateNumberFormat.GhcSession" state $ useWithStale GhcSession nfp
+      (_, fileContents) <- liftIO $ runAction "AlternateNumberFormat.GetFileContents" state $ getFileContents nfp
+      case ghcSession of
+        Just (hscEnv -> hsc_dflags -> sessionDynFlags, _) -> pure $ Just $ getNextPragmaInfo sessionDynFlags fileContents
+        Nothing -> pure Nothing
+
 
 getNormalizedFilePath :: Monad m => TextDocumentIdentifier -> ExceptT String m NormalizedFilePath
 getNormalizedFilePath docId = handleMaybe "Error: converting to NormalizedFilePath"
@@ -124,7 +162,3 @@ requestLiterals state = handleMaybeM "Error: Could not Collect Literals"
                 . liftIO
                 . runAction "AlternateNumberFormat.CollectLiterals" state
                 . use CollectLiterals
-
-logIO :: (MonadIO m, Show a) => IdeState -> a -> m ()
-logIO state = liftIO . Logger.logDebug (ideLogger state) . T.pack . show
-
