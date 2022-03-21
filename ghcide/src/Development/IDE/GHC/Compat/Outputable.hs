@@ -164,7 +164,7 @@ type PsError = ErrMsg
 mkPrintUnqualifiedDefault :: HscEnv -> GlobalRdrEnv -> PrintUnqualified
 mkPrintUnqualifiedDefault env =
 #if MIN_VERSION_ghc(9,2,0)
-  -- GHC 9.2.1 version
+  -- GHC 9.2 version
   -- mkPrintUnqualified :: UnitEnv -> GlobalRdrEnv -> PrintUnqualified
   mkPrintUnqualified (hsc_unit_env env)
 #else

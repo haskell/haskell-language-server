@@ -74,7 +74,7 @@ testRegexTwo = testGroup "Regex Two" [
     where
         regex = errorMessageRegexes !! 1
 
--- test ghc-9.2.1 error message regex
+-- test ghc-9.2 error message regex
 testRegex921One :: TestTree
 testRegex921One = testGroup "Regex One" [
         regexTest "ghc921-error1.txt" regex True
