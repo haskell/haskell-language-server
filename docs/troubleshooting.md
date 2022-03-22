@@ -215,3 +215,7 @@ Due to some limitations in the interaction between HLS and `stack`, there are [i
 
 - The project has to be built succesfully *before* loading it with HLS to get components other than the library work.
 - Changes in the library are not automatically propagated to other components, especially in the presence of errors in the library. So you have to restart HLS in order for those components to be loaded correctly. The usual symptom is the editor showing errors like `Could not load module ...` or `Cannot satisfy -package ...`.
+
+### HLS stops with "Assertion failed"
+
+Try deleting the directory `$HOME/.cache/hie-bios`. (See #1882)
