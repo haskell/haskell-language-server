@@ -186,13 +186,13 @@ stack install haskell-language-server --stack-yaml=stack-${ghcVersion}.yaml
 You also can leverage `ghcup compile hls`:
 
 ```bash
-ghcup compile hls -v 1.6.1.0 --ghc 8.10.7
+cabal update && ghcup compile hls -v 1.6.1.0 --ghc 8.10.7
 ```
 
 as it uses cabal underneath you might need to use a specific cabal.project for some ghc versions:
 
 ```bash
-ghcup compile hls -v 1.6.1.0 --ghc 9.0.2 --cabal-project cabal-ghc90.project
+cabal update && ghcup compile hls -v 1.6.1.0 --ghc 9.0.2 --cabal-project cabal-ghc90.project
 ```
 
 ### Preprocessors
