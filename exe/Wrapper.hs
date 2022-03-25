@@ -1,5 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE CPP #-}
 -- | This module is based on the hie-wrapper.sh script in
 -- https://github.com/alanz/vscode-hie-server
@@ -143,7 +144,19 @@ getRuntimeGhcVersion' cradle = do
     Direct  -> checkToolExists "ghc"
     _       -> pure ()
 
-  HieBios.getRuntimeGhcVersion cradle >>= cradleResult "Failed to get project GHC version"
+  HieBios.getRuntimeGhcVersion cradle >>= \case
+    CradleFail CradleError{..}
+        -- we failed to find the *installed* GHC,
+        -- but cabal may give us hints about what it is
+        | cradleErrorExitCode == ExitFailure 77
+        , (_:stdout:_) <- cradleErrorStderr
+        , Just ghcVer <- stripPrefix "ghc-" . takeFileName . trim $ stdout
+        , not $ null ghcVer
+        -> pure ghcVer
+        | otherwise -> die $ "Failed to get project GHC version: " ++ show cradleErrorStderr
+    CradleSuccess s -> pure s
+    CradleNone -> die "Failed to get project GHC version: no cradle"
+
   where
     checkToolExists exe = do
       exists <- findExecutable exe
