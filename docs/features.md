@@ -19,6 +19,7 @@ Many of these are standard LSP features, but a lot of special features are provi
 | [Code actions](#code-actions)                       | `textDocument/codeAction`                                                                         |
 | [Code lenses](#code-lenses)                         | `textDocument/codeLens`                                                                           |
 | [Selection range](#selection-range)                 | `textDocument/selectionRange`                                                                     |
+| [Rename](#rename)                                   | `textDocument/rename`                                                                             |
 
 The individual sections below also identify which [HLS plugin](./what-is-hls.md#hls-plugins) is responsible for providing the given functionality, which is useful if you want to raise an issue report or contribute!
 Additionally, not all plugins are supported on all versions of GHC, see the [GHC version support page](supported-versions.md) for details.
@@ -305,6 +306,18 @@ support.
 
 ![Selection range demo](https://user-images.githubusercontent.com/16440269/150301502-4c002605-9f8d-43f5-86d3-28846942c4ff.mov)
 
+## Rename
+
+Provided by: `hls-rename-plugin`
+
+Provides renaming of symbols within a module.
+
+![Rename Demo](https://user-images.githubusercontent.com/30090176/133072143-d7d03ec7-3db1-474e-ad5e-6f40d75ff7ab.gif)
+
+Known limitations:
+
+- Only works within a module due to limited [multi-component support](https://github.com/haskell/haskell-language-server/issues/2193).
+
 ## Missing features
 
 The following features are supported by the LSP specification but not implemented in HLS.
@@ -315,7 +328,6 @@ Contributions welcome!
 | Signature help         | Unimplemented                                                                            | `textDocument/signatureHelp`                        |
 | Jump to declaration    | Unclear if useful                                                                        | `textDocument/declaration`                          |
 | Jump to implementation | Unclear if useful                                                                        | `textDocument/implementation`                       |
-| Renaming               | [Parital implementation](https://github.com/haskell/haskell-language-server/issues/2193) | `textDocument/rename`, `textDocument/prepareRename` |
 | Folding                | Unimplemented                                                                            | `textDocument/foldingRange`                         |
 | Semantic tokens        | Unimplemented                                                                            | `textDocument/semanticTokens`                       |
 | Linked editing         | Unimplemented                                                                            | `textDocument/linkedEditingRange`                   |
