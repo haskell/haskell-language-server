@@ -1,4 +1,4 @@
-module Let where
+module Let () where
 
 import Foo
 

@@ -1,4 +1,4 @@
-module Typeclass where
+module Typeclass () where
 
 class Equality a where
     equals :: a -> a -> Bool

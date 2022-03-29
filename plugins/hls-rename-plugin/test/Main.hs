@@ -16,7 +16,8 @@ tests :: TestTree
 tests = testGroup "Rename"
     [ goldenWithRename "Data constructor" "DataConstructor" $ \doc -> do
         rename doc (Position 0 15) "Op"
-    , goldenWithRename "Exported function" "ExportedFunction" $ \doc -> do
+    , ignoreTestBecause "Renaming across modules unsupported" $
+      goldenWithRename "Exported function" "ExportedFunction" $ \doc -> do
         rename doc (Position 2 1) "quux"
     , goldenWithRename "Function argument" "FunctionArgument" $ \doc -> do
         rename doc (Position 3 4) "y"
@@ -24,19 +25,25 @@ tests = testGroup "Rename"
         rename doc (Position 3 1) "baz"
     , goldenWithRename "GADT" "Gadt" $ \doc -> do
         rename doc (Position 6 37) "Expr"
-    , goldenWithRename "Hidden function" "HiddenFunction" $ \doc -> do
+    , ignoreTestBecause "Renaming across modules unsupported" $
+      goldenWithRename "Hidden function" "HiddenFunction" $ \doc -> do
         rename doc (Position 0 32) "quux"
-    , goldenWithRename "Imported function" "ImportedFunction" $ \doc -> do
+    , ignoreTestBecause "Renaming across modules unsupported" $
+      goldenWithRename "Imported function" "ImportedFunction" $ \doc -> do
         rename doc (Position 3 8) "baz"
-    , goldenWithRename "Import hiding" "ImportHiding" $ \doc -> do
+    , ignoreTestBecause "Renaming across modules unsupported" $
+      goldenWithRename "Import hiding" "ImportHiding" $ \doc -> do
         rename doc (Position 0 22) "hiddenFoo"
     , goldenWithRename "Let expression" "LetExpression" $ \doc -> do
         rename doc (Position 5 11) "foobar"
-    , goldenWithRename "Qualified as" "QualifiedAs" $ \doc -> do
+    , ignoreTestBecause "Renaming across modules unsupported" $
+      goldenWithRename "Qualified as" "QualifiedAs" $ \doc -> do
         rename doc (Position 3 10) "baz"
-    , goldenWithRename "Qualified shadowing" "QualifiedShadowing" $ \doc -> do
+    , ignoreTestBecause "Renaming across modules unsupported" $
+      goldenWithRename "Qualified shadowing" "QualifiedShadowing" $ \doc -> do
         rename doc (Position 3 12) "foobar"
-    , goldenWithRename "Qualified function" "QualifiedFunction" $ \doc -> do
+    , ignoreTestBecause "Renaming across modules unsupported" $
+      goldenWithRename "Qualified function" "QualifiedFunction" $ \doc -> do
         rename doc (Position 3 12) "baz"
     , goldenWithRename "Realigns do block indentation" "RealignDo" $ \doc -> do
         rename doc (Position 0 2) "fooBarQuux"
