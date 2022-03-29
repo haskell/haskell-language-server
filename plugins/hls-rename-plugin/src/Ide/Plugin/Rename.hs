@@ -193,7 +193,7 @@ getNameLocs name (HAR _ _ rm _ _, pm) =
 getNameAtPos :: IdeState -> NormalizedFilePath -> Position -> ExceptT String (LspT Config IO) Name
 getNameAtPos state nfp pos = do
     (HAR{hieAst}, pm) <- safeGetHieAst state nfp
-    handleMaybe ("No name at position: " ++ show pos) $ listToMaybe $ getNamesAtPoint hieAst pos pm
+    handleMaybe ("No name at " ++ showPos pos) $ listToMaybe $ getNamesAtPoint hieAst pos pm
 
 safeGetHieAst ::
     MonadIO m =>
@@ -221,6 +221,9 @@ nfpToUri = filePathToUri . fromNormalizedFilePath
 
 showName :: Name -> String
 showName = occNameString . getOccName
+
+showPos :: Position -> String
+showPos Position{_line, _character} = "line: " ++ show _line ++ " - character: " ++ show _character
 
 unsafeSrcSpanToLoc :: SrcSpan -> Location
 unsafeSrcSpanToLoc srcSpan =
