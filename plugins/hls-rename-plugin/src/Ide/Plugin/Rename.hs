@@ -55,6 +55,8 @@ renameProvider state pluginId (RenameParams (TextDocumentIdentifier uri) pos _pr
         nfp <- safeUriToNfp uri
         oldName <- getNameAtPos state nfp pos
         refLocs <- refsAtName state nfp oldName
+        when (isBuiltInSyntax oldName) $
+            throwE ("Invalid rename of built-in syntax: \"" ++ showName oldName ++ "\"")
         let newName = mkTcOcc $ T.unpack newNameText
             filesRefs = collectWith locToUri refLocs
             getFileEdit = flip $ getSrcEdit state . renameRefs newName
@@ -187,3 +189,6 @@ locToUri (Location uri _) = uri
 
 nfpToUri :: NormalizedFilePath -> Uri
 nfpToUri = filePathToUri . fromNormalizedFilePath
+
+showName :: Name -> String
+showName = occNameString . getOccName
