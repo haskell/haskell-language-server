@@ -424,7 +424,8 @@ newtype GhcSessionDeps = GhcSessionDeps_
     deriving newtype (Eq, Typeable, Hashable, NFData)
 
 instance Show GhcSessionDeps where
-    show _ = "GhcSessionDeps"
+    show (GhcSessionDeps_ False) = "GhcSessionDeps"
+    show (GhcSessionDeps_ True) = "GhcSessionDepsFull"
 
 pattern GhcSessionDeps :: GhcSessionDeps
 pattern GhcSessionDeps = GhcSessionDeps_ False
