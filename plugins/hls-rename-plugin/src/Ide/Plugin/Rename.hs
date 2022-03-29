@@ -12,6 +12,7 @@ module Ide.Plugin.Rename (descriptor) where
 import           GHC.Parser.Annotation
 #endif
 
+import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Except
@@ -36,7 +37,6 @@ import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
-import Control.Monad
 
 instance Hashable Location
 instance Hashable Range
@@ -57,11 +57,35 @@ renameProvider state pluginId (RenameParams (TextDocumentIdentifier uri) pos _pr
         refLocs <- refsAtName state nfp oldName
         when (isBuiltInSyntax oldName) $
             throwE ("Invalid rename of built-in syntax: \"" ++ showName oldName ++ "\"")
+        failWhenImportOrExport state nfp refLocs oldName
         let newName = mkTcOcc $ T.unpack newNameText
             filesRefs = collectWith locToUri refLocs
             getFileEdit = flip $ getSrcEdit state . renameRefs newName
         fileEdits <- mapM (uncurry getFileEdit) filesRefs
         pure $ foldl' (<>) mempty fileEdits
+
+-- | Limitation: Renaming across modules is unsupported due limited of multi-component support.
+failWhenImportOrExport ::
+    (MonadLsp config m) =>
+    IdeState ->
+    NormalizedFilePath ->
+    HashSet Location ->
+    Name ->
+    ExceptT String m ()
+failWhenImportOrExport state nfp refLocs name = do
+    pm <- handleMaybeM ("No parsed module for: " ++ show nfp) $ liftIO $ runAction
+        "Rename.GetParsedModule"
+        state
+        (use GetParsedModule nfp)
+    let hsMod = unLoc $ pm_parsed_source pm
+    L _ modName <- handleMaybe ("No module name for: " ++ show nfp) $ hsmodName hsMod
+    unless (nameIsLocalOrFrom (replaceModName name modName) name) $
+        throwE "Renaming of an imported name is unsupported"
+    case hsmodExports hsMod of
+        Nothing -> throwE "Explicit export list required for renaming"
+        Just (L _ exports) | any ((`HS.member` refLocs) . unsafeSrcSpanToLoc . getLoc) exports
+            -> throwE "Renaming of an exported name is unsupported"
+        _ -> pure ()
 
 ---------------------------------------------------------------------------------------------------
 -- Source renaming
@@ -125,7 +149,7 @@ renameRefs newName refs = everywhere $ mkT replaceLoc
         replace _                = Unqual newName
 
         isRef :: SrcSpan -> Bool
-        isRef = (`elem` refs) . fromJust . srcSpanToLocation
+        isRef = (`elem` refs) . unsafeSrcSpanToLoc
 
 ---------------------------------------------------------------------------------------------------
 -- Reference finding
@@ -180,7 +204,7 @@ safeUriToNfp uri = handleMaybe
     ("No filepath for uri: " ++ show uri)
     (toNormalizedFilePath <$> uriToFilePath uri)
 
--- Head is safe since groups are non-empty
+-- head is safe since groups are non-empty
 collectWith :: (Hashable a, Eq a, Eq b) => (a -> b) -> HashSet a -> [(b, HashSet a)]
 collectWith f = map (\a -> (f $ head a, HS.fromList a)) . groupOn f . HS.toList
 
@@ -192,3 +216,12 @@ nfpToUri = filePathToUri . fromNormalizedFilePath
 
 showName :: Name -> String
 showName = occNameString . getOccName
+
+unsafeSrcSpanToLoc :: SrcSpan -> Location
+unsafeSrcSpanToLoc srcSpan =
+    case srcSpanToLocation srcSpan of
+        Nothing       -> error "Invalid conversion from UnhelpfulSpan to Location"
+        Just location -> location
+
+replaceModName :: Name -> ModuleName -> Module
+replaceModName name = mkModule (moduleUnitId $ nameModule name)
