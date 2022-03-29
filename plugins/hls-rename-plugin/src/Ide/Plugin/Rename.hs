@@ -17,20 +17,26 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Except
 import           Data.Generics
-import           Data.HashSet                         (HashSet)
-import qualified Data.HashSet                         as HS
+import           Data.HashSet                          (HashSet)
+import qualified Data.HashSet                          as HS
 import           Data.Hashable
-import           Data.List.Extra
-import qualified Data.Map                             as M
+import           Data.List.Extra                       (foldl', groupOn)
+import qualified Data.Map                              as M
 import           Data.Maybe
 import           Data.Mod.Word
-import qualified Data.Text                            as T
-import           Development.IDE                      hiding (pluginHandlers)
+import qualified Data.Text                             as T
 import           Development.IDE.Core.PositionMapping
+import           Development.IDE.Core.RuleTypes
+import           Development.IDE.Core.Service
 import           Development.IDE.Core.Shake
-import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat.Core
+import           Development.IDE.GHC.Compat.ExactPrint
+import           Development.IDE.GHC.Compat.Parser
+import           Development.IDE.GHC.Compat.Units
+import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.Spans.AtPoint
+import           Development.IDE.Types.Location
 import           HieDb.Query
 import           Ide.Plugin.Config
 import           Ide.PluginUtils
