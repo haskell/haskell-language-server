@@ -84,13 +84,12 @@ failWhenImportOrExport state nfp refLocs name = do
         state
         (use GetParsedModule nfp)
     let hsMod = unLoc $ pm_parsed_source pm
-    L _ modName <- handleMaybe ("No module name for: " ++ show nfp) $ hsmodName hsMod
-    unless (nameIsLocalOrFrom (replaceModName name modName) name) $
-        throwE "Renaming of an imported name is unsupported"
-    case hsmodExports hsMod of
-        Nothing -> throwE "Explicit export list required for renaming"
-        Just (L _ exports) | any ((`HS.member` refLocs) . unsafeSrcSpanToLoc . getLoc) exports
+    case (unLoc <$> hsmodName hsMod, hsmodExports hsMod) of
+        (mbModName, _) | not $ nameIsLocalOrFrom (replaceModName name mbModName) name
+            -> throwE "Renaming of an imported name is unsupported"
+        (_, Just (L _ exports)) | any ((`HS.member` refLocs) . unsafeSrcSpanToLoc . getLoc) exports
             -> throwE "Renaming of an exported name is unsupported"
+        (Just _, Nothing) -> throwE "Explicit export list required for renaming"
         _ -> pure ()
 
 ---------------------------------------------------------------------------------------------------
@@ -229,5 +228,6 @@ unsafeSrcSpanToLoc srcSpan =
         Nothing       -> error "Invalid conversion from UnhelpfulSpan to Location"
         Just location -> location
 
-replaceModName :: Name -> ModuleName -> Module
-replaceModName name = mkModule (moduleUnitId $ nameModule name)
+replaceModName :: Name -> Maybe ModuleName -> Module
+replaceModName name mbModName =
+    mkModule (moduleUnitId $ nameModule name) (fromMaybe (mkModuleName "Main") mbModName)
