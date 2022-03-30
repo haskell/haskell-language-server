@@ -60,8 +60,7 @@ import qualified Refact.Apply                                       as Refact
 import qualified Refact.Types                                       as Refact
 
 #ifdef HLINT_ON_GHC_LIB
-import           Development.IDE.GHC.Compat                         (BufSpan,
-                                                                     DynFlags,
+import           Development.IDE.GHC.Compat                         (DynFlags,
                                                                      WarningFlag (Opt_WarnUnrecognisedPragmas),
                                                                      extensionFlags,
                                                                      ms_hspp_opts,
@@ -74,6 +73,7 @@ import           "ghc-lib" GHC                                      hiding
                                                                      ms_hspp_opts)
 import qualified "ghc-lib" GHC
 import           "ghc-lib-parser" GHC.LanguageExtensions            (Extension)
+import           "ghc-lib-parser" GHC.Types.SrcLoc                  (BufSpan)
 import           Language.Haskell.GhclibParserEx.GHC.Driver.Session as GhclibParserEx (readExtension)
 import           System.FilePath                                    (takeFileName)
 import           System.IO                                          (IOMode (WriteMode),
@@ -141,7 +141,7 @@ instance Pretty Log where
     LogApplying fp res -> "Applying hint(s) for" <+> viaShow fp <> ":" <+> viaShow res
     LogGeneratedIdeas fp ideas -> "Generated hlint ideas for for" <+> viaShow fp <> ":" <+> viaShow ideas
     LogUsingExtensions fp exts -> "Using extensions for " <+> viaShow fp <> ":" <+> pretty exts
-    LogGetIdeas fp -> "Getting hlint ideas for " <+> viaShow fp 
+    LogGetIdeas fp -> "Getting hlint ideas for " <+> viaShow fp
 
 #ifdef HLINT_ON_GHC_LIB
 -- Reimplementing this, since the one in Development.IDE.GHC.Compat isn't for ghc-lib

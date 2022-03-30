@@ -42,8 +42,12 @@ index-state: 2022-03-08T10:53:01Z
 constraints:
   -- These plugins don't work on GHC9 yet
   -- Add a plugin needs remove the -flag but also update ghc bounds in hls.cabal
-  haskell-language-server +ignore-plugins-ghc-bounds -stylishhaskell,
-  ghc-lib-parser ^>= 9.0
+  haskell-language-server +ignore-plugins-ghc-bounds,
+  ghc-lib-parser ^>= 9.0,
+  hls-hlint-plugin +hlint33 +ghc-lib,
+  hlint +ghc-lib,
+  ghc-lib-parser-ex -auto -no-ghc-lib,
+  stylish-haskell -no-ghc-lib
 
 -- although we are not building all plugins cabal solver phase is run for all packages
 -- this way we track explicitly all transitive dependencies which need support for ghc-9
@@ -64,3 +68,13 @@ allow-newer:
   -- ghc-9.0.2 specific
   -- for ghcide:test via ghc-typelits-knownnat
   ghc-typelits-natnormalise:ghc-bignum
+
+source-repository-package
+  type: git
+  location: https://github.com/ndmitchell/hlint.git
+  tag: d155bac951622afdc868cbeec19643ca443c52fa
+
+source-repository-package
+  type: git
+  location: https://github.com/July541/stylish-haskell.git
+  tag: 012e1209b8c40d80a8cd62e568d105561834f600
