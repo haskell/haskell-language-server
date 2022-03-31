@@ -39,7 +39,7 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2022-03-08T10:53:01Z
+index-state: 2022-03-17T15:42:39Z
 
 constraints:
   -- These plugins don't build/work on GHC92 yet
@@ -50,7 +50,11 @@ constraints:
     -retrie
     -splice
     -tactic,
-  hls-hlint-plugin +hlint33 +ghc-lib
+  hls-hlint-plugin +hlint33 +ghc-lib,
+  hlint +ghc-lib,
+  apply-refact ==0.10.0.0,
+  ghc-lib-parser-ex -auto -no-ghc-lib,
+  stylish-haskell -no-ghc-lib,
 
 allow-newer:
   -- for shake-bench
@@ -95,7 +99,9 @@ allow-newer:
   -- for ghcide:test via ghc-typelits-knownnat
   ghc-typelits-natnormalise:ghc-bignum,
 
-  hiedb:base
+  hiedb:base,
+
+  ghc-exactprint
 
 allow-older:
   primitive-extras:primitive-unlifted

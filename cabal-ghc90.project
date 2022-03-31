@@ -30,6 +30,7 @@ packages:
          ./plugins/hls-change-type-signature-plugin
 
 tests: true
+with-compiler: ghc-9.0.2
 
 package *
   ghc-options: -haddock
@@ -37,17 +38,13 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2022-03-08T10:53:01Z
+index-state: 2022-03-17T15:42:39Z
 
 constraints:
   -- These plugins don't work on GHC9 yet
   -- Add a plugin needs remove the -flag but also update ghc bounds in hls.cabal
   haskell-language-server +ignore-plugins-ghc-bounds,
-  ghc-lib-parser ^>= 9.0,
-  hls-hlint-plugin +hlint33 +ghc-lib,
-  hlint +ghc-lib,
-  ghc-lib-parser-ex -auto -no-ghc-lib,
-  stylish-haskell -no-ghc-lib
+  ghc-lib-parser ^>= 9.2
 
 -- although we are not building all plugins cabal solver phase is run for all packages
 -- this way we track explicitly all transitive dependencies which need support for ghc-9
