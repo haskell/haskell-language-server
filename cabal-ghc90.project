@@ -30,7 +30,6 @@ packages:
          ./plugins/hls-change-type-signature-plugin
 
 tests: true
-with-compiler: ghc-9.0.2
 
 package *
   ghc-options: -haddock
