@@ -73,7 +73,11 @@ import           "ghc-lib" GHC                                      hiding
                                                                      ms_hspp_opts)
 import qualified "ghc-lib" GHC
 import           "ghc-lib-parser" GHC.LanguageExtensions            (Extension)
+#if MIN_VERSION_ghc(9,0,0)
 import           "ghc-lib-parser" GHC.Types.SrcLoc                  (BufSpan)
+#else
+import           Development.IDE.GHC.Compat                         (BufSpan)
+#endif
 import           Language.Haskell.GhclibParserEx.GHC.Driver.Session as GhclibParserEx (readExtension)
 import           System.FilePath                                    (takeFileName)
 import           System.IO                                          (IOMode (WriteMode),
