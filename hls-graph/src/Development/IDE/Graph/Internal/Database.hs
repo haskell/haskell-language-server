@@ -329,10 +329,14 @@ waitConcurrently_ [] = pure ()
 waitConcurrently_ [one] = liftIO $ justWait one
 waitConcurrently_ many = do
     ref <- AIO ask
-    -- mask to make sure we keep track of all the asyncs
-    waits <- liftIO $ uninterruptibleMask $ \unmask -> do
+    -- spawn the async computations.
+    -- mask to make sure we keep track of all the asyncs.
+    (asyncs, syncs) <- liftIO $ uninterruptibleMask $ \unmask -> do
         waits <- liftIO $ traverse (waitOrSpawn . fmapWait unmask) many
-        let asyncs = rights waits
+        let (syncs, asyncs) = partitionEithers waits
         liftIO $ atomicModifyIORef'_ ref (asyncs ++)
-        return waits
-    liftIO $ traverse_ (either id wait) waits
+        return (asyncs, syncs)
+    -- work on the sync computations
+    liftIO $ sequence_ syncs
+    -- wait for the async computations before returning
+    liftIO $ traverse_ wait asyncs
