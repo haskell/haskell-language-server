@@ -79,6 +79,7 @@ import           "ghc-lib" GHC                                      hiding
                                                                      ms_hspp_buf)
 import qualified "ghc-lib" GHC
 import           "ghc-lib-parser" GHC.LanguageExtensions            (Extension)
+import qualified Data.Text.Encoding.Error                           as T (lenientDecode)
 #if MIN_VERSION_ghc(9,0,0)
 import           "ghc-lib-parser" GHC.Types.SrcLoc                  (BufSpan)
 #else
@@ -135,7 +136,6 @@ import           GHC.Generics                                       (Generic)
 import           System.Environment                                 (setEnv,
                                                                      unsetEnv)
 import           Text.Regex.TDFA.Text                               ()
-import qualified Data.Text.Encoding.Error as T (lenientDecode)
 -- ---------------------------------------------------------------------
 
 data Log
