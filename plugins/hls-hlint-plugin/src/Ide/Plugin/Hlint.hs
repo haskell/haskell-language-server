@@ -65,12 +65,18 @@ import           Development.IDE.GHC.Compat                         (DynFlags,
                                                                      extensionFlags,
                                                                      ms_hspp_opts,
                                                                      topDir,
-                                                                     wopt)
+                                                                     wopt,
+                                                                     pm_mod_summary,
+                                                                     ms_hspp_file,
+                                                                     ms_hspp_buf)
 import qualified Development.IDE.GHC.Compat.Util                    as EnumSet
 import           "ghc-lib" GHC                                      hiding
                                                                     (DynFlags (..),
                                                                      RealSrcSpan,
-                                                                     ms_hspp_opts)
+                                                                     ms_hspp_opts,
+                                                                     pm_mod_summary,
+                                                                     ms_hspp_file,
+                                                                     ms_hspp_buf)
 import qualified "ghc-lib" GHC
 import           "ghc-lib-parser" GHC.LanguageExtensions            (Extension)
 #if MIN_VERSION_ghc(9,0,0)
@@ -129,6 +135,7 @@ import           GHC.Generics                                       (Generic)
 import           System.Environment                                 (setEnv,
                                                                      unsetEnv)
 import           Text.Regex.TDFA.Text                               ()
+import qualified Data.Text.Encoding.Error as T (lenientDecode)
 -- ---------------------------------------------------------------------
 
 data Log
@@ -298,14 +305,26 @@ getIdeas recorder nfp = do
         moduleEx flags = do
           mbpm <- getParsedModuleWithComments nfp
           -- If ghc was not able to parse the module, we disable hlint diagnostics
-          if isNothing mbpm
-              then return Nothing
-              else do
-                     flags' <- setExtensions flags
-                     (_, contents) <- getFileContents nfp
-                     let fp = fromNormalizedFilePath nfp
-                     let contents' = T.unpack <$> contents
-                     Just <$> liftIO (parseModuleEx flags' fp contents')
+          case mbpm of
+                Nothing -> return Nothing
+                Just pm -> do
+                    flags' <- setExtensions flags
+                    let hspp@(_, contents) = getHsppPathAndContents pm
+                    (fp', contents') <- case contents of
+                                        Just _ -> return hspp
+                                        Nothing -> getPathAndContents
+                    Just <$> (liftIO $ parseModuleEx flags' fp' contents')
+
+        getHsppPathAndContents m =
+            (ms_hspp_file modsum, stringBufferToString <$> ms_hspp_buf modsum)
+            where
+                modsum = pm_mod_summary m
+                stringBufferToString = T.unpack . T.decodeUtf8With T.lenientDecode . stringBufferToByteString
+
+        getPathAndContents = do
+                (_, contents) <- getFileContents nfp
+                let fp = fromNormalizedFilePath nfp
+                return (fp, T.unpack <$> contents)
 
         setExtensions flags = do
           hlintExts <- getExtensions nfp

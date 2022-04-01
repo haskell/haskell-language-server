@@ -181,8 +181,8 @@ suggestionsTests =
         doc <- openDoc "IgnoreAnnHlint.hs" "haskell"
         expectNoMoreDiagnostics 3 doc "hlint"
 
-    , testCase "apply-refact preserve regular comments" $ runHlintSession "" $ do
-        testRefactor "Comments.hs" "Redundant bracket" expectedComments
+    -- , testCase "apply-refact preserve regular comments" $ runHlintSession "" $ do
+    --     testRefactor "Comments.hs" "Redundant bracket" expectedComments
 
     , testCase "[#2290] apply all hints works with a trailing comment" $ runHlintSession "" $ do
         testRefactor "TwoHintsAndComment.hs" "Apply all hints" expectedComments2

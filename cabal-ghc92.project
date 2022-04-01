@@ -55,6 +55,10 @@ constraints:
   apply-refact ==0.10.0.0,
   ghc-lib-parser-ex -auto -no-ghc-lib,
   stylish-haskell -no-ghc-lib,
+  ghc-exactprint ==1.5.0,
+  ghc-lib ==9.2.2.20220307,
+  ghc-lib-parser ==9.2.2.20220307,
+  ghc-lib-parser-ex ==9.2.0.3
 
 allow-newer:
   -- for shake-bench
@@ -82,11 +86,11 @@ allow-newer:
   fourmolu:ghc-lib-parser,
   fourmolu:Cabal,
 
-  hls-hlint-plugin:ghc-lib,
-  hls-hlint-plugin:ghc-lib-parser,
-  hls-hlint-plugin:ghc-lib-parser-ex,
-  hlint:ghc-lib-parser,
-  hlint:ghc-lib-parser-ex,
+  -- hls-hlint-plugin:ghc-lib,
+  -- hls-hlint-plugin:ghc-lib-parser,
+  -- hls-hlint-plugin:ghc-lib-parser-ex,
+  -- hlint:ghc-lib-parser,
+  -- hlint:ghc-lib-parser-ex,
   -- See https://github.com/mpickering/apply-refact/pull/116
   apply-refact:base,
 
@@ -99,9 +103,7 @@ allow-newer:
   -- for ghcide:test via ghc-typelits-knownnat
   ghc-typelits-natnormalise:ghc-bignum,
 
-  hiedb:base,
-
-  ghc-exactprint
+  hiedb:base
 
 allow-older:
   primitive-extras:primitive-unlifted
