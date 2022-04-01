@@ -103,7 +103,9 @@ allow-newer:
   -- for ghcide:test via ghc-typelits-knownnat
   ghc-typelits-natnormalise:ghc-bignum,
 
-  hiedb:base
+  hiedb:base,
+
+  ghc-exactprint
 
 allow-older:
   primitive-extras:primitive-unlifted
