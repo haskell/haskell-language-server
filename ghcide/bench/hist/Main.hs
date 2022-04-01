@@ -57,7 +57,6 @@ import           Numeric.Natural             (Natural)
 import           System.Console.GetOpt
 import           System.FilePath
 
-
 configPath :: FilePath
 configPath = "bench/config.yaml"
 
@@ -88,6 +87,8 @@ ghcideBuildRules :: MkBuildRules BuildSystem
 ghcideBuildRules = MkBuildRules findGhcForBuildSystem "ghcide" projectDepends buildGhcide
   where
       projectDepends = do
+        need . map ("../hls-graph/src" </>) =<< getDirectoryFiles "../hls-graph/src" ["//*.hs"]
+        need . map ("../hls-plugin-api/src" </>) =<< getDirectoryFiles "../hls-plugin-api/src" ["//*.hs"]
         need . map ("src" </>) =<< getDirectoryFiles "src" ["//*.hs"]
         need . map ("session-loader" </>) =<< getDirectoryFiles "session-loader" ["//*.hs"]
         need =<< getDirectoryFiles "." ["*.cabal"]
