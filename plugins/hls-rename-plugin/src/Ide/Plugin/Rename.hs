@@ -12,7 +12,7 @@
 module Ide.Plugin.Rename (descriptor) where
 
 #if MIN_VERSION_ghc(9,2,1)
-import           GHC.Parser.Annotation
+import           GHC.Parser.Annotation                 (AnnContext, AnnList, AnnParen, AnnPragma)
 #endif
 
 import           Control.Monad
