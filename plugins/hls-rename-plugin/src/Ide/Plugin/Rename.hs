@@ -239,7 +239,7 @@ unsafeSrcSpanToLoc srcSpan =
 
 replaceModName :: Name -> Maybe ModuleName -> Module
 replaceModName name mbModName =
-    mkModule (moduleUnitId $ nameModule name) (fromMaybe (mkModuleName "Main") mbModName)
+    mkModule (moduleUnit $ nameModule name) (fromMaybe (mkModuleName "Main") mbModName)
 
 ---------------------------------------------------------------------------------------------------
 -- Config
