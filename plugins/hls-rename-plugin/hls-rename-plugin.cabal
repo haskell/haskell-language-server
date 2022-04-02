@@ -46,7 +46,10 @@ test-suite tests
   main-is:          Main.hs
   ghc-options:      -threaded -rtsopts -with-rtsopts=-N
   build-depends:
+    , aeson
     , base
+    , containers
     , filepath
+    , hls-plugin-api
     , hls-rename-plugin
     , hls-test-utils             ^>=1.2
