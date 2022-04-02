@@ -1,10 +1,12 @@
 {-# LANGUAGE CPP                 #-}
 {-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE GADTs               #-}
 {-# LANGUAGE NamedFieldPuns      #-}
+{-# LANGUAGE OverloadedLabels    #-}
+{-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications    #-}
 
 module Ide.Plugin.Rename (descriptor) where
 
@@ -39,6 +41,7 @@ import           Development.IDE.Spans.AtPoint
 import           Development.IDE.Types.Location
 import           HieDb.Query
 import           Ide.Plugin.Config
+import           Ide.Plugin.Properties
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Server
@@ -51,9 +54,11 @@ instance Hashable UInt
 instance Hashable (Mod a) where hash n = hash (unMod n)
 
 descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor pluginId = (defaultPluginDescriptor pluginId) {
-    pluginHandlers = mkPluginHandler STextDocumentRename renameProvider
-}
+descriptor pluginId = (defaultPluginDescriptor pluginId)
+    { pluginHandlers = mkPluginHandler STextDocumentRename renameProvider
+    , pluginConfigDescriptor = defaultConfigDescriptor
+        { configCustomConfig = mkCustomConfig properties }
+    }
 
 renameProvider :: PluginMethodHandler IdeState TextDocumentRename
 renameProvider state pluginId (RenameParams (TextDocumentIdentifier uri) pos _prog newNameText) =
@@ -61,16 +66,17 @@ renameProvider state pluginId (RenameParams (TextDocumentIdentifier uri) pos _pr
         nfp <- safeUriToNfp uri
         oldName <- getNameAtPos state nfp pos
         refLocs <- refsAtName state nfp oldName
+        crossModuleEnabled <- lift $ usePropertyLsp #crossModule pluginId properties
+        unless crossModuleEnabled $ failWhenImportOrExport state nfp refLocs oldName
         when (isBuiltInSyntax oldName) $
             throwE ("Invalid rename of built-in syntax: \"" ++ showName oldName ++ "\"")
-        failWhenImportOrExport state nfp refLocs oldName
         let newName = mkTcOcc $ T.unpack newNameText
             filesRefs = collectWith locToUri refLocs
             getFileEdit = flip $ getSrcEdit state . renameRefs newName
         fileEdits <- mapM (uncurry getFileEdit) filesRefs
         pure $ foldl' (<>) mempty fileEdits
 
--- | Limitation: Renaming across modules is unsupported due limited of multi-component support.
+-- | Limit renaming across modules.
 failWhenImportOrExport ::
     (MonadLsp config m) =>
     IdeState ->
@@ -234,3 +240,11 @@ unsafeSrcSpanToLoc srcSpan =
 replaceModName :: Name -> Maybe ModuleName -> Module
 replaceModName name mbModName =
     mkModule (moduleUnitId $ nameModule name) (fromMaybe (mkModuleName "Main") mbModName)
+
+---------------------------------------------------------------------------------------------------
+-- Config
+
+properties :: Properties '[ 'PropertyKey "crossModule" 'TBoolean]
+properties = emptyProperties
+  & defineBooleanProperty #crossModule
+    "Enable experimental cross-module renaming" False
