@@ -310,13 +310,13 @@ support.
 
 Provided by: `hls-rename-plugin`
 
-Provides renaming of symbols within a module.
+Provides renaming of symbols within a module. Experimental cross-module renaming can be enabled via the configuration.
 
 ![Rename Demo](https://user-images.githubusercontent.com/30090176/133072143-d7d03ec7-3db1-474e-ad5e-6f40d75ff7ab.gif)
 
 Known limitations:
 
-- Only works within a module due to limited [multi-component support](https://github.com/haskell/haskell-language-server/issues/2193).
+- Cross-module renaming requires all components to be indexed, which sometimes causes [partial renames in multi-component projects.](https://github.com/haskell/haskell-language-server/issues/2193).
 
 ## Missing features
 
