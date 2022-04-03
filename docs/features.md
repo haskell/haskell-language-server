@@ -316,7 +316,7 @@ Provides renaming of symbols within a module. Experimental cross-module renaming
 
 Known limitations:
 
-- Cross-module renaming requires all components to be indexed, which sometimes causes [partial renames in multi-component projects.](https://github.com/haskell/haskell-language-server/issues/2193).
+- Cross-module renaming requires all components to be indexed, which sometimes causes [partial renames in multi-component projects](https://github.com/haskell/haskell-language-server/issues/2193).
 
 ## Missing features
 
