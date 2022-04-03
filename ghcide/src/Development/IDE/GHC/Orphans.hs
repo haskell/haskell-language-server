@@ -33,21 +33,17 @@ import           Retrie.ExactPrint          (Annotated)
 
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Util
-import           Development.IDE.Types.Location
 
 import           Control.DeepSeq
 import           Data.Aeson
 import           Data.Bifunctor             (Bifunctor (..))
 import           Data.Hashable
-import           Data.Mod.Word
 import           Data.String                (IsString (fromString))
 #if MIN_VERSION_ghc(9,0,0)
 import          GHC.ByteCode.Types
 #else
 import          ByteCodeTypes
 #endif
-
-import           Language.LSP.Types        (UInt)
 
 -- Orphan instances for types from the GHC API.
 instance Show CoreModule where show = prettyPrint
@@ -143,11 +139,6 @@ instance Show ModuleName where
 instance Hashable ModuleName where
     hashWithSalt salt = hashWithSalt salt . show
 
-instance Hashable Location
-instance Hashable Range
-instance Hashable Position
-instance Hashable UInt
-instance Hashable (Mod a) where hash n = hash (unMod n)
 
 instance NFData a => NFData (IdentifierDetails a) where
     rnf (IdentifierDetails a b) = rnf a `seq` rnf (length b)

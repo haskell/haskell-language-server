@@ -66,7 +66,6 @@ library
         hiedb == 0.4.1.*,
         lsp-types ^>= 1.4.0.1,
         lsp ^>= 1.4.0.0 ,
-        mod,
         monoid-subclasses,
         mtl,
         network-uri,
