@@ -37,7 +37,9 @@ import           Development.IDE.Test            (getBuildEdgesCount,
                                                   getBuildKeysBuilt,
                                                   getBuildKeysChanged,
                                                   getBuildKeysVisited,
-                                                  getStoredKeys)
+                                                  getStoredKeys,
+                                                  getRebuildsCount,
+                                                  )
 import           Development.IDE.Test.Diagnostic
 import           Development.Shake               (CmdOption (Cwd, FileStdout),
                                                   cmd_)
@@ -329,12 +331,15 @@ runBenchmarksFun dir allBenchmarks = do
         , "setup"
         , "userTime"
         , "delayedTime"
+        , "firstBuildTime"
+        , "averageTimePerResponse"
         , "totalTime"
         , "buildRulesBuilt"
         , "buildRulesChanged"
         , "buildRulesVisited"
         , "buildRulesTotal"
         , "buildEdges"
+        , "ghcRebuilds"
         ]
       rows =
         [ [ name,
@@ -344,15 +349,21 @@ runBenchmarksFun dir allBenchmarks = do
             show runSetup',
             show userWaits,
             show delayedWork,
+            show $ firstResponse+firstResponseDelayed,
+            -- Exclude first response as it has a lot of setup time included
+            -- Assume that number of requests = number of modules * number of samples
+            show ((userWaits - firstResponse)/((fromIntegral samples - 1)*modules)),
             show runExperiment,
             show rulesBuilt,
             show rulesChanged,
             show rulesVisited,
             show rulesTotal,
-            show edgesTotal
+            show edgesTotal,
+            show rebuildsTotal
           ]
           | (Bench {name, samples}, BenchRun {..}) <- results,
             let runSetup' = if runSetup < 0.01 then 0 else runSetup
+                modules = fromIntegral $ length $ exampleModules $ example ?config
         ]
       csv = unlines $ map (intercalate ", ") (headers : rows)
   writeFile (outputCSV ?config) csv
@@ -369,12 +380,14 @@ runBenchmarksFun dir allBenchmarks = do
             showDuration runSetup',
             showDuration userWaits,
             showDuration delayedWork,
+            showDuration firstResponse,
             showDuration runExperiment,
             show rulesBuilt,
             show rulesChanged,
             show rulesVisited,
             show rulesTotal,
-            show edgesTotal
+            show edgesTotal,
+            show rebuildsTotal
           ]
           | (Bench {name, samples}, BenchRun {..}) <- results,
             let runSetup' = if runSetup < 0.01 then 0 else runSetup
@@ -420,16 +433,19 @@ data BenchRun = BenchRun
     runExperiment :: !Seconds,
     userWaits     :: !Seconds,
     delayedWork   :: !Seconds,
+    firstResponse :: !Seconds,
+    firstResponseDelayed :: !Seconds,
     rulesBuilt    :: !Int,
     rulesChanged  :: !Int,
     rulesVisited  :: !Int,
     rulesTotal    :: !Int,
     edgesTotal    :: !Int,
+    rebuildsTotal :: !Int,
     success       :: !Bool
   }
 
 badRun :: BenchRun
-badRun = BenchRun 0 0 0 0 0 0 0 0 0 0 False
+badRun = BenchRun 0 0 0 0 0 0 0 0 0 0 0 0 0 False
 
 waitForProgressStart :: Session ()
 waitForProgressStart = void $ do
@@ -482,8 +498,8 @@ runBench runSess b = handleAny (\e -> print e >> return badRun)
 
       liftIO $ output $ "Running " <> name <> " benchmark"
       (runSetup, ()) <- duration $ benchSetup docs
-      let loop !userWaits !delayedWork 0 = return $ Just (userWaits, delayedWork)
-          loop !userWaits !delayedWork n = do
+      let loop' (Just timeForFirstResponse) !userWaits !delayedWork 0 = return $ Just (userWaits, delayedWork, timeForFirstResponse)
+          loop' timeForFirstResponse !userWaits !delayedWork n = do
             (t, res) <- duration $ experiment docs
             if not res
               then return Nothing
@@ -491,17 +507,19 @@ runBench runSess b = handleAny (\e -> print e >> return badRun)
                 output (showDuration t)
                 -- Wait for the delayed actions to finish
                 td <- waitForBuildQueue
-                loop (userWaits+t) (delayedWork+td) (n -1)
+                loop' (timeForFirstResponse <|> (Just (t,td))) (userWaits+t) (delayedWork+td) (n -1)
+          loop = loop' Nothing
 
       (runExperiment, result) <- duration $ loop 0 0 samples
       let success = isJust result
-          (userWaits, delayedWork) = fromMaybe (0,0) result
+          (userWaits, delayedWork, (firstResponse, firstResponseDelayed)) = fromMaybe (0,0,(0,0)) result
 
       rulesTotal <- length <$> getStoredKeys
       rulesBuilt <- either (const 0) length <$> getBuildKeysBuilt
       rulesChanged <- either (const 0) length <$> getBuildKeysChanged
       rulesVisited <- either (const 0) length <$> getBuildKeysVisited
       edgesTotal   <- fromRight 0 <$> getBuildEdgesCount
+      rebuildsTotal <- fromRight 0 <$> getRebuildsCount
 
       return BenchRun {..}
 
