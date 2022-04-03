@@ -31,7 +31,6 @@ library
     , hls-plugin-api        ^>=1.3
     , lsp
     , lsp-types
-    , mod
     , syb
     , text
     , transformers
