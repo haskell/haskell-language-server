@@ -94,8 +94,8 @@ extra-deps:
 - unix-2.7.2.2
 - Win32-2.12.0.1
 
-- github: ndmitchell/hlint
-  commit: d155bac951622afdc868cbeec19643ca443c52fa
+- github: July541/hlint
+  commit: cb1441651dc225c58827747c5cfd8a3c6e123371
 - github: July541/stylish-haskell
   commit: 012e1209b8c40d80a8cd62e568d105561834f600
 - apply-refact-0.10.0.0

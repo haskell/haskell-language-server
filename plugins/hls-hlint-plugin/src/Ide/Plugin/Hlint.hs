@@ -136,6 +136,8 @@ import           GHC.Generics                                       (Generic)
 import           System.Environment                                 (setEnv,
                                                                      unsetEnv)
 import           Text.Regex.TDFA.Text                               ()
+import Data.Either.Extra (mapRight)
+import Data.List.Extra (splitOn)
 -- ---------------------------------------------------------------------
 
 data Log
@@ -200,7 +202,7 @@ rules recorder plugin = do
   define (cmapWithPrio LogShake recorder) $ \GetHlintDiagnostics file -> do
     config <- getClientConfigAction def
     let hlintOn = pluginEnabledConfig plcDiagnosticsOn plugin config
-    ideas <- if hlintOn then getIdeas recorder file else return (Right [])
+    ideas <- if hlintOn then getIdeas recorder file else return (Right ([], ""))
     return (diagnostics file ideas, Just ())
 
   defineNoFile (cmapWithPrio LogShake recorder) $ \GetHlintSettings -> do
@@ -213,8 +215,8 @@ rules recorder plugin = do
 
   where
 
-      diagnostics :: NormalizedFilePath -> Either ParseError [Idea] -> [FileDiagnostic]
-      diagnostics file (Right ideas) =
+      diagnostics :: NormalizedFilePath -> Either ParseError ([Idea], String) -> [FileDiagnostic]
+      diagnostics file (Right (ideas, _)) =
         [(file, ShowDiag, ideaToDiagnostic i) | i <- ideas, ideaSeverity i /= Ignore]
       diagnostics file (Left parseErr) =
         [(file, ShowDiag, parseErrorToDiagnostic parseErr)]
@@ -268,24 +270,24 @@ rules recorder plugin = do
         }
       srcSpanToRange (UnhelpfulSpan _) = noRange
 
-getIdeas :: Recorder (WithPriority Log) -> NormalizedFilePath -> Action (Either ParseError [Idea])
+getIdeas :: Recorder (WithPriority Log) -> NormalizedFilePath -> Action (Either ParseError ([Idea], String))
 getIdeas recorder nfp = do
   logWith recorder Debug $ LogGetIdeas nfp
   (flags, classify, hint) <- useNoFile_ GetHlintSettings
 
-  let applyHints' (Just (Right modEx)) = Right $ applyHints classify hint [modEx]
+  let applyHints' (Just (Right (modEx, p))) = Right (applyHints classify hint [modEx], p)
       applyHints' (Just (Left err)) = Left err
-      applyHints' Nothing = Right []
+      applyHints' Nothing = Right ([], "")
 
   fmap applyHints' (moduleEx flags)
 
-  where moduleEx :: ParseFlags -> Action (Maybe (Either ParseError ModuleEx))
+  where moduleEx :: ParseFlags -> Action (Maybe (Either ParseError (ModuleEx, String)))
 #ifndef HLINT_ON_GHC_LIB
         moduleEx _flags = do
           mbpm <- getParsedModuleWithComments nfp
           return $ createModule <$> mbpm
           where
-            createModule pm = Right (createModuleEx anns (applyParseFlagsFixities modu))
+            createModule pm = Right ((createModuleEx anns (applyParseFlagsFixities modu)), "")
                   where anns = pm_annotations pm
                         modu = pm_parsed_source pm
 
@@ -313,7 +315,13 @@ getIdeas recorder nfp = do
                     (fp', contents') <- case contents of
                                         Just _ -> return hspp
                                         Nothing -> getPathAndContents
-                    Just <$> (liftIO $ parseModuleEx flags' fp' contents')
+                    let r = filterContent (ms_hspp_file $ pm_mod_summary pm) (fromJust contents)
+                    let flags'' = flags' {
+                        cppFlags = NoCpp
+                    }
+                    Just <$> (liftIO $ mapRight (, r) <$>  parseModuleEx flags'' fp' contents')
+
+        filterContent fp content = last $ splitOn (fp ++ "\"\n") content
 
         getHsppPathAndContents m =
             (ms_hspp_file modsum, stringBufferToString <$> ms_hspp_buf modsum)
@@ -548,14 +556,14 @@ applyOneCmd recorder ide (AOP uri pos title) = do
         pure $ Right Null
 
 applyHint :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> Maybe OneHint -> IO (Either String WorkspaceEdit)
-applyHint recorder ide nfp mhint =
+applyHint recorder ide nfp mhint = do
   runExceptT $ do
     let runAction' :: Action a -> IO a
         runAction' = runAction "applyHint" ide
     let errorHandlers = [ Handler $ \e -> return (Left (show (e :: IOException)))
                         , Handler $ \e -> return (Left (show (e :: ErrorCall)))
                         ]
-    ideas <- bimapExceptT showParseError id $ ExceptT $ runAction' $ getIdeas recorder nfp
+    (ideas, cont) <- bimapExceptT showParseError id $ ExceptT $ runAction' $ getIdeas recorder nfp
     let ideas' = maybe ideas (`filterIdeas` ideas) mhint
     let commands = map ideaRefactoring ideas'
     logWith recorder Debug $ LogGeneratedIdeas nfp commands
@@ -588,13 +596,14 @@ applyHint recorder ide nfp mhint =
     res <-
         liftIO $ withSystemTempFile (takeFileName fp) $ \temp h -> do
             hClose h
-            writeFileUTF8NoNewLineTranslation temp oldContent
+            writeFileUTF8NoNewLineTranslation temp (T.pack cont)
             exts <- runAction' $ getExtensions nfp
             -- We have to reparse extensions to remove the invalid ones
             let (enabled, disabled, _invalid) = Refact.parseExtensions $ map show exts
             let refactExts = map show $ enabled ++ disabled
-            (Right <$> withRuntimeLibdir (Refact.applyRefactorings position commands temp refactExts))
+            r <- (Right <$> withRuntimeLibdir (Refact.applyRefactorings position commands temp refactExts))
                 `catches` errorHandlers
+            return r
 #else
     mbParsedModule <- liftIO $ runAction' $ getParsedModuleWithComments nfp
     res <-
