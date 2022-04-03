@@ -23,7 +23,7 @@ import           Data.Generics
 import           Data.HashSet                          (HashSet)
 import qualified Data.HashSet                          as HS
 import           Data.Hashable
-import           Data.List.Extra                       (foldl', groupOn)
+import           Data.List.Extra
 import qualified Data.Map                              as M
 import           Data.Maybe
 import           Data.Mod.Word
