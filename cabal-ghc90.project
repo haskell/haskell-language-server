@@ -72,7 +72,7 @@ allow-newer:
 source-repository-package
   type: git
   location: https://github.com/July541/hlint.git
-  tag: cb1441651dc225c58827747c5cfd8a3c6e123371
+  tag: d933b5bda075d3c2d3131429ed91ed735c3cc1c2
 
 source-repository-package
   type: git

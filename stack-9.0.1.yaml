@@ -65,6 +65,9 @@ extra-deps:
 - statestack-0.3
 - operational-0.2.4.1
 
+- github: July541/hlint
+  commit: d933b5bda075d3c2d3131429ed91ed735c3cc1c2
+
 # currently needed for ghcide>extra, etc.
 allow-newer: true
 

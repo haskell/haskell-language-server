@@ -77,11 +77,11 @@ library
     -- This mirrors the logic in hlint.cabal for hlint-3.3
     -- https://github.com/ndmitchell/hlint/blob/d3576de4529d8df6cca5a345f5b7e04474ff7bff/hlint.cabal#L79-L88
     -- so we can make sure that we do the same thing as hlint
-    build-depends: hlint ==3.3.7
     if (!flag(ghc-lib) && impl(ghc >=9.0.1) && impl(ghc <9.1.0))
-      build-depends: ghc ==9.0.*
+      build-depends: ghc ==9.0.*, hlint ^>=3.3
     else
       build-depends:
+        , hlint ==3.3.7
         , ghc
         , ghc-lib            ^>=9.2
         , ghc-lib-parser-ex  ^>=9.2
