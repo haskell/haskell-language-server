@@ -2,6 +2,9 @@
 
 module Main (main) where
 
+import           Data.Aeson
+import qualified Data.Map          as M
+import           Ide.Plugin.Config
 import qualified Ide.Plugin.Rename as Rename
 import           System.FilePath
 import           Test.Hls
@@ -14,47 +17,51 @@ renamePlugin = Rename.descriptor "rename"
 
 tests :: TestTree
 tests = testGroup "Rename"
-    [ goldenWithRename "Data constructor" "DataConstructor" $ \doc -> do
+    [ goldenWithRename "Data constructor" "DataConstructor" $ \doc ->
         rename doc (Position 0 15) "Op"
-    , goldenWithRename "Exported function" "ExportedFunction" $ \doc -> do
+    , goldenWithRename "Exported function" "ExportedFunction" $ \doc ->
         rename doc (Position 2 1) "quux"
-    , goldenWithRename "Function argument" "FunctionArgument" $ \doc -> do
+    , goldenWithRename "Function argument" "FunctionArgument" $ \doc ->
         rename doc (Position 3 4) "y"
-    , goldenWithRename "Function name" "FunctionName" $ \doc -> do
+    , goldenWithRename "Function name" "FunctionName" $ \doc ->
         rename doc (Position 3 1) "baz"
-    , goldenWithRename "GADT" "Gadt" $ \doc -> do
+    , goldenWithRename "GADT" "Gadt" $ \doc ->
         rename doc (Position 6 37) "Expr"
-    , goldenWithRename "Hidden function" "HiddenFunction" $ \doc -> do
+    , goldenWithRename "Hidden function" "HiddenFunction" $ \doc ->
         rename doc (Position 0 32) "quux"
-    , goldenWithRename "Imported function" "ImportedFunction" $ \doc -> do
+    , goldenWithRename "Imported function" "ImportedFunction" $ \doc ->
         rename doc (Position 3 8) "baz"
-    , goldenWithRename "Import hiding" "ImportHiding" $ \doc -> do
+    , goldenWithRename "Import hiding" "ImportHiding" $ \doc ->
         rename doc (Position 0 22) "hiddenFoo"
-    , goldenWithRename "Let expression" "LetExpression" $ \doc -> do
+    , goldenWithRename "Let expression" "LetExpression" $ \doc ->
         rename doc (Position 5 11) "foobar"
-    , goldenWithRename "Qualified as" "QualifiedAs" $ \doc -> do
+    , goldenWithRename "Qualified as" "QualifiedAs" $ \doc ->
         rename doc (Position 3 10) "baz"
-    , goldenWithRename "Qualified shadowing" "QualifiedShadowing" $ \doc -> do
+    , goldenWithRename "Qualified shadowing" "QualifiedShadowing" $ \doc ->
         rename doc (Position 3 12) "foobar"
-    , goldenWithRename "Qualified function" "QualifiedFunction" $ \doc -> do
+    , goldenWithRename "Qualified function" "QualifiedFunction" $ \doc ->
         rename doc (Position 3 12) "baz"
-    , goldenWithRename "Realigns do block indentation" "RealignDo" $ \doc -> do
+    , goldenWithRename "Realigns do block indentation" "RealignDo" $ \doc ->
         rename doc (Position 0 2) "fooBarQuux"
-    , goldenWithRename "Record field" "RecordField" $ \doc -> do
+    , goldenWithRename "Record field" "RecordField" $ \doc ->
         rename doc (Position 6 9) "number"
-    , goldenWithRename "Shadowed name" "ShadowedName" $ \doc -> do
+    , goldenWithRename "Shadowed name" "ShadowedName" $ \doc ->
         rename doc (Position 1 1) "baz"
-    , goldenWithRename "Typeclass" "Typeclass" $ \doc -> do
+    , goldenWithRename "Typeclass" "Typeclass" $ \doc ->
         rename doc (Position 8 15) "Equal"
-    , goldenWithRename "Type constructor" "TypeConstructor" $ \doc -> do
+    , goldenWithRename "Type constructor" "TypeConstructor" $ \doc ->
         rename doc (Position 2 17) "BinaryTree"
-    , goldenWithRename "Type variable" "TypeVariable" $ \doc -> do
+    , goldenWithRename "Type variable" "TypeVariable" $ \doc ->
         rename doc (Position 0 13) "b"
     ]
 
-goldenWithRename :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
-goldenWithRename title path =
-    goldenWithHaskellDoc renamePlugin title testDataDir path "expected" "hs"
+goldenWithRename :: TestName-> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
+goldenWithRename title path act =
+    goldenWithHaskellDoc renamePlugin title testDataDir path "expected" "hs" $ \doc -> do
+        sendConfigurationChanged $ toJSON $
+            def { plugins = M.fromList [("rename", def { plcConfig = "crossModule" .= True })] }
+        act doc
+
 
 testDataDir :: FilePath
 testDataDir = "test" </> "testdata"

@@ -33,6 +33,7 @@ module Development.IDE.Test
   , getBuildKeysVisited
   , getBuildKeysChanged
   , getBuildEdgesCount
+  , getRebuildsCount
   , configureCheckProject
   , isReferenceReady
   , referenceReady) where
@@ -224,6 +225,9 @@ getBuildKeysChanged = tryCallTestPlugin GetBuildKeysChanged
 
 getBuildEdgesCount :: Session (Either ResponseError Int)
 getBuildEdgesCount = tryCallTestPlugin GetBuildEdgesCount
+
+getRebuildsCount :: Session (Either ResponseError Int)
+getRebuildsCount = tryCallTestPlugin GetRebuildsCount
 
 getInterfaceFilesDir :: TextDocumentIdentifier -> Session FilePath
 getInterfaceFilesDir TextDocumentIdentifier{_uri} = callTestPlugin (GetInterfaceFilesDir _uri)

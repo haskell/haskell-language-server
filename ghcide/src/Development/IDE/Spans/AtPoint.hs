@@ -17,7 +17,7 @@ module Development.IDE.Spans.AtPoint (
   , computeTypeReferences
   , FOIReferences(..)
   , defRowToSymbolInfo
-  , getAstNamesAtPoint
+  , getNamesAtPoint
   , toCurrentLocation
   , rowToLoc
   ) where
@@ -86,7 +86,7 @@ foiReferencesAtPoint file pos (FOIReferences asts) =
   case HM.lookup file asts of
     Nothing -> ([],[],[])
     Just (HAR _ hf _ _ _,mapping) ->
-      let names = getAstNamesAtPoint hf pos mapping
+      let names = getNamesAtPoint hf pos mapping
           adjustedLocs = HM.foldr go [] asts
           go (HAR _ _ rf tr _, mapping) xs = refs ++ typerefs ++ xs
             where
@@ -96,8 +96,8 @@ foiReferencesAtPoint file pos (FOIReferences asts) =
                    $ concat $ mapMaybe (`M.lookup` tr) names
         in (names, adjustedLocs,map fromNormalizedFilePath $ HM.keys asts)
 
-getAstNamesAtPoint :: HieASTs a -> Position -> PositionMapping -> [Name]
-getAstNamesAtPoint hf pos mapping =
+getNamesAtPoint :: HieASTs a -> Position -> PositionMapping -> [Name]
+getNamesAtPoint hf pos mapping =
   concat $ pointCommand hf posFile (rights . M.keys . getNodeIds)
     where
       posFile = fromMaybe pos $ fromCurrentPosition mapping pos
