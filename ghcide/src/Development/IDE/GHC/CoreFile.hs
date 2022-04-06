@@ -4,7 +4,13 @@
 
 -- | CoreFiles let us serialize Core to a file in order to later recover it
 -- without reparsing or retypechecking
-module Development.IDE.GHC.CoreFile  where
+module Development.IDE.GHC.CoreFile
+  ( CoreFile
+  , codeGutsToCoreFile
+  , typecheckCoreFile
+  , readBinCoreFile
+  , writeBinCoreFile
+  , getImplicitBinds) where
 
 import Data.IORef
 import Data.Foldable
