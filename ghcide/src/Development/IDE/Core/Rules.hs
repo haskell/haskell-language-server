@@ -54,6 +54,7 @@ module Development.IDE.Core.Rules(
     ghcSessionDepsDefinition,
     getParsedModuleDefinition,
     typeCheckRuleDefinition,
+    getRebuildCount,
     GhcSessionDepsConfig(..),
     Log(..),
     DisplayTHWarning(..),
@@ -911,6 +912,20 @@ getModIfaceRule recorder = defineEarlyCutoff (cmapWithPrio LogShake recorder) $ 
       liftIO $ void $ modifyVar' compiledLinkables $ \old -> extendModuleEnv old mod time
   pure res
 
+-- | Count of total times we asked GHC to recompile
+newtype RebuildCounter = RebuildCounter { getRebuildCountVar :: TVar Int }
+instance IsIdeGlobal RebuildCounter
+
+getRebuildCount :: Action Int
+getRebuildCount = do
+  count <- getRebuildCountVar <$> getIdeGlobalAction
+  liftIO $ readTVarIO count
+
+incrementRebuildCount :: Action ()
+incrementRebuildCount = do
+  count <- getRebuildCountVar <$> getIdeGlobalAction
+  liftIO $ atomically $ modifyTVar' count (+1)
+
 -- | Also generates and indexes the `.hie` file, along with the `.o` file if needed
 -- Invariant maintained is that if the `.hi` file was successfully written, then the
 -- `.hie` and `.o` file (if needed) were also successfully written
@@ -940,10 +955,10 @@ regenerateHiFile sess f ms compNeeded = do
               Just tmr -> do
 
                 -- compile writes .o file
-                let compile = compileModule (RunSimplifier True) hsc (pm_mod_summary pm) $ tmrTypechecked tmr
+                let compile = liftIO $ compileModule (RunSimplifier True) hsc (pm_mod_summary pm) $ tmrTypechecked tmr
 
                 -- Bang pattern is important to avoid leaking 'tmr'
-                (diags'', !res) <- liftIO $ compileToObjCodeIfNeeded hsc compNeeded compile tmr
+                (diags'', !res) <- compileToObjCodeIfNeeded hsc compNeeded compile tmr
 
                 -- Write hi file
                 hiDiags <- case res of
@@ -967,18 +982,17 @@ regenerateHiFile sess f ms compNeeded = do
                     pure (hiDiags <> gDiags <> concat wDiags)
                   Nothing -> pure []
 
-
                 return (diags <> diags' <> diags'' <> hiDiags, res)
 
 
-type CompileMod m = m (IdeResult ModGuts)
-
 -- | HscEnv should have deps included already
-compileToObjCodeIfNeeded :: MonadIO m => HscEnv -> Maybe LinkableType -> CompileMod m -> TcModuleResult -> m (IdeResult HiFileResult)
-compileToObjCodeIfNeeded hsc Nothing _ tmr = liftIO $ do
-  res <- mkHiFileResultNoCompile hsc tmr
+compileToObjCodeIfNeeded :: HscEnv -> Maybe LinkableType -> Action (IdeResult ModGuts) -> TcModuleResult -> Action (IdeResult HiFileResult)
+compileToObjCodeIfNeeded hsc Nothing _ tmr = do
+  incrementRebuildCount
+  res <- liftIO $ mkHiFileResultNoCompile hsc tmr
   pure ([], Just $! res)
 compileToObjCodeIfNeeded hsc (Just linkableType) getGuts tmr = do
+  incrementRebuildCount
   (diags, mguts) <- getGuts
   case mguts of
     Nothing -> pure (diags, Nothing)
@@ -1079,6 +1093,7 @@ computeLinkableTypeForDynFlags d
 newtype CompiledLinkables = CompiledLinkables { getCompiledLinkables :: Var (ModuleEnv UTCTime) }
 instance IsIdeGlobal CompiledLinkables
 
+
 writeHiFileAction :: HscEnv -> HiFileResult -> Action [FileDiagnostic]
 writeHiFileAction hsc hiFile = do
     extras <- getShakeExtras
@@ -1115,6 +1130,8 @@ mainRule :: Recorder (WithPriority Log) -> RulesConfig -> Rules ()
 mainRule recorder RulesConfig{..} = do
     linkables <- liftIO $ newVar emptyModuleEnv
     addIdeGlobal $ CompiledLinkables linkables
+    rebuildCountVar <- liftIO $ newTVarIO 0
+    addIdeGlobal $ RebuildCounter rebuildCountVar
     getParsedModuleRule recorder
     getParsedModuleWithCommentsRule recorder
     getLocatedImportsRule recorder
