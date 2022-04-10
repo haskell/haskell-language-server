@@ -4,7 +4,6 @@
 let
   disabledPlugins = [
     "hls-brittany-plugin"
-    "hls-stylish-haskell-plugin"
   ];
 
   hpkgsOverride = hself: hsuper:
@@ -20,7 +19,6 @@ let
         hself.callCabal2nixWithOptions "haskell-language-server" ./.
         (pkgs.lib.concatStringsSep " " [
           "-f-brittany"
-          "-f-stylishhaskell"
         ]) { };
 
       # YOLO

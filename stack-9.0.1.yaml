@@ -21,7 +21,7 @@ packages:
 - ./plugins/hls-splice-plugin
 - ./plugins/hls-tactics-plugin
 - ./plugins/hls-brittany-plugin
-# - ./plugins/hls-stylish-haskell-plugin
+- ./plugins/hls-stylish-haskell-plugin
 - ./plugins/hls-floskell-plugin
 - ./plugins/hls-fourmolu-plugin
 - ./plugins/hls-pragmas-plugin
@@ -65,6 +65,10 @@ extra-deps:
 - statestack-0.3
 - operational-0.2.4.1
 
+# stylish-haskell 9.0
+- github: July541/stylish-haskell
+  commit: b08a85716b991359a46a32e8e7ba5780664d31ae
+
 # currently needed for ghcide>extra, etc.
 allow-newer: true
 
@@ -84,7 +88,6 @@ flags:
     pedantic: true
 
     ignore-plugins-ghc-bounds: true
-    stylishHaskell: false
 
   retrie:
     BuildExecutable: false
