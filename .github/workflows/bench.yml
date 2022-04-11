@@ -116,13 +116,13 @@ jobs:
         enable-stack: false
 
     - name: Download cabal home
-      uses: actions/download-artifact@v2
+      uses: actions/download-artifact@v3
       with:
         name: cabal-home
         path: .
 
     - name: Download workspace
-      uses: actions/download-artifact@v2
+      uses: actions/download-artifact@v3
       with:
         name: workspace
         path: .
