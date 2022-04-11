@@ -137,7 +137,7 @@ jobs:
 
       - name: "Upload package dist tarball"
         if: steps.get-hackage-version.outputs.exists != 'true' && matrix.ghc == '8.10.7'
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: ${{ matrix.package }}
           path: ${{ steps.generate-dist-tarball.outputs.path }}
