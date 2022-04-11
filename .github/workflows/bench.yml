@@ -83,14 +83,14 @@ jobs:
         tar -czf cabal.tar.gz *
 
     - name: Upload workspace
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: workspace
         retention-days: 1
         path: workspace.tar.gz
 
     - name: Upload .cabal
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: cabal-home
         retention-days: 1
@@ -141,7 +141,7 @@ jobs:
         column -s, -t < ghcide/bench-results/unprofiled/${{ matrix.example }}/results.csv | tee ghcide/bench-results/unprofiled/${{ matrix.example }}/results.txt
 
     - name: Archive benchmarking artifacts
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: bench-results-${{ runner.os }}-${{ matrix.ghc }}
         path: |
@@ -151,7 +151,7 @@ jobs:
            ghcide/bench-results/**/*.eventlog.html
 
     - name: Archive benchmark logs
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: bench-logs-${{ runner.os }}-${{ matrix.ghc }}
         path: |
