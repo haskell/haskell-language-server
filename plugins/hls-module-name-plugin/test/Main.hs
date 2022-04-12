@@ -37,6 +37,12 @@ tests =
       [CodeLens { _command = Just c }] <- getCodeLenses doc
       executeCommand c
       void $ skipManyTill anyMessage (message SWorkspaceApplyEdit)
+  , testCase "Should no code lens if the module name is correct" $
+      runSessionWithServer moduleNamePlugin testDataDir $ do
+          doc <- openDoc "CorrectName.hs" "haskell"
+          lenses <- getCodeLenses doc
+          liftIO $ lenses @?= []
+          closeDoc doc
   ]
 
 goldenWithModuleName :: TestName -> FilePath -> (TextDocumentIdentifier -> Session ()) -> TestTree
