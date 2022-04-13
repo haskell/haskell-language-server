@@ -5,3 +5,4 @@ cradle:
       - "TEmptyModule"
       - "TWrongModuleName"
       - "mainlike"
+      - "CorrectName"
