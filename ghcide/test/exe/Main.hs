@@ -4288,11 +4288,7 @@ findDefinitionAndHoverTests = let
   , test  no     yes    outL45     outSig        "top-level signature              #767"
   , test  broken broken innL48     innSig        "inner     signature              #767"
   , test  no     yes    holeL60    hleInfo       "hole without internal name       #831"
-  , if ghcVersion >= GHC92 then
-        -- Broken on GHC 9.2 and above due to printing of uniques
-        test  no     yes    holeL65    []        "hole with variable"
-    else
-        test  no     yes    holeL65    hleInfo2  "hole with variable"
+  , test  no     yes    holeL65    hleInfo2      "hole with variable"
   , test  no     skip   cccL17     docLink       "Haddock html links"
   , testM yes    yes    imported   importedSig   "Imported symbol"
   , testM yes    yes    reexported reexportedSig "Imported symbol (reexported)"
