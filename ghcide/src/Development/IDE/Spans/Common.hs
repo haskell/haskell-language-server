@@ -24,6 +24,7 @@ import qualified Data.Text                    as T
 import           GHC.Generics
 
 import           GHC
+import           GHC.Utils.Outputable         (withPprStyle, defaultUserStyle)
 
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Orphans  ()
@@ -35,7 +36,7 @@ type DocMap = NameEnv SpanDoc
 type KindMap = NameEnv TyThing
 
 showGhc :: Outputable a => a -> T.Text
-showGhc = showSD . ppr
+showGhc = showSD . withPprStyle defaultUserStyle . ppr
 
 showSD :: SDoc -> T.Text
 showSD = T.pack . unsafePrintSDoc
@@ -62,7 +63,7 @@ safeTyThingId _                                = Nothing
 -- Possible documentation for an element in the code
 data SpanDoc
   = SpanDocString HsDocString SpanDocUris
-  | SpanDocText   [T.Text] SpanDocUris
+  | SpanDocText   [T.Text] SpanDocUris
   deriving stock (Eq, Show, Generic)
   deriving anyclass NFData
 
