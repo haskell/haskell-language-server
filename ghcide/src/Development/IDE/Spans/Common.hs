@@ -24,7 +24,6 @@ import qualified Data.Text                    as T
 import           GHC.Generics
 
 import           GHC
-import           GHC.Utils.Outputable         (withPprStyle, defaultUserStyle)
 
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Orphans  ()
