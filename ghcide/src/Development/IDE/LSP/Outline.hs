@@ -21,6 +21,7 @@ import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error      (rangeToRealSrcSpan,
                                                  realSrcSpanToRange)
 import           Development.IDE.Types.Location
+import           Development.IDE.GHC.Util       (showGhc)
 import           Language.LSP.Server            (LspM)
 import           Language.LSP.Types             (DocumentSymbol (..),
                                                  DocumentSymbolParams (DocumentSymbolParams, _textDocument),
@@ -31,7 +32,6 @@ import           Language.LSP.Types             (DocumentSymbol (..),
                                                  type (|?) (InL), uriToFilePath)
 #if MIN_VERSION_ghc(9,2,0)
 import Data.List.NonEmpty (nonEmpty, toList)
-import Development.IDE.GHC.Util (showGhc)
 #endif
 
 moduleOutline

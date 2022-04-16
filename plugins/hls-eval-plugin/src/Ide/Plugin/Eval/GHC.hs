@@ -19,7 +19,7 @@ import           Data.String                     (fromString)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
 import qualified Development.IDE.GHC.Compat.Util as EnumSet
-import           Development.IDE.GHC.Util        (showGhc)
+import           Development.IDE.GHC.Util        (prettyPrint)
 
 import           GHC.LanguageExtensions.Type     (Extension (..))
 import           Ide.Plugin.Eval.Util            (gStrictTry)
@@ -67,7 +67,7 @@ pkgNames_ =
     mapMaybe
         ( \case
             ExposePackage _ (PackageArg n) _  -> Just n
-            ExposePackage _ (UnitIdArg uid) _ -> Just $ showGhc uid
+            ExposePackage _ (UnitIdArg uid) _ -> Just $ prettyPrint uid
             _                                 -> Nothing
         )
 

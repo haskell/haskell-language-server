@@ -4,6 +4,7 @@ module Development.IDE.GHC.Compat.Outputable (
     SDoc,
     Outputable,
     showSDoc,
+    showSDocUnsafe,
     showSDocForUser,
     ppr, pprPanic, text, vcat, (<+>), ($$), empty, hang, nest,
     printSDocQualifiedUnsafe,
@@ -80,7 +81,7 @@ printWithoutUniques =
 #else
   go . ppr
     where
-      go sdoc = oldRenderWithStyle dflags sdoc (mkUserStyle dflags neverQualify AllTheWay)
+      go sdoc = oldRenderWithStyle dflags sdoc (oldMkUserStyle dflags neverQualify AllTheWay)
       dflags = unsafeGlobalDynFlags `gopt_set` Opt_SuppressUniques
 #endif
 
