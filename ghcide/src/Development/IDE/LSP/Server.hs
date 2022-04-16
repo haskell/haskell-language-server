@@ -22,6 +22,7 @@ import           Ide.Types                    (HasTracing, traceWithSpan)
 import           Language.LSP.Server          (Handlers, LspM)
 import qualified Language.LSP.Server          as LSP
 import           Language.LSP.Types
+import           Language.LSP.VFS
 import           UnliftIO.Chan
 
 data ReactorMessage
@@ -48,14 +49,16 @@ requestHandler m k = LSP.requestHandler m $ \RequestMessage{_method,_id,_params}
 notificationHandler
   :: forall (m :: Method FromClient Notification) c. (HasTracing (MessageParams m)) =>
      SMethod m
-  -> (IdeState -> MessageParams m -> LspM c ())
+  -> (IdeState -> VFS -> MessageParams m -> LspM c ())
   -> Handlers (ServerM c)
 notificationHandler m k = LSP.notificationHandler m $ \NotificationMessage{_params,_method}-> do
   (chan,ide) <- ask
   env <- LSP.getLspEnv
+  -- Take a snapshot of the VFS state on every notification
+  -- We only need to do this here because the VFS state is only updated
+  -- on notifications
+  vfs <- LSP.getVirtualFiles
   let trace x = otTracedHandler "Notification" (show _method) $ \sp -> do
         traceWithSpan sp _params
         x
-  writeChan chan $ ReactorNotification (trace $ LSP.runLspT env $ k ide _params)
-
-
+  writeChan chan $ ReactorNotification (trace $ LSP.runLspT env $ k ide vfs _params)

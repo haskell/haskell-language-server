@@ -315,7 +315,7 @@ newtype PluginHandler a (m :: Method FromClient Request)
   = PluginHandler (PluginId -> a -> MessageParams m -> LspM Config (NonEmpty (Either ResponseError (ResponseResult m))))
 
 newtype PluginNotificationHandler a (m :: Method FromClient Notification)
-  = PluginNotificationHandler (PluginId -> a -> MessageParams m -> LspM Config ())
+  = PluginNotificationHandler (PluginId -> a -> VFS -> MessageParams m -> LspM Config ())
 
 newtype PluginHandlers a             = PluginHandlers             (DMap IdeMethod       (PluginHandler a))
 newtype PluginNotificationHandlers a = PluginNotificationHandlers (DMap IdeNotification (PluginNotificationHandler a))
@@ -331,15 +331,15 @@ instance Monoid (PluginHandlers a) where
 instance Semigroup (PluginNotificationHandlers a) where
   (PluginNotificationHandlers a) <> (PluginNotificationHandlers b) = PluginNotificationHandlers $ DMap.unionWithKey go a b
     where
-      go _ (PluginNotificationHandler f) (PluginNotificationHandler g) = PluginNotificationHandler $ \pid ide params ->
-        f pid ide params >> g pid ide params
+      go _ (PluginNotificationHandler f) (PluginNotificationHandler g) = PluginNotificationHandler $ \pid ide vfs params ->
+        f pid ide vfs params >> g pid ide vfs params
 
 instance Monoid (PluginNotificationHandlers a) where
   mempty = PluginNotificationHandlers mempty
 
 type PluginMethodHandler a m = a -> PluginId -> MessageParams m -> LspM Config (Either ResponseError (ResponseResult m))
 
-type PluginNotificationMethodHandler a m = a -> PluginId -> MessageParams m -> LspM Config ()
+type PluginNotificationMethodHandler a m = a -> VFS -> PluginId -> MessageParams m -> LspM Config ()
 
 -- | Make a handler for plugins with no extra data
 mkPluginHandler
@@ -360,7 +360,7 @@ mkPluginNotificationHandler
 mkPluginNotificationHandler m f
     = PluginNotificationHandlers $ DMap.singleton (IdeNotification m) (PluginNotificationHandler f')
   where
-    f' pid ide = f ide pid
+    f' pid ide vfs = f ide vfs pid
 
 defaultPluginDescriptor :: PluginId -> PluginDescriptor ideState
 defaultPluginDescriptor plId =

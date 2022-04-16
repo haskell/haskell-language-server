@@ -558,7 +558,7 @@ getHieAstsRule recorder =
 persistentHieFileRule :: Recorder (WithPriority Log) -> Rules ()
 persistentHieFileRule recorder = addPersistentRule GetHieAst $ \file -> runMaybeT $ do
   res <- readHieFileForSrcFromDisk recorder file
-  vfsRef <- asks vfs
+  vfsRef <- asks vfsVar
   vfsData <- liftIO $ vfsMap <$> readTVarIO vfsRef
   (currentSource, ver) <- liftIO $ case M.lookup (filePathToUri' file) vfsData of
     Nothing -> (,Nothing) . T.decodeUtf8 <$> BS.readFile (fromNormalizedFilePath file)
