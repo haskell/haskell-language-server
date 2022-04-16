@@ -82,6 +82,7 @@ import qualified GHC.LanguageExtensions.Type     as LangExt (Extension (..))
 
 import           Development.IDE.Core.FileStore  (setSomethingModified)
 import           Development.IDE.Types.Shake     (toKey)
+import           Development.IDE.GHC.Util        (showGhc)
 import           Ide.Plugin.Config               (Config)
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Types.SrcLoc                (UnhelpfulSpanReason (UnhelpfulInteractive))
@@ -97,7 +98,7 @@ import           Ide.Plugin.Eval.Parse.Comments  (commentsToSections)
 import           Ide.Plugin.Eval.Parse.Option    (parseSetFlags)
 import           Ide.Plugin.Eval.Rules           (queueForEvaluation)
 import           Ide.Plugin.Eval.Types
-import           Ide.Plugin.Eval.Util            (asS, gStrictTry, isLiterate,
+import           Ide.Plugin.Eval.Util            (gStrictTry, isLiterate,
                                                   logWith, response', timed)
 import           Ide.PluginUtils                 (handleMaybe, handleMaybeM,
                                                   response)
@@ -282,7 +283,7 @@ runEvalCmd plId st EvalParams{..} =
 
                 -- load the module in the interactive environment
                 loadResult <- perf "loadModule" $ load LoadAllTargets
-                dbg "LOAD RESULT" $ asS loadResult
+                dbg "LOAD RESULT" $ showGhc loadResult
                 case loadResult of
                     Failed -> liftIO $ do
                         let err = ""

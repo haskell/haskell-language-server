@@ -19,9 +19,10 @@ import           Data.String                     (fromString)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
 import qualified Development.IDE.GHC.Compat.Util as EnumSet
+import           Development.IDE.GHC.Util        (showGhc)
 
 import           GHC.LanguageExtensions.Type     (Extension (..))
-import           Ide.Plugin.Eval.Util            (asS, gStrictTry)
+import           Ide.Plugin.Eval.Util            (gStrictTry)
 
 {- $setup
 >>> import GHC
@@ -66,7 +67,7 @@ pkgNames_ =
     mapMaybe
         ( \case
             ExposePackage _ (PackageArg n) _  -> Just n
-            ExposePackage _ (UnitIdArg uid) _ -> Just $ asS uid
+            ExposePackage _ (UnitIdArg uid) _ -> Just $ showGhc uid
             _                                 -> Nothing
         )
 
@@ -147,7 +148,7 @@ deriving instance Read Extension
 -- Partial display of DynFlags contents, for testing purposes
 showDynFlags :: DynFlags -> String
 showDynFlags df =
-    showSDocUnsafe . vcat . map (\(n, d) -> text (n ++ ": ") <+> d) $
+    prettyPrint . vcat . map (\(n, d) -> text (n ++ ": ") <+> d) $
         [ ("extensions", ppr . extensions $ df)
         , ("extensionFlags", ppr . EnumSet.toList . extensionFlags $ df)
         , ("importPaths", vList $ importPaths df)

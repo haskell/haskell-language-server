@@ -50,8 +50,7 @@ import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.GHC.Util                          (prettyPrint,
                                                                     printRdrName,
-                                                                    traceAst,
-                                                                    unsafePrintSDoc)
+                                                                    traceAst, showGhc)
 import           Development.IDE.Plugin.CodeAction.Args
 import           Development.IDE.Plugin.CodeAction.ExactPrint
 import           Development.IDE.Plugin.CodeAction.PositionIndexed
@@ -546,7 +545,7 @@ suggestDeleteUnusedBinding
       isTheBinding span = srcSpanToRange span == Just _range
 
       isSameName :: IdP GhcPs -> String -> Bool
-      isSameName x name = showSDocUnsafe (ppr x) == name
+      isSameName x name = prettyPrint x == name
 
 data ExportsAs = ExportName | ExportPattern | ExportFamily | ExportAll
   deriving (Eq)
@@ -1013,7 +1012,7 @@ occursUnqualified symbol ImportDecl{..}
 occursUnqualified _ _ = False
 
 symbolOccursIn :: T.Text -> IE GhcPs -> Bool
-symbolOccursIn symb = any ((== symb). showNameWithoutUniques) . ieNames
+symbolOccursIn symb = any ((== symb). showGhc) . ieNames
 
 targetModuleName :: ModuleTarget -> ModuleName
 targetModuleName ImplicitPrelude{} = mkModuleName "Prelude"
@@ -1423,7 +1422,7 @@ newImport modName mSymbol mQual hiding = NewImport impStmt
      symImp
             | Just symbol <- mSymbol
               , symOcc <- mkVarOcc $ T.unpack symbol =
-              " (" <> T.pack (unsafePrintSDoc (parenSymOcc symOcc $ ppr symOcc)) <> ")"
+              " (" <> showGhc (parenSymOcc symOcc $ ppr symOcc) <> ")"
             | otherwise = ""
      impStmt =
        "import "
@@ -1617,32 +1616,32 @@ smallerRangesForBindingExport lies b =
     b' = wrapOperatorInParens . unqualify $ b
 #if !MIN_VERSION_ghc(9,2,0)
     ranges' (L _ (IEThingWith _ thing _  inners labels))
-      | showSDocUnsafe (ppr thing) == b' = []
+      | prettyPrint thing == b' = []
       | otherwise =
-          [ locA l' | L l' x <- inners, showSDocUnsafe (ppr x) == b']
-          ++ [ l' | L l' x <- labels, showSDocUnsafe (ppr x) == b']
+          [ locA l' | L l' x <- inners, prettyPrint x == b']
+          ++ [ l' | L l' x <- labels, prettyPrint x == b']
 #else
     ranges' (L _ (IEThingWith _ thing _  inners))
-      | showSDocUnsafe (ppr thing) == b' = []
+      | prettyPrint thing == b' = []
       | otherwise =
-          [ locA l' | L l' x <- inners, showSDocUnsafe (ppr x) == b']
+          [ locA l' | L l' x <- inners, prettyPrint x == b']
 #endif
     ranges' _ = []
 
 rangesForBinding' :: String -> LIE GhcPs -> [SrcSpan]
-rangesForBinding' b (L (locA -> l) x@IEVar{}) | showSDocUnsafe (ppr x) == b = [l]
-rangesForBinding' b (L (locA -> l) x@IEThingAbs{}) | showSDocUnsafe (ppr x) == b = [l]
-rangesForBinding' b (L (locA -> l) (IEThingAll _ x)) | showSDocUnsafe (ppr x) == b = [l]
+rangesForBinding' b (L (locA -> l) x@IEVar{}) | prettyPrint x == b = [l]
+rangesForBinding' b (L (locA -> l) x@IEThingAbs{}) | prettyPrint x == b = [l]
+rangesForBinding' b (L (locA -> l) (IEThingAll _ x)) | prettyPrint x == b = [l]
 #if !MIN_VERSION_ghc(9,2,0)
 rangesForBinding' b (L l (IEThingWith _ thing _  inners labels))
 #else
 rangesForBinding' b (L (locA -> l) (IEThingWith _ thing _  inners))
 #endif
-    | showSDocUnsafe (ppr thing) == b = [l]
+    | prettyPrint thing == b = [l]
     | otherwise =
-        [ locA l' | L l' x <- inners, showSDocUnsafe (ppr x) == b]
+        [ locA l' | L l' x <- inners, prettyPrint x == b]
 #if !MIN_VERSION_ghc(9,2,0)
-        ++ [ l' | L l' x <- labels, showSDocUnsafe (ppr x) == b]
+        ++ [ l' | L l' x <- labels, prettyPrint x == b]
 #endif
 rangesForBinding' _ _ = []
 

@@ -214,7 +214,7 @@ mkCompl
         pprLineCol :: SrcLoc -> T.Text
         pprLineCol (UnhelpfulLoc fs) = T.pack $ unpackFS fs
         pprLineCol (RealSrcLoc loc _) =
-            "line " <> ppr(srcLocLine loc) <> ", column " <> ppr(srcLocCol loc)
+            "line " <> showGhc (srcLocLine loc) <> ", column " <> showGhc (srcLocCol loc)
 
 
 mkAdditionalEditsCommand :: PluginId -> ExtendImport -> Command
@@ -244,7 +244,7 @@ mkNameCompItem doc thingParent origName provenance thingType isInfix docs !imp =
             thingParent,
             importName = showModName $ unLoc $ ideclName $ unLoc x,
             importQual = getImportQual x,
-            newThing = showNameWithoutUniques origName
+            newThing = showGhc origName
           }
 
     stripForall :: T.Text -> T.Text
@@ -350,7 +350,7 @@ cacheDataProducer uri env curMod globalEnv inScopeEnv limports = do
   let
       packageState = hscEnv env
       curModName = moduleName curMod
-      curModNameText = ppr curModName
+      curModNameText = showGhc curModName
 
       importMap = Map.fromList [ (l, imp) | imp@(L (locA -> (RealSrcSpan l _)) _) <- limports ]
 
@@ -384,9 +384,9 @@ cacheDataProducer uri env curMod globalEnv inScopeEnv limports = do
                 -- we don't want to extend import if it's already in scope
                 guard . null $ lookupGRE_Name inScopeEnv n
                 -- or if it doesn't have a real location
-                loc <- realSpan $ is_dloc spec
+                loc <- realSpan $ is_dloc spec
                 Map.lookup loc importMap
-          compItem <- toCompItem par curMod (ppr $ is_mod spec) n originalImportDecl
+          compItem <- toCompItem par curMod (showGhc $ is_mod spec) n originalImportDecl
           let unqual
                 | is_qual spec = []
                 | otherwise = compItem
@@ -498,7 +498,7 @@ localCompletionsForParsedModule uri pm@ParsedModule{pm_parsed_source = L _ HsMod
 findRecordCompl :: Uri -> ParsedModule -> Provenance -> TyClDecl GhcPs -> [CompItem]
 findRecordCompl uri pmod mn DataDecl {tcdLName, tcdDataDefn} = result
     where
-        result = [mkRecordSnippetCompItem uri (Just $ showNameWithoutUniques $ unLoc tcdLName)
+        result = [mkRecordSnippetCompItem uri (Just $ showGhc $ unLoc tcdLName)
                         (showGhc . unLoc $ con_name) field_labels mn doc Nothing
                  | ConDeclH98{..} <- unLoc <$> dd_cons tcdDataDefn
                  , Just  con_details <- [getFlds con_args]
@@ -527,9 +527,6 @@ findRecordCompl uri pmod mn DataDecl {tcdLName, tcdDataDefn} = result
         -- XConDeclField
         extract _ = []
 findRecordCompl _ _ _ _ = []
-
-ppr :: Outputable a => a -> T.Text
-ppr = T.pack . prettyPrint
 
 toggleSnippets :: ClientCapabilities -> CompletionsConfig -> CompletionItem -> CompletionItem
 toggleSnippets ClientCapabilities {_textDocument} CompletionsConfig{..} =

@@ -210,7 +210,7 @@ minimalImportsRule recorder = define (cmapWithPrio LogShake recorder) $ \Minimal
   (imports, mbMinImports) <- liftIO $ extractMinimalImports hsc tmr
   let importsMap =
         Map.fromList
-          [ (realSrcSpanStart l, T.pack (prettyPrint i))
+          [ (realSrcSpanStart l, showGhc i)
             | L (locA -> RealSrcSpan l _) i <- fromMaybe [] mbMinImports
           ]
       res =

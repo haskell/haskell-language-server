@@ -55,6 +55,7 @@ import           Data.Version                         (showVersion)
 import           Development.IDE.Types.Shake          (WithHieDb)
 import           HieDb                                hiding (pointCommand)
 import           System.Directory                     (doesFileExist)
+import Development.IDE.GHC.Util (showGhc)
 
 -- | Gives a Uri for the module, given the .hie file location and the the module info
 -- The Bool denotes if it is a boot module
@@ -229,7 +230,7 @@ atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) env pos = listToMaybe $ p
         prettyNames :: [T.Text]
         prettyNames = map prettyName names
         prettyName (Right n, dets) = T.unlines $
-          wrapHaskell (showNameWithoutUniques n <> maybe "" (" :: " <>) ((prettyType <$> identType dets) <|> maybeKind))
+          wrapHaskell (showGhc n <> maybe "" (" :: " <>) ((prettyType <$> identType dets) <|> maybeKind))
           : definedAt n
           ++ maybeToList (prettyPackageName n)
           ++ catMaybes [ T.unlines . spanDocToMarkdown <$> lookupNameEnv dm n
@@ -255,7 +256,7 @@ atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) env pos = listToMaybe $ p
           -- see the code of 'pprNameDefnLoc' for more information
           case nameSrcLoc name of
             UnhelpfulLoc {} | isInternalName name || isSystemName name -> []
-            _ -> ["*Defined " <> T.pack (showSDocUnsafe $ pprNameDefnLoc name) <> "*"]
+            _ -> ["*Defined " <> showGhc (pprNameDefnLoc name) <> "*"]
 
 typeLocationsAtPoint
   :: forall m

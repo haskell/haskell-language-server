@@ -4,11 +4,11 @@ module Development.IDE.GHC.Compat.Outputable (
     SDoc,
     Outputable,
     showSDoc,
-    showSDocUnsafe,
     showSDocForUser,
     ppr, pprPanic, text, vcat, (<+>), ($$), empty, hang, nest,
     printSDocQualifiedUnsafe,
     printNameWithoutUniques,
+    printWithoutUniques,
     printSDocAllTheWay,
     mkPrintUnqualified,
     mkPrintUnqualifiedDefault,
@@ -66,6 +66,22 @@ import           HscTypes
 import           Outputable                      as Out hiding (defaultUserStyle)
 import qualified Outputable                      as Out
 import           SrcLoc
+#endif
+
+printWithoutUniques :: Outputable a => a -> String
+printWithoutUniques =
+#if MIN_VERSION_ghc(9,2,0)
+  renderWithContext (defaultSDocContext
+    {
+      sdocStyle = defaultUserStyle
+    , sdocSuppressUniques = True
+    , sdocCanUseUnicode = True
+    }) . ppr
+#else
+  go . ppr
+    where
+      go sdoc = oldRenderWithStyle dflags sdoc (mkUserStyle dflags neverQualify AllTheWay)
+      dflags = unsafeGlobalDynFlags `gopt_set` Opt_SuppressUniques
 #endif
 
 printNameWithoutUniques :: Outputable a => a -> String

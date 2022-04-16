@@ -3,9 +3,7 @@
 {-# LANGUAGE DerivingStrategies #-}
 
 module Development.IDE.Spans.Common (
-  showGhc
-, showNameWithoutUniques
-, unqualIEWrapName
+  unqualIEWrapName
 , safeTyThingId
 , safeTyThingType
 , SpanDoc(..)
@@ -34,18 +32,18 @@ import qualified Documentation.Haddock.Types  as H
 type DocMap = NameEnv SpanDoc
 type KindMap = NameEnv TyThing
 
-showGhc :: Outputable a => a -> T.Text
-showGhc = showSD . withPprStyle defaultUserStyle . ppr
+-- showGhc :: Outputable a => a -> T.Text
+-- showGhc = showSD . withPprStyle defaultUserStyle . ppr
 
-showSD :: SDoc -> T.Text
-showSD = T.pack . unsafePrintSDoc
+-- showSD :: SDoc -> T.Text
+-- showSD = T.pack . unsafePrintSDoc
 
-showNameWithoutUniques :: Outputable a => a -> T.Text
-showNameWithoutUniques = T.pack . printNameWithoutUniques
+-- showNameWithoutUniques :: Outputable a => a -> T.Text
+-- showNameWithoutUniques = T.pack . printNameWithoutUniques
 
 -- | Shows IEWrappedName, without any modifier, qualifier or unique identifier.
 unqualIEWrapName :: IEWrappedName RdrName -> T.Text
-unqualIEWrapName = showNameWithoutUniques . rdrNameOcc . ieWrappedName
+unqualIEWrapName = showGhc . rdrNameOcc . ieWrappedName
 
 -- From haskell-ide-engine/src/Haskell/Ide/Engine/Support/HieExtras.hs
 safeTyThingType :: TyThing -> Maybe Type

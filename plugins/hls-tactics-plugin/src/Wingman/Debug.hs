@@ -19,7 +19,8 @@ import           Control.DeepSeq
 import           Control.Exception
 import           Data.Either (fromRight)
 import qualified Debug.Trace
-import           Development.IDE.GHC.Compat (PlainGhcException, Outputable(..), SDoc, showSDocUnsafe)
+import           Development.IDE.GHC.Compat (PlainGhcException, Outputable(..), SDoc)
+import           Development.IDE.GHC.Util (prettyPrint)
 import           System.IO.Unsafe  (unsafePerformIO)
 
 ------------------------------------------------------------------------------
@@ -30,7 +31,7 @@ unsafeRender = unsafeRender' . ppr
 
 unsafeRender' :: SDoc -> String
 unsafeRender' sdoc = unsafePerformIO $ do
-  let z = showSDocUnsafe sdoc
+  let z = prettyPrint sdoc
   -- We might not have unsafeGlobalDynFlags (like during testing), in which
   -- case GHC panics. Instead of crashing, let's just fail to print.
   !res <- try @PlainGhcException $ evaluate $ deepseq z z

@@ -32,6 +32,7 @@ import           System.Directory
 import           System.FilePath
 
 import           Language.LSP.Types              (filePathToUri, getUri)
+import Development.IDE.GHC.Util (showGhc)
 
 mkDocMap
   :: HscEnv
@@ -92,8 +93,8 @@ getDocumentationsTryGhc env mod names = do
             src <- toFileUriText $ lookupSrcHtmlForModule env mod
             return (doc, src)
           Nothing -> pure (Nothing, Nothing)
-      let docUri = (<> "#" <> selector <> showNameWithoutUniques name) <$> docFu
-          srcUri = (<> "#" <> showNameWithoutUniques name) <$> srcFu
+      let docUri = (<> "#" <> selector <> showGhc name) <$> docFu
+          srcUri = (<> "#" <> showGhc name) <$> srcFu
           selector
             | isValName name = "v:"
             | otherwise = "t:"

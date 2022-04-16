@@ -42,7 +42,7 @@ import           Development.IDE                  as D (Diagnostic (Diagnostic, 
                                                         Range (Range), Uri,
                                                         getFileContents,
                                                         getParsedModule,
-                                                        prettyPrint, runAction,
+                                                        showGhc, runAction,
                                                         srcSpanToRange,
                                                         toNormalizedUri,
                                                         uriToFilePath',
@@ -151,7 +151,7 @@ suggestAddPragma mDynflags Diagnostic {_message} = genPragma _message
     disabled
       | Just dynFlags <- mDynflags =
         -- GHC does not export 'OnOff', so we have to view it as string
-        catMaybes $ T.stripPrefix "Off " . T.pack . prettyPrint <$> extensions dynFlags
+        catMaybes $ T.stripPrefix "Off " . showGhc <$> extensions dynFlags
       | otherwise =
         -- When the module failed to parse, we don't have access to its
         -- dynFlags. In that case, simply don't disable any pragmas.

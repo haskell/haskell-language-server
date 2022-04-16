@@ -8,7 +8,6 @@ module Development.IDE.GHC.Util(
     evalGhcEnv,
     -- * GHC wrappers
     prettyPrint,
-    unsafePrintSDoc,
     printRdrName,
     Development.IDE.GHC.Util.printName,
     ParseResult(..), runParser,
@@ -28,7 +27,11 @@ module Development.IDE.GHC.Util(
     setHieDir,
     dontWriteHieFiles,
     disableWarningsAsErrors,
-    traceAst) where
+    traceAst,
+    showGhc,
+    showGhcWithUniques,
+    prettyPrintWithUniques
+    ) where
 
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Data.FastString
@@ -130,16 +133,9 @@ stringBufferToByteString StringBuffer{..} = PS buf cur len
 bytestringToStringBuffer :: ByteString -> StringBuffer
 bytestringToStringBuffer (PS buf cur len) = StringBuffer{..}
 
--- | Pretty print a GHC value using 'unsafeGlobalDynFlags '.
-prettyPrint :: Outputable a => a -> String
-prettyPrint = unsafePrintSDoc . ppr
-
-unsafePrintSDoc :: SDoc -> String
-unsafePrintSDoc sdoc = showSDocUnsafe sdoc
-
 -- | Pretty print a 'RdrName' wrapping operators in parens
 printRdrName :: RdrName -> String
-printRdrName name = showSDocUnsafe $ parenSymOcc rn (ppr rn)
+printRdrName name = prettyPrint $ parenSymOcc rn (ppr rn)
   where
     rn = rdrNameOcc name
 
@@ -304,7 +300,7 @@ traceAst lbl x
 #if MIN_VERSION_ghc(9,2,0)
     renderDump = renderWithContext defaultSDocContext{sdocStyle = defaultDumpStyle, sdocPprDebug = True}
 #else
-    renderDump = unsafePrintSDoc
+    renderDump = prettyPrintWithUniques
 #endif
     htmlDump = showAstDataHtml x
     doTrace = unsafePerformIO $ do
@@ -318,4 +314,15 @@ traceAst lbl x
 #endif
             , "file://" ++ htmlDumpFileName]
 
+prettyPrintWithUniques :: Outputable a => a -> String
+prettyPrintWithUniques = showSDocUnsafe . ppr
 
+-- | Pretty print a GHC value using 'unsafeGlobalDynFlags '.
+prettyPrint :: Outputable a => a -> String
+prettyPrint = printWithoutUniques
+
+showGhcWithUniques :: Outputable a => a -> T.Text
+showGhcWithUniques = T.pack . showSDocUnsafe . ppr
+
+showGhc :: Outputable a => a -> T.Text
+showGhc = T.pack . printWithoutUniques
