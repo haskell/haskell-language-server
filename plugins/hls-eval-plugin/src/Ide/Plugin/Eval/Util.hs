@@ -19,7 +19,6 @@ import           Data.String                     (IsString (fromString))
 import qualified Data.Text                       as T
 import           Development.IDE                 (IdeState, Priority (..),
                                                   ideLogger, logPriority)
-import           Development.IDE.GHC.Compat      (Outputable, ppr)
 import           Development.IDE.GHC.Compat.Util (MonadCatch, catch)
 import           GHC.Exts                        (toList)
 import           GHC.Stack                       (HasCallStack, callStack,
