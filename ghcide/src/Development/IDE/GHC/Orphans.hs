@@ -209,8 +209,3 @@ instance (NFData (HsModule a)) where
 
 instance Show OccName where show = prettyPrint
 instance Hashable OccName where hashWithSalt s n = hashWithSalt s (getKey $ getUnique n)
-
-#if !MIN_VERSION_ghc(8,10,0)
-instance Outputable SDoc where
-  ppr = id
-#endif

@@ -314,6 +314,11 @@ traceAst lbl x
 #endif
             , "file://" ++ htmlDumpFileName]
 
+#if !MIN_VERSION_ghc(8,10,0)
+instance Outputable SDoc where
+  ppr = id
+#endif
+
 prettyPrintWithUniques :: Outputable a => a -> String
 prettyPrintWithUniques = showSDocUnsafe . ppr
 
