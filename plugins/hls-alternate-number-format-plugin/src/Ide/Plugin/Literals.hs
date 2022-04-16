@@ -24,14 +24,18 @@ import           Generics.SYB                  (Data, Typeable, everything,
 -- provides location and possibly source text (for OverLits) as well as it's value
 -- we currently don't have any use for PrimLiterals. They never have source text so we always drop them
 -- | Captures a Numeric Literals Location, Source Text, and Value.
-data Literal = IntLiteral  RealSrcSpan Text Integer
-             | FracLiteral RealSrcSpan Text Rational
+data Literal = IntLiteral  LiteralSrcSpan Text Integer
+             | FracLiteral LiteralSrcSpan Text Rational
              deriving (GHC.Generic, Show, Ord, Eq, Data)
 
-instance NFData RealSrcSpan where
+newtype LiteralSrcSpan = LiteralSrcSpan { unLit :: RealSrcSpan }
+                        deriving (GHC.Generic, Show, Ord, Eq, Data)
+
+instance NFData LiteralSrcSpan where
     rnf x = x `seq` ()
 
 instance NFData Literal
+
 
 -- | Return a Literal's Source representation
 getSrcText :: Literal -> Text
@@ -42,8 +46,8 @@ getSrcText = \case
 -- | Return a Literal's Real Source location
 getSrcSpan :: Literal -> RealSrcSpan
 getSrcSpan = \case
-    IntLiteral ss _ _  -> ss
-    FracLiteral ss _ _ -> ss
+    IntLiteral ss _ _  -> unLit ss
+    FracLiteral ss _ _ -> unLit ss
 
 -- | Find all literals in a Parsed Source File
 collectLiterals :: (Data ast, Typeable ast) => ast -> [Literal]
@@ -51,7 +55,7 @@ collectLiterals = everything (<>) (maybeToList . (const Nothing `extQ` getLitera
 
 
 -- | Translate from HsLit and HsOverLit Types to our Literal Type
-getLiteral :: (LHsExpr GhcPs) -> Maybe Literal
+getLiteral :: LHsExpr GhcPs -> Maybe Literal
 getLiteral (L (locA -> (RealSrcSpan sSpan _)) expr) = case expr of
     HsLit _ lit         -> fromLit lit sSpan
     HsOverLit _ overLit -> fromOverLit overLit sSpan
@@ -68,7 +72,7 @@ type LocPat a = LPat a
 #endif
 
 -- | Destructure Patterns to unwrap any Literals
-getPattern :: (LocPat GhcPs) -> Maybe Literal
+getPattern :: LocPat GhcPs -> Maybe Literal
 getPattern (L (locA -> (RealSrcSpan patSpan _)) pat) = case pat of
     LitPat _ lit -> case lit of
         HsInt _ val   -> fromIntegralLit patSpan val
@@ -94,10 +98,10 @@ fromOverLit OverLit{..} sSpan = case ol_val of
 fromOverLit _ _ = Nothing
 
 fromIntegralLit :: RealSrcSpan -> IntegralLit -> Maybe Literal
-fromIntegralLit s IL{..} = fmap (\txt' -> IntLiteral s txt' il_value) (fromSourceText il_text)
+fromIntegralLit s IL{..} = fmap (\txt' -> IntLiteral (LiteralSrcSpan s) txt' il_value) (fromSourceText il_text)
 
 fromFractionalLit  :: RealSrcSpan -> FractionalLit -> Maybe Literal
-fromFractionalLit s fl@FL{fl_text} = fmap (\txt' -> FracLiteral s txt' (rationalFromFractionalLit fl)) (fromSourceText fl_text)
+fromFractionalLit s fl@FL{fl_text} = fmap (\txt' -> FracLiteral (LiteralSrcSpan s) txt' (rationalFromFractionalLit fl)) (fromSourceText fl_text)
 
 fromSourceText :: SourceText -> Maybe Text
 fromSourceText = \case

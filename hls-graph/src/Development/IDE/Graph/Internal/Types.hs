@@ -120,12 +120,12 @@ getDatabaseValues = atomically
                   . databaseValues
 
 data Status
-    = Clean Result
+    = Clean !Result
     | Dirty (Maybe Result)
     | Running {
         runningStep   :: !Step,
         runningWait   :: !(IO ()),
-        runningResult :: Result,
+        runningResult :: Result,     -- LAZY
         runningPrev   :: !(Maybe Result)
         }
 
@@ -145,7 +145,7 @@ data Result = Result {
     resultVisited   :: !Step, -- ^ the step when it was last looked up
     resultDeps      :: !ResultDeps,
     resultExecution :: !Seconds, -- ^ How long it took, last time it ran
-    resultData      :: BS.ByteString
+    resultData      :: !BS.ByteString
     }
 
 data ResultDeps = UnknownDeps | AlwaysRerunDeps ![Key] | ResultDeps ![Key]

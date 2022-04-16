@@ -5,17 +5,19 @@
 module Development.IDE.Spans.Pragmas
   ( NextPragmaInfo(..)
   , LineSplitTextEdits(..)
-  , getNextPragmaInfo ) where
+  , getNextPragmaInfo
+  , insertNewPragma ) where
 
 import           Data.Bits                       (Bits (setBit))
 import           Data.Function                   ((&))
 import qualified Data.List                       as List
 import qualified Data.Maybe                      as Maybe
-import           Data.Text                       (Text)
+import           Data.Text                       (Text, pack)
 import qualified Data.Text                       as Text
 import           Development.IDE                 (srcSpanToRange)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
+import           GHC.LanguageExtensions.Type     (Extension)
 import qualified Language.LSP.Types              as LSP
 
 getNextPragmaInfo :: DynFlags -> Maybe Text -> NextPragmaInfo
@@ -28,6 +30,13 @@ getNextPragmaInfo dynFlags sourceText =
          ParserStateDone{ nextPragma }    -> nextPragma
      | otherwise
      -> NextPragmaInfo 0 Nothing
+
+insertNewPragma :: NextPragmaInfo -> Extension -> LSP.TextEdit
+insertNewPragma (NextPragmaInfo _ (Just (LineSplitTextEdits ins _))) newPragma = ins { LSP._newText = "{-# LANGUAGE " <> pack (show newPragma) <> " #-}\n" } :: LSP.TextEdit
+insertNewPragma (NextPragmaInfo nextPragmaLine _) newPragma =  LSP.TextEdit pragmaInsertRange $ "{-# LANGUAGE " <> pack (show newPragma) <> " #-}\n"
+    where
+        pragmaInsertPosition = LSP.Position (fromIntegral nextPragmaLine) 0
+        pragmaInsertRange = LSP.Range pragmaInsertPosition pragmaInsertPosition
 
 -- Pre-declaration comments parser -----------------------------------------------------
 

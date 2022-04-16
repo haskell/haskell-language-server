@@ -151,7 +151,6 @@ import           Development.IDE.Types.Options
 import           Development.IDE.Types.Shake
 import qualified Focus
 import           GHC.Fingerprint
-import           GHC.Generics
 import           HieDb.Types
 import           Ide.Plugin.Config
 import qualified Ide.PluginUtils                        as HLS
@@ -173,6 +172,7 @@ data Log
   = LogCreateHieDbExportsMapStart
   | LogCreateHieDbExportsMapFinish !Int
   | LogBuildSessionRestart !String ![DelayedActionInternal] !(HashSet Key) !Seconds !(Maybe FilePath)
+  | LogBuildSessionRestartTakingTooLong !Seconds
   | LogDelayedAction !(DelayedAction ()) !Seconds
   | LogBuildSessionFinish !(Maybe SomeException)
   | LogDiagsDiffButNoLspEnv ![FileDiagnostic]
@@ -192,6 +192,8 @@ instance Pretty Log where
         , "Action Queue:" <+> pretty (map actionName actionQueue)
         , "Keys:" <+> pretty (map show $ HSet.toList keyBackLog)
         , "Aborting previous build session took" <+> pretty (showDuration abortDuration) <+> pretty shakeProfilePath ]
+    LogBuildSessionRestartTakingTooLong seconds ->
+        "Build restart is taking too long (" <> pretty seconds <> " seconds)"
     LogDelayedAction delayedAction duration ->
       hsep
         [ "Finished:" <+> pretty (actionName delayedAction)
@@ -322,7 +324,7 @@ getVirtualFile nf = do
 -- Take a snapshot of the current LSP VFS
 vfsSnapshot :: Maybe (LSP.LanguageContextEnv a) -> IO VFS
 vfsSnapshot Nothing       = pure $ VFS mempty ""
-vfsSnapshot (Just lspEnv) = LSP.runLspT lspEnv $ LSP.getVirtualFiles
+vfsSnapshot (Just lspEnv) = LSP.runLspT lspEnv LSP.getVirtualFiles
 
 
 addIdeGlobal :: IsIdeGlobal a => a -> Rules ()
@@ -596,7 +598,7 @@ shakeOpen recorder lspEnv defaultConfig logger debouncer
 
         dirtyKeys <- newTVarIO mempty
         -- Take one VFS snapshot at the start
-        vfs <- atomically . newTVar =<< vfsSnapshot lspEnv
+        vfs <- newTVarIO =<< vfsSnapshot lspEnv
         pure ShakeExtras{..}
     shakeDb  <-
         shakeNewDatabase
@@ -683,7 +685,7 @@ shakeRestart recorder IdeState{..} reason acts =
         shakeSession
         (\runner -> do
               let log = logWith recorder
-              (stopTime,()) <- duration (cancelShakeSession runner)
+              (stopTime,()) <- duration $ logErrorAfter 10 recorder $ cancelShakeSession runner
               res <- shakeDatabaseProfile shakeDb
               backlog <- readTVarIO $ dirtyKeys shakeExtras
               queue <- atomicallyNamed "actionQueue - peek" $ peekInProgress $ actionQueue shakeExtras
@@ -706,6 +708,11 @@ shakeRestart recorder IdeState{..} reason acts =
         -- See https://github.com/haskell/ghcide/issues/79
         (\() -> do
           (,()) <$> newSession recorder shakeExtras shakeDb acts reason)
+    where
+        logErrorAfter :: Seconds -> Recorder (WithPriority Log) -> IO () -> IO ()
+        logErrorAfter seconds recorder action = flip withAsync (const action) $ do
+            sleep seconds
+            logWith recorder Error (LogBuildSessionRestartTakingTooLong seconds)
 
 notifyTestingLogMessage :: ShakeExtras -> T.Text -> IO ()
 notifyTestingLogMessage extras msg = do
@@ -1100,7 +1107,7 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
                     -- No changes in the dependencies and we have
                     -- an existing successful result.
                     Just (v@(Succeeded _ x), diags) -> do
-                        ver <- estimateFileVersionUnsafely state key (Just x) file
+                        ver <- estimateFileVersionUnsafely key (Just x) file
                         doDiagnostics (vfsVersion =<< ver) $ Vector.toList diags
                         return $ Just $ RunResult ChangedNothing old $ A v
                     _ -> return Nothing
@@ -1121,7 +1128,7 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
                     \(e :: SomeException) -> do
                         pure (Nothing, ([ideErrorText file $ T.pack $ show e | not $ isBadDependency e],Nothing))
 
-                ver <- estimateFileVersionUnsafely state key res file
+                ver <- estimateFileVersionUnsafely key res file
                 (bs, res) <- case res of
                     Nothing -> do
                         pure (toShakeValue ShakeStale bs, staleV)
@@ -1147,12 +1154,11 @@ defineEarlyCutoff' doDiagnostics cmp key file old mode action = do
     estimateFileVersionUnsafely
         :: forall k v
          . IdeRule k v
-        => Values
-        -> k
+        => k
         -> Maybe v
         -> NormalizedFilePath
         -> Action (Maybe FileVersion)
-    estimateFileVersionUnsafely state _k v fp
+    estimateFileVersionUnsafely _k v fp
         | fp == emptyFilePath = pure Nothing
         | Just Refl <- eqT @k @GetModificationTime = pure v
         -- GetModificationTime depends on these rules, so avoid creating a cycle

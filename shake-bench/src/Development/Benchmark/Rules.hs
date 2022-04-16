@@ -69,6 +69,7 @@ module Development.Benchmark.Rules
 import           Control.Applicative
 import           Control.Lens                              ((^.))
 import           Control.Monad
+import qualified Control.Monad.State                       as S
 import           Data.Aeson                                (FromJSON (..),
                                                             ToJSON (..),
                                                             Value (..), object,
@@ -561,7 +562,8 @@ instance Read Frame where
 data RunLog = RunLog
   { runVersion :: !String,
     runFrames  :: ![Frame],
-    runSuccess :: !Bool
+    runSuccess :: !Bool,
+    runFirstReponse :: !(Maybe Seconds)
   }
 
 loadRunLog :: HasCallStack => Escaped FilePath -> String -> Action RunLog
@@ -577,10 +579,16 @@ loadRunLog (Escaped csv_fp) ver = do
             generation f == 1
         ]
       -- TODO this assumes a certain structure in the CSV file
-      success = case map (T.split (== ',') . T.pack) csv of
-          [_header, _name:s:_] | Just s <- readMaybe (T.unpack s) -> s
+      (success, firstResponse) = case map (map T.strip . T.split (== ',') . T.pack) csv of
+          [header, row]
+            | let table = zip header row
+                  timeForFirstResponse :: Maybe Seconds
+                  timeForFirstResponse = readMaybe . T.unpack =<< lookup "firstBuildTime" table
+            , Just s <- lookup "success" table
+            , Just s <- readMaybe (T.unpack s)
+            -> (s,timeForFirstResponse)
           _ -> error $ "Cannot parse: " <> csv_fp
-  return $ RunLog ver frames success
+  return $ RunLog ver frames success firstResponse
 
 --------------------------------------------------------------------------------
 
@@ -615,14 +623,21 @@ plotDiagram includeFailed t@Diagram {traceMetric, runLogs} out = do
     E.layout_title E..= title t
     E.setColors myColors
     forM_ runLogs $ \rl ->
-      when (includeFailed || runSuccess rl) $ E.plot $ do
-        lplot <- E.line
-            (runVersion rl ++ if runSuccess rl then "" else " (FAILED)")
-            [ [ (totElapsed f, extract f)
-                | f <- runFrames rl
-                ]
-            ]
-        return (lplot E.& E.plot_lines_style . E.line_width E.*~ 2)
+      when (includeFailed || runSuccess rl) $ do
+        -- Get the color we are going to use
+        ~(c:_) <- E.liftCState $ S.gets (E.view E.colors)
+        E.plot $ do
+          lplot <- E.line
+              (runVersion rl ++ if runSuccess rl then "" else " (FAILED)")
+              [ [ (totElapsed f, extract f)
+                  | f <- runFrames rl
+                  ]
+              ]
+          return (lplot E.& E.plot_lines_style . E.line_width E.*~ 2)
+        case (runFirstReponse rl) of
+          Just t -> E.plot $ pure $
+              E.vlinePlot ("First build: " ++ runVersion rl) (E.defaultPlotLineStyle E.& E.line_color E..~ c) t
+          _ -> pure ()
 
 --------------------------------------------------------------------------------
 

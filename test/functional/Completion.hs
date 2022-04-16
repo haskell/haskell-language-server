@@ -163,7 +163,7 @@ snippetTests = testGroup "snippets" [
       item <- getCompletionByLabel "Nothing" compls
       liftIO $ do
           item ^. insertTextFormat @?= Just Snippet
-          item ^. insertText @?= Just "Nothing "
+          item ^. insertText @?= Just "Nothing"
 
     , testCase "work for polymorphic types" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
         doc <- openDoc "Completion.hs" "haskell"

@@ -49,6 +49,7 @@ Sometimes a plugin will be supported in the prebuilt binaries but not in a HLS b
 | `hls-pragmas-plugin`                |                          |
 | `hls-qualify-imported-names-plugin` |                          |
 | `hls-refine-imports-plugin`         |                          |
+| `hls-rename-plugin`                 |                          |
 | `hls-retrie-plugin`                 | 9.2                      |
 | `hls-splice-plugin`                 | 9.2                      |
 | `hls-stylish-haskell-plugin`        | 9.0, 9.2                 |

@@ -33,7 +33,7 @@ jobs:
                   "hls-class-plugin", "hls-eval-plugin", "hls-explicit-imports-plugin",
                   "hls-haddock-comments-plugin", "hls-hlint-plugin",
                   "hls-module-name-plugin", "hls-pragmas-plugin",
-                  "hls-refine-imports-plugin", "hls-retrie-plugin",
+                  "hls-refine-imports-plugin", "hls-rename-plugin", "hls-retrie-plugin",
                   "hls-splice-plugin", "hls-tactics-plugin",
                   "hls-call-hierarchy-plugin", "hls-alternate-number-format-plugin",
                   "hls-qualify-imported-names-plugin", "hls-selection-range-plugin",
@@ -137,7 +137,7 @@ jobs:
 
       - name: "Upload package dist tarball"
         if: steps.get-hackage-version.outputs.exists != 'true' && matrix.ghc == '8.10.7'
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: ${{ matrix.package }}
           path: ${{ steps.generate-dist-tarball.outputs.path }}
@@ -150,7 +150,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-      - uses: actions/download-artifact@v2
+      - uses: actions/download-artifact@v3
         with:
           path: packages
 

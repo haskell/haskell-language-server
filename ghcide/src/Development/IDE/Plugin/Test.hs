@@ -28,6 +28,7 @@ import           Development.IDE.Core.OfInterest      (getFilesOfInterest)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
 import           Development.IDE.Core.Shake
+import           Development.IDE.Core.Rules
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Graph                (Action)
 import qualified Development.IDE.Graph                as Graph
@@ -64,6 +65,7 @@ data TestRequest
     | GarbageCollectDirtyKeys CheckParents Age    -- ^ :: [String] (list of keys collected)
     | GetStoredKeys                  -- ^ :: [String] (list of keys in store)
     | GetFilesOfInterest             -- ^ :: [FilePath]
+    | GetRebuildsCount               -- ^ :: Int (number of times we recompiled with GHC)
     deriving Generic
     deriving anyclass (FromJSON, ToJSON)
 
@@ -131,6 +133,9 @@ testRequestHandler s GetStoredKeys = do
 testRequestHandler s GetFilesOfInterest = do
     ff <- liftIO $ getFilesOfInterest s
     return $ Right $ toJSON $ map fromNormalizedFilePath $ HM.keys ff
+testRequestHandler s GetRebuildsCount = do
+    count <- liftIO $ runAction "get build count" s getRebuildCount
+    return $ Right $ toJSON count
 
 getDatabaseKeys :: (Graph.Result -> Step)
     -> ShakeDatabase

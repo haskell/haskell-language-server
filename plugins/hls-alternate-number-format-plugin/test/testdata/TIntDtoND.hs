@@ -1,4 +1,4 @@
-{-# LANGUAGE NumDecimals #-}
+{-# LANGUAGE Haskell2010 #-}
 module TIntDtoND where
 
 convertMe :: Integer
