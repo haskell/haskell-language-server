@@ -40,7 +40,8 @@ import           Development.IDE.Core.Shake            as X (FastResult (..),
                                                              useWithStaleFast,
                                                              useWithStaleFast',
                                                              useWithStale_,
-                                                             use_, uses, uses_)
+                                                             use_, uses, uses_,
+                                                             VFSModified(..))
 import           Development.IDE.GHC.Compat            as X (GhcVersion (..),
                                                              ghcVersion)
 import           Development.IDE.GHC.Error             as X

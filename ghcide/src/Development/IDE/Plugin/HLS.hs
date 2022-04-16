@@ -33,6 +33,7 @@ import           Ide.Plugin.Config
 import           Ide.PluginUtils              (getClientConfig)
 import           Ide.Types                    as HLS
 import qualified Language.LSP.Server          as LSP
+import           Language.LSP.VFS
 import           Language.LSP.Types
 import qualified Language.LSP.Types           as J
 import           Text.Regex.TDFA.Text         ()
@@ -190,7 +191,7 @@ extensibleNotificationPlugins recorder xs = mempty { P.pluginHandlers = handlers
       hs
     handlers = mconcat $ do
       (IdeNotification m :=> IdeNotificationHandler fs') <- DMap.assocs handlers'
-      pure $ notificationHandler m $ \ide params -> do
+      pure $ notificationHandler m $ \ide vfs params -> do
         config <- Ide.PluginUtils.getClientConfig
         let fs = filter (\(pid,_) -> plcGlobalOn $ configForPlugin config pid) fs'
         case nonEmpty fs of
@@ -200,7 +201,7 @@ extensibleNotificationPlugins recorder xs = mempty { P.pluginHandlers = handlers
           Just fs -> do
             -- We run the notifications in order, so the core ghcide provider
             -- (which restarts the shake process) hopefully comes last
-              mapM_ (\(pid,f) -> otTracedProvider pid (fromString $ show m) $ f ide params) fs
+              mapM_ (\(pid,f) -> otTracedProvider pid (fromString $ show m) $ f ide vfs params) fs
 
 -- ---------------------------------------------------------------------
 
@@ -226,7 +227,7 @@ newtype IdeHandler (m :: J.Method FromClient Request)
 
 -- | Combine the 'PluginHandler' for all plugins
 newtype IdeNotificationHandler (m :: J.Method FromClient Notification)
-  = IdeNotificationHandler [(PluginId, IdeState -> MessageParams m -> LSP.LspM Config ())]
+  = IdeNotificationHandler [(PluginId, IdeState -> VFS -> MessageParams m -> LSP.LspM Config ())]
 -- type NotificationHandler (m :: Method FromClient Notification) = MessageParams m -> IO ()`
 
 -- | Combine the 'PluginHandlers' for all plugins

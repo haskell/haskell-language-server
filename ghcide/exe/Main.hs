@@ -94,7 +94,7 @@ main = withTelemetryLogger $ \telemetryLogger -> do
     -- This plugin just installs a handler for the `initialized` notification, which then
     -- picks up the LSP environment and feeds it to our recorders
     let lspRecorderPlugin = (defaultPluginDescriptor "LSPRecorderCallback")
-          { pluginNotificationHandlers = mkPluginNotificationHandler LSP.SInitialized $ \_ _ _ -> do
+          { pluginNotificationHandlers = mkPluginNotificationHandler LSP.SInitialized $ \_ _ _ _ -> do
               env <- LSP.getLspEnv
               liftIO $ (cb1 <> cb2) env
           }
