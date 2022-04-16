@@ -36,7 +36,7 @@ import           Development.IDE            (GetParsedModule (GetParsedModule),
 import           Development.IDE.GHC.Compat (GenLocated (L), getSessionDynFlags,
                                              hsmodName, importPaths, locA,
                                              pattern RealSrcSpan,
-                                             pm_parsed_source, unLoc)
+                                             pm_parsed_source, unLoc, moduleNameString)
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types         hiding
@@ -140,7 +140,7 @@ codeModuleName :: IdeState -> NormalizedFilePath -> IO (Maybe (Range, T.Text))
 codeModuleName state nfp = runMaybeT $ do
   pm <- MaybeT . runAction "ModuleName.GetParsedModule" state $ use GetParsedModule nfp
   L (locA -> (RealSrcSpan l _)) m <- MaybeT . pure . hsmodName . unLoc $ pm_parsed_source pm
-  pure (realSrcSpanToRange l, T.pack $ show m)
+  pure (realSrcSpanToRange l, T.pack $ moduleNameString m)
 
 -- traceAs :: Show a => String -> a -> a
 -- traceAs lbl a = trace (lbl ++ " = " ++ show a) a
