@@ -581,7 +581,9 @@ loadSessionWithOptions recorder SessionLoadingOptions{..} dir = do
 
           -- Invalidate all the existing GhcSession build nodes by restarting the Shake session
           invalidateShakeCache
-          restartShakeSession "new component" []
+
+          -- The VFS doesn't change on cradle edits, re-use the old one.
+          restartShakeSession VFSUnmodified "new component" []
 
           -- Typecheck all files in the project on startup
           checkProject <- getCheckProject

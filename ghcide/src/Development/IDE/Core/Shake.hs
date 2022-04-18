@@ -75,7 +75,8 @@ module Development.IDE.Core.Shake(
     addPersistentRule,
     garbageCollectDirtyKeys,
     garbageCollectDirtyKeysOlderThan,
-    Log(..)
+    Log(..),
+    VFSModified(..)
     ) where
 
 import           Control.Concurrent.Async
@@ -253,7 +254,8 @@ data ShakeExtras = ShakeExtras
     ,ideTesting :: IdeTesting
     -- ^ Whether to enable additional lsp messages used by the test suite for checking invariants
     ,restartShakeSession
-        :: String
+        :: VFSModified
+        -> String
         -> [DelayedAction ()]
         -> IO ()
     ,ideNc :: IORef NameCache
@@ -269,7 +271,7 @@ data ShakeExtras = ShakeExtras
     , persistentKeys :: TVar (HMap.HashMap Key GetStalePersistent)
       -- ^ Registery for functions that compute/get "stale" results for the rule
       -- (possibly from disk)
-    , vfs :: TVar VFS
+    , vfsVar :: TVar VFS
     -- ^ A snapshot of the current state of the virtual file system. Updated on shakeRestart
     -- VFS state is managed by LSP. However, the state according to the lsp library may be newer than the state of the current session,
     -- leaving us vulnerable to suble race conditions. To avoid this, we take a snapshot of the state of the VFS on every
@@ -318,7 +320,7 @@ class Typeable a => IsIdeGlobal a where
 -- | Read a virtual file from the current snapshot
 getVirtualFile :: NormalizedFilePath -> Action (Maybe VirtualFile)
 getVirtualFile nf = do
-  vfs <- fmap vfsMap . liftIO . readTVarIO . vfs =<< getShakeExtras
+  vfs <- fmap vfsMap . liftIO . readTVarIO . vfsVar =<< getShakeExtras
   pure $! Map.lookup (filePathToUri' nf) vfs -- Don't leak a reference to the entire map
 
 -- Take a snapshot of the current LSP VFS
@@ -598,7 +600,7 @@ shakeOpen recorder lspEnv defaultConfig logger debouncer
 
         dirtyKeys <- newTVarIO mempty
         -- Take one VFS snapshot at the start
-        vfs <- newTVarIO =<< vfsSnapshot lspEnv
+        vfsVar <- newTVarIO =<< vfsSnapshot lspEnv
         pure ShakeExtras{..}
     shakeDb  <-
         shakeNewDatabase
@@ -640,7 +642,10 @@ startTelemetry db extras@ShakeExtras{..}
 -- | Must be called in the 'Initialized' handler and only once
 shakeSessionInit :: Recorder (WithPriority Log) -> IdeState -> IO ()
 shakeSessionInit recorder ide@IdeState{..} = do
-    initSession <- newSession recorder shakeExtras shakeDb [] "shakeSessionInit"
+    -- Take a snapshot of the VFS - it should be empty as we've recieved no notifications
+    -- till now, but it can't hurt to be in sync with the `lsp` library.
+    vfs <- vfsSnapshot (lspEnv shakeExtras)
+    initSession <- newSession recorder shakeExtras (VFSModified vfs) shakeDb [] "shakeSessionInit"
     putMVar shakeSession initSession
     logDebug (ideLogger ide) "Shake session initialized"
 
@@ -679,8 +684,8 @@ delayedAction a = do
 -- | Restart the current 'ShakeSession' with the given system actions.
 --   Any actions running in the current session will be aborted,
 --   but actions added via 'shakeEnqueue' will be requeued.
-shakeRestart :: Recorder (WithPriority Log) -> IdeState -> String -> [DelayedAction ()] -> IO ()
-shakeRestart recorder IdeState{..} reason acts =
+shakeRestart :: Recorder (WithPriority Log) -> IdeState -> VFSModified -> String -> [DelayedAction ()] -> IO ()
+shakeRestart recorder IdeState{..} vfs reason acts =
     withMVar'
         shakeSession
         (\runner -> do
@@ -707,7 +712,7 @@ shakeRestart recorder IdeState{..} reason acts =
         -- between spawning the new thread and updating shakeSession.
         -- See https://github.com/haskell/ghcide/issues/79
         (\() -> do
-          (,()) <$> newSession recorder shakeExtras shakeDb acts reason)
+          (,()) <$> newSession recorder shakeExtras vfs shakeDb acts reason)
     where
         logErrorAfter :: Seconds -> Recorder (WithPriority Log) -> IO () -> IO ()
         logErrorAfter seconds recorder action = flip withAsync (const action) $ do
@@ -743,19 +748,24 @@ shakeEnqueue ShakeExtras{actionQueue, logger} act = do
               ]
     return (wait' b >>= either throwIO return)
 
+data VFSModified = VFSUnmodified | VFSModified !VFS
+
 -- | Set up a new 'ShakeSession' with a set of initial actions
 --   Will crash if there is an existing 'ShakeSession' running.
 newSession
     :: Recorder (WithPriority Log)
     -> ShakeExtras
+    -> VFSModified
     -> ShakeDatabase
     -> [DelayedActionInternal]
     -> String
     -> IO ShakeSession
-newSession recorder extras@ShakeExtras{..} shakeDb acts reason = do
+newSession recorder extras@ShakeExtras{..} vfsMod shakeDb acts reason = do
 
     -- Take a new VFS snapshot
-    atomically . writeTVar vfs =<< vfsSnapshot lspEnv
+    case vfsMod of
+      VFSUnmodified -> pure ()
+      VFSModified vfs -> atomically $ writeTVar vfsVar vfs
 
     IdeOptions{optRunSubset} <- getIdeOptionsIO extras
     reenqueued <- atomicallyNamed "actionQueue - peek" $ peekInProgress actionQueue

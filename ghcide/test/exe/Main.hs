@@ -421,7 +421,7 @@ diagnosticTests = testGroup "diagnostics"
       let contentA = T.unlines [ "module ModuleA where" ]
       _ <- createDoc "ModuleA.hs" "haskell" contentA
       expectDiagnostics [("ModuleB.hs", [])]
-  , ignoreInWindowsBecause "Broken in windows" $ testSessionWait "add missing module (non workspace)" $ do
+  , ignoreTestBecause "Flaky #2831" $ testSessionWait "add missing module (non workspace)" $ do
       -- need to canonicalize in Mac Os
       tmpDir <- liftIO $ canonicalizePath =<< getTemporaryDirectory
       let contentB = T.unlines
@@ -6417,7 +6417,7 @@ unitTests recorder logger = do
         let plugins = pluginDescToIdePlugins $
                 [ (defaultPluginDescriptor $ fromString $ show i)
                     { pluginNotificationHandlers = mconcat
-                        [ mkPluginNotificationHandler LSP.STextDocumentDidOpen $ \_ _ _ ->
+                        [ mkPluginNotificationHandler LSP.STextDocumentDidOpen $ \_ _ _ _ ->
                             liftIO $ atomicModifyIORef_ orderRef (i:)
                         ]
                     }
