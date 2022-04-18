@@ -27,12 +27,12 @@ import           Development.IDE.Core.RuleTypes
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error
+import           Development.IDE.GHC.Util        (showGhc)
 import           Development.IDE.Spans.Common
 import           System.Directory
 import           System.FilePath
 
 import           Language.LSP.Types              (filePathToUri, getUri)
-import Development.IDE.GHC.Util (showGhc)
 
 mkDocMap
   :: HscEnv

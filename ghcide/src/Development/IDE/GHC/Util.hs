@@ -7,7 +7,6 @@ module Development.IDE.GHC.Util(
     modifyDynFlags,
     evalGhcEnv,
     -- * GHC wrappers
-    prettyPrint,
     printRdrName,
     Development.IDE.GHC.Util.printName,
     ParseResult(..), runParser,
@@ -30,6 +29,7 @@ module Development.IDE.GHC.Util(
     traceAst,
     showGhc,
     showGhcWithUniques,
+    prettyPrint,
     prettyPrintWithUniques
     ) where
 
@@ -314,20 +314,45 @@ traceAst lbl x
 #endif
             , "file://" ++ htmlDumpFileName]
 
+-- Should in `Development.IDE.GHC.Orphans`,
+-- leave it here to prevent cyclic module dependency
 #if !MIN_VERSION_ghc(8,10,0)
 instance Outputable SDoc where
   ppr = id
 #endif
 
+-- | Print a GHC value by default `showSDocUnsafe`.
+--
+-- You may prefer `prettyPrint` unless you know what you are doing.
+--
+-- It internal using `unsafeGlobalDynFlags`.
+--
+-- `String` version of `showGhcWithUniques`.
 prettyPrintWithUniques :: Outputable a => a -> String
 prettyPrintWithUniques = showSDocUnsafe . ppr
 
--- | Pretty print a GHC value using 'unsafeGlobalDynFlags '.
+-- | Print a GHC value in `defaultUserStyle` without unique symbols.
+--
+-- This is the most common print utility, will print with a user friendly style like: `a_a4ME` as `a`.
+--
+-- It internal using `unsafeGlobalDynFlags`.
+--
+-- `String` version of `showGhc`.
 prettyPrint :: Outputable a => a -> String
 prettyPrint = printWithoutUniques
 
+-- | Print a GHC value by default `showSDocUnsafe`.
+--
+-- You may prefer `showGhc` unless you know what you are doing.
+--
+-- It internal using `unsafeGlobalDynFlags`.
 showGhcWithUniques :: Outputable a => a -> T.Text
 showGhcWithUniques = T.pack . showSDocUnsafe . ppr
 
+-- | Print a GHC value in `defaultUserStyle` without unique symbols.
+--
+-- This is the most common print utility, will print with a user friendly style like: `a_a4ME` as `a`.
+--
+-- It internal using `unsafeGlobalDynFlags`.
 showGhc :: Outputable a => a -> T.Text
 showGhc = T.pack . printWithoutUniques

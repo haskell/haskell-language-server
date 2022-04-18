@@ -32,15 +32,6 @@ import qualified Documentation.Haddock.Types  as H
 type DocMap = NameEnv SpanDoc
 type KindMap = NameEnv TyThing
 
--- showGhc :: Outputable a => a -> T.Text
--- showGhc = showSD . withPprStyle defaultUserStyle . ppr
-
--- showSD :: SDoc -> T.Text
--- showSD = T.pack . unsafePrintSDoc
-
--- showNameWithoutUniques :: Outputable a => a -> T.Text
--- showNameWithoutUniques = T.pack . printNameWithoutUniques
-
 -- | Shows IEWrappedName, without any modifier, qualifier or unique identifier.
 unqualIEWrapName :: IEWrappedName RdrName -> T.Text
 unqualIEWrapName = showGhc . rdrNameOcc . ieWrappedName

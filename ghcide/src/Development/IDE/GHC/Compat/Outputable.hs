@@ -8,9 +8,7 @@ module Development.IDE.GHC.Compat.Outputable (
     showSDocForUser,
     ppr, pprPanic, text, vcat, (<+>), ($$), empty, hang, nest,
     printSDocQualifiedUnsafe,
-    printNameWithoutUniques,
     printWithoutUniques,
-    printSDocAllTheWay,
     mkPrintUnqualified,
     mkPrintUnqualifiedDefault,
     PrintUnqualified(..),
@@ -85,16 +83,6 @@ printWithoutUniques =
       dflags = unsafeGlobalDynFlags `gopt_set` Opt_SuppressUniques
 #endif
 
-printNameWithoutUniques :: Outputable a => a -> String
-printNameWithoutUniques =
-#if MIN_VERSION_ghc(9,2,0)
-  renderWithContext (defaultSDocContext { sdocSuppressUniques = True }) . ppr
-#else
-  printSDocAllTheWay dyn . ppr
-  where
-    dyn = unsafeGlobalDynFlags `gopt_set` Opt_SuppressUniques
-#endif
-
 printSDocQualifiedUnsafe :: PrintUnqualified -> SDoc -> String
 #if MIN_VERSION_ghc(9,2,0)
 printSDocQualifiedUnsafe unqual doc =
@@ -108,14 +96,9 @@ printSDocQualifiedUnsafe unqual doc =
     showSDocForUser unsafeGlobalDynFlags unqual doc
 #endif
 
-printSDocAllTheWay :: DynFlags -> SDoc -> String
-#if MIN_VERSION_ghc(9,2,0)
-printSDocAllTheWay dflags sdoc = renderWithContext ctxt sdoc
-  where
-    ctxt = initSDocContext dflags (mkUserStyle neverQualify AllTheWay)
-#else
-printSDocAllTheWay dflags sdoc = oldRenderWithStyle dflags sdoc (oldMkUserStyle dflags Out.neverQualify Out.AllTheWay)
 
+#if MIN_VERSION_ghc(9,2,0)
+#else
 #if  MIN_VERSION_ghc(9,0,0)
 oldRenderWithStyle dflags sdoc sty = Out.renderWithStyle (initSDocContext dflags sty) sdoc
 oldMkUserStyle _ = Out.mkUserStyle
