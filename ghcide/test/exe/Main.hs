@@ -3653,6 +3653,84 @@ exportUnusedTests = testGroup "export unused actions"
               , "  bar) where"
               , "foo = id"
               , "bar = foo"])
+    , testSession "style of multiple exports is preserved 1" $ template
+        (T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+              , "module A"
+              , "  ( foo"
+              , "  , bar"
+              , "  ) where"
+              , "foo = id"
+              , "bar = foo"
+              , "baz = bar"
+              ])
+        (R 7 0 7 3)
+        "Export ‘baz’"
+        (Just $ T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+              , "module A"
+              , "  ( foo"
+              , "  , bar"
+              , "  , baz"
+              , "  ) where"
+              , "foo = id"
+              , "bar = foo"
+              , "baz = bar"
+              ])
+    , testSession "style of multiple exports is preserved 2" $ template
+        (T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+              , "module A"
+              , "  ( foo,"
+              , "    bar"
+              , "  ) where"
+              , "foo = id"
+              , "bar = foo"
+              , "baz = bar"
+              ])
+        (R 7 0 7 3)
+        "Export ‘baz’"
+        (Just $ T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+              , "module A"
+              , "  ( foo,"
+              , "    bar,"
+              , "    baz"
+              , "  ) where"
+              , "foo = id"
+              , "bar = foo"
+              , "baz = bar"
+              ])
+    , testSession "style of multiple exports is preserved and selects smallest export separator" $ template
+        (T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+              , "module A"
+              , "  ( foo"
+              , "  , bar"
+              , "  -- * For testing"
+              , "  , baz"
+              , "  ) where"
+              , "foo = id"
+              , "bar = foo"
+              , "baz = bar"
+              , "quux = bar"
+              ])
+        (R 10 0 10 4)
+        "Export ‘quux’"
+        (Just $ T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+              , "module A"
+              , "  ( foo"
+              , "  , bar"
+              , "  -- * For testing"
+              , "  , baz"
+              , "  , quux"
+              , "  ) where"
+              , "foo = id"
+              , "bar = foo"
+              , "baz = bar"
+              , "quux = bar"
+              ])
     , testSession "unused pattern synonym" $ template
         (T.unlines
               [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
