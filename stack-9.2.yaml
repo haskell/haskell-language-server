@@ -94,7 +94,7 @@ extra-deps:
 - unix-2.7.2.2
 - Win32-2.12.0.1
 
-- stylish-haskell-0.14.1.0@sha256:cc11b0cb18e7378493dca325e2a1f7c06003fb3387cb28f1c1f8f22630a00cc4,4152
+- stylish-haskell-0.14.1.0
 
 # currently needed for ghcide>extra, etc.
 allow-newer: true
