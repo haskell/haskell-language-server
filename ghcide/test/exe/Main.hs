@@ -423,6 +423,10 @@ diagnosticTests = testGroup "diagnostics"
       _ <- createDoc "ModuleA.hs" "haskell" contentA
       expectDiagnostics [("ModuleB.hs", [])]
   , testCase "add missing module (non workspace)" $
+    -- By default lsp-test sends FileWatched notifications for all files, which we don't want
+    -- as non workspace modules will not be watched by the LSP server.
+    -- To work around this, we tell lsp-test that our client doesn't have the
+    -- FileWatched capability, which is enough to disable the notifications
     withTempDir $ \tmpDir -> runInDir'' lspTestCapsNoFileWatches tmpDir "." "." [] $ do
       let contentB = T.unlines
             [ "module ModuleB where"
