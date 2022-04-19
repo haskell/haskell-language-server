@@ -34,11 +34,11 @@ Sometimes a plugin will be supported in the prebuilt binaries but not in a HLS b
 
 | Plugin                              | Unsupported GHC versions |
 |-------------------------------------|--------------------------|
-| `hls-alternate-number-plugin`       | 9.2                      |
+| `hls-alternate-number-plugin`       |                          |
 | `hls-brittany-plugin`               | 9.0.2(hackage), 9.2      |
 | `hls-call-hierarchy-plugin`         |                          |
-| `hls-class-plugin`                  | 9.2                      |
-| `hls-eval-plugin`                   | 9.2                      |
+| `hls-class-plugin`                  |                          |
+| `hls-eval-plugin`                   |                          |
 | `hls-explicit-imports-plugin`       |                          |
 | `hls-floskell-plugin`               |                          |
 | `hls-fourmolu-plugin`               |                          |
@@ -52,7 +52,7 @@ Sometimes a plugin will be supported in the prebuilt binaries but not in a HLS b
 | `hls-rename-plugin`                 |                          |
 | `hls-retrie-plugin`                 | 9.2                      |
 | `hls-splice-plugin`                 | 9.2                      |
-| `hls-stylish-haskell-plugin`        | 9.0, 9.2                 |
+| `hls-stylish-haskell-plugin`        | 9.0                      |
 | `hls-tactics-plugin`                | 9.2                      |
 | `hls-selection-range-plugin`        |                          |
 
