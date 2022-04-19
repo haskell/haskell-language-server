@@ -42,7 +42,7 @@ runs:
         echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
       shell: bash
 
-    # This copy an alternative cabal-ghc${GHCVER}.project (for example cabal-ghc921.project)
+    # This copy an alternative cabal-ghc${GHCVER}.project (for example cabal-ghc92.project)
     # as main cabal-project, for not fully supported ghc versions
     # Needs to be before the caching step so that the cache can detect changes to the modified cabal.project file
     - name: Use possible modified `cabal.project`
