@@ -95,7 +95,7 @@ import           System.Process.Extra                     (CreateProcess (cwd),
 import           Test.QuickCheck
 -- import Test.QuickCheck.Instances ()
 import           Control.Concurrent.Async
-import           Control.Lens                             (to, (^.))
+import           Control.Lens                             (to, (^.), (.~))
 import           Control.Monad.Extra                      (whenJust)
 import           Data.Function                            ((&))
 import           Data.IORef
@@ -133,6 +133,7 @@ import           Test.Tasty.Ingredients.Rerun
 import           Test.Tasty.QuickCheck
 import           Text.Printf                              (printf)
 import           Text.Regex.TDFA                          ((=~))
+import Language.LSP.Types.Lens (workspace, didChangeWatchedFiles)
 
 data Log
   = LogGhcIde Ghcide.Log
@@ -421,9 +422,12 @@ diagnosticTests = testGroup "diagnostics"
       let contentA = T.unlines [ "module ModuleA where" ]
       _ <- createDoc "ModuleA.hs" "haskell" contentA
       expectDiagnostics [("ModuleB.hs", [])]
-  , ignoreTestBecause "Flaky #2831" $ testSessionWait "add missing module (non workspace)" $ do
-      -- need to canonicalize in Mac Os
-      tmpDir <- liftIO $ canonicalizePath =<< getTemporaryDirectory
+  , testCase "add missing module (non workspace)" $
+    -- By default lsp-test sends FileWatched notifications for all files, which we don't want
+    -- as non workspace modules will not be watched by the LSP server.
+    -- To work around this, we tell lsp-test that our client doesn't have the
+    -- FileWatched capability, which is enough to disable the notifications
+    withTempDir $ \tmpDir -> runInDir'' lspTestCapsNoFileWatches tmpDir "." "." [] $ do
       let contentB = T.unlines
             [ "module ModuleB where"
             , "import ModuleA ()"
@@ -6306,7 +6310,18 @@ withLongTimeout = bracket_ (setEnv "LSP_TIMEOUT" "120" True) (unsetEnv "LSP_TIME
 
 -- | Takes a directory as well as relative paths to where we should launch the executable as well as the session root.
 runInDir' :: FilePath -> FilePath -> FilePath -> [String] -> Session a -> IO a
-runInDir' dir startExeIn startSessionIn extraOptions s = do
+runInDir' = runInDir'' lspTestCaps
+
+runInDir''
+    :: ClientCapabilities
+    -> FilePath
+    -> FilePath
+    -> FilePath
+    -> [String]
+    -> Session b
+    -> IO b
+runInDir'' lspCaps dir startExeIn startSessionIn extraOptions s = do
+
   ghcideExe <- locateGhcideExecutable
   let startDir = dir </> startExeIn
   let projDir = dir </> startSessionIn
@@ -6326,9 +6341,10 @@ runInDir' dir startExeIn startSessionIn extraOptions s = do
   -- Only sets HOME if it wasn't already set.
   setEnv "HOME" "/homeless-shelter" False
   conf <- getConfigFromEnv
-  runSessionWithConfig conf cmd lspTestCaps projDir $ do
+  runSessionWithConfig conf cmd lspCaps projDir $ do
       configureCheckProject False
       s
+
 
 getConfigFromEnv :: IO SessionConfig
 getConfigFromEnv = do
@@ -6346,6 +6362,9 @@ getConfigFromEnv = do
 
 lspTestCaps :: ClientCapabilities
 lspTestCaps = fullCaps { _window = Just $ WindowClientCapabilities (Just True) Nothing Nothing }
+
+lspTestCapsNoFileWatches :: ClientCapabilities
+lspTestCapsNoFileWatches = lspTestCaps & workspace . Lens._Just . didChangeWatchedFiles .~ Nothing
 
 openTestDataDoc :: FilePath -> Session TextDocumentIdentifier
 openTestDataDoc path = do

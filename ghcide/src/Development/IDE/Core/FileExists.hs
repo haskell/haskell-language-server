@@ -131,14 +131,6 @@ fromChange FcChanged = Nothing
 -------------------------------------------------------------------------------------
 
 -- | Returns True if the file exists
---   Note that a file is not considered to exist unless it is saved to disk.
---   In particular, VFS existence is not enough.
---   Consider the following example:
---     1. The file @A.hs@ containing the line @import B@ is added to the files of interest
---        Since @B.hs@ is neither open nor exists, GetLocatedImports finds Nothing
---     2. The editor creates a new buffer @B.hs@
---        Unless the editor also sends a @DidChangeWatchedFile@ event, ghcide will not pick it up
---        Most editors, e.g. VSCode, only send the event when the file is saved to disk.
 getFileExists :: NormalizedFilePath -> Action Bool
 getFileExists fp = use_ GetFileExists fp
 
