@@ -20,7 +20,7 @@ variables:
     - GHC_VERSION: 9.0.2
       CABAL_PROJECT: cabal-ghc90.project
     - GHC_VERSION: 9.2.2
-      CABAL_PROJECT: cabal-ghc921.project
+      CABAL_PROJECT: cabal-ghc92.project
 
 workflow:
   rules:
