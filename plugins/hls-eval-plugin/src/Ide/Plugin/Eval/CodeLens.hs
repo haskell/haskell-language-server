@@ -522,7 +522,7 @@ evals mark_exception (st, fp) df stmts = do
 
 prettyWarn :: Warn -> String
 prettyWarn Warn{..} =
-    show (printOutputable $ SrcLoc.getLoc warnMsg) <> ": warning:\n"
+    T.unpack (printOutputable $ SrcLoc.getLoc warnMsg) <> ": warning:\n"
     <> "    " <> SrcLoc.unLoc warnMsg
 
 runGetSession :: MonadIO m => IdeState -> NormalizedFilePath -> m HscEnv

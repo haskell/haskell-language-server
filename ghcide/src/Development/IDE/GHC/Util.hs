@@ -132,7 +132,7 @@ bytestringToStringBuffer (PS buf cur len) = StringBuffer{..}
 
 -- | Pretty print a 'RdrName' wrapping operators in parens
 printRdrName :: RdrName -> String
-printRdrName name = show $ printOutputable $ parenSymOcc rn (ppr rn)
+printRdrName name = T.unpack $ printOutputable $ parenSymOcc rn (ppr rn)
   where
     rn = rdrNameOcc name
 

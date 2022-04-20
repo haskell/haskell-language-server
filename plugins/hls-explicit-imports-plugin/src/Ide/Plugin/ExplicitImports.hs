@@ -197,7 +197,7 @@ exportedModuleStrings :: ParsedModule -> [String]
 exportedModuleStrings ParsedModule{pm_parsed_source = L _ HsModule{..}}
   | Just export <- hsmodExports,
     exports <- unLoc export
-    = map (show . printOutputable) exports
+    = map (T.unpack . printOutputable) exports
 exportedModuleStrings _ = []
 
 minimalImportsRule :: Recorder (WithPriority Log) -> Rules ()

@@ -542,7 +542,7 @@ addCommaInImportList lies x = do
 #endif
 
 unIEWrappedName :: IEWrappedName (IdP GhcPs) -> String
-unIEWrappedName (occName -> occ) = show $ printOutputable $ parenSymOcc occ (ppr occ)
+unIEWrappedName (occName -> occ) = T.unpack $ printOutputable $ parenSymOcc occ (ppr occ)
 
 hasParen :: String -> Bool
 hasParen ('(' : _) = True

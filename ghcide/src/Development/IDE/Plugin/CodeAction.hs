@@ -544,7 +544,7 @@ suggestDeleteUnusedBinding
       isTheBinding span = srcSpanToRange span == Just _range
 
       isSameName :: IdP GhcPs -> String -> Bool
-      isSameName x name = show (printOutputable x) == name
+      isSameName x name = T.unpack (printOutputable x) == name
 
 data ExportsAs = ExportName | ExportPattern | ExportFamily | ExportAll
   deriving (Eq)
@@ -1045,12 +1045,12 @@ disambiguateSymbol pm fileContents Diagnostic {..} (T.unpack -> symbol) = \case
          in Right <$> [ if parensed
                 then Rewrite (rangeToSrcSpan "<dummy>" _range) $ \df ->
                     liftParseAST @(HsExpr GhcPs) df $
-                    show $ printOutputable $
+                    T.unpack $ printOutputable $
                         HsVar @GhcPs noExtField $
                             reLocA $ L (mkGeneralSrcSpan  "") rdr
                 else Rewrite (rangeToSrcSpan "<dummy>" _range) $ \df ->
                     liftParseAST @RdrName df $
-                    show $ printOutputable $ L (mkGeneralSrcSpan  "") rdr
+                    T.unpack $ printOutputable $ L (mkGeneralSrcSpan  "") rdr
             ]
 findImportDeclByRange :: [LImportDecl GhcPs] -> Range -> Maybe (LImportDecl GhcPs)
 findImportDeclByRange xs range = find (\(L (locA -> l) _)-> srcSpanToRange l == Just range) xs
@@ -1615,32 +1615,32 @@ smallerRangesForBindingExport lies b =
     b' = wrapOperatorInParens . unqualify $ b
 #if !MIN_VERSION_ghc(9,2,0)
     ranges' (L _ (IEThingWith _ thing _  inners labels))
-      | show (printOutputable thing) == b' = []
+      | T.unpack (printOutputable thing) == b' = []
       | otherwise =
-          [ locA l' | L l' x <- inners, show (printOutputable x) == b']
-          ++ [ l' | L l' x <- labels, show (printOutputable x) == b']
+          [ locA l' | L l' x <- inners, T.unpack (printOutputable x) == b']
+          ++ [ l' | L l' x <- labels, T.unpack (printOutputable x) == b']
 #else
     ranges' (L _ (IEThingWith _ thing _  inners))
-      | show (printOutputable thing) == b' = []
+      | T.unpack (printOutputable thing) == b' = []
       | otherwise =
-          [ locA l' | L l' x <- inners, show (printOutputable x) == b']
+          [ locA l' | L l' x <- inners, T.unpack (printOutputable x) == b']
 #endif
     ranges' _ = []
 
 rangesForBinding' :: String -> LIE GhcPs -> [SrcSpan]
-rangesForBinding' b (L (locA -> l) x@IEVar{}) | show (printOutputable x) == b = [l]
-rangesForBinding' b (L (locA -> l) x@IEThingAbs{}) | show (printOutputable x) == b = [l]
-rangesForBinding' b (L (locA -> l) (IEThingAll _ x)) | show (printOutputable x) == b = [l]
+rangesForBinding' b (L (locA -> l) x@IEVar{}) | T.unpack (printOutputable x) == b = [l]
+rangesForBinding' b (L (locA -> l) x@IEThingAbs{}) | T.unpack (printOutputable x) == b = [l]
+rangesForBinding' b (L (locA -> l) (IEThingAll _ x)) | T.unpack (printOutputable x) == b = [l]
 #if !MIN_VERSION_ghc(9,2,0)
 rangesForBinding' b (L l (IEThingWith _ thing _  inners labels))
 #else
 rangesForBinding' b (L (locA -> l) (IEThingWith _ thing _  inners))
 #endif
-    | show (printOutputable thing) == b = [l]
+    | T.unpack (printOutputable thing) == b = [l]
     | otherwise =
-        [ locA l' | L l' x <- inners, show (printOutputable x) == b]
+        [ locA l' | L l' x <- inners, T.unpack (printOutputable x) == b]
 #if !MIN_VERSION_ghc(9,2,0)
-        ++ [ l' | L l' x <- labels, show (printOutputable x) == b]
+        ++ [ l' | L l' x <- labels, T.unpack (printOutputable x) == b]
 #endif
 rangesForBinding' _ _ = []
 
