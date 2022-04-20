@@ -232,7 +232,7 @@ refineImportsRule recorder = define (cmapWithPrio LogShake recorder) $ \RefineIm
   let res =
         [ (i, Just
                 . T.intercalate "\n"
-                . map (printOutputableText . constructImport i)
+                . map (printOutputable . constructImport i)
                 . Map.toList
                 $ filteredInnerImports)
         -- for every minimal imports

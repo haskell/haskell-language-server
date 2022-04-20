@@ -214,7 +214,7 @@ mkCompl
         pprLineCol :: SrcLoc -> T.Text
         pprLineCol (UnhelpfulLoc fs) = T.pack $ unpackFS fs
         pprLineCol (RealSrcLoc loc _) =
-            "line " <> printOutputableText (srcLocLine loc) <> ", column " <> printOutputableText (srcLocCol loc)
+            "line " <> printOutputable (srcLocLine loc) <> ", column " <> printOutputable (srcLocCol loc)
 
 
 mkAdditionalEditsCommand :: PluginId -> ExtendImport -> Command
@@ -226,7 +226,7 @@ mkNameCompItem doc thingParent origName provenance thingType isInfix docs !imp =
   where
     compKind = occNameToComKind typeText origName
     isTypeCompl = isTcOcc origName
-    label = stripPrefix $ printOutputableText origName
+    label = stripPrefix $ printOutputable origName
     insertText = case isInfix of
             Nothing -> case getArgText <$> thingType of
                             Nothing      -> label
@@ -235,7 +235,7 @@ mkNameCompItem doc thingParent origName provenance thingType isInfix docs !imp =
 
             Just Surrounded -> label
     typeText
-          | Just t <- thingType = Just . stripForall $ printOutputableText t
+          | Just t <- thingType = Just . stripForall $ printOutputable t
           | otherwise = Nothing
     additionalTextEdits =
       imp <&> \x ->
@@ -244,7 +244,7 @@ mkNameCompItem doc thingParent origName provenance thingType isInfix docs !imp =
             thingParent,
             importName = showModName $ unLoc $ ideclName $ unLoc x,
             importQual = getImportQual x,
-            newThing = printOutputableText origName
+            newThing = printOutputable origName
           }
 
     stripForall :: T.Text -> T.Text
@@ -295,7 +295,7 @@ showForSnippet x = T.pack $ renderWithContext ctxt $ GHC.ppr x -- FIXme
     where
         ctxt = defaultSDocContext{sdocStyle = mkUserStyle neverQualify AllTheWay}
 #else
-showForSnippet x = printOutputableText x
+showForSnippet x = printOutputable x
 #endif
 
 mkModCompl :: T.Text -> CompletionItem
@@ -350,7 +350,7 @@ cacheDataProducer uri env curMod globalEnv inScopeEnv limports = do
   let
       packageState = hscEnv env
       curModName = moduleName curMod
-      curModNameText = printOutputableText curModName
+      curModNameText = printOutputable curModName
 
       importMap = Map.fromList [ (l, imp) | imp@(L (locA -> (RealSrcSpan l _)) _) <- limports ]
 
@@ -386,7 +386,7 @@ cacheDataProducer uri env curMod globalEnv inScopeEnv limports = do
                 -- or if it doesn't have a real location
                 loc <- realSpan $ is_dloc spec
                 Map.lookup loc importMap
-          compItem <- toCompItem par curMod (printOutputableText $ is_mod spec) n originalImportDecl
+          compItem <- toCompItem par curMod (printOutputable $ is_mod spec) n originalImportDecl
           let unqual
                 | is_qual spec = []
                 | otherwise = compItem
@@ -498,12 +498,12 @@ localCompletionsForParsedModule uri pm@ParsedModule{pm_parsed_source = L _ HsMod
 findRecordCompl :: Uri -> ParsedModule -> Provenance -> TyClDecl GhcPs -> [CompItem]
 findRecordCompl uri pmod mn DataDecl {tcdLName, tcdDataDefn} = result
     where
-        result = [mkRecordSnippetCompItem uri (Just $ printOutputableText $ unLoc tcdLName)
-                        (printOutputableText . unLoc $ con_name) field_labels mn doc Nothing
+        result = [mkRecordSnippetCompItem uri (Just $ printOutputable $ unLoc tcdLName)
+                        (printOutputable . unLoc $ con_name) field_labels mn doc Nothing
                  | ConDeclH98{..} <- unLoc <$> dd_cons tcdDataDefn
                  , Just  con_details <- [getFlds con_args]
                  , let field_names = concatMap extract con_details
-                 , let field_labels = printOutputableText <$> field_names
+                 , let field_labels = printOutputable <$> field_names
                  , (not . List.null) field_labels
                  ]
         doc = SpanDocText (getDocumentation [pmod] $ reLoc tcdLName) (SpanDocUris Nothing Nothing)
@@ -804,7 +804,7 @@ prefixes =
 safeTyThingForRecord :: TyThing -> Maybe (T.Text, [T.Text])
 safeTyThingForRecord (AnId _) = Nothing
 safeTyThingForRecord (AConLike dc) =
-    let ctxStr =   printOutputableText . occName . conLikeName $ dc
+    let ctxStr = printOutputable . occName . conLikeName $ dc
         field_names = T.pack . unpackFS . flLabel <$> conLikeFieldLabels dc
     in
         Just (ctxStr, field_names)

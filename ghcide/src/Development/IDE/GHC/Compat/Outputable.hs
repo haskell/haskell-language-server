@@ -108,7 +108,7 @@ oldMkErrStyle _ = Out.mkErrStyle
 oldFormatErrDoc :: DynFlags -> Err.ErrDoc -> Out.SDoc
 oldFormatErrDoc dflags = Err.formatErrDoc dummySDocContext
   where dummySDocContext = initSDocContext dflags Out.defaultUserStyle
-#elif !MIN_VERSION_ghc(9,2,0)
+#elif !MIN_VERSION_ghc(9,0,0)
 oldRenderWithStyle :: DynFlags -> Out.SDoc -> Out.PprStyle -> String
 oldRenderWithStyle = Out.renderWithStyle
 

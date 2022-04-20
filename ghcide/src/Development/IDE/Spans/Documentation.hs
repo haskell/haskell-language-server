@@ -27,7 +27,7 @@ import           Development.IDE.Core.RuleTypes
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error
-import           Development.IDE.GHC.Util        (printOutputableText)
+import           Development.IDE.GHC.Util        (printOutputable)
 import           Development.IDE.Spans.Common
 import           System.Directory
 import           System.FilePath
@@ -93,8 +93,8 @@ getDocumentationsTryGhc env mod names = do
             src <- toFileUriText $ lookupSrcHtmlForModule env mod
             return (doc, src)
           Nothing -> pure (Nothing, Nothing)
-      let docUri = (<> "#" <> selector <> printOutputableText name) <$> docFu
-          srcUri = (<> "#" <> printOutputableText name) <$> srcFu
+      let docUri = (<> "#" <> selector <> printOutputable name) <$> docFu
+          srcUri = (<> "#" <> printOutputable name) <$> srcFu
           selector
             | isValName name = "v:"
             | otherwise = "t:"

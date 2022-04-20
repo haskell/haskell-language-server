@@ -197,7 +197,7 @@ exportedModuleStrings :: ParsedModule -> [String]
 exportedModuleStrings ParsedModule{pm_parsed_source = L _ HsModule{..}}
   | Just export <- hsmodExports,
     exports <- unLoc export
-    = map printOutputable exports
+    = map (show . printOutputable) exports
 exportedModuleStrings _ = []
 
 minimalImportsRule :: Recorder (WithPriority Log) -> Rules ()
@@ -210,7 +210,7 @@ minimalImportsRule recorder = define (cmapWithPrio LogShake recorder) $ \Minimal
   (imports, mbMinImports) <- liftIO $ extractMinimalImports hsc tmr
   let importsMap =
         Map.fromList
-          [ (realSrcSpanStart l, printOutputableText i)
+          [ (realSrcSpanStart l, printOutputable i)
             | L (locA -> RealSrcSpan l _) i <- fromMaybe [] mbMinImports
           ]
       res =

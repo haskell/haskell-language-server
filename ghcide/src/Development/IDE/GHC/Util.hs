@@ -27,8 +27,7 @@ module Development.IDE.GHC.Util(
     dontWriteHieFiles,
     disableWarningsAsErrors,
     traceAst,
-    printOutputable,
-    printOutputableText
+    printOutputable
     ) where
 
 #if MIN_VERSION_ghc(9,2,0)
@@ -133,7 +132,7 @@ bytestringToStringBuffer (PS buf cur len) = StringBuffer{..}
 
 -- | Pretty print a 'RdrName' wrapping operators in parens
 printRdrName :: RdrName -> String
-printRdrName name = printOutputable $ parenSymOcc rn (ppr rn)
+printRdrName name = show $ printOutputable $ parenSymOcc rn (ppr rn)
   where
     rn = rdrNameOcc name
 
@@ -324,19 +323,6 @@ instance Outputable SDoc where
 -- This is the most common print utility, will print with a user-friendly style like: `a_a4ME` as `a`.
 --
 -- It internal using `showSDocUnsafe` with `unsafeGlobalDynFlags`.
---
--- You may prefer `printOutputableText` if `Text` is expected to return.
-printOutputable :: Outputable a => a -> String
-printOutputable = printWithoutUniques
+printOutputable :: Outputable a => a -> T.Text
+printOutputable = T.pack . printWithoutUniques
 {-# INLINE printOutputable #-}
-
--- | Print a GHC value in `defaultUserStyle` without unique symbols.
---
--- This is the most common print utility, will print with a user-friendly style like: `a_a4ME` as `a`.
---
--- It internal using `showSDocUnsafe` with `unsafeGlobalDynFlags`.
---
--- You may prefer `printOutputable` if `String` is expected to return.
-printOutputableText :: Outputable a => a -> T.Text
-printOutputableText = T.pack . printOutputable
-{-# INLINE printOutputableText #-}

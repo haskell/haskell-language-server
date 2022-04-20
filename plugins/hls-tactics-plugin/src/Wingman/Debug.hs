@@ -31,7 +31,7 @@ unsafeRender = unsafeRender' . ppr
 
 unsafeRender' :: SDoc -> String
 unsafeRender' sdoc = unsafePerformIO $ do
-  let z = printOutputable sdoc
+  let z = show $ printOutputable sdoc
   -- We might not have unsafeGlobalDynFlags (like during testing), in which
   -- case GHC panics. Instead of crashing, let's just fail to print.
   !res <- try @PlainGhcException $ evaluate $ deepseq z z

@@ -83,7 +83,6 @@ import qualified GHC.LanguageExtensions.Type     as LangExt (Extension (..))
 
 import           Development.IDE.Core.FileStore  (setSomethingModified)
 import           Development.IDE.Types.Shake     (toKey)
-import           Development.IDE.GHC.Util        (printOutputableText)
 import           Ide.Plugin.Config               (Config)
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Types.SrcLoc                (UnhelpfulSpanReason (UnhelpfulInteractive))
@@ -284,7 +283,7 @@ runEvalCmd plId st EvalParams{..} =
 
                 -- load the module in the interactive environment
                 loadResult <- perf "loadModule" $ load LoadAllTargets
-                dbg "LOAD RESULT" $ printOutputableText loadResult
+                dbg "LOAD RESULT" $ printOutputable loadResult
                 case loadResult of
                     Failed -> liftIO $ do
                         let err = ""
@@ -523,7 +522,7 @@ evals mark_exception (st, fp) df stmts = do
 
 prettyWarn :: Warn -> String
 prettyWarn Warn{..} =
-    printOutputable (SrcLoc.getLoc warnMsg) <> ": warning:\n"
+    show (printOutputable $ SrcLoc.getLoc warnMsg) <> ": warning:\n"
     <> "    " <> SrcLoc.unLoc warnMsg
 
 runGetSession :: MonadIO m => IdeState -> NormalizedFilePath -> m HscEnv

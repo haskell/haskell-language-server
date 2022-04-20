@@ -67,7 +67,7 @@ pkgNames_ =
     mapMaybe
         ( \case
             ExposePackage _ (PackageArg n) _  -> Just n
-            ExposePackage _ (UnitIdArg uid) _ -> Just $ printOutputable uid
+            ExposePackage _ (UnitIdArg uid) _ -> Just $ show $ printOutputable uid
             _                                 -> Nothing
         )
 
@@ -148,7 +148,7 @@ deriving instance Read Extension
 -- Partial display of DynFlags contents, for testing purposes
 showDynFlags :: DynFlags -> String
 showDynFlags df =
-    printOutputable . vcat . map (\(n, d) -> text (n ++ ": ") <+> d) $
+    show . printOutputable . vcat . map (\(n, d) -> text (n ++ ": ") <+> d) $
         [ ("extensions", ppr . extensions $ df)
         , ("extensionFlags", ppr . EnumSet.toList . extensionFlags $ df)
         , ("importPaths", vList $ importPaths df)
