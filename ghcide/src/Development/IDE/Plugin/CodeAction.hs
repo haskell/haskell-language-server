@@ -50,8 +50,7 @@ import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.GHC.Util                          (printOutputable,
                                                                     printRdrName,
-                                                                    traceAst,
-                                                                    printOutputable)
+                                                                    traceAst)
 import           Development.IDE.Plugin.CodeAction.Args
 import           Development.IDE.Plugin.CodeAction.ExactPrint
 import           Development.IDE.Plugin.CodeAction.PositionIndexed
