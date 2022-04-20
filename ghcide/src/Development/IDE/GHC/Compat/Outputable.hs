@@ -67,6 +67,10 @@ import qualified Outputable                      as Out
 import           SrcLoc
 #endif
 
+-- | A compatible function to print `Outputable` instances
+-- without unique symbols.
+--
+-- It print with a user-friendly style like: `a_a4ME` as `a`.
 printWithoutUniques :: Outputable a => a -> String
 printWithoutUniques =
 #if MIN_VERSION_ghc(9,2,0)
@@ -96,10 +100,7 @@ printSDocQualifiedUnsafe unqual doc =
     showSDocForUser unsafeGlobalDynFlags unqual doc
 #endif
 
-
-#if MIN_VERSION_ghc(9,2,0)
-#else
-#if  MIN_VERSION_ghc(9,0,0)
+#if MIN_VERSION_ghc(9,0,0) && !MIN_VERSION_ghc(9,2,0)
 oldRenderWithStyle dflags sdoc sty = Out.renderWithStyle (initSDocContext dflags sty) sdoc
 oldMkUserStyle _ = Out.mkUserStyle
 oldMkErrStyle _ = Out.mkErrStyle
@@ -107,8 +108,7 @@ oldMkErrStyle _ = Out.mkErrStyle
 oldFormatErrDoc :: DynFlags -> Err.ErrDoc -> Out.SDoc
 oldFormatErrDoc dflags = Err.formatErrDoc dummySDocContext
   where dummySDocContext = initSDocContext dflags Out.defaultUserStyle
-
-#else
+#elif !MIN_VERSION_ghc(9,2,0)
 oldRenderWithStyle :: DynFlags -> Out.SDoc -> Out.PprStyle -> String
 oldRenderWithStyle = Out.renderWithStyle
 
@@ -120,7 +120,6 @@ oldMkErrStyle = Out.mkErrStyle
 
 oldFormatErrDoc :: DynFlags -> Err.ErrDoc -> Out.SDoc
 oldFormatErrDoc = Err.formatErrDoc
-#endif
 #endif
 
 pprWarning :: PsWarning -> MsgEnvelope DecoratedSDoc

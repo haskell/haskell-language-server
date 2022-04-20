@@ -27,7 +27,7 @@ import qualified Development.IDE.Core.Shake                   as Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error                    (rangeToSrcSpan)
 import           Development.IDE.GHC.ExactPrint               (GetAnnotatedParsedSource (GetAnnotatedParsedSource))
-import           Development.IDE.GHC.Util                     (showGhc)
+import           Development.IDE.GHC.Util                     (printOutputableText)
 import           Development.IDE.Graph
 import           Development.IDE.Plugin.CodeAction            (newImport,
                                                                newImportToEdit)
@@ -213,7 +213,7 @@ extendImportHandler ideState edit@ExtendImport {..} = do
           <> "’ from "
           <> importName
           <> " (at "
-          <> showGhc srcSpan
+          <> printOutputableText srcSpan
           <> ")"
     void $ LSP.sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
   return $ Right Null

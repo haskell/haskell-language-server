@@ -167,7 +167,7 @@ runRetrieCmd state RunRetrieParams{originatingFile = uri, ..} =
 extractImports :: ModSummary -> [HsBindLR GhcRn GhcRn] -> RewriteSpec -> [ImportSpec]
 extractImports ModSummary{ms_mod} topLevelBinds (Unfold thing)
   | Just FunBind {fun_matches}
-  <- find (\case FunBind{fun_id = L _ n} -> prettyPrint n == thing ; _ -> False) topLevelBinds
+  <- find (\case FunBind{fun_id = L _ n} -> printOutputable n == thing ; _ -> False) topLevelBinds
   , names <- listify p fun_matches
   =
     [ AddImport {..}
@@ -249,7 +249,7 @@ suggestBindRewrites ::
   [(T.Text, CodeActionKind, RunRetrieParams)]
 suggestBindRewrites originatingFile pos ms_mod FunBind {fun_id = L l' rdrName}
   | pos `isInsideSrcSpan` l' =
-    let pprName = prettyPrint rdrName
+    let pprName = printOutputable rdrName
         pprNameText = T.pack pprName
         unfoldRewrite restrictToOriginatingFile =
             let rewrites = [Unfold (qualify ms_mod pprName)]
@@ -273,7 +273,7 @@ suggestTypeRewrites ::
   TyClDecl pass ->
   [(T.Text, CodeActionKind, RunRetrieParams)]
 suggestTypeRewrites originatingFile ms_mod SynDecl {tcdLName = L _ rdrName} =
-    let pprName = prettyPrint rdrName
+    let pprName = printOutputable rdrName
         pprNameText = T.pack pprName
         unfoldRewrite restrictToOriginatingFile =
             let rewrites = [TypeForward (qualify ms_mod pprName)]
@@ -330,7 +330,7 @@ suggestRuleRewrites originatingFile pos ms_mod (L _ HsRules {rds_rules}) =
 suggestRuleRewrites _ _ _ _ = []
 
 qualify :: GHC.Module -> String -> String
-qualify ms_mod x = prettyPrint ms_mod <> "." <> x
+qualify ms_mod x = printOutputable ms_mod <> "." <> x
 
 -------------------------------------------------------------------------------
 -- Retrie driving code

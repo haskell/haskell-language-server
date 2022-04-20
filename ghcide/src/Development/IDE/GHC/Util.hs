@@ -27,10 +27,8 @@ module Development.IDE.GHC.Util(
     dontWriteHieFiles,
     disableWarningsAsErrors,
     traceAst,
-    showGhc,
-    showGhcWithUniques,
-    prettyPrint,
-    prettyPrintWithUniques
+    printOutputable,
+    printOutputableText
     ) where
 
 #if MIN_VERSION_ghc(9,2,0)
@@ -135,7 +133,7 @@ bytestringToStringBuffer (PS buf cur len) = StringBuffer{..}
 
 -- | Pretty print a 'RdrName' wrapping operators in parens
 printRdrName :: RdrName -> String
-printRdrName name = prettyPrint $ parenSymOcc rn (ppr rn)
+printRdrName name = printOutputable $ parenSymOcc rn (ppr rn)
   where
     rn = rdrNameOcc name
 
@@ -300,7 +298,7 @@ traceAst lbl x
 #if MIN_VERSION_ghc(9,2,0)
     renderDump = renderWithContext defaultSDocContext{sdocStyle = defaultDumpStyle, sdocPprDebug = True}
 #else
-    renderDump = prettyPrintWithUniques
+    renderDump = showSDocUnsafe . ppr
 #endif
     htmlDump = showAstDataHtml x
     doTrace = unsafePerformIO $ do
@@ -321,38 +319,24 @@ instance Outputable SDoc where
   ppr = id
 #endif
 
--- | Print a GHC value by default `showSDocUnsafe`.
+-- | Print a GHC value in `defaultUserStyle` without unique symbols.
 --
--- You may prefer `prettyPrint` unless you know what you are doing.
+-- This is the most common print utility, will print with a user-friendly style like: `a_a4ME` as `a`.
 --
--- It internal using `unsafeGlobalDynFlags`.
+-- It internal using `showSDocUnsafe` with `unsafeGlobalDynFlags`.
 --
--- `String` version of `showGhcWithUniques`.
-prettyPrintWithUniques :: Outputable a => a -> String
-prettyPrintWithUniques = showSDocUnsafe . ppr
+-- You may prefer `printOutputableText` if `Text` is expected to return.
+printOutputable :: Outputable a => a -> String
+printOutputable = printWithoutUniques
+{-# INLINE printOutputable #-}
 
 -- | Print a GHC value in `defaultUserStyle` without unique symbols.
 --
--- This is the most common print utility, will print with a user friendly style like: `a_a4ME` as `a`.
+-- This is the most common print utility, will print with a user-friendly style like: `a_a4ME` as `a`.
 --
--- It internal using `unsafeGlobalDynFlags`.
+-- It internal using `showSDocUnsafe` with `unsafeGlobalDynFlags`.
 --
--- `String` version of `showGhc`.
-prettyPrint :: Outputable a => a -> String
-prettyPrint = printWithoutUniques
-
--- | Print a GHC value by default `showSDocUnsafe`.
---
--- You may prefer `showGhc` unless you know what you are doing.
---
--- It internal using `unsafeGlobalDynFlags`.
-showGhcWithUniques :: Outputable a => a -> T.Text
-showGhcWithUniques = T.pack . showSDocUnsafe . ppr
-
--- | Print a GHC value in `defaultUserStyle` without unique symbols.
---
--- This is the most common print utility, will print with a user friendly style like: `a_a4ME` as `a`.
---
--- It internal using `unsafeGlobalDynFlags`.
-showGhc :: Outputable a => a -> T.Text
-showGhc = T.pack . printWithoutUniques
+-- You may prefer `printOutputable` if `String` is expected to return.
+printOutputableText :: Outputable a => a -> T.Text
+printOutputableText = T.pack . printOutputable
+{-# INLINE printOutputableText #-}

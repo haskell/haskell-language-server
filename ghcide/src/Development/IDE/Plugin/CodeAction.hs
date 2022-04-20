@@ -48,10 +48,10 @@ import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint
-import           Development.IDE.GHC.Util                          (prettyPrint,
+import           Development.IDE.GHC.Util                          (printOutputable,
                                                                     printRdrName,
                                                                     traceAst,
-                                                                    showGhc)
+                                                                    printOutputableText)
 import           Development.IDE.Plugin.CodeAction.Args
 import           Development.IDE.Plugin.CodeAction.ExactPrint
 import           Development.IDE.Plugin.CodeAction.PositionIndexed
@@ -545,7 +545,7 @@ suggestDeleteUnusedBinding
       isTheBinding span = srcSpanToRange span == Just _range
 
       isSameName :: IdP GhcPs -> String -> Bool
-      isSameName x name = prettyPrint x == name
+      isSameName x name = printOutputable x == name
 
 data ExportsAs = ExportName | ExportPattern | ExportFamily | ExportAll
   deriving (Eq)
@@ -1012,7 +1012,7 @@ occursUnqualified symbol ImportDecl{..}
 occursUnqualified _ _ = False
 
 symbolOccursIn :: T.Text -> IE GhcPs -> Bool
-symbolOccursIn symb = any ((== symb). showGhc) . ieNames
+symbolOccursIn symb = any ((== symb). printOutputableText) . ieNames
 
 targetModuleName :: ModuleTarget -> ModuleName
 targetModuleName ImplicitPrelude{} = mkModuleName "Prelude"
@@ -1046,12 +1046,12 @@ disambiguateSymbol pm fileContents Diagnostic {..} (T.unpack -> symbol) = \case
          in Right <$> [ if parensed
                 then Rewrite (rangeToSrcSpan "<dummy>" _range) $ \df ->
                     liftParseAST @(HsExpr GhcPs) df $
-                    prettyPrint $
+                    printOutputable $
                         HsVar @GhcPs noExtField $
                             reLocA $ L (mkGeneralSrcSpan  "") rdr
                 else Rewrite (rangeToSrcSpan "<dummy>" _range) $ \df ->
                     liftParseAST @RdrName df $
-                    prettyPrint $ L (mkGeneralSrcSpan  "") rdr
+                    printOutputable $ L (mkGeneralSrcSpan  "") rdr
             ]
 findImportDeclByRange :: [LImportDecl GhcPs] -> Range -> Maybe (LImportDecl GhcPs)
 findImportDeclByRange xs range = find (\(L (locA -> l) _)-> srcSpanToRange l == Just range) xs
@@ -1422,7 +1422,7 @@ newImport modName mSymbol mQual hiding = NewImport impStmt
      symImp
             | Just symbol <- mSymbol
               , symOcc <- mkVarOcc $ T.unpack symbol =
-              " (" <> showGhc (parenSymOcc symOcc $ ppr symOcc) <> ")"
+              " (" <> printOutputableText (parenSymOcc symOcc $ ppr symOcc) <> ")"
             | otherwise = ""
      impStmt =
        "import "
@@ -1616,32 +1616,32 @@ smallerRangesForBindingExport lies b =
     b' = wrapOperatorInParens . unqualify $ b
 #if !MIN_VERSION_ghc(9,2,0)
     ranges' (L _ (IEThingWith _ thing _  inners labels))
-      | prettyPrint thing == b' = []
+      | printOutputable thing == b' = []
       | otherwise =
-          [ locA l' | L l' x <- inners, prettyPrint x == b']
-          ++ [ l' | L l' x <- labels, prettyPrint x == b']
+          [ locA l' | L l' x <- inners, printOutputable x == b']
+          ++ [ l' | L l' x <- labels, printOutputable x == b']
 #else
     ranges' (L _ (IEThingWith _ thing _  inners))
-      | prettyPrint thing == b' = []
+      | printOutputable thing == b' = []
       | otherwise =
-          [ locA l' | L l' x <- inners, prettyPrint x == b']
+          [ locA l' | L l' x <- inners, printOutputable x == b']
 #endif
     ranges' _ = []
 
 rangesForBinding' :: String -> LIE GhcPs -> [SrcSpan]
-rangesForBinding' b (L (locA -> l) x@IEVar{}) | prettyPrint x == b = [l]
-rangesForBinding' b (L (locA -> l) x@IEThingAbs{}) | prettyPrint x == b = [l]
-rangesForBinding' b (L (locA -> l) (IEThingAll _ x)) | prettyPrint x == b = [l]
+rangesForBinding' b (L (locA -> l) x@IEVar{}) | printOutputable x == b = [l]
+rangesForBinding' b (L (locA -> l) x@IEThingAbs{}) | printOutputable x == b = [l]
+rangesForBinding' b (L (locA -> l) (IEThingAll _ x)) | printOutputable x == b = [l]
 #if !MIN_VERSION_ghc(9,2,0)
 rangesForBinding' b (L l (IEThingWith _ thing _  inners labels))
 #else
 rangesForBinding' b (L (locA -> l) (IEThingWith _ thing _  inners))
 #endif
-    | prettyPrint thing == b = [l]
+    | printOutputable thing == b = [l]
     | otherwise =
-        [ locA l' | L l' x <- inners, prettyPrint x == b]
+        [ locA l' | L l' x <- inners, printOutputable x == b]
 #if !MIN_VERSION_ghc(9,2,0)
-        ++ [ l' | L l' x <- labels, prettyPrint x == b]
+        ++ [ l' | L l' x <- labels, printOutputable x == b]
 #endif
 rangesForBinding' _ _ = []
 

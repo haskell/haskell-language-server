@@ -1301,7 +1301,7 @@ getDocsBatch hsc_env _mod _names = do
 #endif
                                   Map.findWithDefault mempty name amap))
     case res of
-        Just x  -> return $ map (first $ T.unpack . showGhc) x
+        Just x  -> return $ map (first $ T.unpack . printOutputableText) x
         Nothing -> throwErrors
 #if MIN_VERSION_ghc(9,2,0)
                      $ Error.getErrorMessages msgs

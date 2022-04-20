@@ -19,7 +19,7 @@ import           Data.String                     (fromString)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
 import qualified Development.IDE.GHC.Compat.Util as EnumSet
-import           Development.IDE.GHC.Util        (prettyPrint)
+import           Development.IDE.GHC.Util        (printOutputable)
 
 import           GHC.LanguageExtensions.Type     (Extension (..))
 import           Ide.Plugin.Eval.Util            (gStrictTry)
@@ -67,7 +67,7 @@ pkgNames_ =
     mapMaybe
         ( \case
             ExposePackage _ (PackageArg n) _  -> Just n
-            ExposePackage _ (UnitIdArg uid) _ -> Just $ prettyPrint uid
+            ExposePackage _ (UnitIdArg uid) _ -> Just $ printOutputable uid
             _                                 -> Nothing
         )
 
@@ -148,7 +148,7 @@ deriving instance Read Extension
 -- Partial display of DynFlags contents, for testing purposes
 showDynFlags :: DynFlags -> String
 showDynFlags df =
-    prettyPrint . vcat . map (\(n, d) -> text (n ++ ": ") <+> d) $
+    printOutputable . vcat . map (\(n, d) -> text (n ++ ": ") <+> d) $
         [ ("extensions", ppr . extensions $ df)
         , ("extensionFlags", ppr . EnumSet.toList . extensionFlags $ df)
         , ("importPaths", vList $ importPaths df)

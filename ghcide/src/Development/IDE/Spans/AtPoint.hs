@@ -55,7 +55,7 @@ import           Data.Version                         (showVersion)
 import           Development.IDE.Types.Shake          (WithHieDb)
 import           HieDb                                hiding (pointCommand)
 import           System.Directory                     (doesFileExist)
-import Development.IDE.GHC.Util (showGhc)
+import Development.IDE.GHC.Util (printOutputableText)
 
 -- | Gives a Uri for the module, given the .hie file location and the the module info
 -- The Bool denotes if it is a boot module
@@ -230,13 +230,13 @@ atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) env pos = listToMaybe $ p
         prettyNames :: [T.Text]
         prettyNames = map prettyName names
         prettyName (Right n, dets) = T.unlines $
-          wrapHaskell (showGhc n <> maybe "" (" :: " <>) ((prettyType <$> identType dets) <|> maybeKind))
+          wrapHaskell (printOutputableText n <> maybe "" (" :: " <>) ((prettyType <$> identType dets) <|> maybeKind))
           : definedAt n
           ++ maybeToList (prettyPackageName n)
           ++ catMaybes [ T.unlines . spanDocToMarkdown <$> lookupNameEnv dm n
                        ]
-          where maybeKind = fmap showGhc $ safeTyThingType =<< lookupNameEnv km n
-        prettyName (Left m,_) = showGhc m
+          where maybeKind = fmap printOutputableText $ safeTyThingType =<< lookupNameEnv km n
+        prettyName (Left m,_) = printOutputableText m
 
         prettyPackageName n = do
           m <- nameModule_maybe n
@@ -248,15 +248,15 @@ atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) env pos = listToMaybe $ p
 
         prettyTypes = map (("_ :: "<>) . prettyType) types
         prettyType t = case kind of
-          HieFresh -> showGhc t
-          HieFromDisk full_file -> showGhc $ hieTypeToIface $ recoverFullType t (hie_types full_file)
+          HieFresh -> printOutputableText t
+          HieFromDisk full_file -> printOutputableText $ hieTypeToIface $ recoverFullType t (hie_types full_file)
 
         definedAt name =
           -- do not show "at <no location info>" and similar messages
           -- see the code of 'pprNameDefnLoc' for more information
           case nameSrcLoc name of
             UnhelpfulLoc {} | isInternalName name || isSystemName name -> []
-            _ -> ["*Defined " <> showGhc (pprNameDefnLoc name) <> "*"]
+            _ -> ["*Defined " <> printOutputableText (pprNameDefnLoc name) <> "*"]
 
 typeLocationsAtPoint
   :: forall m
@@ -381,7 +381,7 @@ toUri = fromNormalizedUri . filePathToUri' . toNormalizedFilePath'
 
 defRowToSymbolInfo :: Res DefRow -> Maybe SymbolInformation
 defRowToSymbolInfo (DefRow{..}:.(modInfoSrcFile -> Just srcFile))
-  = Just $ SymbolInformation (showGhc defNameOcc) kind Nothing Nothing loc Nothing
+  = Just $ SymbolInformation (printOutputableText defNameOcc) kind Nothing Nothing loc Nothing
   where
     kind
       | isVarOcc defNameOcc = SkVariable
