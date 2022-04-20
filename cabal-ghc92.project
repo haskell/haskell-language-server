@@ -39,7 +39,7 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2022-03-08T10:53:01Z
+index-state: 2022-04-19T07:18:40Z
 
 constraints:
   -- These plugins don't build/work on GHC92 yet
@@ -50,7 +50,6 @@ constraints:
     -hlint
     -retrie
     -splice
-    -stylishhaskell
     -tactic,
 
 allow-newer:
@@ -73,11 +72,6 @@ allow-newer:
   data-tree-print:base,
   -- https://github.com/lspitzner/butcher/pull/8
   butcher:base,
-
-  stylish-haskell:ghc-lib-parser,
-  stylish-haskell:Cabal,
-  stylish-haskell:bytestring,
-  stylish-haskell:aeson,
 
   ormolu:ghc-lib-parser,
 

@@ -4,7 +4,6 @@
 let
   disabledPlugins = [
     "hls-brittany-plugin"
-    "hls-stylish-haskell-plugin"
     "hls-hlint-plugin"
     "hls-haddock-comments-plugin"
     "hls-tactics-plugin"
@@ -34,7 +33,6 @@ let
         hself.callCabal2nixWithOptions "haskell-language-server" ./.
         (pkgs.lib.concatStringsSep " " [
           "-f-brittany"
-          "-f-stylishHaskell"
           "-f-hlint"
           "-f-haddockComments"
           "-f-tactics"
