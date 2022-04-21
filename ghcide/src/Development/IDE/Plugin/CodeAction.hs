@@ -5,8 +5,6 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
 
--- | Go to the definition of a variable.
-
 module Development.IDE.Plugin.CodeAction
     (
     iePluginDescriptor,
