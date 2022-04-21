@@ -163,4 +163,4 @@ jobs:
           hackageToken: ${{ secrets.HACKAGE_AUTH_TOKEN }}
           packagesPath: packages
           # runs triggered by *-hackage branches will not publish packages definitely
-          publish: {{ github.event.inputs.publish == 'true' }}
+          publish: ${{ github.event.inputs.publish == 'true' }}
