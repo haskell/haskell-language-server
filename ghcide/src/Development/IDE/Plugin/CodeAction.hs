@@ -611,13 +611,15 @@ suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModul
         _ -> False
     needsComma _ _ = False
 
-    opLetter :: String
+    opLetter :: T.Text
     opLetter = ":!#$%&*+./<=>?@\\^|-~"
 
     parenthesizeIfNeeds :: Bool -> T.Text -> T.Text
     parenthesizeIfNeeds needsTypeKeyword x
-      | T.head x `elem` opLetter = (if needsTypeKeyword then "type " else "") <> "(" <> x <>")"
+      | T.any (c ==) opLetter = (if needsTypeKeyword then "type " else "") <> "(" <> x <> ")"
       | otherwise = x
+      where
+        c = T.head x
 
     matchWithDiagnostic :: Range -> Located (IdP GhcPs) -> Bool
     matchWithDiagnostic Range{_start=l,_end=r} x =
@@ -1245,7 +1247,7 @@ removeRedundantConstraints df (L _ HsModule {hsmodDecls}) Diagnostic{..}
       = [(actionTitle redundantConstraintList typeSignatureName, rewrite)]
   | otherwise = []
     where
-      toRemove df list a = showSDoc df (ppr a) `elem` (T.unpack <$> list)
+      toRemove df list a = T.pack (showSDoc df (ppr a)) `elem` list
 
       parseConstraints :: T.Text -> [T.Text]
       parseConstraints t = t
