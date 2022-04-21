@@ -62,7 +62,9 @@ safeTyThingId _                                = Nothing
 -- Possible documentation for an element in the code
 data SpanDoc
   = SpanDocString HsDocString SpanDocUris
+    -- ^ Extern module doc
   | SpanDocText   [T.Text] SpanDocUris
+    -- ^ Local module doc
   deriving stock (Eq, Show, Generic)
   deriving anyclass NFData
 
@@ -78,11 +80,11 @@ emptySpanDoc = SpanDocText [] (SpanDocUris Nothing Nothing)
 
 spanDocToMarkdown :: SpanDoc -> [T.Text]
 spanDocToMarkdown (SpanDocString docs uris)
-  = [T.pack $ haddockToMarkdown $ H.toRegular $ H._doc $ H.parseParas Nothing $ unpackHDS docs]
-    <> ["\n"] <> spanDocUrisToMarkdown uris
+  = [(T.pack $ haddockToMarkdown $ H.toRegular $ H._doc $ H.parseParas Nothing $ unpackHDS docs) <> T.pack "\n"]
+    <> spanDocUrisToMarkdown uris
   -- Append the extra newlines since this is markdown --- to get a visible newline,
   -- you need to have two newlines
-spanDocToMarkdown (SpanDocText txt uris) = txt <> ["\n"] <> spanDocUrisToMarkdown uris
+spanDocToMarkdown (SpanDocText txt uris) = map (<> T.pack "\n") txt <> ["\n"] <> spanDocUrisToMarkdown uris
 
 spanDocUrisToMarkdown :: SpanDocUris -> [T.Text]
 spanDocUrisToMarkdown (SpanDocUris mdoc msrc) = catMaybes
