@@ -79,12 +79,19 @@ emptySpanDoc :: SpanDoc
 emptySpanDoc = SpanDocText [] (SpanDocUris Nothing Nothing)
 
 spanDocToMarkdown :: SpanDoc -> [T.Text]
-spanDocToMarkdown (SpanDocString docs uris)
-  = [(T.pack $ haddockToMarkdown $ H.toRegular $ H._doc $ H.parseParas Nothing $ unpackHDS docs) <> T.pack "\n"]
-    <> spanDocUrisToMarkdown uris
-  -- Append the extra newlines since this is markdown --- to get a visible newline,
-  -- you need to have two newlines
-spanDocToMarkdown (SpanDocText txt uris) = map (<> T.pack "\n") txt <> ["\n"] <> spanDocUrisToMarkdown uris
+spanDocToMarkdown = \case
+    (SpanDocString docs uris) ->
+        let doc = T.pack $ haddockToMarkdown $ H.toRegular $ H._doc $ H.parseParas Nothing $ unpackHDS docs
+        in  go [doc] uris
+    (SpanDocText txt uris) -> go txt uris
+  where
+    go [] uris = spanDocUrisToMarkdown uris
+    go txt uris = init txt <> [render (last txt)] <> spanDocUrisToMarkdown uris
+    -- If the doc is not end with an `'\n'`, we append it.
+    render txt
+      | T.null txt = txt
+      | T.last txt == '\n' = txt
+      | otherwise = txt <> T.pack "\n"
 
 spanDocUrisToMarkdown :: SpanDocUris -> [T.Text]
 spanDocUrisToMarkdown (SpanDocUris mdoc msrc) = catMaybes
