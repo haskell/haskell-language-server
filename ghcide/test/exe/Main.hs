@@ -5068,7 +5068,7 @@ packageCompletionTests =
         _ <- waitForDiagnostics
         compls <- getCompletions doc (Position 2 12)
         let compls' =
-              [T.drop 1 $ T.dropEnd 10 d
+              [T.drop 1 $ T.dropEnd 3 d
               | CompletionItem {_documentation = Just (CompletionDocMarkup (MarkupContent MkMarkdown d)), _label}
                 <- compls
               , _label == "fromList"
@@ -5088,7 +5088,7 @@ packageCompletionTests =
         _ <- waitForDiagnostics
         compls <- getCompletions doc (Position 2 7)
         let compls' =
-              [T.drop 1 $ T.dropEnd 10 d
+              [T.drop 1 $ T.dropEnd 3 d
               | CompletionItem {_documentation = Just (CompletionDocMarkup (MarkupContent MkMarkdown d)), _label}
                 <- compls
               , _label == "Map"
@@ -5172,7 +5172,7 @@ projectCompletionTests =
             ]
         compls <- getCompletions doc (Position 1 10)
         let compls' =
-              [T.drop 1 $ T.dropEnd 10 d
+              [T.drop 1 $ T.dropEnd 3 d
               | CompletionItem {_documentation = Just (CompletionDocMarkup (MarkupContent MkMarkdown d)), _label}
                 <- compls
               , _label == "anidentifier"
