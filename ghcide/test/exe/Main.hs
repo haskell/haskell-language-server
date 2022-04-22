@@ -5280,21 +5280,21 @@ completionDocTests =
         [ "module A where"
         , "foo = od"
         ]
-      let expected = "*Imported from 'Prelude'*\n* * *\n[Documentation](file:"
+      let expected = "*Imported from 'Prelude'*\n* * *\n"
       test doc (Position 1 8) "odd" (Just $ T.length expected) [expected]
   , broken $ testSession "extern single line doc without '\\n'" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
         , "foo = no"
         ]
-      let expected = "*Imported from 'Prelude'*\n* * *\n\n\nBoolean \"not\"\n* * *\n[Documentation](file:"
+      let expected = "*Imported from 'Prelude'*\n* * *\n\n\nBoolean \"not\"\n* * *\n"
       test doc (Position 1 8) "not" (Just $ T.length expected) [expected]
   , broken $ testSession "extern mulit line doc" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
         , "foo = i"
         ]
-      let expected = "*Imported from 'Prelude'*\n* * *\n\n\nIdentity function. \n```haskell\nid x = x\n```\n* * *\n[Documentation](file:"
+      let expected = "*Imported from 'Prelude'*\n* * *\n\n\nIdentity function. \n```haskell\nid x = x\n```\n* * *\n"
       test doc (Position 1 7) "id" (Just $ T.length expected) [expected]
   ]
   where
