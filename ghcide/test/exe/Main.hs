@@ -4615,6 +4615,7 @@ completionTests
     , testGroup "package" packageCompletionTests
     , testGroup "project" projectCompletionTests
     , testGroup "other" otherCompletionTests
+    , testGroup "doc" completionDocTests
     ]
 
 completionTest :: String -> [T.Text] -> Position -> [(T.Text, CompletionItemKind, T.Text, Bool, Bool, Maybe (List TextEdit))] -> TestTree
@@ -5229,6 +5230,87 @@ projectCompletionTests =
         liftIO $ do
           item ^. L.label @?= "anidentifier"
     ]
+
+completionDocTests :: [TestTree]
+completionDocTests =
+  [ testSession "local define" $ do
+      doc <- createDoc "A.hs" "haskell" $ T.unlines
+        [ "module A where"
+        , "foo = ()"
+        , "bar = fo"
+        ]
+      let expected = "*Defined at line 2, column 1 in this module*\n"
+      test doc (Position 2 8) "foo" (Just $ T.length expected) [expected]
+  , testSession "local empty doc" $ do
+      doc <- createDoc "A.hs" "haskell" $ T.unlines
+        [ "module A where"
+        , "foo = ()"
+        , "bar = fo"
+        ]
+      test doc (Position 2 8) "foo" Nothing ["*Defined at line 2, column 1 in this module*\n"]
+  , broken $ testSession "local single line doc without '\\n'" $ do
+      doc <- createDoc "A.hs" "haskell" $ T.unlines
+        [ "module A where"
+        , "-- |docdoc"
+        , "foo = ()"
+        , "bar = fo"
+        ]
+      test doc (Position 3 8) "foo" Nothing ["*Defined at line 3, column 1 in this module*\n* * *\ndocdoc\n"]
+  , broken $ testSession "local multi line doc with '\\n'" $ do
+      doc <- createDoc "A.hs" "haskell" $ T.unlines
+        [ "module A where"
+        , "-- | abcabc"
+        , "--"
+        , "foo = ()"
+        , "bar = fo"
+        ]
+      test doc (Position 4 8) "foo" Nothing ["*Defined at line 4, column 1 in this module*\n* * *\n abcabc\n"]
+  , broken $ testSession "local multi line doc without '\\n'" $ do
+      doc <- createDoc "A.hs" "haskell" $ T.unlines
+        [ "module A where"
+        , "-- |     abcabc"
+        , "--"
+        , "--def"
+        , "foo = ()"
+        , "bar = fo"
+        ]
+      test doc (Position 5 8) "foo" Nothing ["*Defined at line 5, column 1 in this module*\n* * *\n     abcabc\n\ndef\n"]
+  , testSession "extern empty doc" $ do
+      doc <- createDoc "A.hs" "haskell" $ T.unlines
+        [ "module A where"
+        , "foo = od"
+        ]
+      let expected = "*Imported from 'Prelude'*\n* * *\n[Documentation](file:"
+      test doc (Position 1 8) "odd" (Just $ T.length expected) [expected]
+  , broken $ testSession "extern single line doc without '\\n'" $ do
+      doc <- createDoc "A.hs" "haskell" $ T.unlines
+        [ "module A where"
+        , "foo = no"
+        ]
+      let expected = "*Imported from 'Prelude'*\n* * *\n\n\nBoolean \"not\"\n* * *\n[Documentation](file:"
+      test doc (Position 1 8) "not" (Just $ T.length expected) [expected]
+  , broken $ testSession "extern mulit line doc" $ do
+      doc <- createDoc "A.hs" "haskell" $ T.unlines
+        [ "module A where"
+        , "foo = i"
+        ]
+      let expected = "*Imported from 'Prelude'*\n* * *\n\n\nIdentity function. \n```haskell\nid x = x\n```\n* * *\n[Documentation](file:"
+      test doc (Position 1 7) "id" (Just $ T.length expected) [expected]
+  ]
+  where
+    broken = knownBrokenForGhcVersions [GHC90, GHC92] "Completion doc doesn't support ghc9"
+    test doc pos label mn expected = do
+      _ <- waitForDiagnostics
+      compls <- getCompletions doc pos
+      let compls' = [
+            -- We ignore doc uris since it points to the local path which determined by specific machines
+            case mn of
+                Nothing -> txt
+                Just n -> T.take n txt
+            | CompletionItem {_documentation = Just (CompletionDocMarkup (MarkupContent MkMarkdown txt)), ..} <- compls
+            , _label == label
+            ]
+      liftIO $ compls' @?= expected
 
 highlightTests :: TestTree
 highlightTests = testGroup "highlight"
