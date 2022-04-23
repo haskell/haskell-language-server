@@ -261,8 +261,6 @@ queryCalls :: (Show a)
   -> Action (Maybe [a])
 queryCalls item queryFunc makeFunc merge
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
-    refreshHieDb
-
     ShakeExtras{withHieDb} <- getShakeExtras
     maySymbol <- getSymbol nfp
     case maySymbol of
@@ -298,36 +296,3 @@ queryCalls item queryFunc makeFunc merge
                 Nothing  -> pure Nothing
                 Just res -> pure res
               Nothing -> pure Nothing
-
--- Write modified foi files before queries.
-refreshHieDb :: Action ()
-refreshHieDb = do
-    fs <- HM.keys . HM.filter (/= OnDisk) <$> getFilesOfInterestUntracked
-    forM_ fs (\f -> do
-        tmr <- use_ TypeCheck f
-        hsc <- hscEnv <$> use_ GhcSession f
-        (_, masts) <- liftIO $ generateHieAsts hsc tmr
-        se <- getShakeExtras
-        case masts of
-            Nothing -> pure ()
-            Just asts -> do
-                source <- getSourceFileSource f
-                let exports = tcg_exports $ tmrTypechecked tmr
-                    msum = tmrModSummary tmr
-                liftIO $ writeAndIndexHieFile hsc se msum f exports asts source
-                pure ()
-        )
-    ShakeExtras{hiedbWriter} <- getShakeExtras
-    liftIO $ atomically $ check $ indexPending hiedbWriter
-    where
-      check p = do
-        v <- readTVar p
-        if HM.null v then pure () else retry
-
--- Copy unexport function form `ghcide/src/Development/IDE/Core/Rules.hs`
-getSourceFileSource :: NormalizedFilePath -> Action BS.ByteString
-getSourceFileSource nfp = do
-    (_, msource) <- getFileContents nfp
-    case msource of
-        Nothing     -> liftIO $ BS.readFile (fromNormalizedFilePath nfp)
-        Just source -> pure $ T.encodeUtf8 source
