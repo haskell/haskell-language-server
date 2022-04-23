@@ -25,10 +25,10 @@ library
     , extra
     , ghc
     , ghc-exactprint
-    , ghcide                ^>=1.6
+    , ghcide                ^>= 1.6 || ^>=1.7
     , hashable
     , hiedb
-    , hls-plugin-api        ^>=1.3
+    , hls-plugin-api        ^>= 1.3 || ^>=1.4
     , lsp
     , lsp-types
     , mod
