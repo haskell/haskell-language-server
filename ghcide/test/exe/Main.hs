@@ -5282,14 +5282,14 @@ completionDocTests =
         ]
       let expected = "*Imported from 'Prelude'*\n"
       test doc (Position 1 8) "odd" (Just $ T.length expected) [expected]
-  , brokenForMacGhc9 $ brokenForWinGhc92 $ testSession "extern single line doc without '\\n'" $ do
+  , brokenForMacGhc9 $ brokenForWinGhc9 $ testSession "extern single line doc without '\\n'" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
         , "foo = no"
         ]
       let expected = "*Imported from 'Prelude'*\n* * *\n\n\nBoolean \"not\"\n"
       test doc (Position 1 8) "not" (Just $ T.length expected) [expected]
-  , brokenForMacGhc9 $ brokenForWinGhc92 $ testSession "extern mulit line doc" $ do
+  , brokenForMacGhc9 $ brokenForWinGhc9 $ testSession "extern mulit line doc" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
         , "foo = i"
@@ -5306,7 +5306,7 @@ completionDocTests =
   ]
   where
     brokenForGhc9 = knownBrokenForSpecific (BrokenForGHC [GHC90, GHC92]) "Completion doc doesn't support ghc9"
-    brokenForWinGhc92 = knownBrokenForSpecific (BrokenSpecific Windows [GHC92]) "Extern doc doesn't support Windows for ghc9.2"
+    brokenForWinGhc9 = knownBrokenForSpecific (BrokenSpecific Windows [GHC90, GHC92]) "Extern doc doesn't support Windows for ghc9.2"
     -- https://gitlab.haskell.org/ghc/ghc/-/issues/20903
     brokenForMacGhc9 = knownBrokenForSpecific (BrokenSpecific MacOS [GHC90, GHC92]) "Extern doc doesn't support MacOS for ghc9"
     test doc pos label mn expected = do
