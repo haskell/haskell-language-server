@@ -5305,7 +5305,7 @@ completionDocTests =
       test doc (Position 1 7) "id" (Just $ T.length expected) [expected]
   ]
   where
-    brokenForGhc9 = knownBrokenForSpecific (BrokenForGHC GHC92) "Completion doc doesn't support ghc9"
+    brokenForGhc9 = knownBrokenForSpecific (BrokenForGHC [GHC90, GHC92]) "Completion doc doesn't support ghc9"
     brokenForWinGhc92 = knownBrokenForSpecific (BrokenSpecific Windows [GHC92]) "Extern doc doesn't support Windows for ghc9.2"
     -- https://gitlab.haskell.org/ghc/ghc/-/issues/20903
     brokenForMacGhc9 = knownBrokenForSpecific (BrokenSpecific MacOS [GHC90, GHC92]) "Extern doc doesn't support MacOS for ghc9"
@@ -5608,7 +5608,7 @@ data BrokenTarget =
     -- ^Broken for `BrokenOS` with `GhcVersion`
     | BrokenForOS BrokenOS
     -- ^Broken for `BrokenOS`
-    | BrokenForGHC GhcVersion
+    | BrokenForGHC [GhcVersion]
     -- ^Broken for `GhcVersion`
 
 -- TODO: Adjust related brokens
@@ -5616,14 +5616,16 @@ data BrokenTarget =
 -- | Known broken for specific os and ghc
 knownBrokenForSpecific :: BrokenTarget -> String -> TestTree -> TestTree
 knownBrokenForSpecific = \case
-    BrokenSpecific bos vers -> go $ isTargetOS bos && ghcVersion `elem` vers
+    BrokenSpecific bos vers -> go $ isTargetOS bos && isTargetGhc vers
     BrokenForOS bos -> go $ isTargetOS bos
-    BrokenForGHC ver -> go $ ghcVersion == ver
+    BrokenForGHC vers -> go $ isTargetGhc vers
     where
         isTargetOS = \case
             Windows -> isWindows
             MacOS -> isMac
             Linux -> not isWindows && not isMac
+
+        isTargetGhc = elem ghcVersion
 
         go True = expectFailBecause
         go False = \_ -> id
