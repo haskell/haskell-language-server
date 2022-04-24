@@ -78,6 +78,10 @@ data SpanDocUris =
 emptySpanDoc :: SpanDoc
 emptySpanDoc = SpanDocText [] (SpanDocUris Nothing Nothing)
 
+-- | Convert `SpanDoc` to Markdown format.
+--
+-- Return a list `Text` includes haddock, document uri and source code uri,
+-- each item can be empty and must end with '\\n' if exist.
 spanDocToMarkdown :: SpanDoc -> [T.Text]
 spanDocToMarkdown = \case
     (SpanDocString docs uris) ->
@@ -87,7 +91,7 @@ spanDocToMarkdown = \case
   where
     go [] uris = spanDocUrisToMarkdown uris
     go txt uris = init txt <> [render (last txt)] <> spanDocUrisToMarkdown uris
-    -- If the doc is not end with an `'\n'`, we append it.
+    -- If the doc is not end with an '\n', we append it.
     render txt
       | T.null txt = txt
       | T.last txt == '\n' = txt
