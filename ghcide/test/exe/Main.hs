@@ -5240,7 +5240,7 @@ completionDocTests =
         , "bar = fo"
         ]
       let expected = "*Defined at line 2, column 1 in this module*\n"
-      test doc (Position 2 8) "foo" (Just $ T.length expected) [expected]
+      test doc (Position 2 8) "foo" Nothing [expected]
   , testSession "local empty doc" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
@@ -5248,7 +5248,7 @@ completionDocTests =
         , "bar = fo"
         ]
       test doc (Position 2 8) "foo" Nothing ["*Defined at line 2, column 1 in this module*\n"]
-  , broken $ testSession "local single line doc without '\\n'" $ do
+  , brokenForGhc9 $ testSession "local single line doc without '\\n'" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
         , "-- |docdoc"
@@ -5256,7 +5256,7 @@ completionDocTests =
         , "bar = fo"
         ]
       test doc (Position 3 8) "foo" Nothing ["*Defined at line 3, column 1 in this module*\n* * *\ndocdoc\n"]
-  , broken $ testSession "local multi line doc with '\\n'" $ do
+  , brokenForGhc9 $ testSession "local multi line doc with '\\n'" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
         , "-- | abcabc"
@@ -5265,7 +5265,7 @@ completionDocTests =
         , "bar = fo"
         ]
       test doc (Position 4 8) "foo" Nothing ["*Defined at line 4, column 1 in this module*\n* * *\n abcabc\n"]
-  , broken $ testSession "local multi line doc without '\\n'" $ do
+  , brokenForGhc9 $ testSession "local multi line doc without '\\n'" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
         , "-- |     abcabc"
@@ -5282,23 +5282,33 @@ completionDocTests =
         ]
       let expected = "*Imported from 'Prelude'*\n"
       test doc (Position 1 8) "odd" (Just $ T.length expected) [expected]
-  , testSession "extern single line doc without '\\n'" $ do
+  , brokenForMacGhc9 $ brokenForWinGhc92 $ testSession "extern single line doc without '\\n'" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
         , "foo = no"
         ]
       let expected = "*Imported from 'Prelude'*\n* * *\n\n\nBoolean \"not\"\n"
       test doc (Position 1 8) "not" (Just $ T.length expected) [expected]
-  , testSession "extern mulit line doc" $ do
+  , brokenForMacGhc9 $ brokenForWinGhc92 $ testSession "extern mulit line doc" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
         , "foo = i"
         ]
       let expected = "*Imported from 'Prelude'*\n* * *\n\n\nIdentity function. \n```haskell\nid x = x\n```\n"
       test doc (Position 1 7) "id" (Just $ T.length expected) [expected]
+  , testSession "extern defined doc" $ do
+      doc <- createDoc "A.hs" "haskell" $ T.unlines
+        [ "module A where"
+        , "foo = i"
+        ]
+      let expected = "*Imported from 'Prelude'*\n"
+      test doc (Position 1 7) "id" (Just $ T.length expected) [expected]
   ]
   where
-    broken = knownBrokenForGhcVersions [GHC92] "Completion doc doesn't support ghc9.2"
+    brokenForGhc9 = knownBrokenForSpecific (BrokenForGHC GHC92) "Completion doc doesn't support ghc9"
+    brokenForWinGhc92 = knownBrokenForSpecific (BrokenSpecific Windows [GHC92]) "Extern doc doesn't support Windows for ghc9.2"
+    -- https://gitlab.haskell.org/ghc/ghc/-/issues/20903
+    brokenForMacGhc9 = knownBrokenForSpecific (BrokenSpecific MacOS [GHC90, GHC92]) "Extern doc doesn't support MacOS for ghc9"
     test doc pos label mn expected = do
       _ <- waitForDiagnostics
       compls <- getCompletions doc pos
@@ -5591,6 +5601,32 @@ knownBrokenForGhcVersions ghcVers
     | ghcVersion `elem` ghcVers = expectFailBecause
     | otherwise = \_ x -> x
 
+data BrokenOS = Linux | MacOS | Windows deriving (Show, Eq)
+
+data BrokenTarget =
+    BrokenSpecific BrokenOS [GhcVersion]
+    -- ^Broken for `BrokenOS` with `GhcVersion`
+    | BrokenForOS BrokenOS
+    -- ^Broken for `BrokenOS`
+    | BrokenForGHC GhcVersion
+    -- ^Broken for `GhcVersion`
+
+-- TODO: Adjust related brokens
+
+-- | Known broken for specific os and ghc
+knownBrokenForSpecific :: BrokenTarget -> String -> TestTree -> TestTree
+knownBrokenForSpecific = \case
+    BrokenSpecific bos vers -> go $ isTargetOS bos && ghcVersion `elem` vers
+    BrokenForOS bos -> go $ isTargetOS bos
+    BrokenForGHC ver -> go $ ghcVersion == ver
+    where
+        isTargetOS = \case
+            Windows -> isWindows
+            MacOS -> isMac
+            Linux -> not isWindows && not isMac
+
+        go True = expectFailBecause
+        go False = \_ -> id
 
 data Expect
   = ExpectRange Range -- Both gotoDef and hover should report this range
