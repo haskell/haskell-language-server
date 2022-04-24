@@ -5280,25 +5280,25 @@ completionDocTests =
         [ "module A where"
         , "foo = od"
         ]
-      let expected = "*Imported from 'Prelude'*\n* * *\n"
+      let expected = "*Imported from 'Prelude'*\n"
       test doc (Position 1 8) "odd" (Just $ T.length expected) [expected]
-  , broken $ testSession "extern single line doc without '\\n'" $ do
+  , testSession "extern single line doc without '\\n'" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
         , "foo = no"
         ]
-      let expected = "*Imported from 'Prelude'*\n* * *\n\n\nBoolean \"not\"\n* * *\n"
+      let expected = "*Imported from 'Prelude'*\n* * *\n\n\nBoolean \"not\"\n"
       test doc (Position 1 8) "not" (Just $ T.length expected) [expected]
-  , broken $ testSession "extern mulit line doc" $ do
+  , testSession "extern mulit line doc" $ do
       doc <- createDoc "A.hs" "haskell" $ T.unlines
         [ "module A where"
         , "foo = i"
         ]
-      let expected = "*Imported from 'Prelude'*\n* * *\n\n\nIdentity function. \n```haskell\nid x = x\n```\n* * *\n"
+      let expected = "*Imported from 'Prelude'*\n* * *\n\n\nIdentity function. \n```haskell\nid x = x\n```\n"
       test doc (Position 1 7) "id" (Just $ T.length expected) [expected]
   ]
   where
-    broken = knownBrokenForGhcVersions [GHC90, GHC92] "Completion doc doesn't support ghc9"
+    broken = knownBrokenForGhcVersions [GHC92] "Completion doc doesn't support ghc9.2"
     test doc pos label mn expected = do
       _ <- waitForDiagnostics
       compls <- getCompletions doc pos
