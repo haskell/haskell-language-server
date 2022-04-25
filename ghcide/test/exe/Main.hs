@@ -124,6 +124,7 @@ import           Ide.PluginUtils                          (pluginDescToIdePlugin
 import           Ide.Types
 import qualified Language.LSP.Types                       as LSP
 import qualified Language.LSP.Types.Lens                  as L
+import           Language.LSP.Types.Lens                  (workspace, didChangeWatchedFiles)
 import qualified Progress
 import           System.Time.Extra
 import           Test.Tasty
@@ -133,7 +134,6 @@ import           Test.Tasty.Ingredients.Rerun
 import           Test.Tasty.QuickCheck
 import           Text.Printf                              (printf)
 import           Text.Regex.TDFA                          ((=~))
-import Language.LSP.Types.Lens (workspace, didChangeWatchedFiles)
 
 data Log
   = LogGhcIde Ghcide.Log
@@ -5305,10 +5305,10 @@ completionDocTests =
       test doc (Position 1 7) "id" (Just $ T.length expected) [expected]
   ]
   where
-    brokenForGhc9 = knownBrokenForSpecific (BrokenForGHC [GHC90, GHC92]) "Completion doc doesn't support ghc9"
-    brokenForWinGhc9 = knownBrokenForSpecific (BrokenSpecific Windows [GHC90, GHC92]) "Extern doc doesn't support Windows for ghc9.2"
+    brokenForGhc9 = knownBrokenFor (BrokenForGHC [GHC90, GHC92]) "Completion doc doesn't support ghc9"
+    brokenForWinGhc9 = knownBrokenFor (BrokenSpecific Windows [GHC90, GHC92]) "Extern doc doesn't support Windows for ghc9.2"
     -- https://gitlab.haskell.org/ghc/ghc/-/issues/20903
-    brokenForMacGhc9 = knownBrokenForSpecific (BrokenSpecific MacOS [GHC90, GHC92]) "Extern doc doesn't support MacOS for ghc9"
+    brokenForMacGhc9 = knownBrokenFor (BrokenSpecific MacOS [GHC90, GHC92]) "Extern doc doesn't support MacOS for ghc9"
     test doc pos label mn expected = do
       _ <- waitForDiagnostics
       compls <- getCompletions doc pos
@@ -5575,33 +5575,25 @@ xfail :: TestTree -> String -> TestTree
 xfail = flip expectFailBecause
 
 ignoreInWindowsBecause :: String -> TestTree -> TestTree
-ignoreInWindowsBecause
-    | isWindows = ignoreTestBecause
-    | otherwise = \_ x -> x
+ignoreInWindowsBecause = ignoreFor (BrokenForOS Windows)
 
 ignoreInWindowsForGHC88And810 :: TestTree -> TestTree
-ignoreInWindowsForGHC88And810
-    | ghcVersion `elem` [GHC88, GHC810] =
-        ignoreInWindowsBecause "tests are unreliable in windows for ghc 8.8 and 8.10"
-    | otherwise = id
+ignoreInWindowsForGHC88And810 =
+    ignoreFor (BrokenSpecific Windows [GHC88, GHC810]) "tests are unreliable in windows for ghc 8.8 and 8.10"
 
 ignoreForGHC92 :: String -> TestTree -> TestTree
-ignoreForGHC92 msg
-    | ghcVersion == GHC92 = ignoreTestBecause msg
-    | otherwise = id
+ignoreForGHC92 = ignoreFor (BrokenForGHC [GHC92])
 
 ignoreInWindowsForGHC88 :: TestTree -> TestTree
-ignoreInWindowsForGHC88
-    | ghcVersion == GHC88 =
-        ignoreInWindowsBecause "tests are unreliable in windows for ghc 8.8"
-    | otherwise = id
+ignoreInWindowsForGHC88 =
+    ignoreFor (BrokenSpecific Windows [GHC88]) "tests are unreliable in windows for ghc 8.8"
 
 knownBrokenForGhcVersions :: [GhcVersion] -> String -> TestTree -> TestTree
-knownBrokenForGhcVersions ghcVers
-    | ghcVersion `elem` ghcVers = expectFailBecause
-    | otherwise = \_ x -> x
+knownBrokenForGhcVersions ghcVers = knownBrokenFor (BrokenForGHC ghcVers)
 
-data BrokenOS = Linux | MacOS | Windows deriving (Show, Eq)
+data BrokenOS = Linux | MacOS | Windows deriving (Show)
+
+data IssueSolution = Broken | Ignore deriving (Show)
 
 data BrokenTarget =
     BrokenSpecific BrokenOS [GhcVersion]
@@ -5610,15 +5602,22 @@ data BrokenTarget =
     -- ^Broken for `BrokenOS`
     | BrokenForGHC [GhcVersion]
     -- ^Broken for `GhcVersion`
+    deriving (Show)
 
--- TODO: Adjust related brokens
+-- | Ignore test for specific os and ghc with reason.
+ignoreFor :: BrokenTarget -> String -> TestTree -> TestTree
+ignoreFor = knownIssueFor Ignore
 
--- | Known broken for specific os and ghc
-knownBrokenForSpecific :: BrokenTarget -> String -> TestTree -> TestTree
-knownBrokenForSpecific = \case
-    BrokenSpecific bos vers -> go $ isTargetOS bos && isTargetGhc vers
-    BrokenForOS bos -> go $ isTargetOS bos
-    BrokenForGHC vers -> go $ isTargetGhc vers
+-- | Known broken for specific os and ghc with reason.
+knownBrokenFor :: BrokenTarget -> String -> TestTree -> TestTree
+knownBrokenFor = knownIssueFor Broken
+
+-- | Deal with `IssueSolution` for specific OS and GHC.
+knownIssueFor :: IssueSolution -> BrokenTarget -> String -> TestTree -> TestTree
+knownIssueFor solution = go . \case
+    BrokenSpecific bos vers -> isTargetOS bos && isTargetGhc vers
+    BrokenForOS bos -> isTargetOS bos
+    BrokenForGHC vers -> isTargetGhc vers
     where
         isTargetOS = \case
             Windows -> isWindows
@@ -5627,7 +5626,9 @@ knownBrokenForSpecific = \case
 
         isTargetGhc = elem ghcVersion
 
-        go True = expectFailBecause
+        go True = case solution of
+            Broken -> expectFailBecause
+            Ignore -> ignoreTestBecause
         go False = \_ -> id
 
 data Expect
