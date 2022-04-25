@@ -72,7 +72,9 @@ import           "ghc-lib" GHC                                      hiding
                                                                      RealSrcSpan,
                                                                      ms_hspp_opts)
 import qualified "ghc-lib" GHC
+#if MIN_GHC_API_VERSION(9,0,0)
 import           "ghc-lib" GHC.Types.SrcLoc                         (BufSpan)
+#endif
 import           "ghc-lib-parser" GHC.LanguageExtensions            (Extension)
 import           Language.Haskell.GhclibParserEx.GHC.Driver.Session as GhclibParserEx (readExtension)
 import           System.FilePath                                    (takeFileName)
@@ -149,6 +151,9 @@ instance Pretty Log where
 
 #ifdef HLINT_ON_GHC_LIB
 -- Reimplementing this, since the one in Development.IDE.GHC.Compat isn't for ghc-lib
+#if !MIN_GHC_API_VERSION(9,0,0)
+type BufSpan = ()
+#endif
 pattern RealSrcSpan :: GHC.RealSrcSpan -> Maybe BufSpan -> GHC.SrcSpan
 #if MIN_GHC_API_VERSION(9,0,0)
 pattern RealSrcSpan x y = GHC.RealSrcSpan x y
