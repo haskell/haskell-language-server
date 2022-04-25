@@ -97,6 +97,8 @@ extra-deps:
 ghc-options:
   "$everything": -haddock
 
+allow-newer: true
+
 configure-options:
   ghcide:
     - --disable-library-for-ghci
