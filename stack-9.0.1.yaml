@@ -21,7 +21,7 @@ packages:
 - ./plugins/hls-splice-plugin
 - ./plugins/hls-tactics-plugin
 - ./plugins/hls-brittany-plugin
-# - ./plugins/hls-stylish-haskell-plugin
+- ./plugins/hls-stylish-haskell-plugin
 - ./plugins/hls-floskell-plugin
 - ./plugins/hls-fourmolu-plugin
 - ./plugins/hls-pragmas-plugin
@@ -56,6 +56,13 @@ extra-deps:
 - lsp-types-1.4.0.1
 - lsp-test-0.14.0.2
 - refinery-0.4.0.0
+- ghc-lib-9.2.2.20220307
+- ghc-lib-parser-9.2.2.20220307
+- ghc-lib-parser-ex-9.2.0.3
+- hlint-3.4
+- stylish-haskell-0.14.1.0
+- ormolu-0.4.0.0
+- fourmolu-0.6.0.0
 
 # shake-bench dependencies
 - Chart-1.9.3
@@ -64,9 +71,6 @@ extra-deps:
 - diagrams-postscript-1.5
 - statestack-0.3
 - operational-0.2.4.1
-
-# currently needed for ghcide>extra, etc.
-allow-newer: true
 
 ghc-options:
   "$everything": -haddock
@@ -82,15 +86,11 @@ configure-options:
 flags:
   haskell-language-server:
     pedantic: true
-
-    ignore-plugins-ghc-bounds: true
-    stylishHaskell: false
-
   retrie:
     BuildExecutable: false
-  # Stack doesn't support automatic flags.
   hls-hlint-plugin:
     hlint33: true
+    ghc-lib: true
   hyphenation:
     embed: true
 

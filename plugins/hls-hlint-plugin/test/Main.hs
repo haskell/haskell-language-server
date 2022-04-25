@@ -181,7 +181,8 @@ suggestionsTests =
         doc <- openDoc "IgnoreAnnHlint.hs" "haskell"
         expectNoMoreDiagnostics 3 doc "hlint"
 
-    , testCase "apply-refact preserve regular comments" $ runHlintSession "" $ do
+    , knownBrokenForGhcVersions [GHC92] "apply-refact has different behavior on v0.10.0.0" $
+      testCase "apply-refact preserve regular comments" $ runHlintSession "" $ do
         testRefactor "Comments.hs" "Redundant bracket" expectedComments
 
     , testCase "[#2290] apply all hints works with a trailing comment" $ runHlintSession "" $ do
@@ -358,10 +359,7 @@ disableHlint = sendConfigurationChanged $ toJSON $ def { Plugin.plugins = Map.fr
 -- Although a given hlint version supports one direct ghc, we could use several versions of hlint
 -- each one supporting a different ghc version. It should be a temporary situation though.
 knownBrokenForHlintOnGhcLib :: String -> TestTree -> TestTree
-knownBrokenForHlintOnGhcLib = knownBrokenForGhcVersions [GHC88, GHC86]
-
-knownBrokenForHlintOnRawGhc :: String -> TestTree -> TestTree
-knownBrokenForHlintOnRawGhc = knownBrokenForGhcVersions [GHC810, GHC90]
+knownBrokenForHlintOnGhcLib = knownBrokenForGhcVersions [GHC86, GHC88, GHC90, GHC92]
 
 -- 1's based
 data Point = Point {

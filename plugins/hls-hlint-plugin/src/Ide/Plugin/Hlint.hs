@@ -60,8 +60,7 @@ import qualified Refact.Apply                                       as Refact
 import qualified Refact.Types                                       as Refact
 
 #ifdef HLINT_ON_GHC_LIB
-import           Development.IDE.GHC.Compat                         (BufSpan,
-                                                                     DynFlags,
+import           Development.IDE.GHC.Compat                         (DynFlags,
                                                                      WarningFlag (Opt_WarnUnrecognisedPragmas),
                                                                      extensionFlags,
                                                                      ms_hspp_opts,
@@ -73,6 +72,7 @@ import           "ghc-lib" GHC                                      hiding
                                                                      RealSrcSpan,
                                                                      ms_hspp_opts)
 import qualified "ghc-lib" GHC
+import           "ghc-lib" GHC.Types.SrcLoc                         (BufSpan)
 import           "ghc-lib-parser" GHC.LanguageExtensions            (Extension)
 import           Language.Haskell.GhclibParserEx.GHC.Driver.Session as GhclibParserEx (readExtension)
 import           System.FilePath                                    (takeFileName)
@@ -89,7 +89,11 @@ import           System.IO.Temp
 import           Development.IDE.GHC.Compat                         hiding
                                                                     (setEnv, (<+>))
 import           GHC.Generics                                       (Associativity (LeftAssociative, NotAssociative, RightAssociative))
+#if MIN_GHC_API_VERSION(9,2,0)
+import           Language.Haskell.GHC.ExactPrint.ExactPrint         (deltaOptions)
+#else
 import           Language.Haskell.GHC.ExactPrint.Delta              (deltaOptions)
+#endif
 import           Language.Haskell.GHC.ExactPrint.Parsers            (postParseTransform)
 import           Language.Haskell.GHC.ExactPrint.Types              (Rigidity (..))
 import           Language.Haskell.GhclibParserEx.Fixity             as GhclibParserEx (applyFixities)
@@ -141,12 +145,12 @@ instance Pretty Log where
     LogApplying fp res -> "Applying hint(s) for" <+> viaShow fp <> ":" <+> viaShow res
     LogGeneratedIdeas fp ideas -> "Generated hlint ideas for for" <+> viaShow fp <> ":" <+> viaShow ideas
     LogUsingExtensions fp exts -> "Using extensions for " <+> viaShow fp <> ":" <+> pretty exts
-    LogGetIdeas fp -> "Getting hlint ideas for " <+> viaShow fp 
+    LogGetIdeas fp -> "Getting hlint ideas for " <+> viaShow fp
 
 #ifdef HLINT_ON_GHC_LIB
 -- Reimplementing this, since the one in Development.IDE.GHC.Compat isn't for ghc-lib
 pattern RealSrcSpan :: GHC.RealSrcSpan -> Maybe BufSpan -> GHC.SrcSpan
-#if MIN_VERSION_ghc(9,0,0)
+#if MIN_GHC_API_VERSION(9,0,0)
 pattern RealSrcSpan x y = GHC.RealSrcSpan x y
 #else
 pattern RealSrcSpan x y <- ((,Nothing) -> (GHC.RealSrcSpan x, y))
@@ -323,8 +327,7 @@ getExtensions nfp = do
     dflags <- getFlags
     let hscExts = EnumSet.toList (extensionFlags dflags)
     let hscExts' = mapMaybe (GhclibParserEx.readExtension . show) hscExts
-    let hlintExts = hscExts'
-    return hlintExts
+    return hscExts'
   where getFlags :: Action DynFlags
         getFlags = do
           modsum <- use_ GetModSummary nfp

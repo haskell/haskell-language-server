@@ -16,7 +16,7 @@ packages:
 - ./plugins/hls-explicit-imports-plugin
 - ./plugins/hls-qualify-imported-names-plugin
 - ./plugins/hls-refine-imports-plugin
-# - ./plugins/hls-hlint-plugin
+- ./plugins/hls-hlint-plugin
 - ./plugins/hls-rename-plugin
 # - ./plugins/hls-retrie-plugin
 # - ./plugins/hls-splice-plugin
@@ -44,11 +44,11 @@ extra-deps:
 - dependent-sum-0.7.1.0
 - extra-1.7.10
 - floskell-0.10.6
-- fourmolu-0.5.0.0
-- ghc-exactprint-1.4.1
+- fourmolu-0.6.0.0
+- ghc-exactprint-1.5.0
 - ghc-lib-9.2.2.20220307
 - ghc-lib-parser-9.2.2.20220307
-- ghc-lib-parser-ex-9.2.0.1
+- ghc-lib-parser-ex-9.2.0.3
 - heapsize-0.3.0.1
 - hiedb-0.4.1.0
 - hie-bios-0.9.1
@@ -94,7 +94,11 @@ extra-deps:
 - unix-2.7.2.2
 - Win32-2.12.0.1
 
-- stylish-haskell-0.14.1.0
+# - stylish-haskell-0.14.1.0
+- github: July541/stylish-haskell
+  commit: 305168551e0fe808e0c6ba14d8245680cdd6649d
+- hlint-3.4
+- apply-refact-0.10.0.0
 
 # currently needed for ghcide>extra, etc.
 allow-newer: true
@@ -119,7 +123,6 @@ flags:
     brittany: false
     eval: false
     haddockComments: false
-    hlint: false
     retrie: false
     splice: false
     tactic: false
@@ -127,8 +130,16 @@ flags:
   retrie:
     BuildExecutable: false
   # Stack doesn't support automatic flags.
-  # hls-hlint-plugin:
-  #   hlint33: true
+  hls-hlint-plugin:
+    hlint33: true
+    ghc-lib: true
+  # Use ghc-lib force instead of ghc itself
+  ghc-lib-parser-ex:
+    auto: false
+  hlint:
+    ghc-lib: true
+  stylish-haskell:
+    ghc-lib: true
   hyphenation:
     embed: true
 

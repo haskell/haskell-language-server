@@ -43,7 +43,6 @@ library
   hs-source-dirs:     src
   build-depends:
     , aeson
-    , apply-refact          >=0.9.3.0
     , base                  >=4.12    && <5
     , binary
     , bytestring
@@ -78,14 +77,20 @@ library
     -- This mirrors the logic in hlint.cabal for hlint-3.3
     -- https://github.com/ndmitchell/hlint/blob/d3576de4529d8df6cca5a345f5b7e04474ff7bff/hlint.cabal#L79-L88
     -- so we can make sure that we do the same thing as hlint
-    build-depends: hlint ^>=3.3
+    build-depends: hlint ^>=3.4
+
     if (!flag(ghc-lib) && impl(ghc >=9.0.1) && impl(ghc <9.1.0))
-      build-depends: ghc ==9.0.*
+      build-depends: ghc          ==9.0.*
+                   , apply-refact >=0.9.0.0
+    elif (!flag(ghc-lib) && impl(ghc >=9.2.1) && impl(ghc <9.3.0))
+      build-depends: ghc          ==9.2.*
+                   , apply-refact >=0.10.0.0
     else
       build-depends:
-        , ghc
-        , ghc-lib            ^>=9.0
-        , ghc-lib-parser-ex  ^>=9.0
+        , ghc-lib            ^>=9.2
+        , ghc-lib-parser-ex  ^>=9.2
+        , ghc-lib-parser     ^>=9.2
+        , apply-refact        >=0.9.0.0
 
       cpp-options:   -DHLINT_ON_GHC_LIB
 
@@ -93,6 +98,7 @@ library
     -- This mirrors the logic in hlint.cabal for hlint-3.2
     -- https://github.com/ndmitchell/hlint/blob/c7354e473c7d09213c8adc3dc94bf50a6eb4a42d/hlint.cabal#L79-L88
     build-depends: hlint ^>=3.2
+                 , apply-refact          >=0.9.3.0
     if (!flag(ghc-lib) && impl(ghc >=8.10.1) && impl(ghc < 8.11.0))
       build-depends: ghc >=8.10 && <9.0
     else
