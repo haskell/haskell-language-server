@@ -252,6 +252,15 @@ Alternatively, you can build the entire thing as a Nix derivation from the flake
 
 The docs are also built and previewed on every PR, so you can check them from the PR status.
 
+## Working on code actions
+
+To make HLS easier to maintain, please follow these design guidelines when adding or modifying code actions:
+
+1. Prefer `ghc-exactprint` to manual text parsing.
+2. Prefer `ghc-exactprint` to manual code generation.
+3. Code generating actions should not try to format the generated code. Assume that the user is also leveraging HLS for automated code formatting.
+4. Put new code actions in their own plugin unless they are very closely aligned with an existing ghcide code action.
+
 ## Sponsorship
 
 If you want to contribute financially you can do so via [open-collective](https://opencollective.com/haskell-language-server). In the past the funding has been used to sponsor [summer student projects](https://mpickering.github.io/ide/posts/2021-07-22-summer-of-hls.html).
