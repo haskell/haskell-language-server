@@ -81,7 +81,16 @@ emptySpanDoc = SpanDocText [] (SpanDocUris Nothing Nothing)
 -- | Convert `SpanDoc` to Markdown format.
 --
 -- Return a list `Text` includes haddock, document uri and source code uri,
--- each item can be empty and must end with '\\n' if exist.
+-- each item can be empty and must end with '\\n' if exist. This is to prevent
+-- subsequent render problem caused by the missing newline.
+--
+-- Example:
+--
+-- For return value ["xxxx","yyyy"], if we concat the list with inserting
+-- a separate line(note by "---\n"),
+-- it will result "xxxx---\nyyyy" and can't be rendered as a normal doc.
+-- Therefore we check every item in the value to make sure they all end with '\\n',
+-- this makes "xxxx\n---\nyyy\n" and can be rendered correctly.
 spanDocToMarkdown :: SpanDoc -> [T.Text]
 spanDocToMarkdown = \case
     (SpanDocString docs uris) ->
@@ -89,8 +98,8 @@ spanDocToMarkdown = \case
         in  go [doc] uris
     (SpanDocText txt uris) -> go txt uris
   where
-    go [] uris = spanDocUrisToMarkdown uris
-    go txt uris = init txt <> [render (last txt)] <> spanDocUrisToMarkdown uris
+    go [] uris = render <$> spanDocUrisToMarkdown uris
+    go txt uris = init txt <> [render (last txt)] <> (render <$> spanDocUrisToMarkdown uris)
     -- If the doc is not end with an '\n', we append it.
     render txt
       | T.null txt = txt
