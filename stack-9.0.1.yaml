@@ -63,6 +63,7 @@ extra-deps:
 - stylish-haskell-0.14.1.0
 - ormolu-0.4.0.0
 - fourmolu-0.6.0.0
+- Cabal-3.6.0.0
 
 # shake-bench dependencies
 - Chart-1.9.3
