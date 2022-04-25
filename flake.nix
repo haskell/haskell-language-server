@@ -63,6 +63,16 @@
       url = "https://hackage.haskell.org/package/hie-bios-0.9.1/hie-bios-0.9.1.tar.gz";
       flake = false;
     };
+    myst-parser = {
+      url = "github:smunix/MyST-Parser?ref=fix.hls-docutils"; 
+      flake = false;
+    };
+    # For https://github.com/readthedocs/sphinx_rtd_theme/pull/1185, otherwise lists are broken locally
+    sphinx_rtd_theme = {
+      url = "github:readthedocs/sphinx_rtd_theme?rev=34f81daaf52466366c80003db293d50075c1b896";
+      flake = false;
+    };
+    poetry2nix.url = "github:nix-community/poetry2nix/master";
   };
   outputs =
     inputs@{ self, nixpkgs, flake-compat, flake-utils, pre-commit-hooks, gitignore, ... }:
@@ -169,7 +179,7 @@
       let
         pkgs = import nixpkgs {
           inherit system;
-          overlays = [ self.overlay ];
+          overlays = [ self.overlay inputs.poetry2nix.overlay ];
           config = { allowBroken = true; };
         };
 
@@ -217,16 +227,23 @@
         ghc922 = ghc922Config.tweakHpkgs (pkgs.hlsHpkgs "ghc922");
 
         # For markdown support
-        myst-parser = pkgs.python3Packages.callPackage ./myst-parser.nix {};
-        sphinx_rtd_theme = pkgs.python3Packages.sphinx_rtd_theme.overrideAttrs (oldAttrs: {
-          # For https://github.com/readthedocs/sphinx_rtd_theme/pull/1185, otherwise lists are broken locally
-          src = pkgs.fetchFromGitHub {
-            owner = "readthedocs";
-            repo = "sphinx_rtd_theme";
-            rev = "34f81daaf52466366c80003db293d50075c1b896";
-            sha256 = "0rkrsvvqr6g2p3v5vq88jhfp5sd0r1jqjh3vc5y26jn30z8s4fkz";
-          };
-        });
+        myst-parser = pkgs.poetry2nix.mkPoetryEnv {
+          projectDir = inputs.myst-parser;
+          python = pkgs.python39;
+          overrides = [ 
+            pkgs.poetry2nix.defaultPoetryOverrides
+          ];
+        };
+        sphinx_rtd_theme = pkgs.poetry2nix.mkPoetryEnv {
+          projectDir = inputs.sphinx_rtd_theme;
+          python = pkgs.python39;
+          overrides = [ 
+            pkgs.poetry2nix.defaultPoetryOverrides
+            (self: super: {
+              docutils = pkgs.python3Packages.callPackage ./docutils.nix {};
+            })
+          ];
+        };
         pythonWithPackages = pkgs.python3.withPackages (ps: [ps.sphinx myst-parser sphinx_rtd_theme ps.pip]);
 
         docs = pkgs.stdenv.mkDerivation {
@@ -377,7 +394,7 @@
 
         defaultPackage = packages.haskell-language-server;
 
-        devShell = devShells.haskell-language-server-dev;
+        devShell = devShells.haskell-language-server-922-dev;
       });
 
   nixConfig = {

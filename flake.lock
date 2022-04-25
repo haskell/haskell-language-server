@@ -45,6 +45,21 @@
     },
     "flake-utils_2": {
       "locked": {
+        "lastModified": 1649676176,
+        "narHash": "sha256-OWKJratjt2RW151VUlJPRALb7OU2S5s+f0vLj4o1bHM=",
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "rev": "a4b154ebbdc88c8498a5c7b01589addc9e9cb678",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "type": "github"
+      }
+    },
+    "flake-utils_3": {
+      "locked": {
         "lastModified": 1644229661,
         "narHash": "sha256-1YdnJAsNy69bpcjuoKdOYQX0YxZBiCYZo4Twxerqv7k=",
         "owner": "numtide",
@@ -170,6 +185,23 @@
         "url": "https://hackage.haskell.org/package/lsp-types-1.4.0.1/lsp-types-1.4.0.1.tar.gz"
       }
     },
+    "myst-parser": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1650933355,
+        "narHash": "sha256-Osd3urvH1bn9w/6sAMyLKHO7gxuYePpGJ9y8ReBfp4E=",
+        "owner": "smunix",
+        "repo": "MyST-Parser",
+        "rev": "57d0d78169a0e157406c35df951bdffdf94b4f9b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "smunix",
+        "ref": "fix.hls-docutils",
+        "repo": "MyST-Parser",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1650792148,
@@ -188,6 +220,21 @@
     },
     "nixpkgs_2": {
       "locked": {
+        "lastModified": 1650933476,
+        "narHash": "sha256-kBefFyATME/AGGFMudAltOeKYnSc3YDOI0YgDjjIhzw=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "7deb7b084d6959f4076bcf0ff4aa0a120f1d31ca",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_3": {
+      "locked": {
         "lastModified": 1645655918,
         "narHash": "sha256-ZfbEFRW7o237+A1P7eTKhXje435FCAoe0blj2n20Was=",
         "owner": "nixos",
@@ -200,10 +247,30 @@
         "type": "indirect"
       }
     },
-    "pre-commit-hooks": {
+    "poetry2nix": {
       "inputs": {
         "flake-utils": "flake-utils_2",
         "nixpkgs": "nixpkgs_2"
+      },
+      "locked": {
+        "lastModified": 1650693998,
+        "narHash": "sha256-rypGV9HND1VsR/DEtD4O3cPcwCJVfIiTKvEbYskQSqg=",
+        "owner": "nix-community",
+        "repo": "poetry2nix",
+        "rev": "8cfd980262181bd3ef15899708ceeb2e3f33958b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "ref": "master",
+        "repo": "poetry2nix",
+        "type": "github"
+      }
+    },
+    "pre-commit-hooks": {
+      "inputs": {
+        "flake-utils": "flake-utils_3",
+        "nixpkgs": "nixpkgs_3"
       },
       "locked": {
         "lastModified": 1649054408,
@@ -245,9 +312,29 @@
         "lsp": "lsp",
         "lsp-test": "lsp-test",
         "lsp-types": "lsp-types",
+        "myst-parser": "myst-parser",
         "nixpkgs": "nixpkgs",
+        "poetry2nix": "poetry2nix",
         "pre-commit-hooks": "pre-commit-hooks",
-        "retrie": "retrie"
+        "retrie": "retrie",
+        "sphinx_rtd_theme": "sphinx_rtd_theme"
+      }
+    },
+    "sphinx_rtd_theme": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1628276861,
+        "narHash": "sha256-fzqi0QfDSiN8YXtAiWXIoOlyHZQI4V32uOKZjPfWeWY=",
+        "owner": "readthedocs",
+        "repo": "sphinx_rtd_theme",
+        "rev": "34f81daaf52466366c80003db293d50075c1b896",
+        "type": "github"
+      },
+      "original": {
+        "owner": "readthedocs",
+        "repo": "sphinx_rtd_theme",
+        "rev": "34f81daaf52466366c80003db293d50075c1b896",
+        "type": "github"
       }
     }
   },
