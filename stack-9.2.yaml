@@ -131,7 +131,7 @@ flags:
     BuildExecutable: false
   # Stack doesn't support automatic flags.
   hls-hlint-plugin:
-    hlint33: true
+    hlint34: true
     ghc-lib: true
   # Use ghc-lib force instead of ghc itself
   ghc-lib-parser-ex:

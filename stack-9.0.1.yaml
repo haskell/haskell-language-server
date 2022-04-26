@@ -92,7 +92,7 @@ flags:
   retrie:
     BuildExecutable: false
   hls-hlint-plugin:
-    hlint33: true
+    hlint34: true
     ghc-lib: true
   hyphenation:
     embed: true
