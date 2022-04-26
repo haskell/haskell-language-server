@@ -51,4 +51,4 @@ test-suite tests
     , text
     , filepath
     , hls-qualify-imported-names-plugin
-    , hls-test-utils             ^>=1.2
+    , hls-test-utils             ^>= 1.2 || ^>=1.3

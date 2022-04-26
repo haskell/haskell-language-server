@@ -10,7 +10,7 @@ ls -la out/
 TARBALL_PREFIX="haskell-language-server"
 case "${TARBALL_EXT}" in
     zip)
-		HLS_VERSION="$("$CI_PROJECT_DIR/out/haskell-language-server-wrapper" --numeric-version)"
+		HLS_VERSION="$("$CI_PROJECT_DIR/out/haskell-language-server-8.10.7" --numeric-version)"
 		cd out/
         zip "${TARBALL_PREFIX}-${HLS_VERSION}-${TARBALL_ARCHIVE_SUFFIX}.zip" haskell-language-server-*
 		find . -type f ! -name '*.zip' -delete
