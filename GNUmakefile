@@ -66,7 +66,7 @@ define set_rpath
 endef
 
 hls: bindist/ghcs
-	for ghc in $(shell [ -e "bindist/ghcs-`uname`" ] && cat "bindist/ghcs-`uname`" || cat "bindist/ghcs") ; do \
+	for ghc in $(shell [ -e "bindist/ghcs-`uname -o`" ] && cat "bindist/ghcs-`uname -o`" || cat "bindist/ghcs") ; do \
 		$(GHCUP) -v install ghc `echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` && \
 		$(GHCUP) -v gc -p -s -c && \
 		$(MAKE) GHC_VERSION=`echo $$ghc | $(AWK) -F ',' '{ print $$1 }'` PROJECT_FILE=`echo $$ghc | $(AWK) -F ',' '{ print $$2 }'` hls-ghc && \

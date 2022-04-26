@@ -204,7 +204,7 @@ mkCompl
   where kind = Just compKind
         docs' = imported : spanDocToMarkdown docs
         imported = case provenance of
-          Local pos  -> "*Defined at " <> pprLineCol (srcSpanStart pos) <> " in this module*\n'"
+          Local pos  -> "*Defined at " <> pprLineCol (srcSpanStart pos) <> " in this module*\n"
           ImportedFrom mod -> "*Imported from '" <> mod <> "'*\n"
           DefinedIn mod -> "*Defined in '" <> mod <> "'*\n"
         colon = if optNewColonConvention then ": " else ":: "

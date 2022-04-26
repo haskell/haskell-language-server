@@ -51,7 +51,9 @@ safeTyThingId _                                = Nothing
 -- Possible documentation for an element in the code
 data SpanDoc
   = SpanDocString HsDocString SpanDocUris
+    -- ^ Extern module doc
   | SpanDocText   [T.Text] SpanDocUris
+    -- ^ Local module doc
   deriving stock (Eq, Show, Generic)
   deriving anyclass NFData
 
@@ -65,13 +67,33 @@ data SpanDocUris =
 emptySpanDoc :: SpanDoc
 emptySpanDoc = SpanDocText [] (SpanDocUris Nothing Nothing)
 
+-- | Convert `SpanDoc` to Markdown format.
+--
+-- Return a list `Text` includes haddock, document uri and source code uri,
+-- each item can be empty and must end with '\\n' if exist. This is to prevent
+-- subsequent render problem caused by the missing newline.
+--
+-- Example:
+--
+-- For return value ["xxxx","yyyy"], if we concat the list with inserting
+-- a separate line(note by "---\n"),
+-- it will result "xxxx---\nyyyy" and can't be rendered as a normal doc.
+-- Therefore we check every item in the value to make sure they all end with '\\n',
+-- this makes "xxxx\n---\nyyy\n" and can be rendered correctly.
 spanDocToMarkdown :: SpanDoc -> [T.Text]
-spanDocToMarkdown (SpanDocString docs uris)
-  = [T.pack $ haddockToMarkdown $ H.toRegular $ H._doc $ H.parseParas Nothing $ unpackHDS docs]
-    <> ["\n"] <> spanDocUrisToMarkdown uris
-  -- Append the extra newlines since this is markdown --- to get a visible newline,
-  -- you need to have two newlines
-spanDocToMarkdown (SpanDocText txt uris) = txt <> ["\n"] <> spanDocUrisToMarkdown uris
+spanDocToMarkdown = \case
+    (SpanDocString docs uris) ->
+        let doc = T.pack $ haddockToMarkdown $ H.toRegular $ H._doc $ H.parseParas Nothing $ unpackHDS docs
+        in  go [doc] uris
+    (SpanDocText txt uris) -> go txt uris
+  where
+    go [] uris = render <$> spanDocUrisToMarkdown uris
+    go txt uris = init txt <> [render (last txt)] <> (render <$> spanDocUrisToMarkdown uris)
+    -- If the doc is not end with an '\n', we append it.
+    render txt
+      | T.null txt = txt
+      | T.last txt == '\n' = txt
+      | otherwise = txt <> T.pack "\n"
 
 spanDocUrisToMarkdown :: SpanDocUris -> [T.Text]
 spanDocUrisToMarkdown (SpanDocUris mdoc msrc) = catMaybes
