@@ -22,6 +22,11 @@
       flake = false;
     };
 
+    hiedb_0_4_1_0 = {
+      url = "github:matthewbauer/HieDb/remove-no-break-space";
+      flake = false;
+    };
+
     # List of hackage dependencies
     lsp = {
       url = "https://hackage.haskell.org/package/lsp-1.4.0.0/lsp-1.4.0.0.tar.gz";

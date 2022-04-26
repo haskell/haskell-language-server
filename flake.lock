@@ -173,6 +173,23 @@
         "url": "https://hackage.haskell.org/package/hie-bios-0.9.1/hie-bios-0.9.1.tar.gz"
       }
     },
+    "hiedb_0_4_1_0": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1650992116,
+        "narHash": "sha256-Rw2YBC+4sRijz4R513zEJhLiyjP00YfCw7z0aCkRHEo=",
+        "owner": "matthewbauer",
+        "repo": "HieDb",
+        "rev": "6e526260f1980df9e0083a8ab1b639398738c65e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "matthewbauer",
+        "ref": "remove-no-break-space",
+        "repo": "HieDb",
+        "type": "github"
+      }
+    },
     "hlint": {
       "flake": false,
       "locked": {
@@ -383,6 +400,7 @@
         "ghc-exactprint-150": "ghc-exactprint-150",
         "gitignore": "gitignore",
         "hie-bios": "hie-bios",
+        "hiedb_0_4_1_0": "hiedb_0_4_1_0",
         "hlint": "hlint",
         "hlint-34": "hlint-34",
         "implicit-hie-cradle": "implicit-hie-cradle",

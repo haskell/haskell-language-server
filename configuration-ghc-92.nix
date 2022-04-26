@@ -12,7 +12,13 @@ let
   hpkgsOverride = hself: hsuper:
     with pkgs.haskell.lib;
     {
+      # haddock seems broken on aarch64-darwin for some reason
+      ghc-trace-events = if pkgs.stdenv.isDarwin && pkgs.stdenv.isAarch64 then dontHaddock hsuper.ghc-trace-events else hsuper.ghc-trace-events;
+      parsers = if pkgs.stdenv.isDarwin && pkgs.stdenv.isAarch64 then dontHaddock hsuper.parsers else hsuper.parsers;
+      prettyprinter-ansi-terminal = if pkgs.stdenv.isDarwin && pkgs.stdenv.isAarch64 then dontHaddock hsuper.prettyprinter-ansi-terminal else hsuper.prettyprinter-ansi-terminal;
+
       hlsDisabledPlugins = disabledPlugins;
+
       # YOLO
       mkDerivation = args:
         hsuper.mkDerivation (args // {
