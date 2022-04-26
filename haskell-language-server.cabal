@@ -264,7 +264,7 @@ common retrie
     cpp-options: -Dretrie
 
 common tactic
-  if flag(tactic) && (impl(ghc < 9.0.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(tactic) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-tactics-plugin >=1.2.0.0 && <1.7
     cpp-options: -Dtactic
 
