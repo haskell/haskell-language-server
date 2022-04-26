@@ -77,7 +77,7 @@
   outputs =
     inputs@{ self, nixpkgs, flake-compat, flake-utils, pre-commit-hooks, gitignore, ... }:
     {
-      overlay = final: prev:
+      overlays.default = final: prev:
         with prev;
         let
           haskellOverrides = hself: hsuper: {
@@ -179,7 +179,7 @@
       let
         pkgs = import nixpkgs {
           inherit system;
-          overlays = [ self.overlay inputs.poetry2nix.overlay ];
+          overlays = [ self.overlays.default inputs.poetry2nix.overlay ];
           config = { allowBroken = true; };
         };
 
@@ -214,7 +214,7 @@
           };
         };
 
-        ghc901Config = (import ./configuration-ghc-901.nix) { inherit pkgs; };
+        ghc902Config = (import ./configuration-ghc-902.nix) { inherit pkgs; };
         ghc922Config = (import ./configuration-ghc-922.nix) { inherit pkgs inputs; };
 
         # GHC versions
@@ -223,7 +223,7 @@
           pkgs.haskellPackages.ghc.version);
         ghc884 = pkgs.hlsHpkgs "ghc884";
         ghc8107 = pkgs.hlsHpkgs "ghc8107";
-        ghc901 = ghc901Config.tweakHpkgs (pkgs.hlsHpkgs "ghc901");
+        ghc902 = ghc902Config.tweakHpkgs (pkgs.hlsHpkgs "ghc902");
         ghc922 = ghc922Config.tweakHpkgs (pkgs.hlsHpkgs "ghc922");
 
         # For markdown support
@@ -295,7 +295,7 @@
             export PATH=$PATH:$HOME/.local/bin
 
             # Enable the shell hooks
-            ${(pre-commit-check ghcDefault).shellHook}
+            ${self.checks.${system}.pre-commit-check.shellHook}
 
             # If the cabal project file is not the default one.
             # Print a warning and generate an alias.
@@ -351,8 +351,8 @@
           haskell-language-server-dev = mkDevShell ghcDefault "cabal.project";
           haskell-language-server-884-dev = mkDevShell ghc884 "cabal.project";
           haskell-language-server-8107-dev = mkDevShell ghc8107 "cabal.project";
-          haskell-language-server-901-dev = mkDevShell ghc901 "cabal.project";
-          haskell-language-server-922-dev = mkDevShell ghc921 "cabal-ghc92.project";
+          haskell-language-server-902-dev = mkDevShell ghc902 "cabal.project";
+          haskell-language-server-922-dev = mkDevShell ghc922 "cabal-ghc92.project";
         };
 
         # Developement shell, haskell packages are also provided by nix
@@ -360,7 +360,7 @@
           haskell-language-server-dev-nix = mkDevShellWithNixDeps ghcDefault "cabal.project";
           haskell-language-server-884-dev-nix = mkDevShellWithNixDeps ghc884 "cabal.project";
           haskell-language-server-8107-dev-nix = mkDevShellWithNixDeps ghc8107 "cabal.project";
-          haskell-language-server-901-dev-nix = mkDevShellWithNixDeps ghc901 "cabal.project";
+          haskell-language-server-902-dev-nix = mkDevShellWithNixDeps ghc902 "cabal.project";
           haskell-language-server-922-dev-nix = mkDevShellWithNixDeps ghc921 "cabal-ghc92.project";
         };
 
@@ -368,13 +368,18 @@
           haskell-language-server = mkExe ghcDefault;
           haskell-language-server-884 = mkExe ghc884;
           haskell-language-server-8107 = mkExe ghc8107;
-          haskell-language-server-901 = mkExe ghc901;
+          haskell-language-server-902 = mkExe ghc902;
           haskell-language-server-922 = mkExe ghc922;
         };
 
-        devShells = simpleDevShells // nixDevShells;
+        devShells = simpleDevShells // nixDevShells // {
+          default = simpleDevShells.haskell-language-server-dev;
+          inherit (self.checks.${system}.pre-commit-check) shellHook;
+        };
 
         packages = allPackages // {
+          default = allPackages.haskell-language-server;
+
           # See https://github.com/NixOS/nix/issues/5591
           # nix flake cannot build a list/set of derivation in one command.
           # Using a linkFarmFromDrvs, I'm creating a unique entry point to
@@ -392,9 +397,8 @@
           docs = docs;
         };
 
-        defaultPackage = packages.haskell-language-server;
+        checks = { pre-commit-check = pre-commit-check ghcDefault; };
 
-        devShell = devShells.haskell-language-server-922-dev;
       });
 
   nixConfig = {

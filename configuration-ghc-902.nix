@@ -1,4 +1,4 @@
-# nix version of cabal-ghc901.project
+# nix version of cabal-ghc902.project
 { pkgs }:
 
 let
@@ -11,9 +11,6 @@ let
     with pkgs.haskell.lib;
     {
       hlsDisabledPlugins = disabledPlugins;
-
-      fourmolu = hself.fourmolu_0_4_0_0;
-      primitive-extras = hself.primitive-extras_0_10_1_2;
 
       # Re-generate HLS drv excluding some plugins
       haskell-language-server =
