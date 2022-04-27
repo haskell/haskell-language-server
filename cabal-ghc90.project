@@ -37,7 +37,7 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2022-04-25T10:14:27Z
+index-state: 2022-04-27T09:22:49Z
 
 constraints:
   hls-hlint-plugin +ghc-lib

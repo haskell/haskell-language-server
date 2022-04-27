@@ -27,7 +27,7 @@ library
     , ghcide           ^>=1.7
     , hls-plugin-api   ^>=1.4
     , lsp-types
-    , stylish-haskell  ^>=0.12 || ^>=0.13 || ^>=0.14
+    , stylish-haskell  ^>=0.12 || ^>=0.13 || ^>=0.14.2
     , text
 
   default-language: Haskell2010

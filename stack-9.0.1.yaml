@@ -60,7 +60,7 @@ extra-deps:
 - ghc-lib-parser-9.2.2.20220307
 - ghc-lib-parser-ex-9.2.0.3
 - hlint-3.4
-- stylish-haskell-0.14.1.0
+- stylish-haskell-0.14.2.0
 - ormolu-0.4.0.0
 - fourmolu-0.6.0.0
 - Cabal-3.6.0.0

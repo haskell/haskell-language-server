@@ -94,9 +94,7 @@ extra-deps:
 - unix-2.7.2.2
 - Win32-2.12.0.1
 
-# - stylish-haskell-0.14.1.0
-- github: July541/stylish-haskell
-  commit: 305168551e0fe808e0c6ba14d8245680cdd6649d
+- stylish-haskell-0.14.2.0
 - hlint-3.4
 - apply-refact-0.10.0.0
 
