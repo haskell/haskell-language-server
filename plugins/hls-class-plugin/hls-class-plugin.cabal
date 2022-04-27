@@ -28,6 +28,7 @@ library
     , base            >=4.12 && <5
     , containers
     , ghc
+    -- Require ghc-exactprint >= 1.5 on ghc9.2
     , ghc-exactprint  >= 0.6.4
     , ghcide          ^>=1.7
     , hls-plugin-api  ^>=1.4
