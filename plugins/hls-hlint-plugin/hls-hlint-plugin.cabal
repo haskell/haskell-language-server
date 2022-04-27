@@ -82,8 +82,6 @@ library
 
     if (!flag(ghc-lib) && impl(ghc >=9.0.1) && impl(ghc <9.1.0))
       build-depends: ghc      ==9.0.*
-    elif (!flag(ghc-lib) && impl(ghc >=9.2.1) && impl(ghc <9.3.0))
-      build-depends: ghc      ==9.2.*
     else
       build-depends:
         , ghc-lib            ^>=9.2
