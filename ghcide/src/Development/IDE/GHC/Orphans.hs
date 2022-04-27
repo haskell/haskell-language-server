@@ -39,6 +39,7 @@ import           Data.Aeson
 import           Data.Bifunctor             (Bifunctor (..))
 import           Data.Hashable
 import           Data.String                (IsString (fromString))
+import           Data.Text                  (unpack)
 #if MIN_VERSION_ghc(9,0,0)
 import          GHC.ByteCode.Types
 #else
@@ -46,27 +47,27 @@ import          ByteCodeTypes
 #endif
 
 -- Orphan instances for types from the GHC API.
-instance Show CoreModule where show = prettyPrint
+instance Show CoreModule where show = unpack . printOutputable
 instance NFData CoreModule where rnf = rwhnf
-instance Show CgGuts where show = prettyPrint . cg_module
+instance Show CgGuts where show = unpack . printOutputable . cg_module
 instance NFData CgGuts where rnf = rwhnf
 instance Show ModDetails where show = const "<moddetails>"
 instance NFData ModDetails where rnf = rwhnf
 instance NFData SafeHaskellMode where rnf = rwhnf
-instance Show Linkable where show = prettyPrint
+instance Show Linkable where show = unpack . printOutputable
 instance NFData Linkable where rnf (LM a b c) = rnf a `seq` rnf b `seq` rnf c
 instance NFData Unlinked where
   rnf (DotO f) = rnf f
   rnf (DotA f) = rnf f
   rnf (DotDLL f) = rnf f
   rnf (BCOs a b) = seqCompiledByteCode a `seq` liftRnf rwhnf b
-instance Show PackageFlag where show = prettyPrint
-instance Show InteractiveImport where show = prettyPrint
-instance Show PackageName  where show = prettyPrint
+instance Show PackageFlag where show = unpack . printOutputable
+instance Show InteractiveImport where show = unpack . printOutputable
+instance Show PackageName  where show = unpack . printOutputable
 
 #if !MIN_VERSION_ghc(9,0,1)
-instance Show ComponentId  where show = prettyPrint
-instance Show SourcePackageId  where show = prettyPrint
+instance Show ComponentId  where show = unpack . printOutputable
+instance Show SourcePackageId  where show = unpack . printOutputable
 
 instance Show GhcPlugins.InstalledUnitId where
     show = installedUnitIdString
@@ -76,7 +77,7 @@ instance NFData GhcPlugins.InstalledUnitId where rnf = rwhnf . installedUnitIdFS
 instance Hashable GhcPlugins.InstalledUnitId where
   hashWithSalt salt = hashWithSalt salt . installedUnitIdString
 #else
-instance Show UnitId where show = prettyPrint
+instance Show UnitId where show = unpack . printOutputable
 deriving instance Ord SrcSpan
 deriving instance Ord UnhelpfulSpanReason
 #endif
@@ -86,7 +87,7 @@ instance NFData SB.StringBuffer where rnf = rwhnf
 instance Show Module where
     show = moduleNameString . moduleName
 
-instance Outputable a => Show (GenLocated SrcSpan a) where show = prettyPrint
+instance Outputable a => Show (GenLocated SrcSpan a) where show = unpack . printOutputable
 
 instance (NFData l, NFData e) => NFData (GenLocated l e) where
     rnf (L l e) = rnf l `seq` rnf e
@@ -207,5 +208,5 @@ instance (NFData (HsModule a)) where
 #endif
   rnf = rwhnf
 
-instance Show OccName where show = prettyPrint
+instance Show OccName where show = unpack . printOutputable
 instance Hashable OccName where hashWithSalt s n = hashWithSalt s (getKey $ getUnique n)

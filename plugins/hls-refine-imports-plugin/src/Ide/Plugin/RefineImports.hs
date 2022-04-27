@@ -232,7 +232,7 @@ refineImportsRule recorder = define (cmapWithPrio LogShake recorder) $ \RefineIm
   let res =
         [ (i, Just
                 . T.intercalate "\n"
-                . map (T.pack . prettyPrint . constructImport i)
+                . map (printOutputable . constructImport i)
                 . Map.toList
                 $ filteredInnerImports)
         -- for every minimal imports
@@ -251,7 +251,7 @@ refineImportsRule recorder = define (cmapWithPrio LogShake recorder) $ \RefineIm
     -- Check if a name is exposed by AvailInfo (the available information of a module)
     containsAvail :: LIE GhcRn -> AvailInfo -> Bool
     containsAvail name avail =
-      any (\an -> prettyPrint an == (prettyPrint . ieName . unLoc $ name))
+      any (\an -> printOutputable an == (printOutputable . ieName . unLoc $ name))
         $ availNamesWithSelectors avail
 
 --------------------------------------------------------------------------------

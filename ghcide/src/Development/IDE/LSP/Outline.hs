@@ -13,7 +13,6 @@ import           Control.Monad.IO.Class
 import           Data.Functor
 import           Data.Generics
 import           Data.Maybe
-import           Data.Text                      (Text, pack)
 import qualified Data.Text                      as T
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Shake
@@ -21,6 +20,7 @@ import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error      (rangeToRealSrcSpan,
                                                  realSrcSpanToRange)
 import           Development.IDE.Types.Location
+import           Development.IDE.GHC.Util       (printOutputable)
 import           Language.LSP.Server            (LspM)
 import           Language.LSP.Types             (DocumentSymbol (..),
                                                  DocumentSymbolParams (DocumentSymbolParams, _textDocument),
@@ -47,7 +47,7 @@ moduleOutline ideState DocumentSymbolParams{ _textDocument = TextDocumentIdentif
                moduleSymbol = hsmodName >>= \case
                  (L (locA -> (RealSrcSpan l _)) m) -> Just $
                    (defDocumentSymbol l :: DocumentSymbol)
-                     { _name  = pprText m
+                     { _name  = printOutputable m
                      , _kind  = SkFile
                      , _range = Range (Position 0 0) (Position maxBound 0) -- _ltop is 0 0 0 0
                      }
@@ -70,18 +70,18 @@ moduleOutline ideState DocumentSymbolParams{ _textDocument = TextDocumentIdentif
 documentSymbolForDecl :: LHsDecl GhcPs -> Maybe DocumentSymbol
 documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ FamDecl { tcdFam = FamilyDecl { fdLName = L _ n, fdInfo, fdTyVars } }))
   = Just (defDocumentSymbol l :: DocumentSymbol)
-    { _name   = showRdrName n
-                  <> (case pprText fdTyVars of
+    { _name   = printOutputable n
+                  <> (case printOutputable fdTyVars of
                        "" -> ""
                        t  -> " " <> t
                      )
-    , _detail = Just $ pprText fdInfo
+    , _detail = Just $ printOutputable fdInfo
     , _kind   = SkFunction
     }
 documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ ClassDecl { tcdLName = L _ name, tcdSigs, tcdTyVars }))
   = Just (defDocumentSymbol l :: DocumentSymbol)
-    { _name     = showRdrName name
-                    <> (case pprText tcdTyVars of
+    { _name     = printOutputable name
+                    <> (case printOutputable tcdTyVars of
                          "" -> ""
                          t  -> " " <> t
                        )
@@ -90,7 +90,7 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ ClassDecl { tcdLNa
     , _children =
       Just $ List
         [ (defDocumentSymbol l :: DocumentSymbol)
-            { _name           = showRdrName n
+            { _name           = printOutputable n
             , _kind           = SkMethod
             , _selectionRange = realSrcSpanToRange l'
             }
@@ -100,12 +100,12 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ ClassDecl { tcdLNa
     }
 documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ DataDecl { tcdLName = L _ name, tcdDataDefn = HsDataDefn { dd_cons } }))
   = Just (defDocumentSymbol l :: DocumentSymbol)
-    { _name     = showRdrName name
+    { _name     = printOutputable name
     , _kind     = SkStruct
     , _children =
       Just $ List
         [ (defDocumentSymbol l :: DocumentSymbol)
-            { _name           = showRdrName n
+            { _name           = printOutputable n
             , _kind           = SkConstructor
             , _selectionRange = realSrcSpanToRange l'
 #if MIN_VERSION_ghc(9,2,0)
@@ -123,7 +123,7 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ DataDecl { tcdLNam
   where
     cvtFld :: LFieldOcc GhcPs -> Maybe DocumentSymbol
     cvtFld (L (RealSrcSpan l _) n) = Just $ (defDocumentSymbol l :: DocumentSymbol)
-                { _name = showRdrName (unLoc (rdrNameFieldOcc n))
+                { _name = printOutputable (unLoc (rdrNameFieldOcc n))
                 , _kind = SkField
                 }
     cvtFld _  = Nothing
@@ -138,7 +138,7 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ DataDecl { tcdLNam
     -- | Extract the record fields of a constructor
     conArgRecordFields (RecCon (L _ lcdfs)) = Just $ List
       [ (defDocumentSymbol l :: DocumentSymbol)
-          { _name = showRdrName n
+          { _name = printOutputable n
           , _kind = SkField
           }
       | L _ cdf <- lcdfs
@@ -147,12 +147,12 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ DataDecl { tcdLNam
     conArgRecordFields _ = Nothing
 #endif
 documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (TyClD _ SynDecl { tcdLName = L (locA -> (RealSrcSpan l' _)) n })) = Just
-  (defDocumentSymbol l :: DocumentSymbol) { _name           = showRdrName n
+  (defDocumentSymbol l :: DocumentSymbol) { _name           = printOutputable n
                                           , _kind           = SkTypeParameter
                                           , _selectionRange = realSrcSpanToRange l'
                                           }
 documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (InstD _ ClsInstD { cid_inst = ClsInstDecl { cid_poly_ty } }))
-  = Just (defDocumentSymbol l :: DocumentSymbol) { _name = pprText cid_poly_ty
+  = Just (defDocumentSymbol l :: DocumentSymbol) { _name = printOutputable cid_poly_ty
                                                  , _kind = SkInterface
                                                  }
 #if MIN_VERSION_ghc(9,2,0)
@@ -161,8 +161,8 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (InstD _ DataFamInstD { dfi
 documentSymbolForDecl (L (RealSrcSpan l _) (InstD _ DataFamInstD { dfid_inst = DataFamInstDecl HsIB { hsib_body = FamEqn { feqn_tycon, feqn_pats } } }))
 #endif
   = Just (defDocumentSymbol l :: DocumentSymbol)
-    { _name = showRdrName (unLoc feqn_tycon) <> " " <> T.unwords
-                (map pprText feqn_pats)
+    { _name = printOutputable (unLoc feqn_tycon) <> " " <> T.unwords
+                (map printOutputable feqn_pats)
     , _kind = SkInterface
     }
 #if MIN_VERSION_ghc(9,2,0)
@@ -171,24 +171,24 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (InstD _ TyFamInstD { tfid_
 documentSymbolForDecl (L (RealSrcSpan l _) (InstD _ TyFamInstD { tfid_inst = TyFamInstDecl HsIB { hsib_body = FamEqn { feqn_tycon, feqn_pats } } }))
 #endif
   = Just (defDocumentSymbol l :: DocumentSymbol)
-    { _name = showRdrName (unLoc feqn_tycon) <> " " <> T.unwords
-                (map pprText feqn_pats)
+    { _name = printOutputable (unLoc feqn_tycon) <> " " <> T.unwords
+                (map printOutputable feqn_pats)
     , _kind = SkInterface
     }
 documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (DerivD _ DerivDecl { deriv_type })) =
   gfindtype deriv_type <&> \(L (_ :: SrcSpan) name) ->
-    (defDocumentSymbol l :: DocumentSymbol) { _name = pprText @(HsType GhcPs)
+    (defDocumentSymbol l :: DocumentSymbol) { _name = printOutputable @(HsType GhcPs)
                                               name
                                             , _kind = SkInterface
                                             }
 documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (ValD _ FunBind{fun_id = L _ name})) = Just
     (defDocumentSymbol l :: DocumentSymbol)
-      { _name   = showRdrName name
+      { _name   = printOutputable name
       , _kind   = SkFunction
       }
 documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (ValD _ PatBind{pat_lhs})) = Just
     (defDocumentSymbol l :: DocumentSymbol)
-      { _name   = pprText pat_lhs
+      { _name   = printOutputable pat_lhs
       , _kind   = SkFunction
       }
 
@@ -204,7 +204,7 @@ documentSymbolForDecl (L (locA -> (RealSrcSpan l _)) (ForD _ x)) = Just
                   ForeignExport{} -> Just "export"
                   XForeignDecl{}  -> Nothing
     }
-  where name = showRdrName $ unLoc $ fd_name x
+  where name = printOutputable $ unLoc $ fd_name x
 
 documentSymbolForDecl _ = Nothing
 
@@ -228,7 +228,7 @@ documentSymbolForImportSummary importSymbols =
 documentSymbolForImport :: LImportDecl GhcPs -> Maybe DocumentSymbol
 documentSymbolForImport (L (locA -> (RealSrcSpan l _)) ImportDecl { ideclName, ideclQualified }) = Just
   (defDocumentSymbol l :: DocumentSymbol)
-    { _name   = "import " <> pprText ideclName
+    { _name   = "import " <> printOutputable ideclName
     , _kind   = SkModule
 #if MIN_VERSION_ghc(8,10,0)
     , _detail = case ideclQualified of { NotQualified -> Nothing; _ -> Just "qualified" }
@@ -248,12 +248,6 @@ defDocumentSymbol l = DocumentSymbol { .. } where
   _selectionRange = realSrcSpanToRange l
   _children       = Nothing
   _tags           = Nothing
-
-showRdrName :: RdrName -> Text
-showRdrName = pprText
-
-pprText :: Outputable a => a -> Text
-pprText = pack . showSDocUnsafe . ppr
 
 -- the version of getConNames for ghc9 is restricted to only the renaming phase
 #if !MIN_VERSION_ghc(9,2,0)

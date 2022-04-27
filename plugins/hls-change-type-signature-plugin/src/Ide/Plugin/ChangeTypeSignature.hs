@@ -19,7 +19,7 @@ import           Development.IDE.Core.RuleTypes (GetParsedModule (GetParsedModul
 import           Development.IDE.Core.Service   (IdeState, runAction)
 import           Development.IDE.Core.Shake     (use)
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Util       (prettyPrint)
+import           Development.IDE.GHC.Util       (printOutputable)
 import           Generics.SYB                   (extQ, something)
 import           Ide.PluginUtils                (getNormalizedFilePath,
                                                  handleMaybeM, response)
@@ -134,7 +134,7 @@ findSigLocOfStringDecl decls expectedType declName = something (const Nothing `e
 -- | Pretty Print the Type Signature (to validate GHC Error Message)
 sigToText :: Sig GhcPs -> Maybe Text
 sigToText = \case
-  ts@TypeSig {} -> Just $ stripSignature $ T.pack $ prettyPrint ts
+  ts@TypeSig {} -> Just $ stripSignature $ printOutputable ts
   _             -> Nothing
 
 stripSignature :: Text -> Text
