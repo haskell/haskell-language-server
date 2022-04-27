@@ -4,7 +4,6 @@
 
 -- |Debug utilities
 module Ide.Plugin.Eval.Util (
-    asS,
     timed,
     isLiterate,
     response',
@@ -20,8 +19,6 @@ import           Data.String                     (IsString (fromString))
 import qualified Data.Text                       as T
 import           Development.IDE                 (IdeState, Priority (..),
                                                   ideLogger, logPriority)
-import           Development.IDE.GHC.Compat      (Outputable, ppr,
-                                                  showSDocUnsafe)
 import           Development.IDE.GHC.Compat.Util (MonadCatch, catch)
 import           GHC.Exts                        (toList)
 import           GHC.Stack                       (HasCallStack, callStack,
@@ -32,9 +29,6 @@ import           Language.LSP.Types
 import           System.FilePath                 (takeExtension)
 import           System.Time.Extra               (duration, showDuration)
 import           UnliftIO.Exception              (catchAny)
-
-asS :: Outputable a => a -> String
-asS = showSDocUnsafe . ppr
 
 timed :: MonadIO m => (t -> String -> m a) -> t -> m b -> m b
 timed out name op = do

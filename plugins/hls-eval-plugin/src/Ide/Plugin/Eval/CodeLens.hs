@@ -50,7 +50,7 @@ import           Development.IDE                 (GetModSummary (..),
                                                   NeedsCompilation (NeedsCompilation),
                                                   evalGhcEnv,
                                                   hscEnvWithImportPaths,
-                                                  prettyPrint, runAction,
+                                                  printOutputable, runAction,
                                                   textToStringBuffer,
                                                   toNormalizedFilePath',
                                                   uriToFilePath', useNoFile_,
@@ -98,7 +98,7 @@ import           Ide.Plugin.Eval.Parse.Comments  (commentsToSections)
 import           Ide.Plugin.Eval.Parse.Option    (parseSetFlags)
 import           Ide.Plugin.Eval.Rules           (queueForEvaluation)
 import           Ide.Plugin.Eval.Types
-import           Ide.Plugin.Eval.Util            (asS, gStrictTry, isLiterate,
+import           Ide.Plugin.Eval.Util            (gStrictTry, isLiterate,
                                                   logWith, response', timed)
 import           Ide.PluginUtils                 (handleMaybe, handleMaybeM,
                                                   response)
@@ -283,7 +283,7 @@ runEvalCmd plId st EvalParams{..} =
 
                 -- load the module in the interactive environment
                 loadResult <- perf "loadModule" $ load LoadAllTargets
-                dbg "LOAD RESULT" $ asS loadResult
+                dbg "LOAD RESULT" $ printOutputable loadResult
                 case loadResult of
                     Failed -> liftIO $ do
                         let err = ""
@@ -522,7 +522,7 @@ evals mark_exception (st, fp) df stmts = do
 
 prettyWarn :: Warn -> String
 prettyWarn Warn{..} =
-    prettyPrint (SrcLoc.getLoc warnMsg) <> ": warning:\n"
+    T.unpack (printOutputable $ SrcLoc.getLoc warnMsg) <> ": warning:\n"
     <> "    " <> SrcLoc.unLoc warnMsg
 
 runGetSession :: MonadIO m => IdeState -> NormalizedFilePath -> m HscEnv
