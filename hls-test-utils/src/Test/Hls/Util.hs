@@ -25,6 +25,7 @@ module Test.Hls.Util
     , noLiteralCaps
     , ignoreForGhcVersions
     , ignoreInEnv
+    , onlyRunForGhcVersions
     , inspectCodeAction
     , inspectCommand
     , inspectDiagnostic
@@ -147,6 +148,12 @@ ignoreInEnv envSpecs reason
 
 ignoreForGhcVersions :: [GhcVersion] -> String -> TestTree -> TestTree
 ignoreForGhcVersions vers = ignoreInEnv (map GhcVer vers)
+
+onlyRunForGhcVersions :: [GhcVersion] -> String -> TestTree -> TestTree
+onlyRunForGhcVersions vers =
+    if ghcVersion `elem` vers
+    then const id
+    else ignoreTestBecause
 
 -- ---------------------------------------------------------------------
 
@@ -362,7 +369,7 @@ actual `expectSameLocations` expected = do
 
 -- ---------------------------------------------------------------------
 getCompletionByLabel :: MonadIO m => T.Text -> [CompletionItem] -> m CompletionItem
-getCompletionByLabel desiredLabel compls = 
+getCompletionByLabel desiredLabel compls =
     case find (\c -> c ^. L.label == desiredLabel) compls of
         Just c -> pure c
         Nothing -> liftIO . assertFailure $
