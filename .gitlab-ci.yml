@@ -13,15 +13,13 @@ variables:
 
 .windows_matrix: &windows_matrix
   matrix:
-    - GHC_VERSION: 8.8.4
-      CABAL_PROJECT: cabal.project
     - GHC_VERSION: 8.10.7
       CABAL_PROJECT: cabal.project
     - GHC_VERSION: 9.0.2
       CABAL_PROJECT: cabal-ghc90.project
-    - GHC_VERSION: 9.2.1
-      CABAL_PROJECT: cabal-ghc92.project
     - GHC_VERSION: 9.2.2
+      CABAL_PROJECT: cabal-ghc92.project
+    - GHC_VERSION: 9.2.1
       CABAL_PROJECT: cabal-ghc92.project
 
 workflow:

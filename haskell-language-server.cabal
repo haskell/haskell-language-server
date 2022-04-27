@@ -477,7 +477,7 @@ test-suite func-test
     , lens
     , lens-aeson
     , ghcide
-    , hls-test-utils ^>=1.2
+    , hls-test-utils ^>=1.3
     , lsp-types
     , aeson
     , hls-plugin-api
