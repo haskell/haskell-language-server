@@ -6,11 +6,13 @@ source "$CI_PROJECT_DIR/.gitlab/common.sh"
 
 export GHCUP_INSTALL_BASE_PREFIX="$CI_PROJECT_DIR/toolchain"
 export CABAL_DIR="$CI_PROJECT_DIR/cabal"
+EXE_EXTENSION = ""
 
 case "$(uname)" in
     MSYS_*|MINGW*)
         export CABAL_DIR="$(cygpath -w "$CABAL_DIR")"
 		GHCUP_BINDIR="${GHCUP_INSTALL_BASE_PREFIX}/ghcup/bin"
+		EXE_EXTENSION=".exe"
         ;;
 	*)
 		GHCUP_BINDIR="${GHCUP_INSTALL_BASE_PREFIX}/.ghcup/bin"
@@ -74,8 +76,8 @@ case "$(uname)" in
 
 		mkdir "$CI_PROJECT_DIR/out"
 
-		cp "$(cabal list-bin ${args[@]} exe:hls)" "$CI_PROJECT_DIR/out/haskell-language-server-${GHC_VERSION}"
-		cp "$(cabal list-bin ${args[@]} exe:hls-wrapper)" "$CI_PROJECT_DIR/out/haskell-language-server-wrapper"
+		cp "$(cabal list-bin ${args[@]} exe:hls)" "$CI_PROJECT_DIR/out/haskell-language-server-${GHC_VERSION}"$EXE_EXTENSION
+		cp "$(cabal list-bin ${args[@]} exe:hls-wrapper)" "$CI_PROJECT_DIR/out/haskell-language-server-wrapper"$EXE_EXTENSION
         ;;
 	*)
 		emake --version
