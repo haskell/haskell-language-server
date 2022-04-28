@@ -39,7 +39,7 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2022-04-19T07:18:40Z
+index-state: 2022-04-27T09:22:49Z
 
 constraints:
   -- These plugins don't build/work on GHC92 yet
@@ -47,10 +47,14 @@ constraints:
     +ignore-plugins-ghc-bounds
     -brittany
     -haddockComments
-    -hlint
     -retrie
     -splice
     -tactic,
+  hls-hlint-plugin +ghc-lib,
+  -- # Use ghc-lib force instead of ghc itself
+  ghc-lib-parser-ex -auto,
+  hlint +ghc-lib,
+  stylish-haskell +ghc-lib
 
 allow-newer:
   -- for shake-bench
@@ -73,19 +77,6 @@ allow-newer:
   -- https://github.com/lspitzner/butcher/pull/8
   butcher:base,
 
-  ormolu:ghc-lib-parser,
-
-  fourmolu:ghc-lib-parser,
-  fourmolu:Cabal,
-
-  hls-hlint-plugin:ghc-lib,
-  hls-hlint-plugin:ghc-lib-parser,
-  hls-hlint-plugin:ghc-lib-parser-ex,
-  hlint:ghc-lib-parser,
-  hlint:ghc-lib-parser-ex,
-  -- See https://github.com/mpickering/apply-refact/pull/116
-  apply-refact:base,
-
   implicit-hie-cradle:bytestring,
   implicit-hie-cradle:time,
 
@@ -95,7 +86,8 @@ allow-newer:
   -- for ghcide:test via ghc-typelits-knownnat
   ghc-typelits-natnormalise:ghc-bignum,
 
-  hiedb:base
+  hiedb:base,
+  retrie:ghc-exactprint
 
 allow-older:
   primitive-extras:primitive-unlifted

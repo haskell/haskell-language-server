@@ -28,13 +28,17 @@ library
     , base            >=4.12 && <5
     , containers
     , ghc
-    , ghc-exactprint  >= 0.6.4
     , ghcide          ^>=1.7
     , hls-plugin-api  ^>=1.4
     , lens
     , lsp
     , text
     , transformers
+
+  if impl(ghc >=9.2.1)
+    build-depends: ghc-exactprint ^>= 1.5
+  else
+    build-depends: ghc-exactprint  >= 0.6.4 && <1.1
 
   default-language:   Haskell2010
   default-extensions:

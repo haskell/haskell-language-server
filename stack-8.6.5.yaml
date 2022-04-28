@@ -131,7 +131,7 @@ flags:
     BuildExecutable: false
   # Stack doesn't support automatic flags.
   hls-hlint-plugin:
-    hlint33: false
+    hlint34: false
   hyphenation:
     embed: true
 

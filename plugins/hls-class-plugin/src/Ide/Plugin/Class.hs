@@ -128,7 +128,7 @@ addMethodPlaceholders state AddMinimalMethodsParams{..} = do
         addWhere decl = decl
 
         newLine (L l e) =
-          let dp = deltaPos 1 (indent + 1) -- Not sure why there need one more space
+          let dp = deltaPos 1 indent
           in L (noAnnSrcSpanDP (locA l) dp <> l) e
 
 #else
