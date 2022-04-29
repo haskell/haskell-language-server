@@ -113,13 +113,6 @@ jobs:
           ghc: ${{ matrix.ghc }}
           os:  ${{ runner.os }}
 
-      # repeating builds to workaround segfaults in windows and ghc-8.8.4
-      - name: Build
-        # needed for GHC 9.2.2 https://github.com/digital-asset/ghc-lib/issues/352
-        env:
-          CPATH: "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/ffi:$CPATH"
-        run: cabal build || cabal build || cabal build
-
       - name: Set test options
         # run the tests without parallelism, otherwise tasty will attempt to run
         # all functional test cases simultaneously which causes way too many hls
