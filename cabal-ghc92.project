@@ -34,7 +34,8 @@ with-compiler: ghc-9.2.2
 tests: true
 
 package *
-  ghc-options: -haddock
+  -- ghc 8.10 cannot build ghc-lib 9.2 with --haddock
+  -- ghc-options: -haddock
   test-show-details: direct
 
 write-ghc-environment-files: never
@@ -50,8 +51,6 @@ constraints:
     -retrie
     -splice
     -tactic,
-  hls-hlint-plugin +ghc-lib,
-  -- # Use ghc-lib force instead of ghc itself
   ghc-lib-parser-ex -auto,
   hlint +ghc-lib,
   stylish-haskell +ghc-lib
