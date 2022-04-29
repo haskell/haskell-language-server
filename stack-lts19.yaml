@@ -69,6 +69,8 @@ flags:
   # Stack doesn't support automatic flags.
   hyphenation:
     embed: true
+  hlint:
+    ghc-lib: true
 
 nix:
   packages: [ icu libcxx zlib ]
