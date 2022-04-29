@@ -46,10 +46,8 @@ write-ghc-environment-files: never
 index-state: 2022-04-27T09:22:49Z
 
 constraints:
-    hyphenation +embed,
-    -- remove this when hlint sets ghc-lib to true by default
-    -- https://github.com/ndmitchell/hlint/issues/1376
-    hlint +ghc-lib
+  hyphenation +embed,
+  hls-hlint-plugin +ghc-lib,
 
 allow-newer:
   stylish-haskell:Cabal,
