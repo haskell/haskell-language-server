@@ -50,6 +50,3 @@ constraints:
   hls-hlint-plugin +ghc-lib,
 
 allow-newer:
-  stylish-haskell:Cabal,
-  stylish-haskell:ghc-lib-parser,
-  stylish-haskell:aeson
