@@ -46,9 +46,33 @@ write-ghc-environment-files: never
 index-state: 2022-04-27T09:22:49Z
 
 constraints:
-    hyphenation +embed,
-    -- remove this when hlint sets ghc-lib to true by default
-    -- https://github.com/ndmitchell/hlint/issues/1376
-    hlint +ghc-lib
+  hyphenation +embed,
+  -- remove this when hlint sets ghc-lib to true by default
+  -- https://github.com/ndmitchell/hlint/issues/1376
+  hlint +ghc-lib,
+  ghc-lib-parser-ex -auto,
+  stylish-haskell +ghc-lib
 
 allow-newer:
+  -- ghc-9.2
+  ----------
+  hiedb:base,
+  retrie:ghc-exactprint,
+
+  -- for brittany
+  brittany:ghc-boot,
+  brittany:ghc-boot-th,
+  brittany:ghc,
+  brittany:ghc-exactprint,
+  brittany:bytestring,
+  brittany:base,
+  -- https://github.com/lspitzner/multistate/pull/8
+  multistate:base,
+  -- https://github.com/lspitzner/data-tree-print/pull/3
+  data-tree-print:base,
+  -- https://github.com/lspitzner/butcher/pull/8
+  butcher:base,
+
+  -- for shake-bench
+  Chart:lens,
+  Chart-diagrams:lens,
