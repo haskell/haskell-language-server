@@ -54,7 +54,7 @@ test-suite tests
     , base                 >=4.12 && < 5
     , filepath
     , hls-change-type-signature-plugin
-    , hls-test-utils       ^>=1.2
+    , hls-test-utils       ^>=1.3
     , lsp
     , QuickCheck
     , regex-tdfa

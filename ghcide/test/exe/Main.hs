@@ -124,6 +124,7 @@ import           Ide.PluginUtils                          (pluginDescToIdePlugin
 import           Ide.Types
 import qualified Language.LSP.Types                       as LSP
 import qualified Language.LSP.Types.Lens                  as L
+import           Language.LSP.Types.Lens                  (workspace, didChangeWatchedFiles)
 import qualified Progress
 import           System.Time.Extra
 import           Test.Tasty
@@ -133,7 +134,6 @@ import           Test.Tasty.Ingredients.Rerun
 import           Test.Tasty.QuickCheck
 import           Text.Printf                              (printf)
 import           Text.Regex.TDFA                          ((=~))
-import Language.LSP.Types.Lens (workspace, didChangeWatchedFiles)
 
 data Log
   = LogGhcIde Ghcide.Log
@@ -4693,6 +4693,7 @@ completionTests
     , testGroup "package" packageCompletionTests
     , testGroup "project" projectCompletionTests
     , testGroup "other" otherCompletionTests
+    , testGroup "doc" completionDocTests
     ]
 
 completionTest :: String -> [T.Text] -> Position -> [(T.Text, CompletionItemKind, T.Text, Bool, Bool, Maybe (List TextEdit))] -> TestTree
@@ -5145,7 +5146,7 @@ packageCompletionTests =
         _ <- waitForDiagnostics
         compls <- getCompletions doc (Position 2 12)
         let compls' =
-              [T.drop 1 $ T.dropEnd 10 d
+              [T.drop 1 $ T.dropEnd 3 d
               | CompletionItem {_documentation = Just (CompletionDocMarkup (MarkupContent MkMarkdown d)), _label}
                 <- compls
               , _label == "fromList"
@@ -5165,7 +5166,7 @@ packageCompletionTests =
         _ <- waitForDiagnostics
         compls <- getCompletions doc (Position 2 7)
         let compls' =
-              [T.drop 1 $ T.dropEnd 10 d
+              [T.drop 1 $ T.dropEnd 3 d
               | CompletionItem {_documentation = Just (CompletionDocMarkup (MarkupContent MkMarkdown d)), _label}
                 <- compls
               , _label == "Map"
@@ -5249,7 +5250,7 @@ projectCompletionTests =
             ]
         compls <- getCompletions doc (Position 1 10)
         let compls' =
-              [T.drop 1 $ T.dropEnd 10 d
+              [T.drop 1 $ T.dropEnd 3 d
               | CompletionItem {_documentation = Just (CompletionDocMarkup (MarkupContent MkMarkdown d)), _label}
                 <- compls
               , _label == "anidentifier"
@@ -5307,6 +5308,97 @@ projectCompletionTests =
         liftIO $ do
           item ^. L.label @?= "anidentifier"
     ]
+
+completionDocTests :: [TestTree]
+completionDocTests =
+  [ testSession "local define" $ do
+      doc <- createDoc "A.hs" "haskell" $ T.unlines
+        [ "module A where"
+        , "foo = ()"
+        , "bar = fo"
+        ]
+      let expected = "*Defined at line 2, column 1 in this module*\n"
+      test doc (Position 2 8) "foo" Nothing [expected]
+  , testSession "local empty doc" $ do
+      doc <- createDoc "A.hs" "haskell" $ T.unlines
+        [ "module A where"
+        , "foo = ()"
+        , "bar = fo"
+        ]
+      test doc (Position 2 8) "foo" Nothing ["*Defined at line 2, column 1 in this module*\n"]
+  , brokenForGhc9 $ testSession "local single line doc without '\\n'" $ do
+      doc <- createDoc "A.hs" "haskell" $ T.unlines
+        [ "module A where"
+        , "-- |docdoc"
+        , "foo = ()"
+        , "bar = fo"
+        ]
+      test doc (Position 3 8) "foo" Nothing ["*Defined at line 3, column 1 in this module*\n* * *\ndocdoc\n"]
+  , brokenForGhc9 $ testSession "local multi line doc with '\\n'" $ do
+      doc <- createDoc "A.hs" "haskell" $ T.unlines
+        [ "module A where"
+        , "-- | abcabc"
+        , "--"
+        , "foo = ()"
+        , "bar = fo"
+        ]
+      test doc (Position 4 8) "foo" Nothing ["*Defined at line 4, column 1 in this module*\n* * *\n abcabc\n"]
+  , brokenForGhc9 $ testSession "local multi line doc without '\\n'" $ do
+      doc <- createDoc "A.hs" "haskell" $ T.unlines
+        [ "module A where"
+        , "-- |     abcabc"
+        , "--"
+        , "--def"
+        , "foo = ()"
+        , "bar = fo"
+        ]
+      test doc (Position 5 8) "foo" Nothing ["*Defined at line 5, column 1 in this module*\n* * *\n     abcabc\n\ndef\n"]
+  , testSession "extern empty doc" $ do
+      doc <- createDoc "A.hs" "haskell" $ T.unlines
+        [ "module A where"
+        , "foo = od"
+        ]
+      let expected = "*Imported from 'Prelude'*\n"
+      test doc (Position 1 8) "odd" (Just $ T.length expected) [expected]
+  , brokenForMacGhc9 $ brokenForWinGhc9 $ testSession "extern single line doc without '\\n'" $ do
+      doc <- createDoc "A.hs" "haskell" $ T.unlines
+        [ "module A where"
+        , "foo = no"
+        ]
+      let expected = "*Imported from 'Prelude'*\n* * *\n\n\nBoolean \"not\"\n"
+      test doc (Position 1 8) "not" (Just $ T.length expected) [expected]
+  , brokenForMacGhc9 $ brokenForWinGhc9 $ testSession "extern mulit line doc" $ do
+      doc <- createDoc "A.hs" "haskell" $ T.unlines
+        [ "module A where"
+        , "foo = i"
+        ]
+      let expected = "*Imported from 'Prelude'*\n* * *\n\n\nIdentity function. \n```haskell\nid x = x\n```\n"
+      test doc (Position 1 7) "id" (Just $ T.length expected) [expected]
+  , testSession "extern defined doc" $ do
+      doc <- createDoc "A.hs" "haskell" $ T.unlines
+        [ "module A where"
+        , "foo = i"
+        ]
+      let expected = "*Imported from 'Prelude'*\n"
+      test doc (Position 1 7) "id" (Just $ T.length expected) [expected]
+  ]
+  where
+    brokenForGhc9 = knownBrokenFor (BrokenForGHC [GHC90, GHC92]) "Completion doc doesn't support ghc9"
+    brokenForWinGhc9 = knownBrokenFor (BrokenSpecific Windows [GHC90, GHC92]) "Extern doc doesn't support Windows for ghc9.2"
+    -- https://gitlab.haskell.org/ghc/ghc/-/issues/20903
+    brokenForMacGhc9 = knownBrokenFor (BrokenSpecific MacOS [GHC90, GHC92]) "Extern doc doesn't support MacOS for ghc9"
+    test doc pos label mn expected = do
+      _ <- waitForDiagnostics
+      compls <- getCompletions doc pos
+      let compls' = [
+            -- We ignore doc uris since it points to the local path which determined by specific machines
+            case mn of
+                Nothing -> txt
+                Just n -> T.take n txt
+            | CompletionItem {_documentation = Just (CompletionDocMarkup (MarkupContent MkMarkdown txt)), ..} <- compls
+            , _label == label
+            ]
+      liftIO $ compls' @?= expected
 
 highlightTests :: TestTree
 highlightTests = testGroup "highlight"
@@ -5561,32 +5653,61 @@ xfail :: TestTree -> String -> TestTree
 xfail = flip expectFailBecause
 
 ignoreInWindowsBecause :: String -> TestTree -> TestTree
-ignoreInWindowsBecause
-    | isWindows = ignoreTestBecause
-    | otherwise = \_ x -> x
+ignoreInWindowsBecause = ignoreFor (BrokenForOS Windows)
 
 ignoreInWindowsForGHC88And810 :: TestTree -> TestTree
-ignoreInWindowsForGHC88And810
-    | ghcVersion `elem` [GHC88, GHC810] =
-        ignoreInWindowsBecause "tests are unreliable in windows for ghc 8.8 and 8.10"
-    | otherwise = id
+ignoreInWindowsForGHC88And810 =
+    ignoreFor (BrokenSpecific Windows [GHC88, GHC810]) "tests are unreliable in windows for ghc 8.8 and 8.10"
 
 ignoreForGHC92 :: String -> TestTree -> TestTree
-ignoreForGHC92 msg
-    | ghcVersion == GHC92 = ignoreTestBecause msg
-    | otherwise = id
+ignoreForGHC92 = ignoreFor (BrokenForGHC [GHC92])
 
 ignoreInWindowsForGHC88 :: TestTree -> TestTree
-ignoreInWindowsForGHC88
-    | ghcVersion == GHC88 =
-        ignoreInWindowsBecause "tests are unreliable in windows for ghc 8.8"
-    | otherwise = id
+ignoreInWindowsForGHC88 =
+    ignoreFor (BrokenSpecific Windows [GHC88]) "tests are unreliable in windows for ghc 8.8"
 
 knownBrokenForGhcVersions :: [GhcVersion] -> String -> TestTree -> TestTree
-knownBrokenForGhcVersions ghcVers
-    | ghcVersion `elem` ghcVers = expectFailBecause
-    | otherwise = \_ x -> x
+knownBrokenForGhcVersions ghcVers = knownBrokenFor (BrokenForGHC ghcVers)
 
+data BrokenOS = Linux | MacOS | Windows deriving (Show)
+
+data IssueSolution = Broken | Ignore deriving (Show)
+
+data BrokenTarget =
+    BrokenSpecific BrokenOS [GhcVersion]
+    -- ^Broken for `BrokenOS` with `GhcVersion`
+    | BrokenForOS BrokenOS
+    -- ^Broken for `BrokenOS`
+    | BrokenForGHC [GhcVersion]
+    -- ^Broken for `GhcVersion`
+    deriving (Show)
+
+-- | Ignore test for specific os and ghc with reason.
+ignoreFor :: BrokenTarget -> String -> TestTree -> TestTree
+ignoreFor = knownIssueFor Ignore
+
+-- | Known broken for specific os and ghc with reason.
+knownBrokenFor :: BrokenTarget -> String -> TestTree -> TestTree
+knownBrokenFor = knownIssueFor Broken
+
+-- | Deal with `IssueSolution` for specific OS and GHC.
+knownIssueFor :: IssueSolution -> BrokenTarget -> String -> TestTree -> TestTree
+knownIssueFor solution = go . \case
+    BrokenSpecific bos vers -> isTargetOS bos && isTargetGhc vers
+    BrokenForOS bos -> isTargetOS bos
+    BrokenForGHC vers -> isTargetGhc vers
+    where
+        isTargetOS = \case
+            Windows -> isWindows
+            MacOS -> isMac
+            Linux -> not isWindows && not isMac
+
+        isTargetGhc = elem ghcVersion
+
+        go True = case solution of
+            Broken -> expectFailBecause
+            Ignore -> ignoreTestBecause
+        go False = \_ -> id
 
 data Expect
   = ExpectRange Range -- Both gotoDef and hover should report this range

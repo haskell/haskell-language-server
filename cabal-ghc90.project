@@ -37,13 +37,10 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2022-03-08T10:53:01Z
+index-state: 2022-04-27T09:22:49Z
 
 constraints:
-  -- These plugins don't work on GHC9 yet
-  -- Add a plugin needs remove the -flag but also update ghc bounds in hls.cabal
-  haskell-language-server +ignore-plugins-ghc-bounds -stylishhaskell,
-  ghc-lib-parser ^>= 9.0
+  hls-hlint-plugin +ghc-lib
 
 -- although we are not building all plugins cabal solver phase is run for all packages
 -- this way we track explicitly all transitive dependencies which need support for ghc-9
@@ -56,10 +53,6 @@ allow-newer:
   data-tree-print:base,
   -- https://github.com/lspitzner/butcher/pull/8
   butcher:base,
-
-  stylish-haskell:Cabal,
-  stylish-haskell:ghc-lib-parser,
-  stylish-haskell:aeson,
 
   -- ghc-9.0.2 specific
   -- for ghcide:test via ghc-typelits-knownnat

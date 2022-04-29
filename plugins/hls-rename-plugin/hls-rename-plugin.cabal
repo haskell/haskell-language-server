@@ -52,4 +52,4 @@ test-suite tests
     , filepath
     , hls-plugin-api
     , hls-rename-plugin
-    , hls-test-utils             ^>=1.2
+    , hls-test-utils             ^>=1.3

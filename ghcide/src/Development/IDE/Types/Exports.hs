@@ -178,7 +178,7 @@ unpackAvail mn
   | otherwise = const []
   where
     !mod = pack $ moduleNameString mn
-    f id@IdentInfo {..} = (pack (prettyPrint name), moduleNameText,[id])
+    f id@IdentInfo {..} = (printOutputable name, moduleNameText,[id])
 
 
 identInfoToKeyVal :: IdentInfo -> (ModuleNameText, IdentInfo)
