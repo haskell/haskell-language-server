@@ -46,7 +46,8 @@ write-ghc-environment-files: never
 index-state: 2022-03-08T10:53:01Z
 
 constraints:
-    hyphenation +embed
+    hyphenation +embed,
+    hlint +ghc-lib
 
 allow-newer:
     -- for shake-bench
