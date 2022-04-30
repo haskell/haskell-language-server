@@ -97,6 +97,18 @@
         "url": "https://hackage.haskell.org/package/ghc-exactprint-1.4.1/ghc-exactprint-1.4.1.tar.gz"
       }
     },
+    "ghc-exactprint-150": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-f+WmS86c7B0dx2SMABIMm66z6sbRVWdqSZ1QBBEpUMw=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/ghc-exactprint-1.5.0/ghc-exactprint-1.5.0.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/ghc-exactprint-1.5.0/ghc-exactprint-1.5.0.tar.gz"
+      }
+    },
     "gitignore": {
       "flake": false,
       "locked": {
@@ -305,6 +317,7 @@
         "flake-utils": "flake-utils",
         "fourmolu": "fourmolu",
         "ghc-exactprint": "ghc-exactprint",
+        "ghc-exactprint-150": "ghc-exactprint-150",
         "gitignore": "gitignore",
         "hie-bios": "hie-bios",
         "hlint": "hlint",
