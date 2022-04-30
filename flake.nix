@@ -291,6 +291,7 @@
           buildInputs = [
             # our compiling toolchain
             hpkgs.ghc
+            hpkgs.ptr-poker
             pkgs.cabal-install
             # @guibou: I'm not sure hie-bios is needed
             ghcDefault.hie-bios
