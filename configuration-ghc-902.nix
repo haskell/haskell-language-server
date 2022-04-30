@@ -8,6 +8,10 @@ let
     with pkgs.haskell.lib; {
       hlsDisabledPlugins = disabledPlugins;
 
+      # ptr-poker breaks on MacOS without SSE2 optimizations
+      # https://github.com/nikita-volkov/ptr-poker/issues/11
+      ptr-poker = hself.callCabal2nix "ptr-poker" inputs.ptr-poker { };
+
       # Hlint is still broken
       hlint = doJailbreak (hself.callCabal2nix "hlint" inputs.hlint-34 { });
 
