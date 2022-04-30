@@ -24,7 +24,7 @@ library
 
   hs-source-dirs:     src
   build-depends:
-    , aeson                 >=1.5.2.0
+    , aeson
     , base                  >=4.12 && <5
     , bytestring
     , containers
