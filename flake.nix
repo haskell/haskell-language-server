@@ -35,6 +35,10 @@
       url = "https://hackage.haskell.org/package/lsp-test-0.14.0.2/lsp-test-0.14.0.2.tar.gz";
       flake = false;
     };
+    ghc-exactprint-150 = {
+      url = "https://hackage.haskell.org/package/ghc-exactprint-1.5.0/ghc-exactprint-1.5.0.tar.gz";
+      flake = false;
+    };
     ghc-exactprint = {
       url = "https://hackage.haskell.org/package/ghc-exactprint-1.4.1/ghc-exactprint-1.4.1.tar.gz";
       flake = false;
@@ -399,6 +403,8 @@
 
         checks = { pre-commit-check = pre-commit-check ghcDefault; };
 
+        devShell = devShells.default;
+        defaultPackage = packages.default;
       });
 
   nixConfig = {

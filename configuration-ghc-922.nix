@@ -19,7 +19,7 @@ let
       hlsDisabledPlugins = disabledPlugins;
 
       fourmolu = hself.callCabal2nix "fourmolu" inputs.fourmolu {};
-      ghc-exactprint = hself.callCabal2nix "ghc-exactprint" inputs.ghc-exactprint {};
+      ghc-exactprint = hself.callCabal2nix "ghc-exactprint" inputs.ghc-exactprint-150 {};
       constraints-extras = hself.callCabal2nix "constraints-extras" inputs.constraints-extras {};
       retrie = hself.callCabal2nix "retrie" inputs.retrie {};
 
