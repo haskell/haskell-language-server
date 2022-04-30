@@ -244,8 +244,8 @@
 
         ghc88Config = (import ./configuration-ghc-88.nix) { inherit pkgs inputs; };
         ghc810Config = (import ./configuration-ghc-810.nix) { inherit pkgs inputs; };
-        ghc902Config = (import ./configuration-ghc-902.nix) { inherit pkgs inputs; };
-        ghc922Config = (import ./configuration-ghc-922.nix) { inherit pkgs inputs; };
+        ghc902Config = (import ./configuration-ghc-90.nix) { inherit pkgs inputs; };
+        ghc922Config = (import ./configuration-ghc-92.nix) { inherit pkgs inputs; };
 
         # GHC versions
         supportedGHCs = let
