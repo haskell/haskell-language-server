@@ -31,6 +31,7 @@ module Test.Hls.Util
     , knownBrokenOnWindows
     , knownBrokenForGhcVersions
     , knownBrokenInEnv
+    , onlyWorkForGhcVersions
     , setupBuildToolFiles
     , SymbolLocation
     , waitForDiagnosticsFrom
@@ -147,6 +148,13 @@ ignoreInEnv envSpecs reason
 
 ignoreForGhcVersions :: [GhcVersion] -> String -> TestTree -> TestTree
 ignoreForGhcVersions vers = ignoreInEnv (map GhcVer vers)
+
+-- | Mark as broken if GHC does not match only work versions.
+onlyWorkForGhcVersions :: [GhcVersion] -> String -> TestTree -> TestTree
+onlyWorkForGhcVersions vers reason =
+    if ghcVersion `elem` vers
+        then id
+        else expectFailBecause reason
 
 -- ---------------------------------------------------------------------
 
@@ -362,7 +370,7 @@ actual `expectSameLocations` expected = do
 
 -- ---------------------------------------------------------------------
 getCompletionByLabel :: MonadIO m => T.Text -> [CompletionItem] -> m CompletionItem
-getCompletionByLabel desiredLabel compls = 
+getCompletionByLabel desiredLabel compls =
     case find (\c -> c ^. L.label == desiredLabel) compls of
         Just c -> pure c
         Nothing -> liftIO . assertFailure $
