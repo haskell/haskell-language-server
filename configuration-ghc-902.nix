@@ -13,6 +13,11 @@ let
       ptr-poker = hself.callCabal2nix "ptr-poker" inputs.ptr-poker { };
 
       ghc-lib-parser = hself.ghc-lib-parser_9_2_2_20220307;
+      ghc-lib-parser-ex = hself.ghc-lib-parser-ex_9_2_0_3;
+
+      Cabal = hself.Cabal_3_6_3_0;
+      ormolu = hself.ormolu_0_4_0_0;
+      fourmolu = hself.fourmolu_0_6_0_0;
 
       # Hlint is still broken
       hlint = doJailbreak (hself.callCabal2nix "hlint" inputs.hlint-34 { });
