@@ -25,6 +25,7 @@ module Test.Hls.Util
     , noLiteralCaps
     , ignoreForGhcVersions
     , ignoreInEnv
+    , onlyRunForGhcVersions
     , inspectCodeAction
     , inspectCommand
     , inspectDiagnostic
@@ -155,6 +156,13 @@ onlyWorkForGhcVersions vers reason =
     if ghcVersion `elem` vers
         then id
         else expectFailBecause reason
+
+-- | Ignore the test if GHC does not match only work versions.
+onlyRunForGhcVersions :: [GhcVersion] -> String -> TestTree -> TestTree
+onlyRunForGhcVersions vers =
+    if ghcVersion `elem` vers
+    then const id
+    else ignoreTestBecause
 
 -- ---------------------------------------------------------------------
 

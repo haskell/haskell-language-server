@@ -224,7 +224,7 @@ common example-plugins
                  Ide.Plugin.Example2
 
 common class
-  if flag(class) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(class)
     build-depends: hls-class-plugin ^>= 1.0
     cpp-options: -Dclass
 
@@ -264,12 +264,12 @@ common retrie
     cpp-options: -Dretrie
 
 common tactic
-  if flag(tactic) && (impl(ghc < 9.0.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(tactic) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-tactics-plugin >=1.2.0.0 && <1.7
     cpp-options: -Dtactic
 
 common hlint
-  if flag(hlint) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(hlint)
     build-depends: hls-hlint-plugin ^>= 1.0
     cpp-options: -Dhlint
 
@@ -326,7 +326,7 @@ common ormolu
     cpp-options: -Dormolu
 
 common stylishHaskell
-  if flag(stylishHaskell) && (impl(ghc < 9.0.1) || flag(ignore-plugins-ghc-bounds))
+  if flag(stylishHaskell)
     build-depends: hls-stylish-haskell-plugin ^>= 1.0
     cpp-options: -DstylishHaskell
 

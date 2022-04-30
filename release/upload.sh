@@ -65,8 +65,8 @@ fi
 function hash_files() {
     echo $(find -maxdepth 1 \
          -iname '*.xz' \
+      -o -iname '*.gz' \
       -o -iname '*.lz' \
-      -o -iname '*.bz2' \
       -o -iname '*.zip' \
     )
     echo $(find -maxdepth 1 -iname '*.patch')
@@ -120,7 +120,7 @@ function upload() {
 	    open -u hls-downloads: sftp://$host && \
 	    mirror -P20 -c --reverse --exclude=fetch-gitlab --exclude=out . hls/$dir && \
 	    wait all;"
-    chmod ugo-w $(ls *.xz *.bz2 *.zip)
+    chmod ugo-w $(ls *.xz *.gz *.zip)
 }
 
 function purge_all() {

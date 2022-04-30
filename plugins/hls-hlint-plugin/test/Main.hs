@@ -181,8 +181,13 @@ suggestionsTests =
         doc <- openDoc "IgnoreAnnHlint.hs" "haskell"
         expectNoMoreDiagnostics 3 doc "hlint"
 
-    , testCase "apply-refact preserve regular comments" $ runHlintSession "" $ do
+    , knownBrokenForGhcVersions [GHC92] "apply-refact has different behavior on v0.10" $
+      testCase "apply-refact preserve regular comments" $ runHlintSession "" $ do
         testRefactor "Comments.hs" "Redundant bracket" expectedComments
+
+    , onlyRunForGhcVersions [GHC92] "only run test for apply-refact-0.10" $
+      testCase "apply-refact preserve regular comments" $ runHlintSession "" $ do
+        testRefactor "Comments.hs" "Redundant bracket" expectedComments'
 
     , testCase "[#2290] apply all hints works with a trailing comment" $ runHlintSession "" $ do
         testRefactor "TwoHintsAndComment.hs" "Apply all hints" expectedComments2
@@ -255,6 +260,14 @@ suggestionsTests =
                              , "-- standalone comment", ""
                              , "-- | haddock comment"
                              , "f = {- inline comment -}{- inline comment inside refactored code -} 1 -- ending comment", ""
+                             , "-- final comment"
+                             ]
+        expectedComments' =  [ "-- comment before header"
+                             , "module Comments where", ""
+                             , "{-# standalone annotation #-}", ""
+                             , "-- standalone comment", ""
+                             , "-- | haddock comment"
+                             , "f = {- inline comment -} {- inline comment inside refactored code -}1 -- ending comment", ""
                              , "-- final comment"
                              ]
         expectedComments2 =  [ "module TwoHintsAndComment where"
@@ -358,10 +371,7 @@ disableHlint = sendConfigurationChanged $ toJSON $ def { Plugin.plugins = Map.fr
 -- Although a given hlint version supports one direct ghc, we could use several versions of hlint
 -- each one supporting a different ghc version. It should be a temporary situation though.
 knownBrokenForHlintOnGhcLib :: String -> TestTree -> TestTree
-knownBrokenForHlintOnGhcLib = knownBrokenForGhcVersions [GHC88, GHC86]
-
-knownBrokenForHlintOnRawGhc :: String -> TestTree -> TestTree
-knownBrokenForHlintOnRawGhc = knownBrokenForGhcVersions [GHC810, GHC90]
+knownBrokenForHlintOnGhcLib = knownBrokenForGhcVersions [GHC86, GHC88, GHC90, GHC92]
 
 -- 1's based
 data Point = Point {
