@@ -310,6 +310,18 @@
         "type": "github"
       }
     },
+    "ptr-poker": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-ll3wuUjkhTE8Grcs8LfGpdiuyobrSBmwgjqPOTlrPac=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/ptr-poker-0.1.2.8/ptr-poker-0.1.2.8.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/ptr-poker-0.1.2.8/ptr-poker-0.1.2.8.tar.gz"
+      }
+    },
     "retrie": {
       "flake": false,
       "locked": {
@@ -342,6 +354,7 @@
         "nixpkgs": "nixpkgs",
         "poetry2nix": "poetry2nix",
         "pre-commit-hooks": "pre-commit-hooks",
+        "ptr-poker": "ptr-poker",
         "retrie": "retrie",
         "sphinx_rtd_theme": "sphinx_rtd_theme"
       }

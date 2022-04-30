@@ -12,6 +12,8 @@ let
       # https://github.com/nikita-volkov/ptr-poker/issues/11
       ptr-poker = hself.callCabal2nix "ptr-poker" inputs.ptr-poker { };
 
+      ghc-lib-parser = hself.ghc-lib-parser_9_2_2_20220307;
+
       # Hlint is still broken
       hlint = doJailbreak (hself.callCabal2nix "hlint" inputs.hlint-34 { });
 
