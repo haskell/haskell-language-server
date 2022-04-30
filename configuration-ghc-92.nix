@@ -1,4 +1,3 @@
-# nix version of cabal-ghc901.project
 { pkgs, inputs }:
 
 let
