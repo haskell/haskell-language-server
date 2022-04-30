@@ -230,13 +230,22 @@
         ghc922Config = (import ./configuration-ghc-922.nix) { inherit pkgs inputs; };
 
         # GHC versions
-        ghcDefault = pkgs.hlsHpkgs ("ghc"
-          + pkgs.lib.replaceStrings [ "." ] [ "" ]
-          pkgs.haskellPackages.ghc.version);
-        ghc884 = pkgs.hlsHpkgs "ghc884";
-        ghc8107 = pkgs.hlsHpkgs "ghc8107";
-        ghc902 = ghc902Config.tweakHpkgs (pkgs.hlsHpkgs "ghc902");
-        ghc922 = ghc922Config.tweakHpkgs (pkgs.hlsHpkgs "ghc922");
+        supportedGHCs = let
+          ghcVersion = ("ghc" + pkgs.lib.replaceStrings ["."] ["" pkgs.hskellPackages.ghc.version]);
+          cases = {
+            ghc884  = pkgs.hlsHpkgs "ghc884";
+            ghc8107 = pkgs.hlsHpkgs "ghc8107";
+            ghc902 = ghc902Config.tweakHpkgs (pkgs.hlsHpkgs "ghc902");
+            ghc922 = ghc922Config.tweakHpkgs (pkgs.hlsHpkgs "ghc922");
+          };
+          lookUp = key: if cases ? key then cases."${key}" else (pkgs.hlsHpkgs ghcVersion);
+          in { default = lookUp ghcVersion; } // cases;
+
+        ghc884 = supportedGHCs.ghc884;
+        ghc8107 = supportedGHCs.ghc8107;
+        ghc902 = supportedGHCs.ghc902;
+        ghc922 = supportedGHCs.ghc922;
+        ghcDefault = supportedGHCs.default;
 
         # For markdown support
         myst-parser = pkgs.poetry2nix.mkPoetryEnv {
