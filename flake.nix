@@ -231,7 +231,7 @@
 
         # GHC versions
         supportedGHCs = let
-          ghcVersion = "ghc" + (pkgs.lib.replaceStrings ["."] [""] pkgs.hskellPackages.ghc.version);
+          ghcVersion = "ghc" + (pkgs.lib.replaceStrings ["."] [""] pkgs.haskellPackages.ghc.version);
           cases = {
             ghc884  = pkgs.hlsHpkgs "ghc884";
             ghc8107 = pkgs.hlsHpkgs "ghc8107";
