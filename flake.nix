@@ -226,6 +226,7 @@
           };
         };
 
+        ghc88Config = (import ./configuration-ghc-88.nix) { inherit pkgs inputs; };
         ghc902Config = (import ./configuration-ghc-902.nix) { inherit pkgs inputs; };
         ghc922Config = (import ./configuration-ghc-922.nix) { inherit pkgs inputs; };
 
@@ -233,7 +234,7 @@
         supportedGHCs = let
           ghcVersion = "ghc" + (pkgs.lib.replaceStrings ["."] [""] pkgs.haskellPackages.ghc.version);
           cases = {
-            ghc884  = pkgs.hlsHpkgs "ghc884";
+            ghc884  = ghc88Config.tweakHpkgs (pkgs.hlsHpkgs "ghc884");
             ghc8107 = pkgs.hlsHpkgs "ghc8107";
             ghc902 = ghc902Config.tweakHpkgs (pkgs.hlsHpkgs "ghc902");
             ghc922 = ghc922Config.tweakHpkgs (pkgs.hlsHpkgs "ghc922");
