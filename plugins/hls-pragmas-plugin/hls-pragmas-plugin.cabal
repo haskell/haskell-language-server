@@ -33,7 +33,7 @@ library
     , transformers
     , unordered-containers
     , containers
-
+  ghc-options: -Wall -Wno-name-shadowing
   default-language: Haskell2010
 
 test-suite tests

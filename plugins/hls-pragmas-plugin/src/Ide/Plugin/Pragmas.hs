@@ -10,55 +10,25 @@
 -- | Provides code actions to add missing pragmas (whenever GHC suggests to)
 module Ide.Plugin.Pragmas
   ( descriptor
+  -- For testing
+  , validPragmas
   ) where
 
-import           Control.Applicative              ((<|>))
-import           Control.Lens                     hiding (List)
-import           Control.Monad                    (join)
-import           Control.Monad.IO.Class           (MonadIO (liftIO))
-import           Control.Monad.Trans.State.Strict (State)
-import           Data.Bits                        (Bits (bit, complement, setBit, (.&.)))
-import           Data.Char                        (isSpace)
-import qualified Data.Char                        as Char
-import           Data.Coerce                      (coerce)
-import           Data.Functor                     (void, ($>))
-import qualified Data.HashMap.Strict              as H
-import qualified Data.List                        as List
-import           Data.List.Extra                  (nubOrdOn)
-import qualified Data.Map.Strict                  as Map
-import           Data.Maybe                       (catMaybes, listToMaybe,
-                                                   mapMaybe)
-import qualified Data.Maybe                       as Maybe
-import           Data.Ord                         (Down (Down))
-import           Data.Semigroup                   (Semigroup ((<>)))
-import qualified Data.Text                        as T
-import           Data.Word                        (Word64)
-import           Development.IDE                  as D (Diagnostic (Diagnostic, _code, _message),
-                                                        GhcSession (GhcSession),
-                                                        HscEnvEq (hscEnv),
-                                                        IdeState, List (List),
-                                                        ParseResult (POk),
-                                                        Position (Position),
-                                                        Range (Range), Uri,
-                                                        getFileContents,
-                                                        getParsedModule,
-                                                        printOutputable, runAction,
-                                                        srcSpanToRange,
-                                                        toNormalizedUri,
-                                                        uriToFilePath',
-                                                        useWithStale)
+import           Control.Lens                  hiding (List)
+import           Control.Monad.IO.Class        (MonadIO (liftIO))
+import qualified Data.HashMap.Strict           as H
+import           Data.List.Extra               (nubOrdOn)
+import           Data.Maybe                    (catMaybes)
+import qualified Data.Text                     as T
+import           Development.IDE
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Compat.Util  (StringBuffer, atEnd,
-                                                   nextChar,
-                                                   stringToStringBuffer)
-import qualified Development.IDE.Spans.Pragmas    as Pragmas
-import           Development.IDE.Types.HscEnvEq   (HscEnvEq, hscEnv)
+import qualified Development.IDE.Spans.Pragmas as Pragmas
 import           Ide.Types
-import qualified Language.LSP.Server              as LSP
-import qualified Language.LSP.Types               as J
-import qualified Language.LSP.Types.Lens          as J
-import qualified Language.LSP.VFS                 as VFS
-import qualified Text.Fuzzy                       as Fuzzy
+import qualified Language.LSP.Server           as LSP
+import qualified Language.LSP.Types            as J
+import qualified Language.LSP.Types.Lens       as J
+import qualified Language.LSP.VFS              as VFS
+import qualified Text.Fuzzy                    as Fuzzy
 
 -- ---------------------------------------------------------------------
 
@@ -193,7 +163,9 @@ allPragmas =
     -- Language Version Extensions
   , "Haskell98"
   , "Haskell2010"
-    -- Maybe, GHC 2021 after its release?
+#if MIN_VERSION_ghc(9,2,0)
+  , "GHC2021"
+#endif
   ]
 
 -- ---------------------------------------------------------------------
@@ -214,58 +186,66 @@ completion _ide _ complParams = do
                     = J.List $ map buildCompletion
                         (Fuzzy.simpleFilter (VFS.prefixText pfix) allPragmas)
                     | "{-# options_ghc" `T.isPrefixOf` line
-                    = J.List $ map mkExtCompl
+                    = J.List $ map buildCompletion
                         (Fuzzy.simpleFilter (VFS.prefixText pfix) flags)
                     | "{-#" `T.isPrefixOf` line
-                    = J.List $ map (\(a, b, c) -> mkPragmaCompl (a <> suffix) b c) validPragmas
+                    = J.List $ [ mkPragmaCompl (a <> suffix) b c
+                                | (a, b, c, w) <- validPragmas, w == NewLine ]
                     | otherwise
-                    = J.List []
+                    = J.List $ [ mkPragmaCompl (prefix <> a <> suffix) b c
+                                | (a, b, c, _) <- validPragmas, Fuzzy.test word b]
                     where
                         line = T.toLower $ VFS.fullLine pfix
+                        word = VFS.prefixText pfix
+                        -- Not completely correct, may fail if more than one "{-#" exist
+                        -- , we can ignore it since it rarely happen.
+                        prefix
+                            | "{-# "  `T.isInfixOf` line = ""
+                            | "{-#"   `T.isInfixOf` line = " "
+                            | otherwise                 = "{-# "
                         suffix
-                            | "#-}" `T.isSuffixOf` line = " "
-                            | "-}"  `T.isSuffixOf` line = " #"
-                            | "}"   `T.isSuffixOf` line = " #-"
+                            | " #-}" `T.isSuffixOf` line = ""
+                            | "#-}"  `T.isSuffixOf` line = " "
+                            | "-}"   `T.isSuffixOf` line = " #"
+                            | "}"    `T.isSuffixOf` line = " #-"
                             | otherwise                 = " #-}"
                 result Nothing = J.List []
-                buildCompletion p =
-                    J.CompletionItem
-                      { _label = p,
-                        _kind = Just J.CiKeyword,
-                        _tags = Nothing,
-                        _detail = Nothing,
-                        _documentation = Nothing,
-                        _deprecated = Nothing,
-                        _preselect = Nothing,
-                        _sortText = Nothing,
-                        _filterText = Nothing,
-                        _insertText = Nothing,
-                        _insertTextFormat = Nothing,
-                        _insertTextMode = Nothing,
-                        _textEdit = Nothing,
-                        _additionalTextEdits = Nothing,
-                        _commitCharacters = Nothing,
-                        _command = Nothing,
-                        _xdata = Nothing
-                      }
         _ -> return $ J.List []
 
 -----------------------------------------------------------------------
-validPragmas :: [(T.Text, T.Text, T.Text)]
-validPragmas =
-  [ ("LANGUAGE ${1:extension}"         , "LANGUAGE",           "{-# LANGUAGE #-}")
-  , ("OPTIONS_GHC -${1:option}"        , "OPTIONS_GHC",        "{-# OPTIONS_GHC #-}")
-  , ("INLINE ${1:function}"            , "INLINE",             "{-# INLINE #-}")
-  , ("NOINLINE ${1:function}"          , "NOINLINE",           "{-# NOINLINE #-}")
-  , ("INLINABLE ${1:function}"         , "INLINABLE",          "{-# INLINABLE #-}")
-  , ("WARNING ${1:message}"            , "WARNING",            "{-# WARNING #-}")
-  , ("DEPRECATED ${1:message}"         , "DEPRECATED",         "{-# DEPRECATED  #-}")
-  , ("ANN ${1:annotation}"             , "ANN",                "{-# ANN #-}")
-  , ("RULES"                           , "RULES",              "{-# RULES #-}")
-  , ("SPECIALIZE ${1:function}"        , "SPECIALIZE",         "{-# SPECIALIZE #-}")
-  , ("SPECIALIZE INLINE ${1:function}" , "SPECIALIZE INLINE",  "{-# SPECIALIZE INLINE #-}")
-  ]
 
+-- | Pragma where exist
+data AppearWhere =
+  NewLine
+  -- ^Must be on a new line
+  | CanInline
+  -- ^Can appear in the line
+  deriving (Show, Eq)
+
+validPragmas :: [(T.Text, T.Text, T.Text, AppearWhere)]
+validPragmas =
+  [ ("LANGUAGE ${1:extension}"        , "LANGUAGE"         , "{-# LANGUAGE #-}"         ,   NewLine)
+  , ("OPTIONS_GHC -${1:option}"       , "OPTIONS_GHC"      , "{-# OPTIONS_GHC #-}"      ,   NewLine)
+  , ("INLINE ${1:function}"           , "INLINE"           , "{-# INLINE #-}"           ,   NewLine)
+  , ("NOINLINE ${1:function}"         , "NOINLINE"         , "{-# NOINLINE #-}"         ,   NewLine)
+  , ("INLINABLE ${1:function}"        , "INLINABLE"        , "{-# INLINABLE #-}"        ,   NewLine)
+  , ("WARNING ${1:message}"           , "WARNING"          , "{-# WARNING #-}"          , CanInline)
+  , ("DEPRECATED ${1:message}"        , "DEPRECATED"       , "{-# DEPRECATED  #-}"      , CanInline)
+  , ("ANN ${1:annotation}"            , "ANN"              , "{-# ANN #-}"              ,   NewLine)
+  , ("RULES"                          , "RULES"            , "{-# RULES #-}"            ,   NewLine)
+  , ("SPECIALIZE ${1:function}"       , "SPECIALIZE"       , "{-# SPECIALIZE #-}"       ,   NewLine)
+  , ("SPECIALIZE INLINE ${1:function}", "SPECIALIZE INLINE", "{-# SPECIALIZE INLINE #-}",   NewLine)
+  , ("SPECIALISE ${1:function}"       , "SPECIALISE"       , "{-# SPECIALISE #-}"       ,   NewLine)
+  , ("SPECIALISE INLINE ${1:function}", "SPECIALISE INLINE", "{-# SPECIALISE INLINE #-}",   NewLine)
+  , ("MINIMAL ${1:functions}"         , "MINIMAL"          , "{-# MINIMAL #-}"          , CanInline)
+  , ("UNPACK"                         , "UNPACK"           , "{-# UNPACK #-}"           , CanInline)
+  , ("NOUNPACK"                       , "NOUNPACK"         , "{-# NOUNPACK #-}"         , CanInline)
+  , ("COMPLETE ${1:function}"         , "COMPLETE"         , "{-# COMPLETE #-}"         ,   NewLine)
+  , ("OVERLAPPING"                    , "OVERLAPPING"      , "{-# OVERLAPPING #-}"      , CanInline)
+  , ("OVERLAPPABLE"                   , "OVERLAPPABLE"     , "{-# OVERLAPPABLE #-}"     , CanInline)
+  , ("OVERLAPS"                       , "OVERLAPS"         , "{-# OVERLAPS #-}"         , CanInline)
+  , ("INCOHERENT"                     , "INCOHERENT"       , "{-# INCOHERENT #-}"       , CanInline)
+  ]
 
 mkPragmaCompl :: T.Text -> T.Text -> T.Text -> J.CompletionItem
 mkPragmaCompl insertText label detail =
@@ -281,8 +261,8 @@ stripLeading c (s:ss)
   | otherwise = s:ss
 
 
-mkExtCompl :: T.Text -> J.CompletionItem
-mkExtCompl label =
+buildCompletion :: T.Text -> J.CompletionItem
+buildCompletion label =
   J.CompletionItem label (Just J.CiKeyword) Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing Nothing

@@ -47,8 +47,8 @@ import           Data.Aeson                      (Result (Success),
 import qualified Data.Aeson                      as A
 import           Data.ByteString.Lazy            (ByteString)
 import           Data.Default                    (def)
-import           Data.Maybe                      (fromMaybe)
 import qualified Data.Map                        as M
+import           Data.Maybe                      (fromMaybe)
 import qualified Data.Text                       as T
 import qualified Data.Text.Lazy                  as TL
 import qualified Data.Text.Lazy.Encoding         as TL
@@ -69,7 +69,8 @@ import           Development.IDE.Types.Logger    (Logger (Logger),
 import           Development.IDE.Types.Options
 import           GHC.IO.Handle
 import           GHC.Stack                       (emptyCallStack)
-import           Ide.Plugin.Config               (Config, formattingProvider, PluginConfig, plugins)
+import           Ide.Plugin.Config               (Config, PluginConfig,
+                                                  formattingProvider, plugins)
 import           Ide.PluginUtils                 (idePluginsToPluginDesc,
                                                   pluginDescToIdePlugins)
 import           Ide.Types
@@ -208,9 +209,9 @@ runSessionWithServer' plugins conf sconf caps root s = withLock lock $ keepCurre
     arguments@Arguments{ argsHlsPlugins, argsIdeOptions, argsLogger } = defaultArguments (cmapWithPrio LogIDEMain recorder) logger
 
     hlsPlugins =
-      idePluginsToPluginDesc argsHlsPlugins
+      plugins
       ++ [Test.blockCommandDescriptor "block-command", Test.plugin]
-      ++ plugins
+      ++ idePluginsToPluginDesc argsHlsPlugins
     ideOptions = \config ghcSession ->
       let defIdeOptions = argsIdeOptions config ghcSession
       in defIdeOptions
