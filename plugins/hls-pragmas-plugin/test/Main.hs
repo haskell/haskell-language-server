@@ -1,21 +1,22 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 module Main
   ( main
   ) where
 
-import           Control.Lens            ((^.), (^..), traversed)
-import           Data.Foldable           (find)
+import           Control.Lens            ((<&>), (^.))
 import qualified Data.Text               as T
-import qualified Ide.Plugin.Pragmas      as Pragmas
+import           Ide.Plugin.Pragmas
 import qualified Language.LSP.Types.Lens as L
 import           System.FilePath
 import           Test.Hls
+import           Test.Hls.Util           (onlyWorkForGhcVersions)
 
 main :: IO ()
 main = defaultTestRunner tests
 
 pragmasPlugin :: PluginDescriptor IdeState
-pragmasPlugin = Pragmas.descriptor "pragmas"
+pragmasPlugin = descriptor "pragmas"
 
 tests :: TestTree
 tests =
@@ -23,6 +24,7 @@ tests =
   [ codeActionTests
   , codeActionTests'
   , completionTests
+  , completionSnippetTests
   ]
 
 codeActionTests :: TestTree
@@ -77,7 +79,7 @@ codeActionTest testComment fp actions =
     mapM_ (\(action, contains) -> go action contains cas) actions
     action <- case cas of
       (a:_) -> pure a
-      [] -> liftIO $ assertFailure "Expected non-empty list of code actions"
+      []    -> liftIO $ assertFailure "Expected non-empty list of code actions"
     executeCodeAction action
     where
       go action contains cas = liftIO $ action `elem` map (^. L.title) cas @? contains
@@ -105,7 +107,7 @@ completionTests :: TestTree
 completionTests =
   testGroup "completions"
   [ completionTest "completes pragmas" "Completion.hs" "" "LANGUAGE" (Just Snippet) (Just "LANGUAGE ${1:extension} #-}") (Just "{-# LANGUAGE #-}") [0, 4, 0, 34, 0, 4]
-  , completionTest "completes pragmas with existing closing pragma bracket" "Completion.hs" "" "LANGUAGE" (Just Snippet) (Just "LANGUAGE ${1:extension} ") (Just "{-# LANGUAGE #-}") [0, 4, 0, 31, 0, 4]
+  , completionTest "completes pragmas with existing closing pragma bracket" "Completion.hs" "" "LANGUAGE" (Just Snippet) (Just "LANGUAGE ${1:extension}") (Just "{-# LANGUAGE #-}") [0, 4, 0, 31, 0, 4]
   , completionTest "completes pragmas with existing closing comment bracket" "Completion.hs" "" "LANGUAGE" (Just Snippet) (Just "LANGUAGE ${1:extension} #") (Just "{-# LANGUAGE #-}") [0, 4, 0, 32, 0, 4]
   , completionTest "completes pragmas with existing closing bracket" "Completion.hs" "" "LANGUAGE" (Just Snippet) (Just "LANGUAGE ${1:extension} #-") (Just "{-# LANGUAGE #-}") [0, 4, 0, 33, 0, 4]
   , completionTest "completes options pragma" "Completion.hs" "OPTIONS" "OPTIONS_GHC" (Just Snippet) (Just "OPTIONS_GHC -${1:option} #-}") (Just "{-# OPTIONS_GHC #-}") [0, 4, 0, 34, 0, 4]
@@ -114,7 +116,20 @@ completionTests =
   , completionTest "completes language extensions case insensitive" "Completion.hs" "lAnGuaGe Overloaded" "OverloadedStrings" Nothing Nothing Nothing [0, 4, 0, 34, 0, 24]
   , completionTest "completes the Strict language extension" "Completion.hs" "Str" "Strict" Nothing Nothing Nothing [0, 13, 0, 31, 0, 16]
   , completionTest "completes No- language extensions" "Completion.hs" "NoOverload" "NoOverloadedStrings" Nothing Nothing Nothing [0, 13, 0, 31, 0, 23]
+  , onlyWorkForGhcVersions [GHC92] "GHC2021 flag introduced since ghc9.2" $
+    completionTest "completes GHC2021 extensions" "Completion.hs" "ghc" "GHC2021" Nothing Nothing Nothing [0, 13, 0, 31, 0, 16]
   ]
+
+completionSnippetTests :: TestTree
+completionSnippetTests =
+  testGroup "expand snippet to pragma" $
+    validPragmas <&>
+      (\(insertText, label, detail, _) ->
+        let input = T.toLower $ T.init label
+        in completionTest (T.unpack label)
+            "Completion.hs" input label (Just Snippet)
+            (Just $ "{-# " <> insertText <> " #-}") (Just detail)
+            [0, 0, 0, 34, 0, fromIntegral $ T.length input])
 
 completionTest :: String -> String -> T.Text -> T.Text -> Maybe InsertTextFormat -> Maybe T.Text -> Maybe T.Text -> [UInt] -> TestTree
 completionTest testComment fileName te' label textFormat insertText detail [a, b, c, d, x, y] =
