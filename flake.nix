@@ -63,6 +63,10 @@
       url = "https://hackage.haskell.org/package/hlint-3.4/hlint-3.4.tar.gz";
       flake = false;
     };
+    ptr-poker = {
+      url = "https://hackage.haskell.org/package/ptr-poker-0.1.2.8/ptr-poker-0.1.2.8.tar.gz";
+      flake = false;
+    };
     implicit-hie-cradle = {
       url = "https://hackage.haskell.org/package/implicit-hie-cradle-0.3.0.5/implicit-hie-cradle-0.3.0.5.tar.gz";
       flake = false;
