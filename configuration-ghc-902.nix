@@ -12,6 +12,7 @@ let
       # https://github.com/nikita-volkov/ptr-poker/issues/11
       ptr-poker = hself.callCabal2nix "ptr-poker" inputs.ptr-poker { };
 
+      ghc-lib = hself.ghc-lib_9_2_2_20220307;
       ghc-lib-parser = hself.ghc-lib-parser_9_2_2_20220307;
       ghc-lib-parser-ex = hself.ghc-lib-parser-ex_9_2_0_3;
 
@@ -24,7 +25,7 @@ let
 
       hls-hlint-plugin = hself.callCabal2nixWithOptions "hls-hlint-plugin"
         ./plugins/hls-hlint-plugin
-        (pkgs.lib.concatStringsSep " " [ "-fhlint34" ]) { };
+        (pkgs.lib.concatStringsSep " " [ "-fhlint34" "-fghc-lib" ]) { };
 
       # Re-generate HLS drv excluding some plugins
       haskell-language-server =
