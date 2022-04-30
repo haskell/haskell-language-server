@@ -199,7 +199,7 @@ getDirtySet db = do
         calcAgeStatus _         = Nothing
     return $ mapMaybe (secondM calcAgeStatus) dbContents
 
--- | Returns ann approximation of the database keys,
+-- | Returns an approximation of the database keys,
 --   annotated with how long ago (in # builds) they were visited
 getKeysAndVisitAge :: Database -> IO [(Key, Int)]
 getKeysAndVisitAge db = do
