@@ -11,12 +11,14 @@ module Development.IDE.Main
 ,testing
 ,Log(..)
 ) where
-import           Control.Concurrent.Extra              (withNumCapabilities)
+import           Control.Concurrent.Async              (async, waitCatch)
+import           Control.Concurrent.Extra              (killThread, withNumCapabilities)
 import           Control.Concurrent.STM.Stats          (atomically,
                                                         dumpSTMStats)
 import           Control.Exception.Safe                (SomeException, catchAny,
-                                                        displayException)
-import           Control.Monad.Extra                   (concatMapM, unless,
+                                                        displayException,
+                                                        onException)
+import           Control.Monad.Extra                   (concatMapM, join, unless,
                                                         when)
 import qualified Data.Aeson.Encode.Pretty              as A
 import           Data.Default                          (Default (def))
@@ -34,7 +36,8 @@ import           Data.Typeable                         (typeOf)
 import           Development.IDE                       (Action, GhcVersion (..),
                                                         Priority (Debug, Error), Rules,
                                                         ghcVersion,
-                                                        hDuplicateTo')
+                                                        hDuplicateTo',
+                                                        logInfo)
 import           Development.IDE.Core.Debouncer        (Debouncer,
                                                         newAsyncDebouncer)
 import           Development.IDE.Core.FileStore        (isWatchSupported)
@@ -479,6 +482,8 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                     }
             ide <- initialise (cmapWithPrio LogService recorder) argsDefaultHlsConfig rules Nothing logger debouncer options hiedb hieChan Nothing
             shakeSessionInit (cmapWithPrio LogShake recorder) ide
+            registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
+            c ide
 
 expandFiles :: [FilePath] -> IO [FilePath]
 expandFiles = concatMapM $ \x -> do

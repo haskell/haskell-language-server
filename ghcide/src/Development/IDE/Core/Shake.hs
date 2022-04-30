@@ -155,21 +155,6 @@ import qualified Focus
 import           GHC.Fingerprint
 import           Language.LSP.Types.Capabilities
 import           OpenTelemetry.Eventlog
-
-import           Control.Exception.Extra                hiding (bracket_)
-import           Data.Aeson                             (toJSON)
-import qualified Data.ByteString.Char8                  as BS8
-import           Data.Coerce                            (coerce)
-import           Data.Default
-import           Data.Foldable                          (for_, toList)
-import           Data.HashSet                           (HashSet)
-import qualified Data.HashSet                           as HSet
-import           Data.IORef.Extra                       (atomicModifyIORef'_,
-                                                         atomicModifyIORef_)
-import           Data.String                            (fromString)
-import           Data.Text                              (pack)
-import           Debug.Trace.Flags                      (userTracingEnabled)
-import qualified Development.IDE.Types.Exports          as ExportsMap
 import           HieDb.Types
 import           Ide.Plugin.Config
 import qualified Ide.PluginUtils                        as HLS
@@ -178,10 +163,8 @@ import           Language.LSP.Diagnostics
 import qualified Language.LSP.Server                    as LSP
 import           Language.LSP.Types
 import qualified Language.LSP.Types                     as LSP
-import           Language.LSP.Types.Capabilities
 import           Language.LSP.VFS
 import qualified "list-t" ListT
-import           OpenTelemetry.Eventlog
 import qualified StmContainers.Map                      as STM
 import           System.FilePath                        hiding (makeRelative)
 import           System.IO.Unsafe (unsafePerformIO)
@@ -641,10 +624,10 @@ shakeOpen recorder lspEnv defaultConfig logger debouncer
 
     checkParents <- optCheckParents
     for_ metrics $ \store -> do
-        let readValuesCounter = fromIntegral . countRelevantKeys checkParents . HMap.keys <$> readVar (state shakeExtras)
-            readDirtyKeys = fromIntegral . countRelevantKeys checkParents . HSet.toList <$> readIORef (dirtyKeys shakeExtras)
+        let readValuesCounter = fromIntegral . countRelevantKeys checkParents <$> getStateKeys shakeExtras
+            readDirtyKeys = fromIntegral . countRelevantKeys checkParents . HSet.toList <$> readTVarIO(dirtyKeys shakeExtras)
             readIndexPending = fromIntegral . HMap.size <$> readTVarIO (indexPending $ hiedbWriter shakeExtras)
-            readExportsMap = fromIntegral . HMap.size . getExportsMap <$> readVar (exportsMap shakeExtras)
+            readExportsMap = fromIntegral . HMap.size . getExportsMap <$> readTVarIO (exportsMap shakeExtras)
             readDatabaseCount = fromIntegral . countRelevantKeys checkParents . map fst <$> shakeGetDatabaseKeys shakeDb
             readDatabaseStep =  fromIntegral <$> shakeGetBuildStep shakeDb
 
@@ -666,7 +649,7 @@ startTelemetry db extras@ShakeExtras{..}
     IdeOptions{optCheckParents} <- getIdeOptionsIO extras
     checkParents <- optCheckParents
     regularly 1 $ do
-        observe countKeys . countRelevantKeys checkParents . map fst =<< (atomically . ListT.toList . STM.listT) state
+        observe countKeys . countRelevantKeys checkParents =<< getStateKeys extras
         readTVarIO dirtyKeys >>= observe countDirty . countRelevantKeys checkParents . HSet.toList
         shakeGetBuildStep db >>= observe countBuilds
 
@@ -675,6 +658,8 @@ startTelemetry db extras@ShakeExtras{..}
         regularly :: Seconds -> IO () -> IO (Async ())
         regularly delay act = async $ forever (act >> sleep delay)
 
+getStateKeys :: ShakeExtras -> IO [Key]
+getStateKeys = (fmap.fmap) fst . atomically . ListT.toList . STM.listT . state
 
 -- | Must be called in the 'Initialized' handler and only once
 shakeSessionInit :: Recorder (WithPriority Log) -> IdeState -> IO ()

@@ -38,7 +38,6 @@ import           Control.Monad
 import qualified Development.IDE.Core.FileExists as FileExists
 import qualified Development.IDE.Core.OfInterest as OfInterest
 import           Development.IDE.Core.Shake      hiding (Log)
-import           Development.IDE.Core.Shake
 import qualified Development.IDE.Core.Shake      as Shake
 import           Development.IDE.Types.Shake     (WithHieDb)
 import           System.Environment              (lookupEnv)
