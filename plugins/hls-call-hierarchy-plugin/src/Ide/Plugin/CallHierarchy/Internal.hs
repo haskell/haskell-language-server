@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                 #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE NamedFieldPuns      #-}
@@ -189,6 +190,9 @@ mkSymbol = \case
 deriving instance Ord SymbolKind
 deriving instance Ord SymbolTag
 deriving instance Ord CallHierarchyItem
+#if !MIN_VERSION_aeson(1,5,2)
+deriving instance Ord Value
+#endif
 
 -- | Render incoming calls request.
 incomingCalls :: PluginMethodHandler IdeState CallHierarchyIncomingCalls
