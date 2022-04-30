@@ -356,7 +356,8 @@
         "pre-commit-hooks": "pre-commit-hooks",
         "ptr-poker": "ptr-poker",
         "retrie": "retrie",
-        "sphinx_rtd_theme": "sphinx_rtd_theme"
+        "sphinx_rtd_theme": "sphinx_rtd_theme",
+        "stylish-haskell-01220": "stylish-haskell-01220"
       }
     },
     "sphinx_rtd_theme": {
@@ -374,6 +375,18 @@
         "repo": "sphinx_rtd_theme",
         "rev": "34f81daaf52466366c80003db293d50075c1b896",
         "type": "github"
+      }
+    },
+    "stylish-haskell-01220": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-uQIvhz/xRbKLHe9et+tHUVE9To5vt1Pz3+vvDEqJaLI=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/stylish-haskell-0.12.2.0/stylish-haskell-0.12.2.0.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/stylish-haskell-0.12.2.0/stylish-haskell-0.12.2.0.tar.gz"
       }
     }
   },

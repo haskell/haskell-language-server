@@ -5,6 +5,7 @@ let
   disabledPlugins = [
     "hls-brittany-plugin"
     "hls-hlint-plugin"
+    "hls-stylish-haskell-plugin"
     "hls-haddock-comments-plugin"
     "hls-tactics-plugin"
     # That one is not technically a plugin, but by putting it in this list, we
@@ -19,6 +20,14 @@ let
 
       ghc-lib = hself.ghc-lib_8_10_7_20220219;
       ghc-lib-parser = hself.ghc-lib-parser_8_10_7_20220219;
+
+      stylish-haskell = hself.callCabal2nixWithOptions "stylish-haskell"
+        inputs.stylish-haskell-01220 (pkgs.lib.concatStringsSep " " [ ]) { };
+
+      hls-stylish-haskell-plugin =
+        hself.callCabal2nixWithOptions "hls-stylish-haskell-plugin"
+        ./plugins/hls-stylish-haskell-plugin (pkgs.lib.concatStringsSep " " [ ])
+        { };
 
       # Re-generate HLS drv excluding some plugins
       haskell-language-server =
