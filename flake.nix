@@ -67,6 +67,10 @@
       url = "https://hackage.haskell.org/package/ptr-poker-0.1.2.8/ptr-poker-0.1.2.8.tar.gz";
       flake = false;
     };
+    stylish-haskell-01220 = {
+      url = "https://hackage.haskell.org/package/stylish-haskell-0.12.2.0/stylish-haskell-0.12.2.0.tar.gz";
+      flake = false;
+    };
     implicit-hie-cradle = {
       url = "https://hackage.haskell.org/package/implicit-hie-cradle-0.3.0.5/implicit-hie-cradle-0.3.0.5.tar.gz";
       flake = false;
