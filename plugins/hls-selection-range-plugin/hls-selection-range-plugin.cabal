@@ -52,7 +52,7 @@ test-suite tests
     , containers
     , filepath
     , hls-selection-range-plugin
-    , hls-test-utils             ^>=1.2
+    , hls-test-utils             ^>=1.2 || ^>=1.3
     , lsp
     , lsp-test
     , text

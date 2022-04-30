@@ -5,8 +5,6 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs                 #-}
 
--- | Go to the definition of a variable.
-
 module Development.IDE.Plugin.CodeAction
     (
     iePluginDescriptor,
@@ -21,7 +19,8 @@ module Development.IDE.Plugin.CodeAction
 
 import           Control.Applicative                               ((<|>))
 import           Control.Arrow                                     (second,
-                                                                    (>>>))
+                                                                    (>>>),
+                                                                    (&&&))
 import           Control.Concurrent.STM.Stats                      (atomically)
 import           Control.Monad                                     (guard, join,
                                                                     msum)
@@ -37,6 +36,7 @@ import           Data.List.NonEmpty                                (NonEmpty ((:
 import qualified Data.List.NonEmpty                                as NE
 import qualified Data.Map                                          as M
 import           Data.Maybe
+import           Data.Ord                                          (comparing)
 import qualified Data.Rope.UTF16                                   as Rope
 import qualified Data.Set                                          as S
 import qualified Data.Text                                         as T
@@ -48,15 +48,13 @@ import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint
-import           Development.IDE.GHC.Util                          (prettyPrint,
+import           Development.IDE.GHC.Util                          (printOutputable,
                                                                     printRdrName,
-                                                                    traceAst,
-                                                                    unsafePrintSDoc)
+                                                                    traceAst)
 import           Development.IDE.Plugin.CodeAction.Args
 import           Development.IDE.Plugin.CodeAction.ExactPrint
 import           Development.IDE.Plugin.CodeAction.PositionIndexed
 import           Development.IDE.Plugin.TypeLenses                 (suggestSignature)
-import           Development.IDE.Spans.Common
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
@@ -109,7 +107,7 @@ iePluginDescriptor :: PluginId -> PluginDescriptor IdeState
 iePluginDescriptor plId =
   let old =
         mkGhcideCAsPlugin [
-           wrap suggestExtendImport
+            wrap suggestExtendImport
           , wrap suggestImportDisambiguation
           , wrap suggestNewOrExtendImportForClassMethod
           , wrap suggestNewImport
@@ -229,8 +227,10 @@ findInstanceHead df instanceHead decls =
 
 #if MIN_VERSION_ghc(9,2,0)
 findDeclContainingLoc :: Foldable t => Position -> t (GenLocated (SrcSpanAnn' a) e) -> Maybe (GenLocated (SrcSpanAnn' a) e)
+#elif MIN_VERSION_ghc(8,10,0)
+findDeclContainingLoc :: Foldable t => Position -> t (GenLocated SrcSpan e) -> Maybe (GenLocated SrcSpan e)
 #else
--- TODO populate this type signature for GHC versions <9.2
+-- TODO populate this type signature for GHC versions <8.10
 #endif
 findDeclContainingLoc loc = find (\(L l _) -> loc `isInsideSrcSpan` locA l)
 
@@ -546,53 +546,78 @@ suggestDeleteUnusedBinding
       isTheBinding span = srcSpanToRange span == Just _range
 
       isSameName :: IdP GhcPs -> String -> Bool
-      isSameName x name = showSDocUnsafe (ppr x) == name
+      isSameName x name = T.unpack (printOutputable x) == name
 
 data ExportsAs = ExportName | ExportPattern | ExportFamily | ExportAll
   deriving (Eq)
 
-getLocatedRange :: Located a -> Maybe Range
+getLocatedRange :: HasSrcSpan a => a -> Maybe Range
 getLocatedRange = srcSpanToRange . getLoc
 
-suggestExportUnusedTopBinding :: Maybe T.Text -> ParsedModule -> Diagnostic -> [(T.Text, TextEdit)]
+suggestExportUnusedTopBinding :: Maybe T.Text -> ParsedModule -> Diagnostic -> Maybe (T.Text, TextEdit)
 suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModule{..}} Diagnostic{..}
 -- Foo.hs:4:1: warning: [-Wunused-top-binds] Defined but not used: ‘f’
 -- Foo.hs:5:1: warning: [-Wunused-top-binds] Defined but not used: type constructor or class ‘F’
 -- Foo.hs:6:1: warning: [-Wunused-top-binds] Defined but not used: data constructor ‘Bar’
   | Just source <- srcOpt
-  , Just [name] <- matchRegexUnifySpaces _message ".*Defined but not used: ‘([^ ]+)’"
-                   <|> matchRegexUnifySpaces _message ".*Defined but not used: type constructor or class ‘([^ ]+)’"
-                   <|> matchRegexUnifySpaces _message ".*Defined but not used: data constructor ‘([^ ]+)’"
-  , Just (exportType, _) <- find (matchWithDiagnostic _range . snd)
-                            . mapMaybe
-                                (\(L (locA -> l) b) -> if maybe False isTopLevel $ srcSpanToRange l
-                                                then exportsAs b else Nothing)
-                            $ hsmodDecls
-  , Just pos <- (fmap _end . getLocatedRange) . reLoc =<< hsmodExports
-  , Just needComma <- needsComma source <$> fmap reLoc hsmodExports
-  , let exportName = (if needComma then ", " else "") <> printExport exportType name
-        insertPos = pos {_character = pred $ _character pos}
-  = [("Export ‘" <> name <> "’", TextEdit (Range insertPos insertPos) exportName)]
-  | otherwise = []
+  , Just [_, name] <-
+      matchRegexUnifySpaces
+        _message
+        ".*Defined but not used: (type constructor or class |data constructor )?‘([^ ]+)’"
+  , Just (exportType, _) <-
+      find (matchWithDiagnostic _range . snd)
+      . mapMaybe (\(L l b) -> if isTopLevel (locA l) then exportsAs b else Nothing)
+      $ hsmodDecls
+  , Just exports       <- fmap (fmap reLoc) . reLoc <$> hsmodExports
+  , Just exportsEndPos <- _end <$> getLocatedRange exports
+  , let name'          = printExport exportType name
+        sep            = exportSep source $ map getLocatedRange <$> exports
+        exportName     = case sep of
+          Nothing -> (if needsComma source exports then ", " else "") <> name'
+          Just  s -> s <> name'
+        exportsEndPos' = exportsEndPos { _character = pred $ _character exportsEndPos }
+        insertPos      = fromMaybe exportsEndPos' $ case (sep, unLoc exports) of
+          (Just _, exports'@(_:_)) -> fmap _end . getLocatedRange $ last exports'
+          _                        -> Nothing
+  = Just ("Export ‘" <> name <> "’", TextEdit (Range insertPos insertPos) exportName)
+  | otherwise = Nothing
   where
-    -- we get the last export and the closing bracket and check for comma in that range
-    needsComma :: T.Text -> Located [LIE GhcPs] -> Bool
+    exportSep :: T.Text -> Located [Maybe Range] -> Maybe T.Text
+    exportSep src (L (RealSrcSpan _ _) xs@(_ : tl@(_ : _))) =
+      case mapMaybe (\(e, s) -> (,) <$> e <*> s) $ zip (fmap _end <$> xs) (fmap _start <$> tl) of
+        []     -> Nothing
+        bounds -> Just smallestSep
+          where
+            smallestSep
+              = snd
+              $ minimumBy (comparing fst)
+              $ map (T.length &&& id)
+              $ nubOrd
+              $ map (\(prevEnd, nextStart) -> textInRange (Range prevEnd nextStart) src) bounds
+    exportSep _   _ = Nothing
+
+    -- We get the last export and the closing bracket and check for comma in that range.
+    needsComma :: T.Text -> Located [Located (IE GhcPs)] -> Bool
     needsComma _ (L _ []) = False
     needsComma source (L (RealSrcSpan l _) exports) =
-      let closeParan = _end $ realSrcSpanToRange l
-          lastExport = fmap _end . getLocatedRange $ last $ fmap reLoc exports
-      in case lastExport of
-        Just lastExport -> not $ T.isInfixOf "," $ textInRange (Range lastExport closeParan) source
+      let closeParen = _end $ realSrcSpanToRange l
+          lastExport = fmap _end . getLocatedRange $ last exports
+      in
+      case lastExport of
+        Just lastExport ->
+          not $ T.any (== ',') $ textInRange (Range lastExport closeParen) source
         _ -> False
     needsComma _ _ = False
 
-    opLetter :: String
+    opLetter :: T.Text
     opLetter = ":!#$%&*+./<=>?@\\^|-~"
 
     parenthesizeIfNeeds :: Bool -> T.Text -> T.Text
     parenthesizeIfNeeds needsTypeKeyword x
-      | T.head x `elem` opLetter = (if needsTypeKeyword then "type " else "") <> "(" <> x <>")"
+      | T.any (c ==) opLetter = (if needsTypeKeyword then "type " else "") <> "(" <> x <> ")"
       | otherwise = x
+      where
+        c = T.head x
 
     matchWithDiagnostic :: Range -> Located (IdP GhcPs) -> Bool
     matchWithDiagnostic Range{_start=l,_end=r} x =
@@ -605,8 +630,8 @@ suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModul
     printExport ExportFamily x  = parenthesizeIfNeeds True x
     printExport ExportAll x     = parenthesizeIfNeeds True x <> "(..)"
 
-    isTopLevel :: Range -> Bool
-    isTopLevel l = (_character . _start) l == 0
+    isTopLevel :: SrcSpan -> Bool
+    isTopLevel span = fmap (_character . _start) (srcSpanToRange span) == Just 0
 
     exportsAs :: HsDecl GhcPs -> Maybe (ExportsAs, Located (IdP GhcPs))
     exportsAs (ValD _ FunBind {fun_id})          = Just (ExportName, reLoc fun_id)
@@ -1013,7 +1038,7 @@ occursUnqualified symbol ImportDecl{..}
 occursUnqualified _ _ = False
 
 symbolOccursIn :: T.Text -> IE GhcPs -> Bool
-symbolOccursIn symb = any ((== symb). showNameWithoutUniques) . ieNames
+symbolOccursIn symb = any ((== symb). printOutputable) . ieNames
 
 targetModuleName :: ModuleTarget -> ModuleName
 targetModuleName ImplicitPrelude{} = mkModuleName "Prelude"
@@ -1047,12 +1072,12 @@ disambiguateSymbol pm fileContents Diagnostic {..} (T.unpack -> symbol) = \case
          in Right <$> [ if parensed
                 then Rewrite (rangeToSrcSpan "<dummy>" _range) $ \df ->
                     liftParseAST @(HsExpr GhcPs) df $
-                    prettyPrint $
+                    T.unpack $ printOutputable $
                         HsVar @GhcPs noExtField $
                             reLocA $ L (mkGeneralSrcSpan  "") rdr
                 else Rewrite (rangeToSrcSpan "<dummy>" _range) $ \df ->
                     liftParseAST @RdrName df $
-                    prettyPrint $ L (mkGeneralSrcSpan  "") rdr
+                    T.unpack $ printOutputable $ L (mkGeneralSrcSpan  "") rdr
             ]
 findImportDeclByRange :: [LImportDecl GhcPs] -> Range -> Maybe (LImportDecl GhcPs)
 findImportDeclByRange xs range = find (\(L (locA -> l) _)-> srcSpanToRange l == Just range) xs
@@ -1220,7 +1245,7 @@ removeRedundantConstraints df (L _ HsModule {hsmodDecls}) Diagnostic{..}
       = [(actionTitle redundantConstraintList typeSignatureName, rewrite)]
   | otherwise = []
     where
-      toRemove df list a = showSDoc df (ppr a) `elem` (T.unpack <$> list)
+      toRemove df list a = T.pack (showSDoc df (ppr a)) `elem` list
 
       parseConstraints :: T.Text -> [T.Text]
       parseConstraints t = t
@@ -1423,7 +1448,7 @@ newImport modName mSymbol mQual hiding = NewImport impStmt
      symImp
             | Just symbol <- mSymbol
               , symOcc <- mkVarOcc $ T.unpack symbol =
-              " (" <> T.pack (unsafePrintSDoc (parenSymOcc symOcc $ ppr symOcc)) <> ")"
+              " (" <> printOutputable (parenSymOcc symOcc $ ppr symOcc) <> ")"
             | otherwise = ""
      impStmt =
        "import "
@@ -1620,32 +1645,32 @@ smallerRangesForBindingExport lies b =
     b' = wrapOperatorInParens . unqualify $ b
 #if !MIN_VERSION_ghc(9,2,0)
     ranges' (L _ (IEThingWith _ thing _  inners labels))
-      | showSDocUnsafe (ppr thing) == b' = []
+      | T.unpack (printOutputable thing) == b' = []
       | otherwise =
-          [ locA l' | L l' x <- inners, showSDocUnsafe (ppr x) == b']
-          ++ [ l' | L l' x <- labels, showSDocUnsafe (ppr x) == b']
+          [ locA l' | L l' x <- inners, T.unpack (printOutputable x) == b']
+          ++ [ l' | L l' x <- labels, T.unpack (printOutputable x) == b']
 #else
     ranges' (L _ (IEThingWith _ thing _  inners))
-      | showSDocUnsafe (ppr thing) == b' = []
+      | T.unpack (printOutputable thing) == b' = []
       | otherwise =
-          [ locA l' | L l' x <- inners, showSDocUnsafe (ppr x) == b']
+          [ locA l' | L l' x <- inners, T.unpack (printOutputable x) == b']
 #endif
     ranges' _ = []
 
 rangesForBinding' :: String -> LIE GhcPs -> [SrcSpan]
-rangesForBinding' b (L (locA -> l) x@IEVar{}) | showSDocUnsafe (ppr x) == b = [l]
-rangesForBinding' b (L (locA -> l) x@IEThingAbs{}) | showSDocUnsafe (ppr x) == b = [l]
-rangesForBinding' b (L (locA -> l) (IEThingAll _ x)) | showSDocUnsafe (ppr x) == b = [l]
+rangesForBinding' b (L (locA -> l) x@IEVar{}) | T.unpack (printOutputable x) == b = [l]
+rangesForBinding' b (L (locA -> l) x@IEThingAbs{}) | T.unpack (printOutputable x) == b = [l]
+rangesForBinding' b (L (locA -> l) (IEThingAll _ x)) | T.unpack (printOutputable x) == b = [l]
 #if !MIN_VERSION_ghc(9,2,0)
 rangesForBinding' b (L l (IEThingWith _ thing _  inners labels))
 #else
 rangesForBinding' b (L (locA -> l) (IEThingWith _ thing _  inners))
 #endif
-    | showSDocUnsafe (ppr thing) == b = [l]
+    | T.unpack (printOutputable thing) == b = [l]
     | otherwise =
-        [ locA l' | L l' x <- inners, showSDocUnsafe (ppr x) == b]
+        [ locA l' | L l' x <- inners, T.unpack (printOutputable x) == b]
 #if !MIN_VERSION_ghc(9,2,0)
-        ++ [ l' | L l' x <- labels, showSDocUnsafe (ppr x) == b]
+        ++ [ l' | L l' x <- labels, T.unpack (printOutputable x) == b]
 #endif
 rangesForBinding' _ _ = []
 

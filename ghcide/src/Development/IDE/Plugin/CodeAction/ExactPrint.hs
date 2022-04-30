@@ -355,8 +355,8 @@ extendImportTopLevel thing (L l it@ImportDecl{..})
     top <- uniqueSrcSpanT
     let rdr = reLocA $ L src $ mkRdrUnqual $ mkVarOcc thing
     let alreadyImported =
-          showNameWithoutUniques (occName (unLoc rdr))
-            `elem` map (showNameWithoutUniques @OccName) (listify (const True) lies)
+          printOutputable (occName (unLoc rdr))
+            `elem` map (printOutputable @OccName) (listify (const True) lies)
     when alreadyImported $
       lift (Left $ thing <> " already imported")
 
@@ -456,8 +456,8 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
         childRdr <- pure $ setEntryDP childRdr $ SameLine $ if hasSibling then 1 else 0
 #endif
         let alreadyImported =
-              showNameWithoutUniques (occName (unLoc childRdr))
-                `elem` map (showNameWithoutUniques @OccName) (listify (const True) lies')
+              printOutputable (occName (unLoc childRdr))
+                `elem` map (printOutputable @OccName) (listify (const True) lies')
         when alreadyImported $
           lift (Left $ child <> " already included in " <> parent <> " imports")
 
@@ -542,7 +542,7 @@ addCommaInImportList lies x = do
 #endif
 
 unIEWrappedName :: IEWrappedName (IdP GhcPs) -> String
-unIEWrappedName (occName -> occ) = showSDocUnsafe $ parenSymOcc occ (ppr occ)
+unIEWrappedName (occName -> occ) = T.unpack $ printOutputable $ parenSymOcc occ (ppr occ)
 
 hasParen :: String -> Bool
 hasParen ('(' : _) = True

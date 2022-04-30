@@ -83,7 +83,7 @@ flags:
   # Stack doesn't support automatic flags.
   # Until the formatters support ghc-lib-9, we need this flag disabled
   hls-hlint-plugin:
-    hlint33: false
+    hlint34: false
   hyphenation:
     embed: true
 
