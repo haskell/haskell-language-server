@@ -229,7 +229,7 @@ See the [tutorial](./plugin-tutorial.md) on writing a plugin in HLS.
 
 ### Metrics
 
-HLS opens a metrics server on port 8000 exposing GC and ghcide metrics. The ghcide metrics currently exposed are:
+When ghcide is built with the `ekg` flag, HLS opens a metrics server on port 8999 exposing GC and ghcide metrics. The ghcide metrics currently exposed are:
 
 - `ghcide.values_count`- count of build results in the store
 - `ghcide.database_count` - count of build keys in the store (these two would be the same in the absence of GC)

@@ -1,6 +1,7 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 {-# OPTIONS_GHC -Wno-dodgy-imports #-} -- GHC no longer exports def in GHC 8.6 and above
+{-# LANGUAGE CPP             #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Main(main) where
@@ -24,7 +25,6 @@ import           Development.IDE.Types.Logger      (Logger (Logger),
                                                     LoggingColumn (DataColumn, PriorityColumn),
                                                     Pretty (pretty),
                                                     Priority (Debug, Info, Error),
-                                                    Recorder (Recorder),
                                                     WithPriority (WithPriority, priority),
                                                     cfilter, cmapWithPrio,
                                                     makeDefaultStderrRecorder, layoutPretty, renderStrict, defaultLayoutOptions)
@@ -42,6 +42,11 @@ import           System.Environment                (getExecutablePath)
 import           System.Exit                       (exitSuccess)
 import           System.IO                         (hPutStrLn, stderr)
 import           System.Info                       (compilerVersion)
+
+#ifdef MONITORING_EKG
+import qualified Development.IDE.Monitoring.OpenTelemetry as OpenTelemetry
+import qualified Development.IDE.Monitoring.EKG as EKG
+#endif
 
 data Log
   = LogIDEMain IDEMain.Log
@@ -142,4 +147,10 @@ main = withTelemetryLogger $ \telemetryLogger -> do
                 , optCheckProject = pure $ checkProject config
                 , optRunSubset = not argsConservativeChangeTracking
                 }
+#ifdef MONITORING_EKG
+        , IDEMain.argsMonitoring = OpenTelemetry.monitoring <> EKG.monitoring logger argsMonitoringPort
+#ifdef MONITORING_EKG
+#endif
+#endif
+
         }

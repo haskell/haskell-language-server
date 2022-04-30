@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP            #-}
 {-# LANGUAGE PackageImports #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 module Development.IDE.Main
@@ -11,14 +12,12 @@ module Development.IDE.Main
 ,testing
 ,Log(..)
 ) where
-import           Control.Concurrent.Async              (async, waitCatch)
-import           Control.Concurrent.Extra              (killThread, withNumCapabilities)
+import           Control.Concurrent.Extra              (withNumCapabilities)
 import           Control.Concurrent.STM.Stats          (atomically,
                                                         dumpSTMStats)
 import           Control.Exception.Safe                (SomeException, catchAny,
-                                                        displayException,
-                                                        onException)
-import           Control.Monad.Extra                   (concatMapM, join, unless,
+                                                        displayException)
+import           Control.Monad.Extra                   (concatMapM, unless,
                                                         when)
 import qualified Data.Aeson.Encode.Pretty              as A
 import           Data.Default                          (Default (def))
@@ -31,13 +30,11 @@ import           Data.Maybe                            (catMaybes, isJust)
 import qualified Data.Text                             as T
 import           Data.Text.Lazy.Encoding               (decodeUtf8)
 import qualified Data.Text.Lazy.IO                     as LT
-import           Data.Traversable                      (for)
 import           Data.Typeable                         (typeOf)
 import           Development.IDE                       (Action, GhcVersion (..),
                                                         Priority (Debug, Error), Rules,
                                                         ghcVersion,
-                                                        hDuplicateTo',
-                                                        logInfo)
+                                                        hDuplicateTo')
 import           Development.IDE.Core.Debouncer        (Debouncer,
                                                         newAsyncDebouncer)
 import           Development.IDE.Core.FileStore        (isWatchSupported)
@@ -130,12 +127,15 @@ import           System.IO                             (BufferMode (LineBufferin
                                                         hSetEncoding, stderr,
                                                         stdin, stdout, utf8)
 import           System.Random                         (newStdGen)
-import qualified System.Metrics                        as Monitoring
-import           System.Remote.Monitoring.Wai
-import qualified System.Remote.Monitoring.Wai          as Monitoring
 import           System.Time.Extra                     (Seconds, offsetTime,
                                                         showDuration)
 import           Text.Printf                           (printf)
+import Development.IDE.Types.Monitoring (Monitoring)
+import qualified Development.IDE.Monitoring.OpenTelemetry as OpenTelemetry
+
+#ifdef MONITORING_EKG
+import qualified Development.IDE.Monitoring.EKG as EKG
+#endif
 
 data Log
   = LogHeapStats !HeapStats.Log
@@ -238,9 +238,8 @@ data Arguments = Arguments
     , argsHandleIn              :: IO Handle
     , argsHandleOut             :: IO Handle
     , argsThreads               :: Maybe Natural
-    , argsMonitoringPort        :: Maybe Natural
+    , argsMonitoring            :: IO Monitoring
     }
-
 
 defaultArguments :: Recorder (WithPriority Log) -> Logger -> Arguments
 defaultArguments recorder logger = Arguments
@@ -276,7 +275,10 @@ defaultArguments recorder logger = Arguments
                 -- the language server tests without the redirection.
                 putStr " " >> hFlush stdout
                 return newStdout
-        , argsMonitoringPort = Just 8000
+        , argsMonitoring = OpenTelemetry.monitoring
+#ifdef MONITORING_EKG
+                        <> EKG.monitoring logger 8999
+#endif
         }
 
 
@@ -364,24 +366,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                 -- FIXME: Remove this after GHC 9 gets fully supported
                 when (ghcVersion == GHC90) $
                     log Warning LogOnlyPartialGhc9Support
-                server <- fmap join $ for argsMonitoringPort $ \p -> do
-                    store <- Monitoring.newStore
-                    Monitoring.registerGcMetrics store
-                    let startServer = Monitoring.forkServerWith store "localhost" (fromIntegral p)
-                    -- this can fail if the port is busy, throwing an async exception back to us
-                    -- to handle that, wrap the server thread in an async
-                    mb_server <- async startServer >>= waitCatch
-                    case mb_server of
-                        Right s -> do
-                            logInfo logger $ T.pack $
-                                "Started monitoring server on port " <> show p
-                            return $ Just s
-                        Left e -> do
-                            logInfo logger $ T.pack $
-                                "Unable to bind monitoring server on port "
-                                <> show p <> ":" <> show e
-                            return Nothing
-
+                monitoring <- argsMonitoring
                 initialise
                     (cmapWithPrio LogService recorder)
                     argsDefaultHlsConfig
@@ -392,9 +377,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                     options
                     withHieDb
                     hieChan
-                    (Monitoring.serverMetricStore <$> server)
-                    `onException`
-                        traverse_ (killThread . serverThreadId) server
+                    monitoring
             dumpSTMStats
         Check argFiles -> do
           dir <- maybe IO.getCurrentDirectory return argsProjectRoot
@@ -427,7 +410,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                         , optCheckProject = pure False
                         , optModifyDynFlags = optModifyDynFlags def_options <> pluginModifyDynflags plugins
                         }
-            ide <- initialise (cmapWithPrio LogService recorder) argsDefaultHlsConfig rules Nothing logger debouncer options hiedb hieChan Nothing
+            ide <- initialise (cmapWithPrio LogService recorder) argsDefaultHlsConfig rules Nothing logger debouncer options hiedb hieChan mempty
             shakeSessionInit (cmapWithPrio LogShake recorder) ide
             registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
 
@@ -480,7 +463,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                     , optCheckProject = pure False
                     , optModifyDynFlags = optModifyDynFlags def_options <> pluginModifyDynflags plugins
                     }
-            ide <- initialise (cmapWithPrio LogService recorder) argsDefaultHlsConfig rules Nothing logger debouncer options hiedb hieChan Nothing
+            ide <- initialise (cmapWithPrio LogService recorder) argsDefaultHlsConfig rules Nothing logger debouncer options hiedb hieChan mempty
             shakeSessionInit (cmapWithPrio LogShake recorder) ide
             registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
             c ide

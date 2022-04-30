@@ -30,6 +30,11 @@ flag ghc-patched-unboxed-bytecode
     default:     False
     manual:      True
 
+flag ekg
+    description: Enable EKG monitoring of the build graph and other metrics on port 8999
+    default:     False
+    manual:      True
+
 library
     default-language:   Haskell2010
     build-depends:
@@ -48,8 +53,6 @@ library
         dependent-map,
         dependent-sum,
         dlist,
-        ekg-wai,
-        ekg-core,
         exceptions,
         extra >= 1.7.4,
         enummapset,
@@ -200,6 +203,8 @@ library
         Development.IDE.Types.KnownTargets
         Development.IDE.Types.Location
         Development.IDE.Types.Logger
+        Development.IDE.Types.Monitoring
+        Development.IDE.Monitoring.OpenTelemetry
         Development.IDE.Types.Options
         Development.IDE.Types.Shake
         Development.IDE.Plugin
@@ -237,6 +242,14 @@ library
     if impl(ghc < 8.10)
       exposed-modules:
         Development.IDE.GHC.Compat.CPP
+
+    if flag(ekg)
+        build-depends:
+            ekg-wai,
+            ekg-core,
+        cpp-options:   -DMONITORING_EKG
+        exposed-modules:
+            Development.IDE.Monitoring.EKG
 
 flag test-exe
     description: Build the ghcide-test-preprocessor executable
@@ -358,6 +371,11 @@ executable ghcide
 
     if !flag(executable)
         buildable: False
+    if flag(ekg)
+        build-depends:
+            ekg-wai,
+            ekg-core,
+        cpp-options:   -DMONITORING_EKG
 
 test-suite ghcide-tests
     type: exitcode-stdio-1.0

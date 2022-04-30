@@ -18,30 +18,30 @@ module Development.IDE.Core.Service(
     Log(..),
     ) where
 
-import           Control.Applicative             ((<|>))
+import           Control.Applicative              ((<|>))
 import           Development.IDE.Core.Debouncer
-import           Development.IDE.Core.FileExists (fileExistsRules)
-import           Development.IDE.Core.OfInterest hiding (Log, LogShake)
+import           Development.IDE.Core.FileExists  (fileExistsRules)
+import           Development.IDE.Core.OfInterest  hiding (Log, LogShake)
 import           Development.IDE.Graph
-import           Development.IDE.Types.Logger    as Logger (Logger,
-                                                            Pretty (pretty),
-                                                            Priority (Debug),
-                                                            Recorder,
-                                                            WithPriority,
-                                                            cmapWithPrio)
-import           Development.IDE.Types.Options   (IdeOptions (..))
+import           Development.IDE.Types.Logger     as Logger (Logger,
+                                                             Pretty (pretty),
+                                                             Priority (Debug),
+                                                             Recorder,
+                                                             WithPriority,
+                                                             cmapWithPrio)
+import           Development.IDE.Types.Options    (IdeOptions (..))
 import           Ide.Plugin.Config
-import qualified Language.LSP.Server             as LSP
-import qualified Language.LSP.Types              as LSP
+import qualified Language.LSP.Server              as LSP
+import qualified Language.LSP.Types               as LSP
 
 import           Control.Monad
-import qualified Development.IDE.Core.FileExists as FileExists
-import qualified Development.IDE.Core.OfInterest as OfInterest
-import           Development.IDE.Core.Shake      hiding (Log)
-import qualified Development.IDE.Core.Shake      as Shake
-import           Development.IDE.Types.Shake     (WithHieDb)
-import           System.Environment              (lookupEnv)
-import           System.Metrics
+import qualified Development.IDE.Core.FileExists  as FileExists
+import qualified Development.IDE.Core.OfInterest  as OfInterest
+import           Development.IDE.Core.Shake       hiding (Log)
+import qualified Development.IDE.Core.Shake       as Shake
+import           Development.IDE.Types.Monitoring (Monitoring)
+import           Development.IDE.Types.Shake      (WithHieDb)
+import           System.Environment               (lookupEnv)
 
 data Log
   = LogShake Shake.Log
@@ -68,7 +68,7 @@ initialise :: Recorder (WithPriority Log)
            -> IdeOptions
            -> WithHieDb
            -> IndexQueue
-           -> Maybe Store
+           -> Monitoring
            -> IO IdeState
 initialise recorder defaultConfig mainRule lspEnv logger debouncer options withHieDb hiedbChan metrics = do
     shakeProfiling <- do
