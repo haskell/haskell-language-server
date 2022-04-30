@@ -59,6 +59,10 @@
       url = "https://hackage.haskell.org/package/hlint-3.3.6/hlint-3.3.6.tar.gz";
       flake = false;
     };
+    hlint-34 = {
+      url = "https://hackage.haskell.org/package/hlint-3.4/hlint-3.4.tar.gz";
+      flake = false;
+    };
     implicit-hie-cradle = {
       url = "https://hackage.haskell.org/package/implicit-hie-cradle-0.3.0.5/implicit-hie-cradle-0.3.0.5.tar.gz";
       flake = false;
@@ -218,7 +222,7 @@
           };
         };
 
-        ghc902Config = (import ./configuration-ghc-902.nix) { inherit pkgs; };
+        ghc902Config = (import ./configuration-ghc-902.nix) { inherit pkgs inputs; };
         ghc922Config = (import ./configuration-ghc-922.nix) { inherit pkgs inputs; };
 
         # GHC versions

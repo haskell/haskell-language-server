@@ -149,6 +149,18 @@
         "url": "https://hackage.haskell.org/package/hlint-3.3.6/hlint-3.3.6.tar.gz"
       }
     },
+    "hlint-34": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-mDncRtVkjWnUbZc1fgDMGcGjy8CFNxUF8z2HGuuN7GU=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/hlint-3.4/hlint-3.4.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/hlint-3.4/hlint-3.4.tar.gz"
+      }
+    },
     "implicit-hie-cradle": {
       "flake": false,
       "locked": {
@@ -321,6 +333,7 @@
         "gitignore": "gitignore",
         "hie-bios": "hie-bios",
         "hlint": "hlint",
+        "hlint-34": "hlint-34",
         "implicit-hie-cradle": "implicit-hie-cradle",
         "lsp": "lsp",
         "lsp-test": "lsp-test",
