@@ -10,56 +10,25 @@
 -- | Provides code actions to add missing pragmas (whenever GHC suggests to)
 module Ide.Plugin.Pragmas
   ( descriptor
+  -- For testing
+  , validPragmas
   ) where
 
-import           Control.Applicative              ((<|>))
-import           Control.Lens                     hiding (List)
-import           Control.Monad                    (join)
-import           Control.Monad.IO.Class           (MonadIO (liftIO))
-import           Control.Monad.Trans.State.Strict (State)
-import           Data.Bits                        (Bits (bit, complement, setBit, (.&.)))
-import           Data.Char                        (isSpace)
-import qualified Data.Char                        as Char
-import           Data.Coerce                      (coerce)
-import           Data.Functor                     (void, ($>))
-import qualified Data.HashMap.Strict              as H
-import qualified Data.List                        as List
-import           Data.List.Extra                  (nubOrdOn)
-import qualified Data.Map.Strict                  as Map
-import           Data.Maybe                       (catMaybes, listToMaybe,
-                                                   mapMaybe)
-import qualified Data.Maybe                       as Maybe
-import           Data.Ord                         (Down (Down))
-import           Data.Semigroup                   (Semigroup ((<>)))
-import qualified Data.Text                        as T
-import           Data.Word                        (Word64)
-import           Development.IDE                  as D (Diagnostic (Diagnostic, _code, _message),
-                                                        GhcSession (GhcSession),
-                                                        HscEnvEq (hscEnv),
-                                                        IdeState, List (List),
-                                                        ParseResult (POk),
-                                                        Position (Position),
-                                                        Range (Range), Uri,
-                                                        getFileContents,
-                                                        getParsedModule,
-                                                        printOutputable,
-                                                        runAction,
-                                                        srcSpanToRange,
-                                                        toNormalizedUri,
-                                                        uriToFilePath',
-                                                        useWithStale)
+import           Control.Lens                  hiding (List)
+import           Control.Monad.IO.Class        (MonadIO (liftIO))
+import qualified Data.HashMap.Strict           as H
+import           Data.List.Extra               (nubOrdOn)
+import           Data.Maybe                    (catMaybes)
+import qualified Data.Text                     as T
+import           Development.IDE
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Compat.Util  (StringBuffer, atEnd,
-                                                   nextChar,
-                                                   stringToStringBuffer)
-import qualified Development.IDE.Spans.Pragmas    as Pragmas
-import           Development.IDE.Types.HscEnvEq   (HscEnvEq, hscEnv)
+import qualified Development.IDE.Spans.Pragmas as Pragmas
 import           Ide.Types
-import qualified Language.LSP.Server              as LSP
-import qualified Language.LSP.Types               as J
-import qualified Language.LSP.Types.Lens          as J
-import qualified Language.LSP.VFS                 as VFS
-import qualified Text.Fuzzy                       as Fuzzy
+import qualified Language.LSP.Server           as LSP
+import qualified Language.LSP.Types            as J
+import qualified Language.LSP.Types.Lens       as J
+import qualified Language.LSP.VFS              as VFS
+import qualified Text.Fuzzy                    as Fuzzy
 
 -- ---------------------------------------------------------------------
 
@@ -224,7 +193,7 @@ completion _ide _ complParams = do
                                 | (a, b, c, w) <- validPragmas, w == NewLine ]
                     | otherwise
                     = J.List $ [ mkPragmaCompl (prefix <> a <> suffix) b c
-                                | (a, b, c, _) <- validPragmas, Fuzzy.test word b ]
+                                | (a, b, c, _) <- validPragmas, Fuzzy.test word b]
                     where
                         line = T.toLower $ VFS.fullLine pfix
                         word = VFS.prefixText pfix
