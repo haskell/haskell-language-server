@@ -138,10 +138,10 @@ tests = testGroup "completions" [
     , testCase "import second function completion" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
          doc <- openDoc "FunctionCompletions.hs" "haskell"
 
-         let te = TextEdit (Range (Position 0 41) (Position 0 42)) ", l"
+         let te = TextEdit (Range (Position 0 39) (Position 0 39)) ", l"
          _ <- applyEdit doc te
 
-         compls <- getCompletions doc (Position 0 41)
+         compls <- getCompletions doc (Position 0 42)
          item <- getCompletionByLabel "liftA" compls
          liftIO $ do
              item ^. label @?= "liftA"
