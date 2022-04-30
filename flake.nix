@@ -306,6 +306,7 @@
             capstone tracy
             # ormolu
             # stylish-haskell
+            pre-commit
             ];
 
 
