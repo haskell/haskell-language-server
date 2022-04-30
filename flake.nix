@@ -243,8 +243,7 @@
             ghc902 = ghc902Config.tweakHpkgs (pkgs.hlsHpkgs "ghc902");
             ghc922 = ghc922Config.tweakHpkgs (pkgs.hlsHpkgs "ghc922");
           };
-          lookUp = key: if cases ? key then cases."${key}" else (pkgs.hlsHpkgs ghcVersion);
-          in { default = lookUp ghcVersion; } // cases;
+          in { default = cases."${ghcVersion}"; } // cases;
 
         ghc884 = supportedGHCs.ghc884;
         ghc8107 = supportedGHCs.ghc8107;
