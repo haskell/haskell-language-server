@@ -24,6 +24,9 @@ let
       stylish-haskell = hself.callCabal2nixWithOptions "stylish-haskell"
         inputs.stylish-haskell-01220 (pkgs.lib.concatStringsSep " " [ ]) { };
 
+      brittany = hself.callCabal2nixWithOptions "brittany" inputs.brittany-01312
+        (pkgs.lib.concatStringsSep " " [ ]) { };
+
       hls-stylish-haskell-plugin =
         hself.callCabal2nixWithOptions "hls-stylish-haskell-plugin"
         ./plugins/hls-stylish-haskell-plugin (pkgs.lib.concatStringsSep " " [ ])
