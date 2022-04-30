@@ -109,6 +109,18 @@
         "url": "https://hackage.haskell.org/package/fourmolu-0.5.0.1/fourmolu-0.5.0.1.tar.gz"
       }
     },
+    "fourmolu-0300": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-SFBwhkXfDArITiBSxGSp2qf8gl+yBpWHglBB5aKeaBU=",
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/fourmolu-0.3.0.0/fourmolu-0.3.0.0.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://hackage.haskell.org/package/fourmolu-0.3.0.0/fourmolu-0.3.0.0.tar.gz"
+      }
+    },
     "ghc-exactprint": {
       "flake": false,
       "locked": {
@@ -366,6 +378,7 @@
         "flake-compat": "flake-compat",
         "flake-utils": "flake-utils",
         "fourmolu": "fourmolu",
+        "fourmolu-0300": "fourmolu-0300",
         "ghc-exactprint": "ghc-exactprint",
         "ghc-exactprint-150": "ghc-exactprint-150",
         "gitignore": "gitignore",

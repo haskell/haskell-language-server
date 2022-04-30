@@ -55,6 +55,10 @@
       url = "https://hackage.haskell.org/package/fourmolu-0.5.0.1/fourmolu-0.5.0.1.tar.gz";
       flake = false;
     };
+    fourmolu-0300 = {
+      url = "https://hackage.haskell.org/package/fourmolu-0.3.0.0/fourmolu-0.3.0.0.tar.gz";
+      flake = false;
+    };
     aeson-1520= {
       url = "https://hackage.haskell.org/package/aeson-1.5.2.0/aeson-1.5.2.0.tar.gz";
       flake = false;
