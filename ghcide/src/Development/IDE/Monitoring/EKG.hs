@@ -13,7 +13,7 @@ monitoring :: Logger -> Int -> IO Monitoring
 monitoring logger port = do
     store <- Monitoring.newStore
     Monitoring.registerGcMetrics store
-    let registerCounter name read = Monitoring.registerGauge name read store
+    let registerCounter name read = Monitoring.registerCounter name read store
         registerGauge name read = Monitoring.registerGauge name read store
         start = do
             server <- do

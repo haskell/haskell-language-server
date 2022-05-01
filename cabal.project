@@ -53,7 +53,10 @@ constraints:
   ghc-lib-parser-ex -auto,
   stylish-haskell +ghc-lib
 
- source-repository-package
+-- This is benign and won't affect our ability to release to Hackage,
+-- because we only depend on `ekg-json` when a non-default flag
+-- is turned on.
+source-repository-package
   type:git
   location: https://github.com/vshabanov/ekg-json
   tag: 00ebe7211c981686e65730b7144fbf5350462608

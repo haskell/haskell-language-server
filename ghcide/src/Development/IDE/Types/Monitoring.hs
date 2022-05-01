@@ -11,7 +11,7 @@ data Monitoring = Monitoring {
     registerGauge   :: Text -> IO Int64 -> IO (),
     -- | Register a non-negative, monotonically increasing, integer-valued metric.
     registerCounter :: Text -> IO Int64 -> IO (),
-    start :: IO (IO ())
+    start :: IO (IO ()) -- ^ Start the monitoring system, returning an action which will stop the system.
   }
 
 instance Semigroup Monitoring where
