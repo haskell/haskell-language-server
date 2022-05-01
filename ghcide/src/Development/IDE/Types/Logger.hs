@@ -1,6 +1,7 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
+{-# LANGUAGE CPP        #-}
 {-# LANGUAGE RankNTypes #-}
 -- | This is a compatibility module that abstracts over the
 -- concrete choice of logging framework so users can plug in whatever
@@ -54,8 +55,13 @@ import           Language.LSP.Types            (LogMessageParams (..),
                                                 MessageType (..),
                                                 SMethod (SWindowLogMessage, SWindowShowMessage),
                                                 ShowMessageParams (..))
+#if MIN_VERSION_prettyprinter(1,7,0)
 import           Prettyprinter                 as PrettyPrinterModule
 import           Prettyprinter.Render.Text     (renderStrict)
+#else
+import           Data.Text.Prettyprint.Doc     as PrettyPrinterModule
+import           Data.Text.Prettyprint.Doc.Render.Text (renderStrict)
+#endif
 import           System.IO                     (Handle, IOMode (AppendMode),
                                                 hClose, hFlush, hSetEncoding,
                                                 openFile, stderr, utf8)
