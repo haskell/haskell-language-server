@@ -1,6 +1,7 @@
 module Development.IDE.Monitoring.EKG(monitoring) where
 import           Control.Concurrent               (killThread)
 import           Control.Concurrent.Async         (async, waitCatch)
+import           Control.Monad                    (forM_)
 import           Data.Text                        (pack)
 import           Development.IDE.Types.Logger     (Logger, logInfo)
 import           Development.IDE.Types.Monitoring (Monitoring (..))
@@ -30,5 +31,7 @@ monitoring logger port = do
                             "Unable to bind monitoring server on port "
                             <> show port <> ":" <> show e
                         return Nothing
-            return $ mapM_ (killThread . Monitoring.serverThreadId) server
+            return $ forM_ server $ \s -> do
+                logInfo logger "Stopping monitoring server"
+                killThread $ Monitoring.serverThreadId s
     return $ Monitoring {..}
