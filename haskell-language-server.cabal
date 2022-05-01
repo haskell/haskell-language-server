@@ -234,7 +234,7 @@ common callHierarchy
     cpp-options: -DcallHierarchy
 
 common haddockComments
-  if flag(haddockComments)
+  if flag(haddockComments) && (impl(ghc < 9.2.1) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-haddock-comments-plugin ^>= 1.0
     cpp-options: -DhaddockComments
 

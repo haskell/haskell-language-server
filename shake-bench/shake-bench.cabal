@@ -8,9 +8,8 @@ author:        Pepe Iborra
 maintainer:    pepeiborra@gmail.com
 category:      Development
 build-type:    Simple
-description:
-  A library Shake rules to build and run benchmarks for multiple revisions of a project.
-  An example of usage can be found in the ghcide benchmark suite
+-- description is a single line so that implicit-hie can parse it
+description:   A library Shake rules to build and run benchmarks for multiple revisions of a project.  An example of usage can be found in the ghcide benchmark suite
 
 library
   exposed-modules:  Development.Benchmark.Rules

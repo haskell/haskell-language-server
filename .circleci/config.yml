@@ -75,45 +75,24 @@ defaults: &defaults
 
 version: 2
 jobs:
-  ghc-8.6.5:
-    environment:
-      - STACK_FILE: "stack-8.6.5.yaml"
-    <<: *defaults
-
-  ghc-8.8.4:
-    environment:
-      - STACK_FILE: "stack-8.8.4.yaml"
-    <<: *defaults
-
-  ghc-8.10.6:
-    environment:
-      - STACK_FILE: "stack-8.10.6.yaml"
-    <<: *defaults
-
-  ghc-8.10.7:
-    environment:
-      - STACK_FILE: "stack-8.10.7.yaml"
-    <<: *defaults
-
-  ghc-9.0.1:
-    environment:
-      - STACK_FILE: "stack-9.0.1.yaml"
-    <<: *defaults
-
-  ghc-9.0.2:
-    environment:
-      - STACK_FILE: "stack-9.0.2.yaml"
-    <<: *defaults
-
-  ghc-9.2.2:
+  stackage-lts16:
     environment:
       # https://github.com/digital-asset/ghc-lib/issues/352
       - CPATH: "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/ffi:$CPATH"
-      - STACK_FILE: "stack-9.2.yaml"
+      - STACK_FILE: "stack-lts16.yaml"
     <<: *defaults
 
-  ghc-default:
+  stackage-lts19:
     environment:
+      # https://github.com/digital-asset/ghc-lib/issues/352
+      - CPATH: "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/ffi:$CPATH"
+      - STACK_FILE: "stack-lts19.yaml"
+    <<: *defaults
+
+  stackage-nightly:
+    environment:
+      # https://github.com/digital-asset/ghc-lib/issues/352
+      - CPATH: "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/ffi:$CPATH"
       - STACK_FILE: "stack.yaml"
     <<: *defaults
 
@@ -122,11 +101,6 @@ workflows:
   version: 2
   multiple-ghcs:
     jobs:
-      - ghc-8.6.5
-      - ghc-8.8.4
-      - ghc-8.10.6
-      - ghc-8.10.7
-      - ghc-9.0.1
-      - ghc-9.0.2
-      - ghc-9.2.2
-      - ghc-default
+      - stackage-lts16
+      - stackage-lts19
+      - stackage-nightly

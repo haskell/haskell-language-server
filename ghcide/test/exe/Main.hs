@@ -1343,6 +1343,34 @@ removeImportTests = testGroup "remove import actions"
             , "main = print stuffB"
             ]
       liftIO $ expectedContentAfterAction @=? contentAfterAction
+  , testSession "redundant binding - unicode regression " $ do
+      let contentA = T.unlines
+            [ "module ModuleA where"
+            , "data A = A"
+            , "ε :: Double"
+            , "ε = 0.5"
+            ]
+      _docA <- createDoc "ModuleA.hs" "haskell" contentA
+      let contentB = T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-imports #-}"
+            , "module ModuleB where"
+            , "import ModuleA (A(..), ε)"
+            , "a = A"
+            ]
+      docB <- createDoc "ModuleB.hs" "haskell" contentB
+      _ <- waitForDiagnostics
+      [InR action@CodeAction { _title = actionTitle }, _]
+          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
+      liftIO $ "Remove ε from import" @=? actionTitle
+      executeCodeAction action
+      contentAfterAction <- documentContents docB
+      let expectedContentAfterAction = T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-imports #-}"
+            , "module ModuleB where"
+            , "import ModuleA (A(..))"
+            , "a = A"
+            ]
+      liftIO $ expectedContentAfterAction @=? contentAfterAction
   , testSession "redundant operator" $ do
       let contentA = T.unlines
             [ "module ModuleA where"
