@@ -40,7 +40,6 @@ write-ghc-environment-files: never
 index-state: 2022-04-27T09:22:49Z
 
 constraints:
-  hls-hlint-plugin +ghc-lib
 
 -- although we are not building all plugins cabal solver phase is run for all packages
 -- this way we track explicitly all transitive dependencies which need support for ghc-9

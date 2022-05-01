@@ -371,7 +371,7 @@ disableHlint = sendConfigurationChanged $ toJSON $ def { Plugin.plugins = Map.fr
 -- Although a given hlint version supports one direct ghc, we could use several versions of hlint
 -- each one supporting a different ghc version. It should be a temporary situation though.
 knownBrokenForHlintOnGhcLib :: String -> TestTree -> TestTree
-knownBrokenForHlintOnGhcLib = knownBrokenForGhcVersions [GHC86, GHC88, GHC90, GHC92]
+knownBrokenForHlintOnGhcLib = expectFailBecause
 
 -- 1's based
 data Point = Point {

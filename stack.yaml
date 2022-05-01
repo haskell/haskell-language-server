@@ -82,9 +82,6 @@ flags:
   retrie:
     BuildExecutable: false
   # Stack doesn't support automatic flags.
-  hls-hlint-plugin:
-    hlint34: true
-    ghc-lib: true
   # Use ghc-lib force instead of ghc itself
   ghc-lib-parser-ex:
     auto: false

@@ -67,12 +67,10 @@ flags:
   retrie:
     BuildExecutable: false
   # Stack doesn't support automatic flags.
-  # Until the formatters support ghc-lib-9, we need this flag disabled
-  hls-hlint-plugin:
-    hlint34: true
-    ghc-lib: true
   hyphenation:
     embed: true
+  hlint:
+    ghc-lib: true
 
 nix:
   packages: [ icu libcxx zlib ]
