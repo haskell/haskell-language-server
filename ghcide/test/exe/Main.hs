@@ -22,7 +22,7 @@ import           Control.Exception                        (bracket_, catch,
 import qualified Control.Lens                             as Lens
 import           Control.Monad
 import           Control.Monad.IO.Class                   (MonadIO, liftIO)
-import           Data.Aeson                               (fromJSON, toJSON)
+import           Data.Aeson                               (toJSON)
 import qualified Data.Aeson                               as A
 import           Data.Default
 import           Data.Foldable
