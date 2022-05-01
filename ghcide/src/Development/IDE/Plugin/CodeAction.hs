@@ -41,8 +41,8 @@ import qualified Data.Rope.UTF16                                   as Rope
 import qualified Data.Set                                          as S
 import qualified Data.Text                                         as T
 import           Data.Tuple.Extra                                  (fst3)
-import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Rules
+import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Compat.Util
@@ -1631,8 +1631,11 @@ rangesForBindingImport _ _ = []
 wrapOperatorInParens :: String -> String
 wrapOperatorInParens x =
   case uncons x of
-    Just (h, _t) -> if is_ident h then x else "(" <> x <> ")"
-    Nothing      -> mempty
+    -- see #2483 and #2859
+    -- common lens functions use the _ prefix, and should not be wrapped in parens
+    Just ('_', _t) -> x
+    Just (h, _t)   -> if isAlpha h then x else "(" <> x <> ")"
+    Nothing        -> mempty
 
 smallerRangesForBindingExport :: [LIE GhcPs] -> String -> [Range]
 smallerRangesForBindingExport lies b =
@@ -1788,8 +1791,8 @@ renderImportStyle (ImportAllConstructors p) = p <> "(..)"
 
 -- | Used for extending import lists
 unImportStyle :: ImportStyle -> (Maybe String, String)
-unImportStyle (ImportTopLevel x)    = (Nothing, T.unpack x)
-unImportStyle (ImportViaParent x y) = (Just $ T.unpack y, T.unpack x)
+unImportStyle (ImportTopLevel x)        = (Nothing, T.unpack x)
+unImportStyle (ImportViaParent x y)     = (Just $ T.unpack y, T.unpack x)
 unImportStyle (ImportAllConstructors x) = (Just $ T.unpack x, wildCardSymbol)
 
 
