@@ -50,9 +50,8 @@ asyncRegisterEvent d delay k fire = mask_ $ do
         sleep delay
         fire
         atomically $ STM.delete k d
-    do
-        prev <- atomicallyNamed "debouncer" $ STM.focus (Focus.lookup <* Focus.insert a) k d
-        traverse_ cancel prev
+    prev <- atomicallyNamed "debouncer" $ STM.focus (Focus.lookup <* Focus.insert a) k d
+    traverse_ cancel prev
 
 -- | Debouncer used in the DAML CLI compiler that emits events immediately.
 noopDebouncer :: Debouncer k

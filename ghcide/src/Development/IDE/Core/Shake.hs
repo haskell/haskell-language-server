@@ -696,17 +696,6 @@ shakeRestart recorder IdeState{..} vfs reason acts =
               queue <- atomicallyNamed "actionQueue - peek" $ peekInProgress $ actionQueue shakeExtras
 
               log Debug $ LogBuildSessionRestart reason queue backlog stopTime res
-
-              let profile = case res of
-                      Just fp -> ", profile saved at " <> fp
-                      _       -> ""
-              -- TODO: should replace with logging using a logger that sends lsp message
-              let msg = T.pack $ "Restarting build session " ++ reason' ++ queueMsg ++ keysMsg ++ abortMsg
-                  reason' = "due to " ++ reason
-                  queueMsg = " with queue " ++ show (map actionName queue)
-                  keysMsg = " for keys " ++ show (HSet.toList backlog) ++ " "
-                  abortMsg = "(aborting the previous one took " ++ showDuration stopTime ++ profile ++ ")"
-              notifyTestingLogMessage shakeExtras msg
         )
         -- It is crucial to be masked here, otherwise we can get killed
         -- between spawning the new thread and updating shakeSession.
@@ -718,13 +707,6 @@ shakeRestart recorder IdeState{..} vfs reason acts =
         logErrorAfter seconds recorder action = flip withAsync (const action) $ do
             sleep seconds
             logWith recorder Error (LogBuildSessionRestartTakingTooLong seconds)
-
-notifyTestingLogMessage :: ShakeExtras -> T.Text -> IO ()
-notifyTestingLogMessage extras msg = do
-    (IdeTesting isTestMode) <- optTesting <$> getIdeOptionsIO extras
-    let notif = LSP.LogMessageParams LSP.MtLog msg
-    when isTestMode $ mRunLspT (lspEnv extras) $ LSP.sendNotification LSP.SWindowLogMessage notif
-
 
 -- | Enqueue an action in the existing 'ShakeSession'.
 --   Returns a computation to block until the action is run, propagating exceptions.
@@ -797,17 +779,12 @@ newSession recorder extras@ShakeExtras{..} vfsMod shakeDb acts reason = do
           let keysActs = pumpActionThread otSpan : map (run otSpan) (reenqueued ++ acts)
           res <- try @SomeException $
             restore $ shakeRunDatabaseForKeys (HSet.toList <$> allPendingKeys) shakeDb keysActs
-          let res' = case res of
-                      Left e  -> "exception: " <> displayException e
-                      Right _ -> "completed"
-          let msg = T.pack $ "Finishing build session(" ++ res' ++ ")"
           return $ do
               let exception =
                     case res of
                       Left e -> Just e
                       _      -> Nothing
               logWith recorder Debug $ LogBuildSessionFinish exception
-              notifyTestingLogMessage extras msg
 
     -- Do the work in a background thread
     workThread <- asyncWithUnmask workRun

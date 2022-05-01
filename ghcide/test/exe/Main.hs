@@ -22,7 +22,7 @@ import           Control.Exception                        (bracket_, catch,
 import qualified Control.Lens                             as Lens
 import           Control.Monad
 import           Control.Monad.IO.Class                   (MonadIO, liftIO)
-import           Data.Aeson                               (fromJSON, toJSON)
+import           Data.Aeson                               (toJSON)
 import qualified Data.Aeson                               as A
 import           Data.Default
 import           Data.Foldable
@@ -6075,10 +6075,13 @@ ifaceErrorTest = testCase "iface-error-test-1" $ runWithExtraFiles "recomp" $ \d
     expectDiagnostics
       [("P.hs", [(DsWarning,(4,0), "Top-level binding")])] -- So what we know P has been loaded
 
+    waitForProgressDone
+
     -- Change y from Int to B
     changeDoc bdoc [TextDocumentContentChangeEvent Nothing Nothing $ T.unlines ["module B where", "y :: Bool", "y = undefined"]]
     -- save so that we can that the error propogates to A
     sendNotification STextDocumentDidSave (DidSaveTextDocumentParams bdoc Nothing)
+
 
     -- Check that the error propogates to A
     expectDiagnostics
@@ -6090,7 +6093,8 @@ ifaceErrorTest = testCase "iface-error-test-1" $ runWithExtraFiles "recomp" $ \d
     hi_exists <- liftIO $ doesFileExist $ hidir </> "B.hi"
     liftIO $ assertBool ("Couldn't find B.hi in " ++ hidir) hi_exists
 
-    pdoc <- createDoc pPath "haskell" pSource
+    pdoc <- openDoc pPath "haskell"
+    waitForProgressDone
     changeDoc pdoc [TextDocumentContentChangeEvent Nothing Nothing $ pSource <> "\nfoo = y :: Bool" ]
     -- Now in P we have
     -- bar = x :: Int

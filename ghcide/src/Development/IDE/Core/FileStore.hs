@@ -28,7 +28,6 @@ import           Control.Exception
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import qualified Data.ByteString                              as BS
-import           Data.Either.Extra
 import qualified Data.Rope.UTF16                              as Rope
 import qualified Data.Text                                    as T
 import           Data.Time
@@ -191,12 +190,6 @@ getFileContentsImpl file = do
         mbVirtual <- getVirtualFile file
         pure $ Rope.toText . _text <$> mbVirtual
     pure ([], Just (time, res))
-
-ideTryIOException :: NormalizedFilePath -> IO a -> IO (Either FileDiagnostic a)
-ideTryIOException fp act =
-  mapLeft
-      (\(e :: IOException) -> ideErrorText fp $ T.pack $ show e)
-      <$> try act
 
 -- | Returns the modification time and the contents.
 --   For VFS paths, the modification time is the current time.

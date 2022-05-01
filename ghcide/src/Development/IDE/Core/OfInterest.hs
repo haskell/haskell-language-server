@@ -107,10 +107,10 @@ addFileOfInterest state f v = do
     (prev, files) <- modifyVar var $ \dict -> do
         let (prev, new) = HashMap.alterF (, Just v) f dict
         pure (new, (prev, new))
-    when (prev /= Just v) $
+    when (prev /= Just v) $ do
         join $ atomically $ recordDirtyKeys (shakeExtras state) IsFileOfInterest [f]
-    logDebug (ideLogger state) $
-        "Set files of interest to: " <> T.pack (show files)
+        logDebug (ideLogger state) $
+            "Set files of interest to: " <> T.pack (show files)
 
 deleteFileOfInterest :: IdeState -> NormalizedFilePath -> IO ()
 deleteFileOfInterest state f = do
