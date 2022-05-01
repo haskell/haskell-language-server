@@ -18,6 +18,10 @@ extra-source-files:
   test/testdata/*.hs
 
 library
+  if impl(ghc >= 9.2)
+    buildable: False
+  else
+    buildable: True
   exposed-modules:    Ide.Plugin.HaddockComments
   hs-source-dirs:     src
   ghc-options:
@@ -41,6 +45,10 @@ library
     TypeOperators
 
 test-suite tests
+  if impl(ghc >= 9.2)
+    buildable: False
+  else
+    buildable: True
   type:             exitcode-stdio-1.0
   default-language: Haskell2010
   hs-source-dirs:   test
