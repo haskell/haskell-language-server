@@ -37,15 +37,19 @@ optional-packages: vendored/*/*.cabal
 tests: true
 
 package *
-  ghc-options: -haddock
+  -- ghc 8.10 cannot build ghc-lib 9.2 with --haddock
+  -- ghc-options: -haddock
   test-show-details: direct
 
 write-ghc-environment-files: never
 
-index-state: 2022-03-08T10:53:01Z
+index-state: 2022-04-27T09:22:49Z
 
 constraints:
-    hyphenation +embed
+    hyphenation +embed,
+    -- remove this when hlint sets ghc-lib to true by default
+    -- https://github.com/ndmitchell/hlint/issues/1376
+    hlint +ghc-lib
 
 allow-newer:
     -- for shake-bench

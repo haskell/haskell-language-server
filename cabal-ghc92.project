@@ -50,8 +50,6 @@ constraints:
     -retrie
     -splice
     -tactic,
-  hls-hlint-plugin +ghc-lib,
-  -- # Use ghc-lib force instead of ghc itself
   ghc-lib-parser-ex -auto,
   hlint +ghc-lib,
   stylish-haskell +ghc-lib
