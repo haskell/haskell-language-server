@@ -400,7 +400,7 @@
           haskell-language-server-884-dev-nix = mkDevShellWithNixDeps ghc884 "cabal.project";
           haskell-language-server-8107-dev-nix = mkDevShellWithNixDeps ghc8107 "cabal.project";
           haskell-language-server-902-dev-nix = mkDevShellWithNixDeps ghc902 "cabal.project";
-          haskell-language-server-922-dev-nix = mkDevShellWithNixDeps ghc921 "cabal-ghc92.project";
+          haskell-language-server-922-dev-nix = mkDevShellWithNixDeps ghc922 "cabal-ghc92.project";
         };
 
         allPackages = {
