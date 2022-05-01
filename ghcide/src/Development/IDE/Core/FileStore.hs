@@ -192,12 +192,6 @@ getFileContentsImpl file = do
         pure $ Rope.toText . _text <$> mbVirtual
     pure ([], Just (time, res))
 
-ideTryIOException :: NormalizedFilePath -> IO a -> IO (Either FileDiagnostic a)
-ideTryIOException fp act =
-  mapLeft
-      (\(e :: IOException) -> ideErrorText fp $ T.pack $ show e)
-      <$> try act
-
 -- | Returns the modification time and the contents.
 --   For VFS paths, the modification time is the current time.
 getFileContents :: NormalizedFilePath -> Action (UTCTime, Maybe T.Text)
