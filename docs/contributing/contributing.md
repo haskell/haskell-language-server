@@ -252,7 +252,7 @@ More details in [bench/README](../../ghcide/bench/README.md)
 
 ### Tracing
 
-HLS records opentelemetry eventlog traces via [opentelemetry](https://hackage.haskell.org/package/opentelemetry). To generate the traces, build with `-eventlog` and run with `+RTS -l`. To visualize the traces, install [Tracy](https://github.com/wolfpld/tracy) and use [eventlog-to-tracy](https://hackage.haskell.org/package/opentelemetry-extra) to open the generated eventlog.
+HLS records opentelemetry [eventlog traces](https://downloads.haskell.org/~ghc/latest/docs/html/users_guide/runtime_control.html#rts-eventlog) via [opentelemetry](https://hackage.haskell.org/package/opentelemetry). To generate the traces, build with `-eventlog` and run with `+RTS -l`. To visualize the traces, install [Tracy](https://github.com/wolfpld/tracy) and use [eventlog-to-tracy](https://hackage.haskell.org/package/opentelemetry-extra) to open the generated eventlog.
 
 ## Adding support for a new editor
 
