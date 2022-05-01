@@ -149,8 +149,5 @@ main = withTelemetryLogger $ \telemetryLogger -> do
                 }
 #ifdef MONITORING_EKG
         , IDEMain.argsMonitoring = OpenTelemetry.monitoring <> EKG.monitoring logger argsMonitoringPort
-#ifdef MONITORING_EKG
 #endif
-#endif
-
         }
