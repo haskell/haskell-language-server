@@ -75,6 +75,8 @@ allow-newer:
   -- https://github.com/lspitzner/butcher/pull/8
   butcher:base,
 
+  hls-haddock-comments-plugin:ghc-exactprint,
+
   implicit-hie-cradle:bytestring,
   implicit-hie-cradle:time,
 
