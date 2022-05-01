@@ -514,7 +514,6 @@ extendImportViaParent df parent child (L l it@ImportDecl{..})
           listAnn = epAnn srcParent [AddEpAnn AnnOpenP (epl 1), AddEpAnn AnnCloseP (epl 0)]
           x :: LIE GhcPs = reLocA $ L l'' $ IEThingWith listAnn parentLIE NoIEWildcard [childLIE]
 
-      let hasSibling = not (null pre)
       lies' <- addCommaInImportList (reverse pre) x
 #endif
       return $ L l it{ideclHiding = Just (hide, L l' lies')}
