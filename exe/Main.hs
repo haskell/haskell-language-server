@@ -1,5 +1,6 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Main(main) where
@@ -23,7 +24,11 @@ import           Ide.Types                    (PluginDescriptor (pluginNotificat
 import           Language.LSP.Server          as LSP
 import           Language.LSP.Types           as LSP
 import qualified Plugins
+#if MIN_VERSION_prettyprinter(1,7,0)
 import           Prettyprinter                (Pretty (pretty), vsep)
+#else
+import           Data.Text.Prettyprint.Doc    (Pretty (pretty), vsep)
+#endif
 
 data Log
   = LogIdeMain IdeMain.Log
