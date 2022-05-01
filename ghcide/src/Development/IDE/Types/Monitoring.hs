@@ -5,9 +5,11 @@ module Development.IDE.Types.Monitoring
 import           Data.Int
 import           Data.Text                (Text)
 
--- | An abstraction for runtime monitoring.
+-- | An abstraction for runtime monitoring inspired by the 'ekg' package
 data Monitoring = Monitoring {
+    -- | Register an integer-valued metric.
     registerGauge   :: Text -> IO Int64 -> IO (),
+    -- | Register a non-negative, monotonically increasing, integer-valued metric.
     registerCounter :: Text -> IO Int64 -> IO (),
     start :: IO (IO ())
   }
