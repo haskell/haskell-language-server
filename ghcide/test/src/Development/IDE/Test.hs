@@ -83,7 +83,7 @@ expectNoMoreDiagnostics timeout =
   expectMessages STextDocumentPublishDiagnostics timeout $ \diagsNot -> do
     let fileUri = diagsNot ^. params . uri
         actual = diagsNot ^. params . diagnostics
-    liftIO $
+    unless (actual == List []) $ liftIO $
       assertFailure $
         "Got unexpected diagnostics for " <> show fileUri
           <> " got "
