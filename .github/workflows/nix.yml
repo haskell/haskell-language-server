@@ -67,9 +67,9 @@ jobs:
         name: haskell-language-server
         # Disable pushing, we will do that in job `build`
         skipPush: true
-    - run: |
-        nix develop --print-build-logs --command cabal update
-        nix develop --print-build-logs --command cabal build
+    # - run: |
+    #     nix develop --print-build-logs --command cabal update
+    #     nix develop --print-build-logs --command cabal build
 
   # Build and then push HLS binaries with developmet shell to cachix
   # This job runs when
