@@ -197,6 +197,7 @@ incomingCallsTests =
       testCase "xdata unavailable" $
         runSessionWithServer plugin testDataDir $ do
           doc <- createDoc "A.hs" "haskell" $ T.unlines ["a=3", "b=a"]
+          waitForKickDone
           [item] <- Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc 1 0)
           let expected = [CallHierarchyIncomingCall item (List [mkRange 1 2 1 3])]
           Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc 0 0) >>=
@@ -321,6 +322,7 @@ outgoingCallsTests =
       testCase "xdata unavailable" $ withTempDir $ \dir ->
         runSessionWithServer plugin dir $ do
           doc <- createDoc "A.hs" "haskell" $ T.unlines ["a=3", "b=a"]
+          waitForKickDone
           [item] <- Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc 0 1)
           let expected = [CallHierarchyOutgoingCall item (List [mkRange 1 2 1 3])]
           Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc 1 0) >>=
@@ -424,6 +426,7 @@ incomingCallTestCase :: T.Text -> Int -> Int -> [(Int, Int)] -> [Range] -> Asser
 incomingCallTestCase contents queryX queryY positions ranges = withTempDir $ \dir ->
   runSessionWithServer plugin dir $ do
     doc <- createDoc "A.hs" "haskell" contents
+    waitForKickDone
     items <- concatMapM (\((x, y), range) ->
       Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc x y)
           <&> map (, range)
@@ -443,6 +446,7 @@ incomingCallMultiFileTestCase :: FilePath -> Int -> Int -> M.Map FilePath [((Int
 incomingCallMultiFileTestCase filepath queryX queryY mp =
   runSessionWithServer plugin testDataDir $ do
     doc <- openDoc filepath "haskell"
+    waitForKickDone
     items <- fmap concat $ sequence $ M.elems $ M.mapWithKey (\fp pr ->
               openDoc fp "haskell" >>= \p ->
                 concatMapM (\((x, y), range) ->
@@ -463,6 +467,7 @@ outgoingCallTestCase :: T.Text -> Int -> Int -> [(Int, Int)] -> [Range] -> Asser
 outgoingCallTestCase contents queryX queryY positions ranges = withTempDir $ \dir ->
   runSessionWithServer plugin dir $ do
     doc <- createDoc "A.hs" "haskell" contents
+    waitForKickDone
     items <- concatMapM (\((x, y), range) ->
       Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc x y)
           <&> map (, range)
@@ -481,6 +486,7 @@ outgoingCallMultiFileTestCase :: FilePath -> Int -> Int -> M.Map FilePath [((Int
 outgoingCallMultiFileTestCase filepath queryX queryY mp =
   runSessionWithServer plugin testDataDir $ do
     doc <- openDoc filepath "haskell"
+    waitForKickDone
     items <- fmap concat $ sequence $ M.elems $ M.mapWithKey (\fp pr ->
               openDoc fp "haskell" >>= \p ->
                 concatMapM (\((x, y), range) ->
@@ -500,6 +506,7 @@ oneCaseWithCreate :: T.Text -> Int -> Int -> (Uri -> CallHierarchyItem) -> Asser
 oneCaseWithCreate contents queryX queryY expected = withTempDir $ \dir ->
   runSessionWithServer plugin dir $ do
     doc <- createDoc "A.hs" "haskell" contents
+    waitForKickDone
     Test.prepareCallHierarchy (mkPrepareCallHierarchyParam doc queryX queryY) >>=
       \case
         [item] -> liftIO $ item @?= expected (doc ^. L.uri)
