@@ -82,7 +82,9 @@ allow-newer:
 
   -- for ekg
   ekg-core:base,
+  ekg-core:ghc-prim,
   ekg-wai:base,
+  ekg-wai:time,
 
   -- for shake-bench
   Chart-diagrams:diagrams-core,

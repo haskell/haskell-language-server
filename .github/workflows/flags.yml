@@ -65,11 +65,7 @@ jobs:
         run: cabal v2-build hls-graph --flags="embed-files stm-stats"
 
       - name: Build `ghcide` with flags
-        run: cabal v2-build ghcide --flags="ghc-patched-unboxed-bytecode test-exe executable bench-exe"
-
-      - if: matrix.ghc == '8.10.7'
-        name: Build `ghcide` with ekg
-        run: cabal v2-build ghcide --flags="ekg"
+        run: cabal v2-build ghcide --flags="ghc-patched-unboxed-bytecode test-exe executable bench-exe ekg"
 
       # we have to clean up warnings for 9.0 and 9.2 before enable -WAll
       - if: matrix.ghc != '9.0.2' && matrix.ghc != '9.2.2'
