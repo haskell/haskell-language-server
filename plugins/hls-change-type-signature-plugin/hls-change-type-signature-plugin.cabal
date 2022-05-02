@@ -15,6 +15,7 @@ extra-source-files:
   LICENSE
   README.md
   test/testdata/*.hs
+  test/testdata/*.txt
   test/testdata/*.yaml
 
 library
