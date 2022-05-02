@@ -161,7 +161,7 @@ renameRefs newName refs = everywhere $ mkT replaceLoc
         replace _                = Unqual newName
 
         isRef :: SrcSpan -> Bool
-        isRef = (`elem` refs) . unsafeSrcSpanToLoc
+        isRef = (`HS.member` refs) . unsafeSrcSpanToLoc
 
 ---------------------------------------------------------------------------------------------------
 -- Reference finding
