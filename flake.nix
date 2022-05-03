@@ -388,7 +388,7 @@
         # Developement shell with only compiler
         simpleDevShells = {
           haskell-language-server-dev = mkDevShell ghcDefault "cabal.project";
-          haskell-language-server-884-dev = mkDevShell ghc884 "cabal.project";
+          # haskell-language-server-884-dev = mkDevShell ghc884 "cabal.project";
           haskell-language-server-8107-dev = mkDevShell ghc8107 "cabal.project";
           haskell-language-server-902-dev = mkDevShell ghc902 "cabal.project";
           haskell-language-server-922-dev = mkDevShell ghc922 "cabal.project";
@@ -397,7 +397,7 @@
         # Developement shell, haskell packages are also provided by nix
         nixDevShells = {
           haskell-language-server-dev-nix = mkDevShellWithNixDeps ghcDefault "cabal.project";
-          haskell-language-server-884-dev-nix = mkDevShellWithNixDeps ghc884 "cabal.project";
+          # haskell-language-server-884-dev-nix = mkDevShellWithNixDeps ghc884 "cabal.project";
           haskell-language-server-8107-dev-nix = mkDevShellWithNixDeps ghc8107 "cabal.project";
           haskell-language-server-902-dev-nix = mkDevShellWithNixDeps ghc902 "cabal.project";
           haskell-language-server-922-dev-nix = mkDevShellWithNixDeps ghc921 "cabal.project";
@@ -405,7 +405,7 @@
 
         allPackages = {
           haskell-language-server = mkExe ghcDefault;
-          haskell-language-server-884 = mkExe ghc884;
+          # haskell-language-server-884 = mkExe ghc884;
           haskell-language-server-8107 = mkExe ghc8107;
           haskell-language-server-902 = mkExe ghc902;
           haskell-language-server-922 = mkExe ghc922;
