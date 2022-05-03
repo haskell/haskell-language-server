@@ -114,7 +114,7 @@ jobs:
     - name: Build binaries
       run: nix build --print-build-logs
     # smunix: "Build all binaries" takes too long to run and doesn't contribute
-    # to caching to cachix for now; so I'm disabling it for now.
+    # to caching to cachix for now; so I'm temporarily disabling it for now.
     # - name: Build all binaries
     #   run: nix build --print-build-logs .#all-haskell-language-server
     - name: Push binaries
