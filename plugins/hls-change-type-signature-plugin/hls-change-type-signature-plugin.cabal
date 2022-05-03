@@ -22,10 +22,10 @@ library
   exposed-modules:  Ide.Plugin.ChangeTypeSignature
   hs-source-dirs:   src
   build-depends:
-    , base                 >=4.12 && < 5
-    , ghcide          ^>=1.6 || ^>=1.7
+    , base             >=4.12 && < 5
+    , ghcide          ^>=1.7
     , hls-plugin-api  ^>=1.3 || ^>=1.4
-    , lsp-types       
+    , lsp-types
     , regex-tdfa
     , syb
     , text
