@@ -447,9 +447,10 @@ incomingCallMultiFileTestCase filepath queryX queryY mp =
   runSessionWithServer plugin testDataDir $ do
     doc <- openDoc filepath "haskell"
     waitForKickDone
-    items <- fmap concat $ sequence $ M.elems $ M.mapWithKey (\fp pr ->
-              openDoc fp "haskell" >>= \p ->
-                concatMapM (\((x, y), range) ->
+    items <- fmap concat $ sequence $ M.elems $ M.mapWithKey (\fp pr -> do
+              p <- openDoc fp "haskell"
+              waitForKickDone
+              concatMapM (\((x, y), range) ->
                   Test.prepareCallHierarchy (mkPrepareCallHierarchyParam p x y)
                     <&> map (, range)
                 ) pr) mp
@@ -487,9 +488,10 @@ outgoingCallMultiFileTestCase filepath queryX queryY mp =
   runSessionWithServer plugin testDataDir $ do
     doc <- openDoc filepath "haskell"
     waitForKickDone
-    items <- fmap concat $ sequence $ M.elems $ M.mapWithKey (\fp pr ->
-              openDoc fp "haskell" >>= \p ->
-                concatMapM (\((x, y), range) ->
+    items <- fmap concat $ sequence $ M.elems $ M.mapWithKey (\fp pr -> do
+              p <- openDoc fp "haskell"
+              waitForKickDone
+              concatMapM (\((x, y), range) ->
                   Test.prepareCallHierarchy (mkPrepareCallHierarchyParam p x y)
                     <&> map (, range)
                 ) pr) mp
