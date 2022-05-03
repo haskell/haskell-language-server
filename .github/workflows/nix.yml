@@ -67,9 +67,9 @@ jobs:
         name: haskell-language-server
         # Disable pushing, we will do that in job `build`
         skipPush: true
-    # - run: |
-    #     nix develop --print-build-logs --command cabal update
-    #     nix develop --print-build-logs --command cabal build
+    - run: |
+        nix develop --print-build-logs --command cabal update
+        nix develop --print-build-logs --command cabal build
 
   # Build and then push HLS binaries with developmet shell to cachix
   # This job runs when
@@ -100,23 +100,23 @@ jobs:
       with:
         name: haskell-language-server
         authToken: ${{ secrets.HLS_CACHIX_AUTH_TOKEN }}
-    # smunix: temporarily disabling this to allow the builds to complete and
-    # push binaries to caches. Will re-enable later.
-    # - name: Build development shell
-    #   run: nix develop --print-build-logs --profile dev
-    # - name: Build all development shell (without nix dependencies)
-    #   run: nix develop --print-build-logs .#all-simple-dev-shells --profile dev
+    - name: Build development shell
+      run: nix develop --print-build-logs --profile dev
+    - name: Build all development shell (without nix dependencies)
+      run: nix develop --print-build-logs .#all-simple-dev-shells --profile dev
     # We only build nix dev shell for current GHC version because some are
     # failing with different GHC version on darwin.
-    # - name: Build development shell with nix dependencies for current GHC version
-    #   run: nix develop --print-build-logs .#all-nix-dev-shells --profile dev
-    # - name: Push development shell
-    #   if: ${{ env.HAS_TOKEN == 'true' }}
-    #   run: cachix push haskell-language-server dev
-    # - name: Build binaries
-    #   run: nix build --print-build-logs
-    - name: Build all binaries
-      run: nix build --print-build-logs .#all-haskell-language-server
+    - name: Build development shell with nix dependencies for current GHC version
+      run: nix develop --print-build-logs .#all-nix-dev-shells --profile dev
+    - name: Push development shell
+      if: ${{ env.HAS_TOKEN == 'true' }}
+      run: cachix push haskell-language-server dev
+    - name: Build binaries
+      run: nix build --print-build-logs
+    # smunix: "Build all binaries" takes too long to run and doesn't contribute
+    # to caching to cachix for now; so I'm disabling it for now.
+    # - name: Build all binaries
+    #   run: nix build --print-build-logs .#all-haskell-language-server
     - name: Push binaries
       if: ${{ env.HAS_TOKEN == 'true' }}
       run: nix path-info --json | jq -r '.[].path' | cachix push haskell-language-server
