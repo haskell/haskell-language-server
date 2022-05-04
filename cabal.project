@@ -60,12 +60,6 @@ allow-newer:
   retrie:ghc-exactprint,
 
   -- for brittany
-  brittany:ghc-boot,
-  brittany:ghc-boot-th,
-  brittany:ghc,
-  brittany:ghc-exactprint,
-  brittany:bytestring,
-  brittany:base,
   -- https://github.com/lspitzner/multistate/pull/8
   multistate:base,
   -- https://github.com/lspitzner/data-tree-print/pull/3
