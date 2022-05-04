@@ -12,7 +12,7 @@ packages:
 - ./plugins/hls-call-hierarchy-plugin
 - ./plugins/hls-class-plugin
 # - ./plugins/hls-haddock-comments-plugin
-# - ./plugins/hls-eval-plugin
+- ./plugins/hls-eval-plugin
 - ./plugins/hls-explicit-imports-plugin
 - ./plugins/hls-qualify-imported-names-plugin
 - ./plugins/hls-refine-imports-plugin
@@ -72,7 +72,6 @@ flags:
 
     ignore-plugins-ghc-bounds: true
     brittany: false
-    eval: false
     haddockComments: false
     retrie: false
     splice: false
