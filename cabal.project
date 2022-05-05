@@ -58,8 +58,8 @@ constraints:
 -- is turned on.
 source-repository-package
   type:git
-  location: https://github.com/vshabanov/ekg-json
-  tag: 00ebe7211c981686e65730b7144fbf5350462608
+  location: https://github.com/pepeiborra/ekg-json
+  tag: 7a0af7a8fd38045fd15fb13445bdcc7085325460
   -- https://github.com/tibbe/ekg-json/pull/12
 
 allow-newer:
