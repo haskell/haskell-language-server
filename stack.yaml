@@ -71,7 +71,6 @@ flags:
     pedantic: true
 
     ignore-plugins-ghc-bounds: true
-    alternateNumberFormat: false
     brittany: false
     haddockComments: false
     retrie: false
