@@ -121,6 +121,7 @@ runs:
 
     - name: Form the package list ('cabal.project.freeze')
       run: |
+        rm cabal.project.freeze || \
         cabal v2-freeze && \
         echo "" && \
         echo 'Output:' && \
