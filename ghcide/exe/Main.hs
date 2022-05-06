@@ -1,7 +1,6 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 {-# OPTIONS_GHC -Wno-dodgy-imports #-} -- GHC no longer exports def in GHC 8.6 and above
-{-# LANGUAGE CPP             #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Main(main) where
@@ -20,6 +19,8 @@ import           Development.IDE.Core.Rules        (mainRule)
 import qualified Development.IDE.Core.Rules        as Rules
 import           Development.IDE.Core.Tracing      (withTelemetryLogger)
 import qualified Development.IDE.Main              as IDEMain
+import qualified Development.IDE.Monitoring.OpenTelemetry as OpenTelemetry
+import qualified Development.IDE.Monitoring.EKG    as EKG
 import qualified Development.IDE.Plugin.HLS.GhcIde as GhcIde
 import           Development.IDE.Types.Logger      (Logger (Logger),
                                                     LoggingColumn (DataColumn, PriorityColumn),
@@ -42,11 +43,6 @@ import           System.Environment                (getExecutablePath)
 import           System.Exit                       (exitSuccess)
 import           System.IO                         (hPutStrLn, stderr)
 import           System.Info                       (compilerVersion)
-
-#ifdef MONITORING_EKG
-import qualified Development.IDE.Monitoring.OpenTelemetry as OpenTelemetry
-import qualified Development.IDE.Monitoring.EKG as EKG
-#endif
 
 data Log
   = LogIDEMain IDEMain.Log
@@ -147,7 +143,5 @@ main = withTelemetryLogger $ \telemetryLogger -> do
                 , optCheckProject = pure $ checkProject config
                 , optRunSubset = not argsConservativeChangeTracking
                 }
-#ifdef MONITORING_EKG
         , IDEMain.argsMonitoring = OpenTelemetry.monitoring <> EKG.monitoring logger argsMonitoringPort
-#endif
         }

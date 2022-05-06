@@ -1,7 +1,6 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
-{-# LANGUAGE CPP #-}
 module Arguments(Arguments(..), getArguments) where
 
 import           Development.IDE      (IdeState)
@@ -20,9 +19,7 @@ data Arguments = Arguments
     ,argsVerbose                    :: Bool
     ,argsCommand                    :: Command
     ,argsConservativeChangeTracking :: Bool
-#ifdef MONITORING_EKG
     ,argsMonitoringPort             :: Int
-#endif
     }
 
 getArguments :: IdePlugins IdeState -> IO Arguments
@@ -44,9 +41,7 @@ arguments plugins = Arguments
       <*> switch (short 'd' <> long "verbose" <> help "Include internal events in logging output")
       <*> (commandP plugins <|> lspCommand <|> checkCommand)
       <*> switch (long "conservative-change-tracking" <> help "disable reactive change tracking (for testing/debugging)")
-#ifdef MONITORING_EKG
-      <*> option auto (long "monitoring-port" <> metavar "PORT" <> value 8999 <> showDefault <> help "Port to use for monitoring")
-#endif
+      <*> option auto (long "monitoring-port" <> metavar "PORT" <> value 8999 <> showDefault <> help "Port to use for EKG monitoring (if the binary is built with EKG)")
       where
           checkCommand = Check <$> many (argument str (metavar "FILES/DIRS..."))
           lspCommand = LSP <$ flag' True (long "lsp" <> help "Start talking to an LSP client")

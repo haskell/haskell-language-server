@@ -111,7 +111,6 @@
     - Development.IDE.GHC.Util
     - Development.IDE.Import.FindImports
     - Development.IDE.LSP.Outline
-    - Development.IDE.Main
     - Development.IDE.Spans.Calculate
     - Development.IDE.Spans.Documentation
     - Development.IDE.Spans.Common
@@ -123,8 +122,6 @@
     - Development.IDE.Plugin.Completions
     - Development.IDE.Plugin.Completions.Logic
     - Development.IDE.Types.Location
-    - Main
-    - Arguments
 
 - flags:
   - default: false

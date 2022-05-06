@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP            #-}
 {-# LANGUAGE PackageImports #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 module Development.IDE.Main
@@ -63,6 +62,9 @@ import           Development.IDE.LSP.LanguageServer    (runLanguageServer)
 import qualified Development.IDE.LSP.LanguageServer    as LanguageServer
 import           Development.IDE.Main.HeapStats        (withHeapStats)
 import qualified Development.IDE.Main.HeapStats        as HeapStats
+import           Development.IDE.Types.Monitoring      (Monitoring)
+import qualified Development.IDE.Monitoring.EKG as EKG
+import qualified Development.IDE.Monitoring.OpenTelemetry as OpenTelemetry
 import           Development.IDE.Plugin                (Plugin (pluginHandlers, pluginModifyDynflags, pluginRules))
 import           Development.IDE.Plugin.HLS            (asGhcIdePlugin)
 import qualified Development.IDE.Plugin.HLS            as PluginHLS
@@ -130,12 +132,6 @@ import           System.Random                         (newStdGen)
 import           System.Time.Extra                     (Seconds, offsetTime,
                                                         showDuration)
 import           Text.Printf                           (printf)
-import Development.IDE.Types.Monitoring (Monitoring)
-import qualified Development.IDE.Monitoring.OpenTelemetry as OpenTelemetry
-
-#ifdef MONITORING_EKG
-import qualified Development.IDE.Monitoring.EKG as EKG
-#endif
 
 data Log
   = LogHeapStats !HeapStats.Log
@@ -275,10 +271,7 @@ defaultArguments recorder logger = Arguments
                 -- the language server tests without the redirection.
                 putStr " " >> hFlush stdout
                 return newStdout
-        , argsMonitoring = OpenTelemetry.monitoring
-#ifdef MONITORING_EKG
-                        <> EKG.monitoring logger 8999
-#endif
+        , argsMonitoring = OpenTelemetry.monitoring <> EKG.monitoring logger 8999
         }
 
 

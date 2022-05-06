@@ -1,12 +1,16 @@
+{-# LANGUAGE CPP #-}
 module Development.IDE.Monitoring.EKG(monitoring) where
+
+import           Development.IDE.Types.Monitoring (Monitoring (..))
+import           Development.IDE.Types.Logger     (Logger)
+#ifdef MONITORING_EKG
 import           Control.Concurrent               (killThread)
 import           Control.Concurrent.Async         (async, waitCatch)
 import           Control.Monad                    (forM_)
 import           Data.Text                        (pack)
-import           Development.IDE.Types.Logger     (Logger, logInfo)
-import           Development.IDE.Types.Monitoring (Monitoring (..))
-import qualified System.Metrics                   as Monitoring
+import           Development.IDE.Types.Logger     (logInfo)
 import qualified System.Remote.Monitoring.Wai     as Monitoring
+import qualified System.Metrics                   as Monitoring
 
 -- | Monitoring using EKG
 monitoring :: Logger -> Int -> IO Monitoring
@@ -35,3 +39,10 @@ monitoring logger port = do
                 logInfo logger "Stopping monitoring server"
                 killThread $ Monitoring.serverThreadId s
     return $ Monitoring {..}
+
+#else
+
+monitoring :: Logger -> Int -> IO Monitoring
+monitoring _ _ = mempty
+
+#endif
