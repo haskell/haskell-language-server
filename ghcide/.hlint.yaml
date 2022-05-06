@@ -122,7 +122,6 @@
     - Development.IDE.Plugin.Completions
     - Development.IDE.Plugin.Completions.Logic
     - Development.IDE.Types.Location
-    - Main
 
 - flags:
   - default: false

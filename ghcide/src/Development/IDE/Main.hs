@@ -62,6 +62,9 @@ import           Development.IDE.LSP.LanguageServer    (runLanguageServer)
 import qualified Development.IDE.LSP.LanguageServer    as LanguageServer
 import           Development.IDE.Main.HeapStats        (withHeapStats)
 import qualified Development.IDE.Main.HeapStats        as HeapStats
+import           Development.IDE.Types.Monitoring      (Monitoring)
+import qualified Development.IDE.Monitoring.EKG as EKG
+import qualified Development.IDE.Monitoring.OpenTelemetry as OpenTelemetry
 import           Development.IDE.Plugin                (Plugin (pluginHandlers, pluginModifyDynflags, pluginRules))
 import           Development.IDE.Plugin.HLS            (asGhcIdePlugin)
 import qualified Development.IDE.Plugin.HLS            as PluginHLS
@@ -231,8 +234,8 @@ data Arguments = Arguments
     , argsHandleIn              :: IO Handle
     , argsHandleOut             :: IO Handle
     , argsThreads               :: Maybe Natural
+    , argsMonitoring            :: IO Monitoring
     }
-
 
 defaultArguments :: Recorder (WithPriority Log) -> Logger -> Arguments
 defaultArguments recorder logger = Arguments
@@ -268,6 +271,7 @@ defaultArguments recorder logger = Arguments
                 -- the language server tests without the redirection.
                 putStr " " >> hFlush stdout
                 return newStdout
+        , argsMonitoring = OpenTelemetry.monitoring <> EKG.monitoring logger 8999
         }
 
 
@@ -355,6 +359,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                 -- FIXME: Remove this after GHC 9 gets fully supported
                 when (ghcVersion == GHC90) $
                     log Warning LogOnlyPartialGhc9Support
+                monitoring <- argsMonitoring
                 initialise
                     (cmapWithPrio LogService recorder)
                     argsDefaultHlsConfig
@@ -365,6 +370,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                     options
                     withHieDb
                     hieChan
+                    monitoring
             dumpSTMStats
         Check argFiles -> do
           dir <- maybe IO.getCurrentDirectory return argsProjectRoot
@@ -397,7 +403,7 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                         , optCheckProject = pure False
                         , optModifyDynFlags = optModifyDynFlags def_options <> pluginModifyDynflags plugins
                         }
-            ide <- initialise (cmapWithPrio LogService recorder) argsDefaultHlsConfig rules Nothing logger debouncer options hiedb hieChan
+            ide <- initialise (cmapWithPrio LogService recorder) argsDefaultHlsConfig rules Nothing logger debouncer options hiedb hieChan mempty
             shakeSessionInit (cmapWithPrio LogShake recorder) ide
             registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
 
@@ -450,13 +456,10 @@ defaultMain recorder Arguments{..} = withHeapStats (cmapWithPrio LogHeapStats re
                     , optCheckProject = pure False
                     , optModifyDynFlags = optModifyDynFlags def_options <> pluginModifyDynflags plugins
                     }
-            ide <- initialise (cmapWithPrio LogService recorder) argsDefaultHlsConfig rules Nothing logger debouncer options hiedb hieChan
+            ide <- initialise (cmapWithPrio LogService recorder) argsDefaultHlsConfig rules Nothing logger debouncer options hiedb hieChan mempty
             shakeSessionInit (cmapWithPrio LogShake recorder) ide
             registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
             c ide
-
-{-# ANN defaultMain ("HLint: ignore Use nubOrd" :: String) #-}
-
 
 expandFiles :: [FilePath] -> IO [FilePath]
 expandFiles = concatMapM $ \x -> do

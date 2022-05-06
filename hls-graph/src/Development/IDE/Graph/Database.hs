@@ -9,6 +9,7 @@ module Development.IDE.Graph.Database(
     shakeRunDatabaseForKeys,
     shakeProfileDatabase,
     shakeGetBuildStep,
+    shakeGetDatabaseKeys,
     shakeGetDirtySet,
     shakeGetCleanKeys
     ,shakeGetBuildEdges) where
@@ -79,3 +80,8 @@ shakeGetBuildEdges (ShakeDatabase _ _ db) = do
     keys <- getDatabaseValues db
     let ress = mapMaybe (getResult . snd) keys
     return $ sum $ map (length . getResultDepsDefault [] . resultDeps) ress
+
+-- | Returns an approximation of the database keys,
+--   annotated with how long ago (in # builds) they were visited
+shakeGetDatabaseKeys :: ShakeDatabase -> IO [(Key, Int)]
+shakeGetDatabaseKeys (ShakeDatabase _ _ db) = getKeysAndVisitAge db

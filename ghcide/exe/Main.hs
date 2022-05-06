@@ -19,12 +19,13 @@ import           Development.IDE.Core.Rules        (mainRule)
 import qualified Development.IDE.Core.Rules        as Rules
 import           Development.IDE.Core.Tracing      (withTelemetryLogger)
 import qualified Development.IDE.Main              as IDEMain
+import qualified Development.IDE.Monitoring.OpenTelemetry as OpenTelemetry
+import qualified Development.IDE.Monitoring.EKG    as EKG
 import qualified Development.IDE.Plugin.HLS.GhcIde as GhcIde
 import           Development.IDE.Types.Logger      (Logger (Logger),
                                                     LoggingColumn (DataColumn, PriorityColumn),
                                                     Pretty (pretty),
                                                     Priority (Debug, Info, Error),
-                                                    Recorder (Recorder),
                                                     WithPriority (WithPriority, priority),
                                                     cfilter, cmapWithPrio,
                                                     makeDefaultStderrRecorder, layoutPretty, renderStrict, defaultLayoutOptions)
@@ -142,4 +143,5 @@ main = withTelemetryLogger $ \telemetryLogger -> do
                 , optCheckProject = pure $ checkProject config
                 , optRunSubset = not argsConservativeChangeTracking
                 }
+        , IDEMain.argsMonitoring = OpenTelemetry.monitoring <> EKG.monitoring logger argsMonitoringPort
         }
