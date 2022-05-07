@@ -123,6 +123,8 @@
               in hsuper.mkDerivation (args // {
                 jailbreak = if broken then true else jailbreak;
                 doCheck = if broken then false else check;
+                enableLibraryProfiling = false;
+                doHaddock = false;
               });
           };
           gitignoreSource = (import gitignore { inherit lib; }).gitignoreSource;
@@ -242,8 +244,6 @@
           };
         };
 
-        ghc88Config = (import ./configuration-ghc-88.nix) { inherit pkgs inputs; };
-        ghc810Config = (import ./configuration-ghc-810.nix) { inherit pkgs inputs; };
         ghc902Config = (import ./configuration-ghc-90.nix) { inherit pkgs inputs; };
         ghc922Config = (import ./configuration-ghc-92.nix) { inherit pkgs inputs; };
 
@@ -251,15 +251,11 @@
         supportedGHCs = let
           ghcVersion = "ghc" + (pkgs.lib.replaceStrings ["."] [""] pkgs.haskellPackages.ghc.version);
           cases = {
-            ghc884  = ghc88Config.tweakHpkgs (pkgs.hlsHpkgs "ghc884");
-            ghc8107 = ghc810Config.tweakHpkgs (pkgs.hlsHpkgs "ghc8107");
             ghc902 = ghc902Config.tweakHpkgs (pkgs.hlsHpkgs "ghc902");
             ghc922 = ghc922Config.tweakHpkgs (pkgs.hlsHpkgs "ghc922");
           };
           in { default = cases."${ghcVersion}"; } // cases;
 
-        ghc884 = supportedGHCs.ghc884;
-        ghc8107 = supportedGHCs.ghc8107;
         ghc902 = supportedGHCs.ghc902;
         ghc922 = supportedGHCs.ghc922;
         ghcDefault = supportedGHCs.default;
@@ -388,8 +384,6 @@
         # Developement shell with only compiler
         simpleDevShells = {
           haskell-language-server-dev = mkDevShell ghcDefault "cabal.project";
-          # haskell-language-server-884-dev = mkDevShell ghc884 "cabal.project";
-          haskell-language-server-8107-dev = mkDevShell ghc8107 "cabal.project";
           haskell-language-server-902-dev = mkDevShell ghc902 "cabal.project";
           haskell-language-server-922-dev = mkDevShell ghc922 "cabal.project";
         };
@@ -397,16 +391,12 @@
         # Developement shell, haskell packages are also provided by nix
         nixDevShells = {
           haskell-language-server-dev-nix = mkDevShellWithNixDeps ghcDefault "cabal.project";
-          # haskell-language-server-884-dev-nix = mkDevShellWithNixDeps ghc884 "cabal.project";
-          haskell-language-server-8107-dev-nix = mkDevShellWithNixDeps ghc8107 "cabal.project";
           haskell-language-server-902-dev-nix = mkDevShellWithNixDeps ghc902 "cabal.project";
           haskell-language-server-922-dev-nix = mkDevShellWithNixDeps ghc921 "cabal.project";
         };
 
         allPackages = {
           haskell-language-server = mkExe ghcDefault;
-          # haskell-language-server-884 = mkExe ghc884;
-          haskell-language-server-8107 = mkExe ghc8107;
           haskell-language-server-902 = mkExe ghc902;
           haskell-language-server-922 = mkExe ghc922;
         };
