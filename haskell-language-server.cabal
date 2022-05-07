@@ -218,6 +218,12 @@ flag brittany
   default:     True
   manual:      True
 
+flag hindent
+  description: Enable hindent plugin
+  default:     True
+  manual:      True
+
+
 flag dynamic
   description: Build with the dyn rts
   default:     True
@@ -340,6 +346,11 @@ common stylishHaskell
     build-depends: hls-stylish-haskell-plugin ^>= 1.0
     cpp-options: -DstylishHaskell
 
+common hindent
+  if flag(hindent)
+    build-depends: hls-hindent-plugin ^>= 1.0
+    cpp-options: -Dhindent
+
 common brittany
   if flag(brittany) && (impl(ghc < 9.0.2) || flag(ignore-plugins-ghc-bounds))
     build-depends: hls-brittany-plugin ^>= 1.0
@@ -375,6 +386,7 @@ executable haskell-language-server
                     , ormolu
                     , stylishHaskell
                     , brittany
+                    , hindent
 
   main-is:          Main.hs
   hs-source-dirs:   exe

@@ -108,6 +108,11 @@ import qualified Ide.Plugin.StylishHaskell         as StylishHaskell
 import qualified Ide.Plugin.Brittany               as Brittany
 #endif
 
+#if hindent
+import qualified Ide.Plugin.HIndent               as HIndent
+#endif
+
+
 data Log = forall a. (Pretty a) => Log a
 
 instance Pretty Log where
@@ -155,6 +160,9 @@ idePlugins recorder includeExamples = pluginDescToIdePlugins allPlugins
 #endif
 #if brittany
       Brittany.descriptor "brittany" :
+#endif
+#if hindent
+      HIndent.descriptor "hindent" :
 #endif
 #if callHierarchy
       CallHierarchy.descriptor :
