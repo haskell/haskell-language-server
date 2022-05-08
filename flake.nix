@@ -428,6 +428,8 @@
 
         checks = { pre-commit-check = pre-commit-check ghcDefault; };
 
+        # The attributes for the default shell and package changed in recent versions of Nix,
+        # these are here for backwards compatibility with the old versions.
         devShell = devShells.default;
         defaultPackage = packages.default;
       });
