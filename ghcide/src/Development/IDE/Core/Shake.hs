@@ -99,10 +99,10 @@ import           Data.EnumMap.Strict                    (EnumMap)
 import qualified Data.EnumMap.Strict                    as EM
 import           Data.Foldable                          (for_, toList)
 import           Data.Functor                           ((<&>))
+import           Data.Hashable
 import qualified Data.HashMap.Strict                    as HMap
 import           Data.HashSet                           (HashSet)
 import qualified Data.HashSet                           as HSet
-import           Data.Hashable
 import           Data.IORef
 import           Data.List.Extra                        (foldl', partition,
                                                          takeEnd)
@@ -148,12 +148,12 @@ import           Development.IDE.Types.KnownTargets
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger           hiding (Priority)
 import qualified Development.IDE.Types.Logger           as Logger
+import           Development.IDE.Types.Monitoring       (Monitoring (..))
 import           Development.IDE.Types.Options
 import           Development.IDE.Types.Shake
 import qualified Focus
 import           GHC.Fingerprint
-import           Language.LSP.Types.Capabilities
-import           OpenTelemetry.Eventlog
+import           GHC.Stack                              (HasCallStack)
 import           HieDb.Types
 import           Ide.Plugin.Config
 import qualified Ide.PluginUtils                        as HLS
@@ -162,13 +162,14 @@ import           Language.LSP.Diagnostics
 import qualified Language.LSP.Server                    as LSP
 import           Language.LSP.Types
 import qualified Language.LSP.Types                     as LSP
+import           Language.LSP.Types.Capabilities
 import           Language.LSP.VFS
 import qualified "list-t" ListT
+import           OpenTelemetry.Eventlog
 import qualified StmContainers.Map                      as STM
 import           System.FilePath                        hiding (makeRelative)
-import           System.IO.Unsafe (unsafePerformIO)
+import           System.IO.Unsafe                       (unsafePerformIO)
 import           System.Time.Extra
-import Development.IDE.Types.Monitoring (Monitoring(..))
 
 data Log
   = LogCreateHieDbExportsMapStart
@@ -341,7 +342,7 @@ addIdeGlobalExtras ShakeExtras{globals} x@(typeOf -> ty) =
         Just _ -> error $ "Internal error, addIdeGlobalExtras, got the same type twice for " ++ show ty
         Nothing -> HMap.insert ty (toDyn x) mp
 
-getIdeGlobalExtras :: forall a . IsIdeGlobal a => ShakeExtras -> IO a
+getIdeGlobalExtras :: forall a . (HasCallStack, IsIdeGlobal a) => ShakeExtras -> IO a
 getIdeGlobalExtras ShakeExtras{globals} = do
     let typ = typeRep (Proxy :: Proxy a)
     x <- HMap.lookup (typeRep (Proxy :: Proxy a)) <$> readTVarIO globals
@@ -351,12 +352,11 @@ getIdeGlobalExtras ShakeExtras{globals} = do
             | otherwise -> errorIO $ "Internal error, getIdeGlobalExtras, wrong type for " ++ show typ ++ " (got " ++ show (dynTypeRep x) ++ ")"
         Nothing -> errorIO $ "Internal error, getIdeGlobalExtras, no entry for " ++ show typ
 
-getIdeGlobalAction :: forall a . IsIdeGlobal a => Action a
+getIdeGlobalAction :: forall a . (HasCallStack, IsIdeGlobal a) => Action a
 getIdeGlobalAction = liftIO . getIdeGlobalExtras =<< getShakeExtras
 
 getIdeGlobalState :: forall a . IsIdeGlobal a => IdeState -> IO a
 getIdeGlobalState = getIdeGlobalExtras . shakeExtras
-
 
 newtype GlobalIdeOptions = GlobalIdeOptions IdeOptions
 instance IsIdeGlobal GlobalIdeOptions
@@ -756,7 +756,7 @@ newSession recorder extras@ShakeExtras{..} vfsMod shakeDb acts reason = do
 
     -- Take a new VFS snapshot
     case vfsMod of
-      VFSUnmodified -> pure ()
+      VFSUnmodified   -> pure ()
       VFSModified vfs -> atomically $ writeTVar vfsVar vfs
 
     IdeOptions{optRunSubset} <- getIdeOptionsIO extras

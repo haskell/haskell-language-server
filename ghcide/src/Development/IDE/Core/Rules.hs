@@ -835,9 +835,13 @@ instance IsIdeGlobal DisplayTHWarning
 getModSummaryRule :: LspT Config IO () -> Recorder (WithPriority Log) -> Rules ()
 getModSummaryRule displayTHWarning recorder = do
     menv <- lspEnv <$> getShakeExtrasRules
-    forM_ menv $ \env -> do
+    case menv of
+      Just env -> do
         displayItOnce <- liftIO $ once $ LSP.runLspT env displayTHWarning
         addIdeGlobal (DisplayTHWarning displayItOnce)
+      Nothing -> do
+        logItOnce <- liftIO $ once $ putStrLn ""
+        addIdeGlobal (DisplayTHWarning logItOnce)
 
     defineEarlyCutoff (cmapWithPrio LogShake recorder) $ Rule $ \GetModSummary f -> do
         session' <- hscEnv <$> use_ GhcSession f
@@ -1118,12 +1122,15 @@ instance Default RulesConfig where
         displayTHWarning
             | not isWindows && not hostIsDynamic = do
                 LSP.sendNotification SWindowShowMessage $
-                    ShowMessageParams MtInfo $ T.unwords
-                    [ "This HLS binary does not support Template Haskell."
-                    , "Follow the [instructions](" <> templateHaskellInstructions <> ")"
-                    , "to build an HLS binary with support for Template Haskell."
-                    ]
+                    ShowMessageParams MtInfo thWarningMessage
             | otherwise = return ()
+
+thWarningMessage :: T.Text
+thWarningMessage = T.unwords
+  [ "This HLS binary does not support Template Haskell."
+  , "Follow the [instructions](" <> templateHaskellInstructions <> ")"
+  , "to build an HLS binary with support for Template Haskell."
+  ]
 
 -- | A rule that wires per-file rules together
 mainRule :: Recorder (WithPriority Log) -> RulesConfig -> Rules ()
