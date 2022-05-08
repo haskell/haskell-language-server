@@ -248,6 +248,8 @@
         ghc922Config = (import ./configuration-ghc-92.nix) { inherit pkgs inputs; };
 
         # GHC versions
+        # While HLS still works fine with 8.10 GHCs, we only support the versions that are cached 
+        # by upstream nixpkgs, which now only includes GHC version 9+
         supportedGHCs = let
           ghcVersion = "ghc" + (pkgs.lib.replaceStrings ["."] [""] pkgs.haskellPackages.ghc.version);
           cases = {
