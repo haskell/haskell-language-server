@@ -274,6 +274,7 @@
           overrides = [ 
             pkgs.poetry2nix.defaultPoetryOverrides
             (self: super: {
+              # The RTD theme doesn't work with newer docutils
               docutils = pkgs.python3Packages.callPackage ./docutils.nix {};
             })
           ];
