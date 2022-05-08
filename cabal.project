@@ -37,8 +37,8 @@ optional-packages: vendored/*/*.cabal
 tests: true
 
 package *
-  -- ghc 8.10.7 fails to build ghc-lib-9.2.2
-  -- ghc-options: --haddock
+  -- ghc 8.10 cannot build ghc-lib 9.2 with --haddock
+  -- ghc-options: -haddock
   test-show-details: direct
 
 write-ghc-environment-files: never
