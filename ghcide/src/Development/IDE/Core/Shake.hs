@@ -99,10 +99,10 @@ import           Data.EnumMap.Strict                    (EnumMap)
 import qualified Data.EnumMap.Strict                    as EM
 import           Data.Foldable                          (for_, toList)
 import           Data.Functor                           ((<&>))
+import           Data.Hashable
 import qualified Data.HashMap.Strict                    as HMap
 import           Data.HashSet                           (HashSet)
 import qualified Data.HashSet                           as HSet
-import           Data.Hashable
 import           Data.IORef
 import           Data.List.Extra                        (foldl', partition,
                                                          takeEnd)
@@ -118,7 +118,6 @@ import           Data.Typeable
 import           Data.Unique
 import           Data.Vector                            (Vector)
 import qualified Data.Vector                            as Vector
-import           Debug.Trace.Flags                      (userTracingEnabled)
 import           Development.IDE.Core.Debouncer
 import           Development.IDE.Core.FileUtils         (getModTime)
 import           Development.IDE.Core.PositionMapping
@@ -136,6 +135,7 @@ import           Development.IDE.Graph                  hiding (ShakeValue)
 import qualified Development.IDE.Graph                  as Shake
 import           Development.IDE.Graph.Database         (ShakeDatabase,
                                                          shakeGetBuildStep,
+                                                         shakeGetDatabaseKeys,
                                                          shakeNewDatabase,
                                                          shakeProfileDatabase,
                                                          shakeRunDatabaseForKeys)
@@ -148,10 +148,12 @@ import           Development.IDE.Types.KnownTargets
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger           hiding (Priority)
 import qualified Development.IDE.Types.Logger           as Logger
+import           Development.IDE.Types.Monitoring       (Monitoring (..))
 import           Development.IDE.Types.Options
 import           Development.IDE.Types.Shake
 import qualified Focus
 import           GHC.Fingerprint
+import           GHC.Stack                              (HasCallStack)
 import           HieDb.Types
 import           Ide.Plugin.Config
 import qualified Ide.PluginUtils                        as HLS
@@ -166,7 +168,7 @@ import qualified "list-t" ListT
 import           OpenTelemetry.Eventlog
 import qualified StmContainers.Map                      as STM
 import           System.FilePath                        hiding (makeRelative)
-import           System.IO.Unsafe (unsafePerformIO)
+import           System.IO.Unsafe                       (unsafePerformIO)
 import           System.Time.Extra
 
 data Log
@@ -340,7 +342,7 @@ addIdeGlobalExtras ShakeExtras{globals} x@(typeOf -> ty) =
         Just _ -> error $ "Internal error, addIdeGlobalExtras, got the same type twice for " ++ show ty
         Nothing -> HMap.insert ty (toDyn x) mp
 
-getIdeGlobalExtras :: forall a . IsIdeGlobal a => ShakeExtras -> IO a
+getIdeGlobalExtras :: forall a . (HasCallStack, IsIdeGlobal a) => ShakeExtras -> IO a
 getIdeGlobalExtras ShakeExtras{globals} = do
     let typ = typeRep (Proxy :: Proxy a)
     x <- HMap.lookup (typeRep (Proxy :: Proxy a)) <$> readTVarIO globals
@@ -350,12 +352,11 @@ getIdeGlobalExtras ShakeExtras{globals} = do
             | otherwise -> errorIO $ "Internal error, getIdeGlobalExtras, wrong type for " ++ show typ ++ " (got " ++ show (dynTypeRep x) ++ ")"
         Nothing -> errorIO $ "Internal error, getIdeGlobalExtras, no entry for " ++ show typ
 
-getIdeGlobalAction :: forall a . IsIdeGlobal a => Action a
+getIdeGlobalAction :: forall a . (HasCallStack, IsIdeGlobal a) => Action a
 getIdeGlobalAction = liftIO . getIdeGlobalExtras =<< getShakeExtras
 
 getIdeGlobalState :: forall a . IsIdeGlobal a => IdeState -> IO a
 getIdeGlobalState = getIdeGlobalExtras . shakeExtras
-
 
 newtype GlobalIdeOptions = GlobalIdeOptions IdeOptions
 instance IsIdeGlobal GlobalIdeOptions
@@ -388,7 +389,7 @@ lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
           | otherwise = do
           pmap <- readTVarIO persistentKeys
           mv <- runMaybeT $ do
-            liftIO $ Logger.logDebug (logger s) $ T.pack $ "LOOKUP UP PERSISTENT FOR: " ++ show k
+            liftIO $ Logger.logDebug (logger s) $ T.pack $ "LOOKUP PERSISTENT FOR: " ++ show k
             f <- MaybeT $ pure $ HMap.lookup (Key k) pmap
             (dv,del,ver) <- MaybeT $ runIdeAction "lastValueIO" s $ f file
             MaybeT $ pure $ (,del,ver) <$> fromDynamic dv
@@ -462,6 +463,7 @@ data IdeState = IdeState
     ,shakeSession         :: MVar ShakeSession
     ,shakeExtras          :: ShakeExtras
     ,shakeDatabaseProfile :: ShakeDatabase -> IO (Maybe FilePath)
+    ,stopMonitoring       :: IO ()
     }
 
 
@@ -557,10 +559,13 @@ shakeOpen :: Recorder (WithPriority Log)
           -> WithHieDb
           -> IndexQueue
           -> ShakeOptions
+          -> Monitoring
           -> Rules ()
           -> IO IdeState
 shakeOpen recorder lspEnv defaultConfig logger debouncer
-  shakeProfileDir (IdeReportProgress reportProgress) ideTesting@(IdeTesting testing) withHieDb indexQueue opts rules = mdo
+  shakeProfileDir (IdeReportProgress reportProgress)
+  ideTesting@(IdeTesting testing)
+  withHieDb indexQueue opts monitoring rules = mdo
     let log :: Logger.Priority -> Log -> IO ()
         log = logWith recorder
 
@@ -608,36 +613,40 @@ shakeOpen recorder lspEnv defaultConfig logger debouncer
             rules
     shakeSession <- newEmptyMVar
     shakeDatabaseProfile <- shakeDatabaseProfileIO shakeProfileDir
-    let ideState = IdeState{..}
 
     IdeOptions
         { optOTMemoryProfiling = IdeOTMemoryProfiling otProfilingEnabled
         , optProgressStyle
+        , optCheckParents
         } <- getIdeOptionsIO shakeExtras
 
-    void $ startTelemetry shakeDb shakeExtras
     startProfilingTelemetry otProfilingEnabled logger $ state shakeExtras
 
+    checkParents <- optCheckParents
+
+    -- monitoring
+    let readValuesCounter = fromIntegral . countRelevantKeys checkParents <$> getStateKeys shakeExtras
+        readDirtyKeys = fromIntegral . countRelevantKeys checkParents . HSet.toList <$> readTVarIO(dirtyKeys shakeExtras)
+        readIndexPending = fromIntegral . HMap.size <$> readTVarIO (indexPending $ hiedbWriter shakeExtras)
+        readExportsMap = fromIntegral . HMap.size . getExportsMap <$> readTVarIO (exportsMap shakeExtras)
+        readDatabaseCount = fromIntegral . countRelevantKeys checkParents . map fst <$> shakeGetDatabaseKeys shakeDb
+        readDatabaseStep =  fromIntegral <$> shakeGetBuildStep shakeDb
+
+    registerGauge monitoring "ghcide.values_count" readValuesCounter
+    registerGauge monitoring "ghcide.dirty_keys_count" readDirtyKeys
+    registerGauge monitoring "ghcide.indexing_pending_count" readIndexPending
+    registerGauge monitoring "ghcide.exports_map_count" readExportsMap
+    registerGauge monitoring "ghcide.database_count" readDatabaseCount
+    registerCounter monitoring "ghcide.num_builds" readDatabaseStep
+
+    stopMonitoring <- start monitoring
+
+    let ideState = IdeState{..}
     return ideState
 
-startTelemetry :: ShakeDatabase -> ShakeExtras -> IO (Async ())
-startTelemetry db extras@ShakeExtras{..}
-  | userTracingEnabled = do
-    countKeys <- mkValueObserver "cached keys count"
-    countDirty <- mkValueObserver "dirty keys count"
-    countBuilds <- mkValueObserver "builds count"
-    IdeOptions{optCheckParents} <- getIdeOptionsIO extras
-    checkParents <- optCheckParents
-    regularly 1 $ do
-        observe countKeys . countRelevantKeys checkParents . map fst =<< (atomically . ListT.toList . STM.listT) state
-        readTVarIO dirtyKeys >>= observe countDirty . countRelevantKeys checkParents . HSet.toList
-        shakeGetBuildStep db >>= observe countBuilds
 
-  | otherwise = async (pure ())
-    where
-        regularly :: Seconds -> IO () -> IO (Async ())
-        regularly delay act = async $ forever (act >> sleep delay)
-
+getStateKeys :: ShakeExtras -> IO [Key]
+getStateKeys = (fmap.fmap) fst . atomically . ListT.toList . STM.listT . state
 
 -- | Must be called in the 'Initialized' handler and only once
 shakeSessionInit :: Recorder (WithPriority Log) -> IdeState -> IO ()
@@ -657,6 +666,7 @@ shakeShut IdeState{..} = do
     for_ runner cancelShakeSession
     void $ shakeDatabaseProfile shakeDb
     progressStop $ progress shakeExtras
+    stopMonitoring
 
 
 -- | This is a variant of withMVar where the first argument is run unmasked and if it throws
@@ -746,7 +756,7 @@ newSession recorder extras@ShakeExtras{..} vfsMod shakeDb acts reason = do
 
     -- Take a new VFS snapshot
     case vfsMod of
-      VFSUnmodified -> pure ()
+      VFSUnmodified   -> pure ()
       VFSModified vfs -> atomically $ writeTVar vfsVar vfs
 
     IdeOptions{optRunSubset} <- getIdeOptionsIO extras
