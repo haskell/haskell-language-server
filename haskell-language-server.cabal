@@ -186,6 +186,11 @@ flag changeTypeSignature
   default:     True
   manual:      True
 
+flag gadt
+  description: Enable gadt plugin
+  default:     True
+  manual:      True
+
 -- formatters
 
 flag floskell
@@ -308,6 +313,11 @@ common changeTypeSignature
     build-depends: hls-change-type-signature-plugin ^>= 1.0
     cpp-options: -DchangeTypeSignature
 
+common gadt
+  if flag(gadt) && impl(ghc >= 9.2.1)
+    build-depends: hls-gadt-plugin ^>= 1.0
+    cpp-options: -Dgadt
+
 -- formatters
 
 common floskell
@@ -364,6 +374,7 @@ executable haskell-language-server
                     , ormolu
                     , stylishHaskell
                     , brittany
+                    , gadt
 
   main-is:          Main.hs
   hs-source-dirs:   exe
