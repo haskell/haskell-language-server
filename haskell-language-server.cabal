@@ -369,12 +369,12 @@ executable haskell-language-server
                     , alternateNumberFormat
                     , qualifyImportedNames
                     , selectionRange
+                    , gadt
                     , floskell
                     , fourmolu
                     , ormolu
                     , stylishHaskell
                     , brittany
-                    , gadt
 
   main-is:          Main.hs
   hs-source-dirs:   exe

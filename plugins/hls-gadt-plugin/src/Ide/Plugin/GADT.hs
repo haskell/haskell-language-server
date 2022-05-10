@@ -256,11 +256,12 @@ h98ToGADTConDecl dataName tyVars ctxt = \case
         renderResultTy :: LHsType GP
         renderResultTy = case tyVars of
             -- Without type variable
-            HsQTvs _ []   -> wrappedDatanName
+            HsQTvs _ []   -> wrappedDataName
             -- With type variable
-            HsQTvs _ vars -> foldl go wrappedDatanName vars
+            HsQTvs _ vars -> foldl go wrappedDataName vars
             where
-                wrappedDatanName = wrapXRec @GP (HsTyVar EpAnnNotUsed NotPromoted dataName)
+                wrappedDataName = wrapXRec @GP (HsTyVar EpAnnNotUsed NotPromoted dataName)
+
                 -- Bundle data name with type vars by `HsAppTy`
                 go acc (L _(UserTyVar _ _ var)) =
                     wrapXRec @GP
