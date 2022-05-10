@@ -28,9 +28,12 @@ tests = testGroup "GADT"
     , runTest "Infix" "Infix" 2 0 2 39
     , runTest "Record" "Record" 2 0 5 1
     , runTest "TypeVariable" "TypeVariable"  2 0 2 32
-    , expectFail $ runTest "Constraint" "Constraint" 2 0 2 33
+    , runTest "DataContext" "DataContext" 2 0 2 31
+    , runTest "DataContextParen" "DataContextParen" 2 0 3 6
     , runTest "Forall" "Forall" 2 0 2 44
-    -- Doc test
+    , runTest "ConstuctorContext" "ConstructorContext" 2 0 2 38
+    , runTest "Context" "Context" 2 0 4 41
+    , runTest "Pragma" "Pragma" 2 0 3 29
     ]
 
 codeActionExistenceTest :: String -> UInt -> UInt -> UInt -> UInt -> Bool -> TestTree

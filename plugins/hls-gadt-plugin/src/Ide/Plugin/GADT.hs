@@ -42,7 +42,6 @@ import           Language.LSP.Types
 import qualified Language.LSP.Types.Lens                 as L
 
 -- TODO: Add GADTs pragma
---       Constraints
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
@@ -216,7 +215,9 @@ h98ToGADTDecl = \case
     where
         updateDefn dataName tyVars = \case
             d@HsDataDefn{..} -> d
-                { dd_cons = map (mapXRec @GP (h98ToGADTConDecl dataName tyVars)) dd_cons
+                { dd_cons =
+                    mapXRec @GP (h98ToGADTConDecl dataName tyVars dd_ctxt) <$> dd_cons
+                , dd_ctxt = Nothing -- Context can't appear at the data name in GADT
                 }
 
 -- | Convert H98 data constuctor to GADT data constructor
@@ -226,16 +227,18 @@ h98ToGADTConDecl ::
     -> LHsQTyVars GP
             -- ^Type variable names
             -- used for constucting final result type in GADT
+    -> Maybe (LHsContext GP)
+            -- ^Data type context
     -> ConDecl GP
     -> ConDecl GP
-h98ToGADTConDecl dataName tyVars = \case
+h98ToGADTConDecl dataName tyVars ctxt = \case
     ConDeclH98{..} ->
         ConDeclGADT
             con_ext
             [con_name]
             -- Ignore all existential type variable since GADT not needed
             (wrapXRec @GP mkHsOuterImplicit)
-            con_mb_cxt
+            (mergeContext ctxt con_mb_cxt)
             (renderDetails con_args)
             renderResultTy
             con_doc
@@ -264,3 +267,23 @@ h98ToGADTConDecl dataName tyVars = \case
                         (HsAppTy NoExtField acc
                             (wrapXRec @GP (HsTyVar EpAnnNotUsed NotPromoted var)))
                 go acc _ = acc
+
+        -- Merge data type context and constructor type context
+        mergeContext :: Maybe (LHsContext GP) -> Maybe (LHsContext GP) -> Maybe (LHsContext GP)
+        mergeContext ctxt1 ctxt2 =
+            ((wrapXRec @GP) . map (wrapXRec @GP)) . map unParTy
+                <$> (getContextType ctxt1 <> getContextType ctxt2)
+            where
+                getContextType :: Maybe (LHsContext GP) -> Maybe [HsType GP]
+                getContextType ctxt = map (unXRec @GP) . unXRec @GP <$> ctxt
+
+                -- Unparen the outmost, it only occurs at the outmost
+                -- for a valid type.
+                --
+                -- Note for context paren rule:
+                --
+                -- If only one element, it __can__ have a paren type.
+                -- If not, there can't have a parent type.
+                unParTy :: HsType GP -> HsType GP
+                unParTy (HsParTy _ ty) = unXRec @GP ty
+                unParTy x              = x
