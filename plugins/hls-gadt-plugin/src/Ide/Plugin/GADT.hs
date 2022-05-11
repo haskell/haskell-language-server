@@ -88,7 +88,7 @@ codeActionHandler state plId (CodeActionParams _ _ doc range _) = response $ do
         mkAction :: T.Text -> Command |? CodeAction
         mkAction name = InR CodeAction{..}
             where
-                _title = "Convert " <> name <> " to GADT syntax"
+                _title = "Convert \"" <> name <> "\" to GADT syntax"
                 _kind = Just CodeActionRefactorRewrite
                 _diagnostics = Nothing
                 _isPreferred = Nothing
