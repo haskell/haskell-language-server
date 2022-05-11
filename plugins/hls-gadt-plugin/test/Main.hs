@@ -25,7 +25,7 @@ tests = testGroup "GADT"
     , runTest "Data" "Data" 2 0 2 36
     , runTest "Newtype" "Newtype" 2 0 2 21
     , runTest "Deriving" "Deriving" 2 0 2 56
-    , runTest "Infix" "Infix" 2 0 2 39
+    , runTest "Infix" "Infix" 2 0 2 35
     , runTest "Record" "Record" 2 0 5 1
     , runTest "TypeVariable" "TypeVariable"  2 0 2 32
     , runTest "DataContext" "DataContext" 2 0 2 31
@@ -34,6 +34,10 @@ tests = testGroup "GADT"
     , runTest "ConstuctorContext" "ConstructorContext" 2 0 2 38
     , runTest "Context" "Context" 2 0 4 41
     , runTest "Pragma" "Pragma" 2 0 3 29
+    , onlyWorkForGhcVersions [GHC92] "Single deriving has different output on ghc9.2" $
+        runTest "SingleDerivingGHC92" "SingleDerivingGHC92" 2 0 3 14
+    , knownBrokenForGhcVersions [GHC92] "Single deriving has different output on ghc9.2" $
+        runTest "SingleDeriving" "SingleDeriving" 2 0 3 14
     ]
 
 codeActionExistenceTest :: String -> UInt -> UInt -> UInt -> UInt -> Bool -> TestTree

@@ -314,7 +314,7 @@ common changeTypeSignature
     cpp-options: -DchangeTypeSignature
 
 common gadt
-  if flag(gadt) && impl(ghc >= 9.2.1)
+  if flag(gadt)
     build-depends: hls-gadt-plugin ^>= 1.0
     cpp-options: -Dgadt
 

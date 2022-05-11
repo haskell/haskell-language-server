@@ -2,44 +2,31 @@
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE GADTs             #-}
 {-# LANGUAGE Haskell2010       #-}
-{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes        #-}
 {-# LANGUAGE RecordWildCards   #-}
-{-# LANGUAGE TypeApplications  #-}
 {-# LANGUAGE TypeOperators     #-}
 {-# LANGUAGE ViewPatterns      #-}
 module Ide.Plugin.GADT (descriptor) where
 
-import           Control.Lens                            ((^.))
+import           Control.Lens               ((^.))
 import           Control.Monad.Except
-import           Data.Aeson                              (FromJSON, ToJSON,
-                                                          Value (Null), toJSON)
-import           Data.Either.Extra                       (maybeToEither)
-import           Data.Functor                            ((<&>))
-import qualified Data.HashMap.Lazy                       as HashMap
-import           Data.List.Extra                         (stripInfix)
-import qualified Data.Text                               as T
+import           Data.Aeson                 (FromJSON, ToJSON, Value (Null),
+                                             toJSON)
+import           Data.Either.Extra          (maybeToEither)
+import qualified Data.HashMap.Lazy          as HashMap
+import qualified Data.Text                  as T
 import           Development.IDE
 import           Development.IDE.GHC.Compat
-import           GHC.Data.Maybe
-import           GHC.Generics                            (Generic)
-import           GHC.Parser.Annotation                   (AddEpAnn (..),
-                                                          Anchor (Anchor),
-                                                          AnchorOperation (MovedAnchor),
-                                                          DeltaPos (..),
-                                                          EpAnn (..),
-                                                          EpAnnComments (EpaComments),
-                                                          EpaLocation (EpaDelta),
-                                                          SrcSpanAnn' (SrcSpanAnn),
-                                                          spanAsAnchor)
+
+import           Data.Maybe                 (mapMaybe)
+import           GHC.Generics               (Generic)
+import           Ide.Plugin.GHC
 import           Ide.PluginUtils
 import           Ide.Types
-import           Language.Haskell.GHC.ExactPrint         (showAst)
-import           Language.Haskell.GHC.ExactPrint.Parsers (parseDecl)
-import           Language.LSP.Server                     (sendRequest)
+import           Language.LSP.Server        (sendRequest)
 import           Language.LSP.Types
-import qualified Language.LSP.Types.Lens                 as L
+import qualified Language.LSP.Types.Lens    as L
 
 -- TODO: Add GADTs pragma
 
@@ -59,8 +46,6 @@ data ToGADTParams = ToGADTParams
 
 toGADTSyntaxCommandId :: CommandId
 toGADTSyntaxCommandId = "GADT.toGADT"
-
-type GP = GhcPass Parsed
 
 -- | A command replaces H98 data decl with GADT decl in place
 toGADTCommand :: CommandFunction IdeState ToGADTParams
@@ -127,164 +112,3 @@ getInRangeH98Decls state range nfp = do
         $ use GetParsedModuleWithComments nfp
     let (L _ hsDecls) = hsmodDecls <$> pm_parsed_source pm
     pure $ filter isH98DataDecl $ mapMaybe getDataDecl $ filter (inRange range) hsDecls
-
--- | Get data decl and its location (stored in ann)
-getDataDecl :: LHsDecl GP -> Maybe (LTyClDecl GP)
-getDataDecl (L l (TyClD _ d@DataDecl{})) = Just (L l d)
-getDataDecl _                            = Nothing
-
-isConDeclH98 :: ConDecl GP -> Bool
-isConDeclH98 ConDeclH98{} = True
-isConDeclH98 _            = False
-
-isH98DataDecl :: LTyClDecl GP -> Bool
-isH98DataDecl (L _ decl@DataDecl{}) =
-    any (isConDeclH98 . (unXRec @GP)) (dd_cons $ tcdDataDefn decl)
-isH98DataDecl _ = False
-
--- | Check if a located item is in the given range
-inRange :: Range -> GenLocated (SrcSpanAnn' a) e -> Bool
-inRange range (L s _) = maybe False (subRange range) (srcSpanToRange (locA s))
-
-{- |
-We use `printOutputable` to print H98 data decl as GADT syntax,
-this print is not perfect, it will:
-
-1. Make data name and the `where` key word in different lines.
-2. Make the whole data decl prints in one line if there is only one data constructor.
-3. The ident size of every data constructor depends on its origin
-   format, and may have different ident size between constructors.
-
-Hence, we first use `printOutputable` to get an initial GADT syntax,
-then use `ghc-exactprint` to parse the initial result, and finally
-adjust the details that mentioned above.
-
-The adjustment includes:
-
-1. Make the `where` key word at the same line of data name.
-2. Remove the extra blank line caused by adjustment of `where`.
-3. Make every data constructor start with a new line and 2 spaces
--}
-prettyGADTDecl :: DynFlags -> TyClDecl GP -> Either String String
-prettyGADTDecl df decl =
-    let old = printOutputable decl
-        hsDecl = parseDecl df "unused" (T.unpack old)
-        tycld = adjustTyClD hsDecl
-    in removeExtraEmptyLine . exactPrint <$> tycld
-    where
-        adjustTyClD = \case
-                Right (L _ (TyClD _ tycld)) -> Right $ adjustDataDecl tycld
-                Right x -> Left $ "Expect TyClD but got " <> showAst x
-                Left err -> Left $ show err
-
-        adjustDataDecl d@DataDecl{..} = d
-            { tcdDExt = adjustWhere tcdDExt
-            , tcdDataDefn = tcdDataDefn
-                { dd_cons = map adjustCon (dd_cons tcdDataDefn)
-                }
-            }
-        adjustDataDecl x = x
-
-        -- Make every data constructor start with a new line and 2 spaces
-        adjustCon :: LConDecl GP -> LConDecl GP
-        adjustCon (L (SrcSpanAnn _ loc) r) =
-            L (SrcSpanAnn (EpAnn (go (spanAsAnchor loc)) (AnnListItem []) (EpaComments [])) loc) r
-            where
-                go (Anchor a _) = Anchor a (MovedAnchor (DifferentLine 1 2))
-
-        -- Adjust where annotation to the same line of the type constuctor
-        adjustWhere tcdDExt = tcdDExt <&> map
-            (\(AddEpAnn ann l) ->
-            if ann == AnnWhere
-                then AddEpAnn AnnWhere (EpaDelta (SameLine 1) [])
-                else AddEpAnn ann l
-            )
-
-        -- Remove the first extra line if exist
-        removeExtraEmptyLine s = case stripInfix "\n\n" s of
-            Just (x, xs) -> x <> "\n" <> xs
-            Nothing      -> s
-
--- | Convert H98 data type definition to GADT's
-h98ToGADTDecl :: TyClDecl GP -> TyClDecl GP
-h98ToGADTDecl = \case
-    d@DataDecl{..} -> d
-        { tcdDataDefn = updateDefn tcdLName tcdTyVars tcdDataDefn
-        }
-    x -> x
-    where
-        updateDefn dataName tyVars = \case
-            d@HsDataDefn{..} -> d
-                { dd_cons =
-                    mapXRec @GP (h98ToGADTConDecl dataName tyVars dd_ctxt) <$> dd_cons
-                , dd_ctxt = Nothing -- Context can't appear at the data name in GADT
-                }
-
--- | Convert H98 data constuctor to GADT data constructor
-h98ToGADTConDecl ::
-    LIdP GP -- ^Type constuctor name,
-            -- used for constucting final result type in GADT
-    -> LHsQTyVars GP
-            -- ^Type variable names
-            -- used for constucting final result type in GADT
-    -> Maybe (LHsContext GP)
-            -- ^Data type context
-    -> ConDecl GP
-    -> ConDecl GP
-h98ToGADTConDecl dataName tyVars ctxt = \case
-    ConDeclH98{..} ->
-        ConDeclGADT
-            con_ext
-            [con_name]
-            -- Ignore all existential type variable since GADT not needed
-            (wrapXRec @GP mkHsOuterImplicit)
-            (mergeContext ctxt con_mb_cxt)
-            (renderDetails con_args)
-            renderResultTy
-            con_doc
-    x -> x
-    where
-        -- | Convert `HsConDeclH98Details` to `HsConDeclGADTDetails`
-        --
-        -- Parameters in the data constructor
-        renderDetails :: HsConDeclH98Details GP -> HsConDeclGADTDetails GP
-        renderDetails (PrefixCon _ args)   = PrefixConGADT args
-        renderDetails (InfixCon arg1 arg2) = PrefixConGADT [arg1, arg2]
-        renderDetails (RecCon recs)        = RecConGADT recs
-
-        -- | Construct GADT result type
-        renderResultTy :: LHsType GP
-        renderResultTy = case tyVars of
-            -- Without type variable
-            HsQTvs _ []   -> wrappedDataName
-            -- With type variable
-            HsQTvs _ vars -> foldl go wrappedDataName vars
-            where
-                wrappedDataName = wrapXRec @GP (HsTyVar EpAnnNotUsed NotPromoted dataName)
-
-                -- Bundle data name with type vars by `HsAppTy`
-                go acc (L _(UserTyVar _ _ var)) =
-                    wrapXRec @GP
-                        (HsAppTy NoExtField acc
-                            (wrapXRec @GP (HsTyVar EpAnnNotUsed NotPromoted var)))
-                go acc _ = acc
-
-        -- Merge data type context and constructor type context
-        mergeContext :: Maybe (LHsContext GP) -> Maybe (LHsContext GP) -> Maybe (LHsContext GP)
-        mergeContext ctxt1 ctxt2 =
-            ((wrapXRec @GP) . map (wrapXRec @GP)) . map unParTy
-                <$> (getContextType ctxt1 <> getContextType ctxt2)
-            where
-                getContextType :: Maybe (LHsContext GP) -> Maybe [HsType GP]
-                getContextType ctxt = map (unXRec @GP) . unXRec @GP <$> ctxt
-
-                -- Unparen the outmost, it only occurs at the outmost
-                -- for a valid type.
-                --
-                -- Note for context paren rule:
-                --
-                -- If only one element, it __can__ have a paren type.
-                -- If not, there can't have a parent type.
-                unParTy :: HsType GP -> HsType GP
-                unParTy (HsParTy _ ty) = unXRec @GP ty
-                unParTy x              = x

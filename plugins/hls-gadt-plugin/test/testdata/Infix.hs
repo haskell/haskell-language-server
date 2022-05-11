@@ -1,3 +1,3 @@
 module Infix where
 
-data Foo = Int :-> Char deriving (Show)
+data Foo = Int :-> Char deriving ()

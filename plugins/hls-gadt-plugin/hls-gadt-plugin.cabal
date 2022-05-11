@@ -17,12 +17,13 @@ extra-source-files:
 
 library
   exposed-modules:    Ide.Plugin.GADT
-  other-modules:
+  other-modules:      Ide.Plugin.GHC
 
   hs-source-dirs:     src
   build-depends:
     , aeson
     , base                  >=4.12 && <5
+    , containers
     , extra
     , ghc
     , ghcide                ^>= 1.7
