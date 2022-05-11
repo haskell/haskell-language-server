@@ -128,7 +128,7 @@ h98ToGADTConDecl dataName tyVars ctxt = \case
                 -- Bundle data name with type vars by `HsAppTy`
                 go acc (L _(UserTyVar' var)) =
                     wrap
-                        (HsAppTy NoExtField acc
+                        (HsAppTy noExtField acc
                             (wrap (HsTyVar noUsed NotPromoted var)))
                 go acc _ = acc
 
@@ -139,7 +139,7 @@ h98ToGADTConDecl dataName tyVars ctxt = \case
                 <$> (getContextType ctxt1 <> getContextType ctxt2)
             where
                 getContextType :: Maybe (LHsContext GP) -> Maybe [HsType GP]
-                getContextType ctxt = map ul . ul <$> ctxt
+                getContextType ctxt = map unWrap . unWrap <$> ctxt
 
                 -- Unparen the outmost, it only occurs at the outmost
                 -- for a valid type.
@@ -149,7 +149,7 @@ h98ToGADTConDecl dataName tyVars ctxt = \case
                 -- If only one element, it __can__ have a paren type.
                 -- If not, there can't have a parent type.
                 unParTy :: HsType GP -> HsType GP
-                unParTy (HsParTy _ ty) = ul ty
+                unParTy (HsParTy _ ty) = unWrap ty
                 unParTy x              = x
 {- |
 We use `printOutputable` to print H98 data decl as GADT syntax,
@@ -273,7 +273,7 @@ wrap = wrapXRec @GP
 wrap' = wrapXRec @GP
 wrapCtxt = id
 emptyCtxt = Nothing
-ul = unXRec @GP
+unWrap = unXRec @GP
 mapX = mapXRec @GP
 noUsed = EpAnnNotUsed
 #else
@@ -281,9 +281,9 @@ wrapCtxt = Just
 wrap = L noSrcSpan
 wrap' = wrap
 emptyCtxt = wrap []
-ul (L _ r) = r
+unWrap (L _ r) = r
 mapX = fmap
-noUsed = NoExtField
+noUsed = noExtField
 #endif
 
 #if MIN_VERSION_ghc(9,0,1)
@@ -299,5 +299,5 @@ implicitTyVars = (wrapXRec @GP mkHsOuterImplicit)
 #elif MIN_VERSION_ghc(9,0,1)
 implicitTyVars = []
 #else
-implicitTyVars = HsQTvs NoExtField []
+implicitTyVars = HsQTvs noExtField []
 #endif
