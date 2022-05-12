@@ -27,8 +27,9 @@ library
     , extra
     , ghc
     , ghcide                ^>= 1.7
+    , ghc-boot-th
     , ghc-exactprint
-    , hls-plugin-api        ^>= 1.2 || ^>= 1.3 || ^>= 1.4
+    , hls-plugin-api        ^>= 1.4
     , lens
     , lsp                    >=1.2.0.1
     , mtl
@@ -56,3 +57,4 @@ test-suite tests
     , lens
     , lsp
     , lsp-test
+    , text

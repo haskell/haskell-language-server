@@ -40,6 +40,7 @@ module Test.Hls.Util
     , waitForDiagnosticsFromSourceWithTimeout
     , withCurrentDirectoryInTmp
     , withCurrentDirectoryInTmp'
+    , withTempDir
   )
 where
 
@@ -54,7 +55,7 @@ import           Data.Default
 import           Data.List.Extra                 (find)
 import qualified Data.Set                        as Set
 import qualified Data.Text                       as T
-import           Development.IDE                 (GhcVersion(..), ghcVersion)
+import           Development.IDE                 (GhcVersion (..), ghcVersion)
 import qualified Language.LSP.Test               as Test
 import           Language.LSP.Types              hiding (Reason (..))
 import qualified Language.LSP.Types.Capabilities as C
@@ -62,8 +63,9 @@ import qualified Language.LSP.Types.Lens         as L
 import           System.Directory
 import           System.Environment
 import           System.FilePath
-import           System.IO.Temp
 import           System.Info.Extra               (isMac, isWindows)
+import qualified System.IO.Extra
+import           System.IO.Temp
 import           System.Time.Extra               (Seconds, sleep)
 import           Test.Tasty                      (TestTree)
 import           Test.Tasty.ExpectedFailure      (expectFailBecause,
@@ -253,7 +255,7 @@ onMatch :: [a] -> (a -> Bool) -> String -> IO a
 onMatch as predicate err = maybe (fail err) return (find predicate as)
 
 noMatch :: [a] -> (a -> Bool) -> String -> IO ()
-noMatch [] _ _ = pure ()
+noMatch [] _ _           = pure ()
 noMatch as predicate err = bool (pure ()) (fail err) (any predicate as)
 
 inspectDiagnostic :: [Diagnostic] -> [T.Text] -> IO Diagnostic
@@ -384,3 +386,10 @@ getCompletionByLabel desiredLabel compls =
         Nothing -> liftIO . assertFailure $
             "Completion with label " <> show desiredLabel
             <> " not found in " <> show (fmap (^. L.label) compls)
+
+-- ---------------------------------------------------------------------
+-- Run with a canonicalized temp dir
+withTempDir :: (FilePath -> IO a) -> IO a
+withTempDir f = System.IO.Extra.withTempDir $ \dir -> do
+  dir' <- canonicalizePath dir
+  f dir'

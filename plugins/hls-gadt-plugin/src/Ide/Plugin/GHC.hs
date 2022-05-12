@@ -39,7 +39,7 @@ import           Language.Haskell.GHC.ExactPrint.Types   (AnnConName (CN),
 
 type GP = GhcPass Parsed
 
--- | Check if a located item is in the given range
+-- | Check if a given range is in the range of located item
 inRange :: HasSrcSpan a => Range -> a -> Bool
 inRange range s = maybe False (subRange range) (srcSpanToRange (getLoc s))
 

@@ -9,26 +9,29 @@
 {-# LANGUAGE ViewPatterns      #-}
 module Ide.Plugin.GADT (descriptor) where
 
-import           Control.Lens               ((^.))
+import           Control.Lens                    ((^.))
 import           Control.Monad.Except
-import           Data.Aeson                 (FromJSON, ToJSON, Value (Null),
-                                             toJSON)
-import           Data.Either.Extra          (maybeToEither)
-import qualified Data.HashMap.Lazy          as HashMap
-import qualified Data.Text                  as T
+import           Data.Aeson                      (FromJSON, ToJSON,
+                                                  Value (Null), toJSON)
+import           Data.Either.Extra               (maybeToEither)
+import qualified Data.HashMap.Lazy               as HashMap
+import qualified Data.Text                       as T
 import           Development.IDE
 import           Development.IDE.GHC.Compat
 
-import           Data.Maybe                 (mapMaybe)
-import           GHC.Generics               (Generic)
+import           Data.Maybe                      (mapMaybe)
+import           Development.IDE.GHC.Compat.Util (toList)
+import           Development.IDE.Spans.Pragmas   (NextPragmaInfo,
+                                                  getNextPragmaInfo,
+                                                  insertNewPragma)
+import           GHC.Generics                    (Generic)
+import           GHC.LanguageExtensions.Type     (Extension (GADTSyntax, GADTs))
 import           Ide.Plugin.GHC
 import           Ide.PluginUtils
 import           Ide.Types
-import           Language.LSP.Server        (sendRequest)
+import           Language.LSP.Server             (sendRequest)
 import           Language.LSP.Types
-import qualified Language.LSP.Types.Lens    as L
-
--- TODO: Add GADTs pragma
+import qualified Language.LSP.Types.Lens         as L
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
@@ -40,8 +43,10 @@ descriptor plId = (defaultPluginDescriptor plId)
 
 -- | Parameter used in the command
 data ToGADTParams = ToGADTParams
-    { uri   :: Uri
-    , range :: Range
+    { uri          :: Uri
+    , range        :: Range
+    -- PluginId doesn't have instance of ToJSON and FromJSON
+    , pluginIdText :: T.Text
     } deriving (Generic, ToJSON, FromJSON)
 
 toGADTSyntaxCommandId :: CommandId
@@ -50,10 +55,9 @@ toGADTSyntaxCommandId = "GADT.toGADT"
 -- | A command replaces H98 data decl with GADT decl in place
 toGADTCommand :: CommandFunction IdeState ToGADTParams
 toGADTCommand state ToGADTParams{..} = response $ do
-    nfp <- handleMaybe
-        ("Unable to convert " <> show uri <> " to NormalizedFilePath")
-        $ uriToNormalizedFilePath $ toNormalizedUri uri
-    decls <- getInRangeH98Decls state range nfp
+    let plId = PluginId pluginIdText
+    nfp <- getNormalizedFilePath plId uri
+    (decls, exts) <- getInRangeH98DeclsAndExts state range nfp
     (L ann decl) <- handleMaybe
         ("Expect 1 decl, but got " <> show (Prelude.length decls))
         (if Prelude.length decls == 1 then Just $ head decls else Nothing)
@@ -66,22 +70,26 @@ toGADTCommand state ToGADTParams{..} = response $ do
         $ pure
         $ maybeToEither "Unable to get data decl range"
         $ srcSpanToRange $ locA ann
+    pragma <- getNextPragma state nfp
+    let insertEdit = [insertNewPragma pragma GADTs | all (`notElem` exts) [GADTSyntax, GADTs]]
+
     _ <- lift $ sendRequest
             SWorkspaceApplyEdit
-            (ApplyWorkspaceEditParams Nothing (workSpaceEdit nfp txt range))
+            (ApplyWorkspaceEditParams Nothing (workSpaceEdit nfp (TextEdit range txt : insertEdit)))
             (\_ -> pure ())
+
     pure Null
     where
-        workSpaceEdit nfp txt range = WorkspaceEdit
+        workSpaceEdit nfp edits = WorkspaceEdit
             (pure $ HashMap.fromList
                 [(filePathToUri $ fromNormalizedFilePath nfp,
-                 List [TextEdit range txt])])
+                 List edits)])
                  Nothing Nothing
 
 codeActionHandler :: PluginMethodHandler IdeState TextDocumentCodeAction
-codeActionHandler state plId (CodeActionParams _ _ doc range _) = response $ do
+codeActionHandler state plId@(PluginId txt) (CodeActionParams _ _ doc range _) = response $ do
     nfp <- getNormalizedFilePath plId doc
-    inRangeH98Decls <- getInRangeH98Decls state range nfp
+    (inRangeH98Decls, _) <- getInRangeH98DeclsAndExts state range nfp
     let actions = map (mkAction . printOutputable . tcdLName . unLoc) inRangeH98Decls
     pure $ List actions
     where
@@ -98,17 +106,31 @@ codeActionHandler state plId (CodeActionParams _ _ doc range _) = response $ do
                     $ mkLspCommand plId toGADTSyntaxCommandId _title (Just [toJSON mkParam])
                 _xdata = Nothing
 
-        mkParam = ToGADTParams (doc ^. L.uri) range
+        mkParam = ToGADTParams (doc ^. L.uri) range txt
 
-getInRangeH98Decls :: (Monad (t IO), MonadTrans t) =>
+-- | Get all H98 decls in the given range, and enabled extensions
+getInRangeH98DeclsAndExts :: (Monad (t IO), MonadTrans t) =>
     IdeState
     -> Range
     -> NormalizedFilePath
-    -> ExceptT String (t IO) [LTyClDecl GP]
-getInRangeH98Decls state range nfp = do
+    -> ExceptT String (t IO) ([LTyClDecl GP], [Extension])
+getInRangeH98DeclsAndExts state range nfp = do
     pm <- handleMaybeM "Unable to get ParsedModuleWithComments"
         $ lift
         $ runAction "GADT.GetParsedModuleWithComments" state
         $ use GetParsedModuleWithComments nfp
     let (L _ hsDecls) = hsmodDecls <$> pm_parsed_source pm
-    pure $ filter isH98DataDecl $ mapMaybe getDataDecl $ filter (inRange range) hsDecls
+        decls = filter isH98DataDecl
+            $ mapMaybe getDataDecl
+            $ filter (inRange range) hsDecls
+        exts = (toList . extensionFlags . ms_hspp_opts . pm_mod_summary) pm
+    pure (decls, exts)
+
+-- Copy from hls-alternate-number-format-plugin
+getNextPragma :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m NextPragmaInfo
+getNextPragma state nfp = handleMaybeM "Error: Could not get NextPragmaInfo" $ do
+      ghcSession <- liftIO $ runAction "GADT.GhcSession" state $ useWithStale GhcSession nfp
+      (_, fileContents) <- liftIO $ runAction "GADT.GetFileContents" state $ getFileContents nfp
+      case ghcSession of
+        Just (hscEnv -> hsc_dflags -> sessionDynFlags, _) -> pure $ Just $ getNextPragmaInfo sessionDynFlags fileContents
+        Nothing -> pure Nothing

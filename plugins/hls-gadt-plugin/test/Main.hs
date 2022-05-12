@@ -5,11 +5,14 @@
 
 module Main where
 
-import           Control.Monad   (void)
-import           Data.Either     (rights)
-import qualified Ide.Plugin.GADT as GADT
-import           System.FilePath ((</>))
+import           Control.Monad     (void)
+import           Data.Either       (rights)
+import qualified Data.Text         as T
+import qualified Ide.Plugin.GADT   as GADT
+import           Language.LSP.Test (waitForDiagnostics)
+import           System.FilePath   ((</>))
 import           Test.Hls
+import           Test.Hls.Util     (withTempDir)
 
 main :: IO ()
 main = defaultTestRunner tests
@@ -38,14 +41,25 @@ tests = testGroup "GADT"
         runTest "SingleDerivingGHC92" "SingleDerivingGHC92" 2 0 3 14
     , knownBrokenForGhcVersions [GHC92] "Single deriving has different output on ghc9.2" $
         runTest "SingleDeriving" "SingleDeriving" 2 0 3 14
+    , onlyWorkForGhcVersions [GHC92] "only ghc-9.2 enabled GADTs pragma implicitly" $
+        gadtPragmaTest "ghc-9.2 don't need to insert GADTs pragma" False
+    , knownBrokenForGhcVersions [GHC92] "ghc-9.2 has enabled GADTs pragma implicitly" $
+        gadtPragmaTest "insert pragma" True
     ]
 
-codeActionExistenceTest :: String -> UInt -> UInt -> UInt -> UInt -> Bool -> TestTree
-codeActionExistenceTest title x1 y1 x2 y2 shouldExist =
-    testCase title $ runSessionWithServer gadtPlugin testDataDir $ do
-    doc <- openDoc "Data.hs" "haskell"
-    acts <- findGADTAction <$> getCodeActions doc (Range (Position x1 y1) (Position x2 y2))
-    liftIO $ (not . null) acts @?= shouldExist
+gadtPragmaTest :: TestName -> Bool -> TestTree
+gadtPragmaTest title hasGADT = testCase title
+    $ withTempDir
+    $ \dir -> runSessionWithServer gadtPlugin dir $ do
+        doc <- createDoc "A.hs" "haskell" (T.unlines ["module A where", "data Foo = Bar"])
+        _ <- waitForProgressDone
+        (act:_) <- findGADTAction <$> getCodeActions doc (Range (Position 1 0) (Position 1 1))
+        executeCodeAction act
+        let expected = T.unlines $
+                ["{-# LANGUAGE GADTs #-}" | hasGADT] ++
+                ["module A where", "data Foo where", "  Bar :: Foo"]
+        contents <- skipManyTill anyMessage (getDocumentEdit doc)
+        liftIO $ contents @?= expected
 
 runTest :: TestName -> FilePath -> UInt -> UInt -> UInt -> UInt -> TestTree
 runTest title fp x1 y1 x2 y2 =

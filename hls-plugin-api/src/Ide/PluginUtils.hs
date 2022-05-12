@@ -1,6 +1,7 @@
-{-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE TypeFamilies          #-}
 module Ide.PluginUtils
   ( WithDeletions(..),
     getProcessID,
@@ -56,7 +57,7 @@ import           Language.LSP.Types              hiding
                                                   SemanticTokensEdit (_start))
 import qualified Language.LSP.Types              as J
 import           Language.LSP.Types.Capabilities
-import           Language.LSP.Types.Lens         (uri)
+import           Language.LSP.Types.Lens         (HasUri, uri)
 
 -- ---------------------------------------------------------------------
 
@@ -245,8 +246,10 @@ allLspCmdIds pid commands = concatMap go commands
     go (plid, cmds) = map (mkLspCmdId pid plid . commandId) cmds
 
 -- ---------------------------------------------------------------------
+instance HasUri Uri Uri where
+  uri = id
 
-getNormalizedFilePath :: Monad m => PluginId -> TextDocumentIdentifier -> ExceptT String m NormalizedFilePath
+getNormalizedFilePath :: (Monad m, HasUri a Uri) => PluginId -> a -> ExceptT String m NormalizedFilePath
 getNormalizedFilePath (PluginId plId) docId = handleMaybe errMsg
         $ uriToNormalizedFilePath
         $ toNormalizedUri uri'

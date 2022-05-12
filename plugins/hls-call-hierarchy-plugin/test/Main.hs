@@ -19,6 +19,7 @@ import           System.Directory.Extra
 import           System.FilePath
 import qualified System.IO.Extra
 import           Test.Hls
+import           Test.Hls.Util            (withTempDir)
 
 plugin :: PluginDescriptor IdeState
 plugin = descriptor "callHierarchy"
@@ -544,8 +545,3 @@ mkIncomingCallsParam = CallHierarchyIncomingCallsParams Nothing Nothing
 
 mkOutgoingCallsParam :: CallHierarchyItem -> CallHierarchyOutgoingCallsParams
 mkOutgoingCallsParam = CallHierarchyOutgoingCallsParams Nothing Nothing
-
-withTempDir :: (FilePath -> IO a) -> IO a
-withTempDir f = System.IO.Extra.withTempDir $ \dir -> do
-  dir' <- canonicalizePath dir
-  f dir'
