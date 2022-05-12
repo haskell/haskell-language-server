@@ -256,7 +256,19 @@ Known Limitations:
 
 ![Change Type Signature Demo](../plugins/hls-change-type-signature-plugin/change2.gif)
 
-[Link to Docs](../plugins/hls-change-type-signature/README.md)
+![Link to Docs](../plugins/hls-change-type-signature-plugin/README.md)
+
+### Convert to GADT syntax
+
+Provided by: `hls-gadt-plugin`
+
+Code action kind: `refactor.rewrite`
+
+Convert a datatype to GADT syntax.
+
+![GADT Demo](../plugins/hls-gadt-plugin/gadt.gif)
+
+![Link to Docs](../plugins/hls-gadt-plugin/README.md)
 
 ## Code lenses
 
