@@ -5,14 +5,12 @@
 
 module Main where
 
-import           Control.Monad     (void)
-import           Data.Either       (rights)
-import qualified Data.Text         as T
-import qualified Ide.Plugin.GADT   as GADT
-import           Language.LSP.Test (waitForDiagnostics)
-import           System.FilePath   ((</>))
+import           Control.Monad   (void)
+import           Data.Either     (rights)
+import qualified Data.Text       as T
+import qualified Ide.Plugin.GADT as GADT
+import           System.FilePath ((</>))
 import           Test.Hls
-import           Test.Hls.Util     (withTempDir)
 
 main :: IO ()
 main = defaultTestRunner tests

@@ -220,7 +220,7 @@ prettyGADTDecl df decl =
     where
         adjustTyClD = \case
                 Right (anns, t@(L _ (TyClD _ _))) -> Right (adjustDataDeclAnns anns, t)
-                Right x -> Left "Expect TyClD" -- TODO
+                Right x -> Left "Expect TyClD"
                 Left err -> Left $ show err
 
         adjustDataDeclAnns = Map.mapWithKey go
