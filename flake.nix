@@ -123,6 +123,8 @@
               in hsuper.mkDerivation (args // {
                 jailbreak = if broken then true else jailbreak;
                 doCheck = if broken then false else check;
+                # Library profiling is disabled as it causes long compilation time 
+                # on our CI jobs. Nix users are free tor revert this anytime.
                 enableLibraryProfiling = false;
                 doHaddock = false;
               });
