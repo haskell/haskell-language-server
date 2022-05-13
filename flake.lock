@@ -101,13 +101,13 @@
     "hie-bios": {
       "flake": false,
       "locked": {
-        "narHash": "sha256-nd+FfUQVZNxJfKZkAWA3dF0JwRgXntL+1gGvyNHDbKc=",
+        "narHash": "sha256-5RqspT27rb/tMBwrKr4VfSSbq0+c0LMNuaKlTun0Kkk=",
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/hie-bios-0.9.0/hie-bios-0.9.0.tar.gz"
+        "url": "https://hackage.haskell.org/package/hie-bios-0.9.1/hie-bios-0.9.1.tar.gz"
       },
       "original": {
         "type": "tarball",
-        "url": "https://hackage.haskell.org/package/hie-bios-0.9.0/hie-bios-0.9.0.tar.gz"
+        "url": "https://hackage.haskell.org/package/hie-bios-0.9.1/hie-bios-0.9.1.tar.gz"
       }
     },
     "hlint": {
