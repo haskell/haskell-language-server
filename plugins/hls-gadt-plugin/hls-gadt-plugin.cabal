@@ -34,6 +34,7 @@ library
     , lsp                    >=1.2.0.1
     , mtl
     , text
+    , transformers
     , unordered-containers
 
   ghc-options:

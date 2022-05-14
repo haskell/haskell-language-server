@@ -18,6 +18,7 @@ import qualified Data.Text                       as T
 import           Development.IDE
 import           Development.IDE.GHC.Compat
 
+import           Control.Monad.Trans.Except      (throwE)
 import           Data.Maybe                      (mapMaybe)
 import           Development.IDE.GHC.Compat.Util (toList)
 import           Development.IDE.Spans.Pragmas   (NextPragmaInfo,
@@ -57,13 +58,13 @@ toGADTCommand state ToGADTParams{..} = response $ do
     let plId = PluginId pluginIdText
     nfp <- getNormalizedFilePath plId uri
     (decls, exts) <- getInRangeH98DeclsAndExts state range nfp
-    (L ann decl) <- handleMaybe
-        ("Expect 1 decl, but got " <> show (Prelude.length decls))
-        (if Prelude.length decls == 1 then Just $ head decls else Nothing)
+    (L ann decl) <- case decls of
+        [d] -> pure d
+        _   -> throwE $ "Expected 1 declaration, but got " <> show (Prelude.length decls)
     deps <- liftIO $ runAction "GADT.GhcSessionDeps" state $ use GhcSessionDeps nfp
     (hsc_dflags . hscEnv -> df) <- liftEither
         $ maybeToEither "Get GhcSessionDeps failed" deps
-    txt <- ExceptT $ pure $ T.pack <$> (prettyGADTDecl df . h98ToGADTDecl) decl
+    txt <- liftEither $ T.pack <$> (prettyGADTDecl df . h98ToGADTDecl) decl
     range <- liftEither
         $ maybeToEither "Unable to get data decl range"
         $ srcSpanToRange $ locA ann
@@ -106,14 +107,14 @@ codeActionHandler state plId@(PluginId txt) (CodeActionParams _ _ doc range _) =
         mkParam = ToGADTParams (doc ^. L.uri) range txt
 
 -- | Get all H98 decls in the given range, and enabled extensions
-getInRangeH98DeclsAndExts :: (Monad (t IO), MonadTrans t) =>
+getInRangeH98DeclsAndExts :: (MonadIO m) =>
     IdeState
     -> Range
     -> NormalizedFilePath
-    -> ExceptT String (t IO) ([LTyClDecl GP], [Extension])
+    -> ExceptT String m ([LTyClDecl GP], [Extension])
 getInRangeH98DeclsAndExts state range nfp = do
     pm <- handleMaybeM "Unable to get ParsedModuleWithComments"
-        $ lift
+        $ liftIO
         $ runAction "GADT.GetParsedModuleWithComments" state
         $ use GetParsedModuleWithComments nfp
     let (L _ hsDecls) = hsmodDecls <$> pm_parsed_source pm
