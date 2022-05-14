@@ -30,8 +30,8 @@ import           Ide.Plugin.Conversion           (AlternateFormat,
                                                   ExtensionNeeded (NeedsExtension, NoExtension),
                                                   alternateFormat)
 import           Ide.Plugin.Literals
-import           Ide.PluginUtils                 (handleMaybe, handleMaybeM,
-                                                  response)
+import           Ide.PluginUtils                 (getNormalizedFilePath,
+                                                  handleMaybeM, response)
 import           Ide.Types
 import           Language.LSP.Types
 import           Language.LSP.Types.Lens         (uri)
@@ -84,7 +84,7 @@ collectLiteralsRule recorder = define (cmapWithPrio LogShake recorder) $ \Collec
 
 codeActionHandler :: PluginMethodHandler IdeState 'TextDocumentCodeAction
 codeActionHandler state plId (CodeActionParams _ _ docId currRange _) = response $ do
-    nfp <- getNormalizedFilePath (docId ^. uri)
+    nfp <- getNormalizedFilePath plId (docId ^. uri)
     CLR{..} <- requestLiterals state nfp
     pragma <- getFirstPragma state nfp
         -- remove any invalid literals (see validTarget comment)
