@@ -30,10 +30,10 @@ import           System.Posix.Signals
 #endif
 import           Control.Lens                    ((^.))
 import           Data.Aeson                      hiding (defaultOptions)
-import qualified Data.DList                      as DList
 import qualified Data.Default
 import           Data.Dependent.Map              (DMap)
 import qualified Data.Dependent.Map              as DMap
+import qualified Data.DList                      as DList
 import           Data.GADT.Compare
 import           Data.List.NonEmpty              (NonEmpty (..), toList)
 import qualified Data.Map                        as Map
@@ -389,6 +389,7 @@ data PluginCommand ideState = forall a. (FromJSON a) =>
 
 type CommandFunction ideState a
   = ideState
+  -> PluginId
   -> a
   -> LspM Config (Either ResponseError Value)
 

@@ -36,7 +36,7 @@ descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeSta
 descriptor recorder plId =
     (defaultPluginDescriptor plId)
         { pluginHandlers = mkPluginHandler STextDocumentCodeLens CL.codeLens
-        , pluginCommands = [CL.evalCommand plId]
+        , pluginCommands = [CL.evalCommand]
         , pluginRules = rules (cmapWithPrio LogEvalRules recorder)
         , pluginConfigDescriptor = defaultConfigDescriptor
                                    { configCustomConfig = mkCustomConfig properties

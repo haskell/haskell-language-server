@@ -37,9 +37,9 @@ import           Data.Bifunctor                       (Bifunctor (first),
 import qualified Data.ByteString                      as BS
 import           Data.Coerce
 import           Data.Either                          (partitionEithers)
+import           Data.Hashable                        (unhashed)
 import qualified Data.HashMap.Strict                  as HM
 import qualified Data.HashSet                         as Set
-import           Data.Hashable                        (unhashed)
 import           Data.IORef.Extra                     (atomicModifyIORef'_,
                                                        newIORef, readIORef)
 import           Data.List.Extra                      (find, nubOrdOn)
@@ -101,9 +101,9 @@ import qualified Retrie.GHC                           as GHC
 import           Retrie.Monad                         (addImports, apply,
                                                        getGroundTerms,
                                                        runRetrie)
+import qualified Retrie.Options                       as Retrie
 import           Retrie.Options                       (defaultOptions,
                                                        getTargetFiles)
-import qualified Retrie.Options                       as Retrie
 import           Retrie.Replace                       (Change (..),
                                                        Replacement (..))
 import           Retrie.Rewrites
@@ -133,11 +133,9 @@ data RunRetrieParams = RunRetrieParams
     restrictToOriginatingFile :: Bool
   }
   deriving (Eq, Show, Generic, FromJSON, ToJSON)
-runRetrieCmd ::
-  IdeState ->
-  RunRetrieParams ->
-  LspM c (Either ResponseError Value)
-runRetrieCmd state RunRetrieParams{originatingFile = uri, ..} =
+
+runRetrieCmd :: CommandFunction IdeState RunRetrieParams
+runRetrieCmd state _ RunRetrieParams{originatingFile = uri, ..} =
   withIndefiniteProgress description Cancellable $ do
     runMaybeT $ do
         nfp <- MaybeT $ return $ uriToNormalizedFilePath $ toNormalizedUri uri

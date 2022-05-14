@@ -33,9 +33,9 @@ import           Ide.Plugin.Config
 import           Ide.PluginUtils              (getClientConfig)
 import           Ide.Types                    as HLS
 import qualified Language.LSP.Server          as LSP
-import           Language.LSP.VFS
 import           Language.LSP.Types
 import qualified Language.LSP.Types           as J
+import           Language.LSP.VFS
 import           Text.Regex.TDFA.Text         ()
 import           UnliftIO                     (MonadUnliftIO)
 import           UnliftIO.Async               (forConcurrently)
@@ -149,7 +149,7 @@ executeCommandHandlers ecs = requestHandler SWorkspaceExecuteCommand execCmd
               ResponseError InvalidParams ("error while parsing args for " <> com' <> " in plugin " <> p'
                                            <> ": " <> T.pack err
                                            <> "\narg = " <> T.pack (show arg)) Nothing
-            J.Success a -> f ide a
+            J.Success a -> f ide p a
 
 -- ---------------------------------------------------------------------
 

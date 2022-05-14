@@ -29,9 +29,9 @@ import           Development.IDE                     (GhcSession (..),
                                                       RuleResult, Rules, define,
                                                       srcSpanToRange)
 import           Development.IDE.Core.Compile        (TcModuleResult (..))
+import           Development.IDE.Core.Rules          (IdeState, runAction)
 import           Development.IDE.Core.RuleTypes      (GetBindings (GetBindings),
                                                       TypeCheck (TypeCheck))
-import           Development.IDE.Core.Rules          (IdeState, runAction)
 import           Development.IDE.Core.Service        (getDiagnostics)
 import           Development.IDE.Core.Shake          (getHiddenDiagnostics, use)
 import qualified Development.IDE.Core.Shake          as Shake
@@ -146,7 +146,7 @@ generateLens pId _range title edit =
    in CodeLens _range (Just cId) Nothing
 
 commandHandler :: CommandFunction IdeState WorkspaceEdit
-commandHandler _ideState wedit = do
+commandHandler _ideState _plId wedit = do
   _ <- LSP.sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
   return $ Right Null
 

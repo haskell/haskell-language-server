@@ -4,19 +4,19 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE LambdaCase            #-}
+{-# LANGUAGE MultiWayIf            #-}
+{-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedLabels      #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE PackageImports        #-}
 {-# LANGUAGE PatternSynonyms       #-}
+{-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE StrictData            #-}
 {-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE ViewPatterns          #-}
-{-# LANGUAGE LambdaCase            #-}
-{-# LANGUAGE MultiWayIf            #-}
-{-# LANGUAGE NamedFieldPuns        #-}
-{-# LANGUAGE RecordWildCards       #-}
-{-# LANGUAGE StrictData            #-}
 
 {-# OPTIONS_GHC -Wno-orphans   #-}
 
@@ -44,8 +44,8 @@ import           Data.Aeson.Types                                   (FromJSON (.
                                                                      Value (..))
 import qualified Data.ByteString                                    as BS
 import           Data.Default
-import qualified Data.HashMap.Strict                                as Map
 import           Data.Hashable
+import qualified Data.HashMap.Strict                                as Map
 import           Data.Maybe
 import qualified Data.Text                                          as T
 import qualified Data.Text.Encoding                                 as T
@@ -89,7 +89,8 @@ import           System.IO                                          (IOMode (Wri
 import           System.IO.Temp
 #else
 import           Development.IDE.GHC.Compat                         hiding
-                                                                    (setEnv, (<+>))
+                                                                    (setEnv,
+                                                                     (<+>))
 import           GHC.Generics                                       (Associativity (LeftAssociative, NotAssociative, RightAssociative))
 #if MIN_GHC_API_VERSION(9,2,0)
 import           Language.Haskell.GHC.ExactPrint.ExactPrint         (deltaOptions)
@@ -119,6 +120,7 @@ import           Language.LSP.Types                                 hiding
 import qualified Language.LSP.Types                                 as LSP
 import qualified Language.LSP.Types.Lens                            as LSP
 
+import           Control.Monad.Trans.Class                          (lift)
 import qualified Development.IDE.Core.Shake                         as Shake
 import           Development.IDE.Spans.Pragmas                      (LineSplitTextEdits (LineSplitTextEdits),
                                                                      NextPragmaInfo (NextPragmaInfo),
@@ -488,18 +490,16 @@ mkSuppressHintTextEdits dynFlags fileContents hint =
 -- ---------------------------------------------------------------------
 
 applyAllCmd :: Recorder (WithPriority Log) -> CommandFunction IdeState Uri
-applyAllCmd recorder ide uri = do
-  let file = maybe (error $ show uri ++ " is not a file.")
-                    toNormalizedFilePath'
-                   (uriToFilePath' uri)
-  withIndefiniteProgress "Applying all hints" Cancellable $ do
+applyAllCmd recorder ide plId uri = do
+  withIndefiniteProgress "Applying all hints" Cancellable $ response $ do
+    file <- getNormalizedFilePath plId uri
     res <- liftIO $ applyHint recorder ide file Nothing
     logWith recorder Debug $ LogApplying file res
     case res of
-      Left err -> pure $ Left (responseError (T.pack $ "hlint:applyAll: " ++ show err))
+      Left err -> throwE $ "hlint:applyAll: " ++ show err
       Right fs -> do
-        _ <- sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing fs) (\_ -> pure ())
-        pure $ Right Null
+        _ <- lift $ sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing fs) (\_ -> pure ())
+        pure Null
 
 -- ---------------------------------------------------------------------
 
@@ -518,19 +518,18 @@ data OneHint = OneHint
   } deriving (Eq, Show)
 
 applyOneCmd :: Recorder (WithPriority Log) -> CommandFunction IdeState ApplyOneParams
-applyOneCmd recorder ide (AOP uri pos title) = do
+applyOneCmd recorder ide plId (AOP uri pos title) = do
   let oneHint = OneHint pos title
-  let file = maybe (error $ show uri ++ " is not a file.") toNormalizedFilePath'
-                   (uriToFilePath' uri)
   let progTitle = "Applying hint: " <> title
-  withIndefiniteProgress progTitle Cancellable $ do
+  withIndefiniteProgress progTitle Cancellable $ response $ do
+    file <- getNormalizedFilePath plId uri
     res <- liftIO $ applyHint recorder ide file (Just oneHint)
     logWith recorder Debug $ LogApplying file res
     case res of
-      Left err -> pure $ Left (responseError (T.pack $ "hlint:applyOne: " ++ show err))
+      Left err -> throwE $ "hlint:applyOne: " ++ show err
       Right fs -> do
-        _ <- sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing fs) (\_ -> pure ())
-        pure $ Right Null
+        _ <- lift $ sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing fs) (\_ -> pure ())
+        pure Null
 
 applyHint :: Recorder (WithPriority Log) -> IdeState -> NormalizedFilePath -> Maybe OneHint -> IO (Either String WorkspaceEdit)
 applyHint recorder ide nfp mhint =

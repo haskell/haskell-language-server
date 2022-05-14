@@ -10,7 +10,7 @@ module Wingman.AbstractLSP (installInteractions) where
 import           Control.Monad (void)
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans (lift)
-import           Control.Monad.Trans.Maybe (MaybeT, mapMaybeT)
+import           Control.Monad.Trans.Maybe (MaybeT, mapMaybeT, exceptToMaybeT)
 import qualified Data.Aeson as A
 import           Data.Coerce
 import           Data.Foldable (traverse_)
@@ -31,6 +31,7 @@ import           Wingman.EmptyCase (fromMaybeT)
 import           Wingman.LanguageServer (getTacticConfig, getIdeDynflags, mkWorkspaceEdits, runStaleIde, showLspMessage, mkShowMessageParams)
 import           Wingman.StaticPlugin (enableQuasiQuotes)
 import           Wingman.Types
+import Ide.PluginUtils (getNormalizedFilePath)
 
 
 ------------------------------------------------------------------------------
@@ -42,12 +43,10 @@ installInteractions
     :: [Interaction]
     -> PluginDescriptor IdeState
     -> PluginDescriptor IdeState
-installInteractions is desc =
-  let plId = pluginId desc
-   in desc
-        { pluginCommands = pluginCommands desc <> fmap (buildCommand plId) is
-        , pluginHandlers = pluginHandlers desc <> buildHandlers is
-        }
+installInteractions is desc = desc
+    { pluginCommands = pluginCommands desc <> fmap buildCommand is
+    , pluginHandlers = pluginHandlers desc <> buildHandlers is
+    }
 
 
 ------------------------------------------------------------------------------
@@ -67,14 +66,13 @@ buildHandlers cs =
 ------------------------------------------------------------------------------
 -- | Extract a 'PluginCommand' from an 'Interaction'.
 buildCommand
-  :: PluginId
-  -> Interaction
+  :: Interaction
   -> PluginCommand IdeState
-buildCommand plId (Interaction (c :: Continuation sort target b)) =
+buildCommand (Interaction (c :: Continuation sort target b)) =
   PluginCommand
     { commandId = toCommandId $ c_sort c
     , commandDesc = T.pack ""
-    , commandFunc = runContinuation plId c
+    , commandFunc = runContinuation c
     }
 
 
@@ -83,10 +81,9 @@ buildCommand plId (Interaction (c :: Continuation sort target b)) =
 runContinuation
     :: forall sort a b
      . IsTarget a
-    => PluginId
-    -> Continuation sort a b
+    => Continuation sort a b
     -> CommandFunction IdeState (FileContext, b)
-runContinuation plId cont state (fc, b) = do
+runContinuation cont state plId (fc, b) = do
   fromMaybeT
     (Left $ ResponseError
               { _code = InternalError

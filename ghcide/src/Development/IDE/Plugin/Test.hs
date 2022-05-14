@@ -25,10 +25,10 @@ import           Data.Maybe                           (isJust)
 import           Data.String
 import           Data.Text                            (Text, pack)
 import           Development.IDE.Core.OfInterest      (getFilesOfInterest)
+import           Development.IDE.Core.Rules
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service
 import           Development.IDE.Core.Shake
-import           Development.IDE.Core.Rules
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Graph                (Action)
 import qualified Development.IDE.Graph                as Graph
@@ -170,7 +170,7 @@ blockCommandDescriptor plId = (defaultPluginDescriptor plId) {
 }
 
 blockCommandHandler :: CommandFunction state ExecuteCommandParams
-blockCommandHandler _ideState _params = do
+blockCommandHandler _ideState _plId _params = do
   LSP.sendNotification (SCustomMethod "ghcide/blocking/command") Null
   liftIO $ threadDelay maxBound
   return (Right Null)

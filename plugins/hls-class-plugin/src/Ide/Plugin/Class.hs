@@ -20,8 +20,8 @@ import           Data.Char
 import           Data.List
 import qualified Data.Map.Strict                         as Map
 import           Data.Maybe
-import qualified Data.Text                               as T
 import qualified Data.Set                                as Set
+import qualified Data.Text                               as T
 import           Development.IDE                         hiding (pluginHandlers)
 import           Development.IDE.Core.PositionMapping    (fromCurrentRange,
                                                           toCurrentRange)
@@ -40,7 +40,7 @@ import           Language.LSP.Types
 import qualified Language.LSP.Types.Lens                 as J
 
 #if MIN_VERSION_ghc(9,2,0)
-import           GHC.Hs                                  (AnnsModule(AnnsModule))
+import           GHC.Hs                                  (AnnsModule (AnnsModule))
 import           GHC.Parser.Annotation
 #endif
 
@@ -64,7 +64,7 @@ data AddMinimalMethodsParams = AddMinimalMethodsParams
   deriving (Show, Eq, Generics.Generic, ToJSON, FromJSON)
 
 addMethodPlaceholders :: CommandFunction IdeState AddMinimalMethodsParams
-addMethodPlaceholders state AddMinimalMethodsParams{..} = do
+addMethodPlaceholders state _ AddMinimalMethodsParams{..} = do
   caps <- getClientCapabilities
   medit <- liftIO $ runMaybeT $ do
     docPath <- MaybeT . pure . uriToNormalizedFilePath $ toNormalizedUri uri

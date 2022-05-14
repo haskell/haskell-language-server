@@ -14,9 +14,8 @@ import           Development.IDE                 (GetParsedModule (GetParsedModu
                                                   GhcSession (GhcSession),
                                                   IdeState, RuleResult, Rules,
                                                   define, getFileContents,
-                                                  hscEnv, ideLogger,
-                                                  realSrcSpanToRange, runAction,
-                                                  use, useWithStale)
+                                                  hscEnv, realSrcSpanToRange,
+                                                  runAction, use, useWithStale)
 import qualified Development.IDE.Core.Shake      as Shake
 import           Development.IDE.GHC.Compat      hiding (getSrcSpan)
 import           Development.IDE.GHC.Compat.Util (toList)
@@ -84,8 +83,8 @@ collectLiteralsRule recorder = define (cmapWithPrio LogShake recorder) $ \Collec
         getExtensions = map GhcExtension . toList . extensionFlags . ms_hspp_opts . pm_mod_summary
 
 codeActionHandler :: PluginMethodHandler IdeState 'TextDocumentCodeAction
-codeActionHandler state _ (CodeActionParams _ _ docId currRange _) = response $ do
-    nfp <- getNormalizedFilePath docId
+codeActionHandler state plId (CodeActionParams _ _ docId currRange _) = response $ do
+    nfp <- getNormalizedFilePath (docId ^. uri)
     CLR{..} <- requestLiterals state nfp
     pragma <- getFirstPragma state nfp
         -- remove any invalid literals (see validTarget comment)
@@ -150,12 +149,6 @@ getFirstPragma state nfp = handleMaybeM "Error: Could not get NextPragmaInfo" $ 
       case ghcSession of
         Just (hscEnv -> hsc_dflags -> sessionDynFlags, _) -> pure $ Just $ getNextPragmaInfo sessionDynFlags fileContents
         Nothing -> pure Nothing
-
-
-getNormalizedFilePath :: Monad m => TextDocumentIdentifier -> ExceptT String m NormalizedFilePath
-getNormalizedFilePath docId = handleMaybe "Error: converting to NormalizedFilePath"
-        $ uriToNormalizedFilePath
-        $ toNormalizedUri (docId ^. uri)
 
 requestLiterals :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m CollectLiteralsResult
 requestLiterals state = handleMaybeM "Error: Could not Collect Literals"

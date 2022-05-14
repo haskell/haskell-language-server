@@ -28,8 +28,8 @@ import           Data.IORef                           (readIORef)
 import qualified Data.Map.Strict                      as Map
 import           Data.Maybe                           (catMaybes, fromMaybe,
                                                        isJust)
-import qualified Data.Text                            as T
 import           Data.String                          (fromString)
+import qualified Data.Text                            as T
 import           Development.IDE                      hiding (pluginHandlers,
                                                        pluginRules)
 import           Development.IDE.Core.PositionMapping
@@ -93,7 +93,7 @@ newtype ImportCommandParams = ImportCommandParams WorkspaceEdit
 
 -- | The actual command handler
 runImportCommand :: CommandFunction IdeState ImportCommandParams
-runImportCommand _state (ImportCommandParams edit) = do
+runImportCommand _state _ (ImportCommandParams edit) = do
   -- This command simply triggers a workspace edit!
   _ <- sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
   return (Right Null)

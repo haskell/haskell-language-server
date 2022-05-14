@@ -48,14 +48,13 @@ import           Development.IDE                 (GetModSummary (..),
                                                   GhcSessionIO (..), IdeState,
                                                   ModSummaryResult (..),
                                                   NeedsCompilation (NeedsCompilation),
-                                                  evalGhcEnv,
+                                                  VFSModified (..), evalGhcEnv,
                                                   hscEnvWithImportPaths,
                                                   printOutputable, runAction,
                                                   textToStringBuffer,
                                                   toNormalizedFilePath',
                                                   uriToFilePath', useNoFile_,
-                                                  useWithStale_, use_,
-                                                  VFSModified(..))
+                                                  useWithStale_, use_)
 import           Development.IDE.Core.Rules      (GhcSessionDepsConfig (..),
                                                   ghcSessionDepsDefinition)
 import           Development.IDE.GHC.Compat      hiding (typeKind, unitState)
@@ -91,7 +90,8 @@ import           Ide.Plugin.Eval.Code            (Statement, asStatements,
                                                   evalSetup, myExecStmt,
                                                   propSetup, resultRange,
                                                   testCheck, testRanges)
-import           Ide.Plugin.Eval.Config          (getEvalConfig, EvalConfig(..))
+import           Ide.Plugin.Eval.Config          (EvalConfig (..),
+                                                  getEvalConfig)
 import           Ide.Plugin.Eval.GHC             (addImport, addPackages,
                                                   hasPackage, showDynFlags)
 import           Ide.Plugin.Eval.Parse.Comments  (commentsToSections)
@@ -184,13 +184,13 @@ codeLens st plId CodeLensParams{_textDocument} =
 evalCommandName :: CommandId
 evalCommandName = "evalCommand"
 
-evalCommand :: PluginId -> PluginCommand IdeState
-evalCommand plId = PluginCommand evalCommandName "evaluate" (runEvalCmd plId)
+evalCommand :: PluginCommand IdeState
+evalCommand = PluginCommand evalCommandName "evaluate" runEvalCmd
 
 type EvalId = Int
 
-runEvalCmd :: PluginId -> CommandFunction IdeState EvalParams
-runEvalCmd plId st EvalParams{..} =
+runEvalCmd :: CommandFunction IdeState EvalParams
+runEvalCmd st plId EvalParams{..} =
     let dbg = logWith st
         perf = timed dbg
         cmd :: ExceptT String (LspM Config) WorkspaceEdit

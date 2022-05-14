@@ -201,7 +201,7 @@ extendImportCommand =
   PluginCommand (CommandId extendImportCommandId) "additional edits for a completion" extendImportHandler
 
 extendImportHandler :: CommandFunction IdeState ExtendImport
-extendImportHandler ideState edit@ExtendImport {..} = do
+extendImportHandler ideState _ edit@ExtendImport {..} = do
   res <- liftIO $ runMaybeT $ extendImportHandler' ideState edit
   whenJust res $ \(nfp, wedit@WorkspaceEdit {_changes}) -> do
     let (_, List (head -> TextEdit {_range})) = fromJust $ _changes >>= listToMaybe . toList

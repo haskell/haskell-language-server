@@ -22,8 +22,8 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
 import           Data.Functor
-import qualified Data.HashMap.Strict        as Map
 import           Data.Hashable
+import qualified Data.HashMap.Strict        as Map
 import qualified Data.Text                  as T
 import           Data.Typeable
 import           Development.IDE            as D
@@ -161,7 +161,7 @@ data AddTodoParams = AddTodoParams
   deriving (Show, Eq, Generic, ToJSON, FromJSON)
 
 addTodoCmd :: CommandFunction IdeState AddTodoParams
-addTodoCmd _ide (AddTodoParams uri todoText) = do
+addTodoCmd _ide _plId (AddTodoParams uri todoText) = do
   let
     pos = Position 3 0
     textEdits = List

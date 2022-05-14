@@ -86,7 +86,7 @@ refineImportCommand =
 
 -- | The actual command handler
 runRefineImportCommand :: CommandFunction IdeState RefineImportCommandParams
-runRefineImportCommand _state (RefineImportCommandParams edit) = do
+runRefineImportCommand _state _ (RefineImportCommandParams edit) = do
   -- This command simply triggers a workspace edit!
   _ <- sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
   return (Right Null)
