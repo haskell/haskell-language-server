@@ -10,7 +10,7 @@ module Wingman.AbstractLSP (installInteractions) where
 import           Control.Monad (void)
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans (lift)
-import           Control.Monad.Trans.Maybe (MaybeT, mapMaybeT, exceptToMaybeT)
+import           Control.Monad.Trans.Maybe (MaybeT, mapMaybeT)
 import qualified Data.Aeson as A
 import           Data.Coerce
 import           Data.Foldable (traverse_)
@@ -31,7 +31,6 @@ import           Wingman.EmptyCase (fromMaybeT)
 import           Wingman.LanguageServer (getTacticConfig, getIdeDynflags, mkWorkspaceEdits, runStaleIde, showLspMessage, mkShowMessageParams)
 import           Wingman.StaticPlugin (enableQuasiQuotes)
 import           Wingman.Types
-import Ide.PluginUtils (getNormalizedFilePath)
 
 
 ------------------------------------------------------------------------------
