@@ -61,12 +61,10 @@ toGADTCommand state ToGADTParams{..} = response $ do
         ("Expect 1 decl, but got " <> show (Prelude.length decls))
         (if Prelude.length decls == 1 then Just $ head decls else Nothing)
     deps <- liftIO $ runAction "GADT.GhcSessionDeps" state $ use GhcSessionDeps nfp
-    (hsc_dflags . hscEnv -> df) <- ExceptT
-        $ pure
+    (hsc_dflags . hscEnv -> df) <- liftEither
         $ maybeToEither "Get GhcSessionDeps failed" deps
     txt <- ExceptT $ pure $ T.pack <$> (prettyGADTDecl df . h98ToGADTDecl) decl
-    range <- ExceptT
-        $ pure
+    range <- liftEither
         $ maybeToEither "Unable to get data decl range"
         $ srcSpanToRange $ locA ann
     pragma <- getNextPragma state nfp
@@ -87,7 +85,7 @@ toGADTCommand state ToGADTParams{..} = response $ do
 
 codeActionHandler :: PluginMethodHandler IdeState TextDocumentCodeAction
 codeActionHandler state plId@(PluginId txt) (CodeActionParams _ _ doc range _) = response $ do
-    nfp <- getNormalizedFilePath plId doc
+    nfp <- getNormalizedFilePath plId (doc ^. L.uri)
     (inRangeH98Decls, _) <- getInRangeH98DeclsAndExts state range nfp
     let actions = map (mkAction . printOutputable . tcdLName . unLoc) inRangeH98Decls
     pure $ List actions

@@ -40,7 +40,7 @@ module Test.Hls.Util
     , waitForDiagnosticsFromSourceWithTimeout
     , withCurrentDirectoryInTmp
     , withCurrentDirectoryInTmp'
-    , withTempDir
+    , withCanonicalTempDir
   )
 where
 
@@ -389,7 +389,7 @@ getCompletionByLabel desiredLabel compls =
 
 -- ---------------------------------------------------------------------
 -- Run with a canonicalized temp dir
-withTempDir :: (FilePath -> IO a) -> IO a
-withTempDir f = System.IO.Extra.withTempDir $ \dir -> do
+withCanonicalTempDir :: (FilePath -> IO a) -> IO a
+withCanonicalTempDir f = System.IO.Extra.withTempDir $ \dir -> do
   dir' <- canonicalizePath dir
   f dir'

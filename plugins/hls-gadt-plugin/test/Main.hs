@@ -47,7 +47,7 @@ tests = testGroup "GADT"
 
 gadtPragmaTest :: TestName -> Bool -> TestTree
 gadtPragmaTest title hasGADT = testCase title
-    $ withTempDir
+    $ withCanonicalTempDir
     $ \dir -> runSessionWithServer gadtPlugin dir $ do
         doc <- createDoc "A.hs" "haskell" (T.unlines ["module A where", "data Foo = Bar"])
         _ <- waitForProgressDone
