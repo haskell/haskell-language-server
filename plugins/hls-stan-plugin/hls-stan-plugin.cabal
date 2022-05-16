@@ -1,20 +1,20 @@
 cabal-version: 2.4
 name:          hls-stan-plugin
-version:       1.0.4.0
-synopsis:      Hlint integration plugin with Haskell Language Server
+version:       1.0.0.0
+synopsis:      Stan integration plugin with Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
 
 license:       Apache-2.0
 license-file:  LICENSE
 author:        The Haskell IDE Team
-maintainer:    atreyu.bbb@gmail.com
+maintainer:    uhbif19@gmail.com
 copyright:     The Haskell IDE Team
 category:      Development
 build-type:    Simple
 extra-source-files:
   LICENSE
-  test/testdata/**/*.yaml
+  test/testdata/**/*
 
 flag pedantic
   description: Enable -Werror

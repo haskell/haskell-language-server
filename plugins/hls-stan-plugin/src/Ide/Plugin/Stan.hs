@@ -9,7 +9,7 @@ import           Data.Foldable                  (toList)
 import qualified Data.HashMap.Strict            as HM
 import           Data.Hashable                  (Hashable)
 import qualified Data.Map                       as Map
-import           Data.Maybe                     (fromJust)
+import           Data.Maybe                     (fromJust, mapMaybe)
 import qualified Data.Text                      as T
 import           Data.Typeable                  (Typeable, cast)
 import           Development.IDE                (Action, FileDiagnostic,
@@ -80,32 +80,33 @@ rules recorder = do
     void $ uses GetStanDiagnostics $ HM.keys files
   where
     analysisToDiagnostics :: NormalizedFilePath -> Analysis -> [FileDiagnostic]
-    analysisToDiagnostics file = map (observationToDianostic file) . toList . analysisObservations
-    observationToDianostic :: NormalizedFilePath -> Observation -> FileDiagnostic
+    analysisToDiagnostics file = mapMaybe (observationToDianostic file) . toList . analysisObservations
+    observationToDianostic :: NormalizedFilePath -> Observation -> Maybe FileDiagnostic
     observationToDianostic file (Observation {observationSrcSpan, observationInspectionId}) =
-      ( file,
-        ShowDiag,
-        LSP.Diagnostic
-          { _range = realSrcSpanToRange $ observationSrcSpan,
-            _severity = Just LSP.DsHint,
-            _code = Just (LSP.InR $ unId (inspectionId inspection)),
-            _source = Just "stan",
-            _message = message,
-            _relatedInformation = Nothing,
-            _tags = Nothing
-          }
-      )
-      where
-        inspection = fromJust $ HM.lookup observationInspectionId inspectionsMap
-        -- Lookin similar to Stan CLI output
-        message :: T.Text
-        message =
-          T.unlines $
-            [ " ✲ Name:        " <> inspectionName inspection,
-              " ✲ Description: " <> inspectionDescription inspection,
-              "Possible solutions:"
-            ]
-              ++ map ("  - " <>) (inspectionSolution inspection)
+      do
+        inspection <- HM.lookup observationInspectionId inspectionsMap
+        let
+          -- Looking similar to Stan CLI output
+          message :: T.Text
+          message =
+            T.unlines $
+              [ " ✲ Name:        " <> inspectionName inspection,
+                " ✲ Description: " <> inspectionDescription inspection,
+                "Possible solutions:"
+              ]
+                ++ map ("  - " <>) (inspectionSolution inspection)
+        return ( file,
+          ShowDiag,
+          LSP.Diagnostic
+            { _range = realSrcSpanToRange $ observationSrcSpan,
+              _severity = Just LSP.DsHint,
+              _code = Just (LSP.InR $ unId (inspectionId inspection)),
+              _source = Just "stan",
+              _message = message,
+              _relatedInformation = Nothing,
+              _tags = Nothing
+            }
+          )
 
 getHieFile :: NormalizedFilePath -> Action (Maybe HieFile)
 getHieFile nfp = runMaybeT $ do
