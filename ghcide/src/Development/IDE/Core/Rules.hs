@@ -55,6 +55,7 @@ module Development.IDE.Core.Rules(
     getParsedModuleDefinition,
     typeCheckRuleDefinition,
     getRebuildCount,
+    getSourceFileSource,
     GhcSessionDepsConfig(..),
     Log(..),
     DisplayTHWarning(..),

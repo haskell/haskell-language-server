@@ -44,6 +44,7 @@ Sometimes a plugin will be supported in the prebuilt binaries but not in a HLS b
 | `hls-fourmolu-plugin`               |                          |
 | `hls-haddock-comments-plugin`       | 9.2                      |
 | `hls-hlint-plugin`                  |                          |
+| `hls-stan-plugin`                   | 9.0, 9.2                 |
 | `hls-module-name-plugin`            |                          |
 | `hls-ormolu-plugin`                 |                          |
 | `hls-pragmas-plugin`                |                          |

@@ -59,6 +59,11 @@ import qualified Ide.Plugin.Tactic                 as Tactic
 import qualified Ide.Plugin.Hlint                  as Hlint
 #endif
 
+#if stan
+import qualified Ide.Plugin.Stan                   as Stan
+#endif
+
+
 #if moduleName
 import qualified Ide.Plugin.ModuleName             as ModuleName
 #endif
@@ -178,6 +183,9 @@ idePlugins recorder includeExamples = pluginDescToIdePlugins allPlugins
 #endif
 #if hlint
       Hlint.descriptor pluginRecorder "hlint" :
+#endif
+#if stan
+      Stan.descriptor pluginRecorder "stan" :
 #endif
 #if splice
       Splice.descriptor "splice" :

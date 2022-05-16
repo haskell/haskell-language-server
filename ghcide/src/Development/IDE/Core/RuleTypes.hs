@@ -188,7 +188,7 @@ instance Show HiFileResult where
 
 -- | Save the uncompressed AST here, we compress it just before writing to disk
 data HieAstResult
-  = forall a. HAR
+  = forall a . (Typeable a) =>  HAR
   { hieModule :: Module
   , hieAst    :: !(HieASTs a)
   , refMap    :: RefMap a
