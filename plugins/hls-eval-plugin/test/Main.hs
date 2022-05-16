@@ -68,6 +68,7 @@ tests =
   , goldenWithEval "Refresh an evaluation" "T5" "hs"
   , goldenWithEval "Refresh an evaluation w/ lets" "T6" "hs"
   , goldenWithEval "Refresh a multiline evaluation" "T7" "hs"
+  , goldenWithEval "Evaluate a multi-line show result" "TMultiResult" "hs" -- Do not escape from comments!
   , testCase "Semantic and Lexical errors are reported" $ do
       evalInFile "T8.hs" "-- >>> noFunctionWithThisName" "-- Variable not in scope: noFunctionWithThisName"
       evalInFile "T8.hs" "-- >>> res = \"a\" + \"bc\"" $
