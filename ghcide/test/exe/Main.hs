@@ -4348,6 +4348,7 @@ findDefinitionAndHoverTests = let
   imported = Position 56 13 ; importedSig = getDocUri "Foo.hs" >>= \foo -> return [ExpectHoverText ["foo", "Foo", "Haddock"], mkL foo 5 0 5 3]
   reexported = Position 55 14 ; reexportedSig = getDocUri "Bar.hs" >>= \bar -> return [ExpectHoverText ["Bar", "Bar", "Haddock"], mkL bar 3 0 3 14]
   thLocL57 = Position 59 10 ; thLoc = [ExpectHoverText ["Identity"]]
+  doc36 = Position 36 20; multiDoc = [ExpectHoverText ["\n\n[Documentation](file:///"]]
   in
   mkFindTests
   --      def    hover  look       expect
@@ -4410,6 +4411,7 @@ findDefinitionAndHoverTests = let
         test  no     broken   thLocL57   thLoc         "TH Splice Hover"
        | otherwise ->
         test  no     yes       thLocL57   thLoc         "TH Splice Hover"
+  , test  yes    yes    doc36      multiDoc      "two newlines before document"
   ]
   where yes, broken :: (TestTree -> Maybe TestTree)
         yes    = Just -- test should run and pass
