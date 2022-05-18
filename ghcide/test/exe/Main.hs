@@ -4254,6 +4254,7 @@ findDefinitionAndHoverTests = let
             ExpectRange  expectedRange -> checkHoverRange expectedRange rangeInHover msg
             ExpectHoverRange expectedRange -> checkHoverRange expectedRange rangeInHover msg
             ExpectHoverText snippets -> liftIO $ traverse_ (`assertFoundIn` msg) snippets
+            ExpectHoverTextRegex re -> liftIO $ assertBool ("Regex not found in " <> T.unpack msg) (msg =~ re :: Bool)
             ExpectNoHover -> liftIO $ assertFailure $ "Expected no hover but got " <> show hover
             _ -> pure () -- all other expectations not relevant to hover
         _ -> liftIO $ assertFailure $ "test not expecting this kind of hover info" <> show hover
@@ -4344,11 +4345,10 @@ findDefinitionAndHoverTests = let
   innL48 = Position 52  5  ;  innSig = [ExpectHoverText ["inner", "Char"], mkR 49 2 49 7]
   holeL60 = Position 62 7  ;  hleInfo = [ExpectHoverText ["_ ::"]]
   holeL65 = Position 65 8  ;  hleInfo2 = [ExpectHoverText ["_ :: a -> Maybe a"]]
-  cccL17 = Position 17 16  ;  docLink = [ExpectHoverText ["[Documentation](file:///"]]
+  cccL17 = Position 17 16  ;  docLink = [ExpectHoverTextRegex "\\*Defined in 'GHC.Types'\\* \\*\\(ghc-prim-[0-9.]+\\)\\*\n\n"]
   imported = Position 56 13 ; importedSig = getDocUri "Foo.hs" >>= \foo -> return [ExpectHoverText ["foo", "Foo", "Haddock"], mkL foo 5 0 5 3]
   reexported = Position 55 14 ; reexportedSig = getDocUri "Bar.hs" >>= \bar -> return [ExpectHoverText ["Bar", "Bar", "Haddock"], mkL bar 3 0 3 14]
   thLocL57 = Position 59 10 ; thLoc = [ExpectHoverText ["Identity"]]
-  doc36 = Position 36 20; multiDoc = [ExpectHoverText ["\n\n[Documentation](file:///"]]
   in
   mkFindTests
   --      def    hover  look       expect
@@ -4400,7 +4400,7 @@ findDefinitionAndHoverTests = let
   , test  broken broken innL48     innSig        "inner     signature              #767"
   , test  no     yes    holeL60    hleInfo       "hole without internal name       #831"
   , test  no     yes    holeL65    hleInfo2      "hole with variable"
-  , test  no     skip   cccL17     docLink       "Haddock html links"
+  , test  no     yes    cccL17     docLink       "Haddock html links"
   , testM yes    yes    imported   importedSig   "Imported symbol"
   , testM yes    yes    reexported reexportedSig "Imported symbol (reexported)"
   , if | ghcVersion == GHC90 && isWindows ->
@@ -4411,7 +4411,6 @@ findDefinitionAndHoverTests = let
         test  no     broken   thLocL57   thLoc         "TH Splice Hover"
        | otherwise ->
         test  no     yes       thLocL57   thLoc         "TH Splice Hover"
-  , test  yes    yes    doc36      multiDoc      "two newlines before document"
   ]
   where yes, broken :: (TestTree -> Maybe TestTree)
         yes    = Just -- test should run and pass
@@ -5745,6 +5744,7 @@ data Expect
 --  | ExpectDefRange Range -- Only gotoDef should report this range
   | ExpectHoverRange Range -- Only hover should report this range
   | ExpectHoverText [T.Text] -- the hover message must contain these snippets
+  | ExpectHoverTextRegex T.Text -- the hover message must match this pattern
   | ExpectExternFail -- definition lookup in other file expected to fail
   | ExpectNoDefinitions
   | ExpectNoHover
