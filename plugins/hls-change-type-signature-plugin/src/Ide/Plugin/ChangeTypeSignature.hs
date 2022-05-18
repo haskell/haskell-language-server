@@ -35,7 +35,7 @@ descriptor plId = (defaultPluginDescriptor plId) { pluginHandlers = mkPluginHand
 
 codeActionHandler :: PluginMethodHandler IdeState 'TextDocumentCodeAction
 codeActionHandler ideState plId CodeActionParams {_textDocument = TextDocumentIdentifier uri, _context = CodeActionContext (List diags) _} = response $ do
-      nfp <- getNormalizedFilePath plId (TextDocumentIdentifier uri)
+      nfp <- getNormalizedFilePath plId uri
       decls <- getDecls ideState nfp
       let actions = mapMaybe (generateAction uri decls) diags
       pure $ List actions
