@@ -43,10 +43,12 @@ import           Ide.Types                      (PluginDescriptor (..),
                                                  defaultPluginDescriptor)
 import qualified Language.LSP.Types             as LSP
 import           Stan.Analysis                  (Analysis (..), runAnalysis)
+import           Stan.Category                  (prettyShowCategory)
 import           Stan.Core.Id                   (Id (..))
 import           Stan.Inspection                (Inspection (..))
 import           Stan.Inspection.All            (inspectionsIds, inspectionsMap)
 import           Stan.Observation               (Observation (..))
+import           Stan.Severity                  (prettyShowSeverity)
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId) {pluginRules = rules recorder}
@@ -70,10 +72,14 @@ rules :: Recorder (WithPriority Log) -> Rules ()
 rules recorder = do
   define (cmapWithPrio LogShake recorder) $
     \GetStanDiagnostics file -> do
-      hie <- fromJust <$> getHieFile file
-      let enabledInspections = HM.fromList [(LSP.fromNormalizedFilePath file, inspectionsIds)]
-      let analysis = runAnalysis Map.empty enabledInspections [] [hie]
-      return (analysisToDiagnostics file analysis, Just ())
+      maybeHie <- getHieFile file
+      case maybeHie of
+        Nothing -> return ([], Nothing)
+        Just hie -> do
+          let enabledInspections = HM.fromList [(LSP.fromNormalizedFilePath file, inspectionsIds)]
+          -- This should use Cabal config for extensions and Stan config for inspection preferences is the future
+          let analysis = runAnalysis Map.empty enabledInspections [] [hie]
+          return (analysisToDiagnostics file analysis, Just ())
 
   action $ do
     files <- getFilesOfInterestUntracked
@@ -87,11 +93,16 @@ rules recorder = do
         inspection <- HM.lookup observationInspectionId inspectionsMap
         let
           -- Looking similar to Stan CLI output
+          -- We do not use `prettyShowInspection` cuz Id and Categories is redundant here
           message :: T.Text
           message =
             T.unlines $
               [ " ✲ Name:        " <> inspectionName inspection,
                 " ✲ Description: " <> inspectionDescription inspection,
+                " ✲ Severity:    " <> (prettyShowSeverity $
+                  inspectionSeverity inspection),
+                " ✲ Category:    " <> T.intercalate " "
+                  (map prettyShowCategory $ toList $ inspectionCategory inspection),
                 "Possible solutions:"
               ]
                 ++ map ("  - " <>) (inspectionSolution inspection)
