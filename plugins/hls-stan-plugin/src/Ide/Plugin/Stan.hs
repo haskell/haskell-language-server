@@ -93,7 +93,7 @@ rules recorder = do
         inspection <- HM.lookup observationInspectionId inspectionsMap
         let
           -- Looking similar to Stan CLI output
-          -- We do not use `prettyShowInspection` cuz Id and Categories is redundant here
+          -- We do not use `prettyShowInspection` cuz Id is redundant here
           message :: T.Text
           message =
             T.unlines $
