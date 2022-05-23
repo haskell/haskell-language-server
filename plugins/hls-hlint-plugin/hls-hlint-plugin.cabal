@@ -25,11 +25,6 @@ flag pedantic
   default:     False
   manual:      True
 
-flag ghc-lib
-   default:     True
-   manual:      True
-   description: Use ghc-lib types (requires hlint to be built with ghc-lib)
-
 library
   exposed-modules:    Ide.Plugin.Hlint
   hs-source-dirs:     src
@@ -65,7 +60,6 @@ library
     , ghc-lib-parser
     , ghc-lib-parser-ex
 
-  cpp-options:   -DHLINT_ON_GHC_LIB
   ghc-options:
     -Wall -Wredundant-constraints -Wno-name-shadowing
     -Wno-unticked-promoted-constructors

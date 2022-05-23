@@ -4,27 +4,21 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE LambdaCase            #-}
+{-# LANGUAGE MultiWayIf            #-}
+{-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedLabels      #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE PackageImports        #-}
 {-# LANGUAGE PatternSynonyms       #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE TupleSections         #-}
-{-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE ViewPatterns          #-}
-{-# LANGUAGE LambdaCase            #-}
-{-# LANGUAGE MultiWayIf            #-}
-{-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE StrictData            #-}
+{-# LANGUAGE TypeFamilies          #-}
 
 {-# OPTIONS_GHC -Wno-orphans   #-}
 
-#ifdef HLINT_ON_GHC_LIB
 #define MIN_GHC_API_VERSION(x,y,z) MIN_VERSION_ghc_lib(x,y,z)
-#else
-#define MIN_GHC_API_VERSION(x,y,z) MIN_VERSION_ghc(x,y,z)
-#endif
 
 module Ide.Plugin.Hlint
   (
@@ -44,8 +38,8 @@ import           Data.Aeson.Types                                   (FromJSON (.
                                                                      Value (..))
 import qualified Data.ByteString                                    as BS
 import           Data.Default
-import qualified Data.HashMap.Strict                                as Map
 import           Data.Hashable
+import qualified Data.HashMap.Strict                                as Map
 import           Data.Maybe
 import qualified Data.Text                                          as T
 import qualified Data.Text.Encoding                                 as T
@@ -59,7 +53,6 @@ import           Development.IDE.Core.Shake                         (getDiagnost
 import qualified Refact.Apply                                       as Refact
 import qualified Refact.Types                                       as Refact
 
-#ifdef HLINT_ON_GHC_LIB
 import           Development.IDE.GHC.Compat                         (DynFlags,
                                                                      WarningFlag (Opt_WarnUnrecognisedPragmas),
                                                                      extensionFlags,
@@ -72,10 +65,8 @@ import           "ghc-lib" GHC                                      hiding
                                                                      RealSrcSpan,
                                                                      ms_hspp_opts)
 import qualified "ghc-lib" GHC
-#if MIN_GHC_API_VERSION(9,0,0)
-import           "ghc-lib-parser" GHC.Types.SrcLoc                  (BufSpan)
-#endif
 import           "ghc-lib-parser" GHC.LanguageExtensions            (Extension)
+import           "ghc-lib-parser" GHC.Types.SrcLoc                  (BufSpan)
 import           Language.Haskell.GhclibParserEx.GHC.Driver.Session as GhclibParserEx (readExtension)
 import           System.FilePath                                    (takeFileName)
 import           System.IO                                          (IOMode (WriteMode),
@@ -87,20 +78,6 @@ import           System.IO                                          (IOMode (Wri
                                                                      utf8,
                                                                      withFile)
 import           System.IO.Temp
-#else
-import           Development.IDE.GHC.Compat                         hiding
-                                                                    (setEnv, (<+>))
-import           GHC.Generics                                       (Associativity (LeftAssociative, NotAssociative, RightAssociative))
-#if MIN_GHC_API_VERSION(9,2,0)
-import           Language.Haskell.GHC.ExactPrint.ExactPrint         (deltaOptions)
-#else
-import           Language.Haskell.GHC.ExactPrint.Delta              (deltaOptions)
-#endif
-import           Language.Haskell.GHC.ExactPrint.Parsers            (postParseTransform)
-import           Language.Haskell.GHC.ExactPrint.Types              (Rigidity (..))
-import           Language.Haskell.GhclibParserEx.Fixity             as GhclibParserEx (applyFixities)
-import qualified Refact.Fixity                                      as Refact
-#endif
 
 import           Ide.Plugin.Config                                  hiding
                                                                     (Config)
@@ -130,7 +107,6 @@ import           Development.IDE.Spans.Pragmas                      (LineSplitTe
 import           GHC.Generics                                       (Generic)
 import           System.Environment                                 (setEnv,
                                                                      unsetEnv)
-import           Text.Regex.TDFA.Text                               ()
 -- ---------------------------------------------------------------------
 
 data Log
@@ -149,7 +125,6 @@ instance Pretty Log where
     LogUsingExtensions fp exts -> "Using extensions for " <+> viaShow fp <> ":" <+> pretty exts
     LogGetIdeas fp -> "Getting hlint ideas for " <+> viaShow fp
 
-#ifdef HLINT_ON_GHC_LIB
 -- Reimplementing this, since the one in Development.IDE.GHC.Compat isn't for ghc-lib
 #if !MIN_GHC_API_VERSION(9,0,0)
 type BufSpan = ()
@@ -161,7 +136,6 @@ pattern RealSrcSpan x y = GHC.RealSrcSpan x y
 pattern RealSrcSpan x y <- ((,Nothing) -> (GHC.RealSrcSpan x, y))
 #endif
 {-# COMPLETE RealSrcSpan, UnhelpfulSpan #-}
-#endif
 
 descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId = (defaultPluginDescriptor plId)
@@ -278,28 +252,6 @@ getIdeas recorder nfp = do
   fmap applyHints' (moduleEx flags)
 
   where moduleEx :: ParseFlags -> Action (Maybe (Either ParseError ModuleEx))
-#ifndef HLINT_ON_GHC_LIB
-        moduleEx _flags = do
-          mbpm <- getParsedModuleWithComments nfp
-          return $ createModule <$> mbpm
-          where
-            createModule pm = Right (createModuleEx anns (applyParseFlagsFixities modu))
-                  where anns = pm_annotations pm
-                        modu = pm_parsed_source pm
-
-            applyParseFlagsFixities :: ParsedSource -> ParsedSource
-            applyParseFlagsFixities modul = GhclibParserEx.applyFixities (parseFlagsToFixities _flags) modul
-
-            parseFlagsToFixities :: ParseFlags -> [(String, Fixity)]
-            parseFlagsToFixities = map toFixity . Hlint.fixities
-
-            toFixity :: FixityInfo -> (String, Fixity)
-            toFixity (name, dir, i) = (name, Fixity NoSourceText i $ f dir)
-                where
-                    f LeftAssociative  = InfixL
-                    f RightAssociative = InfixR
-                    f NotAssociative   = InfixN
-#else
         moduleEx flags = do
           mbpm <- getParsedModuleWithComments nfp
           -- If ghc was not able to parse the module, we disable hlint diagnostics
@@ -322,11 +274,6 @@ getIdeas recorder nfp = do
 -- and the ModSummary dynflags. However using the parsedFlags extensions
 -- can sometimes interfere with the hlint parsing of the file.
 -- See https://github.com/haskell/haskell-language-server/issues/1279
---
--- Note: this is used when HLINT_ON_GHC_LIB is defined. We seem to need
--- these extensions to construct dynflags to parse the file again. Therefore
--- using hlint default extensions doesn't seem to be a problem when
--- HLINT_ON_GHC_LIB is not defined because we don't parse the file again.
 getExtensions :: NormalizedFilePath -> Action [Extension]
 getExtensions nfp = do
     dflags <- getFlags
@@ -337,7 +284,6 @@ getExtensions nfp = do
         getFlags = do
           modsum <- use_ GetModSummary nfp
           return $ ms_hspp_opts $ msrModSummary modsum
-#endif
 
 -- ---------------------------------------------------------------------
 
@@ -369,7 +315,7 @@ getHlintConfig pId =
     <$> usePropertyAction #flags pId properties
 
 runHlintAction
- :: (Eq k, Hashable k, Show k, Show (RuleResult k), Typeable k, Typeable (RuleResult k), NFData k, NFData (RuleResult k))
+ :: (Hashable k, Show k, Show (RuleResult k), Typeable k, Typeable (RuleResult k), NFData k, NFData (RuleResult k))
  => IdeState
  -> NormalizedFilePath -> String -> k -> IO (Maybe (RuleResult k))
 runHlintAction ideState normalizedFilePath desc rule = runAction desc ideState $ use rule normalizedFilePath
@@ -564,7 +510,6 @@ applyHint recorder ide nfp mhint =
     -- But "Idea"s returned by HLint point to starting position of the expressions
     -- that contain refactorings, so they are often outside the refactorings' boundaries.
     let position = Nothing
-#ifdef HLINT_ON_GHC_LIB
     let writeFileUTF8NoNewLineTranslation file txt =
             withFile file WriteMode $ \h -> do
                 hSetEncoding h utf8
@@ -580,22 +525,6 @@ applyHint recorder ide nfp mhint =
             let refactExts = map show $ enabled ++ disabled
             (Right <$> withRuntimeLibdir (Refact.applyRefactorings position commands temp refactExts))
                 `catches` errorHandlers
-#else
-    mbParsedModule <- liftIO $ runAction' $ getParsedModuleWithComments nfp
-    res <-
-        case mbParsedModule of
-            Nothing -> throwE "Apply hint: error parsing the module"
-            Just pm -> do
-                let anns = pm_annotations pm
-                let modu = pm_parsed_source pm
-                -- apply-refact uses RigidLayout
-                let rigidLayout = deltaOptions RigidLayout
-                (anns', modu') <-
-                    ExceptT $ mapM (uncurry Refact.applyFixities)
-                            $ postParseTransform (Right (anns, [], dflags, modu)) rigidLayout
-                liftIO $ (Right <$> withRuntimeLibdir (Refact.applyRefactorings' position commands anns' modu'))
-                            `catches` errorHandlers
-#endif
     case res of
       Right appliedFile -> do
         let uri = fromNormalizedUri (filePathToUri' nfp)
