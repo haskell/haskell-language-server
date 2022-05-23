@@ -10,6 +10,7 @@ module Development.IDE.Plugin.HLS
     ) where
 
 import           Control.Exception            (SomeException)
+import           Control.Lens                 ((^.))
 import           Control.Monad
 import qualified Data.Aeson                   as J
 import           Data.Bifunctor
@@ -21,6 +22,7 @@ import qualified Data.List                    as List
 import           Data.List.NonEmpty           (NonEmpty, nonEmpty, toList)
 import qualified Data.Map                     as Map
 import           Data.String
+import           Data.Text                    (Text)
 import qualified Data.Text                    as T
 import           Development.IDE.Core.Shake   hiding (Log)
 import           Development.IDE.Core.Tracing
@@ -33,9 +35,10 @@ import           Ide.Plugin.Config
 import           Ide.PluginUtils              (getClientConfig)
 import           Ide.Types                    as HLS
 import qualified Language.LSP.Server          as LSP
-import           Language.LSP.VFS
 import           Language.LSP.Types
 import qualified Language.LSP.Types           as J
+import qualified Language.LSP.Types.Lens      as LSP
+import           Language.LSP.VFS
 import           Text.Regex.TDFA.Text         ()
 import           UnliftIO                     (MonadUnliftIO)
 import           UnliftIO.Async               (forConcurrently)
@@ -46,19 +49,22 @@ import           UnliftIO.Exception           (catchAny)
 
 data Log
   = LogNoEnabledPlugins
+  | LogPluginError ResponseError
   deriving Show
 
 instance Pretty Log where
   pretty = \case
     LogNoEnabledPlugins ->
       "extensibleNotificationPlugins no enabled plugins"
+    LogPluginError err -> pretty (err ^. LSP.message)
+
 
 -- | Map a set of plugins to the underlying ghcide engine.
 asGhcIdePlugin :: Recorder (WithPriority Log) -> IdePlugins IdeState -> Plugin Config
 asGhcIdePlugin recorder (IdePlugins ls) =
     mkPlugin rulesPlugins HLS.pluginRules <>
     mkPlugin executeCommandPlugins HLS.pluginCommands <>
-    mkPlugin extensiblePlugins HLS.pluginHandlers <>
+    mkPlugin (extensiblePlugins recorder) HLS.pluginHandlers <>
     mkPlugin (extensibleNotificationPlugins recorder) HLS.pluginNotificationHandlers <>
     mkPlugin dynFlagsPlugins HLS.pluginModifyDynflags
     where
@@ -153,8 +159,8 @@ executeCommandHandlers ecs = requestHandler SWorkspaceExecuteCommand execCmd
 
 -- ---------------------------------------------------------------------
 
-extensiblePlugins :: [(PluginId, PluginHandlers IdeState)] -> Plugin Config
-extensiblePlugins xs = mempty { P.pluginHandlers = handlers }
+extensiblePlugins :: Recorder (WithPriority Log) -> [(PluginId, PluginHandlers IdeState)] -> Plugin Config
+extensiblePlugins recorder xs = mempty { P.pluginHandlers = handlers }
   where
     IdeHandlers handlers' = foldMap bakePluginId xs
     bakePluginId :: (PluginId, PluginHandlers IdeState) -> IdeHandlers
@@ -174,11 +180,13 @@ extensiblePlugins xs = mempty { P.pluginHandlers = handlers }
             let msg e pid = "Exception in plugin " <> T.pack (show pid) <> "while processing " <> T.pack (show m) <> ": " <> T.pack (show e)
             es <- runConcurrently msg (show m) fs ide params
             let (errs,succs) = partitionEithers $ toList es
+            unless (null errs) $ forM_ errs $ \err -> logWith recorder Warning $ LogPluginError err
             case nonEmpty succs of
               Nothing -> pure $ Left $ combineErrors errs
               Just xs -> do
                 caps <- LSP.getClientCapabilities
                 pure $ Right $ combineResponses m config caps params xs
+
 -- ---------------------------------------------------------------------
 
 extensibleNotificationPlugins :: Recorder (WithPriority Log) -> [(PluginId, PluginNotificationHandlers IdeState)] -> Plugin Config
