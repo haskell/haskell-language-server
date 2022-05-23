@@ -1,16 +1,21 @@
 {-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE OverloadedLists   #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeOperators     #-}
-
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
+
 module Main
   ( main
   ) where
 
-import           Control.Lens            (Prism', prism', (^..), (^?))
+import           Control.Lens            (Prism', prism', (^.), (^..), (^?))
 import           Control.Monad           (void)
+import           Data.Aeson              (toJSON, (.=))
+import           Data.Maybe              (fromJust, mapMaybe)
 import qualified Ide.Plugin.Class        as Class
+import           Ide.Plugin.Config       (PluginConfig (plcConfig))
+import qualified Ide.Plugin.Config       as Plugin
 import qualified Language.LSP.Types.Lens as J
 import           System.FilePath
 import           Test.Hls
@@ -19,11 +24,16 @@ main :: IO ()
 main = defaultTestRunner tests
 
 classPlugin :: PluginDescriptor IdeState
-classPlugin = Class.descriptor "class"
+classPlugin = Class.descriptor mempty "class"
 
 tests :: TestTree
 tests = testGroup
-  "class"
+    "class"
+    [codeActionTests, codeLensTests]
+
+codeActionTests :: TestTree
+codeActionTests = testGroup
+  "code actions"
   [ testCase "Produces addMinimalMethodPlaceholders code actions for one instance" $ do
       runSessionWithServer classPlugin testDataDir $ do
         doc <- openDoc "T1.hs" "haskell"
@@ -32,28 +42,75 @@ tests = testGroup
         liftIO $ map (^? _CACodeAction . J.title) caResults
           @?=
           [ Just "Add placeholders for '=='"
+          , Just "Add placeholders for '==' with signature(s)"
           , Just "Add placeholders for '/='"
+          , Just "Add placeholders for '/=' with signature(s)"
           ]
   , goldenWithClass "Creates a placeholder for '=='" "T1" "eq" $ \(eqAction:_) -> do
       executeCodeAction eqAction
-  , goldenWithClass "Creates a placeholder for '/='" "T1" "ne" $ \(_:neAction:_) -> do
+  , goldenWithClass "Creates a placeholder for '/='" "T1" "ne" $ \(_:_:neAction:_) -> do
       executeCodeAction neAction
-  , goldenWithClass "Creates a placeholder for 'fmap'" "T2" "fmap" $ \(_:_:fmapAction:_) -> do
+  , goldenWithClass "Creates a placeholder for 'fmap'" "T2" "fmap" $ \(_:_:_:_:fmapAction:_) -> do
       executeCodeAction fmapAction
   , goldenWithClass "Creates a placeholder for multiple methods 1" "T3" "1" $ \(mmAction:_) -> do
       executeCodeAction mmAction
-  , goldenWithClass "Creates a placeholder for multiple methods 2" "T3" "2" $ \(_:mmAction:_) -> do
+  , goldenWithClass "Creates a placeholder for multiple methods 2" "T3" "2" $ \(_:_:mmAction:_) -> do
       executeCodeAction mmAction
   , goldenWithClass "Creates a placeholder for a method starting with '_'" "T4" "" $ \(_fAction:_) -> do
       executeCodeAction _fAction
   , goldenWithClass "Creates a placeholder for '==' with extra lines" "T5" "" $ \(eqAction:_) -> do
       executeCodeAction eqAction
+  , onlyRunForGhcVersions [GHC92] "Only ghc-9.2 enabled GHC2021 implicitly" $
+      goldenWithClass "Don't insert pragma with GHC2021" "T6" "" $ \(_:eqWithSig:_) -> do
+        executeCodeAction eqWithSig
+  , goldenWithClass "Insert pragma if not exist" "T7" "" $ \(_:eqWithSig:_) -> do
+      executeCodeAction eqWithSig
+  , goldenWithClass "Don't insert pragma if exist" "T8" "" $ \(_:eqWithSig:_) -> do
+      executeCodeAction eqWithSig
+  , goldenWithClass "Only insert pragma once" "T9" "" $ \(_:multi:_) -> do
+      executeCodeAction multi
   ]
+
+codeLensTests :: TestTree
+codeLensTests = testGroup
+    "code lens"
+    [ testCase "Has code lens" $ do
+        runSessionWithServer classPlugin testDataDir $ do
+            doc <- openDoc "T10.hs" "haskell"
+            lens <- getCodeLenses doc
+            let titles = map (^. J.title) $ mapMaybe (^. J.command) lens
+            liftIO $ titles @?=
+                [ "(==) :: B -> B -> Bool"
+                , "(==) :: A -> A -> Bool"
+                ]
+    , testCase "Should no lens if disabled" $ do
+        runSessionWithServer classPlugin testDataDir $ do
+            sendConfigurationChanged
+                $ toJSON
+                $ def { Plugin.plugins = [("class", def { plcConfig = "typelensOn" .= False })] }
+            doc <- openDoc "T10.hs" "haskell"
+            lens <- getCodeLenses doc
+            let titles = map (^. J.title) $ mapMaybe (^. J.command) lens
+            liftIO $ titles @?= []
+    , goldenCodeLens "Apply code lens" "T10" 1
+    , goldenCodeLens "Apply code lens for local class" "T11" 0
+    , goldenCodeLens "Apply code lens on the same line" "T12" 0
+    , goldenCodeLens "Don't insert pragma while existing" "T13" 0
+    , onlyRunForGhcVersions [GHC92] "Only ghc-9.2 enabled GHC2021 implicitly" $
+        goldenCodeLens "Don't insert pragma while GHC2021 enabled" "T14" 0
+    ]
 
 _CACodeAction :: Prism' (Command |? CodeAction) CodeAction
 _CACodeAction = prism' InR $ \case
   InR action -> Just action
   _          -> Nothing
+
+goldenCodeLens :: TestName -> FilePath -> Int -> TestTree
+goldenCodeLens title path idx =
+    goldenWithHaskellDoc classPlugin title testDataDir path "expected" "hs" $ \doc -> do
+        lens <- getCodeLenses doc
+        executeCommand $ fromJust $ (lens !! idx) ^. J.command
+        void $ skipManyTill anyMessage (message SWorkspaceApplyEdit)
 
 goldenWithClass :: TestName -> FilePath -> FilePath -> ([CodeAction] -> Session ()) -> TestTree
 goldenWithClass title path desc act =
