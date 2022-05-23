@@ -26,7 +26,7 @@ import           Language.Haskell.GHC.ExactPrint.Utils   (rs)
 #endif
 
 makeEditText :: Monad m => ParsedModule -> DynFlags -> AddMinimalMethodsParams -> MaybeT m (T.Text, T.Text)
-addMethodDecls :: ParsedSource -> [(LHsDecl GhcPs, LHsDecl GhcPs)] -> Range -> Bool -> TransformT Identity (Located HsModule)
+-- addMethodDecls :: ParsedSource -> [(LHsDecl GhcPs, LHsDecl GhcPs)] -> Range -> Bool -> TransformT Identity (Located HsModule)
 #if MIN_VERSION_ghc(9,2,0)
 makeEditText pm df AddMinimalMethodsParams{..} = do
     List mDecls <- MaybeT . pure $ traverse (makeMethodDecl df) methodGroup
@@ -118,5 +118,5 @@ addMethodDecls ps mDecls range withSig = do
     foldM (insertAfter d) ps (reverse decls)
 
 findInstDecl :: ParsedSource -> Range -> Transform (LHsDecl GhcPs)
-findInstDecl ps range = head . filter (inRange range . getLoc) <$> hsDecls ps
+findInstDecl ps range = head . filter (inRange range) <$> hsDecls ps
 #endif
