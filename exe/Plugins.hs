@@ -153,7 +153,7 @@ idePlugins recorder includeExamples = pluginDescToIdePlugins allPlugins
       Brittany.descriptor "brittany" :
 #endif
 #if callHierarchy
-      CallHierarchy.descriptor "callHierarchy":
+      CallHierarchy.descriptor :
 #endif
 #if class
       Class.descriptor "class" :
@@ -183,7 +183,7 @@ idePlugins recorder includeExamples = pluginDescToIdePlugins allPlugins
       Splice.descriptor "splice" :
 #endif
 #if alternateNumberFormat
-      AlternateNumberFormat.descriptor pluginRecorder "alternateNumberFormat" :
+      AlternateNumberFormat.descriptor pluginRecorder :
 #endif
 #if selectionRange
       SelectionRange.descriptor "selectionRange" :

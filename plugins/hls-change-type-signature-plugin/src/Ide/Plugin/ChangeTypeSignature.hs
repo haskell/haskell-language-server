@@ -22,7 +22,7 @@ import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Util       (printOutputable)
 import           Generics.SYB                   (extQ, something)
 import           Ide.PluginUtils                (getNormalizedFilePath,
-                                                 handleMaybeM, response)
+                                                 handleMaybeM, pluginResponse)
 import           Ide.Types                      (PluginDescriptor (..),
                                                  PluginId, PluginMethodHandler,
                                                  defaultPluginDescriptor,
@@ -34,7 +34,7 @@ descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId) { pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionHandler }
 
 codeActionHandler :: PluginMethodHandler IdeState 'TextDocumentCodeAction
-codeActionHandler ideState plId CodeActionParams {_textDocument = TextDocumentIdentifier uri, _context = CodeActionContext (List diags) _} = response $ do
+codeActionHandler ideState plId CodeActionParams {_textDocument = TextDocumentIdentifier uri, _context = CodeActionContext (List diags) _} = pluginResponse $ do
       nfp <- getNormalizedFilePath plId (TextDocumentIdentifier uri)
       decls <- getDecls ideState nfp
       let actions = mapMaybe (generateAction uri decls) diags

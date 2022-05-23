@@ -48,14 +48,13 @@ import           Development.IDE                 (GetModSummary (..),
                                                   GhcSessionIO (..), IdeState,
                                                   ModSummaryResult (..),
                                                   NeedsCompilation (NeedsCompilation),
-                                                  evalGhcEnv,
+                                                  VFSModified (..), evalGhcEnv,
                                                   hscEnvWithImportPaths,
                                                   printOutputable, runAction,
                                                   textToStringBuffer,
                                                   toNormalizedFilePath',
                                                   uriToFilePath', useNoFile_,
-                                                  useWithStale_, use_,
-                                                  VFSModified(..))
+                                                  useWithStale_, use_)
 import           Development.IDE.Core.Rules      (GhcSessionDepsConfig (..),
                                                   ghcSessionDepsDefinition)
 import           Development.IDE.GHC.Compat      hiding (typeKind, unitState)
@@ -91,7 +90,8 @@ import           Ide.Plugin.Eval.Code            (Statement, asStatements,
                                                   evalSetup, myExecStmt,
                                                   propSetup, resultRange,
                                                   testCheck, testRanges)
-import           Ide.Plugin.Eval.Config          (getEvalConfig, EvalConfig(..))
+import           Ide.Plugin.Eval.Config          (EvalConfig (..),
+                                                  getEvalConfig)
 import           Ide.Plugin.Eval.GHC             (addImport, addPackages,
                                                   hasPackage, showDynFlags)
 import           Ide.Plugin.Eval.Parse.Comments  (commentsToSections)
@@ -101,7 +101,7 @@ import           Ide.Plugin.Eval.Types
 import           Ide.Plugin.Eval.Util            (gStrictTry, isLiterate,
                                                   logWith, response', timed)
 import           Ide.PluginUtils                 (handleMaybe, handleMaybeM,
-                                                  response)
+                                                  pluginResponse)
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types              hiding
@@ -127,7 +127,7 @@ codeLens st plId CodeLensParams{_textDocument} =
     let dbg = logWith st
         perf = timed dbg
      in perf "codeLens" $
-            response $ do
+            pluginResponse $ do
                 let TextDocumentIdentifier uri = _textDocument
                 fp <- handleMaybe "uri" $ uriToFilePath' uri
                 let nfp = toNormalizedFilePath' fp

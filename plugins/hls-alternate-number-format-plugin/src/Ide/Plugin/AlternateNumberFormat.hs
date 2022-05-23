@@ -14,9 +14,8 @@ import           Development.IDE                 (GetParsedModule (GetParsedModu
                                                   GhcSession (GhcSession),
                                                   IdeState, RuleResult, Rules,
                                                   define, getFileContents,
-                                                  hscEnv, ideLogger,
-                                                  realSrcSpanToRange, runAction,
-                                                  use, useWithStale)
+                                                  hscEnv, realSrcSpanToRange,
+                                                  runAction, use, useWithStale)
 import qualified Development.IDE.Core.Shake      as Shake
 import           Development.IDE.GHC.Compat      hiding (getSrcSpan)
 import           Development.IDE.GHC.Compat.Util (toList)
@@ -32,7 +31,8 @@ import           Ide.Plugin.Conversion           (AlternateFormat,
                                                   alternateFormat)
 import           Ide.Plugin.Literals
 import           Ide.PluginUtils                 (handleMaybe, handleMaybeM,
-                                                  response)
+                                                  pluginResponse,
+                                                  throwPluginError)
 import           Ide.Types
 import           Language.LSP.Types
 import           Language.LSP.Types.Lens         (uri)
@@ -43,8 +43,11 @@ instance Pretty Log where
   pretty = \case
     LogShake log -> pretty log
 
-descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
-descriptor recorder plId = (defaultPluginDescriptor plId)
+alternateNumberFormatId :: PluginId
+alternateNumberFormatId = "alternateNumberFormat"
+
+descriptor :: Recorder (WithPriority Log) -> PluginDescriptor IdeState
+descriptor recorder = (defaultPluginDescriptor alternateNumberFormatId)
     { pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionHandler
     , pluginRules = collectLiteralsRule recorder
     }
@@ -84,7 +87,7 @@ collectLiteralsRule recorder = define (cmapWithPrio LogShake recorder) $ \Collec
         getExtensions = map GhcExtension . toList . extensionFlags . ms_hspp_opts . pm_mod_summary
 
 codeActionHandler :: PluginMethodHandler IdeState 'TextDocumentCodeAction
-codeActionHandler state _ (CodeActionParams _ _ docId currRange _) = response $ do
+codeActionHandler state _ (CodeActionParams _ _ docId currRange _) = pluginResponse $ do
     nfp <- getNormalizedFilePath docId
     CLR{..} <- requestLiterals state nfp
     pragma <- getFirstPragma state nfp
