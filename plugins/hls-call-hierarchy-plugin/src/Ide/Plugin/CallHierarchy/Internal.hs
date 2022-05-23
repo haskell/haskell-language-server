@@ -52,9 +52,7 @@ prepareCallHierarchy :: PluginMethodHandler IdeState TextDocumentPrepareCallHier
 prepareCallHierarchy state pluginId param = pluginResponse $ do
     nfp <- getNormalizedFilePath pluginId (param ^. L.textDocument)
     items <- liftIO (runAction "CallHierarchy.prepareHierarchy" state (prepareCallHierarchyItem nfp (param ^. L.position)))
-    case items of
-        Just items -> pure $ Just $ List items
-        Nothing    -> pure Nothing
+    pure (List <$> items)
 
 prepareCallHierarchyItem :: NormalizedFilePath -> Position -> Action (Maybe [CallHierarchyItem])
 prepareCallHierarchyItem = constructFromAst
@@ -203,10 +201,9 @@ incomingCalls state pluginId param = pluginResponse $ do
   calls <- liftIO $ runAction "CallHierarchy.incomingCalls" state $
       queryCalls (param ^. L.item) Q.incomingCalls mkCallHierarchyIncomingCall
         mergeIncomingCalls
-  x <- case calls of
-            Just x  -> pure x
-            Nothing -> throwPluginError callHierarchyId "Internal Error" "incomingCalls"
-  pure $ Just $ List x
+  case calls of
+    Just x  -> pure $ Just $ List x
+    Nothing -> throwPluginError callHierarchyId "Internal Error" "incomingCalls"
   where
     mkCallHierarchyIncomingCall :: Vertex -> Action (Maybe CallHierarchyIncomingCall)
     mkCallHierarchyIncomingCall = mkCallHierarchyCall CallHierarchyIncomingCall
