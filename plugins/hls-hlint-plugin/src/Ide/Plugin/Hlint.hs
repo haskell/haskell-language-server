@@ -66,7 +66,9 @@ import           "ghc-lib" GHC                                      hiding
                                                                      ms_hspp_opts)
 import qualified "ghc-lib" GHC
 import           "ghc-lib-parser" GHC.LanguageExtensions            (Extension)
+#if MIN_GHC_API_VERSION(9,0,0)
 import           "ghc-lib-parser" GHC.Types.SrcLoc                  (BufSpan)
+#else
 import           Language.Haskell.GhclibParserEx.GHC.Driver.Session as GhclibParserEx (readExtension)
 import           System.FilePath                                    (takeFileName)
 import           System.IO                                          (IOMode (WriteMode),
@@ -315,7 +317,7 @@ getHlintConfig pId =
     <$> usePropertyAction #flags pId properties
 
 runHlintAction
- :: (Hashable k, Show k, Show (RuleResult k), Typeable k, Typeable (RuleResult k), NFData k, NFData (RuleResult k))
+ :: (Eq k, Hashable k, Show k, Show (RuleResult k), Typeable k, Typeable (RuleResult k), NFData k, NFData (RuleResult k))
  => IdeState
  -> NormalizedFilePath -> String -> k -> IO (Maybe (RuleResult k))
 runHlintAction ideState normalizedFilePath desc rule = runAction desc ideState $ use rule normalizedFilePath
