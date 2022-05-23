@@ -189,7 +189,7 @@ idePlugins recorder includeExamples = pluginDescToIdePlugins allPlugins
       SelectionRange.descriptor "selectionRange" :
 #endif
 #if changeTypeSignature
-      ChangeTypeSignature.descriptor "changeTypeSignature" :
+      ChangeTypeSignature.descriptor :
 #endif
     -- The ghcide descriptors should come last so that the notification handlers
     -- (which restart the Shake build) run after everything else
