@@ -5,7 +5,6 @@
 {-# LANGUAGE ViewPatterns  #-}
 module Ide.Plugin.AlternateNumberFormat (descriptor, Log(..)) where
 
-import           Control.Lens                    ((^.))
 import           Control.Monad.Except            (ExceptT, MonadIO, liftIO)
 import qualified Data.HashMap.Strict             as HashMap
 import           Data.String                     (IsString)
@@ -32,12 +31,9 @@ import           Ide.Plugin.Conversion           (AlternateFormat,
                                                   alternateFormat)
 import           Ide.Plugin.Literals
 import           Ide.PluginUtils                 (getNormalizedFilePath,
-                                                  handleMaybe, handleMaybeM,
-                                                  pluginResponse,
-                                                  throwPluginError)
+                                                  handleMaybeM, pluginResponse)
 import           Ide.Types
 import           Language.LSP.Types
-import           Language.LSP.Types.Lens         (uri)
 
 newtype Log = LogShake Shake.Log deriving Show
 
