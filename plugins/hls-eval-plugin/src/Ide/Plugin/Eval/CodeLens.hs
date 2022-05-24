@@ -358,8 +358,9 @@ runTests EvalConfig{..} e@(_st, _) tests = do
         dbg "TEST RESULTS" rs
 
         let checkedResult = testCheck eval_cfg_diff (section, test) rs
+        let resultLines = concatMap T.lines checkedResult
 
-        let edit = asEdit (sectionFormat section) test (map pad checkedResult)
+        let edit = asEdit (sectionFormat section) test (map pad resultLines)
         dbg "TEST EDIT" edit
         return edit
 

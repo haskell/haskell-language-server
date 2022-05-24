@@ -86,7 +86,7 @@ collectLiteralsRule recorder = define (cmapWithPrio LogShake recorder) $ \Collec
 
 codeActionHandler :: PluginMethodHandler IdeState 'TextDocumentCodeAction
 codeActionHandler state _ (CodeActionParams _ _ docId currRange _) = pluginResponse $ do
-    nfp <- getNormalizedFilePath alternateNumberFormatId docId
+    nfp <- getNormalizedFilePath plId (docId ^. uri)
     CLR{..} <- requestLiterals state nfp
     pragma <- getFirstPragma state nfp
         -- remove any invalid literals (see validTarget comment)
