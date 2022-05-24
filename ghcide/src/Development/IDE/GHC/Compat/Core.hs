@@ -840,8 +840,6 @@ pattern L l a <- GHC.L (getLoc -> l) a
 type HasSrcSpan = SrcLoc.HasSrcSpan
 getLoc :: SrcLoc.HasSrcSpan a => a -> SrcLoc.SrcSpan
 getLoc = SrcLoc.getLoc
-instance HasSrcSpan SrcLoc.SrcSpan where
-    Development.IDE.GHC.Compat.Core.getLoc = id
 
 #else
 
@@ -851,8 +849,6 @@ instance HasSrcSpan Name where
     getLoc = nameSrcSpan
 instance HasSrcSpan (SrcLoc.GenLocated SrcSpan a) where
     getLoc = SrcLoc.getLoc
-instance HasSrcSpan SrcSpan where
-    getLoc = id
 
 #endif
 

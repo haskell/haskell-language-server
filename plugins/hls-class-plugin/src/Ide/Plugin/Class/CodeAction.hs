@@ -5,6 +5,7 @@
 
 module Ide.Plugin.Class.CodeAction where
 
+import           Control.Applicative
 import           Control.Lens                         hiding (List, use)
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class               (liftIO)
@@ -178,7 +179,7 @@ minDefToMethodGroups range sigs = go
     where
         go (Var mn)   = [[ (T.pack . occNameString . occName $ mn, bindRendered sig)
                         | sig <- sigs
-                        , inRange range (getSrcSpan (bindName sig))
+                        , inRange range (getSrcSpan $ bindName sig)
                         , printOutputable mn == T.drop (T.length bindingPrefix) (printOutputable (bindName sig))
                         ]]
         go (Or ms)    = concatMap (go . unLoc) ms

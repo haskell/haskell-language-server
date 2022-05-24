@@ -86,8 +86,8 @@ codeLens state plId CodeLensParams{..} = do
                 -- Existed signatures' name
                 sigNames = concat $ mapMaybe (\(L _ r) -> getSigName r) cid_sigs
                 toBindInfo (L l (L l' _)) = BindInfo
-                    (getLoc l) -- bindSpan
-                    (getLoc l') -- bindNameSpan
+                    (locA l) -- bindSpan
+                    (locA l') -- bindNameSpan
             in toBindInfo <$> filter (\(L _ name) -> unLoc name `notElem` sigNames) bindNames
         getBindSpanWithoutSig _ = []
 

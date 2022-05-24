@@ -25,8 +25,8 @@ isBindingName :: Name -> Bool
 isBindingName name = isPrefixOf bindingPrefix $ occNameString $ nameOccName name
 
 -- | Check if some `HasSrcSpan` value in the given range
-inRange :: HasSrcSpan a => Range -> a -> Bool
-inRange range s = maybe False (subRange range) (srcSpanToRange (getLoc s))
+inRange :: Range -> SrcSpan -> Bool
+inRange range s = maybe False (subRange range) (srcSpanToRange s)
 
 ghostSpan :: RealSrcSpan
 ghostSpan = realSrcLocSpan $ mkRealSrcLoc (fsLit "<haskell-language-sever>") 1 1
