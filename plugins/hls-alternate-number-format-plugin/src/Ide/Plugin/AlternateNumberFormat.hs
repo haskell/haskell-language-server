@@ -5,6 +5,7 @@
 {-# LANGUAGE ViewPatterns  #-}
 module Ide.Plugin.AlternateNumberFormat (descriptor, Log(..)) where
 
+import           Control.Lens                    ((^.))
 import           Control.Monad.Except            (ExceptT, MonadIO, liftIO)
 import qualified Data.HashMap.Strict             as HashMap
 import           Data.String                     (IsString)
@@ -34,6 +35,7 @@ import           Ide.PluginUtils                 (getNormalizedFilePath,
                                                   handleMaybeM, pluginResponse)
 import           Ide.Types
 import           Language.LSP.Types
+import qualified Language.LSP.Types.Lens         as L
 
 newtype Log = LogShake Shake.Log deriving Show
 
@@ -85,8 +87,8 @@ collectLiteralsRule recorder = define (cmapWithPrio LogShake recorder) $ \Collec
         getExtensions = map GhcExtension . toList . extensionFlags . ms_hspp_opts . pm_mod_summary
 
 codeActionHandler :: PluginMethodHandler IdeState 'TextDocumentCodeAction
-codeActionHandler state _ (CodeActionParams _ _ docId currRange _) = pluginResponse $ do
-    nfp <- getNormalizedFilePath plId (docId ^. uri)
+codeActionHandler state plId (CodeActionParams _ _ docId currRange _) = pluginResponse $ do
+    nfp <- getNormalizedFilePath plId (docId ^. L.uri)
     CLR{..} <- requestLiterals state nfp
     pragma <- getFirstPragma state nfp
         -- remove any invalid literals (see validTarget comment)

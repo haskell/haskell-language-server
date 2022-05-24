@@ -36,7 +36,6 @@ module Ide.PluginUtils
 where
 
 
-import           Control.Lens                    ((^.))
 import           Control.Monad.Extra             (maybeM)
 import           Control.Monad.Trans.Class       (lift)
 import           Control.Monad.Trans.Except      (ExceptT, runExceptT, throwE)
@@ -57,7 +56,6 @@ import           Language.LSP.Types              hiding
                                                   SemanticTokensEdit (_start))
 import qualified Language.LSP.Types              as J
 import           Language.LSP.Types.Capabilities
-import           Language.LSP.Types.Lens         (uri)
 
 -- ---------------------------------------------------------------------
 
