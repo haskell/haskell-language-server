@@ -38,24 +38,21 @@ descriptor plId = (defaultPluginDescriptor plId)
     { Ide.Types.pluginHandlers =
         mkPluginHandler STextDocumentCodeAction codeActionHandler
     , pluginCommands =
-        [PluginCommand toGADTSyntaxCommandId "convert data decl to GADT syntax" toGADTCommand]
+        [PluginCommand toGADTSyntaxCommandId "convert data decl to GADT syntax" (toGADTCommand plId)]
     }
 
 -- | Parameter used in the command
 data ToGADTParams = ToGADTParams
-    { uri          :: Uri
-    , range        :: Range
-    -- PluginId doesn't have instance of ToJSON and FromJSON
-    , pluginIdText :: T.Text
+    { uri   :: Uri
+    , range :: Range
     } deriving (Generic, ToJSON, FromJSON)
 
 toGADTSyntaxCommandId :: CommandId
 toGADTSyntaxCommandId = "GADT.toGADT"
 
 -- | A command replaces H98 data decl with GADT decl in place
-toGADTCommand :: CommandFunction IdeState ToGADTParams
-toGADTCommand state ToGADTParams{..} = response $ do
-    let plId = PluginId pluginIdText
+toGADTCommand :: PluginId -> CommandFunction IdeState ToGADTParams
+toGADTCommand plId state ToGADTParams{..} = response $ do
     nfp <- getNormalizedFilePath plId uri
     (decls, exts) <- getInRangeH98DeclsAndExts state range nfp
     (L ann decl) <- case decls of
@@ -85,7 +82,7 @@ toGADTCommand state ToGADTParams{..} = response $ do
                  Nothing Nothing
 
 codeActionHandler :: PluginMethodHandler IdeState TextDocumentCodeAction
-codeActionHandler state plId@(PluginId txt) (CodeActionParams _ _ doc range _) = response $ do
+codeActionHandler state plId (CodeActionParams _ _ doc range _) = response $ do
     nfp <- getNormalizedFilePath plId (doc ^. L.uri)
     (inRangeH98Decls, _) <- getInRangeH98DeclsAndExts state range nfp
     let actions = map (mkAction . printOutputable . tcdLName . unLoc) inRangeH98Decls
@@ -104,7 +101,7 @@ codeActionHandler state plId@(PluginId txt) (CodeActionParams _ _ doc range _) =
                     $ mkLspCommand plId toGADTSyntaxCommandId _title (Just [toJSON mkParam])
                 _xdata = Nothing
 
-        mkParam = ToGADTParams (doc ^. L.uri) range txt
+        mkParam = ToGADTParams (doc ^. L.uri) range
 
 -- | Get all H98 decls in the given range, and enabled extensions
 getInRangeH98DeclsAndExts :: (MonadIO m) =>

@@ -6,6 +6,7 @@
 {-# LANGUAGE TupleSections    #-}
 {-# LANGUAGE TypeApplications #-}
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
+{-# OPTIONS_GHC -Wno-overlapping-patterns #-}
 module Ide.Plugin.GHC where
 
 import           Data.Functor                            ((<&>))
@@ -220,7 +221,7 @@ prettyGADTDecl df decl =
     where
         adjustTyClD = \case
                 Right (anns, t@(L _ (TyClD _ _))) -> Right (adjustDataDeclAnns anns, t)
-                Right x -> Left "Expect TyClD"
+                Right _ -> Left "Expect TyClD"
                 Left err -> Left $ show err
 
         adjustDataDeclAnns = Map.mapWithKey go
