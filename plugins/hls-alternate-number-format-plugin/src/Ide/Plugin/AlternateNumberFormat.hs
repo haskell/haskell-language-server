@@ -152,7 +152,7 @@ getFirstPragma state nfp = handleMaybeM "Error: Could not get NextPragmaInfo" $ 
       (_, fileContents) <- liftIO $ runAction (alternateNumberFormatId <> ".GetFileContents") state $ getFileContents nfp
       case ghcSession of
         Just (hscEnv -> hsc_dflags -> sessionDynFlags, _) -> pure $ Just $ getNextPragmaInfo sessionDynFlags fileContents
-        Nothing -> pure Nothing
+        Nothing                                           -> pure Nothing
 
 requestLiterals :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m CollectLiteralsResult
 requestLiterals state = handleMaybeM "Error: Could not Collect Literals"

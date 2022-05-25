@@ -21,7 +21,7 @@ import qualified System.IO.Extra
 import           Test.Hls
 
 plugin :: PluginDescriptor IdeState
-plugin = descriptor "callHierarchy"
+plugin = descriptor
 
 main :: IO ()
 main = defaultTestRunner $

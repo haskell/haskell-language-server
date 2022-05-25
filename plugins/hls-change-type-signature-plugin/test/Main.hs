@@ -32,7 +32,7 @@ main :: IO ()
 main = defaultTestRunner test
 
 changeTypeSignaturePlugin :: PluginDescriptor IdeState
-changeTypeSignaturePlugin = ChangeTypeSignature.descriptor "changeTypeSignature"
+changeTypeSignaturePlugin = ChangeTypeSignature.descriptor
 
 test :: TestTree
 test = testGroup "changeTypeSignature" [
