@@ -967,7 +967,7 @@ regenerateHiFile sess f ms compNeeded = do
 
                 -- Bang pattern is important to avoid leaking 'tmr'
 
-                (diags'', !res) <- liftIO $ compileToObjCodeIfNeeded se hsc compNeeded compile tmr
+                (diags'', !res) <- compileToObjCodeIfNeeded se hsc compNeeded compile tmr
 
                 -- Write hi file
                 hiDiags <- case res of
@@ -995,21 +995,11 @@ regenerateHiFile sess f ms compNeeded = do
 
 
 -- | HscEnv should have deps included already
-{- <<<<<<< HEAD -}
-{- compileToObjCodeIfNeeded :: HscEnv -> Maybe LinkableType -> Action (IdeResult ModGuts) -> TcModuleResult -> Action (IdeResult HiFileResult)
-compileToObjCodeIfNeeded hsc Nothing _ tmr = do
-  incrementRebuildCount
-  res <- liftIO $ mkHiFileResultNoCompile hsc tmr
-  pure ([], Just $! res)
-compileToObjCodeIfNeeded hsc (Just linkableType) getGuts tmr = do
-  incrementRebuildCount -}
-{- ======= -}
-compileToObjCodeIfNeeded :: MonadIO m => ShakeExtras -> HscEnv -> Maybe LinkableType -> CompileMod m -> TcModuleResult -> m (IdeResult HiFileResult)
+compileToObjCodeIfNeeded :: ShakeExtras -> HscEnv -> Maybe LinkableType -> Action (IdeResult ModGuts) -> TcModuleResult -> Action (IdeResult HiFileResult)
 compileToObjCodeIfNeeded _ hsc Nothing _ tmr = liftIO $ do
   res <- mkHiFileResultNoCompile hsc tmr
   pure ([], Just $! res)
 compileToObjCodeIfNeeded se hsc (Just linkableType) getGuts tmr = do
-{- >>>>>>> 72624310 (Add --verify-core-file to do roundtrip testing of core-files) -}
   (diags, mguts) <- getGuts
   case mguts of
     Nothing -> pure (diags, Nothing)
