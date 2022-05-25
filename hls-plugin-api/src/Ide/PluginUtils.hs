@@ -246,16 +246,13 @@ allLspCmdIds pid commands = concatMap go commands
     go (plid, cmds) = map (mkLspCmdId pid plid . commandId) cmds
 
 -- ---------------------------------------------------------------------
-instance HasUri Uri Uri where
-  uri = id
 
-getNormalizedFilePath :: (Monad m, HasUri a Uri) => PluginId -> a -> ExceptT String m NormalizedFilePath
-getNormalizedFilePath (PluginId plId) docId = handleMaybe errMsg
+getNormalizedFilePath :: Monad m => PluginId -> Uri -> ExceptT String m NormalizedFilePath
+getNormalizedFilePath (PluginId plId) uri = handleMaybe errMsg
         $ uriToNormalizedFilePath
-        $ toNormalizedUri uri'
+        $ toNormalizedUri uri
     where
-        errMsg = T.unpack $ "Error(" <> plId <> "): converting " <> getUri uri' <> " to NormalizedFilePath"
-        uri' = docId ^. uri
+        errMsg = T.unpack $ "Error(" <> plId <> "): converting " <> getUri uri <> " to NormalizedFilePath"
 
 -- ---------------------------------------------------------------------
 handleMaybe :: Monad m => e -> Maybe b -> ExceptT e m b
