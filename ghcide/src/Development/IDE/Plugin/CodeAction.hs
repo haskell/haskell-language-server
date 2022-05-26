@@ -1561,15 +1561,19 @@ mkRenameEdit contents range name =
 -- require understanding both the precedence of the context of the hole and of
 -- the signature itself. Inserting them (almost) unconditionally is ugly but safe.
 extractWildCardTypeSignature :: T.Text -> T.Text
-extractWildCardTypeSignature msg = (if enclosed || not application then id else bracket) signature
+extractWildCardTypeSignature msg
+  | enclosed || not isApp || isToplevelSig = sig
+  | otherwise                              = "(" <> sig <> ")"
   where
-    msgSigPart = snd $ T.breakOnEnd "standing for " msg
-    signature = T.takeWhile (/='’') . T.dropWhile (=='‘') . T.dropWhile (/='‘') $ msgSigPart
-    -- parenthesize type applications, e.g. (Maybe Char)
-    application = any isSpace . T.unpack $ signature
-    -- do not add extra parentheses to lists, tuples and already parenthesized types
-    enclosed = not (T.null signature) && (T.head signature, T.last signature) `elem` [('(',')'), ('[',']')]
-    bracket = ("(" `T.append`) . (`T.append` ")")
+    msgSigPart      = snd $ T.breakOnEnd "standing for " msg
+    (sig, rest)     = T.span (/='’') . T.dropWhile (=='‘') . T.dropWhile (/='‘') $ msgSigPart
+    (prefix, rest') = T.breakOn "• In the type signature:" rest
+    -- If we're completing something like ‘foo :: _’ parens can be safely omitted.
+    isToplevelSig   = not (T.null prefix) && " :: _" `T.isSuffixOf` T.takeWhile (/= '\n') rest'
+    -- Parenthesize type applications, e.g. (Maybe Char).
+    isApp           = T.any isSpace sig
+    -- Do not add extra parentheses to lists, tuples and already parenthesized types.
+    enclosed        = not (T.null sig) && (T.head sig, T.last sig) `elem` [('(', ')'), ('[', ']')]
 
 extractRenamableTerms :: T.Text -> [T.Text]
 extractRenamableTerms msg
