@@ -110,7 +110,7 @@ In addition make sure `haskell-language-server.exe` is not running by closing yo
 ### Download the source code
 
 ```bash
-git clone https://github.com/haskell/haskell-language-server --recurse-submodules
+git clone https://github.com/haskell/haskell-language-server
 cd haskell-language-server
 ```
 
