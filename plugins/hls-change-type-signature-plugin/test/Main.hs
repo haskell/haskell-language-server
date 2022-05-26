@@ -112,8 +112,8 @@ findChangeTypeActions = pure . filter isChangeTypeAction . rights . map toEither
         isChangeTypeAction CodeAction{_kind} = case _kind of
           Nothing -> False
           Just kind -> case kind of
-            "quickfix.changeSignature" -> True
-            _                          -> False
+            "quickfix.changeTypeSignature" -> True
+            _                              -> False
 
 
 regexTest :: FilePath -> Text -> Bool -> TestTree
