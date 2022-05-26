@@ -1,7 +1,9 @@
 {-# LANGUAGE CPP              #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs            #-}
 {-# LANGUAGE LambdaCase       #-}
 {-# LANGUAGE PatternSynonyms  #-}
+{-# LANGUAGE RankNTypes       #-}
 {-# LANGUAGE RecordWildCards  #-}
 {-# LANGUAGE TupleSections    #-}
 {-# LANGUAGE TypeApplications #-}
@@ -136,7 +138,7 @@ h98ToGADTConDecl dataName tyVars ctxt = \case
         -- Merge data type context and constructor type context
         mergeContext :: Maybe (LHsContext GP) -> Maybe (LHsContext GP) -> Maybe (LHsContext GP)
         mergeContext ctxt1 ctxt2 =
-            (wrap' . map wrap) . map unParTy
+            (wrap . map wrap) . map unParTy
                 <$> (getContextType ctxt1 <> getContextType ctxt2)
             where
                 getContextType :: Maybe (LHsContext GP) -> Maybe [HsType GP]
@@ -269,9 +271,8 @@ prettyGADTDecl df decl =
 #endif
 
 #if MIN_VERSION_ghc(9,2,1)
-wrap :: HsType GP -> GenLocated (Anno (HsType GP)) (HsType GP)
+wrap :: forall a. WrapXRec GP a => a -> XRec GP a
 wrap = wrapXRec @GP
-wrap' = wrapXRec @GP
 wrapCtxt = id
 emptyCtxt = Nothing
 unWrap = unXRec @GP
@@ -280,7 +281,6 @@ noUsed = EpAnnNotUsed
 #else
 wrapCtxt = Just
 wrap = L noSrcSpan
-wrap' = wrap
 emptyCtxt = wrap []
 unWrap (L _ r) = r
 mapX = fmap
