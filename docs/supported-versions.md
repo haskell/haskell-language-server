@@ -55,6 +55,7 @@ Sometimes a plugin will be supported in the prebuilt binaries but not in a HLS b
 | `hls-stylish-haskell-plugin`        |                          |
 | `hls-tactics-plugin`                | 9.2                      |
 | `hls-selection-range-plugin`        |                          |
+| `hls-gadt-plugin`                   |                          |
 
 ### Using deprecated GHC versions
 
