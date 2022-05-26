@@ -51,9 +51,7 @@ safeTyThingId _                                = Nothing
 -- Possible documentation for an element in the code
 data SpanDoc
   = SpanDocString HsDocString SpanDocUris
-    -- ^ Extern module doc
   | SpanDocText   [T.Text] SpanDocUris
-    -- ^ Local module doc
   deriving stock (Eq, Show, Generic)
   deriving anyclass NFData
 
@@ -80,6 +78,11 @@ emptySpanDoc = SpanDocText [] (SpanDocUris Nothing Nothing)
 -- it will result "xxxx---\nyyyy" and can't be rendered as a normal doc.
 -- Therefore we check every item in the value to make sure they all end with '\\n',
 -- this makes "xxxx\n---\nyyy\n" and can be rendered correctly.
+--
+-- Notes:
+--
+-- To insert a new line in Markdown, we need two '\\n', like ("\\n\\n"), __or__ a section
+-- symbol with one '\\n', like ("***\\n").
 spanDocToMarkdown :: SpanDoc -> [T.Text]
 spanDocToMarkdown = \case
     (SpanDocString docs uris) ->

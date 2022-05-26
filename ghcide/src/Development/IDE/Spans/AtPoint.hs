@@ -32,9 +32,9 @@ import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.GHC.Compat
 import qualified Development.IDE.GHC.Compat.Util      as Util
+import           Development.IDE.GHC.Util             (printOutputable)
 import           Development.IDE.Spans.Common
 import           Development.IDE.Types.Options
-import           Development.IDE.GHC.Util             (printOutputable)
 
 import           Control.Applicative
 import           Control.Monad.Extra
@@ -231,11 +231,14 @@ atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) env pos = listToMaybe $ p
         prettyNames = map prettyName names
         prettyName (Right n, dets) = T.unlines $
           wrapHaskell (printOutputable n <> maybe "" (" :: " <>) ((prettyType <$> identType dets) <|> maybeKind))
-          : definedAt n
-          ++ maybeToList (prettyPackageName n)
+          : maybeToList (pretty (definedAt n) (prettyPackageName n))
           ++ catMaybes [ T.unlines . spanDocToMarkdown <$> lookupNameEnv dm n
                        ]
           where maybeKind = fmap printOutputable $ safeTyThingType =<< lookupNameEnv km n
+                pretty Nothing Nothing = Nothing
+                pretty (Just define) Nothing = Just $ define <> "\n"
+                pretty Nothing (Just pkgName) = Just $ pkgName <> "\n"
+                pretty (Just define) (Just pkgName) = Just $ define <> " " <> pkgName <> "\n"
         prettyName (Left m,_) = printOutputable m
 
         prettyPackageName n = do
@@ -244,7 +247,7 @@ atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) env pos = listToMaybe $ p
           conf <- lookupUnit env pid
           let pkgName = T.pack $ unitPackageNameString conf
               version = T.pack $ showVersion (unitPackageVersion conf)
-          pure $ " *(" <> pkgName <> "-" <> version <> ")*"
+          pure $ "*(" <> pkgName <> "-" <> version <> ")*"
 
         prettyTypes = map (("_ :: "<>) . prettyType) types
         prettyType t = case kind of
@@ -255,8 +258,8 @@ atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) env pos = listToMaybe $ p
           -- do not show "at <no location info>" and similar messages
           -- see the code of 'pprNameDefnLoc' for more information
           case nameSrcLoc name of
-            UnhelpfulLoc {} | isInternalName name || isSystemName name -> []
-            _ -> ["*Defined " <> printOutputable (pprNameDefnLoc name) <> "*"]
+            UnhelpfulLoc {} | isInternalName name || isSystemName name -> Nothing
+            _ -> Just $ "*Defined " <> printOutputable (pprNameDefnLoc name) <> "*"
 
 typeLocationsAtPoint
   :: forall m

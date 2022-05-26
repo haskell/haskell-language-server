@@ -274,6 +274,13 @@ Evaluates code blocks in comments with a click. [Tutorial](https://github.com/ha
 
 ![Eval Demo](https://raw.githubusercontent.com/haskell/haskell-language-server/master/plugins/hls-eval-plugin/demo.gif)
 
+Known limitations:
+
+- Standard input is shared with HLS, so e.g. [`getLine` breaks the connection to server](https://github.com/haskell/haskell-language-server/issues/2913).
+- Standard (error) output [is not captured](https://github.com/haskell/haskell-language-server/issues/1977).
+- While similar to [doctest](https://hackage.haskell.org/package/doctest), some of its features are unsupported,
+  see [Differences with doctest](https://github.com/haskell/haskell-language-server/blob/master/plugins/hls-eval-plugin/README.md#differences-with-doctest).
+
 ### Make import lists fully explicit code lens
 
 Provided by: `hls-explicit-imports-plugin`
