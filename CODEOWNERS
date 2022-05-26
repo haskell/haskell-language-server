@@ -15,6 +15,7 @@
 /plugins/hls-explicit-imports-plugin @pepeiborra
 /plugins/hls-floskell-plugin @Ailrun
 /plugins/hls-fourmolu-plugin @georgefst
+/plugins/hls-gadt-plugin @July541
 /plugins/hls-haddock-comments-plugin @berberman
 /plugins/hls-hlint-plugin @jneira @eddiemundo
 /plugins/hls-module-name-plugin
