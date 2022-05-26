@@ -1,0 +1,3 @@
+cradle:
+  direct:
+    arguments: ["-XHaskell2010", "-XExistentialQuantification", "-XGADTs"]
