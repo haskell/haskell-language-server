@@ -22,7 +22,7 @@ import           Test.Hls
 import           Test.Hls.Util            (withCanonicalTempDir)
 
 plugin :: PluginDescriptor IdeState
-plugin = descriptor "callHierarchy"
+plugin = descriptor
 
 main :: IO ()
 main = defaultTestRunner $

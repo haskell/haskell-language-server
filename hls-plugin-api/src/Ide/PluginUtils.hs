@@ -28,14 +28,14 @@ module Ide.PluginUtils
     positionInRange,
     usePropertyLsp,
     getNormalizedFilePath,
-    response,
+    pluginResponse,
     handleMaybe,
     handleMaybeM,
+    throwPluginError
     )
 where
 
 
-import           Control.Lens                    ((^.))
 import           Control.Monad.Extra             (maybeM)
 import           Control.Monad.Trans.Class       (lift)
 import           Control.Monad.Trans.Except      (ExceptT, runExceptT, throwE)
@@ -253,13 +253,18 @@ getNormalizedFilePath (PluginId plId) uri = handleMaybe errMsg
         errMsg = T.unpack $ "Error(" <> plId <> "): converting " <> getUri uri <> " to NormalizedFilePath"
 
 -- ---------------------------------------------------------------------
+throwPluginError :: Monad m => PluginId -> String -> String -> ExceptT String m b
+throwPluginError (PluginId who) what where' = throwE msg
+    where
+        msg = (T.unpack who) <> " failed with " <> what <> " at " <> where'
+
 handleMaybe :: Monad m => e -> Maybe b -> ExceptT e m b
 handleMaybe msg = maybe (throwE msg) return
 
 handleMaybeM :: Monad m => e -> m (Maybe b) -> ExceptT e m b
 handleMaybeM msg act = maybeM (throwE msg) return $ lift act
 
-response :: Monad m => ExceptT String m a -> m (Either ResponseError a)
-response =
+pluginResponse :: Monad m => ExceptT String m a -> m (Either ResponseError a)
+pluginResponse =
   fmap (first (\msg -> ResponseError InternalError (fromString msg) Nothing))
     . runExceptT
