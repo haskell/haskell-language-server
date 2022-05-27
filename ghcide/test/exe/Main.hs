@@ -1196,7 +1196,7 @@ typeWildCardActionTests = testGroup "type wildcard actions"
         [ "func :: _"
         , "func x = x"
         ]
-        [ "func :: (p -> p)"
+        [ "func :: p -> p"
         , "func x = x"
         ]
   , testUseTypeSignature "local signature"
@@ -1212,11 +1212,11 @@ typeWildCardActionTests = testGroup "type wildcard actions"
         , "      y = x * 2"
         , "  in y"
         ]
-  , testUseTypeSignature "multi-line message"
+  , testUseTypeSignature "multi-line message 1"
         [ "func :: _"
         , "func x y = x + y"
         ]
-        [ "func :: (Integer -> Integer -> Integer)"
+        [ "func :: Integer -> Integer -> Integer"
         , "func x y = x + y"
         ]
   , testUseTypeSignature "type in parentheses"
@@ -1240,6 +1240,43 @@ typeWildCardActionTests = testGroup "type wildcard actions"
         [ "func :: IO ()"
         , "func = putChar 'H'"
         ]
+  , testUseTypeSignature "no spaces around '::'"
+        [ "func::_"
+        , "func x y = x + y"
+        ]
+        [ "func::Integer -> Integer -> Integer"
+        , "func x y = x + y"
+        ]
+  , testGroup "add parens if hole is part of bigger type"
+    [ testUseTypeSignature "subtype 1"
+          [ "func :: _ -> Integer -> Integer"
+          , "func x y = x + y"
+          ]
+          [ "func :: Integer -> Integer -> Integer"
+          , "func x y = x + y"
+          ]
+    , testUseTypeSignature "subtype 2"
+          [ "func :: Integer -> _ -> Integer"
+          , "func x y = x + y"
+          ]
+          [ "func :: Integer -> Integer -> Integer"
+          , "func x y = x + y"
+          ]
+    , testUseTypeSignature "subtype 3"
+          [ "func :: Integer -> Integer -> _"
+          , "func x y = x + y"
+          ]
+          [ "func :: Integer -> Integer -> Integer"
+          , "func x y = x + y"
+          ]
+    , testUseTypeSignature "subtype 4"
+          [ "func :: Integer -> _"
+          , "func x y = x + y"
+          ]
+          [ "func :: Integer -> (Integer -> Integer)"
+          , "func x y = x + y"
+          ]
+    ]
   ]
   where
     -- | Test session of given name, checking action "Use type signature..."
