@@ -49,14 +49,14 @@ import           UnliftIO.Exception           (catchAny)
 
 data Log
   = LogNoEnabledPlugins
-  | LogPluginError ResponseError
+  | LogPluginError PluginId ResponseError
   deriving Show
 
 instance Pretty Log where
   pretty = \case
     LogNoEnabledPlugins ->
       "extensibleNotificationPlugins no enabled plugins"
-    LogPluginError err -> pretty (err ^. LSP.message)
+    LogPluginError plid err -> pretty (err ^. LSP.message)
 
 
 -- | Map a set of plugins to the underlying ghcide engine.
@@ -180,9 +180,9 @@ extensiblePlugins recorder xs = mempty { P.pluginHandlers = handlers }
             let msg e pid = "Exception in plugin " <> T.pack (show pid) <> "while processing " <> T.pack (show m) <> ": " <> T.pack (show e)
             es <- runConcurrently msg (show m) fs ide params
             let (errs,succs) = partitionEithers $ toList es
-            unless (null errs) $ forM_ errs $ \err -> logWith recorder Warning $ LogPluginError err
+            unless (null errs) $ forM_ errs $ \err -> logWith recorder Warning $ uncurry LogPluginError err
             case nonEmpty succs of
-              Nothing -> pure $ Left $ combineErrors errs
+              Nothing -> pure $ Left $ combineErrors (map snd errs)
               Just xs -> do
                 caps <- LSP.getClientCapabilities
                 pure $ Right $ combineResponses m config caps params xs
@@ -220,10 +220,11 @@ runConcurrently
   -> NonEmpty (PluginId, a -> b -> m (NonEmpty (Either ResponseError d)))
   -> a
   -> b
-  -> m (NonEmpty (Either ResponseError d))
+  -> m (NonEmpty (Either (PluginId, ResponseError) d))
 runConcurrently msg method fs a b = fmap join $ forConcurrently fs $ \(pid,f) -> otTracedProvider pid (fromString method) $ do
-  f a b
-    `catchAny` (\e -> pure $ pure $ Left $ ResponseError InternalError (msg e pid) Nothing)
+  -- attach the PluginId on ResponseError for logging purposes
+  fmap (first (pid,)) <$> (f a b
+     `catchAny` (\e -> pure $ pure $ Left $ ResponseError InternalError (msg e pid) Nothing))
 
 combineErrors :: [ResponseError] -> ResponseError
 combineErrors [x] = x
