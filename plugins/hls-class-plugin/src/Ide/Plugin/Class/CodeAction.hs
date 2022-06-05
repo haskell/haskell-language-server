@@ -36,7 +36,7 @@ import qualified Language.LSP.Types.Lens              as J
 addMethodPlaceholders :: PluginId -> CommandFunction IdeState AddMinimalMethodsParams
 addMethodPlaceholders plId state param@AddMinimalMethodsParams{..} = do
     caps <- getClientCapabilities
-    response $ do
+    pluginResponse $ do
         nfp <- getNormalizedFilePath plId uri
         pm <- handleMaybeM "Unable to GetParsedModule"
             $ liftIO
@@ -77,7 +77,7 @@ addMethodPlaceholders plId state param@AddMinimalMethodsParams{..} = do
 -- This implementation is ad-hoc in a sense that the diagnostic detection mechanism is
 -- sensitive to the format of diagnostic messages from GHC.
 codeAction :: PluginMethodHandler IdeState TextDocumentCodeAction
-codeAction state plId (CodeActionParams _ _ docId _ context) = response $ do
+codeAction state plId (CodeActionParams _ _ docId _ context) = pluginResponse $ do
     nfp <- getNormalizedFilePath plId uri
     actions <- join <$> mapM (mkActions nfp) methodDiags
     pure $ List actions

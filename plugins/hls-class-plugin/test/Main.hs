@@ -98,6 +98,7 @@ codeLensTests = testGroup
     , goldenCodeLens "Don't insert pragma while existing" "T13" 0
     , onlyRunForGhcVersions [GHC92] "Only ghc-9.2 enabled GHC2021 implicitly" $
         goldenCodeLens "Don't insert pragma while GHC2021 enabled" "T14" 0
+    , goldenCodeLens "Qualified name" "T15" 0
     ]
 
 _CACodeAction :: Prism' (Command |? CodeAction) CodeAction
