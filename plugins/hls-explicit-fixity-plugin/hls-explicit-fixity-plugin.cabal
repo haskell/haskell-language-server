@@ -20,21 +20,14 @@ library
 
   hs-source-dirs:     src
   build-depends:
-    , aeson
-    , base                  >=4.12 && <5
+      base                  >=4.12 && <5
     , containers
     , extra
     , ghc
     , ghcide                ^>= 1.7
-    , ghc-boot-th
-    , ghc-exactprint
     , hls-plugin-api        ^>= 1.4
-    , lens
     , lsp                    >=1.2.0.1
-    , mtl
     , text
-    , transformers
-    , unordered-containers
 
   ghc-options:
     -Wall
@@ -54,7 +47,4 @@ test-suite tests
     , filepath
     , hls-explicit-fixity-plugin
     , hls-test-utils              ^>=1.3
-    , lens
-    , lsp
-    , lsp-test
     , text
