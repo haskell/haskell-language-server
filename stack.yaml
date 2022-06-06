@@ -32,6 +32,7 @@ packages:
 - ./plugins/hls-selection-range-plugin
 - ./plugins/hls-change-type-signature-plugin
 - ./plugins/hls-gadt-plugin
+- ./plugins/hls-explicit-fixity-plugin
 
 extra-deps:
 - Chart-1.9.3@sha256:640a38463318b070d80a049577e4f0b3322df98290abb7afcf0cb74a4ad5b512,2948

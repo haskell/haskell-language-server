@@ -44,6 +44,12 @@ Provided by: `ghcide`
 
 Type information and documentation on hover, [including from local definitions](./configuration.md#how-to-show-local-documentation-on-hover).
 
+### Show fixity
+
+Provided by: `hls-explicit-fixity-plugin`
+
+Provides fixity information.
+
 ## Jump to definition
 
 Provided by: `ghcide`

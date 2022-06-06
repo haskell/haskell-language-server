@@ -250,6 +250,10 @@ jobs:
         name: Test hls-gadt-plugin test suit
         run: cabal test hls-gadt-plugin --test-options="$TEST_OPTS" || cabal test hls-gadt-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-gadt-plugin --test-options="$TEST_OPTS"
 
+      - if: matrix.test
+        name: Test hls-explicit-fixity-plugin test suite
+        run: cabal test hls-explicit-fixity-plugin --test-options="$TEST_OPTS" || cabal test hls-explicit-fixity-plugin --test-options="$TEST_OPTS" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-explicit-fixity-plugin --test-options="$TEST_OPTS"
+
   test_post_job:
     if: always()
     runs-on: ubuntu-latest

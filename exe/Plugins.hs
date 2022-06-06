@@ -86,6 +86,11 @@ import           Ide.Plugin.ChangeTypeSignature    as ChangeTypeSignature
 #if gadt
 import           Ide.Plugin.GADT                   as GADT
 #endif
+
+#if explicitFixity
+import          Ide.Plugin.ExplicitFixity          as ExplicitFixity
+#endif
+
 -- formatters
 
 #if floskell
@@ -201,7 +206,11 @@ idePlugins recorder includeExamples = pluginDescToIdePlugins allPlugins
     -- The ghcide descriptors should come last so that the notification handlers
     -- (which restart the Shake build) run after everything else
       GhcIde.descriptors pluginRecorder
+#if explicitFixity
+        ++ [ExplicitFixity.descriptor]
+#endif
     examplePlugins =
       [Example.descriptor  pluginRecorder "eg"
       ,Example2.descriptor pluginRecorder "eg2"
       ]
+
