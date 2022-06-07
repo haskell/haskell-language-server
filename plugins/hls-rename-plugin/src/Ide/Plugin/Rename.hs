@@ -12,7 +12,8 @@
 module Ide.Plugin.Rename (descriptor) where
 
 #if MIN_VERSION_ghc(9,2,1)
-import           GHC.Parser.Annotation                 (AnnContext, AnnList, AnnParen, AnnPragma)
+import           GHC.Parser.Annotation                 (AnnContext, AnnList,
+                                                        AnnParen, AnnPragma)
 #endif
 
 import           Control.Monad
@@ -20,9 +21,9 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Except
 import           Data.Generics
+import           Data.Hashable
 import           Data.HashSet                          (HashSet)
 import qualified Data.HashSet                          as HS
-import           Data.Hashable
 import           Data.List.Extra
 import qualified Data.Map                              as M
 import           Data.Maybe
@@ -63,7 +64,7 @@ descriptor pluginId = (defaultPluginDescriptor pluginId)
 
 renameProvider :: PluginMethodHandler IdeState TextDocumentRename
 renameProvider state pluginId (RenameParams (TextDocumentIdentifier uri) pos _prog newNameText) =
-    response $ do
+    pluginResponse $ do
         nfp <- safeUriToNfp uri
         oldName <- getNameAtPos state nfp pos
         refLocs <- refsAtName state nfp oldName

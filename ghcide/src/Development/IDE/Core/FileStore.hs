@@ -89,7 +89,7 @@ instance Pretty Log where
     LogCouldNotIdentifyReverseDeps path ->
       "Could not identify reverse dependencies for" <+> viaShow path
     (LogTypeCheckingReverseDeps path reverseDepPaths) ->
-      "Typechecking reverse dependecies for"
+      "Typechecking reverse dependencies for"
       <+> viaShow path
       <> ":"
       <+> pretty (fmap (fmap show) reverseDepPaths)

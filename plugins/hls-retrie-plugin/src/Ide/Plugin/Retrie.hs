@@ -37,9 +37,9 @@ import           Data.Bifunctor                       (Bifunctor (first),
 import qualified Data.ByteString                      as BS
 import           Data.Coerce
 import           Data.Either                          (partitionEithers)
+import           Data.Hashable                        (unhashed)
 import qualified Data.HashMap.Strict                  as HM
 import qualified Data.HashSet                         as Set
-import           Data.Hashable                        (unhashed)
 import           Data.IORef.Extra                     (atomicModifyIORef'_,
                                                        newIORef, readIORef)
 import           Data.List.Extra                      (find, nubOrdOn)
@@ -101,9 +101,9 @@ import qualified Retrie.GHC                           as GHC
 import           Retrie.Monad                         (addImports, apply,
                                                        getGroundTerms,
                                                        runRetrie)
+import qualified Retrie.Options                       as Retrie
 import           Retrie.Options                       (defaultOptions,
                                                        getTargetFiles)
-import qualified Retrie.Options                       as Retrie
 import           Retrie.Replace                       (Change (..),
                                                        Replacement (..))
 import           Retrie.Rewrites
@@ -188,7 +188,7 @@ extractImports _ _ _ = []
 -------------------------------------------------------------------------------
 
 provider :: PluginMethodHandler IdeState TextDocumentCodeAction
-provider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range ca) = response $ do
+provider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range ca) = pluginResponse $ do
   let (J.CodeActionContext _diags _monly) = ca
       nuri = toNormalizedUri uri
   nfp <- handleMaybe "uri" $ uriToNormalizedFilePath nuri

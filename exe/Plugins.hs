@@ -82,6 +82,10 @@ import           Ide.Plugin.SelectionRange         as SelectionRange
 #if changeTypeSignature
 import           Ide.Plugin.ChangeTypeSignature    as ChangeTypeSignature
 #endif
+
+#if gadt
+import           Ide.Plugin.GADT                   as GADT
+#endif
 -- formatters
 
 #if floskell
@@ -153,7 +157,7 @@ idePlugins recorder includeExamples = pluginDescToIdePlugins allPlugins
       Brittany.descriptor "brittany" :
 #endif
 #if callHierarchy
-      CallHierarchy.descriptor "callHierarchy":
+      CallHierarchy.descriptor :
 #endif
 #if class
       Class.descriptor "class" :
@@ -183,13 +187,16 @@ idePlugins recorder includeExamples = pluginDescToIdePlugins allPlugins
       Splice.descriptor "splice" :
 #endif
 #if alternateNumberFormat
-      AlternateNumberFormat.descriptor pluginRecorder "alternateNumberFormat" :
+      AlternateNumberFormat.descriptor pluginRecorder :
 #endif
 #if selectionRange
       SelectionRange.descriptor "selectionRange" :
 #endif
 #if changeTypeSignature
-      ChangeTypeSignature.descriptor "changeTypeSignature" :
+      ChangeTypeSignature.descriptor :
+#endif
+#if gadt
+      GADT.descriptor "gadt" :
 #endif
     -- The ghcide descriptors should come last so that the notification handlers
     -- (which restart the Shake build) run after everything else

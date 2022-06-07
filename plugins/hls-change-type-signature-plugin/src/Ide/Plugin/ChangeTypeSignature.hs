@@ -12,6 +12,7 @@ import           Control.Monad.Trans.Except     (ExceptT)
 import           Data.Foldable                  (asum)
 import qualified Data.HashMap.Strict            as Map
 import           Data.Maybe                     (mapMaybe)
+import           Data.String                    (IsString)
 import           Data.Text                      (Text)
 import qualified Data.Text                      as T
 import           Development.IDE                (realSrcSpanToRange)
@@ -22,19 +23,22 @@ import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Util       (printOutputable)
 import           Generics.SYB                   (extQ, something)
 import           Ide.PluginUtils                (getNormalizedFilePath,
-                                                 handleMaybeM, response)
+                                                 handleMaybeM, pluginResponse)
 import           Ide.Types                      (PluginDescriptor (..),
-                                                 PluginId, PluginMethodHandler,
+                                                 PluginMethodHandler,
                                                  defaultPluginDescriptor,
                                                  mkPluginHandler)
 import           Language.LSP.Types
 import           Text.Regex.TDFA                ((=~))
 
-descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId = (defaultPluginDescriptor plId) { pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionHandler }
+changeTypeSignatureId :: IsString a => a
+changeTypeSignatureId = "changeTypeSignature"
+
+descriptor :: PluginDescriptor IdeState
+descriptor = (defaultPluginDescriptor changeTypeSignatureId) { pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionHandler }
 
 codeActionHandler :: PluginMethodHandler IdeState 'TextDocumentCodeAction
-codeActionHandler ideState plId CodeActionParams {_textDocument = TextDocumentIdentifier uri, _context = CodeActionContext (List diags) _} = response $ do
+codeActionHandler ideState plId CodeActionParams {_textDocument = TextDocumentIdentifier uri, _context = CodeActionContext (List diags) _} = pluginResponse $ do
       nfp <- getNormalizedFilePath plId uri
       decls <- getDecls ideState nfp
       let actions = mapMaybe (generateAction uri decls) diags
@@ -44,7 +48,7 @@ getDecls :: MonadIO m => IdeState -> NormalizedFilePath -> ExceptT String m [LHs
 getDecls state = handleMaybeM "Error: Could not get Parsed Module"
     . liftIO
     . fmap (fmap (hsmodDecls . unLoc . pm_parsed_source))
-    . runAction "changeSignature.GetParsedModule" state
+    . runAction (changeTypeSignatureId <> ".GetParsedModule") state
     . use GetParsedModule
 
 -- | Text representing a Declaration's Name
@@ -146,7 +150,7 @@ stripSignature (T.filter (/= '\n') -> sig) = if T.isInfixOf " => " sig
 
 changeSigToCodeAction :: Uri -> ChangeSignature -> Command |? CodeAction
 changeSigToCodeAction uri ChangeSignature{..} = InR CodeAction { _title       = mkChangeSigTitle declName actualType
-                                                               , _kind        = Just (CodeActionUnknown "quickfix.changeSignature")
+                                                               , _kind        = Just (CodeActionUnknown ("quickfix." <> changeTypeSignatureId))
                                                                , _diagnostics = Just $ List [diagnostic]
                                                                , _isPreferred = Nothing
                                                                , _disabled    = Nothing

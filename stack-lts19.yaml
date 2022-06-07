@@ -30,6 +30,7 @@ packages:
   - ./plugins/hls-alternate-number-format-plugin
   - ./plugins/hls-selection-range-plugin
   - ./plugins/hls-change-type-signature-plugin
+  - ./plugins/hls-gadt-plugin
 
 ghc-options:
   "$everything": -haddock

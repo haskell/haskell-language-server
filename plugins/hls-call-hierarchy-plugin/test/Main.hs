@@ -19,9 +19,10 @@ import           System.Directory.Extra
 import           System.FilePath
 import qualified System.IO.Extra
 import           Test.Hls
+import           Test.Hls.Util            (withCanonicalTempDir)
 
 plugin :: PluginDescriptor IdeState
-plugin = descriptor "callHierarchy"
+plugin = descriptor
 
 main :: IO ()
 main = defaultTestRunner $
@@ -319,7 +320,7 @@ outgoingCallsTests =
   testGroup "Outgoing Calls"
   [ testGroup "single file"
     [
-      testCase "xdata unavailable" $ withTempDir $ \dir ->
+      testCase "xdata unavailable" $ withCanonicalTempDir $ \dir ->
         runSessionWithServer plugin dir $ do
           doc <- createDoc "A.hs" "haskell" $ T.unlines ["a=3", "b=a"]
           waitForKickDone
@@ -423,7 +424,7 @@ deriving instance Ord CallHierarchyIncomingCall
 deriving instance Ord CallHierarchyOutgoingCall
 
 incomingCallTestCase :: T.Text -> Int -> Int -> [(Int, Int)] -> [Range] -> Assertion
-incomingCallTestCase contents queryX queryY positions ranges = withTempDir $ \dir ->
+incomingCallTestCase contents queryX queryY positions ranges = withCanonicalTempDir $ \dir ->
   runSessionWithServer plugin dir $ do
     doc <- createDoc "A.hs" "haskell" contents
     waitForKickDone
@@ -465,7 +466,7 @@ incomingCallMultiFileTestCase filepath queryX queryY mp =
     closeDoc doc
 
 outgoingCallTestCase :: T.Text -> Int -> Int -> [(Int, Int)] -> [Range] -> Assertion
-outgoingCallTestCase contents queryX queryY positions ranges = withTempDir $ \dir ->
+outgoingCallTestCase contents queryX queryY positions ranges = withCanonicalTempDir $ \dir ->
   runSessionWithServer plugin dir $ do
     doc <- createDoc "A.hs" "haskell" contents
     waitForKickDone
@@ -505,7 +506,7 @@ outgoingCallMultiFileTestCase filepath queryX queryY mp =
     closeDoc doc
 
 oneCaseWithCreate :: T.Text -> Int -> Int -> (Uri -> CallHierarchyItem) -> Assertion
-oneCaseWithCreate contents queryX queryY expected = withTempDir $ \dir ->
+oneCaseWithCreate contents queryX queryY expected = withCanonicalTempDir $ \dir ->
   runSessionWithServer plugin dir $ do
     doc <- createDoc "A.hs" "haskell" contents
     waitForKickDone
@@ -544,8 +545,3 @@ mkIncomingCallsParam = CallHierarchyIncomingCallsParams Nothing Nothing
 
 mkOutgoingCallsParam :: CallHierarchyItem -> CallHierarchyOutgoingCallsParams
 mkOutgoingCallsParam = CallHierarchyOutgoingCallsParams Nothing Nothing
-
-withTempDir :: (FilePath -> IO a) -> IO a
-withTempDir f = System.IO.Extra.withTempDir $ \dir -> do
-  dir' <- canonicalizePath dir
-  f dir'
