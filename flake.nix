@@ -97,7 +97,7 @@
       flake = false;
     };
     myst-parser = {
-      url = "github:smunix/MyST-Parser?ref=fix.hls-docutils"; 
+      url = "github:smunix/MyST-Parser?ref=fix.hls-docutils";
       flake = false;
     };
     # For https://github.com/readthedocs/sphinx_rtd_theme/pull/1185, otherwise lists are broken locally
@@ -128,7 +128,7 @@
               in hsuper.mkDerivation (args // {
                 jailbreak = if broken then true else jailbreak;
                 doCheck = if broken then false else check;
-                # Library profiling is disabled as it causes long compilation time 
+                # Library profiling is disabled as it causes long compilation time
                 # on our CI jobs. Nix users are free tor revert this anytime.
                 enableLibraryProfiling = false;
                 doHaddock = false;
@@ -175,8 +175,7 @@
                 else hsuper.ormolu;
             };
 
-          hlsSources =
-            builtins.mapAttrs (_: dir: gitignoreSource dir) sourceDirs;
+          hlsSources = sourceDirs;
 
           extended = hpkgs:
             (hpkgs.override (old: {
@@ -255,7 +254,7 @@
         ghc922Config = (import ./configuration-ghc-92.nix) { inherit pkgs inputs; };
 
         # GHC versions
-        # While HLS still works fine with 8.10 GHCs, we only support the versions that are cached 
+        # While HLS still works fine with 8.10 GHCs, we only support the versions that are cached
         # by upstream nixpkgs, which now only includes GHC version 9+
         supportedGHCs = let
           ghcVersion = "ghc" + (pkgs.lib.replaceStrings ["."] [""] pkgs.haskellPackages.ghc.version);
@@ -273,14 +272,14 @@
         myst-parser = pkgs.poetry2nix.mkPoetryEnv {
           projectDir = inputs.myst-parser;
           python = pkgs.python39;
-          overrides = [ 
+          overrides = [
             pkgs.poetry2nix.defaultPoetryOverrides
           ];
         };
         sphinx_rtd_theme = pkgs.poetry2nix.mkPoetryEnv {
           projectDir = inputs.sphinx_rtd_theme;
           python = pkgs.python39;
-          overrides = [ 
+          overrides = [
             pkgs.poetry2nix.defaultPoetryOverrides
             (self: super: {
               # The RTD theme doesn't work with newer docutils
