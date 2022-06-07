@@ -33,7 +33,7 @@ let
       in hsuper.mkDerivation (args // {
         jailbreak = if broken then true else jailbreak;
         doCheck = if broken then false else check;
-        # Library profiling is disabled as it causes long compilation time 
+        # Library profiling is disabled as it causes long compilation time
         # on our CI jobs. Nix users are free tor revert this anytime.
         enableLibraryProfiling = false;
         doHaddock = false;
@@ -80,8 +80,7 @@ let
         else hsuper.ormolu;
     };
 
-  hlsSources =
-    builtins.mapAttrs (_: dir: gitignoreSource dir) sourceDirs;
+  hlsSources = sourceDirs;
 
   extended = hpkgs:
     (hpkgs.override (old: {
