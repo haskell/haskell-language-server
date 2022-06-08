@@ -9,12 +9,18 @@ license:            Apache-2.0
 license-file:       LICENSE
 author:             The Haskell IDE Team
 copyright:          The Haskell IDE Team
+homepage:           https://github.com/haskell/haskell-language-server
+bug-reports:        https://github.com/haskell/haskell-language-server/issues
 maintainer:         alan.zimm@gmail.com
 category:           Development
 build-type:         Simple
 extra-source-files:
   LICENSE
   test/testdata/**/*.hs
+
+source-repository head
+  type:     git
+  location: git://github.com/haskell/haskell-language-server.git
 
 library
   exposed-modules:  Ide.Plugin.Fourmolu
@@ -23,7 +29,7 @@ library
   build-depends:
     , base            >=4.12 && <5
     , filepath
-    , fourmolu        ^>=0.3 || ^>=0.4 || ^>= 0.6
+    , fourmolu        ^>=0.3 || ^>=0.4 || ^>= 0.6 || ^>= 0.7
     , ghc
     , ghc-boot-th
     , ghcide          ^>=1.7
