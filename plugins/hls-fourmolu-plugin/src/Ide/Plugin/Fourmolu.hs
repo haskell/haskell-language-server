@@ -1,9 +1,10 @@
+{-# LANGUAGE CPP                      #-}
+{-# LANGUAGE DataKinds                #-}
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE LambdaCase               #-}
+{-# LANGUAGE OverloadedLabels         #-}
 {-# LANGUAGE OverloadedStrings        #-}
 {-# LANGUAGE TypeApplications         #-}
-{-# LANGUAGE DataKinds                #-}
-{-# LANGUAGE OverloadedLabels         #-}
 
 module Ide.Plugin.Fourmolu (
     descriptor,
@@ -23,16 +24,18 @@ import           Development.IDE.GHC.Compat      as Compat hiding (Cpp)
 import qualified Development.IDE.GHC.Compat.Util as S
 import           GHC.LanguageExtensions.Type     (Extension (Cpp))
 import           Ide.Plugin.Properties
-import           Ide.PluginUtils                 (makeDiffTextEdit, usePropertyLsp)
+import           Ide.PluginUtils                 (makeDiffTextEdit,
+                                                  usePropertyLsp)
 import           Ide.Types
 import           Language.LSP.Server             hiding (defaultConfig)
 import           Language.LSP.Types
 import           Language.LSP.Types.Lens         (HasTabSize (tabSize))
 import           Ormolu
+import           Ormolu.Config
 import           System.Exit
 import           System.FilePath
 import           System.IO                       (stderr)
-import           System.Process.Run              (proc, cwd)
+import           System.Process.Run              (cwd, proc)
 import           System.Process.Text             (readCreateProcessWithExitCode)
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -78,10 +81,17 @@ provider plId ideState typ contents fp fo = withIndefiniteProgress title Cancell
                     ExitFailure n ->
                         pure . Left . responseError $ "Fourmolu failed with exit code " <> T.pack (show n)
         else do
-            let format printerOpts =
+            let format fourmoluConfig =
                     first (mkError . show)
                         <$> try @OrmoluException (makeDiffTextEdit contents <$> ormolu config fp' (T.unpack contents))
                   where
+                    printerOpts =
+#if MIN_VERSION_fourmolu(0,7,0)
+                        cfgFilePrinterOpts fourmoluConfig
+#else
+                        fourmoluConfig
+
+#endif
                     config =
                         defaultConfig
                             { cfgDynOptions = map DynOption fileOpts
@@ -91,6 +101,10 @@ provider plId ideState typ contents fp fo = withIndefiniteProgress title Cancell
                                 fillMissingPrinterOpts
                                     (printerOpts <> lspPrinterOpts)
                                     defaultPrinterOpts
+#if MIN_VERSION_fourmolu(0,7,0)
+                            , cfgFixityOverrides =
+                                cfgFileFixities fourmoluConfig
+#endif
                             }
              in liftIO (loadConfigFile fp') >>= \case
                     ConfigLoaded file opts -> liftIO $ do
@@ -101,8 +115,19 @@ provider plId ideState typ contents fp fo = withIndefiniteProgress title Cancell
                             . unlines
                             $ ("No " ++ show configFileName ++ " found in any of:") :
                             map ("  " ++) searchDirs
-                        format mempty
-                    ConfigParseError f (_, err) -> do
+                        format emptyOptions
+                      where
+                        emptyOptions =
+#if MIN_VERSION_fourmolu(0,7,0)
+                            FourmoluConfig
+                                { cfgFilePrinterOpts = mempty
+                                , cfgFileFixities = mempty
+                                }
+#else
+                            mempty
+#endif
+
+                    ConfigParseError f err -> do
                         sendNotification SWindowShowMessage $
                             ShowMessageParams
                                 { _xtype = MtError
@@ -110,7 +135,13 @@ provider plId ideState typ contents fp fo = withIndefiniteProgress title Cancell
                                 }
                         return . Left $ responseError errorMessage
                       where
-                        errorMessage = "Failed to load " <> T.pack f <> ": " <> T.pack err
+                        errorMessage = "Failed to load " <> T.pack f <> ": " <> T.pack (convertErr err)
+                        convertErr =
+#if MIN_VERSION_fourmolu(0,7,0)
+                            show
+#else
+                            snd
+#endif
   where
     fp' = fromNormalizedFilePath fp
     title = "Formatting " <> T.pack (takeFileName fp')
