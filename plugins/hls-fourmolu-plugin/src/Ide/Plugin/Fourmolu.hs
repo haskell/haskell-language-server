@@ -4,6 +4,7 @@
 {-# LANGUAGE TypeApplications         #-}
 {-# LANGUAGE DataKinds                #-}
 {-# LANGUAGE OverloadedLabels         #-}
+{-# LANGUAGE CPP                      #-}
 
 module Ide.Plugin.Fourmolu (
     descriptor,
@@ -34,6 +35,7 @@ import           System.FilePath
 import           System.IO                       (stderr)
 import           System.Process.Run              (proc, cwd)
 import           System.Process.Text             (readCreateProcessWithExitCode)
+import Ormolu.Config
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
@@ -78,10 +80,17 @@ provider plId ideState typ contents fp fo = withIndefiniteProgress title Cancell
                     ExitFailure n ->
                         pure . Left . responseError $ "Fourmolu failed with exit code " <> T.pack (show n)
         else do
-            let format printerOpts =
+            let format fourmoluConfig =
                     first (mkError . show)
                         <$> try @OrmoluException (makeDiffTextEdit contents <$> ormolu config fp' (T.unpack contents))
                   where
+                    printerOpts =
+#if MIN_VERSION_fourmolu(0,7,0)
+                        cfgFilePrinterOpts fourmoluConfig
+#else
+                        fourmoluConfig
+
+#endif
                     config =
                         defaultConfig
                             { cfgDynOptions = map DynOption fileOpts
@@ -91,6 +100,10 @@ provider plId ideState typ contents fp fo = withIndefiniteProgress title Cancell
                                 fillMissingPrinterOpts
                                     (printerOpts <> lspPrinterOpts)
                                     defaultPrinterOpts
+#if MIN_VERSION_fourmolu(0,7,0)
+                            , cfgFixityOverrides =
+                                cfgFileFixities fourmoluConfig
+#endif
                             }
              in liftIO (loadConfigFile fp') >>= \case
                     ConfigLoaded file opts -> liftIO $ do
@@ -101,8 +114,19 @@ provider plId ideState typ contents fp fo = withIndefiniteProgress title Cancell
                             . unlines
                             $ ("No " ++ show configFileName ++ " found in any of:") :
                             map ("  " ++) searchDirs
-                        format mempty
-                    ConfigParseError f (_, err) -> do
+                        format emptyOptions
+                      where
+                        emptyOptions =
+#if MIN_VERSION_fourmolu(0,7,0)
+                            FourmoluConfig
+                                { cfgFilePrinterOpts = mempty
+                                , cfgFileFixities = mempty
+                                }
+#else
+                            mempty
+#endif
+
+                    ConfigParseError f err -> do
                         sendNotification SWindowShowMessage $
                             ShowMessageParams
                                 { _xtype = MtError
@@ -110,7 +134,13 @@ provider plId ideState typ contents fp fo = withIndefiniteProgress title Cancell
                                 }
                         return . Left $ responseError errorMessage
                       where
-                        errorMessage = "Failed to load " <> T.pack f <> ": " <> T.pack err
+                        errorMessage = "Failed to load " <> T.pack f <> ": " <> T.pack (convertErr err)
+                        convertErr =
+#if MIN_VERSION_fourmolu(0,7,0)
+                            show
+#else
+                            snd
+#endif
   where
     fp' = fromNormalizedFilePath fp
     title = "Formatting " <> T.pack (takeFileName fp')
