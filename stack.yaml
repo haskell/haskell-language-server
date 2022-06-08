@@ -51,7 +51,6 @@ extra-deps:
 - rope-utf16-splay-0.3.2.0
 - sqlite-simple-0.4.18.0@sha256:3ceea56375c0a3590c814e411a4eb86943f8d31b93b110ca159c90689b6b39e5,3002
 - SVGFonts-1.7.0.1  # for Chart-diagrams, https://github.com/timbod7/haskell-chart/issues/232
-- fourmolu-0.7.0.1
 
 
 # currently needed for ghcide>extra, etc.

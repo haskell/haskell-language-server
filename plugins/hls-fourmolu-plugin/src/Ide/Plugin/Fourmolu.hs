@@ -1,10 +1,10 @@
+{-# LANGUAGE CPP                      #-}
+{-# LANGUAGE DataKinds                #-}
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE LambdaCase               #-}
+{-# LANGUAGE OverloadedLabels         #-}
 {-# LANGUAGE OverloadedStrings        #-}
 {-# LANGUAGE TypeApplications         #-}
-{-# LANGUAGE DataKinds                #-}
-{-# LANGUAGE OverloadedLabels         #-}
-{-# LANGUAGE CPP                      #-}
 
 module Ide.Plugin.Fourmolu (
     descriptor,
@@ -24,18 +24,19 @@ import           Development.IDE.GHC.Compat      as Compat hiding (Cpp)
 import qualified Development.IDE.GHC.Compat.Util as S
 import           GHC.LanguageExtensions.Type     (Extension (Cpp))
 import           Ide.Plugin.Properties
-import           Ide.PluginUtils                 (makeDiffTextEdit, usePropertyLsp)
+import           Ide.PluginUtils                 (makeDiffTextEdit,
+                                                  usePropertyLsp)
 import           Ide.Types
 import           Language.LSP.Server             hiding (defaultConfig)
 import           Language.LSP.Types
 import           Language.LSP.Types.Lens         (HasTabSize (tabSize))
 import           Ormolu
+import           Ormolu.Config
 import           System.Exit
 import           System.FilePath
 import           System.IO                       (stderr)
-import           System.Process.Run              (proc, cwd)
+import           System.Process.Run              (cwd, proc)
 import           System.Process.Text             (readCreateProcessWithExitCode)
-import Ormolu.Config
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
