@@ -205,6 +205,25 @@ instance PluginMethod TextDocumentCodeAction where
         , Just caKind <- ca ^. kind = any (\k -> k `codeActionKindSubsumes` caKind) allowed
         | otherwise = False
 
+instance PluginMethod TextDocumentDefinition where
+  pluginEnabled _ _ _ = True
+  combineResponses _ _ _ _ (x :| _) = x
+
+instance PluginMethod TextDocumentTypeDefinition where
+  pluginEnabled _ _ _ = True
+  combineResponses _ _ _ _ (x :| _) = x
+
+instance PluginMethod TextDocumentDocumentHighlight where
+  pluginEnabled _ _ _ = True
+  combineResponses _ _ _ _ (x :| _) = x
+
+instance PluginMethod TextDocumentReferences where
+  pluginEnabled _ _ _ = True
+  combineResponses _ _ _ _ (x :| _) = x
+
+instance PluginMethod WorkspaceSymbol where
+  pluginEnabled _ _ _ = True
+
 instance PluginMethod TextDocumentCodeLens where
   pluginEnabled _ = pluginEnabledConfig plcCodeLensOn
 instance PluginMethod TextDocumentRename where
