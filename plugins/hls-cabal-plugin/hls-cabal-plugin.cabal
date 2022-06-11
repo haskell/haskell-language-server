@@ -1,37 +1,60 @@
 cabal-version:      3.0
 name:               hls-cabal-plugin
 version:            0.1.0.0
-synopsis:
+synopsis:           Cabal integration plugin with Haskell Language Server
+description:
+  Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
+
 homepage:
 license:            MIT
 license-file:       LICENSE
 author:             Fendor
 maintainer:         fendor@posteo.de
 category:           Development
-extra-source-files: CHANGELOG.md
+extra-source-files:
+  CHANGELOG.md
+  test/testdata/simple.cabal
+  test/testdata/simple.cabal.golden.txt
+
+common warnings
+  ghc-options: -Wall
 
 library
-  exposed-modules:  Ide.Plugin.Cabal
+  import:           warnings
+  exposed-modules:
+    Ide.Plugin.Cabal
+    Ide.Plugin.Cabal.Diagnostics
+    Ide.Plugin.Cabal.LicenseSuggest
+    Ide.Plugin.Cabal.Parse
+
   build-depends:
     , aeson
-    , base            >=4.12 && <5
+    , base                  >=4.12 && <5
+    , bytestring
+    , Cabal
     , czipwith
+    , deepseq
+    , directory
     , extra
     , filepath
     , ghc-exactprint
     , ghcide          >=1.6  && <1.9
+    , hashable
     , hls-plugin-api  >=1.5  && <1.6
     , lens
+    , lsp
     , lsp-types
+    , regex-tdfa
+    , stm
     , text
     , transformers
+    , unordered-containers
 
-  -- see https://github.com/lspitzner/brittany/issues/364
-  -- TODO: remove these when GH issue #2005 is resolved
   hs-source-dirs:   src
   default-language: Haskell2010
 
-test-suite hls-cabal-plugin-test
+test-suite tests
+  import:           warnings
   default-language: Haskell2010
   type:             exitcode-stdio-1.0
   hs-source-dirs:   test
@@ -43,4 +66,5 @@ test-suite hls-cabal-plugin-test
     , hls-test-utils    ^>=1.4
     , lsp
     , lsp-types
+    , tasty-hunit
     , text
