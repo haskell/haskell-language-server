@@ -108,6 +108,10 @@ import qualified Ide.Plugin.Floskell               as Floskell
 import qualified Ide.Plugin.Fourmolu               as Fourmolu
 #endif
 
+#if hls_cabalfmt
+import qualified Ide.Plugin.CabalFmt               as CabalFmt
+#endif
+
 #if hls_ormolu
 import qualified Ide.Plugin.Ormolu                 as Ormolu
 #endif
@@ -150,6 +154,9 @@ idePlugins recorder = pluginDescToIdePlugins allPlugins
 #endif
 #if hls_fourmolu
       let pId = "fourmolu" in Fourmolu.descriptor (pluginRecorder pId) pId:
+#endif
+#if hls_cabalfmt
+      let pId = "cabalfmt" in CabalFmt.descriptor (pluginRecorder pId) pId:
 #endif
 #if hls_tactic
       let pId = "tactics" in Tactic.descriptor (pluginRecorder pId) pId:
