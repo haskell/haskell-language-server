@@ -7,7 +7,6 @@ module Development.IDE.Types.Exports
     ExportsMap(..),
     createExportsMap,
     createExportsMapMg,
-    createExportsMapTc,
     buildModuleExportMapFrom,
     createExportsMapHieDb,
     size,
@@ -139,16 +138,6 @@ updateExportsMapMg modGuts old = old' <> new
         new = createExportsMapMg modGuts
         old' = deleteAll old (Map.keys $ getModuleExportsMap new)
         deleteAll = foldl' (flip deleteEntriesForModule)
-
-createExportsMapTc :: [TcGblEnv] -> ExportsMap
-createExportsMapTc modIface = do
-  let exportList = concatMap doOne modIface
-  let exportsMap = Map.fromListWith (<>) $ map (\(a,_,c) -> (a, c)) exportList
-  ExportsMap exportsMap $ buildModuleExportMap $ map (\(_,b,c) -> (b, c)) exportList
-  where
-    doOne mi = do
-      let getModuleName = moduleName $ tcg_mod mi
-      concatMap (fmap (second Set.fromList) . unpackAvail getModuleName) (tcg_exports mi)
 
 nonInternalModules :: ModuleName -> Bool
 nonInternalModules = not . (".Internal" `isSuffixOf`) . moduleNameString
