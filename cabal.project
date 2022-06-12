@@ -44,7 +44,7 @@ package *
 
 write-ghc-environment-files: never
 
-index-state: 2022-04-30T21:02:45Z
+index-state: 2022-06-12T00:00:00Z
 
 constraints:
   hyphenation +embed,
