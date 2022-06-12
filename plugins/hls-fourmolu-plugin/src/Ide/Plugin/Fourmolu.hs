@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP                      #-}
 {-# LANGUAGE DataKinds                #-}
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE LambdaCase               #-}
@@ -85,13 +84,7 @@ provider plId ideState typ contents fp fo = withIndefiniteProgress title Cancell
                     first (mkError . show)
                         <$> try @OrmoluException (makeDiffTextEdit contents <$> ormolu config fp' (T.unpack contents))
                   where
-                    printerOpts =
-#if MIN_VERSION_fourmolu(0,7,0)
-                        cfgFilePrinterOpts fourmoluConfig
-#else
-                        fourmoluConfig
-
-#endif
+                    printerOpts = cfgFilePrinterOpts fourmoluConfig
                     config =
                         defaultConfig
                             { cfgDynOptions = map DynOption fileOpts
@@ -101,10 +94,8 @@ provider plId ideState typ contents fp fo = withIndefiniteProgress title Cancell
                                 fillMissingPrinterOpts
                                     (printerOpts <> lspPrinterOpts)
                                     defaultPrinterOpts
-#if MIN_VERSION_fourmolu(0,7,0)
                             , cfgFixityOverrides =
                                 cfgFileFixities fourmoluConfig
-#endif
                             }
              in liftIO (loadConfigFile fp') >>= \case
                     ConfigLoaded file opts -> liftIO $ do
@@ -118,15 +109,10 @@ provider plId ideState typ contents fp fo = withIndefiniteProgress title Cancell
                         format emptyOptions
                       where
                         emptyOptions =
-#if MIN_VERSION_fourmolu(0,7,0)
                             FourmoluConfig
                                 { cfgFilePrinterOpts = mempty
                                 , cfgFileFixities = mempty
                                 }
-#else
-                            mempty
-#endif
-
                     ConfigParseError f err -> do
                         sendNotification SWindowShowMessage $
                             ShowMessageParams
@@ -135,13 +121,7 @@ provider plId ideState typ contents fp fo = withIndefiniteProgress title Cancell
                                 }
                         return . Left $ responseError errorMessage
                       where
-                        errorMessage = "Failed to load " <> T.pack f <> ": " <> T.pack (convertErr err)
-                        convertErr =
-#if MIN_VERSION_fourmolu(0,7,0)
-                            show
-#else
-                            snd
-#endif
+                        errorMessage = "Failed to load " <> T.pack f <> ": " <> T.pack (show err)
   where
     fp' = fromNormalizedFilePath fp
     title = "Formatting " <> T.pack (takeFileName fp')
