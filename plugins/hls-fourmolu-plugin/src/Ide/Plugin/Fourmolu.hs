@@ -66,7 +66,7 @@ provider plId ideState typ contents fp fo = withIndefiniteProgress title Cancell
                 (exitCode, out, err) <-
                     readCreateProcessWithExitCode
                         ( proc "fourmolu" $
-                            ["-d"]
+                            ["-d", "--no-cabal"]
                                 <> catMaybes
                                     [ ("--start-line=" <>) . show <$> regionStartLine region
                                     , ("--end-line=" <>) . show <$> regionEndLine region
