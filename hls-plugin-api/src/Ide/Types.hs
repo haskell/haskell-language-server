@@ -17,6 +17,7 @@
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE UndecidableInstances       #-}
 {-# LANGUAGE ViewPatterns               #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 module Ide.Types
     where
@@ -165,11 +166,25 @@ defaultConfigDescriptor = ConfigDescriptor True False (mkCustomConfig emptyPrope
 -- | Methods that can be handled by plugins.
 -- 'ExtraParams' captures any extra data the IDE passes to the handlers for this method
 -- Only methods for which we know how to combine responses can be instances of 'PluginMethod'
-class HasTracing (MessageParams m) => PluginMethod m where
+class HasTracing (MessageParams m) => PluginMethod (k :: MethodType) (m :: Method FromClient k) where
 
   -- | Parse the configuration to check if this plugin is enabled
-  pluginEnabled :: SMethod m -> MessageParams m -> PluginDescriptor c -> Config -> Bool
+  pluginEnabled
+    :: SMethod m
+    -> MessageParams m
+    -- ^ Whether a plugin is enabled might depend on the message parameters
+    --   eg 'pluginFileType' specifies what file extension a plugin is allowed to handle
+    -> PluginDescriptor c
+    -> Config
+    -> Bool
 
+  default pluginEnabled :: (HasTextDocument (MessageParams m) doc, HasUri doc Uri)
+                              => SMethod m -> MessageParams m -> PluginDescriptor c -> Config -> Bool
+  pluginEnabled _ params desc conf = pluginResponsible uri desc && plcGlobalOn (configForPlugin conf (pluginId desc))
+    where
+        uri = params ^. J.textDocument . J.uri
+
+class PluginMethod Request m => PluginRequestMethod (m :: Method FromClient Request) where
   -- | How to combine responses from different plugins
   combineResponses
     :: SMethod m
@@ -182,11 +197,14 @@ class HasTracing (MessageParams m) => PluginMethod m where
     => SMethod m -> Config -> ClientCapabilities -> MessageParams m -> NonEmpty (ResponseResult m) -> ResponseResult m
   combineResponses _method _config _caps _params = sconcat
 
-instance PluginMethod TextDocumentCodeAction where
+
+instance PluginMethod Request TextDocumentCodeAction where
   pluginEnabled _ msgParams pluginDesc config =
     pluginResponsible uri pluginDesc && pluginEnabledConfig plcCodeActionsOn (pluginId pluginDesc) config
     where
       uri = msgParams ^. J.textDocument . J.uri
+
+instance PluginRequestMethod TextDocumentCodeAction where
   combineResponses _method _config (ClientCapabilities _ textDocCaps _ _ _) (CodeActionParams _ _ _ _ context) resps =
       fmap compat $ List $ filter wasRequested $ (\(List x) -> x) $ sconcat resps
     where
@@ -243,52 +261,121 @@ pluginResponsible uri pluginDesc
     where
       mfp = uriToFilePath uri
 
-instance PluginMethod TextDocumentDefinition where
-  pluginEnabled _ msgParams pluginDesc _ =
-    pluginResponsible uri pluginDesc
-    where
-      uri = msgParams ^. J.textDocument . J.uri
-  combineResponses _ _ _ _ (x :| _) = x
-
-instance PluginMethod TextDocumentTypeDefinition where
-  pluginEnabled _ msgParams pluginDesc _ =
-    pluginResponsible uri pluginDesc
-    where
-      uri = msgParams ^. J.textDocument . J.uri
-  combineResponses _ _ _ _ (x :| _) = x
-
-instance PluginMethod TextDocumentDocumentHighlight where
+instance PluginMethod Request TextDocumentDefinition where
   pluginEnabled _ msgParams pluginDesc _ =
     pluginResponsible uri pluginDesc
     where
       uri = msgParams ^. J.textDocument . J.uri
 
-instance PluginMethod TextDocumentReferences where
+instance PluginMethod Request TextDocumentTypeDefinition where
   pluginEnabled _ msgParams pluginDesc _ =
     pluginResponsible uri pluginDesc
     where
       uri = msgParams ^. J.textDocument . J.uri
 
-instance PluginMethod WorkspaceSymbol where
+instance PluginMethod Request TextDocumentDocumentHighlight where
+  pluginEnabled _ msgParams pluginDesc _ =
+    pluginResponsible uri pluginDesc
+    where
+      uri = msgParams ^. J.textDocument . J.uri
+
+instance PluginMethod Request TextDocumentReferences where
+  pluginEnabled _ msgParams pluginDesc _ =
+    pluginResponsible uri pluginDesc
+    where
+      uri = msgParams ^. J.textDocument . J.uri
+
+instance PluginMethod Request WorkspaceSymbol where
   pluginEnabled _ _ _ _ = True
 
-instance PluginMethod TextDocumentCodeLens where
+instance PluginMethod Request TextDocumentCodeLens where
   pluginEnabled _ msgParams pluginDesc config =
     pluginResponsible uri pluginDesc
       && pluginEnabledConfig plcCodeLensOn (pluginId pluginDesc) config
     where
       uri = msgParams ^. J.textDocument . J.uri
 
-instance PluginMethod TextDocumentRename where
+instance PluginMethod Request TextDocumentRename where
   pluginEnabled _ msgParams pluginDesc config =  pluginResponsible uri pluginDesc
       && pluginEnabledConfig plcRenameOn (pluginId pluginDesc) config
    where
       uri = msgParams ^. J.textDocument . J.uri
-instance PluginMethod TextDocumentHover where
+instance PluginMethod Request TextDocumentHover where
   pluginEnabled _ msgParams pluginDesc config =  pluginResponsible uri pluginDesc
       && pluginEnabledConfig plcHoverOn (pluginId pluginDesc) config
    where
       uri = msgParams ^. J.textDocument . J.uri
+
+instance PluginMethod Request TextDocumentDocumentSymbol where
+  pluginEnabled _ msgParams pluginDesc config =  pluginResponsible uri pluginDesc
+      && pluginEnabledConfig plcSymbolsOn (pluginId pluginDesc) config
+    where
+      uri = msgParams ^. J.textDocument . J.uri
+
+instance PluginMethod Request TextDocumentCompletion where
+  pluginEnabled _ msgParams pluginDesc config =  pluginResponsible uri pluginDesc
+      && pluginEnabledConfig plcCompletionOn (pluginId pluginDesc) config
+    where
+      uri = msgParams ^. J.textDocument . J.uri
+
+instance PluginMethod Request TextDocumentFormatting where
+  pluginEnabled STextDocumentFormatting msgParams pluginDesc conf =
+    pluginResponsible uri pluginDesc && PluginId (formattingProvider conf) == pid
+    where
+      uri = msgParams ^. J.textDocument . J.uri
+      pid = pluginId pluginDesc
+
+instance PluginMethod Request TextDocumentRangeFormatting where
+  pluginEnabled _ msgParams pluginDesc conf = pluginResponsible uri pluginDesc
+      && PluginId (formattingProvider conf) == pid
+    where
+      uri = msgParams ^. J.textDocument . J.uri
+      pid = pluginId pluginDesc
+
+instance PluginMethod Request TextDocumentPrepareCallHierarchy where
+  pluginEnabled _ msgParams pluginDesc conf = pluginResponsible uri pluginDesc
+      && pluginEnabledConfig plcCallHierarchyOn pid conf
+    where
+      uri = msgParams ^. J.textDocument . J.uri
+      pid = pluginId pluginDesc
+
+instance PluginMethod Request TextDocumentSelectionRange where
+  pluginEnabled _ msgParams pluginDesc conf = pluginResponsible uri pluginDesc && pluginEnabledConfig plcSelectionRangeOn pid conf
+    where
+      uri = msgParams ^. J.textDocument . J.uri
+      pid = pluginId pluginDesc
+
+instance PluginMethod Request CallHierarchyIncomingCalls where
+  pluginEnabled _ _ pluginDesc conf = pluginEnabledConfig plcCallHierarchyOn pid conf
+    where
+      pid = pluginId pluginDesc
+
+instance PluginMethod Request CallHierarchyOutgoingCalls where
+  pluginEnabled _ _ pluginDesc conf = pluginEnabledConfig plcCallHierarchyOn pid conf
+    where
+      pid = pluginId pluginDesc
+
+instance PluginMethod Request CustomMethod where
+  pluginEnabled _ _ _ _ = True
+
+---
+instance PluginRequestMethod TextDocumentDefinition where
+  combineResponses _ _ _ _ (x :| _) = x
+
+instance PluginRequestMethod TextDocumentTypeDefinition where
+  combineResponses _ _ _ _ (x :| _) = x
+
+instance PluginRequestMethod TextDocumentDocumentHighlight where
+
+instance PluginRequestMethod TextDocumentReferences where
+
+instance PluginRequestMethod WorkspaceSymbol where
+
+instance PluginRequestMethod TextDocumentCodeLens where
+
+instance PluginRequestMethod TextDocumentRename where
+
+instance PluginRequestMethod TextDocumentHover where
   combineResponses _ _ _ _ (catMaybes . toList -> hs) = h
     where
       r = listToMaybe $ mapMaybe (^. range) hs
@@ -296,11 +383,7 @@ instance PluginMethod TextDocumentHover where
             HoverContentsMS (List []) -> Nothing
             hh                        -> Just $ Hover hh r
 
-instance PluginMethod TextDocumentDocumentSymbol where
-  pluginEnabled _ msgParams pluginDesc config =  pluginResponsible uri pluginDesc
-      && pluginEnabledConfig plcSymbolsOn (pluginId pluginDesc) config
-    where
-      uri = msgParams ^. J.textDocument . J.uri
+instance PluginRequestMethod TextDocumentDocumentSymbol where
   combineResponses _ _ (ClientCapabilities _ tdc _ _ _) params xs = res
     where
       uri' = params ^. textDocument . uri
@@ -321,11 +404,7 @@ instance PluginMethod TextDocumentDocumentSymbol where
             si = SymbolInformation name' (ds ^. kind) Nothing (ds ^. deprecated) loc parent
         in [si] <> children'
 
-instance PluginMethod TextDocumentCompletion where
-  pluginEnabled _ msgParams pluginDesc config =  pluginResponsible uri pluginDesc
-      && pluginEnabledConfig plcCompletionOn (pluginId pluginDesc) config
-    where
-      uri = msgParams ^. J.textDocument . J.uri
+instance PluginRequestMethod TextDocumentCompletion where
   combineResponses _ conf _ _ (toList -> xs) = snd $ consumeCompletionResponse limit $ combine xs
       where
         limit = maxCompletions conf
@@ -353,60 +432,36 @@ instance PluginMethod TextDocumentCompletion where
         consumeCompletionResponse n (InL (List xx)) =
           consumeCompletionResponse n (InR (CompletionList isCompleteResponse (List xx)))
 
-instance PluginMethod TextDocumentFormatting where
-  pluginEnabled STextDocumentFormatting msgParams pluginDesc conf =
-    pluginResponsible uri pluginDesc && PluginId (formattingProvider conf) == pid
-    where
-      uri = msgParams ^. J.textDocument . J.uri
-      pid = pluginId pluginDesc
-  combineResponses _ _ _ _ x = sconcat x
-
-
-instance PluginMethod TextDocumentRangeFormatting where
-  pluginEnabled _ msgParams pluginDesc conf = pluginResponsible uri pluginDesc
-      && PluginId (formattingProvider conf) == pid
-    where
-      uri = msgParams ^. J.textDocument . J.uri
-      pid = pluginId pluginDesc
+instance PluginRequestMethod TextDocumentFormatting where
   combineResponses _ _ _ _ (x :| _) = x
 
-instance PluginMethod TextDocumentPrepareCallHierarchy where
-  pluginEnabled _ msgParams pluginDesc conf = pluginResponsible uri pluginDesc
-      && pluginEnabledConfig plcCallHierarchyOn pid conf
-    where
-      uri = msgParams ^. J.textDocument . J.uri
-      pid = pluginId pluginDesc
-
-instance PluginMethod TextDocumentSelectionRange where
-  pluginEnabled _ _ pluginDesc conf = pluginEnabledConfig plcSelectionRangeOn pid conf
-    where
-      pid = pluginId pluginDesc
+instance PluginRequestMethod TextDocumentRangeFormatting where
   combineResponses _ _ _ _ (x :| _) = x
 
-instance PluginMethod CallHierarchyIncomingCalls where
-  pluginEnabled _ _ pluginDesc conf = pluginEnabledConfig plcCallHierarchyOn pid conf
-    where
-      pid = pluginId pluginDesc
+instance PluginRequestMethod TextDocumentPrepareCallHierarchy where
 
-instance PluginMethod CallHierarchyOutgoingCalls where
-  pluginEnabled _ _ pluginDesc conf = pluginEnabledConfig plcCallHierarchyOn pid conf
-    where
-      pid = pluginId pluginDesc
-
-instance PluginMethod CustomMethod where
-  pluginEnabled _ _ _ _ = True
+instance PluginRequestMethod TextDocumentSelectionRange where
   combineResponses _ _ _ _ (x :| _) = x
 
+instance PluginRequestMethod CallHierarchyIncomingCalls where
+
+instance PluginRequestMethod CallHierarchyOutgoingCalls where
+
+instance PluginRequestMethod CustomMethod where
+  combineResponses _ _ _ _ (x :| _) = x
 -- ---------------------------------------------------------------------
 
-class HasTracing (MessageParams m) => PluginNotificationMethod (m :: Method FromClient Notification)  where
-  pluginEnabled2 :: SMethod m -> MessageParams m -> PluginDescriptor c -> Config -> Bool
+class PluginMethod Notification m => PluginNotificationMethod (m :: Method FromClient Notification)  where
 
-  default pluginEnabled2 :: (HasTextDocument (MessageParams m) doc, HasUri doc Uri)
-                              => SMethod m -> MessageParams m -> PluginDescriptor c -> Config -> Bool
-  pluginEnabled2 _ params desc conf = pluginResponsible uri desc && plcGlobalOn (configForPlugin conf (pluginId desc))
-    where
-        uri = params ^. J.textDocument . J.uri
+
+instance PluginMethod Notification TextDocumentDidOpen where
+
+instance PluginMethod Notification TextDocumentDidChange where
+
+instance PluginMethod Notification TextDocumentDidSave where
+
+instance PluginMethod Notification TextDocumentDidClose where
+
 
 instance PluginNotificationMethod TextDocumentDidOpen where
 
@@ -416,22 +471,30 @@ instance PluginNotificationMethod TextDocumentDidSave where
 
 instance PluginNotificationMethod TextDocumentDidClose where
 
+instance PluginMethod Notification WorkspaceDidChangeWatchedFiles where
+  pluginEnabled _ _ desc conf = plcGlobalOn $ configForPlugin conf (pluginId desc)
+
+instance PluginMethod Notification WorkspaceDidChangeWorkspaceFolders where
+  pluginEnabled _ _ desc conf = plcGlobalOn $ configForPlugin conf (pluginId desc)
+
+instance PluginMethod Notification WorkspaceDidChangeConfiguration where
+  pluginEnabled _ _ desc conf = plcGlobalOn $ configForPlugin conf (pluginId desc)
+
+instance PluginMethod Notification Initialized where
+  pluginEnabled _ _ desc conf = plcGlobalOn $ configForPlugin conf (pluginId desc)
+
 instance PluginNotificationMethod WorkspaceDidChangeWatchedFiles where
-  pluginEnabled2 _ _ desc conf = plcGlobalOn $ configForPlugin conf (pluginId desc)
 
 instance PluginNotificationMethod WorkspaceDidChangeWorkspaceFolders where
-  pluginEnabled2 _ _ desc conf = plcGlobalOn $ configForPlugin conf (pluginId desc)
 
 instance PluginNotificationMethod WorkspaceDidChangeConfiguration where
-  pluginEnabled2 _ _ desc conf = plcGlobalOn $ configForPlugin conf (pluginId desc)
 
 instance PluginNotificationMethod Initialized where
-  pluginEnabled2 _ _ desc conf = plcGlobalOn $ configForPlugin conf (pluginId desc)
 
 -- ---------------------------------------------------------------------
 
 -- | Methods which have a PluginMethod instance
-data IdeMethod (m :: Method FromClient Request) = PluginMethod m => IdeMethod (SMethod m)
+data IdeMethod (m :: Method FromClient Request) = PluginRequestMethod m => IdeMethod (SMethod m)
 instance GEq IdeMethod where
   geq (IdeMethod a) (IdeMethod b) = geq a b
 instance GCompare IdeMethod where
@@ -477,7 +540,7 @@ type PluginNotificationMethodHandler a m = a -> VFS -> PluginId -> MessageParams
 
 -- | Make a handler for plugins with no extra data
 mkPluginHandler
-  :: PluginMethod m
+  :: PluginRequestMethod m
   => SClientMethod m
   -> PluginMethodHandler ideState m
   -> PluginHandlers ideState

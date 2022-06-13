@@ -218,7 +218,7 @@ extensibleNotificationPlugins recorder xs = mempty { P.pluginHandlers = handlers
         case cleanPluginInfo of
           Left _ -> pure ()
           Right pluginInfos -> do
-            let fs = map snd $ filter (\((_, desc), _) -> pluginEnabled2 m params desc config) (zip pluginInfos fs')
+            let fs = map snd $ filter (\((_, desc), _) -> pluginEnabled m params desc config) (zip pluginInfos fs')
             case nonEmpty fs of
                 Nothing -> do
                   logWith recorder Info LogNoEnabledPlugins
