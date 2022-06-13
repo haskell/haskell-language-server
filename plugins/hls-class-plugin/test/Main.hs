@@ -48,6 +48,10 @@ tests = testGroup
       executeCodeAction _fAction
   , goldenWithClass "Creates a placeholder for '==' with extra lines" "T5" "" $ \(eqAction:_) -> do
       executeCodeAction eqAction
+  , goldenWithClass "Creates a placeholder for only the unimplemented methods of multiple methods" "T6" "1" $ \(gAction:_) -> do
+      executeCodeAction gAction
+  , goldenWithClass "Creates a placeholder for other two multiple methods" "T6" "2" $ \(_:ghAction:_) -> do
+      executeCodeAction ghAction
   ]
 
 _CACodeAction :: Prism' (Command |? CodeAction) CodeAction
