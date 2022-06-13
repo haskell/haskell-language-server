@@ -7,7 +7,8 @@
 {-# LANGUAGE TypeFamilies      #-}
 {-# LANGUAGE ViewPatterns      #-}
 module Ide.Plugin.Class
-  ( descriptor
+  ( descriptor,
+    Log (..)
   ) where
 
 import           Control.Applicative
@@ -27,7 +28,8 @@ import qualified Data.Text                               as T
 import           Development.IDE                         hiding (pluginHandlers)
 import           Development.IDE.Core.PositionMapping    (fromCurrentRange,
                                                           toCurrentRange)
-import           Development.IDE.GHC.Compat              as Compat hiding (locA)
+import           Development.IDE.GHC.Compat              as Compat hiding (locA,
+                                                                    (<+>))
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.Spans.AtPoint
 import qualified GHC.Generics                            as Generics
@@ -46,10 +48,20 @@ import           GHC.Hs                                  (AnnsModule (AnnsModule
 import           GHC.Parser.Annotation
 #endif
 
-descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId = (defaultPluginDescriptor plId)
+data Log
+  = LogImplementedMethods Class [T.Text]
+
+instance Pretty Log where
+  pretty = \case
+    LogImplementedMethods cls methods ->
+      pretty ("Detected implmented methods for class" :: String)
+        <+> pretty (show (getOccString cls) <> ":") -- 'show' is used here to add quotes around the class name
+        <+> pretty methods
+
+descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
+descriptor recorder plId = (defaultPluginDescriptor plId)
   { pluginCommands = commands
-  , pluginHandlers = mkPluginHandler STextDocumentCodeAction codeAction
+  , pluginHandlers = mkPluginHandler STextDocumentCodeAction (codeAction recorder)
   }
 
 commands :: [PluginCommand IdeState]
@@ -178,8 +190,8 @@ addMethodPlaceholders state AddMinimalMethodsParams{..} = do
 -- |
 -- This implementation is ad-hoc in a sense that the diagnostic detection mechanism is
 -- sensitive to the format of diagnostic messages from GHC.
-codeAction :: PluginMethodHandler IdeState TextDocumentCodeAction
-codeAction state plId (CodeActionParams _ _ docId _ context) = liftIO $ fmap (fromMaybe errorResult) . runMaybeT $ do
+codeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState TextDocumentCodeAction
+codeAction recorder state plId (CodeActionParams _ _ docId _ context) = liftIO $ fmap (fromMaybe errorResult) . runMaybeT $ do
   docPath <- MaybeT . pure . uriToNormalizedFilePath $ toNormalizedUri uri
   actions <- join <$> mapM (mkActions docPath) methodDiags
   pure . Right . List $ actions
@@ -201,6 +213,7 @@ codeAction state plId (CodeActionParams _ _ docId _ context) = liftIO $ fmap (fr
       ident <- findClassIdentifier ast instancePosition
       cls <- findClassFromIdentifier docPath ident
       implemented <- findImplementedMethods ast instancePosition
+      logWith recorder Info (LogImplementedMethods cls implemented)
       lift . traverse (mkAction . (\\ implemented)) . minDefToMethodGroups . classMinimalDef $ cls
       where
         range = diag ^. J.range
