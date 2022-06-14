@@ -459,10 +459,17 @@ executable haskell-language-server-wrapper
     , ghcide
     , gitrev
     , haskell-language-server
+    , hslogger
     , hie-bios
+    , hls-plugin-api
+    , lsp
+    , lsp-types
+    , mtl
     , optparse-applicative
     , optparse-simple
     , process
+    , transformers
+    , unliftio-core
   if !os(windows)
       build-depends:
           unix
