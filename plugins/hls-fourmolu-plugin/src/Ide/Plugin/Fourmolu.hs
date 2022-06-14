@@ -2,6 +2,7 @@
 {-# LANGUAGE DataKinds                #-}
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE LambdaCase               #-}
+{-# LANGUAGE NamedFieldPuns           #-}
 {-# LANGUAGE OverloadedLabels         #-}
 {-# LANGUAGE OverloadedStrings        #-}
 {-# LANGUAGE TypeApplications         #-}
@@ -63,10 +64,26 @@ provider plId ideState typ contents fp fo = withIndefiniteProgress title Cancell
             . fmap (join . first (mkError . show))
             . try @IOException
             $ do
-                (exitCode, out, err) <-
+                CLIVersionInfo{noCabal} <- do -- check Fourmolu version so that we know which flags to use
+                    (exitCode, out, _err) <- readCreateProcessWithExitCode ( proc "fourmolu" ["-v"] ) ""
+                    let version = do
+                            guard $ exitCode == ExitSuccess
+                            "fourmolu" : v : _ <- pure $ T.words out
+                            pure $ T.splitOn "." v
+                    case version of
+                        Just v -> pure CLIVersionInfo
+                            { noCabal = v >= ["0", "7"]
+                            }
+                        Nothing -> do
+                            T.hPutStrLn stderr "couldn't get Fourmolu version"
+                            pure CLIVersionInfo
+                                { noCabal = True
+                                }
+                (exitCode, out, err) <- -- run Fourmolu
                     readCreateProcessWithExitCode
                         ( proc "fourmolu" $
                             ["-d"]
+                                <> mwhen noCabal ["--no-cabal"]
                                 <> catMaybes
                                     [ ("--start-line=" <>) . show <$> regionStartLine region
                                     , ("--end-line=" <>) . show <$> regionEndLine region
@@ -163,3 +180,10 @@ convertDynFlags df =
             Cpp -> "-XCPP"
             x   -> "-X" ++ show x
      in pp <> pm <> ex
+
+newtype CLIVersionInfo = CLIVersionInfo
+    { noCabal :: Bool
+    }
+
+mwhen :: Monoid a => Bool -> a -> a
+mwhen b x = if b then x else mempty
