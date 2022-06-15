@@ -18,10 +18,11 @@ import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.Bifunctor                  (first)
 import           Data.Maybe
+import           Data.Text                       (Text)
 import qualified Data.Text                       as T
-import qualified Data.Text.IO                    as T
 import           Development.IDE                 hiding (pluginHandlers)
-import           Development.IDE.GHC.Compat      as Compat hiding (Cpp)
+import           Development.IDE.GHC.Compat      as Compat hiding (Cpp, Warning,
+                                                            hang, vcat)
 import qualified Development.IDE.GHC.Compat.Util as S
 import           GHC.LanguageExtensions.Type     (Extension (Cpp))
 import           Ide.Plugin.Properties
@@ -29,20 +30,19 @@ import           Ide.PluginUtils                 (makeDiffTextEdit,
                                                   usePropertyLsp)
 import           Ide.Types
 import           Language.LSP.Server             hiding (defaultConfig)
-import           Language.LSP.Types
+import           Language.LSP.Types              hiding (line)
 import           Language.LSP.Types.Lens         (HasTabSize (tabSize))
 import           Ormolu
 import           Ormolu.Config
 import           System.Exit
 import           System.FilePath
-import           System.IO                       (stderr)
 import           System.Process.Run              (cwd, proc)
 import           System.Process.Text             (readCreateProcessWithExitCode)
 
-descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId =
+descriptor :: Recorder (WithPriority LogEvent) -> PluginId -> PluginDescriptor IdeState
+descriptor recorder plId =
     (defaultPluginDescriptor plId)
-        { pluginHandlers = mkFormattingHandlers $ provider plId
+        { pluginHandlers = mkFormattingHandlers $ provider recorder plId
         }
 
 properties :: Properties '[ 'PropertyKey "external" 'TBoolean]
@@ -53,8 +53,8 @@ properties =
             "Call out to an external \"fourmolu\" executable, rather than using the bundled library"
             False
 
-provider :: PluginId -> FormattingHandler IdeState
-provider plId ideState typ contents fp fo = withIndefiniteProgress title Cancellable $ do
+provider :: Recorder (WithPriority LogEvent) -> PluginId -> FormattingHandler IdeState
+provider recorder plId ideState typ contents fp fo = withIndefiniteProgress title Cancellable $ do
     fileOpts <-
         maybe [] (convertDynFlags . hsc_dflags . hscEnv)
             <$> liftIO (runAction "Fourmolu" ideState $ use GhcSession fp)
@@ -75,7 +75,7 @@ provider plId ideState typ contents fp fo = withIndefiniteProgress title Cancell
                             { noCabal = v >= ["0", "7"]
                             }
                         Nothing -> do
-                            T.hPutStrLn stderr "couldn't get Fourmolu version"
+                            logWith recorder Warning $ NoVersion out
                             pure CLIVersionInfo
                                 { noCabal = True
                                 }
@@ -91,11 +91,12 @@ provider plId ideState typ contents fp fo = withIndefiniteProgress title Cancell
                                 <> map ("-o" <>) fileOpts
                         ){cwd = Just $ takeDirectory fp'}
                         contents
-                T.hPutStrLn stderr err
                 case exitCode of
-                    ExitSuccess ->
+                    ExitSuccess -> do
+                        logWith recorder Debug $ StdErr err
                         pure . Right $ makeDiffTextEdit contents out
-                    ExitFailure n ->
+                    ExitFailure n -> do
+                        logWith recorder Info $ StdErr err
                         pure . Left . responseError $ "Fourmolu failed with exit code " <> T.pack (show n)
         else do
             let format fourmoluConfig =
@@ -125,13 +126,10 @@ provider plId ideState typ contents fp fo = withIndefiniteProgress title Cancell
                             }
              in liftIO (loadConfigFile fp') >>= \case
                     ConfigLoaded file opts -> liftIO $ do
-                        putStrLn $ "Loaded Fourmolu config from: " <> file
+                        logWith recorder Info $ ConfigPath file
                         format opts
                     ConfigNotFound searchDirs -> liftIO $ do
-                        putStrLn
-                            . unlines
-                            $ ("No " ++ show configFileName ++ " found in any of:") :
-                            map ("  " ++) searchDirs
+                        logWith recorder Info $ NoConfigPath searchDirs
                         format emptyOptions
                       where
                         emptyOptions =
@@ -169,6 +167,21 @@ provider plId ideState typ contents fp fo = withIndefiniteProgress title Cancell
             RegionIndices Nothing Nothing
         FormatRange (Range (Position sl _) (Position el _)) ->
             RegionIndices (Just $ fromIntegral $ sl + 1) (Just $ fromIntegral $ el + 1)
+
+data LogEvent
+    = NoVersion Text
+    | ConfigPath FilePath
+    | NoConfigPath [FilePath]
+    | StdErr Text
+    deriving (Show)
+
+instance Pretty LogEvent where
+    pretty = \case
+        NoVersion t -> "Couldn't get Fourmolu version:" <> line <> indent 2 (pretty t)
+        ConfigPath p -> "Loaded Fourmolu config from: " <> pretty (show p)
+        NoConfigPath ps -> "No " <> pretty configFileName <> " found in any of:"
+            <> line <> indent 2 (vsep (map (pretty . show) ps))
+        StdErr t -> "Fourmolu stderr:" <> line <> indent 2 (pretty t)
 
 convertDynFlags :: DynFlags -> [String]
 convertDynFlags df =
