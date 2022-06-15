@@ -38,6 +38,7 @@ import           System.Exit
 import           System.FilePath
 import           System.Process.Run              (cwd, proc)
 import           System.Process.Text             (readCreateProcessWithExitCode)
+import           Text.Read                       (readMaybe)
 
 descriptor :: Recorder (WithPriority LogEvent) -> PluginId -> PluginDescriptor IdeState
 descriptor recorder plId =
@@ -69,10 +70,10 @@ provider recorder plId ideState typ contents fp fo = withIndefiniteProgress titl
                     let version = do
                             guard $ exitCode == ExitSuccess
                             "fourmolu" : v : _ <- pure $ T.words out
-                            pure $ T.splitOn "." v
+                            traverse (readMaybe @Int . T.unpack) $ T.splitOn "." v
                     case version of
                         Just v -> pure CLIVersionInfo
-                            { noCabal = v >= ["0", "7"]
+                            { noCabal = v >= [0, 7]
                             }
                         Nothing -> do
                             logWith recorder Warning $ NoVersion out
