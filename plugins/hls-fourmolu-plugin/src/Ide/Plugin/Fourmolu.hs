@@ -82,13 +82,12 @@ provider recorder plId ideState typ contents fp fo = withIndefiniteProgress titl
                 (exitCode, out, err) <- -- run Fourmolu
                     readCreateProcessWithExitCode
                         ( proc "fourmolu" $
-                            ["-d"]
+                            map ("-o" <>) fileOpts
                                 <> mwhen noCabal ["--no-cabal"]
                                 <> catMaybes
                                     [ ("--start-line=" <>) . show <$> regionStartLine region
                                     , ("--end-line=" <>) . show <$> regionEndLine region
                                     ]
-                                <> map ("-o" <>) fileOpts
                         ){cwd = Just $ takeDirectory fp'}
                         contents
                 case exitCode of
@@ -114,7 +113,7 @@ provider recorder plId ideState typ contents fp fo = withIndefiniteProgress titl
                         defaultConfig
                             { cfgDynOptions = map DynOption fileOpts
                             , cfgRegion = region
-                            , cfgDebug = True
+                            , cfgDebug = False
                             , cfgPrinterOpts =
                                 fillMissingPrinterOpts
                                     (printerOpts <> lspPrinterOpts)
