@@ -55,11 +55,11 @@ import           Development.IDE.Core.Service          (initialise, runAction)
 import qualified Development.IDE.Core.Service          as Service
 import           Development.IDE.Core.Shake            (IdeState (shakeExtras),
                                                         ShakeExtras (state),
-                                                        shakeSessionInit, uses)
+                                                        shakeSessionInit, uses, IndexQueue)
 import qualified Development.IDE.Core.Shake            as Shake
 import           Development.IDE.Core.Tracing          (measureMemory)
 import           Development.IDE.Graph                 (action)
-import           Development.IDE.LSP.LanguageServer    (runLanguageServer)
+import           Development.IDE.LSP.LanguageServer    (runLanguageServer, setupLSP)
 import qualified Development.IDE.LSP.LanguageServer    as LanguageServer
 import           Development.IDE.Main.HeapStats        (withHeapStats)
 import qualified Development.IDE.Main.HeapStats        as HeapStats
@@ -92,7 +92,7 @@ import           Development.IDE.Types.Options         (IdeGhcSession,
                                                         defaultIdeOptions,
                                                         optModifyDynFlags,
                                                         optTesting)
-import           Development.IDE.Types.Shake           (fromKeyType)
+import           Development.IDE.Types.Shake           (fromKeyType, WithHieDb)
 import           GHC.Conc                              (getNumProcessors)
 import           GHC.IO.Encoding                       (setLocaleEncoding)
 import           GHC.IO.Handle                         (hDuplicate)
