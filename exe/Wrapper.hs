@@ -7,8 +7,6 @@
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
-{-# LANGUAGE TypeApplications           #-}
-{-# LANGUAGE TypeOperators              #-}
 -- | This module is based on the hie-wrapper.sh script in
 -- https://github.com/alanz/vscode-hie-server
 module Main where
@@ -33,7 +31,7 @@ import           System.FilePath
 import           System.Info
 import           System.IO
 
-import           Control.Concurrent                 (newChan, tryPutMVar)
+import           Control.Concurrent                 (tryPutMVar)
 import           Control.Monad.IO.Class
 import           Control.Monad.IO.Unlift            (MonadUnliftIO)
 import           Control.Monad.Reader
@@ -44,33 +42,25 @@ import           Data.Maybe                         (fromMaybe, listToMaybe)
 import qualified Data.Text                          as T
 import qualified Data.Text.IO                       as T
 import           Development.IDE.LSP.LanguageServer (runLanguageServer)
-import           Development.IDE.LSP.Server         (ReactorChan,
-                                                     ReactorMessage)
 import qualified Development.IDE.Main               as Main
-import           Development.IDE.Types.Logger       (WithPriority (WithPriority),
-                                                     cmapWithPrio,
+import           Development.IDE.Types.Logger       (Logger (Logger),
+                                                     Priority (..),
+                                                     WithPriority (WithPriority),
+                                                     cmapWithPrio, logger_,
                                                      makeDefaultStderrRecorder)
-import qualified Development.IDE.Types.Logger       as G
+import           GHC.Stack                          (emptyCallStack)
 import           HIE.Bios.Internal.Log              (debugm, errorm, logm,
                                                      warningm)
-import qualified Ide.Arguments                      as IdeArgs
 import           Ide.Plugin.Config                  (Config)
-import           Language.LSP.Server                (LspM, type (<~>))
+import           Language.LSP.Server                (LspM)
 import qualified Language.LSP.Server                as LSP
 import           Language.LSP.Types
-import qualified System.Directory                   as IO
-import qualified System.Log                         as L
 import           System.Posix.Process               (executeFile)
-#if MIN_VERSION_prettyprinter(1,7,0)
-import           Control.Concurrent.Chan            (Chan)
-import           Development.IDE.Types.Logger       (Logger (Logger),
-                                                     Priority (Info))
-import qualified Development.IDE.Types.Logger       as Logger
-import           GHC.Stack                          (emptyCallStack)
+
 import           Prettyprinter                      (Pretty (pretty))
-#else
-import           Data.Text.Prettyprint.Doc          (Pretty (pretty), vsep)
-#endif
+
+
+
 
 -- ---------------------------------------------------------------------
 
@@ -275,7 +265,7 @@ launchErrorLSP :: T.Text -> IO ()
 launchErrorLSP errorMsg = do
   recorder <- makeDefaultStderrRecorder Nothing Info
 
-  let logger = Logger $ \p m -> Logger.logger_ recorder (WithPriority p emptyCallStack (pretty m))
+  let logger = Logger $ \p m -> logger_ recorder (WithPriority p emptyCallStack (pretty m))
 
   let defaultArguments = Main.defaultArguments (cmapWithPrio pretty recorder) logger
 
@@ -317,10 +307,10 @@ launchErrorLSP errorMsg = do
 exitHandler :: IO () -> LSP.Handlers (ErrorLSPM c)
 exitHandler exit = LSP.notificationHandler SExit $ const $ liftIO exit
 
-hlsWrapperLogger :: G.Logger
-hlsWrapperLogger = G.Logger $ \pri txt ->
+hlsWrapperLogger :: Logger
+hlsWrapperLogger = Logger $ \pri txt ->
     case pri of
-      G.Debug   -> debugm   (T.unpack txt)
-      G.Info    -> logm     (T.unpack txt)
-      G.Warning -> warningm (T.unpack txt)
-      G.Error   -> errorm   (T.unpack txt)
+      Debug   -> debugm   (T.unpack txt)
+      Info    -> logm     (T.unpack txt)
+      Warning -> warningm (T.unpack txt)
+      Error   -> errorm   (T.unpack txt)
