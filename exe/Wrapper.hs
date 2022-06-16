@@ -30,10 +30,10 @@ import           System.IO
 import           System.Info
 #ifndef mingw32_HOST_OS
 import           System.Posix.Process (executeFile)
+import qualified Data.Map.Strict as Map
 #else
 import           System.Process
 #endif
-import qualified Data.Map.Strict as Map
 import qualified Data.Text.IO as T
 import           Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
 import qualified Data.Text as T
