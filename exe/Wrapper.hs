@@ -12,55 +12,50 @@
 module Main where
 
 import           Control.Monad.Extra
-import           Data.Char                          (isSpace)
+import           Data.Char  (isSpace)
 import           Data.Default
 import           Data.Foldable
 import           Data.List
 import           Data.Void
-import qualified Development.IDE.Session            as Session
-import qualified HIE.Bios.Environment               as HieBios
+import qualified Development.IDE.Session as Session
+import qualified HIE.Bios.Environment    as HieBios
 import           HIE.Bios.Types
 import           Ide.Arguments
-import           Ide.Version                        (findProgramVersions,
-                                                     hlsVersion,
-                                                     showProgramVersionOfInterest)
+import           Ide.Version
 import           System.Directory
 import           System.Environment
 import           System.Exit
 import           System.FilePath
-import           System.Info
 import           System.IO
-
-import           Control.Concurrent                 (tryPutMVar)
-import           Control.Monad.IO.Class
-import           Control.Monad.IO.Unlift            (MonadUnliftIO)
-import           Control.Monad.Reader
-import           Control.Monad.Trans.Except         (ExceptT, runExceptT,
-                                                     throwE)
-import qualified Data.Map.Strict                    as Map
-import           Data.Maybe                         (fromMaybe, listToMaybe)
-import qualified Data.Text                          as T
-import qualified Data.Text.IO                       as T
+import           System.Info
+#ifndef mingw32_HOST_OS
+import           System.Posix.Process (executeFile)
+#else
+import           System.Process
+#endif
+import qualified Data.Map.Strict as Map
+import qualified Data.Text.IO as T
+import           Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
+import qualified Data.Text as T
+import           Language.LSP.Server (LspM)
+import           Control.Monad.IO.Class (MonadIO (liftIO))
+import           Control.Monad.IO.Unlift (MonadUnliftIO)
+import qualified Language.LSP.Server as LSP
+import qualified Development.IDE.Main as Main
+import           Ide.Plugin.Config (Config)
+import           Language.LSP.Types (RequestMessage, ResponseError, MessageActionItem (MessageActionItem), Method(Initialize), MessageType (MtError), SMethod (SWindowShowMessageRequest, SExit), ShowMessageRequestParams (ShowMessageRequestParams))
+import           Development.IDE.Types.Logger ( makeDefaultStderrRecorder,
+                                                cmapWithPrio,
+                                                Pretty(pretty),
+                                                Logger(Logger),
+                                                Priority(Error, Debug, Info, Warning),
+                                                Recorder(logger_),
+                                                WithPriority(WithPriority) )
+import           Data.Maybe
+import           GHC.Stack.Types (emptyCallStack)
+import           Control.Concurrent (tryPutMVar)
 import           Development.IDE.LSP.LanguageServer (runLanguageServer)
-import qualified Development.IDE.Main               as Main
-import           Development.IDE.Types.Logger       (Logger (Logger),
-                                                     Priority (..),
-                                                     WithPriority (WithPriority),
-                                                     cmapWithPrio, logger_,
-                                                     makeDefaultStderrRecorder)
-import           GHC.Stack                          (emptyCallStack)
-import           HIE.Bios.Internal.Log              (debugm, errorm, logm,
-                                                     warningm)
-import           Ide.Plugin.Config                  (Config)
-import           Language.LSP.Server                (LspM)
-import qualified Language.LSP.Server                as LSP
-import           Language.LSP.Types
-import           System.Posix.Process               (executeFile)
-
-import           Prettyprinter                      (Pretty (pretty))
-
-
-
+import           HIE.Bios.Internal.Log
 
 -- ---------------------------------------------------------------------
 
@@ -155,7 +150,9 @@ launchHaskellLanguageServer parsedArgs = do
         Just e -> do
           liftIO $ hPutStrLn stderr $ "Launching haskell-language-server exe at:" ++ e
 
-
+#ifdef mingw32_HOST_OS
+          callProcess e args
+#else
 
           let Cradle { cradleOptsProg = CradleAction { runGhcCmd } } = cradle
 
@@ -170,6 +167,7 @@ launchHaskellLanguageServer parsedArgs = do
           env <- Map.fromList <$> liftIO getEnvironment
           let newEnv = Map.insert "GHC_BIN" ghcBinary $ Map.insert "GHC_LIBDIR" libdir env
           liftIO $ executeFile e True args (Just (Map.toList newEnv))
+#endif
 
 
 
