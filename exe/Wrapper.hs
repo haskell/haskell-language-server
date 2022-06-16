@@ -151,7 +151,7 @@ launchHaskellLanguageServer parsedArgs = do
           liftIO $ hPutStrLn stderr $ "Launching haskell-language-server exe at:" ++ e
 
 #ifdef mingw32_HOST_OS
-          callProcess e args
+          liftIO $ callProcess e args
 #else
 
           let Cradle { cradleOptsProg = CradleAction { runGhcCmd } } = cradle
