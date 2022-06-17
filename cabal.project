@@ -67,26 +67,5 @@ allow-newer:
   -- ghc-9.2
   ----------
   hiedb:base,
-  retrie:ghc-exactprint,
 
-  -- for brittany
-  -- https://github.com/lspitzner/multistate/pull/8
-  multistate:base,
-  -- https://github.com/lspitzner/data-tree-print/pull/3
-  data-tree-print:base,
-  -- https://github.com/lspitzner/butcher/pull/8
-  butcher:base,
-
-  -- for shake-bench
-  Chart:lens,
-  Chart-diagrams:lens,
-
-  -- for ekg
-  ekg-core:base,
-  ekg-core:ghc-prim,
-  ekg-wai:base,
-  ekg-wai:time,
-
-  -- for shake-bench
-  Chart-diagrams:diagrams-core,
-  SVGFonts:diagrams-core
+  ekg-wai:time
