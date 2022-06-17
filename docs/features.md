@@ -94,6 +94,7 @@ Format your code with various Haskell code formatters.
 | Fourmolu        | `hls-fourmolu-plugin`        |
 | Ormolu          | `hls-ormolu-plugin`          |
 | Stylish Haskell | `hls-stylish-haskell-plugin` |
+| HIndent         | `hls-hindent-plugin`         |
 
 ## Document symbols
 
