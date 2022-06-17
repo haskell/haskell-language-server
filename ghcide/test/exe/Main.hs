@@ -848,6 +848,7 @@ codeActionHelperFunctionTests = testGroup "code action helpers"
 codeLensesTests :: TestTree
 codeLensesTests = testGroup "code lenses"
   [ addSigLensesTests
+  , addSigLensesForWhereClausesTests
   ]
 
 watchedFilesTests :: TestTree
@@ -4229,6 +4230,52 @@ addSigLensesTests =
             , sigSession "without GHC warnings" False "diagnostics" "" (second (const Nothing) $ head cases) []
             ]
         ]
+
+addSigLensesForWhereClausesTests :: TestTree
+addSigLensesForWhereClausesTests = testGroup
+  "add signature for where clauses"
+  [ testSession "Disbled" $ do
+      let content = T.unlines
+            [ "module Sigs where"
+            , "f :: b"
+            , "f = undefined"
+            , "  where"
+            , "    g = True"
+            ]
+      sendNotification SWorkspaceDidChangeConfiguration
+        $ DidChangeConfigurationParams
+        $ A.object
+            ["haskell" A..= A.object
+                ["plugin" A..= A.object
+                    ["ghcide-type-lenses" A..= A.object
+                        ["config" A..= A.object
+                            ["whereLensOn" A..= A.Bool False]]]]]
+      doc <- createDoc "Sigs.hs" "haskell" content
+      waitForProgressDone
+      lenses <- getCodeLenses doc
+      liftIO $ length lenses @?= 0
+  , test "Simple" "    g = True" "    g :: Bool\n    g = True"
+  , test "Tuple" "    (g,h) = (id, True)" "    g :: a -> a\n    (g,h) = (id, True)"
+  , test "Operator" "    g = ($)" "    g :: (a -> b) -> a -> b\n    g = ($)"
+  , test "Infix" "    a `g` b = a" "    g :: p1 -> p -> p1\n    a `g` b = a"
+  , expectFail $ test "Typeclass" "    g a b = a + b" "    g :: Num a :: a -> a -> a\n    g a b = a + b"
+  ]
+  where
+    test title clauses expected = testSession title $ do
+        let baseContent = T.unlines
+                [ "module Sigs where"
+                , "f :: b"
+                , "f = undefined"
+                , "  where"
+                ]
+        doc <- createDoc "Sigs.hs" "haskell" (baseContent <> clauses)
+        waitForProgressDone
+        lenses <- getCodeLenses doc
+        executeCommand $ fromJust $ head lenses ^. L.command
+        void $ skipManyTill anyMessage (getDocumentEdit doc)
+        contents <- documentContents doc
+        liftIO $ contents @?= baseContent <> expected
+        closeDoc doc
 
 linkToLocation :: [LocationLink] -> [Location]
 linkToLocation = map (\LocationLink{_targetUri,_targetRange} -> Location _targetUri _targetRange)
