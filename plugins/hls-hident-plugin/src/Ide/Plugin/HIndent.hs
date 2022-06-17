@@ -51,6 +51,9 @@ provider ide typ contents fp _opts = do
 
 -- Copied from
 -- https://github.com/mihaimaruseac/hindent/blob/master/src/main/Main.hs#L77
+-- Can be removed with Path.Find and it dependences, once this issue got closed:
+-- https://github.com/mihaimaruseac/hindent/issues/585
+
 
 getHIndentConfig :: IO Config
 getHIndentConfig = do

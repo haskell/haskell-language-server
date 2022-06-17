@@ -31,6 +31,8 @@ packages:
          ./plugins/hls-gadt-plugin
          ./plugins/hls-hident-plugin
 
+-- Can be removed when new release of HIndent is out
+-- https://github.com/mihaimaruseac/hindent/issues/583#issuecomment-1158054210
 source-repository-package
   type: git
   location: https://github.com/uhbif19/hindent.git
