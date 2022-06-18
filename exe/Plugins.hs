@@ -141,7 +141,7 @@ idePlugins recorder includeExamples = pluginDescToIdePlugins allPlugins
       Floskell.descriptor "floskell" :
 #endif
 #if fourmolu
-      Fourmolu.descriptor "fourmolu" :
+      Fourmolu.descriptor pluginRecorder "fourmolu" :
 #endif
 #if tactic
       Tactic.descriptor pluginRecorder "tactics" :
