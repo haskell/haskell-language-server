@@ -349,11 +349,11 @@ data WhereBindings = WhereBindings
     }
 
 -- | All where clauses from type checked source.
-findWhereQ :: GenericQ [LHsLocalBinds GhcTc]
+findWhereQ :: GenericQ [HsLocalBinds GhcTc]
 findWhereQ = everything (<>) $ mkQ [] (pure . findWhere)
     where
-        findWhere :: GRHSs GhcTc (LHsExpr GhcTc) -> LHsLocalBinds GhcTc
-        findWhere = grhssLocalBinds
+        findWhere :: GRHSs GhcTc (LHsExpr GhcTc) -> HsLocalBinds GhcTc
+        findWhere = grhssLocalBindsCompat
 
 -- | Find all bindings for **one** where clasure.
 findBindingsQ :: GenericQ (Maybe WhereBindings)
@@ -367,11 +367,14 @@ findBindingsQ = something (mkQ Nothing findBindings)
                 }
 
         findBindingIds :: LHsBindLR GhcTc GhcTc -> Maybe WhereBinding
-        findBindingIds (L l FunBind{..}) = Just $ WhereBinding (pure $ unLoc fun_id) l
-        findBindingIds (L l PatBind{..}) =
-            let ids = (everything (<>) $ mkQ [] (maybeToList . findIdFromPat)) pat_lhs
-            in Just $ WhereBinding ids l
-        findBindingIds _ = Nothing
+        findBindingIds bind = case unLoc bind of
+            FunBind{..} -> Just $ WhereBinding (pure $ unLoc fun_id) l
+            PatBind{..} ->
+                let ids = (everything (<>) $ mkQ [] (maybeToList . findIdFromPat)) pat_lhs
+                in Just $ WhereBinding ids l
+            _           -> Nothing
+            where
+                l = getLoc bind
 
         -- | Example: Find `a` and `b` from @(a,b) = (1,True)@
         findIdFromPat :: Pat GhcTc -> Maybe Id
