@@ -1181,9 +1181,10 @@ recompilation avoidance scheme for subsequent compiles:
    `HiFileResult` for some reason
 
 4. If the file in question used Template Haskell on the previous compile, then
-  we need to recompile if any `Linkable` in its transitive closure changed. This
-  sounds bad, but it is possible to make some improvements.
-  In particular, we only need to recompile if any of the `Linkable`s actually used during the previous compile change.
+we need to recompile if any `Linkable` in its transitive closure changed. This
+sounds bad, but it is possible to make some improvements. In particular, we only
+need to recompile if any of the `Linkable`s actually used during the previous
+compile change.
 
 How can we tell if a `Linkable` was actually used while running some TH?
 
@@ -1203,8 +1204,13 @@ were generated) using `Annotation`s, which provide a somewhat general purpose
 way to serialise arbitrary information along with interface files.
 
 Then when deciding whether to recompile, we need to check that the versions
-of the linkables used during a previous compile match whatever is currently
-in the HPT.
+(i.e. hashes) of the linkables used during a previous compile match whatever is
+currently in the HPT.
+
+As we always generate Linkables from core files, we use the core file hash
+as a (hopefully) deterministic measure of whether the Linkable has changed.
+This is better than using the object file hash (if we have one) because object
+file generation is not deterministic.
 -}
 
 data RecompilationInfo m
@@ -1276,7 +1282,7 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
          -- If we have an old value, just return it
          case old_value of
            Just (old_hir, _)
-             | if isJust linkableNeeded then isJust (hirCoreFp old_hir) else True
+             | isNothing linkableNeeded || isJust (hirCoreFp old_hir)
              -> do
              -- Peform the fine grained recompilation check for TH
              maybe_recomp <- checkLinkableDependencies get_linkable_hashes (hsc_mod_graph sessionWithMsDynFlags) (hirRuntimeModules old_hir)
@@ -1305,6 +1311,9 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
 
 -- | Find the runtime dependencies by looking at the annotations
 -- serialized in the iface
+-- The bytestrings are the hashes of the core files for modules we
+-- required to run the TH splices in the given module.
+-- See Note [Recompilation avoidance in the presence of TH]
 parseRuntimeDeps :: [ModIfaceAnnotation] -> ModuleEnv BS.ByteString
 parseRuntimeDeps anns = mkModuleEnv $ mapMaybe go anns
   where
