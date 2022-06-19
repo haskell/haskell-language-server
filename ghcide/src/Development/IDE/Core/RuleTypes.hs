@@ -17,6 +17,7 @@ module Development.IDE.Core.RuleTypes(
     ) where
 
 import           Control.DeepSeq
+import           Control.Exception                            (assert)
 import           Control.Lens
 import           Data.Aeson.Types                             (Value)
 import           Data.Hashable
@@ -26,6 +27,7 @@ import           Data.Typeable
 import           Development.IDE.GHC.Compat                   hiding
                                                               (HieFileResult)
 import           Development.IDE.GHC.Compat.Util
+import           Development.IDE.GHC.CoreFile
 import           Development.IDE.GHC.Util
 import           Development.IDE.Graph
 import           Development.IDE.Import.DependencyInformation
@@ -43,8 +45,6 @@ import           Development.IDE.Types.Diagnostics
 import           GHC.Serialized                               (Serialized)
 import           Language.LSP.Types                           (Int32,
                                                                NormalizedFilePath)
-import           Development.IDE.GHC.CoreFile
-import           Control.Exception                            (assert)
 
 data LinkableType = ObjectLinkable | BCOLinkable
   deriving (Eq,Ord,Show, Generic)
