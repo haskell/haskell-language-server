@@ -45,6 +45,7 @@ import           Control.Lens                      hiding (List, (<.>))
 import           Control.Monad.Except
 import           Control.Monad.Extra
 import           Control.Monad.Trans.Except
+import qualified Control.Monad.Trans.State.Strict as S
 import           Data.Aeson                        (toJSON)
 import           Data.Bifunctor                    (first, second)
 import           Data.Binary
@@ -52,6 +53,8 @@ import qualified Data.ByteString                   as BS
 import           Data.Coerce
 import qualified Data.DList                        as DL
 import           Data.Functor
+import Data.Generics.Schemes
+import Data.Generics.Aliases
 import qualified Data.HashMap.Strict               as HashMap
 import           Data.IORef
 import           Data.IntMap                       (IntMap)
@@ -124,14 +127,11 @@ import           GHC                               (Anchor (anchor),
                                                     EpaCommentTok (EpaBlockComment, EpaLineComment),
                                                     epAnnComments,
                                                     priorComments)
+import           GHC                               (ModuleGraph, mgLookupModule, mgModSummaries)
 import qualified GHC                               as G
 import           GHC.Hs                            (LEpaComment)
 import qualified GHC.Types.Error                   as Error
 #endif
-import GHC (ModuleGraph, mgLookupModule, mgModSummaries)
-import qualified Control.Monad.Trans.State.Strict as S
-import Data.Generics.Schemes
-import Data.Generics.Aliases
 
 -- | Given a string buffer, return the string (after preprocessing) and the 'ParsedModule'.
 parseModule
