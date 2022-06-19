@@ -304,7 +304,7 @@ runEvalCmd plId st EvalParams{..} =
             -- the statement we are parsing
             lbs <- liftIO $ runAction "eval: GetLinkables" st $ do
               linkables_needed <- reachableModules <$> use_ GetDependencyInformation nfp
-              uses_ GetLinkable linkables_needed
+              uses_ GetLinkable (filter (/= nfp) linkables_needed) -- We don't need the linkable for the current module
             let hscEnv'' = hscEnv' { hsc_HPT  = addListToHpt (hsc_HPT hscEnv') [(moduleName $ mi_module $ hm_iface hm, hm) | lb <- lbs, let hm = linkableHomeMod lb] }
 
             edits <-
