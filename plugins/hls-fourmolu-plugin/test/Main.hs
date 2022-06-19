@@ -16,7 +16,7 @@ main :: IO ()
 main = defaultTestRunner tests
 
 fourmoluPlugin :: PluginDescriptor IdeState
-fourmoluPlugin = Fourmolu.descriptor "fourmolu"
+fourmoluPlugin = Fourmolu.descriptor mempty "fourmolu"
 
 tests :: TestTree
 tests =
