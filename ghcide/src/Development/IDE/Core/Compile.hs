@@ -1313,7 +1313,7 @@ parseRuntimeDeps anns = mkModuleEnv $ mapMaybe go anns
       = Just (mod, bs)
     go _ = Nothing
 
--- | checkLinkableDependencies compares the core files in the shake store to
+-- | checkLinkableDependencies compares the core files in the Values store to
 -- the runtime dependencies of the module, to check if any of them are out of date
 -- Hopefully 'runtime_deps' will be empty if the module didn't actually use TH
 -- See Note [Recompilation avoidance in the presence of TH]
