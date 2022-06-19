@@ -89,7 +89,9 @@ import           Development.IDE.Types.Options
 import           Development.IDE.GHC.CoreFile
 import           GHC                               (ForeignHValue,
                                                     GetDocsFailure (..),
-                                                    parsedSource)
+                                                    parsedSource,
+                                                    GhcException(..)
+                                                    )
 import qualified GHC.LanguageExtensions            as LangExt
 import           GHC.Serialized
 import           HieDb
@@ -1301,12 +1303,20 @@ loadInterface session ms linkableNeeded RecompilationInfo{..} = do
              case maybe_recomp of
                Just msg -> do_regenerate msg
                Nothing
-                 | isJust linkableNeeded -> do
-                   (core_file@CoreFile{cf_iface_hash}, core_hash) <- liftIO $ readBinCoreFile (mkUpdater $ hsc_NC session) core_file
+                 | isJust linkableNeeded -> handleErrs $ do
+                   (core_file@CoreFile{cf_iface_hash}, core_hash) <- liftIO $
+                     readBinCoreFile (mkUpdater $ hsc_NC session) core_file
                    if cf_iface_hash == getModuleHash iface
                    then return ([], Just $ mkHiFileResult ms iface details runtime_deps (Just (core_file, fingerprintToBS core_hash)))
                    else do_regenerate (RecompBecause "Core file out of date (doesn't match iface hash)")
                  | otherwise -> return ([], Just $ mkHiFileResult ms iface details runtime_deps Nothing)
+                 where handleErrs = flip catches
+                         [Handler $ \(e :: IOException) -> do_regenerate (RecompBecause $ "Reading core file failed (" ++ show e ++ ")")
+                         ,Handler $ \(e :: GhcException) -> case e of
+                            Signal _ -> throw e
+                            Panic _  -> throw e
+                            _        -> do_regenerate (RecompBecause $ "Reading core file failed (" ++ show e ++ ")")
+                         ]
       (_, _reason) -> do_regenerate _reason
 
 -- | Find the runtime dependencies by looking at the annotations
