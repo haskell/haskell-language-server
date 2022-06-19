@@ -1136,7 +1136,7 @@ uses_th_qq (ms_hspp_opts -> dflags) =
 -- Depends on whether it uses unboxed tuples or sums
 computeLinkableTypeForDynFlags :: DynFlags -> LinkableType
 computeLinkableTypeForDynFlags d
-#if defined(GHC_PATCHED_UNBOXED_BYTECODE)
+#if defined(GHC_PATCHED_UNBOXED_BYTECODE) || MIN_VERSION_ghc(9,2,0)
           = BCOLinkable
 #else
           | unboxed_tuples_or_sums = ObjectLinkable
