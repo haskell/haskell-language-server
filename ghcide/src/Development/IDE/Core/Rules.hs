@@ -784,7 +784,7 @@ getModIfaceFromDiskRule recorder = defineEarlyCutoff (cmapWithPrio LogShake reco
             { source_version = ver
             , old_value = m_old
             , get_file_version = use GetModificationTime_{missingFileDiagnostics = False}
-            , get_linkable_hashes = \fs -> map linkableHash <$> uses_ GetLinkable fs
+            , get_linkable_hashes = \fs -> map (snd . fromJust . hirCoreFp) <$> uses_ GetModIface fs
             , regenerate = regenerateHiFile session f ms
             }
       r <- loadInterface (hscEnv session) ms linkableType recompInfo
