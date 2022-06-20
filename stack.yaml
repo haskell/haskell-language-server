@@ -1,5 +1,4 @@
-resolver: nightly-2022-04-28
-compiler: ghc-9.2.2
+resolver: nightly-2022-06-10
 
 packages:
 - .
@@ -31,10 +30,9 @@ packages:
 - ./plugins/hls-alternate-number-format-plugin
 - ./plugins/hls-selection-range-plugin
 - ./plugins/hls-change-type-signature-plugin
+- ./plugins/hls-gadt-plugin
 
 extra-deps:
-- Chart-1.9.3@sha256:640a38463318b070d80a049577e4f0b3322df98290abb7afcf0cb74a4ad5b512,2948
-- Chart-diagrams-1.9.3@sha256:63668daff044a79827b7edb265265a4a8237424abb8f808ad1fcbdb3d47e753d,1801
 - direct-sqlite-2.3.26@sha256:04e835402f1508abca383182023e4e2b9b86297b8533afbd4e57d1a5652e0c23,3718
 - floskell-0.10.6@sha256:e77d194189e8540abe2ace2c7cb8efafc747ca35881a2fefcbd2d40a1292e036,3819
 - heapsize-0.3.0.1@sha256:0b69aa97a46d819b700ac7b145f3b5493c3565cf2c5b8298682238d405d0326e,1417
@@ -49,8 +47,6 @@ extra-deps:
 - retrie-1.2.0.1
 - rope-utf16-splay-0.3.2.0
 - sqlite-simple-0.4.18.0@sha256:3ceea56375c0a3590c814e411a4eb86943f8d31b93b110ca159c90689b6b39e5,3002
-- SVGFonts-1.7.0.1  # for Chart-diagrams, https://github.com/timbod7/haskell-chart/issues/232
-
 
 # currently needed for ghcide>extra, etc.
 allow-newer: true

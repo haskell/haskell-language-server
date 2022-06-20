@@ -25,7 +25,7 @@ import qualified Language.LSP.Types.Lens         as J
 codeLens :: PluginMethodHandler IdeState TextDocumentCodeLens
 codeLens state plId CodeLensParams{..} = do
     enabled <- enableTypeLens <$> getCompletionsConfig plId
-    if not enabled then pure $ pure $ List [] else response $ do
+    if not enabled then pure $ pure $ List [] else pluginResponse $ do
         nfp <- getNormalizedFilePath plId uri
         tmr <- handleMaybeM "Unable to typecheak"
             $ liftIO

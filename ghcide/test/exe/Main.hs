@@ -1196,7 +1196,7 @@ typeWildCardActionTests = testGroup "type wildcard actions"
         [ "func :: _"
         , "func x = x"
         ]
-        [ "func :: (p -> p)"
+        [ "func :: p -> p"
         , "func x = x"
         ]
   , testUseTypeSignature "local signature"
@@ -1212,11 +1212,11 @@ typeWildCardActionTests = testGroup "type wildcard actions"
         , "      y = x * 2"
         , "  in y"
         ]
-  , testUseTypeSignature "multi-line message"
+  , testUseTypeSignature "multi-line message 1"
         [ "func :: _"
         , "func x y = x + y"
         ]
-        [ "func :: (Integer -> Integer -> Integer)"
+        [ "func :: Integer -> Integer -> Integer"
         , "func x y = x + y"
         ]
   , testUseTypeSignature "type in parentheses"
@@ -1240,6 +1240,43 @@ typeWildCardActionTests = testGroup "type wildcard actions"
         [ "func :: IO ()"
         , "func = putChar 'H'"
         ]
+  , testUseTypeSignature "no spaces around '::'"
+        [ "func::_"
+        , "func x y = x + y"
+        ]
+        [ "func::Integer -> Integer -> Integer"
+        , "func x y = x + y"
+        ]
+  , testGroup "add parens if hole is part of bigger type"
+    [ testUseTypeSignature "subtype 1"
+          [ "func :: _ -> Integer -> Integer"
+          , "func x y = x + y"
+          ]
+          [ "func :: Integer -> Integer -> Integer"
+          , "func x y = x + y"
+          ]
+    , testUseTypeSignature "subtype 2"
+          [ "func :: Integer -> _ -> Integer"
+          , "func x y = x + y"
+          ]
+          [ "func :: Integer -> Integer -> Integer"
+          , "func x y = x + y"
+          ]
+    , testUseTypeSignature "subtype 3"
+          [ "func :: Integer -> Integer -> _"
+          , "func x y = x + y"
+          ]
+          [ "func :: Integer -> Integer -> Integer"
+          , "func x y = x + y"
+          ]
+    , testUseTypeSignature "subtype 4"
+          [ "func :: Integer -> _"
+          , "func x y = x + y"
+          ]
+          [ "func :: Integer -> (Integer -> Integer)"
+          , "func x y = x + y"
+          ]
+    ]
   ]
   where
     -- | Test session of given name, checking action "Use type signature..."
@@ -4254,6 +4291,7 @@ findDefinitionAndHoverTests = let
             ExpectRange  expectedRange -> checkHoverRange expectedRange rangeInHover msg
             ExpectHoverRange expectedRange -> checkHoverRange expectedRange rangeInHover msg
             ExpectHoverText snippets -> liftIO $ traverse_ (`assertFoundIn` msg) snippets
+            ExpectHoverTextRegex re -> liftIO $ assertBool ("Regex not found in " <> T.unpack msg) (msg =~ re :: Bool)
             ExpectNoHover -> liftIO $ assertFailure $ "Expected no hover but got " <> show hover
             _ -> pure () -- all other expectations not relevant to hover
         _ -> liftIO $ assertFailure $ "test not expecting this kind of hover info" <> show hover
@@ -4344,7 +4382,7 @@ findDefinitionAndHoverTests = let
   innL48 = Position 52  5  ;  innSig = [ExpectHoverText ["inner", "Char"], mkR 49 2 49 7]
   holeL60 = Position 62 7  ;  hleInfo = [ExpectHoverText ["_ ::"]]
   holeL65 = Position 65 8  ;  hleInfo2 = [ExpectHoverText ["_ :: a -> Maybe a"]]
-  cccL17 = Position 17 16  ;  docLink = [ExpectHoverText ["[Documentation](file:///"]]
+  cccL17 = Position 17 16  ;  docLink = [ExpectHoverTextRegex "\\*Defined in 'GHC.Types'\\* \\*\\(ghc-prim-[0-9.]+\\)\\*\n\n"]
   imported = Position 56 13 ; importedSig = getDocUri "Foo.hs" >>= \foo -> return [ExpectHoverText ["foo", "Foo", "Haddock"], mkL foo 5 0 5 3]
   reexported = Position 55 14 ; reexportedSig = getDocUri "Bar.hs" >>= \bar -> return [ExpectHoverText ["Bar", "Bar", "Haddock"], mkL bar 3 0 3 14]
   thLocL57 = Position 59 10 ; thLoc = [ExpectHoverText ["Identity"]]
@@ -4399,7 +4437,7 @@ findDefinitionAndHoverTests = let
   , test  broken broken innL48     innSig        "inner     signature              #767"
   , test  no     yes    holeL60    hleInfo       "hole without internal name       #831"
   , test  no     yes    holeL65    hleInfo2      "hole with variable"
-  , test  no     skip   cccL17     docLink       "Haddock html links"
+  , test  no     yes    cccL17     docLink       "Haddock html links"
   , testM yes    yes    imported   importedSig   "Imported symbol"
   , testM yes    yes    reexported reexportedSig "Imported symbol (reexported)"
   , if | ghcVersion == GHC90 && isWindows ->
@@ -4584,6 +4622,7 @@ thTests =
         return ()
     , thReloadingTest False
     , thLoadingTest
+    , thCoreTest
     , ignoreInWindowsBecause "Broken in windows" $ thReloadingTest True
     -- Regression test for https://github.com/haskell/haskell-language-server/issues/891
     , thLinkingTest False
@@ -4638,6 +4677,12 @@ thLoadingTest :: TestTree
 thLoadingTest = testCase "Loading linkables" $ runWithExtraFiles "THLoading" $ \dir -> do
     let thb = dir </> "THB.hs"
     _ <- openDoc thb "haskell"
+    expectNoMoreDiagnostics 1
+
+thCoreTest :: TestTree
+thCoreTest = testCase "Verifying TH core files" $ runWithExtraFiles "THCoreFile" $ \dir -> do
+    let thc = dir </> "THC.hs"
+    _ <- openDoc thc "haskell"
     expectNoMoreDiagnostics 1
 
 -- | test that TH is reevaluated on typecheck
@@ -5743,6 +5788,7 @@ data Expect
 --  | ExpectDefRange Range -- Only gotoDef should report this range
   | ExpectHoverRange Range -- Only hover should report this range
   | ExpectHoverText [T.Text] -- the hover message must contain these snippets
+  | ExpectHoverTextRegex T.Text -- the hover message must match this pattern
   | ExpectExternFail -- definition lookup in other file expected to fail
   | ExpectNoDefinitions
   | ExpectNoHover
@@ -6565,7 +6611,7 @@ runInDir'' lspCaps dir startExeIn startSessionIn extraOptions s = do
 
   shakeProfiling <- getEnv "SHAKE_PROFILING"
   let cmd = unwords $
-       [ghcideExe, "--lsp", "--test", "--verbose", "-j2", "--cwd", startDir
+       [ghcideExe, "--lsp", "--test", "--verify-core-file", "--verbose", "-j2", "--cwd", startDir
        ] ++ ["--shake-profiling=" <> dir | Just dir <- [shakeProfiling]
        ] ++ extraOptions
   -- HIE calls getXgdDirectory which assumes that HOME is set.

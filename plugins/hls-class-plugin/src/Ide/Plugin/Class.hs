@@ -1,4 +1,4 @@
-module Ide.Plugin.Class (descriptor) where
+module Ide.Plugin.Class (descriptor, Log(..)) where
 
 import           Development.IDE             (IdeState, Recorder, WithPriority)
 import           Ide.Plugin.Class.CodeAction
@@ -11,7 +11,7 @@ descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeSta
 descriptor recorder plId = (defaultPluginDescriptor plId)
     { pluginCommands = commands plId
     , pluginRules = rules recorder
-    , pluginHandlers = mkPluginHandler STextDocumentCodeAction codeAction
+    , pluginHandlers = mkPluginHandler STextDocumentCodeAction (codeAction recorder)
         <> mkPluginHandler STextDocumentCodeLens codeLens
     , pluginConfigDescriptor =
         defaultConfigDescriptor { configCustomConfig = mkCustomConfig properties }

@@ -12,6 +12,7 @@ import           Control.Monad.Trans.Class            (lift)
 import           Control.Monad.Trans.Except           (throwE)
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
+import           Data.Either.Extra                    (rights)
 import           Data.List
 import qualified Data.Map.Strict                      as Map
 import           Data.Maybe                           (fromJust, isNothing)
@@ -35,7 +36,7 @@ import qualified Language.LSP.Types.Lens              as J
 addMethodPlaceholders :: PluginId -> CommandFunction IdeState AddMinimalMethodsParams
 addMethodPlaceholders plId state param@AddMinimalMethodsParams{..} = do
     caps <- getClientCapabilities
-    response $ do
+    pluginResponse $ do
         nfp <- getNormalizedFilePath plId uri
         pm <- handleMaybeM "Unable to GetParsedModule"
             $ liftIO
@@ -75,8 +76,8 @@ addMethodPlaceholders plId state param@AddMinimalMethodsParams{..} = do
 -- |
 -- This implementation is ad-hoc in a sense that the diagnostic detection mechanism is
 -- sensitive to the format of diagnostic messages from GHC.
-codeAction :: PluginMethodHandler IdeState TextDocumentCodeAction
-codeAction state plId (CodeActionParams _ _ docId _ context) = response $ do
+codeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState TextDocumentCodeAction
+codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginResponse $ do
     nfp <- getNormalizedFilePath plId uri
     actions <- join <$> mapM (mkActions nfp) methodDiags
     pure $ List actions
@@ -88,13 +89,22 @@ codeAction state plId (CodeActionParams _ _ docId _ context) = response $ do
         methodDiags = filter (\d -> isClassMethodWarning (d ^. J.message)) ghcDiags
 
         mkActions docPath diag = do
-            ident <- findClassIdentifier docPath range
+            (HAR {hieAst = ast}, pmap) <- handleMaybeM "Unable to GetHieAst"
+                . liftIO
+                . runAction "classplugin.findClassIdentifier.GetHieAst" state
+                $ useWithStale GetHieAst docPath
+            instancePosition <- handleMaybe "No range" $
+                              fromCurrentRange pmap range ^? _Just . J.start
+                              & fmap (J.character -~ 1)
+            ident <- findClassIdentifier ast instancePosition
             cls <- findClassFromIdentifier docPath ident
             InstanceBindTypeSigsResult sigs <- handleMaybeM "Unable to GetInstanceBindTypeSigs"
                 $ liftIO
                 $ runAction "classplugin.codeAction.GetInstanceBindTypeSigs" state
                 $ use GetInstanceBindTypeSigs docPath
-            pure $ concatMap mkAction $ minDefToMethodGroups range sigs . classMinimalDef $ cls
+            implemented <- findImplementedMethods ast instancePosition
+            logWith recorder Info (LogImplementedMethods cls implemented)
+            pure $ concatMap mkAction $ fmap (filter (\(a, _) -> a `notElem` implemented)) $ minDefToMethodGroups range sigs . classMinimalDef $ cls
             where
                 range = diag ^. J.range
 
@@ -132,19 +142,29 @@ codeAction state plId (CodeActionParams _ _ docId _ context) = response $ do
                         (Just cmd)
                         Nothing
 
-        findClassIdentifier docPath range = do
-            (hieAstResult, pmap) <- handleMaybeM "Unable to GetHieAst"
-                . liftIO
-                . runAction "classplugin.findClassIdentifier.GetHieAst" state
-                $ useWithStale GetHieAst docPath
-            case hieAstResult of
-                HAR {hieAst = hf} ->
+        findClassIdentifier hf instancePosition = do
                     pure
                         $ head . head
-                        $ pointCommand hf (fromJust (fromCurrentRange pmap range) ^. J.start & J.character -~ 1)
+                        $ pointCommand hf instancePosition
                         ( (Map.keys . Map.filter isClassNodeIdentifier . getNodeIds)
                             <=< nodeChildren
                         )
+
+        -- findImplementedMethods :: HieASTs a -> Position -> MaybeT IO [T.Text]
+        findImplementedMethods asts instancePosition = do
+            pure
+                $ concat
+                $ pointCommand asts instancePosition
+                $ map (T.pack . getOccString) . rights . findInstanceValBindIdentifiers
+
+        -- | Recurses through the given AST to find identifiers which are
+        -- 'InstanceValBind's.
+        findInstanceValBindIdentifiers :: HieAST a -> [Identifier]
+        findInstanceValBindIdentifiers ast =
+            let valBindIds = Map.keys
+                            . Map.filter (any isInstanceValBind . identInfo)
+                            $ getNodeIds ast
+            in valBindIds <> concatMap findInstanceValBindIdentifiers (nodeChildren ast)
 
         findClassFromIdentifier docPath (Right name) = do
             (hscEnv -> hscenv, _) <- handleMaybeM "Unable to GhcSessionDeps"
@@ -171,6 +191,10 @@ isClassNodeIdentifier ident = (isNothing . identType) ident && Use `Set.member` 
 
 isClassMethodWarning :: T.Text -> Bool
 isClassMethodWarning = T.isPrefixOf "• No explicit implementation for"
+
+isInstanceValBind :: ContextInfo -> Bool
+isInstanceValBind (ValBind InstanceBind _ _) = True
+isInstanceValBind _                          = False
 
 -- Return (name text, signature text)
 minDefToMethodGroups :: Range -> [InstanceBindTypeSig] -> BooleanFormula Name -> [[(T.Text, T.Text)]]

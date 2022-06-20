@@ -16,7 +16,7 @@ import           Data.Maybe                    (catMaybes)
 import qualified Data.Text                     as T
 import           Development.IDE
 import qualified Development.IDE.Core.Shake    as Shake
-import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat    hiding ((<+>))
 import           Development.IDE.Graph.Classes
 import           GHC.Generics
 import           Ide.Plugin.Class.Utils
@@ -66,10 +66,16 @@ instance NFData InstanceBindTypeSigsResult where
 
 type instance RuleResult GetInstanceBindTypeSigs = InstanceBindTypeSigsResult
 
-newtype Log = LogShake Shake.Log deriving Show
+data Log
+  = LogImplementedMethods Class [T.Text]
+  | LogShake Shake.Log
 
 instance Pretty Log where
   pretty = \case
+    LogImplementedMethods cls methods ->
+      pretty ("Detected implmented methods for class" :: String)
+        <+> pretty (show (getOccString cls) <> ":") -- 'show' is used here to add quotes around the class name
+        <+> pretty methods
     LogShake log -> pretty log
 
 data BindInfo = BindInfo

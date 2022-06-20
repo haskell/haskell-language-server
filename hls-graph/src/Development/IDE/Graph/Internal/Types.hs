@@ -38,6 +38,7 @@ import qualified StmContainers.Map             as SMap
 import           System.Time.Extra             (Seconds)
 import qualified Data.HashSet as Set
 import Data.List (intercalate)
+import UnliftIO (MonadUnliftIO)
 
 
 unwrapDynamic :: forall a . Typeable a => Dynamic -> a
@@ -64,7 +65,7 @@ data SRules = SRules {
 -- ACTIONS
 
 newtype Action a = Action {fromAction :: ReaderT SAction IO a}
-    deriving newtype (Monad, Applicative, Functor, MonadIO, MonadFail, MonadThrow, MonadCatch, MonadMask)
+    deriving newtype (Monad, Applicative, Functor, MonadIO, MonadFail, MonadThrow, MonadCatch, MonadMask, MonadUnliftIO)
 
 data SAction = SAction {
     actionDatabase :: !Database,

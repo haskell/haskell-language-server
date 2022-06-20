@@ -37,7 +37,7 @@ import           Development.IDE.GHC.Compat              (HieAST (Node), Span,
 import           Development.IDE.GHC.Compat.Util
 import           Ide.Plugin.SelectionRange.ASTPreProcess (PreProcessEnv (PreProcessEnv),
                                                           preProcessAST)
-import           Ide.PluginUtils                         (response)
+import           Ide.PluginUtils                         (pluginResponse)
 import           Ide.Types                               (PluginDescriptor (pluginHandlers),
                                                           PluginId,
                                                           defaultPluginDescriptor,
@@ -62,7 +62,7 @@ descriptor plId = (defaultPluginDescriptor plId)
 selectionRangeHandler :: IdeState -> PluginId -> SelectionRangeParams -> LspM c (Either ResponseError (List SelectionRange))
 selectionRangeHandler ide _ SelectionRangeParams{..} = do
     liftIO $ logDebug logger $ "requesting selection range for file: " <> T.pack (show uri)
-    response $ do
+    pluginResponse $ do
         filePath <- ExceptT . pure . maybeToEither "fail to convert uri to file path" $
                 toNormalizedFilePath' <$> uriToFilePath' uri
         selectionRanges <- ExceptT . liftIO . runIdeAction "SelectionRange" (shakeExtras ide) . runExceptT $
