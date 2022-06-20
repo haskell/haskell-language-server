@@ -5,6 +5,7 @@
 
 module Ide.Plugin.Class.CodeAction where
 
+import           Control.Applicative                  (liftA2)
 import           Control.Lens                         hiding (List, use)
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class               (liftIO)
