@@ -129,10 +129,7 @@
   - {name: [-Wno-dodgy-imports,-Wno-incomplete-uni-patterns], within: [Main, Development.IDE.GHC.Compat, Development.IDE.GHC.Compat.Core, Development.Benchmark.Rules]}
   - {name: [-Wno-unused-imports], within: [Development.IDE.GHC.Compat.Core]}
   - {name: [-Wno-deprecations, -Wno-unticked-promoted-constructors], within: [Main, Experiments]}
-# - modules:
-#   - {name: [Data.Set, Data.HashSet], as: Set} # if you import Data.Set qualified, it must be as 'Set'
-#   - {name: Control.Arrow, within: []} # Certain modules are banned entirely
-#
+
 - functions:
   # Things that are unsafe in Haskell base library
   - {name: unsafeInterleaveIO, within: [Development.IDE.LSP.LanguageServer]}
@@ -222,26 +219,3 @@
 # We really do not want novel usages of restricted functions, and mere
 # Warning is not enough to prevent those consistently; you need a build failure.
 - error: {name: Avoid restricted function}
-
-# Add custom hints for this project
-#
-# Will suggest replacing "wibbleMany [myvar]" with "wibbleOne myvar"
-# - error: {lhs: "wibbleMany [x]", rhs: wibbleOne x}
-
-# Turn on hints that are off by default
-#
-# Ban "module X(module X) where", to require a real export list
-# - warn: {name: Use explicit module export list}
-#
-# Replace a $ b $ c with a . b $ c
-# - group: {name: dollar, enabled: true}
-#
-# Generalise map to fmap, ++ to <>
-# - group: {name: generalise, enabled: true}
-
-# Ignore some builtin hints
-# - ignore: {name: Use let}
-# - ignore: {name: Use const, within: SpecialModule} # Only within certain modules
-
-# Define some custom infix operators
-# - fixity: infixr 3 ~^#^~
