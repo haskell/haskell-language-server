@@ -118,5 +118,5 @@ addMethodDecls ps mDecls range withSig = do
     foldM (insertAfter d) ps (reverse decls)
 
 findInstDecl :: ParsedSource -> Range -> Transform (LHsDecl GhcPs)
-findInstDecl ps range = head . filter (inRange range) <$> hsDecls ps
+findInstDecl ps range = head . filter (inRange range . getLoc) <$> hsDecls ps
 #endif

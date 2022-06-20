@@ -202,7 +202,7 @@ minDefToMethodGroups range sigs = go
     where
         go (Var mn)   = [[ (T.pack . occNameString . occName $ mn, bindRendered sig)
                         | sig <- sigs
-                        , inRange range (getSrcSpan (bindName sig))
+                        , inRange range (getSrcSpan $ bindName sig)
                         , printOutputable mn == T.drop (T.length bindingPrefix) (printOutputable (bindName sig))
                         ]]
         go (Or ms)    = concatMap (go . unLoc) ms

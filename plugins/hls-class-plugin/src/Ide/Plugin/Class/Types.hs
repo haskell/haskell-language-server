@@ -99,16 +99,19 @@ rules recorder = do
             (_, maybe [] catMaybes -> instanceBinds) <-
                 initTcWithGbl hsc gblEnv ghostSpan $ traverse bindToSig binds
             pure $ Just $ InstanceBindTypeSigsResult instanceBinds
-        instanceBindType _ _ = pure Nothing
+            where
+                rdrEnv = tcg_rdr_env gblEnv
+                showDoc ty = showSDocForUser' hsc (mkPrintUnqualifiedDefault hsc rdrEnv) (pprSigmaType ty)
 
-        bindToSig id = do
-            let name = idName id
-            whenMaybe (isBindingName name) $ do
-                env <- tcInitTidyEnv
-                let (_, ty) = tidyOpenType env (idType id)
-                pure $ InstanceBindTypeSig name
-                        (prettyBindingNameString (printOutputable name) <> " :: " <> printOutputable (pprSigmaType ty))
-                        Nothing
+                bindToSig id = do
+                    let name = idName id
+                    whenMaybe (isBindingName name) $ do
+                        env <- tcInitTidyEnv
+                        let (_, ty) = tidyOpenType env (idType id)
+                        pure $ InstanceBindTypeSig name
+                                (prettyBindingNameString (printOutputable name) <> " :: " <> T.pack (showDoc ty))
+                                Nothing
+        instanceBindType _ _ = pure Nothing
 
 properties :: Properties
   '[ 'PropertyKey "typelensOn" 'TBoolean]

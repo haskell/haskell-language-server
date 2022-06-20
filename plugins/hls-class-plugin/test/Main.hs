@@ -70,7 +70,7 @@ codeActionTests recorder = testGroup
   , goldenWithClass recorder "Creates a placeholder for other two methods" "T6" "2" $ \(_:_:ghAction:_) -> do
       executeCodeAction ghAction
   , onlyRunForGhcVersions [GHC92] "Only ghc-9.2 enabled GHC2021 implicitly" $
-      goldenWithClass recorder "Don't insert pragma with GHC2021" "T15" "" $ \(_:eqWithSig:_) -> do
+      goldenWithClass recorder "Don't insert pragma with GHC2021" "T16" "" $ \(_:eqWithSig:_) -> do
         executeCodeAction eqWithSig
   , goldenWithClass recorder "Insert pragma if not exist" "T7" "" $ \(_:eqWithSig:_) -> do
       executeCodeAction eqWithSig
@@ -107,6 +107,7 @@ codeLensTests recorder = testGroup
     , goldenCodeLens recorder "Don't insert pragma while existing" "T13" 0
     , onlyRunForGhcVersions [GHC92] "Only ghc-9.2 enabled GHC2021 implicitly" $
         goldenCodeLens recorder "Don't insert pragma while GHC2021 enabled" "T14" 0
+    , goldenCodeLens recorder "Qualified name" "T15" 0
     ]
 
 _CACodeAction :: Prism' (Command |? CodeAction) CodeAction
