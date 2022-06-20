@@ -48,16 +48,6 @@
 - warn: {lhs: nubBy, rhs: Data.List.Extra.nubOrdBy}
 - warn: {lhs: Data.List.Extra.nubOn, rhs: Data.List.Extra.nubOrdOn}
 
-# DA specific hints
-- warn: {lhs: Data.Text.pack (DA.Pretty.renderPlain x), rhs: DA.Pretty.renderPlain x}
-- warn: {lhs: Data.Text.Extended.pack (DA.Pretty.renderPlain x), rhs: DA.Pretty.renderPlain x}
-- warn: {lhs: DA.Pretty.renderPlain (DA.Pretty.pretty x), rhs: DA.Pretty.renderPretty x}
-- warn: {lhs: Data.Text.readFile, rhs: Data.Text.Extended.readFileUtf8}
-- warn: {lhs: Data.Text.writeFile, rhs: Data.Text.Extended.writeFileUtf8}
-- warn: {lhs: Data.Text.Lazy.readFile, rhs: Data.Text.Extended.readFileUtf8}
-- warn: {lhs: Data.Text.Lazy.writeFile, rhs: Data.Text.Extended.writeFileUtf8}
-- warn: {lhs: System.Environment.setEnv, rhs: System.Environment.Blank.setEnv}
-
 # Specify additional command line arguments
 #
 - arguments: ["--cpp-include=include"]
