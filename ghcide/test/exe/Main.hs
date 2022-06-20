@@ -4234,7 +4234,7 @@ addSigLensesTests =
 addSigLensesForWhereClausesTests :: TestTree
 addSigLensesForWhereClausesTests = testGroup
   "add signature for where clauses"
-  [ testSession "Disbled" $ do
+  [ testSession "No lens if disbled" $ do
       let content = T.unlines
             [ "module Sigs where"
             , "f :: b"
@@ -4254,28 +4254,37 @@ addSigLensesForWhereClausesTests = testGroup
       waitForProgressDone
       lenses <- getCodeLenses doc
       liftIO $ length lenses @?= 0
-  , test "Simple" "    g = True" "    g :: Bool\n    g = True"
-  , test "Tuple" "    (g,h) = (id, True)" "    g :: a -> a\n    (g,h) = (id, True)"
-  , test "Operator" "    g = ($)" "    g :: (a -> b) -> a -> b\n    g = ($)"
-  , test "Infix" "    a `g` b = a" "    g :: p1 -> p -> p1\n    a `g` b = a"
-  , expectFail $ test "Typeclass" "    g a b = a + b" "    g :: Num a :: a -> a -> a\n    g a b = a + b"
+  , test "Simple" "Simple"
+  , test "Tuple" "Tuple"
+  , test "Inline" "Inline"
+  , test "Infix" "Infix"
+  , test "Operator" "Operator"
+  , expectFail $ test "ScopedTypeVariables" "ScopedTypeVariables"
+  , test "Nest" "Nest"
+  , test "No lens" "NoLens"
+  , expectFail $ test "Typeclass" "Typeclass"
+  , test "Quqlified" "Qualified"
   ]
   where
-    test title clauses expected = testSession title $ do
-        let baseContent = T.unlines
-                [ "module Sigs where"
-                , "f :: b"
-                , "f = undefined"
-                , "  where"
-                ]
-        doc <- createDoc "Sigs.hs" "haskell" (baseContent <> clauses)
-        waitForProgressDone
+    test :: String -> FilePath -> TestTree
+    test title file = testSessionWithExtraFiles "local-sig-lens" title $ \dir -> do
+        doc <- openDoc (dir </> file ++ ".hs") "haskell"
+        executeAllLens doc
+        real <- documentContents doc
+        expectedDoc <- openDoc (dir </> file ++ ".expected.hs") "haskell"
+        expected <- documentContents expectedDoc
+        liftIO $ real @?= expected
+
+    executeAllLens :: TextDocumentIdentifier -> Session ()
+    executeAllLens doc = do
+        void $ waitForTypecheck doc
         lenses <- getCodeLenses doc
-        executeCommand $ fromJust $ head lenses ^. L.command
-        void $ skipManyTill anyMessage (getDocumentEdit doc)
-        contents <- documentContents doc
-        liftIO $ contents @?= baseContent <> expected
-        closeDoc doc
+        let cmds = mapMaybe (^. L.command) lenses
+        unless (null cmds) $ do
+            let cmd = head cmds
+            executeCommand cmd
+            void $ skipManyTill anyMessage (getDocumentEdit doc)
+            executeAllLens doc
 
 linkToLocation :: [LocationLink] -> [Location]
 linkToLocation = map (\LocationLink{_targetUri,_targetRange} -> Location _targetUri _targetRange)
