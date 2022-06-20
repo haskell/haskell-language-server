@@ -123,13 +123,6 @@
     - Development.IDE.Plugin.Completions.Logic
     - Development.IDE.Types.Location
 
-- flags:
-  - default: false
-  - {name: [-Wno-missing-signatures, -Wno-orphans, -Wno-overlapping-patterns, -Wno-incomplete-patterns, -Wno-missing-fields, -Wno-unused-matches]}
-  - {name: [-Wno-dodgy-imports,-Wno-incomplete-uni-patterns], within: [Main, Development.IDE.GHC.Compat, Development.IDE.GHC.Compat.Core, Development.Benchmark.Rules]}
-  - {name: [-Wno-unused-imports], within: [Development.IDE.GHC.Compat.Core]}
-  - {name: [-Wno-deprecations, -Wno-unticked-promoted-constructors], within: [Main, Experiments]}
-
 - functions:
   # Things that are unsafe in Haskell base library
   - {name: unsafeInterleaveIO, within: [Development.IDE.LSP.LanguageServer]}
