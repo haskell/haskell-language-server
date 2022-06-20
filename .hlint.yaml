@@ -51,25 +51,6 @@
 - extensions:
   - default: true
 
-  # Extensions enabled by `bazel` and `da-ghci` by default.  We ban them here
-  # to avoid useless pragmas piling up on the top of files.
-  - {name: BangPatterns, within: []}
-  - {name: DeriveDataTypeable, within: []}
-  - {name: DeriveFoldable, within: []}
-  - {name: DeriveFunctor, within: []}
-  - {name: DeriveGeneric, within: []}
-  - {name: DeriveTraversable, within: []}
-  - {name: FlexibleContexts, within: []}
-  - {name: GeneralizedNewtypeDeriving, within: []}
-  - {name: LambdaCase, within: []}
-  - {name: NamedFieldPuns, within: []}
-  - {name: RecordWildCards, within: []}
-  - {name: ScopedTypeVariables, within: []}
-  - {name: StandaloneDeriving, within: []}
-  - {name: TupleSections, within: []}
-  - {name: TypeApplications, within: []}
-  - {name: ViewPatterns, within: []}
-
   # Shady extensions
   - name: CPP
     within:
