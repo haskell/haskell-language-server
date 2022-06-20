@@ -171,6 +171,15 @@
     within: 
     - Wingman.LanguageServer
 
+  - name: "Data.IntMap.!"
+    within: []
+
+  - name: "Data.Vector.!"
+    within: []
+
+  - name: "GHC.Arr.!"
+    within: []
+
 # We really do not want novel usages of restricted functions, and mere
 # Warning is not enough to prevent those consistently; you need a build failure.
 - error: {name: Avoid restricted function}
