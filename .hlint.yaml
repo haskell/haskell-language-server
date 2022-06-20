@@ -48,10 +48,6 @@
 - warn: {lhs: nubBy, rhs: Data.List.Extra.nubOrdBy}
 - warn: {lhs: Data.List.Extra.nubOn, rhs: Data.List.Extra.nubOrdOn}
 
-# Specify additional command line arguments
-#
-- arguments: ["--cpp-include=include"]
-
 - extensions:
   - default: true
 
