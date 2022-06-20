@@ -61,9 +61,24 @@ getAtPoint file pos = runMaybeT $ do
   (hf, mapping) <- useE GetHieAst file
   env <- hscEnv . fst <$> useE GhcSession file
   dkMap <- lift $ maybe (DKMap mempty mempty) fst <$> runMaybeT (useE GetDocMap file)
+  (hi, _) <- useE GetModIface file
 
   !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
-  MaybeT $ pure $ first (toCurrentRange mapping =<<) <$> AtPoint.atPoint opts hf dkMap env pos'
+
+  let pointContent = AtPoint.atPoint opts hf dkMap env pos'
+  fixityContent <- liftIO $ AtPoint.fixityAtPoint hf hi env pos'
+
+  MaybeT $ pure $ first (toCurrentRange mapping =<<) <$> mergeContent pointContent fixityContent
+  where
+    -- | Respect point content first
+    mergeContent :: Maybe (Maybe Range, [T.Text]) -> Maybe (Maybe Range, [T.Text]) -> Maybe (Maybe Range, [T.Text])
+    mergeContent Nothing Nothing = Nothing
+    mergeContent x@Just{} Nothing = x
+    mergeContent Nothing x@Just{} = x
+    mergeContent (Just (r1, txt1)) (Just (r2, txt2)) =
+      if r1 == r2
+        then Just (r1, txt1 <> txt2)
+        else Just (r1, txt1)
 
 toCurrentLocations :: PositionMapping -> [Location] -> [Location]
 toCurrentLocations mapping = mapMaybe go

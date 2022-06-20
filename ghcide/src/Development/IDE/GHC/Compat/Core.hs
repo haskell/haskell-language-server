@@ -102,6 +102,10 @@ module Development.IDE.GHC.Compat.Core (
 #endif
     -- * Fixity
     LexicalFixity(..),
+    Fixity(..),
+    mi_fix,
+    defaultFixity,
+    lookupFixityRn,
     -- * ModSummary
     ModSummary(..),
     -- * HomeModInfo
@@ -552,6 +556,7 @@ import           GHC.Runtime.Context          (InteractiveImport (..))
 import           GHC.Parser.Lexer
 import qualified GHC.Runtime.Linker           as Linker
 #endif
+import           GHC.Rename.Fixity            (lookupFixityRn)
 import           GHC.Rename.Names
 import           GHC.Rename.Splice
 import qualified GHC.Runtime.Interpreter      as GHCi
@@ -568,7 +573,7 @@ import           GHC.Tc.Utils.TcType          as TcType
 import qualified GHC.Types.Avail              as Avail
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Types.Avail              (greNamePrintableName)
-import           GHC.Types.Fixity             (LexicalFixity (..))
+import           GHC.Types.Fixity             (LexicalFixity (..), Fixity(..), defaultFixity)
 #endif
 #if MIN_VERSION_ghc(9,2,0)
 import           GHC.Types.Meta
@@ -613,7 +618,7 @@ import           GHC.Unit.Module.Imported
 import           GHC.Unit.Module.ModDetails
 import           GHC.Unit.Module.ModGuts
 import           GHC.Unit.Module.ModIface     (IfaceExport, ModIface (..),
-                                               ModIface_ (..))
+                                               ModIface_ (..), mi_fix)
 import           GHC.Unit.Module.ModSummary   (ModSummary (..))
 #endif
 import           GHC.Unit.State               (ModuleOrigin (..))
@@ -688,6 +693,7 @@ import qualified Panic                        as Plain
 #endif
 import           Parser
 import           PatSyn
+import           RnFixity
 #if MIN_VERSION_ghc(8,8,0)
 import           Plugins
 #endif

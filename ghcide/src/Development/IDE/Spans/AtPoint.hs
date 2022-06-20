@@ -9,6 +9,7 @@
 -- These are all pure functions that should execute quickly.
 module Development.IDE.Spans.AtPoint (
     atPoint
+  , fixityAtPoint
   , gotoDefinition
   , gotoTypeDefinition
   , documentHighlight
@@ -49,8 +50,9 @@ import qualified Data.Text                            as T
 
 import qualified Data.Array                           as A
 import           Data.Either
+import           Data.Either.Extra                    (eitherToMaybe)
 import           Data.List                            (isSuffixOf)
-import           Data.List.Extra                      (dropEnd1, nubOrd)
+import           Data.List.Extra                      (dropEnd1, nubOn, nubOrd)
 
 import           Data.Version                         (showVersion)
 import           Development.IDE.Types.Shake          (WithHieDb)
@@ -202,6 +204,51 @@ gotoDefinition
   -> MaybeT m [Location]
 gotoDefinition withHieDb getHieFile ideOpts imports srcSpans pos
   = lift $ locationsAtPoint withHieDb getHieFile ideOpts imports pos srcSpans
+
+fixityAtPoint :: HieAstResult -> HiFileResult -> HscEnv -> Position -> IO (Maybe (Maybe Range, [T.Text]))
+fixityAtPoint (HAR _ hf _ _ _) hi env pos = fmap listToMaybe $ sequence $ pointCommand hf pos fixityInfo
+  where
+    fixityInfo :: HieAST a -> IO (Maybe Range, [T.Text])
+    fixityInfo ast = do
+      let range = realSrcSpanToRange $ nodeSpan ast
+          names = mapMaybe eitherToMaybe $ M.keys $ getNodeIds ast
+          fixities = getFixityFromModIface names
+
+      -- Get fixity from HscEnv for local defined operator will crash,
+      -- we first try to use ModIface to get fixities, and then use
+      -- HscEnv if ModIface doesn't available.
+      if null fixities
+        then fmap (\fixities -> (Just range, [toHoverContent fixities])) (getFixityFromEnv names)
+        else pure (Just range, [toHoverContent fixities])
+
+    getFixityFromModIface :: [Name] -> [(Name, Fixity)]
+    getFixityFromModIface names =
+      let iface = hirModIface hi
+          fixities = filter (\(_, fixity) -> fixity /= defaultFixity)
+            $ map (\name -> (name, mi_fix iface (nameOccName name))) names
+      in fixities
+
+    getFixityFromEnv :: [Name] -> IO [(Name, Fixity)]
+    getFixityFromEnv names = do
+      liftIO
+        $ fmap (filter ((/= defaultFixity) . snd) . mapMaybe cond)
+        $ forM names $ \name ->
+          (\(_, fixity) -> (name, fixity)) <$> runTcInteractive env (lookupFixityRn name)
+      where
+        cond :: (Name, Maybe Fixity) -> Maybe (Name, Fixity)
+        cond (_, Nothing)   = Nothing
+        cond (name, Just f) = Just (name, f)
+
+    toHoverContent [] = ""
+    toHoverContent fixities =
+      -- We don't have much fixities on one position,
+      -- so `nubOn` is acceptable.
+      let contents = T.intercalate "\n\n" $ fixityText <$> nubOn snd fixities
+          contents' = "\n" <> sectionSeparator <> contents
+      in  contents'
+
+    fixityText (name, Fixity _ precedence direction) =
+      printOutputable direction <> " " <> printOutputable precedence <> " `" <> printOutputable name <> "`"
 
 -- | Synopsis for the name at a given position.
 atPoint
