@@ -160,7 +160,7 @@ idePlugins recorder includeExamples = pluginDescToIdePlugins allPlugins
       CallHierarchy.descriptor :
 #endif
 #if class
-      Class.descriptor "class" :
+      Class.descriptor pluginRecorder "class" :
 #endif
 #if haddockComments
       HaddockComments.descriptor "haddockComments" :
