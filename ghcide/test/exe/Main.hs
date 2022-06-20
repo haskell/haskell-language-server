@@ -6549,7 +6549,7 @@ hoverFixityTests = testGroup "Explicit fixity"
     ]
     where
         hoverTest :: TestName -> Position -> T.Text -> TestTree
-        hoverTest title pos expected = testSessionWithExtraFiles "hover" title $ \dir -> do
+        hoverTest title pos expected = testSessionWithExtraFiles "Fixity" title $ \dir -> do
             doc <- openDoc (dir </> "Fixity.hs") "haskell"
             void $ waitForTypecheck doc
             h <- getHover doc pos
