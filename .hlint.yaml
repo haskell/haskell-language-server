@@ -50,7 +50,22 @@
 
 - functions:
   # Things that are unsafe in Haskell base library
-  - {name: unsafeInterleaveIO, within: [Development.IDE.LSP.LanguageServer]}
+  - name: unsafePerformIO
+    within:
+    - Development.IDE.Core.Shake
+    - Development.IDE.GHC.Util
+    - Development.IDE.Graph.Internal.Database
+    - Development.IDE.Graph.Internal.Paths
+    - Development.IDE.Graph.Internal.Profile
+    - Ide.Types
+    - Test.Hls
+    - Test.Hls.Command
+    - Wingman.Debug
+    - Wingman.Types
+    - AutoTupleSpec
+  - name: unsafeInterleaveIO
+    within: 
+    - Development.IDE.LSP.LanguageServer
   - {name: unsafeDupablePerformIO, within: []}
   - name: unsafeCoerce
     within: 
@@ -63,6 +78,7 @@
   # Things that are a bit dangerous in the GHC API
   - name: nameModule
     within:
+    - Development.IDE.GHC.CoreFile
     - Ide.Plugin.CallHierarchy.Internal
     - Ide.Plugin.Rename
     - Compat.HieBin
@@ -96,6 +112,20 @@
     - IDE.Plugin.Eval.Util
     - UnificationSpec
 
+  - name: Data.List.last
+    within: 
+    - GenChangelogs
+    - Main
+
+  - name: Data.List.init
+    within: []
+
+  - name: Data.List.foldl1'
+    within: []
+
+  - name: Data.List.foldr1'
+    within: []
+
   - name: "Data.List.!!"
     within:
     - Main
@@ -112,6 +142,13 @@
     within:
     - Development.IDE.Plugin.CodeAction
     - Development.IDE.Plugin.Completions.Logic
+
+  - name: Data.Foldable.foldl1
+    within: []
+
+  - name: Data.Foldable.foldr1
+    within: 
+    - Wingman.Tactics
 
   - name: Data.Maybe.fromJust 
     within: 
