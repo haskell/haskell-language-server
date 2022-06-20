@@ -6,7 +6,7 @@ module Development.IDE.GHC.Compat.Outputable (
     showSDoc,
     showSDocUnsafe,
     showSDocForUser,
-    ppr, pprPanic, text, vcat, (<+>), ($$), empty, hang, nest,
+    ppr, pprPanic, text, vcat, (<+>), ($$), empty, hang, nest, punctuate,
     printSDocQualifiedUnsafe,
     printWithoutUniques,
     mkPrintUnqualified,

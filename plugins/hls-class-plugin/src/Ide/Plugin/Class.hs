@@ -1,12 +1,14 @@
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE DeriveGeneric     #-}
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE TypeFamilies      #-}
 {-# LANGUAGE ViewPatterns      #-}
 module Ide.Plugin.Class
-  ( descriptor
+  ( descriptor,
+    Log (..)
   ) where
 
 import           Control.Applicative
@@ -17,15 +19,17 @@ import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
 import           Data.Char
+import           Data.Either                             (rights)
 import           Data.List
 import qualified Data.Map.Strict                         as Map
 import           Data.Maybe
-import qualified Data.Text                               as T
 import qualified Data.Set                                as Set
+import qualified Data.Text                               as T
 import           Development.IDE                         hiding (pluginHandlers)
 import           Development.IDE.Core.PositionMapping    (fromCurrentRange,
                                                           toCurrentRange)
-import           Development.IDE.GHC.Compat              as Compat hiding (locA)
+import           Development.IDE.GHC.Compat              as Compat hiding (locA,
+                                                                    (<+>))
 import           Development.IDE.GHC.Compat.Util
 import           Development.IDE.Spans.AtPoint
 import qualified GHC.Generics                            as Generics
@@ -40,14 +44,24 @@ import           Language.LSP.Types
 import qualified Language.LSP.Types.Lens                 as J
 
 #if MIN_VERSION_ghc(9,2,0)
-import           GHC.Hs                                  (AnnsModule(AnnsModule))
+import           GHC.Hs                                  (AnnsModule (AnnsModule))
 import           GHC.Parser.Annotation
 #endif
 
-descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId = (defaultPluginDescriptor plId)
+data Log
+  = LogImplementedMethods Class [T.Text]
+
+instance Pretty Log where
+  pretty = \case
+    LogImplementedMethods cls methods ->
+      pretty ("Detected implmented methods for class" :: String)
+        <+> pretty (show (getOccString cls) <> ":") -- 'show' is used here to add quotes around the class name
+        <+> pretty methods
+
+descriptor :: Recorder (WithPriority Log) -> PluginId -> PluginDescriptor IdeState
+descriptor recorder plId = (defaultPluginDescriptor plId)
   { pluginCommands = commands
-  , pluginHandlers = mkPluginHandler STextDocumentCodeAction codeAction
+  , pluginHandlers = mkPluginHandler STextDocumentCodeAction (codeAction recorder)
   }
 
 commands :: [PluginCommand IdeState]
@@ -176,8 +190,8 @@ addMethodPlaceholders state AddMinimalMethodsParams{..} = do
 -- |
 -- This implementation is ad-hoc in a sense that the diagnostic detection mechanism is
 -- sensitive to the format of diagnostic messages from GHC.
-codeAction :: PluginMethodHandler IdeState TextDocumentCodeAction
-codeAction state plId (CodeActionParams _ _ docId _ context) = liftIO $ fmap (fromMaybe errorResult) . runMaybeT $ do
+codeAction :: Recorder (WithPriority Log) -> PluginMethodHandler IdeState TextDocumentCodeAction
+codeAction recorder state plId (CodeActionParams _ _ docId _ context) = liftIO $ fmap (fromMaybe errorResult) . runMaybeT $ do
   docPath <- MaybeT . pure . uriToNormalizedFilePath $ toNormalizedUri uri
   actions <- join <$> mapM (mkActions docPath) methodDiags
   pure . Right . List $ actions
@@ -190,9 +204,17 @@ codeAction state plId (CodeActionParams _ _ docId _ context) = liftIO $ fmap (fr
     methodDiags = filter (\d -> isClassMethodWarning (d ^. J.message)) ghcDiags
 
     mkActions docPath diag = do
-      ident <- findClassIdentifier docPath range
+      (HAR {hieAst = ast}, pmap) <-
+          MaybeT . runAction "classplugin" state $ useWithStale GetHieAst docPath
+      instancePosition <- MaybeT . pure $
+                          fromCurrentRange pmap range ^? _Just . J.start
+                          & fmap (J.character -~ 1)
+
+      ident <- findClassIdentifier ast instancePosition
       cls <- findClassFromIdentifier docPath ident
-      lift . traverse mkAction . minDefToMethodGroups . classMinimalDef $ cls
+      implemented <- findImplementedMethods ast instancePosition
+      logWith recorder Info (LogImplementedMethods cls implemented)
+      lift . traverse (mkAction . (\\ implemented)) . minDefToMethodGroups . classMinimalDef $ cls
       where
         range = diag ^. J.range
 
@@ -212,16 +234,14 @@ codeAction state plId (CodeActionParams _ _ docId _ context) = liftIO $ fmap (fr
           = InR
           $ CodeAction title (Just CodeActionQuickFix) (Just (List [])) Nothing Nothing Nothing (Just cmd) Nothing
 
-    findClassIdentifier docPath range = do
-      (hieAstResult, pmap) <- MaybeT . runAction "classplugin" state $ useWithStale GetHieAst docPath
-      case hieAstResult of
-        HAR {hieAst = hf} ->
-          pure
-            $ head . head
-            $ pointCommand hf (fromJust (fromCurrentRange pmap range) ^. J.start & J.character -~ 1)
-              ( (Map.keys . Map.filter isClassNodeIdentifier . Compat.getNodeIds)
-                <=< nodeChildren
-              )
+    findClassIdentifier :: HieASTs a -> Position -> MaybeT IO (Either ModuleName Name)
+    findClassIdentifier ast instancePosition =
+      pure
+        $ head . head
+        $ pointCommand ast instancePosition
+          ( (Map.keys . Map.filter isClassNodeIdentifier . Compat.getNodeIds)
+            <=< nodeChildren
+          )
 
     findClassFromIdentifier docPath (Right name) = do
       (hscEnv -> hscenv, _) <- MaybeT . runAction "classplugin" state $ useWithStale GhcSessionDeps docPath
@@ -234,6 +254,22 @@ codeAction state plId (CodeActionParams _ _ docId _ context) = liftIO $ fmap (fr
           _ -> panic "Ide.Plugin.Class.findClassFromIdentifier"
     findClassFromIdentifier _ (Left _) = panic "Ide.Plugin.Class.findClassIdentifier"
 
+    findImplementedMethods :: HieASTs a -> Position -> MaybeT IO [T.Text]
+    findImplementedMethods asts instancePosition = do
+        pure
+            $ concat
+            $ pointCommand asts instancePosition
+            $ map (T.pack . getOccString) . rights . findInstanceValBindIdentifiers
+
+    -- | Recurses through the given AST to find identifiers which are
+    -- 'InstanceValBind's.
+    findInstanceValBindIdentifiers :: HieAST a -> [Identifier]
+    findInstanceValBindIdentifiers ast =
+        let valBindIds = Map.keys
+                         . Map.filter (any isInstanceValBind . identInfo)
+                         $ getNodeIds ast
+        in valBindIds <> concatMap findInstanceValBindIdentifiers (nodeChildren ast)
+
 ghostSpan :: RealSrcSpan
 ghostSpan = realSrcLocSpan $ mkRealSrcLoc (fsLit "<haskell-language-sever>") 1 1
 
@@ -241,10 +277,14 @@ containRange :: Range -> SrcSpan -> Bool
 containRange range x = isInsideSrcSpan (range ^. J.start) x || isInsideSrcSpan (range ^. J.end) x
 
 isClassNodeIdentifier :: IdentifierDetails a -> Bool
-isClassNodeIdentifier ident = (isNothing . identType) ident && Use `Set.member` (identInfo ident)
+isClassNodeIdentifier ident = (isNothing . identType) ident && Use `Set.member` identInfo ident
 
 isClassMethodWarning :: T.Text -> Bool
 isClassMethodWarning = T.isPrefixOf "• No explicit implementation for"
+
+isInstanceValBind :: ContextInfo -> Bool
+isInstanceValBind (ValBind InstanceBind _ _) = True
+isInstanceValBind _                          = False
 
 minDefToMethodGroups :: BooleanFormula Name -> [[T.Text]]
 minDefToMethodGroups = go

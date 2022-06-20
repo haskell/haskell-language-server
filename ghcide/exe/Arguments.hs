@@ -15,6 +15,7 @@ data Arguments = Arguments
     ,argsOTMemoryProfiling          :: Bool
     ,argsTesting                    :: Bool
     ,argsDisableKick                :: Bool
+    ,argsVerifyCoreFile             :: Bool
     ,argsThreads                    :: Int
     ,argsVerbose                    :: Bool
     ,argsCommand                    :: Command
@@ -37,6 +38,7 @@ arguments plugins = Arguments
       <*> switch (long "ot-memory-profiling" <> help "Record OpenTelemetry info to the eventlog. Needs the -l RTS flag to have an effect")
       <*> switch (long "test" <> help "Enable additional lsp messages used by the testsuite")
       <*> switch (long "test-no-kick" <> help "Disable kick. Useful for testing cancellation")
+      <*> switch (long "verify-core-file" <> help "Verify core trips by roundtripping after serialization. Slow, only useful for testing purposes")
       <*> option auto (short 'j' <> help "Number of threads (0: automatic)" <> metavar "NUM" <> value 0 <> showDefault)
       <*> switch (short 'd' <> long "verbose" <> help "Include internal events in logging output")
       <*> (commandP plugins <|> lspCommand <|> checkCommand)
