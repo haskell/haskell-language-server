@@ -8,7 +8,7 @@ module Ide.Plugin.Class.CodeLens where
 import           Control.Lens                    ((^.))
 import           Control.Monad.IO.Class          (liftIO)
 import           Data.Aeson
-import           Data.Maybe                      (mapMaybe)
+import           Data.Maybe                      (mapMaybe, maybeToList)
 import qualified Data.Text                       as T
 import           Development.IDE
 import           Development.IDE.GHC.Compat
@@ -32,7 +32,8 @@ codeLens state plId CodeLensParams{..} = do
             $ runAction "classplugin.TypeCheck" state
             $ use TypeCheck nfp
 
-        InstanceBindTypeSigsResult binds <-
+        -- All instance binds
+        InstanceBindTypeSigsResult allBinds <-
             handleMaybeM "Unable to get InstanceBindTypeSigsResult"
             $ liftIO
             $ runAction "classplugin.GetInstanceBindTypeSigs" state
@@ -42,29 +43,39 @@ codeLens state plId CodeLensParams{..} = do
 
         let (hsGroup, _, _, _) = tmrRenamed tmr
             tycls = hs_tyclds hsGroup
-            -- class instance decls
-            insts = mapMaybe (getClsInstD . unLoc) $ concatMap group_instds tycls
-            -- Declared instance methods without signatures
-            bindInfos = concatMap getBindSpanWithoutSig insts
-            targetSigs = matchBind bindInfos binds
-            codeLens =
-                (\x@(range, title) ->
-                    generateLens plId range title
+            -- declared instance methods without signatures
+            bindInfos = [ bind
+                        | instds <- map group_instds tycls -- class instance decls
+                        , instd <- instds
+                        , inst <- maybeToList $ getClsInstD (unLoc instd)
+                        , bind <- getBindSpanWithoutSig inst
+                        ]
+            targetSigs = matchBind bindInfos allBinds
+            makeLens (range, title) =
+                generateLens plId range title
                     $ workspaceEdit pragmaInsertion
-                    $ makeEdit x
-                ) <$> mapMaybe getRangeWithSig targetSigs
+                    $ makeEdit range title
+            codeLens = makeLens <$> mapMaybe getRangeWithSig targetSigs
 
         pure $ List codeLens
     where
         uri = _textDocument ^. J.uri
 
         -- Match Binds with their signatures
+        -- We try to give every `InstanceBindTypeSig` a `SrcSpan`,
+        -- hence we can display signatures for `InstanceBindTypeSig` with span later.
         matchBind :: [BindInfo] -> [InstanceBindTypeSig] -> [InstanceBindTypeSig]
-        matchBind binds = map go
+        matchBind existedBinds allBindWithSigs =
+            [foldl go bindSig existedBinds | bindSig <- allBindWithSigs]
             where
+                -- | The `bindDefSpan` of the bind is `Nothing` before,
+                -- we update it with the span where binding occurs.
+                -- Hence, we can infer the place to display the signature later.
+                update :: InstanceBindTypeSig -> SrcSpan -> InstanceBindTypeSig
                 update bind sp = bind {bindDefSpan = Just sp}
-                go sig = foldl go' sig binds
-                go' bindSig bind = case (srcSpanToRange . bindNameSpan) bind of
+
+                go :: InstanceBindTypeSig -> BindInfo -> InstanceBindTypeSig
+                go bindSig bind = case (srcSpanToRange . bindNameSpan) bind of
                     Nothing -> bindSig
                     Just range ->
                         if inRange range (getSrcSpan $ bindName bindSig)
@@ -109,23 +120,12 @@ codeLens state plId CodeLensParams{..} = do
             let cmd = mkLspCommand plId typeLensCommandId title (Just [toJSON edit])
             in  CodeLens range (Just cmd) Nothing
 
-        makeEdit :: (Range, T.Text) -> [TextEdit]
-        makeEdit (range, bind)
-            | indentSize > maxSize =
-                [TextEdit (insertRange (indentSize - 1)) -- minus one to remove the leading space
-                    ("\n"
-                        <> T.replicate defaultIndent " "
-                        <> bind
-                        <> "\n"
-                        <> T.replicate (defaultIndent - 1) " ")]
-            | otherwise = [TextEdit (insertRange 0) (T.replicate indentSize " " <> bind <> "\n")]
-            where
-                startOfLine = Position (_line (range ^. J.start))
-                insertRange c = Range (startOfLine c) (startOfLine c)
-                maxSize :: Int
-                maxSize = 18 -- Length of the shortest instance like `instance X A where`
-                indentSize :: Num a => a
-                indentSize = fromIntegral $ _character $ range ^. J.start
+        makeEdit :: Range -> T.Text -> [TextEdit]
+        makeEdit range bind =
+            let startPos = range ^. J.start
+                insertChar = startPos ^. J.character
+                insertRange = Range startPos startPos
+            in [TextEdit insertRange (bind <> "\n" <> T.replicate (fromIntegral insertChar) " ")]
 
 codeLensCommandHandler :: CommandFunction IdeState WorkspaceEdit
 codeLensCommandHandler _ wedit = do

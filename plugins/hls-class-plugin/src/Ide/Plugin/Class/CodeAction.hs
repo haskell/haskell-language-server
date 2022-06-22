@@ -10,13 +10,14 @@ import           Control.Lens                         hiding (List, use)
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class               (liftIO)
 import           Control.Monad.Trans.Class            (lift)
-import           Control.Monad.Trans.Except           (throwE)
+import           Control.Monad.Trans.Except           (ExceptT, throwE)
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
 import           Data.Either.Extra                    (rights)
 import           Data.List
 import qualified Data.Map.Strict                      as Map
-import           Data.Maybe                           (fromJust, isNothing)
+import           Data.Maybe                           (isNothing, listToMaybe,
+                                                       mapMaybe)
 import qualified Data.Set                             as Set
 import qualified Data.Text                            as T
 import           Development.IDE
@@ -28,6 +29,7 @@ import           GHC.LanguageExtensions.Type
 import           Ide.Plugin.Class.ExactPrint
 import           Ide.Plugin.Class.Types
 import           Ide.Plugin.Class.Utils
+import qualified Ide.Plugin.Config
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Server
@@ -89,6 +91,10 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginRe
         ghcDiags = filter (\d -> d ^. J.source == Just "typecheck") diags
         methodDiags = filter (\d -> isClassMethodWarning (d ^. J.message)) ghcDiags
 
+        mkActions
+            :: NormalizedFilePath
+            -> Diagnostic
+            -> ExceptT String (LspT Ide.Plugin.Config.Config IO) [Command |? CodeAction]
         mkActions docPath diag = do
             (HAR {hieAst = ast}, pmap) <- handleMaybeM "Unable to GetHieAst"
                 . liftIO
@@ -114,10 +120,10 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginRe
                     = [ mkCodeAction title
                             $ mkLspCommand plId codeActionCommandId title
                                 (Just $ mkCmdParams methodGroup False)
-                    , mkCodeAction titleWithSig
+                      , mkCodeAction titleWithSig
                             $ mkLspCommand plId codeActionCommandId titleWithSig
                                 (Just $ mkCmdParams methodGroup True)
-                    ]
+                      ]
                     where
                         title = mkTitle $ fst <$> methodGroup
                         titleWithSig = mkTitleWithSig $ fst <$> methodGroup
@@ -143,15 +149,19 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginRe
                         (Just cmd)
                         Nothing
 
-        findClassIdentifier hf instancePosition = do
-                    pure
-                        $ head . head
-                        $ pointCommand hf instancePosition
-                        ( (Map.keys . Map.filter isClassNodeIdentifier . getNodeIds)
-                            <=< nodeChildren
-                        )
+        findClassIdentifier hf instancePosition =
+            handleMaybe "No Identifier found"
+                $ listToMaybe
+                $ mapMaybe listToMaybe
+                $ pointCommand hf instancePosition
+                    ( (Map.keys . Map.filter isClassNodeIdentifier . getNodeIds)
+                        <=< nodeChildren
+                    )
 
-        -- findImplementedMethods :: HieASTs a -> Position -> MaybeT IO [T.Text]
+        findImplementedMethods
+            :: HieASTs a
+            -> Position
+            -> ExceptT String (LspT Ide.Plugin.Config.Config IO) [T.Text]
         findImplementedMethods asts instancePosition = do
             pure
                 $ concat
@@ -184,7 +194,7 @@ codeAction recorder state plId (CodeActionParams _ _ docId _ context) = pluginRe
                     case tcthing of
                         AGlobal (AConLike (RealDataCon con))
                             | Just cls <- tyConClass_maybe (dataConOrigTyCon con) -> pure cls
-                        _ -> panic "Ide.Plugin.Class.findClassFromIdentifier"
+                        _ -> fail "Ide.Plugin.Class.findClassFromIdentifier"
         findClassFromIdentifier _ (Left _) = throwE "Ide.Plugin.Class.findClassIdentifier"
 
 isClassNodeIdentifier :: IdentifierDetails a -> Bool
